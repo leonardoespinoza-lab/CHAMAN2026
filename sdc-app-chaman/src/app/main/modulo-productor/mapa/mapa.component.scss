@@ -10,12 +10,15 @@
   right: 1rem;
   display: flex;
   align-items: flex-start;
+  flex-wrap: wrap;
   gap: 0.75rem;
   pointer-events: none;
 }
 
 .weather-strip,
 .service-rail,
+.map-actions,
+.climate-layer-card,
 .lot-bottom-sheet {
   color: #243149;
   background: rgba(255, 255, 255, 0.88);
@@ -25,6 +28,7 @@
 }
 
 .weather-strip {
+  flex: 1 1 620px;
   min-height: 3.25rem;
   border-radius: 18px;
   display: grid;
@@ -50,6 +54,12 @@
   line-height: 1.2;
 }
 
+.weather-title small {
+  color: #64748b;
+  font-size: 0.72rem;
+  line-height: 1.15;
+}
+
 .weather-title span,
 .weather-metric span {
   color: #64748b;
@@ -64,12 +74,49 @@
 }
 
 .service-rail {
+  flex: 0 0 auto;
   border-radius: 18px;
   display: flex;
   align-items: center;
   gap: 0.35rem;
   padding: 0.35rem;
   pointer-events: auto;
+}
+
+.map-actions {
+  flex: 0 0 auto;
+  min-height: 3.25rem;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  pointer-events: auto;
+}
+
+.climate-layer-card {
+  flex: 0 1 auto;
+  border-radius: 18px;
+  padding: 0.45rem 0.55rem;
+  pointer-events: auto;
+}
+
+.climate-layer-row {
+  min-height: 2.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.opacity-label {
+  min-width: 2.4rem;
+  color: #64748b;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.legacy-map-tools {
+  display: none !important;
 }
 
 .service-chip {
@@ -198,7 +245,7 @@
 .service-summary-grid {
   margin-top: 0.85rem;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.65rem;
 }
 
@@ -254,6 +301,11 @@
   transition: width 240ms ease;
 }
 
+.yield-summary-card {
+  border-color: rgba(35, 200, 196, 0.5);
+  background: linear-gradient(180deg, rgba(240, 253, 252, 0.95), rgba(255, 255, 255, 0.86));
+}
+
 @media (max-width: 1180px) {
   .map-topbar {
     flex-direction: column;
@@ -261,11 +313,15 @@
   }
 
   .weather-strip,
-  .service-rail {
+  .service-rail,
+  .map-actions,
+  .climate-layer-card {
     width: 100%;
   }
 
-  .service-rail {
+  .service-rail,
+  .map-actions,
+  .climate-layer-card {
     overflow-x: auto;
   }
 
@@ -302,6 +358,14 @@
 
   .service-chip {
     min-width: max-content;
+  }
+
+  .map-actions {
+    justify-content: flex-start;
+  }
+
+  .climate-layer-row {
+    overflow-x: auto;
   }
 
   .lot-bottom-sheet {

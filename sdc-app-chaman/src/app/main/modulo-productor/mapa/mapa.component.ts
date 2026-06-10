@@ -688,6 +688,15 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.establecimientoSeleccionado?.nombre || 'Zona del mapa';
   }
 
+  public establecimientoResumen(): string {
+    const lotes = this.lotesDeEstablecimientoActual();
+    if (!lotes.length) {
+      return `${this.lotes.length} lotes cargados`;
+    }
+    const hectareas = lotes.reduce((acc, lote) => acc + (this.numero(lote.ubicacion?.superficie) || 0), 0);
+    return `${lotes.length} lotes / ${this.formatNumber(hectareas, 0)} ha`;
+  }
+
   public climaTemperaturaActual(): string {
     return this.formatMetric(this.getClimaActual()?.temperatura?.last, 'C', 1);
   }
@@ -887,6 +896,18 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     const prediccion = this.establecimientoSeleccionado?.prediccionClimatica as any;
     const pronosticos = prediccion?.pronosticos || prediccion?.clima?.pronosticos || [];
     return Array.isArray(pronosticos) ? pronosticos : [];
+  }
+
+  private lotesDeEstablecimientoActual(): ILoteMapa[] {
+    const establecimiento = this.establecimientoSeleccionado;
+    if (!establecimiento) {
+      return this.lotes;
+    }
+    return this.lotes.filter((lote) => {
+      const idMatch = lote.idEstablecimiento && establecimiento._id && lote.idEstablecimiento === establecimiento._id;
+      const nombreMatch = lote.establecimiento?.nombre && lote.establecimiento.nombre === establecimiento.nombre;
+      return idMatch || nombreMatch;
+    });
   }
 
   private maxRiesgoEnfermedad(lote?: ILoteMapa): number | null {

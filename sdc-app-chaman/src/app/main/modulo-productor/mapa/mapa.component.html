@@ -121,6 +121,7 @@
     <div class="weather-title">
       <span class="weather-eyebrow">Clima de zona</span>
       <strong>{{ climaZonaNombre() }}</strong>
+      <small>{{ establecimientoResumen() }}</small>
     </div>
     <div class="weather-metric">
       <span>Temp.</span>
@@ -164,6 +165,78 @@
       <p-progress-spinner ariaLabel="loading" [style]="{ width: '18px', height: '18px' }" />
     }
   </div>
+
+  <div class="map-actions" aria-label="Herramientas del mapa">
+    <p-button
+      [rounded]="true"
+      severity="secondary"
+      icon="pi pi-map-marker"
+      (click)="centerOnUserLocation()"
+      pTooltip="Ir a mi ubicacion"
+      tooltipPosition="bottom"
+    />
+    <p-button
+      [rounded]="true"
+      severity="secondary"
+      icon="pi pi-th-large"
+      (click)="centerMapOnBounds()"
+      pTooltip="Ver todos los lotes"
+      tooltipPosition="bottom"
+    />
+    <p-button
+      [rounded]="true"
+      [severity]="isSuelosLayerVisible ? 'success' : 'secondary'"
+      icon="pi pi-globe"
+      (click)="toggleSuelosLayer()"
+      pTooltip="Suelos"
+      tooltipPosition="bottom"
+    />
+    @if (climaVariables.length > 0) {
+      <p-button
+        [rounded]="true"
+        [severity]="showClimaTilesPanel || showClimaLayers ? 'success' : 'secondary'"
+        icon="pi pi-cloud"
+        (click)="toggleClimaTilesPanel()"
+        pTooltip="Capas climaticas"
+        tooltipPosition="bottom"
+      />
+    }
+  </div>
+
+  @if (showClimaTilesPanel) {
+    <div class="climate-layer-card" [@slideInOut]>
+      <div class="climate-layer-row">
+        <p-button
+          [icon]="showClimaLayers ? 'pi pi-eye' : 'pi pi-eye-slash'"
+          [severity]="showClimaLayers ? 'success' : 'secondary'"
+          [text]="true"
+          size="small"
+          (onClick)="toggleClimaLayers()"
+          [pTooltip]="showClimaLayers ? 'Ocultar capa' : 'Mostrar capa'"
+          tooltipPosition="bottom"
+          [disabled]="climaTilesLoading"
+        />
+        @if (climaTilesLoading) {
+          <p-progress-spinner ariaLabel="Cargando tiles climaticos" [style]="{ width: '16px', height: '16px' }" />
+        }
+        <p-select
+          [(ngModel)]="climaVariableSeleccionada"
+          [options]="climaVariables"
+          optionLabel="name"
+          placeholder="Variable"
+          [style]="{ width: '190px' }"
+          (onChange)="onClimaVariableChange($event)"
+          [disabled]="climaTilesLoading"
+          appendTo="body"
+        />
+        @if (showClimaLayers) {
+          <span class="opacity-label">{{ climaOpacidad * 100 | number: '1.0-0' }}%</span>
+          <p-button icon="pi pi-minus" [text]="true" size="small" (onClick)="decreaseOpacity()" [disabled]="climaTilesLoading" />
+          <p-button icon="pi pi-plus" [text]="true" size="small" (onClick)="increaseOpacity()" [disabled]="climaTilesLoading" />
+        }
+      </div>
+    </div>
+  }
 </section>
 
 <!-- Resumen del servicio monitoreo de enfermedades-->
@@ -823,9 +896,18 @@
         <p>Avance del ciclo y cierre al cosechar.</p>
       </article>
 
-      <article class="service-summary-card">
+      <article class="service-summary-card yield-summary-card">
         <div class="service-summary-title">
           <i class="pi pi-chart-line"></i>
+          <span>Prediccion de rendimiento</span>
+        </div>
+        <strong>{{ loteRindeResumen(loteSeleccionado) }}</strong>
+        <p>Cruza cultivo, suelo, NDVI, riego y riesgo sanitario. Se ajusta al cerrar cosechas historicas.</p>
+      </article>
+
+      <article class="service-summary-card">
+        <div class="service-summary-title">
+          <i class="pi pi-calendar-clock"></i>
           <span>Etapa</span>
         </div>
         <strong>{{ loteEtapa(loteSeleccionado) }}</strong>
@@ -907,7 +989,7 @@
 </p-dialog>
 
 <!-- Botones de navegación del mapa -->
-<div style="position: fixed; left: 0.5em; top: 4em; z-index: 1000; display: flex; flex-direction: column; gap: 0.5em">
+<div class="legacy-map-tools" style="position: fixed; left: 0.5em; top: 4em; z-index: 1000; display: flex; flex-direction: column; gap: 0.5em">
   <!-- Botón para centrar en ubicación del usuario -->
   <p-button
     [rounded]="true"
