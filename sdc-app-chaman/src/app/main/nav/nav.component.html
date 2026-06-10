@@ -1,5 +1,5 @@
 @if (mostrarMenuLateral()) {
-<p-drawer #drawerRef [(visible)]="visible">
+<p-drawer #drawerRef [(visible)]="visible" styleClass="chaman-nav-drawer">
   <ng-template #headless>
     <div class="flex flex-col h-full">
       <!-- Logo y cerrar -->
@@ -344,9 +344,7 @@
                     </span>
                     <i class="pi pi-chevron-down ml-auto"></i>
                   </a>
-                  <ul
-                    class="list-none py-0 pl-4 pr-0 m-0 hidden overflow-y-hidden transition-all duration-[400ms] ease-in-out"
-                  >
+                  <ul class="list-none py-0 pl-4 pr-0 m-0 overflow-y-hidden transition-all duration-[400ms] ease-in-out">
                     <!-- Establecimientos -->
                     @if (loginService.esProductor) {
                       <li>
@@ -714,7 +712,7 @@
 
 <!-- Botón menú -->
 @if (mostrarBotonMenu()) {
-  <div style="position: fixed; left: 0.5em; top: 0.5em; z-index: 1000">
+  <div class="menu-launcher">
     <p-button (click)="visible = !visible" icon="pi i-menu-hamburguer" [rounded]="true" severity="secondary" />
   </div>
 }

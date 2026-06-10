@@ -116,6 +116,56 @@
   }
 </div>
 
+<section class="map-topbar">
+  <div class="weather-strip pointer" (click)="abrirDrawerClima()">
+    <div class="weather-title">
+      <span class="weather-eyebrow">Clima de zona</span>
+      <strong>{{ climaZonaNombre() }}</strong>
+    </div>
+    <div class="weather-metric">
+      <span>Temp.</span>
+      <strong>{{ climaTemperaturaActual() }}</strong>
+    </div>
+    <div class="weather-metric">
+      <span>HR</span>
+      <strong>{{ climaHumedadActual() }}</strong>
+    </div>
+    <div class="weather-metric">
+      <span>Lluvia 24 h</span>
+      <strong>{{ climaLluvia24() }}</strong>
+    </div>
+    <div class="weather-metric">
+      <span>Lluvia 72 h</span>
+      <strong>{{ climaLluvia72() }}</strong>
+    </div>
+    <div class="weather-metric">
+      <span>Viento</span>
+      <strong>{{ climaVientoMax() }}</strong>
+    </div>
+  </div>
+
+  <div class="service-rail" aria-label="Servicios del mapa">
+    @for (item of servicios; track $index) {
+      <button
+        type="button"
+        class="service-chip"
+        [class.active]="servicioSeleccionado === item"
+        (click)="changeServicio(item)"
+      >
+        <span class="service-chip-icon" [style.background]="item.backgroudColor">
+          <svg [style.fill]="item.color" width="18" height="18">
+            <use [attr.xlink:href]="'icons/icons.svg#' + item.icon"></use>
+          </svg>
+        </span>
+        <span>{{ getServicioShortLabel(item) }}</span>
+      </button>
+    }
+    @if (loading()) {
+      <p-progress-spinner ariaLabel="loading" [style]="{ width: '18px', height: '18px' }" />
+    }
+  </div>
+</section>
+
 <!-- Resumen del servicio monitoreo de enfermedades-->
 <p-drawer
   #drawerRef
@@ -464,7 +514,7 @@
 <!-- Resumen lote seleccionado -->
 <p-drawer
   #drawerRef
-  [visible]="!!loteSeleccionado"
+  [visible]="false"
   [position]="(helper.isWide$ | async) ? 'right' : 'bottom'"
   [style]="{
     'margin-top': (helper.isWide$ | async) ? '0' : '0',
@@ -677,6 +727,113 @@
     </div>
   </ng-template>
 </p-drawer>
+
+@if (loteSeleccionado) {
+  <section class="lot-bottom-sheet">
+    <button type="button" class="sheet-close" (click)="loteSeleccionado = undefined" aria-label="Cerrar resumen">
+      <i class="pi pi-times"></i>
+    </button>
+
+    <div class="sheet-header">
+      <div>
+        <span class="sheet-eyebrow">{{ loteUbicacion(loteSeleccionado) }}</span>
+        <h2>{{ 'Lote' | translate }} {{ loteSeleccionado.nombre }}</h2>
+      </div>
+      <div class="sheet-actions">
+        <p-button label="Entrar al lote" icon="pi pi-arrow-right" (onClick)="detallesLote()" />
+        @if (loginService.esProductor || loginService.esEstablecimiento) {
+          <p-button label="Editar" icon="pi pi-pencil" severity="secondary" (onClick)="editarLote()" />
+          <p-button label="Cosecha" icon="pi pi-calendar" severity="secondary" (onClick)="cosecharLote()" />
+        }
+      </div>
+    </div>
+
+    <div class="lot-summary-strip">
+      <div>
+        <span>Superficie</span>
+        <strong>{{ loteHectareas(loteSeleccionado) }}</strong>
+      </div>
+      <div>
+        <span>Suelo</span>
+        <strong>{{ loteSuelo(loteSeleccionado) }}</strong>
+      </div>
+      <div>
+        <span>Cultivo</span>
+        <strong>{{ loteCultivo(loteSeleccionado) }}</strong>
+      </div>
+      <div>
+        <span>Variedad</span>
+        <strong>{{ loteVariedad(loteSeleccionado) }}</strong>
+      </div>
+      <div>
+        <span>Siembra</span>
+        <strong>{{ loteFechaSiembra(loteSeleccionado) }}</strong>
+      </div>
+      <div>
+        <span>Rinde</span>
+        <strong>{{ loteRindeResumen(loteSeleccionado) }}</strong>
+      </div>
+    </div>
+
+    <div class="service-summary-grid">
+      <article class="service-summary-card">
+        <div class="service-summary-title">
+          <svg width="20" height="20">
+            <use xlink:href="icons/icons.svg#siembras"></use>
+          </svg>
+          <span>Enfermedades</span>
+        </div>
+        <strong>{{ loteEnfermedadNivel(loteSeleccionado) }}</strong>
+        <p>{{ loteEnfermedadResumen(loteSeleccionado) }}</p>
+        <div class="fill-track">
+          <span [style.width.%]="loteEnfermedadPercent(loteSeleccionado)"></span>
+        </div>
+      </article>
+
+      <article class="service-summary-card">
+        <div class="service-summary-title">
+          <svg width="20" height="20">
+            <use xlink:href="icons/icons.svg#water-drop"></use>
+          </svg>
+          <span>Riego</span>
+        </div>
+        <strong>{{ loteRiegoResumen(loteSeleccionado) }}</strong>
+        <p>Recomendacion de la siembra activa.</p>
+      </article>
+
+      <article class="service-summary-card">
+        <div class="service-summary-title">
+          <svg width="20" height="20">
+            <use xlink:href="icons/icons.svg#plantas"></use>
+          </svg>
+          <span>NDVI</span>
+        </div>
+        <strong>{{ loteNdviResumen(loteSeleccionado) }}</strong>
+        <p>Ultima lectura disponible del indice verde.</p>
+      </article>
+
+      <article class="service-summary-card">
+        <div class="service-summary-title">
+          <svg width="20" height="20">
+            <use xlink:href="icons/icons.svg#bloodtype"></use>
+          </svg>
+          <span>Huella hidrica</span>
+        </div>
+        <strong>{{ loteHuellaResumen(loteSeleccionado) }}</strong>
+        <p>Avance del ciclo y cierre al cosechar.</p>
+      </article>
+
+      <article class="service-summary-card">
+        <div class="service-summary-title">
+          <i class="pi pi-chart-line"></i>
+          <span>Etapa</span>
+        </div>
+        <strong>{{ loteEtapa(loteSeleccionado) }}</strong>
+        <p>Estado fenologico actual.</p>
+      </article>
+    </div>
+  </section>
+}
 
 <!-- Selector de servicios -->
 <p-dialog

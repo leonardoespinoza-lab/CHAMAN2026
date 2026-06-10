@@ -16,7 +16,7 @@ import {
 } from 'modelos/src';
 import { Feature, Map, MapBrowserEvent, Overlay, View } from 'ol';
 import { click } from 'ol/events/condition';
-import { Extent } from 'ol/extent';
+import { createEmpty, Extent, extend as extendExtent } from 'ol/extent';
 import { FeatureLike } from 'ol/Feature';
 import TileWMS from 'ol/source/TileWMS';
 import { Point, Polygon } from 'ol/geom';
@@ -137,6 +137,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private readonly MAP_STATE_KEY = 'chaman_map_state';
   private isFirstVisit = true; // Para controlar si es la primera visita
+  private awaitingNearestLotCenter = false;
+  private readonly DISTRIBUTED_LOTS_DISTANCE_KM = 180;
 
   public establecimientos$?: Subscription;
   public establecimientos: IEstablecimiento[] = [];
@@ -436,9 +438,14 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
-    // Prioridad 1: Centrar en lotes si existen
     if (this.lotes?.length > 0) {
-      this.centerMapOnBoundsLotes();
+      const distributedLots = this.getLotsSpreadKm() > this.DISTRIBUTED_LOTS_DISTANCE_KM;
+      if (distributedLots && this.currentPosition?.coordinates) {
+        this.centerMapOnNearestLotes();
+        return;
+      }
+      this.awaitingNearestLotCenter = distributedLots;
+      this.centerMapOnBoundsLotes(!distributedLots);
       return;
     }
 
@@ -660,6 +667,252 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       return 'Indeterminado';
     }
     return this.climaTraduccionService.traducirDescripcion(descripcionOriginal);
+  }
+
+  public getServicioShortLabel(servicio: IServicio): string {
+    switch (servicio.icon) {
+      case 'siembras':
+        return 'Enfermedades';
+      case 'water-drop':
+        return 'Riego';
+      case 'bloodtype':
+        return 'Huella';
+      case 'plantas':
+        return 'NDVI';
+      default:
+        return servicio.label();
+    }
+  }
+
+  public climaZonaNombre(): string {
+    return this.establecimientoSeleccionado?.nombre || 'Zona del mapa';
+  }
+
+  public climaTemperaturaActual(): string {
+    return this.formatMetric(this.getClimaActual()?.temperatura?.last, 'C', 1);
+  }
+
+  public climaHumedadActual(): string {
+    return this.formatMetric(this.getClimaActual()?.humedad?.last, '%', 0);
+  }
+
+  public climaLluvia24(): string {
+    const pronosticos = this.getPronosticosZona();
+    return this.formatMetric(this.numero(pronosticos[0]?.lluvia) || 0, 'mm', 1);
+  }
+
+  public climaLluvia72(): string {
+    const lluvia = this.getPronosticosZona()
+      .slice(0, 3)
+      .reduce((acc, item) => acc + (this.numero(item?.lluvia) || 0), 0);
+    return this.formatMetric(lluvia, 'mm', 1);
+  }
+
+  public climaVientoMax(): string {
+    const pronosticos = this.getPronosticosZona();
+    const maxPronostico = Math.max(
+      ...pronosticos.slice(0, 3).map((item) => this.numero(item?.velocidadViento?.max ?? item?.velocidadViento?.avg) || 0),
+      0
+    );
+    const actual = this.numero(this.getClimaActual()?.velocidadViento?.last) || 0;
+    return this.formatMetric(Math.max(actual, maxPronostico), 'km/h', 0);
+  }
+
+  public loteUbicacion(lote?: ILoteMapa): string {
+    const seleccionado = lote || this.loteSeleccionado;
+    const partes = [
+      seleccionado?.establecimiento?.nombre,
+      seleccionado?.departamento?.nombre,
+      seleccionado?.departamento?.provincia?.nombre,
+    ].filter(Boolean);
+    return partes.length ? partes.join(' / ') : 'Ubicacion sin clasificar';
+  }
+
+  public loteHectareas(lote?: ILoteMapa): string {
+    const superficie = this.numero((lote || this.loteSeleccionado)?.ubicacion?.superficie);
+    return superficie === null ? '-- ha' : `${this.formatNumber(superficie, 1)} ha`;
+  }
+
+  public loteSuelo(lote?: ILoteMapa): string {
+    const seleccionado = lote || this.loteSeleccionado;
+    return (
+      seleccionado?.suelos?.[0]?.textura ||
+      seleccionado?.texturaLixiviacion ||
+      seleccionado?.texturaEscorrentia ||
+      seleccionado?.drenajeNaturalLixiviacion ||
+      'Sin dato'
+    );
+  }
+
+  public loteCultivo(lote?: ILoteMapa): string {
+    const cultivo = (lote || this.loteSeleccionado)?.siembra?.semilla?.cultivo;
+    return cultivo ? this.helper.translateCultivo(cultivo) : 'Sin siembra';
+  }
+
+  public loteVariedad(lote?: ILoteMapa): string {
+    const semilla = (lote || this.loteSeleccionado)?.siembra?.semilla;
+    if (!semilla) {
+      return 'Sin variedad cargada';
+    }
+    return [semilla.variedad, semilla.semillero, this.helper.translateCiclo(semilla.ciclo)].filter(Boolean).join(' ');
+  }
+
+  public loteEtapa(lote?: ILoteMapa): string {
+    const seleccionado = lote || this.loteSeleccionado;
+    return seleccionado?.siembra ? this.helper.getNombreEtapa(seleccionado) : 'Sin siembra';
+  }
+
+  public loteFechaSiembra(lote?: ILoteMapa): string {
+    const fecha = (lote || this.loteSeleccionado)?.siembra?.fechaSiembra;
+    return fecha ? new Date(fecha).toLocaleDateString('es-AR') : 'No cargada';
+  }
+
+  public loteEnfermedadResumen(lote?: ILoteMapa): string {
+    const predicciones = (lote || this.loteSeleccionado)?.siembra?.ultimaPrediccion?.enfermedades || [];
+    if (!predicciones.length) {
+      return 'Sin prediccion reciente';
+    }
+    const max = predicciones.reduce((prev, current) => ((current.resultado || 0) > (prev.resultado || 0) ? current : prev));
+    return `${max.enfermedad}: ${this.formatNumber(max.resultado || 0, 0)}%`;
+  }
+
+  public loteEnfermedadNivel(lote?: ILoteMapa): string {
+    const max = this.maxRiesgoEnfermedad(lote || this.loteSeleccionado);
+    if (max === null) return 'Pendiente';
+    if (max >= 20) return 'Riesgo alto';
+    if (max >= 15) return 'Riesgo medio';
+    return 'Riesgo bajo';
+  }
+
+  public loteEnfermedadPercent(lote?: ILoteMapa): number {
+    const max = this.maxRiesgoEnfermedad(lote || this.loteSeleccionado);
+    return max === null ? 8 : Math.max(8, Math.min(100, (max / 25) * 100));
+  }
+
+  public loteRiegoResumen(lote?: ILoteMapa): string {
+    const seleccionado = lote || this.loteSeleccionado;
+    if (!seleccionado?.siembra) {
+      return 'Sin siembra';
+    }
+    if (seleccionado?.sumaRiego && seleccionado.sumaRiego > 0) {
+      return `${this.formatNumber(seleccionado.sumaRiego, 1)} mm sugeridos`;
+    }
+    return 'Sin riego recomendado';
+  }
+
+  public loteHuellaResumen(lote?: ILoteMapa): string {
+    const huella = (lote || this.loteSeleccionado)?.huellaHidrica;
+    if (huella?.total?.litrosKg) {
+      return `${this.formatNumber(huella.total.litrosKg, 0)} l/kg total`;
+    }
+    return 'En seguimiento';
+  }
+
+  public loteNdviResumen(lote?: ILoteMapa): string {
+    const seleccionado = lote || this.loteSeleccionado;
+    if (seleccionado?.ndvi) {
+      return `NDVI ${this.formatNumber(seleccionado.ndvi, 3)}`;
+    }
+    return 'Sin lectura NDVI';
+  }
+
+  public loteRindeResumen(lote?: ILoteMapa): string {
+    const seleccionado = lote || this.loteSeleccionado;
+    const siembra = seleccionado?.siembra;
+    if (!siembra) {
+      return 'Sin siembra';
+    }
+    const cosecha = siembra.rendimientoObtenidoKgHaSeco || siembra.rendimientoObtenidoKgHa;
+    if (cosecha) {
+      return `${this.formatNumber(cosecha, 0)} kg/ha cosechado`;
+    }
+
+    const cultivo = String(siembra.semilla?.cultivo || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    let base = 3500;
+    if (cultivo.includes('maiz')) base = 8500;
+    if (cultivo.includes('soja')) base = 3200;
+    if (cultivo.includes('trigo')) base = 4200;
+
+    const manejoFactor: Record<string, number> = {
+      'Muy Bajo': 0.65,
+      Bajo: 0.82,
+      Alto: 1.08,
+      'Muy Alto': 1.2,
+    };
+    const sueloFactor: Record<string, number> = {
+      Arcilloso: 0.95,
+      'Franco arcilloso': 1.04,
+      Franco: 1.08,
+      'Franco arenoso': 0.98,
+      Arenoso: 0.84,
+    };
+
+    const riesgo = this.maxRiesgoEnfermedad(seleccionado) || 0;
+    const ndviFactor = seleccionado?.ndvi ? Math.max(0.65, Math.min(1.18, 0.72 + seleccionado.ndvi * 0.62)) : 0.92;
+    const enfermedadFactor = riesgo >= 20 ? 0.82 : riesgo >= 15 ? 0.91 : 1;
+    const riegoFactor = seleccionado?.sumaRiego && seleccionado.sumaRiego > 15 ? 0.92 : 1;
+    const factor =
+      (manejoFactor[siembra.rendimiento || ''] || 1) *
+      (sueloFactor[this.loteSuelo(seleccionado)] || 1) *
+      ndviFactor *
+      enfermedadFactor *
+      riegoFactor;
+
+    return `${this.formatNumber(base * factor, 0)} kg/ha estimado`;
+  }
+
+  public cosecharLote() {
+    if (!this.loteSeleccionado?.idSiembra) {
+      this.helper.notifWarn('El lote necesita una siembra activa para cargar cosecha.');
+      return;
+    }
+    this.paramsService.set('cosecharLote', this.loteSeleccionado);
+    this.router.navigate(['lotes', 'cosechar', this.loteSeleccionado?._id]);
+  }
+
+  public editarLote() {
+    if (!this.loteSeleccionado?._id) return;
+    this.router.navigate(['lotes', 'editar', this.loteSeleccionado._id]);
+  }
+
+  private getClimaActual(): any {
+    const actual = this.establecimientoSeleccionado?.climaActual as any;
+    return actual?.clima || actual;
+  }
+
+  private getPronosticosZona(): any[] {
+    const prediccion = this.establecimientoSeleccionado?.prediccionClimatica as any;
+    const pronosticos = prediccion?.pronosticos || prediccion?.clima?.pronosticos || [];
+    return Array.isArray(pronosticos) ? pronosticos : [];
+  }
+
+  private maxRiesgoEnfermedad(lote?: ILoteMapa): number | null {
+    const predicciones = lote?.siembra?.ultimaPrediccion?.enfermedades || [];
+    if (!predicciones.length) return null;
+    return predicciones.reduce((max, item) => Math.max(max, item.resultado || 0), 0);
+  }
+
+  private numero(value: unknown): number | null {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : null;
+  }
+
+  private formatMetric(value: unknown, unit: string, digits = 0): string {
+    const numberValue = this.numero(value);
+    if (numberValue === null) {
+      return '--';
+    }
+    return `${this.formatNumber(numberValue, digits)} ${unit}`;
+  }
+
+  private formatNumber(value: number, digits = 0): string {
+    return new Intl.NumberFormat('es-AR', {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(value);
   }
 
   // Método para redibujar datos cuando el mapa está listo
@@ -1140,8 +1393,106 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.centerMapOnBoundsLotes();
   }
 
+  private getLoteCenter(lote: ILoteMapa): [number, number] | null {
+    if (lote.ubicacion?.centro?.lng !== undefined && lote.ubicacion?.centro?.lat !== undefined) {
+      return [lote.ubicacion.centro.lng, lote.ubicacion.centro.lat];
+    }
+
+    const coords = (lote.ubicacion?.geojson as IGeoJSONPolygon | undefined)?.coordinates?.[0];
+    if (!coords?.length) return null;
+    const total = coords.reduce(
+      (acc, coord) => {
+        acc.lng += Number(coord[0]) || 0;
+        acc.lat += Number(coord[1]) || 0;
+        return acc;
+      },
+      { lng: 0, lat: 0 }
+    );
+    return [total.lng / coords.length, total.lat / coords.length];
+  }
+
+  private getLotsSpreadKm(): number {
+    const centers = this.lotes.map((lote) => this.getLoteCenter(lote)).filter((center): center is [number, number] => !!center);
+    if (centers.length < 2) return 0;
+    let maxDistance = 0;
+    for (let i = 0; i < centers.length; i++) {
+      for (let j = i + 1; j < centers.length; j++) {
+        maxDistance = Math.max(maxDistance, this.distanceKm(centers[i], centers[j]));
+      }
+    }
+    return maxDistance;
+  }
+
+  private centerMapOnNearestLotes() {
+    if (!this.map || !this.currentPosition?.coordinates?.length) {
+      return;
+    }
+
+    const userCenter = this.currentPosition.coordinates as [number, number];
+    const ranked = this.lotes
+      .map((lote) => {
+        const center = this.getLoteCenter(lote);
+        return center ? { lote, distance: this.distanceKm(userCenter, center) } : null;
+      })
+      .filter((item): item is { lote: ILoteMapa; distance: number } => !!item)
+      .sort((a, b) => a.distance - b.distance);
+
+    if (!ranked.length) {
+      this.centerMapOnBoundsLotes();
+      return;
+    }
+
+    const nearestDistance = ranked[0].distance;
+    const selectedIds = new Set(
+      ranked
+        .filter((item, index) => index < 6 || item.distance <= nearestDistance + 80)
+        .slice(0, 8)
+        .map((item) => item.lote._id)
+    );
+    const features = this.lotesLayer
+      .getSource()
+      ?.getFeatures()
+      .filter((feature) => selectedIds.has((feature.get('lote') as ILoteMapa | undefined)?._id));
+
+    if (features?.length) {
+      const extent = createEmpty();
+      features.forEach((feature) => {
+        const geometry = feature.getGeometry();
+        if (geometry) {
+          extendExtent(extent, geometry.getExtent());
+        }
+      });
+      this.map.getView().fit(extent, { padding: [90, 90, 260, 90], duration: 1000 });
+    } else {
+      this.map.getView().animate({
+        center: fromLonLat(this.getLoteCenter(ranked[0].lote)!),
+        zoom: this.helper.isHandset ? 13 : 14,
+        duration: 1000,
+      });
+    }
+
+    this.awaitingNearestLotCenter = false;
+    setTimeout(() => {
+      this.saveMapState();
+      this.isFirstVisit = false;
+    }, 1100);
+  }
+
+  private distanceKm(a: [number, number], b: [number, number]): number {
+    const toRad = (value: number) => (value * Math.PI) / 180;
+    const radiusKm = 6371;
+    const dLat = toRad(b[1] - a[1]);
+    const dLng = toRad(b[0] - a[0]);
+    const lat1 = toRad(a[1]);
+    const lat2 = toRad(b[1]);
+    const h =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return 2 * radiusKm * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+  }
+
   // Método separado que siempre centra en lotes (para uso del botón)
-  private centerMapOnBoundsLotes() {
+  private centerMapOnBoundsLotes(markAsVisited = true) {
     if (!this.map || !this.lotesLayer) {
       console.warn('Mapa o capa de lotes no inicializados para setBounds');
       return;
@@ -1160,7 +1511,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     // Guardar la posición después de centrar en los lotes
     setTimeout(() => {
       this.saveMapState();
-      this.isFirstVisit = false; // Marcar que ya no es primera visita
+      if (markAsVisited) {
+        this.isFirstVisit = false; // Marcar que ya no es primera visita
+      }
     }, 1100);
   }
 
@@ -1593,8 +1946,15 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       if (this.isFirstVisit && !this.lotes?.length && !this.establecimientos?.length) {
         this.centerOnUserLocation();
       }
+      if (this.awaitingNearestLotCenter && this.lotes?.length) {
+        this.centerMapOnNearestLotes();
+      }
     } catch (error) {
       console.warn('⚠️ No se pudo obtener ubicación del dispositivo:', error);
+      if (this.awaitingNearestLotCenter && this.lotes?.length) {
+        this.awaitingNearestLotCenter = false;
+        this.isFirstVisit = false;
+      }
       // La app sigue funcionando normalmente sin ubicación
     }
   }
@@ -1742,9 +2102,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   async ngOnInit() {
     this.loading.set(true);
 
-    // Determinar si es primera visita basado en si hay estado guardado del mapa
-    const savedState = this.loadMapState();
-    this.isFirstVisit = !savedState; // Solo es primera visita si NO hay estado guardado
+    // Al entrar al mapa despues del login, priorizamos lotes/cercania por sobre un estado viejo guardado.
+    this.isFirstVisit = true;
 
     // 🚀 OPTIMIZACIÓN: Obtener ubicación en background sin bloquear la carga inicial
     this.obtenerUbicacionEnBackground();

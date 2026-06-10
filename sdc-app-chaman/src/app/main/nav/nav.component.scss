@@ -15,3 +15,47 @@ a {
   min-height: 100dvh;
   overflow-x: hidden;
 }
+
+.menu-launcher {
+  position: fixed;
+  left: 0.5rem;
+  top: 0.5rem;
+  z-index: 1002;
+}
+
+:host ::ng-deep .menu-launcher .p-button {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(121, 150, 185, 0.3);
+  color: var(--p-primary-color);
+  box-shadow: 0 12px 34px rgba(24, 39, 75, 0.16);
+  backdrop-filter: blur(16px);
+}
+
+:host ::ng-deep .chaman-nav-drawer.p-drawer {
+  width: min(300px, calc(100vw - 1.25rem)) !important;
+  background: rgba(255, 255, 255, 0.84);
+  border-right: 1px solid rgba(121, 150, 185, 0.32);
+  box-shadow: 18px 0 54px rgba(24, 39, 75, 0.22);
+  backdrop-filter: blur(18px);
+}
+
+:host ::ng-deep .chaman-nav-drawer .p-drawer-content {
+  background: transparent;
+}
+
+:host ::ng-deep .chaman-nav-drawer a {
+  margin: 0.12rem 0.6rem;
+  border-radius: 14px;
+  border-left-width: 0;
+}
+
+:host ::ng-deep .chaman-nav-drawer a.active {
+  border-left-width: 0;
+  background: rgba(35, 200, 196, 0.14);
+  outline: 1px solid rgba(35, 200, 196, 0.28);
+}
+
+:host ::ng-deep .chaman-nav-drawer svg,
+:host ::ng-deep .chaman-nav-drawer i {
+  opacity: 0.95;
+}
