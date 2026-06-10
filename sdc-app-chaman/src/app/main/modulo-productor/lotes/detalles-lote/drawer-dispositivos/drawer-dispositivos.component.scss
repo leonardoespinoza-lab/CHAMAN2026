@@ -1,0 +1,36 @@
+p-divider {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+}
+
+.contenedor-tarjetas {
+  display: grid;
+  width: 100%;
+  gap: 1rem; // Espacio entre las tarjetas
+
+  // --- Columna Responsiva Automática ---
+  // Crea tantas columnas como quepan, con un ancho mínimo de 160px cada una.
+  // Esto generará una cuadrícula de 2 columnas en la mayoría de los teléfonos
+  // y se adaptará a pantallas más grandes sin necesidad de media queries.
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+
+  // --- CORRECCIÓN DE ALTURA ---
+  // Evita que las tarjetas se estiren verticalmente.
+  // Cada tarjeta ahora tendrá la altura que su contenido requiera.
+  align-items: start;
+}
+
+// Estilos para el selector de vista en el header
+:host ::ng-deep {
+  .p-selectbutton {
+    .p-button {
+      font-size: 12px !important;
+      padding: 0.4rem 0.8rem !important;
+    }
+    
+    .pi {
+      font-size: 12px !important;
+      margin-right: 0.3rem !important;
+    }
+  }
+}

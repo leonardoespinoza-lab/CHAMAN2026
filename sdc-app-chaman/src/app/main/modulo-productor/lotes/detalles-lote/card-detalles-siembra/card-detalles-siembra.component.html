@@ -1,0 +1,49 @@
+<div class="custom-card" style="width: 100%">
+  <p class="titulo-card">{{ 'Detalle' | translate | uppercase }}</p>
+
+  @if (siembra) {
+    <div>
+      <!-- Cultivo -->
+      <div style="display: flex; flex-direction: column; margin-bottom: 1em">
+        <span style="font-size: 12px">{{ 'Cultivo' | translate }}</span>
+        <span style="font-size: 16px; font-weight: bold">
+          {{ helper.translateCultivo(siembra.semilla?.cultivo) }}
+        </span>
+      </div>
+      <!-- Variedad -->
+      <div style="display: flex; flex-direction: column; margin-bottom: 1em">
+        <span style="font-size: 12px">{{ 'Veriedad' | translate }}</span>
+        <span style="font-size: 16px; font-weight: bold">
+          {{ siembra.semilla?.variedad }}
+          <span style="font-size: 14px; font-weight: bold; color: var(--p-text-muted-color)">
+            {{ siembra.semilla?.semillero }}
+          </span>
+          <span style="font-size: 14px; font-weight: bold; color: var(--p-text-muted-color)">
+            {{ helper.translateCiclo(siembra.semilla?.ciclo) }}
+          </span>
+        </span>
+      </div>
+      <!-- Fecha de siembra y cosecha -->
+      <div style="display: flex; flex-direction: row; justify-content: space-between">
+        <!-- Fecha siembra -->
+        <div style="display: flex; flex-direction: column">
+          <span style="font-size: 12px">{{ 'Fecha de siembra' | translate }}</span>
+          <span style="font-size: 16px; font-weight: bold">
+            {{ siembra.fechaSiembra | date: 'shortDate' }}
+          </span>
+        </div>
+        <!-- Fecha cosecha -->
+        @if (siembra.fechaCosecha) {
+          <div style="display: flex; flex-direction: column">
+            <span style="font-size: 12px">{{ 'Fecha de cosecha' | translate }}</span>
+            <span style="font-size: 16px; font-weight: bold">
+              {{ siembra.fechaCosecha | date: 'shortDate' }}
+            </span>
+          </div>
+        }
+      </div>
+    </div>
+  } @else {
+    <p-message severity="info">{{ 'El lote no fue sembrado' | translate }}</p-message>
+  }
+</div>

@@ -1,0 +1,26 @@
+{
+  "name": "chaman2026",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monorepo local para CHAMAN Agro 2026: plataforma agronomica, sensores, clima, predicciones y gestion multi-tenant.",
+  "engines": {
+    "node": ">=20 <21",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "build": "npm run build:datos && npm run build:auth && npm run build:api-cliente && npm run build:predicciones && npm run build:clima && npm run build:app",
+    "build:datos": "npm --prefix sdc-datos run build",
+    "build:auth": "npm --prefix sdc-auth run build",
+    "build:api-cliente": "npm --prefix sdc-api-cliente run build",
+    "build:predicciones": "npm --prefix sdc-api-predicciones run build",
+    "build:clima": "npm --prefix sdc-api-clima run build",
+    "build:app": "npm --prefix sdc-app-chaman run build-test",
+    "start:local": "powershell -ExecutionPolicy Bypass -File scripts/start-local-services.ps1",
+    "stop:local": "powershell -ExecutionPolicy Bypass -File scripts/stop-local-services.ps1",
+    "seed:admin": "node scripts/seed-admin-local.js",
+    "seed:master-data": "node scripts/seed-master-data-local.js",
+    "seed:agro-inputs": "node scripts/seed-agro-inputs-local.js",
+    "seed:demo": "node scripts/seed-demo-hierarchy-local.js",
+    "audit:secrets": "node scripts/audit-config-secrets.js"
+  }
+}

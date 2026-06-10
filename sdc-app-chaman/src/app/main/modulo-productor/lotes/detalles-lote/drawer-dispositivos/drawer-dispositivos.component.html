@@ -1,0 +1,63 @@
+<!-- Resumen del servicio monitoreo de enfermedades-->
+<p-drawer
+  #drawerRef
+  [(visible)]="visible"
+  [position]="(helper.isWide$ | async) ? 'right' : 'bottom'"
+  [style]="{
+    'margin-top': (helper.isWide$ | async) ? '58px' : '0',
+    height: (helper.isWide$ | async) ? 'calc(100% - 58px)' : 'auto',
+    'max-height': (helper.isWide$ | async) ? 'calc(100% - 58px)' : '70%',
+    'border-radius': (helper.isWide$ | async) ? '30px 0 0 30px' : '30px 30px 0 0',
+    overflow: 'auto',
+    width: (helper.isWide$ | async) ? '450px' : '100%',
+    'max-width': (helper.isWide$ | async) ? '45vw' : '100%',
+  }"
+  [modal]="true"
+  (onHide)="visibleChange.emit(false)"
+  [closable]="true"
+>
+  <ng-template #header>
+    <div class="row-space-between" style="gap: 5px; width: 100%">
+      <span class="font-bold whitespace-nowrap">{{ dispositivo?.nombre }}</span>
+      <div style="display: flex; align-items: center; gap: 1em">
+        <!-- Selector de vista solo para lanzas de suelo -->
+        @if (esLanzaDeSuelo && datosLanza.length > 0) {
+          <p-selectButton
+            [options]="[
+              { label: 'Tarjetas', value: 'tarjetas', icon: 'pi pi-th-large' },
+              { label: 'Gráfico', value: 'grafico', icon: 'pi pi-chart-line' },
+            ]"
+            [(ngModel)]="vistaActiva"
+            optionLabel="label"
+            optionValue="value"
+            [style]="{ 'font-size': '12px' }"
+          >
+          </p-selectButton>
+        }
+        <app-ubicar [dispositivo]="dispositivo"></app-ubicar>
+      </div>
+    </div>
+  </ng-template>
+  @if (esLanzaDeSuelo) {
+    <div style="display: flex; flex-direction: column; gap: 1em">
+      @if (vistaActiva === 'tarjetas') {
+        <!-- Vista de tarjetas (actual) -->
+        <div style="display: flex; flex-direction: row; gap: 1em">
+          <div class="contenedor-tarjetas">
+            @for (dato of datosLanza; track dato.profundidad) {
+              <app-card-detalles-reporte-lanza [data]="dato" />
+            }
+          </div>
+        </div>
+      } @else if (vistaActiva === 'grafico') {
+        <!-- Vista de gráfico (nueva) -->
+        <div style="display: flex; flex-direction: column; gap: 1em">
+          <app-grafico-perfil-suelo
+            [datos]="datosLanza"
+            [titulo]="'Perfil de Humedad y Temperatura - ' + dispositivo?.nombre"
+          ></app-grafico-perfil-suelo>
+        </div>
+      }
+    </div>
+  }
+</p-drawer>

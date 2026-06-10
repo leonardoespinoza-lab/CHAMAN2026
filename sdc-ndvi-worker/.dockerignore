@@ -1,0 +1,37 @@
+# Entornos virtuales locales
+.venv/
+env/
+venv/
+
+# Archivos de Pipenv no necesarios
+Pipfile.lock.backup
+
+# Archivos de Python generados
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Archivos temporales o de salida
+*.tif
+*.tiff
+*.png
+*.jpg
+*.jpeg
+*.zip
+*.tar.gz
+*.log
+
+# Carpetas comunes de datos temporales
+/tmp/
+output/
+downloads/
+__output__/
+.ndvi_cache/
+.cache/
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Ignorar credenciales locales
+.env

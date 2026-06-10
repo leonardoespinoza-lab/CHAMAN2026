@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sdc-cron
+  namespace: chaman
+  labels:
+    app: sdc-cron
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sdc-cron
+  template:
+    metadata:
+      labels:
+        app: sdc-cron
+    spec:
+      containers:
+      - name: sdc-cron
+        image: chaman/sdc-cron:latest
+        imagePullPolicy: Never
+        env:
+        - name: REDIS_HOST
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: host
+        - name: REDIS_PORT
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: port
+        - name: REDIS_DB
+          value: "0"
+        - name: API_DATOS
+          value: "http://sdc-datos-service"
+        - name: TAREAS_TEST
+          value: "false"
+        - name: ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "400m"

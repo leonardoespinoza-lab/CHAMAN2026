@@ -1,0 +1,126 @@
+<section class="producer-page">
+  <header class="producer-header">
+    <div>
+      <p class="eyebrow">Productores</p>
+      <h1>{{ titulo?.() }}</h1>
+      <p>Alta del productor. Luego se puede crear el usuario y asociarlo a este productor.</p>
+    </div>
+    <div class="header-actions">
+      <p-button label="Volver" icon="pi pi-arrow-left" severity="secondary" outlined="true" (onClick)="volver()" />
+      @if (loginService.esAdmin && !productor) {
+        <p-button
+          label="Guardar y crear usuario"
+          icon="pi pi-user-plus"
+          severity="secondary"
+          [loading]="loading"
+          [disabled]="disabled"
+          (onClick)="guardar(true)"
+        />
+      }
+      <p-button label="Guardar" icon="pi pi-check" [loading]="loading" [disabled]="disabled" (onClick)="guardar()" />
+    </div>
+  </header>
+
+  @if (form) {
+    <form [formGroup]="form" class="producer-form" autocomplete="off">
+      <div class="form-section">
+        <div class="section-heading">
+          <h2>Datos básicos</h2>
+          <span>Solo el nombre es obligatorio para empezar.</span>
+        </div>
+
+        <div class="field-grid">
+          <p-floatlabel variant="in">
+            <input pInputText formControlName="nombre" [fluid]="true" autocomplete="off" />
+            <label>{{ 'Nombre' | translate }}</label>
+          </p-floatlabel>
+
+          <p-floatlabel variant="in">
+            <input pInputText formControlName="logo" [fluid]="true" autocomplete="off" />
+            <label>{{ 'Logo' | translate }}</label>
+          </p-floatlabel>
+
+          @if (loginService.esAdmin) {
+            <p-floatlabel variant="in">
+              <p-select
+                [loading]="loading"
+                [options]="quimicas"
+                formControlName="idQuimica"
+                [showClear]="true"
+                [fluid]="true"
+                [appendTo]="'body'"
+                optionValue="_id"
+                optionLabel="nombre"
+                (onChange)="onQuimicaChange($event)"
+              />
+              <label>{{ 'Compañía' | translate }}</label>
+            </p-floatlabel>
+
+            <p-floatlabel variant="in">
+              <p-select
+                [loading]="loading"
+                [options]="distribuidores"
+                formControlName="idDistribuidor"
+                [showClear]="true"
+                [fluid]="true"
+                [appendTo]="'body'"
+                optionValue="_id"
+                optionLabel="nombre"
+              />
+              <label>{{ 'Distribuidor' | translate }}</label>
+            </p-floatlabel>
+          }
+        </div>
+
+        <div class="toggle-row">
+          <p-checkbox formControlName="gratis" inputId="gratis" [binary]="true" />
+          <label for="gratis">{{ 'Gratis' | translate }}</label>
+        </div>
+      </div>
+
+      @if (loginService.esAdmin) {
+        <div class="form-section compact">
+          <div class="toggle-row">
+            <p-checkbox
+              [(ngModel)]="mostrarLicencia"
+              [ngModelOptions]="{ standalone: true }"
+              [binary]="true"
+              inputId="mostrarLicencia"
+              (ngModelChange)="onMostrarLicenciaChange($event)"
+            />
+            <label for="mostrarLicencia">Configurar licencia manualmente</label>
+          </div>
+          <p class="hint">Si no se configura, se crea una licencia gratis básica automáticamente.</p>
+        </div>
+      }
+
+      @if (loginService.esAdmin && mostrarLicencia && formLicencia) {
+        <div class="form-section" [formGroup]="formLicencia">
+          <div class="section-heading">
+            <h2>Licencia</h2>
+            <span>Configura límites y módulos del productor.</span>
+          </div>
+
+          <div class="field-grid">
+            <p-floatlabel variant="in">
+              <input pInputText formControlName="nombre" [fluid]="true" autocomplete="off" />
+              <label>Nombre de licencia</label>
+            </p-floatlabel>
+            <p-floatlabel variant="in">
+              <input pInputText type="number" formControlName="maxUsuarios" [fluid]="true" />
+              <label>Usuarios</label>
+            </p-floatlabel>
+            <p-floatlabel variant="in">
+              <input pInputText type="number" formControlName="maxEstablecimientos" [fluid]="true" />
+              <label>Establecimientos</label>
+            </p-floatlabel>
+            <p-floatlabel variant="in">
+              <input pInputText type="number" formControlName="maxLotes" [fluid]="true" />
+              <label>Lotes</label>
+            </p-floatlabel>
+          </div>
+        </div>
+      }
+    </form>
+  }
+</section>

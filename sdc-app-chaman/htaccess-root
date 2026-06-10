@@ -1,0 +1,12 @@
+# .htaccess para la raíz del servidor (app.chamanagro.ar)
+# Este archivo debe colocarse en la raíz del servidor, no en /login/
+
+RewriteEngine On
+
+# Redirigir solicitudes de imágenes desde la raíz al subdirectorio login
+RewriteCond %{REQUEST_URI} ^/images/(.*)$
+RewriteRule ^images/(.*)$ /login/images/$1 [L,R=301]
+
+# Redirigir solicitudes de otros assets desde la raíz al subdirectorio login
+RewriteCond %{REQUEST_URI} ^/(favicon|icons|colormaps|i18n)/(.*)$
+RewriteRule ^(favicon|icons|colormaps|i18n)/(.*)$ /login/$1/$2 [L,R=301]

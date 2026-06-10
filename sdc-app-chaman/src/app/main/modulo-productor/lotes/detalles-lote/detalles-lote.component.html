@@ -1,0 +1,92 @@
+<div class="lote-view-container">
+  <div class="lote-header">
+    <div class="lote-title">
+      <svg class="back-icon" (click)="helper.volver()">
+        <use xlink:href="icons/icons.svg#back"></use>
+      </svg>
+      <div>
+        <span class="lote-name">Lote {{ lote?.nombre }}</span>
+        <span class="lote-establishment">{{ lote?.establecimiento?.nombre }}</span>
+      </div>
+    </div>
+    <div class="lote-actions">
+      @if (siembraActual) {
+        <span class="siembra-badge">Siembra actual</span>
+      } @else {
+        <p-button severity="secondary" (onClick)="verSiembraActual()"> Ver siembra actual </p-button>
+      }
+      @if (!helper.soloLectura()) {
+        <p-button
+          [rounded]="true"
+          pTooltip="Historial de Siembras"
+          severity="primary"
+          icon="pi"
+          (onClick)="this.verDrawerSiembras = true"
+          [text]="true"
+        >
+          <svg class="history-icon">
+            <use xlink:href="icons/icons.svg#history"></use>
+          </svg>
+        </p-button>
+      }
+    </div>
+  </div>
+
+  @if (siembraActual && siembra && !siembra.fechaCosecha) {    
+    @if (siembra.crono) {      
+      <div class="desktop-only">
+        <app-card-etapas-fenologicas [lote]="lote"></app-card-etapas-fenologicas>
+      </div>
+    } @else {
+      <div class="desktop-only">
+        <app-card-etapa-fenologica [lote]="lote"></app-card-etapa-fenologica>
+      </div>
+    }
+
+    @if (siembra.crono) {
+      <div class="mobile-only">
+        <app-card-etapas-fenologicas [lote]="lote"></app-card-etapas-fenologicas>
+      </div>
+    } @else {
+      <div class="mobile-only">
+        <app-card-etapa-fenologica [lote]="lote"></app-card-etapa-fenologica>
+      </div>
+    }
+  }
+
+  @if (!helper.soloLectura()) {
+    @if (!siembra || (siembraActual && siembra.fechaCosecha)) {
+      <p-button
+        [label]="'Crear nueva siembra' | translate"
+        [fluid]="true"
+        [outlined]="true"
+        styleClass="w-full"
+        (onClick)="sembrar()"
+      />
+    }
+  }
+
+  <div class="services-stack">
+    @if (siembra?.fechaCosecha) {
+      <app-card-rendimiento class="service-panel" [siembra]="siembra"></app-card-rendimiento>
+    }
+    <app-card-enfermedades class="service-panel" [siembra]="siembra"></app-card-enfermedades>
+    <app-card-riego class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-riego>
+    <app-card-ndvi class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-ndvi>
+    <app-card-huella-hidrica class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-huella-hidrica>
+    <div class="operations-row service-panel">
+      <app-card-ultima-fertilizacion [lote]="lote"></app-card-ultima-fertilizacion>
+      <app-card-ultima-fumigacion [lote]="lote" [siembra]="siembra"></app-card-ultima-fumigacion>
+    </div>
+    @if (helper.checkArray(lote?.idsDispositivo)) {
+      <app-card-dispositivos class="service-panel" [lote]="lote"></app-card-dispositivos>
+    }
+    <app-card-clima-lote class="service-panel climate-section" [lote]="lote"></app-card-clima-lote>
+  </div>
+</div>
+
+<app-drawer-listado-siembras
+  [lote]="lote"
+  [(visible)]="verDrawerSiembras"
+  (onSelectSiembra)="selectSiembra($event)"
+></app-drawer-listado-siembras>

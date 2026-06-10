@@ -1,0 +1,74 @@
+<!-- <app-map-draw [formGeojson]="geojson" tipo="Polygon" [readOnlyPolygons]="geoJsonEstablecimiento"></app-map-draw> -->
+
+<div style="padding: 1em; height: 100%">
+  <div class="p-card" style="height: 100%">
+    <div
+      class="p-card-body"
+      style="height: 100%; display: flex; flex-direction: column; justify-content: space-between"
+    >
+      <div style="overflow: hidden; height: 100%">
+        <!-- Titulo -->
+        <div class="p-card-title">{{ titulo?.() }}</div>
+        <!-- Subtitulo -->
+        @if (establecimiento) {
+          <div class="p-card-subtitle">{{ establecimiento.nombre }}</div>
+        }
+        <!-- Content -->
+        <div class="p-card-content" style="overflow: auto; height: calc(100% - 26px); margin-top: 1em">
+          @if (form) {
+            <form [formGroup]="form">
+              <p-tabs [(value)]="tabValue" scrollable [lazy]="false">
+                <p-tablist>
+                  <p-tab [value]="0">{{ 'Básico' | translate }}</p-tab>
+                  <p-tab [value]="1">{{ 'Mapa' | translate }}</p-tab>
+                </p-tablist>
+                <p-tabpanels>
+                  <!-- Basico -->
+                  <p-tabpanel [value]="0">
+                    <!-- Nombre -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <input pInputText formControlName="nombre" [fluid]="true" />
+                      <label>{{ 'Nombre' | translate }}</label>
+                    </p-floatlabel>
+                  </p-tabpanel>
+                  <!-- Mapa -->
+                  <p-tabpanel [value]="1">
+                    @if (tabValue === 1) {
+                      <app-map-draw
+                        [multiPolygon]="multipolygon"
+                        (multiPolygonChange)="onMultipoligonChange($event)"
+                        [tipo]="'MultiPolygon'"
+                      ></app-map-draw>
+                    }
+                  </p-tabpanel>
+                </p-tabpanels>
+              </p-tabs>
+            </form>
+          }
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="p-card-footer">
+        <p-divider />
+        <div class="flex gap-4 mt-1">
+          <p-button
+            [label]="'Cancelar' | translate"
+            severity="secondary"
+            class="w-full"
+            [outlined]="true"
+            styleClass="w-full"
+            (onClick)="volver()"
+          />
+          <p-button
+            [label]="'Guardar' | translate"
+            class="w-full"
+            styleClass="w-full"
+            [loading]="loading"
+            (onClick)="guardar()"
+            [disabled]="!form?.valid"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

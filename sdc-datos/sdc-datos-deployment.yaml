@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sdc-datos
+  namespace: chaman
+  labels:
+    app: sdc-datos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sdc-datos
+  template:
+    metadata:
+      labels:
+        app: sdc-datos
+    spec:
+      containers:
+      - name: sdc-datos
+        image: chaman/sdc-datos:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5000
+        env:
+        - name: PORT
+          value: "5000"
+        - name: ENV
+          value: "production"
+        - name: NODE_ENV
+          value: "production"
+        - name: PREFIX_PATH
+          value: ""
+        # Variables de MongoDB
+        - name: DB_HOST
+          value: "mongodb-service"
+        - name: DB_PORT
+          value: "27017"
+        - name: DB_NAME
+          value: "chaman"
+        - name: DB_USER
+          value: ""
+        - name: DB_PASS
+          value: ""
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sdc-datos-service
+  namespace: chaman
+  labels:
+    app: sdc-datos
+spec:
+  selector:
+    app: sdc-datos
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+  type: ClusterIP

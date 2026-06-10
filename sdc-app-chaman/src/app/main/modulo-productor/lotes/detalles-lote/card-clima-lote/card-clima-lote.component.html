@@ -1,0 +1,102 @@
+<div class="custom-card climate-card">
+  <div class="climate-header">
+    <div>
+      <p class="titulo-card">CLIMA Y PRONOSTICO</p>
+      <h3>{{ lote?.establecimiento?.nombre || lote?.nombre }}</h3>
+      <span>{{ fuente }} - pronostico diario - {{ pronosticos.length }} dias disponibles</span>
+    </div>
+    <p-button icon="pi pi-refresh" label="Actualizar" size="small" severity="secondary" [outlined]="true" />
+  </div>
+
+  @if (pronosticos.length || climaActual) {
+    <div class="weather-metrics">
+      @for (metric of metricas; track metric.label) {
+        <article [ngClass]="metric.tone" [attr.title]="metric.label + ': ' + metric.value + ' - ' + metric.detail">
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.value }}</strong>
+          <small>{{ metric.detail }}</small>
+        </article>
+      }
+    </div>
+
+    <div class="daily-strip">
+      @for (dia of dias; track dia.fecha) {
+        <article
+          [attr.title]="
+            dia.label +
+            ' | Temp ' +
+            dia.temp +
+            ' | HR ' +
+            dia.humedad +
+            ' | Lluvia ' +
+            dia.lluvia +
+            ' | ET0 ' +
+            dia.et0
+          "
+        >
+          <header>
+            <strong>{{ dia.label }}</strong>
+            <span>{{ dia.estado }}</span>
+          </header>
+          <div class="daily-values">
+            <span>Temp <strong>{{ dia.temp }}</strong></span>
+            <span>HR <strong>{{ dia.humedad }}</strong></span>
+            <span>Lluvia <strong>{{ dia.lluvia }}</strong></span>
+            <span>Prob. <strong>{{ dia.probabilidad }}</strong></span>
+            <span>Viento <strong>{{ dia.viento }}</strong></span>
+            <span>ET0 <strong>{{ dia.et0 }}</strong></span>
+            <span>VPD <strong>{{ dia.vpd }}</strong></span>
+          </div>
+          <div class="daily-bars">
+            <span class="rain" [style.width.%]="dia.lluviaPct" [attr.title]="'Lluvia ' + dia.lluvia"></span>
+            <span class="humidity" [style.width.%]="dia.humedadPct" [attr.title]="'HR ' + dia.humedad"></span>
+          </div>
+        </article>
+      }
+    </div>
+
+    <div class="weather-panels">
+      @for (panel of paneles; track panel.titulo) {
+        <section>
+          <header>
+            <strong>{{ panel.titulo }}</strong>
+            <span>{{ panel.subtitulo }}</span>
+          </header>
+
+          @if (panel.tipo === 'line') {
+            <svg viewBox="0 0 220 76" preserveAspectRatio="none">
+              @for (serie of panel.series; track serie.label) {
+                <path [attr.d]="serie.path" [attr.stroke]="serie.color"></path>
+                @for (punto of serie.puntos; track $index) {
+                  <circle [attr.cx]="punto.x" [attr.cy]="punto.y" r="2.4" [attr.fill]="serie.color">
+                    <title>{{ serie.label }} - {{ punto.etiqueta }}: {{ punto.valor }}</title>
+                  </circle>
+                }
+              }
+            </svg>
+          } @else {
+            <div class="bar-chart">
+              @for (valor of panel.series[0].valores; track $index) {
+                <span
+                  [style.height.%]="barraAltura(valor, panel.series[0].valores)"
+                  [style.background]="panel.series[0].color"
+                  [attr.title]="panel.series[0].label + ' - ' + (dias[$index]?.label || 'Dia') + ': ' + valor"
+                ></span>
+              }
+            </div>
+          }
+
+          <div class="mini-legend">
+            @for (serie of panel.series; track serie.label) {
+              <span><i [style.background]="serie.color"></i>{{ serie.label }}</span>
+            }
+          </div>
+        </section>
+      }
+    </div>
+  } @else {
+    <p-message severity="info">
+      {{ 'El clima se cargara con Open-Meteo si no hay estacion asociada.' | translate }}
+    </p-message>
+  }
+</div>

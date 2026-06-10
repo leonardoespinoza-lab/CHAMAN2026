@@ -1,0 +1,169 @@
+<p-toast />
+<div class="list-view-container">
+  <!-- <p-table
+    #table
+    [value]="datos"
+    [lazy]="true"
+    [paginator]="true"
+    [rows]="helper.getPageSize(name)"
+    [totalRecords]="totalCount"
+    (onLazyLoad)="listarLazy($event)"
+    [loading]="loading"
+    [rowsPerPageOptions]="helper.pageSizeOptions"
+    [stateStorage]="'session'"
+    [stateKey]="name"
+    dataKey="_id"
+    [globalFilterFields]="['fechaCreacion']"
+  > -->
+  <p-table
+    #table
+    [value]="datos"
+    [lazy]="true"
+    dataKey="_id"
+    [rows]="helper.getPageSize(name)"
+    [rowsPerPageOptions]="helper.pageSizeOptions"
+    [loading]="loading"
+    [paginator]="true"
+    [scrollable]="true"
+    scrollHeight="calc(100vh - 180px)"
+    (onPage)="helper.setPageSize(name, $event.rows)"
+    stripedRows
+    [globalFilterFields]="['fechaCreacion']"
+    rowExpandMode="single"
+    dataKey="_id"
+    stateStorage="session"
+    [stateKey]="name"
+    [totalRecords]="totalCount"
+    (onLazyLoad)="listarLazy($event)"
+  >
+    <!-- Caption -->
+    <ng-template #caption>
+      <div class="flex menu-offset" style="align-items: center; height: 25px">
+        <!-- Buscar -->
+        <!-- <p-iconfield iconPosition="left" class="ml-auto">
+          <p-inputicon>
+            <i class="pi pi-search"></i>
+          </p-inputicon>
+          <input
+            #search
+            pInputText
+            type="text"
+            (input)="table.filterGlobal($any($event.target).value, 'contains')"
+            [placeholder]="'Buscar' | translate"
+          />
+        </p-iconfield> -->
+        <!-- Limpiar -->
+        <!-- <p-button
+          [label]="'Limpiar' | translate"
+          [outlined]="true"
+          icon="pi pi-filter-slash"
+          (click)="table.clear(); search.value = ''"
+          class="ml-2"
+        /> -->
+      </div>
+    </ng-template>
+
+    <!-- Header -->
+    <ng-template #header>
+      <tr>
+        <!-- Expandir -->
+        <!-- <th style="width: 1em"></th> -->
+        <!-- Usuario -->
+        <th pSortableColumn="fechaCreacion">
+          <div class="flex items-center gap-2">
+            {{ 'Fotos' | translate }}
+            <p-sortIcon field="fechaCreacion" />
+          </div>
+        </th>
+        <!-- Acciones -->
+        <th>
+          <div class="flex items-center">
+            {{ 'Acciones' | translate }}
+          </div>
+        </th>
+      </tr>
+    </ng-template>
+
+    <!-- Body -->
+    <ng-template #body let-row let-expanded="expanded">
+      <tr>
+        <!-- Nombre -->
+        <td>
+          {{ row.fechaCreacion | date: 'yyyy-MM-dd HH:mm' }}
+        </td>
+        <td>
+          <div style="display: flex; flex-direction: row; gap: 0.5rem">
+            <!-- Ver -->
+            <p-button [rounded]="true" pTooltip="Ver" icon="pi pi-search" severity="info" (click)="ver(row)"></p-button>
+            <!-- Descargar -->
+
+            <p-button
+              [rounded]="true"
+              pTooltip="Descargar"
+              icon="pi pi-download"
+              severity="warn"
+              (click)="downloadImage(row.url, row.fechaCreacion)"
+            ></p-button>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+
+    <!-- Expanded -->
+    <ng-template #expandedrow let-row>
+      <tr>
+        <td colspan="2">
+          <h2 style="margin: 0; text-align: center; line-height: 2">Acá van mas detalles del lote</h2>
+        </td>
+      </tr>
+    </ng-template>
+
+    <!-- Sin datos -->
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="2">
+          <p-message severity="info">
+            {{ 'No se encontraron lotes con cámara' | translate }}
+          </p-message>
+        </td>
+      </tr>
+    </ng-template>
+
+    <!-- Footer de la tabla con botón crear -->
+    <!-- <ng-template #summary>
+      @if (!helper.soloLectura()) {
+        <div class="flex justify-center p-3 border-t border-surface-200">
+          <p-button
+            [label]="'Asignar cámara a un lote' | translate"
+            icon="pi pi-plus"
+            severity="primary"
+            [fluid]="true"
+            [outlined]="true"
+            (click)="create()"
+          ></p-button>
+        </div>
+      }
+    </ng-template> -->
+  </p-table>
+</div>
+<p-dialog [(visible)]="visible" [modal]="true" [style]="{ width: '90vw', maxWidth: '1200px' }">
+  <div class="flex justify-content-center align-items-center" style="position: relative">
+    <button
+      pButton
+      icon="pi pi-chevron-left"
+      (click)="prevImage()"
+      [disabled]="currentImageIndex === 0"
+      style="position: absolute; left: 10px; z-index: 1; top: 40%; background: transparent; border-color: transparent"
+    ></button>
+
+    <img [src]="imagenUrl" alt="Time-lapse image" style="max-width: 100%; height: auto" />
+
+    <button
+      pButton
+      icon="pi pi-chevron-right"
+      (click)="nextImage()"
+      [disabled]="currentImageIndex === datos.length - 1"
+      style="position: absolute; right: 10px; z-index: 1; top: 40%; background: transparent; border-color: transparent"
+    ></button>
+  </div>
+</p-dialog>

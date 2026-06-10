@@ -1,0 +1,237 @@
+<!-- <app-map-draw [formGeojson]="geojson" tipo="Polygon" [readOnlyPolygons]="geoJsonEstablecimiento"></app-map-draw> -->
+
+<div style="padding: 1em; height: 100%">
+  <div class="p-card" style="height: 100%">
+    <div
+      class="p-card-body"
+      style="height: 100%; display: flex; flex-direction: column; justify-content: space-between"
+    >
+      <div style="overflow: hidden; height: 100%">
+        <!-- Titulo -->
+        <div class="p-card-title">{{ titulo?.() }}</div>
+        <!-- Subtitulo -->
+        @if (usuario) {
+          <div class="p-card-subtitle">{{ usuario.username }}</div>
+        }
+        <!-- Content -->
+        <div class="p-card-content" style="overflow: auto; height: calc(100% - 26px); margin-top: 1em">
+          @if (form) {
+            <form [formGroup]="form" autocomplete="off">
+              <p-tabs [(value)]="tabValue" scrollable [lazy]="false">
+                <p-tablist>
+                  <p-tab [value]="0">{{ 'Básico' | translate }}</p-tab>
+                  <p-tab [value]="1">{{ 'Permisos' | translate }}</p-tab>
+                  <p-tab [value]="2">{{ 'Datos Personales' | translate }}</p-tab>
+                </p-tablist>
+                <p-tabpanels>
+                  <!-- Basico -->
+                  <p-tabpanel [value]="0">
+                    <!-- Username -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <input pInputText formControlName="username" [fluid]="true" autocomplete="new-username" />
+                      <label>{{ 'Usuario' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Password -->
+                    <p-floatlabel variant="in">
+                      <p-password
+                        formControlName="password"
+                        [feedback]="true"
+                        [toggleMask]="true"
+                        [fluid]="true"
+                        autocomplete="new-password"
+                      />
+                      <label>{{ 'Contraseña' | translate }}</label>
+                    </p-floatlabel>
+                  </p-tabpanel>
+
+                  <!-- Permisos -->
+                  <p-tabpanel [value]="1">
+                    <ng-container formArrayName="permisos">
+                      @for (s of permisos.controls; track s; let i = $index) {
+                        <div class="permiso" [formGroupName]="i">
+                          <!-- Rol -->
+                          <p-floatlabel variant="in" class="mb-4">
+                            <p-select
+                              [loading]="loading"
+                              [options]="roles"
+                              formControlName="rol"
+                              [showClear]="true"
+                              [fluid]="true"
+                              [appendTo]="'body'"
+                            >
+                            </p-select>
+                            <label>{{ 'Rol' | translate }}</label>
+                          </p-floatlabel>
+
+                          <!-- Nivel -->
+                          <p-floatlabel variant="in" class="mb-4">
+                            <p-select
+                              [loading]="loading"
+                              [options]="niveles"
+                              formControlName="nivel"
+                              [showClear]="true"
+                              [fluid]="true"
+                              [appendTo]="'body'"
+                              (onChange)="cambioNivel(i)"
+                            >
+                              <ng-template #item let-n>{{ n === 'Quimica' ? 'Compañía' : n }}</ng-template>
+                              <ng-template #selectedItem let-n>{{ n === 'Quimica' ? 'Compañía' : n }}</ng-template>
+                            </p-select>
+                            <label>{{ 'Nivel' | translate }}</label>
+                          </p-floatlabel>
+
+                          <!-- Establecimiento -->
+                          @if (nivel(i) === 'Establecimiento' && establecimientos.length > 1) {
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-select
+                                [loading]="loading"
+                                [options]="establecimientos"
+                                formControlName="idEstablecimiento"
+                                [showClear]="true"
+                                [fluid]="true"
+                                [appendTo]="'body'"
+                                optionValue="_id"
+                                optionLabel="nombre"
+                              >
+                              </p-select>
+                              <label>{{ 'Establecimiento' | translate }}</label>
+                            </p-floatlabel>
+                          }
+                          @if (nivel(i) === 'Establecimiento' && establecimientos.length === 0) {
+                            <p-message severity="warn">
+                              {{ 'No hay establecimientos creados' | translate }}
+                            </p-message>
+                          }
+
+                          <!-- Productor -->
+                          @if (nivel(i) === 'Productor' && productores.length > 1) {
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-select
+                                [loading]="loading"
+                                [options]="productores"
+                                formControlName="idProductor"
+                                [showClear]="true"
+                                [fluid]="true"
+                                [appendTo]="'body'"
+                                optionValue="_id"
+                                optionLabel="nombre"
+                              >
+                              </p-select>
+                              <label>{{ 'Productores' | translate }}</label>
+                            </p-floatlabel>
+                          }
+
+                          <!-- Distribuidor -->
+                          @if (nivel(i) === 'Distribuidor' && distribuidores.length > 1) {
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-select
+                                [loading]="loading"
+                                [options]="distribuidores"
+                                formControlName="idDistribuidor"
+                                [showClear]="true"
+                                [fluid]="true"
+                                [appendTo]="'body'"
+                                optionValue="_id"
+                                optionLabel="nombre"
+                              >
+                              </p-select>
+                              <label>{{ 'Distribuidores' | translate }}</label>
+                            </p-floatlabel>
+                          }
+
+                          <!-- Química -->
+                          @if (nivel(i) === 'Quimica' && quimicas.length > 1) {
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-select
+                                [loading]="loading"
+                                [options]="quimicas"
+                                formControlName="idQuimica"
+                                [showClear]="true"
+                                [fluid]="true"
+                                [appendTo]="'body'"
+                                optionValue="_id"
+                                optionLabel="nombre"
+                              >
+                              </p-select>
+                              <label>{{ 'Químicas' | translate }}</label>
+                            </p-floatlabel>
+                          }
+
+                          <!-- Boton eliminar -->
+                          <div class="mb-4" style="display: flex; justify-content: center">
+                            <p-button
+                              icon="pi pi-trash"
+                              severity="danger"
+                              [rounded]="true"
+                              (click)="borrarPermiso(i)"
+                            ></p-button>
+                          </div>
+                        </div>
+                      } @empty {
+                        <p-message severity="warn">
+                          {{ 'No se han agregado permisos' | translate }}
+                        </p-message>
+                      }
+                    </ng-container>
+                    <br />
+                    <!-- Boton agregar nivel -->
+                    <p-button
+                      [label]="'Agregar Permiso' | translate"
+                      (click)="agregarPermiso()"
+                      [fluid]="true"
+                      [style]="{ 'margin-bottom': '1em' }"
+                    />
+                  </p-tabpanel>
+
+                  <!-- Datos Personales -->
+                  <p-tabpanel [value]="2" formGroupName="datosPersonales">
+                    <!-- nombre -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <input pInputText formControlName="nombre" [fluid]="true" />
+                      <label>{{ 'Nombre' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Telefono -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <input pInputText formControlName="telefono" [fluid]="true" type="tel" />
+                      <label>{{ 'Teléfono' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Email -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <input pInputText formControlName="email" [fluid]="true" type="email" />
+                      <label>{{ 'Email' | translate }}</label>
+                    </p-floatlabel>
+                  </p-tabpanel>
+                </p-tabpanels>
+              </p-tabs>
+            </form>
+          }
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="p-card-footer">
+        <p-divider />
+        <div class="flex gap-4 mt-1">
+          <p-button
+            [label]="'Cancelar' | translate"
+            severity="secondary"
+            class="w-full"
+            [outlined]="true"
+            styleClass="w-full"
+            (onClick)="volver()"
+          />
+          <p-button
+            [label]="'Guardar' | translate"
+            class="w-full"
+            styleClass="w-full"
+            [loading]="loading"
+            (onClick)="guardar()"
+            [disabled]="!form?.valid"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

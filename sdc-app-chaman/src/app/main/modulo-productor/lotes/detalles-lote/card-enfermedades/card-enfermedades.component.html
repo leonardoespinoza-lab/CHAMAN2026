@@ -1,0 +1,63 @@
+<div class="custom-card disease-card">
+  <div class="disease-header" (click)="tienePredicciones && (verDrawerGraficoEnfermedades = true)">
+    <div>
+      <p class="titulo-card">{{ 'Monitoreo de enfermedades' | translate | uppercase }}</p>
+      <span>{{ resumenGeneral }}</span>
+    </div>
+    @if (tienePredicciones) {
+      <strong>+</strong>
+    }
+  </div>
+
+  @if (siembra?._id) {
+    <p-button
+      icon="pi pi-refresh"
+      [label]="'Actualizar riesgo'"
+      severity="secondary"
+      [outlined]="true"
+      [loading]="actualizandoPrediccion"
+      [disabled]="actualizandoPrediccion"
+      [fluid]="true"
+      (click)="actualizarPrediccion($event)"
+      styleClass="mb-3"
+    />
+  }
+
+  @if (enfermedadInsights.length) {
+    <div class="disease-list">
+      @for (item of enfermedadInsights; track item.enfermedad) {
+        <article class="disease-item" [ngClass]="item.severity">
+          <div class="disease-title">
+            <strong>{{ item.enfermedad }}</strong>
+            @if (item.prediccion) {
+              <em>{{ item.resultado | number: '1.0-1' }}%</em>
+            } @else {
+              <em>sin prediccion</em>
+            }
+          </div>
+
+          <div class="risk-row">
+            <div class="risk-cup" [style.--fill]="item.fill + '%'">
+              <span></span>
+            </div>
+            <div>
+              <p>{{ item.sensibilidad }}</p>
+              <small>{{ item.periodo }}</small>
+            </div>
+          </div>
+
+          <small class="variables">{{ item.variables }}</small>
+        </article>
+      }
+    </div>
+  } @else {
+    <p-message severity="info">{{ 'Cargue una siembra para activar el monitoreo' | translate }}</p-message>
+  }
+</div>
+
+@if (tienePredicciones) {
+  <app-drawer-grafico-enfermedades
+    [siembra]="siembra"
+    [(visible)]="verDrawerGraficoEnfermedades"
+  ></app-drawer-grafico-enfermedades>
+}

@@ -1,0 +1,469 @@
+<!-- <app-map-draw [formGeojson]="geojson" tipo="Polygon" [readOnlyPolygons]="geoJsonEstablecimiento"></app-map-draw> -->
+
+<div style="padding: 1em; height: 100%">
+  <div class="p-card" style="height: 100%">
+    <div
+      class="p-card-body"
+      style="height: 100%; display: flex; flex-direction: column; justify-content: space-between"
+    >
+      <div style="overflow: hidden; height: 100%">
+        <!-- Titulo -->
+        <div class="p-card-title">{{ titulo?.() }}</div>
+        <!-- Subtitulo -->
+        @if (lote) {
+          <div class="p-card-subtitle">{{ lote.nombre }}</div>
+        }
+        <!-- Content -->
+        <div class="p-card-content" style="overflow: auto; height: calc(100% - 26px); margin-top: 1em">
+          @if (form) {
+            <form [formGroup]="form">
+              <p-tabs [(value)]="tabValue" scrollable [lazy]="false">
+                <p-tablist>
+                  <p-tab [value]="0">{{ 'Básico' | translate }}</p-tab>
+                  <p-tab [value]="1">{{ 'Mapa' | translate }}</p-tab>
+                  <p-tab [value]="2">{{ 'Riego' | translate }}</p-tab>
+                  <p-tab [value]="3">{{ 'Suelo' | translate }}</p-tab>
+                  <p-tab [value]="4">{{ 'Huella hídrica' | translate }}</p-tab>
+                  <p-tab [value]="5">{{ 'Dispositivos' | translate }}</p-tab>
+                </p-tablist>
+                <p-tabpanels>
+                  <!-- Basico -->
+                  <p-tabpanel [value]="0">
+                    <!-- Nombre -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <input pInputText formControlName="nombre" [fluid]="true" />
+                      <label>{{ 'Nombre' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Establecimiento -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="establecimientos"
+                        formControlName="idEstablecimiento"
+                        optionLabel="nombre"
+                        optionValue="_id"
+                        [filter]="true"
+                        filterBy="nombre"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Establecimiento' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Departamento -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="departamentos"
+                        formControlName="idDepartamento"
+                        optionValue="_id"
+                        [filter]="true"
+                        filterBy="nombre,provincia.nombre"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                        [virtualScroll]="true"
+                        [virtualScrollItemSize]="20"
+                      >
+                        <ng-template #selectedItem let-selectedOption>
+                          <div>
+                            <span> {{ selectedOption.nombre | titlecase }} </span>
+                            <small style="color: var(--p-text-muted-color)">
+                              ({{ selectedOption.provincia?.nombre | titlecase }})
+                            </small>
+                          </div>
+                        </ng-template>
+                        <ng-template let-option #item>
+                          <div>
+                            <span> {{ option.nombre | titlecase }} </span>
+                            <small style="color: var(--p-text-muted-color)"
+                              >({{ option.provincia?.nombre | titlecase }})</small
+                            >
+                          </div>
+                        </ng-template>
+                      </p-select>
+                      <label>{{ 'Departamento' | translate }}</label>
+                    </p-floatlabel>
+                  </p-tabpanel>
+                  <!-- Mapa -->
+                  <p-tabpanel [value]="1">
+                    @if (tabValue === 1) {
+                      @if (geoJsonEstablecimiento.length) {
+                        <app-map-draw
+                          [formGeojson]="geojson"
+                          tipo="Polygon"
+                          [readOnlyPolygons]="geoJsonEstablecimiento"
+                        ></app-map-draw>
+                      } @else {
+                        <p-message severity="warn">
+                          {{ 'Debe seleccionar un establecimiento para editar el mapa' | translate }}
+                        </p-message>
+                        <br />
+                        <p-button [label]="'Volver' | translate" (onClick)="tabValue = 0" [fluid]="true" />
+                      }
+                    }
+                  </p-tabpanel>
+                  <!-- Riego -->
+                  <p-tabpanel [value]="2">
+                    <!-- Capacidad de campo -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-inputnumber
+                        inputId="integeronly"
+                        formControlName="capacidadDeCampo"
+                        [min]="0"
+                        [max]="100"
+                        [fluid]="true"
+                        suffix="%"
+                      />
+                      <label>{{ 'Capacidad de campo' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Punto de marchitez -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-inputnumber
+                        inputId="integeronly"
+                        formControlName="puntoMarchitez"
+                        [min]="0"
+                        [max]="100"
+                        [fluid]="true"
+                        suffix="%"
+                      />
+                      <label>{{ 'Punto de marchitez' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Capacidad de riego diaria -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-inputnumber
+                        inputId="integeronly"
+                        formControlName="capacidadDeRiego"
+                        [min]="0"
+                        [fluid]="true"
+                        suffix=" mm/ha"
+                      />
+                      <label>{{ 'Capacidad de riego diaria' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Ancho de bulbo -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-inputnumber inputId="integeronly" formControlName="anchoDeBulbo" [min]="0" [fluid]="true" />
+                      <label>{{ 'Ancho de bulbo' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Metros lineales de riego por hectárea -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-inputnumber
+                        inputId="integeronly"
+                        formControlName="metrosLinealesHas"
+                        [min]="0"
+                        [fluid]="true"
+                      />
+                      <label>{{ 'Metros lineales de riego por hectárea' | translate }}</label>
+                    </p-floatlabel>
+                  </p-tabpanel>
+                  <!-- Suelo -->
+                  <p-tabpanel [value]="3">
+                    <!-- Sonda de suelo -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="sondasSuelo"
+                        formControlName="idSondaSuelo"
+                        optionValue="_id"
+                        [filter]="true"
+                        filterBy="name?.custom, name?.original"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                        (onChange)="cambioSondaSuelo()"
+                      >
+                        <ng-template #selectedItem let-selectedOption>
+                          <div>
+                            <span>
+                              {{ selectedOption.name?.custom || selectedOption.name?.original | titlecase }}
+                            </span>
+                          </div>
+                        </ng-template>
+                        <ng-template let-option #item>
+                          <div>
+                            <span> {{ option.name?.custom || option.name?.original | titlecase }} </span>
+                          </div>
+                        </ng-template>
+                      </p-select>
+                      <label>{{ 'Sonda de suelo' | translate }}</label>
+                    </p-floatlabel>
+                    <!-- Distancia de la sonda -->
+                    @if (distanciaSonda) {
+                      <p-message severity="info">
+                        {{ 'Distancia de la sonda al lote: ' | translate }} {{ distanciaSonda }}
+                      </p-message>
+                    }
+
+                    <h3>Niveles de suelo</h3>
+                    <ng-container formArrayName="suelos">
+                      @for (s of suelos.controls; track s; let i = $index) {
+                        <div class="nivel" [formGroupName]="i">
+                          <div style="display: flex; flex-direction: row; gap: 1em">
+                            <!-- Número de Sensor -->
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-inputnumber
+                                inputId="integeronly"
+                                formControlName="numeroDeSensor"
+                                [min]="1"
+                                [max]="100"
+                                [fluid]="true"
+                              />
+                              <label>{{ 'Número de sensor' | translate }}</label>
+                            </p-floatlabel>
+
+                            <!-- Número de Sensor -->
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-inputnumber
+                                inputId="integeronly"
+                                formControlName="profundidad"
+                                [min]="1"
+                                [max]="100"
+                                [fluid]="true"
+                                [suffix]="' cm'"
+                              />
+                              <label>{{ 'Profundidad' | translate }}</label>
+                            </p-floatlabel>
+                          </div>
+
+                          <!-- Textura -->
+                          <p-floatlabel variant="in" class="mb-4">
+                            <p-select
+                              [loading]="loading"
+                              [options]="texturas"
+                              formControlName="textura"
+                              [showClear]="true"
+                              [fluid]="true"
+                              [appendTo]="'body'"
+                            >
+                            </p-select>
+                            <label>{{ 'Textura' | translate }}</label>
+                          </p-floatlabel>
+
+                          <div style="display: flex; flex-direction: row; gap: 1em">
+                            <!-- Capacidad de campo -->
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-inputnumber
+                                inputId="integeronly"
+                                formControlName="capacidadDeCampo"
+                                [min]="0"
+                                [max]="100"
+                                [fluid]="true"
+                                suffix="%"
+                              />
+                              <label>{{ 'Capacidad de campo' | translate }}</label>
+                            </p-floatlabel>
+
+                            <!-- Punto de marchitez -->
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-inputnumber
+                                inputId="integeronly"
+                                formControlName="puntoMarchitez"
+                                [min]="0"
+                                [max]="100"
+                                [fluid]="true"
+                                suffix="%"
+                              />
+                              <label>{{ 'Punto de marchitez' | translate }}</label>
+                            </p-floatlabel>
+                          </div>
+
+                          <div style="display: flex; flex-direction: row; gap: 1em; justify-content: space-between">
+                            <!-- Raices -->
+                            <div class="flex items-center gap-1 mb-4">
+                              <p-checkbox formControlName="hayRaices" [binary]="true" [inputId]="'c' + i" />
+                              <label [for]="'c' + i" class="ml-2">
+                                {{ 'Hay raíces' | translate }}
+                              </label>
+                            </div>
+
+                            <!-- Boton eliminar -->
+                            <div class="mb-4">
+                              <p-button
+                                icon="pi pi-trash"
+                                severity="danger"
+                                [rounded]="true"
+                                (click)="borrarSuelo(i)"
+                              ></p-button>
+                            </div>
+                          </div>
+                        </div>
+                      } @empty {
+                        <p-message severity="warn">
+                          {{ 'No se han agregado niveles' | translate }}
+                        </p-message>
+                      }
+                    </ng-container>
+                    <br />
+                    <!-- Boton agregar nivel -->
+                    <p-button
+                      [label]="'Agregar Nivel' | translate"
+                      (click)="agregarSuelo()"
+                      [fluid]="true"
+                      [style]="{ 'margin-bottom': '1em' }"
+                    />
+                  </p-tabpanel>
+                  <!-- Huella Hidrica -->
+                  <p-tabpanel [value]="4">
+                    <!-- depositoN -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="depositoN"
+                        formControlName="depositoN"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Depósito nitrógeno (g N m-2yr-1)' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- erosionEscorrentiaPendiente -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="erosionEscorrentiaPendiente"
+                        formControlName="erosionEscorrentiaPendiente"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Erosión (Escorrentía-Pendiente)' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- contenidoP -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="contenidoP"
+                        formControlName="contenidoP"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Contenido de fósforo' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- texturaLixiviacion -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="texturas"
+                        formControlName="texturaLixiviacion"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Textura (Lixiviación)' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- texturaEscorrentia -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="texturas"
+                        formControlName="texturaEscorrentia"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Textura (Escorrentía)' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- drenajeNaturalLixiviacion -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="drenaje"
+                        formControlName="drenajeNaturalLixiviacion"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Drenaje Natural (Lixiviación)' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- drenajeNaturalEscorrentia -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="drenaje"
+                        formControlName="drenajeNaturalEscorrentia"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Drenaje Natural (Escorrentía)' | translate }}</label>
+                    </p-floatlabel>
+                  </p-tabpanel>
+                  <!-- Dispositivos -->
+                  <p-tabpanel [value]="5">
+                    <!-- Dispositivos -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-multiselect
+                        [options]="dispositivos"
+                        [filter]="true"
+                        filterBy="nombre,tipo"
+                        [maxSelectedLabels]="3"
+                        formControlName="idsDispositivo"
+                        [style]="{ width: '100%' }"
+                        appendTo="body"
+                        [showClear]="true"
+                        (onClear)="form.get('idsDispositivo')!.setValue([])"
+                        optionValue="_id"
+                        optionLabel="nombre"
+                      >
+                        <ng-template let-dispositivo pTemplate="item">
+                          <div class="d-flex flex-column" style="gap: 3px">
+                            <strong>{{ dispositivo.nombre }}</strong>
+                            <small class="no-info">{{ dispositivo.tipo }}</small>
+                          </div>
+                        </ng-template>
+                      </p-multiselect>
+                      <label>{{ 'Dispositivos' | translate }}</label>
+                    </p-floatlabel>
+                  </p-tabpanel>
+                </p-tabpanels>
+              </p-tabs>
+            </form>
+          }
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="p-card-footer">
+        <p-divider />
+        <div class="flex gap-4 mt-1">
+          <p-button
+            [label]="'Cancelar' | translate"
+            severity="secondary"
+            class="w-full"
+            [outlined]="true"
+            styleClass="w-full"
+            (onClick)="volver()"
+          />
+          <p-button
+            [label]="'Guardar' | translate"
+            class="w-full"
+            styleClass="w-full"
+            [loading]="loading"
+            (onClick)="guardar()"
+            [disabled]="!form?.valid"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

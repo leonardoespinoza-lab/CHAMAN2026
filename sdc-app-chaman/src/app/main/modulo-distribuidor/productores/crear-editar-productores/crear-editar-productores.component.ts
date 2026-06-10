@@ -1,0 +1,352 @@
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { FormControl, FormGroup, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
+import { TranslateService } from '@ngx-translate/core';
+import {
+  ICreateLicencia,
+  ICreateProductor,
+  IDistribuidor,
+  IFilter,
+  ILicencia,
+  IListado,
+  IProductor,
+  IQueryParam,
+  IQuimica,
+} from 'modelos/src';
+import { SelectChangeEvent } from 'primeng/select';
+import { Subscription } from 'rxjs';
+import { LoginService } from '../../../../auxiliares/http/login.service';
+import { ProductorsService } from '../../../../auxiliares/http/productor.service';
+import { HelperService } from '../../../../auxiliares/servicios/helper';
+import { ListadosService } from '../../../../auxiliares/servicios/listados';
+import { ParamsService } from '../../../../auxiliares/servicios/params.service';
+import { SharedModule } from '../../../../auxiliares/shared.module';
+
+@Component({
+  selector: 'app-crear-editar-productores',
+  imports: [SharedModule],
+  templateUrl: './crear-editar-productores.component.html',
+  styleUrl: './crear-editar-productores.component.scss',
+})
+export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
+  public loading = false;
+  public productor?: IProductor;
+  public titulo?: () => string;
+  public form?: FormGroup;
+  public tabValue = 0;
+
+  // Licencia
+  public mostrarLicencia = false;
+  public editarLicencia = false;
+  public formLicencia?: FormGroup;
+  public licencias: ILicencia[] = [];
+  private licenciaExtra: ILicencia = {
+    nombre: 'Crear Licencia Nueva',
+  };
+  public licencia?: ILicencia;
+  public licencias$?: Subscription;
+  public hoy = new Date();
+  public fechaDeExpiracion = new Date(this.hoy.getFullYear(), this.hoy.getMonth() + 1, this.hoy.getDate());
+  public disabled = true;
+
+  public get modulos() {
+    return this.formLicencia?.get('modulos') as FormGroup;
+  }
+
+  // LISTADOS
+  public distribuidores: IDistribuidor[] = [];
+  public quimicas: IQuimica[] = [];
+  private distribuidores$?: Subscription;
+  private quimicas$?: Subscription;
+
+  constructor(
+    private paramsService: ParamsService,
+    private translate: TranslateService,
+    private service: ProductorsService,
+    public helper: HelperService,
+    private listados: ListadosService,
+    public loginService: LoginService,
+    private router: Router,
+  ) {}
+
+  private createForm(): void {
+    this.form = new FormGroup({
+      nombre: new FormControl(this.productor?.nombre, Validators.required),
+      logo: new FormControl(this.productor?.logo),
+      gratis: new FormControl(this.productor?.gratis || true),
+      idQuimica: new FormControl(this.productor?.idQuimica),
+      idDistribuidor: new FormControl(this.productor?.idDistribuidor),
+    });
+  }
+
+  private createFormLicencia(): void {
+    this.formLicencia = new FormGroup({
+      nombre: new FormControl('Gratis', Validators.required),
+      maxUsuarios: new FormControl(2, Validators.required),
+      maxdDistribuidores: new FormControl(1, Validators.required),
+      maxProductores: new FormControl(1, Validators.required),
+      maxEstablecimientos: new FormControl(1, Validators.required),
+      maxLotes: new FormControl(1, Validators.required),
+      maxdHectareas: new FormControl(10000, Validators.required),
+      modulos: new FormGroup({
+        Enfermedades: new FormControl(true, Validators.required),
+        Riego: new FormControl(false, Validators.required),
+        'Huella Hídrica': new FormControl(false, Validators.required),
+        NDVI: new FormControl(true, Validators.required),
+        Clima: new FormControl(true, Validators.required),
+        'Etapas Fenológicas': new FormControl(true, Validators.required),
+      }),
+    });
+  }
+
+  private async listarLicencias(): Promise<void> {
+    const queryParams: IQueryParam = {
+      page: 0,
+      limit: 0,
+      sort: 'nombre',
+    };
+
+    this.licencias$?.unsubscribe();
+    this.licencias$ = this.listados.subscribe<IListado<ILicencia>>('licencias', queryParams).subscribe(async (data) => {
+      this.licencias = data.datos;
+      if (!this.licencias.some((lic) => lic.nombre === 'Crear Licencia Nueva')) {
+        this.licencias.push(this.licenciaExtra);
+      }
+      console.log(`listado de licencias`, data);
+    });
+    await this.listados.getLastValue('licencias', queryParams);
+  }
+
+  public async onMostrarLicenciaChange(event: boolean): Promise<void> {
+    this.mostrarLicencia = event;
+    if (this.mostrarLicencia === true) {
+      // Tengo que listar las licencias
+      await this.listarLicencias();
+      // Tengo que crear el formulario de licencia
+      this.createFormLicencia();
+    } else {
+      // Si no se muestra la licencia, reinicio el formulario de licencia
+      this.formLicencia = undefined;
+      this.licencias = [];
+      this.licencia = undefined;
+      this.editarLicencia = false;
+      this.fechaDeExpiracion = new Date(this.hoy.getFullYear(), this.hoy.getMonth() + 1, this.hoy.getDate());
+    }
+    this.checkDisabled();
+  }
+
+  public async onLicenciaChange(event: ILicencia): Promise<void> {
+    if (event.nombre === 'Crear Licencia Nueva') {
+      this.editarLicencia = true;
+      this.licencia = undefined;
+      // Patcheo el default
+      this.formLicencia?.patchValue({
+        nombre: '',
+        maxUsuarios: 2,
+        maxdDistribuidores: 1,
+        maxProductores: 1,
+        maxEstablecimientos: 1,
+        maxLotes: 1,
+        maxdHectareas: 10000,
+        modulos: {
+          Enfermedades: true,
+          Riego: false,
+          'Huella Hídrica': false,
+          NDVI: true,
+          Clima: true,
+          'Etapas Fenológicas': true,
+        },
+      });
+      this.fechaDeExpiracion = new Date(this.hoy.getFullYear(), this.hoy.getMonth() + 1, this.hoy.getDate());
+    } else {
+      // Patch the form with the selected license
+      this.editarLicencia = false;
+      this.licencia = event;
+      this.formLicencia?.patchValue({
+        nombre: this.licencia.nombre,
+        maxUsuarios: this.licencia.maxUsuarios || 2,
+        maxdDistribuidores: this.licencia.maxdDistribuidores || 1,
+        maxProductores: this.licencia.maxProductores || 1,
+        maxEstablecimientos: this.licencia.maxEstablecimientos || 1,
+        maxLotes: this.licencia.maxLotes || 1,
+        maxdHectareas: this.licencia.maxdHectareas || 10000,
+        modulos: {
+          Enfermedades: this.licencia.modulos?.Enfermedades || true,
+          Riego: this.licencia.modulos?.Riego || false,
+          'Huella Hídrica': this.licencia.modulos?.['Huella Hídrica'] || false,
+          NDVI: this.licencia.modulos?.NDVI || true,
+          Clima: this.licencia.modulos?.Clima || true,
+          'Etapas Fenológicas': this.licencia.modulos?.['Etapas Fenológicas'] || true,
+        },
+      });
+      this.fechaDeExpiracion = new Date(this.hoy.getFullYear(), this.hoy.getMonth() + 1, this.hoy.getDate());
+    }
+    this.checkDisabled();
+  }
+
+  // ACCIONES
+  private getData() {
+    const data: ICreateProductor = this.form?.value;
+    if (this.loginService.esAdmin && !data.licencia && data.gratis) {
+      data.licencia = this.getDataLicencia();
+      data.expiracion = this.helper.dateToDias(this.fechaDeExpiracion);
+    }
+    return data;
+  }
+
+  private getDataLicencia() {
+    const data: ICreateLicencia = this.formLicencia?.value;
+    return data;
+  }
+
+  public async guardar(crearUsuario = false): Promise<void> {
+    this.loading = true;
+    try {
+      const data = this.getData();      
+      let productorCreado: IProductor | undefined;
+
+      if (this.editarLicencia === true || this.mostrarLicencia === true) {
+        const dataLicencia = this.getDataLicencia();
+        data.licencia = dataLicencia;
+        data.expiracion = this.helper.dateToDias(this.fechaDeExpiracion);
+        
+        const licenciaId = this.licencia?._id;        
+        data.licencia = {
+          ...dataLicencia,
+          _id: licenciaId
+        } as any;        
+
+      }
+      if (this.productor?._id) {
+        await this.service.editar(this.productor._id, data);
+
+        // Solo actualiza el item en cache
+        this.listados.patchEntityItem('productors', {
+         _id: this.productor._id,
+         ...data,
+        });  
+
+        this.helper.notifSuccess(this.translate.instant('Editado correctamente'));
+      } else {
+
+        const created = await this.service.crear(data);
+        productorCreado = created;
+
+        // Solo actualiza el item en cache
+        this.listados.createEntityItem('productors', created);
+
+        this.helper.notifSuccess(this.translate.instant('Creado correctamente'));
+      }
+      if (crearUsuario && productorCreado) {
+        this.paramsService.set('productorParaUsuario', productorCreado);
+        await this.router.navigateByUrl('/usuarios/crear');
+        return;
+      }
+      this.volver();
+    } catch (err) {
+      console.error(err);
+      this.helper.notifError(err);
+    }
+    this.loading = false;
+  }
+
+  public volver() {
+    if (this.loginService.esAdmin) {
+      this.router.navigateByUrl('/dashboard-admin');
+      return;
+    }
+    window.history.back();
+  }
+
+  private checkDisabled(): void {
+    // form Valid siempre
+    // si hay formLicencia, también tiene que ser válido
+    // si hay mostrarLicencia y no hay editarLicencia, entonces tiene que haber una licencia seleccionada
+    this.disabled = !this.form?.valid || (this.formLicencia ? !this.formLicencia?.valid : false);
+    if (this.mostrarLicencia && !this.editarLicencia) {
+      this.disabled = this.disabled || !this.licencia;
+    }
+  }
+
+  private subcribeFormChanges(): void {
+    this.form?.valueChanges.subscribe(() => {
+      this.checkDisabled();
+    });
+    this.formLicencia?.valueChanges.subscribe(() => {
+      this.checkDisabled();
+    });
+  }
+
+  // LISTADOS
+  private async listarDistribuidores(idQuimica: string): Promise<void> {
+    const filter: IFilter<IDistribuidor> = {
+      idQuimica,
+    };
+    const queryParams: IQueryParam = {
+      filter: JSON.stringify(filter),
+      page: 0,
+      limit: 0,
+      sort: 'nombre',
+    };
+
+    this.distribuidores$?.unsubscribe();
+    this.distribuidores$ = this.listados
+      .subscribe<IListado<IDistribuidor>>('distribuidors', queryParams)
+      .subscribe(async (data) => {
+        this.distribuidores = data.datos;
+        console.log(`listado de distribuidors`, data);
+      });
+    await this.listados.getLastValue('distribuidors', queryParams);
+  }
+
+  private async listarQuimicas(): Promise<void> {
+    const queryParams: IQueryParam = {
+      page: 0,
+      limit: 0,
+      sort: 'nombre',
+    };
+
+    this.quimicas$?.unsubscribe();
+    this.quimicas$ = this.listados.subscribe<IListado<IQuimica>>('quimicas', queryParams).subscribe(async (data) => {
+      this.quimicas = data.datos;
+      console.log(`listado de quimicas`, data);
+    });
+    await this.listados.getLastValue('quimicas', queryParams);
+  }
+
+  //
+
+  public async onQuimicaChange(event: SelectChangeEvent) {
+    await this.listarDistribuidores(event.value);
+  }
+
+  /// HOOKS
+
+  async ngOnInit(): Promise<void> {
+    this.loading = true;
+    this.productor = this.paramsService.get('editProductor');
+    if (this.productor) {
+      console.log('edit', this.productor);
+    }
+    if (this.mostrarLicencia === true) {
+      await this.onMostrarLicenciaChange(true);
+    }
+    this.titulo = this.productor
+      ? () => this.translate.instant(`Editar productor`)
+      : () => this.translate.instant('Crear productor');
+    await Promise.all([this.loginService.esAdmin ? this.listarQuimicas() : null]);
+    this.createForm();
+    if (this.loginService.esAdmin) {
+      this.createFormLicencia();
+    }
+    this.subcribeFormChanges();
+    this.checkDisabled();
+    this.loading = false;
+  }
+
+  ngOnDestroy(): void {
+    this.distribuidores$?.unsubscribe();
+    this.quimicas$?.unsubscribe();
+    this.licencias$?.unsubscribe();
+  }
+}

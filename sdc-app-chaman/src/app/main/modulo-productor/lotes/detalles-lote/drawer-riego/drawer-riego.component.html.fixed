@@ -1,0 +1,498 @@
+<!-- Drawer Riego -->
+<p-drawer
+  #drawerRef
+  [(visible)]="visible"
+  [position]="(helper.isWide$ | async) ? 'right' : 'bottom'"
+  [style]="{
+    'margin-top': (helper.isWide$ | async) ? '58px' : '0',
+    height: (helper.isWide$ | async) ? 'calc(100% - 58px)' : '85vh',
+    'border-radius': (helper.isWide$ | async) ? '30px 0 0 30px' : '30px 30px 0 0',
+    overflow: 'hidden',
+    width: (helper.isWide$ | async) ? '1200px' : '100%',
+    'max-width': (helper.isWide$ | async) ? '90vw' : '100%',
+  }"
+  [modal]="true"
+  (onHide)="visibleChange.emit(false)"
+  [header]="'Riego' | translate"
+  [closable]="true"
+>
+  <!-- Contenedor principal del drawer -->
+  <div class="drawer-content" style="padding: 0; margin: 0; height: 100%; overflow: hidden">
+    @if (helper.isWide$ | async) {
+      <!-- Layout responsivo para desktop -->
+      <div
+        class="desktop-grid"
+        style="
+          display: grid;
+          gap: 1.5em;
+          height: 100%;
+          max-height: 100%;
+          padding: 1.5em;
+          overflow-y: auto;
+          overflow-x: hidden;
+        "
+      >
+        <!-- 1. Sección de Recomendaciones de Riego -->
+        <div class="drawer-section section-recomendaciones" style="display: flex; flex-direction: column; gap: 1em; min-width: 0">
+          <h3 style="margin: 0 0 1em 0; color: var(--p-text-color)">
+            {{ 'Recomendaciones de Riego' | translate }}
+          </h3>
+
+          @if (siembra?.ultimaPrediccionRiego?.length) {
+            @for (item of siembra?.ultimaPrediccionRiego; track $index) {
+              <div
+                style="
+                  display: flex;
+                  flex-direction: row;
+                  justify-content: space-between;
+                  align-items: center;
+                  padding: 0.5em 0;
+                  border-bottom: 1px solid var(--p-surface-border);
+                "
+              >
+                <div style="display: flex; flex-direction: row; gap: 1em; align-items: center">
+                  <span style="font-size: 16px; font-weight: 500">
+                    {{ ($first ? ('Hoy' | translate) : helper.nombreCortoDia(item.fecha)) | titlecase }}
+                  </span>
+                </div>
+                <div style="text-align: right">
+                  <span style="font-size: 20px; font-weight: bold; color: var(--p-primary-color)">
+                    {{ item.cantidad | number: '1.0-0' }}
+                  </span>
+                  <span style="font-size: 14px; color: var(--p-text-muted-color)"> mm</span>
+                </div>
+              </div>
+            }
+          } @else {
+            <div
+              style="
+                padding: 1em;
+                background: var(--p-surface-ground);
+                border: 1px solid var(--p-surface-border);
+                border-radius: 8px;
+                border-left: 4px solid var(--p-primary-color);
+              "
+            >
+              <div style="display: flex; align-items: center; gap: 0.8em">
+                <i class="pi pi-droplet" style="color: var(--p-primary-color); font-size: 1.1em"></i>
+                <span style="font-weight: 500; color: var(--p-text-color)">
+                  {{ 'No se requiere riego por el momento' | translate }}
+                </span>
+              </div>
+            </div>
+          }
+        </div>
+
+        <!-- 2. Histograma de Humedad (Heatmap) -->
+        @if (dispositivosHumedad.length > 0) {
+          <div class="drawer-section section-histograma" style="display: flex; flex-direction: column; gap: 1em; min-width: 0">
+            <h3 style="margin: 0 0 1em 0; color: var(--p-text-color)">
+              {{ 'Histograma de Humedad de Suelo' | translate }}
+            </h3>
+
+            <div style="margin-bottom: 1em">
+              <p style="font-size: 14px; color: var(--p-text-muted-color); margin: 0">
+                {{ 'Distribución por profundidad - Últimos 7 días' | translate }}
+              </p>
+            </div>
+
+            @if (loadingGrafico) {
+              <div style="height: 400px; width: 100%; display: flex; align-items: center; justify-content: center">
+                <p-progressSpinner
+                  [style]="{ width: '50px', height: '50px' }"
+                  strokeWidth="4"
+                  fill="transparent"
+                  animationDuration="1s"
+                >
+                </p-progressSpinner>
+                <p style="margin-left: 1em; color: var(--p-text-muted-color)">
+                  {{ 'Cargando histograma...' | translate }}
+                </p>
+              </div>
+            } @else if (chartOptionsHistograma && valoresHistograma.length > 0) {
+              <div style="height: 400px; width: 100%; overflow: hidden">
+                <div #heatmapContainer style="height: 100%; width: 100%"></div>
+              </div>
+
+              <!-- Leyenda personalizada para el heatmap -->
+              <div style="display: flex; flex-wrap: wrap; gap: 1em; justify-content: center; margin-top: 1em">
+                <div style="display: flex; align-items: center; gap: 0.3em">
+                  <div
+                    style="
+                      width: 16px;
+                      height: 16px;
+                      background: rgba(255, 255, 0, 0.8);
+                      border-radius: 50%;
+                      border: 1px solid #ddd;
+                    "
+                  ></div>
+                  <span style="font-size: 11px; color: var(--p-text-muted-color)">0%</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.3em">
+                  <div
+                    style="
+                      width: 16px;
+                      height: 16px;
+                      background: rgba(191, 191, 64, 0.8);
+                      border-radius: 50%;
+                      border: 1px solid #ddd;
+                    "
+                  ></div>
+                  <span style="font-size: 11px; color: var(--p-text-muted-color)">10%</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.3em">
+                  <div
+                    style="
+                      width: 16px;
+                      height: 16px;
+                      background: rgba(128, 128, 128, 0.8);
+                      border-radius: 50%;
+                      border: 1px solid #ddd;
+                    "
+                  ></div>
+                  <span style="font-size: 11px; color: var(--p-text-muted-color)">20%</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.3em">
+                  <div
+                    style="
+                      width: 16px;
+                      height: 16px;
+                      background: rgba(64, 114, 191, 0.8);
+                      border-radius: 50%;
+                      border: 1px solid #ddd;
+                    "
+                  ></div>
+                  <span style="font-size: 11px; color: var(--p-text-muted-color)">30%</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.3em">
+                  <div
+                    style="
+                      width: 16px;
+                      height: 16px;
+                      background: rgba(0, 100, 255, 0.8);
+                      border-radius: 50%;
+                      border: 1px solid #ddd;
+                    "
+                  ></div>
+                  <span style="font-size: 11px; color: var(--p-text-muted-color)">40%+</span>
+                </div>
+              </div>
+            } @else {
+              <p-message severity="info" [text]="'No hay datos históricos disponibles para el histograma' | translate">
+              </p-message>
+            }
+          </div>
+        }
+
+        <!-- 3. Promedio de Humedad (Gráfico de líneas) -->
+        @if (dispositivosHumedad.length > 0) {
+          <div class="drawer-section section-promedio" style="display: flex; flex-direction: column; gap: 1em; min-width: 0">
+            <h3 style="margin: 0 0 1em 0; color: var(--p-text-color)">
+              {{ 'Promedio de Humedad de Suelo' | translate }}
+            </h3>
+
+            <div style="margin-bottom: 1em">
+              <p style="font-size: 14px; color: var(--p-text-muted-color); margin: 0">
+                {{ 'Promedio diario de' | translate }} {{ dispositivosHumedad.length }}
+                {{ dispositivosHumedad.length === 1 ? ('sensor' | translate) : ('sensores' | translate) }}
+                {{ '- Últimos 7 días' | translate }}
+              </p>
+            </div>
+
+            @if (loadingGrafico) {
+              <div style="height: 350px; width: 100%; display: flex; align-items: center; justify-content: center">
+                <p-progressSpinner
+                  [style]="{ width: '50px', height: '50px' }"
+                  strokeWidth="4"
+                  fill="transparent"
+                  animationDuration="1s"
+                >
+                </p-progressSpinner>
+                <p style="margin-left: 1em; color: var(--p-text-muted-color)">
+                  {{ 'Cargando gráfico...' | translate }}
+                </p>
+              </div>
+            } @else if (chartOptionsGraficoHumedad && valoresHumedadSemana.length > 0) {
+              <div style="height: 350px; width: 100%; overflow: hidden">
+                <div #chartContainer style="height: 100%; width: 100%"></div>
+              </div>
+            } @else {
+              <p-message severity="info" [text]="'No hay datos históricos disponibles para el gráfico' | translate">
+              </p-message>
+            }
+          </div>
+        }
+
+        <!-- 4. Evapotranspiración (ET0) -->
+        <div class="drawer-section section-et0" style="display: flex; flex-direction: column; gap: 1em; min-width: 0">
+          <h3 style="margin: 0 0 1em 0; color: var(--p-text-color)">
+            {{ 'Proyección de Evapotranspiración (ET0)' | translate }}
+          </h3>
+
+          <div style="margin-bottom: 1em">
+            <p style="font-size: 14px; color: var(--p-text-muted-color); margin: 0">
+              {{ 'Pronóstico de evapotranspiración de referencia para los próximos días' | translate }}
+            </p>
+          </div>
+
+          @if (loadingGrafico) {
+            <div style="height: 350px; width: 100%; display: flex; align-items: center; justify-content: center">
+              <p-progressSpinner
+                [style]="{ width: '50px', height: '50px' }"
+                strokeWidth="4"
+                fill="transparent"
+                animationDuration="1s"
+              >
+              </p-progressSpinner>
+              <p style="margin-left: 1em; color: var(--p-text-muted-color)">
+                {{ 'Cargando proyección...' | translate }}
+              </p>
+            </div>
+          } @else if (chartOptionsEvapotranspiracion && valoresEvapotranspiracion.length > 0) {
+            <div style="height: 350px; width: 100%; overflow: hidden">
+              <div #evapotranspiracionContainer style="height: 100%; width: 100%"></div>
+            </div>
+          } @else {
+            <p-message
+              severity="info"
+              [text]="'No hay datos de pronóstico disponibles para evapotranspiración' | translate"
+            >
+            </p-message>
+          }
+        </div>
+      </div>
+    } @else {
+      <!-- Layout móvil con scroll mejorado -->
+      <div class="drawer-content-mobile" style="height: 100%; overflow-y: auto; overflow-x: hidden; padding: 1.5em">
+        <!-- Recomendaciones de Riego (Móvil) -->
+        <div style="margin-bottom: 2em">
+          <h3 style="margin-bottom: 1em; color: var(--p-text-color)">
+            {{ 'Recomendaciones de Riego' | translate }}
+          </h3>
+
+          @if (siembra?.ultimaPrediccionRiego?.length) {
+            @for (item of siembra?.ultimaPrediccionRiego; track $index) {
+              <div
+                style="
+                  display: flex;
+                  flex-direction: row;
+                  justify-content: space-between;
+                  align-items: center;
+                  padding: 0.5em 0;
+                  border-bottom: 1px solid var(--p-surface-border);
+                "
+              >
+                <div style="display: flex; flex-direction: row; gap: 1em; align-items: center">
+                  <span style="font-size: 16px; font-weight: 500">
+                    {{ ($first ? ('Hoy' | translate) : helper.nombreCortoDia(item.fecha)) | titlecase }}
+                  </span>
+                </div>
+                <div style="text-align: right">
+                  <span style="font-size: 20px; font-weight: bold; color: var(--p-primary-color)">
+                    {{ item.cantidad | number: '1.0-0' }}
+                  </span>
+                  <span style="font-size: 14px; color: var(--p-text-muted-color)"> mm</span>
+                </div>
+              </div>
+            }
+          } @else {
+            <div
+              style="
+                padding: 1em;
+                background: var(--p-surface-ground);
+                border: 1px solid var(--p-surface-border);
+                border-radius: 8px;
+                border-left: 4px solid var(--p-primary-color);
+              "
+            >
+              <div style="display: flex; align-items: center; gap: 0.8em">
+                <i class="pi pi-droplet" style="color: var(--p-primary-color); font-size: 1.1em"></i>
+                <span style="font-weight: 500; color: var(--p-text-color)">
+                  {{ 'No se requiere riego por el momento' | translate }}
+                </span>
+              </div>
+            </div>
+          }
+        </div>
+
+        <!-- Histograma de humedad (Móvil) -->
+        @if (dispositivosHumedad.length > 0) {
+          <div style="margin-bottom: 2em">
+            <h3 style="margin-bottom: 1em; color: var(--p-text-color)">
+              {{ 'Histograma de Humedad de Suelo' | translate }}
+            </h3>
+
+            <div style="margin-bottom: 1em">
+              <p style="font-size: 14px; color: var(--p-text-muted-color); margin: 0">
+                {{ 'Distribución por profundidad - Últimos 7 días' | translate }}
+              </p>
+            </div>
+
+            @if (loadingGrafico) {
+              <div style="height: 400px; width: 100%; display: flex; align-items: center; justify-content: center">
+                <p-progressSpinner
+                  [style]="{ width: '50px', height: '50px' }"
+                  strokeWidth="4"
+                  fill="transparent"
+                  animationDuration="1s"
+                >
+                </p-progressSpinner>
+                <p style="margin-left: 1em; color: var(--p-text-muted-color)">
+                  {{ 'Cargando histograma...' | translate }}
+                </p>
+              </div>
+            } @else if (chartOptionsHistograma && valoresHistograma.length > 0) {
+              <div style="height: 400px; width: 100%; overflow: hidden">
+                <div #heatmapContainer style="height: 100%; width: 100%"></div>
+              </div>
+
+              <!-- Leyenda personalizada para el heatmap -->
+              <div style="display: flex; flex-wrap: wrap; gap: 1em; justify-content: center; margin-top: 1em">
+                <div style="display: flex; align-items: center; gap: 0.3em">
+                  <div
+                    style="
+                      width: 16px;
+                      height: 16px;
+                      background: rgba(255, 255, 0, 0.8);
+                      border-radius: 50%;
+                      border: 1px solid #ddd;
+                    "
+                  ></div>
+                  <span style="font-size: 11px; color: var(--p-text-muted-color)">0%</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.3em">
+                  <div
+                    style="
+                      width: 16px;
+                      height: 16px;
+                      background: rgba(191, 191, 64, 0.8);
+                      border-radius: 50%;
+                      border: 1px solid #ddd;
+                    "
+                  ></div>
+                  <span style="font-size: 11px; color: var(--p-text-muted-color)">10%</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.3em">
+                  <div
+                    style="
+                      width: 16px;
+                      height: 16px;
+                      background: rgba(128, 128, 128, 0.8);
+                      border-radius: 50%;
+                      border: 1px solid #ddd;
+                    "
+                  ></div>
+                  <span style="font-size: 11px; color: var(--p-text-muted-color)">20%</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.3em">
+                  <div
+                    style="
+                      width: 16px;
+                      height: 16px;
+                      background: rgba(64, 114, 191, 0.8);
+                      border-radius: 50%;
+                      border: 1px solid #ddd;
+                    "
+                  ></div>
+                  <span style="font-size: 11px; color: var(--p-text-muted-color)">30%</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.3em">
+                  <div
+                    style="
+                      width: 16px;
+                      height: 16px;
+                      background: rgba(0, 100, 255, 0.8);
+                      border-radius: 50%;
+                      border: 1px solid #ddd;
+                    "
+                  ></div>
+                  <span style="font-size: 11px; color: var(--p-text-muted-color)">40%+</span>
+                </div>
+              </div>
+            } @else {
+              <p-message severity="info" [text]="'No hay datos históricos disponibles para el histograma' | translate">
+              </p-message>
+            }
+          </div>
+        }
+
+        <!-- Promedio de Humedad (Móvil) -->
+        @if (dispositivosHumedad.length > 0) {
+          <div style="margin-bottom: 2em">
+            <h3 style="margin-bottom: 1em; color: var(--p-text-color)">
+              {{ 'Promedio de Humedad de Suelo' | translate }}
+            </h3>
+
+            <div style="margin-bottom: 1em">
+              <p style="font-size: 14px; color: var(--p-text-muted-color); margin: 0">
+                {{ 'Promedio diario de' | translate }} {{ dispositivosHumedad.length }}
+                {{ dispositivosHumedad.length === 1 ? ('sensor' | translate) : ('sensores' | translate) }}
+                {{ '- Últimos 7 días' | translate }}
+              </p>
+            </div>
+
+            @if (loadingGrafico) {
+              <div style="height: 350px; width: 100%; display: flex; align-items: center; justify-content: center">
+                <p-progressSpinner
+                  [style]="{ width: '50px', height: '50px' }"
+                  strokeWidth="4"
+                  fill="transparent"
+                  animationDuration="1s"
+                >
+                </p-progressSpinner>
+                <p style="margin-left: 1em; color: var(--p-text-muted-color)">
+                  {{ 'Cargando gráfico...' | translate }}
+                </p>
+              </div>
+            } @else if (chartOptionsGraficoHumedad && valoresHumedadSemana.length > 0) {
+              <div style="height: 350px; width: 100%; overflow: hidden">
+                <div #chartContainer style="height: 100%; width: 100%"></div>
+              </div>
+            } @else {
+              <p-message severity="info" [text]="'No hay datos históricos disponibles para el gráfico' | translate">
+              </p-message>
+            }
+          </div>
+        }
+
+        <!-- Evapotranspiración (Móvil) -->
+        <div style="margin-bottom: 2em">
+          <h3 style="margin-bottom: 1em; color: var(--p-text-color)">
+            {{ 'Proyección de Evapotranspiración (ET0)' | translate }}
+          </h3>
+
+          <div style="margin-bottom: 1em">
+            <p style="font-size: 14px; color: var(--p-text-muted-color); margin: 0">
+              {{ 'Pronóstico de evapotranspiración de referencia para los próximos días' | translate }}
+            </p>
+          </div>
+
+          @if (loadingGrafico) {
+            <div style="height: 350px; width: 100%; display: flex; align-items: center; justify-content: center">
+              <p-progressSpinner
+                [style]="{ width: '50px', height: '50px' }"
+                strokeWidth="4"
+                fill="transparent"
+                animationDuration="1s"
+              >
+              </p-progressSpinner>
+              <p style="margin-left: 1em; color: var(--p-text-muted-color)">
+                {{ 'Cargando proyección...' | translate }}
+              </p>
+            </div>
+          } @else if (chartOptionsEvapotranspiracion && valoresEvapotranspiracion.length > 0) {
+            <div style="height: 350px; width: 100%; overflow: hidden">
+              <div #evapotranspiracionContainer style="height: 100%; width: 100%"></div>
+            </div>
+          } @else {
+            <p-message
+              severity="info"
+              [text]="'No hay datos de pronóstico disponibles para evapotranspiración' | translate"
+            >
+            </p-message>
+          }
+        </div>
+      </div>
+    }
+  </div>
+</p-drawer>

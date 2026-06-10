@@ -1,0 +1,125 @@
+.disease-card {
+  height: 100%;
+  min-height: 100%;
+}
+
+.disease-header {
+  align-items: flex-start;
+  cursor: pointer;
+  display: flex;
+  gap: 0.65rem;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.disease-header p {
+  line-height: 1.1;
+  margin: 0;
+}
+
+.disease-header span {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.74rem;
+  line-height: 1.25;
+  margin-top: 0.22rem;
+}
+
+.disease-header strong {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.disease-list {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+}
+
+.disease-item {
+  background: var(--p-surface-0);
+  border: 1px solid var(--p-surface-200);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 156px;
+  padding: 0.7rem;
+}
+
+.disease-title {
+  align-items: baseline;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.disease-title strong {
+  color: var(--p-text-color);
+  font-size: 0.84rem;
+  line-height: 1.15;
+}
+
+.disease-title em {
+  color: var(--p-text-muted-color);
+  font-size: 0.66rem;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.risk-row {
+  align-items: center;
+  display: flex;
+  gap: 0.65rem;
+  margin-top: 0.65rem;
+}
+
+.risk-cup {
+  background: var(--p-surface-100);
+  border: 1px solid var(--p-surface-300);
+  border-radius: 6px 6px 13px 13px;
+  flex: 0 0 42px;
+  height: 82px;
+  overflow: hidden;
+  position: relative;
+}
+
+.risk-cup span {
+  background: #70c957;
+  border-radius: 999px 999px 0 0;
+  bottom: 0;
+  height: var(--fill);
+  left: 0;
+  position: absolute;
+  right: 0;
+}
+
+.disease-item.medium .risk-cup span {
+  background: #f4b942;
+}
+
+.disease-item.high .risk-cup span {
+  background: #e05d4f;
+}
+
+.disease-item p,
+.disease-item small {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.68rem;
+  line-height: 1.22;
+  margin: 0;
+}
+
+.disease-item p {
+  color: var(--p-text-color);
+  font-weight: 700;
+  margin-bottom: 0.18rem;
+}
+
+.disease-item .variables {
+  border-top: 1px solid var(--p-surface-200);
+  color: var(--p-text-color);
+  font-weight: 600;
+  margin-top: auto;
+  padding-top: 0.45rem;
+}

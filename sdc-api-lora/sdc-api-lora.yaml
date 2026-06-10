@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sdc-api-lora
+  labels:
+    app: sdc-api-lora
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sdc-api-lora
+  template:
+    metadata:
+      labels:
+        app: sdc-api-lora
+    spec:
+      containers:
+      - name: sdc-api-lora
+        image: chaman/sdc-api-lora:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5000
+        env:
+        - name: PORT
+          value: "5000"
+        - name: API_DATOS
+          value: "http://sdc-datos-service"
+        - name: ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "400m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sdc-api-lora-service
+  labels:
+    app: sdc-api-lora
+spec:
+  selector:
+    app: sdc-api-lora
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+  type: ClusterIP

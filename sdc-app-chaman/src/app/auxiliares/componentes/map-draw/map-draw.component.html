@@ -1,0 +1,11 @@
+<div id="map-draw" class="map-container">
+  <div class="flotante">
+    <p-button [label]="'Dibujar' | translate" (click)="dibujar()" [disabled]="!tipo || dibujando" />
+
+    @if (dibujando) {
+      <p-button icon="pi pi-times" severity="warn" [rounded]="true" (click)="desactivarModoEdicion()"></p-button>
+    }
+
+    <p-button icon="pi pi-trash" severity="danger" [rounded]="true" (click)="borrarDibujos()"></p-button>
+  </div>
+</div>

@@ -1,0 +1,62 @@
+<div class="custom-card phenology-card">
+  <div class="phenology-header">
+    <div class="phenology-title">
+      <p class="titulo-card">{{ 'Etapa fenologica' | translate | uppercase }}</p>
+      <span class="phenology-subtitle">{{ cultivo }} - {{ etapas.length }} etapas cargadas en Chaman</span>
+    </div>
+
+    <div class="crop-detail-grid">
+      <div>
+        <span>Cultivo</span>
+        <strong>{{ lote?.siembra?.semilla?.cultivo || '-' }}</strong>
+      </div>
+      <div>
+        <span>Variedad</span>
+        <strong>
+          {{ lote?.siembra?.semilla?.variedad || '-' }}
+          @if (lote?.siembra?.semilla?.ciclo) {
+            <small>{{ lote?.siembra?.semilla?.ciclo }}</small>
+          }
+        </strong>
+      </div>
+      <div>
+        <span>Siembra</span>
+        <strong>{{ lote?.siembra?.fechaSiembra | date: 'd/M/yy' }}</strong>
+      </div>
+    </div>
+
+    <div class="current-stage">
+      <span>Etapa actual</span>
+      <strong>{{ etapaActual | uppercase }}</strong>
+    </div>
+  </div>
+
+  @if (etapas.length > 0) {
+    <div class="phenology-timeline">
+      <div class="timeline-track">
+        <span class="timeline-progress" [style.width.%]="progreso"></span>
+        @for (etapa of etapas; track etapa.nombre) {
+          <span class="timeline-dot" [ngClass]="etapa.estado" [style.left.%]="etapa.posicion"></span>
+        }
+      </div>
+
+      <div class="timeline-label-row">
+        @for (etapa of etapas; track etapa.nombre) {
+          <div class="stage-label" [ngClass]="etapa.estado" [style.left.%]="etapa.posicion">
+            <span>{{ etapa.nombre }}</span>
+            <small>{{ etapa.fecha | date: 'd/M' }}</small>
+            @if (etapa.periodoDias) {
+              <em>{{ etapa.periodoDias }} d</em>
+            } @else {
+              <em>Inicio</em>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  } @else {
+    <div class="empty-state">
+      <p>{{ 'Datos insuficientes para mostrar la linea de tiempo.' | translate }}</p>
+    </div>
+  }
+</div>

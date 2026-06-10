@@ -1,0 +1,1000 @@
+<div id="mapa" class="map-container"></div>
+<div id="popup" class="ol-popup">
+  <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+  <div id="popup-content"></div>
+</div>
+<div
+  style="
+    position: absolute;
+    top: 0.5em;
+    left: var(--menu-offset);
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0.5em;
+  "
+>
+  <!-- Selector de servicio -->
+  <div style="display: flex; align-items: center">
+    <div
+      class="pointer"
+      style="
+        height: 2.75rem;
+        padding: 0 0.75em;
+        border-radius: 16px;
+        background: var(--p-tag-secondary-background);
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        white-space: nowrap;
+      "
+      severity="secondary"
+      (click)="showDrawerServicios = true"
+    >
+      <span>{{ servicioSeleccionado.label() }}</span>
+      @if (loading()) {
+        <p-progress-spinner ariaLabel="loading" [style]="{ width: '15px', height: '15px' }" alig />
+      } @else {
+        <i class="pi pi-angle-down"></i>
+      }
+    </div>
+  </div>
+
+  <!-- Clima -->
+  @if (establecimientoSeleccionado?.climaActual) {
+    <div
+      class="pointer"
+      (click)="masDetallesClima = !masDetallesClima"
+      [style.height]="masDetallesClima ? 'auto' : '2.75rem'"
+      style="
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 0.25em 0.75em;
+        background: var(--p-tag-secondary-background);
+        border-radius: 16px;
+        font-size: 0.75rem;
+        white-space: nowrap;
+      "
+    >
+      <div
+        style="
+          font-size: 12px;
+          width: 100%;
+          margin-bottom: 0.5em;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          align-items: center;
+        "
+        [@expandCollapse]="masDetallesClima ? 'expanded' : 'collapsed'"
+      >
+        <span>{{ establecimientoSeleccionado?.climaActual?.fecha || '2025-1-1 15:50' | date: 'HH:mm' }}</span>
+        <span>{{ getDescripcionClimaTraducida(establecimientoSeleccionado?.climaActual?.clima?.summary) }}</span>
+      </div>
+
+      <!-- Icono y temperatura -->
+      <div style="display: flex; flex-direction: row; align-items: center; gap: 4px">
+        <img
+          [src]="'icons/weather/' + (establecimientoSeleccionado?.climaActual?.clima?.iconNum || 1) + '.png'"
+          style="width: 25px; height: 25px"
+        />
+        <div style="display: flex; line-height: 0.6; gap: 4px">
+          <span style="font-size: 1.8em; font-weight: bold">
+            {{ establecimientoSeleccionado?.climaActual?.clima?.temperatura?.last || '??' }}
+          </span>
+          <span>°C</span>
+        </div>
+      </div>
+
+      <!-- Mas detalles -->
+      <div
+        style="font-size: 12px; width: 100%; margin-top: 0.5em"
+        [@expandCollapse]="masDetallesClima ? 'expanded' : 'collapsed'"
+      >
+        <!-- <p>Prob. de precipitaciones: %</p> -->
+        <p style="margin: 0; line-height: 1.1; font-weight: 300">
+          Humedad: {{ establecimientoSeleccionado?.climaActual?.clima?.humedad?.last || '??' }} %
+        </p>
+        <p style="margin: 0; line-height: 1.1; font-weight: 300">
+          Viento: a {{ establecimientoSeleccionado?.climaActual?.clima?.velocidadViento?.last }} km/h
+        </p>
+        <p style="margin: 0; line-height: 1.1; font-weight: 300">
+          Presion: {{ establecimientoSeleccionado?.climaActual?.clima?.presion?.last || '??' }} hPa
+        </p>
+
+        <p-button
+          [label]="'Ver mas' | translate"
+          severity="primary"
+          [fluid]="true"
+          [style]="{ margin: '0.5em 0' }"
+          (onClick)="abrirDrawerClima(); $event.stopPropagation()"
+        />
+      </div>
+    </div>
+  }
+</div>
+
+<!-- Resumen del servicio monitoreo de enfermedades-->
+<p-drawer
+  #drawerRef
+  [visible]="!loteSeleccionado && servicioSeleccionado === servicios[0] && !showClimaLayers"
+  [position]="'bottom'"
+  [style]="{
+    'margin-top': '0',
+    height: (helper.isWide$ | async) ? 'auto' : 'auto',
+    'border-radius': (helper.isWide$ | async) ? '30px 30px 0 0' : '30px 30px 0 0',
+    overflow: 'auto',
+    width: (helper.isWide$ | async) ? '400px' : '100%',
+    'max-width': (helper.isWide$ | async) ? '400px' : '100%',
+    'max-height': (helper.isWide$ | async) ? '500px' : '70vh',
+    right: (helper.isWide$ | async) ? '20px' : 'auto',
+    left: (helper.isWide$ | async) ? 'auto' : '0',
+    bottom: (helper.isWide$ | async) ? '0' : '0',
+    position: (helper.isWide$ | async) ? 'fixed' : 'fixed',
+  }"
+  [modal]="false"
+>
+  <ng-template #headless>
+    <!-- Barrita gris -->
+    <!-- <div style="width: 100%; display: flex; justify-content: center">
+      <div style="width: 48px; height: 4px; border-radius: 2px; background-color: #ebebeb; margin-top: 0.5em"></div>
+    </div> -->
+
+    <div style="padding: 1em 2em 2em 2em">
+      <span style="font-size: 16px; font-weight: bold">
+        {{ 'Riesgo por hectáreas' | translate }}
+      </span>
+      <br />
+      <br />
+
+      <!-- Riegos -->
+      <div
+        style="display: flex; justify-content: strar"
+        [style.flex-direction]="(helper.isWide$ | async) ? 'column' : 'row'"
+        [style.gap]="(helper.isWide$ | async) ? '2em' : '3em'"
+      >
+        <!-- Riesgo bajo -->
+        <div
+          style="
+            display: flex;
+            flex-direction: column;
+            border-left: 8px solid var(--p-success-color);
+            padding-left: 0.5em;
+            white-space: nowrap;
+          "
+        >
+          <span style="font-size: 12px; white-space: wrap">{{ 'Riesgo bajo' | translate }}</span>
+          <span style="font-size: 24px; font-weight: bold">
+            {{ enfermedades.haVerde }}
+            <span style="font-size: 12px">ha</span>
+          </span>
+        </div>
+
+        <!-- Riesgo medio -->
+        <div
+          style="
+            display: flex;
+            flex-direction: column;
+            border-left: 8px solid var(--p-warning-color);
+            padding-left: 0.5em;
+            white-space: nowrap;
+          "
+        >
+          <span style="font-size: 12px; white-space: wrap">{{ 'Riesgo medio' | translate }}</span>
+          <span style="font-size: 24px; font-weight: bold">
+            {{ enfermedades.haAmarillo }}
+            <span style="font-size: 12px">ha</span>
+          </span>
+        </div>
+
+        <!-- Riesgo alto -->
+        <div
+          style="
+            display: flex;
+            flex-direction: column;
+            border-left: 8px solid var(--p-danger-color);
+            padding-left: 0.5em;
+            white-space: nowrap;
+          "
+        >
+          <span style="font-size: 12px; white-space: wrap">{{ 'Riesgo alto' | translate }}</span>
+          <span style="font-size: 24px; font-weight: bold">
+            {{ enfermedades.haRojo }}
+            <span style="font-size: 12px">ha</span>
+          </span>
+        </div>
+      </div>
+
+      <p-divider />
+
+      <!-- Tag rojo -->
+      @if (enfermedades.cantRojo) {
+        <p-message severity="error" icon="pi pi-exclamation-triangle">
+          {{ enfermedades.cantRojo + (' lotes necesitan atención' | translate) }}
+        </p-message>
+      }
+      <!-- Tag Amarillo -->
+      @if (enfermedades.cantAmarillo) {
+        <p-message severity="warn" icon="pi pi-info-circle">
+          {{ enfermedades.cantRojo + (' lotes necesitan atención' | translate) }}
+        </p-message>
+      }
+      <!-- Tag Verde -->
+      @if (!enfermedades.cantAmarillo && !enfermedades.cantRojo) {
+        <p-message severity="success" icon="pi pi-check">
+          {{ enfermedades.cantVerde + (' lotes sin necesidades' | translate) }}
+        </p-message>
+      }
+    </div>
+  </ng-template>
+</p-drawer>
+
+<!-- Resumen de requerimientos de riego-->
+<p-drawer
+  #drawerRef
+  [visible]="!loteSeleccionado && servicioSeleccionado === servicios[1] && !showClimaLayers"
+  [position]="'bottom'"
+  [style]="{
+    'margin-top': '0',
+    height: (helper.isWide$ | async) ? 'auto' : 'auto',
+    'border-radius': (helper.isWide$ | async) ? '30px 30px 0 0' : '30px 30px 0 0',
+    overflow: 'auto',
+    width: (helper.isWide$ | async) ? '400px' : '100%',
+    'max-width': (helper.isWide$ | async) ? '400px' : '100%',
+    'max-height': (helper.isWide$ | async) ? '500px' : '70vh',
+    right: (helper.isWide$ | async) ? '20px' : 'auto',
+    left: (helper.isWide$ | async) ? 'auto' : '0',
+    bottom: (helper.isWide$ | async) ? '0' : '0',
+    position: (helper.isWide$ | async) ? 'fixed' : 'fixed',
+  }"
+  [modal]="false"
+>
+  <ng-template #headless>
+    <!-- Barrita gris -->
+    <!-- <div style="width: 100%; display: flex; justify-content: center">
+      <div style="width: 48px; height: 4px; border-radius: 2px; background-color: #ebebeb; margin-top: 0.5em"></div>
+    </div> -->
+
+    <div style="padding: 1em 2em 2em 2em">
+      <span style="font-size: 16px; font-weight: bold">
+        {{ 'Recomendación de riego' | translate }}
+      </span>
+      <br />
+      <br />
+
+      <!-- Riegos -->
+      <div
+        style="display: flex; justify-content: strar"
+        [style.flex-direction]="(helper.isWide$ | async) ? 'column' : 'row'"
+        [style.gap]="(helper.isWide$ | async) ? '2em' : '3em'"
+      >
+        <!-- Riesgo bajo -->
+        <div
+          style="
+            display: flex;
+            flex-direction: column;
+            border-left: 8px solid var(--p-success-color);
+            padding-left: 0.5em;
+            white-space: nowrap;
+          "
+        >
+          <span style="font-size: 12px; white-space: wrap">{{ 'No regar' | translate }}</span>
+          <span style="font-size: 24px; font-weight: bold">
+            {{ riego.haVerde }}
+            <span style="font-size: 12px">ha</span>
+          </span>
+        </div>
+
+        <!-- Riesgo medio -->
+        <div
+          style="
+            display: flex;
+            flex-direction: column;
+            border-left: 8px solid var(--p-warning-color);
+            padding-left: 0.5em;
+            white-space: nowrap;
+          "
+        >
+          <span style="font-size: 12px; white-space: wrap">{{ 'Riego Bajo' | translate }}</span>
+          <span style="font-size: 24px; font-weight: bold">
+            {{ riego.haAmarillo }}
+            <span style="font-size: 12px">ha</span>
+          </span>
+        </div>
+
+        <!-- Riesgo alto -->
+        <div
+          style="
+            display: flex;
+            flex-direction: column;
+            border-left: 8px solid var(--p-danger-color);
+            padding-left: 0.5em;
+            white-space: nowrap;
+          "
+        >
+          <span style="font-size: 12px; white-space: wrap">{{ 'Riego alto' | translate }}</span>
+          <span style="font-size: 24px; font-weight: bold">
+            {{ riego.haRojo }}
+            <span style="font-size: 12px">ha</span>
+          </span>
+        </div>
+      </div>
+
+      <p-divider />
+
+      <!-- Tag rojo -->
+      @if (riego.cantRojo) {
+        <p-message severity="error" icon="pi pi-exclamation-triangle">
+          {{ riego.cantRojo + (' lotes necesitan atención' | translate) }}
+        </p-message>
+      }
+      <!-- Tag Amarillo -->
+      @if (riego.cantAmarillo) {
+        <p-message severity="warn" icon="pi pi-info-circle">
+          {{ riego.cantAmarillo + (' lotes necesitan atención' | translate) }}
+        </p-message>
+      }
+      <!-- Tag Verde -->
+      @if (!riego.cantAmarillo && !riego.cantRojo) {
+        <p-message severity="success" icon="pi pi-check">
+          {{ riego.cantVerde + (' lotes sin necesidades' | translate) }}
+        </p-message>
+      }
+    </div>
+  </ng-template>
+</p-drawer>
+
+<!-- Resumen de huella hidrica -->
+<p-drawer
+  #drawerRef
+  [visible]="!loteSeleccionado && servicioSeleccionado === servicios[2] && !showClimaLayers"
+  [position]="'bottom'"
+  [style]="{
+    'margin-top': '0',
+    height: (helper.isWide$ | async) ? 'auto' : 'auto',
+    'border-radius': (helper.isWide$ | async) ? '30px 30px 0 0' : '30px 30px 0 0',
+    overflow: 'auto',
+    width: (helper.isWide$ | async) ? '400px' : '100%',
+    'max-width': (helper.isWide$ | async) ? '400px' : '100%',
+    'max-height': (helper.isWide$ | async) ? '500px' : '70vh',
+    right: (helper.isWide$ | async) ? '20px' : 'auto',
+    left: (helper.isWide$ | async) ? 'auto' : '0',
+    bottom: (helper.isWide$ | async) ? '0' : '0',
+    position: (helper.isWide$ | async) ? 'fixed' : 'fixed',
+  }"
+  [modal]="false"
+>
+  <ng-template #headless>
+    <!-- Barrita gris -->
+    <!-- <div style="width: 100%; display: flex; justify-content: center">
+      <div style="width: 48px; height: 4px; border-radius: 2px; background-color: #ebebeb; margin-top: 0.5em"></div>
+    </div> -->
+
+    <div style="padding: 1em 2em 2em 2em">
+      <span style="font-size: 16px; font-weight: bold">
+        {{ 'Huella Hídrica' | translate }}
+      </span>
+      <br />
+      <br />
+
+      <!-- Riegos -->
+      <div
+        style="display: flex; justify-content: strar"
+        [style.flex-direction]="(helper.isWide$ | async) ? 'column' : 'row'"
+        [style.gap]="(helper.isWide$ | async) ? '2em' : '3em'"
+      >
+        <!-- Riesgo bajo -->
+        <div
+          style="
+            display: flex;
+            flex-direction: column;
+            border-left: 8px solid var(--p-success-color);
+            padding-left: 0.5em;
+            white-space: nowrap;
+          "
+        >
+          <span style="font-size: 12px; white-space: wrap">{{ 'Impacto bajo' | translate }}</span>
+          <span style="font-size: 24px; font-weight: bold">
+            {{ huella.haVerde }}
+            <span style="font-size: 12px">ha</span>
+          </span>
+        </div>
+
+        <!-- Riesgo medio -->
+        <div
+          style="
+            display: flex;
+            flex-direction: column;
+            border-left: 8px solid var(--p-warning-color);
+            padding-left: 0.5em;
+            white-space: nowrap;
+          "
+        >
+          <span style="font-size: 12px; white-space: wrap">{{ 'Impacto medio' | translate }}</span>
+          <span style="font-size: 24px; font-weight: bold">
+            {{ huella.haAmarillo }}
+            <span style="font-size: 12px">ha</span>
+          </span>
+        </div>
+
+        <!-- Riesgo alto -->
+        <div
+          style="
+            display: flex;
+            flex-direction: column;
+            border-left: 8px solid var(--p-danger-color);
+            padding-left: 0.5em;
+            white-space: nowrap;
+          "
+        >
+          <span style="font-size: 12px; white-space: wrap">{{ 'Impacto alto' | translate }}</span>
+          <span style="font-size: 24px; font-weight: bold">
+            {{ huella.haRojo }}
+            <span style="font-size: 12px">ha</span>
+          </span>
+        </div>
+      </div>
+
+      <p-divider />
+
+      <!-- Tag rojo -->
+      @if (huella.cantRojo) {
+        <p-message severity="error" icon="pi pi-exclamation-triangle">
+          {{ huella.cantRojo + (' lotes necesitan atención' | translate) }}
+        </p-message>
+      }
+      <!-- Tag Amarillo -->
+      @if (huella.cantAmarillo) {
+        <p-message severity="warn" icon="pi pi-info-circle">
+          {{ huella.cantAmarillo + (' lotes necesitan atención' | translate) }}
+        </p-message>
+      }
+      <!-- Tag Verde -->
+      @if (!huella.cantAmarillo && !huella.cantRojo) {
+        <p-message severity="success" icon="pi pi-check">
+          {{ huella.cantVerde + (' lotes sin necesidades' | translate) }}
+        </p-message>
+      }
+    </div>
+  </ng-template>
+</p-drawer>
+
+<!-- Resumen lote seleccionado -->
+<p-drawer
+  #drawerRef
+  [visible]="!!loteSeleccionado"
+  [position]="(helper.isWide$ | async) ? 'right' : 'bottom'"
+  [style]="{
+    'margin-top': (helper.isWide$ | async) ? '0' : '0',
+    height: (helper.isWide$ | async) ? 'auto' : 'auto',
+    'max-height': (helper.isWide$ | async) ? '90vh' : '70vh',
+    'border-radius': (helper.isWide$ | async) ? '30px 0 0 30px' : '30px 30px 0 0',
+    overflow: 'auto',
+    width: (helper.isWide$ | async) ? '350px' : '100%',
+    'max-width': (helper.isWide$ | async) ? '35vw' : '100%',
+    top: (helper.isWide$ | async) ? '0' : 'auto',
+    right: (helper.isWide$ | async) ? '0' : 'auto',
+    position: (helper.isWide$ | async) ? 'fixed' : 'fixed',
+  }"
+  [modal]="false"
+>
+  <ng-template #headless>
+    <!-- Barrita gris -->
+    <div style="width: 100%; display: flex; justify-content: center" (click)="loteSeleccionado = undefined">
+      <div style="width: 48px; height: 4px; border-radius: 2px; background-color: #ebebeb; margin-top: 0.5em"></div>
+    </div>
+
+    <div style="padding: 1em 2em 2em 2em">
+      <!-- Info del lote -->
+      <div style="display: flex; flex-direction: row; align-items: center">
+        <svg [style.fill]="'var(--p-accent-color)'" [attr.width]="'24px'" [attr.height]="'24px'" class="mr-2">
+          <use [attr.xlink:href]="'icons/icons.svg#siembras'"></use>
+        </svg>
+        <span style="font-size: 24px; font-weight: bold">
+          {{ 'Lote' | translate }} {{ loteSeleccionado?.nombre }}
+        </span>
+      </div>
+      <p-divider />
+
+      <!-- Info de la siembra -->
+      @if (loteSeleccionado?.siembra) {
+        <div>
+          <!-- Cultivo -->
+          <div style="display: flex; flex-direction: column; margin-bottom: 1em">
+            <span style="font-size: 12px">{{ 'Cultivo' | translate }}</span>
+            <span style="font-size: 20px; font-weight: bold">
+              {{ helper.translateCultivo(loteSeleccionado?.siembra?.semilla?.cultivo) }}
+            </span>
+          </div>
+          <!-- Variedad -->
+          <div style="display: flex; flex-direction: column; margin-bottom: 1em">
+            <span style="font-size: 12px">{{ 'Veriedad' | translate }}</span>
+            <span style="font-size: 20px; font-weight: bold">
+              {{ loteSeleccionado?.siembra?.semilla?.variedad }}
+              <span style="font-size: 16px; font-weight: bold; color: var(--p-text-muted-color)">
+                {{ loteSeleccionado?.siembra?.semilla?.semillero }}
+              </span>
+              <span style="font-size: 16px; font-weight: bold; color: var(--p-text-muted-color)">
+                {{ helper.translateCiclo(loteSeleccionado?.siembra?.semilla?.ciclo) }}
+              </span>
+            </span>
+          </div>
+          <!-- Fecha de siembra y cosecha -->
+          <div style="display: flex; flex-direction: row; justify-content: space-between">
+            <!-- Fecha siembra -->
+            <div style="display: flex; flex-direction: column">
+              <span style="font-size: 12px">{{ 'Fecha de siembra' | translate }}</span>
+              <span style="font-size: 20px; font-weight: bold">
+                {{ loteSeleccionado?.siembra?.fechaSiembra | date: 'shortDate' }}
+              </span>
+            </div>
+            <!-- Fecha cosecha -->
+            @if (loteSeleccionado?.siembra?.fechaCosecha) {
+              <div style="display: flex; flex-direction: column">
+                <span style="font-size: 12px">{{ 'Fecha de cosecha' | translate }}</span>
+                <span style="font-size: 20px; font-weight: bold">
+                  {{ loteSeleccionado?.siembra?.fechaCosecha | date: 'shortDate' }}
+                </span>
+              </div>
+            }
+          </div>
+        </div>
+      } @else {
+        <p-message severity="info">
+          {{ 'El lote no tiene siembra' | translate }}
+        </p-message>
+      }
+      <p-divider />
+
+      <!-- Etapa fenologica -->
+      @if (loteSeleccionado?.siembra) {
+        <div>
+          <div style="margin-bottom: 1em">
+            <span style="font-size: 24px; font-weight: bold">
+              {{ 'Etapa fenológica' | translate }}
+            </span>
+          </div>
+
+          <div style="display: flex; flex-direction: row; align-items: center; gap: 1em; margin-bottom: 1em">
+            <!-- Icono -->
+            <div
+              style="
+                width: 75px;
+                height: 75px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: #dbdada;
+                border-radius: 10px;
+              "
+            >
+              <svg [style.fill]="'#000'" [attr.width]="'40px'" [attr.height]="'40px'">
+                <use [attr.xlink:href]="'icons/icons.svg#siembras'"></use>
+              </svg>
+            </div>
+
+            <!-- Nombre etapa e inicio -->
+            <div style="display: flex; flex-direction: column">
+              <span style="font-size: 20px; font-weight: bold; margin-bottom: 0.5em">
+                {{ helper.getNombreEtapa(loteSeleccionado) }}
+              </span>
+              <span style="font-size: 12px">{{ 'Inicio' | translate }}</span>
+              <span style="font-size: 20px; font-weight: bold">
+                {{ helper.getFechaInicioEtapa(loteSeleccionado) | date: 'shortDate' }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <p-divider />
+      }
+
+      <!-- Info del servicio seleccionado -->
+      <div>
+        <div style="margin-bottom: 1em">
+          <span style="font-size: 16px; font-weight: bold">
+            {{ servicioSeleccionado.label() }}
+          </span>
+        </div>
+
+        <!-- Monitoreo de enfermedades -->
+        @if (servicioSeleccionado === servicios[0]) {
+          @if (loteSeleccionado?.siembra?.ultimaPrediccion?.enfermedades?.length) {
+            @for (item of loteSeleccionado?.siembra?.ultimaPrediccion?.enfermedades; track $index) {
+              <div style="margin-bottom: 1em">
+                <p-message
+                  [severity]="item.resultado > 20 ? 'error' : item.resultado > 15 ? 'warn' : 'success'"
+                  [icon]="
+                    item.resultado > 20
+                      ? 'pi pi-exclamation-triangle'
+                      : item.resultado > 15
+                        ? 'pi pi-info-circle'
+                        : 'pi pi-check'
+                  "
+                >
+                  {{ item.enfermedad }} - {{ item.resultado }}%
+                </p-message>
+              </div>
+            }
+          } @else {
+            <p-message severity="info">
+              {{ 'Aún no hay predicción de enfermedades' | translate }}
+            </p-message>
+          }
+        }
+
+        <!-- Recomendación de riego -->
+        @if (servicioSeleccionado === servicios[1]) {
+          <p-message [severity]="getSeverity(loteSeleccionado?.severityRiego)" [icon]="loteSeleccionado?.iconRiego">
+            @if (loteSeleccionado?.sumaRiego) {
+              {{ loteSeleccionado?.sumaRiego }} mm.
+            } @else {
+              {{ 'No se necesita regar' | translate }}
+            }
+          </p-message>
+        }
+
+        <!-- Huella hidrica -->
+        @if (servicioSeleccionado === servicios[2]) {
+          @if (loteSeleccionado?.huellaHidrica?.total) {
+            <p-message [severity]="getSeverity(loteSeleccionado?.severityHuella)" [icon]="loteSeleccionado?.iconHuella">
+              Total: {{ loteSeleccionado?.huellaHidrica?.total?.litrosKg | number: '0.0-0' }} l/kg.
+            </p-message>
+          } @else {
+            <p-message severity="info">
+              {{ 'Aún no hay cálculo de huella hídrica' | translate }}
+            </p-message>
+          }
+        }
+
+        <!-- NDVI -->
+        @if (servicioSeleccionado === servicios[3]) {
+          @if (loteSeleccionado?.ndvi) {
+            <p-message> NDVI: {{ loteSeleccionado?.ndvi | number: '0.0-3' }} </p-message>
+            <br />
+            <p-message> Fecha de la lectura: {{ loteSeleccionado?.ndviFecha | date: 'short' }} </p-message>
+          } @else {
+            <p-message severity="info">
+              {{ 'Aún no hay cálculo ndvi' | translate }}
+            </p-message>
+          }
+        }
+      </div>
+      <p-divider />
+
+      <!-- Boton mas informacion -->
+      @if (loginService.esProductor || loginService.esEstablecimiento) {
+        <div style="width: 100%">
+          <p-button
+            [style]="{ background: 'var(--p-accent-color)', color: 'black', 'border-color': 'var(--p-accent-color)' }"
+            [label]="'Más información' | translate"
+            [fluid]="true"
+            (click)="detallesLote()"
+          ></p-button>
+        </div>
+      }
+    </div>
+  </ng-template>
+</p-drawer>
+
+<!-- Selector de servicios -->
+<p-dialog
+  [(visible)]="showDrawerServicios"
+  [modal]="true"
+  [closable]="true"
+  [style]="{ width: '90vw', 'max-width': '400px' }"
+  [contentStyle]="{ overflow: 'visible' }"
+  [header]="'Servicios' | translate"
+>
+  <!-- Barrita gris -->
+  <!-- <div style="width: 100%; display: flex; justify-content: center">
+    <div
+      style="
+        width: 48px;
+        height: 4px;
+        border-radius: 2px;
+        background-color: #ebebeb;
+        margin-top: 0.5em;
+      "
+    ></div>
+  </div> -->
+
+  <!-- <img src="icons/siembras.svg" alt="" style="fill: red !important" />
+
+  <svg class="icon" [style.fill]="'red !important'">
+    <use xlink:href="icons/icons.svg#siembras"></use>
+  </svg> -->
+
+  <div style="display: flex; flex-direction: row; gap: 2em; justify-content: center; flex-wrap: wrap">
+    @for (item of servicios; track $index) {
+      <div
+        style="display: flex; flex-direction: column; align-items: center; width: 70px"
+        (click)="changeServicio(item)"
+      >
+        <div
+          style="
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          "
+          [style.background]="item.backgroudColor"
+          [style.color]="item.color"
+          [style.border]="servicioSeleccionado.label() === item.label() ? '2px solid var(--text-color)' : 'none'"
+        >
+          <svg [style.fill]="item.color" [attr.width]="'30px'" [attr.height]="'30px'">
+            <use [attr.xlink:href]="'icons/icons.svg#' + item.icon"></use>
+          </svg>
+        </div>
+
+        <div
+          style="
+            margin-top: 0.75em;
+            width: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            text-align: center;
+          "
+          [style.font-weight]="servicioSeleccionado.label() === item.label() ? 'bold' : 'normal'"
+        >
+          {{ item.label() }}
+        </div>
+      </div>
+    }
+  </div>
+</p-dialog>
+
+<!-- Botones de navegación del mapa -->
+<div style="position: fixed; left: 0.5em; top: 4em; z-index: 1000; display: flex; flex-direction: column; gap: 0.5em">
+  <!-- Botón para centrar en ubicación del usuario -->
+  <p-button
+    [rounded]="true"
+    severity="secondary"
+    icon="pi pi-map-marker"
+    (click)="centerOnUserLocation()"
+    pTooltip="Ir a mi ubicación"
+    tooltipPosition="right"
+  />
+
+  <!-- Botón para centrar en bounds -->
+  <p-button
+    [rounded]="true"
+    severity="secondary"
+    icon="pi pi-th-large"
+    (click)="centerMapOnBounds()"
+    pTooltip="Ver todos los lotes"
+    tooltipPosition="right"
+  />
+
+  <!-- Toggle Suelos -->
+  <p-button
+    [rounded]="true"
+    [severity]="isSuelosLayerVisible ? 'success' : 'secondary'"
+    icon="pi pi-globe"
+    (click)="toggleSuelosLayer()"
+    pTooltip="Ver capa de suelos"
+    tooltipPosition="right"
+  />
+
+  <!-- Botón de tiles climáticos -->
+  @if (climaVariables.length > 0) {
+    <div style="position: relative">
+      <!-- Botón principal redondo -->
+      <p-button
+        [rounded]="true"
+        [severity]="showClimaTilesPanel || showClimaLayers ? 'success' : 'secondary'"
+        icon="pi pi-cloud"
+        (click)="toggleClimaTilesPanel()"
+        pTooltip="Capas climáticas"
+        tooltipPosition="right"
+        [style]="{
+          transform: showClimaTilesPanel ? 'scale(1.05)' : 'scale(1)',
+          transition: 'all 150ms cubic-bezier(0.4, 0.0, 0.2, 1)',
+        }"
+      />
+
+      <!-- Panel expandido -->
+      @if (showClimaTilesPanel) {
+        <div
+          [@slideInOut]
+          style="
+            position: absolute;
+            left: 60px;
+            top: 0;
+            min-height: 2.75rem;
+            border-radius: 16px;
+            background: var(--p-tag-secondary-background);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5em;
+            padding: 0.75em;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            z-index: 1001;
+            min-width: 280px;
+            max-width: calc(100vw - 80px);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+          "
+        >
+          <!-- Primera fila: Toggle y Selector -->
+          <div style="display: flex; align-items: center; gap: 0.5em">
+            <!-- Toggle de visibilidad -->
+            <p-button
+              [icon]="showClimaLayers ? 'pi pi-eye' : 'pi pi-eye-slash'"
+              [severity]="showClimaLayers ? 'success' : 'secondary'"
+              [text]="true"
+              size="small"
+              (onClick)="toggleClimaLayers()"
+              [style]="{ 'min-width': '2rem', height: '1.5rem', padding: '0' }"
+              [pTooltip]="showClimaLayers ? 'Ocultar capas de clima' : 'Mostrar capas de clima'"
+              tooltipPosition="top"
+              [disabled]="climaTilesLoading"
+            />
+
+            <!-- Spinner de loading -->
+            @if (climaTilesLoading) {
+              <p-progress-spinner
+                ariaLabel="Cargando tiles climáticos"
+                [style]="{ width: '16px', height: '16px' }"
+                strokeWidth="4"
+              />
+            }
+
+            <!-- Selector de variable -->
+            <p-select
+              [(ngModel)]="climaVariableSeleccionada"
+              [options]="climaVariables"
+              optionLabel="name"
+              placeholder="Variable"
+              [style]="{
+                'flex-grow': '1',
+                height: '1.8rem',
+                display: 'flex',
+                'align-items': 'center',
+              }"
+              (onChange)="onClimaVariableChange($event)"
+              [disabled]="climaTilesLoading"
+            />
+          </div>
+
+          <!-- Segunda fila: Opacidad (solo si está activo) -->
+          @if (showClimaLayers) {
+            <div style="display: flex; align-items: center; gap: 0.5em; justify-content: center">
+              <!-- Control de opacidad -->
+              <div style="display: flex; align-items: center; gap: 0.5em">
+                <i class="pi pi-palette" style="font-size: 0.8rem; opacity: 0.7"></i>
+                <span style="font-size: 0.8rem; min-width: 35px">{{ climaOpacidad * 100 | number: '1.0-0' }}%</span>
+                <div style="display: flex; gap: 2px">
+                  <p-button
+                    icon="pi pi-minus"
+                    [text]="true"
+                    size="small"
+                    [style]="{ 'min-width': '1rem', height: '1rem', padding: '0', 'font-size': '0.6rem' }"
+                    (onClick)="decreaseOpacity()"
+                    [disabled]="climaTilesLoading"
+                  />
+                  <p-button
+                    icon="pi pi-plus"
+                    [text]="true"
+                    size="small"
+                    [style]="{ 'min-width': '1rem', height: '1rem', padding: '0', 'font-size': '0.6rem' }"
+                    (onClick)="increaseOpacity()"
+                    [disabled]="climaTilesLoading"
+                  />
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>
+
+<!-- Drawer del clima -->
+<p-drawer
+  [visible]="showDrawerClima"
+  (onHide)="showDrawerClima = false"
+  [position]="(helper.isWide$ | async) ? 'right' : 'bottom'"
+  [style]="{
+    'margin-top': (helper.isWide$ | async) ? '58px' : '0',
+    height: (helper.isWide$ | async) ? 'calc(100% - 58px)' : '85vh',
+    'border-radius': (helper.isWide$ | async) ? '30px 0 0 30px' : '30px 30px 0 0',
+    overflow: 'hidden',
+    width: (helper.isWide$ | async) ? '1600px' : '100%',
+    'max-width': (helper.isWide$ | async) ? '95vw' : '100%',
+  }"
+  [modal]="true"
+  [dismissible]="true"
+  [closeOnEscape]="true"
+  [closable]="true"
+>
+  <ng-template pTemplate="header">
+    <div class="drawer-clima-header">
+      <span class="title-main">{{ 'Información Climática' | translate }}</span>
+      @if (establecimientoSeleccionado?.nombre) {
+        <span class="title-establecimiento">{{ establecimientoSeleccionado?.nombre }}</span>
+      }
+    </div>
+  </ng-template>
+  <app-drawer-clima [establecimiento]="establecimientoSeleccionado" [visible]="showDrawerClima"> </app-drawer-clima>
+</p-drawer>
+
+<!-- Leyenda de capas climáticas -->
+@if (getClimaLeyenda()) {
+  <div
+    [@slideInOut]
+    style="
+      position: absolute;
+      bottom: 1em;
+      left: 1em;
+      background: var(--p-tag-secondary-background);
+      backdrop-filter: blur(8px);
+      border-radius: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      z-index: 1000;
+      min-width: 200px;
+      max-width: 300px;
+      pointer-events: auto;
+    "
+  >
+    <!-- Título de la leyenda -->
+    <div
+      style="
+        padding: 0.75em 1em 0.5em 1em;
+        border-bottom: 1px solid var(--p-surface-border);
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: var(--p-text-color);
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+      "
+    >
+      <i class="pi pi-palette" style="font-size: 0.8rem; color: var(--p-text-muted-color)"></i>
+      {{ climaVariableSeleccionada?.name }}
+    </div>
+
+    <!-- Items de la leyenda en fila horizontal -->
+    <div style="padding: 0.75em 1em; display: flex; flex-wrap: wrap; gap: 0.5em; align-items: center">
+      @for (item of getClimaLeyenda(); track item.value) {
+        <div
+          style="
+            display: flex;
+            align-items: center;
+            gap: 0.3em;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            padding: 0.2em 0.4em;
+            border-radius: 8px;
+            background: var(--p-surface-ground);
+            border: 1px solid var(--p-surface-border);
+          "
+        >
+          <!-- Cuadro de color -->
+          <div
+            style="
+              width: 12px;
+              height: 12px;
+              border-radius: 3px;
+              flex-shrink: 0;
+              border: 1px solid var(--p-surface-border);
+              box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            "
+            [style.background-color]="item.color"
+          ></div>
+
+          <!-- Valor -->
+          <span style="color: var(--p-text-color); font-weight: 500">{{ item.value }}</span>
+        </div>
+      }
+    </div>
+  </div>
+}

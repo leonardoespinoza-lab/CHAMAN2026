@@ -1,0 +1,57 @@
+<div class="custom-card application-card">
+  <div class="application-header pointer" (click)="lote ? (verDrawerFertilizaciones = true) : null">
+    <div>
+      <p class="titulo-card">{{ 'Ultima fertilizacion' | translate | uppercase }}</p>
+      <span>{{ resumenFertilizacion }}</span>
+    </div>
+    @if (lote) {
+      <svg [style.fill]="'var(--p-primary-color)'" [attr.width]="'34px'" [attr.height]="'34px'">
+        <use [attr.xlink:href]="'icons/icons.svg#history'"></use>
+      </svg>
+    }
+  </div>
+
+  @if (ultimaFertilizacion) {
+    <div class="application-body">
+      <article class="date-box">
+        <span>Fecha</span>
+        <strong>{{ ultimaFertilizacion.fechaFertilizacion | date: 'shortDate' }}</strong>
+        <small>Ultima carga</small>
+      </article>
+
+      <section class="composition-list">
+        @for (item of ultimaFertilizacion.fertilizantes; track $index) {
+          <article>
+            <div>
+              <strong>{{ item.nombre }}</strong>
+              <span>{{ item.dosis }} kg/ha</span>
+            </div>
+            <small>
+              N {{ item.porcentajeN || 0 }}% · P {{ item.porcentajeP || 0 }}%
+            </small>
+          </article>
+        }
+      </section>
+    </div>
+  } @else {
+    <div class="application-empty">
+      <p-message severity="info">{{ 'El lote no fue fertilizado' | translate }}</p-message>
+      <small>La base local ya tiene fertilizantes cargados para iniciar aplicaciones.</small>
+    </div>
+  }
+
+  @if (!helper.soloLectura()) {
+    <p-button
+      [label]="'Fertilizar' | translate"
+      [fluid]="true"
+      [outlined]="true"
+      styleClass="w-full"
+      (onClick)="fertilizar()"
+    />
+  }
+</div>
+
+<app-drawer-listado-fertilizaciones
+  [fertilizaciones]="lote?.fertilizaciones || []"
+  [(visible)]="verDrawerFertilizaciones"
+></app-drawer-listado-fertilizaciones>

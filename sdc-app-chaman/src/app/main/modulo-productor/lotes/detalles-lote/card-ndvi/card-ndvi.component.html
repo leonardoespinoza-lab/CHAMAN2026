@@ -1,0 +1,90 @@
+<div class="custom-card ndvi-card">
+  <div class="ndvi-header">
+    <svg [style.fill]="'var(--p-text-color)'" [attr.width]="'38px'" [attr.height]="'38px'">
+      <use [attr.xlink:href]="'icons/icons.svg#plantas'"></use>
+    </svg>
+    <div>
+      <p class="titulo-card">
+        <p-button icon="pi pi-info-circle" [rounded]="true" [text]="true" (onClick)="mostrarLeyenda()" />
+        {{ 'NDVI' | translate | uppercase }}
+      </p>
+      <span>
+        @if (reporte?.ndviPromedio) {
+          Promedio {{ reporte?.ndviPromedio | number: '1.0-3' }}
+        } @else {
+          Indice verde del lote
+        }
+      </span>
+    </div>
+    <strong class="ndvi-balance" [ngClass]="analisis.tono">{{ analisis.estado }}</strong>
+  </div>
+
+  @if (ndvis.length > 0) {
+    <div class="ndvi-content">
+      <div class="img-container">
+        @if (reporte?.ndviUrl) {
+          <img [src]="reporte?.ndviUrl" class="img" />
+        } @else {
+          <p-message severity="warn">{{ 'Imagen no disponible' | translate }}</p-message>
+        }
+      </div>
+
+      <section class="ndvi-analysis" [ngClass]="analisis.tono">
+        <div class="analysis-main">
+          <span>Lectura agronomica</span>
+          <strong>{{ analisis.estado }}</strong>
+          <p>{{ analisis.resumen }}</p>
+        </div>
+        <div class="analysis-grid">
+          <article>
+            <span>Tendencia</span>
+            <strong>{{ analisis.tendencia }}</strong>
+          </article>
+          <article>
+            <span>Balance 72 h</span>
+            <strong>{{ analisis.balance72 }}</strong>
+          </article>
+        </div>
+        <p class="context">{{ analisis.contexto }}</p>
+        <p class="recommendation">{{ analisis.recomendacion }}</p>
+      </section>
+    </div>
+
+    <div class="date-strip">
+      @for (r of ndvis; track $index) {
+        <p-button [outlined]="reporte === r ? false : true" (onClick)="onSelect(r)">
+          <div>
+            <p class="boton-fecha dia">{{ r.fechaDeLaImagen | date: 'd' }}</p>
+            <p class="boton-fecha">{{ r.fechaDeLaImagen | date: 'MMM' }}</p>
+          </div>
+        </p-button>
+      }
+    </div>
+  } @else {
+    <div class="empty-ndvi">
+      <p-message severity="info">{{ 'No hay reportes de NDVI para este lote' | translate }}</p-message>
+      <small>
+        En produccion se genera con el worker satelital. En local podes crear una muestra para probar la tarjeta.
+      </small>
+      <section class="ndvi-analysis empty" [ngClass]="analisis.tono">
+        <div class="analysis-main">
+          <span>Lectura agronomica</span>
+          <strong>{{ analisis.estado }}</strong>
+          <p>{{ analisis.recomendacion }}</p>
+        </div>
+      </section>
+      @if (!helper.soloLectura()) {
+        <p-button
+          icon="pi pi-plus"
+          label="Crear muestra local"
+          severity="secondary"
+          [outlined]="true"
+          [loading]="generandoMuestra"
+          [disabled]="generandoMuestra"
+          [fluid]="true"
+          (click)="generarMuestraLocal($event)"
+        />
+      }
+    </div>
+  }
+</div>

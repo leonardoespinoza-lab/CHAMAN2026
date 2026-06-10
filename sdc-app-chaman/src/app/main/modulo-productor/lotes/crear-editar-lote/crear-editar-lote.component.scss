@@ -1,0 +1,54 @@
+.nivel {
+  padding: 0.5em;
+  border: 1px solid var(--p-text-muted-color);
+  border-radius: 10px;
+  margin-bottom: 1em;
+}
+
+/* Aplicar el mismo patrón que detalles-lote para escritorio */
+/* En móviles: ancho completo - el padding se maneja globalmente */
+/* En escritorio: contenedor centrado con márgenes simétricos */
+
+/* --- Configuración de scroll para el nuevo layout de nav --- */
+:host {
+  height: 100vh; /* Altura completa */
+  overflow-y: scroll; /* Scroll vertical siempre disponible */
+  box-sizing: border-box; /* Incluye padding/margin en el cálculo */
+  
+  /* Ocultar barra de scroll para mejor estética */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+  
+  &::-webkit-scrollbar {
+    display: none; /* WebKit browsers (Chrome, Safari, Edge) */
+  }
+}
+
+/* Para escritorio real (pantallas grandes no táctiles) */
+@media (min-width: 1024px) and (pointer: fine) and (hover: hover) {
+  :host {
+    display: block;
+    width: 80%;
+    margin: 0 auto; /* Solo márgenes horizontales para evitar problemas con altura */
+    padding: 2em 0 4em 0; /* Padding vertical para espaciado */
+    height: 100vh; /* Mantener altura completa */
+    overflow-y: scroll; /* Mantener scroll siempre disponible */
+    box-sizing: border-box;
+    
+    /* Ocultar barra de scroll para mejor estética */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* Internet Explorer 10+ */
+    
+    &::-webkit-scrollbar {
+      display: none; /* WebKit browsers (Chrome, Safari, Edge) */
+    }
+  }
+}
+
+/* Para pantallas muy grandes */
+@media (min-width: 1921px) {
+  :host {
+    width: 85%;
+    padding: 3em 0 5em 0; /* Padding vertical para espaciado */
+  }
+}

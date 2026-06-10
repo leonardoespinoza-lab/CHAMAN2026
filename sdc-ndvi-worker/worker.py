@@ -1,0 +1,807 @@
+import asyncio
+import json
+import logging
+import shutil
+import time
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Optional
+
+import httpx
+import numpy as np
+import rasterio
+import redis.asyncio as redis
+from planetary_computer import sign
+from pystac_client import Client
+from shapely.geometry import Polygon, mapping
+
+from calcular_ndvi import calcular_ndvi, exportar_geotiff
+from cleaner import limpiar_descargas_antiguas
+from config import (
+    API_EXTERNA_URL,
+    CLEAN_UP,
+    DOWNLOAD_FOLDER,
+    ENVIAR_BACKEND,
+    LOCAL_NDVI_PATH,
+    PORT,
+    REDIS_DB,
+    REDIS_HOST,
+    REDIS_PORT,
+    REDIS_QUEUE,
+    SAT_COLLECTIONS,
+    SAT_DELTA_VENCIMIENTO,
+)
+from geo import obtener_metadata_png_con_polygon, scene_cubre_poligono
+from health import start_health_server
+from recorte import exportar_png_desde_tif_con_polygon, recortar_ndvi
+from storage import subir_a_storage
+
+# Configuración de logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [%(name)s] [%(levelname)s] - %(message)s",
+    handlers=[logging.StreamHandler(), logging.FileHandler("worker.log")],
+)
+logger = logging.getLogger(__name__)
+
+EARTH_SEARCH_URL = "https://planetarycomputer.microsoft.com/api/stac/v1"
+
+BAND_MAPPING = {
+    "sentinel-2-l2a": {
+        "red": "B04",
+        "nir": "B08",
+        "assets": ["B04", "B08"],  # Nombres reales en Sentinel
+        "output_names": {"B04": "B04", "B08": "B08"},  # Mismo nombre para output
+    },
+    "landsat-c2-l2": {
+        "red": "red",
+        "nir": "nir08",
+        "assets": ["red", "nir08"],  # Nombres reales en Landsat
+        "output_names": {"red": "B04", "nir08": "B08"},  # Mapeo a nombres uniformes
+    },
+}
+
+
+class NDVIWorker:
+    def __init__(self):
+        self.redis = None
+        self.http_client = httpx.AsyncClient(timeout=30.0)
+        self.processing_tasks = set()
+
+    async def initialize(self):
+        """Inicializa conexiones y servicios"""
+        # Mostrar configuraciones al iniciar
+        self._log_configuration()
+
+        self.redis = redis.Redis(
+            host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, socket_connect_timeout=5
+        )
+        await self._check_redis_connection()
+        asyncio.create_task(self._periodic_cleanup())
+
+    def _log_configuration(self):
+        """Log de configuraciones importantes al iniciar"""
+        logger.info("⚙️ Configuración del Worker:")
+        logger.info(
+            f"  • Redis: {REDIS_HOST}:{REDIS_PORT} (DB: {REDIS_DB}, Cola: {REDIS_QUEUE})"
+        )
+        logger.info(f"  • Directorio descargas: {DOWNLOAD_FOLDER}")
+        logger.info(f"  • Almacenamiento local NDVI: {LOCAL_NDVI_PATH}")
+        logger.info(f"  • API Externa: {API_EXTERNA_URL}")
+        logger.info(f"  • Puerto salud: {PORT}")
+        logger.info(f"  • STAC Endpoint: {EARTH_SEARCH_URL}")
+        logger.info(f"  • Colecciones SAT: {SAT_COLLECTIONS}")
+        logger.info(f"  • SAT Delta Vencimiento: {SAT_DELTA_VENCIMIENTO} días")
+
+    async def _check_redis_connection(self):
+        """Verifica la conexión a Redis"""
+        try:
+            if await self.redis.ping():
+                logger.info("✅ Conexión a Redis establecida")
+        except Exception as e:
+            logger.error(f"❌ Error conectando a Redis: {e}")
+            raise
+
+    async def _periodic_cleanup(self):
+        """Limpieza periódica de archivos temporales"""
+        while True:
+            hours = 12 * 3600  # Cada 12 horas
+            try:
+                logger.info(
+                    f"🧹 Iniciando limpieza periódica cada {hours / 3600} horas"
+                )
+                limpiar_descargas_antiguas(
+                    directorio_base=f"{DOWNLOAD_FOLDER}/scenes",
+                    tiempo_limite=timedelta(days=SAT_DELTA_VENCIMIENTO),
+                )
+            except Exception as e:
+                logger.error(f"Error en limpieza periódica: {e}")
+            await asyncio.sleep(hours)
+
+    async def download_image(self, url: str, save_path: str) -> bool:
+        """Versión mejorada con más logging y reintentos"""
+        filename = Path(save_path).name
+        parent_dir = Path(save_path).parent
+        parent_dir.mkdir(parents=True, exist_ok=True)
+
+        for attempt in range(3):
+            try:
+                logger.info(f"⬇️ Intento {attempt + 1} para {filename}...")
+
+                # Verificar espacio en disco
+                free_space = shutil.disk_usage(parent_dir).free
+                if free_space < 100 * 1024 * 1024:  # 100MB mínimo
+                    logger.error("Espacio en disco insuficiente")
+                    return False
+
+                async with self.http_client.stream(
+                    "GET", url, follow_redirects=True
+                ) as response:
+                    response.raise_for_status()
+
+                    total_size = int(response.headers.get("content-length", 0))
+                    if total_size > free_space:
+                        logger.error("No hay suficiente espacio para el archivo")
+                        return False
+
+                    with open(save_path, "wb") as f:
+                        downloaded = 0
+                        async for chunk in response.aiter_bytes(chunk_size=1024 * 64):
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total_size > 0:
+                                percent = (downloaded / total_size) * 100
+                                if (
+                                    attempt == 0
+                                ):  # Solo loggear progreso en primer intento
+                                    logger.debug(f"{filename} - {percent:.1f}%")
+
+                    # Verificar que el archivo se descargó completamente
+                    if total_size > 0 and Path(save_path).stat().st_size != total_size:
+                        raise IOError("Tamaño del archivo no coincide con el esperado")
+
+                    logger.info(f"✅ Descarga completada: {filename}")
+                    return True
+
+            except Exception as e:
+                logger.warning(
+                    f"Intento {attempt + 1} fallido para {filename}: {str(e)}"
+                )
+                if attempt < 2:  # No esperar después del último intento
+                    await asyncio.sleep(2**attempt)  # Backoff exponencial
+                try:
+                    Path(save_path).unlink(missing_ok=True)  # Eliminar archivo parcial
+                except:
+                    pass
+
+        logger.error(f"❌ Fallo al descargar {filename} después de 3 intentos")
+        return False
+
+    async def find_latest_sentinel_scene(
+        self, polygon: Polygon, start_date: Optional[datetime] = None
+    ) -> Optional[dict]:
+        """Busca la escena Sentinel-2 más reciente que cubra el polígono, opcionalmente a partir de una fecha."""
+        timer_start = time.time()
+        try:
+            logger.info("🔍 Buscando escena más reciente...")
+
+            # --- LÓGICA DE FECHA ---
+            if start_date:
+                search_start_date = start_date + timedelta(days=1)
+                logger.info(
+                    f"   -> Filtro de fecha optimizado: buscando a partir de {search_start_date.date()}"
+                )
+            else:
+                search_start_date = datetime.now(timezone.utc) - timedelta(days=60)
+                logger.info(
+                    f"   -> Sin fecha de job previo. Buscando en los últimos 60 días (desde {search_start_date.date()})."
+                )
+
+            datetime_filter = f"{search_start_date.isoformat()}/.."
+
+            client = Client.open(EARTH_SEARCH_URL, timeout=300)
+
+            search = client.search(
+                collections=SAT_COLLECTIONS,
+                intersects=mapping(polygon),
+                datetime=datetime_filter,
+                query={
+                    "eo:cloud_cover": {"lt": 30},
+                },
+                sortby=[{"field": "datetime", "direction": "desc"}],
+                limit=1,
+            )
+            items = list(search.items())
+            return sign(items[0]) if items else None
+        except Exception as e:
+            logger.error(f"Error buscando escena Sentinel: {e}")
+            return None
+        finally:
+            timer_end = time.time()
+            logger.info(
+                f"⏱️ Búsqueda de escena completada en {timer_end - timer_start:.2f}s"
+            )
+
+    async def process_task(self, task_data: dict):
+        """Procesa una tarea de cálculo de NDVI"""
+        task_start = time.time()
+        lote_id = task_data["lote_id"]
+        polygon = self._validate_polygon(task_data["polygon"])
+        job_datetime = self._parse_job_datetime(task_data.get("scene_datetime"))
+
+        try:
+            # Paso 1: Obtener o descargar escena
+            scene_data = await self._get_scene_data(polygon, job_datetime)
+            if not scene_data:
+                logger.error(f"⚠️ No se pudo obtener escena para lote {lote_id}")
+                return
+
+                # Verificar si la escena ya fue procesada para este job
+            if self._is_scene_processed(scene_data["datetime"], job_datetime):
+                logger.info(
+                    f"⏭️ Escena {scene_data['id']} ya procesada para este job. Saltando..."
+                )
+                return
+
+            # Paso 2: Procesar NDVI
+            ndvi_results = await self._process_ndvi(lote_id, polygon, scene_data)
+            if not ndvi_results:
+                return
+
+            # Paso 3: Generar salidas y subir a storage
+            output_data = await self._generate_outputs(lote_id, polygon, ndvi_results)
+
+            logger.info(
+                f"✅ Lote {lote_id} procesado exitosamente: {output_data['ndvi_promedio']:.4f}"
+            )
+
+            if ENVIAR_BACKEND == "true":
+                logger.info("🔔 Enviando resultados al backend...")
+                # Paso 4: Notificar al backend
+                await self._notify_backend(lote_id, output_data)
+
+        except Exception as e:
+            logger.error(f"❌ Error procesando lote {lote_id}: {str(e)}", exc_info=True)
+        finally:
+            if CLEAN_UP == "true":
+                logger.info(f"🧹 Limpiando archivos temporales de {lote_id}...")
+                # Paso 5: Limpieza de archivos temporales
+                await self._cleanup(lote_id)
+            logger.info(
+                f"⏱️ Tiempo total lote {lote_id}: {time.time() - task_start:.2f}s"
+            )
+
+    def _check_existing_results(self, lote_id: str, polygon: Polygon) -> Optional[dict]:
+        """Verifica si ya tenemos resultados procesados para este lote"""
+        lote_dir = Path(DOWNLOAD_FOLDER) / lote_id
+        if not lote_dir.exists():
+            return None
+
+        try:
+            png_path = lote_dir / "ndvi_recorte.png"
+            tif_path = lote_dir / "ndvi_recorte.tif"
+
+            if png_path.exists() and tif_path.exists():
+                # Verificar que el polígono coincida
+                with rasterio.open(str(tif_path)) as src:
+                    if scene_cubre_poligono(str(tif_path), polygon):
+                        metadata = obtener_metadata_png_con_polygon(
+                            str(tif_path), polygon
+                        )
+                        return {
+                            "url_png": None,  # Se generará local
+                            "ndvi_promedio": self.calcular_promedio_ndvi(str(tif_path)),
+                            "metadata": metadata,
+                            "local_path": str(png_path),
+                        }
+        except Exception as e:
+            logger.warning(f"Error verificando resultados existentes: {e}")
+        return None
+
+    def calcular_promedio_ndvi(self, tif_path: str) -> float:
+        """
+        Calcula el promedio de valores NDVI válidos (rango [-1, 1]) en un GeoTIFF.
+        Excluye píxeles con valores NaN o fuera de rango.
+
+        Args:
+            tif_path: Ruta al archivo TIFF con los valores NDVI
+
+        Returns:
+            float: Valor promedio del NDVI en el área recortada (0.0 si no hay valores válidos)
+        """
+        try:
+            with rasterio.open(tif_path) as src:
+                ndvi_data = src.read(1)  # Lee la banda 1 (NDVI)
+
+                # Máscara para valores válidos (entre -1 y 1, excluyendo NaN)
+                valid_mask = (
+                    (~np.isnan(ndvi_data)) & (ndvi_data >= -1.0) & (ndvi_data <= 1.0)
+                )
+                valid_values = ndvi_data[valid_mask]
+
+                if valid_values.size == 0:
+                    logger.warning("No hay valores NDVI válidos en el archivo")
+                    return 0.0
+
+                # Calcular promedio y asegurarse que es un float válido
+                promedio = float(np.mean(valid_values))
+                if np.isnan(promedio):
+                    return 0.0
+                return promedio
+
+        except Exception as e:
+            logger.error(f"Error calculando promedio NDVI: {e}")
+            return 0.0
+
+    async def _get_cached_scene(
+        self, polygon: Polygon, job_datetime: Optional[datetime]
+    ) -> Optional[dict]:
+        """Busca escenas válidas en caché local"""
+        scenes_dir = Path(DOWNLOAD_FOLDER) / "scenes"
+        if not scenes_dir.exists():
+            return None
+
+        for scene_dir in sorted(
+            scenes_dir.iterdir(), key=lambda x: x.name, reverse=True
+        ):
+            if not scene_dir.is_dir():
+                continue
+
+            b4_path = scene_dir / "B04.tif"
+            b8_path = scene_dir / "B08.tif"
+            metadata_path = scene_dir / "metadata.json"
+
+            if b4_path.exists() and b8_path.exists() and metadata_path.exists():
+                try:
+                    if not scene_cubre_poligono(str(b4_path), polygon):
+                        continue
+
+                    scene_date = self._get_scene_date(str(b4_path))
+                    if not scene_date:
+                        logger.warning(
+                            f"No se pudo obtener la fecha de la escena en caché {scene_dir.name}. Saltando."
+                        )
+                        continue
+
+                    # LÓGICA CONSISTENTE: Si hay un job_datetime y la escena en caché es igual o anterior, no es candidata.
+                    if job_datetime and scene_date.date() <= job_datetime.date():
+                        continue
+
+                    # LÓGICA DE EXPIRACIÓN: Si la escena es muy vieja respecto al día de hoy.
+                    if datetime.now(timezone.utc) - scene_date > timedelta(
+                        days=SAT_DELTA_VENCIMIENTO
+                    ):
+                        continue
+
+                    # Si pasa los filtros, es una candidata válida desde la caché.
+                    with open(metadata_path) as f:
+                        metadata = json.load(f)
+
+                    collection = metadata.get(
+                        "collection", "desconocida"
+                    )  # Obtener colección, con fallback
+
+                    logger.info(f"✅ Usando escena en caché: {scene_dir.name}")
+                    return {
+                        "id": scene_dir.name,
+                        "b4_path": str(b4_path),
+                        "b8_path": str(b8_path),
+                        "datetime": scene_date or datetime.now(timezone.utc),
+                        "collection": collection,
+                    }
+                except Exception as e:
+                    logger.warning(f"Error verificando escena {scene_dir.name}: {e}")
+        return None
+
+    def _validate_polygon(self, polygon_data: list) -> Polygon:
+        """Valida y convierte el polígono de entrada"""
+        polygon = Polygon(polygon_data[0])  # Usar anillo exterior
+        if not polygon.is_valid:
+            raise ValueError("Polígono no válido")
+        return polygon
+
+    def _parse_job_datetime(self, datetime_str: Optional[str]) -> Optional[datetime]:
+        if datetime_str:
+            return datetime.fromisoformat(datetime_str.replace("Z", "+00:00"))
+        return None
+
+    async def _get_scene_data(
+        self, polygon: Polygon, job_datetime: Optional[datetime]
+    ) -> Optional[dict]:
+        """Obtiene datos de escena (de caché o nueva descarga)"""
+        try:
+            # 1. Buscar en caché primero (ya con la lógica corregida)
+            cached_scene = await self._get_cached_scene(polygon, job_datetime)
+            if cached_scene:
+                logger.info(f"♻️ Usando escena en caché: {cached_scene['id']}")
+                return cached_scene
+
+            # 2. Si no hay en caché, buscar nueva escena pasando el job_datetime como start_date
+            scene = await self.find_latest_sentinel_scene(
+                polygon, start_date=job_datetime
+            )
+            if not scene:
+                logger.error(
+                    "No se encontraron escenas nuevas disponibles que cumplan los criterios."
+                )
+                return None
+
+            # 3. Procesar nueva escena
+            scene_data = await self._process_new_scene(scene)
+            if scene_data:
+                # Asegurar que tenemos datetime (usar fecha actual si no hay)
+                if "datetime" not in scene_data or scene_data["datetime"] is None:
+                    scene_data["datetime"] = datetime.now(timezone.utc)
+                return scene_data
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error en _get_scene_data: {str(e)}", exc_info=True)
+            return None
+
+    async def _process_new_scene(self, scene) -> Optional[dict]:
+        """Procesa y guarda una nueva escena descargada, adaptándose a su colección."""
+        try:
+            collection_id = scene.collection_id
+            logger.info(
+                f"Procesando escena {scene.id} de la colección: {collection_id}"
+            )
+
+            # Verificar que la colección de la escena esté soportada en nuestro mapping
+            if collection_id not in BAND_MAPPING:
+                logger.error(
+                    f"Colección no soportada encontrada en la escena: {collection_id}"
+                )
+                return None
+
+            # Obtener el mapeo específico para esta colección
+            collection_map = BAND_MAPPING[collection_id]
+
+            # Crear directorio para la escena
+            scene_folder = Path(DOWNLOAD_FOLDER) / "scenes" / scene.id
+            scene_folder.mkdir(parents=True, exist_ok=True)
+
+            # Guardar metadata
+            metadata = {
+                "id": scene.id,
+                "date": scene.datetime.isoformat(),
+                "collection": collection_id,  # Usar el collection_id dinámico
+                "cloud_cover": scene.properties.get("eo:cloud_cover", 0),
+                "geometry": scene.geometry,
+                "properties": scene.properties,
+            }
+            metadata_path = scene_folder / "metadata.json"
+            metadata_path.write_text(
+                json.dumps(metadata, indent=2, default=str)
+            )  # default=str por si hay objetos no serializables
+
+            required_assets = collection_map["assets"]
+
+            logger.info(f"Descargando assets requeridos: {required_assets}")
+
+            download_tasks = []
+            for asset_name in required_assets:
+                # Obtener el nombre de salida uniforme (ej: 'B04' o 'B08')
+                output_name = collection_map["output_names"][asset_name]
+
+                task = self.download_image(
+                    scene.assets[asset_name].href,
+                    str(scene_folder / f"{output_name}.tif"),
+                )
+                download_tasks.append(task)
+
+            download_results = await asyncio.gather(*download_tasks)
+
+            if not all(download_results):
+                logger.error(
+                    f"Fallo en la descarga de una o más bandas para la escena {scene.id}"
+                )
+                # Aquí podrías agregar lógica para limpiar archivos parciales si lo deseas
+                return None
+
+            logger.info(f"Descarga completada para la escena {scene.id}")
+
+            # Gracias al mapeo en `output_names`, los archivos de salida siempre se llamarán
+            # B04.tif y B08.tif, sin importar la fuente.
+            return {
+                "id": scene.id,
+                "datetime": scene.datetime,
+                "collection": collection_id,  # Es útil devolver de qué colección vino
+                "folder": str(scene_folder),
+                "b4_path": str(scene_folder / "B04.tif"),
+                "b8_path": str(scene_folder / "B08.tif"),
+            }
+
+        except KeyError as e:
+            logger.error(
+                f"Error procesando nueva escena {scene.id}: No se encontró el asset esperado '{e}' en la colección '{scene.collection_id}'."
+            )
+            return None
+        except Exception as e:
+            logger.error(f"Error inesperado procesando la escena {scene.id}: {str(e)}")
+            return None
+
+    def _get_scene_date(self, tif_path: str) -> Optional[datetime]:
+        """Extrae la fecha de adquisición de un TIFF"""
+        try:
+            # Primero intentar con el archivo metadata.json en la misma carpeta
+            scene_dir = Path(tif_path).parent
+            metadata_path = scene_dir / "metadata.json"
+
+            if metadata_path.exists():
+                with open(metadata_path) as f:
+                    metadata = json.load(f)
+                    # Intentar obtener de properties.datetime primero
+                    if (
+                        "properties" in metadata
+                        and "datetime" in metadata["properties"]
+                    ):
+                        return datetime.fromisoformat(
+                            metadata["properties"]["datetime"].replace("Z", "+00:00")
+                        )
+                    # Si no, de la fecha directa
+                    if "date" in metadata:
+                        return datetime.fromisoformat(
+                            metadata["date"].replace("Z", "+00:00")
+                        )
+
+            # Si no hay metadata.json o no tiene fecha, buscar en los tags del TIFF
+            with rasterio.open(tif_path) as src:
+                # Probar diferentes tags posibles
+                for tag in ["TIFFTAG_DATETIME", "ACQUISITION_DATE", "LANDSAT_SCENE_ID"]:
+                    if tag in src.tags():
+                        if tag == "LANDSAT_SCENE_ID":
+                            # Extraer fecha del scene_id (ej: LC08_L1TP_226084_20220522_20220527_02_T1)
+                            scene_id = src.tags()[tag]
+                            date_str = scene_id.split("_")[
+                                3
+                            ]  # El cuarto segmento es la fecha YYYYMMDD
+                            return datetime.strptime(date_str, "%Y%m%d")
+                        else:
+                            return datetime.strptime(
+                                src.tags()[tag], "%Y:%m:%d %H:%M:%S"
+                            )
+
+        except Exception as e:
+            logger.warning(f"Error obteniendo fecha de escena: {str(e)}")
+
+        return None
+
+    def _is_scene_processed(
+        self, scene_datetime: datetime, job_datetime: Optional[datetime]
+    ) -> bool:
+        """
+        Verifica si una escena ya fue procesada, comparando solo la parte de la fecha (día/mes/año).
+        """
+        if job_datetime is None or scene_datetime is None:
+            return False
+
+        logger.info(
+            "🔎 Verificando si la escena es más antigua que la del último job procesado."
+        )
+        logger.info(f"  -> Fecha de escena encontrada: {scene_datetime.date()}")
+        logger.info(f"  -> Fecha de último job: {job_datetime.date()}")
+
+        if scene_datetime.date() <= job_datetime.date():
+            logger.info(
+                f"⏭️  La escena ({scene_datetime.date()}) es anterior o igual a la del job ({job_datetime.date()}). Saltando tarea para evitar usar datos viejos."
+            )
+            return True
+
+        logger.info(
+            "✅ La escena es más reciente que la del último job. Se procederá con el procesamiento."
+        )
+        return False
+
+    async def _process_ndvi(
+        self, lote_id: str, polygon: Polygon, scene_data: dict
+    ) -> Optional[dict]:
+        """Procesa el cálculo de NDVI y recortes"""
+        lote_folder = Path(DOWNLOAD_FOLDER) / lote_id
+        lote_folder.mkdir(exist_ok=True)
+
+        try:
+            # Verificar georreferenciación primero
+            for band in ["b4_path", "b8_path"]:
+                with rasterio.open(scene_data[band]) as src:
+                    if src.transform.is_identity:
+                        logger.error(
+                            f"❌ {band} no está georreferenciado (transformación identidad)"
+                        )
+                        return None
+
+            # Recortar bandas al polígono
+            b4_recorte = lote_folder / "B04_recorte.tif"
+            b8_recorte = lote_folder / "B08_recorte.tif"
+
+            await asyncio.gather(
+                self._run_in_executor(
+                    recortar_ndvi, scene_data["b4_path"], polygon, str(b4_recorte)
+                ),
+                self._run_in_executor(
+                    recortar_ndvi, scene_data["b8_path"], polygon, str(b8_recorte)
+                ),
+            )
+
+            # Verificar que los recortes tengan datos válidos antes de continuar
+            with rasterio.open(b4_recorte) as src:
+                b4_data = src.read(1)
+                if np.all(b4_data == src.nodata) or np.all(np.isnan(b4_data)):
+                    logger.error(
+                        f"El recorte de la banda Red para el lote {lote_id} no contiene datos válidos. El polígono podría estar fuera del área de datos de la escena."
+                    )
+                    return None
+
+            # Calcular NDVI
+            ndvi, profile = await self._run_in_executor(
+                calcular_ndvi, str(b8_recorte), str(b4_recorte)
+            )
+
+            # Verificar que el NDVI no sea completamente inválido
+            if np.all(np.isnan(ndvi)):
+                logger.error("El cálculo de NDVI resultó en todos valores inválidos")
+                return None
+
+            # Exportar GeoTIFF
+            ndvi_tif = lote_folder / "ndvi.tif"
+            await self._run_in_executor(exportar_geotiff, ndvi, profile, str(ndvi_tif))
+
+            # Recortar NDVI
+            ndvi_recorte = lote_folder / "ndvi_recorte.tif"
+            if not await self._run_in_executor(
+                recortar_ndvi, str(ndvi_tif), polygon, str(ndvi_recorte)
+            ):
+                raise RuntimeError("Fallo al recortar NDVI")
+
+            # Calcular promedio asegurando que es un número válido
+            ndvi_promedio = float(np.nanmean(ndvi[~np.isnan(ndvi)]))
+            if np.isnan(ndvi_promedio):
+                ndvi_promedio = 0.0
+
+            return {
+                "ndvi_tif": str(ndvi_tif),
+                "ndvi_recorte": str(ndvi_recorte),
+                "ndvi_promedio": ndvi_promedio,
+                "scene_datetime": scene_data["datetime"],
+                "collection": scene_data["collection"],  # Colección de la escena
+            }
+
+        except Exception as e:
+            logger.error(f"Error procesando NDVI para {lote_id}: {e}")
+            return None
+
+    async def _generate_outputs(
+        self, lote_id: str, polygon: Polygon, ndvi_data: dict
+    ) -> dict:
+        """Genera salidas (PNG, metadata)"""
+        lote_folder = Path(DOWNLOAD_FOLDER) / lote_id
+        png_path = lote_folder / "ndvi_recorte.png"
+
+        # Exportar PNG
+        await self._run_in_executor(
+            exportar_png_desde_tif_con_polygon,
+            ndvi_data["ndvi_recorte"],
+            str(png_path),
+            polygon,
+        )
+
+        # Obtener metadata
+        metadata = await self._run_in_executor(
+            obtener_metadata_png_con_polygon, ndvi_data["ndvi_recorte"], polygon
+        )
+
+        # Guardar PNG en almacenamiento local compartido con nginx
+        url_png = None
+        try:
+            nombre_archivo = f"{lote_id}-{int(time.time())}"
+            destino = f"{nombre_archivo}.png"
+            url_png = await subir_a_storage(str(png_path), destino)
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudo guardar el PNG local: {e}")
+        return {
+            "url_png": url_png,  # Puede ser None
+            "ndvi_promedio": ndvi_data["ndvi_promedio"],
+            "metadata": metadata,  # Metadata geográfica del NDVI recortado
+            "fecha_imagen": ndvi_data["scene_datetime"].isoformat(),
+            "coleccion": ndvi_data.get("collection", "desconocida"),
+            "local_path": str(png_path),  # Ruta local para desarrollo
+        }
+
+    async def _notify_backend(self, lote_id: str, output_data: dict):
+        """Notifica los resultados al backend, enviando la fecha de la imagen truncada."""
+        try:
+            ndvi_promedio = (
+                float(output_data["ndvi_promedio"])
+                if not np.isnan(output_data["ndvi_promedio"])
+                else 0.0
+            )
+
+            # output_data['fecha_imagen'] es un string ISO, lo convertimos y truncamos.
+            fecha_imagen_obj = datetime.fromisoformat(output_data["fecha_imagen"])
+            fecha_imagen_truncada = fecha_imagen_obj.date().isoformat()
+
+            payload = {
+                "idLote": lote_id,
+                "ndvi_url": output_data["url_png"],
+                "ndvi_promedio": ndvi_promedio,
+                "metadata": output_data["metadata"],
+                "fecha": datetime.now(timezone.utc).isoformat(),
+                "fechaImagen": fecha_imagen_truncada,
+                "coleccion": output_data.get("coleccion", "desconocida"),
+            }
+
+            response = await self.http_client.post(
+                f"{API_EXTERNA_URL}/ndvi/crear-reporte", json=payload, timeout=10.0
+            )
+            response.raise_for_status()
+            logger.info(f"📬 Notificación enviada para lote {lote_id}")
+        except Exception as e:
+            logger.error(f"Error notificando backend: {e}")
+
+    async def _cleanup(self, lote_id: str):
+        """Limpia archivos temporales del lote con reintentos"""
+        lote_folder = Path(DOWNLOAD_FOLDER) / lote_id
+        max_attempts = 3
+
+        for attempt in range(max_attempts):
+            try:
+                if lote_folder.exists():
+                    shutil.rmtree(lote_folder)
+                    logger.info(f"🧹 Limpiados archivos temporales de {lote_id}")
+                    break
+            except Exception as e:
+                if attempt == max_attempts - 1:
+                    logger.error(f"Error limpiando {lote_id}: {e}")
+                else:
+                    await asyncio.sleep(1)
+
+    async def _run_in_executor(self, func, *args):
+        """Ejecuta funciones síncronas en executor"""
+        return await asyncio.get_event_loop().run_in_executor(None, func, *args)
+
+    async def run(self):
+        """Bucle principal del worker"""
+        await self.initialize()
+        while True:
+            try:
+                task = await self.redis.blpop(REDIS_QUEUE, timeout=5)
+                if task:
+                    _, payload = task
+                    task_data = json.loads(payload)
+                    logger.info(f"📦 Procesando tarea para lote {task_data['lote_id']}")
+                    # Procesar en serie (no usar create_task)
+                    await self.process_task(task_data)
+
+            except json.JSONDecodeError:
+                logger.error("❌ Error decodificando tarea JSON")
+            except Exception as e:
+                logger.error(f"Error en bucle principal: {e}")
+                await asyncio.sleep(5)
+
+
+async def main():
+    # Iniciar servidor de salud
+    start_health_server(PORT)
+
+    logger.info("🚀 Iniciando NDVI Worker...")
+    logger.info(f"🩺 Servidor de salud corriendo en puerto {PORT}")
+
+    # Iniciar worker
+    worker = NDVIWorker()
+    try:
+        await worker.run()
+    except Exception as e:
+        logger.critical(f"🔥 Error crítico: {e}", exc_info=True)
+    finally:
+        await worker.http_client.aclose()
+        logger.info("🛑 Worker detenido")
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("🛑 Worker detenido por usuario")
+    except Exception as e:
+        logger.critical(f"💥 Error no manejado: {e}", exc_info=True)

@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sdc-websocket
+  labels:
+    app: sdc-websocket
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sdc-websocket
+  template:
+    metadata:
+      labels:
+        app: sdc-websocket
+    spec:
+      containers:
+      - name: sdc-websocket
+        image: chaman/sdc-websocket:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5000
+        env:
+        - name: PORT
+          value: "5000"
+        - name: REDIS_HOST
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: host
+        - name: REDIS_PORT
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: port
+        - name: API_DATOS
+          value: "http://sdc-datos-service"
+        - name: ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "400m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sdc-websocket-service
+  labels:
+    app: sdc-websocket
+spec:
+  selector:
+    app: sdc-websocket
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+  type: ClusterIP

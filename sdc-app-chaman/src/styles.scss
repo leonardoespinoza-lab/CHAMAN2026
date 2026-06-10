@@ -1,0 +1,247 @@
+@use "./primeng.scss";
+@use "primeicons/primeicons.css";
+@use "ol/ol.css";
+@use "../public/styles/svg-icons.scss";
+@import url("https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap");
+
+body {
+  margin: 0;
+  font-family: "Lato", sans-serif;
+}
+
+html {
+  touch-action: manipulation; /* Elimina el delay de 250ms en muchos navegadores */
+}
+
+:root {
+  --p-accent-color: #b8f44a;
+  --p-info-color: var(--p-sky-500);
+  --p-help-color: var(--p-purple-500);
+  --p-success-color: var(--p-green-500);
+  --p-warning-color: var(--p-orange-500);
+  --p-danger-color: var(--p-red-500);
+  --menu-offset: 4em;
+}
+
+.highcharts-credits {
+  display: none;
+}
+
+.custom-card {
+  background-color: var(--p-surface-50);
+  border-radius: 10px;
+  border-color: transparent;
+  padding: 1em;
+  width: 100%;
+  flex-grow: 1; /* O puedes usar el atajo: flex: 1; */
+}
+
+.p-dark .custom-card {
+  background-color: var(--p-surface-800);
+}
+
+.titulo-card {
+  color: var(--p-primary-color);
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.pointer {
+  cursor: pointer;
+}
+
+// Hace que el span que agregar el p-message ocupe todo el ancho del contenedor
+.custom-message .p-message-text {
+  width: 100%;
+}
+
+.row-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.row-flex-start {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.row-space-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.row-space-around {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+}
+
+.column-center {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.column-flex-start {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.w-100 {
+  width: 100%;
+}
+
+.no-info {
+  font-style: italic;
+  color: gray;
+  overflow: visible;
+}
+
+.truncate-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1; // Para que ocupe todo el espacio disponible del contenedor
+  min-width: 0; // Necesario cuando está dentro de un flex container
+}
+.menu-offset {
+  margin-left: var(--menu-offset);
+}
+
+/* Compensar el botón flotante del menú centrando los encabezados de formularios */
+.p-card-title,
+.p-card-subtitle {
+  text-align: center;
+}
+
+/* Centrar también los captions de tablas en móviles */
+p-table .flex.menu-offset {
+  justify-content: center;
+  margin-left: 0; /* Override el margin-left del menu-offset */
+}
+
+/* En escritorio, donde ya hay márgenes del contenedor, restaurar alineación normal */
+@media (min-width: 1024px) and (pointer: fine) and (hover: hover) {
+  .p-card-title,
+  .p-card-subtitle {
+    text-align: left; /* Restaurar alineación normal en escritorio */
+  }
+  
+  p-table .flex.menu-offset {
+    justify-content: flex-start; /* Restaurar alineación normal */
+    margin-left: var(--menu-offset); /* Restaurar el margin-left en escritorio */
+  }
+}
+
+/* Contenedor responsivo para vistas de listado */
+.list-view-container {
+  /* Estilos base (Mobile First) */
+  width: 100%; /* Ancho por defecto para pantallas hasta 1920px */
+  height: 100vh; /* Altura completa de la pantalla */
+  margin: 0 auto; /* Mantiene el contenedor centrado */
+  padding: 0.5em; /* Padding reducido para conservar espacio */
+  box-sizing: border-box; /* Incluye padding en el cálculo del tamaño */
+  overflow: hidden; /* Sin scroll en el contenedor principal */
+  display: flex;
+  flex-direction: column;
+}
+
+/* Se activa solo en pantallas más anchas de 1920px */
+@media (min-width: 1921px) {
+  .list-view-container {
+    width: 85%; /* En pantallas muy grandes, el ancho será del 85% */
+    margin: 1.5em auto 2.5em auto; /* Márgenes moderados */
+    padding: 1em; /* Padding normal en pantallas grandes */
+    height: calc(100vh - 4em); /* Ajustar altura considerando márgenes */
+  }
+}
+
+/* Para escritorio real (pantallas grandes no táctiles) */
+@media (min-width: 1024px) and (pointer: fine) and (hover: hover) {
+  .list-view-container {
+    width: 80%; /* Aplicar márgenes solo en escritorio real */
+    margin: 1em auto 2em auto; /* Márgenes moderados */
+    padding: 1em; /* Padding normal en desktop */
+    height: calc(100vh - 3em); /* Ajustar altura considerando márgenes */
+  }
+}
+
+/* Asegurar que las tablas ocupen todo el espacio disponible */
+.list-view-container p-table {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Optimización específica para PrimeNG tables */
+.list-view-container p-table .p-datatable {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.list-view-container p-table .p-datatable .p-datatable-wrapper {
+  flex: 1;
+}
+
+/* Optimización del paginador para móviles */
+@media (max-width: 768px) {
+  /* Ocultar elementos del paginador que ocupan mucho espacio en móvil */
+  .p-paginator .p-paginator-pages .p-paginator-page:not(.p-paginator-page-selected) {
+    display: none;
+  }
+  
+  /* Mantener solo el anterior, actual, siguiente y los elementos esenciales */
+  .p-paginator .p-paginator-prev,
+  .p-paginator .p-paginator-next,
+  .p-paginator .p-paginator-first,
+  .p-paginator .p-paginator-last,
+  .p-paginator .p-paginator-page.p-paginator-page-selected,
+  .p-paginator .p-dropdown-trigger,
+  .p-paginator .p-dropdown {
+    display: inline-flex;
+  }
+  
+  /* Hacer el paginador más compacto */
+  .p-paginator {
+    padding: 0.5rem !important;
+    gap: 0.25rem !important;
+  }
+  
+  /* Reducir tamaño de botones del paginador en móvil */
+  .p-paginator .p-paginator-element {
+    min-width: 2rem !important;
+    height: 2rem !important;
+    padding: 0.25rem !important;
+  }
+}
+
+/* Contenedor para dashboards y otros componentes de pantalla completa */
+.dashboard-container {
+  /* Aplicar responsive design similar */
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* Para escritorio real (pantallas grandes no táctiles) */
+@media (min-width: 1024px) and (pointer: fine) and (hover: hover) {
+  .dashboard-container {
+    width: 80%; /* Aplicar márgenes solo en escritorio real */
+    margin: 0 auto; /* Mantener centrado */
+  }
+}
+
+/* Se activa solo en pantallas más anchas de 1920px */
+@media (min-width: 1921px) {
+  .dashboard-container {
+    width: 85%; /* En pantallas muy grandes, el ancho será del 85% */
+    margin: 0 auto; /* Mantener centrado */
+  }
+}

@@ -1,0 +1,30 @@
+<div class="autocomplete-direccion-container">
+  <!-- Input de autocompletado -->
+  <div class="p-field">
+    <p-autocomplete
+      [(ngModel)]="direccionInput"
+      [suggestions]="direccionesSugeridas"
+      [disabled]="disabled"
+      [placeholder]="placeholder"
+      [fluid]="true"
+      (completeMethod)="onSearch($event)"
+      (onSelect)="onDireccionSelectEvent($event)"
+      (onClear)="direccionInput = ''"
+      forceSelection="false"
+      inputId="direccion-input"
+      >
+    </p-autocomplete>
+  </div>
+
+  <!-- Mapa -->
+  <div class="map-container" #mapContainer>
+    <!-- El mapa se renderiza aquí -->
+  </div>
+
+  <!-- Indicador de carga -->
+  @if (loading) {
+    <div class="loading-overlay">
+      <p-progressSpinner strokeWidth="3" fill="transparent"></p-progressSpinner>
+    </div>
+  }
+</div>

@@ -1,0 +1,127 @@
+<div style="padding: 1em; height: 100%">
+  <div class="p-card" style="height: 100%; overflow: auto">
+    <!-- Header -->
+    <div class="p-card-header" style="display: flex; justify-content: center">
+      <img src="images/fumi.jpg" alt="" />
+    </div>
+
+    <!-- Body -->
+    <div
+      class="p-card-body"
+      style="height: 100%; display: flex; flex-direction: column; justify-content: space-between"
+    >
+      <div style="overflow: hidden; height: 100%">
+        <!-- Titulo -->
+        <div class="p-card-title">{{ titulo?.() }}</div>
+        <!-- Subtitulo -->
+        @if (lote) {
+          <div class="p-card-subtitle">{{ 'Lote' | translate }} {{ lote.nombre }}</div>
+        }
+        <!-- Content -->
+        <div class="p-card-content" style="overflow: auto; height: calc(100% - 26px); margin-top: 1em">
+          @if (form) {
+            <form [formGroup]="form">
+              <!-- Fecha de fumigacion -->
+              <p-floatlabel variant="in" class="mb-4">
+                <p-datepicker
+                  formControlName="fechaFumigacion"
+                  showIcon
+                  iconDisplay="input"
+                  [fluid]="true"
+                  [showButtonBar]="true"
+                />
+                <label>{{ 'Fecha de fumigación' | translate }}</label>
+              </p-floatlabel>
+
+              <!-- Principio Activo -->
+              <p-floatlabel variant="in" class="mb-4">
+                <p-select
+                  [loading]="loading"
+                  [options]="principiosActivos"
+                  formControlName="idPrincipioActivo"
+                  optionLabel="nombre"
+                  optionValue="_id"
+                  [filter]="true"
+                  filterBy="nombre"
+                  [showClear]="true"
+                  [fluid]="true"
+                  [appendTo]="'body'"
+                >
+                  <ng-template #selectedItem let-selectedOption>
+                    <div>
+                      <span> {{ selectedOption.nombre | titlecase }} </span>
+                    </div>
+                  </ng-template>
+                  <ng-template let-option #item>
+                    <div>
+                      <span> {{ option.nombre | titlecase }} </span>
+                    </div>
+                  </ng-template>
+                </p-select>
+                <label>{{ 'Principio activo' | translate }}</label>
+              </p-floatlabel>
+
+              <!-- Concentracion -->
+              <p-floatlabel variant="in" class="mb-4">
+                <p-inputnumber
+                  formControlName="concentracion"
+                  mode="decimal"
+                  [fluid]="true"
+                  [min]="0"
+                  [max]="100"
+                  [minFractionDigits]="0"
+                  [maxFractionDigits]="2"
+                  [style]="{ 'max-width': '95%' }"
+                />
+                <label>{{ 'Concentración' | translate }}</label>
+              </p-floatlabel>
+
+              <!-- Dosis -->
+              <p-floatlabel variant="in" class="mb-4">
+                <p-inputnumber
+                  formControlName="dosisLtHa"
+                  mode="decimal"
+                  [fluid]="true"
+                  [min]="0"
+                  [minFractionDigits]="0"
+                  [maxFractionDigits]="2"
+                  [style]="{ 'max-width': '95%' }"
+                  [suffix]="' Lt/Ha'"
+                />
+                <label>{{ 'Dósis' | translate }}</label>
+              </p-floatlabel>
+
+              <!-- Duracion -->
+              <p-floatlabel variant="in" class="mb-4">
+                <p-inputnumber formControlName="duracion" [min]="0" [fluid]="true" suffix=" días" />
+                <label>{{ 'Duración del efecto' | translate }}</label>
+              </p-floatlabel>
+            </form>
+          }
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="p-card-footer">
+        <p-divider />
+        <div class="flex gap-4 mt-1">
+          <p-button
+            [label]="'Cancelar' | translate"
+            severity="secondary"
+            class="w-full"
+            [outlined]="true"
+            styleClass="w-full"
+            (onClick)="volver()"
+          />
+          <p-button
+            [label]="'Guardar' | translate"
+            class="w-full"
+            styleClass="w-full"
+            [loading]="loading"
+            (onClick)="guardar()"
+            [disabled]="!form?.valid"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

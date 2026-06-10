@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sdc-api-cliente
+  labels:
+    app: sdc-api-cliente
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sdc-api-cliente
+  template:
+    metadata:
+      labels:
+        app: sdc-api-cliente
+    spec:
+      containers:
+      - name: sdc-api-cliente
+        image: chaman/sdc-api-cliente:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5000
+        env:
+        - name: PREFIX
+          value: "sdc-cliente"
+        - name: PORT
+          value: "5000"
+        - name: API_DATOS
+          value: "http://sdc-datos-service"
+        - name: API_AUTH
+          value: "http://sdc-auth-service"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: jwt-secret
+              key: secret
+        - name: ENV
+          value: "production"
+        - name: API_CLIMA
+          value: "http://sdc-api-clima-service"
+        - name: API_PREDICCIONES
+          value: "http://sdc-api-predicciones-service/sdc-predicciones"
+        - name: REDIS_HOST
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: host
+        - name: REDIS_PORT
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: port
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "100m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sdc-api-cliente-service
+  labels:
+    app: sdc-api-cliente
+spec:
+  selector:
+    app: sdc-api-cliente
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+  type: ClusterIP

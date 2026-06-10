@@ -1,0 +1,47 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression, CronOptions } from '@nestjs/schedule';
+import { PrediccionsService } from '../prediccion/service';
+import { SiembrasService } from '../siembra/service';
+import { RiegoService } from '../riego/service';
+
+const CRON_OPTIONS: CronOptions = {
+  timeZone: 'America/Argentina/Buenos_Aires',
+};
+
+@Injectable()
+export class CronService {
+  constructor(
+    private siembrasService: SiembrasService,
+    private prediccionsService: PrediccionsService,
+    private riegoService: RiegoService,
+  ) {}
+
+  @Cron(CronExpression.EVERY_DAY_AT_5AM, CRON_OPTIONS)
+  async hacerPredicciones() {
+    const siembras =
+      await this.siembrasService.listarSiembrasParaPredicciones();
+    Logger.log(`Iniciando Predicciones para ${siembras.length} siembras`);
+    await Promise.all(
+      siembras.map(async (s) => {
+        return await this.prediccionsService.prediccion(s._id);
+      }),
+    );
+    Logger.log('Predicciones realizadas');
+  }
+
+  // Todos los dias a las 09:30
+  @Cron('30 9 * * *', CRON_OPTIONS)
+  async hacerPrediccionesRiego() {
+    const siembras =
+      await this.siembrasService.listarSiembrasParaPredicciones();
+    Logger.log(
+      `Iniciando Predicciones de riego para ${siembras.length} siembras`,
+    );
+    await Promise.all(
+      siembras.map(async (s) => {
+        return await this.riegoService.prediccion(s._id);
+      }),
+    );
+    Logger.log('Predicciones riego realizadas');
+  }
+}

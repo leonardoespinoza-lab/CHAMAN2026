@@ -1,0 +1,23 @@
+<div class="custom-card" style="width: 100%">
+  <div style="height: 28px">
+    <p class="titulo-card" style="margin: 0; line-height: 16px">
+      {{ 'Rendimiento' | translate | uppercase }}
+    </p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding-bottom: 1em">
+    <p-divider />
+    @if (siembra?.rendimientoObtenidoKgHaSeco) {
+      <div style="display: flex; flex-direction: column; text-align: center">
+        <span style="font-size: 18px; font-weight: 300">{{ 'Total' | translate }}</span>
+        <span style="font-size: 30px; font-weight: bold">
+          {{ siembra!.rendimientoObtenidoKgHaSeco | number: '1.0-0' }}
+          <span style="font-size: 24px; font-weight: bold">kg/ha</span>
+        </span>
+      </div>
+    } @else {
+      <p-message severity="info">{{ 'No se cargó el rendimiento de la cosecha' | translate }}</p-message>
+    }
+    <p-divider />
+  </div>
+</div>

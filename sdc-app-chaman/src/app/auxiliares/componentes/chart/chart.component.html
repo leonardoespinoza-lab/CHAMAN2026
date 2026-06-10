@@ -1,0 +1,13 @@
+@if (options) {
+  <highcharts-chart
+    [options]="options"
+    [Highcharts]="Highcharts"
+    [constructorType]="constructorType"
+    [style]="style"
+    [oneToOne]="true"
+    [(update)]="update"
+    (chartInstance)="chartInstance($event)"
+    [callbackFunction]="chartCallback"
+  >
+  </highcharts-chart>
+}

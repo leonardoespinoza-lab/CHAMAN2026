@@ -1,0 +1,20 @@
+/* Aplicar el mismo patrón que detalles-lote para evitar el botón del menú */
+/* En móviles: ancho completo sin márgenes */
+/* En escritorio: contenedor centrado con márgenes simétricos */
+
+/* Para escritorio real (pantallas grandes no táctiles) */
+@media (min-width: 1024px) and (pointer: fine) and (hover: hover) {
+  :host {
+    display: block;
+    width: 80%;
+    margin: 2em auto 4em auto; /* Márgenes simétricos y verticales */
+  }
+}
+
+/* Para pantallas muy grandes */
+@media (min-width: 1921px) {
+  :host {
+    width: 85%;
+    margin: 3em auto 5em auto;
+  }
+}

@@ -1,0 +1,32 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ndvi-nginx-config
+  namespace: chaman
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+
+        location /ndvi/ {
+            alias /app/ndvi-output/;
+            add_header Access-Control-Allow-Origin *;
+            add_header Cache-Control "public, max-age=86400";
+            try_files $uri =404;
+        }
+    }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sdc-ndvi-worker-service
+  namespace: chaman
+spec:
+  selector:
+    app: sdc-ndvi-worker
+  ports:
+  - port: 80
+    targetPort: 80

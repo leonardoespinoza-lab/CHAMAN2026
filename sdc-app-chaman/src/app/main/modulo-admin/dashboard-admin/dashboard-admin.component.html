@@ -1,0 +1,73 @@
+<section class="admin-dashboard">
+  <nav class="admin-topbar">
+    <div class="brand">
+      <img src="images/logo-light.png" alt="" />
+      <span>Admin CHAMAN</span>
+    </div>
+    <div class="topbar-actions">
+      <span class="user-chip">
+        <i class="pi pi-user"></i>
+        {{ helper.user?.username }}
+      </span>
+      <p-button label="Salir" icon="pi pi-sign-out" severity="secondary" outlined="true" (onClick)="logout()" />
+    </div>
+  </nav>
+
+  <header class="admin-header">
+    <div>
+      <p class="eyebrow">Administrador</p>
+      <h1>Centro de control CHAMAN Agro</h1>
+      <p class="subtitle">
+        Gestion central de usuarios, estructura comercial, dispositivos, cultivos y servicios agronomicos.
+      </p>
+    </div>
+    <div class="header-actions">
+      @for (action of quickActions; track action.route) {
+        <p-button [label]="action.label" [icon]="action.icon" (onClick)="go(action.route)" />
+      }
+    </div>
+  </header>
+
+  <div class="workflow-band">
+    <div>
+      <strong>Flujo recomendado</strong>
+      <span>Crear estructura comercial, cargar productor, asociar usuario, y recien despues avanzar con establecimientos, lotes y siembras.</span>
+    </div>
+    <p-button label="Crear productor" icon="pi pi-arrow-right" severity="secondary" outlined="true" (onClick)="go('/productores/crear')" />
+  </div>
+
+  <div class="summary-grid">
+    @for (group of serviceGroups; track group.title) {
+      <article class="summary-card">
+        <h2>{{ group.title }}</h2>
+        <div class="summary-list">
+          @for (item of group.items; track item) {
+            <span>{{ item }}</span>
+          }
+        </div>
+      </article>
+    }
+  </div>
+
+  <div class="section-title">
+    <h2>Servicios del administrador</h2>
+    <p>Accesos principales para operar y configurar la plataforma.</p>
+  </div>
+
+  <div class="cards-grid">
+    @for (card of cards; track card.route) {
+      <button type="button" class="admin-card" (click)="go(card.route)">
+        <span class="card-icon"><i [class]="card.icon"></i></span>
+        <span class="card-content">
+          <span class="card-topline">
+            <span class="card-group">{{ card.group }}</span>
+            <span class="card-status">{{ card.status }}</span>
+          </span>
+          <strong>{{ card.title }}</strong>
+          <span>{{ card.description }}</span>
+        </span>
+        <i class="pi pi-arrow-right card-arrow"></i>
+      </button>
+    }
+  </div>
+</section>

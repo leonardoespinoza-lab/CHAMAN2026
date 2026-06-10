@@ -1,0 +1,15 @@
+.map-container {
+  width: 100%;
+  height: calc(100vh - 310px);
+}
+
+.flotante {
+  position: absolute;
+  padding: 0.5em;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  top: 0.5em;
+  left: var(--menu-offset);
+}

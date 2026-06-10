@@ -1,0 +1,107 @@
+<!-- Resumen del servicio monitoreo de enfermedades-->
+<p-drawer
+  #drawerRef
+  [(visible)]="visible"
+  [position]="(helper.isWide$ | async) ? 'right' : 'bottom'"
+  [style]="{
+    'margin-top': (helper.isWide$ | async) ? '58px' : '0',
+    height: (helper.isWide$ | async) ? 'calc(100% - 58px)' : 'auto',
+    'border-radius': (helper.isWide$ | async) ? '30px 0 0 30px' : '30px 30px 0 0',
+    overflow: 'auto',
+    width: (helper.isWide$ | async) ? '450px' : '100%',
+    'max-width': (helper.isWide$ | async) ? '45vw' : '100%',
+  }"
+  [modal]="true"
+  (onHide)="visibleChange.emit(false)"
+  [header]="'Huella hídrica' | translate"
+  [closable]="true"
+>
+  <!-- Selector de unidad -->
+  <div style="display: flex; justify-content: flex-end; margin-bottom: 1em">
+    <p-select [loading]="loading" [options]="unidades" [(ngModel)]="unidad"> </p-select>
+  </div>
+  <div>
+    <!-- Huella Verde -->
+    <p-divider />
+    <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center">
+      <div style="display: flex; flex-direction: row; gap: 1em; align-items: center">
+        <span style="color: var(--p-success-color); font-size: 2em; overflow: visible"> &#x2B24; </span>
+        <span style="font-size: 18px">{{ 'Huella verde' | translate }}</span>
+      </div>
+
+      <div>
+        <span style="font-size: 22px">
+          {{
+            (unidad === 'lt/kg'
+              ? siembra?.huellaHidrica?.verde?.litrosKg || 0
+              : siembra?.huellaHidrica?.verde?.litrosKcal || 0
+            ) | number: '1.0-0'
+          }}
+        </span>
+        <span>{{ unidad }}</span>
+      </div>
+    </div>
+
+    <!-- Huella Azul -->
+    <p-divider />
+    <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center">
+      <div style="display: flex; flex-direction: row; gap: 1em; align-items: center">
+        <span style="color: var(--p-info-color); font-size: 2em; overflow: visible"> &#x2B24; </span>
+        <span style="font-size: 18px">{{ 'Huella azul' | translate }}</span>
+      </div>
+
+      <div>
+        <span style="font-size: 22px">
+          {{
+            (unidad === 'lt/kg'
+              ? siembra?.huellaHidrica?.azul?.litrosKg || 0
+              : siembra?.huellaHidrica?.azul?.litrosKcal || 0
+            ) | number: '1.0-0'
+          }}
+        </span>
+        <span>{{ unidad }}</span>
+      </div>
+    </div>
+
+    <!-- Huella gris -->
+    <p-divider />
+    <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center">
+      <div style="display: flex; flex-direction: row; gap: 1em; align-items: center">
+        <span style="color: gray; font-size: 2em; overflow: visible"> &#x2B24; </span>
+        <span style="font-size: 18px">{{ 'Huella gris' | translate }}</span>
+      </div>
+
+      <div>
+        <span style="font-size: 22px">
+          {{
+            (unidad === 'lt/kg'
+              ? siembra?.huellaHidrica?.gris?.litrosKg || 0
+              : siembra?.huellaHidrica?.gris?.litrosKcal || 0
+            ) | number: '1.0-0'
+          }}
+        </span>
+        <span>{{ unidad }}</span>
+      </div>
+    </div>
+
+    <!-- Huella total -->
+    <p-divider />
+    <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center">
+      <div style="display: flex; flex-direction: row; gap: 1em; align-items: center">
+        <span style="font-size: 18px">{{ 'Total' | translate }}</span>
+      </div>
+
+      <div>
+        <span style="font-size: 22px">
+          {{
+            (unidad === 'lt/kg'
+              ? siembra?.huellaHidrica?.total?.litrosKg || 0
+              : siembra?.huellaHidrica?.total?.litrosKcal || 0
+            ) | number: '1.0-0'
+          }}
+        </span>
+        <span>{{ unidad }}</span>
+      </div>
+    </div>
+  </div>
+</p-drawer>

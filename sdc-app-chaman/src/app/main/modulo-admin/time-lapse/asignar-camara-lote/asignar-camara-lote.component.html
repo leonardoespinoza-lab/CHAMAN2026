@@ -1,0 +1,65 @@
+<!-- <app-map-draw [formGeojson]="geojson" tipo="Polygon" [readOnlyPolygons]="geoJsonEstablecimiento"></app-map-draw> -->
+
+<div style="padding: 1em; height: 100%">
+  <div class="p-card" style="height: 100%">
+    <div
+      class="p-card-body"
+      style="height: 100%; display: flex; flex-direction: column; justify-content: space-between"
+    >
+      <p-floatlabel variant="in" class="mb-4">
+        <p-select
+          [(ngModel)]="idLote"
+          [loading]="loading"
+          [options]="lotes"
+          [filter]="true"
+          [showClear]="true"
+          [fluid]="true"
+          [appendTo]="'body'"
+          optionValue="_id"
+          optionLabel="nombre"
+          (onChange)="onLoteSelected($event)"
+          [disabled]="editar"
+        >
+        </p-select>
+        <label>{{ 'Lote' | translate }}</label>
+      </p-floatlabel>
+      @if (form) {
+        <form [formGroup]="form" autocomplete="off">
+          <p-floatlabel variant="in" class="mb-4">
+            <input pInputText formControlName="serialCamara" [fluid]="true" autocomplete="new-username" />
+            <label>{{ 'Serial Camara' | translate }}</label>
+          </p-floatlabel>
+        </form>
+      }
+      <!-- Buscar lote Aignar serial camara -->
+      <div style="overflow: hidden; height: 100%">
+        <!-- Titulo -->
+        <div class="p-card-title">{{ titulo?.() }}</div>
+        <!-- Content -->
+        <div class="p-card-content" style="overflow: auto; height: calc(100% - 26px); margin-top: 1em"></div>
+      </div>
+      <!-- Footer -->
+      <div class="p-card-footer">
+        <p-divider />
+        <div class="flex gap-4 mt-1">
+          <p-button
+            [label]="'Cancelar' | translate"
+            severity="secondary"
+            class="w-full"
+            [outlined]="true"
+            styleClass="w-full"
+            (onClick)="volver()"
+          />
+          <p-button
+            [label]="'Guardar' | translate"
+            class="w-full"
+            styleClass="w-full"
+            [loading]="loading"
+            (onClick)="guardar()"
+            [disabled]="idLote == ''"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

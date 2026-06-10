@@ -1,0 +1,240 @@
+<!-- <app-map-draw [formGeojson]="geojson" tipo="Polygon" [readOnlyPolygons]="geoJsonEstablecimiento"></app-map-draw> -->
+
+<div style="padding: 1em; height: 100%">
+  <div class="p-card" style="height: 100%">
+    <div
+      class="p-card-body"
+      style="height: 100%; display: flex; flex-direction: column; justify-content: space-between"
+    >
+      <div style="overflow: hidden; height: 100%">
+        <!-- Titulo -->
+        <div class="p-card-title">{{ titulo?.() }}</div>
+        <!-- Subtitulo -->
+        <div class="p-card-subtitle column-flex-start" style="gap: 5px">
+          @if (quimica) {
+            <span>{{ quimica.nombre }}</span>
+          }
+          <div class="row-flex-start" style="gap: 3px">
+            <p-checkbox
+              [(ngModel)]="mostrarLicencia"
+              [binary]="true"
+              inputId="mostrarLicencia"
+              (ngModelChange)="onMostrarLicenciaChange($event)"
+            />
+            <label for="mostrarLicencia" class="ml-2">Editar Licencia</label>
+          </div>
+        </div>
+
+        <!-- Content -->
+        <div class="p-card-content" style="overflow: auto; height: calc(100% - 26px); margin-top: 1em">
+          @if (form) {
+            <form [formGroup]="form" autocomplete="off">
+              <p-tabs [(value)]="tabValue" scrollable [lazy]="false">
+                <p-tablist>
+                  <p-tab [value]="0">{{ 'Básico' | translate }}</p-tab>
+                  @if (mostrarLicencia) {
+                    <p-tab [value]="1">{{ 'Elegir Licencia' | translate }}</p-tab>
+                    @if (editarLicencia) {
+                      <p-tab [value]="2">{{ 'Licencia Básico' | translate }}</p-tab>
+                      <p-tab [value]="3">{{ 'Licencia Módulos' | translate }}</p-tab>
+                      <p-tab [value]="4">{{ 'Licencia Fecha' | translate }}</p-tab>
+                    }
+                  }
+                </p-tablist>
+                <p-tabpanels>
+                  <!-- Basico -->
+                  <p-tabpanel [value]="0">
+                    <!-- Nombre -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <input pInputText formControlName="nombre" [fluid]="true" autocomplete="new-username" />
+                      <label>{{ 'Nombre' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Logo -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <input pInputText formControlName="logo" [fluid]="true" autocomplete="new-username" />
+                      <label>{{ 'Logo' | translate }}</label>
+                    </p-floatlabel>
+                  </p-tabpanel>
+
+                  @if (mostrarLicencia && formLicencia) {
+                    <!-- Basico -->
+                    <p-tabpanel [value]="1">
+                      <p-select
+                        [options]="licencias"
+                        [(ngModel)]="licencia"
+                        optionLabel="nombre"
+                        placeholder="Licencia"
+                        class="w-full md:w-56"
+                        [ngModelOptions]="{ standalone: true }"
+                        (onChange)="onLicenciaChange($event.value)"
+                      />
+                    </p-tabpanel>
+                    <!-- Basico -->
+                    <p-tabpanel [value]="2" [formGroup]="formLicencia">
+                      <!-- Nombre -->
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input pInputText formControlName="nombre" [fluid]="true" autocomplete="new-username" />
+                        <label>{{ 'Nombre' | translate }}</label>
+                      </p-floatlabel>
+
+                      <!-- Cantidad de Usuarios -->
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input
+                          pInputText
+                          type="number"
+                          formControlName="maxUsuarios"
+                          [fluid]="true"
+                          autocomplete="new-username"
+                        />
+                        <label>{{ 'Cantidad de Usuarios' | translate }}</label>
+                      </p-floatlabel>
+
+                      <!-- Cantidad de Distribuidores -->
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input
+                          pInputText
+                          type="number"
+                          formControlName="maxdDistribuidores"
+                          [fluid]="true"
+                          autocomplete="new-username"
+                        />
+                        <label>{{ 'Cantidad de Distribuidores' | translate }}</label>
+                      </p-floatlabel>
+
+                      <!-- Cantidad de Productores -->
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input
+                          pInputText
+                          type="number"
+                          formControlName="maxProductores"
+                          [fluid]="true"
+                          autocomplete="new-username"
+                        />
+                        <label>{{ 'Cantidad de Productores' | translate }}</label>
+                      </p-floatlabel>
+
+                      <!-- Cantidad de Establecimientos -->
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input
+                          pInputText
+                          type="number"
+                          formControlName="maxEstablecimientos"
+                          [fluid]="true"
+                          autocomplete="new-username"
+                        />
+                        <label>{{ 'Cantidad de Establecimientos' | translate }}</label>
+                      </p-floatlabel>
+
+                      <!-- Cantidad de Lotes -->
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input
+                          pInputText
+                          type="number"
+                          formControlName="maxLotes"
+                          [fluid]="true"
+                          autocomplete="new-username"
+                        />
+                        <label>{{ 'Cantidad de Lotes' | translate }}</label>
+                      </p-floatlabel>
+
+                      <!-- Cantidad de Hectáreas -->
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input
+                          pInputText
+                          type="number"
+                          formControlName="maxdHectareas"
+                          [fluid]="true"
+                          autocomplete="new-username"
+                        />
+                        <label>{{ 'Cantidad de Hectáreas' | translate }}</label>
+                      </p-floatlabel>
+                    </p-tabpanel>
+                    <!-- Módulos -->
+                    <p-tabpanel [value]="3" [formGroup]="modulos">
+                      <div class="column-flex-start" style="gap: 5px">
+                        <!-- Enfermedades -->
+                        <div class="row-flex-start" style="gap: 5px">
+                          <p-checkbox formControlName="Enfermedades" [binary]="true" inputId="Enfermedades" />
+                          <label for="Enfermedades" class="ml-2">Enfermedades</label>
+                        </div>
+
+                        <!-- Riego -->
+                        <div class="row-flex-start" style="gap: 5px">
+                          <p-checkbox formControlName="Riego" [binary]="true" inputId="Riego" />
+                          <label for="Riego" class="ml-2">Riego</label>
+                        </div>
+
+                        <!-- Huella Hídrica -->
+                        <div class="row-flex-start" style="gap: 5px">
+                          <p-checkbox formControlName="Huella Hídrica" [binary]="true" inputId="Huella Hídrica" />
+                          <label for="Huella Hídrica" class="ml-2">Huella Hídrica</label>
+                        </div>
+
+                        <!-- NDVI -->
+                        <div class="row-flex-start" style="gap: 5px">
+                          <p-checkbox formControlName="NDVI" [binary]="true" inputId="NDVI" />
+                          <label for="NDVI" class="ml-2">NDVI</label>
+                        </div>
+
+                        <!-- Clima -->
+                        <div class="row-flex-start" style="gap: 5px">
+                          <p-checkbox formControlName="Clima" [binary]="true" inputId="Clima" />
+                          <label for="Clima" class="ml-2">Clima</label>
+                        </div>
+
+                        <!-- Etapas Fenológicas -->
+                        <div class="row-flex-start" style="gap: 5px">
+                          <p-checkbox
+                            formControlName="Etapas Fenológicas"
+                            [binary]="true"
+                            inputId="Etapas Fenológicas"
+                          />
+                          <label for="Etapas Fenológicas" class="ml-2">Etapas Fenológicas</label>
+                        </div>
+                      </div>
+                    </p-tabpanel>
+                    <!-- Fecha -->
+                    <p-tabpanel [value]="4">
+                      <div class="row-center">{{ 'Días' | translate }}: {{ helper.dateToDias(fechaDeExpiracion) }}</div>
+                      <br />
+                      <p-datepicker
+                        [style]="{ width: '100%' }"
+                        [(ngModel)]="fechaDeExpiracion"
+                        [inline]="true"
+                        [minDate]="hoy"
+                        [ngModelOptions]="{ standalone: true }"
+                      />
+                    </p-tabpanel>
+                  }
+                </p-tabpanels>
+              </p-tabs>
+            </form>
+          }
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="p-card-footer">
+        <p-divider />
+        <div class="flex gap-4 mt-1">
+          <p-button
+            [label]="'Cancelar' | translate"
+            severity="secondary"
+            class="w-full"
+            [outlined]="true"
+            styleClass="w-full"
+            (onClick)="volver()"
+          />
+          <p-button
+            [label]="'Guardar' | translate"
+            class="w-full"
+            styleClass="w-full"
+            [loading]="loading"
+            (onClick)="guardar()"
+            [disabled]="disabled"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

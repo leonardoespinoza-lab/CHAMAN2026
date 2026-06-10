@@ -1,0 +1,60 @@
+.legend-container {
+  display: flex;
+  padding: 10px;
+  background-color: rgba(0, 0, 0, 0.6); // Fondo semitransparente oscuro
+  border-radius: 5px;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  color: white;
+
+  // Estilos cuando la orientación es vertical
+  &.vertical {
+    flex-direction: column;
+
+    .legend-item {
+      margin-bottom: 5px; // Espacio entre items verticales
+    }
+  }
+
+  // Estilos cuando la orientación es horizontal
+  &.horizontal {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap; // Permite que los items pasen a la siguiente línea si no hay espacio
+
+    .legend-item {
+      margin-right: 15px; // Espacio entre items horizontales
+    }
+  }
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+
+  // Quita el margen del último elemento
+  &:last-child {
+    margin-bottom: 0;
+    margin-right: 0;
+  }
+}
+
+.legend-color {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #ffffff44;
+  margin-right: 8px;
+}
+
+.legend-label {
+  line-height: 1;
+}
+
+.legend-actions {
+  width: 100%;
+  margin-top: 15px;
+  padding-top: 10px;
+  border-top: 1px solid #ffffff44;
+  display: flex;
+  justify-content: flex-end;
+}

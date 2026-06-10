@@ -1,0 +1,12 @@
+# python ignore
+.venv
+__pycache__/
+# cache
+.downloads
+worker.log
+
+# local cloud credentials
+google-credentials.json
+*credentials*.json
+*service-account*.json
+!*.example.json

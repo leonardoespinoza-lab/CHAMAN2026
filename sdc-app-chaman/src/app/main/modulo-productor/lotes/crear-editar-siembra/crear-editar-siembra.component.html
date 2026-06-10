@@ -1,0 +1,253 @@
+<div style="padding: 1em; height: 100%">
+  <div class="p-card" style="height: 100%; display: flex; flex-direction: column;">
+    <!-- Header -->
+    <div class="p-card-header" style="display: flex; justify-content: center; flex: 0 0 auto;">
+      <img src="images/siembra.jpg" alt="" style="height: 193px" />
+    </div>
+    <!-- Body -->
+    <div class="p-card-body" style="flex: 1; overflow: auto; display: flex; flex-direction: column;">
+      <div style="overflow: hidden; height: 100%">
+        <!-- Titulo -->
+        <div class="p-card-title">{{ titulo?.() }}</div>
+        <!-- Subtitulo -->
+        @if (lote) {
+          <div class="p-card-subtitle">{{ 'Lote' | translate }} {{ lote.nombre }}</div>
+        }
+        <!-- Content -->
+        <div class="p-card-content" style="overflow: auto; height: calc(100% - 26px); margin-top: 1em">
+          @if (form) {
+            <form [formGroup]="form">
+              <p-tabs [(value)]="tabValue" scrollable [lazy]="false">
+                <p-tablist>
+                  <p-tab [value]="0">{{ 'Básico' | translate }}</p-tab>
+                  <p-tab [value]="1">{{ 'Huella hídrica' | translate }}</p-tab>
+                </p-tablist>
+                <p-tabpanels>
+                  <!-- Basico -->
+                  <p-tabpanel [value]="0">
+                    <!-- Fecha de Siembra -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-datepicker
+                        formControlName="fechaSiembra"
+                        showIcon
+                        iconDisplay="input"
+                        [fluid]="true"
+                        [showButtonBar]="true"
+                      />
+                      <label>{{ 'Fecha de siembra' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Cultivo -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="cultivosDisponibles"
+                        formControlName="cultivo"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Cultivo' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Semilla -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="semillas"
+                        formControlName="idSemilla"
+                        optionValue="_id"
+                        [filter]="true"
+                        filterBy="variedad,semillero,ciclo"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                        [virtualScroll]="true"
+                        [virtualScrollItemSize]="20"
+                      >
+                        <ng-template #selectedItem let-selectedOption>
+                          <div>
+                            <span> {{ selectedOption.variedad | titlecase }} </span>
+                            <small style="color: var(--p-text-muted-color)">
+                              ({{ selectedOption.semillero | titlecase }})
+                            </small>
+                            <small style="color: var(--p-text-muted-color)">
+                              ({{ selectedOption.ciclo | titlecase }})
+                            </small>
+                          </div>
+                        </ng-template>
+                        <ng-template let-option #item>
+                          <div>
+                            <span> {{ option.variedad | titlecase }} </span>
+                            <small style="color: var(--p-text-muted-color)">
+                              ({{ option.semillero | titlecase }})
+                            </small>
+                            <small style="color: var(--p-text-muted-color)"> ({{ option.ciclo | titlecase }}) </small>
+                            <!-- <small style="color: var(--p-text-muted-color)"> ({{ option.cultivo | titlecase }}) </small> -->
+                          </div>
+                        </ng-template>
+                      </p-select>
+                      <label>{{ 'Semilla' | translate }}</label>
+                    </p-floatlabel>
+                  </p-tabpanel>
+
+                  <!-- Huella Hidrica -->
+                  <p-tabpanel [value]="1">
+                    <!-- labranza -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="labranza"
+                        formControlName="labranza"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Labranza' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- lluviasPromedio -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="lluviasPromedio"
+                        formControlName="lluviasPromedio"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Lluvias promedio' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- intensidadLluvias -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="intensidadLluvias"
+                        formControlName="intensidadLluvias"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Intensidad de lluvias' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- fijacionN -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="fijacionN"
+                        formControlName="fijacionN"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Fijacion de nitrógeno' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- dosisN -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="dosisN"
+                        formControlName="dosisN"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Dósis de nigrógeno' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- dosisP -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="dosisP"
+                        formControlName="dosisP"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Dósis de fósforo' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- rendimiento -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="rendimiento"
+                        formControlName="rendimiento"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Rendimiento' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- manejoAgronomico -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="manejoAgronomico"
+                        formControlName="manejoAgronomico"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Manejo agronómico' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- materiaOrganica -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [loading]="loading"
+                        [options]="materiaOrganica"
+                        formControlName="materiaOrganica"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      >
+                      </p-select>
+                      <label>{{ 'Materia orgánica' | translate }}</label>
+                    </p-floatlabel>
+                  </p-tabpanel>
+                </p-tabpanels>
+              </p-tabs>
+            </form>
+          }
+        </div>
+      </div>
+      <!-- Footer -->
+      <div class="p-card-footer" style="flex: 0 0 auto;">
+        <p-divider />
+        <div class="flex gap-4 mt-1">
+          <p-button
+            [label]="'Cancelar' | translate"
+            severity="secondary"
+            class="w-full"
+            [outlined]="true"
+            styleClass="w-full"
+            (onClick)="volver()"
+          />
+          <p-button
+            [label]="'Guardar' | translate"
+            class="w-full"
+            styleClass="w-full"
+            [loading]="loading"
+            (onClick)="guardar()"
+            [disabled]="!form?.valid"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

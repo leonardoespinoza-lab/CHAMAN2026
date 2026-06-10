@@ -1,0 +1,108 @@
+
+.application-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 100%;
+}
+
+.application-header {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.application-header p {
+  line-height: 1.1;
+  margin: 0;
+}
+
+.application-header span,
+.application-empty small,
+.date-box span,
+.date-box small,
+.composition-list span,
+.composition-list small {
+  color: var(--p-text-muted-color);
+  display: block;
+}
+
+.application-header span {
+  font-size: 0.74rem;
+  line-height: 1.25;
+  margin-top: 0.22rem;
+}
+
+.application-body {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
+}
+
+.date-box,
+.composition-list article {
+  background: var(--p-surface-50);
+  border: 1px solid var(--p-surface-200);
+  border-radius: 8px;
+  padding: 0.7rem;
+}
+
+.date-box span,
+.date-box small {
+  font-size: 0.68rem;
+}
+
+.date-box strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 1rem;
+  margin: 0.25rem 0;
+}
+
+.composition-list {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.composition-list article {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.composition-list strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.composition-list span,
+.composition-list small {
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.composition-list small {
+  color: var(--p-primary-color);
+  font-weight: 700;
+}
+
+.application-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.application-empty small {
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 620px) {
+  .application-body {
+    grid-template-columns: 1fr;
+  }
+}

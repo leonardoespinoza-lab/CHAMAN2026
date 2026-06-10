@@ -1,0 +1,223 @@
+<div id="kmz" class="map-container">
+  <!-- isla -->
+  <p-panel header="KMZ/KML" [toggleable]="false" class="panel">
+    <!-- Body es lo de adentro, una verga como en material. -->
+    <!-- Subir KMZ -->
+    <p-fileupload
+      mode="basic"
+      name="kmz"
+      chooseIcon="pi pi-upload"
+      accept=".kmz,.kml"
+      maxFileSize="1000000"
+      (onSelect)="getFile($event)"
+      chooseLabel="KMZ/KML"
+      [disabled]="loading()"
+    />
+
+    <!-- Listados de Polígonos  -->
+    @if (this.listaPoligonos.length > 0) {
+      <br />
+      <p-panel #panelPolys [toggleable]="true" [collapsed]="true" [style]="{ width: '100%' }">
+        <ng-template #header>
+          <div class="row-space-between" style="width: 100%">
+            <span class="font-bold">Polígonos</span>
+            <div class="row-center" style="gap: 3px">
+              <!-- Polígonos -->
+              <p-button
+                icon="pi pi-expand"
+                [severity]="this.polygonsLayer.get('visible') ? 'success' : 'secondary'"
+                rounded
+                text
+                (onClick)="toggleLayer('Poly')"
+                pTooltip="Desactivar Polígonos"
+              />
+              <p-button
+                [icon]="panelPolys.collapsed ? 'pi pi-chevron-down' : 'pi pi-chevron-up'"
+                rounded
+                text
+                (onClick)="panelPolys.collapsed = !panelPolys.collapsed"
+                pTooltip="Expandir / Colapsar"
+              />
+            </div>
+          </div>
+        </ng-template>
+
+        @for (p of listaPoligonos; track $index) {
+          <p-panel #panelPoly [toggleable]="false" [collapsed]="true" [style]="{ width: '100%' }">
+            <ng-template #header>
+              <div class="row-space-between" style="width: 100%">
+                <span class="font-bold truncate-text" [pTooltip]="p.name">{{ p.name }}</span>
+                <div class="row-center" style="gap: 3px">
+                  <!-- Toggle -->
+                  <p-button
+                    icon="pi pi-expand"
+                    [severity]="p.visible ? 'success' : 'secondary'"
+                    rounded
+                    text
+                    (onClick)="toggleFeatureVisibility(p)"
+                    pTooltip="Desactivar Polígono"
+                  />
+                  <!-- Zoom -->
+                  <p-button
+                    icon="pi pi-search"
+                    [severity]="'secondary'"
+                    rounded
+                    text
+                    (onClick)="zoomToFeature(p)"
+                    pTooltip="Ir a la polígono"
+                  />
+                  <p-button
+                    [icon]="panelPoly.collapsed ? 'pi pi-chevron-down' : 'pi pi-chevron-up'"
+                    rounded
+                    text
+                    (onClick)="panelPoly.collapsed = !panelPoly.collapsed"
+                    pTooltip="Expandir / Colapsar"
+                  />
+                </div>
+              </div>
+            </ng-template>
+            <div class="column-center" style="gap: 5px">
+              @if (loginService.esProductor || loginService.esEstablecimiento) {
+                <!-- Crear Lote -->
+                <p-button label="Lote" icon="pi pi-plus" (onClick)="crearLote(p)" [style]="{ width: '100%' }" />
+              }
+              @if (loginService.esProductor) {
+                <!-- Crear Establecimiento -->
+                <p-button
+                  label="Establecimiento"
+                  icon="pi pi-plus"
+                  (onClick)="crearEstablecimiento(p)"
+                  [style]="{ width: '100%' }"
+                />
+              }
+            </div>
+          </p-panel>
+          <br />
+        }
+      </p-panel>
+    }
+    <!-- Listados de Puntos  -->
+    @if (this.listaPuntos.length > 0) {
+      <br />
+      <p-panel #panelPuntos [toggleable]="true" [collapsed]="true" [style]="{ width: '100%' }">
+        <ng-template #header>
+          <div class="row-space-between" style="width: 100%">
+            <span class="font-bold">Puntos</span>
+            <div class="row-center" style="gap: 3px">
+              <!-- Puntos -->
+              <p-button
+                icon="pi pi-map-marker"
+                [severity]="this.pointsLayer.get('visible') ? 'success' : 'secondary'"
+                rounded
+                text
+                (onClick)="toggleLayer('Puntos')"
+                pTooltip="Desactivar Puntos"
+              />
+              <p-button
+                [icon]="panelPuntos.collapsed ? 'pi pi-chevron-down' : 'pi pi-chevron-up'"
+                rounded
+                text
+                (onClick)="panelPuntos.collapsed = !panelPuntos.collapsed"
+                pTooltip="Expandir / Colapsar"
+              />
+            </div>
+          </div>
+        </ng-template>
+        @for (p of listaPuntos; track $index) {
+          <p-panel [toggleable]="false" [collapsed]="true" [style]="{ width: '100%' }">
+            <ng-template #header>
+              <div class="row-space-between" style="width: 100%">
+                <span class="font-bold truncate-text" [pTooltip]="p.name">{{ p.name }}</span>
+                <div class="row-center" style="gap: 3px">
+                  <!-- Toggle -->
+                  <p-button
+                    icon="pi pi-map-marker"
+                    [severity]="p.visible ? 'success' : 'secondary'"
+                    rounded
+                    text
+                    (onClick)="toggleFeatureVisibility(p)"
+                    pTooltip="Desactivar Punto"
+                  />
+                  <!-- Zoom -->
+                  <p-button
+                    icon="pi pi-search"
+                    [severity]="'secondary'"
+                    rounded
+                    text
+                    (onClick)="zoomToFeature(p)"
+                    pTooltip="Ir al punto"
+                  />
+                </div>
+              </div>
+            </ng-template>
+          </p-panel>
+          <br />
+        }
+      </p-panel>
+    }
+    <!-- Listados de Líneas  -->
+    @if (this.listaLineas.length > 0) {
+      <br />
+      <p-panel #panelLineas [toggleable]="true" [collapsed]="true" [style]="{ width: '100%' }">
+        <ng-template #header>
+          <div class="row-space-between" style="width: 100%">
+            <span class="font-bold">Líneas</span>
+            <div class="row-center" style="gap: 3px">
+              <!-- Líneas -->
+              <p-button
+                icon="pi pi-arrow-right"
+                [severity]="this.linesLayer.get('visible') ? 'success' : 'secondary'"
+                rounded
+                text
+                (onClick)="toggleLayer('Lineas')"
+                pTooltip="Desactivar Líneas"
+              />
+              <p-button
+                [icon]="panelLineas.collapsed ? 'pi pi-chevron-down' : 'pi pi-chevron-up'"
+                rounded
+                text
+                (onClick)="panelLineas.collapsed = !panelLineas.collapsed"
+                pTooltip="Expandir / Colapsar"
+              />
+            </div>
+          </div>
+        </ng-template>
+        @for (l of listaLineas; track $index) {
+          <p-panel [toggleable]="false" [collapsed]="true" [style]="{ width: '100%' }">
+            <ng-template #header>
+              <div class="row-space-between" style="width: 100%">
+                <span class="font-bold truncate-text" [pTooltip]="l.name">{{ l.name }}</span>
+                <div class="row-center" style="gap: 3px">
+                  <!-- Toggle -->
+                  <p-button
+                    icon="pi pi-arrow-right"
+                    [severity]="l.visible ? 'success' : 'secondary'"
+                    rounded
+                    text
+                    (onClick)="toggleFeatureVisibility(l)"
+                    pTooltip="Desactivar Línea"
+                  />
+                  <!-- Zoom -->
+                  <p-button
+                    icon="pi pi-search"
+                    [severity]="'secondary'"
+                    rounded
+                    text
+                    (onClick)="zoomToFeature(l)"
+                    pTooltip="Ir a la línea"
+                  />
+                </div>
+              </div>
+            </ng-template>
+          </p-panel>
+          <br />
+        }
+      </p-panel>
+    }
+
+    @if (!this.listaLineas.length && !this.listaPuntos.length && !this.listaPoligonos.length && file) {
+      <br />
+      <p-message severity="info" text="No hay datos disponibles." />
+    }
+  </p-panel>
+</div>

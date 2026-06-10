@@ -1,0 +1,27 @@
+<p-button [rounded]="true" pTooltip="Detalles" icon="pi pi-map" severity="success" (click)="showDialog()"></p-button>
+<p-dialog [(visible)]="visible" [modal]="true" [style]="{ width: '25rem' }">
+  <ng-template #header>
+    <div class="inline-flex items-center justify-center gap-2">
+      <span class="font-bold whitespace-nowrap">{{ dispositivo?.nombre }}</span>
+    </div>
+  </ng-template>
+  <!-- CUERPO -->
+  <div style="width: 100%; height: 350px">
+    <app-mapa-ubicacion
+      #mapaUbicacion
+      [centro]="centro"
+      (coordenadas)="onCoordenadasChange($event)"
+      [poligonos]="poligonos"
+    ></app-mapa-ubicacion>
+  </div>
+  <ng-template #footer>
+    <p-button [label]="'Cancelar' | translate" [text]="true" severity="secondary" (click)="visible = false" />
+    <p-button
+      [label]="'Guardar' | translate"
+      [outlined]="true"
+      severity="success"
+      (click)="onSave()"
+      [disabled]="disabled"
+    />
+  </ng-template>
+</p-dialog>

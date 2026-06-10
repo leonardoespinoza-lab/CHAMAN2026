@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+**/node_modules/
+.yarn/cache/
+.pnp.*
+
+# Build outputs
+dist/
+build/
+coverage/
+.angular/
+.cache/
+tmp/
+temp/
+
+# Runtime and local files
+.env
+.env.*
+!.env.example
+!*.env.example
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local cloud credentials and service accounts
+**/google-credentials.json
+**/*credentials*.json
+**/*service-account*.json
+!**/*.example.json
+
+# Generated/static snapshots not intended for source review
+chamanagro-web-dist/
+demo-repository/
+Testing/
+
+# Legacy/reference modules excluded from first CHAMAN2026 product repository
+sdc-doc/
+sdc-web-admin/
+sdc-web-cliente/
+sdc-api-admin/
+sdc-api-externa/
+sdc-ftp/
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Mobile generated artifacts
+sdc-app-chaman/android/app/build/
+sdc-app-chaman/android/.gradle/
+sdc-app-chaman/ios/App/Pods/
+sdc-app-chaman/ios/App/build/

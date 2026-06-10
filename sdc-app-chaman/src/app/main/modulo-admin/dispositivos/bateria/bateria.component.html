@@ -1,0 +1,11 @@
+<div class="battery-container" [title]="'Batería: ' + level + '%'">
+  <!-- La barra que muestra el nivel actual de la batería -->
+  <div class="battery-level" [ngClass]="batteryLevelClass" [ngStyle]="batteryLevelStyle"></div>
+
+  <!-- El texto con el porcentaje (NUEVO) -->
+  <!-- Se coloca fuera del .battery-level para que se superponga a toda la batería -->
+  <div class="battery-text">{{ level | number: '1.0-0' }}%</div>
+
+  <!-- El pequeño borne o "punta" de la batería -->
+  <div class="battery-nub"></div>
+</div>

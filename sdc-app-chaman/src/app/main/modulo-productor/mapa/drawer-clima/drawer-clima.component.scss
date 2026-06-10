@@ -1,0 +1,938 @@
+// ============================================
+// DRAWER CLIMA - CSS REESCRITO COMPLETAMENTE
+// Coincide exactamente con la estructura HTML
+// ============================================
+
+// Contenedor principal del drawer (será redefinido más abajo para el grid)
+.climate-content {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  height: 100%;
+  overflow-y: auto;
+}
+
+// Títulos de sección
+.section-title {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--p-text-color);
+}
+
+// ============================================
+// SECCIÓN DE CLIMA ACTUAL
+// ============================================
+
+.current-weather-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+// Tarjeta principal de clima actual
+.current-weather-card {
+  background: var(--p-content-background);
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid var(--p-surface-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+// Los estilos del tema oscuro ya no son necesarios porque usamos variables adaptativas
+
+// Sección principal con ícono y temperatura
+.current-weather-main {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.weather-icon-large {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.current-temp {
+  flex: 1;
+}
+
+.temp-value {
+  font-size: 3rem;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--p-primary-500);
+}
+
+.weather-description {
+  margin-top: 0.5rem;
+}
+
+.summary {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--p-text-color);
+}
+
+.last-update {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+}
+
+// Grid de detalles del clima
+.weather-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+}
+
+// Elementos individuales de detalle
+.detail-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: var(--p-surface-0);
+  border-radius: 8px;
+  border: 1px solid var(--p-surface-300);
+}
+
+// Estilos para tema oscuro - elementos de detalle
+.p-dark .detail-item {
+  background: var(--p-surface-700);
+  border-color: var(--p-surface-600);
+}
+
+.detail-icon {
+  font-size: 1.2rem;
+  color: var(--p-primary-500);
+  flex-shrink: 0;
+}
+
+.detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.detail-label {
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color);
+  font-weight: 500;
+}
+
+.detail-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--p-text-color);
+}
+
+// ============================================
+// SECCIÓN DE PRONÓSTICO
+// ============================================
+
+.forecast-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.forecast-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+// Tarjetas del pronóstico por día
+.forecast-day-card {
+  background: var(--p-surface-50);
+  border-radius: 10px;
+  padding: 1rem;
+  border: 1px solid var(--p-surface-200);
+  transition: all 0.2s ease;
+}
+
+.forecast-day-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--p-primary-300);
+}
+
+// Estilos para tema oscuro - tarjetas de pronóstico
+.p-dark .forecast-day-card {
+  background: var(--p-surface-800);
+  border-color: var(--p-surface-700);
+}
+
+// Header de cada día del pronóstico
+.forecast-day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.day-name {
+  font-weight: 600;
+  color: var(--p-text-color);
+  text-transform: capitalize;
+}
+
+.day-date {
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+}
+
+// Contenido principal de cada día
+.forecast-day-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.forecast-icon {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.forecast-temps {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.temp-max {
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--p-text-color);
+}
+
+.temp-min {
+  font-weight: 400;
+  color: var(--p-text-muted-color);
+  position: relative;
+}
+
+.temp-min:before {
+  content: '/';
+  margin-right: 0.25rem;
+  color: var(--p-text-muted-color);
+}
+
+// Detalles adicionales de cada día
+.forecast-details {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.forecast-detail {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+}
+
+.forecast-detail i {
+  font-size: 0.8rem;
+  color: var(--p-primary-500);
+}
+
+// ============================================
+// SECCIÓN DE PROBABILIDAD DE PRECIPITACIÓN
+// ============================================
+
+// Tarjeta principal de precipitación (EXACTAMENTE como current-weather-card)
+.precipitation-weather-card {
+  background: var(--p-content-background);
+  border-radius: 12px;
+  padding: 1.5rem;
+  border: 1px solid var(--p-surface-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+// Título de la sección (similar a weather-description)
+.precipitation-section-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--p-text-color);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.precipitation-title-icon {
+  font-size: 1.2rem;
+  color: var(--p-primary-500);
+}
+
+// Contenedor de las tarjetas de días (similar a weather-details-grid)
+.precipitation-days-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 1rem;
+}
+
+// Tarjetas individuales por día (EXACTAMENTE como detail-item)
+.precipitation-day-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: var(--p-surface-0);
+  border-radius: 8px;
+  border: 1px solid var(--p-surface-300);
+  transition: all 0.2s ease;
+}
+
+// Estilos para tema oscuro - tarjetas de precipitación (IGUAL que detail-item)
+.p-dark .precipitation-day-card {
+  background: var(--p-surface-700);
+  border-color: var(--p-surface-600);
+}
+
+.precipitation-day-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: var(--p-primary-300);
+}
+
+// Etiqueta del día (como detail-label)
+.precipitation-day-label {
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color);
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+// Valor de probabilidad (como detail-value pero más grande)
+.precipitation-probability {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--p-primary-500);
+  line-height: 1;
+}
+
+// Iconos (como detail-icon pero ajustados)
+.precipitation-day-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.precipitation-day-icon.high-rain {
+  color: var(--p-blue-500);
+}
+
+.precipitation-day-icon.medium-rain {
+  color: var(--p-blue-300);
+}
+
+.precipitation-day-icon.low-rain {
+  color: var(--p-gray-400);
+}
+
+.precipitation-day-icon.sunny {
+  color: #f39c12;
+}
+
+// Responsive para móvil
+@media (max-width: 768px) {
+  .precipitation-days-grid {
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    gap: 0.75rem;
+  }
+  
+  .precipitation-weather-card {
+    padding: 1rem;
+    gap: 1rem;
+  }
+  
+  .precipitation-day-card {
+    padding: 0.75rem;
+  }
+  
+  .precipitation-probability {
+    font-size: 1.25rem;
+  }
+  
+  .precipitation-day-icon {
+    font-size: 1.25rem;
+  }
+}
+
+// ============================================
+// MENSAJE SIN DATOS
+// ============================================
+
+.no-data-message {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--p-text-muted-color);
+}
+
+.no-data-message p {
+  margin: 0;
+  font-size: 1rem;
+}
+
+// ============================================
+// RESPONSIVE DESIGN
+// ============================================
+
+@media (max-width: 768px) {
+  .climate-content {
+    padding: 1rem;
+    gap: 1.5rem;
+  }
+  
+  .current-weather-main {
+    flex-direction: column;
+    text-align: center;
+    gap: 1rem;
+  }
+  
+  .weather-details-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+  
+  .forecast-day-content {
+    gap: 0.75rem;
+  }
+}
+
+// ============================================
+// ESTILOS PARA EL GRÁFICO DE PRONÓSTICO
+// ============================================
+
+.forecast-chart-container {
+  margin: 1rem 0;
+  border-radius: 12px;
+  border: 1px solid var(--p-surface-border);
+  padding: 1rem; // Reducir padding
+  background: var(--p-content-background);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  width: 100%;
+  overflow: visible; // Permitir que los títulos se vean
+  position: relative;
+  box-sizing: border-box;
+
+  // Dimensiones responsivas para el contenedor del gráfico
+  min-height: 500px; 
+  
+  // Desktop
+  @media (min-width: 1000px) {
+    min-height: 500px; // Igualar altura en ambos casos
+  }
+  
+  // Móvil
+  @media (max-width: 999px) {
+    min-height: 500px; // Igualar altura en ambos casos
+    padding: 0.75rem;
+  }
+
+  div[id*="chartContainer"] {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 450px; // Aumentar de 350px a 450px
+    position: relative;
+    overflow: visible; // Permitir que los títulos se vean
+    box-sizing: border-box;
+    
+    // Estilos específicos para Highcharts
+    ::ng-deep {
+      .highcharts-container {
+        width: 100% !important;
+        height: 100% !important;
+        overflow: visible !important; // Permitir que los títulos se vean
+        box-sizing: border-box !important;
+        position: relative !important;
+      }
+      
+      .highcharts-root {
+        width: 100% !important;
+        height: 100% !important;
+        overflow: visible !important; // Permitir que los títulos se vean
+        box-sizing: border-box !important;
+      }
+      
+      // Asegurar fondo completamente transparente
+      .highcharts-background {
+        fill: transparent !important;
+      }
+      
+      // Asegurar fondo completamente transparente
+      .highcharts-background {
+        fill: transparent !important;
+      }
+      .highcharts-plot-background {
+        fill: transparent !important;
+      }
+      
+      .highcharts-plot-border {
+        stroke: none !important;
+      }
+      
+      // Remover cualquier borde o fondo blanco
+      .highcharts-container svg {
+        background: transparent !important;
+      }
+      
+      // Asegurar que todos los textos usen los colores del tema
+      .highcharts-axis-labels,
+      .highcharts-legend,
+      .highcharts-title,
+      .highcharts-subtitle {
+        max-width: 100% !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+      
+      // Colores específicos para textos de ejes
+      .highcharts-axis-labels text {
+        fill: var(--p-text-color) !important;
+        font-size: 11px !important;
+      }
+      
+      // Asegurar que las líneas y bordes usen colores adaptativos
+      .highcharts-axis-line,
+      .highcharts-tick {
+        stroke: var(--p-surface-border) !important;
+      }
+      
+      .highcharts-grid-line {
+        stroke: var(--p-surface-border) !important;
+      }
+      
+      // Colores para leyenda
+      .highcharts-legend-item text {
+        fill: var(--p-text-color) !important;
+        font-size: 11px !important;
+        font-weight: 500 !important;
+      }
+      
+      // Títulos del gráfico
+      .highcharts-title {
+        fill: var(--p-text-color) !important;
+        font-weight: 600 !important;
+      }
+      
+      .highcharts-subtitle {
+        fill: var(--p-text-color) !important;
+        font-size: 12px !important;
+      }
+    }
+  }
+}
+
+.forecast-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--p-surface-50);
+  border-radius: 8px;
+  border-left: 4px solid var(--p-primary-color);
+
+  .forecast-summary-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+
+    i {
+      color: var(--p-primary-color);
+      font-size: 1rem;
+      width: 1.2rem;
+      text-align: center;
+    }
+
+    .summary-label {
+      color: var(--p-text-color-secondary);
+      flex: 1;
+    }
+
+    .summary-value {
+      font-weight: 600;
+      color: var(--p-text-color);
+    }
+  }
+}
+
+// Responsivo para el gráfico
+@media (max-width: 768px) {
+  .climate-content {
+    padding: 1rem;
+    gap: 1.5rem;
+  }
+  
+  .forecast-chart-container {
+    padding: 0.75rem;
+    margin: 0.75rem 0;
+    
+    app-chart {
+      min-height: 320px;
+      
+      ::ng-deep {
+        .highcharts-container {
+          width: 100% !important;
+          overflow: visible !important;
+        }
+        
+        .highcharts-background {
+          fill: transparent !important;
+        }
+        
+        .highcharts-plot-background {
+          fill: transparent !important;
+        }
+        
+        .highcharts-axis-labels text {
+          font-size: 10px !important;
+        }
+        
+        .highcharts-legend {
+          margin: 10px 0 !important;
+        }
+        
+        .highcharts-legend-item text {
+          font-size: 10px !important;
+        }
+        
+        .highcharts-title {
+          font-size: 14px !important;
+        }
+        
+        .highcharts-subtitle {
+          font-size: 11px !important;
+        }
+        
+        // Ajustar márgenes para móviles
+        .highcharts-axis-title {
+          font-size: 10px !important;
+        }
+      }
+    }
+  }
+
+  .forecast-summary {
+    padding: 0.75rem;
+    gap: 0.5rem;
+
+    .forecast-summary-item {
+      font-size: 0.85rem;
+      
+      i {
+        font-size: 0.9rem;
+      }
+    }
+  }
+}
+
+// Estilos adicionales para tema oscuro - unificados para todas las tarjetas
+.p-dark {
+  // Tarjeta de clima actual con el mismo fondo que los gráficos
+  .current-weather-card {
+    background: var(--p-surface-800);
+    border-color: var(--p-surface-600);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  // Tarjeta de precipitación con el mismo estilo que current-weather-card
+  .precipitation-weather-card {
+    background: var(--p-surface-800);
+    border-color: var(--p-surface-600);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  // Contenedor del gráfico de pronóstico
+  .forecast-chart-container {
+    background: var(--p-surface-800);
+    border-color: var(--p-surface-600);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    
+    app-chart {
+      ::ng-deep {
+        .highcharts-background {
+          fill: transparent !important;
+        }
+        
+        .highcharts-plot-background {
+          fill: transparent !important;
+        }
+        
+        .highcharts-grid-line {
+          stroke: var(--p-surface-600) !important;
+        }
+        
+        .highcharts-axis-line {
+          stroke: var(--p-surface-600) !important;
+        }
+        
+        .highcharts-tick {
+          stroke: var(--p-surface-600) !important;
+        }
+      }
+    }
+  }
+  
+  // Contenedor del gráfico de precipitaciones con los mismos estilos
+  .precipitation-chart-container {
+    background: var(--p-surface-800);
+    border-color: var(--p-surface-600);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    
+    app-chart {
+      ::ng-deep {
+        .highcharts-background {
+          fill: transparent !important;
+        }
+        
+        .highcharts-plot-background {
+          fill: transparent !important;
+        }
+        
+        .highcharts-grid-line {
+          stroke: var(--p-surface-600) !important;
+        }
+        
+        .highcharts-axis-line {
+          stroke: var(--p-surface-600) !important;
+        }
+        
+        .highcharts-tick {
+          stroke: var(--p-surface-600) !important;
+        }
+      }
+    }
+  }
+  
+  .forecast-summary {
+    background: var(--p-surface-700);
+    border-left-color: var(--p-primary-400);
+  }
+}
+
+// ============================================
+// GRID RESPONSIVO COMO EN DRAWER-RIEGO
+// ============================================
+
+// Grid responsivo para el drawer (igual que drawer-riego)
+.desktop-grid {
+  // 3 columnas para pantallas grandes (>1200px) - Una fila horizontal
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-areas: 
+    "current forecast precipitation";
+  
+  // 2 columnas para pantallas medianas (800px - 1200px)
+  @media (max-width: 1200px) {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-areas: 
+      "current forecast"
+      "precipitation precipitation";
+  }
+  
+  // 1 columna para pantallas pequeñas (<800px) con scroll mejorado
+  @media (max-width: 800px) {
+    grid-template-columns: 1fr;
+    grid-template-areas: 
+      "current"
+      "forecast"
+      "precipitation";
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-height: calc(100vh - 120px);
+    /* Scroll suave */
+    scroll-behavior: smooth;
+    /* Ocultar scrollbar pero mantener funcionalidad */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(155, 155, 155, 0.5) transparent;
+    
+    &::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background: rgba(155, 155, 155, 0.5);
+      border-radius: 4px;
+    }
+    
+    &::-webkit-scrollbar-thumb:hover {
+      background: rgba(155, 155, 155, 0.8);
+    }
+  }
+}
+
+// Asignar áreas específicas a cada sección
+.section-current {
+  grid-area: current;
+}
+
+.section-forecast {
+  grid-area: forecast;
+}
+
+.section-precipitation {
+  grid-area: precipitation;
+}
+
+// Estilos específicos para gráficos de Highcharts
+.chart-container {
+  position: relative;
+  overflow: hidden;
+  
+  app-chart {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    
+    :host {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+    }
+  }
+}
+
+// Asegurar que el contenido del drawer no se desborde
+:host {
+  .drawer-grid {
+    max-width: 100%;
+    overflow: hidden;
+  }
+  
+  .drawer-column {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+}
+
+// Estilos responsivos para gráficos
+@media (max-width: 768px) {
+  .chart-container {
+    width: 100%;
+    max-width: 100vw;
+  }
+}
+
+// Estilos para el contenedor de scroll en móvil - mejorado
+.drawer-content-mobile {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Scroll suave */
+  scroll-behavior: smooth;
+  /* Momentum scrolling en iOS */
+  -webkit-overflow-scrolling: touch;
+  
+  /* Scrollbar personalizada */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(155, 155, 155, 0.5) transparent;
+  
+  /* Ocultar la barra de scroll en WebKit (Safari, Chrome) pero mantener funcionalidad */
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: rgba(155, 155, 155, 0.5);
+    border-radius: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba(155, 155, 155, 0.8);
+  }
+}
+
+// ============================================
+// ESTILOS PARA LOS GRÁFICOS Y CONTENEDORES
+// ============================================
+
+.forecast-chart-container {
+  margin: 0;
+  border-radius: 12px;
+  border: 1px solid var(--p-surface-border);
+  padding: 1rem;
+  background: var(--p-content-background);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  height: 500px; // Altura fija en lugar de 100%
+  max-height: 500px; // Prevenir que crezca más
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow: visible;
+  position: relative;
+  box-sizing: border-box;
+
+  // Dimensiones responsivas para el contenedor del gráfico
+  @media (min-width: 1000px) {
+    height: 500px;
+    max-height: 500px;
+  }
+  
+  // Móvil
+  @media (max-width: 999px) {
+    height: 450px;
+    max-height: 450px;
+    padding: 0.75rem;
+  }
+}
+
+.precipitation-chart-container {
+  margin: 0;
+  border-radius: 12px;
+  border: 1px solid var(--p-surface-border);
+  padding: 1rem;
+  background: var(--p-content-background);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  height: 500px; // Altura fija en lugar de 100%
+  max-height: 500px; // Prevenir que crezca más
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow: visible;
+  position: relative;
+  box-sizing: border-box;
+
+  // Dimensiones responsivas para el contenedor del gráfico
+  @media (min-width: 1000px) {
+    height: 500px;
+    max-height: 500px;
+  }
+  
+  // Móvil
+  @media (max-width: 999px) {
+    height: 450px;
+    max-height: 450px;
+    padding: 0.75rem;
+  }
+}
+
+

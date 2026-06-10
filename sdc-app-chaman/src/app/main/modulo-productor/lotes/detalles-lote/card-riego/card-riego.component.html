@@ -1,0 +1,70 @@
+<div class="custom-card irrigation-card" [class.clickable]="tieneLanzaHumedad" (click)="abrirDrawerRiego()">
+  <div class="irrigation-header">
+    <div>
+      <p class="titulo-card">{{ 'Riego' | translate | uppercase }}</p>
+      <span>{{ resumen }}</span>
+    </div>
+    @if (tieneLanzaHumedad) {
+      <strong>+</strong>
+    }
+  </div>
+
+  <div class="irrigation-main">
+    <div class="today-box">
+      <span>Hoy</span>
+      @if (tieneLanzaHumedad && recomendacionHoy) {
+        <strong>{{ recomendacionHoy.cantidad || 0 }} <small>mm</small></strong>
+      } @else {
+        <strong>N/A</strong>
+      }
+      <em>Recomendacion</em>
+    </div>
+
+    <div class="irrigation-metrics">
+      <article>
+        <span>Agua util</span>
+        @if (siembra?.aguaUtilReal !== undefined && siembra?.aguaUtilReal !== null) {
+          <strong>{{ siembra?.aguaUtilReal | number: '1.1-2' }} <small>mm</small></strong>
+        } @else {
+          <strong>N/A</strong>
+        }
+      </article>
+
+      <article>
+        <span>ET0 7 dias</span>
+        @if (calcularET0Proyectada() !== null) {
+          <strong>{{ calcularET0Proyectada() | number: '1.1-2' }} <small>mm</small></strong>
+        } @else {
+          <strong>N/A</strong>
+        }
+      </article>
+    </div>
+  </div>
+
+  @if (recomendaciones.length) {
+    <div class="irrigation-days">
+      @for (item of recomendaciones; track item.fecha) {
+        <span [class.should-water]="(item.cantidad || 0) > 0">
+          <small>{{ formatearFecha(item.fecha) }}</small>
+          <strong>{{ item.cantidad || 0 }} mm</strong>
+        </span>
+      }
+    </div>
+  } @else if (!tieneLanzaHumedad) {
+    <p-message severity="info">
+      {{ 'Conecta una lanza de humedad para activar recomendacion real.' | translate }}
+    </p-message>
+  } @else {
+    <p-message severity="info">
+      {{ 'Aun no hay recomendaciones calculadas.' | translate }}
+    </p-message>
+  }
+
+  @if (estadoAguaUtil !== 'calculado' && motivoAguaUtil) {
+    <p-message severity="warn" [text]="motivoAguaUtil"></p-message>
+  }
+</div>
+
+@if (tieneLanzaHumedad) {
+  <app-drawer-riego [siembra]="siembra" [lote]="lote" [(visible)]="verDrawerRiego"></app-drawer-riego>
+}

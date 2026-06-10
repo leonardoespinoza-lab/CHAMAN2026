@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sdc-api-clima
+  labels:
+    app: sdc-api-clima
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sdc-api-clima
+  template:
+    metadata:
+      labels:
+        app: sdc-api-clima
+    spec:
+      containers:
+      - name: sdc-api-clima
+        image: chaman/sdc-api-clima:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5000
+        env:
+        - name: PORT
+          value: "5000"
+        - name: API_DATOS
+          value: "http://sdc-datos-service"
+        - name: OPENWEATHER_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: openweather-credentials
+              key: apikey
+        - name: ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "400m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sdc-api-clima-service
+  labels:
+    app: sdc-api-clima
+spec:
+  selector:
+    app: sdc-api-clima
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+  type: ClusterIP

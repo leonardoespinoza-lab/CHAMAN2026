@@ -1,0 +1,195 @@
+<div style="padding: 1em; height: 100%">
+  <div class="p-card" style="height: 100%">
+    <div
+      class="p-card-body"
+      style="height: 100%; display: flex; flex-direction: column; justify-content: space-between"
+    >
+      <div style="overflow: auto; height: 100%">
+        
+        <!-- Título -->
+        <div class="p-card-title" style="margin-top: 30px;">
+          {{ titulo?.() }}
+        </div>
+
+        <!-- Content -->
+        <div
+          class="p-card-content"
+          style="overflow: auto; height: calc(100% - 26px); margin-top: 1em"
+        >
+          @if (form) {
+            <form [formGroup]="form" autocomplete="off">
+
+              <p-tabs [value]="0" scrollable [lazy]="false">
+
+                <p-tablist>
+                  <p-tab [value]="0">{{ 'Básico' | translate }}</p-tab>
+                  <p-tab [value]="1">{{ 'Etapas' | translate }}</p-tab>
+                </p-tablist>
+
+                <p-tabpanels>
+
+                  <!-- ===================== -->
+                  <!-- TAB BÁSICO -->
+                  <!-- ===================== -->
+                  <p-tabpanel [value]="0">
+
+                    <!-- Cultivo -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [options]="cultivosDisponibles"
+                        formControlName="cultivo"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      ></p-select>
+                      <label>{{ 'Cultivo' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Departamento -->
+                     <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [options]="departamentos"
+                        optionLabel="nombre"
+                        optionValue="_id"
+                        formControlName="departamento"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      ></p-select>
+                      <label>{{ 'Departamento' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Ciclo -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [options]="ciclos"
+                        formControlName="ciclo"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      ></p-select>
+                      <label>{{ 'Ciclo' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Día siembra -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <input
+                        pInputText
+                        type="number"
+                        formControlName="diaSiembra"
+                        [fluid]="true"
+                        min="1"
+                        max="31"
+                      />
+                      <label>{{ 'Día de siembra' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Mes siembra -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <input
+                        pInputText
+                        type="number"
+                        formControlName="mesSiembra"
+                        [fluid]="true"
+                        min="1"
+                        max="12"
+                      />
+                      <label>{{ 'Mes de siembra' | translate }}</label>
+                    </p-floatlabel>
+
+                  </p-tabpanel>
+
+                  <!-- ===================== -->
+                  <!-- TAB ETAPAS -->
+                  <!-- ===================== -->
+                  <p-tabpanel [value]="1">
+
+                    <ng-container formArrayName="etapas">
+                      @for (e of etapas.controls; track e; let i = $index) {
+
+                        <div class="etapa-item" [formGroupName]="i" style="margin-bottom: 1rem;">
+
+                          <!-- Nombre etapa -->
+                          <p-floatlabel variant="in" class="mb-4">
+                            <input pInputText formControlName="nombre" [fluid]="true" />
+                            <label>{{ 'Nombre etapa' | translate }}</label>
+                          </p-floatlabel>
+
+                          <!-- Días -->
+                          <p-floatlabel variant="in" class="mb-4">
+                            <input
+                              pInputText
+                              type="number"
+                              formControlName="dias"
+                              [fluid]="true"
+                              min="0"
+                            />
+                            <label>{{ 'Días' | translate }}</label>
+                          </p-floatlabel>
+
+                          <!-- Eliminar -->
+                          <div style="display: flex; justify-content: center">
+                            <p-button
+                              icon="pi pi-trash"
+                              severity="danger"
+                              [rounded]="true"
+                              (click)="borrarEtapa(i)"
+                            ></p-button>
+                          </div>
+
+                          <p-divider></p-divider>
+
+                        </div>
+
+                      } @empty {
+                        <p-message severity="info">
+                          {{ 'Sin etapas cargadas' | translate }}
+                        </p-message>
+                      }
+                    </ng-container>
+
+                    <!-- Agregar etapa -->
+                    <p-button
+                      [label]="'Agregar etapa' | translate"
+                      (click)="agregarEtapa()"
+                      [fluid]="true"
+                      [style]="{ 'margin-bottom': '1em' }"
+                    ></p-button>
+
+                  </p-tabpanel>
+
+                </p-tabpanels>
+              </p-tabs>
+            </form>
+          }
+        </div>
+      </div>
+
+      <!-- ===================== -->
+      <!-- FOOTER -->
+      <!-- ===================== -->
+      <div class="p-card-footer">
+        <p-divider />
+        <div class="flex gap-4 mt-1">
+          <p-button
+            [label]="'Cancelar' | translate"
+            severity="secondary"
+            class="w-full"
+            [outlined]="true"
+            styleClass="w-full"
+            (onClick)="volver()"
+          />
+          <p-button
+            [label]="'Guardar' | translate"
+            class="w-full"
+            styleClass="w-full"
+            [loading]="loading"
+            (onClick)="guardar()"
+            [disabled]="!form.valid"
+          />
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

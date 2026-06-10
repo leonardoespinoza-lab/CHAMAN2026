@@ -1,0 +1,267 @@
+.map-container {
+  width: 100%;
+  height: 100vh; /* Altura fija para el mapa */
+  min-height: 100vh; /* Garantiza altura mínima */
+  position: relative; /* Para posicionamiento de elementos sobre el mapa */
+}
+
+.drawer {
+  height: "auto";
+  border-radius: "10px 10px 0 0";
+}
+
+// Estilos para el header del drawer de clima
+.drawer-clima-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25em;
+
+  .title-main {
+    font-size: 1.25em;
+    font-weight: 600;
+    color: var(--p-text-color);
+    line-height: 1.2;
+  }
+
+  .title-establecimiento {
+    font-size: 0.875em;
+    font-weight: 400;
+    color: var(--p-text-color-secondary);
+    font-style: italic;
+    opacity: 0.8;
+    line-height: 1.1;
+  }
+}
+
+// Estilos responsivos para el header
+@media (max-width: 768px) {
+  .drawer-clima-header {
+    .title-main {
+      font-size: 1.1em;
+    }
+
+    .title-establecimiento {
+      font-size: 0.8em;
+    }
+  }
+}
+
+// Estilos para el dropdown de variables climáticas
+::ng-deep p-select {
+  .p-select {
+    height: 1.8rem !important;
+    display: flex !important;
+    align-items: center !important;
+
+    .p-select-label {
+      display: flex !important;
+      align-items: center !important;
+      height: 100% !important;
+      line-height: 1.2 !important;
+      padding: 0 0.5rem !important;
+      font-size: 0.875rem !important;
+    }
+
+    .p-select-dropdown {
+      display: flex !important;
+      align-items: center !important;
+      height: 100% !important;
+      padding: 0 0.5rem !important;
+    }
+
+    .p-select-clear-icon {
+      display: flex !important;
+      align-items: center !important;
+      height: 100% !important;
+    }
+  }
+}
+// Popup
+
+.ol-popup {
+  // ✨ ESTILO PRINCIPAL: Sólido, oscuro y redondeado
+  position: absolute;
+  background-color: var(--p-tag-secondary-background); // Copia el fondo de tus otros widgets
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 0; // Quitamos el padding principal para dar estructura interna
+  border-radius: 16px; // Redondeado como el widget del clima
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  bottom: 12px;
+  left: -50px;
+  min-width: 280px;
+  max-width: 350px;
+  max-height: 350px;
+  color: var(--p-text-color);
+  transform: translateX(-50%);
+  overflow: hidden;
+
+  // Contenedor del contenido con scroll y padding
+  .popup-content-wrapper {
+    padding: 0.75rem;
+    max-height: 250px;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    // Scrollbar más visible para testing
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.4);
+      border-radius: 3px;
+
+      &:hover {
+        background: rgba(255, 255, 255, 0.6);
+      }
+    }
+  }
+}
+
+// ✨ PICO/FLECHA: Ahora coincide con el fondo sólido
+.ol-popup:after,
+.ol-popup:before {
+  top: 100%;
+  border: solid transparent;
+  content: " ";
+  height: 0;
+  width: 0;
+  position: absolute;
+  pointer-events: none;
+}
+.ol-popup:after {
+  border-top-color: var(--p-tag-secondary-background);
+  border-width: 10px;
+  left: 50%;
+  margin-left: -10px;
+}
+.ol-popup:before {
+  border-top-color: rgba(255, 255, 255, 0.1);
+  border-width: 11px;
+  left: 50%;
+  margin-left: -11px;
+}
+
+// ✨ BOTÓN DE CERRAR: Más integrado
+.ol-popup-closer {
+  text-decoration: none;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 1.2rem;
+  color: var(--p-text-muted-color);
+  transition: color 0.2s;
+  &:hover {
+    color: var(--p-text-color);
+  }
+}
+.ol-popup-closer:after {
+  content: "✖";
+}
+
+// ✨ NUEVO: Título para el popup
+::ng-deep .popup-title {
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: block;
+  margin: 0;
+  color: var(--p-text-color);
+}
+
+// ✨ ESTILOS MEJORADOS para las filas de propiedades
+::ng-deep #popup-content .property-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0.5rem;
+  font-size: 0.85rem;
+  &:not(:last-child) {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+}
+::ng-deep #popup-content .property-key {
+  color: var(--p-text-muted-color);
+  text-transform: capitalize;
+  margin-right: 1.5em;
+  flex: 1;
+  font-size: 0.8rem;
+}
+::ng-deep #popup-content .property-value {
+  font-weight: 600;
+  text-align: right;
+  color: var(--p-text-color);
+  font-size: 0.85rem;
+}
+
+// 📱 RESPONSIVE: Adaptaciones para móvil
+@media (max-width: 768px) {
+  .ol-popup {
+    min-width: 260px;
+    max-width: calc(100vw - 2rem);
+    max-height: 300px;
+    left: -50%;
+
+    .popup-content-wrapper {
+      padding: 0.5rem;
+      max-height: 220px;
+    }
+  }
+
+  ::ng-deep .popup-title {
+    padding: 0.6rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  ::ng-deep #popup-content .property-row {
+    padding: 0.6rem 0.4rem;
+    font-size: 0.8rem;
+  }
+
+  ::ng-deep #popup-content .property-key {
+    font-size: 0.75rem;
+    margin-right: 1rem;
+  }
+
+  ::ng-deep #popup-content .property-value {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .ol-popup {
+    min-width: 240px;
+    max-width: calc(100vw - 1.5rem);
+    max-height: 280px;
+
+    .popup-content-wrapper {
+      padding: 0.4rem;
+      max-height: 200px;
+    }
+  }
+
+  ::ng-deep .popup-title {
+    padding: 0.5rem 0.875rem;
+    font-size: 0.85rem;
+  }
+
+  ::ng-deep #popup-content .property-row {
+    padding: 0.5rem 0.3rem;
+    font-size: 0.75rem;
+  }
+
+  ::ng-deep #popup-content .property-key {
+    font-size: 0.7rem;
+    margin-right: 0.75rem;
+  }
+
+  ::ng-deep #popup-content .property-value {
+    font-size: 0.75rem;
+  }
+}

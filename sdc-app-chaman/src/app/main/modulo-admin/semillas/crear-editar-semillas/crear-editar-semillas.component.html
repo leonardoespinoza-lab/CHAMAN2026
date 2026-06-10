@@ -1,0 +1,157 @@
+<div style="padding: 1em; height: 100%">
+  <div class="p-card" style="height: 100%">
+    <div
+      class="p-card-body"
+      style="height: 100%; display: flex; flex-direction: column; justify-content: space-between"
+    >
+      <div style="overflow: hidden; height: 100%">
+        <!-- Titulo -->
+        <div class="p-card-title" style="margin-top: 30px;">{{ titulo?.() }}</div>
+        <!-- Subtitulo -->
+        @if (semilla) {
+          <div class="p-card-subtitle">{{ semilla.semillero }} - {{ semilla.variedad }}</div>
+        }
+        <!-- Content -->
+        <div class="p-card-content" style="overflow: auto; height: calc(100% - 26px); margin-top: 1em">
+          @if (form) {
+            <form [formGroup]="form" autocomplete="off">
+              <p-tabs [value]="0" scrollable [lazy]="false">
+                <p-tablist>
+                  <p-tab [value]="0">{{ 'Básico' | translate }}</p-tab>
+                  <p-tab [value]="1">{{ 'Resistencia' | translate }}</p-tab>
+                </p-tablist>
+                <p-tabpanels>
+
+                  <!-- Básico -->
+                  <p-tabpanel [value]="0">
+                    <!-- Cultivo -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [options]="cultivosDisponibles"
+                        formControlName="cultivo"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      ></p-select>
+                      <label>{{ 'Cultivo' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Semillero -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <input pInputText formControlName="semillero" [fluid]="true" />
+                      <label>{{ 'Semillero' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Variedad -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <input pInputText formControlName="variedad" [fluid]="true" />
+                      <label>{{ 'Variedad' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Ciclo -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [options]="ciclos"
+                        formControlName="ciclo"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      ></p-select>
+                      <label>{{ 'Ciclo' | translate }}</label>
+                    </p-floatlabel>
+
+                    <!-- Campaña (opcional) -->
+                    <p-floatlabel variant="in" class="mb-4">
+                      <input pInputText formControlName="campania" [fluid]="true" />
+                      <label>{{ 'Campaña (opcional)' | translate }}</label>
+                    </p-floatlabel>
+                  </p-tabpanel>
+
+                  <!-- Resistencia -->
+                  <p-tabpanel [value]="1">
+                    <ng-container formArrayName="resistencia">
+                      @for (r of resistencia.controls; track r; let i = $index) {
+                        <div class="resistencia-item" [formGroupName]="i">
+                          <!-- Enfermedad -->
+                          <p-floatlabel variant="in" class="mb-4">
+                            <p-select
+                              [options]="enfermedades"
+                              formControlName="enfermedad"
+                              [showClear]="true"
+                              [fluid]="true"
+                              [appendTo]="'body'"
+                            ></p-select>
+                            <label>{{ 'Enfermedad' | translate }}</label>
+                          </p-floatlabel>
+
+                          <!-- Multiplicador -->
+                          <p-floatlabel variant="in" class="mb-4">
+                            <input
+                              pInputText
+                              type="number"
+                              formControlName="multiplicador"
+                              [fluid]="true"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                            />
+                            <label>{{ 'Multiplicador (0–1)' | translate }}</label>
+                          </p-floatlabel>
+
+                          <!-- Eliminar entrada -->
+                          <div style="display: flex; justify-content: center">
+                            <p-button
+                              icon="pi pi-trash"
+                              severity="danger"
+                              [rounded]="true"
+                              (click)="borrarResistencia(i)"
+                            ></p-button>
+                          </div>
+                        </div>
+                      } @empty {
+                        <p-message severity="info">
+                          {{ 'Sin resistencias cargadas' | translate }}
+                        </p-message>
+                      }
+                    </ng-container>
+                    <br />
+                    <p-button
+                      [label]="'Agregar Resistencia' | translate"
+                      (click)="agregarResistencia()"
+                      [fluid]="true"
+                      [style]="{ 'margin-bottom': '1em' }"
+                    />
+                  </p-tabpanel>
+
+                </p-tabpanels>
+              </p-tabs>
+            </form>
+          }
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="p-card-footer">
+        <p-divider />
+        <div class="flex gap-4 mt-1">
+          <p-button
+            [label]="'Cancelar' | translate"
+            severity="secondary"
+            class="w-full"
+            [outlined]="true"
+            styleClass="w-full"
+            (onClick)="volver()"
+          />
+          <p-button
+            [label]="'Guardar' | translate"
+            class="w-full"
+            styleClass="w-full"
+            [loading]="loading"
+            (onClick)="guardar()"
+            [disabled]="!form?.valid"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,55 @@
+<div class="custom-card water-footprint-card">
+  <div class="water-header" (click)="siembra?.huellaHidrica ? (verDrawerHuellaHidrica = true) : null">
+    <svg [style.fill]="'var(--p-text-color)'" [attr.width]="'30px'" [attr.height]="'30px'">
+      <use [attr.xlink:href]="'icons/icons.svg#bloodtype'"></use>
+    </svg>
+    <div>
+      <p class="titulo-card">{{ 'Huella hidrica' | translate | uppercase }}</p>
+      <span>
+        @if (siembra?.huellaHidrica) {
+          Resultado al cierre de cosecha
+        } @else {
+          Avance estimado desde siembra
+        }
+      </span>
+    </div>
+    @if (siembra?.huellaHidrica) {
+      <strong>+</strong>
+    }
+  </div>
+
+  @if (siembra?.huellaHidrica) {
+    <div class="water-total">
+      <span>{{ 'Total' | translate }}</span>
+      <strong>
+        {{ siembra!.huellaHidrica!.total?.litrosKg | number: '1.0-0' }}
+        <small>l/kg</small>
+      </strong>
+    </div>
+  } @else {
+    <p-message severity="info">
+      {{ 'Se completa durante el ciclo y se consolida al cosechar' | translate }}
+    </p-message>
+  }
+
+  <div class="water-cups">
+    @for (item of huellas; track item.key) {
+      <article [ngClass]="item.key">
+        <div class="water-cup" [style.--fill]="item.fill + '%'">
+          <span></span>
+        </div>
+        <div>
+          <strong>{{ item.label }}</strong>
+          <em>{{ item.value }}</em>
+          <small>{{ item.detail }}</small>
+        </div>
+      </article>
+    }
+  </div>
+
+  <p class="formula-note">
+    Corre desde siembra. Al cosechar se consolida por rendimiento seco.
+  </p>
+</div>
+
+<app-drawer-huella-hidrica [siembra]="siembra" [(visible)]="verDrawerHuellaHidrica"></app-drawer-huella-hidrica>

@@ -1,0 +1,29 @@
+<div class="custom-card" style="padding: 1em 1em 0 1em">
+  <p class="titulo-card">{{ 'Etapa fenológica' | translate | uppercase }}</p>
+
+  <div style="display: flex; flex-direction: row; align-items: center; gap: 1em">
+    <!-- Icono -->
+    <div
+      style="
+        width: 45px;
+        height: 45px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f4ede7;
+        border-radius: 10px;
+      "
+    >
+      <svg [style.fill]="'#000'" [attr.width]="'30px'" [attr.height]="'30px'">
+        <use [attr.xlink:href]="'icons/icons.svg#siembras'"></use>
+      </svg>
+    </div>
+
+    <!-- Nombre etapa  -->
+    <span style="font-size: 14px; font-weight: bold"> {{ etapaActual | uppercase }} </span>
+  </div>
+
+  <div style="display: block; width: 100%">
+    <app-chart [options]="chartOptions" [style]="'display: block; height: 100px'"></app-chart>
+  </div>
+</div>

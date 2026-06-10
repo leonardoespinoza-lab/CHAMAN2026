@@ -1,0 +1,79 @@
+<div
+  style="
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+    padding: 1em;
+    height: 100vh;
+    overflow-y: auto;
+    box-sizing: border-box;
+  "
+>
+  <!-- Nombre del lote y seleccion de siembra actual / historial -->
+  <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center">
+    <div style="display: flex; flex-direction: row; align-items: center; gap: 0.5em; margin-left: var(--menu-offset); cursor: pointer;">
+      <!-- Volver -->
+      <svg
+        [style.fill]="'var(--p-primary-color)'"
+        [attr.width]="'40px'"
+        [attr.height]="'40px'"
+        (click)="helper.volver()"
+      >
+        <use [attr.xlink:href]="'icons/icons.svg#back'"></use>
+      </svg>
+      <!-- </p-button> -->
+
+      <!-- Nombre del lote -->
+      <div style="display: flex; flex-direction: column; width: 100%;">
+        <div class="row-flex-start" style="gap: 8px; width: 100%">
+          <span style="font-size: 24px"> {{ dispositivo?.nombre }}</span>
+          @if (dispositivo?.bateria?.valor) {
+            <app-bateria [level]="dispositivo?.bateria?.valor!" orientation="vertical"></app-bateria>
+          }
+        </div>
+        <span style="font-size: 12px; font-weight: 300; color: var(--p-text-muted-color)">{{
+          dispositivo?.deveui
+        }}</span>
+      </div>
+    </div>
+
+    <!-- Selector de vista para lanzas de suelo -->
+    @if (esLanzaDeSuelo && datosLanza.length > 0) {
+      <div style="margin-right: 1em">
+        <p-selectButton
+          [options]="[
+            { label: 'Tarjetas', value: 'tarjetas', icon: 'pi pi-th-large' },
+            { label: 'Gráfico', value: 'grafico', icon: 'pi pi-chart-line' },
+          ]"
+          [(ngModel)]="vistaActiva"
+          optionLabel="label"
+          optionValue="value"
+        >
+        </p-selectButton>
+      </div>
+    }
+  </div>
+
+  @if (esLanzaDeSuelo) {
+    <div style="display: flex; flex-direction: column; gap: 1em">
+      @if (vistaActiva === 'tarjetas') {
+        <!-- Vista de tarjetas (actual) -->
+        <div style="display: flex; flex-direction: row; gap: 1em">
+          <div class="contenedor-tarjetas">
+            @for (dato of datosLanza; track dato.profundidad) {
+              <app-card-detalles-reporte-lanza [data]="dato" />
+            }
+          </div>
+        </div>
+      } @else if (vistaActiva === 'grafico') {
+        <!-- Vista de gráfico (nueva) -->
+        <div style="display: flex; flex-direction: column; gap: 1em">
+          <app-grafico-perfil-suelo
+            [datos]="datosLanza"
+            [titulo]="'Perfil de Humedad y Temperatura - ' + dispositivo?.nombre"
+          ></app-grafico-perfil-suelo>
+        </div>
+      }
+    </div>
+  }
+</div>

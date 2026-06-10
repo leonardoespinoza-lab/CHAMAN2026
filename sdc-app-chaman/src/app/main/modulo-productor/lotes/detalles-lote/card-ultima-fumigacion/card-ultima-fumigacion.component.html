@@ -1,0 +1,63 @@
+<div class="custom-card application-card">
+  <div class="application-header pointer" (click)="siembra ? (verDrawerFumigaciones = true) : null">
+    <div>
+      <p class="titulo-card">{{ 'Ultima fumigacion' | translate | uppercase }}</p>
+      <span>{{ resumenFumigacion }}</span>
+    </div>
+    @if (siembra) {
+      <svg [style.fill]="'var(--p-primary-color)'" [attr.width]="'34px'" [attr.height]="'34px'">
+        <use [attr.xlink:href]="'icons/icons.svg#history'"></use>
+      </svg>
+    }
+  </div>
+
+  @if (ultimaFumigacion) {
+    <div class="application-body">
+      <article class="date-box">
+        <span>Fecha</span>
+        <strong>{{ ultimaFumigacion.fechaFumigacion | date: 'shortDate' }}</strong>
+        <small>{{ ultimaFumigacion.duracion }} dias de duracion</small>
+      </article>
+
+      <section class="composition-list">
+        @for (item of ultimaFumigacion.principiosActivos; track $index) {
+          <article>
+            <div>
+              <strong>{{ item.nombre }}</strong>
+              <span>{{ item.concentracion }}% · {{ item.dosis }} l/ha</span>
+            </div>
+            <small>
+              Koc {{ item.koc || 0 }} · Persistencia {{ item.persistencia || 0 }}
+            </small>
+          </article>
+        }
+      </section>
+    </div>
+  } @else if (siembra) {
+    <div class="application-empty">
+      <p-message severity="info">{{ 'La siembra no fue fumigada' | translate }}</p-message>
+      <small>La base local ya tiene principios activos cargados para iniciar aplicaciones.</small>
+    </div>
+  } @else {
+    <div class="application-empty">
+      <p-message severity="info">{{ 'El lote no fue sembrado' | translate }}</p-message>
+    </div>
+  }
+
+  @if (!helper.soloLectura()) {
+    @if (lote?.idSiembra === siembra?._id && !siembra?.fechaCosecha) {
+      <p-button
+        [label]="'Fumigar' | translate"
+        [fluid]="true"
+        [outlined]="true"
+        styleClass="w-full"
+        (onClick)="fumigar()"
+      />
+    }
+  }
+</div>
+
+<app-drawer-listado-fumigaciones
+  [fumigaciones]="siembra?.fumigaciones || []"
+  [(visible)]="verDrawerFumigaciones"
+></app-drawer-listado-fumigaciones>

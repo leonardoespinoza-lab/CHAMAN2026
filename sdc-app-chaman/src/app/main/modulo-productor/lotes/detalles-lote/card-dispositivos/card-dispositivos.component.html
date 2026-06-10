@@ -1,0 +1,79 @@
+<div class="custom-card">
+  <!-- Encabezado  -->
+  <div style="display: flex; flex-direction: row; gap: 0.5em; align-items: center; margin-bottom: 1em">
+    <svg [style.fill]="'var(--p-text-color)'" [attr.width]="'30px'" [attr.height]="'30px'">
+      <use [attr.xlink:href]="'icons/icons.svg#device'"></use>
+    </svg>
+
+    <div
+      class="titulo-card"
+      style="
+        width: 100%;
+        line-height: 15px;
+        color: var(--p-text-color);
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      "
+    >
+      <span>{{ 'Dispositivos' | translate | uppercase }}</span>
+    </div>
+  </div>
+  <!-- Contenido -->
+  <div>
+    <p-carousel
+      [value]="dispositivos"
+      [numVisible]="3"
+      [numScroll]="1"
+      [circular]="false"
+      [responsiveOptions]="responsiveOptions"
+      styleClass="w-full"
+    >
+      <!-- 
+    ng-template define la estructura de cada elemento individual en el carrusel.
+    'let-dispositivo' nos da una variable para acceder a los datos del dispositivo actual en el bucle.
+  -->
+      <ng-template let-dispositivo pTemplate="item">
+        <!-- El contenedor principal usa tu clase global 'custom-card' y flexbox para la estructura interna. -->
+        <div class="custom-card flex flex-col h-full" (click)="abrirDrawerDispositivo(dispositivo)">
+          <!-- 1. Encabezado de la Tarjeta -->
+          <div class="row-flex-start" style="gap: 0.5em; height: 28px">
+            <div class="titulo-card column-center w-full" style="gap: 0.5em">
+              <span>{{ dispositivo.nombre }}</span>
+              <span class="no-info text-xs">{{ dispositivo.deveui }}</span>
+            </div>
+            <app-bateria [level]="dispositivo.bateria.valor" orientation="horizontal" />
+          </div>
+
+          <!-- 2. Cuerpo de la Tarjeta -->
+          <!-- 'flex-grow' hace que este div ocupe el espacio vertical disponible -->
+          <div class="flex flex-col justify-center flex-grow">
+            <p-divider class="my-2" />
+
+            <!-- Contenedor para ambas mediciones, usando tu helper class 'row-space-around' -->
+            <div class="column-center text-center">
+              <!-- Tipo -->
+              <div class="column-center">
+                <span class="text-xs font-bold">
+                  {{ dispositivo.tipo ? dispositivo.tipo : 'Desconocido' }}
+                </span>
+              </div>
+              <!-- Fecha -->
+              <div class="column-center">
+                <span class="text-xs font-light text-surface-500">{{ 'Última comunicación' | translate }}</span>
+                <span class="text-xs font-bold">
+                  {{ dispositivo.fechaUltimaComunicacion | date: 'short' }}
+                </span>
+              </div>
+            </div>
+
+            <p-divider class="my-2" />
+          </div>
+        </div>
+      </ng-template>
+    </p-carousel>
+  </div>
+</div>
+
+<app-drawer-dispositivos [dispositivo]="dispositivo" [(visible)]="verDrawerDispositivos"></app-drawer-dispositivos>

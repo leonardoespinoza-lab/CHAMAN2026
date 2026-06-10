@@ -1,0 +1,297 @@
+<!-- Contenido del drawer sin header propio -->
+@if (climaActual?.clima || prediccionClimatica?.clima) {
+  <!-- Contenedor principal del drawer -->
+  <div class="drawer-content" style="padding: 0; margin: 0; height: 100%; overflow: hidden">
+    @if (helper.isWide$ | async) {
+      <!-- Layout responsivo para desktop -->
+      <div
+        class="desktop-grid"
+        style="
+          display: grid;
+          gap: 1.5em;
+          height: 100%;
+          max-height: 100%;
+          padding: 1.5em;
+          overflow-y: auto;
+          overflow-x: hidden;
+        "
+      >
+        <!-- 1. Sección de Clima Actual -->
+        <div
+          class="drawer-section section-current"
+          style="display: flex; flex-direction: column; gap: 1em; min-width: 0"
+        >
+          @if (climaActual?.clima) {
+            <div class="current-weather-card">
+              <div class="current-weather-main">
+                <img
+                  [src]="getIconUrl(climaActual.clima.iconNum)"
+                  [alt]="climaActual.clima.summary"
+                  class="weather-icon-large"
+                />
+
+                <div class="current-temp">
+                  <span class="temp-value">{{ formatearTemperatura(climaActual.clima.temperatura?.last) }}</span>
+                  <div class="weather-description">
+                    <p class="summary">{{ getDescripcionClimaTraducida(climaActual.clima.summary) }}</p>
+                    <p class="last-update">
+                      {{ 'Actualizado:' | translate }} {{ climaActual.fecha | date: 'dd/MM HH:mm' }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Detalles del clima actual -->
+              <div class="weather-details-grid">
+                <div class="detail-item">
+                  <i class="pi pi-percentage detail-icon"></i>
+                  <div class="detail-content">
+                    <span class="detail-label">{{ 'Humedad' | translate }}</span>
+                    <span class="detail-value">{{ formatearHumedad(climaActual.clima.humedad?.last) }}</span>
+                  </div>
+                </div>
+
+                <div class="detail-item">
+                  <i class="pi pi-send detail-icon"></i>
+                  <div class="detail-content">
+                    <span class="detail-label">{{ 'Viento' | translate }}</span>
+                    <span class="detail-value">{{ formatearViento(climaActual.clima.velocidadViento?.last) }}</span>
+                  </div>
+                </div>
+
+                <div class="detail-item">
+                  <i class="pi pi-compass detail-icon"></i>
+                  <div class="detail-content">
+                    <span class="detail-label">{{ 'Dirección' | translate }}</span>
+                    <span class="detail-value">{{
+                      formatearDireccionViento(climaActual.clima.direccionViento?.last)
+                    }}</span>
+                  </div>
+                </div>
+
+                <div class="detail-item">
+                  <i class="pi pi-gauge detail-icon"></i>
+                  <div class="detail-content">
+                    <span class="detail-label">{{ 'Presión' | translate }}</span>
+                    <span class="detail-value">{{ formatearPresion(climaActual.clima.presion?.last) }}</span>
+                  </div>
+                </div>
+
+                <div class="detail-item">
+                  <i class="pi pi-sun detail-icon"></i>
+                  <div class="detail-content">
+                    <span class="detail-label">{{ 'Radiación solar' | translate }}</span>
+                    <span class="detail-value">{{
+                      formatearRadiacionSolar(climaActual.clima.radiacionSolar?.last)
+                    }}</span>
+                  </div>
+                </div>
+
+                @if (climaActual.clima.et0?.last) {
+                  <div class="detail-item">
+                    <i class="pi pi-chart-line detail-icon"></i>
+                    <div class="detail-content">
+                      <span class="detail-label">{{ 'ET₀' | translate }}</span>
+                      <span class="detail-value">{{ formatearET0(climaActual.clima.et0.last) }}</span>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+
+        <!-- 2. Sección de Pronóstico de Temperatura/Humedad -->
+        <div
+          class="drawer-section section-forecast"
+          style="display: flex; flex-direction: column; gap: 1em; min-width: 0"
+        >
+          @if (pronosticosDias.length > 0 && chartOptions) {
+            <div class="forecast-chart-container">
+              <div #chartContainer style="height: 100%; width: 100%"></div>
+            </div>
+          }
+        </div>
+
+        <!-- 3. Sección de Probabilidad de Lluvia -->
+        <div
+          class="drawer-section section-precipitation"
+          style="display: flex; flex-direction: column; gap: 1em; min-width: 0"
+        >
+          @if (pronosticosDias.length > 0) {
+            <div class="precipitation-weather-card">
+              <h4 class="precipitation-section-title">
+                <i class="pi pi-cloud precipitation-title-icon"></i>
+                Probabilidad de Lluvia
+              </h4>
+
+              <div class="precipitation-days-grid">
+                @for (dia of pronosticosDias; track dia.fecha) {
+                  <div class="precipitation-day-card">
+                    <div class="precipitation-day-label">
+                      {{ dia.dia }}
+                    </div>
+                    <div class="precipitation-probability">{{ dia.probabilidadPrecipitacion || 0 }}%</div>
+                    @if ((dia.probabilidadPrecipitacion || 0) > 50) {
+                      <i class="pi pi-cloud precipitation-day-icon high-rain"></i>
+                    } @else if ((dia.probabilidadPrecipitacion || 0) > 20) {
+                      <i class="pi pi-cloud precipitation-day-icon medium-rain"></i>
+                    } @else {
+                      <i class="pi pi-sun precipitation-day-icon sunny"></i>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    } @else {
+      <!-- Layout móvil -->
+      <div
+        class="drawer-content-mobile"
+        style="
+          padding: 1em;
+          height: 100%;
+          overflow-y: auto;
+          overflow-x: hidden;
+          display: flex;
+          flex-direction: column;
+          gap: 1.5em;
+        "
+      >
+        <!-- Clima Actual para móvil -->
+        <div style="display: flex; flex-direction: column; gap: 1em">
+          @if (climaActual?.clima) {
+            <div class="current-weather-card">
+              <div class="current-weather-main">
+                <img
+                  [src]="getIconUrl(climaActual.clima.iconNum)"
+                  [alt]="climaActual.clima.summary"
+                  class="weather-icon-large"
+                />
+
+                <div class="current-temp">
+                  <span class="temp-value">{{ formatearTemperatura(climaActual.clima.temperatura?.last) }}</span>
+                  <div class="weather-description">
+                    <p class="summary">{{ getDescripcionClimaTraducida(climaActual.clima.summary) }}</p>
+                    <p class="last-update">
+                      {{ 'Actualizado:' | translate }} {{ climaActual.fecha | date: 'dd/MM HH:mm' }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Detalles del clima actual -->
+              <div class="weather-details-grid">
+                <div class="detail-item">
+                  <i class="pi pi-percentage detail-icon"></i>
+                  <div class="detail-content">
+                    <span class="detail-label">{{ 'Humedad' | translate }}</span>
+                    <span class="detail-value">{{ formatearHumedad(climaActual.clima.humedad?.last) }}</span>
+                  </div>
+                </div>
+
+                <div class="detail-item">
+                  <i class="pi pi-send detail-icon"></i>
+                  <div class="detail-content">
+                    <span class="detail-label">{{ 'Viento' | translate }}</span>
+                    <span class="detail-value">{{ formatearViento(climaActual.clima.velocidadViento?.last) }}</span>
+                  </div>
+                </div>
+
+                <div class="detail-item">
+                  <i class="pi pi-compass detail-icon"></i>
+                  <div class="detail-content">
+                    <span class="detail-label">{{ 'Dirección' | translate }}</span>
+                    <span class="detail-value">{{
+                      formatearDireccionViento(climaActual.clima.direccionViento?.last)
+                    }}</span>
+                  </div>
+                </div>
+
+                <div class="detail-item">
+                  <i class="pi pi-gauge detail-icon"></i>
+                  <div class="detail-content">
+                    <span class="detail-label">{{ 'Presión' | translate }}</span>
+                    <span class="detail-value">{{ formatearPresion(climaActual.clima.presion?.last) }}</span>
+                  </div>
+                </div>
+
+                <div class="detail-item">
+                  <i class="pi pi-sun detail-icon"></i>
+                  <div class="detail-content">
+                    <span class="detail-label">{{ 'Radiación solar' | translate }}</span>
+                    <span class="detail-value">{{
+                      formatearRadiacionSolar(climaActual.clima.radiacionSolar?.last)
+                    }}</span>
+                  </div>
+                </div>
+
+                @if (climaActual.clima.et0?.last) {
+                  <div class="detail-item">
+                    <i class="pi pi-chart-line detail-icon"></i>
+                    <div class="detail-content">
+                      <span class="detail-label">{{ 'ET₀' | translate }}</span>
+                      <span class="detail-value">{{ formatearET0(climaActual.clima.et0.last) }}</span>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+
+        <!-- Pronóstico de Temperatura/Humedad para móvil -->
+        <div style="display: flex; flex-direction: column; gap: 1em">
+          @if (pronosticosDias.length > 0 && chartOptions) {
+            <div class="forecast-chart-container">
+              <div #chartContainer style="height: 100%; width: 100%"></div>
+            </div>
+          }
+        </div>
+
+        <!-- Probabilidad de Lluvia para móvil -->
+        <div style="display: flex; flex-direction: column; gap: 1em">
+          @if (pronosticosDias.length > 0) {
+            <div class="precipitation-weather-card">
+              <h4 class="precipitation-section-title">
+                <i class="pi pi-cloud precipitation-title-icon"></i>
+                Probabilidad de Lluvia
+              </h4>
+
+              <div class="precipitation-days-grid">
+                @for (dia of pronosticosDias; track dia.fecha) {
+                  <div class="precipitation-day-card">
+                    <div class="precipitation-day-label">
+                      {{ dia.dia }}
+                    </div>
+                    <div class="precipitation-probability">{{ dia.probabilidadPrecipitacion || 0 }}%</div>
+                    @if ((dia.probabilidadPrecipitacion || 0) > 50) {
+                      <i class="pi pi-cloud precipitation-day-icon high-rain"></i>
+                    } @else if ((dia.probabilidadPrecipitacion || 0) > 20) {
+                      <i class="pi pi-cloud precipitation-day-icon medium-rain"></i>
+                    } @else {
+                      <i class="pi pi-sun precipitation-day-icon sunny"></i>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  </div>
+} @else {
+  <!-- Mensaje cuando no hay datos -->
+  <div
+    class="drawer-content"
+    style="padding: 1.5em; height: 100%; display: flex; align-items: center; justify-content: center"
+  >
+    <div class="no-data-message">
+      <i class="pi pi-info-circle" style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.5"></i>
+      <p>{{ 'No hay información climática disponible para esta ubicación.' | translate }}</p>
+    </div>
+  </div>
+}

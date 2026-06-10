@@ -1,0 +1,86 @@
+<div class="login-background">
+  <div class="version-indicator">v{{ version }}</div>
+
+  <div
+    class="login-card"
+    [class.login-card--mobile]="helper.isHandset$ | async"
+  >
+    <div class="login-inner">
+
+      <!-- Logo -->
+      <div class="login-logo">
+        @if (helper.darkTheme) {
+          <img src="images/logo-dark.png" alt="Chamán logo" class="login-logo__img" />
+        } @else {
+          <img src="images/logo-light.png" alt="Chamán logo" class="login-logo__img" />
+        }
+        <span class="login-logo__title">{{ 'Monitoreo inteligente' | translate }}</span>
+        <span class="login-logo__subtitle">{{ 'para todos tus cultivos' | translate }}</span>
+      </div>
+
+      <!-- Form -->
+      <form [formGroup]="form" class="login-form" pFocusTrap autocomplete="on">
+        <p class="login-form__welcome">{{ 'Te damos la bienvenida a Chamán' | translate }}</p>        
+
+        <div class="login-form__fields">
+          <!-- Usuario -->
+          <p-floatlabel variant="in">
+            <input
+              pInputText
+              id="username"
+              formControlName="username"
+              autocomplete="username"
+              type="email"
+              [fluid]="true"
+            />
+            <label for="username">{{ 'Usuario' | translate }}</label>
+          </p-floatlabel>
+
+          <!-- Password -->
+          <p-floatlabel variant="in">
+            <p-password
+              autocomplete="current-password"
+              formControlName="password"
+              inputId="password"
+              [feedback]="false"
+              [toggleMask]="true"
+              [fluid]="true"
+            />
+            <label for="password">{{ 'Contraseña' | translate }}</label>
+          </p-floatlabel>
+
+          <!-- Mantener sesión -->
+          <div class="login-form__remember">
+            <p-checkbox formControlName="remember" inputId="remember" [binary]="true" />
+            <label for="remember">{{ 'Mantener la sesión iniciada' | translate }}</label>
+          </div>
+
+          <!-- Ingresar -->
+          <p-button
+            (click)="onSubmit()"
+            [label]="'Ingresar' | translate"
+            severity="primary"
+            [loading]="loading"
+            [disabled]="!form.valid"
+            [fluid]="true"
+          />
+
+          <!-- Divisor -->
+          <div class="login-form__divider">
+            <span>{{ 'o continuá con' | translate }}</span>
+          </div>
+       
+          <!-- Botón Google  -->
+          <p-button
+            icon="pi pi-google"
+            (click)="loginGoogle()"
+            [label]="'Iniciar con Google' | translate"
+            [fluid]="true"
+            severity="danger"
+          />
+        </div>
+      </form>
+
+    </div>
+  </div>
+</div>

@@ -1,0 +1,151 @@
+.irrigation-card {
+  height: 100%;
+  min-height: 100%;
+}
+
+.irrigation-card.clickable {
+  cursor: pointer;
+}
+
+.irrigation-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.65rem;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.irrigation-header p {
+  line-height: 1.1;
+  margin: 0;
+}
+
+.irrigation-header span {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.74rem;
+  line-height: 1.25;
+  margin-top: 0.22rem;
+}
+
+.irrigation-header strong {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.irrigation-main {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(110px, 0.7fr) minmax(0, 1.3fr);
+}
+
+.today-box {
+  align-items: center;
+  background: var(--p-surface-50);
+  border: 1px solid var(--p-surface-200);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 116px;
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.today-box span,
+.today-box em,
+.irrigation-metrics span,
+.irrigation-days small {
+  color: var(--p-text-muted-color);
+}
+
+.today-box span {
+  font-size: 0.75rem;
+}
+
+.today-box strong {
+  color: var(--p-primary-color);
+  font-size: 1.8rem;
+  line-height: 1.05;
+  margin-top: 0.25rem;
+}
+
+.today-box small {
+  font-size: 1rem;
+}
+
+.today-box em {
+  font-size: 0.66rem;
+  font-style: normal;
+  margin-top: 0.2rem;
+}
+
+.irrigation-metrics {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: 1fr;
+}
+
+.irrigation-metrics article {
+  background: var(--p-surface-0);
+  border: 1px solid var(--p-surface-200);
+  border-radius: 8px;
+  padding: 0.65rem;
+}
+
+.irrigation-metrics span {
+  display: block;
+  font-size: 0.68rem;
+}
+
+.irrigation-metrics strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 1rem;
+  margin-top: 0.28rem;
+}
+
+.irrigation-metrics small {
+  font-size: 0.78rem;
+}
+
+.irrigation-days {
+  display: grid;
+  gap: 0.4rem;
+  grid-template-columns: repeat(auto-fit, minmax(66px, 1fr));
+  margin: 0.75rem 0;
+}
+
+.irrigation-days span {
+  background: var(--p-surface-50);
+  border: 1px solid var(--p-surface-200);
+  border-radius: 7px;
+  padding: 0.45rem;
+  text-align: center;
+}
+
+.irrigation-days span.should-water {
+  border-color: var(--p-primary-color);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--p-primary-color), transparent 65%);
+}
+
+.irrigation-days small,
+.irrigation-days strong {
+  display: block;
+}
+
+.irrigation-days small {
+  font-size: 0.58rem;
+}
+
+.irrigation-days strong {
+  color: var(--p-text-color);
+  font-size: 0.72rem;
+  margin-top: 0.12rem;
+}
+
+@media (max-width: 520px) {
+  .irrigation-main {
+    grid-template-columns: 1fr;
+  }
+}

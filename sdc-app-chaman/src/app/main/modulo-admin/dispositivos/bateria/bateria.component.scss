@@ -1,0 +1,98 @@
+// Estilos para el componente de batería.
+// El :host permite aplicar estilos al elemento anfitrión del componente (<app-battery>).
+
+:host {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol";
+
+  // Estilos para la orientación vertical
+  &.vertical {
+    .battery-container {
+      width: 22px; // Un poco más ancho para el texto
+      height: 40px;
+      flex-direction: column-reverse; // Pone el nivel abajo
+    }
+
+    .battery-nub {
+      width: 50%;
+      height: 3px;
+      top: -5px; // Posiciona el borne arriba
+      right: auto;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .battery-level {
+      width: 100%; // Ocupa todo el ancho en vertical
+    }
+
+    .battery-text {
+      font-size: 9px; // Letra más pequeña en vertical
+    }
+  }
+}
+
+.battery-container {
+  width: 40px; // Un poco más ancho para el texto
+  height: 20px;
+  border: 2px solid #555;
+  border-radius: 5px; // Bordes un poco más redondeados
+  padding: 2px;
+  position: relative; // Necesario para posicionar el texto absolutamente
+  display: flex;
+  background-color: #e5e7eb; // Un gris más claro
+  // overflow: hidden; // ELIMINADO: Esta línea causaba que el borne se ocultara.
+}
+
+.battery-nub {
+  position: absolute;
+  width: 3px;
+  height: 50%;
+  background-color: #555;
+  top: 50%;
+  right: -7px;
+  transform: translateY(-50%);
+  border-radius: 0 2px 2px 0;
+}
+
+.battery-level {
+  height: 100%;
+  border-radius: 2px;
+  transition:
+    width 0.5s ease,
+    height 0.5s ease,
+    background-color 0.5s ease;
+
+  // Colores según el nivel de la batería
+  &.level-high {
+    background-color: #22c55e; // green-500
+  }
+  &.level-medium {
+    background-color: #f59e0b; // amber-500
+  }
+  &.level-low {
+    background-color: #ef4444; // red-500
+  }
+}
+
+// ESTILOS PARA EL TEXTO SUPERPUESTO
+.battery-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+  color: white; // El color base será blanco
+  mix-blend-mode: difference; // ¡La magia! El color se invierte sobre el fondo
+  // Esto hace que el texto sea blanco sobre el color y negro sobre el fondo gris claro.
+  user-select: none; // Evita que el texto sea seleccionable
+}

@@ -1,0 +1,154 @@
+<div class="list-view-container">
+  <p-table
+    #table
+    [value]="data"
+    [lazy]="true"
+    [paginator]="true"
+    [rows]="helper.getPageSize(name)"
+    [rowsPerPageOptions]="helper.pageSizeOptions"
+    (onPage)="helper.setPageSize(name, $event.rows)"
+    [totalRecords]="totalCount"
+    [loading]="loading"
+    [scrollable]="true"
+    scrollHeight="calc(100vh - 130px)"
+    (onLazyLoad)="loadData($event)"
+    [filterDelay]="500"
+    sortField="fecha"
+    [sortOrder]="-1"
+    stripedRows
+    rowExpandMode="single"
+    dataKey="_id"
+    stateStorage="session"
+    [stateKey]="name"
+  >
+    <!-- Caption -->
+    <ng-template #caption>
+      <div class="flex menu-offset" style="align-items: center">
+        <!-- Buscar -->
+        <p-iconfield iconPosition="left" class="ml-auto">
+          <p-inputicon>
+            <i class="pi pi-search"></i>
+          </p-inputicon>
+          <input
+            #search
+            pInputText
+            type="text"
+            (input)="table.filterGlobal($any($event.target).value, 'contains')"
+            [placeholder]="'Buscar' | translate"
+          />
+        </p-iconfield>
+        <!-- Limpiar -->
+        <p-button
+          [label]="'Limpiar' | translate"
+          [outlined]="true"
+          icon="pi pi-filter-slash"
+          class="ml-2"
+          (click)="table.clear(); search.value = ''"
+        />
+      </div>
+    </ng-template>
+
+    <!-- Header -->
+    <ng-template #header>
+      <tr>
+        <!-- Expandir -->
+        <!-- <th style="width: 1em"></th> -->
+        <!-- Fecha -->
+        <th pSortableColumn="fecha">
+          <div class="flex items-center gap-2">
+            {{ 'Fecha' | translate }}
+            <p-sortIcon field="fecha" />
+            <p-columnFilter type="date" field="fecha" display="menu" />
+          </div>
+        </th>
+        <!-- Estado Actual -->
+        <th>
+          <div class="flex items-center gap-2">
+            {{ 'Estado' | translate }}
+
+            <p-columnFilter
+              field="estadoActual"
+              matchMode="in"
+              display="menu"
+              [showMatchModes]="false"
+              [showOperator]="false"
+              [showAddButton]="false"
+            >
+              <ng-template #filter let-value let-filter="filterCallback">
+                <p-multiselect
+                  [filter]="false"
+                  [(ngModel)]="estadosSeleccionados"
+                  [options]="estados"
+                  placeholder="Todos"
+                  (onChange)="filter($event.value)"
+                >
+                  <ng-template let-option #item>
+                    <div class="flex items-center gap-2">
+                      <span>{{ option }}</span>
+                    </div>
+                  </ng-template>
+                </p-multiselect>
+              </ng-template>
+            </p-columnFilter>
+          </div>
+        </th>
+        <!-- lote -->
+        <th>
+          <div class="flex items-center gap-2">
+            {{ 'Lote' | translate }}
+          </div>
+        </th>
+      </tr>
+    </ng-template>
+
+    <!-- Body -->
+    <ng-template #body let-row let-expanded="expanded">
+      <tr>
+        <!-- Expandir -->
+        <!-- <td>
+        <p-button
+          type="button"
+          pRipple
+          [pRowToggler]="row"
+          [text]="true"
+          [rounded]="true"
+          [plain]="true"
+          [icon]="expanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
+        />
+      </td> -->
+        <!-- Fecha -->
+        <td>
+          {{ row.fecha | date: 'short' }}
+        </td>
+        <!-- Estado Actual -->
+        <td>
+          {{ row.estadoActual }}
+        </td>
+        <!-- Lote -->
+        <td>
+          {{ row.siembra?.lote?.nombre }}
+        </td>
+      </tr>
+    </ng-template>
+
+    <!-- Expanded -->
+    <ng-template #expandedrow let-row>
+      <tr>
+        <td colspan="3">
+          <h2 style="margin: 0; text-align: center; line-height: 2">Acá van mas detalles de la alerta</h2>
+        </td>
+      </tr>
+    </ng-template>
+
+    <!-- Sin datos -->
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="7">
+          <p-message severity="info">
+            {{ 'No se encontraron alertas' | translate }}
+          </p-message>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</div>

@@ -1,0 +1,161 @@
+<input #fileInput type="file" accept=".xlsx,.xls" style="display: none" (change)="onFileSelected($event)" />
+
+<div class="list-view-container">
+  <p-table
+    #table
+    [value]="datos"
+    dataKey="_id"
+    [rows]="helper.getPageSize(name)"
+    [rowsPerPageOptions]="helper.pageSizeOptions"
+    [loading]="loading"
+    [paginator]="true"
+    [scrollable]="true"
+    scrollHeight="flex"
+    (onPage)="helper.setPageSize(name, $event.rows)"
+    [globalFilterFields]="['semillero', 'variedad', 'cultivo', 'ciclo']"
+    stripedRows
+    stateStorage="session"
+    [stateKey]="name"    
+  
+  >
+    <!-- Caption -->
+    <ng-template #caption>
+      <div class="flex menu-offset" style="align-items: center; gap: 0.5rem; flex-wrap: wrap">
+        <p-iconfield iconPosition="left" class="ml-auto">
+          <p-inputicon>
+            <i class="pi pi-search"></i>
+          </p-inputicon>
+          <input
+            #search
+            pInputText
+            type="text"
+            (input)="table.filterGlobal($any($event.target).value, 'contains')"
+            [placeholder]="'Buscar' | translate"
+          />
+        </p-iconfield>
+        <p-button
+          [label]="'Limpiar' | translate"
+          [outlined]="true"
+          icon="pi pi-filter-slash"
+          (click)="table.clear(); search.value = ''"
+        />
+        <p-button
+          [label]="'Exportar' | translate"
+          icon="pi pi-file-excel"
+          severity="success"
+          [outlined]="true"
+          (click)="exportarExcel()"
+          pTooltip="Exportar a Excel"
+        />
+        <p-button
+          [label]="'Importar' | translate"
+          icon="pi pi-upload"
+          severity="info"
+          [outlined]="true"
+          [loading]="importing"
+          (click)="triggerImport()"
+          pTooltip="Importar desde Excel"
+        />
+      </div>
+    </ng-template>
+
+    <!-- Header -->
+    <ng-template #header>
+      <tr>
+        <th pSortableColumn="cultivo">
+          <div class="flex items-center gap-2">
+            {{ 'Cultivo' | translate }}
+            <p-sortIcon field="cultivo" />
+            <p-columnFilter type="text" field="cultivo" display="menu" />
+          </div>
+        </th>
+        <th pSortableColumn="departamentoNombre">
+          <div class="flex items-center gap-2">
+            {{ 'Departamento' | translate }}
+            <p-sortIcon field="departamentoNombre" />
+            <p-columnFilter type="text" field="departamentoNombre" display="menu" />
+          </div>
+        </th>      
+        <th pSortableColumn="ciclo">
+          <div class="flex items-center gap-2">
+            {{ 'Ciclo' | translate }}
+            <p-sortIcon field="ciclo" />
+            <p-columnFilter type="text" field="ciclo" display="menu" />
+          </div>
+        </th>
+        <th pSortableColumn="diaSiembra">
+          <div class="flex items-center gap-2">
+            {{ 'DiaSiembra' | translate }}
+            <p-sortIcon field="diaSiembra" />
+            <p-columnFilter type="text" field="diaSiembra" display="menu" />
+          </div>
+        </th>
+        <th pSortableColumn="mesSiembra">
+          <div class="flex items-center gap-2">
+            {{ 'MesSiembra' | translate }}
+            <p-sortIcon field="mesSiembra" />
+            <p-columnFilter type="text" field="mesSiembra" display="menu" />
+          </div>
+        </th>       
+        <th>{{ 'Acciones' | translate }}</th>
+      </tr>
+    </ng-template>
+
+    <!-- Body -->
+    <ng-template #body let-row>
+      <tr>
+        <td>{{ row.cultivo }}</td>             
+        <td>{{ row.departamento.nombre }}</td>
+        <td>{{ row.ciclo }}</td>
+        <td>{{ row.diaSiembra }}</td>
+        <td>{{ row.mesSiembra }}</td>        
+        <td>
+          <div style="display: flex; flex-direction: row; gap: 0.5rem">
+            <p-button
+              [rounded]="true"
+              pTooltip="Editar"
+              icon="pi pi-pencil"
+              severity="warn"
+              (click)="edit(row)"
+            ></p-button>
+            <p-button
+              [rounded]="true"
+              pTooltip="Eliminar"
+              icon="pi pi-trash"
+              severity="danger"
+              (click)="delete(row)"
+            ></p-button>
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+
+    <!-- Sin datos -->
+    <ng-template #emptymessage>
+      <tr>
+        <td colspan="5">
+          <p-message severity="info">
+            {{ 'No se encontraron cultivos' | translate }}
+          </p-message>
+        </td>
+      </tr>
+    </ng-template>
+
+    <!-- Footer con botón crear -->
+    <ng-template #summary>
+    @if (!helper.soloLectura()) {
+      <div class="flex justify-center p-3 border-t border-surface-200">
+        <p-button
+          [label]="'Crear nueva fenología' | translate"
+          icon="pi pi-plus"
+          severity="primary"
+          [fluid]="true"
+          [outlined]="true"
+          (click)="create()"
+        ></p-button>
+      </div>
+    }
+  </ng-template>
+
+  </p-table>
+</div>

@@ -1,0 +1,12 @@
+a {
+  border-left: 8px solid transparent;
+}
+
+.active {
+  background-color: color-mix(in srgb, var(--p-primary-color) 20%, transparent);
+  border-left: 8px solid var(--p-accent-color);
+  border-radius: 0;
+  span {
+    font-weight: 700 !important;
+  }
+}

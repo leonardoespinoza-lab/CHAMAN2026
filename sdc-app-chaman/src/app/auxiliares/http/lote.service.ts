@@ -1,0 +1,31 @@
+import { Injectable } from '@angular/core';
+import { ILote, ICreateLote, IListado, IQueryParam, IUpdateLote } from 'modelos/src';
+import { HttpService } from './http.service';
+
+@Injectable({
+  providedIn: 'root',
+})
+export class LoteService {
+  constructor(private http: HttpService) {}
+
+  public listar(params?: IQueryParam): Promise<IListado<ILote>> {
+    // let params = HelperService.getQueryParams(queryParams);
+    return this.http.get(`/lotes`, { params });
+  }
+
+  public crear(dato: ICreateLote): Promise<ILote> {
+    return this.http.post(`/lotes`, dato);
+  }
+
+  public listarPorId(id: string): Promise<ILote> {
+    return this.http.get(`/lotes/${id}`);
+  }
+
+  public editar(id: string, dato: IUpdateLote): Promise<ILote> {
+    return this.http.put(`/lotes/${id}`, dato);
+  }
+
+  public eliminar(id: string): Promise<void> {
+    return this.http.delete(`/lotes/${id}`);
+  }
+}

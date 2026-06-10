@@ -1,0 +1,14 @@
+runtime: python312
+service: app-chaman-test
+handlers:
+  # Archivos estáticos
+  - url: /(.+\..+)
+    secure: always
+    static_files: dist/browser/\1
+    upload: dist/browser/.*
+
+  # Redirigir todas las rutas a index.html
+  - url: /.*
+    secure: always
+    static_files: dist/browser/index.html
+    upload: dist/browser/index.html
