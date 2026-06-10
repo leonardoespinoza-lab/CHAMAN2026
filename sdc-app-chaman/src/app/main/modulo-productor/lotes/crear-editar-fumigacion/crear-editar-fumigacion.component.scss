@@ -45,3 +45,15 @@
     padding: 3em 0 5em 0; /* Padding vertical para espaciado */
   }
 }
+
+.agro-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.agro-option small {
+  color: var(--p-text-muted-color);
+  font-size: 0.72rem;
+  line-height: 1.1;
+}

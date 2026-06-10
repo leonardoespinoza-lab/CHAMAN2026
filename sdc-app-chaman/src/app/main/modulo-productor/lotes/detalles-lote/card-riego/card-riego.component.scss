@@ -42,7 +42,7 @@
 .today-box {
   align-items: center;
   background: var(--p-surface-50);
-  border: 1px solid var(--p-surface-200);
+  border: 1px solid #c7d4e2;
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -88,7 +88,7 @@
 
 .irrigation-metrics article {
   background: var(--p-surface-0);
-  border: 1px solid var(--p-surface-200);
+  border: 1px solid #c7d4e2;
   border-radius: 8px;
   padding: 0.65rem;
 }
@@ -118,7 +118,7 @@
 
 .irrigation-days span {
   background: var(--p-surface-50);
-  border: 1px solid var(--p-surface-200);
+  border: 1px solid #d4deea;
   border-radius: 7px;
   padding: 0.45rem;
   text-align: center;

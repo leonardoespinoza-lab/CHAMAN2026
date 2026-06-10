@@ -50,6 +50,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
   public readonly esLocal = ENV === 'Local';
 
   private ndvi$?: Subscription;
+  private refreshTimeout?: ReturnType<typeof setTimeout>;
 
   constructor(
     public helper: HelperService,
@@ -205,6 +206,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
       const response = await this.loteService.generarNdvi(this.lote._id);
       if (response.encolado) {
         this.helper.notifSuccess(response.mensaje || 'NDVI satelital encolado');
+        this.programarRefrescosSatelitales();
       } else {
         this.helper.notifWarn(response.mensaje || 'No se pudo encolar NDVI');
       }
@@ -302,6 +304,17 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
     return value.toLocaleString('es-AR', { maximumFractionDigits: 2 });
   }
 
+  private programarRefrescosSatelitales(intentos = 4): void {
+    if (intentos <= 0) return;
+    clearTimeout(this.refreshTimeout);
+    this.refreshTimeout = setTimeout(async () => {
+      await this.listarNDVIs();
+      if (!this.ndvis.length) {
+        this.programarRefrescosSatelitales(intentos - 1);
+      }
+    }, 12000);
+  }
+
   async ngOnInit(): Promise<void> {
     this.calcularFechaMinima();
     await this.listarNDVIs();
@@ -309,5 +322,6 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.ndvi$?.unsubscribe();
+    clearTimeout(this.refreshTimeout);
   }
 }

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import {
   IAlerta,
+  IAgroquimico,
   IApikey,
   ICrono,
   IDepartamento,
@@ -30,6 +31,7 @@ import {
 } from 'modelos/src';
 import { Observable, Subject } from 'rxjs';
 import { AlertaService } from '../http/alerta.service';
+import { AgroquimicoService } from '../http/agroquimico.service';
 import { ApikeyService } from '../http/apikey.service';
 import { CronoService } from '../http/crono.service';
 import { DepartamentoService } from '../http/departamento.service';
@@ -86,6 +88,8 @@ type Tipo =
   | IListado<IEstacion>
   | IApikey
   | IListado<IApikey>
+  | IAgroquimico
+  | IListado<IAgroquimico>
   | ILicencia
   | IListado<ILicencia>
   | IDispositivo
@@ -128,6 +132,7 @@ interface IEntidades {
   estaciones: IRequestQuery;
   apikey: IRequestId;
   apikeys: IRequestQuery;
+  agroquimicos: IRequestQuery;
   principioActivos: IRequestQuery;
   fertilizantes: IRequestQuery;
   fertilizacions: IRequestQuery;
@@ -191,6 +196,7 @@ export class ListadosService {
     private fumigacionsService: FumigacionService,
     private estacionService: EstacionService,
     private apikeysService: ApikeyService,
+    private agroquimicosService: AgroquimicoService,
     private principioActivosService: PrincipioActivoService,
     private fertilizantesService: FertilizanteService,
     private fertilizacionsService: FertilizacionService,
@@ -384,6 +390,11 @@ export class ListadosService {
     return JSON.parse(JSON.stringify(response));
   }
 
+  private async listarAgroquimicos(query: IQueryParam): Promise<IListado<IAgroquimico>> {
+    const response = await this.agroquimicosService.getFiltered(query);
+    return JSON.parse(JSON.stringify(response));
+  }
+
   private async listarPrincipioActivos(query: IQueryParam): Promise<IListado<IPrincipioActivo>> {
     const response = await this.principioActivosService.getFiltered(query);
     return JSON.parse(JSON.stringify(response));
@@ -520,6 +531,10 @@ export class ListadosService {
       estaciones: { fn: this.listarEstacions.bind(this), keys: {} },
       apikey: { fn: this.listarApikey.bind(this), keys: {} },
       apikeys: { fn: this.listarApikeys.bind(this), keys: {} },
+      agroquimicos: {
+        fn: this.listarAgroquimicos.bind(this),
+        keys: {},
+      },
       principioActivos: {
         fn: this.listarPrincipioActivos.bind(this),
         keys: {},
@@ -684,6 +699,9 @@ export class ListadosService {
     if (message.paths?.includes('apikeys')) {
       this.actualizarQuery('apikeys');
       this.actualizarId('apikey', message.body?.['_id']);
+    }
+    if (message.paths?.includes('agroquimicos')) {
+      this.actualizarQuery('agroquimicos');
     }
     if (message.paths?.includes('principioActivos')) {
       this.actualizarQuery('principioActivos');

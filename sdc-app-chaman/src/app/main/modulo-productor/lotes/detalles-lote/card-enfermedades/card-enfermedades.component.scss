@@ -38,12 +38,21 @@
 
 .disease-item {
   background: var(--p-surface-0);
-  border: 1px solid var(--p-surface-200);
+  border: 1px solid #c7d4e2;
   border-radius: 8px;
+  box-shadow: inset 3px 0 0 rgba(51, 211, 200, 0.36);
   display: flex;
   flex-direction: column;
   min-height: 156px;
   padding: 0.7rem;
+}
+
+.disease-item.medium {
+  box-shadow: inset 3px 0 0 #f4b942;
+}
+
+.disease-item.high {
+  box-shadow: inset 3px 0 0 #e05d4f;
 }
 
 .disease-title {
@@ -117,7 +126,7 @@
 }
 
 .disease-item .variables {
-  border-top: 1px solid var(--p-surface-200);
+  border-top: 1px solid #d7e0ea;
   color: var(--p-text-color);
   font-weight: 600;
   margin-top: auto;

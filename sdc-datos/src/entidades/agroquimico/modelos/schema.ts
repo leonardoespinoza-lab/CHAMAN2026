@@ -1,8 +1,9 @@
 import mongoose from 'mongoose';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Exactly, IAgroquimico, IEmpresa } from 'modelos/src';
+import { Exactly, IAgroquimico, IEmpresa, IPrincipioActivo } from 'modelos/src';
 import { Document } from 'mongoose';
 import { Empresa } from '../../empresa/modelos/schema';
+import { PrincipioActivo } from '../../principio-activo/modelos/schema';
 
 @Schema()
 export class Agroquimico implements Exactly<IAgroquimico, Agroquimico> {
@@ -14,15 +15,34 @@ export class Agroquimico implements Exactly<IAgroquimico, Agroquimico> {
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idEmpresa?: string;
 
+  @Prop({ type: mongoose.Schema.Types.ObjectId })
+  idPrincipioActivo?: string;
+
+  @Prop()
+  concentracion?: number;
+
+  @Prop()
+  koc?: number;
+
+  @Prop()
+  persistencia?: number;
+
+  @Prop()
+  volatilidad?: string;
+
   @Prop()
   segmento?: string;
 
   @Prop({ type: [String] })
   subsegmentos?: string[];
 
+  @Prop()
+  fuente?: string;
+
   // Virtual
 
   empresa?: IEmpresa;
+  principioActivo?: IPrincipioActivo;
 }
 
 export type AgroquimicoDocument = Agroquimico & Document;
@@ -36,4 +56,11 @@ AgroquimicoSchema.virtual('empresa', {
   justOne: true,
   localField: 'idEmpresa',
   ref: Empresa.name,
+});
+
+AgroquimicoSchema.virtual('principioActivo', {
+  foreignField: '_id',
+  justOne: true,
+  localField: 'idPrincipioActivo',
+  ref: PrincipioActivo.name,
 });

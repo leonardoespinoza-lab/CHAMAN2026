@@ -134,6 +134,16 @@
   flex-direction: column;
 }
 
+:host ::ng-deep .services-stack .custom-card {
+  background: var(--p-surface-0);
+  border: 1px solid #bfccd9;
+  box-shadow: 0 10px 24px rgba(31, 42, 68, 0.07);
+}
+
+:host ::ng-deep .services-stack .titulo-card {
+  letter-spacing: 0;
+}
+
 .service-panel {
   min-width: 0;
   width: 100%;

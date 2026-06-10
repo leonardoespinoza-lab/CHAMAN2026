@@ -114,6 +114,7 @@ export class SiembrasService {
       this.updateIdSiembraEnLote(data.idLote, idSiembra, permiso);
     }
     await this.crearPrediccion(idSiembra);
+    this.encolarNdvi(data.idLote, permiso);
     return await this.getById(created._id, permiso);
   }
 
@@ -177,6 +178,7 @@ export class SiembrasService {
 
     await this.repository.update(id, data);
     await this.actualizarPrediccion(id, permiso);
+    this.encolarNdvi(data.idLote, permiso);
     return await this.getById(id, permiso);
   }
 
@@ -273,6 +275,13 @@ export class SiembrasService {
       );
       console.error(error);
     }
+  }
+
+  private encolarNdvi(idLote: string, permiso: IPermiso) {
+    this.lotesService.generarNdvi(idLote, permiso).catch((error) => {
+      this.logger.error(`Error al encolar NDVI para el lote ${idLote}`);
+      console.error(error);
+    });
   }
 
   // HUELLA HIDRICA

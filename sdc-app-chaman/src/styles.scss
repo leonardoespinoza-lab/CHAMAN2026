@@ -29,8 +29,9 @@ html {
 
 .custom-card {
   background-color: var(--p-surface-50);
-  border-radius: 10px;
-  border-color: transparent;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(31, 42, 68, 0.06);
   padding: 1em;
   width: 100%;
   flex-grow: 1; /* O puedes usar el atajo: flex: 1; */
@@ -38,6 +39,8 @@ html {
 
 .p-dark .custom-card {
   background-color: var(--p-surface-800);
+  border-color: var(--p-surface-600);
+  box-shadow: none;
 }
 
 .titulo-card {

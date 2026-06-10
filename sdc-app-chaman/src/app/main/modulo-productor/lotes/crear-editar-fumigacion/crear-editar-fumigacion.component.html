@@ -33,6 +33,40 @@
                 <label>{{ 'Fecha de fumigación' | translate }}</label>
               </p-floatlabel>
 
+              <!-- Agroquimico -->
+              <p-floatlabel variant="in" class="mb-4">
+                <p-select
+                  [loading]="loading"
+                  [options]="agroquimicos"
+                  formControlName="idAgroquimico"
+                  optionLabel="nombre"
+                  optionValue="_id"
+                  [filter]="true"
+                  filterBy="nombre"
+                  [showClear]="true"
+                  [fluid]="true"
+                  [appendTo]="'body'"
+                >
+                  <ng-template #selectedItem let-selectedOption>
+                    <div class="agro-option">
+                      <span> {{ selectedOption.nombre | titlecase }} </span>
+                      @if (detalleAgroquimico(selectedOption)) {
+                        <small>{{ detalleAgroquimico(selectedOption) }}</small>
+                      }
+                    </div>
+                  </ng-template>
+                  <ng-template let-option #item>
+                    <div class="agro-option">
+                      <span> {{ option.nombre | titlecase }} </span>
+                      @if (detalleAgroquimico(option)) {
+                        <small>{{ detalleAgroquimico(option) }}</small>
+                      }
+                    </div>
+                  </ng-template>
+                </p-select>
+                <label>{{ 'Agroquimico' | translate }}</label>
+              </p-floatlabel>
+
               <!-- Principio Activo -->
               <p-floatlabel variant="in" class="mb-4">
                 <p-select

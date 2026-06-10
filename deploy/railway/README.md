@@ -83,7 +83,10 @@ En el worker activar:
 ENVIAR_BACKEND=true
 CLEAN_UP=true
 API_EXTERNA_URL=http://${{chaman-externa.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-externa.PORT}}
+NDVI_STORAGE_MODE=inline
 ```
+
+`NDVI_STORAGE_MODE=inline` embebe la imagen PNG como `data:image/png;base64,...` dentro del reporte. Es la opcion recomendada para Railway mientras no exista un volumen compartido o storage externo. Para una etapa con muchos reportes conviene migrar a S3/R2 o volumen persistente y usar `NDVI_PUBLIC_BASE_URL`.
 
 ### Clima
 
@@ -92,6 +95,20 @@ API_EXTERNA_URL=http://${{chaman-externa.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-exte
 ### Suelos INTA
 
 El autocompletado de suelo consulta el WMS publico de INTA (`geo-backend.inta.gob.ar`) desde `sdc-api-cliente`. No requiere credenciales y siempre deja los campos editables en el formulario del lote.
+
+### Datos maestros agronomicos
+
+El script `npm run seed:agro-inputs` carga fertilizantes, principios activos y agroquimicos desde `BASE DE DATOS DE AGROQUIMICOS Y FERTILIZANTES.xlsx`. Para cargar una base remota usar:
+
+```bash
+MONGO_URI=<connection-string-mongodb> DB_NAME=chaman npm run seed:agro-inputs
+```
+
+En PowerShell:
+
+```powershell
+$env:MONGO_URI="<connection-string-mongodb>"; $env:DB_NAME="chaman"; npm run seed:agro-inputs
+```
 
 ### Google Cloud
 
