@@ -43,6 +43,20 @@ export class LotesController {
     return await this.service.get(query, permiso);
   }
 
+  @Get('suelo-inta')
+  @Permisos(
+    { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+  )
+  public async getSueloInta(
+    @Query('lat') lat: string,
+    @Query('lng') lng: string,
+  ): Promise<any> {
+    return await this.service.getSueloInta(lat, lng);
+  }
+
   @Get('/:id')
   @Permisos(
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
@@ -67,6 +81,20 @@ export class LotesController {
     @GetPermiso() permiso: IPermiso,
   ): Promise<ILote> {
     return await this.service.create(body, permiso);
+  }
+
+  @Post('/:id/ndvi')
+  @Permisos(
+    { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
+  )
+  public async generarNdvi(
+    @Param('id') id: string,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<{ encolado: boolean; mensaje: string }> {
+    return await this.service.generarNdvi(id, permiso);
   }
 
   @Get('capacidad-campo/:idSonda/:fecha')

@@ -1,8 +1,50 @@
 .nivel {
   padding: 0.5em;
   border: 1px solid var(--p-text-muted-color);
-  border-radius: 10px;
+  border-radius: 8px;
   margin-bottom: 1em;
+}
+
+.soil-lookup,
+.soil-summary {
+  display: grid;
+  gap: 1rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  padding: 1rem;
+  background: var(--p-content-background);
+}
+
+.soil-lookup {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.soil-lookup strong,
+.soil-summary strong {
+  color: var(--p-text-color);
+}
+
+.soil-lookup small,
+.soil-summary span {
+  display: block;
+  color: var(--p-text-muted-color);
+  font-size: 0.82rem;
+}
+
+.soil-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.soil-summary-empty {
+  border-color: var(--p-yellow-300);
+}
+
+@media (max-width: 768px) {
+  .soil-lookup,
+  .soil-summary {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Aplicar el mismo patrón que detalles-lote para escritorio */

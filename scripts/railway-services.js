@@ -34,12 +34,26 @@ const services = {
     build: 'npm run build',
     start: 'npm run start:prod',
   },
+  'sdc-api-externa': {
+    aliases: ['chaman-externa', 'externa', 'api-externa'],
+    path: 'sdc-api-externa',
+    install: 'npm install',
+    build: 'npm run build',
+    start: 'npm run start:prod',
+  },
   'sdc-app-chaman': {
     aliases: ['CHAMAN2026', 'chaman-web', 'web', 'app'],
     path: 'sdc-app-chaman',
     install: 'npm ci --legacy-peer-deps',
     build: 'npm run build',
     start: 'node scripts/serve-static.js sdc-app-chaman/dist',
+  },
+  'sdc-ndvi-worker': {
+    aliases: ['chaman-ndvi-worker', 'ndvi-worker', 'ndvi'],
+    path: 'sdc-ndvi-worker',
+    install: 'python -m pip install --upgrade pip && python -m pip install -r requirements.txt',
+    build: 'python -m py_compile worker.py calcular_ndvi.py recorte.py storage.py config.py geo.py health.py cleaner.py',
+    start: 'python worker.py',
   },
 };
 

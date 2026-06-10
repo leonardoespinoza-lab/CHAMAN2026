@@ -26,6 +26,7 @@ from config import (
     PORT,
     REDIS_DB,
     REDIS_HOST,
+    REDIS_PASSWORD,
     REDIS_PORT,
     REDIS_QUEUE,
     SAT_COLLECTIONS,
@@ -74,7 +75,11 @@ class NDVIWorker:
         self._log_configuration()
 
         self.redis = redis.Redis(
-            host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, socket_connect_timeout=5
+            host=REDIS_HOST,
+            port=REDIS_PORT,
+            password=REDIS_PASSWORD or None,
+            db=REDIS_DB,
+            socket_connect_timeout=5,
         )
         await self._check_redis_connection()
         asyncio.create_task(self._periodic_cleanup())

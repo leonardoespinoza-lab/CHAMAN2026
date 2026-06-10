@@ -25,9 +25,11 @@ npm run railway:start
 3. `chaman-clima` con `CHAMAN_SERVICE=sdc-api-clima`
 4. `chaman-predicciones` con `CHAMAN_SERVICE=sdc-api-predicciones`
 5. `chaman-api` con `CHAMAN_SERVICE=sdc-api-cliente`
-6. `chaman-web` con `CHAMAN_SERVICE=sdc-app-chaman`
-7. MongoDB
-8. Redis
+6. `chaman-externa` con `CHAMAN_SERVICE=sdc-api-externa`
+7. `chaman-web` con `CHAMAN_SERVICE=sdc-app-chaman`
+8. `chaman-ndvi-worker` con `CHAMAN_SERVICE=sdc-ndvi-worker`
+9. MongoDB
+10. Redis
 
 ## Orden de publicacion
 
@@ -37,7 +39,9 @@ npm run railway:start
 4. `sdc-api-clima`.
 5. `sdc-api-predicciones`.
 6. `sdc-api-cliente`.
-7. `sdc-app-chaman`.
+7. `sdc-api-externa`.
+8. `sdc-app-chaman`.
+9. `sdc-ndvi-worker`.
 
 ## Conexion entre servicios
 
@@ -48,7 +52,9 @@ Usar private networking para servicios internos y dominio publico solo para `cha
 - `chaman-clima`: privado, `API_DATOS=http://${{chaman-datos.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-datos.PORT}}`.
 - `chaman-predicciones`: privado, `API_DATOS=http://${{chaman-datos.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-datos.PORT}}` y `API_CLIMA=http://${{chaman-clima.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-clima.PORT}}/clima`.
 - `chaman-api`: publico, comunica internamente con datos/auth/clima/predicciones y usa `AUTH_CLIENT_ID` / `AUTH_CLIENT_SECRET` para OAuth.
+- `chaman-externa`: privado, recibe callbacks internos como `/ndvi/crear-reporte` y guarda reportes en `sdc-datos`.
 - `chaman-web`: publico, lee `CHAMAN_WEB_API_URL` y `CHAMAN_WEB_TILES_URL` desde `/runtime-config.js`. En Railway debe apuntar al gateway publico con prefijo, por ejemplo `https://${{chaman-api.RAILWAY_PUBLIC_DOMAIN}}/sdc-quimica`.
+- `chaman-ndvi-worker`: privado, escucha la cola Redis `REDIS_NDVI_QUEUE` y notifica reportes NDVI a `API_EXTERNA_URL`.
 
 Los backends aceptan `HOST` por variable de entorno. En Railway usar `HOST=::` para compatibilidad con private networking dual-stack.
 
@@ -64,9 +70,28 @@ Usar los archivos `*.env.example` de esta carpeta como checklist. No copiar secr
 
 `sdc-api-cliente` usa Redis para colas/cache. Vincular Redis y setear `REDIS_HOST`, `REDIS_PORT` y `REDIS_PASSWORD` segun las variables del plugin.
 
+Para NDVI, `sdc-api-cliente` y `sdc-ndvi-worker` deben compartir:
+
+```bash
+REDIS_NDVI_QUEUE=tareas-ndvi
+REDIS_NDVI_DB=0
+```
+
+En el worker activar:
+
+```bash
+ENVIAR_BACKEND=true
+CLEAN_UP=true
+API_EXTERNA_URL=http://${{chaman-externa.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-externa.PORT}}
+```
+
 ### Clima
 
 `sdc-api-clima` puede funcionar con Open-Meteo sin credenciales. FieldClimate queda opcional para clientes con estacion propia.
+
+### Suelos INTA
+
+El autocompletado de suelo consulta el WMS publico de INTA (`geo-backend.inta.gob.ar`) desde `sdc-api-cliente`. No requiere credenciales y siempre deja los campos editables en el formulario del lote.
 
 ### Google Cloud
 

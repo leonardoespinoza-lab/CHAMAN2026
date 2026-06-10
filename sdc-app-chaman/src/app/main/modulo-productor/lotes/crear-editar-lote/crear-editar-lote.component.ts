@@ -53,6 +53,8 @@ export class CrearEditarLoteComponent implements OnInit {
   public dispositivos$?: Subscription;
 
   public distanciaSonda?: string;
+  public sueloIntaLoading = false;
+  public sueloIntaInfo?: any;
 
   public texturas: TTexturaSuelo[] = ['Arcilloso', 'Franco arcilloso', 'Franco', 'Franco arenoso', 'Arenoso'];
 
@@ -170,6 +172,59 @@ export class CrearEditarLoteComponent implements OnInit {
       this.distanciaSonda = `${Math.trunc(distanciaSonda / 1000)} km`;
     } else {
       this.distanciaSonda = `${distanciaSonda} m`;
+    }
+  }
+
+  public async autocompletarSueloInta(): Promise<void> {
+    if (!this.form) return;
+    const data = this.getData();
+    const centro = data.ubicacion?.centro;
+
+    if (!centro?.lat || !centro?.lng) {
+      this.helper.notifWarn('Dibuja el lote en el mapa antes de consultar el suelo INTA.');
+      this.tabValue = 1;
+      return;
+    }
+
+    this.sueloIntaLoading = true;
+    try {
+      const info = await this.service.sueloInta(centro.lat, centro.lng);
+      this.sueloIntaInfo = info;
+
+      if (!info?.encontrado || !info?.sugerencias) {
+        this.helper.notifWarn(info?.mensaje || 'INTA no devolvio datos para esta ubicacion.');
+        return;
+      }
+
+      const sugerencias = info.sugerencias;
+      const patch: Record<string, any> = {};
+      for (const key of [
+        'capacidadDeCampo',
+        'puntoMarchitez',
+        'texturaLixiviacion',
+        'texturaEscorrentia',
+        'drenajeNaturalLixiviacion',
+        'drenajeNaturalEscorrentia',
+        'erosionEscorrentiaPendiente',
+      ]) {
+        if (sugerencias[key] !== undefined && sugerencias[key] !== null) {
+          patch[key] = sugerencias[key];
+        }
+      }
+      this.form.patchValue(patch);
+
+      if (sugerencias.suelos?.length) {
+        this.suelos.clear();
+        for (const suelo of sugerencias.suelos) {
+          this.suelos.push(this.agregarSueloFormGroup(suelo));
+        }
+      }
+
+      this.helper.notifSuccess('Suelo INTA aplicado. Podes ajustar los valores antes de guardar.');
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.sueloIntaLoading = false;
     }
   }
 

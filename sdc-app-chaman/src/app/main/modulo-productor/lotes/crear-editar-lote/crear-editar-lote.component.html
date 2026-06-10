@@ -165,6 +165,48 @@
                   </p-tabpanel>
                   <!-- Suelo -->
                   <p-tabpanel [value]="3">
+                    <div class="soil-lookup mb-4">
+                      <div>
+                        <strong>Suelo INTA</strong>
+                        <small>
+                          Consulta el Atlas de Suelos por el centro del lote y completa valores editables.
+                        </small>
+                      </div>
+                      <p-button
+                        label="Autocompletar"
+                        icon="pi pi-download"
+                        [loading]="sueloIntaLoading"
+                        (onClick)="autocompletarSueloInta()"
+                      />
+                    </div>
+                    @if (sueloIntaInfo) {
+                      <div class="soil-summary mb-4" [class.soil-summary-empty]="!sueloIntaInfo.encontrado">
+                        <div>
+                          <span>{{ sueloIntaInfo.encontrado ? 'Datos encontrados' : 'Sin datos automaticos' }}</span>
+                          <strong>
+                            {{ sueloIntaInfo.resumen?.unidadCartografica || sueloIntaInfo.fuente }}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>Textura</span>
+                          <strong>
+                            {{ sueloIntaInfo.resumen?.texturaSuperficial || '-' }}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>Drenaje</span>
+                          <strong>
+                            {{ sueloIntaInfo.resumen?.drenaje || '-' }}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>Productividad</span>
+                          <strong>
+                            {{ sueloIntaInfo.resumen?.indiceProductividad || '-' }}
+                          </strong>
+                        </div>
+                      </div>
+                    }
                     <!-- Sonda de suelo -->
                     <p-floatlabel variant="in" class="mb-4">
                       <p-select
@@ -311,6 +353,11 @@
                   </p-tabpanel>
                   <!-- Huella Hidrica -->
                   <p-tabpanel [value]="4">
+                    @if (sueloIntaInfo?.encontrado) {
+                      <p-message severity="info" class="mb-4">
+                        Los campos de huella recibieron sugerencias desde INTA y se pueden editar manualmente.
+                      </p-message>
+                    }
                     <!-- depositoN -->
                     <p-floatlabel variant="in" class="mb-4">
                       <p-select

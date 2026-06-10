@@ -10,11 +10,13 @@ import {
   ISiembra,
 } from 'modelos/src';
 import { Subscription } from 'rxjs';
+import { LoteService } from '../../../../../auxiliares/http/lote.service';
 import { ReporteNDVIService } from '../../../../../auxiliares/http/reporte-ndvis.service';
 import { DialogHandlerService } from '../../../../../auxiliares/servicios/dialog-handler.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../../auxiliares/servicios/listados';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
+import { ENV } from '../../../../../environments/environment';
 import { NdviLegendComponent } from '../../ndvi-legend/ndvi-legend.component';
 
 interface NdviAnalisis {
@@ -44,6 +46,8 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
   public reporte?: IReporteNDVI;
   public ndvis: IReporteNDVI[] = [];
   public generandoMuestra = false;
+  public generandoSatelital = false;
+  public readonly esLocal = ENV === 'Local';
 
   private ndvi$?: Subscription;
 
@@ -51,7 +55,8 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
     public helper: HelperService,
     private listados: ListadosService,
     private dialogHandler: DialogHandlerService,
-    private reporteNDVIService: ReporteNDVIService
+    private reporteNDVIService: ReporteNDVIService,
+    private loteService: LoteService
   ) {}
 
   public onSelect(reporte: IReporteNDVI): void {
@@ -189,6 +194,24 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
       this.helper.notifError(error);
     }
     this.generandoMuestra = false;
+  }
+
+  public async generarNdviSatelital(event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (!this.lote?._id || this.generandoSatelital) return;
+
+    this.generandoSatelital = true;
+    try {
+      const response = await this.loteService.generarNdvi(this.lote._id);
+      if (response.encolado) {
+        this.helper.notifSuccess(response.mensaje || 'NDVI satelital encolado');
+      } else {
+        this.helper.notifWarn(response.mensaje || 'No se pudo encolar NDVI');
+      }
+    } catch (error) {
+      this.helper.notifError(error);
+    }
+    this.generandoSatelital = false;
   }
 
   private get pronosticos(): IPronosticoEstacionMeteorologica[] {

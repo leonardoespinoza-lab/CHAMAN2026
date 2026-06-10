@@ -21,6 +21,14 @@ export class LoteService {
     return this.http.get(`/lotes/${id}`);
   }
 
+  public sueloInta(lat: number, lng: number): Promise<any> {
+    return this.http.get(`/lotes/suelo-inta`, { params: { lat, lng } });
+  }
+
+  public generarNdvi(id: string): Promise<{ encolado: boolean; mensaje: string }> {
+    return this.http.post(`/lotes/${id}/ndvi`, {});
+  }
+
   public editar(id: string, dato: IUpdateLote): Promise<ILote> {
     return this.http.put(`/lotes/${id}`, dato);
   }

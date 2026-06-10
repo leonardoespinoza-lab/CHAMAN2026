@@ -75,6 +75,16 @@
       </section>
       @if (!helper.soloLectura()) {
         <p-button
+          icon="pi pi-satellite"
+          label="Generar NDVI satelital"
+          [loading]="generandoSatelital"
+          [disabled]="generandoSatelital"
+          [fluid]="true"
+          (click)="generarNdviSatelital($event)"
+        />
+      }
+      @if (!helper.soloLectura() && esLocal) {
+        <p-button
           icon="pi pi-plus"
           label="Crear muestra local"
           severity="secondary"

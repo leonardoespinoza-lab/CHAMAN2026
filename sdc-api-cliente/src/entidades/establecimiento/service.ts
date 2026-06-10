@@ -151,7 +151,7 @@ export class EstablecimientosService {
           Logger.error('No se puede obtener el clima, lat o lng no definidos');
           return;
         }
-        const clima = await this.climaRepository.getClimaMeteoSource(
+        const clima = await this.climaRepository.getClima(
           centro.lat,
           centro.lng,
         );

@@ -43,6 +43,10 @@ export const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 export const REDIS_PORT = +process.env.REDIS_PORT || 56826; //6379;
 export const REDIS_PASSWORD = process.env.REDIS_PASSWORD || '';
 export const REDIS_DB = +process.env.REDIS_DB || 0;
+export const REDIS_NDVI_DB =
+  +(process.env.REDIS_NDVI_DB || process.env.REDIS_DB || 0);
+export const REDIS_NDVI_QUEUE =
+  process.env.REDIS_NDVI_QUEUE || process.env.REDIS_QUEUE || 'tareas-ndvi';
 export const REDIS_KEY_PREFIX = process.env.REDIS_KEY_PREFIX || 'sdc-cliente';
 export const REDIS_CONNECT_TIMEOUT =
   +process.env.REDIS_CONNECT_TIMEOUT || 10000;
