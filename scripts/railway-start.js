@@ -5,8 +5,10 @@ const service = resolveService();
 
 console.log(`Starting CHAMAN service: ${service.name}`);
 
+const cwd = service.name === 'sdc-app-chaman' ? process.cwd() : service.path;
+
 const result = spawnSync(service.start, {
-  cwd: process.cwd(),
+  cwd,
   shell: true,
   stdio: 'inherit',
   env: process.env,

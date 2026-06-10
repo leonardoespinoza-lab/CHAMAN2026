@@ -35,7 +35,7 @@ const services = {
     start: 'npm run start:prod',
   },
   'sdc-app-chaman': {
-    aliases: ['chaman-web', 'web', 'app'],
+    aliases: ['CHAMAN2026', 'chaman-web', 'web', 'app'],
     path: 'sdc-app-chaman',
     install: 'npm ci --legacy-peer-deps',
     build: 'npm run build',
