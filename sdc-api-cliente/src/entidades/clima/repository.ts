@@ -21,7 +21,7 @@ export class ClimaRepository {
   }
 
   async getClima(lat: number, lng: number) {
-    const url = `${API_CLIMA}/clima/estacion/cerca/${lat}/${lng}`;
+    const url = `${API_CLIMA}/clima/actual/cerca/${lat}/${lng}`;
     return await this.axios.GET<IClimaEstacionMeteorologica>(url);
   }
 

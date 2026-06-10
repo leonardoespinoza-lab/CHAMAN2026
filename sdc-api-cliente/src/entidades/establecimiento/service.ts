@@ -12,6 +12,7 @@ import { HelperService } from '../../auxiliares/helper';
 import { EstablecimientosRepository } from './repository';
 import { ClimaRepository } from '../clima/repository';
 import { ProductorsService } from '../productor/service';
+import { CLIMA_CACHE_TTL_MINUTES } from '../../env';
 
 @Injectable()
 export class EstablecimientosService {
@@ -106,14 +107,59 @@ export class EstablecimientosService {
     return await this.repository.delete(id);
   }
 
+  async refreshClimaDeEstablecimientos(): Promise<{
+    total: number;
+    actualizados: number;
+    errores: number;
+  }> {
+    let page = 1;
+    const limit = 100;
+    let total = 0;
+    let actualizados = 0;
+    let errores = 0;
+
+    while (true) {
+      const res = await this.repository.get({
+        page,
+        limit,
+        select: 'nombre ubicacion climaActual prediccionClimatica',
+      });
+      const establecimientos = res.datos || [];
+      total = res.totalCount || total;
+      if (!establecimientos.length) {
+        break;
+      }
+
+      const resultados = await Promise.allSettled(
+        establecimientos.map(async (est) => {
+          await Promise.all([this.checkPronostico(est), this.checkClima(est)]);
+          return est._id;
+        }),
+      );
+      actualizados += resultados.filter((item) => item.status === 'fulfilled')
+        .length;
+      errores += resultados.filter((item) => item.status === 'rejected').length;
+
+      if (establecimientos.length < limit || page * limit >= total) {
+        break;
+      }
+      page += 1;
+    }
+
+    return { total, actualizados, errores };
+  }
+
   // Private
 
   private async checkPronostico(est: IEstablecimiento) {
     try {
-      const vencido = this.vencido(est.prediccionClimatica?.fecha, 2);
+      const vencido = this.vencido(
+        est.prediccionClimatica?.fecha,
+        CLIMA_CACHE_TTL_MINUTES,
+      );
       const pronosticos = est.prediccionClimatica?.pronosticos;
       if (!pronosticos?.length || vencido) {
-        const centro = est.ubicacion[0]?.centro;
+        const centro = est.ubicacion?.[0]?.centro;
         if (!centro?.lat || !centro?.lng) {
           Logger.error(
             'No se puede obtener el pronostico, lat o lng no definidos',
@@ -143,18 +189,30 @@ export class EstablecimientosService {
 
   private async checkClima(est: IEstablecimiento) {
     try {
-      const vencido = this.vencido(est.climaActual?.fecha, 1);
+      const vencido = this.vencido(
+        est.climaActual?.fecha,
+        CLIMA_CACHE_TTL_MINUTES,
+      );
       const clima = est.climaActual?.clima;
       if (!clima || vencido) {
-        const centro = est.ubicacion[0]?.centro;
+        const centro = est.ubicacion?.[0]?.centro;
         if (!centro?.lat || !centro?.lng) {
           Logger.error('No se puede obtener el clima, lat o lng no definidos');
           return;
         }
-        const clima = await this.climaRepository.getClima(
+        const climaRespuesta = await this.climaRepository.getClima(
           centro.lat,
           centro.lng,
         );
+        const clima = Array.isArray(climaRespuesta)
+          ? climaRespuesta[climaRespuesta.length - 1]
+          : climaRespuesta;
+        if (!clima) {
+          Logger.warn(
+            `No se obtuvo clima actual para establecimiento ${est._id}`,
+          );
+          return;
+        }
         const fecha = new Date().toISOString();
         const climaActual = {
           fecha,
@@ -172,12 +230,12 @@ export class EstablecimientosService {
     }
   }
 
-  private vencido(fecha: string, horas: number): boolean {
-    // True si la fecha es de hace una hora, false si más antigua
+  private vencido(fecha: string, minutos: number): boolean {
+    // True si la fecha supera el vencimiento configurado.
     if (!fecha) {
       return true;
     }
-    const limite = horas ? horas * 60 * 60 * 1000 : 3600000; // Por defecto, 1 hora
+    const limite = minutos ? minutos * 60 * 1000 : 15 * 60 * 1000;
     const fechaACheckear = new Date(fecha);
     const fechaActual = new Date();
     const diferencia = fechaActual.getTime() - fechaACheckear.getTime();

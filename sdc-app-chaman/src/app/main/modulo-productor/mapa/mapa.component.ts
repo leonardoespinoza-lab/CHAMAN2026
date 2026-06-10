@@ -698,11 +698,27 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   public climaTemperaturaActual(): string {
-    return this.formatMetric(this.getClimaActual()?.temperatura?.last, 'C', 1);
+    const actual = this.getClimaActual();
+    const pronostico = this.getPronosticoActualFallback();
+    const valor =
+      actual?.temperatura?.last ??
+      actual?.temperatura?.avg ??
+      pronostico?.temperatura?.avg ??
+      pronostico?.temperatura?.max ??
+      pronostico?.temperatura?.min;
+    return this.formatMetric(valor, 'C', 1);
   }
 
   public climaHumedadActual(): string {
-    return this.formatMetric(this.getClimaActual()?.humedad?.last, '%', 0);
+    const actual = this.getClimaActual();
+    const pronostico = this.getPronosticoActualFallback();
+    const valor =
+      actual?.humedad?.last ??
+      actual?.humedad?.avg ??
+      pronostico?.humedad?.avg ??
+      pronostico?.humedad?.max ??
+      pronostico?.humedad?.min;
+    return this.formatMetric(valor, '%', 0);
   }
 
   public climaLluvia24(): string {
@@ -723,7 +739,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       ...pronosticos.slice(0, 3).map((item) => this.numero(item?.velocidadViento?.max ?? item?.velocidadViento?.avg) || 0),
       0
     );
-    const actual = this.numero(this.getClimaActual()?.velocidadViento?.last) || 0;
+    const actual = this.numero(this.getClimaActual()?.velocidadViento?.last ?? this.getClimaActual()?.velocidadViento?.avg) || 0;
     return this.formatMetric(Math.max(actual, maxPronostico), 'km/h', 0);
   }
 
@@ -889,13 +905,18 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private getClimaActual(): any {
     const actual = this.establecimientoSeleccionado?.climaActual as any;
-    return actual?.clima || actual;
+    const clima = actual?.clima || actual;
+    return Array.isArray(clima) ? clima[clima.length - 1] : clima;
   }
 
   private getPronosticosZona(): any[] {
     const prediccion = this.establecimientoSeleccionado?.prediccionClimatica as any;
     const pronosticos = prediccion?.pronosticos || prediccion?.clima?.pronosticos || [];
     return Array.isArray(pronosticos) ? pronosticos : [];
+  }
+
+  private getPronosticoActualFallback(): any {
+    return this.getPronosticosZona()[0] || null;
   }
 
   private lotesDeEstablecimientoActual(): ILoteMapa[] {

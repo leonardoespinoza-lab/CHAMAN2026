@@ -217,6 +217,176 @@ export class ClimaService {
     }
   }
 
+  private async getOpenMeteoActual(
+    ubicacion: ICoordenadas,
+  ): Promise<IClimaEstacionMeteorologica | null> {
+    const url = new URL(`${API_OPEN_METEO}/forecast`);
+    url.searchParams.set('latitude', `${ubicacion.lat}`);
+    url.searchParams.set('longitude', `${ubicacion.lng}`);
+    url.searchParams.set('timezone', 'auto');
+    url.searchParams.set('forecast_days', '1');
+    url.searchParams.set(
+      'current',
+      [
+        'temperature_2m',
+        'relative_humidity_2m',
+        'precipitation',
+        'rain',
+        'weather_code',
+        'wind_speed_10m',
+        'wind_direction_10m',
+        'pressure_msl',
+        'surface_pressure',
+        'wind_gusts_10m',
+        'shortwave_radiation',
+      ].join(','),
+    );
+    url.searchParams.set('hourly', 'et0_fao_evapotranspiration');
+
+    try {
+      const response = await fetch(url.toString());
+      if (!response.ok) {
+        this.logger.error(
+          `Open-Meteo actual respondio ${response.status} para ${url.toString()}`,
+        );
+        return null;
+      }
+      const data = await response.json();
+      return this.parsearClimaActualOpenMeteo(data, ubicacion);
+    } catch (error) {
+      this.logger.error(
+        `Error al obtener clima actual Open-Meteo para ${JSON.stringify(ubicacion)}: ${error}`,
+      );
+      return null;
+    }
+  }
+
+  private parsearClimaActualOpenMeteo(
+    data: any,
+    ubicacion: ICoordenadas,
+  ): IClimaEstacionMeteorologica | null {
+    const current = data?.current;
+    if (!current?.time) {
+      return null;
+    }
+
+    const fecha = new Date(
+      `${current.time}:00${this.formatUtcOffset(data?.utc_offset_seconds || 0)}`,
+    );
+    const hourlyEt0 = this.getHourlyValueForCurrentTime(
+      data?.hourly,
+      current.time,
+      'et0_fao_evapotranspiration',
+    );
+    const lluvia = this.toNumber(current.precipitation ?? current.rain);
+    const weatherCode = this.toNumber(current.weather_code);
+
+    return {
+      fuente: 'OpenMeteo' as any,
+      iconNum: this.getOpenMeteoIconNum(weatherCode),
+      summary: this.getOpenMeteoSummary(weatherCode),
+      distancia: null,
+      estacion: 'Open-Meteo',
+      ubicacion,
+      fecha: fecha.toISOString(),
+      diaNoche: this.esDiaONoche(fecha, ubicacion.lat, ubicacion.lng),
+      temperatura: {
+        last: this.toNumber(current.temperature_2m),
+        avg: this.toNumber(current.temperature_2m),
+      },
+      humedad: {
+        last: this.toNumber(current.relative_humidity_2m),
+        avg: this.toNumber(current.relative_humidity_2m),
+      },
+      lluvia: {
+        last: lluvia,
+        sum: lluvia,
+        result: lluvia,
+      },
+      velocidadViento: {
+        last: this.toNumber(current.wind_speed_10m),
+        avg: this.toNumber(current.wind_speed_10m),
+      },
+      direccionViento: {
+        last: this.toNumber(current.wind_direction_10m),
+        avg: this.toNumber(current.wind_direction_10m),
+      },
+      presion: {
+        last: this.toNumber(current.pressure_msl ?? current.surface_pressure),
+        avg: this.toNumber(current.pressure_msl ?? current.surface_pressure),
+      },
+      radiacionSolar: {
+        last: this.toNumber(current.shortwave_radiation),
+        avg: this.toNumber(current.shortwave_radiation),
+      },
+      rafagaViento: {
+        last: this.toNumber(current.wind_gusts_10m),
+        max: this.toNumber(current.wind_gusts_10m),
+      },
+      et0: {
+        last: hourlyEt0,
+        result: hourlyEt0,
+      },
+    };
+  }
+
+  private getHourlyValueForCurrentTime(
+    hourly: any,
+    currentTime: string,
+    field: string,
+  ): number | undefined {
+    const times: string[] = hourly?.time || [];
+    const values: number[] = hourly?.[field] || [];
+    if (!times.length || !values.length) {
+      return undefined;
+    }
+    const currentHour = currentTime.slice(0, 13);
+    const index = times.findIndex((time) => time.slice(0, 13) === currentHour);
+    return index >= 0 ? this.toNumber(values[index]) : undefined;
+  }
+
+  private formatUtcOffset(offsetSeconds: number): string {
+    const sign = offsetSeconds >= 0 ? '+' : '-';
+    const abs = Math.abs(offsetSeconds);
+    const hours = Math.floor(abs / 3600)
+      .toString()
+      .padStart(2, '0');
+    const minutes = Math.floor((abs % 3600) / 60)
+      .toString()
+      .padStart(2, '0');
+    return `${sign}${hours}:${minutes}`;
+  }
+
+  private toNumber(value: unknown): number | undefined {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : undefined;
+  }
+
+  private getOpenMeteoIconNum(code?: number): number {
+    if (code === undefined || code === null) return 1;
+    if (code === 0) return 2;
+    if ([1, 2, 3].includes(code)) return 3;
+    if ([45, 48].includes(code)) return 9;
+    if (code >= 51 && code <= 67) return 12;
+    if (code >= 71 && code <= 77) return 15;
+    if (code >= 80 && code <= 82) return 18;
+    if (code >= 95) return 26;
+    return 1;
+  }
+
+  private getOpenMeteoSummary(code?: number): string {
+    if (code === 0) return 'Despejado';
+    if ([1, 2].includes(code || -1)) return 'Parcialmente nublado';
+    if (code === 3) return 'Nublado';
+    if ([45, 48].includes(code || -1)) return 'Niebla';
+    if (code && code >= 51 && code <= 57) return 'Llovizna';
+    if (code && code >= 61 && code <= 67) return 'Lluvia';
+    if (code && code >= 71 && code <= 77) return 'Nevada';
+    if (code && code >= 80 && code <= 82) return 'Chaparrones';
+    if (code && code >= 95) return 'Tormenta';
+    return 'Condicion actual';
+  }
+
   private parsearClimaOpenMeteo(
     data: any,
     ubicacion: ICoordenadas,
@@ -238,11 +408,13 @@ export class ClimaService {
           max: daily.temperature_2m_max?.[index],
           min: daily.temperature_2m_min?.[index],
           avg: daily.temperature_2m_mean?.[index],
+          last: daily.temperature_2m_mean?.[index],
         },
         humedad: {
           max: daily.relative_humidity_2m_max?.[index],
           min: daily.relative_humidity_2m_min?.[index],
           avg: daily.relative_humidity_2m_mean?.[index],
+          last: daily.relative_humidity_2m_mean?.[index],
         },
         lluvia: {
           sum: daily.precipitation_sum?.[index],
@@ -251,12 +423,14 @@ export class ClimaService {
         velocidadViento: {
           max: daily.wind_speed_10m_max?.[index],
           avg: daily.wind_speed_10m_mean?.[index],
+          last: daily.wind_speed_10m_mean?.[index],
         },
         direccionViento: {
           avg: daily.wind_direction_10m_dominant?.[index],
         },
         radiacionSolar: {
           sum: daily.shortwave_radiation_sum?.[index],
+          result: daily.shortwave_radiation_sum?.[index],
         },
         et0: {
           sum: daily.et0_fao_evapotranspiration?.[index],
@@ -897,6 +1071,38 @@ export class ClimaService {
     }
 
     return this.getOpenMeteoEntreFechas(ubicacion, minDate, maxDate);
+  }
+
+  async getClimaActualMasCercano(
+    ubicacion: ICoordenadas,
+  ): Promise<IClimaEstacionMeteorologica | null> {
+    try {
+      const hoy = new Date();
+      const desde = new Date(hoy.getTime() - 24 * 60 * 60 * 1000).toISOString();
+      const hasta = hoy.toISOString();
+      const res = await this.fieldClimate.getEstacionMasCercanaEntreFechas(
+        ubicacion,
+        desde,
+        hasta,
+        'hourly',
+      );
+      if (res) {
+        const parseado = this.parsearClimaFieldClimate(
+          res.station,
+          res.data,
+          'hourly',
+        );
+        if (parseado.length > 0) {
+          return parseado[parseado.length - 1];
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        `No se pudo obtener clima actual FieldClimate para ${JSON.stringify(ubicacion)}: ${error}`,
+      );
+    }
+
+    return this.getOpenMeteoActual(ubicacion);
   }
 
   async getPluviometroMasCercanoEntreFechas(

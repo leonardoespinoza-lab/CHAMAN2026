@@ -105,6 +105,10 @@ export class DrawerClimaComponent implements OnInit, OnDestroy, OnChanges {
   private cargarDatosClima() {
     if (!this.establecimiento?.nombre) return;
 
+    this.climaActual = null;
+    this.prediccionClimatica = null;
+    this.pronosticosDias = [];
+
     // Los datos de clima ya vienen en el establecimiento desde mapa.component
     // No necesitamos hacer llamadas HTTP adicionales
     if (this.establecimiento.climaActual) {
@@ -114,12 +118,17 @@ export class DrawerClimaComponent implements OnInit, OnDestroy, OnChanges {
     if (this.establecimiento.prediccionClimatica) {
       this.procesarDatosPronostico(this.establecimiento.prediccionClimatica);
     }
+
+    this.completarClimaActualConPronostico();
   }
 
   private procesarDatosClima(climaData: any) {
     if (climaData) {
+      const clima = Array.isArray(climaData.clima)
+        ? climaData.clima[climaData.clima.length - 1]
+        : climaData.clima || climaData;
       this.climaActual = {
-        clima: climaData.clima,
+        clima,
         fecha: new Date(climaData.fecha),
       };
     }
@@ -193,6 +202,7 @@ export class DrawerClimaComponent implements OnInit, OnDestroy, OnChanges {
       }
 
       // Generar gráfico después de procesar los datos
+      this.completarClimaActualConPronostico();
       this.generarGraficoPronostico();
 
       // Renderizar el gráfico después de un pequeño delay para asegurar que el DOM esté listo
@@ -200,6 +210,56 @@ export class DrawerClimaComponent implements OnInit, OnDestroy, OnChanges {
         this.renderizarGrafico();
       }, 200);
     }
+  }
+
+  private completarClimaActualConPronostico() {
+    if (this.tieneClimaActualUtil() || !this.pronosticosDias.length) {
+      return;
+    }
+
+    const pronostico = this.pronosticosDias[0];
+    this.climaActual = {
+      fecha: pronostico.fecha || new Date(),
+      clima: {
+        fuente: 'OpenMeteo',
+        iconNum: pronostico.iconNum || 1,
+        summary: pronostico.summaryOriginal || pronostico.summary || 'Pronostico Open-Meteo',
+        temperatura: {
+          last: pronostico.tempMax ?? pronostico.temperatura?.avg,
+          avg: pronostico.temperatura?.avg,
+          max: pronostico.tempMax,
+          min: pronostico.tempMin,
+        },
+        humedad: {
+          last: pronostico.humedad,
+          avg: pronostico.humedad,
+        },
+        velocidadViento: {
+          last: pronostico.velocidadViento,
+          avg: pronostico.velocidadViento,
+        },
+        lluvia: {
+          last: pronostico.precipitacion,
+          sum: pronostico.precipitacion,
+          result: pronostico.precipitacion,
+        },
+        et0: {
+          last: pronostico.et0,
+          result: pronostico.et0,
+        },
+      },
+    };
+  }
+
+  private tieneClimaActualUtil(): boolean {
+    const clima = this.climaActual?.clima;
+    return !!(
+      clima &&
+      (clima.temperatura?.last !== undefined ||
+        clima.temperatura?.avg !== undefined ||
+        clima.humedad?.last !== undefined ||
+        clima.humedad?.avg !== undefined)
+    );
   }
 
   private generarGraficoPronostico() {
@@ -239,7 +299,7 @@ export class DrawerClimaComponent implements OnInit, OnDestroy, OnChanges {
       chart: {
         type: 'line',
         backgroundColor: 'transparent',
-        height: 450, // Aumentar altura de 350 a 450
+        height: 340,
         width: null, // Permite que se ajuste al contenedor como en drawer-riego
         spacingTop: 10,
         spacingRight: 10,
@@ -466,7 +526,7 @@ export class DrawerClimaComponent implements OnInit, OnDestroy, OnChanges {
             },
             chartOptions: {
               chart: {
-                height: 450, // Igualar altura a desktop
+                height: 340,
               },
               title: {
                 style: {

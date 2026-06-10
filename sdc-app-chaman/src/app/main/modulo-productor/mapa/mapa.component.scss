@@ -17,8 +17,6 @@
 
 .weather-strip,
 .service-rail,
-.map-actions,
-.climate-layer-card,
 .lot-bottom-sheet {
   color: #243149;
   background: rgba(255, 255, 255, 0.88);
@@ -83,40 +81,17 @@
   pointer-events: auto;
 }
 
-.map-actions {
-  flex: 0 0 auto;
-  min-height: 3.25rem;
-  border-radius: 18px;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.35rem;
-  pointer-events: auto;
+:host ::ng-deep .clima-drawer-shell.p-drawer {
+  left: 50% !important;
+  right: auto !important;
+  bottom: 1rem !important;
+  transform: translateX(-50%) !important;
+  border: 1px solid rgba(121, 150, 185, 0.34);
+  box-shadow: 0 24px 70px rgba(24, 39, 75, 0.24);
 }
 
-.climate-layer-card {
-  flex: 0 1 auto;
-  border-radius: 18px;
-  padding: 0.45rem 0.55rem;
-  pointer-events: auto;
-}
-
-.climate-layer-row {
-  min-height: 2.35rem;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.opacity-label {
-  min-width: 2.4rem;
-  color: #64748b;
-  font-size: 0.78rem;
-  text-align: center;
-}
-
-.legacy-map-tools {
-  display: none !important;
+:host ::ng-deep .clima-drawer-shell .p-drawer-content {
+  padding: 0;
 }
 
 .service-chip {
@@ -313,15 +288,11 @@
   }
 
   .weather-strip,
-  .service-rail,
-  .map-actions,
-  .climate-layer-card {
+  .service-rail {
     width: 100%;
   }
 
-  .service-rail,
-  .map-actions,
-  .climate-layer-card {
+  .service-rail {
     overflow-x: auto;
   }
 
@@ -360,14 +331,6 @@
     min-width: max-content;
   }
 
-  .map-actions {
-    justify-content: flex-start;
-  }
-
-  .climate-layer-row {
-    overflow-x: auto;
-  }
-
   .lot-bottom-sheet {
     width: calc(100vw - 1rem);
     bottom: 0.5rem;
@@ -404,6 +367,13 @@
 
   .service-summary-card {
     min-height: auto;
+  }
+
+  :host ::ng-deep .clima-drawer-shell.p-drawer {
+    left: 0 !important;
+    bottom: 0 !important;
+    transform: none !important;
+    border-radius: 24px 24px 0 0 !important;
   }
 }
 

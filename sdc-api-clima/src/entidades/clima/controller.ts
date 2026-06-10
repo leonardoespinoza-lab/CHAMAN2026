@@ -109,6 +109,14 @@ export class ClimaController {
     );
   }
 
+  @Get('actual/cerca/:lat/:lng')
+  public async getClimaActualMasCercano(
+    @Param('lat') lat: number,
+    @Param('lng') lng: number,
+  ) {
+    return await this.service.getClimaActualMasCercano({ lat, lng });
+  }
+
   @Get('pluviometro/cerca/:lat/:lng')
   public async getPluviometroMasCercanoUltimoDato(
     @Param('lat') lat: number,

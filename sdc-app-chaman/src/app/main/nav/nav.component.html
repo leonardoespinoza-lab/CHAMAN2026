@@ -202,6 +202,26 @@
                     <span class="font-medium">{{ 'Alertas' | translate }}</span>
                   </a>
                 </li>
+                <!-- Establecimientos -->
+                <li>
+                  <a
+                    pRipple
+                    class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                    [routerLink]="['/establecimientos']"
+                    [routerLinkActive]="['active']"
+                    (click)="drawerRef.close($event)"
+                  >
+                    <svg
+                      [style.fill]="'var(--p-primary-color)'"
+                      [attr.width]="'24px'"
+                      [attr.height]="'24px'"
+                      class="mr-2"
+                    >
+                      <use [attr.xlink:href]="'icons/icons.svg#house-siding'"></use>
+                    </svg>
+                    <span class="font-medium">{{ 'Establecimientos' | translate }}</span>
+                  </a>
+                </li>
                 <!-- Lotes -->
                 <li>
                   <a
@@ -317,8 +337,153 @@
                 </li>
               </ul>
             }
-            <!-- Configuracion -->
             @if (!helper.soloLectura()) {
+              <ul class="list-none p-0 m-0 overflow-hidden">
+                @if (loginService.esDistribuidor || loginService.esQuimica || loginService.esAdmin) {
+                  <li>
+                    <a
+                      pRipple
+                      class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                      [routerLink]="['/productores']"
+                      [routerLinkActive]="['active']"
+                      (click)="drawerRef.close($event)"
+                    >
+                      <svg
+                        [style.fill]="'var(--p-primary-color)'"
+                        [attr.width]="'24px'"
+                        [attr.height]="'24px'"
+                        class="mr-2"
+                      >
+                        <use [attr.xlink:href]="'icons/icons.svg#productor'"></use>
+                      </svg>
+                      <span class="font-medium">{{ 'Productores' | translate }}</span>
+                    </a>
+                  </li>
+                }
+                @if (loginService.esQuimica || loginService.esAdmin) {
+                  <li>
+                    <a
+                      pRipple
+                      class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                      [routerLink]="['/distribuidores']"
+                      [routerLinkActive]="['active']"
+                      (click)="drawerRef.close($event)"
+                    >
+                      <svg
+                        [style.fill]="'var(--p-primary-color)'"
+                        [attr.width]="'24px'"
+                        [attr.height]="'24px'"
+                        class="mr-2"
+                      >
+                        <use [attr.xlink:href]="'icons/icons.svg#distribuidor'"></use>
+                      </svg>
+                      <span class="font-medium">{{ 'Distribuidores' | translate }}</span>
+                    </a>
+                  </li>
+                }
+                @if (loginService.esAdmin) {
+                  <li>
+                    <a
+                      pRipple
+                      class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                      [routerLink]="['/quimicas']"
+                      [routerLinkActive]="['active']"
+                      (click)="drawerRef.close($event)"
+                    >
+                      <svg
+                        [style.fill]="'var(--p-primary-color)'"
+                        [attr.width]="'24px'"
+                        [attr.height]="'24px'"
+                        class="mr-2"
+                      >
+                        <use [attr.xlink:href]="'icons/icons.svg#quimica'"></use>
+                      </svg>
+                      <span class="font-medium">{{ 'QuÃ­micas' | translate }}</span>
+                    </a>
+                  </li>
+                }
+                <li>
+                  <a
+                    pRipple
+                    class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                    [routerLink]="['/usuarios']"
+                    [routerLinkActive]="['active']"
+                    (click)="drawerRef.close($event)"
+                  >
+                    <svg
+                      [style.fill]="'var(--p-primary-color)'"
+                      [attr.width]="'24px'"
+                      [attr.height]="'24px'"
+                      class="mr-2"
+                    >
+                      <use [attr.xlink:href]="'icons/icons.svg#group'"></use>
+                    </svg>
+                    <span class="font-medium">{{ 'Usuarios' | translate }}</span>
+                  </a>
+                </li>
+                @if (loginService.esProductor || loginService.esEstablecimiento) {
+                  <li>
+                    <a
+                      pRipple
+                      class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                      [routerLink]="['/kmz']"
+                      [routerLinkActive]="['active']"
+                      (click)="drawerRef.close($event)"
+                    >
+                      <svg
+                        [style.fill]="'var(--p-primary-color)'"
+                        [attr.width]="'24px'"
+                        [attr.height]="'24px'"
+                        class="mr-2"
+                      >
+                        <use [attr.xlink:href]="'icons/icons.svg#map'"></use>
+                      </svg>
+                      <span class="font-medium">{{ 'KMZ' | translate }}</span>
+                    </a>
+                  </li>
+                }
+                @if (loginService.esAdmin) {
+                  <li>
+                    <a
+                      pRipple
+                      class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                      [routerLink]="['/dispositivos']"
+                      [routerLinkActive]="['active']"
+                      (click)="drawerRef.close($event)"
+                    >
+                      <svg
+                        [style.fill]="'var(--p-primary-color)'"
+                        [attr.width]="'24px'"
+                        [attr.height]="'24px'"
+                        class="mr-2"
+                      >
+                        <use [attr.xlink:href]="'icons/icons.svg#device'"></use>
+                      </svg>
+                      <span class="font-medium">{{ 'Dispositivos' | translate }}</span>
+                    </a>
+                  </li>
+                }
+                <li>
+                  <a
+                    pRipple
+                    class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                    (click)="openAplicacion()"
+                  >
+                    <svg
+                      [style.fill]="'var(--p-primary-color)'"
+                      [attr.width]="'24px'"
+                      [attr.height]="'24px'"
+                      class="mr-2"
+                    >
+                      <use [attr.xlink:href]="'icons/icons.svg#conf'"></use>
+                    </svg>
+                    <span class="font-medium">{{ 'AplicaciÃ³n' | translate }}</span>
+                  </a>
+                </li>
+              </ul>
+            }
+            <!-- Configuracion -->
+            @if (false && !helper.soloLectura()) {
               <ul class="list-none p-0 m-0 overflow-hidden">
                 <!-- Configuracion -->
                 <li>

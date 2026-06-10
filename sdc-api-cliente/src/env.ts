@@ -58,6 +58,14 @@ export const REDIS_RETRY_DELAY = +process.env.REDIS_RETRY_DELAY || 1000;
 export const TILE_CACHE_TTL = +process.env.TILE_CACHE_TTL || 3600; // 60 minutos (optimizado para datos climáticos)
 export const CACHE_MAX_TILE_SIZE = +process.env.CACHE_MAX_TILE_SIZE || 5242880; // 5MB
 
+// CLIMA
+export const CLIMA_SYNC_ENABLED =
+  process.env.CLIMA_SYNC_ENABLED !== 'false' && ENV !== 'test';
+export const CLIMA_SYNC_INTERVAL_MS =
+  +process.env.CLIMA_SYNC_INTERVAL_MS || 15 * 60 * 1000;
+export const CLIMA_CACHE_TTL_MINUTES =
+  +process.env.CLIMA_CACHE_TTL_MINUTES || 15;
+
 // TILES CLIMA - CONFIGURACIÓN INDIVIDUAL POR ESTABLECIMIENTO
 export const TILES_INDIVIDUAL_CONFIG = {
   // Radio proporcional al tamaño del establecimiento
