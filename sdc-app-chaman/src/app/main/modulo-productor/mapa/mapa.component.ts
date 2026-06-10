@@ -359,15 +359,49 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       const saved = localStorage.getItem(this.MAP_STATE_KEY);
       if (saved) {
         const mapState = JSON.parse(saved);
+        const center = this.normalizeStoredMapCenter(mapState.center);
+        const zoom = Number(mapState.zoom);
+
+        if (!center || !Number.isFinite(zoom)) {
+          localStorage.removeItem(this.MAP_STATE_KEY);
+          return null;
+        }
+
         return {
-          center: mapState.center,
-          zoom: mapState.zoom,
+          center,
+          zoom,
         };
       }
     } catch (error) {
       console.warn('Error al cargar estado del mapa:', error);
+      localStorage.removeItem(this.MAP_STATE_KEY);
     }
     return null;
+  }
+
+  private normalizeStoredMapCenter(center: unknown): number[] | null {
+    if (!Array.isArray(center) || center.length < 2) {
+      return null;
+    }
+
+    const x = Number(center[0]);
+    const y = Number(center[1]);
+
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return null;
+    }
+
+    // Estados viejos guardaban lon/lat directo. OpenLayers espera EPSG:3857.
+    if (Math.abs(x) <= 180 && Math.abs(y) <= 90) {
+      return fromLonLat([x, y]);
+    }
+
+    const webMercatorLimit = 20037508.342789244;
+    if (Math.abs(x) > webMercatorLimit || Math.abs(y) > webMercatorLimit) {
+      return null;
+    }
+
+    return [x, y];
   }
 
   private getInitialMapPosition(): { center: number[]; zoom: number } {
@@ -677,7 +711,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         target: 'mapa',
         controls: [],
         view: new View({
-          center: initialPosition.center,
+          center: this.normalizeStoredMapCenter(initialPosition.center) || fromLonLat([-64.18105, -31.413801]),
           zoom: initialPosition.zoom,
           projection: 'EPSG:3857',
           maxZoom: maxZoomSatellite, // Limitar el zoom máximo del mapa
