@@ -37,12 +37,19 @@
           </div>
 
           <div class="risk-row">
-            <div class="risk-cup" [style.--fill]="item.fill + '%'">
-              <span></span>
-            </div>
-            <div>
+            <div class="risk-copy">
               <p>{{ item.sensibilidad }}</p>
               <small>{{ item.periodo }}</small>
+            </div>
+            <div class="risk-meter" [style.--fill]="item.fill + '%'">
+              <span></span>
+              <em>
+                @if (item.prediccion) {
+                  {{ item.resultado | number: '1.0-1' }}%
+                } @else {
+                  esperando clima
+                }
+              </em>
             </div>
           </div>
 

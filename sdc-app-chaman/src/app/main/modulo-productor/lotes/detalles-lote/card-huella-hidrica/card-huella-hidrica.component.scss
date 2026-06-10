@@ -55,14 +55,14 @@
   font-size: 0.95rem;
 }
 
-.water-cups {
+.water-bars {
   display: grid;
   gap: 0.65rem;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   margin-top: 0.8rem;
 }
 
-.water-cups article {
+.water-bars article {
   align-items: stretch;
   background: var(--p-surface-0);
   border: 1px solid #c7d4e2;
@@ -74,55 +74,56 @@
   padding: 0.65rem;
 }
 
-.water-cups article.blue {
+.water-bars article.blue {
   box-shadow: inset 3px 0 0 #3e91d6;
 }
 
-.water-cups article.gray {
+.water-bars article.gray {
   box-shadow: inset 3px 0 0 #98a2ad;
 }
 
-.water-cup {
-  background: var(--p-surface-100);
-  border: 1px solid var(--p-surface-300);
-  border-radius: 6px 6px 12px 12px;
-  height: 96px;
-  margin: 0 auto;
+.water-meter {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0)),
+    var(--p-surface-100);
+  border: 1px solid #c7d4e2;
+  border-radius: 999px;
+  height: 20px;
   overflow: hidden;
   position: relative;
-  width: 48px;
+  width: 100%;
 }
 
-.water-cup span {
-  background: #77bd43;
-  border-radius: 999px 999px 0 0;
-  bottom: 0;
-  height: var(--fill);
+.water-meter span {
+  background: linear-gradient(90deg, #9ad57f, #6fb845);
+  border-radius: inherit;
+  bottom: 2px;
   left: 0;
   position: absolute;
-  right: 0;
+  top: 2px;
+  width: var(--fill);
 }
 
-article.blue .water-cup span {
-  background: #3e91d6;
+article.blue .water-meter span {
+  background: linear-gradient(90deg, #73b8ee, #3e91d6);
 }
 
-article.gray .water-cup span {
-  background: #98a2ad;
+article.gray .water-meter span {
+  background: linear-gradient(90deg, #c1c8d0, #98a2ad);
 }
 
-.water-cups strong,
-.water-cups em,
-.water-cups small {
+.water-bars strong,
+.water-bars em,
+.water-bars small {
   display: block;
 }
 
-.water-cups strong {
+.water-bars strong {
   color: var(--p-text-color);
   font-size: 0.84rem;
 }
 
-.water-cups em {
+.water-bars em {
   color: var(--p-primary-color);
   font-size: 0.82rem;
   font-style: normal;
@@ -130,7 +131,7 @@ article.gray .water-cup span {
   margin-top: 0.12rem;
 }
 
-.water-cups small {
+.water-bars small {
   color: var(--p-text-muted-color);
   font-size: 0.68rem;
   line-height: 1.3;

@@ -81,6 +81,27 @@
   margin-top: 0.22rem;
 }
 
+.rain-accumulation {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0)),
+    var(--p-surface-100);
+  border: 1px solid #c7d4e2;
+  border-radius: 999px;
+  height: 16px;
+  margin-top: 0.5rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.rain-accumulation i {
+  background: linear-gradient(90deg, #75b9f0, #3e91d6);
+  border-radius: inherit;
+  bottom: 2px;
+  left: 0;
+  position: absolute;
+  top: 2px;
+}
+
 .daily-strip {
   display: grid;
   gap: 0.55rem;

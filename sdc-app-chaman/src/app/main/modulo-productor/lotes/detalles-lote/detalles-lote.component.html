@@ -32,6 +32,37 @@
     </div>
   </div>
 
+  <section class="custom-card lot-summary-card">
+    <div class="lot-summary-title">
+      <span>Detalle del lote</span>
+      <strong>{{ lote?.nombre || 'Sin nombre' }}</strong>
+      <small>{{ lote?.establecimiento?.nombre || 'Sin establecimiento' }}</small>
+    </div>
+
+    <div class="lot-summary-grid">
+      <article>
+        <span>Ubicacion</span>
+        <strong>{{ ubicacionResumen }}</strong>
+        <small>{{ departamentoResumen }}</small>
+      </article>
+      <article>
+        <span>Superficie</span>
+        <strong>{{ superficieResumen }}</strong>
+        <small>Hectareas calculadas por poligono</small>
+      </article>
+      <article>
+        <span>Tipo de suelo</span>
+        <strong>{{ sueloResumen }}</strong>
+        <small>{{ sueloDetalleResumen }}</small>
+      </article>
+      <article>
+        <span>Capacidad de rinde</span>
+        <strong>{{ rindeResumen }}</strong>
+        <small>Basado en historial y datos cargados</small>
+      </article>
+    </div>
+  </section>
+
   @if (siembraActual && siembra && !siembra.fechaCosecha) {    
     @if (siembra.crono) {      
       <div class="desktop-only">
@@ -71,13 +102,13 @@
       <app-card-rendimiento class="service-panel" [siembra]="siembra"></app-card-rendimiento>
     }
     <app-card-enfermedades class="service-panel" [siembra]="siembra"></app-card-enfermedades>
-    <app-card-riego class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-riego>
     <app-card-ndvi class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-ndvi>
-    <app-card-huella-hidrica class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-huella-hidrica>
     <div class="operations-row service-panel">
       <app-card-ultima-fertilizacion [lote]="lote"></app-card-ultima-fertilizacion>
       <app-card-ultima-fumigacion [lote]="lote" [siembra]="siembra"></app-card-ultima-fumigacion>
     </div>
+    <app-card-riego class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-riego>
+    <app-card-huella-hidrica class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-huella-hidrica>
     @if (helper.checkArray(lote?.idsDispositivo)) {
       <app-card-dispositivos class="service-panel" [lote]="lote"></app-card-dispositivos>
     }

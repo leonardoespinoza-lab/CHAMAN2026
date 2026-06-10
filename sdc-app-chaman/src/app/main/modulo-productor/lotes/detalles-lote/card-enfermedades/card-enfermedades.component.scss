@@ -76,38 +76,54 @@
 }
 
 .risk-row {
-  align-items: center;
+  align-items: stretch;
   display: flex;
-  gap: 0.65rem;
+  flex-direction: column;
+  gap: 0.5rem;
   margin-top: 0.65rem;
 }
 
-.risk-cup {
-  background: var(--p-surface-100);
-  border: 1px solid var(--p-surface-300);
-  border-radius: 6px 6px 13px 13px;
-  flex: 0 0 42px;
-  height: 82px;
+.risk-meter {
+  align-items: center;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0)),
+    var(--p-surface-100);
+  border: 1px solid #c7d4e2;
+  border-radius: 999px;
+  display: flex;
+  height: 18px;
   overflow: hidden;
   position: relative;
 }
 
-.risk-cup span {
-  background: #70c957;
-  border-radius: 999px 999px 0 0;
-  bottom: 0;
-  height: var(--fill);
+.risk-meter span {
+  background: linear-gradient(90deg, #8bd76f, #54b948);
+  border-radius: inherit;
+  bottom: 2px;
   left: 0;
   position: absolute;
-  right: 0;
+  top: 2px;
+  width: var(--fill);
 }
 
-.disease-item.medium .risk-cup span {
-  background: #f4b942;
+.risk-meter em {
+  color: var(--p-text-color);
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 700;
+  margin-left: auto;
+  padding-right: 0.5rem;
+  position: relative;
+  white-space: nowrap;
+  z-index: 1;
 }
 
-.disease-item.high .risk-cup span {
-  background: #e05d4f;
+.disease-item.medium .risk-meter span {
+  background: linear-gradient(90deg, #f9d27a, #f4b942);
+}
+
+.disease-item.high .risk-meter span {
+  background: linear-gradient(90deg, #f19a8d, #e05d4f);
 }
 
 .disease-item p,

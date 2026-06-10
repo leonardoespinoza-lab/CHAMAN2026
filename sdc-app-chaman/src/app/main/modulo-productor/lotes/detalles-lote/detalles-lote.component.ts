@@ -53,6 +53,7 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   public siembraActual? = true;
   public esUltimaEtapa?: boolean;
   public verDrawerSiembras: boolean = false;
+  private readonly numeroAr = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
 
   constructor(
     private paramsService: ParamsService,
@@ -78,6 +79,58 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     const data = this.lote;
     this.params.set('sembrarLote', data);
     this.router.navigate(['lotes', 'sembrar', data?._id]);
+  }
+
+  public get ubicacionResumen(): string {
+    const centro = this.lote?.ubicacion?.centro;
+    if (!centro?.lat || !centro?.lng) {
+      return 'Sin coordenadas';
+    }
+    return `${centro.lat.toFixed(4)}, ${centro.lng.toFixed(4)}`;
+  }
+
+  public get departamentoResumen(): string {
+    const departamento = this.lote?.departamento?.nombre;
+    const provincia = this.lote?.departamento?.provincia?.nombre;
+    if (departamento && provincia) {
+      return `${departamento}, ${provincia}`;
+    }
+    return departamento || provincia || 'Ubicacion editable en el lote';
+  }
+
+  public get superficieResumen(): string {
+    const superficie = this.lote?.ubicacion?.superficie;
+    if (!superficie || Number.isNaN(superficie)) {
+      return 'Sin dato';
+    }
+    return `${this.numeroAr.format(superficie)} ha`;
+  }
+
+  public get sueloResumen(): string {
+    const principal =
+      this.lote?.texturaEscorrentia ||
+      this.lote?.texturaLixiviacion ||
+      this.lote?.suelos?.find((suelo) => !!suelo.textura)?.textura;
+    return principal || 'Sin dato';
+  }
+
+  public get sueloDetalleResumen(): string {
+    const niveles = this.lote?.suelos?.filter((suelo) => suelo.textura || suelo.profundidad) || [];
+    if (!niveles.length) {
+      return 'Puede completarse desde INTA o editarse manualmente';
+    }
+    return `${niveles.length} nivel${niveles.length === 1 ? '' : 'es'} cargado${niveles.length === 1 ? '' : 's'}`;
+  }
+
+  public get rindeResumen(): string {
+    const rendimientoSeco = this.siembra?.rendimientoObtenidoKgHaSeco || this.siembra?.rendimientoObtenidoKgHa;
+    if (rendimientoSeco) {
+      return `${this.numeroAr.format(rendimientoSeco)} kg/ha`;
+    }
+    if (this.siembra?.rendimiento) {
+      return this.siembra.rendimiento;
+    }
+    return 'Sin historico suficiente';
   }
 
   async ngOnInit(): Promise<void> {

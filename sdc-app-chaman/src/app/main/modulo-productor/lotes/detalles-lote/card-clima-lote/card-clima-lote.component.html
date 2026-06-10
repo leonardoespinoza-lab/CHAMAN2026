@@ -15,6 +15,11 @@
           <span>{{ metric.label }}</span>
           <strong>{{ metric.value }}</strong>
           <small>{{ metric.detail }}</small>
+          @if (metric.fill !== undefined) {
+            <div class="rain-accumulation" [attr.title]="metric.value">
+              <i [style.width.%]="metric.fill"></i>
+            </div>
+          }
         </article>
       }
     </div>

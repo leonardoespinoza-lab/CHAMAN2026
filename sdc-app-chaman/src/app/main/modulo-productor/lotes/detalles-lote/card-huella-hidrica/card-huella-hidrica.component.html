@@ -32,16 +32,16 @@
     </p-message>
   }
 
-  <div class="water-cups">
+  <div class="water-bars">
     @for (item of huellas; track item.key) {
       <article [ngClass]="item.key">
-        <div class="water-cup" [style.--fill]="item.fill + '%'">
-          <span></span>
-        </div>
         <div>
           <strong>{{ item.label }}</strong>
           <em>{{ item.value }}</em>
           <small>{{ item.detail }}</small>
+        </div>
+        <div class="water-meter" [style.--fill]="item.fill + '%'">
+          <span></span>
         </div>
       </article>
     }

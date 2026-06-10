@@ -9,6 +9,7 @@ interface MetricClima {
   value: string;
   detail: string;
   tone?: 'ok' | 'warn' | 'info';
+  fill?: number;
 }
 
 interface DiaClima {
@@ -80,8 +81,20 @@ export class CardClimaLoteComponent {
     const vientoMax72 = this.max(this.vientos.slice(0, 3));
 
     return [
-      { label: 'Lluvia 24 h', value: this.formatear(lluvia24, 'mm'), detail: 'Proximo dia', tone: lluvia24 > 0 ? 'info' : 'ok' },
-      { label: 'Lluvia 72 h', value: this.formatear(lluvia72, 'mm'), detail: 'Ventana enfermedades', tone: lluvia72 > 4 ? 'warn' : 'ok' },
+      {
+        label: 'Lluvia 24 h',
+        value: this.formatear(lluvia24, 'mm'),
+        detail: 'Proximo dia',
+        tone: lluvia24 > 0 ? 'info' : 'ok',
+        fill: this.limitar((lluvia24 / 20) * 100),
+      },
+      {
+        label: 'Lluvia 72 h',
+        value: this.formatear(lluvia72, 'mm'),
+        detail: 'Ventana enfermedades',
+        tone: lluvia72 > 4 ? 'warn' : 'ok',
+        fill: this.limitar((lluvia72 / 35) * 100),
+      },
       { label: 'HR max 72 h', value: this.formatear(humedadMax72, '%'), detail: 'Mojado foliar probable', tone: humedadMax72 > 92 ? 'warn' : 'ok' },
       { label: 'ET0 72 h', value: this.formatear(et072, 'mm'), detail: 'Demanda atmosferica', tone: 'info' },
       { label: 'Balance 72 h', value: this.formatear(balance, 'mm'), detail: 'Lluvia menos ET0', tone: balance < -2 ? 'warn' : 'ok' },
@@ -296,5 +309,12 @@ export class CardClimaLoteComponent {
 
   private redondear(value: number): number {
     return Math.round(value * 10) / 10;
+  }
+
+  private limitar(value: number): number {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    return Math.max(0, Math.min(100, value));
   }
 }
