@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sdc-api-externa
+  labels:
+    app: sdc-api-externa
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sdc-api-externa
+  template:
+    metadata:
+      labels:
+        app: sdc-api-externa
+    spec:
+      containers:
+      - name: sdc-api-externa
+        image: chaman/sdc-api-externa:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5000
+        env:
+        - name: PORT
+          value: "5000"
+        - name: API_DATOS
+          value: "http://sdc-datos-service"
+        - name: ENV
+          value: "production"
+        - name: API_PREDICCIONES
+          value: "http://sdc-api-predicciones-service/sdc-predicciones"
+        - name: API_CLIMA
+          value: "http://sdc-api-clima-service"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "100m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sdc-api-externa-service
+  labels:
+    app: sdc-api-externa
+spec:
+  selector:
+    app: sdc-api-externa
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 5000
+  type: ClusterIP

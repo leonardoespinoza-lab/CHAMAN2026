@@ -41,7 +41,6 @@ sdc-doc/
 sdc-web-admin/
 sdc-web-cliente/
 sdc-api-admin/
-sdc-api-externa/
 sdc-ftp/
 
 # IDE / OS
@@ -51,6 +50,7 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+**/.vscode/*
 
 # Mobile generated artifacts
 sdc-app-chaman/android/app/build/
