@@ -29,6 +29,7 @@ yarn-error.log*
 **/*credentials*.json
 **/*service-account*.json
 !**/*.example.json
+.railway-admin-credential.txt
 
 # Generated/static snapshots not intended for source review
 chamanagro-web-dist/
