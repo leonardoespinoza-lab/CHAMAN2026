@@ -48,8 +48,9 @@ async function bootstrap() {
   );
   app.use(json({ limit: '50mb' }));
   app.use(urlencoded({ extended: true, limit: '50mb' }));
-  await app.listen(PORT);
-  logger.verbose(`Application listening on port ${PORT}`);
+  const host = process.env.HOST || '0.0.0.0';
+  await app.listen(PORT, host);
+  logger.verbose(`Application listening on ${host}:${PORT}`);
   logger.verbose(`Version: ${VERSION}`);
   logger.verbose(`Documentación disponible en ${PREFIX_PATH}/api`);
 }

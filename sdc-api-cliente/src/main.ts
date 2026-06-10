@@ -34,8 +34,9 @@ async function bootstrap() {
   swaggerConfig(app);
   app.enableCors();
   app.useGlobalInterceptors(new LogRequestInterceptor());
-  await app.listen(PORT);
-  logger.verbose(`Application listening on port ${PORT}`);
+  const host = process.env.HOST || '0.0.0.0';
+  await app.listen(PORT, host);
+  logger.verbose(`Application listening on ${host}:${PORT}`);
   logger.verbose(`Documentación disponible en ${PREFIX_PATH}/api`);
 }
 bootstrap();

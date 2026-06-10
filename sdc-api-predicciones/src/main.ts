@@ -32,8 +32,9 @@ async function bootstrap() {
   setGlobalPrefix(app, logger);
   swaggerConfig(app);
   app.enableCors();
-  await app.listen(PORT);
-  logger.verbose(`Application listening on port ${PORT}`);
+  const host = process.env.HOST || '0.0.0.0';
+  await app.listen(PORT, host);
+  logger.verbose(`Application listening on ${host}:${PORT}`);
   logger.verbose(`Version: ${VERSION}`);
   logger.verbose(`Documentación disponible en ${PREFIX_PATH}/api`);
 }
