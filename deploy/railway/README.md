@@ -4,7 +4,7 @@
 
 Crear un proyecto Railway con servicios separados desde el mismo repositorio `CHAMAN2026`.
 
-Usar root directory `.` para todos los servicios. El repo incluye `railway.json` y scripts raiz que resuelven cada subproyecto mediante la variable `CHAMAN_SERVICE`.
+Usar root directory `.` para todos los servicios. El repo incluye `railway.json` con builder `RAILPACK` y scripts raiz que resuelven cada subproyecto mediante la variable `CHAMAN_SERVICE`.
 
 Build command para todos los servicios:
 
