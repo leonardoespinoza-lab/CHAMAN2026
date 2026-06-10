@@ -71,6 +71,16 @@ function sendFile(res, filePath) {
 }
 
 const server = http.createServer((req, res) => {
+  if ((req.url || '').split('?')[0] === '/health') {
+    res.writeHead(200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-cache',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end('OK');
+    return;
+  }
+
   if ((req.url || '').split('?')[0] === '/runtime-config.js') {
     res.writeHead(200, {
       'Content-Type': 'text/javascript; charset=utf-8',
