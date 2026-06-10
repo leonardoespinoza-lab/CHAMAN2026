@@ -46,9 +46,9 @@ Usar private networking para servicios internos y dominio publico solo para `cha
 - `chaman-datos`: privado, `PORT=5000`.
 - `chaman-auth`: privado, `API_DATOS=http://${{chaman-datos.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-datos.PORT}}`.
 - `chaman-clima`: privado, `API_DATOS=http://${{chaman-datos.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-datos.PORT}}`.
-- `chaman-predicciones`: privado, `API_DATOS=http://${{chaman-datos.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-datos.PORT}}` y `API_CLIMA=http://${{chaman-clima.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-clima.PORT}}/local`.
+- `chaman-predicciones`: privado, `API_DATOS=http://${{chaman-datos.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-datos.PORT}}` y `API_CLIMA=http://${{chaman-clima.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-clima.PORT}}/clima`.
 - `chaman-api`: publico, comunica internamente con datos/auth/clima/predicciones.
-- `chaman-web`: publico, lee `CHAMAN_WEB_API_URL` y `CHAMAN_WEB_TILES_URL` desde `/runtime-config.js`.
+- `chaman-web`: publico, lee `CHAMAN_WEB_API_URL` y `CHAMAN_WEB_TILES_URL` desde `/runtime-config.js`. En Railway debe apuntar al gateway publico con prefijo, por ejemplo `https://${{chaman-api.RAILWAY_PUBLIC_DOMAIN}}/sdc-quimica`.
 
 Los backends aceptan `HOST` por variable de entorno. En Railway usar `HOST=::` para compatibilidad con private networking dual-stack.
 

@@ -50,6 +50,42 @@ const blink = colorIfAllowed((text: string) => `\x1B[5m${text}\x1B[0m`);
 const bold = colorIfAllowed((text: string) => `\x1B[1m${text}\x1B[0m`);
 const faint = colorIfAllowed((text: string) => `\x1B[2m${text}\x1B[0m`);
 
+const REDACTED = '[redacted]';
+const SENSITIVE_KEYS = new Set([
+  'password',
+  'pass',
+  'clave',
+  'token',
+  'accesstoken',
+  'refreshtoken',
+  'refresh_token',
+  'authorization',
+  'clientsecret',
+  'client_secret',
+  'privatekey',
+  'private_key',
+  'apikey',
+  'api_key',
+  'secret',
+]);
+
+function sanitizeLogData(value: any): any {
+  if (Array.isArray(value)) return value.map((item) => sanitizeLogData(item));
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.entries(value).reduce((result, [key, item]) => {
+    const normalizedKey = key.toLowerCase().replace(/[\s_-]/g, '');
+    result[key] =
+      SENSITIVE_KEYS.has(normalizedKey) ||
+      normalizedKey.includes('password') ||
+      normalizedKey.includes('secret') ||
+      normalizedKey.includes('token')
+        ? REDACTED
+        : sanitizeLogData(item);
+    return result;
+  }, {} as Record<string, any>);
+}
+
 @Injectable()
 export class LogRequestInterceptor implements NestInterceptor {
   private logger = new LogService(LogRequestInterceptor.name);
@@ -87,9 +123,13 @@ export class LogRequestInterceptor implements NestInterceptor {
 
     let msg = `${ruta}`;
     const bodyString =
-      body && Object.keys(body).length ? JSON.stringify(body) : '';
+      body && Object.keys(body).length
+        ? JSON.stringify(sanitizeLogData(body))
+        : '';
     const querystring =
-      query && Object.keys(query).length ? JSON.stringify(query) : '';
+      query && Object.keys(query).length
+        ? JSON.stringify(sanitizeLogData(query))
+        : '';
 
     if (body && Object.keys(body).length) msg += ` [body: ${bodyString}]`;
     if (query && Object.keys(query).length) msg += ` [query: ${querystring}]`;
