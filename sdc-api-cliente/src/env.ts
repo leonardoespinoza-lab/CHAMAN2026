@@ -22,6 +22,7 @@ export const API_PREDICCIONES =
 export const API_CLIMA =
   process.env.API_CLIMA || 'http://127.0.0.1:5008/local';
 // MQTT
+export const MQTT_ENABLED = process.env.MQTT_ENABLED === 'true';
 export const MQTT_PROTOCOL = process.env.MQTT_PROTOCOL || 'ssl';
 export const MQTT_HOST = process.env.MQTT_HOST || 'localhost';
 export const MQTT_PORT = +process.env.MQTT_PORT || 8883;

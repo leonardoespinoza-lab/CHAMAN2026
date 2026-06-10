@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   ENV,
+  MQTT_ENABLED,
   MQTT_CLIENT_ID,
   MQTT_HOST,
   MQTT_PASS,
@@ -37,10 +38,18 @@ export class MqttService {
   private client?: MQTT.AsyncMqttClient;
 
   constructor() {
-    this.connect();
+    if (MQTT_ENABLED) {
+      this.connect();
+    } else {
+      this.logger.verbose('MQTT deshabilitado. Definir MQTT_ENABLED=true para activar broker externo.');
+    }
   }
 
   private async connect() {
+    if (!MQTT_ENABLED) {
+      return;
+    }
+
     try {
       const host = `${MQTT_PROTOCOL}://${MQTT_HOST}:${MQTT_PORT}`;
       this.logger.verbose(`Connecting to MQTT broker... ${host}`);
@@ -55,6 +64,10 @@ export class MqttService {
   }
 
   public async sendMessage(topic: string, message: string) {
+    if (!MQTT_ENABLED) {
+      return;
+    }
+
     if (!this.client) {
       await this.connect();
     }
