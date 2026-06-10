@@ -25,7 +25,7 @@ ENV PATH="/opt/venv/bin:${PATH}"
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package.json ./
 COPY scripts ./scripts
 COPY sdc-ndvi-worker ./sdc-ndvi-worker
 

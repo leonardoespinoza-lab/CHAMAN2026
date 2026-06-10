@@ -8,7 +8,11 @@ function run(command, cwd) {
     cwd,
     shell: true,
     stdio: 'inherit',
-    env: process.env,
+    env: {
+      ...process.env,
+      NPM_CONFIG_PRODUCTION: 'false',
+      npm_config_production: 'false',
+    },
   });
 
   if (result.status !== 0) {
