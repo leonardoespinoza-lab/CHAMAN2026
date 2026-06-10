@@ -8,16 +8,9 @@
 
 :host {
   display: block;
-  height: 100vh;
-  overflow-y: auto;
+  min-height: 100dvh;
   box-sizing: border-box;
-  padding: 24px;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
+  padding: clamp(12px, 2vw, 24px);
 }
 
 @media (min-width: 1024px) and (pointer: fine) and (hover: hover) {
@@ -32,5 +25,65 @@
   :host {
     width: min(1320px, calc(100% - 96px));
     padding: 48px 0 80px;
+  }
+}
+
+.user-editor-page,
+.user-editor-card,
+.user-editor-body,
+.user-editor-main {
+  min-width: 0;
+}
+
+.user-editor-page {
+  min-height: calc(100dvh - 48px);
+}
+
+.user-editor-card {
+  min-height: min(760px, calc(100dvh - 48px));
+}
+
+.user-editor-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.user-editor-main {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.user-editor-content {
+  margin-top: 1rem;
+  overflow: visible;
+}
+
+.user-editor-footer {
+  margin-top: auto;
+}
+
+.user-editor-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 720px) {
+  :host {
+    padding: 12px;
+  }
+
+  .user-editor-page {
+    min-height: auto;
+  }
+
+  .user-editor-card {
+    min-height: auto;
+  }
+
+  .user-editor-actions {
+    grid-template-columns: 1fr;
   }
 }

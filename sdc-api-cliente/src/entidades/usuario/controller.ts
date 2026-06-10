@@ -91,8 +91,11 @@ export class UsuariosController {
     { nivel: 'Establecimiento', roles: ['Admin'] },
     { nivel: 'Admin', roles: ['Admin'] },
   )
-  public async create(@Body() body: ICreateUsuario): Promise<IUsuario> {
-    return await this.service.create(body);
+  public async create(
+    @Body() body: ICreateUsuario,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<IUsuario> {
+    return await this.service.create(body, permiso);
   }
 
   @Post('autogestion/crear')

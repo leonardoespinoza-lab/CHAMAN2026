@@ -10,3 +10,8 @@ a {
     font-weight: 700 !important;
   }
 }
+
+.app-shell {
+  min-height: 100dvh;
+  overflow-x: hidden;
+}

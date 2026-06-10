@@ -1,12 +1,9 @@
 <!-- <app-map-draw [formGeojson]="geojson" tipo="Polygon" [readOnlyPolygons]="geoJsonEstablecimiento"></app-map-draw> -->
 
-<div style="padding: 1em; height: 100%">
-  <div class="p-card" style="height: 100%">
-    <div
-      class="p-card-body"
-      style="height: 100%; display: flex; flex-direction: column; justify-content: space-between"
-    >
-      <div style="overflow: hidden; height: 100%">
+<div class="user-editor-page">
+  <div class="p-card user-editor-card">
+    <div class="p-card-body user-editor-body">
+      <div class="user-editor-main">
         <!-- Titulo -->
         <div class="p-card-title">{{ titulo?.() }}</div>
         <!-- Subtitulo -->
@@ -14,7 +11,7 @@
           <div class="p-card-subtitle">{{ usuario.username }}</div>
         }
         <!-- Content -->
-        <div class="p-card-content" style="overflow: auto; height: calc(100% - 26px); margin-top: 1em">
+        <div class="p-card-content user-editor-content">
           @if (form) {
             <form [formGroup]="form" autocomplete="off">
               <p-tabs [(value)]="tabValue" scrollable [lazy]="false">
@@ -121,6 +118,11 @@
                               <label>{{ 'Productores' | translate }}</label>
                             </p-floatlabel>
                           }
+                          @if (nivel(i) === 'Productor' && productores.length === 0) {
+                            <p-message severity="warn">
+                              {{ 'No hay productores creados' | translate }}
+                            </p-message>
+                          }
 
                           <!-- Distribuidor -->
                           @if (nivel(i) === 'Distribuidor' && distribuidores.length > 1) {
@@ -139,6 +141,11 @@
                               <label>{{ 'Distribuidores' | translate }}</label>
                             </p-floatlabel>
                           }
+                          @if (nivel(i) === 'Distribuidor' && distribuidores.length === 0) {
+                            <p-message severity="warn">
+                              {{ 'No hay distribuidores creados' | translate }}
+                            </p-message>
+                          }
 
                           <!-- Química -->
                           @if (nivel(i) === 'Quimica' && quimicas.length > 1) {
@@ -156,6 +163,11 @@
                               </p-select>
                               <label>{{ 'Químicas' | translate }}</label>
                             </p-floatlabel>
+                          }
+                          @if (nivel(i) === 'Quimica' && quimicas.length === 0) {
+                            <p-message severity="warn">
+                              {{ 'No hay químicas creadas' | translate }}
+                            </p-message>
                           }
 
                           <!-- Boton eliminar -->
@@ -211,9 +223,9 @@
         </div>
       </div>
       <!-- Footer -->
-      <div class="p-card-footer">
+      <div class="p-card-footer user-editor-footer">
         <p-divider />
-        <div class="flex gap-4 mt-1">
+        <div class="user-editor-actions">
           <p-button
             [label]="'Cancelar' | translate"
             severity="secondary"

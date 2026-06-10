@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   IUsuario,
   IListado,
@@ -47,7 +47,11 @@ export class UsuariosService {
     return await this.repository.get(query);
   }
 
-  async create(data: ICreateUsuario): Promise<IUsuario> {
+  async create(data: ICreateUsuario, permiso: IPermiso): Promise<IUsuario> {
+    if (!data.password) {
+      throw new BadRequestException('La contraseña es obligatoria');
+    }
+    this.validarPermisosAsignados(data.permisos, permiso);
     data.hash = await this.hashClave(data.password);
     return await this.repository.create(data);
   }
@@ -85,6 +89,9 @@ export class UsuariosService {
     permiso: IPermiso,
   ): Promise<IUsuario> {
     await this.getById(id, permiso);
+    if (data.permisos) {
+      this.validarPermisosAsignados(data.permisos, permiso);
+    }
     if (data.password) {
       data.hash = await this.hashClave(data.password);
     }
@@ -137,6 +144,9 @@ export class UsuariosService {
   }
 
   private puedeVer(data: IUsuario, permiso: IPermiso): boolean {
+    if (!data?.permisos?.length) {
+      return false;
+    }
     if (permiso.nivel === 'Admin') {
       return true;
     }
@@ -154,6 +164,58 @@ export class UsuariosService {
     if (permiso.nivel === 'Establecimiento') {
       return data.permisos.some(
         (p) => p.idEstablecimiento === permiso.idEstablecimiento,
+      );
+    }
+    return false;
+  }
+
+  private validarPermisosAsignados(
+    permisos: IPermiso[] | undefined,
+    permisoActual: IPermiso,
+  ): void {
+    if (!permisos?.length) {
+      throw new BadRequestException('Debe asignar al menos un permiso');
+    }
+    for (const permiso of permisos) {
+      if (!this.permisoDentroDelAlcance(permiso, permisoActual)) {
+        throw new BadRequestException(
+          'No tiene permiso para asignar ese nivel de usuario',
+        );
+      }
+    }
+  }
+
+  private permisoDentroDelAlcance(
+    permisoDestino: IPermiso,
+    permisoActual: IPermiso,
+  ): boolean {
+    if (permisoActual.nivel === 'Admin') {
+      return true;
+    }
+    if (permisoDestino.nivel === 'Admin') {
+      return false;
+    }
+    if (permisoActual.nivel === 'Quimica') {
+      return permisoDestino.idQuimica === permisoActual.idQuimica;
+    }
+    if (permisoActual.nivel === 'Distribuidor') {
+      return (
+        permisoDestino.idDistribuidor === permisoActual.idDistribuidor &&
+        ['Distribuidor', 'Productor', 'Establecimiento'].includes(
+          permisoDestino.nivel,
+        )
+      );
+    }
+    if (permisoActual.nivel === 'Productor') {
+      return (
+        permisoDestino.idProductor === permisoActual.idProductor &&
+        ['Productor', 'Establecimiento'].includes(permisoDestino.nivel)
+      );
+    }
+    if (permisoActual.nivel === 'Establecimiento') {
+      return (
+        permisoDestino.nivel === 'Establecimiento' &&
+        permisoDestino.idEstablecimiento === permisoActual.idEstablecimiento
       );
     }
     return false;

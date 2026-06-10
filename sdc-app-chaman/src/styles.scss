@@ -141,13 +141,12 @@ p-table .flex.menu-offset {
 
 /* Contenedor responsivo para vistas de listado */
 .list-view-container {
-  /* Estilos base (Mobile First) */
-  width: 100%; /* Ancho por defecto para pantallas hasta 1920px */
-  height: 100vh; /* Altura completa de la pantalla */
-  margin: 0 auto; /* Mantiene el contenedor centrado */
-  padding: 0.5em; /* Padding reducido para conservar espacio */
-  box-sizing: border-box; /* Incluye padding en el cálculo del tamaño */
-  overflow: hidden; /* Sin scroll en el contenedor principal */
+  width: 100%;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: clamp(12px, 2vw, 24px);
+  box-sizing: border-box;
+  overflow: visible;
   display: flex;
   flex-direction: column;
 }
@@ -155,20 +154,20 @@ p-table .flex.menu-offset {
 /* Se activa solo en pantallas más anchas de 1920px */
 @media (min-width: 1921px) {
   .list-view-container {
-    width: 85%; /* En pantallas muy grandes, el ancho será del 85% */
-    margin: 1.5em auto 2.5em auto; /* Márgenes moderados */
-    padding: 1em; /* Padding normal en pantallas grandes */
-    height: calc(100vh - 4em); /* Ajustar altura considerando márgenes */
+    width: min(1480px, calc(100% - 96px));
+    margin: 32px auto 56px;
+    padding: 0;
+    min-height: calc(100dvh - 88px);
   }
 }
 
 /* Para escritorio real (pantallas grandes no táctiles) */
 @media (min-width: 1024px) and (pointer: fine) and (hover: hover) {
   .list-view-container {
-    width: 80%; /* Aplicar márgenes solo en escritorio real */
-    margin: 1em auto 2em auto; /* Márgenes moderados */
-    padding: 1em; /* Padding normal en desktop */
-    height: calc(100vh - 3em); /* Ajustar altura considerando márgenes */
+    width: min(1320px, calc(100% - 64px));
+    margin: 24px auto 48px;
+    padding: 0;
+    min-height: calc(100dvh - 72px);
   }
 }
 
@@ -177,17 +176,31 @@ p-table .flex.menu-offset {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 /* Optimización específica para PrimeNG tables */
 .list-view-container p-table .p-datatable {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: min(760px, calc(100dvh - 96px));
+  height: auto;
 }
 
 .list-view-container p-table .p-datatable .p-datatable-wrapper {
   flex: 1;
+  max-height: calc(100dvh - 230px);
+  overflow: auto;
+}
+
+@media (max-width: 768px) {
+  .list-view-container p-table .p-datatable {
+    min-height: auto;
+  }
+
+  .list-view-container p-table .p-datatable .p-datatable-wrapper {
+    max-height: none;
+  }
 }
 
 /* Optimización del paginador para móviles */

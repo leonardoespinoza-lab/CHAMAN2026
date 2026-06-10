@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormArray, FormControl, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
@@ -29,7 +29,7 @@ import { SharedModule } from '../../../auxiliares/shared.module';
   templateUrl: './crear-editar-usuarios.component.html',
   styleUrl: './crear-editar-usuarios.component.scss',
 })
-export class CrearEditarUsuariosComponent implements OnInit {
+export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
   public loading = false;
   public usuario?: IUsuario;
   public titulo?: () => string;
@@ -100,6 +100,7 @@ export class CrearEditarUsuariosComponent implements OnInit {
   }
   public agregarPermiso() {
     this.permisos.push(this.agregarPermisoFormGroup());
+    this.cambioNivel(this.permisos.length - 1, false);
   }
   public borrarPermiso(i: number) {
     this.permisos.removeAt(i);
@@ -113,7 +114,7 @@ export class CrearEditarUsuariosComponent implements OnInit {
         telefono: new FormControl(this.usuario?.datosPersonales?.['telefono']),
         email: new FormControl(this.usuario?.datosPersonales?.email, Validators.email),
       }),
-      permisos: new FormArray(this.initPermisos()),
+      permisos: new FormArray(this.initPermisos(), Validators.required),
     });
     this.permisos.controls.forEach((_, i) => this.cambioNivel(i, false));
   }
@@ -121,52 +122,58 @@ export class CrearEditarUsuariosComponent implements OnInit {
   public cambioNivel(i: number, reset = true) {
     const nivel = this.nivel(i);
     const permiso = this.permisos.at(i);
+    const idProductor = permiso.get('idProductor');
+    const idEstablecimiento = permiso.get('idEstablecimiento');
+    const idDistribuidor = permiso.get('idDistribuidor');
+    const idQuimica = permiso.get('idQuimica');
+
     if (reset) {
-      permiso.get('idProductor')?.reset();
-      permiso.get('idEstablecimiento')?.reset();
-      permiso.get('idDistribuidor')?.reset();
-      permiso.get('idQuimica')?.reset();
+      idProductor?.reset();
+      idEstablecimiento?.reset();
+      idDistribuidor?.reset();
+      idQuimica?.reset();
     }
+
+    idProductor?.clearValidators();
+    idEstablecimiento?.clearValidators();
+    idDistribuidor?.clearValidators();
+    idQuimica?.clearValidators();
+
     if (nivel === 'Productor') {
-      permiso.get('idProductor')?.setValidators(Validators.required);
-      permiso.get('idEstablecimiento')?.clearValidators();
-      permiso.get('idDistribuidor')?.clearValidators();
-      permiso.get('idQuimica')?.clearValidators();
+      idProductor?.setValidators(Validators.required);
       if (this.productorPreseleccionado) {
-        permiso.get('idProductor')?.setValue(this.productorPreseleccionado._id);
-        permiso.get('idDistribuidor')?.setValue(this.productorPreseleccionado.idDistribuidor);
-        permiso.get('idQuimica')?.setValue(this.productorPreseleccionado.idQuimica);
+        idProductor?.setValue(this.productorPreseleccionado._id);
+        idDistribuidor?.setValue(this.productorPreseleccionado.idDistribuidor);
+        idQuimica?.setValue(this.productorPreseleccionado.idQuimica);
       } else if (this.productores.length === 1) {
-        permiso.get('idProductor')?.setValue(this.productores[0]._id);
+        idProductor?.setValue(this.productores[0]._id);
+        idDistribuidor?.setValue(this.productores[0].idDistribuidor);
+        idQuimica?.setValue(this.productores[0].idQuimica);
       }
     } else if (nivel === 'Establecimiento') {
-      permiso.get('idEstablecimiento')?.setValidators(Validators.required);
-      permiso.get('idProductor')?.clearValidators();
-      permiso.get('idDistribuidor')?.clearValidators();
-      permiso.get('idQuimica')?.clearValidators();
+      idEstablecimiento?.setValidators(Validators.required);
       if (this.establecimientos.length === 1) {
-        permiso.get('idEstablecimiento')?.setValue(this.establecimientos[0]._id);
+        idEstablecimiento?.setValue(this.establecimientos[0]._id);
+        idProductor?.setValue(this.establecimientos[0].idProductor);
+        idDistribuidor?.setValue(this.establecimientos[0].idDistribuidor);
+        idQuimica?.setValue(this.establecimientos[0].idQuimica);
       }
     } else if (nivel === 'Distribuidor') {
-      permiso.get('idDistribuidor')?.setValidators(Validators.required);
-      permiso.get('idProductor')?.clearValidators();
-      permiso.get('idEstablecimiento')?.clearValidators();
+      idDistribuidor?.setValidators(Validators.required);
       if (this.distribuidores.length === 1) {
-        permiso.get('idDistribuidor')?.setValue(this.distribuidores[0]._id);
+        idDistribuidor?.setValue(this.distribuidores[0]._id);
+        idQuimica?.setValue(this.distribuidores[0].idQuimica);
       }
     } else if (nivel === 'Quimica') {
-      permiso.get('idQuimica')?.setValidators(Validators.required);
-      permiso.get('idProductor')?.clearValidators();
-      permiso.get('idEstablecimiento')?.clearValidators();
-      permiso.get('idDistribuidor')?.clearValidators();
+      idQuimica?.setValidators(Validators.required);
       if (this.quimicas.length === 1) {
-        permiso.get('idQuimica')?.setValue(this.quimicas[0]._id);
+        idQuimica?.setValue(this.quimicas[0]._id);
       }
     }
-    permiso.get('idProductor')?.updateValueAndValidity();
-    permiso.get('idEstablecimiento')?.updateValueAndValidity();
-    permiso.get('idDistribuidor')?.updateValueAndValidity();
-    permiso.get('idQuimica')?.updateValueAndValidity();
+    idProductor?.updateValueAndValidity();
+    idEstablecimiento?.updateValueAndValidity();
+    idDistribuidor?.updateValueAndValidity();
+    idQuimica?.updateValueAndValidity();
   }
 
   // ACCIONES
@@ -176,36 +183,68 @@ export class CrearEditarUsuariosComponent implements OnInit {
     data.activo = true;
     data.email = data.datosPersonales?.email || data.username;
     if (data.permisos) {
-      for (const permiso of data.permisos) {
-        if (permiso.nivel === 'Productor') {
-          const productor =
-            this.productores.find((p) => p._id === permiso.idProductor) ||
-            (this.productorPreseleccionado?._id === permiso.idProductor ? this.productorPreseleccionado : undefined);
-          permiso.idQuimica = productor?.idQuimica;
-          permiso.idDistribuidor = productor?.idDistribuidor;
-        }
-        if (permiso.nivel === 'Establecimiento') {
-          const establecimiento = this.establecimientos.find((p) => p._id === permiso.idEstablecimiento);
-          permiso.idQuimica = establecimiento?.idQuimica;
-          permiso.idDistribuidor = establecimiento?.idDistribuidor;
-          permiso.idProductor = establecimiento?.idProductor;
-        }
-        // if (permiso.nivel === 'Distribuidor') {
-        //   const distribuidor = this.distribuidores.find((p) => p._id === permiso.idDistribuidor);
-        //   permiso.idQuimica = distribuidor?.idQuimica;
-        //   permiso.idDistribuidor = distribuidor?._id;
-        // }
-        // if (permiso.nivel === 'Quimica') {
-        //   const quimica = this.quimicas.find((p) => p._id === permiso.idQuimica);
-        //   permiso.idQuimica = quimica?._id;
-        // }
-      }
+      data.permisos = data.permisos.map((permiso) => this.normalizarPermiso({ ...permiso }));
     }
     return data;
   }
 
+  private normalizarPermiso(permiso: IPermiso): IPermiso {
+    if (permiso.nivel === 'Admin') {
+      return {
+        nivel: permiso.nivel,
+        rol: permiso.rol,
+      };
+    }
+
+    if (permiso.nivel === 'Quimica') {
+      const quimica = this.quimicas.find((q) => q._id === permiso.idQuimica);
+      return {
+        nivel: permiso.nivel,
+        rol: permiso.rol,
+        idQuimica: quimica?._id || permiso.idQuimica,
+      };
+    }
+
+    if (permiso.nivel === 'Distribuidor') {
+      const distribuidor = this.distribuidores.find((d) => d._id === permiso.idDistribuidor);
+      return {
+        nivel: permiso.nivel,
+        rol: permiso.rol,
+        idDistribuidor: distribuidor?._id || permiso.idDistribuidor,
+        idQuimica: distribuidor?.idQuimica || permiso.idQuimica,
+      };
+    }
+
+    if (permiso.nivel === 'Productor') {
+      const productor =
+        this.productores.find((p) => p._id === permiso.idProductor) ||
+        (this.productorPreseleccionado?._id === permiso.idProductor ? this.productorPreseleccionado : undefined);
+      return {
+        nivel: permiso.nivel,
+        rol: permiso.rol,
+        idProductor: productor?._id || permiso.idProductor,
+        idDistribuidor: productor?.idDistribuidor || permiso.idDistribuidor,
+        idQuimica: productor?.idQuimica || permiso.idQuimica,
+      };
+    }
+
+    if (permiso.nivel === 'Establecimiento') {
+      const establecimiento = this.establecimientos.find((e) => e._id === permiso.idEstablecimiento);
+      return {
+        nivel: permiso.nivel,
+        rol: permiso.rol,
+        idEstablecimiento: establecimiento?._id || permiso.idEstablecimiento,
+        idProductor: establecimiento?.idProductor || permiso.idProductor,
+        idDistribuidor: establecimiento?.idDistribuidor || permiso.idDistribuidor,
+        idQuimica: establecimiento?.idQuimica || permiso.idQuimica,
+      };
+    }
+
+    return permiso;
+  }
+
   public async guardar(): Promise<void> {
-    if (!this.form?.valid) {
+    if (!this.form?.valid || !this.permisos.length) {
       this.form?.markAllAsTouched();
       this.helper.notifError('Completá usuario, contraseña y al menos un permiso válido.');
       return;
@@ -249,6 +288,10 @@ export class CrearEditarUsuariosComponent implements OnInit {
 
   // LISTADOS
 
+  private refrescarPermisosPorNivel(): void {
+    this.permisos?.controls.forEach((_, i) => this.cambioNivel(i, false));
+  }
+
   private async listarProductores() {
     const queryParams: IQueryParam = {
       page: 0,
@@ -258,15 +301,10 @@ export class CrearEditarUsuariosComponent implements OnInit {
 
     this.productores$?.unsubscribe();
     this.productores$ = this.listado
-      .subscribe<IListado<IEstablecimiento>>('productors', queryParams)
+      .subscribe<IListado<IProductor>>('productors', queryParams)
       .subscribe(async (data) => {
         this.productores = data.datos;
-        this.permisos?.controls.forEach((_, i) => {
-          if (this.nivel(i) === 'Productor' && !this.permisos.at(i).get('idProductor')?.value) {
-            this.cambioNivel(i, false);
-          }
-        });
-        console.log(`listado de productores`, data);
+        this.refrescarPermisosPorNivel();
       });
     await this.listado.getLastValue('productors', queryParams);
   }
@@ -283,7 +321,7 @@ export class CrearEditarUsuariosComponent implements OnInit {
       .subscribe<IListado<IEstablecimiento>>('establecimientos', queryParams)
       .subscribe(async (data) => {
         this.establecimientos = data.datos;
-        console.log(`listado de establecimientos`, data);
+        this.refrescarPermisosPorNivel();
       });
     await this.listado.getLastValue('establecimientos', queryParams);
   }
@@ -300,7 +338,7 @@ export class CrearEditarUsuariosComponent implements OnInit {
       .subscribe<IListado<IDistribuidor>>('distribuidors', queryParams)
       .subscribe(async (data) => {
         this.distribuidores = data.datos;
-        console.log(`listado de distribuidors`, data);
+        this.refrescarPermisosPorNivel();
       });
     await this.listado.getLastValue('distribuidors', queryParams);
   }
@@ -315,7 +353,7 @@ export class CrearEditarUsuariosComponent implements OnInit {
     this.quimicas$?.unsubscribe();
     this.quimicas$ = this.listado.subscribe<IListado<IQuimica>>('quimicas', queryParams).subscribe(async (data) => {
       this.quimicas = data.datos;
-      console.log(`listado de quimicas`, data);
+      this.refrescarPermisosPorNivel();
     });
     await this.listado.getLastValue('quimicas', queryParams);
   }
@@ -357,5 +395,12 @@ export class CrearEditarUsuariosComponent implements OnInit {
       this.loginService.esQuimica || this.loginService.esAdmin ? this.listarQuimicas() : null,
     ]);
     this.loading = false;
+  }
+
+  ngOnDestroy(): void {
+    this.productores$?.unsubscribe();
+    this.establecimientos$?.unsubscribe();
+    this.distribuidores$?.unsubscribe();
+    this.quimicas$?.unsubscribe();
   }
 }
