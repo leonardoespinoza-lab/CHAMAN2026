@@ -27,6 +27,12 @@ export class SemillasController {
     return await this.service.create(body);
   }
 
+  @Post('/bulk')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  public async bulk(@Body() body: ICreateSemilla[]): Promise<void> {
+    return await this.service.bulk(body);
+  }
+
   @Put('/:id')
   @Permisos({ nivel: 'Admin', roles: ['Admin'] })
   public async update(

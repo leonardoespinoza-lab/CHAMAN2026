@@ -22,6 +22,11 @@ export class SemillasRepository {
     return await this.axios.POST<ISemilla>(url, data);
   }
 
+  async bulk(data: ICreateSemilla[]): Promise<void> {
+    const url = `${API_DATOS}/semillas/bulk`;
+    return await this.axios.POST<void>(url, data);
+  }
+
   async update(id: string, data: IUpdateSemilla): Promise<ISemilla> {
     const url = `${API_DATOS}/semillas/${id}`;
     return await this.axios.PUT<ISemilla>(url, data);

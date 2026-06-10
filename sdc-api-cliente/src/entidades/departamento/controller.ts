@@ -1,8 +1,15 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { DepartamentosService } from './service';
-import { IDepartamento, IListado, IQueryParam } from 'modelos/src';
+import {
+  IDepartamento,
+  ICreateDepartamento,
+  IListado,
+  IQueryParam,
+  IUpdateDepartamento,
+} from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
+import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 
 @ApiTags('Departamentos')
 @Controller('departamentos')
@@ -20,5 +27,29 @@ export class DepartamentosController {
   @Get('/:id')
   public async getById(@Param('id') id: string): Promise<IDepartamento> {
     return await this.service.getById(id);
+  }
+
+  @Post()
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  public async create(@Body() body: ICreateDepartamento): Promise<IDepartamento> {
+    return await this.service.create(body);
+  }
+
+  @Post('/bulk')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  public async bulk(@Body() body: ICreateDepartamento[]): Promise<void> {
+    return await this.service.bulk(body);
+  }
+
+  @Put('/:id')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  public async update(@Param('id') id: string, @Body() body: IUpdateDepartamento): Promise<IDepartamento> {
+    return await this.service.update(id, body);
+  }
+
+  @Delete('/:id')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  public async delete(@Param('id') id: string): Promise<IDepartamento> {
+    return await this.service.delete(id);
   }
 }

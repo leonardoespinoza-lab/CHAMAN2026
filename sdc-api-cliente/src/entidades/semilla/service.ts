@@ -18,6 +18,10 @@ export class SemillasService {
     return await this.repository.create(data);
   }
 
+  async bulk(data: ICreateSemilla[]): Promise<void> {
+    return await this.repository.bulk(data);
+  }
+
   async update(id: string, data: IUpdateSemilla): Promise<ISemilla> {
     return await this.repository.update(id, data);
   }
