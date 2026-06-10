@@ -35,12 +35,8 @@
   min-width: 0;
 }
 
-.user-editor-page {
-  min-height: calc(100dvh - 48px);
-}
-
 .user-editor-card {
-  min-height: min(760px, calc(100dvh - 48px));
+  min-height: auto;
 }
 
 .user-editor-body {
