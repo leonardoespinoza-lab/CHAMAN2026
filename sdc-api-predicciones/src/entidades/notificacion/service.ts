@@ -9,7 +9,7 @@ import {
 import { NotificacionsRepository } from './repository';
 import { UsuariosService } from '../usuarios/service';
 import { TokenPushsService } from '../tokenPush/service';
-import { FirebaseAdminService } from '../../auxiliares/firebase-admin/service';
+import { PushNotificationsService } from '../../auxiliares/push-notifications/service';
 
 @Injectable()
 export class NotificacionsService {
@@ -18,7 +18,7 @@ export class NotificacionsService {
     private repository: NotificacionsRepository,
     private usuariosService: UsuariosService,
     private tokenPushsService: TokenPushsService,
-    private firebaseAdminService: FirebaseAdminService,
+    private pushNotificationsService: PushNotificationsService,
   ) {}
 
   private async create(data: ICreateNotificacion): Promise<INotificacion> {
@@ -99,7 +99,7 @@ export class NotificacionsService {
       `Enviando notificacion a ${idsUsuariosConTokenUnicos.length} usuarios. ${mensaje}`,
     );
 
-    await this.firebaseAdminService.sendNotifications(tokens, titulo, mensaje);
+    await this.pushNotificationsService.sendNotifications(tokens, titulo, mensaje);
 
     for (const idUsuario of idsUsuariosConTokenUnicos) {
       const createNotif: ICreateNotificacion = {

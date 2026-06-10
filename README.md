@@ -46,4 +46,4 @@ npm run audit:secrets
 
 ## Politica de secretos
 
-No se deben commitear `.env`, credenciales de FieldClimate, tokens de ChirpStack, passwords MQTT, connection strings privadas, claves Firebase server-side, credenciales MongoDB ni claves de proveedores climaticos. Usar los ejemplos de `deploy/railway/*.env.example`.
+No se deben commitear `.env`, credenciales de FieldClimate, tokens de ChirpStack, passwords MQTT, connection strings privadas, credenciales MongoDB ni claves de proveedores climaticos. Usar los ejemplos de `deploy/railway/*.env.example`.

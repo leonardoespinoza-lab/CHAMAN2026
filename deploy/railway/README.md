@@ -4,16 +4,28 @@
 
 Crear un proyecto Railway con servicios separados desde el mismo repositorio `CHAMAN2026`.
 
-Usar root directory `.` para que todos los servicios puedan resolver `sdc-modelos` por `file:../sdc-modelos`, o configurar cada servicio con comandos que se ejecuten desde raiz.
+Usar root directory `.` para todos los servicios. El repo incluye `railway.json` y scripts raiz que resuelven cada subproyecto mediante la variable `CHAMAN_SERVICE`.
+
+Build command para todos los servicios:
+
+```bash
+npm run railway:build
+```
+
+Start command para todos los servicios:
+
+```bash
+npm run railway:start
+```
 
 ## Servicios minimos para staging
 
-1. `chaman-datos`
-2. `chaman-auth`
-3. `chaman-api`
-4. `chaman-predicciones`
-5. `chaman-clima`
-6. `chaman-web`
+1. `chaman-datos` con `CHAMAN_SERVICE=sdc-datos`
+2. `chaman-auth` con `CHAMAN_SERVICE=sdc-auth`
+3. `chaman-clima` con `CHAMAN_SERVICE=sdc-api-clima`
+4. `chaman-predicciones` con `CHAMAN_SERVICE=sdc-api-predicciones`
+5. `chaman-api` con `CHAMAN_SERVICE=sdc-api-cliente`
+6. `chaman-web` con `CHAMAN_SERVICE=sdc-app-chaman`
 7. MongoDB
 8. Redis
 
@@ -27,88 +39,43 @@ Usar root directory `.` para que todos los servicios puedan resolver `sdc-modelo
 6. `sdc-api-cliente`.
 7. `sdc-app-chaman`.
 
-## Comandos por servicio
+## Conexion entre servicios
 
-### sdc-datos
+Usar las URLs privadas o publicas que Railway genere para cada servicio:
 
-Build:
+- `sdc-auth`: `API_DATOS=<url de chaman-datos>`
+- `sdc-api-clima`: `API_DATOS=<url de chaman-datos>`
+- `sdc-api-predicciones`: `API_DATOS=<url de chaman-datos>` y `API_CLIMA=<url de chaman-clima>/local`
+- `sdc-api-cliente`: `API_DATOS=<url de chaman-datos>`, `API_AUTH=<url de chaman-auth>`, `API_PREDICCIONES=<url de chaman-predicciones>` y `API_CLIMA=<url de chaman-clima>/local`
+- `sdc-app-chaman`: configurar las URLs de API en los environment de frontend antes del build productivo.
 
-```bash
-npm --prefix sdc-datos ci && npm --prefix sdc-datos run build
-```
-
-Start:
-
-```bash
-npm --prefix sdc-datos run start:prod
-```
-
-### sdc-auth
-
-Build:
-
-```bash
-npm --prefix sdc-auth ci && npm --prefix sdc-auth run build
-```
-
-Start:
-
-```bash
-npm --prefix sdc-auth run start:prod
-```
-
-### sdc-api-cliente
-
-Build:
-
-```bash
-npm --prefix sdc-api-cliente ci && npm --prefix sdc-api-cliente run build
-```
-
-Start:
-
-```bash
-npm --prefix sdc-api-cliente run start:prod
-```
-
-### sdc-api-predicciones
-
-Build:
-
-```bash
-npm --prefix sdc-api-predicciones ci && npm --prefix sdc-api-predicciones run build
-```
-
-Start:
-
-```bash
-npm --prefix sdc-api-predicciones run start:prod
-```
-
-### sdc-api-clima
-
-Build:
-
-```bash
-npm --prefix sdc-api-clima ci && npm --prefix sdc-api-clima run build
-```
-
-Start:
-
-```bash
-npm --prefix sdc-api-clima run start:prod
-```
-
-### sdc-app-chaman
-
-Build:
-
-```bash
-npm --prefix sdc-app-chaman ci --legacy-peer-deps && npm --prefix sdc-app-chaman run build
-```
-
-Start depende del builder elegido. Para Nginx/Docker usar `sdc-app-chaman/Dockerfile`; para hosting estatico publicar `sdc-app-chaman/dist`.
-
-## Variables
+## Variables principales
 
 Usar los archivos `*.env.example` de esta carpeta como checklist. No copiar secretos reales al repositorio.
+
+### MongoDB
+
+`sdc-datos` acepta `MONGO_URI`, `MONGO_URL` o `DATABASE_URL`. En Railway, vincular el plugin MongoDB y mapear la connection string a `MONGO_URI`.
+
+### Redis
+
+`sdc-api-cliente` usa Redis para colas/cache. Vincular Redis y setear `REDIS_HOST`, `REDIS_PORT` y `REDIS_PASSWORD` segun las variables del plugin.
+
+### Clima
+
+`sdc-api-clima` puede funcionar con Open-Meteo sin credenciales. FieldClimate queda opcional para clientes con estacion propia.
+
+### Google Cloud
+
+Google Cloud no se usa en esta version. No subir service accounts ni archivos `google-credentials.json`.
+
+## Verificacion
+
+Antes de publicar:
+
+```bash
+npm run audit:secrets
+npm run build
+```
+
+En Railway, cada servicio debe responder `GET /health`. El frontend sirve `index.html` tambien en `/health`, suficiente para healthcheck de staging.

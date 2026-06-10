@@ -21,6 +21,8 @@
     "seed:master-data": "node scripts/seed-master-data-local.js",
     "seed:agro-inputs": "node scripts/seed-agro-inputs-local.js",
     "seed:demo": "node scripts/seed-demo-hierarchy-local.js",
-    "audit:secrets": "node scripts/audit-config-secrets.js"
+    "audit:secrets": "node scripts/audit-config-secrets.js",
+    "railway:build": "node scripts/railway-build.js",
+    "railway:start": "node scripts/railway-start.js"
   }
 }
