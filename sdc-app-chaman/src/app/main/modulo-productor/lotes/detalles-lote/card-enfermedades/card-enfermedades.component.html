@@ -32,14 +32,14 @@
             @if (item.prediccion) {
               <em>{{ item.resultado | number: '1.0-1' }}%</em>
             } @else {
-              <em>sin prediccion</em>
+              <em>{{ item.estadoCalculo }}</em>
             }
           </div>
 
           <div class="risk-row">
             <div class="risk-copy">
               <p>{{ item.sensibilidad }}</p>
-              <small>{{ item.periodo }}</small>
+              <small><b>Periodo en planta:</b> {{ item.periodo }}</small>
             </div>
             <div class="risk-meter" [style.--fill]="item.fill + '%'">
               <span></span>
@@ -47,13 +47,29 @@
                 @if (item.prediccion) {
                   {{ item.resultado | number: '1.0-1' }}%
                 } @else {
-                  esperando clima
+                  sin calculo reciente
                 }
               </em>
             </div>
           </div>
 
           <small class="variables">{{ item.variables }}</small>
+
+          <details class="prescription-panel">
+            <summary>Prescripcion orientativa</summary>
+            <div class="prescription-body">
+              <p>{{ item.prescripcion.objetivo }}</p>
+              <small>{{ item.prescripcion.momento }}</small>
+              @for (producto of item.prescripcion.productos; track producto.grupo) {
+                <article>
+                  <span>{{ producto.grupo }}</span>
+                  <strong>{{ producto.activos }}</strong>
+                  <em>{{ producto.dosisHa }}</em>
+                </article>
+              }
+              <small class="prescription-note">{{ item.prescripcion.nota }}</small>
+            </div>
+          </details>
         </article>
       }
     </div>

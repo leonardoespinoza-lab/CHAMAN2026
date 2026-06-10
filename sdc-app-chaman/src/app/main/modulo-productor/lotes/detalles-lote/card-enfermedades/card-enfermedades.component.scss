@@ -33,7 +33,7 @@
 .disease-list {
   display: grid;
   gap: 0.65rem;
-  grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
 }
 
 .disease-item {
@@ -43,7 +43,7 @@
   box-shadow: inset 3px 0 0 rgba(51, 211, 200, 0.36);
   display: flex;
   flex-direction: column;
-  min-height: 156px;
+  min-height: 184px;
   padding: 0.7rem;
 }
 
@@ -135,6 +135,11 @@
   margin: 0;
 }
 
+.risk-copy b {
+  color: var(--p-text-color);
+  font-weight: 700;
+}
+
 .disease-item p {
   color: var(--p-text-color);
   font-weight: 700;
@@ -145,6 +150,83 @@
   border-top: 1px solid #d7e0ea;
   color: var(--p-text-color);
   font-weight: 600;
-  margin-top: auto;
+  margin-top: 0.65rem;
   padding-top: 0.45rem;
+}
+
+.prescription-panel {
+  border-top: 1px solid #d7e0ea;
+  margin-top: auto;
+  padding-top: 0.48rem;
+}
+
+.prescription-panel summary {
+  color: var(--p-text-color);
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 800;
+  list-style: none;
+}
+
+.prescription-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.prescription-panel summary::after {
+  color: var(--p-primary-color);
+  content: "+";
+  float: right;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.prescription-panel[open] summary::after {
+  content: "-";
+}
+
+.prescription-body {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+}
+
+.prescription-body article {
+  background: var(--p-surface-50);
+  border: 1px solid #d4deea;
+  border-radius: 7px;
+  padding: 0.52rem;
+}
+
+.prescription-body span,
+.prescription-body strong,
+.prescription-body em {
+  display: block;
+  line-height: 1.2;
+}
+
+.prescription-body span {
+  color: var(--p-text-muted-color);
+  font-size: 0.6rem;
+  font-weight: 800;
+}
+
+.prescription-body strong {
+  color: var(--p-text-color);
+  font-size: 0.68rem;
+  margin-top: 0.16rem;
+}
+
+.prescription-body em {
+  color: var(--p-primary-color);
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 800;
+  margin-top: 0.18rem;
+}
+
+.prescription-note {
+  background: color-mix(in srgb, var(--p-primary-color), transparent 92%);
+  border-radius: 6px;
+  color: var(--p-text-color) !important;
+  padding: 0.4rem;
 }

@@ -1,7 +1,11 @@
 <div class="custom-card water-footprint-card">
   <div class="water-header" (click)="siembra?.huellaHidrica ? (verDrawerHuellaHidrica = true) : null">
-    <svg [style.fill]="'var(--p-text-color)'" [attr.width]="'30px'" [attr.height]="'30px'">
-      <use [attr.xlink:href]="'icons/icons.svg#bloodtype'"></use>
+    <svg class="water-footprint-icon" viewBox="0 0 64 64" aria-hidden="true">
+      <ellipse cx="17" cy="14" rx="5" ry="7"></ellipse>
+      <ellipse cx="29" cy="10" rx="5" ry="8"></ellipse>
+      <ellipse cx="41" cy="13" rx="5" ry="7"></ellipse>
+      <path d="M17 26c9-10 25-7 30 5 6 15-6 27-20 25-12-2-18-12-15-22 1-3 2-5 5-8z"></path>
+      <path class="drop" d="M33 31c4 5 8 10 8 15 0 5-4 9-8 9s-8-4-8-9c0-5 4-10 8-15z"></path>
     </svg>
     <div>
       <p class="titulo-card">{{ 'Huella hidrica' | translate | uppercase }}</p>
@@ -18,15 +22,18 @@
     }
   </div>
 
-  @if (siembra?.huellaHidrica) {
-    <div class="water-total">
+  <div class="water-total">
+    <div>
       <span>{{ 'Total' | translate }}</span>
-      <strong>
-        {{ siembra!.huellaHidrica!.total?.litrosKg | number: '1.0-0' }}
-        <small>l/kg</small>
-      </strong>
+      <strong>{{ totalHuellaResumen.value }}</strong>
+      <small>{{ totalHuellaResumen.detail }}</small>
     </div>
-  } @else {
+    <div class="water-meter total" [style.--fill]="totalHuellaResumen.fill + '%'">
+      <span></span>
+    </div>
+  </div>
+
+  @if (!siembra?.huellaHidrica) {
     <p-message severity="info">
       {{ 'Se completa durante el ciclo y se consolida al cosechar' | translate }}
     </p-message>

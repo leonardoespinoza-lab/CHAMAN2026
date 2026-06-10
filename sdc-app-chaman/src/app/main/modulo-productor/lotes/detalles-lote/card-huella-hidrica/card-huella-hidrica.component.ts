@@ -16,6 +16,7 @@ export class CardHuellaHidricaComponent implements OnInit, OnDestroy {
   @Input() public siembra?: ISiembra;
   @Input() public lote?: IDetallesLote;
   public verDrawerHuellaHidrica: boolean = false;
+  private readonly numeroAr = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
 
   constructor(public helper: HelperService) {}
 
@@ -66,6 +67,29 @@ export class CardHuellaHidricaComponent implements OnInit, OnDestroy {
         fill: huella ? this.limitar(((huella.gris?.litrosKg || 0) / max) * 100) : this.limitar(aplicaciones * 28),
       },
     ];
+  }
+
+  public get totalHuellaResumen() {
+    const huella = this.siembra?.huellaHidrica;
+    const verde = huella?.verde?.litrosKg || 0;
+    const azul = huella?.azul?.litrosKg || 0;
+    const gris = huella?.gris?.litrosKg || 0;
+    const total = huella?.total?.litrosKg || verde + azul + gris;
+
+    if (huella) {
+      return {
+        value: `${this.numeroAr.format(total)} l/kg`,
+        detail: 'Suma verde + azul + gris consolidada al cosechar',
+        fill: 100,
+      };
+    }
+
+    const avance = Math.round(this.huellas.reduce((acc, item) => acc + item.fill, 0) / Math.max(this.huellas.length, 1));
+    return {
+      value: `${avance}%`,
+      detail: 'Avance promedio de componentes hasta cierre de ciclo',
+      fill: avance,
+    };
   }
 
   private duracionEstimada(): number {
