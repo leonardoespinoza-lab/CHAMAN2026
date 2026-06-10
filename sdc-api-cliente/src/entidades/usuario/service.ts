@@ -177,11 +177,37 @@ export class UsuariosService {
       throw new BadRequestException('Debe asignar al menos un permiso');
     }
     for (const permiso of permisos) {
+      this.validarPermisoCompleto(permiso);
       if (!this.permisoDentroDelAlcance(permiso, permisoActual)) {
         throw new BadRequestException(
           'No tiene permiso para asignar ese nivel de usuario',
         );
       }
+    }
+  }
+
+  private validarPermisoCompleto(permiso: IPermiso): void {
+    if (!permiso?.nivel) {
+      throw new BadRequestException('Debe indicar el nivel del permiso');
+    }
+    if (!permiso?.rol) {
+      throw new BadRequestException('Debe indicar el rol del permiso');
+    }
+
+    if (permiso.nivel === 'Admin') {
+      return;
+    }
+    if (permiso.nivel === 'Quimica' && !permiso.idQuimica) {
+      throw new BadRequestException('Debe indicar la quimica del permiso');
+    }
+    if (permiso.nivel === 'Distribuidor' && !permiso.idDistribuidor) {
+      throw new BadRequestException('Debe indicar el distribuidor del permiso');
+    }
+    if (permiso.nivel === 'Productor' && !permiso.idProductor) {
+      throw new BadRequestException('Debe indicar el productor del permiso');
+    }
+    if (permiso.nivel === 'Establecimiento' && !permiso.idEstablecimiento) {
+      throw new BadRequestException('Debe indicar el establecimiento del permiso');
     }
   }
 

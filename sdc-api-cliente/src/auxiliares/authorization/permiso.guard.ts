@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { IUsuario, NivelPermiso, Rol } from 'modelos/src';
+import { IPermiso, NivelPermiso, Rol } from 'modelos/src';
 
 @Injectable()
 export class PermisoGuard implements CanActivate {
@@ -18,23 +18,18 @@ export class PermisoGuard implements CanActivate {
 
     // Si se especifica un nivel de permiso, se verifica que el usuario tenga
     const res = context.switchToHttp().getResponse();
-    const user: IUsuario = res.locals?.token?.user;
+    const permisoActual: IPermiso = res.locals?.permiso;
 
-    // Si es Admin, que tenga todos los permisos
-    if (
-      user?.permisos?.some(
-        (p) => p.nivel === 'Admin' && p.rol === 'Admin'
-      )
-    ) {
+    // Si el permiso activo es Admin, tiene acceso total.
+    if (permisoActual?.nivel === 'Admin' && permisoActual.rol === 'Admin') {
       return true;
     }
 
-    if (user) {
-      for (const permiso of permisosValidos) {
+    if (permisoActual) {
+      for (const permisoValido of permisosValidos) {
         if (
-          user.permisos.some(
-            (p) => p.nivel === permiso.nivel && permiso.roles.includes(p.rol),
-          )
+          permisoActual.nivel === permisoValido.nivel &&
+          permisoValido.roles.includes(permisoActual.rol)
         ) {
           return true;
         }

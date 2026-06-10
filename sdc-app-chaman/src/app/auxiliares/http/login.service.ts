@@ -22,6 +22,14 @@ export class LoginService {
 
   // LOGIN
 
+  public resetPermisos(): void {
+    this.esAdmin = false;
+    this.esQuimica = false;
+    this.esDistribuidor = false;
+    this.esProductor = false;
+    this.esEstablecimiento = false;
+  }
+
   public _login(username: string, password: string, remember?: boolean): Observable<IToken> {
     return this.http.post<IToken>(`${API}/auth/login`, {
       username,
@@ -31,6 +39,7 @@ export class LoginService {
   }
 
   public async login(username: string, password: string, remember = false): Promise<IToken> {
+    this.resetPermisos();
     const token = await firstValueFrom(this._login(username, password, remember));
     this.helper.removePermiso();
     this.helper.removeNumeroPermiso();
@@ -53,13 +62,19 @@ export class LoginService {
   }
 
   public async loginGoogle(idToken: string, remember = false): Promise<IToken> {
+    this.resetPermisos();
     const token = await firstValueFrom(this._loginGoogle(idToken, remember));
+    this.helper.removePermiso();
+    this.helper.removeNumeroPermiso();
     this.helper.setToken(token, remember);
     return token;
   }
 
   public async loginGoogleApple(idToken: string, remember = false): Promise<IToken> {
+    this.resetPermisos();
     const token = await firstValueFrom(this._loginGoogleApple(idToken, remember));
+    this.helper.removePermiso();
+    this.helper.removeNumeroPermiso();
     this.helper.setToken(token, remember);
     return token;
   }

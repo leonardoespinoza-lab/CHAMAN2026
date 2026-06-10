@@ -85,9 +85,9 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
       p?.nivel ||
       (this.productorPreseleccionado
         ? 'Productor'
-        : this.loginService.esAdmin || permisoActual?.nivel === 'Admin'
-          ? 'Admin'
-          : permisoActual?.nivel);
+        : permisoActual?.nivel && permisoActual.nivel !== 'Admin'
+          ? permisoActual.nivel
+          : undefined);
     const rol = p?.rol || 'Admin';
     return new FormGroup({
       nivel: new FormControl(nivel, Validators.required),

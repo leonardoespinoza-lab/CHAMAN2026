@@ -94,6 +94,7 @@ export class NavComponent implements OnInit, OnDestroy {
           label: this.translate.instant('Aceptar'),
         },
         accept: () => {
+          this.loginService.resetPermisos();
           this.helper.removeToken();
           this.listados.borrarCache();
           this.webSocketService.closeWS();
@@ -164,6 +165,7 @@ export class NavComponent implements OnInit, OnDestroy {
   }
 
   private checkPermisos() {
+    this.loginService.resetPermisos();
     const permiso = this.helper.permiso;
     if (!permiso) return;
     const esEstablecimiento = permiso?.nivel === 'Establecimiento';

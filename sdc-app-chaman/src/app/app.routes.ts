@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { loginGuard } from './auxiliares/guards/login.guard';
+import { roleGuard } from './auxiliares/guards/role.guard';
 import { LoginComponent } from './login/login/login.component';
 import { AplicacionComponent } from './main/aplicacion/aplicacion.component';
 import { KMZComponent } from './main/kmz/kmz.component';
@@ -39,6 +40,10 @@ import { ListadoUsuariosComponent } from './main/usuarios/listado-usuarios/lista
 import { CrearEditarFenologiaComponent } from './main/modulo-admin/fenologia/crear-editar-fenologia/crear-editar-fenologia.component';
 import { ListadoFenologiaComponent } from './main/modulo-admin/fenologia/listado-fenologia/listado-fenologia.component';
 
+const adminOnly = { canActivate: [roleGuard], data: { niveles: ['Admin'] } };
+const quimicaScope = { canActivate: [roleGuard], data: { niveles: ['Admin', 'Quimica'] } };
+const distribuidorScope = { canActivate: [roleGuard], data: { niveles: ['Admin', 'Quimica', 'Distribuidor'] } };
+
 export const routes: Routes = [
   {
     path: '',
@@ -68,47 +73,47 @@ export const routes: Routes = [
 
       // *** Distribuidor *** //
       // Productores
-      { path: 'dashboard-distribuidor', component: DashboardDistribuidorComponent },
-      { path: 'productores', component: ListadoProductoresComponent },
-      { path: 'productores/editar/:id', component: CrearEditarProductoresComponent },
-      { path: 'productores/crear', component: CrearEditarProductoresComponent },
+      { path: 'dashboard-distribuidor', component: DashboardDistribuidorComponent, ...distribuidorScope },
+      { path: 'productores', component: ListadoProductoresComponent, ...distribuidorScope },
+      { path: 'productores/editar/:id', component: CrearEditarProductoresComponent, ...distribuidorScope },
+      { path: 'productores/crear', component: CrearEditarProductoresComponent, ...distribuidorScope },
       // *** Distribuidor *** //
 
       // *** Química *** //
       // Distribuidores
-      { path: 'dashboard-quimica', component: DashboardQuimicaComponent },
-      { path: 'distribuidores', component: ListadoDistribuidoresComponent },
-      { path: 'distribuidores/editar/:id', component: CrearEditarDistribuidoresComponent },
-      { path: 'distribuidores/crear', component: CrearEditarDistribuidoresComponent },
+      { path: 'dashboard-quimica', component: DashboardQuimicaComponent, ...quimicaScope },
+      { path: 'distribuidores', component: ListadoDistribuidoresComponent, ...quimicaScope },
+      { path: 'distribuidores/editar/:id', component: CrearEditarDistribuidoresComponent, ...quimicaScope },
+      { path: 'distribuidores/crear', component: CrearEditarDistribuidoresComponent, ...quimicaScope },
       // *** Química *** //
 
       // *** Admin *** //
-      { path: 'dashboard-admin', component: DashboardAdminComponent },
+      { path: 'dashboard-admin', component: DashboardAdminComponent, ...adminOnly },
       // Time-lapse
-      { path: 'time-lapse', component: ListadoTimeLapseComponent },
-      { path: 'time-lapse/fotos/:id', component: ListadoImagenesLoteComponent },
-      { path: 'time-lapse/asignar-camara', component: AsignarCamaraLoteComponent },
+      { path: 'time-lapse', component: ListadoTimeLapseComponent, ...adminOnly },
+      { path: 'time-lapse/fotos/:id', component: ListadoImagenesLoteComponent, ...adminOnly },
+      { path: 'time-lapse/asignar-camara', component: AsignarCamaraLoteComponent, ...adminOnly },
       // Químicas
-      { path: 'quimicas', component: ListadoQuimicasComponent },
-      { path: 'quimicas/editar/:id', component: CrearEditarQuimicasComponent },
-      { path: 'quimicas/crear', component: CrearEditarQuimicasComponent },
+      { path: 'quimicas', component: ListadoQuimicasComponent, ...adminOnly },
+      { path: 'quimicas/editar/:id', component: CrearEditarQuimicasComponent, ...adminOnly },
+      { path: 'quimicas/crear', component: CrearEditarQuimicasComponent, ...adminOnly },
       // Semillas
-      { path: 'semillas', component: ListadoSemillasComponent },
-      { path: 'semillas/editar/:id', component: CrearEditarSemillasComponent },
-      { path: 'semillas/crear', component: CrearEditarSemillasComponent },
+      { path: 'semillas', component: ListadoSemillasComponent, ...adminOnly },
+      { path: 'semillas/editar/:id', component: CrearEditarSemillasComponent, ...adminOnly },
+      { path: 'semillas/crear', component: CrearEditarSemillasComponent, ...adminOnly },
       // Licencias
-      { path: 'licencias', component: ListadoLicenciasComponent },
-      { path: 'licencias/editar/:id', component: CrearEditarLicenciasComponent },
-      { path: 'licencias/crear', component: CrearEditarLicenciasComponent },
+      { path: 'licencias', component: ListadoLicenciasComponent, ...adminOnly },
+      { path: 'licencias/editar/:id', component: CrearEditarLicenciasComponent, ...adminOnly },
+      { path: 'licencias/crear', component: CrearEditarLicenciasComponent, ...adminOnly },
       // Dispositivos
-      { path: 'dispositivos', component: ListadoDispositivosComponent },
-      { path: 'dispositivos/editar/:id', component: CrearEditarDispositivosComponent },
-      { path: 'dispositivos/crear', component: CrearEditarDispositivosComponent },
-      { path: 'dispositivos/detalles/:id', component: DetallesDispositivoComponent },
+      { path: 'dispositivos', component: ListadoDispositivosComponent, ...adminOnly },
+      { path: 'dispositivos/editar/:id', component: CrearEditarDispositivosComponent, ...adminOnly },
+      { path: 'dispositivos/crear', component: CrearEditarDispositivosComponent, ...adminOnly },
+      { path: 'dispositivos/detalles/:id', component: DetallesDispositivoComponent, ...adminOnly },
       // Fenologia
-      { path: 'fenologias', component: ListadoFenologiaComponent },
-      { path: 'fenologias/editar/:id', component: CrearEditarFenologiaComponent },
-      { path: 'fenologias/crear', component: CrearEditarFenologiaComponent },
+      { path: 'fenologias', component: ListadoFenologiaComponent, ...adminOnly },
+      { path: 'fenologias/editar/:id', component: CrearEditarFenologiaComponent, ...adminOnly },
+      { path: 'fenologias/crear', component: CrearEditarFenologiaComponent, ...adminOnly },
 
       // *** Admin *** //
 

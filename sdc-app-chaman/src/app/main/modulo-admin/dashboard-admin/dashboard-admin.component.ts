@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { Router } from '@angular/router';
+import { LoginService } from '../../../auxiliares/http/login.service';
 import { HelperService } from '../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../auxiliares/shared.module';
 
@@ -119,6 +120,7 @@ export class DashboardAdminComponent {
   constructor(
     private router: Router,
     public helper: HelperService,
+    private loginService: LoginService
   ) {}
 
   public go(route: string) {
@@ -126,6 +128,7 @@ export class DashboardAdminComponent {
   }
 
   public logout() {
+    this.loginService.resetPermisos();
     this.helper.removeToken();
     this.router.navigateByUrl('/auth');
   }
