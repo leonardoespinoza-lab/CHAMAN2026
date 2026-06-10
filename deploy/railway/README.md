@@ -80,11 +80,14 @@ REDIS_NDVI_DB=0
 En el worker activar:
 
 ```bash
+RAILWAY_DOCKERFILE_PATH=deploy/railway/sdc-ndvi-worker.Dockerfile
 ENVIAR_BACKEND=true
 CLEAN_UP=true
 API_EXTERNA_URL=http://${{chaman-externa.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-externa.PORT}}
 NDVI_STORAGE_MODE=inline
 ```
+
+El worker usa un Dockerfile propio porque necesita Python, GDAL/rasterio y Node para convivir con los scripts raiz del monorepo en Railway.
 
 `NDVI_STORAGE_MODE=inline` embebe la imagen PNG como `data:image/png;base64,...` dentro del reporte. Es la opcion recomendada para Railway mientras no exista un volumen compartido o storage externo. Para una etapa con muchos reportes conviene migrar a S3/R2 o volumen persistente y usar `NDVI_PUBLIC_BASE_URL`.
 
