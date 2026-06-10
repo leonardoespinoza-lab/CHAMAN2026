@@ -16,7 +16,7 @@ import {
 } from 'modelos/src';
 import { Feature, Map, MapBrowserEvent, Overlay, View } from 'ol';
 import { click } from 'ol/events/condition';
-import { createEmpty, Extent, extend as extendExtent } from 'ol/extent';
+import { Extent } from 'ol/extent';
 import { FeatureLike } from 'ol/Feature';
 import TileWMS from 'ol/source/TileWMS';
 import { Point, Polygon } from 'ol/geom';
@@ -135,10 +135,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   public loading = signal(false);
 
-  private readonly MAP_STATE_KEY = 'chaman_map_state';
   private isFirstVisit = true; // Para controlar si es la primera visita
-  private awaitingNearestLotCenter = false;
-  private readonly DISTRIBUTED_LOTS_DISTANCE_KM = 180;
+  private initialDataLoaded = false;
 
   public establecimientos$?: Subscription;
   public establecimientos: IEstablecimiento[] = [];
@@ -333,103 +331,13 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     private climaService: ClimaService
   ) {}
 
-  // Métodos para manejar el estado del mapa
-  private saveMapState() {
-    if (!this.map) return;
-
-    const view = this.map.getView();
-    const center = view.getCenter();
-    const zoom = view.getZoom();
-
-    if (center && zoom !== undefined) {
-      const mapState = {
-        center,
-        zoom,
-        timestamp: Date.now(),
-      };
-
-      try {
-        localStorage.setItem(this.MAP_STATE_KEY, JSON.stringify(mapState));
-      } catch (error) {
-        console.warn('Error al guardar estado del mapa:', error);
-      }
-    }
-  }
-
-  private loadMapState(): { center: number[]; zoom: number } | null {
-    try {
-      const saved = localStorage.getItem(this.MAP_STATE_KEY);
-      if (saved) {
-        const mapState = JSON.parse(saved);
-        const center = this.normalizeStoredMapCenter(mapState.center);
-        const zoom = Number(mapState.zoom);
-
-        if (!center || !Number.isFinite(zoom)) {
-          localStorage.removeItem(this.MAP_STATE_KEY);
-          return null;
-        }
-
-        return {
-          center,
-          zoom,
-        };
-      }
-    } catch (error) {
-      console.warn('Error al cargar estado del mapa:', error);
-      localStorage.removeItem(this.MAP_STATE_KEY);
-    }
-    return null;
-  }
-
-  private normalizeStoredMapCenter(center: unknown): number[] | null {
-    if (!Array.isArray(center) || center.length < 2) {
-      return null;
-    }
-
-    const x = Number(center[0]);
-    const y = Number(center[1]);
-
-    if (!Number.isFinite(x) || !Number.isFinite(y)) {
-      return null;
-    }
-
-    // Estados viejos guardaban lon/lat directo. OpenLayers espera EPSG:3857.
-    if (Math.abs(x) <= 180 && Math.abs(y) <= 90) {
-      return fromLonLat([x, y]);
-    }
-
-    const webMercatorLimit = 20037508.342789244;
-    if (Math.abs(x) > webMercatorLimit || Math.abs(y) > webMercatorLimit) {
-      return null;
-    }
-
-    return [x, y];
-  }
-
+  // El mapa arranca en una posicion neutra y luego se encuadra con datos reales.
   private getInitialMapPosition(): { center: number[]; zoom: number } {
-    // Intentar cargar estado guardado primero
-    const savedState = this.loadMapState();
-    if (savedState) {
-      return savedState;
-    }
-
-    // Si no hay estado guardado, usar posición por defecto
-    // La posición real se establecerá después de cargar establecimientos/lotes
     const zoom = this.helper.isHandset ? 14 : 15;
     return {
       center: [-64.18105, -31.413801], // Coordenadas por defecto de Córdoba - NO usar ubicación del dispositivo aquí
       zoom,
     };
-  }
-
-  // Método para limpiar el estado guardado (útil para desarrollo/testing)
-  public clearMapState() {
-    try {
-      localStorage.removeItem(this.MAP_STATE_KEY);
-      this.isFirstVisit = true; // Resetear bandera de primera visita
-    } catch (error) {
-      console.warn('Error al limpiar estado del mapa:', error);
-    }
   }
 
   // Método para centrar el mapa en la primera visita según prioridad
@@ -439,13 +347,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     if (this.lotes?.length > 0) {
-      const distributedLots = this.getLotsSpreadKm() > this.DISTRIBUTED_LOTS_DISTANCE_KM;
-      if (distributedLots && this.currentPosition?.coordinates) {
-        this.centerMapOnNearestLotes();
-        return;
-      }
-      this.awaitingNearestLotCenter = distributedLots;
-      this.centerMapOnBoundsLotes(!distributedLots);
+      this.centerMapOnBoundsLotes();
+      return;
+    }
+
+    if (!this.initialDataLoaded) {
       return;
     }
 
@@ -476,11 +382,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.map?.getView()?.fit(extent, { padding: [50, 50, 50, 50] });
 
-    // Guardar la posición después de centrar
-    setTimeout(() => {
-      this.saveMapState();
-      this.isFirstVisit = false;
-    }, 1000);
+    this.isFirstVisit = false;
   }
 
   private calcularEnfermedades() {
@@ -1006,7 +908,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         target: 'mapa',
         controls: [],
         view: new View({
-          center: this.normalizeStoredMapCenter(initialPosition.center) || fromLonLat([-64.18105, -31.413801]),
+          center: fromLonLat(initialPosition.center),
           zoom: initialPosition.zoom,
           projection: 'EPSG:3857',
           maxZoom: maxZoomSatellite, // Limitar el zoom máximo del mapa
@@ -1084,14 +986,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
           this.map.updateSize();
         }
       }, 100);
-
-      // Agregar listener para cambios de zoom
-      this.map.getView().on('change:resolution', () => {
-        // Guardar estado con un pequeño delay para evitar muchas escrituras
-        setTimeout(() => {
-          this.saveMapState();
-        }, 500);
-      });
 
       this.handleSelectLote();
       this.handleSelectEstablciemientos();
@@ -1279,8 +1173,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   private handleMapDragEnd() {
     this.map?.on('moveend', () => {
       this.moveEnd();
-      // Guardar el estado del mapa cada vez que se mueva
-      this.saveMapState();
 
       // Actualizar tiles climáticos si están visibles y cambió el zoom
       this.handleZoomChange();
@@ -1435,104 +1327,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.centerMapOnBoundsLotes();
   }
 
-  private getLoteCenter(lote: ILoteMapa): [number, number] | null {
-    if (lote.ubicacion?.centro?.lng !== undefined && lote.ubicacion?.centro?.lat !== undefined) {
-      return [lote.ubicacion.centro.lng, lote.ubicacion.centro.lat];
-    }
-
-    const coords = (lote.ubicacion?.geojson as IGeoJSONPolygon | undefined)?.coordinates?.[0];
-    if (!coords?.length) return null;
-    const total = coords.reduce(
-      (acc, coord) => {
-        acc.lng += Number(coord[0]) || 0;
-        acc.lat += Number(coord[1]) || 0;
-        return acc;
-      },
-      { lng: 0, lat: 0 }
-    );
-    return [total.lng / coords.length, total.lat / coords.length];
-  }
-
-  private getLotsSpreadKm(): number {
-    const centers = this.lotes.map((lote) => this.getLoteCenter(lote)).filter((center): center is [number, number] => !!center);
-    if (centers.length < 2) return 0;
-    let maxDistance = 0;
-    for (let i = 0; i < centers.length; i++) {
-      for (let j = i + 1; j < centers.length; j++) {
-        maxDistance = Math.max(maxDistance, this.distanceKm(centers[i], centers[j]));
-      }
-    }
-    return maxDistance;
-  }
-
-  private centerMapOnNearestLotes() {
-    if (!this.map || !this.currentPosition?.coordinates?.length) {
-      return;
-    }
-
-    const userCenter = this.currentPosition.coordinates as [number, number];
-    const ranked = this.lotes
-      .map((lote) => {
-        const center = this.getLoteCenter(lote);
-        return center ? { lote, distance: this.distanceKm(userCenter, center) } : null;
-      })
-      .filter((item): item is { lote: ILoteMapa; distance: number } => !!item)
-      .sort((a, b) => a.distance - b.distance);
-
-    if (!ranked.length) {
-      this.centerMapOnBoundsLotes();
-      return;
-    }
-
-    const nearestDistance = ranked[0].distance;
-    const selectedIds = new Set(
-      ranked
-        .filter((item, index) => index < 6 || item.distance <= nearestDistance + 80)
-        .slice(0, 8)
-        .map((item) => item.lote._id)
-    );
-    const features = this.lotesLayer
-      .getSource()
-      ?.getFeatures()
-      .filter((feature) => selectedIds.has((feature.get('lote') as ILoteMapa | undefined)?._id));
-
-    if (features?.length) {
-      const extent = createEmpty();
-      features.forEach((feature) => {
-        const geometry = feature.getGeometry();
-        if (geometry) {
-          extendExtent(extent, geometry.getExtent());
-        }
-      });
-      this.map.getView().fit(extent, { padding: [90, 90, 260, 90], duration: 1000 });
-    } else {
-      this.map.getView().animate({
-        center: fromLonLat(this.getLoteCenter(ranked[0].lote)!),
-        zoom: this.helper.isHandset ? 13 : 14,
-        duration: 1000,
-      });
-    }
-
-    this.awaitingNearestLotCenter = false;
-    setTimeout(() => {
-      this.saveMapState();
-      this.isFirstVisit = false;
-    }, 1100);
-  }
-
-  private distanceKm(a: [number, number], b: [number, number]): number {
-    const toRad = (value: number) => (value * Math.PI) / 180;
-    const radiusKm = 6371;
-    const dLat = toRad(b[1] - a[1]);
-    const dLng = toRad(b[0] - a[0]);
-    const lat1 = toRad(a[1]);
-    const lat2 = toRad(b[1]);
-    const h =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
-    return 2 * radiusKm * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
-  }
-
   // Método separado que siempre centra en lotes (para uso del botón)
   private centerMapOnBoundsLotes(markAsVisited = true) {
     if (!this.map || !this.lotesLayer) {
@@ -1551,12 +1345,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.map?.getView()?.fit(extent, { padding: [50, 50, 50, 50], duration: 1000 });
 
     // Guardar la posición después de centrar en los lotes
-    setTimeout(() => {
-      this.saveMapState();
-      if (markAsVisited) {
-        this.isFirstVisit = false; // Marcar que ya no es primera visita
-      }
-    }, 1100);
+    if (markAsVisited) {
+      this.isFirstVisit = false; // Marcar que ya no es primera visita
+    }
   }
 
   private handleMapClick() {
@@ -1638,9 +1429,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       this.map?.getView()?.fit(combinedExtent, { padding: [50, 50, 50, 50], duration: 1000 });
     }
 
-    setTimeout(() => {
-      this.saveMapState();
-    }, 1100);
   }
 
   private async redibujarImagenes() {
@@ -1900,6 +1688,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   public async cargaInicial() {
     await Promise.all([this.listarLotes(), this.listarEstablecimientos()]);
+    this.initialDataLoaded = true;
+    this.centerMapOnFirstVisit();
     // Va después porque completo los lotes, fer.
     await this.ultimoReportePorLote();
     // Suscripción reactiva para refrescar imágenes NDVI cuando lleguen nuevos reportes
@@ -1920,13 +1710,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
           duration: 1000,
         });
 
-        // Guardar la nueva posición
-        setTimeout(() => {
-          this.saveMapState();
-          if (this.isFirstVisit) {
-            this.isFirstVisit = false; // Marcar como visitado si era fallback
-          }
-        }, 1100);
+        if (this.isFirstVisit) {
+          this.isFirstVisit = false; // Marcar como visitado si era fallback
+        }
       }
     } catch (error) {
       console.error('Error al obtener ubicación actual:', error);
@@ -1951,10 +1737,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
           duration: 1000,
         });
 
-        // Guardar la nueva posición
-        setTimeout(() => {
-          this.saveMapState();
-        }, 1100);
         return;
       }
     }
@@ -1970,10 +1752,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
           duration: 1000,
         });
 
-        // Guardar la nueva posición
-        setTimeout(() => {
-          this.saveMapState();
-        }, 1100);
         return;
       }
     }
@@ -1985,18 +1763,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       this.currentPosition = await this.helper.getCurrentPosition();
 
       // Si es primera visita y no hay datos, usar ubicación como fallback
-      if (this.isFirstVisit && !this.lotes?.length && !this.establecimientos?.length) {
+      if (this.initialDataLoaded && this.isFirstVisit && !this.lotes?.length && !this.establecimientos?.length) {
         this.centerOnUserLocation();
-      }
-      if (this.awaitingNearestLotCenter && this.lotes?.length) {
-        this.centerMapOnNearestLotes();
       }
     } catch (error) {
       console.warn('⚠️ No se pudo obtener ubicación del dispositivo:', error);
-      if (this.awaitingNearestLotCenter && this.lotes?.length) {
-        this.awaitingNearestLotCenter = false;
-        this.isFirstVisit = false;
-      }
       // La app sigue funcionando normalmente sin ubicación
     }
   }
