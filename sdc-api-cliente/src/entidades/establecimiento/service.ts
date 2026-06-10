@@ -112,7 +112,7 @@ export class EstablecimientosService {
     actualizados: number;
     errores: number;
   }> {
-    let page = 1;
+    let page = 0;
     const limit = 100;
     let total = 0;
     let actualizados = 0;
@@ -140,7 +140,7 @@ export class EstablecimientosService {
         .length;
       errores += resultados.filter((item) => item.status === 'rejected').length;
 
-      if (establecimientos.length < limit || page * limit >= total) {
+      if (establecimientos.length < limit || (page + 1) * limit >= total) {
         break;
       }
       page += 1;
