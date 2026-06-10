@@ -21,6 +21,9 @@ export const API_PREDICCIONES =
   process.env.API_PREDICCIONES || 'http://127.0.0.1:5007';
 export const API_CLIMA =
   process.env.API_CLIMA || 'http://127.0.0.1:5008/local';
+// OAuth client used by the public gateway when talking to sdc-auth.
+export const AUTH_CLIENT_ID = process.env.AUTH_CLIENT_ID || '1';
+export const AUTH_CLIENT_SECRET = process.env.AUTH_CLIENT_SECRET || '1';
 // MQTT
 export const MQTT_ENABLED = process.env.MQTT_ENABLED === 'true';
 export const MQTT_PROTOCOL = process.env.MQTT_PROTOCOL || 'ssl';

@@ -62,7 +62,7 @@ export class OauthModel {
       }
       return client;
     }
-    this.logger.verbose(`Client ${clientId}:${clientSecret} not found`);
+    this.logger.verbose(`Client ${clientId} not found`);
   }
 
   // Usuario
@@ -79,7 +79,7 @@ export class OauthModel {
         return usuario;
       }
     }
-    this.logger.verbose(`Usuario ${username} clave ${password} invalida`);
+    this.logger.verbose(`Usuario ${username} con clave invalida`);
   }
 
   // Token

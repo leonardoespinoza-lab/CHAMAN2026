@@ -1,11 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { IToken } from 'modelos/src';
 import { AxiosService } from '../axios/axios.service';
-import { API_AUTH } from '../../env';
+import { API_AUTH, AUTH_CLIENT_ID, AUTH_CLIENT_SECRET } from '../../env';
 
 @Injectable()
 export class AuthenticationRepository {
   constructor(private axios: AxiosService) {}
+
+  private getFormHeaders() {
+    const credentials = Buffer.from(
+      `${AUTH_CLIENT_ID}:${AUTH_CLIENT_SECRET}`,
+    ).toString('base64');
+
+    return {
+      Authorization: `Basic ${credentials}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    };
+  }
 
   async login(
     username: string,
@@ -13,25 +24,30 @@ export class AuthenticationRepository {
     remember?: boolean,
   ): Promise<IToken> {
     const url = `${API_AUTH}/oauth/login`;
-    const headers = {
-      Authorization: 'Basic MTox',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    };
-    let body = `username=${username}&password=${password}&grant_type=password`;
+    const headers = this.getFormHeaders();
+    const body = new URLSearchParams({
+      username,
+      password,
+      grant_type: 'password',
+    });
     if (remember !== undefined) {
-      body += `&remember=${remember}`;
+      body.set('remember', `${remember}`);
     }
-    return await this.axios.POST<IToken>(url, body as any, { headers });
+    return await this.axios.POST<IToken>(url, body.toString() as any, {
+      headers,
+    });
   }
 
   async refreshToken(refreshToken: string): Promise<IToken> {
     const url = `${API_AUTH}/oauth/login`;
-    const headers = {
-      Authorization: 'Basic MTox',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    };
-    const body = `refresh_token=${refreshToken}&grant_type=refresh_token`;
-    return await this.axios.POST<IToken>(url, body as any, { headers });
+    const headers = this.getFormHeaders();
+    const body = new URLSearchParams({
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    });
+    return await this.axios.POST<IToken>(url, body.toString() as any, {
+      headers,
+    });
   }
 
   async authorization(authorization: string): Promise<IToken> {
