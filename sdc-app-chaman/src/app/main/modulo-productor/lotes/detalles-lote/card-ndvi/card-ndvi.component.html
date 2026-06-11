@@ -10,9 +10,9 @@
       </p>
       <span>
         @if (reporte?.ndviPromedio) {
-          NDVI promedio {{ reporte?.ndviPromedio | number: '1.0-3' }} - {{ fechaImagenResumen }}
+          Analisis satelital semanal - {{ fechaImagenResumen }}
         } @else {
-          Indice verde y capas satelitales del lote
+          Linea de tiempo e indices satelitales del lote
         }
       </span>
     </div>
@@ -35,25 +35,57 @@
   </div>
 
   @if (ndvis.length > 0) {
-    <div class="ndvi-content">
-      <div class="img-container">
-        @if (reporte?.ndviUrl) {
-          <img [src]="reporte?.ndviUrl" class="img" />
-        } @else {
-          <p-message severity="warn">{{ 'Imagen no disponible' | translate }}</p-message>
+    <section class="satellite-timeline">
+      <div class="satellite-title">
+        <span>Evolucion satelital</span>
+        <strong>Escenas validas procesadas</strong>
+      </div>
+      <div class="timeline-strip">
+        @for (r of ndvis; track r._id || $index) {
+          <button type="button" class="timeline-item" [class.active]="reporte === r" (click)="onSelect(r)">
+            <span>{{ r.fechaDeLaImagen | date: 'd MMM' }}</span>
+            <strong>NDVI {{ r.ndviPromedio | number: '1.0-3' }}</strong>
+            <small>{{ r.coleccion || 'satelite' }}</small>
+          </button>
         }
+      </div>
+    </section>
+
+    <div class="ndvi-content">
+      <div class="satellite-viewer">
+        <div class="layer-tabs" role="list">
+          @for (indicator of satelliteIndicators; track indicator.label) {
+            <button
+              type="button"
+              class="layer-tab"
+              [class.active]="capaActiva.key === indicator.key"
+              [disabled]="indicator.status !== 'activo'"
+              (click)="seleccionarCapa(indicator)"
+            >
+              <strong>{{ indicator.label }}</strong>
+              <span>{{ indicator.value }}</span>
+            </button>
+          }
+        </div>
+        <div class="img-container">
+          @if (imagenCapaActiva) {
+            <img [src]="imagenCapaActiva" class="img" />
+          } @else {
+            <p-message severity="warn">{{ 'Imagen no disponible' | translate }}</p-message>
+          }
+        </div>
       </div>
 
       <section class="ndvi-analysis" [ngClass]="analisis.tono">
         <div class="analysis-main">
-          <span>Lectura agronomica</span>
-          <strong>{{ analisis.estado }}</strong>
-          <p>{{ analisis.resumen }}</p>
+          <span>Lectura agronomica de {{ capaActiva.label }}</span>
+          <strong>{{ capaActiva.value }}</strong>
+          <p>{{ capaActiva.lectura }}</p>
         </div>
         <div class="analysis-grid">
           <article>
-            <span>Tendencia</span>
-            <strong>{{ analisis.tendencia }}</strong>
+            <span>Escena</span>
+            <strong>{{ fechaImagenResumen }}</strong>
           </article>
           <article>
             <span>Balance 72 h</span>
@@ -65,30 +97,20 @@
       </section>
     </div>
 
-    <div class="date-strip">
-      @for (r of ndvis; track $index) {
-        <p-button [outlined]="reporte === r ? false : true" (onClick)="onSelect(r)">
-          <div>
-            <p class="boton-fecha dia">{{ r.fechaDeLaImagen | date: 'd' }}</p>
-            <p class="boton-fecha">{{ r.fechaDeLaImagen | date: 'MMM' }}</p>
-          </div>
-        </p-button>
-      }
-    </div>
-
     <section class="satellite-module">
       <div class="satellite-title">
         <span>Modulo satelital</span>
-        <strong>Indices complementarios</strong>
+        <strong>Capas e interpretacion</strong>
       </div>
       <div class="satellite-grid">
         @for (indicator of satelliteIndicators; track indicator.label) {
-          <article [ngClass]="indicator.status">
+          <article [ngClass]="indicator.status" [class.active-layer]="capaActiva.key === indicator.key">
             <div>
               <strong>{{ indicator.label }}</strong>
               <em>{{ indicator.value }}</em>
             </div>
             <p>{{ indicator.detail }}</p>
+            <p class="layer-reading">{{ indicator.lectura }}</p>
             <small>{{ indicator.source }}</small>
           </article>
         }

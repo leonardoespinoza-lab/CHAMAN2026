@@ -19,6 +19,7 @@ import { EstablecimientosService } from '../establecimiento/service';
 import { ReporteNDVIsService } from '../reporte-ndvis/service';
 import { NdviQueueService } from './ndvi-queue.service';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
+import { NDVI_SYNC_LIMIT } from '../../env';
 
 interface IntaFeatureCollection {
   features?: {
@@ -155,6 +156,54 @@ export class LotesService {
 
   async getNdviQueueStatus() {
     return await this.ndviQueue.getStatus();
+  }
+
+  async sincronizarNdviAutomatico(): Promise<{
+    total: number;
+    encolados: number;
+    omitidos: number;
+  }> {
+    const permisoSistema: IPermiso = { nivel: 'Admin', rol: 'Admin' };
+    const query: IQueryParam = {
+      filter: JSON.stringify({
+        idSiembra: { $exists: true, $ne: null },
+        'ubicacion.geojson.coordinates.0': { $exists: true },
+      }),
+      limit: NDVI_SYNC_LIMIT,
+      sort: 'nombre',
+    };
+    const lotes = await this.repository.get(query);
+    let encolados = 0;
+    let omitidos = 0;
+
+    for (const lote of lotes.datos || []) {
+      try {
+        const ultimaFechaImagen = await this.getUltimaFechaNdvi(
+          lote._id,
+          permisoSistema,
+        );
+        const encolado = await this.ndviQueue.enqueueLote(
+          lote,
+          ultimaFechaImagen,
+        );
+        if (encolado) {
+          encolados++;
+        } else {
+          omitidos++;
+        }
+      } catch (error) {
+        omitidos++;
+        this.logger.error(
+          `Error encolando satelite automatico para lote ${lote._id}: ${error?.message || error}`,
+        );
+      }
+    }
+
+    return {
+      total: lotes.totalCount || lotes.datos?.length || 0,
+      encolados,
+      omitidos,
+    };
   }
 
   async getSueloInta(latParam: string | number, lngParam: string | number): Promise<SueloIntaResponse> {

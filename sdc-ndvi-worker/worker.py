@@ -15,7 +15,7 @@ from planetary_computer import sign
 from pystac_client import Client
 from shapely.geometry import Polygon, mapping
 
-from calcular_ndvi import calcular_indices, calcular_ndvi, exportar_geotiff
+from calcular_ndvi import calcular_indices_y_rasters, calcular_ndvi, exportar_geotiff
 from cleaner import limpiar_descargas_antiguas
 from config import (
     API_EXTERNA_URL,
@@ -34,7 +34,7 @@ from config import (
 )
 from geo import obtener_metadata_png_con_polygon, scene_cubre_poligono
 from health import start_health_server
-from recorte import exportar_png_desde_tif_con_polygon, recortar_ndvi
+from recorte import exportar_png_desde_array, exportar_png_desde_tif_con_polygon, recortar_ndvi
 from storage import subir_a_storage
 
 # Configuración de logging
@@ -701,18 +701,25 @@ class NDVIWorker:
             if np.isnan(ndvi_promedio):
                 ndvi_promedio = 0.0
             try:
-                indices = await self._run_in_executor(
-                    calcular_indices, recorte_band_paths
+                indices_info = await self._run_in_executor(
+                    calcular_indices_y_rasters, recorte_band_paths
                 )
+                indices = indices_info.get("indices", {})
+                rasters = indices_info.get("rasters", {})
             except Exception as e:
                 logger.warning(f"No se pudieron calcular indices satelitales: {e}")
                 indices = {"ndvi": round(ndvi_promedio, 4)}
+                rasters = {"ndvi": ndvi}
+
+            if indices.get("ndvi") is not None:
+                ndvi_promedio = float(indices["ndvi"])
 
             return {
                 "ndvi_tif": str(ndvi_tif),
                 "ndvi_recorte": str(ndvi_recorte),
                 "ndvi_promedio": ndvi_promedio,
                 "indices": indices,
+                "rasters": rasters,
                 "scene_datetime": scene_data["datetime"],
                 "collection": scene_data["collection"],  # Colección de la escena
             }
@@ -741,6 +748,8 @@ class NDVIWorker:
             obtener_metadata_png_con_polygon, ndvi_data["ndvi_recorte"], polygon
         )
 
+        imagenes = await self._export_index_images(lote_id, lote_folder, ndvi_data)
+
         # Guardar PNG en almacenamiento local compartido con nginx
         url_png = None
         try:
@@ -753,11 +762,36 @@ class NDVIWorker:
             "url_png": url_png,  # Puede ser None
             "ndvi_promedio": ndvi_data["ndvi_promedio"],
             "indices": ndvi_data.get("indices", {}),
+            "imagenes": imagenes,
             "metadata": metadata,  # Metadata geográfica del NDVI recortado
             "fecha_imagen": ndvi_data["scene_datetime"].isoformat(),
             "coleccion": ndvi_data.get("collection", "desconocida"),
             "local_path": str(png_path),  # Ruta local para desarrollo
         }
+
+    async def _export_index_images(
+        self, lote_id: str, lote_folder: Path, ndvi_data: dict
+    ) -> dict:
+        """Genera y sube una imagen PNG por indice satelital disponible."""
+        imagenes = {}
+        timestamp = int(time.time())
+        for indice, raster in ndvi_data.get("rasters", {}).items():
+            if raster is None:
+                continue
+            try:
+                output_path = lote_folder / f"{indice}_recorte.png"
+                await self._run_in_executor(
+                    exportar_png_desde_array,
+                    raster,
+                    str(output_path),
+                    indice,
+                )
+                imagenes[indice] = await subir_a_storage(
+                    str(output_path), f"{lote_id}-{indice}-{timestamp}.png"
+                )
+            except Exception as e:
+                logger.warning(f"No se pudo generar imagen {indice}: {e}")
+        return imagenes
 
     async def _notify_backend(self, lote_id: str, output_data: dict):
         """Notifica los resultados al backend, enviando la fecha de la imagen truncada."""
@@ -777,6 +811,7 @@ class NDVIWorker:
                 "ndvi_url": output_data["url_png"],
                 "ndvi_promedio": ndvi_promedio,
                 "indices": output_data.get("indices", {}),
+                "imagenes": output_data.get("imagenes", {}),
                 "metadata": output_data["metadata"],
                 "fecha": datetime.now(timezone.utc).isoformat(),
                 "fechaImagen": fecha_imagen_truncada,

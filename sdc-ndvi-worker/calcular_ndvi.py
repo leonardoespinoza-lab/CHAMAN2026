@@ -50,11 +50,21 @@ def calcular_ndvi(b8_path, b4_path):
         return ndvi, profile
 
 
-def _read_band(path, reference=None):
+def _apply_scale_offset(src, data):
+    scale = src.scales[0] if src.scales else 1
+    offset = src.offsets[0] if src.offsets else 0
+    if scale != 1 or offset != 0:
+        return data * scale + offset
+    return data
+
+
+def _read_band(path, reference=None, reflectance=True):
     with rasterio.open(path) as src:
         data = src.read(1).astype("float32")
         if src.nodata is not None:
             data[data == src.nodata] = np.nan
+        if reflectance:
+            data = _normalize_reflectance(_apply_scale_offset(src, data))
 
         if reference is not None:
             _, ref_transform, ref_crs, ref_shape = reference
@@ -100,9 +110,9 @@ def _mean_index(data):
     return round(float(np.nanmean(valid)), 4)
 
 
-def calcular_indices(band_paths):
+def calcular_indices_y_rasters(band_paths):
     """
-    Calcula indices satelitales promedio dentro del recorte del lote.
+    Calcula indices satelitales promedio y sus rasters dentro del recorte del lote.
     Las bandas opcionales se reproyectan a la grilla NIR cuando tienen otra
     resolucion, como B05/B11 en Sentinel-2.
     """
@@ -121,6 +131,8 @@ def calcular_indices(band_paths):
         nir = nir_src.read(1).astype("float32")
         if nir_src.nodata is not None:
             nir[nir == nir_src.nodata] = np.nan
+        nir = _normalize_reflectance(_apply_scale_offset(nir_src, nir))
+        profile = nir_src.profile.copy()
 
     red = _read_band(b4_path, reference)
     blue = _read_band(band_paths["B02"], reference) if band_paths.get("B02") else None
@@ -128,29 +140,39 @@ def calcular_indices(band_paths):
     red_edge = _read_band(band_paths["B05"], reference) if band_paths.get("B05") else None
     swir1 = _read_band(band_paths["B11"], reference) if band_paths.get("B11") else None
 
-    indices = {
-        "ndvi": _mean_index(_safe_div(nir - red, nir + red)),
-        "savi": _mean_index(((nir - red) * 1.5) / (nir + red + 0.5)),
+    rasters = {
+        "ndvi": _safe_div(nir - red, nir + red),
+        "savi": np.clip(((nir - red) * 1.5) / (nir + red + 0.5), -1, 1),
     }
 
     if green is not None:
-        indices["ndwi"] = _mean_index(_safe_div(green - nir, green + nir))
+        rasters["ndwi"] = _safe_div(green - nir, green + nir)
 
     if swir1 is not None:
-        indices["ndmi"] = _mean_index(_safe_div(nir - swir1, nir + swir1))
+        rasters["ndmi"] = _safe_div(nir - swir1, nir + swir1)
 
     if red_edge is not None:
-        indices["ndre"] = _mean_index(_safe_div(nir - red_edge, nir + red_edge))
+        rasters["ndre"] = _safe_div(nir - red_edge, nir + red_edge)
 
     if blue is not None:
-        nir_r = _normalize_reflectance(nir)
-        red_r = _normalize_reflectance(red)
-        blue_r = _normalize_reflectance(blue)
-        indices["evi"] = _mean_index(
-            2.5 * (nir_r - red_r) / (nir_r + 6 * red_r - 7.5 * blue_r + 1)
+        rasters["evi"] = np.clip(
+            2.5 * (nir - red) / (nir + 6 * red - 7.5 * blue + 1),
+            -1,
+            1,
         )
 
-    return {key: value for key, value in indices.items() if value is not None}
+    indices = {}
+    for key, value in rasters.items():
+        mean = _mean_index(value)
+        if mean is not None:
+            indices[key] = mean
+
+    profile.update({"dtype": "float32", "nodata": np.nan, "crs": reference[2]})
+    return {"indices": indices, "rasters": rasters, "profile": profile}
+
+
+def calcular_indices(band_paths):
+    return calcular_indices_y_rasters(band_paths)["indices"]
 
 
 def exportar_geotiff(ndvi, profile, output_path):

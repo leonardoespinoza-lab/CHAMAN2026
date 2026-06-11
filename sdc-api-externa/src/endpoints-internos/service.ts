@@ -33,6 +33,7 @@ export class EndpointsService {
       ndviUrl: body?.ndvi_url,
       ndviPromedio: body?.ndvi_promedio,
       indices: body?.indices,
+      imagenes: body?.imagenes,
       metadataImagen: body?.metadata,
       coleccion: body?.coleccion,
     };

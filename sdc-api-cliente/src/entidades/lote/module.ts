@@ -6,11 +6,12 @@ import { LotesRepository } from './repository';
 import { EstablecimientosModule } from '../establecimiento/module';
 import { ReporteNDVIsModule } from '../reporte-ndvis/module';
 import { NdviQueueService } from './ndvi-queue.service';
+import { SatelliteSyncService } from './satellite-sync.service';
 
 @Module({
   imports: [AxiosModule, EstablecimientosModule, ReporteNDVIsModule],
   controllers: [LotesController],
-  providers: [LotesService, LotesRepository, NdviQueueService],
+  providers: [LotesService, LotesRepository, NdviQueueService, SatelliteSyncService],
   exports: [LotesService],
 })
 export class LotesModule {}

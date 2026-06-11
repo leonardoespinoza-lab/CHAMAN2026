@@ -22,11 +22,21 @@ export interface IIndicesSatelitales {
   evi?: number;
 }
 
+export interface IImagenesSatelitales {
+  ndvi?: string;
+  ndmi?: string;
+  ndwi?: string;
+  ndre?: string;
+  savi?: string;
+  evi?: string;
+}
+
 export interface IReporteNDVIExterno {
   idLote?: string;
   ndvi_url?: string;
   ndvi_promedio?: number;
   indices?: IIndicesSatelitales;
+  imagenes?: IImagenesSatelitales;
   metadata?: IMetadata;
   fecha?: string;
   fechaImagen?: string;
@@ -41,6 +51,7 @@ export interface IReporteNDVI {
   fechaDeLaImagen?: string;
   ndviPromedio?: number;
   indices?: IIndicesSatelitales;
+  imagenes?: IImagenesSatelitales;
   ndviUrl?: string;
   coleccion?: string; // Nombre de la coleccion satelital de la imagen
   // Esto sirve para ubicar la imagen en el mapa

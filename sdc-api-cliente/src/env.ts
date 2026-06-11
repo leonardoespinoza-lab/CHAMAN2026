@@ -66,6 +66,15 @@ export const CLIMA_SYNC_INTERVAL_MS =
 export const CLIMA_CACHE_TTL_MINUTES =
   +process.env.CLIMA_CACHE_TTL_MINUTES || 15;
 
+// SATELITE
+export const NDVI_SYNC_ENABLED =
+  process.env.NDVI_SYNC_ENABLED !== 'false' && ENV !== 'test';
+export const NDVI_SYNC_INTERVAL_MS =
+  +process.env.NDVI_SYNC_INTERVAL_MS || 24 * 60 * 60 * 1000;
+export const NDVI_SYNC_STARTUP_DELAY_MS =
+  +process.env.NDVI_SYNC_STARTUP_DELAY_MS || 90 * 1000;
+export const NDVI_SYNC_LIMIT = +process.env.NDVI_SYNC_LIMIT || 250;
+
 // TILES CLIMA - CONFIGURACIÓN INDIVIDUAL POR ESTABLECIMIENTO
 export const TILES_INDIVIDUAL_CONFIG = {
   // Radio proporcional al tamaño del establecimiento

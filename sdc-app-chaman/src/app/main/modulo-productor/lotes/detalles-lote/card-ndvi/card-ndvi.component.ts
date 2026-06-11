@@ -30,10 +30,13 @@ interface NdviAnalisis {
 }
 
 interface SatelliteIndicator {
+  key: keyof NonNullable<IReporteNDVI['indices']>;
   label: string;
   value: string;
   detail: string;
   source: string;
+  image?: string;
+  lectura: string;
   status: 'activo' | 'preparado' | 'contexto';
 }
 
@@ -56,6 +59,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
   public generandoMuestra = false;
   public generandoSatelital = false;
   public readonly esLocal = ENV === 'Local';
+  public capaSatelitalActiva: SatelliteIndicator['key'] = 'ndvi';
 
   private ndvi$?: Subscription;
   private refreshTimeout?: ReturnType<typeof setTimeout>;
@@ -124,18 +128,11 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
       return 'Sin imagen satelital activa';
     }
     const fechaImagen = new Date(this.reporte.fechaDeLaImagen);
-    const dias = this.diasDesde(fechaImagen);
     const fecha = fechaImagen.toLocaleDateString('es-AR', {
       day: 'numeric',
       month: 'short',
     });
-    if (dias === 0) {
-      return `Imagen ${fecha} (hoy)`;
-    }
-    if (dias === 1) {
-      return `Imagen ${fecha} (ayer)`;
-    }
-    return `Imagen ${fecha} (${dias} dias)`;
+    return `Ultima escena valida ${fecha}`;
   }
 
   public get imagenAtrasada(): boolean {
@@ -149,47 +146,154 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
     const ndvi = this.reporte?.ndviPromedio;
     const ndviValue = ndvi == null ? 'Pendiente' : this.formatear(ndvi);
     const indices = this.reporte?.indices;
+    const imagenes = this.reporte?.imagenes;
     const indexValue = (key: keyof NonNullable<IReporteNDVI['indices']>) =>
       indices?.[key] == null ? (this.reporte ? 'Pendiente' : 'Preparado') : this.formatear(indices[key]!);
     const indexStatus = (...keys: (keyof NonNullable<IReporteNDVI['indices']>)[]) =>
       keys.some((key) => indices?.[key] != null) ? 'activo' : 'preparado';
     return [
       {
+        key: 'ndvi',
         label: 'NDVI',
         value: indexValue('ndvi') === 'Preparado' ? ndviValue : indexValue('ndvi'),
         detail: 'Vigor verde y cobertura activa del lote.',
         source: this.reporte?.coleccion || 'Sentinel-2 B08/B04',
+        image: imagenes?.ndvi || this.reporte?.ndviUrl,
+        lectura: this.lecturaIndice('ndvi', indices?.ndvi ?? ndvi),
         status: this.reporte ? 'activo' : 'preparado',
       },
       {
-        label: 'NDMI / NDWI',
-        value: `${indexValue('ndmi')} / ${indexValue('ndwi')}`,
-        detail: 'Agua en canopia y estres hidrico superficial.',
+        key: 'ndmi',
+        label: 'NDMI',
+        value: indexValue('ndmi'),
+        detail: 'Agua en canopia y estrés hídrico de la biomasa.',
         source: 'Sentinel-2 B08/B11',
-        status: indexStatus('ndmi', 'ndwi'),
+        image: imagenes?.ndmi,
+        lectura: this.lecturaIndice('ndmi', indices?.ndmi),
+        status: indexStatus('ndmi'),
       },
       {
+        key: 'ndwi',
+        label: 'NDWI',
+        value: indexValue('ndwi'),
+        detail: 'Humedad superficial y contraste agua/suelo.',
+        source: 'Sentinel-2 B03/B08',
+        image: imagenes?.ndwi,
+        lectura: this.lecturaIndice('ndwi', indices?.ndwi),
+        status: indexStatus('ndwi'),
+      },
+      {
+        key: 'ndre',
         label: 'NDRE',
         value: indexValue('ndre'),
-        detail: 'Clorofila y respuesta a nitrogeno en etapas avanzadas.',
+        detail: 'Clorofila y respuesta a nitrógeno en etapas avanzadas.',
         source: 'Sentinel-2 B08/B05',
+        image: imagenes?.ndre,
+        lectura: this.lecturaIndice('ndre', indices?.ndre),
         status: indexStatus('ndre'),
       },
       {
-        label: 'SAVI / EVI',
-        value: `${indexValue('savi')} / ${indexValue('evi')}`,
-        detail: 'Vigor ajustado para suelo expuesto y alta biomasa.',
+        key: 'savi',
+        label: 'SAVI',
+        value: indexValue('savi'),
+        detail: 'Vigor corregido para suelo expuesto.',
         source: 'Sentinel-2 multibanda',
-        status: indexStatus('savi', 'evi'),
+        image: imagenes?.savi,
+        lectura: this.lecturaIndice('savi', indices?.savi),
+        status: indexStatus('savi'),
       },
       {
-        label: 'Humedad suelo',
-        value: 'Contextual',
-        detail: 'Capa modelada por punto y referencia zonal.',
-        source: 'Open-Meteo / SMAP',
-        status: 'contexto',
+        key: 'evi',
+        label: 'EVI',
+        value: indexValue('evi'),
+        detail: 'Vigor mejorado para alta biomasa.',
+        source: 'Sentinel-2 multibanda',
+        image: imagenes?.evi,
+        lectura: this.lecturaIndice('evi', indices?.evi),
+        status: indexStatus('evi'),
       },
     ];
+  }
+
+  public get capaActiva(): SatelliteIndicator {
+    return (
+      this.satelliteIndicators.find((indicator) => indicator.key === this.capaSatelitalActiva) ||
+      this.satelliteIndicators[0]
+    );
+  }
+
+  public get imagenCapaActiva(): string | undefined {
+    return this.capaActiva?.image || this.reporte?.ndviUrl;
+  }
+
+  public seleccionarCapa(indicator: SatelliteIndicator): void {
+    if (indicator.status === 'activo') {
+      this.capaSatelitalActiva = indicator.key;
+    }
+  }
+
+  private lecturaIndice(key: SatelliteIndicator['key'], value?: number): string {
+    if (value == null) {
+      return 'La capa queda preparada y se completa cuando el worker procese una escena con las bandas necesarias.';
+    }
+
+    const tendencia = this.tendenciaIndice(key);
+    const sufijo = tendencia ? ` ${tendencia}` : '';
+
+    if (key === 'ndvi') {
+      if (value < 0.35) return `Vigor bajo: revisar implantación, suelo desnudo, estrés hídrico o presión sanitaria.${sufijo}`;
+      if (value < 0.55) return `Vigor medio: conviene recorrer ambientes y comparar con lluvia, riego y fertilización.${sufijo}`;
+      return `Cobertura activa buena: sostener monitoreo y buscar cambios por ambiente.${sufijo}`;
+    }
+
+    if (key === 'ndmi') {
+      if (value < -0.05) return `Señal seca en canopia: puede indicar demanda de agua, estrés o baja cobertura.${sufijo}`;
+      if (value > 0.25) return `Canopia con buena humedad: vigilar enfermedades si coincide con HR alta y lluvias.${sufijo}`;
+      return `Humedad de canopia intermedia: usar junto con riego, NDVI y pronóstico.${sufijo}`;
+    }
+
+    if (key === 'ndwi') {
+      if (value < -0.15) return `Superficie seca o suelo expuesto: revisar balance hídrico y sectores de bajo vigor.${sufijo}`;
+      if (value > 0.1) return `Señal húmeda: revisar anegamiento, bajos o exceso de agua reciente.${sufijo}`;
+      return `Humedad superficial moderada: comparar con lluvia acumulada y textura de suelo.${sufijo}`;
+    }
+
+    if (key === 'ndre') {
+      if (value < 0.12) return `Baja señal de clorofila: revisar nitrógeno, estado fenológico y sanidad foliar.${sufijo}`;
+      if (value > 0.32) return `Buena respuesta de clorofila: útil para seguir nutrición y hoja funcional.${sufijo}`;
+      return `Clorofila intermedia: mirar tendencia antes de recomendar correcciones.${sufijo}`;
+    }
+
+    if (key === 'savi') {
+      if (value < 0.25) return `Vigor ajustado bajo con peso de suelo expuesto: revisar nacimiento y cobertura.${sufijo}`;
+      return `Vigor ajustado estable: buena capa para comparar lotes con cobertura parcial.${sufijo}`;
+    }
+
+    if (value < 0.25) return `EVI bajo: posible baja biomasa o estrés; confirmar con NDVI y recorrida.${sufijo}`;
+    return `EVI acompaña biomasa activa; útil cuando NDVI empieza a saturarse en coberturas altas.${sufijo}`;
+  }
+
+  private tendenciaIndice(key: SatelliteIndicator['key']): string {
+    if (!this.reporte?.indices || this.ndvis.length < 2) {
+      return '';
+    }
+    const actual = this.reporte.indices[key] ?? (key === 'ndvi' ? this.reporte.ndviPromedio : undefined);
+    if (actual == null) {
+      return '';
+    }
+    const index = this.ndvis.findIndex((item) => item._id === this.reporte?._id);
+    const previo = this.ndvis[index >= 0 ? index + 1 : 1];
+    const previoValue = previo?.indices?.[key] ?? (key === 'ndvi' ? previo?.ndviPromedio : undefined);
+    if (previoValue == null) {
+      return '';
+    }
+    const delta = this.redondear(actual - previoValue);
+    if (Math.abs(delta) < 0.03) {
+      return 'Sin cambio importante contra la escena anterior.';
+    }
+    return delta > 0
+      ? `Mejora ${this.formatear(delta)} contra la escena anterior.`
+      : `Cae ${this.formatear(Math.abs(delta))} contra la escena anterior.`;
   }
 
   private calcularFechaMinima(): void {

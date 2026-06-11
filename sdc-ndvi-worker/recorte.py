@@ -9,7 +9,6 @@ from PIL import Image, ImageFilter
 from rasterio.mask import mask
 from shapely.geometry import Polygon, mapping
 
-# Configuración del logging
 logger = logging.getLogger(__name__)
 
 
@@ -23,44 +22,67 @@ def _png_scale() -> int:
 
 NDVI_PNG_SCALE = _png_scale()
 
-# Configuración del colormap NDVI
 NDVI_CMAP = LinearSegmentedColormap.from_list(
     "ndvi",
     [
-        # El rango de 0.0 a 0.5 representa el NDVI de -1.0 a 0.0
-        (0.0, "#000080"),  # NDVI ~ -1.0 (Agua profunda y clara) -> Azul Marino
-        (0.4, "#4682B4"),  # NDVI ~ -0.2 (Agua poco profunda, turbia) -> Azul Acero
-        # El rango de 0.5 a 0.6 representa el NDVI de 0.0 a 0.2 (suelo)
-        (0.5, "#A0522D"),  # NDVI = 0.0 (Línea de costa/suelo húmedo) -> Siena
-        (0.55, "#D2B48C"),  # NDVI ~ 0.1 (Suelo desnudo y seco) -> Canela
-        # El rango de 0.6 en adelante representa la vegetación
-        (0.6, "#FFFFE0"),  # NDVI ~ 0.2 (Vegetación muy escasa) -> Amarillo Claro
-        (0.7, "#9ACD32"),  # NDVI ~ 0.4 (Vegetación moderada) -> Verde Amarillento
-        (0.85, "#008000"),  # NDVI ~ 0.7 (Vegetación saludable) -> Verde
-        (1.0, "#006400"),  # NDVI = 1.0 (Vegetación muy densa/bosque) -> Verde Oscuro
+        (0.0, "#000080"),
+        (0.4, "#4682B4"),
+        (0.5, "#A0522D"),
+        (0.55, "#D2B48C"),
+        (0.6, "#FFFFE0"),
+        (0.7, "#9ACD32"),
+        (0.85, "#008000"),
+        (1.0, "#006400"),
     ],
 )
 
+INDEX_CMAPS = {
+    "ndvi": NDVI_CMAP,
+    "savi": NDVI_CMAP,
+    "evi": NDVI_CMAP,
+    "ndmi": LinearSegmentedColormap.from_list(
+        "ndmi",
+        [
+            (0.0, "#8a4f2a"),
+            (0.42, "#e6c68f"),
+            (0.55, "#f2f7f5"),
+            (0.72, "#69c7c4"),
+            (1.0, "#0b678f"),
+        ],
+    ),
+    "ndwi": LinearSegmentedColormap.from_list(
+        "ndwi",
+        [
+            (0.0, "#8b5a2b"),
+            (0.45, "#efe0b5"),
+            (0.6, "#d8f2ef"),
+            (0.82, "#4bb8d8"),
+            (1.0, "#0d5aa7"),
+        ],
+    ),
+    "ndre": LinearSegmentedColormap.from_list(
+        "ndre",
+        [
+            (0.0, "#d0a15f"),
+            (0.38, "#efe9aa"),
+            (0.58, "#8ed36d"),
+            (0.78, "#31a354"),
+            (1.0, "#0b5d2a"),
+        ],
+    ),
+}
+
 
 def recortar_ndvi(ndvi_tif_path: str, polygon: Polygon, output_tif_path: str):
-    """Recorta un archivo NDVI GeoTIFF usando un polígono Shapely."""
+    """Recorta un GeoTIFF usando el poligono del lote."""
     try:
         with rasterio.open(ndvi_tif_path) as src:
-            # Obtener dtype del metadata (no directamente de src)
-            dtype = src.meta.get("dtype", "uint16")  # Default para Landsat
-
-            # Definir nodata según el tipo de dato
+            dtype = src.meta.get("dtype", "uint16")
             nodata = 0 if dtype == "uint16" else np.nan
-
-            # Transformar el polígono al CRS del raster
             geom_reproj = _reproject_geom(polygon, "EPSG:4326", src.crs)
-
-            # Recortar
             out_image, out_transform = mask(
                 src, [mapping(geom_reproj)], crop=True, nodata=nodata, all_touched=True
             )
-
-            # Actualizar metadatos
             out_meta = src.meta.copy()
             out_meta.update(
                 {
@@ -70,13 +92,9 @@ def recortar_ndvi(ndvi_tif_path: str, polygon: Polygon, output_tif_path: str):
                     "nodata": nodata,
                 }
             )
-
-            # Guardar
             with rasterio.open(output_tif_path, "w", **out_meta) as dest:
                 dest.write(out_image)
-
         return output_tif_path
-
     except Exception as e:
         logger.error(f"Error en recortar_ndvi: {str(e)}")
         raise
@@ -89,59 +107,59 @@ def exportar_png_desde_tif_con_polygon(
     dpi: int = 300,
     quality: int = 90,
 ) -> str:
-    """
-    Exporta un PNG a partir de un GeoTIFF recortado por un polígono.
-
-    Args:
-        tif_path: Ruta al archivo TIFF
-        output_png_path: Ruta de salida PNG
-        polygon: Polígono Shapely en WGS84
-        dpi: Resolución de la imagen
-        quality: Calidad del PNG (1-100)
-
-    Returns:
-        str: Ruta al PNG generado
-    """
+    """Exporta un PNG NDVI a partir de un GeoTIFF y el poligono del lote."""
     if not os.path.exists(tif_path):
         raise FileNotFoundError(f"Archivo TIFF no encontrado: {tif_path}")
 
     try:
         with rasterio.open(tif_path) as src:
-            # Transformar y recortar
             geom_reproj = _reproject_geom(polygon, "EPSG:4326", src.crs)
             ndvi_array, _ = mask(
                 src, [mapping(geom_reproj)], crop=True, filled=True, nodata=np.nan
             )
-            ndvi = ndvi_array[0]
-
-        # Procesamiento de la imagen
-        ndvi = np.clip(ndvi, -1, 1)  # Asegurar rango válido
-        ndvi_normalized = (ndvi + 1) / 2  # Normalizar a 0-1
-
-        # Aplicar colormap
-        rgba = (NDVI_CMAP(ndvi_normalized) * 255).astype(np.uint8)
-
-        # Máscara de transparencia para valores NaN
-        rgba[..., 3] = np.where(np.isnan(ndvi), 0, 255)
-
-        # Guardar como PNG
-        img = Image.fromarray(rgba, mode="RGBA")
-        img = _agregar_contorno_transparente(img)
-        if NDVI_PNG_SCALE > 1:
-            img = img.resize(
-                (img.width * NDVI_PNG_SCALE, img.height * NDVI_PNG_SCALE),
-                Image.Resampling.BICUBIC,
-            )
-        img.save(output_png_path, dpi=(dpi, dpi), quality=quality)
-
+        _guardar_png_indexado(ndvi_array[0], output_png_path, "ndvi", dpi, quality)
         return output_png_path
-
     except Exception as e:
         raise RuntimeError(f"Error al exportar PNG: {str(e)}")
 
 
+def exportar_png_desde_array(
+    array: np.ndarray,
+    output_png_path: str,
+    indice: str = "ndvi",
+    dpi: int = 300,
+    quality: int = 90,
+) -> str:
+    """Exporta un raster de indice ya recortado a PNG interpretable."""
+    _guardar_png_indexado(array, output_png_path, indice, dpi, quality)
+    return output_png_path
+
+
+def _guardar_png_indexado(
+    values: np.ndarray,
+    output_png_path: str,
+    indice: str,
+    dpi: int,
+    quality: int,
+) -> None:
+    values = np.clip(values.astype("float32"), -1, 1)
+    normalized = (values + 1) / 2
+    cmap = INDEX_CMAPS.get(indice, NDVI_CMAP)
+    rgba = (cmap(normalized) * 255).astype(np.uint8)
+    rgba[..., 3] = np.where(np.isnan(values), 0, 255)
+
+    img = Image.fromarray(rgba, mode="RGBA")
+    img = _agregar_contorno_transparente(img)
+    if NDVI_PNG_SCALE > 1:
+        img = img.resize(
+            (img.width * NDVI_PNG_SCALE, img.height * NDVI_PNG_SCALE),
+            Image.Resampling.BICUBIC,
+        )
+    img.save(output_png_path, dpi=(dpi, dpi), quality=quality)
+
+
 def _agregar_contorno_transparente(img: Image.Image) -> Image.Image:
-    """Agrega un borde sutil al area valida del recorte para mejorar lectura en el front."""
+    """Agrega un borde sutil al area valida del recorte."""
     alpha = img.getchannel("A")
     borde = alpha.filter(ImageFilter.FIND_EDGES).point(lambda p: 150 if p else 0)
     capa_borde = Image.new("RGBA", img.size, (37, 50, 73, 0))
@@ -150,17 +168,7 @@ def _agregar_contorno_transparente(img: Image.Image) -> Image.Image:
 
 
 def _reproject_geom(geom: Polygon, from_crs: str, to_crs: str) -> Polygon:
-    """
-    Reprojecta una geometría entre sistemas de coordenadas.
-
-    Args:
-        geom: Polígono a transformar
-        from_crs: CRS de origen (ej. 'EPSG:4326')
-        to_crs: CRS de destino
-
-    Returns:
-        Polygon: Polígono reproyectado
-    """
+    """Reproyecta una geometria entre sistemas de coordenadas."""
     if from_crs == to_crs:
         return geom
 
@@ -171,50 +179,26 @@ def _reproject_geom(geom: Polygon, from_crs: str, to_crs: str) -> Polygon:
 
 
 def calcular_promedio_ndvi(tif_path: str) -> Optional[float]:
-    """
-    Calcula el valor promedio de NDVI en un archivo TIFF.
-
-    Args:
-        tif_path: Ruta al archivo TIFF
-
-    Returns:
-        float: Valor promedio o None si falla
-    """
+    """Calcula el valor promedio de NDVI en un TIFF."""
     try:
         with rasterio.open(tif_path) as src:
             array = src.read(1).astype(np.float32)
-            array[array == src.nodata] = np.nan
+            if src.nodata is not None:
+                array[array == src.nodata] = np.nan
         return float(np.nanmean(array))
     except Exception:
         return None
 
 
 def obtener_geojson_valido(polygon_coords: list) -> dict:
-    """
-    Convierte coordenadas a una geometría GeoJSON válida.
-
-    Args:
-        polygon_coords: Lista de coordenadas [[x,y], ...]
-
-    Returns:
-        dict: Geometría en formato GeoJSON
-    """
+    """Convierte coordenadas a una geometria GeoJSON valida."""
     return mapping(Polygon(polygon_coords))
 
 
 def recortar(
     geotiff_path: str, polygon_coords: list
 ) -> Tuple[Optional[np.ndarray], Optional[dict]]:
-    """
-    Recorta un GeoTIFF usando coordenadas de polígono.
-
-    Args:
-        geotiff_path: Ruta al GeoTIFF
-        polygon_coords: Lista de coordenadas [[x,y], ...]
-
-    Returns:
-        tuple: (array de datos, metadatos) o (None, None) si falla
-    """
+    """Recorta un GeoTIFF usando coordenadas de poligono."""
     try:
         polygon = Polygon(polygon_coords)
         geojson_geom = [mapping(polygon)]
@@ -232,7 +216,6 @@ def recortar(
         )
 
         return out_image, out_meta
-
     except Exception as e:
         print(f"Error al recortar: {str(e)}")
         return None, None
