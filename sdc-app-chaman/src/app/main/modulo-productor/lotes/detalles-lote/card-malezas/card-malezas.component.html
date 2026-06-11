@@ -1,0 +1,65 @@
+<div class="custom-card weeds-card">
+  <div class="weeds-header">
+    <div>
+      <p class="titulo-card">{{ 'Prediccion de malezas' | uppercase }}</p>
+      <span>
+        {{ cultivo || 'Cultivo sin seleccionar' }} -
+        {{ tieneSensorSuelo ? 'modelo con sensor de suelo' : 'modelo estimado con clima y sin sensor de suelo' }}
+      </span>
+    </div>
+    <strong>{{ malezas.length }}</strong>
+  </div>
+
+  @if (cargando) {
+    <p-message severity="info" text="Cargando modelos de malezas..."></p-message>
+  } @else if (!malezas.length) {
+    <p-message severity="info" text="Aun no hay modelos de malezas cargados para este cultivo."></p-message>
+  } @else {
+    <div class="weeds-grid">
+      @for (item of analisis; track item.maleza.codigoCarga || item.maleza.nombre) {
+        <article class="weed-card" [class.high]="item.severidad === 'alta'" [class.medium]="item.severidad === 'media'">
+          <div class="weed-title">
+            <div>
+              <h3>{{ item.maleza.nombre }}</h3>
+              <span>{{ item.maleza.nombreCientifico }}</span>
+            </div>
+            <em>{{ item.estado }}</em>
+          </div>
+
+          <div class="weed-metrics">
+            <div>
+              <span>HTT 7 dias</span>
+              <strong>{{ item.htt7Dias | number: '1.0-1' }}</strong>
+            </div>
+            <div>
+              <span>Emergencia estimada</span>
+              <strong>{{ item.emergencia7Dias | number: '1.0-1' }}%</strong>
+            </div>
+            <div>
+              <span>Temp. ref.</span>
+              <strong>{{ item.temperaturaReferencia !== undefined ? (item.temperaturaReferencia | number: '1.0-1') + ' C' : 'clima' }}</strong>
+            </div>
+            <div>
+              <span>Hum. ref.</span>
+              <strong>{{ item.humedadReferencia !== undefined ? ((item.humedadReferencia * 100) | number: '1.0-0') + '%' : 'proxy' }}</strong>
+            </div>
+          </div>
+
+          <div class="thresholds">
+            @for (umbral of item.maleza.umbrales || []; track umbral.porcentaje) {
+              <div>
+                <span>E{{ umbral.porcentaje }}</span>
+                <div class="threshold-bar">
+                  <i [style.width.%]="progresoUmbral(item, umbral.horasTermicas)"></i>
+                </div>
+                <small>{{ umbral.horasTermicas | number: '1.0-0' }} HTT</small>
+              </div>
+            }
+          </div>
+
+          <p>{{ item.recomendacion }}</p>
+        </article>
+      }
+    </div>
+  }
+</div>

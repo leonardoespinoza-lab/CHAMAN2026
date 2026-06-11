@@ -34,6 +34,7 @@ import { LicenciaPorEntidadsModule } from './entidades/licenciaPorEntidad/module
 import { ReportesModule } from './entidades/reportes/module';
 import { DispositivosModule } from './entidades/dispositivos/module';
 import { FotosModule } from './entidades/foto/module';
+import { MalezasModule } from './entidades/maleza/module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { FotosModule } from './entidades/foto/module';
     ReportesModule,
     DispositivosModule,
     FotosModule,
+    MalezasModule,
   ],
   controllers: [HealthController],
   providers: [],

@@ -8,12 +8,35 @@ import {
   IReporte,
   IUpdateDispositivo,
   IValoresV2,
+  IFrioAcumulado,
 } from 'modelos/src';
 import { ReportesRepository } from './repository';
 import { Event, Uplink } from 'src/auxiliares/chirpstack/interfaces';
 import { DispositivosService } from '../dispositivos/service';
 
 const MERGE_WINDOW_MINUTES = 5;
+const TEMP_FRIO = Number(process.env.TEMP_FRIO || 7);
+const HFE_TABLE: [number, number][] = [
+  [-5, 0],
+  [0, 0.2],
+  [1, 0.45],
+  [2, 0.65],
+  [3, 0.799],
+  [4, 0.905],
+  [5, 0.975],
+  [6, 1],
+  [7, 0.975],
+  [8, 0.905],
+  [9, 0.799],
+  [10, 0.68],
+  [11, 0.54],
+  [12, 0.407],
+  [13, 0.29],
+  [14, 0.18],
+  [15, 0.08],
+  [16, 0],
+  [18, 0],
+];
 
 // --- CONFIGURACIÓN DE PARSERS ---
 
@@ -153,6 +176,14 @@ export class ReportesService {
       fechaUltimaComunicacion: fecha,
       ultimoReporte: reporteCreado,
     };
+    const frioAcumulado = this.calcularFrioAcumulado(
+      dispositivo,
+      fecha,
+      reporteCreado.datos?.valores,
+    );
+    if (frioAcumulado) {
+      updateDispositivo.frioAcumulado = frioAcumulado;
+    }
 
     await this.dispositivos.update(dispositivo._id, updateDispositivo);
     this.logger.log(
@@ -238,6 +269,14 @@ export class ReportesService {
       fechaUltimaComunicacion: fecha,
       ultimoReporte: reporteFinal,
     };
+    const frioAcumulado = this.calcularFrioAcumulado(
+      dispositivo,
+      fecha,
+      reporteFinal.datos?.valores,
+    );
+    if (frioAcumulado) {
+      updateDispositivo.frioAcumulado = frioAcumulado;
+    }
     await this.dispositivos.update(dispositivo._id, updateDispositivo);
     this.logger.log(
       `Dispositivo ${deveui} actualizado con reporte ${reporteFinal._id}.`,
@@ -380,6 +419,93 @@ export class ReportesService {
           : null,
     };
     return res;
+  }
+
+  private hfeFactor(temp: number): number {
+    if (!Number.isFinite(temp)) return 0;
+    if (temp <= HFE_TABLE[0][0]) return HFE_TABLE[0][1];
+    if (temp >= HFE_TABLE[HFE_TABLE.length - 1][0]) {
+      return HFE_TABLE[HFE_TABLE.length - 1][1];
+    }
+
+    for (let i = 0; i < HFE_TABLE.length - 1; i++) {
+      const [t1, f1] = HFE_TABLE[i];
+      const [t2, f2] = HFE_TABLE[i + 1];
+      if (temp >= t1 && temp <= t2) {
+        const ratio = (temp - t1) / (t2 - t1);
+        return f1 + ratio * (f2 - f1);
+      }
+    }
+    return 0;
+  }
+
+  private calcularFrioAcumulado(
+    dispositivo: IDispositivo,
+    fecha: string,
+    valores?: IValoresV2['valores'],
+  ): IFrioAcumulado | undefined {
+    const temperaturaActual = this.extraerTemperaturaReferencia(valores);
+    if (!Number.isFinite(temperaturaActual)) return undefined;
+
+    const previo = dispositivo.frioAcumulado || {};
+    let horasFrio = Number(previo.horasFrio || 0);
+    let horasFrioEfectivas = Number(previo.horasFrioEfectivas || 0);
+
+    const fechaPrevia =
+      previo.fechaUltimoCalculo || dispositivo.ultimoReporte?.fecha;
+    const temperaturaPrevia = Number.isFinite(previo.ultimaTemperatura)
+      ? Number(previo.ultimaTemperatura)
+      : this.extraerTemperaturaReferencia(dispositivo.ultimoReporte?.datos?.valores);
+
+    if (fechaPrevia && Number.isFinite(temperaturaPrevia)) {
+      const diffHours =
+        (new Date(fecha).getTime() - new Date(fechaPrevia).getTime()) /
+        3600000;
+
+      if (diffHours > 0 && diffHours < 24) {
+        if (temperaturaPrevia <= TEMP_FRIO) {
+          horasFrio += diffHours;
+        }
+        horasFrioEfectivas += diffHours * this.hfeFactor(temperaturaPrevia);
+      }
+    }
+
+    return {
+      fechaInicio: previo.fechaInicio || fecha,
+      fechaUltimoCalculo: fecha,
+      ultimaTemperatura: Number(temperaturaActual.toFixed(2)),
+      horasFrio: Number(horasFrio.toFixed(2)),
+      horasFrioEfectivas: Number(horasFrioEfectivas.toFixed(2)),
+      factorEfectivoActual: Number(this.hfeFactor(temperaturaActual).toFixed(3)),
+      modelo: 'HF <= 7C + HFE Utah simplificado',
+      fuente: 'Sensor LoRa',
+    };
+  }
+
+  private extraerTemperaturaReferencia(
+    valores?: IValoresV2['valores'],
+  ): number | undefined {
+    const temperaturasAire = valores?.Temperatura
+      ?.map((item) => item?.valores?.actual ?? item?.valores?.promedio)
+      .filter((valor) => Number.isFinite(valor));
+
+    if (temperaturasAire?.length) {
+      return this.promedio(temperaturasAire);
+    }
+
+    const temperaturasSuelo = valores?.['Temperatura Suelo']
+      ?.map((item) => item?.valores?.actual ?? item?.valores?.promedio)
+      .filter((valor) => Number.isFinite(valor));
+
+    if (temperaturasSuelo?.length) {
+      return this.promedio(temperaturasSuelo.slice(0, 3));
+    }
+
+    return undefined;
+  }
+
+  private promedio(valores: number[]): number {
+    return valores.reduce((suma, valor) => suma + Number(valor), 0) / valores.length;
   }
 
   private async ultimoReportePorDeveuiYFecha(

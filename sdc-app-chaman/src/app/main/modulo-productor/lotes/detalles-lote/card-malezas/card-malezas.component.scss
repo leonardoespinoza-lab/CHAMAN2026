@@ -1,0 +1,179 @@
+.weeds-card {
+  min-height: 100%;
+}
+
+.weeds-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 0.9rem;
+}
+
+.weeds-header p {
+  margin: 0;
+}
+
+.weeds-header span {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 1rem;
+  line-height: 1.25;
+  margin-top: 0.2rem;
+}
+
+.weeds-header strong {
+  align-items: center;
+  background: color-mix(in srgb, var(--p-primary-color), transparent 84%);
+  border: 1px solid var(--p-primary-color);
+  border-radius: 999px;
+  color: var(--p-primary-color);
+  display: inline-flex;
+  font-size: 1.2rem;
+  height: 42px;
+  justify-content: center;
+  min-width: 42px;
+}
+
+.weeds-grid {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.weed-card {
+  background: var(--p-surface-0);
+  border: 1px solid #b9c9d9;
+  border-left: 5px solid #5ecf57;
+  border-radius: 8px;
+  padding: 0.95rem;
+}
+
+.weed-card.medium {
+  border-left-color: #f2c94c;
+}
+
+.weed-card.high {
+  border-left-color: #eb5757;
+}
+
+.weed-title {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.weed-title h3 {
+  color: var(--p-text-color);
+  font-size: 1.22rem;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.weed-title span,
+.weed-title em,
+.weed-metrics span,
+.thresholds small {
+  color: var(--p-text-muted-color);
+}
+
+.weed-title span {
+  display: block;
+  font-size: 0.94rem;
+  margin-top: 0.18rem;
+}
+
+.weed-title em {
+  border: 1px solid #c7d4e2;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-style: normal;
+  font-weight: 700;
+  padding: 0.2rem 0.62rem;
+  white-space: nowrap;
+}
+
+.weed-metrics {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0.85rem 0;
+}
+
+.weed-metrics div {
+  background: var(--p-surface-50);
+  border: 1px solid #c7d4e2;
+  border-radius: 8px;
+  min-width: 0;
+  padding: 0.58rem;
+}
+
+.weed-metrics span,
+.weed-metrics strong {
+  display: block;
+}
+
+.weed-metrics span {
+  font-size: 0.78rem;
+  line-height: 1.15;
+}
+
+.weed-metrics strong {
+  color: var(--p-text-color);
+  font-size: 1.08rem;
+  margin-top: 0.22rem;
+}
+
+.thresholds {
+  display: grid;
+  gap: 0.52rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.thresholds span {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 800;
+  margin-bottom: 0.25rem;
+}
+
+.threshold-bar {
+  background: #eef4f8;
+  border: 1px solid #c7d4e2;
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.threshold-bar i {
+  background: linear-gradient(90deg, #35d6cf, #80d757);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+}
+
+.thresholds small {
+  display: block;
+  font-size: 0.74rem;
+  margin-top: 0.22rem;
+}
+
+.weed-card p {
+  background: color-mix(in srgb, var(--p-primary-color), transparent 90%);
+  border-radius: 8px;
+  color: var(--p-text-color);
+  font-size: 0.98rem;
+  line-height: 1.35;
+  margin: 0.85rem 0 0;
+  padding: 0.72rem;
+}
+
+@media (max-width: 720px) {
+  .weeds-grid,
+  .weed-metrics,
+  .thresholds {
+    grid-template-columns: 1fr;
+  }
+}

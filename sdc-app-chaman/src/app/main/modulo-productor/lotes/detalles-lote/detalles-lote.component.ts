@@ -16,6 +16,7 @@ import { CardEnfermedadesComponent } from './card-enfermedades/card-enfermedades
 import { CardEtapaFenologicaComponent } from './card-etapa-fenologica/card-etapa-fenologica.component';
 import { CardEtapasFenologicasComponent } from './card-etapas-fenologicas/card-etapas-fenologicas.component';
 import { CardHuellaHidricaComponent } from './card-huella-hidrica/card-huella-hidrica.component';
+import { CardMalezasComponent } from './card-malezas/card-malezas.component';
 import { CardNDVIComponent } from './card-ndvi/card-ndvi.component';
 import { CardRendimientoComponent } from './card-rendimiento/card-rendimiento.component';
 import { CardRiegoComponent } from './card-riego/card-riego.component';
@@ -47,6 +48,7 @@ export interface IDetallesLote extends ILoteTabla {
     DrawerListadoSiembrasComponent,
     CardNDVIComponent,
     CardEtapasFenologicasComponent,
+    CardMalezasComponent,
   ],
   templateUrl: './detalles-lote.component.html',
   styleUrl: './detalles-lote.component.scss',

@@ -31,3 +31,4 @@ export * from "./licenciaPorEntidad";
 export * from "./dispositivo";
 export * from "./reporte";
 export * from "./foto";
+export * from "./maleza";

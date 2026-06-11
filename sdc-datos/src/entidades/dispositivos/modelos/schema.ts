@@ -11,6 +11,7 @@ import {
   IGeoJSONPoint,
   IBateria,
   IReporte,
+  IFrioAcumulado,
 } from 'modelos/src';
 import mongoose, { Document } from 'mongoose';
 import { Distribuidor } from 'src/entidades/distribuidor/modelos/schema';
@@ -58,6 +59,9 @@ export class Dispositivo implements Exactly<IDispositivo, Dispositivo> {
 
   @Prop({ type: Object })
   ultimoReporte?: IReporte;
+
+  @Prop({ type: Object })
+  frioAcumulado?: IFrioAcumulado;
 
   @Prop({ type: Date })
   fechaUltimaComunicacion?: string; // Puede ser de otra copsa que no sea un reporte.
