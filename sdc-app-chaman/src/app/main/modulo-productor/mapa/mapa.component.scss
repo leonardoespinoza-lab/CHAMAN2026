@@ -1,18 +1,27 @@
 .map-topbar {
   position: fixed;
   z-index: 1001;
-  top: 0.75rem;
-  left: var(--menu-offset);
-  right: 1rem;
+  top: 0.65rem;
+  left: calc(var(--menu-offset) + 0.35rem);
+  right: 0.75rem;
   display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
   pointer-events: none;
+}
+
+.map-topbar-main {
+  display: flex;
+  align-items: stretch;
+  gap: 0.6rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .weather-strip,
 .service-rail,
+.establishment-rail,
 .lot-bottom-sheet {
   color: #243149;
   background: rgba(255, 255, 255, 0.88);
@@ -22,8 +31,9 @@
 }
 
 .weather-strip {
-  flex: 1 1 620px;
-  min-height: 3.25rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 3.35rem;
   border-radius: 18px;
   display: grid;
   grid-template-columns: minmax(160px, 1.6fr) repeat(5, minmax(88px, 1fr));
@@ -75,6 +85,76 @@
   gap: 0.35rem;
   padding: 0.35rem;
   pointer-events: auto;
+  min-height: 3.35rem;
+}
+
+.establishment-rail {
+  align-self: flex-start;
+  max-width: min(100%, 1020px);
+  min-height: 2.75rem;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  pointer-events: auto;
+}
+
+.establishment-rail > span {
+  flex: 0 0 auto;
+  padding: 0 0.45rem 0 0.3rem;
+  color: var(--p-primary-color);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.establishment-chip {
+  border: 1px solid rgba(121, 150, 185, 0.28);
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.78);
+  color: #1e293b;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.08rem;
+  min-width: 10.5rem;
+  min-height: 2.2rem;
+  padding: 0.28rem 0.55rem;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.establishment-chip strong {
+  font-size: 0.82rem;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.establishment-chip small {
+  color: #64748b;
+  font-size: 0.68rem;
+  line-height: 1.1;
+}
+
+.establishment-chip:hover,
+.establishment-chip.active {
+  border-color: rgba(35, 200, 196, 0.72);
+  background: rgba(226, 255, 253, 0.9);
+}
+
+.establishment-chip.view-all {
+  min-width: 6.8rem;
+  align-items: center;
+  text-align: center;
+  color: #0f766e;
+  font-weight: 700;
 }
 
 :host ::ng-deep .clima-dialog-shell.p-dialog {
@@ -286,17 +366,18 @@
 }
 
 @media (max-width: 1180px) {
-  .map-topbar {
+  .map-topbar-main {
     flex-direction: column;
-    right: 0.75rem;
   }
 
   .weather-strip,
-  .service-rail {
+  .service-rail,
+  .establishment-rail {
     width: 100%;
   }
 
-  .service-rail {
+  .service-rail,
+  .establishment-rail {
     overflow-x: auto;
   }
 
@@ -332,7 +413,8 @@
   }
 
   .weather-strip::-webkit-scrollbar,
-  .service-rail::-webkit-scrollbar {
+  .service-rail::-webkit-scrollbar,
+  .establishment-rail::-webkit-scrollbar {
     display: none;
   }
 
@@ -376,6 +458,22 @@
   .service-chip-icon {
     width: 1.75rem;
     height: 1.75rem;
+  }
+
+  .establishment-rail {
+    width: 100%;
+    max-width: 100%;
+    min-height: 2.55rem;
+    padding: 0.25rem;
+  }
+
+  .establishment-rail > span {
+    display: none;
+  }
+
+  .establishment-chip {
+    min-width: 9.25rem;
+    min-height: 2.2rem;
   }
 
   .lot-bottom-sheet {

@@ -5,55 +5,80 @@
 </div>
 
 <section class="map-topbar">
-  <div class="weather-strip pointer" (click)="abrirDrawerClima()">
-    <div class="weather-title">
-      <span class="weather-eyebrow">Clima de zona</span>
-      <strong>{{ climaZonaNombre() }}</strong>
-      <small>{{ establecimientoResumen() }}</small>
+  <div class="map-topbar-main">
+    <div class="weather-strip pointer" (click)="abrirDrawerClima()">
+      <div class="weather-title">
+        <span class="weather-eyebrow">Clima de zona</span>
+        <strong>{{ climaZonaNombre() }}</strong>
+        <small>{{ establecimientoResumen() }}</small>
+      </div>
+      <div class="weather-metric">
+        <span>Temp.</span>
+        <strong>{{ climaTemperaturaActual() }}</strong>
+      </div>
+      <div class="weather-metric">
+        <span>HR</span>
+        <strong>{{ climaHumedadActual() }}</strong>
+      </div>
+      <div class="weather-metric">
+        <span>Lluvia 24 h</span>
+        <strong>{{ climaLluvia24() }}</strong>
+      </div>
+      <div class="weather-metric">
+        <span>Lluvia 72 h</span>
+        <strong>{{ climaLluvia72() }}</strong>
+      </div>
+      <div class="weather-metric">
+        <span>Viento</span>
+        <strong>{{ climaVientoMax() }}</strong>
+      </div>
     </div>
-    <div class="weather-metric">
-      <span>Temp.</span>
-      <strong>{{ climaTemperaturaActual() }}</strong>
-    </div>
-    <div class="weather-metric">
-      <span>HR</span>
-      <strong>{{ climaHumedadActual() }}</strong>
-    </div>
-    <div class="weather-metric">
-      <span>Lluvia 24 h</span>
-      <strong>{{ climaLluvia24() }}</strong>
-    </div>
-    <div class="weather-metric">
-      <span>Lluvia 72 h</span>
-      <strong>{{ climaLluvia72() }}</strong>
-    </div>
-    <div class="weather-metric">
-      <span>Viento</span>
-      <strong>{{ climaVientoMax() }}</strong>
+
+    <div class="service-rail" aria-label="Servicios del mapa">
+      @for (item of servicios; track $index) {
+        <button
+          type="button"
+          class="service-chip"
+          [class.active]="servicioSeleccionado === item"
+          (click)="changeServicio(item)"
+        >
+          <span class="service-chip-icon" [style.background]="item.backgroudColor">
+            <svg [style.fill]="item.color" width="18" height="18">
+              <use [attr.xlink:href]="'icons/icons.svg#' + item.icon"></use>
+            </svg>
+          </span>
+          <span>{{ getServicioShortLabel(item) }}</span>
+        </button>
+      }
+      @if (loading()) {
+        <p-progress-spinner ariaLabel="loading" [style]="{ width: '18px', height: '18px' }" />
+      }
     </div>
   </div>
 
-  <div class="service-rail" aria-label="Servicios del mapa">
-    @for (item of servicios; track $index) {
+  @if (establecimientos.length > 1) {
+    <div class="establishment-rail" aria-label="Accesos a establecimientos">
+      <span>Establecimientos</span>
+      @for (establecimiento of establecimientos; track establecimiento._id || establecimiento.nombre) {
+        <button
+          type="button"
+          class="establishment-chip"
+          [class.active]="establecimientoSeleccionado?._id === establecimiento._id || establecimientoSeleccionado?.nombre === establecimiento.nombre"
+          (click)="seleccionarEstablecimiento(establecimiento)"
+        >
+          <strong>{{ establecimiento.nombre }}</strong>
+          <small>{{ resumenEstablecimiento(establecimiento) }}</small>
+        </button>
+      }
       <button
         type="button"
-        class="service-chip"
-        [class.active]="servicioSeleccionado === item"
-        (click)="changeServicio(item)"
+        class="establishment-chip view-all"
+        (click)="centerAllEstablecimientos()"
       >
-        <span class="service-chip-icon" [style.background]="item.backgroudColor">
-          <svg [style.fill]="item.color" width="18" height="18">
-            <use [attr.xlink:href]="'icons/icons.svg#' + item.icon"></use>
-          </svg>
-        </span>
-        <span>{{ getServicioShortLabel(item) }}</span>
+        Ver todos
       </button>
-    }
-    @if (loading()) {
-      <p-progress-spinner ariaLabel="loading" [style]="{ width: '18px', height: '18px' }" />
-    }
-  </div>
-
+    </div>
+  }
 </section>
 
 <!-- Resumen del servicio monitoreo de enfermedades-->

@@ -325,12 +325,13 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
-    if (this.lotes?.length > 0) {
-      this.centerMapOnBoundsLotes();
+    if (!this.initialDataLoaded) {
       return;
     }
 
-    if (!this.initialDataLoaded) {
+    const establecimientoInicial = this.getEstablecimientoInicial();
+    if (establecimientoInicial) {
+      this.seleccionarEstablecimiento(establecimientoInicial, true);
       return;
     }
 
@@ -342,6 +343,16 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Prioridad 3: Usar ubicación del dispositivo si no hay datos
     this.centerOnUserLocation();
+  }
+
+  private getEstablecimientoInicial(): IEstablecimiento | undefined {
+    if (this.establecimientoSeleccionado) {
+      return this.establecimientoSeleccionado;
+    }
+    const establecimientoConLotes = this.establecimientos.find((establecimiento) => {
+      return this.lotesDeEstablecimiento(establecimiento).length > 0;
+    });
+    return establecimientoConLotes || this.establecimientos[0];
   }
 
   // Método para centrar en establecimientos
@@ -577,6 +588,30 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     return `${lotes.length} lotes / ${this.formatNumber(hectareas, 0)} ha`;
   }
 
+  public resumenEstablecimiento(establecimiento: IEstablecimiento): string {
+    const lotes = this.lotesDeEstablecimiento(establecimiento);
+    const hectareas = lotes.reduce((acc, lote) => acc + (this.numero(lote.ubicacion?.superficie) || 0), 0);
+    if (!lotes.length) {
+      return 'sin lotes';
+    }
+    return `${lotes.length} lotes / ${this.formatNumber(hectareas, 0)} ha`;
+  }
+
+  public seleccionarEstablecimiento(establecimiento: IEstablecimiento, markAsVisited = true): void {
+    this.establecimientoSeleccionado = establecimiento;
+    this.loteSeleccionado = undefined;
+    this.selectEstablecimiento(establecimiento.nombre);
+    this.centerMapOnEstablecimiento(establecimiento, markAsVisited);
+    this.changeDetectorRef.detectChanges();
+  }
+
+  public centerAllEstablecimientos(): void {
+    this.loteSeleccionado = undefined;
+    this.centerMapOnBounds();
+    this.isFirstVisit = false;
+    this.changeDetectorRef.detectChanges();
+  }
+
   public climaTemperaturaActual(): string {
     const actual = this.getClimaActual();
     const pronostico = this.getPronosticoActualFallback();
@@ -805,11 +840,102 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!establecimiento) {
       return this.lotes;
     }
+    return this.lotesDeEstablecimiento(establecimiento);
+  }
+
+  private lotesDeEstablecimiento(establecimiento: IEstablecimiento): ILoteMapa[] {
     return this.lotes.filter((lote) => {
       const idMatch = lote.idEstablecimiento && establecimiento._id && lote.idEstablecimiento === establecimiento._id;
       const nombreMatch = lote.establecimiento?.nombre && lote.establecimiento.nombre === establecimiento.nombre;
       return idMatch || nombreMatch;
     });
+  }
+
+  private centerMapOnEstablecimiento(establecimiento: IEstablecimiento, markAsVisited = true): void {
+    if (!this.map) {
+      return;
+    }
+
+    const lotes = this.lotesDeEstablecimiento(establecimiento);
+    const loteExtent = this.getFeatureExtent(this.lotesLayer, (feature) => {
+      const lote = feature.get('lote') as ILoteMapa | undefined;
+      if (!lote) {
+        return false;
+      }
+      return lotes.some((item) => {
+        const idMatch = item._id && lote._id && item._id === lote._id;
+        const nombreMatch = item.nombre && lote.nombre && item.nombre === lote.nombre;
+        return idMatch || nombreMatch;
+      });
+    });
+
+    const establecimientoExtent = this.getFeatureExtent(this.establecimientosLayer, (feature) => {
+      const featureEstablecimiento = feature.get('establecimiento') as IEstablecimiento | undefined;
+      const idMatch = featureEstablecimiento?._id && establecimiento._id && featureEstablecimiento._id === establecimiento._id;
+      const nombreMatch = featureEstablecimiento?.nombre && featureEstablecimiento.nombre === establecimiento.nombre;
+      return !!idMatch || !!nombreMatch || feature.getId() === establecimiento.nombre;
+    });
+
+    const extent = loteExtent || establecimientoExtent;
+    if (!extent) {
+      return;
+    }
+
+    this.fitMapToExtent(extent, markAsVisited);
+  }
+
+  private getFeatureExtent(
+    layer: VectorLayer<Vector>,
+    predicate: (feature: Feature) => boolean
+  ): Extent | undefined {
+    const source = layer.getSource();
+    if (!source) {
+      return undefined;
+    }
+
+    const features = source.getFeatures().filter((feature) => predicate(feature as Feature));
+    return this.combineFeatureExtents(features as Feature[]);
+  }
+
+  private combineFeatureExtents(features: Feature[]): Extent | undefined {
+    let combinedExtent: Extent | undefined;
+
+    features.forEach((feature) => {
+      const extent = feature.getGeometry()?.getExtent();
+      if (!extent || !this.isValidExtent(extent)) {
+        return;
+      }
+      if (!combinedExtent) {
+        combinedExtent = [...extent] as Extent;
+        return;
+      }
+      combinedExtent[0] = Math.min(combinedExtent[0], extent[0]);
+      combinedExtent[1] = Math.min(combinedExtent[1], extent[1]);
+      combinedExtent[2] = Math.max(combinedExtent[2], extent[2]);
+      combinedExtent[3] = Math.max(combinedExtent[3], extent[3]);
+    });
+
+    return combinedExtent;
+  }
+
+  private fitMapToExtent(extent: Extent, markAsVisited = true): void {
+    if (!this.map || !this.isValidExtent(extent)) {
+      return;
+    }
+
+    this.map.getView().fit(extent, {
+      padding: this.helper.isHandset ? [140, 24, 210, 24] : [130, 80, 230, 80],
+      duration: 850,
+      maxZoom: this.helper.isHandset ? 15 : 16,
+    });
+
+    if (markAsVisited) {
+      this.isFirstVisit = false;
+    }
+  }
+
+  private isValidExtent(extent?: Extent): extent is Extent {
+    return !!extent && extent.length === 4 && extent.every((value) => Number.isFinite(value)) && extent[0] <= extent[2] && extent[1] <= extent[3];
   }
 
   private maxRiesgoEnfermedad(lote?: ILoteMapa): number | null {
