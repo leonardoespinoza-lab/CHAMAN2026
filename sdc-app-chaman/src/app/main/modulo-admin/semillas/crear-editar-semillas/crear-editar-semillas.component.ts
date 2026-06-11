@@ -10,6 +10,8 @@ import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 
+const CULTIVOS_DISPONIBLES_APP: Cultivo[] = ['Soja', 'Trigo', 'Maiz', 'Papa', 'Vid', 'Peral', 'Pecan', 'Manzano'];
+
 @Component({
   selector: 'app-crear-editar-semillas',
   imports: [SharedModule],
@@ -22,7 +24,7 @@ export class CrearEditarSemillasComponent implements OnInit, OnDestroy {
   public titulo?: () => string;
   public form?: FormGroup;
 
-  public ciclos = ['LARGO', 'INTERMEDIO', 'CORTO'];
+  public ciclos = ['LARGO', 'INTERMEDIO', 'CORTO', 'TEMPRANO', 'MUY TEMPRANO', 'MEDIA', 'TARDIA', 'GENERAL'];
   public enfermedades = [
     'Roya de la Hoja',
     'Mancha Amarilla',
@@ -31,6 +33,20 @@ export class CrearEditarSemillasComponent implements OnInit, OnDestroy {
     'Roya del Maíz',
     'Roya Anaranjada',
     'Fin de Ciclo Soja',
+    'Oidio',
+    'Botritis',
+    'Mildiu',
+    'Tizon Tardio',
+    'Tizon Temprano',
+    'Rhizoctonia',
+    'Sarna del Manzano',
+    'Sarna del Peral',
+    'Sarna del Pecan',
+    'Oidio del Manzano',
+    'Fuego Bacteriano',
+    'Carpocapsa',
+    'Psila del Peral',
+    'Bacteriosis del Pecan',
   ];
   public cultivosDisponibles: Cultivo[] = [];
   private datos$?: Subscription;
@@ -66,6 +82,21 @@ export class CrearEditarSemillasComponent implements OnInit, OnDestroy {
       variedad: new FormControl(this.semilla?.variedad || '', Validators.required),
       ciclo: new FormControl(this.semilla?.ciclo || null, Validators.required),
       campania: new FormControl(this.semilla?.campania || ''),
+      tipoCultivo: new FormControl(this.semilla?.tipoCultivo || 'Anual'),
+      portainjerto: new FormControl(this.semilla?.portainjerto || ''),
+      requerimientoFrio: new FormGroup({
+        horasFrio: new FormControl(this.semilla?.requerimientoFrio?.horasFrio || null),
+        horasFrioEfectivas: new FormControl(this.semilla?.requerimientoFrio?.horasFrioEfectivas || null),
+        porcionesFrio: new FormControl(this.semilla?.requerimientoFrio?.porcionesFrio || null),
+        modelo: new FormControl(this.semilla?.requerimientoFrio?.modelo || 'HF + HFE + CP'),
+      }),
+      fenologiaReferencia: new FormGroup({
+        brotacion: new FormControl(this.semilla?.fenologiaReferencia?.brotacion || ''),
+        floracion: new FormControl(this.semilla?.fenologiaReferencia?.floracion || ''),
+        cosecha: new FormControl(this.semilla?.fenologiaReferencia?.cosecha || ''),
+        editable: new FormControl(this.semilla?.fenologiaReferencia?.editable ?? true),
+      }),
+      observaciones: new FormControl(this.semilla?.observaciones || ''),
       resistencia: new FormArray(resistenciaControls),
     });
   }
@@ -87,6 +118,11 @@ export class CrearEditarSemillasComponent implements OnInit, OnDestroy {
         variedad: this.form?.value.variedad,
         ciclo: this.form?.value.ciclo,
         campania: this.form?.value.campania || undefined,
+        tipoCultivo: this.form?.value.tipoCultivo || undefined,
+        portainjerto: this.form?.value.portainjerto || undefined,
+        requerimientoFrio: this.form?.value.requerimientoFrio,
+        fenologiaReferencia: this.form?.value.fenologiaReferencia,
+        observaciones: this.form?.value.observaciones || undefined,
         resistencia: this.form?.value.resistencia,
       };
       if (this.semilla?._id) {
@@ -142,8 +178,8 @@ export class CrearEditarSemillasComponent implements OnInit, OnDestroy {
       .subscribe<IListado<ISemilla>>('semillas', queryParams)
       .subscribe((data) => {
         // Extraer cultivos únicos del listado        
-        const unicos = [...new Set(data.datos.map((s) => s.cultivo))];
-        this.cultivosDisponibles = unicos as Cultivo[];        
+        const unicos = [...new Set(data.datos.map((s) => s.cultivo).filter(Boolean))] as Cultivo[];
+        this.cultivosDisponibles = [...new Set([...CULTIVOS_DISPONIBLES_APP, ...unicos])] as Cultivo[];
       });
     await this.listado.getLastValue('semillas', queryParams);
   }

@@ -7,6 +7,7 @@ import {
   IDepartamento,
   IEtapasSoja,
   IEtapasTrigo,
+  IEtapasMaiz,
 } from 'modelos/src';
 import { Document } from 'mongoose';
 import { Departamento } from '../../departamento/modelos/schema';
@@ -18,20 +19,20 @@ export class Crono implements Exactly<ICrono, Crono> {
   @Prop({ required: true })
   cultivo: Cultivo;
 
-  @Prop({ type: mongoose.Schema.Types.ObjectId, required: true })
-  idDepartamento: string;
+  @Prop({ type: mongoose.Schema.Types.ObjectId })
+  idDepartamento?: string;
 
   @Prop({ required: true })
   ciclo: string;
 
-  @Prop({ required: true })
-  diaSiembra: number;
+  @Prop()
+  diaSiembra?: number;
 
-  @Prop({ required: true })
-  mesSiembra: number;
+  @Prop()
+  mesSiembra?: number;
 
   @Prop({ type: Object, required: true })
-  etapas: IEtapasSoja | IEtapasTrigo;
+  etapas: IEtapasSoja | IEtapasTrigo | IEtapasMaiz | Record<string, number>;
 
   // Populate
   departamento?: IDepartamento;

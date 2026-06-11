@@ -34,7 +34,7 @@
                         [fluid]="true"
                         [showButtonBar]="true"
                       />
-                      <label>{{ 'Fecha de siembra' | translate }}</label>
+                      <label>{{ etiquetaFechaSiembra | translate }}</label>
                     </p-floatlabel>
 
                     <!-- Cultivo -->
@@ -51,7 +51,11 @@
                       <label>{{ 'Cultivo' | translate }}</label>
                     </p-floatlabel>
 
-                    <!-- Semilla -->
+                    @if (ayudaCultivo) {
+                      <p-message severity="info" styleClass="mb-4">{{ ayudaCultivo }}</p-message>
+                    }
+
+                    <!-- Semilla / variedad -->
                     <p-floatlabel variant="in" class="mb-4">
                       <p-select
                         [loading]="loading"
@@ -69,6 +73,11 @@
                         <ng-template #selectedItem let-selectedOption>
                           <div>
                             <span> {{ selectedOption.variedad | titlecase }} </span>
+                            @if (selectedOption.portainjerto) {
+                              <small style="color: var(--p-text-muted-color)">
+                                / {{ selectedOption.portainjerto | titlecase }}
+                              </small>
+                            }
                             <small style="color: var(--p-text-muted-color)">
                               ({{ selectedOption.semillero | titlecase }})
                             </small>
@@ -80,6 +89,11 @@
                         <ng-template let-option #item>
                           <div>
                             <span> {{ option.variedad | titlecase }} </span>
+                            @if (option.portainjerto) {
+                              <small style="color: var(--p-text-muted-color)">
+                                / {{ option.portainjerto | titlecase }}
+                              </small>
+                            }
                             <small style="color: var(--p-text-muted-color)">
                               ({{ option.semillero | titlecase }})
                             </small>
@@ -88,7 +102,7 @@
                           </div>
                         </ng-template>
                       </p-select>
-                      <label>{{ 'Semilla' | translate }}</label>
+                      <label>{{ etiquetaMaterial | translate }}</label>
                     </p-floatlabel>
                   </p-tabpanel>
 

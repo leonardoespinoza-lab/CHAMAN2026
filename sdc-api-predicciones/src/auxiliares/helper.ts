@@ -174,6 +174,8 @@ export class HelperService {
           return stagesSoja;
         case 'Trigo':
           return stagesTrigo;
+        default:
+          return [{ name: 'Inicio', kcProm: 0.5, days: 0 }];
       }
     }
 
@@ -209,6 +211,21 @@ export class HelperService {
       }
       return stagesSoja;
     }
+
+    return HelperService.getGenericStages(crono);
+  }
+
+  private static getGenericStages(crono: ICrono): Stage[] {
+    const etapas = (crono?.etapas || {}) as Record<string, number>;
+    const stages: Stage[] = [{ name: 'Inicio', kcProm: 0.35, days: 0 }];
+    let acumulado = 0;
+
+    for (const key of Object.keys(etapas)) {
+      acumulado += Number(etapas[key] || 0);
+      stages.push({ name: key, kcProm: 0.75, days: acumulado });
+    }
+
+    return stages.length > 1 ? stages : [{ name: 'Inicio', kcProm: 0.5, days: 0 }];
   }
 
   /**

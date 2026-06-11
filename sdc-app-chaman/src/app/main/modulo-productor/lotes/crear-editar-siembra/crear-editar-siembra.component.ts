@@ -26,6 +26,9 @@ import { ParamsService } from '../../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../../auxiliares/shared.module';
 import { ILoteTabla } from '../listado-lotes/listado-lotes.component';
 
+const CULTIVOS_DISPONIBLES_APP: Cultivo[] = ['Soja', 'Trigo', 'Maiz', 'Papa', 'Vid', 'Peral', 'Pecan', 'Manzano'];
+const CULTIVOS_PERENNES_APP: Cultivo[] = ['Vid', 'Peral', 'Pecan', 'Manzano'];
+
 @Component({
   selector: 'app-crear-editar-siembra',
   imports: [SharedModule],
@@ -52,6 +55,30 @@ export class CrearEditarSiembraComponent {
   public intensidadLluvias: TTipoIntensidadLluvias[] = ['Suaves', 'Moderadas', 'Intensas', 'Muy Intensas'];
   public materiaOrganica: TTipoMateriaOrganica[] = ['< 1', '> 1 < 3', '> 3 < 5', '> 5'];
   public labranza: TTipoLabranza[] = ['Siembra Directa', 'Convencional', 'Labranza', 'Reducida'];
+
+  public get cultivoSeleccionado(): Cultivo | undefined {
+    return this.form?.get('cultivo')?.value;
+  }
+
+  public get esCultivoPerenne(): boolean {
+    return !!this.cultivoSeleccionado && CULTIVOS_PERENNES_APP.includes(this.cultivoSeleccionado);
+  }
+
+  public get etiquetaFechaSiembra(): string {
+    return this.esCultivoPerenne ? 'Inicio de campania / brotacion' : 'Fecha de siembra';
+  }
+
+  public get etiquetaMaterial(): string {
+    return this.esCultivoPerenne ? 'Variedad / pie' : 'Semilla';
+  }
+
+  public get ayudaCultivo(): string {
+    if (!this.cultivoSeleccionado) return '';
+    if (this.esCultivoPerenne) {
+      return 'Cultivo perenne: Chaman activa fenologia editable, frio acumulado y monitoreo sanitario por temporada.';
+    }
+    return 'Cultivo anual: Chaman usa fecha de siembra, ciclo y fenologia base para activar servicios del lote.';
+  }
 
   get semillas() {
     const cultivo = this.form?.get('cultivo')?.value;
@@ -151,9 +178,8 @@ export class CrearEditarSiembraComponent {
     this.semillas$ = this.listado.subscribe<IListado<ISemilla>>('semillas', queryParams).subscribe((data) => {
       this.todasLasSemillas = data.datos;
 
-      // Cultivos únicos sin importar mayúsculas
-      const unicos = [...new Set(data.datos.map((s: any) => s.cultivo))];
-      this.cultivosDisponibles = unicos;
+      const unicos = [...new Set(data.datos.map((s: any) => s.cultivo).filter(Boolean))] as Cultivo[];
+      this.cultivosDisponibles = [...new Set([...CULTIVOS_DISPONIBLES_APP, ...unicos])] as Cultivo[];
 
       // Si es edición, preseleccionar cultivo según semilla guardada
       if (this.siembra?.idSemilla && !this.form?.get('cultivo')?.value) {

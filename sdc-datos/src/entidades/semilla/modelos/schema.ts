@@ -7,6 +7,12 @@ import { Enfermedad } from '../../enfermedad/modelos/schema';
 export class Semilla implements Exactly<ISemilla, Semilla> {
   _id: string;
 
+  @Prop()
+  codigoCarga?: string;
+
+  @Prop()
+  fuenteBase?: string;
+
   @Prop({ required: true })
   semillero: string;
 
@@ -24,6 +30,21 @@ export class Semilla implements Exactly<ISemilla, Semilla> {
 
   @Prop()
   campania?: string;
+
+  @Prop()
+  tipoCultivo?: ISemilla['tipoCultivo'];
+
+  @Prop()
+  portainjerto?: string;
+
+  @Prop({ type: Object })
+  requerimientoFrio?: ISemilla['requerimientoFrio'];
+
+  @Prop({ type: Object })
+  fenologiaReferencia?: ISemilla['fenologiaReferencia'];
+
+  @Prop()
+  observaciones?: string;
 }
 
 export type SemillaDocument = Semilla & Document;
@@ -36,6 +57,8 @@ SemillaSchema.index(
   { cultivo: 1, semillero: 1, variedad: 1, ciclo: 1, campania: 1 },
   { unique: true },
 );
+
+SemillaSchema.index({ codigoCarga: 1 }, { sparse: true });
 
 SemillaSchema.virtual('resistencia.enfermedad', {
   foreignField: '_id',

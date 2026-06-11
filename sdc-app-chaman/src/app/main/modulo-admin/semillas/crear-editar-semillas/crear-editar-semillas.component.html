@@ -50,13 +50,7 @@
 
                     <!-- Ciclo -->
                     <p-floatlabel variant="in" class="mb-4">
-                      <p-select
-                        [options]="ciclos"
-                        formControlName="ciclo"
-                        [showClear]="true"
-                        [fluid]="true"
-                        [appendTo]="'body'"
-                      ></p-select>
+                      <input pInputText formControlName="ciclo" [fluid]="true" />
                       <label>{{ 'Ciclo' | translate }}</label>
                     </p-floatlabel>
 
@@ -64,6 +58,59 @@
                     <p-floatlabel variant="in" class="mb-4">
                       <input pInputText formControlName="campania" [fluid]="true" />
                       <label>{{ 'Campaña (opcional)' | translate }}</label>
+                    </p-floatlabel>
+                    <p-floatlabel variant="in" class="mb-4">
+                      <p-select
+                        [options]="['Anual', 'Perenne']"
+                        formControlName="tipoCultivo"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                      ></p-select>
+                      <label>{{ 'Tipo de cultivo' | translate }}</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in" class="mb-4">
+                      <input pInputText formControlName="portainjerto" [fluid]="true" />
+                      <label>{{ 'Portainjerto / pie' | translate }}</label>
+                    </p-floatlabel>
+
+                    <div formGroupName="requerimientoFrio">
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input pInputText type="number" formControlName="horasFrio" [fluid]="true" />
+                        <label>{{ 'Horas de frio requeridas' | translate }}</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input pInputText type="number" formControlName="horasFrioEfectivas" [fluid]="true" />
+                        <label>{{ 'Horas de frio efectivas requeridas' | translate }}</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input pInputText type="number" formControlName="porcionesFrio" [fluid]="true" />
+                        <label>{{ 'Porciones de frio requeridas' | translate }}</label>
+                      </p-floatlabel>
+                    </div>
+
+                    <div formGroupName="fenologiaReferencia">
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input pInputText formControlName="brotacion" [fluid]="true" />
+                        <label>{{ 'Brotacion de referencia' | translate }}</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input pInputText formControlName="floracion" [fluid]="true" />
+                        <label>{{ 'Floracion de referencia' | translate }}</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input pInputText formControlName="cosecha" [fluid]="true" />
+                        <label>{{ 'Cosecha de referencia' | translate }}</label>
+                      </p-floatlabel>
+                    </div>
+
+                    <p-floatlabel variant="in" class="mb-4">
+                      <textarea pInputText formControlName="observaciones" [fluid]="true"></textarea>
+                      <label>{{ 'Observaciones agronomicas' | translate }}</label>
                     </p-floatlabel>
                   </p-tabpanel>
 

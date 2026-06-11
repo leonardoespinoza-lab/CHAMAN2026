@@ -1,6 +1,19 @@
 import { IDepartamento } from "./departamento";
 
-export type Cultivo = "Soja" | "Trigo" | "Maiz";
+export const CULTIVOS_ANUALES = ["Soja", "Trigo", "Maiz", "Papa"] as const;
+export const CULTIVOS_PERENNES = ["Vid", "Peral", "Pecan", "Manzano"] as const;
+export const CULTIVOS_DISPONIBLES = [
+  ...CULTIVOS_ANUALES,
+  ...CULTIVOS_PERENNES,
+] as const;
+
+export type Cultivo = (typeof CULTIVOS_DISPONIBLES)[number];
+
+export type TipoCicloCultivo = "Anual" | "Perenne";
+
+export function esCultivoPerenne(cultivo?: string): boolean {
+  return !!cultivo && (CULTIVOS_PERENNES as readonly string[]).includes(cultivo);
+}
 
 export interface IEtapasTrigo {
   R0_R1?: number;

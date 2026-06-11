@@ -622,6 +622,16 @@ export class HelperService {
         return this.translate.instant('Maíz');
       case 'Trigo':
         return this.translate.instant('Trigo');
+      case 'Papa':
+        return this.translate.instant('Papa');
+      case 'Vid':
+        return this.translate.instant('Vid');
+      case 'Peral':
+        return this.translate.instant('Peral');
+      case 'Pecan':
+        return this.translate.instant('Pecan');
+      case 'Manzano':
+        return this.translate.instant('Manzano');
     }
   }
   public translateCiclo(ciclo?: string): string {
@@ -634,7 +644,7 @@ export class HelperService {
       case 'largo':
         return this.translate.instant('Largo');
       default:
-        return '';
+        return ciclo;
     }
   }
 

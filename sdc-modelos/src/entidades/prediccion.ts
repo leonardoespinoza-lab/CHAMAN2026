@@ -46,7 +46,8 @@ export interface IPrediccionEnfermedad {
     | IVariablesManchaDeLaHoja
     | IVariablesFusariumDeLaEspiga
     | IVariablesFinDeCiclo
-    | IVariablesRoyaDelMaiz;
+    | IVariablesRoyaDelMaiz
+    | Record<string, number>;
 }
 
 export interface IPrediccionEstacion {

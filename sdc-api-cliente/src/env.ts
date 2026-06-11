@@ -221,16 +221,31 @@ export const EXTRACCION_N = {
   Soja: 55,
   Trigo: 20.55,
   Maiz: 15,
+  Papa: 4.5,
+  Vid: 2.2,
+  Peral: 0.65,
+  Pecan: 12,
+  Manzano: 0.65,
 };
 
 export const EXTRACCION_P = {
   Soja: 6.12997,
   Trigo: 3.99,
   Maiz: 3.0228,
+  Papa: 0.7,
+  Vid: 0.35,
+  Peral: 0.12,
+  Pecan: 1.2,
+  Manzano: 0.12,
 };
 
 export const KCAL_X_KG = {
   Maiz: 3650,
   Trigo: 3400,
   Soja: 4100,
+  Papa: 770,
+  Vid: 690,
+  Peral: 570,
+  Pecan: 6910,
+  Manzano: 520,
 };

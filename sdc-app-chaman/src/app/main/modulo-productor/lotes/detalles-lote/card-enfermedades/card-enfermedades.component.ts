@@ -101,6 +101,21 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     if (cultivo === 'Maiz') {
       return ['Roya del Maiz'];
     }
+    if (cultivo === 'Vid') {
+      return ['Oidio', 'Botritis', 'Mildiu'];
+    }
+    if (cultivo === 'Papa') {
+      return ['Tizon Tardio', 'Tizon Temprano', 'Rhizoctonia'];
+    }
+    if (cultivo === 'Manzano') {
+      return ['Sarna del Manzano', 'Oidio del Manzano', 'Fuego Bacteriano', 'Carpocapsa'];
+    }
+    if (cultivo === 'Peral') {
+      return ['Sarna del Peral', 'Fuego Bacteriano', 'Psila del Peral'];
+    }
+    if (cultivo === 'Pecan') {
+      return ['Sarna del Pecan', 'Bacteriosis del Pecan'];
+    }
     return [];
   }
 
@@ -141,7 +156,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   private periodoSusceptible(enfermedad: TEnfermedad): string {
-    const periodos: Record<TEnfermedad, string> = {
+    const periodos: Partial<Record<TEnfermedad, string>> = {
       'Mancha Amarilla': 'Puede presentarse desde emergencia hasta hoja bandera.',
       'Roya de la Hoja': 'Puede presentarse desde hoja bandera hasta llenado de granos.',
       'Mancha de la Hoja': 'Puede presentarse en vegetativo y reproductivo temprano.',
@@ -150,8 +165,22 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       'Roya Anaranjada': 'Mayor riesgo durante crecimiento activo.',
       'Fin de Ciclo': 'Mayor riesgo en floracion y llenado.',
       'Roya del Maiz': 'Puede presentarse desde vegetativo avanzado hasta llenado.',
+      Oidio: 'Brotes activos, floracion y desarrollo de racimos con humedad favorable.',
+      Botritis: 'Floracion, cierre de racimo y madurez con mojado o humedad alta.',
+      Mildiu: 'Desde brotacion hasta canopia activa, especialmente despues de lluvias.',
+      'Tizon Tardio': 'Desde emergencia hasta llenado de tuberculos con HR alta y mojado foliar.',
+      'Tizon Temprano': 'Vegetativo avanzado y llenado, asociado a estres y humedad intermitente.',
+      Rhizoctonia: 'Emergencia, tuberizacion y etapas tempranas con suelo frio-humedo.',
+      'Sarna del Manzano': 'Brotacion, floracion, cuaje y fruto joven con mojado foliar.',
+      'Oidio del Manzano': 'Brotacion y crecimiento de brotes con temperatura templada.',
+      'Fuego Bacteriano': 'Floracion y brotes tiernos con temperatura templada/calida y humedad.',
+      Carpocapsa: 'Cuaje, desarrollo de fruto y madurez; seguir vuelos/trampas y grados-dia.',
+      'Sarna del Peral': 'Brotacion, floracion, cuaje y fruto joven con mojado foliar.',
+      'Psila del Peral': 'Brotacion y crecimiento activo; seguir monitoreo de ninfas/adultos.',
+      'Sarna del Pecan': 'Brotacion, cuaje y llenado de nuez con humedad alta.',
+      'Bacteriosis del Pecan': 'Brotes y frutos jovenes con lluvia/viento y heridas.',
     };
-    return periodos[enfermedad];
+    return periodos[enfermedad] || 'Periodo susceptible configurable por cultivo y zona.';
   }
 
   private resumenVariables(prediccion?: IPrediccionEnfermedad): string {
@@ -185,7 +214,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   private prescripcionPorEnfermedad(enfermedad: TEnfermedad): PrescripcionEnfermedad {
-    const base: Record<TEnfermedad, PrescripcionEnfermedad> = {
+    const base: Partial<Record<TEnfermedad, PrescripcionEnfermedad>> = {
       'Mancha Amarilla': {
         objetivo: 'Proteger area foliar y evitar avance hacia hoja bandera.',
         momento: 'Aplicar con umbral tecnico confirmado y condiciones predisponentes sostenidas.',
@@ -307,8 +336,138 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         ],
         nota: 'Confirmar compatibilidad del producto con maiz y estadio del cultivo.',
       },
+      Oidio: {
+        objetivo: 'Reducir infecciones en brotes, hojas y racimos susceptibles.',
+        momento: 'Priorizar aplicaciones preventivas cuando el monitoreo y clima indiquen riesgo.',
+        productos: [
+          { grupo: 'Multisitio', activos: 'Azufre', dosisHa: 'Segun marbete, temperatura y formulado' },
+          { grupo: 'DMI/QoI/SDHI', activos: 'Triazoles, estrobilurinas o carboxamidas registradas', dosisHa: 'Rotar modos de accion y validar etiqueta' },
+        ],
+        nota: 'Validar registro por cultivo, destino y restricciones de residuo antes de aplicar.',
+      },
+      Botritis: {
+        objetivo: 'Proteger floracion/racimo y reducir infecciones latentes.',
+        momento: 'Floracion, cierre de racimo y pre-cosecha si hay humedad sostenida.',
+        productos: [
+          { grupo: 'Botriticidas especificos', activos: 'Ciprodinil + Fludioxonil / Boscalid / Fenhexamid', dosisHa: 'Segun producto comercial y marbete' },
+        ],
+        nota: 'La cobertura y rotacion anti-resistencia son criticas.',
+      },
+      Mildiu: {
+        objetivo: 'Prevenir infecciones despues de lluvias y mojado foliar.',
+        momento: 'Canopia activa con lluvia o pronostico predisponente.',
+        productos: [
+          { grupo: 'Preventivos', activos: 'Cobre / Mancozeb', dosisHa: 'Segun marbete' },
+          { grupo: 'Sistemicos especificos', activos: 'Metalaxil-M u otros oomyceticidas registrados', dosisHa: 'Usar en rotacion, no repetir sin criterio tecnico' },
+        ],
+        nota: 'Confirmar registro para vid y estrategia anti-resistencia.',
+      },
+      'Tizon Tardio': {
+        objetivo: 'Proteger follaje y tuberculos contra Phytophthora infestans.',
+        momento: 'Emergencia a llenado con HR alta, lluvia o mojado foliar.',
+        productos: [
+          { grupo: 'Preventivos', activos: 'Mancozeb / Cobre / Clorotalonil donde este registrado', dosisHa: 'Segun marbete' },
+          { grupo: 'Especificos oomycetes', activos: 'Metalaxil-M / Cymoxanil / Mandipropamid registrados', dosisHa: 'Segun riesgo y etiqueta' },
+        ],
+        nota: 'No recomendar sin confirmar destino, carencia y registro vigente.',
+      },
+      'Tizon Temprano': {
+        objetivo: 'Reducir avance de Alternaria en follaje activo.',
+        momento: 'Vegetativo avanzado/llenado con estres y humedad favorable.',
+        productos: [
+          { grupo: 'DMI/QoI/SDHI', activos: 'Difenoconazole / Azoxistrobina / Boscalid registrados', dosisHa: 'Segun marbete' },
+        ],
+        nota: 'Combinar con manejo de estres y monitoreo de manchas activas.',
+      },
+      Rhizoctonia: {
+        objetivo: 'Reducir dano temprano en brotes, estolones y tuberculos.',
+        momento: 'Tratamiento/arranque y emergencia segun historial del lote.',
+        productos: [
+          { grupo: 'Tratamiento preventivo', activos: 'Flutolanil / Azoxistrobina u opciones registradas', dosisHa: 'Segun formulado y posicion de aplicacion' },
+        ],
+        nota: 'Depende mucho de semilla, suelo e historial; validar estrategia tecnica.',
+      },
+      'Sarna del Manzano': {
+        objetivo: 'Proteger tejido verde y fruto joven durante infecciones primarias.',
+        momento: 'Brotacion a cuaje con mojado foliar.',
+        productos: [
+          { grupo: 'Preventivos multisitio', activos: 'Captan / Mancozeb / Cobre segun ventana', dosisHa: 'Segun marbete' },
+          { grupo: 'Curativos/mezclas', activos: 'Difenoconazole u otros DMI registrados', dosisHa: 'Rotar modos de accion' },
+        ],
+        nota: 'Ajustar por estadio, carencia y mercado destino.',
+      },
+      'Sarna del Peral': {
+        objetivo: 'Proteger tejido verde y fruto joven durante mojados infectivos.',
+        momento: 'Brotacion, floracion y cuaje con humedad alta.',
+        productos: [
+          { grupo: 'Preventivos multisitio', activos: 'Captan / Mancozeb / Cobre segun registro', dosisHa: 'Segun marbete' },
+          { grupo: 'DMI', activos: 'Difenoconazole registrado', dosisHa: 'Segun etiqueta y riesgo' },
+        ],
+        nota: 'Validar sensibilidad varietal y registro para peral.',
+      },
+      'Sarna del Pecan': {
+        objetivo: 'Proteger brotes, hojas y nuez joven en humedad alta.',
+        momento: 'Brotacion a llenado de nuez con mojado prolongado.',
+        productos: [
+          { grupo: 'Preventivos/mezclas', activos: 'Cobre / DMI / QoI registrados para pecan', dosisHa: 'Segun marbete local' },
+        ],
+        nota: 'Base inicial: requiere validacion regional y de etiqueta.',
+      },
+      'Oidio del Manzano': {
+        objetivo: 'Reducir infeccion en brotes y hojas nuevas.',
+        momento: 'Brotacion y crecimiento activo con clima templado.',
+        productos: [
+          { grupo: 'Preventivos/DMI', activos: 'Azufre / DMI registrados', dosisHa: 'Segun marbete y temperatura' },
+        ],
+        nota: 'Evitar fitotoxicidad y rotar modos de accion.',
+      },
+      'Fuego Bacteriano': {
+        objetivo: 'Reducir infeccion floral y avance bacteriano en brotes.',
+        momento: 'Floracion con temperatura templada/calida y humedad.',
+        productos: [
+          { grupo: 'Bactericidas/preventivos', activos: 'Cobre u opciones registradas segun zona', dosisHa: 'Segun marbete' },
+        ],
+        nota: 'El manejo cultural y alerta temprana son tan importantes como la aplicacion.',
+      },
+      Carpocapsa: {
+        objetivo: 'Proteger fruto segun vuelo y grados-dia.',
+        momento: 'Aplicar por umbral/trampas/modelo, no por calendario fijo.',
+        productos: [
+          { grupo: 'Insecticidas especificos', activos: 'Clorantraniliprol / reguladores / opciones registradas', dosisHa: 'Segun marbete y momento de oviposicion' },
+        ],
+        nota: 'Es plaga sanitaria; validar monitoreo, carencia y mercado.',
+      },
+      'Psila del Peral': {
+        objetivo: 'Reducir poblaciones de ninfas/adultos y dano por melaza.',
+        momento: 'Intervenir por umbral de monitoreo y estado fenologico.',
+        productos: [
+          { grupo: 'Insecticidas/aceites registrados', activos: 'Aceites, reguladores u opciones registradas', dosisHa: 'Segun marbete' },
+        ],
+        nota: 'Integrar control biologico y evitar aplicaciones que disparen resurgencia.',
+      },
+      'Bacteriosis del Pecan': {
+        objetivo: 'Reducir infeccion en brotes y frutos jovenes.',
+        momento: 'Lluvias, viento/heridas y humedad alta.',
+        productos: [
+          { grupo: 'Preventivos', activos: 'Cobre u opciones registradas', dosisHa: 'Segun marbete' },
+        ],
+        nota: 'Base inicial pendiente de validacion regional.',
+      },
     };
 
-    return base[enfermedad];
+    return (
+      base[enfermedad] || {
+        objetivo: 'Monitorear riesgo sanitario y validar recomendacion tecnica.',
+        momento: 'Aplicar solo con diagnostico, umbral y condiciones predisponentes confirmadas.',
+        productos: [
+          {
+            grupo: 'Base local',
+            activos: 'Seleccionar producto desde la base de agroquimicos validada',
+            dosisHa: 'Segun marbete y criterio tecnico',
+          },
+        ],
+        nota: 'Prescripcion orientativa: requiere validacion de etiqueta, cultivo, zona y asesor agronomico.',
+      }
+    );
   }
 }

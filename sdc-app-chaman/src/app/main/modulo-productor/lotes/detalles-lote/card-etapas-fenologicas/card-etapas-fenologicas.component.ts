@@ -82,8 +82,9 @@ export class CardEtapasFenologicasComponent implements OnInit, OnDestroy {
         break;
       }
       default:
-        this.etapas = [];
-        return;
+        etapasConfig = this.crearEtapasGenericas(crono.etapas as Record<string, number>);
+        etapaActualNumero = this.getEtapaGenericaPorFecha(fechaBase, etapasConfig.claves, crono.etapas as Record<string, number>);
+        break;
     }
 
     etapasConfig.nombres.forEach((_, index) => {
@@ -122,7 +123,40 @@ export class CardEtapasFenologicasComponent implements OnInit, OnDestroy {
     if (cultivo === 'Soja') {
       return 'soja';
     }
-    return 'trigo';
+    return cultivo
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  }
+
+  private crearEtapasGenericas(etapas?: Record<string, number>): { nombres: string[]; claves: string[] } {
+    const claves = Object.keys(etapas || {});
+    return {
+      claves,
+      nombres: claves.map((key) => this.formatearNombreEtapa(key)),
+    };
+  }
+
+  private getEtapaGenericaPorFecha(fechaBase: Date, claves: string[], etapas?: Record<string, number>): number {
+    if (!claves.length) return -1;
+    const hoy = Date.now();
+    const cursor = new Date(fechaBase);
+    let actual = 0;
+
+    claves.forEach((key, index) => {
+      if (index > 0) {
+        cursor.setDate(cursor.getDate() + Number(etapas?.[key] || 0));
+      }
+      if (cursor.getTime() <= hoy) {
+        actual = index;
+      }
+    });
+
+    return actual;
+  }
+
+  private formatearNombreEtapa(key: string): string {
+    return key.replace(/_/g, ' ');
   }
 
   private limitar(valor: number): number {

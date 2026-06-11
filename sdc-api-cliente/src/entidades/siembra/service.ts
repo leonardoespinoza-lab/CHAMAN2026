@@ -663,6 +663,26 @@ export class SiembrasService {
       }
       return stagesSoja;
     }
+
+    return this.getGenericStages(crono);
+  }
+
+  private getGenericStages(crono: ICrono): Stage[] {
+    const etapas = (crono?.etapas || {}) as Record<string, number>;
+    const keys = Object.keys(etapas);
+    const stages: Stage[] = [{ name: 'Inicio', kcProm: 0.35, days: 0 }];
+    let acumulado = 0;
+
+    for (const key of keys) {
+      acumulado += Number(etapas[key] || 0);
+      stages.push({
+        name: key,
+        kcProm: 0.75,
+        days: acumulado,
+      });
+    }
+
+    return stages.length > 1 ? stages : [{ name: 'Inicio', kcProm: 0.5, days: 0 }];
   }
 
   private getKc(diasDesdeSiembra: number, cultivo: Cultivo, crono: ICrono) {
@@ -883,7 +903,7 @@ export class SiembrasService {
 
   private async getCrono(
     siembra: ICreateSiembra | IUpdateSiembra,
-  ): Promise<ICrono> {
+  ): Promise<ICrono | undefined> {
     const semilla = await this.semillasService.getById(siembra.idSemilla);
     const cultivo = semilla?.cultivo;
     const ciclo = semilla?.ciclo;
@@ -901,6 +921,32 @@ export class SiembrasService {
       filter: JSON.stringify(filtro),
     };
     const resp = await this.cronosService.get(query);
-    return resp.datos[0];
+    if (resp.datos[0]) {
+      return resp.datos[0];
+    }
+
+    const fallbackPorDepartamento: IQueryParam = {
+      filter: JSON.stringify({
+        ciclo: { $regex: `^${ciclo}$`, $options: 'i' },
+        idDepartamento,
+        cultivo,
+      }),
+      limit: 1,
+    };
+    const porDepartamento = await this.cronosService.get(fallbackPorDepartamento);
+    if (porDepartamento.datos[0]) {
+      return porDepartamento.datos[0];
+    }
+
+    const fallbackGenerico: IQueryParam = {
+      filter: JSON.stringify({
+        ciclo: { $regex: `^${ciclo}$`, $options: 'i' },
+        cultivo,
+        idDepartamento: { $exists: false },
+      }),
+      limit: 1,
+    };
+    const generico = await this.cronosService.get(fallbackGenerico);
+    return generico.datos[0];
   }
 }

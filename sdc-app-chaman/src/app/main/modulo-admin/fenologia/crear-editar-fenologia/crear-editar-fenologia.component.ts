@@ -10,6 +10,8 @@ import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 
+const CULTIVOS_DISPONIBLES_APP: Cultivo[] = ['Soja', 'Trigo', 'Maiz', 'Papa', 'Vid', 'Peral', 'Pecan', 'Manzano'];
+
 @Component({
   selector: 'app-crear-editar-fenologia',
   imports: [SharedModule],
@@ -204,8 +206,8 @@ export class CrearEditarFenologiaComponent implements OnInit, OnDestroy {
       .subscribe<IListado<ISemilla>>('semillas', queryParams)
       .subscribe((data) => {
         // Extraer cultivos únicos del listado        
-        const unicos = [...new Set(data.datos.map((s) => s.cultivo))];
-        this.cultivosDisponibles = unicos as Cultivo[];        
+        const unicos = [...new Set(data.datos.map((s) => s.cultivo).filter(Boolean))] as Cultivo[];
+        this.cultivosDisponibles = [...new Set([...CULTIVOS_DISPONIBLES_APP, ...unicos])] as Cultivo[];
       });
     await this.listado.getLastValue('semillas', queryParams);
   }
