@@ -15,7 +15,7 @@ from planetary_computer import sign
 from pystac_client import Client
 from shapely.geometry import Polygon, mapping
 
-from calcular_ndvi import calcular_ndvi, exportar_geotiff
+from calcular_ndvi import calcular_indices, calcular_ndvi, exportar_geotiff
 from cleaner import limpiar_descargas_antiguas
 from config import (
     API_EXTERNA_URL,
@@ -51,14 +51,27 @@ BAND_MAPPING = {
     "sentinel-2-l2a": {
         "red": "B04",
         "nir": "B08",
-        "assets": ["B04", "B08"],  # Nombres reales en Sentinel
-        "output_names": {"B04": "B04", "B08": "B08"},  # Mismo nombre para output
+        "assets": ["B02", "B03", "B04", "B05", "B08", "B11"],
+        "output_names": {
+            "B02": "B02",
+            "B03": "B03",
+            "B04": "B04",
+            "B05": "B05",
+            "B08": "B08",
+            "B11": "B11",
+        },
     },
     "landsat-c2-l2": {
         "red": "red",
         "nir": "nir08",
-        "assets": ["red", "nir08"],  # Nombres reales en Landsat
-        "output_names": {"red": "B04", "nir08": "B08"},  # Mapeo a nombres uniformes
+        "assets": ["blue", "green", "red", "nir08", "swir16"],
+        "output_names": {
+            "blue": "B02",
+            "green": "B03",
+            "red": "B04",
+            "nir08": "B08",
+            "swir16": "B11",
+        },
     },
 }
 
@@ -506,6 +519,10 @@ class NDVIWorker:
                 return None
 
             logger.info(f"Descarga completada para la escena {scene.id}")
+            band_paths = {
+                output_name: str(scene_folder / f"{output_name}.tif")
+                for output_name in set(collection_map["output_names"].values())
+            }
 
             # Gracias al mapeo en `output_names`, los archivos de salida siempre se llamarán
             # B04.tif y B08.tif, sin importar la fuente.
@@ -514,8 +531,9 @@ class NDVIWorker:
                 "datetime": scene.datetime,
                 "collection": collection_id,  # Es útil devolver de qué colección vino
                 "folder": str(scene_folder),
-                "b4_path": str(scene_folder / "B04.tif"),
-                "b8_path": str(scene_folder / "B08.tif"),
+                "b4_path": band_paths["B04"],
+                "b8_path": band_paths["B08"],
+                "band_paths": band_paths,
             }
 
         except KeyError as e:
@@ -629,6 +647,25 @@ class NDVIWorker:
                 ),
             )
 
+            recorte_band_paths = {
+                "B04": str(b4_recorte),
+                "B08": str(b8_recorte),
+            }
+            for band_name, band_path in scene_data.get("band_paths", {}).items():
+                if band_name in recorte_band_paths:
+                    continue
+                output_path = lote_folder / f"{band_name}_recorte.tif"
+                try:
+                    recortado = await self._run_in_executor(
+                        recortar_ndvi, band_path, polygon, str(output_path)
+                    )
+                    if recortado:
+                        recorte_band_paths[band_name] = str(output_path)
+                except Exception as e:
+                    logger.warning(
+                        f"No se pudo recortar banda opcional {band_name}: {e}"
+                    )
+
             # Verificar que los recortes tengan datos válidos antes de continuar
             with rasterio.open(b4_recorte) as src:
                 b4_data = src.read(1)
@@ -663,11 +700,19 @@ class NDVIWorker:
             ndvi_promedio = float(np.nanmean(ndvi[~np.isnan(ndvi)]))
             if np.isnan(ndvi_promedio):
                 ndvi_promedio = 0.0
+            try:
+                indices = await self._run_in_executor(
+                    calcular_indices, recorte_band_paths
+                )
+            except Exception as e:
+                logger.warning(f"No se pudieron calcular indices satelitales: {e}")
+                indices = {"ndvi": round(ndvi_promedio, 4)}
 
             return {
                 "ndvi_tif": str(ndvi_tif),
                 "ndvi_recorte": str(ndvi_recorte),
                 "ndvi_promedio": ndvi_promedio,
+                "indices": indices,
                 "scene_datetime": scene_data["datetime"],
                 "collection": scene_data["collection"],  # Colección de la escena
             }
@@ -707,6 +752,7 @@ class NDVIWorker:
         return {
             "url_png": url_png,  # Puede ser None
             "ndvi_promedio": ndvi_data["ndvi_promedio"],
+            "indices": ndvi_data.get("indices", {}),
             "metadata": metadata,  # Metadata geográfica del NDVI recortado
             "fecha_imagen": ndvi_data["scene_datetime"].isoformat(),
             "coleccion": ndvi_data.get("collection", "desconocida"),
@@ -730,6 +776,7 @@ class NDVIWorker:
                 "idLote": lote_id,
                 "ndvi_url": output_data["url_png"],
                 "ndvi_promedio": ndvi_promedio,
+                "indices": output_data.get("indices", {}),
                 "metadata": output_data["metadata"],
                 "fecha": datetime.now(timezone.utc).isoformat(),
                 "fechaImagen": fecha_imagen_truncada,

@@ -29,6 +29,9 @@ export class ReporteNDVI implements Exactly<IReporteNDVI, ReporteNDVI> {
   @Prop()
   ndviPromedio?: number;
 
+  @Prop({ type: Object })
+  indices?: IReporteNDVI['indices'];
+
   @Prop()
   ndviUrl?: string;
 

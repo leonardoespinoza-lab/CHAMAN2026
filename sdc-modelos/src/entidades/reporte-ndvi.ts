@@ -13,10 +13,20 @@ export interface IMetadata {
   crs: string;
 }
 
+export interface IIndicesSatelitales {
+  ndvi?: number;
+  ndmi?: number;
+  ndwi?: number;
+  ndre?: number;
+  savi?: number;
+  evi?: number;
+}
+
 export interface IReporteNDVIExterno {
   idLote?: string;
   ndvi_url?: string;
   ndvi_promedio?: number;
+  indices?: IIndicesSatelitales;
   metadata?: IMetadata;
   fecha?: string;
   fechaImagen?: string;
@@ -30,6 +40,7 @@ export interface IReporteNDVI {
   fechaDelReporte?: string;
   fechaDeLaImagen?: string;
   ndviPromedio?: number;
+  indices?: IIndicesSatelitales;
   ndviUrl?: string;
   coleccion?: string; // Nombre de la coleccion satelital de la imagen
   // Esto sirve para ubicar la imagen en el mapa

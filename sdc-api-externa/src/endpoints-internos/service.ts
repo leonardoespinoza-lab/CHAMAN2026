@@ -32,6 +32,7 @@ export class EndpointsService {
       idQuimica: lote?.idQuimica,
       ndviUrl: body?.ndvi_url,
       ndviPromedio: body?.ndvi_promedio,
+      indices: body?.indices,
       metadataImagen: body?.metadata,
       coleccion: body?.coleccion,
     };

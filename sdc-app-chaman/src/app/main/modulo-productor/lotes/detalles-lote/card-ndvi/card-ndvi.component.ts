@@ -148,34 +148,39 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
   public get satelliteIndicators(): SatelliteIndicator[] {
     const ndvi = this.reporte?.ndviPromedio;
     const ndviValue = ndvi == null ? 'Pendiente' : this.formatear(ndvi);
+    const indices = this.reporte?.indices;
+    const indexValue = (key: keyof NonNullable<IReporteNDVI['indices']>) =>
+      indices?.[key] == null ? (this.reporte ? 'Pendiente' : 'Preparado') : this.formatear(indices[key]!);
+    const indexStatus = (...keys: (keyof NonNullable<IReporteNDVI['indices']>)[]) =>
+      keys.some((key) => indices?.[key] != null) ? 'activo' : 'preparado';
     return [
       {
         label: 'NDVI',
-        value: ndviValue,
+        value: indexValue('ndvi') === 'Preparado' ? ndviValue : indexValue('ndvi'),
         detail: 'Vigor verde y cobertura activa del lote.',
         source: this.reporte?.coleccion || 'Sentinel-2 B08/B04',
         status: this.reporte ? 'activo' : 'preparado',
       },
       {
         label: 'NDMI / NDWI',
-        value: 'Preparado',
+        value: `${indexValue('ndmi')} / ${indexValue('ndwi')}`,
         detail: 'Agua en canopia y estres hidrico superficial.',
         source: 'Sentinel-2 B08/B11',
-        status: 'preparado',
+        status: indexStatus('ndmi', 'ndwi'),
       },
       {
         label: 'NDRE',
-        value: 'Preparado',
+        value: indexValue('ndre'),
         detail: 'Clorofila y respuesta a nitrogeno en etapas avanzadas.',
         source: 'Sentinel-2 B08/B05',
-        status: 'preparado',
+        status: indexStatus('ndre'),
       },
       {
         label: 'SAVI / EVI',
-        value: 'Preparado',
+        value: `${indexValue('savi')} / ${indexValue('evi')}`,
         detail: 'Vigor ajustado para suelo expuesto y alta biomasa.',
         source: 'Sentinel-2 multibanda',
-        status: 'preparado',
+        status: indexStatus('savi', 'evi'),
       },
       {
         label: 'Humedad suelo',
