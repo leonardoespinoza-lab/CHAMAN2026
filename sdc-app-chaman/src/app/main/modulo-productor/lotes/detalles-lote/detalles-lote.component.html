@@ -99,8 +99,8 @@
     </div>
   </section>
 
-  @if (siembraActual && siembra && !siembra.fechaCosecha) {    
-    @if (siembra.crono) {      
+  @if (siembraActual && siembra && !siembra.fechaCosecha) {
+    @if (siembra.crono) {
       <div class="desktop-only">
         <app-card-etapas-fenologicas [lote]="lote"></app-card-etapas-fenologicas>
       </div>
@@ -138,7 +138,9 @@
       <app-card-rendimiento class="service-panel" [siembra]="siembra"></app-card-rendimiento>
     }
     <app-card-enfermedades class="service-panel" [siembra]="siembra"></app-card-enfermedades>
-    <app-card-malezas class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-malezas>
+    @if (mostrarPrediccionMalezas) {
+      <app-card-malezas class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-malezas>
+    }
     <app-card-ndvi class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-ndvi>
     <div class="operations-row service-panel">
       <app-card-ultima-fertilizacion [lote]="lote"></app-card-ultima-fertilizacion>

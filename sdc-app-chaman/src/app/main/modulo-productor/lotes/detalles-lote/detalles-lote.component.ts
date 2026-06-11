@@ -24,6 +24,8 @@ import { CardUltimaFertilizacionComponent } from './card-ultima-fertilizacion/ca
 import { CardUltimaFumigacionComponent } from './card-ultima-fumigacion/card-ultima-fumigacion.component';
 import { DrawerListadoSiembrasComponent } from './drawer-listado-siembras/drawer-listado-siembras.component';
 
+const CULTIVOS_CON_PREDICCION_MALEZAS = ['Soja', 'Trigo', 'Maiz'];
+
 export interface IDetalleSiembra extends ISiembra {
   fumigaciones?: IFumigacion[];
 }
@@ -71,7 +73,7 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     private loteService: LoteService,
     private listado: ListadosService,
     private confirmationService: ConfirmationService,
-    private translate: TranslateService,
+    private translate: TranslateService
   ) {}
 
   public verSiembraActual(): void {
@@ -196,6 +198,11 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
       return this.siembra.rendimiento;
     }
     return 'Sin historico suficiente';
+  }
+
+  public get mostrarPrediccionMalezas(): boolean {
+    const cultivo = this.siembra?.semilla?.cultivo;
+    return !!cultivo && CULTIVOS_CON_PREDICCION_MALEZAS.includes(cultivo);
   }
 
   async ngOnInit(): Promise<void> {

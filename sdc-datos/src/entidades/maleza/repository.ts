@@ -30,7 +30,19 @@ export class MalezasRepository {
   }
 
   async bulk(data: ICreateMaleza[]): Promise<Maleza[]> {
-    return await this.model.insertMany(data, { ordered: false });
+    await this.model.bulkWrite(
+      data.map((doc) => ({
+        updateOne: {
+          filter: { codigoCarga: doc.codigoCarga },
+          update: { $set: doc },
+          upsert: true,
+        },
+      })),
+      { ordered: false },
+    );
+    return await this.model
+      .find({ codigoCarga: { $in: data.map((doc) => doc.codigoCarga) } })
+      .lean();
   }
 
   async update(id: string, data: IUpdateMaleza): Promise<Maleza> {

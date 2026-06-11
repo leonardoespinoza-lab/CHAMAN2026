@@ -6,6 +6,8 @@ import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
 
+const CULTIVOS_CON_PREDICCION_MALEZAS = ['Soja', 'Trigo', 'Maiz'];
+
 interface IAnalisisMaleza {
   maleza: IMaleza;
   htt7Dias: number;
@@ -32,11 +34,15 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
 
   constructor(
     private malezaService: MalezaService,
-    public helper: HelperService,
+    public helper: HelperService
   ) {}
 
   public get cultivo(): string {
     return this.siembra?.semilla?.cultivo || '';
+  }
+
+  public get cultivoCompatible(): boolean {
+    return CULTIVOS_CON_PREDICCION_MALEZAS.includes(this.cultivo);
   }
 
   public get pronosticos(): IPronosticoEstacionMeteorologica[] {
@@ -64,7 +70,7 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
   ngOnDestroy(): void {}
 
   private async cargarMalezas(): Promise<void> {
-    if (!this.cultivo) {
+    if (!this.cultivoCompatible) {
       this.malezas = [];
       return;
     }
@@ -94,15 +100,10 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
       htt7Dias,
       parametros.kMaxPorcentaje || 100,
       parametros.beta || 0,
-      parametros.muHorasTermicas || 0,
+      parametros.muHorasTermicas || 0
     );
     const severidad = emergencia7Dias >= 12 ? 'alta' : emergencia7Dias >= 5 ? 'media' : 'baja';
-    const estado =
-      severidad === 'alta'
-        ? 'Ventana activa'
-        : severidad === 'media'
-          ? 'Monitorear'
-          : 'Bajo por ahora';
+    const estado = severidad === 'alta' ? 'Ventana activa' : severidad === 'media' ? 'Monitorear' : 'Bajo por ahora';
 
     return {
       maleza,
@@ -137,7 +138,7 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
           const fW = 1 / (1 + Math.exp((theta50 - humedad) / escala));
           return suma + fT * fW * deltaHoras;
         }, 0)
-        .toFixed(1),
+        .toFixed(1)
     );
   }
 
@@ -148,7 +149,10 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
 
   private recomendacion(severidad: IAnalisisMaleza['severidad'], maleza: IMaleza): string {
     if (severidad === 'alta') {
-      return maleza.recomendaciones?.find((item) => item.momento?.includes('E10'))?.accion || 'Revisar lote y definir control temprano.';
+      return (
+        maleza.recomendaciones?.find((item) => item.momento?.includes('E10'))?.accion ||
+        'Revisar lote y definir control temprano.'
+      );
     }
     if (severidad === 'media') {
       return 'Entrar a monitorear nacimientos y comparar contra zonas humedas o compactadas.';
