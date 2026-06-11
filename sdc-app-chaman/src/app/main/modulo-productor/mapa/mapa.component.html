@@ -3,118 +3,6 @@
   <a href="#" id="popup-closer" class="ol-popup-closer"></a>
   <div id="popup-content"></div>
 </div>
-<div
-  style="
-    position: absolute;
-    top: 0.5em;
-    left: var(--menu-offset);
-    display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 0.5em;
-  "
->
-  <!-- Selector de servicio -->
-  <div style="display: flex; align-items: center">
-    <div
-      class="pointer"
-      style="
-        height: 2.75rem;
-        padding: 0 0.75em;
-        border-radius: 16px;
-        background: var(--p-tag-secondary-background);
-        display: flex;
-        align-items: center;
-        gap: 0.5em;
-        white-space: nowrap;
-      "
-      severity="secondary"
-      (click)="showDrawerServicios = true"
-    >
-      <span>{{ servicioSeleccionado.label() }}</span>
-      @if (loading()) {
-        <p-progress-spinner ariaLabel="loading" [style]="{ width: '15px', height: '15px' }" alig />
-      } @else {
-        <i class="pi pi-angle-down"></i>
-      }
-    </div>
-  </div>
-
-  <!-- Clima -->
-  @if (establecimientoSeleccionado?.climaActual) {
-    <div
-      class="pointer"
-      (click)="masDetallesClima = !masDetallesClima"
-      [style.height]="masDetallesClima ? 'auto' : '2.75rem'"
-      style="
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        padding: 0.25em 0.75em;
-        background: var(--p-tag-secondary-background);
-        border-radius: 16px;
-        font-size: 0.75rem;
-        white-space: nowrap;
-      "
-    >
-      <div
-        style="
-          font-size: 12px;
-          width: 100%;
-          margin-bottom: 0.5em;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          align-items: center;
-        "
-        [@expandCollapse]="masDetallesClima ? 'expanded' : 'collapsed'"
-      >
-        <span>{{ establecimientoSeleccionado?.climaActual?.fecha || '2025-1-1 15:50' | date: 'HH:mm' }}</span>
-        <span>{{ getDescripcionClimaTraducida(establecimientoSeleccionado?.climaActual?.clima?.summary) }}</span>
-      </div>
-
-      <!-- Icono y temperatura -->
-      <div style="display: flex; flex-direction: row; align-items: center; gap: 4px">
-        <img
-          [src]="'icons/weather/' + (establecimientoSeleccionado?.climaActual?.clima?.iconNum || 1) + '.png'"
-          style="width: 25px; height: 25px"
-        />
-        <div style="display: flex; line-height: 0.6; gap: 4px">
-          <span style="font-size: 1.8em; font-weight: bold">
-            {{ establecimientoSeleccionado?.climaActual?.clima?.temperatura?.last || '??' }}
-          </span>
-          <span>°C</span>
-        </div>
-      </div>
-
-      <!-- Mas detalles -->
-      <div
-        style="font-size: 12px; width: 100%; margin-top: 0.5em"
-        [@expandCollapse]="masDetallesClima ? 'expanded' : 'collapsed'"
-      >
-        <!-- <p>Prob. de precipitaciones: %</p> -->
-        <p style="margin: 0; line-height: 1.1; font-weight: 300">
-          Humedad: {{ establecimientoSeleccionado?.climaActual?.clima?.humedad?.last || '??' }} %
-        </p>
-        <p style="margin: 0; line-height: 1.1; font-weight: 300">
-          Viento: a {{ establecimientoSeleccionado?.climaActual?.clima?.velocidadViento?.last }} km/h
-        </p>
-        <p style="margin: 0; line-height: 1.1; font-weight: 300">
-          Presion: {{ establecimientoSeleccionado?.climaActual?.clima?.presion?.last || '??' }} hPa
-        </p>
-
-        <p-button
-          [label]="'Ver mas' | translate"
-          severity="primary"
-          [fluid]="true"
-          [style]="{ margin: '0.5em 0' }"
-          (onClick)="abrirDrawerClima(); $event.stopPropagation()"
-        />
-      </div>
-    </div>
-  }
-</div>
 
 <section class="map-topbar">
   <div class="weather-strip pointer" (click)="abrirDrawerClima()">
@@ -846,93 +734,22 @@
   </section>
 }
 
-<!-- Selector de servicios -->
-<p-dialog
-  [(visible)]="showDrawerServicios"
-  [modal]="true"
-  [closable]="true"
-  [style]="{ width: '90vw', 'max-width': '400px' }"
-  [contentStyle]="{ overflow: 'visible' }"
-  [header]="'Servicios' | translate"
->
-  <!-- Barrita gris -->
-  <!-- <div style="width: 100%; display: flex; justify-content: center">
-    <div
-      style="
-        width: 48px;
-        height: 4px;
-        border-radius: 2px;
-        background-color: #ebebeb;
-        margin-top: 0.5em;
-      "
-    ></div>
-  </div> -->
-
-  <!-- <img src="icons/siembras.svg" alt="" style="fill: red !important" />
-
-  <svg class="icon" [style.fill]="'red !important'">
-    <use xlink:href="icons/icons.svg#siembras"></use>
-  </svg> -->
-
-  <div style="display: flex; flex-direction: row; gap: 2em; justify-content: center; flex-wrap: wrap">
-    @for (item of servicios; track $index) {
-      <div
-        style="display: flex; flex-direction: column; align-items: center; width: 70px"
-        (click)="changeServicio(item)"
-      >
-        <div
-          style="
-            width: 50px;
-            height: 50px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          "
-          [style.background]="item.backgroudColor"
-          [style.color]="item.color"
-          [style.border]="servicioSeleccionado.label() === item.label() ? '2px solid var(--text-color)' : 'none'"
-        >
-          <svg [style.fill]="item.color" [attr.width]="'30px'" [attr.height]="'30px'">
-            <use [attr.xlink:href]="'icons/icons.svg#' + item.icon"></use>
-          </svg>
-        </div>
-
-        <div
-          style="
-            margin-top: 0.75em;
-            width: 70px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            text-align: center;
-          "
-          [style.font-weight]="servicioSeleccionado.label() === item.label() ? 'bold' : 'normal'"
-        >
-          {{ item.label() }}
-        </div>
-      </div>
-    }
-  </div>
-</p-dialog>
-
-<!-- Botones de navegación del mapa -->
 <!-- Drawer del clima -->
-<p-drawer
-  [visible]="showDrawerClima"
+<p-dialog
+  [(visible)]="showDrawerClima"
   (onHide)="showDrawerClima = false"
-  styleClass="clima-drawer-shell"
-  [position]="'bottom'"
+  styleClass="clima-dialog-shell"
   [style]="{
-    height: (helper.isWide$ | async) ? 'min(76vh, 760px)' : '85vh',
-    'border-radius': (helper.isWide$ | async) ? '24px' : '24px 24px 0 0',
+    width: (helper.isWide$ | async) ? 'min(1180px, calc(100vw - 2rem))' : 'calc(100vw - 1rem)',
+    height: (helper.isWide$ | async) ? 'min(76vh, 760px)' : 'calc(100dvh - 1rem)',
+    'max-width': (helper.isWide$ | async) ? 'calc(100vw - 2rem)' : 'calc(100vw - 1rem)',
+    'max-height': (helper.isWide$ | async) ? 'calc(100dvh - 2rem)' : 'calc(100dvh - 1rem)',
     overflow: 'hidden',
-    width: (helper.isWide$ | async) ? 'min(1180px, calc(100vw - 2rem))' : '100%',
-    'max-width': (helper.isWide$ | async) ? 'calc(100vw - 2rem)' : '100%',
   }"
+  [contentStyle]="{ padding: '0', overflow: 'hidden', height: '100%' }"
   [modal]="true"
-  [dismissible]="true"
+  [draggable]="false"
+  [resizable]="false"
   [closeOnEscape]="true"
   [closable]="true"
 >
@@ -945,7 +762,7 @@
     </div>
   </ng-template>
   <app-drawer-clima [establecimiento]="establecimientoSeleccionado" [visible]="showDrawerClima"> </app-drawer-clima>
-</p-drawer>
+</p-dialog>
 
 <!-- Leyenda de capas climáticas -->
 @if (getClimaLeyenda()) {

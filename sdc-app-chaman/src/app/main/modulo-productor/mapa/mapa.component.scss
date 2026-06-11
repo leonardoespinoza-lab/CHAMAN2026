@@ -1,7 +1,3 @@
-#popup + div[style*='position: absolute'] {
-  display: none !important;
-}
-
 .map-topbar {
   position: fixed;
   z-index: 1001;
@@ -81,16 +77,24 @@
   pointer-events: auto;
 }
 
-:host ::ng-deep .clima-drawer-shell.p-drawer {
+:host ::ng-deep .clima-dialog-shell.p-dialog {
+  position: fixed;
+  top: 50% !important;
   left: 50% !important;
-  right: auto !important;
-  bottom: 1rem !important;
-  transform: translateX(-50%) !important;
+  transform: translate(-50%, -50%) !important;
+  margin: 0 !important;
   border: 1px solid rgba(121, 150, 185, 0.34);
+  border-radius: 24px;
   box-shadow: 0 24px 70px rgba(24, 39, 75, 0.24);
+  overflow: hidden;
 }
 
-:host ::ng-deep .clima-drawer-shell .p-drawer-content {
+:host ::ng-deep .clima-dialog-shell .p-dialog-header {
+  padding: 1rem 1.25rem 0.65rem;
+  border-bottom: 1px solid rgba(121, 150, 185, 0.18);
+}
+
+:host ::ng-deep .clima-dialog-shell .p-dialog-content {
   padding: 0;
 }
 
@@ -311,24 +315,63 @@
 
 @media (max-width: 760px) {
   .map-topbar {
-    left: 0.75rem;
-    top: 4.25rem;
+    top: 0.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    padding-left: 3.25rem;
+    gap: 0.45rem;
   }
 
   .weather-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    min-height: 2.8rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .weather-strip::-webkit-scrollbar,
+  .service-rail::-webkit-scrollbar {
+    display: none;
   }
 
   .weather-title {
-    grid-column: 1 / -1;
+    flex: 0 0 135px;
+    padding: 0.45rem 0.65rem;
   }
 
   .weather-metric {
+    flex: 0 0 86px;
     min-height: 2.55rem;
+    padding: 0.45rem 0.6rem;
+  }
+
+  .weather-title strong,
+  .weather-metric strong {
+    font-size: 0.82rem;
+  }
+
+  .weather-title span,
+  .weather-metric span,
+  .weather-title small {
+    font-size: 0.62rem;
+  }
+
+  .service-rail {
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 0.25rem;
   }
 
   .service-chip {
     min-width: max-content;
+    min-height: 2.25rem;
+    font-size: 0.72rem;
+    padding-right: 0.5rem;
+  }
+
+  .service-chip-icon {
+    width: 1.75rem;
+    height: 1.75rem;
   }
 
   .lot-bottom-sheet {
@@ -349,6 +392,10 @@
     justify-content: flex-start;
   }
 
+  :host ::ng-deep .sheet-actions .p-button {
+    flex: 1 1 8.5rem;
+  }
+
   .lot-summary-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -362,18 +409,30 @@
   }
 
   .service-summary-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .service-summary-card {
     min-height: auto;
   }
 
-  :host ::ng-deep .clima-drawer-shell.p-drawer {
-    left: 0 !important;
-    bottom: 0 !important;
-    transform: none !important;
-    border-radius: 24px 24px 0 0 !important;
+  :host ::ng-deep .clima-dialog-shell.p-dialog {
+    border-radius: 18px;
+  }
+}
+
+@media (max-width: 520px) {
+  .service-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lot-summary-strip {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .lot-summary-strip div {
+    min-width: 138px;
   }
 }
 

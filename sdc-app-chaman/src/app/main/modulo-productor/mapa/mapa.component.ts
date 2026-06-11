@@ -1,4 +1,4 @@
-import { animate, state, style, transition, trigger } from '@angular/animations';
+import { animate, style, transition, trigger } from '@angular/animations';
 import { AfterViewInit, ChangeDetectorRef, Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -72,25 +72,6 @@ interface ILoteMapa extends ILote {
   templateUrl: './mapa.component.html',
   styleUrl: './mapa.component.scss',
   animations: [
-    trigger('expandCollapse', [
-      state(
-        'collapsed',
-        style({
-          height: '0px',
-          opacity: 0,
-          overflow: 'hidden',
-        })
-      ),
-      state(
-        'expanded',
-        style({
-          height: '*',
-          opacity: 1,
-          overflow: 'hidden',
-        })
-      ),
-      transition('collapsed <=> expanded', [animate('250ms ease-in-out')]),
-    ]),
     trigger('slideInOut', [
       transition(':enter', [
         style({
@@ -131,7 +112,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   public map?: Map;
   private currentPosition?: IGeoJSONPoint;
-  public masDetallesClima = false;
 
   public loading = signal(false);
 
@@ -224,7 +204,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   public servicioSeleccionado: IServicio = this.servicios[0];
-  public showDrawerServicios = false;
   public showDrawerClima = false;
 
   // Datos para el panel de enfermedades
@@ -540,7 +519,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   public changeServicio(servicio: IServicio) {
     this.servicioSeleccionado = servicio;
-    this.showDrawerServicios = false;
     if (this.servicioSeleccionado.label() === this.translate.instant('NDVI')) {
       this.refreshImagesGroup();
       this.redibujarImagenes();
@@ -802,6 +780,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   public editarLote() {
     if (!this.loteSeleccionado?._id) return;
+    this.paramsService.set('editLote', this.loteSeleccionado);
     this.router.navigate(['lotes', 'editar', this.loteSeleccionado._id]);
   }
 

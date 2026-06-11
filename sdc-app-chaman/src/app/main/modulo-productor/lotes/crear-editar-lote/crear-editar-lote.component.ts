@@ -1,5 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { FormArray, FormControl, FormGroup, Validators } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import {
   ICoordenadas,
@@ -86,7 +87,8 @@ export class CrearEditarLoteComponent implements OnInit {
     private translate: TranslateService,
     private service: LoteService,
     private helper: HelperService,
-    private listado: ListadosService
+    private listado: ListadosService,
+    private activatedRoute: ActivatedRoute
   ) {}
 
   // FORMULARIO
@@ -352,7 +354,15 @@ export class CrearEditarLoteComponent implements OnInit {
 
   async ngOnInit(): Promise<void> {
     this.loading = true;
-    this.lote = this.paramsService.get('editLote');
+    this.lote = this.paramsService.get('editLote') || undefined;
+    const idLote = this.activatedRoute.snapshot.paramMap.get('id');
+    if (!this.lote && idLote) {
+      try {
+        this.lote = (await this.service.listarPorId(idLote)) as ILoteTabla;
+      } catch (error) {
+        this.helper.notifError(error);
+      }
+    }
     const datosKMZ: {
       coords: any;
       nombre: string;
