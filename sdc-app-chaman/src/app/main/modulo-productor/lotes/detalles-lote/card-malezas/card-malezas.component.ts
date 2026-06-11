@@ -124,14 +124,15 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
     const theta50 = parametros.humedadTheta50 || 0.2;
     const escala = parametros.humedadEscala || 0.03;
     const humedadSensor = this.humedadSueloReferencia();
+    const temperaturaSensor = this.temperaturaSueloReferencia();
 
     return Number(
       this.pronosticos
         .reduce((suma, pronostico) => {
           const temp =
+            temperaturaSensor ??
             this.numero(pronostico.temperatura?.avg) ??
             this.promedio([pronostico.temperatura?.min, pronostico.temperatura?.max]) ??
-            this.temperaturaSueloReferencia() ??
             0;
           const humedad = humedadSensor ?? this.humedadProxy(pronostico);
           const fT = Math.max(0, temp - base);
