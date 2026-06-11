@@ -45,6 +45,68 @@ function formatPercent(value) {
   return Number.isInteger(value) ? String(value) : String(value).replace(/0+$/, '').replace(/\.$/, '');
 }
 
+const PRESCRIPTION_RULES = [
+  {
+    match: ['TEBUCONAZOLE'],
+    cultivos: ['Trigo', 'Maiz'],
+    enfermedades: ['Mancha Amarilla', 'Roya de la Hoja', 'Fusarium de la Espiga', 'Roya del Maiz'],
+    modoAccion: 'Triazol / DMI (FRAC 3)',
+    dosisHaSugerida: 'Segun formulado comercial y marbete',
+    recomendacionUso: 'Base fungicida sistemica para royas y manchas; en fusarium priorizar ventana espigazon-antesis.',
+  },
+  {
+    match: ['PROPICONAZOLE', 'CIPROCONAZOLE', 'DIFENOCONAZOLE', 'METCONAZOLE'],
+    cultivos: ['Trigo', 'Soja'],
+    enfermedades: ['Mancha Amarilla', 'Roya de la Hoja', 'Fin de Ciclo', 'Fusarium de la Espiga'],
+    modoAccion: 'Triazol / DMI (FRAC 3)',
+    dosisHaSugerida: 'Segun formulado comercial y marbete',
+    recomendacionUso: 'Usar con diagnostico y riesgo confirmado; rotar modos de accion en aplicaciones sucesivas.',
+  },
+  {
+    match: ['PROTHIOCONAZOLE'],
+    cultivos: ['Trigo', 'Soja'],
+    enfermedades: ['Mancha de la Hoja', 'Fusarium de la Espiga', 'Fin de Ciclo'],
+    modoAccion: 'Triazol / DMI (FRAC 3)',
+    dosisHaSugerida: 'Segun formulado comercial y marbete',
+    recomendacionUso: 'Activo de referencia para ventanas criticas de espiga y manchas foliares complejas.',
+  },
+  {
+    match: ['AZOXISTROBINA', 'PYRACLOSTROBIN', 'TRIFLOXISTROBIN'],
+    cultivos: ['Trigo', 'Soja', 'Maiz'],
+    enfermedades: ['Mancha Amarilla', 'Roya de la Hoja', 'Mancha de la Hoja', 'Fin de Ciclo', 'Roya del Maiz'],
+    modoAccion: 'Estrobilurina / QoI (FRAC 11)',
+    dosisHaSugerida: 'Segun formulado comercial y marbete',
+    recomendacionUso: 'Preferir en mezcla con triazol/carboxamida; evitar uso repetido solo por riesgo de resistencia.',
+  },
+  {
+    match: ['FLUXAPYROXAD', 'BENZOVINDIFUPYR', 'BENZOVINDIFLUPYR', 'IMPIRIFLUXAN'],
+    cultivos: ['Trigo', 'Soja'],
+    enfermedades: ['Mancha de la Hoja', 'Mancha Amarilla', 'Fin de Ciclo'],
+    modoAccion: 'Carboxamida / SDHI (FRAC 7)',
+    dosisHaSugerida: 'Segun formulado comercial y marbete',
+    recomendacionUso: 'Buen complemento en mezclas para manchas foliares; rotar FRAC y validar presion de enfermedad.',
+  },
+];
+
+function unique(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function prescriptionMetadataForIngredient(ingredient) {
+  const key = norm(ingredient);
+  const rules = PRESCRIPTION_RULES.filter((rule) => rule.match.some((term) => key.includes(term)));
+  if (!rules.length) return {};
+
+  return {
+    cultivosObjetivo: unique(rules.flatMap((rule) => rule.cultivos)),
+    enfermedadesObjetivo: unique(rules.flatMap((rule) => rule.enfermedades)),
+    modoAccion: unique(rules.map((rule) => rule.modoAccion)).join(' + '),
+    dosisHaSugerida: unique(rules.map((rule) => rule.dosisHaSugerida)).join(' | '),
+    recomendacionUso: unique(rules.map((rule) => rule.recomendacionUso)).join(' '),
+    fuentePrescripcion: 'CHAMAN2026 matriz inicial de prescripcion fungicida; validar marbete antes de aplicar.',
+  };
+}
+
 function readWorkbook() {
   if (!fs.existsSync(EXCEL_PATH)) {
     throw new Error(`No se encontro el Excel: ${EXCEL_PATH}`);
@@ -201,6 +263,7 @@ function buildAgrochemicalOps(items, principiosByNorm) {
   return dedupeAgrochemicals(items).map((item) => {
     const principioActivo = principiosByNorm.get(norm(item.ingrediente));
     const volatilidad = cleanText(item.volatilidad);
+    const prescripcion = prescriptionMetadataForIngredient(item.ingrediente);
     const set = {
       nombre: item.nombre,
       concentracion: item.concentracion,
@@ -209,6 +272,7 @@ function buildAgrochemicalOps(items, principiosByNorm) {
       segmento: 'Agroquimico',
       subsegmentos: volatilidad ? [volatilidad] : [],
       fuente: 'BASE DE DATOS DE AGROQUIMICOS Y FERTILIZANTES.xlsx',
+      ...prescripcion,
     };
     if (principioActivo?._id) set.idPrincipioActivo = principioActivo._id;
     if (volatilidad) set.volatilidad = volatilidad;
@@ -237,6 +301,9 @@ async function main() {
             fertilizantes: dedupeByName(data.fertilizantes || []).length,
             principiosActivos: dedupeByName(data.principiosActivos || []).length,
             agroquimicos: dedupeAgrochemicals(data.agroquimicos || []).length,
+            agroquimicosConPrescripcion: dedupeAgrochemicals(data.agroquimicos || []).filter(
+              (item) => prescriptionMetadataForIngredient(item.ingrediente).enfermedadesObjetivo,
+            ).length,
           },
           samples: {
             fertilizantes: dedupeByName(data.fertilizantes || []).slice(0, 3),

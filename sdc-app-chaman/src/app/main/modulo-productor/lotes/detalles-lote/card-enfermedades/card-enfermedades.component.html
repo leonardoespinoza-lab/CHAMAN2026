@@ -55,11 +55,13 @@
 
           <small class="variables">{{ item.variables }}</small>
 
-          <details class="prescription-panel">
-            <summary>Prescripcion orientativa</summary>
+          <section class="prescription-panel">
+            <div class="prescription-title">
+              <strong>Prescripcion orientativa</strong>
+              <span>{{ item.prescripcion.momento }}</span>
+            </div>
             <div class="prescription-body">
               <p>{{ item.prescripcion.objetivo }}</p>
-              <small>{{ item.prescripcion.momento }}</small>
               @for (producto of item.prescripcion.productos; track producto.grupo) {
                 <article>
                   <span>{{ producto.grupo }}</span>
@@ -69,7 +71,7 @@
               }
               <small class="prescription-note">{{ item.prescripcion.nota }}</small>
             </div>
-          </details>
+          </section>
         </article>
       }
     </div>

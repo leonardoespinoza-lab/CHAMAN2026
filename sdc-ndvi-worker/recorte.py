@@ -12,6 +12,17 @@ from shapely.geometry import Polygon, mapping
 # Configuración del logging
 logger = logging.getLogger(__name__)
 
+
+def _png_scale() -> int:
+    try:
+        return max(1, int(os.getenv("NDVI_PNG_SCALE", "3")))
+    except ValueError:
+        logger.warning("NDVI_PNG_SCALE invalido; usando 3")
+        return 3
+
+
+NDVI_PNG_SCALE = _png_scale()
+
 # Configuración del colormap NDVI
 NDVI_CMAP = LinearSegmentedColormap.from_list(
     "ndvi",
@@ -115,6 +126,11 @@ def exportar_png_desde_tif_con_polygon(
 
         # Guardar como PNG
         img = Image.fromarray(rgba, mode="RGBA")
+        if NDVI_PNG_SCALE > 1:
+            img = img.resize(
+                (img.width * NDVI_PNG_SCALE, img.height * NDVI_PNG_SCALE),
+                Image.Resampling.BICUBIC,
+            )
         img.save(output_png_path, dpi=(dpi, dpi), quality=quality)
 
         return output_png_path

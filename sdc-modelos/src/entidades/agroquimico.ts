@@ -13,6 +13,12 @@ export interface IAgroquimico {
   segmento?: string;
   subsegmentos?: string[];
   fuente?: string;
+  cultivosObjetivo?: string[];
+  enfermedadesObjetivo?: string[];
+  modoAccion?: string;
+  dosisHaSugerida?: string;
+  recomendacionUso?: string;
+  fuentePrescripcion?: string;
   //
   empresa?: IEmpresa;
   principioActivo?: IPrincipioActivo;

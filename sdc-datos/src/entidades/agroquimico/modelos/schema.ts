@@ -39,6 +39,24 @@ export class Agroquimico implements Exactly<IAgroquimico, Agroquimico> {
   @Prop()
   fuente?: string;
 
+  @Prop({ type: [String] })
+  cultivosObjetivo?: string[];
+
+  @Prop({ type: [String] })
+  enfermedadesObjetivo?: string[];
+
+  @Prop()
+  modoAccion?: string;
+
+  @Prop()
+  dosisHaSugerida?: string;
+
+  @Prop()
+  recomendacionUso?: string;
+
+  @Prop()
+  fuentePrescripcion?: string;
+
   // Virtual
 
   empresa?: IEmpresa;

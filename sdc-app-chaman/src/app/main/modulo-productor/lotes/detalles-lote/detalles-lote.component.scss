@@ -71,12 +71,14 @@
 }
 
 .lote-name {
-  font-size: 24px;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.1;
 }
 
 .lote-establishment {
   color: var(--p-text-muted-color);
-  font-size: 12px;
+  font-size: 0.9rem;
   font-weight: 300;
 }
 
@@ -91,22 +93,23 @@
   background-color: var(--p-primary-color);
   border-radius: 20px;
   color: black;
-  font-weight: 300;
-  padding: 0.2em 1em 0.3em;
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 0.32em 1.1em 0.38em;
 }
 
 .lot-summary-card {
   align-items: stretch;
   display: grid;
   gap: 1rem;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: 300px minmax(0, 1fr);
 }
 
 .lot-summary-title {
   border-right: 1px solid #d7e0ea;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   min-width: 0;
   padding-right: 1rem;
 }
@@ -122,22 +125,39 @@
 
 .lot-summary-title span,
 .lot-summary-grid span {
-  font-size: 0.68rem;
+  font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
 }
 
 .lot-summary-title strong {
   color: var(--p-text-color);
-  font-size: 1.25rem;
+  font-size: 1.55rem;
   line-height: 1.1;
   margin-top: 0.25rem;
   word-break: break-word;
 }
 
 .lot-summary-title small {
-  font-size: 0.74rem;
+  font-size: 0.9rem;
   margin-top: 0.25rem;
+}
+
+.lot-primary-actions {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 1rem;
+}
+
+:host ::ng-deep .lot-primary-actions .p-button {
+  justify-content: flex-start;
+  min-height: 38px;
+  padding: 0.55rem 0.7rem;
+}
+
+:host ::ng-deep .lot-primary-actions .p-button-label {
+  font-size: 0.86rem;
+  font-weight: 700;
 }
 
 .lot-summary-grid {
@@ -151,20 +171,20 @@
   border: 1px solid #c7d4e2;
   border-radius: 8px;
   min-width: 0;
-  padding: 0.72rem 0.78rem;
+  padding: 0.88rem 0.92rem;
 }
 
 .lot-summary-grid strong {
   color: var(--p-text-color);
   display: block;
-  font-size: 0.95rem;
+  font-size: 1.08rem;
   line-height: 1.18;
   margin-top: 0.25rem;
   overflow-wrap: anywhere;
 }
 
 .lot-summary-grid small {
-  font-size: 0.66rem;
+  font-size: 0.78rem;
   margin-top: 0.3rem;
 }
 
@@ -211,11 +231,21 @@
   background: var(--p-surface-0);
   border: 1px solid #bfccd9;
   box-shadow: 0 10px 24px rgba(31, 42, 68, 0.07);
-  padding: 0.85rem;
+  padding: 1rem;
 }
 
 :host ::ng-deep .services-stack .titulo-card {
+  font-size: 1.02rem;
+  font-weight: 800;
   letter-spacing: 0;
+}
+
+:host ::ng-deep .services-stack .p-button-label {
+  font-size: 0.95rem;
+}
+
+:host ::ng-deep .services-stack .p-message-text {
+  font-size: 0.92rem;
 }
 
 .service-panel {
@@ -256,12 +286,31 @@
     padding: 0 0 0.8rem;
   }
 
+  .lot-primary-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .lot-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 560px) {
+  .lote-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .lote-actions {
+    width: 100%;
+  }
+
+  .lote-name {
+    font-size: 24px;
+  }
+
+  .lot-primary-actions,
   .lot-summary-grid {
     grid-template-columns: 1fr;
   }

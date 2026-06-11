@@ -20,7 +20,7 @@
 .disease-header span {
   color: var(--p-text-muted-color);
   display: block;
-  font-size: 0.74rem;
+  font-size: 0.88rem;
   line-height: 1.25;
   margin-top: 0.22rem;
 }
@@ -32,8 +32,8 @@
 
 .disease-list {
   display: grid;
-  gap: 0.65rem;
-  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 0.8rem;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
 }
 
 .disease-item {
@@ -43,8 +43,8 @@
   box-shadow: inset 3px 0 0 rgba(51, 211, 200, 0.36);
   display: flex;
   flex-direction: column;
-  min-height: 184px;
-  padding: 0.7rem;
+  min-height: 268px;
+  padding: 0.86rem;
 }
 
 .disease-item.medium {
@@ -64,13 +64,13 @@
 
 .disease-title strong {
   color: var(--p-text-color);
-  font-size: 0.84rem;
+  font-size: 1rem;
   line-height: 1.15;
 }
 
 .disease-title em {
   color: var(--p-text-muted-color);
-  font-size: 0.66rem;
+  font-size: 0.78rem;
   font-style: normal;
   white-space: nowrap;
 }
@@ -91,7 +91,7 @@
   border: 1px solid #c7d4e2;
   border-radius: 999px;
   display: flex;
-  height: 18px;
+  height: 22px;
   overflow: hidden;
   position: relative;
 }
@@ -108,7 +108,7 @@
 
 .risk-meter em {
   color: var(--p-text-color);
-  font-size: 0.58rem;
+  font-size: 0.68rem;
   font-style: normal;
   font-weight: 700;
   margin-left: auto;
@@ -130,8 +130,8 @@
 .disease-item small {
   color: var(--p-text-muted-color);
   display: block;
-  font-size: 0.68rem;
-  line-height: 1.22;
+  font-size: 0.82rem;
+  line-height: 1.34;
   margin: 0;
 }
 
@@ -157,37 +157,30 @@
 .prescription-panel {
   border-top: 1px solid #d7e0ea;
   margin-top: auto;
-  padding-top: 0.48rem;
+  padding-top: 0.65rem;
 }
 
-.prescription-panel summary {
+.prescription-title {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.prescription-title strong {
   color: var(--p-text-color);
-  cursor: pointer;
-  font-size: 0.68rem;
+  font-size: 0.82rem;
   font-weight: 800;
-  list-style: none;
 }
 
-.prescription-panel summary::-webkit-details-marker {
-  display: none;
-}
-
-.prescription-panel summary::after {
-  color: var(--p-primary-color);
-  content: "+";
-  float: right;
-  font-size: 0.9rem;
-  line-height: 1;
-}
-
-.prescription-panel[open] summary::after {
-  content: "-";
+.prescription-title span {
+  color: var(--p-text-muted-color);
+  font-size: 0.76rem;
+  line-height: 1.3;
 }
 
 .prescription-body {
   display: grid;
   gap: 0.45rem;
-  margin-top: 0.5rem;
+  margin-top: 0.58rem;
 }
 
 .prescription-body article {
@@ -206,19 +199,19 @@
 
 .prescription-body span {
   color: var(--p-text-muted-color);
-  font-size: 0.6rem;
+  font-size: 0.72rem;
   font-weight: 800;
 }
 
 .prescription-body strong {
   color: var(--p-text-color);
-  font-size: 0.68rem;
+  font-size: 0.82rem;
   margin-top: 0.16rem;
 }
 
 .prescription-body em {
   color: var(--p-primary-color);
-  font-size: 0.66rem;
+  font-size: 0.8rem;
   font-style: normal;
   font-weight: 800;
   margin-top: 0.18rem;
@@ -229,4 +222,10 @@
   border-radius: 6px;
   color: var(--p-text-color) !important;
   padding: 0.4rem;
+}
+
+@media (max-width: 560px) {
+  .disease-list {
+    grid-template-columns: 1fr;
+  }
 }

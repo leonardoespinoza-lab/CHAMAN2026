@@ -1,8 +1,12 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
+import { TranslateService } from '@ngx-translate/core';
 import { ICrono, IFertilizacion, IFumigacion, IQueryParam, ISiembra } from 'modelos/src';
+import { ConfirmationService } from 'primeng/api';
 import { FenologiaService } from '../../../../auxiliares/http/fenologia.service';
+import { LoteService } from '../../../../auxiliares/http/lote.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
+import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { ParamsService } from '../../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../../auxiliares/shared.module';
 import { ILoteTabla } from '../listado-lotes/listado-lotes.component';
@@ -61,6 +65,11 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     public params: ParamsService,
     private router: Router,
     private fenologiaService: FenologiaService,
+    private activatedRoute: ActivatedRoute,
+    private loteService: LoteService,
+    private listado: ListadosService,
+    private confirmationService: ConfirmationService,
+    private translate: TranslateService,
   ) {}
 
   public verSiembraActual(): void {
@@ -78,7 +87,61 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   public async sembrar(): Promise<void> {
     const data = this.lote;
     this.params.set('sembrarLote', data);
+    this.params.set('editSiembra', false);
     this.router.navigate(['lotes', 'sembrar', data?._id]);
+  }
+
+  public async editarLote(): Promise<void> {
+    if (!this.lote?._id) return;
+    this.params.set('editLote', this.lote);
+    this.router.navigate(['lotes', 'editar', this.lote._id]);
+  }
+
+  public async editarSiembra(): Promise<void> {
+    if (!this.lote?._id || !this.siembra?._id) return;
+    this.params.set('sembrarLote', this.lote);
+    this.params.set('editSiembra', this.siembra);
+    this.router.navigate(['lotes', 'sembrar', this.lote._id]);
+  }
+
+  public async cosechar(): Promise<void> {
+    if (!this.lote?._id || !this.siembra?._id) return;
+    this.params.set('cosecharLote', this.lote);
+    this.params.set('editCosecha', this.siembra.fechaCosecha ? this.siembra : false);
+    this.router.navigate(['lotes', 'cosechar', this.lote._id]);
+  }
+
+  public async eliminarLote(event?: Event): Promise<void> {
+    event?.stopPropagation();
+    if (!this.lote?._id) return;
+
+    this.confirmationService.confirm({
+      header: this.translate.instant('Por favor, confirme la accion'),
+      message: this.translate.instant('Desea eliminar el lote y sus reportes asociados?'),
+      closable: true,
+      closeOnEscape: true,
+      icon: 'pi pi-exclamation-triangle',
+      rejectButtonProps: {
+        label: this.translate.instant('Cancelar'),
+        severity: 'secondary',
+        outlined: true,
+      },
+      acceptButtonProps: {
+        label: this.translate.instant('Aceptar'),
+        severity: 'danger',
+      },
+      accept: async () => {
+        try {
+          await this.loteService.eliminar(this.lote!._id!);
+          this.listado.deleteEntityItem('lotes', this.lote!._id!);
+          this.params.set('detallesLote', null);
+          this.helper.notifSuccess(this.translate.instant('Eliminado correctamente'));
+          this.router.navigate(['mapa']);
+        } catch (error) {
+          this.helper.notifError(error);
+        }
+      },
+    });
   }
 
   public get ubicacionResumen(): string {
@@ -134,7 +197,15 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
-    this.lote = this.paramsService.get('detallesLote');
+    this.lote = this.paramsService.get('detallesLote') || undefined;
+    const idLote = this.activatedRoute.snapshot.paramMap.get('id');
+    if (!this.lote && idLote) {
+      try {
+        this.lote = (await this.loteService.listarPorId(idLote)) as IDetallesLote;
+      } catch (error) {
+        this.helper.notifError(error);
+      }
+    }
 
     if (this.lote?.siembra && !this.lote.siembra.crono) {
       const cultivo = this.lote.siembra.semilla?.cultivo;

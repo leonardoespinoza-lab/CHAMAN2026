@@ -49,21 +49,21 @@ export class CardHuellaHidricaComponent implements OnInit, OnDestroy {
         key: 'green',
         label: 'Verde',
         value: huella ? `${Math.round(huella.verde?.litrosKg || 0)} l/kg` : `${Math.round(this.progresoFenologico)}%`,
-        detail: huella ? 'Agua de lluvia incorporada al cultivo' : 'Acumula con el avance del cultivo',
+        detail: huella ? 'Lluvia natural aprovechada por el cultivo' : 'Avance de lluvia natural durante el ciclo',
         fill: huella ? this.limitar(((huella.verde?.litrosKg || 0) / max) * 100) : this.progresoFenologico,
       },
       {
         key: 'blue',
         label: 'Azul',
         value: huella ? `${Math.round(huella.azul?.litrosKg || 0)} l/kg` : `${Math.round(this.progresoFenologico)}%`,
-        detail: huella ? 'Agua de riego o aporte azul estimado' : 'Se estima hasta tener cierre de ciclo',
+        detail: huella ? 'Riego o agua aportada desde fuente externa' : 'Demanda potencial a cubrir con riego',
         fill: huella ? this.limitar(((huella.azul?.litrosKg || 0) / max) * 100) : this.progresoFenologico,
       },
       {
         key: 'gray',
         label: 'Gris',
         value: huella ? `${Math.round(huella.gris?.litrosKg || 0)} l/kg` : `${aplicaciones} aplic.`,
-        detail: huella ? 'Carga por fertilizantes y fitosanitarios' : 'Sube al cargar fertilizaciones/fumigaciones',
+        detail: huella ? 'Agua para diluir/lavar fertilizantes y fitosanitarios' : 'Sube al cargar fertilizaciones/fumigaciones',
         fill: huella ? this.limitar(((huella.gris?.litrosKg || 0) / max) * 100) : this.limitar(aplicaciones * 28),
       },
     ];
@@ -79,7 +79,7 @@ export class CardHuellaHidricaComponent implements OnInit, OnDestroy {
     if (huella) {
       return {
         value: `${this.numeroAr.format(total)} l/kg`,
-        detail: 'Suma verde + azul + gris consolidada al cosechar',
+        detail: 'Suma de lluvia natural, riego y carga de dilucion',
         fill: 100,
       };
     }
