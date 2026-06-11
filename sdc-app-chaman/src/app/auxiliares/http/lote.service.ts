@@ -25,7 +25,11 @@ export class LoteService {
     return this.http.get(`/lotes/suelo-inta`, { params: { lat, lng } });
   }
 
-  public generarNdvi(id: string): Promise<{ encolado: boolean; mensaje: string }> {
+  public generarNdvi(id: string): Promise<{
+    encolado: boolean;
+    mensaje: string;
+    ultimaFechaImagen?: string | null;
+  }> {
     return this.http.post(`/lotes/${id}/ndvi`, {});
   }
 

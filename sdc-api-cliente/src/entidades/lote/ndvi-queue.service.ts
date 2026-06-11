@@ -3,12 +3,26 @@ import { ILote } from 'modelos/src';
 import Redis from 'ioredis';
 import {
   ENV,
+  REDIS_COMMAND_TIMEOUT,
+  REDIS_CONNECT_TIMEOUT,
   REDIS_HOST,
   REDIS_NDVI_DB,
   REDIS_NDVI_QUEUE,
   REDIS_PASSWORD,
   REDIS_PORT,
 } from '../../env';
+
+export interface NdviQueueStatus {
+  enabled: boolean;
+  env: string;
+  queue: string;
+  db: number;
+  connected: boolean;
+  redisStatus?: string;
+  queueLength?: number;
+  reason?: string;
+  error?: string;
+}
 
 @Injectable()
 export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
@@ -26,6 +40,8 @@ export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
       port: REDIS_PORT,
       password: REDIS_PASSWORD || undefined,
       db: REDIS_NDVI_DB,
+      connectTimeout: REDIS_CONNECT_TIMEOUT,
+      commandTimeout: REDIS_COMMAND_TIMEOUT,
       lazyConnect: true,
     });
     this.enabled = true;
@@ -57,5 +73,42 @@ export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
     await this.redis.lpush(REDIS_NDVI_QUEUE, JSON.stringify(task));
     this.logger.log(`Tarea NDVI encolada para lote ${lote._id}`);
     return true;
+  }
+
+  async getStatus(): Promise<NdviQueueStatus> {
+    const base: NdviQueueStatus = {
+      enabled: this.enabled,
+      env: ENV,
+      queue: REDIS_NDVI_QUEUE,
+      db: REDIS_NDVI_DB,
+      connected: false,
+      redisStatus: this.redis?.status,
+    };
+
+    if (!this.enabled || !this.redis) {
+      return {
+        ...base,
+        reason: ENV === 'local' ? 'disabled-local-env' : 'redis-not-initialized',
+      };
+    }
+
+    try {
+      const pong = await this.redis.ping();
+      const queueLength = await this.redis.llen(REDIS_NDVI_QUEUE);
+      return {
+        ...base,
+        connected: pong === 'PONG',
+        redisStatus: this.redis.status,
+        queueLength,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        ...base,
+        connected: false,
+        redisStatus: this.redis.status,
+        error: message.slice(0, 180),
+      };
+    }
   }
 }

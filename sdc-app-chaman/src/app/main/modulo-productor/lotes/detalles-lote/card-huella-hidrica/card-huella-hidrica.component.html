@@ -13,7 +13,7 @@
         @if (siembra?.huellaHidrica) {
           Resultado al cierre de cosecha
         } @else {
-          Avance estimado desde siembra
+          Pendiente de calculo real
         }
       </span>
     </div>
@@ -35,7 +35,7 @@
 
   @if (!siembra?.huellaHidrica) {
     <p-message severity="info">
-      {{ 'Se completa durante el ciclo y se consolida al cosechar' | translate }}
+      {{ 'Sin valores estimados: se completara con clima real, aplicaciones y rendimiento al cerrar la siembra' | translate }}
     </p-message>
   }
 
@@ -55,7 +55,7 @@
   </div>
 
   <p class="formula-note">
-    Corre desde siembra. Verde y azul se estiman con ETc/Kc y lluvia efectiva; gris suma fertilizaciones y fumigaciones. Al cosechar se consolida por rendimiento seco.
+    Formula real: verde y azul usan ETc/Kc y lluvia efectiva; gris suma fertilizantes y fitosanitarios. El resultado se consolida por rendimiento seco al cosechar.
   </p>
 </div>
 

@@ -57,6 +57,12 @@ export class LotesController {
     return await this.service.getSueloInta(lat, lng);
   }
 
+  @Get('ndvi/status')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  public async getNdviQueueStatus(): Promise<any> {
+    return await this.service.getNdviQueueStatus();
+  }
+
   @Get('/:id')
   @Permisos(
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
@@ -93,7 +99,11 @@ export class LotesController {
   public async generarNdvi(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,
-  ): Promise<{ encolado: boolean; mensaje: string }> {
+  ): Promise<{
+    encolado: boolean;
+    mensaje: string;
+    ultimaFechaImagen?: string | null;
+  }> {
     return await this.service.generarNdvi(id, permiso);
   }
 

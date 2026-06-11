@@ -146,10 +146,15 @@ export class LotesService {
     const encolado = await this.ndviQueue.enqueueLote(lote, ultimaFechaImagen);
     return {
       encolado,
+      ultimaFechaImagen,
       mensaje: encolado
         ? 'Tarea NDVI satelital encolada. El reporte aparecera cuando el worker termine el procesamiento.'
         : 'No se pudo encolar NDVI. Verificar Redis, worker NDVI y poligono del lote.',
     };
+  }
+
+  async getNdviQueueStatus() {
+    return await this.ndviQueue.getStatus();
   }
 
   async getSueloInta(latParam: string | number, lngParam: string | number): Promise<SueloIntaResponse> {
