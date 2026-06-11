@@ -31,7 +31,7 @@ export class Semilla implements Exactly<ISemilla, Semilla> {
   @Prop()
   campania?: string;
 
-  @Prop()
+  @Prop({ type: String })
   tipoCultivo?: ISemilla['tipoCultivo'];
 
   @Prop()
