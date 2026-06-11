@@ -324,6 +324,8 @@
 
   .weather-strip {
     display: flex;
+    flex: 0 0 auto;
+    width: 100%;
     min-height: 2.8rem;
     overflow-x: auto;
     scrollbar-width: none;
@@ -357,6 +359,8 @@
   }
 
   .service-rail {
+    flex: 0 0 auto;
+    width: 100%;
     max-width: 100%;
     overflow-x: auto;
     padding: 0.25rem;
