@@ -142,7 +142,8 @@ export class LotesService {
 
   async generarNdvi(id: string, permiso: IPermiso) {
     const lote = await this.getById(id, permiso);
-    const encolado = await this.ndviQueue.enqueueLote(lote);
+    const ultimaFechaImagen = await this.getUltimaFechaNdvi(id, permiso);
+    const encolado = await this.ndviQueue.enqueueLote(lote, ultimaFechaImagen);
     return {
       encolado,
       mensaje: encolado
@@ -359,6 +360,31 @@ export class LotesService {
     return values
       .map((value) => `${value || ''}`.trim())
       .filter((value) => value && value !== '-');
+  }
+
+  private async getUltimaFechaNdvi(
+    idLote: string,
+    permiso: IPermiso,
+  ): Promise<string | null> {
+    const query: IQueryParam = {
+      filter: JSON.stringify({ idLote }),
+      limit: 1,
+      sort: '-fechaDeLaImagen',
+    };
+    const reportes = await this.reportesNDVIsService.get(query, permiso);
+    const ultimo = reportes?.datos?.[0];
+    return this.toIsoString(ultimo?.fechaDeLaImagen || ultimo?.fechaCreacion);
+  }
+
+  private toIsoString(value: unknown): string | null {
+    if (!value) {
+      return null;
+    }
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    const fecha = new Date(value as string);
+    return Number.isNaN(fecha.getTime()) ? null : fecha.toISOString();
   }
 
   private puedeVer(data: ILote, permiso: IPermiso): boolean {

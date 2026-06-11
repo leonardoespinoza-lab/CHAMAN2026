@@ -6,7 +6,7 @@
   align-items: center;
   display: flex;
   gap: 0.7rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.85rem;
 }
 
 .ndvi-header p {
@@ -19,15 +19,23 @@
 .ndvi-header span {
   color: var(--p-text-muted-color);
   display: block;
-  font-size: 0.88rem;
+  font-size: 1rem;
+}
+
+.ndvi-header-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-left: auto;
 }
 
 .ndvi-balance {
   border: 1px solid var(--p-surface-200);
   border-radius: 999px;
   color: var(--p-text-color);
-  font-size: 0.86rem;
-  margin-left: auto;
+  font-size: 0.95rem;
   padding: 0.32rem 0.7rem;
   white-space: nowrap;
 }
@@ -44,19 +52,26 @@
   border-color: #e05d4f;
 }
 
+.ndvi-balance.stale {
+  background: #fff7e8;
+  border-color: #e8a33a;
+}
+
 .ndvi-content {
   display: grid;
   gap: 0.75rem;
-  grid-template-columns: minmax(280px, 0.56fr) minmax(360px, 1fr);
+  grid-template-columns: minmax(300px, 0.54fr) minmax(380px, 1fr);
 }
 
 .img-container {
   align-items: center;
-  background: var(--p-surface-50);
-  border: 1px solid #c7d4e2;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(244, 248, 252, 0.42)),
+    var(--p-surface-50);
+  border: 1px solid #aebed0;
   border-radius: 8px;
   display: flex;
-  height: clamp(170px, 17vw, 245px);
+  height: clamp(180px, 15vw, 230px);
   justify-content: center;
   overflow: hidden;
   padding: 0.35rem;
@@ -65,6 +80,8 @@
 .img {
   display: block;
   height: 100%;
+  filter: drop-shadow(0 0 1px rgba(37, 50, 73, 0.52));
+  image-rendering: auto;
   max-height: 100%;
   max-width: none;
   object-fit: contain;
@@ -102,7 +119,7 @@
 .analysis-main strong {
   color: var(--p-text-color);
   display: block;
-  font-size: 1.05rem;
+  font-size: 1.2rem;
   margin-top: 0.2rem;
 }
 
@@ -110,7 +127,7 @@
 .context,
 .recommendation {
   color: var(--p-text-muted-color);
-  font-size: 0.88rem;
+  font-size: 0.96rem;
   line-height: 1.35;
   margin: 0.35rem 0 0;
 }
@@ -146,7 +163,7 @@
 .date-strip {
   display: flex;
   gap: 0.35rem;
-  margin-top: 0.8rem;
+  margin-top: 0.75rem;
   overflow: auto;
 }
 
@@ -180,6 +197,93 @@
   max-width: 680px;
 }
 
+.satellite-module {
+  border-top: 1px solid #d7e0ea;
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+}
+
+.satellite-title span {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.satellite-title strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 1.16rem;
+  margin-top: 0.12rem;
+}
+
+.satellite-grid {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+}
+
+.satellite-grid article {
+  background: var(--p-surface-50);
+  border: 1px solid #c7d4e2;
+  border-radius: 8px;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.72rem;
+}
+
+.satellite-grid article.activo {
+  border-color: color-mix(in srgb, var(--p-primary-color), transparent 28%);
+  box-shadow: inset 3px 0 0 var(--p-primary-color);
+}
+
+.satellite-grid article.preparado {
+  box-shadow: inset 3px 0 0 #8bb0c9;
+}
+
+.satellite-grid article.contexto {
+  box-shadow: inset 3px 0 0 #e8a33a;
+}
+
+.satellite-grid article div {
+  align-items: baseline;
+  display: flex;
+  gap: 0.45rem;
+  justify-content: space-between;
+}
+
+.satellite-grid strong {
+  color: var(--p-text-color);
+  font-size: 1rem;
+}
+
+.satellite-grid em {
+  color: var(--p-primary-color);
+  font-size: 0.92rem;
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.satellite-grid p,
+.satellite-grid small {
+  color: var(--p-text-muted-color);
+  line-height: 1.25;
+  margin: 0;
+}
+
+.satellite-grid p {
+  font-size: 0.92rem;
+}
+
+.satellite-grid small {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 @media (max-width: 760px) {
   .ndvi-content {
     grid-template-columns: 1fr;
@@ -187,10 +291,12 @@
 
   .ndvi-header {
     align-items: flex-start;
+    flex-wrap: wrap;
   }
 
-  .ndvi-balance {
+  .ndvi-header-actions {
     margin-left: 0;
+    width: 100%;
   }
 
   .img-container {

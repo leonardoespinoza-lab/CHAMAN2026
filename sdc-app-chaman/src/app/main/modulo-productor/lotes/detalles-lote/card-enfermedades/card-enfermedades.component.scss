@@ -20,7 +20,7 @@
 .disease-header span {
   color: var(--p-text-muted-color);
   display: block;
-  font-size: 0.88rem;
+  font-size: 1rem;
   line-height: 1.25;
   margin-top: 0.22rem;
 }
@@ -33,7 +33,7 @@
 .disease-list {
   display: grid;
   gap: 0.8rem;
-  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(390px, 100%), 1fr));
 }
 
 .disease-item {
@@ -43,8 +43,8 @@
   box-shadow: inset 3px 0 0 rgba(51, 211, 200, 0.36);
   display: flex;
   flex-direction: column;
-  min-height: 268px;
-  padding: 0.86rem;
+  min-height: 246px;
+  padding: 1rem;
 }
 
 .disease-item.medium {
@@ -64,13 +64,13 @@
 
 .disease-title strong {
   color: var(--p-text-color);
-  font-size: 1rem;
+  font-size: 1.18rem;
   line-height: 1.15;
 }
 
 .disease-title em {
   color: var(--p-text-muted-color);
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   font-style: normal;
   white-space: nowrap;
 }
@@ -91,7 +91,7 @@
   border: 1px solid #c7d4e2;
   border-radius: 999px;
   display: flex;
-  height: 22px;
+  height: 24px;
   overflow: hidden;
   position: relative;
 }
@@ -108,7 +108,7 @@
 
 .risk-meter em {
   color: var(--p-text-color);
-  font-size: 0.68rem;
+  font-size: 0.74rem;
   font-style: normal;
   font-weight: 700;
   margin-left: auto;
@@ -130,7 +130,7 @@
 .disease-item small {
   color: var(--p-text-muted-color);
   display: block;
-  font-size: 0.82rem;
+  font-size: 0.94rem;
   line-height: 1.34;
   margin: 0;
 }
@@ -167,14 +167,61 @@
 
 .prescription-title strong {
   color: var(--p-text-color);
-  font-size: 0.82rem;
+  font-size: 0.98rem;
   font-weight: 800;
 }
 
 .prescription-title span {
   color: var(--p-text-muted-color);
-  font-size: 0.76rem;
+  font-size: 0.9rem;
   line-height: 1.3;
+}
+
+.prescription-products {
+  margin-top: 0.6rem;
+}
+
+.prescription-products summary {
+  align-items: center;
+  background: var(--p-surface-50);
+  border: 1px solid #d4deea;
+  border-radius: 7px;
+  cursor: pointer;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  list-style: none;
+  padding: 0.62rem 0.7rem;
+}
+
+.prescription-products summary::-webkit-details-marker {
+  display: none;
+}
+
+.prescription-products summary::after {
+  color: var(--p-primary-color);
+  content: '+';
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.prescription-products[open] summary::after {
+  content: '-';
+}
+
+.prescription-products summary span {
+  color: var(--p-text-color);
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.prescription-products summary strong {
+  background: color-mix(in srgb, var(--p-primary-color), transparent 86%);
+  border-radius: 999px;
+  color: var(--p-text-color);
+  font-size: 0.86rem;
+  padding: 0.12rem 0.52rem;
 }
 
 .prescription-body {
@@ -199,19 +246,19 @@
 
 .prescription-body span {
   color: var(--p-text-muted-color);
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   font-weight: 800;
 }
 
 .prescription-body strong {
   color: var(--p-text-color);
-  font-size: 0.82rem;
+  font-size: 0.95rem;
   margin-top: 0.16rem;
 }
 
 .prescription-body em {
   color: var(--p-primary-color);
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   font-style: normal;
   font-weight: 800;
   margin-top: 0.18rem;

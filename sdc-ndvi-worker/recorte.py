@@ -5,7 +5,7 @@ from typing import Optional, Tuple
 import numpy as np
 import rasterio
 from matplotlib.colors import LinearSegmentedColormap
-from PIL import Image
+from PIL import Image, ImageFilter
 from rasterio.mask import mask
 from shapely.geometry import Polygon, mapping
 
@@ -126,6 +126,7 @@ def exportar_png_desde_tif_con_polygon(
 
         # Guardar como PNG
         img = Image.fromarray(rgba, mode="RGBA")
+        img = _agregar_contorno_transparente(img)
         if NDVI_PNG_SCALE > 1:
             img = img.resize(
                 (img.width * NDVI_PNG_SCALE, img.height * NDVI_PNG_SCALE),
@@ -137,6 +138,15 @@ def exportar_png_desde_tif_con_polygon(
 
     except Exception as e:
         raise RuntimeError(f"Error al exportar PNG: {str(e)}")
+
+
+def _agregar_contorno_transparente(img: Image.Image) -> Image.Image:
+    """Agrega un borde sutil al area valida del recorte para mejorar lectura en el front."""
+    alpha = img.getchannel("A")
+    borde = alpha.filter(ImageFilter.FIND_EDGES).point(lambda p: 150 if p else 0)
+    capa_borde = Image.new("RGBA", img.size, (37, 50, 73, 0))
+    capa_borde.putalpha(borde)
+    return Image.alpha_composite(capa_borde, img)
 
 
 def _reproject_geom(geom: Polygon, from_crs: str, to_crs: str) -> Polygon:

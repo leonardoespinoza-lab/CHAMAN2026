@@ -6,17 +6,32 @@
     <div>
       <p class="titulo-card">
         <p-button icon="pi pi-info-circle" [rounded]="true" [text]="true" (onClick)="mostrarLeyenda()" />
-        {{ 'NDVI' | translate | uppercase }}
+        {{ 'Modulo satelital' | uppercase }}
       </p>
       <span>
         @if (reporte?.ndviPromedio) {
-          Promedio {{ reporte?.ndviPromedio | number: '1.0-3' }}
+          NDVI promedio {{ reporte?.ndviPromedio | number: '1.0-3' }} - {{ fechaImagenResumen }}
         } @else {
-          Indice verde del lote
+          Indice verde y capas satelitales del lote
         }
       </span>
     </div>
-    <strong class="ndvi-balance" [ngClass]="analisis.tono">{{ analisis.estado }}</strong>
+    <div class="ndvi-header-actions">
+      <strong class="ndvi-balance" [ngClass]="[analisis.tono, imagenAtrasada ? 'stale' : '']">
+        {{ imagenAtrasada ? 'Imagen atrasada' : analisis.estado }}
+      </strong>
+      @if (!helper.soloLectura()) {
+        <p-button
+          icon="pi pi-satellite"
+          label="Actualizar satelite"
+          [loading]="generandoSatelital"
+          [disabled]="generandoSatelital"
+          severity="secondary"
+          [outlined]="true"
+          (click)="generarNdviSatelital($event)"
+        />
+      }
+    </div>
   </div>
 
   @if (ndvis.length > 0) {
@@ -60,6 +75,25 @@
         </p-button>
       }
     </div>
+
+    <section class="satellite-module">
+      <div class="satellite-title">
+        <span>Modulo satelital</span>
+        <strong>Indices complementarios</strong>
+      </div>
+      <div class="satellite-grid">
+        @for (indicator of satelliteIndicators; track indicator.label) {
+          <article [ngClass]="indicator.status">
+            <div>
+              <strong>{{ indicator.label }}</strong>
+              <em>{{ indicator.value }}</em>
+            </div>
+            <p>{{ indicator.detail }}</p>
+            <small>{{ indicator.source }}</small>
+          </article>
+        }
+      </div>
+    </section>
   } @else {
     <div class="empty-ndvi">
       <p-message severity="info">{{ 'No hay reportes de NDVI para este lote' | translate }}</p-message>
@@ -76,7 +110,7 @@
       @if (!helper.soloLectura()) {
         <p-button
           icon="pi pi-satellite"
-          label="Generar NDVI satelital"
+          label="Generar satelite"
           [loading]="generandoSatelital"
           [disabled]="generandoSatelital"
           [fluid]="true"
@@ -95,6 +129,24 @@
           (click)="generarMuestraLocal($event)"
         />
       }
+      <section class="satellite-module empty-module">
+        <div class="satellite-title">
+          <span>Modulo satelital</span>
+          <strong>Capas preparadas</strong>
+        </div>
+        <div class="satellite-grid">
+          @for (indicator of satelliteIndicators; track indicator.label) {
+            <article [ngClass]="indicator.status">
+              <div>
+                <strong>{{ indicator.label }}</strong>
+                <em>{{ indicator.value }}</em>
+              </div>
+              <p>{{ indicator.detail }}</p>
+              <small>{{ indicator.source }}</small>
+            </article>
+          }
+        </div>
+      </section>
     </div>
   }
 </div>

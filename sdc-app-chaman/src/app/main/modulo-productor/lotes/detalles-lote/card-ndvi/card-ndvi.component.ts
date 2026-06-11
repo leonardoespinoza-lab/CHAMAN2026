@@ -29,6 +29,14 @@ interface NdviAnalisis {
   balance72: string;
 }
 
+interface SatelliteIndicator {
+  label: string;
+  value: string;
+  detail: string;
+  source: string;
+  status: 'activo' | 'preparado' | 'contexto';
+}
+
 @Component({
   selector: 'app-card-ndvi',
   imports: [CommonModule, SharedModule],
@@ -109,6 +117,74 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
       tendencia,
       balance72: balanceTxt,
     };
+  }
+
+  public get fechaImagenResumen(): string {
+    if (!this.reporte?.fechaDeLaImagen) {
+      return 'Sin imagen satelital activa';
+    }
+    const fechaImagen = new Date(this.reporte.fechaDeLaImagen);
+    const dias = this.diasDesde(fechaImagen);
+    const fecha = fechaImagen.toLocaleDateString('es-AR', {
+      day: 'numeric',
+      month: 'short',
+    });
+    if (dias === 0) {
+      return `Imagen ${fecha} (hoy)`;
+    }
+    if (dias === 1) {
+      return `Imagen ${fecha} (ayer)`;
+    }
+    return `Imagen ${fecha} (${dias} dias)`;
+  }
+
+  public get imagenAtrasada(): boolean {
+    if (!this.reporte?.fechaDeLaImagen) {
+      return false;
+    }
+    return this.diasDesde(new Date(this.reporte.fechaDeLaImagen)) > 10;
+  }
+
+  public get satelliteIndicators(): SatelliteIndicator[] {
+    const ndvi = this.reporte?.ndviPromedio;
+    const ndviValue = ndvi == null ? 'Pendiente' : this.formatear(ndvi);
+    return [
+      {
+        label: 'NDVI',
+        value: ndviValue,
+        detail: 'Vigor verde y cobertura activa del lote.',
+        source: this.reporte?.coleccion || 'Sentinel-2 B08/B04',
+        status: this.reporte ? 'activo' : 'preparado',
+      },
+      {
+        label: 'NDMI / NDWI',
+        value: 'Preparado',
+        detail: 'Agua en canopia y estres hidrico superficial.',
+        source: 'Sentinel-2 B08/B11',
+        status: 'preparado',
+      },
+      {
+        label: 'NDRE',
+        value: 'Preparado',
+        detail: 'Clorofila y respuesta a nitrogeno en etapas avanzadas.',
+        source: 'Sentinel-2 B08/B05',
+        status: 'preparado',
+      },
+      {
+        label: 'SAVI / EVI',
+        value: 'Preparado',
+        detail: 'Vigor ajustado para suelo expuesto y alta biomasa.',
+        source: 'Sentinel-2 multibanda',
+        status: 'preparado',
+      },
+      {
+        label: 'Humedad suelo',
+        value: 'Contextual',
+        detail: 'Capa modelada por punto y referencia zonal.',
+        source: 'Open-Meteo / SMAP',
+        status: 'contexto',
+      },
+    ];
   }
 
   private calcularFechaMinima(): void {
@@ -302,6 +378,12 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
 
   private formatear(value: number): string {
     return value.toLocaleString('es-AR', { maximumFractionDigits: 2 });
+  }
+
+  private diasDesde(fecha: Date): number {
+    const inicio = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()).getTime();
+    const fin = new Date(this.hoy.getFullYear(), this.hoy.getMonth(), this.hoy.getDate()).getTime();
+    return Math.max(0, Math.round((fin - inicio) / 86400000));
   }
 
   private programarRefrescosSatelitales(intentos = 4): void {

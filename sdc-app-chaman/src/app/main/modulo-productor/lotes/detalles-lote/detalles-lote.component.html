@@ -5,8 +5,8 @@
         <use xlink:href="icons/icons.svg#back"></use>
       </svg>
       <div>
-        <span class="lote-name">Lote {{ lote?.nombre }}</span>
-        <span class="lote-establishment">{{ lote?.establecimiento?.nombre }}</span>
+        <span class="lote-name">{{ lote?.nombre || 'Lote sin nombre' }}</span>
+        <span class="lote-establishment">{{ lote?.establecimiento?.nombre || 'Sin establecimiento' }}</span>
       </div>
     </div>
     <div class="lote-actions">
@@ -33,15 +33,16 @@
   </div>
 
   <section class="custom-card lot-summary-card">
-    <div class="lot-summary-title">
-      <span>Detalle del lote</span>
-      <strong>{{ lote?.nombre || 'Sin nombre' }}</strong>
-      <small>{{ lote?.establecimiento?.nombre || 'Sin establecimiento' }}</small>
-
+    <div class="lot-summary-toolbar">
+      <div class="lot-summary-title">
+        <span>Detalle operativo</span>
+        <strong>{{ lote?.establecimiento?.nombre || 'Sin establecimiento' }}</strong>
+        <small>{{ departamentoResumen }}</small>
+      </div>
       @if (!helper.soloLectura()) {
         <div class="lot-primary-actions">
           <p-button
-            label="Editar lote / suelo"
+            label="Editar lote y suelo"
             icon="pi pi-pencil"
             severity="secondary"
             [outlined]="true"

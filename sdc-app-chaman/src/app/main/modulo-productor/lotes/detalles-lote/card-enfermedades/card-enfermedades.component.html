@@ -58,19 +58,25 @@
           <section class="prescription-panel">
             <div class="prescription-title">
               <strong>Prescripcion orientativa</strong>
-              <span>{{ item.prescripcion.momento }}</span>
+              <span>{{ item.prescripcion.objetivo }}</span>
             </div>
-            <div class="prescription-body">
-              <p>{{ item.prescripcion.objetivo }}</p>
-              @for (producto of item.prescripcion.productos; track producto.grupo) {
-                <article>
-                  <span>{{ producto.grupo }}</span>
-                  <strong>{{ producto.activos }}</strong>
-                  <em>{{ producto.dosisHa }}</em>
-                </article>
-              }
-              <small class="prescription-note">{{ item.prescripcion.nota }}</small>
-            </div>
+            <details class="prescription-products">
+              <summary>
+                <span>Productos sugeridos</span>
+                <strong>{{ item.prescripcion.productos.length }}</strong>
+              </summary>
+              <div class="prescription-body">
+                <p>{{ item.prescripcion.momento }}</p>
+                @for (producto of item.prescripcion.productos; track producto.grupo) {
+                  <article>
+                    <span>{{ producto.grupo }}</span>
+                    <strong>{{ producto.activos }}</strong>
+                    <em>{{ producto.dosisHa }}</em>
+                  </article>
+                }
+                <small class="prescription-note">{{ item.prescripcion.nota }}</small>
+              </div>
+            </details>
           </section>
         </article>
       }
