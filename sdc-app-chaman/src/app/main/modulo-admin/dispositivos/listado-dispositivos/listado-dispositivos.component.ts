@@ -37,6 +37,8 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
   public uplinks: ILorawanUplink[] = [];
   public latestByDevEui = new Map<string, ILorawanUplink>();
   public gateways: GatewaySummary[] = [];
+  public detectedUplinks: ILorawanUplink[] = [];
+  private dispositivosPorDevEui = new Map<string, IDispositivo>();
 
   public datos$?: Subscription;
 
@@ -56,11 +58,13 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
   ) {}
 
   public async create() {
+    this.params.remove('nuevoDispositivoLorawan');
     this.params.set('editDispositivo', false);
     this.router.navigate(['dispositivos', 'crear']);
   }
 
   public async edit(data: IDispositivo) {
+    this.params.remove('nuevoDispositivoLorawan');
     this.params.set('editDispositivo', data);
     this.router.navigate(['dispositivos', 'editar', data._id]);
   }
@@ -124,6 +128,7 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
       .subscribe(async (data) => {
         this.totalCount = data.totalCount;
         this.datos = data.datos;
+        this.rebuildDeviceIndex();
         console.log(`listado de dispositivos`, data);
       });
     await this.listados.getLastValue('dispositivos', queryParams);
@@ -151,7 +156,89 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
       }
     }
 
+    this.detectedUplinks = Array.from(this.latestByDevEui.values()).sort((a, b) => {
+      const fechaA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const fechaB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return fechaB - fechaA;
+    });
     this.gateways = this.buildGateways(this.uplinks);
+  }
+
+  public deviceForUplink(uplink: ILorawanUplink): IDispositivo | undefined {
+    return this.dispositivosPorDevEui.get(this.normalizeDevEui(uplink.devEUI));
+  }
+
+  public addOrAssignFromUplink(uplink: ILorawanUplink): void {
+    const existing = this.deviceForUplink(uplink);
+    if (existing) {
+      this.edit(existing);
+      return;
+    }
+
+    const nombre = uplink.deviceName || uplink.applicationName || uplink.devEUI || 'Dispositivo MQTT';
+    this.params.set('editDispositivo', false);
+    this.params.set('nuevoDispositivoLorawan', {
+      nombre,
+      deveui: this.normalizeDevEui(uplink.devEUI),
+      tipo: this.inferType(uplink),
+      sensores: this.inferSensors(uplink),
+      metadata: {
+        applicationID: uplink.applicationID,
+        applicationName: uplink.applicationName,
+        gatewayID: uplink.gatewayID,
+        frequency: uplink.frequency,
+        fCnt: uplink.fCnt,
+        fPort: uplink.fPort,
+        rssi: uplink.rssi,
+        snr: uplink.snr,
+        dr: uplink.dr,
+      },
+      fechaUltimaComunicacion: uplink.timestamp,
+    } as Partial<IDispositivo>);
+    this.router.navigate(['dispositivos', 'crear']);
+  }
+
+  public inferredLabel(uplink: ILorawanUplink): string {
+    const device = this.deviceForUplink(uplink);
+    if (device?.tipo && device.tipo !== 'Otro') {
+      return device.tipo;
+    }
+    return this.inferType(uplink) || 'Otro';
+  }
+
+  public assignmentLabel(uplink: ILorawanUplink): string {
+    const device = this.deviceForUplink(uplink);
+    if (!device) {
+      return 'Nuevo: pendiente de agregar a Chaman';
+    }
+    if (device.lote?.nombre || device.idLote) {
+      return `Asignado a lote: ${device.lote?.nombre || device.idLote}`;
+    }
+    if (device.establecimiento?.nombre || device.idEstablecimiento) {
+      return `Asignado a establecimiento: ${device.establecimiento?.nombre || device.idEstablecimiento}`;
+    }
+    if (device.productor?.nombre || device.idProductor) {
+      return `Asignado a productor: ${device.productor?.nombre || device.idProductor}`;
+    }
+    return 'Registrado sin asignar';
+  }
+
+  public assignmentClass(uplink: ILorawanUplink): string {
+    const device = this.deviceForUplink(uplink);
+    if (!device) {
+      return 'mqtt-new';
+    }
+    if (device.idLote || device.idEstablecimiento || device.idProductor) {
+      return 'mqtt-assigned';
+    }
+    return 'mqtt-unassigned';
+  }
+
+  public uplinkSignal(uplink: ILorawanUplink): string {
+    if (uplink.rssi === undefined && uplink.snr === undefined) {
+      return '-';
+    }
+    return `${uplink.rssi ?? '--'} dBm / ${uplink.snr ?? '--'} dB`;
   }
 
   public uplinkFor(row: IDispositivo): ILorawanUplink | undefined {
@@ -235,6 +322,49 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
       const fechaB = b.ultimoReporte ? new Date(b.ultimoReporte).getTime() : 0;
       return fechaB - fechaA;
     });
+  }
+
+  private rebuildDeviceIndex(): void {
+    this.dispositivosPorDevEui = new Map<string, IDispositivo>();
+    for (const dispositivo of this.datos) {
+      const key = this.normalizeDevEui(dispositivo.deveui);
+      if (key) {
+        this.dispositivosPorDevEui.set(key, dispositivo);
+      }
+    }
+  }
+
+  private inferType(uplink: ILorawanUplink): IDispositivo['tipo'] {
+    const text = `${uplink.deviceName || ''} ${uplink.applicationName || ''}`.toLowerCase();
+    if (
+      text.includes('sentek') ||
+      text.includes('lanza') ||
+      text.includes('humedad de suelo') ||
+      text.includes('soil moisture')
+    ) {
+      return 'Sensor de Humedad de Suelo';
+    }
+    if (text.includes('pluvio') || text.includes('lluvia') || text.includes('rain')) {
+      return 'Pluviometro';
+    }
+    if (text.includes('meteo') || text.includes('weather') || text.includes('estacion')) {
+      return 'Estacion Meteorologica';
+    }
+    return 'Otro';
+  }
+
+  private inferSensors(uplink: ILorawanUplink): IDispositivo['sensores'] {
+    const type = this.inferType(uplink);
+    if (type === 'Sensor de Humedad de Suelo') {
+      return ['Humedad Suelo Profundidad', 'Temperatura Suelo', 'Salinidad Suelo'];
+    }
+    if (type === 'Pluviometro') {
+      return ['Pluviometro'];
+    }
+    if (type === 'Estacion Meteorologica') {
+      return ['Temperatura', 'Humedad', 'Viento Velocidad', 'Pluviometro'];
+    }
+    return ['Otro'];
   }
 
   private isOnline(fecha?: string, minutes = 30): boolean {

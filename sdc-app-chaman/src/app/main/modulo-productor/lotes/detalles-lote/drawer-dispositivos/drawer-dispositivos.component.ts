@@ -41,7 +41,7 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
   private ultimoReporte?: IReporte;
   public datosLanza: MedicionProfundidad[] = [];
   public esLanzaDeSuelo = false;
-  public vistaActiva: 'tarjetas' | 'grafico' = 'tarjetas';
+  public vistaActiva: 'tarjetas' | 'grafico' = 'grafico';
 
   constructor(public helper: HelperService) {}
 

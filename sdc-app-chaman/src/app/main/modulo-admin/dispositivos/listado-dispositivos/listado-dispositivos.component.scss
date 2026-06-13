@@ -60,6 +60,8 @@ h1 {
 
 .metric-card,
 .gateway-panel,
+.mqtt-queue-panel,
+.mqtt-device-card,
 .gateway-card {
   border: 1px solid var(--p-content-border-color);
   border-radius: 8px;
@@ -98,6 +100,10 @@ h1 {
   padding: 16px;
 }
 
+.mqtt-queue-panel {
+  padding: 16px;
+}
+
 .panel-title {
   display: flex;
   justify-content: space-between;
@@ -118,6 +124,96 @@ h1 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.mqtt-device-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mqtt-device-card {
+  border-left: 4px solid #f59e0b;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.mqtt-device-card.mqtt-assigned {
+  border-left-color: #22c55e;
+}
+
+.mqtt-device-card.mqtt-new {
+  border-left-color: var(--p-primary-color);
+}
+
+.mqtt-device-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.mqtt-device-card h3 {
+  color: var(--p-text-color);
+  font-size: 1.2rem;
+  line-height: 1.15;
+  margin: 8px 0 4px;
+}
+
+.mqtt-device-card p {
+  color: var(--p-text-muted-color);
+  font-size: 0.98rem;
+  margin: 0;
+}
+
+.mqtt-badge {
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 999px;
+  color: var(--p-text-muted-color);
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 900;
+  min-height: 28px;
+  padding: 0 10px;
+  align-items: center;
+}
+
+.mqtt-assigned .mqtt-badge {
+  background: #ecfdf3;
+  color: #15803d;
+}
+
+.mqtt-new .mqtt-badge {
+  background: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
+  color: var(--p-primary-color);
+}
+
+.mqtt-meta-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.mqtt-meta-grid article {
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.mqtt-meta-grid span {
+  color: var(--p-text-muted-color);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.mqtt-meta-grid strong {
+  color: var(--p-text-color);
+  overflow-wrap: anywhere;
 }
 
 .gateway-card {
@@ -226,7 +322,12 @@ h1 {
 
 @media (max-width: 1200px) {
   .status-grid,
-  .gateway-grid {
+  .gateway-grid,
+  .mqtt-device-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mqtt-meta-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -246,8 +347,14 @@ h1 {
   }
 
   .status-grid,
-  .gateway-grid {
+  .gateway-grid,
+  .mqtt-device-grid,
+  .mqtt-meta-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mqtt-device-header {
+    display: grid;
   }
 
   h1 {

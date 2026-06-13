@@ -185,9 +185,9 @@ LoteSchema.virtual('siembra', {
 });
 
 LoteSchema.virtual('dispositivos', {
-  foreignField: '_id',
+  foreignField: 'idLote',
   justOne: false,
-  localField: 'idsDispositivo',
+  localField: '_id',
   ref: Dispositivo.name,
 });
 

@@ -37,6 +37,7 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
   public productores: IProductor[] = [];
   public establecimientos: IEstablecimiento[] = [];
   public lotes: ILote[] = [];
+  private prefillLorawan?: Partial<IDispositivo>;
 
   private productores$?: Subscription;
   private establecimientos$?: Subscription;
@@ -55,6 +56,7 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     'Humedad',
     'Humedad Suelo Superficial',
     'Humedad Suelo Profundidad',
+    'Salinidad Suelo',
     'Viento Velocidad',
     'Viento Dirección',
     'Pluviometro',
@@ -74,6 +76,10 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     public helper: HelperService,
     private listados: ListadosService
   ) {}
+
+  public get lorawanSource(): Partial<IDispositivo> | undefined {
+    return this.dispositivo || this.prefillLorawan;
+  }
 
   public get establecimientosFiltrados(): IEstablecimiento[] {
     const idProductor = this.form?.get('idProductor')?.value;
@@ -99,14 +105,15 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
   }
 
   private createForm(): void {
+    const source = this.dispositivo || this.prefillLorawan;
     this.form = new FormGroup({
-      nombre: new FormControl(this.dispositivo?.nombre),
-      deveui: new FormControl(this.dispositivo?.deveui, Validators.required),
-      tipo: new FormControl(this.dispositivo?.tipo || 'Otro', Validators.required),
-      sensores: new FormControl(this.dispositivo?.sensores || [], Validators.required),
-      idProductor: new FormControl(this.dispositivo?.idProductor),
-      idEstablecimiento: new FormControl(this.dispositivo?.idEstablecimiento),
-      idLote: new FormControl(this.dispositivo?.idLote),
+      nombre: new FormControl(source?.nombre),
+      deveui: new FormControl(source?.deveui, Validators.required),
+      tipo: new FormControl(source?.tipo || 'Otro', Validators.required),
+      sensores: new FormControl(source?.sensores || [], Validators.required),
+      idProductor: new FormControl(source?.idProductor),
+      idEstablecimiento: new FormControl(source?.idEstablecimiento),
+      idLote: new FormControl(source?.idLote),
     });
   }
 
@@ -205,13 +212,15 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
   private async cargarDispositivo(): Promise<void> {
     const id = this.route.snapshot.paramMap.get('id');
     const dispositivoEnMemoria = this.paramsService.get('editDispositivo') as IDispositivo | undefined;
+    this.prefillLorawan = this.paramsService.get('nuevoDispositivoLorawan') as Partial<IDispositivo> | undefined;
 
     if (id && dispositivoEnMemoria?._id !== id) {
       this.dispositivo = await this.service.getById(id);
+      this.prefillLorawan = undefined;
       return;
     }
 
-    this.dispositivo = dispositivoEnMemoria;
+    this.dispositivo = dispositivoEnMemoria?._id ? dispositivoEnMemoria : undefined;
   }
 
   async ngOnInit(): Promise<void> {

@@ -1,0 +1,235 @@
+.devices-card {
+  display: grid;
+  gap: 16px;
+}
+
+.devices-header {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.devices-title {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+
+.devices-title span {
+  color: var(--p-primary-color);
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.devices-title strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 1.35rem;
+  line-height: 1.15;
+}
+
+.devices-icon {
+  flex: none;
+  fill: var(--p-text-color);
+  height: 32px;
+  width: 32px;
+}
+
+.devices-count {
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 999px;
+  color: var(--p-text-muted-color);
+  font-weight: 800;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.devices-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+}
+
+.device-card {
+  border: 1px solid var(--p-content-border-color);
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.device-card.device-online {
+  border-left-color: #22c55e;
+}
+
+.device-card-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.device-card h3 {
+  color: var(--p-text-color);
+  font-size: 1.35rem;
+  line-height: 1.15;
+  margin: 8px 0 4px;
+}
+
+.device-card p {
+  color: var(--p-text-muted-color);
+  font-size: 1rem;
+  margin: 0;
+}
+
+.device-status {
+  align-items: center;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 999px;
+  color: var(--p-text-muted-color);
+  display: inline-flex;
+  font-size: 0.9rem;
+  font-weight: 900;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.device-status i {
+  color: #f59e0b;
+  font-size: 0.55rem;
+}
+
+.device-online .device-status {
+  background: #ecfdf3;
+  color: #15803d;
+}
+
+.device-online .device-status i {
+  color: #22c55e;
+}
+
+.device-meta-grid,
+.device-summary-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.device-meta-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.device-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.device-meta-grid article,
+.device-summary-grid article {
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.device-meta-grid span,
+.device-summary-grid span {
+  color: var(--p-text-muted-color);
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.device-meta-grid strong,
+.device-summary-grid strong {
+  color: var(--p-text-color);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.device-summary-grid strong {
+  color: var(--p-primary-color);
+  font-size: 1.2rem;
+}
+
+.depth-preview {
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.depth-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 56px minmax(80px, 1fr) minmax(90px, auto);
+}
+
+.depth-row span,
+.depth-row strong {
+  color: var(--p-text-color);
+  font-size: 0.95rem;
+}
+
+.depth-row strong {
+  text-align: right;
+}
+
+.depth-track {
+  background: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 999px;
+  height: 12px;
+  overflow: hidden;
+}
+
+.depth-fill {
+  background: linear-gradient(90deg, #7fd14f, var(--p-primary-color));
+  border-radius: 999px;
+  height: 100%;
+}
+
+.device-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 760px) {
+  .devices-header,
+  .device-card-header {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .devices-grid,
+  .device-meta-grid,
+  .device-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .devices-title strong,
+  .device-card h3 {
+    font-size: 1.18rem;
+  }
+
+  .depth-row {
+    grid-template-columns: 52px 1fr;
+  }
+
+  .depth-row strong {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .device-actions {
+    display: grid;
+  }
+}

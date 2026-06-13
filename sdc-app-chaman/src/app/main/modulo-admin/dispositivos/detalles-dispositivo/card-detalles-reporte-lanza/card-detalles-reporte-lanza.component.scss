@@ -1,28 +1,61 @@
+.soil-depth-card {
+  background: var(--p-content-background);
+  border: 1px solid var(--p-content-border-color);
+  border-left: 4px solid var(--p-primary-color);
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.soil-depth-card header {
+  align-items: baseline;
+  border-bottom: 1px solid var(--p-content-border-color);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding-bottom: 10px;
+}
+
+.soil-depth-card header span,
+.soil-metrics-grid span {
+  color: var(--p-text-muted-color);
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.soil-depth-card header strong {
+  color: var(--p-text-color);
+  font-size: 1.35rem;
+}
+
 .soil-metrics-grid {
   display: grid;
-  gap: 0.75rem;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.metric-value {
+.soil-metrics-grid section {
+  background: color-mix(in srgb, var(--p-primary-color) 5%, transparent);
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.soil-metrics-grid strong {
   align-items: baseline;
+  color: var(--p-text-color);
   display: flex;
   flex-wrap: wrap;
-  font-size: 1.35rem;
-  font-weight: 800;
-  gap: 0.2rem;
-  justify-content: center;
-  line-height: 1.1;
+  font-size: 1.22rem;
+  font-weight: 900;
+  gap: 4px;
 }
 
-.metric-unit {
+.soil-metrics-grid small {
   color: var(--p-text-muted-color);
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-@media (max-width: 560px) {
-  .soil-metrics-grid {
-    grid-template-columns: 1fr;
-  }
+  font-size: 0.82rem;
+  font-weight: 700;
 }

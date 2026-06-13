@@ -1,60 +1,48 @@
-<div class="custom-card flex flex-col h-full">
-  <div class="row-flex-start" style="gap: 0.5em; min-height: 32px">
-    <div class="titulo-card row-space-around w-full" style="gap: 0.5em">
-      <span>{{ 'Profundidad' | translate }}</span>
-      <span class="text-xl font-semibold">{{ data.profundidad }} cm</span>
+<article class="soil-depth-card">
+  <header>
+    <span>Profundidad</span>
+    <strong>{{ data.profundidad }} cm</strong>
+  </header>
+
+  @if (data) {
+    <div class="soil-metrics-grid">
+      <section>
+        <span>Humedad</span>
+        <strong>
+          @if (data.humedad) {
+            {{ data.humedad.actual | number: data.humedad.unidad === 'm3/m3' ? '1.3-3' : '1.1-1' }}
+            <small>{{ data.humedad.unidad }}</small>
+          } @else {
+            -
+          }
+        </strong>
+      </section>
+
+      <section>
+        <span>Salinidad</span>
+        <strong>
+          @if (data.salinidad) {
+            {{ data.salinidad.actual | number: '1.1-1' }}
+            <small>{{ data.salinidad.unidad }}</small>
+          } @else {
+            -
+          }
+        </strong>
+      </section>
+
+      <section>
+        <span>Temperatura</span>
+        <strong>
+          @if (data.temperatura) {
+            {{ data.temperatura.actual | number: '1.1-1' }}
+            <small>{{ data.temperatura.unidad }}</small>
+          } @else {
+            -
+          }
+        </strong>
+      </section>
     </div>
-  </div>
-
-  <div class="flex flex-col justify-center flex-grow">
-    <p-divider class="my-2" />
-
-    @if (data) {
-      <div class="soil-metrics-grid text-center">
-        <div class="column-center">
-          <span class="text-sm font-light text-surface-500">{{ 'Humedad' | translate }}</span>
-          <span class="metric-value">
-            @if (data.humedad) {
-              {{ data.humedad.actual | number: data.humedad.unidad === 'm3/m3' ? '1.3-3' : '1.1-1' }}
-              <span class="metric-unit">{{ data.humedad.unidad }}</span>
-            } @else {
-              -
-            }
-          </span>
-        </div>
-
-        <div class="column-center">
-          <span class="text-sm font-light text-surface-500">{{ 'Salinidad' | translate }}</span>
-          <span class="metric-value">
-            @if (data.salinidad) {
-              {{ data.salinidad.actual | number: '1.1-1' }}
-              <span class="metric-unit">{{ data.salinidad.unidad }}</span>
-            } @else {
-              -
-            }
-          </span>
-        </div>
-
-        <div class="column-center">
-          <span class="text-sm font-light text-surface-500">{{ 'Temperatura' | translate }}</span>
-          <span class="metric-value">
-            @if (data.temperatura) {
-              {{ data.temperatura.actual | number: '1.1-1' }}
-              <span class="metric-unit">{{ data.temperatura.unidad }}</span>
-            } @else {
-              -
-            }
-          </span>
-        </div>
-      </div>
-    } @else {
-      <p-message
-        class="custom-message"
-        severity="info"
-        [text]="'Sin datos para esta profundidad' | translate"
-      ></p-message>
-    }
-
-    <p-divider class="my-2" />
-  </div>
-</div>
+  } @else {
+    <p-message severity="info">Sin datos para esta profundidad.</p-message>
+  }
+</article>

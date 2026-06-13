@@ -208,9 +208,13 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   async ngOnInit(): Promise<void> {
     this.lote = this.paramsService.get('detallesLote') || undefined;
     const idLote = this.activatedRoute.snapshot.paramMap.get('id');
-    if (!this.lote && idLote) {
+    if (idLote) {
       try {
-        this.lote = (await this.loteService.listarPorId(idLote)) as IDetallesLote;
+        const loteActualizado = (await this.loteService.listarPorId(idLote)) as IDetallesLote;
+        this.lote = {
+          ...(this.lote || {}),
+          ...loteActualizado,
+        };
       } catch (error) {
         this.helper.notifError(error);
       }

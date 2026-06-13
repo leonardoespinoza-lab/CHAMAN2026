@@ -6,8 +6,8 @@
         <h1>{{ titulo?.() }}</h1>
         <p>Alta manual o edicion de sensores detectados por MQTT. Despues se vinculan a productor, campo y lote.</p>
       </div>
-      @if (dispositivo?.fechaUltimaComunicacion) {
-        <span class="last-seen">Ultimo reporte: {{ dispositivo?.fechaUltimaComunicacion | date: 'short' }}</span>
+      @if (lorawanSource?.fechaUltimaComunicacion) {
+        <span class="last-seen">Ultimo reporte: {{ lorawanSource?.fechaUltimaComunicacion | date: 'short' }}</span>
       }
     </header>
 
@@ -110,19 +110,19 @@
               <div class="lorawan-readonly">
                 <article>
                   <span>Gateway</span>
-                  <strong>{{ dispositivo?.metadata?.gatewayID || '-' }}</strong>
+                  <strong>{{ lorawanSource?.metadata?.gatewayID || '-' }}</strong>
                 </article>
                 <article>
                   <span>Aplicacion</span>
-                  <strong>{{ dispositivo?.metadata?.applicationName || dispositivo?.metadata?.applicationID || '-' }}</strong>
+                  <strong>{{ lorawanSource?.metadata?.applicationName || lorawanSource?.metadata?.applicationID || '-' }}</strong>
                 </article>
                 <article>
                   <span>RSSI / SNR</span>
-                  <strong>{{ dispositivo?.metadata?.rssi ?? '--' }} dBm / {{ dispositivo?.metadata?.snr ?? '--' }} dB</strong>
+                  <strong>{{ lorawanSource?.metadata?.rssi ?? '--' }} dBm / {{ lorawanSource?.metadata?.snr ?? '--' }} dB</strong>
                 </article>
                 <article>
                   <span>Contador</span>
-                  <strong>{{ dispositivo?.metadata?.fCnt ?? '-' }}</strong>
+                  <strong>{{ lorawanSource?.metadata?.fCnt ?? '-' }}</strong>
                 </article>
               </div>
             </p-tabpanel>

@@ -25,7 +25,7 @@ export class LotesRepository {
   async getById(id: string): Promise<Lote> {
     return await this.model
       .findById(id)
-      .populate('establecimiento departamento siembra')
+      .populate('establecimiento departamento siembra dispositivos')
       .lean();
   }
 

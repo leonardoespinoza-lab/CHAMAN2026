@@ -63,6 +63,57 @@
         }
       </div>
     </div>
+
+    <div class="mqtt-queue-panel">
+      <div class="panel-title">
+        <div>
+          <h2>Cola MQTT detectada</h2>
+          <span>Uplinks recibidos desde EMQX listos para agregar o asignar.</span>
+        </div>
+        <span>{{ detectedUplinks.length || 0 }} DevEUI detectado{{ detectedUplinks.length === 1 ? '' : 's' }}</span>
+      </div>
+
+      <div class="mqtt-device-grid">
+        @for (uplink of detectedUplinks; track uplink.devEUI) {
+          <article class="mqtt-device-card" [ngClass]="assignmentClass(uplink)">
+            <div class="mqtt-device-header">
+              <div>
+                <span class="mqtt-badge">{{ assignmentLabel(uplink) }}</span>
+                <h3>{{ uplink.deviceName || uplink.devEUI || 'Dispositivo MQTT' }}</h3>
+                <p>{{ inferredLabel(uplink) }}</p>
+              </div>
+              <p-button
+                [label]="deviceForUplink(uplink) ? 'Asignar / editar' : 'Agregar a Chaman'"
+                icon="pi pi-link"
+                [outlined]="true"
+                (onClick)="addOrAssignFromUplink(uplink)"
+              />
+            </div>
+
+            <div class="mqtt-meta-grid">
+              <article>
+                <span>DevEUI</span>
+                <strong>{{ uplink.devEUI || '-' }}</strong>
+              </article>
+              <article>
+                <span>Gateway</span>
+                <strong>{{ uplink.gatewayID || '-' }}</strong>
+              </article>
+              <article>
+                <span>Senal</span>
+                <strong>{{ uplinkSignal(uplink) }}</strong>
+              </article>
+              <article>
+                <span>Ultimo uplink</span>
+                <strong>{{ uplink.timestamp ? (uplink.timestamp | date: 'short') : '-' }}</strong>
+              </article>
+            </div>
+          </article>
+        } @empty {
+          <p-message severity="info">Todavia no hay uplinks MQTT detectados.</p-message>
+        }
+      </div>
+    </div>
   </section>
 
   <p-table
