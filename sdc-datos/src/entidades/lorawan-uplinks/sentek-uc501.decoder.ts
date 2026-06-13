@@ -36,7 +36,7 @@ const SENSOR_BY_METRIC: Record<SentekMetric, SensoresV2> = {
 };
 
 const UNIT_BY_METRIC: Record<SentekMetric, string> = {
-  humedad: 'm3/m3',
+  humedad: 'indice',
   salinidad: 'mS/m',
   temperatura: 'C',
 };

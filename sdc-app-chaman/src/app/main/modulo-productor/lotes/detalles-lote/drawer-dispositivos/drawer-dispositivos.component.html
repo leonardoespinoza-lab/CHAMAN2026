@@ -1,63 +1,88 @@
-<!-- Resumen del servicio monitoreo de enfermedades-->
-<p-drawer
-  #drawerRef
+<p-dialog
   [(visible)]="visible"
-  [position]="(helper.isWide$ | async) ? 'right' : 'bottom'"
-  [style]="{
-    'margin-top': (helper.isWide$ | async) ? '58px' : '0',
-    height: (helper.isWide$ | async) ? 'calc(100% - 58px)' : 'auto',
-    'max-height': (helper.isWide$ | async) ? 'calc(100% - 58px)' : '70%',
-    'border-radius': (helper.isWide$ | async) ? '30px 0 0 30px' : '30px 30px 0 0',
-    overflow: 'auto',
-    width: (helper.isWide$ | async) ? '920px' : '100%',
-    'max-width': (helper.isWide$ | async) ? '92vw' : '100%',
-  }"
   [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="true"
+  [style]="{ width: 'min(1120px, 94vw)', 'max-height': '92vh' }"
+  [contentStyle]="{ 'max-height': 'calc(92vh - 110px)', overflow: 'auto' }"
+  styleClass="soil-device-dialog"
   (onHide)="visibleChange.emit(false)"
-  [closable]="true"
 >
   <ng-template #header>
-    <div class="row-space-between" style="gap: 5px; width: 100%">
-      <span class="font-bold whitespace-nowrap">{{ dispositivo?.nombre }}</span>
-      <div style="display: flex; align-items: center; gap: 1em">
-        <!-- Selector de vista solo para lanzas de suelo -->
+    <div class="device-dialog-header">
+      <div>
+        <span class="device-kicker">Dispositivo</span>
+        <strong>{{ dispositivo?.nombre || 'Sensor sin nombre' }}</strong>
+        <small>{{ dispositivo?.deveui || 'Sin devEUI' }}</small>
+      </div>
+
+      <div class="device-dialog-actions">
         @if (esLanzaDeSuelo && datosLanza.length > 0) {
           <p-selectButton
             [options]="[
               { label: 'Curvas', value: 'grafico', icon: 'pi pi-chart-line' },
-              { label: 'Tarjetas', value: 'tarjetas', icon: 'pi pi-th-large' },
+              { label: 'Tabla', value: 'tabla', icon: 'pi pi-table' },
             ]"
             [(ngModel)]="vistaActiva"
             optionLabel="label"
             optionValue="value"
-            [style]="{ 'font-size': '12px' }"
-          >
-          </p-selectButton>
+          />
         }
         <app-ubicar [dispositivo]="dispositivo"></app-ubicar>
       </div>
     </div>
   </ng-template>
+
   @if (esLanzaDeSuelo) {
-    <div style="display: flex; flex-direction: column; gap: 1em">
-      @if (vistaActiva === 'tarjetas') {
-        <!-- Vista de tarjetas (actual) -->
-        <div style="display: flex; flex-direction: row; gap: 1em">
-          <div class="contenedor-tarjetas">
-            @for (dato of datosLanza; track dato.profundidad) {
-              <app-card-detalles-reporte-lanza [data]="dato" />
-            }
-          </div>
-        </div>
-      } @else if (vistaActiva === 'grafico') {
-        <!-- Vista de gráfico (nueva) -->
-        <div style="display: flex; flex-direction: column; gap: 1em">
+    @if (datosLanza.length > 0) {
+      <section class="soil-device-content">
+        @if (vistaActiva === 'grafico') {
           <app-grafico-perfil-suelo
             [datos]="datosLanza"
             [titulo]="'Perfil Sentek - ' + dispositivo?.nombre"
           ></app-grafico-perfil-suelo>
-        </div>
-      }
-    </div>
+        } @else {
+          <div class="sensor-table-wrap">
+            <table class="sensor-table">
+              <thead>
+                <tr>
+                  <th>Profundidad</th>
+                  <th>Humedad</th>
+                  <th>Salinidad</th>
+                  <th>Temperatura</th>
+                  @if (tieneDatosCrudos) {
+                    <th>Lectura cruda humedad</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (dato of datosLanza; track dato.profundidad) {
+                  <tr>
+                    <td>{{ dato.profundidad }} cm</td>
+                    <td>{{ formatearMedicion(dato.humedad) }}</td>
+                    <td>{{ formatearMedicion(dato.salinidad) }}</td>
+                    <td>{{ formatearMedicion(dato.temperatura) }}</td>
+                    @if (tieneDatosCrudos) {
+                      <td>
+                        @if (dato.humedad?.crudo !== undefined) {
+                          {{ dato.humedad?.crudo | number: '1.3-3' }} {{ dato.humedad?.unidadCruda }}
+                        } @else {
+                          -
+                        }
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    } @else {
+      <p-message severity="info">La lanza no tiene lecturas procesadas todavia.</p-message>
+    }
+  } @else {
+    <p-message severity="info">Este dispositivo no tiene perfil de suelo disponible.</p-message>
   }
-</p-drawer>
+</p-dialog>

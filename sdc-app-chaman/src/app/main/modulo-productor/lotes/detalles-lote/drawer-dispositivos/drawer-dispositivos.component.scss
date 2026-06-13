@@ -1,36 +1,124 @@
-p-divider {
-  margin-top: 0.25em;
-  margin-bottom: 0.25em;
+:host ::ng-deep .soil-device-dialog {
+  border-radius: 18px;
+  overflow: hidden;
 }
 
-.contenedor-tarjetas {
-  display: grid;
+:host ::ng-deep .soil-device-dialog .p-dialog-header {
+  padding: 1rem 1.25rem;
+}
+
+:host ::ng-deep .soil-device-dialog .p-dialog-content {
+  padding: 0 1.25rem 1.25rem;
+}
+
+.device-dialog-header {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
   width: 100%;
-  gap: 1rem; // Espacio entre las tarjetas
-
-  // --- Columna Responsiva Automática ---
-  // Crea tantas columnas como quepan, con un ancho mínimo de 160px cada una.
-  // Esto generará una cuadrícula de 2 columnas en la mayoría de los teléfonos
-  // y se adaptará a pantallas más grandes sin necesidad de media queries.
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-
-  // --- CORRECCIÓN DE ALTURA ---
-  // Evita que las tarjetas se estiren verticalmente.
-  // Cada tarjeta ahora tendrá la altura que su contenido requiera.
-  align-items: start;
 }
 
-// Estilos para el selector de vista en el header
-:host ::ng-deep {
-  .p-selectbutton {
-    .p-button {
-      font-size: 12px !important;
-      padding: 0.4rem 0.8rem !important;
-    }
-    
-    .pi {
-      font-size: 12px !important;
-      margin-right: 0.3rem !important;
-    }
+.device-dialog-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.device-dialog-header strong {
+  color: var(--p-text-color);
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+.device-dialog-header small,
+.device-kicker {
+  color: var(--p-text-muted-color);
+  font-size: 0.82rem;
+}
+
+.device-kicker {
+  color: var(--p-primary-color);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.device-dialog-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.soil-device-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sensor-table-wrap {
+  border: 1px solid var(--p-surface-border);
+  border-radius: 14px;
+  overflow: auto;
+}
+
+.sensor-table {
+  border-collapse: collapse;
+  font-size: 0.96rem;
+  min-width: 760px;
+  width: 100%;
+}
+
+.sensor-table th,
+.sensor-table td {
+  border-bottom: 1px solid var(--p-surface-border);
+  padding: 0.85rem 1rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sensor-table th {
+  background: var(--p-surface-50);
+  color: var(--p-text-muted-color);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.sensor-table td:first-child {
+  color: var(--p-text-color);
+  font-weight: 800;
+}
+
+.sensor-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+:host ::ng-deep .p-selectbutton .p-button {
+  font-size: 0.86rem;
+  padding: 0.5rem 0.85rem;
+}
+
+:host ::ng-deep .p-selectbutton .pi {
+  font-size: 0.9rem;
+  margin-right: 0.35rem;
+}
+
+@media (max-width: 720px) {
+  .device-dialog-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .device-dialog-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .sensor-table {
+    font-size: 0.9rem;
   }
 }

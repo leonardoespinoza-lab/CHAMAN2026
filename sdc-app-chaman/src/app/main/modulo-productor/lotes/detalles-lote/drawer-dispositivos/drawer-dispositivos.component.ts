@@ -13,10 +13,10 @@ import { IDispositivo, IReporte } from 'modelos/src';
 import { UbicarComponent } from '../../../../../auxiliares/componentes/ubicar/ubicar.component';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
-import { CardDetallesReporteLanzaComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/card-detalles-reporte-lanza/card-detalles-reporte-lanza.component';
 import { GraficoPerfilSueloComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-perfil-suelo/grafico-perfil-suelo.component';
 import {
   buildSentekProfile,
+  MedicionSensorProfundidad,
   MedicionProfundidad,
 } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/sentek-profile';
 
@@ -25,7 +25,6 @@ import {
   imports: [
     CommonModule,
     SharedModule,
-    CardDetallesReporteLanzaComponent,
     GraficoPerfilSueloComponent,
     UbicarComponent,
   ],
@@ -41,7 +40,7 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
   private ultimoReporte?: IReporte;
   public datosLanza: MedicionProfundidad[] = [];
   public esLanzaDeSuelo = false;
-  public vistaActiva: 'tarjetas' | 'grafico' = 'grafico';
+  public vistaActiva: 'tabla' | 'grafico' = 'grafico';
 
   constructor(public helper: HelperService) {}
 
@@ -62,8 +61,19 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
     }
   }
 
-  public cambiarVista(vista: 'tarjetas' | 'grafico'): void {
+  public cambiarVista(vista: 'tabla' | 'grafico'): void {
     this.vistaActiva = vista;
+  }
+
+  public formatearMedicion(medicion?: MedicionSensorProfundidad): string {
+    if (!medicion) {
+      return '-';
+    }
+    return `${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 }).format(medicion.actual)} ${medicion.unidad}`;
+  }
+
+  public get tieneDatosCrudos(): boolean {
+    return this.datosLanza.some((dato) => !!dato.humedad?.crudo);
   }
 
   private refreshFromDevice(): void {

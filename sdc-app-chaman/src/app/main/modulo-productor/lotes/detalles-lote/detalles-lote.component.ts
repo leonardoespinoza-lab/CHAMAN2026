@@ -5,6 +5,7 @@ import { ICrono, IFertilizacion, IFumigacion, IQueryParam, ISiembra } from 'mode
 import { ConfirmationService } from 'primeng/api';
 import { FenologiaService } from '../../../../auxiliares/http/fenologia.service';
 import { LoteService } from '../../../../auxiliares/http/lote.service';
+import { SiembraService } from '../../../../auxiliares/http/siembra.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { ParamsService } from '../../../../auxiliares/servicios/params.service';
@@ -69,21 +70,35 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     private fenologiaService: FenologiaService,
     private activatedRoute: ActivatedRoute,
     private loteService: LoteService,
+    private siembraService: SiembraService,
     private listado: ListadosService,
     private confirmationService: ConfirmationService,
     private translate: TranslateService
   ) {}
 
   public verSiembraActual(): void {
-    if (!this.lote?.siembra) return;
-    this.siembra = JSON.parse(JSON.stringify(this.lote.siembra));
-    this.siembraActual = true;
+    const siembra = this.getSiembraOperativa();
+    if (!siembra) {
+      this.siembra = undefined;
+      this.siembraActual = false;
+      return;
+    }
+    this.siembra = JSON.parse(JSON.stringify(siembra));
+    this.siembraActual = !this.siembra?.fechaCosecha;
   }
 
-  public selectSiembra(siembra: ISiembra): void {
+  public async selectSiembra(siembra: ISiembra): Promise<void> {
     if (!siembra) return;
-    this.siembra = JSON.parse(JSON.stringify(siembra));
-    this.siembraActual = this.lote?.idSiembra === siembra._id;
+    let siembraCompleta = siembra as IDetalleSiembra;
+    if (siembra._id && (!siembra.semilla || !siembra.crono)) {
+      siembraCompleta = (await this.siembraService.listarPorId(siembra._id)) as IDetalleSiembra;
+    }
+    await this.completarCronoSiembra(siembraCompleta);
+    this.siembra = JSON.parse(JSON.stringify(siembraCompleta));
+    this.siembraActual = this.lote?.idSiembra === siembra._id && !siembraCompleta.fechaCosecha;
+    if (this.siembraActual && this.lote) {
+      this.lote.siembra = siembraCompleta;
+    }
   }
 
   public async sembrar(): Promise<void> {
@@ -218,8 +233,53 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
       }
     }
 
-    await this.completarCronoSiembra(this.lote?.siembra);
+    await this.hidratarSiembraOperativa();
     this.verSiembraActual();
+  }
+
+  private getSiembraOperativa(): IDetalleSiembra | undefined {
+    const siembra = this.lote?.siembra as IDetalleSiembra | undefined;
+    if (siembra?._id || siembra?.fechaSiembra) {
+      return siembra;
+    }
+
+    const siembras = ((this.lote as unknown as { siembras?: IDetalleSiembra[] })?.siembras || [])
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.fechaSiembra || 0).getTime() - new Date(a.fechaSiembra || 0).getTime());
+
+    if (!siembras.length) {
+      return undefined;
+    }
+
+    return (
+      siembras.find((item) => item._id === this.lote?.idSiembra) ||
+      siembras.find((item) => !item.fechaCosecha) ||
+      siembras[0]
+    );
+  }
+
+  private async hidratarSiembraOperativa(): Promise<void> {
+    let siembra = this.getSiembraOperativa();
+    if (!siembra) {
+      return;
+    }
+
+    if (siembra._id && (!siembra.semilla || !siembra.crono)) {
+      try {
+        siembra = {
+          ...siembra,
+          ...((await this.siembraService.listarPorId(siembra._id)) as IDetalleSiembra),
+        };
+      } catch (error) {
+        this.helper.notifError(error);
+      }
+    }
+
+    await this.completarCronoSiembra(siembra);
+    if (this.lote) {
+      this.lote.siembra = siembra;
+      this.lote.idSiembra = this.lote.idSiembra || siembra._id;
+    }
   }
 
   private async completarCronoSiembra(siembra?: ISiembra): Promise<void> {

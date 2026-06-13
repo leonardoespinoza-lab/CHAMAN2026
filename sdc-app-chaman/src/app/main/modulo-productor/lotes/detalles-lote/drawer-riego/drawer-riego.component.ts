@@ -21,6 +21,7 @@ import { IDispositivo } from 'modelos/src';
 import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
+import { buildSentekProfile } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/sentek-profile';
 import { IDetalleSiembra, IDetallesLote } from '../detalles-lote.component';
 
 // Importar e inicializar el módulo de heatmap
@@ -352,40 +353,19 @@ export class DrawerRiegoComponent implements OnInit, OnDestroy, AfterViewInit, O
   }
 
   private procesarReporteLanza(dispositivo: IDispositivo): MedicionProfundidad[] {
-    const ultimoReporte = dispositivo.ultimoReporte;
-    const reportHumedad = ultimoReporte?.datos?.valores?.['Humedad Suelo Profundidad'];
-    const reportTemp = ultimoReporte?.datos?.valores?.['Temperatura Suelo'];
-
-    if (!Array.isArray(reportHumedad) || !Array.isArray(reportTemp)) {
-      return [];
-    }
-
-    return reportHumedad.reduce((acc: MedicionProfundidad[], medicionHumedad) => {
-      const medicionTemp = reportTemp.find((temp: any) => temp.profundidad === medicionHumedad.profundidad);
-
-      if (
-        medicionHumedad.profundidad != null &&
-        medicionHumedad.valores?.actual != null &&
-        medicionHumedad.unidad &&
-        medicionTemp &&
-        medicionTemp.valores?.actual != null &&
-        medicionTemp.unidad
-      ) {
-        acc.push({
-          profundidad: medicionHumedad.profundidad,
-          humedad: {
-            actual: medicionHumedad.valores.actual,
-            unidad: medicionHumedad.unidad,
-          },
-          temperatura: {
-            actual: medicionTemp.valores.actual,
-            unidad: medicionTemp.unidad,
-          },
-        });
-      }
-
-      return acc;
-    }, []);
+    return buildSentekProfile(dispositivo.ultimoReporte)
+      .filter((medicion) => medicion.humedad && medicion.temperatura)
+      .map((medicion) => ({
+        profundidad: medicion.profundidad,
+        humedad: {
+          actual: medicion.humedad!.actual,
+          unidad: medicion.humedad!.unidad,
+        },
+        temperatura: {
+          actual: medicion.temperatura!.actual,
+          unidad: medicion.temperatura!.unidad,
+        },
+      }));
   }
 
   private getColorForDevice(index: number, alpha: number = 1): string {

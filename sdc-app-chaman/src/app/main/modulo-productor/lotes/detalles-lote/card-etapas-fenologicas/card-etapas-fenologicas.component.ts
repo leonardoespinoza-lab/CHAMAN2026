@@ -130,7 +130,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       return;
     }
 
-    const cultivo = siembra.semilla.cultivo;
+    const cultivo = this.canonicalCultivo(siembra.semilla.cultivo);
     const etapasCrono = crono?.etapas as Record<string, number | string> | undefined;
     const etapasDisponibles = this.getEtapasDisponibles(cultivo, siembra.semilla, etapasCrono);
     const fechaBase = new Date(siembra.fechaSiembra);
@@ -138,7 +138,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     let etapaActualNumero = -1;
     let etapasConfig: { nombres: string[]; claves: string[] } = { nombres: [], claves: [] };
 
-    this.cultivo = cultivo;
+    this.cultivo = siembra.semilla.cultivo || cultivo;
     this.cultivoClass = `cultivo-${this.normalizarCultivo(cultivo)}`;
 
     switch (cultivo) {
@@ -269,6 +269,27 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase();
+  }
+
+  private canonicalCultivo(cultivo?: string): string {
+    const normalizado = (cultivo || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+    const cultivos: Record<string, string> = {
+      trigo: 'Trigo',
+      soja: 'Soja',
+      maiz: 'Maiz',
+      papa: 'Papa',
+      vid: 'Vid',
+      peral: 'Peral',
+      pecan: 'Pecan',
+      manzano: 'Manzano',
+    };
+
+    return cultivos[normalizado] || cultivo || 'Cultivo';
   }
 
   private crearEtapasGenericas(etapas?: Record<string, number>): { nombres: string[]; claves: string[] } {

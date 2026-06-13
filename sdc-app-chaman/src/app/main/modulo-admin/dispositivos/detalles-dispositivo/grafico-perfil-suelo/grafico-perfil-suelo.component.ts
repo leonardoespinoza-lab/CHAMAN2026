@@ -22,6 +22,13 @@ interface SoilMetricChart {
   options: any;
 }
 
+interface SoilPoint {
+  x: number;
+  y: number;
+  raw?: number;
+  rawUnit?: string;
+}
+
 @Component({
   selector: 'app-grafico-perfil-suelo',
   imports: [SharedModule, ChartComponent],
@@ -96,7 +103,7 @@ export class GraficoPerfilSueloComponent implements OnChanges {
       return null;
     }
 
-    const valores = data.map(([value]) => Number(value));
+    const valores = data.map((point) => Number(point.x));
     const promedio = valores.reduce((acc, value) => acc + value, 0) / valores.length;
 
     return {
@@ -126,6 +133,7 @@ export class GraficoPerfilSueloComponent implements OnChanges {
       },
       title: { text: undefined },
       xAxis: definitions.map((definition, index) => ({
+        ...this.getAxisBounds(definition),
         title: {
           text: `${definition.title} (${definition.unit})`,
           style: {
@@ -175,7 +183,7 @@ export class GraficoPerfilSueloComponent implements OnChanges {
     };
   }
 
-  private getSingleChartOptions(data: number[][], definition: SoilMetricDefinition): any {
+  private getSingleChartOptions(data: SoilPoint[], definition: SoilMetricDefinition): any {
     return {
       chart: {
         backgroundColor: 'transparent',
@@ -193,6 +201,7 @@ export class GraficoPerfilSueloComponent implements OnChanges {
       },
       title: { text: undefined },
       xAxis: {
+        ...this.getAxisBounds(definition),
         title: {
           text: `${definition.title} (${definition.unit})`,
           style: {
@@ -237,10 +246,15 @@ export class GraficoPerfilSueloComponent implements OnChanges {
     };
   }
 
-  private getSeriesData(datos: MedicionProfundidad[], key: SoilMetricKey): number[][] {
+  private getSeriesData(datos: MedicionProfundidad[], key: SoilMetricKey): SoilPoint[] {
     return datos
       .filter((row) => row[key])
-      .map((row) => [row[key]!.actual, row.profundidad]);
+      .map((row) => ({
+        x: row[key]!.actual,
+        y: row.profundidad,
+        raw: row[key]!.crudo,
+        rawUnit: row[key]!.unidadCruda,
+      }));
   }
 
   private getUnit(datos: MedicionProfundidad[], key: SoilMetricKey, fallback: string): string {
@@ -290,6 +304,14 @@ export class GraficoPerfilSueloComponent implements OnChanges {
       borderColor: 'var(--p-surface-border)',
       borderRadius: 8,
       borderWidth: 1,
+      formatter: function (this: any) {
+        const point = this.point as any;
+        const raw =
+          point.raw !== undefined && point.rawUnit
+            ? `<br/><span>Lectura cruda: <strong>${Number(point.raw).toFixed(3)} ${point.rawUnit}</strong></span>`
+            : '';
+        return `<span style="color:${this.series.color}">●</span> ${this.series.name}: <strong>${Number(point.x).toFixed(1)}</strong><br/>Profundidad: ${point.y} cm${raw}`;
+      },
       pointFormat: '<span style="color:{series.color}">●</span> {series.name}: <strong>{point.x:.1f}</strong><br/>Profundidad: {point.y} cm',
       shadow: true,
       style: {
@@ -297,6 +319,13 @@ export class GraficoPerfilSueloComponent implements OnChanges {
         fontSize: '13px',
       },
     };
+  }
+
+  private getAxisBounds(definition: SoilMetricDefinition): any {
+    if (definition.key === 'humedad') {
+      return { min: 0, max: 100 };
+    }
+    return {};
   }
 
   private getPlotOptions(): any {

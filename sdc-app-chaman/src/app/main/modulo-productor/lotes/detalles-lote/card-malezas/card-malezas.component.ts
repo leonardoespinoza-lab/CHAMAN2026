@@ -5,6 +5,7 @@ import { MalezaService } from '../../../../../auxiliares/http/maleza.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
+import { buildSentekProfile } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/sentek-profile';
 
 const CULTIVOS_CON_PREDICCION_MALEZAS = ['Soja', 'Trigo', 'Maiz'];
 
@@ -173,9 +174,10 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
 
   private humedadSueloReferencia(): number | undefined {
     const dispositivo = this.lote?.dispositivos?.find((d) => d.tipo === 'Sensor de Humedad de Suelo');
-    const valor = this.promedioValoresSensor(dispositivo, 'Humedad Suelo Profundidad');
-    if (valor === undefined) return undefined;
-    return valor > 1 ? valor / 100 : valor;
+    const perfil = buildSentekProfile(dispositivo?.ultimoReporte);
+    const humedad = this.promedio(perfil.map((dato) => dato.humedad?.actual));
+    if (humedad === undefined) return undefined;
+    return Math.max(0, Math.min(1, humedad / 100));
   }
 
   private promedioValoresSensor(dispositivo: IDispositivo | undefined, sensor: string): number | undefined {

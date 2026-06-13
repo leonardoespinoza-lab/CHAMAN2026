@@ -8,20 +8,20 @@
     <div class="crop-detail-grid">
       <div>
         <span>Cultivo</span>
-        <strong>{{ lote?.siembra?.semilla?.cultivo || '-' }}</strong>
+        <strong>{{ siembra?.semilla?.cultivo || '-' }}</strong>
       </div>
       <div>
         <span>Variedad</span>
         <strong>
-          {{ lote?.siembra?.semilla?.variedad || '-' }}
-          @if (lote?.siembra?.semilla?.ciclo) {
-            <small>{{ lote?.siembra?.semilla?.ciclo }}</small>
+          {{ siembra?.semilla?.variedad || '-' }}
+          @if (siembra?.semilla?.ciclo) {
+            <small>{{ siembra?.semilla?.ciclo }}</small>
           }
         </strong>
       </div>
       <div>
         <span>Siembra</span>
-        <strong>{{ lote?.siembra?.fechaSiembra | date: 'd/M/yy' }}</strong>
+        <strong>{{ siembra?.fechaSiembra | date: 'd/M/yy' }}</strong>
       </div>
     </div>
 
