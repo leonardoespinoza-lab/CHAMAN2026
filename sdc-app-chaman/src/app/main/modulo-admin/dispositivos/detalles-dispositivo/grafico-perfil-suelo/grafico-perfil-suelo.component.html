@@ -1,4 +1,15 @@
-@if (metricCharts.length > 0) {
+@if (combinedChart && metricCharts.length > 0) {
+  <article class="soil-chart-card soil-chart-card-combined">
+    <header>
+      <div>
+        <span>{{ titulo || 'Perfil Sentek' }}</span>
+        <strong>Curvas combinadas por profundidad</strong>
+      </div>
+      <small>Humedad / salinidad / temperatura</small>
+    </header>
+    <app-chart [options]="combinedChart"></app-chart>
+  </article>
+
   <div class="soil-chart-grid">
     @for (chart of metricCharts; track chart.key) {
       <article class="soil-chart-card">

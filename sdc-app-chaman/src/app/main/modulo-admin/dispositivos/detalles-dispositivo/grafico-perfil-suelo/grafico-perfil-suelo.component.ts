@@ -4,8 +4,18 @@ import { ChartComponent } from '../../../../../auxiliares/componentes/chart/char
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { MedicionProfundidad } from '../sentek-profile';
 
+type SoilMetricKey = 'humedad' | 'salinidad' | 'temperatura';
+
+interface SoilMetricDefinition {
+  key: SoilMetricKey;
+  title: string;
+  unit: string;
+  color: string;
+  decimals: number;
+}
+
 interface SoilMetricChart {
-  key: 'humedad' | 'salinidad' | 'temperatura';
+  key: SoilMetricKey;
   title: string;
   unit: string;
   summary: string;
@@ -22,6 +32,7 @@ export class GraficoPerfilSueloComponent implements OnChanges {
   @Input() datos: MedicionProfundidad[] = [];
   @Input() titulo?: string;
 
+  public combinedChart?: any;
   public metricCharts: SoilMetricChart[] = [];
 
   constructor(private translate: TranslateService) {}
@@ -34,49 +45,52 @@ export class GraficoPerfilSueloComponent implements OnChanges {
 
   private crearGraficosPerfil(): void {
     if (!this.datos.length) {
+      this.combinedChart = undefined;
       this.metricCharts = [];
       return;
     }
 
     const datosOrdenados = [...this.datos].sort((a, b) => a.profundidad - b.profundidad);
-    this.metricCharts = [
-      this.buildMetricChart(datosOrdenados, {
-        key: 'humedad',
-        title: this.translate.instant('Humedad de suelo'),
-        unit: 'm3/m3',
-        color: '#2f9fe8',
-        decimals: 3,
-      }),
-      this.buildMetricChart(datosOrdenados, {
-        key: 'salinidad',
-        title: this.translate.instant('Salinidad'),
-        unit: 'mS/m',
-        color: '#8e44ad',
-        decimals: 1,
-      }),
-      this.buildMetricChart(datosOrdenados, {
-        key: 'temperatura',
-        title: this.translate.instant('Temperatura'),
-        unit: 'C',
-        color: '#e74c3c',
-        decimals: 1,
-      }),
-    ].filter(Boolean) as SoilMetricChart[];
+    const definitions = this.getMetricDefinitions(datosOrdenados).filter((definition) =>
+      datosOrdenados.some((row) => !!row[definition.key])
+    );
+
+    this.combinedChart = definitions.length
+      ? this.getCombinedChartOptions(datosOrdenados, definitions)
+      : undefined;
+    this.metricCharts = definitions
+      .map((definition) => this.buildMetricChart(datosOrdenados, definition))
+      .filter(Boolean) as SoilMetricChart[];
   }
 
-  private buildMetricChart(
-    datos: MedicionProfundidad[],
-    definition: {
-      key: 'humedad' | 'salinidad' | 'temperatura';
-      title: string;
-      unit: string;
-      color: string;
-      decimals: number;
-    }
-  ): SoilMetricChart | null {
-    const data = datos
-      .filter((row) => row[definition.key])
-      .map((row) => [row[definition.key]!.actual, row.profundidad]);
+  private getMetricDefinitions(datos: MedicionProfundidad[]): SoilMetricDefinition[] {
+    return [
+      {
+        key: 'humedad',
+        title: this.translate.instant('Humedad de suelo'),
+        unit: this.getUnit(datos, 'humedad', '%'),
+        color: '#2f9fe8',
+        decimals: 1,
+      },
+      {
+        key: 'salinidad',
+        title: this.translate.instant('Salinidad'),
+        unit: this.getUnit(datos, 'salinidad', 'mS/m'),
+        color: '#8e44ad',
+        decimals: 1,
+      },
+      {
+        key: 'temperatura',
+        title: this.translate.instant('Temperatura'),
+        unit: this.getUnit(datos, 'temperatura', 'C'),
+        color: '#e74c3c',
+        decimals: 1,
+      },
+    ];
+  }
+
+  private buildMetricChart(datos: MedicionProfundidad[], definition: SoilMetricDefinition): SoilMetricChart | null {
+    const data = this.getSeriesData(datos, definition.key);
 
     if (!data.length) {
       return null;
@@ -90,19 +104,78 @@ export class GraficoPerfilSueloComponent implements OnChanges {
       title: definition.title,
       unit: definition.unit,
       summary: `Promedio ${promedio.toFixed(definition.decimals)} ${definition.unit}`,
-      options: this.getChartOptions(data, definition),
+      options: this.getSingleChartOptions(data, definition),
     };
   }
 
-  private getChartOptions(
-    data: number[][],
-    definition: {
-      title: string;
-      unit: string;
-      color: string;
-      decimals: number;
-    }
-  ): any {
+  private getCombinedChartOptions(datos: MedicionProfundidad[], definitions: SoilMetricDefinition[]): any {
+    return {
+      chart: {
+        backgroundColor: 'transparent',
+        height: 380,
+        inverted: true,
+        spacingBottom: 12,
+        spacingLeft: 8,
+        spacingRight: 16,
+        spacingTop: 8,
+        style: {
+          fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        },
+        type: 'spline',
+        width: null,
+      },
+      title: { text: undefined },
+      xAxis: definitions.map((definition, index) => ({
+        title: {
+          text: `${definition.title} (${definition.unit})`,
+          style: {
+            color: definition.color,
+            fontSize: '13px',
+            fontWeight: '700',
+          },
+        },
+        labels: {
+          style: {
+            color: definition.color,
+            fontSize: '12px',
+          },
+        },
+        gridLineColor: index === 0 ? 'var(--p-surface-border)' : 'transparent',
+        gridLineWidth: index === 0 ? 1 : 0,
+        lineColor: definition.color,
+        opposite: index > 0,
+        offset: index > 1 ? 34 : 0,
+      })),
+      yAxis: this.getDepthAxis(),
+      legend: this.getLegendOptions(),
+      tooltip: this.getTooltipOptions(),
+      plotOptions: this.getPlotOptions(),
+      series: definitions.map((definition, index) => ({
+        color: definition.color,
+        data: this.getSeriesData(datos, definition.key),
+        name: `${definition.title} (${definition.unit})`,
+        type: 'spline',
+        xAxis: index,
+      })),
+      credits: { enabled: false },
+      accessibility: { enabled: false },
+      responsive: {
+        rules: [
+          {
+            condition: { maxWidth: 768 },
+            chartOptions: {
+              chart: { height: 340 },
+              xAxis: definitions.map((definition) => ({
+                title: { text: definition.unit },
+              })),
+            },
+          },
+        ],
+      },
+    };
+  }
+
+  private getSingleChartOptions(data: number[][], definition: SoilMetricDefinition): any {
     return {
       chart: {
         backgroundColor: 'transparent',
@@ -137,56 +210,15 @@ export class GraficoPerfilSueloComponent implements OnChanges {
         gridLineColor: 'var(--p-surface-border)',
         gridLineWidth: 1,
       },
-      yAxis: {
-        title: {
-          text: this.translate.instant('Profundidad (cm)'),
-          style: {
-            color: 'var(--p-text-color)',
-            fontSize: '13px',
-            fontWeight: '600',
-          },
-        },
-        labels: {
-          style: {
-            color: 'var(--p-text-color)',
-            fontSize: '12px',
-          },
-        },
-        gridLineColor: 'var(--p-surface-border)',
-        gridLineWidth: 1,
-        reversed: true,
-      },
+      yAxis: this.getDepthAxis(),
       legend: { enabled: false },
-      tooltip: {
-        backgroundColor: 'var(--p-content-background)',
-        borderColor: 'var(--p-surface-border)',
-        borderRadius: 8,
-        borderWidth: 1,
-        pointFormat:
-          `<span style="color:{series.color}">●</span> {series.name}: <strong>{point.x:.${definition.decimals}f} ${definition.unit}</strong><br/>Profundidad: {point.y} cm`,
-        shadow: true,
-        style: {
-          color: 'var(--p-text-color)',
-          fontSize: '13px',
-        },
-      },
-      plotOptions: {
-        spline: {
-          animation: { duration: 600 },
-          dataLabels: { enabled: false },
-          enableMouseTracking: true,
-          lineWidth: 2,
-          marker: {
-            enabled: true,
-            radius: 3,
-          },
-        },
-      },
+      tooltip: this.getTooltipOptions(),
+      plotOptions: this.getPlotOptions(),
       series: [
         {
           color: definition.color,
           data,
-          name: definition.title,
+          name: `${definition.title} (${definition.unit})`,
           type: 'spline',
         },
       ],
@@ -201,6 +233,83 @@ export class GraficoPerfilSueloComponent implements OnChanges {
             },
           },
         ],
+      },
+    };
+  }
+
+  private getSeriesData(datos: MedicionProfundidad[], key: SoilMetricKey): number[][] {
+    return datos
+      .filter((row) => row[key])
+      .map((row) => [row[key]!.actual, row.profundidad]);
+  }
+
+  private getUnit(datos: MedicionProfundidad[], key: SoilMetricKey, fallback: string): string {
+    return datos.find((row) => row[key])?.[key]?.unidad || fallback;
+  }
+
+  private getDepthAxis(): any {
+    return {
+      title: {
+        text: this.translate.instant('Profundidad (cm)'),
+        style: {
+          color: 'var(--p-text-color)',
+          fontSize: '13px',
+          fontWeight: '600',
+        },
+      },
+      labels: {
+        style: {
+          color: 'var(--p-text-color)',
+          fontSize: '12px',
+        },
+      },
+      gridLineColor: 'var(--p-surface-border)',
+      gridLineWidth: 1,
+      reversed: true,
+    };
+  }
+
+  private getLegendOptions(): any {
+    return {
+      align: 'center',
+      enabled: true,
+      itemDistance: 18,
+      itemStyle: {
+        color: 'var(--p-text-color)',
+        fontSize: '13px',
+        fontWeight: '700',
+      },
+      layout: 'horizontal',
+      verticalAlign: 'bottom',
+    };
+  }
+
+  private getTooltipOptions(): any {
+    return {
+      backgroundColor: 'var(--p-content-background)',
+      borderColor: 'var(--p-surface-border)',
+      borderRadius: 8,
+      borderWidth: 1,
+      pointFormat: '<span style="color:{series.color}">●</span> {series.name}: <strong>{point.x:.1f}</strong><br/>Profundidad: {point.y} cm',
+      shadow: true,
+      style: {
+        color: 'var(--p-text-color)',
+        fontSize: '13px',
+      },
+    };
+  }
+
+  private getPlotOptions(): any {
+    return {
+      spline: {
+        animation: { duration: 600 },
+        dataLabels: { enabled: false },
+        enableMouseTracking: true,
+        lineWidth: 2.5,
+        marker: {
+          enabled: true,
+          radius: 3,
+        },
       },
     };
   }

@@ -101,11 +101,11 @@
 
   @if (siembraActual && siembra && !siembra.fechaCosecha) {
     <div class="desktop-only">
-      <app-card-etapas-fenologicas [lote]="lote"></app-card-etapas-fenologicas>
+      <app-card-etapas-fenologicas [lote]="lote" [siembra]="siembra"></app-card-etapas-fenologicas>
     </div>
 
     <div class="mobile-only">
-      <app-card-etapas-fenologicas [lote]="lote"></app-card-etapas-fenologicas>
+      <app-card-etapas-fenologicas [lote]="lote" [siembra]="siembra"></app-card-etapas-fenologicas>
     </div>
   }
 

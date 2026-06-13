@@ -218,20 +218,43 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
       }
     }
 
-    if (this.lote?.siembra && !this.lote.siembra.crono) {
-      const cultivo = this.lote.siembra.semilla?.cultivo;
-      const ciclo = this.lote.siembra.semilla?.ciclo;
-      const idDepartamento = this.lote.departamento?._id;
+    await this.completarCronoSiembra(this.lote?.siembra);
+    this.verSiembraActual();
+  }
 
-      const queryParams: IQueryParam = {
-        filter: JSON.stringify({ cultivo, ciclo, idDepartamento }),
-      };
-
-      const result = await this.fenologiaService.listar(queryParams);
-      this.lote.siembra.crono = result.datos[0] as unknown as ICrono;
+  private async completarCronoSiembra(siembra?: ISiembra): Promise<void> {
+    if (!siembra || siembra.crono || !siembra.semilla?.cultivo) {
+      return;
     }
 
-    this.verSiembraActual();
+    const cultivo = siembra.semilla.cultivo;
+    const ciclo = siembra.semilla.ciclo;
+    const idDepartamento = this.lote?.departamento?._id;
+    const filters = [
+      { cultivo, ciclo, idDepartamento },
+      { cultivo, idDepartamento },
+      { cultivo, ciclo },
+      { cultivo },
+    ].map((filter) =>
+      Object.fromEntries(Object.entries(filter).filter(([, value]) => value !== undefined && value !== null && value !== ''))
+    );
+
+    const filtrosUnicos = filters.filter(
+      (filter, index, array) => array.findIndex((item) => JSON.stringify(item) === JSON.stringify(filter)) === index
+    );
+
+    for (const filter of filtrosUnicos) {
+      const queryParams: IQueryParam = {
+        filter: JSON.stringify(filter),
+        limit: 1,
+      };
+      const result = await this.fenologiaService.listar(queryParams);
+      const crono = result.datos?.[0] as unknown as ICrono | undefined;
+      if (crono) {
+        siembra.crono = crono;
+        return;
+      }
+    }
   }
 
   ngOnDestroy(): void {}

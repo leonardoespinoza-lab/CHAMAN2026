@@ -158,43 +158,21 @@
   font-size: 1.2rem;
 }
 
-.depth-preview {
+.device-profile-note {
+  align-items: center;
   border: 1px solid var(--p-content-border-color);
   border-radius: 8px;
-  display: grid;
-  gap: 8px;
+  color: var(--p-text-color);
+  display: flex;
+  font-size: 1rem;
+  font-weight: 700;
+  gap: 10px;
   padding: 12px;
 }
 
-.depth-row {
-  align-items: center;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: 56px minmax(80px, 1fr) minmax(90px, auto);
-}
-
-.depth-row span,
-.depth-row strong {
-  color: var(--p-text-color);
-  font-size: 0.95rem;
-}
-
-.depth-row strong {
-  text-align: right;
-}
-
-.depth-track {
-  background: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 999px;
-  height: 12px;
-  overflow: hidden;
-}
-
-.depth-fill {
-  background: linear-gradient(90deg, #7fd14f, var(--p-primary-color));
-  border-radius: 999px;
-  height: 100%;
+.device-profile-note i {
+  color: var(--p-primary-color);
+  font-size: 1.2rem;
 }
 
 .device-actions {
@@ -218,15 +196,6 @@
   .devices-title strong,
   .device-card h3 {
     font-size: 1.18rem;
-  }
-
-  .depth-row {
-    grid-template-columns: 52px 1fr;
-  }
-
-  .depth-row strong {
-    grid-column: 2;
-    text-align: left;
   }
 
   .device-actions {

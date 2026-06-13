@@ -73,16 +73,6 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
     return this.estaOnline(dispositivo) ? 'Online' : 'Sin reporte reciente';
   }
 
-  public barWidth(dato: MedicionProfundidad): number {
-    const value = dato.humedad?.actual;
-    if (value === undefined || value === null) {
-      return 4;
-    }
-
-    const percent = dato.humedad?.unidad === 'm3/m3' ? value * 100 : value;
-    return Math.max(4, Math.min(100, percent));
-  }
-
   private numberFormat(format: string): Intl.NumberFormatOptions {
     if (format === '1.3-3') {
       return { minimumFractionDigits: 3, maximumFractionDigits: 3 };

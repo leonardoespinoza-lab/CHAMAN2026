@@ -52,7 +52,7 @@
           <div class="device-summary-grid">
             <article>
               <span>Humedad prom.</span>
-              <strong>{{ formatearValor(resumen(dispositivo).humedad, '1.3-3') }}</strong>
+              <strong>{{ formatearValor(resumen(dispositivo).humedad) }}</strong>
             </article>
             <article>
               <span>Salinidad prom.</span>
@@ -64,16 +64,9 @@
             </article>
           </div>
 
-          <div class="depth-preview" aria-label="Perfil de humedad por profundidad">
-            @for (dato of perfil(dispositivo).slice(0, 12); track dato.profundidad) {
-              <div class="depth-row">
-                <span>{{ dato.profundidad }} cm</span>
-                <div class="depth-track">
-                  <div class="depth-fill" [style.width.%]="barWidth(dato)"></div>
-                </div>
-                <strong>{{ formatearValor(dato.humedad, '1.3-3') }}</strong>
-              </div>
-            }
+          <div class="device-profile-note">
+            <i class="pi pi-chart-line"></i>
+            <span>Perfil disponible por profundidad: humedad, salinidad y temperatura.</span>
           </div>
         } @else {
           <p-message severity="info">El dispositivo todavia no tiene un reporte completo para graficar en el lote.</p-message>

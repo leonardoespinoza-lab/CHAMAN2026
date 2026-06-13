@@ -3,7 +3,7 @@ import { Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
-import { ISemilla } from 'modelos/src';
+import { ISemilla, ISiembra } from 'modelos/src';
 import {
   ETAPAS_MAIZ,
   ETAPAS_SOJA,
@@ -98,6 +98,7 @@ const ETAPAS_BASE_POR_CULTIVO: Record<string, Record<string, number>> = {
 })
 export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDestroy {
   @Input() public lote?: IDetallesLote;
+  @Input() public siembra?: ISiembra;
   public etapaActual?: string;
   public cultivo?: string;
   public cultivoClass = 'cultivo-trigo';
@@ -113,13 +114,13 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['lote']) {
+    if (changes['lote'] || changes['siembra']) {
       this.crearTimeline();
     }
   }
 
   private crearTimeline(): void {
-    const siembra = this.lote?.siembra;
+    const siembra = this.siembra || this.lote?.siembra;
     const crono = siembra?.crono;
 
     if (!siembra?.fechaSiembra || !siembra.semilla?.cultivo) {

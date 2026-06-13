@@ -23,6 +23,7 @@ const SENSOR_KEY: Record<
 function getMetricByDepth(
   reporte: IReporte | undefined,
   sensor: SensoresV2,
+  normalizer?: (value: number, unidad: string) => MedicionSensorProfundidad,
 ): Map<number, MedicionSensorProfundidad> {
   const result = new Map<number, MedicionSensorProfundidad>();
   const rows = reporte?.datos?.valores?.[sensor];
@@ -43,7 +44,7 @@ function getMetricByDepth(
       return;
     }
 
-    result.set(depth, {
+    result.set(depth, normalizer ? normalizer(value, row.unidad) : {
       actual: value,
       unidad: row.unidad,
     });
@@ -55,7 +56,7 @@ function getMetricByDepth(
 export function buildSentekProfile(
   reporte: IReporte | undefined,
 ): MedicionProfundidad[] {
-  const humedad = getMetricByDepth(reporte, SENSOR_KEY.humedad);
+  const humedad = getMetricByDepth(reporte, SENSOR_KEY.humedad, normalizarHumedad);
   const salinidad = getMetricByDepth(reporte, SENSOR_KEY.salinidad);
   const temperatura = getMetricByDepth(reporte, SENSOR_KEY.temperatura);
   const depths = [...new Set([
@@ -70,4 +71,18 @@ export function buildSentekProfile(
     salinidad: salinidad.get(profundidad),
     temperatura: temperatura.get(profundidad),
   }));
+}
+
+function normalizarHumedad(value: number, unidad: string): MedicionSensorProfundidad {
+  const unidadNormalizada = unidad.toLowerCase().replace(/\s/g, '');
+  const esVolumetrica =
+    unidadNormalizada.includes('m3/m3') ||
+    unidadNormalizada.includes('m³/m³') ||
+    unidadNormalizada.includes('vwc');
+  const actual = esVolumetrica || value <= 1.5 ? value * 100 : value;
+
+  return {
+    actual,
+    unidad: '%',
+  };
 }
