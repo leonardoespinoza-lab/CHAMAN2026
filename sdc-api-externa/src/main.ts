@@ -1,6 +1,7 @@
 import { INestApplication, Logger, RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { ENV, PORT, PREFIX } from './env';
 import { LogRequestInterceptor } from './auxiliares/logRequest/logRequest.interceptor';
@@ -29,7 +30,9 @@ function swaggerConfig(app: INestApplication) {
 async function bootstrap() {
   const logger = new Logger('Main');
   logger.verbose(`Iniciando en env... ${ENV}`);
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  app.use(json({ limit: process.env.HTTP_BODY_LIMIT || '100mb' }));
+  app.use(urlencoded({ extended: true, limit: process.env.HTTP_BODY_LIMIT || '100mb' }));
   setGlobalPrefix(app, logger);
   swaggerConfig(app);
   app.enableCors();

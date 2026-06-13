@@ -100,25 +100,13 @@
   </section>
 
   @if (siembraActual && siembra && !siembra.fechaCosecha) {
-    @if (siembra.crono) {
-      <div class="desktop-only">
-        <app-card-etapas-fenologicas [lote]="lote"></app-card-etapas-fenologicas>
-      </div>
-    } @else {
-      <div class="desktop-only">
-        <app-card-etapa-fenologica [lote]="lote"></app-card-etapa-fenologica>
-      </div>
-    }
+    <div class="desktop-only">
+      <app-card-etapas-fenologicas [lote]="lote"></app-card-etapas-fenologicas>
+    </div>
 
-    @if (siembra.crono) {
-      <div class="mobile-only">
-        <app-card-etapas-fenologicas [lote]="lote"></app-card-etapas-fenologicas>
-      </div>
-    } @else {
-      <div class="mobile-only">
-        <app-card-etapa-fenologica [lote]="lote"></app-card-etapa-fenologica>
-      </div>
-    }
+    <div class="mobile-only">
+      <app-card-etapas-fenologicas [lote]="lote"></app-card-etapas-fenologicas>
+    </div>
   }
 
   @if (!helper.soloLectura()) {

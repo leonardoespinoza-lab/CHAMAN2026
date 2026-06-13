@@ -2,7 +2,7 @@
   <div class="phenology-header">
     <div class="phenology-title">
       <p class="titulo-card">{{ 'Etapa fenologica' | translate | uppercase }}</p>
-      <span class="phenology-subtitle">{{ cultivo }} - {{ etapas.length }} etapas cargadas en Chaman</span>
+      <span class="phenology-subtitle">{{ cultivo || 'Cultivo' }} - {{ etapas.length }} etapas - {{ fuenteTexto }}</span>
     </div>
 
     <div class="crop-detail-grid">

@@ -155,7 +155,7 @@ def _guardar_png_indexado(
             (img.width * NDVI_PNG_SCALE, img.height * NDVI_PNG_SCALE),
             Image.Resampling.BICUBIC,
         )
-    img.save(output_png_path, dpi=(dpi, dpi), quality=quality)
+    img.save(output_png_path, dpi=(dpi, dpi), optimize=True, compress_level=9)
 
 
 def _agregar_contorno_transparente(img: Image.Image) -> Image.Image:

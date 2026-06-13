@@ -13,7 +13,6 @@ import { ILoteTabla } from '../listado-lotes/listado-lotes.component';
 import { CardClimaLoteComponent } from './card-clima-lote/card-clima-lote.component';
 import { CardDispositivosComponent } from './card-dispositivos/card-dispositivos.component';
 import { CardEnfermedadesComponent } from './card-enfermedades/card-enfermedades.component';
-import { CardEtapaFenologicaComponent } from './card-etapa-fenologica/card-etapa-fenologica.component';
 import { CardEtapasFenologicasComponent } from './card-etapas-fenologicas/card-etapas-fenologicas.component';
 import { CardHuellaHidricaComponent } from './card-huella-hidrica/card-huella-hidrica.component';
 import { CardMalezasComponent } from './card-malezas/card-malezas.component';
@@ -38,7 +37,6 @@ export interface IDetallesLote extends ILoteTabla {
   selector: 'app-detalles-lote',
   imports: [
     SharedModule,
-    CardEtapaFenologicaComponent,
     CardUltimaFumigacionComponent,
     CardDispositivosComponent,
     CardEnfermedadesComponent,

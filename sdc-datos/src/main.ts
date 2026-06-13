@@ -72,7 +72,9 @@ async function bootstrap() {
   const logger = new Logger('Main');
   logger.verbose(`Iniciando en env... ${ENV}`);
   await seedAdminIfRequested(logger);
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  app.use(json({ limit: process.env.HTTP_BODY_LIMIT || '100mb' }));
+  app.use(urlencoded({ extended: true, limit: process.env.HTTP_BODY_LIMIT || '100mb' }));
   setGlobalPrefix(app, logger);
   swaggerConfig(app);
   app.enableCors();
@@ -83,8 +85,6 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
-  app.use(json({ limit: '50mb' }));
-  app.use(urlencoded({ extended: true, limit: '50mb' }));
   const host = process.env.HOST || '0.0.0.0';
   await app.listen(PORT, host);
   logger.verbose(`Application listening on ${host}:${PORT}`);

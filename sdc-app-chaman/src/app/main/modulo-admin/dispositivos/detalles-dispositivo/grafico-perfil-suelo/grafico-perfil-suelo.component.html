@@ -1,6 +1,17 @@
-@if (chartOptions && datos.length > 0) {
-  <div id="chartContainer" class="chart-container">
-    <app-chart [options]="chartOptions"></app-chart>
+@if (metricCharts.length > 0) {
+  <div class="soil-chart-grid">
+    @for (chart of metricCharts; track chart.key) {
+      <article class="soil-chart-card">
+        <header>
+          <div>
+            <span>{{ chart.title }}</span>
+            <strong>{{ chart.summary }}</strong>
+          </div>
+          <small>{{ chart.unit }}</small>
+        </header>
+        <app-chart [options]="chart.options"></app-chart>
+      </article>
+    }
   </div>
 } @else {
   <div class="sin-datos">

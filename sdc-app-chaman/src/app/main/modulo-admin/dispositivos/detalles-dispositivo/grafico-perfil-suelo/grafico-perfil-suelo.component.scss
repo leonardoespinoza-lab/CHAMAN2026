@@ -1,114 +1,92 @@
-// Contenedor del gráfico siguiendo exactamente el patrón de drawer-clima
-.chart-container {
-  display: block;
+.soil-chart-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   width: 100%;
-  height: 100%;
-  min-height: 400px;
-  position: relative;
-  overflow: visible;
-  box-sizing: border-box;
-  
-  app-chart {
-    display: block;
-    width: 100%;
-    height: 100%;
-    
-    // Estilos específicos para Highcharts siguiendo exactamente drawer-clima
-    ::ng-deep {
-      .highcharts-container {
-        width: 100% !important;
-        height: 100% !important;
-        overflow: visible !important;
-        box-sizing: border-box !important;
-        position: relative !important;
-      }
-      
-      .highcharts-root {
-        width: 100% !important;
-        height: 100% !important;
-        overflow: visible !important;
-        box-sizing: border-box !important;
-      }
-      
-      // Asegurar fondo completamente transparente
-      .highcharts-background {
-        fill: transparent !important;
-      }
-      
-      .highcharts-plot-background {
-        fill: transparent !important;
-      }
-      
-      .highcharts-plot-border {
-        stroke: none !important;
-      }
-      
-      // Remover cualquier borde o fondo blanco
-      .highcharts-container svg {
-        background: transparent !important;
-      }
-      
-      // Asegurar que todos los textos usen los colores del tema
-      .highcharts-axis-labels,
-      .highcharts-legend,
-      .highcharts-title,
-      .highcharts-subtitle {
-        max-width: 100% !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-      }
-      
-      // Colores específicos para textos de ejes
-      .highcharts-axis-labels text {
-        fill: var(--p-text-color) !important;
-        font-size: 12px !important;
-      }
-      
-      // Asegurar que las líneas y bordes usen colores adaptativos
-      .highcharts-axis-line,
-      .highcharts-tick {
-        stroke: var(--p-surface-border) !important;
-      }
-      
-      .highcharts-grid-line {
-        stroke: var(--p-surface-border) !important;
-      }
-      
-      // Colores para leyenda
-      .highcharts-legend-item text {
-        fill: var(--p-text-color) !important;
-        font-size: 12px !important;
-        font-weight: 500 !important;
-      }
-      
-      // Títulos del gráfico
-      .highcharts-title {
-        fill: var(--p-text-color) !important;
-        font-weight: 600 !important;
-        font-size: 16px !important;
-      }
-      
-      .highcharts-subtitle {
-        fill: var(--p-text-color) !important;
-        font-size: 13px !important;
-      }
-    }
+}
+
+.soil-chart-card {
+  background: var(--p-surface-0);
+  border: 1px solid var(--p-surface-200);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  min-height: 360px;
+  padding: 0.85rem;
+}
+
+.soil-chart-card header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.soil-chart-card span {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.soil-chart-card strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 1.05rem;
+  line-height: 1.2;
+  margin-top: 0.2rem;
+}
+
+.soil-chart-card small {
+  background: var(--p-surface-100);
+  border-radius: 999px;
+  color: var(--p-text-muted-color);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  white-space: nowrap;
+}
+
+.soil-chart-card app-chart {
+  display: block;
+  min-height: 280px;
+  width: 100%;
+}
+
+.soil-chart-card ::ng-deep {
+  .highcharts-background,
+  .highcharts-plot-background {
+    fill: transparent !important;
+  }
+
+  .highcharts-axis-labels text,
+  .highcharts-axis-title,
+  .highcharts-legend-item text {
+    fill: var(--p-text-color) !important;
+  }
+
+  .highcharts-axis-line,
+  .highcharts-tick,
+  .highcharts-grid-line {
+    stroke: var(--p-surface-border) !important;
   }
 }
 
 .sin-datos {
+  align-items: center;
   display: flex;
   justify-content: center;
-  align-items: center;
   min-height: 200px;
   width: 100%;
 }
 
-// Ajustes responsivos para el gráfico
 @media (max-width: 768px) {
-  .chart-container {
-    min-height: 350px;
-    width: 100%;
-    max-width: 100vw;
+  .soil-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .soil-chart-card {
+    min-height: 320px;
   }
 }
