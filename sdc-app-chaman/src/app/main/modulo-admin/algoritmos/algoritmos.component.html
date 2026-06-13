@@ -1,0 +1,217 @@
+<section class="algorithms-page">
+  <header class="page-hero">
+    <div>
+      <p>ADMIN</p>
+      <h1>Algoritmos</h1>
+      <span>Auditoria, pruebas controladas e inputs/outputs de los motores agronomicos de Chaman.</span>
+    </div>
+    <div class="hero-actions">
+      <p-button label="Recargar" icon="pi pi-refresh" [loading]="loading" [outlined]="true" (onClick)="cargar()" />
+      <p-button label="Probar huella" icon="pi pi-play" [loading]="loading" (onClick)="simular()" />
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="catalog">
+      @for (algoritmo of algoritmos; track algoritmo.id) {
+        <button
+          class="catalog-card"
+          type="button"
+          [class.active]="seleccionado === algoritmo.id"
+          (click)="seleccionar(algoritmo.id)"
+        >
+          <span class="status" [class]="algoritmo.estado">{{ algoritmo.estado }}</span>
+          <strong>{{ algoritmo.nombre }}</strong>
+          <small>{{ algoritmo.descripcion }}</small>
+        </button>
+      }
+    </aside>
+
+    <main class="workspace">
+      <section class="algorithm-summary">
+        <div>
+          <p>Motor seleccionado</p>
+          <h2>{{ algoritmoActual?.nombre }}</h2>
+          <span>{{ algoritmoActual?.descripcion }}</span>
+        </div>
+        <div class="io-grid">
+          <div>
+            <strong>Inputs</strong>
+            @for (input of algoritmoActual?.inputs || []; track input) {
+              <span>{{ input }}</span>
+            }
+          </div>
+          <div>
+            <strong>Outputs</strong>
+            @for (output of algoritmoActual?.outputs || []; track output) {
+              <span>{{ output }}</span>
+            }
+          </div>
+        </div>
+      </section>
+
+      @if (seleccionado === 'huella-hidrica') {
+        <section class="formula-card">
+          <div>
+            <p>Formula ejecutable</p>
+            <h3>Huella total = verde + azul + gris</h3>
+            <span>
+              Verde/Azul usa ETc = Kc x ET0 y lluvia efectiva. Gris usa excedentes N/P mas fitosanitarios
+              ponderados por suelo, manejo, pendiente, Koc, persistencia y dosis.
+            </span>
+          </div>
+          <div class="formula-pill">
+            <strong>Se guarda al cosechar</strong>
+            <span>PUT /siembras/cosechar/:id</span>
+          </div>
+        </section>
+
+        <section class="tester">
+          <div class="tester-header">
+            <div>
+              <p>Banco de prueba</p>
+              <h3>Simulacion de huella hidrica</h3>
+            </div>
+            <div class="tester-actions">
+              <p-button
+                [label]="modoJson ? 'Modo simple' : 'Editar JSON'"
+                icon="pi pi-code"
+                [outlined]="true"
+                (onClick)="modoJson = !modoJson"
+              />
+              <p-button label="Actualizar input" icon="pi pi-sliders-h" [outlined]="true" (onClick)="generarPayload()" />
+              <p-button label="Ejecutar" icon="pi pi-play" [loading]="loading" (onClick)="simular()" />
+            </div>
+          </div>
+
+          @if (!modoJson) {
+            <div class="input-grid">
+              <label>
+                Cultivo
+                <select [(ngModel)]="form.cultivo" (change)="generarPayload()">
+                  <option>Trigo</option>
+                  <option>Soja</option>
+                  <option>Maiz</option>
+                </select>
+              </label>
+              <label>
+                Rinde seco kg/ha
+                <input type="number" [(ngModel)]="form.rendimientoSecoKgHa" (input)="generarPayload()" />
+              </label>
+              <label>
+                Dias de ciclo
+                <input type="number" [(ngModel)]="form.dias" (input)="generarPayload()" />
+              </label>
+              <label>
+                ET0 promedio mm/dia
+                <input type="number" [(ngModel)]="form.et0PromedioMm" (input)="generarPayload()" />
+              </label>
+              <label>
+                Lluvia promedio mm/dia
+                <input type="number" [(ngModel)]="form.lluviaPromedioMm" (input)="generarPayload()" />
+              </label>
+              <label>
+                Fertilizante kg/ha
+                <input type="number" [(ngModel)]="form.dosisFertilizanteKgHa" (input)="generarPayload()" />
+              </label>
+              <label>
+                N %
+                <input type="number" [(ngModel)]="form.porcentajeN" (input)="generarPayload()" />
+              </label>
+              <label>
+                P %
+                <input type="number" [(ngModel)]="form.porcentajeP" (input)="generarPayload()" />
+              </label>
+              <label>
+                Fitosanitario lt/ha
+                <input type="number" [(ngModel)]="form.dosisFitosanitarioLtHa" (input)="generarPayload()" />
+              </label>
+              <label>
+                Concentracion %
+                <input type="number" [(ngModel)]="form.concentracion" (input)="generarPayload()" />
+              </label>
+              <label>
+                Textura
+                <select [(ngModel)]="form.textura" (change)="generarPayload()">
+                  <option>Arcilloso</option>
+                  <option>Franco arcilloso</option>
+                  <option>Franco</option>
+                  <option>Franco arenoso</option>
+                  <option>Arenoso</option>
+                </select>
+              </label>
+              <label>
+                Manejo
+                <select [(ngModel)]="form.manejo" (change)="generarPayload()">
+                  <option>Malo</option>
+                  <option>Promedio</option>
+                  <option>Bueno</option>
+                  <option>Excelente</option>
+                </select>
+              </label>
+            </div>
+          }
+
+          <div class="json-panel">
+            <div>
+              <p>Input enviado al backend</p>
+              <textarea [(ngModel)]="payloadJson" spellcheck="false"></textarea>
+            </div>
+            <div>
+              <p>Parametros del motor</p>
+              <pre>{{ parametrosHuella | json }}</pre>
+            </div>
+          </div>
+        </section>
+
+        @if (resultado) {
+          <section class="result-card">
+            <div class="result-header">
+              <div>
+                <p>Output</p>
+                <h3>Resultado de simulacion</h3>
+              </div>
+              <strong>{{ format(resultado.huella.total?.litrosKg) }} l/kg total</strong>
+            </div>
+
+            <div class="metrics">
+              <div>
+                <span>Verde</span>
+                <strong>{{ format(resultado.huella.verde?.litrosKg) }} l/kg</strong>
+                <small>Lluvia efectiva consumida por el cultivo</small>
+              </div>
+              <div>
+                <span>Azul</span>
+                <strong>{{ format(resultado.huella.azul?.litrosKg) }} l/kg</strong>
+                <small>Demanda no cubierta por lluvia efectiva</small>
+              </div>
+              <div>
+                <span>Gris</span>
+                <strong>{{ format(resultado.huella.gris?.litrosKg) }} l/kg</strong>
+                <small>Fertilizantes + fitosanitarios</small>
+              </div>
+              <div>
+                <span>Total</span>
+                <strong>{{ format(resultado.huella.total?.litrosKg) }} l/kg</strong>
+                <small>Suma consolidada por rinde seco</small>
+              </div>
+            </div>
+
+            <div class="trace-grid">
+              <div>
+                <h4>Parciales</h4>
+                <pre>{{ resultado.parciales | json }}</pre>
+              </div>
+              <div>
+                <h4>Traza de calculo</h4>
+                @for (traza of resultado.trazas; track traza) {
+                  <p class="trace-line">{{ traza }}</p>
+                }
+              </div>
+            </div>
+          </section>
+        }
+      }
+    </main>
+  </div>
+</section>

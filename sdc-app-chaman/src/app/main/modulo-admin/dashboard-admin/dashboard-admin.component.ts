@@ -25,6 +25,7 @@ export class DashboardAdminComponent {
     { label: 'Productor', icon: 'pi pi-id-card', route: '/productores/crear' },
     { label: 'Quimica', icon: 'pi pi-building', route: '/quimicas/crear' },
     { label: 'LoRaWAN', icon: 'pi pi-microchip', route: '/dispositivos/crear' },
+    { label: 'Algoritmos', icon: 'pi pi-sliders-h', route: '/algoritmos' },
   ];
 
   public readonly cards: AdminServiceCard[] = [
@@ -89,6 +90,14 @@ export class DashboardAdminComponent {
       description: 'Habilitaciones por entidad y control de acceso a servicios comerciales.',
       icon: 'pi pi-key',
       route: '/licencias',
+      group: 'Sistema',
+      status: 'Configurable',
+    },
+    {
+      title: 'Algoritmos',
+      description: 'Auditoria, pruebas, inputs y outputs de huella hidrica, riego, enfermedades, satelite y malezas.',
+      icon: 'pi pi-sliders-h',
+      route: '/algoritmos',
       group: 'Sistema',
       status: 'Configurable',
     },

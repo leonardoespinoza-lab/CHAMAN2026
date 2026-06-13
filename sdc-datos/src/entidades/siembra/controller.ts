@@ -32,6 +32,11 @@ export class SiembrasController {
     return await this.service.create(data);
   }
 
+  @Put('cosechar/:id')
+  async cosechar(@Param('id') id: string, @Body() data: IUpdateSiembra) {
+    return await this.service.cosechar(id, data);
+  }
+
   @Put(':id')
   async update(@Param('id') id: string, @Body() data: IUpdateSiembra) {
     return await this.service.update(id, data);
