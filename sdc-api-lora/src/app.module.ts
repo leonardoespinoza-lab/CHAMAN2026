@@ -9,6 +9,8 @@ import { ApiCheckService } from './auxiliares/api-check/api-check.service';
 import { ApiCheckModule } from './auxiliares/api-check/api-check.module';
 import { ReportesModule } from './entidades/reportes/module';
 import { AuthenticationMiddleware } from './auxiliares/authentication/middleware';
+import { LorawanUplinksModule } from './entidades/lorawan-uplinks/module';
+import { LorawanMqttConsumerModule } from './auxiliares/lorawan-mqtt-consumer/module';
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { AuthenticationMiddleware } from './auxiliares/authentication/middleware
     ApiCheckModule,
     //
     ReportesModule,
+    LorawanUplinksModule,
+    LorawanMqttConsumerModule,
   ],
   controllers: [],
 })

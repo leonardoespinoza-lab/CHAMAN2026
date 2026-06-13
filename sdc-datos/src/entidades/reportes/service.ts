@@ -22,6 +22,18 @@ export class ReportesService {
     return await this.repository.create(dato);
   }
 
+  async getRecentPartialByDeveui(
+    deveui: string,
+    referenceDate: Date,
+    windowMinutes = 20,
+  ) {
+    return await this.repository.getRecentPartialByDeveui(
+      deveui,
+      referenceDate,
+      windowMinutes,
+    );
+  }
+
   async update(id: string, dato: IUpdateReporte) {
     const updated = await this.repository.update(id, dato);
     if (updated) {

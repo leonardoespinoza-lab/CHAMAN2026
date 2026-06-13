@@ -3,7 +3,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { SeriesOptionsType } from 'highcharts';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
-import { MedicionProfundidad } from '../detalles-dispositivo.component';
+import { MedicionProfundidad } from '../sentek-profile';
 
 @Component({
   selector: 'app-grafico-perfil-suelo',
@@ -26,82 +26,40 @@ export class GraficoPerfilSueloComponent implements OnChanges {
   }
 
   private crearGraficoPerfil(): void {
-    // Ordenar datos por profundidad (de menor a mayor)
     const datosOrdenados = [...this.datos].sort((a, b) => a.profundidad - b.profundidad);
-
-    // Preparar datos para humedad - En modo invertido: [x, y] = [valor, profundidad]
-    const datosHumedad = datosOrdenados.map((d) => [d.humedad.actual, d.profundidad]);
-
-    // Preparar datos para temperatura - En modo invertido: [x, y] = [valor, profundidad]
-    const datosTemperatura = datosOrdenados.map((d) => [d.temperatura.actual, d.profundidad]);
-
-    const series: SeriesOptionsType[] = [
-      {
-        name: this.translate.instant('Humedad') + ' (%)',
-        data: datosHumedad,
-        type: 'spline',
-        color: '#3498db', // Azul similar al drawer-clima
-        lineWidth: 2,
-        marker: {
-          enabled: true,
-          radius: 3,
-          fillColor: '#3498db',
-        },
-        tooltip: {
-          pointFormat:
-            '<span style="color:{point.color}">●</span> {series.name}: <strong>{point.x:.1f}%</strong><br/>Profundidad: {point.y} cm',
-        },
-      },
-      {
-        name: this.translate.instant('Temperatura') + ' (°C)',
-        data: datosTemperatura,
-        type: 'spline',
-        color: '#e74c3c', // Rojo similar al drawer-clima
-        lineWidth: 2,
-        marker: {
-          enabled: true,
-          radius: 3,
-          fillColor: '#e74c3c',
-        },
-        tooltip: {
-          pointFormat:
-            '<span style="color:{point.color}">●</span> {series.name}: <strong>{point.x:.1f}°C</strong><br/>Profundidad: {point.y} cm',
-        },
-      },
-    ];
+    const series = this.buildSeries(datosOrdenados);
 
     this.chartOptions = {
       chart: {
-        type: 'line',
         backgroundColor: 'transparent',
-        height: 400,
-        width: null, // Permite que se ajuste al contenedor
-        spacingTop: 10,
-        spacingRight: 10,
+        height: 430,
+        inverted: true,
         spacingBottom: 10,
         spacingLeft: 10,
+        spacingRight: 10,
+        spacingTop: 10,
         style: {
           fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         },
-        inverted: true, // Esto invierte los ejes para mostrar profundidad vertical
+        type: 'line',
+        width: null,
       },
       title: {
-        text: this.titulo || this.translate.instant('Perfil de Humedad y Temperatura del Suelo'),
+        text: this.titulo || this.translate.instant('Perfil de suelo'),
+        margin: 8,
         style: {
-          fontSize: '16px',
-          fontWeight: '600',
           color: 'var(--p-text-color)',
+          fontSize: '18px',
+          fontWeight: '700',
         },
-        margin: 6,
       },
       xAxis: {
-        // En modo invertido, xAxis controla el eje horizontal (valores)
         title: {
-          text: this.translate.instant('Humedad (%) / Temperatura (°C)'),
+          text: this.translate.instant('Lectura del sensor'),
           style: {
             color: 'var(--p-text-color)',
-            fontSize: '13px',
-            fontWeight: '500',
+            fontSize: '14px',
+            fontWeight: '600',
           },
         },
         labels: {
@@ -110,20 +68,16 @@ export class GraficoPerfilSueloComponent implements OnChanges {
             fontSize: '12px',
           },
         },
-        lineColor: 'var(--p-surface-border)',
-        tickColor: 'var(--p-surface-border)',
         gridLineColor: 'var(--p-surface-border)',
         gridLineWidth: 1,
-        tickLength: 5,
       },
       yAxis: {
-        // En modo invertido, yAxis se convierte en el eje vertical (profundidad)
         title: {
           text: this.translate.instant('Profundidad (cm)'),
           style: {
             color: 'var(--p-text-color)',
-            fontSize: '13px',
-            fontWeight: '500',
+            fontSize: '14px',
+            fontWeight: '600',
           },
         },
         labels: {
@@ -132,44 +86,29 @@ export class GraficoPerfilSueloComponent implements OnChanges {
             fontSize: '12px',
           },
         },
-        reversed: true, // Profundidad mayor hacia abajo
         gridLineColor: 'var(--p-surface-border)',
         gridLineWidth: 1,
-        lineColor: 'var(--p-surface-border)',
-        lineWidth: 1,
-        tickColor: 'var(--p-surface-border)',
+        reversed: true,
       },
       legend: {
-        enabled: true,
         align: 'center',
-        verticalAlign: 'bottom',
-        layout: 'horizontal',
+        enabled: true,
+        itemDistance: 18,
         itemStyle: {
           color: 'var(--p-text-color)',
-          fontSize: '12px',
-          fontWeight: '500',
+          fontSize: '13px',
+          fontWeight: '600',
         },
-        itemHoverStyle: {
-          color: 'var(--p-text-color)',
-        },
-        itemHiddenStyle: {
-          color: 'var(--p-text-color-secondary)',
-        },
-        symbolHeight: 8,
-        symbolWidth: 10,
-        symbolRadius: 4,
-        margin: 20,
-        itemMarginTop: 5,
-        itemMarginBottom: 5,
-        itemDistance: 15,
-        y: 10,
+        layout: 'horizontal',
+        verticalAlign: 'bottom',
       },
       tooltip: {
-        shared: false,
         backgroundColor: 'var(--p-content-background)',
         borderColor: 'var(--p-surface-border)',
-        borderWidth: 1,
         borderRadius: 8,
+        borderWidth: 1,
+        pointFormat:
+          '<span style="color:{series.color}">●</span> {series.name}: <strong>{point.x:.3f}</strong><br/>Profundidad: {point.y} cm',
         shadow: true,
         style: {
           color: 'var(--p-text-color)',
@@ -177,54 +116,71 @@ export class GraficoPerfilSueloComponent implements OnChanges {
         },
       },
       plotOptions: {
-        line: {
-          dataLabels: {
-            enabled: false,
-          },
+        spline: {
+          animation: { duration: 600 },
+          dataLabels: { enabled: false },
           enableMouseTracking: true,
           lineWidth: 2,
-          animation: {
-            duration: 1000,
-            easing: 'easeOutQuart',
-          },
-          states: {
-            hover: {
-              lineWidthPlus: 1,
-            },
+          marker: {
+            enabled: true,
+            radius: 3,
           },
         },
       },
       series,
-      credits: {
-        enabled: false,
-      },
-      accessibility: {
-        enabled: false,
-      },
+      credits: { enabled: false },
+      accessibility: { enabled: false },
       responsive: {
         rules: [
           {
-            condition: {
-              maxWidth: 768,
-            },
+            condition: { maxWidth: 768 },
             chartOptions: {
-              chart: {
-                height: 350,
-              },
-              title: {
-                style: {
-                  fontSize: '12px',
-                },
-              },
-              legend: {
-                itemStyle: {
-                  fontSize: '9px',
-                },
-              },
+              chart: { height: 360 },
+              title: { style: { fontSize: '14px' } },
+              legend: { itemStyle: { fontSize: '11px' } },
             },
           },
         ],
       },
     };
+  }
+
+  private buildSeries(datos: MedicionProfundidad[]): SeriesOptionsType[] {
+    const definitions = [
+      {
+        key: 'humedad' as const,
+        name: `${this.translate.instant('Humedad')} (m3/m3)`,
+        color: '#2f9fe8',
+      },
+      {
+        key: 'salinidad' as const,
+        name: `${this.translate.instant('Salinidad')} (mS/m)`,
+        color: '#8e44ad',
+      },
+      {
+        key: 'temperatura' as const,
+        name: `${this.translate.instant('Temperatura')} (C)`,
+        color: '#e74c3c',
+      },
+    ];
+
+    return definitions
+      .map((definition) => {
+        const data = datos
+          .filter((row) => row[definition.key])
+          .map((row) => [row[definition.key]!.actual, row.profundidad]);
+
+        if (!data.length) {
+          return null;
+        }
+
+        return {
+          color: definition.color,
+          data,
+          name: definition.name,
+          type: 'spline',
+        } as SeriesOptionsType;
+      })
+      .filter(Boolean) as SeriesOptionsType[];
   }
 }

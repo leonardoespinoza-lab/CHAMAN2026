@@ -1,6 +1,6 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
-import { MedicionProfundidad } from '../detalles-dispositivo.component';
+import { MedicionProfundidad } from '../sentek-profile';
 
 @Component({
   selector: 'app-card-detalles-reporte-lanza',

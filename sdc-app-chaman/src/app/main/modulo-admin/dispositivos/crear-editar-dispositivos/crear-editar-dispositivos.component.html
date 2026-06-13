@@ -1,110 +1,139 @@
-<!-- <app-map-draw [formGeojson]="geojson" tipo="Polygon" [readOnlyPolygons]="geoJsonEstablecimiento"></app-map-draw> -->
-
-<div style="padding: 1em; height: 100%">
-  <div class="p-card" style="height: 100%">
-    <div
-      class="p-card-body"
-      style="height: 100%; display: flex; flex-direction: column; justify-content: space-between"
-    >
-      <div style="overflow: hidden; height: 100%">
-        <!-- Titulo -->
-        <div class="p-card-title">{{ titulo?.() }}</div>
-        <!-- Subtitulo -->
-        <div class="p-card-subtitle column-flex-start" style="gap: 5px">
-          @if (dispositivo) {
-            <span>{{ dispositivo.nombre }}</span>
-          }
-        </div>
-
-        <!-- Content -->
-        <div class="p-card-content" style="overflow: auto; height: calc(100% - 26px); margin-top: 1em">
-          @if (form) {
-            <form [formGroup]="form" autocomplete="off">
-              <p-tabs [(value)]="tabValue" scrollable [lazy]="false">
-                <p-tablist>
-                  <p-tab [value]="0">{{ 'Básico' | translate }}</p-tab>
-                  <p-tab [value]="1">{{ 'Asignación' | translate }}</p-tab>
-                </p-tablist>
-                <p-tabpanels>
-                  <!-- Basico -->
-                  <p-tabpanel [value]="0">
-                    <!-- Nombre -->
-                    <p-floatlabel variant="in" class="mb-4">
-                      <input pInputText formControlName="nombre" [fluid]="true" autocomplete="new-username" />
-                      <label>{{ 'Nombre' | translate }}</label>
-                    </p-floatlabel>
-
-                    <!-- Deveui -->
-                    <p-floatlabel variant="in" class="mb-4">
-                      <input pInputText formControlName="deveui" [fluid]="true" autocomplete="new-username" />
-                      <label>{{ 'Deveui' | translate }}</label>
-                    </p-floatlabel>
-
-                    <!-- Tipo -->
-                    <p-floatlabel variant="in" class="mb-4">
-                      <p-select formControlName="tipo" [options]="tiposDispositivo" [style]="{ width: '100%' }" />
-                      <label>{{ 'Tipo' | translate }}</label>
-                    </p-floatlabel>
-
-                    <!-- Sensores -->
-                    <p-floatlabel variant="in" class="mb-4">
-                      <p-multiselect
-                        [options]="sensores"
-                        formControlName="sensores"
-                        [style]="{ width: '100%' }"
-                        [maxSelectedLabels]="3"
-                        appendTo="body"
-                      />
-                      <label>{{ 'Sensores' | translate }}</label>
-                    </p-floatlabel>
-                  </p-tabpanel>
-                  <!-- Asignación -->
-                  <p-tabpanel [value]="1">
-                    <!-- Nombre -->
-                    <p-floatlabel variant="in" class="mb-4">
-                      <p-select
-                        [options]="productores"
-                        formControlName="idProductor"
-                        [checkmark]="true"
-                        [filter]="true"
-                        [showClear]="true"
-                        filterBy="nombre"
-                        optionLabel="nombre"
-                        optionValue="_id"
-                        [style]="{ width: '100%' }"
-                        (onClear)="form.get('idProductor')!.setValue(null)"
-                      />
-                      <label>{{ 'Productor' | translate }}</label>
-                    </p-floatlabel>
-                  </p-tabpanel>
-                </p-tabpanels>
-              </p-tabs>
-            </form>
-          }
-        </div>
+<div class="device-form-page">
+  <div class="device-form-card">
+    <header class="form-header">
+      <div>
+        <p class="eyebrow">LoRaWAN</p>
+        <h1>{{ titulo?.() }}</h1>
+        <p>Alta manual o edicion de sensores detectados por MQTT. Despues se vinculan a productor, campo y lote.</p>
       </div>
-      <!-- Footer -->
-      <div class="p-card-footer">
-        <p-divider />
-        <div class="flex gap-4 mt-1">
-          <p-button
-            [label]="'Cancelar' | translate"
-            severity="secondary"
-            class="w-full"
-            [outlined]="true"
-            styleClass="w-full"
-            (onClick)="volver()"
-          />
-          <p-button
-            [label]="'Guardar' | translate"
-            class="w-full"
-            styleClass="w-full"
-            [loading]="loading"
-            (onClick)="guardar()"
-            [disabled]="!form?.valid || loading"
-          />
-        </div>
-      </div>
-    </div>
+      @if (dispositivo?.fechaUltimaComunicacion) {
+        <span class="last-seen">Ultimo reporte: {{ dispositivo?.fechaUltimaComunicacion | date: 'short' }}</span>
+      }
+    </header>
+
+    @if (form) {
+      <form [formGroup]="form" autocomplete="off">
+        <p-tabs [(value)]="tabValue" scrollable [lazy]="false">
+          <p-tablist>
+            <p-tab [value]="0">Basico</p-tab>
+            <p-tab [value]="1">Asignacion</p-tab>
+            <p-tab [value]="2">LoRaWAN</p-tab>
+          </p-tablist>
+          <p-tabpanels>
+            <p-tabpanel [value]="0">
+              <div class="form-grid">
+                <p-floatlabel variant="in">
+                  <input pInputText formControlName="nombre" [fluid]="true" autocomplete="new-username" />
+                  <label>Nombre</label>
+                </p-floatlabel>
+
+                <p-floatlabel variant="in">
+                  <input pInputText formControlName="deveui" [fluid]="true" autocomplete="new-username" />
+                  <label>DevEUI</label>
+                </p-floatlabel>
+
+                <p-floatlabel variant="in">
+                  <p-select formControlName="tipo" [options]="tiposDispositivo" [style]="{ width: '100%' }" />
+                  <label>Tipo</label>
+                </p-floatlabel>
+
+                <p-floatlabel variant="in">
+                  <p-multiselect
+                    [options]="sensores"
+                    formControlName="sensores"
+                    [style]="{ width: '100%' }"
+                    [maxSelectedLabels]="3"
+                    appendTo="body"
+                  />
+                  <label>Sensores</label>
+                </p-floatlabel>
+              </div>
+            </p-tabpanel>
+
+            <p-tabpanel [value]="1">
+              <div class="form-grid">
+                <p-floatlabel variant="in">
+                  <p-select
+                    [options]="productores"
+                    formControlName="idProductor"
+                    [checkmark]="true"
+                    [filter]="true"
+                    [showClear]="true"
+                    filterBy="nombre"
+                    optionLabel="nombre"
+                    optionValue="_id"
+                    [style]="{ width: '100%' }"
+                    appendTo="body"
+                    (onChange)="onProductorChange()"
+                    (onClear)="onProductorChange()"
+                  />
+                  <label>Productor</label>
+                </p-floatlabel>
+
+                <p-floatlabel variant="in">
+                  <p-select
+                    [options]="establecimientosFiltrados"
+                    formControlName="idEstablecimiento"
+                    [checkmark]="true"
+                    [filter]="true"
+                    [showClear]="true"
+                    filterBy="nombre"
+                    optionLabel="nombre"
+                    optionValue="_id"
+                    [style]="{ width: '100%' }"
+                    appendTo="body"
+                    (onChange)="onEstablecimientoChange()"
+                    (onClear)="onEstablecimientoChange()"
+                  />
+                  <label>Establecimiento / campo</label>
+                </p-floatlabel>
+
+                <p-floatlabel variant="in">
+                  <p-select
+                    [options]="lotesFiltrados"
+                    formControlName="idLote"
+                    [checkmark]="true"
+                    [filter]="true"
+                    [showClear]="true"
+                    filterBy="nombre"
+                    optionLabel="nombre"
+                    optionValue="_id"
+                    [style]="{ width: '100%' }"
+                    appendTo="body"
+                  />
+                  <label>Lote</label>
+                </p-floatlabel>
+              </div>
+            </p-tabpanel>
+
+            <p-tabpanel [value]="2">
+              <div class="lorawan-readonly">
+                <article>
+                  <span>Gateway</span>
+                  <strong>{{ dispositivo?.metadata?.gatewayID || '-' }}</strong>
+                </article>
+                <article>
+                  <span>Aplicacion</span>
+                  <strong>{{ dispositivo?.metadata?.applicationName || dispositivo?.metadata?.applicationID || '-' }}</strong>
+                </article>
+                <article>
+                  <span>RSSI / SNR</span>
+                  <strong>{{ dispositivo?.metadata?.rssi ?? '--' }} dBm / {{ dispositivo?.metadata?.snr ?? '--' }} dB</strong>
+                </article>
+                <article>
+                  <span>Contador</span>
+                  <strong>{{ dispositivo?.metadata?.fCnt ?? '-' }}</strong>
+                </article>
+              </div>
+            </p-tabpanel>
+          </p-tabpanels>
+        </p-tabs>
+      </form>
+    }
+
+    <footer class="form-footer">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" (onClick)="volver()" />
+      <p-button label="Guardar" [loading]="loading" (onClick)="guardar()" [disabled]="!form?.valid || loading" />
+    </footer>
   </div>
 </div>

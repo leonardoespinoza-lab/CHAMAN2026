@@ -6,6 +6,7 @@ export type SensoresV2 =
   | 'Humedad'
   | 'Humedad Suelo Superficial' // SHS Pinche ahí nomás
   | 'Humedad Suelo Profundidad' // LANZA Muchos valores
+  | 'Salinidad Suelo'
   | 'Viento Velocidad'
   | 'Viento Dirección'
   | 'Pluviometro' // Lluvia en general

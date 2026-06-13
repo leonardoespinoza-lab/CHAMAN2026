@@ -1,73 +1,51 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo_text.svg" width="320" alt="Nest Logo" /></a>
-</p>
+# sdc-api-lora
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Servicio NestJS de integracion LoRaWAN para CHAMAN Agro.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Responsabilidad
 
-## Description
+- Mantener endpoints historicos de reportes ChirpStack/Sentek.
+- Conectarse a un broker EMQX por MQTT.
+- Suscribirse a `application/+/device/+/rx`.
+- Normalizar uplinks LoRaWAN.
+- Persistir cada uplink en `sdc-datos` dentro de la coleccion `lorawan_uplinks`.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Installation
+## Variables principales
 
 ```bash
-$ npm install
+API_DATOS=http://127.0.0.1:5000
+APIKEY_CHIRPSTACK=<api-key-webhook>
+
+LORAWAN_MQTT_ENABLED=true
+LORAWAN_MQTT_URL=mqtts://<emqx-host>:8883
+LORAWAN_MQTT_USERNAME=<mqtt-user>
+LORAWAN_MQTT_PASSWORD=<mqtt-password>
+LORAWAN_MQTT_CLIENT_ID=chaman-lorawan-local
+LORAWAN_MQTT_TOPIC=application/+/device/+/rx
+LORAWAN_MQTT_QOS=0
 ```
 
-## Running the app
+Tambien acepta aliases `EMQX_MQTT_URL`, `EMQX_MQTT_USERNAME` y `EMQX_MQTT_PASSWORD`.
+
+## Endpoint de diagnostico
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+GET /lorawan/uplinks/latest
 ```
 
-## Test
+Filtros opcionales:
+
+- `devEUI`
+- `applicationID`
+- `gatewayID`
+- `limit`
+
+El servicio mantiene autenticacion por `apikey` para las rutas HTTP. El consumidor MQTT no expone credenciales en logs.
+
+## Comandos
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run build
+npm run start:dev
+npm run start:prod
 ```
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](LICENSE).

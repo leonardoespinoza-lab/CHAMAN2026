@@ -35,6 +35,7 @@ import { ReportesModule } from './entidades/reportes/module';
 import { DispositivosModule } from './entidades/dispositivos/module';
 import { FotosModule } from './entidades/foto/module';
 import { MalezasModule } from './entidades/maleza/module';
+import { LorawanUplinksModule } from './entidades/lorawan-uplinks/module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { MalezasModule } from './entidades/maleza/module';
     DispositivosModule,
     FotosModule,
     MalezasModule,
+    LorawanUplinksModule,
   ],
   controllers: [HealthController],
   providers: [],

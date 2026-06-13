@@ -1,6 +1,112 @@
-.permiso {
-  padding: 0.5em;
-  border: 1px solid var(--p-text-muted-color);
-  border-radius: 10px;
-  margin-bottom: 1em;
+.device-form-page {
+  min-height: 100%;
+  padding: 24px;
+}
+
+.device-form-card {
+  display: grid;
+  gap: 22px;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  background: var(--p-content-background);
+  padding: 24px;
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: var(--p-primary-color);
+  font-weight: 800;
+  font-size: 0.86rem;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  color: var(--p-text-color);
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.form-header p {
+  margin: 8px 0 0;
+  color: var(--p-text-muted-color);
+}
+
+.last-seen {
+  padding: 10px 12px;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  color: var(--p-text-muted-color);
+  white-space: nowrap;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  padding-top: 12px;
+}
+
+.lorawan-readonly {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding-top: 12px;
+}
+
+.lorawan-readonly article {
+  display: grid;
+  gap: 6px;
+  min-height: 94px;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.lorawan-readonly span {
+  color: var(--p-text-muted-color);
+  font-weight: 700;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.lorawan-readonly strong {
+  color: var(--p-text-color);
+  overflow-wrap: anywhere;
+}
+
+.form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid var(--p-content-border-color);
+  padding-top: 18px;
+}
+
+@media (max-width: 860px) {
+  .device-form-page {
+    padding: 12px;
+  }
+
+  .form-header {
+    display: grid;
+  }
+
+  .form-grid,
+  .lorawan-readonly {
+    grid-template-columns: 1fr;
+  }
+
+  .form-footer {
+    display: grid;
+  }
 }

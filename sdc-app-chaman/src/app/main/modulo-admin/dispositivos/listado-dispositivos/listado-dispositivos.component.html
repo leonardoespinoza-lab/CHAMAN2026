@@ -1,4 +1,70 @@
 <div class="list-view-container">
+  <section class="lorawan-console">
+    <div class="console-header">
+      <div>
+        <p class="eyebrow">LoRaWAN / EMQX</p>
+        <h1>Gestion de dispositivos</h1>
+        <p class="subtitle">Sensores detectados por MQTT, gateways, senal y asignacion a productores, campos y lotes.</p>
+      </div>
+      <div class="console-actions">
+        <p-button
+          label="Actualizar"
+          icon="pi pi-refresh"
+          [outlined]="true"
+          [loading]="loading"
+          (onClick)="refreshLorawan()"
+        />
+        @if (!helper.soloLectura()) {
+          <p-button label="Agregar dispositivo" icon="pi pi-plus" (onClick)="create()" />
+        }
+      </div>
+    </div>
+
+    <div class="status-grid">
+      <article class="metric-card">
+        <span class="metric-label">Registrados</span>
+        <strong>{{ totalCount }}</strong>
+        <span>dispositivos en Chaman</span>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">Online</span>
+        <strong>{{ onlineDevices }}</strong>
+        <span>reportaron en 30 min</span>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">Detectados MQTT</span>
+        <strong>{{ detectedDevices }}</strong>
+        <span>devEUI con uplinks recientes</span>
+      </article>
+      <article class="metric-card warning">
+        <span class="metric-label">Sin asignar</span>
+        <strong>{{ unassignedDevices }}</strong>
+        <span>faltan productor/campo/lote</span>
+      </article>
+    </div>
+
+    <div class="gateway-panel">
+      <div class="panel-title">
+        <h2>Gateways detectados</h2>
+        <span>{{ gateways.length || 0 }} gateways con trafico reciente</span>
+      </div>
+      <div class="gateway-grid">
+        @for (gateway of gateways; track gateway.gatewayID) {
+          <article class="gateway-card" [class.offline]="!gateway.online">
+            <div>
+              <span class="gateway-status" [class.online]="gateway.online"></span>
+              <strong>{{ gateway.gatewayID }}</strong>
+            </div>
+            <span>Ultimo reporte: {{ gateway.ultimoReporte ? (gateway.ultimoReporte | date: 'short') : '-' }}</span>
+            <span>Senal: {{ gateway.rssi ?? '--' }} dBm / {{ gateway.snr ?? '--' }} dB</span>
+          </article>
+        } @empty {
+          <p-message severity="info">Todavia no hay gateways con uplinks guardados.</p-message>
+        }
+      </div>
+    </div>
+  </section>
+
   <p-table
     #table
     [value]="datos"
@@ -10,17 +76,14 @@
     [scrollable]="true"
     scrollHeight="flex"
     (onPage)="helper.setPageSize(name, $event.rows)"
-    [globalFilterFields]="['nombre']"
+    [globalFilterFields]="['nombre', 'deveui']"
     stripedRows
     rowExpandMode="single"
-    dataKey="_id"
     stateStorage="session"
     [stateKey]="name"
   >
-    <!-- Caption -->
     <ng-template #caption>
       <div class="flex menu-offset" style="align-items: center">
-        <!-- Buscar -->
         <p-iconfield iconPosition="left" class="ml-auto">
           <p-inputicon>
             <i class="pi pi-search"></i>
@@ -33,7 +96,6 @@
             [placeholder]="'Buscar' | translate"
           />
         </p-iconfield>
-        <!-- Limpiar -->
         <p-button
           [label]="'Limpiar' | translate"
           [outlined]="true"
@@ -44,129 +106,107 @@
       </div>
     </ng-template>
 
-    <!-- Header -->
     <ng-template #header>
       <tr>
-        <!-- Expandir -->
-        <!-- <th style="width: 1em"></th> -->
-
-        <!-- Batería-->
+        <th style="width: 9rem">Estado</th>
         <th pSortableColumn="bateria" style="width: 8rem; text-align: center">
           <div class="flex items-center justify-center gap-2">
-            {{ 'Batería' | translate }}
+            Bateria
             <p-sortIcon field="bateria" />
           </div>
         </th>
-        <!-- Nombre -->
         <th pSortableColumn="nombre">
           <div class="flex items-center gap-2">
-            {{ 'Nombre' | translate }}
+            Nombre
             <p-sortIcon field="nombre" />
             <p-columnFilter type="text" field="nombre" display="menu" />
           </div>
         </th>
-        <!-- Deveui -->
         <th pSortableColumn="deveui">
           <div class="flex items-center gap-2">
-            {{ 'Deveui' | translate }}
+            DevEUI
             <p-columnFilter type="text" field="deveui" display="menu" />
           </div>
         </th>
-        <!-- Fecha Última Comunicación -->
+        <th>Asignacion</th>
+        <th>Gateway</th>
+        <th>Senal</th>
         <th pSortableColumn="fechaUltimaComunicacion">
           <div class="flex items-center gap-2">
-            {{ 'Fecha' | translate }}
-            <p-columnFilter type="text" field="deveui" display="menu" />
+            Ultimo reporte
+            <p-sortIcon field="fechaUltimaComunicacion" />
           </div>
         </th>
-        <!-- Acciones -->
-        <th>
-          <div class="flex items-center">
-            {{ 'Acciones' | translate }}
-          </div>
-        </th>
+        <th>Acciones</th>
       </tr>
     </ng-template>
 
-    <!-- Body -->
-    <ng-template #body let-row let-expanded="expanded">
+    <ng-template #body let-row>
       <tr>
-        <!-- Expandir -->
-        <!-- <td>
-        <p-button
-          type="button"
-          pRipple
-          [pRowToggler]="row"
-          [text]="true"
-          [rounded]="true"
-          [plain]="true"
-          [icon]="expanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
-        />
-      </td> -->
-        <!-- Batería-->
+        <td>
+          <span class="device-status" [ngClass]="statusClass(row)">
+            <i class="pi pi-circle-fill"></i>
+            {{ statusLabel(row) }}
+          </span>
+        </td>
         <td style="text-align: center">
-          <!-- Usamos el componente aquí. El *ngIf se asegura de que solo se muestre si el valor existe. -->
           @if (row.bateria?.valor !== null && row.bateria?.valor !== undefined) {
             <app-bateria [level]="row.bateria?.valor" orientation="horizontal"></app-bateria>
           } @else {
             <span> - </span>
           }
-          <!-- Puedes cambiar la orientación a 'vertical' si lo prefieres -->
         </td>
-        <!-- Nombre -->
         <td>
-          {{ row.nombre }}
+          <strong>{{ row.nombre || 'Sin nombre' }}</strong>
         </td>
-        <!-- Deveui -->
         <td>
           <div class="row-center">
-            <span style="font-size: small">{{ row.deveui }}</span>
-
-            <button
-              (click)="helper.copyToClipboard(row.deveui)"
-              pButton
-              type="button"
-              icon="pi pi-copy"
-              class="p-button-text p-button-sm ml-2"
-            ></button>
+            <span class="deveui">{{ row.deveui || '-' }}</span>
+            @if (row.deveui) {
+              <button
+                (click)="helper.copyToClipboard(row.deveui)"
+                pButton
+                type="button"
+                icon="pi pi-copy"
+                class="p-button-text p-button-sm ml-2"
+              ></button>
+            }
           </div>
         </td>
-        <!-- Fecha Última Comunicación -->
         <td>
-          @if (row.fechaUltimaComunicacion) {
+          <div class="assignment-cell">
+            <strong>{{ row.lote?.nombre || row.establecimiento?.nombre || row.productor?.nombre || 'Sin asignar' }}</strong>
+            <span>
+              @if (row.lote?.nombre) {
+                Lote
+              } @else if (row.establecimiento?.nombre) {
+                Establecimiento
+              } @else if (row.productor?.nombre) {
+                Productor
+              } @else {
+                Disponible para vincular
+              }
+            </span>
+          </div>
+        </td>
+        <td>{{ gatewayFor(row) }}</td>
+        <td>{{ signalFor(row) }}</td>
+        <td>
+          @if (uplinkFor(row)?.timestamp || row.fechaUltimaComunicacion) {
             <div class="row-center">
-              {{ row.fechaUltimaComunicacion | date: 'short' }}
+              {{ (uplinkFor(row)?.timestamp || row.fechaUltimaComunicacion) | date: 'short' }}
             </div>
           } @else {
-            <span class="no-info">Sin Reportar</span>
+            <span class="no-info">Sin reportar</span>
           }
         </td>
         <td>
-          <div style="display: flex; flex-direction: row; gap: 0.5rem">
-            <!-- Detalles -->
-            <p-button
-              [rounded]="true"
-              pTooltip="Detalles"
-              icon="pi pi-search"
-              severity="success"
-              (click)="detalles(row)"
-            ></p-button>
-
+          <div class="actions-cell">
+            <p-button [rounded]="true" pTooltip="Detalles" icon="pi pi-search" severity="success" (click)="detalles(row)" />
             @if (row.idProductor) {
-              <!-- Ubicar -->
               <app-ubicar [dispositivo]="row"></app-ubicar>
             }
-
-            <!-- Editar -->
-            <p-button
-              [rounded]="true"
-              pTooltip="Editar"
-              icon="pi pi-pencil"
-              severity="warn"
-              (click)="edit(row)"
-            ></p-button>
-
-            <!-- Eliminar -->
+            <p-button [rounded]="true" pTooltip="Editar asignacion" icon="pi pi-pencil" severity="warn" (click)="edit(row)" />
             <p-button
               [rounded]="true"
               pTooltip="Eliminar"
@@ -174,46 +214,18 @@
               severity="danger"
               (click)="delete(row)"
               [disabled]="user?._id === row._id"
-            ></p-button>
+            />
           </div>
         </td>
       </tr>
     </ng-template>
 
-    <!-- Expanded -->
-    <ng-template #expandedrow let-row>
-      <tr>
-        <td colspan="2">
-          <h2 style="margin: 0; text-align: center; line-height: 2">Acá van mas detalles del usuario</h2>
-        </td>
-      </tr>
-    </ng-template>
-
-    <!-- Sin datos -->
     <ng-template #emptymessage>
       <tr>
-        <td colspan="2">
-          <p-message severity="info">
-            {{ 'No se encontraron dispositivos' | translate }}
-          </p-message>
+        <td colspan="9">
+          <p-message severity="info">No se encontraron dispositivos.</p-message>
         </td>
       </tr>
-    </ng-template>
-
-    <!-- Footer de la tabla con botón crear -->
-    <ng-template #summary>
-      @if (!helper.soloLectura()) {
-        <div class="flex justify-center p-3 border-t border-surface-200">
-          <p-button
-            [label]="'Crear nuevo dispositivo' | translate"
-            icon="pi pi-plus"
-            severity="primary"
-            [fluid]="true"
-            [outlined]="true"
-            (click)="create()"
-          ></p-button>
-        </div>
-      }
     </ng-template>
   </p-table>
 </div>

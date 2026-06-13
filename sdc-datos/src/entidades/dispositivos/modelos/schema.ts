@@ -8,6 +8,8 @@ import {
   IQuimica,
   IDistribuidor,
   IProductor,
+  IEstablecimiento,
+  ILote,
   IGeoJSONPoint,
   IBateria,
   IReporte,
@@ -33,8 +35,14 @@ export class Dispositivo implements Exactly<IDispositivo, Dispositivo> {
 
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idProductor?: string;
+
+  @Prop({ type: mongoose.Schema.Types.ObjectId })
+  idEstablecimiento?: string;
+
+  @Prop({ type: mongoose.Schema.Types.ObjectId })
+  idLote?: string;
   //
-  @Prop({ type: String, uppercase: true })
+  @Prop({ type: String, uppercase: true, index: true })
   deveui?: string;
 
   @Prop()
@@ -70,6 +78,8 @@ export class Dispositivo implements Exactly<IDispositivo, Dispositivo> {
   quimica?: IQuimica;
   distribuidor?: IDistribuidor;
   productor?: IProductor;
+  establecimiento?: IEstablecimiento;
+  lote?: ILote;
 }
 
 export type DispositivoDocument = Dispositivo & Document;
@@ -79,6 +89,7 @@ export const DispositivoSchema = SchemaFactory.createForClass(Dispositivo);
 DispositivoSchema.set('toJSON', { virtuals: true, getters: true });
 
 DispositivoSchema.index({ geojson: '2dsphere' });
+DispositivoSchema.index({ deveui: 1 });
 
 DispositivoSchema.virtual('quimica', {
   foreignField: '_id',
@@ -99,4 +110,18 @@ DispositivoSchema.virtual('productor', {
   justOne: true,
   localField: 'idProductor',
   ref: Productor.name,
+});
+
+DispositivoSchema.virtual('establecimiento', {
+  foreignField: '_id',
+  justOne: true,
+  localField: 'idEstablecimiento',
+  ref: 'Establecimiento',
+});
+
+DispositivoSchema.virtual('lote', {
+  foreignField: '_id',
+  justOne: true,
+  localField: 'idLote',
+  ref: 'Lote',
 });

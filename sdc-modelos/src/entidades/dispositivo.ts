@@ -3,9 +3,17 @@ import { IDistribuidor } from './distribuidor';
 import { IProductor } from './productor';
 import { IQuimica } from './quimica';
 import { IReporte, SensoresV2 } from './reporte';
+import type { IEstablecimiento } from './establecimiento';
+import type { ILote } from './lote';
 
 export interface IMetaDataLora {
   ubicacionGW?: IGeoJSONPoint;
+  applicationID?: string;
+  applicationName?: string;
+  gatewayID?: string;
+  frequency?: number;
+  fCnt?: number;
+  fPort?: number;
   snr?: number;
   rssi?: number;
   dr?: number;
@@ -42,6 +50,8 @@ export interface IDispositivo {
   idQuimica?: string;
   idDistribuidor?: string;
   idProductor?: string;
+  idEstablecimiento?: string;
+  idLote?: string;
   deveui?: string;
   tipo?: TipoDispositivo;
   metadata?: IMetaDataLora;
@@ -55,6 +65,8 @@ export interface IDispositivo {
   quimica?: IQuimica;
   distribuidor?: IDistribuidor;
   productor?: IProductor;
+  establecimiento?: IEstablecimiento;
+  lote?: ILote;
 }
 
 type Omitir = '_id';

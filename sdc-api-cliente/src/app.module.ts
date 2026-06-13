@@ -45,6 +45,7 @@ import { GeoCodeApiModule } from './auxiliares/geocode-api/geocode-api.module';
 import { CacheWarmingModule } from './auxiliares/cache-warming/cache-warming.module';
 import { FotosModule } from './entidades/foto/module';
 import { MalezasModule } from './entidades/maleza/module';
+import { LorawanUplinksModule } from './entidades/lorawan-uplinks/module';
 import { REDIS_HOST, REDIS_PORT, REDIS_PASSWORD } from './env';
 
 @Module({
@@ -96,6 +97,7 @@ import { REDIS_HOST, REDIS_PORT, REDIS_PASSWORD } from './env';
     GeoCodeApiModule,
     FotosModule,
     MalezasModule,
+    LorawanUplinksModule,
   ],
   controllers: [],
   providers: [{ provide: APP_INTERCEPTOR, useClass: MqttInterceptor }],

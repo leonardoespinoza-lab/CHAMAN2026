@@ -41,6 +41,13 @@ const services = {
     build: 'npm run build',
     start: 'npm run start:prod',
   },
+  'sdc-api-lora': {
+    aliases: ['chaman-lora', 'lora', 'lorawan'],
+    path: 'sdc-api-lora',
+    install: 'npm ci',
+    build: 'npm run build',
+    start: 'npm run start:prod',
+  },
   'sdc-app-chaman': {
     aliases: ['CHAMAN2026', 'chaman-web', 'web', 'app'],
     path: 'sdc-app-chaman',

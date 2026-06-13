@@ -24,7 +24,7 @@ export class DashboardAdminComponent {
     { label: 'Usuario', icon: 'pi pi-user-plus', route: '/usuarios/crear' },
     { label: 'Productor', icon: 'pi pi-id-card', route: '/productores/crear' },
     { label: 'Quimica', icon: 'pi pi-building', route: '/quimicas/crear' },
-    { label: 'Dispositivo', icon: 'pi pi-microchip', route: '/dispositivos/crear' },
+    { label: 'LoRaWAN', icon: 'pi pi-microchip', route: '/dispositivos/crear' },
   ];
 
   public readonly cards: AdminServiceCard[] = [
@@ -61,8 +61,8 @@ export class DashboardAdminComponent {
       status: 'Operativo',
     },
     {
-      title: 'Dispositivos',
-      description: 'Sensores LoRaWAN, lanzas Sentek, bateria, ultimo reporte y asignaciones.',
+      title: 'Dispositivos LoRaWAN',
+      description: 'Alta de sensores, DevEUI, gateway, asignacion a lotes y monitoreo de uplinks MQTT.',
       icon: 'pi pi-microchip',
       route: '/dispositivos',
       group: 'Sensores',
@@ -109,7 +109,7 @@ export class DashboardAdminComponent {
     },
     {
       title: 'Integraciones',
-      items: ['FieldClimate', 'ChirpStack LoRaWAN', 'NDVI', 'Websocket y notificaciones'],
+      items: ['Open-Meteo', 'FieldClimate', 'EMQX / ChirpStack LoRaWAN', 'NDVI y satelite'],
     },
     {
       title: 'Datos',

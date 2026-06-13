@@ -47,15 +47,15 @@ export class DispositivosService {
     const productoresUsusario = user.permisos
       .filter((p) => p.nivel === 'Productor')
       .map((p) => p.idProductor);
-    const dispositivoesUsuario = user.permisos
+    const establecimientosUsuario = user.permisos
       .filter((p) => p.nivel === 'Establecimiento')
       .map((p) => p.idEstablecimiento);
 
     if (productoresUsusario.length > 0) {
       $or.push({ idProductor: { $in: productoresUsusario } });
     }
-    if (dispositivoesUsuario.length > 0) {
-      $or.push({ _id: { $in: dispositivoesUsuario } });
+    if (establecimientosUsuario.length > 0) {
+      $or.push({ idEstablecimiento: { $in: establecimientosUsuario } });
     }
     if ($or.length > 0) {
       $and.push({ $or });

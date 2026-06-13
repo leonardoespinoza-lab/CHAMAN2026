@@ -1,0 +1,28 @@
+.soil-metrics-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric-value {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 1.35rem;
+  font-weight: 800;
+  gap: 0.2rem;
+  justify-content: center;
+  line-height: 1.1;
+}
+
+.metric-unit {
+  color: var(--p-text-muted-color);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  .soil-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}

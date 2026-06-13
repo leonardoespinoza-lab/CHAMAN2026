@@ -9,6 +9,7 @@ Esta carpeta es la base de trabajo nueva. No depende del codigo que esta corrien
 - `sdc-api-cliente`: `http://127.0.0.1:5002`
 - `sdc-api-predicciones`: `http://127.0.0.1:5007`
 - `sdc-api-clima`: `http://127.0.0.1:5008/local`
+- `sdc-api-lora`: `http://127.0.0.1:5012`
 - `sdc-app-chaman`: `http://127.0.0.1:4200`
 
 ## Login local
@@ -57,8 +58,23 @@ C:\CHAMAN2026\scripts\start-local-services.ps1
 3. Levantar `sdc-auth`.
 4. Levantar `sdc-api-clima`.
 5. Levantar `sdc-api-predicciones`.
-6. Levantar `sdc-api-cliente`.
-7. Levantar `sdc-app-chaman`.
+6. Levantar `sdc-api-lora`.
+7. Levantar `sdc-api-cliente`.
+8. Levantar `sdc-app-chaman`.
+
+## LoRaWAN local
+
+`sdc-api-lora` escucha EMQX si existen estas variables en la terminal antes de iniciar:
+
+```powershell
+$env:LORAWAN_MQTT_ENABLED="true"
+$env:LORAWAN_MQTT_URL="mqtts://v5160f66.ala.us-east-1.emqxsl.com:8883"
+$env:LORAWAN_MQTT_USERNAME="<usuario-mqtt>"
+$env:LORAWAN_MQTT_PASSWORD=$env:CHAMAN_MQTT_PASSWORD
+$env:LORAWAN_MQTT_TOPIC="application/+/device/+/rx"
+```
+
+No guardar credenciales MQTT dentro del repositorio.
 
 ## Modelos compartidos
 

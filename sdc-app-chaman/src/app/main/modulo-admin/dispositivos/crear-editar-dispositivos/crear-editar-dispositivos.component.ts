@@ -1,10 +1,13 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import {
   ICreateDispositivo,
   IDispositivo,
+  IEstablecimiento,
   IListado,
+  ILote,
   IPopulate,
   IProductor,
   IQueryParam,
@@ -32,12 +35,17 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
   public tabValue = 0;
 
   public productores: IProductor[] = [];
+  public establecimientos: IEstablecimiento[] = [];
+  public lotes: ILote[] = [];
+
   private productores$?: Subscription;
+  private establecimientos$?: Subscription;
+  private lotes$?: Subscription;
 
   public tiposDispositivo: TipoDispositivo[] = [
-    'Estación Meteorológica',
+    'Estacion Meteorologica',
     'Sensor de Humedad de Suelo',
-    'Pluviómetro',
+    'Pluviometro',
     'Otro',
   ];
 
@@ -59,6 +67,7 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
   ];
 
   constructor(
+    private route: ActivatedRoute,
     private paramsService: ParamsService,
     private translate: TranslateService,
     private service: DispositivoService,
@@ -66,21 +75,52 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     private listados: ListadosService
   ) {}
 
+  public get establecimientosFiltrados(): IEstablecimiento[] {
+    const idProductor = this.form?.get('idProductor')?.value;
+    if (!idProductor) {
+      return this.establecimientos;
+    }
+    return this.establecimientos.filter((establecimiento) => establecimiento.idProductor === idProductor);
+  }
+
+  public get lotesFiltrados(): ILote[] {
+    const idProductor = this.form?.get('idProductor')?.value;
+    const idEstablecimiento = this.form?.get('idEstablecimiento')?.value;
+
+    return this.lotes.filter((lote) => {
+      if (idEstablecimiento) {
+        return lote.idEstablecimiento === idEstablecimiento;
+      }
+      if (idProductor) {
+        return lote.idProductor === idProductor;
+      }
+      return true;
+    });
+  }
+
   private createForm(): void {
     this.form = new FormGroup({
       nombre: new FormControl(this.dispositivo?.nombre),
       deveui: new FormControl(this.dispositivo?.deveui, Validators.required),
-      tipo: new FormControl(this.dispositivo?.tipo, Validators.required),
-      sensores: new FormControl(this.dispositivo?.sensores, Validators.required),
+      tipo: new FormControl(this.dispositivo?.tipo || 'Otro', Validators.required),
+      sensores: new FormControl(this.dispositivo?.sensores || [], Validators.required),
       idProductor: new FormControl(this.dispositivo?.idProductor),
+      idEstablecimiento: new FormControl(this.dispositivo?.idEstablecimiento),
+      idLote: new FormControl(this.dispositivo?.idLote),
     });
   }
 
-  // ACCIONES
-
   private getData() {
-    const data: ICreateDispositivo = this.form?.value;
-    return data;
+    return this.form?.value as ICreateDispositivo;
+  }
+
+  public onProductorChange(): void {
+    this.form?.get('idEstablecimiento')?.setValue(null);
+    this.form?.get('idLote')?.setValue(null);
+  }
+
+  public onEstablecimientoChange(): void {
+    this.form?.get('idLote')?.setValue(null);
   }
 
   public async guardar(): Promise<void> {
@@ -89,23 +129,15 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
       const data = this.getData();
       if (this.dispositivo?._id) {
         await this.service.update(this.dispositivo._id, data);
-
-        // Solo actualiza el item en cache
         this.listados.patchEntityItem('dispositivos', {
           _id: this.dispositivo._id,
           ...data,
         });
-
         this.helper.notifSuccess(this.translate.instant('Editado correctamente'));
-        // console.log('edit', data);
       } else {
         const created = await this.service.create(data);
-
-        // Solo actualiza el item en cache
         this.listados.createEntityItem('dispositivos', created);
-
         this.helper.notifSuccess(this.translate.instant('Creado correctamente'));
-        // console.log('crear', data);
       }
       this.volver();
     } catch (err) {
@@ -119,7 +151,6 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     window.history.back();
   }
 
-  // Listados
   private async listarProductores(): Promise<void> {
     const populate: IPopulate[] = [];
     const queryParams: IQueryParam = {
@@ -135,25 +166,68 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
       .subscribe<IListado<IProductor>>('productors', queryParams)
       .subscribe(async (data) => {
         this.productores = data.datos;
-        console.log(`listado de productors`, data);
       });
     await this.listados.getLastValue('productors', queryParams);
   }
 
-  // Hooks
+  private async listarEstablecimientos(): Promise<void> {
+    const queryParams: IQueryParam = {
+      page: 0,
+      limit: 0,
+      select: 'nombre idProductor',
+      sort: 'nombre',
+    };
+
+    this.establecimientos$?.unsubscribe();
+    this.establecimientos$ = this.listados
+      .subscribe<IListado<IEstablecimiento>>('establecimientos', queryParams)
+      .subscribe(async (data) => {
+        this.establecimientos = data.datos;
+      });
+    await this.listados.getLastValue('establecimientos', queryParams);
+  }
+
+  private async listarLotes(): Promise<void> {
+    const queryParams: IQueryParam = {
+      page: 0,
+      limit: 0,
+      select: 'nombre idProductor idEstablecimiento',
+      sort: 'nombre',
+    };
+
+    this.lotes$?.unsubscribe();
+    this.lotes$ = this.listados.subscribe<IListado<ILote>>('lotes', queryParams).subscribe(async (data) => {
+      this.lotes = data.datos;
+    });
+    await this.listados.getLastValue('lotes', queryParams);
+  }
+
+  private async cargarDispositivo(): Promise<void> {
+    const id = this.route.snapshot.paramMap.get('id');
+    const dispositivoEnMemoria = this.paramsService.get('editDispositivo') as IDispositivo | undefined;
+
+    if (id && dispositivoEnMemoria?._id !== id) {
+      this.dispositivo = await this.service.getById(id);
+      return;
+    }
+
+    this.dispositivo = dispositivoEnMemoria;
+  }
+
   async ngOnInit(): Promise<void> {
     this.loading = true;
-    this.dispositivo = this.paramsService.get('editDispositivo');
-    if (this.dispositivo) {
-      console.log('edit', this.dispositivo);
-    }
+    await this.cargarDispositivo();
     this.titulo = this.dispositivo
       ? () => this.translate.instant(`Editar dispositivo`)
       : () => this.translate.instant(`Crear dispositivo`);
     this.createForm();
-    await Promise.all([this.listarProductores()]);
+    await Promise.all([this.listarProductores(), this.listarEstablecimientos(), this.listarLotes()]);
     this.loading = false;
   }
 
-  ngOnDestroy(): void {}
+  ngOnDestroy(): void {
+    this.productores$?.unsubscribe();
+    this.establecimientos$?.unsubscribe();
+    this.lotes$?.unsubscribe();
+  }
 }

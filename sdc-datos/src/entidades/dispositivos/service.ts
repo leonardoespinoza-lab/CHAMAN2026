@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   ICreateDispositivo,
+  ILorawanUplink,
   IQueryParam,
   IUpdateDispositivo,
 } from 'modelos/src';
@@ -24,6 +25,10 @@ export class DispositivosService {
 
   async create(dato: ICreateDispositivo) {
     return await this.repository.create(dato);
+  }
+
+  async upsertFromLorawanUplink(uplink: ILorawanUplink) {
+    return await this.repository.upsertFromLorawanUplink(uplink);
   }
 
   async update(id: string, dato: IUpdateDispositivo) {

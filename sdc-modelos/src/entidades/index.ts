@@ -32,3 +32,4 @@ export * from "./dispositivo";
 export * from "./reporte";
 export * from "./foto";
 export * from "./maleza";
+export * from "./lorawan-uplink";

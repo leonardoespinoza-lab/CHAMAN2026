@@ -9,6 +9,7 @@ $services = @(
   @{ Name = "sdc-auth"; Port = 5001; Path = "sdc-auth" },
   @{ Name = "sdc-api-clima"; Port = 5008; Path = "sdc-api-clima" },
   @{ Name = "sdc-api-predicciones"; Port = 5007; Path = "sdc-api-predicciones" },
+  @{ Name = "sdc-api-lora"; Port = 5012; Path = "sdc-api-lora" },
   @{ Name = "sdc-api-cliente"; Port = 5002; Path = "sdc-api-cliente" },
   @{ Name = "sdc-app-chaman"; Port = 4200; Path = "sdc-app-chaman" }
 )
