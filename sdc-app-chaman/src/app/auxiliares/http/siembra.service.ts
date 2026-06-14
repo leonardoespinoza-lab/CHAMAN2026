@@ -2,6 +2,33 @@ import { Injectable } from '@angular/core';
 import { ISiembra, ICreateSiembra, IListado, IPrediccion, IQueryParam, IUpdateSiembra } from 'modelos/src';
 import { HttpService } from './http.service';
 
+export interface HuellaHidricaSeguimiento {
+  estado: 'seguimiento' | 'final';
+  periodo: {
+    desde?: string;
+    hasta?: string;
+    diasClima: number;
+    diasDesdeSiembra: number;
+    diasCiclo: number;
+    avanceCiclo: number;
+  };
+  progreso: {
+    verde: { mm: number; litrosHa: number; litrosKg?: number; porcentaje: number; detalle: string };
+    azul: { mm: number; litrosHa: number; litrosKg?: number; porcentaje: number; detalle: string };
+    gris: { litrosHa: number; litrosKg?: number; aplicaciones: number; porcentaje: number; detalle: string };
+    total: { litrosHa: number; litrosKg?: number; porcentaje: number; detalle: string };
+  };
+  inputs: {
+    cultivo?: string;
+    rendimientoSecoKgHa?: number;
+    fertilizaciones: number;
+    fumigaciones: number;
+    climaDisponible: boolean;
+  };
+  faltantes: Array<{ campo: string; accion: string; bloque: string }>;
+  trazas: string[];
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -23,6 +50,10 @@ export class SiembraService {
 
   public generarPrediccionEnfermedades(id: string): Promise<IPrediccion[]> {
     return this.http.post(`/siembras/${id}/prediccion-enfermedades`, {});
+  }
+
+  public seguimientoHuellaHidrica(id: string): Promise<HuellaHidricaSeguimiento> {
+    return this.http.get(`/siembras/${id}/huella-hidrica/seguimiento`);
   }
 
   public editar(id: string, dato: IUpdateSiembra): Promise<ISiembra> {

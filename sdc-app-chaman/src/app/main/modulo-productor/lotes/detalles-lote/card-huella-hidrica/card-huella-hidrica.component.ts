@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, OnDestroy, OnInit } from '@angular/core';
+import { Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
 import { ISiembra } from 'modelos/src';
+import { HuellaHidricaSeguimiento, SiembraService } from '../../../../../auxiliares/http/siembra.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
@@ -12,46 +13,71 @@ import { DrawerHuellaHidricaComponent } from '../drawer-huella-hidrica/drawer-hu
   templateUrl: './card-huella-hidrica.component.html',
   styleUrl: './card-huella-hidrica.component.scss',
 })
-export class CardHuellaHidricaComponent implements OnInit, OnDestroy {
+export class CardHuellaHidricaComponent implements OnInit, OnChanges, OnDestroy {
   @Input() public siembra?: ISiembra;
   @Input() public lote?: IDetallesLote;
   public verDrawerHuellaHidrica: boolean = false;
+  public seguimiento?: HuellaHidricaSeguimiento;
+  public cargandoSeguimiento = false;
+  public errorSeguimiento?: string;
   private readonly numeroAr = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
+  private readonly decimalAr = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 });
+  private ultimaSiembraConsultada?: string;
 
-  constructor(public helper: HelperService) {}
+  constructor(public helper: HelperService, private siembraService: SiembraService) {}
 
   async ngOnInit(): Promise<void> {}
 
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['siembra']) {
+      this.cargarSeguimiento();
+    }
+  }
+
   ngOnDestroy(): void {}
+
+  public get subtitulo(): string {
+    if (this.siembra?.huellaHidrica) {
+      return 'Resultado final guardado al cosechar';
+    }
+    if (this.cargandoSeguimiento) {
+      return 'Actualizando seguimiento con clima y aplicaciones';
+    }
+    if (this.seguimiento?.periodo.diasClima) {
+      return `Seguimiento en campana: ${this.seguimiento.periodo.diasClima} dias climaticos`;
+    }
+    return 'Seguimiento en campana pendiente de sincronizacion';
+  }
 
   public get huellas() {
     const huella = this.siembra?.huellaHidrica;
-    const aplicaciones =
-      (this.lote?.fertilizaciones?.length || 0) +
-      ((this.siembra as any)?.fumigaciones?.length || 0);
+    const seguimiento = this.seguimiento;
 
     if (!huella) {
+      const verde = seguimiento?.progreso.verde;
+      const azul = seguimiento?.progreso.azul;
+      const gris = seguimiento?.progreso.gris;
       return [
         {
           key: 'green',
           label: 'Verde',
-          value: 'Pendiente',
-          detail: 'Requiere clima real acumulado y rendimiento de cierre',
-          fill: 0,
+          value: verde ? this.formatearAgua(verde.mm, verde.litrosKg) : 'Sin clima',
+          detail: verde?.detalle || 'Se completa con lluvia efectiva desde Open-Meteo.',
+          fill: this.limitar(verde?.porcentaje || 0),
         },
         {
           key: 'blue',
           label: 'Azul',
-          value: 'Pendiente',
-          detail: 'Requiere riego/sensores o balance hidrico consolidado',
-          fill: 0,
+          value: azul ? this.formatearAgua(azul.mm, azul.litrosKg) : 'Sin balance',
+          detail: azul?.detalle || 'Se completa con deficit hidrico y riego registrado.',
+          fill: this.limitar(azul?.porcentaje || 0),
         },
         {
           key: 'gray',
           label: 'Gris',
-          value: `${aplicaciones} aplic.`,
-          detail: 'Se calcula con fertilizaciones, fumigaciones y rendimiento',
-          fill: 0,
+          value: gris ? this.formatearGris(gris.litrosHa, gris.litrosKg) : 'Sin aplic.',
+          detail: gris ? `${gris.aplicaciones} aplicaciones registradas. ${gris.detalle}` : 'Se completa con fertilizaciones y fumigaciones.',
+          fill: this.limitar(gris?.porcentaje || 0),
         },
       ];
     }
@@ -90,6 +116,7 @@ export class CardHuellaHidricaComponent implements OnInit, OnDestroy {
 
   public get totalHuellaResumen() {
     const huella = this.siembra?.huellaHidrica;
+    const seguimiento = this.seguimiento;
     const verde = huella?.verde?.litrosKg || 0;
     const azul = huella?.azul?.litrosKg || 0;
     const gris = huella?.gris?.litrosKg || 0;
@@ -103,11 +130,62 @@ export class CardHuellaHidricaComponent implements OnInit, OnDestroy {
       };
     }
 
+    if (seguimiento) {
+      const total = seguimiento.progreso.total;
+      return {
+        value: total.litrosKg != null
+          ? `${this.numeroAr.format(total.litrosKg)} l/kg`
+          : `${this.numeroAr.format(total.litrosHa || 0)} l/ha`,
+        detail: total.detalle,
+        fill: this.limitar(total.porcentaje || 0),
+      };
+    }
+
     return {
-      value: 'Pendiente',
-      detail: 'Se consolida con clima, aplicaciones y rendimiento seco',
+      value: this.cargandoSeguimiento ? 'Actualizando' : 'Sin sincronizar',
+      detail: this.errorSeguimiento || 'Esperando respuesta del motor de huella.',
       fill: 0,
     };
+  }
+
+  public get faltantesSeguimiento() {
+    return (this.seguimiento?.faltantes || []).slice(0, 5);
+  }
+
+  public get faltantesRestantes(): number {
+    return Math.max((this.seguimiento?.faltantes?.length || 0) - this.faltantesSeguimiento.length, 0);
+  }
+
+  public get periodoSeguimiento(): string {
+    const periodo = this.seguimiento?.periodo;
+    if (!periodo?.desde || !periodo?.hasta) return '';
+    return `${periodo.desde} a ${periodo.hasta}`;
+  }
+
+  private async cargarSeguimiento(): Promise<void> {
+    const idSiembra = this.siembra?._id;
+    if (!idSiembra || this.siembra?.huellaHidrica || this.ultimaSiembraConsultada === idSiembra) return;
+    this.ultimaSiembraConsultada = idSiembra;
+    this.cargandoSeguimiento = true;
+    this.errorSeguimiento = undefined;
+    try {
+      this.seguimiento = await this.siembraService.seguimientoHuellaHidrica(idSiembra);
+    } catch (error) {
+      console.error('Error al cargar seguimiento de huella hidrica', error);
+      this.errorSeguimiento = 'No se pudo consultar el seguimiento de huella.';
+    } finally {
+      this.cargandoSeguimiento = false;
+    }
+  }
+
+  private formatearAgua(mm?: number, litrosKg?: number): string {
+    if (litrosKg != null) return `${this.numeroAr.format(litrosKg)} l/kg`;
+    return `${this.decimalAr.format(mm || 0)} mm`;
+  }
+
+  private formatearGris(litrosHa?: number, litrosKg?: number): string {
+    if (litrosKg != null) return `${this.numeroAr.format(litrosKg)} l/kg`;
+    return `${this.numeroAr.format(litrosHa || 0)} l/ha`;
   }
 
   private limitar(value: number): number {

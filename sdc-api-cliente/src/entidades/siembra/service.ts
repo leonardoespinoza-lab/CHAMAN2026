@@ -73,6 +73,11 @@ export class SiembrasService {
     return data;
   }
 
+  async seguimientoHuellaHidrica(id: string, permiso: IPermiso): Promise<any> {
+    await this.getById(id, permiso);
+    return await this.repository.seguimientoHuellaHidrica(id);
+  }
+
   async get(
     query: IQueryParam,
     permiso: IPermiso,

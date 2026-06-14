@@ -44,6 +44,20 @@ export class SiembrasController {
     return await this.service.get(query, permiso);
   }
 
+  @Get('/:id/huella-hidrica/seguimiento')
+  @Permisos(
+    { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+  )
+  public async seguimientoHuellaHidrica(
+    @Param('id') id: string,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<any> {
+    return await this.service.seguimientoHuellaHidrica(id, permiso);
+  }
+
   @Get('/:id')
   @Permisos(
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },

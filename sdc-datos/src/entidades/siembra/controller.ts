@@ -22,6 +22,11 @@ export class SiembrasController {
     return await this.service.getFilter(query);
   }
 
+  @Get(':id/huella-hidrica/seguimiento')
+  async seguimientoHuellaHidrica(@Param('id') id: string) {
+    return await this.service.seguimientoHuellaHidrica(id);
+  }
+
   @Get(':id')
   async getById(@Param('id') id: string) {
     return await this.service.getById(id);

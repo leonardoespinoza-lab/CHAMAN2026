@@ -112,4 +112,33 @@ export class SiembrasService {
     }
     throw new NotFoundException('No encontrado');
   }
+
+  async seguimientoHuellaHidrica(id: string) {
+    const siembra = await this.getById(id);
+    const lote = await this.lotesService.getById(siembra.idLote);
+    const fechaSiembra = siembra.fechaSiembra ? new Date(siembra.fechaSiembra) : new Date();
+    fechaSiembra.setDate(fechaSiembra.getDate() - 30);
+    const hasta = (siembra.fechaCosecha ? new Date(siembra.fechaCosecha) : new Date()).toISOString();
+
+    const [fertilizaciones, fumigaciones] = await Promise.all([
+      this.fertilizacionsService.getFilter({
+        filter: JSON.stringify({
+          idLote: siembra.idLote,
+          fechaFertilizacion: { $gte: fechaSiembra.toISOString(), $lte: hasta },
+        }),
+        populate: 'fertilizante',
+      }),
+      this.fumigacionsService.getFilter({
+        filter: JSON.stringify({ idSiembra: id }),
+        populate: 'principioActivo',
+      }),
+    ]);
+
+    return await this.algoritmosService.calcularSeguimientoHuellaHidrica({
+      siembra,
+      lote,
+      fertilizaciones: fertilizaciones.datos,
+      fumigaciones: fumigaciones.datos,
+    });
+  }
 }

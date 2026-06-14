@@ -9,13 +9,7 @@
     </svg>
     <div>
       <p class="titulo-card">{{ 'Huella hidrica' | translate | uppercase }}</p>
-      <span>
-        @if (siembra?.huellaHidrica) {
-          Resultado al cierre de cosecha
-        } @else {
-          Pendiente de calculo real
-        }
-      </span>
+      <span>{{ subtitulo }}</span>
     </div>
     @if (siembra?.huellaHidrica) {
       <strong>+</strong>
@@ -27,16 +21,27 @@
       <span>{{ 'Total' | translate }}</span>
       <strong>{{ totalHuellaResumen.value }}</strong>
       <small>{{ totalHuellaResumen.detail }}</small>
+      @if (periodoSeguimiento && !siembra?.huellaHidrica) {
+        <small class="periodo">{{ periodoSeguimiento }}</small>
+      }
     </div>
     <div class="water-meter total" [style.--fill]="totalHuellaResumen.fill + '%'">
       <span></span>
     </div>
   </div>
 
-  @if (!siembra?.huellaHidrica) {
-    <p-message severity="info">
-      {{ 'Sin valores estimados: se completara con clima real, aplicaciones y rendimiento al cerrar la siembra' | translate }}
-    </p-message>
+  @if (faltantesSeguimiento.length && !siembra?.huellaHidrica) {
+    <div class="water-missing">
+      <strong>Faltan datos para mejorar el seguimiento</strong>
+      <ul>
+        @for (faltante of faltantesSeguimiento; track faltante.campo) {
+          <li>{{ faltante.accion }}</li>
+        }
+      </ul>
+      @if (faltantesRestantes > 0) {
+        <span>+{{ faltantesRestantes }} datos mas en lote/siembra.</span>
+      }
+    </div>
   }
 
   <div class="water-bars">
@@ -55,7 +60,7 @@
   </div>
 
   <p class="formula-note">
-    Formula real: verde y azul usan ETc/Kc y lluvia efectiva; gris suma fertilizantes y fitosanitarios. El resultado se consolida por rendimiento seco al cosechar.
+    En campana se acumula lluvia efectiva, deficit hidrico y carga gris con los datos disponibles. Al cosechar se consolida en litros/kg con rendimiento seco.
   </p>
 </div>
 

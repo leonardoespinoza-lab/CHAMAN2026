@@ -3,10 +3,12 @@ import axios from 'axios';
 import { IHuellaHidrica, ILote, ISiembra } from 'modelos/src';
 import {
   calcularHuellaHidrica,
+  calcularSeguimientoHuellaHidrica,
   DiaClimaHuella,
   getHuellaHidricaConstantes,
   HuellaHidricaParams,
   HuellaHidricaResultado,
+  HuellaHidricaSeguimientoResultado,
 } from './huella-hidrica.engine';
 
 export interface AlgoritmoCatalogo {
@@ -99,6 +101,28 @@ export class AlgoritmosService {
     }
     const clima = await this.getClimaOpenMeteo(lat, lng, siembra.fechaSiembra, siembra.fechaCosecha);
     return calcularHuellaHidrica({ ...params, clima });
+  }
+
+  async calcularSeguimientoHuellaHidrica(
+    params: Omit<HuellaHidricaParams, 'clima'>,
+  ): Promise<HuellaHidricaSeguimientoResultado> {
+    const lote = params.lote;
+    const siembra = params.siembra;
+    const lat = lote.ubicacion?.centro?.lat;
+    const lng = lote.ubicacion?.centro?.lng;
+    if (lat == null || lng == null) {
+      return calcularSeguimientoHuellaHidrica({ ...params, clima: [] });
+    }
+    if (!siembra.fechaSiembra) {
+      return calcularSeguimientoHuellaHidrica({ ...params, clima: [] });
+    }
+
+    const desde = this.toDateKey(siembra.fechaSiembra);
+    const hoy = this.toDateKey(new Date().toISOString());
+    const hasta = siembra.fechaCosecha ? this.toDateKey(siembra.fechaCosecha) : hoy;
+    const fechaHasta = desde > hasta ? desde : hasta;
+    const clima = await this.getClimaOpenMeteo(lat, lng, desde, fechaHasta);
+    return calcularSeguimientoHuellaHidrica({ ...params, clima });
   }
 
   calcularHumedadSeca(rendimientoKgHa?: number, humedadCosecha?: number): number {
