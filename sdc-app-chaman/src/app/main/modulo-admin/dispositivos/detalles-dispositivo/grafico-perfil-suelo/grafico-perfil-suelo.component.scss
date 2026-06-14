@@ -1,67 +1,69 @@
-.soil-chart-grid {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  margin-top: 1rem;
-  width: 100%;
-}
-
 .soil-chart-card {
   background: var(--p-surface-0);
-  border: 1px solid color-mix(in srgb, var(--p-primary-color) 22%, var(--p-surface-200));
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 26%, var(--p-surface-200));
   border-radius: 8px;
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
-  min-height: 360px;
+  min-height: 460px;
   padding: 1rem;
-}
-
-.soil-chart-card-combined {
-  margin-bottom: 0;
-  min-height: 455px;
 }
 
 .soil-chart-card header {
   align-items: flex-start;
   display: flex;
-  justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.6rem;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
 }
 
 .soil-chart-card span {
   color: var(--p-text-muted-color);
   display: block;
-  font-size: 0.86rem;
-  font-weight: 700;
+  font-size: 0.9rem;
+  font-weight: 800;
   text-transform: uppercase;
 }
 
 .soil-chart-card strong {
   color: var(--p-text-color);
   display: block;
-  font-size: 1.18rem;
-  line-height: 1.2;
-  margin-top: 0.2rem;
+  font-size: 1.24rem;
+  line-height: 1.25;
+  margin-top: 0.25rem;
 }
 
-.soil-chart-card small {
-  background: var(--p-surface-100);
-  border-radius: 999px;
-  color: var(--p-text-muted-color);
-  font-size: 0.82rem;
+.soil-chart-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.soil-chart-filter,
+.soil-chart-export {
+  background: var(--p-surface-0);
+  border: 1px solid var(--p-surface-border);
+  border-radius: 8px;
+  color: var(--p-text-color);
+  font-size: 0.98rem;
   font-weight: 700;
-  padding: 0.25rem 0.5rem;
-  white-space: nowrap;
+  min-height: 2.45rem;
+  padding: 0.45rem 0.75rem;
+}
+
+.soil-chart-export {
+  cursor: pointer;
+}
+
+.soil-chart-export:hover {
+  border-color: var(--p-primary-color);
+  color: var(--p-primary-color);
 }
 
 .soil-chart-card app-chart {
   display: block;
-  min-height: 280px;
+  min-height: 390px;
   width: 100%;
-}
-
-.soil-chart-card-combined app-chart {
-  min-height: 380px;
 }
 
 .soil-chart-card ::ng-deep {
@@ -92,12 +94,27 @@
 }
 
 @media (max-width: 768px) {
-  .soil-chart-grid {
-    grid-template-columns: 1fr;
+  .soil-chart-card {
+    min-height: 380px;
+    padding: 0.85rem;
   }
 
-  .soil-chart-card {
-    min-height: 320px;
-    padding: 0.85rem;
+  .soil-chart-card header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .soil-chart-actions {
+    justify-content: stretch;
+  }
+
+  .soil-chart-filter,
+  .soil-chart-export {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .soil-chart-card app-chart {
+    min-height: 330px;
   }
 }

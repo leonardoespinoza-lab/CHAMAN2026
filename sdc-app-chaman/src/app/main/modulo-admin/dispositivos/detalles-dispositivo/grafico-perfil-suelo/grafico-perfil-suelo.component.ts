@@ -5,6 +5,7 @@ import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { MedicionProfundidad } from '../sentek-profile';
 
 type SoilMetricKey = 'humedad' | 'salinidad' | 'temperatura';
+type SoilMetricSelection = SoilMetricKey | 'todas';
 
 interface SoilMetricDefinition {
   key: SoilMetricKey;
@@ -14,19 +15,13 @@ interface SoilMetricDefinition {
   decimals: number;
 }
 
-interface SoilMetricChart {
-  key: SoilMetricKey;
-  title: string;
-  unit: string;
-  summary: string;
-  options: any;
-}
-
 interface SoilPoint {
   x: number;
   y: number;
   raw?: number;
   rawUnit?: string;
+  displayValue?: number;
+  displayUnit?: string;
 }
 
 @Component({
@@ -40,7 +35,12 @@ export class GraficoPerfilSueloComponent implements OnChanges {
   @Input() titulo?: string;
 
   public combinedChart?: any;
-  public metricCharts: SoilMetricChart[] = [];
+  public selectedMetric: SoilMetricSelection = 'humedad';
+  public metricOptions: Array<{ label: string; value: SoilMetricSelection }> = [];
+  public metricSummary = '';
+
+  private datosOrdenados: MedicionProfundidad[] = [];
+  private definitions: SoilMetricDefinition[] = [];
 
   constructor(private translate: TranslateService) {}
 
@@ -50,24 +50,78 @@ export class GraficoPerfilSueloComponent implements OnChanges {
     }
   }
 
+  public onMetricChange(metric: SoilMetricSelection): void {
+    this.selectedMetric = metric;
+    this.rebuildChart();
+  }
+
+  public exportarCsv(): void {
+    if (!this.datosOrdenados.length) return;
+
+    const headers = [
+      'Profundidad cm',
+      'Humedad suelo %',
+      'Salinidad mS/m',
+      'Temperatura C',
+      'Lectura cruda humedad',
+      'Unidad cruda humedad',
+    ];
+    const rows = this.datosOrdenados.map((row) => [
+      row.profundidad,
+      row.humedad?.actual ?? '',
+      row.salinidad?.actual ?? '',
+      row.temperatura?.actual ?? '',
+      row.humedad?.crudo ?? '',
+      row.humedad?.unidadCruda ?? '',
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((value) => this.csvCell(value)).join(';'))
+      .join('\n');
+    const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const fecha = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `perfil-sentek-${fecha}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   private crearGraficosPerfil(): void {
     if (!this.datos.length) {
+      this.datosOrdenados = [];
+      this.definitions = [];
+      this.metricOptions = [];
+      this.metricSummary = '';
       this.combinedChart = undefined;
-      this.metricCharts = [];
       return;
     }
 
-    const datosOrdenados = [...this.datos].sort((a, b) => a.profundidad - b.profundidad);
-    const definitions = this.getMetricDefinitions(datosOrdenados).filter((definition) =>
-      datosOrdenados.some((row) => !!row[definition.key])
+    this.datosOrdenados = [...this.datos].sort((a, b) => a.profundidad - b.profundidad);
+    this.definitions = this.getMetricDefinitions(this.datosOrdenados).filter((definition) =>
+      this.datosOrdenados.some((row) => !!row[definition.key])
     );
+    this.metricOptions = [
+      ...this.definitions.map((definition) => ({ label: definition.title, value: definition.key })),
+      ...(this.definitions.length > 1 ? [{ label: this.translate.instant('Todas'), value: 'todas' as const }] : []),
+    ];
 
-    this.combinedChart = definitions.length
-      ? this.getCombinedChartOptions(datosOrdenados, definitions)
-      : undefined;
-    this.metricCharts = definitions
-      .map((definition) => this.buildMetricChart(datosOrdenados, definition))
-      .filter(Boolean) as SoilMetricChart[];
+    if (!this.metricOptions.some((option) => option.value === this.selectedMetric)) {
+      this.selectedMetric = this.definitions[0]?.key || 'humedad';
+    }
+
+    this.rebuildChart();
+  }
+
+  private rebuildChart(): void {
+    if (!this.definitions.length) {
+      this.metricSummary = '';
+      this.combinedChart = undefined;
+      return;
+    }
+
+    this.metricSummary = this.getMetricSummary();
+    this.combinedChart = this.getCombinedChartOptions();
   }
 
   private getMetricDefinitions(datos: MedicionProfundidad[]): SoilMetricDefinition[] {
@@ -96,33 +150,20 @@ export class GraficoPerfilSueloComponent implements OnChanges {
     ];
   }
 
-  private buildMetricChart(datos: MedicionProfundidad[], definition: SoilMetricDefinition): SoilMetricChart | null {
-    const data = this.getSeriesData(datos, definition.key);
+  private getCombinedChartOptions(): any {
+    const selectedDefinitions =
+      this.selectedMetric === 'todas'
+        ? this.definitions
+        : this.definitions.filter((definition) => definition.key === this.selectedMetric);
+    const relativeMode = this.selectedMetric === 'todas';
 
-    if (!data.length) {
-      return null;
-    }
-
-    const valores = data.map((point) => Number(point.y));
-    const promedio = valores.reduce((acc, value) => acc + value, 0) / valores.length;
-
-    return {
-      key: definition.key,
-      title: definition.title,
-      unit: definition.unit,
-      summary: `Promedio ${promedio.toFixed(definition.decimals)} ${definition.unit}`,
-      options: this.getSingleChartOptions(data, definition),
-    };
-  }
-
-  private getCombinedChartOptions(datos: MedicionProfundidad[], definitions: SoilMetricDefinition[]): any {
     return {
       chart: {
         backgroundColor: 'transparent',
-        height: 360,
-        spacingBottom: 12,
+        height: 380,
+        spacingBottom: 14,
         spacingLeft: 8,
-        spacingRight: 16,
+        spacingRight: 12,
         spacingTop: 8,
         style: {
           fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -132,16 +173,19 @@ export class GraficoPerfilSueloComponent implements OnChanges {
       },
       title: { text: undefined },
       xAxis: this.getDepthXAxis(),
-      yAxis: definitions.map((definition, index) => this.getMetricYAxis(definition, index)),
+      yAxis: relativeMode
+        ? this.getRelativeYAxis()
+        : this.getMetricYAxis(selectedDefinitions[0]),
       legend: this.getLegendOptions(),
-      tooltip: this.getTooltipOptions(),
+      tooltip: this.getTooltipOptions(relativeMode),
       plotOptions: this.getPlotOptions(),
-      series: definitions.map((definition, index) => ({
+      series: selectedDefinitions.map((definition) => ({
         color: definition.color,
-        data: this.getSeriesData(datos, definition.key),
-        name: `${definition.title} (${definition.unit})`,
+        data: relativeMode
+          ? this.getRelativeSeriesData(definition)
+          : this.getSeriesData(this.datosOrdenados, definition.key),
+        name: relativeMode ? definition.title : `${definition.title} (${definition.unit})`,
         type: 'spline',
-        yAxis: index,
       })),
       credits: { enabled: false },
       accessibility: { enabled: false },
@@ -150,52 +194,10 @@ export class GraficoPerfilSueloComponent implements OnChanges {
           {
             condition: { maxWidth: 768 },
             chartOptions: {
-              chart: { height: 320 },
-              yAxis: definitions.map((definition, index) => this.getMetricYAxis(definition, index, true)),
-            },
-          },
-        ],
-      },
-    };
-  }
-
-  private getSingleChartOptions(data: SoilPoint[], definition: SoilMetricDefinition): any {
-    return {
-      chart: {
-        backgroundColor: 'transparent',
-        height: 280,
-        spacingBottom: 8,
-        spacingLeft: 8,
-        spacingRight: 8,
-        spacingTop: 8,
-        style: {
-          fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        },
-        type: 'spline',
-        width: null,
-      },
-      title: { text: undefined },
-      xAxis: this.getDepthXAxis(),
-      yAxis: this.getMetricYAxis(definition),
-      legend: { enabled: false },
-      tooltip: this.getTooltipOptions(),
-      plotOptions: this.getPlotOptions(),
-      series: [
-        {
-          color: definition.color,
-          data,
-          name: `${definition.title} (${definition.unit})`,
-          type: 'spline',
-        },
-      ],
-      credits: { enabled: false },
-      accessibility: { enabled: false },
-      responsive: {
-        rules: [
-          {
-            condition: { maxWidth: 768 },
-            chartOptions: {
-              chart: { height: 250 },
+              chart: { height: 330 },
+              legend: {
+                itemStyle: { fontSize: '12px' },
+              },
             },
           },
         ],
@@ -211,7 +213,40 @@ export class GraficoPerfilSueloComponent implements OnChanges {
         y: row[key]!.actual,
         raw: row[key]!.crudo,
         rawUnit: row[key]!.unidadCruda,
+        displayValue: row[key]!.actual,
+        displayUnit: row[key]!.unidad,
       }));
+  }
+
+  private getRelativeSeriesData(definition: SoilMetricDefinition): SoilPoint[] {
+    const points = this.getSeriesData(this.datosOrdenados, definition.key);
+    const values = points.map((point) => Number(point.y)).filter((value) => Number.isFinite(value));
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min;
+
+    return points.map((point) => {
+      const relative = range > 0 ? ((Number(point.y) - min) / range) * 100 : 50;
+      return {
+        ...point,
+        y: definition.key === 'humedad' ? Number(point.y) : relative,
+        displayValue: Number(point.y),
+        displayUnit: definition.unit,
+      };
+    });
+  }
+
+  private getMetricSummary(): string {
+    if (this.selectedMetric === 'todas') {
+      return 'Curvas normalizadas para comparar tendencia por profundidad';
+    }
+
+    const definition = this.definitions.find((item) => item.key === this.selectedMetric);
+    if (!definition) return '';
+    const values = this.getSeriesData(this.datosOrdenados, definition.key).map((point) => Number(point.y));
+    if (!values.length) return definition.title;
+    const average = values.reduce((acc, value) => acc + value, 0) / values.length;
+    return `Promedio ${average.toFixed(definition.decimals)} ${definition.unit}`;
   }
 
   private getUnit(datos: MedicionProfundidad[], key: SoilMetricKey, fallback: string): string {
@@ -224,14 +259,14 @@ export class GraficoPerfilSueloComponent implements OnChanges {
         text: this.translate.instant('Profundidad (cm)'),
         style: {
           color: 'var(--p-text-color)',
-          fontSize: '13px',
-          fontWeight: '600',
+          fontSize: '14px',
+          fontWeight: '700',
         },
       },
       labels: {
         style: {
           color: 'var(--p-text-color)',
-          fontSize: '12px',
+          fontSize: '13px',
         },
       },
       gridLineColor: 'var(--p-surface-border)',
@@ -239,28 +274,49 @@ export class GraficoPerfilSueloComponent implements OnChanges {
     };
   }
 
-  private getMetricYAxis(definition: SoilMetricDefinition, index = 0, compact = false): any {
+  private getMetricYAxis(definition?: SoilMetricDefinition): any {
     return {
-      ...this.getAxisBounds(definition),
+      ...(definition ? this.getAxisBounds(definition) : {}),
       title: {
-        text: compact ? definition.unit : `${definition.title} (${definition.unit})`,
+        text: definition ? `${definition.title} (${definition.unit})` : undefined,
         style: {
-          color: definition.color,
-          fontSize: compact ? '11px' : '13px',
+          color: definition?.color || 'var(--p-text-color)',
+          fontSize: '14px',
           fontWeight: '700',
         },
       },
       labels: {
         style: {
-          color: definition.color,
-          fontSize: compact ? '10px' : '12px',
+          color: definition?.color || 'var(--p-text-color)',
+          fontSize: '13px',
         },
       },
-      gridLineColor: index === 0 ? 'var(--p-surface-border)' : 'transparent',
-      gridLineWidth: index === 0 ? 1 : 0,
-      lineColor: definition.color,
-      opposite: index > 0,
-      offset: index > 1 ? 42 : 0,
+      gridLineColor: 'var(--p-surface-border)',
+      gridLineWidth: 1,
+      lineColor: definition?.color,
+    };
+  }
+
+  private getRelativeYAxis(): any {
+    return {
+      min: 0,
+      max: 100,
+      title: {
+        text: 'Indice relativo / humedad (%)',
+        style: {
+          color: 'var(--p-text-color)',
+          fontSize: '14px',
+          fontWeight: '700',
+        },
+      },
+      labels: {
+        style: {
+          color: 'var(--p-text-color)',
+          fontSize: '13px',
+        },
+      },
+      gridLineColor: 'var(--p-surface-border)',
+      gridLineWidth: 1,
     };
   }
 
@@ -271,7 +327,7 @@ export class GraficoPerfilSueloComponent implements OnChanges {
       itemDistance: 18,
       itemStyle: {
         color: 'var(--p-text-color)',
-        fontSize: '13px',
+        fontSize: '14px',
         fontWeight: '700',
       },
       layout: 'horizontal',
@@ -279,21 +335,28 @@ export class GraficoPerfilSueloComponent implements OnChanges {
     };
   }
 
-  private getTooltipOptions(): any {
+  private getTooltipOptions(relativeMode: boolean): any {
     return {
       backgroundColor: 'var(--p-content-background)',
       borderColor: 'var(--p-surface-border)',
       borderRadius: 8,
       borderWidth: 1,
       formatter: function (this: any) {
-        const point = this.point as any;
+        const point = this.point as SoilPoint;
+        const display =
+          relativeMode && point.displayValue != null
+            ? `${Number(point.displayValue).toFixed(1)} ${point.displayUnit || ''}`
+            : `${Number(point.y).toFixed(1)}`;
+        const relative =
+          relativeMode && point.displayValue != null
+            ? `<br/><span>Indice relativo: <strong>${Number(point.y).toFixed(1)}%</strong></span>`
+            : '';
         const raw =
           point.raw !== undefined && point.rawUnit
             ? `<br/><span>Lectura cruda: <strong>${Number(point.raw).toFixed(3)} ${point.rawUnit}</strong></span>`
             : '';
-        return `<span style="color:${this.series.color}">●</span> ${this.series.name}: <strong>${Number(point.y).toFixed(1)}</strong><br/>Profundidad: ${point.x} cm${raw}`;
+        return `<span style="color:${this.series.color}">●</span> ${this.series.name}: <strong>${display}</strong><br/>Profundidad: ${point.x} cm${relative}${raw}`;
       },
-      pointFormat: '<span style="color:{series.color}">●</span> {series.name}: <strong>{point.y:.1f}</strong><br/>Profundidad: {point.x} cm',
       shadow: true,
       style: {
         color: 'var(--p-text-color)',
@@ -315,12 +378,18 @@ export class GraficoPerfilSueloComponent implements OnChanges {
         animation: { duration: 600 },
         dataLabels: { enabled: false },
         enableMouseTracking: true,
-        lineWidth: 2.5,
+        lineWidth: 3,
         marker: {
           enabled: true,
-          radius: 3,
+          radius: 4,
         },
       },
     };
+  }
+
+  private csvCell(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    const text = String(value).replace(/"/g, '""');
+    return `"${text}"`;
   }
 }

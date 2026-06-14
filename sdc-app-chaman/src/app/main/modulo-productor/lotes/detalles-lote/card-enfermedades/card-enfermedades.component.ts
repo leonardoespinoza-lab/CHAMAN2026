@@ -125,7 +125,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
 
   private llenadoRiesgo(resultado: number, tienePrediccion: boolean): number {
     if (!tienePrediccion) {
-      return 10;
+      return 0;
     }
     return Math.max(8, Math.min(100, resultado * 4));
   }

@@ -399,6 +399,13 @@ function getDiasDesdeSiembra(fechaSiembra?: string, fechaHasta?: string): number
   return Math.max(0, Math.floor((hasta - desde) / 86400000));
 }
 
+function getFechaFinCiclo(fechaSiembra?: string, diasCiclo = 0): string | undefined {
+  if (!fechaSiembra) return undefined;
+  const desde = new Date(`${new Date(fechaSiembra).toISOString().slice(0, 10)}T00:00:00Z`);
+  desde.setUTCDate(desde.getUTCDate() + Math.max(0, diasCiclo));
+  return desde.toISOString().slice(0, 10);
+}
+
 function getPotencialesGris(siembra: ISiembra, lote: ILote) {
   const potencialN =
     val('depositoN', lote.depositoN) * PESOS_N.depositoN +
@@ -487,14 +494,16 @@ export function calcularSeguimientoHuellaHidrica(params: HuellaHidricaParams): H
   const lote = params.lote;
   const fertilizaciones = params.fertilizaciones || [];
   const fumigaciones = params.fumigaciones || [];
-  const clima = (params.clima || []).sort((a, b) => a.fecha.localeCompare(b.fecha));
   const huellaFinal = siembra.huellaHidrica;
   const cultivo = siembra.semilla?.cultivo || (siembra as any).cultivo;
   const rendimientoSeco = Number(siembra.rendimientoObtenidoKgHaSeco || 0);
-
-  const fechaHasta = clima[clima.length - 1]?.fecha || new Date().toISOString().slice(0, 10);
-  const diasDesdeSiembra = getDiasDesdeSiembra(siembra.fechaSiembra, fechaHasta);
   const diasCiclo = getDiasCiclo(cultivo, siembra.crono);
+  const climaCompleto = (params.clima || []).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const clima = huellaFinal || siembra.fechaCosecha
+    ? climaCompleto
+    : climaCompleto.filter((dia) => getDiasDesdeSiembra(siembra.fechaSiembra, dia.fecha) <= diasCiclo);
+  const fechaHasta = clima[clima.length - 1]?.fecha || getFechaFinCiclo(siembra.fechaSiembra, diasCiclo) || new Date().toISOString().slice(0, 10);
+  const diasDesdeSiembra = getDiasDesdeSiembra(siembra.fechaSiembra, fechaHasta);
   const avanceCiclo = round(Math.min(100, (diasDesdeSiembra / diasCiclo) * 100), 1);
   const trazas: string[] = [];
 

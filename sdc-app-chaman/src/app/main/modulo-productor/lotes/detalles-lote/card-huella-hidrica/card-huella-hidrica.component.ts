@@ -132,12 +132,15 @@ export class CardHuellaHidricaComponent implements OnInit, OnChanges, OnDestroy 
 
     if (seguimiento) {
       const total = seguimiento.progreso.total;
+      const avance = seguimiento.periodo?.avanceCiclo ?? total.porcentaje ?? 0;
       return {
         value: total.litrosKg != null
           ? `${this.numeroAr.format(total.litrosKg)} l/kg`
-          : `${this.numeroAr.format(total.litrosHa || 0)} l/ha`,
-        detail: total.detalle,
-        fill: this.limitar(total.porcentaje || 0),
+          : `${this.decimalAr.format(avance)}% del ciclo`,
+        detail: total.litrosKg != null
+          ? total.detalle
+          : `${total.detalle} Cargar rendimiento esperado o cerrar cosecha para expresar litros/kg.`,
+        fill: this.limitar(avance),
       };
     }
 

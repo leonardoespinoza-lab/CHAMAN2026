@@ -3,6 +3,7 @@ import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Capacitor } from '@capacitor/core';
 import { GoogleLoginOptions, SocialLogin } from '@capgo/capacitor-social-login';
+import { IPermiso } from 'modelos/src';
 import { Subscription } from 'rxjs';
 import { LoginService } from '../../auxiliares/http/login.service';
 import { HelperService } from '../../auxiliares/servicios/helper';
@@ -68,7 +69,7 @@ export class LoginComponent implements OnInit, OnDestroy {
       const password = this.form.get('password')?.value as string;
       const remember = this.form.get('remember')?.value as boolean;
       await this.loginService.login(username, password, remember);
-      this.router.navigateByUrl('/');
+      this.router.navigateByUrl(this.getRutaInicial());
     } catch (error) {
       this.helper.notifError(error);
     }
@@ -89,7 +90,7 @@ export class LoginComponent implements OnInit, OnDestroy {
       const remember = this.form.get('remember')?.value as boolean;
       await this.loginService.loginGoogle(idToken, remember);
       this.loading = false;
-      this.router.navigateByUrl('/mapa');
+      this.router.navigateByUrl(this.getRutaInicial());
     }
   }
 
@@ -99,7 +100,7 @@ export class LoginComponent implements OnInit, OnDestroy {
       const remember = this.form.get('remember')?.value as boolean;
       await this.loginService.loginGoogleApple(idToken, remember);
       this.loading = false;
-      this.router.navigateByUrl('/mapa');
+      this.router.navigateByUrl(this.getRutaInicial());
     }
   }
 
@@ -166,6 +167,33 @@ export class LoginComponent implements OnInit, OnDestroy {
       console.log('iOS platform detected');
       await this.loginIOS();
     }
+  }
+
+  private getRutaInicial(): string {
+    const permisos = this.helper.user?.permisos || [];
+    const permiso = this.getPermisoPrincipal(permisos);
+    const indice = permiso ? permisos.indexOf(permiso) : -1;
+
+    if (permiso) {
+      this.helper.setPermiso(permiso);
+      this.helper.setNumeroPermiso(Math.max(indice, 0));
+    }
+
+    if (permiso?.nivel === 'Admin') return '/dashboard-admin';
+    if (permiso?.nivel === 'Quimica') return '/dashboard-quimica';
+    if (permiso?.nivel === 'Distribuidor') return '/dashboard-distribuidor';
+    return '/mapa';
+  }
+
+  private getPermisoPrincipal(permisos: IPermiso[]): IPermiso | undefined {
+    const prioridad: Record<string, number> = {
+      Admin: 5,
+      Quimica: 4,
+      Distribuidor: 3,
+      Productor: 2,
+      Establecimiento: 1,
+    };
+    return [...permisos].sort((a, b) => (prioridad[b.nivel] || 0) - (prioridad[a.nivel] || 0))[0];
   }
 
   async ngOnInit() {

@@ -135,19 +135,37 @@ export class NavComponent implements OnInit, OnDestroy {
       this.user = data;
       this.permisos = this.user?.permisos || [];
       if (!this.helper.permiso) {
-        this.helper.setPermiso(this.permisos[0]);
+        const permisoPrincipal = this.getPermisoPrincipal(this.permisos);
+        if (permisoPrincipal) {
+          this.helper.setPermiso(permisoPrincipal);
+        }
       }
-      this.permisoSeleccionado = this.helper.permiso || this.permisos[0];
-      let indice = this.encontrarIndicePermiso(this.permisos, this.permisoSeleccionado);
+      this.permisoSeleccionado = this.helper.permiso || this.getPermisoPrincipal(this.permisos);
+      let indice = this.permisoSeleccionado
+        ? this.encontrarIndicePermiso(this.permisos, this.permisoSeleccionado)
+        : -1;
       if (indice < 0) {
-        this.permisoSeleccionado = this.permisos[0];
-        this.helper.setPermiso(this.permisoSeleccionado);
-        indice = 0;
+        this.permisoSeleccionado = this.getPermisoPrincipal(this.permisos);
+        if (this.permisoSeleccionado) {
+          this.helper.setPermiso(this.permisoSeleccionado);
+          indice = this.encontrarIndicePermiso(this.permisos, this.permisoSeleccionado);
+        }
       }
-      this.helper.setNumeroPermiso(indice);
+      this.helper.setNumeroPermiso(Math.max(indice, 0));
       this.checkPermisos();
     });
     await this.listados.getLastValue('usuarioPropio', {});
+  }
+
+  private getPermisoPrincipal(permisos: IPermiso[]): IPermiso | undefined {
+    const prioridad: Record<string, number> = {
+      Admin: 5,
+      Quimica: 4,
+      Distribuidor: 3,
+      Productor: 2,
+      Establecimiento: 1,
+    };
+    return [...permisos].sort((a, b) => (prioridad[b.nivel] || 0) - (prioridad[a.nivel] || 0))[0];
   }
 
   private encontrarIndicePermiso(permisos: IPermiso[], permisoABuscar: Partial<IPermiso>): number {
