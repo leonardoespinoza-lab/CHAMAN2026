@@ -132,7 +132,33 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
       day: 'numeric',
       month: 'short',
     });
-    return `Ultima escena valida ${fecha}`;
+    return `Escena limpia ${fecha}`;
+  }
+
+  public get subtituloSatelital(): string {
+    if (!this.reporte?.fechaDeLaImagen) {
+      return 'Linea de tiempo e indices satelitales del lote';
+    }
+    const dias = this.diasDesde(new Date(this.reporte.fechaDeLaImagen));
+    const sufijo = dias > 0 ? `, hace ${dias} dias` : ', procesada hoy';
+    return `Analisis por escena limpia - ${this.fechaImagenResumen}${sufijo}`;
+  }
+
+  public get estadoEscenaSatelital(): string {
+    if (!this.reporte?.fechaDeLaImagen) {
+      return 'Sin escena';
+    }
+    return this.imagenAtrasada ? 'Sin escena limpia reciente' : this.analisis.estado;
+  }
+
+  public get notaEscenaSatelital(): string {
+    if (!this.reporte?.fechaDeLaImagen) {
+      return 'El worker satelital guarda una escena cuando encuentra imagen util para el poligono del lote.';
+    }
+    if (this.imagenAtrasada) {
+      return 'La base mantiene la ultima escena limpia. Al actualizar se vuelve a consultar STAC y se guarda una nueva solo si cubre el lote con calidad suficiente.';
+    }
+    return 'Escena util para analisis semanal; comparar siempre con recorrida, clima, suelo y manejo reciente.';
   }
 
   public get imagenAtrasada(): boolean {
@@ -391,7 +417,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
       const response = await this.loteService.generarNdvi(this.lote._id);
       if (response.encolado) {
         this.helper.notifSuccess(response.mensaje || 'NDVI satelital encolado');
-        this.programarRefrescosSatelitales();
+        this.programarRefrescosSatelitales(6, this.ndvis[0]?._id);
       } else {
         this.helper.notifWarn(response.mensaje || 'No se pudo encolar NDVI');
       }
@@ -495,13 +521,14 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
     return Math.max(0, Math.round((fin - inicio) / 86400000));
   }
 
-  private programarRefrescosSatelitales(intentos = 4): void {
+  private programarRefrescosSatelitales(intentos = 4, ultimoReporteId?: string): void {
     if (intentos <= 0) return;
     clearTimeout(this.refreshTimeout);
     this.refreshTimeout = setTimeout(async () => {
       await this.listarNDVIs();
-      if (!this.ndvis.length) {
-        this.programarRefrescosSatelitales(intentos - 1);
+      const nuevoReporteId = this.ndvis[0]?._id;
+      if (!nuevoReporteId || nuevoReporteId === ultimoReporteId) {
+        this.programarRefrescosSatelitales(intentos - 1, ultimoReporteId);
       }
     }, 12000);
   }

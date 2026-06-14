@@ -132,15 +132,19 @@ export class CardHuellaHidricaComponent implements OnInit, OnChanges, OnDestroy 
 
     if (seguimiento) {
       const total = seguimiento.progreso.total;
-      const avance = seguimiento.periodo?.avanceCiclo ?? total.porcentaje ?? 0;
+      const verde = seguimiento.progreso.verde;
+      const azul = seguimiento.progreso.azul;
+      const gris = seguimiento.progreso.gris;
+      const aguaAcumuladaMm = (verde.mm || 0) + (azul.mm || 0);
+      const fill = this.getTotalSeguimientoFill(seguimiento);
       return {
         value: total.litrosKg != null
           ? `${this.numeroAr.format(total.litrosKg)} l/kg`
-          : `${this.decimalAr.format(avance)}% del ciclo`,
+          : `${this.numeroAr.format(total.litrosHa || 0)} l/ha`,
         detail: total.litrosKg != null
           ? total.detalle
-          : `${total.detalle} Cargar rendimiento esperado o cerrar cosecha para expresar litros/kg.`,
-        fill: this.limitar(avance),
+          : `Seguimiento acumulado: ${this.decimalAr.format(aguaAcumuladaMm)} mm de agua real/efectiva + ${this.numeroAr.format(gris.litrosHa || 0)} l/ha de carga gris. Para l/kg cargar rendimiento o cosecha.`,
+        fill,
       };
     }
 
@@ -149,6 +153,10 @@ export class CardHuellaHidricaComponent implements OnInit, OnChanges, OnDestroy 
       detail: this.errorSeguimiento || 'Esperando respuesta del motor de huella.',
       fill: 0,
     };
+  }
+
+  public get totalLabel(): string {
+    return this.siembra?.huellaHidrica ? 'Total final' : 'Total en seguimiento';
   }
 
   public get faltantesSeguimiento() {
@@ -189,6 +197,15 @@ export class CardHuellaHidricaComponent implements OnInit, OnChanges, OnDestroy 
   private formatearGris(litrosHa?: number, litrosKg?: number): string {
     if (litrosKg != null) return `${this.numeroAr.format(litrosKg)} l/kg`;
     return `${this.numeroAr.format(litrosHa || 0)} l/ha`;
+  }
+
+  private getTotalSeguimientoFill(seguimiento: HuellaHidricaSeguimiento): number {
+    const valores = [
+      seguimiento.progreso.verde.porcentaje || 0,
+      seguimiento.progreso.azul.porcentaje || 0,
+      seguimiento.progreso.gris.porcentaje || 0,
+    ];
+    return this.limitar(Math.max(...valores));
   }
 
   private limitar(value: number): number {

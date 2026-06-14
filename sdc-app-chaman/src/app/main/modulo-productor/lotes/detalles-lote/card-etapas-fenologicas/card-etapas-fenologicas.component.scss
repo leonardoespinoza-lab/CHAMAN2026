@@ -1,34 +1,46 @@
 .phenology-card {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(243, 252, 250, 0.72)),
+    var(--p-surface-0);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(91, 124, 156, 0.28);
+  box-shadow: 0 18px 42px rgba(28, 45, 68, 0.08);
   overflow: hidden;
-  padding: 1rem;
+  padding: 1.15rem;
 }
 
 .phenology-header {
   align-items: center;
   display: grid;
   gap: 1rem;
-  grid-template-columns: minmax(180px, 0.8fr) minmax(360px, 1.8fr) minmax(130px, 0.6fr);
+  grid-template-columns: minmax(220px, 0.8fr) minmax(460px, 1.7fr) minmax(170px, 0.55fr);
 }
 
 .phenology-title p {
   margin: 0;
 }
 
+.phenology-title .titulo-card {
+  font-size: clamp(1.18rem, 1.35vw, 1.6rem);
+  letter-spacing: 0;
+}
+
 .phenology-subtitle {
   color: var(--p-text-muted-color);
   display: block;
-  font-size: 0.74rem;
+  font-size: 1rem;
+  line-height: 1.35;
   margin-top: 0.16rem;
 }
 
 .crop-detail-grid {
-  background: var(--p-surface-50);
-  border: 1px solid var(--p-surface-200);
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid rgba(91, 124, 156, 0.24);
   border-radius: 8px;
   display: grid;
   gap: 0.75rem;
   grid-template-columns: minmax(90px, 0.7fr) minmax(180px, 1.4fr) minmax(90px, 0.6fr);
-  padding: 0.6rem 0.75rem;
+  padding: 0.72rem 0.85rem;
 }
 
 .crop-detail-grid div {
@@ -44,14 +56,15 @@
 
 .crop-detail-grid span {
   display: block;
-  font-size: 0.62rem;
+  font-size: 0.85rem;
+  font-weight: 750;
   margin-bottom: 0.1rem;
 }
 
 .crop-detail-grid strong {
   color: var(--p-text-color);
   display: block;
-  font-size: 0.84rem;
+  font-size: 1.08rem;
   line-height: 1.15;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -60,28 +73,29 @@
 
 .crop-detail-grid small {
   color: var(--p-text-muted-color);
-  font-size: 0.76rem;
+  font-size: 0.94rem;
   font-weight: 500;
   margin-left: 0.18rem;
 }
 
 .current-stage {
-  background: var(--p-surface-0);
-  border: 1px solid var(--p-surface-200);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(91, 124, 156, 0.24);
   border-radius: 999px;
   display: flex;
   flex-direction: column;
-  padding: 0.48rem 0.85rem;
+  padding: 0.62rem 1rem;
   text-align: right;
 }
 
 .current-stage span {
-  font-size: 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 750;
 }
 
 .current-stage strong {
   color: var(--p-text-color);
-  font-size: 0.78rem;
+  font-size: 1rem;
   line-height: 1.15;
 }
 
@@ -101,7 +115,7 @@
 .timeline-track {
   background: var(--p-surface-300);
   border-radius: 999px;
-  height: 8px;
+  height: 12px;
 }
 
 .timeline-progress {
@@ -115,11 +129,11 @@
   background: var(--p-surface-0);
   border: 1px solid var(--p-surface-500);
   border-radius: 50%;
-  height: 12px;
+  height: 16px;
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 12px;
+  width: 16px;
 }
 
 .timeline-dot.done {
@@ -129,23 +143,23 @@
 
 .timeline-dot.current {
   border: 3px solid var(--p-primary-color);
-  height: 18px;
-  width: 18px;
+  height: 24px;
+  width: 24px;
 }
 
 .timeline-label-row {
-  height: 58px;
+  height: 78px;
 }
 
 .stage-label {
   color: var(--p-text-muted-color);
   display: flex;
   flex-direction: column;
-  font-size: 0.64rem;
+  font-size: 0.84rem;
   font-weight: 700;
   gap: 0.12rem;
   line-height: 1.08;
-  max-width: 118px;
+  max-width: 150px;
   position: absolute;
   text-align: center;
   top: 0.85rem;
@@ -157,7 +171,7 @@
 }
 
 .stage-label em {
-  font-size: 0.58rem;
+  font-size: 0.72rem;
   font-style: normal;
   font-weight: 500;
 }

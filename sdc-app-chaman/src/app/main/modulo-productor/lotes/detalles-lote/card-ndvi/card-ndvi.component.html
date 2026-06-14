@@ -10,20 +10,20 @@
       </p>
       <span>
         @if (reporte?.ndviPromedio) {
-          Analisis satelital semanal - {{ fechaImagenResumen }}
+          {{ subtituloSatelital }}
         } @else {
-          Linea de tiempo e indices satelitales del lote
+          {{ subtituloSatelital }}
         }
       </span>
     </div>
     <div class="ndvi-header-actions">
       <strong class="ndvi-balance" [ngClass]="[analisis.tono, imagenAtrasada ? 'stale' : '']">
-        {{ imagenAtrasada ? 'Imagen atrasada' : analisis.estado }}
+        {{ estadoEscenaSatelital }}
       </strong>
       @if (!helper.soloLectura()) {
         <p-button
           icon="pi pi-satellite"
-          label="Actualizar satelite"
+          label="Buscar nueva escena"
           [loading]="generandoSatelital"
           [disabled]="generandoSatelital"
           severity="secondary"
@@ -33,12 +33,13 @@
       }
     </div>
   </div>
+  <p class="satellite-sync-note">{{ notaEscenaSatelital }}</p>
 
   @if (ndvis.length > 0) {
     <section class="satellite-timeline">
       <div class="satellite-title">
-        <span>Evolucion satelital</span>
-        <strong>Escenas validas procesadas</strong>
+        <span>Evolucion por escenas limpias</span>
+        <strong>Historial satelital procesado</strong>
       </div>
       <div class="timeline-strip">
         @for (r of ndvis; track r._id || $index) {
@@ -84,7 +85,7 @@
         </div>
         <div class="analysis-grid">
           <article>
-            <span>Escena</span>
+            <span>Escena limpia procesada</span>
             <strong>{{ fechaImagenResumen }}</strong>
           </article>
           <article>

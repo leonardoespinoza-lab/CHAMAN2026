@@ -18,7 +18,7 @@
 
   <div class="water-total">
     <div>
-      <span>{{ 'Total' | translate }}</span>
+      <span>{{ totalLabel }}</span>
       <strong>{{ totalHuellaResumen.value }}</strong>
       <small>{{ totalHuellaResumen.detail }}</small>
       @if (periodoSeguimiento && !siembra?.huellaHidrica) {
@@ -60,7 +60,7 @@
   </div>
 
   <p class="formula-note">
-    En campana se acumula lluvia efectiva, riego registrado y carga gris con los datos disponibles. El deficit hidrico se muestra como potencial hasta cargar un aporte de riego.
+    En campana se acumula lluvia efectiva, riego registrado y carga gris con los datos disponibles. La huella final en l/kg se consolida con rendimiento o cosecha.
   </p>
 </div>
 

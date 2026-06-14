@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 
 def _png_scale() -> int:
     try:
-        return max(1, int(os.getenv("NDVI_PNG_SCALE", "3")))
+        return max(1, int(os.getenv("NDVI_PNG_SCALE", "5")))
     except ValueError:
-        logger.warning("NDVI_PNG_SCALE invalido; usando 3")
-        return 3
+        logger.warning("NDVI_PNG_SCALE invalido; usando 5")
+        return 5
 
 
 NDVI_PNG_SCALE = _png_scale()

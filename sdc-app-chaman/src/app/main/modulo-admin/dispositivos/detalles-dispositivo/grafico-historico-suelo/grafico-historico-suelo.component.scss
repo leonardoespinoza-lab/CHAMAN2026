@@ -1,10 +1,13 @@
 .soil-history-card {
-  background: var(--p-surface-0);
-  border: 1px solid color-mix(in srgb, var(--p-primary-color) 28%, var(--p-surface-200));
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(242, 252, 250, 0.7)),
+    var(--p-surface-0);
+  backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 32%, var(--p-surface-200));
   border-radius: 8px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-  min-height: 650px;
-  padding: 1.1rem;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+  min-height: 740px;
+  padding: 1.25rem;
   width: 100%;
 }
 
@@ -19,7 +22,7 @@
 .soil-history-card span {
   color: var(--p-primary-color);
   display: block;
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   font-weight: 900;
   text-transform: uppercase;
 }
@@ -27,7 +30,7 @@
 .soil-history-card strong {
   color: var(--p-text-color);
   display: block;
-  font-size: 1.32rem;
+  font-size: clamp(1.42rem, 1.55vw, 1.9rem);
   line-height: 1.2;
   margin-top: 0.25rem;
 }
@@ -35,7 +38,7 @@
 .soil-history-card small {
   color: var(--p-text-muted-color);
   display: block;
-  font-size: 0.95rem;
+  font-size: 1.02rem;
   margin-top: 0.2rem;
 }
 
@@ -49,11 +52,11 @@
 
 .soil-history-filter,
 .soil-history-export {
-  background: var(--p-surface-0);
+  background: rgba(255, 255, 255, 0.78);
   border: 1px solid var(--p-surface-border);
   border-radius: 8px;
   color: var(--p-text-color);
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 800;
   min-height: 2.55rem;
   padding: 0.45rem 0.8rem;
@@ -70,7 +73,7 @@
 
 .soil-history-card app-chart {
   display: block;
-  min-height: 570px;
+  min-height: 650px;
   width: 100%;
 }
 
@@ -123,6 +126,6 @@
   }
 
   .soil-history-card app-chart {
-    min-height: 430px;
+    min-height: 440px;
   }
 }

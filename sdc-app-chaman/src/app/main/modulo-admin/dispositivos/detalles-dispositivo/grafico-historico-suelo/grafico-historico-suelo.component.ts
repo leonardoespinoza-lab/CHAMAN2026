@@ -138,7 +138,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     return {
       chart: {
         backgroundColor: 'transparent',
-        height: 560,
+        height: 640,
         spacingBottom: 18,
         spacingLeft: 8,
         spacingRight: 18,
@@ -151,13 +151,17 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       },
       title: { text: undefined },
       xAxis: {
+        crosshair: {
+          color: 'rgba(34, 211, 200, 0.24)',
+          width: 2,
+        },
         type: 'datetime',
         title: {
           text: 'Fecha y hora',
           style: { color: 'var(--p-text-color)', fontSize: '14px', fontWeight: '700' },
         },
         labels: {
-          style: { color: 'var(--p-text-color)', fontSize: '13px' },
+          style: { color: 'var(--p-text-color)', fontSize: '14px' },
         },
         gridLineColor: 'var(--p-surface-border)',
         gridLineWidth: 1,
@@ -170,7 +174,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           style: { color: definition.color, fontSize: '14px', fontWeight: '700' },
         },
         labels: {
-          style: { color: 'var(--p-text-color)', fontSize: '13px' },
+          style: { color: 'var(--p-text-color)', fontSize: '14px' },
         },
         gridLineColor: 'var(--p-surface-border)',
         gridLineWidth: 1,
@@ -181,7 +185,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         itemDistance: 16,
         itemStyle: {
           color: 'var(--p-text-color)',
-          fontSize: '13px',
+          fontSize: '14px',
           fontWeight: '700',
         },
         layout: 'horizontal',
@@ -207,14 +211,14 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           return `<span style="color:${this.series.color}">&bull;</span> ${this.series.name}<br/>${date}<br/><strong>${Number(point.y).toFixed(definition.decimals)} ${definition.unit}</strong>${raw}`;
         },
         shadow: true,
-        style: { color: 'var(--p-text-color)', fontSize: '13px' },
+        style: { color: 'var(--p-text-color)', fontSize: '14px' },
       },
       plotOptions: {
         spline: {
           animation: { duration: 500 },
           dataLabels: { enabled: false },
           enableMouseTracking: true,
-          lineWidth: 2.6,
+          lineWidth: 2.8,
         },
         series: {
           connectNulls: false,
@@ -230,7 +234,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
             condition: { maxWidth: 768 },
             chartOptions: {
               chart: { height: 430 },
-              legend: { itemStyle: { fontSize: '11px' } },
+              legend: { itemStyle: { fontSize: '12px' } },
             },
           },
         ],

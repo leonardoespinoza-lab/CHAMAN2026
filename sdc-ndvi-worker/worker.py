@@ -30,6 +30,7 @@ from config import (
     REDIS_PORT,
     REDIS_QUEUE,
     SAT_COLLECTIONS,
+    SAT_CLOUD_COVER_THRESHOLDS,
     SAT_DELTA_VENCIMIENTO,
 )
 from geo import obtener_metadata_png_con_polygon, scene_cubre_poligono
@@ -219,18 +220,30 @@ class NDVIWorker:
 
             client = Client.open(EARTH_SEARCH_URL, timeout=300)
 
-            search = client.search(
-                collections=SAT_COLLECTIONS,
-                intersects=mapping(polygon),
-                datetime=datetime_filter,
-                query={
-                    "eo:cloud_cover": {"lt": 30},
-                },
-                sortby=[{"field": "datetime", "direction": "desc"}],
-                limit=1,
-            )
-            items = list(search.items())
-            return sign(items[0]) if items else None
+            thresholds = SAT_CLOUD_COVER_THRESHOLDS or [30]
+            for cloud_threshold in thresholds:
+                logger.info(
+                    f"   -> Buscando escena con nubosidad menor a {cloud_threshold}%"
+                )
+                search = client.search(
+                    collections=SAT_COLLECTIONS,
+                    intersects=mapping(polygon),
+                    datetime=datetime_filter,
+                    query={
+                        "eo:cloud_cover": {"lt": cloud_threshold},
+                    },
+                    sortby=[{"field": "datetime", "direction": "desc"}],
+                    limit=1,
+                )
+                items = list(search.items())
+                if items:
+                    logger.info(
+                        f"   -> Escena candidata {items[0].id} ({items[0].collection_id}) con nubosidad {items[0].properties.get('eo:cloud_cover', 's/d')}%"
+                    )
+                    return sign(items[0])
+
+            logger.info("   -> No se encontraron escenas con los umbrales configurados.")
+            return None
         except Exception as e:
             logger.error(f"Error buscando escena Sentinel: {e}")
             return None

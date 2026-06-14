@@ -534,6 +534,9 @@ export function calcularSeguimientoHuellaHidrica(params: HuellaHidricaParams): H
   const totalLitrosHa = verdeLitrosHa + azulLitrosHa + gris.litrosHa;
   const divisor = Math.max(etcTotalMm, 1);
   const aplicaciones = fertilizaciones.length + fumigaciones.length;
+  const porcentajeAguaReal = round(Math.min(100, ((etVerdeMm + azulRealMm) / divisor) * 100), 1);
+  const porcentajeGris = round(Math.min(100, aplicaciones * 25), 1);
+  const porcentajeTotalSeguimiento = round(Math.min(100, Math.max(porcentajeAguaReal, porcentajeGris)), 1);
   const faltantes = getFaltantesSeguimiento(siembra, lote, clima);
 
   trazas.push(`Seguimiento hasta ${fechaHasta}: verde ${round(etVerdeMm)} mm, deficit hidrico potencial ${round(etAzulMm)} mm, ETc acumulada ${round(etcTotalMm)} mm.`);
@@ -586,8 +589,8 @@ export function calcularSeguimientoHuellaHidrica(params: HuellaHidricaParams): H
       total: {
         litrosHa: round(totalLitrosHa),
         litrosKg: rendimientoSeco > 0 ? round((totalLitrosHa / rendimientoSeco) * 1000) : undefined,
-        porcentaje: avanceCiclo,
-        detalle: `Seguimiento del ciclo: ${avanceCiclo}% con ${clima.length} dias climaticos.`,
+        porcentaje: porcentajeTotalSeguimiento,
+        detalle: `Seguimiento acumulado: verde ${round(etVerdeMm)} mm, azul real ${round(azulRealMm)} mm, gris ${round(gris.litrosHa)} l/ha. Ciclo ${avanceCiclo}%.`,
       },
     },
     inputs: {
