@@ -46,6 +46,14 @@ const quimicaScope = { canActivate: [roleGuard], data: { niveles: ['Admin', 'Qui
 const distribuidorScope = { canActivate: [roleGuard], data: { niveles: ['Admin', 'Quimica', 'Distribuidor'] } };
 
 export const routes: Routes = [
+  { path: 'auth', component: LoginComponent },
+  {
+    path: 'login',
+    children: [
+      { path: 'auth', component: LoginComponent },
+      { path: '', redirectTo: 'auth', pathMatch: 'full' },
+    ],
+  },
   {
     path: '',
     component: NavComponent,
@@ -53,7 +61,7 @@ export const routes: Routes = [
     children: [
       // *** Prductor *** //
       // Mapa
-      // { path: '', redirectTo: 'mapa', pathMatch: 'full' },
+      { path: '', redirectTo: 'mapa', pathMatch: 'full' },
       { path: 'mapa', component: MapaComponent },
       // Lotes
       { path: 'lotes', component: ListadoLotesComponent },
@@ -132,6 +140,4 @@ export const routes: Routes = [
       // *** Compartidos *** //
     ],
   },
-  { path: 'auth', component: LoginComponent },
-  { path: '', redirectTo: 'auth', pathMatch: 'full' },
 ];
