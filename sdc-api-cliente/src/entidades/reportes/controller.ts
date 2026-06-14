@@ -20,17 +20,23 @@ export class ReportesController {
     return await this.service.get(query);
   }
 
-  @Get('/:id')
+  @Get('historico/:idDispositivo')
   @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
   )
-  public async getById(@Param('id') id: string): Promise<IReporte> {
-    return await this.service.getById(id);
+  public async historico(
+    @Param('idDispositivo') idDispositivo: string,
+    @Query('dias') dias?: number,
+    @Query('limit') limit?: number,
+  ): Promise<IListado<IReporte>> {
+    return await this.service.historico(idDispositivo, dias, limit);
   }
 
   @Get('diario/:idDispositivo')
   @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
   )
@@ -39,5 +45,15 @@ export class ReportesController {
     @Query('dias') dias?: number,
   ): Promise<IListado<IReporte>> {
     return await this.service.diario(dias, idDispositivo);
+  }
+
+  @Get('/:id')
+  @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Productor', roles: ['Admin'] },
+    { nivel: 'Establecimiento', roles: ['Admin'] },
+  )
+  public async getById(@Param('id') id: string): Promise<IReporte> {
+    return await this.service.getById(id);
   }
 }

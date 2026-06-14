@@ -76,6 +76,15 @@ export class ReporteService {
     return this.http.get(`/reportes`, { params });
   }
 
+  public historico(idDispositivo: string, dias = 7, limit = 2000): Promise<IListado<IReporte>> {
+    return this.http.get(`/reportes/historico/${idDispositivo}`, {
+      params: {
+        dias: dias.toString(),
+        limit: limit.toString(),
+      },
+    });
+  }
+
   /**
    * Método alternativo para probar con fechaCreacion en lugar de fecha
    */

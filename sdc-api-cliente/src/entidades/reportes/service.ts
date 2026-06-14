@@ -14,6 +14,27 @@ export class ReportesService {
     return await this.repository.get(filtro);
   }
 
+  async historico(
+    idDispositivo: string,
+    dias = 7,
+    limit = 2000,
+  ): Promise<IListado<IReporte>> {
+    const desde = new Date();
+    desde.setDate(desde.getDate() - Number(dias || 7));
+    const filtro: IFilter<IReporte> = {
+      idDispositivo,
+      fecha: {
+        $gte: desde.toISOString(),
+      },
+    };
+    const query: IQueryParam = {
+      filter: JSON.stringify(filtro),
+      sort: 'fecha fechaCreacion',
+      limit: Number(limit || 2000),
+    };
+    return await this.repository.get(query);
+  }
+
   async diario(dias = 7, idDispositivo: string): Promise<IListado<IReporte>> {
     // Obtiene un reporte por día para el dispositivo, específicamente el más cercano a las 06:00 AM
     const filtro: IFilter<IReporte> = {

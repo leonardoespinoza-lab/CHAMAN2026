@@ -1,0 +1,35 @@
+@if (chartOptions && metricOptions.length > 0) {
+  <article class="soil-history-card">
+    <header>
+      <div>
+        <span>{{ titulo || 'Historico Sentek' }}</span>
+        <strong>{{ resumen }}</strong>
+        @if (subtitulo) {
+          <small>{{ subtitulo }}</small>
+        }
+      </div>
+
+      <div class="soil-history-actions">
+        <select
+          class="soil-history-filter"
+          [ngModel]="selectedMetric"
+          (ngModelChange)="onMetricChange($event)"
+          aria-label="Variable historica de suelo"
+        >
+          @for (option of metricOptions; track option.value) {
+            <option [ngValue]="option.value">{{ option.label }}</option>
+          }
+        </select>
+        <button class="soil-history-export" type="button" (click)="exportarCsv()">
+          Exportar CSV
+        </button>
+      </div>
+    </header>
+
+    <app-chart [options]="chartOptions"></app-chart>
+  </article>
+} @else {
+  <div class="sin-datos">
+    <p-message severity="info" text="No hay historico suficiente para graficar la lanza de suelo"></p-message>
+  </div>
+}

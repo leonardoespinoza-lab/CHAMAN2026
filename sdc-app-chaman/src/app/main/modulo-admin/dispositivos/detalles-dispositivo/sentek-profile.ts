@@ -78,16 +78,16 @@ function normalizarHumedad(value: number, unidad: string): MedicionSensorProfund
   let actual = value;
   let nota: string | undefined;
 
-  if (esPorcentaje) {
+  if (value > 100 && value <= SENTEK_SCALED_HUMIDITY_MAX) {
+    actual = (value / SENTEK_SCALED_HUMIDITY_MAX) * 100;
+    nota = 'Lectura Sentek normalizada con escala cruda 0-300.';
+  } else if (esPorcentaje) {
     actual = value;
   } else if (esVolumetrica && value >= 0 && value <= 1) {
     actual = value * 100;
   } else if (value >= 0 && value <= SENTEK_RAW_HUMIDITY_MAX) {
     actual = (value / SENTEK_RAW_HUMIDITY_MAX) * 100;
     nota = 'Lectura Sentek normalizada con escala cruda 0-3.';
-  } else if (value > 100 && value <= SENTEK_SCALED_HUMIDITY_MAX) {
-    actual = (value / SENTEK_SCALED_HUMIDITY_MAX) * 100;
-    nota = 'Lectura Sentek normalizada con escala cruda 0-300.';
   } else if (value > SENTEK_SCALED_HUMIDITY_MAX && value <= 1000) {
     actual = value / 10;
     nota = 'Lectura Sentek normalizada desde valor x10.';

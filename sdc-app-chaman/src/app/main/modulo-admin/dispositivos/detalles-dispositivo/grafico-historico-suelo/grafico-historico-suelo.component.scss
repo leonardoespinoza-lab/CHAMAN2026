@@ -1,0 +1,128 @@
+.soil-history-card {
+  background: var(--p-surface-0);
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 28%, var(--p-surface-200));
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  min-height: 650px;
+  padding: 1.1rem;
+  width: 100%;
+}
+
+.soil-history-card header {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+}
+
+.soil-history-card span {
+  color: var(--p-primary-color);
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.soil-history-card strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 1.32rem;
+  line-height: 1.2;
+  margin-top: 0.25rem;
+}
+
+.soil-history-card small {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.95rem;
+  margin-top: 0.2rem;
+}
+
+.soil-history-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: flex-end;
+}
+
+.soil-history-filter,
+.soil-history-export {
+  background: var(--p-surface-0);
+  border: 1px solid var(--p-surface-border);
+  border-radius: 8px;
+  color: var(--p-text-color);
+  font-size: 1rem;
+  font-weight: 800;
+  min-height: 2.55rem;
+  padding: 0.45rem 0.8rem;
+}
+
+.soil-history-export {
+  cursor: pointer;
+}
+
+.soil-history-export:hover {
+  border-color: var(--p-primary-color);
+  color: var(--p-primary-color);
+}
+
+.soil-history-card app-chart {
+  display: block;
+  min-height: 570px;
+  width: 100%;
+}
+
+.soil-history-card ::ng-deep {
+  .highcharts-background,
+  .highcharts-plot-background {
+    fill: transparent !important;
+  }
+
+  .highcharts-axis-labels text,
+  .highcharts-axis-title,
+  .highcharts-legend-item text {
+    fill: var(--p-text-color) !important;
+  }
+
+  .highcharts-axis-line,
+  .highcharts-tick,
+  .highcharts-grid-line {
+    stroke: var(--p-surface-border) !important;
+  }
+}
+
+.sin-datos {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 260px;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .soil-history-card {
+    min-height: 500px;
+    padding: 0.85rem;
+  }
+
+  .soil-history-card header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .soil-history-actions {
+    justify-content: stretch;
+  }
+
+  .soil-history-filter,
+  .soil-history-export {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .soil-history-card app-chart {
+    min-height: 430px;
+  }
+}

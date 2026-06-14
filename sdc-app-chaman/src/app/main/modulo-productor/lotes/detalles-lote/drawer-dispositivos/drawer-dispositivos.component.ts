@@ -11,9 +11,10 @@ import {
 } from '@angular/core';
 import { IDispositivo, IReporte } from 'modelos/src';
 import { UbicarComponent } from '../../../../../auxiliares/componentes/ubicar/ubicar.component';
+import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
-import { GraficoPerfilSueloComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-perfil-suelo/grafico-perfil-suelo.component';
+import { GraficoHistoricoSueloComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-suelo/grafico-historico-suelo.component';
 import {
   buildSentekProfile,
   MedicionSensorProfundidad,
@@ -25,7 +26,7 @@ import {
   imports: [
     CommonModule,
     SharedModule,
-    GraficoPerfilSueloComponent,
+    GraficoHistoricoSueloComponent,
     UbicarComponent,
   ],
   templateUrl: './drawer-dispositivos.component.html',
@@ -41,8 +42,14 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
   public datosLanza: MedicionProfundidad[] = [];
   public esLanzaDeSuelo = false;
   public vistaActiva: 'tabla' | 'grafico' = 'grafico';
+  public reportesHistoricos: IReporte[] = [];
+  public diasHistorico = 7;
+  public loadingHistorico = false;
 
-  constructor(public helper: HelperService) {}
+  constructor(
+    public helper: HelperService,
+    private reportesService: ReporteService,
+  ) {}
 
   async ngOnInit(): Promise<void> {
     this.refreshFromDevice();
@@ -63,6 +70,11 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
 
   public cambiarVista(vista: 'tabla' | 'grafico'): void {
     this.vistaActiva = vista;
+  }
+
+  public async cambiarPeriodoHistorico(dias: number): Promise<void> {
+    this.diasHistorico = dias;
+    await this.cargarHistorico();
   }
 
   public formatearMedicion(medicion?: MedicionSensorProfundidad): string {
@@ -87,6 +99,27 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
     this.datosLanza = this.esLanzaDeSuelo
       ? buildSentekProfile(this.ultimoReporte)
       : [];
+    this.reportesHistoricos = this.ultimoReporte ? [this.ultimoReporte] : [];
     this.loading = false;
+    this.cargarHistorico();
+  }
+
+  private async cargarHistorico(): Promise<void> {
+    const id = this.dispositivo?._id;
+    if (!this.esLanzaDeSuelo || !id) return;
+    this.loadingHistorico = true;
+    try {
+      const response = await this.reportesService.historico(id, this.diasHistorico, 2500);
+      this.reportesHistoricos = response.datos?.length
+        ? response.datos
+        : this.ultimoReporte
+          ? [this.ultimoReporte]
+          : [];
+    } catch (error) {
+      console.error('Error al cargar historico de reportes de suelo', error);
+      this.reportesHistoricos = this.ultimoReporte ? [this.ultimoReporte] : [];
+    } finally {
+      this.loadingHistorico = false;
+    }
   }
 }

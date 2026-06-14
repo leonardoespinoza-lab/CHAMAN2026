@@ -19,6 +19,19 @@
 
       <div class="device-dialog-actions">
         @if (esLanzaDeSuelo && datosLanza.length > 0) {
+          @if (vistaActiva === 'grafico') {
+            <p-selectButton
+              [options]="[
+                { label: '24 h', value: 1 },
+                { label: '7 dias', value: 7 },
+                { label: '30 dias', value: 30 },
+              ]"
+              [(ngModel)]="diasHistorico"
+              optionLabel="label"
+              optionValue="value"
+              (onChange)="cambiarPeriodoHistorico($event.value)"
+            />
+          }
           <p-selectButton
             [options]="[
               { label: 'Curvas', value: 'grafico', icon: 'pi pi-chart-line' },
@@ -38,10 +51,14 @@
     @if (datosLanza.length > 0) {
       <section class="soil-device-content">
         @if (vistaActiva === 'grafico') {
-          <app-grafico-perfil-suelo
-            [datos]="datosLanza"
-            [titulo]="'Perfil Sentek - ' + dispositivo?.nombre"
-          ></app-grafico-perfil-suelo>
+          @if (loadingHistorico) {
+            <p-message severity="info">Cargando historico de la lanza...</p-message>
+          }
+          <app-grafico-historico-suelo
+            [reportes]="reportesHistoricos"
+            [titulo]="'Historico Sentek - ' + dispositivo?.nombre"
+            [subtitulo]="'Cada linea representa una profundidad de medicion'"
+          ></app-grafico-historico-suelo>
         } @else {
           <div class="sensor-table-wrap">
             <table class="sensor-table">
