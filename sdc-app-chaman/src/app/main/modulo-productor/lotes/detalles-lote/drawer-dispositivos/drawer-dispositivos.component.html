@@ -54,6 +54,9 @@
                   @if (tieneDatosCrudos) {
                     <th>Lectura cruda humedad</th>
                   }
+                  @if (tieneNotasNormalizacion) {
+                    <th>Normalizacion</th>
+                  }
                 </tr>
               </thead>
               <tbody>
@@ -70,6 +73,11 @@
                         } @else {
                           -
                         }
+                      </td>
+                    }
+                    @if (tieneNotasNormalizacion) {
+                      <td>
+                        {{ dato.humedad?.nota || dato.salinidad?.nota || dato.temperatura?.nota || '-' }}
                       </td>
                     }
                   </tr>

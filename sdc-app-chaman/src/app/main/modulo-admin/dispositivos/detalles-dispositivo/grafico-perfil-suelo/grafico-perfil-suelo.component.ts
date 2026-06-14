@@ -103,7 +103,7 @@ export class GraficoPerfilSueloComponent implements OnChanges {
       return null;
     }
 
-    const valores = data.map((point) => Number(point.x));
+    const valores = data.map((point) => Number(point.y));
     const promedio = valores.reduce((acc, value) => acc + value, 0) / valores.length;
 
     return {
@@ -119,8 +119,7 @@ export class GraficoPerfilSueloComponent implements OnChanges {
     return {
       chart: {
         backgroundColor: 'transparent',
-        height: 380,
-        inverted: true,
+        height: 360,
         spacingBottom: 12,
         spacingLeft: 8,
         spacingRight: 16,
@@ -132,29 +131,8 @@ export class GraficoPerfilSueloComponent implements OnChanges {
         width: null,
       },
       title: { text: undefined },
-      xAxis: definitions.map((definition, index) => ({
-        ...this.getAxisBounds(definition),
-        title: {
-          text: `${definition.title} (${definition.unit})`,
-          style: {
-            color: definition.color,
-            fontSize: '13px',
-            fontWeight: '700',
-          },
-        },
-        labels: {
-          style: {
-            color: definition.color,
-            fontSize: '12px',
-          },
-        },
-        gridLineColor: index === 0 ? 'var(--p-surface-border)' : 'transparent',
-        gridLineWidth: index === 0 ? 1 : 0,
-        lineColor: definition.color,
-        opposite: index > 0,
-        offset: index > 1 ? 34 : 0,
-      })),
-      yAxis: this.getDepthAxis(),
+      xAxis: this.getDepthXAxis(),
+      yAxis: definitions.map((definition, index) => this.getMetricYAxis(definition, index)),
       legend: this.getLegendOptions(),
       tooltip: this.getTooltipOptions(),
       plotOptions: this.getPlotOptions(),
@@ -163,7 +141,7 @@ export class GraficoPerfilSueloComponent implements OnChanges {
         data: this.getSeriesData(datos, definition.key),
         name: `${definition.title} (${definition.unit})`,
         type: 'spline',
-        xAxis: index,
+        yAxis: index,
       })),
       credits: { enabled: false },
       accessibility: { enabled: false },
@@ -172,10 +150,8 @@ export class GraficoPerfilSueloComponent implements OnChanges {
           {
             condition: { maxWidth: 768 },
             chartOptions: {
-              chart: { height: 340 },
-              xAxis: definitions.map((definition) => ({
-                title: { text: definition.unit },
-              })),
+              chart: { height: 320 },
+              yAxis: definitions.map((definition, index) => this.getMetricYAxis(definition, index, true)),
             },
           },
         ],
@@ -188,7 +164,6 @@ export class GraficoPerfilSueloComponent implements OnChanges {
       chart: {
         backgroundColor: 'transparent',
         height: 280,
-        inverted: true,
         spacingBottom: 8,
         spacingLeft: 8,
         spacingRight: 8,
@@ -200,26 +175,8 @@ export class GraficoPerfilSueloComponent implements OnChanges {
         width: null,
       },
       title: { text: undefined },
-      xAxis: {
-        ...this.getAxisBounds(definition),
-        title: {
-          text: `${definition.title} (${definition.unit})`,
-          style: {
-            color: 'var(--p-text-color)',
-            fontSize: '13px',
-            fontWeight: '600',
-          },
-        },
-        labels: {
-          style: {
-            color: 'var(--p-text-color)',
-            fontSize: '12px',
-          },
-        },
-        gridLineColor: 'var(--p-surface-border)',
-        gridLineWidth: 1,
-      },
-      yAxis: this.getDepthAxis(),
+      xAxis: this.getDepthXAxis(),
+      yAxis: this.getMetricYAxis(definition),
       legend: { enabled: false },
       tooltip: this.getTooltipOptions(),
       plotOptions: this.getPlotOptions(),
@@ -250,8 +207,8 @@ export class GraficoPerfilSueloComponent implements OnChanges {
     return datos
       .filter((row) => row[key])
       .map((row) => ({
-        x: row[key]!.actual,
-        y: row.profundidad,
+        x: row.profundidad,
+        y: row[key]!.actual,
         raw: row[key]!.crudo,
         rawUnit: row[key]!.unidadCruda,
       }));
@@ -261,7 +218,7 @@ export class GraficoPerfilSueloComponent implements OnChanges {
     return datos.find((row) => row[key])?.[key]?.unidad || fallback;
   }
 
-  private getDepthAxis(): any {
+  private getDepthXAxis(): any {
     return {
       title: {
         text: this.translate.instant('Profundidad (cm)'),
@@ -279,7 +236,31 @@ export class GraficoPerfilSueloComponent implements OnChanges {
       },
       gridLineColor: 'var(--p-surface-border)',
       gridLineWidth: 1,
-      reversed: true,
+    };
+  }
+
+  private getMetricYAxis(definition: SoilMetricDefinition, index = 0, compact = false): any {
+    return {
+      ...this.getAxisBounds(definition),
+      title: {
+        text: compact ? definition.unit : `${definition.title} (${definition.unit})`,
+        style: {
+          color: definition.color,
+          fontSize: compact ? '11px' : '13px',
+          fontWeight: '700',
+        },
+      },
+      labels: {
+        style: {
+          color: definition.color,
+          fontSize: compact ? '10px' : '12px',
+        },
+      },
+      gridLineColor: index === 0 ? 'var(--p-surface-border)' : 'transparent',
+      gridLineWidth: index === 0 ? 1 : 0,
+      lineColor: definition.color,
+      opposite: index > 0,
+      offset: index > 1 ? 42 : 0,
     };
   }
 
@@ -310,9 +291,9 @@ export class GraficoPerfilSueloComponent implements OnChanges {
           point.raw !== undefined && point.rawUnit
             ? `<br/><span>Lectura cruda: <strong>${Number(point.raw).toFixed(3)} ${point.rawUnit}</strong></span>`
             : '';
-        return `<span style="color:${this.series.color}">●</span> ${this.series.name}: <strong>${Number(point.x).toFixed(1)}</strong><br/>Profundidad: ${point.y} cm${raw}`;
+        return `<span style="color:${this.series.color}">●</span> ${this.series.name}: <strong>${Number(point.y).toFixed(1)}</strong><br/>Profundidad: ${point.x} cm${raw}`;
       },
-      pointFormat: '<span style="color:{series.color}">●</span> {series.name}: <strong>{point.x:.1f}</strong><br/>Profundidad: {point.y} cm',
+      pointFormat: '<span style="color:{series.color}">●</span> {series.name}: <strong>{point.y:.1f}</strong><br/>Profundidad: {point.x} cm',
       shadow: true,
       style: {
         color: 'var(--p-text-color)',

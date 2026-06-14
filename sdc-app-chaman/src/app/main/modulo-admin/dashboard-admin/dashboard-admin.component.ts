@@ -95,7 +95,7 @@ export class DashboardAdminComponent {
     },
     {
       title: 'Algoritmos',
-      description: 'Auditoria, pruebas, inputs y outputs de huella hidrica, riego, enfermedades, satelite y malezas.',
+      description: 'Auditoria, pruebas, inputs y outputs de huella hidrica, riego, enfermedades y malezas.',
       icon: 'pi pi-sliders-h',
       route: '/algoritmos',
       group: 'Sistema',

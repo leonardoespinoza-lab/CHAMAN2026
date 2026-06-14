@@ -68,8 +68,8 @@ export class CardHuellaHidricaComponent implements OnInit, OnChanges, OnDestroy 
         {
           key: 'blue',
           label: 'Azul',
-          value: azul ? this.formatearAgua(azul.mm, azul.litrosKg) : 'Sin balance',
-          detail: azul?.detalle || 'Se completa con deficit hidrico y riego registrado.',
+          value: azul ? this.formatearAgua(azul.mm, azul.litrosKg) : 'Sin riego',
+          detail: azul?.detalle || 'Solo se computa con riego o aporte externo cargado.',
           fill: this.limitar(azul?.porcentaje || 0),
         },
         {
@@ -125,7 +125,7 @@ export class CardHuellaHidricaComponent implements OnInit, OnChanges, OnDestroy 
     if (huella) {
       return {
         value: `${this.numeroAr.format(total)} l/kg`,
-        detail: 'Suma de lluvia natural, riego y carga de dilucion',
+        detail: 'Suma de lluvia natural, riego registrado y carga de dilucion',
         fill: 100,
       };
     }

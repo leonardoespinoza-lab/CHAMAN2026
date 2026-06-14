@@ -17,4 +17,16 @@ export class AlgoritmosRepository {
   async simularHuellaHidrica(body: any): Promise<any> {
     return await this.axios.POST<any>(`${API_DATOS}/algoritmos/huella-hidrica/simular`, body);
   }
+
+  async simularEnfermedades(body: any): Promise<any> {
+    return await this.axios.POST<any>(`${API_DATOS}/algoritmos/enfermedades/simular`, body);
+  }
+
+  async simularRiego(body: any): Promise<any> {
+    return await this.axios.POST<any>(`${API_DATOS}/algoritmos/riego/simular`, body);
+  }
+
+  async simularMalezas(body: any): Promise<any> {
+    return await this.axios.POST<any>(`${API_DATOS}/algoritmos/malezas/simular`, body);
+  }
 }

@@ -7,7 +7,7 @@
     </div>
     <div class="hero-actions">
       <p-button label="Recargar" icon="pi pi-refresh" [loading]="loading" [outlined]="true" (onClick)="cargar()" />
-      <p-button label="Probar huella" icon="pi pi-play" [loading]="loading" (onClick)="simular()" />
+      <p-button label="Ejecutar motor" icon="pi pi-play" [loading]="loading" (onClick)="simularActual()" />
     </div>
   </header>
 
@@ -183,7 +183,7 @@
               <div>
                 <span>Azul</span>
                 <strong>{{ format(resultado.huella.azul?.litrosKg) }} l/kg</strong>
-                <small>Demanda no cubierta por lluvia efectiva</small>
+                <small>Riego o agua externa registrada; el deficit no cargado queda fuera de la huella azul real</small>
               </div>
               <div>
                 <span>Gris</span>
@@ -205,6 +205,96 @@
               <div>
                 <h4>Traza de calculo</h4>
                 @for (traza of resultado.trazas; track traza) {
+                  <p class="trace-line">{{ traza }}</p>
+                }
+              </div>
+            </div>
+          </section>
+        }
+      }
+
+      @if (seleccionado === 'enfermedades' || seleccionado === 'riego' || seleccionado === 'malezas') {
+        <section class="formula-card">
+          <div>
+            <p>Formula ejecutable</p>
+            <h3>{{ motorTitle }}</h3>
+            <span>{{ motorDescription }}</span>
+          </div>
+          <div class="formula-pill">
+            <strong>{{ seleccionado | uppercase }}</strong>
+            <span>POST /algoritmos/{{ seleccionado }}/simular</span>
+          </div>
+        </section>
+
+        <section class="tester">
+          <div class="tester-header">
+            <div>
+              <p>Banco de prueba</p>
+              <h3>{{ motorTitle }}</h3>
+            </div>
+            <div class="tester-actions">
+              <p-button label="Ejecutar" icon="pi pi-play" [loading]="loading" (onClick)="simularActual()" />
+            </div>
+          </div>
+
+          <div class="input-grid motor-input-grid">
+            @for (key of motorFieldKeys(); track key) {
+              <label>
+                {{ key }}
+                <input [ngModel]="motorForm[key]" (ngModelChange)="setMotorField(key, $event)" />
+              </label>
+            }
+          </div>
+        </section>
+
+        @if (resultadoMotor) {
+          <section class="result-card">
+            <div class="result-header">
+              <div>
+                <p>Output</p>
+                <h3>{{ resultadoMotor.resumen }}</h3>
+              </div>
+              <strong>{{ resultadoMotor.motor }}</strong>
+            </div>
+
+            <div class="metrics">
+              @for (item of resultadoMotor.metricas | keyvalue; track item.key) {
+                <div>
+                  <span>{{ item.key }}</span>
+                  <strong>{{ item.value }}</strong>
+                </div>
+              }
+            </div>
+
+            @if (resultadoMotor.enfermedades?.length) {
+              <div class="disease-output-grid">
+                @for (enfermedad of resultadoMotor.enfermedades; track enfermedad['nombre']) {
+                  <article>
+                    <div>
+                      <span>{{ enfermedad['periodo'] }}</span>
+                      <strong>{{ enfermedad['nombre'] }}</strong>
+                    </div>
+                    <em>{{ enfermedad['riesgo'] }}% - {{ enfermedad['nivel'] }}</em>
+                    <p>{{ enfermedad['prescripcion'] }}</p>
+                  </article>
+                }
+              </div>
+            }
+
+            <div class="prediction-chart">
+              @for (point of resultadoMotor.serie; track point.label) {
+                <div>
+                  <span [style.height]="barHeight(point.value)"></span>
+                  <small>{{ point.label }}</small>
+                  <strong>{{ point.value }}</strong>
+                </div>
+              }
+            </div>
+
+            <div class="trace-grid single">
+              <div>
+                <h4>Traza de calculo</h4>
+                @for (traza of resultadoMotor.trazas; track traza) {
                   <p class="trace-line">{{ traza }}</p>
                 }
               </div>

@@ -15,6 +15,7 @@ export interface HuellaHidricaParams {
   fertilizaciones?: IFertilizacion[];
   fumigaciones?: IFumigacion[];
   clima?: DiaClimaHuella[];
+  riegos?: Array<Record<string, any>>;
 }
 
 export interface HuellaHidricaResultado {
@@ -29,6 +30,7 @@ export interface HuellaHidricaResultado {
   parciales: {
     etVerdeMm: number;
     etAzulMm: number;
+    deficitPotencialMm: number;
     grisFertilizantesLitrosKg: number;
     grisAgroquimicosLitrosKg: number;
     aporteN: number;
@@ -71,6 +73,7 @@ export interface HuellaHidricaSeguimientoResultado {
       litrosKg?: number;
       porcentaje: number;
       detalle: string;
+      deficitPotencialMm?: number;
     };
     gris: {
       litrosHa: number;
@@ -466,6 +469,19 @@ function getGrisLitrosHa(
   };
 }
 
+function getRiegoMm(riegos?: Array<Record<string, any>>): number {
+  if (!Array.isArray(riegos) || !riegos.length) return 0;
+  return riegos.reduce((acc, riego) => {
+    const lamina =
+      Number(riego?.laminaMm) ||
+      Number(riego?.cantidadMm) ||
+      Number(riego?.mm) ||
+      Number(riego?.riegoMm) ||
+      0;
+    return acc + Math.max(0, lamina);
+  }, 0);
+}
+
 export function calcularSeguimientoHuellaHidrica(params: HuellaHidricaParams): HuellaHidricaSeguimientoResultado {
   const siembra = params.siembra;
   const lote = params.lote;
@@ -502,13 +518,21 @@ export function calcularSeguimientoHuellaHidrica(params: HuellaHidricaParams): H
 
   const gris = getGrisLitrosHa(siembra, lote, fertilizaciones, fumigaciones);
   const verdeLitrosHa = etVerdeMm * 10000;
-  const azulLitrosHa = etAzulMm * 10000;
+  const riegoRegistradoMm = getRiegoMm(params.riegos);
+  const hayRiegoRegistrado = riegoRegistradoMm > 0;
+  const azulRealMm = hayRiegoRegistrado ? Math.min(etAzulMm, riegoRegistradoMm) : 0;
+  const azulLitrosHa = azulRealMm * 10000;
   const totalLitrosHa = verdeLitrosHa + azulLitrosHa + gris.litrosHa;
   const divisor = Math.max(etcTotalMm, 1);
   const aplicaciones = fertilizaciones.length + fumigaciones.length;
   const faltantes = getFaltantesSeguimiento(siembra, lote, clima);
 
-  trazas.push(`Seguimiento hasta ${fechaHasta}: verde ${round(etVerdeMm)} mm, azul ${round(etAzulMm)} mm, ETc acumulada ${round(etcTotalMm)} mm.`);
+  trazas.push(`Seguimiento hasta ${fechaHasta}: verde ${round(etVerdeMm)} mm, deficit hidrico potencial ${round(etAzulMm)} mm, ETc acumulada ${round(etcTotalMm)} mm.`);
+  if (hayRiegoRegistrado) {
+    trazas.push(`Huella azul real: ${round(azulRealMm)} mm tomados de ${round(riegoRegistradoMm)} mm de riego registrado.`);
+  } else if (etAzulMm > 0) {
+    trazas.push('Huella azul en campana no se computa como real porque no hay riego/aporte externo registrado.');
+  }
   trazas.push(`Huella gris acumulada por aplicaciones: ${aplicaciones} registros, ${round(gris.litrosHa)} l/ha antes de dividir por rendimiento.`);
 
   if (huellaFinal) {
@@ -534,11 +558,14 @@ export function calcularSeguimientoHuellaHidrica(params: HuellaHidricaParams): H
         detalle: 'Lluvia efectiva consumida por el cultivo hasta hoy.',
       },
       azul: {
-        mm: round(etAzulMm),
+        mm: round(azulRealMm),
         litrosHa: round(azulLitrosHa),
         litrosKg: rendimientoSeco > 0 ? round((azulLitrosHa / rendimientoSeco) * 1000) : undefined,
-        porcentaje: round(Math.min(100, (etAzulMm / divisor) * 100), 1),
-        detalle: 'Deficit hidrico cubierto por riego o agua externa pendiente.',
+        porcentaje: hayRiegoRegistrado ? round(Math.min(100, (azulRealMm / divisor) * 100), 1) : 0,
+        detalle: hayRiegoRegistrado
+          ? 'Riego o agua externa registrada durante el ciclo.'
+          : `Sin riego cargado: huella azul real 0. Deficit hidrico potencial: ${round(etAzulMm)} mm.`,
+        deficitPotencialMm: round(etAzulMm),
       },
       gris: {
         litrosHa: round(gris.litrosHa),
@@ -641,12 +668,19 @@ export function calcularHuellaHidrica(params: HuellaHidricaParams): HuellaHidric
   }, 0);
   const grisAgroquimicosLitrosKg = Math.max(0, grisAgroquimicos / 0.0005 / rendimientoSeco);
 
+  const riegoRegistradoMm = getRiegoMm(params.riegos);
+  const azulRealMm = riegoRegistradoMm > 0 ? Math.min(etAzulMm, riegoRegistradoMm) : 0;
   const verdeLitrosKg = (etVerdeMm * 10000) / rendimientoSeco;
-  const azulLitrosKg = (etAzulMm * 10000) / rendimientoSeco;
+  const azulLitrosKg = (azulRealMm * 10000) / rendimientoSeco;
   const grisLitrosKg = grisFertilizantes + grisAgroquimicosLitrosKg;
   const totalLitrosKg = verdeLitrosKg + azulLitrosKg + grisLitrosKg;
 
-  trazas.push(`Verde/Azul: ET verde ${round(etVerdeMm)} mm y ET azul ${round(etAzulMm)} mm sobre ${clima.length} dias.`);
+  trazas.push(`Verde/Azul: ET verde ${round(etVerdeMm)} mm y deficit potencial ${round(etAzulMm)} mm sobre ${clima.length} dias.`);
+  trazas.push(
+    riegoRegistradoMm > 0
+      ? `Huella azul real por riego registrado: ${round(azulRealMm)} mm de ${round(riegoRegistradoMm)} mm cargados.`
+      : 'Huella azul real: 0 mm porque no hay riego/aporte externo registrado.',
+  );
   trazas.push(`Gris fertilizantes: aporte N ${round(aporteN)} kg/ha, extraccion N ${round(extraccionN)} kg/ha, excedente N ${round(excedenteN)}; aporte P ${round(aporteP)} kg/ha, extraccion P ${round(extraccionP)} kg/ha, excedente P ${round(excedenteP)}.`);
   trazas.push(`Gris fitosanitarios: ${fumigaciones.length} aplicaciones evaluadas con Koc, persistencia, dosis y concentracion.`);
 
@@ -671,7 +705,8 @@ export function calcularHuellaHidrica(params: HuellaHidricaParams): HuellaHidric
     },
     parciales: {
       etVerdeMm: round(etVerdeMm),
-      etAzulMm: round(etAzulMm),
+      etAzulMm: round(azulRealMm),
+      deficitPotencialMm: round(etAzulMm),
       grisFertilizantesLitrosKg: round(grisFertilizantes),
       grisAgroquimicosLitrosKg: round(grisAgroquimicosLitrosKg),
       aporteN: round(aporteN),

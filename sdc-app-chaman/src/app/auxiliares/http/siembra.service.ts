@@ -14,7 +14,7 @@ export interface HuellaHidricaSeguimiento {
   };
   progreso: {
     verde: { mm: number; litrosHa: number; litrosKg?: number; porcentaje: number; detalle: string };
-    azul: { mm: number; litrosHa: number; litrosKg?: number; porcentaje: number; detalle: string };
+    azul: { mm: number; litrosHa: number; litrosKg?: number; porcentaje: number; detalle: string; deficitPotencialMm?: number };
     gris: { litrosHa: number; litrosKg?: number; aplicaciones: number; porcentaje: number; detalle: string };
     total: { litrosHa: number; litrosKg?: number; porcentaje: number; detalle: string };
   };

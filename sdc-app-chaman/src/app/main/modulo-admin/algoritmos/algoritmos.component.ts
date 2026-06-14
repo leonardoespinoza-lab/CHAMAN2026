@@ -1,5 +1,10 @@
 import { Component } from '@angular/core';
-import { AlgoritmoCatalogo, AlgoritmosHttpService, HuellaHidricaSimulacion } from '../../../auxiliares/http/algoritmos.service';
+import {
+  AlgoritmoCatalogo,
+  AlgoritmoSimulacion,
+  AlgoritmosHttpService,
+  HuellaHidricaSimulacion,
+} from '../../../auxiliares/http/algoritmos.service';
 import { HelperService } from '../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../auxiliares/shared.module';
 
@@ -14,6 +19,7 @@ export class AlgoritmosComponent {
   public seleccionado = 'huella-hidrica';
   public parametrosHuella: any;
   public resultado?: HuellaHidricaSimulacion;
+  public resultadoMotor?: AlgoritmoSimulacion;
   public payloadJson = '';
   public loading = false;
   public modoJson = false;
@@ -36,6 +42,41 @@ export class AlgoritmosComponent {
     pendiente: 'Baja (0 - 3%)',
     labranza: 'Siembra Directa',
     manejo: 'Bueno',
+  };
+
+  public enfermedadesForm = {
+    cultivo: 'Trigo',
+    variedad: 'BAGUETTE 450',
+    etapa: 'Hoja bandera',
+    humedadRelativa: 88,
+    horasMojado: 18,
+    lluvia48h: 12,
+    temperatura: 18,
+    susceptibilidad: 0.7,
+  };
+
+  public riegoForm = {
+    humedadSueloPct: 24,
+    capacidadCampoPct: 32,
+    puntoMarchitezPct: 14,
+    profundidadRaicesCm: 60,
+    et0MmDia: 4.2,
+    kc: 0.9,
+    lluvia72h: 4,
+    umbralAguaUtilPct: 45,
+  };
+
+  public malezasForm = {
+    cultivo: 'Trigo',
+    especie: 'Amaranthus',
+    dias: 20,
+    temperaturaMedia: 17,
+    baseTermica: 8,
+    humedadSueloPct: 55,
+    lluvia7d: 18,
+    k: 0.038,
+    x0: 130,
+    amplitud: 92,
   };
 
   constructor(
@@ -67,6 +108,7 @@ export class AlgoritmosComponent {
   public seleccionar(id: string): void {
     this.seleccionado = id;
     this.resultado = undefined;
+    this.resultadoMotor = undefined;
   }
 
   public generarPayload(): void {
@@ -149,6 +191,63 @@ export class AlgoritmosComponent {
       this.helper.notifError(error);
     }
     this.loading = false;
+  }
+
+  public async simularActual(): Promise<void> {
+    if (this.seleccionado === 'huella-hidrica') {
+      await this.simular();
+      return;
+    }
+
+    this.loading = true;
+    this.resultadoMotor = undefined;
+    try {
+      if (this.seleccionado === 'enfermedades') {
+        this.resultadoMotor = await this.service.simularEnfermedades(this.enfermedadesForm);
+      } else if (this.seleccionado === 'riego') {
+        this.resultadoMotor = await this.service.simularRiego(this.riegoForm);
+      } else if (this.seleccionado === 'malezas') {
+        this.resultadoMotor = await this.service.simularMalezas(this.malezasForm);
+      }
+    } catch (error) {
+      this.helper.notifError(error);
+    }
+    this.loading = false;
+  }
+
+  public get motorForm(): Record<string, any> {
+    if (this.seleccionado === 'enfermedades') return this.enfermedadesForm;
+    if (this.seleccionado === 'riego') return this.riegoForm;
+    return this.malezasForm;
+  }
+
+  public get motorTitle(): string {
+    if (this.seleccionado === 'enfermedades') return 'Calibracion de enfermedades';
+    if (this.seleccionado === 'riego') return 'Calibracion de recomendacion de riego';
+    return 'Calibracion de malezas';
+  }
+
+  public get motorDescription(): string {
+    if (this.seleccionado === 'enfermedades') {
+      return 'Cruza ventana fenologica, humedad persistente, mojado foliar, lluvia, temperatura y susceptibilidad.';
+    }
+    if (this.seleccionado === 'riego') {
+      return 'Calcula agua util, deficit a capacidad de campo, ETc y recomendacion segun lluvia esperada.';
+    }
+    return 'Predice emergencia acumulada con curva Gompertz, grados dia, humedad de suelo y lluvia reciente.';
+  }
+
+  public motorFieldKeys(): string[] {
+    return Object.keys(this.motorForm);
+  }
+
+  public setMotorField(key: string, value: any): void {
+    const numeric = Number(value);
+    this.motorForm[key] = value !== '' && Number.isFinite(numeric) ? numeric : value;
+  }
+
+  public barHeight(value: number): string {
+    return `${Math.max(3, Math.min(100, Number(value) || 0))}%`;
   }
 
   public format(value?: number, digits = 0): string {

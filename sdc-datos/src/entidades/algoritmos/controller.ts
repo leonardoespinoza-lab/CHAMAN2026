@@ -22,4 +22,19 @@ export class AlgoritmosController {
   simularHuellaHidrica(@Body() body: HuellaHidricaParams) {
     return this.service.simularHuellaHidrica(body);
   }
+
+  @Post('enfermedades/simular')
+  simularEnfermedades(@Body() body: any) {
+    return this.service.simularEnfermedades(body);
+  }
+
+  @Post('riego/simular')
+  simularRiego(@Body() body: any) {
+    return this.service.simularRiego(body);
+  }
+
+  @Post('malezas/simular')
+  simularMalezas(@Body() body: any) {
+    return this.service.simularMalezas(body);
+  }
 }

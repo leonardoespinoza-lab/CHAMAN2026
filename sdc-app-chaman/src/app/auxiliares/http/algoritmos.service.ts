@@ -17,6 +17,15 @@ export interface HuellaHidricaSimulacion {
   trazas: string[];
 }
 
+export interface AlgoritmoSimulacion {
+  motor: string;
+  resumen: string;
+  metricas: Record<string, any>;
+  serie: Array<{ label: string; value: number }>;
+  trazas: string[];
+  enfermedades?: Array<Record<string, any>>;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -33,5 +42,17 @@ export class AlgoritmosHttpService {
 
   public simularHuella(body: any): Promise<HuellaHidricaSimulacion> {
     return this.http.post('/algoritmos/huella-hidrica/simular', body);
+  }
+
+  public simularEnfermedades(body: any): Promise<AlgoritmoSimulacion> {
+    return this.http.post('/algoritmos/enfermedades/simular', body);
+  }
+
+  public simularRiego(body: any): Promise<AlgoritmoSimulacion> {
+    return this.http.post('/algoritmos/riego/simular', body);
+  }
+
+  public simularMalezas(body: any): Promise<AlgoritmoSimulacion> {
+    return this.http.post('/algoritmos/malezas/simular', body);
   }
 }

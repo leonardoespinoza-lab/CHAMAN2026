@@ -16,4 +16,16 @@ export class AlgoritmosService {
   async simularHuellaHidrica(body: any): Promise<any> {
     return await this.repository.simularHuellaHidrica(body);
   }
+
+  async simularEnfermedades(body: any): Promise<any> {
+    return await this.repository.simularEnfermedades(body);
+  }
+
+  async simularRiego(body: any): Promise<any> {
+    return await this.repository.simularRiego(body);
+  }
+
+  async simularMalezas(body: any): Promise<any> {
+    return await this.repository.simularMalezas(body);
+  }
 }

@@ -8,16 +8,16 @@
 
 .soil-chart-card {
   background: var(--p-surface-0);
-  border: 1px solid var(--p-surface-200);
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 22%, var(--p-surface-200));
   border-radius: 8px;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
   min-height: 360px;
-  padding: 0.85rem;
+  padding: 1rem;
 }
 
 .soil-chart-card-combined {
   margin-bottom: 0;
-  min-height: 470px;
+  min-height: 455px;
 }
 
 .soil-chart-card header {
@@ -31,7 +31,7 @@
 .soil-chart-card span {
   color: var(--p-text-muted-color);
   display: block;
-  font-size: 0.8rem;
+  font-size: 0.86rem;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -39,7 +39,7 @@
 .soil-chart-card strong {
   color: var(--p-text-color);
   display: block;
-  font-size: 1.05rem;
+  font-size: 1.18rem;
   line-height: 1.2;
   margin-top: 0.2rem;
 }
@@ -48,7 +48,7 @@
   background: var(--p-surface-100);
   border-radius: 999px;
   color: var(--p-text-muted-color);
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   font-weight: 700;
   padding: 0.25rem 0.5rem;
   white-space: nowrap;
@@ -98,5 +98,6 @@
 
   .soil-chart-card {
     min-height: 320px;
+    padding: 0.85rem;
   }
 }

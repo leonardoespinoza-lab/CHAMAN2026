@@ -76,6 +76,10 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
     return this.datosLanza.some((dato) => !!dato.humedad?.crudo);
   }
 
+  public get tieneNotasNormalizacion(): boolean {
+    return this.datosLanza.some((dato) => !!dato.humedad?.nota || !!dato.salinidad?.nota || !!dato.temperatura?.nota);
+  }
+
   private refreshFromDevice(): void {
     this.loading = true;
     this.esLanzaDeSuelo = this.dispositivo?.tipo === 'Sensor de Humedad de Suelo';

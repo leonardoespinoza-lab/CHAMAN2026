@@ -27,4 +27,22 @@ export class AlgoritmosController {
   async simularHuellaHidrica(@Body() body: any): Promise<any> {
     return await this.service.simularHuellaHidrica(body);
   }
+
+  @Post('enfermedades/simular')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  async simularEnfermedades(@Body() body: any): Promise<any> {
+    return await this.service.simularEnfermedades(body);
+  }
+
+  @Post('riego/simular')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  async simularRiego(@Body() body: any): Promise<any> {
+    return await this.service.simularRiego(body);
+  }
+
+  @Post('malezas/simular')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  async simularMalezas(@Body() body: any): Promise<any> {
+    return await this.service.simularMalezas(body);
+  }
 }

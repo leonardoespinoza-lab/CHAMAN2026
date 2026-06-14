@@ -22,6 +22,7 @@ const SENSOR_KEY: Record<'humedad' | 'salinidad' | 'temperatura', SensoresV2> = 
 };
 
 const SENTEK_RAW_HUMIDITY_MAX = 3;
+const SENTEK_SCALED_HUMIDITY_MAX = 300;
 
 function getMetricByDepth(
   reporte: IReporte | undefined,
@@ -58,8 +59,8 @@ function getMetricByDepth(
 
 export function buildSentekProfile(reporte: IReporte | undefined): MedicionProfundidad[] {
   const humedad = getMetricByDepth(reporte, SENSOR_KEY.humedad, normalizarHumedad);
-  const salinidad = getMetricByDepth(reporte, SENSOR_KEY.salinidad);
-  const temperatura = getMetricByDepth(reporte, SENSOR_KEY.temperatura);
+  const salinidad = getMetricByDepth(reporte, SENSOR_KEY.salinidad, normalizarSalinidad);
+  const temperatura = getMetricByDepth(reporte, SENSOR_KEY.temperatura, normalizarTemperatura);
   const depths = [...new Set([...humedad.keys(), ...salinidad.keys(), ...temperatura.keys()])].sort((a, b) => a - b);
 
   return depths.map((profundidad) => ({
@@ -84,11 +85,53 @@ function normalizarHumedad(value: number, unidad: string): MedicionSensorProfund
   } else if (value >= 0 && value <= SENTEK_RAW_HUMIDITY_MAX) {
     actual = (value / SENTEK_RAW_HUMIDITY_MAX) * 100;
     nota = 'Lectura Sentek normalizada con escala cruda 0-3.';
+  } else if (value > 100 && value <= SENTEK_SCALED_HUMIDITY_MAX) {
+    actual = (value / SENTEK_SCALED_HUMIDITY_MAX) * 100;
+    nota = 'Lectura Sentek normalizada con escala cruda 0-300.';
+  } else if (value > SENTEK_SCALED_HUMIDITY_MAX && value <= 1000) {
+    actual = value / 10;
+    nota = 'Lectura Sentek normalizada desde valor x10.';
   }
 
   return {
     actual: redondear(limitar(actual, 0, 100), 1),
     unidad: '%',
+    crudo: value,
+    unidadCruda: unidad,
+    nota,
+  };
+}
+
+function normalizarTemperatura(value: number, unidad: string): MedicionSensorProfundidad {
+  let actual = value;
+  let nota: string | undefined;
+
+  if (Math.abs(value) > 80 && Math.abs(value) <= 800) {
+    actual = value / 10;
+    nota = 'Temperatura normalizada desde valor x10.';
+  }
+
+  return {
+    actual: redondear(actual, 1),
+    unidad: 'C',
+    crudo: value,
+    unidadCruda: unidad,
+    nota,
+  };
+}
+
+function normalizarSalinidad(value: number, unidad: string): MedicionSensorProfundidad {
+  let actual = value;
+  let nota: string | undefined;
+
+  if (value > 2000 && value <= 20000) {
+    actual = value / 10;
+    nota = 'Salinidad normalizada desde valor x10.';
+  }
+
+  return {
+    actual: redondear(Math.max(0, actual), 1),
+    unidad: unidad || 'mS/m',
     crudo: value,
     unidadCruda: unidad,
     nota,
