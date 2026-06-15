@@ -81,6 +81,80 @@ export interface IPronosticoMeteoSource {
   et0?: number;
 }
 
+export interface ISerieFrioTermicoDia {
+  fecha: string;
+  temperaturaMin?: number;
+  temperaturaMax?: number;
+  temperaturaMedia?: number;
+  lluvia?: number;
+  horasFrio?: number;
+  horasFrioEfectivas?: number;
+  gradosDia?: number;
+  esPronostico?: boolean;
+}
+
+export interface IFrioTermicoCultivo {
+  fuente: "OpenMeteo";
+  lat: number;
+  lng: number;
+  cultivo?: string;
+  generadoEn: string;
+  periodoFrio: {
+    desde: string;
+    hasta: string;
+    dias: number;
+  };
+  periodoTermico: {
+    desde: string;
+    hasta: string;
+    dias: number;
+  };
+  requerimientos: {
+    horasFrioObjetivo?: number;
+    horasFrioEfectivasObjetivo?: number;
+    porcionesFrioObjetivo?: number;
+    temperaturaBaseGradosDia?: number;
+    gradosDiaBrotacionObjetivo?: number;
+    gradosDiaFloracionObjetivo?: number;
+  };
+  acumulados: {
+    horasFrio: number;
+    horasFrioEfectivas: number;
+    porcionesFrio: number;
+    gradosDia: number;
+    lluvia: number;
+  };
+  progreso: {
+    horasFrioPct: number;
+    horasFrioEfectivasPct: number;
+    porcionesFrioPct: number;
+    brotacionPct: number;
+    floracionPct: number;
+  };
+  riesgoHelada: {
+    nivel: "bajo" | "medio" | "alto";
+    dias: number;
+    fechaCritica?: string;
+    temperaturaMinima?: number;
+  };
+  eventos: {
+    brotacion: {
+      estado: "esperando_frio" | "acumulando_calor" | "probable" | "alcanzada";
+      lectura: string;
+    };
+    floracion: {
+      estado: "pendiente" | "probable" | "alcanzada";
+      lectura: string;
+    };
+    ventanaSanitaria: {
+      estado: "baja" | "media" | "alta";
+      lectura: string;
+    };
+  };
+  serie: ISerieFrioTermicoDia[];
+  lectura: string;
+}
+
 // ========================================
 // INTERFACES PARA SISTEMA DE TILES CLIMÁTICOS
 // ========================================

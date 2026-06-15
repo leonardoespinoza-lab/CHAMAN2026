@@ -1,7 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
-import { IPermiso, IEstablecimiento, IUbicacion } from 'modelos/src';
+import {
+  CONFIGURACION_FRIO_CULTIVOS,
+  IEstablecimiento,
+  IFrioTermicoCultivo,
+  IPermiso,
+  ISerieFrioTermicoDia,
+  IUbicacion,
+} from 'modelos/src';
 import { EstablecimientosService } from '../establecimiento/service';
 import { TileCacheService } from '../../auxiliares/tile-cache/tile-cache.service';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
@@ -11,6 +18,7 @@ import { API_CLIMA } from '../../env';
 @Injectable()
 export class ClimaService {
   private readonly logger = new Logger(ClimaService.name);
+  private readonly timezone = 'America/Argentina/Buenos_Aires';
 
   constructor(
     private readonly establecimientosService: EstablecimientosService,
@@ -659,6 +667,184 @@ export class ClimaService {
     }
   }
 
+  async getFrioTermico(
+    lat: number,
+    lng: number,
+    cultivo?: string,
+    overrides: {
+      horasFrioObjetivo?: number;
+      horasFrioEfectivasObjetivo?: number;
+      porcionesFrioObjetivo?: number;
+      temperaturaBaseGradosDia?: number;
+      gradosDiaBrotacionObjetivo?: number;
+      gradosDiaFloracionObjetivo?: number;
+    } = {},
+  ): Promise<IFrioTermicoCultivo> {
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+      throw new Error('Coordenadas invalidas para calcular frio termico.');
+    }
+
+    const hoy = new Date();
+    const config = CONFIGURACION_FRIO_CULTIVOS[cultivo || ''] || {
+      requiereFrio: true,
+      horasFrioObjetivo: 500,
+      horasFrioEfectivasObjetivo: 400,
+      porcionesFrioObjetivo: 35,
+      temperaturaBaseGradosDia: 10,
+      gradosDiaBrotacionObjetivo: 120,
+      gradosDiaFloracionObjetivo: 260,
+      umbralHelada: -1,
+    };
+    const requerimientos = {
+      horasFrioObjetivo:
+        overrides.horasFrioObjetivo ?? config.horasFrioObjetivo,
+      horasFrioEfectivasObjetivo:
+        overrides.horasFrioEfectivasObjetivo ??
+        config.horasFrioEfectivasObjetivo,
+      porcionesFrioObjetivo:
+        overrides.porcionesFrioObjetivo ?? config.porcionesFrioObjetivo,
+      temperaturaBaseGradosDia:
+        overrides.temperaturaBaseGradosDia ??
+        config.temperaturaBaseGradosDia ??
+        10,
+      gradosDiaBrotacionObjetivo:
+        overrides.gradosDiaBrotacionObjetivo ??
+        config.gradosDiaBrotacionObjetivo,
+      gradosDiaFloracionObjetivo:
+        overrides.gradosDiaFloracionObjetivo ??
+        config.gradosDiaFloracionObjetivo,
+    };
+
+    const frioDesde = this.getInicioFrio(hoy);
+    const termicoDesde = this.getInicioTermico(hoy);
+    const ayer = this.addDays(this.startOfDay(hoy), -1);
+    const historicoHasta = ayer >= frioDesde ? ayer : frioDesde;
+    const historico = await this.fetchOpenMeteoDaily(
+      latNum,
+      lngNum,
+      this.toDateKey(frioDesde),
+      this.toDateKey(historicoHasta),
+      false,
+    );
+    const forecast = await this.fetchOpenMeteoForecast(latNum, lngNum);
+    const serieBase = this.mergeSeries(historico, forecast);
+    const baseTermica = requerimientos.temperaturaBaseGradosDia || 10;
+    const serie = serieBase.map((dia) => {
+      const horasFrio = this.estimarHorasFrio(
+        dia.temperaturaMin,
+        dia.temperaturaMax,
+      );
+      const horasFrioEfectivas = this.estimarHorasFrioEfectivas(
+        dia.temperaturaMedia,
+      );
+      const gradosDia = this.estimarGradosDia(
+        dia.temperaturaMin,
+        dia.temperaturaMax,
+        baseTermica,
+      );
+      return {
+        ...dia,
+        horasFrio,
+        horasFrioEfectivas,
+        gradosDia,
+      };
+    });
+
+    const frioSerie = serie.filter((dia) =>
+      this.entreFechas(dia.fecha, this.toDateKey(frioDesde), this.toDateKey(hoy)),
+    );
+    const termicoSerie = serie.filter((dia) =>
+      this.entreFechas(
+        dia.fecha,
+        this.toDateKey(termicoDesde),
+        this.toDateKey(this.addDays(hoy, 15)),
+      ),
+    );
+    const acumulados = {
+      horasFrio: this.round(
+        frioSerie.reduce((acc, dia) => acc + (dia.horasFrio || 0), 0),
+      ),
+      horasFrioEfectivas: this.round(
+        frioSerie.reduce((acc, dia) => acc + (dia.horasFrioEfectivas || 0), 0),
+      ),
+      porcionesFrio: 0,
+      gradosDia: this.round(
+        termicoSerie
+          .filter((dia) => !dia.esPronostico || dia.fecha <= this.toDateKey(hoy))
+          .reduce((acc, dia) => acc + (dia.gradosDia || 0), 0),
+      ),
+      lluvia: this.round(
+        serie
+          .filter((dia) =>
+            this.entreFechas(
+              dia.fecha,
+              this.toDateKey(frioDesde),
+              this.toDateKey(hoy),
+            ),
+          )
+          .reduce((acc, dia) => acc + (dia.lluvia || 0), 0),
+      ),
+    };
+    acumulados.porcionesFrio = this.round(acumulados.horasFrioEfectivas / 28);
+
+    const progreso = {
+      horasFrioPct: this.pct(acumulados.horasFrio, requerimientos.horasFrioObjetivo),
+      horasFrioEfectivasPct: this.pct(
+        acumulados.horasFrioEfectivas,
+        requerimientos.horasFrioEfectivasObjetivo,
+      ),
+      porcionesFrioPct: this.pct(
+        acumulados.porcionesFrio,
+        requerimientos.porcionesFrioObjetivo,
+      ),
+      brotacionPct: this.pct(
+        acumulados.gradosDia,
+        requerimientos.gradosDiaBrotacionObjetivo,
+      ),
+      floracionPct: this.pct(
+        acumulados.gradosDia,
+        requerimientos.gradosDiaFloracionObjetivo,
+      ),
+    };
+    const riesgoHelada = this.getRiesgoHelada(
+      forecast,
+      config.umbralHelada ?? -1,
+    );
+    const eventos = this.getEventosFrioTermico(
+      progreso,
+      riesgoHelada,
+      acumulados,
+    );
+
+    return {
+      fuente: 'OpenMeteo',
+      lat: latNum,
+      lng: lngNum,
+      cultivo,
+      generadoEn: new Date().toISOString(),
+      periodoFrio: {
+        desde: this.toDateKey(frioDesde),
+        hasta: this.toDateKey(hoy),
+        dias: frioSerie.length,
+      },
+      periodoTermico: {
+        desde: this.toDateKey(termicoDesde),
+        hasta: this.toDateKey(hoy),
+        dias: termicoSerie.filter((dia) => dia.fecha <= this.toDateKey(hoy))
+          .length,
+      },
+      requerimientos,
+      acumulados,
+      progreso,
+      riesgoHelada,
+      eventos,
+      serie,
+      lectura: this.getLecturaFrioTermico(cultivo, progreso, riesgoHelada),
+    };
+  }
+
   /**
    * Cache de establecimientos por usuario para evitar consultas repetidas
    */
@@ -811,5 +997,220 @@ export class ClimaService {
       this.logger.error(`Error en getSemaforo: ${error.message}`);
       throw error;
     }
+  }
+
+  private async fetchOpenMeteoDaily(
+    lat: number,
+    lng: number,
+    from: string,
+    to: string,
+    esPronostico: boolean,
+  ): Promise<ISerieFrioTermicoDia[]> {
+    if (from > to) return [];
+    const url = 'https://archive-api.open-meteo.com/v1/archive';
+    const response = await firstValueFrom(
+      this.httpService.get(url, {
+        params: {
+          latitude: lat,
+          longitude: lng,
+          start_date: from,
+          end_date: to,
+          daily:
+            'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum',
+          timezone: this.timezone,
+        },
+        timeout: 12000,
+      }),
+    );
+    return this.normalizarOpenMeteoDaily(response.data, esPronostico);
+  }
+
+  private async fetchOpenMeteoForecast(
+    lat: number,
+    lng: number,
+  ): Promise<ISerieFrioTermicoDia[]> {
+    const url = 'https://api.open-meteo.com/v1/forecast';
+    const response = await firstValueFrom(
+      this.httpService.get(url, {
+        params: {
+          latitude: lat,
+          longitude: lng,
+          forecast_days: 16,
+          daily:
+            'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum',
+          timezone: this.timezone,
+        },
+        timeout: 12000,
+      }),
+    );
+    return this.normalizarOpenMeteoDaily(response.data, true);
+  }
+
+  private normalizarOpenMeteoDaily(
+    data: any,
+    esPronostico: boolean,
+  ): ISerieFrioTermicoDia[] {
+    const daily = data?.daily || {};
+    const fechas: string[] = daily.time || [];
+    return fechas.map((fecha, index) => ({
+      fecha,
+      temperaturaMax: this.round(daily.temperature_2m_max?.[index]),
+      temperaturaMin: this.round(daily.temperature_2m_min?.[index]),
+      temperaturaMedia: this.round(daily.temperature_2m_mean?.[index]),
+      lluvia: this.round(daily.precipitation_sum?.[index] || 0),
+      esPronostico,
+    }));
+  }
+
+  private mergeSeries(
+    historico: ISerieFrioTermicoDia[],
+    forecast: ISerieFrioTermicoDia[],
+  ): ISerieFrioTermicoDia[] {
+    const byDate = new Map<string, ISerieFrioTermicoDia>();
+    historico.forEach((dia) => byDate.set(dia.fecha, dia));
+    forecast.forEach((dia) => byDate.set(dia.fecha, dia));
+    return [...byDate.values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
+  }
+
+  private getInicioFrio(fecha: Date): Date {
+    const year = fecha.getMonth() + 1 >= 5 ? fecha.getFullYear() : fecha.getFullYear() - 1;
+    return new Date(Date.UTC(year, 4, 1));
+  }
+
+  private getInicioTermico(fecha: Date): Date {
+    const year = fecha.getMonth() + 1 >= 8 ? fecha.getFullYear() : fecha.getFullYear() - 1;
+    return new Date(Date.UTC(year, 7, 1));
+  }
+
+  private estimarHorasFrio(tempMin?: number, tempMax?: number): number {
+    const umbral = 7.2;
+    if (tempMin == null || tempMax == null) return 0;
+    if (tempMax <= umbral) return 24;
+    if (tempMin >= umbral) return 0;
+    const rango = Math.max(tempMax - tempMin, 0.1);
+    return this.round(((umbral - tempMin) / rango) * 24);
+  }
+
+  private estimarHorasFrioEfectivas(tempMedia?: number): number {
+    if (tempMedia == null) return 0;
+    if (tempMedia >= 2.5 && tempMedia <= 9.1) return 24;
+    if (tempMedia > 9.1 && tempMedia <= 12.4) return 12;
+    if (tempMedia > 12.4 && tempMedia <= 15.9) return 6;
+    if (tempMedia > 18) return -6;
+    return 0;
+  }
+
+  private estimarGradosDia(
+    tempMin?: number,
+    tempMax?: number,
+    base = 10,
+  ): number {
+    if (tempMin == null || tempMax == null) return 0;
+    return this.round(Math.max((tempMin + tempMax) / 2 - base, 0));
+  }
+
+  private getRiesgoHelada(
+    serie: ISerieFrioTermicoDia[],
+    umbral: number,
+  ): IFrioTermicoCultivo['riesgoHelada'] {
+    const diasRiesgo = serie.filter(
+      (dia) => dia.temperaturaMin != null && dia.temperaturaMin <= umbral,
+    );
+    const minimo = diasRiesgo.sort(
+      (a, b) => (a.temperaturaMin || 0) - (b.temperaturaMin || 0),
+    )[0];
+    return {
+      nivel: diasRiesgo.length >= 2 ? 'alto' : diasRiesgo.length === 1 ? 'medio' : 'bajo',
+      dias: diasRiesgo.length,
+      fechaCritica: minimo?.fecha,
+      temperaturaMinima: minimo?.temperaturaMin,
+    };
+  }
+
+  private getEventosFrioTermico(
+    progreso: IFrioTermicoCultivo['progreso'],
+    riesgoHelada: IFrioTermicoCultivo['riesgoHelada'],
+    acumulados: IFrioTermicoCultivo['acumulados'],
+  ): IFrioTermicoCultivo['eventos'] {
+    const frioCumplido = progreso.horasFrioPct >= 85 || progreso.porcionesFrioPct >= 85;
+    const brotacionAlcanzada = progreso.brotacionPct >= 100;
+    const floracionAlcanzada = progreso.floracionPct >= 100;
+    return {
+      brotacion: {
+        estado: brotacionAlcanzada
+          ? 'alcanzada'
+          : frioCumplido
+            ? progreso.brotacionPct >= 65
+              ? 'probable'
+              : 'acumulando_calor'
+            : 'esperando_frio',
+        lectura: frioCumplido
+          ? `Frio suficiente o cercano; acumulados ${acumulados.gradosDia} grados dia.`
+          : 'Todavia conviene seguir acumulacion de frio antes de estimar brotacion.',
+      },
+      floracion: {
+        estado: floracionAlcanzada ? 'alcanzada' : progreso.floracionPct >= 70 ? 'probable' : 'pendiente',
+        lectura: floracionAlcanzada
+          ? 'Floracion termicamente alcanzada para el umbral configurado.'
+          : 'Floracion pendiente; usar grados dia y recorrida para ajustar.',
+      },
+      ventanaSanitaria: {
+        estado: riesgoHelada.nivel === 'alto' ? 'alta' : riesgoHelada.nivel === 'medio' ? 'media' : 'baja',
+        lectura:
+          riesgoHelada.nivel === 'bajo'
+            ? 'Sin heladas relevantes en el pronostico inmediato.'
+            : 'Pronostico con helada: revisar estado fenologico y proteccion.',
+      },
+    };
+  }
+
+  private getLecturaFrioTermico(
+    cultivo: string | undefined,
+    progreso: IFrioTermicoCultivo['progreso'],
+    riesgoHelada: IFrioTermicoCultivo['riesgoHelada'],
+  ): string {
+    const nombre = cultivo || 'plantacion';
+    if (riesgoHelada.nivel !== 'bajo') {
+      return `${nombre}: riesgo de helada en la ventana de pronostico; priorizar monitoreo de brotes y flores.`;
+    }
+    if (progreso.horasFrioPct < 70 && progreso.porcionesFrioPct < 70) {
+      return `${nombre}: etapa de acumulacion de frio, sin señal firme de salida de dormancia.`;
+    }
+    if (progreso.brotacionPct < 100) {
+      return `${nombre}: frio cercano a objetivo; seguir grados dia para anticipar brotacion.`;
+    }
+    return `${nombre}: acumulacion termica suficiente; validar fenologia a campo y ajustar ventana sanitaria.`;
+  }
+
+  private entreFechas(fecha: string, desde: string, hasta: string): boolean {
+    return fecha >= desde && fecha <= hasta;
+  }
+
+  private startOfDay(date: Date): Date {
+    return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  }
+
+  private addDays(date: Date, dias: number): Date {
+    const next = new Date(date);
+    next.setUTCDate(next.getUTCDate() + dias);
+    return next;
+  }
+
+  private toDateKey(date: Date): string {
+    return date.toISOString().slice(0, 10);
+  }
+
+  private pct(value?: number, target?: number): number {
+    if (!target || !Number.isFinite(target) || !Number.isFinite(value || 0)) {
+      return 0;
+    }
+    return Math.max(0, Math.min(100, this.round(((value || 0) / target) * 100)));
+  }
+
+  private round(value: unknown, digits = 1): number {
+    const numberValue = Number(value || 0);
+    if (!Number.isFinite(numberValue)) return 0;
+    const factor = 10 ** digits;
+    return Math.round(numberValue * factor) / factor;
   }
 }

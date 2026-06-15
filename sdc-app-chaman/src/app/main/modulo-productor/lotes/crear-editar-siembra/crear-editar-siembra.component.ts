@@ -2,7 +2,10 @@ import { Component } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { TranslateService } from '@ngx-translate/core';
 import {
+  CULTIVOS_DISPONIBLES,
+  CULTIVOS_PERENNES,
   Cultivo,
+  getNombreImplantacion,
   ICreateSiembra,
   IListado,
   IQueryParam,
@@ -26,8 +29,8 @@ import { ParamsService } from '../../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../../auxiliares/shared.module';
 import { ILoteTabla } from '../listado-lotes/listado-lotes.component';
 
-const CULTIVOS_DISPONIBLES_APP: Cultivo[] = ['Soja', 'Trigo', 'Maiz', 'Papa', 'Vid', 'Peral', 'Pecan', 'Manzano'];
-const CULTIVOS_PERENNES_APP: Cultivo[] = ['Vid', 'Peral', 'Pecan', 'Manzano'];
+const CULTIVOS_DISPONIBLES_APP: Cultivo[] = [...CULTIVOS_DISPONIBLES];
+const CULTIVOS_PERENNES_APP: Cultivo[] = [...CULTIVOS_PERENNES];
 
 @Component({
   selector: 'app-crear-editar-siembra',
@@ -65,17 +68,21 @@ export class CrearEditarSiembraComponent {
   }
 
   public get etiquetaFechaSiembra(): string {
-    return this.esCultivoPerenne ? 'Inicio de campania / brotacion' : 'Fecha de siembra';
+    return this.esCultivoPerenne ? 'Inicio de plantacion / campania' : 'Fecha de siembra';
   }
 
   public get etiquetaMaterial(): string {
     return this.esCultivoPerenne ? 'Variedad / pie' : 'Semilla';
   }
 
+  public get accionImplantacion(): string {
+    return getNombreImplantacion(this.cultivoSeleccionado);
+  }
+
   public get ayudaCultivo(): string {
     if (!this.cultivoSeleccionado) return '';
     if (this.esCultivoPerenne) {
-      return 'Cultivo perenne: Chaman activa fenologia editable, frio acumulado y monitoreo sanitario por temporada.';
+      return 'Plantacion perenne: Chaman renueva la campania fenologica cada temporada y activa frio, grados dia y ventana sanitaria.';
     }
     return 'Cultivo anual: Chaman usa fecha de siembra, ciclo y fenologia base para activar servicios del lote.';
   }
@@ -204,8 +211,8 @@ export class CrearEditarSiembraComponent {
     }
 
     this.titulo = this.siembra
-      ? () => this.translate.instant(`Editar siembra`)
-      : () => this.translate.instant('Sembrar');
+      ? () => this.translate.instant(this.esCultivoPerenne ? 'Editar plantacion' : 'Editar siembra')
+      : () => this.translate.instant(this.esCultivoPerenne ? 'Crear plantacion' : 'Sembrar');
     this.createForm();
     await Promise.all([this.listarSemillas()]);
     this.loading = false;

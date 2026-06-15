@@ -1,0 +1,105 @@
+@if (mostrar) {
+  <div class="custom-card frio-card">
+    <div class="frio-header">
+      <div>
+        <p class="titulo-card">FRIO Y ACUMULACION TERMICA</p>
+        <span>
+          {{ data?.fuente || 'Open-Meteo' }} - horas frio, grados dia y ventana sanitaria
+        </span>
+      </div>
+      <p-button
+        icon="pi pi-refresh"
+        label="Actualizar"
+        size="small"
+        severity="secondary"
+        [outlined]="true"
+        [loading]="loading"
+        (onClick)="cargar()"
+      />
+    </div>
+
+    @if (data) {
+      <div class="frio-summary">
+        <strong>{{ data.lectura }}</strong>
+        <small>
+          Frio {{ data.periodoFrio.desde }} a {{ data.periodoFrio.hasta }}.
+          Termico desde {{ data.periodoTermico.desde }}.
+        </small>
+      </div>
+
+      <div class="frio-metrics">
+        @for (metric of metricas; track metric.label) {
+          <article [ngClass]="metric.tone">
+            <span>{{ metric.label }}</span>
+            <strong>{{ metric.value }}</strong>
+            <small>{{ metric.detail }}</small>
+            @if (metric.pct !== undefined) {
+              <div class="frio-meter">
+                <i [style.width.%]="metric.pct"></i>
+              </div>
+            }
+          </article>
+        }
+      </div>
+
+      <div class="frio-body">
+        <section class="frio-chart">
+          <header>
+            <strong>Temperatura y lluvia reciente</strong>
+            <span>Serie diaria historica + pronostico</span>
+          </header>
+          <svg viewBox="0 0 320 116" preserveAspectRatio="none">
+            <g class="rain-bars">
+              @for (dia of serieReciente; track dia.fecha; let i = $index) {
+                <rect
+                  [attr.x]="(i / (serieReciente.length || 1)) * 320"
+                  [attr.y]="108 - barraLluvia(dia) * 0.42"
+                  [attr.width]="anchoBarraLluvia()"
+                  [attr.height]="barraLluvia(dia) * 0.42"
+                >
+                  <title>{{ dia.fecha }} lluvia {{ dia.lluvia || 0 }} mm</title>
+                </rect>
+              }
+            </g>
+            @for (serie of seriesTemperatura; track serie.label) {
+              <path [attr.d]="serie.path" [attr.stroke]="serie.color"></path>
+              @for (punto of serie.puntos; track $index) {
+                <circle [attr.cx]="punto.x" [attr.cy]="punto.y" r="2.7" [attr.fill]="serie.color">
+                  <title>{{ serie.label }} - {{ punto.fecha }}: {{ punto.valor }} C</title>
+                </circle>
+              }
+            }
+          </svg>
+          <div class="frio-legend">
+            @for (serie of seriesTemperatura; track serie.label) {
+              <span><i [style.background]="serie.color"></i>{{ serie.label }}</span>
+            }
+            <span><i class="rain"></i>Lluvia</span>
+          </div>
+        </section>
+
+        <section class="frio-events">
+          <article>
+            <span>Brotacion esperada</span>
+            <strong>{{ data.eventos.brotacion.estado.replace('_', ' ') }}</strong>
+            <small>{{ data.eventos.brotacion.lectura }}</small>
+          </article>
+          <article>
+            <span>Floracion esperada</span>
+            <strong>{{ data.eventos.floracion.estado }}</strong>
+            <small>{{ data.eventos.floracion.lectura }}</small>
+          </article>
+          <article>
+            <span>Ventana sanitaria</span>
+            <strong>{{ data.eventos.ventanaSanitaria.estado }}</strong>
+            <small>{{ data.eventos.ventanaSanitaria.lectura }}</small>
+          </article>
+        </section>
+      </div>
+    } @else if (error) {
+      <p-message severity="warn">{{ error }}</p-message>
+    } @else {
+      <p-message severity="info">Calculando frio y acumulacion termica...</p-message>
+    }
+  </div>
+}

@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { IFrioTermicoCultivo } from 'modelos/src';
 import { HttpService } from './http.service';
 
 export interface IClimaTile {
@@ -86,6 +87,25 @@ export class ClimaService {
     const params = { zoom: zoom.toString() };
 
     return this.httpService.get<IClimaResponse>(url, { params });
+  }
+
+  getFrioTermico(
+    lat: number,
+    lng: number,
+    params: {
+      cultivo?: string;
+      horasFrioObjetivo?: number;
+      horasFrioEfectivasObjetivo?: number;
+      porcionesFrioObjetivo?: number;
+      temperaturaBaseGradosDia?: number;
+      gradosDiaBrotacionObjetivo?: number;
+      gradosDiaFloracionObjetivo?: number;
+    } = {}
+  ): Promise<IFrioTermicoCultivo> {
+    const query = Object.fromEntries(
+      Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')
+    ) as Record<string, string | number | boolean>;
+    return this.httpService.get<IFrioTermicoCultivo>(`/clima/frio-termico/${lat}/${lng}`, { params: query });
   }
 
   /**

@@ -11,9 +11,9 @@
     </div>
     <div class="lote-actions">
       @if (siembraActual) {
-        <span class="siembra-badge">Siembra actual</span>
+        <span class="siembra-badge">{{ implantacionLabel }} actual</span>
       } @else {
-        <p-button severity="secondary" (onClick)="verSiembraActual()"> Ver siembra actual </p-button>
+        <p-button severity="secondary" (onClick)="verSiembraActual()"> Ver {{ implantacionLabel.toLowerCase() }} actual </p-button>
       }
       @if (!helper.soloLectura()) {
         <p-button
@@ -50,7 +50,7 @@
           />
           @if (siembra?._id) {
             <p-button
-              label="Editar siembra / semilla"
+              [label]="esPlantacion ? 'Editar plantacion / variedad' : 'Editar siembra / semilla'"
               icon="pi pi-seedling"
               severity="secondary"
               [outlined]="true"
@@ -112,7 +112,7 @@
   @if (!helper.soloLectura()) {
     @if (!siembra || (siembraActual && siembra.fechaCosecha)) {
       <p-button
-        [label]="'Crear nueva siembra' | translate"
+        [label]="esPlantacion ? 'Crear nueva plantacion' : ('Crear nueva siembra' | translate)"
         [fluid]="true"
         [outlined]="true"
         styleClass="w-full"
@@ -124,6 +124,9 @@
   <div class="services-stack">
     @if (siembra?.fechaCosecha) {
       <app-card-rendimiento class="service-panel" [siembra]="siembra"></app-card-rendimiento>
+    }
+    @if (esPlantacion) {
+      <app-card-frio-termico class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-frio-termico>
     }
     <app-card-enfermedades class="service-panel" [siembra]="siembra"></app-card-enfermedades>
     @if (mostrarPrediccionMalezas) {

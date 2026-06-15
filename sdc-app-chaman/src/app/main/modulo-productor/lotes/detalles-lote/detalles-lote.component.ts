@@ -1,7 +1,15 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { ICrono, IFertilizacion, IFumigacion, IQueryParam, ISiembra } from 'modelos/src';
+import {
+  esCultivoPerenne,
+  getNombreImplantacion,
+  ICrono,
+  IFertilizacion,
+  IFumigacion,
+  IQueryParam,
+  ISiembra,
+} from 'modelos/src';
 import { ConfirmationService } from 'primeng/api';
 import { FenologiaService } from '../../../../auxiliares/http/fenologia.service';
 import { LoteService } from '../../../../auxiliares/http/lote.service';
@@ -15,6 +23,7 @@ import { CardClimaLoteComponent } from './card-clima-lote/card-clima-lote.compon
 import { CardDispositivosComponent } from './card-dispositivos/card-dispositivos.component';
 import { CardEnfermedadesComponent } from './card-enfermedades/card-enfermedades.component';
 import { CardEtapasFenologicasComponent } from './card-etapas-fenologicas/card-etapas-fenologicas.component';
+import { CardFrioTermicoComponent } from './card-frio-termico/card-frio-termico.component';
 import { CardHuellaHidricaComponent } from './card-huella-hidrica/card-huella-hidrica.component';
 import { CardMalezasComponent } from './card-malezas/card-malezas.component';
 import { CardNDVIComponent } from './card-ndvi/card-ndvi.component';
@@ -49,6 +58,7 @@ export interface IDetallesLote extends ILoteTabla {
     DrawerListadoSiembrasComponent,
     CardNDVIComponent,
     CardEtapasFenologicasComponent,
+    CardFrioTermicoComponent,
     CardMalezasComponent,
   ],
   templateUrl: './detalles-lote.component.html',
@@ -216,6 +226,14 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   public get mostrarPrediccionMalezas(): boolean {
     const cultivo = this.siembra?.semilla?.cultivo;
     return !!cultivo && CULTIVOS_CON_PREDICCION_MALEZAS.includes(cultivo);
+  }
+
+  public get esPlantacion(): boolean {
+    return esCultivoPerenne(this.siembra?.semilla?.cultivo);
+  }
+
+  public get implantacionLabel(): string {
+    return getNombreImplantacion(this.siembra?.semilla?.cultivo);
   }
 
   async ngOnInit(): Promise<void> {

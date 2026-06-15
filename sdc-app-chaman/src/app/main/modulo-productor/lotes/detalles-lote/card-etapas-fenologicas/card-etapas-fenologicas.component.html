@@ -2,7 +2,12 @@
   <div class="phenology-header">
     <div class="phenology-title">
       <p class="titulo-card">{{ 'Etapa fenologica' | translate | uppercase }}</p>
-      <span class="phenology-subtitle">{{ cultivo || 'Cultivo' }} - {{ etapas.length }} etapas - {{ fuenteTexto }}</span>
+      <span class="phenology-subtitle">
+        {{ cultivo || 'Cultivo' }} - {{ etapas.length }} etapas - {{ esPerenne ? 'campania perenne' : fuenteTexto }}
+        @if (campaniaTexto) {
+          <strong> {{ campaniaTexto }}</strong>
+        }
+      </span>
     </div>
 
     <div class="crop-detail-grid">
@@ -20,7 +25,7 @@
         </strong>
       </div>
       <div>
-        <span>Siembra</span>
+        <span>{{ etiquetaImplantacion }}</span>
         <strong>{{ siembra?.fechaSiembra | date: 'd/M/yy' }}</strong>
       </div>
     </div>

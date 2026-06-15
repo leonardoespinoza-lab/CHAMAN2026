@@ -3,7 +3,13 @@ import { Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
-import { ISemilla, ISiembra } from 'modelos/src';
+import {
+  esCultivoPerenne,
+  getEtapasPerennesReferencia,
+  getNombreImplantacion,
+  ISemilla,
+  ISiembra,
+} from 'modelos/src';
 import {
   ETAPAS_MAIZ,
   ETAPAS_SOJA,
@@ -106,6 +112,9 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   public etapas: FenologiaStage[] = [];
   public fuenteFenologia: FuenteFenologia = 'crono';
   public fuenteTexto = 'crono cargado';
+  public esPerenne = false;
+  public etiquetaImplantacion: 'Siembra' | 'Plantacion' = 'Siembra';
+  public campaniaTexto = '';
 
   constructor(public helper: HelperService) {}
 
@@ -133,13 +142,22 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     const cultivo = this.canonicalCultivo(siembra.semilla.cultivo);
     const etapasCrono = crono?.etapas as Record<string, number | string> | undefined;
     const etapasDisponibles = this.getEtapasDisponibles(cultivo, siembra.semilla, etapasCrono);
-    const fechaBase = new Date(siembra.fechaSiembra);
     const fechas: Date[] = [];
     let etapaActualNumero = -1;
     let etapasConfig: { nombres: string[]; claves: string[] } = { nombres: [], claves: [] };
 
     this.cultivo = siembra.semilla.cultivo || cultivo;
     this.cultivoClass = `cultivo-${this.normalizarCultivo(cultivo)}`;
+    this.esPerenne = esCultivoPerenne(cultivo);
+    this.etiquetaImplantacion = getNombreImplantacion(cultivo);
+    this.campaniaTexto = '';
+
+    if (this.esPerenne) {
+      this.crearTimelinePerenne(cultivo, etapasDisponibles);
+      return;
+    }
+
+    const fechaBase = new Date(siembra.fechaSiembra);
 
     switch (cultivo) {
       case 'Trigo':
@@ -242,6 +260,13 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
     this.fuenteFenologia = 'base';
     this.fuenteTexto = 'base editable';
+    const etapasPerennes = getEtapasPerennesReferencia(cultivo);
+    if (etapasPerennes.length) {
+      return etapasPerennes.reduce<Record<string, number>>((acc, etapa) => {
+        acc[etapa.nombre] = etapa.dia;
+        return acc;
+      }, {});
+    }
     return ETAPAS_BASE_POR_CULTIVO[cultivo] || {
       Inicio: 0,
       Desarrollo: 30,
@@ -298,6 +323,112 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       claves,
       nombres: claves.map((key) => this.formatearNombreEtapa(key)),
     };
+  }
+
+  private crearTimelinePerenne(cultivo: string, etapasDisponibles: Record<string, number>): void {
+    const etapas = this.normalizarEtapasPerenne(etapasDisponibles);
+    if (!etapas.length) {
+      this.etapas = [];
+      this.etapaActual = undefined;
+      this.progreso = 0;
+      return;
+    }
+
+    const inicioCampania = this.getInicioCampaniaPerenne(cultivo);
+    const hoy = new Date();
+    const diaCampania = Math.max(
+      0,
+      Math.min(365, Math.floor((hoy.getTime() - inicioCampania.getTime()) / 86400000))
+    );
+    const etapasCiclo = [...etapas];
+    const ultima = etapasCiclo[etapasCiclo.length - 1];
+    if (ultima.dia < 355) {
+      etapasCiclo.push({
+        nombre: this.nombreReposoFinal(cultivo),
+        dia: 365,
+      });
+    }
+
+    const etapaActualNumero = this.getIndiceEtapaPerenne(etapasCiclo, diaCampania);
+    this.progreso = this.limitar((diaCampania / 365) * 100);
+    this.etapaActual = etapasCiclo[etapaActualNumero]?.nombre || etapasCiclo[0].nombre;
+    this.campaniaTexto = `${inicioCampania.getFullYear()}/${inicioCampania.getFullYear() + 1}`;
+
+    this.etapas = etapasCiclo.map((etapa, index) => {
+      const fecha = new Date(inicioCampania);
+      fecha.setDate(fecha.getDate() + etapa.dia);
+      const anterior = etapasCiclo[index - 1];
+      const periodoDias = index > 0 ? Math.max(1, etapa.dia - anterior.dia) : undefined;
+
+      return {
+        nombre: etapa.nombre,
+        fecha,
+        periodoDias,
+        posicion: this.posicionPorDiaPerenne(etapa.dia),
+        estado: index < etapaActualNumero ? 'done' : index === etapaActualNumero ? 'current' : 'pending',
+      };
+    });
+  }
+
+  private normalizarEtapasPerenne(etapas: Record<string, number>): Array<{ nombre: string; dia: number }> {
+    const entries = Object.entries(etapas)
+      .map(([nombre, valor]) => ({ nombre: this.formatearNombreEtapa(nombre), valor: Number(valor || 0) }))
+      .filter((item) => Number.isFinite(item.valor));
+
+    if (!entries.length) {
+      return [];
+    }
+
+    const valores = entries.map((item) => item.valor);
+    const sonOffsets = valores.every((valor, index) => index === 0 || valor >= valores[index - 1]);
+    let acumulado = 0;
+
+    return entries
+      .map((item, index) => {
+        if (sonOffsets) {
+          return { nombre: item.nombre, dia: Math.max(0, Math.min(365, Math.round(item.valor))) };
+        }
+        acumulado += index === 0 ? 0 : Math.max(0, item.valor);
+        return { nombre: item.nombre, dia: Math.max(0, Math.min(365, Math.round(acumulado))) };
+      })
+      .sort((a, b) => a.dia - b.dia);
+  }
+
+  private getInicioCampaniaPerenne(cultivo: string): Date {
+    const hoy = new Date();
+    const mesActual = hoy.getMonth() + 1;
+    const year = mesActual >= 7 ? hoy.getFullYear() : hoy.getFullYear() - 1;
+    const anchors: Record<string, { mes: number; dia: number }> = {
+      Pecan: { mes: 7, dia: 1 },
+      Vid: { mes: 7, dia: 1 },
+      Manzano: { mes: 7, dia: 1 },
+      Peral: { mes: 7, dia: 1 },
+    };
+    const anchor = anchors[cultivo] || { mes: 7, dia: 1 };
+    return new Date(year, anchor.mes - 1, anchor.dia);
+  }
+
+  private getIndiceEtapaPerenne(etapas: Array<{ nombre: string; dia: number }>, diaCampania: number): number {
+    let actual = 0;
+    etapas.forEach((etapa, index) => {
+      if (diaCampania >= etapa.dia) {
+        actual = index;
+      }
+    });
+    return actual;
+  }
+
+  private posicionPorDiaPerenne(dia: number): number {
+    const margen = 1.5;
+    const anchoUtil = 100 - margen * 2;
+    return margen + (Math.max(0, Math.min(365, dia)) / 365) * anchoUtil;
+  }
+
+  private nombreReposoFinal(cultivo: string): string {
+    if (cultivo === 'Pecan') {
+      return 'Reposo / nueva campania';
+    }
+    return 'Reposo invernal';
   }
 
   private getEtapaGenericaPorFecha(fechaBase: Date, claves: string[], etapas?: Record<string, number>): number {

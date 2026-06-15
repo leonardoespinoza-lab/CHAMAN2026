@@ -53,6 +53,47 @@ export class ClimaController {
     return await this.service.getSemaforo(lat, lng);
   }
 
+  @Get('frio-termico/:lat/:lng')
+  @UseGuards(PermisoGuard)
+  @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
+  )
+  public async getFrioTermico(
+    @Param('lat') lat: number,
+    @Param('lng') lng: number,
+    @Query('cultivo') cultivo?: string,
+    @Query('horasFrioObjetivo') horasFrioObjetivo?: string,
+    @Query('horasFrioEfectivasObjetivo')
+    horasFrioEfectivasObjetivo?: string,
+    @Query('porcionesFrioObjetivo') porcionesFrioObjetivo?: string,
+    @Query('temperaturaBaseGradosDia') temperaturaBaseGradosDia?: string,
+    @Query('gradosDiaBrotacionObjetivo')
+    gradosDiaBrotacionObjetivo?: string,
+    @Query('gradosDiaFloracionObjetivo')
+    gradosDiaFloracionObjetivo?: string,
+  ) {
+    return await this.service.getFrioTermico(Number(lat), Number(lng), cultivo, {
+      horasFrioObjetivo: this.toNumberOrUndefined(horasFrioObjetivo),
+      horasFrioEfectivasObjetivo: this.toNumberOrUndefined(
+        horasFrioEfectivasObjetivo,
+      ),
+      porcionesFrioObjetivo: this.toNumberOrUndefined(porcionesFrioObjetivo),
+      temperaturaBaseGradosDia: this.toNumberOrUndefined(
+        temperaturaBaseGradosDia,
+      ),
+      gradosDiaBrotacionObjetivo: this.toNumberOrUndefined(
+        gradosDiaBrotacionObjetivo,
+      ),
+      gradosDiaFloracionObjetivo: this.toNumberOrUndefined(
+        gradosDiaFloracionObjetivo,
+      ),
+    });
+  }
+
   /**
    * Endpoint de producción para obtener tiles climáticos actuales
    * SOLO para usuarios Productor y Establecimiento
@@ -349,5 +390,10 @@ export class ClimaController {
       parseInt(zoom),
       bounds,
     );
+  }
+
+  private toNumberOrUndefined(value?: string): number | undefined {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : undefined;
   }
 }
