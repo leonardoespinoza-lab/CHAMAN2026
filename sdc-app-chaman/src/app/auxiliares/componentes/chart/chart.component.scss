@@ -1,3 +1,18 @@
 .highcharts-credits {
   display: none;
 }
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+::ng-deep highcharts-chart {
+  display: block;
+  width: 100%;
+}
+
+::ng-deep .highcharts-container,
+::ng-deep .highcharts-root {
+  border-radius: 10px;
+}
