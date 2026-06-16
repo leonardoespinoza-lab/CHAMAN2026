@@ -22,6 +22,18 @@ export class ReportesController {
     return await this.service.getFilter(query);
   }
 
+  @Get('historico/:dispositivo')
+  async historico(
+    @Param('dispositivo') dispositivo: string,
+    @Query('dias') dias?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return await this.service.historico(dispositivo, {
+      dias: Number(dias) || 7,
+      limit: Number(limit) || 2000,
+    });
+  }
+
   @Get(':id')
   async getById(@Param('id') id: string) {
     return await this.service.getById(id);

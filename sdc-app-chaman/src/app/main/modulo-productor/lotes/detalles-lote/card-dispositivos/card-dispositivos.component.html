@@ -6,7 +6,7 @@
       </svg>
       <div>
         <span>{{ 'Dispositivos' | translate | uppercase }}</span>
-        <strong>Lanzas y sensores asignados al lote</strong>
+        <strong>Sensores asignados al lote</strong>
       </div>
     </div>
     <span class="devices-count">{{ dispositivos.length }} activo{{ dispositivos.length === 1 ? '' : 's' }}</span>
@@ -68,8 +68,28 @@
             <i class="pi pi-chart-line"></i>
             <span>Perfil disponible por profundidad: humedad, salinidad y temperatura.</span>
           </div>
+        } @else if (esSensorAmbiente(dispositivo)) {
+          <div class="device-summary-grid">
+            <article>
+              <span>Temperatura</span>
+              <strong>{{ formatearNumero(resumenAmbiente(dispositivo).temperatura, 'C') }}</strong>
+            </article>
+            <article>
+              <span>Humedad relativa</span>
+              <strong>{{ formatearNumero(resumenAmbiente(dispositivo).humedad, '%') }}</strong>
+            </article>
+            <article>
+              <span>Bateria</span>
+              <strong>{{ formatearNumero(resumenAmbiente(dispositivo).bateria, '%', 0) }}</strong>
+            </article>
+          </div>
+
+          <div class="device-profile-note">
+            <i class="pi pi-chart-line"></i>
+            <span>Historico ambiental disponible: temperatura y humedad en abrigo meteorologico.</span>
+          </div>
         } @else {
-          <p-message severity="info">El dispositivo todavia no tiene un reporte completo para graficar en el lote.</p-message>
+          <p-message severity="info">El dispositivo todavia no tiene variables graficables en el lote.</p-message>
         }
 
         <div class="device-actions">

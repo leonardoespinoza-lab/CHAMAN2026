@@ -14,6 +14,7 @@ import { UbicarComponent } from '../../../../../auxiliares/componentes/ubicar/ub
 import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
+import { GraficoHistoricoAmbienteComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-ambiente/grafico-historico-ambiente.component';
 import { GraficoHistoricoSueloComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-suelo/grafico-historico-suelo.component';
 import {
   buildSentekProfile,
@@ -26,6 +27,7 @@ import {
   imports: [
     CommonModule,
     SharedModule,
+    GraficoHistoricoAmbienteComponent,
     GraficoHistoricoSueloComponent,
     UbicarComponent,
   ],
@@ -41,6 +43,7 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
   private ultimoReporte?: IReporte;
   public datosLanza: MedicionProfundidad[] = [];
   public esLanzaDeSuelo = false;
+  public esSensorAmbiente = false;
   public vistaActiva: 'tabla' | 'grafico' = 'grafico';
   public reportesHistoricos: IReporte[] = [];
   public diasHistorico = 7;
@@ -95,7 +98,8 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
   private refreshFromDevice(): void {
     this.loading = true;
     this.esLanzaDeSuelo = this.dispositivo?.tipo === 'Sensor de Humedad de Suelo';
-    this.ultimoReporte = this.esLanzaDeSuelo ? this.dispositivo?.ultimoReporte : undefined;
+    this.esSensorAmbiente = this.tieneVariableAmbiental(this.dispositivo);
+    this.ultimoReporte = this.dispositivo?.ultimoReporte;
     this.datosLanza = this.esLanzaDeSuelo
       ? buildSentekProfile(this.ultimoReporte)
       : [];
@@ -105,8 +109,8 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
   }
 
   private async cargarHistorico(): Promise<void> {
-    const id = this.dispositivo?._id;
-    if (!this.esLanzaDeSuelo || !id) return;
+    const id = this.dispositivo?.deveui || this.dispositivo?._id;
+    if ((!this.esLanzaDeSuelo && !this.esSensorAmbiente) || !id) return;
     this.loadingHistorico = true;
     try {
       const response = await this.reportesService.historico(id, this.diasHistorico, 2500);
@@ -116,10 +120,20 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
           ? [this.ultimoReporte]
           : [];
     } catch (error) {
-      console.error('Error al cargar historico de reportes de suelo', error);
+      console.error('Error al cargar historico de reportes del dispositivo', error);
       this.reportesHistoricos = this.ultimoReporte ? [this.ultimoReporte] : [];
     } finally {
       this.loadingHistorico = false;
     }
+  }
+
+  private tieneVariableAmbiental(dispositivo?: IDispositivo): boolean {
+    const sensores = dispositivo?.sensores || [];
+    const valores = (dispositivo?.ultimoReporte?.datos?.valores || {}) as unknown as Record<string, any>;
+    return (
+      sensores.some((sensor) => ['Temperatura', 'Humedad', 'Batería', 'Bateria', 'BaterÃ­a'].includes(sensor as string)) ||
+      !!valores['Temperatura'] ||
+      !!valores['Humedad']
+    );
   }
 }

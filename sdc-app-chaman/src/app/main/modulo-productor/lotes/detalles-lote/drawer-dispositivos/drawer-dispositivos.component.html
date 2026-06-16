@@ -18,7 +18,7 @@
       </div>
 
       <div class="device-dialog-actions">
-        @if (esLanzaDeSuelo && datosLanza.length > 0) {
+        @if ((esLanzaDeSuelo && datosLanza.length > 0) || esSensorAmbiente) {
           @if (vistaActiva === 'grafico') {
             <p-selectButton
               [options]="[
@@ -32,15 +32,17 @@
               (onChange)="cambiarPeriodoHistorico($event.value)"
             />
           }
-          <p-selectButton
-            [options]="[
-              { label: 'Curvas', value: 'grafico', icon: 'pi pi-chart-line' },
-              { label: 'Tabla', value: 'tabla', icon: 'pi pi-table' },
-            ]"
-            [(ngModel)]="vistaActiva"
-            optionLabel="label"
-            optionValue="value"
-          />
+          @if (esLanzaDeSuelo) {
+            <p-selectButton
+              [options]="[
+                { label: 'Curvas', value: 'grafico', icon: 'pi pi-chart-line' },
+                { label: 'Tabla', value: 'tabla', icon: 'pi pi-table' },
+              ]"
+              [(ngModel)]="vistaActiva"
+              optionLabel="label"
+              optionValue="value"
+            />
+          }
         }
         <app-ubicar [dispositivo]="dispositivo"></app-ubicar>
       </div>
@@ -107,7 +109,18 @@
     } @else {
       <p-message severity="info">La lanza no tiene lecturas procesadas todavia.</p-message>
     }
+  } @else if (esSensorAmbiente) {
+    <section class="soil-device-content">
+      @if (loadingHistorico) {
+        <p-message severity="info">Cargando historico del sensor ambiental...</p-message>
+      }
+      <app-grafico-historico-ambiente
+        [reportes]="reportesHistoricos"
+        [titulo]="'Historico ambiental - ' + dispositivo?.nombre"
+        [subtitulo]="'Temperatura y humedad relativa medidas en abrigo meteorologico'"
+      ></app-grafico-historico-ambiente>
+    </section>
   } @else {
-    <p-message severity="info">Este dispositivo no tiene perfil de suelo disponible.</p-message>
+    <p-message severity="info">Este dispositivo no tiene variables graficables disponibles.</p-message>
   }
 </p-dialog>

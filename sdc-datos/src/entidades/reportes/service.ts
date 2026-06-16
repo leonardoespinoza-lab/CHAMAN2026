@@ -18,6 +18,16 @@ export class ReportesService {
     throw new NotFoundException('No encontrado');
   }
 
+  async historico(
+    dispositivo: string,
+    options?: { dias?: number; limit?: number },
+  ) {
+    return await this.repository.historico(dispositivo, {
+      dias: Math.max(1, Math.min(Number(options?.dias) || 7, 365)),
+      limit: Math.max(1, Math.min(Number(options?.limit) || 2000, 5000)),
+    });
+  }
+
   async create(dato: ICreateReporte) {
     return await this.repository.create(dato);
   }

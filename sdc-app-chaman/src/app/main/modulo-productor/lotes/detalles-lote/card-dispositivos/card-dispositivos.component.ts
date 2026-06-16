@@ -17,6 +17,12 @@ interface DispositivoResumen {
   temperatura?: MedicionSensorProfundidad;
 }
 
+interface DispositivoAmbienteResumen {
+  temperatura?: number;
+  humedad?: number;
+  bateria?: number;
+}
+
 @Component({
   selector: 'app-card-dispositivos',
   imports: [CommonModule, SharedModule, DrawerDispositivosComponent, BateriaComponent],
@@ -31,6 +37,7 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   public dispositivo?: IDispositivo;
   public perfiles = new Map<string, MedicionProfundidad[]>();
   public resumenes = new Map<string, DispositivoResumen>();
+  public resumenesAmbiente = new Map<string, DispositivoAmbienteResumen>();
 
   constructor(public helper: HelperService) {}
 
@@ -51,6 +58,24 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
     return this.resumenes.get(this.getDeviceKey(dispositivo)) || {};
   }
 
+  public resumenAmbiente(dispositivo: IDispositivo): DispositivoAmbienteResumen {
+    return this.resumenesAmbiente.get(this.getDeviceKey(dispositivo)) || {};
+  }
+
+  public esLanzaDeSuelo(dispositivo: IDispositivo): boolean {
+    return dispositivo.tipo === 'Sensor de Humedad de Suelo';
+  }
+
+  public esSensorAmbiente(dispositivo: IDispositivo): boolean {
+    const sensores = dispositivo.sensores || [];
+    const valores = (dispositivo.ultimoReporte?.datos?.valores || {}) as unknown as Record<string, any>;
+    return (
+      sensores.some((sensor) => ['Temperatura', 'Humedad', 'Batería', 'Bateria', 'BaterÃ­a'].includes(sensor as string)) ||
+      !!valores['Temperatura'] ||
+      !!valores['Humedad']
+    );
+  }
+
   public estaOnline(dispositivo: IDispositivo): boolean {
     const fecha = dispositivo.fechaUltimaComunicacion || dispositivo.ultimoReporte?.fecha || dispositivo.ultimoReporte?.fechaCreacion;
     if (!fecha) return false;
@@ -63,6 +88,15 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
       return '-';
     }
     return `${data.actual.toLocaleString('es-AR', this.numberFormat(decimales))} ${data.unidad}`;
+  }
+
+  public formatearNumero(valor?: number, unidad = '', decimales = 1): string {
+    if (valor === undefined || valor === null || !Number.isFinite(valor)) return '-';
+    const numero = valor.toLocaleString('es-AR', {
+      maximumFractionDigits: decimales,
+      minimumFractionDigits: decimales,
+    });
+    return `${numero}${unidad ? ` ${unidad}` : ''}`;
   }
 
   public ultimaComunicacion(dispositivo: IDispositivo): string | undefined {
@@ -84,15 +118,35 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
     this.dispositivos = this.lote?.dispositivos || [];
     this.perfiles.clear();
     this.resumenes.clear();
+    this.resumenesAmbiente.clear();
 
     for (const dispositivo of this.dispositivos) {
-      const perfil = dispositivo.tipo === 'Sensor de Humedad de Suelo'
+      const perfil = this.esLanzaDeSuelo(dispositivo)
         ? buildSentekProfile(dispositivo.ultimoReporte)
         : [];
       const key = this.getDeviceKey(dispositivo);
       this.perfiles.set(key, perfil);
       this.resumenes.set(key, this.calcularResumen(perfil));
+      this.resumenesAmbiente.set(key, this.calcularResumenAmbiente(dispositivo));
     }
+  }
+
+  private calcularResumenAmbiente(dispositivo: IDispositivo): DispositivoAmbienteResumen {
+    const valores = (dispositivo.ultimoReporte?.datos?.valores || {}) as unknown as Record<string, any>;
+    return {
+      temperatura: this.valorActual(valores['Temperatura']?.[0]),
+      humedad: this.valorActual(valores['Humedad']?.[0]),
+      bateria:
+        this.valorActual(valores['Batería']?.[0]) ??
+        this.valorActual(valores['Bateria']?.[0]) ??
+        this.valorActual(valores['BaterÃ­a']?.[0]) ??
+        dispositivo.bateria?.valor,
+    };
+  }
+
+  private valorActual(entry?: { valores?: { actual?: number; promedio?: number } }): number | undefined {
+    const valor = entry?.valores?.actual ?? entry?.valores?.promedio;
+    return typeof valor === 'number' && Number.isFinite(valor) ? valor : undefined;
   }
 
   private calcularResumen(perfil: MedicionProfundidad[]): DispositivoResumen {

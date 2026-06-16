@@ -6,7 +6,7 @@ import {
   IQueryParam,
   ICreateReporte,
 } from 'modelos/src';
-import { Model } from 'mongoose';
+import { FilterQuery, Model, Types } from 'mongoose';
 import { dbQuery } from 'src/auxiliares/helper.service';
 import { Reporte, ReporteDocument } from './modelos/schema';
 
@@ -23,6 +23,46 @@ export class ReportesRepository {
 
   async getById(id: string): Promise<Reporte> {
     return await this.model.findById(id).populate('dispositivo').lean();
+  }
+
+  async historico(
+    dispositivo: string,
+    options: { dias: number; limit: number },
+  ): Promise<IListado<Reporte>> {
+    const since = new Date();
+    since.setDate(since.getDate() - options.dias);
+
+    const devEuis = new Set([dispositivo, dispositivo.toUpperCase()]);
+    const matchDispositivo: FilterQuery<Reporte>[] = [...devEuis].map(
+      (deveui) => ({ deveui }),
+    );
+
+    if (Types.ObjectId.isValid(dispositivo)) {
+      matchDispositivo.push({ idDispositivo: new Types.ObjectId(dispositivo) });
+    }
+
+    const filter: FilterQuery<Reporte> = {
+      $and: [
+        { $or: matchDispositivo },
+        {
+          $or: [
+            { fecha: { $gte: since } },
+            { fechaCreacion: { $gte: since } },
+          ],
+        },
+      ],
+    };
+
+    const datos = await this.model
+      .find(filter)
+      .sort({ fecha: 1, fechaCreacion: 1 })
+      .limit(options.limit)
+      .lean();
+
+    return {
+      totalCount: datos.length,
+      datos,
+    };
   }
 
   async create(data: ICreateReporte): Promise<Reporte> {

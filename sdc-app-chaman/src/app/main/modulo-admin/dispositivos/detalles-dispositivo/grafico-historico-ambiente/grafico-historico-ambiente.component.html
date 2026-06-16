@@ -1,0 +1,23 @@
+@if (chartOptions) {
+  <article class="ambient-history-card">
+    <header>
+      <div>
+        <span>{{ titulo || 'Historico ambiental' }}</span>
+        <strong>{{ resumen }}</strong>
+        @if (subtitulo) {
+          <small>{{ subtitulo }}</small>
+        }
+      </div>
+
+      <button class="ambient-history-export" type="button" (click)="exportarCsv()">
+        Exportar CSV
+      </button>
+    </header>
+
+    <app-chart [options]="chartOptions"></app-chart>
+  </article>
+} @else {
+  <div class="sin-datos">
+    <p-message severity="info" text="No hay historico suficiente para graficar temperatura y humedad"></p-message>
+  </div>
+}
