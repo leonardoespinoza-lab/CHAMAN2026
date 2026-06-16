@@ -75,7 +75,11 @@ export class ReportesService {
     event: Event,
     parserConfig?: LanzaParserConfig,
   ): Promise<void> {
-    const { devEui } = uplink.deviceInfo;
+    const devEui = this.getDevEui(uplink);
+    if (!devEui) {
+      this.logger.warn('Uplink recibido sin devEUI.');
+      return;
+    }
 
     const dispositivo = await this.dispositivos.getByDeveui(devEui);
     if (!dispositivo) {
@@ -138,7 +142,7 @@ export class ReportesService {
   }
 
   private async handleGenericClimateUplink(uplink: Uplink): Promise<void> {
-    const devEui = uplink.deviceInfo?.devEui;
+    const devEui = this.getDevEui(uplink);
     if (!devEui) {
       this.logger.warn('Uplink MQTT generico sin devEUI.');
       return;
@@ -593,6 +597,17 @@ export class ReportesService {
       if (Number.isFinite(parsed)) return parsed;
     }
     return undefined;
+  }
+
+  private getDevEui(uplink: Uplink): string | undefined {
+    const deviceInfo = uplink.deviceInfo as any;
+    const devEui =
+      deviceInfo?.devEui ||
+      deviceInfo?.devEUI ||
+      (uplink as any).devEui ||
+      (uplink as any).devEUI;
+
+    return devEui ? String(devEui).toUpperCase() : undefined;
   }
 
   private buildMetadataLora(uplink: Uplink) {
