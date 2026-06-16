@@ -24,6 +24,22 @@ export const LORAWAN_MQTT_CLIENT_ID =
   process.env.LORAWAN_MQTT_CLIENT_ID || `chaman-lorawan-${ENV}`;
 export const LORAWAN_MQTT_TOPIC =
   process.env.LORAWAN_MQTT_TOPIC || 'application/+/device/+/rx';
+export const LORAWAN_MQTT_TOPICS =
+  process.env.LORAWAN_MQTT_TOPICS || LORAWAN_MQTT_TOPIC;
 export const LORAWAN_MQTT_ENABLED =
   (process.env.LORAWAN_MQTT_ENABLED || 'true').toLowerCase() !== 'false';
 export const LORAWAN_MQTT_QOS = Number(process.env.LORAWAN_MQTT_QOS || 0);
+
+export const LORAWAN_MQTT_SECONDARY_URL =
+  process.env.LORAWAN_MQTT_SECONDARY_URL || '';
+export const LORAWAN_MQTT_SECONDARY_USERNAME =
+  process.env.LORAWAN_MQTT_SECONDARY_USERNAME || '';
+export const LORAWAN_MQTT_SECONDARY_PASSWORD =
+  process.env.LORAWAN_MQTT_SECONDARY_PASSWORD || '';
+export const LORAWAN_MQTT_SECONDARY_CLIENT_ID =
+  process.env.LORAWAN_MQTT_SECONDARY_CLIENT_ID ||
+  `${LORAWAN_MQTT_CLIENT_ID}-secondary`;
+export const LORAWAN_MQTT_SECONDARY_TOPICS =
+  process.env.LORAWAN_MQTT_SECONDARY_TOPICS ||
+  process.env.LORAWAN_MQTT_SECONDARY_TOPIC ||
+  'application/+/device/+/event/up';

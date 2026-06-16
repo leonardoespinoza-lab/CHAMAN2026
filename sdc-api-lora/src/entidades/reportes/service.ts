@@ -112,6 +112,95 @@ export class ReportesService {
     }
   }
 
+  public async procesarUplinkMqtt(
+    uplink: Uplink,
+    topic?: string,
+  ): Promise<void> {
+    const event = this.getEventFromTopic(topic) || 'up';
+
+    if (event === 'status') {
+      return this.procesarReporte(uplink, event);
+    }
+
+    if (event !== 'up') {
+      this.logger.log(
+        `Evento MQTT '${event}' para ${uplink.deviceInfo?.devEui || '--'} ignorado.`,
+      );
+      return;
+    }
+
+    const sentekConfig = this.inferirConfiguracionSentek(uplink.object);
+    if (sentekConfig) {
+      return this.procesarReporte(uplink, 'up', sentekConfig);
+    }
+
+    return this.handleGenericClimateUplink(uplink);
+  }
+
+  private async handleGenericClimateUplink(uplink: Uplink): Promise<void> {
+    const devEui = uplink.deviceInfo?.devEui;
+    if (!devEui) {
+      this.logger.warn('Uplink MQTT generico sin devEUI.');
+      return;
+    }
+
+    const dispositivo = await this.dispositivos.getByDeveui(devEui);
+    if (!dispositivo) {
+      this.logger.warn(`Dispositivo con deveui ${devEui} no encontrado.`);
+      return;
+    }
+
+    const valores = this.parsearDatosClimaticosGenericos(uplink);
+    if (!valores) {
+      this.logger.warn(
+        `Uplink MQTT para ${devEui} sin datos climaticos genericos parseables.`,
+      );
+      return;
+    }
+
+    const fecha = new Date(uplink.time || Date.now()).toISOString();
+    const reporteCreado = await this.repository.create({
+      deveui: dispositivo.deveui,
+      idDispositivo: dispositivo._id,
+      fecha,
+      datos: { valores },
+      metadataLora: this.buildMetadataLora(uplink),
+      estado: 'completo',
+    });
+
+    const updateDispositivo: IUpdateDispositivo = {
+      fechaUltimaComunicacion: fecha,
+      ultimoReporte: reporteCreado,
+    };
+
+    const frioAcumulado = this.calcularFrioAcumulado(
+      dispositivo,
+      fecha,
+      reporteCreado.datos?.valores,
+    );
+    if (frioAcumulado) {
+      updateDispositivo.frioAcumulado = frioAcumulado;
+    }
+
+    const bateria = this.getFirstNumber(
+      uplink.object?.battery,
+      uplink.object?.batteryLevel,
+      uplink.batteryLevel,
+    );
+    if (Number.isFinite(bateria)) {
+      updateDispositivo.bateria = {
+        valor: Number(bateria),
+        unidad: '%',
+        fecha,
+      };
+    }
+
+    await this.dispositivos.update(dispositivo._id, updateDispositivo);
+    this.logger.log(
+      `Reporte climatico MQTT procesado para ${dispositivo.deveui}.`,
+    );
+  }
+
   private async handleStatusEvent(
     uplink: Uplink,
     dispositivo: IDispositivo,
@@ -401,12 +490,118 @@ export class ReportesService {
     );
   }
 
+  private parsearDatosClimaticosGenericos(
+    uplink: Uplink,
+  ): IValoresV2['valores'] | null {
+    const object = uplink.object || {};
+    const valores: IValoresV2['valores'] = {};
+
+    const temperatura = this.getFirstNumber(
+      object.temperature,
+      object.temp,
+      object.airTemperature,
+      object.temperatura,
+    );
+    if (Number.isFinite(temperatura)) {
+      valores.Temperatura = [
+        {
+          unidad: 'C',
+          valores: { actual: Number(Number(temperatura).toFixed(2)) },
+        },
+      ];
+    }
+
+    const humedad = this.getFirstNumber(
+      object.humidity,
+      object.hum,
+      object.relativeHumidity,
+      object.humedad,
+    );
+    if (Number.isFinite(humedad)) {
+      valores.Humedad = [
+        {
+          unidad: '%',
+          valores: { actual: Number(Number(humedad).toFixed(2)) },
+        },
+      ];
+    }
+
+    const lluvia = this.getFirstNumber(
+      object.rain,
+      object.rainfall,
+      object.precipitation,
+      object.lluvia,
+    );
+    if (Number.isFinite(lluvia)) {
+      valores.Pluviometro = [
+        {
+          unidad: 'mm',
+          valores: { actual: Number(Number(lluvia).toFixed(2)) },
+        },
+      ];
+    }
+
+    const presion = this.getFirstNumber(
+      object.pressure,
+      object.barometricPressure,
+      object.presion,
+    );
+    if (Number.isFinite(presion)) {
+      valores['PresiÃ³n'] = [
+        {
+          unidad: 'hPa',
+          valores: { actual: Number(Number(presion).toFixed(2)) },
+        },
+      ];
+    }
+
+    return Object.keys(valores).length ? valores : null;
+  }
+
+  private inferirConfiguracionSentek(
+    object?: Uplink['object'],
+  ): LanzaParserConfig | undefined {
+    if (!object) return undefined;
+    const keys = Object.keys(object);
+    const sdi12Keys = keys.filter((key) => /^sdi12_\d+$/i.test(key));
+    if (!sdi12Keys.length) return undefined;
+
+    const maxKey = Math.max(
+      ...sdi12Keys.map((key) => Number(key.replace(/\D/g, '')) || 0),
+    );
+
+    return maxKey > 6 ? SENTEK_12_CONFIG : SENTEK_9_CONFIG;
+  }
+
+  private getEventFromTopic(topic?: string): Event | undefined {
+    if (!topic) return undefined;
+    const parts = topic.split('/');
+    const eventIndex = parts.findIndex((part) => part === 'event');
+    if (eventIndex >= 0) {
+      const event = parts[eventIndex + 1] as Event;
+      return event;
+    }
+    const lastPart = parts[parts.length - 1] as Event;
+    return ['up', 'status', 'join', 'ack'].includes(lastPart)
+      ? lastPart
+      : undefined;
+  }
+
+  private getFirstNumber(...values: unknown[]): number | undefined {
+    for (const value of values) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return undefined;
+  }
+
   private buildMetadataLora(uplink: Uplink) {
-    const ubicacionGWCoord = uplink.rxInfo[0]?.location;
+    const rxInfo = uplink.rxInfo?.[0] || ({} as any);
+    const ubicacionGWCoord = rxInfo.location;
     const res: IMetaDataLora = {
       dr: uplink.dr,
-      rssi: uplink.rxInfo[0].rssi,
-      snr: uplink.rxInfo[0].snr,
+      rssi: rxInfo.rssi,
+      snr: rxInfo.snr,
       ubicacionGW:
         ubicacionGWCoord?.longitude && ubicacionGWCoord?.latitude
           ? {

@@ -11,20 +11,38 @@ import {
   LORAWAN_MQTT_ENABLED,
   LORAWAN_MQTT_PASSWORD,
   LORAWAN_MQTT_QOS,
-  LORAWAN_MQTT_TOPIC,
+  LORAWAN_MQTT_SECONDARY_CLIENT_ID,
+  LORAWAN_MQTT_SECONDARY_PASSWORD,
+  LORAWAN_MQTT_SECONDARY_TOPICS,
+  LORAWAN_MQTT_SECONDARY_URL,
+  LORAWAN_MQTT_SECONDARY_USERNAME,
+  LORAWAN_MQTT_TOPICS,
   LORAWAN_MQTT_URL,
   LORAWAN_MQTT_USERNAME,
 } from '../../env';
 import { LorawanUplinksService } from '../../entidades/lorawan-uplinks/service';
+import { ReportesService } from '../../entidades/reportes/service';
+
+interface BrokerConnectionConfig {
+  name: string;
+  url: string;
+  clientId: string;
+  username?: string;
+  password?: string;
+  topics: string[];
+}
 
 @Injectable()
 export class LorawanMqttConsumerService
   implements OnModuleInit, OnModuleDestroy
 {
   private readonly logger = new Logger(LorawanMqttConsumerService.name);
-  private client?: AsyncMqttClient;
+  private clients: AsyncMqttClient[] = [];
 
-  constructor(private readonly uplinks: LorawanUplinksService) {}
+  constructor(
+    private readonly uplinks: LorawanUplinksService,
+    private readonly reportes: ReportesService,
+  ) {}
 
   async onModuleInit(): Promise<void> {
     if (!LORAWAN_MQTT_ENABLED) {
@@ -32,43 +50,20 @@ export class LorawanMqttConsumerService
       return;
     }
 
-    if (!LORAWAN_MQTT_URL) {
+    const brokers = this.getBrokerConfigs();
+
+    if (!brokers.length) {
       this.logger.warn(
         'Consumer MQTT LoRaWAN sin URL. Definir LORAWAN_MQTT_URL o EMQX_MQTT_URL.',
       );
       return;
     }
 
-    this.client = connect(LORAWAN_MQTT_URL, {
-      clientId: LORAWAN_MQTT_CLIENT_ID,
-      username: LORAWAN_MQTT_USERNAME || undefined,
-      password: LORAWAN_MQTT_PASSWORD || undefined,
-      clean: true,
-      reconnectPeriod: 5000,
-      connectTimeout: 15000,
-    });
-
-    this.client.on('connect', () => {
-      this.logger.log(`Conectado a EMQX: ${this.safeBrokerUrl()}`);
-    });
-    this.client.on('reconnect', () => {
-      this.logger.warn('Reconectando a EMQX...');
-    });
-    this.client.on('error', (error) => {
-      this.logger.error(`Error MQTT LoRaWAN: ${error.message}`);
-    });
-    this.client.on('message', (topic, payload) => {
-      void this.handleMessage(topic, payload);
-    });
-
-    await this.client.subscribe(LORAWAN_MQTT_TOPIC, { qos: this.qos() });
-    this.logger.log(`Suscripto a ${LORAWAN_MQTT_TOPIC}`);
+    await Promise.all(brokers.map((broker) => this.connectBroker(broker)));
   }
 
   async onModuleDestroy(): Promise<void> {
-    if (this.client) {
-      await this.client.end(true);
-    }
+    await Promise.all(this.clients.map((client) => client.end(true)));
   }
 
   private async handleMessage(topic: string, payload: Buffer): Promise<void> {
@@ -91,6 +86,74 @@ export class LorawanMqttConsumerService
     } catch (error) {
       this.logger.error(`No se pudo guardar uplink MQTT: ${error.message}`);
     }
+
+    try {
+      await this.reportes.procesarUplinkMqtt(parsed as any, topic);
+    } catch (error) {
+      this.logger.warn(
+        `Uplink guardado sin reporte operativo devEUI=${uplink.devEUI || '--'}: ${error.message}`,
+      );
+    }
+  }
+
+  private async connectBroker(config: BrokerConnectionConfig): Promise<void> {
+    const client = connect(config.url, {
+      clientId: config.clientId,
+      username: config.username || undefined,
+      password: config.password || undefined,
+      clean: true,
+      reconnectPeriod: 5000,
+      connectTimeout: 15000,
+    });
+
+    client.on('connect', () => {
+      this.logger.log(
+        `Conectado a ${config.name}: ${this.safeBrokerUrl(config.url)}`,
+      );
+    });
+    client.on('reconnect', () => {
+      this.logger.warn(`Reconectando a ${config.name}...`);
+    });
+    client.on('error', (error) => {
+      this.logger.error(`Error MQTT ${config.name}: ${error.message}`);
+    });
+    client.on('message', (topic, payload) => {
+      void this.handleMessage(topic, payload);
+    });
+
+    this.clients.push(client);
+    await Promise.all(
+      config.topics.map((topic) => client.subscribe(topic, { qos: this.qos() })),
+    );
+    this.logger.log(`${config.name} suscripto a ${config.topics.join(', ')}`);
+  }
+
+  private getBrokerConfigs(): BrokerConnectionConfig[] {
+    const brokers: BrokerConnectionConfig[] = [];
+
+    if (LORAWAN_MQTT_URL) {
+      brokers.push({
+        name: 'LoRaWAN principal',
+        url: LORAWAN_MQTT_URL,
+        clientId: LORAWAN_MQTT_CLIENT_ID,
+        username: LORAWAN_MQTT_USERNAME,
+        password: LORAWAN_MQTT_PASSWORD,
+        topics: this.parseTopics(LORAWAN_MQTT_TOPICS),
+      });
+    }
+
+    if (LORAWAN_MQTT_SECONDARY_URL) {
+      brokers.push({
+        name: 'LoRaWAN secundario',
+        url: LORAWAN_MQTT_SECONDARY_URL,
+        clientId: LORAWAN_MQTT_SECONDARY_CLIENT_ID,
+        username: LORAWAN_MQTT_SECONDARY_USERNAME,
+        password: LORAWAN_MQTT_SECONDARY_PASSWORD,
+        topics: this.parseTopics(LORAWAN_MQTT_SECONDARY_TOPICS),
+      });
+    }
+
+    return brokers;
   }
 
   private normalizeUplink(
@@ -190,9 +253,16 @@ export class LorawanMqttConsumerService
       : 0;
   }
 
-  private safeBrokerUrl(): string {
+  private parseTopics(value: string): string[] {
+    return String(value || '')
+      .split(',')
+      .map((topic) => topic.trim())
+      .filter(Boolean);
+  }
+
+  private safeBrokerUrl(brokerUrl: string): string {
     try {
-      const url = new URL(LORAWAN_MQTT_URL);
+      const url = new URL(brokerUrl);
       url.username = '';
       url.password = '';
       return url.toString();

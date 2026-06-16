@@ -109,8 +109,19 @@ LORAWAN_MQTT_ENABLED=true
 LORAWAN_MQTT_URL=mqtts://<emqx-host>:8883
 LORAWAN_MQTT_USERNAME=<mqtt-user>
 LORAWAN_MQTT_PASSWORD=<mqtt-password>
-LORAWAN_MQTT_TOPIC=application/+/device/+/rx
+LORAWAN_MQTT_TOPICS=application/+/device/+/rx
 ```
+
+Tambien puede escuchar un broker ChirpStack secundario sin reemplazar el principal. Esto permite integrar proyectos legacy como el dashboard de horas de frio de Neuquen:
+
+```bash
+LORAWAN_MQTT_SECONDARY_URL=mqtt://lora.chamanagro.ar:1883
+LORAWAN_MQTT_SECONDARY_TOPICS=application/+/device/+/event/up
+LORAWAN_MQTT_SECONDARY_CLIENT_ID=chaman-lorawan-legacy-frutales
+TEMP_FRIO=7
+```
+
+Los uplinks MQTT se guardan crudos y, cuando tienen `object.temperature` / `object.humidity` o datos Sentek `sdi12_*`, tambien generan reportes operativos para curvas, ultimo reporte del dispositivo y acumulacion HF/HFE.
 
 El endpoint de diagnostico del servicio es `GET /lorawan/uplinks/latest`. Si `PREFIX` esta definido, anteponer ese prefijo.
 
