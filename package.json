@@ -28,5 +28,8 @@
     "audit:secrets": "node scripts/audit-config-secrets.js",
     "railway:build": "node scripts/railway-build.js",
     "railway:start": "node scripts/railway-start.js"
+  },
+  "dependencies": {
+    "modelos": "file:sdc-modelos"
   }
 }
