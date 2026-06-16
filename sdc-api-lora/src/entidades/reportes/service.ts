@@ -156,7 +156,7 @@ export class ReportesService {
 
     const valores = this.parsearDatosClimaticosGenericos(uplink);
     if (!valores) {
-      this.logger.warn(
+      this.logger.log(
         `Uplink MQTT para ${devEui} sin datos climaticos genericos parseables.`,
       );
       return;
