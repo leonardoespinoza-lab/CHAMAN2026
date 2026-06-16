@@ -14,6 +14,7 @@ import { LorawanUplinksRepository } from './repository';
 import { decodeSentekUc501Payload } from './sentek-uc501.decoder';
 
 const TEMP_FRIO = Number(process.env.TEMP_FRIO || 7);
+const HFE_POR_CHILL_PORTION = Number(process.env.HFE_POR_CHILL_PORTION || 28);
 const HFE_TABLE: [number, number][] = [
   [-5, 0],
   [0, 0.2],
@@ -468,10 +469,16 @@ export class LorawanUplinksService {
       ultimaTemperatura: Number(Number(temperaturaActual).toFixed(2)),
       horasFrio: Number(horasFrio.toFixed(2)),
       horasFrioEfectivas: Number(horasFrioEfectivas.toFixed(2)),
+      porcionesFrio: Number(this.calcularPorcionesFrio(horasFrioEfectivas).toFixed(2)),
       factorEfectivoActual: Number(this.hfeFactor(Number(temperaturaActual)).toFixed(3)),
-      modelo: 'HF <= 7C + HFE Utah simplificado',
+      modelo: 'HF <= 7C + HFE + CP simplificado',
       fuente: 'Sensor LoRa',
     };
+  }
+
+  private calcularPorcionesFrio(horasFrioEfectivas: number): number {
+    if (!Number.isFinite(horasFrioEfectivas) || HFE_POR_CHILL_PORTION <= 0) return 0;
+    return horasFrioEfectivas / HFE_POR_CHILL_PORTION;
   }
 
   private extraerTemperaturaReferencia(

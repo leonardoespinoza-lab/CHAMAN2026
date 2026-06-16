@@ -31,8 +31,9 @@ export interface IFrioAcumulado {
   ultimaTemperatura?: number;
   horasFrio?: number;
   horasFrioEfectivas?: number;
+  porcionesFrio?: number;
   factorEfectivoActual?: number;
-  modelo?: 'HF <= 7C + HFE Utah simplificado';
+  modelo?: 'HF <= 7C + HFE Utah simplificado' | 'HF <= 7C + HFE + CP simplificado';
   fuente?: 'Sensor LoRa';
 }
 

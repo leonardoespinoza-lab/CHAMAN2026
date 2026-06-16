@@ -122,6 +122,11 @@ function numberOrUndefined(value) {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function chillPortionsFromHfe(value) {
+  const hfe = numberOrUndefined(value);
+  return hfe !== undefined ? Number((hfe / 28).toFixed(2)) : undefined;
+}
+
 function hfeFactor(temp) {
   const value = Number(temp);
   if (!Number.isFinite(value)) return undefined;
@@ -312,6 +317,8 @@ function buildDeviceDoc({ oldSensor, mapping, lote, establecimiento, chillState,
   const latestObject = latestReport?.object_json || {};
   const battery = numberOrUndefined(latestObject.battery);
   const temperature = numberOrUndefined(chillState?.last_temp);
+  const horasFrioEfectivas = numberOrUndefined(chillState?.hfe_hours);
+  const porcionesFrio = chillPortionsFromHfe(horasFrioEfectivas);
   const lastTime = chillState?.last_time || latestReport?.time;
   const idLote = lote?._id;
   const idEstablecimiento = establecimiento?._id;
@@ -336,9 +343,10 @@ function buildDeviceDoc({ oldSensor, mapping, lote, establecimiento, chillState,
       fechaUltimoCalculo: formatDate(lastTime),
       ultimaTemperatura: temperature,
       horasFrio: numberOrUndefined(chillState?.chill_hours),
-      horasFrioEfectivas: numberOrUndefined(chillState?.hfe_hours),
+      horasFrioEfectivas,
+      porcionesFrio,
       factorEfectivoActual: hfeFactor(temperature),
-      modelo: 'HF <= 7C + HFE Utah simplificado',
+      modelo: 'HF <= 7C + HFE + CP simplificado',
       fuente: 'Sensor LoRa',
     },
     fechaUltimaComunicacion: lastTime ? new Date(lastTime) : undefined,
@@ -675,6 +683,7 @@ async function main() {
         ultimoReporte: formatDate(item.uplinksSummary?.last_time),
         horasFrio: numberOrUndefined(item.chillState?.chill_hours),
         horasFrioEfectivas: numberOrUndefined(item.chillState?.hfe_hours),
+        porcionesFrio: chillPortionsFromHfe(item.chillState?.hfe_hours),
       })),
     };
 

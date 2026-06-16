@@ -59,7 +59,11 @@ export class CardFrioTermicoComponent implements OnChanges {
   public get dispositivoFrio(): IDispositivo | undefined {
     return (this.lote?.dispositivos || []).find((dispositivo) => {
       const frio = dispositivo.frioAcumulado;
-      return !!frio && (this.esNumero(frio.horasFrio) || this.esNumero(frio.horasFrioEfectivas));
+      return !!frio && (
+        this.esNumero(frio.horasFrio) ||
+        this.esNumero(frio.horasFrioEfectivas) ||
+        this.esNumero(frio.porcionesFrio)
+      );
     });
   }
 
@@ -89,7 +93,7 @@ export class CardFrioTermicoComponent implements OnChanges {
     if (this.frioSensor) {
       const cultivo = this.siembra?.semilla?.cultivo || 'Plantacion';
       const dispositivo = this.dispositivoFrio?.nombre || this.dispositivoFrio?.deveui || 'sensor asociado';
-      return `${cultivo}: frio acumulado medido por ${dispositivo}. Open-Meteo se usa como respaldo para pronostico, grados dia y riesgo sanitario.`;
+      return `${cultivo}: frio, HFE y CP acumulados por ${dispositivo}. Open-Meteo respalda pronostico, grados dia y riesgo sanitario.`;
     }
     return this.data?.lectura || 'Calculando frio y acumulacion termica.';
   }
@@ -125,6 +129,11 @@ export class CardFrioTermicoComponent implements OnChanges {
     const horasFrioEfectivas = this.esNumero(frio?.horasFrioEfectivas)
       ? Number(frio?.horasFrioEfectivas)
       : data?.acumulados.horasFrioEfectivas;
+    const porcionesFrio = this.esNumero(frio?.porcionesFrio)
+      ? Number(frio?.porcionesFrio)
+      : this.esNumero(horasFrioEfectivas)
+        ? this.calcularPorcionesFrio(Number(horasFrioEfectivas))
+        : data?.acumulados.porcionesFrio;
     const factorActual = this.esNumero(frio?.factorEfectivoActual)
       ? Number(frio?.factorEfectivoActual)
       : this.esNumero(frio?.ultimaTemperatura)
@@ -133,23 +142,38 @@ export class CardFrioTermicoComponent implements OnChanges {
 
     const metricas: MetricFrio[] = [];
 
-    if (this.esNumero(horasFrio)) {
+    if (this.esNumero(horasFrio) || this.esNumero(horasFrioObjetivo)) {
       const pct = this.porcentaje(horasFrio, horasFrioObjetivo);
       metricas.push({
-        label: 'Horas frio',
-        value: `${this.numero(horasFrio, this.usaSensorFrio ? 2 : 1)} h`,
-        detail: `Objetivo ${horasFrioObjetivo || '-'} h`,
+        label: 'Horas frio (HF)',
+        value: this.esNumero(horasFrio)
+          ? `${this.numero(horasFrio, this.usaSensorFrio ? 2 : 1)} h`
+          : '-',
+        detail: this.detalleObjetivo(horasFrio, horasFrioObjetivo, 'h', 0),
         pct,
         tone: pct !== undefined && pct >= 85 ? 'ok' : 'info',
       });
     }
 
-    if (this.esNumero(horasFrioEfectivas)) {
+    if (this.esNumero(horasFrioEfectivas) || this.esNumero(horasFrioEfectivasObjetivo)) {
       const pct = this.porcentaje(horasFrioEfectivas, horasFrioEfectivasObjetivo);
       metricas.push({
-        label: 'Frio efectivo',
-        value: `${this.numero(horasFrioEfectivas, this.usaSensorFrio ? 2 : 1)} h`,
-        detail: `Objetivo ${horasFrioEfectivasObjetivo || '-'} h`,
+        label: 'Frio efectivo (HFE)',
+        value: this.esNumero(horasFrioEfectivas)
+          ? `${this.numero(horasFrioEfectivas, this.usaSensorFrio ? 2 : 1)} HFE`
+          : '-',
+        detail: this.detalleObjetivo(horasFrioEfectivas, horasFrioEfectivasObjetivo, 'HFE', 0),
+        pct,
+        tone: pct !== undefined && pct >= 85 ? 'ok' : 'info',
+      });
+    }
+
+    if (this.esNumero(porcionesFrio) || this.esNumero(porcionesFrioObjetivo)) {
+      const pct = this.porcentaje(porcionesFrio, porcionesFrioObjetivo);
+      metricas.push({
+        label: 'Chill portions (CP)',
+        value: this.esNumero(porcionesFrio) ? `${this.numero(porcionesFrio, 2)} CP` : '-',
+        detail: this.detalleObjetivo(porcionesFrio, porcionesFrioObjetivo, 'CP', 1),
         pct,
         tone: pct !== undefined && pct >= 85 ? 'ok' : 'info',
       });
@@ -167,15 +191,6 @@ export class CardFrioTermicoComponent implements OnChanges {
     }
 
     if (data) {
-      const porcionesPct = this.porcentaje(data.acumulados.porcionesFrio, porcionesFrioObjetivo);
-      metricas.push({
-        label: 'Porciones frio',
-        value: `${data.acumulados.porcionesFrio}`,
-        detail: `Objetivo ${porcionesFrioObjetivo || '-'}`,
-        pct: porcionesPct,
-        tone: porcionesPct !== undefined && porcionesPct >= 85 ? 'ok' : 'info',
-      });
-
       metricas.push({
         label: 'Grados dia',
         value: `${data.acumulados.gradosDia} GD`,
@@ -323,6 +338,28 @@ export class CardFrioTermicoComponent implements OnChanges {
       return undefined;
     }
     return Math.max(0, Math.min(100, (Number(valor) / Number(objetivo)) * 100));
+  }
+
+  private calcularPorcionesFrio(horasFrioEfectivas: number): number {
+    if (!this.esNumero(horasFrioEfectivas)) return 0;
+    return Number((Number(horasFrioEfectivas) / 28).toFixed(2));
+  }
+
+  private detalleObjetivo(
+    valor: number | undefined,
+    objetivo: number | undefined,
+    unidad: string,
+    decimales = 1,
+  ): string {
+    if (!this.esNumero(objetivo)) return 'Objetivo sin cargar';
+
+    const unidadLabel = unidad ? ` ${unidad}` : '';
+    const objetivoLabel = `${this.numero(Number(objetivo), decimales)}${unidadLabel}`;
+
+    if (!this.esNumero(valor)) return `Objetivo ${objetivoLabel}`;
+
+    const faltante = Math.max(0, Number(objetivo) - Number(valor));
+    return `Objetivo ${objetivoLabel} - faltan ${this.numero(faltante, decimales)}${unidadLabel}`;
   }
 
   private numero(valor?: number, decimales = 1): string {
