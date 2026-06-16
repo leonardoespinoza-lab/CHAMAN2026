@@ -19,20 +19,7 @@ export class ReportesService {
     dias = 7,
     limit = 2000,
   ): Promise<IListado<IReporte>> {
-    const desde = new Date();
-    desde.setDate(desde.getDate() - Number(dias || 7));
-    const filtro: IFilter<IReporte> = {
-      idDispositivo,
-      fecha: {
-        $gte: desde.toISOString(),
-      },
-    };
-    const query: IQueryParam = {
-      filter: JSON.stringify(filtro),
-      sort: 'fecha fechaCreacion',
-      limit: Number(limit || 2000),
-    };
-    return await this.repository.get(query);
+    return await this.repository.historico(idDispositivo, dias, limit);
   }
 
   async diario(dias = 7, idDispositivo: string): Promise<IListado<IReporte>> {

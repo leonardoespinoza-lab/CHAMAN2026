@@ -21,7 +21,6 @@ import {
   LORAWAN_MQTT_USERNAME,
 } from '../../env';
 import { LorawanUplinksService } from '../../entidades/lorawan-uplinks/service';
-import { ReportesService } from '../../entidades/reportes/service';
 
 interface BrokerConnectionConfig {
   name: string;
@@ -39,10 +38,7 @@ export class LorawanMqttConsumerService
   private readonly logger = new Logger(LorawanMqttConsumerService.name);
   private clients: AsyncMqttClient[] = [];
 
-  constructor(
-    private readonly uplinks: LorawanUplinksService,
-    private readonly reportes: ReportesService,
-  ) {}
+  constructor(private readonly uplinks: LorawanUplinksService) {}
 
   async onModuleInit(): Promise<void> {
     if (!LORAWAN_MQTT_ENABLED) {
@@ -85,14 +81,6 @@ export class LorawanMqttConsumerService
       );
     } catch (error) {
       this.logger.error(`No se pudo guardar uplink MQTT: ${error.message}`);
-    }
-
-    try {
-      await this.reportes.procesarUplinkMqtt(parsed as any, topic);
-    } catch (error) {
-      this.logger.warn(
-        `Uplink guardado sin reporte operativo devEUI=${uplink.devEUI || '--'}: ${error.message}`,
-      );
     }
   }
 

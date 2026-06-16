@@ -16,4 +16,15 @@ export class ReportesRepository {
     const url = `${API_DATOS}/reportes`;
     return await this.axios.GET<IListado<IReporte>>(url, { params });
   }
+
+  async historico(
+    idDispositivo: string,
+    dias = 7,
+    limit = 2000,
+  ): Promise<IListado<IReporte>> {
+    const url = `${API_DATOS}/reportes/historico/${idDispositivo}`;
+    return await this.axios.GET<IListado<IReporte>>(url, {
+      params: { dias, limit },
+    });
+  }
 }

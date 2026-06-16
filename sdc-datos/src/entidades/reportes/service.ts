@@ -44,6 +44,18 @@ export class ReportesService {
     );
   }
 
+  async getByDeveuiAndFecha(
+    deveui: string,
+    referenceDate: Date,
+    windowSeconds = 1,
+  ) {
+    return await this.repository.getByDeveuiAndFecha(
+      deveui,
+      referenceDate,
+      windowSeconds,
+    );
+  }
+
   async update(id: string, dato: IUpdateReporte) {
     const updated = await this.repository.update(id, dato);
     if (updated) {

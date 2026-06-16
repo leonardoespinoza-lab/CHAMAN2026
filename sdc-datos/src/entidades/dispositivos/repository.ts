@@ -64,10 +64,19 @@ export class DispositivosRepository {
       };
     }
 
-    if (text.includes('meteo') || text.includes('weather') || text.includes('estacion')) {
+    if (
+      text.includes('meteo') ||
+      text.includes('weather') ||
+      text.includes('estacion') ||
+      text.includes('abrigo') ||
+      text.includes('temp y hum') ||
+      text.includes('temperatura') ||
+      text.includes('humidity') ||
+      text.includes('humedad ambiente')
+    ) {
       return {
         tipo: 'Estacion Meteorologica',
-        sensores: ['Temperatura', 'Humedad', 'Viento Velocidad', 'Pluviometro'],
+        sensores: ['Temperatura', 'Humedad', 'Batería'],
       };
     }
 

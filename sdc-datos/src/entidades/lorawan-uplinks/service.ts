@@ -2,14 +2,39 @@ import { Injectable } from '@nestjs/common';
 import {
   ICreateLorawanUplink,
   IDispositivo,
+  IFrioAcumulado,
   IReporte,
   IQueryParam,
+  IUpdateDispositivo,
   IValoresV2,
 } from 'modelos/src';
 import { DispositivosService } from '../dispositivos/service';
 import { ReportesService } from '../reportes/service';
 import { LorawanUplinksRepository } from './repository';
 import { decodeSentekUc501Payload } from './sentek-uc501.decoder';
+
+const TEMP_FRIO = Number(process.env.TEMP_FRIO || 7);
+const HFE_TABLE: [number, number][] = [
+  [-5, 0],
+  [0, 0.2],
+  [1, 0.45],
+  [2, 0.65],
+  [3, 0.799],
+  [4, 0.905],
+  [5, 0.975],
+  [6, 1],
+  [7, 0.975],
+  [8, 0.905],
+  [9, 0.799],
+  [10, 0.68],
+  [11, 0.54],
+  [12, 0.407],
+  [13, 0.29],
+  [14, 0.18],
+  [15, 0.08],
+  [16, 0],
+  [18, 0],
+];
 
 @Injectable()
 export class LorawanUplinksService {
@@ -26,7 +51,10 @@ export class LorawanUplinksService {
   async create(data: ICreateLorawanUplink) {
     const uplink = await this.repository.create(data);
     const dispositivo = await this.dispositivos.upsertFromLorawanUplink(uplink);
-    await this.syncSentekReport(uplink, dispositivo);
+    const sentekSynced = await this.syncSentekReport(uplink, dispositivo);
+    if (!sentekSynced) {
+      await this.syncGenericClimateReport(uplink, dispositivo);
+    }
     return uplink;
   }
 
@@ -47,14 +75,14 @@ export class LorawanUplinksService {
   private async syncSentekReport(
     uplink: ICreateLorawanUplink,
     dispositivo?: IDispositivo | null,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (!dispositivo?._id || !uplink.devEUI) {
-      return;
+      return false;
     }
 
     const decoded = decodeSentekUc501Payload(uplink.data);
     if (!decoded) {
-      return;
+      return false;
     }
 
     const devEUI = uplink.devEUI.toUpperCase();
@@ -103,11 +131,265 @@ export class LorawanUplinksService {
       ultimoReporte: reporte,
       fechaUltimaComunicacion: reportDate.toISOString(),
     });
+    return true;
   }
 
-  private safeDate(value?: string): Date {
+  private async syncGenericClimateReport(
+    uplink: ICreateLorawanUplink,
+    dispositivo?: IDispositivo | null,
+  ): Promise<boolean> {
+    if (!dispositivo?._id || !uplink.devEUI) {
+      return false;
+    }
+
+    const devEUI = uplink.devEUI.toUpperCase();
+    const reportDate = this.safeDate(uplink.timestamp);
+    const decodedObject = this.extractDecodedObject(uplink);
+    const valores = this.parseGenericClimateValues(decodedObject);
+    const battery = this.getFirstNumber(
+      decodedObject.battery,
+      decodedObject.batteryLevel,
+      decodedObject.bateria,
+      decodedObject.bat,
+      (uplink.rawPayload as any)?.batteryLevel,
+      (uplink.rawPayload as any)?.battery,
+    );
+
+    const updateDispositivo: IUpdateDispositivo = {
+      fechaUltimaComunicacion: reportDate.toISOString(),
+    };
+
+    if (Number.isFinite(battery)) {
+      updateDispositivo.bateria = {
+        valor: Number(Number(battery).toFixed(2)),
+        unidad: '%',
+        fecha: reportDate.toISOString(),
+      };
+    }
+
+    if (!valores) {
+      if (battery !== undefined) {
+        await this.dispositivos.update(dispositivo._id, updateDispositivo);
+      }
+      return false;
+    }
+
+    const metadataLora = this.buildMetadataLora(uplink);
+    const previous = await this.reportes.getByDeveuiAndFecha(
+      devEUI,
+      reportDate,
+      2,
+    );
+    let reporte: IReporte;
+
+    if (previous?._id) {
+      reporte = await this.reportes.update(previous._id, {
+        fecha: reportDate.toISOString(),
+        estado: 'completo',
+        datos: { valores },
+        metadataLora,
+      });
+    } else {
+      reporte = await this.reportes.create({
+        idDispositivo: dispositivo._id,
+        deveui: devEUI,
+        fecha: reportDate.toISOString(),
+        estado: 'completo',
+        datos: { valores },
+        metadataLora,
+      });
+    }
+
+    updateDispositivo.ultimoReporte = reporte;
+    const frioAcumulado = this.calcularFrioAcumulado(
+      dispositivo,
+      reportDate.toISOString(),
+      valores,
+    );
+    if (frioAcumulado) {
+      updateDispositivo.frioAcumulado = frioAcumulado;
+    }
+
+    await this.dispositivos.update(dispositivo._id, updateDispositivo);
+    return true;
+  }
+
+  private safeDate(value?: string | Date): Date {
     const parsed = value ? new Date(value) : new Date();
     return Number.isFinite(parsed.getTime()) ? parsed : new Date();
+  }
+
+  private extractDecodedObject(
+    uplink: ICreateLorawanUplink,
+  ): Record<string, any> {
+    const raw = uplink.rawPayload || {};
+    const candidates = [
+      (raw as any).object,
+      (raw as any).decodedData,
+      (raw as any).decoded_data,
+      (raw as any).decoded,
+      (raw as any).objectJSON,
+      (raw as any).objectJson,
+      (raw as any).object_json,
+      (raw as any).payload,
+      (raw as any).uplink_message?.decoded_payload,
+      (raw as any).data?.object,
+    ];
+
+    for (const candidate of candidates) {
+      const parsed = this.parseObjectCandidate(candidate);
+      if (parsed && Object.keys(parsed).length) {
+        return parsed;
+      }
+    }
+
+    return {};
+  }
+
+  private parseObjectCandidate(value: unknown): Record<string, any> | null {
+    if (!value) return null;
+    if (typeof value === 'object') return value as Record<string, any>;
+    if (typeof value !== 'string') return null;
+
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object'
+        ? (parsed as Record<string, any>)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private parseGenericClimateValues(
+    object: Record<string, any>,
+  ): IValoresV2['valores'] | null {
+    const valores: IValoresV2['valores'] = {};
+
+    const temperatura = this.getFirstNumber(
+      object.temperature,
+      object.temp,
+      object.airTemperature,
+      object.temperatura,
+      object.t,
+    );
+    if (Number.isFinite(temperatura)) {
+      valores.Temperatura = [this.valueItem(temperatura, 'C')];
+    }
+
+    const humedad = this.getFirstNumber(
+      object.humidity,
+      object.hum,
+      object.relativeHumidity,
+      object.humedad,
+      object.rh,
+    );
+    if (Number.isFinite(humedad)) {
+      valores.Humedad = [this.valueItem(humedad, '%')];
+    }
+
+    const lluvia = this.getFirstNumber(
+      object.rain,
+      object.rainfall,
+      object.precipitation,
+      object.lluvia,
+      object.rain_mm,
+    );
+    if (Number.isFinite(lluvia)) {
+      valores.Pluviometro = [this.valueItem(lluvia, 'mm')];
+    }
+
+    const presion = this.getFirstNumber(
+      object.pressure,
+      object.barometricPressure,
+      object.presion,
+      object.pressure_hpa,
+    );
+    if (Number.isFinite(presion)) {
+      valores['Presión'] = [this.valueItem(presion, 'hPa')];
+    }
+
+    const viento = this.getFirstNumber(
+      object.windSpeed,
+      object.wind_speed,
+      object.viento,
+      object.velocidadViento,
+    );
+    if (Number.isFinite(viento)) {
+      valores['Viento Velocidad'] = [this.valueItem(viento, 'km/h')];
+    }
+
+    const direccion = this.getFirstNumber(
+      object.windDirection,
+      object.wind_direction,
+      object.direccionViento,
+    );
+    if (Number.isFinite(direccion)) {
+      valores['Viento Dirección'] = [this.valueItem(direccion, 'deg')];
+    }
+
+    const radiacion = this.getFirstNumber(
+      object.solarRadiation,
+      object.radiacion,
+      object.radiacionSolar,
+      object.solar,
+    );
+    if (Number.isFinite(radiacion)) {
+      valores['Radiación Solar'] = [this.valueItem(radiacion, 'W/m2')];
+    }
+
+    const et0 = this.getFirstNumber(
+      object.et0,
+      object.eto,
+      object.evapotranspiration,
+      object.evapotranspiracion,
+    );
+    if (Number.isFinite(et0)) {
+      valores['Evapotranspiración'] = [this.valueItem(et0, 'mm')];
+    }
+
+    const bateria = this.getFirstNumber(
+      object.battery,
+      object.batteryLevel,
+      object.bateria,
+      object.bat,
+    );
+    if (Number.isFinite(bateria)) {
+      valores['Batería'] = [this.valueItem(bateria, '%')];
+    }
+
+    return Object.keys(valores).length ? valores : null;
+  }
+
+  private valueItem(value: unknown, unidad: string) {
+    return {
+      unidad,
+      valores: {
+        actual: Number(Number(value).toFixed(2)),
+      },
+    };
+  }
+
+  private buildMetadataLora(uplink: ICreateLorawanUplink) {
+    return {
+      applicationID: uplink.applicationID,
+      applicationName: uplink.applicationName,
+      gatewayID: uplink.gatewayID,
+      frequency: uplink.frequency,
+      fCnt: uplink.fCnt,
+      fPort: uplink.fPort,
+      rssi: uplink.rssi,
+      snr: uplink.snr,
+      dr: uplink.dr,
+    };
+  }
+
+  private getFirstNumber(...values: unknown[]): number | undefined {
+    for (const value of values) {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return undefined;
   }
 
   private mergeSentekValues(
@@ -148,5 +430,91 @@ export class LorawanUplinksService {
       countValid('Salinidad Suelo') >= 10 &&
       countValid('Humedad Suelo Profundidad') >= 9
     );
+  }
+
+  private calcularFrioAcumulado(
+    dispositivo: IDispositivo,
+    fecha: string,
+    valores?: IValoresV2['valores'],
+  ): IFrioAcumulado | undefined {
+    const temperaturaActual = this.extraerTemperaturaReferencia(valores);
+    if (!Number.isFinite(temperaturaActual)) return undefined;
+
+    const previo = dispositivo.frioAcumulado || {};
+    let horasFrio = Number(previo.horasFrio || 0);
+    let horasFrioEfectivas = Number(previo.horasFrioEfectivas || 0);
+    const fechaPrevia =
+      previo.fechaUltimoCalculo || dispositivo.ultimoReporte?.fecha;
+    const temperaturaPrevia = Number.isFinite(previo.ultimaTemperatura)
+      ? Number(previo.ultimaTemperatura)
+      : this.extraerTemperaturaReferencia(dispositivo.ultimoReporte?.datos?.valores);
+
+    if (fechaPrevia && Number.isFinite(temperaturaPrevia)) {
+      const diffHours =
+        (new Date(fecha).getTime() - new Date(fechaPrevia).getTime()) /
+        3600000;
+
+      if (diffHours > 0 && diffHours < 24) {
+        if (Number(temperaturaPrevia) <= TEMP_FRIO) {
+          horasFrio += diffHours;
+        }
+        horasFrioEfectivas += diffHours * this.hfeFactor(Number(temperaturaPrevia));
+      }
+    }
+
+    return {
+      fechaInicio: previo.fechaInicio || fecha,
+      fechaUltimoCalculo: fecha,
+      ultimaTemperatura: Number(Number(temperaturaActual).toFixed(2)),
+      horasFrio: Number(horasFrio.toFixed(2)),
+      horasFrioEfectivas: Number(horasFrioEfectivas.toFixed(2)),
+      factorEfectivoActual: Number(this.hfeFactor(Number(temperaturaActual)).toFixed(3)),
+      modelo: 'HF <= 7C + HFE Utah simplificado',
+      fuente: 'Sensor LoRa',
+    };
+  }
+
+  private extraerTemperaturaReferencia(
+    valores?: IValoresV2['valores'],
+  ): number | undefined {
+    const temperaturasAire = valores?.Temperatura
+      ?.map((item) => item?.valores?.actual ?? item?.valores?.promedio)
+      .filter((valor) => Number.isFinite(valor));
+
+    if (temperaturasAire?.length) {
+      return this.promedio(temperaturasAire.map(Number));
+    }
+
+    const temperaturasSuelo = valores?.['Temperatura Suelo']
+      ?.map((item) => item?.valores?.actual ?? item?.valores?.promedio)
+      .filter((valor) => Number.isFinite(valor));
+
+    if (temperaturasSuelo?.length) {
+      return this.promedio(temperaturasSuelo.slice(0, 3).map(Number));
+    }
+
+    return undefined;
+  }
+
+  private promedio(valores: number[]): number {
+    return valores.reduce((suma, valor) => suma + valor, 0) / valores.length;
+  }
+
+  private hfeFactor(temp: number): number {
+    if (!Number.isFinite(temp)) return 0;
+    if (temp <= HFE_TABLE[0][0]) return HFE_TABLE[0][1];
+    if (temp >= HFE_TABLE[HFE_TABLE.length - 1][0]) {
+      return HFE_TABLE[HFE_TABLE.length - 1][1];
+    }
+
+    for (let i = 0; i < HFE_TABLE.length - 1; i++) {
+      const [t1, f1] = HFE_TABLE[i];
+      const [t2, f2] = HFE_TABLE[i + 1];
+      if (temp >= t1 && temp <= t2) {
+        const ratio = (temp - t1) / (t2 - t1);
+        return f1 + ratio * (f2 - f1);
+      }
+    }
+    return 0;
   }
 }

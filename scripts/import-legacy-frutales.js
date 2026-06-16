@@ -264,6 +264,50 @@ function buildReportDoc(row, deviceId) {
   };
 }
 
+function parseLegacyRawPayload(row) {
+  let raw = {};
+  if (row.raw_json && typeof row.raw_json === 'object') {
+    raw = row.raw_json;
+  } else if (row.raw_json) {
+    try {
+      raw = JSON.parse(row.raw_json);
+    } catch {
+      raw = {};
+    }
+  }
+
+  return {
+    ...raw,
+    object: raw.object || row.object_json || {},
+    legacy: {
+      source: SOURCE,
+      uplinkId: row.id,
+      importedFrom: 'legacy-frutales-postgres',
+    },
+  };
+}
+
+function buildLorawanUplinkDoc(row) {
+  const rawPayload = parseLegacyRawPayload(row);
+  const timestamp = new Date(row.time);
+
+  return {
+    fechaCreacion: row.created_at ? new Date(row.created_at) : timestamp,
+    topic: row.topic,
+    applicationName: 'Legacy ChirpStack frutales',
+    devEUI: normalizeDevEui(row.dev_eui),
+    deviceName: cleanText(row.device_name),
+    data: rawPayload.data,
+    gatewayID: cleanText(row.gateway_id) || undefined,
+    rssi: numberOrUndefined(row.rssi),
+    snr: numberOrUndefined(row.snr),
+    frequency: numberOrUndefined(rawPayload.frequency),
+    dr: numberOrUndefined(rawPayload.dr),
+    timestamp,
+    rawPayload,
+  };
+}
+
 function buildDeviceDoc({ oldSensor, mapping, lote, establecimiento, chillState, latestReport }) {
   const latestObject = latestReport?.object_json || {};
   const battery = numberOrUndefined(latestObject.battery);
@@ -504,8 +548,9 @@ async function upsertDeviceAndReports(db, item) {
   );
 
   let reportResult = { upserted: 0, modified: 0, matched: 0, skipped: 0 };
+  let uplinkResult = { upserted: 0, modified: 0, matched: 0, skipped: 0 };
   if (IMPORT_REPORTS && item.uplinks.length) {
-    const ops = item.uplinks.map((row) => {
+    const reportOps = item.uplinks.map((row) => {
       const report = buildReportDoc(row, device._id);
       return {
         updateOne: {
@@ -520,16 +565,40 @@ async function upsertDeviceAndReports(db, item) {
       };
     });
 
-    for (let i = 0; i < ops.length; i += 500) {
-      const chunk = ops.slice(i, i + 500);
+    const uplinkOps = item.uplinks.map((row) => {
+      const uplink = buildLorawanUplinkDoc(row);
+      return {
+        updateOne: {
+          filter: {
+            devEUI: uplink.devEUI,
+            timestamp: uplink.timestamp,
+            'rawPayload.legacy.source': SOURCE,
+            'rawPayload.legacy.uplinkId': row.id,
+          },
+          update: { $set: uplink },
+          upsert: true,
+        },
+      };
+    });
+
+    for (let i = 0; i < reportOps.length; i += 500) {
+      const chunk = reportOps.slice(i, i + 500);
       const res = await db.collection('reportes').bulkWrite(chunk, { ordered: false });
       reportResult.upserted += res.upsertedCount || 0;
       reportResult.modified += res.modifiedCount || 0;
       reportResult.matched += res.matchedCount || 0;
     }
+
+    for (let i = 0; i < uplinkOps.length; i += 500) {
+      const chunk = uplinkOps.slice(i, i + 500);
+      const res = await db.collection('lorawan_uplinks').bulkWrite(chunk, { ordered: false });
+      uplinkResult.upserted += res.upsertedCount || 0;
+      uplinkResult.modified += res.modifiedCount || 0;
+      uplinkResult.matched += res.matchedCount || 0;
+    }
   }
 
-  return { device, reportResult };
+  return { device, reportResult, uplinkResult };
 }
 
 function collectIssues(items) {
@@ -625,7 +694,7 @@ async function main() {
       const semilla = await upsertSemilla(db, item.variedad);
       const crono = await upsertCrono(db, semilla);
       const plantacion = await upsertPlantacion(db, item, semilla, crono);
-      const { device, reportResult } = await upsertDeviceAndReports(db, item);
+      const { device, reportResult, uplinkResult } = await upsertDeviceAndReports(db, item);
       writes.push({
         sensor: item.mapping.sensorNumber,
         semilla: semilla._id,
@@ -633,6 +702,7 @@ async function main() {
         plantacion: plantacion._id,
         dispositivo: device._id,
         reportes: reportResult,
+        uplinks: uplinkResult,
       });
     }
 
@@ -646,6 +716,9 @@ async function main() {
           }),
           reportesLegacy: await db.collection('reportes').countDocuments({
             'metadataLora.legacy.source': SOURCE,
+          }),
+          uplinksLegacy: await db.collection('lorawan_uplinks').countDocuments({
+            'rawPayload.legacy.source': SOURCE,
           }),
           semillasLegacy: await db.collection('semillas').countDocuments({
             codigoCarga: { $regex: `^${SOURCE}:` },

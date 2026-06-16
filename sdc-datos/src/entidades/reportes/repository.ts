@@ -87,6 +87,23 @@ export class ReportesRepository {
       .lean();
   }
 
+  async getByDeveuiAndFecha(
+    deveui: string,
+    referenceDate: Date,
+    windowSeconds = 1,
+  ): Promise<Reporte | null> {
+    const minDate = new Date(referenceDate.getTime() - windowSeconds * 1000);
+    const maxDate = new Date(referenceDate.getTime() + windowSeconds * 1000);
+
+    return await this.model
+      .findOne({
+        deveui,
+        fecha: { $gte: minDate, $lte: maxDate },
+      })
+      .sort({ fecha: -1, fechaCreacion: -1 })
+      .lean();
+  }
+
   async update(id: string, data: IUpdateReporte): Promise<Reporte> {
     return await this.model.findByIdAndUpdate(id, data, {
       new: true,
