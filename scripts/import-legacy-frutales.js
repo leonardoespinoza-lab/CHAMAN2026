@@ -68,6 +68,44 @@ function normalizeDevEui(value) {
   return cleanText(value).replace(/[^a-fA-F0-9]/g, '').toUpperCase();
 }
 
+function normalizedEstablecimientoTokens(value) {
+  const base = norm(value)
+    .replace(/^CHACRA\s+/, '')
+    .replace(/^EL\s+/, '')
+    .trim();
+  return [norm(value), base].filter(Boolean);
+}
+
+function expectedLoteLabel(mapping) {
+  return `${mapping.lote} (${mapping.establecimiento}) SENSOR ${mapping.sensorNumber}`;
+}
+
+function matchesEstablecimientoName(name, expected) {
+  const actual = norm(name);
+  const expectedTokens = normalizedEstablecimientoTokens(expected);
+  return expectedTokens.some(
+    (token) =>
+      actual === token ||
+      actual === norm(`CHACRA ${expected}`) ||
+      actual.replace(/^CHACRA\s+/, '') === token ||
+      actual.includes(token),
+  );
+}
+
+function matchesLoteName(name, mapping) {
+  const actual = norm(name);
+  const fullLabel = norm(expectedLoteLabel(mapping));
+  return (
+    actual === norm(mapping.lote) ||
+    actual === fullLabel ||
+    (
+      actual.includes(norm(mapping.lote)) &&
+      actual.includes(norm(`SENSOR ${mapping.sensorNumber}`)) &&
+      actual.includes(norm(mapping.establecimiento))
+    )
+  );
+}
+
 function sensorNumberFromName(name) {
   const match = cleanText(name).match(/sensor\s*(\d+)/i);
   return match ? Number(match[1]) : undefined;
@@ -277,7 +315,7 @@ async function loadLegacyData(pg) {
       `
         select id, dev_eui, device_name, time, object_json, rssi, snr, gateway_id, topic, raw_json, created_at
         from uplinks
-        where dev_eui = any($1)
+        where upper(dev_eui) = any($1)
         order by time asc
       `,
       [devEuis],
@@ -301,10 +339,10 @@ async function loadTargetContext(db, legacyItems) {
 
   return legacyItems.map((item) => {
     const estCandidates = establecimientos.filter(
-      (est) => norm(est.nombre) === norm(item.mapping.establecimiento),
+      (est) => matchesEstablecimientoName(est.nombre, item.mapping.establecimiento),
     );
     const loteCandidates = lotes.filter(
-      (lote) => norm(lote.nombre) === norm(item.mapping.lote),
+      (lote) => matchesLoteName(lote.nombre, item.mapping),
     );
     const match = loteCandidates
       .map((lote) => ({
@@ -414,6 +452,13 @@ async function upsertDeviceAndReports(db, item) {
     { upsert: true, returnDocument: 'after' },
   );
   const device = deviceResult.value || deviceResult;
+
+  if (!Array.isArray(lote.idsDispositivo)) {
+    await db.collection('lotes').updateOne(
+      { _id: lote._id },
+      { $set: { idsDispositivo: [] } },
+    );
+  }
 
   await db.collection('lotes').updateOne(
     { _id: lote._id },
