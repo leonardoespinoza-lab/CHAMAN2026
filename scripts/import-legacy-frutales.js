@@ -122,6 +122,43 @@ function numberOrUndefined(value) {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function hfeFactor(temp) {
+  const value = Number(temp);
+  if (!Number.isFinite(value)) return undefined;
+  const points = [
+    [-5, 0],
+    [0, 0.2],
+    [1, 0.45],
+    [2, 0.65],
+    [3, 0.799],
+    [4, 0.905],
+    [5, 0.975],
+    [6, 1],
+    [7, 0.975],
+    [8, 0.905],
+    [9, 0.799],
+    [10, 0.68],
+    [11, 0.54],
+    [12, 0.407],
+    [13, 0.29],
+    [14, 0.18],
+    [15, 0.08],
+    [16, 0],
+    [18, 0],
+  ];
+  if (value <= points[0][0]) return points[0][1];
+  if (value >= points[points.length - 1][0]) return 0;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const [x1, y1] = points[i];
+    const [x2, y2] = points[i + 1];
+    if (value >= x1 && value <= x2) {
+      const t = (value - x1) / (x2 - x1);
+      return y1 + t * (y2 - y1);
+    }
+  }
+  return 0;
+}
+
 function formatDate(value) {
   return value ? new Date(value).toISOString() : undefined;
 }
@@ -256,6 +293,7 @@ function buildDeviceDoc({ oldSensor, mapping, lote, establecimiento, chillState,
       ultimaTemperatura: temperature,
       horasFrio: numberOrUndefined(chillState?.chill_hours),
       horasFrioEfectivas: numberOrUndefined(chillState?.hfe_hours),
+      factorEfectivoActual: hfeFactor(temperature),
       modelo: 'HF <= 7C + HFE Utah simplificado',
       fuente: 'Sensor LoRa',
     },

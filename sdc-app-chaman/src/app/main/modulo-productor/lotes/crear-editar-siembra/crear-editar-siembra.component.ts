@@ -75,6 +75,24 @@ export class CrearEditarSiembraComponent {
     return this.esCultivoPerenne ? 'Variedad / pie' : 'Semilla';
   }
 
+  public get semillaSeleccionada(): ISemilla | undefined {
+    const idSemilla = this.form?.get('idSemilla')?.value;
+    return this.todasLasSemillas.find((semilla) => semilla._id === idSemilla);
+  }
+
+  public get materialSeleccionadoLabel(): string {
+    const semilla = this.semillaSeleccionada;
+    if (!semilla) return 'Selecciona material vegetal para activar los servicios.';
+    const piezas = [semilla.variedad, semilla.portainjerto].filter(Boolean);
+    return piezas.join(' / ') || semilla.ciclo || 'Material seleccionado';
+  }
+
+  public get materialSeleccionadoSubtitulo(): string {
+    const semilla = this.semillaSeleccionada;
+    if (!semilla) return 'Para frutales se usa variedad, pie, frio requerido y ventanas fenologicas editables.';
+    return [semilla.cultivo, semilla.semillero, semilla.campania].filter(Boolean).join(' - ');
+  }
+
   public get accionImplantacion(): string {
     return getNombreImplantacion(this.cultivoSeleccionado);
   }
@@ -192,7 +210,7 @@ export class CrearEditarSiembraComponent {
       if (this.siembra?.idSemilla && !this.form?.get('cultivo')?.value) {
         const semillaActual = data.datos.find((s) => s._id === this.siembra?.idSemilla);
         if (semillaActual) {
-          this.form?.get('cultivo')?.setValue(semillaActual.cultivo);
+          this.form?.get('cultivo')?.setValue(semillaActual.cultivo, { emitEvent: false });
         }
       }
     });

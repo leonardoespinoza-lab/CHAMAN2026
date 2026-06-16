@@ -130,7 +130,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         name: `${depth} cm`,
         data,
         type: 'spline',
-        marker: { enabled: data.length <= 40, radius: 3 },
+        marker: { enabled: data.length <= 40, radius: 2 },
       }));
   }
 
@@ -218,7 +218,20 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           animation: { duration: 500 },
           dataLabels: { enabled: false },
           enableMouseTracking: true,
-          lineWidth: 2.8,
+          lineWidth: 1.8,
+          marker: {
+            lineWidth: 1,
+            states: {
+              hover: {
+                radius: 3.5,
+              },
+            },
+          },
+          states: {
+            hover: {
+              lineWidth: 2.4,
+            },
+          },
         },
         series: {
           connectNulls: false,

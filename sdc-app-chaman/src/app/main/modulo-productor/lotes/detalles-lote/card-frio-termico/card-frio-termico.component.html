@@ -4,7 +4,7 @@
       <div>
         <p class="titulo-card">FRIO Y ACUMULACION TERMICA</p>
         <span>
-          {{ data?.fuente || 'Open-Meteo' }} - horas frio, grados dia y ventana sanitaria
+          {{ fuenteFrioLabel }} - horas frio, grados dia y ventana sanitaria
         </span>
       </div>
       <p-button
@@ -18,12 +18,11 @@
       />
     </div>
 
-    @if (data) {
+    @if (data || frioSensor) {
       <div class="frio-summary">
-        <strong>{{ data.lectura }}</strong>
+        <strong>{{ lecturaPrincipal }}</strong>
         <small>
-          Frio {{ data.periodoFrio.desde }} a {{ data.periodoFrio.hasta }}.
-          Termico desde {{ data.periodoTermico.desde }}.
+          {{ periodoFrioLabel }}
         </small>
       </div>
 
@@ -42,7 +41,8 @@
         }
       </div>
 
-      <div class="frio-body">
+      @if (data) {
+        <div class="frio-body">
         <section class="frio-chart">
           <header>
             <strong>Temperatura y lluvia reciente</strong>
@@ -64,7 +64,7 @@
             @for (serie of seriesTemperatura; track serie.label) {
               <path [attr.d]="serie.path" [attr.stroke]="serie.color"></path>
               @for (punto of serie.puntos; track $index) {
-                <circle [attr.cx]="punto.x" [attr.cy]="punto.y" r="2.7" [attr.fill]="serie.color">
+                <circle [attr.cx]="punto.x" [attr.cy]="punto.y" r="2" [attr.fill]="serie.color">
                   <title>{{ serie.label }} - {{ punto.fecha }}: {{ punto.valor }} C</title>
                 </circle>
               }
@@ -95,7 +95,12 @@
             <small>{{ data.eventos.ventanaSanitaria.lectura }}</small>
           </article>
         </section>
-      </div>
+        </div>
+      } @else {
+        <p-message severity="info">
+          Mostrando acumulado real del sensor. Falta serie climatica por coordenadas para graficar pronostico y riesgo de helada.
+        </p-message>
+      }
     } @else if (error) {
       <p-message severity="warn">{{ error }}</p-message>
     } @else {

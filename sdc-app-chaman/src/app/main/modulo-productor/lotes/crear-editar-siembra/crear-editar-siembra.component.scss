@@ -1,25 +1,274 @@
-/* Aplicar el mismo patrón que detalles-lote para evitar el botón del menú */
-/* En móviles: ancho completo sin márgenes */
-/* En escritorio: contenedor centrado con márgenes simétricos */
-
-/* Para escritorio real (pantallas grandes no táctiles) */
-@media (min-width: 1024px) and (pointer: fine) and (hover: hover) {
-  :host {
-    display: block;
-    width: 80%;
-    margin: 2em auto 4em auto; /* Márgenes simétricos y verticales */
-  }
-}
-
-/* Para pantallas muy grandes */
-@media (min-width: 1921px) {
-  :host {
-    width: 85%;
-    margin: 3em auto 5em auto;
-  }
-}
-
 :host {
-  height: 100%;
   display: block;
+  min-height: 100%;
+}
+
+.implantacion-page {
+  min-height: 100%;
+  padding: clamp(1rem, 2vw, 2rem);
+}
+
+.implantacion-shell {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(242, 252, 250, 0.76)),
+    var(--p-surface-0);
+  backdrop-filter: blur(14px);
+  border: 1.5px solid rgba(91, 124, 156, 0.28);
+  border-radius: 8px;
+  box-shadow: 0 24px 58px rgba(15, 23, 42, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 0 auto;
+  max-width: 1480px;
+  min-height: calc(100vh - 4rem);
+  padding: clamp(1rem, 1.8vw, 1.6rem);
+}
+
+.implantacion-header {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+}
+
+.volver-btn {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--p-primary-color);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 2rem;
+  height: 3rem;
+  justify-content: center;
+  width: 3rem;
+}
+
+.implantacion-header span,
+.perennial-panel header span,
+.agro-grid span,
+.fenologia-grid span,
+.observaciones-panel span {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.implantacion-header h1 {
+  color: var(--p-text-color);
+  font-size: clamp(2rem, 2.5vw, 3rem);
+  line-height: 1.05;
+  margin: 0.1rem 0;
+}
+
+.implantacion-header p {
+  color: var(--p-text-muted-color);
+  font-size: 1.1rem;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.implantacion-form {
+  flex: 1;
+  min-height: 0;
+}
+
+.form-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.span-2 {
+  grid-column: span 2;
+}
+
+.material-option {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  min-height: 2.2rem;
+}
+
+.material-option strong {
+  color: var(--p-text-color);
+  font-size: 1rem;
+}
+
+.material-option span,
+.material-option small {
+  color: var(--p-text-muted-color);
+  font-size: 0.95rem;
+}
+
+.option-row {
+  min-height: 2.8rem;
+}
+
+.perennial-panel {
+  background: rgba(255, 255, 255, 0.68);
+  border: 1.5px solid color-mix(in srgb, var(--p-primary-color) 32%, var(--p-surface-200));
+  border-radius: 8px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.07);
+  margin-top: 1.15rem;
+  padding: 1rem;
+}
+
+.perennial-panel header {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.perennial-panel header strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: clamp(1.35rem, 1.7vw, 2rem);
+  line-height: 1.1;
+  margin: 0.2rem 0;
+}
+
+.perennial-panel header small,
+.observaciones-panel p {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 1.05rem;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.perennial-panel header i {
+  background: color-mix(in srgb, var(--p-primary-color), white 84%);
+  border: 1px solid color-mix(in srgb, var(--p-primary-color), white 50%);
+  border-radius: 999px;
+  color: var(--p-primary-color);
+  font-size: 0.95rem;
+  font-style: normal;
+  font-weight: 850;
+  padding: 0.42rem 0.75rem;
+  white-space: nowrap;
+}
+
+.agro-grid,
+.fenologia-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.agro-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.fenologia-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 0.75rem;
+}
+
+.agro-grid article,
+.fenologia-grid article,
+.observaciones-panel {
+  background: rgba(255, 255, 255, 0.84);
+  border: 1.5px solid rgba(86, 117, 150, 0.24);
+  border-radius: 8px;
+  padding: 0.85rem;
+}
+
+.agro-grid article {
+  box-shadow: inset 4px 0 0 var(--p-primary-color);
+}
+
+.agro-grid strong,
+.fenologia-grid strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 1.35rem;
+  line-height: 1.15;
+  margin-top: 0.2rem;
+}
+
+.fenologia-grid strong {
+  font-size: 1.18rem;
+}
+
+.observaciones-panel {
+  margin-top: 0.75rem;
+}
+
+.implantacion-footer {
+  border-top: 1px solid var(--p-surface-border);
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: 1fr 1fr;
+  padding-top: 1rem;
+}
+
+:host ::ng-deep {
+  .p-tabs {
+    background: transparent;
+  }
+
+  .p-tabpanels,
+  .p-tabpanel {
+    background: transparent;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .p-tab {
+    font-size: 1.1rem;
+    font-weight: 850;
+  }
+
+  .p-inputtext,
+  .p-select,
+  .p-datepicker-input {
+    font-size: 1.08rem;
+  }
+}
+
+@media (max-width: 1100px) {
+  .form-grid,
+  .agro-grid,
+  .fenologia-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .span-2 {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 700px) {
+  .implantacion-page {
+    padding: 0.6rem;
+  }
+
+  .implantacion-shell {
+    min-height: calc(100vh - 1.2rem);
+  }
+
+  .implantacion-header {
+    align-items: flex-start;
+  }
+
+  .form-grid,
+  .agro-grid,
+  .fenologia-grid,
+  .implantacion-footer {
+    grid-template-columns: 1fr;
+  }
+
+  .span-2 {
+    grid-column: span 1;
+  }
+
+  .perennial-panel header {
+    flex-direction: column;
+  }
 }
