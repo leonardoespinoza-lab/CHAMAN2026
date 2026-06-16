@@ -1,9 +1,12 @@
 const { spawnSync } = require('child_process');
 const { resolveService } = require('./railway-services');
+const { ensureSharedPackages } = require('./shared-packages');
 
 const service = resolveService();
 
 console.log(`Starting CHAMAN service: ${service.name}`);
+
+ensureSharedPackages();
 
 const cwd = service.name === 'sdc-app-chaman' ? process.cwd() : service.path;
 
