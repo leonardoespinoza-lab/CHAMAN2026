@@ -41,60 +41,113 @@
         }
       </div>
 
-      @if (data) {
-        <div class="frio-body">
-        <section class="frio-chart">
-          <header>
-            <strong>Temperatura y lluvia reciente</strong>
-            <span>Serie diaria historica + pronostico</span>
-          </header>
-          <svg viewBox="0 0 320 116" preserveAspectRatio="none">
-            <g class="rain-bars">
-              @for (dia of serieReciente; track dia.fecha; let i = $index) {
-                <rect
-                  [attr.x]="(i / (serieReciente.length || 1)) * 320"
-                  [attr.y]="108 - barraLluvia(dia) * 0.42"
-                  [attr.width]="anchoBarraLluvia()"
-                  [attr.height]="barraLluvia(dia) * 0.42"
-                >
-                  <title>{{ dia.fecha }} lluvia {{ dia.lluvia || 0 }} mm</title>
-                </rect>
-              }
-            </g>
-            @for (serie of seriesTemperatura; track serie.label) {
-              <path [attr.d]="serie.path" [attr.stroke]="serie.color"></path>
-              @for (punto of serie.puntos; track $index) {
-                <circle [attr.cx]="punto.x" [attr.cy]="punto.y" r="2" [attr.fill]="serie.color">
-                  <title>{{ serie.label }} - {{ punto.fecha }}: {{ punto.valor }} C</title>
-                </circle>
-              }
-            }
-          </svg>
-          <div class="frio-legend">
-            @for (serie of seriesTemperatura; track serie.label) {
-              <span><i [style.background]="serie.color"></i>{{ serie.label }}</span>
-            }
-            <span><i class="rain"></i>Lluvia</span>
-          </div>
-        </section>
+      @if (usaSensorFrio) {
+        <div class="frio-body frio-body--sensor">
+          <section class="frio-sensor-history">
+            <header class="frio-sensor-toolbar">
+              <div>
+                <strong>Variables del sensor</strong>
+                <span>Historico real registrado para este lote</span>
+              </div>
 
-        <section class="frio-events">
-          <article>
-            <span>Brotacion esperada</span>
-            <strong>{{ data.eventos.brotacion.estado.replace('_', ' ') }}</strong>
-            <small>{{ data.eventos.brotacion.lectura }}</small>
-          </article>
-          <article>
-            <span>Floracion esperada</span>
-            <strong>{{ data.eventos.floracion.estado }}</strong>
-            <small>{{ data.eventos.floracion.lectura }}</small>
-          </article>
-          <article>
-            <span>Ventana sanitaria</span>
-            <strong>{{ data.eventos.ventanaSanitaria.estado }}</strong>
-            <small>{{ data.eventos.ventanaSanitaria.lectura }}</small>
-          </article>
-        </section>
+              <p-selectButton
+                [options]="[
+                  { label: '24 h', value: 1 },
+                  { label: '7 dias', value: 7 },
+                  { label: '30 dias', value: 30 },
+                ]"
+                [(ngModel)]="diasHistoricoSensor"
+                optionLabel="label"
+                optionValue="value"
+                (onChange)="cambiarPeriodoSensor($event.value)"
+              />
+            </header>
+
+            @if (loadingHistoricoSensor) {
+              <p-message severity="info">Cargando historico del sensor...</p-message>
+            }
+
+            <app-grafico-historico-ambiente
+              [reportes]="reportesSensorFrio"
+              [titulo]="tituloHistoricoSensor"
+              [subtitulo]="subtituloHistoricoSensor"
+            ></app-grafico-historico-ambiente>
+          </section>
+
+          @if (data) {
+            <section class="frio-events">
+              <article>
+                <span>Brotacion esperada</span>
+                <strong>{{ data.eventos.brotacion.estado.replace('_', ' ') }}</strong>
+                <small>{{ data.eventos.brotacion.lectura }}</small>
+              </article>
+              <article>
+                <span>Floracion esperada</span>
+                <strong>{{ data.eventos.floracion.estado }}</strong>
+                <small>{{ data.eventos.floracion.lectura }}</small>
+              </article>
+              <article>
+                <span>Ventana sanitaria</span>
+                <strong>{{ data.eventos.ventanaSanitaria.estado }}</strong>
+                <small>{{ data.eventos.ventanaSanitaria.lectura }}</small>
+              </article>
+            </section>
+          }
+        </div>
+      } @else if (data) {
+        <div class="frio-body">
+          <section class="frio-chart">
+            <header>
+              <strong>Temperatura y lluvia reciente</strong>
+              <span>Serie diaria historica + pronostico</span>
+            </header>
+            <svg viewBox="0 0 320 116" preserveAspectRatio="none">
+              <g class="rain-bars">
+                @for (dia of serieReciente; track dia.fecha; let i = $index) {
+                  <rect
+                    [attr.x]="(i / (serieReciente.length || 1)) * 320"
+                    [attr.y]="108 - barraLluvia(dia) * 0.42"
+                    [attr.width]="anchoBarraLluvia()"
+                    [attr.height]="barraLluvia(dia) * 0.42"
+                  >
+                    <title>{{ dia.fecha }} lluvia {{ dia.lluvia || 0 }} mm</title>
+                  </rect>
+                }
+              </g>
+              @for (serie of seriesTemperatura; track serie.label) {
+                <path [attr.d]="serie.path" [attr.stroke]="serie.color"></path>
+                @for (punto of serie.puntos; track $index) {
+                  <circle [attr.cx]="punto.x" [attr.cy]="punto.y" r="2" [attr.fill]="serie.color">
+                    <title>{{ serie.label }} - {{ punto.fecha }}: {{ punto.valor }} C</title>
+                  </circle>
+                }
+              }
+            </svg>
+            <div class="frio-legend">
+              @for (serie of seriesTemperatura; track serie.label) {
+                <span><i [style.background]="serie.color"></i>{{ serie.label }}</span>
+              }
+              <span><i class="rain"></i>Lluvia</span>
+            </div>
+          </section>
+
+          <section class="frio-events">
+            <article>
+              <span>Brotacion esperada</span>
+              <strong>{{ data.eventos.brotacion.estado.replace('_', ' ') }}</strong>
+              <small>{{ data.eventos.brotacion.lectura }}</small>
+            </article>
+            <article>
+              <span>Floracion esperada</span>
+              <strong>{{ data.eventos.floracion.estado }}</strong>
+              <small>{{ data.eventos.floracion.lectura }}</small>
+            </article>
+            <article>
+              <span>Ventana sanitaria</span>
+              <strong>{{ data.eventos.ventanaSanitaria.estado }}</strong>
+              <small>{{ data.eventos.ventanaSanitaria.lectura }}</small>
+            </article>
+          </section>
         </div>
       } @else {
         <p-message severity="info">

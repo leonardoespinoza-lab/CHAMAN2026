@@ -281,6 +281,14 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
         return value;
       }
     }
+    if (definition.key === 'bateria') {
+      const bateriaKey = Object.keys(valores).find((key) => key.toLowerCase().startsWith('bater'));
+      const entry = bateriaKey ? valores[bateriaKey]?.[0] : undefined;
+      const value = entry?.valores?.actual ?? entry?.valores?.promedio;
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+      }
+    }
     return undefined;
   }
 

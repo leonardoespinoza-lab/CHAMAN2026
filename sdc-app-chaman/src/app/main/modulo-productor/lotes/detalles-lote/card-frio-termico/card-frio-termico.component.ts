@@ -5,11 +5,14 @@ import {
   IDispositivo,
   IFrioAcumulado,
   IFrioTermicoCultivo,
+  IReporte,
   ISerieFrioTermicoDia,
   ISiembra,
 } from 'modelos/src';
 import { ClimaService } from '../../../../../auxiliares/http/clima.service';
+import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
+import { GraficoHistoricoAmbienteComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-ambiente/grafico-historico-ambiente.component';
 import { IDetallesLote } from '../detalles-lote.component';
 
 interface MetricFrio {
@@ -29,7 +32,7 @@ interface SeriePath {
 
 @Component({
   selector: 'app-card-frio-termico',
-  imports: [CommonModule, SharedModule],
+  imports: [CommonModule, SharedModule, GraficoHistoricoAmbienteComponent],
   templateUrl: './card-frio-termico.component.html',
   styleUrl: './card-frio-termico.component.scss',
 })
@@ -40,8 +43,14 @@ export class CardFrioTermicoComponent implements OnChanges {
   public loading = false;
   public data?: IFrioTermicoCultivo;
   public error?: string;
+  public reportesSensorFrio: IReporte[] = [];
+  public loadingHistoricoSensor = false;
+  public diasHistoricoSensor = 7;
 
-  constructor(private climaService: ClimaService) {}
+  constructor(
+    private climaService: ClimaService,
+    private reporteService: ReporteService,
+  ) {}
 
   public get mostrar(): boolean {
     return esCultivoPerenne(this.siembra?.semilla?.cultivo);
@@ -66,6 +75,14 @@ export class CardFrioTermicoComponent implements OnChanges {
     if (this.usaSensorFrio && this.data) return 'Sensor LoRa + Open-Meteo';
     if (this.usaSensorFrio) return 'Sensor LoRa';
     return this.data?.fuente || 'Open-Meteo';
+  }
+
+  public get tituloHistoricoSensor(): string {
+    return `Historico ambiental - ${this.dispositivoFrio?.nombre || 'sensor asociado'}`;
+  }
+
+  public get subtituloHistoricoSensor(): string {
+    return 'Temperatura, humedad relativa y bateria medidas por el sensor asignado al lote';
   }
 
   public get lecturaPrincipal(): string {
@@ -198,8 +215,13 @@ export class CardFrioTermicoComponent implements OnChanges {
 
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
     if (changes['lote'] || changes['siembra']) {
-      await this.cargar();
+      await Promise.all([this.cargar(), this.cargarHistoricoSensor()]);
     }
+  }
+
+  public async cambiarPeriodoSensor(dias: number): Promise<void> {
+    this.diasHistoricoSensor = dias;
+    await this.cargarHistoricoSensor();
   }
 
   public async cargar(): Promise<void> {
@@ -238,6 +260,30 @@ export class CardFrioTermicoComponent implements OnChanges {
 
   public anchoBarraLluvia(): number {
     return Math.max(2, 320 / Math.max(this.serieReciente.length, 1) - 2);
+  }
+
+  private async cargarHistoricoSensor(): Promise<void> {
+    const dispositivo = this.dispositivoFrio;
+    const id = dispositivo?.deveui || dispositivo?._id;
+    if (!id) {
+      this.reportesSensorFrio = [];
+      return;
+    }
+
+    this.loadingHistoricoSensor = true;
+    try {
+      const response = await this.reporteService.historico(String(id), this.diasHistoricoSensor, 2500);
+      this.reportesSensorFrio = response.datos?.length
+        ? response.datos
+        : dispositivo.ultimoReporte
+          ? [dispositivo.ultimoReporte]
+          : [];
+    } catch (error) {
+      console.error('Error al cargar historico ambiental para frio', error);
+      this.reportesSensorFrio = dispositivo.ultimoReporte ? [dispositivo.ultimoReporte] : [];
+    } finally {
+      this.loadingHistoricoSensor = false;
+    }
   }
 
   private crearPath(

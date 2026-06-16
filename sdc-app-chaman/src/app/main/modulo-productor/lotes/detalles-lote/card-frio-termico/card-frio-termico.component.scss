@@ -25,7 +25,8 @@
 .frio-summary small,
 .frio-metrics small,
 .frio-events small,
-.frio-chart header span {
+.frio-chart header span,
+.frio-sensor-toolbar span {
   color: var(--p-text-muted-color);
   font-size: 1rem;
   line-height: 1.35;
@@ -56,7 +57,8 @@
 
 .frio-metrics article,
 .frio-events article,
-.frio-chart {
+.frio-chart,
+.frio-sensor-history {
   background: rgba(255, 255, 255, 0.72);
   border: 1.5px solid rgba(86, 117, 150, 0.3);
   border-radius: 8px;
@@ -69,7 +71,8 @@
 
 .frio-metrics span,
 .frio-events span,
-.frio-chart header strong {
+.frio-chart header strong,
+.frio-sensor-toolbar strong {
   color: var(--p-text-muted-color);
   display: block;
   font-size: 0.9rem;
@@ -117,6 +120,45 @@
   display: grid;
   gap: 0.85rem;
   grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+}
+
+.frio-body--sensor {
+  grid-template-columns: 1fr;
+}
+
+.frio-sensor-history {
+  padding: 0.8rem;
+}
+
+.frio-sensor-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.frio-sensor-toolbar strong {
+  color: var(--p-text-color);
+  font-size: 1.05rem;
+}
+
+.frio-body--sensor .frio-events {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+:host ::ng-deep .frio-sensor-history .ambient-history-card {
+  border-color: rgba(34, 211, 200, 0.45);
+  min-height: 620px;
+}
+
+:host ::ng-deep .frio-sensor-history .ambient-history-card app-chart {
+  min-height: 540px;
+}
+
+:host ::ng-deep .frio-sensor-toolbar .p-selectbutton .p-button {
+  font-size: 0.9rem;
+  padding: 0.52rem 0.85rem;
 }
 
 .frio-chart {
@@ -205,6 +247,15 @@
   }
 
   .frio-body {
+    grid-template-columns: 1fr;
+  }
+
+  .frio-sensor-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .frio-body--sensor .frio-events {
     grid-template-columns: 1fr;
   }
 }
