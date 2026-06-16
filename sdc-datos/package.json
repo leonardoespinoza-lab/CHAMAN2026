@@ -34,6 +34,7 @@
     "class-validator": "^0.14.2",
     "modelos": "file:../sdc-modelos",
     "mongoose": "^8.14.1",
+    "pg": "^8.21.0",
     "reflect-metadata": "^0.2.2",
     "rimraf": "^6.0.1",
     "rxjs": "^7.8.2",
