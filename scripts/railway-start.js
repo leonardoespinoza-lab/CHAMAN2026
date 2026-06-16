@@ -6,9 +6,9 @@ const service = resolveService();
 
 console.log(`Starting CHAMAN service: ${service.name}`);
 
-ensureSharedPackages();
-
 const cwd = service.name === 'sdc-app-chaman' ? process.cwd() : service.path;
+
+ensureSharedPackages({ compilerCwd: cwd });
 
 const result = spawnSync(service.start, {
   cwd,

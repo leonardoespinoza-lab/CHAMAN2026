@@ -25,13 +25,13 @@ const service = resolveService();
 
 console.log(`Building CHAMAN service: ${service.name}`);
 
-ensureSharedPackages();
-
 const nodeModulesPath = path.join(process.cwd(), service.path, 'node_modules');
 if (fs.existsSync(nodeModulesPath) && !process.env.RAILWAY_ENVIRONMENT_NAME) {
   console.log(`Using existing dependencies at ${nodeModulesPath}`);
 } else {
   run(service.install, service.path);
 }
+
+ensureSharedPackages({ compilerCwd: service.path });
 
 run(service.build, service.path);
