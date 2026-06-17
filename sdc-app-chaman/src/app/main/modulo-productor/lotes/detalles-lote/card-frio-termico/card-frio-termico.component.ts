@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import Highcharts from 'highcharts';
 import {
   esCultivoPerenne,
   IDispositivo,
@@ -9,6 +10,7 @@ import {
   ISerieFrioTermicoDia,
   ISiembra,
 } from 'modelos/src';
+import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { ClimaService } from '../../../../../auxiliares/http/clima.service';
 import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
@@ -23,16 +25,9 @@ interface MetricFrio {
   tone?: 'ok' | 'warn' | 'info';
 }
 
-interface SeriePath {
-  label: string;
-  color: string;
-  path: string;
-  puntos: Array<{ x: number; y: number; valor: number; fecha: string }>;
-}
-
 @Component({
   selector: 'app-card-frio-termico',
-  imports: [CommonModule, SharedModule, GraficoHistoricoAmbienteComponent],
+  imports: [CommonModule, SharedModule, GraficoHistoricoAmbienteComponent, ChartComponent],
   templateUrl: './card-frio-termico.component.html',
   styleUrl: './card-frio-termico.component.scss',
 })
@@ -212,20 +207,157 @@ export class CardFrioTermicoComponent implements OnChanges {
     return metricas;
   }
 
-  public get seriesTemperatura(): SeriePath[] {
-    const serie = this.serieReciente;
-    return [
-      this.crearPath('Temp min', '#2d9bf0', serie.map((dia) => dia.temperaturaMin), serie),
-      this.crearPath('Temp max', '#f0524a', serie.map((dia) => dia.temperaturaMax), serie),
-    ].filter((item) => item.path);
-  }
-
   public get serieReciente(): ISerieFrioTermicoDia[] {
     return (this.data?.serie || []).slice(-60);
   }
 
-  public get lluviaMaxima(): number {
-    return Math.max(...this.serieReciente.map((dia) => dia.lluvia || 0), 1);
+  public get chartFrioOptions(): Highcharts.Options | undefined {
+    const serie = this.serieReciente;
+    const hayTemperatura = serie.filter((dia) => this.esNumero(dia.temperaturaMin) || this.esNumero(dia.temperaturaMax)).length > 1;
+    const hayLluvia = serie.some((dia) => this.esNumero(dia.lluvia));
+
+    if (!hayTemperatura && !hayLluvia) {
+      return undefined;
+    }
+
+    const categorias = serie.map((dia) => this.labelDia(dia.fecha));
+    const tempMin = serie.map((dia) => (this.esNumero(dia.temperaturaMin) ? Number(dia.temperaturaMin) : null));
+    const tempMax = serie.map((dia) => (this.esNumero(dia.temperaturaMax) ? Number(dia.temperaturaMax) : null));
+    const lluvia = serie.map((dia) => (this.esNumero(dia.lluvia) ? Number(dia.lluvia) : 0));
+
+    return {
+      chart: {
+        backgroundColor: 'transparent',
+        height: 300,
+        spacingBottom: 18,
+        spacingLeft: 8,
+        spacingRight: 18,
+        spacingTop: 10,
+        type: 'spline',
+        zooming: { type: 'x' },
+        style: {
+          fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        },
+      },
+      title: { text: undefined },
+      xAxis: {
+        categories: categorias,
+        crosshair: {
+          color: 'rgba(34, 211, 200, 0.24)',
+          width: 1,
+        },
+        gridLineColor: 'rgba(119, 150, 180, 0.16)',
+        gridLineWidth: 1,
+        labels: {
+          style: { color: 'var(--p-text-color)', fontSize: '13px', fontWeight: '650' },
+        },
+      },
+      yAxis: [
+        {
+          title: {
+            text: 'Temperatura (C)',
+            style: { color: 'var(--p-text-color)', fontSize: '13px', fontWeight: '750' },
+          },
+          labels: {
+            style: { color: 'var(--p-text-color)', fontSize: '13px' },
+          },
+          gridLineColor: 'rgba(119, 150, 180, 0.18)',
+          gridLineWidth: 1,
+        },
+        {
+          min: 0,
+          opposite: true,
+          title: {
+            text: 'Lluvia (mm)',
+            style: { color: 'var(--p-text-muted-color)', fontSize: '13px', fontWeight: '750' },
+          },
+          labels: {
+            style: { color: 'var(--p-text-muted-color)', fontSize: '13px' },
+          },
+          gridLineWidth: 0,
+        },
+      ],
+      legend: {
+        align: 'center',
+        enabled: true,
+        itemDistance: 18,
+        itemStyle: {
+          color: 'var(--p-text-color)',
+          fontSize: '13px',
+          fontWeight: '750',
+        },
+        verticalAlign: 'bottom',
+      },
+      tooltip: {
+        backgroundColor: 'var(--p-content-background)',
+        borderColor: 'var(--p-surface-border)',
+        borderRadius: 8,
+        borderWidth: 1,
+        shared: true,
+        shadow: true,
+        style: { color: 'var(--p-text-color)', fontSize: '13px' },
+      },
+      plotOptions: {
+        column: {
+          borderRadius: 5,
+          borderWidth: 0,
+          color: '#9ee2c9',
+          groupPadding: 0.08,
+          pointPadding: 0.08,
+        },
+        spline: {
+          animation: { duration: 450 },
+          lineWidth: 1.9,
+          marker: {
+            enabled: serie.length <= 65,
+            radius: 2.7,
+            states: { hover: { radius: 4 } },
+          },
+          states: { hover: { lineWidth: 2.5 } },
+        },
+        series: {
+          connectNulls: false,
+          turboThreshold: 0,
+        },
+      },
+      series: [
+        {
+          name: 'Temp min (C)',
+          color: '#2d9bf0',
+          data: tempMin,
+          type: 'spline',
+          tooltip: { valueDecimals: 1, valueSuffix: ' C' },
+        },
+        {
+          name: 'Temp max (C)',
+          color: '#f0524a',
+          data: tempMax,
+          type: 'spline',
+          tooltip: { valueDecimals: 1, valueSuffix: ' C' },
+        },
+        {
+          name: 'Lluvia mm',
+          color: '#9ee2c9',
+          data: lluvia,
+          type: 'column',
+          yAxis: 1,
+          tooltip: { valueDecimals: 1, valueSuffix: ' mm' },
+        },
+      ],
+      credits: { enabled: false },
+      accessibility: { enabled: false },
+      responsive: {
+        rules: [
+          {
+            condition: { maxWidth: 760 },
+            chartOptions: {
+              chart: { height: 280 },
+              legend: { itemStyle: { fontSize: '12px' } },
+            },
+          },
+        ],
+      },
+    };
   }
 
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
@@ -269,14 +401,6 @@ export class CardFrioTermicoComponent implements OnChanges {
     }
   }
 
-  public barraLluvia(dia: ISerieFrioTermicoDia): number {
-    return Math.max(2, ((dia.lluvia || 0) / this.lluviaMaxima) * 100);
-  }
-
-  public anchoBarraLluvia(): number {
-    return Math.max(2, 320 / Math.max(this.serieReciente.length, 1) - 2);
-  }
-
   private async cargarHistoricoSensor(): Promise<void> {
     const dispositivo = this.dispositivoFrio;
     const id = dispositivo?.deveui || dispositivo?._id;
@@ -299,38 +423,6 @@ export class CardFrioTermicoComponent implements OnChanges {
     } finally {
       this.loadingHistoricoSensor = false;
     }
-  }
-
-  private crearPath(
-    label: string,
-    color: string,
-    valores: Array<number | undefined>,
-    serie: ISerieFrioTermicoDia[],
-  ): SeriePath {
-    const puntosBase = valores
-      .map((valor, index) => ({ valor, index }))
-      .filter((item): item is { valor: number; index: number } => typeof item.valor === 'number');
-    if (puntosBase.length < 2) {
-      return { label, color, path: '', puntos: [] };
-    }
-
-    const width = 320;
-    const height = 96;
-    const min = Math.min(...puntosBase.map((item) => item.valor));
-    const max = Math.max(...puntosBase.map((item) => item.valor));
-    const range = Math.max(max - min, 1);
-    const puntos = puntosBase.map((item) => ({
-      x: puntosBase.length === 1 ? width / 2 : (item.index / Math.max(serie.length - 1, 1)) * width,
-      y: height - ((item.valor - min) / range) * (height - 14) - 7,
-      valor: item.valor,
-      fecha: serie[item.index]?.fecha || '',
-    }));
-    return {
-      label,
-      color,
-      puntos,
-      path: puntos.map((punto, index) => `${index === 0 ? 'M' : 'L'} ${punto.x.toFixed(1)} ${punto.y.toFixed(1)}`).join(' '),
-    };
   }
 
   private porcentaje(valor?: number, objetivo?: number): number | undefined {
@@ -379,6 +471,13 @@ export class CardFrioTermicoComponent implements OnChanges {
     const date = new Date(fecha);
     if (Number.isNaN(date.getTime())) return '';
     return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  }
+
+  private labelDia(fecha?: string): string {
+    if (!fecha) return '-';
+    const date = new Date(fecha);
+    if (Number.isNaN(date.getTime())) return fecha;
+    return date.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
   }
 
   private hfeFactor(temp: number): number {

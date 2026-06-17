@@ -101,34 +101,11 @@
               <strong>Temperatura y lluvia reciente</strong>
               <span>Serie diaria historica + pronostico</span>
             </header>
-            <svg viewBox="0 0 320 116" preserveAspectRatio="none">
-              <g class="rain-bars">
-                @for (dia of serieReciente; track dia.fecha; let i = $index) {
-                  <rect
-                    [attr.x]="(i / (serieReciente.length || 1)) * 320"
-                    [attr.y]="108 - barraLluvia(dia) * 0.42"
-                    [attr.width]="anchoBarraLluvia()"
-                    [attr.height]="barraLluvia(dia) * 0.42"
-                  >
-                    <title>{{ dia.fecha }} lluvia {{ dia.lluvia || 0 }} mm</title>
-                  </rect>
-                }
-              </g>
-              @for (serie of seriesTemperatura; track serie.label) {
-                <path [attr.d]="serie.path" [attr.stroke]="serie.color"></path>
-                @for (punto of serie.puntos; track $index) {
-                  <circle [attr.cx]="punto.x" [attr.cy]="punto.y" r="2" [attr.fill]="serie.color">
-                    <title>{{ serie.label }} - {{ punto.fecha }}: {{ punto.valor }} C</title>
-                  </circle>
-                }
-              }
-            </svg>
-            <div class="frio-legend">
-              @for (serie of seriesTemperatura; track serie.label) {
-                <span><i [style.background]="serie.color"></i>{{ serie.label }}</span>
-              }
-              <span><i class="rain"></i>Lluvia</span>
-            </div>
+            @if (chartFrioOptions) {
+              <app-chart [options]="chartFrioOptions" [style]="'display:block;width:100%;height:300px'"></app-chart>
+            } @else {
+              <p-message severity="info">Sin serie climatica suficiente para graficar temperatura y lluvia.</p-message>
+            }
           </section>
 
           <section class="frio-events">

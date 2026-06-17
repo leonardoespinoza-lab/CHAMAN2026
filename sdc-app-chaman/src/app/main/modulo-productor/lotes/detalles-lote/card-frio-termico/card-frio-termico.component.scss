@@ -162,7 +162,7 @@
 }
 
 .frio-chart {
-  min-height: 250px;
+  min-height: 390px;
   padding: 0.8rem;
 }
 
@@ -175,51 +175,10 @@
   font-size: 1.05rem;
 }
 
-.frio-chart svg {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(243, 248, 252, 0.72));
-  border: 1px solid rgba(86, 117, 150, 0.16);
-  border-radius: 8px;
-  height: 180px;
+.frio-chart app-chart {
+  display: block;
+  min-height: 300px;
   width: 100%;
-}
-
-.frio-chart path {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
-.rain-bars rect {
-  fill: rgba(79, 197, 149, 0.34);
-}
-
-.frio-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.8rem;
-  margin-top: 0.55rem;
-}
-
-.frio-legend span {
-  align-items: center;
-  color: var(--p-text-muted-color);
-  display: inline-flex;
-  font-size: 0.95rem;
-  font-weight: 700;
-  gap: 0.35rem;
-}
-
-.frio-legend i {
-  border-radius: 999px;
-  display: inline-block;
-  height: 10px;
-  width: 18px;
-}
-
-.frio-legend i.rain {
-  background: rgba(79, 197, 149, 0.58);
 }
 
 .frio-events {

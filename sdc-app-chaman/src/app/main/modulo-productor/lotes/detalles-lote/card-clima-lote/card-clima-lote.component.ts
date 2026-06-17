@@ -1,6 +1,8 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input } from '@angular/core';
+import Highcharts from 'highcharts';
 import { IClimaEstacionMeteorologica, IPronosticoEstacionMeteorologica } from 'modelos/src';
+import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
 
@@ -30,28 +32,22 @@ interface DiaClima {
 interface SerieClima {
   label: string;
   color: string;
-  valores: number[];
-  path: string;
-  puntos: PuntoClima[];
-}
-
-interface PuntoClima {
-  x: number;
-  y: number;
-  valor: number;
-  etiqueta: string;
+  valores: Array<number | null>;
+  tipo?: 'spline' | 'column';
+  unidad?: string;
+  yAxis?: number;
+  decimales?: number;
 }
 
 interface PanelClima {
   titulo: string;
   subtitulo: string;
-  tipo: 'line' | 'bar';
-  series: SerieClima[];
+  options: Highcharts.Options;
 }
 
 @Component({
   selector: 'app-card-clima-lote',
-  imports: [CommonModule, SharedModule],
+  imports: [CommonModule, SharedModule, ChartComponent],
   templateUrl: './card-clima-lote.component.html',
   styleUrl: './card-clima-lote.component.scss',
 })
@@ -137,57 +133,31 @@ export class CardClimaLoteComponent {
       this.calcularPuntoRocio(this.numero(p.temperatura?.avg ?? p.temperatura?.max), this.numero(p.humedad?.avg ?? p.humedad?.max)),
     );
 
-    const paneles: PanelClima[] = [
-      {
-        titulo: 'Temperatura',
-        subtitulo: 'Media y punto de rocio',
-        tipo: 'line',
-        series: [
-          this.crearSerie('Temp C', '#23c8c4', this.temperaturas),
-          this.crearSerie('Punto rocio C', '#7f8ea3', puntoRocio),
-        ],
-      },
-      {
-        titulo: 'Lluvia',
-        subtitulo: 'mm por dia',
-        tipo: 'bar',
-        series: [this.crearSerie('Lluvia mm', '#6aa84f', this.lluvias)],
-      },
-      {
-        titulo: 'Humedad',
-        subtitulo: 'HR maxima diaria',
-        tipo: 'line',
-        series: [this.crearSerie('HR %', '#5c7cfa', this.humedadesMax)],
-      },
-      {
-        titulo: 'ET0 y VPD',
-        subtitulo: 'Demanda atmosferica',
-        tipo: 'line',
-        series: [
-          this.crearSerie('ET0 mm', '#f4a340', this.et0s),
-          this.crearSerie('VPD kPa', '#e05d4f', this.vpds),
-        ],
-      },
-    ];
-
-    return paneles.filter((panel) => panel.series.some((serie) => serie.valores.length > 1));
-  }
-
-  public barraAltura(valor: number, valores: number[]): number {
-    const max = Math.max(...valores, 1);
-    return Math.max(5, (valor / max) * 100);
+    return [
+      this.crearPanel('Temperatura', 'Media y punto de rocio', [
+        this.crearSerie('Temp C', '#23c8c4', this.temperaturasSerie, 'spline', ' C', 0, 1),
+        this.crearSerie('Punto rocio C', '#7f8ea3', puntoRocio, 'spline', ' C', 0, 1),
+      ]),
+      this.crearPanel('Lluvia', 'mm por dia y probabilidad', [
+        this.crearSerie('Lluvia mm', '#8fd5bf', this.lluviasSerie, 'column', ' mm', 0, 1),
+        this.crearSerie('Prob. lluvia %', '#5c7cfa', this.probabilidadesSerie, 'spline', ' %', 1, 0),
+      ]),
+      this.crearPanel('Humedad', 'HR maxima diaria', [
+        this.crearSerie('HR %', '#35a7ff', this.humedadesMaxSerie, 'spline', ' %', 0, 0),
+      ]),
+      this.crearPanel('ET0 y VPD', 'Demanda atmosferica', [
+        this.crearSerie('ET0 mm', '#f4a340', this.et0Serie, 'spline', ' mm', 0, 1),
+        this.crearSerie('VPD kPa', '#e05d4f', this.vpdSerie, 'spline', ' kPa', 1, 2),
+      ]),
+    ].filter((panel): panel is PanelClima => !!panel);
   }
 
   private get temperaturas(): number[] {
-    return this.pronosticos
-      .map((p) => this.numero(p.temperatura?.avg ?? p.temperatura?.max))
-      .filter((value): value is number => value !== null);
+    return this.temperaturasSerie.filter((value): value is number => value !== null);
   }
 
   private get humedadesMax(): number[] {
-    return this.pronosticos
-      .map((p) => this.numero(p.humedad?.max ?? p.humedad?.avg))
-      .filter((value): value is number => value !== null);
+    return this.humedadesMaxSerie.filter((value): value is number => value !== null);
   }
 
   private get lluvias(): number[] {
@@ -207,48 +177,197 @@ export class CardClimaLoteComponent {
   }
 
   private get vpds(): number[] {
-    return this.pronosticos
-      .map((p) => this.calcularVpd(this.numero(p.temperatura?.avg ?? p.temperatura?.max), this.numero(p.humedad?.avg ?? p.humedad?.max)))
-      .filter((value): value is number => value !== null);
+    return this.vpdSerie.filter((value): value is number => value !== null);
   }
 
-  private crearSerie(label: string, color: string, valores: Array<number | null>): SerieClima {
-    const clean = valores.filter((value): value is number => value !== null).map((v) => this.redondear(v));
-    const puntos = this.crearPuntos(clean);
+  private get temperaturasSerie(): Array<number | null> {
+    return this.pronosticos.map((p) => this.numero(p.temperatura?.avg ?? p.temperatura?.max));
+  }
+
+  private get humedadesMaxSerie(): Array<number | null> {
+    return this.pronosticos.map((p) => this.numero(p.humedad?.max ?? p.humedad?.avg));
+  }
+
+  private get lluviasSerie(): Array<number | null> {
+    return this.pronosticos.map((p) => this.numero(p.lluvia) ?? 0);
+  }
+
+  private get probabilidadesSerie(): Array<number | null> {
+    return this.pronosticos.map((p) => this.numero(p.probabilidadLluvia) ?? 0);
+  }
+
+  private get et0Serie(): Array<number | null> {
+    return this.pronosticos.map((p) => this.numero(p.et0) ?? 0);
+  }
+
+  private get vpdSerie(): Array<number | null> {
+    return this.pronosticos.map((p) =>
+      this.calcularVpd(this.numero(p.temperatura?.avg ?? p.temperatura?.max), this.numero(p.humedad?.avg ?? p.humedad?.max)),
+    );
+  }
+
+  private crearSerie(
+    label: string,
+    color: string,
+    valores: Array<number | null>,
+    tipo: 'spline' | 'column' = 'spline',
+    unidad = '',
+    yAxis = 0,
+    decimales = 1,
+  ): SerieClima {
     return {
       label,
       color,
-      valores: clean,
-      path: this.crearPath(puntos),
-      puntos,
+      valores: valores.map((value) => (value === null ? null : this.redondear(value))),
+      tipo,
+      unidad,
+      yAxis,
+      decimales,
     };
   }
 
-  private crearPuntos(valores: number[]): PuntoClima[] {
-    if (!valores.length) {
-      return [];
+  private crearPanel(titulo: string, subtitulo: string, series: SerieClima[]): PanelClima | undefined {
+    if (!series.some((serie) => serie.valores.filter((value) => value !== null).length > 1)) {
+      return undefined;
     }
-    const width = 220;
-    const height = 68;
-    const min = Math.min(...valores);
-    const max = Math.max(...valores);
-    const range = Math.max(max - min, 1);
-
-    return valores.map((valor, index) => ({
-      x: valores.length === 1 ? width / 2 : (index / (valores.length - 1)) * width,
-      y: height - ((valor - min) / range) * (height - 10) - 5,
-      valor,
-      etiqueta: this.dias[index]?.label || `Dia ${index + 1}`,
-    }));
+    return {
+      titulo,
+      subtitulo,
+      options: this.crearOpcionesGrafico(series),
+    };
   }
 
-  private crearPath(puntos: PuntoClima[]): string {
-    if (puntos.length < 2) {
-      return '';
-    }
-    return puntos
-      .map((punto, index) => `${index === 0 ? 'M' : 'L'} ${punto.x.toFixed(1)} ${punto.y.toFixed(1)}`)
-      .join(' ');
+  private crearOpcionesGrafico(series: SerieClima[]): Highcharts.Options {
+    const tieneEjeSecundario = series.some((serie) => serie.yAxis === 1);
+    const unidadPrimaria = series.find((serie) => (serie.yAxis || 0) === 0)?.unidad?.trim() || '';
+    const unidadSecundaria = series.find((serie) => serie.yAxis === 1)?.unidad?.trim() || '';
+
+    return {
+      chart: {
+        backgroundColor: 'transparent',
+        height: 250,
+        spacingBottom: 16,
+        spacingLeft: 8,
+        spacingRight: 14,
+        spacingTop: 8,
+        type: 'spline',
+        zooming: { type: 'x' },
+        style: {
+          fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        },
+      },
+      title: { text: undefined },
+      xAxis: {
+        categories: this.dias.map((dia) => dia.label),
+        crosshair: {
+          color: 'rgba(34, 211, 200, 0.24)',
+          width: 1,
+        },
+        gridLineColor: 'rgba(119, 150, 180, 0.16)',
+        gridLineWidth: 1,
+        labels: {
+          style: { color: 'var(--p-text-color)', fontSize: '13px', fontWeight: '650' },
+        },
+      },
+      yAxis: [
+        {
+          title: {
+            text: unidadPrimaria || undefined,
+            style: { color: 'var(--p-text-color)', fontSize: '13px', fontWeight: '750' },
+          },
+          labels: {
+            style: { color: 'var(--p-text-color)', fontSize: '13px' },
+          },
+          gridLineColor: 'rgba(119, 150, 180, 0.18)',
+          gridLineWidth: 1,
+          min: series.every((serie) => serie.label.includes('HR') || serie.label.includes('Prob')) ? 0 : undefined,
+          max: series.every((serie) => serie.label.includes('HR') || serie.label.includes('Prob')) ? 100 : undefined,
+        },
+        ...(tieneEjeSecundario
+          ? [
+              {
+                title: {
+                  text: unidadSecundaria || undefined,
+                  style: { color: 'var(--p-text-muted-color)', fontSize: '13px', fontWeight: '750' },
+                },
+                labels: {
+                  style: { color: 'var(--p-text-muted-color)', fontSize: '13px' },
+                },
+                gridLineWidth: 0,
+                max: unidadSecundaria === '%' ? 100 : undefined,
+                min: 0,
+                opposite: true,
+              } as Highcharts.YAxisOptions,
+            ]
+          : []),
+      ],
+      legend: {
+        align: 'center',
+        enabled: true,
+        itemDistance: 16,
+        itemStyle: {
+          color: 'var(--p-text-color)',
+          fontSize: '13px',
+          fontWeight: '750',
+        },
+        verticalAlign: 'bottom',
+      },
+      tooltip: {
+        backgroundColor: 'var(--p-content-background)',
+        borderColor: 'var(--p-surface-border)',
+        borderRadius: 8,
+        borderWidth: 1,
+        shared: true,
+        shadow: true,
+        style: { color: 'var(--p-text-color)', fontSize: '13px' },
+      },
+      plotOptions: {
+        column: {
+          borderRadius: 5,
+          borderWidth: 0,
+          groupPadding: 0.12,
+          pointPadding: 0.08,
+        },
+        spline: {
+          animation: { duration: 450 },
+          lineWidth: 1.9,
+          marker: {
+            enabled: true,
+            radius: 2.8,
+            states: { hover: { radius: 4 } },
+          },
+          states: { hover: { lineWidth: 2.5 } },
+        },
+        series: {
+          connectNulls: false,
+          turboThreshold: 0,
+        },
+      },
+      series: series.map((serie) => ({
+        color: serie.color,
+        data: serie.valores,
+        name: serie.label,
+        type: serie.tipo || 'spline',
+        yAxis: serie.yAxis || 0,
+        tooltip: {
+          valueDecimals: serie.decimales ?? 1,
+          valueSuffix: serie.unidad || '',
+        },
+      })) as Highcharts.SeriesOptionsType[],
+      credits: { enabled: false },
+      accessibility: { enabled: false },
+      responsive: {
+        rules: [
+          {
+            condition: { maxWidth: 760 },
+            chartOptions: {
+              chart: { height: 260 },
+              legend: { itemStyle: { fontSize: '12px' } },
+            },
+          },
+        ],
+      },
+    };
   }
 
   private calcularPuntoRocio(temp?: number | null, humedad?: number | null): number | null {

@@ -150,14 +150,15 @@ export class ChartComponent implements OnInit, OnChanges {
       ],
       chart: {
         ...chart,
-        backgroundColor: {
-          linearGradient: { x1: 0, y1: 0, x2: 1, y2: 1 },
-          stops: [
-            [0, '#203746'],
-            [0.48, '#243244'],
-            [1, '#1d2b3a'],
-          ],
-        },
+        backgroundColor:
+          chart.backgroundColor ?? {
+            linearGradient: { x1: 0, y1: 0, x2: 1, y2: 1 },
+            stops: [
+              [0, '#203746'],
+              [0.48, '#243244'],
+              [1, '#1d2b3a'],
+            ],
+          },
         borderRadius: chart.borderRadius ?? 10,
         marginTop: chart.marginTop ?? 24,
         spacingBottom: chart.spacingBottom ?? 18,
@@ -208,8 +209,8 @@ export class ChartComponent implements OnInit, OnChanges {
       },
       tooltip: {
         ...options.tooltip,
-        backgroundColor: 'rgba(18, 31, 43, 0.94)',
-        borderColor: 'rgba(34, 211, 200, 0.35)',
+        backgroundColor: options.tooltip?.backgroundColor ?? 'rgba(18, 31, 43, 0.94)',
+        borderColor: options.tooltip?.borderColor ?? 'rgba(34, 211, 200, 0.35)',
         borderRadius: 10,
         borderWidth: 1,
         shadow: {
@@ -221,7 +222,7 @@ export class ChartComponent implements OnInit, OnChanges {
         },
         style: {
           ...(options.tooltip?.style || {}),
-          color: '#eef8ff',
+          color: options.tooltip?.style?.color ?? '#eef8ff',
           fontSize: '13px',
         },
       },
@@ -286,7 +287,7 @@ export class ChartComponent implements OnInit, OnChanges {
         ...(axis.labels || {}),
         style: {
           ...(axis.labels?.style || {}),
-          color: '#9fb2c3',
+          color: axis.labels?.style?.color ?? '#9fb2c3',
           fontSize: '12px',
           fontWeight: '600',
         },
@@ -297,7 +298,7 @@ export class ChartComponent implements OnInit, OnChanges {
         ...(axis.title || {}),
         style: {
           ...(axis.title?.style || {}),
-          color: '#d7e4ee',
+          color: axis.title?.style?.color ?? '#d7e4ee',
           fontSize: '13px',
           fontWeight: '700',
         },

@@ -67,35 +67,7 @@
             <strong>{{ panel.titulo }}</strong>
             <span>{{ panel.subtitulo }}</span>
           </header>
-
-          @if (panel.tipo === 'line') {
-            <svg viewBox="0 0 220 76" preserveAspectRatio="none">
-              @for (serie of panel.series; track serie.label) {
-                <path [attr.d]="serie.path" [attr.stroke]="serie.color"></path>
-                @for (punto of serie.puntos; track $index) {
-                  <circle [attr.cx]="punto.x" [attr.cy]="punto.y" r="2.4" [attr.fill]="serie.color">
-                    <title>{{ serie.label }} - {{ punto.etiqueta }}: {{ punto.valor }}</title>
-                  </circle>
-                }
-              }
-            </svg>
-          } @else {
-            <div class="bar-chart">
-              @for (valor of panel.series[0].valores; track $index) {
-                <span
-                  [style.height.%]="barraAltura(valor, panel.series[0].valores)"
-                  [style.background]="panel.series[0].color"
-                  [attr.title]="panel.series[0].label + ' - ' + (dias[$index]?.label || 'Dia') + ': ' + valor"
-                ></span>
-              }
-            </div>
-          }
-
-          <div class="mini-legend">
-            @for (serie of panel.series; track serie.label) {
-              <span><i [style.background]="serie.color"></i>{{ serie.label }}</span>
-            }
-          </div>
+          <app-chart [options]="panel.options" [style]="'display:block;width:100%;height:250px'"></app-chart>
         </section>
       }
     </div>
