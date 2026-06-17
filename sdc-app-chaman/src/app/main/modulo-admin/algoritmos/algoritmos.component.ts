@@ -56,14 +56,19 @@ export class AlgoritmosComponent {
   };
 
   public riegoForm = {
-    humedadSueloPct: 24,
-    capacidadCampoPct: 32,
+    humedadSueloPct: 31,
+    capacidadCampoPct: 34,
     puntoMarchitezPct: 14,
     profundidadRaicesCm: 60,
     et0MmDia: 4.2,
     kc: 0.9,
     lluvia72h: 4,
+    probabilidadLluviaPct: 55,
+    capacidadRiegoMmDia: 6,
+    anchoBulboM: 1,
+    metrosLinealesHa: 10000,
     umbralAguaUtilPct: 45,
+    raicesActivas: true,
   };
 
   public malezasForm = {
@@ -232,7 +237,7 @@ export class AlgoritmosComponent {
       return 'Cruza ventana fenologica, humedad persistente, mojado foliar, lluvia, temperatura y susceptibilidad.';
     }
     if (this.seleccionado === 'riego') {
-      return 'Calcula agua util, deficit a capacidad de campo, ETc y recomendacion segun lluvia esperada.';
+      return 'Audita agua util real, deficit a capacidad de campo, raices activas, ETc, lluvia efectiva y recomendacion limitada por capacidad de riego.';
     }
     return 'Predice emergencia acumulada con curva Gompertz, grados dia, humedad de suelo y lluvia reciente.';
   }

@@ -34,6 +34,10 @@ import { DispositivosService } from '../dispositivos/service';
 import { ClimaV2Service } from '../clima-v2/service';
 import { API_CLIMA } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
+import {
+  calcularRiegoV12,
+  normalizarHumedadSueloPct,
+} from './riego-v12.engine';
 
 interface IRespuestaInicioDiaNoche {
   primerReporteNoche: IClimaEstacionMeteorologica;
@@ -187,7 +191,7 @@ export class RiegoService {
       const suelos = lote.suelos || [];
 
       // Prediccion de riego - Obtener datos de la sonda de suelo y pronostico a 7 dias
-      const f = this.getFechasDatos();
+      const f = this.getFechasDatos(undefined, 21);
       this.logger.log(
         `Obteniendo datos desde ${this.parseFechaLog(
           f.from,
@@ -273,62 +277,49 @@ export class RiegoService {
         datosHumedadAdaptados = sondaSuelo;
       }
 
-      // Calculo de raices
-      const { sueloActualizado, calculoRaices } = await this.actualizarRaices(
+      // Motor V12: integra lanza/sonda, clima, pronostico, raices, CC y PMP.
+      const resultadoRiego = calcularRiegoV12({
+        siembra,
         lote,
-        suelos,
-        datosHumedadAdaptados,
-        pluviometro,
-      );
+        cultivo,
+        crono,
+        suelo: suelos,
+        humedadSuelo: datosHumedadAdaptados,
+        lluviaHistorica: pluviometro,
+        pronostico7Dias,
+      });
 
-      // Calcula el agua total disponible (método potencial - independiente de sensores)
       const {
-        nivelesCapacidadCampo,
+        calculoRaices,
         et0Promedio,
         umbralDeRiego,
         capacidadRetencionTotal,
+        nivelesCapacidadCampo,
         aguaUtilFacilmenteDisponiblePotencial,
-      } = this.calcularAguaPorNivelPotencial(
-        pronostico7Dias,
-        sueloActualizado,
-        lote,
-        cultivo,
-      );
-
-      // Nuevo: Calcula agua útil real independiente de detección de raíces
-      const {
         nivelesLecturaSensor,
         aguaUtilFacilmenteDisponibleReal,
         estadoCalculoAguaUtil,
         motivoCalculoAguaUtil,
         nivelesConRaicesDetectadas,
         nivelesConDatosDisponibles,
-      } = this.calcularAguaUtilReal(
-        pronostico7Dias,
-        sueloActualizado,
+        pronosticosRiego,
+        aguaUtilPct,
+        deficitMm,
+        demanda3Dias,
+        lluviaEfectiva72h,
+        recomendacionHoyMm,
+        estadoCapacidadCampo,
+        motivoCapacidadCampo,
+        trazas,
+      } = resultadoRiego;
+
+      const suelosActualizados = this.actualizarSueloConRiegoV12(
         lote,
-        cultivo,
-        datosHumedadAdaptados,
-        calculoRaices,
+        suelos,
+        nivelesLecturaSensor,
       );
 
-      const menorAguaUtilFacilmenteDisponible = Math.min(
-        aguaUtilFacilmenteDisponiblePotencial,
-        aguaUtilFacilmenteDisponibleReal,
-      );
-
-      // Cálculo de consumo total de agua para los proximos 7 dias y lluvias
-      const { pronosticosRiego } = this.calcularPronosticoDeRiego(
-        pronostico7Dias,
-        siembra,
-        cultivo,
-        crono,
-        menorAguaUtilFacilmenteDisponible,
-        aguaUtilFacilmenteDisponiblePotencial,
-        umbralDeRiego,
-      );
-
-      // Guardar resultado de la prediccion
+      // Guardar resultado auditable del motor de riego V12.
       const variables: IVariablesPrediccionRiego = {
         calculoRaices,
         et0Promedio,
@@ -343,16 +334,27 @@ export class RiegoService {
         motivoCalculoAguaUtil,
         nivelesConRaicesDetectadas,
         nivelesConDatosDisponibles,
+        aguaUtilPct,
+        deficitMm,
+        demanda3Dias,
+        lluviaEfectiva72h,
+        recomendacionHoyMm,
+        estadoCapacidadCampo,
+        motivoCapacidadCampo,
+        trazas,
         pronosticosRiego,
       };
-      const regar: IResultadoPrediccionRiego[] = [];
-      for (const pronostico of pronosticosRiego) {
-        const r: IResultadoPrediccionRiego = {
-          fecha: pronostico.fecha.slice(0, 10),
-          cantidad: pronostico.regar ? lote.capacidadDeRiego || 6 : 0,
-        };
-        regar.push(r);
-      }
+      const regar: IResultadoPrediccionRiego[] = pronosticosRiego.map(
+        (pronostico, index) => ({
+          fecha: pronostico.fecha?.slice(0, 10),
+          cantidad:
+            index === 0
+              ? recomendacionHoyMm
+              : pronostico.regar
+                ? lote.capacidadDeRiego || 6
+                : 0,
+        }),
+      );
 
       const create: ICreatePrediccionRiego = {
         idQuimica: siembra.idQuimica,
@@ -362,7 +364,8 @@ export class RiegoService {
         //
         idSiembra: siembra._id,
         idLote: siembra.idLote,
-        fechaPrediccion: regar[0].fecha.slice(0, 10),
+        fechaPrediccion:
+          regar[0]?.fecha?.slice(0, 10) || new Date().toISOString().slice(0, 10),
         regar,
         variables,
       };
@@ -374,6 +377,9 @@ export class RiegoService {
             aguaUtilReal: aguaUtilFacilmenteDisponibleReal,
             estadoCalculoAguaUtil,
             motivoCalculoAguaUtil,
+          }),
+          this.lotesService.update(lote._id, {
+            suelos: suelosActualizados,
           }),
         ]);
 
@@ -577,15 +583,15 @@ export class RiegoService {
     return { reporteDia1Nueve, reporteNocheOcho, reporteDia2Ocho };
   }
 
-  private getFechasDatos(fecha = new Date().toISOString()) {
-    // Desde ayer a las 4:00
+  private getFechasDatos(fecha = new Date().toISOString(), diasHistoricos = 1) {
+    // El motor V12 necesita historial suficiente para detectar raices y estimar capacidad de campo.
     const desde = new Date(fecha);
-    desde.setUTCDate(desde.getUTCDate() - 1);
-    desde.setUTCHours(7, 0, 0, 0);
+    desde.setUTCDate(desde.getUTCDate() - Math.max(1, diasHistoricos));
+    desde.setUTCHours(0, 0, 0, 0);
 
-    // Hasta hoy a las 9:00
+    // Hasta el cierre del dia consultado para tomar la ultima lectura disponible.
     const hasta = new Date(fecha);
-    hasta.setUTCHours(12, 0, 0, 0);
+    hasta.setUTCHours(23, 59, 59, 999);
 
     const from = desde.toISOString();
     const to = hasta.toISOString();
@@ -782,16 +788,67 @@ export class RiegoService {
         profundidades.forEach((profundidad, index) => {
           const nivel = index + 1; // Los niveles empiezan en 1
           const datosHumedad = reporte.humedadSuelo[profundidad];
+          const avg =
+            normalizarHumedadSueloPct(
+              datosHumedad.avg || datosHumedad.last || datosHumedad.result,
+            ) || 0;
+          const min =
+            normalizarHumedadSueloPct(
+              datosHumedad.min || datosHumedad.avg || datosHumedad.last,
+            ) || avg;
+          const max =
+            normalizarHumedadSueloPct(
+              datosHumedad.max || datosHumedad.avg || datosHumedad.last,
+            ) || avg;
 
           adaptado.humedadSuelo[nivel] = {
-            avg: datosHumedad.avg || datosHumedad.last || 0,
-            min: datosHumedad.min || datosHumedad.avg || datosHumedad.last || 0,
-            max: datosHumedad.max || datosHumedad.avg || datosHumedad.last || 0,
+            avg,
+            min,
+            max,
           };
         });
       }
 
       return adaptado as IClimaEstacionMeteorologica;
+    });
+  }
+
+  private actualizarSueloConRiegoV12(
+    lote: ILote,
+    suelos: ISuelo[] = [],
+    nivelesLecturaSensor: INivelLecturaSensor[] = [],
+  ): ISuelo[] {
+    if (!nivelesLecturaSensor.length) {
+      return suelos;
+    }
+
+    const base = suelos.length
+      ? suelos
+      : nivelesLecturaSensor.map((nivel, index) => ({
+          numeroDeSensor: nivel.numeroDeSensor || index + 1,
+          profundidad: nivel.profundidad || (index + 1) * 10,
+        }));
+
+    return base.map((suelo, index) => {
+      const lectura =
+        nivelesLecturaSensor.find(
+          (nivel) =>
+            nivel.numeroDeSensor === suelo.numeroDeSensor ||
+            nivel.profundidad === suelo.profundidad,
+        ) || nivelesLecturaSensor[index];
+
+      if (!lectura) return suelo;
+
+      return {
+        ...suelo,
+        numeroDeSensor: suelo.numeroDeSensor || lectura.numeroDeSensor || index + 1,
+        profundidad: suelo.profundidad || lectura.profundidad || (index + 1) * 10,
+        capacidadDeCampo:
+          lectura.capacidadCampo ?? suelo.capacidadDeCampo ?? lote.capacidadDeCampo,
+        puntoMarchitez:
+          lectura.puntoMarchitez ?? suelo.puntoMarchitez ?? lote.puntoMarchitez,
+        hayRaices: lectura.hayRaices ?? suelo.hayRaices,
+      };
     });
   }
 

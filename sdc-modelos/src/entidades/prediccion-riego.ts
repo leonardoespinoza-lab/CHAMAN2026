@@ -21,6 +21,9 @@ export interface IPronosticoRiego {
 export interface INivelCapacidadCampo {
   profundidad?: number;
   capacidadCampo?: number;
+  puntoMarchitez?: number;
+  fuenteCapacidadCampo?: "auto" | "manual" | "textura";
+  confianzaCapacidadCampo?: number;
   aguaUtil?: number;
   fraccionDeConsumo?: number;
   capacidadDeRetencion?: number;
@@ -37,6 +40,13 @@ export interface INivelLecturaSensor {
   numeroDeSensor?: number;
   humedad?: number;
   profundidad?: number;
+  capacidadCampo?: number;
+  puntoMarchitez?: number;
+  aguaUtilPct?: number;
+  deficitMm?: number;
+  hayRaices?: boolean;
+  fuenteCapacidadCampo?: "auto" | "manual" | "textura";
+  confianzaCapacidadCampo?: number;
   aguaUtil?: number;
   fraccionDeConsumo?: number;
   capacidadDeRetencion?: number;
@@ -78,6 +88,8 @@ export interface ICalculoRaices {
   relacionDiaNoche?: number;
   condicion?: "Aceptado" | "Rechazado";
   hayRaices?: boolean;
+  ascensoCapilar?: boolean;
+  puntoMarchitez?: number;
 }
 
 export interface IVariablesPrediccionRiego {
@@ -98,6 +110,18 @@ export interface IVariablesPrediccionRiego {
   motivoCalculoAguaUtil?: string; // Ej: "Humedad alta impide detección de raíces"
   nivelesConRaicesDetectadas?: number; // Cantidad de niveles donde se detectaron raíces
   nivelesConDatosDisponibles?: number; // Total de niveles con datos de sensores
+  aguaUtilPct?: number;
+  deficitMm?: number;
+  demanda3Dias?: number;
+  lluviaEfectiva72h?: number;
+  recomendacionHoyMm?: number;
+  estadoCapacidadCampo?:
+    | "calculado"
+    | "estimado"
+    | "no_disponible"
+    | "fallida";
+  motivoCapacidadCampo?: string;
+  trazas?: string[];
   pronosticosRiego?: IPronosticoRiego[];
 }
 

@@ -55,9 +55,16 @@ export class AlgoritmosService {
         nombre: 'Recomendacion de riego',
         estado: 'auditable',
         descripcion:
-          'Combina humedad de suelo, capacidad de campo, punto de marchitez, ET0 y balance hidrico para recomendar riego.',
-        inputs: ['Sensor de suelo', 'Suelo', 'ET0', 'Pronostico', 'Cultivo'],
-        outputs: ['agua util', 'deficit', 'recomendacion'],
+          'Motor V12: requiere lanza/sonda de humedad, cruza dia/noche, raices, capacidad de campo, PMP, ET0, Kc y lluvia efectiva.',
+        inputs: [
+          'Lanza de humedad de suelo por profundidad',
+          'Capacidad de campo estimada o cargada',
+          'Punto de marchitez permanente',
+          'Raices activas por nivel',
+          'ET0, Kc, lluvia y probabilidad de lluvia',
+          'Capacidad diaria de riego, bulbo y metros lineales por hectarea',
+        ],
+        outputs: ['agua util mm/%', 'deficit mm', 'demanda 72 h', 'lluvia efectiva', 'recomendacion mm', 'traza auditable'],
       },
       {
         id: 'malezas',
@@ -147,28 +154,53 @@ export class AlgoritmosService {
   }
 
   simularRiego(body: any) {
-    const humedadActual = Number(body?.humedadSueloPct ?? 24);
-    const capacidadCampo = Number(body?.capacidadCampoPct ?? 32);
+    const humedadActual = Number(body?.humedadSueloPct ?? 31);
+    const capacidadCampo = Number(body?.capacidadCampoPct ?? 34);
     const puntoMarchitez = Number(body?.puntoMarchitezPct ?? 14);
     const profundidadCm = Number(body?.profundidadRaicesCm ?? 60);
     const et0 = Number(body?.et0MmDia ?? 4.2);
     const kc = Number(body?.kc ?? 0.9);
     const lluvia72h = Number(body?.lluvia72h ?? 4);
+    const probabilidadLluvia = Number(body?.probabilidadLluviaPct ?? 55);
+    const capacidadRiegoDia = Number(body?.capacidadRiegoMmDia ?? 6);
+    const anchoBulboM = Number(body?.anchoBulboM ?? 1);
+    const metrosLinealesHa = Number(body?.metrosLinealesHa ?? 10000);
     const umbralAguaUtil = Number(body?.umbralAguaUtilPct ?? 45);
+    const raicesActivas = body?.raicesActivas !== false;
 
-    const rangoUtil = Math.max(capacidadCampo - puntoMarchitez, 1);
-    const aguaUtilPct = this.clamp(((humedadActual - puntoMarchitez) / rangoUtil) * 100, 0, 100);
-    const deficitMm = this.clamp(((capacidadCampo - humedadActual) / 100) * profundidadCm * 10, 0, 300);
+    const factorAreaMojada = this.clamp((anchoBulboM * metrosLinealesHa) / 10000, 0.05, 1.5);
+    const rangoUtilPct = Math.max(capacidadCampo - puntoMarchitez, 1);
+    const aguaTotalDisponibleMm = (rangoUtilPct / 100) * profundidadCm * 10 * factorAreaMojada;
+    const aguaUtilActualMm =
+      (this.clamp(humedadActual - puntoMarchitez, 0, rangoUtilPct) / 100) *
+      profundidadCm *
+      10 *
+      factorAreaMojada;
+    const aguaUtilPct = this.clamp((aguaUtilActualMm / Math.max(aguaTotalDisponibleMm, 1)) * 100, 0, 100);
+    const deficitMm =
+      (this.clamp(capacidadCampo - humedadActual, 0, capacidadCampo) / 100) *
+      profundidadCm *
+      10 *
+      factorAreaMojada;
     const etcDia = et0 * kc;
     const demanda72h = etcDia * 3;
-    const balance72h = lluvia72h - demanda72h;
-    const recomendacionMm = aguaUtilPct < umbralAguaUtil ? this.round(Math.max(deficitMm - lluvia72h * 0.8, 0), 1) : 0;
-    const decision = recomendacionMm > 0 ? `Regar ${recomendacionMm} mm` : 'No regar por ahora';
+    const lluviaEfectiva72h = probabilidadLluvia >= 70 ? lluvia72h * 0.8 : 0;
+    const saldo72h = aguaUtilActualMm + lluviaEfectiva72h - demanda72h;
+    const umbralMm = (aguaTotalDisponibleMm * umbralAguaUtil) / 100;
+    const recomendacionMm =
+      raicesActivas && saldo72h < umbralMm
+        ? this.round(Math.min(Math.max(deficitMm - lluviaEfectiva72h, 0), capacidadRiegoDia), 1)
+        : 0;
+    const decision = !raicesActivas
+      ? 'No recomendar: falta confirmar raíces activas en la zona medida'
+      : recomendacionMm > 0
+        ? `Regar ${recomendacionMm} mm`
+        : 'No regar por ahora';
     let humedad = humedadActual;
     const serie = Array.from({ length: 7 }).map((_, index) => {
-      const lluviaDia = index < 3 ? lluvia72h / 3 : 0;
+      const lluviaDia = index < 3 ? lluviaEfectiva72h / 3 : 0;
       humedad = this.clamp(humedad + lluviaDia / (profundidadCm * 10) * 100 - etcDia / (profundidadCm * 10) * 100, puntoMarchitez, capacidadCampo);
-      const aguaUtil = this.clamp(((humedad - puntoMarchitez) / rangoUtil) * 100, 0, 100);
+      const aguaUtil = this.clamp(((humedad - puntoMarchitez) / rangoUtilPct) * 100, 0, 100);
       return { label: `Dia ${index + 1}`, value: this.round(aguaUtil, 1) };
     });
 
@@ -180,16 +212,24 @@ export class AlgoritmosService {
         capacidadCampo,
         puntoMarchitez,
         aguaUtilPct: this.round(aguaUtilPct, 1),
+        aguaUtilActualMm: this.round(aguaUtilActualMm, 1),
+        aguaTotalDisponibleMm: this.round(aguaTotalDisponibleMm, 1),
         deficitMm: this.round(deficitMm, 1),
         etcDia: this.round(etcDia, 1),
-        balance72h: this.round(balance72h, 1),
+        demanda72h: this.round(demanda72h, 1),
+        lluviaEfectiva72h: this.round(lluviaEfectiva72h, 1),
+        balance72h: this.round(saldo72h, 1),
         recomendacionMm,
+        capacidadRiegoDia,
+        raicesActivas,
       },
       serie,
       trazas: [
-        'Agua util = (humedad actual - punto marchitez) / (capacidad campo - punto marchitez).',
-        'Deficit mm = diferencia a capacidad de campo por profundidad efectiva de raices.',
+        'Agua util = (humedad actual - PMP) / (capacidad de campo - PMP).',
+        'Deficit mm = diferencia a capacidad de campo por profundidad efectiva, bulbo mojado y metros lineales por hectarea.',
         `ETc diaria = ET0 ${et0} x Kc ${kc} = ${this.round(etcDia, 1)} mm/dia.`,
+        `Lluvia efectiva 72 h = ${probabilidadLluvia >= 70 ? 'lluvia x 0.8' : '0 por baja probabilidad'} = ${this.round(lluviaEfectiva72h, 1)} mm.`,
+        'La recomendacion se limita por capacidad diaria de riego y exige raices activas detectadas/cargadas.',
       ],
     };
   }
