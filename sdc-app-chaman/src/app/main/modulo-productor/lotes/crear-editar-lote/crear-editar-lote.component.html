@@ -90,6 +90,7 @@
                         [(ngModel)]="busquedaUbicacion"
                         [ngModelOptions]="{ standalone: true }"
                         [suggestions]="ubicacionesSugeridas"
+                        optionLabel="label"
                         [fluid]="true"
                         [dropdown]="true"
                         [forceSelection]="false"
@@ -97,7 +98,14 @@
                         appendTo="body"
                         (completeMethod)="buscarUbicaciones($event)"
                         (onSelect)="seleccionarUbicacionEvent($event)"
-                      />
+                      >
+                        <ng-template #item let-zona>
+                          <div class="zone-option">
+                            <strong>{{ zona.label }}</strong>
+                            <small>{{ zona.tipo | titlecase }} - {{ zona.fuente }}</small>
+                          </div>
+                        </ng-template>
+                      </p-autocomplete>
                       <p-button
                         label="Ir a ubicacion"
                         icon="pi pi-map-marker"

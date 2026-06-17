@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { DireccionV2, ICoordenadas, IGeoJSONPoint } from 'modelos/src';
+import { DireccionV2, ICoordenadas, IGeoJSONPoint, IZonaGeografica } from 'modelos/src';
 import { HttpService } from './http.service';
 
 @Injectable({
@@ -18,6 +18,10 @@ export class GeoNodeService {
 
   public geocode(dato: { text: string }): Promise<ICoordenadas> {
     return this.http.post(`/geocode/geocode`, dato);
+  }
+
+  public zonas(dato: { text: string }): Promise<{ resultados: IZonaGeografica[] }> {
+    return this.http.post(`/geocode/zonas`, dato);
   }
 
   public reverse(dato: { geojson: IGeoJSONPoint }): Promise<DireccionV2> {

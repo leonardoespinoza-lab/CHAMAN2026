@@ -1,7 +1,7 @@
 import { Body, Controller, Logger, Post, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { GeocodesService } from './geocode-api.service';
-import { DireccionV2, ICoordenadas, IGeoJSONPoint } from 'modelos/src';
+import { DireccionV2, ICoordenadas, IGeoJSONPoint, IZonaGeografica } from 'modelos/src';
 import { PermisoGuard } from '../authorization/permiso.guard';
 import { Permisos } from '../authorization/permiso.decorator';
 
@@ -29,6 +29,17 @@ export class GeocodesController {
       body.pais,
       body.coordenadas,
     );
+  }
+
+  @Post('/zonas')
+  @Permisos(
+    { nivel: 'Quimica', roles: ['Admin'] },
+    { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Productor', roles: ['Admin'] },
+    { nivel: 'Establecimiento', roles: ['Admin'] },
+  )
+  public async zonas(@Body() body: { text: string }): Promise<{ resultados: IZonaGeografica[] }> {
+    return await this.service.zonas(body.text);
   }
 
   @Post('/geocode')

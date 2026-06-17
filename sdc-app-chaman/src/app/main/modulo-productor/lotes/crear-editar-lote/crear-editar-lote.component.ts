@@ -18,6 +18,7 @@ import {
   IQueryParam,
   ISuelo,
   ISueloReferencia,
+  IZonaGeografica,
   TTexturaSuelo,
   TTipoContenidoP,
   TTipoDepositoN,
@@ -57,8 +58,8 @@ export class CrearEditarLoteComponent implements OnInit {
   public dispositivos: IDispositivo[] = [];
   public dispositivos$?: Subscription;
 
-  public busquedaUbicacion = '';
-  public ubicacionesSugeridas: string[] = [];
+  public busquedaUbicacion: string | IZonaGeografica = '';
+  public ubicacionesSugeridas: IZonaGeografica[] = [];
   public ubicacionLoading = false;
   public centroMapa?: IGeoJSONPoint;
   public ubicacionDetectada?: DireccionV2;
@@ -201,9 +202,7 @@ export class CrearEditarLoteComponent implements OnInit {
 
     this.ubicacionLoading = true;
     try {
-      const response = await this.geonode.direcciones({
-        text: `${query}, Argentina`,
-      });
+      const response = await this.geonode.zonas({ text: query });
       this.ubicacionesSugeridas = response.resultados || [];
     } catch (error) {
       this.ubicacionesSugeridas = [];
@@ -214,15 +213,27 @@ export class CrearEditarLoteComponent implements OnInit {
   }
 
   public async seleccionarUbicacionEvent(event: AutoCompleteSelectEvent): Promise<void> {
-    await this.seleccionarUbicacion(`${event.value || ''}`);
+    await this.seleccionarUbicacion(event.value);
   }
 
-  public async seleccionarUbicacion(direccion: string): Promise<void> {
+  public async seleccionarUbicacion(direccion: string | IZonaGeografica): Promise<void> {
+    if (typeof direccion === 'object' && direccion?.coordenadas) {
+      this.aplicarZonaGeografica(direccion);
+      return;
+    }
+
     const texto = `${direccion || ''}`.trim();
     if (!texto || !this.form) return;
 
     this.ubicacionLoading = true;
     try {
+      const zonas = await this.geonode.zonas({ text: texto });
+      const zona = zonas.resultados?.[0];
+      if (zona?.coordenadas) {
+        this.aplicarZonaGeografica(zona);
+        return;
+      }
+
       const coordenadas = await this.geonode.geocode({ text: texto });
       if (!Number.isFinite(coordenadas?.lat) || !Number.isFinite(coordenadas?.lng)) {
         this.helper.notifWarn('No se encontraron coordenadas para esa busqueda.');
@@ -246,7 +257,7 @@ export class CrearEditarLoteComponent implements OnInit {
 
   public async actualizarUbicacionDesdeCentro(): Promise<void> {
     const centro = this.form?.get('ubicacion.centro')?.value;
-    if (!centro?.lat || !centro?.lng) return;
+    if (!Number.isFinite(centro?.lat) || !Number.isFinite(centro?.lng)) return;
 
     try {
       const geojson: IGeoJSONPoint = {
@@ -263,9 +274,9 @@ export class CrearEditarLoteComponent implements OnInit {
   public async autocompletarSueloInta(): Promise<void> {
     if (!this.form) return;
     const data = this.getData();
-    const centro = data.ubicacion?.centro;
+    const centro = data.ubicacion?.centro as ICoordenadas | undefined;
 
-    if (!centro?.lat || !centro?.lng) {
+    if (!centro || !Number.isFinite(centro.lat) || !Number.isFinite(centro.lng)) {
       this.helper.notifWarn('Dibuja el lote en el mapa antes de consultar el suelo INTA.');
       this.tabValue = 1;
       return;
@@ -324,6 +335,9 @@ export class CrearEditarLoteComponent implements OnInit {
       data.ubicacion.superficie = this.helper.calcularAreaHectareas(data.ubicacion.geojson);
       this.form?.get('ubicacion.centro')?.setValue(data.ubicacion.centro, { emitEvent: false });
       this.form?.get('ubicacion.superficie')?.setValue(data.ubicacion.superficie, { emitEvent: false });
+    } else if (this.form?.get('ubicacion.centro')?.value) {
+      data.ubicacion = data.ubicacion || {};
+      data.ubicacion.centro = this.form.get('ubicacion.centro')?.value;
     }
     return data;
   }
@@ -362,11 +376,51 @@ export class CrearEditarLoteComponent implements OnInit {
     window.history.back();
   }
 
-  private seleccionarDepartamentoPorDireccion(direccion?: DireccionV2): void {
-    if (!direccion || !this.departamentos.length) return;
+  private aplicarZonaGeografica(zona: IZonaGeografica): void {
+    if (!zona.coordenadas || !this.form) return;
 
-    const provincia = this.normalizarTexto(direccion.provincia);
-    const candidatos = [direccion.partido, direccion.localidad]
+    this.busquedaUbicacion = zona;
+    this.form.get('ubicacion.centro')?.setValue(zona.coordenadas);
+    this.centroMapa = {
+      type: 'Point',
+      coordinates: [zona.coordenadas.lng, zona.coordenadas.lat],
+    };
+    this.ubicacionDetectada = {
+      localidad: zona.localidad,
+      partido: zona.departamento,
+      provincia: zona.provincia,
+      direccion: zona.label,
+      coordenadas: zona.coordenadas,
+    };
+
+    const departamento = this.seleccionarDepartamentoPorZona(zona);
+    if (departamento) {
+      this.helper.notifSuccess(`${zona.label}. Departamento asociado: ${departamento.nombre}.`);
+    } else if (zona.departamento || zona.provincia) {
+      this.helper.notifWarn(
+        `${zona.label}. No encontre ese departamento en la base interna de Chaman; revisa el selector de departamento antes de guardar.`,
+      );
+    } else {
+      this.helper.notifSuccess(`${zona.label}. Zona centrada en el mapa.`);
+    }
+  }
+
+  private seleccionarDepartamentoPorDireccion(direccion?: DireccionV2): IDepartamento | undefined {
+    if (!direccion) return undefined;
+    return this.seleccionarDepartamentoPorZona({
+      localidad: direccion.localidad,
+      departamento: direccion.partido,
+      provincia: direccion.provincia,
+    });
+  }
+
+  private seleccionarDepartamentoPorZona(
+    zona?: Pick<IZonaGeografica, 'localidad' | 'departamento' | 'provincia'>,
+  ): IDepartamento | undefined {
+    if (!zona || !this.departamentos.length) return undefined;
+
+    const provincia = this.normalizarTexto(zona.provincia);
+    const candidatos = [zona.departamento, zona.localidad]
       .map((value) => this.normalizarTexto(value))
       .filter(Boolean);
 
@@ -385,6 +439,7 @@ export class CrearEditarLoteComponent implements OnInit {
     if (departamento?._id) {
       this.form?.get('idDepartamento')?.setValue(departamento._id);
     }
+    return departamento;
   }
 
   private normalizarTexto(value?: string): string {

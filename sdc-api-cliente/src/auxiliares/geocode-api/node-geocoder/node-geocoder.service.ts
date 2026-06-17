@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ICoordenadas, DireccionV2 } from 'modelos/src';
+import { ICoordenadas, DireccionV2, IZonaGeografica } from 'modelos/src';
 import NodeGeocoder, { Options } from 'node-geocoder';
 import { AxiosService } from 'src/auxiliares/axios/axios.service';
 import { MAPS_KEY } from 'src/env';
@@ -13,6 +13,23 @@ const options: Options = {
 @Injectable()
 export class NodeGeocodeService {
   constructor(private axios: AxiosService) {}
+
+  public async buscarZonasArgentina(text: string): Promise<IZonaGeografica[]> {
+    const query = this.limpiarBusqueda(text);
+    if (query.length < 2) return [];
+
+    const [localidades, departamentos, provincias] = await Promise.allSettled([
+      this.buscarLocalidadesGeoref(query),
+      this.buscarDepartamentosGeoref(query),
+      this.buscarProvinciasGeoref(query),
+    ]);
+
+    return this.deduplicarZonas([
+      ...(localidades.status === 'fulfilled' ? localidades.value : []),
+      ...(departamentos.status === 'fulfilled' ? departamentos.value : []),
+      ...(provincias.status === 'fulfilled' ? provincias.value : []),
+    ]).slice(0, 15);
+  }
 
   public async reverse(coordenadas: ICoordenadas): Promise<DireccionV2> {
     try {
@@ -111,5 +128,118 @@ export class NodeGeocodeService {
       Logger.error('Error en getPredictions:', error, 'NodeGeocodeService');
       return [];
     }
+  }
+
+  private async buscarLocalidadesGeoref(query: string): Promise<IZonaGeografica[]> {
+    const url = `https://apis.datos.gob.ar/georef/api/localidades?nombre=${encodeURIComponent(query)}&max=10`;
+    const response = await this.axios.GET<{
+      localidades?: Array<{
+        id?: string;
+        nombre?: string;
+        categoria?: string;
+        centroide?: { lat?: number; lon?: number };
+        departamento?: { id?: string; nombre?: string };
+        provincia?: { id?: string; nombre?: string };
+        municipio?: { id?: string; nombre?: string };
+      }>;
+    }>(url, { timeout: 8000 });
+
+    return (response.localidades || [])
+      .filter((item) => Number.isFinite(item.centroide?.lat) && Number.isFinite(item.centroide?.lon))
+      .map((item) => ({
+        id: item.id,
+        tipo: 'localidad',
+        label: this.formatearLabel(item.nombre, item.departamento?.nombre, item.provincia?.nombre),
+        localidad: item.nombre,
+        departamento: item.departamento?.nombre,
+        provincia: item.provincia?.nombre,
+        municipio: item.municipio?.nombre,
+        coordenadas: {
+          lat: item.centroide.lat,
+          lng: item.centroide.lon,
+        },
+        fuente: 'GeoRef Argentina',
+      }));
+  }
+
+  private async buscarDepartamentosGeoref(query: string): Promise<IZonaGeografica[]> {
+    const url = `https://apis.datos.gob.ar/georef/api/departamentos?nombre=${encodeURIComponent(query)}&max=10`;
+    const response = await this.axios.GET<{
+      departamentos?: Array<{
+        id?: string;
+        nombre?: string;
+        centroide?: { lat?: number; lon?: number };
+        provincia?: { id?: string; nombre?: string };
+      }>;
+    }>(url, { timeout: 8000 });
+
+    return (response.departamentos || [])
+      .filter((item) => Number.isFinite(item.centroide?.lat) && Number.isFinite(item.centroide?.lon))
+      .map((item) => ({
+        id: item.id,
+        tipo: 'departamento',
+        label: this.formatearLabel(item.nombre, undefined, item.provincia?.nombre),
+        departamento: item.nombre,
+        provincia: item.provincia?.nombre,
+        coordenadas: {
+          lat: item.centroide.lat,
+          lng: item.centroide.lon,
+        },
+        fuente: 'GeoRef Argentina',
+      }));
+  }
+
+  private async buscarProvinciasGeoref(query: string): Promise<IZonaGeografica[]> {
+    const url = `https://apis.datos.gob.ar/georef/api/provincias?nombre=${encodeURIComponent(query)}&max=10`;
+    const response = await this.axios.GET<{
+      provincias?: Array<{
+        id?: string;
+        nombre?: string;
+        centroide?: { lat?: number; lon?: number };
+      }>;
+    }>(url, { timeout: 8000 });
+
+    return (response.provincias || [])
+      .filter((item) => Number.isFinite(item.centroide?.lat) && Number.isFinite(item.centroide?.lon))
+      .map((item) => ({
+        id: item.id,
+        tipo: 'provincia',
+        label: item.nombre,
+        provincia: item.nombre,
+        coordenadas: {
+          lat: item.centroide.lat,
+          lng: item.centroide.lon,
+        },
+        fuente: 'GeoRef Argentina',
+      }));
+  }
+
+  private deduplicarZonas(zonas: IZonaGeografica[]): IZonaGeografica[] {
+    const output = new Map<string, IZonaGeografica>();
+    for (const zona of zonas) {
+      const key = this.normalizarTexto([zona.tipo, zona.localidad, zona.departamento, zona.provincia].join('|'));
+      if (!output.has(key)) {
+        output.set(key, zona);
+      }
+    }
+    return [...output.values()];
+  }
+
+  private limpiarBusqueda(text: string): string {
+    return `${text || ''}`.trim().replace(/\s+/g, ' ');
+  }
+
+  private formatearLabel(nombre?: string, departamento?: string, provincia?: string): string {
+    return [nombre, departamento, provincia].filter(Boolean).join(', ');
+  }
+
+  private normalizarTexto(value?: string): string {
+    return `${value || ''}`
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s|]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 }

@@ -16,3 +16,15 @@ export interface DireccionV2 {
   direccion?: string;
   coordenadas?: ICoordenadas;
 }
+
+export interface IZonaGeografica {
+  id?: string;
+  tipo?: 'localidad' | 'departamento' | 'provincia' | 'direccion';
+  label?: string;
+  localidad?: string;
+  departamento?: string;
+  provincia?: string;
+  municipio?: string;
+  coordenadas?: ICoordenadas;
+  fuente?: string;
+}

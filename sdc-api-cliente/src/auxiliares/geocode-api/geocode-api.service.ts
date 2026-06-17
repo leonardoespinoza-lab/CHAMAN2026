@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DireccionV2, ICoordenadas, IGeoJSONPoint } from 'modelos/src';
+import { DireccionV2, ICoordenadas, IGeoJSONPoint, IZonaGeografica } from 'modelos/src';
 import { NodeGeocodeService } from './node-geocoder/node-geocoder.service';
 
 @Injectable()
@@ -21,6 +21,10 @@ export class GeocodesService {
 
   async geoCode(direccion: string): Promise<ICoordenadas> {
     return await this.nodeGeoCode.geocode(direccion);
+  }
+
+  async zonas(text: string): Promise<{ resultados: IZonaGeografica[] }> {
+    return { resultados: await this.nodeGeoCode.buscarZonasArgentina(text) };
   }
 
   async reverse(geojson: IGeoJSONPoint): Promise<DireccionV2> {

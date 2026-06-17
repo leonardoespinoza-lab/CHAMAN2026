@@ -126,7 +126,8 @@
   padding: 1rem;
 }
 
-.select-option {
+.select-option,
+.zone-option {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
@@ -146,7 +147,8 @@
 .soil-summary span,
 .soil-detail-grid span,
 .device-help small,
-.select-option small {
+.select-option small,
+.zone-option small {
   display: block;
   color: var(--p-text-muted-color);
   font-size: 0.86rem;
