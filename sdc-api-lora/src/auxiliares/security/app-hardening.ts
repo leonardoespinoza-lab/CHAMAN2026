@@ -47,6 +47,8 @@ function configureCors(app: INestApplication, logger: Logger, env?: string) {
       'X-Requested-With',
       'x-api-key',
       'appversion',
+      'ngrok-skip-browser-warning',
+      'X-Permiso',
     ],
     origin: (origin: string | undefined, callback: CorsCallback) => {
       if (origins === true || !origin || origins.includes(origin)) {
