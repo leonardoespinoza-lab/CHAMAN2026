@@ -11,9 +11,13 @@ export class PermisoGuard implements CanActivate {
       { nivel: NivelPermiso; roles: Rol[] }[]
     >('permisos', context.getHandler());
 
-    // Si no se especifica ningún nivel de permiso, se permite el acceso
-    if (!permisosValidos?.length) {
-      return true;
+    // Un decorador @Permisos() vacio no debe abrir rutas por accidente.
+    if (permisosValidos && permisosValidos.length === 0) {
+      return false;
+    }
+
+    if (!permisosValidos) {
+      return process.env.RBAC_DENY_UNDECORATED === 'true' ? false : true;
     }
 
     // Si se especifica un nivel de permiso, se verifica que el usuario tenga

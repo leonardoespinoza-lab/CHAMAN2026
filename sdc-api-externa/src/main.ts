@@ -5,6 +5,10 @@ import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { ENV, PORT, PREFIX } from './env';
 import { LogRequestInterceptor } from './auxiliares/logRequest/logRequest.interceptor';
+import {
+  applySecurityHardening,
+  shouldExposeSwagger,
+} from './auxiliares/security/app-hardening';
 
 function setGlobalPrefix(app: INestApplication, logger: Logger) {
   if (PREFIX) {
@@ -34,11 +38,15 @@ async function bootstrap() {
   app.use(json({ limit: process.env.HTTP_BODY_LIMIT || '100mb' }));
   app.use(urlencoded({ extended: true, limit: process.env.HTTP_BODY_LIMIT || '100mb' }));
   setGlobalPrefix(app, logger);
-  swaggerConfig(app);
-  app.enableCors();
+  if (shouldExposeSwagger(ENV)) {
+    swaggerConfig(app);
+    logger.verbose(`Documentacion disponible en ${PREFIX}/api`);
+  } else {
+    logger.verbose('Swagger deshabilitado en este entorno');
+  }
+  applySecurityHardening(app, logger, ENV);
   app.useGlobalInterceptors(new LogRequestInterceptor());
   await app.listen(PORT);
   logger.verbose(`Application listening on port ${PORT}`);
-  logger.verbose(`Documentación disponible en ${PREFIX}/api`);
 }
 bootstrap();

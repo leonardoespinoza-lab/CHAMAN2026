@@ -10,6 +10,7 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
+import { PERMISOS_AUTENTICADOS } from '../../auxiliares/authorization/permisos-authenticados';
 
 @ApiTags('Departamentos')
 @Controller('departamentos')
@@ -18,6 +19,7 @@ export class DepartamentosController {
   constructor(private service: DepartamentosService) {}
 
   @Get()
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async get(
     @Query() query: IQueryParam,
   ): Promise<IListado<IDepartamento>> {
@@ -25,6 +27,7 @@ export class DepartamentosController {
   }
 
   @Get('/:id')
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async getById(@Param('id') id: string): Promise<IDepartamento> {
     return await this.service.getById(id);
   }

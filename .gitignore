@@ -54,6 +54,9 @@ Thumbs.db
 **/.vscode/*
 
 # Mobile generated artifacts
+sdc-app-chaman/keystore-chaman.key
+*.keystore
+*.jks
 sdc-app-chaman/android/app/build/
 sdc-app-chaman/android/.gradle/
 sdc-app-chaman/ios/App/Pods/

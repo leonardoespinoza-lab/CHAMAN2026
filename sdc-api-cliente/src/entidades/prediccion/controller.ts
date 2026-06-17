@@ -11,6 +11,8 @@ import { IPrediccion, IListado, IQueryParam, IPermiso } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { GetPermiso } from '../../auxiliares/authorization/get-permiso.decorator';
+import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
+import { PERMISOS_AUTENTICADOS } from '../../auxiliares/authorization/permisos-authenticados';
 
 @ApiTags('Prediccions')
 @Controller('prediccions')
@@ -19,6 +21,7 @@ export class PrediccionsController {
   constructor(private service: PrediccionsService) {}
 
   @Get()
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async get(
     @Query() query: IQueryParam,
     @GetPermiso() permiso: IPermiso,
@@ -27,6 +30,7 @@ export class PrediccionsController {
   }
 
   @Get('/export')
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async export(
     @Query() query: IQueryParam,
     @GetPermiso() permiso: IPermiso,
@@ -35,6 +39,7 @@ export class PrediccionsController {
   }
 
   @Get('/:id')
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async getById(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,

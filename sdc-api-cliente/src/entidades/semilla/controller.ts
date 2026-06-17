@@ -4,6 +4,7 @@ import { ISemilla, IListado, IQueryParam, ICreateSemilla, IUpdateSemilla } from 
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
+import { PERMISOS_AUTENTICADOS } from '../../auxiliares/authorization/permisos-authenticados';
 
 @ApiTags('Semillas')
 @Controller('semillas')
@@ -12,11 +13,13 @@ export class SemillasController {
   constructor(private service: SemillasService) {}
 
   @Get()
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async get(@Query() query: IQueryParam): Promise<IListado<ISemilla>> {
     return await this.service.get(query);
   }
 
   @Get('/:id')
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async getById(@Param('id') id: string): Promise<ISemilla> {
     return await this.service.getById(id);
   }

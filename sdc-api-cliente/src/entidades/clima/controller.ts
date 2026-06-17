@@ -10,6 +10,7 @@ import {
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 import { GetPermiso } from '../../auxiliares/authorization/get-permiso.decorator';
+import { PERMISOS_AUTENTICADOS } from '../../auxiliares/authorization/permisos-authenticados';
 import { IPermiso } from 'modelos/src';
 import { ClimaService } from './service';
 
@@ -29,6 +30,7 @@ export class ClimaController {
 
   @Get('estacion/cerca/:lat/:lng/:from/:to')
   @UseGuards(PermisoGuard)
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async getClimaEntreFechas(
     @Param('lat') lat: number,
     @Param('lng') lng: number,
@@ -40,12 +42,14 @@ export class ClimaController {
 
   @Get('estacion/cerca/:lat/:lng')
   @UseGuards(PermisoGuard)
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async getClima(@Param('lat') lat: number, @Param('lng') lng: number) {
     return await this.service.getClima(lat, lng);
   }
 
   @Get('semaforo/:lat/:lng')
   @UseGuards(PermisoGuard)
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async getSemaforo(
     @Param('lat') lat: number,
     @Param('lng') lng: number,

@@ -4,6 +4,8 @@ import { ITokenPush, IUsuario, ICreateTokenPush } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { GetUser } from '../../auxiliares/authorization/get-token.decorator';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
+import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
+import { PERMISOS_AUTENTICADOS } from '../../auxiliares/authorization/permisos-authenticados';
 
 @ApiTags('TokenPushs')
 @Controller('tokenpushs')
@@ -12,6 +14,7 @@ export class TokenPushsController {
   constructor(private service: TokenPushsService) {}
 
   @Post('upsert')
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async upsert(
     @Body() datos: ICreateTokenPush,
     @GetUser() user: IUsuario,

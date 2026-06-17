@@ -12,6 +12,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 import { GetPermiso } from '../../auxiliares/authorization/get-permiso.decorator';
+import { PERMISOS_AUTENTICADOS } from '../../auxiliares/authorization/permisos-authenticados';
 
 @ApiTags('Fotos')
 @Controller('fotos')
@@ -20,12 +21,13 @@ export class FotosController {
   constructor(private service: FotosService) {}
 
   @Get('imagen')
+  @Permisos(...PERMISOS_AUTENTICADOS)
   async getImage(@Query('url') url: string): Promise<any> {
     return await this.service.getImagen(url);
   }
 
   @Get()
-  @Permisos()
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
   public async get(
     @Query() query: IQueryParam,
     @GetPermiso() permiso: IPermiso,
@@ -34,7 +36,7 @@ export class FotosController {
   }
 
   @Get('lote/:id')
-  @Permisos()
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
   public async getByLoteId(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,
@@ -43,7 +45,7 @@ export class FotosController {
   }
 
   @Get('/:id')
-  @Permisos()
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
   public async getById(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,
@@ -52,7 +54,7 @@ export class FotosController {
   }
 
   @Delete('/:id')
-  @Permisos()
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
   public async delete(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,

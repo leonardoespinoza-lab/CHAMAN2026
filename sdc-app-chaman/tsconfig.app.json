@@ -7,5 +7,5 @@
     "types": ["node"]
   },
   "files": ["src/main.ts"],
-  "include": ["src/**/*.d.ts"]
+  "include": ["src/**/*.d.ts", "../sdc-modelos/src/**/*.ts"]
 }

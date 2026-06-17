@@ -11,6 +11,10 @@ import { connect, disconnect } from 'mongoose';
 import { AppModule } from './app.module';
 import { DB_NAME, DB_OPTIONS, DB_URL, ENV, PORT, PREFIX_PATH, VERSION } from './env';
 import { LogRequestInterceptor } from './auxiliares/logRequest/logRequest.interceptor';
+import {
+  applySecurityHardening,
+  shouldExposeSwagger,
+} from './auxiliares/security/app-hardening';
 
 function setGlobalPrefix(app: INestApplication, logger: Logger) {
   if (PREFIX_PATH) {
@@ -76,8 +80,13 @@ async function bootstrap() {
   app.use(json({ limit: process.env.HTTP_BODY_LIMIT || '100mb' }));
   app.use(urlencoded({ extended: true, limit: process.env.HTTP_BODY_LIMIT || '100mb' }));
   setGlobalPrefix(app, logger);
-  swaggerConfig(app);
-  app.enableCors();
+  if (shouldExposeSwagger(ENV)) {
+    swaggerConfig(app);
+    logger.verbose(`Documentacion disponible en ${PREFIX_PATH}/api`);
+  } else {
+    logger.verbose('Swagger deshabilitado en este entorno');
+  }
+  applySecurityHardening(app, logger, ENV);
   app.useGlobalInterceptors(new LogRequestInterceptor());
   app.useGlobalPipes(
     new ValidationPipe({
@@ -89,6 +98,5 @@ async function bootstrap() {
   await app.listen(PORT, host);
   logger.verbose(`Application listening on ${host}:${PORT}`);
   logger.verbose(`Version: ${VERSION}`);
-  logger.verbose(`Documentación disponible en ${PREFIX_PATH}/api`);
 }
 bootstrap();

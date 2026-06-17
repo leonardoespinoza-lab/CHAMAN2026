@@ -19,6 +19,7 @@ import {
 } from 'modelos/src';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
+import { PERMISOS_AUTENTICADOS } from '../../auxiliares/authorization/permisos-authenticados';
 import { MalezasService } from './service';
 
 @ApiTags('Malezas')
@@ -28,11 +29,13 @@ export class MalezasController {
   constructor(private service: MalezasService) {}
 
   @Get()
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async get(@Query() query: IQueryParam): Promise<IListado<IMaleza>> {
     return await this.service.get(query);
   }
 
   @Get('/:id')
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async getById(@Param('id') id: string): Promise<IMaleza> {
     return await this.service.getById(id);
   }

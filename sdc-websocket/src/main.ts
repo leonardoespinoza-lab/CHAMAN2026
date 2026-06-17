@@ -3,7 +3,11 @@ import { NestFactory } from '@nestjs/core';
 import { WsAdapter } from '@nestjs/platform-ws';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { PORT, PREFIX_PATH } from './env';
+import { ENV, PORT, PREFIX_PATH } from './env';
+import {
+  applySecurityHardening,
+  shouldExposeSwagger,
+} from './auxiliares/security/app-hardening';
 
 function setGlobalPrefix(app: INestApplication, logger: Logger) {
   if (PREFIX_PATH) {
@@ -31,8 +35,13 @@ async function bootstrap() {
   const logger = new Logger('Main');
   const app = await NestFactory.create(AppModule);
   setGlobalPrefix(app, logger);
-  swaggerConfig(app);
-  app.enableCors();
+  if (shouldExposeSwagger(ENV)) {
+    swaggerConfig(app);
+    logger.verbose(`Documentacion disponible en ${PREFIX_PATH}/api`);
+  } else {
+    logger.verbose('Swagger deshabilitado en este entorno');
+  }
+  applySecurityHardening(app, logger, ENV);
   app.useWebSocketAdapter(new WsAdapter(app));
   await app.listen(PORT);
   logger.verbose(`Application listening on port ${PORT}`);

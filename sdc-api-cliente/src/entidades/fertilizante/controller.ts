@@ -10,6 +10,8 @@ import { FertilizantesService } from './service';
 import { IFertilizante, IListado, IQueryParam } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
+import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
+import { PERMISOS_AUTENTICADOS } from '../../auxiliares/authorization/permisos-authenticados';
 
 @ApiTags('Fertilizantees')
 @Controller('fertilizantes')
@@ -20,6 +22,7 @@ export class FertilizantesController {
   constructor(private service: FertilizantesService) {}
 
   @Get()
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async get(
     @Query() query: IQueryParam,
   ): Promise<IListado<IFertilizante>> {
@@ -27,6 +30,7 @@ export class FertilizantesController {
   }
 
   @Get('/:id')
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async getById(@Param('id') id: string): Promise<IFertilizante> {
     return await this.service.getById(id);
   }

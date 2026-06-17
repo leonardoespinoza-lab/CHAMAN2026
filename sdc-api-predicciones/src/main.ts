@@ -3,6 +3,10 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { ENV, PORT, PREFIX_PATH, VERSION } from './env';
+import {
+  applySecurityHardening,
+  shouldExposeSwagger,
+} from './auxiliares/security/app-hardening';
 
 function setGlobalPrefix(app: INestApplication, logger: Logger) {
   if (PREFIX_PATH) {
@@ -30,12 +34,16 @@ async function bootstrap() {
   logger.verbose(`Iniciando en env... ${ENV}`);
   const app = await NestFactory.create(AppModule);
   setGlobalPrefix(app, logger);
-  swaggerConfig(app);
-  app.enableCors();
+  if (shouldExposeSwagger(ENV)) {
+    swaggerConfig(app);
+    logger.verbose(`Documentacion disponible en ${PREFIX_PATH}/api`);
+  } else {
+    logger.verbose('Swagger deshabilitado en este entorno');
+  }
+  applySecurityHardening(app, logger, ENV);
   const host = process.env.HOST || '0.0.0.0';
   await app.listen(PORT, host);
   logger.verbose(`Application listening on ${host}:${PORT}`);
   logger.verbose(`Version: ${VERSION}`);
-  logger.verbose(`Documentación disponible en ${PREFIX_PATH}/api`);
 }
 bootstrap();

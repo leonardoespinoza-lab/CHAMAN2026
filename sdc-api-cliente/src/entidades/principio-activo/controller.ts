@@ -10,6 +10,8 @@ import { PrincipioActivosService } from './service';
 import { IPrincipioActivo, IListado, IQueryParam } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
+import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
+import { PERMISOS_AUTENTICADOS } from '../../auxiliares/authorization/permisos-authenticados';
 
 @ApiTags('PrincipioActivoes')
 @Controller('principioactivos')
@@ -20,6 +22,7 @@ export class PrincipioActivosController {
   constructor(private service: PrincipioActivosService) {}
 
   @Get()
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async get(
     @Query() query: IQueryParam,
   ): Promise<IListado<IPrincipioActivo>> {
@@ -27,6 +30,7 @@ export class PrincipioActivosController {
   }
 
   @Get('/:id')
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async getById(@Param('id') id: string): Promise<IPrincipioActivo> {
     return await this.service.getById(id);
   }

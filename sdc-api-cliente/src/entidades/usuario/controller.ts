@@ -99,7 +99,7 @@ export class UsuariosController {
   }
 
   @Post('autogestion/crear')
-  @Permisos()
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
   public async crearFront(@Body() body: ICreateUsuario): Promise<IUsuario> {
     return await this.service.crearFront(body);
   }
