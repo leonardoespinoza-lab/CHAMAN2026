@@ -41,6 +41,12 @@ export class CardFrioTermicoComponent implements OnChanges {
   public reportesSensorFrio: IReporte[] = [];
   public loadingHistoricoSensor = false;
   public diasHistoricoSensor = 7;
+  public metricas: MetricFrio[] = [];
+  public serieReciente: ISerieFrioTermicoDia[] = [];
+  public chartFrioOptions?: Highcharts.Options;
+
+  private ultimoKeyFrio = '';
+  private ultimoKeyHistorico = '';
 
   constructor(
     private climaService: ClimaService,
@@ -108,7 +114,7 @@ export class CardFrioTermicoComponent implements OnChanges {
     return '';
   }
 
-  public get metricas(): MetricFrio[] {
+  private crearMetricas(): MetricFrio[] {
     const data = this.data;
     const frio = this.frioSensor;
     if (!data && !frio) return [];
@@ -207,11 +213,7 @@ export class CardFrioTermicoComponent implements OnChanges {
     return metricas;
   }
 
-  public get serieReciente(): ISerieFrioTermicoDia[] {
-    return (this.data?.serie || []).slice(-60);
-  }
-
-  public get chartFrioOptions(): Highcharts.Options | undefined {
+  private crearChartFrioOptions(): Highcharts.Options | undefined {
     const serie = this.serieReciente;
     const hayTemperatura = serie.filter((dia) => this.esNumero(dia.temperaturaMin) || this.esNumero(dia.temperaturaMax)).length > 1;
     const hayLluvia = serie.some((dia) => this.esNumero(dia.lluvia));
@@ -362,27 +364,40 @@ export class CardFrioTermicoComponent implements OnChanges {
 
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
     if (changes['lote'] || changes['siembra']) {
+      this.prepararVista();
       await Promise.all([this.cargar(), this.cargarHistoricoSensor()]);
     }
   }
 
   public async cambiarPeriodoSensor(dias: number): Promise<void> {
     this.diasHistoricoSensor = dias;
-    await this.cargarHistoricoSensor();
+    await this.cargarHistoricoSensor(true);
   }
 
-  public async cargar(): Promise<void> {
-    if (!this.mostrar) return;
+  public async cargar(force = false): Promise<void> {
+    if (!this.mostrar) {
+      this.data = undefined;
+      this.prepararVista();
+      return;
+    }
     const centro = this.lote?.ubicacion?.centro || this.lote?.establecimiento?.ubicacion?.[0]?.centro;
-    this.data = undefined;
     this.error = undefined;
     if (!centro?.lat || !centro?.lng) {
       if (!this.frioSensor) {
         this.error = 'Sin coordenadas para calcular frio y grados dia.';
       }
+      this.prepararVista();
       return;
     }
 
+    const key = this.frioRequestKey();
+    if (!force && key && key === this.ultimoKeyFrio && this.data) {
+      this.prepararVista();
+      return;
+    }
+
+    this.data = undefined;
+    this.prepararVista();
     this.loading = true;
     try {
       const requerimientoFrio = this.siembra?.semilla?.requerimientoFrio || {};
@@ -392,20 +407,33 @@ export class CardFrioTermicoComponent implements OnChanges {
         horasFrioEfectivasObjetivo: requerimientoFrio.horasFrioEfectivas,
         porcionesFrioObjetivo: requerimientoFrio.porcionesFrio,
       });
+      this.ultimoKeyFrio = key;
     } catch (error: any) {
       if (!this.frioSensor) {
         this.error = error?.error?.message || error?.message || 'No se pudo calcular frio termico.';
       }
     } finally {
       this.loading = false;
+      this.prepararVista();
     }
   }
 
-  private async cargarHistoricoSensor(): Promise<void> {
+  private prepararVista(): void {
+    this.metricas = this.crearMetricas();
+    this.serieReciente = (this.data?.serie || []).slice(-60);
+    this.chartFrioOptions = this.crearChartFrioOptions();
+  }
+
+  private async cargarHistoricoSensor(force = false): Promise<void> {
     const dispositivo = this.dispositivoFrio;
     const id = dispositivo?.deveui || dispositivo?._id;
     if (!id) {
       this.reportesSensorFrio = [];
+      return;
+    }
+
+    const key = `${id}|${this.diasHistoricoSensor}`;
+    if (!force && key === this.ultimoKeyHistorico && this.reportesSensorFrio.length) {
       return;
     }
 
@@ -417,12 +445,26 @@ export class CardFrioTermicoComponent implements OnChanges {
         : dispositivo.ultimoReporte
           ? [dispositivo.ultimoReporte]
           : [];
+      this.ultimoKeyHistorico = key;
     } catch (error) {
       console.error('Error al cargar historico ambiental para frio', error);
       this.reportesSensorFrio = dispositivo.ultimoReporte ? [dispositivo.ultimoReporte] : [];
     } finally {
       this.loadingHistoricoSensor = false;
     }
+  }
+
+  private frioRequestKey(): string {
+    const centro = this.lote?.ubicacion?.centro || this.lote?.establecimiento?.ubicacion?.[0]?.centro;
+    const requerimientoFrio = this.siembra?.semilla?.requerimientoFrio || {};
+    return [
+      centro?.lat,
+      centro?.lng,
+      this.siembra?.semilla?.cultivo,
+      requerimientoFrio.horasFrio,
+      requerimientoFrio.horasFrioEfectivas,
+      requerimientoFrio.porcionesFrio,
+    ].join('|');
   }
 
   private porcentaje(valor?: number, objetivo?: number): number | undefined {

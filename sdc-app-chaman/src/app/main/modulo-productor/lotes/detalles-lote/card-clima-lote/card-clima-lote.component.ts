@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import Highcharts from 'highcharts';
 import { IClimaEstacionMeteorologica, IPronosticoEstacionMeteorologica } from 'modelos/src';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
@@ -51,22 +51,32 @@ interface PanelClima {
   templateUrl: './card-clima-lote.component.html',
   styleUrl: './card-clima-lote.component.scss',
 })
-export class CardClimaLoteComponent {
+export class CardClimaLoteComponent implements OnChanges {
   @Input() public lote?: IDetallesLote;
 
-  public get pronosticos(): IPronosticoEstacionMeteorologica[] {
-    return this.lote?.establecimiento?.prediccionClimatica?.pronosticos?.slice(0, 7) || [];
+  public pronosticos: IPronosticoEstacionMeteorologica[] = [];
+  public climaActual?: IClimaEstacionMeteorologica;
+  public fuente = 'Open-Meteo';
+  public metricas: MetricClima[] = [];
+  public dias: DiaClima[] = [];
+  public paneles: PanelClima[] = [];
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['lote']) {
+      this.prepararVista();
+    }
   }
 
-  public get climaActual(): IClimaEstacionMeteorologica | undefined {
-    return this.lote?.establecimiento?.climaActual?.clima;
+  private prepararVista(): void {
+    this.pronosticos = this.lote?.establecimiento?.prediccionClimatica?.pronosticos?.slice(0, 7) || [];
+    this.climaActual = this.lote?.establecimiento?.climaActual?.clima;
+    this.fuente = this.pronosticos[0]?.fuente || this.climaActual?.fuente || 'Open-Meteo';
+    this.metricas = this.crearMetricas();
+    this.dias = this.crearDias();
+    this.paneles = this.crearPaneles();
   }
 
-  public get fuente(): string {
-    return this.pronosticos[0]?.fuente || this.climaActual?.fuente || 'Open-Meteo';
-  }
-
-  public get metricas(): MetricClima[] {
+  private crearMetricas(): MetricClima[] {
     const lluvia24 = this.lluvias[0] || 0;
     const lluvia72 = this.suma(this.lluvias.slice(0, 3));
     const et072 = this.suma(this.et0s.slice(0, 3));
@@ -100,7 +110,7 @@ export class CardClimaLoteComponent {
     ];
   }
 
-  public get dias(): DiaClima[] {
+  private crearDias(): DiaClima[] {
     const lluviaMax = Math.max(...this.lluvias, 1);
 
     return this.pronosticos.map((p, index) => {
@@ -128,7 +138,7 @@ export class CardClimaLoteComponent {
     });
   }
 
-  public get paneles(): PanelClima[] {
+  private crearPaneles(): PanelClima[] {
     const puntoRocio = this.pronosticos.map((p) =>
       this.calcularPuntoRocio(this.numero(p.temperatura?.avg ?? p.temperatura?.max), this.numero(p.humedad?.avg ?? p.humedad?.max)),
     );

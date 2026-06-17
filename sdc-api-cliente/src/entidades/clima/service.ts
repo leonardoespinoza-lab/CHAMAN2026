@@ -19,6 +19,12 @@ import { API_CLIMA } from '../../env';
 export class ClimaService {
   private readonly logger = new Logger(ClimaService.name);
   private readonly timezone = 'America/Argentina/Buenos_Aires';
+  private readonly FRIO_TERMICO_CACHE_TTL_MS = 15 * 60 * 1000;
+  private readonly FRIO_TERMICO_CACHE_MAX = 500;
+  private readonly frioTermicoCache = new Map<
+    string,
+    { expiresAt: number; value: IFrioTermicoCultivo }
+  >();
 
   constructor(
     private readonly establecimientosService: EstablecimientosService,
@@ -716,6 +722,16 @@ export class ClimaService {
         overrides.gradosDiaFloracionObjetivo ??
         config.gradosDiaFloracionObjetivo,
     };
+    const cacheKey = this.getFrioTermicoCacheKey(
+      latNum,
+      lngNum,
+      cultivo,
+      requerimientos,
+    );
+    const cached = this.frioTermicoCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
 
     const frioDesde = this.getInicioFrio(hoy);
     const termicoDesde = this.getInicioTermico(hoy);
@@ -818,7 +834,7 @@ export class ClimaService {
       acumulados,
     );
 
-    return {
+    const resultado: IFrioTermicoCultivo = {
       fuente: 'OpenMeteo',
       lat: latNum,
       lng: lngNum,
@@ -843,6 +859,45 @@ export class ClimaService {
       serie,
       lectura: this.getLecturaFrioTermico(cultivo, progreso, riesgoHelada),
     };
+
+    this.frioTermicoCache.set(cacheKey, {
+      expiresAt: Date.now() + this.FRIO_TERMICO_CACHE_TTL_MS,
+      value: resultado,
+    });
+    this.limpiarCacheFrioTermico();
+
+    return resultado;
+  }
+
+  private getFrioTermicoCacheKey(
+    lat: number,
+    lng: number,
+    cultivo: string | undefined,
+    requerimientos: Record<string, number | undefined>,
+  ): string {
+    const req = Object.entries(requerimientos)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}:${value ?? ''}`)
+      .join('|');
+    return [
+      this.round(lat, 4),
+      this.round(lng, 4),
+      cultivo || 'cultivo',
+      this.toDateKey(new Date()),
+      req,
+    ].join('|');
+  }
+
+  private limpiarCacheFrioTermico(): void {
+    if (this.frioTermicoCache.size <= this.FRIO_TERMICO_CACHE_MAX) {
+      return;
+    }
+    const now = Date.now();
+    for (const [key, value] of this.frioTermicoCache.entries()) {
+      if (value.expiresAt <= now || this.frioTermicoCache.size > this.FRIO_TERMICO_CACHE_MAX) {
+        this.frioTermicoCache.delete(key);
+      }
+    }
   }
 
   /**
