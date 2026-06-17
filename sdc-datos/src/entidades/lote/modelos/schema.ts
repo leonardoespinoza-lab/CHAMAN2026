@@ -20,6 +20,7 @@ import {
   ISiembra,
   ICalidadClima,
   IDispositivo,
+  ISueloReferencia,
 } from 'modelos/src';
 import { Document } from 'mongoose';
 import { Quimica } from '../../quimica/modelos/schema';
@@ -45,6 +46,9 @@ export class Lote implements Exactly<ILote, Lote> {
 
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idSondaSuelo?: string;
+
+  @Prop({ type: Object })
+  sueloReferencia?: ISueloReferencia;
 
   @Prop({ type: [Object] })
   suelos?: ISuelo[];

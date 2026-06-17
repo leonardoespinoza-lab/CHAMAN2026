@@ -5,6 +5,7 @@ import { TranslateService } from '@ngx-translate/core';
 import {
   ICoordenadas,
   ICreateLote,
+  DireccionV2,
   IDepartamento,
   IDispositivo,
   IEstablecimiento,
@@ -16,14 +17,17 @@ import {
   IPopulate,
   IQueryParam,
   ISuelo,
+  ISueloReferencia,
   TTexturaSuelo,
   TTipoContenidoP,
   TTipoDepositoN,
   TTipoDrenaje,
   TTipoErosionEscorrentiaPendiente,
 } from 'modelos/src';
+import { AutoCompleteCompleteEvent, AutoCompleteSelectEvent } from 'primeng/autocomplete';
 import { Subscription } from 'rxjs';
 import { MapDrawComponent } from '../../../../auxiliares/componentes/map-draw/map-draw.component';
+import { GeoNodeService } from '../../../../auxiliares/http/geonode.service';
 import { LoteService } from '../../../../auxiliares/http/lote.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../auxiliares/servicios/listados';
@@ -53,6 +57,12 @@ export class CrearEditarLoteComponent implements OnInit {
   public dispositivos: IDispositivo[] = [];
   public dispositivos$?: Subscription;
 
+  public busquedaUbicacion = '';
+  public ubicacionesSugeridas: string[] = [];
+  public ubicacionLoading = false;
+  public centroMapa?: IGeoJSONPoint;
+  public ubicacionDetectada?: DireccionV2;
+
   public distanciaSonda?: string;
   public sueloIntaLoading = false;
   public sueloIntaInfo?: any;
@@ -76,6 +86,9 @@ export class CrearEditarLoteComponent implements OnInit {
   get geojson() {
     return this.form?.get('ubicacion.geojson') as FormGroup;
   }
+  get sueloReferenciaActual(): ISueloReferencia | undefined {
+    return this.sueloIntaInfo?.resumen || this.form?.get('sueloReferencia')?.value || this.lote?.sueloReferencia;
+  }
   get geoJsonEstablecimiento() {
     const idEstablecimiento = this.form?.get('idEstablecimiento')?.value;
     const e = this.establecimientos.find((d) => d._id === idEstablecimiento);
@@ -86,6 +99,7 @@ export class CrearEditarLoteComponent implements OnInit {
     private paramsService: ParamsService,
     private translate: TranslateService,
     private service: LoteService,
+    private geonode: GeoNodeService,
     private helper: HelperService,
     private listado: ListadosService,
     private activatedRoute: ActivatedRoute
@@ -126,7 +140,8 @@ export class CrearEditarLoteComponent implements OnInit {
       idEstablecimiento: new FormControl(this.lote?.idEstablecimiento, Validators.required),
       idDepartamento: new FormControl(this.lote?.idDepartamento, Validators.required),
       idSondaSuelo: new FormControl(this.lote?.idSondaSuelo),
-      idsDispositivo: new FormControl(this.lote?.idsDispositivo),
+      idsDispositivo: new FormControl(this.lote?.idsDispositivo || []),
+      sueloReferencia: new FormControl(this.lote?.sueloReferencia),
       capacidadDeCampo: new FormControl(this.lote?.capacidadDeCampo),
       puntoMarchitez: new FormControl(this.lote?.puntoMarchitez),
       capacidadDeRiego: new FormControl(this.lote?.capacidadDeRiego),
@@ -177,6 +192,74 @@ export class CrearEditarLoteComponent implements OnInit {
     }
   }
 
+  public async buscarUbicaciones(event: AutoCompleteCompleteEvent): Promise<void> {
+    const query = `${event.query || ''}`.trim();
+    if (query.length < 3) {
+      this.ubicacionesSugeridas = [];
+      return;
+    }
+
+    this.ubicacionLoading = true;
+    try {
+      const response = await this.geonode.direcciones({
+        text: `${query}, Argentina`,
+      });
+      this.ubicacionesSugeridas = response.resultados || [];
+    } catch (error) {
+      this.ubicacionesSugeridas = [];
+      this.helper.notifWarn('No se pudieron buscar ubicaciones en este momento.');
+    } finally {
+      this.ubicacionLoading = false;
+    }
+  }
+
+  public async seleccionarUbicacionEvent(event: AutoCompleteSelectEvent): Promise<void> {
+    await this.seleccionarUbicacion(`${event.value || ''}`);
+  }
+
+  public async seleccionarUbicacion(direccion: string): Promise<void> {
+    const texto = `${direccion || ''}`.trim();
+    if (!texto || !this.form) return;
+
+    this.ubicacionLoading = true;
+    try {
+      const coordenadas = await this.geonode.geocode({ text: texto });
+      if (!Number.isFinite(coordenadas?.lat) || !Number.isFinite(coordenadas?.lng)) {
+        this.helper.notifWarn('No se encontraron coordenadas para esa busqueda.');
+        return;
+      }
+
+      this.form.get('ubicacion.centro')?.setValue(coordenadas);
+      this.centroMapa = {
+        type: 'Point',
+        coordinates: [coordenadas.lng, coordenadas.lat],
+      };
+
+      await this.actualizarUbicacionDesdeCentro();
+      this.helper.notifSuccess('Ubicacion encontrada. Ahora podes dibujar o ajustar el lote en el mapa.');
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.ubicacionLoading = false;
+    }
+  }
+
+  public async actualizarUbicacionDesdeCentro(): Promise<void> {
+    const centro = this.form?.get('ubicacion.centro')?.value;
+    if (!centro?.lat || !centro?.lng) return;
+
+    try {
+      const geojson: IGeoJSONPoint = {
+        type: 'Point',
+        coordinates: [centro.lng, centro.lat],
+      };
+      this.ubicacionDetectada = await this.geonode.reverse({ geojson });
+      this.seleccionarDepartamentoPorDireccion(this.ubicacionDetectada);
+    } catch (error) {
+      this.ubicacionDetectada = undefined;
+    }
+  }
+
   public async autocompletarSueloInta(): Promise<void> {
     if (!this.form) return;
     const data = this.getData();
@@ -201,6 +284,7 @@ export class CrearEditarLoteComponent implements OnInit {
       const sugerencias = info.sugerencias;
       const patch: Record<string, any> = {};
       for (const key of [
+        'sueloReferencia',
         'capacidadDeCampo',
         'puntoMarchitez',
         'texturaLixiviacion',
@@ -238,6 +322,8 @@ export class CrearEditarLoteComponent implements OnInit {
       const centro = this.helper.calcularCentroide(data.ubicacion.geojson);
       data.ubicacion.centro = { lat: centro[1], lng: centro[0] };
       data.ubicacion.superficie = this.helper.calcularAreaHectareas(data.ubicacion.geojson);
+      this.form?.get('ubicacion.centro')?.setValue(data.ubicacion.centro, { emitEvent: false });
+      this.form?.get('ubicacion.superficie')?.setValue(data.ubicacion.superficie, { emitEvent: false });
     }
     return data;
   }
@@ -274,6 +360,41 @@ export class CrearEditarLoteComponent implements OnInit {
 
   public volver() {
     window.history.back();
+  }
+
+  private seleccionarDepartamentoPorDireccion(direccion?: DireccionV2): void {
+    if (!direccion || !this.departamentos.length) return;
+
+    const provincia = this.normalizarTexto(direccion.provincia);
+    const candidatos = [direccion.partido, direccion.localidad]
+      .map((value) => this.normalizarTexto(value))
+      .filter(Boolean);
+
+    if (!candidatos.length && !provincia) return;
+
+    const departamento = this.departamentos.find((item) => {
+      const nombreDepartamento = this.normalizarTexto(item.nombre);
+      const nombreProvincia = this.normalizarTexto(item.provincia?.nombre);
+      const coincideProvincia = !provincia || nombreProvincia === provincia || nombreProvincia.includes(provincia);
+      const coincideDepartamento =
+        !candidatos.length ||
+        candidatos.some((candidato) => nombreDepartamento === candidato || nombreDepartamento.includes(candidato));
+      return coincideProvincia && coincideDepartamento;
+    });
+
+    if (departamento?._id) {
+      this.form?.get('idDepartamento')?.setValue(departamento._id);
+    }
+  }
+
+  private normalizarTexto(value?: string): string {
+    return `${value || ''}`
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   // LISTADOS

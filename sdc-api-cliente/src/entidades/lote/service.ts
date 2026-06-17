@@ -9,6 +9,7 @@ import {
   IReporteNDVI,
   IPermiso,
   ISuelo,
+  ISueloReferencia,
   TTexturaSuelo,
   TTipoDrenaje,
   TTipoErosionEscorrentiaPendiente,
@@ -256,8 +257,33 @@ export class LotesService {
       const profundidad = this.toNumber(properties.profund_s1);
       const indiceProductividad = this.toNumber(properties.ind_prod);
       const pendiente = this.toNumber(properties.porc_pens1);
+      const sueloReferencia: ISueloReferencia = {
+        fuente: base.fuente,
+        servicio: base.servicio,
+        fechaConsulta: base.fechaConsulta,
+        confianza: this.calcularConfianza(properties),
+        provincia: properties.provincia,
+        unidadCartografica: properties.simbc,
+        tipoUnidad: properties.tipo_uc,
+        limitaciones: this.compactar([
+          properties.limit_ppal,
+          properties.limit_secu,
+          properties.limit_terc,
+        ]),
+        indiceProductividad,
+        orden: properties.orden_sue1,
+        granGrupo: properties.ggrup_sue1,
+        subGrupo: properties.sgrup_sue1,
+        texturaSuperficial: properties.text_sups1,
+        texturaSubsuelo: properties.text_bs1,
+        drenaje: properties.drenaje_s1,
+        profundidadCm: profundidad,
+        pendientePorcentaje: pendiente,
+        raw: properties,
+      };
 
       const sugerencias: Partial<IUpdateLote> = {
+        sueloReferencia,
         capacidadDeCampo: capacidad.capacidadDeCampo,
         puntoMarchitez: capacidad.puntoMarchitez,
         texturaLixiviacion: textura,
@@ -280,27 +306,9 @@ export class LotesService {
       return {
         ...base,
         encontrado: true,
-        confianza: this.calcularConfianza(properties),
+        confianza: sueloReferencia.confianza,
         mensaje: 'Datos sugeridos desde INTA. Se pueden editar antes de guardar el lote.',
-        resumen: {
-          provincia: properties.provincia,
-          unidadCartografica: properties.simbc,
-          tipoUnidad: properties.tipo_uc,
-          limitaciones: this.compactar([
-            properties.limit_ppal,
-            properties.limit_secu,
-            properties.limit_terc,
-          ]),
-          indiceProductividad,
-          orden: properties.orden_sue1,
-          granGrupo: properties.ggrup_sue1,
-          subGrupo: properties.sgrup_sue1,
-          texturaSuperficial: properties.text_sups1,
-          texturaSubsuelo: properties.text_bs1,
-          drenaje: properties.drenaje_s1,
-          profundidadCm: profundidad,
-          pendientePorcentaje: pendiente,
-        },
+        resumen: sueloReferencia,
         sugerencias,
         raw: properties,
       };

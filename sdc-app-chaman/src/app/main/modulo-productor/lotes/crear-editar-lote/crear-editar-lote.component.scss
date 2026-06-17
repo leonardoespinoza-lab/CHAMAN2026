@@ -1,96 +1,190 @@
-.nivel {
-  padding: 0.5em;
-  border: 1px solid var(--p-text-muted-color);
-  border-radius: 8px;
-  margin-bottom: 1em;
+:host {
+  display: block;
+  min-height: 100vh;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
-.soil-lookup,
-.soil-summary {
+.lote-editor {
+  min-height: 100%;
+  padding: 1rem;
+}
+
+.editor-card {
+  min-height: calc(100vh - 2rem);
+}
+
+.editor-body {
+  min-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.editor-main {
+  min-height: 0;
+}
+
+.editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.editor-content {
+  overflow: auto;
+  max-height: calc(100vh - 170px);
+  margin-top: 1rem;
+  padding-right: 0.25rem;
+}
+
+.form-section,
+.devices-section {
   display: grid;
   gap: 1rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.location-search,
+.soil-lookup,
+.soil-summary,
+.soil-detail-grid,
+.device-help {
   border: 1px solid var(--p-content-border-color);
   border-radius: 8px;
+  background: color-mix(in srgb, var(--p-content-background) 88%, #ffffff 12%);
+}
+
+.location-search {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(260px, 1.4fr) auto;
+  gap: 1rem;
+  align-items: center;
   padding: 1rem;
-  background: var(--p-content-background);
+  margin-bottom: 1rem;
 }
 
 .soil-lookup {
+  display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-}
-
-.soil-lookup strong,
-.soil-summary strong {
-  color: var(--p-text-color);
-}
-
-.soil-lookup small,
-.soil-summary span {
-  display: block;
-  color: var(--p-text-muted-color);
-  font-size: 0.82rem;
+  gap: 1rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
 }
 
 .soil-summary {
+  display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.soil-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 .soil-summary-empty {
   border-color: var(--p-yellow-300);
 }
 
-@media (max-width: 768px) {
-  .soil-lookup,
-  .soil-summary {
-    grid-template-columns: 1fr;
-  }
+.nivel {
+  padding: 1rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  background: var(--p-content-background);
 }
 
-/* Aplicar el mismo patrón que detalles-lote para escritorio */
-/* En móviles: ancho completo - el padding se maneja globalmente */
-/* En escritorio: contenedor centrado con márgenes simétricos */
-
-/* --- Configuración de scroll para el nuevo layout de nav --- */
-:host {
-  height: 100vh; /* Altura completa */
-  overflow-y: scroll; /* Scroll vertical siempre disponible */
-  box-sizing: border-box; /* Incluye padding/margin en el cálculo */
-  
-  /* Ocultar barra de scroll para mejor estética */
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* Internet Explorer 10+ */
-  
-  &::-webkit-scrollbar {
-    display: none; /* WebKit browsers (Chrome, Safari, Edge) */
-  }
+.soil-layer-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
 }
 
-/* Para escritorio real (pantallas grandes no táctiles) */
+.soil-layer-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1rem;
+}
+
+.device-help {
+  padding: 1rem;
+}
+
+.select-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  line-height: 1.2;
+}
+
+.location-search strong,
+.soil-lookup strong,
+.soil-summary strong,
+.soil-detail-grid strong,
+.device-help strong {
+  color: var(--p-text-color);
+}
+
+.location-search small,
+.soil-lookup small,
+.soil-summary span,
+.soil-detail-grid span,
+.device-help small,
+.select-option small {
+  display: block;
+  color: var(--p-text-muted-color);
+  font-size: 0.86rem;
+}
+
+.editor-footer {
+  flex: 0 0 auto;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 1rem;
+}
+
 @media (min-width: 1024px) and (pointer: fine) and (hover: hover) {
   :host {
-    display: block;
-    width: 80%;
-    margin: 0 auto; /* Solo márgenes horizontales para evitar problemas con altura */
-    padding: 2em 0 4em 0; /* Padding vertical para espaciado */
-    height: 100vh; /* Mantener altura completa */
-    overflow-y: scroll; /* Mantener scroll siempre disponible */
-    box-sizing: border-box;
-    
-    /* Ocultar barra de scroll para mejor estética */
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* Internet Explorer 10+ */
-    
-    &::-webkit-scrollbar {
-      display: none; /* WebKit browsers (Chrome, Safari, Edge) */
-    }
+    width: min(1500px, 92vw);
+    margin: 0 auto;
+    padding: 1rem 0 2rem;
   }
 }
 
-/* Para pantallas muy grandes */
-@media (min-width: 1921px) {
-  :host {
-    width: 85%;
-    padding: 3em 0 5em 0; /* Padding vertical para espaciado */
+@media (max-width: 900px) {
+  .form-grid,
+  .location-search,
+  .soil-lookup,
+  .soil-summary,
+  .soil-detail-grid,
+  .soil-layer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-content {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .footer-actions {
+    flex-direction: column;
   }
 }

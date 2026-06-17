@@ -40,6 +40,27 @@ export interface ISuelo {
   numeroDeSensor?: number;
 }
 
+export interface ISueloReferencia {
+  fuente?: string;
+  servicio?: string;
+  fechaConsulta?: string;
+  confianza?: 'alta' | 'media' | 'baja';
+  provincia?: string;
+  unidadCartografica?: string;
+  tipoUnidad?: string;
+  limitaciones?: string[];
+  indiceProductividad?: number;
+  orden?: string;
+  granGrupo?: string;
+  subGrupo?: string;
+  texturaSuperficial?: string;
+  texturaSubsuelo?: string;
+  drenaje?: string;
+  profundidadCm?: number;
+  pendientePorcentaje?: number;
+  raw?: Record<string, unknown>;
+}
+
 export interface nivelPrediccion {
   cultivo?: Cultivo; // Soja - Trigo - Maiz
   enfermedad?: TEnfermedad; // Enfermedad a predecir
@@ -70,6 +91,7 @@ export interface ILote {
   ubicacion?: IUbicacion;
   capacidadDeCampo?: number;
   idSondaSuelo?: string;
+  sueloReferencia?: ISueloReferencia;
   suelos?: ISuelo[];
   capacidadDeRiego?: number;
   puntoMarchitez?: number;
