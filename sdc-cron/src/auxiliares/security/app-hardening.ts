@@ -55,7 +55,7 @@ function configureCors(app: INestApplication, logger: Logger, env?: string) {
       }
 
       logger.warn(`CORS origin bloqueado: ${origin}`);
-      callback(new Error('Origen no permitido por CORS'), false);
+      callback(null, false);
     },
   });
 }
