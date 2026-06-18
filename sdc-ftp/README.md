@@ -1,8 +1,10 @@
-# CHAMAN Time-lapse FTP
+# CHAMAN Time-lapse Ingest
 
-Servicio de ingreso para camaras de seguimiento visual de lotes. Recibe imagenes por FTP, las guarda en almacenamiento persistente y registra la foto en `sdc-datos` para que el modulo Time-lapse del admin las muestre por lote.
+Servicio de ingreso para camaras de seguimiento visual de lotes. Recibe imagenes por FTP y tambien puede pedir capturas por Hik-Connect for Teams OpenAPI. Guarda las imagenes en almacenamiento persistente y registra la foto en `sdc-datos` para que el modulo Time-lapse del admin las muestre por lote.
 
 ## Flujo
+
+### FTP
 
 1. En el admin de CHAMAN, asignar a un lote el `serialCamara`.
 2. Configurar la camara para subir por FTP usando ese serial como usuario.
@@ -11,6 +13,15 @@ Servicio de ingreso para camaras de seguimiento visual de lotes. Recibe imagenes
 5. El servicio consulta `API_DATOS /lotes` por `serialCamara`.
 6. Si encuentra lote asociado, crea un registro en `API_DATOS /fotos`.
 7. Si no encuentra lote, deja el archivo guardado y lo lista en `/uploads/latest` como pendiente.
+
+### Hik-Connect for Teams
+
+1. Hikvision entrega `serverAddress`, `appKey` y `secretKey`.
+2. El servicio obtiene token con `POST /api/hccgw/platform/v1/token/get` y lo cachea hasta su vencimiento.
+3. El admin puede listar camaras con `/hik-connect/cameras`.
+4. Para cada lote con `serialCamara`, el servicio llama `POST /api/hccgw/resource/v1/device/capturePic`.
+5. Hik-Connect devuelve un `captureUrl` temporal, valido por 15 minutos.
+6. El servicio descarga la imagen enseguida, la guarda en `FTP_DATA_DIR/{serial}/{yyyy-mm-dd}/` y crea la foto en `sdc-datos`.
 
 ## Variables
 
@@ -28,6 +39,14 @@ Servicio de ingreso para camaras de seguimiento visual de lotes. Recibe imagenes
 | `FTP_DATA_DIR` | Carpeta persistente. En Railway conviene montarla en un volumen. |
 | `PUBLIC_BASE_URL` | URL HTTP publica del servicio, usada para guardar `foto.url`. |
 | `API_DATOS` | URL interna/publica de `sdc-datos`. |
+| `TIMELAPSE_ADMIN_TOKEN` | Token opcional para proteger endpoints operativos de Hik-Connect. Enviar `Authorization: Bearer <token>` o `x-timelapse-token`. |
+| `HIKCONNECT_ENABLED` | Habilita la integracion Hik-Connect. Default `false`. |
+| `HIKCONNECT_SERVER_URL` | Dominio base entregado por Hikvision, por ejemplo `https://...hikcentralconnect.com`. |
+| `HIKCONNECT_APP_KEY` | AK/AppKey de Hik-Connect for Teams. |
+| `HIKCONNECT_SECRET_KEY` | SK/AppSecret de Hik-Connect for Teams. |
+| `HIKCONNECT_DEFAULT_CHANNEL` | Canal por defecto para `capturePic`. Default `1`. |
+| `HIKCONNECT_CAPTURE_ON_START` | Captura todos los lotes vinculados al iniciar. Default `false`. |
+| `HIKCONNECT_CAPTURE_INTERVAL_MINUTES` | Captura periodica de todos los lotes vinculados. `0` desactiva scheduler. |
 
 ## Configuracion de camara Hikvision
 
@@ -56,6 +75,11 @@ Si el firmware ofrece `SFTP`, conviene preferirlo en Railway porque usa una sola
 - `GET /health`: healthcheck.
 - `GET /ftp-info`: datos no sensibles de configuracion FTP.
 - `GET /uploads/latest`: ultimas 50 imagenes recibidas.
+- `GET /hik-connect/status`: estado de configuracion Hik-Connect sin exponer secretos.
+- `POST /hik-connect/token/refresh`: fuerza renovacion de token. Protegido por `TIMELAPSE_ADMIN_TOKEN` si esta configurado.
+- `GET /hik-connect/cameras`: lista camaras disponibles en Hik-Connect. Protegido por `TIMELAPSE_ADMIN_TOKEN` si esta configurado.
+- `POST /hik-connect/capture/{serial}?channelNo=1`: captura una foto para una camara. Protegido por `TIMELAPSE_ADMIN_TOKEN` si esta configurado.
+- `POST /hik-connect/capture-linked`: captura una foto para cada `serialCamara` asignado a un lote. Protegido por `TIMELAPSE_ADMIN_TOKEN` si esta configurado.
 - `GET /imagenes/{serial}/{yyyy-mm-dd}/{archivo}`: imagen publica para el front.
 
 ## Nota Railway

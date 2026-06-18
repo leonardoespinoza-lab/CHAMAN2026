@@ -15,6 +15,7 @@
     "build:predicciones": "npm --prefix sdc-api-predicciones run build",
     "build:clima": "npm --prefix sdc-api-clima run build",
     "build:lora": "npm --prefix sdc-api-lora run build",
+    "build:ftp": "npm --prefix sdc-ftp run build",
     "build:app": "npm --prefix sdc-app-chaman run build-test",
     "start:local": "powershell -ExecutionPolicy Bypass -File scripts/start-local-services.ps1",
     "stop:local": "powershell -ExecutionPolicy Bypass -File scripts/stop-local-services.ps1",

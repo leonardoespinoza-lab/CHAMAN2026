@@ -16,10 +16,16 @@ import {
   FTP_PORT,
   FTP_SHARED_USERNAME,
   FTP_URL,
+  HIKCONNECT_CAPTURE_INTERVAL_MINUTES,
+  HIKCONNECT_CAPTURE_ON_START,
+  HIKCONNECT_DEFAULT_CHANNEL,
+  HIKCONNECT_ENABLED,
   HTTP_PORT,
   HTTP_PUBLIC_PORT,
   PUBLIC_BASE_URL,
+  TIMELAPSE_ADMIN_TOKEN,
 } from "./enviroments/environment";
+import { HikConnectClient } from "./hik-connect";
 import { IFoto, IListado, ILote } from "modelos";
 
 const FtpFileSystem: any = require("ftp-srv/src/fs");
@@ -32,6 +38,9 @@ type UploadRecord = {
   publicUrl: string;
   size: number;
   fechaCaptura: string;
+  fuente: IFoto["fuente"];
+  canalCamara?: number;
+  metadata?: Record<string, unknown>;
   idLote?: string;
   loteNombre?: string;
   status: "linked" | "pending";
@@ -39,6 +48,7 @@ type UploadRecord = {
 
 const recentUploads: UploadRecord[] = [];
 const fetchFn = (globalThis as any).fetch as (input: string, init?: any) => Promise<any>;
+const hikConnect = new HikConnectClient();
 
 class AutoCreateFileSystem extends FtpFileSystem {
   constructor(...args: any[]) {
@@ -116,6 +126,35 @@ function publicUrlFor(relativePath: string, req?: Request) {
   return `/imagenes/${normalized}`;
 }
 
+function extensionFromContentType(contentType: string) {
+  if (/png/i.test(contentType)) return "png";
+  if (/webp/i.test(contentType)) return "webp";
+  return "jpg";
+}
+
+function tokenExpiresAtIso(expireTime?: number) {
+  if (!expireTime) return null;
+  const ms = expireTime > 10_000_000_000 ? expireTime : expireTime * 1000;
+  return new Date(ms).toISOString();
+}
+
+function requireAdminToken(req: Request, res: Response, next: () => void) {
+  if (!TIMELAPSE_ADMIN_TOKEN) {
+    next();
+    return;
+  }
+
+  const header = req.get("authorization") || "";
+  const bearer = header.replace(/^Bearer\s+/i, "").trim();
+  const explicit = req.get("x-timelapse-token") || "";
+  if (bearer === TIMELAPSE_ADMIN_TOKEN || explicit === TIMELAPSE_ADMIN_TOKEN) {
+    next();
+    return;
+  }
+
+  res.status(401).json({ ok: false, message: "Token operativo requerido." });
+}
+
 function pushRecent(record: UploadRecord) {
   recentUploads.unshift(record);
   recentUploads.splice(50);
@@ -150,6 +189,11 @@ async function registerFoto(record: UploadRecord) {
         url: record.publicUrl,
         idLote: lote._id,
         fechaCreacion: record.fechaCaptura,
+        fuente: record.fuente,
+        serialCamara: record.serialCamara,
+        canalCamara: record.canalCamara,
+        nombreOriginal: record.originalName,
+        metadata: record.metadata,
       };
       const response = await fetchFn(`${API_DATOS}/fotos`, {
         method: "POST",
@@ -195,6 +239,7 @@ async function ingestUpload(username: string, fileName: string) {
     publicUrl: publicUrlFor(relativePath),
     size: fs.statSync(targetPath).size,
     fechaCaptura,
+    fuente: "ftp",
     status: "pending",
   };
 
@@ -206,6 +251,77 @@ async function ingestUpload(username: string, fileName: string) {
 
   pushRecent(record);
   console.log("Foto time-lapse recibida:", record);
+}
+
+async function ingestHikConnectCapture(serialCamara: string, channelNo = HIKCONNECT_DEFAULT_CHANNEL) {
+  const serial = sanitizeSegment(serialCamara, "sin-serie").toUpperCase();
+  const capture = await hikConnect.capturePicture(serial, channelNo);
+  if (capture.isEncrypted) {
+    throw new Error("La captura Hik-Connect llego encriptada. Desactivar stream encryption o pedir guia de desencriptado a Hikvision.");
+  }
+
+  const download = await hikConnect.downloadCapture(capture.captureUrl);
+  const fechaCaptura = new Date().toISOString();
+  const day = fechaCaptura.slice(0, 10);
+  const extension = extensionFromContentType(download.contentType);
+  const originalName = `hik-connect-channel-${channelNo}.${extension}`;
+  const storedName = `${Date.now()}-${sanitizeSegment(originalName, "foto.jpg")}`;
+  const cameraDir = path.join(FTP_DATA_DIR, serial, day);
+  ensureDir(cameraDir);
+
+  const targetPath = path.join(cameraDir, storedName);
+  fs.writeFileSync(targetPath, download.bytes);
+
+  const relativePath = path.relative(FTP_DATA_DIR, targetPath);
+  const record: UploadRecord = {
+    serialCamara: serial,
+    canalCamara: channelNo,
+    originalName,
+    storedName,
+    relativePath,
+    publicUrl: publicUrlFor(relativePath),
+    size: fs.statSync(targetPath).size,
+    fechaCaptura,
+    fuente: "hik-connect",
+    status: "pending",
+    metadata: {
+      provider: "hik-connect-for-teams",
+      contentType: download.contentType,
+      captureUrlExpiresInMinutes: 15,
+    },
+  };
+
+  await registerFoto(record);
+  pushRecent(record);
+  console.log("Foto time-lapse Hik-Connect recibida:", record);
+
+  return record;
+}
+
+async function captureLinkedHikConnectCameras() {
+  const url = new URL(`${API_DATOS}/lotes`);
+  url.searchParams.set("filter", JSON.stringify({ serialCamara: { $exists: true, $ne: "" } }));
+  url.searchParams.set("limit", "0");
+
+  const response = await fetchFn(url.toString());
+  if (!response.ok) {
+    throw new Error(`sdc-datos rechazo consulta de lotes con camara: ${response.status}`);
+  }
+
+  const data = (await response.json()) as IListado<ILote>;
+  const seriales = Array.from(new Set((data?.datos || []).map((lote) => lote.serialCamara).filter(Boolean))) as string[];
+  const results = [];
+
+  for (const serial of seriales) {
+    try {
+      results.push(await ingestHikConnectCapture(serial));
+    } catch (err: any) {
+      results.push({ serialCamara: serial, status: "error", message: err?.message || String(err) });
+      console.error(`No se pudo capturar Hik-Connect ${serial}:`, err);
+    }
+  }
+
+  return results;
 }
 
 function startHttp() {
@@ -251,6 +367,52 @@ function startHttp() {
 
   app.get("/uploads/latest", (_req: Request, res: Response) => {
     res.status(200).json({ datos: recentUploads, totalCount: recentUploads.length });
+  });
+
+  app.get("/hik-connect/status", (_req: Request, res: Response) => {
+    res.status(200).json(hikConnect.status());
+  });
+
+  app.post("/hik-connect/token/refresh", requireAdminToken, async (_req: Request, res: Response) => {
+    try {
+      const token = await hikConnect.getToken(true);
+      res.status(200).json({
+        ok: true,
+        tokenCached: true,
+        tokenExpiresAt: tokenExpiresAtIso(token.expireTime),
+        areaDomain: token.areaDomain || null,
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, message: err?.message || String(err) });
+    }
+  });
+
+  app.get("/hik-connect/cameras", requireAdminToken, async (_req: Request, res: Response) => {
+    try {
+      const data = await hikConnect.listCameras();
+      res.status(200).json(data);
+    } catch (err: any) {
+      res.status(500).json({ ok: false, message: err?.message || String(err) });
+    }
+  });
+
+  app.post("/hik-connect/capture/:serial", requireAdminToken, async (req: Request, res: Response) => {
+    try {
+      const channelNo = Number(req.query.channelNo || HIKCONNECT_DEFAULT_CHANNEL);
+      const record = await ingestHikConnectCapture(req.params.serial, channelNo);
+      res.status(201).json(record);
+    } catch (err: any) {
+      res.status(500).json({ ok: false, message: err?.message || String(err) });
+    }
+  });
+
+  app.post("/hik-connect/capture-linked", requireAdminToken, async (_req: Request, res: Response) => {
+    try {
+      const results = await captureLinkedHikConnectCameras();
+      res.status(200).json({ datos: results, totalCount: results.length });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, message: err?.message || String(err) });
+    }
   });
 
   app.use("/imagenes", express.static(FTP_DATA_DIR, {
@@ -325,3 +487,20 @@ function startFtp() {
 
 startHttp();
 startFtp();
+
+if (HIKCONNECT_ENABLED) {
+  if (HIKCONNECT_CAPTURE_ON_START) {
+    captureLinkedHikConnectCameras().catch((err) => {
+      console.error("Error en captura inicial Hik-Connect:", err);
+    });
+  }
+
+  if (HIKCONNECT_CAPTURE_INTERVAL_MINUTES > 0) {
+    const intervalMs = HIKCONNECT_CAPTURE_INTERVAL_MINUTES * 60 * 1000;
+    setInterval(() => {
+      captureLinkedHikConnectCameras().catch((err) => {
+        console.error("Error en captura programada Hik-Connect:", err);
+      });
+    }, intervalMs);
+  }
+}

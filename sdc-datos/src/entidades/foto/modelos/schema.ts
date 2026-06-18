@@ -16,6 +16,21 @@ export class Foto implements Exactly<IFoto, Foto> {
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idLote?: string;
 
+  @Prop()
+  fuente?: IFoto['fuente'];
+
+  @Prop({ uppercase: true })
+  serialCamara?: string;
+
+  @Prop()
+  canalCamara?: number;
+
+  @Prop()
+  nombreOriginal?: string;
+
+  @Prop({ type: Object })
+  metadata?: Record<string, unknown>;
+
   lote?: ILote;
 }
 
