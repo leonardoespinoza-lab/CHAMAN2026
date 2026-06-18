@@ -12,6 +12,7 @@ export const FTP_PASV_URL = FTP_PUBLIC_HOST || "127.0.0.1";
 export const FTP_PASV_MIN = Number(process.env.FTP_PASV_MIN || 30000);
 export const FTP_PASV_MAX = Number(process.env.FTP_PASV_MAX || 30010);
 export const FTP_ANONYMOUS = process.env.FTP_ANONYMOUS === "true";
+export const FTP_ALLOW_ACTIVE_BEHIND_PROXY = process.env.FTP_ALLOW_ACTIVE_BEHIND_PROXY === "true";
 export const FTP_SHARED_USERNAME = process.env.FTP_SHARED_USERNAME || "chaman";
 export const FTP_CAMERA_PASSWORD = process.env.FTP_CAMERA_PASSWORD || "";
 export const FTP_DATA_DIR = process.env.FTP_DATA_DIR || "/data/chaman-timelapse";

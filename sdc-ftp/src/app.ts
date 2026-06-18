@@ -5,6 +5,7 @@ import path from "path";
 import {
   API_DATOS,
   FTP_ANONYMOUS,
+  FTP_ALLOW_ACTIVE_BEHIND_PROXY,
   FTP_CAMERA_PASSWORD,
   FTP_DATA_DIR,
   FTP_HOST,
@@ -220,6 +221,7 @@ function startHttp() {
         min: FTP_PASV_MIN,
         max: FTP_PASV_MAX,
       },
+      activeBehindProxy: FTP_ALLOW_ACTIVE_BEHIND_PROXY,
       uploadsPath: "/imagenes/{serial}/{yyyy-mm-dd}/{archivo}",
     });
   });
