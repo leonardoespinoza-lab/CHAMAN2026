@@ -256,11 +256,7 @@ async function ingestUpload(username: string, fileName: string) {
 async function ingestHikConnectCapture(serialCamara: string, channelNo = HIKCONNECT_DEFAULT_CHANNEL) {
   const serial = sanitizeSegment(serialCamara, "sin-serie").toUpperCase();
   const capture = await hikConnect.capturePicture(serial, channelNo);
-  if (capture.isEncrypted) {
-    throw new Error("La captura Hik-Connect llego encriptada. Desactivar stream encryption o pedir guia de desencriptado a Hikvision.");
-  }
-
-  const download = await hikConnect.downloadCapture(capture.captureUrl);
+  const download = await hikConnect.downloadCapture(capture.captureUrl, capture.isEncrypted);
   const fechaCaptura = new Date().toISOString();
   const day = fechaCaptura.slice(0, 10);
   const extension = extensionFromContentType(download.contentType);
@@ -287,6 +283,9 @@ async function ingestHikConnectCapture(serialCamara: string, channelNo = HIKCONN
     metadata: {
       provider: "hik-connect-for-teams",
       contentType: download.contentType,
+      encrypted: download.encrypted,
+      rawContentType: download.rawContentType,
+      rawSize: download.rawSize,
       captureUrlExpiresInMinutes: 15,
     },
   };

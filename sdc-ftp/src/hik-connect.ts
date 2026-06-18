@@ -1,10 +1,12 @@
 import {
   HIKCONNECT_APP_KEY,
   HIKCONNECT_DEFAULT_CHANNEL,
+  HIKCONNECT_ENCRYPTION_KEY,
   HIKCONNECT_ENABLED,
   HIKCONNECT_SECRET_KEY,
   HIKCONNECT_SERVER_URL,
 } from "./enviroments/environment";
+import crypto from "crypto";
 
 const fetchFn = (globalThis as any).fetch as (input: string, init?: any) => Promise<any>;
 
@@ -39,6 +41,10 @@ export type HikConnectCaptureResult = {
   isEncrypted: number;
 };
 
+const HIK_ENCRYPTED_PICTURE_MAGIC = "hikencodepicture";
+const HIK_ENCRYPTED_PICTURE_HEADER_BYTES = 48;
+const HIK_ENCRYPTED_PICTURE_IV = Buffer.from([48, 49, 50, 51, 52, 53, 54, 55, 0, 0, 0, 0, 0, 0, 0, 0]);
+
 function trimSlash(value: string) {
   return value.replace(/\/+$/, "");
 }
@@ -52,6 +58,48 @@ function resolveBaseUrl(serverUrl?: string) {
 
 function secondsToMs(value: number) {
   return value > 10_000_000_000 ? value : value * 1000;
+}
+
+function md5Hex(value: string) {
+  return crypto.createHash("md5").update(value).digest("hex");
+}
+
+function toHikvisionAesKey(encryptionKey: string) {
+  const key = Buffer.alloc(16, 0);
+  Buffer.from(encryptionKey, "utf8").copy(key, 0, 0, 16);
+  return key;
+}
+
+function assertJpeg(bytes: Buffer) {
+  return bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+}
+
+function decryptHikvisionPicture(bytes: Buffer, encryptionKey: string) {
+  if (bytes.subarray(0, 16).toString("ascii") !== HIK_ENCRYPTED_PICTURE_MAGIC) {
+    return bytes;
+  }
+
+  if (!encryptionKey) {
+    throw new Error("La captura Hik-Connect llego cifrada. Falta definir HIKCONNECT_ENCRYPTION_KEY.");
+  }
+
+  const expectedKeyHash = bytes.subarray(16, HIK_ENCRYPTED_PICTURE_HEADER_BYTES).toString("ascii").toLowerCase();
+  const actualKeyHash = md5Hex(md5Hex(encryptionKey));
+  if (expectedKeyHash !== actualKeyHash) {
+    throw new Error("La clave HIKCONNECT_ENCRYPTION_KEY no coincide con la captura cifrada de Hik-Connect.");
+  }
+
+  const decipher = crypto.createDecipheriv("aes-128-cbc", toHikvisionAesKey(encryptionKey), HIK_ENCRYPTED_PICTURE_IV);
+  const decrypted = Buffer.concat([
+    decipher.update(bytes.subarray(HIK_ENCRYPTED_PICTURE_HEADER_BYTES)),
+    decipher.final(),
+  ]);
+
+  if (!assertJpeg(decrypted)) {
+    throw new Error("La captura Hik-Connect fue descifrada pero no produjo un JPEG valido.");
+  }
+
+  return decrypted;
 }
 
 function assertConfigured() {
@@ -83,6 +131,7 @@ export class HikConnectClient {
       tokenCached: Boolean(this.cachedToken?.accessToken),
       tokenExpiresAt: expiresAt,
       areaDomain: this.cachedToken?.areaDomain || null,
+      encryptionKeyConfigured: Boolean(HIKCONNECT_ENCRYPTION_KEY),
     };
   }
 
@@ -186,14 +235,16 @@ export class HikConnectClient {
     return payload.data;
   }
 
-  async downloadCapture(captureUrl: string) {
+  async downloadCapture(captureUrl: string, isEncrypted = 0) {
     const response = await fetchFn(captureUrl);
     if (!response.ok) {
       throw new Error(`No se pudo descargar captureUrl: HTTP ${response.status}`);
     }
 
-    const contentType = response.headers.get("content-type") || "image/jpeg";
-    const bytes = Buffer.from(await response.arrayBuffer());
-    return { bytes, contentType };
+    const rawContentType = response.headers.get("content-type") || "image/jpeg";
+    const rawBytes = Buffer.from(await response.arrayBuffer());
+    const bytes = isEncrypted ? decryptHikvisionPicture(rawBytes, HIKCONNECT_ENCRYPTION_KEY) : rawBytes;
+    const contentType = isEncrypted ? "image/jpeg" : rawContentType;
+    return { bytes, contentType, encrypted: Boolean(isEncrypted), rawContentType, rawSize: rawBytes.length };
   }
 }

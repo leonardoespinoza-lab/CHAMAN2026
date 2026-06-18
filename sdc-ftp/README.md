@@ -21,7 +21,8 @@ Servicio de ingreso para camaras de seguimiento visual de lotes. Recibe imagenes
 3. El admin puede listar camaras con `/hik-connect/cameras`.
 4. Para cada lote con `serialCamara`, el servicio llama `POST /api/hccgw/resource/v1/device/capturePic`.
 5. Hik-Connect devuelve un `captureUrl` temporal, valido por 15 minutos.
-6. El servicio descarga la imagen enseguida, la guarda en `FTP_DATA_DIR/{serial}/{yyyy-mm-dd}/` y crea la foto en `sdc-datos`.
+6. El servicio descarga la imagen enseguida. Si Hik-Connect la entrega cifrada (`isEncrypted=1`), la descifra con `HIKCONNECT_ENCRYPTION_KEY`.
+7. Guarda la imagen JPG en `FTP_DATA_DIR/{serial}/{yyyy-mm-dd}/` y crea la foto en `sdc-datos`.
 
 ## Variables
 
@@ -44,6 +45,7 @@ Servicio de ingreso para camaras de seguimiento visual de lotes. Recibe imagenes
 | `HIKCONNECT_SERVER_URL` | Dominio base entregado por Hikvision, por ejemplo `https://...hikcentralconnect.com`. |
 | `HIKCONNECT_APP_KEY` | AK/AppKey de Hik-Connect for Teams. |
 | `HIKCONNECT_SECRET_KEY` | SK/AppSecret de Hik-Connect for Teams. |
+| `HIKCONNECT_ENCRYPTION_KEY` | Verification/encryption code de las camaras Hikvision cuando `isEncrypted=1`. No se expone por endpoints. |
 | `HIKCONNECT_DEFAULT_CHANNEL` | Canal por defecto para `capturePic`. Default `1`. |
 | `HIKCONNECT_CAPTURE_ON_START` | Captura todos los lotes vinculados al iniciar. Default `false`. |
 | `HIKCONNECT_CAPTURE_INTERVAL_MINUTES` | Captura periodica de todos los lotes vinculados. `0` desactiva scheduler. |

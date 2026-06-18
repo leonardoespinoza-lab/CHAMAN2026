@@ -25,6 +25,7 @@ export const HIKCONNECT_ENABLED = process.env.HIKCONNECT_ENABLED === "true";
 export const HIKCONNECT_SERVER_URL = process.env.HIKCONNECT_SERVER_URL || "";
 export const HIKCONNECT_APP_KEY = process.env.HIKCONNECT_APP_KEY || "";
 export const HIKCONNECT_SECRET_KEY = process.env.HIKCONNECT_SECRET_KEY || "";
+export const HIKCONNECT_ENCRYPTION_KEY = process.env.HIKCONNECT_ENCRYPTION_KEY || "";
 export const HIKCONNECT_DEFAULT_CHANNEL = Number(process.env.HIKCONNECT_DEFAULT_CHANNEL || 1);
 export const HIKCONNECT_CAPTURE_ON_START = process.env.HIKCONNECT_CAPTURE_ON_START === "true";
 export const HIKCONNECT_CAPTURE_INTERVAL_MINUTES = Number(process.env.HIKCONNECT_CAPTURE_INTERVAL_MINUTES || 0);
