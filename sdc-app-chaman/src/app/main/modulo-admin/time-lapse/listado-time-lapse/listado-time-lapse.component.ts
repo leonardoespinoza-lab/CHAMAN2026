@@ -81,9 +81,7 @@ export class ListadoTimeLapseComponent implements OnInit, OnDestroy {
       accept: async () => {
         this.loading = true;
         try {
-          //await this.service.editar(dato._id!, { serialCamara: '' });
-
-          await this.service.eliminar(dato._id!);
+          await this.service.editar(dato._id!, { serialCamara: '' });
 
           // Solo elimina el item en cache
           this.listado.deleteEntityItem('lotes', dato._id!);

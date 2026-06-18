@@ -1,4 +1,18 @@
 <div class="list-view-container">
+  <section class="timelapse-hero">
+    <div>
+      <span class="eyebrow">Seguimiento visual</span>
+      <h1>Time-lapse de lotes</h1>
+      <p>
+        Vincula cada camara por numero de serie. La camara sube imagenes por FTP usando ese serial como usuario.
+      </p>
+    </div>
+    <div class="ftp-contract">
+      <span>FTP</span>
+      <strong>Usuario = serial de camara</strong>
+      <small>JPG, PNG o WEBP. Una imagen diaria por lote.</small>
+    </div>
+  </section>
   <p-table
     #table
     [value]="datos"
@@ -52,9 +66,15 @@
         <!-- Usuario -->
         <th pSortableColumn="nombre">
           <div class="flex items-center gap-2">
-            {{ 'Time-lapse' | translate }}
+            {{ 'Lote' | translate }}
             <p-sortIcon field="nombre" />
             <p-columnFilter type="text" field="nombre" display="menu" />
+          </div>
+        </th>
+        <th pSortableColumn="serialCamara">
+          <div class="flex items-center gap-2">
+            {{ 'Serial camara' | translate }}
+            <p-sortIcon field="serialCamara" />
           </div>
         </th>
         <!-- Acciones -->
@@ -72,6 +92,9 @@
         <!-- Nombre -->
         <td>
           {{ row.nombre }}
+        </td>
+        <td>
+          <span class="serial-chip">{{ row.serialCamara }}</span>
         </td>
         <td>
           <div style="display: flex; flex-direction: row; gap: 0.5rem">
@@ -108,7 +131,7 @@
     <!-- Expanded -->
     <ng-template #expandedrow let-row>
       <tr>
-        <td colspan="2">
+        <td colspan="3">
           <h2 style="margin: 0; text-align: center; line-height: 2">Acá van mas detalles del lote</h2>
         </td>
       </tr>
@@ -117,7 +140,7 @@
     <!-- Sin datos -->
     <ng-template #emptymessage>
       <tr>
-        <td colspan="2">
+        <td colspan="3">
           <p-message severity="info">
             {{ 'No se encontraron lotes con cámara' | translate }}
           </p-message>

@@ -41,7 +41,11 @@ sdc-doc/
 sdc-web-admin/
 sdc-web-cliente/
 sdc-api-admin/
-sdc-ftp/
+
+# Time-lapse FTP is an active CHAMAN2026 service; keep runtime artifacts out.
+sdc-ftp/dist/
+sdc-ftp/node_modules/
+sdc-ftp/src/ftp-data/
 
 # IDE / OS
 .DS_Store

@@ -1,0 +1,69 @@
+.timelapse-hero {
+  align-items: center;
+  background: linear-gradient(135deg, rgba(48, 216, 204, 0.16), rgba(255, 255, 255, 0.92));
+  border: 1px solid rgba(48, 216, 204, 0.35);
+  border-radius: 10px;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding: 1rem 1.25rem;
+}
+
+.timelapse-hero h1 {
+  color: #17233a;
+  font-size: 1.55rem;
+  font-weight: 800;
+  margin: 0.1rem 0 0.2rem;
+}
+
+.timelapse-hero p {
+  color: #415270;
+  font-size: 1rem;
+  margin: 0;
+}
+
+.eyebrow {
+  color: #13cfc2;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.ftp-contract {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(47, 69, 104, 0.16);
+  border-radius: 8px;
+  color: #17233a;
+  display: grid;
+  gap: 0.15rem;
+  min-width: 260px;
+  padding: 0.85rem 1rem;
+}
+
+.ftp-contract span,
+.ftp-contract small {
+  color: #62708a;
+}
+
+.serial-chip {
+  background: #eefaf8;
+  border: 1px solid rgba(19, 207, 194, 0.35);
+  border-radius: 999px;
+  color: #17233a;
+  display: inline-flex;
+  font-weight: 700;
+  padding: 0.3rem 0.65rem;
+}
+
+@media (max-width: 768px) {
+  .timelapse-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .ftp-contract {
+    min-width: 100%;
+  }
+}

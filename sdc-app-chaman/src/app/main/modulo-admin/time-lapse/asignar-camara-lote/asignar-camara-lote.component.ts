@@ -42,7 +42,7 @@ export class AsignarCamaraLoteComponent implements OnInit, OnDestroy {
 
   private createForm(): void {
     this.form = new FormGroup({
-      serialCamara: new FormControl(this.lote?.nombre, Validators.required),
+      serialCamara: new FormControl(this.lote?.serialCamara || '', Validators.required),
     });
   }
 
@@ -50,6 +50,9 @@ export class AsignarCamaraLoteComponent implements OnInit, OnDestroy {
 
   private getData() {
     const data: ICreateLote = this.form?.value;
+    if (data.serialCamara) {
+      data.serialCamara = String(data.serialCamara).trim().toUpperCase();
+    }
     return data;
   }
 

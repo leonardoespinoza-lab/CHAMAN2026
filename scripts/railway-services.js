@@ -48,6 +48,13 @@ const services = {
     build: 'npm run build',
     start: 'npm run start:prod',
   },
+  'sdc-ftp': {
+    aliases: ['chaman-ftp', 'ftp', 'timelapse-ftp', 'time-lapse-ftp'],
+    path: 'sdc-ftp',
+    install: 'npm ci',
+    build: 'npm run build',
+    start: 'npm run start:prod',
+  },
   'sdc-app-chaman': {
     aliases: ['CHAMAN2026', 'chaman-web', 'web', 'app'],
     path: 'sdc-app-chaman',
