@@ -13,8 +13,10 @@ import {
   FTP_PASV_URL,
   FTP_PUBLIC_PORT,
   FTP_PORT,
+  FTP_SHARED_USERNAME,
   FTP_URL,
   HTTP_PORT,
+  HTTP_PUBLIC_PORT,
   PUBLIC_BASE_URL,
 } from "./enviroments/environment";
 import { IFoto, IListado, ILote } from "modelos";
@@ -55,14 +57,26 @@ function isImageFile(fileName: string) {
   return /\.(jpe?g|png|webp)$/i.test(fileName);
 }
 
+function serialFromFilePrefix(fileName: string) {
+  const base = path.basename(fileName, path.extname(fileName));
+  const withoutHikvisionTimestamp = base
+    .replace(/[_-]\d{8}[_-]?\d{6}.*$/g, "")
+    .replace(/[_-]\d{14}.*$/g, "")
+    .replace(/[_-]\d{4}[_-]\d{2}[_-]\d{2}.*$/g, "");
+
+  const candidate = withoutHikvisionTimestamp || base;
+  return sanitizeSegment(candidate, "sin-serie").toUpperCase();
+}
+
 function serialFromLoginOrFile(username: string, fileName: string) {
-  if (username && username.toLowerCase() !== "anonymous") {
+  const normalizedUser = sanitizeSegment(username).toLowerCase();
+  const sharedUser = sanitizeSegment(FTP_SHARED_USERNAME).toLowerCase();
+
+  if (normalizedUser && normalizedUser !== "anonymous" && normalizedUser !== sharedUser) {
     return sanitizeSegment(username).toUpperCase();
   }
 
-  const base = path.basename(fileName);
-  const prefix = base.split(/[_\-\s]/)[0];
-  return sanitizeSegment(prefix).toUpperCase();
+  return serialFromFilePrefix(fileName);
 }
 
 function publicUrlFor(relativePath: string, req?: Request) {
@@ -195,8 +209,13 @@ function startHttp() {
     res.status(200).json({
       host: FTP_PASV_URL,
       port: FTP_PUBLIC_PORT,
-      username: "usar-numero-de-serie-de-camara",
-      password: FTP_CAMERA_PASSWORD ? "configurada-por-variable" : "sin-password-configurado",
+      username: FTP_ANONYMOUS ? "anonymous" : FTP_SHARED_USERNAME,
+      password: FTP_ANONYMOUS
+        ? "anonymous"
+        : FTP_CAMERA_PASSWORD
+          ? "configurada-por-variable"
+          : "sin-password-configurado",
+      cameraId: "usar Custom Prefix igual al serialCamara del lote",
       passive: {
         min: FTP_PASV_MIN,
         max: FTP_PASV_MAX,
@@ -214,8 +233,11 @@ function startHttp() {
     maxAge: "30d",
   }));
 
-  app.listen(HTTP_PORT, () => {
-    console.log(`HTTP time-lapse escuchando en puerto ${HTTP_PORT}`);
+  const httpPorts = Array.from(new Set([HTTP_PORT, HTTP_PUBLIC_PORT].filter(Boolean)));
+  httpPorts.forEach((port) => {
+    app.listen(port, () => {
+      console.log(`HTTP time-lapse escuchando en puerto ${port}`);
+    });
   });
 }
 
@@ -236,9 +258,14 @@ function startFtp() {
 
   ftpServer.on("login", ({ connection, username, password }, resolve, reject) => {
     const cameraUser = sanitizeSegment(username);
+    const normalizedUser = cameraUser.toLowerCase();
+    const sharedUser = sanitizeSegment(FTP_SHARED_USERNAME).toLowerCase();
+    const isAnonymousLogin = normalizedUser === "anonymous";
+    const isSharedLogin = normalizedUser === sharedUser;
+    const validUsername = FTP_ANONYMOUS || isSharedLogin || (!!cameraUser && !isAnonymousLogin);
     const validPassword = FTP_ANONYMOUS || !FTP_CAMERA_PASSWORD || password === FTP_CAMERA_PASSWORD;
 
-    if (!validPassword) {
+    if (!validUsername || !validPassword) {
       reject(new Error("Credenciales FTP invalidas"));
       return;
     }

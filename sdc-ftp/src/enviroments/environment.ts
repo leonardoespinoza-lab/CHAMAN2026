@@ -1,6 +1,7 @@
 const railwayPublicDomain = process.env.RAILWAY_PUBLIC_DOMAIN || "";
 
 export const HTTP_PORT = Number(process.env.HTTP_PORT || process.env.PORT || 5000);
+export const HTTP_PUBLIC_PORT = Number(process.env.HTTP_PUBLIC_PORT || 0);
 export const FTP_PORT = Number(process.env.FTP_PORT || process.env.RAILWAY_TCP_APPLICATION_PORT || 2121);
 export const FTP_HOST = process.env.FTP_HOST || "0.0.0.0";
 export const FTP_PUBLIC_HOST =
@@ -11,6 +12,7 @@ export const FTP_PASV_URL = FTP_PUBLIC_HOST || "127.0.0.1";
 export const FTP_PASV_MIN = Number(process.env.FTP_PASV_MIN || 30000);
 export const FTP_PASV_MAX = Number(process.env.FTP_PASV_MAX || 30010);
 export const FTP_ANONYMOUS = process.env.FTP_ANONYMOUS === "true";
+export const FTP_SHARED_USERNAME = process.env.FTP_SHARED_USERNAME || "chaman";
 export const FTP_CAMERA_PASSWORD = process.env.FTP_CAMERA_PASSWORD || "";
 export const FTP_DATA_DIR = process.env.FTP_DATA_DIR || "/data/chaman-timelapse";
 export const PUBLIC_BASE_URL =
