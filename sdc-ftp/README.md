@@ -39,6 +39,8 @@ Servicio de ingreso para camaras de seguimiento visual de lotes. Recibe imagenes
 - Picture Name: `Custom Prefix`, usando el mismo valor cargado en `serialCamara` del lote.
 - Upload Picture: activado.
 
+Algunos firmwares crean igualmente carpetas por fecha aunque el destino sea raiz. El servicio acepta ese comportamiento y crea directorios de trabajo automaticamente dentro de `_incoming`.
+
 El boton `Test` solo prueba la conexion FTP. Para que la camara suba imagenes periodicas:
 
 1. Ir a `Storage > Schedule Settings > Capture`.

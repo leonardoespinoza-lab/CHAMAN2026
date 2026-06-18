@@ -22,6 +22,8 @@ import {
 } from "./enviroments/environment";
 import { IFoto, IListado, ILote } from "modelos";
 
+const FtpFileSystem: any = require("ftp-srv/src/fs");
+
 type UploadRecord = {
   serialCamara: string;
   originalName: string;
@@ -37,6 +39,27 @@ type UploadRecord = {
 
 const recentUploads: UploadRecord[] = [];
 const fetchFn = (globalThis as any).fetch as (input: string, init?: any) => Promise<any>;
+
+class AutoCreateFileSystem extends FtpFileSystem {
+  constructor(...args: any[]) {
+    super(...args);
+  }
+
+  chdir(dir = ".") {
+    return super.chdir(dir).catch((err: any) => {
+      if (err?.code !== "ENOENT") throw err;
+      const { fsPath } = this._resolvePath(dir);
+      fs.mkdirSync(fsPath, { recursive: true });
+      return super.chdir(dir);
+    });
+  }
+
+  write(fileName: string, options: any) {
+    const { fsPath } = this._resolvePath(fileName);
+    fs.mkdirSync(path.dirname(fsPath), { recursive: true });
+    return super.write(fileName, options);
+  }
+}
 
 function ensureDir(dir: string) {
   fs.mkdirSync(dir, { recursive: true });
@@ -275,7 +298,7 @@ function startFtp() {
     const root = path.join(FTP_DATA_DIR, "_incoming", cameraUser);
     ensureDir(root);
     console.log(`Camara conectada por FTP: ${cameraUser}`);
-    resolve({ root });
+    resolve({ root, fs: new AutoCreateFileSystem(connection, { root }) as any });
 
     connection.on("STOR", (error, fileName) => {
       if (error) {
