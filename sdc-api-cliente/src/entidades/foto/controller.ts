@@ -36,7 +36,13 @@ export class FotosController {
   }
 
   @Get('lote/:id')
-  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  @Permisos(
+    { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Admin', roles: ['Admin'] },
+  )
   public async getByLoteId(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,

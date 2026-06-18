@@ -20,6 +20,7 @@ import { ParamsService } from '../../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../../auxiliares/shared.module';
 import { ILoteTabla } from '../listado-lotes/listado-lotes.component';
 import { CardClimaLoteComponent } from './card-clima-lote/card-clima-lote.component';
+import { CardCamarasLoteComponent } from './card-camaras-lote/card-camaras-lote.component';
 import { CardDispositivosComponent } from './card-dispositivos/card-dispositivos.component';
 import { CardEnfermedadesComponent } from './card-enfermedades/card-enfermedades.component';
 import { CardEtapasFenologicasComponent } from './card-etapas-fenologicas/card-etapas-fenologicas.component';
@@ -60,6 +61,7 @@ export interface IDetallesLote extends ILoteTabla {
     CardEtapasFenologicasComponent,
     CardFrioTermicoComponent,
     CardMalezasComponent,
+    CardCamarasLoteComponent,
   ],
   templateUrl: './detalles-lote.component.html',
   styleUrl: './detalles-lote.component.scss',

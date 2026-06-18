@@ -142,6 +142,9 @@
     @if (helper.checkArray(lote?.dispositivos)) {
       <app-card-dispositivos class="service-panel" [lote]="lote"></app-card-dispositivos>
     }
+    @if (lote?.serialCamara) {
+      <app-card-camaras-lote class="service-panel" [lote]="lote"></app-card-camaras-lote>
+    }
     <app-card-clima-lote class="service-panel climate-section" [lote]="lote"></app-card-clima-lote>
   </div>
 </div>

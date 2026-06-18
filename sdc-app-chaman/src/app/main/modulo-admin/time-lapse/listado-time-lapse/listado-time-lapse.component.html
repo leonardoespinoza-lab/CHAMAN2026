@@ -1,176 +1,216 @@
-<div class="list-view-container">
-  <section class="timelapse-hero">
+<div class="list-view-container cameras-page">
+  <section class="cameras-hero">
     <div>
       <span class="eyebrow">Seguimiento visual</span>
-      <h1>Time-lapse de lotes</h1>
+      <h1>Camaras</h1>
       <p>
-        Vincula cada camara por numero de serie. La camara sube imagenes por FTP usando ese serial como usuario.
+        Inventario operativo desde Hik-Connect. Desde aca podes capturar imagenes, revisar historial y asociar una
+        camara a uno o varios lotes.
       </p>
     </div>
-    <div class="ftp-contract">
-      <span>FTP</span>
-      <strong>Usuario = serial de camara</strong>
-      <small>JPG, PNG o WEBP. Una imagen diaria por lote.</small>
+    <div class="hero-actions">
+      <p-iconfield iconPosition="left">
+        <p-inputicon>
+          <i class="pi pi-search"></i>
+        </p-inputicon>
+        <input
+          pInputText
+          type="text"
+          [(ngModel)]="busqueda"
+          placeholder="Buscar camara, serial o lote"
+        />
+      </p-iconfield>
+      <p-button
+        label="Actualizar"
+        icon="pi pi-refresh"
+        [loading]="loading"
+        severity="secondary"
+        [outlined]="true"
+        (click)="listar()"
+      />
     </div>
   </section>
-  <p-table
-    #table
-    [value]="datos"
-    dataKey="_id"
-    [rows]="helper.getPageSize(name)"
-    [rowsPerPageOptions]="helper.pageSizeOptions"
-    [loading]="loading"
-    [paginator]="true"
-    [scrollable]="true"
-    scrollHeight="flex"
-    (onPage)="helper.setPageSize(name, $event.rows)"
-    [globalFilterFields]="['nombre']"
-    stripedRows
-    rowExpandMode="single"
-    dataKey="_id"
-    stateStorage="session"
-    [stateKey]="name"
-  >
-    <!-- Caption -->
-    <ng-template #caption>
-      <div class="flex menu-offset" style="align-items: center">
-        <!-- Buscar -->
-        <p-iconfield iconPosition="left" class="ml-auto">
-          <p-inputicon>
-            <i class="pi pi-search"></i>
-          </p-inputicon>
-          <input
-            #search
-            pInputText
-            type="text"
-            (input)="table.filterGlobal($any($event.target).value, 'contains')"
-            [placeholder]="'Buscar' | translate"
-          />
-        </p-iconfield>
-        <!-- Limpiar -->
-        <p-button
-          [label]="'Limpiar' | translate"
-          [outlined]="true"
-          icon="pi pi-filter-slash"
-          (click)="table.clear(); search.value = ''"
-          class="ml-2"
-        />
-      </div>
-    </ng-template>
 
-    <!-- Header -->
-    <ng-template #header>
-      <tr>
-        <!-- Expandir -->
-        <!-- <th style="width: 1em"></th> -->
-        <!-- Usuario -->
-        <th pSortableColumn="nombre">
-          <div class="flex items-center gap-2">
-            {{ 'Lote' | translate }}
-            <p-sortIcon field="nombre" />
-            <p-columnFilter type="text" field="nombre" display="menu" />
+  @if (loading) {
+    <div class="loading-card">
+      <p-progressSpinner ariaLabel="Cargando camaras"></p-progressSpinner>
+      <span>Cargando camaras disponibles...</span>
+    </div>
+  } @else if (!camarasFiltradas.length) {
+    <p-message severity="info">No se encontraron camaras disponibles para esta cuenta.</p-message>
+  } @else {
+    <section class="camera-grid">
+      @for (camara of camarasFiltradas; track trackCamara($index, camara)) {
+        <article class="camera-card" [class.offline]="!camara.online">
+          <div class="camera-card-header">
+            <div>
+              <span class="status" [class.online]="camara.online">
+                {{ camara.online ? 'Online' : 'Offline' }}
+              </span>
+              <h2>{{ camara.nombre || 'Camara sin nombre' }}</h2>
+              <p>{{ camara.serialCamara }}</p>
+            </div>
+            <div class="camera-icon">
+              <i class="pi pi-camera"></i>
+            </div>
           </div>
-        </th>
-        <th pSortableColumn="serialCamara">
-          <div class="flex items-center gap-2">
-            {{ 'Serial camara' | translate }}
-            <p-sortIcon field="serialCamara" />
-          </div>
-        </th>
-        <!-- Acciones -->
-        <th>
-          <div class="flex items-center">
-            {{ 'Acciones' | translate }}
-          </div>
-        </th>
-      </tr>
-    </ng-template>
 
-    <!-- Body -->
-    <ng-template #body let-row let-expanded="expanded">
-      <tr>
-        <!-- Nombre -->
-        <td>
-          {{ row.nombre }}
-        </td>
-        <td>
-          <span class="serial-chip">{{ row.serialCamara }}</span>
-        </td>
-        <td>
-          <div style="display: flex; flex-direction: row; gap: 0.5rem">
-            <!-- Detalles -->
+          <div class="camera-facts">
+            <article>
+              <span>Modelo</span>
+              <strong>{{ camara.modelo || camara.categoria || 'Sin dato' }}</strong>
+            </article>
+            <article>
+              <span>Canal</span>
+              <strong>{{ camara.canal || 1 }}</strong>
+            </article>
+            <article>
+              <span>Area</span>
+              <strong>{{ camara.area || 'Raiz Hik-Connect' }}</strong>
+            </article>
+            <article>
+              <span>Fotos</span>
+              <strong>{{ camara.totalFotos || 0 }}</strong>
+            </article>
+          </div>
+
+          <div class="camera-preview" [class.empty]="!camara.ultimaFoto?.url">
+            @if (camara.ultimaFoto?.url) {
+              <img [src]="camara.ultimaFoto?.url" alt="Ultima captura de camara" />
+              <span>{{ camara.ultimaFoto?.fechaCreacion | date: 'dd/MM HH:mm' }}</span>
+            } @else {
+              <i class="pi pi-image"></i>
+              <span>Sin imagen registrada</span>
+            }
+          </div>
+
+          <div class="linked-lots">
+            <span>Lotes asociados</span>
+            @if (camara.lotes?.length) {
+              <div class="lot-chips">
+                @for (lote of camara.lotes; track lote._id) {
+                  <strong>{{ lote.nombre }}</strong>
+                }
+              </div>
+            } @else {
+              <p>Sin lotes asignados</p>
+            }
+          </div>
+
+          <div class="camera-actions">
             <p-button
-              [rounded]="true"
-              pTooltip="Detalles"
-              icon="pi pi-search"
-              severity="info"
-              (click)="fotos(row)"
-            ></p-button>
-            <!-- Editar -->
+              label="Fotos"
+              icon="pi pi-images"
+              severity="secondary"
+              [outlined]="true"
+              (click)="abrirFotos(camara)"
+            />
             <p-button
-              [rounded]="true"
-              pTooltip="Editar"
-              icon="pi pi-pencil"
-              severity="warn"
-              (click)="edit(row)"
-            ></p-button>
-            <!-- Eliminar -->
+              label="Asignar"
+              icon="pi pi-link"
+              severity="secondary"
+              [outlined]="true"
+              (click)="abrirAsignacion(camara)"
+            />
             <p-button
-              [rounded]="true"
-              pTooltip="Eliminar"
-              icon="pi pi-trash"
-              severity="danger"
-              (click)="delete(row)"
-              [disabled]="user?._id === row._id"
-            ></p-button>
+              label="Capturar"
+              icon="pi pi-camera"
+              [loading]="capturandoSerial === camara.serialCamara"
+              [disabled]="capturandoSerial === camara.serialCamara"
+              (click)="capturarAhora(camara)"
+            />
           </div>
-        </td>
-      </tr>
-    </ng-template>
-
-    <!-- Expanded -->
-    <ng-template #expandedrow let-row>
-      <tr>
-        <td colspan="3">
-          <h2 style="margin: 0; text-align: center; line-height: 2">Acá van mas detalles del lote</h2>
-        </td>
-      </tr>
-    </ng-template>
-
-    <!-- Sin datos -->
-    <ng-template #emptymessage>
-      <tr>
-        <td colspan="3">
-          <p-message severity="info">
-            {{ 'No se encontraron lotes con cámara' | translate }}
-          </p-message>
-        </td>
-      </tr>
-    </ng-template>
-
-    <!-- Footer de la tabla con botón crear -->
-    <ng-template #summary>
-      @if (!helper.soloLectura()) {
-        <div class="flex justify-center p-3 border-t border-surface-200">
-          <p-button
-            [label]="'Asignar cámara a un lote' | translate"
-            icon="pi pi-plus"
-            severity="primary"
-            [fluid]="true"
-            [outlined]="true"
-            (click)="create()"
-          ></p-button>
-        </div>
+        </article>
       }
-    </ng-template>
-  </p-table>
+    </section>
+  }
 </div>
+
 <p-dialog
-  [(visible)]="visible"
+  [(visible)]="visibleAsignar"
   [modal]="true"
-  [style]="{ width: '25rem' }"
-  (onShow)="child.onDialogShow()"
-  (onHide)="child.volver()"
+  [style]="{ width: 'min(760px, 94vw)' }"
+  header="Asignar camara a lotes"
 >
-  <app-asignar-camara-lote (cerrar)="visible = false" #child [editarLote]="editarLote"></app-asignar-camara-lote>
+  <div class="assign-dialog">
+    <div class="dialog-camera-title">
+      <span>{{ camaraSeleccionada?.nombre }}</span>
+      <strong>{{ camaraSeleccionada?.serialCamara }}</strong>
+    </div>
+    <p-multiSelect
+      [options]="lotesOptions"
+      [(ngModel)]="idsLoteSeleccionados"
+      optionLabel="label"
+      optionValue="value"
+      display="chip"
+      [filter]="true"
+      [loading]="loadingLotes"
+      placeholder="Seleccionar uno o varios lotes"
+      styleClass="w-full"
+    />
+    <small>Una misma camara puede alimentar el seguimiento visual de varios lotes.</small>
+    <div class="dialog-actions">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" (click)="visibleAsignar = false" />
+      <p-button
+        label="Guardar asignacion"
+        icon="pi pi-save"
+        [loading]="guardandoAsignacion"
+        (click)="guardarAsignacion()"
+      />
+    </div>
+  </div>
+</p-dialog>
+
+<p-dialog
+  [(visible)]="visibleFotos"
+  [modal]="true"
+  [style]="{ width: 'min(1120px, 96vw)' }"
+  header="Historial de imagenes"
+>
+  <div class="photos-dialog">
+    <div class="dialog-camera-title">
+      <span>{{ camaraSeleccionada?.nombre }}</span>
+      <strong>{{ camaraSeleccionada?.serialCamara }}</strong>
+    </div>
+
+    @if (loadingFotos) {
+      <div class="loading-card small">
+        <p-progressSpinner ariaLabel="Cargando fotos"></p-progressSpinner>
+        <span>Cargando fotos...</span>
+      </div>
+    } @else if (!fotos.length) {
+      <p-message severity="info">Todavia no hay fotos registradas para esta camara.</p-message>
+    } @else {
+      <section class="photos-grid">
+        @for (foto of fotos; track trackFoto($index, foto)) {
+          <button type="button" class="photo-thumb" (click)="verFoto(foto)">
+            <img [src]="foto.url" alt="Foto de seguimiento visual" />
+            <span>{{ foto.fechaCreacion | date: 'dd/MM/yyyy HH:mm' }}</span>
+          </button>
+        }
+      </section>
+    }
+  </div>
+</p-dialog>
+
+<p-dialog [(visible)]="imagenVisible" [modal]="true" [style]="{ width: 'min(1100px, 96vw)' }">
+  <div class="image-viewer">
+    <p-button
+      icon="pi pi-chevron-left"
+      [rounded]="true"
+      severity="secondary"
+      [disabled]="indiceImagenActiva === 0"
+      (click)="fotoAnterior()"
+    />
+    @if (imagenActiva) {
+      <img [src]="imagenActiva" alt="Imagen de camara" />
+    }
+    <p-button
+      icon="pi pi-chevron-right"
+      [rounded]="true"
+      severity="secondary"
+      [disabled]="indiceImagenActiva >= fotos.length - 1"
+      (click)="siguienteFoto()"
+    />
+  </div>
 </p-dialog>

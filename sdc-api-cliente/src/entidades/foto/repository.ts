@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { IFoto, IListado, IQueryParam } from 'modelos/src';
+import { IFoto, ILote, IListado, IQueryParam } from 'modelos/src';
 import { API_DATOS } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 
@@ -17,6 +17,11 @@ export class FotosRepository {
     return await this.axios.GET<IListado<IFoto>>(url, {
       params: filtro,
     });
+  }
+
+  async getLoteById(id: string): Promise<ILote> {
+    const url = `${API_DATOS}/lotes/${id}`;
+    return await this.axios.GET<ILote>(url);
   }
 
   async getImagen(url: string): Promise<any> {

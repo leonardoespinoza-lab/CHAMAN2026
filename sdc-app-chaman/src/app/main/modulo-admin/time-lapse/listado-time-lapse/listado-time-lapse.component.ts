@@ -1,127 +1,188 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, OnInit } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
-import { IListado, ILote, IQueryParam } from 'modelos/src';
-import { ConfirmationService } from 'primeng/api';
-import { Subscription } from 'rxjs';
-import { LoteService } from '../../../../auxiliares/http/lote.service';
+import { ICamara, IFoto, ILote, IQueryParam } from 'modelos/src';
+import { CamaraService } from '../../../../auxiliares/http/camara.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
-import { ListadosService } from '../../../../auxiliares/servicios/listados';
-import { ParamsService } from '../../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../../auxiliares/shared.module';
-import { AsignarCamaraLoteComponent } from '../asignar-camara-lote/asignar-camara-lote.component';
 
 @Component({
   selector: 'app-listado-time-lapse',
-  imports: [SharedModule, AsignarCamaraLoteComponent],
+  imports: [SharedModule],
   templateUrl: './listado-time-lapse.component.html',
   styleUrl: './listado-time-lapse.component.scss',
 })
-export class ListadoTimeLapseComponent implements OnInit, OnDestroy {
+export class ListadoTimeLapseComponent implements OnInit {
   public loading = false;
-  public editarLote: ILote | null = null;
+  public loadingLotes = false;
+  public loadingFotos = false;
+  public guardandoAsignacion = false;
+  public capturandoSerial = '';
 
-  public name = ListadoTimeLapseComponent.name;
-  public datos: ILote[] = [];
-  public totalCount = 0;
-  public visible = false;
+  public camaras: ICamara[] = [];
+  public lotes: ILote[] = [];
+  public fotos: IFoto[] = [];
+  public busqueda = '';
 
-  public datos$?: Subscription;
+  public camaraSeleccionada?: ICamara;
+  public idsLoteSeleccionados: string[] = [];
+  public visibleAsignar = false;
+  public visibleFotos = false;
+  public imagenVisible = false;
+  public imagenActiva?: string;
+  public indiceImagenActiva = 0;
 
-  get user() {
-    return this.helper.user;
+  public readonly name = ListadoTimeLapseComponent.name;
+
+  get camarasFiltradas(): ICamara[] {
+    const term = this.busqueda.trim().toLowerCase();
+    if (!term) {
+      return this.camaras;
+    }
+    return this.camaras.filter((camara) =>
+      [
+        camara.nombre,
+        camara.serialCamara,
+        camara.modelo,
+        camara.categoria,
+        camara.area,
+        ...(camara.lotes || []).map((lote) => lote.nombre),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(term)
+    );
+  }
+
+  get lotesOptions() {
+    return this.lotes.map((lote) => ({
+      label: `${lote.nombre || 'Lote sin nombre'}${lote.establecimiento?.nombre ? ` - ${lote.establecimiento.nombre}` : ''}`,
+      value: lote._id,
+    }));
   }
 
   constructor(
     public helper: HelperService,
-    private listado: ListadosService,
-    private confirmationService: ConfirmationService,
-    private translate: TranslateService,
-    private service: LoteService,
-    private params: ParamsService,
-    private router: Router
+    private camaraService: CamaraService,
+    private translate: TranslateService
   ) {}
 
-  public async create() {
-    // this.params.set('editQuimica', false);
-    // this.router.navigate(['time-lapse', 'asignar-camara']);
-    this.editarLote = null;
-    this.visible = true;
+  public async ngOnInit(): Promise<void> {
+    await this.listar();
   }
 
-  public async edit(data: ILote) {
-    this.editarLote = data;
-    // this.router.navigate(['time-lapse', 'asignar-camara']);
-    this.visible = true;
-  }
-
-  public async fotos(data: ILote) {
-    // this.editarLote = data;
-    this.params.set('Lote', data);
-    this.router.navigate(['time-lapse', 'fotos', data._id]);
-    // this.visible = true;
-  }
-
-  public async delete(dato: ILote): Promise<void> {
-    this.confirmationService.confirm({
-      // target: event.target as EventTarget,
-      header: this.translate.instant('Por favor, confirme la acción'),
-      message: this.translate.instant('¿Desea desvincular la camara?'),
-      closable: true,
-      closeOnEscape: true,
-      icon: 'pi pi-exclamation-triangle',
-      rejectButtonProps: {
-        label: this.translate.instant('Cancelar'),
-        severity: 'secondary',
-        outlined: true,
-      },
-      acceptButtonProps: {
-        label: this.translate.instant('Aceptar'),
-      },
-      accept: async () => {
-        this.loading = true;
-        try {
-          await this.service.editar(dato._id!, { serialCamara: '' });
-
-          // Solo elimina el item en cache
-          this.listado.deleteEntityItem('lotes', dato._id!);
-
-          this.helper.notifSuccess(this.translate.instant('Desvinculado correctamente'));
-        } catch (error) {
-          this.helper.notifError(error);
-        }
-        this.loading = false;
-      },
-    });
-  }
-
-  // Listados
-
-  private async listar(): Promise<void> {
-    const filtro = { serialCamara: { $exists: true, $ne: '' } };
-    const queryParams: IQueryParam = {
-      page: 0,
-      filter: JSON.stringify(filtro),
-      limit: 0,
-      sort: 'nombre',
-    };
-
-    this.datos$?.unsubscribe();
-    this.datos$ = this.listado.subscribe<IListado<ILote>>('lotes', queryParams).subscribe(async (data) => {
-      this.totalCount = data.totalCount;
-      this.datos = data.datos;
-      console.log(`listado de lotes`, data);
-    });
-    await this.listado.getLastValue('lotes', queryParams);
-  }
-
-  public async ngOnInit() {
+  public async listar(): Promise<void> {
     this.loading = true;
-    await Promise.all([this.listar()]);
-    this.loading = false;
+    try {
+      const data = await this.camaraService.listar();
+      this.camaras = data.datos || [];
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.loading = false;
+    }
   }
 
-  ngOnDestroy(): void {
-    this.datos$?.unsubscribe();
+  public async abrirAsignacion(camara: ICamara): Promise<void> {
+    this.camaraSeleccionada = camara;
+    this.idsLoteSeleccionados = (camara.lotes || []).map((lote) => lote._id).filter(Boolean) as string[];
+    this.visibleAsignar = true;
+    await this.cargarLotesDisponibles();
+  }
+
+  public async guardarAsignacion(): Promise<void> {
+    if (!this.camaraSeleccionada?.serialCamara) return;
+    this.guardandoAsignacion = true;
+    try {
+      await this.camaraService.asignarLotes(this.camaraSeleccionada.serialCamara, {
+        idsLote: this.idsLoteSeleccionados,
+        reemplazar: true,
+      });
+      this.helper.notifSuccess(this.translate.instant('Camara asignada correctamente'));
+      this.visibleAsignar = false;
+      await this.listar();
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.guardandoAsignacion = false;
+    }
+  }
+
+  public async abrirFotos(camara: ICamara): Promise<void> {
+    this.camaraSeleccionada = camara;
+    this.visibleFotos = true;
+    await this.cargarFotos(camara);
+  }
+
+  public async capturarAhora(camara: ICamara): Promise<void> {
+    if (!camara.serialCamara) return;
+    this.capturandoSerial = camara.serialCamara;
+    try {
+      await this.camaraService.capturar(camara.serialCamara, camara.canal || 1);
+      this.helper.notifSuccess(this.translate.instant('Captura solicitada correctamente'));
+      await this.listar();
+      if (this.visibleFotos && this.camaraSeleccionada?.serialCamara === camara.serialCamara) {
+        await this.cargarFotos(camara);
+      }
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.capturandoSerial = '';
+    }
+  }
+
+  public verFoto(foto: IFoto): void {
+    this.indiceImagenActiva = this.fotos.findIndex((item) => item._id === foto._id);
+    this.imagenActiva = foto.url;
+    this.imagenVisible = true;
+  }
+
+  public siguienteFoto(): void {
+    if (this.indiceImagenActiva >= this.fotos.length - 1) return;
+    this.indiceImagenActiva++;
+    this.imagenActiva = this.fotos[this.indiceImagenActiva]?.url;
+  }
+
+  public fotoAnterior(): void {
+    if (this.indiceImagenActiva <= 0) return;
+    this.indiceImagenActiva--;
+    this.imagenActiva = this.fotos[this.indiceImagenActiva]?.url;
+  }
+
+  public trackCamara(_index: number, camara: ICamara): string {
+    return camara.serialCamara;
+  }
+
+  public trackFoto(_index: number, foto: IFoto): string {
+    return foto._id || foto.url || String(_index);
+  }
+
+  private async cargarLotesDisponibles(): Promise<void> {
+    if (this.lotes.length) return;
+    this.loadingLotes = true;
+    try {
+      const data = await this.camaraService.listarLotesDisponibles();
+      this.lotes = data.datos || [];
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.loadingLotes = false;
+    }
+  }
+
+  private async cargarFotos(camara: ICamara): Promise<void> {
+    this.loadingFotos = true;
+    try {
+      const params: IQueryParam = {
+        limit: 50,
+        sort: '-fechaCreacion',
+      };
+      const data = await this.camaraService.listarFotos(camara.serialCamara, params);
+      this.fotos = data.datos || [];
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.loadingFotos = false;
+    }
   }
 }

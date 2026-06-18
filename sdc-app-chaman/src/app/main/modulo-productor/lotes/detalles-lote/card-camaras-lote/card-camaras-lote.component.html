@@ -1,0 +1,44 @@
+@if (lote?.serialCamara) {
+  <div class="custom-card lot-camera-card">
+    <div class="camera-header">
+      <div class="camera-icon">
+        <i class="pi pi-camera"></i>
+      </div>
+      <div>
+        <p class="titulo-card">{{ 'Camaras' | uppercase }}</p>
+        <span>Seguimiento visual del lote</span>
+      </div>
+      <strong class="serial-chip">{{ lote?.serialCamara }}</strong>
+    </div>
+
+    @if (loading) {
+      <div class="camera-empty">Cargando imagenes...</div>
+    } @else if (ultimaFoto?.url) {
+      <section class="camera-content">
+        <button type="button" class="latest-photo" (click)="abrir(ultimaFoto)">
+          <img [src]="ultimaFoto?.url" alt="Ultima imagen de seguimiento del lote" />
+          <span>Ultima captura {{ ultimaFoto?.fechaCreacion | date: 'dd/MM HH:mm' }}</span>
+        </button>
+        <div class="photo-strip">
+          @for (foto of fotos; track foto._id || foto.url) {
+            <button type="button" (click)="abrir(foto)">
+              <img [src]="foto.url" alt="Imagen historica de camara" />
+              <span>{{ foto.fechaCreacion | date: 'dd/MM' }}</span>
+            </button>
+          }
+        </div>
+      </section>
+    } @else {
+      <div class="camera-empty">
+        <i class="pi pi-image"></i>
+        <span>Camara asignada, sin imagenes registradas todavia.</span>
+      </div>
+    }
+  </div>
+
+  <p-dialog [(visible)]="visible" [modal]="true" [style]="{ width: 'min(980px, 96vw)' }">
+    @if (imagenActiva) {
+      <img class="dialog-image" [src]="imagenActiva" alt="Imagen de seguimiento del lote" />
+    }
+  </p-dialog>
+}

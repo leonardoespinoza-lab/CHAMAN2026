@@ -12,6 +12,10 @@ export class FotoService {
     return this.http.get(`/fotos`, { params });
   }
 
+  public listarPorLote(idLote: string): Promise<IListado<IFoto>> {
+    return this.http.get(`/fotos/lote/${idLote}`);
+  }
+
   public getImagen(url: string): Promise<any> {
     return this.http.get(`/fotos/imagen`, { params: { url } });
   }

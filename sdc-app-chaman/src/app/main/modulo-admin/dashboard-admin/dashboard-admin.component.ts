@@ -102,10 +102,10 @@ export class DashboardAdminComponent {
       status: 'Configurable',
     },
     {
-      title: 'Time-lapse',
-      description: 'Camaras, lotes asociados e historico visual para seguimiento del cultivo.',
+      title: 'Camaras',
+      description: 'Camaras disponibles, lotes asociados e historico visual para seguimiento del cultivo.',
       icon: 'pi pi-camera',
-      route: '/time-lapse',
+      route: '/camaras',
       group: 'Monitoreo',
       status: 'Monitoreo',
     },

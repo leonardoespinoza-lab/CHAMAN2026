@@ -98,7 +98,10 @@ export const routes: Routes = [
 
       // *** Admin *** //
       { path: 'dashboard-admin', component: DashboardAdminComponent, ...adminOnly },
-      // Time-lapse
+      // Camaras / Time-lapse
+      { path: 'camaras', component: ListadoTimeLapseComponent, ...adminOnly },
+      { path: 'camaras/fotos/:id', component: ListadoImagenesLoteComponent, ...adminOnly },
+      { path: 'camaras/asignar-camara', component: AsignarCamaraLoteComponent, ...adminOnly },
       { path: 'time-lapse', component: ListadoTimeLapseComponent, ...adminOnly },
       { path: 'time-lapse/fotos/:id', component: ListadoImagenesLoteComponent, ...adminOnly },
       { path: 'time-lapse/asignar-camara', component: AsignarCamaraLoteComponent, ...adminOnly },
