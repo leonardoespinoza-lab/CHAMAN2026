@@ -28,6 +28,8 @@ export class LicenciasService {
   }
 
   async create(data: ICreateLicencia): Promise<ILicencia> {
+    data.origen = data.origen || 'manual';
+    data.fechaCreacion = data.fechaCreacion || new Date().toISOString();
     return await this.repository.create(data);
   }
 

@@ -98,6 +98,8 @@ export class ProductorsService {
     if (!data.licencia) {
       data.licencia = {
         nombre: 'Gratis',
+        origen: 'automatico',
+        motivoCreacion: 'Alta de productor desde admin sin licencia seleccionada',
         maxUsuarios: 2,
         maxdDistribuidores: 1,
         maxProductores: 1,

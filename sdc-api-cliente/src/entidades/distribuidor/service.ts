@@ -108,6 +108,8 @@ export class DistribuidorsService {
   private getLicenciaGratis() {
     return {
       nombre: 'Gratis',
+      origen: 'automatico' as const,
+      motivoCreacion: 'Alta de distribuidor sin licencia seleccionada',
       maxUsuarios: 2,
       maxdDistribuidores: 1,
       maxProductores: 25,

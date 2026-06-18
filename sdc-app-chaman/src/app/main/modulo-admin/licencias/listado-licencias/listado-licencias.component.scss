@@ -1,0 +1,127 @@
+.license-admin {
+  .license-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+
+    h2 {
+      margin: 0;
+      color: #25364d;
+      font-size: 1.35rem;
+      font-weight: 800;
+    }
+
+    p {
+      margin: 0.25rem 0 0;
+      color: #5b6e89;
+      font-size: 0.95rem;
+    }
+  }
+
+  .license-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .license-name,
+  .license-status,
+  .license-capacity {
+    color: #20304a;
+    font-size: 1rem;
+    font-weight: 800;
+  }
+
+  .license-entity {
+    color: #20304a;
+    font-weight: 700;
+    max-width: 26rem;
+    white-space: normal;
+  }
+
+  .license-subtitle {
+    margin-top: 0.2rem;
+    color: #5b6e89;
+    font-size: 0.82rem;
+    line-height: 1.25;
+  }
+
+  .license-origin {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.85rem;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid #cbd7e7;
+    background: #f7fafc;
+    color: #20304a;
+    font-size: 0.84rem;
+    font-weight: 800;
+  }
+
+  .license-origin.manual {
+    border-color: #2fd6cc;
+    background: #e9fbfa;
+    color: #087b75;
+  }
+
+  .license-origin.automatic {
+    border-color: #f0b35a;
+    background: #fff7e8;
+    color: #8b5608;
+  }
+
+  .license-origin.system {
+    border-color: #6b7cff;
+    background: #eef1ff;
+    color: #3343bd;
+  }
+
+  .license-origin.unknown {
+    border-style: dashed;
+    color: #5b6e89;
+  }
+
+  .license-modules {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    max-width: 28rem;
+
+    span {
+      padding: 0.22rem 0.55rem;
+      border: 1px solid #cbd7e7;
+      border-radius: 999px;
+      background: #ffffff;
+      color: #20304a;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+
+    .muted {
+      color: #7a8ca5;
+      font-weight: 600;
+    }
+  }
+
+  .license-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .license-admin {
+    .license-toolbar {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .license-toolbar-actions {
+      width: 100%;
+    }
+  }
+}

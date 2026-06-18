@@ -1,6 +1,9 @@
 export interface ILicencia {
   _id?: string;
+  fechaCreacion?: string;
   nombre?: string; // "Free" | "Pro" | "Enterprise";
+  origen?: 'manual' | 'automatico' | 'sistema';
+  motivoCreacion?: string;
   maxUsuarios?: number;
   // Aplica a quimica
   maxdDistribuidores?: number;

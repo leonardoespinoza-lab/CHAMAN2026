@@ -69,6 +69,8 @@ export class QuimicasService {
   private getLicenciaGratis() {
     return {
       nombre: 'Gratis',
+      origen: 'automatico' as const,
+      motivoCreacion: 'Alta de quimica sin licencia seleccionada',
       maxUsuarios: 2,
       maxdDistribuidores: 10,
       maxProductores: 50,

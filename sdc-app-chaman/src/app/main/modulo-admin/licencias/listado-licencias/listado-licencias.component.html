@@ -1,4 +1,4 @@
-<div class="list-view-container">
+<div class="list-view-container license-admin">
   <p-table
     #table
     [value]="datos"
@@ -10,46 +10,43 @@
     [scrollable]="true"
     scrollHeight="flex"
     (onPage)="helper.setPageSize(name, $event.rows)"
-    [globalFilterFields]="['nombre']"
+    [globalFilterFields]="['nombre', 'origen', 'motivoCreacion']"
     stripedRows
     rowExpandMode="single"
-    dataKey="_id"
     stateStorage="session"
     [stateKey]="name"
   >
-    <!-- Caption -->
     <ng-template #caption>
-      <div class="flex menu-offset" style="align-items: center">
-        <!-- Buscar -->
-        <p-iconfield iconPosition="left" class="ml-auto">
-          <p-inputicon>
-            <i class="pi pi-search"></i>
-          </p-inputicon>
-          <input
-            #search
-            pInputText
-            type="text"
-            (input)="table.filterGlobal($any($event.target).value, 'contains')"
-            [placeholder]="'Buscar' | translate"
+      <div class="license-toolbar">
+        <div>
+          <h2>Gestion de licencias</h2>
+          <p>Control de origen, entidad asociada, vigencia y modulos habilitados.</p>
+        </div>
+        <div class="license-toolbar-actions">
+          <p-iconfield iconPosition="left">
+            <p-inputicon>
+              <i class="pi pi-search"></i>
+            </p-inputicon>
+            <input
+              #search
+              pInputText
+              type="text"
+              (input)="table.filterGlobal($any($event.target).value, 'contains')"
+              [placeholder]="'Buscar' | translate"
+            />
+          </p-iconfield>
+          <p-button
+            [label]="'Limpiar' | translate"
+            [outlined]="true"
+            icon="pi pi-filter-slash"
+            (click)="table.clear(); search.value = ''"
           />
-        </p-iconfield>
-        <!-- Limpiar -->
-        <p-button
-          [label]="'Limpiar' | translate"
-          [outlined]="true"
-          icon="pi pi-filter-slash"
-          (click)="table.clear(); search.value = ''"
-          class="ml-2"
-        />
+        </div>
       </div>
     </ng-template>
 
-    <!-- Header -->
     <ng-template #header>
       <tr>
-        <!-- Expandir -->
-        <!-- <th style="width: 1em"></th> -->
-        <!-- Usuario -->
         <th pSortableColumn="nombre">
           <div class="flex items-center gap-2">
             {{ 'Licencia' | translate }}
@@ -57,37 +54,52 @@
             <p-columnFilter type="text" field="nombre" display="menu" />
           </div>
         </th>
-        <!-- Acciones -->
-        <th>
-          <div class="flex items-center">
-            {{ 'Acciones' | translate }}
-          </div>
-        </th>
+        <th>{{ 'Origen' | translate }}</th>
+        <th>{{ 'Entidad asociada' | translate }}</th>
+        <th>{{ 'Vigencia' | translate }}</th>
+        <th>{{ 'Capacidad' | translate }}</th>
+        <th>{{ 'Modulos' | translate }}</th>
+        <th>{{ 'Acciones' | translate }}</th>
       </tr>
     </ng-template>
 
-    <!-- Body -->
-    <ng-template #body let-row let-expanded="expanded">
+    <ng-template #body let-row>
       <tr>
-        <!-- Expandir -->
-        <!-- <td>
-        <p-button
-          type="button"
-          pRipple
-          [pRowToggler]="row"
-          [text]="true"
-          [rounded]="true"
-          [plain]="true"
-          [icon]="expanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
-        />
-      </td> -->
-        <!-- Nombre -->
         <td>
-          {{ row.nombre }}
+          <div class="license-name">{{ row.nombre }}</div>
+          <div class="license-subtitle">
+            {{ row.motivoCreacion || 'Sin motivo registrado' }}
+          </div>
         </td>
         <td>
-          <div style="display: flex; flex-direction: row; gap: 0.5rem">
-            <!-- Editar -->
+          <span [class]="getOrigenClass(row)">
+            {{ getOrigen(row) }}
+          </span>
+        </td>
+        <td>
+          <div class="license-entity">{{ getEntidadesResumen(row) }}</div>
+          <div class="license-subtitle">{{ getAsociaciones(row).length }} asociacion(es)</div>
+        </td>
+        <td>
+          <div class="license-status">{{ getVigenciaResumen(row) }}</div>
+          @if (row.fechaCreacion) {
+            <div class="license-subtitle">Creada {{ formatDate(row.fechaCreacion) }}</div>
+          }
+        </td>
+        <td>
+          <div class="license-capacity">{{ getCapacidad(row) }}</div>
+        </td>
+        <td>
+          <div class="license-modules">
+            @for (modulo of getModulosActivos(row); track modulo) {
+              <span>{{ modulo }}</span>
+            } @empty {
+              <span class="muted">Sin modulos</span>
+            }
+          </div>
+        </td>
+        <td>
+          <div class="license-actions">
             <p-button
               [rounded]="true"
               pTooltip="Editar"
@@ -95,33 +107,22 @@
               severity="warn"
               (click)="edit(row)"
             ></p-button>
-            <!-- Eliminar -->
             <p-button
               [rounded]="true"
               pTooltip="Eliminar"
               icon="pi pi-trash"
               severity="danger"
               (click)="delete(row)"
-              [disabled]="user?._id === row._id"
+              [disabled]="!puedeEliminar(row)"
             ></p-button>
           </div>
         </td>
       </tr>
     </ng-template>
 
-    <!-- Expanded -->
-    <ng-template #expandedrow let-row>
-      <tr>
-        <td colspan="2">
-          <h2 style="margin: 0; text-align: center; line-height: 2">Acá van mas detalles del usuario</h2>
-        </td>
-      </tr>
-    </ng-template>
-
-    <!-- Sin datos -->
     <ng-template #emptymessage>
       <tr>
-        <td colspan="2">
+        <td colspan="7">
           <p-message severity="info">
             {{ 'No se encontraron licencias' | translate }}
           </p-message>
@@ -129,7 +130,6 @@
       </tr>
     </ng-template>
 
-    <!-- Footer de la tabla con botón crear -->
     <ng-template #summary>
       @if (!helper.soloLectura()) {
         <div class="flex justify-center p-3 border-t border-surface-200">

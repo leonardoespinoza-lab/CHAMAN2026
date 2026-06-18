@@ -6,8 +6,17 @@ import { Document } from 'mongoose';
 export class Licencia implements Exactly<ILicencia, Licencia> {
   _id?: string;
 
+  @Prop({ type: Date, default: Date.now })
+  fechaCreacion?: string;
+
   @Prop() // "Free" | "Pro" | "Enterprise";
   nombre?: string;
+
+  @Prop({ type: String, default: 'manual' })
+  origen?: 'manual' | 'automatico' | 'sistema';
+
+  @Prop()
+  motivoCreacion?: string;
 
   @Prop()
   maxUsuarios?: number;
