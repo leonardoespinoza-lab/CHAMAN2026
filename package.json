@@ -26,6 +26,7 @@
     "seed:weeds": "node scripts/seed-weeds-gompertz-local.js",
     "seed:demo": "node scripts/seed-demo-hierarchy-local.js",
     "import:legacy-frutales": "node scripts/import-legacy-frutales.js",
+    "import:suelos-inta": "npm --prefix sdc-datos run import:suelos-inta",
     "audit:secrets": "node scripts/audit-config-secrets.js",
     "railway:build": "node scripts/railway-build.js",
     "railway:start": "node scripts/railway-start.js"

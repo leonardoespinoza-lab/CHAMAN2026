@@ -84,8 +84,20 @@
                     <section class="location-search">
                       <div>
                         <strong>Buscar zona del lote</strong>
-                        <small>Escribi localidad, departamento o provincia para centrar el mapa.</small>
+                        <small>Filtra por provincia y escribi localidad o departamento para centrar el mapa.</small>
                       </div>
+                      <p-select
+                        [(ngModel)]="provinciaBusqueda"
+                        [ngModelOptions]="{ standalone: true }"
+                        [options]="provinciasGeograficas"
+                        optionLabel="label"
+                        [filter]="true"
+                        filterBy="label,provincia"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                        placeholder="Provincia"
+                      />
                       <p-autocomplete
                         [(ngModel)]="busquedaUbicacion"
                         [ngModelOptions]="{ standalone: true }"

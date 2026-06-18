@@ -37,6 +37,7 @@ import { FotosModule } from './entidades/foto/module';
 import { MalezasModule } from './entidades/maleza/module';
 import { LorawanUplinksModule } from './entidades/lorawan-uplinks/module';
 import { AlgoritmosModule } from './entidades/algoritmos/module';
+import { SuelosIntaModule } from './entidades/suelo-inta/module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { AlgoritmosModule } from './entidades/algoritmos/module';
     MalezasModule,
     LorawanUplinksModule,
     AlgoritmosModule,
+    SuelosIntaModule,
   ],
   controllers: [HealthController],
   providers: [],

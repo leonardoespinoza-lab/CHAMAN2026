@@ -38,8 +38,19 @@ export class GeocodesController {
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
   )
-  public async zonas(@Body() body: { text: string }): Promise<{ resultados: IZonaGeografica[] }> {
-    return await this.service.zonas(body.text);
+  public async zonas(@Body() body: { text: string; provincia?: string }): Promise<{ resultados: IZonaGeografica[] }> {
+    return await this.service.zonas(body.text, body.provincia);
+  }
+
+  @Post('/provincias')
+  @Permisos(
+    { nivel: 'Quimica', roles: ['Admin'] },
+    { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Productor', roles: ['Admin'] },
+    { nivel: 'Establecimiento', roles: ['Admin'] },
+  )
+  public async provincias(): Promise<{ resultados: IZonaGeografica[] }> {
+    return await this.service.provincias();
   }
 
   @Post('/geocode')

@@ -33,3 +33,4 @@ export * from "./reporte";
 export * from "./foto";
 export * from "./maleza";
 export * from "./lorawan-uplink";
+export * from "./suelo-inta";

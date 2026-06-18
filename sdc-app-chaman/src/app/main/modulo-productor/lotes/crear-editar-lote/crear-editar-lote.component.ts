@@ -59,6 +59,8 @@ export class CrearEditarLoteComponent implements OnInit {
   public dispositivos$?: Subscription;
 
   public busquedaUbicacion: string | IZonaGeografica = '';
+  public provinciaBusqueda?: IZonaGeografica;
+  public provinciasGeograficas: IZonaGeografica[] = [];
   public ubicacionesSugeridas: IZonaGeografica[] = [];
   public ubicacionLoading = false;
   public centroMapa?: IGeoJSONPoint;
@@ -202,7 +204,10 @@ export class CrearEditarLoteComponent implements OnInit {
 
     this.ubicacionLoading = true;
     try {
-      const response = await this.geonode.zonas({ text: query });
+      const response = await this.geonode.zonas({
+        text: query,
+        provincia: this.provinciaBusqueda?.provincia,
+      });
       this.ubicacionesSugeridas = response.resultados || [];
     } catch (error) {
       this.ubicacionesSugeridas = [];
@@ -227,7 +232,10 @@ export class CrearEditarLoteComponent implements OnInit {
 
     this.ubicacionLoading = true;
     try {
-      const zonas = await this.geonode.zonas({ text: texto });
+      const zonas = await this.geonode.zonas({
+        text: texto,
+        provincia: this.provinciaBusqueda?.provincia,
+      });
       const zona = zonas.resultados?.[0];
       if (zona?.coordenadas) {
         this.aplicarZonaGeografica(zona);
@@ -380,6 +388,7 @@ export class CrearEditarLoteComponent implements OnInit {
     if (!zona.coordenadas || !this.form) return;
 
     this.busquedaUbicacion = zona;
+    this.sincronizarProvinciaBusqueda(zona.provincia);
     this.form.get('ubicacion.centro')?.setValue(zona.coordenadas);
     this.centroMapa = {
       type: 'Point',
@@ -452,6 +461,14 @@ export class CrearEditarLoteComponent implements OnInit {
       .trim();
   }
 
+  private sincronizarProvinciaBusqueda(provincia?: string): void {
+    if (!provincia || this.provinciaBusqueda?.provincia) return;
+    const normalizada = this.normalizarTexto(provincia);
+    this.provinciaBusqueda = this.provinciasGeograficas.find(
+      (item) => this.normalizarTexto(item.provincia) === normalizada,
+    );
+  }
+
   // LISTADOS
 
   private async listarEstablecimientos(): Promise<void> {
@@ -490,6 +507,15 @@ export class CrearEditarLoteComponent implements OnInit {
         console.log(`listado de departamentos`, data);
       });
     await this.listado.getLastValue('departamentos', queryParams);
+  }
+
+  private async listarProvinciasGeograficas(): Promise<void> {
+    try {
+      const response = await this.geonode.provincias();
+      this.provinciasGeograficas = response.resultados || [];
+    } catch (error) {
+      this.provinciasGeograficas = [];
+    }
   }
   private async listarSondasSuelo(): Promise<void> {
     const filter: IFilter<IEstacion> = {
@@ -566,6 +592,7 @@ export class CrearEditarLoteComponent implements OnInit {
     await Promise.all([
       this.listarEstablecimientos(),
       this.listarDepartamentos(),
+      this.listarProvinciasGeograficas(),
       this.listarSondasSuelo(),
       this.listarDispositivos(),
     ]);

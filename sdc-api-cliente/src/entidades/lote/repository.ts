@@ -5,6 +5,7 @@ import {
   IQueryParam,
   ICreateLote,
   IUpdateLote,
+  ISueloInta,
 } from 'modelos/src';
 import { API_DATOS, API_PREDICCIONES } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
@@ -41,5 +42,12 @@ export class LotesRepository {
   async calcularCapacidadCampo(idSonda: string, fecha: string) {
     const url = `${API_PREDICCIONES}/riego/capacidad-campo/${idSonda}/${fecha}`;
     return await this.axios.GET(url);
+  }
+
+  async getSueloIntaLocal(lat: number, lng: number): Promise<ISueloInta | null> {
+    const url = `${API_DATOS}/suelos-inta/punto`;
+    return await this.axios.GET<ISueloInta | null>(url, {
+      params: { lat, lng },
+    });
   }
 }

@@ -19,7 +19,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "modelos": "npm install ../sdc-modelos --force"
+    "modelos": "npm install ../sdc-modelos --force",
+    "import:suelos-inta": "node scripts/import-suelos-inta.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.0",
@@ -38,6 +39,7 @@
     "reflect-metadata": "^0.2.2",
     "rimraf": "^6.0.1",
     "rxjs": "^7.8.2",
+    "shapefile": "^0.6.6",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^11.1.0"
   },

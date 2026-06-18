@@ -13,6 +13,7 @@ import {
   TTexturaSuelo,
   TTipoDrenaje,
   TTipoErosionEscorrentiaPendiente,
+  ISueloInta,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { LotesRepository } from './repository';
@@ -216,6 +217,15 @@ export class LotesService {
       throw new BadRequestException('Latitud y longitud invalidas');
     }
 
+    const local = await this.consultarSueloIntaLocal(lat, lng);
+    if (local?.properties) {
+      return this.crearRespuestaSueloIntaEncontrada(local.properties, {
+        ...base,
+        fuente: local.fuente || base.fuente,
+        servicio: 'sdc-datos/suelos_inta',
+      });
+    }
+
     try {
       const delta = 0.05;
       const response = await this.axios.GET<IntaFeatureCollection>(
@@ -250,68 +260,7 @@ export class LotesService {
         };
       }
 
-      const textura = this.inferirTexturaSuelo(properties);
-      const drenaje = this.inferirDrenaje(properties);
-      const erosion = this.inferirErosionPendiente(properties);
-      const capacidad = this.capacidadPorTextura(textura);
-      const profundidad = this.toNumber(properties.profund_s1);
-      const indiceProductividad = this.toNumber(properties.ind_prod);
-      const pendiente = this.toNumber(properties.porc_pens1);
-      const sueloReferencia: ISueloReferencia = {
-        fuente: base.fuente,
-        servicio: base.servicio,
-        fechaConsulta: base.fechaConsulta,
-        confianza: this.calcularConfianza(properties),
-        provincia: properties.provincia,
-        unidadCartografica: properties.simbc,
-        tipoUnidad: properties.tipo_uc,
-        limitaciones: this.compactar([
-          properties.limit_ppal,
-          properties.limit_secu,
-          properties.limit_terc,
-        ]),
-        indiceProductividad,
-        orden: properties.orden_sue1,
-        granGrupo: properties.ggrup_sue1,
-        subGrupo: properties.sgrup_sue1,
-        texturaSuperficial: properties.text_sups1,
-        texturaSubsuelo: properties.text_bs1,
-        drenaje: properties.drenaje_s1,
-        profundidadCm: profundidad,
-        pendientePorcentaje: pendiente,
-        raw: properties,
-      };
-
-      const sugerencias: Partial<IUpdateLote> = {
-        sueloReferencia,
-        capacidadDeCampo: capacidad.capacidadDeCampo,
-        puntoMarchitez: capacidad.puntoMarchitez,
-        texturaLixiviacion: textura,
-        texturaEscorrentia: textura,
-        drenajeNaturalLixiviacion: drenaje,
-        drenajeNaturalEscorrentia: drenaje,
-        erosionEscorrentiaPendiente: erosion,
-        suelos: [
-          {
-            numeroDeSensor: 1,
-            profundidad: profundidad ? Math.min(Math.max(profundidad, 20), 100) : 30,
-            textura,
-            hayRaices: true,
-            capacidadDeCampo: capacidad.capacidadDeCampo,
-            puntoMarchitez: capacidad.puntoMarchitez,
-          },
-        ],
-      };
-
-      return {
-        ...base,
-        encontrado: true,
-        confianza: sueloReferencia.confianza,
-        mensaje: 'Datos sugeridos desde INTA. Se pueden editar antes de guardar el lote.',
-        resumen: sueloReferencia,
-        sugerencias,
-        raw: properties,
-      };
+      return this.crearRespuestaSueloIntaEncontrada(properties, base);
     } catch (error) {
       this.logger.error(`Error consultando suelo INTA: ${error?.message || error}`);
       return {
@@ -323,6 +272,15 @@ export class LotesService {
 
   // Private
 
+  private async consultarSueloIntaLocal(lat: number, lng: number): Promise<ISueloInta | null> {
+    try {
+      return await this.repository.getSueloIntaLocal(lat, lng);
+    } catch (error) {
+      this.logger.warn(`Suelo INTA local no disponible: ${error?.message || error}`);
+      return null;
+    }
+  }
+
   private crearRespuestaSueloInta(lat: number, lng: number): SueloIntaResponse {
     return {
       fuente: 'INTA Atlas de Suelos 1:500.000/1:1.000.000',
@@ -331,6 +289,74 @@ export class LotesService {
       ubicacion: { lat, lng },
       encontrado: false,
       editable: true,
+    };
+  }
+
+  private crearRespuestaSueloIntaEncontrada(
+    properties: Record<string, any>,
+    base: SueloIntaResponse,
+  ): SueloIntaResponse {
+    const textura = this.inferirTexturaSuelo(properties);
+    const drenaje = this.inferirDrenaje(properties);
+    const erosion = this.inferirErosionPendiente(properties);
+    const capacidad = this.capacidadPorTextura(textura);
+    const profundidad = this.toNumber(properties.profund_s1);
+    const indiceProductividad = this.toNumber(properties.ind_prod);
+    const pendiente = this.toNumber(properties.porc_pens1);
+    const sueloReferencia: ISueloReferencia = {
+      fuente: base.fuente,
+      servicio: base.servicio,
+      fechaConsulta: base.fechaConsulta,
+      confianza: this.calcularConfianza(properties),
+      provincia: properties.provincia,
+      unidadCartografica: properties.simbc,
+      tipoUnidad: properties.tipo_uc,
+      limitaciones: this.compactar([
+        properties.limit_ppal,
+        properties.limit_secu,
+        properties.limit_terc,
+      ]),
+      indiceProductividad,
+      orden: properties.orden_sue1,
+      granGrupo: properties.ggrup_sue1,
+      subGrupo: properties.sgrup_sue1,
+      texturaSuperficial: properties.text_sups1,
+      texturaSubsuelo: properties.text_bs1,
+      drenaje: properties.drenaje_s1,
+      profundidadCm: profundidad,
+      pendientePorcentaje: pendiente,
+      raw: properties,
+    };
+
+    const sugerencias: Partial<IUpdateLote> = {
+      sueloReferencia,
+      capacidadDeCampo: capacidad.capacidadDeCampo,
+      puntoMarchitez: capacidad.puntoMarchitez,
+      texturaLixiviacion: textura,
+      texturaEscorrentia: textura,
+      drenajeNaturalLixiviacion: drenaje,
+      drenajeNaturalEscorrentia: drenaje,
+      erosionEscorrentiaPendiente: erosion,
+      suelos: [
+        {
+          numeroDeSensor: 1,
+          profundidad: profundidad ? Math.min(Math.max(profundidad, 20), 100) : 30,
+          textura,
+          hayRaices: true,
+          capacidadDeCampo: capacidad.capacidadDeCampo,
+          puntoMarchitez: capacidad.puntoMarchitez,
+        },
+      ],
+    };
+
+    return {
+      ...base,
+      encontrado: true,
+      confianza: sueloReferencia.confianza,
+      mensaje: 'Datos sugeridos desde INTA. Se pueden editar antes de guardar el lote.',
+      resumen: sueloReferencia,
+      sugerencias,
+      raw: properties,
     };
   }
 

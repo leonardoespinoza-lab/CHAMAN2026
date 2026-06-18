@@ -20,8 +20,12 @@ export class GeoNodeService {
     return this.http.post(`/geocode/geocode`, dato);
   }
 
-  public zonas(dato: { text: string }): Promise<{ resultados: IZonaGeografica[] }> {
+  public zonas(dato: { text: string; provincia?: string }): Promise<{ resultados: IZonaGeografica[] }> {
     return this.http.post(`/geocode/zonas`, dato);
+  }
+
+  public provincias(): Promise<{ resultados: IZonaGeografica[] }> {
+    return this.http.post(`/geocode/provincias`, {});
   }
 
   public reverse(dato: { geojson: IGeoJSONPoint }): Promise<DireccionV2> {

@@ -14,14 +14,14 @@ const options: Options = {
 export class NodeGeocodeService {
   constructor(private axios: AxiosService) {}
 
-  public async buscarZonasArgentina(text: string): Promise<IZonaGeografica[]> {
+  public async buscarZonasArgentina(text: string, provincia?: string): Promise<IZonaGeografica[]> {
     const query = this.limpiarBusqueda(text);
     if (query.length < 2) return [];
 
     const [localidades, departamentos, provincias] = await Promise.allSettled([
-      this.buscarLocalidadesGeoref(query),
-      this.buscarDepartamentosGeoref(query),
-      this.buscarProvinciasGeoref(query),
+      this.buscarLocalidadesGeoref(query, provincia),
+      this.buscarDepartamentosGeoref(query, provincia),
+      provincia ? Promise.resolve([]) : this.buscarProvinciasGeoref(query),
     ]);
 
     return this.deduplicarZonas([
@@ -29,6 +29,33 @@ export class NodeGeocodeService {
       ...(departamentos.status === 'fulfilled' ? departamentos.value : []),
       ...(provincias.status === 'fulfilled' ? provincias.value : []),
     ]).slice(0, 15);
+  }
+
+  public async listarProvinciasArgentina(): Promise<IZonaGeografica[]> {
+    const response = await this.axios.GET<{
+      provincias?: Array<{
+        id?: string;
+        nombre?: string;
+        centroide?: { lat?: number; lon?: number };
+      }>;
+    }>('https://apis.datos.gob.ar/georef/api/provincias?max=30', {
+      timeout: 8000,
+    });
+
+    return (response.provincias || [])
+      .filter((item) => Number.isFinite(item.centroide?.lat) && Number.isFinite(item.centroide?.lon))
+      .map((item) => ({
+        id: item.id,
+        tipo: 'provincia' as const,
+        label: item.nombre,
+        provincia: item.nombre,
+        coordenadas: {
+          lat: item.centroide.lat,
+          lng: item.centroide.lon,
+        },
+        fuente: 'GeoRef Argentina',
+      }))
+      .sort((a, b) => `${a.provincia}`.localeCompare(`${b.provincia}`));
   }
 
   public async reverse(coordenadas: ICoordenadas): Promise<DireccionV2> {
@@ -130,8 +157,8 @@ export class NodeGeocodeService {
     }
   }
 
-  private async buscarLocalidadesGeoref(query: string): Promise<IZonaGeografica[]> {
-    const url = `https://apis.datos.gob.ar/georef/api/localidades?nombre=${encodeURIComponent(query)}&max=10`;
+  private async buscarLocalidadesGeoref(query: string, provincia?: string): Promise<IZonaGeografica[]> {
+    const url = this.crearGeorefUrl('localidades', query, provincia);
     const response = await this.axios.GET<{
       localidades?: Array<{
         id?: string;
@@ -162,8 +189,8 @@ export class NodeGeocodeService {
       }));
   }
 
-  private async buscarDepartamentosGeoref(query: string): Promise<IZonaGeografica[]> {
-    const url = `https://apis.datos.gob.ar/georef/api/departamentos?nombre=${encodeURIComponent(query)}&max=10`;
+  private async buscarDepartamentosGeoref(query: string, provincia?: string): Promise<IZonaGeografica[]> {
+    const url = this.crearGeorefUrl('departamentos', query, provincia);
     const response = await this.axios.GET<{
       departamentos?: Array<{
         id?: string;
@@ -190,7 +217,7 @@ export class NodeGeocodeService {
   }
 
   private async buscarProvinciasGeoref(query: string): Promise<IZonaGeografica[]> {
-    const url = `https://apis.datos.gob.ar/georef/api/provincias?nombre=${encodeURIComponent(query)}&max=10`;
+    const url = this.crearGeorefUrl('provincias', query);
     const response = await this.axios.GET<{
       provincias?: Array<{
         id?: string;
@@ -231,6 +258,21 @@ export class NodeGeocodeService {
 
   private formatearLabel(nombre?: string, departamento?: string, provincia?: string): string {
     return [nombre, departamento, provincia].filter(Boolean).join(', ');
+  }
+
+  private crearGeorefUrl(
+    endpoint: 'localidades' | 'departamentos' | 'provincias',
+    query: string,
+    provincia?: string,
+  ): string {
+    const params = new URLSearchParams({
+      nombre: query,
+      max: '10',
+    });
+    if (provincia) {
+      params.set('provincia', provincia);
+    }
+    return `https://apis.datos.gob.ar/georef/api/${endpoint}?${params.toString()}`;
   }
 
   private normalizarTexto(value?: string): string {
