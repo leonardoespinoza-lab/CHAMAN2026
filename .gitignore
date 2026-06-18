@@ -30,6 +30,7 @@ yarn-error.log*
 **/*service-account*.json
 !**/*.example.json
 .railway-admin-credential.txt
+.railway-ftp-camera-password.txt
 
 # Generated/static snapshots not intended for source review
 chamanagro-web-dist/
