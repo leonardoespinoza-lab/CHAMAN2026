@@ -1,4 +1,5 @@
 import { IUbicacion } from "../compartidos/ubicacion";
+import { DireccionV2 } from "../compartidos/coordenadas";
 import {
   IClimaEstacionMeteorologica,
   IPronosticoEstacionMeteorologica,
@@ -14,6 +15,7 @@ export interface IEstablecimiento {
   idProductor?: string;
   nombre?: string;
   ubicacion?: IUbicacion[];
+  ubicacionAdministrativa?: DireccionV2;
   fechaCreacion?: string;
   prediccionClimatica?: {
     fecha?: string;

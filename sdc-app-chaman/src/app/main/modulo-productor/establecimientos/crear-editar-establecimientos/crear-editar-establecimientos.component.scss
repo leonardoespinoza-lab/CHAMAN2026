@@ -44,6 +44,43 @@
   gap: 1rem;
 }
 
+.admin-location-card,
+.map-reference-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 38%, var(--p-content-border-color) 62%);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--p-primary-50) 36%, var(--p-content-background) 64%);
+}
+
+.admin-location-card > div:first-child,
+.admin-location-value {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.admin-location-card strong,
+.map-reference-card strong {
+  color: var(--p-text-color);
+}
+
+.admin-location-card small,
+.admin-location-value small,
+.map-reference-card span,
+.map-reference-card small {
+  color: var(--p-text-muted-color);
+}
+
+.admin-location-value {
+  min-width: min(520px, 52%);
+  text-align: right;
+  font-weight: 600;
+}
+
 .location-search {
   display: grid;
   grid-template-columns: minmax(260px, 0.9fr) minmax(210px, 0.8fr) minmax(320px, 1.4fr) auto;
@@ -76,6 +113,17 @@
   font-size: 0.86rem;
 }
 
+.map-reference-card {
+  margin-bottom: 0.75rem;
+  align-items: flex-start;
+}
+
+.map-reference-card span,
+.map-reference-card small {
+  display: block;
+  font-size: 0.82rem;
+}
+
 .editor-footer {
   flex: 0 0 auto;
 }
@@ -105,5 +153,16 @@
 
   .footer-actions {
     flex-direction: column;
+  }
+
+  .admin-location-card,
+  .map-reference-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-location-value {
+    min-width: 0;
+    text-align: left;
   }
 }

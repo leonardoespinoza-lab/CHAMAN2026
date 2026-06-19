@@ -9,6 +9,7 @@ import {
   IProductor,
   IPronosticoEstacionMeteorologica,
   IClimaEstacionMeteorologica,
+  DireccionV2,
 } from 'modelos/src';
 import { Document } from 'mongoose';
 import { Quimica } from '../../quimica/modelos/schema';
@@ -35,6 +36,9 @@ export class Establecimiento
 
   @Prop({ type: [Object] })
   ubicacion?: IUbicacion[];
+
+  @Prop({ type: Object })
+  ubicacionAdministrativa?: DireccionV2;
 
   @Prop({ type: Date, default: Date.now })
   fechaCreacion: string;

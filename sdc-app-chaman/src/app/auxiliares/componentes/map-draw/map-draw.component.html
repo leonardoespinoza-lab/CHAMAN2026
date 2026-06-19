@@ -1,5 +1,5 @@
 <div id="map-draw" class="map-container">
-  <div class="flotante">
+  <div class="flotante" [class.derecha]="herramientasPosicion === 'derecha'">
     <p-button [label]="'Dibujar' | translate" (click)="dibujar()" [disabled]="!tipo || dibujando" />
 
     @if (dibujando) {

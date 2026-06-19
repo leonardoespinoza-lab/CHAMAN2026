@@ -27,6 +27,19 @@
                         <input pInputText formControlName="nombre" [fluid]="true" />
                         <label>{{ 'Nombre' | translate }}</label>
                       </p-floatlabel>
+
+                      <section class="admin-location-card">
+                        <div>
+                          <strong>Referencia administrativa</strong>
+                          <small>Se guarda con el establecimiento y ayuda a ubicar clima, lotes y reportes.</small>
+                        </div>
+                        <div class="admin-location-value">
+                          <span>{{ referenciaUbicacion }}</span>
+                          @if (referenciaCoordenadas) {
+                            <small>{{ referenciaCoordenadas }}</small>
+                          }
+                        </div>
+                      </section>
                     </section>
                   </p-tabpanel>
 
@@ -48,6 +61,7 @@
                         [fluid]="true"
                         [appendTo]="'body'"
                         placeholder="Provincia"
+                        (onChange)="cambioProvinciaBusqueda()"
                       />
 
                       <p-autocomplete
@@ -88,12 +102,21 @@
                       </p-message>
                     }
 
+                    <section class="map-reference-card">
+                      <span>Referencia guardada</span>
+                      <strong>{{ referenciaUbicacion }}</strong>
+                      @if (referenciaCoordenadas) {
+                        <small>{{ referenciaCoordenadas }}</small>
+                      }
+                    </section>
+
                     @if (tabValue === 1) {
                       <app-map-draw
                         [multiPolygon]="multipolygon"
                         [centrarA]="centroMapa"
                         (multiPolygonChange)="onMultipoligonChange($event)"
                         [tipo]="'MultiPolygon'"
+                        herramientasPosicion="derecha"
                       />
                     }
                   </p-tabpanel>

@@ -29,6 +29,7 @@ export class MapDrawComponent implements AfterViewInit {
   @Input() centrarA?: IGeoJSONPoint;
   @Input() public tipo?: 'Point' | 'LineString' | 'Polygon' | 'Circle' | 'MultiPolygon';
   @Input() public color?: string = '#000000';
+  @Input() public herramientasPosicion: 'izquierda' | 'derecha' = 'izquierda';
 
   @Input() public point?: IGeoJSONPoint;
   @Output() public pointChange = new EventEmitter<IGeoJSONPoint>();
