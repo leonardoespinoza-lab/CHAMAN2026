@@ -40,6 +40,17 @@ interface SatelliteIndicator {
   status: 'activo' | 'preparado' | 'contexto';
 }
 
+interface SatelliteMapContext {
+  backgroundImage: string;
+  points: string;
+  overlay: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
+}
+
 @Component({
   selector: 'app-card-ndvi',
   imports: [CommonModule, SharedModule],
@@ -252,10 +263,117 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
     return this.capaActiva?.image || this.reporte?.ndviUrl;
   }
 
+  public get mapaSatelital(): SatelliteMapContext | null {
+    const ring = this.coordenadasLote();
+    if (ring.length < 3) {
+      return null;
+    }
+
+    const longitudes = ring.map(([lng]) => lng);
+    const latitudes = ring.map(([, lat]) => lat);
+    const minLng = Math.min(...longitudes);
+    const maxLng = Math.max(...longitudes);
+    const minLat = Math.min(...latitudes);
+    const maxLat = Math.max(...latitudes);
+    const ancho = Math.max(maxLng - minLng, 0.0018);
+    const alto = Math.max(maxLat - minLat, 0.0018);
+    const padLng = Math.max(ancho * 0.85, 0.0025);
+    const padLat = Math.max(alto * 0.85, 0.0025);
+    const bbox = {
+      minLng: minLng - padLng,
+      maxLng: maxLng + padLng,
+      minLat: minLat - padLat,
+      maxLat: maxLat + padLat,
+    };
+    const bboxWidth = bbox.maxLng - bbox.minLng || 1;
+    const bboxHeight = bbox.maxLat - bbox.minLat || 1;
+    const points = ring
+      .map(([lng, lat]) => {
+        const x = ((lng - bbox.minLng) / bboxWidth) * 100;
+        const y = ((bbox.maxLat - lat) / bboxHeight) * 100;
+        return `${this.redondear(x)},${this.redondear(y)}`;
+      })
+      .join(' ');
+
+    const polygonX = ring.map(([lng]) => ((lng - bbox.minLng) / bboxWidth) * 100);
+    const polygonY = ring.map(([, lat]) => ((bbox.maxLat - lat) / bboxHeight) * 100);
+    const left = Math.min(...polygonX);
+    const top = Math.min(...polygonY);
+    const right = Math.max(...polygonX);
+    const bottom = Math.max(...polygonY);
+    const bboxParam = [bbox.minLng, bbox.minLat, bbox.maxLng, bbox.maxLat].map((value) => value.toFixed(7)).join(',');
+    const url =
+      'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export' +
+      `?bbox=${bboxParam}&bboxSR=4326&imageSR=4326&size=900,520&format=jpg&f=image`;
+
+    return {
+      backgroundImage: `linear-gradient(180deg, rgba(8, 18, 32, 0.08), rgba(8, 18, 32, 0.18)), url("${url}")`,
+      points,
+      overlay: {
+        left,
+        top,
+        width: right - left,
+        height: bottom - top,
+      },
+    };
+  }
+
+  public get estiloRasterSatelital(): Record<string, string> {
+    const overlay = this.mapaSatelital?.overlay;
+    if (!overlay) {
+      return {};
+    }
+    return {
+      left: `${overlay.left}%`,
+      top: `${overlay.top}%`,
+      width: `${overlay.width}%`,
+      height: `${overlay.height}%`,
+    };
+  }
+
+  public get colorCapaActiva(): string {
+    const valor = this.valorCapa(this.capaActiva.key);
+    if (valor == null) {
+      return 'rgba(48, 216, 204, 0.38)';
+    }
+    if (this.capaActiva.key === 'ndmi' || this.capaActiva.key === 'ndwi') {
+      if (valor < -0.12) return 'rgba(221, 172, 83, 0.58)';
+      if (valor > 0.12) return 'rgba(38, 166, 224, 0.58)';
+      return 'rgba(48, 216, 204, 0.5)';
+    }
+    if (valor < 0.18) return 'rgba(218, 168, 83, 0.58)';
+    if (valor < 0.35) return 'rgba(186, 207, 96, 0.56)';
+    if (valor < 0.58) return 'rgba(86, 190, 94, 0.58)';
+    return 'rgba(25, 137, 67, 0.62)';
+  }
+
   public seleccionarCapa(indicator: SatelliteIndicator): void {
     if (indicator.status === 'activo') {
       this.capaSatelitalActiva = indicator.key;
     }
+  }
+
+  private coordenadasLote(): Array<[number, number]> {
+    const geojson = (this.lote as any)?.ubicacion?.geojson;
+    const coordinates = geojson?.type === 'MultiPolygon' ? geojson?.coordinates?.[0]?.[0] : geojson?.coordinates?.[0];
+    if (!Array.isArray(coordinates)) {
+      return [];
+    }
+    return coordinates
+      .map((coord: unknown) => {
+        if (!Array.isArray(coord) || coord.length < 2) {
+          return null;
+        }
+        const lng = Number(coord[0]);
+        const lat = Number(coord[1]);
+        return Number.isFinite(lng) && Number.isFinite(lat) ? ([lng, lat] as [number, number]) : null;
+      })
+      .filter((coord): coord is [number, number] => !!coord);
+  }
+
+  private valorCapa(key: SatelliteIndicator['key']): number | null {
+    const value = key === 'ndvi' ? this.reporte?.indices?.ndvi ?? this.reporte?.ndviPromedio : this.reporte?.indices?.[key];
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
   }
 
   private lecturaIndice(key: SatelliteIndicator['key'], value?: number): string {

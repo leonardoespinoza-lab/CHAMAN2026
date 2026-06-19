@@ -174,17 +174,15 @@
 }
 
 .img-container {
-  align-items: center;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.35), rgba(243, 249, 246, 0.18)),
-    linear-gradient(22deg, rgba(84, 121, 74, 0.22) 0 12%, transparent 12% 24%, rgba(161, 132, 86, 0.18) 24% 42%, transparent 42% 58%, rgba(83, 135, 67, 0.16) 58% 73%, transparent 73%),
-    repeating-linear-gradient(98deg, rgba(41, 75, 49, 0.12) 0 2px, transparent 2px 18px),
+    linear-gradient(180deg, rgba(8, 18, 32, 0.08), rgba(8, 18, 32, 0.18)),
     var(--p-surface-50);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
   border: 1px solid #aebed0;
   border-radius: 8px;
-  display: flex;
   height: clamp(220px, 20vw, 300px);
-  justify-content: center;
   overflow: hidden;
   padding: 0.6rem;
   position: relative;
@@ -192,12 +190,13 @@
 
 .img-container::before {
   background:
-    radial-gradient(circle at 16% 18%, rgba(255, 255, 255, 0.36), transparent 22%),
-    radial-gradient(circle at 88% 72%, rgba(13, 78, 42, 0.18), transparent 28%);
+    linear-gradient(180deg, transparent 55%, rgba(11, 22, 37, 0.28)),
+    radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.16), transparent 24%);
   content: "";
   inset: 0;
   pointer-events: none;
   position: absolute;
+  z-index: 1;
 }
 
 .img-container::after {
@@ -207,6 +206,46 @@
   inset: 0.55rem;
   pointer-events: none;
   position: absolute;
+  z-index: 6;
+}
+
+.satellite-lot-shape {
+  height: 100%;
+  inset: 0;
+  position: absolute;
+  width: 100%;
+  z-index: 2;
+}
+
+.satellite-lot-shadow {
+  fill: rgba(8, 18, 32, 0.18);
+  stroke: rgba(8, 18, 32, 0.42);
+  stroke-width: 1.6;
+  transform: translate(0.7px, 0.9px);
+}
+
+.satellite-lot-fill {
+  opacity: 0.78;
+  stroke: rgba(255, 255, 255, 0.78);
+  stroke-width: 0.8;
+}
+
+.satellite-lot-border {
+  fill: none;
+  stroke: rgba(13, 24, 39, 0.72);
+  stroke-linejoin: round;
+  stroke-width: 1.15;
+}
+
+.satellite-index-raster {
+  border-radius: 4px;
+  filter: saturate(1.24) contrast(1.12);
+  mix-blend-mode: multiply;
+  object-fit: fill;
+  opacity: 0.68;
+  outline: 1px solid rgba(255, 255, 255, 0.36);
+  position: absolute;
+  z-index: 3;
 }
 
 .img {
@@ -222,6 +261,43 @@
   position: relative;
   width: auto;
   z-index: 1;
+}
+
+.img.satellite-index-raster {
+  filter: saturate(1.24) contrast(1.12);
+  height: auto;
+  max-height: none;
+  max-width: none;
+  object-fit: fill;
+  position: absolute;
+  width: auto;
+  z-index: 3;
+}
+
+.satellite-map-chip {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 999px;
+  box-shadow: 0 8px 18px rgba(8, 18, 32, 0.22);
+  color: #17233a;
+  display: flex;
+  gap: 0.35rem;
+  left: 1rem;
+  padding: 0.45rem 0.7rem;
+  position: absolute;
+  top: 1rem;
+  z-index: 7;
+}
+
+.satellite-map-chip strong,
+.satellite-map-chip span {
+  font-size: 0.92rem;
+  line-height: 1;
+}
+
+.satellite-map-chip span {
+  color: var(--p-primary-color);
+  font-weight: 850;
 }
 
 .ndvi-analysis {

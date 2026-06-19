@@ -55,7 +55,7 @@
   display: grid;
   flex: 1;
   gap: 0.7rem;
-  grid-template-columns: minmax(260px, 1fr) minmax(148px, 0.42fr);
+  grid-template-columns: 1fr;
   min-height: 0;
 }
 
@@ -69,22 +69,29 @@
   cursor: pointer;
   overflow: hidden;
   padding: 0;
+  position: relative;
   text-align: left;
 }
 
 .latest-photo img {
   display: block;
-  height: clamp(190px, 20vw, 260px);
-  object-fit: contain;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  max-height: clamp(230px, 28vw, 390px);
+  object-fit: cover;
   width: 100%;
 }
 
 .latest-photo span {
-  background: rgba(255, 255, 255, 0.92);
-  display: block;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  bottom: 0.7rem;
+  display: inline-flex;
   font-size: 0.94rem;
   font-weight: 750;
-  padding: 0.55rem 0.65rem;
+  left: 0.7rem;
+  padding: 0.42rem 0.65rem;
+  position: absolute;
 }
 
 .photo-date-strip {
@@ -94,9 +101,9 @@
   border-radius: 8px;
   display: grid;
   gap: 0.55rem;
-  grid-template-columns: 1fr;
-  max-height: 310px;
-  overflow: auto;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  max-height: none;
+  overflow: visible;
   padding: 0.65rem;
 }
 

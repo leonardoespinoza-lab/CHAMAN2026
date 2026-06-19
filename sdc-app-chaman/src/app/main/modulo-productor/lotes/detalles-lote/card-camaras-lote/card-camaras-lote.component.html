@@ -20,7 +20,7 @@
           <span>{{ (fotoSeleccionada?.fechaCreacion || ultimaFoto?.fechaCreacion) | date: 'EEEE dd/MM HH:mm' }}</span>
         </button>
         <div class="photo-date-strip">
-          <span>Capturas</span>
+          <span>Capturas disponibles</span>
           @for (foto of fotos; track foto._id || foto.url) {
             <button
               type="button"

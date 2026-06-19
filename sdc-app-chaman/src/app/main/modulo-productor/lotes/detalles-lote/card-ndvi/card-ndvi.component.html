@@ -68,12 +68,34 @@
             </button>
           }
         </div>
-        <div class="img-container">
-          @if (imagenCapaActiva) {
-            <img [src]="imagenCapaActiva" class="img" />
+        <div class="img-container" [style.background-image]="mapaSatelital?.backgroundImage">
+          @if (mapaSatelital?.points) {
+            <svg class="satellite-lot-shape" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <polygon class="satellite-lot-shadow" [attr.points]="mapaSatelital?.points"></polygon>
+              <polygon
+                class="satellite-lot-fill"
+                [attr.points]="mapaSatelital?.points"
+                [attr.fill]="colorCapaActiva"
+              ></polygon>
+              <polygon class="satellite-lot-border" [attr.points]="mapaSatelital?.points"></polygon>
+            </svg>
+          }
+          @if (imagenCapaActiva && mapaSatelital?.overlay) {
+            <img
+              [src]="imagenCapaActiva"
+              class="img satellite-index-raster"
+              [ngStyle]="estiloRasterSatelital"
+              [alt]="'Capa ' + capaActiva.label + ' del lote'"
+            />
+          } @else if (imagenCapaActiva) {
+            <img [src]="imagenCapaActiva" class="img" [alt]="'Capa ' + capaActiva.label + ' del lote'" />
           } @else {
             <p-message severity="warn">{{ 'Imagen no disponible' | translate }}</p-message>
           }
+          <div class="satellite-map-chip">
+            <strong>{{ capaActiva.label }}</strong>
+            <span>{{ capaActiva.value }}</span>
+          </div>
         </div>
       </div>
 
