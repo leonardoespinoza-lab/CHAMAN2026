@@ -51,8 +51,6 @@
   gap: 1rem;
 }
 
-.location-search,
-.basic-zone-card,
 .soil-manual-card,
 .soil-lookup,
 .soil-summary,
@@ -64,44 +62,6 @@
   border: 1px solid var(--p-content-border-color);
   border-radius: 8px;
   background: color-mix(in srgb, var(--p-content-background) 88%, #ffffff 12%);
-}
-
-.basic-zone-card {
-  display: grid;
-  gap: 1rem;
-  padding: 1rem;
-}
-
-.basic-zone-title {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.basic-zone-grid {
-  display: grid;
-  grid-template-columns: minmax(190px, 0.85fr) minmax(260px, 1fr) minmax(280px, 1.2fr) auto;
-  gap: 1rem;
-  align-items: center;
-}
-
-.basic-zone-current {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border-radius: 8px;
-  padding: 0.8rem 1rem;
-  background: color-mix(in srgb, var(--p-primary-color) 9%, transparent);
-}
-
-.location-search {
-  display: grid;
-  grid-template-columns: minmax(220px, 0.7fr) minmax(180px, 0.8fr) minmax(260px, 1.4fr) auto;
-  gap: 1rem;
-  align-items: center;
-  padding: 1rem;
-  margin-bottom: 1rem;
 }
 
 .soil-lookup {
@@ -280,16 +240,13 @@
   min-height: 2.8rem;
 }
 
-.select-option,
-.zone-option {
+.select-option {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
   line-height: 1.2;
 }
 
-.location-search strong,
-.basic-zone-card strong,
 .soil-manual-card strong,
 .soil-lookup strong,
 .soil-summary strong,
@@ -301,9 +258,6 @@
   color: var(--p-text-color);
 }
 
-.location-search small,
-.basic-zone-card small,
-.basic-zone-current span,
 .soil-manual-card small,
 .soil-lookup small,
 .soil-profile-header small,
@@ -313,11 +267,14 @@
 .probe-config-card small,
 .device-layers-card small,
 .device-help small,
-.select-option small,
-.zone-option small {
+.select-option small {
   display: block;
   color: var(--p-text-muted-color);
   font-size: 0.86rem;
+}
+
+.inherited-location {
+  line-height: 1.45;
 }
 
 .editor-footer {
@@ -339,8 +296,6 @@
 
 @media (max-width: 900px) {
   .form-grid,
-  .basic-zone-grid,
-  .location-search,
   .soil-manual-grid,
   .soil-lookup,
   .soil-summary,
@@ -352,7 +307,6 @@
     grid-template-columns: 1fr;
   }
 
-  .basic-zone-current,
   .soil-profile-header {
     align-items: flex-start;
     flex-direction: column;

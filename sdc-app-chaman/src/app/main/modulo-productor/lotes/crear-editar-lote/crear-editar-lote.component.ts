@@ -5,7 +5,6 @@ import { TranslateService } from '@ngx-translate/core';
 import {
   ICoordenadas,
   ICreateLote,
-  DireccionV2,
   IDepartamento,
   IDispositivo,
   IEstablecimiento,
@@ -19,18 +18,14 @@ import {
   IProvincia,
   ISuelo,
   ISueloReferencia,
-  IZonaGeografica,
   TTexturaSuelo,
   TTipoContenidoP,
   TTipoDepositoN,
   TTipoDrenaje,
   TTipoErosionEscorrentiaPendiente,
 } from 'modelos/src';
-import { AutoCompleteCompleteEvent, AutoCompleteSelectEvent } from 'primeng/autocomplete';
 import { Subscription } from 'rxjs';
 import { MapDrawComponent } from '../../../../auxiliares/componentes/map-draw/map-draw.component';
-import { PROVINCIAS_ARGENTINA_BASE } from '../../../../auxiliares/constantes/provincias-argentina';
-import { GeoNodeService } from '../../../../auxiliares/http/geonode.service';
 import { LoteService } from '../../../../auxiliares/http/lote.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../auxiliares/servicios/listados';
@@ -57,20 +52,12 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
   public departamentos$?: Subscription;
   public provincias: IProvincia[] = [];
   public provincias$?: Subscription;
-  public provinciasDepartamento: string[] = [];
-  public provinciaDepartamento?: string;
   public sondasSuelo: IEstacion[] = [];
   public sondasSuelo$?: Subscription;
   public dispositivos: IDispositivo[] = [];
   public dispositivos$?: Subscription;
 
-  public busquedaUbicacion: string | IZonaGeografica = '';
-  public provinciaBusqueda?: IZonaGeografica;
-  public provinciasGeograficas: IZonaGeografica[] = [];
-  public ubicacionesSugeridas: IZonaGeografica[] = [];
-  public ubicacionLoading = false;
   public centroMapa?: IGeoJSONPoint;
-  public ubicacionDetectada?: DireccionV2;
 
   public distanciaSonda?: string;
   public sueloIntaLoading = false;
@@ -106,22 +93,16 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
   get sueloReferenciaActual(): ISueloReferencia | undefined {
     return this.sueloIntaInfo?.resumen || this.form?.get('sueloReferencia')?.value || this.lote?.sueloReferencia;
   }
-  get departamentosFiltrados(): IDepartamento[] {
-    const provincia = this.normalizarTexto(this.provinciaDepartamento);
-    if (!provincia) return this.departamentos;
-    return this.departamentos.filter((departamento) => {
-      const nombreProvincia = this.normalizarTexto(this.nombreProvinciaDepartamento(departamento));
-      return !nombreProvincia || nombreProvincia === provincia;
-    });
-  }
   get departamentoSeleccionado(): IDepartamento | undefined {
     const idDepartamento = this.form?.get('idDepartamento')?.value;
     return this.departamentos.find((departamento) => departamento._id === idDepartamento);
   }
-  get geoJsonEstablecimiento() {
+  get establecimientoSeleccionado(): IEstablecimiento | undefined {
     const idEstablecimiento = this.form?.get('idEstablecimiento')?.value;
-    const e = this.establecimientos.find((d) => d._id === idEstablecimiento);
-    return e?.ubicacion?.filter((d) => d.geojson).map((d) => d.geojson!) || [];
+    return this.establecimientos.find((establecimiento) => establecimiento._id === idEstablecimiento);
+  }
+  get geoJsonEstablecimiento() {
+    return this.establecimientoSeleccionado?.ubicacion?.filter((d) => d.geojson).map((d) => d.geojson!) || [];
   }
   get dispositivosSeleccionados(): IDispositivo[] {
     const ids: string[] = this.form?.get('idsDispositivo')?.value || [];
@@ -142,8 +123,21 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
     }
     return `${cantidad} capas de medicion`;
   }
+  get referenciaUbicacionEstablecimiento(): string {
+    const ubicacion = this.establecimientoSeleccionado?.ubicacionAdministrativa;
+    const partes = [ubicacion?.localidad, ubicacion?.partido, ubicacion?.provincia].filter(Boolean);
+    if (partes.length) return partes.join(' / ');
+    if (ubicacion?.direccion) return ubicacion.direccion;
+    return 'Sin referencia administrativa cargada en el establecimiento';
+  }
+  get departamentoHeredadoTexto(): string | undefined {
+    const departamento = this.departamentoSeleccionado;
+    if (!departamento) return undefined;
+    const provincia = this.nombreProvinciaDepartamento(departamento);
+    return [provincia, departamento.nombre].filter(Boolean).join(' / ');
+  }
 
-  public nombreProvinciaDepartamento(departamento?: IDepartamento): string {
+  private nombreProvinciaDepartamento(departamento?: IDepartamento): string {
     if (!departamento) return '';
     if (departamento.provincia?.nombre) return departamento.provincia.nombre;
     if (departamento.idProvincia) {
@@ -156,7 +150,6 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
     private paramsService: ParamsService,
     private translate: TranslateService,
     private service: LoteService,
-    private geonode: GeoNodeService,
     private helper: HelperService,
     private listado: ListadosService,
     private activatedRoute: ActivatedRoute
@@ -193,7 +186,7 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
     this.form = new FormGroup({
       nombre: new FormControl(this.lote?.nombre, Validators.required),
       idEstablecimiento: new FormControl(this.lote?.idEstablecimiento, Validators.required),
-      idDepartamento: new FormControl(this.lote?.idDepartamento, Validators.required),
+      idDepartamento: new FormControl(this.lote?.idDepartamento),
       idSondaSuelo: new FormControl(this.lote?.idSondaSuelo),
       idsDispositivo: new FormControl(this.lote?.idsDispositivo || []),
       sueloReferencia: new FormControl(this.lote?.sueloReferencia),
@@ -225,25 +218,8 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
   }
 
   // FUNCIONES
-  public cambioProvinciaDepartamento(): void {
-    this.sincronizarProvinciaBusqueda(this.provinciaDepartamento);
-    const seleccionado = this.departamentoSeleccionado;
-    if (
-      seleccionado &&
-      this.provinciaDepartamento &&
-      this.normalizarTexto(this.nombreProvinciaDepartamento(seleccionado)) !== this.normalizarTexto(this.provinciaDepartamento)
-    ) {
-      this.form?.get('idDepartamento')?.setValue(undefined);
-    }
-  }
-
-  public cambioDepartamentoManual(): void {
-    this.sincronizarProvinciaDepartamentoDesdeSeleccion();
-    const seleccionado = this.departamentoSeleccionado;
-    const provincia = this.nombreProvinciaDepartamento(seleccionado);
-    if (provincia) {
-      this.sincronizarProvinciaBusqueda(provincia);
-    }
+  public cambioEstablecimiento(): void {
+    this.sincronizarDesdeEstablecimiento(true);
   }
 
   public cambioSondaSuelo() {
@@ -354,110 +330,6 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
       texto.includes('humedad de suelo') ||
       (dispositivo.sensores || []).some((sensor) => this.normalizarTexto(sensor).includes('humedad suelo profundidad'))
     );
-  }
-
-  public async buscarUbicaciones(event: AutoCompleteCompleteEvent): Promise<void> {
-    const query = `${event.query || ''}`.trim();
-    if (query.length < 3) {
-      this.ubicacionesSugeridas = [];
-      return;
-    }
-
-    const locales = this.buscarUbicacionesLocales(query);
-    this.ubicacionesSugeridas = locales;
-    this.ubicacionLoading = true;
-    try {
-      const response = await this.valorConTimeout(
-        'busqueda de ubicaciones',
-        this.geonode.zonas({
-          text: query,
-          provincia: this.provinciaBusqueda?.provincia,
-        }),
-        { resultados: [] },
-        8000,
-      );
-      this.ubicacionesSugeridas = this.combinarZonas(response.resultados || [], locales);
-    } catch (error) {
-      console.warn('No se pudieron buscar ubicaciones en este momento.', error);
-      this.ubicacionesSugeridas = locales;
-    } finally {
-      this.ubicacionLoading = false;
-    }
-  }
-
-  public async seleccionarUbicacionEvent(event: AutoCompleteSelectEvent): Promise<void> {
-    await this.seleccionarUbicacion(event.value);
-  }
-
-  public async seleccionarUbicacion(direccion: string | IZonaGeografica): Promise<void> {
-    if (typeof direccion === 'object' && direccion?.coordenadas) {
-      this.aplicarZonaGeografica(direccion);
-      return;
-    }
-
-    const texto =
-      typeof direccion === 'object'
-        ? `${direccion?.label || direccion?.localidad || direccion?.departamento || direccion?.provincia || ''}`.trim()
-        : `${direccion || ''}`.trim();
-    if (!texto || !this.form) return;
-
-    this.ubicacionLoading = true;
-    try {
-      const zonas = await this.valorConTimeout(
-        'zonas geograficas',
-        this.geonode.zonas({
-          text: texto,
-          provincia: this.provinciaBusqueda?.provincia,
-        }),
-        { resultados: [] },
-        8000,
-      );
-      const zona = zonas.resultados?.[0];
-      if (zona?.coordenadas) {
-        this.aplicarZonaGeografica(zona);
-        return;
-      }
-
-      const coordenadas = await this.valorConTimeout<ICoordenadas | undefined>(
-        'geocodificacion',
-        this.geonode.geocode({ text: texto }),
-        undefined,
-        8000,
-      );
-      if (!coordenadas || !Number.isFinite(coordenadas.lat) || !Number.isFinite(coordenadas.lng)) {
-        this.helper.notifWarn('No se encontraron coordenadas para esa busqueda.');
-        return;
-      }
-
-      this.form.get('ubicacion.centro')?.setValue(coordenadas);
-      this.centroMapa = {
-        type: 'Point',
-        coordinates: [coordenadas.lng, coordenadas.lat],
-      };
-
-      await this.actualizarUbicacionDesdeCentro();
-      this.helper.notifSuccess('Ubicacion encontrada. Ahora podes dibujar o ajustar el lote en el mapa.');
-    } catch (error) {
-      this.helper.notifError(error);
-    } finally {
-      this.ubicacionLoading = false;
-    }
-  }
-
-  public async actualizarUbicacionDesdeCentro(): Promise<void> {
-    const centro = this.form?.get('ubicacion.centro')?.value;
-    if (!Number.isFinite(centro?.lat) || !Number.isFinite(centro?.lng)) return;
-
-    try {
-      const geojson: IGeoJSONPoint = {
-        type: 'Point',
-        coordinates: [centro.lng, centro.lat],
-      };
-      this.ubicacionDetectada = await this.geonode.reverse({ geojson });
-      this.seleccionarDepartamentoPorDireccion(this.ubicacionDetectada);
-    } catch (error) {
-      this.ubicacionDetectada = undefined;
-    }
   }
 
   public async autocompletarSueloInta(): Promise<void> {
@@ -684,9 +556,10 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
 
   private getData() {
     this.sincronizarSueloManualEnCapas();
+    this.sincronizarDesdeEstablecimiento(false);
     const data: ICreateLote = this.form?.value;
     delete (data as any).tipoSueloManual;
-    if (data.ubicacion?.geojson) {
+    if (data.ubicacion?.geojson?.coordinates?.length) {
       const centro = this.helper.calcularCentroide(data.ubicacion.geojson);
       data.ubicacion.centro = { lat: centro[1], lng: centro[0] };
       data.ubicacion.superficie = this.helper.calcularAreaHectareas(data.ubicacion.geojson);
@@ -733,56 +606,28 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
     window.history.back();
   }
 
-  private aplicarZonaGeografica(zona: IZonaGeografica): void {
-    if (!zona.coordenadas || !this.form) return;
-
-    this.busquedaUbicacion = zona;
-    this.sincronizarProvinciaBusqueda(zona.provincia);
-    if (zona.provincia) {
-      this.provinciaDepartamento = zona.provincia;
-    }
-    this.form.get('ubicacion.centro')?.setValue(zona.coordenadas);
-    this.form.get('ubicacion.centro')?.markAsDirty();
-    this.centroMapa = {
-      type: 'Point',
-      coordinates: [zona.coordenadas.lng, zona.coordenadas.lat],
-    };
-    this.ubicacionDetectada = {
-      localidad: zona.localidad,
-      partido: zona.departamento,
-      provincia: zona.provincia,
-      direccion: zona.label,
-      coordenadas: zona.coordenadas,
-    };
-
-    const departamento = this.seleccionarDepartamentoPorZona(zona);
-    if (departamento) {
-      this.helper.notifSuccess(`${zona.label}. Departamento asociado: ${departamento.nombre}.`);
-    } else if (zona.departamento || zona.provincia) {
-      this.helper.notifWarn(
-        `${zona.label}. No encontre ese departamento en la base interna de Chaman; revisa el selector de departamento antes de guardar.`,
-      );
-    } else {
-      this.helper.notifSuccess(`${zona.label}. Zona centrada en el mapa.`);
-    }
+  private sincronizarDesdeEstablecimiento(forzarDepartamento = false): void {
+    const establecimiento = this.establecimientoSeleccionado;
+    if (!establecimiento || !this.form) return;
+    this.centrarMapaDesdeEstablecimiento(establecimiento);
+    this.sincronizarDepartamentoDesdeEstablecimiento(establecimiento, forzarDepartamento);
   }
 
-  private seleccionarDepartamentoPorDireccion(direccion?: DireccionV2): IDepartamento | undefined {
-    if (!direccion) return undefined;
-    return this.seleccionarDepartamentoPorZona({
-      localidad: direccion.localidad,
-      departamento: direccion.partido,
-      provincia: direccion.provincia,
-    });
-  }
-
-  private seleccionarDepartamentoPorZona(
-    zona?: Pick<IZonaGeografica, 'localidad' | 'departamento' | 'provincia'>,
+  private sincronizarDepartamentoDesdeEstablecimiento(
+    establecimiento?: IEstablecimiento,
+    forzarDepartamento = false,
   ): IDepartamento | undefined {
-    if (!zona || !this.departamentos.length) return undefined;
+    const control = this.form?.get('idDepartamento');
+    if (!control || (!forzarDepartamento && control.value)) return this.departamentoSeleccionado;
 
-    const provincia = this.normalizarTexto(zona.provincia);
-    const candidatos = [zona.departamento, zona.localidad]
+    const ubicacion = establecimiento?.ubicacionAdministrativa;
+    if (!ubicacion) {
+      if (forzarDepartamento) control.setValue(undefined);
+      return undefined;
+    }
+
+    const provincia = this.normalizarTexto(ubicacion.provincia);
+    const candidatos = [ubicacion.partido, ubicacion.localidad]
       .map((value) => this.normalizarTexto(value))
       .filter(Boolean);
 
@@ -799,11 +644,41 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
     });
 
     if (departamento?._id) {
-      this.form?.get('idDepartamento')?.setValue(departamento._id);
-      this.form?.get('idDepartamento')?.markAsDirty();
-      this.sincronizarProvinciaDepartamentoDesdeDepartamento(departamento);
+      control.setValue(departamento._id);
+      control.markAsDirty();
+    } else if (forzarDepartamento) {
+      control.setValue(undefined);
     }
     return departamento;
+  }
+
+  private centrarMapaDesdeEstablecimiento(establecimiento?: IEstablecimiento): void {
+    const centro = this.obtenerCentroEstablecimiento(establecimiento);
+    if (!centro) return;
+    this.form?.get('ubicacion.centro')?.setValue(centro, { emitEvent: false });
+    this.centroMapa = {
+      type: 'Point',
+      coordinates: [centro.lng, centro.lat],
+    };
+  }
+
+  private obtenerCentroEstablecimiento(establecimiento?: IEstablecimiento): ICoordenadas | undefined {
+    const administrativa = establecimiento?.ubicacionAdministrativa?.coordenadas;
+    if (this.coordenadasValidas(administrativa)) return administrativa;
+
+    const centroGuardado = establecimiento?.ubicacion?.find((ubicacion) => this.coordenadasValidas(ubicacion.centro))?.centro;
+    if (this.coordenadasValidas(centroGuardado)) return centroGuardado;
+
+    const geojson = establecimiento?.ubicacion?.find((ubicacion) => ubicacion.geojson?.coordinates)?.geojson;
+    if (!geojson) return undefined;
+
+    const centro = this.helper.calcularCentroide(geojson);
+    if (!centro?.length) return undefined;
+    return { lat: centro[1], lng: centro[0] };
+  }
+
+  private coordenadasValidas(coordenadas?: ICoordenadas): coordenadas is ICoordenadas {
+    return Number.isFinite(coordenadas?.lat) && Number.isFinite(coordenadas?.lng);
   }
 
   private normalizarTexto(value?: unknown): string {
@@ -814,82 +689,6 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
       .replace(/[^a-z0-9\s]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-  }
-
-  private buscarUbicacionesLocales(query: string): IZonaGeografica[] {
-    const texto = this.normalizarTexto(query);
-    const provinciaFiltro = this.normalizarTexto(this.provinciaBusqueda?.provincia);
-    const resultados: IZonaGeografica[] = [];
-
-    for (const provincia of this.provinciasGeograficas) {
-      const valor = this.normalizarTexto([provincia.label, provincia.provincia].join(' '));
-      if (!valor.includes(texto)) continue;
-      resultados.push({ ...provincia, fuente: provincia.fuente || 'Chaman' });
-    }
-
-    for (const departamento of this.departamentos) {
-      const provincia = this.nombreProvinciaDepartamento(departamento);
-      const provinciaNormalizada = this.normalizarTexto(provincia);
-      if (provinciaFiltro && provinciaNormalizada && provinciaNormalizada !== provinciaFiltro) continue;
-
-      const valor = this.normalizarTexto([departamento.nombre, provincia].join(' '));
-      if (!valor.includes(texto)) continue;
-      resultados.push({
-        id: departamento._id,
-        tipo: 'departamento',
-        label: provincia ? `${departamento.nombre}, ${provincia}` : departamento.nombre,
-        departamento: departamento.nombre,
-        provincia,
-        fuente: 'Chaman',
-      });
-    }
-
-    resultados.push({
-      id: `buscar-${texto}`,
-      tipo: 'direccion',
-      label: query,
-      provincia: this.provinciaBusqueda?.provincia,
-      fuente: 'Busqueda libre',
-    });
-
-    return this.combinarZonas(resultados).slice(0, 12);
-  }
-
-  private combinarZonas(...grupos: IZonaGeografica[][]): IZonaGeografica[] {
-    const zonas = new Map<string, IZonaGeografica>();
-    for (const grupo of grupos) {
-      for (const zona of grupo || []) {
-        const key = this.normalizarTexto(
-          [zona.tipo, zona.provincia, zona.departamento, zona.localidad, zona.label].filter(Boolean).join('|'),
-        );
-        if (key && !zonas.has(key)) zonas.set(key, zona);
-      }
-    }
-    return Array.from(zonas.values());
-  }
-
-  private async valorConTimeout<T>(nombre: string, tarea: Promise<T>, fallback: T, timeoutMs = 10000): Promise<T> {
-    let finalizada = false;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    const tareaSegura = tarea
-      .then((value) => {
-        finalizada = true;
-        return value;
-      })
-      .catch((error) => {
-        finalizada = true;
-        console.warn(`No se pudo cargar ${nombre}.`, error);
-        return fallback;
-      });
-    const timeout = new Promise<T>((resolve) => {
-      timeoutId = setTimeout(() => {
-        if (!finalizada) console.warn(`${nombre} no respondio antes de ${timeoutMs} ms; sigo con respaldo local.`);
-        resolve(fallback);
-      }, timeoutMs);
-    });
-    const resultado = await Promise.race([tareaSegura, timeout]);
-    if (timeoutId) clearTimeout(timeoutId);
-    return resultado;
   }
 
   private async cargarListadoInicial(nombre: string, tarea: () => Promise<void>, timeoutMs = 12000): Promise<void> {
@@ -908,43 +707,6 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
         }, timeoutMs),
       ),
     ]);
-  }
-
-  private sincronizarProvinciaBusqueda(provincia?: string): void {
-    if (!provincia) return;
-    const normalizada = this.normalizarTexto(provincia);
-    const encontrada = this.provinciasGeograficas.find(
-      (item) => this.normalizarTexto(item.provincia) === normalizada,
-    );
-    if (encontrada) {
-      this.provinciaBusqueda = encontrada;
-    }
-  }
-
-  private actualizarProvinciasDepartamento(): void {
-    const provincias = new Set<string>();
-    for (const provincia of this.provincias) {
-      if (provincia.nombre) provincias.add(provincia.nombre);
-    }
-    for (const departamento of this.departamentos) {
-      const nombre = this.nombreProvinciaDepartamento(departamento);
-      if (nombre) provincias.add(nombre);
-    }
-    for (const provincia of this.provinciasGeograficas) {
-      if (provincia.provincia) provincias.add(provincia.provincia);
-    }
-    this.provinciasDepartamento = Array.from(provincias).sort((a, b) => a.localeCompare(b));
-  }
-
-  private sincronizarProvinciaDepartamentoDesdeSeleccion(): void {
-    const departamento = this.departamentoSeleccionado;
-    this.sincronizarProvinciaDepartamentoDesdeDepartamento(departamento);
-  }
-
-  private sincronizarProvinciaDepartamentoDesdeDepartamento(departamento?: IDepartamento): void {
-    const provincia = this.nombreProvinciaDepartamento(departamento);
-    if (!provincia) return;
-    this.provinciaDepartamento = provincia;
   }
 
   private hidratarProvinciasDepartamentos(): void {
@@ -974,6 +736,7 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
       .subscribe<IListado<IEstablecimiento>>('establecimientos', queryParams)
       .subscribe(async (data) => {
         this.establecimientos = data.datos;
+        this.sincronizarDesdeEstablecimiento(false);
         console.log(`listado de establecimientos`, data);
       });
     await this.listado.getLastValue('establecimientos', queryParams);
@@ -996,8 +759,7 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
       .subscribe(async (data) => {
         this.departamentos = data.datos;
         this.hidratarProvinciasDepartamentos();
-        this.actualizarProvinciasDepartamento();
-        this.sincronizarProvinciaDepartamentoDesdeSeleccion();
+        this.sincronizarDesdeEstablecimiento(false);
         console.log(`listado de departamentos`, data);
       });
     await this.listado.getLastValue('departamentos', queryParams);
@@ -1017,31 +779,12 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
       .subscribe(async (data) => {
         this.provincias = data.datos;
         this.hidratarProvinciasDepartamentos();
-        this.actualizarProvinciasDepartamento();
-        this.sincronizarProvinciaDepartamentoDesdeSeleccion();
+        this.sincronizarDesdeEstablecimiento(false);
         console.log(`listado de provincias`, data);
       });
     void this.listado.getLastValue('provincias', queryParams).catch((error) => {
       console.warn('No se pudieron cargar provincias internas.', error);
-      this.actualizarProvinciasDepartamento();
     });
-  }
-
-  private async listarProvinciasGeograficas(): Promise<void> {
-    this.provinciasGeograficas = PROVINCIAS_ARGENTINA_BASE;
-    try {
-      const response = await this.valorConTimeout(
-        'provincias geograficas',
-        this.geonode.provincias(),
-        { resultados: [] },
-        8000,
-      );
-      this.provinciasGeograficas = this.combinarZonas(response.resultados || [], PROVINCIAS_ARGENTINA_BASE);
-    } catch (error) {
-      console.warn('No se pudieron cargar provincias geograficas.', error);
-      this.provinciasGeograficas = PROVINCIAS_ARGENTINA_BASE;
-    }
-    this.actualizarProvinciasDepartamento();
   }
   private async listarSondasSuelo(): Promise<void> {
     const filter: IFilter<IEstacion> = {
@@ -1083,9 +826,6 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
   async ngOnInit(): Promise<void> {
     this.loading = true;
     try {
-      this.provinciasGeograficas = PROVINCIAS_ARGENTINA_BASE;
-      this.actualizarProvinciasDepartamento();
-
       this.lote = this.paramsService.get('editLote') || undefined;
       const idLote = this.activatedRoute.snapshot.paramMap.get('id');
       if (!this.lote && idLote) {
@@ -1125,15 +865,13 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
       await Promise.all([
         this.cargarListadoInicial('establecimientos', () => this.listarEstablecimientos()),
         this.cargarListadoInicial('departamentos', () => this.listarDepartamentos()),
-        this.cargarListadoInicial('provincias geograficas', () => this.listarProvinciasGeograficas(), 8000),
         this.cargarListadoInicial('sondas de suelo legacy', () => this.listarSondasSuelo()),
         this.cargarListadoInicial('dispositivos', () => this.listarDispositivos()),
       ]);
 
       this.hidratarProvinciasDepartamentos();
-      this.actualizarProvinciasDepartamento();
+      this.sincronizarDesdeEstablecimiento(false);
       this.cambioSondaSuelo();
-      this.sincronizarProvinciaDepartamentoDesdeSeleccion();
       this.onDispositivosChange();
       console.log('form', this.form?.value);
     } finally {

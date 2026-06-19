@@ -44,160 +44,24 @@
                           [showClear]="true"
                           [fluid]="true"
                           [appendTo]="'body'"
+                          (onChange)="cambioEstablecimiento()"
                         />
                         <label>{{ 'Establecimiento' | translate }}</label>
                       </p-floatlabel>
 
-                      <section class="basic-zone-card">
-                        <div class="basic-zone-title">
-                          <strong>Ubicacion administrativa</strong>
-                          <small>Selecciona provincia y departamento. La localidad sirve para centrar el mapa y acelerar la carga.</small>
-                        </div>
-
-                        <div class="basic-zone-grid">
-                          <p-floatlabel variant="in">
-                            <p-select
-                              [(ngModel)]="provinciaDepartamento"
-                              [ngModelOptions]="{ standalone: true }"
-                              [loading]="loading"
-                              [options]="provinciasDepartamento"
-                              [filter]="true"
-                              [showClear]="true"
-                              [fluid]="true"
-                              [appendTo]="'body'"
-                              (onChange)="cambioProvinciaDepartamento()"
-                            />
-                            <label>{{ 'Provincia' | translate }}</label>
-                          </p-floatlabel>
-
-                          <p-floatlabel variant="in">
-                            <p-select
-                              [loading]="loading"
-                              [options]="departamentosFiltrados"
-                              formControlName="idDepartamento"
-                              optionValue="_id"
-                              [filter]="true"
-                              filterBy="nombre,provincia.nombre"
-                              [showClear]="true"
-                              [fluid]="true"
-                              [appendTo]="'body'"
-                              [virtualScroll]="true"
-                              [virtualScrollItemSize]="38"
-                              (onChange)="cambioDepartamentoManual()"
-                            >
-                              <ng-template #selectedItem let-selectedOption>
-                                <div class="select-option">
-                                  <span>{{ selectedOption.nombre | titlecase }}</span>
-                                  <small>{{ nombreProvinciaDepartamento(selectedOption) | titlecase }}</small>
-                                </div>
-                              </ng-template>
-                              <ng-template let-option #item>
-                                <div class="select-option">
-                                  <span>{{ option.nombre | titlecase }}</span>
-                                  <small>{{ nombreProvinciaDepartamento(option) | titlecase }}</small>
-                                </div>
-                              </ng-template>
-                            </p-select>
-                            <label>{{ 'Departamento' | translate }}</label>
-                          </p-floatlabel>
-
-                          <p-autocomplete
-                            [(ngModel)]="busquedaUbicacion"
-                            [ngModelOptions]="{ standalone: true }"
-                            [suggestions]="ubicacionesSugeridas"
-                            optionLabel="label"
-                            [fluid]="true"
-                            [dropdown]="true"
-                            [forceSelection]="false"
-                            placeholder="Localidad o paraje. Ej. Cinco Saltos"
-                            appendTo="body"
-                            (completeMethod)="buscarUbicaciones($event)"
-                            (onSelect)="seleccionarUbicacionEvent($event)"
-                          >
-                            <ng-template #item let-zona>
-                              <div class="zone-option">
-                                <strong>{{ zona.label }}</strong>
-                                <small>{{ zona.tipo | titlecase }} - {{ zona.fuente }}</small>
-                              </div>
-                            </ng-template>
-                          </p-autocomplete>
-
-                          <p-button
-                            label="Centrar mapa"
-                            icon="pi pi-map-marker"
-                            [loading]="ubicacionLoading"
-                            (onClick)="seleccionarUbicacion(busquedaUbicacion)"
-                          />
-                        </div>
-
-                        @if (departamentoSeleccionado) {
-                          <div class="basic-zone-current">
-                            <span>Seleccion actual</span>
-                            <strong>
-                              {{ nombreProvinciaDepartamento(departamentoSeleccionado) | titlecase }} /
-                              {{ departamentoSeleccionado.nombre | titlecase }}
-                            </strong>
-                          </div>
-                        }
-                      </section>
+                      @if (establecimientoSeleccionado) {
+                        <p-message severity="info" class="inherited-location">
+                          Ubicacion heredada del establecimiento: {{ referenciaUbicacionEstablecimiento }}
+                          @if (departamentoHeredadoTexto) {
+                            <br />
+                            Departamento para algoritmos: {{ departamentoHeredadoTexto | titlecase }}
+                          }
+                        </p-message>
+                      }
                     </section>
                   </p-tabpanel>
 
                   <p-tabpanel [value]="1">
-                    <section class="location-search">
-                      <div>
-                        <strong>Buscar zona del lote</strong>
-                        <small>Filtra por provincia y escribi localidad o departamento para centrar el mapa.</small>
-                      </div>
-                      <p-select
-                        [(ngModel)]="provinciaBusqueda"
-                        [ngModelOptions]="{ standalone: true }"
-                        [options]="provinciasGeograficas"
-                        optionLabel="label"
-                        [filter]="true"
-                        filterBy="label,provincia"
-                        [showClear]="true"
-                        [fluid]="true"
-                        [appendTo]="'body'"
-                        placeholder="Provincia"
-                      />
-                      <p-autocomplete
-                        [(ngModel)]="busquedaUbicacion"
-                        [ngModelOptions]="{ standalone: true }"
-                        [suggestions]="ubicacionesSugeridas"
-                        optionLabel="label"
-                        [fluid]="true"
-                        [dropdown]="true"
-                        [forceSelection]="false"
-                        placeholder="Ej. General Roca, Rio Negro"
-                        appendTo="body"
-                        (completeMethod)="buscarUbicaciones($event)"
-                        (onSelect)="seleccionarUbicacionEvent($event)"
-                      >
-                        <ng-template #item let-zona>
-                          <div class="zone-option">
-                            <strong>{{ zona.label }}</strong>
-                            <small>{{ zona.tipo | titlecase }} - {{ zona.fuente }}</small>
-                          </div>
-                        </ng-template>
-                      </p-autocomplete>
-                      <p-button
-                        label="Ir a ubicacion"
-                        icon="pi pi-map-marker"
-                        [loading]="ubicacionLoading"
-                        (onClick)="seleccionarUbicacion(busquedaUbicacion)"
-                      />
-                    </section>
-
-                    @if (ubicacionDetectada) {
-                      <p-message severity="info" class="mb-4">
-                        {{ ubicacionDetectada.localidad || ubicacionDetectada.partido || 'Ubicacion detectada' }}
-                        @if (ubicacionDetectada.provincia) {
-                          - {{ ubicacionDetectada.provincia }}
-                        }
-                      </p-message>
-                    }
-
                     @if (tabValue === 1) {
                       @if (geoJsonEstablecimiento.length) {
                         <app-map-draw
