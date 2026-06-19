@@ -19,6 +19,7 @@ import {
   IPrediccion,
   IPrincipioActivo,
   IProductor,
+  IProvincia,
   IQueryParam,
   IQuimica,
   IReporte,
@@ -48,6 +49,7 @@ import { LoteService } from '../http/lote.service';
 import { PrediccionService } from '../http/prediccion.service';
 import { PrincipioActivoService } from '../http/principio-activos.service';
 import { ProductorsService } from '../http/productor.service';
+import { ProvinciaService } from '../http/provincia.service';
 import { QuimicaService } from '../http/quimica.service';
 import { ReporteNDVIService } from '../http/reporte-ndvis.service';
 import { ReporteService } from '../http/reporte.service';
@@ -70,6 +72,8 @@ type Tipo =
   | IListado<IEstablecimiento>
   | ILote
   | IListado<ILote>
+  | IProvincia
+  | IListado<IProvincia>
   | IDepartamento
   | IListado<IDepartamento>
   | ISemilla
@@ -114,6 +118,8 @@ interface IEntidades {
   establecimientos: IRequestQuery;
   lote: IRequestId;
   lotes: IRequestQuery;
+  provincia: IRequestId;
+  provincias: IRequestQuery;
   departamento: IRequestId;
   departamentos: IRequestQuery;
   semilla: IRequestId;
@@ -187,6 +193,7 @@ export class ListadosService {
     private productorsService: ProductorsService,
     private establecimientosService: EstablecimientoService,
     private lotesService: LoteService,
+    private provinciasService: ProvinciaService,
     private departamentosService: DepartamentoService,
     private semillasService: SemillaService,
     private siembrasService: SiembraService,
@@ -296,6 +303,16 @@ export class ListadosService {
 
   private async listarLotes(query: IQueryParam): Promise<IListado<ILote>> {
     const response = await this.lotesService.listar(query);
+    return JSON.parse(JSON.stringify(response));
+  }
+
+  private async listarProvincia(id: string): Promise<IProvincia> {
+    const response = await this.provinciasService.listarPorId(id);
+    return JSON.parse(JSON.stringify(response));
+  }
+
+  private async listarProvincias(query: IQueryParam): Promise<IListado<IProvincia>> {
+    const response = await this.provinciasService.listar(query);
     return JSON.parse(JSON.stringify(response));
   }
 
@@ -507,6 +524,14 @@ export class ListadosService {
       },
       lote: { fn: this.listarLote.bind(this), keys: {} },
       lotes: { fn: this.listarLotes.bind(this), keys: {} },
+      provincia: {
+        fn: this.listarProvincia.bind(this),
+        keys: {},
+      },
+      provincias: {
+        fn: this.listarProvincias.bind(this),
+        keys: {},
+      },
       departamento: {
         fn: this.listarDepartamento.bind(this),
         keys: {},

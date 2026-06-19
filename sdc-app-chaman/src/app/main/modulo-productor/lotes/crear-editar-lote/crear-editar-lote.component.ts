@@ -16,6 +16,7 @@ import {
   IListado,
   IPopulate,
   IQueryParam,
+  IProvincia,
   ISuelo,
   ISueloReferencia,
   IZonaGeografica,
@@ -53,6 +54,8 @@ export class CrearEditarLoteComponent implements OnInit {
   public establecimientos$?: Subscription;
   public departamentos: IDepartamento[] = [];
   public departamentos$?: Subscription;
+  public provincias: IProvincia[] = [];
+  public provincias$?: Subscription;
   public provinciasDepartamento: string[] = [];
   public provinciaDepartamento?: string;
   public sondasSuelo: IEstacion[] = [];
@@ -105,7 +108,10 @@ export class CrearEditarLoteComponent implements OnInit {
   get departamentosFiltrados(): IDepartamento[] {
     const provincia = this.normalizarTexto(this.provinciaDepartamento);
     if (!provincia) return this.departamentos;
-    return this.departamentos.filter((departamento) => this.normalizarTexto(departamento.provincia?.nombre) === provincia);
+    return this.departamentos.filter((departamento) => {
+      const nombreProvincia = this.normalizarTexto(this.nombreProvinciaDepartamento(departamento));
+      return !nombreProvincia || nombreProvincia === provincia;
+    });
   }
   get departamentoSeleccionado(): IDepartamento | undefined {
     const idDepartamento = this.form?.get('idDepartamento')?.value;
@@ -136,6 +142,15 @@ export class CrearEditarLoteComponent implements OnInit {
     return `${cantidad} capas de medicion`;
   }
 
+  public nombreProvinciaDepartamento(departamento?: IDepartamento): string {
+    if (!departamento) return '';
+    if (departamento.provincia?.nombre) return departamento.provincia.nombre;
+    if (departamento.idProvincia) {
+      return this.provincias.find((provincia) => provincia._id === departamento.idProvincia)?.nombre || '';
+    }
+    return '';
+  }
+
   constructor(
     private paramsService: ParamsService,
     private translate: TranslateService,
@@ -149,15 +164,13 @@ export class CrearEditarLoteComponent implements OnInit {
   // FORMULARIO
   private initSuelos() {
     const array: FormGroup[] = [];
-    if (this.lote?.suelos) {
+    if (this.lote?.suelos?.length) {
       for (const p of this.lote.suelos) {
         array.push(this.agregarSueloFormGroup(p));
       }
       return array;
-    } else {
-      array.push(this.agregarSueloFormGroup());
-      return array;
     }
+    return array;
   }
   public agregarSueloFormGroup(p?: ISuelo): FormGroup {
     return new FormGroup({
@@ -183,6 +196,7 @@ export class CrearEditarLoteComponent implements OnInit {
       idSondaSuelo: new FormControl(this.lote?.idSondaSuelo),
       idsDispositivo: new FormControl(this.lote?.idsDispositivo || []),
       sueloReferencia: new FormControl(this.lote?.sueloReferencia),
+      tipoSueloManual: new FormControl(this.texturaInicialLote()),
       capacidadDeCampo: new FormControl(this.lote?.capacidadDeCampo),
       puntoMarchitez: new FormControl(this.lote?.puntoMarchitez),
       capacidadDeRiego: new FormControl(this.lote?.capacidadDeRiego),
@@ -216,7 +230,7 @@ export class CrearEditarLoteComponent implements OnInit {
     if (
       seleccionado &&
       this.provinciaDepartamento &&
-      this.normalizarTexto(seleccionado.provincia?.nombre) !== this.normalizarTexto(this.provinciaDepartamento)
+      this.normalizarTexto(this.nombreProvinciaDepartamento(seleccionado)) !== this.normalizarTexto(this.provinciaDepartamento)
     ) {
       this.form?.get('idDepartamento')?.setValue(undefined);
     }
@@ -225,8 +239,9 @@ export class CrearEditarLoteComponent implements OnInit {
   public cambioDepartamentoManual(): void {
     this.sincronizarProvinciaDepartamentoDesdeSeleccion();
     const seleccionado = this.departamentoSeleccionado;
-    if (seleccionado?.provincia?.nombre) {
-      this.sincronizarProvinciaBusqueda(seleccionado.provincia.nombre);
+    const provincia = this.nombreProvinciaDepartamento(seleccionado);
+    if (provincia) {
+      this.sincronizarProvinciaBusqueda(provincia);
     }
   }
 
@@ -259,6 +274,29 @@ export class CrearEditarLoteComponent implements OnInit {
     if (this.debeAutocompletarCapasDesdeLanza()) {
       this.prepararCapasDesdeLanza(false);
     }
+  }
+
+  public cambioTipoSueloManual(aplicarValores = true): void {
+    if (!this.form) return;
+    const textura = (this.form.get('tipoSueloManual')?.value || 'Franco') as TTexturaSuelo;
+    const agua = this.capacidadPorTextura(textura);
+
+    const capacidadActual = this.form.get('capacidadDeCampo')?.value;
+    const marchitezActual = this.form.get('puntoMarchitez')?.value;
+    const capacidadDeCampo = aplicarValores || this.esValorVacio(capacidadActual) ? agua.capacidadDeCampo : capacidadActual;
+    const puntoMarchitez = aplicarValores || this.esValorVacio(marchitezActual) ? agua.puntoMarchitez : marchitezActual;
+
+    this.form.patchValue(
+      {
+        capacidadDeCampo,
+        puntoMarchitez,
+        texturaLixiviacion: textura,
+        texturaEscorrentia: textura,
+      },
+      { emitEvent: false },
+    );
+
+    this.sincronizarSueloManualEnCapas();
   }
 
   public prepararCapasDesdeLanza(forzar = true): void {
@@ -470,13 +508,7 @@ export class CrearEditarLoteComponent implements OnInit {
     if (!this.suelos?.length) return true;
     if (this.suelos.length > 1) return false;
     const value = this.suelos.at(0)?.value as ISuelo | undefined;
-    return (
-      !value ||
-      (this.esValorVacio(value.profundidad) &&
-        this.esValorVacio(value.textura) &&
-        this.esValorVacio(value.capacidadDeCampo) &&
-        this.esValorVacio(value.puntoMarchitez))
-    );
+    return !value || (this.esValorVacio(value.numeroDeSensor) && this.esValorVacio(value.profundidad));
   }
 
   private cantidadCapasDispositivo(dispositivo?: IDispositivo): number {
@@ -529,6 +561,9 @@ export class CrearEditarLoteComponent implements OnInit {
   }
 
   private texturaPrincipalLote(): TTexturaSuelo {
+    const manual = this.form?.get('tipoSueloManual')?.value as TTexturaSuelo | undefined;
+    if (manual) return manual;
+
     const existente = (this.suelos?.controls || [])
       .map((control) => control.get('textura')?.value as TTexturaSuelo | undefined)
       .find(Boolean);
@@ -539,6 +574,47 @@ export class CrearEditarLoteComponent implements OnInit {
     if (desdeHuella) return desdeHuella;
 
     return this.texturaDesdeTexto(this.sueloReferenciaActual?.texturaSuperficial || this.sueloReferenciaActual?.texturaSubsuelo);
+  }
+
+  private texturaInicialLote(): TTexturaSuelo {
+    const desdePerfil = this.lote?.suelos?.map((suelo) => suelo.textura).find(Boolean) as TTexturaSuelo | undefined;
+    const desdeHuella = (this.lote?.texturaLixiviacion || this.lote?.texturaEscorrentia) as TTexturaSuelo | undefined;
+    const desdeReferencia = this.texturaDesdeTexto(
+      this.lote?.sueloReferencia?.texturaSuperficial || this.lote?.sueloReferencia?.texturaSubsuelo,
+    );
+    return desdePerfil || desdeHuella || desdeReferencia || 'Franco';
+  }
+
+  private sincronizarSueloManualEnCapas(): void {
+    if (!this.form || !this.suelos) return;
+
+    const textura = (this.form.get('tipoSueloManual')?.value || 'Franco') as TTexturaSuelo;
+    const agua = this.capacidadPorTextura(textura);
+    const capacidadDeCampo = this.form.get('capacidadDeCampo')?.value ?? agua.capacidadDeCampo;
+    const puntoMarchitez = this.form.get('puntoMarchitez')?.value ?? agua.puntoMarchitez;
+
+    if (!this.suelos.length) {
+      this.suelos.push(
+        this.agregarSueloFormGroup({
+          textura,
+          capacidadDeCampo,
+          puntoMarchitez,
+          hayRaices: true,
+        }),
+      );
+      return;
+    }
+
+    for (const control of this.suelos.controls) {
+      (control as FormGroup).patchValue(
+        {
+          textura,
+          capacidadDeCampo,
+          puntoMarchitez,
+        },
+        { emitEvent: false },
+      );
+    }
   }
 
   private texturaDesdeTexto(value?: string): TTexturaSuelo {
@@ -586,7 +662,9 @@ export class CrearEditarLoteComponent implements OnInit {
   // ACCIONES
 
   private getData() {
+    this.sincronizarSueloManualEnCapas();
     const data: ICreateLote = this.form?.value;
+    delete (data as any).tipoSueloManual;
     if (data.ubicacion?.geojson) {
       const centro = this.helper.calcularCentroide(data.ubicacion.geojson);
       data.ubicacion.centro = { lat: centro[1], lng: centro[0] };
@@ -691,7 +769,7 @@ export class CrearEditarLoteComponent implements OnInit {
 
     const departamento = this.departamentos.find((item) => {
       const nombreDepartamento = this.normalizarTexto(item.nombre);
-      const nombreProvincia = this.normalizarTexto(item.provincia?.nombre);
+      const nombreProvincia = this.normalizarTexto(this.nombreProvinciaDepartamento(item));
       const coincideProvincia = !provincia || nombreProvincia === provincia || nombreProvincia.includes(provincia);
       const coincideDepartamento =
         !candidatos.length ||
@@ -730,8 +808,15 @@ export class CrearEditarLoteComponent implements OnInit {
 
   private actualizarProvinciasDepartamento(): void {
     const provincias = new Set<string>();
+    for (const provincia of this.provincias) {
+      if (provincia.nombre) provincias.add(provincia.nombre);
+    }
     for (const departamento of this.departamentos) {
-      if (departamento.provincia?.nombre) provincias.add(departamento.provincia.nombre);
+      const nombre = this.nombreProvinciaDepartamento(departamento);
+      if (nombre) provincias.add(nombre);
+    }
+    for (const provincia of this.provinciasGeograficas) {
+      if (provincia.provincia) provincias.add(provincia.provincia);
     }
     this.provinciasDepartamento = Array.from(provincias).sort((a, b) => a.localeCompare(b));
   }
@@ -742,8 +827,22 @@ export class CrearEditarLoteComponent implements OnInit {
   }
 
   private sincronizarProvinciaDepartamentoDesdeDepartamento(departamento?: IDepartamento): void {
-    if (!departamento?.provincia?.nombre) return;
-    this.provinciaDepartamento = departamento.provincia.nombre;
+    const provincia = this.nombreProvinciaDepartamento(departamento);
+    if (!provincia) return;
+    this.provinciaDepartamento = provincia;
+  }
+
+  private hidratarProvinciasDepartamentos(): void {
+    if (!this.departamentos.length || !this.provincias.length) return;
+    const provinciasPorId = new Map(
+      this.provincias.filter((provincia) => provincia._id).map((provincia) => [provincia._id!, provincia]),
+    );
+
+    this.departamentos = this.departamentos.map((departamento) => {
+      if (departamento.provincia?.nombre || !departamento.idProvincia) return departamento;
+      const provincia = provinciasPorId.get(departamento.idProvincia);
+      return provincia ? { ...departamento, provincia } : departamento;
+    });
   }
 
   // LISTADOS
@@ -781,11 +880,33 @@ export class CrearEditarLoteComponent implements OnInit {
       .subscribe<IListado<IDepartamento>>('departamentos', queryParams)
       .subscribe(async (data) => {
         this.departamentos = data.datos;
+        this.hidratarProvinciasDepartamentos();
         this.actualizarProvinciasDepartamento();
         this.sincronizarProvinciaDepartamentoDesdeSeleccion();
         console.log(`listado de departamentos`, data);
       });
     await this.listado.getLastValue('departamentos', queryParams);
+  }
+
+  private async listarProvinciasDb(): Promise<void> {
+    const queryParams: IQueryParam = {
+      page: 0,
+      limit: 0,
+      sort: 'nombre',
+      select: 'nombre ubicacion',
+    };
+
+    this.provincias$?.unsubscribe();
+    this.provincias$ = this.listado
+      .subscribe<IListado<IProvincia>>('provincias', queryParams)
+      .subscribe(async (data) => {
+        this.provincias = data.datos;
+        this.hidratarProvinciasDepartamentos();
+        this.actualizarProvinciasDepartamento();
+        this.sincronizarProvinciaDepartamentoDesdeSeleccion();
+        console.log(`listado de provincias`, data);
+      });
+    await this.listado.getLastValue('provincias', queryParams);
   }
 
   private async listarProvinciasGeograficas(): Promise<void> {
@@ -795,6 +916,7 @@ export class CrearEditarLoteComponent implements OnInit {
     } catch (error) {
       this.provinciasGeograficas = [];
     }
+    this.actualizarProvinciasDepartamento();
   }
   private async listarSondasSuelo(): Promise<void> {
     const filter: IFilter<IEstacion> = {
@@ -868,13 +990,17 @@ export class CrearEditarLoteComponent implements OnInit {
 
     this.titulo = this.lote ? () => this.translate.instant(`Editar lote`) : () => this.translate.instant('Crear lote');
     this.createForm();
+    this.cambioTipoSueloManual(false);
     await Promise.all([
       this.listarEstablecimientos(),
+      this.listarProvinciasDb(),
       this.listarDepartamentos(),
       this.listarProvinciasGeograficas(),
       this.listarSondasSuelo(),
       this.listarDispositivos(),
     ]);
+    this.hidratarProvinciasDepartamentos();
+    this.actualizarProvinciasDepartamento();
     this.cambioSondaSuelo();
     this.sincronizarProvinciaDepartamentoDesdeSeleccion();
     this.onDispositivosChange();

@@ -88,13 +88,13 @@
                               <ng-template #selectedItem let-selectedOption>
                                 <div class="select-option">
                                   <span>{{ selectedOption.nombre | titlecase }}</span>
-                                  <small>{{ selectedOption.provincia?.nombre | titlecase }}</small>
+                                  <small>{{ nombreProvinciaDepartamento(selectedOption) | titlecase }}</small>
                                 </div>
                               </ng-template>
                               <ng-template let-option #item>
                                 <div class="select-option">
                                   <span>{{ option.nombre | titlecase }}</span>
-                                  <small>{{ option.provincia?.nombre | titlecase }}</small>
+                                  <small>{{ nombreProvinciaDepartamento(option) | titlecase }}</small>
                                 </div>
                               </ng-template>
                             </p-select>
@@ -134,7 +134,7 @@
                           <div class="basic-zone-current">
                             <span>Seleccion actual</span>
                             <strong>
-                              {{ departamentoSeleccionado.provincia?.nombre | titlecase }} /
+                              {{ nombreProvinciaDepartamento(departamentoSeleccionado) | titlecase }} /
                               {{ departamentoSeleccionado.nombre | titlecase }}
                             </strong>
                           </div>
@@ -245,183 +245,45 @@
                   </p-tabpanel>
 
                   <p-tabpanel [value]="3">
-                    <section class="soil-lookup">
-                      <div>
-                        <strong>Suelo INTA</strong>
-                        <small>Consulta el Atlas de Suelos por el centro del lote y completa valores editables.</small>
+                    <section class="soil-manual-card">
+                      <div class="soil-manual-header">
+                        <div>
+                          <strong>Suelo del lote</strong>
+                          <small>
+                            Seleccion manual editable. Estos valores alimentan riego, huella hidrica y los algoritmos del lote.
+                          </small>
+                        </div>
                       </div>
-                      <p-button
-                        label="Autocompletar"
-                        icon="pi pi-download"
-                        [loading]="sueloIntaLoading"
-                        (onClick)="autocompletarSueloInta()"
-                      />
-                    </section>
 
-                    @if (sueloReferenciaActual) {
-                      <section class="soil-summary" [class.soil-summary-empty]="sueloIntaInfo && !sueloIntaInfo.encontrado">
-                        <div>
-                          <span>Unidad cartografica</span>
-                          <strong>{{ sueloReferenciaActual.unidadCartografica || sueloReferenciaActual.fuente || '-' }}</strong>
-                        </div>
-                        <div>
-                          <span>Textura</span>
-                          <strong>{{ sueloReferenciaActual.texturaSuperficial || '-' }}</strong>
-                        </div>
-                        <div>
-                          <span>Drenaje</span>
-                          <strong>{{ sueloReferenciaActual.drenaje || '-' }}</strong>
-                        </div>
-                        <div>
-                          <span>Productividad</span>
-                          <strong>{{ sueloReferenciaActual.indiceProductividad ?? '-' }}</strong>
-                        </div>
-                      </section>
+                      <div class="soil-manual-grid">
+                        <p-floatlabel variant="in">
+                          <p-select
+                            [options]="texturas"
+                            formControlName="tipoSueloManual"
+                            [showClear]="false"
+                            [fluid]="true"
+                            [appendTo]="'body'"
+                            (onChange)="cambioTipoSueloManual()"
+                          />
+                          <label>{{ 'Tipo de suelo' | translate }}</label>
+                        </p-floatlabel>
 
-                      <section class="soil-detail-grid">
-                        <div>
-                          <span>Fuente</span>
-                          <strong>{{ sueloReferenciaActual.fuente || '-' }}</strong>
-                        </div>
-                        <div>
-                          <span>Confianza</span>
-                          <strong>{{ sueloReferenciaActual.confianza || 'editable' }}</strong>
-                        </div>
-                        <div>
-                          <span>Orden / gran grupo</span>
-                          <strong>
-                            {{ sueloReferenciaActual.orden || '-' }}
-                            @if (sueloReferenciaActual.granGrupo) {
-                              / {{ sueloReferenciaActual.granGrupo }}
-                            }
-                          </strong>
-                        </div>
-                        <div>
-                          <span>Subgrupo</span>
-                          <strong>{{ sueloReferenciaActual.subGrupo || '-' }}</strong>
-                        </div>
-                        <div>
-                          <span>Textura subsuelo</span>
-                          <strong>{{ sueloReferenciaActual.texturaSubsuelo || '-' }}</strong>
-                        </div>
-                        <div>
-                          <span>Pendiente</span>
-                          <strong>
-                            {{ sueloReferenciaActual.pendientePorcentaje ?? '-' }}
-                            @if (sueloReferenciaActual.pendientePorcentaje !== undefined) {
-                              %
-                            }
-                          </strong>
-                        </div>
-                        <div>
-                          <span>Profundidad</span>
-                          <strong>
-                            {{ sueloReferenciaActual.profundidadCm ?? '-' }}
-                            @if (sueloReferenciaActual.profundidadCm !== undefined) {
-                              cm
-                            }
-                          </strong>
-                        </div>
-                        <div>
-                          <span>Ultima consulta</span>
-                          <strong>{{ sueloReferenciaActual.fechaConsulta || '-' }}</strong>
-                        </div>
-                      </section>
-                    }
+                        <p-floatlabel variant="in">
+                          <p-inputnumber formControlName="capacidadDeCampo" [min]="0" [max]="100" [fluid]="true" suffix="%" />
+                          <label>{{ 'Capacidad de campo' | translate }}</label>
+                        </p-floatlabel>
 
-                    <section class="soil-profile-header">
-                      <div>
-                        <h3>Perfil y propiedades del suelo</h3>
-                        <small>
-                          Capas editables para riego y huella. Si asignas una lanza en Dispositivos, Chaman prepara las
-                          profundidades detectadas y conserva estos valores agronomicos editables.
-                        </small>
+                        <p-floatlabel variant="in">
+                          <p-inputnumber formControlName="puntoMarchitez" [min]="0" [max]="100" [fluid]="true" suffix="%" />
+                          <label>{{ 'Punto de marchitez' | translate }}</label>
+                        </p-floatlabel>
                       </div>
-                      @if (lanzaSueloSeleccionada) {
-                        <p-button
-                          label="Sincronizar con lanza"
-                          icon="pi pi-sliders-h"
-                          severity="secondary"
-                          [outlined]="true"
-                          (onClick)="prepararCapasDesdeLanza(true)"
-                        />
-                      }
+
+                      <p-message severity="info">
+                        Las profundidades, sensores y presencia de raices se configuran en la solapa Dispositivos cuando el lote
+                        tiene una lanza de humedad asignada.
+                      </p-message>
                     </section>
-                    <ng-container formArrayName="suelos">
-                      @for (s of suelos.controls; track s; let i = $index) {
-                        <div class="nivel" [formGroupName]="i">
-                          <div class="soil-layer-title">
-                            <strong>Capa {{ i + 1 }}</strong>
-                            @if (s.get('numeroDeSensor')?.value) {
-                              <span>Sensor {{ s.get('numeroDeSensor')?.value }}</span>
-                            }
-                          </div>
-                          <div class="soil-layer-grid">
-                            <p-floatlabel variant="in">
-                              <p-inputnumber
-                                formControlName="profundidad"
-                                [min]="1"
-                                [max]="300"
-                                [fluid]="true"
-                                [suffix]="' cm'"
-                              />
-                              <label>{{ 'Profundidad' | translate }}</label>
-                            </p-floatlabel>
-
-                            <p-floatlabel variant="in">
-                              <p-select
-                                [loading]="loading"
-                                [options]="texturas"
-                                formControlName="textura"
-                                [showClear]="true"
-                                [fluid]="true"
-                                [appendTo]="'body'"
-                              />
-                              <label>{{ 'Textura' | translate }}</label>
-                            </p-floatlabel>
-
-                            <p-floatlabel variant="in">
-                              <p-inputnumber
-                                formControlName="capacidadDeCampo"
-                                [min]="0"
-                                [max]="100"
-                                [fluid]="true"
-                                suffix="%"
-                              />
-                              <label>{{ 'Capacidad de campo' | translate }}</label>
-                            </p-floatlabel>
-
-                            <p-floatlabel variant="in">
-                              <p-inputnumber
-                                formControlName="puntoMarchitez"
-                                [min]="0"
-                                [max]="100"
-                                [fluid]="true"
-                                suffix="%"
-                              />
-                              <label>{{ 'Punto de marchitez' | translate }}</label>
-                            </p-floatlabel>
-                          </div>
-
-                          <div class="soil-layer-actions">
-                            <div class="flex items-center gap-1">
-                              <p-checkbox formControlName="hayRaices" [binary]="true" [inputId]="'c' + i" />
-                              <label [for]="'c' + i" class="ml-2">{{ 'Hay raices' | translate }}</label>
-                            </div>
-                            <p-button icon="pi pi-trash" severity="danger" [rounded]="true" (click)="borrarSuelo(i)" />
-                          </div>
-                        </div>
-                      } @empty {
-                        <p-message severity="warn">{{ 'No se han agregado niveles' | translate }}</p-message>
-                      }
-                    </ng-container>
-
-                    <p-button
-                      [label]="'Agregar nivel' | translate"
-                      icon="pi pi-plus"
-                      (click)="agregarSuelo()"
-                      [fluid]="true"
-                    />
                   </p-tabpanel>
 
                   <p-tabpanel [value]="4">
@@ -566,14 +428,63 @@
                             [outlined]="true"
                             (onClick)="prepararCapasDesdeLanza(true)"
                           />
-                          <div class="probe-depths">
-                            @for (s of suelos.controls; track s; let i = $index) {
-                              <span>
-                                {{ s.get('numeroDeSensor')?.value || i + 1 }}:
-                                {{ s.get('profundidad')?.value || '-' }} cm
-                              </span>
-                            }
+                        </section>
+
+                        <section class="device-layers-card">
+                          <div class="device-layers-header">
+                            <div>
+                              <strong>Capas de medicion</strong>
+                              <small>
+                                Configuracion de profundidades y raices para convertir las lecturas del sensor en recomendacion
+                                de riego.
+                              </small>
+                            </div>
+                            <p-button
+                              label="Agregar capa"
+                              icon="pi pi-plus"
+                              severity="secondary"
+                              [outlined]="true"
+                              (onClick)="agregarSuelo()"
+                            />
                           </div>
+
+                          <ng-container formArrayName="suelos">
+                            @for (s of suelos.controls; track s; let i = $index) {
+                              <div class="device-layer-row" [formGroupName]="i">
+                                <div class="device-layer-title">
+                                  <strong>Capa {{ i + 1 }}</strong>
+                                  <span>{{ s.get('textura')?.value || form.get('tipoSueloManual')?.value }}</span>
+                                </div>
+
+                                <p-floatlabel variant="in">
+                                  <p-inputnumber formControlName="numeroDeSensor" [min]="1" [max]="64" [fluid]="true" />
+                                  <label>{{ 'Sensor' | translate }}</label>
+                                </p-floatlabel>
+
+                                <p-floatlabel variant="in">
+                                  <p-inputnumber formControlName="profundidad" [min]="1" [max]="300" [fluid]="true" suffix=" cm" />
+                                  <label>{{ 'Profundidad' | translate }}</label>
+                                </p-floatlabel>
+
+                                <div class="device-layer-roots">
+                                  <p-checkbox formControlName="hayRaices" [binary]="true" [inputId]="'raices' + i" />
+                                  <label [for]="'raices' + i">{{ 'Hay raices' | translate }}</label>
+                                </div>
+
+                                <p-button
+                                  icon="pi pi-trash"
+                                  severity="danger"
+                                  [rounded]="true"
+                                  [text]="true"
+                                  (click)="borrarSuelo(i)"
+                                />
+                              </div>
+                            } @empty {
+                              <p-message severity="warn">
+                                Selecciona una lanza o agrega manualmente las capas de medicion.
+                              </p-message>
+                            }
+                          </ng-container>
                         </section>
                       }
 
