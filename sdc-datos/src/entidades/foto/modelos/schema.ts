@@ -16,7 +16,7 @@ export class Foto implements Exactly<IFoto, Foto> {
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idLote?: string;
 
-  @Prop()
+  @Prop({ type: String, enum: ['ftp', 'hik-connect'] })
   fuente?: IFoto['fuente'];
 
   @Prop({ uppercase: true })
