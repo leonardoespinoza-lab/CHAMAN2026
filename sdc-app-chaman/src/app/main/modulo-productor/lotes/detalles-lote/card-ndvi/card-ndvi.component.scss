@@ -218,15 +218,15 @@
 }
 
 .satellite-lot-shadow {
-  fill: rgba(8, 18, 32, 0.18);
+  fill: rgba(8, 18, 32, 0.16);
   stroke: rgba(8, 18, 32, 0.42);
   stroke-width: 1.6;
   transform: translate(0.7px, 0.9px);
 }
 
 .satellite-lot-fill {
-  opacity: 0.78;
-  stroke: rgba(255, 255, 255, 0.78);
+  fill: rgba(255, 255, 255, 0.86);
+  stroke: rgba(255, 255, 255, 0.92);
   stroke-width: 0.8;
 }
 
@@ -238,14 +238,7 @@
 }
 
 .satellite-index-raster {
-  border-radius: 4px;
-  filter: saturate(1.24) contrast(1.12);
-  mix-blend-mode: multiply;
-  object-fit: fill;
-  opacity: 0.68;
-  outline: 1px solid rgba(255, 255, 255, 0.36);
   position: absolute;
-  z-index: 3;
 }
 
 .img {
@@ -264,14 +257,21 @@
 }
 
 .img.satellite-index-raster {
-  filter: saturate(1.24) contrast(1.12);
+  filter: none;
   height: auto;
   max-height: none;
   max-width: none;
+  mix-blend-mode: normal;
   object-fit: fill;
+  opacity: 1;
   position: absolute;
   width: auto;
   z-index: 3;
+}
+
+.satellite-index-image {
+  image-rendering: auto;
+  opacity: 1;
 }
 
 .satellite-map-chip {

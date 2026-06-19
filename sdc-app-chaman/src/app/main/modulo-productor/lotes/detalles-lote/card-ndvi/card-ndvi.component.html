@@ -71,25 +71,31 @@
         <div class="img-container" [style.background-image]="mapaSatelital?.backgroundImage">
           @if (mapaSatelital?.points) {
             <svg class="satellite-lot-shape" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <clipPath id="satelliteLotClip">
+                  <polygon [attr.points]="mapaSatelital?.points"></polygon>
+                </clipPath>
+              </defs>
               <polygon class="satellite-lot-shadow" [attr.points]="mapaSatelital?.points"></polygon>
-              <polygon
-                class="satellite-lot-fill"
-                [attr.points]="mapaSatelital?.points"
-                [attr.fill]="colorCapaActiva"
-              ></polygon>
+              <polygon class="satellite-lot-fill" [attr.points]="mapaSatelital?.points"></polygon>
+              @if (imagenCapaActiva && mapaSatelital?.raster) {
+                <image
+                  class="satellite-index-image"
+                  [attr.href]="imagenCapaActiva"
+                  [attr.x]="mapaSatelital?.raster?.left"
+                  [attr.y]="mapaSatelital?.raster?.top"
+                  [attr.width]="mapaSatelital?.raster?.width"
+                  [attr.height]="mapaSatelital?.raster?.height"
+                  preserveAspectRatio="none"
+                  clip-path="url(#satelliteLotClip)"
+                ></image>
+              }
               <polygon class="satellite-lot-border" [attr.points]="mapaSatelital?.points"></polygon>
             </svg>
           }
-          @if (imagenCapaActiva && mapaSatelital?.overlay) {
-            <img
-              [src]="imagenCapaActiva"
-              class="img satellite-index-raster"
-              [ngStyle]="estiloRasterSatelital"
-              [alt]="'Capa ' + capaActiva.label + ' del lote'"
-            />
-          } @else if (imagenCapaActiva) {
+          @if (imagenCapaActiva && !mapaSatelital?.points) {
             <img [src]="imagenCapaActiva" class="img" [alt]="'Capa ' + capaActiva.label + ' del lote'" />
-          } @else {
+          } @else if (!imagenCapaActiva) {
             <p-message severity="warn">{{ 'Imagen no disponible' | translate }}</p-message>
           }
           <div class="satellite-map-chip">

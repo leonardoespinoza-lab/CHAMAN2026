@@ -60,13 +60,12 @@
 }
 
 .latest-photo {
-  background:
-    linear-gradient(135deg, rgba(16, 30, 48, 0.92), rgba(30, 48, 66, 0.84)),
-    #101e30;
+  background: #f5f9fc;
   border: 1px solid #bfd0e1;
   border-radius: 8px;
   color: #17233a;
   cursor: pointer;
+  height: clamp(280px, 32vw, 430px);
   overflow: hidden;
   padding: 0;
   position: relative;
@@ -75,10 +74,9 @@
 
 .latest-photo img {
   display: block;
-  aspect-ratio: 16 / 9;
-  height: auto;
-  max-height: clamp(230px, 28vw, 390px);
+  height: 100%;
   object-fit: cover;
+  object-position: center;
   width: 100%;
 }
 
