@@ -34,26 +34,13 @@
       </div>
     </div>
 
-    <div class="service-rail" aria-label="Servicios del mapa">
-      @for (item of servicios; track $index) {
-        <button
-          type="button"
-          class="service-chip"
-          [class.active]="servicioSeleccionado === item"
-          (click)="changeServicio(item)"
-        >
-          <span class="service-chip-icon" [style.background]="item.backgroudColor">
-            @if (item.primeIcon) {
-              <i [class]="item.primeIcon" [style.color]="item.color"></i>
-            } @else {
-              <svg [style.fill]="item.color" width="18" height="18">
-                <use [attr.xlink:href]="'icons/icons.svg#' + item.icon"></use>
-              </svg>
-            }
-          </span>
-          <span>{{ getServicioShortLabel(item) }}</span>
-        </button>
-      }
+    <div class="summary-action" aria-label="Resumen ejecutivo del mapa">
+      <button type="button" class="summary-button" (click)="abrirResumenGerencial()">
+        <span class="summary-button-icon">
+          <i class="pi pi-chart-bar"></i>
+        </span>
+        <span>Resumen</span>
+      </button>
       @if (loading()) {
         <p-progress-spinner ariaLabel="loading" [style]="{ width: '18px', height: '18px' }" />
       }
@@ -762,6 +749,76 @@
     </div>
   </section>
 }
+
+<!-- Resumen gerencial -->
+<p-dialog
+  [(visible)]="showResumenGerencial"
+  (onHide)="showResumenGerencial = false"
+  styleClass="resumen-dialog-shell"
+  [style]="{
+    width: (helper.isWide$ | async) ? 'min(1180px, calc(100vw - 2rem))' : 'calc(100vw - 1rem)',
+    'max-width': (helper.isWide$ | async) ? 'calc(100vw - 2rem)' : 'calc(100vw - 1rem)',
+    'max-height': (helper.isWide$ | async) ? 'calc(100dvh - 2rem)' : 'calc(100dvh - 1rem)',
+    overflow: 'hidden',
+  }"
+  [contentStyle]="{ padding: '0', overflow: 'auto', 'max-height': (helper.isWide$ | async) ? 'calc(100dvh - 8rem)' : 'calc(100dvh - 6rem)' }"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [closeOnEscape]="true"
+  [closable]="true"
+>
+  <ng-template pTemplate="header">
+    <div class="resumen-dialog-header">
+      <span class="title-main">Resumen ejecutivo</span>
+      <span class="title-sub">Lectura rapida por establecimiento</span>
+    </div>
+  </ng-template>
+
+  <section class="executive-summary">
+    @for (resumen of resumenGerencialEstablecimientos(); track resumen.id) {
+      <article class="executive-establishment-card">
+        <header class="executive-card-header">
+          <div>
+            <span class="executive-eyebrow">Establecimiento</span>
+            <h3>{{ resumen.nombre }}</h3>
+          </div>
+          <div class="executive-card-kpis">
+            <span>{{ resumen.lotes }} lotes</span>
+            <strong>{{ resumen.hectareas }}</strong>
+          </div>
+        </header>
+
+        <div class="executive-metric-grid">
+          @for (metric of resumen.metricas; track metric.label) {
+            <section
+              class="executive-metric"
+              [class.ok]="metric.tono === 'ok'"
+              [class.warn]="metric.tono === 'warn'"
+              [class.risk]="metric.tono === 'risk'"
+              [class.neutral]="metric.tono === 'neutral'"
+            >
+              <div class="metric-icon">
+                <i [class]="metric.icon"></i>
+              </div>
+              <div>
+                <span>{{ metric.label }}</span>
+                <strong>{{ metric.valor }}</strong>
+                <p>{{ metric.detalle }}</p>
+              </div>
+            </section>
+          }
+        </div>
+      </article>
+    } @empty {
+      <article class="executive-empty">
+        <i class="pi pi-map-marker"></i>
+        <strong>Sin establecimientos cargados</strong>
+        <p>Cuando haya lotes o establecimientos, Chaman va a mostrar aca la lectura rapida por unidad productiva.</p>
+      </article>
+    }
+  </section>
+</p-dialog>
 
 <!-- Drawer del clima -->
 <p-dialog
