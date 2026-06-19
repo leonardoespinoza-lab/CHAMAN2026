@@ -29,8 +29,10 @@ export const HIKCONNECT_ENCRYPTION_KEY = process.env.HIKCONNECT_ENCRYPTION_KEY |
 export const HIKCONNECT_DEFAULT_CHANNEL = Number(process.env.HIKCONNECT_DEFAULT_CHANNEL || 1);
 export const HIKCONNECT_CAPTURE_ON_START = process.env.HIKCONNECT_CAPTURE_ON_START === "true";
 export const HIKCONNECT_CAPTURE_INTERVAL_MINUTES = Number(process.env.HIKCONNECT_CAPTURE_INTERVAL_MINUTES || 0);
-export const HIKCONNECT_SCHEDULER_INTERVAL_MINUTES = Number(
+const hikConnectSchedulerInterval = Number(
   process.env.HIKCONNECT_SCHEDULER_INTERVAL_MINUTES ||
     process.env.HIKCONNECT_CAPTURE_INTERVAL_MINUTES ||
     10,
 );
+export const HIKCONNECT_SCHEDULER_INTERVAL_MINUTES =
+  hikConnectSchedulerInterval > 0 ? hikConnectSchedulerInterval : 10;
