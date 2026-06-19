@@ -16,6 +16,7 @@ export class ListadoTimeLapseComponent implements OnInit {
   public loadingLotes = false;
   public loadingFotos = false;
   public guardandoAsignacion = false;
+  public sincronizando = false;
   public capturandoSerial = '';
 
   public camaras: ICamara[] = [];
@@ -80,6 +81,19 @@ export class ListadoTimeLapseComponent implements OnInit {
       this.helper.notifError(error);
     } finally {
       this.loading = false;
+    }
+  }
+
+  public async sincronizar(): Promise<void> {
+    this.sincronizando = true;
+    try {
+      const data = await this.camaraService.sincronizar();
+      this.camaras = data.datos || [];
+      this.helper.notifSuccess(this.translate.instant('Inventario de camaras sincronizado'));
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.sincronizando = false;
     }
   }
 

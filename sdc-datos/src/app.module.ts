@@ -34,6 +34,7 @@ import { LicenciaPorEntidadsModule } from './entidades/licenciaPorEntidad/module
 import { ReportesModule } from './entidades/reportes/module';
 import { DispositivosModule } from './entidades/dispositivos/module';
 import { FotosModule } from './entidades/foto/module';
+import { CamarasModule } from './entidades/camara/module';
 import { MalezasModule } from './entidades/maleza/module';
 import { LorawanUplinksModule } from './entidades/lorawan-uplinks/module';
 import { AlgoritmosModule } from './entidades/algoritmos/module';
@@ -74,6 +75,7 @@ import { SuelosIntaModule } from './entidades/suelo-inta/module';
     ReportesModule,
     DispositivosModule,
     FotosModule,
+    CamarasModule,
     MalezasModule,
     LorawanUplinksModule,
     AlgoritmosModule,

@@ -33,6 +33,12 @@ export class CamarasController {
     return await this.service.get(query);
   }
 
+  @Post('sincronizar')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  public async sincronizar(@Query() query: IQueryParam): Promise<IListado<ICamara>> {
+    return await this.service.sincronizar(query);
+  }
+
   @Get('lotes/disponibles')
   @Permisos({ nivel: 'Admin', roles: ['Admin'] })
   public async getLotesDisponibles(): Promise<IListado<ILote>> {

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   IAsignarCamaraLotes,
   ICamara,
+  ICreateCamara,
   IFoto,
   IFilter,
   ILote,
@@ -15,11 +16,30 @@ export class CamarasService {
   constructor(private repository: CamarasRepository) {}
 
   async get(query?: IQueryParam): Promise<IListado<ICamara>> {
+    const response = await this.repository.getCamaras({
+      limit: 0,
+      sort: 'nombre',
+    });
+    return await this.enriquecerListado(response.datos || [], query);
+  }
+
+  async sincronizar(query?: IQueryParam): Promise<IListado<ICamara>> {
     const response = await this.repository.getHikConnectCameras();
     const camaras = (response.cameras || [])
       .map((raw) => this.normalizarCamara(raw))
-      .filter((camara): camara is ICamara => !!camara);
+      .filter((camara): camara is ICreateCamara => !!camara);
 
+    if (camaras.length) {
+      await this.repository.upsertCamaras(camaras);
+    }
+
+    return await this.get(query);
+  }
+
+  private async enriquecerListado(
+    camaras: ICamara[],
+    query?: IQueryParam,
+  ): Promise<IListado<ICamara>> {
     const seriales = camaras.map((camara) => camara.serialCamara);
     if (!seriales.length) {
       return { datos: [], totalCount: 0 };
@@ -156,7 +176,7 @@ export class CamarasService {
     return response.datos || [];
   }
 
-  private normalizarCamara(raw: Record<string, any>): ICamara | null {
+  private normalizarCamara(raw: Record<string, any>): ICreateCamara | null {
     const devInfo = raw?.device?.devInfo || {};
     const channelInfo = raw?.device?.channelInfo || {};
     const serialCamara = this.normalizarSerial(
@@ -179,6 +199,7 @@ export class CamarasService {
       online: this.normalizarOnline(raw.online),
       area: raw.area?.name || raw.areaName,
       fuente: 'hik-connect',
+      fechaSincronizacion: new Date().toISOString(),
       raw,
     };
   }

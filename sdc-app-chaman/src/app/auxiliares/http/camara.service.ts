@@ -12,6 +12,10 @@ export class CamaraService {
     return this.http.get(`/camaras`, { params });
   }
 
+  public sincronizar(params?: IQueryParam): Promise<IListado<ICamara>> {
+    return this.http.post(`/camaras/sincronizar`, {}, { params });
+  }
+
   public listarFotos(serialCamara: string, params?: IQueryParam): Promise<IListado<IFoto>> {
     return this.http.get(`/camaras/${encodeURIComponent(serialCamara)}/fotos`, { params });
   }

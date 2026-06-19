@@ -21,12 +21,19 @@
         />
       </p-iconfield>
       <p-button
-        label="Actualizar"
+        label="Actualizar vista"
         icon="pi pi-refresh"
         [loading]="loading"
         severity="secondary"
         [outlined]="true"
         (click)="listar()"
+      />
+      <p-button
+        label="Sincronizar Hik"
+        icon="pi pi-cloud-download"
+        [loading]="sincronizando"
+        [disabled]="loading || sincronizando"
+        (click)="sincronizar()"
       />
     </div>
   </section>
@@ -37,7 +44,9 @@
       <span>Cargando camaras disponibles...</span>
     </div>
   } @else if (!camarasFiltradas.length) {
-    <p-message severity="info">No se encontraron camaras disponibles para esta cuenta.</p-message>
+    <p-message severity="info">
+      No hay camaras cacheadas en Chaman. Usa Sincronizar Hik desde backoffice para actualizar el inventario.
+    </p-message>
   } @else {
     <section class="camera-grid">
       @for (camara of camarasFiltradas; track trackCamara($index, camara)) {

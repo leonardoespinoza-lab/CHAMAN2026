@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import {
   ICreateFoto,
+  ICreateCamara,
   IFoto,
+  ICamara,
   ILote,
   IListado,
   IQueryParam,
@@ -18,6 +20,16 @@ interface HikConnectCameraResponse {
 @Injectable()
 export class CamarasRepository {
   constructor(private axios: AxiosService) {}
+
+  async getCamaras(params: IQueryParam): Promise<IListado<ICamara>> {
+    const url = `${API_DATOS}/camaras`;
+    return await this.axios.GET<IListado<ICamara>>(url, { params });
+  }
+
+  async upsertCamaras(camaras: ICreateCamara[]): Promise<IListado<ICamara>> {
+    const url = `${API_DATOS}/camaras/bulk-upsert`;
+    return await this.axios.POST<IListado<ICamara>>(url, { camaras });
+  }
 
   async getHikConnectCameras(): Promise<HikConnectCameraResponse> {
     const url = `${API_FTP}/hik-connect/cameras`;
