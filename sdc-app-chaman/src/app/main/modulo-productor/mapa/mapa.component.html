@@ -776,41 +776,103 @@
   </ng-template>
 
   <section class="executive-summary">
-    @for (resumen of resumenGerencialEstablecimientos(); track resumen.id) {
-      <article class="executive-establishment-card">
-        <header class="executive-card-header">
-          <div>
-            <span class="executive-eyebrow">Establecimiento</span>
-            <h3>{{ resumen.nombre }}</h3>
-          </div>
-          <div class="executive-card-kpis">
-            <span>{{ resumen.lotes }} lotes</span>
-            <strong>{{ resumen.hectareas }}</strong>
-          </div>
-        </header>
+    @if (resumenGerencialEstablecimientos().length) {
+      <nav class="executive-establishment-tabs" aria-label="Establecimientos">
+        @for (resumen of resumenGerencialEstablecimientos(); track resumen.id) {
+          <button
+            type="button"
+            class="executive-tab"
+            [class.active]="resumenGerencialActivo()?.id === resumen.id"
+            [class.ok]="resumen.estado.tono === 'ok'"
+            [class.warn]="resumen.estado.tono === 'warn'"
+            [class.risk]="resumen.estado.tono === 'risk'"
+            [class.neutral]="resumen.estado.tono === 'neutral'"
+            (click)="seleccionarResumenEstablecimiento(resumen.id)"
+          >
+            <span>{{ resumen.nombre }}</span>
+            <small>{{ resumen.lotes }} lotes / {{ resumen.hectareas }}</small>
+          </button>
+        }
+      </nav>
 
-        <div class="executive-metric-grid">
-          @for (metric of resumen.metricas; track metric.label) {
-            <section
-              class="executive-metric"
-              [class.ok]="metric.tono === 'ok'"
-              [class.warn]="metric.tono === 'warn'"
-              [class.risk]="metric.tono === 'risk'"
-              [class.neutral]="metric.tono === 'neutral'"
+      @if (resumenGerencialActivo(); as resumen) {
+        <article class="executive-focus-card">
+          <header class="executive-hero">
+            <div>
+              <span class="executive-eyebrow">Establecimiento seleccionado</span>
+              <h3>{{ resumen.nombre }}</h3>
+              <p>{{ resumen.estado.detalle }}</p>
+            </div>
+            <div
+              class="executive-status"
+              [class.ok]="resumen.estado.tono === 'ok'"
+              [class.warn]="resumen.estado.tono === 'warn'"
+              [class.risk]="resumen.estado.tono === 'risk'"
+              [class.neutral]="resumen.estado.tono === 'neutral'"
             >
-              <div class="metric-icon">
+              <i [class]="resumen.estado.icon"></i>
+              <strong>{{ resumen.estado.valor }}</strong>
+              <span>{{ resumen.estado.label }}</span>
+            </div>
+          </header>
+
+          <div class="executive-hero-kpis">
+            <span><strong>{{ resumen.lotes }}</strong> lotes</span>
+            <span><strong>{{ resumen.hectareas }}</strong> superficie</span>
+            <span><strong>{{ resumen.siembras }}</strong> siembras activas</span>
+            <span><strong>{{ resumen.perennes }}</strong> perennes</span>
+          </div>
+
+          <section class="executive-climate-grid">
+            @for (metric of resumen.clima; track metric.label) {
+              <div
+                class="executive-climate-metric"
+                [class.ok]="metric.tono === 'ok'"
+                [class.warn]="metric.tono === 'warn'"
+                [class.risk]="metric.tono === 'risk'"
+                [class.neutral]="metric.tono === 'neutral'"
+              >
                 <i [class]="metric.icon"></i>
-              </div>
-              <div>
                 <span>{{ metric.label }}</span>
                 <strong>{{ metric.valor }}</strong>
                 <p>{{ metric.detalle }}</p>
               </div>
-            </section>
-          }
-        </div>
-      </article>
-    } @empty {
+            }
+          </section>
+
+          <div class="executive-metric-grid">
+            @for (metric of resumen.metricas; track metric.label) {
+              <section
+                class="executive-metric"
+                [class.ok]="metric.tono === 'ok'"
+                [class.warn]="metric.tono === 'warn'"
+                [class.risk]="metric.tono === 'risk'"
+                [class.neutral]="metric.tono === 'neutral'"
+              >
+                <div class="metric-icon">
+                  <i [class]="metric.icon"></i>
+                </div>
+                <div class="metric-body">
+                  <div class="metric-head">
+                    <span>{{ metric.label }}</span>
+                    @if (metric.soporte) {
+                      <small>{{ metric.soporte }}</small>
+                    }
+                  </div>
+                  <strong>{{ metric.valor }}</strong>
+                  <p>{{ metric.detalle }}</p>
+                  @if (metric.progreso !== undefined) {
+                    <div class="metric-progress" aria-hidden="true">
+                      <span [style.width.%]="metric.progreso"></span>
+                    </div>
+                  }
+                </div>
+              </section>
+            }
+          </div>
+        </article>
+      }
+    } @else {
       <article class="executive-empty">
         <i class="pi pi-map-marker"></i>
         <strong>Sin establecimientos cargados</strong>

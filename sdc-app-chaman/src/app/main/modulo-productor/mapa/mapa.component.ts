@@ -74,13 +74,19 @@ interface IResumenGerencialMetric {
   detalle: string;
   icon: string;
   tono: 'ok' | 'warn' | 'risk' | 'neutral';
+  progreso?: number;
+  soporte?: string;
 }
 
 interface IResumenGerencialEstablecimiento {
   id: string;
   nombre: string;
   lotes: number;
+  siembras: number;
+  perennes: number;
   hectareas: string;
+  estado: IResumenGerencialMetric;
+  clima: IResumenGerencialMetric[];
   metricas: IResumenGerencialMetric[];
 }
 
@@ -238,6 +244,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   public servicioSeleccionado: IServicio = this.servicios[0];
   public showDrawerClima = false;
   public showResumenGerencial = false;
+  public resumenSeleccionadoId?: string;
 
   // Datos para el panel de enfermedades
   public enfermedades = {
@@ -582,7 +589,21 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   public abrirResumenGerencial(): void {
+    const resumenes = this.resumenGerencialEstablecimientos();
+    const establecimientoActualId = this.establecimientoSeleccionado?._id || this.establecimientoSeleccionado?.nombre;
+    const actual = resumenes.find((resumen) => resumen.id === establecimientoActualId);
+    const seleccionadoValido = resumenes.some((resumen) => resumen.id === this.resumenSeleccionadoId);
+    this.resumenSeleccionadoId = seleccionadoValido ? this.resumenSeleccionadoId : actual?.id || resumenes[0]?.id;
     this.showResumenGerencial = true;
+  }
+
+  public seleccionarResumenEstablecimiento(id: string): void {
+    this.resumenSeleccionadoId = id;
+  }
+
+  public resumenGerencialActivo(): IResumenGerencialEstablecimiento | undefined {
+    const resumenes = this.resumenGerencialEstablecimientos();
+    return resumenes.find((resumen) => resumen.id === this.resumenSeleccionadoId) || resumenes[0];
   }
 
   /**
@@ -882,55 +903,135 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     const hectareas = lotes.reduce((acc, lote) => acc + (this.numero(lote.ubicacion?.superficie) || 0), 0);
     const sembrados = lotes.filter((lote) => !!lote.siembra).length;
     const perennes = lotes.filter((lote) => this.esLotePerenne(lote)).length;
+    const metricas = [
+      this.resumenEnfermedadesGerencial(lotes, sembrados),
+      this.resumenRiegoGerencial(lotes),
+      this.resumenHuellaGerencial(lotes),
+      this.resumenNdviGerencial(lotes),
+      this.resumenFrioGerencial(lotes, perennes),
+      this.resumenHeladaGerencial(establecimiento, lotes, perennes),
+    ];
 
     return {
       id: establecimiento._id || establecimiento.nombre || 'establecimiento-sin-id',
       nombre: establecimiento.nombre || 'Establecimiento sin nombre',
       lotes: lotes.length,
+      siembras: sembrados,
+      perennes,
       hectareas: `${this.formatNumber(hectareas, 0)} ha`,
-      metricas: [
-        this.resumenEnfermedadesGerencial(lotes, sembrados),
-        this.resumenRiegoGerencial(lotes),
-        this.resumenHuellaGerencial(lotes),
-        this.resumenNdviGerencial(lotes),
-        this.resumenFrioGerencial(lotes, perennes),
-        this.resumenHeladaGerencial(lotes, perennes),
-      ],
+      estado: this.resumenEstadoGerencial(metricas, lotes),
+      clima: this.resumenClimaGerencial(establecimiento),
+      metricas,
     };
   }
 
+  private resumenEstadoGerencial(
+    metricas: IResumenGerencialMetric[],
+    lotes: ILoteMapa[]
+  ): IResumenGerencialMetric {
+    if (!lotes.length) {
+      return this.metric('Estado', 'Sin lotes', 'Todavia no hay superficie cargada en este establecimiento.', 'pi pi-map-marker', 'neutral');
+    }
+
+    const criticos = metricas.filter((metric) => metric.tono === 'risk').length;
+    const atencion = metricas.filter((metric) => metric.tono === 'warn').length;
+
+    if (criticos) {
+      return this.metric(
+        'Estado',
+        'Alerta',
+        `${criticos} indicador${criticos > 1 ? 'es' : ''} critico${criticos > 1 ? 's' : ''}. Revisar este establecimiento hoy.`,
+        'pi pi-exclamation-triangle',
+        'risk'
+      );
+    }
+
+    if (atencion) {
+      return this.metric(
+        'Estado',
+        'Atencion',
+        `${atencion} indicador${atencion > 1 ? 'es' : ''} en observacion. No requiere alarma, pero si seguimiento.`,
+        'pi pi-info-circle',
+        'warn'
+      );
+    }
+
+    return this.metric(
+      'Estado',
+      'Operativo normal',
+      'Sin alertas altas con la informacion cargada y los calculos disponibles.',
+      'pi pi-check-circle',
+      'ok'
+    );
+  }
+
   private resumenEnfermedadesGerencial(lotes: ILoteMapa[], sembrados: number): IResumenGerencialMetric {
-    const riesgos = lotes
-      .map((lote) => this.maxRiesgoEnfermedad(lote))
-      .filter((valor): valor is number => valor !== null);
-    const altos = riesgos.filter((valor) => valor >= 20).length;
-    const medios = riesgos.filter((valor) => valor >= 15 && valor < 20).length;
+    const lotesConRiesgo = lotes
+      .map((lote) => ({ lote, riesgo: this.maxRiesgoEnfermedad(lote) }))
+      .filter((item): item is { lote: ILoteMapa; riesgo: number } => item.riesgo !== null);
+    const extensivos = lotes.filter((lote) => this.esCultivoExtensivo(lote));
+    const altos = lotesConRiesgo.filter((item) => item.riesgo >= 20);
+    const medios = lotesConRiesgo.filter((item) => item.riesgo >= 15 && item.riesgo < 20);
 
     if (!sembrados) {
-      return this.metric('Enfermedades', 'Sin siembras', 'Todavia no hay cultivos activos para monitorear.', 'pi pi-shield', 'neutral');
+      return this.metric('Enfermedades', 'Sin siembras', 'Todavia no hay cultivos activos para monitoreo sanitario.', 'pi pi-shield', 'neutral', 0);
     }
-    if (!riesgos.length) {
-      return this.metric('Enfermedades', `${sembrados} en monitoreo`, 'Sin predicciones recientes de riesgo sanitario.', 'pi pi-shield', 'neutral');
+    if (!lotesConRiesgo.length) {
+      const detalle = extensivos.length
+        ? `${this.cultivosResumen(extensivos)} en monitoreo. Actualizar riesgo para cruzar clima, cultivo y etapa.`
+        : 'Sin predicciones recientes de riesgo sanitario en cultivos activos.';
+      return this.metric('Enfermedades', `${sembrados} activos`, detalle, 'pi pi-shield', 'neutral', 8);
     }
-    if (altos) {
-      return this.metric('Enfermedades', `${altos} riesgo alto`, `${medios} lotes en riesgo medio. Revisar lotes prioritarios.`, 'pi pi-shield', 'risk');
+    const peor = lotesConRiesgo.reduce((max, item) => (item.riesgo > max.riesgo ? item : max));
+    const progreso = Math.max(8, Math.min(100, (peor.riesgo / 25) * 100));
+    if (altos.length) {
+      return this.metric(
+        'Enfermedades',
+        `${this.formatNumber(peor.riesgo, 0)}%`,
+        `${altos.length} lote${altos.length > 1 ? 's' : ''} con riesgo alto. Prioridad: ${peor.lote.nombre || 'lote sin nombre'}.`,
+        'pi pi-shield',
+        'risk',
+        progreso,
+        medios.length ? `${medios.length} en riesgo medio` : 'Riesgo sanitario alto'
+      );
     }
-    if (medios) {
-      return this.metric('Enfermedades', `${medios} riesgo medio`, 'Conviene revisar humedad, etapa fenologica y aplicaciones.', 'pi pi-shield', 'warn');
+    if (medios.length) {
+      return this.metric(
+        'Enfermedades',
+        `${this.formatNumber(peor.riesgo, 0)}%`,
+        `${medios.length} lote${medios.length > 1 ? 's' : ''} en riesgo medio. Revisar humedad, etapa fenologica y aplicaciones.`,
+        'pi pi-shield',
+        'warn',
+        progreso
+      );
     }
-    return this.metric('Enfermedades', 'Sin alertas altas', `${riesgos.length} lotes con lectura sanitaria reciente.`, 'pi pi-shield', 'ok');
+    return this.metric(
+      'Enfermedades',
+      'Sin alertas altas',
+      `${lotesConRiesgo.length} lote${lotesConRiesgo.length > 1 ? 's' : ''} con lectura sanitaria reciente.`,
+      'pi pi-shield',
+      'ok',
+      progreso
+    );
   }
 
   private resumenRiegoGerencial(lotes: ILoteMapa[]): IResumenGerencialMetric {
     const lotesConRiego = lotes.filter((lote) => (this.numero(lote.sumaRiego) || 0) > 0);
     const mm = lotesConRiego.reduce((acc, lote) => acc + (this.numero(lote.sumaRiego) || 0), 0);
     if (!lotes.length) {
-      return this.metric('Riego', 'Sin lotes', 'No hay superficie cargada para evaluar.', 'pi pi-tint', 'neutral');
+      return this.metric('Riego', 'Sin lotes', 'No hay superficie cargada para evaluar.', 'pi pi-tint', 'neutral', 0);
     }
     if (!lotesConRiego.length) {
-      return this.metric('Riego', 'Sin necesidad', 'No hay riego recomendado con los datos disponibles.', 'pi pi-tint', 'ok');
+      return this.metric('Riego', 'Sin necesidad', 'No hay riego recomendado con los datos disponibles.', 'pi pi-tint', 'ok', 5);
     }
-    return this.metric('Riego', `${lotesConRiego.length} lotes`, `${this.formatNumber(mm, 1)} mm sugeridos acumulados.`, 'pi pi-tint', 'warn');
+    return this.metric(
+      'Riego',
+      `${this.formatNumber(mm, 1)} mm`,
+      `${lotesConRiego.length} lote${lotesConRiego.length > 1 ? 's' : ''} con recomendacion activa.`,
+      'pi pi-tint',
+      mm >= 30 ? 'risk' : 'warn',
+      Math.min(100, Math.max(12, (mm / 40) * 100))
+    );
   }
 
   private resumenHuellaGerencial(lotes: ILoteMapa[]): IResumenGerencialMetric {
@@ -938,48 +1039,90 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       .map((lote) => this.numero(lote.huellaHidrica?.total?.litrosKg))
       .filter((valor): valor is number => valor !== null && valor > 0);
     if (!lotes.length) {
-      return this.metric('Huella', 'Sin lotes', 'No hay lotes cargados para seguimiento hidrico.', 'pi pi-compass', 'neutral');
+      return this.metric('Huella', 'Sin lotes', 'No hay lotes cargados para seguimiento hidrico.', 'pi pi-compass', 'neutral', 0);
     }
     if (!valores.length) {
-      return this.metric('Huella', 'En seguimiento', 'Acumula lluvia, riego y aplicaciones durante la campana.', 'pi pi-compass', 'neutral');
+      return this.metric('Huella', 'En seguimiento', 'Acumula lluvia, riego y aplicaciones durante la campana.', 'pi pi-compass', 'neutral', 18);
     }
     const promedio = valores.reduce((acc, valor) => acc + valor, 0) / valores.length;
-    return this.metric('Huella', `${this.formatNumber(promedio, 0)} l/kg`, `Promedio en ${valores.length} lotes con calculo consolidado.`, 'pi pi-compass', 'ok');
+    return this.metric(
+      'Huella',
+      `${this.formatNumber(promedio, 0)} l/kg`,
+      `Promedio en ${valores.length} lote${valores.length > 1 ? 's' : ''} con calculo consolidado.`,
+      'pi pi-compass',
+      'ok',
+      65
+    );
   }
 
   private resumenNdviGerencial(lotes: ILoteMapa[]): IResumenGerencialMetric {
     const valores = lotes.map((lote) => this.numero(lote.ndvi)).filter((valor): valor is number => valor !== null);
     if (!valores.length) {
-      return this.metric('NDVI', 'Sin escena', 'Todavia no hay lectura satelital util para los lotes.', 'pi pi-sparkles', 'neutral');
+      return this.metric('NDVI', 'Sin escena', 'Todavia no hay lectura satelital util para los lotes.', 'pi pi-sparkles', 'neutral', 0);
     }
     const promedio = valores.reduce((acc, valor) => acc + valor, 0) / valores.length;
-    const tono: IResumenGerencialMetric['tono'] = promedio < 0.25 ? 'warn' : 'ok';
-    return this.metric('NDVI', this.formatNumber(promedio, 3), `Promedio de ${valores.length} lotes con escena procesada.`, 'pi pi-sparkles', tono);
+    const tono: IResumenGerencialMetric['tono'] = promedio < 0.18 ? 'risk' : promedio < 0.28 ? 'warn' : 'ok';
+    return this.metric(
+      'NDVI',
+      this.formatNumber(promedio, 3),
+      `Promedio de ${valores.length} lote${valores.length > 1 ? 's' : ''} con escena procesada.`,
+      'pi pi-sparkles',
+      tono,
+      Math.min(100, Math.max(8, promedio * 100))
+    );
   }
 
   private resumenFrioGerencial(lotes: ILoteMapa[], perennes: number): IResumenGerencialMetric {
     if (!perennes) {
-      return this.metric('Horas frio', 'No aplica', 'Solo se muestra para frutales y cultivos perennes.', 'pi pi-clock', 'neutral');
+      return this.metric('Horas frio', 'No aplica', 'Solo se muestra para frutales y cultivos perennes.', 'pi pi-clock', 'neutral', 0);
     }
-    const conDatos = lotes.filter((lote) => this.esLotePerenne(lote) && this.loteTieneDatosFrio(lote)).length;
-    const tono: IResumenGerencialMetric['tono'] = conDatos === perennes ? 'ok' : 'warn';
-    return this.metric('Horas frio', `${conDatos}/${perennes}`, 'Lotes perennes con objetivos o sensor de frio cargado.', 'pi pi-clock', tono);
+    const avances = lotes
+      .filter((lote) => this.esLotePerenne(lote))
+      .map((lote) => this.avanceFrioLote(lote))
+      .filter(Boolean) as Array<{
+      lote: string;
+      metric: string;
+      actual: number;
+      objetivo: number;
+      progreso: number;
+    }>;
+
+    if (!avances.length) {
+      return this.metric('Horas frio', 'Sin objetivos', 'Faltan objetivos de frio o sensor asociado en los lotes perennes.', 'pi pi-clock', 'warn', 0);
+    }
+
+    const peor = avances.reduce((min, item) => (item.progreso < min.progreso ? item : min));
+    const tono: IResumenGerencialMetric['tono'] = peor.progreso >= 85 ? 'ok' : peor.progreso >= 50 ? 'warn' : 'risk';
+    return this.metric(
+      'Horas frio',
+      `${this.formatNumber(peor.actual, peor.metric === 'CP' ? 1 : 0)} / ${this.formatNumber(peor.objetivo, peor.metric === 'CP' ? 1 : 0)} ${peor.metric}`,
+      `${peor.lote}: avance ${this.formatNumber(peor.progreso, 0)}% del objetivo mas sensible.`,
+      'pi pi-clock',
+      tono,
+      peor.progreso
+    );
   }
 
-  private resumenHeladaGerencial(lotes: ILoteMapa[], perennes: number): IResumenGerencialMetric {
+  private resumenHeladaGerencial(
+    establecimiento: IEstablecimiento,
+    lotes: ILoteMapa[],
+    perennes: number
+  ): IResumenGerencialMetric {
     if (!perennes) {
-      return this.metric('Heladas', 'No aplica', 'Solo se muestra para frutales y cultivos perennes.', 'pi pi-snowflake', 'neutral');
+      return this.metric('Heladas', 'No aplica', 'Solo se muestra para frutales y cultivos perennes.', 'pi pi-snowflake', 'neutral', 0);
     }
-    const minimas = lotes
-      .filter((lote) => this.esLotePerenne(lote))
-      .map((lote) => this.minimaPronosticada(lote))
-      .filter((valor): valor is number => valor !== null);
-    if (!minimas.length) {
-      return this.metric('Heladas', 'Sin pronostico', 'Faltan minimas pronosticadas para la ventana de riesgo.', 'pi pi-snowflake', 'neutral');
+    const minima = this.minimaPronosticadaEstablecimiento(establecimiento, lotes);
+    if (minima === null) {
+      return this.metric('Heladas', 'Sin pronostico', 'Faltan minimas pronosticadas para la ventana de riesgo.', 'pi pi-snowflake', 'neutral', 0);
     }
-    const minima = Math.min(...minimas);
     const tono: IResumenGerencialMetric['tono'] = minima <= 0 ? 'risk' : minima <= 2 ? 'warn' : 'ok';
-    return this.metric('Heladas', `${this.formatNumber(minima, 1)} C`, 'Minima prevista en los proximos dias para lotes perennes.', 'pi pi-snowflake', tono);
+    const detalle =
+      minima <= 0
+        ? 'Alerta de helada: priorizar monitoreo de cuadros sensibles.'
+        : minima <= 2
+          ? 'Cerca del umbral de helada: mantener alerta operativa.'
+          : 'Sin helada probable en la ventana de pronostico.';
+    return this.metric('Heladas', `${this.formatNumber(minima, 1)} C`, detalle, 'pi pi-snowflake', tono, minima <= 0 ? 100 : minima <= 2 ? 70 : 18);
   }
 
   private metric(
@@ -987,19 +1130,29 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     valor: string,
     detalle: string,
     icon: string,
-    tono: IResumenGerencialMetric['tono']
+    tono: IResumenGerencialMetric['tono'],
+    progreso?: number,
+    soporte?: string
   ): IResumenGerencialMetric {
-    return { label, valor, detalle, icon, tono };
+    return { label, valor, detalle, icon, tono, progreso, soporte };
   }
 
   private getClimaActual(): any {
-    const actual = this.establecimientoSeleccionado?.climaActual as any;
+    return this.getClimaActualEstablecimiento(this.establecimientoSeleccionado);
+  }
+
+  private getClimaActualEstablecimiento(establecimiento?: IEstablecimiento): any {
+    const actual = establecimiento?.climaActual as any;
     const clima = actual?.clima || actual;
     return Array.isArray(clima) ? clima[clima.length - 1] : clima;
   }
 
   private getPronosticosZona(): any[] {
-    const prediccion = this.establecimientoSeleccionado?.prediccionClimatica as any;
+    return this.getPronosticosEstablecimiento(this.establecimientoSeleccionado);
+  }
+
+  private getPronosticosEstablecimiento(establecimiento?: IEstablecimiento): any[] {
+    const prediccion = establecimiento?.prediccionClimatica as any;
     const pronosticos = prediccion?.pronosticos || prediccion?.clima?.pronosticos || [];
     return Array.isArray(pronosticos) ? pronosticos : [];
   }
@@ -1022,6 +1175,146 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       const nombreMatch = lote.establecimiento?.nombre && lote.establecimiento.nombre === establecimiento.nombre;
       return idMatch || nombreMatch;
     });
+  }
+
+  private resumenClimaGerencial(establecimiento: IEstablecimiento): IResumenGerencialMetric[] {
+    const actual = this.getClimaActualEstablecimiento(establecimiento);
+    const pronosticos = this.getPronosticosEstablecimiento(establecimiento);
+    const pronostico = pronosticos[0] || null;
+    const temperatura =
+      actual?.temperatura?.last ??
+      actual?.temperatura?.avg ??
+      pronostico?.temperatura?.avg ??
+      pronostico?.temperatura?.max ??
+      pronostico?.temperatura?.min;
+    const humedad =
+      actual?.humedad?.last ??
+      actual?.humedad?.avg ??
+      pronostico?.humedad?.avg ??
+      pronostico?.humedad?.max ??
+      pronostico?.humedad?.min;
+    const lluvia72 = pronosticos.slice(0, 3).reduce((acc, item) => acc + (this.numero(item?.lluvia) || 0), 0);
+    const minima = this.minimaPronosticadaEstablecimiento(establecimiento, []);
+
+    const clima: IResumenGerencialMetric[] = [
+      this.metric('Temperatura', this.formatMetric(temperatura, 'C', 1), 'Actual o primer pronostico disponible.', 'pi pi-sun', 'neutral'),
+    ];
+
+    const humedadNum = this.numero(humedad);
+    clima.push(
+      this.metric(
+        'Humedad',
+        this.formatMetric(humedad, '%', 0),
+        humedadNum !== null && humedadNum >= 90 ? 'Alta humedad: sube la vigilancia sanitaria.' : 'Humedad en rango de seguimiento.',
+        'pi pi-percentage',
+        humedadNum !== null && humedadNum >= 90 ? 'warn' : 'ok'
+      )
+    );
+
+    clima.push(
+      this.metric(
+        'Lluvia 72 h',
+        this.formatMetric(lluvia72, 'mm', 1),
+        lluvia72 >= 20 ? 'Lluvia relevante para enfermedades y balance hidrico.' : 'Sin lluvia fuerte prevista.',
+        'pi pi-cloud-rain',
+        lluvia72 >= 20 ? 'warn' : 'ok',
+        Math.min(100, (lluvia72 / 30) * 100)
+      )
+    );
+
+    let tonoMinima: IResumenGerencialMetric['tono'] = 'neutral';
+    let detalleMinima = 'Sin minima pronosticada disponible.';
+    let progresoMinima = 0;
+    if (minima !== null) {
+      tonoMinima = minima <= 0 ? 'risk' : minima <= 2 ? 'warn' : 'ok';
+      detalleMinima = minima <= 0 ? 'Alerta de helada probable.' : minima <= 2 ? 'Cerca de umbral de helada.' : 'Sin helada probable.';
+      progresoMinima = minima <= 0 ? 100 : minima <= 2 ? 70 : 12;
+    }
+    clima.push(
+      this.metric(
+        'Minima',
+        minima === null ? '--' : `${this.formatNumber(minima, 1)} C`,
+        detalleMinima,
+        'pi pi-snowflake',
+        tonoMinima,
+        progresoMinima
+      )
+    );
+
+    return clima;
+  }
+
+  private esCultivoExtensivo(lote?: ILoteMapa): boolean {
+    const cultivo = String(lote?.siembra?.semilla?.cultivo || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    return ['trigo', 'soja', 'maiz'].some((valor) => cultivo.includes(valor));
+  }
+
+  private cultivosResumen(lotes: ILoteMapa[]): string {
+    const cultivos = Array.from(
+      new Set(
+        lotes
+          .map((lote) => lote.siembra?.semilla?.cultivo)
+          .filter(Boolean)
+          .map((cultivo) => this.helper.translateCultivo(cultivo as any))
+      )
+    );
+    if (!cultivos.length) {
+      return 'Cultivos activos';
+    }
+    return cultivos.slice(0, 3).join(', ');
+  }
+
+  private avanceFrioLote(lote: ILoteMapa):
+    | {
+        lote: string;
+        metric: string;
+        actual: number;
+        objetivo: number;
+        progreso: number;
+      }
+    | null {
+    const requerimiento = (lote.siembra?.semilla?.requerimientoFrio || {}) as any;
+    const frio = (lote.dispositivos || []).map((dispositivo: any) => dispositivo?.frioAcumulado).find(Boolean) as any;
+    const opciones = [
+      {
+        metric: 'HFE',
+        actual: this.numero(frio?.horasFrioEfectivas ?? frio?.hfe ?? frio?.frioEfectivo),
+        objetivo: this.numero(requerimiento.horasFrioEfectivas ?? requerimiento.hfe),
+      },
+      {
+        metric: 'CP',
+        actual: this.numero(frio?.porcionesFrio ?? frio?.chillPortions ?? frio?.cp),
+        objetivo: this.numero(requerimiento.porcionesFrio ?? requerimiento.cp),
+      },
+      {
+        metric: 'HF',
+        actual: this.numero(frio?.horasFrio ?? frio?.hf),
+        objetivo: this.numero(requerimiento.horasFrio ?? requerimiento.hf),
+      },
+    ].filter((item) => item.actual !== null && item.objetivo !== null && item.objetivo > 0) as Array<{
+      metric: string;
+      actual: number;
+      objetivo: number;
+    }>;
+
+    if (!opciones.length) {
+      return null;
+    }
+
+    const menor = opciones
+      .map((item) => ({ ...item, progreso: Math.min(100, Math.max(0, (item.actual / item.objetivo) * 100)) }))
+      .reduce((min, item) => (item.progreso < min.progreso ? item : min));
+
+    return {
+      lote: lote.nombre || 'Lote sin nombre',
+      metric: menor.metric,
+      actual: menor.actual,
+      objetivo: menor.objetivo,
+      progreso: menor.progreso,
+    };
   }
 
   private centerMapOnEstablecimiento(establecimiento: IEstablecimiento, markAsVisited = true): void {
@@ -1554,6 +1847,23 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       .map((pronostico) => this.numero(pronostico?.temperatura?.min ?? pronostico?.tempMin ?? pronostico?.temperaturaMinima))
       .filter((valor): valor is number => valor !== null);
     return minimas.length ? Math.min(...minimas) : null;
+  }
+
+  private minimaPronosticadaEstablecimiento(establecimiento?: IEstablecimiento, lotes: ILoteMapa[] = []): number | null {
+    const pronosticos = this.getPronosticosEstablecimiento(establecimiento);
+    const minimasEstablecimiento = pronosticos
+      .slice(0, 5)
+      .map((pronostico) => this.numero(pronostico?.temperatura?.min ?? pronostico?.tempMin ?? pronostico?.temperaturaMinima))
+      .filter((valor): valor is number => valor !== null);
+
+    if (minimasEstablecimiento.length) {
+      return Math.min(...minimasEstablecimiento);
+    }
+
+    const minimasLotes = lotes
+      .map((lote) => this.minimaPronosticada(lote))
+      .filter((valor): valor is number => valor !== null);
+    return minimasLotes.length ? Math.min(...minimasLotes) : null;
   }
 
   private addPolygonLote(lote: ILoteMapa) {
