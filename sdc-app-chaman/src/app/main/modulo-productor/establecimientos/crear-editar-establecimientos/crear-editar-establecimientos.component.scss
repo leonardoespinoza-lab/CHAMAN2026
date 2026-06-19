@@ -1,20 +1,109 @@
-/* Aplicar el mismo patrón que detalles-lote para evitar el botón del menú */
-/* En móviles: ancho completo sin márgenes */
-/* En escritorio: contenedor centrado con márgenes simétricos */
+:host {
+  display: block;
+  min-height: 100vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
 
-/* Para escritorio real (pantallas grandes no táctiles) */
+.establecimiento-editor {
+  min-height: 100%;
+  padding: 1rem;
+}
+
+.editor-card {
+  min-height: calc(100vh - 2rem);
+}
+
+.editor-body {
+  min-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.editor-main {
+  min-height: 0;
+}
+
+.editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.editor-content {
+  overflow: auto;
+  max-height: calc(100vh - 170px);
+  margin-top: 1rem;
+  padding-right: 0.25rem;
+}
+
+.form-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.location-search {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(210px, 0.8fr) minmax(320px, 1.4fr) auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--p-content-background) 88%, #ffffff 12%);
+}
+
+.location-search-title,
+.zone-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  line-height: 1.2;
+}
+
+.location-search strong,
+.zone-option strong {
+  color: var(--p-text-color);
+}
+
+.location-search small,
+.zone-option small {
+  display: block;
+  color: var(--p-text-muted-color);
+  font-size: 0.86rem;
+}
+
+.editor-footer {
+  flex: 0 0 auto;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 1rem;
+}
+
 @media (min-width: 1024px) and (pointer: fine) and (hover: hover) {
   :host {
-    display: block;
-    width: 80%;
-    margin: 2em auto 4em auto; /* Márgenes simétricos y verticales */
+    width: min(1500px, 92vw);
+    margin: 0 auto;
+    padding: 1rem 0 2rem;
   }
 }
 
-/* Para pantallas muy grandes */
-@media (min-width: 1921px) {
-  :host {
-    width: 85%;
-    margin: 3em auto 5em auto;
+@media (max-width: 900px) {
+  .location-search {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-content {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .footer-actions {
+    flex-direction: column;
   }
 }

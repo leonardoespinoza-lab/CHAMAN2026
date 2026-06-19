@@ -1,44 +1,100 @@
-<!-- <app-map-draw [formGeojson]="geojson" tipo="Polygon" [readOnlyPolygons]="geoJsonEstablecimiento"></app-map-draw> -->
+<div class="establecimiento-editor">
+  <div class="p-card editor-card">
+    <div class="p-card-body editor-body">
+      <div class="editor-main">
+        <header class="editor-header">
+          <div>
+            <div class="p-card-title">{{ titulo?.() }}</div>
+            @if (establecimiento) {
+              <div class="p-card-subtitle">{{ establecimiento.nombre }}</div>
+            }
+          </div>
+        </header>
 
-<div style="padding: 1em; height: 100%">
-  <div class="p-card" style="height: 100%">
-    <div
-      class="p-card-body"
-      style="height: 100%; display: flex; flex-direction: column; justify-content: space-between"
-    >
-      <div style="overflow: hidden; height: 100%">
-        <!-- Titulo -->
-        <div class="p-card-title">{{ titulo?.() }}</div>
-        <!-- Subtitulo -->
-        @if (establecimiento) {
-          <div class="p-card-subtitle">{{ establecimiento.nombre }}</div>
-        }
-        <!-- Content -->
-        <div class="p-card-content" style="overflow: auto; height: calc(100% - 26px); margin-top: 1em">
+        <div class="p-card-content editor-content">
           @if (form) {
             <form [formGroup]="form">
               <p-tabs [(value)]="tabValue" scrollable [lazy]="false">
                 <p-tablist>
-                  <p-tab [value]="0">{{ 'Básico' | translate }}</p-tab>
+                  <p-tab [value]="0">{{ 'Basico' | translate }}</p-tab>
                   <p-tab [value]="1">{{ 'Mapa' | translate }}</p-tab>
                 </p-tablist>
+
                 <p-tabpanels>
-                  <!-- Basico -->
                   <p-tabpanel [value]="0">
-                    <!-- Nombre -->
-                    <p-floatlabel variant="in" class="mb-4">
-                      <input pInputText formControlName="nombre" [fluid]="true" />
-                      <label>{{ 'Nombre' | translate }}</label>
-                    </p-floatlabel>
+                    <section class="form-section">
+                      <p-floatlabel variant="in">
+                        <input pInputText formControlName="nombre" [fluid]="true" />
+                        <label>{{ 'Nombre' | translate }}</label>
+                      </p-floatlabel>
+                    </section>
                   </p-tabpanel>
-                  <!-- Mapa -->
+
                   <p-tabpanel [value]="1">
+                    <section class="location-search">
+                      <div class="location-search-title">
+                        <strong>Buscar zona del establecimiento</strong>
+                        <small>Filtra por provincia y escribi localidad o departamento para centrar el mapa antes de dibujar.</small>
+                      </div>
+
+                      <p-select
+                        [(ngModel)]="provinciaBusqueda"
+                        [ngModelOptions]="{ standalone: true }"
+                        [options]="provinciasGeograficas"
+                        optionLabel="label"
+                        [filter]="true"
+                        filterBy="label,provincia"
+                        [showClear]="true"
+                        [fluid]="true"
+                        [appendTo]="'body'"
+                        placeholder="Provincia"
+                      />
+
+                      <p-autocomplete
+                        [(ngModel)]="busquedaUbicacion"
+                        [ngModelOptions]="{ standalone: true }"
+                        [suggestions]="ubicacionesSugeridas"
+                        optionLabel="label"
+                        [fluid]="true"
+                        [dropdown]="true"
+                        [forceSelection]="false"
+                        placeholder="Localidad, departamento o paraje. Ej. Cinco Saltos"
+                        appendTo="body"
+                        (completeMethod)="buscarUbicaciones($event)"
+                        (onSelect)="seleccionarUbicacionEvent($event)"
+                      >
+                        <ng-template #item let-zona>
+                          <div class="zone-option">
+                            <strong>{{ zona.label }}</strong>
+                            <small>{{ zona.tipo | titlecase }} - {{ zona.fuente }}</small>
+                          </div>
+                        </ng-template>
+                      </p-autocomplete>
+
+                      <p-button
+                        label="Centrar mapa"
+                        icon="pi pi-map-marker"
+                        [loading]="ubicacionLoading"
+                        (onClick)="seleccionarUbicacion(busquedaUbicacion)"
+                      />
+                    </section>
+
+                    @if (ubicacionDetectada) {
+                      <p-message severity="info" class="mb-4">
+                        {{ ubicacionDetectada.localidad || ubicacionDetectada.partido || ubicacionDetectada.direccion || 'Ubicacion detectada' }}
+                        @if (ubicacionDetectada.provincia) {
+                          - {{ ubicacionDetectada.provincia }}
+                        }
+                      </p-message>
+                    }
+
                     @if (tabValue === 1) {
                       <app-map-draw
                         [multiPolygon]="multipolygon"
+                        [centrarA]="centroMapa"
                         (multiPolygonChange)="onMultipoligonChange($event)"
                         [tipo]="'MultiPolygon'"
-                      ></app-map-draw>
+                      />
                     }
                   </p-tabpanel>
                 </p-tabpanels>
@@ -47,10 +103,10 @@
           }
         </div>
       </div>
-      <!-- Footer -->
-      <div class="p-card-footer">
+
+      <footer class="p-card-footer editor-footer">
         <p-divider />
-        <div class="flex gap-4 mt-1">
+        <div class="footer-actions">
           <p-button
             [label]="'Cancelar' | translate"
             severity="secondary"
@@ -68,7 +124,7 @@
             [disabled]="!form?.valid"
           />
         </div>
-      </div>
+      </footer>
     </div>
   </div>
 </div>
