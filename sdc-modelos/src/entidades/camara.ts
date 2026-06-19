@@ -2,6 +2,24 @@ import { IFoto } from "./foto";
 import { ILote } from "./lote";
 
 export type TOrigenCamara = "hik-connect" | "ftp";
+export type TEstadoCapturaCamara =
+  | "pendiente"
+  | "ok"
+  | "error"
+  | "fuera_de_ventana";
+
+export interface ICapturaAutomaticaCamara {
+  habilitada?: boolean;
+  intervaloMinutos?: number;
+  reintentoMinutos?: number;
+  horaInicio?: string;
+  horaFin?: string;
+  proximoIntento?: string;
+  ultimoIntento?: string;
+  ultimoExito?: string;
+  ultimoError?: string;
+  estado?: TEstadoCapturaCamara;
+}
 
 export interface ICamara {
   _id?: string;
@@ -16,6 +34,7 @@ export interface ICamara {
   fuente?: TOrigenCamara;
   fechaSincronizacion?: string;
   fechaUltimaComunicacion?: string;
+  capturaAutomatica?: ICapturaAutomaticaCamara;
   lotes?: ILote[];
   ultimaFoto?: IFoto;
   totalFotos?: number;

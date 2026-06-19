@@ -51,11 +51,10 @@
 .camera-content {
   display: grid;
   gap: 0.8rem;
-  grid-template-columns: minmax(220px, 320px) 1fr;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(220px, 0.5fr);
 }
 
-.latest-photo,
-.photo-strip button {
+.latest-photo {
   background: #f5f9fc;
   border: 1px solid #bfd0e1;
   border-radius: 8px;
@@ -68,30 +67,61 @@
 
 .latest-photo img {
   display: block;
-  height: 190px;
-  object-fit: cover;
+  height: 260px;
+  object-fit: contain;
   width: 100%;
 }
 
-.latest-photo span,
-.photo-strip span {
+.latest-photo span {
   display: block;
   font-size: 0.94rem;
   font-weight: 750;
   padding: 0.55rem 0.65rem;
 }
 
-.photo-strip {
+.photo-date-strip {
+  align-content: start;
+  background: #f5f9fc;
+  border: 1px solid #bfd0e1;
+  border-radius: 8px;
   display: grid;
   gap: 0.55rem;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  padding: 0.75rem;
 }
 
-.photo-strip img {
-  display: block;
-  height: 96px;
-  object-fit: cover;
-  width: 100%;
+.photo-date-strip > span {
+  color: #63718b;
+  font-size: 0.82rem;
+  font-weight: 850;
+  grid-column: 1 / -1;
+  text-transform: uppercase;
+}
+
+.photo-date-strip button {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid #c9d6e5;
+  border-radius: 8px;
+  color: #17233a;
+  cursor: pointer;
+  display: grid;
+  gap: 0.12rem;
+  padding: 0.55rem 0.6rem;
+  text-align: left;
+}
+
+.photo-date-strip button.active {
+  border-color: var(--p-primary-color);
+  box-shadow: inset 3px 0 0 var(--p-primary-color);
+}
+
+.photo-date-strip strong {
+  font-size: 0.98rem;
+}
+
+.photo-date-strip small {
+  color: #63718b;
+  font-size: 0.84rem;
 }
 
 .camera-empty {
@@ -106,11 +136,45 @@
   padding: 1rem;
 }
 
+.camera-viewer-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.camera-viewer-toolbar span {
+  color: #17233a;
+  font-size: 1rem;
+  font-weight: 850;
+}
+
+.camera-viewer-toolbar div {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.dialog-image-viewport {
+  align-items: center;
+  background:
+    linear-gradient(135deg, #f8fbfd, #f0faf8),
+    #f5f9fc;
+  border: 1px solid #bfd0e1;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  min-height: 68vh;
+  overflow: auto;
+  padding: 0.75rem;
+}
+
 .dialog-image {
   border-radius: 8px;
   display: block;
-  max-height: 78vh;
+  max-height: 70vh;
   object-fit: contain;
+  transition: transform 160ms ease;
   width: 100%;
 }
 

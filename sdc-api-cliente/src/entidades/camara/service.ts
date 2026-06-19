@@ -8,6 +8,7 @@ import {
   ILote,
   IListado,
   IQueryParam,
+  IUpdateCamara,
 } from 'modelos/src';
 import { CamarasRepository } from './repository';
 
@@ -152,6 +153,18 @@ export class CamarasService {
     return await this.repository.capturarHikConnect(serial, canal);
   }
 
+  async update(serialCamara: string, data: IUpdateCamara): Promise<ICamara> {
+    const serial = this.requerirSerial(serialCamara);
+    const capturaAutomatica = data.capturaAutomatica
+      ? this.normalizarCapturaAutomatica(data.capturaAutomatica)
+      : undefined;
+
+    return await this.repository.updateCamara(serial, {
+      ...data,
+      ...(capturaAutomatica ? { capturaAutomatica } : {}),
+    });
+  }
+
   private async getLotesPorSeriales(seriales: string[]): Promise<ILote[]> {
     const filter: IFilter<ILote> = {
       serialCamara: { $in: seriales },
@@ -201,6 +214,31 @@ export class CamarasService {
       fuente: 'hik-connect',
       fechaSincronizacion: new Date().toISOString(),
       raw,
+    };
+  }
+
+  private normalizarCapturaAutomatica(
+    capturaAutomatica: NonNullable<IUpdateCamara['capturaAutomatica']>,
+  ): NonNullable<IUpdateCamara['capturaAutomatica']> {
+    const intervaloMinutos = Math.max(
+      15,
+      Number(capturaAutomatica.intervaloMinutos || 1440),
+    );
+    const reintentoMinutos = Math.max(
+      5,
+      Number(capturaAutomatica.reintentoMinutos || 10),
+    );
+
+    return {
+      ...capturaAutomatica,
+      habilitada: Boolean(capturaAutomatica.habilitada),
+      intervaloMinutos,
+      reintentoMinutos,
+      horaInicio: capturaAutomatica.horaInicio || '08:00',
+      horaFin: capturaAutomatica.horaFin || '18:00',
+      estado: capturaAutomatica.habilitada
+        ? capturaAutomatica.estado || 'pendiente'
+        : undefined,
     };
   }
 

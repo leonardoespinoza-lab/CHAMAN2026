@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
-import { ICamara, IFoto, ILote, IQueryParam } from 'modelos/src';
+import { ICamara, IFoto, ILote, IQueryParam, IUpdateCamara } from 'modelos/src';
 import { CamaraService } from '../../../../auxiliares/http/camara.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../auxiliares/shared.module';
@@ -16,6 +16,7 @@ export class ListadoTimeLapseComponent implements OnInit {
   public loadingLotes = false;
   public loadingFotos = false;
   public guardandoAsignacion = false;
+  public guardandoProgramacion = false;
   public sincronizando = false;
   public capturandoSerial = '';
 
@@ -28,9 +29,19 @@ export class ListadoTimeLapseComponent implements OnInit {
   public idsLoteSeleccionados: string[] = [];
   public visibleAsignar = false;
   public visibleFotos = false;
+  public visibleProgramacion = false;
   public imagenVisible = false;
   public imagenActiva?: string;
   public indiceImagenActiva = 0;
+  public fotoSeleccionada?: IFoto;
+  public zoomImagen = 1;
+  public programacion: NonNullable<IUpdateCamara['capturaAutomatica']> = {
+    habilitada: false,
+    intervaloMinutos: 1440,
+    reintentoMinutos: 10,
+    horaInicio: '08:00',
+    horaFin: '18:00',
+  };
 
   public readonly name = ListadoTimeLapseComponent.name;
 
@@ -104,6 +115,45 @@ export class ListadoTimeLapseComponent implements OnInit {
     await this.cargarLotesDisponibles();
   }
 
+  public abrirProgramacion(camara: ICamara): void {
+    this.camaraSeleccionada = camara;
+    const captura = camara.capturaAutomatica || {};
+    this.programacion = {
+      habilitada: Boolean(captura.habilitada),
+      intervaloMinutos: captura.intervaloMinutos || 1440,
+      reintentoMinutos: captura.reintentoMinutos || 10,
+      horaInicio: captura.horaInicio || '08:00',
+      horaFin: captura.horaFin || '18:00',
+      proximoIntento: captura.proximoIntento,
+      ultimoIntento: captura.ultimoIntento,
+      ultimoExito: captura.ultimoExito,
+      ultimoError: captura.ultimoError,
+      estado: captura.estado,
+    };
+    this.visibleProgramacion = true;
+  }
+
+  public async guardarProgramacion(): Promise<void> {
+    if (!this.camaraSeleccionada?.serialCamara) return;
+    this.guardandoProgramacion = true;
+    try {
+      await this.camaraService.actualizar(this.camaraSeleccionada.serialCamara, {
+        capturaAutomatica: {
+          ...this.programacion,
+          intervaloMinutos: Number(this.programacion.intervaloMinutos || 1440),
+          reintentoMinutos: Number(this.programacion.reintentoMinutos || 10),
+        },
+      });
+      this.helper.notifSuccess(this.translate.instant('Programacion de camara guardada'));
+      this.visibleProgramacion = false;
+      await this.listar();
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.guardandoProgramacion = false;
+    }
+  }
+
   public async guardarAsignacion(): Promise<void> {
     if (!this.camaraSeleccionada?.serialCamara) return;
     this.guardandoAsignacion = true;
@@ -124,6 +174,7 @@ export class ListadoTimeLapseComponent implements OnInit {
 
   public async abrirFotos(camara: ICamara): Promise<void> {
     this.camaraSeleccionada = camara;
+    this.fotoSeleccionada = undefined;
     this.visibleFotos = true;
     await this.cargarFotos(camara);
   }
@@ -145,22 +196,82 @@ export class ListadoTimeLapseComponent implements OnInit {
     }
   }
 
-  public verFoto(foto: IFoto): void {
-    this.indiceImagenActiva = this.fotos.findIndex((item) => item._id === foto._id);
-    this.imagenActiva = foto.url;
+  public seleccionarFoto(foto: IFoto): void {
+    this.fotoSeleccionada = foto;
+    this.indiceImagenActiva = Math.max(
+      0,
+      this.fotos.findIndex((item) => (foto._id ? item._id === foto._id : item.url === foto.url))
+    );
+  }
+
+  public verFoto(foto?: IFoto): void {
+    const fotoActual = foto || this.fotoSeleccionada;
+    if (!fotoActual?.url) return;
+    this.fotoSeleccionada = fotoActual;
+    this.indiceImagenActiva = Math.max(
+      0,
+      this.fotos.findIndex((item) =>
+        fotoActual._id ? item._id === fotoActual._id : item.url === fotoActual.url
+      )
+    );
+    this.imagenActiva = fotoActual.url;
+    this.zoomImagen = 1;
     this.imagenVisible = true;
   }
 
   public siguienteFoto(): void {
     if (this.indiceImagenActiva >= this.fotos.length - 1) return;
     this.indiceImagenActiva++;
-    this.imagenActiva = this.fotos[this.indiceImagenActiva]?.url;
+    this.fotoSeleccionada = this.fotos[this.indiceImagenActiva];
+    this.imagenActiva = this.fotoSeleccionada?.url;
+    this.zoomImagen = 1;
   }
 
   public fotoAnterior(): void {
     if (this.indiceImagenActiva <= 0) return;
     this.indiceImagenActiva--;
-    this.imagenActiva = this.fotos[this.indiceImagenActiva]?.url;
+    this.fotoSeleccionada = this.fotos[this.indiceImagenActiva];
+    this.imagenActiva = this.fotoSeleccionada?.url;
+    this.zoomImagen = 1;
+  }
+
+  public aumentarZoom(): void {
+    this.zoomImagen = Math.min(3, Number((this.zoomImagen + 0.2).toFixed(1)));
+  }
+
+  public disminuirZoom(): void {
+    this.zoomImagen = Math.max(0.6, Number((this.zoomImagen - 0.2).toFixed(1)));
+  }
+
+  public resetZoom(): void {
+    this.zoomImagen = 1;
+  }
+
+  public descargarImagenActual(): void {
+    const url = this.imagenActiva || this.fotoSeleccionada?.url;
+    if (!url) return;
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.download = `${this.camaraSeleccionada?.serialCamara || 'camara'}-${this.fotoSeleccionada?.fechaCreacion || 'imagen'}.jpg`;
+    link.click();
+  }
+
+  public estadoProgramacion(camara: ICamara): string {
+    const captura = camara.capturaAutomatica;
+    if (!captura?.habilitada) {
+      return 'Manual';
+    }
+    if (captura.estado === 'ok' && captura.ultimoExito) {
+      return `Ultima captura ${new Date(captura.ultimoExito).toLocaleString()}`;
+    }
+    if (captura.estado === 'error') {
+      return `Reintentando cada ${captura.reintentoMinutos || 10} min`;
+    }
+    if (captura.estado === 'fuera_de_ventana') {
+      return `Fuera de ventana ${captura.horaInicio || '08:00'}-${captura.horaFin || '18:00'}`;
+    }
+    return `Programada cada ${captura.intervaloMinutos || 1440} min`;
   }
 
   public trackCamara(_index: number, camara: ICamara): string {
@@ -193,6 +304,7 @@ export class ListadoTimeLapseComponent implements OnInit {
       };
       const data = await this.camaraService.listarFotos(camara.serialCamara, params);
       this.fotos = data.datos || [];
+      this.fotoSeleccionada = this.fotos[0];
     } catch (error) {
       this.helper.notifError(error);
     } finally {

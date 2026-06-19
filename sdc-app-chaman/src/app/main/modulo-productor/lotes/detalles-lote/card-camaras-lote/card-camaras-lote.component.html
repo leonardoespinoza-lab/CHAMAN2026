@@ -15,15 +15,20 @@
       <div class="camera-empty">Cargando imagenes...</div>
     } @else if (ultimaFoto?.url) {
       <section class="camera-content">
-        <button type="button" class="latest-photo" (click)="abrir(ultimaFoto)">
-          <img [src]="ultimaFoto?.url" alt="Ultima imagen de seguimiento del lote" />
-          <span>Ultima captura {{ ultimaFoto?.fechaCreacion | date: 'dd/MM HH:mm' }}</span>
+        <button type="button" class="latest-photo" (click)="abrir()">
+          <img [src]="fotoSeleccionada?.url || ultimaFoto?.url" alt="Ultima imagen de seguimiento del lote" />
+          <span>{{ (fotoSeleccionada?.fechaCreacion || ultimaFoto?.fechaCreacion) | date: 'EEEE dd/MM HH:mm' }}</span>
         </button>
-        <div class="photo-strip">
+        <div class="photo-date-strip">
+          <span>Capturas</span>
           @for (foto of fotos; track foto._id || foto.url) {
-            <button type="button" (click)="abrir(foto)">
-              <img [src]="foto.url" alt="Imagen historica de camara" />
-              <span>{{ foto.fechaCreacion | date: 'dd/MM' }}</span>
+            <button
+              type="button"
+              [class.active]="fotoSeleccionada?._id === foto._id || fotoSeleccionada?.url === foto.url"
+              (click)="seleccionarFoto(foto)"
+            >
+              <strong>{{ foto.fechaCreacion | date: 'dd/MM' }}</strong>
+              <small>{{ foto.fechaCreacion | date: 'HH:mm' }}</small>
             </button>
           }
         </div>
@@ -37,8 +42,19 @@
   </div>
 
   <p-dialog [(visible)]="visible" [modal]="true" [style]="{ width: 'min(980px, 96vw)' }">
+    <div class="camera-viewer-toolbar">
+      <span>{{ fotoSeleccionada?.fechaCreacion | date: 'dd/MM/yyyy HH:mm' }}</span>
+      <div>
+        <p-button icon="pi pi-search-minus" [rounded]="true" severity="secondary" [outlined]="true" (click)="disminuirZoom()" />
+        <p-button icon="pi pi-refresh" [rounded]="true" severity="secondary" [outlined]="true" (click)="resetZoom()" />
+        <p-button icon="pi pi-search-plus" [rounded]="true" severity="secondary" [outlined]="true" (click)="aumentarZoom()" />
+        <p-button icon="pi pi-download" [rounded]="true" severity="secondary" [outlined]="true" (click)="descargarImagenActual()" />
+      </div>
+    </div>
     @if (imagenActiva) {
-      <img class="dialog-image" [src]="imagenActiva" alt="Imagen de seguimiento del lote" />
+      <div class="dialog-image-viewport">
+        <img class="dialog-image" [src]="imagenActiva" alt="Imagen de seguimiento del lote" [style.transform]="'scale(' + zoomImagen + ')'" />
+      </div>
     }
   </p-dialog>
 }

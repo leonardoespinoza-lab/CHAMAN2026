@@ -40,6 +40,9 @@ export class Camara implements Exactly<ICamara, Camara> {
   fechaUltimaComunicacion?: string;
 
   @Prop({ type: Object })
+  capturaAutomatica?: ICamara['capturaAutomatica'];
+
+  @Prop({ type: Object })
   raw?: Record<string, unknown>;
 
   lotes?: ILote[];

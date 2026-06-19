@@ -16,17 +16,17 @@ import {
   FTP_PORT,
   FTP_SHARED_USERNAME,
   FTP_URL,
-  HIKCONNECT_CAPTURE_INTERVAL_MINUTES,
   HIKCONNECT_CAPTURE_ON_START,
   HIKCONNECT_DEFAULT_CHANNEL,
   HIKCONNECT_ENABLED,
+  HIKCONNECT_SCHEDULER_INTERVAL_MINUTES,
   HTTP_PORT,
   HTTP_PUBLIC_PORT,
   PUBLIC_BASE_URL,
   TIMELAPSE_ADMIN_TOKEN,
 } from "./enviroments/environment";
 import { HikConnectClient } from "./hik-connect";
-import { IFoto, IListado, ILote } from "modelos";
+import { ICamara, IFoto, IListado, ILote } from "modelos";
 
 const FtpFileSystem: any = require("ftp-srv/src/fs");
 
@@ -49,6 +49,7 @@ type UploadRecord = {
 const recentUploads: UploadRecord[] = [];
 const fetchFn = (globalThis as any).fetch as (input: string, init?: any) => Promise<any>;
 const hikConnect = new HikConnectClient();
+let scheduledCaptureRunning = false;
 
 class AutoCreateFileSystem extends FtpFileSystem {
   constructor(...args: any[]) {
@@ -323,6 +324,168 @@ async function captureLinkedHikConnectCameras() {
   return results;
 }
 
+function minutesFromNowIso(minutes: number) {
+  const safeMinutes = Math.max(1, Number(minutes || 1));
+  return new Date(Date.now() + safeMinutes * 60 * 1000).toISOString();
+}
+
+function parseClockMinutes(value?: string) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || "").trim());
+  if (!match) return null;
+  const hour = Math.min(23, Math.max(0, Number(match[1])));
+  const minute = Math.min(59, Math.max(0, Number(match[2])));
+  return hour * 60 + minute;
+}
+
+function minuteOfDay(date: Date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+function isWithinCaptureWindow(camara: ICamara, now = new Date()) {
+  const start = parseClockMinutes(camara.capturaAutomatica?.horaInicio);
+  const end = parseClockMinutes(camara.capturaAutomatica?.horaFin);
+  if (start === null || end === null || start === end) return true;
+
+  const current = minuteOfDay(now);
+  if (start < end) {
+    return current >= start && current <= end;
+  }
+
+  return current >= start || current <= end;
+}
+
+function minutesUntilCaptureWindow(camara: ICamara, now = new Date()) {
+  if (isWithinCaptureWindow(camara, now)) return 0;
+
+  const start = parseClockMinutes(camara.capturaAutomatica?.horaInicio);
+  if (start === null) return Number(camara.capturaAutomatica?.reintentoMinutos || 10);
+
+  const current = minuteOfDay(now);
+  let delta = start - current;
+  if (delta <= 0) delta += 24 * 60;
+  return Math.max(1, delta);
+}
+
+function isCameraCaptureDue(camara: ICamara, now = new Date()) {
+  const config = camara.capturaAutomatica;
+  if (!config?.habilitada) return false;
+  if (!config.proximoIntento) return true;
+
+  const next = new Date(config.proximoIntento).getTime();
+  return Number.isNaN(next) || next <= now.getTime();
+}
+
+async function getScheduledHikConnectCameras(): Promise<ICamara[]> {
+  const url = new URL(`${API_DATOS}/camaras`);
+  url.searchParams.set("limit", "0");
+  url.searchParams.set("sort", "nombre");
+
+  const response = await fetchFn(url.toString());
+  if (!response.ok) {
+    throw new Error(`sdc-datos rechazo consulta de camaras: ${response.status}`);
+  }
+
+  const data = (await response.json()) as IListado<ICamara>;
+  return (data?.datos || []).filter(
+    (camara) =>
+      !!camara.serialCamara &&
+      camara.fuente === "hik-connect" &&
+      camara.capturaAutomatica?.habilitada === true,
+  );
+}
+
+async function updateCameraCaptureState(
+  camara: ICamara,
+  patch: NonNullable<ICamara["capturaAutomatica"]>,
+) {
+  const capturaAutomatica = {
+    ...(camara.capturaAutomatica || {}),
+    ...patch,
+  };
+  const response = await fetchFn(
+    `${API_DATOS}/camaras/${encodeURIComponent(camara.serialCamara)}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ capturaAutomatica }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`sdc-datos rechazo estado de captura: ${response.status}`);
+  }
+
+  camara.capturaAutomatica = capturaAutomatica;
+}
+
+async function captureScheduledHikConnectCameras(reason = "interval") {
+  if (!HIKCONNECT_ENABLED || scheduledCaptureRunning) {
+    return [];
+  }
+
+  scheduledCaptureRunning = true;
+  const results: Array<Record<string, unknown>> = [];
+
+  try {
+    const camaras = await getScheduledHikConnectCameras();
+    const now = new Date();
+
+    for (const camara of camaras) {
+      if (!isCameraCaptureDue(camara, now)) {
+        continue;
+      }
+
+      const config = camara.capturaAutomatica || {};
+      const retryMinutes = Math.max(5, Number(config.reintentoMinutos || 10));
+      const intervalMinutes = Math.max(15, Number(config.intervaloMinutos || 1440));
+
+      if (!isWithinCaptureWindow(camara, now)) {
+        const nextWindowMinutes = minutesUntilCaptureWindow(camara, now);
+        await updateCameraCaptureState(camara, {
+          estado: "fuera_de_ventana",
+          ultimoIntento: now.toISOString(),
+          proximoIntento: minutesFromNowIso(nextWindowMinutes || retryMinutes),
+        });
+        results.push({
+          serialCamara: camara.serialCamara,
+          status: "fuera_de_ventana",
+          reason,
+        });
+        continue;
+      }
+
+      try {
+        const record = await ingestHikConnectCapture(
+          camara.serialCamara,
+          camara.canal || HIKCONNECT_DEFAULT_CHANNEL,
+        );
+        await updateCameraCaptureState(camara, {
+          estado: "ok",
+          ultimoIntento: now.toISOString(),
+          ultimoExito: new Date().toISOString(),
+          ultimoError: "",
+          proximoIntento: minutesFromNowIso(intervalMinutes),
+        });
+        results.push({ serialCamara: camara.serialCamara, status: "ok", record });
+      } catch (err: any) {
+        const message = err?.message || String(err);
+        await updateCameraCaptureState(camara, {
+          estado: "error",
+          ultimoIntento: now.toISOString(),
+          ultimoError: message,
+          proximoIntento: minutesFromNowIso(retryMinutes),
+        });
+        results.push({ serialCamara: camara.serialCamara, status: "error", message });
+        console.error(`No se pudo capturar Hik-Connect programada ${camara.serialCamara}:`, err);
+      }
+    }
+
+    return results;
+  } finally {
+    scheduledCaptureRunning = false;
+  }
+}
+
 function startHttp() {
   ensureDir(FTP_DATA_DIR);
   const app = express();
@@ -361,6 +524,10 @@ function startHttp() {
       },
       activeBehindProxy: FTP_ALLOW_ACTIVE_BEHIND_PROXY,
       uploadsPath: "/imagenes/{serial}/{yyyy-mm-dd}/{archivo}",
+      hikConnectScheduler: {
+        enabled: HIKCONNECT_ENABLED,
+        everyMinutes: HIKCONNECT_SCHEDULER_INTERVAL_MINUTES,
+      },
     });
   });
 
@@ -408,6 +575,15 @@ function startHttp() {
   app.post("/hik-connect/capture-linked", requireAdminToken, async (_req: Request, res: Response) => {
     try {
       const results = await captureLinkedHikConnectCameras();
+      res.status(200).json({ datos: results, totalCount: results.length });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, message: err?.message || String(err) });
+    }
+  });
+
+  app.post("/hik-connect/capture-scheduled", requireAdminToken, async (_req: Request, res: Response) => {
+    try {
+      const results = await captureScheduledHikConnectCameras("manual");
       res.status(200).json({ datos: results, totalCount: results.length });
     } catch (err: any) {
       res.status(500).json({ ok: false, message: err?.message || String(err) });
@@ -489,15 +665,15 @@ startFtp();
 
 if (HIKCONNECT_ENABLED) {
   if (HIKCONNECT_CAPTURE_ON_START) {
-    captureLinkedHikConnectCameras().catch((err) => {
+    captureScheduledHikConnectCameras("startup").catch((err) => {
       console.error("Error en captura inicial Hik-Connect:", err);
     });
   }
 
-  if (HIKCONNECT_CAPTURE_INTERVAL_MINUTES > 0) {
-    const intervalMs = HIKCONNECT_CAPTURE_INTERVAL_MINUTES * 60 * 1000;
+  if (HIKCONNECT_SCHEDULER_INTERVAL_MINUTES > 0) {
+    const intervalMs = HIKCONNECT_SCHEDULER_INTERVAL_MINUTES * 60 * 1000;
     setInterval(() => {
-      captureLinkedHikConnectCameras().catch((err) => {
+      captureScheduledHikConnectCameras("interval").catch((err) => {
         console.error("Error en captura programada Hik-Connect:", err);
       });
     }, intervalMs);

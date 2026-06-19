@@ -15,6 +15,7 @@ import {
   ILote,
   IListado,
   IQueryParam,
+  IUpdateCamara,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
@@ -70,5 +71,14 @@ export class CamarasController {
     @Query('canal') canal?: string,
   ): Promise<any> {
     return await this.service.capturar(serial, Number(canal || 1));
+  }
+
+  @Put(':serial')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  public async update(
+    @Param('serial') serial: string,
+    @Body() body: IUpdateCamara,
+  ): Promise<ICamara> {
+    return await this.service.update(serial, body);
   }
 }

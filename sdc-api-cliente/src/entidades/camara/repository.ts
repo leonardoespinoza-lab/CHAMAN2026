@@ -7,6 +7,7 @@ import {
   ILote,
   IListado,
   IQueryParam,
+  IUpdateCamara,
   IUpdateLote,
 } from 'modelos/src';
 import { API_DATOS, API_FTP, TIMELAPSE_ADMIN_TOKEN } from '../../env';
@@ -29,6 +30,14 @@ export class CamarasRepository {
   async upsertCamaras(camaras: ICreateCamara[]): Promise<IListado<ICamara>> {
     const url = `${API_DATOS}/camaras/bulk-upsert`;
     return await this.axios.POST<IListado<ICamara>>(url, { camaras });
+  }
+
+  async updateCamara(
+    serialCamara: string,
+    data: IUpdateCamara,
+  ): Promise<ICamara> {
+    const url = `${API_DATOS}/camaras/${encodeURIComponent(serialCamara)}`;
+    return await this.axios.PUT<ICamara>(url, data);
   }
 
   async getHikConnectCameras(): Promise<HikConnectCameraResponse> {

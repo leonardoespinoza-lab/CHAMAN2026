@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { IAsignarCamaraLotes, ICamara, IFoto, ILote, IListado, IQueryParam } from 'modelos/src';
+import { IAsignarCamaraLotes, ICamara, IFoto, ILote, IListado, IQueryParam, IUpdateCamara } from 'modelos/src';
 import { HttpService } from './http.service';
 
 @Injectable({
@@ -26,6 +26,10 @@ export class CamaraService {
 
   public asignarLotes(serialCamara: string, body: IAsignarCamaraLotes): Promise<IListado<ILote>> {
     return this.http.put(`/camaras/${encodeURIComponent(serialCamara)}/lotes`, body);
+  }
+
+  public actualizar(serialCamara: string, body: IUpdateCamara): Promise<ICamara> {
+    return this.http.put(`/camaras/${encodeURIComponent(serialCamara)}`, body);
   }
 
   public capturar(serialCamara: string, canal = 1): Promise<IFoto> {

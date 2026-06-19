@@ -81,6 +81,10 @@
               <span>Fotos</span>
               <strong>{{ camara.totalFotos || 0 }}</strong>
             </article>
+            <article>
+              <span>Captura</span>
+              <strong>{{ estadoProgramacion(camara) }}</strong>
+            </article>
           </div>
 
           <div class="camera-preview" [class.empty]="!camara.ultimaFoto?.url">
@@ -120,6 +124,13 @@
               severity="secondary"
               [outlined]="true"
               (click)="abrirAsignacion(camara)"
+            />
+            <p-button
+              label="Programar"
+              icon="pi pi-clock"
+              severity="secondary"
+              [outlined]="true"
+              (click)="abrirProgramacion(camara)"
             />
             <p-button
               label="Capturar"
@@ -171,6 +182,61 @@
 </p-dialog>
 
 <p-dialog
+  [(visible)]="visibleProgramacion"
+  [modal]="true"
+  [style]="{ width: 'min(720px, 94vw)' }"
+  header="Programar capturas"
+>
+  <div class="schedule-dialog">
+    <div class="dialog-camera-title">
+      <span>{{ camaraSeleccionada?.nombre }}</span>
+      <strong>{{ camaraSeleccionada?.serialCamara }}</strong>
+    </div>
+
+    <label class="toggle-row">
+      <input type="checkbox" [(ngModel)]="programacion.habilitada" />
+      <span>Activar captura automatica desde backend</span>
+    </label>
+
+    <div class="schedule-grid">
+      <label>
+        <span>Intervalo exitoso</span>
+        <input pInputText type="number" min="15" [(ngModel)]="programacion.intervaloMinutos" />
+        <small>Minutos hasta la proxima captura cuando la camara responde.</small>
+      </label>
+      <label>
+        <span>Reintento</span>
+        <input pInputText type="number" min="5" [(ngModel)]="programacion.reintentoMinutos" />
+        <small>Minutos entre intentos si la camara esta offline o falla.</small>
+      </label>
+      <label>
+        <span>Desde</span>
+        <input pInputText type="time" [(ngModel)]="programacion.horaInicio" />
+      </label>
+      <label>
+        <span>Hasta</span>
+        <input pInputText type="time" [(ngModel)]="programacion.horaFin" />
+      </label>
+    </div>
+
+    <p-message severity="info">
+      El servicio de backend consulta la agenda, captura en la ventana horaria definida y guarda la imagen para que el
+      front solo lea el historial.
+    </p-message>
+
+    <div class="dialog-actions">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" (click)="visibleProgramacion = false" />
+      <p-button
+        label="Guardar programacion"
+        icon="pi pi-save"
+        [loading]="guardandoProgramacion"
+        (click)="guardarProgramacion()"
+      />
+    </div>
+  </div>
+</p-dialog>
+
+<p-dialog
   [(visible)]="visibleFotos"
   [modal]="true"
   [style]="{ width: 'min(1120px, 96vw)' }"
@@ -190,19 +256,50 @@
     } @else if (!fotos.length) {
       <p-message severity="info">Todavia no hay fotos registradas para esta camara.</p-message>
     } @else {
-      <section class="photos-grid">
-        @for (foto of fotos; track trackFoto($index, foto)) {
-          <button type="button" class="photo-thumb" (click)="verFoto(foto)">
-            <img [src]="foto.url" alt="Foto de seguimiento visual" />
-            <span>{{ foto.fechaCreacion | date: 'dd/MM/yyyy HH:mm' }}</span>
-          </button>
-        }
+      <section class="photos-browser">
+        <aside class="photo-date-list">
+          <span>Capturas guardadas</span>
+          @for (foto of fotos; track trackFoto($index, foto)) {
+            <button
+              type="button"
+              class="photo-date-button"
+              [class.active]="fotoSeleccionada?._id === foto._id || fotoSeleccionada?.url === foto.url"
+              (click)="seleccionarFoto(foto)"
+            >
+              <strong>{{ foto.fechaCreacion | date: 'dd/MM/yyyy' }}</strong>
+              <small>{{ foto.fechaCreacion | date: 'HH:mm' }}</small>
+            </button>
+          }
+        </aside>
+        <article class="selected-photo-panel">
+          @if (fotoSeleccionada?.url) {
+            <button type="button" class="selected-photo" (click)="verFoto()">
+              <img [src]="fotoSeleccionada?.url" alt="Foto de seguimiento visual" />
+            </button>
+            <div class="selected-photo-actions">
+              <span>{{ fotoSeleccionada?.fechaCreacion | date: 'EEEE dd/MM/yyyy HH:mm' }}</span>
+              <div>
+                <p-button label="Ver grande" icon="pi pi-search-plus" severity="secondary" [outlined]="true" (click)="verFoto()" />
+                <p-button label="Descargar" icon="pi pi-download" severity="secondary" [outlined]="true" (click)="descargarImagenActual()" />
+              </div>
+            </div>
+          }
+        </article>
       </section>
     }
   </div>
 </p-dialog>
 
 <p-dialog [(visible)]="imagenVisible" [modal]="true" [style]="{ width: 'min(1100px, 96vw)' }">
+  <div class="viewer-toolbar">
+    <span>{{ fotoSeleccionada?.fechaCreacion | date: 'dd/MM/yyyy HH:mm' }}</span>
+    <div>
+      <p-button icon="pi pi-search-minus" [rounded]="true" severity="secondary" [outlined]="true" (click)="disminuirZoom()" />
+      <p-button icon="pi pi-refresh" [rounded]="true" severity="secondary" [outlined]="true" (click)="resetZoom()" />
+      <p-button icon="pi pi-search-plus" [rounded]="true" severity="secondary" [outlined]="true" (click)="aumentarZoom()" />
+      <p-button icon="pi pi-download" [rounded]="true" severity="secondary" [outlined]="true" (click)="descargarImagenActual()" />
+    </div>
+  </div>
   <div class="image-viewer">
     <p-button
       icon="pi pi-chevron-left"
@@ -212,7 +309,9 @@
       (click)="fotoAnterior()"
     />
     @if (imagenActiva) {
-      <img [src]="imagenActiva" alt="Imagen de camara" />
+      <div class="image-viewport">
+        <img [src]="imagenActiva" alt="Imagen de camara" [style.transform]="'scale(' + zoomImagen + ')'" />
+      </div>
     }
     <p-button
       icon="pi pi-chevron-right"

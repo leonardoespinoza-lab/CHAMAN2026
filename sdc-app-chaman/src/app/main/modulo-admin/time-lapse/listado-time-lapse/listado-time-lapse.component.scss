@@ -181,20 +181,22 @@
 
 .camera-preview {
   align-items: center;
-  background: #f5f9fc;
+  background:
+    linear-gradient(135deg, #f7fbfd, #eef8f6),
+    #f5f9fc;
   border: 1px solid #bfd0e1;
   border-radius: 8px;
   display: grid;
   gap: 0.45rem;
-  grid-template-rows: 152px auto;
+  grid-template-rows: minmax(180px, 220px) auto;
   overflow: hidden;
   text-align: center;
 }
 
 .camera-preview img {
   display: block;
-  height: 152px;
-  object-fit: cover;
+  height: 100%;
+  object-fit: contain;
   width: 100%;
 }
 
@@ -246,7 +248,8 @@
 }
 
 .assign-dialog,
-.photos-dialog {
+.photos-dialog,
+.schedule-dialog {
   display: grid;
   gap: 0.85rem;
 }
@@ -266,39 +269,143 @@
   overflow-wrap: anywhere;
 }
 
-.photos-grid {
+.schedule-grid {
   display: grid;
   gap: 0.75rem;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  max-height: 64vh;
-  overflow: auto;
-  padding-right: 0.25rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.photo-thumb {
+.schedule-grid label,
+.toggle-row {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.schedule-grid label span,
+.toggle-row span {
+  color: #17233a;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.schedule-grid small {
+  color: #63718b;
+  font-size: 0.88rem;
+}
+
+.toggle-row {
+  align-items: center;
   background: #f5f9fc;
   border: 1px solid #bfd0e1;
+  border-radius: 8px;
+  grid-template-columns: auto 1fr;
+  padding: 0.75rem 0.85rem;
+}
+
+.toggle-row input {
+  height: 20px;
+  width: 20px;
+}
+
+.photos-browser {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: 230px 1fr;
+  min-height: 520px;
+}
+
+.photo-date-list {
+  align-content: start;
+  background: #f5f9fc;
+  border: 1px solid #bfd0e1;
+  border-radius: 8px;
+  display: grid;
+  gap: 0.45rem;
+  max-height: 62vh;
+  overflow: auto;
+  padding: 0.75rem;
+}
+
+.photo-date-list > span {
+  color: #63718b;
+  font-size: 0.82rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.photo-date-button {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid #c9d6e5;
   border-radius: 8px;
   color: #17233a;
   cursor: pointer;
   display: grid;
-  gap: 0.45rem;
-  overflow: hidden;
-  padding: 0;
+  gap: 0.12rem;
+  padding: 0.65rem 0.7rem;
   text-align: left;
 }
 
-.photo-thumb img {
+.photo-date-button.active {
+  border-color: var(--p-primary-color);
+  box-shadow: inset 3px 0 0 var(--p-primary-color);
+}
+
+.photo-date-button strong {
+  font-size: 0.95rem;
+  font-weight: 750;
+}
+
+.photo-date-button small {
+  color: #63718b;
+  font-size: 0.84rem;
+}
+
+.selected-photo-panel {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-rows: minmax(420px, 1fr) auto;
+}
+
+.selected-photo {
+  align-items: center;
+  background:
+    linear-gradient(135deg, #f8fbfd, #f0faf8),
+    #f5f9fc;
+  border: 1px solid #bfd0e1;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  min-height: 420px;
+  overflow: hidden;
+  padding: 0.65rem;
+}
+
+.selected-photo img {
   display: block;
-  height: 138px;
-  object-fit: cover;
+  height: 100%;
+  max-height: 58vh;
+  object-fit: contain;
   width: 100%;
 }
 
-.photo-thumb span {
-  font-size: 0.95rem;
-  font-weight: 750;
-  padding: 0 0.65rem 0.65rem;
+.selected-photo-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.selected-photo-actions span {
+  color: #51617d;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.selected-photo-actions div,
+.viewer-toolbar div {
+  display: flex;
+  gap: 0.45rem;
 }
 
 .image-viewer {
@@ -308,11 +415,40 @@
   grid-template-columns: auto 1fr auto;
 }
 
-.image-viewer img {
+.viewer-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.viewer-toolbar span {
+  color: #17233a;
+  font-size: 1rem;
+  font-weight: 850;
+}
+
+.image-viewport {
+  align-items: center;
+  background:
+    linear-gradient(135deg, #f8fbfd, #f0faf8),
+    #f5f9fc;
+  border: 1px solid #bfd0e1;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  min-height: 70vh;
+  overflow: auto;
+  padding: 0.75rem;
+}
+
+.image-viewport img {
   border-radius: 8px;
   display: block;
-  max-height: 76vh;
+  max-height: 72vh;
   object-fit: contain;
+  transition: transform 160ms ease;
   width: 100%;
 }
 
@@ -342,5 +478,15 @@
 
   .image-viewer {
     grid-template-columns: 1fr;
+  }
+
+  .photos-browser,
+  .schedule-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .selected-photo-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
