@@ -52,13 +52,45 @@
 }
 
 .location-search,
+.basic-zone-card,
 .soil-lookup,
 .soil-summary,
 .soil-detail-grid,
+.soil-profile-header,
+.probe-config-card,
 .device-help {
   border: 1px solid var(--p-content-border-color);
   border-radius: 8px;
   background: color-mix(in srgb, var(--p-content-background) 88%, #ffffff 12%);
+}
+
+.basic-zone-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.basic-zone-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.basic-zone-grid {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.85fr) minmax(260px, 1fr) minmax(280px, 1.2fr) auto;
+  gap: 1rem;
+  align-items: center;
+}
+
+.basic-zone-current {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  background: color-mix(in srgb, var(--p-primary-color) 9%, transparent);
 }
 
 .location-search {
@@ -95,6 +127,19 @@
   margin-bottom: 1.25rem;
 }
 
+.soil-profile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.soil-profile-header h3 {
+  margin: 0 0 0.25rem;
+}
+
 .soil-summary-empty {
   border-color: var(--p-yellow-300);
 }
@@ -105,6 +150,23 @@
   border-radius: 8px;
   margin-bottom: 1rem;
   background: var(--p-content-background);
+}
+
+.soil-layer-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.soil-layer-title span {
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 35%, transparent);
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  color: var(--p-primary-color);
+  font-size: 0.86rem;
+  font-weight: 700;
 }
 
 .soil-layer-grid {
@@ -126,6 +188,34 @@
   padding: 1rem;
 }
 
+.probe-config-card {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 1rem;
+  padding: 1rem;
+  align-items: center;
+}
+
+.probe-config-card > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.probe-depths {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.probe-depths span {
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+  background: color-mix(in srgb, var(--p-primary-color) 8%, #ffffff 92%);
+}
+
 .select-option,
 .zone-option {
   display: flex;
@@ -135,17 +225,25 @@
 }
 
 .location-search strong,
+.basic-zone-card strong,
 .soil-lookup strong,
 .soil-summary strong,
 .soil-detail-grid strong,
+.soil-profile-header strong,
+.probe-config-card strong,
 .device-help strong {
   color: var(--p-text-color);
 }
 
 .location-search small,
+.basic-zone-card small,
+.basic-zone-current span,
 .soil-lookup small,
+.soil-profile-header small,
 .soil-summary span,
 .soil-detail-grid span,
+.probe-config-card span,
+.probe-config-card small,
 .device-help small,
 .select-option small,
 .zone-option small {
@@ -173,12 +271,20 @@
 
 @media (max-width: 900px) {
   .form-grid,
+  .basic-zone-grid,
   .location-search,
   .soil-lookup,
   .soil-summary,
   .soil-detail-grid,
+  .probe-config-card,
   .soil-layer-grid {
     grid-template-columns: 1fr;
+  }
+
+  .basic-zone-current,
+  .soil-profile-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .editor-content {

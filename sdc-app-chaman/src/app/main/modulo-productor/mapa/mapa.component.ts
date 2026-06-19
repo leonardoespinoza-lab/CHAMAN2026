@@ -866,6 +866,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       Arcilloso: 0.95,
       'Franco arcilloso': 1.04,
       Franco: 1.08,
+      'Franco limoso': 1.07,
+      Limoso: 1.02,
       'Franco arenoso': 0.98,
       Arenoso: 0.84,
     };

@@ -14,6 +14,8 @@ export type TTexturaSuelo =
   | "Arcilloso"
   | "Franco arcilloso"
   | "Franco"
+  | "Franco limoso"
+  | "Limoso"
   | "Franco arenoso"
   | "Arenoso";
 export type TTipoDrenaje =

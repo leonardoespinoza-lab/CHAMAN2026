@@ -757,6 +757,10 @@ export class SiembrasService {
         return 0.8;
       case 'Franco arcilloso':
         return 0.8;
+      case 'Franco limoso':
+        return 0.82;
+      case 'Limoso':
+        return 0.82;
       case 'Franco':
         return 0.85;
       case 'Franco arenoso':

@@ -365,6 +365,12 @@ export class LotesService {
       `${properties.text_sups1 || ''} ${properties.text_bs1 || ''}`,
     );
 
+    if (texto.includes('lim') && texto.includes('franco')) {
+      return 'Franco limoso';
+    }
+    if (texto.includes('lim')) {
+      return 'Limoso';
+    }
     if (texto.includes('aren') && texto.includes('franco')) {
       return 'Franco arenoso';
     }
@@ -416,6 +422,8 @@ export class LotesService {
       Arcilloso: { capacidadDeCampo: 40, puntoMarchitez: 22 },
       'Franco arcilloso': { capacidadDeCampo: 35, puntoMarchitez: 18 },
       Franco: { capacidadDeCampo: 30, puntoMarchitez: 14 },
+      'Franco limoso': { capacidadDeCampo: 32, puntoMarchitez: 15 },
+      Limoso: { capacidadDeCampo: 31, puntoMarchitez: 13 },
       'Franco arenoso': { capacidadDeCampo: 22, puntoMarchitez: 10 },
       Arenoso: { capacidadDeCampo: 14, puntoMarchitez: 6 },
     };

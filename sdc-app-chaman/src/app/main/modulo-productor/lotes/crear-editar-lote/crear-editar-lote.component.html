@@ -48,35 +48,98 @@
                         <label>{{ 'Establecimiento' | translate }}</label>
                       </p-floatlabel>
 
-                      <p-floatlabel variant="in">
-                        <p-select
-                          [loading]="loading"
-                          [options]="departamentos"
-                          formControlName="idDepartamento"
-                          optionValue="_id"
-                          [filter]="true"
-                          filterBy="nombre,provincia.nombre"
-                          [showClear]="true"
-                          [fluid]="true"
-                          [appendTo]="'body'"
-                          [virtualScroll]="true"
-                          [virtualScrollItemSize]="34"
-                        >
-                          <ng-template #selectedItem let-selectedOption>
-                            <div class="select-option">
-                              <span>{{ selectedOption.nombre | titlecase }}</span>
-                              <small>{{ selectedOption.provincia?.nombre | titlecase }}</small>
-                            </div>
-                          </ng-template>
-                          <ng-template let-option #item>
-                            <div class="select-option">
-                              <span>{{ option.nombre | titlecase }}</span>
-                              <small>{{ option.provincia?.nombre | titlecase }}</small>
-                            </div>
-                          </ng-template>
-                        </p-select>
-                        <label>{{ 'Departamento' | translate }}</label>
-                      </p-floatlabel>
+                      <section class="basic-zone-card">
+                        <div class="basic-zone-title">
+                          <strong>Ubicacion administrativa</strong>
+                          <small>Selecciona provincia y departamento. La localidad sirve para centrar el mapa y acelerar la carga.</small>
+                        </div>
+
+                        <div class="basic-zone-grid">
+                          <p-floatlabel variant="in">
+                            <p-select
+                              [(ngModel)]="provinciaDepartamento"
+                              [ngModelOptions]="{ standalone: true }"
+                              [loading]="loading"
+                              [options]="provinciasDepartamento"
+                              [filter]="true"
+                              [showClear]="true"
+                              [fluid]="true"
+                              [appendTo]="'body'"
+                              (onChange)="cambioProvinciaDepartamento()"
+                            />
+                            <label>{{ 'Provincia' | translate }}</label>
+                          </p-floatlabel>
+
+                          <p-floatlabel variant="in">
+                            <p-select
+                              [loading]="loading"
+                              [options]="departamentosFiltrados"
+                              formControlName="idDepartamento"
+                              optionValue="_id"
+                              [filter]="true"
+                              filterBy="nombre,provincia.nombre"
+                              [showClear]="true"
+                              [fluid]="true"
+                              [appendTo]="'body'"
+                              [virtualScroll]="true"
+                              [virtualScrollItemSize]="38"
+                              (onChange)="cambioDepartamentoManual()"
+                            >
+                              <ng-template #selectedItem let-selectedOption>
+                                <div class="select-option">
+                                  <span>{{ selectedOption.nombre | titlecase }}</span>
+                                  <small>{{ selectedOption.provincia?.nombre | titlecase }}</small>
+                                </div>
+                              </ng-template>
+                              <ng-template let-option #item>
+                                <div class="select-option">
+                                  <span>{{ option.nombre | titlecase }}</span>
+                                  <small>{{ option.provincia?.nombre | titlecase }}</small>
+                                </div>
+                              </ng-template>
+                            </p-select>
+                            <label>{{ 'Departamento' | translate }}</label>
+                          </p-floatlabel>
+
+                          <p-autocomplete
+                            [(ngModel)]="busquedaUbicacion"
+                            [ngModelOptions]="{ standalone: true }"
+                            [suggestions]="ubicacionesSugeridas"
+                            optionLabel="label"
+                            [fluid]="true"
+                            [dropdown]="true"
+                            [forceSelection]="false"
+                            placeholder="Localidad o paraje. Ej. Cinco Saltos"
+                            appendTo="body"
+                            (completeMethod)="buscarUbicaciones($event)"
+                            (onSelect)="seleccionarUbicacionEvent($event)"
+                          >
+                            <ng-template #item let-zona>
+                              <div class="zone-option">
+                                <strong>{{ zona.label }}</strong>
+                                <small>{{ zona.tipo | titlecase }} - {{ zona.fuente }}</small>
+                              </div>
+                            </ng-template>
+                          </p-autocomplete>
+
+                          <p-button
+                            label="Centrar mapa"
+                            icon="pi pi-map-marker"
+                            [loading]="ubicacionLoading"
+                            (onClick)="seleccionarUbicacion(busquedaUbicacion)"
+                          />
+                        </div>
+
+                        @if (departamentoSeleccionado) {
+                          <div class="basic-zone-current">
+                            <span>Seleccion actual</span>
+                            <strong>
+                              {{ departamentoSeleccionado.provincia?.nombre | titlecase }} /
+                              {{ departamentoSeleccionado.nombre | titlecase }}
+                            </strong>
+                          </div>
+                        }
+                      </section>
                     </section>
                   </p-tabpanel>
 
@@ -266,10 +329,33 @@
                       </section>
                     }
 
-                    <h3>Perfil y propiedades del suelo</h3>
+                    <section class="soil-profile-header">
+                      <div>
+                        <h3>Perfil y propiedades del suelo</h3>
+                        <small>
+                          Capas editables para riego y huella. Si asignas una lanza en Dispositivos, Chaman prepara las
+                          profundidades detectadas y conserva estos valores agronomicos editables.
+                        </small>
+                      </div>
+                      @if (lanzaSueloSeleccionada) {
+                        <p-button
+                          label="Sincronizar con lanza"
+                          icon="pi pi-sliders-h"
+                          severity="secondary"
+                          [outlined]="true"
+                          (onClick)="prepararCapasDesdeLanza(true)"
+                        />
+                      }
+                    </section>
                     <ng-container formArrayName="suelos">
                       @for (s of suelos.controls; track s; let i = $index) {
                         <div class="nivel" [formGroupName]="i">
+                          <div class="soil-layer-title">
+                            <strong>Capa {{ i + 1 }}</strong>
+                            @if (s.get('numeroDeSensor')?.value) {
+                              <span>Sensor {{ s.get('numeroDeSensor')?.value }}</span>
+                            }
+                          </div>
                           <div class="soil-layer-grid">
                             <p-floatlabel variant="in">
                               <p-inputnumber
@@ -452,6 +538,7 @@
                           appendTo="body"
                           [showClear]="true"
                           (onClear)="form.get('idsDispositivo')!.setValue([])"
+                          (onChange)="onDispositivosChange()"
                           optionValue="_id"
                           optionLabel="nombre"
                         >
@@ -464,6 +551,31 @@
                         </p-multiselect>
                         <label>{{ 'Dispositivos LoraWAN / MQTT' | translate }}</label>
                       </p-floatlabel>
+
+                      @if (lanzaSueloSeleccionada) {
+                        <section class="probe-config-card">
+                          <div>
+                            <span>Lanza de humedad detectada</span>
+                            <strong>{{ lanzaSueloSeleccionada.nombre || lanzaSueloSeleccionada.deveui }}</strong>
+                            <small>{{ resumenCapasLanza }}</small>
+                          </div>
+                          <p-button
+                            label="Preparar capas de suelo"
+                            icon="pi pi-sliders-h"
+                            severity="secondary"
+                            [outlined]="true"
+                            (onClick)="prepararCapasDesdeLanza(true)"
+                          />
+                          <div class="probe-depths">
+                            @for (s of suelos.controls; track s; let i = $index) {
+                              <span>
+                                {{ s.get('numeroDeSensor')?.value || i + 1 }}:
+                                {{ s.get('profundidad')?.value || '-' }} cm
+                              </span>
+                            }
+                          </div>
+                        </section>
+                      }
 
                       <p-floatlabel variant="in">
                         <p-select

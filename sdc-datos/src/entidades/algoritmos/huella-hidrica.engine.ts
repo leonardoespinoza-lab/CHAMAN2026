@@ -108,8 +108,24 @@ interface Stage {
 
 const EQ: Record<string, Dict> = {
   depositoN: { '< 0.5': 0, '> 0.5': 0.33, '< 1.5': 0.67, '> 1.5': 1 },
-  texturaLixiviacion: { Arcilloso: 0, 'Franco arcilloso': 0.33, Franco: 0.33, 'Franco arenoso': 0.67, Arenoso: 1 },
-  texturaEscorrentia: { Arcilloso: 0, 'Franco arcilloso': 0.33, Franco: 0.33, 'Franco arenoso': 0.67, Arenoso: 1 },
+  texturaLixiviacion: {
+    Arcilloso: 0,
+    'Franco arcilloso': 0.33,
+    Franco: 0.33,
+    'Franco limoso': 0.33,
+    Limoso: 0.4,
+    'Franco arenoso': 0.67,
+    Arenoso: 1,
+  },
+  texturaEscorrentia: {
+    Arcilloso: 0,
+    'Franco arcilloso': 0.33,
+    Franco: 0.33,
+    'Franco limoso': 0.33,
+    Limoso: 0.4,
+    'Franco arenoso': 0.67,
+    Arenoso: 1,
+  },
   drenajeNaturalLixiviacion: { 'Mal Drenado': 0, 'Moderadamente Drenado': 0.33, 'Bien Drenado': 0.67, 'Excesivamente Drenado': 1 },
   drenajeNaturalEscorrentia: { 'Mal Drenado': 0, 'Moderadamente Drenado': 0.33, 'Bien Drenado': 0.67, 'Excesivamente Drenado': 1 },
   erosionEscorrentiaPendiente: { 'Baja (0 - 3%)': 0, 'Moderada (3 - 8%)': 0.33, 'Alta (8 - 15%)': 0.67, 'Muy Alta (> 15%)': 1 },
@@ -326,6 +342,8 @@ function getFactorTextura(lote: ILote): number {
   switch (lote.texturaEscorrentia) {
     case 'Arcilloso':
     case 'Franco arcilloso':
+    case 'Franco limoso':
+    case 'Limoso':
     case 'Franco arenoso':
       return 0.8;
     case 'Franco':

@@ -53,6 +53,8 @@ export class CrearEditarLoteComponent implements OnInit {
   public establecimientos$?: Subscription;
   public departamentos: IDepartamento[] = [];
   public departamentos$?: Subscription;
+  public provinciasDepartamento: string[] = [];
+  public provinciaDepartamento?: string;
   public sondasSuelo: IEstacion[] = [];
   public sondasSuelo$?: Subscription;
   public dispositivos: IDispositivo[] = [];
@@ -70,7 +72,15 @@ export class CrearEditarLoteComponent implements OnInit {
   public sueloIntaLoading = false;
   public sueloIntaInfo?: any;
 
-  public texturas: TTexturaSuelo[] = ['Arcilloso', 'Franco arcilloso', 'Franco', 'Franco arenoso', 'Arenoso'];
+  public texturas: TTexturaSuelo[] = [
+    'Arcilloso',
+    'Franco arcilloso',
+    'Franco',
+    'Franco limoso',
+    'Limoso',
+    'Franco arenoso',
+    'Arenoso',
+  ];
 
   public depositoN: TTipoDepositoN[] = ['< 0.5', '> 0.5', '< 1.5', '> 1.5'];
   public drenaje: TTipoDrenaje[] = ['Mal Drenado', 'Moderadamente Drenado', 'Bien Drenado', 'Excesivamente Drenado'];
@@ -92,10 +102,38 @@ export class CrearEditarLoteComponent implements OnInit {
   get sueloReferenciaActual(): ISueloReferencia | undefined {
     return this.sueloIntaInfo?.resumen || this.form?.get('sueloReferencia')?.value || this.lote?.sueloReferencia;
   }
+  get departamentosFiltrados(): IDepartamento[] {
+    const provincia = this.normalizarTexto(this.provinciaDepartamento);
+    if (!provincia) return this.departamentos;
+    return this.departamentos.filter((departamento) => this.normalizarTexto(departamento.provincia?.nombre) === provincia);
+  }
+  get departamentoSeleccionado(): IDepartamento | undefined {
+    const idDepartamento = this.form?.get('idDepartamento')?.value;
+    return this.departamentos.find((departamento) => departamento._id === idDepartamento);
+  }
   get geoJsonEstablecimiento() {
     const idEstablecimiento = this.form?.get('idEstablecimiento')?.value;
     const e = this.establecimientos.find((d) => d._id === idEstablecimiento);
     return e?.ubicacion?.filter((d) => d.geojson).map((d) => d.geojson!) || [];
+  }
+  get dispositivosSeleccionados(): IDispositivo[] {
+    const ids: string[] = this.form?.get('idsDispositivo')?.value || [];
+    return this.dispositivos.filter((dispositivo) => dispositivo._id && ids.includes(dispositivo._id));
+  }
+  get lanzaSueloSeleccionada(): IDispositivo | undefined {
+    return this.dispositivosSeleccionados.find((dispositivo) => this.esLanzaSuelo(dispositivo));
+  }
+  get cantidadCapasLanza(): number {
+    return this.cantidadCapasDispositivo(this.lanzaSueloSeleccionada);
+  }
+  get resumenCapasLanza(): string {
+    const cantidad = this.cantidadCapasLanza;
+    if (!cantidad) return 'Sin capas detectadas';
+    const profundidades = this.profundidadesLanza(this.lanzaSueloSeleccionada);
+    if (profundidades.length) {
+      return `${cantidad} capas: ${profundidades.map((profundidad) => `${profundidad} cm`).join(', ')}`;
+    }
+    return `${cantidad} capas de medicion`;
   }
 
   constructor(
@@ -132,7 +170,7 @@ export class CrearEditarLoteComponent implements OnInit {
     });
   }
   public agregarSuelo() {
-    this.suelos.push(this.agregarSueloFormGroup());
+    this.suelos.push(this.agregarSueloFormGroup(this.sueloNuevoSugerido()));
   }
   public borrarSuelo(i: number) {
     this.suelos.removeAt(i);
@@ -172,6 +210,26 @@ export class CrearEditarLoteComponent implements OnInit {
   }
 
   // FUNCIONES
+  public cambioProvinciaDepartamento(): void {
+    this.sincronizarProvinciaBusqueda(this.provinciaDepartamento);
+    const seleccionado = this.departamentoSeleccionado;
+    if (
+      seleccionado &&
+      this.provinciaDepartamento &&
+      this.normalizarTexto(seleccionado.provincia?.nombre) !== this.normalizarTexto(this.provinciaDepartamento)
+    ) {
+      this.form?.get('idDepartamento')?.setValue(undefined);
+    }
+  }
+
+  public cambioDepartamentoManual(): void {
+    this.sincronizarProvinciaDepartamentoDesdeSeleccion();
+    const seleccionado = this.departamentoSeleccionado;
+    if (seleccionado?.provincia?.nombre) {
+      this.sincronizarProvinciaBusqueda(seleccionado.provincia.nombre);
+    }
+  }
+
   public cambioSondaSuelo() {
     const idSondaSuelo = this.form?.get('idSondaSuelo')?.value;
     const sondaSuelo = this.sondasSuelo.find((d) => d._id === idSondaSuelo);
@@ -193,6 +251,70 @@ export class CrearEditarLoteComponent implements OnInit {
     } else {
       this.distanciaSonda = `${distanciaSonda} m`;
     }
+  }
+
+  public onDispositivosChange(): void {
+    const lanza = this.lanzaSueloSeleccionada;
+    if (!lanza) return;
+    if (this.debeAutocompletarCapasDesdeLanza()) {
+      this.prepararCapasDesdeLanza(false);
+    }
+  }
+
+  public prepararCapasDesdeLanza(forzar = true): void {
+    const lanza = this.lanzaSueloSeleccionada;
+    const profundidades = this.profundidadesLanza(lanza);
+    if (!lanza || !profundidades.length || !this.suelos) {
+      this.helper.notifWarn('No pude detectar capas de medicion en la lanza seleccionada.');
+      return;
+    }
+
+    const textura = this.texturaPrincipalLote();
+    const agua = this.capacidadPorTextura(textura);
+
+    if (forzar) {
+      this.suelos.clear();
+    }
+
+    for (let i = 0; i < profundidades.length; i++) {
+      if (!this.suelos.at(i)) {
+        this.suelos.push(
+          this.agregarSueloFormGroup({
+            numeroDeSensor: i + 1,
+            profundidad: profundidades[i],
+            textura,
+            hayRaices: i < 6,
+            capacidadDeCampo: agua.capacidadDeCampo,
+            puntoMarchitez: agua.puntoMarchitez,
+          }),
+        );
+        continue;
+      }
+
+      const group = this.suelos.at(i) as FormGroup;
+      const patch: Partial<ISuelo> = {};
+      if (forzar || this.esValorVacio(group.get('numeroDeSensor')?.value)) patch.numeroDeSensor = i + 1;
+      if (forzar || this.esValorVacio(group.get('profundidad')?.value)) patch.profundidad = profundidades[i];
+      if (forzar || this.esValorVacio(group.get('textura')?.value)) patch.textura = textura;
+      if (forzar || this.esValorVacio(group.get('capacidadDeCampo')?.value)) patch.capacidadDeCampo = agua.capacidadDeCampo;
+      if (forzar || this.esValorVacio(group.get('puntoMarchitez')?.value)) patch.puntoMarchitez = agua.puntoMarchitez;
+      if (forzar || this.esValorVacio(group.get('hayRaices')?.value)) patch.hayRaices = i < 6;
+      group.patchValue(patch);
+    }
+
+    this.suelos.markAsDirty();
+    this.helper.notifSuccess(`${profundidades.length} capas de suelo preparadas desde la lanza seleccionada.`);
+  }
+
+  public esLanzaSuelo(dispositivo?: IDispositivo): boolean {
+    if (!dispositivo) return false;
+    const texto = this.textoDispositivo(dispositivo);
+    return (
+      texto.includes('lanza') ||
+      texto.includes('sentek') ||
+      texto.includes('humedad de suelo') ||
+      (dispositivo.sensores || []).some((sensor) => this.normalizarTexto(sensor).includes('humedad suelo profundidad'))
+    );
   }
 
   public async buscarUbicaciones(event: AutoCompleteCompleteEvent): Promise<void> {
@@ -333,6 +455,134 @@ export class CrearEditarLoteComponent implements OnInit {
     }
   }
 
+  private sueloNuevoSugerido(): ISuelo {
+    const textura = this.texturaPrincipalLote();
+    const agua = this.capacidadPorTextura(textura);
+    return {
+      textura,
+      hayRaices: true,
+      capacidadDeCampo: agua.capacidadDeCampo,
+      puntoMarchitez: agua.puntoMarchitez,
+    };
+  }
+
+  private debeAutocompletarCapasDesdeLanza(): boolean {
+    if (!this.suelos?.length) return true;
+    if (this.suelos.length > 1) return false;
+    const value = this.suelos.at(0)?.value as ISuelo | undefined;
+    return (
+      !value ||
+      (this.esValorVacio(value.profundidad) &&
+        this.esValorVacio(value.textura) &&
+        this.esValorVacio(value.capacidadDeCampo) &&
+        this.esValorVacio(value.puntoMarchitez))
+    );
+  }
+
+  private cantidadCapasDispositivo(dispositivo?: IDispositivo): number {
+    if (!dispositivo) return 0;
+    const profundidades = this.profundidadesDesdeDispositivo(dispositivo);
+    if (profundidades.length) return profundidades.length;
+
+    const texto = this.textoDispositivo(dispositivo);
+    if (texto.includes('sentek') || texto.includes('lanza') || texto.includes('humedad de suelo')) {
+      return 12;
+    }
+    return 0;
+  }
+
+  private profundidadesLanza(dispositivo?: IDispositivo): number[] {
+    const detectadas = this.profundidadesDesdeDispositivo(dispositivo);
+    if (detectadas.length) return detectadas;
+
+    const cantidad = this.cantidadCapasDispositivo(dispositivo);
+    if (!cantidad) return [];
+    return Array.from({ length: cantidad }, (_, index) => (index + 1) * 10);
+  }
+
+  private profundidadesDesdeDispositivo(dispositivo?: IDispositivo): number[] {
+    if (!dispositivo) return [];
+    const profundidades = new Set<number>();
+
+    const valores = (dispositivo.ultimoReporte?.datos as any)?.valores || {};
+    for (const key of ['Humedad Suelo Profundidad', 'Salinidad Suelo', 'Temperatura Suelo']) {
+      const mediciones = valores[key];
+      if (!Array.isArray(mediciones)) continue;
+      for (const medicion of mediciones) {
+        const profundidad = this.toNumero(medicion?.profundidad);
+        if (profundidad) profundidades.add(profundidad);
+      }
+    }
+
+    for (const sensor of dispositivo.sensores || []) {
+      const profundidad = this.extraerProfundidad(`${sensor}`);
+      if (profundidad) profundidades.add(profundidad);
+    }
+
+    return Array.from(profundidades).sort((a, b) => a - b);
+  }
+
+  private extraerProfundidad(value?: string): number | undefined {
+    const match = `${value || ''}`.match(/(\d{1,3})\s*cm/i);
+    if (!match) return undefined;
+    return this.toNumero(match[1]);
+  }
+
+  private texturaPrincipalLote(): TTexturaSuelo {
+    const existente = (this.suelos?.controls || [])
+      .map((control) => control.get('textura')?.value as TTexturaSuelo | undefined)
+      .find(Boolean);
+    if (existente) return existente;
+
+    const desdeHuella = (this.form?.get('texturaLixiviacion')?.value ||
+      this.form?.get('texturaEscorrentia')?.value) as TTexturaSuelo | undefined;
+    if (desdeHuella) return desdeHuella;
+
+    return this.texturaDesdeTexto(this.sueloReferenciaActual?.texturaSuperficial || this.sueloReferenciaActual?.texturaSubsuelo);
+  }
+
+  private texturaDesdeTexto(value?: string): TTexturaSuelo {
+    const texto = this.normalizarTexto(value);
+    if (texto.includes('lim') && texto.includes('franco')) return 'Franco limoso';
+    if (texto.includes('lim')) return 'Limoso';
+    if (texto.includes('aren') && texto.includes('franco')) return 'Franco arenoso';
+    if (texto.includes('aren')) return 'Arenoso';
+    if (texto.includes('arcill') && texto.includes('franco')) return 'Franco arcilloso';
+    if (texto.includes('arcill')) return 'Arcilloso';
+    return 'Franco';
+  }
+
+  private capacidadPorTextura(textura: TTexturaSuelo): Pick<ISuelo, 'capacidadDeCampo' | 'puntoMarchitez'> {
+    const valores: Record<TTexturaSuelo, Pick<ISuelo, 'capacidadDeCampo' | 'puntoMarchitez'>> = {
+      Arcilloso: { capacidadDeCampo: 40, puntoMarchitez: 22 },
+      'Franco arcilloso': { capacidadDeCampo: 35, puntoMarchitez: 18 },
+      Franco: { capacidadDeCampo: 30, puntoMarchitez: 14 },
+      'Franco limoso': { capacidadDeCampo: 32, puntoMarchitez: 15 },
+      Limoso: { capacidadDeCampo: 31, puntoMarchitez: 13 },
+      'Franco arenoso': { capacidadDeCampo: 22, puntoMarchitez: 10 },
+      Arenoso: { capacidadDeCampo: 14, puntoMarchitez: 6 },
+    };
+    return valores[textura];
+  }
+
+  private textoDispositivo(dispositivo: IDispositivo): string {
+    return this.normalizarTexto([
+      dispositivo.nombre,
+      dispositivo.tipo,
+      dispositivo.deveui,
+      ...(dispositivo.sensores || []),
+    ].join(' '));
+  }
+
+  private esValorVacio(value: unknown): boolean {
+    return value === undefined || value === null || value === '';
+  }
+
+  private toNumero(value: unknown): number | undefined {
+    const numero = Number(value);
+    return Number.isFinite(numero) ? numero : undefined;
+  }
+
   // ACCIONES
 
   private getData() {
@@ -389,7 +639,11 @@ export class CrearEditarLoteComponent implements OnInit {
 
     this.busquedaUbicacion = zona;
     this.sincronizarProvinciaBusqueda(zona.provincia);
+    if (zona.provincia) {
+      this.provinciaDepartamento = zona.provincia;
+    }
     this.form.get('ubicacion.centro')?.setValue(zona.coordenadas);
+    this.form.get('ubicacion.centro')?.markAsDirty();
     this.centroMapa = {
       type: 'Point',
       coordinates: [zona.coordenadas.lng, zona.coordenadas.lat],
@@ -447,11 +701,13 @@ export class CrearEditarLoteComponent implements OnInit {
 
     if (departamento?._id) {
       this.form?.get('idDepartamento')?.setValue(departamento._id);
+      this.form?.get('idDepartamento')?.markAsDirty();
+      this.sincronizarProvinciaDepartamentoDesdeDepartamento(departamento);
     }
     return departamento;
   }
 
-  private normalizarTexto(value?: string): string {
+  private normalizarTexto(value?: unknown): string {
     return `${value || ''}`
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -462,11 +718,32 @@ export class CrearEditarLoteComponent implements OnInit {
   }
 
   private sincronizarProvinciaBusqueda(provincia?: string): void {
-    if (!provincia || this.provinciaBusqueda?.provincia) return;
+    if (!provincia) return;
     const normalizada = this.normalizarTexto(provincia);
-    this.provinciaBusqueda = this.provinciasGeograficas.find(
+    const encontrada = this.provinciasGeograficas.find(
       (item) => this.normalizarTexto(item.provincia) === normalizada,
     );
+    if (encontrada) {
+      this.provinciaBusqueda = encontrada;
+    }
+  }
+
+  private actualizarProvinciasDepartamento(): void {
+    const provincias = new Set<string>();
+    for (const departamento of this.departamentos) {
+      if (departamento.provincia?.nombre) provincias.add(departamento.provincia.nombre);
+    }
+    this.provinciasDepartamento = Array.from(provincias).sort((a, b) => a.localeCompare(b));
+  }
+
+  private sincronizarProvinciaDepartamentoDesdeSeleccion(): void {
+    const departamento = this.departamentoSeleccionado;
+    this.sincronizarProvinciaDepartamentoDesdeDepartamento(departamento);
+  }
+
+  private sincronizarProvinciaDepartamentoDesdeDepartamento(departamento?: IDepartamento): void {
+    if (!departamento?.provincia?.nombre) return;
+    this.provinciaDepartamento = departamento.provincia.nombre;
   }
 
   // LISTADOS
@@ -504,6 +781,8 @@ export class CrearEditarLoteComponent implements OnInit {
       .subscribe<IListado<IDepartamento>>('departamentos', queryParams)
       .subscribe(async (data) => {
         this.departamentos = data.datos;
+        this.actualizarProvinciasDepartamento();
+        this.sincronizarProvinciaDepartamentoDesdeSeleccion();
         console.log(`listado de departamentos`, data);
       });
     await this.listado.getLastValue('departamentos', queryParams);
@@ -539,7 +818,7 @@ export class CrearEditarLoteComponent implements OnInit {
       page: 0,
       limit: 0,
       sort: 'nombre',
-      select: 'nombre tipo deveui',
+      select: 'nombre tipo deveui sensores ultimoReporte metadata fechaUltimaComunicacion',
     };
 
     this.dispositivos$?.unsubscribe();
@@ -597,6 +876,8 @@ export class CrearEditarLoteComponent implements OnInit {
       this.listarDispositivos(),
     ]);
     this.cambioSondaSuelo();
+    this.sincronizarProvinciaDepartamentoDesdeSeleccion();
+    this.onDispositivosChange();
     this.loading = false;
     console.log('form', this.form?.value);
   }
