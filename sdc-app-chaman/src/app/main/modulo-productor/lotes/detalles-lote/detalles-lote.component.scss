@@ -261,6 +261,23 @@
   width: 100%;
 }
 
+.satellite-camera-row {
+  align-items: stretch;
+  display: grid !important;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
+}
+
+.satellite-camera-row.single {
+  grid-template-columns: 1fr;
+}
+
+.satellite-camera-row > * {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .operations-row {
   display: grid !important;
   gap: 1rem;
@@ -291,6 +308,10 @@
   .lot-primary-actions {
     justify-content: flex-start;
     margin-left: 0;
+  }
+
+  .satellite-camera-row {
+    grid-template-columns: 1fr;
   }
 
   .lot-summary-grid {

@@ -86,6 +86,9 @@
   padding: 0.35rem;
   pointer-events: auto;
   min-height: 3.35rem;
+  max-width: min(100%, 520px);
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .establishment-rail {
@@ -191,6 +194,7 @@
   font: inherit;
   font-size: 0.78rem;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .service-chip:hover,
@@ -210,6 +214,11 @@
   display: grid;
   place-items: center;
   flex: 0 0 auto;
+}
+
+.service-chip-icon i {
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .lot-bottom-sheet {

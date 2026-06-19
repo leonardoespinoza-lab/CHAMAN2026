@@ -132,7 +132,12 @@
     @if (mostrarPrediccionMalezas) {
       <app-card-malezas class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-malezas>
     }
-    <app-card-ndvi class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-ndvi>
+    <div class="satellite-camera-row service-panel" [class.single]="!lote?.serialCamara">
+      <app-card-ndvi [siembra]="siembra" [lote]="lote"></app-card-ndvi>
+      @if (lote?.serialCamara) {
+        <app-card-camaras-lote [lote]="lote"></app-card-camaras-lote>
+      }
+    </div>
     <div class="operations-row service-panel">
       <app-card-ultima-fertilizacion [lote]="lote"></app-card-ultima-fertilizacion>
       <app-card-ultima-fumigacion [lote]="lote" [siembra]="siembra"></app-card-ultima-fumigacion>
@@ -141,9 +146,6 @@
     <app-card-huella-hidrica class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-huella-hidrica>
     @if (helper.checkArray(lote?.dispositivos)) {
       <app-card-dispositivos class="service-panel" [lote]="lote"></app-card-dispositivos>
-    }
-    @if (lote?.serialCamara) {
-      <app-card-camaras-lote class="service-panel" [lote]="lote"></app-card-camaras-lote>
     }
     <app-card-clima-lote class="service-panel climate-section" [lote]="lote"></app-card-clima-lote>
   </div>

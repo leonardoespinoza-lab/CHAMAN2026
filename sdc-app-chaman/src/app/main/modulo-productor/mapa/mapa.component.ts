@@ -13,6 +13,7 @@ import {
   IPopulate,
   IQueryParam,
   IReporteNDVI,
+  esCultivoPerenne,
 } from 'modelos/src';
 import { Feature, Map, MapBrowserEvent, Overlay, View } from 'ol';
 import { click } from 'ol/events/condition';
@@ -48,6 +49,7 @@ import { DrawerClimaComponent } from './drawer-clima/drawer-clima.component';
 interface IServicio {
   label: () => string;
   icon: string;
+  primeIcon?: string;
   backgroudColor: string;
   color: string;
 }
@@ -183,6 +185,20 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     {
       label: () => this.translate.instant('NDVI'),
       icon: 'plantas',
+      backgroudColor: 'var(--p-success-color)',
+      color: 'white',
+    },
+    {
+      label: () => this.translate.instant('Horas frio'),
+      icon: 'plantas',
+      primeIcon: 'pi pi-clock',
+      backgroudColor: 'var(--p-success-color)',
+      color: 'white',
+    },
+    {
+      label: () => this.translate.instant('Riesgo de heladas'),
+      icon: 'plantas',
+      primeIcon: 'pi pi-snowflake',
       backgroudColor: 'var(--p-success-color)',
       color: 'white',
     },
@@ -569,7 +585,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       case 'bloodtype':
         return 'Huella';
       case 'plantas':
-        return 'NDVI';
+        return servicio.primeIcon === 'pi pi-clock'
+          ? 'Horas frio'
+          : servicio.primeIcon === 'pi pi-snowflake'
+            ? 'Heladas'
+            : 'NDVI';
       default:
         return servicio.label();
     }
@@ -1323,8 +1343,64 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       case this.translate.instant('NDVI'):
         color = lote.colorNDVI || color;
         break;
+      case this.translate.instant('Horas frio'):
+        color = this.getColorFrioLote(lote);
+        break;
+      case this.translate.instant('Riesgo de heladas'):
+        color = this.getColorHeladaLote(lote);
+        break;
     }
     return color;
+  }
+
+  private getColorFrioLote(lote: ILoteMapa): string {
+    if (!this.esLotePerenne(lote)) {
+      return 'rgba(255, 255, 255, 0.38)';
+    }
+    return this.loteTieneDatosFrio(lote) ? 'rgba(34, 197, 94, 0.64)' : 'rgba(243, 216, 64, 0.62)';
+  }
+
+  private getColorHeladaLote(lote: ILoteMapa): string {
+    if (!this.esLotePerenne(lote)) {
+      return 'rgba(255, 255, 255, 0.38)';
+    }
+    const minima = this.minimaPronosticada(lote);
+    if (minima === null) {
+      return 'rgba(243, 216, 64, 0.56)';
+    }
+    if (minima <= 0) {
+      return 'rgba(244, 74, 74, 0.66)';
+    }
+    if (minima <= 2) {
+      return 'rgba(243, 216, 64, 0.64)';
+    }
+    return 'rgba(34, 197, 94, 0.62)';
+  }
+
+  private esLotePerenne(lote?: ILoteMapa): boolean {
+    return esCultivoPerenne(String(lote?.siembra?.semilla?.cultivo || ''));
+  }
+
+  private loteTieneDatosFrio(lote: ILoteMapa): boolean {
+    const requerimiento = lote.siembra?.semilla?.requerimientoFrio || {};
+    const tieneRequerimiento = [
+      requerimiento.horasFrio,
+      requerimiento.horasFrioEfectivas,
+      requerimiento.porcionesFrio,
+    ].some((valor) => this.numero(valor) !== null);
+    const tieneSensor = (lote.dispositivos || []).some((dispositivo: any) => !!dispositivo?.frioAcumulado);
+    return tieneRequerimiento || tieneSensor;
+  }
+
+  private minimaPronosticada(lote: ILoteMapa): number | null {
+    const pronosticos = ((lote as any)?.establecimiento?.prediccionClimatica?.pronosticos ||
+      this.establecimientoSeleccionado?.prediccionClimatica?.pronosticos ||
+      []) as any[];
+    const minimas = pronosticos
+      .slice(0, 5)
+      .map((pronostico) => this.numero(pronostico?.temperatura?.min ?? pronostico?.tempMin ?? pronostico?.temperaturaMinima))
+      .filter((valor): valor is number => valor !== null);
+    return minimas.length ? Math.min(...minimas) : null;
   }
 
   private addPolygonLote(lote: ILoteMapa) {

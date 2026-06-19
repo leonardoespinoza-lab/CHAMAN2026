@@ -43,9 +43,13 @@
           (click)="changeServicio(item)"
         >
           <span class="service-chip-icon" [style.background]="item.backgroudColor">
-            <svg [style.fill]="item.color" width="18" height="18">
-              <use [attr.xlink:href]="'icons/icons.svg#' + item.icon"></use>
-            </svg>
+            @if (item.primeIcon) {
+              <i [class]="item.primeIcon" [style.color]="item.color"></i>
+            } @else {
+              <svg [style.fill]="item.color" width="18" height="18">
+                <use [attr.xlink:href]="'icons/icons.svg#' + item.icon"></use>
+              </svg>
+            }
           </span>
           <span>{{ getServicioShortLabel(item) }}</span>
         </button>
