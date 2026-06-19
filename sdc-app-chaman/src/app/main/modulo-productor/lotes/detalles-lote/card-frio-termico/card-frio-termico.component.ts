@@ -32,6 +32,11 @@ interface MetricFrio {
   styleUrl: './card-frio-termico.component.scss',
 })
 export class CardFrioTermicoComponent implements OnChanges {
+  private static readonly frioCache = new Map<string, IFrioTermicoCultivo>();
+  private static readonly frioPending = new Map<string, Promise<IFrioTermicoCultivo>>();
+  private static readonly historicoSensorCache = new Map<string, IReporte[]>();
+  private static readonly historicoSensorPending = new Map<string, Promise<IReporte[]>>();
+
   @Input() public lote?: IDetallesLote;
   @Input() public siembra?: ISiembra;
 
@@ -40,7 +45,7 @@ export class CardFrioTermicoComponent implements OnChanges {
   public error?: string;
   public reportesSensorFrio: IReporte[] = [];
   public loadingHistoricoSensor = false;
-  public diasHistoricoSensor = 7;
+  public diasHistoricoSensor = 1;
   public metricas: MetricFrio[] = [];
   public serieReciente: ISerieFrioTermicoDia[] = [];
   public chartFrioOptions?: Highcharts.Options;
@@ -362,10 +367,11 @@ export class CardFrioTermicoComponent implements OnChanges {
     };
   }
 
-  async ngOnChanges(changes: SimpleChanges): Promise<void> {
+  ngOnChanges(changes: SimpleChanges): void {
     if (changes['lote'] || changes['siembra']) {
       this.prepararVista();
-      await Promise.all([this.cargar(), this.cargarHistoricoSensor()]);
+      void this.cargar();
+      setTimeout(() => void this.cargarHistoricoSensor(), 0);
     }
   }
 
@@ -396,23 +402,52 @@ export class CardFrioTermicoComponent implements OnChanges {
       return;
     }
 
+    const cached = CardFrioTermicoComponent.frioCache.get(key);
+    if (!force && cached) {
+      this.data = cached;
+      this.ultimoKeyFrio = key;
+      this.prepararVista();
+      return;
+    }
+
+    const pending = CardFrioTermicoComponent.frioPending.get(key);
+    if (!force && pending) {
+      this.loading = !this.data && !this.frioSensor;
+      try {
+        this.data = await pending;
+        this.ultimoKeyFrio = key;
+      } catch (error: any) {
+        if (!this.frioSensor) {
+          this.error = error?.error?.message || error?.message || 'No se pudo calcular frio termico.';
+        }
+      } finally {
+        this.loading = false;
+        this.prepararVista();
+      }
+      return;
+    }
+
     this.data = undefined;
     this.prepararVista();
     this.loading = true;
     try {
       const requerimientoFrio = this.siembra?.semilla?.requerimientoFrio || {};
-      this.data = await this.climaService.getFrioTermico(centro.lat, centro.lng, {
+      const request = this.climaService.getFrioTermico(centro.lat, centro.lng, {
         cultivo: this.siembra?.semilla?.cultivo,
         horasFrioObjetivo: requerimientoFrio.horasFrio,
         horasFrioEfectivasObjetivo: requerimientoFrio.horasFrioEfectivas,
         porcionesFrioObjetivo: requerimientoFrio.porcionesFrio,
       });
+      CardFrioTermicoComponent.frioPending.set(key, request);
+      this.data = await request;
       this.ultimoKeyFrio = key;
+      CardFrioTermicoComponent.frioCache.set(key, this.data);
     } catch (error: any) {
       if (!this.frioSensor) {
         this.error = error?.error?.message || error?.message || 'No se pudo calcular frio termico.';
       }
     } finally {
+      CardFrioTermicoComponent.frioPending.delete(key);
       this.loading = false;
       this.prepararVista();
     }
@@ -437,21 +472,54 @@ export class CardFrioTermicoComponent implements OnChanges {
       return;
     }
 
+    const cached = CardFrioTermicoComponent.historicoSensorCache.get(key);
+    if (!force && cached) {
+      this.reportesSensorFrio = cached;
+      this.ultimoKeyHistorico = key;
+      return;
+    }
+
+    const pending = CardFrioTermicoComponent.historicoSensorPending.get(key);
+    if (!force && pending) {
+      this.loadingHistoricoSensor = !this.reportesSensorFrio.length;
+      try {
+        this.reportesSensorFrio = await pending;
+        this.ultimoKeyHistorico = key;
+      } catch (error) {
+        console.error('Error al cargar historico ambiental para frio', error);
+        this.reportesSensorFrio = dispositivo.ultimoReporte ? [dispositivo.ultimoReporte] : [];
+      } finally {
+        this.loadingHistoricoSensor = false;
+      }
+      return;
+    }
+
     this.loadingHistoricoSensor = true;
     try {
-      const response = await this.reporteService.historico(String(id), this.diasHistoricoSensor, 2500);
-      this.reportesSensorFrio = response.datos?.length
-        ? response.datos
-        : dispositivo.ultimoReporte
-          ? [dispositivo.ultimoReporte]
-          : [];
+      const request = this.reporteService
+        .historico(String(id), this.diasHistoricoSensor, this.limiteHistoricoSensor())
+        .then((response) => response.datos?.length
+          ? response.datos
+          : dispositivo.ultimoReporte
+            ? [dispositivo.ultimoReporte]
+            : []);
+      CardFrioTermicoComponent.historicoSensorPending.set(key, request);
+      this.reportesSensorFrio = await request;
       this.ultimoKeyHistorico = key;
+      CardFrioTermicoComponent.historicoSensorCache.set(key, this.reportesSensorFrio);
     } catch (error) {
       console.error('Error al cargar historico ambiental para frio', error);
       this.reportesSensorFrio = dispositivo.ultimoReporte ? [dispositivo.ultimoReporte] : [];
     } finally {
+      CardFrioTermicoComponent.historicoSensorPending.delete(key);
       this.loadingHistoricoSensor = false;
     }
+  }
+
+  private limiteHistoricoSensor(): number {
+    if (this.diasHistoricoSensor <= 1) return 400;
+    if (this.diasHistoricoSensor <= 7) return 1400;
+    return 2500;
   }
 
   private frioRequestKey(): string {

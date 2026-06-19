@@ -80,7 +80,7 @@ export class ChartComponent implements OnInit, OnChanges {
   private setDefaults() {
     this.update = true;
     if (this.chart && this.options) {
-      this.options = this.applyLineChartTheme(this.options);
+      this.options = this.applyChamanChartTheme(this.options);
 
       if (!this.options.accessibility) {
         this.options.accessibility = {
@@ -97,13 +97,25 @@ export class ChartComponent implements OnInit, OnChanges {
     }
   }
 
-  private applyLineChartTheme(options: Highcharts.Options): Highcharts.Options {
-    if (!this.isLineChart(options)) {
+  private applyChamanChartTheme(options: Highcharts.Options): Highcharts.Options {
+    if (!this.isChamanChart(options)) {
       return options;
     }
 
     const chart = options.chart || {};
     const plotOptions = options.plotOptions || {};
+    const defaultBackground = {
+      linearGradient: { x1: 0, y1: 0, x2: 1, y2: 1 },
+      stops: [
+        [0, '#203746'],
+        [0.48, '#243244'],
+        [1, '#1d2b3a'],
+      ],
+    } as Highcharts.GradientColorObject;
+    const backgroundColor =
+      chart.backgroundColor && chart.backgroundColor !== 'transparent'
+        ? chart.backgroundColor
+        : defaultBackground;
     const lineBase = {
       animation: { duration: 650 },
       dataLabels: { enabled: false },
@@ -136,6 +148,23 @@ export class ChartComponent implements OnInit, OnChanges {
         },
       },
     };
+    const columnBase = {
+      animation: { duration: 650 },
+      borderRadius: 5,
+      borderWidth: 0,
+      color: 'rgba(143, 226, 201, 0.72)',
+      groupPadding: 0.08,
+      maxPointWidth: 26,
+      pointPadding: 0.08,
+      states: {
+        hover: {
+          brightness: 0.12,
+        },
+        inactive: {
+          opacity: 0.55,
+        },
+      },
+    };
 
     return {
       ...options,
@@ -150,15 +179,7 @@ export class ChartComponent implements OnInit, OnChanges {
       ],
       chart: {
         ...chart,
-        backgroundColor:
-          chart.backgroundColor ?? {
-            linearGradient: { x1: 0, y1: 0, x2: 1, y2: 1 },
-            stops: [
-              [0, '#203746'],
-              [0.48, '#243244'],
-              [1, '#1d2b3a'],
-            ],
-          },
+        backgroundColor,
         borderRadius: chart.borderRadius ?? 10,
         marginTop: chart.marginTop ?? 24,
         spacingBottom: chart.spacingBottom ?? 18,
@@ -209,8 +230,8 @@ export class ChartComponent implements OnInit, OnChanges {
       },
       tooltip: {
         ...options.tooltip,
-        backgroundColor: options.tooltip?.backgroundColor ?? 'rgba(18, 31, 43, 0.94)',
-        borderColor: options.tooltip?.borderColor ?? 'rgba(34, 211, 200, 0.35)',
+        backgroundColor: this.themeColor(options.tooltip?.backgroundColor, 'rgba(18, 31, 43, 0.94)'),
+        borderColor: this.themeColor(options.tooltip?.borderColor, 'rgba(34, 211, 200, 0.35)'),
         borderRadius: 10,
         borderWidth: 1,
         shadow: {
@@ -222,7 +243,7 @@ export class ChartComponent implements OnInit, OnChanges {
         },
         style: {
           ...(options.tooltip?.style || {}),
-          color: options.tooltip?.style?.color ?? '#eef8ff',
+          color: this.themeColor(options.tooltip?.style?.color, '#eef8ff'),
           fontSize: '13px',
         },
       },
@@ -244,25 +265,35 @@ export class ChartComponent implements OnInit, OnChanges {
           ...lineBase,
           ...(plotOptions.spline || {}),
         },
+        bar: {
+          ...columnBase,
+          ...(plotOptions.bar || {}),
+        },
+        column: {
+          ...columnBase,
+          ...(plotOptions.column || {}),
+        },
         series: {
-          ...(plotOptions.series || {}),
+          animation: { duration: 650 },
           connectNulls: false,
-          turboThreshold: 0,
+          stickyTracking: true,
+          turboThreshold: 10000,
+          ...(plotOptions.series || {}),
         },
       },
       credits: { enabled: false },
     };
   }
 
-  private isLineChart(options: Highcharts.Options): boolean {
-    const lineTypes = new Set(['line', 'spline', 'area', 'areaspline']);
+  private isChamanChart(options: Highcharts.Options): boolean {
+    const themedTypes = new Set(['line', 'spline', 'area', 'areaspline', 'column', 'bar']);
     const chartType = String(options.chart?.type || '');
 
-    if (lineTypes.has(chartType)) {
+    if (themedTypes.has(chartType)) {
       return true;
     }
 
-    return (options.series || []).some((series: any) => lineTypes.has(String(series?.type || chartType)));
+    return (options.series || []).some((series: any) => themedTypes.has(String(series?.type || chartType)));
   }
 
   private themeAxis(axis: any, kind: 'x' | 'y'): any {
@@ -274,6 +305,9 @@ export class ChartComponent implements OnInit, OnChanges {
   }
 
   private themeAxisItem(axis: any, kind: 'x' | 'y'): any {
+    const labelColor = this.themeColor(axis.labels?.style?.color, '#9fb2c3');
+    const titleColor = this.themeColor(axis.title?.style?.color, '#d7e4ee');
+
     return {
       ...axis,
       crosshair: axis.crosshair ?? {
@@ -287,7 +321,7 @@ export class ChartComponent implements OnInit, OnChanges {
         ...(axis.labels || {}),
         style: {
           ...(axis.labels?.style || {}),
-          color: axis.labels?.style?.color ?? '#9fb2c3',
+          color: labelColor,
           fontSize: '12px',
           fontWeight: '600',
         },
@@ -298,12 +332,24 @@ export class ChartComponent implements OnInit, OnChanges {
         ...(axis.title || {}),
         style: {
           ...(axis.title?.style || {}),
-          color: axis.title?.style?.color ?? '#d7e4ee',
+          color: titleColor,
           fontSize: '13px',
           fontWeight: '700',
         },
       },
     };
+  }
+
+  private themeColor(value: any, fallback: string): any {
+    if (!value || value === 'transparent') {
+      return fallback;
+    }
+
+    if (typeof value === 'string' && value.trim().startsWith('var(')) {
+      return fallback;
+    }
+
+    return value;
   }
 
   ngOnChanges() {

@@ -67,12 +67,21 @@ export interface IDetallesLote extends ILoteTabla {
   styleUrl: './detalles-lote.component.scss',
 })
 export class DetallesLoteComponent implements OnInit, OnDestroy {
+  private static readonly loteCache = new Map<string, IDetallesLote>();
+  private static readonly lotePending = new Map<string, Promise<IDetallesLote>>();
+  private static readonly siembraCache = new Map<string, IDetalleSiembra>();
+  private static readonly cronoCache = new Map<string, ICrono | null>();
+  private static readonly cronoPending = new Map<string, Promise<ICrono | null>>();
+
   public lote?: IDetallesLote;
   public siembra?: IDetalleSiembra;
   public siembraActual? = true;
   public esUltimaEtapa?: boolean;
   public verDrawerSiembras: boolean = false;
+  public cargandoPrimario: boolean = false;
+  public refrescandoDetalle: boolean = false;
   private readonly numeroAr = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
+  private destroyed = false;
 
   constructor(
     private paramsService: ParamsService,
@@ -103,14 +112,10 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     if (!siembra) return;
     let siembraCompleta = siembra as IDetalleSiembra;
     if (siembra._id && (!siembra.semilla || !siembra.crono)) {
-      siembraCompleta = (await this.siembraService.listarPorId(siembra._id)) as IDetalleSiembra;
+      siembraCompleta = await this.obtenerSiembraCompleta(siembra);
     }
     await this.completarCronoSiembra(siembraCompleta);
-    this.siembra = JSON.parse(JSON.stringify(siembraCompleta));
-    this.siembraActual = this.lote?.idSiembra === siembra._id && !siembraCompleta.fechaCosecha;
-    if (this.siembraActual && this.lote) {
-      this.lote.siembra = siembraCompleta;
-    }
+    this.publicarSiembra(siembraCompleta, this.lote?.idSiembra === siembraCompleta._id);
   }
 
   public async sembrar(): Promise<void> {
@@ -239,22 +244,25 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
-    this.lote = this.paramsService.get('detallesLote') || undefined;
     const idLote = this.activatedRoute.snapshot.paramMap.get('id');
-    if (idLote) {
-      try {
-        const loteActualizado = (await this.loteService.listarPorId(idLote)) as IDetallesLote;
-        this.lote = {
-          ...(this.lote || {}),
-          ...loteActualizado,
-        };
-      } catch (error) {
-        this.helper.notifError(error);
-      }
+    const loteParam = this.paramsService.get('detallesLote') as IDetallesLote | undefined;
+    const loteCacheado = idLote ? DetallesLoteComponent.loteCache.get(idLote) : undefined;
+    const loteInicial = loteCacheado || loteParam || undefined;
+
+    if (loteInicial) {
+      this.aplicarLote(loteInicial);
+      this.publicarSiembra(this.getSiembraOperativa());
+      void this.hidratarSiembraOperativa();
+    } else {
+      this.cargandoPrimario = true;
     }
 
-    await this.hidratarSiembraOperativa();
-    this.verSiembraActual();
+    if (idLote) {
+      void this.cargarLoteEnSegundoPlano(idLote);
+      return;
+    }
+
+    void this.hidratarSiembraOperativa();
   }
 
   private getSiembraOperativa(): IDetalleSiembra | undefined {
@@ -284,12 +292,11 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.publicarSiembra(siembra);
+
     if (siembra._id && (!siembra.semilla || !siembra.crono)) {
       try {
-        siembra = {
-          ...siembra,
-          ...((await this.siembraService.listarPorId(siembra._id)) as IDetalleSiembra),
-        };
+        siembra = await this.obtenerSiembraCompleta(siembra);
       } catch (error) {
         this.helper.notifError(error);
       }
@@ -300,6 +307,7 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
       this.lote.siembra = siembra;
       this.lote.idSiembra = this.lote.idSiembra || siembra._id;
     }
+    this.publicarSiembra(siembra);
   }
 
   private async completarCronoSiembra(siembra?: ISiembra): Promise<void> {
@@ -323,19 +331,141 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
       (filter, index, array) => array.findIndex((item) => JSON.stringify(item) === JSON.stringify(filter)) === index
     );
 
-    for (const filter of filtrosUnicos) {
-      const queryParams: IQueryParam = {
-        filter: JSON.stringify(filter),
-        limit: 1,
-      };
-      const result = await this.fenologiaService.listar(queryParams);
-      const crono = result.datos?.[0] as unknown as ICrono | undefined;
-      if (crono) {
-        siembra.crono = crono;
-        return;
+    const resultados = await Promise.all(
+      filtrosUnicos.map(async (filter, index) => ({
+        index,
+        crono: await this.obtenerCrono(filter),
+      }))
+    );
+
+    const resultado = resultados
+      .sort((a, b) => a.index - b.index)
+      .find((item) => !!item.crono);
+
+    if (resultado?.crono) {
+      siembra.crono = resultado.crono;
+    }
+  }
+
+  private aplicarLote(lote: IDetallesLote): void {
+    this.lote = {
+      ...(this.lote || {}),
+      ...lote,
+    };
+
+    if (this.lote?._id) {
+      DetallesLoteComponent.loteCache.set(this.lote._id, JSON.parse(JSON.stringify(this.lote)));
+    }
+  }
+
+  private publicarSiembra(siembra?: IDetalleSiembra, actualizarLote = true): void {
+    if (!siembra) {
+      this.verSiembraActual();
+      return;
+    }
+
+    if (this.lote && actualizarLote) {
+      this.lote.siembra = siembra;
+      this.lote.idSiembra = this.lote.idSiembra || siembra._id;
+    }
+    this.siembra = JSON.parse(JSON.stringify(siembra));
+    this.siembraActual = this.lote?.idSiembra === siembra._id && !siembra.fechaCosecha;
+
+    if (siembra._id) {
+      DetallesLoteComponent.siembraCache.set(siembra._id, JSON.parse(JSON.stringify(siembra)));
+    }
+  }
+
+  private async cargarLoteEnSegundoPlano(idLote: string): Promise<void> {
+    this.refrescandoDetalle = true;
+    try {
+      const loteActualizado = await this.obtenerLote(idLote);
+      if (this.destroyed) return;
+      this.aplicarLote(loteActualizado);
+      this.cargandoPrimario = false;
+      this.publicarSiembra(this.getSiembraOperativa());
+      await this.hidratarSiembraOperativa();
+    } catch (error) {
+      if (!this.destroyed) {
+        this.helper.notifError(error);
+        this.cargandoPrimario = false;
+      }
+    } finally {
+      if (!this.destroyed) {
+        this.refrescandoDetalle = false;
       }
     }
   }
 
-  ngOnDestroy(): void {}
+  private async obtenerLote(idLote: string): Promise<IDetallesLote> {
+    const pendiente = DetallesLoteComponent.lotePending.get(idLote);
+    if (pendiente) {
+      return pendiente;
+    }
+
+    const request = this.loteService
+      .listarPorId(idLote)
+      .then((lote) => {
+        const detalle = lote as IDetallesLote;
+        DetallesLoteComponent.loteCache.set(idLote, JSON.parse(JSON.stringify(detalle)));
+        return detalle;
+      })
+      .finally(() => DetallesLoteComponent.lotePending.delete(idLote));
+
+    DetallesLoteComponent.lotePending.set(idLote, request);
+    return request;
+  }
+
+  private async obtenerSiembraCompleta(siembra: IDetalleSiembra): Promise<IDetalleSiembra> {
+    if (!siembra._id) {
+      return siembra;
+    }
+
+    const cacheada = DetallesLoteComponent.siembraCache.get(siembra._id);
+    if (cacheada && cacheada.semilla) {
+      return {
+        ...siembra,
+        ...JSON.parse(JSON.stringify(cacheada)),
+      };
+    }
+
+    const completa = {
+      ...siembra,
+      ...((await this.siembraService.listarPorId(siembra._id)) as IDetalleSiembra),
+    };
+    DetallesLoteComponent.siembraCache.set(siembra._id, JSON.parse(JSON.stringify(completa)));
+    return completa;
+  }
+
+  private async obtenerCrono(filter: Record<string, unknown>): Promise<ICrono | null> {
+    const key = JSON.stringify(filter);
+    if (DetallesLoteComponent.cronoCache.has(key)) {
+      return DetallesLoteComponent.cronoCache.get(key) || null;
+    }
+
+    const pendiente = DetallesLoteComponent.cronoPending.get(key);
+    if (pendiente) {
+      return pendiente;
+    }
+
+    const request = this.fenologiaService
+      .listar({
+        filter: key,
+        limit: 1,
+      } as IQueryParam)
+      .then((result) => (result.datos?.[0] as unknown as ICrono | undefined) || null)
+      .catch(() => null)
+      .then((crono) => {
+        DetallesLoteComponent.cronoCache.set(key, crono);
+        return crono;
+      })
+      .finally(() => DetallesLoteComponent.cronoPending.delete(key));
+
+    DetallesLoteComponent.cronoPending.set(key, request);
+    return request;
+  }
+
+  ngOnDestroy(): void {
+    this.destroyed = true;
+  }
 }

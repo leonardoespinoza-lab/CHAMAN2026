@@ -43,6 +43,11 @@ export type ReporteDocument = Reporte & Document;
 export const ReporteSchema = SchemaFactory.createForClass(Reporte);
 
 ReporteSchema.set('toJSON', { virtuals: true, getters: true });
+ReporteSchema.index({ deveui: 1, fecha: 1 });
+ReporteSchema.index({ deveui: 1, fechaCreacion: 1 });
+ReporteSchema.index({ idDispositivo: 1, fecha: 1 });
+ReporteSchema.index({ idDispositivo: 1, fechaCreacion: 1 });
+ReporteSchema.index({ estado: 1, deveui: 1, fecha: 1 });
 
 ReporteSchema.virtual('dispositivo', {
   foreignField: '_id',
