@@ -1,11 +1,12 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { IPermiso, IUsuario } from 'modelos/src';
 import { ConfirmationService, MenuItem } from 'primeng/api';
 import { PrimeNG } from 'primeng/config';
 import { DialogService, DynamicDialogRef } from 'primeng/dynamicdialog';
 import { Subscription } from 'rxjs';
+import { filter } from 'rxjs/operators';
 import { PRIMENG_BR } from '../../../../public/i18n/primeng-br';
 import { PRIMENG_EN } from '../../../../public/i18n/primeng-en';
 import { PRIMENG_ES } from '../../../../public/i18n/primeng-es';
@@ -18,10 +19,11 @@ import { SharedModule } from '../../auxiliares/shared.module';
 import { ENV, VERSION } from '../../environments/environment';
 import { AplicacionComponent } from '../aplicacion/aplicacion.component';
 import { CambiarPasswordComponent } from '../usuarios/cambiar-password/cambiar-password.component';
+import { AsistenteChamanComponent } from '../../auxiliares/componentes/asistente-chaman/asistente-chaman.component';
 
 @Component({
   selector: 'app-nav',
-  imports: [SharedModule],
+  imports: [SharedModule, AsistenteChamanComponent],
   providers: [DialogService],
   templateUrl: './nav.component.html',
   styleUrl: './nav.component.scss',
@@ -34,6 +36,8 @@ export class NavComponent implements OnInit, OnDestroy {
   public user$?: Subscription;
   public permisos: IPermiso[] = [];
   public permisoSeleccionado?: IPermiso;
+  public rutaActual = '';
+  public routerEvents$?: Subscription;
 
   public items: MenuItem[] = [
     {
@@ -253,11 +257,67 @@ export class NavComponent implements OnInit, OnDestroy {
   }
 
   public mostrarBotonMenu(): boolean {
-    return this.mostrarMenuLateral();
+    return true;
   }
 
   public mostrarMenuLateral(): boolean {
     return !this.loginService.esAdmin;
+  }
+
+  public accionLogo(event?: Event): void {
+    event?.stopPropagation();
+    if (this.mostrarMenuLateral()) {
+      this.visible = !this.visible;
+      return;
+    }
+    this.irInicio();
+  }
+
+  public volver(): void {
+    if (!this.mostrarVolver()) {
+      this.irInicio();
+      return;
+    }
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    this.irInicio();
+  }
+
+  public irInicio(): void {
+    if (this.loginService.esAdmin) {
+      this.router.navigateByUrl('/dashboard-admin');
+    } else if (this.loginService.esQuimica) {
+      this.router.navigateByUrl('/dashboard-quimica');
+    } else if (this.loginService.esDistribuidor) {
+      this.router.navigateByUrl('/dashboard-distribuidor');
+    } else {
+      this.router.navigateByUrl('/mapa');
+    }
+  }
+
+  public mostrarVolver(): boolean {
+    const ruta = this.getRutaLimpia();
+    return !['/', '/mapa', '/dashboard-admin', '/dashboard-quimica', '/dashboard-distribuidor'].includes(ruta);
+  }
+
+  public get contextoAsistente(): string {
+    const ruta = this.getRutaLimpia();
+    if (ruta.startsWith('/lotes/detalles')) return 'detalle-lote';
+    if (ruta.startsWith('/lotes/editar') || ruta.startsWith('/lotes/crear')) return 'edicion-lote';
+    if (ruta.startsWith('/establecimientos')) return 'establecimientos';
+    if (ruta.startsWith('/dispositivos')) return 'dispositivos';
+    if (ruta.startsWith('/camaras')) return 'camaras';
+    if (ruta.startsWith('/dashboard-admin')) return 'admin';
+    if (ruta.startsWith('/dashboard-quimica')) return 'quimica';
+    if (ruta.startsWith('/dashboard-distribuidor')) return 'distribuidor';
+    if (ruta.startsWith('/mapa')) return 'mapa';
+    return 'general';
+  }
+
+  private getRutaLimpia(): string {
+    return (this.rutaActual || this.router.url || '').split('?')[0].split('#')[0] || '/';
   }
 
   public changeLang(lang: string) {
@@ -284,6 +344,10 @@ export class NavComponent implements OnInit, OnDestroy {
 
   /// HOOKS
   public async ngOnInit(): Promise<void> {
+    this.rutaActual = this.router.url;
+    this.routerEvents$ = this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe((event) => {
+      this.rutaActual = (event as NavigationEnd).urlAfterRedirects;
+    });
     this.checkPermisos();
     await this.subscribeUsuarioPropio();
     this.redirect();
@@ -291,5 +355,6 @@ export class NavComponent implements OnInit, OnDestroy {
 
   public async ngOnDestroy(): Promise<void> {
     this.user$?.unsubscribe();
+    this.routerEvents$?.unsubscribe();
   }
 }

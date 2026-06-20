@@ -1,0 +1,70 @@
+<div class="assistant-root" [class.assistant-root--open]="abierto">
+  @if (avisoVisible && !abierto) {
+    <div class="assistant-hint" role="button" tabindex="0" (click)="toggle()" (keydown.enter)="toggle()">
+      <button type="button" class="assistant-hint__close" (click)="cerrarAviso($event)" aria-label="Cerrar aviso">
+        <i class="pi pi-times"></i>
+      </button>
+      <strong>Asistente Chaman</strong>
+      <span>Estoy atento a clima, riego, frio, sensores y alertas agronomicas.</span>
+    </div>
+  }
+
+  @if (abierto) {
+    <section class="assistant-panel" aria-label="Asistente agronomico Chaman">
+      <header class="assistant-panel__header">
+        <div class="assistant-panel__brand">
+          <span class="assistant-panel__avatar">
+            @if (helper.darkTheme) {
+              <img src="images/logo-dark.png" alt="" />
+            } @else {
+              <img src="images/logo-light.png" alt="" />
+            }
+          </span>
+          <div>
+            <h3>Chamancito</h3>
+            <p>Asistente agronomico</p>
+          </div>
+        </div>
+        <button type="button" class="assistant-panel__close" (click)="toggle()" aria-label="Cerrar asistente">
+          <i class="pi pi-times"></i>
+        </button>
+      </header>
+
+      <div class="assistant-panel__messages">
+        @for (mensaje of mensajes; track $index) {
+          <div class="assistant-message" [class.assistant-message--user]="mensaje.autor === 'usuario'">
+            {{ mensaje.texto }}
+          </div>
+        }
+      </div>
+
+      <div class="assistant-panel__quick">
+        <button type="button" (click)="preguntarRapido('Que debo mirar para riego en este lote?')">Riego</button>
+        <button type="button" (click)="preguntarRapido('Hay algo importante de enfermedades?')">Sanidad</button>
+        <button type="button" (click)="preguntarRapido('Como interpreto frio y heladas?')">Frio</button>
+        <button type="button" (click)="irAlertas()">Alertas</button>
+      </div>
+
+      <form class="assistant-panel__form" (ngSubmit)="enviar()">
+        <textarea
+          name="pregunta"
+          [(ngModel)]="pregunta"
+          rows="2"
+          placeholder="Preguntame sobre el lote, clima, riego o sensores..."
+        ></textarea>
+        <button type="submit" aria-label="Enviar pregunta">
+          <i class="pi pi-send"></i>
+        </button>
+      </form>
+    </section>
+  }
+
+  <button type="button" class="assistant-launcher" (click)="toggle()" aria-label="Abrir asistente Chaman">
+    @if (helper.darkTheme) {
+      <img src="images/logo-dark.png" alt="" />
+    } @else {
+      <img src="images/logo-light.png" alt="" />
+    }
+    <span class="assistant-launcher__pulse"></span>
+  </button>
+</div>

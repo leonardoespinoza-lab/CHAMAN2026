@@ -877,11 +877,32 @@
 
 <!-- Botón menú -->
 @if (mostrarBotonMenu()) {
-  <div class="menu-launcher">
-    <p-button (click)="visible = !visible" icon="pi i-menu-hamburguer" [rounded]="true" severity="secondary" />
+  <div class="global-nav-actions">
+    <button
+      type="button"
+      class="chaman-menu-button"
+      (click)="accionLogo($event)"
+      pTooltip="Menu Chaman"
+      tooltipPosition="right"
+      aria-label="Abrir menu Chaman"
+    >
+      @if (helper.darkTheme) {
+        <img src="images/logo-dark.png" alt="" />
+      } @else {
+        <img src="images/logo-light.png" alt="" />
+      }
+    </button>
+    @if (mostrarVolver()) {
+      <button type="button" class="global-back-button" (click)="volver()" aria-label="Volver">
+        <i class="pi pi-arrow-left"></i>
+        <span>Volver</span>
+      </button>
+    }
   </div>
 }
 
 <div class="app-shell">
   <router-outlet></router-outlet>
 </div>
+
+<app-asistente-chaman [contexto]="contextoAsistente"></app-asistente-chaman>
