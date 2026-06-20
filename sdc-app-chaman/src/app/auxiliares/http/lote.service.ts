@@ -21,6 +21,10 @@ export class LoteService {
     return this.http.get(`/lotes/${id}`);
   }
 
+  public certificado(id: string, filename: string): Promise<void> {
+    return this.http.getFile(`/lotes/${id}/certificado`, {}, filename);
+  }
+
   public sueloInta(lat: number, lng: number): Promise<any> {
     return this.http.get(`/lotes/suelo-inta`, { params: { lat, lng } });
   }

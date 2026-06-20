@@ -145,6 +145,17 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     this.router.navigate(['lotes', 'cosechar', this.lote._id]);
   }
 
+  public async descargarCertificado(): Promise<void> {
+    if (!this.lote?._id) return;
+    try {
+      const fecha = new Date().toISOString().slice(0, 10);
+      const nombreLote = this.slugArchivo(this.lote.nombre || 'lote');
+      await this.loteService.certificado(this.lote._id, `certificado-chaman-${nombreLote}-${fecha}.html`);
+    } catch (error) {
+      this.helper.notifError(error);
+    }
+  }
+
   public async eliminarLote(event?: Event): Promise<void> {
     event?.stopPropagation();
     if (!this.lote?._id) return;
@@ -284,6 +295,16 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
       siembras.find((item) => !item.fechaCosecha) ||
       siembras[0]
     );
+  }
+
+  private slugArchivo(value: string): string {
+    return value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60) || 'lote';
   }
 
   private async hidratarSiembraOperativa(): Promise<void> {

@@ -7,6 +7,7 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { LotesService } from './service';
@@ -22,6 +23,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 import { GetPermiso } from '../../auxiliares/authorization/get-permiso.decorator';
+import { Response } from 'express';
 
 @ApiTags('Lotes')
 @Controller('lotes')
@@ -61,6 +63,28 @@ export class LotesController {
   @Permisos({ nivel: 'Admin', roles: ['Admin'] })
   public async getNdviQueueStatus(): Promise<any> {
     return await this.service.getNdviQueueStatus();
+  }
+
+  @Get('/:id/certificado')
+  @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+  )
+  public async generarCertificado(
+    @Param('id') id: string,
+    @GetPermiso() permiso: IPermiso,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<string> {
+    const html = await this.service.generarCertificado(id, permiso);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="certificado-chaman-${id}.html"`,
+    );
+    return html;
   }
 
   @Get('/:id')

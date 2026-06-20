@@ -24,13 +24,15 @@ export const authInterceptor: HttpInterceptorFn = (
 
   return next(authRequest).pipe(
     catchError((error: HttpErrorResponse) => {
-      // Si es 401/403 y tenemos refresh token, intentar refresh
-      if ((error.status === 401 || error.status === 403) && helper.refreshToken) {
+      // 401: token vencido o invalido. 403: sesion valida sin permiso para una accion puntual.
+      // No se debe cerrar la sesion ante un 403 porque un usuario de lectura puede disparar
+      // consultas opcionales sin permisos de escritura y aun asi seguir navegando.
+      if (error.status === 401 && helper.refreshToken) {
         return handle401Error(authRequest, next, helper, loginService, router);
       }
 
-      // Si es 401/403 y NO tenemos refresh token, redirigir a login
-      if ((error.status === 401 || error.status === 403) && !helper.refreshToken) {
+      // Si es 401 y NO tenemos refresh token, redirigir a login
+      if (error.status === 401 && !helper.refreshToken) {
         helper.removeToken();
         router.navigate(['/auth']);
       }

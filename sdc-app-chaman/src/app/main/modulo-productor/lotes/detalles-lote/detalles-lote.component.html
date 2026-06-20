@@ -39,8 +39,15 @@
         <strong>{{ lote?.establecimiento?.nombre || 'Sin establecimiento' }}</strong>
         <small>{{ departamentoResumen }}</small>
       </div>
-      @if (!helper.soloLectura()) {
-        <div class="lot-primary-actions">
+      <div class="lot-primary-actions">
+        <p-button
+          label="Informe agronomico"
+          icon="pi pi-file-export"
+          severity="primary"
+          [outlined]="true"
+          (onClick)="descargarCertificado()"
+        />
+        @if (!helper.soloLectura()) {
           <p-button
             label="Editar lote y suelo"
             icon="pi pi-pencil"
@@ -71,8 +78,8 @@
             [outlined]="true"
             (onClick)="eliminarLote($event)"
           />
-        </div>
-      }
+        }
+      </div>
     </div>
 
     <div class="lot-summary-grid">
