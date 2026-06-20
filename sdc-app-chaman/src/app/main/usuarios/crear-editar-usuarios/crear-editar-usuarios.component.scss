@@ -6,6 +6,54 @@
   background: var(--p-content-background);
 }
 
+.modulos-permiso {
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 36%, var(--p-content-border-color));
+  border-radius: 8px;
+  padding: 0.9rem;
+  margin: 0.5rem 0 1rem;
+  background:
+    linear-gradient(135deg, rgba(46, 212, 202, 0.08), rgba(255, 255, 255, 0.65)),
+    var(--p-content-background);
+}
+
+.modulos-permiso-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+  margin-bottom: 0.75rem;
+  color: var(--p-text-color);
+
+  strong {
+    font-size: 1rem;
+  }
+
+  span {
+    color: var(--p-text-muted-color);
+    font-size: 0.86rem;
+  }
+}
+
+.modulos-permiso-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.55rem;
+}
+
+.modulo-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 42px;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  font-size: 0.94rem;
+  font-weight: 600;
+}
+
 :host {
   display: block;
   min-height: 100dvh;
@@ -81,5 +129,9 @@
 
   .user-editor-actions {
     grid-template-columns: 1fr;
+  }
+
+  .modulos-permiso-header {
+    display: grid;
   }
 }

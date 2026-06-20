@@ -1,16 +1,43 @@
-import { Injectable } from '@nestjs/common';
-import { IReporte, IListado, IQueryParam, IFilter } from 'modelos/src';
+import { ForbiddenException, Injectable } from '@nestjs/common';
+import { IReporte, IListado, IQueryParam, IFilter, IUsuario } from 'modelos/src';
 import { ReportesRepository } from './repository';
+import { DispositivosService } from '../dispositivos/service';
+import { HelperService } from '../../auxiliares/helper';
 
 @Injectable()
 export class ReportesService {
-  constructor(private repository: ReportesRepository) {}
+  constructor(
+    private repository: ReportesRepository,
+    private dispositivosService: DispositivosService,
+  ) {}
 
-  async getById(id: string): Promise<IReporte> {
-    return await this.repository.getById(id);
+  async getById(id: string, user?: IUsuario): Promise<IReporte> {
+    const reporte = await this.repository.getById(id);
+    if (user && reporte?.idDispositivo) {
+      await this.dispositivosService.assertPuedeVer(
+        reporte.idDispositivo,
+        user,
+        'Sensores',
+      );
+    }
+    return reporte;
   }
 
-  async get(filtro: IQueryParam): Promise<IListado<IReporte>> {
+  async get(filtro: IQueryParam, user?: IUsuario): Promise<IListado<IReporte>> {
+    if (user && !user.permisos?.some((permiso) => permiso.nivel === 'Admin')) {
+      const filter = HelperService.filtroToObject(filtro.filter);
+      const idDispositivo = this.extraerIdDispositivo(filter);
+      if (!idDispositivo) {
+        throw new ForbiddenException(
+          'Debe consultar reportes por un dispositivo asignado',
+        );
+      }
+      await this.dispositivosService.assertPuedeVer(
+        idDispositivo,
+        user,
+        'Sensores',
+      );
+    }
     return await this.repository.get(filtro);
   }
 
@@ -18,11 +45,30 @@ export class ReportesService {
     idDispositivo: string,
     dias = 7,
     limit = 2000,
+    user?: IUsuario,
   ): Promise<IListado<IReporte>> {
+    if (user) {
+      await this.dispositivosService.assertPuedeVer(
+        idDispositivo,
+        user,
+        'Sensores',
+      );
+    }
     return await this.repository.historico(idDispositivo, dias, limit);
   }
 
-  async diario(dias = 7, idDispositivo: string): Promise<IListado<IReporte>> {
+  async diario(
+    dias = 7,
+    idDispositivo: string,
+    user?: IUsuario,
+  ): Promise<IListado<IReporte>> {
+    if (user) {
+      await this.dispositivosService.assertPuedeVer(
+        idDispositivo,
+        user,
+        'Sensores',
+      );
+    }
     // Obtiene un reporte por día para el dispositivo, específicamente el más cercano a las 06:00 AM
     const filtro: IFilter<IReporte> = {
       idDispositivo,
@@ -80,5 +126,26 @@ export class ReportesService {
       datos: reportesFinales,
       totalCount: reportesFinales.length,
     };
+  }
+
+  private extraerIdDispositivo(filter: any): string | undefined {
+    if (!filter || typeof filter !== 'object') {
+      return undefined;
+    }
+    if (typeof filter.idDispositivo === 'string') {
+      return filter.idDispositivo;
+    }
+    if (filter.idDispositivo?.$eq) {
+      return filter.idDispositivo.$eq;
+    }
+    const andItems = Array.isArray(filter.$and) ? filter.$and : [];
+    const orItems = Array.isArray(filter.$or) ? filter.$or : [];
+    for (const item of [...andItems, ...orItems]) {
+      const value = this.extraerIdDispositivo(item);
+      if (value) {
+        return value;
+      }
+    }
+    return undefined;
   }
 }

@@ -12,6 +12,7 @@ import {
   IQueryParam,
   IQuimica,
   IUsuario,
+  ModuloPermiso,
   NivelPermiso,
   Rol,
 } from 'modelos/src';
@@ -47,6 +48,21 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
   public quimicas: IQuimica[] = [];
   public quimicas$?: Subscription;
   public productorPreseleccionado?: IProductor;
+  public modulosPermiso: { key: ModuloPermiso; label: string }[] = [
+    { key: 'Enfermedades', label: 'Enfermedades' },
+    { key: 'Riego', label: 'Riego' },
+    { key: 'HuellaHidrica', label: 'Huella hidrica' },
+    { key: 'NDVI', label: 'Indice verde / satelite' },
+    { key: 'Clima', label: 'Clima' },
+    { key: 'EtapasFenologicas', label: 'Fenologia' },
+    { key: 'Sensores', label: 'Sensores' },
+    { key: 'Camaras', label: 'Camaras' },
+    { key: 'Malezas', label: 'Malezas' },
+    { key: 'FrioTermica', label: 'Frio y acumulacion termica' },
+    { key: 'Fertilizacion', label: 'Fertilizacion' },
+    { key: 'Fumigacion', label: 'Fumigacion' },
+    { key: 'Certificados', label: 'Informes agronomicos' },
+  ];
 
   public get permisos() {
     return this.form?.get('permisos') as FormArray;
@@ -96,7 +112,19 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
       idEstablecimiento: new FormControl(p?.idEstablecimiento),
       idDistribuidor: new FormControl(p?.idDistribuidor || this.productorPreseleccionado?.idDistribuidor),
       idQuimica: new FormControl(p?.idQuimica || this.productorPreseleccionado?.idQuimica),
+      modulos: this.crearModulosFormGroup(p?.modulos),
     });
+  }
+
+  private crearModulosFormGroup(modulos?: Partial<Record<ModuloPermiso, boolean>>): FormGroup {
+    const controls = this.modulosPermiso.reduce(
+      (acc, modulo) => ({
+        ...acc,
+        [modulo.key]: new FormControl(modulos?.[modulo.key] !== false),
+      }),
+      {} as Record<ModuloPermiso, FormControl<boolean | null>>
+    );
+    return new FormGroup(controls);
   }
   public agregarPermiso() {
     this.permisos.push(this.agregarPermisoFormGroup());
@@ -189,10 +217,13 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
   }
 
   private normalizarPermiso(permiso: IPermiso): IPermiso {
+    const modulos = this.normalizarModulos(permiso.modulos);
+
     if (permiso.nivel === 'Admin') {
       return {
         nivel: permiso.nivel,
         rol: permiso.rol,
+        modulos,
       };
     }
 
@@ -202,6 +233,7 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
         nivel: permiso.nivel,
         rol: permiso.rol,
         idQuimica: quimica?._id || permiso.idQuimica,
+        modulos,
       };
     }
 
@@ -212,6 +244,7 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
         rol: permiso.rol,
         idDistribuidor: distribuidor?._id || permiso.idDistribuidor,
         idQuimica: distribuidor?.idQuimica || permiso.idQuimica,
+        modulos,
       };
     }
 
@@ -225,6 +258,7 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
         idProductor: productor?._id || permiso.idProductor,
         idDistribuidor: productor?.idDistribuidor || permiso.idDistribuidor,
         idQuimica: productor?.idQuimica || permiso.idQuimica,
+        modulos,
       };
     }
 
@@ -237,10 +271,21 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
         idProductor: establecimiento?.idProductor || permiso.idProductor,
         idDistribuidor: establecimiento?.idDistribuidor || permiso.idDistribuidor,
         idQuimica: establecimiento?.idQuimica || permiso.idQuimica,
+        modulos,
       };
     }
 
     return permiso;
+  }
+
+  private normalizarModulos(modulos?: Partial<Record<ModuloPermiso, boolean>>): Partial<Record<ModuloPermiso, boolean>> {
+    return this.modulosPermiso.reduce(
+      (acc, modulo) => ({
+        ...acc,
+        [modulo.key]: modulos?.[modulo.key] !== false,
+      }),
+      {} as Partial<Record<ModuloPermiso, boolean>>
+    );
   }
 
   public async guardar(): Promise<void> {

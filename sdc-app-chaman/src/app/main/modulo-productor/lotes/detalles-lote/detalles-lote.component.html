@@ -40,13 +40,15 @@
         <small>{{ departamentoResumen }}</small>
       </div>
       <div class="lot-primary-actions">
-        <p-button
-          label="Informe agronomico"
-          icon="pi pi-file-export"
-          severity="primary"
-          [outlined]="true"
-          (onClick)="descargarCertificado()"
-        />
+        @if (helper.puedeVerModulo('Certificados')) {
+          <p-button
+            label="Informe agronomico"
+            icon="pi pi-file-export"
+            severity="primary"
+            [outlined]="true"
+            (onClick)="descargarCertificado()"
+          />
+        }
         @if (!helper.soloLectura()) {
           <p-button
             label="Editar lote y suelo"
@@ -106,7 +108,7 @@
     </div>
   </section>
 
-  @if (siembra && !siembra.fechaCosecha) {
+  @if (siembra && !siembra.fechaCosecha && helper.puedeVerModulo('EtapasFenologicas')) {
     <div class="desktop-only">
       <app-card-etapas-fenologicas [lote]="lote" [siembra]="siembra"></app-card-etapas-fenologicas>
     </div>
@@ -132,29 +134,50 @@
     @if (siembra?.fechaCosecha) {
       <app-card-rendimiento class="service-panel" [siembra]="siembra"></app-card-rendimiento>
     }
-    @if (esPlantacion) {
+    @if (esPlantacion && helper.puedeVerModulo('FrioTermica')) {
       <app-card-frio-termico class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-frio-termico>
     }
-    <app-card-enfermedades class="service-panel" [siembra]="siembra"></app-card-enfermedades>
-    @if (mostrarPrediccionMalezas) {
+    @if (helper.puedeVerModulo('Enfermedades')) {
+      <app-card-enfermedades class="service-panel" [siembra]="siembra"></app-card-enfermedades>
+    }
+    @if (mostrarPrediccionMalezas && helper.puedeVerModulo('Malezas')) {
       <app-card-malezas class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-malezas>
     }
-    <div class="satellite-camera-row service-panel" [class.single]="!lote?.serialCamara">
-      <app-card-ndvi [siembra]="siembra" [lote]="lote"></app-card-ndvi>
-      @if (lote?.serialCamara) {
+    @if (helper.puedeVerModulo('NDVI') || (lote?.serialCamara && helper.puedeVerModulo('Camaras'))) {
+      <div
+        class="satellite-camera-row service-panel"
+        [class.single]="!lote?.serialCamara || !helper.puedeVerModulo('Camaras') || !helper.puedeVerModulo('NDVI')"
+      >
+        @if (helper.puedeVerModulo('NDVI')) {
+          <app-card-ndvi [siembra]="siembra" [lote]="lote"></app-card-ndvi>
+        }
+        @if (lote?.serialCamara && helper.puedeVerModulo('Camaras')) {
         <app-card-camaras-lote [lote]="lote"></app-card-camaras-lote>
-      }
-    </div>
-    <div class="operations-row service-panel">
-      <app-card-ultima-fertilizacion [lote]="lote"></app-card-ultima-fertilizacion>
-      <app-card-ultima-fumigacion [lote]="lote" [siembra]="siembra"></app-card-ultima-fumigacion>
-    </div>
-    <app-card-riego class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-riego>
-    <app-card-huella-hidrica class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-huella-hidrica>
-    @if (helper.checkArray(lote?.dispositivos)) {
+        }
+      </div>
+    }
+    @if (helper.puedeVerModulo('Fertilizacion') || helper.puedeVerModulo('Fumigacion')) {
+      <div class="operations-row service-panel" [class.single]="!helper.puedeVerModulo('Fertilizacion') || !helper.puedeVerModulo('Fumigacion')">
+        @if (helper.puedeVerModulo('Fertilizacion')) {
+          <app-card-ultima-fertilizacion [lote]="lote"></app-card-ultima-fertilizacion>
+        }
+        @if (helper.puedeVerModulo('Fumigacion')) {
+          <app-card-ultima-fumigacion [lote]="lote" [siembra]="siembra"></app-card-ultima-fumigacion>
+        }
+      </div>
+    }
+    @if (helper.puedeVerModulo('Riego')) {
+      <app-card-riego class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-riego>
+    }
+    @if (helper.puedeVerModulo('HuellaHidrica')) {
+      <app-card-huella-hidrica class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-huella-hidrica>
+    }
+    @if (helper.checkArray(lote?.dispositivos) && helper.puedeVerModulo('Sensores')) {
       <app-card-dispositivos class="service-panel" [lote]="lote"></app-card-dispositivos>
     }
-    <app-card-clima-lote class="service-panel climate-section" [lote]="lote"></app-card-clima-lote>
+    @if (helper.puedeVerModulo('Clima')) {
+      <app-card-clima-lote class="service-panel climate-section" [lote]="lote"></app-card-clima-lote>
+    }
   </div>
 </div>
 

@@ -170,6 +170,25 @@
                             </p-message>
                           }
 
+                          <div class="modulos-permiso" formGroupName="modulos">
+                            <div class="modulos-permiso-header">
+                              <strong>Servicios visibles</strong>
+                              <span>Activan u ocultan modulos para este alcance.</span>
+                            </div>
+                            <div class="modulos-permiso-grid">
+                              @for (modulo of modulosPermiso; track modulo.key) {
+                                <label class="modulo-chip" [for]="'modulo-' + i + '-' + modulo.key">
+                                  <p-checkbox
+                                    [formControlName]="modulo.key"
+                                    [binary]="true"
+                                    [inputId]="'modulo-' + i + '-' + modulo.key"
+                                  />
+                                  <span>{{ modulo.label }}</span>
+                                </label>
+                              }
+                            </div>
+                          </div>
+
                           <!-- Boton eliminar -->
                           <div class="mb-4" style="display: flex; justify-content: center">
                             <p-button

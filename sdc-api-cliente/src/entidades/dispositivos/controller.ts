@@ -31,10 +31,10 @@ export class DispositivosController {
 
   @Get()
   @Permisos(
-    { nivel: 'Quimica', roles: ['Admin'] },
-    { nivel: 'Distribuidor', roles: ['Admin'] },
-    { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
-    { nivel: 'Establecimiento', roles: ['Admin'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Escritura', 'Lectura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Escritura', 'Lectura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Escritura', 'Lectura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Admin', roles: ['Admin'] },
   )
   public async get(
@@ -46,14 +46,17 @@ export class DispositivosController {
 
   @Get('/:id')
   @Permisos(
-    { nivel: 'Quimica', roles: ['Admin'] },
-    { nivel: 'Distribuidor', roles: ['Admin'] },
-    { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
-    { nivel: 'Establecimiento', roles: ['Admin'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Escritura', 'Lectura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Escritura', 'Lectura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Escritura', 'Lectura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Admin', roles: ['Admin'] },
   )
-  public async getById(@Param('id') id: string): Promise<IDispositivo> {
-    return await this.service.getById(id);
+  public async getById(
+    @Param('id') id: string,
+    @GetUser() user: IUsuario,
+  ): Promise<IDispositivo> {
+    return await this.service.getById(id, user);
   }
 
   @Post()

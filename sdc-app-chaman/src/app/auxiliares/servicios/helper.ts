@@ -17,6 +17,7 @@ import {
   IQueryParam,
   ISiembra,
   IToken,
+  ModuloPermiso,
 } from 'modelos/src';
 import { FilterMetadata, MessageService } from 'primeng/api';
 import { TableLazyLoadEvent } from 'primeng/table';
@@ -297,6 +298,14 @@ export class HelperService {
   public removeNumeroPermiso() {
     localStorage.removeItem('numeroPermiso');
     sessionStorage.removeItem('numeroPermiso');
+  }
+
+  public puedeVerModulo(modulo: ModuloPermiso | string): boolean {
+    const permiso = this.permiso;
+    if (!permiso?.modulos) {
+      return true;
+    }
+    return permiso.modulos[modulo as ModuloPermiso] !== false;
   }
 
   // COLORES

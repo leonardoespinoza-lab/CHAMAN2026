@@ -11,6 +11,23 @@ export type NivelPermiso =
   | 'Establecimiento';
 export type Rol = 'Admin' | 'Lectura' | 'Escritura';
 
+export type ModuloPermiso =
+  | 'Enfermedades'
+  | 'Riego'
+  | 'HuellaHidrica'
+  | 'NDVI'
+  | 'Clima'
+  | 'EtapasFenologicas'
+  | 'Sensores'
+  | 'Camaras'
+  | 'Malezas'
+  | 'FrioTermica'
+  | 'Fertilizacion'
+  | 'Fumigacion'
+  | 'Certificados';
+
+export type IModulosPermiso = Partial<Record<ModuloPermiso, boolean>>;
+
 export interface IPermiso {
   nivel: NivelPermiso;
   rol: Rol;
@@ -18,6 +35,7 @@ export interface IPermiso {
   idDistribuidor?: string;
   idProductor?: string;
   idEstablecimiento?: string;
+  modulos?: IModulosPermiso;
   // Populate
   quimica?: IQuimica;
   distribuidor?: IDistribuidor;
