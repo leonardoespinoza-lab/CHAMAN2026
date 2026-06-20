@@ -45,7 +45,7 @@ export class CardFrioTermicoComponent implements OnChanges {
   public error?: string;
   public reportesSensorFrio: IReporte[] = [];
   public loadingHistoricoSensor = false;
-  public diasHistoricoSensor = 1;
+  public diasHistoricoSensor = 7;
   public metricas: MetricFrio[] = [];
   public serieReciente: ISerieFrioTermicoDia[] = [];
   public chartFrioOptions?: Highcharts.Options;
@@ -461,7 +461,7 @@ export class CardFrioTermicoComponent implements OnChanges {
 
   private async cargarHistoricoSensor(force = false): Promise<void> {
     const dispositivo = this.dispositivoFrio;
-    const id = dispositivo?.deveui || dispositivo?._id;
+    const id = dispositivo?._id || dispositivo?.deveui;
     if (!id) {
       this.reportesSensorFrio = [];
       return;

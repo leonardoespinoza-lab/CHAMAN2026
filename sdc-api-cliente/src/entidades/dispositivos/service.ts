@@ -36,6 +36,30 @@ export class DispositivosService {
     return await this.getById(id, user, modulo);
   }
 
+  async getByIdentificador(
+    identificador: string,
+    user?: IUsuario,
+    modulo?: ModuloPermiso,
+  ): Promise<IDispositivo | undefined> {
+    const dispositivo = await this.resolverDispositivo(identificador);
+    if (user && !this.puedeVer(dispositivo, user, modulo)) {
+      throw new ForbiddenException('No tiene permiso para ver este dispositivo');
+    }
+    return dispositivo;
+  }
+
+  async assertPuedeVerPorIdentificador(
+    identificador: string,
+    user: IUsuario,
+    modulo?: ModuloPermiso,
+  ): Promise<IDispositivo> {
+    const dispositivo = await this.getByIdentificador(identificador, user, modulo);
+    if (!dispositivo) {
+      throw new ForbiddenException('No tiene permiso para ver este dispositivo');
+    }
+    return dispositivo;
+  }
+
   async get(
     filtro: IQueryParam,
     user: IUsuario,
@@ -58,8 +82,41 @@ export class DispositivosService {
 
   // Private
 
+  private async resolverDispositivo(identificador: string): Promise<IDispositivo | undefined> {
+    if (!identificador) {
+      return undefined;
+    }
+
+    if (this.esObjectId(identificador)) {
+      try {
+        return await this.repository.getById(identificador);
+      } catch {
+        // El identificador tambien puede ser un devEUI con forma no ObjectId.
+      }
+    }
+
+    const variantesDevEui = Array.from(new Set([
+      identificador,
+      identificador.toUpperCase(),
+      identificador.toLowerCase(),
+    ].filter(Boolean)));
+
+    const response = await this.repository.get({
+      filter: JSON.stringify({
+        $or: variantesDevEui.map((deveui) => ({ deveui })),
+      }),
+      limit: 1,
+    });
+
+    return response.datos?.[0];
+  }
+
+  private esObjectId(value: string): boolean {
+    return /^[a-f\d]{24}$/i.test(value);
+  }
+
   puedeVer(
-    dispositivo: IDispositivo,
+    dispositivo: IDispositivo | undefined,
     user: IUsuario,
     modulo?: ModuloPermiso,
   ): boolean {

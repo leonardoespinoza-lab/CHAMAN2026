@@ -47,14 +47,34 @@ export class ReportesService {
     limit = 2000,
     user?: IUsuario,
   ): Promise<IListado<IReporte>> {
+    const diasNormalizados = Number(dias) || 7;
+    const limitNormalizado = Number(limit) || 2000;
+    const identificadores = new Set<string>([idDispositivo].filter(Boolean));
+
     if (user) {
-      await this.dispositivosService.assertPuedeVer(
+      const dispositivo = await this.dispositivosService.assertPuedeVerPorIdentificador(
         idDispositivo,
         user,
         'Sensores',
       );
+      if (dispositivo?._id) {
+        identificadores.add(dispositivo._id);
+      }
+      if (dispositivo?.deveui) {
+        identificadores.add(dispositivo.deveui);
+        identificadores.add(dispositivo.deveui.toUpperCase());
+      }
     }
-    return await this.repository.historico(idDispositivo, dias, limit);
+
+    const historicos = await Promise.all(
+      Array.from(identificadores).map((identificador) =>
+        this.repository
+          .historico(identificador, diasNormalizados, limitNormalizado)
+          .catch(() => ({ datos: [], totalCount: 0 })),
+      ),
+    );
+
+    return this.unirHistoricos(historicos, limitNormalizado);
   }
 
   async diario(
@@ -147,5 +167,41 @@ export class ReportesService {
       }
     }
     return undefined;
+  }
+
+  private unirHistoricos(
+    historicos: IListado<IReporte>[],
+    limit: number,
+  ): IListado<IReporte> {
+    const porClave = new Map<string, IReporte>();
+
+    for (const historico of historicos) {
+      for (const reporte of historico.datos || []) {
+        const key = reporte._id || [
+          reporte.idDispositivo || reporte.deveui || '',
+          reporte.fecha || reporte.fechaCreacion || '',
+        ].join('|');
+        if (!porClave.has(key)) {
+          porClave.set(key, reporte);
+        }
+      }
+    }
+
+    const datos = Array.from(porClave.values()).sort((a, b) =>
+      this.fechaReporte(a).getTime() - this.fechaReporte(b).getTime(),
+    );
+
+    const recortados = limit > 0 && datos.length > limit
+      ? datos.slice(datos.length - limit)
+      : datos;
+
+    return {
+      datos: recortados,
+      totalCount: datos.length,
+    };
+  }
+
+  private fechaReporte(reporte: IReporte): Date {
+    return new Date(reporte.fecha || reporte.fechaCreacion || 0);
   }
 }

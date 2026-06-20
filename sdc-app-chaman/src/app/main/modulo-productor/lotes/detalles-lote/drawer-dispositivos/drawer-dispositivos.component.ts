@@ -109,7 +109,7 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
   }
 
   private async cargarHistorico(): Promise<void> {
-    const id = this.dispositivo?.deveui || this.dispositivo?._id;
+    const id = this.dispositivo?._id || this.dispositivo?.deveui;
     if ((!this.esLanzaDeSuelo && !this.esSensorAmbiente) || !id) return;
     this.loadingHistorico = true;
     try {
