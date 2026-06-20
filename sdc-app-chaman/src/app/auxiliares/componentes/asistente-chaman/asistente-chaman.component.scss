@@ -22,8 +22,8 @@
 
 .assistant-launcher {
   position: relative;
-  width: 4.1rem;
-  height: 4.1rem;
+  width: 4.55rem;
+  height: 4.55rem;
   border-radius: 999px;
   border: 1px solid rgba(35, 200, 196, 0.55);
   background: rgba(255, 255, 255, 0.86);
@@ -32,7 +32,7 @@
   display: grid;
   place-items: center;
   cursor: pointer;
-  padding: 0.55rem;
+  padding: 0.62rem;
   transition:
     transform 0.18s ease,
     box-shadow 0.18s ease;
@@ -131,8 +131,8 @@
 }
 
 .assistant-panel__avatar {
-  width: 3.1rem;
-  height: 3.1rem;
+  width: 3.45rem;
+  height: 3.45rem;
   border-radius: 999px;
   background: rgba(35, 200, 196, 0.12);
   border: 1px solid rgba(35, 200, 196, 0.35);
@@ -268,8 +268,8 @@
   }
 
   .assistant-launcher {
-    width: 3.7rem;
-    height: 3.7rem;
+    width: 4rem;
+    height: 4rem;
   }
 
   .assistant-panel {
