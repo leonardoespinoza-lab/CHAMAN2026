@@ -45,6 +45,16 @@
         <p-progress-spinner ariaLabel="loading" [style]="{ width: '18px', height: '18px' }" />
       }
     </div>
+
+    <div class="wind-action" [class.active]="showVientoLayer" aria-label="Modo viento y aplicacion">
+      <button type="button" class="wind-toggle" (click)="toggleVientoLayer()">
+        <span class="wind-button-icon">
+          <i class="pi pi-send"></i>
+        </span>
+        <span>Viento</span>
+        <strong>{{ vientoVelocidadActual() }}</strong>
+      </button>
+    </div>
   </div>
 
   @if (establecimientos.length > 1) {
@@ -71,6 +81,51 @@
     </div>
   }
 </section>
+
+@if (showVientoLayer) {
+  @if (vientoDecision(); as viento) {
+    <aside
+      class="wind-decision-panel"
+      [class.ok]="viento.tono === 'ok'"
+      [class.warn]="viento.tono === 'warn'"
+      [class.risk]="viento.tono === 'risk'"
+      [class.danger]="viento.tono === 'danger'"
+      [class.neutral]="viento.tono === 'neutral'"
+    >
+      <div class="wind-panel-head">
+        <span>Ventana de aplicacion</span>
+        <button type="button" (click)="toggleVientoLayer()" aria-label="Cerrar viento">
+          <i class="pi pi-times"></i>
+        </button>
+      </div>
+      <strong>{{ viento.titulo }}</strong>
+      <p>{{ viento.detalle }}</p>
+      <div class="wind-panel-metrics">
+        <div>
+          <span>Viento</span>
+          <strong>{{ viento.velocidad === null ? '--' : (viento.velocidad | number:'1.0-0') + ' km/h' }}</strong>
+        </div>
+        <div>
+          <span>Rafaga</span>
+          <strong>{{ viento.rafaga === null ? '--' : (viento.rafaga | number:'1.0-0') + ' km/h' }}</strong>
+        </div>
+        <div>
+          <span>Direccion</span>
+          <strong>{{ viento.direccionLabel }}</strong>
+        </div>
+      </div>
+      <div class="wind-forecast">
+        @for (item of viento.pronostico; track item.label) {
+          <span>
+            {{ item.label }}
+            <strong>{{ item.valor }}</strong>
+          </span>
+        }
+      </div>
+      <small>{{ viento.ventana }}</small>
+    </aside>
+  }
+}
 
 <!-- Resumen del servicio monitoreo de enfermedades-->
 <p-drawer

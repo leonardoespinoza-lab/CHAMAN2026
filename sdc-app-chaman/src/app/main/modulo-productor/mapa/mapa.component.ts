@@ -17,7 +17,7 @@ import {
 } from 'modelos/src';
 import { Feature, Map, MapBrowserEvent, Overlay, View } from 'ol';
 import { click } from 'ol/events/condition';
-import { Extent } from 'ol/extent';
+import { Extent, getCenter } from 'ol/extent';
 import { FeatureLike } from 'ol/Feature';
 import TileWMS from 'ol/source/TileWMS';
 import { Point, Polygon } from 'ol/geom';
@@ -90,6 +90,19 @@ interface IResumenGerencialEstablecimiento {
   metricas: IResumenGerencialMetric[];
 }
 
+interface IVientoDecision {
+  velocidad: number | null;
+  rafaga: number | null;
+  direccion: number | null;
+  direccionLabel: string;
+  tono: 'ok' | 'warn' | 'risk' | 'danger' | 'neutral';
+  titulo: string;
+  detalle: string;
+  ventana: string;
+  color: string;
+  pronostico: { label: string; valor: string }[];
+}
+
 @Component({
   selector: 'app-mapa',
   imports: [SharedModule, DrawerClimaComponent],
@@ -155,6 +168,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   // Capas
   private establecimientosLayer = new VectorLayer({ source: new Vector(), zIndex: 0 });
   private lotesLayer = new VectorLayer({ source: new Vector(), zIndex: 2 });
+  private vientoLayer = new VectorLayer({ source: new Vector(), zIndex: 6, visible: false });
   private ndviLayerGroup = new LayerGroup({ zIndex: 1, visible: false });
   private suelosLayer = new TileLayer({
     source: new TileWMS({
@@ -244,6 +258,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   public servicioSeleccionado: IServicio = this.servicios[0];
   public showDrawerClima = false;
   public showResumenGerencial = false;
+  public showVientoLayer = false;
   public resumenSeleccionadoId?: string;
 
   // Datos para el panel de enfermedades
@@ -682,6 +697,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.loteSeleccionado = undefined;
     this.selectEstablecimiento(establecimiento.nombre);
     this.centerMapOnEstablecimiento(establecimiento, markAsVisited);
+    this.actualizarCapaViento();
     this.changeDetectorRef.detectChanges();
   }
 
@@ -689,6 +705,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.loteSeleccionado = undefined;
     this.centerMapOnBounds();
     this.isFirstVisit = false;
+    this.actualizarCapaViento();
     this.changeDetectorRef.detectChanges();
   }
 
@@ -736,6 +753,77 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     );
     const actual = this.numero(this.getClimaActual()?.velocidadViento?.last ?? this.getClimaActual()?.velocidadViento?.avg) || 0;
     return this.formatMetric(Math.max(actual, maxPronostico), 'km/h', 0);
+  }
+
+  public toggleVientoLayer(): void {
+    this.showVientoLayer = !this.showVientoLayer;
+    this.vientoLayer.setVisible(this.showVientoLayer);
+    this.actualizarCapaViento();
+  }
+
+  public vientoDecision(): IVientoDecision {
+    const datos = this.getDatosVientoZona();
+    const velocidad = datos.velocidad;
+    const rafaga = datos.rafaga;
+    const referencia = velocidad === null && rafaga === null ? null : Math.max(velocidad ?? 0, rafaga ?? velocidad ?? 0);
+    const tono = this.getTonoViento(referencia);
+    const direccionLabel = datos.direccion === null ? '--' : `${this.getDireccionCardinal(datos.direccion)} ${Math.round(datos.direccion)} deg`;
+    const pronostico = this.getPronosticosZona()
+      .slice(0, 3)
+      .map((item, index) => {
+        const viento = this.numero(item?.velocidadViento?.max ?? item?.velocidadViento?.avg);
+        return {
+          label: index === 0 ? '24 h' : index === 1 ? '48 h' : '72 h',
+          valor: this.formatMetric(viento, 'km/h', 0),
+        };
+      });
+
+    const textos: Record<IVientoDecision['tono'], Pick<IVientoDecision, 'titulo' | 'detalle' | 'ventana' | 'color'>> = {
+      ok: {
+        titulo: 'Aplicacion recomendada',
+        detalle: 'Viento en rango bajo. Mantener control de rafagas, humedad y deriva segun marbete.',
+        ventana: 'Ventana operativa favorable',
+        color: '#22c55e',
+      },
+      warn: {
+        titulo: 'Aplicar con precaucion',
+        detalle: 'Viento moderado. Revisar tamano de gota, boquillas antideriva y cultivos vecinos.',
+        ventana: 'Ventana condicionada',
+        color: '#f59e0b',
+      },
+      risk: {
+        titulo: 'Riesgo alto de deriva',
+        detalle: 'Viento fuerte. Evitar aplicaciones sensibles y esperar una ventana mas estable.',
+        ventana: 'No recomendado para pulverizacion fina',
+        color: '#f97316',
+      },
+      danger: {
+        titulo: 'No aplicar',
+        detalle: 'Viento o rafagas fuera de rango seguro para pulverizar.',
+        ventana: 'Esperar nueva ventana climatica',
+        color: '#ef4444',
+      },
+      neutral: {
+        titulo: 'Sin datos de viento',
+        detalle: 'No hay lectura suficiente para recomendar una ventana de aplicacion.',
+        ventana: 'Actualizar clima del establecimiento',
+        color: '#64748b',
+      },
+    };
+
+    return {
+      velocidad,
+      rafaga,
+      direccion: datos.direccion,
+      direccionLabel,
+      tono,
+      pronostico,
+      ...textos[tono],
+    };
+  }
+
+  public vientoVelocidadActual(): string {
+    return this.formatMetric(this.vientoDecision().velocidad, 'km/h', 0);
   }
 
   public loteUbicacion(lote?: ILoteMapa): string {
@@ -1163,6 +1251,131 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.getPronosticosZona()[0] || null;
   }
 
+  private getDatosVientoZona(): { velocidad: number | null; rafaga: number | null; direccion: number | null } {
+    const actual = this.getClimaActual();
+    const pronostico = this.getPronosticoActualFallback();
+    const velocidad = this.numero(
+      actual?.velocidadViento?.last ??
+        actual?.velocidadViento?.avg ??
+        pronostico?.velocidadViento?.avg ??
+        pronostico?.velocidadViento?.max
+    );
+    const rafaga = this.numero(
+      actual?.rafagaViento?.last ??
+        actual?.rafagaViento?.max ??
+        actual?.rafagaViento?.avg ??
+        pronostico?.rafagaViento?.max ??
+        pronostico?.rafagaViento?.avg ??
+        pronostico?.velocidadViento?.max
+    );
+    const direccion = this.numero(
+      actual?.direccionViento?.last ??
+        actual?.direccionViento?.avg ??
+        actual?.direccionViento ??
+        pronostico?.direccionViento?.last ??
+        pronostico?.direccionViento?.avg ??
+        pronostico?.direccionViento
+    );
+    return { velocidad, rafaga, direccion };
+  }
+
+  private getTonoViento(valor: number | null): IVientoDecision['tono'] {
+    if (valor === null) {
+      return 'neutral';
+    }
+    if (valor >= 35) {
+      return 'danger';
+    }
+    if (valor >= 20) {
+      return 'risk';
+    }
+    if (valor >= 10) {
+      return 'warn';
+    }
+    return 'ok';
+  }
+
+  private getDireccionCardinal(grados: number): string {
+    const direcciones = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
+    const index = Math.round((((grados % 360) + 360) % 360) / 45) % 8;
+    return direcciones[index];
+  }
+
+  private actualizarCapaViento(): void {
+    const source = this.vientoLayer.getSource();
+    source?.clear();
+    if (!this.showVientoLayer || !source) {
+      return;
+    }
+
+    const decision = this.vientoDecision();
+    const direccion = decision.direccion ?? 45;
+    const rotacion = this.getRotacionFlechaViento(direccion);
+    const lotes = this.lotesDeEstablecimientoActual().filter((lote) => !!lote.ubicacion?.geojson?.coordinates);
+
+    if (lotes.length) {
+      lotes.forEach((lote) => {
+        const coordenada = this.getCentroLote(lote);
+        if (!coordenada) {
+          return;
+        }
+        source.addFeature(this.crearFeatureViento(coordenada, decision, rotacion, lote.nombre || 'Lote'));
+      });
+      return;
+    }
+
+    const establecimiento = this.establecimientoSeleccionado || this.establecimientos[0];
+    const coordenada = this.getCentroEstablecimiento(establecimiento);
+    if (coordenada) {
+      source.addFeature(this.crearFeatureViento(coordenada, decision, rotacion, establecimiento?.nombre || 'Zona'));
+    }
+  }
+
+  private getRotacionFlechaViento(direccionDesdeGrados: number): number {
+    // direccionViento suele venir como direccion desde donde sopla; la flecha muestra hacia donde se desplaza.
+    const hacia = ((direccionDesdeGrados + 180) % 360) - 90;
+    return (hacia * Math.PI) / 180;
+  }
+
+  private crearFeatureViento(coordenada: number[], decision: IVientoDecision, rotacion: number, nombre: string): Feature {
+    const feature = new Feature(new Point(coordenada));
+    feature.set('nombre', nombre);
+    feature.setStyle(
+      new Style({
+        text: new Text({
+          text: '➤',
+          font: '900 34px Arial',
+          rotation: rotacion,
+          rotateWithView: true,
+          fill: new Fill({ color: decision.color }),
+          stroke: new Stroke({ color: 'rgba(255, 255, 255, 0.92)', width: 5 }),
+          offsetY: -6,
+        }),
+      })
+    );
+    return feature;
+  }
+
+  private getCentroLote(lote: ILoteMapa): number[] | null {
+    const geojson = lote.ubicacion?.geojson as IGeoJSONPolygon;
+    if (!geojson?.coordinates?.length) {
+      return null;
+    }
+    const polygon = new Polygon(geojson.coordinates);
+    polygon.transform('EPSG:4326', 'EPSG:3857');
+    return polygon.getInteriorPoint().getCoordinates();
+  }
+
+  private getCentroEstablecimiento(establecimiento?: IEstablecimiento): number[] | null {
+    const geojson = establecimiento?.ubicacion?.[0]?.geojson as IGeoJSONPolygon | undefined;
+    if (!geojson?.coordinates?.length) {
+      return null;
+    }
+    const polygon = new Polygon(geojson.coordinates);
+    polygon.transform('EPSG:4326', 'EPSG:3857');
+    return polygon.getInteriorPoint().getCoordinates() || getCenter(polygon.getExtent());
+  }
+
   private lotesDeEstablecimientoActual(): ILoteMapa[] {
     const establecimiento = this.establecimientoSeleccionado;
     if (!establecimiento) {
@@ -1504,6 +1717,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
           }),
           this.establecimientosLayer,
           this.lotesLayer,
+          this.vientoLayer,
           this.ndviLayerGroup,
           this.distribuidorLayer,
           this.suelosLayer,
@@ -1661,6 +1875,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       })
     );
 
+    this.actualizarCapaViento();
     this.loading.set(false);
   }
 
@@ -1738,6 +1953,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Forzar detección de cambios
     if (this.establecimientoSeleccionado) {
+      this.actualizarCapaViento();
       this.changeDetectorRef.detectChanges();
     }
 
@@ -1961,6 +2177,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       })
     );
+    this.actualizarCapaViento();
     this.loading.set(false);
   }
 
