@@ -191,11 +191,12 @@ export class CardVientoLoteComponent implements OnChanges {
     if (ring.length < 3) {
       return null;
     }
-    const bounds = this.bounds(ring);
-    const ancho = Math.max(bounds.maxLng - bounds.minLng, 0.0007);
-    const alto = Math.max(bounds.maxLat - bounds.minLat, 0.0007);
-    const padLng = Math.max(ancho * 0.18, 0.00035);
-    const padLat = Math.max(alto * 0.18, 0.00035);
+    const projectedRing = ring.map((coord) => this.project(coord));
+    const bounds = this.bounds(projectedRing);
+    const ancho = Math.max(bounds.maxLng - bounds.minLng, 90);
+    const alto = Math.max(bounds.maxLat - bounds.minLat, 90);
+    const padLng = Math.max(ancho * 0.18, 45);
+    const padLat = Math.max(alto * 0.18, 45);
     const bbox = {
       minLng: bounds.minLng - padLng,
       maxLng: bounds.maxLng + padLng,
@@ -204,17 +205,17 @@ export class CardVientoLoteComponent implements OnChanges {
     };
     const bboxWidth = bbox.maxLng - bbox.minLng || 1;
     const bboxHeight = bbox.maxLat - bbox.minLat || 1;
-    const points = ring
+    const points = projectedRing
       .map(([lng, lat]) => {
         const x = ((lng - bbox.minLng) / bboxWidth) * 100;
         const y = ((bbox.maxLat - lat) / bboxHeight) * 100;
         return `${this.redondear(x)},${this.redondear(y)}`;
       })
       .join(' ');
-    const bboxParam = [bbox.minLng, bbox.minLat, bbox.maxLng, bbox.maxLat].map((value) => value.toFixed(7)).join(',');
+    const bboxParam = [bbox.minLng, bbox.minLat, bbox.maxLng, bbox.maxLat].map((value) => value.toFixed(2)).join(',');
     const url =
       'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export' +
-      `?bbox=${bboxParam}&bboxSR=4326&imageSR=4326&size=980,420&format=jpg&f=image`;
+      `?bbox=${bboxParam}&bboxSR=3857&imageSR=3857&size=980,420&format=jpg&f=image`;
 
     return {
       backgroundImage: `linear-gradient(180deg, rgba(8, 18, 32, 0.04), rgba(8, 18, 32, 0.18)), url("${url}")`,
@@ -249,6 +250,14 @@ export class CardVientoLoteComponent implements OnChanges {
       minLat: Math.min(...latitudes),
       maxLat: Math.max(...latitudes),
     };
+  }
+
+  private project([lng, lat]: [number, number]): [number, number] {
+    const radius = 6378137;
+    const safeLat = Math.max(Math.min(lat, 85.05112878), -85.05112878);
+    const x = radius * (lng * Math.PI) / 180;
+    const y = radius * Math.log(Math.tan(Math.PI / 4 + (safeLat * Math.PI) / 360));
+    return [x, y];
   }
 
   private getDatosViento(): { velocidad: number | null; rafaga: number | null; direccion: number | null } {
