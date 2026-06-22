@@ -5,6 +5,7 @@ import {
   IPronosticoEstacionMeteorologica,
 } from "./clima";
 import { IDistribuidor } from "./distribuidor";
+import { IEstacion } from "./estacion";
 import { IProductor } from "./productor";
 import { IQuimica } from "./quimica";
 
@@ -16,6 +17,8 @@ export interface IEstablecimiento {
   nombre?: string;
   ubicacion?: IUbicacion[];
   ubicacionAdministrativa?: DireccionV2;
+  idEstacionMeteorologica?: string;
+  fuenteClimaPreferida?: "FieldClimate" | "Open-Meteo" | "Chaman";
   fechaCreacion?: string;
   prediccionClimatica?: {
     fecha?: string;
@@ -29,6 +32,7 @@ export interface IEstablecimiento {
   quimica?: IQuimica;
   distribuidor?: IDistribuidor;
   productor?: IProductor;
+  estacionMeteorologica?: IEstacion;
 }
 
 type OmitirCreate = "_id" | "fechaCreacion";

@@ -7,12 +7,16 @@ import {
   IUpdateEstablecimiento,
   IFilter,
   IPermiso,
+  IClimaEstacionMeteorologica,
+  IEstacion,
+  IValores,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { EstablecimientosRepository } from './repository';
 import { ClimaRepository } from '../clima/repository';
 import { ProductorsService } from '../productor/service';
 import { CLIMA_CACHE_TTL_MINUTES } from '../../env';
+import { EstacionsService } from '../estacion/service';
 
 @Injectable()
 export class EstablecimientosService {
@@ -20,6 +24,7 @@ export class EstablecimientosService {
     private repository: EstablecimientosRepository,
     private climaRepository: ClimaRepository,
     private productorsService: ProductorsService,
+    private estacionsService: EstacionsService,
   ) {}
 
   async getById(id: string, permiso: IPermiso): Promise<IEstablecimiento> {
@@ -122,7 +127,8 @@ export class EstablecimientosService {
       const res = await this.repository.get({
         page,
         limit,
-        select: 'nombre ubicacion climaActual prediccionClimatica',
+        select:
+          'nombre ubicacion climaActual prediccionClimatica idEstacionMeteorologica fuenteClimaPreferida',
       });
       const establecimientos = res.datos || [];
       total = res.totalCount || total;
@@ -200,14 +206,19 @@ export class EstablecimientosService {
           Logger.error('No se puede obtener el clima, lat o lng no definidos');
           return;
         }
-        const climaRespuesta = await this.climaRepository.getClima(
-          centro.lat,
-          centro.lng,
-        );
-        const clima = Array.isArray(climaRespuesta)
-          ? climaRespuesta[climaRespuesta.length - 1]
-          : climaRespuesta;
+        const climaCentral = await this.getClimaActualFieldClimate(est);
+        let clima = climaCentral;
         if (!clima) {
+          const climaRespuesta = await this.climaRepository.getClima(
+            centro.lat,
+            centro.lng,
+          );
+          clima = Array.isArray(climaRespuesta)
+            ? climaRespuesta[climaRespuesta.length - 1]
+            : climaRespuesta;
+        }
+        const climaSeleccionado = clima;
+        if (!climaSeleccionado) {
           Logger.warn(
             `No se obtuvo clima actual para establecimiento ${est._id}`,
           );
@@ -216,7 +227,7 @@ export class EstablecimientosService {
         const fecha = new Date().toISOString();
         const climaActual = {
           fecha,
-          clima,
+          clima: climaSeleccionado,
         };
         est.climaActual = climaActual || {};
         // update el pronostico en la base de datos
@@ -228,6 +239,99 @@ export class EstablecimientosService {
       Logger.error('Error al obtener el clima actual');
       console.error(error);
     }
+  }
+
+  private async getClimaActualFieldClimate(
+    est: IEstablecimiento,
+  ): Promise<IClimaEstacionMeteorologica | null> {
+    if (
+      est.fuenteClimaPreferida !== 'FieldClimate' ||
+      !est.idEstacionMeteorologica
+    ) {
+      return null;
+    }
+    try {
+      const central = await this.estacionsService.getById(
+        est.idEstacionMeteorologica,
+      );
+      if (!central?.idExterno || !central.user || !central.pass) {
+        return null;
+      }
+      const data = await this.climaRepository.getFieldClimateLastData(
+        central.idExterno,
+        central.user,
+        central.pass,
+      );
+      return this.normalizarFieldClimateActual(central, data);
+    } catch (error) {
+      Logger.warn(
+        `No se pudo usar FieldClimate para establecimiento ${est._id}; se usa respaldo Open-Meteo`,
+      );
+      return null;
+    }
+  }
+
+  private normalizarFieldClimateActual(
+    central: IEstacion,
+    data: any,
+  ): IClimaEstacionMeteorologica | null {
+    const dates = data?.dates || [];
+    const lastIndex = dates.length ? dates.length - 1 : -1;
+    if (lastIndex < 0 || !Array.isArray(data?.data)) {
+      return null;
+    }
+    const lectura = (matcher: (name: string) => boolean): IValores | undefined => {
+      const serie = data.data.find((item) => {
+        const name = String(item?.name || item?.name_original || '').toLowerCase();
+        return matcher(name);
+      });
+      if (!serie?.values) {
+        return undefined;
+      }
+      return {
+        avg: this.valorSerie(serie.values.avg, lastIndex),
+        min: this.valorSerie(serie.values.min, lastIndex),
+        max: this.valorSerie(serie.values.max, lastIndex),
+        sum: this.valorSerie(serie.values.sum, lastIndex),
+        last: this.valorSerie(serie.values.last, lastIndex),
+      };
+    };
+    const coordinates = central.position?.geo?.coordinates;
+    return {
+      fuente: 'FieldClimate',
+      fecha: dates[lastIndex],
+      estacion: central.name?.custom || central.name?.original || central.idExterno,
+      ubicacion: coordinates?.length
+        ? { lng: coordinates[0], lat: coordinates[1] }
+        : undefined,
+      temperatura: lectura((name) =>
+        name.includes('air temperature') || name === 'temperature',
+      ),
+      humedad: lectura((name) => name.includes('relative humidity')),
+      lluvia: lectura((name) =>
+        name.includes('precipitation') || name.includes('rain'),
+      ),
+      velocidadViento: lectura((name) =>
+        name.includes('wind speed') && !name.includes('gust'),
+      ),
+      direccionViento: lectura((name) =>
+        name.includes('wind dir') || name.includes('wind direction'),
+      ),
+      rafagaViento: lectura((name) => name.includes('gust')),
+      radiacionSolar: lectura((name) => name.includes('solar radiation')),
+      presion: lectura((name) => name.includes('pressure')),
+      et0: lectura((name) => name === 'et0' || name.includes('daily et0')),
+    };
+  }
+
+  private valorSerie(values: number[] | undefined, index: number): number | undefined {
+    if (!Array.isArray(values)) {
+      return undefined;
+    }
+    const value = values[index];
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : undefined;
   }
 
   private vencido(fecha: string, minutos: number): boolean {

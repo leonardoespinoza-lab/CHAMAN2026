@@ -7,6 +7,7 @@ import {
   IQuimica,
   IDistribuidor,
   IProductor,
+  IEstacion,
   IPronosticoEstacionMeteorologica,
   IClimaEstacionMeteorologica,
   DireccionV2,
@@ -15,6 +16,7 @@ import { Document } from 'mongoose';
 import { Quimica } from '../../quimica/modelos/schema';
 import { Distribuidor } from '../../distribuidor/modelos/schema';
 import { Productor } from '../../productor/modelos/schema';
+import { Estacion } from '../../estacion/schema';
 
 @Schema()
 export class Establecimiento
@@ -40,6 +42,12 @@ export class Establecimiento
   @Prop({ type: Object })
   ubicacionAdministrativa?: DireccionV2;
 
+  @Prop({ type: mongoose.Schema.Types.ObjectId })
+  idEstacionMeteorologica?: string;
+
+  @Prop({ type: String, enum: ['FieldClimate', 'Open-Meteo', 'Chaman'] })
+  fuenteClimaPreferida?: 'FieldClimate' | 'Open-Meteo' | 'Chaman';
+
   @Prop({ type: Date, default: Date.now })
   fechaCreacion: string;
 
@@ -61,6 +69,8 @@ export class Establecimiento
   distribuidor?: IDistribuidor;
 
   productor?: IProductor;
+
+  estacionMeteorologica?: IEstacion;
 }
 
 export type EstablecimientoDocument = Establecimiento & Document;
@@ -91,4 +101,11 @@ EstablecimientoSchema.virtual('productor', {
   justOne: true,
   localField: 'idProductor',
   ref: Productor.name,
+});
+
+EstablecimientoSchema.virtual('estacionMeteorologica', {
+  foreignField: '_id',
+  justOne: true,
+  localField: 'idEstacionMeteorologica',
+  ref: Estacion.name,
 });

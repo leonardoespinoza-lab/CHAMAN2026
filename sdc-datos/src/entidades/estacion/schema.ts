@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Exactly, IEstacion, Module } from 'modelos/src';
-import { Document } from 'mongoose';
+import { Exactly, IEstacion, Module, Sensores } from 'modelos/src';
+import mongoose, { Document } from 'mongoose';
 
 @Schema()
 export class Estacion implements Exactly<IEstacion, Estacion> {
@@ -57,6 +57,22 @@ export class Estacion implements Exactly<IEstacion, Estacion> {
     hdop: number; // 0.7;
     measure_time: number; // 0;
     timezoneCode: string; // "America/Argentina/Buenos_Aires"
+  };
+
+  @Prop({ type: [String] })
+  sensores?: Sensores[];
+
+  @Prop({ type: mongoose.Schema.Types.ObjectId })
+  idEstablecimiento?: string;
+
+  @Prop({ type: [String] })
+  variablesDisponibles?: string[];
+
+  @Prop({ type: Object })
+  estado?: {
+    activa?: boolean;
+    ultimoSync?: string;
+    ultimoError?: string;
   };
 
   @Prop({ type: [Object] })

@@ -1,0 +1,149 @@
+<section class="fieldclimate-page">
+  <header class="page-header">
+    <button type="button" class="back-button" (click)="volver()">
+      <i class="pi pi-arrow-left"></i>
+    </button>
+    <div>
+      <p class="eyebrow">Integraciones</p>
+      <h1>Centrales meteorologicas FieldClimate</h1>
+      <p>
+        Descubri centrales desde una cuenta FieldClimate, importalas a Chaman y asignalas al establecimiento donde estan instaladas.
+      </p>
+    </div>
+  </header>
+
+  @if (message) {
+    <div class="notice ok">{{ message }}</div>
+  }
+  @if (error) {
+    <div class="notice error">{{ error }}</div>
+  }
+
+  <article class="panel connection-panel">
+    <div>
+      <h2>Conexion FieldClimate</h2>
+      <p>Las credenciales se usan para descubrir/importar centrales y no se muestran luego en la pantalla.</p>
+    </div>
+    <div class="credentials-form">
+      <label>
+        Usuario
+        <input pInputText type="text" [(ngModel)]="credentials.username" autocomplete="off" />
+      </label>
+      <label>
+        Password
+        <input pInputText type="password" [(ngModel)]="credentials.password" autocomplete="new-password" />
+      </label>
+      <p-button
+        label="Buscar centrales"
+        icon="pi pi-cloud-download"
+        [loading]="loadingDiscovery"
+        (onClick)="descubrir()"
+      />
+    </div>
+  </article>
+
+  <section class="panel">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">FieldClimate</p>
+        <h2>Centrales disponibles en la cuenta</h2>
+      </div>
+      <span>{{ descubiertas.length }} encontradas</span>
+    </div>
+
+    @if (!descubiertas.length) {
+      <div class="empty-state">
+        Ingresa usuario y password FieldClimate para listar las centrales disponibles.
+      </div>
+    } @else {
+      <div class="station-grid">
+        @for (station of descubiertas; track station.idExterno) {
+          <article class="station-card">
+            <div class="station-main">
+              <span class="station-icon"><i class="pi pi-cloud"></i></span>
+              <div>
+                <h3>{{ nombreCentral(station) }}</h3>
+                <p>{{ station.info?.device_name || station.info?.description || station.idExterno }}</p>
+              </div>
+            </div>
+            <dl>
+              <div>
+                <dt>ID</dt>
+                <dd>{{ station.idExterno }}</dd>
+              </div>
+              <div>
+                <dt>Ultimo dato</dt>
+                <dd>{{ ultimoDato(station) }}</dd>
+              </div>
+              <div>
+                <dt>Ubicacion</dt>
+                <dd>{{ coords(station) }}</dd>
+              </div>
+            </dl>
+            <p-button
+              label="Agregar a Chaman"
+              icon="pi pi-plus"
+              [loading]="savingId === station.idExterno"
+              (onClick)="importar(station)"
+            />
+          </article>
+        }
+      </div>
+    }
+  </section>
+
+  <section class="panel">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Chaman</p>
+        <h2>Centrales importadas y asignacion</h2>
+      </div>
+      <span>{{ centrales.length }} centrales</span>
+    </div>
+
+    @if (loadingCentrales) {
+      <div class="empty-state">Cargando centrales...</div>
+    } @else if (!centrales.length) {
+      <div class="empty-state">Todavia no hay centrales FieldClimate importadas.</div>
+    } @else {
+      <div class="imported-list">
+        @for (central of centrales; track central._id) {
+          <article class="imported-card">
+            <div class="imported-title">
+              <span class="station-icon"><i class="pi pi-map-marker"></i></span>
+              <div>
+                <h3>{{ nombreCentral(central) }}</h3>
+                <p>{{ central.info?.device_name || central.idExterno }}</p>
+              </div>
+              <span class="status-chip" [class.assigned]="central.idEstablecimiento">
+                {{ central.idEstablecimiento ? 'Asignada' : 'Sin asignar' }}
+              </span>
+            </div>
+
+            <div class="central-meta">
+              <span>Ultimo dato: <strong>{{ ultimoDato(central) }}</strong></span>
+              <span>Ubicacion: <strong>{{ coords(central) }}</strong></span>
+              <span>Actual: <strong>{{ establecimientoNombre(central.idEstablecimiento) }}</strong></span>
+              <span>Variables: <strong>{{ variables(central) }}</strong></span>
+            </div>
+
+            <div class="assign-row">
+              <select [(ngModel)]="asignaciones[central._id || '']">
+                <option value="">Seleccionar establecimiento</option>
+                @for (est of establecimientos; track est._id) {
+                  <option [value]="est._id">{{ est.nombre }}</option>
+                }
+              </select>
+              <p-button
+                label="Asignar central"
+                icon="pi pi-check"
+                [loading]="savingId === central._id"
+                (onClick)="asignar(central)"
+              />
+            </div>
+          </article>
+        }
+      </div>
+    }
+  </section>
+</section>

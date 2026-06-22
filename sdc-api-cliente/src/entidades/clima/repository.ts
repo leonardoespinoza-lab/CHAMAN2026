@@ -39,6 +39,23 @@ export class ClimaRepository {
     const url = `${API_CLIMA}/clima/pronostico/cerca/${lat}/${lng}`;
     return await this.axios.GET<IPronosticoEstacionMeteorologica[]>(url);
   }
+
+  async getFieldClimateLastData(
+    stationId: string,
+    username: string,
+    password: string,
+    dataGroup: 'raw' | 'hourly' | 'daily' | 'monthly' = 'hourly',
+    timePeriod = '24h',
+  ) {
+    const id = encodeURIComponent(stationId);
+    const url = `${API_CLIMA}/fieldclimate/integracion/stations/${id}/last`;
+    return await this.axios.POST<any>(url, {
+      username,
+      password,
+      dataGroup,
+      timePeriod,
+    });
+  }
 }
 
 export enum SemaforoClima {

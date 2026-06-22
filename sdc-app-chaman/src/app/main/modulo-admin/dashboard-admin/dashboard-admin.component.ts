@@ -25,6 +25,7 @@ export class DashboardAdminComponent {
     { label: 'Productor', icon: 'pi pi-id-card', route: '/productores/crear' },
     { label: 'Quimica', icon: 'pi pi-building', route: '/quimicas/crear' },
     { label: 'LoRaWAN', icon: 'pi pi-microchip', route: '/dispositivos/crear' },
+    { label: 'FieldClimate', icon: 'pi pi-cloud', route: '/fieldclimate' },
     { label: 'Algoritmos', icon: 'pi pi-sliders-h', route: '/algoritmos' },
   ];
 
@@ -68,6 +69,14 @@ export class DashboardAdminComponent {
       route: '/dispositivos',
       group: 'Sensores',
       status: 'Monitoreo',
+    },
+    {
+      title: 'Centrales meteorologicas',
+      description: 'Integracion FieldClimate, importacion de centrales y asignacion por establecimiento.',
+      icon: 'pi pi-cloud',
+      route: '/fieldclimate',
+      group: 'Integraciones',
+      status: 'Configurable',
     },
     {
       title: 'Fenologia',

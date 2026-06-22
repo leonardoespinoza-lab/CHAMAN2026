@@ -56,8 +56,15 @@ export interface IEstacion {
   };
   /**
    * Sensores que tiene la estación - Cambia según el origen
-   */
+  */
   sensores?: Sensores[]; // ["temperatura", "humedad", "viento", "radiacion"]
+  idEstablecimiento?: string;
+  variablesDisponibles?: string[];
+  estado?: {
+    activa?: boolean;
+    ultimoSync?: string;
+    ultimoError?: string;
+  };
   /**
    * Modulos que tiene la estación - solo para Omixom
    * Está porque reportan con el id en lugar de un nombre legible.

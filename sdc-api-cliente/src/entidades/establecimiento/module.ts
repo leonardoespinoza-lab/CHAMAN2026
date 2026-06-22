@@ -6,9 +6,15 @@ import { EstablecimientosRepository } from './repository';
 import { ProductorsModule } from '../productor/module';
 import { ClimaModule } from '../clima/module';
 import { EstablecimientosClimateSyncService } from './climate-sync.service';
+import { EstacionsModule } from '../estacion/module';
 
 @Module({
-  imports: [AxiosModule, ProductorsModule, forwardRef(() => ClimaModule)],
+  imports: [
+    AxiosModule,
+    ProductorsModule,
+    EstacionsModule,
+    forwardRef(() => ClimaModule),
+  ],
   controllers: [EstablecimientosController],
   providers: [
     EstablecimientosService,
