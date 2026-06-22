@@ -1,5 +1,5 @@
 import { animate, style, transition, trigger } from '@angular/animations';
-import { AfterViewInit, ChangeDetectorRef, Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, inject, NgZone, OnDestroy, OnInit, signal, ViewChild } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
@@ -17,7 +17,7 @@ import {
 } from 'modelos/src';
 import { Feature, Map, MapBrowserEvent, Overlay, View } from 'ol';
 import { click } from 'ol/events/condition';
-import { Extent, getCenter } from 'ol/extent';
+import { Extent } from 'ol/extent';
 import { FeatureLike } from 'ol/Feature';
 import TileWMS from 'ol/source/TileWMS';
 import { Point, Polygon } from 'ol/geom';
@@ -103,6 +103,18 @@ interface IVientoDecision {
   pronostico: { label: string; valor: string }[];
 }
 
+interface IVientoParticle {
+  x: number;
+  y: number;
+  length: number;
+  speed: number;
+  width: number;
+  age: number;
+  life: number;
+  wobble: number;
+  alpha: number;
+}
+
 @Component({
   selector: 'app-mapa',
   imports: [SharedModule, DrawerClimaComponent],
@@ -139,6 +151,7 @@ interface IVientoDecision {
   ],
 })
 export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
+  @ViewChild('windCanvas') private windCanvasRef?: ElementRef<HTMLCanvasElement>;
 
   // Helper para convertir severity a tipo válido
   getSeverity(severity: string | undefined): "error" | "success" | "info" | "warn" | "secondary" | "contrast" {
@@ -168,7 +181,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   // Capas
   private establecimientosLayer = new VectorLayer({ source: new Vector(), zIndex: 0 });
   private lotesLayer = new VectorLayer({ source: new Vector(), zIndex: 2 });
-  private vientoLayer = new VectorLayer({ source: new Vector(), zIndex: 6, visible: false });
   private ndviLayerGroup = new LayerGroup({ zIndex: 1, visible: false });
   private suelosLayer = new TileLayer({
     source: new TileWMS({
@@ -260,6 +272,10 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   public showResumenGerencial = false;
   public showVientoLayer = false;
   public resumenSeleccionadoId?: string;
+  private windParticles: IVientoParticle[] = [];
+  private windAnimationFrame?: number;
+  private windLastFrame = 0;
+  private windDecisionSnapshot?: IVientoDecision;
 
   // Datos para el panel de enfermedades
   public enfermedades = {
@@ -362,7 +378,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     private activatedRoute: ActivatedRoute,
     public loginService: LoginService,
     private climaTraduccionService: ClimaTraduccionService,
-    private climaService: ClimaService
+    private climaService: ClimaService,
+    private ngZone: NgZone
   ) {}
 
   // El mapa arranca en una posicion neutra y luego se encuadra con datos reales.
@@ -697,7 +714,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.loteSeleccionado = undefined;
     this.selectEstablecimiento(establecimiento.nombre);
     this.centerMapOnEstablecimiento(establecimiento, markAsVisited);
-    this.actualizarCapaViento();
+    this.actualizarFlujoViento();
     this.changeDetectorRef.detectChanges();
   }
 
@@ -705,7 +722,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.loteSeleccionado = undefined;
     this.centerMapOnBounds();
     this.isFirstVisit = false;
-    this.actualizarCapaViento();
+    this.actualizarFlujoViento();
     this.changeDetectorRef.detectChanges();
   }
 
@@ -757,8 +774,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   public toggleVientoLayer(): void {
     this.showVientoLayer = !this.showVientoLayer;
-    this.vientoLayer.setVisible(this.showVientoLayer);
-    this.actualizarCapaViento();
+    if (this.showVientoLayer) {
+      this.startWindFlow();
+      return;
+    }
+    this.stopWindFlow();
   }
 
   public vientoDecision(): IVientoDecision {
@@ -1301,79 +1321,219 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     return direcciones[index];
   }
 
-  private actualizarCapaViento(): void {
-    const source = this.vientoLayer.getSource();
-    source?.clear();
-    if (!this.showVientoLayer || !source) {
+  private actualizarFlujoViento(): void {
+    if (!this.showVientoLayer) {
+      return;
+    }
+    this.windParticles = [];
+    this.windDecisionSnapshot = this.vientoDecision();
+    this.startWindFlow();
+  }
+
+  private startWindFlow(): void {
+    if (!this.showVientoLayer) {
+      return;
+    }
+    this.stopWindFlow(false);
+    this.windDecisionSnapshot = this.vientoDecision();
+
+    this.ngZone.runOutsideAngular(() => {
+      const canvas = this.windCanvasRef?.nativeElement;
+      if (!canvas) {
+        return;
+      }
+      this.resizeWindCanvas(canvas);
+      this.windLastFrame = performance.now();
+      this.windAnimationFrame = window.requestAnimationFrame((timestamp) => this.drawWindFrame(timestamp));
+    });
+  }
+
+  private stopWindFlow(clear = true): void {
+    if (this.windAnimationFrame) {
+      window.cancelAnimationFrame(this.windAnimationFrame);
+      this.windAnimationFrame = undefined;
+    }
+    this.windLastFrame = 0;
+    if (!clear) {
+      return;
+    }
+    this.windDecisionSnapshot = undefined;
+    this.windParticles = [];
+    const canvas = this.windCanvasRef?.nativeElement;
+    const ctx = canvas?.getContext('2d');
+    if (canvas && ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  private drawWindFrame(timestamp: number): void {
+    if (!this.showVientoLayer) {
       return;
     }
 
-    const decision = this.vientoDecision();
-    const direccion = decision.direccion ?? 45;
-    const rotacion = this.getRotacionFlechaViento(direccion);
-    const lotes = this.lotesDeEstablecimientoActual().filter((lote) => !!lote.ubicacion?.geojson?.coordinates);
-
-    if (lotes.length) {
-      lotes.forEach((lote) => {
-        const coordenada = this.getCentroLote(lote);
-        if (!coordenada) {
-          return;
-        }
-        source.addFeature(this.crearFeatureViento(coordenada, decision, rotacion, lote.nombre || 'Lote'));
-      });
+    const canvas = this.windCanvasRef?.nativeElement;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) {
       return;
     }
 
-    const establecimiento = this.establecimientoSeleccionado || this.establecimientos[0];
-    const coordenada = this.getCentroEstablecimiento(establecimiento);
-    if (coordenada) {
-      source.addFeature(this.crearFeatureViento(coordenada, decision, rotacion, establecimiento?.nombre || 'Zona'));
+    const ratio = this.resizeWindCanvas(canvas);
+    const width = canvas.width / ratio;
+    const height = canvas.height / ratio;
+    const elapsed = Math.min(32, timestamp - (this.windLastFrame || timestamp));
+    const delta = Math.max(0.7, elapsed / 16.67);
+    this.windLastFrame = timestamp;
+
+    const decision = this.windDecisionSnapshot || this.vientoDecision();
+    const vector = this.getWindCanvasVector(decision.direccion ?? 45);
+    const color = this.hexToRgb(decision.color) || { r: 35, g: 200, b: 196 };
+    const intensidad = Math.max(decision.velocidad ?? 6, decision.rafaga ?? 0, 4);
+    const target = this.getWindParticleTarget(width, height);
+
+    while (this.windParticles.length < target) {
+      this.windParticles.push(this.createWindParticle(width, height, vector, true));
     }
+    if (this.windParticles.length > target) {
+      this.windParticles.length = target;
+    }
+
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowBlur = 7;
+    ctx.shadowColor = `rgba(${color.r}, ${color.g}, ${color.b}, 0.42)`;
+
+    const baseSpeed = 0.42 + Math.min(intensidad, 45) / 28;
+    const normal = { x: -vector.y, y: vector.x };
+
+    for (const particle of this.windParticles) {
+      const wave = Math.sin((particle.age + particle.wobble) * 0.06) * 0.45;
+      particle.x += (vector.x * baseSpeed * particle.speed + normal.x * wave) * delta;
+      particle.y += (vector.y * baseSpeed * particle.speed + normal.y * wave) * delta;
+      particle.age += delta;
+
+      if (
+        particle.age > particle.life ||
+        particle.x < -90 ||
+        particle.x > width + 90 ||
+        particle.y < -90 ||
+        particle.y > height + 90
+      ) {
+        this.resetWindParticle(particle, width, height, vector, false);
+      }
+
+      const headAlpha = Math.max(0.08, particle.alpha * (1 - particle.age / particle.life));
+      const tailX = particle.x - vector.x * particle.length;
+      const tailY = particle.y - vector.y * particle.length;
+      const gradient = ctx.createLinearGradient(tailX, tailY, particle.x, particle.y);
+      gradient.addColorStop(0, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
+      gradient.addColorStop(0.45, `rgba(${color.r}, ${color.g}, ${color.b}, ${headAlpha * 0.58})`);
+      gradient.addColorStop(1, `rgba(255, 255, 255, ${headAlpha})`);
+
+      ctx.strokeStyle = gradient;
+      ctx.lineWidth = particle.width;
+      ctx.beginPath();
+      ctx.moveTo(tailX, tailY);
+      ctx.lineTo(particle.x, particle.y);
+      ctx.stroke();
+    }
+
+    this.windAnimationFrame = window.requestAnimationFrame((nextTimestamp) => this.drawWindFrame(nextTimestamp));
   }
 
-  private getRotacionFlechaViento(direccionDesdeGrados: number): number {
-    // direccionViento suele venir como direccion desde donde sopla; la flecha muestra hacia donde se desplaza.
-    const hacia = ((direccionDesdeGrados + 180) % 360) - 90;
-    return (hacia * Math.PI) / 180;
+  private resizeWindCanvas(canvas: HTMLCanvasElement): number {
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(1, Math.floor(rect.width * ratio));
+    const height = Math.max(1, Math.floor(rect.height * ratio));
+
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+
+    return ratio;
   }
 
-  private crearFeatureViento(coordenada: number[], decision: IVientoDecision, rotacion: number, nombre: string): Feature {
-    const feature = new Feature(new Point(coordenada));
-    feature.set('nombre', nombre);
-    feature.setStyle(
-      new Style({
-        text: new Text({
-          text: '➤',
-          font: '900 34px Arial',
-          rotation: rotacion,
-          rotateWithView: true,
-          fill: new Fill({ color: decision.color }),
-          stroke: new Stroke({ color: 'rgba(255, 255, 255, 0.92)', width: 5 }),
-          offsetY: -6,
-        }),
-      })
-    );
-    return feature;
+  private getWindParticleTarget(width: number, height: number): number {
+    const area = width * height;
+    const mobile = this.helper.isHandset;
+    const density = mobile ? 10500 : 8200;
+    const min = mobile ? 34 : 62;
+    const max = mobile ? 72 : 150;
+    return Math.max(min, Math.min(max, Math.round(area / density)));
   }
 
-  private getCentroLote(lote: ILoteMapa): number[] | null {
-    const geojson = lote.ubicacion?.geojson as IGeoJSONPolygon;
-    if (!geojson?.coordinates?.length) {
+  private createWindParticle(width: number, height: number, vector: { x: number; y: number }, initial: boolean): IVientoParticle {
+    const particle: IVientoParticle = {
+      x: 0,
+      y: 0,
+      length: 0,
+      speed: 0,
+      width: 0,
+      age: 0,
+      life: 0,
+      wobble: 0,
+      alpha: 0,
+    };
+    this.resetWindParticle(particle, width, height, vector, initial);
+    return particle;
+  }
+
+  private resetWindParticle(
+    particle: IVientoParticle,
+    width: number,
+    height: number,
+    vector: { x: number; y: number },
+    initial: boolean
+  ): void {
+    const fromHorizontal = Math.abs(vector.x) > Math.abs(vector.y);
+    const offset = 80;
+    particle.x = fromHorizontal
+      ? vector.x > 0
+        ? -offset
+        : width + offset
+      : Math.random() * width;
+    particle.y = fromHorizontal
+      ? Math.random() * height
+      : vector.y > 0
+        ? -offset
+        : height + offset;
+
+    if (initial) {
+      particle.x += vector.x * Math.random() * width;
+      particle.y += vector.y * Math.random() * height;
+    }
+
+    particle.length = 34 + Math.random() * 58;
+    particle.speed = 0.8 + Math.random() * 1.8;
+    particle.width = 1.25 + Math.random() * 1.65;
+    particle.life = 150 + Math.random() * 180;
+    particle.age = Math.random() * (initial ? particle.life : 30);
+    particle.wobble = Math.random() * 1000;
+    particle.alpha = 0.38 + Math.random() * 0.36;
+  }
+
+  private getWindCanvasVector(direccionDesdeGrados: number): { x: number; y: number } {
+    const hacia = (((direccionDesdeGrados + 180) % 360) * Math.PI) / 180;
+    return {
+      x: Math.sin(hacia),
+      y: -Math.cos(hacia),
+    };
+  }
+
+  private hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+    const normalized = hex.replace('#', '').trim();
+    if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
       return null;
     }
-    const polygon = new Polygon(geojson.coordinates);
-    polygon.transform('EPSG:4326', 'EPSG:3857');
-    return polygon.getInteriorPoint().getCoordinates();
-  }
-
-  private getCentroEstablecimiento(establecimiento?: IEstablecimiento): number[] | null {
-    const geojson = establecimiento?.ubicacion?.[0]?.geojson as IGeoJSONPolygon | undefined;
-    if (!geojson?.coordinates?.length) {
-      return null;
-    }
-    const polygon = new Polygon(geojson.coordinates);
-    polygon.transform('EPSG:4326', 'EPSG:3857');
-    return polygon.getInteriorPoint().getCoordinates() || getCenter(polygon.getExtent());
+    const value = Number.parseInt(normalized, 16);
+    return {
+      r: (value >> 16) & 255,
+      g: (value >> 8) & 255,
+      b: value & 255,
+    };
   }
 
   private lotesDeEstablecimientoActual(): ILoteMapa[] {
@@ -1717,7 +1877,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
           }),
           this.establecimientosLayer,
           this.lotesLayer,
-          this.vientoLayer,
           this.ndviLayerGroup,
           this.distribuidorLayer,
           this.suelosLayer,
@@ -1875,7 +2034,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       })
     );
 
-    this.actualizarCapaViento();
+    this.actualizarFlujoViento();
     this.loading.set(false);
   }
 
@@ -1953,7 +2112,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Forzar detección de cambios
     if (this.establecimientoSeleccionado) {
-      this.actualizarCapaViento();
+      this.actualizarFlujoViento();
       this.changeDetectorRef.detectChanges();
     }
 
@@ -2177,7 +2336,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         }
       })
     );
-    this.actualizarCapaViento();
+    this.actualizarFlujoViento();
     this.loading.set(false);
   }
 
@@ -2800,6 +2959,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.stopWindFlow();
     this.removeClimaLayer();
     this.lotes$?.unsubscribe();
     this.establecimientos$?.unsubscribe();

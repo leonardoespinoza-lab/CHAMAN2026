@@ -786,7 +786,16 @@
     gap: 0.45rem;
   }
 
+  .map-topbar-main {
+    display: grid;
+    grid-template-columns: auto auto;
+    justify-content: start;
+    align-items: center;
+    gap: 0.38rem;
+  }
+
   .weather-strip {
+    grid-column: 1 / -1;
     display: flex;
     flex: 0 0 auto;
     width: 100%;
@@ -825,17 +834,17 @@
 
   .summary-action {
     flex: 0 0 auto;
-    width: 100%;
-    max-width: 100%;
+    width: auto;
+    max-width: max-content;
     padding: 0.25rem;
   }
 
   .summary-button {
-    width: 100%;
+    width: auto;
     justify-content: center;
     min-height: 2.25rem;
     font-size: 0.82rem;
-    padding-right: 0.5rem;
+    padding: 0.22rem 0.58rem 0.22rem 0.28rem;
   }
 
   .summary-button-icon {

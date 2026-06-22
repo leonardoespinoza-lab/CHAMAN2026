@@ -1,4 +1,20 @@
 app-mapa {
+  .wind-flow-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    width: 100vw;
+    height: 100vh;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms ease;
+    mix-blend-mode: screen;
+  }
+
+  .wind-flow-canvas.visible {
+    opacity: 0.9;
+  }
+
   .wind-action {
     flex: 0 0 auto;
     min-height: 3.35rem;
@@ -179,8 +195,8 @@ app-mapa {
 @media (max-width: 1180px) {
   app-mapa {
     .wind-action {
-      width: 100%;
-      overflow-x: auto;
+      width: auto;
+      max-width: max-content;
     }
   }
 }
@@ -189,33 +205,29 @@ app-mapa {
   app-mapa {
     .wind-action {
       flex: 0 0 auto;
-      width: 100%;
-      max-width: 100%;
+      width: auto;
+      max-width: max-content;
       padding: 0.25rem;
-      overflow-x: auto;
-    }
-
-    .wind-action::-webkit-scrollbar {
-      display: none;
     }
 
     .wind-toggle {
-      width: 100%;
+      width: auto;
       min-height: 2.25rem;
-      grid-template-columns: auto auto 1fr;
+      grid-template-columns: auto auto;
       justify-content: center;
       font-size: 0.82rem;
-      padding-right: 0.5rem;
+      padding: 0.22rem 0.58rem 0.22rem 0.28rem;
     }
 
     .wind-toggle strong {
-      grid-column: 3;
-      justify-self: end;
+      grid-column: 2;
+      justify-self: start;
+      font-size: 0.7rem;
     }
 
     .wind-button-icon {
-      width: 1.75rem;
-      height: 1.75rem;
+      width: 1.65rem;
+      height: 1.65rem;
     }
 
     .wind-decision-panel {
@@ -224,6 +236,14 @@ app-mapa {
       right: 0.5rem;
       width: auto;
       border-radius: 16px;
+    }
+  }
+}
+
+@media (max-width: 420px) {
+  app-mapa {
+    .wind-toggle strong {
+      display: none;
     }
   }
 }
