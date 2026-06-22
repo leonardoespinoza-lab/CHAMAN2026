@@ -1,0 +1,74 @@
+<section class="custom-card wind-card" [ngClass]="'tone-' + decision.tono">
+  <div class="wind-header">
+    <div class="wind-title">
+      <span class="wind-icon"><i class="pi pi-send"></i></span>
+      <div>
+        <p>VIENTO Y APLICACION</p>
+        <span>{{ lote?.establecimiento?.nombre || 'Sin establecimiento' }}</span>
+      </div>
+    </div>
+    <span class="wind-status">{{ decision.titulo }}</span>
+  </div>
+
+  <div class="wind-content">
+    <div
+      class="wind-map"
+      [ngClass]="mapToneClass"
+      [style.background-image]="mapa?.backgroundImage"
+      [style.--wind-angle]="windAngleCss"
+      [style.--wind-color]="decision.color"
+    >
+      @if (mapa?.points) {
+        <svg class="wind-lot-shape" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <polygon class="wind-lot-fill" [attr.points]="mapa?.points"></polygon>
+          <polygon class="wind-lot-border" [attr.points]="mapa?.points"></polygon>
+        </svg>
+      }
+
+      <div class="wind-streams" aria-hidden="true">
+        @for (stream of streams; track stream.id) {
+          <span
+            [style.left.%]="stream.left"
+            [style.top.%]="stream.top"
+            [style.width.px]="stream.width"
+            [style.animation-delay.s]="stream.delay"
+            [style.animation-duration.s]="stream.duration"
+          ></span>
+        }
+      </div>
+
+      <div class="wind-map-chip">
+        <span>{{ decision.direccionLabel }}</span>
+        <strong>{{ decision.velocidad === null ? '--' : (decision.velocidad | number: '1.0-0') + ' km/h' }}</strong>
+      </div>
+    </div>
+
+    <div class="wind-panel">
+      <article class="wind-decision">
+        <span>Ventana de aplicacion</span>
+        <strong>{{ decision.ventana }}</strong>
+        <p>{{ decision.detalle }}</p>
+      </article>
+
+      <div class="wind-metrics">
+        @for (metrica of metricas; track metrica.label) {
+          <article>
+            <span>{{ metrica.label }}</span>
+            <strong>{{ metrica.value }}</strong>
+            <small>{{ metrica.detail }}</small>
+          </article>
+        }
+      </div>
+
+      <div class="wind-forecast">
+        @for (dia of pronostico; track dia.label) {
+          <article [ngClass]="'tone-' + dia.tone">
+            <span>{{ dia.label }}</span>
+            <strong>{{ dia.viento }}</strong>
+            <small>{{ dia.estado }}</small>
+          </article>
+        }
+      </div>
+    </div>
+  </div>
+</section>

@@ -269,18 +269,16 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
       return null;
     }
 
-    const rasterRing = this.coordenadasMetadataImagen();
-    const rasterBounds = this.bounds(rasterRing.length >= 3 ? rasterRing : ring);
-    const unionBounds = this.bounds([...ring, ...rasterRing]);
-    const ancho = Math.max(unionBounds.maxLng - unionBounds.minLng, 0.0018);
-    const alto = Math.max(unionBounds.maxLat - unionBounds.minLat, 0.0018);
-    const padLng = Math.max(ancho * 0.65, 0.0025);
-    const padLat = Math.max(alto * 0.65, 0.0025);
+    const lotBounds = this.bounds(ring);
+    const ancho = Math.max(lotBounds.maxLng - lotBounds.minLng, 0.0008);
+    const alto = Math.max(lotBounds.maxLat - lotBounds.minLat, 0.0008);
+    const padLng = Math.max(ancho * 0.16, 0.00035);
+    const padLat = Math.max(alto * 0.16, 0.00035);
     const bbox = {
-      minLng: unionBounds.minLng - padLng,
-      maxLng: unionBounds.maxLng + padLng,
-      minLat: unionBounds.minLat - padLat,
-      maxLat: unionBounds.maxLat + padLat,
+      minLng: lotBounds.minLng - padLng,
+      maxLng: lotBounds.maxLng + padLng,
+      minLat: lotBounds.minLat - padLat,
+      maxLat: lotBounds.maxLat + padLat,
     };
     const bboxWidth = bbox.maxLng - bbox.minLng || 1;
     const bboxHeight = bbox.maxLat - bbox.minLat || 1;
@@ -292,14 +290,14 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
       })
       .join(' ');
 
-    const rasterPosition = this.percentBounds(rasterBounds, bbox, bboxWidth, bboxHeight);
+    const rasterPosition = this.percentBounds(lotBounds, bbox, bboxWidth, bboxHeight);
     const bboxParam = [bbox.minLng, bbox.minLat, bbox.maxLng, bbox.maxLat].map((value) => value.toFixed(7)).join(',');
     const url =
       'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export' +
       `?bbox=${bboxParam}&bboxSR=4326&imageSR=4326&size=900,520&format=jpg&f=image`;
 
     return {
-      backgroundImage: `linear-gradient(180deg, rgba(8, 18, 32, 0.08), rgba(8, 18, 32, 0.18)), url("${url}")`,
+      backgroundImage: `url("${url}")`,
       points,
       raster: rasterPosition,
     };
@@ -314,23 +312,6 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
   private coordenadasLote(): Array<[number, number]> {
     const geojson = (this.lote as any)?.ubicacion?.geojson;
     const coordinates = geojson?.type === 'MultiPolygon' ? geojson?.coordinates?.[0]?.[0] : geojson?.coordinates?.[0];
-    if (!Array.isArray(coordinates)) {
-      return [];
-    }
-    return coordinates
-      .map((coord: unknown) => {
-        if (!Array.isArray(coord) || coord.length < 2) {
-          return null;
-        }
-        const lng = Number(coord[0]);
-        const lat = Number(coord[1]);
-        return Number.isFinite(lng) && Number.isFinite(lat) ? ([lng, lat] as [number, number]) : null;
-      })
-      .filter((coord): coord is [number, number] => !!coord);
-  }
-
-  private coordenadasMetadataImagen(): Array<[number, number]> {
-    const coordinates = this.reporte?.metadataImagen?.geojson?.coordinates?.[0];
     if (!Array.isArray(coordinates)) {
       return [];
     }

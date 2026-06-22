@@ -32,6 +32,7 @@ import { CardRendimientoComponent } from './card-rendimiento/card-rendimiento.co
 import { CardRiegoComponent } from './card-riego/card-riego.component';
 import { CardUltimaFertilizacionComponent } from './card-ultima-fertilizacion/card-ultima-fertilizacion.component';
 import { CardUltimaFumigacionComponent } from './card-ultima-fumigacion/card-ultima-fumigacion.component';
+import { CardVientoLoteComponent } from './card-viento-lote/card-viento-lote.component';
 import { DrawerListadoSiembrasComponent } from './drawer-listado-siembras/drawer-listado-siembras.component';
 
 const CULTIVOS_CON_PREDICCION_MALEZAS = ['Soja', 'Trigo', 'Maiz'];
@@ -62,6 +63,7 @@ export interface IDetallesLote extends ILoteTabla {
     CardFrioTermicoComponent,
     CardMalezasComponent,
     CardCamarasLoteComponent,
+    CardVientoLoteComponent,
   ],
   templateUrl: './detalles-lote.component.html',
   styleUrl: './detalles-lote.component.scss',

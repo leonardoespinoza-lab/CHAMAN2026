@@ -143,6 +143,9 @@
     @if (mostrarPrediccionMalezas && helper.puedeVerModulo('Malezas')) {
       <app-card-malezas class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-malezas>
     }
+    @if (helper.puedeVerModulo('Clima')) {
+      <app-card-viento-lote class="service-panel" [lote]="lote"></app-card-viento-lote>
+    }
     @if (helper.puedeVerModulo('NDVI') || (lote?.serialCamara && helper.puedeVerModulo('Camaras'))) {
       <div
         class="satellite-camera-row service-panel"
