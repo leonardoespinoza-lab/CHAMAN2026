@@ -80,9 +80,6 @@
 
 .wind-map {
   background-color: #eef5f4;
-  background-position: 0 0;
-  background-repeat: no-repeat;
-  background-size: 100% 100%;
   border: 1px solid rgba(117, 148, 180, 0.55);
   border-radius: 8px;
   min-height: 260px;
@@ -101,25 +98,10 @@
   z-index: 1;
 }
 
-.wind-lot-shape {
-  height: 100%;
+.wind-ol-map {
   inset: 0;
   position: absolute;
-  width: 100%;
-  z-index: 2;
-}
-
-.wind-lot-fill {
-  fill: rgba(255, 255, 255, 0.14);
-  stroke: rgba(255, 255, 255, 0.78);
-  stroke-width: 0.55;
-}
-
-.wind-lot-border {
-  fill: none;
-  stroke: rgba(11, 24, 39, 0.74);
-  stroke-linejoin: round;
-  stroke-width: 0.75;
+  z-index: 0;
 }
 
 .wind-streams {

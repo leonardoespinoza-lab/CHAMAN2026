@@ -1,5 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, Input, OnChanges, OnDestroy, SimpleChanges, ViewChild } from '@angular/core';
+import { Feature, Map, View } from 'ol';
+import { defaults as defaultControls } from 'ol/control';
+import { defaults as defaultInteractions } from 'ol/interaction';
+import TileLayer from 'ol/layer/Tile';
+import VectorLayer from 'ol/layer/Vector';
+import { fromLonLat } from 'ol/proj';
+import { Vector as VectorSource, XYZ } from 'ol/source';
+import { Fill, Stroke, Style } from 'ol/style';
+import { Polygon } from 'ol/geom';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import type { IDetallesLote } from '../detalles-lote.component';
 
@@ -31,11 +40,6 @@ interface VientoForecast {
   tone: VientoTono;
 }
 
-interface VientoMapContext {
-  backgroundImage: string;
-  points: string;
-}
-
 interface WindStream {
   id: number;
   left: number;
@@ -51,13 +55,13 @@ interface WindStream {
   templateUrl: './card-viento-lote.component.html',
   styleUrl: './card-viento-lote.component.scss',
 })
-export class CardVientoLoteComponent implements OnChanges {
+export class CardVientoLoteComponent implements OnChanges, AfterViewInit, OnDestroy {
   @Input() public lote?: IDetallesLote;
+  @ViewChild('windMapTarget') private windMapTarget?: ElementRef<HTMLElement>;
 
   public decision: VientoDecision = this.crearDecision();
   public metricas: VientoMetric[] = [];
   public pronostico: VientoForecast[] = [];
-  public mapa?: VientoMapContext | null;
 
   public readonly streams: WindStream[] = Array.from({ length: 24 }, (_, index) => ({
     id: index,
@@ -68,10 +72,22 @@ export class CardVientoLoteComponent implements OnChanges {
     duration: 3.2 + ((index * 0.23) % 1.8),
   }));
 
+  private map?: Map;
+  private loteLayer?: VectorLayer<VectorSource>;
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['lote']) {
       this.prepararVista();
+      this.renderizarMapa();
     }
+  }
+
+  ngAfterViewInit(): void {
+    this.renderizarMapa();
+  }
+
+  ngOnDestroy(): void {
+    this.map?.setTarget(undefined);
   }
 
   public get windAngleCss(): string {
@@ -86,7 +102,6 @@ export class CardVientoLoteComponent implements OnChanges {
     this.decision = this.crearDecision();
     this.metricas = this.crearMetricas();
     this.pronostico = this.crearPronostico();
-    this.mapa = this.crearMapaLote();
   }
 
   private crearDecision(): VientoDecision {
@@ -186,41 +201,65 @@ export class CardVientoLoteComponent implements OnChanges {
       });
   }
 
-  private crearMapaLote(): VientoMapContext | null {
+  private renderizarMapa(): void {
+    const target = this.windMapTarget?.nativeElement;
     const ring = this.coordenadasLote();
-    if (ring.length < 3) {
-      return null;
+    if (!target || ring.length < 3) {
+      return;
     }
-    const projectedRing = ring.map((coord) => this.project(coord));
-    const bounds = this.bounds(projectedRing);
-    const ancho = Math.max(bounds.maxLng - bounds.minLng, 90);
-    const alto = Math.max(bounds.maxLat - bounds.minLat, 90);
-    const padLng = Math.max(ancho * 0.18, 45);
-    const padLat = Math.max(alto * 0.18, 45);
-    const bbox = {
-      minLng: bounds.minLng - padLng,
-      maxLng: bounds.maxLng + padLng,
-      minLat: bounds.minLat - padLat,
-      maxLat: bounds.maxLat + padLat,
-    };
-    const bboxWidth = bbox.maxLng - bbox.minLng || 1;
-    const bboxHeight = bbox.maxLat - bbox.minLat || 1;
-    const points = projectedRing
-      .map(([lng, lat]) => {
-        const x = ((lng - bbox.minLng) / bboxWidth) * 100;
-        const y = ((bbox.maxLat - lat) / bboxHeight) * 100;
-        return `${this.redondear(x)},${this.redondear(y)}`;
-      })
-      .join(' ');
-    const bboxParam = [bbox.minLng, bbox.minLat, bbox.maxLng, bbox.maxLat].map((value) => value.toFixed(2)).join(',');
-    const url =
-      'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export' +
-      `?bbox=${bboxParam}&bboxSR=3857&imageSR=3857&size=980,420&format=jpg&f=image`;
 
-    return {
-      backgroundImage: `linear-gradient(180deg, rgba(8, 18, 32, 0.04), rgba(8, 18, 32, 0.18)), url("${url}")`,
-      points,
-    };
+    const polygon = new Polygon([ring.map((coord) => fromLonLat(coord))]);
+    const feature = new Feature({ geometry: polygon });
+    feature.setStyle(
+      new Style({
+        fill: new Fill({ color: 'rgba(255, 255, 255, 0.08)' }),
+        stroke: new Stroke({ color: 'rgba(18, 37, 59, 0.82)', width: 2 }),
+      })
+    );
+
+    const source = new VectorSource({ features: [feature] });
+    if (!this.map) {
+      this.loteLayer = new VectorLayer({ source });
+      this.map = new Map({
+        target,
+        controls: defaultControls({ attribution: false, rotate: false, zoom: false }),
+        interactions: defaultInteractions({
+          altShiftDragRotate: false,
+          doubleClickZoom: false,
+          dragPan: false,
+          keyboard: false,
+          mouseWheelZoom: false,
+          pinchRotate: false,
+          pinchZoom: false,
+        }),
+        layers: [
+          new TileLayer({
+            source: new XYZ({
+              url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+              attributions: '',
+              maxZoom: 19,
+            }),
+          }),
+          this.loteLayer,
+        ],
+        view: new View({
+          center: fromLonLat(ring[0]),
+          zoom: 14,
+        }),
+      });
+    } else {
+      this.map.setTarget(target);
+      this.loteLayer?.setSource(source);
+    }
+
+    setTimeout(() => {
+      this.map?.updateSize();
+      this.map?.getView().fit(polygon.getExtent(), {
+        padding: [44, 44, 44, 44],
+        maxZoom: 17,
+        duration: 0,
+      });
+    });
   }
 
   private coordenadasLote(): Array<[number, number]> {
@@ -239,25 +278,6 @@ export class CardVientoLoteComponent implements OnChanges {
         return Number.isFinite(lng) && Number.isFinite(lat) ? ([lng, lat] as [number, number]) : null;
       })
       .filter((coord): coord is [number, number] => !!coord);
-  }
-
-  private bounds(ring: Array<[number, number]>): { minLng: number; maxLng: number; minLat: number; maxLat: number } {
-    const longitudes = ring.map(([lng]) => lng);
-    const latitudes = ring.map(([, lat]) => lat);
-    return {
-      minLng: Math.min(...longitudes),
-      maxLng: Math.max(...longitudes),
-      minLat: Math.min(...latitudes),
-      maxLat: Math.max(...latitudes),
-    };
-  }
-
-  private project([lng, lat]: [number, number]): [number, number] {
-    const radius = 6378137;
-    const safeLat = Math.max(Math.min(lat, 85.05112878), -85.05112878);
-    const x = radius * (lng * Math.PI) / 180;
-    const y = radius * Math.log(Math.tan(Math.PI / 4 + (safeLat * Math.PI) / 360));
-    return [x, y];
   }
 
   private getDatosViento(): { velocidad: number | null; rafaga: number | null; direccion: number | null } {

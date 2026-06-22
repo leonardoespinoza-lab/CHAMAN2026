@@ -1,5 +1,16 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, OnDestroy, OnInit } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import { Feature, Map, View } from 'ol';
+import { defaults as defaultControls } from 'ol/control';
+import { defaults as defaultInteractions } from 'ol/interaction';
+import { Polygon } from 'ol/geom';
+import ImageLayer from 'ol/layer/Image';
+import TileLayer from 'ol/layer/Tile';
+import VectorLayer from 'ol/layer/Vector';
+import { fromLonLat } from 'ol/proj';
+import ImageStatic from 'ol/source/ImageStatic';
+import { Vector as VectorSource, XYZ } from 'ol/source';
+import { Fill, Stroke, Style } from 'ol/style';
 import {
   IFilter,
   IListado,
@@ -40,26 +51,16 @@ interface SatelliteIndicator {
   status: 'activo' | 'preparado' | 'contexto';
 }
 
-interface SatelliteMapContext {
-  backgroundImage: string;
-  points: string;
-  raster: {
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  };
-}
-
 @Component({
   selector: 'app-card-ndvi',
   imports: [CommonModule, SharedModule],
   templateUrl: './card-ndvi.component.html',
   styleUrl: './card-ndvi.component.scss',
 })
-export class CardNDVIComponent implements OnInit, OnDestroy {
+export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   @Input() public lote?: ILote;
   @Input() public siembra?: ISiembra;
+  @ViewChild('satelliteMapTarget') private satelliteMapTarget?: ElementRef<HTMLElement>;
 
   public hoy: Date = new Date();
   public fecha: Date = this.hoy;
@@ -74,6 +75,9 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
 
   private ndvi$?: Subscription;
   private refreshTimeout?: ReturnType<typeof setTimeout>;
+  private satelliteMap?: Map;
+  private satelliteLoteLayer?: VectorLayer<VectorSource>;
+  private satelliteIndexLayer?: ImageLayer<ImageStatic>;
 
   constructor(
     public helper: HelperService,
@@ -86,6 +90,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
   public onSelect(reporte: IReporteNDVI): void {
     this.reporte = reporte;
     this.fecha = reporte.fechaDeLaImagen ? new Date(reporte.fechaDeLaImagen) : this.hoy;
+    this.programarRenderMapaSatelital();
   }
 
   public get analisis(): NdviAnalisis {
@@ -263,63 +268,110 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
     return this.capaActiva?.image || this.reporte?.ndviUrl;
   }
 
-  public get mapaSatelital(): SatelliteMapContext | null {
-    const ring = this.coordenadasLote();
-    if (ring.length < 3) {
-      return null;
-    }
-
-    const projectedRing = ring.map((coord) => this.project(coord));
-    const lotBounds = this.bounds(projectedRing);
-    const rasterRing = this.coordenadasMetadataImagen();
-    const rasterBounds =
-      rasterRing.length >= 3 ? this.bounds(rasterRing.map((coord) => this.project(coord))) : lotBounds;
-    const ancho = Math.max(lotBounds.maxLng - lotBounds.minLng, 90);
-    const alto = Math.max(lotBounds.maxLat - lotBounds.minLat, 90);
-    const padLng = Math.max(ancho * 0.16, 45);
-    const padLat = Math.max(alto * 0.16, 45);
-    const bbox = {
-      minLng: lotBounds.minLng - padLng,
-      maxLng: lotBounds.maxLng + padLng,
-      minLat: lotBounds.minLat - padLat,
-      maxLat: lotBounds.maxLat + padLat,
-    };
-    const bboxWidth = bbox.maxLng - bbox.minLng || 1;
-    const bboxHeight = bbox.maxLat - bbox.minLat || 1;
-    const points = projectedRing
-      .map(([lng, lat]) => {
-        const x = ((lng - bbox.minLng) / bboxWidth) * 100;
-        const y = ((bbox.maxLat - lat) / bboxHeight) * 100;
-        return `${this.redondear(x)},${this.redondear(y)}`;
-      })
-      .join(' ');
-
-    const rasterPosition = this.percentBounds(rasterBounds, bbox, bboxWidth, bboxHeight);
-    const bboxParam = [bbox.minLng, bbox.minLat, bbox.maxLng, bbox.maxLat].map((value) => value.toFixed(2)).join(',');
-    const url =
-      'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export' +
-      `?bbox=${bboxParam}&bboxSR=3857&imageSR=3857&size=900,520&format=jpg&f=image`;
-
-    return {
-      backgroundImage: `url("${url}")`,
-      points,
-      raster: rasterPosition,
-    };
-  }
-
   public seleccionarCapa(indicator: SatelliteIndicator): void {
     if (indicator.status === 'activo') {
       this.capaSatelitalActiva = indicator.key;
+      this.programarRenderMapaSatelital();
     }
+  }
+
+  private programarRenderMapaSatelital(): void {
+    setTimeout(() => this.renderizarMapaSatelital());
+  }
+
+  private renderizarMapaSatelital(): void {
+    const target = this.satelliteMapTarget?.nativeElement;
+    const ring = this.coordenadasLote();
+    if (!target || ring.length < 3) {
+      return;
+    }
+
+    const polygon = new Polygon([ring.map((coord) => fromLonLat(coord))]);
+    const feature = new Feature({ geometry: polygon });
+    feature.setStyle(
+      new Style({
+        fill: new Fill({ color: 'rgba(255, 255, 255, 0.01)' }),
+        stroke: new Stroke({ color: 'rgba(18, 37, 59, 0.84)', width: 2.2 }),
+      })
+    );
+    const source = new VectorSource({ features: [feature] });
+
+    if (!this.satelliteMap) {
+      this.satelliteIndexLayer = new ImageLayer<ImageStatic>({ opacity: 1 });
+      this.satelliteLoteLayer = new VectorLayer({ source });
+      this.satelliteMap = new Map({
+        target,
+        controls: defaultControls({ attribution: false, rotate: false, zoom: false }),
+        interactions: defaultInteractions({
+          altShiftDragRotate: false,
+          doubleClickZoom: false,
+          dragPan: false,
+          mouseWheelZoom: false,
+          pinchRotate: false,
+          pinchZoom: false,
+        }),
+        layers: [
+          new TileLayer({
+            source: new XYZ({
+              url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+              attributions: '',
+              maxZoom: 19,
+            }),
+          }),
+          this.satelliteIndexLayer,
+          this.satelliteLoteLayer,
+        ],
+        view: new View({
+          center: fromLonLat(ring[0]),
+          zoom: 14,
+        }),
+      });
+    } else {
+      this.satelliteMap.setTarget(target);
+      this.satelliteLoteLayer?.setSource(source);
+    }
+
+    const imageUrl = this.imagenCapaActiva;
+    if (imageUrl) {
+      this.satelliteIndexLayer?.setSource(
+        new ImageStatic({
+          url: imageUrl,
+          imageExtent: this.extentImagen3857(polygon),
+          projection: 'EPSG:3857',
+          crossOrigin: 'anonymous',
+        })
+      );
+    } else {
+      this.satelliteIndexLayer?.setSource(null as any);
+    }
+
+    setTimeout(() => {
+      this.satelliteMap?.updateSize();
+      this.satelliteMap?.getView().fit(polygon.getExtent(), {
+        padding: [22, 22, 22, 22],
+        maxZoom: 18,
+        duration: 0,
+      });
+    });
+  }
+
+  private extentImagen3857(polygon: Polygon): [number, number, number, number] {
+    const coordinates = this.coordenadasLote();
+    const projected = coordinates.map((coord) => fromLonLat(coord) as [number, number]);
+    if (projected.length < 3) {
+      return polygon.getExtent() as [number, number, number, number];
+    }
+    return this.bounds3857(projected);
+  }
+
+  private bounds3857(points: Array<[number, number]>): [number, number, number, number] {
+    const xs = points.map(([x]) => x);
+    const ys = points.map(([, y]) => y);
+    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
   }
 
   private coordenadasLote(): Array<[number, number]> {
     const geojson = (this.lote as any)?.ubicacion?.geojson;
-    return this.coordenadasDesdeGeojson(geojson);
-  }
-
-  private coordenadasMetadataImagen(): Array<[number, number]> {
-    const geojson = (this.reporte as any)?.metadataImagen?.geojson;
     return this.coordenadasDesdeGeojson(geojson);
   }
 
@@ -338,44 +390,6 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
         return Number.isFinite(lng) && Number.isFinite(lat) ? ([lng, lat] as [number, number]) : null;
       })
       .filter((coord): coord is [number, number] => !!coord);
-  }
-
-  private bounds(ring: Array<[number, number]>): { minLng: number; maxLng: number; minLat: number; maxLat: number } {
-    const source = ring.length ? ring : this.coordenadasLote();
-    const longitudes = source.map(([lng]) => lng);
-    const latitudes = source.map(([, lat]) => lat);
-    return {
-      minLng: Math.min(...longitudes),
-      maxLng: Math.max(...longitudes),
-      minLat: Math.min(...latitudes),
-      maxLat: Math.max(...latitudes),
-    };
-  }
-
-  private percentBounds(
-    source: { minLng: number; maxLng: number; minLat: number; maxLat: number },
-    bbox: { minLng: number; maxLng: number; minLat: number; maxLat: number },
-    bboxWidth: number,
-    bboxHeight: number
-  ): SatelliteMapContext['raster'] {
-    const left = ((source.minLng - bbox.minLng) / bboxWidth) * 100;
-    const right = ((source.maxLng - bbox.minLng) / bboxWidth) * 100;
-    const top = ((bbox.maxLat - source.maxLat) / bboxHeight) * 100;
-    const bottom = ((bbox.maxLat - source.minLat) / bboxHeight) * 100;
-    return {
-      left: this.redondear(left),
-      top: this.redondear(top),
-      width: this.redondear(right - left),
-      height: this.redondear(bottom - top),
-    };
-  }
-
-  private project([lng, lat]: [number, number]): [number, number] {
-    const radius = 6378137;
-    const safeLat = Math.max(Math.min(lat, 85.05112878), -85.05112878);
-    const x = radius * (lng * Math.PI) / 180;
-    const y = radius * Math.log(Math.tan(Math.PI / 4 + (safeLat * Math.PI) / 360));
-    return [x, y];
   }
 
   private lecturaIndice(key: SatelliteIndicator['key'], value?: number): string {
@@ -484,6 +498,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
       } else {
         this.reporte = undefined;
       }
+      this.programarRenderMapaSatelital();
     });
 
     await this.listados.getLastValue('reportendvis', query);
@@ -658,8 +673,13 @@ export class CardNDVIComponent implements OnInit, OnDestroy {
     await this.listarNDVIs();
   }
 
+  ngAfterViewInit(): void {
+    this.renderizarMapaSatelital();
+  }
+
   ngOnDestroy(): void {
     this.ndvi$?.unsubscribe();
     clearTimeout(this.refreshTimeout);
+    this.satelliteMap?.setTarget(undefined);
   }
 }

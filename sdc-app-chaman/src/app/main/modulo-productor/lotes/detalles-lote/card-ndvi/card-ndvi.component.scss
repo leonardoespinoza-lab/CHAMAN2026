@@ -175,15 +175,18 @@
 
 .img-container {
   background: var(--p-surface-50);
-  background-position: 0 0;
-  background-repeat: no-repeat;
-  background-size: 100% 100%;
   border: 1px solid rgba(104, 132, 163, 0.42);
   border-radius: 8px;
   height: clamp(240px, 22vw, 330px);
   overflow: hidden;
   padding: 0;
   position: relative;
+}
+
+.satellite-ol-map {
+  inset: 0;
+  position: absolute;
+  z-index: 0;
 }
 
 .img-container::before {
@@ -203,71 +206,6 @@
   pointer-events: none;
   position: absolute;
   z-index: 6;
-}
-
-.satellite-lot-shape {
-  height: 100%;
-  inset: 0;
-  position: absolute;
-  width: 100%;
-  z-index: 2;
-}
-
-.satellite-lot-shadow {
-  fill: none;
-  stroke: rgba(8, 18, 32, 0.28);
-  stroke-width: 0.55;
-  transform: translate(0.35px, 0.45px);
-}
-
-.satellite-lot-fill {
-  fill: rgba(255, 255, 255, 0.03);
-  stroke: rgba(255, 255, 255, 0.52);
-  stroke-width: 0.35;
-}
-
-.satellite-lot-border {
-  fill: none;
-  stroke: rgba(13, 24, 39, 0.68);
-  stroke-linejoin: round;
-  stroke-width: 0.65;
-}
-
-.satellite-index-raster {
-  position: absolute;
-}
-
-.img {
-  display: block;
-  height: auto;
-  filter: saturate(1.12) contrast(1.08) drop-shadow(0 12px 20px rgba(37, 50, 73, 0.24));
-  image-rendering: auto;
-  max-height: 88%;
-  max-width: 88%;
-  object-fit: contain;
-  outline: 1px solid rgba(255, 255, 255, 0.34);
-  outline-offset: 2px;
-  position: relative;
-  width: auto;
-  z-index: 1;
-}
-
-.img.satellite-index-raster {
-  filter: none;
-  height: auto;
-  max-height: none;
-  max-width: none;
-  mix-blend-mode: normal;
-  object-fit: fill;
-  opacity: 1;
-  position: absolute;
-  width: auto;
-  z-index: 3;
-}
-
-.satellite-index-image {
-  image-rendering: auto;
-  opacity: 1;
 }
 
 .satellite-map-chip {

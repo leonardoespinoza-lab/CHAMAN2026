@@ -14,16 +14,10 @@
     <div
       class="wind-map"
       [ngClass]="mapToneClass"
-      [style.background-image]="mapa?.backgroundImage"
       [style.--wind-angle]="windAngleCss"
       [style.--wind-color]="decision.color"
     >
-      @if (mapa?.points) {
-        <svg class="wind-lot-shape" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <polygon class="wind-lot-fill" [attr.points]="mapa?.points"></polygon>
-          <polygon class="wind-lot-border" [attr.points]="mapa?.points"></polygon>
-        </svg>
-      }
+      <div #windMapTarget class="wind-ol-map"></div>
 
       <div class="wind-streams" aria-hidden="true">
         @for (stream of streams; track stream.id) {
