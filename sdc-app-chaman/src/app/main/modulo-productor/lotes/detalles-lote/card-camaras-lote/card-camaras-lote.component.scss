@@ -7,7 +7,7 @@
   box-shadow: 0 18px 42px rgba(28, 45, 68, 0.08);
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  min-height: 0;
 }
 
 .camera-header {
@@ -65,7 +65,8 @@
   border-radius: 8px;
   color: #17233a;
   cursor: pointer;
-  height: clamp(280px, 32vw, 430px);
+  aspect-ratio: 16 / 9;
+  height: auto;
   overflow: hidden;
   padding: 0;
   position: relative;
@@ -77,6 +78,7 @@
   height: 100%;
   object-fit: cover;
   object-position: center;
+  transform: scale(1.04);
   width: 100%;
 }
 
@@ -99,18 +101,36 @@
   border-radius: 8px;
   display: grid;
   gap: 0.55rem;
-  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   max-height: none;
   overflow: visible;
   padding: 0.65rem;
 }
 
-.photo-date-strip > span {
+.photo-date-title {
+  align-items: center;
+  display: flex;
+  gap: 0.6rem;
+  grid-column: 1 / -1;
+  justify-content: space-between;
+}
+
+.photo-date-title span {
   color: #63718b;
   font-size: 0.82rem;
   font-weight: 850;
-  grid-column: 1 / -1;
   text-transform: uppercase;
+}
+
+.repository-link {
+  background: rgba(48, 216, 204, 0.12);
+  border: 1px solid rgba(48, 216, 204, 0.38);
+  border-radius: 999px;
+  color: #17233a;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 800;
+  padding: 0.35rem 0.65rem;
 }
 
 .photo-date-strip button {
@@ -149,6 +169,52 @@
   gap: 0.65rem;
   min-height: 94px;
   padding: 1rem;
+}
+
+.photo-repository {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  max-height: 70vh;
+  overflow: auto;
+  padding: 0.25rem;
+}
+
+.photo-repository button {
+  background: #f5f9fc;
+  border: 1px solid #bfd0e1;
+  border-radius: 8px;
+  cursor: pointer;
+  overflow: hidden;
+  padding: 0;
+  text-align: left;
+}
+
+.photo-repository button.active {
+  border-color: var(--p-primary-color);
+  box-shadow: 0 0 0 2px rgba(48, 216, 204, 0.16);
+}
+
+.photo-repository img {
+  aspect-ratio: 16 / 9;
+  display: block;
+  object-fit: cover;
+  width: 100%;
+}
+
+.photo-repository span {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.55rem 0.65rem;
+}
+
+.photo-repository strong {
+  color: #17233a;
+  font-size: 0.98rem;
+}
+
+.photo-repository small {
+  color: #63718b;
 }
 
 .camera-viewer-toolbar {
@@ -205,5 +271,9 @@
   .camera-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .photo-date-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

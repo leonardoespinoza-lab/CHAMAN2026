@@ -16,6 +16,7 @@ export class CardCamarasLoteComponent implements OnChanges {
   public loading = false;
   public fotos: IFoto[] = [];
   public visible = false;
+  public repositorioVisible = false;
   public imagenActiva?: string;
   public fotoSeleccionada?: IFoto;
   public zoomImagen = 1;
@@ -24,6 +25,10 @@ export class CardCamarasLoteComponent implements OnChanges {
 
   public get ultimaFoto(): IFoto | undefined {
     return this.fotos[0];
+  }
+
+  public get fotosVisibles(): IFoto[] {
+    return this.fotos.slice(0, 7);
   }
 
   public async ngOnChanges(changes: SimpleChanges): Promise<void> {
@@ -43,6 +48,10 @@ export class CardCamarasLoteComponent implements OnChanges {
     this.imagenActiva = fotoActual.url;
     this.zoomImagen = 1;
     this.visible = true;
+  }
+
+  public abrirRepositorio(): void {
+    this.repositorioVisible = true;
   }
 
   public aumentarZoom(): void {
@@ -83,7 +92,7 @@ export class CardCamarasLoteComponent implements OnChanges {
           (a, b) =>
             new Date(b.fechaCreacion || 0).getTime() - new Date(a.fechaCreacion || 0).getTime()
         )
-        .slice(0, 12);
+        .slice(0, 40);
       this.fotoSeleccionada = this.fotos[0];
     } finally {
       this.loading = false;

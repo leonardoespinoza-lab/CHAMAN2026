@@ -175,9 +175,9 @@
 
 .img-container {
   background: var(--p-surface-50);
-  background-position: center;
+  background-position: 0 0;
   background-repeat: no-repeat;
-  background-size: cover;
+  background-size: 100% 100%;
   border: 1px solid rgba(104, 132, 163, 0.42);
   border-radius: 8px;
   height: clamp(240px, 22vw, 330px);

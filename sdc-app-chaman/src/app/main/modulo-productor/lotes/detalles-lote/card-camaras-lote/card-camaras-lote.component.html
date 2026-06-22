@@ -20,8 +20,13 @@
           <span>{{ (fotoSeleccionada?.fechaCreacion || ultimaFoto?.fechaCreacion) | date: 'EEEE dd/MM HH:mm' }}</span>
         </button>
         <div class="photo-date-strip">
-          <span>Capturas disponibles</span>
-          @for (foto of fotos; track foto._id || foto.url) {
+          <div class="photo-date-title">
+            <span>Ultimas capturas</span>
+            @if (fotos.length > fotosVisibles.length) {
+              <button type="button" class="repository-link" (click)="abrirRepositorio()">Repositorio</button>
+            }
+          </div>
+          @for (foto of fotosVisibles; track foto._id || foto.url) {
             <button
               type="button"
               [class.active]="fotoSeleccionada?._id === foto._id || fotoSeleccionada?.url === foto.url"
@@ -40,6 +45,29 @@
       </div>
     }
   </div>
+
+  <p-dialog
+    header="Repositorio de fotos"
+    [(visible)]="repositorioVisible"
+    [modal]="true"
+    [style]="{ width: 'min(1080px, 96vw)' }"
+  >
+    <div class="photo-repository">
+      @for (foto of fotos; track foto._id || foto.url) {
+        <button
+          type="button"
+          [class.active]="fotoSeleccionada?._id === foto._id || fotoSeleccionada?.url === foto.url"
+          (click)="seleccionarFoto(foto); repositorioVisible = false"
+        >
+          <img [src]="foto.url" alt="Foto de seguimiento del lote" />
+          <span>
+            <strong>{{ foto.fechaCreacion | date: 'dd/MM' }}</strong>
+            <small>{{ foto.fechaCreacion | date: 'HH:mm' }}</small>
+          </span>
+        </button>
+      }
+    </div>
+  </p-dialog>
 
   <p-dialog [(visible)]="visible" [modal]="true" [style]="{ width: 'min(980px, 96vw)' }">
     <div class="camera-viewer-toolbar">
