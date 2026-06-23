@@ -25,7 +25,16 @@ export class LotesRepository {
   async getById(id: string): Promise<Lote> {
     return await this.model
       .findById(id)
-      .populate('establecimiento departamento dispositivos')
+      .populate([
+        {
+          path: 'establecimiento',
+          populate: {
+            path: 'estacionMeteorologica',
+          },
+        },
+        { path: 'departamento' },
+        { path: 'dispositivos' },
+      ])
       .populate({
         path: 'siembra',
         populate: ['semilla', 'crono', 'departamento'],

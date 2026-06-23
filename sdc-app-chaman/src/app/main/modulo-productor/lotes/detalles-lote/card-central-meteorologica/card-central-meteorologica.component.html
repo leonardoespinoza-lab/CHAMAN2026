@@ -1,0 +1,58 @@
+@if (visible) {
+  <article class="central-card">
+    <header class="central-header">
+      <div class="central-title">
+        <span class="central-icon">
+          <i class="pi pi-cloud"></i>
+        </span>
+        <div>
+          <p class="titulo-card">CENTRAL METEOROLOGICA</p>
+          <h3>{{ nombreCentral }}</h3>
+          <small>{{ subtituloCentral }}</small>
+        </div>
+      </div>
+      <span class="central-status" [class.live]="usaFieldClimate">{{ estadoTexto }}</span>
+    </header>
+
+    <section class="central-resume">
+      <article>
+        <span>Establecimiento</span>
+        <strong>{{ lote?.establecimiento?.nombre || '-' }}</strong>
+      </article>
+      <article>
+        <span>Ultima actualizacion</span>
+        <strong>{{ actualizado }}</strong>
+      </article>
+      <article>
+        <span>Fuente de decision</span>
+        <strong>{{ usaFieldClimate ? 'FieldClimate' : 'Open-Meteo respaldo' }}</strong>
+      </article>
+    </section>
+
+    <section class="central-grid">
+      @for (variable of variables; track variable.label) {
+        <article [class.empty]="!variable.disponible">
+          <i [class]="variable.icon"></i>
+          <span>{{ variable.label }}</span>
+          <strong>{{ variable.value }}</strong>
+          <small>{{ variable.detail }}</small>
+        </article>
+      }
+    </section>
+
+    @if (chips.length) {
+      <section class="central-variables">
+        <strong>Variables disponibles</strong>
+        <div>
+          @for (chip of chips; track chip) {
+            <span>{{ chip }}</span>
+          }
+        </div>
+      </section>
+    } @else {
+      <p-message severity="info">
+        Central asignada. Chaman mostrara las variables cuando ingrese la proxima sincronizacion.
+      </p-message>
+    }
+  </article>
+}

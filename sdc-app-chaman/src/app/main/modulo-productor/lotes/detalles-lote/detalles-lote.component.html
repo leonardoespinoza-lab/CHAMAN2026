@@ -179,6 +179,9 @@
       <app-card-dispositivos class="service-panel" [lote]="lote"></app-card-dispositivos>
     }
     @if (helper.puedeVerModulo('Clima')) {
+      @if (mostrarCentralMeteorologica()) {
+        <app-card-central-meteorologica class="service-panel" [lote]="lote"></app-card-central-meteorologica>
+      }
       <app-card-clima-lote class="service-panel climate-section" [lote]="lote"></app-card-clima-lote>
     }
   </div>

@@ -21,6 +21,7 @@ import { SharedModule } from '../../../../auxiliares/shared.module';
 import { ILoteTabla } from '../listado-lotes/listado-lotes.component';
 import { CardClimaLoteComponent } from './card-clima-lote/card-clima-lote.component';
 import { CardCamarasLoteComponent } from './card-camaras-lote/card-camaras-lote.component';
+import { CardCentralMeteorologicaComponent } from './card-central-meteorologica/card-central-meteorologica.component';
 import { CardDispositivosComponent } from './card-dispositivos/card-dispositivos.component';
 import { CardEnfermedadesComponent } from './card-enfermedades/card-enfermedades.component';
 import { CardEtapasFenologicasComponent } from './card-etapas-fenologicas/card-etapas-fenologicas.component';
@@ -52,6 +53,7 @@ export interface IDetallesLote extends ILoteTabla {
     CardUltimaFumigacionComponent,
     CardDispositivosComponent,
     CardEnfermedadesComponent,
+    CardCentralMeteorologicaComponent,
     CardClimaLoteComponent,
     CardRiegoComponent,
     CardHuellaHidricaComponent,
@@ -206,6 +208,15 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
       return `${departamento}, ${provincia}`;
     }
     return departamento || provincia || 'Ubicacion editable en el lote';
+  }
+
+  public mostrarCentralMeteorologica(): boolean {
+    const establecimiento = this.lote?.establecimiento;
+    return (
+      !!establecimiento?.estacionMeteorologica ||
+      establecimiento?.fuenteClimaPreferida === 'FieldClimate' ||
+      establecimiento?.climaActual?.clima?.fuente === 'FieldClimate'
+    );
   }
 
   public get superficieResumen(): string {
