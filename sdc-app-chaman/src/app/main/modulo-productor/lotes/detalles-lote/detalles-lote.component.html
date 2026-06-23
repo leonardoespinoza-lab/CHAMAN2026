@@ -1,9 +1,6 @@
 <div class="lote-view-container">
   <div class="lote-header">
     <div class="lote-title">
-      <svg class="back-icon" (click)="helper.volver()">
-        <use xlink:href="icons/icons.svg#back"></use>
-      </svg>
       <div>
         <span class="lote-name">{{ lote?.nombre || 'Lote sin nombre' }}</span>
         <span class="lote-establishment">{{ lote?.establecimiento?.nombre || 'Sin establecimiento' }}</span>

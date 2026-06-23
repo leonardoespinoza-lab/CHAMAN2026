@@ -99,6 +99,7 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
     this.variableSeleccionada = variable;
     this.chartOptions = this.crearOpcionesGrafico(variable);
     this.graficoVisible = true;
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 80);
   }
 
   private crearVariables(): VariableCentral[] {

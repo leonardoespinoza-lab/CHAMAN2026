@@ -85,7 +85,10 @@
       [(visible)]="graficoVisible"
       [modal]="true"
       [dismissableMask]="true"
-      [style]="{ width: 'min(960px, 96vw)' }"
+      [draggable]="false"
+      [resizable]="false"
+      styleClass="central-chart-dialog"
+      [style]="{ width: 'min(1180px, calc(100vw - 2rem))' }"
       [contentStyle]="{ padding: '0' }"
     >
       <ng-template pTemplate="header">
@@ -96,7 +99,11 @@
       </ng-template>
       <div class="central-chart-modal">
         @if (chartOptions) {
-          <app-chart [options]="chartOptions" [style]="'display:block;width:100%;height:380px'"></app-chart>
+          <app-chart
+            class="central-chart"
+            [options]="chartOptions"
+            [style]="'display:block;width:100%;height:min(62vh,620px);min-height:440px'"
+          ></app-chart>
         }
       </div>
     </p-dialog>

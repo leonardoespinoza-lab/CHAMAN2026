@@ -19,11 +19,10 @@ import { SharedModule } from '../../auxiliares/shared.module';
 import { ENV, VERSION } from '../../environments/environment';
 import { AplicacionComponent } from '../aplicacion/aplicacion.component';
 import { CambiarPasswordComponent } from '../usuarios/cambiar-password/cambiar-password.component';
-import { AsistenteChamanComponent } from '../../auxiliares/componentes/asistente-chaman/asistente-chaman.component';
 
 @Component({
   selector: 'app-nav',
-  imports: [SharedModule, AsistenteChamanComponent],
+  imports: [SharedModule],
   providers: [DialogService],
   templateUrl: './nav.component.html',
   styleUrl: './nav.component.scss',
@@ -256,21 +255,27 @@ export class NavComponent implements OnInit, OnDestroy {
     this.visible = false;
   }
 
-  public mostrarBotonMenu(): boolean {
+  public mostrarMenuModal(): boolean {
     return true;
   }
 
-  public mostrarMenuLateral(): boolean {
-    return !this.loginService.esAdmin;
+  public mostrarMenuFlotante(): boolean {
+    const ruta = this.getRutaLimpia();
+    return !ruta.startsWith('/login') && !ruta.startsWith('/auth');
+  }
+
+  public abrirMenu(event?: Event): void {
+    event?.stopPropagation();
+    this.visible = true;
+  }
+
+  public cerrarMenu(event?: Event): void {
+    event?.stopPropagation();
+    this.visible = false;
   }
 
   public accionLogo(event?: Event): void {
-    event?.stopPropagation();
-    if (this.mostrarMenuLateral()) {
-      this.visible = !this.visible;
-      return;
-    }
-    this.irInicio();
+    this.abrirMenu(event);
   }
 
   public volver(): void {
@@ -300,20 +305,6 @@ export class NavComponent implements OnInit, OnDestroy {
   public mostrarVolver(): boolean {
     const ruta = this.getRutaLimpia();
     return !['/', '/mapa', '/dashboard-admin', '/dashboard-quimica', '/dashboard-distribuidor'].includes(ruta);
-  }
-
-  public get contextoAsistente(): string {
-    const ruta = this.getRutaLimpia();
-    if (ruta.startsWith('/lotes/detalles')) return 'detalle-lote';
-    if (ruta.startsWith('/lotes/editar') || ruta.startsWith('/lotes/crear')) return 'edicion-lote';
-    if (ruta.startsWith('/establecimientos')) return 'establecimientos';
-    if (ruta.startsWith('/dispositivos')) return 'dispositivos';
-    if (ruta.startsWith('/camaras')) return 'camaras';
-    if (ruta.startsWith('/dashboard-admin')) return 'admin';
-    if (ruta.startsWith('/dashboard-quimica')) return 'quimica';
-    if (ruta.startsWith('/dashboard-distribuidor')) return 'distribuidor';
-    if (ruta.startsWith('/mapa')) return 'mapa';
-    return 'general';
   }
 
   private getRutaLimpia(): string {

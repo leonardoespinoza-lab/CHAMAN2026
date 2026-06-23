@@ -1,6 +1,14 @@
-@if (mostrarMenuLateral()) {
-<p-drawer #drawerRef [(visible)]="visible" styleClass="chaman-nav-drawer">
-  <ng-template #headless>
+@if (mostrarMenuModal()) {
+<p-dialog
+  [(visible)]="visible"
+  [modal]="true"
+  [dismissableMask]="true"
+  [draggable]="false"
+  [resizable]="false"
+  styleClass="chaman-nav-dialog"
+  [style]="{ width: 'min(920px, calc(100vw - 1.5rem))' }"
+  [contentStyle]="{ padding: '0' }"
+>
     <div class="flex flex-col h-full">
       <!-- Logo y cerrar -->
       <div class="flex items-center justify-between px-6 pt-4 shrink-0 mb-4">
@@ -16,7 +24,7 @@
         <span>
           <p-button
             type="button"
-            (click)="drawerRef.close($event)"
+            (click)="cerrarMenu($event)"
             icon="pi pi-times"
             rounded="true"
             outlined="true"
@@ -101,7 +109,7 @@
                     class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/dashboard-quimica']"
                     [routerLinkActive]="['active']"
-                    (click)="drawerRef.close($event)"
+                    (click)="cerrarMenu($event)"
                   >
                     <svg
                       [style.fill]="'var(--p-primary-color)'"
@@ -124,7 +132,7 @@
                     class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/dashboard-distribuidor']"
                     [routerLinkActive]="['active']"
-                    (click)="drawerRef.close($event)"
+                    (click)="cerrarMenu($event)"
                   >
                     <svg
                       [style.fill]="'var(--p-primary-color)'"
@@ -144,7 +152,7 @@
                     class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/mapa']"
                     [routerLinkActive]="['active']"
-                    (click)="drawerRef.close($event)"
+                    (click)="cerrarMenu($event)"
                   >
                     <!-- <i class="pi i-inicio mr-2"></i> -->
                     <svg
@@ -168,7 +176,7 @@
                     class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/mapa']"
                     [routerLinkActive]="['active']"
-                    (click)="drawerRef.close($event)"
+                    (click)="cerrarMenu($event)"
                   >
                     <!-- <i class="pi i-inicio mr-2"></i> -->
                     <svg
@@ -189,7 +197,7 @@
                     class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/alertas']"
                     [routerLinkActive]="['active']"
-                    (click)="drawerRef.close($event)"
+                    (click)="cerrarMenu($event)"
                   >
                     <svg
                       [style.fill]="'var(--p-primary-color)'"
@@ -209,7 +217,7 @@
                     class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/establecimientos']"
                     [routerLinkActive]="['active']"
-                    (click)="drawerRef.close($event)"
+                    (click)="cerrarMenu($event)"
                   >
                     <svg
                       [style.fill]="'var(--p-primary-color)'"
@@ -229,7 +237,7 @@
                     class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/lotes']"
                     [routerLinkActive]="['active']"
-                    (click)="drawerRef.close($event)"
+                    (click)="cerrarMenu($event)"
                   >
                     <svg
                       [style.fill]="'var(--p-primary-color)'"
@@ -252,7 +260,7 @@
                     class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/mapa']"
                     [routerLinkActive]="['active']"
-                    (click)="drawerRef.close($event)"
+                    (click)="cerrarMenu($event)"
                   >
                     <!-- <i class="pi i-inicio mr-2"></i> -->
                     <svg
@@ -273,7 +281,7 @@
                     class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/alertas']"
                     [routerLinkActive]="['active']"
-                    (click)="drawerRef.close($event)"
+                    (click)="cerrarMenu($event)"
                   >
                     <svg
                       [style.fill]="'var(--p-primary-color)'"
@@ -293,7 +301,7 @@
                     class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/lotes']"
                     [routerLinkActive]="['active']"
-                    (click)="drawerRef.close($event)"
+                    (click)="cerrarMenu($event)"
                   >
                     <svg
                       [style.fill]="'var(--p-primary-color)'"
@@ -317,7 +325,7 @@
                     class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/dashboard-admin']"
                     [routerLinkActive]="['active']"
-                    (click)="drawerRef.close($event)"
+                    (click)="cerrarMenu($event)"
                   >
                     <i class="pi pi-th-large mr-2" style="font-size: 24px; color: var(--p-primary-color)"></i>
                     <span class="font-medium">{{ 'Inicio' | translate }}</span>
@@ -329,7 +337,7 @@
                     class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/semillas']"
                     [routerLinkActive]="['active']"
-                    (click)="drawerRef.close($event)"
+                    (click)="cerrarMenu($event)"
                   >
                     <i class="pi pi-seedling mr-2" style="font-size: 24px; color: var(--p-primary-color)"></i>
                     <span class="font-medium">{{ 'Cultivo' | translate }}</span>
@@ -346,7 +354,7 @@
                       class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                       [routerLink]="['/productores']"
                       [routerLinkActive]="['active']"
-                      (click)="drawerRef.close($event)"
+                      (click)="cerrarMenu($event)"
                     >
                       <svg
                         [style.fill]="'var(--p-primary-color)'"
@@ -367,7 +375,7 @@
                       class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                       [routerLink]="['/distribuidores']"
                       [routerLinkActive]="['active']"
-                      (click)="drawerRef.close($event)"
+                      (click)="cerrarMenu($event)"
                     >
                       <svg
                         [style.fill]="'var(--p-primary-color)'"
@@ -388,7 +396,7 @@
                       class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                       [routerLink]="['/quimicas']"
                       [routerLinkActive]="['active']"
-                      (click)="drawerRef.close($event)"
+                      (click)="cerrarMenu($event)"
                     >
                       <svg
                         [style.fill]="'var(--p-primary-color)'"
@@ -398,7 +406,7 @@
                       >
                         <use [attr.xlink:href]="'icons/icons.svg#quimica'"></use>
                       </svg>
-                      <span class="font-medium">{{ 'QuÃ­micas' | translate }}</span>
+                      <span class="font-medium">{{ 'Químicas' | translate }}</span>
                     </a>
                   </li>
                 }
@@ -408,7 +416,7 @@
                     class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/usuarios']"
                     [routerLinkActive]="['active']"
-                    (click)="drawerRef.close($event)"
+                    (click)="cerrarMenu($event)"
                   >
                     <svg
                       [style.fill]="'var(--p-primary-color)'"
@@ -428,7 +436,7 @@
                       class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                       [routerLink]="['/kmz']"
                       [routerLinkActive]="['active']"
-                      (click)="drawerRef.close($event)"
+                      (click)="cerrarMenu($event)"
                     >
                       <svg
                         [style.fill]="'var(--p-primary-color)'"
@@ -449,7 +457,7 @@
                       class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                       [routerLink]="['/dispositivos']"
                       [routerLinkActive]="['active']"
-                      (click)="drawerRef.close($event)"
+                      (click)="cerrarMenu($event)"
                     >
                       <svg
                         [style.fill]="'var(--p-primary-color)'"
@@ -477,7 +485,7 @@
                     >
                       <use [attr.xlink:href]="'icons/icons.svg#conf'"></use>
                     </svg>
-                    <span class="font-medium">{{ 'AplicaciÃ³n' | translate }}</span>
+                    <span class="font-medium">{{ 'Aplicación' | translate }}</span>
                   </a>
                 </li>
               </ul>
@@ -518,7 +526,7 @@
                           class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                           [routerLink]="['/establecimientos']"
                           [routerLinkActive]="['active']"
-                          (click)="drawerRef.close($event)"
+                          (click)="cerrarMenu($event)"
                         >
                           <svg
                             [style.fill]="'var(--p-primary-color)'"
@@ -541,7 +549,7 @@
                           class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                           [routerLink]="['/productores']"
                           [routerLinkActive]="['active']"
-                          (click)="drawerRef.close($event)"
+                          (click)="cerrarMenu($event)"
                         >
                           <svg
                             [style.fill]="'var(--p-primary-color)'"
@@ -564,7 +572,7 @@
                           class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                           [routerLink]="['/distribuidores']"
                           [routerLinkActive]="['active']"
-                          (click)="drawerRef.close($event)"
+                          (click)="cerrarMenu($event)"
                         >
                           <svg
                             [style.fill]="'var(--p-primary-color)'"
@@ -587,7 +595,7 @@
                           class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                           [routerLink]="['/quimicas']"
                           [routerLinkActive]="['active']"
-                          (click)="drawerRef.close($event)"
+                          (click)="cerrarMenu($event)"
                         >
                           <svg
                             [style.fill]="'var(--p-primary-color)'"
@@ -610,7 +618,7 @@
                           class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                           [routerLink]="['/licencias']"
                           [routerLinkActive]="['active']"
-                          (click)="drawerRef.close($event)"
+                          (click)="cerrarMenu($event)"
                         >
                           <svg
                             [style.fill]="'var(--p-primary-color)'"
@@ -633,7 +641,7 @@
                           class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                           [routerLink]="['/dispositivos']"
                           [routerLinkActive]="['active']"
-                          (click)="drawerRef.close($event)"
+                          (click)="cerrarMenu($event)"
                         >
                           <svg
                             [style.fill]="'var(--p-primary-color)'"
@@ -656,7 +664,7 @@
                           class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                           [routerLink]="['/camaras']"
                           [routerLinkActive]="['active']"
-                          (click)="drawerRef.close($event)"
+                          (click)="cerrarMenu($event)"
                         >
                           <svg
                             [style.fill]="'var(--p-primary-color)'"
@@ -676,7 +684,7 @@
                           class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                           [routerLink]="['/fenologias']"
                           [routerLinkActive]="['active']"
-                          (click)="drawerRef.close($event)"
+                          (click)="cerrarMenu($event)"
                         >
                           <svg
                             [style.fill]="'var(--p-primary-color)'"
@@ -698,7 +706,7 @@
                         class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                         [routerLink]="['/usuarios']"
                         [routerLinkActive]="['active']"
-                        (click)="drawerRef.close($event)"
+                        (click)="cerrarMenu($event)"
                       >
                         <svg
                           [style.fill]="'var(--p-primary-color)'"
@@ -738,7 +746,7 @@
                           class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                           [routerLink]="['/kmz']"
                           [routerLinkActive]="['active']"
-                          (click)="drawerRef.close($event)"
+                          (click)="cerrarMenu($event)"
                         >
                           <svg
                             [style.fill]="'var(--p-primary-color)'"
@@ -871,34 +879,32 @@
         </div>
       </div>
     </div>
-  </ng-template>
-</p-drawer>
+</p-dialog>
 }
 
-<!-- Botón menú -->
-@if (mostrarBotonMenu()) {
+<!-- Boton volver -->
+@if (mostrarVolver()) {
   <div class="global-nav-actions">
-    <button
-      type="button"
-      class="chaman-menu-button"
-      (click)="accionLogo($event)"
-      pTooltip="Menu Chaman"
-      tooltipPosition="right"
-      aria-label="Abrir menu Chaman"
-    >
-      <img src="favicon/android-chrome-192x192.png" alt="" />
+    <button type="button" class="global-back-button" (click)="volver()" aria-label="Volver">
+      <i class="pi pi-arrow-left"></i>
+      <span>Volver</span>
     </button>
-    @if (mostrarVolver()) {
-      <button type="button" class="global-back-button" (click)="volver()" aria-label="Volver">
-        <i class="pi pi-arrow-left"></i>
-        <span>Volver</span>
-      </button>
-    }
   </div>
+}
+
+@if (mostrarMenuFlotante()) {
+  <button
+    type="button"
+    class="chaman-menu-launcher"
+    (click)="abrirMenu($event)"
+    pTooltip="Menu Chaman"
+    tooltipPosition="left"
+    aria-label="Abrir menu Chaman"
+  >
+    <img src="favicon/android-chrome-192x192.png" alt="" />
+  </button>
 }
 
 <div class="app-shell">
   <router-outlet></router-outlet>
 </div>
-
-<app-asistente-chaman [contexto]="contextoAsistente"></app-asistente-chaman>

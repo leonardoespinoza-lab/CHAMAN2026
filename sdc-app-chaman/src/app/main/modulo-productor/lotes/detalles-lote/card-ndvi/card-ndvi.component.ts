@@ -291,7 +291,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     feature.setStyle(
       new Style({
         fill: new Fill({ color: 'rgba(255, 255, 255, 0.01)' }),
-        stroke: new Stroke({ color: 'rgba(18, 37, 59, 0.84)', width: 2.2 }),
+        stroke: new Stroke({ color: 'rgba(18, 37, 59, 0.9)', width: 1.35 }),
       })
     );
     const source = new VectorSource({ features: [feature] });
@@ -348,7 +348,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     setTimeout(() => {
       this.satelliteMap?.updateSize();
       this.satelliteMap?.getView().fit(polygon.getExtent(), {
-        padding: [22, 22, 22, 22],
+        padding: [10, 10, 10, 10],
         maxZoom: 18,
         duration: 0,
       });
@@ -356,7 +356,8 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private extentImagen3857(polygon: Polygon): [number, number, number, number] {
-    const coordinates = this.coordenadasLote();
+    const metadataCoordinates = this.coordenadasDesdeGeojson(this.reporte?.metadataImagen?.geojson);
+    const coordinates = metadataCoordinates.length >= 3 ? metadataCoordinates : this.coordenadasLote();
     const projected = coordinates.map((coord) => fromLonLat(coord) as [number, number]);
     if (projected.length < 3) {
       return polygon.getExtent() as [number, number, number, number];
