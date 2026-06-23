@@ -9,6 +9,7 @@ import {
   IPermiso,
   IClimaEstacionMeteorologica,
   IEstacion,
+  IEstacionLecturaDetalle,
   IValores,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
@@ -262,6 +263,7 @@ export class EstablecimientosService {
         central.user,
         central.pass,
       );
+      await this.actualizarCentralFieldClimateDetalle(central, data);
       return this.normalizarFieldClimateActual(central, data);
     } catch (error) {
       Logger.warn(
@@ -324,14 +326,92 @@ export class EstablecimientosService {
     };
   }
 
+  private async actualizarCentralFieldClimateDetalle(
+    central: IEstacion,
+    data: any,
+  ): Promise<void> {
+    if (!central?._id) {
+      return;
+    }
+    const ultimaLecturaDetalle = this.obtenerUltimaLecturaFieldClimate(data);
+    if (!ultimaLecturaDetalle.length) {
+      return;
+    }
+    const variables = new Set<string>(central.variablesDisponibles || []);
+    ultimaLecturaDetalle.forEach((lectura) => variables.add(lectura.label));
+    try {
+      await this.estacionsService.update(central._id, {
+        variablesDisponibles: Array.from(variables).sort(),
+        ultimaLecturaDetalle,
+        estado: {
+          activa: true,
+          ultimoSync: new Date().toISOString(),
+        },
+      });
+    } catch {
+      Logger.warn(
+        `No se pudo actualizar detalle FieldClimate para central ${central._id}`,
+      );
+    }
+  }
+
+  private obtenerUltimaLecturaFieldClimate(
+    data: any,
+  ): IEstacionLecturaDetalle[] {
+    const dates = Array.isArray(data?.dates) ? data.dates : [];
+    const lastIndex = dates.length ? dates.length - 1 : -1;
+    if (lastIndex < 0 || !Array.isArray(data?.data)) {
+      return [];
+    }
+    return data.data
+      .map((serie) => {
+        const label = String(serie?.name || serie?.name_original || '').trim();
+        if (!label) {
+          return null;
+        }
+        const values = serie?.values || {};
+        const lectura: IEstacionLecturaDetalle = {
+          label,
+          name: serie?.name,
+          nameOriginal: serie?.name_original,
+          type: serie?.type,
+          unit: serie?.unit,
+          decimals: this.toNumber(serie?.decimals),
+          code: this.toNumber(serie?.code),
+          ch: this.toNumber(serie?.ch),
+          group: this.toNumber(serie?.group),
+          fecha: dates[lastIndex],
+          avg: this.valorSerie(values.avg, lastIndex),
+          min: this.valorSerie(values.min, lastIndex),
+          max: this.valorSerie(values.max, lastIndex),
+          sum: this.valorSerie(values.sum, lastIndex),
+          last: this.valorSerie(values.last, lastIndex),
+          result: this.valorSerie(values.result, lastIndex),
+          count: this.valorSerie(values.count, lastIndex),
+        };
+        lectura.value =
+          lectura.last ??
+          lectura.avg ??
+          lectura.result ??
+          lectura.sum ??
+          lectura.max ??
+          lectura.min;
+        return lectura;
+      })
+      .filter((lectura): lectura is IEstacionLecturaDetalle => !!lectura);
+  }
+
   private valorSerie(values: number[] | undefined, index: number): number | undefined {
     if (!Array.isArray(values)) {
       return undefined;
     }
     const value = values[index];
-    return typeof value === 'number' && Number.isFinite(value)
-      ? value
-      : undefined;
+    return this.toNumber(value);
+  }
+
+  private toNumber(value: any): number | undefined {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : undefined;
   }
 
   private vencido(fecha: string, minutos: number): boolean {

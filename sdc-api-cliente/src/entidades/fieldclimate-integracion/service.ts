@@ -3,6 +3,8 @@ import {
   ICreateEstacion,
   IEstablecimiento,
   IEstacion,
+  IEstacionLecturaDetalle,
+  IEstacionSensorDetalle,
   IListado,
   IQueryParam,
   Sensores,
@@ -57,9 +59,20 @@ export class FieldClimateIntegracionService {
       sensoresRaw = [];
     }
 
+    let ultimosDatosRaw: any = null;
+    try {
+      ultimosDatosRaw = await this.repository.obtenerUltimosDatos(
+        body.stationId,
+        body,
+      );
+    } catch {
+      ultimosDatosRaw = null;
+    }
+
     const data = this.mapCentralChaman(
       central,
       sensoresRaw,
+      ultimosDatosRaw,
       body,
       body.idEstablecimiento,
     );
@@ -145,12 +158,21 @@ export class FieldClimateIntegracionService {
   private mapCentralChaman(
     station: any,
     sensoresRaw: any,
+    ultimosDatosRaw: any,
     credentials: FieldClimateCredentials,
     idEstablecimiento?: string,
   ): ICreateEstacion {
     const idExterno = this.getStationExternalId(station);
     const sensores = this.inferirSensores(station, sensoresRaw);
-    const variablesDisponibles = this.obtenerVariables(station, sensoresRaw);
+    const sensoresDetalle = this.obtenerSensoresDetalle(sensoresRaw);
+    const ultimaLecturaDetalle = this.obtenerUltimaLecturaDetalle(
+      ultimosDatosRaw,
+    );
+    const variablesDisponibles = this.obtenerVariables(
+      station,
+      sensoresRaw,
+      ultimosDatosRaw,
+    );
     return {
       origen: 'FieldClimate',
       idExterno,
@@ -162,6 +184,8 @@ export class FieldClimateIntegracionService {
       position: station.position,
       sensores,
       variablesDisponibles,
+      sensoresDetalle,
+      ultimaLecturaDetalle,
       idEstablecimiento,
       estado: {
         activa: true,
@@ -222,14 +246,116 @@ export class FieldClimateIntegracionService {
     return Array.from(sensores);
   }
 
-  private obtenerVariables(station: any, sensoresRaw: any): string[] {
+  private obtenerVariables(
+    station: any,
+    sensoresRaw: any,
+    ultimosDatosRaw?: any,
+  ): string[] {
     const variables = new Set<string>();
     Object.keys(station?.meta || {}).forEach((key) => variables.add(key));
     this.flattenSensores(sensoresRaw).forEach((sensor) => {
       const name = sensor?.name_custom || sensor?.name;
       if (name) variables.add(String(name));
     });
+    this.flattenLecturas(ultimosDatosRaw).forEach((serie) => {
+      const name = serie?.name || serie?.name_original;
+      if (name) variables.add(String(name));
+    });
     return Array.from(variables).sort();
+  }
+
+  private obtenerSensoresDetalle(sensoresRaw: any): IEstacionSensorDetalle[] {
+    return this.flattenSensores(sensoresRaw)
+      .map((sensor): IEstacionSensorDetalle | null => {
+        const label = String(
+          sensor?.name_custom || sensor?.name || sensor?.name_original || '',
+        ).trim();
+        if (!label) {
+          return null;
+        }
+        return {
+          label,
+          name: sensor?.name,
+          nameOriginal: sensor?.name_original,
+          type: sensor?.type,
+          unit: sensor?.unit || sensor?.unit_default,
+          color: sensor?.color,
+          decimals: this.toNumber(sensor?.decimals),
+          code: this.toNumber(sensor?.code),
+          ch: this.toNumber(sensor?.ch),
+          group: this.toNumber(sensor?.group),
+          isActive: sensor?.isActive,
+          aggr: Array.isArray(sensor?.aggr) ? sensor.aggr : undefined,
+        };
+      })
+      .filter((sensor): sensor is IEstacionSensorDetalle => !!sensor);
+  }
+
+  private obtenerUltimaLecturaDetalle(
+    ultimosDatosRaw: any,
+  ): IEstacionLecturaDetalle[] {
+    const dates = Array.isArray(ultimosDatosRaw?.dates)
+      ? ultimosDatosRaw.dates
+      : [];
+    const lastIndex = dates.length ? dates.length - 1 : -1;
+    if (lastIndex < 0) {
+      return [];
+    }
+    return this.flattenLecturas(ultimosDatosRaw)
+      .map((serie): IEstacionLecturaDetalle | null => {
+        const label = String(serie?.name || serie?.name_original || '').trim();
+        if (!label) {
+          return null;
+        }
+        const values = serie?.values || {};
+        const lectura: IEstacionLecturaDetalle = {
+          label,
+          name: serie?.name,
+          nameOriginal: serie?.name_original,
+          type: serie?.type,
+          unit: serie?.unit,
+          color: serie?.color,
+          decimals: this.toNumber(serie?.decimals),
+          code: this.toNumber(serie?.code),
+          ch: this.toNumber(serie?.ch),
+          group: this.toNumber(serie?.group),
+          aggr: Array.isArray(serie?.aggr) ? serie.aggr : undefined,
+          fecha: dates[lastIndex],
+          avg: this.valorSerie(values.avg, lastIndex),
+          min: this.valorSerie(values.min, lastIndex),
+          max: this.valorSerie(values.max, lastIndex),
+          sum: this.valorSerie(values.sum, lastIndex),
+          last: this.valorSerie(values.last, lastIndex),
+          result: this.valorSerie(values.result, lastIndex),
+          count: this.valorSerie(values.count, lastIndex),
+        };
+        lectura.value =
+          lectura.last ??
+          lectura.avg ??
+          lectura.result ??
+          lectura.sum ??
+          lectura.max ??
+          lectura.min;
+        return lectura;
+      })
+      .filter((lectura): lectura is IEstacionLecturaDetalle => !!lectura);
+  }
+
+  private flattenLecturas(ultimosDatosRaw: any): any[] {
+    return Array.isArray(ultimosDatosRaw?.data) ? ultimosDatosRaw.data : [];
+  }
+
+  private valorSerie(values: any, index: number): number | undefined {
+    if (!Array.isArray(values)) {
+      return undefined;
+    }
+    const value = values[index];
+    return this.toNumber(value);
+  }
+
+  private toNumber(value: any): number | undefined {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : undefined;
   }
 
   private flattenSensores(sensoresRaw: any): any[] {

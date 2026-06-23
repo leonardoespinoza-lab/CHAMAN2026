@@ -68,6 +68,12 @@ export class Estacion implements Exactly<IEstacion, Estacion> {
   @Prop({ type: [String] })
   variablesDisponibles?: string[];
 
+  @Prop({ type: [Object] })
+  sensoresDetalle?: IEstacion['sensoresDetalle'];
+
+  @Prop({ type: [Object] })
+  ultimaLecturaDetalle?: IEstacion['ultimaLecturaDetalle'];
+
   @Prop({ type: Object })
   estado?: {
     activa?: boolean;

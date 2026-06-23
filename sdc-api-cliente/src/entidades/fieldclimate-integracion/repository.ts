@@ -43,6 +43,19 @@ export class FieldClimateIntegracionRepository {
     return await this.axios.POST<any>(url, credentials);
   }
 
+  async obtenerUltimosDatos(
+    stationId: string,
+    credentials: FieldClimateCredentials,
+  ): Promise<any> {
+    const id = encodeURIComponent(stationId);
+    const url = `${API_CLIMA}/fieldclimate/integracion/stations/${id}/last`;
+    return await this.axios.POST<any>(url, {
+      ...credentials,
+      dataGroup: 'hourly',
+      timePeriod: '48h',
+    });
+  }
+
   async upsertCentral(data: ICreateEstacion): Promise<IEstacion> {
     const url = `${API_DATOS}/estacions/upsert`;
     return await this.axios.POST<IEstacion>(url, data);

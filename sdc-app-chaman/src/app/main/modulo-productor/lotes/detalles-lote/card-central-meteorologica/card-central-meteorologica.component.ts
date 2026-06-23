@@ -1,6 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
-import { IClimaEstacionMeteorologica, IEstacion, IValores } from 'modelos/src';
+import {
+  IClimaEstacionMeteorologica,
+  IEstacion,
+  IEstacionLecturaDetalle,
+  IEstacionSensorDetalle,
+  IValores,
+} from 'modelos/src';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
 
@@ -22,6 +28,7 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
   @Input() public lote?: IDetallesLote;
 
   public variables: VariableCentral[] = [];
+  public variablesDetalle: VariableCentral[] = [];
   public chips: string[] = [];
   public actualizado = '';
 
@@ -64,6 +71,7 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
 
   private prepararVista(): void {
     this.variables = this.crearVariables();
+    this.variablesDetalle = this.crearVariablesDetalle();
     this.chips = this.crearChips();
     this.actualizado = this.formatearFecha(this.establecimiento?.climaActual?.fecha || this.clima?.fecha || this.central?.estado?.ultimoSync);
   }
@@ -101,11 +109,87 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
   private crearChips(): string[] {
     const variablesCentral = this.central?.variablesDisponibles?.filter(Boolean) || [];
     if (variablesCentral.length) {
-      return variablesCentral.slice(0, 14);
+      return variablesCentral;
     }
     return this.variables
       .filter((variable) => variable.disponible)
       .map((variable) => variable.label);
+  }
+
+  private crearVariablesDetalle(): VariableCentral[] {
+    const lecturas = this.central?.ultimaLecturaDetalle || [];
+    if (lecturas.length) {
+      return lecturas.map((lectura) => this.variableDetalleDesdeLectura(lectura));
+    }
+    const sensores = this.central?.sensoresDetalle || [];
+    return sensores.map((sensor) => this.variableDetalleDesdeSensor(sensor));
+  }
+
+  private variableDetalleDesdeLectura(
+    lectura: IEstacionLecturaDetalle,
+  ): VariableCentral {
+    const value = this.leerValor(lectura);
+    const unit = lectura.unit ? ` ${lectura.unit}` : '';
+    return {
+      label: this.traducirLabel(lectura.label),
+      value: value === undefined ? '--' : `${this.numeroAr.format(value)}${unit}`,
+      detail: this.detalleLectura(lectura),
+      icon: this.iconoVariable(lectura.label),
+      disponible: value !== undefined,
+    };
+  }
+
+  private variableDetalleDesdeSensor(
+    sensor: IEstacionSensorDetalle,
+  ): VariableCentral {
+    return {
+      label: this.traducirLabel(sensor.label),
+      value: '--',
+      detail: sensor.unit || sensor.nameOriginal || 'Sensor disponible',
+      icon: this.iconoVariable(sensor.label),
+      disponible: false,
+    };
+  }
+
+  private detalleLectura(lectura: IEstacionLecturaDetalle): string {
+    const fecha = this.formatearFecha(lectura.fecha);
+    const partes = [
+      lectura.nameOriginal && lectura.nameOriginal !== lectura.label
+        ? lectura.nameOriginal
+        : '',
+      fecha !== 'Sin sincronizacion reciente' ? fecha : '',
+    ].filter(Boolean);
+    return partes.join(' - ') || lectura.type || 'Ultima lectura';
+  }
+
+  private iconoVariable(label: string): string {
+    const normalizado = label.toLowerCase();
+    if (normalizado.includes('temperature') || normalizado.includes('temp')) return 'pi pi-sun';
+    if (normalizado.includes('humidity') || normalizado.includes('humedad')) return 'pi pi-percentage';
+    if (normalizado.includes('dew')) return 'pi pi-cloud';
+    if (normalizado.includes('vpd') || normalizado.includes('dpv')) return 'pi pi-chart-line';
+    if (normalizado.includes('precip') || normalizado.includes('rain')) return 'pi pi-cloud';
+    if (normalizado.includes('battery') || normalizado.includes('bateria')) return 'pi pi-bolt';
+    if (normalizado.includes('panel') || normalizado.includes('solar')) return 'pi pi-sparkles';
+    if (normalizado.includes('wind')) return 'pi pi-send';
+    if (normalizado.includes('delta')) return 'pi pi-gauge';
+    return 'pi pi-circle';
+  }
+
+  private traducirLabel(label: string): string {
+    const normalizado = label.toLowerCase();
+    if (normalizado.includes('air temperature')) return 'Temperatura del aire';
+    if (normalizado.includes('dew point')) return 'Punto de rocio';
+    if (normalizado.includes('relative humidity')) return 'Humedad relativa';
+    if (normalizado.includes('precipitation')) return 'Precipitacion';
+    if (normalizado === 'vpd' || normalizado.includes('dpv')) return 'DPV';
+    if (normalizado.includes('battery')) return 'Bateria';
+    if (normalizado.includes('solar panel')) return 'Panel solar';
+    if (normalizado.includes('solar radiation')) return 'Radiacion solar';
+    if (normalizado.includes('wind speed')) return 'Velocidad viento';
+    if (normalizado.includes('wind dir') || normalizado.includes('wind direction')) return 'Direccion viento';
+    if (normalizado.includes('gust')) return 'Rafaga';
+    return label;
   }
 
   private formatearFecha(fecha?: string): string {

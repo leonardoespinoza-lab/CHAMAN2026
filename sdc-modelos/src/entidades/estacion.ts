@@ -15,6 +15,33 @@ export type Sensores =
   | 'napa' // Freatimetro
   | 'otro'; // Sensores que no sé que son
 
+export interface IEstacionSensorDetalle {
+  label: string;
+  name?: string;
+  nameOriginal?: string;
+  type?: string;
+  unit?: string;
+  color?: string;
+  decimals?: number;
+  code?: number;
+  ch?: number;
+  group?: number;
+  isActive?: boolean;
+  aggr?: string[];
+}
+
+export interface IEstacionLecturaDetalle extends IEstacionSensorDetalle {
+  fecha?: string;
+  value?: number;
+  avg?: number;
+  min?: number;
+  max?: number;
+  sum?: number;
+  last?: number;
+  result?: number;
+  count?: number;
+}
+
 export interface IEstacion {
   _id?: string;
   origen?: 'FieldClimate' | 'Chaman' | 'Omixom' | 'Horatech';
@@ -60,6 +87,8 @@ export interface IEstacion {
   sensores?: Sensores[]; // ["temperatura", "humedad", "viento", "radiacion"]
   idEstablecimiento?: string;
   variablesDisponibles?: string[];
+  sensoresDetalle?: IEstacionSensorDetalle[];
+  ultimaLecturaDetalle?: IEstacionLecturaDetalle[];
   estado?: {
     activa?: boolean;
     ultimoSync?: string;

@@ -40,6 +40,27 @@
       }
     </section>
 
+    @if (variablesDetalle.length) {
+      <section class="central-detalle">
+        <div class="section-title">
+          <strong>Variables FieldClimate</strong>
+          <span>{{ variablesDetalle.length }} variables detectadas</span>
+        </div>
+        <div class="central-detail-grid">
+          @for (variable of variablesDetalle; track variable.label) {
+            <article [class.empty]="!variable.disponible">
+              <i [class]="variable.icon"></i>
+              <div>
+                <span>{{ variable.label }}</span>
+                <strong>{{ variable.value }}</strong>
+                <small>{{ variable.detail }}</small>
+              </div>
+            </article>
+          }
+        </div>
+      </section>
+    }
+
     @if (chips.length) {
       <section class="central-variables">
         <strong>Variables disponibles</strong>
