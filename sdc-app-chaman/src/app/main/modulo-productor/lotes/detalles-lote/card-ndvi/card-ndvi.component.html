@@ -70,8 +70,8 @@
         </div>
         <div class="img-container">
           <div #satelliteMapTarget class="satellite-ol-map"></div>
-          @if (!imagenCapaActiva) {
-            <p-message severity="warn">{{ 'Imagen no disponible' | translate }}</p-message>
+          @if (valorCapaActiva == null) {
+            <p-message severity="warn">Capa pendiente de procesamiento</p-message>
           }
           <div class="satellite-map-chip">
             <strong>{{ capaActiva.label }}</strong>

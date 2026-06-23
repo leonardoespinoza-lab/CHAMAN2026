@@ -4,11 +4,9 @@ import { Feature, Map, View } from 'ol';
 import { defaults as defaultControls } from 'ol/control';
 import { defaults as defaultInteractions } from 'ol/interaction';
 import { Polygon } from 'ol/geom';
-import ImageLayer from 'ol/layer/Image';
 import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
 import { fromLonLat } from 'ol/proj';
-import ImageStatic from 'ol/source/ImageStatic';
 import { Vector as VectorSource, XYZ } from 'ol/source';
 import { Fill, Stroke, Style } from 'ol/style';
 import {
@@ -77,7 +75,6 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   private refreshTimeout?: ReturnType<typeof setTimeout>;
   private satelliteMap?: Map;
   private satelliteLoteLayer?: VectorLayer<VectorSource>;
-  private satelliteIndexLayer?: ImageLayer<ImageStatic>;
 
   constructor(
     public helper: HelperService,
@@ -268,6 +265,10 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     return this.capaActiva?.image || this.reporte?.ndviUrl;
   }
 
+  public get valorCapaActiva(): number | undefined {
+    return this.valorIndice(this.capaActiva.key);
+  }
+
   public seleccionarCapa(indicator: SatelliteIndicator): void {
     if (indicator.status === 'activo') {
       this.capaSatelitalActiva = indicator.key;
@@ -288,16 +289,10 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const polygon = new Polygon([ring.map((coord) => fromLonLat(coord))]);
     const feature = new Feature({ geometry: polygon });
-    feature.setStyle(
-      new Style({
-        fill: new Fill({ color: 'rgba(255, 255, 255, 0.01)' }),
-        stroke: new Stroke({ color: 'rgba(18, 37, 59, 0.9)', width: 1.35 }),
-      })
-    );
+    feature.setStyle(this.estiloMapaSatelital());
     const source = new VectorSource({ features: [feature] });
 
     if (!this.satelliteMap) {
-      this.satelliteIndexLayer = new ImageLayer<ImageStatic>({ opacity: 1 });
       this.satelliteLoteLayer = new VectorLayer({ source });
       this.satelliteMap = new Map({
         target,
@@ -318,7 +313,6 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
               maxZoom: 19,
             }),
           }),
-          this.satelliteIndexLayer,
           this.satelliteLoteLayer,
         ],
         view: new View({
@@ -331,20 +325,6 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
       this.satelliteLoteLayer?.setSource(source);
     }
 
-    const imageUrl = this.imagenCapaActiva;
-    if (imageUrl) {
-      this.satelliteIndexLayer?.setSource(
-        new ImageStatic({
-          url: imageUrl,
-          imageExtent: this.extentImagen3857(polygon),
-          projection: 'EPSG:3857',
-          crossOrigin: 'anonymous',
-        })
-      );
-    } else {
-      this.satelliteIndexLayer?.setSource(null as any);
-    }
-
     setTimeout(() => {
       this.satelliteMap?.updateSize();
       this.satelliteMap?.getView().fit(polygon.getExtent(), {
@@ -355,8 +335,41 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
-  private extentImagen3857(polygon: Polygon): [number, number, number, number] {
-    return polygon.getExtent() as [number, number, number, number];
+  private estiloMapaSatelital(): Style {
+    return new Style({
+      fill: new Fill({ color: this.colorCapaSatelital(this.capaActiva.key, this.valorCapaActiva) }),
+      stroke: new Stroke({ color: 'rgba(18, 37, 59, 0.92)', width: 1.8 }),
+    });
+  }
+
+  private colorCapaSatelital(key: SatelliteIndicator['key'], value?: number): string {
+    if (value == null) {
+      return 'rgba(255, 255, 255, 0.28)';
+    }
+
+    if (key === 'ndwi') {
+      if (value < -0.15) return 'rgba(214, 150, 79, 0.58)';
+      if (value < 0.05) return 'rgba(190, 199, 115, 0.58)';
+      if (value < 0.18) return 'rgba(66, 182, 172, 0.58)';
+      return 'rgba(32, 119, 182, 0.6)';
+    }
+
+    if (key === 'ndmi') {
+      if (value < -0.1) return 'rgba(218, 165, 83, 0.58)';
+      if (value < 0.08) return 'rgba(189, 198, 99, 0.58)';
+      if (value < 0.22) return 'rgba(82, 190, 128, 0.58)';
+      return 'rgba(21, 142, 109, 0.6)';
+    }
+
+    if (value < 0.2) return 'rgba(212, 151, 80, 0.58)';
+    if (value < 0.35) return 'rgba(232, 196, 86, 0.58)';
+    if (value < 0.55) return 'rgba(165, 205, 91, 0.58)';
+    if (value < 0.72) return 'rgba(78, 184, 100, 0.58)';
+    return 'rgba(22, 133, 72, 0.6)';
+  }
+
+  private valorIndice(key: SatelliteIndicator['key']): number | undefined {
+    return this.reporte?.indices?.[key] ?? (key === 'ndvi' ? this.reporte?.ndviPromedio : undefined);
   }
 
   private coordenadasLote(): Array<[number, number]> {
