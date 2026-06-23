@@ -1,6 +1,7 @@
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
+const zlib = require('zlib');
 
 const requestedRoot = process.argv[2];
 if (!requestedRoot) {
@@ -34,6 +35,17 @@ const contentTypes = {
   '.woff2': 'font/woff2',
 };
 
+const compressibleExtensions = new Set([
+  '.css',
+  '.html',
+  '.js',
+  '.json',
+  '.map',
+  '.svg',
+  '.txt',
+  '.webmanifest',
+]);
+
 function runtimeConfigScript() {
   const config = {
     API: process.env.CHAMAN_WEB_API_URL || process.env.API_URL || process.env.API || '',
@@ -57,17 +69,51 @@ function safeResolve(urlPath) {
   return resolved;
 }
 
-function sendFile(res, filePath) {
+function shouldGzip(req, extension) {
+  if (!compressibleExtensions.has(extension)) {
+    return false;
+  }
+
+  const acceptEncoding = String(req.headers['accept-encoding'] || '');
+  return /\bgzip\b/.test(acceptEncoding);
+}
+
+function sendFile(req, res, filePath) {
   const extension = path.extname(filePath).toLowerCase();
   const contentType = contentTypes[extension] || 'application/octet-stream';
+  const stat = fs.statSync(filePath);
+  const gzip = shouldGzip(req, extension);
 
-  res.writeHead(200, {
+  const headers = {
     'Content-Type': contentType,
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'SAMEORIGIN',
     'Cache-Control': extension === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
+    'Vary': 'Accept-Encoding',
+  };
+
+  if (gzip) {
+    headers['Content-Encoding'] = 'gzip';
+  } else {
+    headers['Content-Length'] = stat.size;
+  }
+
+  res.writeHead(200, headers);
+
+  const stream = fs.createReadStream(filePath);
+  stream.on('error', () => {
+    if (!res.headersSent) {
+      res.writeHead(500);
+    }
+    res.end('Unable to read file');
   });
-  fs.createReadStream(filePath).pipe(res);
+
+  if (gzip) {
+    stream.pipe(zlib.createGzip({ level: 6 })).pipe(res);
+    return;
+  }
+
+  stream.pipe(res);
 }
 
 const server = http.createServer((req, res) => {
@@ -113,7 +159,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  sendFile(res, filePath);
+  sendFile(req, res, filePath);
 });
 
 server.listen(port, host, () => {
