@@ -46,6 +46,8 @@ const compressibleExtensions = new Set([
   '.webmanifest',
 ]);
 
+const gzipCache = new Map();
+
 function runtimeConfigScript() {
   const config = {
     API: process.env.CHAMAN_WEB_API_URL || process.env.API_URL || process.env.API || '',
@@ -78,11 +80,27 @@ function shouldGzip(req, extension) {
   return /\bgzip\b/.test(acceptEncoding);
 }
 
+function getGzipBuffer(filePath, stat) {
+  const cached = gzipCache.get(filePath);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    return cached.buffer;
+  }
+
+  const buffer = zlib.gzipSync(fs.readFileSync(filePath), { level: 6 });
+  gzipCache.set(filePath, {
+    buffer,
+    mtimeMs: stat.mtimeMs,
+    size: stat.size,
+  });
+  return buffer;
+}
+
 function sendFile(req, res, filePath) {
   const extension = path.extname(filePath).toLowerCase();
   const contentType = contentTypes[extension] || 'application/octet-stream';
   const stat = fs.statSync(filePath);
   const gzip = shouldGzip(req, extension);
+  const gzipBuffer = gzip ? getGzipBuffer(filePath, stat) : null;
 
   const headers = {
     'Content-Type': contentType,
@@ -94,11 +112,22 @@ function sendFile(req, res, filePath) {
 
   if (gzip) {
     headers['Content-Encoding'] = 'gzip';
+    headers['Content-Length'] = gzipBuffer.length;
   } else {
     headers['Content-Length'] = stat.size;
   }
 
   res.writeHead(200, headers);
+
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+
+  if (gzip) {
+    res.end(gzipBuffer);
+    return;
+  }
 
   const stream = fs.createReadStream(filePath);
   stream.on('error', () => {
@@ -107,11 +136,6 @@ function sendFile(req, res, filePath) {
     }
     res.end('Unable to read file');
   });
-
-  if (gzip) {
-    stream.pipe(zlib.createGzip({ level: 6 })).pipe(res);
-    return;
-  }
 
   stream.pipe(res);
 }
