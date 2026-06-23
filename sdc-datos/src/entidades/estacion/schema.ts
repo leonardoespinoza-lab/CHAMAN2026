@@ -74,6 +74,9 @@ export class Estacion implements Exactly<IEstacion, Estacion> {
   @Prop({ type: [Object] })
   ultimaLecturaDetalle?: IEstacion['ultimaLecturaDetalle'];
 
+  @Prop({ type: [Object] })
+  historialLecturas?: IEstacion['historialLecturas'];
+
   @Prop({ type: Object })
   estado?: {
     activa?: boolean;

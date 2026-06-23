@@ -3,6 +3,7 @@ import {
   ICreateEstacion,
   IEstablecimiento,
   IEstacion,
+  IEstacionLecturaHistorica,
   IEstacionLecturaDetalle,
   IEstacionSensorDetalle,
   IListado,
@@ -168,8 +169,8 @@ export class FieldClimateIntegracionService {
     const ultimaLecturaDetalle = this.obtenerUltimaLecturaDetalle(
       ultimosDatosRaw,
     );
+    const historialLecturas = this.obtenerHistorialLecturas(ultimosDatosRaw);
     const variablesDisponibles = this.obtenerVariables(
-      station,
       sensoresRaw,
       ultimosDatosRaw,
     );
@@ -186,6 +187,7 @@ export class FieldClimateIntegracionService {
       variablesDisponibles,
       sensoresDetalle,
       ultimaLecturaDetalle,
+      historialLecturas,
       idEstablecimiento,
       estado: {
         activa: true,
@@ -247,12 +249,10 @@ export class FieldClimateIntegracionService {
   }
 
   private obtenerVariables(
-    station: any,
     sensoresRaw: any,
     ultimosDatosRaw?: any,
   ): string[] {
     const variables = new Set<string>();
-    Object.keys(station?.meta || {}).forEach((key) => variables.add(key));
     this.flattenSensores(sensoresRaw).forEach((sensor) => {
       const name = sensor?.name_custom || sensor?.name;
       if (name) variables.add(String(name));
@@ -339,6 +339,59 @@ export class FieldClimateIntegracionService {
         return lectura;
       })
       .filter((lectura): lectura is IEstacionLecturaDetalle => !!lectura);
+  }
+
+  private obtenerHistorialLecturas(
+    ultimosDatosRaw: any,
+  ): IEstacionLecturaHistorica[] {
+    const dates = Array.isArray(ultimosDatosRaw?.dates)
+      ? ultimosDatosRaw.dates
+      : [];
+    if (!dates.length) {
+      return [];
+    }
+    const lecturas: IEstacionLecturaHistorica[] = [];
+    this.flattenLecturas(ultimosDatosRaw).forEach((serie) => {
+      const label = String(serie?.name || serie?.name_original || '').trim();
+      if (!label) {
+        return;
+      }
+      const values = serie?.values || {};
+      dates.forEach((fecha, index) => {
+        const lectura: IEstacionLecturaHistorica = {
+          label,
+          name: serie?.name,
+          nameOriginal: serie?.name_original,
+          type: serie?.type,
+          unit: serie?.unit,
+          color: serie?.color,
+          decimals: this.toNumber(serie?.decimals),
+          code: this.toNumber(serie?.code),
+          ch: this.toNumber(serie?.ch),
+          group: this.toNumber(serie?.group),
+          aggr: Array.isArray(serie?.aggr) ? serie.aggr : undefined,
+          fecha: String(fecha),
+          avg: this.valorSerie(values.avg, index),
+          min: this.valorSerie(values.min, index),
+          max: this.valorSerie(values.max, index),
+          sum: this.valorSerie(values.sum, index),
+          last: this.valorSerie(values.last, index),
+          result: this.valorSerie(values.result, index),
+          count: this.valorSerie(values.count, index),
+        };
+        lectura.value =
+          lectura.last ??
+          lectura.avg ??
+          lectura.result ??
+          lectura.sum ??
+          lectura.max ??
+          lectura.min;
+        if (typeof lectura.value === 'number') {
+          lecturas.push(lectura);
+        }
+      });
+    });
+    return lecturas.slice(-12000);
   }
 
   private flattenLecturas(ultimosDatosRaw: any): any[] {

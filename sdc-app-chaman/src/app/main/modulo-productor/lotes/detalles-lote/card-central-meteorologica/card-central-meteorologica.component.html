@@ -24,18 +24,25 @@
         <strong>{{ actualizado }}</strong>
       </article>
       <article>
-        <span>Fuente de decision</span>
-        <strong>{{ usaFieldClimate ? 'FieldClimate' : 'Open-Meteo respaldo' }}</strong>
+        <span>Lecturas historicas</span>
+        <strong>{{ central?.historialLecturas?.length || 0 }} puntos guardados</strong>
       </article>
     </section>
 
     <section class="central-grid">
       @for (variable of variables; track variable.label) {
-        <article [class.empty]="!variable.disponible">
+        <article
+          [class.empty]="!variable.disponible"
+          [class.clickable]="variable.historial.length"
+          (click)="abrirGrafico(variable)"
+        >
           <i [class]="variable.icon"></i>
           <span>{{ variable.label }}</span>
           <strong>{{ variable.value }}</strong>
           <small>{{ variable.detail }}</small>
+          @if (variable.historial.length) {
+            <em>Ver curva</em>
+          }
         </article>
       }
     </section>
@@ -47,13 +54,20 @@
           <span>{{ variablesDetalle.length }} variables detectadas</span>
         </div>
         <div class="central-detail-grid">
-          @for (variable of variablesDetalle; track variable.label) {
-            <article [class.empty]="!variable.disponible">
+          @for (variable of variablesDetalle; track variable.key) {
+            <article
+              [class.empty]="!variable.disponible"
+              [class.clickable]="variable.historial.length"
+              (click)="abrirGrafico(variable)"
+            >
               <i [class]="variable.icon"></i>
               <div>
                 <span>{{ variable.label }}</span>
                 <strong>{{ variable.value }}</strong>
                 <small>{{ variable.detail }}</small>
+                @if (variable.historial.length) {
+                  <em>Ver curva</em>
+                }
               </div>
             </article>
           }
@@ -61,19 +75,30 @@
       </section>
     }
 
-    @if (chips.length) {
-      <section class="central-variables">
-        <strong>Variables disponibles</strong>
-        <div>
-          @for (chip of chips; track chip) {
-            <span>{{ chip }}</span>
-          }
-        </div>
-      </section>
-    } @else {
+    @if (!tieneVariablesDetectadas) {
       <p-message severity="info">
         Central asignada. Chaman mostrara las variables cuando ingrese la proxima sincronizacion.
       </p-message>
     }
+
+    <p-dialog
+      [(visible)]="graficoVisible"
+      [modal]="true"
+      [dismissableMask]="true"
+      [style]="{ width: 'min(960px, 96vw)' }"
+      [contentStyle]="{ padding: '0' }"
+    >
+      <ng-template pTemplate="header">
+        <div class="chart-dialog-title">
+          <span>{{ variableSeleccionada?.label }}</span>
+          <small>{{ nombreCentral }} - {{ variableSeleccionada?.historial?.length || 0 }} puntos</small>
+        </div>
+      </ng-template>
+      <div class="central-chart-modal">
+        @if (chartOptions) {
+          <app-chart [options]="chartOptions" [style]="'display:block;width:100%;height:380px'"></app-chart>
+        }
+      </div>
+    </p-dialog>
   </article>
 }

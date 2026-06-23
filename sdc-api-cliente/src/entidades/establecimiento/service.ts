@@ -9,6 +9,7 @@ import {
   IPermiso,
   IClimaEstacionMeteorologica,
   IEstacion,
+  IEstacionLecturaHistorica,
   IEstacionLecturaDetalle,
   IValores,
 } from 'modelos/src';
@@ -337,12 +338,20 @@ export class EstablecimientosService {
     if (!ultimaLecturaDetalle.length) {
       return;
     }
-    const variables = new Set<string>(central.variablesDisponibles || []);
+    const historialLecturas = this.mergeHistorialFieldClimate(
+      central.historialLecturas || [],
+      this.obtenerHistorialLecturasFieldClimate(data),
+    );
+    const variables = new Set<string>();
+    (central.sensoresDetalle || []).forEach((sensor) => {
+      if (sensor.label) variables.add(sensor.label);
+    });
     ultimaLecturaDetalle.forEach((lectura) => variables.add(lectura.label));
     try {
       await this.estacionsService.update(central._id, {
         variablesDisponibles: Array.from(variables).sort(),
         ultimaLecturaDetalle,
+        historialLecturas,
         estado: {
           activa: true,
           ultimoSync: new Date().toISOString(),
@@ -399,6 +408,84 @@ export class EstablecimientosService {
         return lectura;
       })
       .filter((lectura): lectura is IEstacionLecturaDetalle => !!lectura);
+  }
+
+  private obtenerHistorialLecturasFieldClimate(
+    data: any,
+  ): IEstacionLecturaHistorica[] {
+    const dates = Array.isArray(data?.dates) ? data.dates : [];
+    if (!dates.length || !Array.isArray(data?.data)) {
+      return [];
+    }
+    const historial: IEstacionLecturaHistorica[] = [];
+    data.data.forEach((serie) => {
+      const label = String(serie?.name || serie?.name_original || '').trim();
+      if (!label) {
+        return;
+      }
+      const values = serie?.values || {};
+      dates.forEach((fecha, index) => {
+        const lectura: IEstacionLecturaHistorica = {
+          label,
+          name: serie?.name,
+          nameOriginal: serie?.name_original,
+          type: serie?.type,
+          unit: serie?.unit,
+          color: serie?.color,
+          decimals: this.toNumber(serie?.decimals),
+          code: this.toNumber(serie?.code),
+          ch: this.toNumber(serie?.ch),
+          group: this.toNumber(serie?.group),
+          fecha: String(fecha),
+          avg: this.valorSerie(values.avg, index),
+          min: this.valorSerie(values.min, index),
+          max: this.valorSerie(values.max, index),
+          sum: this.valorSerie(values.sum, index),
+          last: this.valorSerie(values.last, index),
+          result: this.valorSerie(values.result, index),
+          count: this.valorSerie(values.count, index),
+        };
+        lectura.value =
+          lectura.last ??
+          lectura.avg ??
+          lectura.result ??
+          lectura.sum ??
+          lectura.max ??
+          lectura.min;
+        if (typeof lectura.value === 'number') {
+          historial.push(lectura);
+        }
+      });
+    });
+    return historial;
+  }
+
+  private mergeHistorialFieldClimate(
+    actual: IEstacionLecturaHistorica[],
+    nuevo: IEstacionLecturaHistorica[],
+  ): IEstacionLecturaHistorica[] {
+    const map = new Map<string, IEstacionLecturaHistorica>();
+    [...actual, ...nuevo].forEach((lectura) => {
+      if (!lectura?.fecha || !lectura?.label) {
+        return;
+      }
+      const key = [
+        lectura.fecha,
+        lectura.label,
+        lectura.code ?? '',
+        lectura.ch ?? '',
+        lectura.group ?? '',
+      ].join('|');
+      map.set(key, lectura);
+    });
+    return Array.from(map.values())
+      .sort((a, b) => this.fechaToTime(a.fecha) - this.fechaToTime(b.fecha))
+      .slice(-12000);
+  }
+
+  private fechaToTime(fecha: string): number {
+    const date = new Date(fecha);
+    return Number.isNaN(date.getTime()) ? 0 : date.getTime();
   }
 
   private valorSerie(values: number[] | undefined, index: number): number | undefined {

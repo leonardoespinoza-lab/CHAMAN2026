@@ -13,8 +13,7 @@
 
 .central-header,
 .central-title,
-.central-resume,
-.central-variables div {
+.central-resume {
   display: flex;
 }
 
@@ -138,11 +137,24 @@
   border-radius: 8px;
   min-height: 88px;
   padding: 0.7rem 0.75rem;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
 .central-grid article.empty {
   border-left-color: #a9b6c7;
   opacity: 0.72;
+}
+
+.central-grid article.clickable,
+.central-detail-grid article.clickable {
+  cursor: pointer;
+}
+
+.central-grid article.clickable:hover,
+.central-detail-grid article.clickable:hover {
+  border-color: rgba(34, 211, 200, 0.72);
+  box-shadow: 0 12px 26px rgba(16, 34, 55, 0.08);
+  transform: translateY(-1px);
 }
 
 .central-grid i {
@@ -170,10 +182,14 @@
   margin-top: 0.25rem;
 }
 
-.central-variables {
-  border-top: 1px solid #d7e2ee;
-  margin-top: 0.85rem;
-  padding-top: 0.78rem;
+.central-grid em,
+.central-detail-grid em {
+  color: var(--p-primary-color);
+  display: block;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 800;
+  margin-top: 0.35rem;
 }
 
 .central-detalle {
@@ -190,8 +206,7 @@
   margin-bottom: 0.55rem;
 }
 
-.section-title strong,
-.central-variables strong {
+.section-title strong {
   color: #33445b;
   display: block;
   font-size: 0.82rem;
@@ -219,6 +234,7 @@
   gap: 0.55rem;
   min-height: 76px;
   padding: 0.62rem 0.68rem;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
 .central-detail-grid article.empty {
@@ -263,23 +279,26 @@
   overflow-wrap: anywhere;
 }
 
-.central-variables strong {
-  margin-bottom: 0.45rem;
+.chart-dialog-title {
+  display: grid;
+  gap: 0.15rem;
 }
 
-.central-variables div {
-  flex-wrap: wrap;
-  gap: 0.35rem;
+.chart-dialog-title span {
+  color: var(--p-text-color);
+  font-size: 1.05rem;
+  font-weight: 850;
 }
 
-.central-variables span {
-  background: #eefaf8;
-  border: 1px solid #c8f2ec;
-  border-radius: 999px;
-  color: #27786d;
-  font-size: 0.75rem;
+.chart-dialog-title small {
+  color: #5f718c;
+  font-size: 0.78rem;
   font-weight: 700;
-  padding: 0.28rem 0.5rem;
+}
+
+.central-chart-modal {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(241, 251, 250, 0.94));
+  padding: 0.9rem;
 }
 
 @media (max-width: 720px) {

@@ -42,6 +42,10 @@ export interface IEstacionLecturaDetalle extends IEstacionSensorDetalle {
   count?: number;
 }
 
+export interface IEstacionLecturaHistorica extends IEstacionLecturaDetalle {
+  fecha: string;
+}
+
 export interface IEstacion {
   _id?: string;
   origen?: 'FieldClimate' | 'Chaman' | 'Omixom' | 'Horatech';
@@ -89,6 +93,7 @@ export interface IEstacion {
   variablesDisponibles?: string[];
   sensoresDetalle?: IEstacionSensorDetalle[];
   ultimaLecturaDetalle?: IEstacionLecturaDetalle[];
+  historialLecturas?: IEstacionLecturaHistorica[];
   estado?: {
     activa?: boolean;
     ultimoSync?: string;
