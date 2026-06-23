@@ -102,20 +102,83 @@ a {
 }
 
 :host ::ng-deep .chaman-nav-dialog a {
-  margin: 0.12rem 0.6rem;
-  border-radius: 14px;
+  margin: 0;
+  border-radius: 18px;
   border-left-width: 0;
 }
 
 :host ::ng-deep .chaman-nav-dialog a.active {
   border-left-width: 0;
-  background: rgba(35, 200, 196, 0.14);
-  outline: 1px solid rgba(35, 200, 196, 0.28);
+  background: rgba(35, 200, 196, 0.12);
+  outline: 1px solid rgba(35, 200, 196, 0.42);
 }
 
 :host ::ng-deep .chaman-nav-dialog svg,
 :host ::ng-deep .chaman-nav-dialog i {
   opacity: 0.95;
+}
+
+.nav-menu-scroll {
+  padding: 0 1.35rem 1rem;
+}
+
+:host ::ng-deep .chaman-nav-dialog .nav-menu-scroll > ul,
+:host ::ng-deep .chaman-nav-dialog .nav-menu-scroll > ul > li,
+:host ::ng-deep .chaman-nav-dialog .nav-menu-scroll > ul > li > ul,
+:host ::ng-deep .chaman-nav-dialog .nav-menu-scroll > ul > li > ul > li > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+:host ::ng-deep .chaman-nav-dialog .nav-menu-scroll > ul > li > ul,
+:host ::ng-deep .chaman-nav-dialog .nav-menu-scroll > ul > li > ul > li > ul {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+:host ::ng-deep .chaman-nav-dialog .nav-menu-scroll li:has(> ul) {
+  display: contents;
+}
+
+:host ::ng-deep .chaman-nav-dialog .nav-menu-scroll a {
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(242, 251, 250, 0.88));
+  border: 1px solid rgba(122, 150, 184, 0.28);
+  box-shadow: 0 14px 34px rgba(24, 39, 75, 0.08);
+  display: flex;
+  gap: 0.9rem;
+  min-height: 5.35rem;
+  padding: 1rem 1.05rem;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+:host ::ng-deep .chaman-nav-dialog .nav-menu-scroll a:hover {
+  border-color: rgba(35, 200, 196, 0.48);
+  box-shadow: 0 18px 42px rgba(24, 39, 75, 0.13);
+  transform: translateY(-1px);
+}
+
+:host ::ng-deep .chaman-nav-dialog .nav-menu-scroll a svg {
+  background: rgba(35, 211, 200, 0.14);
+  border-radius: 16px;
+  box-sizing: content-box;
+  flex: 0 0 auto;
+  height: 1.75rem;
+  margin-right: 0 !important;
+  padding: 0.7rem;
+  width: 1.75rem;
+}
+
+:host ::ng-deep .chaman-nav-dialog .nav-menu-scroll a span {
+  color: var(--p-surface-800);
+  font-size: 1.02rem;
+  font-weight: 800;
 }
 
 @keyframes chamanPulse {

@@ -97,9 +97,12 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
       return;
     }
     this.variableSeleccionada = variable;
-    this.chartOptions = this.crearOpcionesGrafico(variable);
+    this.chartOptions = undefined;
     this.graficoVisible = true;
-    setTimeout(() => window.dispatchEvent(new Event('resize')), 80);
+    setTimeout(() => {
+      this.chartOptions = this.crearOpcionesGrafico(variable);
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 80);
+    });
   }
 
   private crearVariables(): VariableCentral[] {
@@ -250,7 +253,8 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
     return {
       chart: {
         backgroundColor: 'transparent',
-        height: 360,
+        className: 'chaman-light-chart',
+        reflow: true,
         spacing: [18, 18, 20, 12],
         type: 'spline',
         zooming: { type: 'x' },

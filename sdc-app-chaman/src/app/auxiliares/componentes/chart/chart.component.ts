@@ -286,6 +286,14 @@ export class ChartComponent implements OnInit, OnChanges {
   }
 
   private isChamanChart(options: Highcharts.Options): boolean {
+    const customTheme = (options as any)?.custom?.chamanTheme;
+    if (customTheme === 'light' || customTheme === 'none') {
+      return false;
+    }
+    if (String(options.chart?.className || '').includes('chaman-light-chart')) {
+      return false;
+    }
+
     const themedTypes = new Set(['line', 'spline', 'area', 'areaspline', 'column', 'bar']);
     const chartType = String(options.chart?.type || '');
 

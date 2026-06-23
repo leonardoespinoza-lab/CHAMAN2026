@@ -356,19 +356,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private extentImagen3857(polygon: Polygon): [number, number, number, number] {
-    const metadataCoordinates = this.coordenadasDesdeGeojson(this.reporte?.metadataImagen?.geojson);
-    const coordinates = metadataCoordinates.length >= 3 ? metadataCoordinates : this.coordenadasLote();
-    const projected = coordinates.map((coord) => fromLonLat(coord) as [number, number]);
-    if (projected.length < 3) {
-      return polygon.getExtent() as [number, number, number, number];
-    }
-    return this.bounds3857(projected);
-  }
-
-  private bounds3857(points: Array<[number, number]>): [number, number, number, number] {
-    const xs = points.map(([x]) => x);
-    const ys = points.map(([, y]) => y);
-    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    return polygon.getExtent() as [number, number, number, number];
   }
 
   private coordenadasLote(): Array<[number, number]> {
