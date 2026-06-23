@@ -20,6 +20,7 @@
 }
 
 .weather-strip,
+.risk-strip,
 .summary-action,
 .establishment-rail,
 .lot-bottom-sheet {
@@ -33,10 +34,10 @@
 .weather-strip {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 3.35rem;
+  min-height: 3.05rem;
   border-radius: 18px;
   display: grid;
-  grid-template-columns: minmax(160px, 1.6fr) repeat(5, minmax(88px, 1fr));
+  grid-template-columns: minmax(145px, 1.35fr) repeat(5, minmax(76px, 0.85fr));
   align-items: stretch;
   gap: 0;
   overflow: hidden;
@@ -48,7 +49,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 0.55rem 0.85rem;
+  padding: 0.45rem 0.75rem;
   border-right: 1px solid rgba(121, 150, 185, 0.2);
 }
 
@@ -77,6 +78,76 @@
   color: var(--p-primary-color) !important;
 }
 
+.risk-strip {
+  flex: 0 0 min(34vw, 26rem);
+  min-width: 20rem;
+  min-height: 3.05rem;
+  border-radius: 18px;
+  display: grid;
+  grid-template-columns: minmax(7.4rem, 1fr) repeat(3, minmax(4.4rem, auto));
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.risk-strip-heading,
+.risk-mini {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0.45rem 0.7rem;
+  border-right: 1px solid rgba(121, 150, 185, 0.2);
+}
+
+.risk-strip-heading span,
+.risk-mini span {
+  color: #64748b;
+  font-size: 0.62rem;
+  line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.risk-strip-heading strong {
+  color: #102a43;
+  font-size: 0.82rem;
+  line-height: 1.15;
+}
+
+.risk-mini {
+  position: relative;
+  padding-left: 0.85rem;
+}
+
+.risk-mini::before {
+  content: '';
+  position: absolute;
+  left: 0.42rem;
+  top: 0.72rem;
+  bottom: 0.72rem;
+  width: 0.22rem;
+  border-radius: 999px;
+  background: var(--risk-color);
+}
+
+.risk-mini.low {
+  --risk-color: var(--p-success-color);
+}
+
+.risk-mini.medium {
+  --risk-color: var(--p-warning-color);
+}
+
+.risk-mini.high {
+  --risk-color: var(--p-danger-color);
+}
+
+.risk-mini strong {
+  color: #102a43;
+  font-size: 0.88rem;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
 .summary-action {
   flex: 0 0 auto;
   border-radius: 18px;
@@ -85,7 +156,7 @@
   gap: 0.5rem;
   padding: 0.35rem;
   pointer-events: auto;
-  min-height: 3.35rem;
+  min-height: 3.05rem;
 }
 
 .establishment-rail {
@@ -749,9 +820,15 @@
   }
 
   .weather-strip,
+  .risk-strip,
   .summary-action,
   .establishment-rail {
     width: 100%;
+  }
+
+  .risk-strip {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .summary-action,
@@ -805,6 +882,7 @@
   }
 
   .weather-strip::-webkit-scrollbar,
+  .risk-strip::-webkit-scrollbar,
   .summary-action::-webkit-scrollbar,
   .establishment-rail::-webkit-scrollbar {
     display: none;
@@ -830,6 +908,41 @@
   .weather-metric span,
   .weather-title small {
     font-size: 0.62rem;
+  }
+
+  .risk-strip {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    min-height: 2.65rem;
+    grid-template-columns: minmax(8.2rem, 1fr) repeat(3, minmax(4.5rem, auto));
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .risk-strip-heading,
+  .risk-mini {
+    padding: 0.38rem 0.58rem;
+  }
+
+  .risk-mini {
+    padding-left: 0.78rem;
+  }
+
+  .risk-mini::before {
+    left: 0.36rem;
+    top: 0.62rem;
+    bottom: 0.62rem;
+  }
+
+  .risk-strip-heading span,
+  .risk-mini span {
+    font-size: 0.58rem;
+  }
+
+  .risk-strip-heading strong,
+  .risk-mini strong {
+    font-size: 0.76rem;
   }
 
   .summary-action {

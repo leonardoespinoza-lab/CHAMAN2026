@@ -34,6 +34,25 @@
       </div>
     </div>
 
+    <div class="risk-strip" aria-label="Riesgo por hectáreas">
+      <div class="risk-strip-heading">
+        <span>Riesgo por hectáreas</span>
+        <strong>{{ riesgoMapaEstado() }}</strong>
+      </div>
+      <div class="risk-mini low">
+        <span>Bajo</span>
+        <strong>{{ riesgoHectareas('verde') }}</strong>
+      </div>
+      <div class="risk-mini medium">
+        <span>Medio</span>
+        <strong>{{ riesgoHectareas('amarillo') }}</strong>
+      </div>
+      <div class="risk-mini high">
+        <span>Alto</span>
+        <strong>{{ riesgoHectareas('rojo') }}</strong>
+      </div>
+    </div>
+
     <div class="summary-action" aria-label="Resumen ejecutivo del mapa">
       <button type="button" class="summary-button" (click)="abrirResumenGerencial()">
         <span class="summary-button-icon">
@@ -76,7 +95,7 @@
 <!-- Resumen del servicio monitoreo de enfermedades-->
 <p-drawer
   #drawerRef
-  [visible]="!loteSeleccionado && servicioSeleccionado === servicios[0] && !showClimaLayers"
+  [visible]="false"
   [position]="'bottom'"
   [style]="{
     'margin-top': '0',

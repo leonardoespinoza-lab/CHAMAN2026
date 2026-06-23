@@ -737,6 +737,29 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     return this.formatMetric(Math.max(actual, maxPronostico), 'km/h', 0);
   }
 
+  public riesgoMapaEstado(): string {
+    if (this.enfermedades.cantRojo) {
+      return `${this.enfermedades.cantRojo} en alto`;
+    }
+    if (this.enfermedades.cantAmarillo) {
+      return `${this.enfermedades.cantAmarillo} en observación`;
+    }
+    if (this.enfermedades.cantVerde) {
+      return `${this.enfermedades.cantVerde} sin necesidades`;
+    }
+    return 'Sin datos';
+  }
+
+  public riesgoHectareas(tipo: 'verde' | 'amarillo' | 'rojo'): string {
+    const hectareas =
+      tipo === 'rojo'
+        ? this.enfermedades.haRojo
+        : tipo === 'amarillo'
+          ? this.enfermedades.haAmarillo
+          : this.enfermedades.haVerde;
+    return `${this.formatNumber(hectareas || 0, 0)} ha`;
+  }
+
   public loteUbicacion(lote?: ILoteMapa): string {
     const seleccionado = lote || this.loteSeleccionado;
     const partes = [
