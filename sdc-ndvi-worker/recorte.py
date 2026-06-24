@@ -22,54 +22,88 @@ def _png_scale() -> int:
 
 NDVI_PNG_SCALE = _png_scale()
 
-NDVI_CMAP = LinearSegmentedColormap.from_list(
-    "ndvi",
+def _colormap_from_value_ramp(name: str, ramp: list[tuple[float, str]], vmin: float, vmax: float) -> LinearSegmentedColormap:
+    scale = vmax - vmin
+    return LinearSegmentedColormap.from_list(
+        name,
+        [(max(0.0, min(1.0, (value - vmin) / scale)), color) for value, color in ramp],
+    )
+
+
+VEGETATION_CMAP = _colormap_from_value_ramp(
+    "vegetacion_agro_sentinelhub",
     [
-        (0.0, "#000080"),
-        (0.4, "#4682B4"),
-        (0.5, "#A0522D"),
-        (0.55, "#D2B48C"),
-        (0.6, "#FFFFE0"),
-        (0.7, "#9ACD32"),
-        (0.85, "#008000"),
-        (1.0, "#006400"),
+        (-0.5, "#0c0c0c"),
+        (-0.2, "#bfbfbf"),
+        (-0.1, "#dbdbdb"),
+        (0.0, "#eaeaea"),
+        (0.025, "#fff9cc"),
+        (0.05, "#ede8b5"),
+        (0.075, "#ddd89b"),
+        (0.1, "#ccc682"),
+        (0.125, "#bcb76b"),
+        (0.15, "#afc160"),
+        (0.175, "#a3cc59"),
+        (0.2, "#91bf51"),
+        (0.25, "#7fb247"),
+        (0.3, "#70a33f"),
+        (0.35, "#609635"),
+        (0.4, "#4f892d"),
+        (0.45, "#3f7c23"),
+        (0.5, "#306d1c"),
+        (0.55, "#216011"),
+        (0.6, "#0f540a"),
+        (1.0, "#004400"),
+    ],
+    -0.5,
+    1.0,
+)
+
+CANOPY_WATER_CMAP = LinearSegmentedColormap.from_list(
+    "agua_canopia",
+    [
+        (0.0, "#7f4f24"),
+        (0.22, "#bf7f3a"),
+        (0.42, "#f0d59b"),
+        (0.55, "#eef7f3"),
+        (0.72, "#79d2ca"),
+        (1.0, "#1267a7"),
     ],
 )
 
-INDEX_CMAPS = {
-    "ndvi": NDVI_CMAP,
-    "savi": NDVI_CMAP,
-    "evi": NDVI_CMAP,
-    "ndmi": LinearSegmentedColormap.from_list(
-        "ndmi",
-        [
-            (0.0, "#8a4f2a"),
-            (0.42, "#e6c68f"),
-            (0.55, "#f2f7f5"),
-            (0.72, "#69c7c4"),
-            (1.0, "#0b678f"),
-        ],
-    ),
-    "ndwi": LinearSegmentedColormap.from_list(
-        "ndwi",
-        [
-            (0.0, "#8b5a2b"),
-            (0.45, "#efe0b5"),
-            (0.6, "#d8f2ef"),
-            (0.82, "#4bb8d8"),
-            (1.0, "#0d5aa7"),
-        ],
-    ),
-    "ndre": LinearSegmentedColormap.from_list(
-        "ndre",
-        [
-            (0.0, "#d0a15f"),
-            (0.38, "#efe9aa"),
-            (0.58, "#8ed36d"),
-            (0.78, "#31a354"),
-            (1.0, "#0b5d2a"),
-        ],
-    ),
+SURFACE_WATER_CMAP = LinearSegmentedColormap.from_list(
+    "agua_superficial",
+    [
+        (0.0, "#7c552f"),
+        (0.32, "#d0a35f"),
+        (0.5, "#f2e2ad"),
+        (0.62, "#d8f2ef"),
+        (0.82, "#49b7d5"),
+        (1.0, "#0c5ca8"),
+    ],
+)
+
+RED_EDGE_CMAP = LinearSegmentedColormap.from_list(
+    "borde_rojo_clorofila",
+    [
+        (0.0, "#8c2f2a"),
+        (0.2, "#d8703d"),
+        (0.38, "#f0c95c"),
+        (0.55, "#b5df73"),
+        (0.75, "#38a852"),
+        (1.0, "#0b6b2a"),
+    ],
+)
+
+INDEX_RENDER_CONFIG = {
+    # Rampas agronomicas por indice. NDVI/SAVI/EVI usan una rampa tipo EO Browser:
+    # 0.1-0.2 ya se percibe verde suave, y >0.3 escala hacia verde intenso.
+    "ndvi": {"vmin": -0.5, "vmax": 1.0, "cmap": VEGETATION_CMAP},
+    "savi": {"vmin": -0.5, "vmax": 1.0, "cmap": VEGETATION_CMAP},
+    "evi": {"vmin": -0.5, "vmax": 1.0, "cmap": VEGETATION_CMAP},
+    "ndmi": {"vmin": -0.45, "vmax": 0.5, "cmap": CANOPY_WATER_CMAP},
+    "ndwi": {"vmin": -0.45, "vmax": 0.35, "cmap": SURFACE_WATER_CMAP},
+    "ndre": {"vmin": -0.05, "vmax": 0.5, "cmap": RED_EDGE_CMAP},
 }
 
 
@@ -143,8 +177,13 @@ def _guardar_png_indexado(
     quality: int,
 ) -> None:
     values = np.clip(values.astype("float32"), -1, 1)
-    normalized = (values + 1) / 2
-    cmap = INDEX_CMAPS.get(indice, NDVI_CMAP)
+    config = INDEX_RENDER_CONFIG.get(indice, INDEX_RENDER_CONFIG["ndvi"])
+    vmin = float(config["vmin"])
+    vmax = float(config["vmax"])
+    normalized = np.full(values.shape, np.nan, dtype="float32")
+    valid = np.isfinite(values)
+    normalized[valid] = np.clip((values[valid] - vmin) / (vmax - vmin), 0, 1)
+    cmap = config["cmap"]
     rgba = (cmap(normalized) * 255).astype(np.uint8)
     rgba[..., 3] = np.where(np.isnan(values), 0, 255)
 

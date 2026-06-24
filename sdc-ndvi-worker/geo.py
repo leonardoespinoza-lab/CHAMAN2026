@@ -105,7 +105,7 @@ def obtener_metadata_png_con_polygon(tif_path: str, polygon: GeometryInput) -> d
             polygon_proj = polygon_obj
 
         # Obtener bbox en CRS del raster
-        raster_bbox = polygon_proj.bounds
+        raster_bbox = src.bounds
 
         # Convertir bbox a EPSG:4326 si es necesario
         if epsg_code != 4326:

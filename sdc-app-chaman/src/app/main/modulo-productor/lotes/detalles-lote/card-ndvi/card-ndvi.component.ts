@@ -3,11 +3,14 @@ import { AfterViewInit, Component, ElementRef, Input, OnDestroy, OnInit, ViewChi
 import { Feature, Map, View } from 'ol';
 import { defaults as defaultControls } from 'ol/control';
 import { defaults as defaultInteractions } from 'ol/interaction';
+import { Extent } from 'ol/extent';
 import { Polygon } from 'ol/geom';
+import ImageLayer from 'ol/layer/Image';
 import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
-import { fromLonLat } from 'ol/proj';
+import { fromLonLat, transformExtent } from 'ol/proj';
 import { Vector as VectorSource, XYZ } from 'ol/source';
+import Static from 'ol/source/ImageStatic';
 import { Fill, Stroke, Style } from 'ol/style';
 import {
   IFilter,
@@ -76,6 +79,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   private refreshTimeout?: ReturnType<typeof setTimeout>;
   private satelliteMap?: Map;
   private satelliteLoteLayer?: VectorLayer<VectorSource>;
+  private satelliteRasterLayer?: ImageLayer<Static>;
 
   constructor(
     public helper: HelperService,
@@ -298,7 +302,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     const source = new VectorSource({ features: [feature] });
 
     if (!this.satelliteMap) {
-      this.satelliteLoteLayer = new VectorLayer({ source });
+      this.satelliteLoteLayer = new VectorLayer({ source, zIndex: 20 });
       this.satelliteMap = new Map({
         target,
         controls: defaultControls({ attribution: false, rotate: false, zoom: false }),
@@ -317,6 +321,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
               attributions: '',
               maxZoom: 19,
             }),
+            zIndex: 0,
           }),
           this.satelliteLoteLayer,
         ],
@@ -330,6 +335,9 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
       this.satelliteLoteLayer?.setSource(source);
     }
 
+    const polygonExtent = polygon.getExtent();
+    this.actualizarRasterSatelital(this.extentImagenSatelital(polygonExtent));
+
     setTimeout(() => {
       this.satelliteMap?.updateSize();
       this.satelliteMap?.getView().fit(polygon.getExtent(), {
@@ -340,15 +348,76 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
+  private actualizarRasterSatelital(extent: Extent): void {
+    if (!this.satelliteMap) {
+      return;
+    }
+
+    if (this.satelliteRasterLayer) {
+      this.satelliteMap.removeLayer(this.satelliteRasterLayer);
+      this.satelliteRasterLayer = undefined;
+    }
+
+    const imageUrl = this.imagenCapaActiva;
+    if (!imageUrl || extent.some((value) => !Number.isFinite(value))) {
+      return;
+    }
+
+    this.satelliteRasterLayer = new ImageLayer({
+      source: new Static({
+        url: imageUrl,
+        imageExtent: extent,
+        projection: this.satelliteMap.getView().getProjection(),
+      }),
+      opacity: 1,
+      zIndex: 10,
+      extent,
+    });
+    this.satelliteMap.addLayer(this.satelliteRasterLayer);
+  }
+
+  private extentImagenSatelital(fallback: Extent): Extent {
+    const coordinates = this.reporte?.metadataImagen?.geojson?.coordinates?.[0];
+    if (!Array.isArray(coordinates) || coordinates.length === 0) {
+      return fallback;
+    }
+
+    const extent4326 = coordinates.reduce(
+      (acc: Extent, coord: unknown) => {
+        if (!Array.isArray(coord) || coord.length < 2) {
+          return acc;
+        }
+        const x = Number(coord[0]);
+        const y = Number(coord[1]);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+          return acc;
+        }
+        return [
+          Math.min(acc[0], x),
+          Math.min(acc[1], y),
+          Math.max(acc[2], x),
+          Math.max(acc[3], y),
+        ] as Extent;
+      },
+      [Infinity, Infinity, -Infinity, -Infinity] as Extent
+    );
+
+    if (extent4326.some((value) => !Number.isFinite(value))) {
+      return fallback;
+    }
+    return transformExtent(extent4326, 'EPSG:4326', 'EPSG:3857');
+  }
+
   private estiloMapaSatelital(): Style[] {
+    const usaRaster = !!this.imagenCapaActiva;
     const fillColor = colorForSatelliteIndex(this.capaActiva.key, this.valorCapaActiva);
     return [
       new Style({
-        fill: new Fill({ color: fillColor }),
-        stroke: new Stroke({ color: 'rgba(255, 255, 255, 0.62)', width: 3.4 }),
+        fill: new Fill({ color: usaRaster ? 'rgba(255, 255, 255, 0)' : fillColor }),
+        stroke: new Stroke({ color: 'rgba(255, 255, 255, 0.72)', width: 2.6 }),
       }),
       new Style({
-        stroke: new Stroke({ color: 'rgba(18, 37, 59, 0.92)', width: 1.35 }),
+        stroke: new Stroke({ color: 'rgba(18, 37, 59, 0.9)', width: 1.2 }),
       }),
     ];
   }
