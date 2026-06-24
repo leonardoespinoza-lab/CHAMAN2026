@@ -77,6 +77,16 @@
             <strong>{{ capaActiva.label }}</strong>
             <span>{{ capaActiva.value }}</span>
           </div>
+          @if (leyendaCapaActiva.length) {
+            <div class="satellite-map-legend">
+              @for (item of leyendaCapaActiva; track item.label) {
+                <span>
+                  <i [style.background]="item.color"></i>
+                  {{ item.label }}
+                </span>
+              }
+            </div>
+          }
         </div>
       </div>
 
