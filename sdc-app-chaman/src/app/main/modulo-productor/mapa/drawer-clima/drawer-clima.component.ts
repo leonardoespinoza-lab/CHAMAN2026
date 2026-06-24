@@ -13,6 +13,7 @@ import {
 import * as Highcharts from 'highcharts';
 import { IEstablecimiento } from 'modelos/src';
 import { Subscription } from 'rxjs';
+import { withChamanChartTheme } from '../../../../auxiliares/componentes/chart/chaman-chart-theme';
 import { ClimaTraduccionService } from '../../../../auxiliares/servicios/clima-traduccion.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../auxiliares/shared.module';
@@ -690,7 +691,7 @@ export class DrawerClimaComponent implements OnInit, OnDestroy, OnChanges {
         };
 
         // Crear nueva instancia del gráfico
-        this.chartInstance = Highcharts.chart(this.chartContainer.nativeElement, optionsWithDimensions);
+        this.chartInstance = Highcharts.chart(this.chartContainer.nativeElement, withChamanChartTheme(optionsWithDimensions));
       }
     }
   }
@@ -728,7 +729,7 @@ export class DrawerClimaComponent implements OnInit, OnDestroy, OnChanges {
         // Crear nueva instancia del gráfico
         this.precipitationChartInstance = Highcharts.chart(
           this.precipitationChartContainer.nativeElement,
-          optionsWithDimensions
+          withChamanChartTheme(optionsWithDimensions)
         );
       }
     }

@@ -18,6 +18,7 @@ import {
 } from '@angular/core';
 import * as Highcharts from 'highcharts';
 import { IDispositivo } from 'modelos/src';
+import { withChamanChartTheme } from '../../../../../auxiliares/componentes/chart/chaman-chart-theme';
 import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
@@ -753,7 +754,7 @@ export class DrawerRiegoComponent implements OnInit, OnDestroy, AfterViewInit, O
         };
 
         try {
-          this.chartInstance = Highcharts.chart(container.nativeElement, optionsWithData);
+          this.chartInstance = Highcharts.chart(container.nativeElement, withChamanChartTheme(optionsWithData));
         } catch (error) {
           console.error('❌ Error al renderizar gráfico de líneas:', error);
         }
@@ -811,7 +812,7 @@ export class DrawerRiegoComponent implements OnInit, OnDestroy, AfterViewInit, O
         };
 
         try {
-          this.heatmapInstance = Highcharts.chart(container.nativeElement, optionsWithData);
+          this.heatmapInstance = Highcharts.chart(container.nativeElement, withChamanChartTheme(optionsWithData));
         } catch (error) {
           console.error('❌ Error al renderizar heatmap:', error);
         }
@@ -858,7 +859,7 @@ export class DrawerRiegoComponent implements OnInit, OnDestroy, AfterViewInit, O
         };
 
         try {
-          this.evapotranspiracionInstance = Highcharts.chart(container.nativeElement, optionsWithData);
+          this.evapotranspiracionInstance = Highcharts.chart(container.nativeElement, withChamanChartTheme(optionsWithData));
         } catch (error) {
           console.error('❌ Error al renderizar gráfico de evapotranspiración:', error);
         }

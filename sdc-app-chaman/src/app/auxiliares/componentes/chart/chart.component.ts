@@ -1,49 +1,16 @@
 import { Component, EventEmitter, Input, OnChanges, OnInit, Output } from '@angular/core';
 import Highcharts from 'highcharts';
+import More from 'highcharts/highcharts-more';
 import { HighchartsChartModule } from 'highcharts-angular';
+import TimelineModule from 'highcharts/modules/timeline';
 import XRangeModule from 'highcharts/modules/xrange';
 
-import More from 'highcharts/highcharts-more';
-import TimelineModule from 'highcharts/modules/timeline';
+import { applyChamanHighchartsDefaults, withChamanChartTheme } from './chaman-chart-theme';
 
 More(Highcharts);
 TimelineModule(Highcharts);
 XRangeModule(Highcharts);
-
-/// HICHARTS > 11 no necesita hacer esto.
-// More(Highcharts);
-// TimelineModule(Highcharts);
-// HC_stock(Highcharts);
-// Boost(Highcharts);
-// SolidGauge(Highcharts);
-// IndicatorsCore(Highcharts);
-// IndicatorRegressions(Highcharts);
-// Theme(Highcharts);
-// Stock(Highcharts);
-// stockTools(Highcharts);
-// require('highcharts/modules/timeline')(Highcharts);
-
-Highcharts.setOptions({
-  lang: {
-    months: [
-      'Enero',
-      'Febrero',
-      'Marzo',
-      'Abril',
-      'Mayo',
-      'Junio',
-      'Julio',
-      'Agosto',
-      'Septiembre',
-      'Octubre',
-      'Noviembre',
-      'Diciembre',
-    ],
-    weekdays: ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'],
-    shortMonths: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
-    shortWeekdays: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'],
-  },
-});
+applyChamanHighchartsDefaults(Highcharts);
 
 @Component({
   selector: 'app-chart',
@@ -63,12 +30,9 @@ export class ChartComponent implements OnInit, OnChanges {
   @Output() optionsChange = new EventEmitter<Highcharts.Options>();
   @Output() chartPrint = new EventEmitter<void>();
 
-  constructor() {
-    this.chartCallback.bind(this);
-  }
-
   public chartInstance(chart: Highcharts.Chart) {
     this.chart = chart;
+    this.setDefaults();
   }
 
   public chartCallback: Highcharts.ChartCallbackFunction = () => {
@@ -78,219 +42,38 @@ export class ChartComponent implements OnInit, OnChanges {
   };
 
   private setDefaults() {
+    if (!this.options) {
+      return;
+    }
+
+    this.options = this.prepareOptions(this.options);
     this.update = true;
-    if (this.chart && this.options) {
-      this.options = this.applyChamanChartTheme(this.options);
 
-      if (!this.options.accessibility) {
-        this.options.accessibility = {
-          enabled: false,
-        };
-      }
-      if (this.options?.chart && !this.options?.chart?.style) {
-        this.options!.chart!.style = {
-          fontFamily: 'Lato, sans-serif',
-        };
-      }
-
-      this.chart?.update(this.options, true, true);
+    if (this.chart) {
+      this.chart.update(this.options, true, true);
     }
   }
 
-  private applyChamanChartTheme(options: Highcharts.Options): Highcharts.Options {
-    if (!this.isChamanChart(options)) {
-      return options;
-    }
-
-    const chart = options.chart || {};
-    const plotOptions = options.plotOptions || {};
-    const defaultBackground = {
-      linearGradient: { x1: 0, y1: 0, x2: 1, y2: 1 },
-      stops: [
-        [0, '#203746'],
-        [0.48, '#243244'],
-        [1, '#1d2b3a'],
-      ],
-    } as Highcharts.GradientColorObject;
-    const backgroundColor =
-      chart.backgroundColor && chart.backgroundColor !== 'transparent'
-        ? chart.backgroundColor
-        : defaultBackground;
-    const lineBase = {
-      animation: { duration: 650 },
-      dataLabels: { enabled: false },
-      lineWidth: 2.35,
-      marker: {
-        enabled: false,
-        radius: 3,
-        symbol: 'circle',
-        states: {
-          hover: {
-            enabled: true,
-            radius: 4.5,
-          },
-        },
-      },
-      shadow: {
-        color: 'rgba(34, 211, 200, 0.14)',
-        offsetX: 0,
-        offsetY: 6,
-        opacity: 0.16,
-        width: 12,
-      },
-      states: {
-        hover: {
-          enabled: true,
-          lineWidthPlus: 0.7,
-        },
-        inactive: {
-          opacity: 0.45,
-        },
-      },
-    };
-    const columnBase = {
-      animation: { duration: 650 },
-      borderRadius: 5,
-      borderWidth: 0,
-      color: 'rgba(143, 226, 201, 0.72)',
-      groupPadding: 0.08,
-      maxPointWidth: 26,
-      pointPadding: 0.08,
-      states: {
-        hover: {
-          brightness: 0.12,
-        },
-        inactive: {
-          opacity: 0.55,
-        },
-      },
-    };
+  private prepareOptions(options: Highcharts.Options): Highcharts.Options {
+    const themedOptions = this.isChamanChart(options) ? withChamanChartTheme(options) : options;
 
     return {
-      ...options,
-      colors: options.colors || [
-        '#22d3c8',
-        '#f3df22',
-        '#35a7ff',
-        '#ff8a68',
-        '#ff6f91',
-        '#8fe388',
-        '#b88cff',
-      ],
+      ...themedOptions,
+      accessibility: themedOptions.accessibility || {
+        enabled: false,
+      },
       chart: {
-        ...chart,
-        backgroundColor,
-        borderRadius: chart.borderRadius ?? 10,
-        marginTop: chart.marginTop ?? 24,
-        spacingBottom: chart.spacingBottom ?? 18,
-        spacingLeft: chart.spacingLeft ?? 14,
-        spacingRight: chart.spacingRight ?? 18,
-        spacingTop: chart.spacingTop ?? 20,
+        ...(themedOptions.chart || {}),
         style: {
           fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          ...(chart.style || {}),
+          ...(themedOptions.chart?.style || {}),
         },
       },
-      title: {
-        ...options.title,
-        style: {
-          ...(options.title?.style || {}),
-          color: '#f5fbff',
-          fontSize: '16px',
-          fontWeight: '700',
-        },
-      },
-      subtitle: {
-        ...options.subtitle,
-        style: {
-          ...(options.subtitle?.style || {}),
-          color: '#93a7b8',
-          fontSize: '13px',
-        },
-      },
-      xAxis: this.themeAxis(options.xAxis, 'x'),
-      yAxis: this.themeAxis(options.yAxis, 'y'),
-      legend: {
-        ...options.legend,
-        align: options.legend?.align || 'center',
-        itemDistance: options.legend?.itemDistance || 18,
-        itemHoverStyle: {
-          ...(options.legend?.itemHoverStyle || {}),
-          color: '#ffffff',
-        },
-        itemStyle: {
-          ...(options.legend?.itemStyle || {}),
-          color: '#d7e4ee',
-          fontSize: '13px',
-          fontWeight: '650',
-        },
-        symbolHeight: options.legend?.symbolHeight || 8,
-        symbolRadius: options.legend?.symbolRadius || 4,
-        symbolWidth: options.legend?.symbolWidth || 20,
-      },
-      tooltip: {
-        ...options.tooltip,
-        backgroundColor: this.themeColor(options.tooltip?.backgroundColor, 'rgba(18, 31, 43, 0.94)'),
-        borderColor: this.themeColor(options.tooltip?.borderColor, 'rgba(34, 211, 200, 0.35)'),
-        borderRadius: 10,
-        borderWidth: 1,
-        shadow: {
-          color: 'rgba(0, 0, 0, 0.28)',
-          offsetX: 0,
-          offsetY: 8,
-          opacity: 0.45,
-          width: 14,
-        },
-        style: {
-          ...(options.tooltip?.style || {}),
-          color: this.themeColor(options.tooltip?.style?.color, '#eef8ff'),
-          fontSize: '13px',
-        },
-      },
-      plotOptions: {
-        ...plotOptions,
-        area: {
-          ...lineBase,
-          ...(plotOptions.area || {}),
-        },
-        areaspline: {
-          ...lineBase,
-          ...(plotOptions.areaspline || {}),
-        },
-        line: {
-          ...lineBase,
-          ...(plotOptions.line || {}),
-        },
-        spline: {
-          ...lineBase,
-          ...(plotOptions.spline || {}),
-        },
-        bar: {
-          ...columnBase,
-          ...(plotOptions.bar || {}),
-        },
-        column: {
-          ...columnBase,
-          ...(plotOptions.column || {}),
-        },
-        series: {
-          animation: { duration: 650 },
-          connectNulls: false,
-          stickyTracking: true,
-          turboThreshold: 10000,
-          ...(plotOptions.series || {}),
-        },
-      },
-      credits: { enabled: false },
     };
   }
 
   private isChamanChart(options: Highcharts.Options): boolean {
-    const customTheme = (options as any)?.custom?.chamanTheme;
-    if (customTheme === 'light' || customTheme === 'none') {
-      return false;
-    }
-    if (String(options.chart?.className || '').includes('chaman-light-chart')) {
+    if ((options as any)?.custom?.chamanTheme === 'none') {
       return false;
     }
 
@@ -302,62 +85,6 @@ export class ChartComponent implements OnInit, OnChanges {
     }
 
     return (options.series || []).some((series: any) => themedTypes.has(String(series?.type || chartType)));
-  }
-
-  private themeAxis(axis: any, kind: 'x' | 'y'): any {
-    if (Array.isArray(axis)) {
-      return axis.map((item) => this.themeAxisItem(item, kind));
-    }
-
-    return this.themeAxisItem(axis || {}, kind);
-  }
-
-  private themeAxisItem(axis: any, kind: 'x' | 'y'): any {
-    const labelColor = this.themeColor(axis.labels?.style?.color, '#9fb2c3');
-    const titleColor = this.themeColor(axis.title?.style?.color, '#d7e4ee');
-
-    return {
-      ...axis,
-      crosshair: axis.crosshair ?? {
-        color: 'rgba(255, 255, 255, 0.10)',
-        dashStyle: 'Solid',
-        width: 1,
-      },
-      gridLineColor: kind === 'y' ? 'rgba(214, 232, 242, 0.10)' : 'rgba(214, 232, 242, 0.06)',
-      gridLineWidth: axis.gridLineWidth ?? 1,
-      labels: {
-        ...(axis.labels || {}),
-        style: {
-          ...(axis.labels?.style || {}),
-          color: labelColor,
-          fontSize: '12px',
-          fontWeight: '600',
-        },
-      },
-      lineColor: 'rgba(214, 232, 242, 0.10)',
-      tickColor: 'rgba(214, 232, 242, 0.14)',
-      title: {
-        ...(axis.title || {}),
-        style: {
-          ...(axis.title?.style || {}),
-          color: titleColor,
-          fontSize: '13px',
-          fontWeight: '700',
-        },
-      },
-    };
-  }
-
-  private themeColor(value: any, fallback: string): any {
-    if (!value || value === 'transparent') {
-      return fallback;
-    }
-
-    if (typeof value === 'string' && value.trim().startsWith('var(')) {
-      return fallback;
-    }
-
-    return value;
   }
 
   ngOnChanges() {

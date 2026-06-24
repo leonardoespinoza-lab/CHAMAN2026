@@ -335,11 +335,17 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
-  private estiloMapaSatelital(): Style {
-    return new Style({
-      fill: new Fill({ color: this.colorCapaSatelital(this.capaActiva.key, this.valorCapaActiva) }),
-      stroke: new Stroke({ color: 'rgba(18, 37, 59, 0.92)', width: 1.8 }),
-    });
+  private estiloMapaSatelital(): Style[] {
+    const fillColor = this.colorCapaSatelital(this.capaActiva.key, this.valorCapaActiva);
+    return [
+      new Style({
+        fill: new Fill({ color: fillColor }),
+        stroke: new Stroke({ color: 'rgba(255, 255, 255, 0.62)', width: 3.4 }),
+      }),
+      new Style({
+        stroke: new Stroke({ color: 'rgba(18, 37, 59, 0.92)', width: 1.35 }),
+      }),
+    ];
   }
 
   private colorCapaSatelital(key: SatelliteIndicator['key'], value?: number): string {
@@ -348,24 +354,80 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     if (key === 'ndwi') {
-      if (value < -0.15) return 'rgba(214, 150, 79, 0.58)';
-      if (value < 0.05) return 'rgba(190, 199, 115, 0.58)';
-      if (value < 0.18) return 'rgba(66, 182, 172, 0.58)';
-      return 'rgba(32, 119, 182, 0.6)';
+      return this.colorPorEscala(
+        value,
+        [
+          { at: -0.35, rgb: [178, 119, 63] },
+          { at: -0.15, rgb: [179, 153, 82] },
+          { at: 0.04, rgb: [111, 164, 132] },
+          { at: 0.18, rgb: [56, 177, 174] },
+          { at: 0.38, rgb: [35, 120, 185] },
+        ],
+        0.6,
+      );
     }
 
     if (key === 'ndmi') {
-      if (value < -0.1) return 'rgba(218, 165, 83, 0.58)';
-      if (value < 0.08) return 'rgba(189, 198, 99, 0.58)';
-      if (value < 0.22) return 'rgba(82, 190, 128, 0.58)';
-      return 'rgba(21, 142, 109, 0.6)';
+      return this.colorPorEscala(
+        value,
+        [
+          { at: -0.35, rgb: [183, 126, 62] },
+          { at: -0.12, rgb: [179, 154, 76] },
+          { at: 0.02, rgb: [139, 176, 90] },
+          { at: 0.18, rgb: [79, 184, 121] },
+          { at: 0.36, rgb: [18, 136, 105] },
+        ],
+        0.6,
+      );
     }
 
-    if (value < 0.2) return 'rgba(212, 151, 80, 0.58)';
-    if (value < 0.35) return 'rgba(232, 196, 86, 0.58)';
-    if (value < 0.55) return 'rgba(165, 205, 91, 0.58)';
-    if (value < 0.72) return 'rgba(78, 184, 100, 0.58)';
-    return 'rgba(22, 133, 72, 0.6)';
+    return this.colorPorEscala(
+      value,
+      [
+        { at: -0.05, rgb: [170, 121, 63] },
+        { at: 0.04, rgb: [184, 158, 84] },
+        { at: 0.1, rgb: [159, 178, 78] },
+        { at: 0.16, rgb: [118, 190, 80] },
+        { at: 0.35, rgb: [76, 194, 88] },
+        { at: 0.55, rgb: [36, 158, 78] },
+        { at: 0.78, rgb: [18, 116, 63] },
+      ],
+      0.58,
+    );
+  }
+
+  private colorPorEscala(
+    value: number,
+    stops: Array<{ at: number; rgb: [number, number, number] }>,
+    alpha: number,
+  ): string {
+    const sortedStops = [...stops].sort((a, b) => a.at - b.at);
+    if (value <= sortedStops[0].at) {
+      return this.rgba(sortedStops[0].rgb, alpha);
+    }
+
+    for (let i = 1; i < sortedStops.length; i++) {
+      const previous = sortedStops[i - 1];
+      const current = sortedStops[i];
+      if (value <= current.at) {
+        const range = current.at - previous.at || 1;
+        const t = Math.max(0, Math.min(1, (value - previous.at) / range));
+        return this.rgba(
+          [
+            Math.round(previous.rgb[0] + (current.rgb[0] - previous.rgb[0]) * t),
+            Math.round(previous.rgb[1] + (current.rgb[1] - previous.rgb[1]) * t),
+            Math.round(previous.rgb[2] + (current.rgb[2] - previous.rgb[2]) * t),
+          ],
+          alpha,
+        );
+      }
+    }
+
+    return this.rgba(sortedStops[sortedStops.length - 1].rgb, alpha);
+  }
+
+  private rgba(rgb: [number, number, number], alpha: number): string {
+    return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
   }
 
   private valorIndice(key: SatelliteIndicator['key']): number | undefined {

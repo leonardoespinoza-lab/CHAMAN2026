@@ -250,47 +250,26 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
     const puntos = variable.historial
       .slice()
       .sort((a, b) => this.fechaToTime(a.fecha) - this.fechaToTime(b.fecha));
+    const data = puntos.map((punto) => [this.fechaToTime(punto.fecha), punto.value] as [number, number]);
     return {
       chart: {
-        backgroundColor: 'transparent',
-        className: 'chaman-light-chart',
         reflow: true,
-        spacing: [18, 18, 20, 12],
+        spacing: [16, 18, 18, 12],
         type: 'spline',
         zooming: { type: 'x' },
-        style: {
-          fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        },
       },
       title: { text: undefined },
       xAxis: {
-        categories: puntos.map((punto) => this.labelFechaGrafico(punto.fecha)),
-        crosshair: { color: 'rgba(34, 211, 200, 0.24)', width: 1 },
-        gridLineColor: 'rgba(119, 150, 180, 0.16)',
-        gridLineWidth: 1,
-        labels: {
-          style: { color: 'var(--p-text-color)', fontSize: '12px', fontWeight: '650' },
-        },
+        type: 'datetime',
       },
       yAxis: {
         title: {
           text: variable.unit,
-          style: { color: 'var(--p-text-color)', fontSize: '13px', fontWeight: '750' },
         },
-        labels: {
-          style: { color: 'var(--p-text-color)', fontSize: '12px' },
-        },
-        gridLineColor: 'rgba(119, 150, 180, 0.18)',
-        gridLineWidth: 1,
       },
       legend: { enabled: false },
       tooltip: {
-        backgroundColor: 'var(--p-content-background)',
-        borderColor: 'var(--p-surface-border)',
-        borderRadius: 8,
-        borderWidth: 1,
-        shadow: true,
-        style: { color: 'var(--p-text-color)', fontSize: '13px' },
+        xDateFormat: '%d/%m/%Y %H:%M',
         valueDecimals: 2,
         valueSuffix: variable.unit ? ` ${variable.unit}` : '',
       },
@@ -306,12 +285,11 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
       },
       series: [
         {
-          data: puntos.map((punto) => punto.value),
+          data,
           name: variable.label,
           type: 'spline',
         },
       ],
-      credits: { enabled: false },
       accessibility: { enabled: false },
     };
   }
@@ -342,17 +320,6 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
   private fechaToTime(fecha: string): number {
     const date = new Date(fecha);
     return Number.isNaN(date.getTime()) ? 0 : date.getTime();
-  }
-
-  private labelFechaGrafico(fecha: string): string {
-    const date = new Date(fecha);
-    if (Number.isNaN(date.getTime())) return fecha;
-    return date.toLocaleString('es-AR', {
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      month: '2-digit',
-    });
   }
 
   private detalleLectura(lectura: IEstacionLecturaDetalle): string {
