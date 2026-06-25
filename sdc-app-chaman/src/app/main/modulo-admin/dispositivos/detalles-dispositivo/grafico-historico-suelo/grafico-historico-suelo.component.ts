@@ -59,6 +59,21 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     { key: 'temperatura', title: 'Temperatura', unit: 'C', color: '#e74c3c', decimals: 1 },
   ];
 
+  private readonly depthColors = [
+    '#22d3c8',
+    '#2f9fe8',
+    '#f59e0b',
+    '#ef4444',
+    '#8b5cf6',
+    '#10b981',
+    '#64748b',
+    '#ec4899',
+    '#14b8a6',
+    '#84cc16',
+    '#f97316',
+    '#06b6d4',
+  ];
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['reportes']) {
       this.prepareOptions();
@@ -112,25 +127,40 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     }
 
     const definition = this.getDefinition(this.selectedMetric);
-    const series = this.buildProfileSeries(definition);
-    this.profileRows = this.buildProfileRows(definition, series);
-    this.resumen = this.buildResumen(definition, series);
-    this.chartOptions = this.buildChartOptions(definition, series);
+    const series = this.buildHistoricalSeries(definition);
+    const latestPoints = this.buildLatestDepthPoints(definition);
+    this.profileRows = this.buildProfileRows(definition, latestPoints);
+    this.resumen = this.buildResumen(definition, series, latestPoints);
+    this.chartOptions = this.buildTimeSeriesChartOptions(definition, series);
     this.napaChartOptions = this.buildNapaChartOptions();
   }
 
-  private buildProfileSeries(definition: SoilMetricDefinition): any[] {
-    const latestByDepth = new Map<number, HistoricalPoint>();
+  private buildHistoricalSeries(definition: SoilMetricDefinition): any[] {
+    const byDepth = new Map<number, HistoricalPoint[]>();
 
-    for (const reporte of [...this.sortedReports()].reverse()) {
+    for (const reporte of this.sortedReports()) {
+      const timestamp = this.getReporteTimestamp(reporte);
+      if (!timestamp) continue;
+
       const profile = buildSentekProfile(reporte);
       for (const row of profile) {
         const metric = row[definition.key];
-        if (!metric || metric.actual === undefined || metric.actual === null) continue;
-        if (latestByDepth.has(row.profundidad)) continue;
-        latestByDepth.set(row.profundidad, {
-          x: metric.actual,
-          y: row.profundidad,
+        if (
+          !metric ||
+          metric.actual === undefined ||
+          metric.actual === null ||
+          !Number.isFinite(metric.actual)
+        ) {
+          continue;
+        }
+
+        if (!byDepth.has(row.profundidad)) {
+          byDepth.set(row.profundidad, []);
+        }
+
+        byDepth.get(row.profundidad)!.push({
+          x: timestamp,
+          y: metric.actual,
           depth: row.profundidad,
           raw: metric.crudo,
           rawUnit: metric.unidadCruda,
@@ -138,42 +168,52 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       }
     }
 
-    const data = [...latestByDepth.entries()]
+    return [...byDepth.entries()]
       .sort(([a], [b]) => a - b)
-      .map(([, point]) => point);
-
-    return [
-      {
-        color: definition.color,
-        data,
-        dataLabels: {
-          enabled: true,
-          allowOverlap: true,
-          align: 'left',
-          crop: false,
-          overflow: 'allow',
-          x: 8,
-          formatter: function (this: any) {
-            const point = this.point as HistoricalPoint;
-            return `${point.depth} cm: ${Number(point.x).toFixed(definition.decimals)} ${definition.unit}`;
-          },
-          style: {
-            color: 'var(--p-text-color)',
-            fontSize: '12px',
-            fontWeight: '800',
-            textOutline: 'none',
-          },
-        },
-        name: definition.title,
+      .map(([depth, data], index) => ({
+        color: this.depthColors[index % this.depthColors.length],
+        data: data.sort((a, b) => a.x - b.x),
+        lineWidth: 2,
+        marker: { enabled: data.length <= 36, radius: 2 },
+        name: `${depth} cm`,
         type: 'spline',
-        marker: { enabled: true, radius: 4 },
-      },
-    ];
+        turboThreshold: 0,
+      }));
   }
 
-  private buildChartOptions(definition: SoilMetricDefinition, series: any[]): any {
-    const xAxisExtremes = this.buildXAxisExtremes(definition, series);
+  private buildLatestDepthPoints(definition: SoilMetricDefinition): HistoricalPoint[] {
+    const latestByDepth = new Map<number, HistoricalPoint>();
 
+    for (const reporte of [...this.sortedReports()].reverse()) {
+      const timestamp = this.getReporteTimestamp(reporte) || Date.now();
+      const profile = buildSentekProfile(reporte);
+
+      for (const row of profile) {
+        const metric = row[definition.key];
+        if (
+          !metric ||
+          metric.actual === undefined ||
+          metric.actual === null ||
+          !Number.isFinite(metric.actual) ||
+          latestByDepth.has(row.profundidad)
+        ) {
+          continue;
+        }
+
+        latestByDepth.set(row.profundidad, {
+          x: timestamp,
+          y: metric.actual,
+          depth: row.profundidad,
+          raw: metric.crudo,
+          rawUnit: metric.unidadCruda,
+        });
+      }
+    }
+
+    return [...latestByDepth.values()].sort((a, b) => a.depth - b.depth);
+  }
+
+  private buildTimeSeriesChartOptions(definition: SoilMetricDefinition, series: any[]): any {
     return {
       chart: {
         backgroundColor: 'transparent',
@@ -183,45 +223,43 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         spacingRight: 18,
         spacingTop: 10,
         type: 'spline',
-        zooming: { type: 'xy' },
+        zooming: { type: 'x' },
         style: {
           fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         },
       },
       title: { text: undefined },
       xAxis: {
-        ...xAxisExtremes,
+        type: 'datetime',
         crosshair: {
           color: 'rgba(34, 211, 200, 0.24)',
           width: 2,
         },
         title: {
-          text: `${definition.title} (${definition.unit})`,
+          text: 'Fecha y hora',
           style: { color: 'var(--p-text-color)', fontSize: '14px', fontWeight: '700' },
         },
         labels: {
-          style: { color: 'var(--p-text-color)', fontSize: '14px' },
+          format: '{value:%d/%m<br/>%H:%M}',
+          style: { color: 'var(--p-text-color)', fontSize: '13px', fontWeight: '600' },
         },
         gridLineColor: 'var(--p-surface-border)',
         gridLineWidth: 1,
       },
       yAxis: {
-        max: 125,
-        min: 0,
-        reversed: true,
-        tickInterval: 10,
+        max: definition.key === 'humedad' ? 100 : undefined,
+        min: definition.key === 'humedad' ? 0 : undefined,
         title: {
-          text: 'Profundidad de la sonda (cm)',
+          text: `${definition.title} (${definition.unit})`,
           style: { color: definition.color, fontSize: '14px', fontWeight: '700' },
         },
         labels: {
-          formatter: function (this: any) {
-            return `${this.value} cm`;
-          },
           style: { color: 'var(--p-text-color)', fontSize: '14px' },
         },
+        endOnTick: true,
         gridLineColor: 'var(--p-surface-border)',
         gridLineWidth: 1,
+        startOnTick: true,
       },
       legend: {
         align: 'center',
@@ -240,15 +278,19 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         borderColor: 'var(--p-surface-border)',
         borderRadius: 8,
         borderWidth: 1,
-        formatter: function (this: any) {
-          const point = this.point as HistoricalPoint;
+        shared: true,
+        shadow: true,
+        xDateFormat: '%d/%m/%Y %H:%M',
+        valueDecimals: definition.decimals,
+        valueSuffix: ` ${definition.unit}`,
+        pointFormatter: function (this: any) {
+          const point = this as HistoricalPoint & { color?: string; series?: any };
           const raw =
             point.raw !== undefined && point.rawUnit
-              ? `<br/>Crudo: <strong>${Number(point.raw).toFixed(3)} ${point.rawUnit}</strong>`
+              ? ` <span style="color:#60708a">(crudo ${Number(point.raw).toFixed(3)} ${point.rawUnit})</span>`
               : '';
-          return `<span style="color:${this.series.color}">&bull;</span> ${this.series.name}<br/>Profundidad: <strong>${point.depth} cm</strong><br/><strong>${Number(point.x).toFixed(definition.decimals)} ${definition.unit}</strong>${raw}`;
+          return `<br/><span style="color:${point.color}">&bull;</span> ${point.series?.name || ''}: <strong>${Number(point.y).toFixed(definition.decimals)} ${definition.unit}</strong>${raw}`;
         },
-        shadow: true,
         style: { color: 'var(--p-text-color)', fontSize: '14px' },
       },
       plotOptions: {
@@ -278,6 +320,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       series,
       credits: { enabled: false },
       accessibility: { enabled: false },
+      lang: { noData: 'Sin lecturas historicas para esta variable.' },
+      noData: { style: { color: '#60708a', fontWeight: '700' } },
+      time: { useUTC: false },
       responsive: {
         rules: [
           {
@@ -292,59 +337,15 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     };
   }
 
-  private buildProfileRows(definition: SoilMetricDefinition, series: any[]): ProfileRow[] {
-    const data = ((series?.[0]?.data || []) as HistoricalPoint[]).filter((point) => Number.isFinite(point.x));
-    return data.map((point) => ({
+  private buildProfileRows(definition: SoilMetricDefinition, latestPoints: HistoricalPoint[]): ProfileRow[] {
+    return latestPoints.map((point) => ({
       profundidad: point.depth,
-      formatted: `${Number(point.x).toFixed(definition.decimals)} ${definition.unit}`,
+      formatted: `${Number(point.y).toFixed(definition.decimals)} ${definition.unit}`,
       raw:
         point.raw !== undefined && point.rawUnit
           ? `${Number(point.raw).toFixed(3)} ${point.rawUnit}`
           : undefined,
     }));
-  }
-
-  private buildXAxisExtremes(definition: SoilMetricDefinition, series: any[]): { min?: number; max?: number; tickAmount?: number; startOnTick?: boolean; endOnTick?: boolean } {
-    const values = series
-      .flatMap((serie) => (serie.data || []).map((point: HistoricalPoint) => Number(point.x)))
-      .filter((value) => Number.isFinite(value));
-
-    if (!values.length) return {};
-
-    const minValue = Math.min(...values);
-    const maxValue = Math.max(...values);
-    const range = maxValue - minValue;
-    const minSpan =
-      definition.key === 'humedad'
-        ? 8
-        : definition.key === 'temperatura'
-          ? 4
-          : Math.max(20, Math.abs(maxValue) * 0.08);
-    const span = Math.max(range, minSpan);
-    const center = (minValue + maxValue) / 2;
-    const padding = Math.max(span * 0.14, definition.key === 'humedad' ? 1.5 : 0.5);
-
-    let axisMin = center - span / 2 - padding;
-    let axisMax = center + span / 2 + padding;
-
-    if (definition.key === 'humedad') {
-      axisMin = Math.max(0, axisMin);
-      axisMax = Math.min(100, axisMax);
-    }
-
-    return {
-      endOnTick: false,
-      max: this.roundAxisLimit(axisMax, 'ceil'),
-      min: this.roundAxisLimit(axisMin, 'floor'),
-      startOnTick: false,
-      tickAmount: 6,
-    };
-  }
-
-  private roundAxisLimit(value: number, mode: 'floor' | 'ceil'): number {
-    const multiplier = Math.abs(value) >= 100 ? 1 : 10;
-    const scaled = value * multiplier;
-    return (mode === 'floor' ? Math.floor(scaled) : Math.ceil(scaled)) / multiplier;
   }
 
   private buildNapaChartOptions(): any | undefined {
@@ -497,11 +498,21 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     return points.sort((a, b) => a.x - b.x);
   }
 
-  private buildResumen(definition: SoilMetricDefinition, series: any[]): string {
-    const values = series.flatMap((serie) => serie.data.map((point: HistoricalPoint) => point.x));
-    if (!values.length) return 'Sin lecturas historicas para esta variable';
-    const average = values.reduce((acc, value) => acc + Number(value), 0) / values.length;
-    return `${values.length} profundidades - perfil actual promedio ${average.toFixed(definition.decimals)} ${definition.unit}`;
+  private buildResumen(
+    definition: SoilMetricDefinition,
+    series: any[],
+    latestPoints: HistoricalPoint[],
+  ): string {
+    const pointCount = series.reduce((sum, item) => sum + (item.data?.length || 0), 0);
+    if (!pointCount) return 'Sin lecturas historicas para esta variable';
+
+    const average = latestPoints.length
+      ? latestPoints.reduce((sum, point) => sum + point.y, 0) / latestPoints.length
+      : undefined;
+    const averageText =
+      average === undefined ? '' : ` - promedio actual ${average.toFixed(definition.decimals)} ${definition.unit}`;
+
+    return `${series.length} profundidades - ${pointCount} lecturas${averageText}`;
   }
 
   private hasMetric(key: SoilMetricKey): boolean {

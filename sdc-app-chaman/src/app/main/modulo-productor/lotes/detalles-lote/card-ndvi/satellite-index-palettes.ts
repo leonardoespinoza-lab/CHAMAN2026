@@ -19,21 +19,23 @@ interface SatellitePaletteConfig {
 }
 
 const VEGETATION_PALETTE: SatellitePaletteConfig = {
-  opacity: 0.78,
+  opacity: 0.82,
   stops: [
-    { at: -0.2, rgb: [128, 83, 55] },
-    { at: 0, rgb: [214, 184, 102] },
-    { at: 0.06, rgb: [226, 217, 118] },
-    { at: 0.12, rgb: [190, 224, 112] },
-    { at: 0.22, rgb: [132, 211, 92] },
-    { at: 0.38, rgb: [70, 177, 82] },
-    { at: 0.6, rgb: [24, 132, 65] },
-    { at: 0.78, rgb: [10, 91, 48] },
+    { at: -0.2, rgb: [124, 80, 52] },
+    { at: 0, rgb: [226, 214, 154] },
+    { at: 0.03, rgb: [224, 233, 126] },
+    { at: 0.06, rgb: [203, 235, 105] },
+    { at: 0.1, rgb: [168, 226, 87] },
+    { at: 0.14, rgb: [130, 213, 76] },
+    { at: 0.2, rgb: [91, 194, 69] },
+    { at: 0.32, rgb: [50, 163, 61] },
+    { at: 0.5, rgb: [21, 122, 51] },
+    { at: 0.72, rgb: [0, 83, 39] },
   ],
   legend: [
-    { label: 'Bajo', color: 'rgba(226, 217, 118, 0.78)' },
-    { label: 'Medio', color: 'rgba(132, 211, 92, 0.78)' },
-    { label: 'Alto', color: 'rgba(24, 132, 65, 0.78)' },
+    { label: 'Bajo', color: 'rgba(168, 226, 87, 0.82)' },
+    { label: 'Medio', color: 'rgba(91, 194, 69, 0.82)' },
+    { label: 'Alto', color: 'rgba(21, 122, 51, 0.82)' },
   ],
 };
 

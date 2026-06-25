@@ -31,29 +31,20 @@ def _colormap_from_value_ramp(name: str, ramp: list[tuple[float, str]], vmin: fl
 
 
 VEGETATION_CMAP = _colormap_from_value_ramp(
-    "vegetacion_agro_sentinelhub",
+    "vegetacion_agro_chaman",
     [
-        (-0.5, "#0c0c0c"),
-        (-0.2, "#bfbfbf"),
-        (-0.1, "#dbdbdb"),
-        (0.0, "#eaeaea"),
-        (0.025, "#fff9cc"),
-        (0.05, "#ede8b5"),
-        (0.075, "#ddd89b"),
-        (0.1, "#ccc682"),
-        (0.125, "#bcb76b"),
-        (0.15, "#afc160"),
-        (0.175, "#a3cc59"),
-        (0.2, "#91bf51"),
-        (0.25, "#7fb247"),
-        (0.3, "#70a33f"),
-        (0.35, "#609635"),
-        (0.4, "#4f892d"),
-        (0.45, "#3f7c23"),
-        (0.5, "#306d1c"),
-        (0.55, "#216011"),
-        (0.6, "#0f540a"),
-        (1.0, "#004400"),
+        (-0.5, "#6f4a2f"),
+        (-0.2, "#7c5034"),
+        (0.0, "#e2d69a"),
+        (0.03, "#e0e97e"),
+        (0.06, "#cbeb69"),
+        (0.10, "#a8e257"),
+        (0.14, "#82d54c"),
+        (0.20, "#5bc245"),
+        (0.32, "#32a33d"),
+        (0.50, "#157a33"),
+        (0.72, "#005327"),
+        (1.0, "#003319"),
     ],
     -0.5,
     1.0,
@@ -192,7 +183,7 @@ def _guardar_png_indexado(
     if NDVI_PNG_SCALE > 1:
         img = img.resize(
             (img.width * NDVI_PNG_SCALE, img.height * NDVI_PNG_SCALE),
-            Image.Resampling.BICUBIC,
+            Image.Resampling.NEAREST,
         )
     img.save(output_png_path, dpi=(dpi, dpi), optimize=True, compress_level=9)
 
