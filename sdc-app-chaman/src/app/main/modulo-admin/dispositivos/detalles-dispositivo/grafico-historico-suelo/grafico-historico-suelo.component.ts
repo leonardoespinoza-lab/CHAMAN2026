@@ -104,72 +104,72 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     }
 
     const definition = this.getDefinition(this.selectedMetric);
-    const series = this.buildSeries(definition);
+    const series = this.buildProfileSeries(definition);
     this.resumen = this.buildResumen(definition, series);
     this.chartOptions = this.buildChartOptions(definition, series);
     this.napaChartOptions = this.buildNapaChartOptions();
   }
 
-  private buildSeries(definition: SoilMetricDefinition): any[] {
-    const byDepth = new Map<number, HistoricalPoint[]>();
-    const sortedReports = this.sortedReports();
+  private buildProfileSeries(definition: SoilMetricDefinition): any[] {
+    const latestByDepth = new Map<number, HistoricalPoint>();
 
-    for (const reporte of sortedReports) {
-      const timestamp = this.getReporteTimestamp(reporte);
-      if (!timestamp) continue;
-
+    for (const reporte of [...this.sortedReports()].reverse()) {
       const profile = buildSentekProfile(reporte);
       for (const row of profile) {
         const metric = row[definition.key];
         if (!metric || metric.actual === undefined || metric.actual === null) continue;
-        const current = byDepth.get(row.profundidad) || [];
-        current.push({
-          x: timestamp,
-          y: metric.actual,
+        if (latestByDepth.has(row.profundidad)) continue;
+        latestByDepth.set(row.profundidad, {
+          x: metric.actual,
+          y: row.profundidad,
           depth: row.profundidad,
           raw: metric.crudo,
           rawUnit: metric.unidadCruda,
         });
-        byDepth.set(row.profundidad, current);
       }
     }
 
-    return [...byDepth.entries()]
+    const data = [...latestByDepth.entries()]
       .sort(([a], [b]) => a - b)
-      .map(([depth, data]) => ({
-        name: `${depth} cm`,
+      .map(([, point]) => point);
+
+    return [
+      {
+        color: definition.color,
         data,
+        name: definition.title,
         type: 'spline',
-        marker: { enabled: data.length <= 40, radius: 2 },
-      }));
+        marker: { enabled: true, radius: 4 },
+      },
+    ];
   }
 
   private buildChartOptions(definition: SoilMetricDefinition, series: any[]): any {
-    const yAxisExtremes = this.buildYAxisExtremes(definition, series);
+    const xAxisExtremes = this.buildXAxisExtremes(definition, series);
 
     return {
       chart: {
         backgroundColor: 'transparent',
-        height: 640,
+        height: 560,
         spacingBottom: 18,
         spacingLeft: 8,
         spacingRight: 18,
         spacingTop: 10,
         type: 'spline',
-        zooming: { type: 'x' },
+        zooming: { type: 'xy' },
         style: {
           fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         },
       },
       title: { text: undefined },
       xAxis: {
+        ...xAxisExtremes,
         crosshair: {
           color: 'rgba(34, 211, 200, 0.24)',
           width: 2,
         },
-        type: 'datetime',
         title: {
-          text: 'Fecha y hora',
+          text: `${definition.title} (${definition.unit})`,
           style: { color: 'var(--p-text-color)', fontSize: '14px', fontWeight: '700' },
         },
         labels: {
@@ -179,12 +179,18 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         gridLineWidth: 1,
       },
       yAxis: {
-        ...yAxisExtremes,
+        max: 125,
+        min: 0,
+        reversed: true,
+        tickInterval: 10,
         title: {
-          text: `${definition.title} (${definition.unit})`,
+          text: 'Profundidad de la sonda (cm)',
           style: { color: definition.color, fontSize: '14px', fontWeight: '700' },
         },
         labels: {
+          formatter: function (this: any) {
+            return `${this.value} cm`;
+          },
           style: { color: 'var(--p-text-color)', fontSize: '14px' },
         },
         gridLineColor: 'var(--p-surface-border)',
@@ -209,17 +215,11 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         borderWidth: 1,
         formatter: function (this: any) {
           const point = this.point as HistoricalPoint;
-          const date = new Date(point.x).toLocaleString('es-AR', {
-            day: '2-digit',
-            month: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-          });
           const raw =
             point.raw !== undefined && point.rawUnit
               ? `<br/>Crudo: <strong>${Number(point.raw).toFixed(3)} ${point.rawUnit}</strong>`
               : '';
-          return `<span style="color:${this.series.color}">&bull;</span> ${this.series.name}<br/>${date}<br/><strong>${Number(point.y).toFixed(definition.decimals)} ${definition.unit}</strong>${raw}`;
+          return `<span style="color:${this.series.color}">&bull;</span> ${this.series.name}<br/>Profundidad: <strong>${point.depth} cm</strong><br/><strong>${Number(point.x).toFixed(definition.decimals)} ${definition.unit}</strong>${raw}`;
         },
         shadow: true,
         style: { color: 'var(--p-text-color)', fontSize: '14px' },
@@ -229,7 +229,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           animation: { duration: 500 },
           dataLabels: { enabled: false },
           enableMouseTracking: true,
-          lineWidth: 1.8,
+          lineWidth: 2.4,
           marker: {
             lineWidth: 1,
             states: {
@@ -266,9 +266,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     };
   }
 
-  private buildYAxisExtremes(definition: SoilMetricDefinition, series: any[]): { min?: number; max?: number; tickAmount?: number; startOnTick?: boolean; endOnTick?: boolean } {
+  private buildXAxisExtremes(definition: SoilMetricDefinition, series: any[]): { min?: number; max?: number; tickAmount?: number; startOnTick?: boolean; endOnTick?: boolean } {
     const values = series
-      .flatMap((serie) => (serie.data || []).map((point: HistoricalPoint) => Number(point.y)))
+      .flatMap((serie) => (serie.data || []).map((point: HistoricalPoint) => Number(point.x)))
       .filter((value) => Number.isFinite(value));
 
     if (!values.length) return {};
@@ -317,9 +317,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       return undefined;
     }
 
-    const unit = points.find((point) => !!point.unit)?.unit || 'cm';
+    const unit = points.find((point) => !!point.unit)?.unit || 'm';
     const latest = points[points.length - 1];
-    this.napaResumen = `${points.length} lecturas - ultima ${Number(latest.y).toFixed(1)} ${unit}`;
+    this.napaResumen = `${points.length} lecturas - ultima ${Number(latest.y).toFixed(2)} ${unit}`;
 
     return {
       chart: {
@@ -353,6 +353,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         gridLineWidth: 1,
       },
       yAxis: {
+        max: 10,
+        min: 0,
         title: {
           text: `Altura de napa (${unit})`,
           style: { color: '#0f766e', fontSize: '14px', fontWeight: '700' },
@@ -384,7 +386,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
             hour: '2-digit',
             minute: '2-digit',
           });
-          return `${date}<br/><strong>${Number(point.y).toFixed(1)} ${point.unit || unit}</strong>`;
+          return `${date}<br/><strong>${Number(point.y).toFixed(2)} ${point.unit || unit}</strong>`;
         },
         shadow: true,
         style: { color: 'var(--p-text-color)', fontSize: '14px' },
@@ -435,7 +437,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
       for (const row of napaRows) {
         const valores = row?.valores || row;
-        const value = this.toNumber(
+        const rawValue = this.toNumber(
           valores?.actual ??
             valores?.promedio ??
             valores?.altura ??
@@ -443,12 +445,13 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
             valores?.value ??
             valores?.valor,
         );
-        if (value === undefined) continue;
+        if (rawValue === undefined) continue;
+        const normalized = this.normalizarNapa(rawValue, valores?.unidad || row?.unidad);
 
         points.push({
           x: timestamp,
-          y: value,
-          unit: valores?.unidad || row?.unidad || 'cm',
+          y: normalized,
+          unit: 'm',
         });
       }
     }
@@ -457,10 +460,10 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   }
 
   private buildResumen(definition: SoilMetricDefinition, series: any[]): string {
-    const values = series.flatMap((serie) => serie.data.map((point: HistoricalPoint) => point.y));
+    const values = series.flatMap((serie) => serie.data.map((point: HistoricalPoint) => point.x));
     if (!values.length) return 'Sin lecturas historicas para esta variable';
     const average = values.reduce((acc, value) => acc + Number(value), 0) / values.length;
-    return `${series.length} profundidades - ${values.length} lecturas - promedio ${average.toFixed(definition.decimals)} ${definition.unit}`;
+    return `${values.length} profundidades - perfil actual promedio ${average.toFixed(definition.decimals)} ${definition.unit}`;
   }
 
   private hasMetric(key: SoilMetricKey): boolean {
@@ -507,6 +510,22 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   private toNumber(value: unknown): number | undefined {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  private normalizarNapa(value: number, unit?: string): number {
+    const normalizedUnit = String(unit || '').toLowerCase();
+    if (normalizedUnit.includes('cm')) {
+      return this.round(value / 100, 2);
+    }
+    if (normalizedUnit.includes('ma') || (value > 4 && value <= 20)) {
+      return this.round(Math.max(0, ((value - 4) / 16) * 10), 2);
+    }
+    return this.round(value, 2);
+  }
+
+  private round(value: number, decimals: number): number {
+    const factor = Math.pow(10, decimals);
+    return Math.round(value * factor) / factor;
   }
 
   private csvCell(value: unknown): string {

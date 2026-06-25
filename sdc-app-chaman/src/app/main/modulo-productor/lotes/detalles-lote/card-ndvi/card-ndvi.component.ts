@@ -377,9 +377,23 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private extentImagenSatelital(fallback: Extent): Extent {
+    const normal = this.extentDesdeMetadata(false);
+    if (normal && this.extentsCompatibles(normal, fallback)) {
+      return normal;
+    }
+
+    const swapped = this.extentDesdeMetadata(true);
+    if (swapped && this.extentsCompatibles(swapped, fallback)) {
+      return swapped;
+    }
+
+    return fallback;
+  }
+
+  private extentDesdeMetadata(invertirCoordenadas: boolean): Extent | null {
     const coordinates = this.reporte?.metadataImagen?.geojson?.coordinates?.[0];
     if (!Array.isArray(coordinates) || coordinates.length === 0) {
-      return fallback;
+      return null;
     }
 
     const extent4326 = coordinates.reduce(
@@ -387,25 +401,66 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
         if (!Array.isArray(coord) || coord.length < 2) {
           return acc;
         }
-        const x = Number(coord[0]);
-        const y = Number(coord[1]);
-        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+        const lon = Number(invertirCoordenadas ? coord[1] : coord[0]);
+        const lat = Number(invertirCoordenadas ? coord[0] : coord[1]);
+        if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
           return acc;
         }
         return [
-          Math.min(acc[0], x),
-          Math.min(acc[1], y),
-          Math.max(acc[2], x),
-          Math.max(acc[3], y),
+          Math.min(acc[0], lon),
+          Math.min(acc[1], lat),
+          Math.max(acc[2], lon),
+          Math.max(acc[3], lat),
         ] as Extent;
       },
       [Infinity, Infinity, -Infinity, -Infinity] as Extent
     );
 
     if (extent4326.some((value) => !Number.isFinite(value))) {
-      return fallback;
+      return null;
     }
     return transformExtent(extent4326, 'EPSG:4326', 'EPSG:3857');
+  }
+
+  private extentsCompatibles(imagen: Extent, lote: Extent): boolean {
+    const areaImagen = this.extentArea(imagen);
+    const areaLote = this.extentArea(lote);
+    if (areaImagen <= 0 || areaLote <= 0) {
+      return false;
+    }
+
+    const overlap = this.extentIntersectionArea(imagen, lote);
+    const coverageLote = overlap / areaLote;
+    const coverageImagen = overlap / areaImagen;
+    const ratio = areaImagen / areaLote;
+    const [cxImagen, cyImagen] = this.extentCenter(imagen);
+    const [cxLote, cyLote] = this.extentCenter(lote);
+    const diagonalLote = Math.hypot(lote[2] - lote[0], lote[3] - lote[1]);
+    const distanciaCentros = Math.hypot(cxImagen - cxLote, cyImagen - cyLote);
+
+    return (
+      coverageLote >= 0.7 &&
+      coverageImagen >= 0.45 &&
+      ratio >= 0.35 &&
+      ratio <= 3 &&
+      distanciaCentros <= diagonalLote
+    );
+  }
+
+  private extentArea(extent: Extent): number {
+    return Math.max(0, extent[2] - extent[0]) * Math.max(0, extent[3] - extent[1]);
+  }
+
+  private extentIntersectionArea(a: Extent, b: Extent): number {
+    const minX = Math.max(a[0], b[0]);
+    const minY = Math.max(a[1], b[1]);
+    const maxX = Math.min(a[2], b[2]);
+    const maxY = Math.min(a[3], b[3]);
+    return Math.max(0, maxX - minX) * Math.max(0, maxY - minY);
+  }
+
+  private extentCenter(extent: Extent): [number, number] {
+    return [(extent[0] + extent[2]) / 2, (extent[1] + extent[3]) / 2];
   }
 
   private estiloMapaSatelital(): Style[] {
