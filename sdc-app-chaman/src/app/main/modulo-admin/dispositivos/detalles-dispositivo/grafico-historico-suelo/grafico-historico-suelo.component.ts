@@ -145,6 +145,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   }
 
   private buildChartOptions(definition: SoilMetricDefinition, series: any[]): any {
+    const yAxisExtremes = this.buildYAxisExtremes(definition, series);
+
     return {
       chart: {
         backgroundColor: 'transparent',
@@ -177,8 +179,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         gridLineWidth: 1,
       },
       yAxis: {
-        min: definition.key === 'humedad' ? 0 : undefined,
-        max: definition.key === 'humedad' ? 100 : undefined,
+        ...yAxisExtremes,
         title: {
           text: `${definition.title} (${definition.unit})`,
           style: { color: definition.color, fontSize: '14px', fontWeight: '700' },
@@ -263,6 +264,49 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         ],
       },
     };
+  }
+
+  private buildYAxisExtremes(definition: SoilMetricDefinition, series: any[]): { min?: number; max?: number; tickAmount?: number; startOnTick?: boolean; endOnTick?: boolean } {
+    const values = series
+      .flatMap((serie) => (serie.data || []).map((point: HistoricalPoint) => Number(point.y)))
+      .filter((value) => Number.isFinite(value));
+
+    if (!values.length) return {};
+
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    const range = maxValue - minValue;
+    const minSpan =
+      definition.key === 'humedad'
+        ? 8
+        : definition.key === 'temperatura'
+          ? 4
+          : Math.max(20, Math.abs(maxValue) * 0.08);
+    const span = Math.max(range, minSpan);
+    const center = (minValue + maxValue) / 2;
+    const padding = Math.max(span * 0.14, definition.key === 'humedad' ? 1.5 : 0.5);
+
+    let axisMin = center - span / 2 - padding;
+    let axisMax = center + span / 2 + padding;
+
+    if (definition.key === 'humedad') {
+      axisMin = Math.max(0, axisMin);
+      axisMax = Math.min(100, axisMax);
+    }
+
+    return {
+      endOnTick: false,
+      max: this.roundAxisLimit(axisMax, 'ceil'),
+      min: this.roundAxisLimit(axisMin, 'floor'),
+      startOnTick: false,
+      tickAmount: 6,
+    };
+  }
+
+  private roundAxisLimit(value: number, mode: 'floor' | 'ceil'): number {
+    const multiplier = Math.abs(value) >= 100 ? 1 : 10;
+    const scaled = value * multiplier;
+    return (mode === 'floor' ? Math.floor(scaled) : Math.ceil(scaled)) / multiplier;
   }
 
   private buildNapaChartOptions(): any | undefined {
