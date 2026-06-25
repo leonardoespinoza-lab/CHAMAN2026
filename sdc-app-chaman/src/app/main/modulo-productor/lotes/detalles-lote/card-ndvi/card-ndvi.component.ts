@@ -80,6 +80,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   private satelliteMap?: Map;
   private satelliteLoteLayer?: VectorLayer<VectorSource>;
   private satelliteRasterLayer?: ImageLayer<Static>;
+  private satelliteRasterVisible = false;
 
   constructor(
     public helper: HelperService,
@@ -297,6 +298,10 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     const polygon = new Polygon([ring.map((coord) => fromLonLat(coord))]);
+    const polygonExtent = polygon.getExtent();
+    const imageExtent = this.extentImagenSatelital(polygonExtent);
+    this.satelliteRasterVisible = this.rasterSatelitalSeguro(polygon, imageExtent, polygonExtent);
+
     const feature = new Feature({ geometry: polygon });
     feature.setStyle(this.estiloMapaSatelital());
     const source = new VectorSource({ features: [feature] });
@@ -335,8 +340,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
       this.satelliteLoteLayer?.setSource(source);
     }
 
-    const polygonExtent = polygon.getExtent();
-    this.actualizarRasterSatelital(this.extentImagenSatelital(polygonExtent));
+    this.actualizarRasterSatelital(this.satelliteRasterVisible ? imageExtent : undefined);
 
     setTimeout(() => {
       this.satelliteMap?.updateSize();
@@ -348,7 +352,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
 
-  private actualizarRasterSatelital(extent: Extent): void {
+  private actualizarRasterSatelital(extent?: Extent): void {
     if (!this.satelliteMap) {
       return;
     }
@@ -359,7 +363,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     const imageUrl = this.imagenCapaActiva;
-    if (!imageUrl || extent.some((value) => !Number.isFinite(value))) {
+    if (!imageUrl || !extent || extent.some((value) => !Number.isFinite(value))) {
       return;
     }
 
@@ -388,6 +392,24 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     return fallback;
+  }
+
+  private rasterSatelitalSeguro(polygon: Polygon, extent: Extent, fallbackExtent: Extent): boolean {
+    if (!this.imagenCapaActiva || extent.some((value) => !Number.isFinite(value))) {
+      return false;
+    }
+
+    if (!this.extentsCompatibles(extent, fallbackExtent)) {
+      return false;
+    }
+
+    const boundingArea = this.extentArea(fallbackExtent);
+    const polygonArea = Math.max(0, polygon.getArea());
+    const shapeRatio = boundingArea > 0 ? polygonArea / boundingArea : 0;
+
+    // La imagen satelital que recibimos esta georreferenciada por bbox. En lotes inclinados
+    // o irregulares se transforma en un rectangulo falso; ahi conviene pintar el poligono.
+    return shapeRatio >= 0.86;
   }
 
   private extentDesdeMetadata(invertirCoordenadas: boolean): Extent | null {
@@ -464,7 +486,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private estiloMapaSatelital(): Style[] {
-    const usaRaster = !!this.imagenCapaActiva;
+    const usaRaster = this.satelliteRasterVisible;
     const fillColor = colorForSatelliteIndex(this.capaActiva.key, this.valorCapaActiva);
     return [
       new Style({

@@ -28,6 +28,12 @@ interface NapaPoint {
   unit: string;
 }
 
+interface ProfileRow {
+  profundidad: number;
+  formatted: string;
+  raw?: string;
+}
+
 @Component({
   selector: 'app-grafico-historico-suelo',
   imports: [SharedModule, ChartComponent],
@@ -43,6 +49,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   public napaChartOptions?: any;
   public selectedMetric: SoilMetricKey = 'humedad';
   public metricOptions: Array<{ label: string; value: SoilMetricKey }> = [];
+  public profileRows: ProfileRow[] = [];
   public resumen = '';
   public napaResumen = '';
 
@@ -98,6 +105,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
     if (!available.length) {
       this.chartOptions = undefined;
+      this.profileRows = [];
       this.resumen = '';
       this.napaChartOptions = this.buildNapaChartOptions();
       return;
@@ -105,6 +113,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
     const definition = this.getDefinition(this.selectedMetric);
     const series = this.buildProfileSeries(definition);
+    this.profileRows = this.buildProfileRows(definition, series);
     this.resumen = this.buildResumen(definition, series);
     this.chartOptions = this.buildChartOptions(definition, series);
     this.napaChartOptions = this.buildNapaChartOptions();
@@ -137,6 +146,24 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       {
         color: definition.color,
         data,
+        dataLabels: {
+          enabled: true,
+          allowOverlap: true,
+          align: 'left',
+          crop: false,
+          overflow: 'allow',
+          x: 8,
+          formatter: function (this: any) {
+            const point = this.point as HistoricalPoint;
+            return `${point.depth} cm: ${Number(point.x).toFixed(definition.decimals)} ${definition.unit}`;
+          },
+          style: {
+            color: 'var(--p-text-color)',
+            fontSize: '12px',
+            fontWeight: '800',
+            textOutline: 'none',
+          },
+        },
         name: definition.title,
         type: 'spline',
         marker: { enabled: true, radius: 4 },
@@ -227,7 +254,6 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       plotOptions: {
         spline: {
           animation: { duration: 500 },
-          dataLabels: { enabled: false },
           enableMouseTracking: true,
           lineWidth: 2.4,
           marker: {
@@ -264,6 +290,18 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         ],
       },
     };
+  }
+
+  private buildProfileRows(definition: SoilMetricDefinition, series: any[]): ProfileRow[] {
+    const data = ((series?.[0]?.data || []) as HistoricalPoint[]).filter((point) => Number.isFinite(point.x));
+    return data.map((point) => ({
+      profundidad: point.depth,
+      formatted: `${Number(point.x).toFixed(definition.decimals)} ${definition.unit}`,
+      raw:
+        point.raw !== undefined && point.rawUnit
+          ? `${Number(point.raw).toFixed(3)} ${point.rawUnit}`
+          : undefined,
+    }));
   }
 
   private buildXAxisExtremes(definition: SoilMetricDefinition, series: any[]): { min?: number; max?: number; tickAmount?: number; startOnTick?: boolean; endOnTick?: boolean } {

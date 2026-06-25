@@ -19,20 +19,21 @@ interface SatellitePaletteConfig {
 }
 
 const VEGETATION_PALETTE: SatellitePaletteConfig = {
-  opacity: 0.72,
+  opacity: 0.78,
   stops: [
-    { at: -0.2, rgb: [112, 91, 72] },
-    { at: 0, rgb: [201, 180, 132] },
-    { at: 0.1, rgb: [230, 205, 93] },
-    { at: 0.18, rgb: [188, 211, 87] },
-    { at: 0.32, rgb: [105, 183, 91] },
-    { at: 0.55, rgb: [32, 137, 70] },
-    { at: 0.78, rgb: [12, 91, 48] },
+    { at: -0.2, rgb: [128, 83, 55] },
+    { at: 0, rgb: [214, 184, 102] },
+    { at: 0.06, rgb: [226, 217, 118] },
+    { at: 0.12, rgb: [190, 224, 112] },
+    { at: 0.22, rgb: [132, 211, 92] },
+    { at: 0.38, rgb: [70, 177, 82] },
+    { at: 0.6, rgb: [24, 132, 65] },
+    { at: 0.78, rgb: [10, 91, 48] },
   ],
   legend: [
-    { label: 'Bajo', color: 'rgba(201, 180, 132, 0.72)' },
-    { label: 'Medio', color: 'rgba(188, 211, 87, 0.72)' },
-    { label: 'Alto', color: 'rgba(32, 137, 70, 0.72)' },
+    { label: 'Bajo', color: 'rgba(226, 217, 118, 0.78)' },
+    { label: 'Medio', color: 'rgba(132, 211, 92, 0.78)' },
+    { label: 'Alto', color: 'rgba(24, 132, 65, 0.78)' },
   ],
 };
 

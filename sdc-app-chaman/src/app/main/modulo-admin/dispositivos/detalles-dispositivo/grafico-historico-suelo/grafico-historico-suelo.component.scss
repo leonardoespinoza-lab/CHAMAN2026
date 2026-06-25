@@ -77,6 +77,43 @@
   width: 100%;
 }
 
+.soil-profile-values {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  margin-top: 0.8rem;
+}
+
+.soil-profile-value {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--p-surface-border);
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+}
+
+.soil-profile-value span {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 800;
+  margin-bottom: 0.2rem;
+  text-transform: uppercase;
+}
+
+.soil-profile-value strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.soil-profile-value small {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.78rem;
+  margin-top: 0.1rem;
+}
+
 .napa-history-card {
   border-top: 1px solid var(--p-surface-border);
   margin-top: 1rem;

@@ -28,6 +28,20 @@
 
     <app-chart [options]="chartOptions"></app-chart>
 
+    @if (profileRows.length) {
+      <div class="soil-profile-values" aria-label="Detalle por sensor de profundidad">
+        @for (row of profileRows; track row.profundidad) {
+          <div class="soil-profile-value">
+            <span>{{ row.profundidad }} cm</span>
+            <strong>{{ row.formatted }}</strong>
+            @if (row.raw) {
+              <small>{{ row.raw }}</small>
+            }
+          </div>
+        }
+      </div>
+    }
+
     @if (napaChartOptions) {
       <section class="napa-history-card">
         <header>
