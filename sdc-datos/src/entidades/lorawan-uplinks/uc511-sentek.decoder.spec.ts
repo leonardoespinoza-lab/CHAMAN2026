@@ -28,4 +28,20 @@ describe('decodeUc511SentekPayload', () => {
     expect(decoded?.soil.temperature['30cm']).toBe(14.5);
     expect(decoded?.soil.moisture['10cm']).toBeUndefined();
   });
+
+  it('decodes stored base64 broker payloads after converting them to hex', () => {
+    const base64 =
+      'AwAABAAABeKXSJdIl0iXSAjbACszNC4zMjg3NCszOS4zMDA3MiszOS45OTk4MA0KAAAAAAAAAAjbATArMzguODEyNzMrMzAuMzk1NjErMjcuODkwNzkNCgAAAAAAAAjbAjArMzcuNDg2ODkrMzUuMjQ3NjMrMzAuNTI4MjMNCgAAAAAAAAjbAzArMjcuMjYwNzErMjQuNTc2MDUrMzguMzcwNTcNCgAAAAAAAAjbBDArMTQ4Ny4wMTIrMTYxNy4zNjIrMTY2OC40MjYNCgAAAAAAAA==';
+    const decoded = decodeUc511SentekPayload(
+      Buffer.from(base64, 'base64').toString('hex'),
+    );
+
+    expect(decoded).not.toBeNull();
+    expect(decoded?.analog.rawMa).toBeCloseTo(9.18, 3);
+    expect(decoded?.analog.waterTableDepthM).toBeCloseTo(3.24, 2);
+    expect(decoded?.soil.moisture['10cm']).toBeCloseTo(34.32874, 5);
+    expect(decoded?.soil.moisture['40cm']).toBeCloseTo(38.81273, 5);
+    expect(decoded?.soil.salinity['10cm']).toBeCloseTo(1487.012, 3);
+    expect(decoded?.soil.temperature['10cm']).toBeUndefined();
+  });
 });

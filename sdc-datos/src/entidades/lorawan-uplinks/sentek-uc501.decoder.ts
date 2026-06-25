@@ -69,8 +69,17 @@ function cleanNumber(value: number): number | null {
   return value <= -999 ? null : value;
 }
 
-function parseBlockText(text: string): number[] {
-  const matches = text.match(/[+-]\d+(?:\.\d+)?/g) || [];
+function parseBlockText(text: string): Array<number | null> {
+  const normalized = text.replace(/\0/g, '').trim();
+  if (!/^[0-9]?[+-]\d/.test(normalized)) {
+    return [];
+  }
+
+  const matches = normalized.match(/[+-]\d+(?:\.\d+)?/g) || [];
+  if (!matches.length || matches.length > 4) {
+    return [];
+  }
+
   return matches.map((value) => cleanNumber(Number(value)));
 }
 
@@ -114,6 +123,10 @@ export function decodeSentekUc501Payload(
 
     const text = buffer.subarray(i + 3, end).toString('ascii').trim();
     const readings = parseBlockText(text);
+    if (!readings.length) {
+      continue;
+    }
+
     const sensor = SENSOR_BY_METRIC[channel.metric];
     const sensorValues = valores[sensor];
 

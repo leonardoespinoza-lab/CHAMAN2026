@@ -135,8 +135,8 @@ export class LorawanUplinksService {
     }
 
     const decoded =
-      decodeSentekUc501Payload(uplink.data) ||
-      this.decodeUc511SentekUplink(uplink);
+      this.decodeUc511SentekUplink(uplink) ||
+      decodeSentekUc501Payload(uplink.data);
     if (!decoded) {
       return false;
     }
@@ -209,7 +209,9 @@ export class LorawanUplinksService {
         raw.macPayload?.FRMPayload,
         raw.uplink?.FRMPayload,
         raw.uplink?.frmPayload,
-      ) || (this.isLikelyHexPayload(uplink.data) ? uplink.data : undefined);
+      ) ||
+      (this.isLikelyHexPayload(uplink.data) ? uplink.data : undefined) ||
+      this.base64PayloadToHex(uplink.data);
 
     const decoded = decodeUc511SentekPayload(payloadHex);
     if (!decoded) {
@@ -496,6 +498,34 @@ export class LorawanUplinksService {
       compact.length % 2 === 0 &&
       compact.length === nonSeparators.length
     );
+  }
+
+  private base64PayloadToHex(value?: string): string | undefined {
+    if (!value || this.isLikelyHexPayload(value)) return undefined;
+
+    try {
+      const buffer = Buffer.from(value, 'base64');
+      if (!buffer.length) return undefined;
+
+      const hasSdi12Block = buffer.some(
+        (byte, index) => byte === 0x08 && buffer[index + 1] === 0xdb,
+      );
+      const hasAnalogBlock = buffer.some(
+        (byte, index) =>
+          byte === 0x03 &&
+          buffer[index + 1] === 0x00 &&
+          buffer[index + 2] === 0x00 &&
+          buffer[index + 3] === 0x04 &&
+          buffer[index + 4] === 0x00 &&
+          buffer[index + 5] === 0x00,
+      );
+
+      return hasSdi12Block || hasAnalogBlock
+        ? buffer.toString('hex').toUpperCase()
+        : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private mergeSentekValues(
