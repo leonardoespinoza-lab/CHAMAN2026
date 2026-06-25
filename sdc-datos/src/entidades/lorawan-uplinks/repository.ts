@@ -52,4 +52,15 @@ export class LorawanUplinksRepository {
       .limit(params.limit || 20)
       .lean();
   }
+
+  async byDevEUI(devEUI: string, limit = 5000): Promise<ILorawanUplink[]> {
+    const upper = devEUI.toUpperCase();
+    const lower = devEUI.toLowerCase();
+
+    return await this.model
+      .find({ devEUI: { $in: [upper, lower, devEUI] } })
+      .sort({ timestamp: 1, fechaCreacion: 1 })
+      .limit(Math.max(1, Math.min(Number(limit) || 5000, 20000)))
+      .lean();
+  }
 }

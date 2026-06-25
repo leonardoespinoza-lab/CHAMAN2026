@@ -26,6 +26,18 @@ export class LorawanUplinksController {
     return await this.service.latest({ devEUI, applicationID, gatewayID, limit });
   }
 
+  @Post('reprocess')
+  async reprocess(
+    @Body() body: { devEUI?: string; limit?: string | number },
+    @Query('devEUI') devEUI?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return await this.service.reprocess({
+      devEUI: devEUI || body?.devEUI,
+      limit: limit || body?.limit,
+    });
+  }
+
   @Post()
   async create(@Body() data: ICreateLorawanUplink) {
     return await this.service.create(data);

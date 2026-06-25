@@ -175,11 +175,17 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const nombre = uplink.deviceName || uplink.applicationName || uplink.devEUI || 'Dispositivo MQTT';
+    const devEUI = this.normalizeDevEui(uplink.devEUI);
+    const nombre =
+      uplink.deviceName ||
+      (this.isUc511SentekUplink(uplink) ? `Lanza Sentek / Napa ${devEUI}` : '') ||
+      uplink.applicationName ||
+      uplink.devEUI ||
+      'Dispositivo MQTT';
     this.params.set('editDispositivo', false);
     this.params.set('nuevoDispositivoLorawan', {
       nombre,
-      deveui: this.normalizeDevEui(uplink.devEUI),
+      deveui: devEUI,
       tipo: this.inferType(uplink),
       sensores: this.inferSensors(uplink),
       metadata: {
@@ -337,10 +343,15 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
   private inferType(uplink: ILorawanUplink): IDispositivo['tipo'] {
     const text = `${uplink.deviceName || ''} ${uplink.applicationName || ''}`.toLowerCase();
     if (
+      this.isUc511SentekUplink(uplink) ||
       text.includes('sentek') ||
       text.includes('lanza') ||
       text.includes('humedad de suelo') ||
-      text.includes('soil moisture')
+      text.includes('soil moisture') ||
+      text.includes('uc501') ||
+      text.includes('uc511') ||
+      text.includes('milesight') ||
+      text.includes('napa')
     ) {
       return 'Sensor de Humedad de Suelo';
     }
@@ -356,7 +367,7 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
   private inferSensors(uplink: ILorawanUplink): IDispositivo['sensores'] {
     const type = this.inferType(uplink);
     if (type === 'Sensor de Humedad de Suelo') {
-      return ['Humedad Suelo Profundidad', 'Temperatura Suelo', 'Salinidad Suelo'];
+      return ['Humedad Suelo Profundidad', 'Temperatura Suelo', 'Salinidad Suelo', 'Napa', 'Batería'];
     }
     if (type === 'Pluviometro') {
       return ['Pluviometro'];
@@ -365,6 +376,39 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
       return ['Temperatura', 'Humedad', 'Viento Velocidad', 'Pluviometro'];
     }
     return ['Otro'];
+  }
+
+  private isUc511SentekUplink(uplink: ILorawanUplink): boolean {
+    if (uplink.fPort !== 85) {
+      return false;
+    }
+
+    const payload = this.getUplinkPayloadText(uplink);
+    if (!payload) {
+      return false;
+    }
+
+    const hex = payload.replace(/[^a-fA-F0-9]/g, '').toLowerCase();
+    return hex.length >= 24 && (hex.includes('08db') || hex.includes('9c48') || hex.length >= 70);
+  }
+
+  private getUplinkPayloadText(uplink: ILorawanUplink): string | undefined {
+    const rawPayload = (uplink as any).rawPayload || {};
+    const candidates = [
+      uplink.data,
+      rawPayload.FRMPayload,
+      rawPayload.frmPayload,
+      rawPayload.frmpayload,
+      rawPayload.payloadHex,
+      rawPayload.hexPayload,
+      rawPayload.dataHex,
+      rawPayload.MACPayload?.FRMPayload,
+      rawPayload.macPayload?.FRMPayload,
+      rawPayload.uplink?.frmPayload,
+      rawPayload.object?.frmPayload,
+    ];
+
+    return candidates.find((value) => typeof value === 'string' && value.trim());
   }
 
   private isOnline(fecha?: string, minutes = 30): boolean {

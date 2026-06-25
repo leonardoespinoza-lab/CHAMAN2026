@@ -2,7 +2,7 @@ import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { IReporte } from 'modelos/src';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
-import { buildSentekProfile, MedicionProfundidad } from '../sentek-profile';
+import { buildSentekProfile } from '../sentek-profile';
 
 type SoilMetricKey = 'humedad' | 'salinidad' | 'temperatura';
 
@@ -22,6 +22,12 @@ interface HistoricalPoint {
   rawUnit?: string;
 }
 
+interface NapaPoint {
+  x: number;
+  y: number;
+  unit: string;
+}
+
 @Component({
   selector: 'app-grafico-historico-suelo',
   imports: [SharedModule, ChartComponent],
@@ -34,9 +40,11 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   @Input() subtitulo?: string;
 
   public chartOptions?: any;
+  public napaChartOptions?: any;
   public selectedMetric: SoilMetricKey = 'humedad';
   public metricOptions: Array<{ label: string; value: SoilMetricKey }> = [];
   public resumen = '';
+  public napaResumen = '';
 
   private readonly definitions: SoilMetricDefinition[] = [
     { key: 'humedad', title: 'Humedad de suelo', unit: '%', color: '#2f9fe8', decimals: 1 },
@@ -91,6 +99,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     if (!available.length) {
       this.chartOptions = undefined;
       this.resumen = '';
+      this.napaChartOptions = this.buildNapaChartOptions();
       return;
     }
 
@@ -98,6 +107,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const series = this.buildSeries(definition);
     this.resumen = this.buildResumen(definition, series);
     this.chartOptions = this.buildChartOptions(definition, series);
+    this.napaChartOptions = this.buildNapaChartOptions();
   }
 
   private buildSeries(definition: SoilMetricDefinition): any[] {
@@ -255,6 +265,153 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     };
   }
 
+  private buildNapaChartOptions(): any | undefined {
+    const points = this.buildNapaPoints();
+
+    if (!points.length) {
+      this.napaResumen = '';
+      return undefined;
+    }
+
+    const unit = points.find((point) => !!point.unit)?.unit || 'cm';
+    const latest = points[points.length - 1];
+    this.napaResumen = `${points.length} lecturas - ultima ${Number(latest.y).toFixed(1)} ${unit}`;
+
+    return {
+      chart: {
+        backgroundColor: 'transparent',
+        height: 360,
+        spacingBottom: 18,
+        spacingLeft: 8,
+        spacingRight: 18,
+        spacingTop: 10,
+        type: 'spline',
+        zooming: { type: 'x' },
+        style: {
+          fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        },
+      },
+      title: { text: undefined },
+      xAxis: {
+        crosshair: {
+          color: 'rgba(34, 211, 200, 0.24)',
+          width: 2,
+        },
+        type: 'datetime',
+        title: {
+          text: 'Fecha y hora',
+          style: { color: 'var(--p-text-color)', fontSize: '14px', fontWeight: '700' },
+        },
+        labels: {
+          style: { color: 'var(--p-text-color)', fontSize: '14px' },
+        },
+        gridLineColor: 'var(--p-surface-border)',
+        gridLineWidth: 1,
+      },
+      yAxis: {
+        title: {
+          text: `Altura de napa (${unit})`,
+          style: { color: '#0f766e', fontSize: '14px', fontWeight: '700' },
+        },
+        labels: {
+          style: { color: 'var(--p-text-color)', fontSize: '14px' },
+        },
+        gridLineColor: 'var(--p-surface-border)',
+        gridLineWidth: 1,
+      },
+      legend: {
+        enabled: true,
+        itemStyle: {
+          color: 'var(--p-text-color)',
+          fontSize: '14px',
+          fontWeight: '700',
+        },
+      },
+      tooltip: {
+        backgroundColor: 'var(--p-content-background)',
+        borderColor: 'var(--p-surface-border)',
+        borderRadius: 8,
+        borderWidth: 1,
+        formatter: function (this: any) {
+          const point = this.point as NapaPoint;
+          const date = new Date(point.x).toLocaleString('es-AR', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+          return `${date}<br/><strong>${Number(point.y).toFixed(1)} ${point.unit || unit}</strong>`;
+        },
+        shadow: true,
+        style: { color: 'var(--p-text-color)', fontSize: '14px' },
+      },
+      plotOptions: {
+        spline: {
+          animation: { duration: 500 },
+          dataLabels: { enabled: false },
+          enableMouseTracking: true,
+          lineWidth: 2,
+          marker: {
+            enabled: points.length <= 80,
+            radius: 2,
+          },
+          states: {
+            hover: {
+              lineWidth: 2.6,
+            },
+          },
+        },
+        series: {
+          connectNulls: false,
+          turboThreshold: 0,
+        },
+      },
+      series: [
+        {
+          color: '#14b8a6',
+          data: points,
+          name: 'Napa',
+          type: 'spline',
+        },
+      ],
+      credits: { enabled: false },
+      accessibility: { enabled: false },
+    };
+  }
+
+  private buildNapaPoints(): NapaPoint[] {
+    const points: NapaPoint[] = [];
+
+    for (const reporte of this.sortedReports()) {
+      const timestamp = this.getReporteTimestamp(reporte);
+      if (!timestamp) continue;
+
+      const rawNapa = (reporte?.datos as any)?.valores?.Napa;
+      const napaRows = Array.isArray(rawNapa) ? rawNapa : rawNapa ? [rawNapa] : [];
+
+      for (const row of napaRows) {
+        const valores = row?.valores || row;
+        const value = this.toNumber(
+          valores?.actual ??
+            valores?.promedio ??
+            valores?.altura ??
+            valores?.nivel ??
+            valores?.value ??
+            valores?.valor,
+        );
+        if (value === undefined) continue;
+
+        points.push({
+          x: timestamp,
+          y: value,
+          unit: valores?.unidad || row?.unidad || 'cm',
+        });
+      }
+    }
+
+    return points.sort((a, b) => a.x - b.x);
+  }
+
   private buildResumen(definition: SoilMetricDefinition, series: any[]): string {
     const values = series.flatMap((serie) => serie.data.map((point: HistoricalPoint) => point.y));
     if (!values.length) return 'Sin lecturas historicas para esta variable';
@@ -301,6 +458,11 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     }
 
     return rows;
+  }
+
+  private toNumber(value: unknown): number | undefined {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
   }
 
   private csvCell(value: unknown): string {

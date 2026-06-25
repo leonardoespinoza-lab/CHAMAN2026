@@ -27,9 +27,39 @@
     </header>
 
     <app-chart [options]="chartOptions"></app-chart>
+
+    @if (napaChartOptions) {
+      <section class="napa-history-card">
+        <header>
+          <div>
+            <span>Napa</span>
+            <strong>{{ napaResumen }}</strong>
+            <small>Historico del sensor de nivel asociado al controlador</small>
+          </div>
+        </header>
+
+        <app-chart [options]="napaChartOptions"></app-chart>
+      </section>
+    }
   </article>
 } @else {
-  <div class="sin-datos">
-    <p-message severity="info" text="No hay historico suficiente para graficar la lanza de suelo"></p-message>
-  </div>
+  @if (napaChartOptions) {
+    <article class="soil-history-card">
+      <section class="napa-history-card only">
+        <header>
+          <div>
+            <span>Napa</span>
+            <strong>{{ napaResumen }}</strong>
+            <small>Historico del sensor de nivel asociado al controlador</small>
+          </div>
+        </header>
+
+        <app-chart [options]="napaChartOptions"></app-chart>
+      </section>
+    </article>
+  } @else {
+    <div class="sin-datos">
+      <p-message severity="info" text="No hay historico suficiente para graficar la lanza de suelo"></p-message>
+    </div>
+  }
 }

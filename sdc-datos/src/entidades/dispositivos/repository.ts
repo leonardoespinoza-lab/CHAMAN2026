@@ -42,10 +42,15 @@ export class DispositivosRepository {
     const text = `${uplink.deviceName || ''} ${uplink.applicationName || ''}`.toLowerCase();
 
     if (
+      this.isUc511SentekUplink(uplink) ||
       text.includes('sentek') ||
       text.includes('lanza') ||
       text.includes('humedad de suelo') ||
-      text.includes('soil moisture')
+      text.includes('soil moisture') ||
+      text.includes('uc501') ||
+      text.includes('uc511') ||
+      text.includes('milesight') ||
+      text.includes('napa')
     ) {
       return {
         tipo: 'Sensor de Humedad de Suelo',
@@ -53,6 +58,8 @@ export class DispositivosRepository {
           'Humedad Suelo Profundidad',
           'Temperatura Suelo',
           'Salinidad Suelo',
+          'Napa',
+          'Batería',
         ],
       };
     }
@@ -86,6 +93,45 @@ export class DispositivosRepository {
     };
   }
 
+  private isUc511SentekUplink(uplink: ILorawanUplink): boolean {
+    if (uplink.fPort !== 85) {
+      return false;
+    }
+
+    const payload = this.getUplinkPayloadText(uplink);
+    if (!payload) {
+      return false;
+    }
+
+    const hex = payload.replace(/[^a-fA-F0-9]/g, '').toLowerCase();
+    if (hex.length < 24) {
+      return false;
+    }
+
+    // UC501/UC511 + Sentek llega por fPort 85 con bloques SDI-12 y/o analogicos.
+    // Este patron evita clasificar otros LoRaWAN genericos como lanza.
+    return hex.includes('08db') || hex.includes('9c48') || hex.length >= 70;
+  }
+
+  private getUplinkPayloadText(uplink: ILorawanUplink): string | undefined {
+    const rawPayload = (uplink as any).rawPayload || {};
+    const candidates = [
+      uplink.data,
+      rawPayload.FRMPayload,
+      rawPayload.frmPayload,
+      rawPayload.frmpayload,
+      rawPayload.payloadHex,
+      rawPayload.hexPayload,
+      rawPayload.dataHex,
+      rawPayload.MACPayload?.FRMPayload,
+      rawPayload.macPayload?.FRMPayload,
+      rawPayload.uplink?.frmPayload,
+      rawPayload.object?.frmPayload,
+    ];
+
+    return candidates.find((value) => typeof value === 'string' && value.trim());
+  }
+
   async upsertFromLorawanUplink(
     uplink: ILorawanUplink,
   ): Promise<Dispositivo | null> {
@@ -96,10 +142,14 @@ export class DispositivosRepository {
     const devEUI = uplink.devEUI.toUpperCase();
     const timestamp = uplink.timestamp || new Date().toISOString();
     const inferred = this.inferDeviceFromLorawanUplink(uplink);
+    const inferredName =
+      inferred.tipo === 'Sensor de Humedad de Suelo' && this.isUc511SentekUplink(uplink)
+        ? `Lanza Sentek / Napa ${devEUI}`
+        : devEUI;
     const existing = await this.model.findOne({ deveui: devEUI }).lean();
     const update: IUpdateDispositivo = {
       deveui: devEUI,
-      nombre: uplink.deviceName || devEUI,
+      nombre: uplink.deviceName || inferredName,
       tipo: inferred.tipo,
       sensores: inferred.sensores,
       fechaUltimaComunicacion: timestamp,

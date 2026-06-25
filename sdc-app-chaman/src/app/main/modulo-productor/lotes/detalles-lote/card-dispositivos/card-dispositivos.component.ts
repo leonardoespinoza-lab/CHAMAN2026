@@ -63,7 +63,7 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   public esLanzaDeSuelo(dispositivo: IDispositivo): boolean {
-    return dispositivo.tipo === 'Sensor de Humedad de Suelo';
+    return this.tieneVariableSuelo(dispositivo);
   }
 
   public esSensorAmbiente(dispositivo: IDispositivo): boolean {
@@ -107,6 +107,23 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
     return this.estaOnline(dispositivo) ? 'Online' : 'Sin reporte reciente';
   }
 
+  private tieneVariableSuelo(dispositivo?: IDispositivo): boolean {
+    const sensores = (dispositivo?.sensores || []).map((sensor) => String(sensor));
+    const valores = (dispositivo?.ultimoReporte?.datos?.valores || {}) as unknown as Record<string, any>;
+    const texto = `${dispositivo?.tipo || ''} ${dispositivo?.nombre || ''} ${dispositivo?.deveui || ''}`.toLowerCase();
+    const soilKeys = ['Humedad Suelo Profundidad', 'Temperatura Suelo', 'Salinidad Suelo', 'Napa'];
+
+    return (
+      dispositivo?.tipo === 'Sensor de Humedad de Suelo' ||
+      soilKeys.some((key) => sensores.includes(key) || Array.isArray(valores[key])) ||
+      texto.includes('sentek') ||
+      texto.includes('lanza') ||
+      texto.includes('napa') ||
+      texto.includes('uc501') ||
+      texto.includes('uc511')
+    );
+  }
+
   private numberFormat(format: string): Intl.NumberFormatOptions {
     if (format === '1.3-3') {
       return { minimumFractionDigits: 3, maximumFractionDigits: 3 };
@@ -121,7 +138,7 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
     this.resumenesAmbiente.clear();
 
     for (const dispositivo of this.dispositivos) {
-      const perfil = this.esLanzaDeSuelo(dispositivo)
+      const perfil = this.tieneVariableSuelo(dispositivo)
         ? buildSentekProfile(dispositivo.ultimoReporte)
         : [];
       const key = this.getDeviceKey(dispositivo);

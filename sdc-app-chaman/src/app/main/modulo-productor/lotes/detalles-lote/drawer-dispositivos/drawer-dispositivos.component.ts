@@ -97,7 +97,7 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
 
   private refreshFromDevice(): void {
     this.loading = true;
-    this.esLanzaDeSuelo = this.dispositivo?.tipo === 'Sensor de Humedad de Suelo';
+    this.esLanzaDeSuelo = this.tieneVariableSuelo(this.dispositivo);
     this.esSensorAmbiente = this.tieneVariableAmbiental(this.dispositivo);
     this.ultimoReporte = this.dispositivo?.ultimoReporte;
     this.datosLanza = this.esLanzaDeSuelo
@@ -134,6 +134,23 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
       sensores.some((sensor) => ['Temperatura', 'Humedad', 'Batería', 'Bateria', 'BaterÃ­a'].includes(sensor as string)) ||
       !!valores['Temperatura'] ||
       !!valores['Humedad']
+    );
+  }
+
+  private tieneVariableSuelo(dispositivo?: IDispositivo): boolean {
+    const sensores = (dispositivo?.sensores || []).map((sensor) => String(sensor));
+    const valores = (dispositivo?.ultimoReporte?.datos?.valores || {}) as unknown as Record<string, any>;
+    const texto = `${dispositivo?.tipo || ''} ${dispositivo?.nombre || ''} ${dispositivo?.deveui || ''}`.toLowerCase();
+    const soilKeys = ['Humedad Suelo Profundidad', 'Temperatura Suelo', 'Salinidad Suelo', 'Napa'];
+
+    return (
+      dispositivo?.tipo === 'Sensor de Humedad de Suelo' ||
+      soilKeys.some((key) => sensores.includes(key) || Array.isArray(valores[key])) ||
+      texto.includes('sentek') ||
+      texto.includes('lanza') ||
+      texto.includes('napa') ||
+      texto.includes('uc501') ||
+      texto.includes('uc511')
     );
   }
 }

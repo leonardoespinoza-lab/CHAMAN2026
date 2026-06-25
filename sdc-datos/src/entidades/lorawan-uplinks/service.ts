@@ -12,6 +12,10 @@ import { DispositivosService } from '../dispositivos/service';
 import { ReportesService } from '../reportes/service';
 import { LorawanUplinksRepository } from './repository';
 import { decodeSentekUc501Payload } from './sentek-uc501.decoder';
+import {
+  decodeUc511SentekPayload,
+  decodedUc511ToReporteValores,
+} from './uc511-sentek.decoder';
 
 const TEMP_FRIO = Number(process.env.TEMP_FRIO || 7);
 const HFE_POR_CHILL_PORTION = Number(process.env.HFE_POR_CHILL_PORTION || 28);
@@ -73,6 +77,55 @@ export class LorawanUplinksService {
     });
   }
 
+  async reprocess(query: { devEUI?: string; limit?: string | number }) {
+    const devEUI = query.devEUI?.trim().toUpperCase();
+    if (!devEUI) {
+      return {
+        devEUI: null,
+        procesados: 0,
+        reportesSentek: 0,
+        reportesGenericos: 0,
+        errores: 0,
+        mensaje: 'devEUI requerido',
+      };
+    }
+
+    const uplinks = await this.repository.byDevEUI(
+      devEUI,
+      Math.min(Number(query.limit) || 5000, 20000),
+    );
+    let reportesSentek = 0;
+    let reportesGenericos = 0;
+    let errores = 0;
+
+    for (const uplink of uplinks) {
+      try {
+        const dispositivo = await this.dispositivos.upsertFromLorawanUplink(uplink);
+        const sentekSynced = await this.syncSentekReport(uplink, dispositivo);
+        if (sentekSynced) {
+          reportesSentek += 1;
+          continue;
+        }
+
+        const genericSynced = await this.syncGenericClimateReport(uplink, dispositivo);
+        if (genericSynced) {
+          reportesGenericos += 1;
+        }
+      } catch (error) {
+        errores += 1;
+        console.error(`Error reprocesando uplink ${devEUI}`, error);
+      }
+    }
+
+    return {
+      devEUI,
+      procesados: uplinks.length,
+      reportesSentek,
+      reportesGenericos,
+      errores,
+    };
+  }
+
   private async syncSentekReport(
     uplink: ICreateLorawanUplink,
     dispositivo?: IDispositivo | null,
@@ -81,7 +134,9 @@ export class LorawanUplinksService {
       return false;
     }
 
-    const decoded = decodeSentekUc501Payload(uplink.data);
+    const decoded =
+      decodeSentekUc501Payload(uplink.data) ||
+      this.decodeUc511SentekUplink(uplink);
     if (!decoded) {
       return false;
     }
@@ -133,6 +188,38 @@ export class LorawanUplinksService {
       fechaUltimaComunicacion: reportDate.toISOString(),
     });
     return true;
+  }
+
+  private decodeUc511SentekUplink(
+    uplink: ICreateLorawanUplink,
+  ): { valores: IValoresV2['valores']; canales: number[] } | null {
+    const raw = (uplink.rawPayload || {}) as Record<string, any>;
+    const payloadHex =
+      this.getFirstString(
+        raw.FRMPayload,
+        raw.frmPayload,
+        raw.frmpayload,
+        raw.payloadHex,
+        raw.hexPayload,
+        raw.dataHex,
+        raw.decoded?.FRMPayload,
+        raw.decoded?.frmPayload,
+        raw.MACPayload?.FRMPayload,
+        raw.macPayload?.frmPayload,
+        raw.macPayload?.FRMPayload,
+        raw.uplink?.FRMPayload,
+        raw.uplink?.frmPayload,
+      ) || (this.isLikelyHexPayload(uplink.data) ? uplink.data : undefined);
+
+    const decoded = decodeUc511SentekPayload(payloadHex);
+    if (!decoded) {
+      return null;
+    }
+
+    return {
+      valores: decodedUc511ToReporteValores(decoded),
+      canales: decoded.raw.blocks.map((block) => block.channel),
+    };
   }
 
   private async syncGenericClimateReport(
@@ -391,6 +478,24 @@ export class LorawanUplinksService {
       if (Number.isFinite(parsed)) return parsed;
     }
     return undefined;
+  }
+
+  private getFirstString(...values: unknown[]): string | undefined {
+    for (const value of values) {
+      if (typeof value === 'string' && value.trim()) return value;
+    }
+    return undefined;
+  }
+
+  private isLikelyHexPayload(value?: string): boolean {
+    if (!value) return false;
+    const compact = value.replace(/0x/gi, '').replace(/[^a-fA-F0-9]/g, '');
+    const nonSeparators = value.replace(/[\s:,-]/g, '');
+    return (
+      compact.length >= 8 &&
+      compact.length % 2 === 0 &&
+      compact.length === nonSeparators.length
+    );
   }
 
   private mergeSentekValues(

@@ -77,6 +77,24 @@
   width: 100%;
 }
 
+.napa-history-card {
+  border-top: 1px solid var(--p-surface-border);
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.napa-history-card.only {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.napa-history-card app-chart {
+  display: block;
+  min-height: 360px;
+  width: 100%;
+}
+
 .soil-history-card ::ng-deep {
   .highcharts-background,
   .highcharts-plot-background {
@@ -127,5 +145,9 @@
 
   .soil-history-card app-chart {
     min-height: 440px;
+  }
+
+  .napa-history-card app-chart {
+    min-height: 320px;
   }
 }
