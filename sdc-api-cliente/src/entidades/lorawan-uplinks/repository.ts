@@ -16,4 +16,12 @@ export class LorawanUplinksRepository {
     const url = `${API_DATOS}/lorawan/uplinks/latest`;
     return await this.axios.GET<ILorawanUplink[]>(url, { params });
   }
+
+  async reprocess(params: {
+    devEUI?: string;
+    limit?: string | number;
+  }): Promise<any> {
+    const url = `${API_DATOS}/lorawan/uplinks/reprocess`;
+    return await this.axios.POST<any>(url, {}, { params });
+  }
 }

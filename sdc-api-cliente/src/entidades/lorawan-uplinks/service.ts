@@ -18,4 +18,11 @@ export class LorawanUplinksService {
       limit: Math.min(Number(query.limit) || 100, 300),
     });
   }
+
+  async reprocess(query: { devEUI?: string; limit?: string | number }) {
+    return await this.repository.reprocess({
+      devEUI: query.devEUI,
+      limit: Math.min(Number(query.limit) || 10000, 20000),
+    });
+  }
 }

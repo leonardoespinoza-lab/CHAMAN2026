@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
@@ -19,5 +19,18 @@ export class LorawanUplinksController {
     @Query('limit') limit?: string,
   ) {
     return await this.service.latest({ devEUI, applicationID, gatewayID, limit });
+  }
+
+  @Post('reprocess')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  async reprocess(
+    @Query('devEUI') devEUI?: string,
+    @Query('limit') limit?: string,
+    @Body() body?: { devEUI?: string; limit?: string | number },
+  ) {
+    return await this.service.reprocess({
+      devEUI: devEUI || body?.devEUI,
+      limit: limit || body?.limit,
+    });
   }
 }
