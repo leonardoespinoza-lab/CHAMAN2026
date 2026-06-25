@@ -28,13 +28,15 @@ export class LorawanUplinksController {
 
   @Post('reprocess')
   async reprocess(
-    @Body() body: { devEUI?: string; limit?: string | number },
+    @Body() body: { devEUI?: string; limit?: string | number; replace?: boolean | string },
     @Query('devEUI') devEUI?: string,
     @Query('limit') limit?: string,
+    @Query('replace') replace?: string,
   ) {
     return await this.service.reprocess({
       devEUI: devEUI || body?.devEUI,
       limit: limit || body?.limit,
+      replace: replace || body?.replace,
     });
   }
 

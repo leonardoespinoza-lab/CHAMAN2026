@@ -19,10 +19,15 @@ export class LorawanUplinksService {
     });
   }
 
-  async reprocess(query: { devEUI?: string; limit?: string | number }) {
+  async reprocess(query: {
+    devEUI?: string;
+    limit?: string | number;
+    replace?: string | boolean;
+  }) {
     return await this.repository.reprocess({
       devEUI: query.devEUI,
       limit: Math.min(Number(query.limit) || 10000, 20000),
+      replace: query.replace,
     });
   }
 }

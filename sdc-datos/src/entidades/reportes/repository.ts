@@ -69,6 +69,14 @@ export class ReportesRepository {
     return await this.model.create(data);
   }
 
+  async deleteByDeveui(deveui: string): Promise<number> {
+    const result = await this.model.deleteMany({
+      deveui: { $in: [deveui, deveui.toUpperCase(), deveui.toLowerCase()] },
+    });
+
+    return result.deletedCount || 0;
+  }
+
   async getRecentPartialByDeveui(
     deveui: string,
     referenceDate: Date,

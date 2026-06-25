@@ -32,6 +32,10 @@ export class ReportesService {
     return await this.repository.create(dato);
   }
 
+  async deleteByDeveui(deveui: string) {
+    return await this.repository.deleteByDeveui(deveui);
+  }
+
   async getRecentPartialByDeveui(
     deveui: string,
     referenceDate: Date,

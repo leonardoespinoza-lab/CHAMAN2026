@@ -20,6 +20,7 @@ export class LorawanUplinksRepository {
   async reprocess(params: {
     devEUI?: string;
     limit?: string | number;
+    replace?: string | boolean;
   }): Promise<any> {
     const url = `${API_DATOS}/lorawan/uplinks/reprocess`;
     return await this.axios.POST<any>(url, {}, { params });

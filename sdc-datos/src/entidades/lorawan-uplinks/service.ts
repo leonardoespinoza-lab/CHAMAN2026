@@ -77,7 +77,11 @@ export class LorawanUplinksService {
     });
   }
 
-  async reprocess(query: { devEUI?: string; limit?: string | number }) {
+  async reprocess(query: {
+    devEUI?: string;
+    limit?: string | number;
+    replace?: string | boolean;
+  }) {
     const devEUI = query.devEUI?.trim().toUpperCase();
     if (!devEUI) {
       return {
@@ -94,6 +98,10 @@ export class LorawanUplinksService {
       devEUI,
       Math.min(Number(query.limit) || 5000, 20000),
     );
+    const replace = query.replace === true || query.replace === 'true';
+    const reportesEliminados = replace
+      ? await this.reportes.deleteByDeveui(devEUI)
+      : 0;
     let reportesSentek = 0;
     let reportesGenericos = 0;
     let errores = 0;
@@ -123,6 +131,7 @@ export class LorawanUplinksService {
       reportesSentek,
       reportesGenericos,
       errores,
+      reportesEliminados,
     };
   }
 
