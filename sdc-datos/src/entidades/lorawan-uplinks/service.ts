@@ -143,11 +143,14 @@ export class LorawanUplinksService {
 
     const devEUI = uplink.devEUI.toUpperCase();
     const reportDate = this.safeDate(uplink.timestamp);
-    const previous = await this.reportes.getRecentPartialByDeveui(
+    const existing = await this.reportes.getByDeveuiAndFecha(
       devEUI,
       reportDate,
-      20,
+      2,
     );
+    const previous =
+      existing ||
+      (await this.reportes.getRecentPartialByDeveui(devEUI, reportDate, 20));
     const valores = previous?.datos?.valores
       ? this.mergeSentekValues(previous.datos.valores, decoded.valores)
       : decoded.valores;
