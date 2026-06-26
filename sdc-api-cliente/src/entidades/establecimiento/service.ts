@@ -22,6 +22,9 @@ import { EstacionsService } from '../estacion/service';
 
 @Injectable()
 export class EstablecimientosService {
+  private readonly pronosticoPendiente = new Map<string, Promise<void>>();
+  private readonly climaPendiente = new Map<string, Promise<void>>();
+
   constructor(
     private repository: EstablecimientosRepository,
     private climaRepository: ClimaRepository,
@@ -138,15 +141,17 @@ export class EstablecimientosService {
         break;
       }
 
-      const resultados = await Promise.allSettled(
-        establecimientos.map(async (est) => {
-          await Promise.all([this.checkPronostico(est), this.checkClima(est)]);
-          return est._id;
-        }),
-      );
-      actualizados += resultados.filter((item) => item.status === 'fulfilled')
-        .length;
-      errores += resultados.filter((item) => item.status === 'rejected').length;
+      for (const est of establecimientos) {
+        try {
+          await this.checkPronostico(est);
+          await this.checkClima(est);
+          actualizados += 1;
+        } catch (error) {
+          errores += 1;
+          Logger.error(`Error refrescando clima de establecimiento ${est._id}`);
+          console.error(error);
+        }
+      }
 
       if (establecimientos.length < limit || (page + 1) * limit >= total) {
         break;
@@ -160,6 +165,14 @@ export class EstablecimientosService {
   // Private
 
   private async checkPronostico(est: IEstablecimiento) {
+    return this.ejecutarUnaVez(
+      this.pronosticoPendiente,
+      this.cacheKeyClima(est, 'pronostico'),
+      () => this.checkPronosticoInterno(est),
+    );
+  }
+
+  private async checkPronosticoInterno(est: IEstablecimiento) {
     try {
       const vencido = this.vencido(
         est.prediccionClimatica?.fecha,
@@ -178,6 +191,12 @@ export class EstablecimientosService {
           centro.lat,
           centro.lng,
         );
+        if (!pronosticos?.length) {
+          Logger.warn(
+            `No se obtuvo pronostico para establecimiento ${est._id}; se conserva el cache existente`,
+          );
+          return;
+        }
         const fecha = new Date().toISOString();
         const prediccionClimatica = {
           fecha,
@@ -196,6 +215,14 @@ export class EstablecimientosService {
   }
 
   private async checkClima(est: IEstablecimiento) {
+    return this.ejecutarUnaVez(
+      this.climaPendiente,
+      this.cacheKeyClima(est, 'actual'),
+      () => this.checkClimaInterno(est),
+    );
+  }
+
+  private async checkClimaInterno(est: IEstablecimiento) {
     try {
       const vencido = this.vencido(
         est.climaActual?.fecha,
@@ -241,6 +268,35 @@ export class EstablecimientosService {
       Logger.error('Error al obtener el clima actual');
       console.error(error);
     }
+  }
+
+  private ejecutarUnaVez(
+    mapa: Map<string, Promise<void>>,
+    key: string,
+    tarea: () => Promise<void>,
+  ): Promise<void> {
+    const pendiente = mapa.get(key);
+    if (pendiente) {
+      return pendiente;
+    }
+
+    const promesa = tarea().finally(() => mapa.delete(key));
+    mapa.set(key, promesa);
+    return promesa;
+  }
+
+  private cacheKeyClima(
+    est: IEstablecimiento,
+    tipo: 'actual' | 'pronostico',
+  ): string {
+    const centro = est.ubicacion?.[0]?.centro;
+    const lat = centro?.lat;
+    const lng = centro?.lng;
+    const ubicacion =
+      lat !== undefined && lat !== null && lng !== undefined && lng !== null
+        ? `${Number(lat).toFixed(5)},${Number(lng).toFixed(5)}`
+        : est._id;
+    return `${tipo}:${ubicacion}`;
   }
 
   private async getClimaActualFieldClimate(
@@ -308,9 +364,15 @@ export class EstablecimientosService {
         ? { lng: coordinates[0], lat: coordinates[1] }
         : undefined,
       temperatura: lectura((name) =>
-        name.includes('air temperature') || name === 'temperature',
+        name.includes('air temperature') ||
+        name.includes('i2c temperature') ||
+        (name.includes('temperature') && !name.includes('soil')),
       ),
-      humedad: lectura((name) => name.includes('relative humidity')),
+      humedad: lectura((name) =>
+        name.includes('relative humidity') ||
+        name.includes('rel humidity') ||
+        name === 'rh',
+      ),
       lluvia: lectura((name) =>
         name.includes('precipitation') || name.includes('rain'),
       ),

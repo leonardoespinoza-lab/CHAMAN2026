@@ -5,7 +5,11 @@ import {
   IStationData,
   TDataReporte,
 } from '../fieldClimate/modelos/stationData';
-import { API_OPEN_METEO, API_OPEN_METEO_ARCHIVE } from '../../env';
+import {
+  API_OPEN_METEO,
+  API_OPEN_METEO_ARCHIVE,
+  METEO_SOURCE_KEY,
+} from '../../env';
 import { LogService } from '../../auxiliares/logsService/service';
 import { EstacionsService, IEstacionCercana } from '../estacion/service';
 import { IForecast, TDataForecast } from '../fieldClimate/modelos/forecast';
@@ -29,6 +33,13 @@ import { OmixomService } from '../omixom/service';
 @Injectable()
 export class ClimaService {
   private logger = new LogService(ClimaService.name);
+  private readonly openMeteoCache = new Map<
+    string,
+    { expiresAt: number; data: any }
+  >();
+  private readonly openMeteoPendiente = new Map<string, Promise<any | null>>();
+  private readonly openMeteoCacheMs = 10 * 60 * 1000;
+  private readonly openMeteoReintentosMs = [1500, 3000];
   // En lugar de mandar vacío, mando esto
   private prediccionDefault: nivelPrediccion[] = [
     //DEFAUL (TODO EN 3)
@@ -118,6 +129,99 @@ export class ClimaService {
     });
   }
 
+  private async fetchOpenMeteoJson(
+    url: URL,
+    contexto: string,
+  ): Promise<any | null> {
+    const key = url.toString();
+    const cacheado = this.openMeteoCache.get(key);
+    if (cacheado && cacheado.expiresAt > Date.now()) {
+      return cacheado.data;
+    }
+
+    const pendiente = this.openMeteoPendiente.get(key);
+    if (pendiente) {
+      return pendiente;
+    }
+
+    const promesa = this.fetchOpenMeteoJsonSinCache(key, contexto).finally(() =>
+      this.openMeteoPendiente.delete(key),
+    );
+    this.openMeteoPendiente.set(key, promesa);
+    return promesa;
+  }
+
+  private async fetchOpenMeteoJsonSinCache(
+    url: string,
+    contexto: string,
+  ): Promise<any | null> {
+    for (
+      let intento = 0;
+      intento <= this.openMeteoReintentosMs.length;
+      intento++
+    ) {
+      try {
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          this.openMeteoCache.set(url, {
+            expiresAt: Date.now() + this.openMeteoCacheMs,
+            data,
+          });
+          return data;
+        }
+
+        if (
+          response.status === 429 &&
+          intento < this.openMeteoReintentosMs.length
+        ) {
+          const espera = this.getOpenMeteoRetryMs(response, intento);
+          this.logger.warn(
+            `Open-Meteo ${contexto} respondio 429; reintento en ${espera} ms`,
+          );
+          await this.wait(espera);
+          continue;
+        }
+
+        this.logger.error(
+          `Open-Meteo ${contexto} respondio ${response.status} para ${url}`,
+        );
+        return null;
+      } catch (error) {
+        if (intento < this.openMeteoReintentosMs.length) {
+          const espera = this.openMeteoReintentosMs[intento];
+          this.logger.warn(
+            `Error Open-Meteo ${contexto}; reintento en ${espera} ms: ${error}`,
+          );
+          await this.wait(espera);
+          continue;
+        }
+
+        this.logger.error(`Error al obtener Open-Meteo ${contexto}: ${error}`);
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  private getOpenMeteoRetryMs(response: any, intento: number): number {
+    const retryAfter = response?.headers?.get?.('retry-after');
+    if (retryAfter) {
+      const segundos = Number(retryAfter);
+      if (Number.isFinite(segundos) && segundos >= 0) {
+        return Math.max(1000, segundos * 1000);
+      }
+
+      const fecha = Date.parse(retryAfter);
+      if (Number.isFinite(fecha)) {
+        return Math.max(1000, fecha - Date.now());
+      }
+    }
+
+    return this.openMeteoReintentosMs[intento] || 3000;
+  }
+
   private esDiaONoche(fecha: Date, latitud: number, longitud: number) {
     const tiempos = SunCalc.getTimes(fecha, latitud, longitud);
     if (fecha >= tiempos.sunrise && fecha < tiempos.sunset) {
@@ -199,22 +303,11 @@ export class ClimaService {
       ].join(','),
     );
 
-    try {
-      const response = await fetch(url.toString());
-      if (!response.ok) {
-        this.logger.error(
-          `Open-Meteo respondio ${response.status} para ${url.toString()}`,
-        );
-        return [];
-      }
-      const data = await response.json();
-      return this.parsearClimaOpenMeteo(data, ubicacion);
-    } catch (error) {
-      this.logger.error(
-        `Error al obtener clima Open-Meteo para ${JSON.stringify(ubicacion)}: ${error}`,
-      );
+    const data = await this.fetchOpenMeteoJson(url, 'historico');
+    if (!data) {
       return [];
     }
+    return this.parsearClimaOpenMeteo(data, ubicacion);
   }
 
   private async getOpenMeteoActual(
@@ -243,22 +336,11 @@ export class ClimaService {
     );
     url.searchParams.set('hourly', 'et0_fao_evapotranspiration');
 
-    try {
-      const response = await fetch(url.toString());
-      if (!response.ok) {
-        this.logger.error(
-          `Open-Meteo actual respondio ${response.status} para ${url.toString()}`,
-        );
-        return null;
-      }
-      const data = await response.json();
-      return this.parsearClimaActualOpenMeteo(data, ubicacion);
-    } catch (error) {
-      this.logger.error(
-        `Error al obtener clima actual Open-Meteo para ${JSON.stringify(ubicacion)}: ${error}`,
-      );
+    const data = await this.fetchOpenMeteoJson(url, 'actual');
+    if (!data) {
       return null;
     }
+    return this.parsearClimaActualOpenMeteo(data, ubicacion);
   }
 
   private parsearClimaActualOpenMeteo(
@@ -467,52 +549,42 @@ export class ClimaService {
       ].join(','),
     );
 
-    try {
-      const response = await fetch(url.toString());
-      if (!response.ok) {
-        this.logger.error(
-          `Open-Meteo pronostico respondio ${response.status} para ${url.toString()}`,
-        );
-        return [];
-      }
-      const data = await response.json();
-      const daily = data?.daily;
-      const fechas: string[] = daily?.time || [];
-      return fechas.map((fecha, index) => {
-        const fechaIso = new Date(`${fecha}T12:00:00`).toISOString();
-        const date = new Date(fechaIso);
-        return {
-          fuente: 'OpenMeteo' as any,
-          ubicacion,
-          fecha: fechaIso,
-          diaNoche: this.esDiaONoche(date, ubicacion.lat, ubicacion.lng),
-          temperatura: {
-            max: daily.temperature_2m_max?.[index],
-            min: daily.temperature_2m_min?.[index],
-            avg: daily.temperature_2m_mean?.[index],
-          },
-          humedad: {
-            max: daily.relative_humidity_2m_max?.[index],
-            min: daily.relative_humidity_2m_min?.[index],
-            avg: daily.relative_humidity_2m_mean?.[index],
-          },
-          velocidadViento: {
-            max: daily.wind_speed_10m_max?.[index],
-            avg: daily.wind_speed_10m_mean?.[index],
-          },
-          lluvia: daily.precipitation_sum?.[index],
-          probabilidadLluvia: daily.precipitation_probability_max?.[index],
-          direccionViento: daily.wind_direction_10m_dominant?.[index],
-          radiacionSolar: daily.shortwave_radiation_sum?.[index],
-          et0: daily.et0_fao_evapotranspiration?.[index],
-        };
-      });
-    } catch (error) {
-      this.logger.error(
-        `Error al obtener pronostico Open-Meteo para ${JSON.stringify(ubicacion)}: ${error}`,
-      );
+    const data = await this.fetchOpenMeteoJson(url, 'pronostico');
+    if (!data) {
       return [];
     }
+
+    const daily = data?.daily;
+    const fechas: string[] = daily?.time || [];
+    return fechas.map((fecha, index) => {
+      const fechaIso = new Date(`${fecha}T12:00:00`).toISOString();
+      const date = new Date(fechaIso);
+      return {
+        fuente: 'OpenMeteo' as any,
+        ubicacion,
+        fecha: fechaIso,
+        diaNoche: this.esDiaONoche(date, ubicacion.lat, ubicacion.lng),
+        temperatura: {
+          max: daily.temperature_2m_max?.[index],
+          min: daily.temperature_2m_min?.[index],
+          avg: daily.temperature_2m_mean?.[index],
+        },
+        humedad: {
+          max: daily.relative_humidity_2m_max?.[index],
+          min: daily.relative_humidity_2m_min?.[index],
+          avg: daily.relative_humidity_2m_mean?.[index],
+        },
+        velocidadViento: {
+          max: daily.wind_speed_10m_max?.[index],
+          avg: daily.wind_speed_10m_mean?.[index],
+        },
+        lluvia: daily.precipitation_sum?.[index],
+        probabilidadLluvia: daily.precipitation_probability_max?.[index],
+        direccionViento: daily.wind_direction_10m_dominant?.[index],
+        radiacionSolar: daily.shortwave_radiation_sum?.[index],
+        et0: daily.et0_fao_evapotranspiration?.[index],
+      };
+    });
   }
 
   // Parseo de datos de estaciones meteorológicas
@@ -1206,6 +1278,11 @@ export class ClimaService {
   }
 
   async getForecastMeteoSource(ubicacion: ICoordenadas) {
+    if (!METEO_SOURCE_KEY) {
+      this.logger.warn('MeteoSource sin clave configurada; se omite fallback');
+      return null;
+    }
+
     try {
       const forecast = await this.meteoSourceService.getForecast(
         ubicacion,

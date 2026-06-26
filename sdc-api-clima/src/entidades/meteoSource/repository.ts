@@ -69,6 +69,10 @@ export class MeteoSourceRepository {
     y: string,
     z: string,
   ): Promise<Buffer> {
+    if (!METEO_SOURCE_KEY) {
+      throw new Error('METEO_SOURCE_KEY no configurada');
+    }
+
     const tileUrl = `${API_METEO_SOURCE}/standard/map?tile_x=${x}&tile_y=${y}&tile_zoom=${z}&variable=${variable}&datetime=${datetime}&format=png&key=${METEO_SOURCE_KEY}`;
 
     // Usar curl en lugar de axios/Node.js HTTPS para evitar el bloqueo de JA3
@@ -85,7 +89,29 @@ export class MeteoSourceRepository {
       return buffer;
     } catch (error) {
       console.error(`❌ Error obteniendo tile de Meteosource [${x},${y},${z}]:`, error.message);
-      throw error;
+      return this.getTileConFetch(tileUrl, variable, x, y, z);
     }
+  }
+
+  private async getTileConFetch(
+    tileUrl: string,
+    variable: WeatherVariable,
+    x: string,
+    y: string,
+    z: string,
+  ): Promise<Buffer> {
+    const response = await fetch(tileUrl);
+    if (!response.ok) {
+      throw new Error(
+        `Meteosource tile respondio ${response.status} [${x},${y},${z}]`,
+      );
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    console.log(
+      `Tile ${variable} [${x},${y},${z}] recibido via fetch: ${buffer.length} bytes`,
+    );
+    return buffer;
   }
 }

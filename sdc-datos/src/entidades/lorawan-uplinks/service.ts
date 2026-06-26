@@ -195,11 +195,64 @@ export class LorawanUplinksService {
       });
     }
 
-    await this.dispositivos.update(dispositivo._id, {
-      ultimoReporte: reporte,
+    const updateDispositivo: IUpdateDispositivo = {
       fechaUltimaComunicacion: reportDate.toISOString(),
-    });
+    };
+
+    if (this.shouldPromoteSentekReport(reporte, dispositivo.ultimoReporte)) {
+      updateDispositivo.ultimoReporte = reporte;
+    }
+
+    await this.dispositivos.update(dispositivo._id, updateDispositivo);
     return true;
+  }
+
+  private shouldPromoteSentekReport(
+    reporte: IReporte,
+    ultimoReporte?: IReporte,
+  ): boolean {
+    if (!ultimoReporte) {
+      return true;
+    }
+
+    const calidadNueva = this.sentekReportQuality(reporte);
+    const calidadActual = this.sentekReportQuality(ultimoReporte);
+
+    if (reporte.estado === 'completo') {
+      return true;
+    }
+
+    if (ultimoReporte.estado !== 'completo') {
+      return calidadNueva.total >= calidadActual.total;
+    }
+
+    const pierdeHumedad =
+      calidadActual.humedad > 0 && calidadNueva.humedad === 0;
+
+    return !pierdeHumedad && calidadNueva.total >= calidadActual.total;
+  }
+
+  private sentekReportQuality(reporte?: IReporte): {
+    humedad: number;
+    salinidad: number;
+    temperatura: number;
+    total: number;
+  } {
+    const valores = reporte?.datos?.valores || {};
+    const countValid = (sensor: keyof IValoresV2['valores']) =>
+      (valores[sensor] || []).filter(
+        (item) => item?.valores?.actual !== null && item?.valores?.actual !== undefined,
+      ).length;
+    const humedad = countValid('Humedad Suelo Profundidad');
+    const salinidad = countValid('Salinidad Suelo');
+    const temperatura = countValid('Temperatura Suelo');
+
+    return {
+      humedad,
+      salinidad,
+      temperatura,
+      total: humedad + salinidad + temperatura,
+    };
   }
 
   private decodeUc511SentekUplink(

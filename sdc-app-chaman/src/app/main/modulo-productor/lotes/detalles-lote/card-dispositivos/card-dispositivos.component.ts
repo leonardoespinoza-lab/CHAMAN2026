@@ -104,7 +104,30 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   public estadoLabel(dispositivo: IDispositivo): string {
-    return this.estaOnline(dispositivo) ? 'Online' : 'Sin reporte reciente';
+    const edad = this.edadUltimaComunicacionMs(dispositivo);
+    if (edad === undefined) return 'Sin reportes';
+    if (edad <= 30 * 60 * 1000) return 'Online';
+    if (edad <= 24 * 60 * 60 * 1000) return 'Ultimo reporte <24 h';
+    if (edad <= 72 * 60 * 60 * 1000) return 'Demorado';
+    return 'Sin reporte reciente';
+  }
+
+  public perfilLabel(dispositivo: IDispositivo): string {
+    const perfil = this.perfil(dispositivo);
+    const variables = [
+      perfil.some((dato) => dato.humedad) ? 'humedad' : '',
+      perfil.some((dato) => dato.salinidad) ? 'salinidad' : '',
+      perfil.some((dato) => dato.temperatura) ? 'temperatura' : '',
+    ].filter(Boolean);
+
+    if (!variables.length) {
+      return 'Perfil pendiente: el ultimo reporte no trae variables de profundidad validas.';
+    }
+
+    const prefijo = dispositivo.ultimoReporte?.estado === 'parcial'
+      ? 'Perfil parcial por profundidad'
+      : 'Perfil disponible por profundidad';
+    return `${prefijo}: ${variables.join(', ')}.`;
   }
 
   private tieneVariableSuelo(dispositivo?: IDispositivo): boolean {
@@ -146,6 +169,14 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
       this.resumenes.set(key, this.calcularResumen(perfil));
       this.resumenesAmbiente.set(key, this.calcularResumenAmbiente(dispositivo));
     }
+  }
+
+  private edadUltimaComunicacionMs(dispositivo: IDispositivo): number | undefined {
+    const fecha = this.ultimaComunicacion(dispositivo);
+    if (!fecha) return undefined;
+    const timestamp = new Date(fecha).getTime();
+    if (!Number.isFinite(timestamp)) return undefined;
+    return Date.now() - timestamp;
   }
 
   private calcularResumenAmbiente(dispositivo: IDispositivo): DispositivoAmbienteResumen {

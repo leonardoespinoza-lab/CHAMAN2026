@@ -148,10 +148,14 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
   private crearVariablesDetalle(): VariableCentral[] {
     const lecturas = this.central?.ultimaLecturaDetalle || [];
     if (lecturas.length) {
-      return lecturas.map((lectura) => this.variableDetalleDesdeLectura(lectura));
+      return lecturas
+        .map((lectura) => this.variableDetalleDesdeLectura(lectura))
+        .filter((variable) => this.mostrarVariableDetalle(variable));
     }
     const sensores = this.central?.sensoresDetalle || [];
-    return sensores.map((sensor) => this.variableDetalleDesdeSensor(sensor));
+    return sensores
+      .map((sensor) => this.variableDetalleDesdeSensor(sensor))
+      .filter((variable) => this.mostrarVariableDetalle(variable));
   }
 
   private variableDetalleDesdeLectura(
@@ -233,12 +237,12 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
   private matcherMetrica(key: string): (label: string, original: string) => boolean {
     return (label, original) => {
       const texto = `${label} ${original}`;
-      if (key === 'temperatura') return texto.includes('air temperature') || texto === 'temperature';
-      if (key === 'humedad') return texto.includes('relative humidity') || texto === 'rh';
+      if (key === 'temperatura') return texto.includes('air temperature') || texto.includes('i2c temperature') || texto === 'temperature';
+      if (key === 'humedad') return texto.includes('relative humidity') || texto.includes('rel humidity') || texto === 'rh';
       if (key === 'lluvia') return texto.includes('precipitation') || texto.includes('rain');
       if (key === 'viento') return texto.includes('wind speed') && !texto.includes('gust');
       if (key === 'rafaga') return texto.includes('gust');
-      if (key === 'direccion') return texto.includes('wind dir') || texto.includes('wind direction');
+      if (key === 'direccion') return texto.includes('wind dir') || texto.includes('wind direction') || texto.includes('wind orientation');
       if (key === 'radiacion') return texto.includes('solar radiation') || texto.includes('radiation');
       if (key === 'presion') return texto.includes('pressure');
       if (key === 'et0') return texto === 'et0' || texto.includes('daily et0');
@@ -307,6 +311,45 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
     return value.toLowerCase().trim();
   }
 
+  private mostrarVariableDetalle(variable: VariableCentral): boolean {
+    const label = this.normalizar(variable.label);
+    if (this.esVariableTecnica(label)) {
+      return false;
+    }
+
+    const resumenKey = this.keyResumenDesdeTexto(label);
+    if (!resumenKey) {
+      return true;
+    }
+
+    const resumenTieneDato = this.variables.some((item) => item.key === resumenKey && item.disponible);
+    return !resumenTieneDato;
+  }
+
+  private esVariableTecnica(label: string): boolean {
+    return (
+      label.includes('firmware') ||
+      label.includes('hardware') ||
+      label.includes('identifier') ||
+      label === 'sunrise' ||
+      label === 'sunset' ||
+      label === 'midnight'
+    );
+  }
+
+  private keyResumenDesdeTexto(texto: string): string | undefined {
+    if (texto.includes('air temperature') || texto.includes('i2c temperature')) return 'temperatura';
+    if (texto.includes('relative humidity') || texto.includes('rel humidity')) return 'humedad';
+    if (texto.includes('precipitation') || texto.includes('rain')) return 'lluvia';
+    if (texto.includes('wind speed') && !texto.includes('gust')) return 'viento';
+    if (texto.includes('gust')) return 'rafaga';
+    if (texto.includes('wind dir') || texto.includes('wind direction') || texto.includes('wind orientation')) return 'direccion';
+    if (texto.includes('solar radiation') || texto === 'radiacion solar') return 'radiacion';
+    if (texto.includes('pressure')) return 'presion';
+    if (texto === 'et0' || texto.includes('daily et0')) return 'et0';
+    return undefined;
+  }
+
   private fechaUltimaLecturaCentral(): string | undefined {
     const fechas = (this.central?.ultimaLecturaDetalle || [])
       .map((lectura) => lectura.fecha)
@@ -350,8 +393,10 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
   private traducirLabel(label: string): string {
     const normalizado = label.toLowerCase();
     if (normalizado.includes('air temperature')) return 'Temperatura del aire';
+    if (normalizado.includes('i2c temperature')) return 'Temperatura del aire';
     if (normalizado.includes('dew point')) return 'Punto de rocio';
     if (normalizado.includes('relative humidity')) return 'Humedad relativa';
+    if (normalizado.includes('rel humidity')) return 'Humedad relativa';
     if (normalizado.includes('precipitation')) return 'Precipitacion';
     if (normalizado === 'vpd' || normalizado.includes('dpv')) return 'DPV';
     if (normalizado.includes('battery')) return 'Bateria';
