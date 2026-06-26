@@ -32,6 +32,7 @@ from config import (
     SAT_COLLECTIONS,
     SAT_CLOUD_COVER_THRESHOLDS,
     SAT_DELTA_VENCIMIENTO,
+    SAT_SENTINEL_PREFERENCE_DAYS,
 )
 from geo import obtener_metadata_png_con_polygon, scene_cubre_poligono
 from health import start_health_server
@@ -74,6 +75,11 @@ BAND_MAPPING = {
             "swir16": "B11",
         },
     },
+}
+
+COLLECTION_PRIORITY = {
+    "sentinel-2-l2a": 0,
+    "landsat-c2-l2": 1,
 }
 
 
@@ -222,7 +228,10 @@ class NDVIWorker:
         return False
 
     async def find_latest_sentinel_scene(
-        self, polygon: Polygon, start_date: Optional[datetime] = None
+        self,
+        polygon: Polygon,
+        start_date: Optional[datetime] = None,
+        last_collection: Optional[str] = None,
     ) -> Optional[dict]:
         """Busca la escena Sentinel-2 más reciente que cubra el polígono, opcionalmente a partir de una fecha."""
         timer_start = time.time()
@@ -231,7 +240,18 @@ class NDVIWorker:
 
             # --- LÓGICA DE FECHA ---
             if start_date:
-                search_start_date = start_date + timedelta(days=1)
+                if last_collection and self._collection_priority(
+                    last_collection
+                ) > self._collection_priority("sentinel-2-l2a"):
+                    search_start_date = start_date - timedelta(
+                        days=SAT_SENTINEL_PREFERENCE_DAYS
+                    )
+                    logger.info(
+                        "   -> Ultima escena fue Landsat; se abre ventana de calidad "
+                        f"desde {search_start_date.date()} para permitir Sentinel-2 cercano."
+                    )
+                else:
+                    search_start_date = start_date + timedelta(days=1)
                 logger.info(
                     f"   -> Filtro de fecha optimizado: buscando a partir de {search_start_date.date()}"
                 )
@@ -258,14 +278,15 @@ class NDVIWorker:
                         "eo:cloud_cover": {"lt": cloud_threshold},
                     },
                     sortby=[{"field": "datetime", "direction": "desc"}],
-                    limit=1,
+                    limit=20,
                 )
                 items = list(search.items())
                 if items:
+                    selected = self._select_best_scene(items)
                     logger.info(
-                        f"   -> Escena candidata {items[0].id} ({items[0].collection_id}) con nubosidad {items[0].properties.get('eo:cloud_cover', 's/d')}%"
+                        f"   -> Escena candidata {selected.id} ({selected.collection_id}) con nubosidad {selected.properties.get('eo:cloud_cover', 's/d')}%"
                     )
-                    return sign(items[0])
+                    return sign(selected)
 
             logger.info("   -> No se encontraron escenas con los umbrales configurados.")
             return None
@@ -278,22 +299,73 @@ class NDVIWorker:
                 f"⏱️ Búsqueda de escena completada en {timer_end - timer_start:.2f}s"
             )
 
+    def _select_best_scene(self, items: list):
+        dated_items = [item for item in items if self._scene_datetime(item)]
+        if not dated_items:
+            return items[0]
+
+        newest_datetime = max(self._scene_datetime(item) for item in dated_items)
+        window_start = newest_datetime - timedelta(days=SAT_SENTINEL_PREFERENCE_DAYS)
+        candidates = [
+            item
+            for item in dated_items
+            if self._scene_datetime(item) >= window_start
+        ] or dated_items
+
+        return sorted(
+            candidates,
+            key=lambda item: (
+                self._collection_priority(item.collection_id),
+                -self._scene_datetime(item).timestamp(),
+                self._scene_cloud_cover(item),
+            ),
+        )[0]
+
+    @staticmethod
+    def _scene_datetime(scene) -> Optional[datetime]:
+        if getattr(scene, "datetime", None):
+            return scene.datetime
+        value = getattr(scene, "properties", {}).get("datetime")
+        if value:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return None
+
+    @staticmethod
+    def _scene_cloud_cover(scene) -> float:
+        value = getattr(scene, "properties", {}).get("eo:cloud_cover", 100)
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 100.0
+
+    @staticmethod
+    def _collection_priority(collection: Optional[str]) -> int:
+        return COLLECTION_PRIORITY.get(collection or "", 99)
+
     async def process_task(self, task_data: dict):
         """Procesa una tarea de cálculo de NDVI"""
         task_start = time.time()
         lote_id = task_data["lote_id"]
         polygon = self._validate_polygon(task_data["polygon"])
         job_datetime = self._parse_job_datetime(task_data.get("scene_datetime"))
+        job_collection = task_data.get("scene_collection")
 
         try:
             # Paso 1: Obtener o descargar escena
-            scene_data = await self._get_scene_data(polygon, job_datetime)
+            scene_data = await self._get_scene_data(
+                polygon, job_datetime, job_collection
+            )
             if not scene_data:
                 logger.error(f"⚠️ No se pudo obtener escena para lote {lote_id}")
                 return
 
                 # Verificar si la escena ya fue procesada para este job
-            if self._is_scene_processed(scene_data["datetime"], job_datetime):
+            if self._is_scene_processed(
+                scene_data["datetime"],
+                job_datetime,
+                scene_data.get("collection"),
+                job_collection,
+            ):
                 logger.info(
                     f"⏭️ Escena {scene_data['id']} ya procesada para este job. Saltando..."
                 )
@@ -390,7 +462,10 @@ class NDVIWorker:
             return 0.0
 
     async def _get_cached_scene(
-        self, polygon: Polygon, job_datetime: Optional[datetime]
+        self,
+        polygon: Polygon,
+        job_datetime: Optional[datetime],
+        job_collection: Optional[str] = None,
     ) -> Optional[dict]:
         """Busca escenas válidas en caché local"""
         scenes_dir = Path(DOWNLOAD_FOLDER) / "scenes"
@@ -421,7 +496,18 @@ class NDVIWorker:
 
                     # LÓGICA CONSISTENTE: Si hay un job_datetime y la escena en caché es igual o anterior, no es candidata.
                     if job_datetime and scene_date.date() <= job_datetime.date():
-                        continue
+                        with open(metadata_path) as f:
+                            metadata_precheck = json.load(f)
+                        collection_precheck = metadata_precheck.get(
+                            "collection", "desconocida"
+                        )
+                        if not self._is_quality_replacement(
+                            scene_date,
+                            job_datetime,
+                            collection_precheck,
+                            job_collection,
+                        ):
+                            continue
 
                     # LÓGICA DE EXPIRACIÓN: Si la escena es muy vieja respecto al día de hoy.
                     if datetime.now(timezone.utc) - scene_date > timedelta(
@@ -438,12 +524,19 @@ class NDVIWorker:
                     )  # Obtener colección, con fallback
 
                     logger.info(f"✅ Usando escena en caché: {scene_dir.name}")
+                    band_paths = {
+                        band: str(scene_dir / f"{band}.tif")
+                        for band in ["B02", "B03", "B04", "B05", "B08", "B11"]
+                        if (scene_dir / f"{band}.tif").exists()
+                    }
+
                     return {
                         "id": scene_dir.name,
                         "b4_path": str(b4_path),
                         "b8_path": str(b8_path),
                         "datetime": scene_date or datetime.now(timezone.utc),
                         "collection": collection,
+                        "band_paths": band_paths,
                     }
                 except Exception as e:
                     logger.warning(f"Error verificando escena {scene_dir.name}: {e}")
@@ -462,19 +555,24 @@ class NDVIWorker:
         return None
 
     async def _get_scene_data(
-        self, polygon: Polygon, job_datetime: Optional[datetime]
+        self,
+        polygon: Polygon,
+        job_datetime: Optional[datetime],
+        job_collection: Optional[str] = None,
     ) -> Optional[dict]:
         """Obtiene datos de escena (de caché o nueva descarga)"""
         try:
             # 1. Buscar en caché primero (ya con la lógica corregida)
-            cached_scene = await self._get_cached_scene(polygon, job_datetime)
+            cached_scene = await self._get_cached_scene(
+                polygon, job_datetime, job_collection
+            )
             if cached_scene:
                 logger.info(f"♻️ Usando escena en caché: {cached_scene['id']}")
                 return cached_scene
 
             # 2. Si no hay en caché, buscar nueva escena pasando el job_datetime como start_date
             scene = await self.find_latest_sentinel_scene(
-                polygon, start_date=job_datetime
+                polygon, start_date=job_datetime, last_collection=job_collection
             )
             if not scene:
                 logger.error(
@@ -630,7 +728,11 @@ class NDVIWorker:
         return None
 
     def _is_scene_processed(
-        self, scene_datetime: datetime, job_datetime: Optional[datetime]
+        self,
+        scene_datetime: datetime,
+        job_datetime: Optional[datetime],
+        scene_collection: Optional[str] = None,
+        job_collection: Optional[str] = None,
     ) -> bool:
         """
         Verifica si una escena ya fue procesada, comparando solo la parte de la fecha (día/mes/año).
@@ -645,6 +747,14 @@ class NDVIWorker:
         logger.info(f"  -> Fecha de último job: {job_datetime.date()}")
 
         if scene_datetime.date() <= job_datetime.date():
+            if self._is_quality_replacement(
+                scene_datetime, job_datetime, scene_collection, job_collection
+            ):
+                logger.info(
+                    "Escena anterior permitida como reemplazo de calidad "
+                    f"({scene_collection} mejora {job_collection})."
+                )
+                return False
             logger.info(
                 f"⏭️  La escena ({scene_datetime.date()}) es anterior o igual a la del job ({job_datetime.date()}). Saltando tarea para evitar usar datos viejos."
             )
@@ -654,6 +764,24 @@ class NDVIWorker:
             "✅ La escena es más reciente que la del último job. Se procederá con el procesamiento."
         )
         return False
+
+    def _is_quality_replacement(
+        self,
+        scene_datetime: Optional[datetime],
+        job_datetime: Optional[datetime],
+        scene_collection: Optional[str],
+        job_collection: Optional[str],
+    ) -> bool:
+        if not scene_datetime or not job_datetime:
+            return False
+        if not job_collection:
+            return False
+        if self._collection_priority(scene_collection) >= self._collection_priority(
+            job_collection
+        ):
+            return False
+        days_delta = (job_datetime.date() - scene_datetime.date()).days
+        return 0 <= days_delta <= SAT_SENTINEL_PREFERENCE_DAYS
 
     async def _process_ndvi(
         self, lote_id: str, polygon: Polygon, scene_data: dict
@@ -715,7 +843,10 @@ class NDVIWorker:
 
             # Calcular NDVI
             ndvi, profile = await self._run_in_executor(
-                calcular_ndvi, str(b8_recorte), str(b4_recorte)
+                calcular_ndvi,
+                str(b8_recorte),
+                str(b4_recorte),
+                scene_data.get("collection"),
             )
 
             # Verificar que el NDVI no sea completamente inválido
@@ -740,7 +871,9 @@ class NDVIWorker:
                 ndvi_promedio = 0.0
             try:
                 indices_info = await self._run_in_executor(
-                    calcular_indices_y_rasters, recorte_band_paths
+                    calcular_indices_y_rasters,
+                    recorte_band_paths,
+                    scene_data.get("collection"),
                 )
                 indices = indices_info.get("indices", {})
                 rasters = indices_info.get("rasters", {})

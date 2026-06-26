@@ -15,6 +15,7 @@ SAT_COLLECTIONS = ["landsat-c2-l2", "sentinel-2-l2a"]
 # SAT_COLLECTIONS = ["sentinel-2-l2a"]
 #
 SAT_DELTA_VENCIMIENTO = int(os.getenv("SAT_DELTA_VENCIMIENTO", "30"))
+SAT_SENTINEL_PREFERENCE_DAYS = int(os.getenv("SAT_SENTINEL_PREFERENCE_DAYS", "6"))
 SAT_CLOUD_COVER_THRESHOLDS = [
     int(value.strip())
     for value in os.getenv("SAT_CLOUD_COVER_THRESHOLDS", "30,50,70").split(",")

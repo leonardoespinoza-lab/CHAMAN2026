@@ -35,16 +35,14 @@ VEGETATION_CMAP = _colormap_from_value_ramp(
     [
         (-0.5, "#6f4a2f"),
         (-0.2, "#7c5034"),
-        (0.0, "#e2d69a"),
-        (0.03, "#e0e97e"),
-        (0.06, "#cbeb69"),
-        (0.10, "#a8e257"),
-        (0.14, "#82d54c"),
-        (0.20, "#5bc245"),
-        (0.32, "#32a33d"),
-        (0.50, "#157a33"),
-        (0.72, "#005327"),
-        (1.0, "#003319"),
+        (0.0, "#c68b5d"),
+        (0.08, "#e0c486"),
+        (0.15, "#eadf9a"),
+        (0.22, "#d5e878"),
+        (0.32, "#9edb5d"),
+        (0.50, "#42aa49"),
+        (0.72, "#157a33"),
+        (1.0, "#00451f"),
     ],
     -0.5,
     1.0,
@@ -87,8 +85,8 @@ RED_EDGE_CMAP = LinearSegmentedColormap.from_list(
 )
 
 INDEX_RENDER_CONFIG = {
-    # Rampas agronomicas por indice. NDVI/SAVI/EVI usan una rampa tipo EO Browser:
-    # 0.1-0.2 ya se percibe verde suave, y >0.3 escala hacia verde intenso.
+    # Rampas agronomicas por indice. En cultivos/lotes con suelo expuesto,
+    # NDVI menor a 0.15 se mantiene como vigor bajo para no sobrerrepresentar verde.
     "ndvi": {"vmin": -0.5, "vmax": 1.0, "cmap": VEGETATION_CMAP},
     "savi": {"vmin": -0.5, "vmax": 1.0, "cmap": VEGETATION_CMAP},
     "evi": {"vmin": -0.5, "vmax": 1.0, "cmap": VEGETATION_CMAP},
@@ -188,7 +186,7 @@ def _guardar_png_indexado(
     if NDVI_PNG_SCALE > 1:
         img = img.resize(
             (img.width * NDVI_PNG_SCALE, img.height * NDVI_PNG_SCALE),
-            Image.Resampling.NEAREST,
+            Image.Resampling.BILINEAR,
         )
     img.save(output_png_path, dpi=(dpi, dpi), optimize=True, compress_level=9)
 

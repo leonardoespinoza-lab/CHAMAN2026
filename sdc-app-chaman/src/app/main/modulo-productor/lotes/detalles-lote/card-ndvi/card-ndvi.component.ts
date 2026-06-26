@@ -81,6 +81,8 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   private satelliteLoteLayer?: VectorLayer<VectorSource>;
   private satelliteRasterLayer?: ImageLayer<Static>;
   public satelliteRasterVisible = false;
+  private readonly ventanaPreferenciaSentinelDias = 6;
+  private seleccionManual = false;
 
   constructor(
     public helper: HelperService,
@@ -91,6 +93,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   ) {}
 
   public onSelect(reporte: IReporteNDVI): void {
+    this.seleccionManual = true;
     this.reporte = reporte;
     this.fecha = reporte.fechaDeLaImagen ? new Date(reporte.fechaDeLaImagen) : this.hoy;
     this.programarRenderMapaSatelital();
@@ -535,6 +538,31 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     }
   }
 
+  private reportePreferido(reportes: IReporteNDVI[]): IReporteNDVI {
+    const ordenados = [...reportes].sort((a, b) => this.fechaReporteMs(b) - this.fechaReporteMs(a));
+    const masNuevo = ordenados[0];
+    const limite = this.fechaReporteMs(masNuevo) - this.ventanaPreferenciaSentinelDias * 24 * 60 * 60 * 1000;
+    const candidatos = ordenados.filter((reporte) => this.fechaReporteMs(reporte) >= limite);
+    return (
+      candidatos.sort((a, b) => {
+        const prioridad = this.prioridadColeccion(a) - this.prioridadColeccion(b);
+        return prioridad || this.fechaReporteMs(b) - this.fechaReporteMs(a);
+      })[0] || masNuevo
+    );
+  }
+
+  private prioridadColeccion(reporte: IReporteNDVI): number {
+    const coleccion = (reporte.coleccion || '').toLowerCase();
+    if (coleccion.includes('sentinel')) return 0;
+    if (coleccion.includes('landsat')) return 1;
+    return 2;
+  }
+
+  private fechaReporteMs(reporte: IReporteNDVI): number {
+    const fecha = new Date(reporte.fechaDeLaImagen || reporte.fechaCreacion || 0).getTime();
+    return Number.isFinite(fecha) ? fecha : 0;
+  }
+
   private async listarNDVIs(): Promise<void> {
     const filter: IFilter<IReporteNDVI> = {
       idLote: this.lote?._id,
@@ -554,9 +582,10 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
       this.calcularFechaMinima();
       if (this.ndvis.length > 0) {
         const estaEnLista = this.reporte && this.ndvis.some((n) => n._id === this.reporte!._id);
-        if (!estaEnLista) {
-          this.reporte = this.ndvis[0];
-          this.fecha = new Date(this.ndvis[0].fechaCreacion!);
+        const preferido = this.reportePreferido(this.ndvis);
+        if (!estaEnLista || !this.seleccionManual) {
+          this.reporte = preferido;
+          this.fecha = new Date(preferido.fechaDeLaImagen || preferido.fechaCreacion || Date.now());
         }
       } else {
         this.reporte = undefined;
@@ -610,6 +639,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     if (!this.lote?._id || this.generandoSatelital) return;
 
     this.generandoSatelital = true;
+    this.seleccionManual = false;
     try {
       const response = await this.loteService.generarNdvi(this.lote._id);
       if (response.encolado) {

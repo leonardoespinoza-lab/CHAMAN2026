@@ -181,8 +181,13 @@ export class LotesService {
 
   async generarNdvi(id: string, permiso: IPermiso) {
     const lote = await this.getById(id, permiso);
-    const ultimaFechaImagen = await this.getUltimaFechaNdvi(id, permiso);
-    const encolado = await this.ndviQueue.enqueueLote(lote, ultimaFechaImagen);
+    const ultimoReporte = await this.getUltimoReporteNdviReferencia(id, permiso);
+    const ultimaFechaImagen = ultimoReporte?.fecha || null;
+    const encolado = await this.ndviQueue.enqueueLote(
+      lote,
+      ultimaFechaImagen,
+      ultimoReporte?.coleccion || null,
+    );
     return {
       encolado,
       ultimaFechaImagen,
@@ -241,13 +246,14 @@ export class LotesService {
 
     for (const lote of lotes.datos || []) {
       try {
-        const ultimaFechaImagen = await this.getUltimaFechaNdvi(
+        const ultimoReporte = await this.getUltimoReporteNdviReferencia(
           lote._id,
           permisoSistema,
         );
         const encolado = await this.ndviQueue.enqueueLote(
           lote,
-          ultimaFechaImagen,
+          ultimoReporte?.fecha || null,
+          ultimoReporte?.coleccion || null,
         );
         if (encolado) {
           encolados++;
@@ -1676,6 +1682,14 @@ export class LotesService {
     idLote: string,
     permiso: IPermiso,
   ): Promise<string | null> {
+    const ultimo = await this.getUltimoReporteNdviReferencia(idLote, permiso);
+    return ultimo?.fecha || null;
+  }
+
+  private async getUltimoReporteNdviReferencia(
+    idLote: string,
+    permiso: IPermiso,
+  ): Promise<{ fecha: string | null; coleccion: string | null } | null> {
     const query: IQueryParam = {
       filter: JSON.stringify({ idLote }),
       limit: 1,
@@ -1683,7 +1697,13 @@ export class LotesService {
     };
     const reportes = await this.reportesNDVIsService.get(query, permiso);
     const ultimo = reportes?.datos?.[0];
-    return this.toIsoString(ultimo?.fechaDeLaImagen || ultimo?.fechaCreacion);
+    if (!ultimo) {
+      return null;
+    }
+    return {
+      fecha: this.toIsoString(ultimo.fechaDeLaImagen || ultimo.fechaCreacion),
+      coleccion: ultimo.coleccion || null,
+    };
   }
 
   private toIsoString(value: unknown): string | null {

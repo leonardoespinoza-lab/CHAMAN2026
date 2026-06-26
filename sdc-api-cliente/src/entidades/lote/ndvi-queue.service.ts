@@ -54,7 +54,11 @@ export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
     this.redis?.disconnect();
   }
 
-  async enqueueLote(lote: ILote, sceneDatetime?: string | null): Promise<boolean> {
+  async enqueueLote(
+    lote: ILote,
+    sceneDatetime?: string | null,
+    sceneCollection?: string | null,
+  ): Promise<boolean> {
     if (!this.enabled || !this.redis) {
       return false;
     }
@@ -68,6 +72,7 @@ export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
     const task = {
       lote_id: lote._id,
       scene_datetime: sceneDatetime || null,
+      scene_collection: sceneCollection || null,
       polygon,
     };
     await this.redis.lpush(REDIS_NDVI_QUEUE, JSON.stringify(task));

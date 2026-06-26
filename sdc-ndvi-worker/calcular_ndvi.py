@@ -4,8 +4,11 @@ import numpy as np
 import rasterio
 from rasterio.warp import Resampling, reproject
 
+LANDSAT_C2_L2_SCALE = 0.0000275
+LANDSAT_C2_L2_OFFSET = -0.2
 
-def calcular_ndvi(b8_path, b4_path):
+
+def calcular_ndvi(b8_path, b4_path, collection=None):
     """
     Calcula el NDVI a partir de las bandas NIR y Red, compatible con Landsat y Sentinel-2.
     Args:
@@ -32,6 +35,9 @@ def calcular_ndvi(b8_path, b4_path):
         if red_src.nodata is not None:
             red[red == red_src.nodata] = np.nan
 
+        nir = _to_reflectance(nir_src, nir, collection)
+        red = _to_reflectance(red_src, red, collection)
+
         # Calcular NDVI con manejo seguro de divisiones
         np.seterr(divide="ignore", invalid="ignore")
         ndvi = (nir - red) / (nir + red)
@@ -50,21 +56,28 @@ def calcular_ndvi(b8_path, b4_path):
         return ndvi, profile
 
 
-def _apply_scale_offset(src, data):
+def _scale_offset(src, collection=None):
     scale = src.scales[0] if src.scales else 1
     offset = src.offsets[0] if src.offsets else 0
+    if collection == "landsat-c2-l2" and scale == 1 and offset == 0:
+        return LANDSAT_C2_L2_SCALE, LANDSAT_C2_L2_OFFSET
+    return scale, offset
+
+
+def _apply_scale_offset(src, data, collection=None):
+    scale, offset = _scale_offset(src, collection)
     if scale != 1 or offset != 0:
         return data * scale + offset
     return data
 
 
-def _read_band(path, reference=None, reflectance=True):
+def _read_band(path, reference=None, reflectance=True, collection=None):
     with rasterio.open(path) as src:
         data = src.read(1).astype("float32")
         if src.nodata is not None:
             data[data == src.nodata] = np.nan
         if reflectance:
-            data = _normalize_reflectance(_apply_scale_offset(src, data))
+            data = _to_reflectance(src, data, collection)
 
         if reference is not None:
             _, ref_transform, ref_crs, ref_shape = reference
@@ -96,6 +109,10 @@ def _safe_div(numerator, denominator):
     return np.clip(numerator / denominator, -1, 1)
 
 
+def _to_reflectance(src, data, collection=None):
+    return _normalize_reflectance(_apply_scale_offset(src, data, collection))
+
+
 def _normalize_reflectance(data):
     finite = data[np.isfinite(data)]
     if finite.size and np.nanpercentile(finite, 95) > 2:
@@ -110,7 +127,7 @@ def _mean_index(data):
     return round(float(np.nanmean(valid)), 4)
 
 
-def calcular_indices_y_rasters(band_paths):
+def calcular_indices_y_rasters(band_paths, collection=None):
     """
     Calcula indices satelitales promedio y sus rasters dentro del recorte del lote.
     Las bandas opcionales se reproyectan a la grilla NIR cuando tienen otra
@@ -131,14 +148,30 @@ def calcular_indices_y_rasters(band_paths):
         nir = nir_src.read(1).astype("float32")
         if nir_src.nodata is not None:
             nir[nir == nir_src.nodata] = np.nan
-        nir = _normalize_reflectance(_apply_scale_offset(nir_src, nir))
+        nir = _to_reflectance(nir_src, nir, collection)
         profile = nir_src.profile.copy()
 
-    red = _read_band(b4_path, reference)
-    blue = _read_band(band_paths["B02"], reference) if band_paths.get("B02") else None
-    green = _read_band(band_paths["B03"], reference) if band_paths.get("B03") else None
-    red_edge = _read_band(band_paths["B05"], reference) if band_paths.get("B05") else None
-    swir1 = _read_band(band_paths["B11"], reference) if band_paths.get("B11") else None
+    red = _read_band(b4_path, reference, collection=collection)
+    blue = (
+        _read_band(band_paths["B02"], reference, collection=collection)
+        if band_paths.get("B02")
+        else None
+    )
+    green = (
+        _read_band(band_paths["B03"], reference, collection=collection)
+        if band_paths.get("B03")
+        else None
+    )
+    red_edge = (
+        _read_band(band_paths["B05"], reference, collection=collection)
+        if band_paths.get("B05")
+        else None
+    )
+    swir1 = (
+        _read_band(band_paths["B11"], reference, collection=collection)
+        if band_paths.get("B11")
+        else None
+    )
 
     rasters = {
         "ndvi": _safe_div(nir - red, nir + red),
