@@ -2031,8 +2031,13 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   // Imágenes NDVI
+  private getSatelliteRasterUrl(reporte?: IReporteNDVI | null): string | undefined {
+    return reporte?.imagenes?.ndvi;
+  }
+
   private addNdviImage(reporte: IReporteNDVI) {
-    if (!reporte.ndviUrl || !reporte.metadataImagen?.geojson) return;
+    const rasterUrl = this.getSatelliteRasterUrl(reporte);
+    if (!rasterUrl || !reporte.metadataImagen?.geojson) return;
     const extent4326 = reporte.metadataImagen.geojson.coordinates?.[0].reduce(
       (acc, coord) => {
         const [x, y] = coord;
@@ -2048,7 +2053,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     const extent = transformExtent(extent4326, 'EPSG:4326', 'EPSG:3857');
     const imageLayer = new ImageLayer({
       source: new Static({
-        url: reporte.ndviUrl,
+        url: rasterUrl,
         imageExtent: extent,
         projection: 'EPSG:3857',
       }),
@@ -2104,7 +2109,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.clearImagesNdvi();
     await Promise.all(
       this.reportesNDVI.map(async (reporte) => {
-        if (reporte.lastReporte?.ndviUrl && reporte.lastReporte?.metadataImagen?.geojson?.coordinates) {
+        if (this.getSatelliteRasterUrl(reporte.lastReporte) && reporte.lastReporte?.metadataImagen?.geojson?.coordinates) {
           this.addNdviImage(reporte.lastReporte);
         }
       })
@@ -2301,7 +2306,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.reportesNDVI.map((reporte) => {
       // Agrego la imagen al mapa
-      if (reporte.lastReporte?.ndviUrl) {
+      if (this.getSatelliteRasterUrl(reporte.lastReporte)) {
         this.addNdviImage(reporte.lastReporte);
       }
       const lote = this.lotes.find((lote) => lote._id === reporte?.lastReporte?.idLote);

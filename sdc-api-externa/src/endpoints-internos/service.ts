@@ -21,6 +21,8 @@ export class EndpointsService {
       throw new NotFoundException('Lote no encontrado');
     }
 
+    const imagenes = (body?.imagenes ?? {}) as Record<string, string>;
+
     const reporteData: ICreateReporteNDVI = {
       idLote: body?.idLote,
       fechaDelReporte: body?.fecha,
@@ -30,10 +32,10 @@ export class EndpointsService {
       idProductor: lote?.idProductor,
       idEstablecimiento: lote?.idEstablecimiento,
       idQuimica: lote?.idQuimica,
-      ndviUrl: body?.ndvi_url,
+      ndviUrl: imagenes?.ndvi ?? body?.ndvi_url,
       ndviPromedio: body?.ndvi_promedio,
       indices: body?.indices,
-      imagenes: body?.imagenes,
+      imagenes,
       metadataImagen: body?.metadata,
       coleccion: body?.coleccion,
     };

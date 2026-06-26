@@ -77,7 +77,13 @@
             <strong>{{ capaActiva.label }}</strong>
             <span>{{ capaActiva.value }}</span>
           </div>
-          @if (leyendaCapaActiva.length) {
+          @if (!satelliteRasterVisible) {
+            <div class="satellite-raster-warning">
+              <strong>Raster no disponible</strong>
+              <span>Esta capa necesita una escena satelital procesada pixel a pixel.</span>
+            </div>
+          }
+          @if (satelliteRasterVisible && leyendaCapaActiva.length) {
             <div class="satellite-map-legend">
               @for (item of leyendaCapaActiva; track item.label) {
                 <span>

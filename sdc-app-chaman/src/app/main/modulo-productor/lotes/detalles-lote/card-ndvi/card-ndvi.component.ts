@@ -30,7 +30,7 @@ import { ListadosService } from '../../../../../auxiliares/servicios/listados';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { ENV } from '../../../../../environments/environment';
 import { NdviLegendComponent } from '../../ndvi-legend/ndvi-legend.component';
-import { colorForSatelliteIndex, legendForSatelliteIndex, SatelliteLegendItem } from './satellite-index-palettes';
+import { legendForSatelliteIndex, SatelliteLegendItem } from './satellite-index-palettes';
 
 interface NdviAnalisis {
   estado: string;
@@ -80,7 +80,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   private satelliteMap?: Map;
   private satelliteLoteLayer?: VectorLayer<VectorSource>;
   private satelliteRasterLayer?: ImageLayer<Static>;
-  private satelliteRasterVisible = false;
+  public satelliteRasterVisible = false;
 
   constructor(
     public helper: HelperService,
@@ -203,7 +203,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
         value: indexValue('ndvi') === 'Preparado' ? ndviValue : indexValue('ndvi'),
         detail: 'Vigor verde y cobertura activa del lote.',
         source: this.reporte?.coleccion || 'Sentinel-2 B08/B04',
-        image: imagenes?.ndvi || this.reporte?.ndviUrl,
+        image: imagenes?.ndvi,
         lectura: this.lecturaIndice('ndvi', indices?.ndvi ?? ndvi),
         status: this.reporte ? 'activo' : 'preparado',
       },
@@ -268,7 +268,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   public get imagenCapaActiva(): string | undefined {
-    return this.capaActiva?.image || this.reporte?.ndviUrl;
+    return this.capaActiva?.image;
   }
 
   public get valorCapaActiva(): number | undefined {
@@ -300,7 +300,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     const polygon = new Polygon([ring.map((coord) => fromLonLat(coord))]);
     const polygonExtent = polygon.getExtent();
     const imageExtent = this.extentImagenSatelital(polygonExtent);
-    this.satelliteRasterVisible = this.rasterSatelitalSeguro(polygon, imageExtent, polygonExtent);
+    this.satelliteRasterVisible = this.rasterSatelitalSeguro(imageExtent, polygonExtent);
 
     const feature = new Feature({ geometry: polygon });
     feature.setStyle(this.estiloMapaSatelital());
@@ -394,22 +394,12 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     return fallback;
   }
 
-  private rasterSatelitalSeguro(polygon: Polygon, extent: Extent, fallbackExtent: Extent): boolean {
+  private rasterSatelitalSeguro(extent: Extent, fallbackExtent: Extent): boolean {
     if (!this.imagenCapaActiva || extent.some((value) => !Number.isFinite(value))) {
       return false;
     }
 
-    if (!this.extentsCompatibles(extent, fallbackExtent)) {
-      return false;
-    }
-
-    const boundingArea = this.extentArea(fallbackExtent);
-    const polygonArea = Math.max(0, polygon.getArea());
-    const shapeRatio = boundingArea > 0 ? polygonArea / boundingArea : 0;
-
-    // La imagen satelital que recibimos esta georreferenciada por bbox. En lotes inclinados
-    // o irregulares se transforma en un rectangulo falso; ahi conviene pintar el poligono.
-    return shapeRatio >= 0.86;
+    return this.extentsCompatibles(extent, fallbackExtent);
   }
 
   private extentDesdeMetadata(invertirCoordenadas: boolean): Extent | null {
@@ -486,11 +476,9 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private estiloMapaSatelital(): Style[] {
-    const usaRaster = this.satelliteRasterVisible;
-    const fillColor = colorForSatelliteIndex(this.capaActiva.key, this.valorCapaActiva);
     return [
       new Style({
-        fill: new Fill({ color: usaRaster ? 'rgba(255, 255, 255, 0)' : fillColor }),
+        fill: new Fill({ color: 'rgba(255, 255, 255, 0)' }),
         stroke: new Stroke({ color: 'rgba(255, 255, 255, 0.72)', width: 2.6 }),
       }),
       new Style({
@@ -665,7 +653,6 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
         fechaDelReporte: fecha,
         fechaDeLaImagen: fecha,
         ndviPromedio: 0.62,
-        ndviUrl: this.crearImagenNdviLocal(),
         coleccion: 'Muestra local CHAMAN2026',
       });
       await this.listarNDVIs();
@@ -742,28 +729,6 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
       return 'Estable respecto al reporte anterior';
     }
     return delta > 0 ? `Sube ${this.formatear(delta)}` : `Baja ${this.formatear(Math.abs(delta))}`;
-  }
-
-  private crearImagenNdviLocal(): string {
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 220">
-        <defs>
-          <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stop-color="#efe6bc"/>
-            <stop offset="0.32" stop-color="#cadf7a"/>
-            <stop offset="0.66" stop-color="#65b85b"/>
-            <stop offset="1" stop-color="#1f7a3f"/>
-          </linearGradient>
-        </defs>
-        <rect width="260" height="220" rx="10" fill="#f5f7ef"/>
-        <path d="M38 30 L214 22 L232 188 L52 198 Z" fill="url(#g)"/>
-        <path d="M52 58 C82 38 96 88 128 70 C164 50 174 98 210 82" fill="none" stroke="#f7f2d0" stroke-width="18" opacity=".45"/>
-        <path d="M64 158 C96 135 132 170 164 144 C184 128 202 138 222 120" fill="none" stroke="#0e5d31" stroke-width="16" opacity=".28"/>
-        <text x="24" y="32" font-family="Arial" font-size="13" fill="#31405a">NDVI local</text>
-        <text x="24" y="52" font-family="Arial" font-size="22" font-weight="700" fill="#1f7a3f">0.62</text>
-      </svg>
-    `;
-    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
   }
 
   private suma(values: Array<number | null | undefined>): number {

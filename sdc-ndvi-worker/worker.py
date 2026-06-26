@@ -748,14 +748,6 @@ class NDVIWorker:
         lote_folder = Path(DOWNLOAD_FOLDER) / lote_id
         png_path = lote_folder / "ndvi_recorte.png"
 
-        # Exportar PNG
-        await self._run_in_executor(
-            exportar_png_desde_tif_con_polygon,
-            ndvi_data["ndvi_recorte"],
-            str(png_path),
-            polygon,
-        )
-
         # Obtener metadata
         metadata = await self._run_in_executor(
             obtener_metadata_png_con_polygon, ndvi_data["ndvi_recorte"], polygon
@@ -763,14 +755,23 @@ class NDVIWorker:
 
         imagenes = await self._export_index_images(lote_id, lote_folder, ndvi_data)
 
-        # Guardar PNG en almacenamiento local compartido con nginx
-        url_png = None
-        try:
-            nombre_archivo = f"{lote_id}-{int(time.time())}"
-            destino = f"{nombre_archivo}.png"
-            url_png = await subir_a_storage(str(png_path), destino)
-        except Exception as e:
-            logger.warning(f"⚠️ No se pudo guardar el PNG local: {e}")
+        # La imagen principal debe ser el raster NDVI por pixel. El PNG legado solo
+        # queda como fallback si por algun motivo no se genero la capa por indice.
+        url_png = imagenes.get("ndvi")
+        local_path = str(lote_folder / "ndvi_recorte.png")
+        if not url_png:
+            try:
+                await self._run_in_executor(
+                    exportar_png_desde_tif_con_polygon,
+                    ndvi_data["ndvi_recorte"],
+                    str(png_path),
+                    polygon,
+                )
+                nombre_archivo = f"{lote_id}-{int(time.time())}"
+                destino = f"{nombre_archivo}.png"
+                url_png = await subir_a_storage(str(png_path), destino)
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo guardar el PNG local de respaldo: {e}")
         return {
             "url_png": url_png,  # Puede ser None
             "ndvi_promedio": ndvi_data["ndvi_promedio"],
@@ -779,7 +780,7 @@ class NDVIWorker:
             "metadata": metadata,  # Metadata geográfica del NDVI recortado
             "fecha_imagen": ndvi_data["scene_datetime"].isoformat(),
             "coleccion": ndvi_data.get("collection", "desconocida"),
-            "local_path": str(png_path),  # Ruta local para desarrollo
+            "local_path": local_path,  # Ruta local para desarrollo
         }
 
     async def _export_index_images(

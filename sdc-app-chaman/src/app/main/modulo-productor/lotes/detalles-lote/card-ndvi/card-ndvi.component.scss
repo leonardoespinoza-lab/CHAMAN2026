@@ -271,6 +271,31 @@
   width: 0.7rem;
 }
 
+.satellite-raster-warning {
+  background: rgba(255, 248, 234, 0.94);
+  border: 1px solid rgba(232, 163, 58, 0.55);
+  border-radius: 8px;
+  bottom: 0.85rem;
+  box-shadow: 0 8px 18px rgba(8, 18, 32, 0.14);
+  color: #5d410d;
+  display: grid;
+  gap: 0.15rem;
+  line-height: 1.22;
+  max-width: min(330px, calc(100% - 2rem));
+  padding: 0.52rem 0.68rem;
+  position: absolute;
+  right: 0.85rem;
+  z-index: 7;
+}
+
+.satellite-raster-warning strong {
+  font-size: 0.86rem;
+}
+
+.satellite-raster-warning span {
+  font-size: 0.78rem;
+}
+
 .ndvi-analysis {
   background: rgba(255, 255, 255, 0.62);
   border: 1px solid #c7d4e2;

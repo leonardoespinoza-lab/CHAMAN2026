@@ -167,16 +167,21 @@ def _guardar_png_indexado(
     dpi: int,
     quality: int,
 ) -> None:
-    values = np.clip(values.astype("float32"), -1, 1)
+    raw_values = values.astype("float32", copy=False)
     config = INDEX_RENDER_CONFIG.get(indice, INDEX_RENDER_CONFIG["ndvi"])
     vmin = float(config["vmin"])
     vmax = float(config["vmax"])
-    normalized = np.full(values.shape, np.nan, dtype="float32")
-    valid = np.isfinite(values)
-    normalized[valid] = np.clip((values[valid] - vmin) / (vmax - vmin), 0, 1)
+    valid = np.isfinite(raw_values) & (raw_values >= -1.0) & (raw_values <= 1.0)
     cmap = config["cmap"]
-    rgba = (cmap(normalized) * 255).astype(np.uint8)
-    rgba[..., 3] = np.where(np.isnan(values), 0, 255)
+
+    rgba = np.zeros((raw_values.shape[0], raw_values.shape[1], 4), dtype=np.uint8)
+    if np.any(valid):
+        clipped = np.clip(raw_values[valid], -1.0, 1.0)
+        # Escala fija por indice: no normalizar por escena ni por promedio del lote.
+        normalized = np.clip((clipped - vmin) / (vmax - vmin), 0, 1)
+        colors = (cmap(normalized) * 255).astype(np.uint8)
+        rgba[valid, :3] = colors[:, :3]
+        rgba[valid, 3] = 242
 
     img = Image.fromarray(rgba, mode="RGBA")
     img = _agregar_contorno_transparente(img)
