@@ -302,16 +302,11 @@ export class EstablecimientosService {
   private async getClimaActualFieldClimate(
     est: IEstablecimiento,
   ): Promise<IClimaEstacionMeteorologica | null> {
-    if (
-      est.fuenteClimaPreferida !== 'FieldClimate' ||
-      !est.idEstacionMeteorologica
-    ) {
+    if (est.fuenteClimaPreferida !== 'FieldClimate') {
       return null;
     }
     try {
-      const central = await this.estacionsService.getById(
-        est.idEstacionMeteorologica,
-      );
+      const central = await this.getCentralFieldClimate(est);
       if (!central?.idExterno || !central.user || !central.pass) {
         return null;
       }
@@ -328,6 +323,26 @@ export class EstablecimientosService {
       );
       return null;
     }
+  }
+
+  private async getCentralFieldClimate(
+    est: IEstablecimiento,
+  ): Promise<IEstacion | null> {
+    if (est.idEstacionMeteorologica) {
+      return await this.estacionsService.getById(est.idEstacionMeteorologica);
+    }
+
+    const centrales = await this.estacionsService.getFiltered({
+      filter: JSON.stringify({
+        idEstablecimiento: est._id,
+        origen: 'FieldClimate',
+        'estado.activa': { $ne: false },
+      }),
+      limit: 1,
+      sort: '-estado.ultimoSync',
+    });
+
+    return centrales?.datos?.[0] || null;
   }
 
   private normalizarFieldClimateActual(
