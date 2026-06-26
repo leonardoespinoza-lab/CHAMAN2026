@@ -10,6 +10,10 @@ import {
 import { ICoordenadas, WeatherVariable } from 'modelos/src';
 
 const execFileAsync = promisify(execFile);
+const TRANSPARENT_TILE_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+  'base64',
+);
 
 export interface Token {
   access_token: string;
@@ -22,6 +26,8 @@ export interface Token {
 
 @Injectable()
 export class MeteoSourceRepository {
+  private missingKeyWarningShown = false;
+
   constructor(private axios: AxiosService) {}
 
   async getForecast(
@@ -70,7 +76,13 @@ export class MeteoSourceRepository {
     z: string,
   ): Promise<Buffer> {
     if (!METEO_SOURCE_KEY) {
-      throw new Error('METEO_SOURCE_KEY no configurada');
+      if (!this.missingKeyWarningShown) {
+        console.warn(
+          'METEO_SOURCE_KEY no configurada; se devuelven tiles transparentes',
+        );
+        this.missingKeyWarningShown = true;
+      }
+      return TRANSPARENT_TILE_PNG;
     }
 
     const tileUrl = `${API_METEO_SOURCE}/standard/map?tile_x=${x}&tile_y=${y}&tile_zoom=${z}&variable=${variable}&datetime=${datetime}&format=png&key=${METEO_SOURCE_KEY}`;
