@@ -256,6 +256,9 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
       .sort((a, b) => this.fechaToTime(a.fecha) - this.fechaToTime(b.fecha));
     const data = puntos.map((punto) => [this.fechaToTime(punto.fecha), punto.value] as [number, number]);
     return {
+      time: {
+        useUTC: false,
+      },
       chart: {
         reflow: true,
         spacing: [16, 18, 18, 12],
