@@ -268,7 +268,32 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   public get imagenCapaActiva(): string | undefined {
-    return this.capaActiva?.image;
+    return this.urlImagenSatelital(this.capaActiva?.image, this.capaActiva?.key);
+  }
+
+  private urlImagenSatelital(url?: string, key?: string): string | undefined {
+    if (!url || url.startsWith('data:')) {
+      return url;
+    }
+
+    const reporte = this.reporte as any;
+    const version = [
+      reporte?._id,
+      reporte?.fechaDeLaImagen,
+      reporte?.fechaDelReporte,
+      reporte?.fechaCreacion,
+      reporte?.updatedAt,
+      key,
+    ]
+      .filter(Boolean)
+      .join('-');
+
+    if (!version) {
+      return url;
+    }
+
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}v=${encodeURIComponent(version)}`;
   }
 
   public get valorCapaActiva(): number | undefined {

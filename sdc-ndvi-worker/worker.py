@@ -137,6 +137,31 @@ class NDVIWorker:
                 logger.error(f"Error en limpieza periódica: {e}")
             await asyncio.sleep(hours)
 
+    @staticmethod
+    def _safe_filename(value: str) -> str:
+        """Normaliza identificadores para nombres de archivo remotos."""
+        safe = "".join(
+            ch if ch.isalnum() or ch in "-_" else "-" for ch in str(value or "")
+        )
+        return safe.strip("-") or "lote"
+
+    @staticmethod
+    def _scene_key(ndvi_data: dict) -> str:
+        """Clave estable de escena para no reutilizar rasters de otra fecha."""
+        scene_datetime = ndvi_data.get("scene_datetime")
+        if hasattr(scene_datetime, "strftime"):
+            return scene_datetime.strftime("%Y%m%dT%H%M%S")
+        if scene_datetime:
+            return (
+                str(scene_datetime)
+                .replace(":", "")
+                .replace("-", "")
+                .replace(".", "")
+                .replace("+", "")
+                .replace(" ", "T")
+            )
+        return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+
     async def download_image(self, url: str, save_path: str) -> bool:
         """Versión mejorada con más logging y reintentos"""
         filename = Path(save_path).name
@@ -746,7 +771,9 @@ class NDVIWorker:
     ) -> dict:
         """Genera salidas (PNG, metadata)"""
         lote_folder = Path(DOWNLOAD_FOLDER) / lote_id
-        png_path = lote_folder / "ndvi_recorte.png"
+        scene_key = self._scene_key(ndvi_data)
+        safe_lote_id = self._safe_filename(lote_id)
+        png_path = lote_folder / f"ndvi_{scene_key}_recorte.png"
 
         # Obtener metadata
         metadata = await self._run_in_executor(
@@ -758,7 +785,7 @@ class NDVIWorker:
         # La imagen principal debe ser el raster NDVI por pixel. El PNG legado solo
         # queda como fallback si por algun motivo no se genero la capa por indice.
         url_png = imagenes.get("ndvi")
-        local_path = str(lote_folder / "ndvi_recorte.png")
+        local_path = str(png_path)
         if not url_png:
             try:
                 await self._run_in_executor(
@@ -767,7 +794,7 @@ class NDVIWorker:
                     str(png_path),
                     polygon,
                 )
-                nombre_archivo = f"{lote_id}-{int(time.time())}"
+                nombre_archivo = f"{safe_lote_id}-ndvi-{scene_key}-{int(time.time())}"
                 destino = f"{nombre_archivo}.png"
                 url_png = await subir_a_storage(str(png_path), destino)
             except Exception as e:
@@ -789,11 +816,13 @@ class NDVIWorker:
         """Genera y sube una imagen PNG por indice satelital disponible."""
         imagenes = {}
         timestamp = int(time.time())
+        scene_key = self._scene_key(ndvi_data)
+        safe_lote_id = self._safe_filename(lote_id)
         for indice, raster in ndvi_data.get("rasters", {}).items():
             if raster is None:
                 continue
             try:
-                output_path = lote_folder / f"{indice}_recorte.png"
+                output_path = lote_folder / f"{indice}_{scene_key}_recorte.png"
                 await self._run_in_executor(
                     exportar_png_desde_array,
                     raster,
@@ -801,7 +830,8 @@ class NDVIWorker:
                     indice,
                 )
                 imagenes[indice] = await subir_a_storage(
-                    str(output_path), f"{lote_id}-{indice}-{timestamp}.png"
+                    str(output_path),
+                    f"{safe_lote_id}-{indice}-{scene_key}-{timestamp}.png",
                 )
             except Exception as e:
                 logger.warning(f"No se pudo generar imagen {indice}: {e}")
