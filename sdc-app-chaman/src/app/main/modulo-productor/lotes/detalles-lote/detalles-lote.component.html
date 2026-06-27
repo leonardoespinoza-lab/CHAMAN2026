@@ -136,22 +136,6 @@
     @if (esPlantacion && helper.puedeVerModulo('FrioTermica')) {
       <app-card-frio-termico class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-frio-termico>
     }
-    @if (helper.puedeVerModulo('Clima')) {
-      <app-card-riesgos-agroclimaticos
-        class="service-panel"
-        [siembra]="siembra"
-        [lote]="lote"
-      ></app-card-riesgos-agroclimaticos>
-    }
-    @if (helper.puedeVerModulo('Enfermedades')) {
-      <app-card-enfermedades class="service-panel" [siembra]="siembra"></app-card-enfermedades>
-    }
-    @if (mostrarPrediccionMalezas && helper.puedeVerModulo('Malezas')) {
-      <app-card-malezas class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-malezas>
-    }
-    @if (helper.puedeVerModulo('Clima')) {
-      <app-card-viento-lote class="service-panel" [lote]="lote"></app-card-viento-lote>
-    }
     @if (helper.puedeVerModulo('NDVI') || (lote?.serialCamara && helper.puedeVerModulo('Camaras'))) {
       <div
         class="satellite-camera-row service-panel"
@@ -162,6 +146,34 @@
         }
         @if (lote?.serialCamara && helper.puedeVerModulo('Camaras')) {
           <app-card-camaras-lote [lote]="lote"></app-card-camaras-lote>
+        }
+      </div>
+    }
+    @if (
+      helper.puedeVerModulo('Clima') ||
+      helper.puedeVerModulo('Enfermedades') ||
+      (mostrarPrediccionMalezas && helper.puedeVerModulo('Malezas')) ||
+      helper.puedeVerModulo('Riego')
+    ) {
+      <div class="monitoring-section">
+        @if (helper.puedeVerModulo('Clima')) {
+          <app-card-riesgos-agroclimaticos
+            class="service-panel"
+            [siembra]="siembra"
+            [lote]="lote"
+          ></app-card-riesgos-agroclimaticos>
+        }
+        @if (helper.puedeVerModulo('Enfermedades')) {
+          <app-card-enfermedades class="service-panel" [siembra]="siembra"></app-card-enfermedades>
+        }
+        @if (mostrarPrediccionMalezas && helper.puedeVerModulo('Malezas')) {
+          <app-card-malezas class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-malezas>
+        }
+        @if (helper.puedeVerModulo('Riego')) {
+          <app-card-riego class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-riego>
+        }
+        @if (helper.puedeVerModulo('Clima')) {
+          <app-card-viento-lote class="service-panel" [lote]="lote"></app-card-viento-lote>
         }
       </div>
     }
@@ -177,9 +189,6 @@
           <app-card-ultima-fumigacion [lote]="lote" [siembra]="siembra"></app-card-ultima-fumigacion>
         }
       </div>
-    }
-    @if (helper.puedeVerModulo('Riego')) {
-      <app-card-riego class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-riego>
     }
     @if (helper.puedeVerModulo('HuellaHidrica')) {
       <app-card-huella-hidrica class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-huella-hidrica>

@@ -13,6 +13,9 @@ import { Vector as VectorSource, XYZ } from 'ol/source';
 import Static from 'ol/source/ImageStatic';
 import { Fill, Stroke, Style } from 'ol/style';
 import {
+  esCultivoPerenne,
+  getEtapasPerennesReferencia,
+  getNombreImplantacion,
   IFilter,
   IListado,
   ILote,
@@ -38,6 +41,7 @@ interface NdviAnalisis {
   resumen: string;
   recomendacion: string;
   contexto: string;
+  contextoAgronomico: string;
   tendencia: string;
   balance72: string;
 }
@@ -51,6 +55,20 @@ interface SatelliteIndicator {
   image?: string;
   lectura: string;
   status: 'activo' | 'preparado' | 'contexto';
+}
+
+type FaseSatelital = 'reposo' | 'implantacion' | 'vegetativo' | 'reproductivo' | 'madurez' | 'cosecha' | 'monitoreo';
+
+interface ContextoAgronomicoSatelital {
+  cultivo: string;
+  variedad?: string;
+  ciclo?: string;
+  etapa: string;
+  fase: FaseSatelital;
+  esPerenne: boolean;
+  diasDesdeImplantacion?: number;
+  implantacionLabel: 'Siembra' | 'Plantacion';
+  texto: string;
 }
 
 @Component({
@@ -105,34 +123,24 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     const et072 = this.suma(this.pronosticos.slice(0, 3).map((p) => this.numero(p.et0)));
     const balance = this.redondear(lluvia72 - et072);
     const balanceTxt = `${this.formatear(balance)} mm`;
+    const contextoAgronomico = this.contextoAgronomico;
 
     if (ndvi == null) {
       return {
         estado: 'Sin imagen activa',
         tono: 'warn',
         resumen: 'Todavia no hay una imagen NDVI seleccionada para interpretar.',
-        recomendacion: 'Genera una muestra local o espera el worker satelital para comparar vigor por ambiente.',
+        recomendacion: this.recomendacionSinImagen(contextoAgronomico),
         contexto: `Pronostico 72 h: lluvia ${this.formatear(lluvia72)} mm, ET0 ${this.formatear(et072)} mm.`,
+        contextoAgronomico: contextoAgronomico.texto,
         tendencia: 'Sin tendencia',
         balance72: balanceTxt,
       };
     }
 
-    const base = this.estadoNdvi(ndvi);
+    const base = this.estadoNdvi(ndvi, contextoAgronomico);
     const tendencia = this.tendenciaNdvi();
-    let recomendacion = 'Monitorear el lote y comparar la imagen con ambiente, suelo y manejo reciente.';
-
-    if (ndvi < 0.35 && balance < -2) {
-      recomendacion = 'Vigor bajo con balance seco: revisar humedad de suelo, riego y sectores con estres hidrico.';
-    } else if (ndvi < 0.35 && lluvia72 > 12) {
-      recomendacion = 'Vigor bajo con humedad alta: revisar anegamiento, enfermedades y zonas compactadas.';
-    } else if (ndvi < 0.55 && balance < -2) {
-      recomendacion = 'Vigor medio con demanda atmosferica: priorizar recorrida y verificar si hay deficit de agua.';
-    } else if (ndvi < 0.55 && lluvia72 > 12) {
-      recomendacion = 'Vigor medio con lluvias: revisar exceso de humedad y presion sanitaria por ambiente.';
-    } else if (ndvi >= 0.72) {
-      recomendacion = 'Vigor alto y cobertura buena: mantener monitoreo, especialmente si sube humedad o ET0.';
-    }
+    const recomendacion = this.recomendacionSatelital(ndvi, balance, lluvia72, contextoAgronomico);
 
     return {
       estado: base.estado,
@@ -140,6 +148,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
       resumen: base.resumen,
       recomendacion,
       contexto: `Pronostico 72 h: lluvia ${this.formatear(lluvia72)} mm, ET0 ${this.formatear(et072)} mm.`,
+      contextoAgronomico: contextoAgronomico.texto,
       tendencia,
       balance72: balanceTxt,
     };
@@ -204,7 +213,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
         key: 'ndvi',
         label: 'NDVI',
         value: indexValue('ndvi') === 'Preparado' ? ndviValue : indexValue('ndvi'),
-        detail: 'Vigor verde y cobertura activa del lote.',
+        detail: this.detalleIndice('ndvi'),
         source: this.reporte?.coleccion || 'Sentinel-2 B08/B04',
         image: imagenes?.ndvi,
         lectura: this.lecturaIndice('ndvi', indices?.ndvi ?? ndvi),
@@ -214,7 +223,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
         key: 'ndmi',
         label: 'NDMI',
         value: indexValue('ndmi'),
-        detail: 'Agua en canopia y estrés hídrico de la biomasa.',
+        detail: this.detalleIndice('ndmi'),
         source: 'Sentinel-2 B08/B11',
         image: imagenes?.ndmi,
         lectura: this.lecturaIndice('ndmi', indices?.ndmi),
@@ -224,7 +233,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
         key: 'ndwi',
         label: 'NDWI',
         value: indexValue('ndwi'),
-        detail: 'Humedad superficial y contraste agua/suelo.',
+        detail: this.detalleIndice('ndwi'),
         source: 'Sentinel-2 B03/B08',
         image: imagenes?.ndwi,
         lectura: this.lecturaIndice('ndwi', indices?.ndwi),
@@ -234,7 +243,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
         key: 'ndre',
         label: 'NDRE',
         value: indexValue('ndre'),
-        detail: 'Clorofila y respuesta a nitrógeno en etapas avanzadas.',
+        detail: this.detalleIndice('ndre'),
         source: 'Sentinel-2 B08/B05',
         image: imagenes?.ndre,
         lectura: this.lecturaIndice('ndre', indices?.ndre),
@@ -244,7 +253,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
         key: 'savi',
         label: 'SAVI',
         value: indexValue('savi'),
-        detail: 'Vigor corregido para suelo expuesto.',
+        detail: this.detalleIndice('savi'),
         source: 'Sentinel-2 multibanda',
         image: imagenes?.savi,
         lectura: this.lecturaIndice('savi', indices?.savi),
@@ -254,7 +263,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
         key: 'evi',
         label: 'EVI',
         value: indexValue('evi'),
-        detail: 'Vigor mejorado para alta biomasa.',
+        detail: this.detalleIndice('evi'),
         source: 'Sentinel-2 multibanda',
         image: imagenes?.evi,
         lectura: this.lecturaIndice('evi', indices?.evi),
@@ -458,45 +467,370 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
       .filter((coord): coord is [number, number] => !!coord);
   }
 
+  private get contextoAgronomico(): ContextoAgronomicoSatelital {
+    const semilla = this.siembra?.semilla;
+    const cultivo = this.canonicalCultivo(semilla?.cultivo);
+    const esPerenne = esCultivoPerenne(cultivo);
+    const etapa = this.etapaSatelital(cultivo, esPerenne);
+    const fase = this.faseSatelital(cultivo, etapa, esPerenne);
+    const diasDesdeImplantacion = this.diasDesdeImplantacion();
+    const implantacionLabel = getNombreImplantacion(cultivo);
+    const atributos = [cultivo];
+
+    if (semilla?.variedad) {
+      atributos.push(semilla.variedad);
+    }
+    if (semilla?.ciclo) {
+      atributos.push(`ciclo ${semilla.ciclo}`);
+    }
+    atributos.push(etapa);
+    atributos.push(esPerenne ? 'perenne' : 'anual');
+
+    return {
+      cultivo,
+      variedad: semilla?.variedad,
+      ciclo: semilla?.ciclo,
+      etapa,
+      fase,
+      esPerenne,
+      diasDesdeImplantacion,
+      implantacionLabel,
+      texto: atributos.filter(Boolean).join(' - '),
+    };
+  }
+
+  private etapaSatelital(cultivo: string, esPerenne: boolean): string {
+    if (esPerenne) {
+      return this.etapaSatelitalPerenne(cultivo);
+    }
+
+    const siembra = this.siembra;
+    if (siembra?.crono) {
+      const fecha = new Date().toISOString();
+      if (cultivo === 'Trigo')
+        return this.nombreEtapaTrigo(HelperService.getEtapaPorFechaTrigo(siembra, fecha, siembra.crono));
+      if (cultivo === 'Soja') return HelperService.getEtapaPorFechaSoja(siembra, fecha, siembra.crono) || 'Etapa soja';
+      if (cultivo === 'Maiz') return HelperService.getEtapaPorFechaMaiz(siembra, fecha, siembra.crono) || 'Etapa maiz';
+    }
+
+    const dias = this.diasDesdeImplantacion() ?? 0;
+    if (cultivo === 'Soja') {
+      if (dias < 10) return 'Implantacion';
+      if (dias < 45) return 'Vegetativo';
+      if (dias < 92) return 'Reproductivo';
+      if (dias < 130) return 'Llenado';
+      return 'Madurez';
+    }
+    if (cultivo === 'Maiz') {
+      if (dias < 10) return 'Implantacion';
+      if (dias < 65) return 'Vegetativo';
+      if (dias < 110) return 'Floracion y llenado';
+      return 'Madurez';
+    }
+    if (cultivo === 'Trigo') {
+      if (dias < 18) return 'Implantacion';
+      if (dias < 75) return 'Macollaje y encanazon';
+      if (dias < 105) return 'Espigazon y floracion';
+      return 'Llenado y madurez';
+    }
+    return dias > 0 ? `Dia ${dias} del ciclo` : 'Etapa no definida';
+  }
+
+  private nombreEtapaTrigo(etapa: unknown): string {
+    const nombres = [
+      'Siembra',
+      'Emergencia',
+      'Macollaje',
+      'Encanazon',
+      'Hoja bandera',
+      'Espigazon',
+      'Floracion',
+      'Llenado',
+    ];
+    if (typeof etapa === 'number') {
+      return nombres[Math.max(0, Math.min(nombres.length - 1, etapa))] || `Etapa ${etapa}`;
+    }
+    return typeof etapa === 'string' && etapa ? etapa : 'Etapa trigo';
+  }
+
+  private etapaSatelitalPerenne(cultivo: string): string {
+    const etapasSemilla = this.siembra?.semilla?.fenologiaReferencia?.etapas;
+    const etapas =
+      etapasSemilla && Object.keys(etapasSemilla).length
+        ? this.normalizarEtapasSatelitales(etapasSemilla)
+        : getEtapasPerennesReferencia(cultivo).map((etapa) => ({
+            nombre: etapa.nombre,
+            dia: etapa.dia,
+          }));
+
+    if (!etapas.length) {
+      return 'Campania perenne';
+    }
+
+    const inicio = this.inicioCampaniaPerenne();
+    const hoy = new Date();
+    const diaCampania = Math.max(0, Math.min(365, Math.floor((hoy.getTime() - inicio.getTime()) / 86400000)));
+    let actual = etapas[0].nombre;
+    etapas
+      .sort((a, b) => a.dia - b.dia)
+      .forEach((etapa) => {
+        if (diaCampania >= etapa.dia) {
+          actual = etapa.nombre;
+        }
+      });
+    return actual;
+  }
+
+  private normalizarEtapasSatelitales(etapas: Record<string, number | string>): Array<{ nombre: string; dia: number }> {
+    const entries = Object.entries(etapas)
+      .map(([nombre, value]) => ({
+        nombre: nombre.replace(/_/g, ' '),
+        dia: Number(String(value).replace(',', '.')),
+      }))
+      .filter((item) => Number.isFinite(item.dia));
+
+    if (!entries.length) return [];
+    const valores = entries.map((item) => item.dia);
+    const sonDiasCampania = valores.every((valor, index) => index === 0 || valor >= valores[index - 1]);
+    let acumulado = 0;
+
+    return entries.map((item, index) => {
+      if (sonDiasCampania) {
+        return { nombre: item.nombre, dia: Math.max(0, Math.min(365, Math.round(item.dia))) };
+      }
+      acumulado += index === 0 ? 0 : Math.max(0, item.dia);
+      return { nombre: item.nombre, dia: Math.max(0, Math.min(365, Math.round(acumulado))) };
+    });
+  }
+
+  private faseSatelital(cultivo: string, etapa: string, esPerenne: boolean): FaseSatelital {
+    const texto = this.normalizarTexto(`${cultivo} ${etapa}`);
+    if (texto.includes('dormancia') || texto.includes('reposo')) return 'reposo';
+    if (texto.includes('cosecha')) return 'cosecha';
+    if (texto.includes('madurez')) return 'madurez';
+    if (
+      texto.includes('floracion') ||
+      texto.includes('cuaje') ||
+      texto.includes('llenado') ||
+      texto.includes('espig') ||
+      texto.includes('reproduct') ||
+      texto.includes('poliniz') ||
+      texto.includes('envero') ||
+      texto.includes('gel') ||
+      texto.includes('masa') ||
+      texto.includes('fruto') ||
+      texto.includes('nuez')
+    ) {
+      return 'reproductivo';
+    }
+    if (
+      texto.includes('siembra') ||
+      texto.includes('implantacion') ||
+      texto.includes('emergencia') ||
+      texto.includes('nacimiento')
+    ) {
+      return 'implantacion';
+    }
+    if (esPerenne || texto.includes('vegetativo') || texto.includes('brotacion') || texto.includes('macoll')) {
+      return 'vegetativo';
+    }
+    return 'monitoreo';
+  }
+
+  private inicioCampaniaPerenne(): Date {
+    const hoy = new Date();
+    const year = hoy.getMonth() + 1 >= 7 ? hoy.getFullYear() : hoy.getFullYear() - 1;
+    return new Date(year, 6, 1);
+  }
+
+  private diasDesdeImplantacion(): number | undefined {
+    if (!this.siembra?.fechaSiembra) {
+      return undefined;
+    }
+    return Math.max(0, Math.floor((Date.now() - new Date(this.siembra.fechaSiembra).getTime()) / 86400000));
+  }
+
+  private canonicalCultivo(cultivo?: string): string {
+    const normalizado = this.normalizarTexto(cultivo || '');
+    const cultivos: Record<string, string> = {
+      trigo: 'Trigo',
+      soja: 'Soja',
+      maiz: 'Maiz',
+      papa: 'Papa',
+      vid: 'Vid',
+      peral: 'Peral',
+      pecan: 'Pecan',
+      manzano: 'Manzano',
+    };
+    return cultivos[normalizado] || cultivo || 'Cultivo';
+  }
+
+  private normalizarTexto(value: string): string {
+    return value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  }
+
+  private detalleIndice(key: SatelliteIndicator['key']): string {
+    const contexto = this.contextoAgronomico;
+    if (contexto.esPerenne && contexto.fase === 'reposo') {
+      const detalles: Record<SatelliteIndicator['key'], string> = {
+        ndvi: 'Actividad verde en reposo; lectura orientada a uniformidad, cobertura y malezas.',
+        ndmi: 'Humedad relativa con baja canopia; no usar sola como diagnostico hidrico del cultivo.',
+        ndwi: 'Contraste de superficie y agua/suelo durante baja actividad foliar.',
+        ndre: 'Clorofila limitada por reposo; esperar hoja funcional para interpretar nutricion.',
+        savi: 'Vigor corregido cuando domina suelo expuesto o cobertura parcial.',
+        evi: 'Biomasa activa limitada; util solo como tendencia entre escenas comparables.',
+      };
+      return detalles[key];
+    }
+
+    const detalles: Record<SatelliteIndicator['key'], string> = {
+      ndvi: `Vigor verde y cobertura activa para ${contexto.cultivo} en ${contexto.etapa}.`,
+      ndmi: `Agua en canopia activa y demanda del cultivo en ${contexto.etapa}.`,
+      ndwi: 'Humedad superficial y contraste agua/suelo del lote.',
+      ndre: 'Clorofila y hoja funcional, mas util cuando hay cobertura desarrollada.',
+      savi: 'Vigor corregido para suelo expuesto o cobertura parcial.',
+      evi: 'Vigor mejorado para biomasa alta o NDVI cercano a saturacion.',
+    };
+    return detalles[key];
+  }
+
+  private recomendacionSinImagen(contexto: ContextoAgronomicoSatelital): string {
+    return `Esperar una escena limpia para ${contexto.texto}. La lectura satelital se debe validar contra recorrida, clima reciente y manejo del lote.`;
+  }
+
+  private recomendacionSatelital(
+    ndvi: number,
+    balance: number,
+    lluvia72: number,
+    contexto: ContextoAgronomicoSatelital
+  ): string {
+    if (contexto.esPerenne && contexto.fase === 'reposo') {
+      return `${contexto.cultivo} en ${contexto.etapa}: usar la escena para uniformidad, cobertura de suelo y malezas. No diagnosticar estres hidrico del cultivo sin brotacion u hoja activa.`;
+    }
+
+    if (contexto.fase === 'implantacion') {
+      if (ndvi < 0.35) {
+        return `${contexto.cultivo} en ${contexto.etapa}: priorizar recorrida de emergencia, stand, fallas de implantacion y costras o sectores compactados.`;
+      }
+      return `${contexto.cultivo} en ${contexto.etapa}: seguir cierre de surco y uniformidad antes de tomar decisiones por vigor absoluto.`;
+    }
+
+    if (ndvi < 0.35 && balance < -2) {
+      return `${contexto.cultivo} en ${contexto.etapa}: vigor bajo con balance seco; confirmar con humedad de suelo, riego disponible y sintomas reales antes de accionar.`;
+    }
+    if (ndvi < 0.35 && lluvia72 > 12) {
+      return `${contexto.cultivo} en ${contexto.etapa}: vigor bajo con humedad alta; revisar anegamiento, sanidad y compactacion por ambientes.`;
+    }
+    if (ndvi < 0.55 && balance < -2) {
+      return `${contexto.cultivo} en ${contexto.etapa}: vigor medio con demanda atmosferica; recorrer sectores de menor vigor y cruzar con sensores/riego.`;
+    }
+    if (ndvi < 0.55 && lluvia72 > 12) {
+      return `${contexto.cultivo} en ${contexto.etapa}: vigor medio con lluvias; mirar sanidad, exceso de humedad y nutricion segun etapa.`;
+    }
+    if (contexto.fase === 'reproductivo') {
+      return `${contexto.cultivo} en ${contexto.etapa}: sostener monitoreo de canopia funcional, sanidad y agua disponible porque el impacto productivo es alto.`;
+    }
+    return `${contexto.cultivo} en ${contexto.etapa}: cobertura activa estable; monitorear cambios por ambiente y validar con recorrida.`;
+  }
+
+  private lecturaContextualIndice(
+    key: SatelliteIndicator['key'],
+    value: number,
+    contexto: ContextoAgronomicoSatelital,
+    sufijo: string
+  ): string | undefined {
+    if (contexto.esPerenne && contexto.fase === 'reposo') {
+      if (key === 'ndvi' || key === 'savi' || key === 'evi') {
+        return `${contexto.cultivo} en ${contexto.etapa}: baja actividad verde puede ser esperada. Usar para ver uniformidad, cobertura, malezas o cambios contra escenas previas.${sufijo}`;
+      }
+      if (key === 'ndmi') {
+        return `En reposo y con baja canopia, NDMI no diagnostica por si solo demanda de agua del ${contexto.cultivo}. Cruzar con humedad de suelo y estado de yemas.${sufijo}`;
+      }
+      if (key === 'ndwi') {
+        return `NDWI en ${contexto.etapa}: lectura mas ligada a superficie/suelo que a planta activa; revisar bajos, agua libre o cobertura.${sufijo}`;
+      }
+      if (key === 'ndre') {
+        return `NDRE tiene baja sensibilidad agronomica en reposo; retomar lectura de clorofila cuando haya hoja funcional.${sufijo}`;
+      }
+    }
+
+    if (contexto.fase === 'implantacion') {
+      if (key === 'ndvi' && value < 0.35) {
+        return `${contexto.cultivo} en ${contexto.etapa}: vigor bajo puede corresponder a cobertura inicial; revisar emergencia, stand y uniformidad.${sufijo}`;
+      }
+      if (key === 'ndmi' || key === 'ndwi') {
+        return `${contexto.cultivo} con cobertura inicial: interpretar ${key.toUpperCase()} con cautela porque pesa suelo expuesto. Confirmar con recorrida y humedad medida.${sufijo}`;
+      }
+    }
+
+    if (contexto.esPerenne && key === 'ndvi' && value < 0.35) {
+      return `${contexto.cultivo} en ${contexto.etapa}: vigor bajo; revisar brotacion/hoja activa, dano por helada, sanidad y agua disponible por sectores.${sufijo}`;
+    }
+    if (contexto.esPerenne && key === 'ndmi' && value < -0.05) {
+      return `${contexto.cultivo} en ${contexto.etapa}: senal seca de canopia; confirmar con suelo, riego, carga y sintomas antes de concluir estres hidrico.${sufijo}`;
+    }
+    if (contexto.fase === 'reproductivo' && (key === 'ndvi' || key === 'ndre') && value < 0.45) {
+      return `${contexto.cultivo} en ${contexto.etapa}: senal baja en etapa sensible; priorizar recorrida sanitaria, agua disponible y nutricion.${sufijo}`;
+    }
+
+    return undefined;
+  }
+
   private lecturaIndice(key: SatelliteIndicator['key'], value?: number): string {
     if (value == null) {
       return 'La capa queda preparada y se completa cuando el worker procese una escena con las bandas necesarias.';
     }
 
+    const contexto = this.contextoAgronomico;
     const tendencia = this.tendenciaIndice(key);
     const sufijo = tendencia ? ` ${tendencia}` : '';
+    const contextual = this.lecturaContextualIndice(key, value, contexto, sufijo);
+    if (contextual) {
+      return contextual;
+    }
 
     if (key === 'ndvi') {
-      if (value < 0.35) return `Vigor bajo: revisar implantación, suelo desnudo, estrés hídrico o presión sanitaria.${sufijo}`;
-      if (value < 0.55) return `Vigor medio: conviene recorrer ambientes y comparar con lluvia, riego y fertilización.${sufijo}`;
+      if (value < 0.35)
+        return `Vigor bajo: revisar cobertura, suelo expuesto, sanidad y agua disponible segun etapa.${sufijo}`;
+      if (value < 0.55)
+        return `Vigor medio: conviene recorrer ambientes y comparar con lluvia, riego y fertilizacion.${sufijo}`;
       return `Cobertura activa buena: sostener monitoreo y buscar cambios por ambiente.${sufijo}`;
     }
 
     if (key === 'ndmi') {
-      if (value < -0.05) return `Señal seca en canopia: puede indicar demanda de agua, estrés o baja cobertura.${sufijo}`;
-      if (value > 0.25) return `Canopia con buena humedad: vigilar enfermedades si coincide con HR alta y lluvias.${sufijo}`;
-      return `Humedad de canopia intermedia: usar junto con riego, NDVI y pronóstico.${sufijo}`;
+      if (value < -0.05)
+        return `Senal seca en canopia: confirmar con humedad de suelo, cobertura y estado del cultivo.${sufijo}`;
+      if (value > 0.25)
+        return `Canopia con buena humedad: vigilar enfermedades si coincide con HR alta y lluvias.${sufijo}`;
+      return `Humedad de canopia intermedia: usar junto con riego, NDVI y pronostico.${sufijo}`;
     }
 
     if (key === 'ndwi') {
-      if (value < -0.15) return `Superficie seca o suelo expuesto: revisar balance hídrico y sectores de bajo vigor.${sufijo}`;
-      if (value > 0.1) return `Señal húmeda: revisar anegamiento, bajos o exceso de agua reciente.${sufijo}`;
+      if (value < -0.15)
+        return `Superficie seca o suelo expuesto: revisar balance de agua y sectores de bajo vigor.${sufijo}`;
+      if (value > 0.1) return `Senal humeda: revisar anegamiento, bajos o exceso de agua reciente.${sufijo}`;
       return `Humedad superficial moderada: comparar con lluvia acumulada y textura de suelo.${sufijo}`;
     }
 
     if (key === 'ndre') {
-      if (value < 0.12) return `Baja señal de clorofila: revisar nitrógeno, estado fenológico y sanidad foliar.${sufijo}`;
-      if (value > 0.32) return `Buena respuesta de clorofila: útil para seguir nutrición y hoja funcional.${sufijo}`;
+      if (value < 0.12)
+        return `Baja senal de clorofila: revisar nutricion, estado fenologico y sanidad foliar.${sufijo}`;
+      if (value > 0.32) return `Buena respuesta de clorofila: util para seguir nutricion y hoja funcional.${sufijo}`;
       return `Clorofila intermedia: mirar tendencia antes de recomendar correcciones.${sufijo}`;
     }
 
     if (key === 'savi') {
-      if (value < 0.25) return `Vigor ajustado bajo con peso de suelo expuesto: revisar nacimiento y cobertura.${sufijo}`;
+      if (value < 0.25)
+        return `Vigor ajustado bajo con peso de suelo expuesto: revisar nacimiento y cobertura.${sufijo}`;
       return `Vigor ajustado estable: buena capa para comparar lotes con cobertura parcial.${sufijo}`;
     }
 
-    if (value < 0.25) return `EVI bajo: posible baja biomasa o estrés; confirmar con NDVI y recorrida.${sufijo}`;
-    return `EVI acompaña biomasa activa; útil cuando NDVI empieza a saturarse en coberturas altas.${sufijo}`;
+    if (value < 0.25) return `EVI bajo: posible baja biomasa; confirmar con NDVI, etapa y recorrida.${sufijo}`;
+    return `EVI acompana biomasa activa; util cuando NDVI empieza a saturarse en coberturas altas.${sufijo}`;
   }
 
   private tendenciaIndice(key: SatelliteIndicator['key']): string {
@@ -655,10 +989,37 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private get pronosticos(): IPronosticoEstacionMeteorologica[] {
-    return ((this.lote as any)?.establecimiento?.prediccionClimatica?.pronosticos || []) as IPronosticoEstacionMeteorologica[];
+    return ((this.lote as any)?.establecimiento?.prediccionClimatica?.pronosticos ||
+      []) as IPronosticoEstacionMeteorologica[];
   }
 
-  private estadoNdvi(ndvi: number): Pick<NdviAnalisis, 'estado' | 'tono' | 'resumen'> {
+  private estadoNdvi(
+    ndvi: number,
+    contexto: ContextoAgronomicoSatelital
+  ): Pick<NdviAnalisis, 'estado' | 'tono' | 'resumen'> {
+    if (contexto.esPerenne && contexto.fase === 'reposo') {
+      if (ndvi < 0.35) {
+        return {
+          estado: 'Reposo vegetativo',
+          tono: 'ok',
+          resumen: `${contexto.cultivo} esta en ${contexto.etapa}; una baja senal verde puede ser fenologicamente esperable.`,
+        };
+      }
+      return {
+        estado: 'Actividad verde en reposo',
+        tono: 'warn',
+        resumen: `Hay senal verde aun con ${contexto.cultivo} en ${contexto.etapa}; revisar cobertura, malezas o diferencias por ambiente.`,
+      };
+    }
+
+    if (contexto.fase === 'implantacion' && ndvi < 0.35) {
+      return {
+        estado: 'Cobertura inicial',
+        tono: 'warn',
+        resumen: `${contexto.cultivo} esta en ${contexto.etapa}; interpretar vigor absoluto con foco en nacimiento y uniformidad.`,
+      };
+    }
+
     if (ndvi >= 0.72) {
       return {
         estado: 'Vigor alto',

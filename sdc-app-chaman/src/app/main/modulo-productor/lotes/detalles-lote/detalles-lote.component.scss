@@ -261,6 +261,17 @@
   width: 100%;
 }
 
+.monitoring-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+  margin-top: clamp(1.25rem, 4vh, 2.75rem);
+}
+
+.monitoring-section:empty {
+  display: none;
+}
+
 .satellite-camera-row {
   align-items: start;
   display: grid !important;
