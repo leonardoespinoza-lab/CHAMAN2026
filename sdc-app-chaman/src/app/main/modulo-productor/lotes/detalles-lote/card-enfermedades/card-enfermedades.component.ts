@@ -27,6 +27,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   @Input() public siembra?: ISiembra;
   public verDrawerGraficoEnfermedades = false;
   public actualizandoPrediccion = false;
+  private readonly cultivosConMotorSanitario = new Set(['Trigo', 'Soja', 'Maiz']);
 
   constructor(
     public helper: HelperService,
@@ -41,9 +42,18 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     return !!this.siembra?.ultimaPrediccion?.enfermedades?.length;
   }
 
+  public get tieneMotorSanitario(): boolean {
+    const cultivo = this.siembra?.semilla?.cultivo;
+    return !!cultivo && this.cultivosConMotorSanitario.has(cultivo);
+  }
+
+  public get etiquetaBotonActualizacion(): string {
+    return this.tieneMotorSanitario ? 'Actualizar riesgo' : 'Motor en calibracion';
+  }
+
   public async actualizarPrediccion(event?: Event): Promise<void> {
     event?.stopPropagation();
-    if (!this.siembra?._id || this.actualizandoPrediccion) return;
+    if (!this.siembra?._id || this.actualizandoPrediccion || !this.tieneMotorSanitario) return;
 
     this.actualizandoPrediccion = true;
     try {
@@ -65,17 +75,20 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     return this.enfermedadesEsperadas().map((enfermedad) => {
       const prediccion = this.prediccionPorEnfermedad(enfermedad);
       const resultado = prediccion?.resultado ?? 0;
+      const enVentanaFenologica = this.estaEnVentanaFenologica(enfermedad);
       return {
         enfermedad,
         prediccion,
         resultado,
+        enVentanaFenologica,
         fill: this.llenadoRiesgo(resultado, !!prediccion),
         severity: this.severidad(resultado),
         periodo: this.periodoSusceptible(enfermedad),
         sensibilidad: this.sensibilidadVarietal(enfermedad),
-        variables: this.resumenVariables(prediccion),
-        estadoCalculo: this.estadoCalculo(prediccion),
+        variables: this.resumenVariables(prediccion, enfermedad),
+        estadoCalculo: this.estadoCalculo(prediccion, enfermedad),
         prescripcion: this.prescripcionPorEnfermedad(enfermedad),
+        mostrarPrescripcion: this.tieneMotorSanitario && enVentanaFenologica,
       };
     });
   }
@@ -83,7 +96,16 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   public get resumenGeneral(): string {
     const cultivo = this.siembra?.semilla?.cultivo || 'cultivo';
     const variedad = this.siembra?.semilla?.variedad || 'la variedad';
+    if (!this.tieneMotorSanitario) {
+      return `${variedad}: motor sanitario pendiente de calibracion para ${cultivo}.`;
+    }
     if (!this.tienePredicciones) {
+      const tieneVentanaActiva = this.enfermedadesEsperadas().some((enfermedad) =>
+        this.estaEnVentanaFenologica(enfermedad),
+      );
+      if (!tieneVentanaActiva) {
+        return `${variedad}: fuera de ventana sanitaria actual para ${cultivo}.`;
+      }
       return `${variedad}: monitoreo activo para ${cultivo}.`;
     }
     const mayor = [...this.enfermedadInsights].sort((a, b) => b.resultado - a.resultado)[0];
@@ -93,7 +115,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   private enfermedadesEsperadas(): TEnfermedad[] {
     const cultivo = this.siembra?.semilla?.cultivo;
     if (cultivo === 'Trigo') {
-      return ['Mancha Amarilla', 'Roya de la Hoja', 'Mancha de la Hoja', 'Fusarium de la Espiga'];
+      return ['Mancha Amarilla', 'Roya de la Hoja', 'Roya Anaranjada', 'Mancha de la Hoja', 'Fusarium de la Espiga'];
     }
     if (cultivo === 'Soja') {
       return ['Fin de Ciclo'];
@@ -134,7 +156,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     if (resultado > 20) {
       return 'high';
     }
-    if (resultado > 15) {
+    if (resultado >= 15) {
       return 'medium';
     }
     return 'low';
@@ -183,7 +205,47 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     return periodos[enfermedad] || 'Periodo susceptible configurable por cultivo y zona.';
   }
 
-  private resumenVariables(prediccion?: IPrediccionEnfermedad): string {
+  private estaEnVentanaFenologica(enfermedad: TEnfermedad): boolean {
+    if (!this.tieneMotorSanitario) {
+      return false;
+    }
+    const cultivo = this.siembra?.semilla?.cultivo;
+    if (cultivo === 'Trigo') {
+      const etapa = this.etapaTrigoActual();
+      if (etapa == null) return true;
+      if (enfermedad === 'Mancha Amarilla' || enfermedad === 'Mancha de la Hoja') {
+        return etapa >= 1 && etapa <= 4;
+      }
+      if (enfermedad === 'Roya de la Hoja' || enfermedad === 'Roya Anaranjada') {
+        return etapa >= 2 && etapa <= 6;
+      }
+      if (enfermedad === 'Fusarium de la Espiga') {
+        return etapa >= 4 && etapa <= 6;
+      }
+    }
+    if (cultivo === 'Soja') {
+      const etapa = this.etapaSojaActual();
+      if (!etapa) return true;
+      return enfermedad === 'Fin de Ciclo' && (etapa === 'R3' || etapa === 'R5');
+    }
+    if (cultivo === 'Maiz') {
+      const etapa = this.etapaMaizActual();
+      if (etapa == null) return true;
+      return enfermedad === 'Roya del Maiz' && (etapa === 1 || etapa === 2);
+    }
+    return false;
+  }
+
+  private resumenVariables(prediccion?: IPrediccionEnfermedad, enfermedad?: TEnfermedad): string {
+    if (!this.tieneMotorSanitario) {
+      return 'Sin calculo sanitario calibrado para este cultivo.';
+    }
+    if (!prediccion && enfermedad && !this.estaEnVentanaFenologica(enfermedad)) {
+      return 'Fuera de ventana fenologica del cultivo.';
+    }
+    if (prediccion && !prediccion.variables) {
+      return 'Riesgo calculado con clima diario y sensibilidad varietal.';
+    }
     if (!prediccion?.variables) {
       return 'Sin calculo reciente. Actualizar para cruzar fenologia, humedad, lluvia y temperatura.';
     }
@@ -198,6 +260,10 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       PtAc7: 'lluvia > 7',
       DPr7: 'dias > 7',
       Lt7: 'persistencia',
+      Tmin: 'Tmin',
+      Tmax: 'Tmax',
+      viento: 'viento',
+      HR: 'HR',
     };
     return Object.entries(prediccion.variables)
       .filter(([, value]) => value !== undefined && value !== null)
@@ -206,11 +272,75 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       .join(' - ');
   }
 
-  private estadoCalculo(prediccion?: IPrediccionEnfermedad): string {
+  private estadoCalculo(prediccion?: IPrediccionEnfermedad, enfermedad?: TEnfermedad): string {
+    if (!this.tieneMotorSanitario) {
+      return 'motor en calibracion';
+    }
+    if (!prediccion && enfermedad && !this.estaEnVentanaFenologica(enfermedad)) {
+      return 'fuera de ventana fenologica';
+    }
     if (!prediccion) {
       return 'pendiente de actualizar';
     }
     return 'riesgo calculado';
+  }
+
+  private etapaTrigoActual(): number | undefined {
+    const etapas = this.siembra?.crono?.etapas as Record<string, number> | undefined;
+    const dias = this.diasDesdeSiembra();
+    if (!etapas || dias == null) return undefined;
+    const etapa1 = etapas['R0_R1'] || 0;
+    const etapa2 = etapa1 + (etapas['R1_R2'] || 0);
+    const etapa3 = etapa2 + (etapas['R2_R3'] || 0);
+    const etapa4 = etapa3 + (etapas['R3_R4'] || 0);
+    const etapa5 = etapa4 + (etapas['R4_R5'] || 0);
+    const etapa6 = etapa5 + (etapas['R5_R6'] || 0);
+    const etapa7 = etapa6 + (etapas['R6_R7'] || 0);
+    if (dias < etapa1) return 0;
+    if (dias < etapa2) return 1;
+    if (dias < etapa3) return 2;
+    if (dias < etapa4) return 3;
+    if (dias < etapa5) return 4;
+    if (dias < etapa6) return 5;
+    if (dias < etapa7) return 6;
+    return 7;
+  }
+
+  private etapaSojaActual(): 'Siembra' | 'Emergencia' | 'R1' | 'R3' | 'R5' | 'R7' | undefined {
+    const etapas = this.siembra?.crono?.etapas as Record<string, number> | undefined;
+    const dias = this.diasDesdeSiembra();
+    if (!etapas || dias == null) return undefined;
+    const emergencia = etapas['siembra_emergencia'] || 0;
+    const r1 = emergencia + (etapas['emergencia_R1'] || 0);
+    const r3 = r1 + (etapas['R1_R3'] || 0);
+    const r5 = r3 + (etapas['R3_R5'] || 0);
+    const r7 = r5 + (etapas['R5_R7'] || 0);
+    if (dias < emergencia) return 'Siembra';
+    if (dias < r1) return 'Emergencia';
+    if (dias < r3) return 'R1';
+    if (dias < r5) return 'R3';
+    if (dias < r7) return 'R5';
+    return 'R7';
+  }
+
+  private etapaMaizActual(): number | undefined {
+    const etapas = this.siembra?.crono?.etapas as Record<string, number> | undefined;
+    const dias = this.diasDesdeSiembra();
+    if (!etapas || dias == null) return undefined;
+    const emergencia = etapas['siembra_emergencia'] || 0;
+    const floracion = emergencia + (etapas['emergencia_floracion'] || 0);
+    const madurez = floracion + (etapas['floracion_madurez'] || 0);
+    if (dias < emergencia) return 0;
+    if (dias < floracion) return 1;
+    if (dias < madurez) return 2;
+    return 3;
+  }
+
+  private diasDesdeSiembra(): number | undefined {
+    if (!this.siembra?.fechaSiembra) return undefined;
+    const fechaSiembra = new Date(this.siembra.fechaSiembra);
+    const hoy = new Date();
+    return Math.floor((hoy.getTime() - fechaSiembra.getTime()) / (1000 * 60 * 60 * 24));
   }
 
   private prescripcionPorEnfermedad(enfermedad: TEnfermedad): PrescripcionEnfermedad {

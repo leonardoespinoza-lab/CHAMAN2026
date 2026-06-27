@@ -271,6 +271,15 @@
   padding: 0.4rem;
 }
 
+.calibration-note {
+  background: var(--p-surface-50);
+  border: 1px solid #d4deea;
+  border-radius: 7px;
+  color: var(--p-text-color) !important;
+  margin-top: auto !important;
+  padding: 0.62rem 0.7rem;
+}
+
 @media (max-width: 560px) {
   .disease-list {
     grid-template-columns: 1fr;

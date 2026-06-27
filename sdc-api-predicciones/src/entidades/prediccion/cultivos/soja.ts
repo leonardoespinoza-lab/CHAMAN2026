@@ -4,6 +4,7 @@ import {
   ICrono,
   IEtapasSoja,
   IPrediccion,
+  IPrediccionEnfermedad,
   IQueryParam,
   ISiembra,
 } from 'modelos/src';
@@ -96,7 +97,6 @@ export class PrediccionSojaService {
           );
         }
 
-        predAnterior = await this.getUltimaPrediccion(siembra._id);
         const etapa = this.getEtapaPorFecha(siembra, crono, fecha);
 
         const distancia = clima[0].distancia;
@@ -106,11 +106,6 @@ export class PrediccionSojaService {
         const Tmax = HelperService.getTMax(clima, fecha.toISOString());
         const Tavg = HelperService.getTAvg(clima, fecha.toISOString());
         const precip = HelperService.getPrecip(clima, fecha.toISOString());
-
-        const fechaAnt = new Date(fecha);
-        fechaAnt.setUTCDate(fechaAnt.getUTCDate() - 1);
-        // const hrAnterior = HelperService.getHR(clima, fechaAnt);
-        // const precipAnterior = HelperService.getPrecip(clima, fechaAnt);
 
         const prediccion: ICreatePrediccion = {
           idSiembra: siembra._id,
@@ -133,26 +128,22 @@ export class PrediccionSojaService {
           },
         };
 
-        // Hace las predicciones por enfermedades
-        switch (etapa) {
-          case 'R3':
-          case 'R5': {
-            const predicciones = await Promise.all([
+        // Enfermedades de fin de ciclo: ventana reproductiva R3-R7.
+        const predicciones: IPrediccionEnfermedad[] = [];
+        if (this.estaEnVentanaFinDeCiclo(etapa)) {
+          predicciones.push(
+            ...(await Promise.all([
               this.finCicloSojaService.predecir(
                 siembra.semilla,
                 { precip },
                 predAnterior,
                 predecir,
               ),
-            ]);
-            prediccion.enfermedades.push(...predicciones);
-            break;
-          }
-
-          default: {
-            break;
-          }
+            ])),
+          );
         }
+        prediccion.enfermedades.push(...predicciones);
+
         // Crea la prediccion en la base de datos
         if (prediccion.enfermedades.length) {
           try {
@@ -160,7 +151,8 @@ export class PrediccionSojaService {
               prediccion,
             );
             prediccionesCreadas.push(prediccionCreada);
-            ultimaPrediccion = JSON.parse(JSON.stringify(prediccionCreada));
+            predAnterior = JSON.parse(JSON.stringify(prediccionCreada));
+            ultimaPrediccion = predAnterior;
           } catch (error) {
             Logger.error(error);
           }
@@ -173,6 +165,12 @@ export class PrediccionSojaService {
       }
     }
     return prediccionesCreadas;
+  }
+
+  private estaEnVentanaFinDeCiclo(
+    etapa: 'Siembra' | 'Emergencia' | 'R1' | 'R3' | 'R5' | 'R7',
+  ): boolean {
+    return etapa === 'R3' || etapa === 'R5';
   }
 
   private async getUltimaPrediccion(
@@ -262,7 +260,7 @@ export class PrediccionSojaService {
    * @returns Fecha desde que se debe hacer la prediccion,
    * en caso de que exista una prediccion anterior se devuelve
    * la fecha de la prediccion anterior,
-   * sino... la fecha de la etapa solicitadas +- el offset
+   * sino... la fecha de la etapa solicitada +- el offset
    */
   private getFechaDesde(
     siembra: ISiembra,
@@ -277,12 +275,6 @@ export class PrediccionSojaService {
       fecha.setUTCDate(fecha.getUTCDate() + 1);
       return fecha;
     }
-    // 45 dias despues de la etapa 1
-    // const fecha = this.getFechaInicioEtapa(siembra, crono, 1);
-    // fecha.setUTCHours(3, 0, 0, 0);
-    // fecha.setUTCDate(fecha.getUTCDate() + 45);
-
-    // 10 dian antes de la etapa 2
     const fecha = this.getFechaInicioEtapa(siembra, crono, etapaInicial);
     fecha.setUTCHours(3, 0, 0, 0);
     fecha.setUTCDate(fecha.getUTCDate() + offsetDias);

@@ -39,7 +39,12 @@ export class RoyaAnaranjadaService {
     const prediccion: IPrediccionEnfermedad = {
       enfermedad: 'Roya Anaranjada',
       resultado: predecir ? +resultado.toFixed(2) : 0,
-      variables: null,
+      variables: {
+        Tmin: clima.Tmin,
+        Tmax: clima.Tmax,
+        viento: clima.viento,
+        HR: clima.hr,
+      },
     };
     return prediccion;
   }

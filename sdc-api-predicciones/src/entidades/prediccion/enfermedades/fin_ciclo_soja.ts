@@ -46,7 +46,12 @@ export class FinCicloSojaService {
       variables.Lt7 = variables.DPr7 * variables.PtAc7;
     }
 
-    let resultado = (8 * variables.Lt7) / 600;
+    const resistencia = semilla.resistencia?.find(
+      (r) => r.enfermedad === 'Fin de Ciclo',
+    );
+
+    let resultado =
+      ((8 * variables.Lt7) / 600) * (resistencia?.multiplicador || 1);
     if (resultado < 0) {
       resultado = 0;
     }

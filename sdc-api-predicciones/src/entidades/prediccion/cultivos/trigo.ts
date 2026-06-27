@@ -4,6 +4,7 @@ import {
   ICrono,
   IEtapasTrigo,
   IPrediccion,
+  IPrediccionEnfermedad,
   IQueryParam,
   ISiembra,
 } from 'modelos/src';
@@ -102,7 +103,6 @@ export class PrediccionTrigoService {
           );
         }
 
-        predAnterior = await this.getUltimaPrediccion(siembra._id);
         const etapa = this.getEtapaPorFecha(siembra, crono, fecha);
 
         const distancia = clima[0].distancia;
@@ -143,12 +143,12 @@ export class PrediccionTrigoService {
           },
         };
 
-        // Hace las predicciones por enfermedades
-        switch (etapa) {
-          case 1:
-          case 2:
-          case 3: {
-            const predicciones = await Promise.all([
+        // Hace las predicciones por enfermedad segun ventana fenologica.
+        const predicciones: (IPrediccionEnfermedad | undefined)[] = [];
+
+        if (this.estaEnVentanaManchas(etapa)) {
+          predicciones.push(
+            ...(await Promise.all([
               this.manchaDeLaHojaService.predecir(
                 siembra.semilla,
                 { precip, hr },
@@ -161,6 +161,13 @@ export class PrediccionTrigoService {
                 predAnterior,
                 predecir,
               ),
+            ])),
+          );
+        }
+
+        if (this.estaEnVentanaRoyas(etapa)) {
+          predicciones.push(
+            ...(await Promise.all([
               this.royaDeLaHojaService.predecir(
                 siembra.semilla,
                 { precip, hr, Tavg },
@@ -172,64 +179,36 @@ export class PrediccionTrigoService {
                 { viento, hr, Tmin, Tmax },
                 predecir,
               ),
-            ]);
-            prediccion.enfermedades.push(...predicciones);
-            break;
-          }
-          case 4: {
-            const predicciones = await Promise.all([
-              this.manchaDeLaHojaService.predecir(
-                siembra.semilla,
-                { precip, hr },
-                predAnterior,
-                predecir,
-              ),
-              this.manchaAmarillaService.predecir(
-                siembra.semilla,
-                { precip, hr, Tmin, Tmax },
-                predAnterior,
-                predecir,
-              ),
-              this.royaDeLaHojaService.predecir(
-                siembra.semilla,
-                { precip, hr, Tavg },
-                predAnterior,
-                predecir,
-              ),
-              this.fusariumDeLaEspigaService.predecir(
-                siembra.semilla,
-                { precip, precipAnterior, hr, hrAnterior, Tmin, Tmax, Tavg },
-                predAnterior,
-                predecir,
-              ),
-            ]);
-            prediccion.enfermedades.push(...predicciones);
-            break;
-          }
-          case 5:
-          case 6: {
-            const predicciones = await Promise.all([
-              this.fusariumDeLaEspigaService.predecir(
-                siembra.semilla,
-                { precip, precipAnterior, hr, hrAnterior, Tmin, Tmax, Tavg },
-                predAnterior,
-                predecir,
-              ),
-            ]);
-            if (predicciones[0]) prediccion.enfermedades.push(...predicciones);
-            break;
-          }
-          default: {
-            break;
-          }
+            ])),
+          );
         }
+
+        if (this.estaEnVentanaFusarium(etapa)) {
+          predicciones.push(
+            await this.fusariumDeLaEspigaService.predecir(
+              siembra.semilla,
+              { precip, precipAnterior, hr, hrAnterior, Tmin, Tmax, Tavg },
+              predAnterior,
+              predecir,
+            ),
+          );
+        }
+
+        prediccion.enfermedades.push(
+          ...predicciones.filter(
+            (prediccion): prediccion is IPrediccionEnfermedad =>
+              !!prediccion,
+          ),
+        );
+
         // Crea la prediccion en la base de datos
         if (prediccion.enfermedades.length) {
           try {
             const prediccionCreada =
               await this.prediccionsRepository.create(prediccion);
             prediccionesCreadas.push(prediccionCreada);
-            ultimaPrediccion = JSON.parse(JSON.stringify(prediccionCreada));
+            predAnterior = JSON.parse(JSON.stringify(prediccionCreada));
+            ultimaPrediccion = predAnterior;
           } catch (error) {
             Logger.error(error);
           }
@@ -242,6 +221,18 @@ export class PrediccionTrigoService {
       }
     }
     return prediccionesCreadas;
+  }
+
+  private estaEnVentanaManchas(etapa: number): boolean {
+    return etapa >= 1 && etapa <= 4;
+  }
+
+  private estaEnVentanaRoyas(etapa: number): boolean {
+    return etapa >= 2 && etapa <= 6;
+  }
+
+  private estaEnVentanaFusarium(etapa: number): boolean {
+    return etapa >= 4 && etapa <= 6;
   }
 
   private async getUltimaPrediccion(
@@ -335,7 +326,7 @@ export class PrediccionTrigoService {
    * @returns Fecha desde que se debe hacer la prediccion,
    * en caso de que exista una prediccion anterior se devuelve
    * la fecha de la prediccion anterior,
-   * sino... 10 dias antes de la etapa 2
+   * sino desde emergencia para no perder el seguimiento foliar temprano.
    */
   private getFechaDesde(
     siembra: ISiembra,
@@ -348,15 +339,8 @@ export class PrediccionTrigoService {
       fecha.setUTCDate(fecha.getUTCDate() + 1);
       return fecha;
     }
-    // 45 dias despues de la etapa 1
-    // const fecha = this.getFechaInicioEtapa(siembra, crono, 1);
-    // fecha.setUTCHours(3, 0, 0, 0);
-    // fecha.setUTCDate(fecha.getUTCDate() + 45);
-
-    // 10 dian antes de la etapa 2
-    const fecha = this.getFechaInicioEtapa(siembra, crono, 2);
+    const fecha = this.getFechaInicioEtapa(siembra, crono, 1);
     fecha.setUTCHours(3, 0, 0, 0);
-    fecha.setUTCDate(fecha.getUTCDate() - 10);
 
     return fecha;
   }

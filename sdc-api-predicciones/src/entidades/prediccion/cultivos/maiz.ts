@@ -94,7 +94,6 @@ export class PrediccionMaizService {
           );
         }
 
-        predAnterior = await this.getUltimaPrediccion(siembra._id);
         const etapa = this.getEtapaPorFecha(siembra, crono, fecha);
 
         const distancia = clima[0].distancia;
@@ -105,14 +104,6 @@ export class PrediccionMaizService {
         const Tavg = HelperService.getTAvg(clima, fecha.toISOString());
         const precip = HelperService.getPrecip(clima, fecha.toISOString());
 
-        const fechaAnt = new Date(fecha);
-        fechaAnt.setUTCDate(fechaAnt.getUTCDate() - 1);
-        // const hrAnterior = HelperService.getHR(clima, fechaAnt.toISOString());
-        // const precipAnterior = HelperService.getPrecip(
-        //   clima,
-        //   fechaAnt.toISOString(),
-        // );
-
         const prediccion: ICreatePrediccion = {
           idSiembra: siembra._id,
           idQuimica: siembra.idQuimica,
@@ -122,6 +113,7 @@ export class PrediccionMaizService {
           fecha: fecha.toISOString(),
           fechaPrediccion: fecha.toISOString().split('T')[0],
           etapa,
+          nombreEtapa: this.nombreEtapa(etapa),
           enfermedades: [],
           estacion: {
             idEstacion: clima[0].estacion,
@@ -134,14 +126,15 @@ export class PrediccionMaizService {
           },
         };
 
-        // Hace la prediccion por enfermedades
-        const pred = await this.royaDelMaizService.predecir(
-          siembra.semilla,
-          { precip, hr, Tavg },
-          predAnterior,
-          predecir,
-        );
-        prediccion.enfermedades.push(pred);
+        if (this.estaEnVentanaRoyaDelMaiz(etapa)) {
+          const pred = await this.royaDelMaizService.predecir(
+            siembra.semilla,
+            { precip, hr, Tavg },
+            predAnterior,
+            predecir,
+          );
+          prediccion.enfermedades.push(pred);
+        }
 
         // Crea la prediccion en la base de datos
         if (prediccion.enfermedades.length) {
@@ -150,7 +143,8 @@ export class PrediccionMaizService {
               prediccion,
             );
             prediccionesCreadas.push(prediccionCreada);
-            ultimaPrediccion = JSON.parse(JSON.stringify(prediccionCreada));
+            predAnterior = JSON.parse(JSON.stringify(prediccionCreada));
+            ultimaPrediccion = predAnterior;
           } catch (error) {
             Logger.error(error);
           }
@@ -163,6 +157,23 @@ export class PrediccionMaizService {
       }
     }
     return prediccionesCreadas;
+  }
+
+  private estaEnVentanaRoyaDelMaiz(etapa: number): boolean {
+    return etapa === 1 || etapa === 2;
+  }
+
+  private nombreEtapa(etapa: number): string {
+    switch (etapa) {
+      case 0:
+        return 'Siembra';
+      case 1:
+        return 'Vegetativo';
+      case 2:
+        return 'Reproductivo';
+      default:
+        return 'Madurez';
+    }
   }
 
   private async getUltimaPrediccion(
@@ -219,12 +230,12 @@ export class PrediccionMaizService {
     etapa: 1 | 2 | 3,
   ) {
     const etapas = [];
-    const etapasTrigo = crono.etapas as IEtapasMaiz;
+    const etapasMaiz = crono.etapas as IEtapasMaiz;
 
     etapas[0] = 0;
-    etapas[1] = etapasTrigo.siembra_emergencia;
-    etapas[2] = etapas[1] + etapasTrigo.emergencia_floracion;
-    etapas[3] = etapas[2] + etapasTrigo.floracion_madurez;
+    etapas[1] = etapasMaiz.siembra_emergencia;
+    etapas[2] = etapas[1] + etapasMaiz.emergencia_floracion;
+    etapas[3] = etapas[2] + etapasMaiz.floracion_madurez;
 
     const fecha = new Date(siembra.fechaSiembra);
     fecha.setUTCHours(0, 0, 0, 0);
@@ -240,7 +251,7 @@ export class PrediccionMaizService {
    * @returns Fecha desde que se debe hacer la prediccion,
    * en caso de que exista una prediccion anterior se devuelve
    * la fecha de la prediccion anterior,
-   * sino... 15 dias antes de la etapa 2
+   * sino desde emergencia para seguir el cultivo activo.
    */
   private getFechaDesde(
     siembra: ISiembra,
@@ -254,10 +265,8 @@ export class PrediccionMaizService {
       return fecha;
     }
 
-    // 15 dias antes de la etapa 2
-    const fecha = this.getFechaInicioEtapa(siembra, crono, 2);
+    const fecha = this.getFechaInicioEtapa(siembra, crono, 1);
     fecha.setUTCHours(3, 0, 0, 0);
-    fecha.setUTCDate(fecha.getUTCDate() - 15);
 
     return fecha;
   }
@@ -265,13 +274,11 @@ export class PrediccionMaizService {
   /**
    *
    * @returns Fecha hasta que se debe hacer la prediccion,
-   * la fecha menor entre la fecha actual y 15 dias despues del inicio de la etapa 2
+   * la fecha menor entre la fecha actual y madurez.
    */
   private getFechaHasta(siembra: ISiembra, crono: ICrono) {
-    // 15 dias despues del inicio de la etapa 2
-    const fechaLimite = this.getFechaInicioEtapa(siembra, crono, 2);
+    const fechaLimite = this.getFechaInicioEtapa(siembra, crono, 3);
     fechaLimite.setUTCHours(3, 0, 0, 0);
-    fechaLimite.setUTCDate(fechaLimite.getUTCDate() + 15);
 
     const fechaHoy = this.diaActual();
     const fechaMenor = fechaHoy > fechaLimite ? fechaLimite : fechaHoy;

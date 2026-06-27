@@ -47,7 +47,16 @@ export class PrediccionsService {
   }
 
   async deleteByIdSiembra(idSiembra: string, permiso: IPermiso): Promise<void> {
-    await this.getById(idSiembra, permiso);
+    const predicciones = await this.get(
+      {
+        filter: JSON.stringify({ idSiembra }),
+        limit: 1,
+      },
+      permiso,
+    );
+    if (!predicciones.datos.length) {
+      return;
+    }
     return await this.repository.deleteByIdSiembra(idSiembra);
   }
 

@@ -58,7 +58,21 @@ export class NotificacionsService {
               }
               break;
             }
+            case 'Roya Anaranjada': {
+              const valorAlerta = 15;
+              if (e.resultado >= valorAlerta) {
+                await this.enviarNotificacion(prediccion, e, siembra);
+              }
+              break;
+            }
             case 'Fin de Ciclo': {
+              const valorAlerta = 15;
+              if (e.resultado >= valorAlerta) {
+                await this.enviarNotificacion(prediccion, e, siembra);
+              }
+              break;
+            }
+            case 'Roya del Maiz': {
               const valorAlerta = 15;
               if (e.resultado >= valorAlerta) {
                 await this.enviarNotificacion(prediccion, e, siembra);

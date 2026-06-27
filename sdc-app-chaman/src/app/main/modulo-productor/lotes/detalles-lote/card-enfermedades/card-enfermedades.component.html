@@ -12,11 +12,11 @@
   @if (siembra?._id) {
     <p-button
       icon="pi pi-refresh"
-      [label]="'Actualizar riesgo'"
+      [label]="etiquetaBotonActualizacion"
       severity="secondary"
       [outlined]="true"
       [loading]="actualizandoPrediccion"
-      [disabled]="actualizandoPrediccion"
+      [disabled]="actualizandoPrediccion || !tieneMotorSanitario"
       [fluid]="true"
       (click)="actualizarPrediccion($event)"
       styleClass="mb-3"
@@ -55,29 +55,33 @@
 
           <small class="variables">{{ item.variables }}</small>
 
-          <section class="prescription-panel">
-            <div class="prescription-title">
-              <strong>Prescripcion orientativa</strong>
-              <span>{{ item.prescripcion.objetivo }}</span>
-            </div>
-            <details class="prescription-products">
-              <summary>
-                <span>Productos sugeridos</span>
-                <strong>{{ item.prescripcion.productos.length }}</strong>
-              </summary>
-              <div class="prescription-body">
-                <p>{{ item.prescripcion.momento }}</p>
-                @for (producto of item.prescripcion.productos; track producto.grupo) {
-                  <article>
-                    <span>{{ producto.grupo }}</span>
-                    <strong>{{ producto.activos }}</strong>
-                    <em>{{ producto.dosisHa }}</em>
-                  </article>
-                }
-                <small class="prescription-note">{{ item.prescripcion.nota }}</small>
+          @if (item.mostrarPrescripcion) {
+            <section class="prescription-panel">
+              <div class="prescription-title">
+                <strong>Prescripcion orientativa</strong>
+                <span>{{ item.prescripcion.objetivo }}</span>
               </div>
-            </details>
-          </section>
+              <details class="prescription-products">
+                <summary>
+                  <span>Productos sugeridos</span>
+                  <strong>{{ item.prescripcion.productos.length }}</strong>
+                </summary>
+                <div class="prescription-body">
+                  <p>{{ item.prescripcion.momento }}</p>
+                  @for (producto of item.prescripcion.productos; track producto.grupo) {
+                    <article>
+                      <span>{{ producto.grupo }}</span>
+                      <strong>{{ producto.activos }}</strong>
+                      <em>{{ producto.dosisHa }}</em>
+                    </article>
+                  }
+                  <small class="prescription-note">{{ item.prescripcion.nota }}</small>
+                </div>
+              </details>
+            </section>
+          } @else {
+            <small class="calibration-note">Motor sanitario en calibracion para este cultivo.</small>
+          }
         </article>
       }
     </div>
