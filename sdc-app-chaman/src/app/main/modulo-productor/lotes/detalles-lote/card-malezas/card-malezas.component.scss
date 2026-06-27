@@ -22,6 +22,22 @@
   margin-top: 0.22rem;
 }
 
+.weeds-header small {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  margin-top: 0.28rem;
+}
+
+.header-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: flex-end;
+}
+
 .weeds-header strong {
   align-items: center;
   background: color-mix(in srgb, var(--p-primary-color), transparent 86%);
@@ -338,10 +354,25 @@
   font-size: 0.98rem;
 }
 
+.trace-list {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.trace-list small {
+  color: var(--p-text-muted-color);
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
 @media (max-width: 720px) {
   .weeds-header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .header-actions {
+    justify-content: space-between;
   }
 
   .detail-hero,

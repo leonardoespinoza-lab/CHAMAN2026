@@ -24,6 +24,7 @@ import {
   IFilter,
   IPermiso,
   IPrediccion,
+  IResultadoPrediccionMalezas,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { CronosService } from '../crono/service';
@@ -76,6 +77,14 @@ export class SiembrasService {
   async seguimientoHuellaHidrica(id: string, permiso: IPermiso): Promise<any> {
     await this.getById(id, permiso);
     return await this.repository.seguimientoHuellaHidrica(id);
+  }
+
+  async prediccionMalezas(
+    id: string,
+    permiso: IPermiso,
+  ): Promise<IResultadoPrediccionMalezas> {
+    await this.getById(id, permiso);
+    return await this.repository.prediccionMalezas(id);
   }
 
   async get(

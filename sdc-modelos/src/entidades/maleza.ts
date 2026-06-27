@@ -25,6 +25,93 @@ export interface IRecomendacionMaleza {
   detalle?: string;
 }
 
+export type TEstadoPrediccionMalezas =
+  | 'operativo'
+  | 'sin_modelos'
+  | 'no_aplica'
+  | 'sin_clima';
+
+export type TSeveridadPrediccionMaleza = 'baja' | 'media' | 'alta';
+
+export type TCalidadPrediccionMalezas = 'alta' | 'media' | 'baja';
+
+export interface IPrediccionMalezaDia {
+  fecha?: string;
+  tipo?: 'historico' | 'pronostico';
+  temperaturaMedia?: number;
+  lluviaMm?: number;
+  et0Mm?: number;
+  humedadSueloPct?: number;
+  factorHidrico?: number;
+  httDia?: number;
+  httAcumulado?: number;
+  emergenciaPct?: number;
+  fuente?: string;
+}
+
+export interface IPrediccionMalezaUmbral {
+  porcentaje?: number;
+  horasTermicas?: number;
+  progreso?: number;
+  estado?: 'alcanzado' | 'cercano' | 'en seguimiento';
+  fechaEstimada?: string;
+  diasEstimados?: number;
+}
+
+export interface IPrediccionMalezaEspecie {
+  idMaleza?: string;
+  codigoCarga?: string;
+  nombre?: string;
+  nombreCientifico?: string;
+  modelo?: TModeloMaleza;
+  avancePct?: number;
+  emergenciaPct?: number;
+  emergenciaActualPct?: number;
+  emergenciaProyectada7dPct?: number;
+  httHistorico?: number;
+  httProyectado7d?: number;
+  httTotal?: number;
+  temperaturaReferencia?: number;
+  humedadReferencia?: number;
+  severidad?: TSeveridadPrediccionMaleza;
+  estado?: string;
+  estadoCorto?: string;
+  lecturaCorta?: string;
+  recomendacion?: string;
+  fuenteDatos?: string;
+  detalleFuente?: string;
+  formula?: string;
+  calidadDatos?: TCalidadPrediccionMalezas;
+  temperaturaBase?: number;
+  deltaHoras?: number;
+  umbrales?: IPrediccionMalezaUmbral[];
+  recomendaciones?: IRecomendacionMaleza[];
+  observaciones?: string;
+  serie?: IPrediccionMalezaDia[];
+}
+
+export interface IResultadoPrediccionMalezas {
+  fecha?: string;
+  idSiembra?: string;
+  idLote?: string;
+  cultivo?: Cultivo;
+  estado?: TEstadoPrediccionMalezas;
+  resumen?: string;
+  fuenteDatos?: string;
+  calidadDatos?: TCalidadPrediccionMalezas;
+  periodo?: {
+    desde?: string;
+    hastaHistorico?: string;
+    hastaPronostico?: string;
+    diasHistorico?: number;
+    diasPronostico?: number;
+    diasEvaluados?: number;
+    recorteDias?: number;
+  };
+  especies?: IPrediccionMalezaEspecie[];
+  trazas?: string[];
+}
+
 export interface IMaleza {
   _id?: string;
   codigoCarga?: string;

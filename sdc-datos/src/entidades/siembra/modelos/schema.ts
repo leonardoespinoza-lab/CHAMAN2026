@@ -25,6 +25,7 @@ import {
   TTipoDosisP,
   TTipoLabranza,
   IResultadoPrediccionRiego,
+  IResultadoPrediccionMalezas,
 } from 'modelos/src';
 import { Document } from 'mongoose';
 import { Quimica } from '../../quimica/modelos/schema';
@@ -84,6 +85,9 @@ export class Siembra implements Exactly<ISiembra, Siembra> {
 
   @Prop({ type: [Object] })
   ultimaPrediccionRiego?: IResultadoPrediccionRiego[];
+
+  @Prop({ type: Object })
+  ultimaPrediccionMalezas?: IResultadoPrediccionMalezas;
 
   // Datos para huella hídrica
   @Prop()

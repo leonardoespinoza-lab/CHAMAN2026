@@ -4,6 +4,7 @@ import { IDepartamento } from "./departamento";
 import { IDistribuidor } from "./distribuidor";
 import { IEstablecimiento } from "./establecimiento";
 import { ILote } from "./lote";
+import { IResultadoPrediccionMalezas } from "./maleza";
 import { IPrediccion } from "./prediccion";
 import {
   IPrediccionRiego,
@@ -73,6 +74,7 @@ export interface ISiembra {
   geojson?: IGeoJSONPoint;
   ultimaPrediccion?: IPrediccion;
   ultimaPrediccionRiego?: IResultadoPrediccionRiego[];
+  ultimaPrediccionMalezas?: IResultadoPrediccionMalezas;
   aguaUtilReal?: number;
   // Información adicional sobre el cálculo de agua útil
   estadoCalculoAguaUtil?:

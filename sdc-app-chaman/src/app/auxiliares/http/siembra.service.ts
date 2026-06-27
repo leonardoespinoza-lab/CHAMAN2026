@@ -1,5 +1,13 @@
 import { Injectable } from '@angular/core';
-import { ISiembra, ICreateSiembra, IListado, IPrediccion, IQueryParam, IUpdateSiembra } from 'modelos/src';
+import {
+  ISiembra,
+  ICreateSiembra,
+  IListado,
+  IPrediccion,
+  IQueryParam,
+  IResultadoPrediccionMalezas,
+  IUpdateSiembra,
+} from 'modelos/src';
 import { HttpService } from './http.service';
 
 export interface HuellaHidricaSeguimiento {
@@ -50,6 +58,10 @@ export class SiembraService {
 
   public generarPrediccionEnfermedades(id: string): Promise<IPrediccion[]> {
     return this.http.post(`/siembras/${id}/prediccion-enfermedades`, {});
+  }
+
+  public generarPrediccionMalezas(id: string): Promise<IResultadoPrediccionMalezas> {
+    return this.http.post(`/siembras/${id}/prediccion-malezas`, {});
   }
 
   public seguimientoHuellaHidrica(id: string): Promise<HuellaHidricaSeguimiento> {

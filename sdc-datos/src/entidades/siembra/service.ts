@@ -141,4 +141,16 @@ export class SiembrasService {
       fumigaciones: fumigaciones.datos,
     });
   }
+
+  async prediccionMalezas(id: string) {
+    const siembra = await this.getById(id);
+    const lote = await this.lotesService.getById(siembra.idLote);
+    const resultado = await this.algoritmosService.calcularPrediccionMalezas({ siembra, lote });
+
+    if (resultado.estado !== 'sin_clima') {
+      await this.repository.update(id, { ultimaPrediccionMalezas: resultado });
+    }
+
+    return resultado;
+  }
 }

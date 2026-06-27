@@ -27,6 +27,11 @@ export class SiembrasController {
     return await this.service.seguimientoHuellaHidrica(id);
   }
 
+  @Post(':id/prediccion-malezas')
+  async prediccionMalezas(@Param('id') id: string) {
+    return await this.service.prediccionMalezas(id);
+  }
+
   @Get(':id')
   async getById(@Param('id') id: string) {
     return await this.service.getById(id);

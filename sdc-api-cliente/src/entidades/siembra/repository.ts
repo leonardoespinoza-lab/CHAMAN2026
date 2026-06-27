@@ -5,6 +5,7 @@ import {
   IQueryParam,
   ICreateSiembra,
   IUpdateSiembra,
+  IResultadoPrediccionMalezas,
 } from 'modelos/src';
 import { API_DATOS } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
@@ -21,6 +22,11 @@ export class SiembrasRepository {
   async seguimientoHuellaHidrica(id: string): Promise<any> {
     const url = `${API_DATOS}/siembras/${id}/huella-hidrica/seguimiento`;
     return await this.axios.GET<any>(url);
+  }
+
+  async prediccionMalezas(id: string): Promise<IResultadoPrediccionMalezas> {
+    const url = `${API_DATOS}/siembras/${id}/prediccion-malezas`;
+    return await this.axios.POST<IResultadoPrediccionMalezas>(url, {});
   }
 
   async get(params: IQueryParam): Promise<IListado<ISiembra>> {

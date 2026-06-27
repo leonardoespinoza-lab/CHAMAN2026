@@ -18,6 +18,7 @@ import {
   IUpdateSiembra,
   IPermiso,
   IPrediccion,
+  IResultadoPrediccionMalezas,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
@@ -84,6 +85,20 @@ export class SiembrasController {
     @GetPermiso() permiso: IPermiso,
   ): Promise<IPrediccion[]> {
     return await this.service.generarPrediccionEnfermedades(id, permiso);
+  }
+
+  @Post('/:id/prediccion-malezas')
+  @Permisos(
+    { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+  )
+  public async prediccionMalezas(
+    @Param('id') id: string,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<IResultadoPrediccionMalezas> {
+    return await this.service.prediccionMalezas(id, permiso);
   }
 
   @Post()
