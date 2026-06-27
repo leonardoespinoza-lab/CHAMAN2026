@@ -1,0 +1,123 @@
+@if (mostrar) {
+  <div class="custom-card climate-risk-card">
+    <div class="risk-header">
+      <div>
+        <p class="titulo-card">RIESGOS CLIMATICOS</p>
+        <span>{{ resumen }}</span>
+        @if (riesgos?.generadoEn) {
+          <small>Actualizado {{ riesgos?.generadoEn | date: 'dd/MM/yy, HH:mm' }} - Open-Meteo</small>
+        }
+      </div>
+      <p-button
+        icon="pi pi-refresh"
+        label="Actualizar"
+        severity="secondary"
+        [outlined]="true"
+        [loading]="loading"
+        (onClick)="cargar(true)"
+      />
+    </div>
+
+    @if (loading && !riesgos) {
+      <p-message severity="info" text="Calculando ventana de helada y granizo..."></p-message>
+    } @else if (error) {
+      <p-message severity="warn" [text]="error"></p-message>
+    } @else if (items.length) {
+      <div class="risk-action-grid">
+        @for (riesgo of items; track riesgo.tipo) {
+          <button
+            type="button"
+            class="risk-action-card"
+            [class.medium]="riesgo.nivel === 'medio'"
+            [class.high]="riesgo.nivel === 'alto'"
+            [style.--fill]="riesgo.posibilidadPct + '%'"
+            (click)="abrirDetalle(riesgo)"
+          >
+            <span class="status-pill">{{ nivelLabel(riesgo.nivel) }}</span>
+            <strong>{{ riesgo.titulo }}</strong>
+            <span class="risk-value">{{ riesgo.posibilidadPct | number: '1.0-0' }}%</span>
+            <span class="risk-track"><i></i></span>
+            <small>{{ riesgo.lectura }}</small>
+            <em>{{ fechaLabel(riesgo.fechaCritica) }}</em>
+          </button>
+        }
+      </div>
+    } @else {
+      <p-message severity="info" text="Sin riesgos climaticos disponibles para este lote."></p-message>
+    }
+  </div>
+}
+
+<p-dialog
+  [(visible)]="verDetalle"
+  [modal]="true"
+  [dismissableMask]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(900px, 94vw)' }"
+  [breakpoints]="{ '720px': '96vw' }"
+  [header]="riesgoSeleccionado?.titulo || 'Riesgo climatico'"
+  styleClass="climate-risk-dialog"
+  (onHide)="cerrarDetalle()"
+>
+  @if (riesgoSeleccionado; as riesgo) {
+    <section class="risk-detail">
+      <div class="detail-hero" [class.medium]="riesgo.nivel === 'medio'" [class.high]="riesgo.nivel === 'alto'">
+        <div>
+          <span>{{ nivelLabel(riesgo.nivel) }}</span>
+          <strong>{{ riesgo.titulo }}</strong>
+          <small>{{ riesgo.lectura }}</small>
+        </div>
+        <em>{{ riesgo.posibilidadPct | number: '1.0-0' }}%</em>
+      </div>
+
+      <div class="detail-meta">
+        <article>
+          <span>Fecha critica</span>
+          <strong>{{ fechaLabel(riesgo.fechaCritica) }}</strong>
+        </article>
+        <article>
+          <span>Dias con senal</span>
+          <strong>{{ riesgo.diasRiesgo }}</strong>
+        </article>
+        <article>
+          <span>Fuente</span>
+          <strong>Open-Meteo</strong>
+        </article>
+      </div>
+
+      <article class="detail-panel">
+        <span>Recomendacion operativa</span>
+        <p>{{ riesgo.recomendacion }}</p>
+      </article>
+
+      <section class="evidence-panel">
+        <div class="section-heading">
+          <span>Evidencia usada</span>
+          <strong>Variables resumidas del pronostico</strong>
+        </div>
+        <div class="evidence-list">
+          @for (item of riesgo.evidencia; track item) {
+            <small>{{ item }}</small>
+          }
+        </div>
+      </section>
+
+      <section class="day-panel">
+        <div class="section-heading">
+          <span>Ventana diaria</span>
+          <strong>Proximos dias evaluados</strong>
+        </div>
+        <div class="day-grid">
+          @for (dia of riesgo.serie; track dia.fecha) {
+            <article [class.medium]="dia.nivel === 'medio'" [class.high]="dia.nivel === 'alto'">
+              <span>{{ fechaLabel(dia.fecha) }}</span>
+              <strong>{{ dia.posibilidadPct | number: '1.0-0' }}%</strong>
+              <small>{{ nivelLabel(dia.nivel) }}</small>
+            </article>
+          }
+        </div>
+      </section>
+    </section>
+  }
+</p-dialog>

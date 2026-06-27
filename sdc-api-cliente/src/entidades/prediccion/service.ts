@@ -5,6 +5,7 @@ import {
   IQueryParam,
   IPermiso,
   IFilter,
+  IResumenRiesgosAgroclimaticos,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { XlsxService } from '../../auxiliares/xlsx/xlsx.service';
@@ -62,6 +63,10 @@ export class PrediccionsService {
 
   async prediccion(idSiembra: string): Promise<IPrediccion[]> {
     return await this.repository.prediccion(idSiembra);
+  }
+
+  async agroclima(idSiembra: string): Promise<IResumenRiesgosAgroclimaticos> {
+    return await this.repository.agroclima(idSiembra);
   }
 
   // Private

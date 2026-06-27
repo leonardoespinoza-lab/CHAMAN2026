@@ -81,6 +81,24 @@ export class NotificacionsService {
     }
   }
 
+  async enviarEventoAgroclimatico(evento: {
+    titulo: string;
+    mensaje: string;
+    siembra: ISiembra;
+    eventKey: string;
+    data: Record<string, string | number | undefined>;
+  }) {
+    await this.enviarEvento({
+      modulo: 'Clima',
+      titulo: evento.titulo,
+      mensaje: evento.mensaje,
+      siembra: evento.siembra,
+      idProductor: evento.siembra.idProductor,
+      eventKey: evento.eventKey,
+      data: evento.data,
+    });
+  }
+
   private async enviarNotificacion(
     prediccion: IPrediccion,
     enfermedad: IPrediccionEnfermedad,

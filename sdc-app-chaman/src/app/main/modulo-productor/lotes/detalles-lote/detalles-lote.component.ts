@@ -30,6 +30,7 @@ import { CardHuellaHidricaComponent } from './card-huella-hidrica/card-huella-hi
 import { CardMalezasComponent } from './card-malezas/card-malezas.component';
 import { CardNDVIComponent } from './card-ndvi/card-ndvi.component';
 import { CardRendimientoComponent } from './card-rendimiento/card-rendimiento.component';
+import { CardRiesgosAgroclimaticosComponent } from './card-riesgos-agroclimaticos/card-riesgos-agroclimaticos.component';
 import { CardRiegoComponent } from './card-riego/card-riego.component';
 import { CardUltimaFertilizacionComponent } from './card-ultima-fertilizacion/card-ultima-fertilizacion.component';
 import { CardUltimaFumigacionComponent } from './card-ultima-fumigacion/card-ultima-fumigacion.component';
@@ -59,6 +60,7 @@ export interface IDetallesLote extends ILoteTabla {
     CardHuellaHidricaComponent,
     CardUltimaFertilizacionComponent,
     CardRendimientoComponent,
+    CardRiesgosAgroclimaticosComponent,
     DrawerListadoSiembrasComponent,
     CardNDVIComponent,
     CardEtapasFenologicasComponent,
@@ -311,13 +313,15 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   }
 
   private slugArchivo(value: string): string {
-    return value
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 60) || 'lote';
+    return (
+      value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 60) || 'lote'
+    );
   }
 
   private async hidratarSiembraOperativa(): Promise<void> {
@@ -358,7 +362,9 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
       { cultivo, ciclo },
       { cultivo },
     ].map((filter) =>
-      Object.fromEntries(Object.entries(filter).filter(([, value]) => value !== undefined && value !== null && value !== ''))
+      Object.fromEntries(
+        Object.entries(filter).filter(([, value]) => value !== undefined && value !== null && value !== '')
+      )
     );
 
     const filtrosUnicos = filters.filter(
@@ -372,9 +378,7 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
       }))
     );
 
-    const resultado = resultados
-      .sort((a, b) => a.index - b.index)
-      .find((item) => !!item.crono);
+    const resultado = resultados.sort((a, b) => a.index - b.index).find((item) => !!item.crono);
 
     if (resultado?.crono) {
       siembra.crono = resultado.crono;

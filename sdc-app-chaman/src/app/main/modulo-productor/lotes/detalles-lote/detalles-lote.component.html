@@ -10,7 +10,9 @@
       @if (siembraActual) {
         <span class="siembra-badge">{{ implantacionLabel }} actual</span>
       } @else {
-        <p-button severity="secondary" (onClick)="verSiembraActual()"> Ver {{ implantacionLabel.toLowerCase() }} actual </p-button>
+        <p-button severity="secondary" (onClick)="verSiembraActual()">
+          Ver {{ implantacionLabel.toLowerCase() }} actual
+        </p-button>
       }
       @if (!helper.soloLectura()) {
         <p-button
@@ -134,6 +136,13 @@
     @if (esPlantacion && helper.puedeVerModulo('FrioTermica')) {
       <app-card-frio-termico class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-frio-termico>
     }
+    @if (helper.puedeVerModulo('Clima')) {
+      <app-card-riesgos-agroclimaticos
+        class="service-panel"
+        [siembra]="siembra"
+        [lote]="lote"
+      ></app-card-riesgos-agroclimaticos>
+    }
     @if (helper.puedeVerModulo('Enfermedades')) {
       <app-card-enfermedades class="service-panel" [siembra]="siembra"></app-card-enfermedades>
     }
@@ -152,12 +161,15 @@
           <app-card-ndvi [siembra]="siembra" [lote]="lote"></app-card-ndvi>
         }
         @if (lote?.serialCamara && helper.puedeVerModulo('Camaras')) {
-        <app-card-camaras-lote [lote]="lote"></app-card-camaras-lote>
+          <app-card-camaras-lote [lote]="lote"></app-card-camaras-lote>
         }
       </div>
     }
     @if (helper.puedeVerModulo('Fertilizacion') || helper.puedeVerModulo('Fumigacion')) {
-      <div class="operations-row service-panel" [class.single]="!helper.puedeVerModulo('Fertilizacion') || !helper.puedeVerModulo('Fumigacion')">
+      <div
+        class="operations-row service-panel"
+        [class.single]="!helper.puedeVerModulo('Fertilizacion') || !helper.puedeVerModulo('Fumigacion')"
+      >
         @if (helper.puedeVerModulo('Fertilizacion')) {
           <app-card-ultima-fertilizacion [lote]="lote"></app-card-ultima-fertilizacion>
         }

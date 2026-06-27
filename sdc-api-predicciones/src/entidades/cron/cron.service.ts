@@ -3,7 +3,11 @@ import { Cron, CronExpression, CronOptions } from '@nestjs/schedule';
 import { PrediccionsService } from '../prediccion/service';
 import { SiembrasService } from '../siembra/service';
 import { RiegoService } from '../riego/service';
-import { PREDICCIONES_MALEZAS_CRON_ENABLED } from '../../env';
+import {
+  PREDICCIONES_AGROCLIMA_CRON_ENABLED,
+  PREDICCIONES_MALEZAS_CRON_ENABLED,
+} from '../../env';
+import { AgroclimaService } from '../agroclima/service';
 
 const CRON_OPTIONS: CronOptions = {
   timeZone: 'America/Argentina/Buenos_Aires',
@@ -15,6 +19,7 @@ export class CronService {
     private siembrasService: SiembrasService,
     private prediccionsService: PrediccionsService,
     private riegoService: RiegoService,
+    private agroclimaService: AgroclimaService,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_5AM, CRON_OPTIONS)
@@ -38,6 +43,16 @@ export class CronService {
       return;
     }
     await this.prediccionsService.hacerPrediccionesMalezas();
+  }
+
+  // Todos los dias a las 06:00
+  @Cron('0 6 * * *', CRON_OPTIONS)
+  async hacerPrediccionesAgroclima() {
+    if (!PREDICCIONES_AGROCLIMA_CRON_ENABLED) {
+      Logger.log('Riesgos agroclimaticos automaticos deshabilitados');
+      return;
+    }
+    await this.agroclimaService.hacerPredicciones();
   }
 
   // Todos los dias a las 09:30

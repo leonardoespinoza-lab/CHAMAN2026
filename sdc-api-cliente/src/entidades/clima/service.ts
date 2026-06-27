@@ -3,8 +3,12 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import {
   CONFIGURACION_FRIO_CULTIVOS,
+  esCultivoPerenne,
   IEstablecimiento,
   IFrioTermicoCultivo,
+  IResumenRiesgosAgroclimaticos,
+  IRiesgoAgroclimatico,
+  NivelRiesgoAgroclimatico,
   IPermiso,
   ISerieFrioTermicoDia,
   IUbicacion,
@@ -769,7 +773,11 @@ export class ClimaService {
     });
 
     const frioSerie = serie.filter((dia) =>
-      this.entreFechas(dia.fecha, this.toDateKey(frioDesde), this.toDateKey(hoy)),
+      this.entreFechas(
+        dia.fecha,
+        this.toDateKey(frioDesde),
+        this.toDateKey(hoy),
+      ),
     );
     const termicoSerie = serie.filter((dia) =>
       this.entreFechas(
@@ -788,7 +796,9 @@ export class ClimaService {
       porcionesFrio: 0,
       gradosDia: this.round(
         termicoSerie
-          .filter((dia) => !dia.esPronostico || dia.fecha <= this.toDateKey(hoy))
+          .filter(
+            (dia) => !dia.esPronostico || dia.fecha <= this.toDateKey(hoy),
+          )
           .reduce((acc, dia) => acc + (dia.gradosDia || 0), 0),
       ),
       lluvia: this.round(
@@ -806,7 +816,10 @@ export class ClimaService {
     acumulados.porcionesFrio = this.round(acumulados.horasFrioEfectivas / 28);
 
     const progreso = {
-      horasFrioPct: this.pct(acumulados.horasFrio, requerimientos.horasFrioObjetivo),
+      horasFrioPct: this.pct(
+        acumulados.horasFrio,
+        requerimientos.horasFrioObjetivo,
+      ),
       horasFrioEfectivasPct: this.pct(
         acumulados.horasFrioEfectivas,
         requerimientos.horasFrioEfectivasObjetivo,
@@ -869,6 +882,31 @@ export class ClimaService {
     return resultado;
   }
 
+  async getRiesgosAgroclimaticos(
+    lat: number,
+    lng: number,
+    cultivo?: string,
+  ): Promise<IResumenRiesgosAgroclimaticos> {
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+      throw new Error(
+        'Coordenadas invalidas para calcular riesgos climaticos.',
+      );
+    }
+
+    const serie = await this.fetchOpenMeteoAgroForecast(latNum, lngNum);
+    return {
+      fuente: 'OpenMeteo',
+      lat: latNum,
+      lng: lngNum,
+      cultivo,
+      generadoEn: new Date().toISOString(),
+      helada: this.calcularRiesgoHeladaAgroclimatica(serie, cultivo),
+      granizo: this.calcularRiesgoGranizo(serie),
+    };
+  }
+
   private getFrioTermicoCacheKey(
     lat: number,
     lng: number,
@@ -894,7 +932,10 @@ export class ClimaService {
     }
     const now = Date.now();
     for (const [key, value] of this.frioTermicoCache.entries()) {
-      if (value.expiresAt <= now || this.frioTermicoCache.size > this.FRIO_TERMICO_CACHE_MAX) {
+      if (
+        value.expiresAt <= now ||
+        this.frioTermicoCache.size > this.FRIO_TERMICO_CACHE_MAX
+      ) {
         this.frioTermicoCache.delete(key);
       }
     }
@@ -1101,6 +1142,89 @@ export class ClimaService {
     return this.normalizarOpenMeteoDaily(response.data, true);
   }
 
+  private async fetchOpenMeteoAgroForecast(
+    lat: number,
+    lng: number,
+  ): Promise<ISerieFrioTermicoDia[]> {
+    const url = 'https://api.open-meteo.com/v1/forecast';
+    const response = await firstValueFrom(
+      this.httpService.get(url, {
+        params: {
+          latitude: lat,
+          longitude: lng,
+          forecast_days: 7,
+          daily:
+            'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,precipitation_probability_max,showers_sum,weather_code,wind_gusts_10m_max',
+          hourly:
+            'cape,showers,precipitation_probability,weather_code,wind_gusts_10m',
+          timezone: this.timezone,
+        },
+        timeout: 12000,
+      }),
+    );
+    return this.normalizarOpenMeteoAgroForecast(response.data);
+  }
+
+  private normalizarOpenMeteoAgroForecast(data: any): ISerieFrioTermicoDia[] {
+    const daily = data?.daily || {};
+    const fechas: string[] = daily.time || [];
+    const hourly = data?.hourly || {};
+    const hourlyByDate = this.agruparHourlyAgro(hourly);
+    return fechas.map((fecha, index) => {
+      const hourlyDia = hourlyByDate.get(fecha) || {};
+      return {
+        fecha,
+        temperaturaMax: this.round(daily.temperature_2m_max?.[index]),
+        temperaturaMin: this.round(daily.temperature_2m_min?.[index]),
+        temperaturaMedia: this.round(daily.temperature_2m_mean?.[index]),
+        lluvia: this.round(daily.precipitation_sum?.[index] || 0),
+        probabilidadLluvia: this.round(
+          daily.precipitation_probability_max?.[index] ??
+            hourlyDia.probabilidadLluvia,
+          0,
+        ),
+        showers: this.round(daily.showers_sum?.[index] ?? hourlyDia.showers),
+        weatherCode: daily.weather_code?.[index] ?? hourlyDia.weatherCode,
+        cape: this.round(hourlyDia.cape, 0),
+        rafagaViento: this.round(
+          daily.wind_gusts_10m_max?.[index] ?? hourlyDia.rafagaViento,
+        ),
+        esPronostico: true,
+      };
+    });
+  }
+
+  private agruparHourlyAgro(hourly: any): Map<string, Record<string, number>> {
+    const result = new Map<string, Record<string, number>>();
+    const times: string[] = hourly?.time || [];
+    times.forEach((time, index) => {
+      const fecha = String(time || '').slice(0, 10);
+      if (!fecha) return;
+      const item = result.get(fecha) || {};
+      item.cape = Math.max(item.cape || 0, Number(hourly.cape?.[index] || 0));
+      item.showers = Math.max(
+        item.showers || 0,
+        Number(hourly.showers?.[index] || 0),
+      );
+      item.probabilidadLluvia = Math.max(
+        item.probabilidadLluvia || 0,
+        Number(hourly.precipitation_probability?.[index] || 0),
+      );
+      item.rafagaViento = Math.max(
+        item.rafagaViento || 0,
+        Number(hourly.wind_gusts_10m?.[index] || 0),
+      );
+      const code = Number(hourly.weather_code?.[index]);
+      if (Number.isFinite(code) && this.weatherCodeConvectivo(code)) {
+        item.weatherCode = code;
+      } else if (Number.isFinite(code) && item.weatherCode === undefined) {
+        item.weatherCode = code;
+      }
+      result.set(fecha, item);
+    });
+    return result;
+  }
+
   private normalizarOpenMeteoDaily(
     data: any,
     esPronostico: boolean,
@@ -1117,6 +1241,211 @@ export class ClimaService {
     }));
   }
 
+  private calcularRiesgoHeladaAgroclimatica(
+    serie: ISerieFrioTermicoDia[],
+    cultivo?: string,
+  ): IRiesgoAgroclimatico {
+    const aplica = esCultivoPerenne(cultivo);
+    if (!aplica) {
+      return {
+        tipo: 'helada',
+        aplica: false,
+        nivel: 'bajo',
+        posibilidadPct: 0,
+        titulo: 'Heladas',
+        lectura:
+          'Servicio de heladas reservado para frutales y cultivos perennes configurados.',
+        recomendacion:
+          'Para cultivos anuales se mantiene el seguimiento climatico general y alertas de granizo.',
+        diasRiesgo: 0,
+        evidencia: ['Cultivo sin servicio fenologico de heladas asignado.'],
+        serie: [],
+      };
+    }
+
+    const umbral =
+      CONFIGURACION_FRIO_CULTIVOS[cultivo || '']?.umbralHelada ?? -1;
+    const dias = serie.map((dia) => {
+      const posibilidad = this.posibilidadHelada(dia.temperaturaMin, umbral);
+      const nivel: NivelRiesgoAgroclimatico =
+        posibilidad >= 70 ? 'alto' : posibilidad >= 35 ? 'medio' : 'bajo';
+      const evidencia = [
+        dia.temperaturaMin !== undefined
+          ? `Temperatura minima prevista ${dia.temperaturaMin} C`
+          : 'Sin temperatura minima disponible',
+        `Umbral operativo del cultivo ${umbral} C`,
+      ];
+      return {
+        fecha: dia.fecha,
+        nivel,
+        posibilidadPct: posibilidad,
+        temperaturaMin: dia.temperaturaMin,
+        temperaturaMax: dia.temperaturaMax,
+        lluvia: dia.lluvia,
+        evidencia,
+      };
+    });
+    const critico = [...dias].sort(
+      (a, b) => b.posibilidadPct - a.posibilidadPct,
+    )[0];
+    const diasRiesgo = dias.filter((dia) => dia.nivel !== 'bajo').length;
+    const nivel =
+      critico?.posibilidadPct >= 70
+        ? 'alto'
+        : critico?.posibilidadPct >= 35
+          ? 'medio'
+          : 'bajo';
+    return {
+      tipo: 'helada',
+      aplica: true,
+      nivel,
+      posibilidadPct: critico?.posibilidadPct || 0,
+      titulo: 'Posibilidad de heladas',
+      lectura:
+        nivel === 'alto'
+          ? `${cultivo}: pronostico con helada probable en la ventana operativa.`
+          : nivel === 'medio'
+            ? `${cultivo}: escenario cercano a helada; conviene vigilar madrugada critica.`
+            : `${cultivo}: sin senal firme de helada en los proximos dias.`,
+      recomendacion:
+        nivel === 'bajo'
+          ? 'Mantener seguimiento del pronostico y estado fenologico.'
+          : 'Revisar estado de yemas, brotes o flores; preparar estrategia de defensa y recorrida previa.',
+      fechaCritica: critico?.fecha,
+      diasRiesgo,
+      evidencia: critico?.evidencia || [],
+      serie: dias,
+    };
+  }
+
+  private calcularRiesgoGranizo(
+    serie: ISerieFrioTermicoDia[],
+  ): IRiesgoAgroclimatico {
+    const dias = serie.map((dia) => {
+      const posibilidad = this.posibilidadGranizo(dia);
+      const nivel: NivelRiesgoAgroclimatico =
+        posibilidad >= 65 ? 'alto' : posibilidad >= 35 ? 'medio' : 'bajo';
+      const evidencia = this.evidenciaGranizo(dia);
+      return {
+        fecha: dia.fecha,
+        nivel,
+        posibilidadPct: posibilidad,
+        temperaturaMin: dia.temperaturaMin,
+        temperaturaMax: dia.temperaturaMax,
+        lluvia: dia.lluvia,
+        probabilidadLluvia: dia.probabilidadLluvia,
+        weatherCode: dia.weatherCode,
+        cape: dia.cape,
+        showers: dia.showers,
+        rafagaViento: dia.rafagaViento,
+        evidencia,
+      };
+    });
+    const critico = [...dias].sort(
+      (a, b) => b.posibilidadPct - a.posibilidadPct,
+    )[0];
+    const diasRiesgo = dias.filter((dia) => dia.nivel !== 'bajo').length;
+    const nivel =
+      critico?.posibilidadPct >= 65
+        ? 'alto'
+        : critico?.posibilidadPct >= 35
+          ? 'medio'
+          : 'bajo';
+    return {
+      tipo: 'granizo',
+      aplica: true,
+      nivel,
+      posibilidadPct: critico?.posibilidadPct || 0,
+      titulo: 'Posibilidad de granizo',
+      lectura:
+        nivel === 'alto'
+          ? 'Ventana convectiva compatible con granizo; requiere monitoreo cercano.'
+          : nivel === 'medio'
+            ? 'Senal convectiva moderada; observar actualizaciones del pronostico.'
+            : 'Sin senal convectiva fuerte compatible con granizo.',
+      recomendacion:
+        nivel === 'bajo'
+          ? 'Mantener seguimiento del pronostico local.'
+          : 'Revisar cobertura operativa, maquinaria expuesta y recorrida posterior al evento.',
+      fechaCritica: critico?.fecha,
+      diasRiesgo,
+      evidencia: critico?.evidencia || [],
+      serie: dias,
+    };
+  }
+
+  private posibilidadHelada(
+    tempMin: number | undefined,
+    umbral: number,
+  ): number {
+    if (tempMin === undefined || tempMin === null) return 0;
+    if (tempMin <= umbral - 3) return 95;
+    if (tempMin <= umbral - 1.5) return 85;
+    if (tempMin <= umbral) return 70;
+    if (tempMin <= umbral + 1) return 45;
+    if (tempMin <= umbral + 2) return 25;
+    return 5;
+  }
+
+  private posibilidadGranizo(dia: ISerieFrioTermicoDia): number {
+    let score = 0;
+    const code = Number(dia.weatherCode);
+    if (code === 96 || code === 99) score += 55;
+    else if (code === 95) score += 35;
+    else if (this.weatherCodeConvectivo(code)) score += 18;
+
+    const cape = Number(dia.cape || 0);
+    if (cape >= 1800) score += 32;
+    else if (cape >= 1000) score += 25;
+    else if (cape >= 500) score += 15;
+    else if (cape >= 250) score += 8;
+
+    const probLluvia = Number(dia.probabilidadLluvia || 0);
+    if (probLluvia >= 75) score += 18;
+    else if (probLluvia >= 50) score += 12;
+    else if (probLluvia >= 30) score += 6;
+
+    const showers = Number(dia.showers || 0);
+    if (showers >= 8) score += 15;
+    else if (showers >= 3) score += 10;
+    else if (showers >= 1) score += 5;
+
+    const rafaga = Number(dia.rafagaViento || 0);
+    if (rafaga >= 70) score += 12;
+    else if (rafaga >= 45) score += 7;
+
+    if (Number(dia.temperaturaMax || 0) >= 24) score += 4;
+    return Math.max(0, Math.min(100, Math.round(score)));
+  }
+
+  private evidenciaGranizo(dia: ISerieFrioTermicoDia): string[] {
+    const evidencia: string[] = [];
+    if (dia.weatherCode !== undefined) {
+      evidencia.push(`Codigo de tiempo ${dia.weatherCode}`);
+    }
+    if (dia.cape !== undefined) {
+      evidencia.push(`Energia convectiva ${dia.cape}`);
+    }
+    if (dia.probabilidadLluvia !== undefined) {
+      evidencia.push(
+        `Probabilidad de precipitacion ${dia.probabilidadLluvia}%`,
+      );
+    }
+    if (dia.showers !== undefined) {
+      evidencia.push(`Chaparrones previstos ${dia.showers} mm`);
+    }
+    if (dia.rafagaViento !== undefined) {
+      evidencia.push(`Rafagas maximas ${dia.rafagaViento} km/h`);
+    }
+    return evidencia.length
+      ? evidencia
+      : ['Sin variables convectivas suficientes para elevar el riesgo.'];
+  }
+
+  private weatherCodeConvectivo(code: number): boolean {
+    return [80, 81, 82, 95, 96, 99].includes(code);
+  }
+
   private mergeSeries(
     historico: ISerieFrioTermicoDia[],
     forecast: ISerieFrioTermicoDia[],
@@ -1128,12 +1457,14 @@ export class ClimaService {
   }
 
   private getInicioFrio(fecha: Date): Date {
-    const year = fecha.getMonth() + 1 >= 5 ? fecha.getFullYear() : fecha.getFullYear() - 1;
+    const year =
+      fecha.getMonth() + 1 >= 5 ? fecha.getFullYear() : fecha.getFullYear() - 1;
     return new Date(Date.UTC(year, 4, 1));
   }
 
   private getInicioTermico(fecha: Date): Date {
-    const year = fecha.getMonth() + 1 >= 8 ? fecha.getFullYear() : fecha.getFullYear() - 1;
+    const year =
+      fecha.getMonth() + 1 >= 8 ? fecha.getFullYear() : fecha.getFullYear() - 1;
     return new Date(Date.UTC(year, 7, 1));
   }
 
@@ -1175,7 +1506,12 @@ export class ClimaService {
       (a, b) => (a.temperaturaMin || 0) - (b.temperaturaMin || 0),
     )[0];
     return {
-      nivel: diasRiesgo.length >= 2 ? 'alto' : diasRiesgo.length === 1 ? 'medio' : 'bajo',
+      nivel:
+        diasRiesgo.length >= 2
+          ? 'alto'
+          : diasRiesgo.length === 1
+            ? 'medio'
+            : 'bajo',
       dias: diasRiesgo.length,
       fechaCritica: minimo?.fecha,
       temperaturaMinima: minimo?.temperaturaMin,
@@ -1187,7 +1523,8 @@ export class ClimaService {
     riesgoHelada: IFrioTermicoCultivo['riesgoHelada'],
     acumulados: IFrioTermicoCultivo['acumulados'],
   ): IFrioTermicoCultivo['eventos'] {
-    const frioCumplido = progreso.horasFrioPct >= 85 || progreso.porcionesFrioPct >= 85;
+    const frioCumplido =
+      progreso.horasFrioPct >= 85 || progreso.porcionesFrioPct >= 85;
     const brotacionAlcanzada = progreso.brotacionPct >= 100;
     const floracionAlcanzada = progreso.floracionPct >= 100;
     return {
@@ -1204,13 +1541,22 @@ export class ClimaService {
           : 'Todavia conviene seguir acumulacion de frio antes de estimar brotacion.',
       },
       floracion: {
-        estado: floracionAlcanzada ? 'alcanzada' : progreso.floracionPct >= 70 ? 'probable' : 'pendiente',
+        estado: floracionAlcanzada
+          ? 'alcanzada'
+          : progreso.floracionPct >= 70
+            ? 'probable'
+            : 'pendiente',
         lectura: floracionAlcanzada
           ? 'Floracion termicamente alcanzada para el umbral configurado.'
           : 'Floracion pendiente; usar grados dia y recorrida para ajustar.',
       },
       ventanaSanitaria: {
-        estado: riesgoHelada.nivel === 'alto' ? 'alta' : riesgoHelada.nivel === 'medio' ? 'media' : 'baja',
+        estado:
+          riesgoHelada.nivel === 'alto'
+            ? 'alta'
+            : riesgoHelada.nivel === 'medio'
+              ? 'media'
+              : 'baja',
         lectura:
           riesgoHelada.nivel === 'bajo'
             ? 'Sin heladas relevantes en el pronostico inmediato.'
@@ -1242,7 +1588,9 @@ export class ClimaService {
   }
 
   private startOfDay(date: Date): Date {
-    return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    return new Date(
+      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+    );
   }
 
   private addDays(date: Date, dias: number): Date {
@@ -1259,7 +1607,10 @@ export class ClimaService {
     if (!target || !Number.isFinite(target) || !Number.isFinite(value || 0)) {
       return 0;
     }
-    return Math.max(0, Math.min(100, this.round(((value || 0) / target) * 100)));
+    return Math.max(
+      0,
+      Math.min(100, this.round(((value || 0) / target) * 100)),
+    );
   }
 
   private round(value: unknown, digits = 1): number {

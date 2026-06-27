@@ -19,6 +19,7 @@ import { FumigacionsModule } from '../fumigacion/module';
 import { PrediccionMaizService } from './cultivos/maiz';
 import { RoyaDelMaizService } from './enfermedades/roya_del_maiz';
 import { RoyaAnaranjadaService } from './enfermedades/roya_anaranjada';
+import { AgroclimaModule } from '../agroclima/module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { RoyaAnaranjadaService } from './enfermedades/roya_anaranjada';
     NotificacionsModule,
     AlertasModule,
     FumigacionsModule,
+    AgroclimaModule,
   ],
   controllers: [PrediccionsController],
   providers: [

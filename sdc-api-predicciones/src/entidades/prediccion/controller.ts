@@ -1,13 +1,25 @@
 import { Controller, Get, Logger, Param } from '@nestjs/common';
 import { PrediccionsService } from './service';
 import { ApiTags } from '@nestjs/swagger';
+import { AgroclimaService } from '../agroclima/service';
 
 @ApiTags('Prediccion')
 @Controller('prediccions')
 export class PrediccionsController {
   private logger = new Logger(PrediccionsController.name);
 
-  constructor(private service: PrediccionsService) {}
+  constructor(
+    private service: PrediccionsService,
+    private agroclimaService: AgroclimaService,
+  ) {}
+
+  @Get(':idSiembra/agroclima')
+  public async agroclima(@Param('idSiembra') idSiembra: string) {
+    this.logger.verbose(`agroclima: ${idSiembra}`);
+    const res = await this.agroclimaService.evaluarYRegistrar(idSiembra);
+    this.logger.verbose(`agroclima: ${idSiembra} finalizada`);
+    return res;
+  }
 
   @Get(':idSiembra')
   public async prediccion(@Param('idSiembra') idSiembra: string) {

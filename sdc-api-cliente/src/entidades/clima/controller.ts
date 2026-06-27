@@ -80,22 +80,42 @@ export class ClimaController {
     @Query('gradosDiaFloracionObjetivo')
     gradosDiaFloracionObjetivo?: string,
   ) {
-    return await this.service.getFrioTermico(Number(lat), Number(lng), cultivo, {
-      horasFrioObjetivo: this.toNumberOrUndefined(horasFrioObjetivo),
-      horasFrioEfectivasObjetivo: this.toNumberOrUndefined(
-        horasFrioEfectivasObjetivo,
-      ),
-      porcionesFrioObjetivo: this.toNumberOrUndefined(porcionesFrioObjetivo),
-      temperaturaBaseGradosDia: this.toNumberOrUndefined(
-        temperaturaBaseGradosDia,
-      ),
-      gradosDiaBrotacionObjetivo: this.toNumberOrUndefined(
-        gradosDiaBrotacionObjetivo,
-      ),
-      gradosDiaFloracionObjetivo: this.toNumberOrUndefined(
-        gradosDiaFloracionObjetivo,
-      ),
-    });
+    return await this.service.getFrioTermico(
+      Number(lat),
+      Number(lng),
+      cultivo,
+      {
+        horasFrioObjetivo: this.toNumberOrUndefined(horasFrioObjetivo),
+        horasFrioEfectivasObjetivo: this.toNumberOrUndefined(
+          horasFrioEfectivasObjetivo,
+        ),
+        porcionesFrioObjetivo: this.toNumberOrUndefined(porcionesFrioObjetivo),
+        temperaturaBaseGradosDia: this.toNumberOrUndefined(
+          temperaturaBaseGradosDia,
+        ),
+        gradosDiaBrotacionObjetivo: this.toNumberOrUndefined(
+          gradosDiaBrotacionObjetivo,
+        ),
+        gradosDiaFloracionObjetivo: this.toNumberOrUndefined(
+          gradosDiaFloracionObjetivo,
+        ),
+      },
+    );
+  }
+
+  @Get('riesgos-agroclimaticos/:lat/:lng')
+  @UseGuards(PermisoGuard)
+  @Permisos(...PERMISOS_AUTENTICADOS)
+  public async getRiesgosAgroclimaticos(
+    @Param('lat') lat: number,
+    @Param('lng') lng: number,
+    @Query('cultivo') cultivo?: string,
+  ) {
+    return await this.service.getRiesgosAgroclimaticos(
+      Number(lat),
+      Number(lng),
+      cultivo,
+    );
   }
 
   /**

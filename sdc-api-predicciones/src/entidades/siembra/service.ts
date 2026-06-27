@@ -64,4 +64,18 @@ export class SiembrasService {
     const listado = await this.repository.get(query);
     return listado.datos;
   }
+
+  async listarSiembrasParaAgroclima(limit = 300): Promise<ISiembra[]> {
+    const filter = {
+      fechaCosecha: { $eq: null },
+    };
+    const query: IQueryParam = {
+      select: '_id',
+      filter: JSON.stringify(filter),
+      sort: '-fechaSiembra',
+      limit,
+    };
+    const listado = await this.repository.get(query);
+    return listado.datos;
+  }
 }

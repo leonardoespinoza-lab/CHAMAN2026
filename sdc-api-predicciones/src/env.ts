@@ -21,6 +21,10 @@ export const PREDICCIONES_MALEZAS_CRON_ENABLED =
   process.env.PREDICCIONES_MALEZAS_CRON_ENABLED !== 'false' && ENV !== 'test';
 export const PREDICCIONES_MALEZAS_LIMIT =
   +process.env.PREDICCIONES_MALEZAS_LIMIT || 250;
+export const PREDICCIONES_AGROCLIMA_CRON_ENABLED =
+  process.env.PREDICCIONES_AGROCLIMA_CRON_ENABLED !== 'false' && ENV !== 'test';
+export const PREDICCIONES_AGROCLIMA_LIMIT =
+  +process.env.PREDICCIONES_AGROCLIMA_LIMIT || 300;
 // MAIL
 export const MAIL_HOST = process.env.MAIL_HOST;
 export const MAIL_PORT = +process.env.MAIL_PORT;

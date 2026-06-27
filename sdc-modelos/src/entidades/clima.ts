@@ -87,10 +87,57 @@ export interface ISerieFrioTermicoDia {
   temperaturaMax?: number;
   temperaturaMedia?: number;
   lluvia?: number;
+  probabilidadLluvia?: number;
+  weatherCode?: number;
+  cape?: number;
+  showers?: number;
+  rafagaViento?: number;
   horasFrio?: number;
   horasFrioEfectivas?: number;
   gradosDia?: number;
   esPronostico?: boolean;
+}
+
+export type TipoRiesgoAgroclimatico = "helada" | "granizo";
+export type NivelRiesgoAgroclimatico = "bajo" | "medio" | "alto";
+
+export interface IDiaRiesgoAgroclimatico {
+  fecha: string;
+  nivel: NivelRiesgoAgroclimatico;
+  posibilidadPct: number;
+  temperaturaMin?: number;
+  temperaturaMax?: number;
+  lluvia?: number;
+  probabilidadLluvia?: number;
+  weatherCode?: number;
+  cape?: number;
+  showers?: number;
+  rafagaViento?: number;
+  evidencia?: string[];
+}
+
+export interface IRiesgoAgroclimatico {
+  tipo: TipoRiesgoAgroclimatico;
+  aplica: boolean;
+  nivel: NivelRiesgoAgroclimatico;
+  posibilidadPct: number;
+  titulo: string;
+  lectura: string;
+  recomendacion: string;
+  fechaCritica?: string;
+  diasRiesgo: number;
+  evidencia: string[];
+  serie: IDiaRiesgoAgroclimatico[];
+}
+
+export interface IResumenRiesgosAgroclimaticos {
+  fuente: "OpenMeteo";
+  lat: number;
+  lng: number;
+  cultivo?: string;
+  generadoEn: string;
+  helada?: IRiesgoAgroclimatico;
+  granizo: IRiesgoAgroclimatico;
 }
 
 export interface IFrioTermicoCultivo {

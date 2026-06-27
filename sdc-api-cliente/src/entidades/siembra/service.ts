@@ -128,6 +128,7 @@ export class SiembrasService {
       this.updateIdSiembraEnLote(data.idLote, idSiembra, permiso);
     }
     await this.crearPrediccion(idSiembra);
+    this.evaluarAgroclima(idSiembra);
     this.encolarNdvi(data.idLote, permiso);
     return await this.getById(created._id, permiso);
   }
@@ -192,6 +193,7 @@ export class SiembrasService {
 
     await this.repository.update(id, data);
     await this.actualizarPrediccion(id, permiso);
+    this.evaluarAgroclima(id);
     this.encolarNdvi(data.idLote, permiso);
     return await this.getById(id, permiso);
   }
@@ -294,6 +296,15 @@ export class SiembrasService {
   private encolarNdvi(idLote: string, permiso: IPermiso) {
     this.lotesService.generarNdvi(idLote, permiso).catch((error) => {
       this.logger.error(`Error al encolar NDVI para el lote ${idLote}`);
+      console.error(error);
+    });
+  }
+
+  private evaluarAgroclima(idSiembra: string) {
+    this.prediccionsService.agroclima(idSiembra).catch((error) => {
+      this.logger.error(
+        `Error al evaluar riesgos agroclimaticos para la siembra ${idSiembra}`,
+      );
       console.error(error);
     });
   }
@@ -696,7 +707,9 @@ export class SiembrasService {
       });
     }
 
-    return stages.length > 1 ? stages : [{ name: 'Inicio', kcProm: 0.5, days: 0 }];
+    return stages.length > 1
+      ? stages
+      : [{ name: 'Inicio', kcProm: 0.5, days: 0 }];
   }
 
   private getKc(diasDesdeSiembra: number, cultivo: Cultivo, crono: ICrono) {
@@ -951,7 +964,9 @@ export class SiembrasService {
       }),
       limit: 1,
     };
-    const porDepartamento = await this.cronosService.get(fallbackPorDepartamento);
+    const porDepartamento = await this.cronosService.get(
+      fallbackPorDepartamento,
+    );
     if (porDepartamento.datos[0]) {
       return porDepartamento.datos[0];
     }
