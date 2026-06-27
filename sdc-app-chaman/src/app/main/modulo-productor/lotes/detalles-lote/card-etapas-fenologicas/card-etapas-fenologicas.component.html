@@ -37,7 +37,7 @@
   </div>
 
   @if (etapas.length > 0) {
-    <div class="phenology-timeline">
+    <div class="phenology-timeline" [style.--timeline-min-width]="timelineMinWidth">
       <div class="timeline-track">
         <span class="timeline-progress" [style.width.%]="progreso"></span>
         @for (etapa of etapas; track etapa.nombre) {

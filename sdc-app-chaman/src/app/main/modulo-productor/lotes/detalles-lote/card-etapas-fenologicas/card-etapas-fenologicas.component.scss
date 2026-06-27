@@ -21,7 +21,7 @@
 }
 
 .phenology-title .titulo-card {
-  font-size: clamp(1.18rem, 1.35vw, 1.6rem);
+  font-size: 1.45rem;
   letter-spacing: 0;
 }
 
@@ -103,13 +103,26 @@
   margin-top: 1rem;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 0.7rem 0.2rem 0.2rem;
+  padding: 0.7rem 3rem 0.2rem;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  touch-action: pan-x;
+}
+
+.phenology-timeline::-webkit-scrollbar {
+  height: 8px;
+}
+
+.phenology-timeline::-webkit-scrollbar-thumb {
+  background: rgba(91, 124, 156, 0.28);
+  border-radius: 999px;
 }
 
 .timeline-track,
 .timeline-label-row {
-  min-width: 980px;
+  min-width: var(--timeline-min-width, 760px);
   position: relative;
+  width: 100%;
 }
 
 .timeline-track {
@@ -148,7 +161,7 @@
 }
 
 .timeline-label-row {
-  height: 78px;
+  height: 90px;
 }
 
 .stage-label {
@@ -159,11 +172,16 @@
   font-weight: 700;
   gap: 0.12rem;
   line-height: 1.08;
-  max-width: 150px;
+  max-width: 8rem;
   position: absolute;
   text-align: center;
   top: 0.85rem;
   transform: translateX(-50%);
+  width: 8rem;
+}
+
+.stage-label span {
+  overflow-wrap: anywhere;
 }
 
 .stage-label.current {
@@ -198,11 +216,34 @@
   }
 
   .crop-detail-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .phenology-card {
+    padding: 0.95rem;
+  }
+
+  .phenology-title .titulo-card {
+    font-size: 1.24rem;
+  }
+
+  .phenology-timeline {
+    padding: 0.7rem 3.5rem 0.2rem;
+  }
+
+  .crop-detail-grid {
     grid-template-columns: 1fr;
   }
 
-  .timeline-track,
   .timeline-label-row {
-    min-width: 760px;
+    height: 98px;
+  }
+
+  .stage-label {
+    font-size: 0.78rem;
+    max-width: 7.25rem;
+    width: 7.25rem;
   }
 }

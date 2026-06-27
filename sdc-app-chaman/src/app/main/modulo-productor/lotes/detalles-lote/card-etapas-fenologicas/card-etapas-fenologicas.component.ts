@@ -116,6 +116,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   public etiquetaImplantacion: 'Siembra' | 'Plantacion' = 'Siembra';
   public campaniaTexto = '';
 
+  public get timelineMinWidth(): string {
+    const etapasVisibles = Math.max(this.etapas.length, 1);
+    return `${Math.max(620, etapasVisibles * 136)}px`;
+  }
+
   constructor(public helper: HelperService) {}
 
   ngOnInit(): void {
