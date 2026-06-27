@@ -16,6 +16,7 @@ export class UsuariosService {
 
   async getPorIdProductor(idProductor: string): Promise<IUsuario[]> {
     const filter: IFilter<IUsuario> = {
+      activo: true,
       'permisos.idProductor': idProductor,
     } as any;
     const query: IQueryParam = { filter: JSON.stringify(filter), limit: 0 };

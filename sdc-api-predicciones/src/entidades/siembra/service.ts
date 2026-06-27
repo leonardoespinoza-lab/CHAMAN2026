@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { ISiembra, IListado, IQueryParam, IUpdateSiembra } from 'modelos/src';
+import {
+  ISiembra,
+  IListado,
+  IQueryParam,
+  IResultadoPrediccionMalezas,
+  IUpdateSiembra,
+} from 'modelos/src';
 import { SiembrasRepository } from './repository';
 
 @Injectable()
@@ -18,6 +24,10 @@ export class SiembrasService {
     return await this.repository.update(id, data);
   }
 
+  async prediccionMalezas(id: string): Promise<IResultadoPrediccionMalezas> {
+    return await this.repository.prediccionMalezas(id);
+  }
+
   //
 
   async listarSiembrasParaPredicciones(): Promise<ISiembra[]> {
@@ -32,6 +42,24 @@ export class SiembrasService {
     const query: IQueryParam = {
       select: '_id',
       filter: JSON.stringify(filter),
+    };
+    const listado = await this.repository.get(query);
+    return listado.datos;
+  }
+
+  async listarSiembrasParaMalezas(limit = 250): Promise<ISiembra[]> {
+    const fechaHace8Meses = new Date();
+    fechaHace8Meses.setMonth(fechaHace8Meses.getMonth() - 8);
+    const filter = {
+      fechaSiembra: {
+        $gt: fechaHace8Meses,
+      },
+      fechaCosecha: { $eq: null },
+    };
+    const query: IQueryParam = {
+      select: '_id',
+      filter: JSON.stringify(filter),
+      limit,
     };
     const listado = await this.repository.get(query);
     return listado.datos;

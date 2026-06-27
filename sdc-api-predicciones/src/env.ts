@@ -14,10 +14,13 @@ export const PREFIX_PATH =
         ? `${PREFIX}-dev`
         : '';
 // APIS
-export const API_DATOS =
-  process.env.API_DATOS || 'http://127.0.0.1:5000';
-export const API_CLIMA =
-  process.env.API_CLIMA || 'http://127.0.0.1:5008/local';
+export const API_DATOS = process.env.API_DATOS || 'http://127.0.0.1:5000';
+export const API_CLIMA = process.env.API_CLIMA || 'http://127.0.0.1:5008/local';
+// CRON
+export const PREDICCIONES_MALEZAS_CRON_ENABLED =
+  process.env.PREDICCIONES_MALEZAS_CRON_ENABLED !== 'false' && ENV !== 'test';
+export const PREDICCIONES_MALEZAS_LIMIT =
+  +process.env.PREDICCIONES_MALEZAS_LIMIT || 250;
 // MAIL
 export const MAIL_HOST = process.env.MAIL_HOST;
 export const MAIL_PORT = +process.env.MAIL_PORT;

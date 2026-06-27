@@ -3,6 +3,7 @@ import { Cron, CronExpression, CronOptions } from '@nestjs/schedule';
 import { PrediccionsService } from '../prediccion/service';
 import { SiembrasService } from '../siembra/service';
 import { RiegoService } from '../riego/service';
+import { PREDICCIONES_MALEZAS_CRON_ENABLED } from '../../env';
 
 const CRON_OPTIONS: CronOptions = {
   timeZone: 'America/Argentina/Buenos_Aires',
@@ -27,6 +28,16 @@ export class CronService {
       }),
     );
     Logger.log('Predicciones realizadas');
+  }
+
+  // Todos los dias a las 05:30
+  @Cron('30 5 * * *', CRON_OPTIONS)
+  async hacerPrediccionesMalezas() {
+    if (!PREDICCIONES_MALEZAS_CRON_ENABLED) {
+      Logger.log('Predicciones de malezas automaticas deshabilitadas');
+      return;
+    }
+    await this.prediccionsService.hacerPrediccionesMalezas();
   }
 
   // Todos los dias a las 09:30
