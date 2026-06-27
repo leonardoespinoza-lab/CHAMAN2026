@@ -1,94 +1,175 @@
 <div class="custom-card disease-card">
-  <div class="disease-header" (click)="tienePredicciones && (verDrawerGraficoEnfermedades = true)">
+  <div class="disease-header">
     <div>
       <p class="titulo-card">{{ 'Monitoreo de enfermedades' | translate | uppercase }}</p>
       <span>{{ resumenGeneral }}</span>
     </div>
-    @if (tienePredicciones) {
-      <strong>+</strong>
+
+    @if (siembra?._id) {
+      <p-button
+        icon="pi pi-refresh"
+        [label]="etiquetaBotonActualizacion"
+        severity="secondary"
+        [outlined]="true"
+        [loading]="actualizandoPrediccion"
+        [disabled]="actualizandoPrediccion || !tieneMotorSanitario"
+        (click)="actualizarPrediccion($event)"
+      />
     }
   </div>
 
-  @if (siembra?._id) {
-    <p-button
-      icon="pi pi-refresh"
-      [label]="etiquetaBotonActualizacion"
-      severity="secondary"
-      [outlined]="true"
-      [loading]="actualizandoPrediccion"
-      [disabled]="actualizandoPrediccion || !tieneMotorSanitario"
-      [fluid]="true"
-      (click)="actualizarPrediccion($event)"
-      styleClass="mb-3"
-    />
-  }
-
   @if (enfermedadInsights.length) {
-    <div class="disease-list">
+    <div class="disease-action-grid">
       @for (item of enfermedadInsights; track item.enfermedad) {
-        <article class="disease-item" [ngClass]="item.severity">
-          <div class="disease-title">
-            <strong>{{ item.enfermedad }}</strong>
-            @if (item.prediccion) {
-              <em>{{ item.resultado | number: '1.0-1' }}%</em>
-            } @else {
-              <em>{{ item.estadoCalculo }}</em>
-            }
-          </div>
-
-          <div class="risk-row">
-            <div class="risk-copy">
-              <p>{{ item.sensibilidad }}</p>
-              <small><b>Periodo en planta:</b> {{ item.periodo }}</small>
-            </div>
-            <div class="risk-meter" [style.--fill]="item.fill + '%'">
-              <span></span>
-              <em>
-                @if (item.prediccion) {
-                  {{ item.resultado | number: '1.0-1' }}%
-                } @else {
-                  sin calculo reciente
-                }
-              </em>
-            </div>
-          </div>
-
-          <small class="variables">{{ item.variables }}</small>
-
-          @if (item.mostrarPrescripcion) {
-            <section class="prescription-panel">
-              <div class="prescription-title">
-                <strong>Prescripcion orientativa</strong>
-                <span>{{ item.prescripcion.objetivo }}</span>
-              </div>
-              <details class="prescription-products">
-                <summary>
-                  <span>Productos sugeridos</span>
-                  <strong>{{ item.prescripcion.productos.length }}</strong>
-                </summary>
-                <div class="prescription-body">
-                  <p>{{ item.prescripcion.momento }}</p>
-                  @for (producto of item.prescripcion.productos; track producto.grupo) {
-                    <article>
-                      <span>{{ producto.grupo }}</span>
-                      <strong>{{ producto.activos }}</strong>
-                      <em>{{ producto.dosisHa }}</em>
-                    </article>
-                  }
-                  <small class="prescription-note">{{ item.prescripcion.nota }}</small>
-                </div>
-              </details>
-            </section>
-          } @else {
-            <small class="calibration-note">Motor sanitario en calibracion para este cultivo.</small>
-          }
-        </article>
+        <button
+          type="button"
+          class="disease-action-card"
+          [ngClass]="item.severity"
+          [style.--fill]="item.fill + '%'"
+          (click)="abrirDetalleEnfermedad(item)"
+        >
+          <span class="status-pill">{{ item.estadoCorto }}</span>
+          <strong>{{ item.enfermedad }}</strong>
+          <span class="risk-value">{{ item.resultado | number: '1.0-1' }}%</span>
+          <span class="risk-track"><i></i></span>
+          <small>{{ item.lecturaCorta }}</small>
+        </button>
       }
     </div>
   } @else {
     <p-message severity="info">{{ 'Cargue una siembra para activar el monitoreo' | translate }}</p-message>
   }
 </div>
+
+<p-dialog
+  [(visible)]="verDetalleEnfermedad"
+  [modal]="true"
+  [dismissableMask]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(920px, 94vw)' }"
+  [breakpoints]="{ '720px': '96vw' }"
+  [header]="enfermedadSeleccionada?.enfermedad || 'Detalle sanitario'"
+  styleClass="disease-detail-dialog"
+  (onHide)="cerrarDetalleEnfermedad()"
+>
+  @if (enfermedadSeleccionada; as detalle) {
+    <section class="disease-detail">
+      <div class="detail-hero" [ngClass]="detalle.severity">
+        <div>
+          <span>{{ detalle.estadoCorto }}</span>
+          <strong>{{ detalle.enfermedad }}</strong>
+          <small>{{ detalle.descripcion }}</small>
+        </div>
+        <em>{{ detalle.resultado | number: '1.0-1' }}%</em>
+      </div>
+
+      <div class="detail-meta">
+        <article>
+          <span>Cultivo</span>
+          <strong>{{ siembra?.semilla?.cultivo || '-' }}</strong>
+        </article>
+        <article>
+          <span>Variedad</span>
+          <strong>{{ siembra?.semilla?.variedad || '-' }}</strong>
+        </article>
+        <article>
+          <span>Lectura</span>
+          <strong>{{ detalle.estadoCalculo }}</strong>
+        </article>
+        <article>
+          <span>Fecha</span>
+          <strong>
+            @if (fechaUltimaPrediccion) {
+              {{ fechaUltimaPrediccion | date: 'd/M/yy' }}
+            } @else {
+              Sin lectura
+            }
+          </strong>
+        </article>
+      </div>
+
+      <div class="detail-grid">
+        <article class="detail-panel">
+          <span>Lectura agronomica</span>
+          <p>{{ detalle.sensibilidad }}</p>
+          <small>{{ detalle.periodo }}</small>
+          <small>{{ detalle.enVentanaFenologica ? 'Ventana fenologica activa' : 'Fuera de ventana fenologica' }}</small>
+        </article>
+
+        <article class="detail-panel">
+          <span>Calculo del motor</span>
+          <p>{{ detalle.calculo }}</p>
+          <small>{{ detalle.variables }}</small>
+        </article>
+      </div>
+
+      @if (detalle.variablesDetalladas.length) {
+        <div class="variable-list">
+          @for (variable of detalle.variablesDetalladas; track variable.key) {
+            <article>
+              <span>{{ variable.label }}</span>
+              <strong>{{ variable.value }}</strong>
+            </article>
+          }
+        </div>
+      }
+
+      <section class="decision-panel" [class.confirmed]="enfermedadConfirmada(detalle.enfermedad)">
+        <div class="decision-copy">
+          <strong>Confirmacion de campo</strong>
+          <span>{{ enfermedadConfirmada(detalle.enfermedad) ? 'Enfermedad confirmada en esta revision.' : 'Confirmar solo con recorrido, sintomas o criterio tecnico.' }}</span>
+        </div>
+        <p-button
+          [label]="enfermedadConfirmada(detalle.enfermedad) ? 'Quitar confirmacion' : 'Confirmar enfermedad'"
+          [severity]="enfermedadConfirmada(detalle.enfermedad) ? 'success' : 'secondary'"
+          [outlined]="!enfermedadConfirmada(detalle.enfermedad)"
+          (click)="alternarConfirmacion(detalle.enfermedad)"
+        />
+      </section>
+
+      @if (enfermedadConfirmada(detalle.enfermedad)) {
+        <section class="prescription-panel">
+          <div class="prescription-heading">
+            <div>
+              <span>Prescripciones relacionadas</span>
+              <strong>{{ detalle.prescripcion.objetivo }}</strong>
+            </div>
+            <p-select
+              [options]="opcionesPrescripcion"
+              optionLabel="label"
+              optionValue="value"
+              [(ngModel)]="prescripcionSeleccionadaGrupo"
+              placeholder="Seleccionar"
+            />
+          </div>
+
+          @if (prescripcionSeleccionada; as producto) {
+            <article class="prescription-detail">
+              <span>{{ producto.grupo }}</span>
+              <strong>{{ producto.activos }}</strong>
+              <em>{{ producto.dosisHa }}</em>
+              <small>{{ detalle.prescripcion.momento }}</small>
+              <small>{{ detalle.prescripcion.nota }}</small>
+            </article>
+          }
+        </section>
+      }
+
+      <div class="detail-actions">
+        @if (tienePredicciones) {
+          <p-button
+            icon="pi pi-chart-line"
+            label="Ver curvas"
+            severity="secondary"
+            [outlined]="true"
+            (click)="abrirCurvas()"
+          />
+        }
+      </div>
+    </section>
+  }
+</p-dialog>
 
 @if (tienePredicciones) {
   <app-drawer-grafico-enfermedades

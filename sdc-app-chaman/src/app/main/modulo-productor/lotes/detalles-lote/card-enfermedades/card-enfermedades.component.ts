@@ -6,15 +6,49 @@ import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { DrawerGraficoEnfermedadesComponent } from '../drawer-grafico-enfermedades/drawer-grafico-enfermedades.component';
 
+interface ProductoPrescripcion {
+  grupo: string;
+  activos: string;
+  dosisHa: string;
+}
+
 interface PrescripcionEnfermedad {
   objetivo: string;
   momento: string;
-  productos: {
-    grupo: string;
-    activos: string;
-    dosisHa: string;
-  }[];
+  productos: ProductoPrescripcion[];
   nota: string;
+}
+
+interface VariableDetalle {
+  key: string;
+  label: string;
+  value: string;
+}
+
+interface PrescripcionOption {
+  label: string;
+  value: string;
+  producto: ProductoPrescripcion;
+}
+
+interface DiseaseInsight {
+  enfermedad: TEnfermedad;
+  prediccion?: IPrediccionEnfermedad;
+  resultado: number;
+  enVentanaFenologica: boolean;
+  fill: number;
+  severity: 'low' | 'medium' | 'high';
+  periodo: string;
+  sensibilidad: string;
+  variables: string;
+  variablesDetalladas: VariableDetalle[];
+  estadoCalculo: string;
+  estadoCorto: string;
+  lecturaCorta: string;
+  descripcion: string;
+  calculo: string;
+  prescripcion: PrescripcionEnfermedad;
+  mostrarPrescripcion: boolean;
 }
 
 @Component({
@@ -26,8 +60,12 @@ interface PrescripcionEnfermedad {
 export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   @Input() public siembra?: ISiembra;
   public verDrawerGraficoEnfermedades = false;
+  public verDetalleEnfermedad = false;
   public actualizandoPrediccion = false;
+  public enfermedadSeleccionada?: DiseaseInsight;
+  public prescripcionSeleccionadaGrupo?: string;
   private readonly cultivosConMotorSanitario = new Set(['Trigo', 'Soja', 'Maiz']);
+  private readonly enfermedadesConfirmadas = new Set<TEnfermedad>();
 
   constructor(
     public helper: HelperService,
@@ -51,6 +89,23 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     return this.tieneMotorSanitario ? 'Actualizar riesgo' : 'Motor en calibracion';
   }
 
+  public get fechaUltimaPrediccion(): Date | undefined {
+    const fecha = this.siembra?.ultimaPrediccion?.fechaPrediccion || this.siembra?.ultimaPrediccion?.fecha;
+    return fecha ? new Date(fecha) : undefined;
+  }
+
+  public get opcionesPrescripcion(): PrescripcionOption[] {
+    return (this.enfermedadSeleccionada?.prescripcion.productos || []).map((producto) => ({
+      label: producto.grupo,
+      value: producto.grupo,
+      producto,
+    }));
+  }
+
+  public get prescripcionSeleccionada(): ProductoPrescripcion | undefined {
+    return this.opcionesPrescripcion.find((item) => item.value === this.prescripcionSeleccionadaGrupo)?.producto;
+  }
+
   public async actualizarPrediccion(event?: Event): Promise<void> {
     event?.stopPropagation();
     if (!this.siembra?._id || this.actualizandoPrediccion || !this.tieneMotorSanitario) return;
@@ -71,11 +126,43 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     this.actualizandoPrediccion = false;
   }
 
-  public get enfermedadInsights() {
+  public abrirDetalleEnfermedad(item: DiseaseInsight): void {
+    this.enfermedadSeleccionada = item;
+    this.verDetalleEnfermedad = true;
+    this.sincronizarPrescripcionSeleccionada();
+  }
+
+  public cerrarDetalleEnfermedad(): void {
+    this.verDetalleEnfermedad = false;
+    this.enfermedadSeleccionada = undefined;
+    this.prescripcionSeleccionadaGrupo = undefined;
+  }
+
+  public alternarConfirmacion(enfermedad: TEnfermedad): void {
+    if (this.enfermedadesConfirmadas.has(enfermedad)) {
+      this.enfermedadesConfirmadas.delete(enfermedad);
+      this.prescripcionSeleccionadaGrupo = undefined;
+      return;
+    }
+    this.enfermedadesConfirmadas.add(enfermedad);
+    this.sincronizarPrescripcionSeleccionada();
+  }
+
+  public enfermedadConfirmada(enfermedad: TEnfermedad): boolean {
+    return this.enfermedadesConfirmadas.has(enfermedad);
+  }
+
+  public abrirCurvas(): void {
+    this.verDetalleEnfermedad = false;
+    this.verDrawerGraficoEnfermedades = true;
+  }
+
+  public get enfermedadInsights(): DiseaseInsight[] {
     return this.enfermedadesEsperadas().map((enfermedad) => {
       const prediccion = this.prediccionPorEnfermedad(enfermedad);
       const resultado = prediccion?.resultado ?? 0;
       const enVentanaFenologica = this.estaEnVentanaFenologica(enfermedad);
+      const estadoCalculo = this.estadoCalculo(prediccion, enfermedad);
       return {
         enfermedad,
         prediccion,
@@ -86,7 +173,12 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         periodo: this.periodoSusceptible(enfermedad),
         sensibilidad: this.sensibilidadVarietal(enfermedad),
         variables: this.resumenVariables(prediccion, enfermedad),
-        estadoCalculo: this.estadoCalculo(prediccion, enfermedad),
+        variablesDetalladas: this.variablesDetalladas(prediccion),
+        estadoCalculo,
+        estadoCorto: this.estadoCorto(prediccion, enfermedad, resultado),
+        lecturaCorta: this.lecturaCorta(prediccion, enfermedad, estadoCalculo),
+        descripcion: this.descripcionEnfermedad(enfermedad),
+        calculo: this.calculoEnfermedad(enfermedad),
         prescripcion: this.prescripcionPorEnfermedad(enfermedad),
         mostrarPrescripcion: this.tieneMotorSanitario && enVentanaFenologica,
       };
@@ -97,7 +189,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     const cultivo = this.siembra?.semilla?.cultivo || 'cultivo';
     const variedad = this.siembra?.semilla?.variedad || 'la variedad';
     if (!this.tieneMotorSanitario) {
-      return `${variedad}: motor sanitario pendiente de calibracion para ${cultivo}.`;
+      return `${variedad}: motor sanitario en calibracion para ${cultivo}.`;
     }
     if (!this.tienePredicciones) {
       const tieneVentanaActiva = this.enfermedadesEsperadas().some((enfermedad) =>
@@ -110,6 +202,24 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     }
     const mayor = [...this.enfermedadInsights].sort((a, b) => b.resultado - a.resultado)[0];
     return mayor ? `Mayor atencion: ${mayor.enfermedad}` : `Monitoreo activo para ${cultivo}.`;
+  }
+
+  private sincronizarPrescripcionSeleccionada(): void {
+    if (!this.enfermedadSeleccionada || !this.enfermedadConfirmada(this.enfermedadSeleccionada.enfermedad)) {
+      this.prescripcionSeleccionadaGrupo = undefined;
+      return;
+    }
+
+    const opciones = this.opcionesPrescripcion;
+    if (!opciones.length) {
+      this.prescripcionSeleccionadaGrupo = undefined;
+      return;
+    }
+
+    const seleccionExiste = opciones.some((item) => item.value === this.prescripcionSeleccionadaGrupo);
+    if (!seleccionExiste) {
+      this.prescripcionSeleccionadaGrupo = opciones[0].value;
+    }
   }
 
   private enfermedadesEsperadas(): TEnfermedad[] {
@@ -236,6 +346,47 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     return false;
   }
 
+  private descripcionEnfermedad(enfermedad: TEnfermedad): string {
+    const textos: Partial<Record<TEnfermedad, string>> = {
+      'Mancha Amarilla': 'Enfermedad foliar de trigo favorecida por lluvias, humedad alta y temperaturas templadas.',
+      'Roya de la Hoja': 'Roya foliar de trigo que progresa con humedad sostenida y cultivo activo.',
+      'Mancha de la Hoja': 'Complejo de manchas foliares que aumenta con humedad alta y precipitaciones relevantes.',
+      'Fusarium de la Espiga': 'Enfermedad de espiga con ventana corta en espigazon/antesis y riesgo asociado a mojado floral.',
+      'Roya Anaranjada': 'Roya de avance rapido asociada a temperatura, humedad y viento durante crecimiento activo.',
+      'Fin de Ciclo': 'Complejo sanitario de soja asociado a lluvias acumuladas durante floracion y llenado.',
+      'Roya del Maiz': 'Roya foliar de maiz favorecida por humedad muy alta y temperaturas templadas.',
+    };
+    return textos[enfermedad] || 'Riesgo sanitario configurado por cultivo, etapa fenologica y ambiente.';
+  }
+
+  private calculoEnfermedad(enfermedad: TEnfermedad): string {
+    const calculos: Partial<Record<TEnfermedad, string>> = {
+      'Mancha Amarilla': 'Severidad = (-2,25 + 1,62 x DPrHRT + 1,30 x DPr) x multiplicador varietal.',
+      'Roya de la Hoja': 'Severidad = 4,42 + 0,61 x GD + 0,57 x DHR - 30,01 x multiplicador varietal.',
+      'Mancha de la Hoja': 'Severidad = (-6,41 + 0,59 x DHR + 2,79 x DPr) x multiplicador varietal.',
+      'Fusarium de la Espiga': 'Severidad = (20,37 + 8,63 x PMoj - 0,49 x GDN) x multiplicador varietal, dentro de la ventana de GDA.',
+      'Roya Anaranjada': 'Severidad = (-63,11 + 0,96 x Tmin + 1,72 x Tmax + 3,72 x viento + 0,43 x HR) x multiplicador varietal.',
+      'Fin de Ciclo': 'Riesgo = (8 x Lt7 / 600) x multiplicador varietal, con Lt7 basado en dias y milimetros de lluvia mayor a 7 mm.',
+      'Roya del Maiz': 'Severidad = 4,42 + 0,61 x GD + 0,57 x DHR - 30,01 x multiplicador varietal.',
+    };
+    return calculos[enfermedad] || 'Modelo en calibracion: cruza cultivo, etapa, clima y sensibilidad varietal.';
+  }
+
+  private variablesDetalladas(prediccion?: IPrediccionEnfermedad): VariableDetalle[] {
+    if (!prediccion?.variables) {
+      return [];
+    }
+
+    const labels: Record<string, string> = this.variableLabels();
+    return Object.entries(prediccion.variables)
+      .filter(([, value]) => value !== undefined && value !== null && Number.isFinite(Number(value)))
+      .map(([key, value]) => ({
+        key,
+        label: labels[key] || key,
+        value: Number(value).toFixed(1),
+      }));
+  }
+
   private resumenVariables(prediccion?: IPrediccionEnfermedad, enfermedad?: TEnfermedad): string {
     if (!this.tieneMotorSanitario) {
       return 'Sin calculo sanitario calibrado para este cultivo.';
@@ -247,9 +398,18 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return 'Riesgo calculado con clima diario y sensibilidad varietal.';
     }
     if (!prediccion?.variables) {
-      return 'Sin calculo reciente. Actualizar para cruzar fenologia, humedad, lluvia y temperatura.';
+      return 'Actualizar riesgo para cruzar fenologia, humedad, lluvia y temperatura.';
     }
-    const labels: Record<string, string> = {
+    const labels: Record<string, string> = this.variableLabels();
+    return Object.entries(prediccion.variables)
+      .filter(([, value]) => value !== undefined && value !== null)
+      .map(([key, value]) => `${labels[key] || key}: ${Number(value).toFixed(1)}`)
+      .slice(0, 3)
+      .join(' - ');
+  }
+
+  private variableLabels(): Record<string, string> {
+    return {
       DHR: 'HR sostenida',
       DPr: 'dias lluvia',
       DPrHRT: 'lluvia + HR + temp',
@@ -265,12 +425,8 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       viento: 'viento',
       HR: 'HR',
     };
-    return Object.entries(prediccion.variables)
-      .filter(([, value]) => value !== undefined && value !== null)
-      .map(([key, value]) => `${labels[key] || key}: ${Number(value).toFixed(1)}`)
-      .slice(0, 3)
-      .join(' - ');
   }
+
 
   private estadoCalculo(prediccion?: IPrediccionEnfermedad, enfermedad?: TEnfermedad): string {
     if (!this.tieneMotorSanitario) {
@@ -280,9 +436,45 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return 'fuera de ventana fenologica';
     }
     if (!prediccion) {
-      return 'pendiente de actualizar';
+      return 'listo para calcular';
     }
     return 'riesgo calculado';
+  }
+
+  private estadoCorto(prediccion: IPrediccionEnfermedad | undefined, enfermedad: TEnfermedad, resultado: number): string {
+    if (!this.tieneMotorSanitario) {
+      return 'En calibracion';
+    }
+    if (!prediccion && !this.estaEnVentanaFenologica(enfermedad)) {
+      return 'Fuera de ventana';
+    }
+    if (!prediccion) {
+      return 'Sin lectura';
+    }
+    if (resultado > 20) {
+      return 'Riesgo alto';
+    }
+    if (resultado >= 15) {
+      return 'Riesgo medio';
+    }
+    return 'Riesgo bajo';
+  }
+
+  private lecturaCorta(
+    prediccion: IPrediccionEnfermedad | undefined,
+    enfermedad: TEnfermedad,
+    estadoCalculo: string,
+  ): string {
+    if (!this.tieneMotorSanitario) {
+      return 'Modelo reservado para calibracion del cultivo.';
+    }
+    if (!prediccion && !this.estaEnVentanaFenologica(enfermedad)) {
+      return 'El cultivo no esta en la etapa sensible.';
+    }
+    if (!prediccion) {
+      return 'Calculo disponible al actualizar riesgo.';
+    }
+    return `${estadoCalculo}. ${this.sensibilidadVarietal(enfermedad)}.`;
   }
 
   private etapaTrigoActual(): number | undefined {
