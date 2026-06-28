@@ -73,9 +73,12 @@
           @if (valorCapaActiva == null) {
             <p-message severity="warn">Capa pendiente de procesamiento</p-message>
           }
-          <div class="satellite-map-chip">
+          <div class="satellite-map-chip" [class.corrected]="correccionVisualLegadoActiva">
             <strong>{{ capaActiva.label }}</strong>
             <span>{{ capaActiva.value }}</span>
+            @if (correccionVisualLegadoActiva) {
+              <small>Escala corregida</small>
+            }
           </div>
           @if (!satelliteRasterVisible) {
             <div class="satellite-raster-warning">

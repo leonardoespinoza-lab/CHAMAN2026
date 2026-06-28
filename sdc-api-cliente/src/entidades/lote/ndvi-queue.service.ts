@@ -58,6 +58,7 @@ export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
     lote: ILote,
     sceneDatetime?: string | null,
     sceneCollection?: string | null,
+    forceRender = false,
   ): Promise<boolean> {
     if (!this.enabled || !this.redis) {
       return false;
@@ -73,6 +74,7 @@ export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
       lote_id: lote._id,
       scene_datetime: sceneDatetime || null,
       scene_collection: sceneCollection || null,
+      force_render: forceRender,
       polygon,
     };
     await this.redis.lpush(REDIS_NDVI_QUEUE, JSON.stringify(task));

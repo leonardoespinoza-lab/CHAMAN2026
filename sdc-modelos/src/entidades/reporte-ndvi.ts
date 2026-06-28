@@ -11,6 +11,8 @@ export interface IMetadata {
   width: number;
   height: number;
   crs: string;
+  renderVersion?: string;
+  renderStrategy?: string;
 }
 
 export interface IIndicesSatelitales {

@@ -48,6 +48,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 EARTH_SEARCH_URL = "https://planetarycomputer.microsoft.com/api/stac/v1"
+SATELLITE_RENDER_VERSION = "fixed-index-v2"
 
 BAND_MAPPING = {
     "sentinel-2-l2a": {
@@ -232,6 +233,7 @@ class NDVIWorker:
         polygon: Polygon,
         start_date: Optional[datetime] = None,
         last_collection: Optional[str] = None,
+        allow_same_date: bool = False,
     ) -> Optional[dict]:
         """Busca la escena Sentinel-2 más reciente que cubra el polígono, opcionalmente a partir de una fecha."""
         timer_start = time.time()
@@ -240,7 +242,11 @@ class NDVIWorker:
 
             # --- LÓGICA DE FECHA ---
             if start_date:
-                if last_collection and self._collection_priority(
+                if allow_same_date:
+                    search_start_date = start_date.replace(
+                        hour=0, minute=0, second=0, microsecond=0
+                    )
+                elif last_collection and self._collection_priority(
                     last_collection
                 ) > self._collection_priority("sentinel-2-l2a"):
                     search_start_date = start_date - timedelta(
@@ -349,11 +355,14 @@ class NDVIWorker:
         polygon = self._validate_polygon(task_data["polygon"])
         job_datetime = self._parse_job_datetime(task_data.get("scene_datetime"))
         job_collection = task_data.get("scene_collection")
+        force_render = bool(
+            task_data.get("force_render") or task_data.get("forceRender")
+        )
 
         try:
             # Paso 1: Obtener o descargar escena
             scene_data = await self._get_scene_data(
-                polygon, job_datetime, job_collection
+                polygon, job_datetime, job_collection, force_render
             )
             if not scene_data:
                 logger.error(f"⚠️ No se pudo obtener escena para lote {lote_id}")
@@ -365,6 +374,7 @@ class NDVIWorker:
                 job_datetime,
                 scene_data.get("collection"),
                 job_collection,
+                force_render,
             ):
                 logger.info(
                     f"⏭️ Escena {scene_data['id']} ya procesada para este job. Saltando..."
@@ -466,6 +476,7 @@ class NDVIWorker:
         polygon: Polygon,
         job_datetime: Optional[datetime],
         job_collection: Optional[str] = None,
+        force_render: bool = False,
     ) -> Optional[dict]:
         """Busca escenas válidas en caché local"""
         scenes_dir = Path(DOWNLOAD_FOLDER) / "scenes"
@@ -495,7 +506,18 @@ class NDVIWorker:
                         continue
 
                     # LÓGICA CONSISTENTE: Si hay un job_datetime y la escena en caché es igual o anterior, no es candidata.
-                    if job_datetime and scene_date.date() <= job_datetime.date():
+                    if (
+                        job_datetime
+                        and force_render
+                        and scene_date.date() < job_datetime.date()
+                    ):
+                        continue
+
+                    if (
+                        job_datetime
+                        and not force_render
+                        and scene_date.date() <= job_datetime.date()
+                    ):
                         with open(metadata_path) as f:
                             metadata_precheck = json.load(f)
                         collection_precheck = metadata_precheck.get(
@@ -559,12 +581,13 @@ class NDVIWorker:
         polygon: Polygon,
         job_datetime: Optional[datetime],
         job_collection: Optional[str] = None,
+        force_render: bool = False,
     ) -> Optional[dict]:
         """Obtiene datos de escena (de caché o nueva descarga)"""
         try:
             # 1. Buscar en caché primero (ya con la lógica corregida)
             cached_scene = await self._get_cached_scene(
-                polygon, job_datetime, job_collection
+                polygon, job_datetime, job_collection, force_render
             )
             if cached_scene:
                 logger.info(f"♻️ Usando escena en caché: {cached_scene['id']}")
@@ -572,7 +595,10 @@ class NDVIWorker:
 
             # 2. Si no hay en caché, buscar nueva escena pasando el job_datetime como start_date
             scene = await self.find_latest_sentinel_scene(
-                polygon, start_date=job_datetime, last_collection=job_collection
+                polygon,
+                start_date=job_datetime,
+                last_collection=job_collection,
+                allow_same_date=force_render,
             )
             if not scene:
                 logger.error(
@@ -733,11 +759,19 @@ class NDVIWorker:
         job_datetime: Optional[datetime],
         scene_collection: Optional[str] = None,
         job_collection: Optional[str] = None,
+        force_render: bool = False,
     ) -> bool:
         """
         Verifica si una escena ya fue procesada, comparando solo la parte de la fecha (día/mes/año).
         """
         if job_datetime is None or scene_datetime is None:
+            return False
+
+        if force_render and scene_datetime.date() >= job_datetime.date():
+            logger.info(
+                "Reproceso visual solicitado: se permite recalcular la escena "
+                f"{scene_datetime.date()}."
+            )
             return False
 
         logger.info(
@@ -912,6 +946,8 @@ class NDVIWorker:
         metadata = await self._run_in_executor(
             obtener_metadata_png_con_polygon, ndvi_data["ndvi_recorte"], polygon
         )
+        metadata["renderVersion"] = SATELLITE_RENDER_VERSION
+        metadata["renderStrategy"] = "fixed-index-scale"
 
         imagenes = await self._export_index_images(lote_id, lote_folder, ndvi_data)
 

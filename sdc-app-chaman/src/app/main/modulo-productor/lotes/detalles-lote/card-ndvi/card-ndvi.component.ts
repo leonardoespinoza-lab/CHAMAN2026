@@ -33,7 +33,7 @@ import { ListadosService } from '../../../../../auxiliares/servicios/listados';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { ENV } from '../../../../../environments/environment';
 import { NdviLegendComponent } from '../../ndvi-legend/ndvi-legend.component';
-import { legendForSatelliteIndex, SatelliteLegendItem } from './satellite-index-palettes';
+import { colorForSatelliteIndex, legendForSatelliteIndex, SatelliteLegendItem } from './satellite-index-palettes';
 
 interface NdviAnalisis {
   estado: string;
@@ -189,6 +189,9 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.imagenAtrasada) {
       return 'La base mantiene la ultima escena limpia. Al actualizar se vuelve a consultar STAC y se guarda una nueva solo si cubre el lote con calidad suficiente.';
     }
+    if (this.correccionVisualLegadoActiva) {
+      return 'Escena procesada con render legado: se corrige visualmente con una escala fija para que el color acompane el valor real del indice.';
+    }
     return 'Escena util para analisis semanal; comparar siempre con recorrida, clima, suelo y manejo reciente.';
   }
 
@@ -316,6 +319,15 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     return legendForSatelliteIndex(this.capaActiva.key);
   }
 
+  public get correccionVisualLegadoActiva(): boolean {
+    return !!this.reporte?.fechaDeLaImagen && !this.renderSatelitalConfiable && this.valorCapaActiva != null;
+  }
+
+  public get renderSatelitalConfiable(): boolean {
+    const metadata = this.reporte?.metadataImagen as any;
+    return metadata?.renderVersion === 'fixed-index-v2';
+  }
+
   public seleccionarCapa(indicator: SatelliteIndicator): void {
     if (indicator.status === 'activo') {
       this.capaSatelitalActiva = indicator.key;
@@ -410,7 +422,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
         imageExtent: extent,
         projection: this.satelliteMap.getView().getProjection(),
       }),
-      opacity: 1,
+      opacity: this.correccionVisualLegadoActiva ? 0.22 : 1,
       zIndex: 10,
       extent,
     });
@@ -430,9 +442,12 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private estiloMapaSatelital(): Style[] {
+    const fillColor = this.correccionVisualLegadoActiva
+      ? this.colorCapaActiva(0.72)
+      : 'rgba(255, 255, 255, 0)';
     return [
       new Style({
-        fill: new Fill({ color: 'rgba(255, 255, 255, 0)' }),
+        fill: new Fill({ color: fillColor }),
         stroke: new Stroke({ color: 'rgba(255, 255, 255, 0.72)', width: 2.6 }),
       }),
       new Style({
@@ -443,6 +458,11 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private valorIndice(key: SatelliteIndicator['key']): number | undefined {
     return this.reporte?.indices?.[key] ?? (key === 'ndvi' ? this.reporte?.ndviPromedio : undefined);
+  }
+
+  private colorCapaActiva(opacity: number): string {
+    const color = colorForSatelliteIndex(this.capaActiva.key, this.valorCapaActiva);
+    return color.replace(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*[\d.]+\)/, `rgba($1, $2, $3, ${opacity})`);
   }
 
   private coordenadasLote(): Array<[number, number]> {

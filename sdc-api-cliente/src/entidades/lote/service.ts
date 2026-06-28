@@ -183,16 +183,20 @@ export class LotesService {
     const lote = await this.getById(id, permiso);
     const ultimoReporte = await this.getUltimoReporteNdviReferencia(id, permiso);
     const ultimaFechaImagen = ultimoReporte?.fecha || null;
+    const reprocesarRender = this.debeReprocesarRenderSatelital(ultimoReporte);
     const encolado = await this.ndviQueue.enqueueLote(
       lote,
       ultimaFechaImagen,
       ultimoReporte?.coleccion || null,
+      reprocesarRender,
     );
     return {
       encolado,
       ultimaFechaImagen,
       mensaje: encolado
-        ? 'Tarea NDVI satelital encolada. El reporte aparecera cuando el worker termine el procesamiento.'
+        ? reprocesarRender
+          ? 'Tarea NDVI satelital encolada para reprocesar la escala visual del ultimo reporte.'
+          : 'Tarea NDVI satelital encolada. El reporte aparecera cuando el worker termine el procesamiento.'
         : 'No se pudo encolar NDVI. Verificar Redis, worker NDVI y poligono del lote.',
     };
   }
@@ -254,6 +258,7 @@ export class LotesService {
           lote,
           ultimoReporte?.fecha || null,
           ultimoReporte?.coleccion || null,
+          this.debeReprocesarRenderSatelital(ultimoReporte),
         );
         if (encolado) {
           encolados++;
@@ -1689,7 +1694,11 @@ export class LotesService {
   private async getUltimoReporteNdviReferencia(
     idLote: string,
     permiso: IPermiso,
-  ): Promise<{ fecha: string | null; coleccion: string | null } | null> {
+  ): Promise<{
+    fecha: string | null;
+    coleccion: string | null;
+    renderVersion: string | null;
+  } | null> {
     const query: IQueryParam = {
       filter: JSON.stringify({ idLote }),
       limit: 1,
@@ -1703,7 +1712,14 @@ export class LotesService {
     return {
       fecha: this.toIsoString(ultimo.fechaDeLaImagen || ultimo.fechaCreacion),
       coleccion: ultimo.coleccion || null,
+      renderVersion: ultimo.metadataImagen?.renderVersion || null,
     };
+  }
+
+  private debeReprocesarRenderSatelital(
+    reporte?: { fecha: string | null; renderVersion?: string | null } | null,
+  ): boolean {
+    return !!reporte?.fecha && reporte.renderVersion !== 'fixed-index-v2';
   }
 
   private toIsoString(value: unknown): string | null {
