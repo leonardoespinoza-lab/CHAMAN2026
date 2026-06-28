@@ -265,6 +265,10 @@ export class AgroclimaService {
         fecha: dia.fecha,
         fechaSiembra: siembra.fechaSiembra,
         etapasFenologia: siembra.semilla?.fenologiaReferencia?.etapas,
+        ajusteVarietalC: siembra.semilla?.sensibilidadHelada?.ajusteUmbralC,
+        ajustesHeladaPorFase:
+          siembra.semilla?.sensibilidadHelada?.ajustesPorFase,
+        fuenteAjusteVarietal: siembra.semilla?.sensibilidadHelada?.fuente,
       });
       const posibilidad = this.posibilidadDanoHelada(
         dia.temperaturaMin,
@@ -293,6 +297,9 @@ export class AgroclimaService {
         umbralDanoSeveroC: contexto?.tempDanoSeveroC,
         fuenteUmbral: contexto?.fuente,
         margenUmbralC: margen,
+        calibracionVarietal: contexto?.calibracionVarietal,
+        ajusteVarietalC: contexto?.ajusteVarietalC,
+        fuenteAjusteVarietal: contexto?.fuenteAjusteVarietal,
         evidencia: [
           dia.temperaturaMin !== undefined
             ? `Temperatura minima prevista ${dia.temperaturaMin} C`
@@ -307,6 +314,9 @@ export class AgroclimaService {
             ? `Umbral dano severo ${contexto.tempDanoSeveroC} C`
             : 'Sin umbral severo disponible',
           contexto?.fuente ? `Referencia: ${contexto.fuente}` : '',
+          contexto?.calibracionVarietal === 'base_fenologica'
+            ? 'Calibracion: base fenologica'
+            : `Calibracion varietal: ${contexto?.fuenteAjusteVarietal || 'ajuste cargado'}`,
         ].filter((item): item is string => !!item),
       };
     });
@@ -341,6 +351,9 @@ export class AgroclimaService {
       umbralDanoLeveC: critico?.umbralDanoLeveC,
       umbralDanoSeveroC: critico?.umbralDanoSeveroC,
       fuenteUmbral: critico?.fuenteUmbral,
+      calibracionVarietal: critico?.calibracionVarietal,
+      ajusteVarietalC: critico?.ajusteVarietalC,
+      fuenteAjusteVarietal: critico?.fuenteAjusteVarietal,
       diasRiesgo: dias.filter((dia) => dia.nivel !== 'bajo').length,
       evidencia: (critico?.evidencia || []).filter(
         (item): item is string => !!item,
@@ -416,6 +429,9 @@ export class AgroclimaService {
       umbralDanoLeveC: riesgo.umbralDanoLeveC,
       umbralDanoSeveroC: riesgo.umbralDanoSeveroC,
       fuenteUmbral: riesgo.fuenteUmbral,
+      calibracionVarietal: riesgo.calibracionVarietal,
+      ajusteVarietalC: riesgo.ajusteVarietalC,
+      fuenteAjusteVarietal: riesgo.fuenteAjusteVarietal,
       diasRiesgo: riesgo.diasRiesgo,
       lectura: riesgo.lectura,
       recomendacion: riesgo.recomendacion,
@@ -436,6 +452,8 @@ export class AgroclimaService {
       fechaCritica: riesgo.fechaCritica,
       etapaFenologica: riesgo.etapaFenologica,
       umbralDanoLeveC: riesgo.umbralDanoLeveC,
+      calibracionVarietal: riesgo.calibracionVarietal,
+      ajusteVarietalC: riesgo.ajusteVarietalC,
     };
   }
 

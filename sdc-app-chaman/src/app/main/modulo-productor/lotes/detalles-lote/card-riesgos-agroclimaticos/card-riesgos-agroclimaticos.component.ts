@@ -91,6 +91,8 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
         cultivo: this.siembra?.semilla?.cultivo,
         variedad: this.siembra?.semilla?.variedad,
         fechaSiembra: this.siembra?.fechaSiembra,
+        ajusteHeladaC: this.siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
+        fuenteAjusteVarietal: this.siembra?.semilla?.sensibilidadHelada?.fuente,
       });
       CardRiesgosAgroclimaticosComponent.pending.set(key, request);
       this.riesgos = await request;
@@ -118,6 +120,13 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
     });
   }
 
+  public calibracionLabel(riesgo?: IRiesgoAgroclimatico): string {
+    if (!riesgo?.calibracionVarietal) return 'Base fenologica';
+    if (riesgo.calibracionVarietal === 'semilla') return 'Variedad cargada';
+    if (riesgo.calibracionVarietal === 'variedad') return 'Tabla varietal';
+    return 'Base fenologica';
+  }
+
   public ngOnChanges(changes: SimpleChanges): void {
     if (changes['lote'] || changes['siembra']) {
       void this.cargar();
@@ -138,6 +147,8 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
       this.siembra?.semilla?.cultivo,
       this.siembra?.semilla?.variedad,
       this.siembra?.fechaSiembra,
+      this.siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
+      this.siembra?.semilla?.sensibilidadHelada?.fuente,
       new Date().toISOString().slice(0, 10),
     ].join('|');
   }

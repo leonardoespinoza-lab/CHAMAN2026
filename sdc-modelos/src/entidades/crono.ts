@@ -68,6 +68,8 @@ export interface IUmbralHeladaFenologico {
 export interface IContextoHeladaFenologico extends IUmbralHeladaFenologico {
   variedad?: string;
   ajusteVarietalC?: number;
+  fuenteAjusteVarietal?: string;
+  calibracionVarietal: "base_fenologica" | "variedad" | "semilla";
   etapaDetectada: string;
   fechaEvaluada: string;
 }
@@ -79,6 +81,19 @@ export interface IResolverContextoHeladaParams {
   fechaSiembra?: string | Date;
   etapaFenologica?: string;
   etapasFenologia?: Record<string, number | string>;
+  ajusteVarietalC?: number;
+  ajustesHeladaPorFase?: Partial<Record<FaseHeladaFenologica, number>>;
+  fuenteAjusteVarietal?: string;
+}
+
+export interface IAjusteHeladaVarietal {
+  cultivo: string;
+  variedad: string;
+  aliases?: string[];
+  ajusteUmbralC?: number;
+  ajustesPorFase?: Partial<Record<FaseHeladaFenologica, number>>;
+  fuente: string;
+  observaciones?: string;
 }
 
 export const ETAPAS_PERENNES_REFERENCIA: Record<
@@ -405,6 +420,8 @@ export const UMBRALES_HELADA_FENOLOGICOS: Record<
   ],
 };
 
+export const AJUSTES_HELADA_VARIEDAD: IAjusteHeladaVarietal[] = [];
+
 export const CONFIGURACION_FRIO_CULTIVOS: Record<
   string,
   IConfiguracionFrioCultivo
@@ -571,6 +588,53 @@ function elegirUmbralHelada(
   return match || tabla[0];
 }
 
+function buscarAjusteHeladaVarietal(
+  cultivo: string,
+  variedad?: string,
+): IAjusteHeladaVarietal | undefined {
+  const variedadNormalizada = normalizarTextoHelada(variedad);
+  if (!variedadNormalizada) return undefined;
+  return AJUSTES_HELADA_VARIEDAD.find((ajuste) => {
+    if (canonicalCultivoHelada(ajuste.cultivo) !== cultivo) return false;
+    return [ajuste.variedad, ...(ajuste.aliases || [])].some(
+      (alias) => normalizarTextoHelada(alias) === variedadNormalizada,
+    );
+  });
+}
+
+function resolverAjusteVarietal(
+  params: IResolverContextoHeladaParams,
+  cultivo: string,
+  fase: FaseHeladaFenologica,
+): {
+  ajuste: number;
+  fuente?: string;
+  calibracion: IContextoHeladaFenologico["calibracionVarietal"];
+} {
+  const ajusteDesdeSemilla =
+    params.ajustesHeladaPorFase?.[fase] ?? params.ajusteVarietalC;
+  if (Number.isFinite(Number(ajusteDesdeSemilla))) {
+    return {
+      ajuste: Number(ajusteDesdeSemilla),
+      fuente: params.fuenteAjusteVarietal || "Ficha tecnica de semilla",
+      calibracion: "semilla",
+    };
+  }
+
+  const ajusteVariedad = buscarAjusteHeladaVarietal(cultivo, params.variedad);
+  const ajusteDesdeTabla =
+    ajusteVariedad?.ajustesPorFase?.[fase] ?? ajusteVariedad?.ajusteUmbralC;
+  if (Number.isFinite(Number(ajusteDesdeTabla))) {
+    return {
+      ajuste: Number(ajusteDesdeTabla),
+      fuente: ajusteVariedad?.fuente,
+      calibracion: "variedad",
+    };
+  }
+
+  return { ajuste: 0, calibracion: "base_fenologica" };
+}
+
 export function resolverContextoHeladaFenologico(
   params: IResolverContextoHeladaParams,
 ): IContextoHeladaFenologico | undefined {
@@ -589,11 +653,18 @@ export function resolverContextoHeladaFenologico(
     etapaPerennePorFecha(cultivo, fechaEvaluada, params.etapasFenologia);
   const umbral = elegirUmbralHelada(cultivo, etapaDetectada);
   if (!umbral) return undefined;
+  const ajusteVarietal = resolverAjusteVarietal(params, cultivo, umbral.fase);
 
   return {
     ...umbral,
+    tempDanoLeveC:
+      Math.round((umbral.tempDanoLeveC + ajusteVarietal.ajuste) * 10) / 10,
+    tempDanoSeveroC:
+      Math.round((umbral.tempDanoSeveroC + ajusteVarietal.ajuste) * 10) / 10,
     variedad: params.variedad,
-    ajusteVarietalC: 0,
+    ajusteVarietalC: ajusteVarietal.ajuste,
+    fuenteAjusteVarietal: ajusteVarietal.fuente,
+    calibracionVarietal: ajusteVarietal.calibracion,
     etapaDetectada,
     fechaEvaluada: fechaEvaluada.toISOString().slice(0, 10),
   };

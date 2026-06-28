@@ -100,6 +100,10 @@ export class ClimaService {
       temperaturaBaseGradosDia?: number;
       gradosDiaBrotacionObjetivo?: number;
       gradosDiaFloracionObjetivo?: number;
+      variedad?: string;
+      fechaSiembra?: string;
+      ajusteHeladaC?: number;
+      fuenteAjusteVarietal?: string;
     } = {}
   ): Promise<IFrioTermicoCultivo> {
     const query = Object.fromEntries(
@@ -116,6 +120,8 @@ export class ClimaService {
       variedad?: string;
       fechaSiembra?: string;
       etapaFenologica?: string;
+      ajusteHeladaC?: number;
+      fuenteAjusteVarietal?: string;
     } = {}
   ): Promise<IResumenRiesgosAgroclimaticos> {
     const query = Object.fromEntries(

@@ -79,6 +79,10 @@ export class ClimaController {
     gradosDiaBrotacionObjetivo?: string,
     @Query('gradosDiaFloracionObjetivo')
     gradosDiaFloracionObjetivo?: string,
+    @Query('variedad') variedad?: string,
+    @Query('fechaSiembra') fechaSiembra?: string,
+    @Query('ajusteHeladaC') ajusteHeladaC?: string,
+    @Query('fuenteAjusteVarietal') fuenteAjusteVarietal?: string,
   ) {
     return await this.service.getFrioTermico(
       Number(lat),
@@ -100,6 +104,12 @@ export class ClimaController {
           gradosDiaFloracionObjetivo,
         ),
       },
+      {
+        variedad,
+        fechaSiembra,
+        ajusteVarietalC: this.toNumberOrUndefined(ajusteHeladaC),
+        fuenteAjusteVarietal,
+      },
     );
   }
 
@@ -113,12 +123,20 @@ export class ClimaController {
     @Query('variedad') variedad?: string,
     @Query('fechaSiembra') fechaSiembra?: string,
     @Query('etapaFenologica') etapaFenologica?: string,
+    @Query('ajusteHeladaC') ajusteHeladaC?: string,
+    @Query('fuenteAjusteVarietal') fuenteAjusteVarietal?: string,
   ) {
     return await this.service.getRiesgosAgroclimaticos(
       Number(lat),
       Number(lng),
       cultivo,
-      { variedad, fechaSiembra, etapaFenologica },
+      {
+        variedad,
+        fechaSiembra,
+        etapaFenologica,
+        ajusteVarietalC: this.toNumberOrUndefined(ajusteHeladaC),
+        fuenteAjusteVarietal,
+      },
     );
   }
 

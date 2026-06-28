@@ -119,6 +119,9 @@ export interface IDiaRiesgoAgroclimatico {
   umbralDanoSeveroC?: number;
   fuenteUmbral?: string;
   margenUmbralC?: number;
+  calibracionVarietal?: string;
+  ajusteVarietalC?: number;
+  fuenteAjusteVarietal?: string;
   evidencia?: string[];
 }
 
@@ -136,6 +139,9 @@ export interface IRiesgoAgroclimatico {
   umbralDanoLeveC?: number;
   umbralDanoSeveroC?: number;
   fuenteUmbral?: string;
+  calibracionVarietal?: string;
+  ajusteVarietalC?: number;
+  fuenteAjusteVarietal?: string;
   diasRiesgo: number;
   evidencia: string[];
   serie: IDiaRiesgoAgroclimatico[];

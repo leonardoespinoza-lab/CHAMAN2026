@@ -430,6 +430,10 @@ export class CardFrioTermicoComponent implements OnChanges {
       const requerimientoFrio = this.siembra?.semilla?.requerimientoFrio || {};
       const request = this.climaService.getFrioTermico(centro.lat, centro.lng, {
         cultivo: this.siembra?.semilla?.cultivo,
+        variedad: this.siembra?.semilla?.variedad,
+        fechaSiembra: this.siembra?.fechaSiembra,
+        ajusteHeladaC: this.siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
+        fuenteAjusteVarietal: this.siembra?.semilla?.sensibilidadHelada?.fuente,
         horasFrioObjetivo: requerimientoFrio.horasFrio,
         horasFrioEfectivasObjetivo: requerimientoFrio.horasFrioEfectivas,
         porcionesFrioObjetivo: requerimientoFrio.porcionesFrio,
@@ -523,6 +527,10 @@ export class CardFrioTermicoComponent implements OnChanges {
       centro?.lat,
       centro?.lng,
       this.siembra?.semilla?.cultivo,
+      this.siembra?.semilla?.variedad,
+      this.siembra?.fechaSiembra,
+      this.siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
+      this.siembra?.semilla?.sensibilidadHelada?.fuente,
       requerimientoFrio.horasFrio,
       requerimientoFrio.horasFrioEfectivas,
       requerimientoFrio.porcionesFrio,

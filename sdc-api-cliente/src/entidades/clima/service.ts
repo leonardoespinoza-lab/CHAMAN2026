@@ -690,6 +690,12 @@ export class ClimaService {
       gradosDiaBrotacionObjetivo?: number;
       gradosDiaFloracionObjetivo?: number;
     } = {},
+    contextoHelada: {
+      variedad?: string;
+      fechaSiembra?: string;
+      ajusteVarietalC?: number;
+      fuenteAjusteVarietal?: string;
+    } = {},
   ): Promise<IFrioTermicoCultivo> {
     const latNum = Number(lat);
     const lngNum = Number(lng);
@@ -732,6 +738,7 @@ export class ClimaService {
       lngNum,
       cultivo,
       requerimientos,
+      contextoHelada,
     );
     const cached = this.frioTermicoCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
@@ -838,7 +845,11 @@ export class ClimaService {
         requerimientos.gradosDiaFloracionObjetivo,
       ),
     };
-    const riesgoHelada = this.getRiesgoHelada(forecast, cultivo);
+    const riesgoHelada = this.getRiesgoHelada(
+      forecast,
+      cultivo,
+      contextoHelada,
+    );
     const eventos = this.getEventosFrioTermico(
       progreso,
       riesgoHelada,
@@ -888,6 +899,8 @@ export class ClimaService {
       variedad?: string;
       fechaSiembra?: string;
       etapaFenologica?: string;
+      ajusteVarietalC?: number;
+      fuenteAjusteVarietal?: string;
     } = {},
   ): Promise<IResumenRiesgosAgroclimaticos> {
     const latNum = Number(lat);
@@ -915,6 +928,12 @@ export class ClimaService {
     lng: number,
     cultivo: string | undefined,
     requerimientos: Record<string, number | undefined>,
+    contextoHelada: {
+      variedad?: string;
+      fechaSiembra?: string;
+      ajusteVarietalC?: number;
+      fuenteAjusteVarietal?: string;
+    } = {},
   ): string {
     const req = Object.entries(requerimientos)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -924,6 +943,10 @@ export class ClimaService {
       this.round(lat, 4),
       this.round(lng, 4),
       cultivo || 'cultivo',
+      contextoHelada.variedad || 'variedad',
+      contextoHelada.fechaSiembra || 'fecha',
+      contextoHelada.ajusteVarietalC ?? '',
+      contextoHelada.fuenteAjusteVarietal || '',
       this.toDateKey(new Date()),
       req,
     ].join('|');
@@ -1251,6 +1274,8 @@ export class ClimaService {
       variedad?: string;
       fechaSiembra?: string;
       etapaFenologica?: string;
+      ajusteVarietalC?: number;
+      fuenteAjusteVarietal?: string;
     } = {},
   ): IRiesgoAgroclimatico {
     const aplica = esCultivoPerenne(cultivo);
@@ -1278,6 +1303,8 @@ export class ClimaService {
         fecha: dia.fecha,
         fechaSiembra: contextoCultivo.fechaSiembra,
         etapaFenologica: contextoCultivo.etapaFenologica,
+        ajusteVarietalC: contextoCultivo.ajusteVarietalC,
+        fuenteAjusteVarietal: contextoCultivo.fuenteAjusteVarietal,
       });
       const posibilidad = this.posibilidadDanoHelada(
         dia.temperaturaMin,
@@ -1305,6 +1332,9 @@ export class ClimaService {
           ? `Umbral dano severo ${contexto.tempDanoSeveroC} C`
           : 'Sin umbral severo disponible',
         contexto?.fuente ? `Referencia: ${contexto.fuente}` : '',
+        contexto?.calibracionVarietal === 'base_fenologica'
+          ? 'Calibracion: base fenologica'
+          : `Calibracion varietal: ${contexto?.fuenteAjusteVarietal || 'ajuste cargado'}`,
       ].filter((item): item is string => !!item);
       return {
         fecha: dia.fecha,
@@ -1321,6 +1351,9 @@ export class ClimaService {
         umbralDanoSeveroC: contexto?.tempDanoSeveroC,
         fuenteUmbral: contexto?.fuente,
         margenUmbralC: margen,
+        calibracionVarietal: contexto?.calibracionVarietal,
+        ajusteVarietalC: contexto?.ajusteVarietalC,
+        fuenteAjusteVarietal: contexto?.fuenteAjusteVarietal,
         evidencia,
       };
     });
@@ -1356,6 +1389,9 @@ export class ClimaService {
       umbralDanoLeveC: critico?.umbralDanoLeveC,
       umbralDanoSeveroC: critico?.umbralDanoSeveroC,
       fuenteUmbral: critico?.fuenteUmbral,
+      calibracionVarietal: critico?.calibracionVarietal,
+      ajusteVarietalC: critico?.ajusteVarietalC,
+      fuenteAjusteVarietal: critico?.fuenteAjusteVarietal,
       diasRiesgo,
       evidencia: critico?.evidencia || [],
       serie: dias,
@@ -1547,11 +1583,21 @@ export class ClimaService {
   private getRiesgoHelada(
     serie: ISerieFrioTermicoDia[],
     cultivo?: string,
+    contextoHelada: {
+      variedad?: string;
+      fechaSiembra?: string;
+      ajusteVarietalC?: number;
+      fuenteAjusteVarietal?: string;
+    } = {},
   ): IFrioTermicoCultivo['riesgoHelada'] {
     const diasEvaluados = serie.map((dia) => {
       const contexto = resolverContextoHeladaFenologico({
         cultivo,
         fecha: dia.fecha,
+        variedad: contextoHelada.variedad,
+        fechaSiembra: contextoHelada.fechaSiembra,
+        ajusteVarietalC: contextoHelada.ajusteVarietalC,
+        fuenteAjusteVarietal: contextoHelada.fuenteAjusteVarietal,
       });
       const posibilidad = this.posibilidadDanoHelada(
         dia.temperaturaMin,

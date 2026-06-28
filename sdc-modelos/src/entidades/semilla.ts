@@ -1,34 +1,34 @@
-import { Cultivo, TipoCicloCultivo } from './crono';
+import { Cultivo, FaseHeladaFenologica, TipoCicloCultivo } from "./crono";
 
 export type TEnfermedad =
   // Trigo
-  | 'Fusarium de la Espiga'
-  | 'Mancha Amarilla'
-  | 'Mancha de la Hoja'
-  | 'Roya de la Hoja'
-  | 'Roya del Tallo'
-  | 'Roya Anaranjada'
+  | "Fusarium de la Espiga"
+  | "Mancha Amarilla"
+  | "Mancha de la Hoja"
+  | "Roya de la Hoja"
+  | "Roya del Tallo"
+  | "Roya Anaranjada"
   // Soja
-  | 'Fin de Ciclo'
+  | "Fin de Ciclo"
   // Maiz
-  | 'Roya del Maiz'
+  | "Roya del Maiz"
   // Vid
-  | 'Oidio'
-  | 'Botritis'
-  | 'Mildiu'
+  | "Oidio"
+  | "Botritis"
+  | "Mildiu"
   // Papa
-  | 'Tizon Tardio'
-  | 'Tizon Temprano'
-  | 'Rhizoctonia'
+  | "Tizon Tardio"
+  | "Tizon Temprano"
+  | "Rhizoctonia"
   // Frutales
-  | 'Sarna del Manzano'
-  | 'Sarna del Peral'
-  | 'Sarna del Pecan'
-  | 'Oidio del Manzano'
-  | 'Fuego Bacteriano'
-  | 'Carpocapsa'
-  | 'Psila del Peral'
-  | 'Bacteriosis del Pecan';
+  | "Sarna del Manzano"
+  | "Sarna del Peral"
+  | "Sarna del Pecan"
+  | "Oidio del Manzano"
+  | "Fuego Bacteriano"
+  | "Carpocapsa"
+  | "Psila del Peral"
+  | "Bacteriosis del Pecan";
 
 export interface IResistencia {
   multiplicador?: number;
@@ -50,6 +50,13 @@ export interface IFenologiaReferencia {
   editable?: boolean;
 }
 
+export interface ISensibilidadHelada {
+  ajusteUmbralC?: number;
+  ajustesPorFase?: Partial<Record<FaseHeladaFenologica, number>>;
+  fuente?: string;
+  observaciones?: string;
+}
+
 export interface ISemilla {
   _id?: string;
   codigoCarga?: string;
@@ -64,11 +71,12 @@ export interface ISemilla {
   portainjerto?: string;
   requerimientoFrio?: IRequerimientoFrio;
   fenologiaReferencia?: IFenologiaReferencia;
+  sensibilidadHelada?: ISensibilidadHelada;
   observaciones?: string;
 }
 
-type OmitirCreate = '_id';
+type OmitirCreate = "_id";
 export interface ICreateSemilla extends Omit<Partial<ISemilla>, OmitirCreate> {}
 
-type OmitirUpdate = '_id';
+type OmitirUpdate = "_id";
 export interface IUpdateSemilla extends Omit<Partial<ISemilla>, OmitirUpdate> {}
