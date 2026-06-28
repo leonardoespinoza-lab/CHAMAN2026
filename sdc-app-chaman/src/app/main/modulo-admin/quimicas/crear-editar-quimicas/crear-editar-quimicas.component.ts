@@ -251,8 +251,8 @@ export class CrearEditarQuimicasComponent implements OnInit, OnDestroy {
       await this.onMostrarLicenciaChange(true);
     }
     this.titulo = this.quimica
-      ? () => this.translate.instant(`Editar química`)
-      : () => this.translate.instant(`Crear química`);
+      ? () => this.translate.instant(`Editar compañía`)
+      : () => this.translate.instant(`Crear compañía`);
     this.createForm();
     this.subcribeFormChanges();
     this.loading = false;

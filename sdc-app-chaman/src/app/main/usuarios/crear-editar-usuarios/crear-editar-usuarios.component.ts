@@ -48,6 +48,9 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
   public quimicas: IQuimica[] = [];
   public quimicas$?: Subscription;
   public productorPreseleccionado?: IProductor;
+  public readonly passwordPolicyText =
+    'Minimo 8 caracteres, una mayuscula, una minuscula y un numero. Sin espacios.';
+  private readonly passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)\S{8,}$/;
   public modulosPermiso: { key: ModuloPermiso; label: string }[] = [
     { key: 'Enfermedades', label: 'Enfermedades' },
     { key: 'Riego', label: 'Riego' },
@@ -136,7 +139,7 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
   private createForm(): void {
     this.form = new FormGroup({
       username: new FormControl(this.usuario?.username, Validators.required),
-      password: new FormControl('', !this.usuario ? Validators.required : null),
+      password: new FormControl('', this.passwordValidators(!this.usuario)),
       datosPersonales: new FormGroup({
         nombre: new FormControl(this.usuario?.datosPersonales?.nombre),
         telefono: new FormControl(this.usuario?.datosPersonales?.['telefono']),
@@ -145,6 +148,14 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
       permisos: new FormArray(this.initPermisos(), Validators.required),
     });
     this.permisos.controls.forEach((_, i) => this.cambioNivel(i, false));
+  }
+
+  private passwordValidators(required: boolean) {
+    const validators = [
+      Validators.minLength(8),
+      Validators.pattern(this.passwordPattern),
+    ];
+    return required ? [Validators.required, ...validators] : validators;
   }
 
   public cambioNivel(i: number, reset = true) {

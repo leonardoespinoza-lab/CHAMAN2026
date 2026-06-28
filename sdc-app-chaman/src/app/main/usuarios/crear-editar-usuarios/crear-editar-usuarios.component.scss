@@ -54,6 +54,13 @@
   font-weight: 600;
 }
 
+.password-policy {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.84rem;
+}
+
 :host {
   display: block;
   min-height: 100dvh;

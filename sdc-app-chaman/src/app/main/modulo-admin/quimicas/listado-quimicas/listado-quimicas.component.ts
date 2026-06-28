@@ -53,7 +53,7 @@ export class ListadoQuimicasComponent implements OnInit, OnDestroy {
     this.confirmationService.confirm({
       // target: event.target as EventTarget,
       header: this.translate.instant('Por favor, confirme la acción'),
-      message: this.translate.instant('¿Desea eliminar la química?'),
+      message: this.translate.instant('¿Desea eliminar la compañía?'),
       closable: true,
       closeOnEscape: true,
       icon: 'pi pi-exclamation-triangle',

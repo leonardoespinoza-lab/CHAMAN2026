@@ -23,7 +23,7 @@ export class DashboardAdminComponent {
   public readonly quickActions = [
     { label: 'Usuario', icon: 'pi pi-user-plus', route: '/usuarios/crear' },
     { label: 'Productor', icon: 'pi pi-id-card', route: '/productores/crear' },
-    { label: 'Quimica', icon: 'pi pi-building', route: '/quimicas/crear' },
+    { label: 'Compañía', icon: 'pi pi-building', route: '/quimicas/crear' },
     { label: 'LoRaWAN', icon: 'pi pi-microchip', route: '/dispositivos/crear' },
     { label: 'FieldClimate', icon: 'pi pi-cloud', route: '/fieldclimate' },
     { label: 'Algoritmos', icon: 'pi pi-sliders-h', route: '/algoritmos' },
@@ -32,14 +32,14 @@ export class DashboardAdminComponent {
   public readonly cards: AdminServiceCard[] = [
     {
       title: 'Usuarios y permisos',
-      description: 'Alta de administradores, productores, distribuidores, quimicas y roles de acceso.',
+      description: 'Alta de administradores, compañías, distribuidores, productores y roles de acceso.',
       icon: 'pi pi-users',
       route: '/usuarios',
       group: 'Identidad',
       status: 'Operativo',
     },
     {
-      title: 'Quimicas',
+      title: 'Compañías',
       description: 'Organizaciones principales, relaciones comerciales y estructura superior.',
       icon: 'pi pi-building',
       route: '/quimicas',
@@ -48,7 +48,7 @@ export class DashboardAdminComponent {
     },
     {
       title: 'Distribuidores',
-      description: 'Red comercial intermedia asociada a quimicas y productores.',
+      description: 'Red comercial intermedia asociada a compañías y productores.',
       icon: 'pi pi-sitemap',
       route: '/distribuidores',
       group: 'Estructura',

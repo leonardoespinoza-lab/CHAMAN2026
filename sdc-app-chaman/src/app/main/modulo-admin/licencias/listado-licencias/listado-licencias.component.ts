@@ -113,7 +113,7 @@ export class ListadoLicenciasComponent implements OnInit, OnDestroy {
     const quimica = asociacion.quimica?.nombre;
     const distribuidor = asociacion.distribuidor?.nombre;
     const productor = asociacion.productor?.nombre;
-    if (quimica) return `Quimica: ${quimica}`;
+    if (quimica) return `Compañía: ${quimica}`;
     if (distribuidor) return `Distribuidor: ${distribuidor}`;
     if (productor) return `Productor: ${productor}`;
     return asociacion.idEntidad ? `Entidad ${asociacion.idEntidad}` : 'Sin entidad';

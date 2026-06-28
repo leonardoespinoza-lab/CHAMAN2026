@@ -17,6 +17,9 @@ import { AuthenticationService } from '../../auxiliares/authentication/authentic
 
 @Injectable()
 export class UsuariosService {
+  private readonly passwordPolicyMessage =
+    'La contrasena debe tener al menos 8 caracteres, incluir mayuscula, minuscula y numero, sin espacios.';
+
   constructor(
     private repository: UsuariosRepository,
     private productorService: ProductorsService,
@@ -52,11 +55,13 @@ export class UsuariosService {
       throw new BadRequestException('La contraseña es obligatoria');
     }
     this.validarPermisosAsignados(data.permisos, permiso);
+    this.validarPassword(data.password);
     data.hash = await this.hashClave(data.password);
     return await this.repository.create(data);
   }
 
   async crearFront(data: ICreateUsuario): Promise<IUsuario> {
+    this.validarPassword(data.password);
     data.hash = await this.hashClave(data.password);
     // Default a una quimica y distribuidora
     // "65f044fe3584e3c22061f786" Chamán Química
@@ -93,6 +98,7 @@ export class UsuariosService {
       this.validarPermisosAsignados(data.permisos, permiso);
     }
     if (data.password) {
+      this.validarPassword(data.password);
       data.hash = await this.hashClave(data.password);
     }
     return await this.repository.update(id, data);
@@ -131,7 +137,7 @@ export class UsuariosService {
       oldPassword,
     );
     if (!res.valid) {
-      throw new Error('La contraseña actual es incorrecta');
+      throw new BadRequestException('La contrasena actual es incorrecta');
     }
     // El hash se hacen en el metodo updateUsuario
     return await this.update(user._id, { password: newPassword }, permiso);
@@ -141,6 +147,19 @@ export class UsuariosService {
 
   private async hashClave(clave: string): Promise<string> {
     return await bcrypt.hash(clave, 10);
+  }
+
+  private validarPassword(password?: string): void {
+    if (
+      !password ||
+      password.length < 8 ||
+      /\s/.test(password) ||
+      !/[a-z]/.test(password) ||
+      !/[A-Z]/.test(password) ||
+      !/\d/.test(password)
+    ) {
+      throw new BadRequestException(this.passwordPolicyMessage);
+    }
   }
 
   private puedeVer(data: IUsuario, permiso: IPermiso): boolean {

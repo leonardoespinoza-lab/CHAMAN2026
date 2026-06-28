@@ -19,6 +19,9 @@ export class CambiarPasswordComponent implements OnInit {
   public form?: FormGroup;
   public tabValue = 0;
   public nombre?: string;
+  public readonly passwordPolicyText =
+    'Minimo 8 caracteres, una mayuscula, una minuscula y un numero. Sin espacios.';
+  private readonly passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)\S{8,}$/;
 
   constructor(
     private translate: TranslateService,
@@ -33,8 +36,20 @@ export class CambiarPasswordComponent implements OnInit {
   private createForm(): void {
     this.form = new FormGroup({
       oldPassword: new FormControl('', Validators.required),
-      newPassword: new FormControl('', [Validators.required]),
-      newPassword2: new FormControl('', [Validators.required, this.matchValues('newPassword')]),
+      newPassword: new FormControl('', [
+        Validators.required,
+        Validators.minLength(8),
+        Validators.pattern(this.passwordPattern),
+      ]),
+      newPassword2: new FormControl('', [
+        Validators.required,
+        Validators.minLength(8),
+        Validators.pattern(this.passwordPattern),
+        this.matchValues('newPassword'),
+      ]),
+    });
+    this.form.get('newPassword')?.valueChanges.subscribe(() => {
+      this.form?.get('newPassword2')?.updateValueAndValidity();
     });
   }
 

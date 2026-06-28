@@ -40,6 +40,20 @@
                       />
                       <label>{{ 'Contraseña' | translate }}</label>
                     </p-floatlabel>
+                    <small class="password-policy">{{ passwordPolicyText }}</small>
+                    @if (form.get('password')?.errors?.['required'] && form.get('password')?.touched) {
+                      <small class="p-error">
+                        {{ 'La contrasena es obligatoria' | translate }}
+                      </small>
+                    }
+                    @if (
+                      (form.get('password')?.errors?.['minlength'] || form.get('password')?.errors?.['pattern']) &&
+                      form.get('password')?.touched
+                    ) {
+                      <small class="p-error">
+                        {{ passwordPolicyText }}
+                      </small>
+                    }
                   </p-tabpanel>
 
                   <!-- Permisos -->
@@ -147,7 +161,7 @@
                             </p-message>
                           }
 
-                          <!-- Química -->
+                          <!-- Compania -->
                           @if (nivel(i) === 'Quimica' && quimicas.length > 1) {
                             <p-floatlabel variant="in" class="mb-4">
                               <p-select
@@ -161,12 +175,12 @@
                                 optionLabel="nombre"
                               >
                               </p-select>
-                              <label>{{ 'Químicas' | translate }}</label>
+                              <label>{{ 'Compañías' | translate }}</label>
                             </p-floatlabel>
                           }
                           @if (nivel(i) === 'Quimica' && quimicas.length === 0) {
                             <p-message severity="warn">
-                              {{ 'No hay químicas creadas' | translate }}
+                              {{ 'No hay compañías creadas' | translate }}
                             </p-message>
                           }
 

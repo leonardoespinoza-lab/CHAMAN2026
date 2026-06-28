@@ -71,9 +71,29 @@ export class LoginComponent implements OnInit, OnDestroy {
       await this.loginService.login(username, password, remember);
       this.router.navigateByUrl(this.getRutaInicial());
     } catch (error) {
-      this.helper.notifError(error);
+      this.helper.notifError(this.mensajeLoginError(error));
     }
     this.loading = false;
+  }
+
+  private mensajeLoginError(error: any): string {
+    const status = error?.status;
+    const rawMessage = error?.error?.message || error?.message || '';
+    const message = Array.isArray(rawMessage) ? rawMessage.join('. ') : String(rawMessage);
+
+    if (status === 0) {
+      return 'No se pudo conectar con CHAMAN. Revise la conexion e intente nuevamente.';
+    }
+    if (status === 401) {
+      return message || 'Usuario o contrasena incorrectos. Verifique mayusculas y minusculas.';
+    }
+    if (status === 503) {
+      return 'El servicio de autenticacion no esta disponible. Reintente en unos minutos.';
+    }
+    if (status >= 500) {
+      return 'No pudimos iniciar sesion por un problema del servidor. Reintente en unos minutos.';
+    }
+    return message || 'No pudimos iniciar sesion. Revise usuario y contrasena.';
   }
   
   @HostListener('document:keyup.enter', ['$event'])
