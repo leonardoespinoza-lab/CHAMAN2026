@@ -59,6 +59,7 @@ export class SiembrasService {
     const query: IQueryParam = {
       select: '_id',
       filter: JSON.stringify(filter),
+      sort: '-fechaSiembra',
       limit,
     };
     const listado = await this.repository.get(query);

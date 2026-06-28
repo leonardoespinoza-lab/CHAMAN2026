@@ -1,0 +1,267 @@
+.napas-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(240, 249, 255, 0.74)), var(--p-surface-0);
+  border: 1px solid rgba(91, 124, 156, 0.28);
+  box-shadow: 0 18px 42px rgba(28, 45, 68, 0.08);
+  cursor: pointer;
+  height: 100%;
+}
+
+.napas-header {
+  align-items: center;
+  display: flex;
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+
+.napas-header > i {
+  align-items: center;
+  background: color-mix(in srgb, #3e91d6, white 84%);
+  border-radius: 8px;
+  color: #226da5;
+  display: inline-flex;
+  flex: 0 0 38px;
+  font-size: 1.2rem;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.napas-header > div {
+  min-width: 0;
+}
+
+.napas-header p {
+  font-size: clamp(1.14rem, 1.2vw, 1.5rem);
+  letter-spacing: 0;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.napas-header span,
+.napas-reading,
+.napas-main small,
+.napas-kpis span {
+  color: var(--p-text-muted-color);
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.napas-header p-button {
+  margin-left: auto;
+}
+
+.napas-main {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1.5px solid rgba(86, 117, 150, 0.28);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: minmax(150px, 0.38fr) 1fr;
+  padding: 0.75rem 0.85rem;
+}
+
+.napas-main span,
+.detail-grid span {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.napas-main strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: clamp(1.55rem, 1.7vw, 2rem);
+  margin-top: 0.15rem;
+}
+
+.napas-meter {
+  background: var(--p-surface-100);
+  border: 1.5px solid rgba(94, 122, 150, 0.36);
+  border-radius: 999px;
+  height: 22px;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.napas-meter span {
+  background: linear-gradient(90deg, #73b8ee, #33d3c8);
+  border-radius: inherit;
+  bottom: 2px;
+  left: 0;
+  position: absolute;
+  top: 2px;
+  width: var(--fill);
+}
+
+.napas-kpis {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 0.7rem;
+}
+
+.napas-kpis article {
+  border-left: 3px solid color-mix(in srgb, #3e91d6, white 30%);
+  padding-left: 0.55rem;
+}
+
+.napas-kpis strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 1.05rem;
+  margin-top: 0.12rem;
+}
+
+.napas-reading {
+  background: color-mix(in srgb, #3e91d6, white 91%);
+  border-radius: 8px;
+  color: var(--p-text-color);
+  font-weight: 700;
+  margin: 0.8rem 0 0;
+  padding: 0.65rem 0.75rem;
+}
+
+.napas-detail {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.detail-hero {
+  align-items: center;
+  background: linear-gradient(135deg, color-mix(in srgb, #3e91d6, white 82%), rgba(255, 255, 255, 0.88));
+  border: 1.5px solid rgba(86, 117, 150, 0.28);
+  border-left: 5px solid #3e91d6;
+  border-radius: 8px;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1rem;
+}
+
+.detail-hero.alta {
+  border-left-color: #6fb845;
+}
+
+.detail-hero.media {
+  border-left-color: #f1b84a;
+}
+
+.detail-hero.baja,
+.detail-hero.sin_datos {
+  border-left-color: #ef6f6c;
+}
+
+.detail-hero span,
+.trace-panel small {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.detail-hero strong {
+  display: block;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 1;
+  margin: 0.25rem 0;
+}
+
+.detail-hero small {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.detail-hero em {
+  color: #226da5;
+  font-size: clamp(1.7rem, 4vw, 2.8rem);
+  font-style: normal;
+  font-weight: 900;
+}
+
+.detail-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.detail-grid article,
+.trace-panel {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1.5px solid rgba(86, 117, 150, 0.28);
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.detail-grid strong {
+  display: block;
+  font-size: 1.12rem;
+  margin-top: 0.2rem;
+}
+
+.well-chart {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.well-chart article {
+  align-items: center;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: minmax(170px, 1fr) 72px minmax(120px, 0.5fr);
+}
+
+.well-chart strong,
+.well-chart small {
+  display: block;
+}
+
+.well-chart small {
+  color: var(--p-text-muted-color);
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+
+.well-chart span {
+  color: #226da5;
+  font-weight: 850;
+  text-align: right;
+}
+
+.well-bar {
+  background: var(--p-surface-100);
+  border-radius: 999px;
+  height: 12px;
+  overflow: hidden;
+}
+
+.well-bar i {
+  background: linear-gradient(90deg, #a6d9f7, #3e91d6);
+  display: block;
+  height: 100%;
+}
+
+.trace-panel {
+  display: grid;
+  gap: 0.35rem;
+}
+
+@media (max-width: 680px) {
+  .napas-main,
+  .well-chart article {
+    grid-template-columns: 1fr;
+  }
+
+  .napas-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .well-chart span {
+    text-align: left;
+  }
+}

@@ -28,6 +28,7 @@ import { CardEtapasFenologicasComponent } from './card-etapas-fenologicas/card-e
 import { CardFrioTermicoComponent } from './card-frio-termico/card-frio-termico.component';
 import { CardHuellaHidricaComponent } from './card-huella-hidrica/card-huella-hidrica.component';
 import { CardMalezasComponent } from './card-malezas/card-malezas.component';
+import { CardNapasComponent } from './card-napas/card-napas.component';
 import { CardNDVIComponent } from './card-ndvi/card-ndvi.component';
 import { CardRendimientoComponent } from './card-rendimiento/card-rendimiento.component';
 import { CardRiesgosAgroclimaticosComponent } from './card-riesgos-agroclimaticos/card-riesgos-agroclimaticos.component';
@@ -66,6 +67,7 @@ export interface IDetallesLote extends ILoteTabla {
     CardEtapasFenologicasComponent,
     CardFrioTermicoComponent,
     CardMalezasComponent,
+    CardNapasComponent,
     CardCamarasLoteComponent,
     CardVientoLoteComponent,
   ],

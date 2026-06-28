@@ -8,29 +8,44 @@
           <small>
             Actualizado {{ fechaUltimaPrediccion | date: 'dd/MM/yy, HH:mm' }} -
             calidad {{ prediccion?.calidadDatos || 'media' }}
+            @if (prediccionAlDia) {
+              - al dia
+            }
           </small>
         }
       </div>
       <div class="header-actions">
         <strong>{{ totalModelos }}</strong>
-        @if (siembra?._id) {
+        @if (siembra?._id && !helper.soloLectura()) {
           <p-button
             icon="pi pi-refresh"
-            label="Actualizar"
+            label="Recalcular"
             severity="secondary"
             [outlined]="true"
             [loading]="actualizando"
             [disabled]="actualizando || !cultivoCompatible"
-            (click)="actualizarPrediccion($event)"
+            (click)="actualizarPrediccion($event, { force: true })"
           />
         }
       </div>
     </div>
 
     @if (actualizando) {
-      <p-message severity="info" text="Calculando malezas con clima historico y pronostico..."></p-message>
+      <p-message
+        severity="info"
+        [text]="
+          actualizacionAutomatica
+            ? 'Sincronizando prediccion diaria de malezas...'
+            : 'Calculando malezas con clima historico y pronostico...'
+        "
+      ></p-message>
+    } @else if (error) {
+      <p-message severity="warn" [text]="error"></p-message>
     } @else if (!prediccion) {
-      <p-message severity="info" text="Ejecutar el motor para generar una prediccion profesional por lote."></p-message>
+      <p-message
+        severity="info"
+        text="Sin prediccion diaria disponible aun; el proceso automatico la completa al sincronizar clima y modelos."
+      ></p-message>
     } @else if (prediccion.estado === 'sin_clima') {
       <p-message severity="warn" text="No se pudo obtener clima suficiente para actualizar malezas."></p-message>
     } @else if (prediccion.estado === 'sin_modelos' || !analisis.length) {

@@ -20,7 +20,7 @@ export const API_CLIMA = process.env.API_CLIMA || 'http://127.0.0.1:5008/local';
 export const PREDICCIONES_MALEZAS_CRON_ENABLED =
   process.env.PREDICCIONES_MALEZAS_CRON_ENABLED !== 'false' && ENV !== 'test';
 export const PREDICCIONES_MALEZAS_LIMIT =
-  +process.env.PREDICCIONES_MALEZAS_LIMIT || 250;
+  +process.env.PREDICCIONES_MALEZAS_LIMIT || 1000;
 export const PREDICCIONES_AGROCLIMA_CRON_ENABLED =
   process.env.PREDICCIONES_AGROCLIMA_CRON_ENABLED !== 'false' && ENV !== 'test';
 export const PREDICCIONES_AGROCLIMA_LIMIT =

@@ -1,0 +1,130 @@
+<div class="custom-card napas-card" (click)="abrirDetalle()">
+  <div class="napas-header">
+    <i class="pi pi-database"></i>
+    <div>
+      <p class="titulo-card">{{ 'Seguimiento de napas' | uppercase }}</p>
+      <span>{{ subtitulo }}</span>
+    </div>
+    <p-button
+      icon="pi pi-refresh"
+      severity="secondary"
+      [outlined]="true"
+      [rounded]="true"
+      [loading]="cargando"
+      (click)="refrescar($event)"
+    />
+  </div>
+
+  @if (cargando) {
+    <p-message severity="info" text="Consultando red nacional de aguas subterraneas..."></p-message>
+  } @else if (error) {
+    <p-message severity="warn" [text]="error"></p-message>
+  } @else if (referencia) {
+    <div class="napas-main">
+      <div>
+        <span>{{ calidadLabel }}</span>
+        <strong>{{ nivelResumen }}</strong>
+        <small>Nivel estatico territorial bajo superficie</small>
+      </div>
+      <div class="napas-meter" [style.--fill]="coberturaPct + '%'"><span></span></div>
+    </div>
+
+    <div class="napas-kpis">
+      <article>
+        <span>Pozo con nivel</span>
+        <strong>{{ distanciaResumen }}</strong>
+      </article>
+      <article>
+        <span>Datos utiles</span>
+        <strong>{{ referencia.cobertura.pozosConNivel }}/{{ referencia.cobertura.totalPozos }}</strong>
+      </article>
+      <article>
+        <span>Fuente</span>
+        <strong>SIAS</strong>
+      </article>
+    </div>
+
+    <p class="napas-reading">{{ referencia.cobertura.lectura }}</p>
+  } @else {
+    <p-message severity="info" text="Referencia de napas pendiente de consulta."></p-message>
+  }
+</div>
+
+<p-dialog
+  [(visible)]="verDetalle"
+  [modal]="true"
+  [dismissableMask]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(920px, 94vw)' }"
+  [breakpoints]="{ '720px': '96vw' }"
+  header="Analisis territorial de napas"
+  styleClass="napas-detail-dialog"
+>
+  @if (referencia) {
+    <section class="napas-detail">
+      <div class="detail-hero" [ngClass]="referencia.cobertura.calidad">
+        <div>
+          <span>{{ calidadLabel }}</span>
+          <strong>{{ nivelResumen }}</strong>
+          <small>{{ referencia.cobertura.lectura }}</small>
+        </div>
+        <em>{{ referencia.cobertura.radioKm }} km</em>
+      </div>
+
+      <div class="detail-grid">
+        <article>
+          <span>Pozos cercanos</span>
+          <strong>{{ referencia.cobertura.totalPozos }}</strong>
+        </article>
+        <article>
+          <span>Con nivel estatico</span>
+          <strong>{{ referencia.cobertura.pozosConNivel }}</strong>
+        </article>
+        <article>
+          <span>Fecha mas reciente</span>
+          <strong>{{ referencia.estadisticas?.fechaMasReciente || 'Sin fecha' }}</strong>
+        </article>
+        <article>
+          <span>Rango observado</span>
+          <strong>
+            @if (referencia.estadisticas?.nivelEstaticoMinM !== undefined) {
+              {{ referencia.estadisticas?.nivelEstaticoMinM | number: '1.0-1' }} -
+              {{ referencia.estadisticas?.nivelEstaticoMaxM | number: '1.0-1' }} m
+            } @else {
+              Sin nivel
+            }
+          </strong>
+        </article>
+      </div>
+
+      <div class="well-chart">
+        @for (pozo of pozosPrincipales; track pozo.id + pozo.distanciaKm) {
+          <article>
+            <div>
+              <strong>{{ pozo.departamento || pozo.nombre || 'Pozo SIAS' }}</strong>
+              <small>
+                {{ pozo.provincia || 'Argentina' }} - {{ pozo.distanciaKm | number: '1.0-1' }} km -
+                {{ pozo.fuente || 'Fuente publica' }}
+              </small>
+            </div>
+            <span>
+              @if (pozo.nivelEstaticoM !== undefined) {
+                {{ pozo.nivelEstaticoM | number: '1.0-1' }} m
+              } @else {
+                ND
+              }
+            </span>
+            <div class="well-bar"><i [style.width.%]="nivelBar(pozo)"></i></div>
+          </article>
+        }
+      </div>
+
+      <div class="trace-panel">
+        @for (traza of referencia.trazas; track traza) {
+          <small>{{ traza }}</small>
+        }
+      </div>
+    </section>
+  }
+</p-dialog>

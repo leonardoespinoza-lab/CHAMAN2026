@@ -181,6 +181,9 @@
         }
       </div>
     }
+    @if (lote?.ubicacion?.centro) {
+      <app-card-napas class="service-panel" [lote]="lote"></app-card-napas>
+    }
     @if (helper.puedeVerModulo('Fertilizacion') || helper.puedeVerModulo('Fumigacion')) {
       <div
         class="operations-row service-panel"
