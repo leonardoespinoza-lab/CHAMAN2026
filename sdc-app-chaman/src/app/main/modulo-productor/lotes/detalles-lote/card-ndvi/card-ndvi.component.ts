@@ -190,7 +190,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
       return 'La base mantiene la ultima escena limpia. Al actualizar se vuelve a consultar STAC y se guarda una nueva solo si cubre el lote con calidad suficiente.';
     }
     if (this.correccionVisualLegadoActiva) {
-      return 'Escena procesada con render legado: se corrige visualmente con una escala fija para que el color acompane el valor real del indice.';
+      return 'Escena sin auditoria visual completa: se corrige con una escala fija para que el color acompane el valor real del indice.';
     }
     return 'Escena util para analisis semanal; comparar siempre con recorrida, clima, suelo y manejo reciente.';
   }
@@ -325,7 +325,24 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
 
   public get renderSatelitalConfiable(): boolean {
     const metadata = this.reporte?.metadataImagen as any;
-    return metadata?.renderVersion === 'fixed-index-v2';
+    const qa = this.qaCapaActiva;
+    const coverage = Number(qa?.validCoveragePct ?? metadata?.qualityMask?.validCoveragePct ?? 0);
+    return metadata?.renderVersion === 'fixed-index-v3' && qa?.status === 'ok' && coverage >= 3;
+  }
+
+  public get qaCapaActiva(): any {
+    const metadata = this.reporte?.metadataImagen as any;
+    return metadata?.renderQa?.[this.capaActiva.key];
+  }
+
+  public get statsCapaActiva(): any {
+    const metadata = this.reporte?.metadataImagen as any;
+    return metadata?.indicesStats?.[this.capaActiva.key];
+  }
+
+  public get resumenQaCapaActiva(): string {
+    const coverage = Number(this.qaCapaActiva?.validCoveragePct ?? this.statsCapaActiva?.validCoveragePct);
+    return Number.isFinite(coverage) && coverage > 0 ? `QA ${this.formatear(coverage)}%` : '';
   }
 
   public seleccionarCapa(indicator: SatelliteIndicator): void {

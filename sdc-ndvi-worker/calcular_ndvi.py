@@ -71,7 +71,13 @@ def _apply_scale_offset(src, data, collection=None):
     return data
 
 
-def _read_band(path, reference=None, reflectance=True, collection=None):
+def _read_band(
+    path,
+    reference=None,
+    reflectance=True,
+    collection=None,
+    resampling=Resampling.bilinear,
+):
     with rasterio.open(path) as src:
         data = src.read(1).astype("float32")
         if src.nodata is not None:
@@ -95,7 +101,7 @@ def _read_band(path, reference=None, reflectance=True, collection=None):
                     src_crs=src.crs,
                     dst_transform=ref_transform,
                     dst_crs=ref_crs,
-                    resampling=Resampling.bilinear,
+                    resampling=resampling,
                     src_nodata=np.nan,
                     dst_nodata=np.nan,
                 )
@@ -125,6 +131,72 @@ def _mean_index(data):
     if valid.size == 0:
         return None
     return round(float(np.nanmean(valid)), 4)
+
+
+def _apply_quality_mask(arrays, mask):
+    if mask is None:
+        return arrays
+    masked = []
+    for data in arrays:
+        if data is None:
+            masked.append(None)
+            continue
+        copy = data.astype("float32", copy=True)
+        copy[~mask] = np.nan
+        masked.append(copy)
+    return masked
+
+
+def _build_quality_mask(band_paths, reference):
+    _, _, _, ref_shape = reference
+    base_mask = np.ones(ref_shape, dtype=bool)
+    source = "none"
+
+    scl_path = band_paths.get("SCL")
+    if scl_path:
+        scl = _read_band(
+            scl_path,
+            reference,
+            reflectance=False,
+            resampling=Resampling.nearest,
+        )
+        # Sentinel-2 L2A Scene Classification:
+        # 4 vegetation, 5 bare soil, 6 water. Exclude no-data, saturated,
+        # shadows, clouds, cirrus, snow and unclassified pixels.
+        scl_int = np.nan_to_num(np.rint(scl), nan=-1).astype("int16")
+        base_mask &= np.isin(scl_int, [4, 5, 6])
+        source = "sentinel-2-scl"
+
+    qa_path = band_paths.get("QA_PIXEL")
+    if qa_path:
+        qa = _read_band(
+            qa_path,
+            reference,
+            reflectance=False,
+            resampling=Resampling.nearest,
+        )
+        qa_int = np.nan_to_num(qa, nan=0).astype("uint16")
+        fill = (qa_int & (1 << 0)) != 0
+        dilated_cloud = (qa_int & (1 << 1)) != 0
+        cirrus = (qa_int & (1 << 2)) != 0
+        cloud = (qa_int & (1 << 3)) != 0
+        cloud_shadow = (qa_int & (1 << 4)) != 0
+        snow = (qa_int & (1 << 5)) != 0
+        clear = (qa_int & (1 << 6)) != 0
+        base_mask &= clear & ~(fill | dilated_cloud | cirrus | cloud | cloud_shadow | snow)
+        source = "landsat-c2-qa-pixel" if source == "none" else f"{source}+landsat-c2-qa-pixel"
+
+    valid_pixels = int(np.count_nonzero(base_mask))
+    total_pixels = int(base_mask.size)
+    return {
+        "mask": base_mask,
+        "metadata": {
+            "source": source,
+            "validPixels": valid_pixels,
+            "totalPixels": total_pixels,
+            "validCoveragePct": round((valid_pixels / total_pixels) * 100, 2) if total_pixels else 0,
+        },
+    }
 
 
 def calcular_indices_y_rasters(band_paths, collection=None):
@@ -173,6 +245,15 @@ def calcular_indices_y_rasters(band_paths, collection=None):
         else None
     )
 
+    quality = _build_quality_mask(band_paths, reference)
+    quality_mask = quality["mask"]
+    finite_base = np.isfinite(nir) & np.isfinite(red)
+    quality_mask &= finite_base
+    nir, red, blue, green, red_edge, swir1 = _apply_quality_mask(
+        [nir, red, blue, green, red_edge, swir1],
+        quality_mask,
+    )
+
     rasters = {
         "ndvi": _safe_div(nir - red, nir + red),
         "savi": np.clip(((nir - red) * 1.5) / (nir + red + 0.5), -1, 1),
@@ -201,7 +282,18 @@ def calcular_indices_y_rasters(band_paths, collection=None):
             indices[key] = mean
 
     profile.update({"dtype": "float32", "nodata": np.nan, "crs": reference[2]})
-    return {"indices": indices, "rasters": rasters, "profile": profile}
+    quality["metadata"]["validPixels"] = int(np.count_nonzero(quality_mask))
+    quality["metadata"]["validCoveragePct"] = (
+        round((quality["metadata"]["validPixels"] / quality["metadata"]["totalPixels"]) * 100, 2)
+        if quality["metadata"]["totalPixels"]
+        else 0
+    )
+    return {
+        "indices": indices,
+        "rasters": rasters,
+        "profile": profile,
+        "qualityMask": quality["metadata"],
+    }
 
 
 def calcular_indices(band_paths):

@@ -13,6 +13,47 @@ export interface IMetadata {
   crs: string;
   renderVersion?: string;
   renderStrategy?: string;
+  qualityMask?: {
+    source?: string;
+    validPixels?: number;
+    totalPixels?: number;
+    validCoveragePct?: number;
+  };
+  indicesStats?: Record<
+    string,
+    {
+      index?: string;
+      totalPixels?: number;
+      validPixels?: number;
+      validCoveragePct?: number;
+      min?: number;
+      max?: number;
+      mean?: number;
+      std?: number;
+      p02?: number;
+      p10?: number;
+      p25?: number;
+      p50?: number;
+      p75?: number;
+      p90?: number;
+      p98?: number;
+      classes?: Record<string, number>;
+      status?: string;
+    }
+  >;
+  renderQa?: Record<
+    string,
+    {
+      status?: 'ok' | 'warning' | 'error';
+      validCoveragePct?: number;
+      expectedRgbMean?: number[];
+      actualRgbMean?: number[];
+      rgbDeltaMax?: number;
+      message?: string;
+    }
+  >;
+  renderChecksums?: Record<string, string>;
+  renderConfig?: Record<string, Record<string, unknown>>;
 }
 
 export interface IIndicesSatelitales {

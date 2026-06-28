@@ -1,6 +1,7 @@
 import logging
 import os
-from typing import Optional, Tuple
+import hashlib
+from typing import Any, Optional, Tuple
 
 import numpy as np
 import rasterio
@@ -158,21 +159,36 @@ def exportar_png_desde_array(
     return output_png_path
 
 
+def exportar_png_desde_array_validado(
+    array: np.ndarray,
+    output_png_path: str,
+    indice: str = "ndvi",
+    dpi: int = 300,
+    quality: int = 90,
+) -> dict[str, Any]:
+    """Exporta un raster y devuelve metadata tecnica del render."""
+    metadata = _guardar_png_indexado(array, output_png_path, indice, dpi, quality)
+    metadata["path"] = output_png_path
+    return metadata
+
+
 def _guardar_png_indexado(
     values: np.ndarray,
     output_png_path: str,
     indice: str,
     dpi: int,
     quality: int,
-) -> None:
+) -> dict[str, Any]:
     raw_values = values.astype("float32", copy=False)
     config = INDEX_RENDER_CONFIG.get(indice, INDEX_RENDER_CONFIG["ndvi"])
     vmin = float(config["vmin"])
     vmax = float(config["vmax"])
     valid = np.isfinite(raw_values) & (raw_values >= -1.0) & (raw_values <= 1.0)
     cmap = config["cmap"]
+    stats = _estadisticas_indice(raw_values, valid, indice)
 
     rgba = np.zeros((raw_values.shape[0], raw_values.shape[1], 4), dtype=np.uint8)
+    expected_rgb_mean = [0.0, 0.0, 0.0]
     if np.any(valid):
         clipped = np.clip(raw_values[valid], -1.0, 1.0)
         # Escala fija por indice: no normalizar por escena ni por promedio del lote.
@@ -180,6 +196,7 @@ def _guardar_png_indexado(
         colors = (cmap(normalized) * 255).astype(np.uint8)
         rgba[valid, :3] = colors[:, :3]
         rgba[valid, 3] = 242
+        expected_rgb_mean = np.mean(colors[:, :3], axis=0).round(2).tolist()
 
     img = Image.fromarray(rgba, mode="RGBA")
     img = _agregar_contorno_transparente(img)
@@ -188,7 +205,117 @@ def _guardar_png_indexado(
             (img.width * NDVI_PNG_SCALE, img.height * NDVI_PNG_SCALE),
             Image.Resampling.BILINEAR,
         )
+    qa = _validar_render_png(img, expected_rgb_mean, stats)
+    checksum = _checksum_imagen(img)
     img.save(output_png_path, dpi=(dpi, dpi), optimize=True, compress_level=9)
+    return {
+        "stats": stats,
+        "qa": qa,
+        "checksum": checksum,
+        "renderScale": NDVI_PNG_SCALE,
+        "renderConfig": {
+            "index": indice,
+            "vmin": vmin,
+            "vmax": vmax,
+            "alpha": 242,
+        },
+    }
+
+
+def _estadisticas_indice(values: np.ndarray, valid: np.ndarray, indice: str) -> dict[str, Any]:
+    total = int(values.size)
+    valid_count = int(np.count_nonzero(valid))
+    cobertura = round((valid_count / total) * 100, 2) if total else 0
+    if valid_count == 0:
+        return {
+            "index": indice,
+            "totalPixels": total,
+            "validPixels": 0,
+            "validCoveragePct": cobertura,
+            "status": "sin-datos-validos",
+        }
+
+    data = values[valid].astype("float32")
+    percentiles = np.nanpercentile(data, [2, 10, 25, 50, 75, 90, 98])
+    return {
+        "index": indice,
+        "totalPixels": total,
+        "validPixels": valid_count,
+        "validCoveragePct": cobertura,
+        "min": round(float(np.nanmin(data)), 4),
+        "max": round(float(np.nanmax(data)), 4),
+        "mean": round(float(np.nanmean(data)), 4),
+        "std": round(float(np.nanstd(data)), 4),
+        "p02": round(float(percentiles[0]), 4),
+        "p10": round(float(percentiles[1]), 4),
+        "p25": round(float(percentiles[2]), 4),
+        "p50": round(float(percentiles[3]), 4),
+        "p75": round(float(percentiles[4]), 4),
+        "p90": round(float(percentiles[5]), 4),
+        "p98": round(float(percentiles[6]), 4),
+        "classes": _clases_indice(data, indice),
+        "status": "ok",
+    }
+
+
+def _clases_indice(data: np.ndarray, indice: str) -> dict[str, float]:
+    if data.size == 0:
+        return {}
+    if indice in {"ndvi", "savi", "evi"}:
+        breaks = {
+            "muy_bajo": data < 0.08,
+            "bajo": (data >= 0.08) & (data < 0.18),
+            "medio": (data >= 0.18) & (data < 0.42),
+            "alto": data >= 0.42,
+        }
+    elif indice in {"ndmi", "ndwi"}:
+        breaks = {
+            "seco": data < -0.10,
+            "transicion": (data >= -0.10) & (data < 0.10),
+            "humedo": data >= 0.10,
+        }
+    else:
+        breaks = {
+            "bajo": data < 0.10,
+            "medio": (data >= 0.10) & (data < 0.30),
+            "alto": data >= 0.30,
+        }
+    total = float(data.size)
+    return {key: round(float(np.count_nonzero(mask) / total * 100), 2) for key, mask in breaks.items()}
+
+
+def _validar_render_png(img: Image.Image, expected_rgb_mean: list[float], stats: dict[str, Any]) -> dict[str, Any]:
+    if stats.get("validPixels", 0) <= 0:
+        return {
+            "status": "error",
+            "message": "Sin pixeles validos para renderizar.",
+            "validCoveragePct": stats.get("validCoveragePct", 0),
+        }
+
+    arr = np.asarray(img.convert("RGBA"))
+    mask = arr[:, :, 3] >= 220
+    if not np.any(mask):
+        return {
+            "status": "error",
+            "message": "El PNG generado no contiene pixeles opacos validos.",
+            "validCoveragePct": stats.get("validCoveragePct", 0),
+        }
+
+    actual_rgb_mean = np.mean(arr[:, :, :3][mask], axis=0)
+    expected = np.asarray(expected_rgb_mean, dtype="float32")
+    delta = np.abs(actual_rgb_mean - expected)
+    status = "ok" if float(np.max(delta)) <= 10 else "warning"
+    return {
+        "status": status,
+        "validCoveragePct": stats.get("validCoveragePct", 0),
+        "expectedRgbMean": [round(float(v), 2) for v in expected],
+        "actualRgbMean": [round(float(v), 2) for v in actual_rgb_mean],
+        "rgbDeltaMax": round(float(np.max(delta)), 2),
+    }
+
+
+def _checksum_imagen(img: Image.Image) -> str:
+    return hashlib.sha256(img.tobytes()).hexdigest()[:16]
 
 
 def _agregar_contorno_transparente(img: Image.Image) -> Image.Image:

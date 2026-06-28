@@ -36,7 +36,11 @@ from config import (
 )
 from geo import obtener_metadata_png_con_polygon, scene_cubre_poligono
 from health import start_health_server
-from recorte import exportar_png_desde_array, exportar_png_desde_tif_con_polygon, recortar_ndvi
+from recorte import (
+    exportar_png_desde_array_validado,
+    exportar_png_desde_tif_con_polygon,
+    recortar_ndvi,
+)
 from storage import subir_a_storage
 
 # Configuración de logging
@@ -48,13 +52,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 EARTH_SEARCH_URL = "https://planetarycomputer.microsoft.com/api/stac/v1"
-SATELLITE_RENDER_VERSION = "fixed-index-v2"
+SATELLITE_RENDER_VERSION = "fixed-index-v3"
 
 BAND_MAPPING = {
     "sentinel-2-l2a": {
         "red": "B04",
         "nir": "B08",
-        "assets": ["B02", "B03", "B04", "B05", "B08", "B11"],
+        "assets": ["B02", "B03", "B04", "B05", "B08", "B11", "SCL"],
         "output_names": {
             "B02": "B02",
             "B03": "B03",
@@ -62,18 +66,20 @@ BAND_MAPPING = {
             "B05": "B05",
             "B08": "B08",
             "B11": "B11",
+            "SCL": "SCL",
         },
     },
     "landsat-c2-l2": {
         "red": "red",
         "nir": "nir08",
-        "assets": ["blue", "green", "red", "nir08", "swir16"],
+        "assets": ["blue", "green", "red", "nir08", "swir16", "qa_pixel"],
         "output_names": {
             "blue": "B02",
             "green": "B03",
             "red": "B04",
             "nir08": "B08",
             "swir16": "B11",
+            "qa_pixel": "QA_PIXEL",
         },
     },
 }
@@ -545,10 +551,20 @@ class NDVIWorker:
                         "collection", "desconocida"
                     )  # Obtener colección, con fallback
 
+                    quality_band = {
+                        "sentinel-2-l2a": "SCL",
+                        "landsat-c2-l2": "QA_PIXEL",
+                    }.get(collection)
+                    if quality_band and not (scene_dir / f"{quality_band}.tif").exists():
+                        logger.info(
+                            f"Escena en cache {scene_dir.name} sin banda de calidad {quality_band}; se descarta para render v3."
+                        )
+                        continue
+
                     logger.info(f"✅ Usando escena en caché: {scene_dir.name}")
                     band_paths = {
                         band: str(scene_dir / f"{band}.tif")
-                        for band in ["B02", "B03", "B04", "B05", "B08", "B11"]
+                        for band in ["B02", "B03", "B04", "B05", "B08", "B11", "SCL", "QA_PIXEL"]
                         if (scene_dir / f"{band}.tif").exists()
                     }
 
@@ -911,10 +927,12 @@ class NDVIWorker:
                 )
                 indices = indices_info.get("indices", {})
                 rasters = indices_info.get("rasters", {})
+                quality_mask = indices_info.get("qualityMask", {})
             except Exception as e:
                 logger.warning(f"No se pudieron calcular indices satelitales: {e}")
                 indices = {"ndvi": round(ndvi_promedio, 4)}
                 rasters = {"ndvi": ndvi}
+                quality_mask = {}
 
             if indices.get("ndvi") is not None:
                 ndvi_promedio = float(indices["ndvi"])
@@ -925,6 +943,7 @@ class NDVIWorker:
                 "ndvi_promedio": ndvi_promedio,
                 "indices": indices,
                 "rasters": rasters,
+                "quality_mask": quality_mask,
                 "scene_datetime": scene_data["datetime"],
                 "collection": scene_data["collection"],  # Colección de la escena
             }
@@ -947,9 +966,15 @@ class NDVIWorker:
             obtener_metadata_png_con_polygon, ndvi_data["ndvi_recorte"], polygon
         )
         metadata["renderVersion"] = SATELLITE_RENDER_VERSION
-        metadata["renderStrategy"] = "fixed-index-scale"
+        metadata["renderStrategy"] = "fixed-index-scale-quality-masked"
+        metadata["qualityMask"] = ndvi_data.get("quality_mask", {})
 
-        imagenes = await self._export_index_images(lote_id, lote_folder, ndvi_data)
+        exported = await self._export_index_images(lote_id, lote_folder, ndvi_data)
+        imagenes = exported.get("imagenes", {})
+        metadata["indicesStats"] = exported.get("stats", {})
+        metadata["renderQa"] = exported.get("qa", {})
+        metadata["renderChecksums"] = exported.get("checksums", {})
+        metadata["renderConfig"] = exported.get("configs", {})
 
         # La imagen principal debe ser el raster NDVI por pixel. El PNG legado solo
         # queda como fallback si por algun motivo no se genero la capa por indice.
@@ -984,6 +1009,10 @@ class NDVIWorker:
     ) -> dict:
         """Genera y sube una imagen PNG por indice satelital disponible."""
         imagenes = {}
+        stats = {}
+        qa = {}
+        checksums = {}
+        configs = {}
         timestamp = int(time.time())
         scene_key = self._scene_key(ndvi_data)
         safe_lote_id = self._safe_filename(lote_id)
@@ -992,8 +1021,8 @@ class NDVIWorker:
                 continue
             try:
                 output_path = lote_folder / f"{indice}_{scene_key}_recorte.png"
-                await self._run_in_executor(
-                    exportar_png_desde_array,
+                render_metadata = await self._run_in_executor(
+                    exportar_png_desde_array_validado,
                     raster,
                     str(output_path),
                     indice,
@@ -1002,9 +1031,19 @@ class NDVIWorker:
                     str(output_path),
                     f"{safe_lote_id}-{indice}-{scene_key}-{timestamp}.png",
                 )
+                stats[indice] = render_metadata.get("stats", {})
+                qa[indice] = render_metadata.get("qa", {})
+                checksums[indice] = render_metadata.get("checksum")
+                configs[indice] = render_metadata.get("renderConfig", {})
             except Exception as e:
                 logger.warning(f"No se pudo generar imagen {indice}: {e}")
-        return imagenes
+        return {
+            "imagenes": imagenes,
+            "stats": stats,
+            "qa": qa,
+            "checksums": checksums,
+            "configs": configs,
+        }
 
     async def _notify_backend(self, lote_id: str, output_data: dict):
         """Notifica los resultados al backend, enviando la fecha de la imagen truncada."""

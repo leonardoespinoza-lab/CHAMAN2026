@@ -77,7 +77,9 @@
             <strong>{{ capaActiva.label }}</strong>
             <span>{{ capaActiva.value }}</span>
             @if (correccionVisualLegadoActiva) {
-              <small>Escala corregida</small>
+              <small>Lectura corregida</small>
+            } @else if (resumenQaCapaActiva) {
+              <small>{{ resumenQaCapaActiva }}</small>
             }
           </div>
           @if (!satelliteRasterVisible) {

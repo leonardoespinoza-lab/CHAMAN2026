@@ -1719,7 +1719,7 @@ export class LotesService {
   private debeReprocesarRenderSatelital(
     reporte?: { fecha: string | null; renderVersion?: string | null } | null,
   ): boolean {
-    return !!reporte?.fecha && reporte.renderVersion !== 'fixed-index-v2';
+    return !!reporte?.fecha && reporte.renderVersion !== 'fixed-index-v3';
   }
 
   private toIsoString(value: unknown): string | null {

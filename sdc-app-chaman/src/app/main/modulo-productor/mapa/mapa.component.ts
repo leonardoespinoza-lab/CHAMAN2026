@@ -2032,7 +2032,17 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Imágenes NDVI
   private getSatelliteRasterUrl(reporte?: IReporteNDVI | null): string | undefined {
+    if (!this.isSatelliteRasterReliable(reporte)) {
+      return undefined;
+    }
     return reporte?.imagenes?.ndvi;
+  }
+
+  private isSatelliteRasterReliable(reporte?: IReporteNDVI | null): boolean {
+    const metadata = reporte?.metadataImagen as any;
+    const qa = metadata?.renderQa?.ndvi;
+    const coverage = Number(qa?.validCoveragePct ?? metadata?.qualityMask?.validCoveragePct ?? 0);
+    return metadata?.renderVersion === 'fixed-index-v3' && qa?.status === 'ok' && coverage >= 3;
   }
 
   private addNdviImage(reporte: IReporteNDVI) {
