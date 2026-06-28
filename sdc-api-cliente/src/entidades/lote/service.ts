@@ -234,14 +234,38 @@ export class LotesService {
     total: number;
     encolados: number;
     omitidos: number;
+    legacy: {
+      total: number;
+      encolados: number;
+      omitidos: number;
+      lotesUnicos: number;
+    };
+    normal: {
+      total: number;
+      encolados: number;
+      omitidos: number;
+    };
   }> {
     const permisoSistema: IPermiso = { nivel: 'Admin', rol: 'Admin' };
+    const legacy = await this.normalizarNdviLegacy(Math.max(NDVI_SYNC_LIMIT, 1000));
+    const normalLimit = Math.max(0, NDVI_SYNC_LIMIT - legacy.encolados);
+
+    if (normalLimit <= 0) {
+      return {
+        total: legacy.total,
+        encolados: legacy.encolados,
+        omitidos: legacy.omitidos,
+        legacy,
+        normal: { total: 0, encolados: 0, omitidos: 0 },
+      };
+    }
+
     const query: IQueryParam = {
       filter: JSON.stringify({
         idSiembra: { $exists: true, $ne: null },
         'ubicacion.geojson.coordinates.0': { $exists: true },
       }),
-      limit: NDVI_SYNC_LIMIT,
+      limit: normalLimit,
       sort: 'nombre',
     };
     const lotes = await this.repository.get(query);
@@ -274,9 +298,81 @@ export class LotesService {
     }
 
     return {
-      total: lotes.totalCount || lotes.datos?.length || 0,
+      total: legacy.total + (lotes.totalCount || lotes.datos?.length || 0),
+      encolados: legacy.encolados + encolados,
+      omitidos: legacy.omitidos + omitidos,
+      legacy,
+      normal: {
+        total: lotes.totalCount || lotes.datos?.length || 0,
+        encolados,
+        omitidos,
+      },
+    };
+  }
+
+  async normalizarNdviLegacy(limit = NDVI_SYNC_LIMIT): Promise<{
+    total: number;
+    encolados: number;
+    omitidos: number;
+    lotesUnicos: number;
+  }> {
+    const permisoSistema: IPermiso = { nivel: 'Admin', rol: 'Admin' };
+    const query: IQueryParam = {
+      filter: JSON.stringify({
+        idLote: { $exists: true, $ne: null },
+        fechaDeLaImagen: { $exists: true, $ne: null },
+        'metadataImagen.renderVersion': { $ne: 'fixed-index-v3' },
+      }),
+      limit: Math.max(1, Math.min(Number(limit) || NDVI_SYNC_LIMIT, 1000)),
+      sort: '-fechaDeLaImagen',
+    };
+    const reportes = await this.reportesNDVIsService.get(query, permisoSistema);
+    const vistos = new Set<string>();
+    const lotesUnicos = new Set<string>();
+    let encolados = 0;
+    let omitidos = 0;
+
+    for (const reporte of reportes.datos || []) {
+      try {
+        const idLote = `${reporte.idLote || ''}`;
+        const fecha = this.toIsoString(reporte.fechaDeLaImagen || reporte.fechaCreacion);
+        if (!idLote || !fecha) {
+          omitidos++;
+          continue;
+        }
+
+        const clave = `${idLote}:${fecha.slice(0, 10)}`;
+        if (vistos.has(clave)) {
+          continue;
+        }
+        vistos.add(clave);
+        lotesUnicos.add(idLote);
+
+        const lote = await this.repository.getById(idLote);
+        const encolado = await this.ndviQueue.enqueueLote(
+          lote,
+          fecha,
+          reporte.coleccion || null,
+          true,
+        );
+        if (encolado) {
+          encolados++;
+        } else {
+          omitidos++;
+        }
+      } catch (error) {
+        omitidos++;
+        this.logger.error(
+          `Error normalizando reporte satelital legacy ${reporte?._id || ''}: ${error?.message || error}`,
+        );
+      }
+    }
+
+    return {
+      total: reportes.totalCount || reportes.datos?.length || 0,
       encolados,
       omitidos,
+      lotesUnicos: lotesUnicos.size,
     };
   }
 

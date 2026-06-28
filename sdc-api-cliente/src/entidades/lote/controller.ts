@@ -65,6 +65,19 @@ export class LotesController {
     return await this.service.getNdviQueueStatus();
   }
 
+  @Post('ndvi/normalizar')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  public async normalizarNdviLegacy(
+    @Query('limit') limit?: string,
+  ): Promise<{
+    total: number;
+    encolados: number;
+    omitidos: number;
+    lotesUnicos: number;
+  }> {
+    return await this.service.normalizarNdviLegacy(Number(limit) || undefined);
+  }
+
   @Get('/:id/certificado')
   @Permisos(
     { nivel: 'Admin', roles: ['Admin'] },

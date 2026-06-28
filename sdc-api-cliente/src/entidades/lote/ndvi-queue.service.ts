@@ -27,6 +27,7 @@ export interface NdviQueueStatus {
 @Injectable()
 export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NdviQueueService.name);
+  private readonly taskDedupTtlSeconds = 12 * 60 * 60;
   private redis?: Redis;
   private enabled = false;
 
@@ -77,9 +78,39 @@ export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
       force_render: forceRender,
       polygon,
     };
+    const dedupeKey = this.taskDedupeKey(lote, sceneDatetime, forceRender);
+    const reserved = await this.redis.set(
+      dedupeKey,
+      '1',
+      'EX',
+      this.taskDedupTtlSeconds,
+      'NX',
+    );
+    if (reserved !== 'OK') {
+      this.logger.warn(`Tarea NDVI duplicada omitida para lote ${lote._id}`);
+      return false;
+    }
     await this.redis.lpush(REDIS_NDVI_QUEUE, JSON.stringify(task));
     this.logger.log(`Tarea NDVI encolada para lote ${lote._id}`);
     return true;
+  }
+
+  private taskDedupeKey(
+    lote: ILote,
+    sceneDatetime?: string | null,
+    forceRender = false,
+  ): string {
+    const parsedDate = sceneDatetime ? new Date(sceneDatetime) : undefined;
+    const sceneKey =
+      parsedDate && Number.isFinite(parsedDate.getTime())
+        ? parsedDate.toISOString().slice(0, 10)
+        : 'latest';
+    return [
+      'ndvi-task',
+      lote._id || 'sin-lote',
+      sceneKey,
+      forceRender ? 'force-v3' : 'normal',
+    ].join(':');
   }
 
   async getStatus(): Promise<NdviQueueStatus> {

@@ -53,7 +53,7 @@ export class SatelliteSyncService implements OnModuleInit, OnModuleDestroy {
     try {
       const result = await this.lotesService.sincronizarNdviAutomatico();
       this.logger.log(
-        `Satelite consultado (${reason}): ${result.encolados}/${result.total} lotes encolados, ${result.omitidos} omitidos`,
+        `Satelite consultado (${reason}): ${result.encolados}/${result.total} tareas encoladas, ${result.omitidos} omitidas. Legacy v3: ${result.legacy.encolados}/${result.legacy.total}; normal: ${result.normal.encolados}/${result.normal.total}`,
       );
     } catch (error) {
       this.logger.error('Error general sincronizando satelite', error as any);
