@@ -35,8 +35,8 @@
     <div class="lot-summary-toolbar">
       <div class="lot-summary-title">
         <span>Detalle operativo</span>
-        <strong>{{ lote?.establecimiento?.nombre || 'Sin establecimiento' }}</strong>
-        <small>{{ departamentoResumen }}</small>
+        <strong>{{ lote?.nombre || 'Lote sin nombre' }}</strong>
+        <small>{{ lote?.establecimiento?.nombre || 'Sin establecimiento' }} - {{ departamentoResumen }}</small>
       </div>
       <div class="lot-primary-actions">
         @if (helper.puedeVerModulo('Certificados')) {
@@ -85,21 +85,25 @@
 
     <div class="lot-summary-grid">
       <article>
+        <i class="pi pi-map-marker"></i>
         <span>Ubicacion</span>
         <strong>{{ ubicacionResumen }}</strong>
         <small>{{ departamentoResumen }}</small>
       </article>
       <article>
+        <i class="pi pi-expand"></i>
         <span>Superficie</span>
         <strong>{{ superficieResumen }}</strong>
         <small>Hectareas calculadas por poligono</small>
       </article>
       <article>
+        <i class="pi pi-compass"></i>
         <span>Tipo de suelo</span>
         <strong>{{ sueloResumen }}</strong>
         <small>{{ sueloDetalleResumen }}</small>
       </article>
       <article>
+        <i class="pi pi-chart-line"></i>
         <span>Capacidad de rinde</span>
         <strong>{{ rindeResumen }}</strong>
         <small>Basado en historial y datos cargados</small>

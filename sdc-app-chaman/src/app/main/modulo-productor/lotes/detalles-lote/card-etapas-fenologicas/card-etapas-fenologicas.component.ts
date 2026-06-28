@@ -115,10 +115,114 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   public esPerenne = false;
   public etiquetaImplantacion: 'Siembra' | 'Plantacion' = 'Siembra';
   public campaniaTexto = '';
+  private readonly diaMs = 86400000;
 
   public get timelineMinWidth(): string {
     const etapasVisibles = Math.max(this.etapas.length, 1);
-    return `${Math.max(620, etapasVisibles * 136)}px`;
+    return `${Math.max(720, etapasVisibles * 150)}px`;
+  }
+
+  public get etapaActualDetalle(): FenologiaStage | undefined {
+    return this.etapas.find((etapa) => etapa.estado === 'current') || this.etapas[0];
+  }
+
+  public get etapaAnteriorDetalle(): FenologiaStage | undefined {
+    const index = this.indiceEtapaActual();
+    return index > 0 ? this.etapas[index - 1] : undefined;
+  }
+
+  public get proximaEtapaDetalle(): FenologiaStage | undefined {
+    const index = this.indiceEtapaActual();
+    if (index < 0) return undefined;
+    return this.etapas[index + 1];
+  }
+
+  public get diasDesdeImplantacion(): number {
+    const fecha = this.siembra?.fechaSiembra || this.lote?.siembra?.fechaSiembra;
+    if (!fecha) return 0;
+    return Math.max(0, Math.floor((Date.now() - new Date(fecha).getTime()) / this.diaMs));
+  }
+
+  public get diasDesdeEtapaActual(): number {
+    const actual = this.etapaActualDetalle;
+    if (!actual) return 0;
+    return Math.max(0, Math.floor((Date.now() - actual.fecha.getTime()) / this.diaMs));
+  }
+
+  public get diasHastaProximaEtapa(): number | undefined {
+    const proxima = this.proximaEtapaDetalle;
+    if (!proxima) return undefined;
+    return Math.max(0, Math.ceil((proxima.fecha.getTime() - Date.now()) / this.diaMs));
+  }
+
+  public get duracionEtapaActual(): number | undefined {
+    const actual = this.etapaActualDetalle;
+    const proxima = this.proximaEtapaDetalle;
+    if (!actual || !proxima) return undefined;
+    return Math.max(1, Math.round((proxima.fecha.getTime() - actual.fecha.getTime()) / this.diaMs));
+  }
+
+  public get progresoEtapaActual(): number {
+    const duracion = this.duracionEtapaActual;
+    if (!duracion) {
+      return this.proximaEtapaDetalle ? 0 : 100;
+    }
+    return this.limitar((this.diasDesdeEtapaActual / duracion) * 100);
+  }
+
+  public get lecturaEtapaActual(): string {
+    const actual = this.etapaActualDetalle;
+    if (!actual) {
+      return 'No hay datos suficientes para ubicar el lote en el ciclo.';
+    }
+    const proxima = this.proximaEtapaDetalle;
+    if (proxima) {
+      const dias = this.diasHastaProximaEtapa ?? 0;
+      return `Transitamos ${actual.nombre} desde hace ${this.diasDesdeEtapaActual} d. Proximo hito: ${proxima.nombre} en ${dias} d.`;
+    }
+    return `El ciclo esta en ${actual.nombre}. Revisar cosecha o cierre operativo si corresponde.`;
+  }
+
+  public get resumenFenologico(): string {
+    const fuente = this.esPerenne ? 'campania perenne' : this.fuenteTexto;
+    const campania = this.campaniaTexto ? ` ${this.campaniaTexto}` : '';
+    return `${this.cultivo || 'Cultivo'} - ${this.etapas.length} etapas - ${fuente}${campania}`;
+  }
+
+  public get siguienteHitoTexto(): string {
+    const proxima = this.proximaEtapaDetalle;
+    if (!proxima) return 'Sin proximo hito';
+    const dias = this.diasHastaProximaEtapa ?? 0;
+    if (dias === 0) return `${proxima.nombre} puede estar iniciando`;
+    return `${proxima.nombre} en ${dias} d`;
+  }
+
+  public etapaEstadoTexto(etapa: FenologiaStage, index: number): string {
+    if (etapa.estado === 'current') return 'Ahora';
+    if (etapa.estado === 'done') return 'Pasada';
+    const actual = this.indiceEtapaActual();
+    if (index === actual + 1) return 'Proxima';
+    return 'Pendiente';
+  }
+
+  public etapaDetalleTexto(etapa: FenologiaStage, index: number): string {
+    if (etapa.estado === 'current') {
+      const duracion = this.duracionEtapaActual;
+      return duracion ? `${this.diasDesdeEtapaActual} de ${duracion} d` : `${this.diasDesdeEtapaActual} d`;
+    }
+    if (index === 0) {
+      return `${this.etiquetaImplantacion} inicial`;
+    }
+    if (etapa.periodoDias) {
+      return `${etapa.periodoDias} d desde la etapa anterior`;
+    }
+    return 'Hito del ciclo';
+  }
+
+  public etapaProgreso(etapa: FenologiaStage): number {
+    if (etapa.estado === 'done') return 100;
+    if (etapa.estado === 'current') return this.progresoEtapaActual;
+    return 0;
   }
 
   constructor(public helper: HelperService) {}
@@ -233,7 +337,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       const posicion = this.posicionUniforme(index, etapasConfig.nombres.length);
       const estado = index < etapaActualNumero ? 'done' : index === etapaActualNumero ? 'current' : 'pending';
       const periodoDias =
-        index > 0 ? Math.max(1, Math.round((fechas[index].getTime() - fechas[index - 1].getTime()) / 86400000)) : undefined;
+        index > 0 ? Math.max(1, Math.round((fechas[index].getTime() - fechas[index - 1].getTime()) / this.diaMs)) : undefined;
 
       return {
         nombre,
@@ -343,7 +447,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     const hoy = new Date();
     const diaCampania = Math.max(
       0,
-      Math.min(365, Math.floor((hoy.getTime() - inicioCampania.getTime()) / 86400000))
+      Math.min(365, Math.floor((hoy.getTime() - inicioCampania.getTime()) / this.diaMs))
     );
     const etapasCiclo = [...etapas];
     const ultima = etapasCiclo[etapasCiclo.length - 1];
@@ -474,6 +578,10 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     const margen = 1.5;
     const anchoUtil = 100 - margen * 2;
     return margen + (index / (total - 1)) * anchoUtil;
+  }
+
+  private indiceEtapaActual(): number {
+    return this.etapas.findIndex((etapa) => etapa.estado === 'current');
   }
 
   ngOnDestroy(): void {}

@@ -1,13 +1,8 @@
 <div class="custom-card phenology-card">
-  <div class="phenology-header">
+  <div class="phenology-heading">
     <div class="phenology-title">
       <p class="titulo-card">{{ 'Etapa fenologica' | translate | uppercase }}</p>
-      <span class="phenology-subtitle">
-        {{ cultivo || 'Cultivo' }} - {{ etapas.length }} etapas - {{ esPerenne ? 'campania perenne' : fuenteTexto }}
-        @if (campaniaTexto) {
-          <strong> {{ campaniaTexto }}</strong>
-        }
-      </span>
+      <span class="phenology-subtitle">{{ resumenFenologico }}</span>
     </div>
 
     <div class="crop-detail-grid">
@@ -29,39 +24,63 @@
         <strong>{{ siembra?.fechaSiembra | date: 'd/M/yy' }}</strong>
       </div>
     </div>
-
-    <div class="current-stage">
-      <span>Etapa actual</span>
-      <strong>{{ etapaActual | uppercase }}</strong>
-    </div>
   </div>
 
   @if (etapas.length > 0) {
-    <div class="phenology-timeline" [style.--timeline-min-width]="timelineMinWidth">
-      <div class="timeline-track">
-        <span class="timeline-progress" [style.width.%]="progreso"></span>
-        @for (etapa of etapas; track etapa.nombre) {
-          <span class="timeline-dot" [ngClass]="etapa.estado" [style.left.%]="etapa.posicion"></span>
-        }
-      </div>
+    <div class="phenology-overview">
+      <section class="stage-now-panel">
+        <span>Hoy en el lote</span>
+        <h3>{{ etapaActual || 'Sin etapa' }}</h3>
+        <p>{{ lecturaEtapaActual }}</p>
 
-      <div class="timeline-label-row">
-        @for (etapa of etapas; track etapa.nombre) {
-          <div class="stage-label" [ngClass]="etapa.estado" [style.left.%]="etapa.posicion">
-            <span>{{ etapa.nombre }}</span>
-            <small>{{ etapa.fecha | date: 'd/M' }}</small>
-            @if (etapa.periodoDias) {
-              <em>{{ etapa.periodoDias }} d</em>
-            } @else {
-              <em>Inicio</em>
-            }
+        <div class="stage-progress">
+          <div>
+            <strong>{{ progresoEtapaActual | number: '1.0-0' }}%</strong>
+            <span>avance de la etapa</span>
           </div>
+          <div class="progress-track">
+            <span [style.width.%]="progresoEtapaActual"></span>
+          </div>
+        </div>
+      </section>
+
+      <div class="stage-context">
+        <article>
+          <span>{{ etiquetaImplantacion }}</span>
+          <strong>{{ diasDesdeImplantacion }} d</strong>
+          <small>desde el inicio</small>
+        </article>
+        <article>
+          <span>Etapa anterior</span>
+          <strong>{{ etapaAnteriorDetalle?.nombre || 'Inicio' }}</strong>
+          <small>{{ etapaAnteriorDetalle?.fecha ? (etapaAnteriorDetalle?.fecha | date: 'd/M') : '-' }}</small>
+        </article>
+        <article>
+          <span>Proximo hito</span>
+          <strong>{{ siguienteHitoTexto }}</strong>
+          <small>{{ proximaEtapaDetalle?.fecha ? (proximaEtapaDetalle?.fecha | date: 'd/M') : '-' }}</small>
+        </article>
+      </div>
+    </div>
+
+    <div class="stage-journey" [style.--stage-min-width]="timelineMinWidth">
+      <div class="stage-journey-scroll">
+        @for (etapa of etapas; track etapa.nombre; let i = $index) {
+          <article class="stage-step" [ngClass]="etapa.estado">
+            <span class="stage-status">{{ etapaEstadoTexto(etapa, i) }}</span>
+            <strong>{{ etapa.nombre }}</strong>
+            <small>{{ etapa.fecha | date: 'd/M' }}</small>
+            <em>{{ etapaDetalleTexto(etapa, i) }}</em>
+            <div class="step-progress">
+              <span [style.width.%]="etapaProgreso(etapa)"></span>
+            </div>
+          </article>
         }
       </div>
     </div>
   } @else {
     <div class="empty-state">
-      <p>{{ 'Datos insuficientes para mostrar la linea de tiempo.' | translate }}</p>
+      <p>{{ 'Datos insuficientes para mostrar la etapa fenologica.' | translate }}</p>
     </div>
   }
 </div>
