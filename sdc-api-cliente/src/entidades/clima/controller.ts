@@ -110,11 +110,15 @@ export class ClimaController {
     @Param('lat') lat: number,
     @Param('lng') lng: number,
     @Query('cultivo') cultivo?: string,
+    @Query('variedad') variedad?: string,
+    @Query('fechaSiembra') fechaSiembra?: string,
+    @Query('etapaFenologica') etapaFenologica?: string,
   ) {
     return await this.service.getRiesgosAgroclimaticos(
       Number(lat),
       Number(lng),
       cultivo,
+      { variedad, fechaSiembra, etapaFenologica },
     );
   }
 

@@ -2,7 +2,7 @@
   <div class="custom-card climate-risk-card">
     <div class="risk-header">
       <div>
-        <p class="titulo-card">RIESGOS CLIMATICOS</p>
+        <p class="titulo-card">RIESGOS AGROCLIMATICOS</p>
         <span>{{ resumen }}</span>
         @if (riesgos?.generadoEn) {
           <small>Actualizado {{ riesgos?.generadoEn | date: 'dd/MM/yy, HH:mm' }} - Open-Meteo</small>
@@ -19,7 +19,7 @@
     </div>
 
     @if (loading && !riesgos) {
-      <p-message severity="info" text="Calculando ventana de helada y granizo..."></p-message>
+      <p-message severity="info" text="Calculando dano por helada y granizo..."></p-message>
     } @else if (error) {
       <p-message severity="warn" [text]="error"></p-message>
     } @else if (items.length) {
@@ -43,7 +43,7 @@
         }
       </div>
     } @else {
-      <p-message severity="info" text="Sin riesgos climaticos disponibles para este lote."></p-message>
+      <p-message severity="info" text="Sin riesgos agroclimaticos disponibles para este lote."></p-message>
     }
   </div>
 }
@@ -80,6 +80,18 @@
           <span>Dias con senal</span>
           <strong>{{ riesgo.diasRiesgo }}</strong>
         </article>
+        @if (riesgo.etapaFenologica) {
+          <article>
+            <span>Estadio evaluado</span>
+            <strong>{{ riesgo.etapaFenologica }}</strong>
+          </article>
+        }
+        @if (riesgo.umbralDanoLeveC !== undefined) {
+          <article>
+            <span>Umbral inicial</span>
+            <strong>{{ riesgo.umbralDanoLeveC | number: '1.0-1' }} C</strong>
+          </article>
+        }
         <article>
           <span>Fuente</span>
           <strong>Open-Meteo</strong>
@@ -113,7 +125,7 @@
             <article [class.medium]="dia.nivel === 'medio'" [class.high]="dia.nivel === 'alto'">
               <span>{{ fechaLabel(dia.fecha) }}</span>
               <strong>{{ dia.posibilidadPct | number: '1.0-0' }}%</strong>
-              <small>{{ nivelLabel(dia.nivel) }}</small>
+              <small>{{ dia.etapaFenologica || nivelLabel(dia.nivel) }}</small>
             </article>
           }
         </div>

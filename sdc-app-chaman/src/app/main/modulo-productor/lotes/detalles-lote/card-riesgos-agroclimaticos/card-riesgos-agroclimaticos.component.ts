@@ -77,7 +77,7 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
         this.riesgos = await pending;
         this.ultimoKey = key;
       } catch (error: any) {
-        this.error = error?.error?.message || error?.message || 'No se pudo calcular riesgos climaticos.';
+        this.error = error?.error?.message || error?.message || 'No se pudo calcular riesgos agroclimaticos.';
       } finally {
         this.loading = false;
       }
@@ -89,13 +89,15 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
     try {
       const request = this.climaService.getRiesgosAgroclimaticos(this.centro.lat, this.centro.lng, {
         cultivo: this.siembra?.semilla?.cultivo,
+        variedad: this.siembra?.semilla?.variedad,
+        fechaSiembra: this.siembra?.fechaSiembra,
       });
       CardRiesgosAgroclimaticosComponent.pending.set(key, request);
       this.riesgos = await request;
       this.ultimoKey = key;
       CardRiesgosAgroclimaticosComponent.cache.set(key, this.riesgos);
     } catch (error: any) {
-      this.error = error?.error?.message || error?.message || 'No se pudo calcular riesgos climaticos.';
+      this.error = error?.error?.message || error?.message || 'No se pudo calcular riesgos agroclimaticos.';
     } finally {
       CardRiesgosAgroclimaticosComponent.pending.delete(key);
       this.loading = false;
@@ -134,6 +136,8 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
       this.centro?.lat,
       this.centro?.lng,
       this.siembra?.semilla?.cultivo,
+      this.siembra?.semilla?.variedad,
+      this.siembra?.fechaSiembra,
       new Date().toISOString().slice(0, 10),
     ].join('|');
   }

@@ -113,6 +113,12 @@ export interface IDiaRiesgoAgroclimatico {
   cape?: number;
   showers?: number;
   rafagaViento?: number;
+  etapaFenologica?: string;
+  contextoFenologico?: string;
+  umbralDanoLeveC?: number;
+  umbralDanoSeveroC?: number;
+  fuenteUmbral?: string;
+  margenUmbralC?: number;
   evidencia?: string[];
 }
 
@@ -125,6 +131,11 @@ export interface IRiesgoAgroclimatico {
   lectura: string;
   recomendacion: string;
   fechaCritica?: string;
+  etapaFenologica?: string;
+  contextoFenologico?: string;
+  umbralDanoLeveC?: number;
+  umbralDanoSeveroC?: number;
+  fuenteUmbral?: string;
   diasRiesgo: number;
   evidencia: string[];
   serie: IDiaRiesgoAgroclimatico[];
@@ -183,6 +194,9 @@ export interface IFrioTermicoCultivo {
     dias: number;
     fechaCritica?: string;
     temperaturaMinima?: number;
+    etapaFenologica?: string;
+    umbralDanoLeveC?: number;
+    umbralDanoSeveroC?: number;
   };
   eventos: {
     brotacion: {

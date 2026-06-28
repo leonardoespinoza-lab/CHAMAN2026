@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
-  CONFIGURACION_FRIO_CULTIVOS,
   esCultivoPerenne,
   IRiesgoAgroclimatico,
   IResumenRiesgosAgroclimaticos,
   ISerieFrioTermicoDia,
   ISiembra,
   NivelRiesgoAgroclimatico,
+  resolverContextoHeladaFenologico,
 } from 'modelos/src';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 import { PREDICCIONES_AGROCLIMA_LIMIT } from '../../env';
@@ -75,7 +75,7 @@ export class AgroclimaService {
         lng: centro.lng,
         cultivo,
         generadoEn: new Date().toISOString(),
-        helada: this.calcularRiesgoHelada(serie, cultivo),
+        helada: this.calcularRiesgoHelada(serie, siembra),
         granizo: this.calcularRiesgoGranizo(serie),
       },
     };
@@ -101,14 +101,14 @@ export class AgroclimaService {
       const eventKey = `helada:${idSiembra}:${this.dateKey(fecha)}`;
       await this.alertasService.registrarEventoSiembra({
         idSiembra,
-        descripcion: 'Riesgo de Helada',
+        descripcion: 'Riesgo de Dano por Helada',
         fecha,
         eventKey,
         reporte: this.reporteAgroclimatico(riesgos.helada),
         tenant: this.tenant(siembra),
       });
       await this.notificacionesService.enviarEventoAgroclimatico({
-        titulo: 'Alerta de helada',
+        titulo: 'Alerta de dano por helada',
         mensaje: `${siembra.semilla?.cultivo || 'Cultivo'} en ${
           siembra.lote?.nombre || 'lote'
         }: ${riesgos.helada.lectura}`,
@@ -238,8 +238,9 @@ export class AgroclimaService {
 
   private calcularRiesgoHelada(
     serie: ISerieFrioTermicoDia[],
-    cultivo?: string,
+    siembra: ISiembra,
   ): IRiesgoAgroclimatico {
+    const cultivo = siembra.semilla?.cultivo;
     const aplica = esCultivoPerenne(cultivo);
     if (!aplica) {
       return {
@@ -257,12 +258,26 @@ export class AgroclimaService {
       };
     }
 
-    const umbral =
-      CONFIGURACION_FRIO_CULTIVOS[cultivo || '']?.umbralHelada ?? -1;
     const dias = serie.map((dia) => {
-      const posibilidad = this.posibilidadHelada(dia.temperaturaMin, umbral);
+      const contexto = resolverContextoHeladaFenologico({
+        cultivo,
+        variedad: siembra.semilla?.variedad,
+        fecha: dia.fecha,
+        fechaSiembra: siembra.fechaSiembra,
+        etapasFenologia: siembra.semilla?.fenologiaReferencia?.etapas,
+      });
+      const posibilidad = this.posibilidadDanoHelada(
+        dia.temperaturaMin,
+        contexto?.tempDanoLeveC,
+        contexto?.tempDanoSeveroC,
+      );
       const nivel: NivelRiesgoAgroclimatico =
         posibilidad >= 70 ? 'alto' : posibilidad >= 35 ? 'medio' : 'bajo';
+      const margen =
+        dia.temperaturaMin !== undefined &&
+        contexto?.tempDanoLeveC !== undefined
+          ? this.round(dia.temperaturaMin - contexto.tempDanoLeveC)
+          : undefined;
       return {
         fecha: dia.fecha,
         nivel,
@@ -270,12 +285,29 @@ export class AgroclimaService {
         temperaturaMin: dia.temperaturaMin,
         temperaturaMax: dia.temperaturaMax,
         lluvia: dia.lluvia,
+        etapaFenologica: contexto?.etapaDetectada,
+        contextoFenologico: contexto
+          ? `${contexto.cultivo} - ${contexto.etapaDetectada}${contexto.variedad ? ` - ${contexto.variedad}` : ''}`
+          : undefined,
+        umbralDanoLeveC: contexto?.tempDanoLeveC,
+        umbralDanoSeveroC: contexto?.tempDanoSeveroC,
+        fuenteUmbral: contexto?.fuente,
+        margenUmbralC: margen,
         evidencia: [
           dia.temperaturaMin !== undefined
             ? `Temperatura minima prevista ${dia.temperaturaMin} C`
             : 'Sin temperatura minima disponible',
-          `Umbral operativo del cultivo ${umbral} C`,
-        ],
+          contexto
+            ? `Estadio fenologico: ${contexto.etapaDetectada}`
+            : 'Sin estadio fenologico disponible',
+          contexto?.tempDanoLeveC !== undefined
+            ? `Umbral dano inicial ${contexto.tempDanoLeveC} C`
+            : 'Sin umbral fenologico disponible',
+          contexto?.tempDanoSeveroC !== undefined
+            ? `Umbral dano severo ${contexto.tempDanoSeveroC} C`
+            : 'Sin umbral severo disponible',
+          contexto?.fuente ? `Referencia: ${contexto.fuente}` : '',
+        ].filter((item): item is string => !!item),
       };
     });
     const critico = [...dias].sort(
@@ -292,20 +324,27 @@ export class AgroclimaService {
       aplica: true,
       nivel,
       posibilidadPct: critico?.posibilidadPct || 0,
-      titulo: 'Posibilidad de heladas',
+      titulo: 'Riesgo de dano por helada',
       lectura:
         nivel === 'alto'
-          ? `${cultivo}: pronostico con helada probable en la ventana operativa.`
+          ? `${cultivo} en ${critico?.etapaFenologica || 'estadio sensible'}: temperatura bajo umbral de dano.`
           : nivel === 'medio'
-            ? `${cultivo}: escenario cercano a helada; vigilar madrugada critica.`
-            : `${cultivo}: sin senal firme de helada en los proximos dias.`,
+            ? `${cultivo} en ${critico?.etapaFenologica || 'estadio actual'}: escenario cercano al umbral de dano.`
+            : `${cultivo}: puede haber frio, pero sin umbral de dano fenologico en los proximos dias.`,
       recomendacion:
         nivel === 'bajo'
-          ? 'Mantener seguimiento del pronostico y estado fenologico.'
-          : 'Revisar yemas, brotes o flores; preparar estrategia de defensa y recorrida previa.',
+          ? 'Mantener seguimiento del pronostico y del estadio fenologico; no activar defensa solo por helada meteorologica.'
+          : 'Revisar el estadio real en campo, sensibilidad de yemas/brotes/flores y preparar estrategia de defensa si el lote confirma el estadio sensible.',
       fechaCritica: critico?.fecha,
+      etapaFenologica: critico?.etapaFenologica,
+      contextoFenologico: critico?.contextoFenologico,
+      umbralDanoLeveC: critico?.umbralDanoLeveC,
+      umbralDanoSeveroC: critico?.umbralDanoSeveroC,
+      fuenteUmbral: critico?.fuenteUmbral,
       diasRiesgo: dias.filter((dia) => dia.nivel !== 'bajo').length,
-      evidencia: critico?.evidencia || [],
+      evidencia: (critico?.evidencia || []).filter(
+        (item): item is string => !!item,
+      ),
       serie: dias,
     };
   }
@@ -372,6 +411,11 @@ export class AgroclimaService {
       nivel: riesgo.nivel,
       posibilidadPct: riesgo.posibilidadPct,
       fechaCritica: riesgo.fechaCritica,
+      etapaFenologica: riesgo.etapaFenologica,
+      contextoFenologico: riesgo.contextoFenologico,
+      umbralDanoLeveC: riesgo.umbralDanoLeveC,
+      umbralDanoSeveroC: riesgo.umbralDanoSeveroC,
+      fuenteUmbral: riesgo.fuenteUmbral,
       diasRiesgo: riesgo.diasRiesgo,
       lectura: riesgo.lectura,
       recomendacion: riesgo.recomendacion,
@@ -390,6 +434,8 @@ export class AgroclimaService {
       nivel: riesgo.nivel,
       posibilidadPct: riesgo.posibilidadPct,
       fechaCritica: riesgo.fechaCritica,
+      etapaFenologica: riesgo.etapaFenologica,
+      umbralDanoLeveC: riesgo.umbralDanoLeveC,
     };
   }
 
@@ -413,16 +459,21 @@ export class AgroclimaService {
       : undefined;
   }
 
-  private posibilidadHelada(
+  private posibilidadDanoHelada(
     tempMin: number | undefined,
-    umbral: number,
+    umbralDanoLeve?: number,
+    umbralDanoSevero?: number,
   ): number {
     if (tempMin === undefined || tempMin === null) return 0;
-    if (tempMin <= umbral - 3) return 95;
-    if (tempMin <= umbral - 1.5) return 85;
-    if (tempMin <= umbral) return 70;
-    if (tempMin <= umbral + 1) return 45;
-    if (tempMin <= umbral + 2) return 25;
+    if (umbralDanoLeve === undefined || umbralDanoSevero === undefined) {
+      return 0;
+    }
+    const puntoMedio = (umbralDanoLeve + umbralDanoSevero) / 2;
+    if (tempMin <= umbralDanoSevero) return 95;
+    if (tempMin <= puntoMedio) return 75;
+    if (tempMin <= umbralDanoLeve) return 50;
+    if (tempMin <= umbralDanoLeve + 1) return 25;
+    if (tempMin <= umbralDanoLeve + 2) return 10;
     return 5;
   }
 

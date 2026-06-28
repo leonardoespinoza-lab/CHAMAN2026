@@ -111,7 +111,12 @@ export class ClimaService {
   getRiesgosAgroclimaticos(
     lat: number,
     lng: number,
-    params: { cultivo?: string } = {}
+    params: {
+      cultivo?: string;
+      variedad?: string;
+      fechaSiembra?: string;
+      etapaFenologica?: string;
+    } = {}
   ): Promise<IResumenRiesgosAgroclimaticos> {
     const query = Object.fromEntries(
       Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== '')

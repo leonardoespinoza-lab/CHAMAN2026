@@ -55,7 +55,7 @@ export class CardFrioTermicoComponent implements OnChanges {
 
   constructor(
     private climaService: ClimaService,
-    private reporteService: ReporteService,
+    private reporteService: ReporteService
   ) {}
 
   public get mostrar(): boolean {
@@ -65,10 +65,9 @@ export class CardFrioTermicoComponent implements OnChanges {
   public get dispositivoFrio(): IDispositivo | undefined {
     return (this.lote?.dispositivos || []).find((dispositivo) => {
       const frio = dispositivo.frioAcumulado;
-      return !!frio && (
-        this.esNumero(frio.horasFrio) ||
-        this.esNumero(frio.horasFrioEfectivas) ||
-        this.esNumero(frio.porcionesFrio)
+      return (
+        !!frio &&
+        (this.esNumero(frio.horasFrio) || this.esNumero(frio.horasFrioEfectivas) || this.esNumero(frio.porcionesFrio))
       );
     });
   }
@@ -108,9 +107,7 @@ export class CardFrioTermicoComponent implements OnChanges {
     if (this.frioSensor) {
       const desde = this.fechaCorta(this.frioSensor.fechaInicio);
       const hasta = this.fechaCorta(this.frioSensor.fechaUltimoCalculo);
-      const termico = this.data?.periodoTermico?.desde
-        ? ` Termico desde ${this.data.periodoTermico.desde}.`
-        : '';
+      const termico = this.data?.periodoTermico?.desde ? ` Termico desde ${this.data.periodoTermico.desde}.` : '';
       return `Frio sensor ${desde || 'inicio no definido'} a ${hasta || 'ultimo reporte no definido'}.${termico}`;
     }
     if (this.data) {
@@ -152,9 +149,7 @@ export class CardFrioTermicoComponent implements OnChanges {
       const pct = this.porcentaje(horasFrio, horasFrioObjetivo);
       metricas.push({
         label: 'Horas frio (HF)',
-        value: this.esNumero(horasFrio)
-          ? `${this.numero(horasFrio, this.usaSensorFrio ? 2 : 1)} h`
-          : '-',
+        value: this.esNumero(horasFrio) ? `${this.numero(horasFrio, this.usaSensorFrio ? 2 : 1)} h` : '-',
         detail: this.detalleObjetivo(horasFrio, horasFrioObjetivo, 'h', 0),
         pct,
         tone: pct !== undefined && pct >= 85 ? 'ok' : 'info',
@@ -206,10 +201,10 @@ export class CardFrioTermicoComponent implements OnChanges {
       });
 
       metricas.push({
-        label: 'Riesgo helada',
+        label: 'Dano por helada',
         value: data.riesgoHelada.nivel.toUpperCase(),
         detail: data.riesgoHelada.fechaCritica
-          ? `${data.riesgoHelada.fechaCritica} / ${data.riesgoHelada.temperaturaMinima} C`
+          ? `${data.riesgoHelada.fechaCritica} / ${data.riesgoHelada.etapaFenologica || 'estadio estimado'} / ${data.riesgoHelada.temperaturaMinima} C`
           : 'Sin alerta inmediata',
         tone: data.riesgoHelada.nivel === 'bajo' ? 'ok' : 'warn',
       });
@@ -220,7 +215,8 @@ export class CardFrioTermicoComponent implements OnChanges {
 
   private crearChartFrioOptions(): Highcharts.Options | undefined {
     const serie = this.serieReciente;
-    const hayTemperatura = serie.filter((dia) => this.esNumero(dia.temperaturaMin) || this.esNumero(dia.temperaturaMax)).length > 1;
+    const hayTemperatura =
+      serie.filter((dia) => this.esNumero(dia.temperaturaMin) || this.esNumero(dia.temperaturaMax)).length > 1;
     const hayLluvia = serie.some((dia) => this.esNumero(dia.lluvia));
 
     if (!hayTemperatura && !hayLluvia) {
@@ -498,11 +494,9 @@ export class CardFrioTermicoComponent implements OnChanges {
     try {
       const request = this.reporteService
         .historico(String(id), this.diasHistoricoSensor, this.limiteHistoricoSensor())
-        .then((response) => response.datos?.length
-          ? response.datos
-          : dispositivo.ultimoReporte
-            ? [dispositivo.ultimoReporte]
-            : []);
+        .then((response) =>
+          response.datos?.length ? response.datos : dispositivo.ultimoReporte ? [dispositivo.ultimoReporte] : []
+        );
       CardFrioTermicoComponent.historicoSensorPending.set(key, request);
       this.reportesSensorFrio = await request;
       this.ultimoKeyHistorico = key;
@@ -551,7 +545,7 @@ export class CardFrioTermicoComponent implements OnChanges {
     valor: number | undefined,
     objetivo: number | undefined,
     unidad: string,
-    decimales = 1,
+    decimales = 1
   ): string {
     if (!this.esNumero(objetivo)) return 'Objetivo sin cargar';
 
