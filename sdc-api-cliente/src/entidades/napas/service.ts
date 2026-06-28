@@ -84,7 +84,7 @@ export class NapasService {
         dentroRadio.length
           ? `Se usaron pozos dentro de ${radio} km del lote.`
           : `Sin pozos dentro de ${radio} km; se muestran los mas cercanos como referencia.`,
-        'Nivel estatico expresado como profundidad aproximada bajo superficie, segun el dato publicado por el duenio del dato.',
+        'Nivel estatico expresado como profundidad aproximada al agua bajo la superficie del terreno, segun el dato publicado por el duenio del dato.',
       ],
     };
   }
@@ -213,7 +213,7 @@ export class NapasService {
     const distancia = conNivel[0]?.distanciaKm;
     const base =
       mediana !== undefined
-        ? `Nivel estatico de referencia ${mediana} m bajo superficie`
+        ? `Profundidad al agua de referencia ${mediana} m bajo la superficie del terreno`
         : 'Red con niveles estaticos disponibles';
     const cercania =
       distancia !== undefined ? `; pozo con nivel mas cercano a ${distancia} km` : '';

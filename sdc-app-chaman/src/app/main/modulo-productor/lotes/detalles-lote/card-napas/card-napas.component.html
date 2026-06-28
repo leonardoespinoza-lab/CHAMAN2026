@@ -24,7 +24,7 @@
       <div>
         <span>{{ calidadLabel }}</span>
         <strong>{{ nivelResumen }}</strong>
-        <small>Nivel estatico territorial bajo superficie</small>
+        <small>Profundidad al agua desde la superficie del terreno</small>
       </div>
       <div class="napas-meter" [style.--fill]="coberturaPct + '%'"><span></span></div>
     </div>
@@ -44,7 +44,7 @@
       </article>
     </div>
 
-    <p class="napas-reading">{{ referencia.cobertura.lectura }}</p>
+    <p class="napas-reading">{{ nivelDetalle }} {{ referencia.cobertura.lectura }}</p>
   } @else {
     <p-message severity="info" text="Referencia de napas pendiente de consulta."></p-message>
   }
@@ -67,10 +67,44 @@
         <div>
           <span>{{ calidadLabel }}</span>
           <strong>{{ nivelResumen }}</strong>
-          <small>{{ referencia.cobertura.lectura }}</small>
+          <small>{{ nivelDetalle }} {{ referencia.cobertura.lectura }}</small>
         </div>
         <em>{{ referencia.cobertura.radioKm }} km</em>
       </div>
+
+      <section class="map-panel">
+        <div class="map-panel-heading">
+          <div>
+            <span>Ubicacion geografica</span>
+            <strong>{{ mapaResumen }}</strong>
+          </div>
+          <small>La posicion es relativa al lote; no reemplaza un mapa catastral.</small>
+        </div>
+        <div class="napas-reference-map">
+          <span class="map-axis north">N</span>
+          <span class="map-axis west">O</span>
+          <span class="map-axis east">E</span>
+          @for (punto of puntosMapa; track punto.id) {
+            <span
+              class="map-point"
+              [class.lote]="punto.isLote"
+              [class.with-level]="punto.tieneNivel"
+              [style.left.%]="punto.left"
+              [style.top.%]="punto.top"
+              [title]="punto.tooltip"
+            >
+              @if (punto.isLote) {
+                L
+              }
+            </span>
+          }
+        </div>
+        <div class="map-legend">
+          <span><i class="lote-dot"></i>Lote</span>
+          <span><i class="well-dot"></i>Pozo con nivel</span>
+          <span><i class="empty-dot"></i>Pozo sin nivel</span>
+        </div>
+      </section>
 
       <div class="detail-grid">
         <article>
@@ -107,10 +141,11 @@
                 {{ pozo.provincia || 'Argentina' }} - {{ pozo.distanciaKm | number: '1.0-1' }} km -
                 {{ pozo.fuente || 'Fuente publica' }}
               </small>
+              <small>{{ pozo.lat | number: '1.4-4' }}, {{ pozo.lng | number: '1.4-4' }}</small>
             </div>
             <span>
               @if (pozo.nivelEstaticoM !== undefined) {
-                {{ pozo.nivelEstaticoM | number: '1.0-1' }} m
+                {{ pozo.nivelEstaticoM | number: '1.0-1' }} m b.s.
               } @else {
                 ND
               }

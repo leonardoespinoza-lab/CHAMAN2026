@@ -190,6 +190,154 @@
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
+.map-panel {
+  background: rgba(255, 255, 255, 0.74);
+  border: 1.5px solid rgba(86, 117, 150, 0.28);
+  border-radius: 8px;
+  padding: 0.85rem;
+}
+
+.map-panel-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.map-panel-heading span {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.map-panel-heading strong,
+.map-panel-heading small {
+  display: block;
+}
+
+.map-panel-heading strong {
+  color: var(--p-text-color);
+  font-size: 1.1rem;
+  margin-top: 0.15rem;
+}
+
+.map-panel-heading small {
+  color: var(--p-text-muted-color);
+  font-size: 0.92rem;
+  line-height: 1.28;
+  max-width: 230px;
+  text-align: right;
+}
+
+.napas-reference-map {
+  background:
+    linear-gradient(rgba(62, 145, 214, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(62, 145, 214, 0.08) 1px, transparent 1px),
+    linear-gradient(135deg, rgba(240, 249, 255, 0.95), rgba(255, 255, 255, 0.76));
+  background-size: 12.5% 12.5%, 12.5% 12.5%, auto;
+  border: 1px solid rgba(86, 117, 150, 0.24);
+  border-radius: 8px;
+  height: 250px;
+  overflow: hidden;
+  position: relative;
+}
+
+.map-axis {
+  color: rgba(34, 109, 165, 0.72);
+  font-size: 0.78rem;
+  font-weight: 900;
+  position: absolute;
+  z-index: 1;
+}
+
+.map-axis.north {
+  left: 50%;
+  top: 0.45rem;
+  transform: translateX(-50%);
+}
+
+.map-axis.west {
+  left: 0.55rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.map-axis.east {
+  right: 0.55rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.map-point {
+  align-items: center;
+  background: rgba(151, 162, 173, 0.88);
+  border: 2px solid white;
+  border-radius: 999px;
+  box-shadow: 0 7px 18px rgba(28, 45, 68, 0.18);
+  color: white;
+  display: inline-flex;
+  font-size: 0.7rem;
+  font-weight: 900;
+  height: 13px;
+  justify-content: center;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 13px;
+  z-index: 2;
+}
+
+.map-point.with-level {
+  background: #3e91d6;
+}
+
+.map-point.lote {
+  background: var(--p-primary-color);
+  border-color: #14233a;
+  color: #14233a;
+  height: 26px;
+  width: 26px;
+  z-index: 4;
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 0.6rem;
+}
+
+.map-legend span {
+  align-items: center;
+  color: var(--p-text-muted-color);
+  display: inline-flex;
+  font-size: 0.92rem;
+  font-weight: 750;
+  gap: 0.35rem;
+}
+
+.map-legend i {
+  border-radius: 999px;
+  display: inline-block;
+  height: 10px;
+  width: 10px;
+}
+
+.map-legend .lote-dot {
+  background: var(--p-primary-color);
+  border: 1px solid #14233a;
+}
+
+.map-legend .well-dot {
+  background: #3e91d6;
+}
+
+.map-legend .empty-dot {
+  background: #98a2ad;
+}
+
 .detail-grid article,
 .trace-panel {
   background: rgba(255, 255, 255, 0.72);
@@ -255,6 +403,16 @@
   .napas-main,
   .well-chart article {
     grid-template-columns: 1fr;
+  }
+
+  .map-panel-heading {
+    display: block;
+  }
+
+  .map-panel-heading small {
+    margin-top: 0.25rem;
+    max-width: none;
+    text-align: left;
   }
 
   .napas-kpis {
