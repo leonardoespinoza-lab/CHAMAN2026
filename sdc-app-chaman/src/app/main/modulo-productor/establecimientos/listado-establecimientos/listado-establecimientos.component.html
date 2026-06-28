@@ -1,4 +1,4 @@
-<div class="list-view-container">
+<div class="list-view-container establishments-list-page">
   <p-table
     #table
     [value]="dataSource"
@@ -10,46 +10,60 @@
     [scrollable]="true"
     scrollHeight="flex"
     (onPage)="helper.setPageSize(name, $event.rows)"
-    [globalFilterFields]="['nombre']"
-    stripedRows
+    [globalFilterFields]="[
+      'nombre',
+      'ubicacionAdministrativa.localidad',
+      'ubicacionAdministrativa.partido',
+      'ubicacionAdministrativa.provincia',
+      'productor.nombre',
+      'fuenteClimaPreferida'
+    ]"
     rowExpandMode="single"
-    dataKey="_id"
     stateStorage="session"
     [stateKey]="name"
   >
-    <!-- Caption -->
     <ng-template #caption>
-      <div class="flex menu-offset" style="align-items: center">
-        <!-- Buscar -->
-        <p-iconfield iconPosition="left" class="ml-auto">
-          <p-inputicon>
-            <i class="pi pi-search"></i>
-          </p-inputicon>
-          <input
-            #search
-            pInputText
-            type="text"
-            (input)="table.filterGlobal($any($event.target).value, 'contains')"
-            [placeholder]="'Buscar' | translate"
+      <div class="establishments-toolbar menu-offset">
+        <div>
+          <span>Gestion territorial</span>
+          <h2>Establecimientos</h2>
+          <small>
+            {{ totalCount || dataSource.length }} campos cargados con resumen de lotes, clima y superficie.
+          </small>
+        </div>
+        <div class="toolbar-actions">
+          <p-iconfield iconPosition="left">
+            <p-inputicon>
+              <i class="pi pi-search"></i>
+            </p-inputicon>
+            <input
+              #search
+              pInputText
+              type="text"
+              (input)="table.filterGlobal($any($event.target).value, 'contains')"
+              [placeholder]="'Buscar establecimiento' | translate"
+            />
+          </p-iconfield>
+          <p-button
+            [label]="'Limpiar' | translate"
+            [outlined]="true"
+            icon="pi pi-filter-slash"
+            (onClick)="table.clear(); search.value = ''"
           />
-        </p-iconfield>
-        <!-- Limpiar -->
-        <p-button
-          [label]="'Limpiar' | translate"
-          [outlined]="true"
-          icon="pi pi-filter-slash"
-          (click)="table.clear(); search.value = ''"
-          class="ml-2"
-        />
+          @if (!helper.soloLectura()) {
+            <p-button
+              [label]="'Nuevo establecimiento' | translate"
+              icon="pi pi-plus"
+              severity="primary"
+              (onClick)="create()"
+            />
+          }
+        </div>
       </div>
     </ng-template>
 
-    <!-- Header -->
     <ng-template #header>
       <tr>
-        <!-- Expandir -->
-        <!-- <th style="width: 1em"></th> -->
-        <!-- Nombre / Establecimiento -->
         <th pSortableColumn="nombre">
           <div class="flex items-center gap-2">
             {{ 'Establecimiento' | translate }}
@@ -57,8 +71,7 @@
             <p-columnFilter type="text" field="nombre" display="menu" />
           </div>
         </th>
-        <!-- Acciones -->
-        <th>
+        <th class="actions-column">
           <div class="flex items-center">
             {{ 'Acciones' | translate }}
           </div>
@@ -66,64 +79,98 @@
       </tr>
     </ng-template>
 
-    <!-- Body -->
-    <ng-template #body let-row let-expanded="expanded">
-      <tr>
-        <!-- Expandir -->
-        <!-- <td>
-        <p-button
-          type="button"
-          pRipple
-          [pRowToggler]="row"
-          [text]="true"
-          [rounded]="true"
-          [plain]="true"
-          [icon]="expanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
-        />
-      </td> -->
-        <!-- Nombre / Lote -->
+    <ng-template #body let-row>
+      <tr class="establishment-table-row">
         <td>
-          {{ row.nombre }}
+          <div class="establishment-summary">
+            <div class="establishment-main">
+              <div class="establishment-icon" [ngClass]="estadoOperativoClase(row)">
+                <i class="pi pi-building"></i>
+              </div>
+              <div class="establishment-title">
+                <div class="title-row">
+                  <h3>{{ row.nombre }}</h3>
+                  <span class="state-pill" [ngClass]="estadoOperativoClase(row)">
+                    {{ estadoOperativo(row) }}
+                  </span>
+                </div>
+                <p>{{ ubicacionResumen(row) }}</p>
+                <div class="establishment-meta">
+                  <span>
+                    <i class="pi pi-user"></i>
+                    {{ productorResumen(row) }}
+                  </span>
+                  <span>
+                    <i class="pi pi-cloud"></i>
+                    {{ fuenteClima(row) }}
+                  </span>
+                  <span>
+                    <i class="pi pi-map"></i>
+                    {{ poligonosResumen(row) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="metrics-strip">
+              @for (item of indicadores(row); track item.label) {
+                <article [ngClass]="item.tone" [pTooltip]="item.tooltip">
+                  <span>{{ item.label }}</span>
+                  <strong>{{ item.value }}</strong>
+                  <small>{{ item.detail }}</small>
+                </article>
+              }
+            </div>
+          </div>
         </td>
-        <!-- Superficie -->
-        <!-- <td>{{ row.ubicacion?.superficie | number : "0.0-0" }} Has.</td> -->
-        <!-- Acciones -->
-        <td>
-          <div style="display: flex; flex-direction: row; gap: 0.5rem">
-            <!-- Editar -->
+
+        <td class="actions-column">
+          <div class="row-actions">
             <p-button
+              label="Mapa"
+              icon="pi pi-map-marker"
+              severity="primary"
               [rounded]="true"
-              pTooltip="Editar"
-              icon="pi pi-pencil"
-              severity="warn"
-              (click)="edit(row)"
+              pTooltip="Abrir mapa operativo"
+              (onClick)="abrirMapa(row)"
             ></p-button>
-            <!-- Eliminar -->
-            <p-button
-              [rounded]="true"
-              pTooltip="Eliminar"
-              icon="pi pi-trash"
-              severity="danger"
-              (click)="delete(row)"
-            ></p-button>
+            @if (!helper.soloLectura()) {
+              <p-button
+                icon="pi pi-pencil"
+                severity="warn"
+                [rounded]="true"
+                pTooltip="Editar establecimiento"
+                (onClick)="edit(row)"
+              ></p-button>
+            }
+            @if (!helper.soloLectura()) {
+              <p-button
+                icon="pi pi-trash"
+                severity="danger"
+                [rounded]="true"
+                pTooltip="Eliminar establecimiento"
+                (onClick)="delete(row)"
+              ></p-button>
+            }
           </div>
         </td>
       </tr>
     </ng-template>
 
-    <!-- Expanded -->
     <ng-template #expandedrow let-row>
       <tr>
-        <td colspan="3">
-          <h2 style="margin: 0; text-align: center; line-height: 2">Acá van mas detalles del establecimiento</h2>
+        <td colspan="2">
+          <div class="expanded-summary">
+            <span>{{ ubicacionResumen(row) }}</span>
+            <strong>{{ cultivosResumen(row) }}</strong>
+          </div>
         </td>
       </tr>
     </ng-template>
 
-    <!-- Sin datos -->
     <ng-template #emptymessage>
       <tr>
-        <td colspan="7">
+        <td colspan="2">
           <p-message severity="info">
             {{ 'No se encontraron establecimientos' | translate }}
           </p-message>
@@ -131,17 +178,18 @@
       </tr>
     </ng-template>
 
-    <!-- Footer de la tabla con botón crear -->
     <ng-template #summary>
-      <div class="flex justify-center p-3 border-t border-surface-200">
-        <p-button
-          [label]="'Crear nuevo establecimiento' | translate"
-          icon="pi pi-plus"
-          severity="primary"
-          [fluid]="true"
-          [outlined]="true"
-          (click)="create()"
-        ></p-button>
+      <div class="table-summary">
+        <span>{{ dataSource.length }} visibles</span>
+        @if (!helper.soloLectura()) {
+          <p-button
+            [label]="'Crear nuevo establecimiento' | translate"
+            icon="pi pi-plus"
+            severity="primary"
+            [outlined]="true"
+            (onClick)="create()"
+          ></p-button>
+        }
       </div>
     </ng-template>
   </p-table>
