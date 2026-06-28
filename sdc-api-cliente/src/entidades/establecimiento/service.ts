@@ -354,11 +354,20 @@ export class EstablecimientosService {
     if (lastIndex < 0 || !Array.isArray(data?.data)) {
       return null;
     }
-    const lectura = (matcher: (name: string) => boolean): IValores | undefined => {
-      const serie = data.data.find((item) => {
-        const name = String(item?.name || item?.name_original || '').toLowerCase();
-        return matcher(name);
-      });
+    const lectura = (
+      matcher: (name: string) => boolean,
+      preferencia: (name: string) => number = () => 0,
+    ): IValores | undefined => {
+      const serie = data.data
+        .filter((item) => {
+          const name = String(item?.name || item?.name_original || '').toLowerCase();
+          return matcher(name);
+        })
+        .sort((a, b) => {
+          const nameA = String(a?.name || a?.name_original || '').toLowerCase();
+          const nameB = String(b?.name || b?.name_original || '').toLowerCase();
+          return preferencia(nameB) - preferencia(nameA);
+        })[0];
       if (!serie?.values) {
         return undefined;
       }
@@ -382,6 +391,12 @@ export class EstablecimientosService {
         name.includes('air temperature') ||
         name.includes('i2c temperature') ||
         (name.includes('temperature') && !name.includes('soil')),
+        (name) => {
+          if (name.includes('air temperature')) return 3;
+          if (name.includes('temperature') && !name.includes('i2c') && !name.includes('soil')) return 2;
+          if (name.includes('i2c temperature')) return 1;
+          return 0;
+        },
       ),
       humedad: lectura((name) =>
         name.includes('relative humidity') ||

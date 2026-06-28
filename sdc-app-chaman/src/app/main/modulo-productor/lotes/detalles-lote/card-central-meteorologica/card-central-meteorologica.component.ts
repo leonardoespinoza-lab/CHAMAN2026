@@ -29,6 +29,17 @@ interface SerieVariable {
   value: number;
 }
 
+type VariableCanonica =
+  | 'temperatura'
+  | 'humedad'
+  | 'lluvia'
+  | 'viento'
+  | 'rafaga'
+  | 'direccion'
+  | 'radiacion'
+  | 'presion'
+  | 'et0';
+
 @Component({
   selector: 'app-card-central-meteorologica',
   imports: [CommonModule, SharedModule, ChartComponent],
@@ -122,12 +133,14 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
   private variable(
     label: string,
     valores: IValores | undefined,
-    unidad: string,
+    unidadFallback: string,
     icon: string,
     detail: string,
     key: string,
   ): VariableCentral {
-    const value = this.leerValor(valores);
+    const lecturaCanonica = this.lecturaCanonica(key as VariableCanonica);
+    const value = this.leerValor(lecturaCanonica) ?? this.leerValor(valores);
+    const unidad = lecturaCanonica?.unit || unidadFallback;
     return {
       key,
       label,
@@ -136,7 +149,7 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
       icon,
       disponible: value !== undefined,
       unit: unidad,
-      historial: this.historialPorMetrica(key),
+      historial: this.historialPorMetrica(key, lecturaCanonica),
     };
   }
 
@@ -148,14 +161,12 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
   private crearVariablesDetalle(): VariableCentral[] {
     const lecturas = this.central?.ultimaLecturaDetalle || [];
     if (lecturas.length) {
-      return lecturas
-        .map((lectura) => this.variableDetalleDesdeLectura(lectura))
-        .filter((variable) => this.mostrarVariableDetalle(variable));
+      const variables = lecturas.map((lectura) => this.variableDetalleDesdeLectura(lectura));
+      return this.deduplicarVariablesDetalle(variables).filter((variable) => this.mostrarVariableDetalle(variable));
     }
     const sensores = this.central?.sensoresDetalle || [];
-    return sensores
-      .map((sensor) => this.variableDetalleDesdeSensor(sensor))
-      .filter((variable) => this.mostrarVariableDetalle(variable));
+    const variables = sensores.map((sensor) => this.variableDetalleDesdeSensor(sensor));
+    return this.deduplicarVariablesDetalle(variables).filter((variable) => this.mostrarVariableDetalle(variable));
   }
 
   private variableDetalleDesdeLectura(
@@ -191,7 +202,10 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
     };
   }
 
-  private historialPorMetrica(key: string): SerieVariable[] {
+  private historialPorMetrica(key: string, lecturaCanonica?: IEstacionLecturaDetalle): SerieVariable[] {
+    if (lecturaCanonica) {
+      return this.historialPorLectura(lecturaCanonica);
+    }
     const matcher = this.matcherMetrica(key);
     return this.historialCentral()
       .filter((lectura) => matcher(this.normalizar(lectura.label), this.normalizar(lectura.nameOriginal || lectura.name || '')))
@@ -224,6 +238,54 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
 
   private historialCentral(): IEstacionLecturaHistorica[] {
     return this.central?.historialLecturas || [];
+  }
+
+  private lecturaCanonica(key: VariableCanonica): IEstacionLecturaDetalle | undefined {
+    const lecturas = this.central?.ultimaLecturaDetalle || [];
+    return lecturas
+      .filter((lectura) => this.keyResumenDesdeTexto(this.textoLectura(lectura)) === key)
+      .sort((a, b) => this.prioridadLecturaCanonica(key, b) - this.prioridadLecturaCanonica(key, a))[0];
+  }
+
+  private textoLectura(lectura: IEstacionSensorDetalle): string {
+    return this.normalizar([
+      lectura.label,
+      lectura.name,
+      lectura.nameOriginal,
+      lectura.type,
+    ].filter(Boolean).join(' '));
+  }
+
+  private prioridadLecturaCanonica(key: VariableCanonica, lectura: IEstacionLecturaDetalle): number {
+    const texto = this.textoLectura(lectura);
+    let prioridad = this.leerValor(lectura) !== undefined ? 20 : 0;
+    if (key === 'temperatura') {
+      if (texto.includes('air temperature') || texto.includes('temperatura del aire')) prioridad += 10;
+      else if (texto.includes('temperature') && !texto.includes('i2c') && !texto.includes('soil')) prioridad += 6;
+      else if (texto.includes('i2c temperature')) prioridad += 1;
+    }
+    if (key === 'humedad' && (texto.includes('relative humidity') || texto.includes('humedad relativa'))) prioridad += 10;
+    if (key === 'lluvia' && (texto.includes('precipitation') || texto.includes('precipitacion'))) prioridad += 10;
+    if (key === 'viento' && texto.includes('wind speed')) prioridad += 10;
+    if (key === 'rafaga' && (texto.includes('gust') || texto.includes('rafaga'))) prioridad += 10;
+    if (key === 'direccion' && (texto.includes('wind dir') || texto.includes('direccion viento'))) prioridad += 10;
+    if (key === 'radiacion' && (texto.includes('solar radiation') || texto.includes('radiacion solar'))) prioridad += 10;
+    if (key === 'presion' && (texto.includes('pressure') || texto.includes('presion'))) prioridad += 10;
+    if (key === 'et0' && texto.includes('et0')) prioridad += 10;
+    return prioridad;
+  }
+
+  private deduplicarVariablesDetalle(variables: VariableCentral[]): VariableCentral[] {
+    const vistas = new Set<string>();
+    return variables.filter((variable) => {
+      const claveCanonica = this.keyResumenDesdeTexto(variable.label);
+      const clave = claveCanonica || `${this.normalizar(variable.label)}|${variable.unit || ''}`;
+      if (vistas.has(clave)) {
+        return false;
+      }
+      vistas.add(clave);
+      return true;
+    });
   }
 
   private puntoHistorico(lectura: IEstacionLecturaHistorica): SerieVariable | undefined {
@@ -341,15 +403,45 @@ export class CardCentralMeteorologicaComponent implements OnChanges {
   }
 
   private keyResumenDesdeTexto(texto: string): string | undefined {
-    if (texto.includes('air temperature') || texto.includes('i2c temperature')) return 'temperatura';
-    if (texto.includes('relative humidity') || texto.includes('rel humidity')) return 'humedad';
-    if (texto.includes('precipitation') || texto.includes('rain')) return 'lluvia';
-    if (texto.includes('wind speed') && !texto.includes('gust')) return 'viento';
-    if (texto.includes('gust')) return 'rafaga';
-    if (texto.includes('wind dir') || texto.includes('wind direction') || texto.includes('wind orientation')) return 'direccion';
-    if (texto.includes('solar radiation') || texto === 'radiacion solar') return 'radiacion';
-    if (texto.includes('pressure')) return 'presion';
-    if (texto === 'et0' || texto.includes('daily et0')) return 'et0';
+    const normalizado = this.normalizar(texto);
+    if (
+      normalizado.includes('air temperature') ||
+      normalizado.includes('i2c temperature') ||
+      normalizado.includes('temperatura del aire') ||
+      normalizado === 'temperatura'
+    ) return 'temperatura';
+    if (
+      normalizado.includes('relative humidity') ||
+      normalizado.includes('rel humidity') ||
+      normalizado.includes('humedad relativa') ||
+      normalizado === 'humedad'
+    ) return 'humedad';
+    if (
+      normalizado.includes('precipitation') ||
+      normalizado.includes('precipitacion') ||
+      normalizado.includes('rain') ||
+      normalizado === 'lluvia'
+    ) return 'lluvia';
+    if (
+      (normalizado.includes('wind speed') || normalizado.includes('velocidad viento')) &&
+      !normalizado.includes('gust') &&
+      !normalizado.includes('rafaga')
+    ) return 'viento';
+    if (normalizado.includes('gust') || normalizado.includes('rafaga')) return 'rafaga';
+    if (
+      normalizado.includes('wind dir') ||
+      normalizado.includes('wind direction') ||
+      normalizado.includes('wind orientation') ||
+      normalizado.includes('direccion viento') ||
+      normalizado === 'direccion'
+    ) return 'direccion';
+    if (
+      normalizado.includes('solar radiation') ||
+      normalizado.includes('radiacion solar') ||
+      normalizado === 'radiacion'
+    ) return 'radiacion';
+    if (normalizado.includes('pressure') || normalizado.includes('presion')) return 'presion';
+    if (normalizado === 'et0' || normalizado.includes('daily et0')) return 'et0';
     return undefined;
   }
 
