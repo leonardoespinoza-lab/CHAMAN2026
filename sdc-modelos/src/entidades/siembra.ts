@@ -20,21 +20,40 @@ export type TTipoDosisP = "Muy Baja" | "Baja" | "Alta" | "Muy Alta";
 export type TTipoRendimiento = "Muy Bajo" | "Bajo" | "Alto" | "Muy Alto";
 export type TTipoManejoAgronomico = "Malo" | "Promedio" | "Bueno" | "Excelente";
 export type TTipoIntensidadLluvias =
-  | "Suaves"
-  | "Moderadas"
-  | "Intensas"
-  | "Muy Intensas";
+  "Suaves" | "Moderadas" | "Intensas" | "Muy Intensas";
 export type TTipoMateriaOrganica = "< 1" | "> 1 < 3" | "> 3 < 5" | "> 5";
 export type TTipoLluviaPromedio =
-  | "< 600"
-  | "> 600 < 1200"
-  | "> 1200 < 1800"
-  | "> 1800";
+  "< 600" | "> 600 < 1200" | "> 1200 < 1800" | "> 1800";
 export type TTipoLabranza =
-  | "Siembra Directa"
-  | "Convencional"
-  | "Labranza"
-  | "Reducida";
+  "Siembra Directa" | "Convencional" | "Labranza" | "Reducida";
+export type TCalidadHuellaHidrica = "alta" | "media" | "baja";
+
+export interface ICalidadHuellaHidrica {
+  nivel: TCalidadHuellaHidrica;
+  score: number;
+  observaciones: string[];
+}
+
+export interface IMetodologiaHuellaHidrica {
+  version: string;
+  enfoque: string;
+  fuenteClima?: string;
+  fechaCalculo?: string;
+  limites?: string[];
+}
+
+export interface IComponentesHuellaHidrica {
+  etcTotalMm?: number;
+  lluviaTotalMm?: number;
+  lluviaEfectivaMm?: number;
+  verdeMm?: number;
+  azulRealMm?: number;
+  deficitPotencialMm?: number;
+  riegoRegistradoMm?: number;
+  grisLitrosHa?: number;
+  grisFertilizantesLitrosHa?: number;
+  grisAgroquimicosLitrosHa?: number;
+}
 
 export interface IHuellaHidrica {
   gris?: {
@@ -55,6 +74,9 @@ export interface IHuellaHidrica {
     litrosKcal?: number;
     litrosKg?: number;
   };
+  componentes?: IComponentesHuellaHidrica;
+  calidad?: ICalidadHuellaHidrica;
+  metodologia?: IMetodologiaHuellaHidrica;
 }
 
 export interface ISiembra {
@@ -78,10 +100,7 @@ export interface ISiembra {
   aguaUtilReal?: number;
   // Información adicional sobre el cálculo de agua útil
   estadoCalculoAguaUtil?:
-    | "calculado"
-    | "estimado"
-    | "no_disponible"
-    | "fallida";
+    "calculado" | "estimado" | "no_disponible" | "fallida";
   motivoCalculoAguaUtil?: string;
 
   // Datos para huella hídrica

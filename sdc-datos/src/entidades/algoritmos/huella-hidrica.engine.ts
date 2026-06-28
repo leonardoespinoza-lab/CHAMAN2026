@@ -1,5 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
-import { IFertilizacion, IFumigacion, IHuellaHidrica, ILote, ISiembra } from 'modelos/src';
+import {
+  IFertilizacion,
+  IFumigacion,
+  IHuellaHidrica,
+  ILote,
+  ISiembra,
+} from 'modelos/src';
 
 type Dict<T = number> = Record<string, T>;
 
@@ -28,9 +34,16 @@ export interface HuellaHidricaResultado {
     fumigaciones: number;
   };
   parciales: {
+    etcTotalMm: number;
+    lluviaTotalMm: number;
+    lluviaEfectivaMm: number;
     etVerdeMm: number;
     etAzulMm: number;
+    riegoRegistradoMm: number;
     deficitPotencialMm: number;
+    grisLitrosHa: number;
+    grisFertilizantesLitrosHa: number;
+    grisAgroquimicosLitrosHa: number;
     grisFertilizantesLitrosKg: number;
     grisAgroquimicosLitrosKg: number;
     aporteN: number;
@@ -40,6 +53,8 @@ export interface HuellaHidricaResultado {
     excedenteN: number;
     excedenteP: number;
   };
+  calidad: NonNullable<IHuellaHidrica['calidad']>;
+  metodologia: NonNullable<IHuellaHidrica['metodologia']>;
   trazas: string[];
 }
 
@@ -96,6 +111,9 @@ export interface HuellaHidricaSeguimientoResultado {
     fumigaciones: number;
     climaDisponible: boolean;
   };
+  parciales: NonNullable<IHuellaHidrica['componentes']>;
+  calidad: NonNullable<IHuellaHidrica['calidad']>;
+  metodologia: NonNullable<IHuellaHidrica['metodologia']>;
   faltantes: HuellaHidricaFaltante[];
   trazas: string[];
 }
@@ -105,6 +123,15 @@ interface Stage {
   kcProm: number;
   days: number;
 }
+
+const HUELLA_HIDRICA_VERSION = 'huella-hidrica-chaman-2026-02';
+const HUELLA_HIDRICA_ENFOQUE =
+  'WFN operativa + FAO-56: ETc con Kc y ET0, agua verde por lluvia efectiva, azul por riego registrado y gris por carga potencial.';
+const HUELLA_HIDRICA_LIMITES = [
+  'No reemplaza una verificacion ISO 14046 completa de ciclo de vida.',
+  'La huella azul real requiere riego o aporte externo registrado.',
+  'La huella gris usa un modelo agronomico operativo con trazabilidad de inputs.',
+];
 
 const EQ: Record<string, Dict> = {
   depositoN: { '< 0.5': 0, '> 0.5': 0.33, '< 1.5': 0.67, '> 1.5': 1 },
@@ -126,17 +153,42 @@ const EQ: Record<string, Dict> = {
     'Franco arenoso': 0.67,
     Arenoso: 1,
   },
-  drenajeNaturalLixiviacion: { 'Mal Drenado': 0, 'Moderadamente Drenado': 0.33, 'Bien Drenado': 0.67, 'Excesivamente Drenado': 1 },
-  drenajeNaturalEscorrentia: { 'Mal Drenado': 0, 'Moderadamente Drenado': 0.33, 'Bien Drenado': 0.67, 'Excesivamente Drenado': 1 },
-  erosionEscorrentiaPendiente: { 'Baja (0 - 3%)': 0, 'Moderada (3 - 8%)': 0.33, 'Alta (8 - 15%)': 0.67, 'Muy Alta (> 15%)': 1 },
+  drenajeNaturalLixiviacion: {
+    'Mal Drenado': 0,
+    'Moderadamente Drenado': 0.33,
+    'Bien Drenado': 0.67,
+    'Excesivamente Drenado': 1,
+  },
+  drenajeNaturalEscorrentia: {
+    'Mal Drenado': 0,
+    'Moderadamente Drenado': 0.33,
+    'Bien Drenado': 0.67,
+    'Excesivamente Drenado': 1,
+  },
+  erosionEscorrentiaPendiente: {
+    'Baja (0 - 3%)': 0,
+    'Moderada (3 - 8%)': 0.33,
+    'Alta (8 - 15%)': 0.67,
+    'Muy Alta (> 15%)': 1,
+  },
   contenidoP: { '< 12': 0, '> 12 < 20': 0.33, '> 20 < 30': 0.67, '> 30': 1 },
-  lluviasPromedio: { '< 600': 0, '> 600 < 1200': 0.33, '> 1200 < 1800': 0.67, '> 1800': 1 },
+  lluviasPromedio: {
+    '< 600': 0,
+    '> 600 < 1200': 0.33,
+    '> 1200 < 1800': 0.67,
+    '> 1800': 1,
+  },
   fijacionN: { '0': 0, '> 0 < 30': 0.33, '> 30 < 60': 0.67, '> 60': 1 },
   dosisN: { 'Muy Baja': 0, Baja: 0.33, Alta: 0.67, 'Muy Alta': 1 },
   dosisP: { 'Muy Baja': 0, Baja: 0.33, Alta: 0.67, 'Muy Alta': 1 },
   rendimiento: { 'Muy Bajo': 1, Bajo: 0.67, Alto: 0.33, 'Muy Alto': 0 },
   manejoAgronomico: { Malo: 1, Promedio: 0.67, Bueno: 0.33, Excelente: 0 },
-  intensidadLluvias: { Suaves: 0, Moderadas: 0.33, Intensas: 0.67, 'Muy Intensas': 1 },
+  intensidadLluvias: {
+    Suaves: 0,
+    Moderadas: 0.33,
+    Intensas: 0.67,
+    'Muy Intensas': 1,
+  },
   materiaOrganica: { '< 1': 1, '> 1 < 3': 0.67, '> 3 < 5': 0.33, '> 5': 0 },
 };
 
@@ -183,6 +235,59 @@ function round(value: number, digits = 2): number {
   if (!Number.isFinite(value)) return 0;
   const factor = Math.pow(10, digits);
   return Math.round(value * factor) / factor;
+}
+
+function toDateKey(fecha?: string | Date): string | undefined {
+  if (!fecha) return undefined;
+  const date = new Date(fecha);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString().slice(0, 10);
+}
+
+function diffDias(desde?: string | Date, hasta?: string | Date): number {
+  const desdeKey = toDateKey(desde);
+  const hastaKey = toDateKey(hasta);
+  if (!desdeKey || !hastaKey) return 0;
+  const start = new Date(`${desdeKey}T00:00:00Z`).getTime();
+  const end = new Date(`${hastaKey}T00:00:00Z`).getTime();
+  return Math.max(0, Math.floor((end - start) / 86400000));
+}
+
+function normalizarClimaHuella(clima?: DiaClimaHuella[]): DiaClimaHuella[] {
+  const byDate = new Map<
+    string,
+    { lluvia: number; et0: number; count: number }
+  >();
+  (clima || []).forEach((dia) => {
+    const fecha = toDateKey(dia.fecha);
+    if (!fecha) return;
+    const current = byDate.get(fecha) || { lluvia: 0, et0: 0, count: 0 };
+    byDate.set(fecha, {
+      lluvia: current.lluvia + Math.max(0, Number(dia.lluviaMm || 0)),
+      et0: current.et0 + Math.max(0, Number(dia.et0Mm || 0)),
+      count: current.count + 1,
+    });
+  });
+
+  return [...byDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([fecha, values]) => ({
+      fecha,
+      lluviaMm: round(values.lluvia / Math.max(values.count, 1), 2),
+      et0Mm: round(values.et0 / Math.max(values.count, 1), 2),
+    }));
+}
+
+function metodologiaHuella(
+  fuenteClima = 'Open-Meteo daily precipitation + et0_fao_evapotranspiration',
+) {
+  return {
+    version: HUELLA_HIDRICA_VERSION,
+    enfoque: HUELLA_HIDRICA_ENFOQUE,
+    fuenteClima,
+    fechaCalculo: new Date().toISOString(),
+    limites: HUELLA_HIDRICA_LIMITES,
+  };
 }
 
 function val(tabla: string, key?: string): number {
@@ -233,7 +338,9 @@ function validar(siembra: ISiembra, lote: ILote, clima?: DiaClimaHuella[]) {
   }
 
   if (faltantes.length) {
-    throw new BadRequestException(`No se puede calcular huella hidrica. Faltan: ${faltantes.join(', ')}`);
+    throw new BadRequestException(
+      `No se puede calcular huella hidrica. Faltan: ${faltantes.join(', ')}`,
+    );
   }
 }
 
@@ -270,7 +377,8 @@ function getStages(cultivo?: string, crono?: any): Stage[] {
     stagesTrigo[1].days = acumulado;
     for (let i = 2; i < stagesTrigo.length; i++) {
       const stage = stagesTrigo[i];
-      acumulado += etapas[stage.name] || Math.max(stage.days - stagesTrigo[i - 1].days, 1);
+      acumulado +=
+        etapas[stage.name] || Math.max(stage.days - stagesTrigo[i - 1].days, 1);
       stage.days = acumulado;
     }
     return stagesTrigo;
@@ -281,7 +389,8 @@ function getStages(cultivo?: string, crono?: any): Stage[] {
     stagesMaiz[1].days = acumulado;
     for (let i = 2; i < stagesMaiz.length; i++) {
       const stage = stagesMaiz[i];
-      acumulado += etapas[stage.name] || Math.max(stage.days - stagesMaiz[i - 1].days, 1);
+      acumulado +=
+        etapas[stage.name] || Math.max(stage.days - stagesMaiz[i - 1].days, 1);
       stage.days = acumulado;
     }
     return stagesMaiz;
@@ -292,7 +401,8 @@ function getStages(cultivo?: string, crono?: any): Stage[] {
     stagesSoja[1].days = acumulado;
     for (let i = 2; i < stagesSoja.length; i++) {
       const stage = stagesSoja[i];
-      acumulado += etapas[stage.name] || Math.max(stage.days - stagesSoja[i - 1].days, 1);
+      acumulado +=
+        etapas[stage.name] || Math.max(stage.days - stagesSoja[i - 1].days, 1);
       stage.days = acumulado;
     }
     return stagesSoja;
@@ -306,10 +416,15 @@ function getStages(cultivo?: string, crono?: any): Stage[] {
   ];
 }
 
-function getKc(diasDesdeSiembra: number, cultivo?: string, crono?: any): number {
+function getKc(
+  diasDesdeSiembra: number,
+  cultivo?: string,
+  crono?: any,
+): number {
   const stages = getStages(cultivo, crono);
   if (diasDesdeSiembra <= stages[0].days) return stages[0].kcProm;
-  if (diasDesdeSiembra >= stages[stages.length - 1].days) return stages[stages.length - 1].kcProm;
+  if (diasDesdeSiembra >= stages[stages.length - 1].days)
+    return stages[stages.length - 1].kcProm;
 
   for (let i = 0; i < stages.length - 1; i++) {
     const current = stages[i];
@@ -317,7 +432,10 @@ function getKc(diasDesdeSiembra: number, cultivo?: string, crono?: any): number 
     if (diasDesdeSiembra >= current.days && diasDesdeSiembra <= next.days) {
       const span = Math.max(next.days - current.days, 1);
       const proportion = (diasDesdeSiembra - current.days) / span;
-      return round(current.kcProm + proportion * (next.kcProm - current.kcProm), 2);
+      return round(
+        current.kcProm + proportion * (next.kcProm - current.kcProm),
+        2,
+      );
     }
   }
   return stages[0].kcProm;
@@ -369,40 +487,202 @@ function getFactorCobertura(siembra: ISiembra): number {
   }
 }
 
-function lluviaEfectiva(siembra: ISiembra, lote: ILote, lluviaMm: number): number {
+function lluviaEfectiva(
+  siembra: ISiembra,
+  lote: ILote,
+  lluviaMm: number,
+): number {
   const intensidad = lluviaMm > 20 ? 0.7 : lluviaMm > 10 ? 0.8 : 0.9;
-  return lluviaMm * intensidad * (1 - getPendiente(lote)) * getFactorTextura(lote) * getFactorCobertura(siembra);
+  return (
+    lluviaMm *
+    intensidad *
+    (1 - getPendiente(lote)) *
+    getFactorTextura(lote) *
+    getFactorCobertura(siembra)
+  );
 }
 
-function getFaltantesSeguimiento(siembra: ISiembra, lote: ILote, clima?: DiaClimaHuella[]): HuellaHidricaFaltante[] {
+function getFaltantesSeguimiento(
+  siembra: ISiembra,
+  lote: ILote,
+  clima?: DiaClimaHuella[],
+): HuellaHidricaFaltante[] {
   const faltantes: HuellaHidricaFaltante[] = [];
-  const add = (campo: string, accion: string, bloque: HuellaHidricaFaltante['bloque']) => {
+  const add = (
+    campo: string,
+    accion: string,
+    bloque: HuellaHidricaFaltante['bloque'],
+  ) => {
     faltantes.push({ campo, accion, bloque });
   };
 
-  if (!siembra.fechaSiembra) add('fechaSiembra', 'Cargar fecha de siembra para iniciar el seguimiento.', 'siembra');
-  if (!siembra.labranza) add('labranza', 'Configurar labranza para ajustar lluvia efectiva y cobertura.', 'siembra');
-  if (!lote.texturaEscorrentia) add('texturaEscorrentia', 'Completar textura del suelo para estimar escorrentia.', 'lote');
-  if (!lote.texturaLixiviacion) add('texturaLixiviacion', 'Completar textura del suelo para estimar lixiviacion.', 'lote');
-  if (!lote.erosionEscorrentiaPendiente) add('erosionEscorrentiaPendiente', 'Configurar pendiente/erosion del lote.', 'lote');
-  if (!lote.drenajeNaturalLixiviacion) add('drenajeNaturalLixiviacion', 'Completar drenaje natural para huella gris.', 'lote');
-  if (!lote.drenajeNaturalEscorrentia) add('drenajeNaturalEscorrentia', 'Completar drenaje/escorrentia para huella gris.', 'lote');
-  if (!lote.depositoN) add('depositoN', 'Completar deposito de nitrogeno del suelo.', 'lote');
-  if (!lote.contenidoP) add('contenidoP', 'Completar contenido de fosforo del suelo.', 'lote');
-  if (!siembra.lluviasPromedio) add('lluviasPromedio', 'Configurar rango de lluvias promedio del ambiente.', 'siembra');
-  if (!siembra.fijacionN) add('fijacionN', 'Configurar fijacion de nitrogeno esperada.', 'siembra');
-  if (!siembra.dosisN) add('dosisN', 'Configurar rango de dosis de nitrogeno.', 'siembra');
-  if (!siembra.dosisP) add('dosisP', 'Configurar rango de dosis de fosforo.', 'siembra');
-  if (!siembra.rendimiento) add('rendimiento', 'Configurar rango de rendimiento esperado.', 'rendimiento');
-  if (!siembra.manejoAgronomico) add('manejoAgronomico', 'Configurar manejo agronomico para ajustar riesgo de perdida.', 'siembra');
-  if (!siembra.intensidadLluvias) add('intensidadLluvias', 'Configurar intensidad de lluvias para escorrentia.', 'siembra');
-  if (!siembra.materiaOrganica) add('materiaOrganica', 'Completar materia organica para fitosanitarios.', 'lote');
-  if (!clima?.length) add('clima', 'Sincronizar clima Open-Meteo para acumular ET0 y lluvia.', 'clima');
+  if (!siembra.fechaSiembra)
+    add(
+      'fechaSiembra',
+      'Cargar fecha de siembra para iniciar el seguimiento.',
+      'siembra',
+    );
+  if (!siembra.labranza)
+    add(
+      'labranza',
+      'Configurar labranza para ajustar lluvia efectiva y cobertura.',
+      'siembra',
+    );
+  if (!lote.texturaEscorrentia)
+    add(
+      'texturaEscorrentia',
+      'Completar textura del suelo para estimar escorrentia.',
+      'lote',
+    );
+  if (!lote.texturaLixiviacion)
+    add(
+      'texturaLixiviacion',
+      'Completar textura del suelo para estimar lixiviacion.',
+      'lote',
+    );
+  if (!lote.erosionEscorrentiaPendiente)
+    add(
+      'erosionEscorrentiaPendiente',
+      'Configurar pendiente/erosion del lote.',
+      'lote',
+    );
+  if (!lote.drenajeNaturalLixiviacion)
+    add(
+      'drenajeNaturalLixiviacion',
+      'Completar drenaje natural para huella gris.',
+      'lote',
+    );
+  if (!lote.drenajeNaturalEscorrentia)
+    add(
+      'drenajeNaturalEscorrentia',
+      'Completar drenaje/escorrentia para huella gris.',
+      'lote',
+    );
+  if (!lote.depositoN)
+    add('depositoN', 'Completar deposito de nitrogeno del suelo.', 'lote');
+  if (!lote.contenidoP)
+    add('contenidoP', 'Completar contenido de fosforo del suelo.', 'lote');
+  if (!siembra.lluviasPromedio)
+    add(
+      'lluviasPromedio',
+      'Configurar rango de lluvias promedio del ambiente.',
+      'siembra',
+    );
+  if (!siembra.fijacionN)
+    add('fijacionN', 'Configurar fijacion de nitrogeno esperada.', 'siembra');
+  if (!siembra.dosisN)
+    add('dosisN', 'Configurar rango de dosis de nitrogeno.', 'siembra');
+  if (!siembra.dosisP)
+    add('dosisP', 'Configurar rango de dosis de fosforo.', 'siembra');
+  if (!siembra.rendimiento)
+    add(
+      'rendimiento',
+      'Configurar rango de rendimiento esperado.',
+      'rendimiento',
+    );
+  if (!siembra.manejoAgronomico)
+    add(
+      'manejoAgronomico',
+      'Configurar manejo agronomico para ajustar riesgo de perdida.',
+      'siembra',
+    );
+  if (!siembra.intensidadLluvias)
+    add(
+      'intensidadLluvias',
+      'Configurar intensidad de lluvias para escorrentia.',
+      'siembra',
+    );
+  if (!siembra.materiaOrganica)
+    add(
+      'materiaOrganica',
+      'Completar materia organica para fitosanitarios.',
+      'lote',
+    );
+  if (!clima?.length)
+    add(
+      'clima',
+      'Sincronizar clima Open-Meteo para acumular ET0 y lluvia.',
+      'clima',
+    );
   if (Number(siembra.rendimientoObtenidoKgHaSeco || 0) <= 0) {
-    add('rendimientoObtenidoKgHaSeco', 'Cargar rendimiento esperado o cerrar cosecha para expresar litros/kg.', 'rendimiento');
+    add(
+      'rendimientoObtenidoKgHaSeco',
+      'Cargar rendimiento esperado o cerrar cosecha para expresar litros/kg.',
+      'rendimiento',
+    );
   }
 
   return faltantes;
+}
+
+function evaluarCalidadHuella(params: {
+  faltantes: HuellaHidricaFaltante[];
+  diasClima: number;
+  diasEsperados: number;
+  rendimientoSeco: number;
+  deficitPotencialMm: number;
+  riegoRegistradoMm: number;
+  climaDuplicado?: boolean;
+}): NonNullable<IHuellaHidrica['calidad']> {
+  const observaciones: string[] = [];
+  let score = 100;
+  const coberturaClima =
+    params.diasEsperados > 0
+      ? params.diasClima / Math.max(params.diasEsperados, 1)
+      : params.diasClima > 0
+        ? 1
+        : 0;
+
+  if (params.diasClima <= 0) {
+    score -= 35;
+    observaciones.push(
+      'Sin clima diario: no se puede acumular ET0 y lluvia con confianza.',
+    );
+  } else if (coberturaClima < 0.75) {
+    score -= 22;
+    observaciones.push(
+      `Cobertura climatica parcial: ${round(coberturaClima * 100, 0)}% del periodo esperado.`,
+    );
+  } else {
+    observaciones.push(
+      `Cobertura climatica ${round(Math.min(100, coberturaClima * 100), 0)}% del periodo evaluado.`,
+    );
+  }
+
+  if (params.rendimientoSeco <= 0) {
+    score -= 18;
+    observaciones.push(
+      'Sin rendimiento seco: se informa l/ha y el l/kg queda pendiente.',
+    );
+  }
+
+  if (params.faltantes.length) {
+    score -= Math.min(28, params.faltantes.length * 4);
+    observaciones.push(
+      `${params.faltantes.length} datos de lote/siembra pueden mejorar el calculo.`,
+    );
+  }
+
+  if (params.deficitPotencialMm > 5 && params.riegoRegistradoMm <= 0) {
+    score -= 10;
+    observaciones.push(
+      'Existe deficit hidrico potencial, pero no hay riego registrado para computar huella azul real.',
+    );
+  }
+
+  if (params.climaDuplicado) {
+    score -= 4;
+    observaciones.push(
+      'Se normalizaron fechas climaticas repetidas para evitar doble conteo.',
+    );
+  }
+
+  const scoreFinal = round(Math.max(0, Math.min(100, score)), 0);
+  return {
+    nivel: scoreFinal >= 80 ? 'alta' : scoreFinal >= 55 ? 'media' : 'baja',
+    score: scoreFinal,
+    observaciones,
+  };
 }
 
 function getDiasCiclo(cultivo?: string, crono?: any): number {
@@ -410,16 +690,26 @@ function getDiasCiclo(cultivo?: string, crono?: any): number {
   return Math.max(stages[stages.length - 1]?.days || 1, 1);
 }
 
-function getDiasDesdeSiembra(fechaSiembra?: string, fechaHasta?: string): number {
+function getDiasDesdeSiembra(
+  fechaSiembra?: string,
+  fechaHasta?: string,
+): number {
   if (!fechaSiembra || !fechaHasta) return 0;
-  const desde = new Date(`${new Date(fechaSiembra).toISOString().slice(0, 10)}T00:00:00Z`).getTime();
+  const desde = new Date(
+    `${new Date(fechaSiembra).toISOString().slice(0, 10)}T00:00:00Z`,
+  ).getTime();
   const hasta = new Date(`${fechaHasta}T00:00:00Z`).getTime();
   return Math.max(0, Math.floor((hasta - desde) / 86400000));
 }
 
-function getFechaFinCiclo(fechaSiembra?: string, diasCiclo = 0): string | undefined {
+function getFechaFinCiclo(
+  fechaSiembra?: string,
+  diasCiclo = 0,
+): string | undefined {
   if (!fechaSiembra) return undefined;
-  const desde = new Date(`${new Date(fechaSiembra).toISOString().slice(0, 10)}T00:00:00Z`);
+  const desde = new Date(
+    `${new Date(fechaSiembra).toISOString().slice(0, 10)}T00:00:00Z`,
+  );
   desde.setUTCDate(desde.getUTCDate() + Math.max(0, diasCiclo));
   return desde.toISOString().slice(0, 10);
 }
@@ -427,24 +717,33 @@ function getFechaFinCiclo(fechaSiembra?: string, diasCiclo = 0): string | undefi
 function getPotencialesGris(siembra: ISiembra, lote: ILote) {
   const potencialN =
     val('depositoN', lote.depositoN) * PESOS_N.depositoN +
-    val('texturaLixiviacion', lote.texturaLixiviacion) * PESOS_N.texturaLixiviacion +
-    val('texturaEscorrentia', lote.texturaEscorrentia) * PESOS_N.texturaEscorrentia +
-    val('drenajeNaturalLixiviacion', lote.drenajeNaturalLixiviacion) * PESOS_N.drenajeNaturalLixiviacion +
-    val('drenajeNaturalEscorrentia', lote.drenajeNaturalEscorrentia) * PESOS_N.drenajeNaturalEscorrentia +
+    val('texturaLixiviacion', lote.texturaLixiviacion) *
+      PESOS_N.texturaLixiviacion +
+    val('texturaEscorrentia', lote.texturaEscorrentia) *
+      PESOS_N.texturaEscorrentia +
+    val('drenajeNaturalLixiviacion', lote.drenajeNaturalLixiviacion) *
+      PESOS_N.drenajeNaturalLixiviacion +
+    val('drenajeNaturalEscorrentia', lote.drenajeNaturalEscorrentia) *
+      PESOS_N.drenajeNaturalEscorrentia +
     val('lluviasPromedio', siembra.lluviasPromedio) * PESOS_N.lluviasPromedio +
     val('fijacionN', siembra.fijacionN) * PESOS_N.fijacionN +
     val('dosisN', siembra.dosisN) * PESOS_N.dosisN +
     val('rendimiento', siembra.rendimiento) * PESOS_N.rendimiento +
-    val('manejoAgronomico', siembra.manejoAgronomico) * PESOS_N.manejoAgronomico;
+    val('manejoAgronomico', siembra.manejoAgronomico) *
+      PESOS_N.manejoAgronomico;
 
   const potencialP =
-    val('texturaLixiviacion', lote.texturaLixiviacion) * PESOS_P.texturaLixiviacion +
-    val('erosionEscorrentiaPendiente', lote.erosionEscorrentiaPendiente) * PESOS_P.erosionEscorrentiaPendiente +
+    val('texturaLixiviacion', lote.texturaLixiviacion) *
+      PESOS_P.texturaLixiviacion +
+    val('erosionEscorrentiaPendiente', lote.erosionEscorrentiaPendiente) *
+      PESOS_P.erosionEscorrentiaPendiente +
     val('contenidoP', lote.contenidoP) * PESOS_P.contenidoP +
-    val('intensidadLluvias', siembra.intensidadLluvias) * PESOS_P.intensidadLluvias +
+    val('intensidadLluvias', siembra.intensidadLluvias) *
+      PESOS_P.intensidadLluvias +
     val('dosisP', siembra.dosisP) * PESOS_P.dosisP +
     val('rendimiento', siembra.rendimiento) * PESOS_P.rendimiento +
-    val('manejoAgronomico', siembra.manejoAgronomico) * PESOS_P.manejoAgronomico;
+    val('manejoAgronomico', siembra.manejoAgronomico) *
+      PESOS_P.manejoAgronomico;
 
   return { potencialN, potencialP };
 }
@@ -458,13 +757,32 @@ function getGrisLitrosHa(
   const cultivo = siembra.semilla?.cultivo || (siembra as any).cultivo;
   const rendimientoSeco = Number(siembra.rendimientoObtenidoKgHaSeco || 0);
   const { potencialN, potencialP } = getPotencialesGris(siembra, lote);
-  const aporteN = fertilizaciones.reduce((acc, f) => acc + (Number(f.dosisKgHa || 0) * Number(f.fertilizante?.porcentajeN || 0)) / 100, 0);
-  const aporteP = fertilizaciones.reduce((acc, f) => acc + (Number(f.dosisKgHa || 0) * Number(f.fertilizante?.porcentajeP || 0)) / 100, 0);
-  const extraccionN = rendimientoSeco > 0 ? (Number(EXTRACCION_N[cultivo || ''] || 0) * rendimientoSeco) / 1000 : 0;
-  const extraccionP = rendimientoSeco > 0 ? (Number(EXTRACCION_P[cultivo || ''] || 0) * rendimientoSeco) / 1000 : 0;
+  const aporteN = fertilizaciones.reduce(
+    (acc, f) =>
+      acc +
+      (Number(f.dosisKgHa || 0) * Number(f.fertilizante?.porcentajeN || 0)) /
+        100,
+    0,
+  );
+  const aporteP = fertilizaciones.reduce(
+    (acc, f) =>
+      acc +
+      (Number(f.dosisKgHa || 0) * Number(f.fertilizante?.porcentajeP || 0)) /
+        100,
+    0,
+  );
+  const extraccionN =
+    rendimientoSeco > 0
+      ? (Number(EXTRACCION_N[cultivo || ''] || 0) * rendimientoSeco) / 1000
+      : 0;
+  const extraccionP =
+    rendimientoSeco > 0
+      ? (Number(EXTRACCION_P[cultivo || ''] || 0) * rendimientoSeco) / 1000
+      : 0;
   const excedenteN = Math.max(0, ((aporteN - extraccionN) * potencialN) / 100);
   const excedenteP = Math.max(0, ((aporteP - extraccionP) * potencialP) / 100);
-  const grisFertilizantesLitrosHa = (excedenteN / 35) * 1000 + (excedenteP / 4) * 1000;
+  const grisFertilizantesLitrosHa =
+    (excedenteN * 1000000) / 35 + (excedenteP * 1000000) / 4;
 
   const grisAgroquimicosBase = fumigaciones.reduce((acc, f) => {
     const principio = f.principioActivo || {};
@@ -472,25 +790,47 @@ function getGrisLitrosHa(
       Number(principio.koc || 0) * PESOS_CPP.koc +
       Number(principio.persistencia || 0) * PESOS_CPP.persistenciaEscorrentia +
       Number(principio.persistencia || 0) * PESOS_CPP.persistenciaLixiviacion +
-      val('texturaLixiviacion', lote.texturaLixiviacion) * PESOS_CPP.texturaLixiviacion +
-      val('texturaEscorrentia', lote.texturaEscorrentia) * PESOS_CPP.texturaEscorrentia +
-      val('materiaOrganica', siembra.materiaOrganica) * PESOS_CPP.materiaOrganica +
-      val('intensidadLluvias', siembra.intensidadLluvias) * PESOS_CPP.intensidadLluvias +
-      val('lluviasPromedio', siembra.lluviasPromedio) * PESOS_CPP.lluviasPromedio +
-      val('manejoAgronomico', siembra.manejoAgronomico) * PESOS_CPP.manejoAgronomico;
-    const iaHa = (Number(f.dosisLtHa || 0) * Number(f.concentracion || 0)) / 100;
+      val('texturaLixiviacion', lote.texturaLixiviacion) *
+        PESOS_CPP.texturaLixiviacion +
+      val('texturaEscorrentia', lote.texturaEscorrentia) *
+        PESOS_CPP.texturaEscorrentia +
+      val('materiaOrganica', siembra.materiaOrganica) *
+        PESOS_CPP.materiaOrganica +
+      val('intensidadLluvias', siembra.intensidadLluvias) *
+        PESOS_CPP.intensidadLluvias +
+      val('lluviasPromedio', siembra.lluviasPromedio) *
+        PESOS_CPP.lluviasPromedio +
+      val('manejoAgronomico', siembra.manejoAgronomico) *
+        PESOS_CPP.manejoAgronomico;
+    const iaHa =
+      (Number(f.dosisLtHa || 0) * Number(f.concentracion || 0)) / 100;
     return acc + iaHa * potencialCpp;
   }, 0);
 
   const grisAgroquimicosLitrosHa = grisAgroquimicosBase / 0.0005;
-  const litrosHa = Math.max(0, grisFertilizantesLitrosHa + grisAgroquimicosLitrosHa);
+  const litrosHa = Math.max(
+    0,
+    grisFertilizantesLitrosHa + grisAgroquimicosLitrosHa,
+  );
   return {
     litrosHa,
-    litrosKg: rendimientoSeco > 0 ? (litrosHa / rendimientoSeco) * 1000 : undefined,
+    litrosKg: rendimientoSeco > 0 ? litrosHa / rendimientoSeco : undefined,
+    litrosHaFertilizantes: Math.max(0, grisFertilizantesLitrosHa),
+    litrosHaAgroquimicos: Math.max(0, grisAgroquimicosLitrosHa),
+    litrosKgFertilizantes:
+      rendimientoSeco > 0
+        ? Math.max(0, grisFertilizantesLitrosHa) / rendimientoSeco
+        : undefined,
+    litrosKgAgroquimicos:
+      rendimientoSeco > 0
+        ? Math.max(0, grisAgroquimicosLitrosHa) / rendimientoSeco
+        : undefined,
     aporteN,
     aporteP,
     extraccionN,
     extraccionP,
+    excedenteN,
+    excedenteP,
   };
 }
 
@@ -507,7 +847,9 @@ function getRiegoMm(riegos?: Array<Record<string, any>>): number {
   }, 0);
 }
 
-export function calcularSeguimientoHuellaHidrica(params: HuellaHidricaParams): HuellaHidricaSeguimientoResultado {
+export function calcularSeguimientoHuellaHidrica(
+  params: HuellaHidricaParams,
+): HuellaHidricaSeguimientoResultado {
   const siembra = params.siembra;
   const lote = params.lote;
   const fertilizaciones = params.fertilizaciones || [];
@@ -516,18 +858,36 @@ export function calcularSeguimientoHuellaHidrica(params: HuellaHidricaParams): H
   const cultivo = siembra.semilla?.cultivo || (siembra as any).cultivo;
   const rendimientoSeco = Number(siembra.rendimientoObtenidoKgHaSeco || 0);
   const diasCiclo = getDiasCiclo(cultivo, siembra.crono);
-  const climaCompleto = (params.clima || []).sort((a, b) => a.fecha.localeCompare(b.fecha));
-  const clima = huellaFinal || siembra.fechaCosecha
-    ? climaCompleto
-    : climaCompleto.filter((dia) => getDiasDesdeSiembra(siembra.fechaSiembra, dia.fecha) <= diasCiclo);
-  const fechaHasta = clima[clima.length - 1]?.fecha || getFechaFinCiclo(siembra.fechaSiembra, diasCiclo) || new Date().toISOString().slice(0, 10);
-  const diasDesdeSiembra = getDiasDesdeSiembra(siembra.fechaSiembra, fechaHasta);
-  const avanceCiclo = round(Math.min(100, (diasDesdeSiembra / diasCiclo) * 100), 1);
+  const climaInput = params.clima || [];
+  const climaDuplicado =
+    normalizarClimaHuella(climaInput).length !== climaInput.length;
+  const climaCompleto = normalizarClimaHuella(climaInput);
+  const clima =
+    huellaFinal || siembra.fechaCosecha
+      ? climaCompleto
+      : climaCompleto.filter(
+          (dia) =>
+            getDiasDesdeSiembra(siembra.fechaSiembra, dia.fecha) <= diasCiclo,
+        );
+  const fechaHasta =
+    clima[clima.length - 1]?.fecha ||
+    getFechaFinCiclo(siembra.fechaSiembra, diasCiclo) ||
+    new Date().toISOString().slice(0, 10);
+  const diasDesdeSiembra = getDiasDesdeSiembra(
+    siembra.fechaSiembra,
+    fechaHasta,
+  );
+  const avanceCiclo = round(
+    Math.min(100, (diasDesdeSiembra / diasCiclo) * 100),
+    1,
+  );
   const trazas: string[] = [];
 
   let etVerdeMm = 0;
   let etAzulMm = 0;
   let etcTotalMm = 0;
+  let lluviaTotalMm = 0;
+  let lluviaEfectivaMm = 0;
   clima.forEach((dia, index) => {
     const dias = getDiasDesdeSiembra(siembra.fechaSiembra, dia.fecha);
     const kc = getKc(dias || index, cultivo, siembra.crono);
@@ -536,10 +896,14 @@ export function calcularSeguimientoHuellaHidrica(params: HuellaHidricaParams): H
     const verdeDia = Math.min(etc, lluviaEf);
     const azulDia = Math.max(etc - lluviaEf, 0);
     etcTotalMm += etc;
+    lluviaTotalMm += Number(dia.lluviaMm || 0);
+    lluviaEfectivaMm += lluviaEf;
     etVerdeMm += verdeDia;
     etAzulMm += azulDia;
     if (index < 3 || index === clima.length - 1) {
-      trazas.push(`${dia.fecha}: Kc ${kc}, ETc ${round(etc)} mm, lluvia efectiva ${round(lluviaEf)} mm.`);
+      trazas.push(
+        `${dia.fecha}: Kc ${kc}, ETc ${round(etc)} mm, lluvia efectiva ${round(lluviaEf)} mm.`,
+      );
     }
   });
 
@@ -547,32 +911,78 @@ export function calcularSeguimientoHuellaHidrica(params: HuellaHidricaParams): H
   const verdeLitrosHa = etVerdeMm * 10000;
   const riegoRegistradoMm = getRiegoMm(params.riegos);
   const hayRiegoRegistrado = riegoRegistradoMm > 0;
-  const azulRealMm = hayRiegoRegistrado ? Math.min(etAzulMm, riegoRegistradoMm) : 0;
+  const azulRealMm = hayRiegoRegistrado
+    ? Math.min(etAzulMm, riegoRegistradoMm)
+    : 0;
   const azulLitrosHa = azulRealMm * 10000;
   const totalLitrosHa = verdeLitrosHa + azulLitrosHa + gris.litrosHa;
   const divisor = Math.max(etcTotalMm, 1);
   const aplicaciones = fertilizaciones.length + fumigaciones.length;
-  const porcentajeAguaReal = round(Math.min(100, ((etVerdeMm + azulRealMm) / divisor) * 100), 1);
+  const porcentajeAguaReal = round(
+    Math.min(100, ((etVerdeMm + azulRealMm) / divisor) * 100),
+    1,
+  );
   const porcentajeGris = round(Math.min(100, aplicaciones * 25), 1);
-  const porcentajeTotalSeguimiento = round(Math.min(100, Math.max(porcentajeAguaReal, porcentajeGris)), 1);
+  const porcentajeTotalSeguimiento = round(
+    Math.min(100, Math.max(porcentajeAguaReal, porcentajeGris)),
+    1,
+  );
   const faltantes = getFaltantesSeguimiento(siembra, lote, clima);
+  const calidad = evaluarCalidadHuella({
+    faltantes,
+    diasClima: clima.length,
+    diasEsperados: Math.max(
+      1,
+      Math.min(diasCiclo, diasDesdeSiembra || diasCiclo),
+    ),
+    rendimientoSeco,
+    deficitPotencialMm: etAzulMm,
+    riegoRegistradoMm,
+    climaDuplicado,
+  });
+  const metodologia = metodologiaHuella();
+  const parciales: NonNullable<IHuellaHidrica['componentes']> = {
+    etcTotalMm: round(etcTotalMm),
+    lluviaTotalMm: round(lluviaTotalMm),
+    lluviaEfectivaMm: round(lluviaEfectivaMm),
+    verdeMm: round(etVerdeMm),
+    azulRealMm: round(azulRealMm),
+    deficitPotencialMm: round(etAzulMm),
+    riegoRegistradoMm: round(riegoRegistradoMm),
+    grisLitrosHa: round(gris.litrosHa),
+    grisFertilizantesLitrosHa: round(gris.litrosHaFertilizantes),
+    grisAgroquimicosLitrosHa: round(gris.litrosHaAgroquimicos),
+  };
 
-  trazas.push(`Seguimiento hasta ${fechaHasta}: verde ${round(etVerdeMm)} mm, deficit hidrico potencial ${round(etAzulMm)} mm, ETc acumulada ${round(etcTotalMm)} mm.`);
+  trazas.push(
+    `Seguimiento hasta ${fechaHasta}: verde ${round(etVerdeMm)} mm, deficit hidrico potencial ${round(etAzulMm)} mm, ETc acumulada ${round(etcTotalMm)} mm.`,
+  );
   if (hayRiegoRegistrado) {
-    trazas.push(`Huella azul real: ${round(azulRealMm)} mm tomados de ${round(riegoRegistradoMm)} mm de riego registrado.`);
+    trazas.push(
+      `Huella azul real: ${round(azulRealMm)} mm tomados de ${round(riegoRegistradoMm)} mm de riego registrado.`,
+    );
   } else if (etAzulMm > 0) {
-    trazas.push('Huella azul en campana no se computa como real porque no hay riego/aporte externo registrado.');
+    trazas.push(
+      'Huella azul en campana no se computa como real porque no hay riego/aporte externo registrado.',
+    );
   }
-  trazas.push(`Huella gris acumulada por aplicaciones: ${aplicaciones} registros, ${round(gris.litrosHa)} l/ha antes de dividir por rendimiento.`);
+  trazas.push(
+    `Huella gris acumulada por aplicaciones: ${aplicaciones} registros, ${round(gris.litrosHa)} l/ha antes de dividir por rendimiento.`,
+  );
 
   if (huellaFinal) {
-    trazas.push('La siembra ya tiene huella final guardada; el seguimiento se muestra como lectura historica.');
+    trazas.push(
+      'La siembra ya tiene huella final guardada; el seguimiento se muestra como lectura historica.',
+    );
   }
+  trazas.push(`Calidad del calculo: ${calidad.nivel} (${calidad.score}/100).`);
 
   return {
     estado: huellaFinal ? 'final' : 'seguimiento',
     periodo: {
-      desde: siembra.fechaSiembra ? new Date(siembra.fechaSiembra).toISOString().slice(0, 10) : undefined,
+      desde: siembra.fechaSiembra
+        ? new Date(siembra.fechaSiembra).toISOString().slice(0, 10)
+        : undefined,
       hasta: fechaHasta,
       diasClima: clima.length,
       diasDesdeSiembra,
@@ -583,15 +993,23 @@ export function calcularSeguimientoHuellaHidrica(params: HuellaHidricaParams): H
       verde: {
         mm: round(etVerdeMm),
         litrosHa: round(verdeLitrosHa),
-        litrosKg: rendimientoSeco > 0 ? round((verdeLitrosHa / rendimientoSeco) * 1000) : undefined,
+        litrosKg:
+          rendimientoSeco > 0
+            ? round(verdeLitrosHa / rendimientoSeco)
+            : undefined,
         porcentaje: round(Math.min(100, (etVerdeMm / divisor) * 100), 1),
         detalle: 'Lluvia efectiva consumida por el cultivo hasta hoy.',
       },
       azul: {
         mm: round(azulRealMm),
         litrosHa: round(azulLitrosHa),
-        litrosKg: rendimientoSeco > 0 ? round((azulLitrosHa / rendimientoSeco) * 1000) : undefined,
-        porcentaje: hayRiegoRegistrado ? round(Math.min(100, (azulRealMm / divisor) * 100), 1) : 0,
+        litrosKg:
+          rendimientoSeco > 0
+            ? round(azulLitrosHa / rendimientoSeco)
+            : undefined,
+        porcentaje: hayRiegoRegistrado
+          ? round(Math.min(100, (azulRealMm / divisor) * 100), 1)
+          : 0,
         detalle: hayRiegoRegistrado
           ? 'Riego o agua externa registrada durante el ciclo.'
           : `Sin riego cargado: huella azul real 0. Deficit hidrico potencial: ${round(etAzulMm)} mm.`,
@@ -599,36 +1017,51 @@ export function calcularSeguimientoHuellaHidrica(params: HuellaHidricaParams): H
       },
       gris: {
         litrosHa: round(gris.litrosHa),
-        litrosKg: rendimientoSeco > 0 && gris.litrosKg != null ? round(gris.litrosKg) : undefined,
+        litrosKg:
+          rendimientoSeco > 0 && gris.litrosKg != null
+            ? round(gris.litrosKg)
+            : undefined,
         aplicaciones,
         porcentaje: round(Math.min(100, aplicaciones * 25), 1),
-        detalle: 'Carga potencial de fertilizaciones y fitosanitarios registrados.',
+        detalle:
+          'Carga potencial de fertilizaciones y fitosanitarios registrados.',
       },
       total: {
         litrosHa: round(totalLitrosHa),
-        litrosKg: rendimientoSeco > 0 ? round((totalLitrosHa / rendimientoSeco) * 1000) : undefined,
+        litrosKg:
+          rendimientoSeco > 0
+            ? round(totalLitrosHa / rendimientoSeco)
+            : undefined,
         porcentaje: porcentajeTotalSeguimiento,
         detalle: `Seguimiento acumulado: verde ${round(etVerdeMm)} mm, azul real ${round(azulRealMm)} mm, gris ${round(gris.litrosHa)} l/ha. Ciclo ${avanceCiclo}%.`,
       },
     },
     inputs: {
       cultivo,
-      rendimientoSecoKgHa: rendimientoSeco > 0 ? round(rendimientoSeco, 2) : undefined,
+      rendimientoSecoKgHa:
+        rendimientoSeco > 0 ? round(rendimientoSeco, 2) : undefined,
       fertilizaciones: fertilizaciones.length,
       fumigaciones: fumigaciones.length,
       climaDisponible: clima.length > 0,
     },
+    parciales,
+    calidad,
+    metodologia,
     faltantes,
     trazas,
   };
 }
 
-export function calcularHuellaHidrica(params: HuellaHidricaParams): HuellaHidricaResultado {
+export function calcularHuellaHidrica(
+  params: HuellaHidricaParams,
+): HuellaHidricaResultado {
   const siembra = params.siembra;
   const lote = params.lote;
   const fertilizaciones = params.fertilizaciones || [];
   const fumigaciones = params.fumigaciones || [];
-  const clima = params.clima || [];
+  const climaInput = params.clima || [];
+  const clima = normalizarClimaHuella(climaInput);
+  const climaDuplicado = clima.length !== climaInput.length;
   validar(siembra, lote, clima);
 
   const trazas: string[] = [];
@@ -637,94 +1070,102 @@ export function calcularHuellaHidrica(params: HuellaHidricaParams): HuellaHidric
 
   let etVerdeMm = 0;
   let etAzulMm = 0;
+  let etcTotalMm = 0;
+  let lluviaTotalMm = 0;
+  let lluviaEfectivaMm = 0;
   clima.forEach((dia, index) => {
-    const kc = getKc(index, cultivo, siembra.crono);
+    const dias = getDiasDesdeSiembra(siembra.fechaSiembra, dia.fecha);
+    const kc = getKc(dias || index, cultivo, siembra.crono);
     const etc = kc * Number(dia.et0Mm || 0);
     const lluviaEf = lluviaEfectiva(siembra, lote, Number(dia.lluviaMm || 0));
     const verdeDia = Math.min(etc, lluviaEf);
     const azulDia = Math.max(etc - lluviaEf, 0);
+    etcTotalMm += etc;
+    lluviaTotalMm += Number(dia.lluviaMm || 0);
+    lluviaEfectivaMm += lluviaEf;
     etVerdeMm += verdeDia;
     etAzulMm += azulDia;
     if (index < 5 || index === clima.length - 1) {
-      trazas.push(`${dia.fecha}: Kc ${kc}, ETc ${round(etc)} mm, lluvia efectiva ${round(lluviaEf)} mm, verde ${round(verdeDia)} mm, azul ${round(azulDia)} mm.`);
+      trazas.push(
+        `${dia.fecha}: Kc ${kc}, ETc ${round(etc)} mm, lluvia efectiva ${round(lluviaEf)} mm, verde ${round(verdeDia)} mm, azul ${round(azulDia)} mm.`,
+      );
     }
   });
 
-  const potencialN =
-    val('depositoN', lote.depositoN) * PESOS_N.depositoN +
-    val('texturaLixiviacion', lote.texturaLixiviacion) * PESOS_N.texturaLixiviacion +
-    val('texturaEscorrentia', lote.texturaEscorrentia) * PESOS_N.texturaEscorrentia +
-    val('drenajeNaturalLixiviacion', lote.drenajeNaturalLixiviacion) * PESOS_N.drenajeNaturalLixiviacion +
-    val('drenajeNaturalEscorrentia', lote.drenajeNaturalEscorrentia) * PESOS_N.drenajeNaturalEscorrentia +
-    val('lluviasPromedio', siembra.lluviasPromedio) * PESOS_N.lluviasPromedio +
-    val('fijacionN', siembra.fijacionN) * PESOS_N.fijacionN +
-    val('dosisN', siembra.dosisN) * PESOS_N.dosisN +
-    val('rendimiento', siembra.rendimiento) * PESOS_N.rendimiento +
-    val('manejoAgronomico', siembra.manejoAgronomico) * PESOS_N.manejoAgronomico;
-
-  const potencialP =
-    val('texturaLixiviacion', lote.texturaLixiviacion) * PESOS_P.texturaLixiviacion +
-    val('erosionEscorrentiaPendiente', lote.erosionEscorrentiaPendiente) * PESOS_P.erosionEscorrentiaPendiente +
-    val('contenidoP', lote.contenidoP) * PESOS_P.contenidoP +
-    val('intensidadLluvias', siembra.intensidadLluvias) * PESOS_P.intensidadLluvias +
-    val('dosisP', siembra.dosisP) * PESOS_P.dosisP +
-    val('rendimiento', siembra.rendimiento) * PESOS_P.rendimiento +
-    val('manejoAgronomico', siembra.manejoAgronomico) * PESOS_P.manejoAgronomico;
-
-  const aporteN = fertilizaciones.reduce((acc, f) => acc + (Number(f.dosisKgHa || 0) * Number(f.fertilizante?.porcentajeN || 0)) / 100, 0);
-  const aporteP = fertilizaciones.reduce((acc, f) => acc + (Number(f.dosisKgHa || 0) * Number(f.fertilizante?.porcentajeP || 0)) / 100, 0);
-  const extraccionN = (Number(EXTRACCION_N[cultivo || ''] || 0) * rendimientoSeco) / 1000;
-  const extraccionP = (Number(EXTRACCION_P[cultivo || ''] || 0) * rendimientoSeco) / 1000;
-  const excedenteN = Math.max(0, ((aporteN - extraccionN) * potencialN) / 100);
-  const excedenteP = Math.max(0, ((aporteP - extraccionP) * potencialP) / 100);
-  const litrosHaN = (excedenteN / 35) * 1000;
-  const litrosHaP = (excedenteP / 4) * 1000;
-  const grisFertilizantes = (litrosHaN / rendimientoSeco) * 1000 + (litrosHaP / rendimientoSeco) * 1000;
-
-  const grisAgroquimicos = fumigaciones.reduce((acc, f) => {
-    const principio = f.principioActivo || {};
-    const potencialCpp =
-      Number(principio.koc || 0) * PESOS_CPP.koc +
-      Number(principio.persistencia || 0) * PESOS_CPP.persistenciaEscorrentia +
-      Number(principio.persistencia || 0) * PESOS_CPP.persistenciaLixiviacion +
-      val('texturaLixiviacion', lote.texturaLixiviacion) * PESOS_CPP.texturaLixiviacion +
-      val('texturaEscorrentia', lote.texturaEscorrentia) * PESOS_CPP.texturaEscorrentia +
-      val('materiaOrganica', siembra.materiaOrganica) * PESOS_CPP.materiaOrganica +
-      val('intensidadLluvias', siembra.intensidadLluvias) * PESOS_CPP.intensidadLluvias +
-      val('lluviasPromedio', siembra.lluviasPromedio) * PESOS_CPP.lluviasPromedio +
-      val('manejoAgronomico', siembra.manejoAgronomico) * PESOS_CPP.manejoAgronomico;
-    const iaHa = (Number(f.dosisLtHa || 0) * Number(f.concentracion || 0)) / 100;
-    return acc + iaHa * potencialCpp;
-  }, 0);
-  const grisAgroquimicosLitrosKg = Math.max(0, grisAgroquimicos / 0.0005 / rendimientoSeco);
+  const gris = getGrisLitrosHa(siembra, lote, fertilizaciones, fumigaciones);
+  const grisFertilizantes = Number(gris.litrosKgFertilizantes || 0);
+  const grisAgroquimicosLitrosKg = Number(gris.litrosKgAgroquimicos || 0);
 
   const riegoRegistradoMm = getRiegoMm(params.riegos);
-  const azulRealMm = riegoRegistradoMm > 0 ? Math.min(etAzulMm, riegoRegistradoMm) : 0;
+  const azulRealMm =
+    riegoRegistradoMm > 0 ? Math.min(etAzulMm, riegoRegistradoMm) : 0;
   const verdeLitrosKg = (etVerdeMm * 10000) / rendimientoSeco;
   const azulLitrosKg = (azulRealMm * 10000) / rendimientoSeco;
   const grisLitrosKg = grisFertilizantes + grisAgroquimicosLitrosKg;
   const totalLitrosKg = verdeLitrosKg + azulLitrosKg + grisLitrosKg;
+  const faltantes = getFaltantesSeguimiento(siembra, lote, clima);
+  const calidad = evaluarCalidadHuella({
+    faltantes,
+    diasClima: clima.length,
+    diasEsperados: diffDias(siembra.fechaSiembra, siembra.fechaCosecha) + 1,
+    rendimientoSeco,
+    deficitPotencialMm: etAzulMm,
+    riegoRegistradoMm,
+    climaDuplicado,
+  });
+  const metodologia = metodologiaHuella();
+  const componentes: NonNullable<IHuellaHidrica['componentes']> = {
+    etcTotalMm: round(etcTotalMm),
+    lluviaTotalMm: round(lluviaTotalMm),
+    lluviaEfectivaMm: round(lluviaEfectivaMm),
+    verdeMm: round(etVerdeMm),
+    azulRealMm: round(azulRealMm),
+    deficitPotencialMm: round(etAzulMm),
+    riegoRegistradoMm: round(riegoRegistradoMm),
+    grisLitrosHa: round(gris.litrosHa),
+    grisFertilizantesLitrosHa: round(gris.litrosHaFertilizantes),
+    grisAgroquimicosLitrosHa: round(gris.litrosHaAgroquimicos),
+  };
 
-  trazas.push(`Verde/Azul: ET verde ${round(etVerdeMm)} mm y deficit potencial ${round(etAzulMm)} mm sobre ${clima.length} dias.`);
+  trazas.push(
+    `Verde/Azul: ET verde ${round(etVerdeMm)} mm y deficit potencial ${round(etAzulMm)} mm sobre ${clima.length} dias.`,
+  );
   trazas.push(
     riegoRegistradoMm > 0
       ? `Huella azul real por riego registrado: ${round(azulRealMm)} mm de ${round(riegoRegistradoMm)} mm cargados.`
       : 'Huella azul real: 0 mm porque no hay riego/aporte externo registrado.',
   );
-  trazas.push(`Gris fertilizantes: aporte N ${round(aporteN)} kg/ha, extraccion N ${round(extraccionN)} kg/ha, excedente N ${round(excedenteN)}; aporte P ${round(aporteP)} kg/ha, extraccion P ${round(extraccionP)} kg/ha, excedente P ${round(excedenteP)}.`);
-  trazas.push(`Gris fitosanitarios: ${fumigaciones.length} aplicaciones evaluadas con Koc, persistencia, dosis y concentracion.`);
+  trazas.push(
+    `Gris fertilizantes: aporte N ${round(gris.aporteN)} kg/ha, extraccion N ${round(gris.extraccionN)} kg/ha, excedente N ${round(gris.excedenteN)}; aporte P ${round(gris.aporteP)} kg/ha, extraccion P ${round(gris.extraccionP)} kg/ha, excedente P ${round(gris.excedenteP)}.`,
+  );
+  trazas.push(
+    `Gris fitosanitarios: ${fumigaciones.length} aplicaciones evaluadas con Koc, persistencia, dosis y concentracion.`,
+  );
+  trazas.push(`Calidad del calculo: ${calidad.nivel} (${calidad.score}/100).`);
 
   return {
     huella: {
-      verde: { litrosKg: round(verdeLitrosKg), litrosKcal: kcToKcal(verdeLitrosKg, cultivo) },
-      azul: { litrosKg: round(azulLitrosKg), litrosKcal: kcToKcal(azulLitrosKg, cultivo) },
+      verde: {
+        litrosKg: round(verdeLitrosKg),
+        litrosKcal: kcToKcal(verdeLitrosKg, cultivo),
+      },
+      azul: {
+        litrosKg: round(azulLitrosKg),
+        litrosKcal: kcToKcal(azulLitrosKg, cultivo),
+      },
       gris: {
         litrosKgFertilizante: round(grisFertilizantes),
         litrosKgAgroquimico: round(grisAgroquimicosLitrosKg),
         litrosKg: round(grisLitrosKg),
         litrosKcal: kcToKcal(grisLitrosKg, cultivo),
       },
-      total: { litrosKg: round(totalLitrosKg), litrosKcal: kcToKcal(totalLitrosKg, cultivo) },
+      total: {
+        litrosKg: round(totalLitrosKg),
+        litrosKcal: kcToKcal(totalLitrosKg, cultivo),
+      },
+      componentes,
+      calidad,
+      metodologia,
     },
     inputs: {
       cultivo,
@@ -734,18 +1175,27 @@ export function calcularHuellaHidrica(params: HuellaHidricaParams): HuellaHidric
       fumigaciones: fumigaciones.length,
     },
     parciales: {
+      etcTotalMm: round(etcTotalMm),
+      lluviaTotalMm: round(lluviaTotalMm),
+      lluviaEfectivaMm: round(lluviaEfectivaMm),
       etVerdeMm: round(etVerdeMm),
       etAzulMm: round(azulRealMm),
+      riegoRegistradoMm: round(riegoRegistradoMm),
       deficitPotencialMm: round(etAzulMm),
+      grisLitrosHa: round(gris.litrosHa),
+      grisFertilizantesLitrosHa: round(gris.litrosHaFertilizantes),
+      grisAgroquimicosLitrosHa: round(gris.litrosHaAgroquimicos),
       grisFertilizantesLitrosKg: round(grisFertilizantes),
       grisAgroquimicosLitrosKg: round(grisAgroquimicosLitrosKg),
-      aporteN: round(aporteN),
-      aporteP: round(aporteP),
-      extraccionN: round(extraccionN),
-      extraccionP: round(extraccionP),
-      excedenteN: round(excedenteN),
-      excedenteP: round(excedenteP),
+      aporteN: round(gris.aporteN),
+      aporteP: round(gris.aporteP),
+      extraccionN: round(gris.extraccionN),
+      extraccionP: round(gris.extraccionP),
+      excedenteN: round(gris.excedenteN),
+      excedenteP: round(gris.excedenteP),
     },
+    calidad,
+    metodologia,
     trazas,
   };
 }
@@ -756,6 +1206,7 @@ export function getHuellaHidricaConstantes() {
     pesos: { nitrogeno: PESOS_N, fosforo: PESOS_P, fitosanitarios: PESOS_CPP },
     extraccion: { nitrogeno: EXTRACCION_N, fosforo: EXTRACCION_P },
     kcalPorKg: KCAL_X_KG,
-    version: 'huella-hidrica-chaman-2026-01',
+    metodologia: metodologiaHuella(),
+    version: HUELLA_HIDRICA_VERSION,
   };
 }

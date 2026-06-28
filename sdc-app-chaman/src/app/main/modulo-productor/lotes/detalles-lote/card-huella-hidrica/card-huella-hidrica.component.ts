@@ -24,7 +24,10 @@ export class CardHuellaHidricaComponent implements OnInit, OnChanges, OnDestroy 
   private readonly decimalAr = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 });
   private ultimaSiembraConsultada?: string;
 
-  constructor(public helper: HelperService, private siembraService: SiembraService) {}
+  constructor(
+    public helper: HelperService,
+    private siembraService: SiembraService
+  ) {}
 
   async ngOnInit(): Promise<void> {}
 
@@ -76,17 +79,15 @@ export class CardHuellaHidricaComponent implements OnInit, OnChanges, OnDestroy 
           key: 'gray',
           label: 'Gris',
           value: gris ? this.formatearGris(gris.litrosHa, gris.litrosKg) : 'Sin aplic.',
-          detail: gris ? `${gris.aplicaciones} aplicaciones registradas. ${gris.detalle}` : 'Se completa con fertilizaciones y fumigaciones.',
+          detail: gris
+            ? `${gris.aplicaciones} aplicaciones registradas. ${gris.detalle}`
+            : 'Se completa con fertilizaciones y fumigaciones.',
           fill: this.limitar(gris?.porcentaje || 0),
         },
       ];
     }
 
-    const valores = [
-      huella.verde?.litrosKg || 0,
-      huella.azul?.litrosKg || 0,
-      huella.gris?.litrosKg || 0,
-    ];
+    const valores = [huella.verde?.litrosKg || 0, huella.azul?.litrosKg || 0, huella.gris?.litrosKg || 0];
     const max = Math.max(...valores, 1);
 
     return [
@@ -138,12 +139,14 @@ export class CardHuellaHidricaComponent implements OnInit, OnChanges, OnDestroy 
       const aguaAcumuladaMm = (verde.mm || 0) + (azul.mm || 0);
       const fill = this.getTotalSeguimientoFill(seguimiento);
       return {
-        value: total.litrosKg != null
-          ? `${this.numeroAr.format(total.litrosKg)} l/kg`
-          : `${this.numeroAr.format(total.litrosHa || 0)} l/ha`,
-        detail: total.litrosKg != null
-          ? total.detalle
-          : `Seguimiento acumulado: ${this.decimalAr.format(aguaAcumuladaMm)} mm de agua real/efectiva + ${this.numeroAr.format(gris.litrosHa || 0)} l/ha de carga gris. Para l/kg cargar rendimiento o cosecha.`,
+        value:
+          total.litrosKg != null
+            ? `${this.numeroAr.format(total.litrosKg)} l/kg`
+            : `${this.numeroAr.format(total.litrosHa || 0)} l/ha`,
+        detail:
+          total.litrosKg != null
+            ? total.detalle
+            : `Seguimiento acumulado: ${this.decimalAr.format(aguaAcumuladaMm)} mm de agua real/efectiva + ${this.numeroAr.format(gris.litrosHa || 0)} l/ha de carga gris. Para l/kg cargar rendimiento o cosecha.`,
         fill,
       };
     }
@@ -157,6 +160,16 @@ export class CardHuellaHidricaComponent implements OnInit, OnChanges, OnDestroy 
 
   public get totalLabel(): string {
     return this.siembra?.huellaHidrica ? 'Total final' : 'Total en seguimiento';
+  }
+
+  public get calidadActual() {
+    return this.siembra?.huellaHidrica?.calidad || this.seguimiento?.calidad;
+  }
+
+  public get calidadTexto(): string {
+    const calidad = this.calidadActual;
+    if (!calidad) return 'Calidad pendiente';
+    return `Calidad ${calidad.nivel} - ${calidad.score}/100`;
   }
 
   public get faltantesSeguimiento() {

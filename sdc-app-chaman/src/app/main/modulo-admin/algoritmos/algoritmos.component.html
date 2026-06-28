@@ -56,8 +56,8 @@
             <p>Formula ejecutable</p>
             <h3>Huella total = verde + azul + gris</h3>
             <span>
-              Verde/Azul usa ETc = Kc x ET0 y lluvia efectiva. Gris usa excedentes N/P mas fitosanitarios
-              ponderados por suelo, manejo, pendiente, Koc, persistencia y dosis.
+              Verde/Azul usa ETc = Kc x ET0 y lluvia efectiva. Gris usa excedentes N/P mas fitosanitarios ponderados por
+              suelo, manejo, pendiente, Koc, persistencia y dosis.
             </span>
           </div>
           <div class="formula-pill">
@@ -79,7 +79,12 @@
                 [outlined]="true"
                 (onClick)="modoJson = !modoJson"
               />
-              <p-button label="Actualizar input" icon="pi pi-sliders-h" [outlined]="true" (onClick)="generarPayload()" />
+              <p-button
+                label="Actualizar input"
+                icon="pi pi-sliders-h"
+                [outlined]="true"
+                (onClick)="generarPayload()"
+              />
               <p-button label="Ejecutar" icon="pi pi-play" [loading]="loading" (onClick)="simular()" />
             </div>
           </div>
@@ -172,6 +177,9 @@
               <div>
                 <p>Output</p>
                 <h3>Resultado de simulacion</h3>
+                @if (resultado.calidad) {
+                  <span> Calidad {{ resultado.calidad.nivel }} - {{ resultado.calidad.score }}/100 </span>
+                }
               </div>
               <strong>{{ format(resultado.huella.total?.litrosKg) }} l/kg total</strong>
             </div>
@@ -208,6 +216,10 @@
                 <h4>Traza de calculo</h4>
                 @for (traza of resultado.trazas; track traza) {
                   <p class="trace-line">{{ traza }}</p>
+                }
+                @if (resultado.metodologia) {
+                  <h4>Metodo</h4>
+                  <p class="trace-line">{{ resultado.metodologia.enfoque }}</p>
                 }
               </div>
             </div>

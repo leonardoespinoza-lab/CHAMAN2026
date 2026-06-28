@@ -1,4 +1,3 @@
-<!-- Resumen del servicio monitoreo de enfermedades-->
 <p-drawer
   #drawerRef
   [(visible)]="visible"
@@ -8,100 +7,83 @@
     height: (helper.isWide$ | async) ? 'calc(100% - 58px)' : 'auto',
     'border-radius': (helper.isWide$ | async) ? '30px 0 0 30px' : '30px 30px 0 0',
     overflow: 'auto',
-    width: (helper.isWide$ | async) ? '450px' : '100%',
-    'max-width': (helper.isWide$ | async) ? '45vw' : '100%',
+    width: (helper.isWide$ | async) ? '520px' : '100%',
+    'max-width': (helper.isWide$ | async) ? '48vw' : '100%',
   }"
   [modal]="true"
   (onHide)="visibleChange.emit(false)"
-  [header]="'Huella hídrica' | translate"
+  [header]="'Huella hidrica' | translate"
   [closable]="true"
 >
-  <!-- Selector de unidad -->
-  <div style="display: flex; justify-content: flex-end; margin-bottom: 1em">
-    <p-select [loading]="loading" [options]="unidades" [(ngModel)]="unidad"> </p-select>
-  </div>
-  <div>
-    <!-- Huella Verde -->
-    <p-divider />
-    <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center">
-      <div style="display: flex; flex-direction: row; gap: 1em; align-items: center">
-        <span style="color: var(--p-success-color); font-size: 2em; overflow: visible"> &#x2B24; </span>
-        <span style="font-size: 18px">{{ 'Huella verde' | translate }}</span>
-      </div>
-
+  <section class="water-drawer">
+    <header class="drawer-summary">
       <div>
-        <span style="font-size: 22px">
-          {{
-            (unidad === 'lt/kg'
-              ? siembra?.huellaHidrica?.verde?.litrosKg || 0
-              : siembra?.huellaHidrica?.verde?.litrosKcal || 0
-            ) | number: '1.0-0'
-          }}
-        </span>
-        <span>{{ unidad }}</span>
+        <span>{{ esFinal ? 'Resultado final' : 'Seguimiento en campana' }}</span>
+        <h3>{{ siembra?.semilla?.cultivo || 'Cultivo' }}</h3>
+        @if (periodo) {
+          <small>{{ periodo }}</small>
+        }
       </div>
+      @if (calidad) {
+        <strong [ngClass]="calidad.nivel">{{ calidad.nivel }} {{ calidad.score }}/100</strong>
+      }
+    </header>
+
+    @if (esFinal) {
+      <div class="unit-row">
+        <span>Unidad</span>
+        <p-select [loading]="loading" [options]="unidades" [(ngModel)]="unidad" />
+      </div>
+    }
+
+    <div class="footprint-list">
+      @for (fila of filasHuella; track fila.nombre) {
+        <article [ngClass]="fila.clase">
+          <div>
+            <span>{{ fila.nombre }}</span>
+            <small>{{ fila.detalle }}</small>
+          </div>
+          <strong>{{ numero(fila.valor) | number: '1.0-0' }} {{ fila.unidad }}</strong>
+        </article>
+      }
     </div>
 
-    <!-- Huella Azul -->
-    <p-divider />
-    <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center">
-      <div style="display: flex; flex-direction: row; gap: 1em; align-items: center">
-        <span style="color: var(--p-info-color); font-size: 2em; overflow: visible"> &#x2B24; </span>
-        <span style="font-size: 18px">{{ 'Huella azul' | translate }}</span>
-      </div>
+    @if (filasComponentes.length) {
+      <section class="detail-block">
+        <h4>Componentes agronomicos</h4>
+        <div class="component-grid">
+          @for (item of filasComponentes; track item.label) {
+            <article>
+              <span>{{ item.label }}</span>
+              <strong>{{ numero(item.value) | number: '1.0-1' }} {{ item.unit }}</strong>
+            </article>
+          }
+        </div>
+      </section>
+    }
 
-      <div>
-        <span style="font-size: 22px">
-          {{
-            (unidad === 'lt/kg'
-              ? siembra?.huellaHidrica?.azul?.litrosKg || 0
-              : siembra?.huellaHidrica?.azul?.litrosKcal || 0
-            ) | number: '1.0-0'
-          }}
-        </span>
-        <span>{{ unidad }}</span>
-      </div>
-    </div>
+    @if (calidad?.observaciones?.length) {
+      <section class="detail-block">
+        <h4>Calidad de datos</h4>
+        @for (item of calidad?.observaciones || []; track item) {
+          <p>{{ item }}</p>
+        }
+      </section>
+    }
 
-    <!-- Huella gris -->
-    <p-divider />
-    <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center">
-      <div style="display: flex; flex-direction: row; gap: 1em; align-items: center">
-        <span style="color: gray; font-size: 2em; overflow: visible"> &#x2B24; </span>
-        <span style="font-size: 18px">{{ 'Huella gris' | translate }}</span>
-      </div>
-
-      <div>
-        <span style="font-size: 22px">
-          {{
-            (unidad === 'lt/kg'
-              ? siembra?.huellaHidrica?.gris?.litrosKg || 0
-              : siembra?.huellaHidrica?.gris?.litrosKcal || 0
-            ) | number: '1.0-0'
-          }}
-        </span>
-        <span>{{ unidad }}</span>
-      </div>
-    </div>
-
-    <!-- Huella total -->
-    <p-divider />
-    <div style="display: flex; flex-direction: row; justify-content: space-between; align-items: center">
-      <div style="display: flex; flex-direction: row; gap: 1em; align-items: center">
-        <span style="font-size: 18px">{{ 'Total' | translate }}</span>
-      </div>
-
-      <div>
-        <span style="font-size: 22px">
-          {{
-            (unidad === 'lt/kg'
-              ? siembra?.huellaHidrica?.total?.litrosKg || 0
-              : siembra?.huellaHidrica?.total?.litrosKcal || 0
-            ) | number: '1.0-0'
-          }}
-        </span>
-        <span>{{ unidad }}</span>
-      </div>
-    </div>
-  </div>
+    @if (metodologia) {
+      <section class="detail-block method">
+        <h4>Metodo operativo</h4>
+        <p>{{ metodologia.enfoque }}</p>
+        @if (metodologia.fuenteClima) {
+          <p>Clima: {{ metodologia.fuenteClima }}</p>
+        }
+        @if (metodologia.limites?.length) {
+          @for (limite of metodologia.limites || []; track limite) {
+            <p>{{ limite }}</p>
+          }
+        }
+      </section>
+    }
+  </section>
 </p-drawer>

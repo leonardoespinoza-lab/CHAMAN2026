@@ -1,5 +1,5 @@
 <div class="custom-card water-footprint-card">
-  <div class="water-header" (click)="siembra?.huellaHidrica ? (verDrawerHuellaHidrica = true) : null">
+  <div class="water-header" (click)="verDrawerHuellaHidrica = true">
     <svg class="water-footprint-icon" viewBox="0 0 64 64" aria-hidden="true">
       <ellipse cx="17" cy="14" rx="5" ry="7"></ellipse>
       <ellipse cx="29" cy="10" rx="5" ry="8"></ellipse>
@@ -11,7 +11,10 @@
       <p class="titulo-card">{{ 'Huella hidrica' | translate | uppercase }}</p>
       <span>{{ subtitulo }}</span>
     </div>
-    @if (siembra?.huellaHidrica) {
+    @if (calidadActual) {
+      <span class="quality-badge" [ngClass]="calidadActual.nivel">{{ calidadTexto }}</span>
+    }
+    @if (siembra?.huellaHidrica || seguimiento) {
       <strong>+</strong>
     }
   </div>
@@ -60,8 +63,13 @@
   </div>
 
   <p class="formula-note">
-    En campana se acumula lluvia efectiva, riego registrado y carga gris con los datos disponibles. La huella final en l/kg se consolida con rendimiento o cosecha.
+    En campana se acumula lluvia efectiva, riego registrado y carga gris con calidad de datos. La huella final en l/kg
+    se consolida con rendimiento o cosecha.
   </p>
 </div>
 
-<app-drawer-huella-hidrica [siembra]="siembra" [(visible)]="verDrawerHuellaHidrica"></app-drawer-huella-hidrica>
+<app-drawer-huella-hidrica
+  [siembra]="siembra"
+  [seguimiento]="seguimiento"
+  [(visible)]="verDrawerHuellaHidrica"
+></app-drawer-huella-hidrica>

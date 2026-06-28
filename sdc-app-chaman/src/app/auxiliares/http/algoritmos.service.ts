@@ -14,6 +14,8 @@ export interface HuellaHidricaSimulacion {
   huella: any;
   inputs: any;
   parciales: any;
+  calidad?: any;
+  metodologia?: any;
   trazas: string[];
 }
 
