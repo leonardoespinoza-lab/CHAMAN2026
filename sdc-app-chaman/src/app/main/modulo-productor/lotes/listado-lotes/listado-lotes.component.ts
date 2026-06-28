@@ -14,6 +14,14 @@ export interface ILoteTabla extends ILote {
   estacion?: IClimaEstacionMeteorologica;
 }
 
+interface IndicadorLote {
+  label: string;
+  value: string;
+  detail: string;
+  tooltip: string;
+  tone: 'ok' | 'warn' | 'danger' | 'muted' | 'info';
+}
+
 @Component({
   selector: 'app-listado-lotes',
   imports: [SharedModule],
@@ -27,6 +35,8 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
   public dataSource: ILoteTabla[] = [];
   public totalCount = 0;
   public expandedRow: ILoteTabla | null = null;
+  private readonly numero = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 });
+  private readonly entero = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
 
   public dataSource$?: Subscription;
 
@@ -78,9 +88,9 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
         try {
           await this.service.eliminar(dato._id!);
 
-           // Solo elimina el item en cache
+          // Solo elimina el item en cache
           this.listado.deleteEntityItem('lotes', dato._id!);
-          
+
           this.helper.notifSuccess(this.translate.instant('Eliminado correctamente'));
         } catch (error) {
           this.helper.notifError(error);
@@ -112,7 +122,7 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
     this.router.navigate(['lotes', 'sembrar', data._id]);
   }
 
-  public elegirColor(n: number) {
+  public elegirColor(n?: number) {
     switch (n) {
       case 1:
         return {
@@ -133,7 +143,7 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
     }
   }
 
-  public getText(n: number) {
+  public getText(n?: number) {
     switch (n) {
       case 1:
         return this.translate.instant('Excelente');
@@ -144,6 +154,166 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
       default:
         return this.translate.instant('Sin datos');
     }
+  }
+
+  public estadoSiembra(data: ILoteTabla): string {
+    if (data.siembra?.activa) return 'Campana activa';
+    if (data.siembra?.fechaCosecha) return 'Cosechado';
+    if (data.siembra?._id) return 'Siembra cargada';
+    return 'Sin siembra';
+  }
+
+  public estadoSiembraClase(data: ILoteTabla): string {
+    if (data.siembra?.activa) return 'active';
+    if (data.siembra?.fechaCosecha) return 'harvested';
+    if (data.siembra?._id) return 'loaded';
+    return 'pending';
+  }
+
+  public ubicacionResumen(data: ILoteTabla): string {
+    const partes = [
+      data.establecimiento?.nombre,
+      data.departamento?.nombre,
+      data.departamento?.provincia?.nombre,
+    ].filter(Boolean);
+    if (partes.length) return partes.join(' · ');
+    const centro = data.ubicacion?.centro;
+    if (centro?.lat != null && centro?.lng != null) {
+      return `${this.numero.format(Number(centro.lat))}, ${this.numero.format(Number(centro.lng))}`;
+    }
+    return 'Ubicacion pendiente';
+  }
+
+  public cultivoResumen(data: ILoteTabla): string {
+    const cultivo = data.siembra?.semilla?.cultivo;
+    const variedad = data.siembra?.semilla?.variedad;
+    if (!cultivo) return 'Sin cultivo asignado';
+    return [cultivo, variedad].filter(Boolean).join(' · ');
+  }
+
+  public superficie(data: ILoteTabla): string {
+    const superficie = Number(data.ubicacion?.superficie || 0);
+    return superficie > 0 ? `${this.numero.format(superficie)} ha` : 'Superficie pendiente';
+  }
+
+  public dispositivosResumen(data: ILoteTabla): string {
+    const cantidad = data.dispositivos?.length || 0;
+    if (!cantidad) return 'Sin sensores';
+    return `${cantidad} sensor${cantidad === 1 ? '' : 'es'}`;
+  }
+
+  public indicadores(data: ILoteTabla): IndicadorLote[] {
+    return [
+      this.indicadorEnfermedades(data),
+      this.indicadorMalezas(data),
+      this.indicadorRiego(data),
+      this.indicadorHuella(data),
+      this.indicadorClima(data),
+    ];
+  }
+
+  private indicadorEnfermedades(data: ILoteTabla): IndicadorLote {
+    const enfermedades = data.siembra?.ultimaPrediccion?.enfermedades || [];
+    const max = enfermedades.length ? Math.max(...enfermedades.map((item) => Number(item.resultado || 0))) : undefined;
+    if (max === undefined) {
+      return {
+        label: 'Sanidad',
+        value: 'Sin calculo',
+        detail: 'Enfermedades',
+        tooltip: 'Abrir el lote para ejecutar o revisar prediccion de enfermedades.',
+        tone: 'muted',
+      };
+    }
+    return {
+      label: 'Sanidad',
+      value: `${this.entero.format(max)}%`,
+      detail: `${enfermedades.length} enfermedades`,
+      tooltip: `Mayor riesgo sanitario calculado: ${this.entero.format(max)}%.`,
+      tone: max >= 70 ? 'danger' : max >= 40 ? 'warn' : 'ok',
+    };
+  }
+
+  private indicadorMalezas(data: ILoteTabla): IndicadorLote {
+    const prediccion = data.siembra?.ultimaPrediccionMalezas;
+    const especies = prediccion?.especies || [];
+    const max = especies.length
+      ? Math.max(...especies.map((item) => Number(item.avancePct || item.emergenciaPct || 0)))
+      : undefined;
+    if (!prediccion || max === undefined) {
+      return {
+        label: 'Malezas',
+        value: 'Pendiente',
+        detail: 'Sin curva',
+        tooltip: 'Todavia no hay prediccion de malezas persistida para este lote.',
+        tone: 'muted',
+      };
+    }
+    return {
+      label: 'Malezas',
+      value: `${this.entero.format(max)}%`,
+      detail: prediccion.calidadDatos ? `Calidad ${prediccion.calidadDatos}` : 'Emergencia',
+      tooltip: prediccion.resumen || 'Prediccion de emergencia de malezas.',
+      tone: max >= 70 ? 'danger' : max >= 35 ? 'warn' : 'ok',
+    };
+  }
+
+  private indicadorRiego(data: ILoteTabla): IndicadorLote {
+    const predicciones = data.siembra?.ultimaPrediccionRiego || [];
+    const tieneSensor = (data.dispositivos || []).some((item) => item.tipo === 'Sensor de Humedad de Suelo');
+    if (predicciones.length) {
+      const primero = predicciones[0] as any;
+      const aguaUtil = Number(primero?.aguaUtilPct ?? primero?.aguaUtilReal ?? NaN);
+      return {
+        label: 'Riego',
+        value: Number.isFinite(aguaUtil) ? `${this.entero.format(aguaUtil)}%` : 'Calculado',
+        detail: 'Agua util',
+        tooltip: 'Prediccion de riego disponible para este lote.',
+        tone: Number.isFinite(aguaUtil) && aguaUtil < 35 ? 'warn' : 'ok',
+      };
+    }
+    return {
+      label: 'Riego',
+      value: tieneSensor ? 'Sensor' : 'Sin sensor',
+      detail: tieneSensor ? 'Asignado' : 'Pendiente',
+      tooltip: tieneSensor
+        ? 'El lote tiene sensor de humedad asignado, pero no hay prediccion reciente.'
+        : 'Asignar sensor o cargar datos de riego para mejorar el seguimiento.',
+      tone: tieneSensor ? 'info' : 'muted',
+    };
+  }
+
+  private indicadorHuella(data: ILoteTabla): IndicadorLote {
+    const huella = data.siembra?.huellaHidrica || data.huellaHidrica;
+    const total = Number(huella?.total?.litrosKg || 0);
+    if (total > 0) {
+      return {
+        label: 'Huella',
+        value: `${this.entero.format(total)}`,
+        detail: 'l/kg',
+        tooltip: huella?.calidad
+          ? `Huella consolidada. Calidad ${huella.calidad.nivel} (${huella.calidad.score}/100).`
+          : 'Huella hidrica consolidada.',
+        tone: 'ok',
+      };
+    }
+    return {
+      label: 'Huella',
+      value: 'Seguim.',
+      detail: 'En campana',
+      tooltip: 'La huella se consolida al cosechar con rendimiento seco y clima del ciclo.',
+      tone: 'info',
+    };
+  }
+
+  private indicadorClima(data: ILoteTabla): IndicadorLote {
+    const nivel = data.calidadClima?.nivel;
+    return {
+      label: 'Clima',
+      value: this.getText(nivel),
+      detail: 'Calidad',
+      tooltip: `Calidad climatica para predicciones: ${this.getText(nivel)}.`,
+      tone: nivel === 1 ? 'ok' : nivel === 2 ? 'warn' : nivel === 3 ? 'danger' : 'muted',
+    };
   }
 
   // Listados

@@ -1,4 +1,4 @@
-<div class="list-view-container">
+<div class="list-view-container lots-list-page">
   <p-table
     #table
     [value]="dataSource"
@@ -10,46 +10,48 @@
     [scrollable]="true"
     scrollHeight="flex"
     (onPage)="helper.setPageSize(name, $event.rows)"
-    [globalFilterFields]="['nombre']"
-    stripedRows
+    [globalFilterFields]="['nombre', 'establecimiento.nombre', 'siembra.semilla.cultivo', 'siembra.semilla.variedad']"
     rowExpandMode="single"
-    dataKey="_id"
     stateStorage="session"
     [stateKey]="name"
   >
-    <!-- Caption -->
     <ng-template #caption>
-      <div class="flex menu-offset" style="align-items: center">
-        <!-- Buscar -->
-        <p-iconfield iconPosition="left" class="ml-auto">
-          <p-inputicon>
-            <i class="pi pi-search"></i>
-          </p-inputicon>
-          <input
-            #search
-            pInputText
-            type="text"
-            (input)="table.filterGlobal($any($event.target).value, 'contains')"
-            [placeholder]="'Buscar' | translate"
+      <div class="lots-toolbar menu-offset">
+        <div>
+          <span>Gestion operativa</span>
+          <h2>Lotes</h2>
+          <small
+            >{{ totalCount || dataSource.length }} lotes cargados con siembra, sensores y servicios asociados.</small
+          >
+        </div>
+        <div class="toolbar-actions">
+          <p-iconfield iconPosition="left">
+            <p-inputicon>
+              <i class="pi pi-search"></i>
+            </p-inputicon>
+            <input
+              #search
+              pInputText
+              type="text"
+              (input)="table.filterGlobal($any($event.target).value, 'contains')"
+              [placeholder]="'Buscar lote' | translate"
+            />
+          </p-iconfield>
+          <p-button
+            [label]="'Limpiar' | translate"
+            [outlined]="true"
+            icon="pi pi-filter-slash"
+            (onClick)="table.clear(); search.value = ''"
           />
-        </p-iconfield>
-        <!-- Limpiar -->
-        <p-button
-          [label]="'Limpiar' | translate"
-          [outlined]="true"
-          icon="pi pi-filter-slash"
-          (click)="table.clear(); search.value = ''"
-          class="ml-2"
-        />
+          @if (!helper.soloLectura()) {
+            <p-button [label]="'Nuevo lote' | translate" icon="pi pi-plus" severity="primary" (onClick)="create()" />
+          }
+        </div>
       </div>
     </ng-template>
 
-    <!-- Header -->
     <ng-template #header>
       <tr>
-        <!-- Expandir -->
-        <!-- <th style="width: 1em"></th> -->
-        <!-- Nombre / Lotes -->
         <th pSortableColumn="nombre">
           <div class="flex items-center gap-2">
             {{ 'Lote' | translate }}
@@ -57,16 +59,7 @@
             <p-columnFilter type="text" field="nombre" display="menu" />
           </div>
         </th>
-        <!-- Semáforo -->
-        <!-- <th pSortableColumn="calidadClima.nivel">
-        <div class="flex items-center gap-2">
-          {{ 'Nivel de Predicción de Clima' | translate }}
-          <p-sortIcon field="calidadClima.nivel" />
-          <p-columnFilter type="numeric" field="calidadClima.nivel" display="menu" />
-        </div>
-      </th> -->
-        <!-- Acciones -->
-        <th>
+        <th class="actions-column">
           <div class="flex items-center">
             {{ 'Acciones' | translate }}
           </div>
@@ -74,66 +67,77 @@
       </tr>
     </ng-template>
 
-    <!-- Body -->
-    <ng-template #body let-row let-expanded="expanded">
-      <tr>
-        <!-- Expandir -->
-        <!-- <td>
-        <p-button
-          type="button"
-          pRipple
-          [pRowToggler]="row"
-          [text]="true"
-          [rounded]="true"
-          [plain]="true"
-          [icon]="expanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
-        />
-      </td> -->
-        <!-- Nombre / Lote -->
+    <ng-template #body let-row>
+      <tr class="lot-table-row">
         <td>
-          <p style="margin: 0">{{ row.nombre }}</p>
-          <!-- Calidad de prediccion -->
-          <div class="row-flex-start" style="gap: 3px">
-            <i
-              class="pi pi-circle-fill"
-              [style]="elegirColor(row.calidadClima?.nivel)"
-              [pTooltip]="getText(row.calidadClima?.nivel)"
-            ></i>
-            <span pTooltip="Último chequeo" class="no-info" style="text-align: center">
-              Predicción de Enfermedades
-            </span>
+          <div class="lot-summary">
+            <div class="lot-main">
+              <div class="lot-icon" [ngClass]="estadoSiembraClase(row)">
+                <i class="pi pi-map-marker"></i>
+              </div>
+              <div class="lot-title">
+                <div class="title-row">
+                  <h3>{{ row.nombre }}</h3>
+                  <span class="state-pill" [ngClass]="estadoSiembraClase(row)">
+                    {{ estadoSiembra(row) }}
+                  </span>
+                </div>
+                <p>{{ ubicacionResumen(row) }}</p>
+                <div class="lot-meta">
+                  <span>
+                    <i class="pi pi-sitemap"></i>
+                    {{ cultivoResumen(row) }}
+                  </span>
+                  <span>
+                    <i class="pi pi-expand"></i>
+                    {{ superficie(row) }}
+                  </span>
+                  <span>
+                    <i class="pi pi-wifi"></i>
+                    {{ dispositivosResumen(row) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="service-strip">
+              @for (item of indicadores(row); track item.label) {
+                <article [ngClass]="item.tone" [pTooltip]="item.tooltip">
+                  <span>{{ item.label }}</span>
+                  <strong>{{ item.value }}</strong>
+                  <small>{{ item.detail }}</small>
+                </article>
+              }
+            </div>
           </div>
         </td>
 
-        <!-- Acciones -->
-        <td>
-          <div style="display: flex; flex-direction: row; gap: 0.5rem">
-            <!-- Detalles -->
+        <td class="actions-column">
+          <div class="row-actions">
             <p-button
-              [rounded]="true"
-              pTooltip="Editar"
+              label="Ver"
               icon="pi pi-search"
               severity="primary"
-              (click)="detalles(row)"
+              [rounded]="true"
+              pTooltip="Abrir tablero del lote"
+              (onClick)="detalles(row)"
             ></p-button>
-            <!-- Editar -->
             @if (!this.helper.soloLectura()) {
               <p-button
-                [rounded]="true"
-                pTooltip="Editar"
                 icon="pi pi-pencil"
                 severity="warn"
-                (click)="edit(row)"
+                [rounded]="true"
+                pTooltip="Editar lote"
+                (onClick)="edit(row)"
               ></p-button>
             }
-            <!-- Eliminar -->
             @if (!this.helper.soloLectura()) {
               <p-button
-                [rounded]="true"
-                pTooltip="Eliminar"
                 icon="pi pi-trash"
                 severity="danger"
-                (click)="delete(row)"
+                [rounded]="true"
+                pTooltip="Eliminar lote"
+                (onClick)="delete(row)"
               ></p-button>
             }
           </div>
@@ -141,31 +145,25 @@
       </tr>
     </ng-template>
 
-    <!-- Expanded -->
     <ng-template #expandedrow let-row>
       <tr>
-        <td colspan="3">
-          <h2 style="margin: 0; text-align: center; line-height: 2">Acá van mas detalles del lote</h2>
-          <div style="display: flex; flex-direction: row; gap: 0.5rem; justify-content: center">
-            <!-- Fertilizar -->
+        <td colspan="2">
+          <div class="expanded-actions">
             <p-button [rounded]="true" pTooltip="Fertilizar" severity="primary" icon="pi" (onClick)="fertilizar(row)">
               <svg [style.fill]="'var(--p-button-primary-color)'" [attr.width]="'24px'" [attr.height]="'24px'">
                 <use [attr.xlink:href]="'icons/icons.svg#psychiatry'"></use>
               </svg>
             </p-button>
-            <!-- Fumigar -->
             <p-button [rounded]="true" pTooltip="Fumigar" severity="primary" icon="pi" (onClick)="fumigar(row)">
               <svg [style.fill]="'var(--p-button-primary-color)'" [attr.width]="'24px'" [attr.height]="'24px'">
                 <use [attr.xlink:href]="'icons/icons.svg#shower'"></use>
               </svg>
             </p-button>
-            <!-- Cosechar -->
             <p-button [rounded]="true" pTooltip="Cosechar" severity="primary" icon="pi" (onClick)="cosechar(row)">
               <svg [style.fill]="'var(--p-button-primary-color)'" [attr.width]="'24px'" [attr.height]="'24px'">
                 <use [attr.xlink:href]="'icons/icons.svg#agriculture'"></use>
               </svg>
             </p-button>
-            <!-- Sembrar -->
             <p-button [rounded]="true" pTooltip="Sembrar" severity="primary" icon="pi" (onClick)="sembrar(row)">
               <svg [style.fill]="'var(--p-button-primary-color)'" [attr.width]="'24px'" [attr.height]="'24px'">
                 <use [attr.xlink:href]="'icons/icons.svg#compost'"></use>
@@ -176,10 +174,9 @@
       </tr>
     </ng-template>
 
-    <!-- Sin datos -->
     <ng-template #emptymessage>
       <tr>
-        <td colspan="7">
+        <td colspan="2">
           <p-message severity="info">
             {{ 'No se encontraron lotes' | translate }}
           </p-message>
@@ -187,20 +184,19 @@
       </tr>
     </ng-template>
 
-    <!-- Footer de la tabla con botón crear -->
     <ng-template #summary>
-      @if (!helper.soloLectura()) {
-        <div class="flex justify-center p-3 border-t border-surface-200">
+      <div class="table-summary">
+        <span>{{ dataSource.length }} visibles</span>
+        @if (!helper.soloLectura()) {
           <p-button
             [label]="'Crear nuevo lote' | translate"
             icon="pi pi-plus"
             severity="primary"
-            [fluid]="true"
             [outlined]="true"
-            (click)="create()"
+            (onClick)="create()"
           ></p-button>
-        </div>
-      }
+        }
+      </div>
     </ng-template>
   </p-table>
 </div>
