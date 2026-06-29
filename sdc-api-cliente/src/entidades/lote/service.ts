@@ -979,7 +979,7 @@ export class LotesService {
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <title>Certificado Chaman - ${this.escapeHtml(lote.nombre || 'lote')}</title>
+  <title>Informe ejecutivo Chaman - ${this.escapeHtml(lote.nombre || 'lote')}</title>
   <style>
     :root {
       --ink: #1f3047;
@@ -1089,6 +1089,88 @@ export class LotesService {
       line-height: 1.15;
     }
     .card small { color: var(--muted); }
+    .executive-board {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-top: 14px;
+    }
+    .score-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      background: #fff;
+      min-height: 112px;
+    }
+    .score-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+    .score-card strong {
+      display: block;
+      font-size: 24px;
+      line-height: 1.1;
+    }
+    .score-card small {
+      display: block;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .score-meter {
+      height: 9px;
+      border-radius: 999px;
+      background: #e9f1f8;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .score-meter i {
+      display: block;
+      height: 100%;
+      width: var(--value, 0%);
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--cyan), var(--green));
+    }
+    .score-card.warn .score-meter i { background: linear-gradient(90deg, #f7c35d, var(--amber)); }
+    .score-card.danger .score-meter i { background: linear-gradient(90deg, #ff8b80, var(--danger)); }
+    .score-row.warn .score-meter i { background: linear-gradient(90deg, #f7c35d, var(--amber)); }
+    .score-row.danger .score-meter i { background: linear-gradient(90deg, #ff8b80, var(--danger)); }
+    .action-panel {
+      border: 1px solid rgba(46, 212, 202, 0.45);
+      border-radius: 14px;
+      padding: 16px 18px;
+      background: linear-gradient(135deg, #f2fffd, #ffffff);
+      margin-top: 16px;
+    }
+    .action-panel ol {
+      margin: 10px 0 0;
+      padding-left: 20px;
+    }
+    .action-panel li { margin: 7px 0; }
+    .summary-chart {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      background: #fff;
+    }
+    .score-row {
+      display: grid;
+      grid-template-columns: 170px 1fr 70px;
+      gap: 12px;
+      align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid #e7eff6;
+    }
+    .score-row:last-child { border-bottom: none; }
+    .score-row span { color: var(--muted); font-weight: 700; }
+    .score-row strong { text-align: right; }
+    .section-copy {
+      margin-top: 0;
+      color: var(--muted);
+    }
     .dark-panel {
       background: linear-gradient(160deg, #132235, #1f344b);
       color: white;
@@ -1102,8 +1184,8 @@ export class LotesService {
       width: 100%;
       height: 160px;
       margin-top: 10px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
+      background: #f8fbfe;
+      border: 1px solid var(--line);
       border-radius: 12px;
     }
     .bar {
@@ -1172,6 +1254,13 @@ export class LotesService {
       color: var(--muted);
       font-size: 12px;
     }
+    @media (max-width: 900px) {
+      .page { width: auto; margin: 0; border-radius: 0; }
+      .hero, .two-col { grid-template-columns: 1fr; }
+      .grid, .grid.three, .executive-board { grid-template-columns: 1fr; }
+      .score-row { grid-template-columns: 1fr; gap: 6px; }
+      .score-row strong { text-align: left; }
+    }
     @media print {
       body { background: white; }
       .page { width: auto; margin: 0; border: none; border-radius: 0; box-shadow: none; }
@@ -1184,23 +1273,27 @@ export class LotesService {
     <section class="hero">
       <div class="brand">
         <small>Chaman Agro</small>
-        <h1>Certificado de seguimiento agronomico y ecologico</h1>
-        <p>${this.escapeHtml(estado)} para ${this.escapeHtml(cultivo)} en el lote <strong>${this.escapeHtml(lote.nombre || 'Sin nombre')}</strong>.</p>
+        <h1>Informe ejecutivo de ambiente productivo</h1>
+        <p>Trazabilidad agronomica, sanitaria y ambiental para ${this.escapeHtml(cultivo)} en el lote <strong>${this.escapeHtml(lote.nombre || 'Sin nombre')}</strong>.</p>
         <span class="pill">${this.escapeHtml(lote.establecimiento?.nombre || 'Sin establecimiento')}</span>
       </div>
       <div class="hero-meta">
-        <div class="card"><span>Fecha de emision</span><strong>${fechaInforme}</strong><small>Generado por Chaman</small></div>
-        <div class="card"><span>Etapa actual</span><strong>${this.escapeHtml(etapa)}</strong><small>${this.getDiasCultivoTexto(siembra)}</small></div>
+        <div class="card"><span>Fecha de emision</span><strong>${fechaInforme}</strong><small>${this.escapeHtml(estado)}</small></div>
+        <div class="card"><span>Etapa fenologica</span><strong>${this.escapeHtml(etapa)}</strong><small>${this.getDiasCultivoTexto(siembra)}</small></div>
       </div>
     </section>
 
     <section class="section">
-      <h2>Resumen ejecutivo</h2>
+      <h2>Lectura ejecutiva</h2>
+      <p class="section-copy">Indicadores principales del ambiente/lote para seguimiento operativo, auditoria y conversacion tecnica con clientes.</p>
+      ${this.renderTableroEjecutivo(datos, riesgo, clima)}
+      ${this.renderPrioridadesEjecutivas(datos, riesgo, huella, frio, clima)}
+      <h3 style="margin-top:18px;">Datos del ambiente</h3>
       <div class="grid">
         ${this.metricCard('Cultivo', cultivo, this.getVariedadTexto(siembra))}
         ${this.metricCard('Superficie', this.formatHectareas(lote.ubicacion?.superficie), 'Poligono Chaman')}
         ${this.metricCard('Suelo', this.getSueloTexto(lote), this.getFuenteSuelo(lote))}
-        ${this.metricCard('Clima / lluvia', lluviaAcumulada, clima?.periodoFrio ? `Periodo ${this.formatDate(clima.periodoFrio.desde)} a ${this.formatDate(clima.periodoFrio.hasta)}` : 'Open-Meteo / estacion')}
+        ${this.metricCard('Lluvia operativa', lluviaAcumulada, clima?.periodoFrio ? `Periodo ${this.formatDate(clima.periodoFrio.desde)} a ${this.formatDate(clima.periodoFrio.hasta)}` : 'Open-Meteo / estacion')}
         ${this.metricCard('Riesgo sanitario', riesgo.titulo, riesgo.detalle)}
         ${this.metricCard('Riego', this.getRiegoTexto(siembra), this.getAguaUtilTexto(siembra))}
         ${this.metricCard('Huella hidrica', huella.total, huella.detalle)}
@@ -1213,13 +1306,14 @@ export class LotesService {
     </section>
 
     <section class="section two-col">
-      <div class="dark-panel">
-        <h3>Temperatura, humedad y lluvia</h3>
-        <small>Serie climatica usada para seguimiento agronomico, frio, grados dia y riesgo sanitario.</small>
-        ${this.renderClimaSparkline(clima)}
+      <div>
+        <h2>Tablero de indicadores</h2>
+        <p class="section-copy">Sintesis comparativa de presion sanitaria, carga quimica y recencia de aplicaciones. La escala es 0-100 y no reemplaza el diagnostico a campo.</p>
+        ${this.renderIndicadoresEjecutivos(datos, riesgo)}
       </div>
       <div>
-        <h2>${esPerenne ? 'Frio y acumulacion termica' : 'Clima agronomico'}</h2>
+        <h2>${esPerenne ? 'Frio y acumulacion termica' : 'Clima agronomico resumido'}</h2>
+        <p class="section-copy">Variables de decision: lluvia, grados dia, heladas y ventanas agronomicas. Se excluyen curvas de temperatura/humedad para mantener foco ejecutivo.</p>
         ${this.renderTablaClimaAgronomica(clima, frio, esPerenne)}
       </div>
     </section>
@@ -1262,7 +1356,9 @@ export class LotesService {
 
     <section class="section">
       <h2>Complemento satelital</h2>
-      <p>Los indices satelitales se informan como evidencia complementaria de vigor, agua y cobertura. La lectura principal del certificado prioriza clima, fenologia, sensores, aplicaciones y observacion a campo.</p>
+      <p>Los indices satelitales se informan como evidencia complementaria de vigor, agua y cobertura. La lectura principal del informe prioriza fenologia, sanidad, aplicaciones, suelo, agua y observacion a campo.</p>
+      ${this.renderNdviSparkline(reportesNdvi)}
+      <div class="note"><strong>Lectura satelital:</strong> ${this.escapeHtml(this.getResumenSatelital(reportesNdvi))}</div>
       ${this.renderTablaSatelital(reportesNdvi)}
     </section>
 
@@ -1281,7 +1377,7 @@ export class LotesService {
     </section>
 
     <footer>
-      Este certificado es un documento tecnico generado automaticamente por Chaman Agro. Debe interpretarse junto con observacion a campo, criterio profesional y marbetes vigentes de productos aplicados. La validez agronomica depende de la calidad de los datos cargados y de los sensores/servicios conectados.
+      Este informe es un documento tecnico generado automaticamente por Chaman Agro. Debe interpretarse junto con observacion a campo, criterio profesional y marbetes vigentes de productos aplicados. La validez agronomica depende de la calidad de los datos cargados y de los sensores/servicios conectados.
     </footer>
   </main>
 </body>
@@ -1290,6 +1386,246 @@ export class LotesService {
 
   private metricCard(label: string, value: string, detail?: string): string {
     return `<article class="card"><span>${this.escapeHtml(label)}</span><strong>${this.escapeHtml(value || '-')}</strong><small>${this.escapeHtml(detail || '')}</small></article>`;
+  }
+
+  private renderTableroEjecutivo(
+    datos: CertificadoDatos,
+    riesgo: { titulo: string; detalle: string },
+    clima?: IFrioTermicoCultivo,
+  ): string {
+    const riesgoScore = this.getRiesgoSanitarioScore(datos.siembra, datos.predicciones);
+    const ndvi = this.getUltimoNdvi(datos.reportesNdvi);
+    const riegoScore = this.getRiegoScore(datos.siembra);
+    const huellaConsolidada = this.tieneHuellaConsolidada(datos.lote, datos.siembra);
+    const sateliteScore = ndvi ? this.limitarPorcentaje((ndvi.valor || 0) * 100) : 0;
+    const climaDetalle = clima
+      ? `Lluvia ${this.formatNumber(clima.acumulados.lluvia, 1)} mm | GD ${this.formatNumber(clima.acumulados.gradosDia, 1)}`
+      : 'Sin clima consolidado';
+
+    return `<div class="executive-board">
+      ${this.scoreCard('Sanidad', riesgo.titulo, riesgoScore, riesgo.detalle, this.getRiesgoTone(riesgoScore))}
+      ${this.scoreCard('Carga fitosanitaria', `${this.formatNumber(datos.cargaFitosanitaria.score, 0)}/100`, datos.cargaFitosanitaria.score, datos.cargaFitosanitaria.recomendacion, this.getRiesgoTone(datos.cargaFitosanitaria.score))}
+      ${this.scoreCard('Agua y riego', this.getRiegoTexto(datos.siembra), riegoScore, this.getAguaUtilTexto(datos.siembra), riegoScore < 45 ? 'warn' : '')}
+      ${this.scoreCard('Satelite', ndvi ? `NDVI ${this.formatNumber(ndvi.valor, 3)}` : 'Sin escena', sateliteScore, ndvi ? `Ultima escena ${ndvi.fecha || 'sin fecha'}` : 'Pendiente de escena limpia', ndvi ? '' : 'warn')}
+      ${this.scoreCard('Huella / clima', huellaConsolidada ? 'Con datos' : 'Parcial', huellaConsolidada ? 80 : 35, climaDetalle, huellaConsolidada ? '' : 'warn')}
+    </div>`;
+  }
+
+  private scoreCard(
+    label: string,
+    value: string,
+    score: number,
+    detail: string,
+    tone = '',
+  ): string {
+    const safeScore = this.limitarPorcentaje(score);
+    const className = this.compactar(['score-card', tone]).join(' ');
+    return `<article class="${className}">
+      <span>${this.escapeHtml(label)}</span>
+      <strong>${this.escapeHtml(value || '-')}</strong>
+      <div class="score-meter" style="--value:${this.formatCssNumber(safeScore, 1)}%"><i></i></div>
+      <small>${this.escapeHtml(detail || '')}</small>
+    </article>`;
+  }
+
+  private renderPrioridadesEjecutivas(
+    datos: CertificadoDatos,
+    riesgo: { titulo: string; detalle: string },
+    huella: { total: string },
+    frio: CertificadoFrio,
+    clima?: IFrioTermicoCultivo,
+  ): string {
+    const acciones = this.getPrioridadesEjecutivas(datos, riesgo, huella, frio, clima);
+    return `<div class="action-panel">
+      <h3>Prioridades de gestion</h3>
+      <ol>${acciones.map((item) => `<li>${this.escapeHtml(item)}</li>`).join('')}</ol>
+    </div>`;
+  }
+
+  private getPrioridadesEjecutivas(
+    datos: CertificadoDatos,
+    riesgo: { titulo: string; detalle: string },
+    huella: { total: string },
+    frio: CertificadoFrio,
+    clima?: IFrioTermicoCultivo,
+  ): string[] {
+    const acciones: string[] = [];
+    const riesgoScore = this.getRiesgoSanitarioScore(datos.siembra, datos.predicciones);
+    const cultivo = datos.siembra?.semilla?.cultivo || 'Cultivo';
+    const etapa = this.getEstadoFenologico(datos.siembra, datos.predicciones);
+
+    acciones.push(`${cultivo} en ${etapa}: sostener lectura por ambiente y actualizar el informe cuando cambie fenologia, aplicaciones o clima.`);
+
+    if (riesgoScore >= 40) {
+      acciones.push(`Priorizar recorrida sanitaria: ${riesgo.titulo.toLowerCase()} (${riesgo.detalle}) antes de nuevas decisiones de aplicacion.`);
+    } else {
+      acciones.push(`Mantener monitoreo sanitario preventivo; el mayor riesgo calculado se mantiene bajo con los datos disponibles.`);
+    }
+
+    if (datos.cargaFitosanitaria.score >= 35) {
+      acciones.push(`Auditar carga fitosanitaria: revisar productos, principios activos, dosis, carencias y justificacion tecnica por etapa.`);
+    } else {
+      acciones.push(`Carga fitosanitaria baja: conservar trazabilidad de aplicaciones y confirmar sintomas a campo antes de intervenir.`);
+    }
+
+    if (!clima) {
+      acciones.push('Consolidar clima del establecimiento o estacion asociada para mejorar sanidad, riego, heladas y huella hidrica.');
+    } else if (clima.riesgoHelada?.nivel && clima.riesgoHelada.nivel !== 'bajo') {
+      acciones.push(`Revisar alerta de helada segun estadio fenologico: ${this.capitalize(clima.riesgoHelada.nivel)} (${this.getDetalleHelada(clima)}).`);
+    }
+
+    if (!datos.lote.suelos?.length) {
+      acciones.push('Completar perfil de suelo por profundidad para mejorar riego, capacidad productiva y huella.');
+    }
+
+    if (huella.total === 'En seguimiento') {
+      acciones.push('Cargar rendimiento esperado/cosecha y riegos para consolidar huella hidrica en litros por kilo.');
+    }
+
+    if (frio.aplica && !frio.acumulado && !clima) {
+      acciones.push('Asociar sensor o clima confiable para consolidar frio acumulado en cultivos perennes.');
+    }
+
+    return acciones.slice(0, 6);
+  }
+
+  private renderIndicadoresEjecutivos(
+    datos: CertificadoDatos,
+    riesgo: { titulo: string; detalle: string },
+  ): string {
+    const rows = [
+      {
+        label: 'Riesgo sanitario',
+        value: this.getRiesgoSanitarioScore(datos.siembra, datos.predicciones),
+        detail: riesgo.titulo,
+      },
+      {
+        label: 'Carga fitosanitaria',
+        value: datos.cargaFitosanitaria.score,
+        detail: this.capitalize(datos.cargaFitosanitaria.nivel.replace('_', ' ')),
+      },
+      {
+        label: 'Presion de enfermedades',
+        value: datos.cargaFitosanitaria.presionEnfermedades,
+        detail: `${datos.cargaFitosanitaria.enfermedadesMonitoreadas} enfermedad(es)`,
+      },
+      {
+        label: 'Carga de aplicaciones',
+        value: datos.cargaFitosanitaria.cargaQuimica,
+        detail: `${datos.cargaFitosanitaria.aplicacionesTotales} aplicacion(es)`,
+      },
+      {
+        label: 'Recencia operativa',
+        value: datos.cargaFitosanitaria.recenciaAplicaciones,
+        detail: `${datos.cargaFitosanitaria.aplicacionesUltimos30Dias} en 30 dias`,
+      },
+    ];
+
+    return `<div class="summary-chart">
+      ${rows.map((item) => this.renderScoreRow(item.label, item.value, item.detail)).join('')}
+    </div>`;
+  }
+
+  private renderScoreRow(label: string, value: number, detail: string): string {
+    const safeValue = this.limitarPorcentaje(value);
+    const tone = this.getRiesgoTone(safeValue);
+    return `<div class="score-row ${tone}">
+      <span>${this.escapeHtml(label)}</span>
+      <div class="score-meter" style="--value:${this.formatCssNumber(safeValue, 1)}%"><i></i></div>
+      <strong>${this.escapeHtml(`${this.formatNumber(safeValue, 1)}/100`)}</strong>
+      <small style="grid-column: 1 / -1; color: var(--muted);">${this.escapeHtml(detail || '')}</small>
+    </div>`;
+  }
+
+  private getRiesgoSanitarioScore(
+    siembra?: ISiembra,
+    predicciones: IPrediccion[] = [],
+  ): number {
+    const prediccion = predicciones[0] || siembra?.ultimaPrediccion;
+    const enfermedades = prediccion?.enfermedades || [];
+    if (!enfermedades.length) {
+      return 0;
+    }
+    return this.limitarPorcentaje(
+      Math.max(...enfermedades.map((item) => this.normalizarRiesgo(item.resultado))),
+    );
+  }
+
+  private getRiesgoTone(score: number): string {
+    if (score >= 70) {
+      return 'danger';
+    }
+    if (score >= 40) {
+      return 'warn';
+    }
+    return '';
+  }
+
+  private getRiegoScore(siembra?: ISiembra): number {
+    const recomendacion = siembra?.ultimaPrediccionRiego?.[0] as any;
+    if (recomendacion?.recomendacion !== undefined) {
+      return 85;
+    }
+    if (siembra?.aguaUtilReal !== undefined) {
+      return 65;
+    }
+    return 25;
+  }
+
+  private tieneHuellaConsolidada(lote: ILote, siembra?: ISiembra): boolean {
+    const huella = siembra?.huellaHidrica || lote.huellaHidrica;
+    return !!(
+      huella?.total?.litrosKg ||
+      huella?.total?.litrosKcal ||
+      huella?.verde?.litrosKg ||
+      huella?.azul?.litrosKg ||
+      huella?.gris?.litrosKg
+    );
+  }
+
+  private getUltimoNdvi(reportes: IReporteNDVI[]): { valor: number; fecha: string } | undefined {
+    const ordenados = reportes
+      .map((reporte) => ({
+        fecha: this.formatDate(reporte.fechaDeLaImagen || reporte.fechaDelReporte || reporte.fechaCreacion),
+        time: new Date(reporte.fechaDeLaImagen || reporte.fechaDelReporte || reporte.fechaCreacion || '').getTime(),
+        valor: this.toNumber(reporte.indices?.ndvi ?? reporte.ndviPromedio),
+      }))
+      .filter((item) => Number.isFinite(item.valor))
+      .sort((a, b) => (Number.isFinite(b.time) ? b.time : 0) - (Number.isFinite(a.time) ? a.time : 0));
+
+    const ultimo = ordenados[0];
+    return ultimo ? { valor: Number(ultimo.valor), fecha: ultimo.fecha } : undefined;
+  }
+
+  private getResumenSatelital(reportes: IReporteNDVI[]): string {
+    const ordenados = reportes
+      .map((reporte) => ({
+        fecha: this.formatDate(reporte.fechaDeLaImagen || reporte.fechaDelReporte || reporte.fechaCreacion),
+        time: new Date(reporte.fechaDeLaImagen || reporte.fechaDelReporte || reporte.fechaCreacion || '').getTime(),
+        valor: this.toNumber(reporte.indices?.ndvi ?? reporte.ndviPromedio),
+        coleccion: reporte.coleccion || '',
+      }))
+      .filter((item) => Number.isFinite(item.valor))
+      .sort((a, b) => (Number.isFinite(b.time) ? b.time : 0) - (Number.isFinite(a.time) ? a.time : 0));
+
+    if (!ordenados.length) {
+      return 'Sin escenas limpias con NDVI procesado para este lote.';
+    }
+
+    const ultimo = ordenados[0];
+    const anterior = ordenados[1];
+    if (!anterior) {
+      return `Ultima escena ${ultimo.fecha || 'sin fecha'} con NDVI ${this.formatNumber(Number(ultimo.valor), 3)}${ultimo.coleccion ? ` (${ultimo.coleccion})` : ''}.`;
+    }
+
+    const diferencia = Number(ultimo.valor) - Number(anterior.valor);
+    const tendencia =
+      Math.abs(diferencia) < 0.02
+        ? 'estable'
+        : diferencia > 0
+          ? 'en mejora'
+          : 'en descenso';
+    return `Ultima escena ${ultimo.fecha || 'sin fecha'} con NDVI ${this.formatNumber(Number(ultimo.valor), 3)}; tendencia ${tendencia} contra ${anterior.fecha || 'escena anterior'} (${this.formatNumber(diferencia, 3)}).`;
   }
 
   private renderNdviSparkline(reportes: IReporteNDVI[]): string {
@@ -1410,7 +1746,7 @@ export class LotesService {
     esPerenne: boolean,
   ): string {
     if (!clima) {
-      return '<p>Sin clima consolidado para este certificado. Chaman mantiene la trazabilidad con sensores y datos del lote disponibles.</p>';
+      return '<p>Sin clima consolidado para este informe. Chaman mantiene la trazabilidad con sensores y datos del lote disponibles.</p>';
     }
 
     const items = esPerenne
@@ -1572,7 +1908,7 @@ export class LotesService {
     if (!pendientes.length) {
       return '<div class="note"><strong>Control de calidad:</strong> El informe cuenta con los datos principales para seguimiento operativo.</div>';
     }
-    return `<div class="note warn"><strong>Datos pendientes para robustecer el certificado:</strong><ul>${pendientes.map((item) => `<li>${this.escapeHtml(item)}</li>`).join('')}</ul></div>`;
+    return `<div class="note warn"><strong>Datos pendientes para robustecer el informe:</strong><ul>${pendientes.map((item) => `<li>${this.escapeHtml(item)}</li>`).join('')}</ul></div>`;
   }
 
   private getResumenRiesgo(
@@ -1637,7 +1973,7 @@ export class LotesService {
         fuente: 'No aplica',
         titulo: 'No aplica',
         detalle: 'Cultivo sin requerimiento de frio configurado',
-        lectura: 'El cultivo no requiere seguimiento de horas frio en este certificado.',
+        lectura: 'El cultivo no requiere seguimiento de horas frio en este informe.',
         objetivos,
       };
     }
@@ -1774,7 +2110,7 @@ export class LotesService {
       `${cultivo}: seguimiento generado con ${datos.predicciones.length} prediccion(es), ${datos.fertilizaciones.length} fertilizacion(es), ${datos.fumigaciones.length} fumigacion(es) y ${datos.reportesNdvi.length} escena(s) satelital(es) complementaria(s).`,
       clima
         ? `Clima operativo: lluvia ${this.formatNumber(clima.acumulados.lluvia, 1)} mm, helada ${this.capitalize(clima.riesgoHelada.nivel)}.`
-        : 'Sin clima consolidado en el certificado.',
+        : 'Sin clima consolidado en el informe.',
       `Riesgo sanitario ${riesgo.titulo.toLowerCase()} (${riesgo.detalle}).`,
       `Carga fitosanitaria ${datos.cargaFitosanitaria.score}/100 (${this.capitalize(datos.cargaFitosanitaria.nivel.replace('_', ' '))}).`,
       `Huella hidrica ${huella.total}.`,
@@ -1985,6 +2321,10 @@ export class LotesService {
       minimumFractionDigits: 0,
       maximumFractionDigits: digits,
     }).format(value);
+  }
+
+  private formatCssNumber(value: number, digits = 1): string {
+    return Number(value || 0).toFixed(digits).replace(/\.0$/, '');
   }
 
   private formatDate(value?: string): string {
