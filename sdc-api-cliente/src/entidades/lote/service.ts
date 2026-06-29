@@ -615,7 +615,7 @@ export class LotesService {
   ): IFitosanitarioRiesgoSanitario[] {
     return (prediccion?.enfermedades || [])
       .map((item) => {
-        const resultado = Math.round(this.normalizarRiesgo(item.resultado));
+        const resultado = this.normalizarResultadoFitosanitario(item.resultado);
         return {
           enfermedad: item.enfermedad,
           resultado,
@@ -636,7 +636,15 @@ export class LotesService {
     const max = Math.max(...valores);
     const promedio =
       valores.reduce((total, value) => total + value, 0) / valores.length;
-    return Math.round(this.limitarPorcentaje(max * 0.65 + promedio * 0.35));
+    return this.redondearPorcentaje(max * 0.65 + promedio * 0.35);
+  }
+
+  private normalizarResultadoFitosanitario(value?: number): number {
+    const numero = Number(value);
+    if (!Number.isFinite(numero)) {
+      return 0;
+    }
+    return this.redondearPorcentaje(numero);
   }
 
   private resumirAplicacionFitosanitaria(
@@ -832,6 +840,11 @@ export class LotesService {
       return 0;
     }
     return Math.max(0, Math.min(max, numero));
+  }
+
+  private redondearPorcentaje(value: number, decimales = 1): number {
+    const factor = Math.pow(10, decimales);
+    return Math.round(this.limitarPorcentaje(value) * factor) / factor;
   }
 
   private async getReportesNdviCertificado(
@@ -1941,13 +1954,7 @@ export class LotesService {
     if (!Number.isFinite(numero)) {
       return 0;
     }
-    if (numero <= 1) {
-      return numero * 100;
-    }
-    if (numero <= 10) {
-      return numero * 10;
-    }
-    return Math.min(100, Math.max(0, numero));
+    return this.limitarPorcentaje(numero);
   }
 
   private getNivelRiesgoTexto(value?: number): string {

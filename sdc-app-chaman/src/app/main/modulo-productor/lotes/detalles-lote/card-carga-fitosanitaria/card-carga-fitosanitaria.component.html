@@ -36,7 +36,7 @@
         <article>
           <div>
             <span>{{ factor.nombre }}</span>
-            <strong>{{ factor.valor | number: '1.0-0' }}/100</strong>
+            <strong>{{ factor.valor | number: '1.0-1' }}/100</strong>
           </div>
           <div class="factor-bar" [style.--fill]="porcentaje(factor.valor) + '%'"><i></i></div>
           <small>{{ factor.detalle }}</small>
@@ -66,7 +66,7 @@
       <div class="event-preview">
         @for (enfermedad of enfermedadesPrincipales; track enfermedad.enfermedad) {
           <span class="event-chip disease">
-            {{ enfermedad.enfermedad }} {{ enfermedad.resultado | number: '1.0-0' }}%
+            {{ enfermedad.enfermedad }} {{ enfermedad.resultado | number: '1.0-1' }}%
           </span>
         }
         @for (aplicacion of aplicacionesPrincipales; track $index) {
@@ -108,7 +108,7 @@
       <div class="detail-hero" [ngClass]="data.nivel">
         <div>
           <span>{{ nivelTexto }}</span>
-          <strong>{{ data.score }}/100</strong>
+          <strong>{{ data.score | number: '1.0-0' }}/100</strong>
           <small>{{ data.lectura }}</small>
         </div>
         <p>{{ data.recomendacion }}</p>
@@ -117,17 +117,17 @@
       <div class="detail-grid">
         <article>
           <span>Presion sanitaria</span>
-          <strong>{{ data.presionEnfermedades }}/100</strong>
+          <strong>{{ data.presionEnfermedades | number: '1.0-1' }}/100</strong>
           <small>{{ data.enfermedadesMonitoreadas }} enfermedad(es) monitoreadas.</small>
         </article>
         <article>
           <span>Carga quimica</span>
-          <strong>{{ data.cargaQuimica }}/100</strong>
+          <strong>{{ data.cargaQuimica | number: '1.0-1' }}/100</strong>
           <small>{{ data.aplicacionesTotales }} aplicacion(es) registradas.</small>
         </article>
         <article>
           <span>Recencia</span>
-          <strong>{{ data.recenciaAplicaciones }}/100</strong>
+          <strong>{{ data.recenciaAplicaciones | number: '1.0-1' }}/100</strong>
           <small>{{ data.aplicacionesUltimos30Dias }} aplicacion(es) en 30 dias.</small>
         </article>
       </div>
@@ -142,7 +142,7 @@
                   <strong>{{ enfermedad.enfermedad }}</strong>
                   <span>{{ enfermedad.nivel | titlecase }}</span>
                 </div>
-                <em>{{ enfermedad.resultado }}%</em>
+                <em>{{ enfermedad.resultado | number: '1.0-1' }}%</em>
               </article>
             }
           } @else {
