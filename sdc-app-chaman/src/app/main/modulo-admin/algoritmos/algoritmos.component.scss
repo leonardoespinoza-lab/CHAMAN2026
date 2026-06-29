@@ -69,7 +69,8 @@ h3 {
 
 .page-hero span,
 .algorithm-summary span,
-.formula-card span {
+.formula-card span,
+.tester-header span {
   display: block;
   margin-top: 8px;
   color: #52647d;
@@ -255,6 +256,30 @@ label {
   font-weight: 700;
 }
 
+label span {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+label em {
+  border-radius: 999px;
+  background: #eafdfb;
+  color: #07958d;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  padding: 3px 7px;
+  text-transform: uppercase;
+}
+
+label small {
+  color: #70829a;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
 input,
 select,
 textarea {
@@ -280,6 +305,51 @@ textarea {
   font-size: 13px;
   line-height: 1.45;
   resize: vertical;
+}
+
+.motor-context {
+  align-items: center;
+  border: 1px solid #d5e1ed;
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+}
+
+.motor-context span {
+  color: #23d2cc;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.motor-context strong {
+  color: #1d2b44;
+  font-family: Consolas, monospace;
+  font-size: 13px;
+  text-align: right;
+}
+
+.switch-row {
+  align-items: center;
+  border: 1px solid #bdd0e4;
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 12px;
+}
+
+.switch-row input {
+  height: 18px;
+  min-height: 18px;
+  width: 18px;
+}
+
+.switch-row strong {
+  color: #1d2b44;
 }
 
 .json-panel,

@@ -232,11 +232,11 @@
           <div>
             <p>Formula ejecutable</p>
             <h3>{{ motorTitle }}</h3>
-            <span>{{ motorDescription }}</span>
+            <span>{{ motorFormula }}</span>
           </div>
           <div class="formula-pill">
             <strong>{{ seleccionado | uppercase }}</strong>
-            <span>POST /algoritmos/{{ seleccionado }}/simular</span>
+            <span>{{ motorEndpoint }}</span>
           </div>
         </section>
 
@@ -245,19 +245,93 @@
             <div>
               <p>Banco de prueba</p>
               <h3>{{ motorTitle }}</h3>
+              <span>{{ motorDescription }}</span>
             </div>
             <div class="tester-actions">
+              <p-button
+                [label]="motorModoJson ? 'Modo simple' : 'Editar JSON'"
+                icon="pi pi-code"
+                [outlined]="true"
+                (onClick)="motorModoJson = !motorModoJson"
+              />
+              <p-button
+                label="Actualizar input"
+                icon="pi pi-sliders-h"
+                [outlined]="true"
+                (onClick)="generarMotorPayload()"
+              />
               <p-button label="Ejecutar" icon="pi pi-play" [loading]="loading" (onClick)="simularActual()" />
             </div>
           </div>
 
-          <div class="input-grid motor-input-grid">
-            @for (key of motorFieldKeys(); track key) {
-              <label>
-                {{ key }}
-                <input [ngModel]="motorForm[key]" (ngModelChange)="setMotorField(key, $event)" />
-              </label>
-            }
+          <div class="motor-context">
+            <span>Servicio real</span>
+            <strong>{{ motorPersistencia }}</strong>
+          </div>
+
+          @if (!motorModoJson) {
+            <div class="input-grid motor-input-grid">
+              @for (field of motorFields(); track field.key) {
+                <label [for]="fieldId(field.key)">
+                  <span>
+                    {{ field.label }}
+                    @if (field.suffix) {
+                      <em>{{ field.suffix }}</em>
+                    }
+                  </span>
+
+                  @if (field.type === 'select') {
+                    <select
+                      [id]="fieldId(field.key)"
+                      [ngModel]="motorForm[field.key]"
+                      (ngModelChange)="setMotorField(field.key, $event)"
+                    >
+                      @for (option of field.options || []; track option) {
+                        <option [value]="option">{{ option }}</option>
+                      }
+                    </select>
+                  } @else if (field.type === 'boolean') {
+                    <div class="switch-row">
+                      <input
+                        [id]="fieldId(field.key)"
+                        type="checkbox"
+                        [ngModel]="motorForm[field.key]"
+                        (ngModelChange)="setMotorField(field.key, $event)"
+                      />
+                      <strong>{{ motorForm[field.key] ? 'Si' : 'No' }}</strong>
+                    </div>
+                  } @else {
+                    <input
+                      [id]="fieldId(field.key)"
+                      [type]="field.type === 'number' ? 'number' : 'text'"
+                      [ngModel]="motorForm[field.key]"
+                      (ngModelChange)="setMotorField(field.key, $event)"
+                    />
+                  }
+
+                  @if (field.helper) {
+                    <small>{{ field.helper }}</small>
+                  }
+                </label>
+              }
+            </div>
+          }
+
+          <div class="json-panel">
+            <div>
+              <p>Input enviado al backend</p>
+              <textarea [(ngModel)]="motorPayloadJson" spellcheck="false"></textarea>
+            </div>
+            <div>
+              <p>Contrato de prueba</p>
+              <pre>{{
+                {
+                  endpoint: motorEndpoint,
+                  persistencia: motorPersistencia,
+                  campos: motorFields()
+                } | json
+              }}</pre>
+            </div>
           </div>
         </section>
 
@@ -275,7 +349,7 @@
               @for (item of resultadoMotor.metricas | keyvalue; track item.key) {
                 <div>
                   <span>{{ item.key }}</span>
-                  <strong>{{ item.value }}</strong>
+                  <strong>{{ metricValue(item.value) }}</strong>
                 </div>
               }
             </div>
@@ -295,23 +369,36 @@
               </div>
             }
 
-            <div class="prediction-chart">
-              @for (point of resultadoMotor.serie; track point.label) {
-                <div>
-                  <span [style.height]="barHeight(point.value)"></span>
-                  <small>{{ point.label }}</small>
-                  <strong>{{ point.value }}</strong>
-                </div>
-              }
-            </div>
+            @if (resultadoMotor.serie.length) {
+              <div class="prediction-chart">
+                @for (point of resultadoMotor.serie; track point.label) {
+                  <div>
+                    <span [style.height]="barHeight(point.value)"></span>
+                    <small>{{ point.label }}</small>
+                    <strong>{{ point.value }}</strong>
+                  </div>
+                }
+              </div>
+            }
 
-            <div class="trace-grid single">
+            <div class="trace-grid">
+              <div>
+                <h4>Input ejecutado</h4>
+                <pre>{{ inputMotorVisible }}</pre>
+              </div>
               <div>
                 <h4>Traza de calculo</h4>
                 @for (traza of resultadoMotor.trazas; track traza) {
                   <p class="trace-line">{{ traza }}</p>
                 }
               </div>
+            </div>
+
+            <div class="trace-grid single">
+              <label>
+                Output crudo
+                <textarea [ngModel]="outputMotorVisible" readonly spellcheck="false"></textarea>
+              </label>
             </div>
           </section>
         }

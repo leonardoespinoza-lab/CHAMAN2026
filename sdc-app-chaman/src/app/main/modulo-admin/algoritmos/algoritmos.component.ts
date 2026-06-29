@@ -8,6 +8,27 @@ import {
 import { HelperService } from '../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../auxiliares/shared.module';
 
+type MotorAuditableId = 'enfermedades' | 'riego' | 'malezas';
+type MotorFieldType = 'text' | 'number' | 'select' | 'boolean';
+
+interface MotorField {
+  key: string;
+  label: string;
+  type: MotorFieldType;
+  helper?: string;
+  suffix?: string;
+  options?: string[];
+}
+
+interface MotorDefinition {
+  title: string;
+  description: string;
+  formula: string;
+  endpoint: string;
+  persistencia: string;
+  fields: MotorField[];
+}
+
 @Component({
   selector: 'app-algoritmos',
   imports: [SharedModule],
@@ -21,8 +42,11 @@ export class AlgoritmosComponent {
   public resultado?: HuellaHidricaSimulacion;
   public resultadoMotor?: AlgoritmoSimulacion;
   public payloadJson = '';
+  public motorPayloadJson = '';
+  public motorInputEnviado?: Record<string, any>;
   public loading = false;
   public modoJson = false;
+  public motorModoJson = false;
 
   public form = {
     cultivo: 'Trigo',
@@ -84,6 +108,80 @@ export class AlgoritmosComponent {
     amplitud: 92,
   };
 
+  private readonly motorDefinitions: Record<MotorAuditableId, MotorDefinition> = {
+    enfermedades: {
+      title: 'Banco sanitario por cultivo',
+      description:
+        'Cruza cultivo, variedad, etapa fenologica, humedad persistente, mojado foliar, lluvia, temperatura y susceptibilidad varietal.',
+      formula: 'Riesgo sanitario = ventana fenologica x ambiente predisponente x susceptibilidad varietal',
+      endpoint: 'POST /algoritmos/enfermedades/simular',
+      persistencia: 'Motor productivo: /siembras/:id/prediccion-enfermedades',
+      fields: [
+        { key: 'cultivo', label: 'Cultivo', type: 'select', options: ['Trigo', 'Soja', 'Maiz'] },
+        { key: 'variedad', label: 'Variedad', type: 'text', helper: 'Nombre varietal usado para sensibilidad.' },
+        {
+          key: 'etapa',
+          label: 'Etapa fenologica',
+          type: 'select',
+          options: ['Emergencia', 'Macollaje', 'Hoja bandera', 'Espigazon', 'Floracion', 'Llenado de granos'],
+        },
+        { key: 'humedadRelativa', label: 'Humedad relativa', type: 'number', suffix: '%' },
+        { key: 'horasMojado', label: 'Horas de mojado', type: 'number', suffix: 'h' },
+        { key: 'lluvia48h', label: 'Lluvia 48 h', type: 'number', suffix: 'mm' },
+        { key: 'temperatura', label: 'Temperatura media', type: 'number', suffix: 'C' },
+        { key: 'susceptibilidad', label: 'Susceptibilidad', type: 'number', helper: '0 tolerante, 1 susceptible.' },
+      ],
+    },
+    riego: {
+      title: 'Banco de recomendacion de riego',
+      description:
+        'Audita agua util real, deficit a capacidad de campo, raices activas, ETc, lluvia efectiva y limite operativo de riego.',
+      formula: 'Riego recomendado = deficit util + ETc proyectada - lluvia efectiva, limitado por capacidad operativa',
+      endpoint: 'POST /algoritmos/riego/simular',
+      persistencia: 'Motor productivo: prediccion diaria sobre siembra, sensor, suelo y clima',
+      fields: [
+        { key: 'humedadSueloPct', label: 'Humedad suelo', type: 'number', suffix: '%' },
+        { key: 'capacidadCampoPct', label: 'Capacidad de campo', type: 'number', suffix: '%' },
+        { key: 'puntoMarchitezPct', label: 'Punto de marchitez', type: 'number', suffix: '%' },
+        { key: 'profundidadRaicesCm', label: 'Profundidad raices', type: 'number', suffix: 'cm' },
+        { key: 'et0MmDia', label: 'ET0 diaria', type: 'number', suffix: 'mm/dia' },
+        { key: 'kc', label: 'Kc cultivo', type: 'number' },
+        { key: 'lluvia72h', label: 'Lluvia 72 h', type: 'number', suffix: 'mm' },
+        { key: 'probabilidadLluviaPct', label: 'Probabilidad lluvia', type: 'number', suffix: '%' },
+        { key: 'capacidadRiegoMmDia', label: 'Capacidad de riego', type: 'number', suffix: 'mm/dia' },
+        { key: 'anchoBulboM', label: 'Ancho bulbo', type: 'number', suffix: 'm' },
+        { key: 'metrosLinealesHa', label: 'Metros lineales', type: 'number', suffix: 'm/ha' },
+        { key: 'umbralAguaUtilPct', label: 'Umbral agua util', type: 'number', suffix: '%' },
+        { key: 'raicesActivas', label: 'Raices activas', type: 'boolean' },
+      ],
+    },
+    malezas: {
+      title: 'Banco de prediccion de malezas',
+      description:
+        'Evalua emergencia acumulada por cultivo y especie usando acumulacion termica, humedad de suelo, lluvia reciente y curva Gompertz.',
+      formula: 'Emergencia = amplitud x exp(-exp(-k x (GDA - x0))) ajustada por humedad y lluvia',
+      endpoint: 'POST /algoritmos/malezas/simular',
+      persistencia: 'Motor productivo: /siembras/:id/prediccion-malezas',
+      fields: [
+        { key: 'cultivo', label: 'Cultivo', type: 'select', options: ['Trigo', 'Soja', 'Maiz'] },
+        {
+          key: 'especie',
+          label: 'Especie',
+          type: 'select',
+          options: ['Amaranthus', 'Rama Negra', 'Chloris', 'Echinochloa', 'Sorghum halepense'],
+        },
+        { key: 'dias', label: 'Dias simulados', type: 'number' },
+        { key: 'temperaturaMedia', label: 'Temperatura media', type: 'number', suffix: 'C' },
+        { key: 'baseTermica', label: 'Base termica', type: 'number', suffix: 'C' },
+        { key: 'humedadSueloPct', label: 'Humedad suelo', type: 'number', suffix: '%' },
+        { key: 'lluvia7d', label: 'Lluvia 7 dias', type: 'number', suffix: 'mm' },
+        { key: 'k', label: 'K Gompertz', type: 'number' },
+        { key: 'x0', label: 'GDA punto medio', type: 'number' },
+        { key: 'amplitud', label: 'Emergencia maxima', type: 'number', suffix: '%' },
+      ],
+    },
+  };
+
   constructor(
     private service: AlgoritmosHttpService,
     private helper: HelperService
@@ -96,6 +194,7 @@ export class AlgoritmosComponent {
   public async ngOnInit(): Promise<void> {
     await this.cargar();
     this.generarPayload();
+    this.generarMotorPayload();
   }
 
   public async cargar(): Promise<void> {
@@ -114,6 +213,12 @@ export class AlgoritmosComponent {
     this.seleccionado = id;
     this.resultado = undefined;
     this.resultadoMotor = undefined;
+    this.motorInputEnviado = undefined;
+    this.modoJson = false;
+    this.motorModoJson = false;
+    if (this.esMotorAuditable(id)) {
+      this.generarMotorPayload();
+    }
   }
 
   public generarPayload(): void {
@@ -206,13 +311,16 @@ export class AlgoritmosComponent {
 
     this.loading = true;
     this.resultadoMotor = undefined;
+    this.motorInputEnviado = undefined;
     try {
+      const payload = JSON.parse(this.motorPayloadJson);
+      this.motorInputEnviado = payload;
       if (this.seleccionado === 'enfermedades') {
-        this.resultadoMotor = await this.service.simularEnfermedades(this.enfermedadesForm);
+        this.resultadoMotor = await this.service.simularEnfermedades(payload);
       } else if (this.seleccionado === 'riego') {
-        this.resultadoMotor = await this.service.simularRiego(this.riegoForm);
+        this.resultadoMotor = await this.service.simularRiego(payload);
       } else if (this.seleccionado === 'malezas') {
-        this.resultadoMotor = await this.service.simularMalezas(this.malezasForm);
+        this.resultadoMotor = await this.service.simularMalezas(payload);
       }
     } catch (error) {
       this.helper.notifError(error);
@@ -227,28 +335,71 @@ export class AlgoritmosComponent {
   }
 
   public get motorTitle(): string {
-    if (this.seleccionado === 'enfermedades') return 'Calibracion de enfermedades';
-    if (this.seleccionado === 'riego') return 'Calibracion de recomendacion de riego';
-    return 'Calibracion de malezas';
+    return this.motorDefinition?.title || 'Banco de pruebas';
   }
 
   public get motorDescription(): string {
-    if (this.seleccionado === 'enfermedades') {
-      return 'Cruza ventana fenologica, humedad persistente, mojado foliar, lluvia, temperatura y susceptibilidad.';
-    }
-    if (this.seleccionado === 'riego') {
-      return 'Audita agua util real, deficit a capacidad de campo, raices activas, ETc, lluvia efectiva y recomendacion limitada por capacidad de riego.';
-    }
-    return 'Predice emergencia acumulada con curva Gompertz, grados dia, humedad de suelo y lluvia reciente.';
+    return this.motorDefinition?.description || '';
   }
 
-  public motorFieldKeys(): string[] {
-    return Object.keys(this.motorForm);
+  public get motorFormula(): string {
+    return this.motorDefinition?.formula || '';
+  }
+
+  public get motorEndpoint(): string {
+    return this.motorDefinition?.endpoint || '';
+  }
+
+  public get motorPersistencia(): string {
+    return this.motorDefinition?.persistencia || '';
+  }
+
+  public get motorDefinition(): MotorDefinition | undefined {
+    return this.esMotorAuditable(this.seleccionado) ? this.motorDefinitions[this.seleccionado] : undefined;
+  }
+
+  public motorFields(): MotorField[] {
+    return this.motorDefinition?.fields || [];
   }
 
   public setMotorField(key: string, value: any): void {
-    const numeric = Number(value);
-    this.motorForm[key] = value !== '' && Number.isFinite(numeric) ? numeric : value;
+    const field = this.motorFields().find((item) => item.key === key);
+    if (field?.type === 'boolean') {
+      this.motorForm[key] = !!value;
+    } else {
+      const numeric = Number(value);
+      this.motorForm[key] = field?.type === 'number' && value !== '' && Number.isFinite(numeric) ? numeric : value;
+    }
+    this.generarMotorPayload();
+  }
+
+  public generarMotorPayload(): void {
+    if (!this.esMotorAuditable(this.seleccionado)) {
+      return;
+    }
+    this.motorPayloadJson = JSON.stringify(this.motorForm, null, 2);
+  }
+
+  public get inputMotorVisible(): string {
+    return this.motorInputEnviado ? JSON.stringify(this.motorInputEnviado, null, 2) : this.motorPayloadJson;
+  }
+
+  public get outputMotorVisible(): string {
+    return this.resultadoMotor ? JSON.stringify(this.resultadoMotor, null, 2) : '';
+  }
+
+  public metricValue(value: unknown): string {
+    if (typeof value === 'number') return this.format(value, Number.isInteger(value) ? 0 : 1);
+    if (value == null) return '--';
+    return `${value}`;
+  }
+
+  public fieldId(key: string): string {
+    return `motor-${key}`;
+  }
+
+  private esMotorAuditable(id: string): id is MotorAuditableId {
+    return id === 'enfermedades' || id === 'riego' || id === 'malezas';
   }
 
   public barHeight(value: number): string {
