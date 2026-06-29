@@ -25,6 +25,7 @@ export * from "./usuario";
 export * from "./alerta";
 export * from "./apikey";
 export * from "./camara";
+export * from "./carga-fitosanitaria";
 export * from "./omixom";
 export * from "./reporte-ndvi";
 export * from "./licencia";

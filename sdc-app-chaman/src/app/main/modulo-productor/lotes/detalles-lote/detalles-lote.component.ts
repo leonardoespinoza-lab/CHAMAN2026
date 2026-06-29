@@ -21,6 +21,7 @@ import { SharedModule } from '../../../../auxiliares/shared.module';
 import { ILoteTabla } from '../listado-lotes/listado-lotes.component';
 import { CardClimaLoteComponent } from './card-clima-lote/card-clima-lote.component';
 import { CardCamarasLoteComponent } from './card-camaras-lote/card-camaras-lote.component';
+import { CardCargaFitosanitariaComponent } from './card-carga-fitosanitaria/card-carga-fitosanitaria.component';
 import { CardCentralMeteorologicaComponent } from './card-central-meteorologica/card-central-meteorologica.component';
 import { CardDispositivosComponent } from './card-dispositivos/card-dispositivos.component';
 import { CardEnfermedadesComponent } from './card-enfermedades/card-enfermedades.component';
@@ -70,6 +71,7 @@ export interface IDetallesLote extends ILoteTabla {
     CardNapasComponent,
     CardCamarasLoteComponent,
     CardVientoLoteComponent,
+    CardCargaFitosanitariaComponent,
   ],
   templateUrl: './detalles-lote.component.html',
   styleUrl: './detalles-lote.component.scss',

@@ -1,0 +1,197 @@
+<div class="custom-card phytosanitary-card" [ngClass]="nivelClase" (click)="abrirDetalle()">
+  <div class="phytosanitary-header">
+    <div class="title-block">
+      <span class="icon-wrap"><i class="pi pi-shield"></i></span>
+      <div>
+        <p class="titulo-card">{{ 'Carga fitosanitaria' | translate | uppercase }}</p>
+        <small>{{ subtitulo }}</small>
+      </div>
+    </div>
+    <p-button
+      icon="pi pi-refresh"
+      severity="secondary"
+      [outlined]="true"
+      [loading]="cargando"
+      [disabled]="cargando || !lote?._id"
+      pTooltip="Actualizar lectura"
+      (click)="actualizar($event)"
+    />
+  </div>
+
+  @if (carga; as data) {
+    <section class="phytosanitary-hero">
+      <div>
+        <span>Nivel</span>
+        <strong>{{ nivelTexto }}</strong>
+        <small>{{ data.lectura }}</small>
+      </div>
+      <div class="score-ring" [style.--score]="score + '%'">
+        <strong>{{ score }}</strong>
+        <span>/100</span>
+      </div>
+    </section>
+
+    <div class="factor-grid">
+      @for (factor of factores; track factor.nombre) {
+        <article>
+          <div>
+            <span>{{ factor.nombre }}</span>
+            <strong>{{ factor.valor | number: '1.0-0' }}/100</strong>
+          </div>
+          <div class="factor-bar" [style.--fill]="porcentaje(factor.valor) + '%'"><i></i></div>
+          <small>{{ factor.detalle }}</small>
+        </article>
+      }
+    </div>
+
+    <div class="summary-row">
+      <article>
+        <span>Aplicaciones</span>
+        <strong>{{ data.aplicacionesTotales }}</strong>
+        <small>{{ data.aplicacionesUltimos30Dias }} en 30 dias</small>
+      </article>
+      <article>
+        <span>Enfermedades</span>
+        <strong>{{ data.enfermedadesMonitoreadas }}</strong>
+        <small>Prediccion vigente</small>
+      </article>
+      <article>
+        <span>Variedad</span>
+        <strong>{{ data.variedad || '-' }}</strong>
+        <small>{{ data.cultivo || 'Cultivo sin definir' }}</small>
+      </article>
+    </div>
+
+    @if (tieneEventos) {
+      <div class="event-preview">
+        @for (enfermedad of enfermedadesPrincipales; track enfermedad.enfermedad) {
+          <span class="event-chip disease">
+            {{ enfermedad.enfermedad }} {{ enfermedad.resultado | number: '1.0-0' }}%
+          </span>
+        }
+        @for (aplicacion of aplicacionesPrincipales; track $index) {
+          <span class="event-chip application">
+            {{ aplicacion.producto }} {{ aplicacion.fecha | date: 'd/M/yy' }}
+          </span>
+        }
+      </div>
+    } @else {
+      <p-message severity="info">Sin eventos fitosanitarios registrados para la campana.</p-message>
+    }
+
+    <p class="phytosanitary-note">{{ data.recomendacion }}</p>
+  } @else {
+    <div class="phytosanitary-empty">
+      @if (cargando) {
+        <i class="pi pi-spin pi-spinner"></i>
+        <span>Calculando indicador fitosanitario</span>
+      } @else {
+        <p-message severity="warn">{{ error || 'No hay lectura disponible.' }}</p-message>
+      }
+    </div>
+  }
+</div>
+
+<p-dialog
+  [(visible)]="verDetalle"
+  [modal]="true"
+  [dismissableMask]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(940px, 94vw)' }"
+  [breakpoints]="{ '720px': '96vw' }"
+  header="Detalle de carga fitosanitaria"
+  styleClass="phytosanitary-detail-dialog"
+>
+  @if (carga; as data) {
+    <section class="phytosanitary-detail">
+      <div class="detail-hero" [ngClass]="data.nivel">
+        <div>
+          <span>{{ nivelTexto }}</span>
+          <strong>{{ data.score }}/100</strong>
+          <small>{{ data.lectura }}</small>
+        </div>
+        <p>{{ data.recomendacion }}</p>
+      </div>
+
+      <div class="detail-grid">
+        <article>
+          <span>Presion sanitaria</span>
+          <strong>{{ data.presionEnfermedades }}/100</strong>
+          <small>{{ data.enfermedadesMonitoreadas }} enfermedad(es) monitoreadas.</small>
+        </article>
+        <article>
+          <span>Carga quimica</span>
+          <strong>{{ data.cargaQuimica }}/100</strong>
+          <small>{{ data.aplicacionesTotales }} aplicacion(es) registradas.</small>
+        </article>
+        <article>
+          <span>Recencia</span>
+          <strong>{{ data.recenciaAplicaciones }}/100</strong>
+          <small>{{ data.aplicacionesUltimos30Dias }} aplicacion(es) en 30 dias.</small>
+        </article>
+      </div>
+
+      <div class="detail-columns">
+        <section>
+          <h4>Enfermedades consideradas</h4>
+          @if (data.enfermedades.length) {
+            @for (enfermedad of data.enfermedades; track enfermedad.enfermedad) {
+              <article class="detail-row">
+                <div>
+                  <strong>{{ enfermedad.enfermedad }}</strong>
+                  <span>{{ enfermedad.nivel | titlecase }}</span>
+                </div>
+                <em>{{ enfermedad.resultado }}%</em>
+              </article>
+            }
+          } @else {
+            <p>Sin prediccion sanitaria vigente.</p>
+          }
+        </section>
+
+        <section>
+          <h4>Aplicaciones consideradas</h4>
+          @if (data.aplicaciones.length) {
+            @for (aplicacion of data.aplicaciones; track $index) {
+              <article class="detail-row">
+                <div>
+                  <strong>{{ aplicacion.producto }}</strong>
+                  <span>
+                    {{ aplicacion.principioActivo || 'Activo sin cargar' }}
+                    @if (aplicacion.fecha) {
+                      - {{ aplicacion.fecha | date: 'd/M/yy' }}
+                    }
+                  </span>
+                </div>
+                <em>{{ aplicacion.aporte }}/100</em>
+              </article>
+            }
+          } @else {
+            <p>Sin fumigaciones registradas para la campana.</p>
+          }
+        </section>
+      </div>
+
+      <section class="method-panel">
+        <h4>Criterio del motor</h4>
+        <ul>
+          @for (item of data.metodologia; track item) {
+            <li>{{ item }}</li>
+          }
+        </ul>
+      </section>
+
+      @if (data.advertencias.length) {
+        <section class="warning-panel">
+          <h4>Datos a mejorar</h4>
+          <ul>
+            @for (item of data.advertencias; track item) {
+              <li>{{ item }}</li>
+            }
+          </ul>
+        </section>
+      }
+    </section>
+  }
+</p-dialog>

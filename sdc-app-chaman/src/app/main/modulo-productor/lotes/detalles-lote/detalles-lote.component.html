@@ -200,6 +200,13 @@
     @if (helper.puedeVerModulo('HuellaHidrica')) {
       <app-card-huella-hidrica class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-huella-hidrica>
     }
+    @if (helper.puedeVerModulo('Enfermedades') || helper.puedeVerModulo('Fumigacion')) {
+      <app-card-carga-fitosanitaria
+        class="service-panel"
+        [siembra]="siembra"
+        [lote]="lote"
+      ></app-card-carga-fitosanitaria>
+    }
     @if (helper.checkArray(lote?.dispositivos) && helper.puedeVerModulo('Sensores')) {
       <app-card-dispositivos class="service-panel" [lote]="lote"></app-card-dispositivos>
     }

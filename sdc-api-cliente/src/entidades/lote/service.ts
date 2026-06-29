@@ -22,6 +22,10 @@ import {
   TTipoDrenaje,
   TTipoErosionEscorrentiaPendiente,
   ISueloInta,
+  ICargaFitosanitaria,
+  IFitosanitarioAplicacionResumen,
+  IFitosanitarioRiesgoSanitario,
+  TNivelCargaFitosanitaria,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { LotesRepository } from './repository';
@@ -59,6 +63,7 @@ interface CertificadoDatos {
   predicciones: IPrediccion[];
   fertilizaciones: IFertilizacion[];
   fumigaciones: IFumigacion[];
+  cargaFitosanitaria: ICargaFitosanitaria;
   frio: CertificadoFrio;
   clima?: IFrioTermicoCultivo;
 }
@@ -217,6 +222,12 @@ export class LotesService {
         this.getFumigacionesCertificado(siembra?._id),
         this.getClimaCertificado(lote, siembra),
       ]);
+    const cargaFitosanitaria = this.calcularCargaFitosanitaria(
+      lote,
+      siembra,
+      predicciones,
+      fumigaciones,
+    );
 
     return this.renderCertificadoHtml({
       lote,
@@ -225,9 +236,28 @@ export class LotesService {
       predicciones,
       fertilizaciones,
       fumigaciones,
+      cargaFitosanitaria,
       frio: this.getFrioCertificado(lote, siembra),
       clima,
     });
+  }
+
+  async getCargaFitosanitaria(
+    id: string,
+    permiso: IPermiso,
+  ): Promise<ICargaFitosanitaria> {
+    const lote = await this.getById(id, permiso);
+    const siembra = await this.getSiembraFitosanitaria(lote);
+    const [predicciones, fumigaciones] = await Promise.all([
+      this.getPrediccionesCertificado(siembra?._id),
+      this.getFumigacionesFitosanitarias(siembra?._id),
+    ]);
+    return this.calcularCargaFitosanitaria(
+      lote,
+      siembra,
+      predicciones,
+      fumigaciones,
+    );
   }
 
   async sincronizarNdviAutomatico(): Promise<{
@@ -440,6 +470,370 @@ export class LotesService {
 
   // Private
 
+  private async getSiembraFitosanitaria(
+    lote: ILote,
+  ): Promise<ISiembra | undefined> {
+    if (lote.siembra?._id || lote.siembra?.fechaSiembra) {
+      return lote.siembra;
+    }
+    if (!lote.idSiembra) {
+      return undefined;
+    }
+    try {
+      return await this.axios.GET<ISiembra>(
+        `${API_DATOS}/siembras/${lote.idSiembra}`,
+        {
+          params: {
+            populate: JSON.stringify([{ path: 'semilla' }, { path: 'crono' }]),
+          },
+        },
+      );
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo obtener siembra para carga fitosanitaria: ${error?.message || error}`,
+      );
+      return undefined;
+    }
+  }
+
+  private async getFumigacionesFitosanitarias(
+    idSiembra?: string,
+  ): Promise<IFumigacion[]> {
+    if (!idSiembra) {
+      return [];
+    }
+    return this.getListadoInterno<IFumigacion>(
+      'fumigacions',
+      { idSiembra },
+      {
+        limit: 0,
+        sort: '-fechaFumigacion',
+        populate: JSON.stringify([
+          { path: 'agroquimico' },
+          { path: 'principioActivo' },
+        ]),
+      },
+    );
+  }
+
+  private calcularCargaFitosanitaria(
+    lote: ILote,
+    siembra?: ISiembra,
+    predicciones: IPrediccion[] = [],
+    fumigaciones: IFumigacion[] = [],
+  ): ICargaFitosanitaria {
+    const prediccion = predicciones[0] || siembra?.ultimaPrediccion;
+    const enfermedades = this.resumirEnfermedadesFitosanitarias(prediccion);
+    const aplicaciones = fumigaciones.map((item) =>
+      this.resumirAplicacionFitosanitaria(item),
+    );
+    const presionEnfermedades =
+      this.calcularPresionEnfermedadesFitosanitarias(enfermedades);
+    const cargaQuimica = this.limitarPorcentaje(
+      aplicaciones.reduce((total, item) => total + item.aporte, 0),
+    );
+    const aplicacionesUltimos30Dias = aplicaciones.filter((item) =>
+      this.estaEnUltimosDias(item.fecha, 30),
+    ).length;
+    const recenciaAplicaciones = this.limitarPorcentaje(
+      aplicacionesUltimos30Dias * 25,
+    );
+    const tieneDatos = enfermedades.length > 0 || aplicaciones.length > 0;
+    const score = tieneDatos
+      ? Math.round(
+          presionEnfermedades * 0.45 +
+            cargaQuimica * 0.45 +
+            recenciaAplicaciones * 0.1,
+        )
+      : 0;
+    const nivel = tieneDatos
+      ? this.getNivelCargaFitosanitaria(score)
+      : 'sin_datos';
+    const etapaActual = this.getEstadoFenologico(siembra, predicciones);
+
+    return {
+      loteId: lote._id,
+      siembraId: siembra?._id,
+      fechaCalculo: new Date().toISOString(),
+      cultivo: siembra?.semilla?.cultivo,
+      variedad: siembra?.semilla?.variedad,
+      etapaActual,
+      score,
+      nivel,
+      lectura: this.getLecturaCargaFitosanitaria(
+        nivel,
+        siembra?.semilla?.cultivo,
+        etapaActual,
+        enfermedades.length,
+        aplicaciones.length,
+      ),
+      recomendacion: this.getRecomendacionCargaFitosanitaria(nivel, tieneDatos),
+      presionEnfermedades,
+      cargaQuimica,
+      recenciaAplicaciones,
+      aplicacionesTotales: aplicaciones.length,
+      aplicacionesUltimos30Dias,
+      enfermedadesMonitoreadas: enfermedades.length,
+      factores: [
+        {
+          nombre: 'Presion sanitaria',
+          valor: presionEnfermedades,
+          peso: 45,
+          detalle: `${enfermedades.length} enfermedad(es) con prediccion vigente.`,
+        },
+        {
+          nombre: 'Carga de aplicaciones',
+          valor: cargaQuimica,
+          peso: 45,
+          detalle: `${aplicaciones.length} fumigacion(es) registradas en la campana.`,
+        },
+        {
+          nombre: 'Recencia operativa',
+          valor: recenciaAplicaciones,
+          peso: 10,
+          detalle: `${aplicacionesUltimos30Dias} aplicacion(es) en los ultimos 30 dias.`,
+        },
+      ],
+      aplicaciones,
+      enfermedades,
+      metodologia: [
+        'Indicador tecnico orientativo de carga fitosanitaria por lote y campana.',
+        'Integra prediccion sanitaria vigente, fumigaciones registradas, recencia e informacion disponible de principio activo.',
+        'La lectura se contextualiza por cultivo, variedad y etapa fenologica operativa.',
+        'No reemplaza diagnostico a campo, marbete vigente ni certificacion ambiental formal.',
+      ],
+      advertencias: this.getAdvertenciasCargaFitosanitaria(
+        siembra,
+        enfermedades,
+        aplicaciones,
+      ),
+    };
+  }
+
+  private resumirEnfermedadesFitosanitarias(
+    prediccion?: IPrediccion,
+  ): IFitosanitarioRiesgoSanitario[] {
+    return (prediccion?.enfermedades || [])
+      .map((item) => {
+        const resultado = Math.round(this.normalizarRiesgo(item.resultado));
+        return {
+          enfermedad: item.enfermedad,
+          resultado,
+          nivel: this.getNivelCargaFitosanitaria(resultado),
+          variables: item.variables as Record<string, number>,
+        };
+      })
+      .sort((a, b) => b.resultado - a.resultado);
+  }
+
+  private calcularPresionEnfermedadesFitosanitarias(
+    enfermedades: IFitosanitarioRiesgoSanitario[],
+  ): number {
+    if (!enfermedades.length) {
+      return 0;
+    }
+    const valores = enfermedades.map((item) => item.resultado);
+    const max = Math.max(...valores);
+    const promedio =
+      valores.reduce((total, value) => total + value, 0) / valores.length;
+    return Math.round(this.limitarPorcentaje(max * 0.65 + promedio * 0.35));
+  }
+
+  private resumirAplicacionFitosanitaria(
+    fumigacion: IFumigacion,
+  ): IFitosanitarioAplicacionResumen {
+    const principio =
+      fumigacion.principioActivo || fumigacion.agroquimico?.principioActivo;
+    const tipo = this.compactar([
+      fumigacion.agroquimico?.segmento,
+      ...(fumigacion.agroquimico?.subsegmentos || []),
+    ]).join(' / ');
+
+    return {
+      fecha: fumigacion.fechaFumigacion || fumigacion.fechaCreacion,
+      producto:
+        fumigacion.agroquimico?.nombre ||
+        principio?.nombre ||
+        fumigacion.idAgroquimico ||
+        'Producto sin nombre',
+      principioActivo: principio?.nombre,
+      tipo: tipo || undefined,
+      dosisLtHa: this.toNumber(fumigacion.dosisLtHa),
+      concentracion: this.toNumber(fumigacion.concentracion),
+      persistencia: this.toNumber(principio?.persistencia),
+      koc: this.toNumber(principio?.koc),
+      aporte: this.calcularAporteAplicacionFitosanitaria(fumigacion),
+    };
+  }
+
+  private calcularAporteAplicacionFitosanitaria(
+    fumigacion: IFumigacion,
+  ): number {
+    const principio =
+      fumigacion.principioActivo || fumigacion.agroquimico?.principioActivo;
+    const dosis = this.toNumber(fumigacion.dosisLtHa) || 0;
+    const concentracion = this.toNumber(fumigacion.concentracion) || 0;
+    const persistencia = this.toNumber(principio?.persistencia);
+    const koc = this.toNumber(principio?.koc);
+    let aporte = 10;
+
+    aporte += Math.min(14, Math.max(0, dosis) * 4);
+    aporte += Math.min(12, Math.max(0, concentracion) / 8);
+    if (persistencia !== undefined) {
+      aporte += Math.min(14, Math.max(0, persistencia) / 6);
+    }
+    if (koc !== undefined) {
+      if (koc < 100) {
+        aporte += 10;
+      } else if (koc < 300) {
+        aporte += 8;
+      } else if (koc < 1000) {
+        aporte += 5;
+      } else {
+        aporte += 2;
+      }
+    }
+    if (this.aplicacionSigueActiva(fumigacion)) {
+      aporte += 5;
+    }
+
+    aporte *= this.factorRecenciaAplicacion(fumigacion.fechaFumigacion);
+    return Math.round(this.limitarPorcentaje(aporte, 45));
+  }
+
+  private factorRecenciaAplicacion(fecha?: string): number {
+    const dias = this.getDiasDesdeFecha(fecha);
+    if (dias === undefined) {
+      return 1;
+    }
+    if (dias <= 7) {
+      return 1.25;
+    }
+    if (dias <= 30) {
+      return 1.15;
+    }
+    if (dias <= 60) {
+      return 1.05;
+    }
+    return 1;
+  }
+
+  private aplicacionSigueActiva(fumigacion: IFumigacion): boolean {
+    const fecha = fumigacion.fechaFumigacion;
+    const duracion = this.toNumber(fumigacion.duracion);
+    const dias = this.getDiasDesdeFecha(fecha);
+    return dias !== undefined && duracion !== undefined && dias <= duracion;
+  }
+
+  private estaEnUltimosDias(
+    fecha: string | undefined,
+    diasMax: number,
+  ): boolean {
+    const dias = this.getDiasDesdeFecha(fecha);
+    return dias !== undefined && dias <= diasMax;
+  }
+
+  private getDiasDesdeFecha(fecha?: string): number | undefined {
+    if (!fecha) {
+      return undefined;
+    }
+    const time = new Date(fecha).getTime();
+    if (!Number.isFinite(time)) {
+      return undefined;
+    }
+    return Math.max(0, Math.floor((Date.now() - time) / 86400000));
+  }
+
+  private getNivelCargaFitosanitaria(score: number): TNivelCargaFitosanitaria {
+    if (score >= 85) {
+      return 'critico';
+    }
+    if (score >= 65) {
+      return 'alto';
+    }
+    if (score >= 35) {
+      return 'medio';
+    }
+    return 'bajo';
+  }
+
+  private getLecturaCargaFitosanitaria(
+    nivel: TNivelCargaFitosanitaria,
+    cultivo?: string,
+    etapa?: string,
+    enfermedades = 0,
+    aplicaciones = 0,
+  ): string {
+    const contexto = this.compactar([cultivo, etapa]).join(' en ') || 'Cultivo';
+    if (nivel === 'sin_datos') {
+      return `${contexto}: sin enfermedades ni fumigaciones registradas para estimar carga fitosanitaria.`;
+    }
+    if (nivel === 'critico') {
+      return `${contexto}: carga fitosanitaria critica por presion sanitaria y/o intervenciones acumuladas.`;
+    }
+    if (nivel === 'alto') {
+      return `${contexto}: carga alta; revisar recorridas, umbrales y secuencia de aplicaciones.`;
+    }
+    if (nivel === 'medio') {
+      return `${contexto}: carga media con ${enfermedades} enfermedad(es) y ${aplicaciones} aplicacion(es) consideradas.`;
+    }
+    return `${contexto}: carga baja con los datos disponibles.`;
+  }
+
+  private getRecomendacionCargaFitosanitaria(
+    nivel: TNivelCargaFitosanitaria,
+    tieneDatos: boolean,
+  ): string {
+    if (!tieneDatos) {
+      return 'Registrar monitoreos sanitarios y aplicaciones para construir trazabilidad por lote.';
+    }
+    if (nivel === 'critico' || nivel === 'alto') {
+      return 'Priorizar auditoria tecnica: confirmar sintomas a campo, revisar productos, carencias, rotacion de modos de accion y justificacion de nuevas aplicaciones.';
+    }
+    if (nivel === 'medio') {
+      return 'Mantener seguimiento semanal y validar que futuras intervenciones respondan a umbrales, fenologia y pronostico.';
+    }
+    return 'Continuar monitoreo preventivo y sostener el registro de aplicaciones con principio activo y dosis.';
+  }
+
+  private getAdvertenciasCargaFitosanitaria(
+    siembra: ISiembra | undefined,
+    enfermedades: IFitosanitarioRiesgoSanitario[],
+    aplicaciones: IFitosanitarioAplicacionResumen[],
+  ): string[] {
+    const advertencias: string[] = [];
+    if (!siembra?._id) {
+      advertencias.push('No hay siembra o plantacion activa asociada al lote.');
+    }
+    if (!enfermedades.length) {
+      advertencias.push('Sin prediccion sanitaria vigente para el cultivo.');
+    }
+    if (!aplicaciones.length) {
+      advertencias.push('Sin fumigaciones registradas para la campana.');
+    }
+    if (
+      aplicaciones.some(
+        (item) =>
+          !item.principioActivo ||
+          item.persistencia === undefined ||
+          item.koc === undefined,
+      )
+    ) {
+      advertencias.push(
+        'Hay aplicaciones con principio activo o parametros ambientales incompletos.',
+      );
+    }
+    return advertencias;
+  }
+
+  private limitarPorcentaje(value: number, max = 100): number {
+    const numero = Number(value);
+    if (!Number.isFinite(numero)) {
+      return 0;
+    }
+    return Math.max(0, Math.min(max, numero));
+  }
+
   private async getReportesNdviCertificado(
     idLote: string,
     permiso: IPermiso,
@@ -551,7 +945,7 @@ export class LotesService {
   }
 
   private renderCertificadoHtml(datos: CertificadoDatos): string {
-    const { lote, siembra, reportesNdvi, predicciones, fertilizaciones, fumigaciones, clima } = datos;
+    const { lote, siembra, reportesNdvi, predicciones, fertilizaciones, fumigaciones, cargaFitosanitaria, clima } = datos;
     const semilla = siembra?.semilla;
     const cultivo = semilla?.cultivo || 'Cultivo sin definir';
     const esPerenne = ['Vid', 'Peral', 'Pecan', 'Manzano'].includes(cultivo);
@@ -797,6 +1191,7 @@ export class LotesService {
         ${this.metricCard('Riesgo sanitario', riesgo.titulo, riesgo.detalle)}
         ${this.metricCard('Riego', this.getRiegoTexto(siembra), this.getAguaUtilTexto(siembra))}
         ${this.metricCard('Huella hidrica', huella.total, huella.detalle)}
+        ${this.metricCard('Carga fitosanitaria', `${cargaFitosanitaria.score}/100`, `${this.capitalize(cargaFitosanitaria.nivel.replace('_', ' '))} - ${cargaFitosanitaria.aplicacionesTotales} aplicacion(es)`)}
         ${this.metricCard(esPerenne ? 'Frio / CP' : 'Heladas', esPerenne ? this.getResumenFrioTermico(clima, frio) : helada, esPerenne ? this.getDetalleFrioTermico(clima, frio) : this.getDetalleHelada(clima))}
       </div>
       <div class="note ${riesgo.clase}">
@@ -824,6 +1219,11 @@ export class LotesService {
     <section class="section">
       <h2>Monitoreo sanitario</h2>
       ${this.renderTablaEnfermedades(siembra, predicciones)}
+    </section>
+
+    <section class="section">
+      <h2>Carga fitosanitaria</h2>
+      ${this.renderCargaFitosanitaria(cargaFitosanitaria)}
     </section>
 
     <section class="section two-col">
@@ -861,6 +1261,7 @@ export class LotesService {
         <div><strong>Clima y frio</strong><br/>Open-Meteo / estacion o sensor asociado cuando existe historico operativo.</div>
         <div><strong>Satelite</strong><br/>Worker Chaman con escenas Sentinel/Landsat disponibles y validadas.</div>
         <div><strong>Aplicaciones</strong><br/>Fertilizaciones y fumigaciones registradas por usuario autorizado.</div>
+        <div><strong>Carga fitosanitaria</strong><br/>Motor Chaman sobre prediccion sanitaria, aplicaciones y fenologia.</div>
         <div><strong>Suelo</strong><br/>Datos editables del lote; INTA cuando existe consulta o carga de referencia.</div>
       </div>
       ${this.renderPendientes(pendientes)}
@@ -1067,6 +1468,48 @@ export class LotesService {
         <td>${this.escapeHtml(this.formatVariables(item.variables))}</td>
       </tr>`).join('');
     return `<table><thead><tr><th>Enfermedad</th><th>Valor</th><th>Lectura</th><th>Variables usadas</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+
+  private renderCargaFitosanitaria(carga: ICargaFitosanitaria): string {
+    const factores = carga.factores.map((factor) => `
+      <tr>
+        <td>${this.escapeHtml(factor.nombre)}</td>
+        <td>${this.escapeHtml(`${this.formatNumber(factor.valor, 0)}/100`)}</td>
+        <td>${this.escapeHtml(`${this.formatNumber(factor.peso, 0)}%`)}</td>
+        <td>${this.escapeHtml(factor.detalle)}</td>
+      </tr>`).join('');
+    const aplicaciones = carga.aplicaciones.slice(0, 8).map((item) => `
+      <tr>
+        <td>${this.escapeHtml(this.formatDate(item.fecha) || '-')}</td>
+        <td>${this.escapeHtml(item.producto || '-')}</td>
+        <td>${this.escapeHtml(item.principioActivo || '-')}</td>
+        <td>${this.escapeHtml(this.formatMaybe(item.dosisLtHa, 2))} l/ha</td>
+        <td>${this.escapeHtml(`${item.aporte}/100`)}</td>
+      </tr>`).join('');
+    const advertencias = carga.advertencias.length
+      ? `<div class="note warn"><strong>Calidad de datos:</strong><ul>${carga.advertencias.map((item) => `<li>${this.escapeHtml(item)}</li>`).join('')}</ul></div>`
+      : '';
+
+    return `
+      <div class="grid three">
+        ${this.metricCard('Nivel', this.capitalize(carga.nivel.replace('_', ' ')), carga.lectura)}
+        ${this.metricCard('Presion sanitaria', `${carga.presionEnfermedades}/100`, `${carga.enfermedadesMonitoreadas} enfermedad(es) monitoreadas`)}
+        ${this.metricCard('Carga quimica', `${carga.cargaQuimica}/100`, `${carga.aplicacionesTotales} fumigacion(es), ${carga.aplicacionesUltimos30Dias} reciente(s)`)}
+      </div>
+      <div class="note">
+        <strong>Recomendacion:</strong> ${this.escapeHtml(carga.recomendacion)}
+      </div>
+      <h3 style="margin-top:16px;">Factores considerados</h3>
+      <table><thead><tr><th>Factor</th><th>Valor</th><th>Peso</th><th>Detalle</th></tr></thead><tbody>${factores}</tbody></table>
+      <h3 style="margin-top:16px;">Aplicaciones fitosanitarias recientes</h3>
+      ${
+        aplicaciones
+          ? `<table><thead><tr><th>Fecha</th><th>Producto</th><th>Activo</th><th>Dosis</th><th>Aporte</th></tr></thead><tbody>${aplicaciones}</tbody></table>`
+          : '<p>Sin fumigaciones registradas para esta campana.</p>'
+      }
+      ${advertencias}
+    `;
   }
 
   private renderTablaFertilizaciones(fertilizaciones: IFertilizacion[]): string {
@@ -1320,6 +1763,7 @@ export class LotesService {
         ? `Clima operativo: lluvia ${this.formatNumber(clima.acumulados.lluvia, 1)} mm, helada ${this.capitalize(clima.riesgoHelada.nivel)}.`
         : 'Sin clima consolidado en el certificado.',
       `Riesgo sanitario ${riesgo.titulo.toLowerCase()} (${riesgo.detalle}).`,
+      `Carga fitosanitaria ${datos.cargaFitosanitaria.score}/100 (${this.capitalize(datos.cargaFitosanitaria.nivel.replace('_', ' '))}).`,
       `Huella hidrica ${huella.total}.`,
     ];
     if (esPerenne) {

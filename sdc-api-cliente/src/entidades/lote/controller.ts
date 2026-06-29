@@ -18,6 +18,7 @@ import {
   ICreateLote,
   IUpdateLote,
   IPermiso,
+  ICargaFitosanitaria,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
@@ -98,6 +99,21 @@ export class LotesController {
       `attachment; filename="certificado-chaman-${id}.html"`,
     );
     return html;
+  }
+
+  @Get('/:id/carga-fitosanitaria')
+  @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+  )
+  public async getCargaFitosanitaria(
+    @Param('id') id: string,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<ICargaFitosanitaria> {
+    return await this.service.getCargaFitosanitaria(id, permiso);
   }
 
   @Get('/:id')

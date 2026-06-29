@@ -1,0 +1,348 @@
+.phytosanitary-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(241, 252, 250, 0.72)), var(--p-surface-0);
+  border: 1px solid rgba(91, 124, 156, 0.28);
+  box-shadow: 0 18px 42px rgba(28, 45, 68, 0.08);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-height: 100%;
+}
+
+.phytosanitary-header,
+.title-block,
+.phytosanitary-hero,
+.summary-row,
+.detail-hero,
+.detail-row {
+  align-items: center;
+  display: flex;
+}
+
+.phytosanitary-header {
+  gap: 0.8rem;
+  justify-content: space-between;
+}
+
+.title-block {
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.icon-wrap {
+  align-items: center;
+  background: color-mix(in srgb, var(--p-primary-color), white 84%);
+  border-radius: 8px;
+  color: var(--p-primary-color);
+  display: inline-flex;
+  flex: 0 0 42px;
+  height: 42px;
+  justify-content: center;
+  width: 42px;
+}
+
+.phytosanitary-header p {
+  font-size: clamp(1.15rem, 1.3vw, 1.5rem);
+  line-height: 1.1;
+  margin: 0;
+}
+
+.phytosanitary-header small,
+.phytosanitary-hero small,
+.summary-row small,
+.factor-grid small,
+.phytosanitary-note,
+.detail-hero small,
+.detail-grid small,
+.detail-row span,
+.method-panel li,
+.warning-panel li,
+.detail-columns p {
+  color: var(--p-text-muted-color);
+  line-height: 1.32;
+}
+
+.phytosanitary-hero {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1.5px solid rgba(86, 117, 150, 0.28);
+  border-radius: 8px;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0.85rem;
+}
+
+.phytosanitary-hero span,
+.summary-row span,
+.factor-grid span,
+.detail-grid span,
+.method-panel h4,
+.warning-panel h4,
+.detail-columns h4 {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.phytosanitary-hero strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: clamp(1.65rem, 2vw, 2.1rem);
+  line-height: 1;
+  margin: 0.25rem 0;
+}
+
+.score-ring {
+  align-items: center;
+  aspect-ratio: 1;
+  background:
+    radial-gradient(circle at center, var(--p-surface-0) 58%, transparent 60%),
+    conic-gradient(var(--risk-color, var(--p-primary-color)) var(--score), #dfe8f1 0);
+  border-radius: 50%;
+  display: flex;
+  flex: 0 0 94px;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.score-ring strong {
+  color: var(--p-text-color);
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.score-ring span {
+  color: var(--p-text-muted-color);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.factor-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.factor-grid article,
+.summary-row article,
+.detail-grid article,
+.detail-row,
+.method-panel,
+.warning-panel {
+  background: rgba(255, 255, 255, 0.74);
+  border: 1.5px solid rgba(86, 117, 150, 0.3);
+  border-radius: 8px;
+  padding: 0.7rem;
+}
+
+.factor-grid article > div:first-child {
+  align-items: baseline;
+  display: flex;
+  gap: 0.55rem;
+  justify-content: space-between;
+}
+
+.factor-grid strong,
+.summary-row strong,
+.detail-grid strong,
+.detail-row strong {
+  color: var(--p-text-color);
+}
+
+.factor-bar {
+  background: var(--p-surface-100);
+  border: 1px solid rgba(94, 122, 150, 0.32);
+  border-radius: 999px;
+  height: 16px;
+  margin: 0.55rem 0 0.35rem;
+  overflow: hidden;
+}
+
+.factor-bar i {
+  background: linear-gradient(90deg, var(--p-primary-color), var(--risk-color, #6fb845));
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  width: var(--fill);
+}
+
+.summary-row {
+  gap: 0.65rem;
+}
+
+.summary-row article {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.summary-row strong {
+  display: block;
+  font-size: 1.15rem;
+  margin: 0.2rem 0;
+  overflow-wrap: anywhere;
+}
+
+.event-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.event-chip {
+  border: 1px solid rgba(86, 117, 150, 0.3);
+  border-radius: 999px;
+  color: var(--p-text-color);
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1;
+  padding: 0.45rem 0.6rem;
+}
+
+.event-chip.disease {
+  background: color-mix(in srgb, #f59f22, white 84%);
+}
+
+.event-chip.application {
+  background: color-mix(in srgb, var(--p-primary-color), white 86%);
+}
+
+.phytosanitary-note {
+  margin: 0;
+}
+
+.phytosanitary-empty {
+  align-items: center;
+  display: flex;
+  gap: 0.55rem;
+  min-height: 88px;
+}
+
+.phytosanitary-card.bajo {
+  --risk-color: #68be4a;
+}
+
+.phytosanitary-card.medio {
+  --risk-color: #f6b94f;
+}
+
+.phytosanitary-card.alto {
+  --risk-color: #f59f22;
+}
+
+.phytosanitary-card.critico {
+  --risk-color: #ef6f6c;
+}
+
+.phytosanitary-detail {
+  display: grid;
+  gap: 1rem;
+}
+
+.detail-hero {
+  background: color-mix(in srgb, var(--p-primary-color), white 88%);
+  border: 1.5px solid color-mix(in srgb, var(--p-primary-color), white 55%);
+  border-radius: 8px;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 1rem;
+}
+
+.detail-hero.alto,
+.detail-hero.critico {
+  background: #fff3ea;
+  border-color: #f7b36b;
+}
+
+.detail-hero strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 2rem;
+  line-height: 1;
+  margin: 0.2rem 0;
+}
+
+.detail-hero p {
+  color: var(--p-text-color);
+  font-weight: 700;
+  margin: 0;
+  max-width: 420px;
+}
+
+.detail-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.detail-grid strong {
+  display: block;
+  font-size: 1.35rem;
+  margin: 0.25rem 0;
+}
+
+.detail-columns {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.detail-columns section {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.detail-columns h4,
+.method-panel h4,
+.warning-panel h4 {
+  margin: 0;
+}
+
+.detail-row {
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.detail-row strong,
+.detail-row span {
+  display: block;
+}
+
+.detail-row em {
+  color: var(--p-primary-color);
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.method-panel ul,
+.warning-panel ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.55rem 0 0;
+  padding-left: 1rem;
+}
+
+.warning-panel {
+  background: #fff8e8;
+  border-color: #f6d18c;
+}
+
+@media (max-width: 760px) {
+  .phytosanitary-hero,
+  .summary-row,
+  .detail-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .detail-grid,
+  .detail-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .score-ring {
+    align-self: flex-start;
+  }
+}

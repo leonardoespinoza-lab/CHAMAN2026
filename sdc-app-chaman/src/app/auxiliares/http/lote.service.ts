@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { ILote, ICreateLote, IListado, IQueryParam, IUpdateLote } from 'modelos/src';
+import { ICargaFitosanitaria, ILote, ICreateLote, IListado, IQueryParam, IUpdateLote } from 'modelos/src';
 import { HttpService } from './http.service';
 
 @Injectable({
@@ -23,6 +23,10 @@ export class LoteService {
 
   public certificado(id: string, filename: string): Promise<void> {
     return this.http.getFile(`/lotes/${id}/certificado`, {}, filename);
+  }
+
+  public cargaFitosanitaria(id: string): Promise<ICargaFitosanitaria> {
+    return this.http.get(`/lotes/${id}/carga-fitosanitaria`);
   }
 
   public sueloInta(lat: number, lng: number): Promise<any> {
