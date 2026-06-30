@@ -28,6 +28,50 @@
                         <label>{{ 'Nombre' | translate }}</label>
                       </p-floatlabel>
 
+                      <section class="kmz-import-card">
+                        <div class="kmz-import-copy">
+                          <strong>Importar KML/KMZ</strong>
+                          <small>Usa poligonos del archivo para completar este establecimiento o crear varios automaticamente.</small>
+                        </div>
+                        <p-fileupload
+                          mode="basic"
+                          name="establecimiento-kmz"
+                          chooseIcon="pi pi-upload"
+                          accept=".kmz,.kml"
+                          maxFileSize="20000000"
+                          [disabled]="loading || kmzImportando"
+                          [chooseLabel]="kmzImportando ? 'Leyendo...' : 'Cargar KML/KMZ'"
+                          (onSelect)="importarKmzKml($event)"
+                        />
+                      </section>
+
+                      @if (kmzPoligonos.length) {
+                        <section class="kmz-import-preview">
+                          <div class="kmz-preview-header">
+                            <div>
+                              <strong>{{ kmzPoligonos.length }} poligono{{ kmzPoligonos.length === 1 ? '' : 's' }} detectado{{ kmzPoligonos.length === 1 ? '' : 's' }}</strong>
+                              <small>{{ kmzNombreArchivo }}</small>
+                            </div>
+                            <p-button
+                              label="Crear todos"
+                              icon="pi pi-plus"
+                              severity="secondary"
+                              [outlined]="true"
+                              [disabled]="loading"
+                              (onClick)="crearEstablecimientosImportados()"
+                            />
+                          </div>
+                          <div class="kmz-preview-grid">
+                            @for (poligono of kmzPoligonos; track poligono.id) {
+                              <button type="button" class="kmz-preview-item" (click)="aplicarPoligonoImportado(poligono)">
+                                <strong>{{ poligono.nombre }}</strong>
+                                <span>{{ poligono.superficie | number: '1.1-1' }} ha</span>
+                              </button>
+                            }
+                          </div>
+                        </section>
+                      }
+
                       <section class="admin-location-card">
                         <div>
                           <strong>Referencia administrativa</strong>

@@ -13,11 +13,13 @@ import {
   IZonaGeografica,
 } from 'modelos/src';
 import { AutoCompleteCompleteEvent, AutoCompleteSelectEvent } from 'primeng/autocomplete';
+import { FileSelectEvent } from 'primeng/fileupload';
 import { MapDrawComponent } from '../../../../auxiliares/componentes/map-draw/map-draw.component';
 import { PROVINCIAS_ARGENTINA_BASE } from '../../../../auxiliares/constantes/provincias-argentina';
 import { EstablecimientoService } from '../../../../auxiliares/http/establecimiento.service';
 import { GeoNodeService } from '../../../../auxiliares/http/geonode.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
+import { IKmzPolygonImportado, KmlKmzImportService } from '../../../../auxiliares/servicios/kml-kmz-import.service';
 import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { ParamsService } from '../../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../../auxiliares/shared.module';
@@ -43,6 +45,9 @@ export class CrearEditarEstablecimientosComponent {
   public busquedaUbicacion: string | IZonaGeografica = '';
   public ubicacionLoading = false;
   public ubicacionDetectada?: DireccionV2;
+  public kmzImportando = false;
+  public kmzNombreArchivo = '';
+  public kmzPoligonos: IKmzPolygonImportado[] = [];
 
   constructor(
     private paramsService: ParamsService,
@@ -51,6 +56,7 @@ export class CrearEditarEstablecimientosComponent {
     private helper: HelperService,
     private listado: ListadosService,
     private geonode: GeoNodeService,
+    private kmlKmzImport: KmlKmzImportService
   ) {}
 
   // FORMULARIO
@@ -438,6 +444,110 @@ export class CrearEditarEstablecimientosComponent {
 
   public volver() {
     window.history.back();
+  }
+
+  // IMPORTACION KMZ/KML
+
+  public async importarKmzKml(event: FileSelectEvent): Promise<void> {
+    const file = event.files?.[0];
+    if (!file) {
+      this.helper.notifWarn('Selecciona un archivo KML o KMZ.');
+      return;
+    }
+
+    this.kmzImportando = true;
+    this.kmzNombreArchivo = file.name;
+    try {
+      this.kmzPoligonos = await this.kmlKmzImport.leerPoligonos(file);
+      if (this.kmzPoligonos.length === 1) {
+        this.aplicarPoligonoImportado(this.kmzPoligonos[0]);
+        this.helper.notifSuccess('Poligono importado. Revisa el mapa y guarda el establecimiento.');
+      } else {
+        this.tabValue = 1;
+        this.helper.notifSuccess(`${this.kmzPoligonos.length} poligonos importados. Podes usarlos o crearlos en lote.`);
+      }
+    } catch (error) {
+      this.helper.notifError(error);
+      this.kmzPoligonos = [];
+    } finally {
+      this.kmzImportando = false;
+    }
+  }
+
+  public aplicarPoligonoImportado(poligono: IKmzPolygonImportado): void {
+    if (!poligono?.geojson?.coordinates?.length) return;
+    this.multipolygon = {
+      type: 'MultiPolygon',
+      coordinates: [poligono.geojson.coordinates],
+    };
+    if (!this.form?.get('nombre')?.value) {
+      this.form?.get('nombre')?.setValue(poligono.nombre);
+    }
+    this.centroMapa = {
+      type: 'Point',
+      coordinates: [poligono.centro.lng, poligono.centro.lat],
+    };
+    const actual = this.ubicacionAdministrativaActual();
+    this.actualizarUbicacionAdministrativa({
+      ...actual,
+      direccion: actual?.direccion || `Importado desde ${this.kmzNombreArchivo || 'KML/KMZ'}`,
+      coordenadas: actual?.coordenadas || poligono.centro,
+    });
+    this.tabValue = 1;
+  }
+
+  public async crearEstablecimientosImportados(): Promise<void> {
+    if (!this.kmzPoligonos.length) return;
+    const cantidad = this.kmzPoligonos.length;
+    const confirmar = window.confirm(`Crear ${cantidad} establecimiento${cantidad === 1 ? '' : 's'} desde el archivo importado?`);
+    if (!confirmar) return;
+
+    this.loading = true;
+    let creados = 0;
+    let errores = 0;
+    try {
+      for (const poligono of this.kmzPoligonos) {
+        const ubicacionAdministrativa = this.ubicacionAdministrativaActual();
+        const data: ICreateEstablecimiento = {
+          nombre: poligono.nombre,
+          ubicacion: [
+            {
+              geojson: poligono.geojson,
+              centro: poligono.centro,
+              superficie: poligono.superficie,
+            },
+          ],
+          ubicacionAdministrativa: ubicacionAdministrativa
+            ? {
+                ...ubicacionAdministrativa,
+                coordenadas: ubicacionAdministrativa.coordenadas || poligono.centro,
+              }
+            : {
+                direccion: `Importado desde ${this.kmzNombreArchivo || 'KML/KMZ'}`,
+                coordenadas: poligono.centro,
+              },
+        };
+
+        try {
+          const created = await this.service.crear(data);
+          this.listado.createEntityItem('establecimientos', created);
+          creados += 1;
+        } catch (error) {
+          errores += 1;
+          console.error('No se pudo crear establecimiento importado.', error);
+        }
+      }
+
+      if (creados) {
+        this.helper.notifSuccess(`${creados} establecimiento${creados === 1 ? '' : 's'} creado${creados === 1 ? '' : 's'} desde KMZ/KML.`);
+      }
+      if (errores) {
+        this.helper.notifWarn(`${errores} poligono${errores === 1 ? '' : 's'} no se pudieron crear. Revisa permisos o datos del archivo.`);
+      }
+      if (creados) this.volver();
+    } finally {
+      this.loading = false;
+    }
   }
 
   //

@@ -24,10 +24,12 @@ import {
   TTipoDrenaje,
   TTipoErosionEscorrentiaPendiente,
 } from 'modelos/src';
+import { FileSelectEvent } from 'primeng/fileupload';
 import { Subscription } from 'rxjs';
 import { MapDrawComponent } from '../../../../auxiliares/componentes/map-draw/map-draw.component';
 import { LoteService } from '../../../../auxiliares/http/lote.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
+import { IKmzPolygonImportado, KmlKmzImportService } from '../../../../auxiliares/servicios/kml-kmz-import.service';
 import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { ParamsService } from '../../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../../auxiliares/shared.module';
@@ -62,6 +64,9 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
   public distanciaSonda?: string;
   public sueloIntaLoading = false;
   public sueloIntaInfo?: any;
+  public kmzImportando = false;
+  public kmzNombreArchivo = '';
+  public kmzPoligonos: IKmzPolygonImportado[] = [];
 
   public texturas: TTexturaSuelo[] = [
     'Arcilloso',
@@ -152,7 +157,8 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
     private service: LoteService,
     private helper: HelperService,
     private listado: ListadosService,
-    private activatedRoute: ActivatedRoute
+    private activatedRoute: ActivatedRoute,
+    private kmlKmzImport: KmlKmzImportService
   ) {}
 
   // FORMULARIO
@@ -604,6 +610,131 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
 
   public volver() {
     window.history.back();
+  }
+
+  // IMPORTACION KMZ/KML
+
+  public async importarKmzKml(event: FileSelectEvent): Promise<void> {
+    const file = event.files?.[0];
+    if (!file) {
+      this.helper.notifWarn('Selecciona un archivo KML o KMZ.');
+      return;
+    }
+
+    this.kmzImportando = true;
+    this.kmzNombreArchivo = file.name;
+    try {
+      this.kmzPoligonos = await this.kmlKmzImport.leerPoligonos(file);
+      if (this.kmzPoligonos.length === 1) {
+        this.aplicarPoligonoImportado(this.kmzPoligonos[0]);
+        this.helper.notifSuccess('Poligono importado. Revisa el mapa, suelo y riego antes de guardar.');
+      } else {
+        this.helper.notifSuccess(`${this.kmzPoligonos.length} lotes detectados. Selecciona establecimiento y crea todos.`);
+      }
+    } catch (error) {
+      this.helper.notifError(error);
+      this.kmzPoligonos = [];
+    } finally {
+      this.kmzImportando = false;
+    }
+  }
+
+  public aplicarPoligonoImportado(poligono: IKmzPolygonImportado): void {
+    if (!this.form || !poligono?.geojson?.coordinates?.length) return;
+    if (!this.form.get('nombre')?.value) {
+      this.form.get('nombre')?.setValue(poligono.nombre);
+    }
+    this.form.patchValue(
+      {
+        ubicacion: {
+          geojson: {
+            type: 'Polygon',
+            coordinates: poligono.geojson.coordinates,
+          },
+          centro: poligono.centro,
+          superficie: poligono.superficie,
+        },
+      },
+      { emitEvent: false },
+    );
+    this.centroMapa = {
+      type: 'Point',
+      coordinates: [poligono.centro.lng, poligono.centro.lat],
+    };
+    this.cambioSondaSuelo();
+    this.tabValue = 1;
+  }
+
+  public async crearLotesImportados(): Promise<void> {
+    if (!this.kmzPoligonos.length || !this.form) return;
+    const idEstablecimiento = this.form.get('idEstablecimiento')?.value;
+    if (!idEstablecimiento) {
+      this.helper.notifWarn('Selecciona un establecimiento antes de crear lotes desde KMZ/KML.');
+      this.tabValue = 0;
+      return;
+    }
+
+    const cantidad = this.kmzPoligonos.length;
+    const confirmar = window.confirm(`Crear ${cantidad} lote${cantidad === 1 ? '' : 's'} en el establecimiento seleccionado?`);
+    if (!confirmar) return;
+
+    this.loading = true;
+    let creados = 0;
+    let errores = 0;
+    try {
+      this.sincronizarDesdeEstablecimiento(true);
+      this.sincronizarSueloManualEnCapas();
+
+      for (const poligono of this.kmzPoligonos) {
+        try {
+          const created = await this.service.crear(this.getDataLoteImportado(poligono));
+          this.listado.createEntityItem('lotes', created);
+          creados += 1;
+        } catch (error) {
+          errores += 1;
+          console.error('No se pudo crear lote importado.', error);
+        }
+      }
+
+      if (creados) {
+        this.helper.notifSuccess(`${creados} lote${creados === 1 ? '' : 's'} creado${creados === 1 ? '' : 's'} desde KMZ/KML.`);
+      }
+      if (errores) {
+        this.helper.notifWarn(`${errores} poligono${errores === 1 ? '' : 's'} no se pudieron crear. Revisa permisos o datos del archivo.`);
+      }
+      if (creados) this.volver();
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  private getDataLoteImportado(poligono: IKmzPolygonImportado): ICreateLote {
+    const geojson = poligono.geojson;
+    const suelos = ((this.suelos?.value || []) as ISuelo[]).map((suelo) => ({ ...suelo }));
+    return {
+      nombre: poligono.nombre,
+      idEstablecimiento: this.form?.get('idEstablecimiento')?.value,
+      idDepartamento: this.form?.get('idDepartamento')?.value,
+      sueloReferencia: this.form?.get('sueloReferencia')?.value,
+      capacidadDeCampo: this.form?.get('capacidadDeCampo')?.value,
+      puntoMarchitez: this.form?.get('puntoMarchitez')?.value,
+      capacidadDeRiego: this.form?.get('capacidadDeRiego')?.value,
+      anchoDeBulbo: this.form?.get('anchoDeBulbo')?.value,
+      metrosLinealesHas: this.form?.get('metrosLinealesHas')?.value,
+      ubicacion: {
+        geojson,
+        centro: poligono.centro,
+        superficie: poligono.superficie,
+      },
+      suelos,
+      depositoN: this.form?.get('depositoN')?.value,
+      texturaLixiviacion: this.form?.get('texturaLixiviacion')?.value,
+      texturaEscorrentia: this.form?.get('texturaEscorrentia')?.value,
+      drenajeNaturalLixiviacion: this.form?.get('drenajeNaturalLixiviacion')?.value,
+      drenajeNaturalEscorrentia: this.form?.get('drenajeNaturalEscorrentia')?.value,
+      erosionEscorrentiaPendiente: this.form?.get('erosionEscorrentiaPendiente')?.value,
+      contenidoP: this.form?.get('contenidoP')?.value,
+    };
   }
 
   private sincronizarDesdeEstablecimiento(forzarDepartamento = false): void {

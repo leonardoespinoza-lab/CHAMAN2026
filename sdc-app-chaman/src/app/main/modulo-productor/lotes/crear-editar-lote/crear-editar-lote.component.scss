@@ -58,10 +58,66 @@
 .soil-profile-header,
 .probe-config-card,
 .device-layers-card,
-.device-help {
+.device-help,
+.kmz-import-card,
+.kmz-import-preview {
   border: 1px solid var(--p-content-border-color);
   border-radius: 8px;
   background: color-mix(in srgb, var(--p-content-background) 88%, #ffffff 12%);
+}
+
+.kmz-import-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--p-primary-50) 22%, var(--p-content-background) 78%);
+}
+
+.kmz-import-copy,
+.kmz-preview-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.kmz-import-preview {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--p-primary-50) 22%, var(--p-content-background) 78%);
+}
+
+.kmz-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.kmz-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.65rem;
+}
+
+.kmz-preview-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  width: 100%;
+  padding: 0.75rem;
+  text-align: left;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  background: var(--p-content-background);
+  color: var(--p-text-color);
+  cursor: pointer;
+}
+
+.kmz-preview-item:hover {
+  border-color: var(--p-primary-color);
 }
 
 .soil-lookup {
@@ -254,8 +310,16 @@
 .soil-profile-header strong,
 .probe-config-card strong,
 .device-layers-card strong,
-.device-help strong {
+.device-help strong,
+.kmz-import-card strong,
+.kmz-import-preview strong {
   color: var(--p-text-color);
+}
+
+.kmz-import-card small,
+.kmz-import-preview small,
+.kmz-preview-item span {
+  color: var(--p-text-muted-color);
 }
 
 .soil-manual-card small,
@@ -308,6 +372,12 @@
   }
 
   .soil-profile-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .kmz-import-card,
+  .kmz-preview-header {
     align-items: flex-start;
     flex-direction: column;
   }

@@ -45,7 +45,9 @@
 }
 
 .admin-location-card,
-.map-reference-card {
+.map-reference-card,
+.kmz-import-card,
+.kmz-import-preview {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -57,21 +59,26 @@
 }
 
 .admin-location-card > div:first-child,
-.admin-location-value {
+.admin-location-value,
+.kmz-import-copy {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
 }
 
 .admin-location-card strong,
-.map-reference-card strong {
+.map-reference-card strong,
+.kmz-import-card strong,
+.kmz-import-preview strong {
   color: var(--p-text-color);
 }
 
 .admin-location-card small,
 .admin-location-value small,
 .map-reference-card span,
-.map-reference-card small {
+.map-reference-card small,
+.kmz-import-card small,
+.kmz-import-preview small {
   color: var(--p-text-muted-color);
 }
 
@@ -118,6 +125,54 @@
   align-items: flex-start;
 }
 
+.kmz-import-card,
+.kmz-import-preview {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--p-primary-50) 22%, var(--p-content-background) 78%);
+}
+
+.kmz-import-preview {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.kmz-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.kmz-preview-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.kmz-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.65rem;
+}
+
+.kmz-preview-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  width: 100%;
+  padding: 0.75rem;
+  text-align: left;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  background: var(--p-content-background);
+  color: var(--p-text-color);
+  cursor: pointer;
+}
+
+.kmz-preview-item:hover {
+  border-color: var(--p-primary-color);
+}
+
 .map-reference-card span,
 .map-reference-card small {
   display: block;
@@ -156,7 +211,9 @@
   }
 
   .admin-location-card,
-  .map-reference-card {
+  .map-reference-card,
+  .kmz-import-card,
+  .kmz-preview-header {
     align-items: flex-start;
     flex-direction: column;
   }
