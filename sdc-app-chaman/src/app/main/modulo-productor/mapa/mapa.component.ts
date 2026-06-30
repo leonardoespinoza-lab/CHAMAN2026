@@ -1890,7 +1890,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     return minimasLotes.length ? Math.min(...minimasLotes) : null;
   }
 
-  private addPolygonLote(lote: ILoteMapa) {
+  private nombreAmbienteMapa(index: number): string {
+    return `Ambiente ${index + 1}`;
+  }
+
+  private addPolygonLote(lote: ILoteMapa, index: number) {
     const geojson = lote.ubicacion?.geojson as IGeoJSONPolygon;
     const source = this.lotesLayer.getSource();
     const polygon = new Polygon(geojson.coordinates!);
@@ -1900,6 +1904,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     const color = this.getColorLote(lote);
     feature.set('lote', lote);
     feature.set('nombre', lote.nombre);
+    feature.set('nombreMapa', this.nombreAmbienteMapa(index));
     feature.set('fillColor', color);
     feature.set('strokeColor', this.helper.darkTheme ? '#000' : '#FFF');
     feature.set('strokeColorSelected', this.helper.darkTheme ? '#FFF' : '#000');
@@ -1938,8 +1943,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         color: feature.get('fillColor') || 'rgba(255, 255, 255, 0.6)',
       }),
       text: new Text({
-        text: feature.get('nombre') || '',
-        font: 'bold 14px lato',
+        text: feature.get('nombreMapa') || feature.get('nombre') || '',
+        font: '600 11px Lato, sans-serif',
+        fill: new Fill({ color: this.helper.darkTheme ? '#f8fafc' : '#111827' }),
+        stroke: new Stroke({ color: this.helper.darkTheme ? 'rgba(15, 23, 42, 0.9)' : 'rgba(255, 255, 255, 0.95)', width: 4 }),
+        overflow: false,
       }),
     });
   }
@@ -1977,9 +1985,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.loading.set(true);
     this.clearPolygonsLotes();
     await Promise.all(
-      this.lotes.map(async (lote) => {
+      this.lotes.map(async (lote, index) => {
         if (lote.ubicacion?.geojson?.coordinates) {
-          this.addPolygonLote(lote);
+          this.addPolygonLote(lote, index);
         }
       })
     );

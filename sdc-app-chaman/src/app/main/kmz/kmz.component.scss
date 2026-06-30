@@ -19,6 +19,22 @@ p-button {
   width: 100%;
 }
 
+.kmz-feature-title {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.kmz-feature-title small {
+  color: var(--p-text-muted-color);
+  font-size: 0.72rem;
+  line-height: 1.1;
+  max-width: 13rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 :host ::ng-deep .p-panel .p-panel-header .p-panel-header-icon {
   display: none !important;
 }

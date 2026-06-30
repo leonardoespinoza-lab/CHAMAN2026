@@ -173,6 +173,12 @@
   border-color: var(--p-primary-color);
 }
 
+.kmz-preview-item small {
+  color: var(--p-text-muted-color);
+  font-size: 0.78rem;
+  line-height: 1.15;
+}
+
 .map-reference-card span,
 .map-reference-card small {
   display: block;

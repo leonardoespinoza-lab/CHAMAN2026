@@ -120,6 +120,12 @@
   border-color: var(--p-primary-color);
 }
 
+.kmz-preview-item small {
+  color: var(--p-text-muted-color);
+  font-size: 0.78rem;
+  line-height: 1.15;
+}
+
 .soil-lookup {
   display: grid;
   grid-template-columns: 1fr auto;

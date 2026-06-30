@@ -8,6 +8,7 @@ import { HelperService } from './helper';
 export interface IKmzPolygonImportado {
   id: string;
   nombre: string;
+  nombreOriginal?: string;
   geojson: IGeoJSONPolygon;
   centro: ICoordenadas;
   superficie: number;
@@ -36,9 +37,9 @@ export class KmlKmzImportService {
     const poligonos: IKmzPolygonImportado[] = [];
     for (const feature of features) {
       const geometry = feature.getGeometry();
-      const nombreBase = `${feature.get('name') || feature.get('nombre') || 'Poligono importado'}`.trim();
+      const nombreOriginal = `${feature.get('name') || feature.get('nombre') || ''}`.trim();
       const polygons = this.extraerPoligonos(geometry);
-      polygons.forEach((coordinates, index) => {
+      polygons.forEach((coordinates) => {
         const geojson: IGeoJSONPolygon = {
           type: 'Polygon',
           coordinates,
@@ -47,9 +48,11 @@ export class KmlKmzImportService {
         if (!centro?.length || !Number.isFinite(centro[0]) || !Number.isFinite(centro[1])) return;
         const superficie = this.helper.calcularAreaHectareas(geojson);
         if (!Number.isFinite(superficie)) return;
+        const nombre = `Ambiente ${poligonos.length + 1}`;
         poligonos.push({
           id: crypto.randomUUID(),
-          nombre: polygons.length > 1 ? `${nombreBase} ${index + 1}` : nombreBase,
+          nombre,
+          nombreOriginal: nombreOriginal && nombreOriginal !== nombre ? nombreOriginal : undefined,
           geojson,
           centro: { lat: centro[1], lng: centro[0] },
           superficie,

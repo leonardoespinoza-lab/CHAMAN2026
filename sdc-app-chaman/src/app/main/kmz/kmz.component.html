@@ -46,7 +46,12 @@
           <p-panel #panelPoly [toggleable]="false" [collapsed]="true" [style]="{ width: '100%' }">
             <ng-template #header>
               <div class="row-space-between" style="width: 100%">
-                <span class="font-bold truncate-text" [pTooltip]="p.name">{{ p.name }}</span>
+                <div class="kmz-feature-title">
+                  <span class="font-bold truncate-text" [pTooltip]="p.name">{{ p.name }}</span>
+                  @if (p.originalName) {
+                    <small>Origen: {{ p.originalName }}</small>
+                  }
+                </div>
                 <div class="row-center" style="gap: 3px">
                   <!-- Toggle -->
                   <p-button

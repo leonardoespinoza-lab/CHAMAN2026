@@ -21,6 +21,7 @@ import { KMZService } from './kmz.service';
 export interface featureItem {
   id: string;
   name: string;
+  originalName?: string;
   type: 'Point' | 'LineString' | 'Polygon';
   visible: boolean;
   feature: Feature;
@@ -250,11 +251,13 @@ export class KMZComponent implements OnInit {
     polygonFeatures.forEach((f) => {
       const geom = f.getGeometry() as Polygon;
       if (geom) {
-        const name = f.get('name') || f.get('nombre') || 'Unnamed Polygon';
+        const originalName = `${f.get('name') || f.get('nombre') || ''}`.trim();
+        const name = `Ambiente ${this.listaPoligonos.length + 1}`;
         const id = crypto.randomUUID();
         const polygonFeature = new Feature({
           geometry: geom,
           name,
+          originalName,
         });
         polygonFeature.setStyle(OpenLayersService.poligonosConTextStyle(polygonFeature));
         polygonFeature.setId(id);
@@ -262,6 +265,7 @@ export class KMZComponent implements OnInit {
         const featureList: featureItem = {
           id,
           name,
+          originalName: originalName && originalName !== name ? originalName : undefined,
           type: 'Polygon',
           visible: true,
           feature: polygonFeature,
