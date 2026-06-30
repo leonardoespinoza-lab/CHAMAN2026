@@ -654,6 +654,43 @@
   </ng-template>
 </p-drawer>
 
+@if (grupoAmbientesSeleccionado) {
+  <section class="lot-bottom-sheet environments-bottom-sheet">
+    <button type="button" class="sheet-close" (click)="cerrarGrupoAmbientes()" aria-label="Cerrar ambientes">
+      <i class="pi pi-times"></i>
+    </button>
+
+    <div class="sheet-header">
+      <div>
+        <span class="sheet-eyebrow">
+          {{ grupoAmbientesSeleccionado.establecimiento || 'Establecimiento' }} · {{ grupoAmbientesSeleccionado.cultivo }}
+        </span>
+        <h2>Ambientes productivos</h2>
+        <span class="sheet-eyebrow">Variedades: {{ variedadesAmbientesTexto(grupoAmbientesSeleccionado) }}</span>
+      </div>
+      <div class="sheet-actions">
+        <span class="sheet-eyebrow">{{ grupoAmbientesSeleccionado.lotes.length }} ambientes</span>
+      </div>
+    </div>
+
+    <div class="environment-list">
+      @for (lote of grupoAmbientesSeleccionado.lotes; track lote._id; let index = $index) {
+        <button type="button" class="environment-row" (click)="entrarAmbiente(lote)">
+          <div>
+            <strong>{{ nombreAmbienteListado(index) }}</strong>
+            <span>{{ variedadAmbiente(lote) }}</span>
+          </div>
+          <div>
+            <strong>{{ loteHectareas(lote) }}</strong>
+            <span>{{ loteEtapa(lote) }}</span>
+          </div>
+          <i class="pi pi-arrow-right"></i>
+        </button>
+      }
+    </div>
+  </section>
+}
+
 @if (loteSeleccionado) {
   <section class="lot-bottom-sheet">
     <button type="button" class="sheet-close" (click)="loteSeleccionado = undefined" aria-label="Cerrar resumen">

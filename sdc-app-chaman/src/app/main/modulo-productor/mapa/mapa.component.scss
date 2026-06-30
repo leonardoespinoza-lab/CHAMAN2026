@@ -814,6 +814,23 @@
   background: linear-gradient(180deg, rgba(240, 253, 252, 0.95), rgba(255, 255, 255, 0.86));
 }
 
+.environment-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.8rem;
+}
+
+.environment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(121, 150, 185, 0.28);
+  border-radius: 14px;
+}
+
 @media (max-width: 1180px) {
   .map-topbar-main {
     flex-direction: column;

@@ -68,6 +68,15 @@ interface ILoteMapa extends ILote {
   ndviFecha?: string;
 }
 
+interface IGrupoAmbientesMapa {
+  key: string;
+  cultivo: string;
+  establecimiento?: string;
+  lotes: ILoteMapa[];
+  variedades: string[];
+  representanteId: string;
+}
+
 interface IResumenGerencialMetric {
   label: string;
   valor: string;
@@ -147,6 +156,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   public lotes$?: Subscription;
   public lotes: ILoteMapa[] = [];
   public loteSeleccionado?: ILoteMapa;
+  public grupoAmbientesSeleccionado?: IGrupoAmbientesMapa;
+  private gruposAmbientes = new globalThis.Map<string, IGrupoAmbientesMapa>();
+  private grupoAmbientePorLote = new globalThis.Map<string, IGrupoAmbientesMapa>();
 
   public reportesNDVI: IUltimoReporteNDVI[] = [];
   public reportesNDVI$?: Subscription;
@@ -679,6 +691,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   public seleccionarEstablecimiento(establecimiento: IEstablecimiento, markAsVisited = true): void {
     this.establecimientoSeleccionado = establecimiento;
     this.loteSeleccionado = undefined;
+    this.grupoAmbientesSeleccionado = undefined;
     this.selectEstablecimiento(establecimiento.nombre);
     this.centerMapOnEstablecimiento(establecimiento, markAsVisited);
     this.changeDetectorRef.detectChanges();
@@ -686,6 +699,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   public centerAllEstablecimientos(): void {
     this.loteSeleccionado = undefined;
+    this.grupoAmbientesSeleccionado = undefined;
     this.centerMapOnBounds();
     this.isFirstVisit = false;
     this.changeDetectorRef.detectChanges();
@@ -797,6 +811,30 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       return 'Sin variedad cargada';
     }
     return [semilla.variedad, semilla.semillero, this.helper.translateCiclo(semilla.ciclo)].filter(Boolean).join(' ');
+  }
+
+  public nombreAmbienteListado(index: number): string {
+    return `Ambiente ${index + 1}`;
+  }
+
+  public variedadAmbiente(lote?: ILoteMapa): string {
+    const semilla = lote?.siembra?.semilla;
+    return [semilla?.variedad, semilla?.semillero, this.helper.translateCiclo(semilla?.ciclo)].filter(Boolean).join(' ') || lote?.nombre || 'Sin variedad';
+  }
+
+  public variedadesAmbientesTexto(grupo?: IGrupoAmbientesMapa): string {
+    return grupo?.variedades?.length ? grupo.variedades.join(', ') : 'Sin variedades cargadas';
+  }
+
+  public cerrarGrupoAmbientes(): void {
+    this.grupoAmbientesSeleccionado = undefined;
+    this.selectInteractionLotes?.getFeatures().clear();
+  }
+
+  public entrarAmbiente(lote: ILoteMapa): void {
+    this.grupoAmbientesSeleccionado = undefined;
+    this.loteSeleccionado = lote;
+    this.detallesLote(lote);
   }
 
   public loteEtapa(lote?: ILoteMapa): string {
@@ -1890,11 +1928,82 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     return minimasLotes.length ? Math.min(...minimasLotes) : null;
   }
 
-  private nombreAmbienteMapa(index: number): string {
-    return `Ambiente ${index + 1}`;
+  private getLoteIdentity(lote: ILoteMapa): string {
+    return String(lote._id || (lote as any).id || `${lote.establecimiento?.nombre || 'zona'}-${lote.nombre}`);
   }
 
-  private addPolygonLote(lote: ILoteMapa, index: number) {
+  private getEstablecimientoIdentity(lote: ILoteMapa): string {
+    return String(
+      lote.establecimiento?._id ||
+        (lote as any).idEstablecimiento ||
+        lote.establecimiento?.nombre ||
+        this.establecimientoSeleccionado?._id ||
+        this.establecimientoSeleccionado?.nombre ||
+        'sin-establecimiento'
+    );
+  }
+
+  private getCultivoKey(lote: ILoteMapa): string {
+    return String(lote.siembra?.semilla?.cultivo || '').trim().toLowerCase();
+  }
+
+  private getVariedadKey(lote: ILoteMapa): string {
+    return String(lote.siembra?.semilla?.variedad || lote.nombre || '').trim().toLowerCase();
+  }
+
+  private prepararGruposAmbientes(): void {
+    this.gruposAmbientes.clear();
+    this.grupoAmbientePorLote.clear();
+
+    const candidatos = new globalThis.Map<string, ILoteMapa[]>();
+    for (const lote of this.lotes) {
+      const cultivo = this.getCultivoKey(lote);
+      if (!cultivo || !esCultivoPerenne(cultivo)) continue;
+
+      const key = `${this.getEstablecimientoIdentity(lote)}|${cultivo}`;
+      const lotes = candidatos.get(key) || [];
+      lotes.push(lote);
+      candidatos.set(key, lotes);
+    }
+
+    candidatos.forEach((lotes, key) => {
+      const variedades = Array.from(new Set(lotes.map((lote) => this.getVariedadKey(lote)).filter(Boolean)));
+      if (lotes.length < 4 || variedades.length < 2) return;
+
+      const representante = [...lotes].sort(
+        (a, b) => (this.numero(b.ubicacion?.superficie) || 0) - (this.numero(a.ubicacion?.superficie) || 0)
+      )[0];
+      const lotesOrdenados = [...lotes].sort((a, b) =>
+        String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es', { numeric: true, sensitivity: 'base' })
+      );
+
+      const grupo: IGrupoAmbientesMapa = {
+        key,
+        cultivo: this.helper.translateCultivo(lotes[0]?.siembra?.semilla?.cultivo || undefined),
+        establecimiento: lotes[0]?.establecimiento?.nombre,
+        lotes: lotesOrdenados,
+        variedades: Array.from(new Set(lotes.map((lote) => this.variedadAmbiente(lote)).filter(Boolean))).sort((a, b) =>
+          a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' })
+        ),
+        representanteId: this.getLoteIdentity(representante),
+      };
+
+      this.gruposAmbientes.set(key, grupo);
+      lotes.forEach((lote) => this.grupoAmbientePorLote.set(this.getLoteIdentity(lote), grupo));
+    });
+  }
+
+  private getGrupoAmbiente(lote: ILoteMapa): IGrupoAmbientesMapa | undefined {
+    return this.grupoAmbientePorLote.get(this.getLoteIdentity(lote));
+  }
+
+  private nombreMapaLote(lote: ILoteMapa): string {
+    const grupo = this.getGrupoAmbiente(lote);
+    if (!grupo) return lote.nombre || 'Lote';
+    return grupo.representanteId === this.getLoteIdentity(lote) ? `Ambientes (${grupo.lotes.length})` : '';
+  }
+
+  private addPolygonLote(lote: ILoteMapa) {
     const geojson = lote.ubicacion?.geojson as IGeoJSONPolygon;
     const source = this.lotesLayer.getSource();
     const polygon = new Polygon(geojson.coordinates!);
@@ -1902,9 +2011,12 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     const feature = new Feature(polygon);
     // Estilo del poligono
     const color = this.getColorLote(lote);
+    const grupoAmbiente = this.getGrupoAmbiente(lote);
     feature.set('lote', lote);
     feature.set('nombre', lote.nombre);
-    feature.set('nombreMapa', this.nombreAmbienteMapa(index));
+    feature.set('nombreMapa', this.nombreMapaLote(lote));
+    feature.set('grupoAmbiente', grupoAmbiente);
+    feature.set('esResumenAmbientes', !!grupoAmbiente && grupoAmbiente.representanteId === this.getLoteIdentity(lote));
     feature.set('fillColor', color);
     feature.set('strokeColor', this.helper.darkTheme ? '#000' : '#FFF');
     feature.set('strokeColorSelected', this.helper.darkTheme ? '#FFF' : '#000');
@@ -1943,8 +2055,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         color: feature.get('fillColor') || 'rgba(255, 255, 255, 0.6)',
       }),
       text: new Text({
-        text: feature.get('nombreMapa') || feature.get('nombre') || '',
-        font: '600 11px Lato, sans-serif',
+        text: feature.get('nombreMapa') ?? feature.get('nombre') ?? '',
+        font: feature.get('esResumenAmbientes') ? '700 12px Lato, sans-serif' : '600 11px Lato, sans-serif',
         fill: new Fill({ color: this.helper.darkTheme ? '#f8fafc' : '#111827' }),
         stroke: new Stroke({ color: this.helper.darkTheme ? 'rgba(15, 23, 42, 0.9)' : 'rgba(255, 255, 255, 0.95)', width: 4 }),
         overflow: false,
@@ -1961,7 +2073,14 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectInteractionLotes.on('select', (e) => {
       e.selected.forEach((f) => {
         const lote = f.get('lote');
-        this.loteSeleccionado = lote as ILoteMapa;
+        const grupoAmbiente = f.get('grupoAmbiente') as IGrupoAmbientesMapa | undefined;
+        if (grupoAmbiente) {
+          this.grupoAmbientesSeleccionado = grupoAmbiente;
+          this.loteSeleccionado = undefined;
+        } else {
+          this.grupoAmbientesSeleccionado = undefined;
+          this.loteSeleccionado = lote as ILoteMapa;
+        }
         this.changeDetectorRef.detectChanges();
       });
     });
@@ -1984,10 +2103,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.loading.set(true);
     this.clearPolygonsLotes();
+    this.prepararGruposAmbientes();
     await Promise.all(
-      this.lotes.map(async (lote, index) => {
+      this.lotes.map(async (lote) => {
         if (lote.ubicacion?.geojson?.coordinates) {
-          this.addPolygonLote(lote, index);
+          this.addPolygonLote(lote);
         }
       })
     );
@@ -2034,6 +2154,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         // No se clickeó en ningún feature: deseleccionar
         this.selectInteractionLotes?.getFeatures().clear();
         this.loteSeleccionado = undefined;
+        this.grupoAmbientesSeleccionado = undefined;
       }
     });
   }
@@ -2372,9 +2493,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Detalles
 
-  public detallesLote() {
-    this.paramsService.set('detallesLote', this.loteSeleccionado);
-    this.router.navigate(['lotes', 'detalles', this.loteSeleccionado?._id]);
+  public detallesLote(lote?: ILoteMapa) {
+    const seleccionado = lote || this.loteSeleccionado;
+    if (!seleccionado?._id) return;
+    this.paramsService.set('detallesLote', seleccionado);
+    this.router.navigate(['lotes', 'detalles', seleccionado._id]);
   }
 
   public async cargaInicial() {
