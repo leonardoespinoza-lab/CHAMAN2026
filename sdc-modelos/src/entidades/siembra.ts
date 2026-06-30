@@ -12,7 +12,7 @@ import {
 } from "./prediccion-riego";
 import { IProductor } from "./productor";
 import { IQuimica } from "./quimica";
-import { ISemilla } from "./semilla";
+import { IFenologiaReferencia, IRequerimientoFrio, ISemilla } from "./semilla";
 
 export type TTipoFijacionN = "0" | "> 0 < 30" | "> 30 < 60" | "> 60";
 export type TTipoDosisN = "Muy Baja" | "Baja" | "Alta" | "Muy Alta";
@@ -79,6 +79,40 @@ export interface IHuellaHidrica {
   metodologia?: IMetodologiaHuellaHidrica;
 }
 
+export interface IRegistroFenologicoFrio {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  horasFrio?: number;
+  horasFrioEfectivas?: number;
+  porcionesFrio?: number;
+  gradosDia?: number;
+  fuente?: string;
+}
+
+export interface IRegistroFenologico {
+  id?: string;
+  fecha?: string;
+  accion?: "inicio" | "ajuste" | "observacion";
+  etapa?: string;
+  cultivo?: string;
+  variedad?: string;
+  ciclo?: string;
+  campania?: string;
+  idLote?: string;
+  idSiembra?: string;
+  idSemilla?: string;
+  edadPlantacionAnios?: number;
+  diasDesdeImplantacion?: number;
+  diasDesdeCampania?: number;
+  fuenteFenologia?: string;
+  requerimientoFrio?: IRequerimientoFrio;
+  fenologiaReferencia?: IFenologiaReferencia;
+  frioAcumulado?: IRegistroFenologicoFrio;
+  observaciones?: string;
+  creadoEn?: string;
+  actualizadoEn?: string;
+}
+
 export interface ISiembra {
   _id?: string;
   idQuimica?: string;
@@ -117,6 +151,7 @@ export interface ISiembra {
   intensidadLluvias?: TTipoIntensidadLluvias;
   materiaOrganica?: TTipoMateriaOrganica;
   huellaHidrica?: IHuellaHidrica;
+  registrosFenologicos?: IRegistroFenologico[];
 
   // Populate
   quimica?: IQuimica;

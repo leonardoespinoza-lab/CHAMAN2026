@@ -6,6 +6,7 @@ import {
   ICreateSiembra,
   IUpdateSiembra,
   IResultadoPrediccionMalezas,
+  IRegistroFenologico,
 } from 'modelos/src';
 import { API_DATOS } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
@@ -42,6 +43,13 @@ export class SiembrasRepository {
   async update(id: string, data: IUpdateSiembra): Promise<ISiembra> {
     const url = `${API_DATOS}/siembras/${id}`;
     return await this.axios.PUT<ISiembra>(url, data);
+  }
+
+  async registrarEtapaFenologica(
+    id: string,
+    registrosFenologicos: IRegistroFenologico[],
+  ): Promise<ISiembra> {
+    return await this.update(id, { registrosFenologicos });
   }
 
   async delete(id: string): Promise<ISiembra> {

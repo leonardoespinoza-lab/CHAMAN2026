@@ -25,6 +25,7 @@ import {
   IPermiso,
   IPrediccion,
   IResultadoPrediccionMalezas,
+  IRegistroFenologico,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { CronosService } from '../crono/service';
@@ -85,6 +86,55 @@ export class SiembrasService {
   ): Promise<IResultadoPrediccionMalezas> {
     await this.getById(id, permiso);
     return await this.repository.prediccionMalezas(id);
+  }
+
+  async registrarEtapaFenologica(
+    id: string,
+    registro: IRegistroFenologico,
+    permiso: IPermiso,
+  ): Promise<ISiembra> {
+    const siembra = await this.getById(id, permiso);
+    const now = new Date().toISOString();
+    const registroCompleto: IRegistroFenologico = {
+      ...registro,
+      id: registro.id || this.crearIdRegistroFenologico(),
+      idSiembra: siembra._id,
+      idLote: siembra.idLote,
+      idSemilla: siembra.idSemilla,
+      cultivo: registro.cultivo || siembra.semilla?.cultivo,
+      variedad: registro.variedad || siembra.semilla?.variedad,
+      ciclo: registro.ciclo || siembra.semilla?.ciclo,
+      requerimientoFrio:
+        registro.requerimientoFrio || siembra.semilla?.requerimientoFrio,
+      fenologiaReferencia:
+        registro.fenologiaReferencia || siembra.semilla?.fenologiaReferencia,
+      actualizadoEn: now,
+    };
+
+    const registros = [...(siembra.registrosFenologicos || [])];
+    const index = registros.findIndex((item) =>
+      registro.id
+        ? item.id === registro.id
+        : item.etapa === registroCompleto.etapa &&
+          item.campania === registroCompleto.campania &&
+          (item.accion || 'inicio') === (registroCompleto.accion || 'inicio'),
+    );
+
+    if (index >= 0) {
+      registros[index] = {
+        ...registros[index],
+        ...registroCompleto,
+        creadoEn: registros[index].creadoEn || now,
+      };
+    } else {
+      registros.push({
+        ...registroCompleto,
+        creadoEn: now,
+      });
+    }
+
+    await this.repository.registrarEtapaFenologica(id, registros);
+    return await this.getById(id, permiso);
   }
 
   async get(
@@ -905,6 +955,12 @@ export class SiembrasService {
       );
     }
     return false;
+  }
+
+  private crearIdRegistroFenologico(): string {
+    return `fen-${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
   }
 
   private agregarFiltroPermiso(query: IQueryParam, permiso: IPermiso) {

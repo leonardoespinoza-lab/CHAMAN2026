@@ -26,6 +26,7 @@ import {
   TTipoLabranza,
   IResultadoPrediccionRiego,
   IResultadoPrediccionMalezas,
+  IRegistroFenologico,
 } from 'modelos/src';
 import { Document } from 'mongoose';
 import { Quimica } from '../../quimica/modelos/schema';
@@ -128,6 +129,9 @@ export class Siembra implements Exactly<ISiembra, Siembra> {
 
   @Prop({ type: Object })
   huellaHidrica?: IHuellaHidrica;
+
+  @Prop({ type: [Object], default: [] })
+  registrosFenologicos?: IRegistroFenologico[];
 
   // Campos para diagnóstico del cálculo de agua útil
   @Prop()

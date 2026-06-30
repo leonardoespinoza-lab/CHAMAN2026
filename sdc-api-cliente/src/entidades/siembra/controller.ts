@@ -19,6 +19,7 @@ import {
   IPermiso,
   IPrediccion,
   IResultadoPrediccionMalezas,
+  IRegistroFenologico,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
@@ -99,6 +100,21 @@ export class SiembrasController {
     @GetPermiso() permiso: IPermiso,
   ): Promise<IResultadoPrediccionMalezas> {
     return await this.service.prediccionMalezas(id, permiso);
+  }
+
+  @Put('/:id/registro-fenologico')
+  @Permisos(
+    { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+  )
+  public async registrarEtapaFenologica(
+    @Param('id') id: string,
+    @Body() body: IRegistroFenologico,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<ISiembra> {
+    return await this.service.registrarEtapaFenologica(id, body, permiso);
   }
 
   @Post()

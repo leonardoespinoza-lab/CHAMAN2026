@@ -17,6 +17,14 @@
   margin: 0;
 }
 
+.phenology-title {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.85rem;
+  justify-content: space-between;
+  min-width: 0;
+}
+
 .phenology-title .titulo-card {
   font-size: 1.45rem;
   letter-spacing: 0;
@@ -28,6 +36,14 @@
   font-size: 1rem;
   line-height: 1.35;
   margin-top: 0.16rem;
+}
+
+.phenology-last-record {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.82rem;
+  line-height: 1.25;
+  margin-top: 0.38rem;
 }
 
 .crop-detail-grid {
@@ -220,7 +236,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  min-height: 122px;
+  min-height: 154px;
   padding: 0.72rem;
 }
 
@@ -261,6 +277,17 @@
   line-height: 1.16;
 }
 
+.stage-registered {
+  align-self: flex-start;
+  background: color-mix(in srgb, var(--p-primary-color), white 86%);
+  border-radius: 999px;
+  color: var(--p-text-color);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0.28rem 0.45rem;
+}
+
 .step-progress {
   height: 5px;
   margin-top: auto;
@@ -272,6 +299,109 @@
 
 .stage-step.pending .step-progress span {
   background: #98a2ad;
+}
+
+.stage-register-btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid rgba(91, 124, 156, 0.28);
+  border-radius: 7px;
+  color: var(--p-text-color);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 0.34rem;
+  justify-content: center;
+  line-height: 1;
+  margin-top: 0.5rem;
+  min-height: 30px;
+  padding: 0.4rem 0.48rem;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  width: 100%;
+}
+
+.stage-register-btn:hover {
+  background: color-mix(in srgb, var(--p-primary-color), white 91%);
+  border-color: color-mix(in srgb, var(--p-primary-color), white 45%);
+  color: var(--p-primary-color);
+}
+
+.register-dialog-heading {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.register-dialog-heading span {
+  color: var(--p-primary-color);
+  font-size: 0.86rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.register-dialog-heading strong {
+  color: var(--p-text-color);
+  font-size: 1rem;
+}
+
+.register-dialog-body {
+  display: grid;
+  gap: 1rem;
+}
+
+.register-form-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: 1fr 1fr;
+}
+
+.register-form-grid label,
+.register-notes {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.register-form-grid span,
+.register-notes span,
+.register-snapshot span {
+  color: var(--p-text-muted-color);
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.register-notes textarea {
+  min-height: 92px;
+  resize: vertical;
+  width: 100%;
+}
+
+.register-snapshot {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.register-snapshot article {
+  background: var(--p-surface-50);
+  border: 1px solid rgba(91, 124, 156, 0.22);
+  border-radius: 8px;
+  padding: 0.72rem;
+}
+
+.register-snapshot strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 0.95rem;
+  line-height: 1.15;
+  margin-top: 0.2rem;
+  overflow-wrap: anywhere;
+}
+
+.register-dialog-footer {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
 }
 
 .empty-state {
@@ -306,8 +436,15 @@
     font-size: 1.24rem;
   }
 
+  .phenology-title {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .crop-detail-grid,
-  .stage-context {
+  .stage-context,
+  .register-form-grid,
+  .register-snapshot {
     grid-template-columns: 1fr;
   }
 

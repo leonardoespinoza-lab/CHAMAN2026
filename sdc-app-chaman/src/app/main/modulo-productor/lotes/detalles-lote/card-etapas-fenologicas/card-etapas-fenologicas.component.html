@@ -1,8 +1,26 @@
 <div class="custom-card phenology-card">
   <div class="phenology-heading">
     <div class="phenology-title">
-      <p class="titulo-card">{{ 'Etapa fenologica' | translate | uppercase }}</p>
-      <span class="phenology-subtitle">{{ resumenFenologico }}</span>
+      <div>
+        <p class="titulo-card">{{ 'Etapa fenologica' | translate | uppercase }}</p>
+        <span class="phenology-subtitle">{{ resumenFenologico }}</span>
+        @if (ultimoRegistroFenologico) {
+          <small class="phenology-last-record">
+            Ultimo registro de campo: {{ ultimoRegistroFenologico.etapa }} -
+            {{ ultimoRegistroFenologico.fecha | date: 'd/M/yy' }}
+          </small>
+        }
+      </div>
+      @if (etapas.length > 0) {
+        <p-button
+          label="Registrar etapa"
+          icon="pi pi-calendar-plus"
+          severity="secondary"
+          [outlined]="true"
+          size="small"
+          (click)="abrirRegistroEtapa()"
+        ></p-button>
+      }
     </div>
 
     <div class="crop-detail-grid">
@@ -71,9 +89,16 @@
             <strong>{{ etapa.nombre }}</strong>
             <small>{{ etapa.fecha | date: 'd/M' }}</small>
             <em>{{ etapaDetalleTexto(etapa, i) }}</em>
+            @if (registroEtapa(etapa)) {
+              <span class="stage-registered">Campo {{ registroEtapa(etapa)?.fecha | date: 'd/M' }}</span>
+            }
             <div class="step-progress">
               <span [style.width.%]="etapaProgreso(etapa)"></span>
             </div>
+            <button type="button" class="stage-register-btn" (click)="abrirRegistroEtapa(etapa)">
+              <i class="pi pi-calendar-plus"></i>
+              {{ textoBotonRegistro(etapa) }}
+            </button>
           </article>
         }
       </div>
@@ -84,3 +109,94 @@
     </div>
   }
 </div>
+
+<p-dialog
+  [(visible)]="registroDialogVisible"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(680px, 94vw)' }"
+  styleClass="phenology-register-dialog"
+>
+  <ng-template pTemplate="header">
+    <div class="register-dialog-heading">
+      <span>Registro fenologico de campo</span>
+      <strong>{{ siembraActual?.semilla?.cultivo || 'Cultivo' }} - {{ siembraActual?.semilla?.variedad || 'Variedad' }}</strong>
+    </div>
+  </ng-template>
+
+  <div class="register-dialog-body">
+    <div class="register-form-grid">
+      <label>
+        <span>Etapa observada</span>
+        <p-select
+          [options]="etapaOptions"
+          [(ngModel)]="registroForm.etapa"
+          appendTo="body"
+          [style]="{ width: '100%' }"
+        ></p-select>
+      </label>
+
+      <label>
+        <span>Fecha de inicio real</span>
+        <p-datepicker
+          [(ngModel)]="registroForm.fecha"
+          dateFormat="dd/mm/yy"
+          appendTo="body"
+          [showIcon]="true"
+          [style]="{ width: '100%' }"
+        ></p-datepicker>
+      </label>
+    </div>
+
+    <label class="register-notes">
+      <span>Observacion de campo</span>
+      <textarea
+        pInputText
+        rows="4"
+        [(ngModel)]="registroForm.observaciones"
+        placeholder="Ej: brotacion vegetativa observada en 70% de plantas, yemas uniformes, sin floracion."
+      ></textarea>
+    </label>
+
+    <div class="register-snapshot">
+      <article>
+        <span>Cultivo</span>
+        <strong>{{ siembraActual?.semilla?.cultivo || '-' }}</strong>
+      </article>
+      <article>
+        <span>Variedad</span>
+        <strong>{{ siembraActual?.semilla?.variedad || '-' }}</strong>
+      </article>
+      <article>
+        <span>Frio requerido</span>
+        <strong>
+          {{ siembraActual?.semilla?.requerimientoFrio?.horasFrio || '-' }} HF
+        </strong>
+      </article>
+      <article>
+        <span>CP requerido</span>
+        <strong>
+          {{ siembraActual?.semilla?.requerimientoFrio?.porcionesFrio || '-' }}
+        </strong>
+      </article>
+    </div>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <div class="register-dialog-footer">
+      <p-button
+        label="Cancelar"
+        severity="secondary"
+        [outlined]="true"
+        (click)="registroDialogVisible = false"
+      ></p-button>
+      <p-button
+        label="Guardar registro"
+        icon="pi pi-check"
+        [loading]="guardandoRegistro"
+        (click)="guardarRegistroFenologico()"
+      ></p-button>
+    </div>
+  </ng-template>
+</p-dialog>

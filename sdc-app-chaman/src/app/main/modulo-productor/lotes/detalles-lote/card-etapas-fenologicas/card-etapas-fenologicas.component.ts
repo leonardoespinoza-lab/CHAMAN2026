@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
+import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
@@ -10,6 +11,7 @@ import {
   getFenologiaJuvenilPerenne,
   getEtapasPerennesReferencia,
   getNombreImplantacion,
+  IRegistroFenologico,
   ISemilla,
   ISiembra,
 } from 'modelos/src';
@@ -28,6 +30,12 @@ interface FenologiaStage {
 }
 
 type FuenteFenologia = 'crono' | 'semilla' | 'base';
+
+interface RegistroFenologicoForm {
+  fecha: Date;
+  etapa: string;
+  observaciones: string;
+}
 
 const ETAPAS_BASE_POR_CULTIVO: Record<string, Record<string, number>> = {
   Trigo: {
@@ -122,6 +130,14 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   public fuenteFenologiaJoven = '';
   public etiquetaImplantacion: 'Siembra' | 'Plantacion' = 'Siembra';
   public campaniaTexto = '';
+  public registroDialogVisible = false;
+  public guardandoRegistro = false;
+  public registroEditandoId?: string;
+  public registroForm: RegistroFenologicoForm = {
+    fecha: new Date(),
+    etapa: '',
+    observaciones: '',
+  };
   private readonly diaMs = 86400000;
 
   public get timelineMinWidth(): string {
@@ -142,6 +158,24 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     const index = this.indiceEtapaActual();
     if (index < 0) return undefined;
     return this.etapas[index + 1];
+  }
+
+  public get siembraActual(): ISiembra | undefined {
+    return this.siembra || this.lote?.siembra;
+  }
+
+  public get registrosFenologicos(): IRegistroFenologico[] {
+    return [...(this.siembraActual?.registrosFenologicos || [])].sort((a, b) =>
+      String(a.fecha || '').localeCompare(String(b.fecha || '')),
+    );
+  }
+
+  public get ultimoRegistroFenologico(): IRegistroFenologico | undefined {
+    return this.registrosFenologicos[this.registrosFenologicos.length - 1];
+  }
+
+  public get etapaOptions(): Array<{ label: string; value: string }> {
+    return this.etapas.map((etapa) => ({ label: etapa.nombre, value: etapa.nombre }));
   }
 
   public get diasDesdeImplantacion(): number {
@@ -256,7 +290,87 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     return 0;
   }
 
-  constructor(public helper: HelperService) {}
+  public registroEtapa(etapa: FenologiaStage): IRegistroFenologico | undefined {
+    return this.registrosFenologicos.find(
+      (registro) =>
+        registro.etapa === etapa.nombre &&
+        registro.campania === this.campaniaTexto &&
+        (registro.accion || 'inicio') === 'inicio',
+    );
+  }
+
+  public textoBotonRegistro(etapa: FenologiaStage): string {
+    return this.registroEtapa(etapa) ? 'Editar inicio' : 'Registrar inicio';
+  }
+
+  public abrirRegistroEtapa(etapa?: FenologiaStage): void {
+    const etapaObjetivo = etapa || this.etapaActualDetalle;
+    if (!this.siembraActual?._id || !etapaObjetivo) {
+      this.helper.notifWarn('No hay siembra activa o etapa disponible para registrar.');
+      return;
+    }
+
+    const existente = this.registroEtapa(etapaObjetivo);
+    this.registroEditandoId = existente?.id;
+    this.registroForm = {
+      fecha: existente?.fecha ? new Date(existente.fecha) : new Date(etapaObjetivo.fecha),
+      etapa: existente?.etapa || etapaObjetivo.nombre,
+      observaciones: existente?.observaciones || '',
+    };
+    this.registroDialogVisible = true;
+  }
+
+  public async guardarRegistroFenologico(): Promise<void> {
+    const siembra = this.siembraActual;
+    if (!siembra?._id || !this.registroForm.etapa) {
+      this.helper.notifWarn('Selecciona una etapa fenologica para registrar.');
+      return;
+    }
+
+    const fechaRegistro = this.normalizarFechaRegistro(this.registroForm.fecha);
+    const registro: IRegistroFenologico = {
+      id: this.registroEditandoId,
+      fecha: fechaRegistro.toISOString(),
+      accion: 'inicio',
+      etapa: this.registroForm.etapa,
+      cultivo: siembra.semilla?.cultivo,
+      variedad: siembra.semilla?.variedad,
+      ciclo: siembra.semilla?.ciclo,
+      campania: this.campaniaTexto || undefined,
+      idLote: siembra.idLote || this.lote?._id,
+      idSiembra: siembra._id,
+      idSemilla: siembra.idSemilla,
+      edadPlantacionAnios: this.edadPlantacionAnios,
+      diasDesdeImplantacion: this.getDiasDesdeFechaBase(siembra.fechaSiembra, fechaRegistro),
+      diasDesdeCampania: this.getDiasDesdeInicioCampania(fechaRegistro),
+      fuenteFenologia: this.fuenteTexto,
+      requerimientoFrio: siembra.semilla?.requerimientoFrio,
+      fenologiaReferencia: siembra.semilla?.fenologiaReferencia,
+      frioAcumulado: this.getFrioAcumuladoSnapshot(),
+      observaciones: this.registroForm.observaciones?.trim() || undefined,
+    };
+
+    try {
+      this.guardandoRegistro = true;
+      const actualizado = await this.siembraService.registrarEtapaFenologica(siembra._id, registro);
+      this.siembra = actualizado;
+      if (this.lote?.siembra) {
+        this.lote.siembra = actualizado;
+      }
+      this.crearTimeline();
+      this.registroDialogVisible = false;
+      this.helper.notifSuccess('Etapa fenologica registrada.');
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.guardandoRegistro = false;
+    }
+  }
+
+  constructor(
+    public helper: HelperService,
+    private siembraService: SiembraService,
+  ) {}
 
   ngOnInit(): void {
     this.crearTimeline();
@@ -643,6 +757,55 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
   private indiceEtapaActual(): number {
     return this.etapas.findIndex((etapa) => etapa.estado === 'current');
+  }
+
+  private normalizarFechaRegistro(value?: Date): Date {
+    const fecha = value instanceof Date ? new Date(value) : value ? new Date(value) : new Date();
+    const segura = Number.isNaN(fecha.getTime()) ? new Date() : fecha;
+    segura.setHours(12, 0, 0, 0);
+    return segura;
+  }
+
+  private getDiasDesdeFechaBase(fechaBase: string | Date | undefined, fecha: Date): number | undefined {
+    if (!fechaBase) return undefined;
+    const base = fechaBase instanceof Date ? fechaBase : new Date(fechaBase);
+    if (Number.isNaN(base.getTime())) return undefined;
+    return Math.max(0, Math.floor((fecha.getTime() - base.getTime()) / this.diaMs));
+  }
+
+  private getDiasDesdeInicioCampania(fecha: Date): number | undefined {
+    if (!this.esPerenne) return undefined;
+    const cultivo = this.canonicalCultivo(this.siembraActual?.semilla?.cultivo);
+    const anchors: Record<string, { mes: number; dia: number }> = {
+      Pecan: { mes: 7, dia: 1 },
+      Vid: { mes: 7, dia: 1 },
+      Manzano: { mes: 7, dia: 1 },
+      Peral: { mes: 7, dia: 1 },
+    };
+    const anchor = anchors[cultivo] || { mes: 7, dia: 1 };
+    const year = fecha.getMonth() + 1 >= anchor.mes ? fecha.getFullYear() : fecha.getFullYear() - 1;
+    const inicio = new Date(year, anchor.mes - 1, anchor.dia);
+    return Math.max(0, Math.floor((fecha.getTime() - inicio.getTime()) / this.diaMs));
+  }
+
+  private getFrioAcumuladoSnapshot(): IRegistroFenologico['frioAcumulado'] | undefined {
+    const frio = (this.lote?.dispositivos || [])
+      .map((dispositivo: any) => dispositivo?.frioAcumulado)
+      .find(Boolean) as any;
+    if (!frio) return undefined;
+    return {
+      fechaDesde: frio.fechaInicio,
+      fechaHasta: frio.fechaUltimoCalculo,
+      horasFrio: this.numeroSeguro(frio.horasFrio),
+      horasFrioEfectivas: this.numeroSeguro(frio.horasFrioEfectivas),
+      porcionesFrio: this.numeroSeguro(frio.porcionesFrio),
+      fuente: frio.fuente || 'Sensor LoRa',
+    };
+  }
+
+  private numeroSeguro(value: unknown): number | undefined {
+    const numero = Number(value);
+    return Number.isFinite(numero) ? numero : undefined;
   }
 
   ngOnDestroy(): void {}
