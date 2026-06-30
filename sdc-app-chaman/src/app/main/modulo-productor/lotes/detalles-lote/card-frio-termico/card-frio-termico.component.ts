@@ -113,7 +113,7 @@ export class CardFrioTermicoComponent implements OnChanges {
   public get edadPlantacionLabel(): string {
     const edad = this.edadPlantacionAnios;
     if (!this.esNumero(edad)) return 'edad sin calcular';
-    return edad === 1 ? '1 anio' : `${edad} anios`;
+    return edad === 1 ? '1 año' : `${edad} años`;
   }
 
   public get fuenteFrioLabel(): string {
@@ -135,7 +135,7 @@ export class CardFrioTermicoComponent implements OnChanges {
       const cultivo = this.siembra?.semilla?.cultivo || 'Plantacion';
       const edad = this.edadPlantacionLabel;
       const productiva = this.edadProductivaDesdeAnios
-        ? ` Entrada productiva estimada desde ${this.edadProductivaDesdeAnios} anios.`
+        ? ` Entrada productiva estimada desde ${this.edadProductivaDesdeAnios} años.`
         : '';
       return `${cultivo} joven (${edad}): el frio acumulado sirve para dormancia y brotacion vegetativa; no estima floracion, llenado ni cosecha.${productiva}`;
     }

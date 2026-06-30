@@ -185,7 +185,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     if (this.plantacionJoven) {
       const edad = this.edadPlantacionLabel;
       const productiva = this.edadProductivaDesdeAnios
-        ? ` Entrada productiva estimada desde ${this.edadProductivaDesdeAnios} anios, ajustable por tecnico.`
+        ? ` Entrada productiva estimada desde ${this.edadProductivaDesdeAnios} años, ajustable por tecnico.`
         : '';
       return `Plantacion joven (${edad}): seguimos estructura vegetativa y sanidad, sin proyectar cosecha hasta confirmar entrada productiva.${productiva}`;
     }
@@ -210,14 +210,14 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   public get edadPlantacionLabel(): string {
     if (this.edadPlantacionAnios === undefined) return 'edad sin calcular';
     return this.edadPlantacionAnios === 1
-      ? '1 anio'
-      : `${this.edadPlantacionAnios} anios`;
+      ? '1 año'
+      : `${this.edadPlantacionAnios} años`;
   }
 
   public get detalleEdadProductiva(): string {
     if (!this.plantacionJoven) return 'desde el inicio';
     if (!this.edadProductivaDesdeAnios) return 'entrada productiva por validar';
-    return `productiva desde ${this.edadProductivaDesdeAnios} anios`;
+    return `productiva desde ${this.edadProductivaDesdeAnios} años`;
   }
 
   public get siguienteHitoTexto(): string {
