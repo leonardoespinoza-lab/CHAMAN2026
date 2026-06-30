@@ -26,6 +26,7 @@ import {
   IPrediccion,
   IResultadoPrediccionMalezas,
   IRegistroFenologico,
+  esCultivoPerenne,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { CronosService } from '../crono/service';
@@ -94,6 +95,16 @@ export class SiembrasService {
     permiso: IPermiso,
   ): Promise<ISiembra> {
     const siembra = await this.getById(id, permiso);
+    const cultivo = this.canonicalCultivo(
+      registro.cultivo || siembra.semilla?.cultivo,
+    );
+
+    if (!esCultivoPerenne(cultivo)) {
+      throw new BadRequestException(
+        'El registro manual de etapas fenologicas esta habilitado solo para cultivos perennes.',
+      );
+    }
+
     const now = new Date().toISOString();
     const registroCompleto: IRegistroFenologico = {
       ...registro,
@@ -961,6 +972,27 @@ export class SiembrasService {
     return `fen-${Date.now().toString(36)}-${Math.random()
       .toString(36)
       .slice(2, 8)}`;
+  }
+
+  private canonicalCultivo(cultivo?: string): string {
+    const normalizado = (cultivo || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+    const cultivos: Record<string, string> = {
+      trigo: 'Trigo',
+      soja: 'Soja',
+      maiz: 'Maiz',
+      papa: 'Papa',
+      vid: 'Vid',
+      peral: 'Peral',
+      pecan: 'Pecan',
+      manzano: 'Manzano',
+    };
+
+    return cultivos[normalizado] || cultivo || '';
   }
 
   private agregarFiltroPermiso(query: IQueryParam, permiso: IPermiso) {

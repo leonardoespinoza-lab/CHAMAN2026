@@ -165,6 +165,8 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   public get registrosFenologicos(): IRegistroFenologico[] {
+    const cultivo = this.canonicalCultivo(this.siembraActual?.semilla?.cultivo || this.cultivo);
+    if (!esCultivoPerenne(cultivo)) return [];
     return [...(this.siembraActual?.registrosFenologicos || [])].sort((a, b) =>
       String(a.fecha || '').localeCompare(String(b.fecha || '')),
     );
@@ -176,6 +178,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
   public get etapaOptions(): Array<{ label: string; value: string }> {
     return this.etapas.map((etapa) => ({ label: etapa.nombre, value: etapa.nombre }));
+  }
+
+  public get puedeRegistrarFenologiaCampo(): boolean {
+    const cultivo = this.canonicalCultivo(this.siembraActual?.semilla?.cultivo || this.cultivo);
+    return !!this.siembraActual?._id && this.etapas.length > 0 && esCultivoPerenne(cultivo);
   }
 
   public get diasDesdeImplantacion(): number {
@@ -304,6 +311,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   public abrirRegistroEtapa(etapa?: FenologiaStage): void {
+    if (!this.puedeRegistrarFenologiaCampo) {
+      this.helper.notifWarn('El registro manual de etapas esta habilitado solo para cultivos perennes.');
+      return;
+    }
+
     const etapaObjetivo = etapa || this.etapaActualDetalle;
     if (!this.siembraActual?._id || !etapaObjetivo) {
       this.helper.notifWarn('No hay siembra activa o etapa disponible para registrar.');
@@ -322,6 +334,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
   public async guardarRegistroFenologico(): Promise<void> {
     const siembra = this.siembraActual;
+    if (!this.puedeRegistrarFenologiaCampo) {
+      this.helper.notifWarn('El registro manual de etapas esta habilitado solo para cultivos perennes.');
+      return;
+    }
+
     if (!siembra?._id || !this.registroForm.etapa) {
       this.helper.notifWarn('Selecciona una etapa fenologica para registrar.');
       return;
