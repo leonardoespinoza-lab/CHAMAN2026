@@ -4,6 +4,9 @@ import { firstValueFrom } from 'rxjs';
 import {
   CONFIGURACION_FRIO_CULTIVOS,
   esCultivoPerenne,
+  esPlantacionPerenneJoven,
+  getEdadPerenneAnios,
+  getFenologiaJuvenilPerenne,
   IConfiguracionFrioCultivo,
   IEstablecimiento,
   IFrioTermicoCultivo,
@@ -700,6 +703,7 @@ export class ClimaService {
     contextoHelada: {
       variedad?: string;
       fechaSiembra?: string;
+      edadProductivaDesdeAnios?: number;
       ajusteVarietalC?: number;
       fuenteAjusteVarietal?: string;
     } = {},
@@ -746,6 +750,19 @@ export class ClimaService {
       config,
     );
     const requerimientos = validacionRequerimientos.requerimientos;
+    const edadProductivaDesdeAnios =
+      contextoHelada.edadProductivaDesdeAnios ??
+      getFenologiaJuvenilPerenne(cultivo)?.edadProductivaDesdeAnios;
+    const edadPlantacionAnios = getEdadPerenneAnios(
+      contextoHelada.fechaSiembra,
+      hoy,
+    );
+    const plantacionJoven = esPlantacionPerenneJoven(
+      cultivo,
+      contextoHelada.fechaSiembra,
+      hoy,
+      edadProductivaDesdeAnios,
+    );
     const cacheKey = this.getFrioTermicoCacheKey(
       latNum,
       lngNum,
@@ -909,7 +926,16 @@ export class ClimaService {
       progreso,
       riesgoHelada,
       acumulados,
+      plantacionJoven,
     );
+    const contextoCultivo: IFrioTermicoCultivo['contextoCultivo'] = {
+      plantacionJoven,
+      edadPlantacionAnios,
+      edadProductivaDesdeAnios,
+      lectura: plantacionJoven
+        ? `${cultivo || 'Plantacion'} joven: el frio acumulado se usa para dormancia y brotacion vegetativa; no habilita lectura de floracion, llenado o cosecha.`
+        : undefined,
+    };
 
     const resultado: IFrioTermicoCultivo = {
       fuente: 'OpenMeteo',
@@ -937,8 +963,14 @@ export class ClimaService {
         porcionesFrio: calculoPorciones,
         observaciones: observacionesCalculo,
       },
+      contextoCultivo,
       serie,
-      lectura: this.getLecturaFrioTermico(cultivo, progreso, riesgoHelada),
+      lectura: this.getLecturaFrioTermico(
+        cultivo,
+        progreso,
+        riesgoHelada,
+        plantacionJoven,
+      ),
     };
 
     this.frioTermicoCache.set(cacheKey, {
@@ -958,6 +990,7 @@ export class ClimaService {
       variedad?: string;
       fechaSiembra?: string;
       etapaFenologica?: string;
+      edadProductivaDesdeAnios?: number;
       ajusteVarietalC?: number;
       fuenteAjusteVarietal?: string;
     } = {},
@@ -990,6 +1023,7 @@ export class ClimaService {
     contextoHelada: {
       variedad?: string;
       fechaSiembra?: string;
+      edadProductivaDesdeAnios?: number;
       ajusteVarietalC?: number;
       fuenteAjusteVarietal?: string;
     } = {},
@@ -1004,6 +1038,7 @@ export class ClimaService {
       cultivo || 'cultivo',
       contextoHelada.variedad || 'variedad',
       contextoHelada.fechaSiembra || 'fecha',
+      contextoHelada.edadProductivaDesdeAnios ?? '',
       contextoHelada.ajusteVarietalC ?? '',
       contextoHelada.fuenteAjusteVarietal || '',
       this.toDateKey(new Date()),
@@ -1517,6 +1552,7 @@ export class ClimaService {
       variedad?: string;
       fechaSiembra?: string;
       etapaFenologica?: string;
+      edadProductivaDesdeAnios?: number;
       ajusteVarietalC?: number;
       fuenteAjusteVarietal?: string;
     } = {},
@@ -1546,6 +1582,7 @@ export class ClimaService {
         fecha: dia.fecha,
         fechaSiembra: contextoCultivo.fechaSiembra,
         etapaFenologica: contextoCultivo.etapaFenologica,
+        edadProductivaDesdeAnios: contextoCultivo.edadProductivaDesdeAnios,
         ajusteVarietalC: contextoCultivo.ajusteVarietalC,
         fuenteAjusteVarietal: contextoCultivo.fuenteAjusteVarietal,
       });
@@ -1829,6 +1866,7 @@ export class ClimaService {
     contextoHelada: {
       variedad?: string;
       fechaSiembra?: string;
+      edadProductivaDesdeAnios?: number;
       ajusteVarietalC?: number;
       fuenteAjusteVarietal?: string;
     } = {},
@@ -1839,6 +1877,7 @@ export class ClimaService {
         fecha: dia.fecha,
         variedad: contextoHelada.variedad,
         fechaSiembra: contextoHelada.fechaSiembra,
+        edadProductivaDesdeAnios: contextoHelada.edadProductivaDesdeAnios,
         ajusteVarietalC: contextoHelada.ajusteVarietalC,
         fuenteAjusteVarietal: contextoHelada.fuenteAjusteVarietal,
       });
@@ -1879,11 +1918,47 @@ export class ClimaService {
     progreso: IFrioTermicoCultivo['progreso'],
     riesgoHelada: IFrioTermicoCultivo['riesgoHelada'],
     acumulados: IFrioTermicoCultivo['acumulados'],
+    plantacionJoven = false,
   ): IFrioTermicoCultivo['eventos'] {
     const frioCumplido =
-      progreso.horasFrioPct >= 85 || progreso.porcionesFrioPct >= 85;
-    const brotacionAlcanzada = progreso.brotacionPct >= 100;
+      progreso.horasFrioPct >= 85 ||
+      progreso.horasFrioEfectivasPct >= 85 ||
+      progreso.porcionesFrioPct >= 85;
+    const brotacionAlcanzada = frioCumplido && progreso.brotacionPct >= 100;
     const floracionAlcanzada = progreso.floracionPct >= 100;
+    if (plantacionJoven) {
+      return {
+        brotacion: {
+          estado: brotacionAlcanzada
+            ? 'alcanzada'
+            : frioCumplido
+              ? progreso.brotacionPct >= 65
+                ? 'probable'
+                : 'acumulando_calor'
+              : 'esperando_frio',
+          lectura: frioCumplido
+            ? `Frio de dormancia suficiente o cercano; ${acumulados.gradosDia} grados dia acumulados para brotacion vegetativa.`
+            : 'Seguir acumulacion de frio de dormancia antes de anticipar brotacion vegetativa.',
+        },
+        floracion: {
+          estado: 'pendiente',
+          lectura:
+            'No se proyecta floracion, llenado ni cosecha en plantacion joven sin confirmacion de entrada productiva.',
+        },
+        ventanaSanitaria: {
+          estado:
+            riesgoHelada.nivel === 'alto'
+              ? 'alta'
+              : riesgoHelada.nivel === 'medio'
+                ? 'media'
+                : 'baja',
+          lectura:
+            riesgoHelada.nivel === 'bajo'
+              ? 'Sin dano por helada esperado para el estadio vegetativo estimado.'
+              : 'Revisar brotes/yemas jovenes a campo antes de activar defensa.',
+        },
+      };
+    }
     return {
       brotacion: {
         estado: brotacionAlcanzada
@@ -1926,12 +2001,29 @@ export class ClimaService {
     cultivo: string | undefined,
     progreso: IFrioTermicoCultivo['progreso'],
     riesgoHelada: IFrioTermicoCultivo['riesgoHelada'],
+    plantacionJoven = false,
   ): string {
     const nombre = cultivo || 'plantacion';
+    const frioDormanciaBajo =
+      progreso.horasFrioPct < 70 &&
+      progreso.horasFrioEfectivasPct < 70 &&
+      progreso.porcionesFrioPct < 70;
+    if (plantacionJoven) {
+      if (riesgoHelada.nivel !== 'bajo') {
+        return `${nombre} joven: riesgo de dano por helada en yemas o brotes vegetativos; validar estado real antes de activar defensa.`;
+      }
+      if (frioDormanciaBajo) {
+        return `${nombre} joven: acumulacion de frio de dormancia en seguimiento; no es una lectura de floracion ni cosecha.`;
+      }
+      if (progreso.brotacionPct < 100) {
+        return `${nombre} joven: frio de dormancia suficiente o cercano; seguir grados dia para brotacion vegetativa.`;
+      }
+      return `${nombre} joven: dormancia y calor acumulados compatibles con brotacion vegetativa; validar a campo.`;
+    }
     if (riesgoHelada.nivel !== 'bajo') {
       return `${nombre}: riesgo de dano por helada para ${riesgoHelada.etapaFenologica || 'el estadio estimado'}; validar a campo antes de activar defensa.`;
     }
-    if (progreso.horasFrioPct < 70 && progreso.porcionesFrioPct < 70) {
+    if (frioDormanciaBajo) {
       return `${nombre}: etapa de acumulacion de frio, sin senal firme de salida de dormancia.`;
     }
     if (progreso.brotacionPct < 100) {

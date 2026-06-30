@@ -914,6 +914,14 @@ export class LotesService {
           horasFrioEfectivasObjetivo: req?.horasFrioEfectivas,
           porcionesFrioObjetivo: req?.porcionesFrio,
         },
+        {
+          variedad: siembra?.semilla?.variedad,
+          fechaSiembra: siembra?.fechaSiembra,
+          edadProductivaDesdeAnios:
+            siembra?.semilla?.fenologiaReferencia?.edadProductivaDesdeAnios,
+          ajusteVarietalC: siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
+          fuenteAjusteVarietal: siembra?.semilla?.sensibilidadHelada?.fuente,
+        },
       );
     } catch (error) {
       this.logger.warn(

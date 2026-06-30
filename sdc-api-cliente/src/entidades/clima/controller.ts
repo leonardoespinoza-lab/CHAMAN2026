@@ -81,6 +81,7 @@ export class ClimaController {
     gradosDiaFloracionObjetivo?: string,
     @Query('variedad') variedad?: string,
     @Query('fechaSiembra') fechaSiembra?: string,
+    @Query('edadProductivaDesdeAnios') edadProductivaDesdeAnios?: string,
     @Query('ajusteHeladaC') ajusteHeladaC?: string,
     @Query('fuenteAjusteVarietal') fuenteAjusteVarietal?: string,
   ) {
@@ -107,6 +108,9 @@ export class ClimaController {
       {
         variedad,
         fechaSiembra,
+        edadProductivaDesdeAnios: this.toNumberOrUndefined(
+          edadProductivaDesdeAnios,
+        ),
         ajusteVarietalC: this.toNumberOrUndefined(ajusteHeladaC),
         fuenteAjusteVarietal,
       },
@@ -123,6 +127,7 @@ export class ClimaController {
     @Query('variedad') variedad?: string,
     @Query('fechaSiembra') fechaSiembra?: string,
     @Query('etapaFenologica') etapaFenologica?: string,
+    @Query('edadProductivaDesdeAnios') edadProductivaDesdeAnios?: string,
     @Query('ajusteHeladaC') ajusteHeladaC?: string,
     @Query('fuenteAjusteVarietal') fuenteAjusteVarietal?: string,
   ) {
@@ -134,6 +139,9 @@ export class ClimaController {
         variedad,
         fechaSiembra,
         etapaFenologica,
+        edadProductivaDesdeAnios: this.toNumberOrUndefined(
+          edadProductivaDesdeAnios,
+        ),
         ajusteVarietalC: this.toNumberOrUndefined(ajusteHeladaC),
         fuenteAjusteVarietal,
       },

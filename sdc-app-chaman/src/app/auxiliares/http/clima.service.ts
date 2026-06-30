@@ -102,6 +102,7 @@ export class ClimaService {
       gradosDiaFloracionObjetivo?: number;
       variedad?: string;
       fechaSiembra?: string;
+      edadProductivaDesdeAnios?: number;
       ajusteHeladaC?: number;
       fuenteAjusteVarietal?: string;
     } = {}
@@ -120,6 +121,7 @@ export class ClimaService {
       variedad?: string;
       fechaSiembra?: string;
       etapaFenologica?: string;
+      edadProductivaDesdeAnios?: number;
       ajusteHeladaC?: number;
       fuenteAjusteVarietal?: string;
     } = {}

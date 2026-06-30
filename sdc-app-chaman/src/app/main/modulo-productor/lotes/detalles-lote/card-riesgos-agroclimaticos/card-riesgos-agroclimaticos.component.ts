@@ -91,6 +91,7 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
         cultivo: this.siembra?.semilla?.cultivo,
         variedad: this.siembra?.semilla?.variedad,
         fechaSiembra: this.siembra?.fechaSiembra,
+        edadProductivaDesdeAnios: this.siembra?.semilla?.fenologiaReferencia?.edadProductivaDesdeAnios,
         ajusteHeladaC: this.siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
         fuenteAjusteVarietal: this.siembra?.semilla?.sensibilidadHelada?.fuente,
       });
@@ -147,6 +148,7 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
       this.siembra?.semilla?.cultivo,
       this.siembra?.semilla?.variedad,
       this.siembra?.fechaSiembra,
+      this.siembra?.semilla?.fenologiaReferencia?.edadProductivaDesdeAnios,
       this.siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
       this.siembra?.semilla?.sensibilidadHelada?.fuente,
       new Date().toISOString().slice(0, 10),

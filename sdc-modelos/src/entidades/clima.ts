@@ -223,6 +223,12 @@ export interface IFrioTermicoCultivo {
     porcionesFrio: "dinamico_horario" | "estimado_hfe";
     observaciones?: string[];
   };
+  contextoCultivo?: {
+    plantacionJoven?: boolean;
+    edadPlantacionAnios?: number;
+    edadProductivaDesdeAnios?: number;
+    lectura?: string;
+  };
   serie: ISerieFrioTermicoDia[];
   lectura: string;
 }

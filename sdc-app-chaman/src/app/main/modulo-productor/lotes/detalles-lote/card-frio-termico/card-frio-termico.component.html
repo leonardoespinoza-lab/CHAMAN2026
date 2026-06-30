@@ -77,17 +77,17 @@
           @if (data) {
             <section class="frio-events">
               <article>
-                <span>Brotacion esperada</span>
+                <span>{{ tituloEventoBrotacion }}</span>
                 <strong>{{ data.eventos.brotacion.estado.replace('_', ' ') }}</strong>
                 <small>{{ data.eventos.brotacion.lectura }}</small>
               </article>
               <article>
-                <span>Floracion esperada</span>
+                <span>{{ tituloEventoFloracion }}</span>
                 <strong>{{ data.eventos.floracion.estado }}</strong>
                 <small>{{ data.eventos.floracion.lectura }}</small>
               </article>
               <article>
-                <span>Ventana sanitaria</span>
+                <span>{{ tituloEventoSanitario }}</span>
                 <strong>{{ data.eventos.ventanaSanitaria.estado }}</strong>
                 <small>{{ data.eventos.ventanaSanitaria.lectura }}</small>
               </article>
@@ -110,17 +110,17 @@
 
           <section class="frio-events">
             <article>
-              <span>Brotacion esperada</span>
+              <span>{{ tituloEventoBrotacion }}</span>
               <strong>{{ data.eventos.brotacion.estado.replace('_', ' ') }}</strong>
               <small>{{ data.eventos.brotacion.lectura }}</small>
             </article>
             <article>
-              <span>Floracion esperada</span>
+              <span>{{ tituloEventoFloracion }}</span>
               <strong>{{ data.eventos.floracion.estado }}</strong>
               <small>{{ data.eventos.floracion.lectura }}</small>
             </article>
             <article>
-              <span>Ventana sanitaria</span>
+              <span>{{ tituloEventoSanitario }}</span>
               <strong>{{ data.eventos.ventanaSanitaria.estado }}</strong>
               <small>{{ data.eventos.ventanaSanitaria.lectura }}</small>
             </article>

@@ -3,6 +3,9 @@ import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import Highcharts from 'highcharts';
 import {
   esCultivoPerenne,
+  esPlantacionPerenneJoven,
+  getEdadPerenneAnios,
+  getFenologiaJuvenilPerenne,
   IDispositivo,
   IFrioAcumulado,
   IFrioTermicoCultivo,
@@ -80,6 +83,39 @@ export class CardFrioTermicoComponent implements OnChanges {
     return !!this.frioSensor;
   }
 
+  public get plantacionJoven(): boolean {
+    if (this.data?.contextoCultivo?.plantacionJoven !== undefined) {
+      return !!this.data.contextoCultivo.plantacionJoven;
+    }
+    const cultivo = this.siembra?.semilla?.cultivo;
+    const edadProductiva = this.edadProductivaDesdeAnios;
+    return esPlantacionPerenneJoven(
+      cultivo,
+      this.siembra?.fechaSiembra,
+      new Date(),
+      edadProductiva,
+    );
+  }
+
+  public get edadPlantacionAnios(): number | undefined {
+    return this.data?.contextoCultivo?.edadPlantacionAnios ??
+      getEdadPerenneAnios(this.siembra?.fechaSiembra);
+  }
+
+  public get edadProductivaDesdeAnios(): number | undefined {
+    const desdeData = this.data?.contextoCultivo?.edadProductivaDesdeAnios;
+    if (this.esNumero(desdeData)) return Number(desdeData);
+    const desdeSemilla = Number(this.siembra?.semilla?.fenologiaReferencia?.edadProductivaDesdeAnios);
+    if (Number.isFinite(desdeSemilla)) return desdeSemilla;
+    return getFenologiaJuvenilPerenne(this.siembra?.semilla?.cultivo)?.edadProductivaDesdeAnios;
+  }
+
+  public get edadPlantacionLabel(): string {
+    const edad = this.edadPlantacionAnios;
+    if (!this.esNumero(edad)) return 'edad sin calcular';
+    return edad === 1 ? '1 anio' : `${edad} anios`;
+  }
+
   public get fuenteFrioLabel(): string {
     if (this.usaSensorFrio && this.data) return 'Sensor LoRa + Open-Meteo';
     if (this.usaSensorFrio) return 'Sensor LoRa';
@@ -95,6 +131,14 @@ export class CardFrioTermicoComponent implements OnChanges {
   }
 
   public get lecturaPrincipal(): string {
+    if (this.plantacionJoven) {
+      const cultivo = this.siembra?.semilla?.cultivo || 'Plantacion';
+      const edad = this.edadPlantacionLabel;
+      const productiva = this.edadProductivaDesdeAnios
+        ? ` Entrada productiva estimada desde ${this.edadProductivaDesdeAnios} anios.`
+        : '';
+      return `${cultivo} joven (${edad}): el frio acumulado sirve para dormancia y brotacion vegetativa; no estima floracion, llenado ni cosecha.${productiva}`;
+    }
     if (this.frioSensor) {
       const cultivo = this.siembra?.semilla?.cultivo || 'Plantacion';
       const dispositivo = this.dispositivoFrio?.nombre || this.dispositivoFrio?.deveui || 'sensor asociado';
@@ -114,6 +158,18 @@ export class CardFrioTermicoComponent implements OnChanges {
       return `Frio ${this.data.periodoFrio.desde} a ${this.data.periodoFrio.hasta}. Termico desde ${this.data.periodoTermico.desde}.`;
     }
     return '';
+  }
+
+  public get tituloEventoBrotacion(): string {
+    return this.plantacionJoven ? 'Brotacion vegetativa' : 'Brotacion esperada';
+  }
+
+  public get tituloEventoFloracion(): string {
+    return this.plantacionJoven ? 'Entrada productiva' : 'Floracion esperada';
+  }
+
+  public get tituloEventoSanitario(): string {
+    return this.plantacionJoven ? 'Helada en tejido joven' : 'Ventana sanitaria';
   }
 
   private crearMetricas(): MetricFrio[] {
@@ -164,7 +220,7 @@ export class CardFrioTermicoComponent implements OnChanges {
     if (this.esNumero(horasFrioEfectivas) || this.esNumero(horasFrioEfectivasObjetivo)) {
       const pct = this.porcentaje(horasFrioEfectivas, horasFrioEfectivasObjetivo);
       metricas.push({
-        label: 'Frio efectivo (HFE)',
+        label: 'Frio efectivo (HFE est.)',
         value: this.esNumero(horasFrioEfectivas)
           ? `${this.numero(horasFrioEfectivas, this.usaSensorFrio ? 2 : 1)} HFE`
           : '-',
@@ -439,6 +495,7 @@ export class CardFrioTermicoComponent implements OnChanges {
         cultivo: this.siembra?.semilla?.cultivo,
         variedad: this.siembra?.semilla?.variedad,
         fechaSiembra: this.siembra?.fechaSiembra,
+        edadProductivaDesdeAnios: this.edadProductivaDesdeAnios,
         ajusteHeladaC: this.siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
         fuenteAjusteVarietal: this.siembra?.semilla?.sensibilidadHelada?.fuente,
         horasFrioObjetivo: requerimientoFrio.horasFrio,
@@ -536,6 +593,7 @@ export class CardFrioTermicoComponent implements OnChanges {
       this.siembra?.semilla?.cultivo,
       this.siembra?.semilla?.variedad,
       this.siembra?.fechaSiembra,
+      this.edadProductivaDesdeAnios,
       this.siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
       this.siembra?.semilla?.sensibilidadHelada?.fuente,
       requerimientoFrio.horasFrio,
@@ -570,6 +628,12 @@ export class CardFrioTermicoComponent implements OnChanges {
     if (!this.esNumero(valor)) return `Objetivo ${objetivoLabel}`;
 
     const faltante = Math.max(0, Number(objetivo) - Number(valor));
+    if (this.plantacionJoven && ['h', 'HFE', 'CP'].includes(unidad)) {
+      const estado = faltante > 0
+        ? `faltan ${this.numero(faltante, decimales)}${unidadLabel}`
+        : 'referencia alcanzada';
+      return `Referencia dormancia ${objetivoLabel} - ${estado}; no implica cosecha`;
+    }
     return `Objetivo ${objetivoLabel} - faltan ${this.numero(faltante, decimales)}${unidadLabel}`;
   }
 
