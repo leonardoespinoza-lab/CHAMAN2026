@@ -94,6 +94,7 @@ export interface ISerieFrioTermicoDia {
   rafagaViento?: number;
   horasFrio?: number;
   horasFrioEfectivas?: number;
+  porcionesFrio?: number;
   gradosDia?: number;
   esPronostico?: boolean;
 }
@@ -217,6 +218,10 @@ export interface IFrioTermicoCultivo {
       estado: "baja" | "media" | "alta";
       lectura: string;
     };
+  };
+  calculo?: {
+    porcionesFrio: "dinamico_horario" | "estimado_hfe";
+    observaciones?: string[];
   };
   serie: ISerieFrioTermicoDia[];
   lectura: string;

@@ -4,7 +4,10 @@ import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
 import {
+  esPlantacionPerenneJoven,
   esCultivoPerenne,
+  getEdadPerenneAnios,
+  getFenologiaJuvenilPerenne,
   getEtapasPerennesReferencia,
   getNombreImplantacion,
   ISemilla,
@@ -113,6 +116,10 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   public fuenteFenologia: FuenteFenologia = 'crono';
   public fuenteTexto = 'crono cargado';
   public esPerenne = false;
+  public plantacionJoven = false;
+  public edadPlantacionAnios?: number;
+  public edadProductivaDesdeAnios?: number;
+  public fuenteFenologiaJoven = '';
   public etiquetaImplantacion: 'Siembra' | 'Plantacion' = 'Siembra';
   public campaniaTexto = '';
   private readonly diaMs = 86400000;
@@ -175,6 +182,13 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     if (!actual) {
       return 'No hay datos suficientes para ubicar el lote en el ciclo.';
     }
+    if (this.plantacionJoven) {
+      const edad = this.edadPlantacionLabel;
+      const productiva = this.edadProductivaDesdeAnios
+        ? ` Entrada productiva estimada desde ${this.edadProductivaDesdeAnios} anios, ajustable por tecnico.`
+        : '';
+      return `Plantacion joven (${edad}): seguimos estructura vegetativa y sanidad, sin proyectar cosecha hasta confirmar entrada productiva.${productiva}`;
+    }
     const proxima = this.proximaEtapaDetalle;
     if (proxima) {
       const dias = this.diasHastaProximaEtapa ?? 0;
@@ -184,9 +198,26 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   public get resumenFenologico(): string {
-    const fuente = this.esPerenne ? 'campania perenne' : this.fuenteTexto;
+    const fuente = this.plantacionJoven
+      ? 'plantacion joven'
+      : this.esPerenne
+        ? 'campania perenne'
+        : this.fuenteTexto;
     const campania = this.campaniaTexto ? ` ${this.campaniaTexto}` : '';
     return `${this.cultivo || 'Cultivo'} - ${this.etapas.length} etapas - ${fuente}${campania}`;
+  }
+
+  public get edadPlantacionLabel(): string {
+    if (this.edadPlantacionAnios === undefined) return 'edad sin calcular';
+    return this.edadPlantacionAnios === 1
+      ? '1 anio'
+      : `${this.edadPlantacionAnios} anios`;
+  }
+
+  public get detalleEdadProductiva(): string {
+    if (!this.plantacionJoven) return 'desde el inicio';
+    if (!this.edadProductivaDesdeAnios) return 'entrada productiva por validar';
+    return `productiva desde ${this.edadProductivaDesdeAnios} anios`;
   }
 
   public get siguienteHitoTexto(): string {
@@ -250,7 +281,6 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
     const cultivo = this.canonicalCultivo(siembra.semilla.cultivo);
     const etapasCrono = crono?.etapas as Record<string, number | string> | undefined;
-    const etapasDisponibles = this.getEtapasDisponibles(cultivo, siembra.semilla, etapasCrono);
     const fechas: Date[] = [];
     let etapaActualNumero = -1;
     let etapasConfig: { nombres: string[]; claves: string[] } = { nombres: [], claves: [] };
@@ -259,7 +289,22 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     this.cultivoClass = `cultivo-${this.normalizarCultivo(cultivo)}`;
     this.esPerenne = esCultivoPerenne(cultivo);
     this.etiquetaImplantacion = getNombreImplantacion(cultivo);
+    this.edadPlantacionAnios = getEdadPerenneAnios(siembra.fechaSiembra);
+    const edadProductivaSemilla = Number(siembra.semilla?.fenologiaReferencia?.edadProductivaDesdeAnios);
+    const fenologiaJoven = getFenologiaJuvenilPerenne(cultivo);
+    this.edadProductivaDesdeAnios = Number.isFinite(edadProductivaSemilla)
+      ? edadProductivaSemilla
+      : fenologiaJoven?.edadProductivaDesdeAnios;
+    this.plantacionJoven = esPlantacionPerenneJoven(
+      cultivo,
+      siembra.fechaSiembra,
+      new Date(),
+      this.edadProductivaDesdeAnios,
+    );
+    this.fuenteFenologiaJoven = fenologiaJoven?.fuente || '';
     this.campaniaTexto = '';
+
+    const etapasDisponibles = this.getEtapasDisponibles(cultivo, siembra.semilla, etapasCrono);
 
     if (this.esPerenne) {
       this.crearTimelinePerenne(cultivo, etapasDisponibles);
@@ -354,6 +399,22 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     semilla?: ISemilla,
     etapasCrono?: Record<string, number | string>
   ): Record<string, number> {
+    if (this.plantacionJoven && esCultivoPerenne(cultivo)) {
+      this.fuenteFenologia = 'base';
+      this.fuenteTexto = 'plantacion joven';
+      const etapasJuveniles = semilla?.fenologiaReferencia?.etapasJuveniles;
+      if (etapasJuveniles && Object.keys(etapasJuveniles).length) {
+        return this.normalizarEtapas(etapasJuveniles);
+      }
+      const referenciaJoven = getFenologiaJuvenilPerenne(cultivo);
+      if (referenciaJoven?.etapas.length) {
+        return referenciaJoven.etapas.reduce<Record<string, number>>((acc, etapa) => {
+          acc[etapa.nombre] = etapa.dia;
+          return acc;
+        }, {});
+      }
+    }
+
     if (etapasCrono && Object.keys(etapasCrono).length) {
       this.fuenteFenologia = 'crono';
       this.fuenteTexto = 'crono cargado';

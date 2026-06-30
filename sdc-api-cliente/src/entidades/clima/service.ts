@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import {
   CONFIGURACION_FRIO_CULTIVOS,
   esCultivoPerenne,
+  IConfiguracionFrioCultivo,
   IEstablecimiento,
   IFrioTermicoCultivo,
   IResumenRiesgosAgroclimaticos,
@@ -19,6 +20,12 @@ import { TileCacheService } from '../../auxiliares/tile-cache/tile-cache.service
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 import { TileCalculationService } from '../../auxiliares/tile-calculation/tile-calculation.service';
 import { API_CLIMA } from '../../env';
+
+interface IOpenMeteoHourlyTemp {
+  time: string;
+  temperatura?: number;
+  esPronostico: boolean;
+}
 
 @Injectable()
 export class ClimaService {
@@ -714,7 +721,7 @@ export class ClimaService {
       gradosDiaFloracionObjetivo: 260,
       umbralHelada: -1,
     };
-    const requerimientos = {
+    const requerimientosBase = {
       horasFrioObjetivo:
         overrides.horasFrioObjetivo ?? config.horasFrioObjetivo,
       horasFrioEfectivasObjetivo:
@@ -733,6 +740,12 @@ export class ClimaService {
         overrides.gradosDiaFloracionObjetivo ??
         config.gradosDiaFloracionObjetivo,
     };
+    const validacionRequerimientos = this.validarRequerimientosFrio(
+      cultivo,
+      requerimientosBase,
+      config,
+    );
+    const requerimientos = validacionRequerimientos.requerimientos;
     const cacheKey = this.getFrioTermicoCacheKey(
       latNum,
       lngNum,
@@ -757,6 +770,41 @@ export class ClimaService {
       false,
     );
     const forecast = await this.fetchOpenMeteoForecast(latNum, lngNum);
+    let calculoPorciones: 'dinamico_horario' | 'estimado_hfe' =
+      'dinamico_horario';
+    const observacionesCalculo: string[] = [
+      ...validacionRequerimientos.observaciones,
+    ];
+    let porcionesFrioPorDia = new Map<string, number>();
+    try {
+      const hourlyHistorico = await this.fetchOpenMeteoHourlyArchive(
+        latNum,
+        lngNum,
+        this.toDateKey(frioDesde),
+        this.toDateKey(historicoHasta),
+      );
+      const hourlyForecast = await this.fetchOpenMeteoHourlyForecast(latNum, lngNum);
+      const hourlyFrio = this.mergeHourlySeries(hourlyHistorico, hourlyForecast).filter(
+        (hora) =>
+          this.entreFechas(
+            hora.time.slice(0, 10),
+            this.toDateKey(frioDesde),
+            this.toDateKey(hoy),
+          ),
+      );
+      porcionesFrioPorDia = this.calcularPorcionesFrioDinamicoPorDia(hourlyFrio);
+      if (!porcionesFrioPorDia.size) {
+        throw new Error('Open-Meteo no devolvio temperaturas horarias utiles.');
+      }
+    } catch (error: any) {
+      calculoPorciones = 'estimado_hfe';
+      observacionesCalculo.push(
+        'CP estimado desde HFE por falta de serie horaria completa.',
+      );
+      this.logger.warn(
+        `Frio termico sin CP dinamico horario (${latNum}, ${lngNum}): ${error?.message || error}`,
+      );
+    }
     const serieBase = this.mergeSeries(historico, forecast);
     const baseTermica = requerimientos.temperaturaBaseGradosDia || 10;
     const serie = serieBase.map((dia) => {
@@ -772,10 +820,15 @@ export class ClimaService {
         dia.temperaturaMax,
         baseTermica,
       );
+      const porcionesFrio =
+        calculoPorciones === 'dinamico_horario'
+          ? this.round(porcionesFrioPorDia.get(dia.fecha) || 0, 3)
+          : this.round(horasFrioEfectivas / 28, 3);
       return {
         ...dia,
         horasFrio,
         horasFrioEfectivas,
+        porcionesFrio,
         gradosDia,
       };
     });
@@ -801,7 +854,10 @@ export class ClimaService {
       horasFrioEfectivas: this.round(
         frioSerie.reduce((acc, dia) => acc + (dia.horasFrioEfectivas || 0), 0),
       ),
-      porcionesFrio: 0,
+      porcionesFrio: this.round(
+        frioSerie.reduce((acc, dia) => acc + (dia.porcionesFrio || 0), 0),
+        2,
+      ),
       gradosDia: this.round(
         termicoSerie
           .filter(
@@ -821,7 +877,6 @@ export class ClimaService {
           .reduce((acc, dia) => acc + (dia.lluvia || 0), 0),
       ),
     };
-    acumulados.porcionesFrio = this.round(acumulados.horasFrioEfectivas / 28);
 
     const progreso = {
       horasFrioPct: this.pct(
@@ -878,6 +933,10 @@ export class ClimaService {
       progreso,
       riesgoHelada,
       eventos,
+      calculo: {
+        porcionesFrio: calculoPorciones,
+        observaciones: observacionesCalculo,
+      },
       serie,
       lectura: this.getLecturaFrioTermico(cultivo, progreso, riesgoHelada),
     };
@@ -950,6 +1009,69 @@ export class ClimaService {
       this.toDateKey(new Date()),
       req,
     ].join('|');
+  }
+
+  private validarRequerimientosFrio(
+    cultivo: string | undefined,
+    requerimientos: IFrioTermicoCultivo['requerimientos'],
+    config: IConfiguracionFrioCultivo,
+  ): {
+    requerimientos: IFrioTermicoCultivo['requerimientos'];
+    observaciones: string[];
+  } {
+    const normalizado = (cultivo || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+    const resultado = { ...requerimientos };
+    const observaciones: string[] = [];
+
+    if (normalizado !== 'pecan') {
+      return { requerimientos: resultado, observaciones };
+    }
+
+    if (
+      this.fueraDeRango(resultado.horasFrioObjetivo, 100, 1200) &&
+      Number.isFinite(config.horasFrioObjetivo)
+    ) {
+      observaciones.push(
+        `HF objetivo ${resultado.horasFrioObjetivo} fuera de rango para Pecan; se uso base ${config.horasFrioObjetivo}.`,
+      );
+      resultado.horasFrioObjetivo = config.horasFrioObjetivo;
+    }
+
+    if (
+      this.fueraDeRango(resultado.horasFrioEfectivasObjetivo, 80, 1000) &&
+      Number.isFinite(config.horasFrioEfectivasObjetivo)
+    ) {
+      observaciones.push(
+        `HFE objetivo ${resultado.horasFrioEfectivasObjetivo} fuera de rango para Pecan; se uso base ${config.horasFrioEfectivasObjetivo}.`,
+      );
+      resultado.horasFrioEfectivasObjetivo =
+        config.horasFrioEfectivasObjetivo;
+    }
+
+    if (
+      this.fueraDeRango(resultado.porcionesFrioObjetivo, 5, 80) &&
+      Number.isFinite(config.porcionesFrioObjetivo)
+    ) {
+      observaciones.push(
+        `CP objetivo ${resultado.porcionesFrioObjetivo} fuera de rango para Pecan; se uso base ${config.porcionesFrioObjetivo}.`,
+      );
+      resultado.porcionesFrioObjetivo = config.porcionesFrioObjetivo;
+    }
+
+    return { requerimientos: resultado, observaciones };
+  }
+
+  private fueraDeRango(
+    valor: number | undefined,
+    minimo: number,
+    maximo: number,
+  ): boolean {
+    if (!Number.isFinite(valor)) return false;
+    return Number(valor) < minimo || Number(valor) > maximo;
   }
 
   private limpiarCacheFrioTermico(): void {
@@ -1168,6 +1290,50 @@ export class ClimaService {
     return this.normalizarOpenMeteoDaily(response.data, true);
   }
 
+  private async fetchOpenMeteoHourlyArchive(
+    lat: number,
+    lng: number,
+    from: string,
+    to: string,
+  ): Promise<IOpenMeteoHourlyTemp[]> {
+    if (from > to) return [];
+    const url = 'https://archive-api.open-meteo.com/v1/archive';
+    const response = await firstValueFrom(
+      this.httpService.get(url, {
+        params: {
+          latitude: lat,
+          longitude: lng,
+          start_date: from,
+          end_date: to,
+          hourly: 'temperature_2m',
+          timezone: this.timezone,
+        },
+        timeout: 16000,
+      }),
+    );
+    return this.normalizarOpenMeteoHourlyTemperature(response.data, false);
+  }
+
+  private async fetchOpenMeteoHourlyForecast(
+    lat: number,
+    lng: number,
+  ): Promise<IOpenMeteoHourlyTemp[]> {
+    const url = 'https://api.open-meteo.com/v1/forecast';
+    const response = await firstValueFrom(
+      this.httpService.get(url, {
+        params: {
+          latitude: lat,
+          longitude: lng,
+          forecast_days: 16,
+          hourly: 'temperature_2m',
+          timezone: this.timezone,
+        },
+        timeout: 12000,
+      }),
+    );
+    return this.normalizarOpenMeteoHourlyTemperature(response.data, true);
+  }
+
   private async fetchOpenMeteoAgroForecast(
     lat: number,
     lng: number,
@@ -1265,6 +1431,83 @@ export class ClimaService {
       lluvia: this.round(daily.precipitation_sum?.[index] || 0),
       esPronostico,
     }));
+  }
+
+  private normalizarOpenMeteoHourlyTemperature(
+    data: any,
+    esPronostico: boolean,
+  ): IOpenMeteoHourlyTemp[] {
+    const hourly = data?.hourly || {};
+    const times: string[] = hourly.time || [];
+    return times
+      .map((time, index) => ({
+        time,
+        temperatura: this.round(hourly.temperature_2m?.[index], 3),
+        esPronostico,
+      }))
+      .filter((item) => !!item.time && Number.isFinite(item.temperatura));
+  }
+
+  private mergeHourlySeries(
+    historico: IOpenMeteoHourlyTemp[],
+    forecast: IOpenMeteoHourlyTemp[],
+  ): IOpenMeteoHourlyTemp[] {
+    const byTime = new Map<string, IOpenMeteoHourlyTemp>();
+    historico.forEach((hora) => byTime.set(hora.time, hora));
+    forecast.forEach((hora) => byTime.set(hora.time, hora));
+    return [...byTime.values()].sort((a, b) => a.time.localeCompare(b.time));
+  }
+
+  private calcularPorcionesFrioDinamicoPorDia(
+    serieHoraria: IOpenMeteoHourlyTemp[],
+  ): Map<string, number> {
+    const serie = serieHoraria.filter((hora) =>
+      Number.isFinite(hora.temperatura),
+    );
+    const resultado = new Map<string, number>();
+    if (serie.length < 2) return resultado;
+
+    const e0 = 4153.5;
+    const e1 = 12888.8;
+    const a0 = 139500;
+    const a1 = 2567000000000000000;
+    const slope = 1.6;
+    const tf = 277;
+    const aa = a0 / a1;
+    const ee = e1 - e0;
+    const xi: number[] = [];
+    const xs: number[] = [];
+    const eak1: number[] = [];
+
+    serie.forEach((hora) => {
+      const tk = Number(hora.temperatura) + 273;
+      const sr = Math.exp((slope * tf * (tk - tf)) / tk);
+      xi.push(sr / (1 + sr));
+      xs.push(aa * Math.exp(ee / tk));
+      eak1.push(Math.exp(-a1 * Math.exp(-e1 / tk)));
+    });
+
+    const x = new Array<number>(serie.length).fill(0);
+    for (let index = 1; index < serie.length; index += 1) {
+      let s = x[index - 1];
+      if (x[index - 1] >= 1) {
+        s *= 1 - (xi[index - 2] || 0);
+      }
+      x[index] = xs[index - 1] - (xs[index - 1] - s) * eak1[index - 1];
+    }
+
+    x.forEach((valor, index) => {
+      if (valor < 1 || index === 0) return;
+      const delta = valor * (xi[index - 1] || 0);
+      if (!Number.isFinite(delta) || delta <= 0) return;
+      const fecha = serie[index].time.slice(0, 10);
+      resultado.set(fecha, (resultado.get(fecha) || 0) + delta);
+    });
+
+    for (const [fecha, valor] of resultado.entries()) {
+      resultado.set(fecha, this.round(valor, 3));
+    }
+    return resultado;
   }
 
   private calcularRiesgoHeladaAgroclimatica(

@@ -134,9 +134,14 @@ export class CardFrioTermicoComponent implements OnChanges {
       : data?.acumulados.horasFrioEfectivas;
     const porcionesFrio = this.esNumero(frio?.porcionesFrio)
       ? Number(frio?.porcionesFrio)
-      : this.esNumero(horasFrioEfectivas)
-        ? this.calcularPorcionesFrio(Number(horasFrioEfectivas))
-        : data?.acumulados.porcionesFrio;
+      : this.esNumero(data?.acumulados.porcionesFrio)
+        ? data?.acumulados.porcionesFrio
+        : this.esNumero(horasFrioEfectivas)
+          ? this.calcularPorcionesFrio(Number(horasFrioEfectivas))
+          : undefined;
+    const porcionesEstimadas =
+      !this.esNumero(frio?.porcionesFrio) &&
+      data?.calculo?.porcionesFrio !== 'dinamico_horario';
     const factorActual = this.esNumero(frio?.factorEfectivoActual)
       ? Number(frio?.factorEfectivoActual)
       : this.esNumero(frio?.ultimaTemperatura)
@@ -172,9 +177,11 @@ export class CardFrioTermicoComponent implements OnChanges {
     if (this.esNumero(porcionesFrio) || this.esNumero(porcionesFrioObjetivo)) {
       const pct = this.porcentaje(porcionesFrio, porcionesFrioObjetivo);
       metricas.push({
-        label: 'Chill portions (CP)',
+        label: porcionesEstimadas ? 'CP estimado' : 'Chill portions (CP)',
         value: this.esNumero(porcionesFrio) ? `${this.numero(porcionesFrio, 2)} CP` : '-',
-        detail: this.detalleObjetivo(porcionesFrio, porcionesFrioObjetivo, 'CP', 1),
+        detail: porcionesEstimadas
+          ? `${this.detalleObjetivo(porcionesFrio, porcionesFrioObjetivo, 'CP', 1)} - validar serie horaria`
+          : this.detalleObjetivo(porcionesFrio, porcionesFrioObjetivo, 'CP', 1),
         pct,
         tone: pct !== undefined && pct >= 85 ? 'ok' : 'info',
       });

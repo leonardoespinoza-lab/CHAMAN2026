@@ -46,9 +46,9 @@
 
       <div class="stage-context">
         <article>
-          <span>{{ etiquetaImplantacion }}</span>
-          <strong>{{ diasDesdeImplantacion }} d</strong>
-          <small>desde el inicio</small>
+          <span>{{ plantacionJoven ? 'Edad de planta' : etiquetaImplantacion }}</span>
+          <strong>{{ plantacionJoven ? edadPlantacionLabel : (diasDesdeImplantacion + ' d') }}</strong>
+          <small>{{ detalleEdadProductiva }}</small>
         </article>
         <article>
           <span>Etapa anterior</span>

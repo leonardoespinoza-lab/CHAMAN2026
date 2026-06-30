@@ -40,6 +40,9 @@ export interface IRequerimientoFrio {
   horasFrioEfectivas?: number;
   porcionesFrio?: number;
   modelo?: "HF" | "HFE" | "CP" | "HF + HFE" | "HF + HFE + CP";
+  fuente?: string;
+  confianza?: "alta" | "media" | "estimada";
+  observaciones?: string;
 }
 
 export interface IFenologiaReferencia {
@@ -47,6 +50,9 @@ export interface IFenologiaReferencia {
   floracion?: string;
   cosecha?: string;
   etapas?: Record<string, number | string>;
+  edadProductivaDesdeAnios?: number;
+  etapasJuveniles?: Record<string, number | string>;
+  fuente?: string;
   editable?: boolean;
 }
 

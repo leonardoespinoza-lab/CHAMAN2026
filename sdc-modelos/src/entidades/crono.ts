@@ -81,6 +81,8 @@ export interface IResolverContextoHeladaParams {
   fechaSiembra?: string | Date;
   etapaFenologica?: string;
   etapasFenologia?: Record<string, number | string>;
+  etapasJuveniles?: Record<string, number | string>;
+  edadProductivaDesdeAnios?: number;
   ajusteVarietalC?: number;
   ajustesHeladaPorFase?: Partial<Record<FaseHeladaFenologica, number>>;
   fuenteAjusteVarietal?: string;
@@ -177,6 +179,85 @@ export const ETAPAS_PERENNES_REFERENCIA: Record<
     { nombre: "Madurez", dia: 268 },
     { nombre: "Cosecha", dia: 304 },
   ],
+};
+
+export interface IFenologiaJuvenilPerenne {
+  edadProductivaDesdeAnios: number;
+  fuente: string;
+  observaciones?: string;
+  etapas: IEtapaFenologicaReferencia[];
+}
+
+export const FENOLOGIA_JUVENIL_PERENNE: Record<
+  string,
+  IFenologiaJuvenilPerenne
+> = {
+  Pecan: {
+    edadProductivaDesdeAnios: 5,
+    fuente: "NMSU Guide H-616: etapa vegetativa/no productiva inicial en pecan",
+    observaciones:
+      "Para arboles jovenes se evita inferir floracion, llenado, madurez o cosecha sin confirmacion de campo.",
+    etapas: [
+      {
+        nombre: "Dormancia joven",
+        dia: 0,
+        descripcion: "Reposo de plantacion joven sin carga productiva.",
+      },
+      {
+        nombre: "Brotacion vegetativa",
+        dia: 78,
+        descripcion: "Salida de yemas y expansion foliar de arbol joven.",
+      },
+      {
+        nombre: "Crecimiento vegetativo",
+        dia: 122,
+        descripcion: "Formacion de estructura, brotes y copa.",
+      },
+      {
+        nombre: "Endurecimiento de madera",
+        dia: 245,
+        descripcion: "Cierre de crecimiento y preparacion para reposo.",
+      },
+      {
+        nombre: "Reposo / nueva campania",
+        dia: 330,
+        descripcion: "Fin del ciclo vegetativo anual.",
+      },
+    ],
+  },
+  Vid: {
+    edadProductivaDesdeAnios: 3,
+    fuente: "Base CHAMAN calibrable para vid joven",
+    etapas: [
+      { nombre: "Dormancia joven", dia: 0 },
+      { nombre: "Brotacion vegetativa", dia: 78 },
+      { nombre: "Crecimiento vegetativo", dia: 125 },
+      { nombre: "Agostamiento", dia: 245 },
+      { nombre: "Reposo invernal", dia: 330 },
+    ],
+  },
+  Manzano: {
+    edadProductivaDesdeAnios: 4,
+    fuente: "Base CHAMAN calibrable para frutal joven",
+    etapas: [
+      { nombre: "Reposo invernal joven", dia: 0 },
+      { nombre: "Punta verde vegetativa", dia: 88 },
+      { nombre: "Crecimiento vegetativo", dia: 130 },
+      { nombre: "Endurecimiento de madera", dia: 248 },
+      { nombre: "Reposo invernal", dia: 330 },
+    ],
+  },
+  Peral: {
+    edadProductivaDesdeAnios: 4,
+    fuente: "Base CHAMAN calibrable para frutal joven",
+    etapas: [
+      { nombre: "Reposo invernal joven", dia: 0 },
+      { nombre: "Brotacion vegetativa", dia: 86 },
+      { nombre: "Crecimiento vegetativo", dia: 126 },
+      { nombre: "Endurecimiento de madera", dia: 246 },
+      { nombre: "Reposo invernal", dia: 330 },
+    ],
+  },
 };
 
 const fToC = (fahrenheit: number): number =>
@@ -369,7 +450,13 @@ export const UMBRALES_HELADA_FENOLOGICOS: Record<
     {
       cultivo: "Pecan",
       etapa: "Dormancia",
-      aliases: ["dormancia", "reposo", "reposo / nueva campania"],
+      aliases: [
+        "dormancia",
+        "dormancia joven",
+        "reposo",
+        "reposo joven",
+        "reposo / nueva campania",
+      ],
       fase: "reposo",
       tempDanoLeveC: fToC(24),
       tempDanoSeveroC: -8,
@@ -378,7 +465,13 @@ export const UMBRALES_HELADA_FENOLOGICOS: Record<
     {
       cultivo: "Pecan",
       etapa: "Brotacion",
-      aliases: ["brotacion", "green tissue", "brote"],
+      aliases: [
+        "brotacion",
+        "brotacion vegetativa",
+        "green tissue",
+        "brote",
+        "crecimiento vegetativo",
+      ],
       fase: "brotacion",
       tempDanoLeveC: fToC(26),
       tempDanoSeveroC: fToC(20),
@@ -400,6 +493,7 @@ export const UMBRALES_HELADA_FENOLOGICOS: Record<
         "estado acuoso",
         "gel",
         "endurecimiento de cascara",
+        "endurecimiento de madera",
         "masa",
         "llenado de nuez",
       ],
@@ -474,6 +568,52 @@ export function getEtapasPerennesReferencia(
   return cultivo ? ETAPAS_PERENNES_REFERENCIA[cultivo] || [] : [];
 }
 
+export function getFenologiaJuvenilPerenne(
+  cultivo?: string,
+): IFenologiaJuvenilPerenne | undefined {
+  return cultivo ? FENOLOGIA_JUVENIL_PERENNE[cultivo] : undefined;
+}
+
+export function getEdadPerenneAnios(
+  fechaSiembra?: string | Date,
+  fechaReferencia: string | Date = new Date(),
+): number | undefined {
+  if (!fechaSiembra) return undefined;
+  const inicio =
+    fechaSiembra instanceof Date ? fechaSiembra : new Date(fechaSiembra);
+  const referencia =
+    fechaReferencia instanceof Date ? fechaReferencia : new Date(fechaReferencia);
+  if (Number.isNaN(inicio.getTime()) || Number.isNaN(referencia.getTime())) {
+    return undefined;
+  }
+  const anios = referencia.getFullYear() - inicio.getFullYear();
+  const antesDelAniversario =
+    referencia.getMonth() < inicio.getMonth() ||
+    (referencia.getMonth() === inicio.getMonth() &&
+      referencia.getDate() < inicio.getDate());
+  return Math.max(0, anios - (antesDelAniversario ? 1 : 0));
+}
+
+export function esPlantacionPerenneJoven(
+  cultivo?: string,
+  fechaSiembra?: string | Date,
+  fechaReferencia: string | Date = new Date(),
+  edadProductivaDesdeAnios?: number,
+): boolean {
+  const cultivoCanonico = canonicalCultivoHelada(cultivo);
+  if (!cultivoCanonico || !esCultivoPerenne(cultivoCanonico)) return false;
+  const edad = getEdadPerenneAnios(fechaSiembra, fechaReferencia);
+  if (edad === undefined) return false;
+  const config = getFenologiaJuvenilPerenne(cultivoCanonico);
+  const edadProductiva =
+    Number.isFinite(Number(edadProductivaDesdeAnios))
+      ? Number(edadProductivaDesdeAnios)
+      : config?.edadProductivaDesdeAnios;
+  return Number.isFinite(Number(edadProductiva))
+    ? edad < Number(edadProductiva)
+    : false;
+}
+
 export function getConfiguracionFrioCultivo(
   cultivo?: string,
 ): IConfiguracionFrioCultivo | undefined {
@@ -543,14 +683,39 @@ function etapaPerennePorFecha(
   cultivo: string,
   fecha: Date,
   etapasFenologia?: Record<string, number | string>,
+  fechaSiembra?: string | Date,
+  etapasJuveniles?: Record<string, number | string>,
+  edadProductivaDesdeAnios?: number,
 ): string {
-  const etapasCustom = normalizarEtapasHelada(etapasFenologia);
+  const usarFenologiaJoven = esPlantacionPerenneJoven(
+    cultivo,
+    fechaSiembra,
+    fecha,
+    edadProductivaDesdeAnios,
+  );
+  const etapasJuvenilesCustom = usarFenologiaJoven
+    ? normalizarEtapasHelada(etapasJuveniles)
+    : [];
+  const etapasCustom = usarFenologiaJoven
+    ? []
+    : normalizarEtapasHelada(etapasFenologia);
+  const etapasJuvenilesBase =
+    usarFenologiaJoven && !etapasJuvenilesCustom.length
+      ? getFenologiaJuvenilPerenne(cultivo)?.etapas.map((etapa) => ({
+          nombre: etapa.nombre,
+          dia: etapa.dia,
+        })) || []
+      : [];
   const etapas = etapasCustom.length
     ? etapasCustom
-    : getEtapasPerennesReferencia(cultivo).map((etapa) => ({
-        nombre: etapa.nombre,
-        dia: etapa.dia,
-      }));
+    : etapasJuvenilesCustom.length
+      ? etapasJuvenilesCustom
+      : etapasJuvenilesBase.length
+        ? etapasJuvenilesBase
+        : getEtapasPerennesReferencia(cultivo).map((etapa) => ({
+            nombre: etapa.nombre,
+            dia: etapa.dia,
+          }));
   if (!etapas.length) return "Campania perenne";
 
   const inicio = inicioCampaniaPerenneHelada(fecha);
@@ -650,7 +815,14 @@ export function resolverContextoHeladaFenologico(
   const fechaEvaluada = Number.isNaN(fecha.getTime()) ? new Date() : fecha;
   const etapaDetectada =
     params.etapaFenologica ||
-    etapaPerennePorFecha(cultivo, fechaEvaluada, params.etapasFenologia);
+    etapaPerennePorFecha(
+      cultivo,
+      fechaEvaluada,
+      params.etapasFenologia,
+      params.fechaSiembra,
+      params.etapasJuveniles,
+      params.edadProductivaDesdeAnios,
+    );
   const umbral = elegirUmbralHelada(cultivo, etapaDetectada);
   if (!umbral) return undefined;
   const ajusteVarietal = resolverAjusteVarietal(params, cultivo, umbral.fase);

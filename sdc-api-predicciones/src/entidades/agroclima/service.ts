@@ -265,6 +265,9 @@ export class AgroclimaService {
         fecha: dia.fecha,
         fechaSiembra: siembra.fechaSiembra,
         etapasFenologia: siembra.semilla?.fenologiaReferencia?.etapas,
+        etapasJuveniles: siembra.semilla?.fenologiaReferencia?.etapasJuveniles,
+        edadProductivaDesdeAnios:
+          siembra.semilla?.fenologiaReferencia?.edadProductivaDesdeAnios,
         ajusteVarietalC: siembra.semilla?.sensibilidadHelada?.ajusteUmbralC,
         ajustesHeladaPorFase:
           siembra.semilla?.sensibilidadHelada?.ajustesPorFase,
