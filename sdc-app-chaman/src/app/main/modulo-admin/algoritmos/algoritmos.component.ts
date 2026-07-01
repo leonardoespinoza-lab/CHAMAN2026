@@ -69,14 +69,15 @@ export class AlgoritmosComponent {
   };
 
   public enfermedadesForm = {
-    cultivo: 'Trigo',
-    variedad: 'BAGUETTE 450',
-    etapa: 'Hoja bandera',
-    humedadRelativa: 88,
-    horasMojado: 18,
-    lluvia48h: 12,
+    cultivo: 'Cebada',
+    variedad: 'ANDREIA',
+    zona: 'Azul',
+    etapa: 'Hoja Bandera',
+    humedadRelativa: 86,
+    horasMojado: 16,
+    lluvia48h: 9,
     temperatura: 18,
-    susceptibilidad: 0.7,
+    susceptibilidad: 0.85,
   };
 
   public riegoForm = {
@@ -117,13 +118,25 @@ export class AlgoritmosComponent {
       endpoint: 'POST /algoritmos/enfermedades/simular',
       persistencia: 'Motor productivo: /siembras/:id/prediccion-enfermedades',
       fields: [
-        { key: 'cultivo', label: 'Cultivo', type: 'select', options: ['Trigo', 'Soja', 'Maiz'] },
+        { key: 'cultivo', label: 'Cultivo', type: 'select', options: ['Trigo', 'Cebada', 'Soja', 'Maiz'] },
         { key: 'variedad', label: 'Variedad', type: 'text', helper: 'Nombre varietal usado para sensibilidad.' },
+        { key: 'zona', label: 'Zona / departamento', type: 'text', helper: 'Referencia de influencia para crono y calibracion regional.' },
         {
           key: 'etapa',
           label: 'Etapa fenologica',
           type: 'select',
-          options: ['Emergencia', 'Macollaje', 'Hoja bandera', 'Espigazon', 'Floracion', 'Llenado de granos'],
+          options: [
+            'Emergencia',
+            'Macollaje',
+            'Primer Nudo',
+            'Hoja bandera',
+            'Hoja Bandera',
+            'Espigazon',
+            'Antesis',
+            'Floracion',
+            'Llenado de granos',
+            'Llenado de Granos',
+          ],
         },
         { key: 'humedadRelativa', label: 'Humedad relativa', type: 'number', suffix: '%' },
         { key: 'horasMojado', label: 'Horas de mojado', type: 'number', suffix: 'h' },

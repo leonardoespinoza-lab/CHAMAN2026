@@ -15,6 +15,7 @@ export class CronosService {
 
     const ciclo = siembra.semilla?.ciclo as TCiclo;
     const cultivo = siembra.semilla?.cultivo;
+    const variedad = siembra.semilla?.variedad;
     const idDepartamento = siembra.idDepartamento;
     const diaSiembra = new Date(siembra.fechaSiembra).getDate();
     const mesSiembra = new Date(siembra.fechaSiembra).getMonth() + 1;
@@ -24,12 +25,57 @@ export class CronosService {
     }
 
     const filtro: IFilter<ICrono> = {
-      ciclo: { $regex: `^${ciclo}$`, $options: 'i' },
+      ciclo: { $regex: `^${this.escapeRegex(ciclo)}$`, $options: 'i' },
       idDepartamento,
       diaSiembra,
       mesSiembra,
       cultivo,
     };
+    if (variedad) {
+      const filtroVarietal = {
+        ...filtro,
+        variedad: { $regex: `^${this.escapeRegex(variedad)}$`, $options: 'i' },
+      };
+      const cronoExactoVarietal = await this.findOne(filtroVarietal);
+      if (cronoExactoVarietal) {
+        return cronoExactoVarietal;
+      }
+
+      const cronoDepartamentoVarietal = await this.findClosestToSowingDate(
+        {
+          ciclo: { $regex: `^${this.escapeRegex(ciclo)}$`, $options: 'i' },
+          idDepartamento,
+          cultivo,
+          variedad: {
+            $regex: `^${this.escapeRegex(variedad)}$`,
+            $options: 'i',
+          },
+        },
+        diaSiembra,
+        mesSiembra,
+      );
+      if (cronoDepartamentoVarietal) {
+        return cronoDepartamentoVarietal;
+      }
+
+      const cronoGenericoVarietal = await this.findClosestToSowingDate(
+        {
+          ciclo: { $regex: `^${this.escapeRegex(ciclo)}$`, $options: 'i' },
+          cultivo,
+          variedad: {
+            $regex: `^${this.escapeRegex(variedad)}$`,
+            $options: 'i',
+          },
+          idDepartamento: { $exists: false },
+        },
+        diaSiembra,
+        mesSiembra,
+      );
+      if (cronoGenericoVarietal) {
+        return cronoGenericoVarietal;
+      }
+    }
+
     const cronoExacto = await this.findOne(filtro);
     if (cronoExacto) {
       return cronoExacto;
@@ -37,7 +83,7 @@ export class CronosService {
 
     const cronoDepartamento = await this.findClosestToSowingDate(
       {
-        ciclo: { $regex: `^${ciclo}$`, $options: 'i' },
+        ciclo: { $regex: `^${this.escapeRegex(ciclo)}$`, $options: 'i' },
         idDepartamento,
         cultivo,
       },
@@ -50,7 +96,7 @@ export class CronosService {
 
     return await this.findClosestToSowingDate(
       {
-        ciclo: { $regex: `^${ciclo}$`, $options: 'i' },
+        ciclo: { $regex: `^${this.escapeRegex(ciclo)}$`, $options: 'i' },
         cultivo,
         idDepartamento: { $exists: false },
       },
@@ -96,5 +142,9 @@ export class CronosService {
     const fechaCrono = Date.UTC(2000, crono.mesSiembra - 1, crono.diaSiembra);
     const diferencia = Math.abs((fechaCrono - objetivo) / 86400000);
     return Math.min(diferencia, 366 - diferencia);
+  }
+
+  private escapeRegex(value: string): string {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 }

@@ -31,6 +31,16 @@ export interface IVariablesFusariumDeLaEspiga {
   GDAcum?: number; // Grados dia acumulados
 }
 
+export interface IVariablesEnfermedadCebada {
+  diasFavorables?: number;
+  indiceAcumulado?: number;
+  lluviaAcumulada?: number;
+  humedadScore?: number;
+  temperaturaScore?: number;
+  lluviaScore?: number;
+  etapaScore?: number;
+}
+
 export interface IVariablesFinDeCiclo {
   PtAc7?: number; // Suma de precipitaciones de dias con mas de 7mm.
   DPr7?: number; // Dias con precipitaciones > 7mm
@@ -45,6 +55,7 @@ export interface IPrediccionEnfermedad {
     | IVariablesManchaAmarilla
     | IVariablesManchaDeLaHoja
     | IVariablesFusariumDeLaEspiga
+    | IVariablesEnfermedadCebada
     | IVariablesFinDeCiclo
     | IVariablesRoyaDelMaiz
     | Record<string, number>;

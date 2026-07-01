@@ -1,6 +1,12 @@
 import { IDepartamento } from "./departamento";
 
-export const CULTIVOS_ANUALES = ["Soja", "Trigo", "Maiz", "Papa"] as const;
+export const CULTIVOS_ANUALES = [
+  "Soja",
+  "Trigo",
+  "Maiz",
+  "Papa",
+  "Cebada",
+] as const;
 export const CULTIVOS_PERENNES = ["Vid", "Peral", "Pecan", "Manzano"] as const;
 export const CULTIVOS_DISPONIBLES = [
   ...CULTIVOS_ANUALES,
@@ -866,14 +872,30 @@ export interface IEtapasMaiz {
   floracion_madurez?: number;
 }
 
+export interface IEtapasCebada {
+  siembra_emergencia?: number;
+  emergencia_primer_nudo?: number;
+  primer_nudo_hoja_bandera?: number;
+  hoja_bandera_espigazon?: number;
+  espigazon_antesis?: number;
+  antesis_llenado_granos?: number;
+  llenado_granos_madurez_fisiologica?: number;
+}
+
 export interface ICrono {
   _id?: string;
   cultivo?: Cultivo;
   idDepartamento?: string;
+  variedad?: string;
   ciclo?: string;
   diaSiembra?: number;
   mesSiembra?: number;
-  etapas?: IEtapasSoja | IEtapasTrigo | IEtapasMaiz | Record<string, number>;
+  etapas?:
+    | IEtapasSoja
+    | IEtapasTrigo
+    | IEtapasMaiz
+    | IEtapasCebada
+    | Record<string, number>;
   departamentoNombre?: string;
   // Populate
   departamento?: IDepartamento;

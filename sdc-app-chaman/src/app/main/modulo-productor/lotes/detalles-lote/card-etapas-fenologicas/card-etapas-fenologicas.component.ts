@@ -16,6 +16,7 @@ import {
   ISiembra,
 } from 'modelos/src';
 import {
+  ETAPAS_CEBADA,
   ETAPAS_MAIZ,
   ETAPAS_SOJA,
   ETAPAS_TRIGO,
@@ -58,6 +59,15 @@ const ETAPAS_BASE_POR_CULTIVO: Record<string, Record<string, number>> = {
     siembra_emergencia: 8,
     emergencia_floracion: 65,
     floracion_madurez: 55,
+  },
+  Cebada: {
+    siembra_emergencia: 15,
+    emergencia_primer_nudo: 67,
+    primer_nudo_hoja_bandera: 14,
+    hoja_bandera_espigazon: 18,
+    espigazon_antesis: 7,
+    antesis_llenado_granos: 4,
+    llenado_granos_madurez_fisiologica: 30,
   },
   Papa: {
     Plantacion: 0,
@@ -482,6 +492,28 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
         };
         break;
       }
+      case 'Cebada': {
+        if (crono) {
+          const etapaCebadaStr = HelperService.getEtapaPorFechaCebada(siembra, new Date().toISOString(), crono);
+          etapaActualNumero = HelperService.etapaCebadaANumero(etapaCebadaStr);
+        } else {
+          etapaActualNumero = this.getEtapaGenericaPorFecha(fechaBase, ['Siembra', ...Object.keys(etapasDisponibles)], etapasDisponibles);
+        }
+        etapasConfig = {
+          nombres: ETAPAS_CEBADA,
+          claves: [
+            'siembra',
+            'siembra_emergencia',
+            'emergencia_primer_nudo',
+            'primer_nudo_hoja_bandera',
+            'hoja_bandera_espigazon',
+            'espigazon_antesis',
+            'antesis_llenado_granos',
+            'llenado_granos_madurez_fisiologica',
+          ],
+        };
+        break;
+      }
       default:
         etapasConfig = this.crearEtapasGenericas(etapasDisponibles);
         etapaActualNumero = this.getEtapaGenericaPorFecha(fechaBase, etapasConfig.claves, etapasDisponibles);
@@ -608,6 +640,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       trigo: 'Trigo',
       soja: 'Soja',
       maiz: 'Maiz',
+      cebada: 'Cebada',
       papa: 'Papa',
       vid: 'Vid',
       peral: 'Peral',

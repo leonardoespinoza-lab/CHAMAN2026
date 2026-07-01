@@ -5,9 +5,10 @@ import {
   Exactly,
   ICrono,
   IDepartamento,
+  IEtapasCebada,
+  IEtapasMaiz,
   IEtapasSoja,
   IEtapasTrigo,
-  IEtapasMaiz,
 } from 'modelos/src';
 import { Document } from 'mongoose';
 import { Departamento } from '../../departamento/modelos/schema';
@@ -22,6 +23,9 @@ export class Crono implements Exactly<ICrono, Crono> {
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idDepartamento?: string;
 
+  @Prop({ uppercase: true })
+  variedad?: string;
+
   @Prop({ required: true })
   ciclo: string;
 
@@ -32,7 +36,12 @@ export class Crono implements Exactly<ICrono, Crono> {
   mesSiembra?: number;
 
   @Prop({ type: Object, required: true })
-  etapas: IEtapasSoja | IEtapasTrigo | IEtapasMaiz | Record<string, number>;
+  etapas:
+    | IEtapasSoja
+    | IEtapasTrigo
+    | IEtapasMaiz
+    | IEtapasCebada
+    | Record<string, number>;
 
   // Populate
   departamento?: IDepartamento;
@@ -45,7 +54,14 @@ export const CronoSchema = SchemaFactory.createForClass(Crono);
 CronoSchema.set('toJSON', { virtuals: true, getters: true });
 
 CronoSchema.index(
-  { cultivo: 1, idDepartamento: 1, ciclo: 1, mesSiembra: 1, diaSiembra: 1 },
+  {
+    cultivo: 1,
+    idDepartamento: 1,
+    ciclo: 1,
+    variedad: 1,
+    mesSiembra: 1,
+    diaSiembra: 1,
+  },
   { unique: true },
 );
 

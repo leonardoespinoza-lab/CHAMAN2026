@@ -8,6 +8,11 @@ export type TEnfermedad =
   | "Roya de la Hoja"
   | "Roya del Tallo"
   | "Roya Anaranjada"
+  // Cebada
+  | "Mancha en Red"
+  | "Escaldadura de la Cebada"
+  | "Roya de la Hoja de Cebada"
+  | "Fusariosis de la Espiga de Cebada"
   // Soja
   | "Fin de Ciclo"
   // Maiz

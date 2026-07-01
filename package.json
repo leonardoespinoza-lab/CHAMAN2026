@@ -23,6 +23,7 @@
     "seed:master-data": "node scripts/seed-master-data-local.js",
     "seed:agro-inputs": "node scripts/seed-agro-inputs-local.js",
     "seed:expanded-crops": "node scripts/seed-expanded-crops-local.js",
+    "seed:cebada": "node scripts/seed-cebada-local.js",
     "seed:kleppe-frutales": "node scripts/seed-kleppe-frutales-local.js",
     "seed:weeds": "node scripts/seed-weeds-gompertz-local.js",
     "seed:demo": "node scripts/seed-demo-hierarchy-local.js",

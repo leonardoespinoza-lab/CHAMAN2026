@@ -227,9 +227,9 @@ const PESOS_CPP: Dict = {
   manejoAgronomico: 10,
 };
 
-const EXTRACCION_N: Dict = { Soja: 55, Trigo: 20.55, Maiz: 15 };
-const EXTRACCION_P: Dict = { Soja: 6.12997, Trigo: 3.99, Maiz: 3.0228 };
-const KCAL_X_KG: Dict = { Maiz: 3650, Trigo: 3400, Soja: 4100 };
+const EXTRACCION_N: Dict = { Soja: 55, Trigo: 20.55, Cebada: 18, Maiz: 15 };
+const EXTRACCION_P: Dict = { Soja: 6.12997, Trigo: 3.99, Cebada: 3.5, Maiz: 3.0228 };
+const KCAL_X_KG: Dict = { Maiz: 3650, Trigo: 3400, Cebada: 3500, Soja: 4100 };
 
 function round(value: number, digits = 2): number {
   if (!Number.isFinite(value)) return 0;

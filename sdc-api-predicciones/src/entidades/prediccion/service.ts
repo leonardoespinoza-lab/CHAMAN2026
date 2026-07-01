@@ -11,6 +11,7 @@ import {
 import { AlertasService } from '../alerta/service';
 import { PrediccionMaizService } from './cultivos/maiz';
 import { PREDICCIONES_MALEZAS_LIMIT } from '../../env';
+import { PrediccionCebadaService } from './cultivos/cebada';
 
 @Injectable()
 export class PrediccionsService {
@@ -20,6 +21,7 @@ export class PrediccionsService {
     private prediccionTrigoService: PrediccionTrigoService,
     private prediccionSojaService: PrediccionSojaService,
     private prediccionMaizService: PrediccionMaizService,
+    private prediccionCebadaService: PrediccionCebadaService,
     private notificacionesService: NotificacionsService,
     private alertasService: AlertasService,
   ) {}
@@ -92,6 +94,10 @@ export class PrediccionsService {
         case 'Maiz':
           predicciones =
             await this.prediccionMaizService.hacerPredicciones(siembra);
+          break;
+        case 'Cebada':
+          predicciones =
+            await this.prediccionCebadaService.hacerPredicciones(siembra);
           break;
       }
 

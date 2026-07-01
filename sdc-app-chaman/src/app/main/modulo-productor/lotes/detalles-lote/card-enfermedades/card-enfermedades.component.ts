@@ -64,7 +64,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   public actualizandoPrediccion = false;
   public enfermedadSeleccionada?: DiseaseInsight;
   public prescripcionSeleccionadaGrupo?: string;
-  private readonly cultivosConMotorSanitario = new Set(['Trigo', 'Soja', 'Maiz']);
+  private readonly cultivosConMotorSanitario = new Set(['Trigo', 'Soja', 'Maiz', 'Cebada']);
   private readonly enfermedadesConfirmadas = new Set<TEnfermedad>();
 
   constructor(
@@ -227,6 +227,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     if (cultivo === 'Trigo') {
       return ['Mancha Amarilla', 'Roya de la Hoja', 'Roya Anaranjada', 'Mancha de la Hoja', 'Fusarium de la Espiga'];
     }
+    if (cultivo === 'Cebada') {
+      return ['Mancha en Red', 'Escaldadura de la Cebada', 'Roya de la Hoja de Cebada', 'Fusariosis de la Espiga de Cebada'];
+    }
     if (cultivo === 'Soja') {
       return ['Fin de Ciclo'];
     }
@@ -295,6 +298,10 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       'Fusarium de la Espiga': 'Ventana critica en espigazon y antesis.',
       'Roya del Tallo': 'Mayor riesgo en trigo tardio con cultivo activo.',
       'Roya Anaranjada': 'Mayor riesgo durante crecimiento activo.',
+      'Mancha en Red': 'Mayor riesgo desde emergencia a espigazon con humedad, mojado y temperatura templada.',
+      'Escaldadura de la Cebada': 'Riesgo temprano a hoja bandera con periodos frescos, lluvia y humedad persistente.',
+      'Roya de la Hoja de Cebada': 'Desde primer nudo a llenado, especialmente con HR alta y temperaturas templadas.',
+      'Fusariosis de la Espiga de Cebada': 'Ventana critica en espigazon, antesis y llenado temprano con lluvia y mojado.',
       'Fin de Ciclo': 'Mayor riesgo en floracion y llenado.',
       'Roya del Maiz': 'Puede presentarse desde vegetativo avanzado hasta llenado.',
       Oidio: 'Brotes activos, floracion y desarrollo de racimos con humedad favorable.',
@@ -333,6 +340,22 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         return etapa >= 4 && etapa <= 6;
       }
     }
+    if (cultivo === 'Cebada') {
+      const etapa = this.etapaCebadaActual();
+      if (etapa == null) return true;
+      if (enfermedad === 'Mancha en Red') {
+        return etapa >= 1 && etapa <= 5;
+      }
+      if (enfermedad === 'Escaldadura de la Cebada') {
+        return etapa >= 1 && etapa <= 4;
+      }
+      if (enfermedad === 'Roya de la Hoja de Cebada') {
+        return etapa >= 2 && etapa <= 6;
+      }
+      if (enfermedad === 'Fusariosis de la Espiga de Cebada') {
+        return etapa >= 4 && etapa <= 6;
+      }
+    }
     if (cultivo === 'Soja') {
       const etapa = this.etapaSojaActual();
       if (!etapa) return true;
@@ -353,6 +376,10 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       'Mancha de la Hoja': 'Complejo de manchas foliares que aumenta con humedad alta y precipitaciones relevantes.',
       'Fusarium de la Espiga': 'Enfermedad de espiga con ventana corta en espigazon/antesis y riesgo asociado a mojado floral.',
       'Roya Anaranjada': 'Roya de avance rapido asociada a temperatura, humedad y viento durante crecimiento activo.',
+      'Mancha en Red': 'Enfermedad foliar de cebada favorecida por rastrojo infectado, humedad, lluvias y temperaturas templadas.',
+      'Escaldadura de la Cebada': 'Enfermedad foliar de cebada asociada a clima fresco-humedo, salpicado de lluvia y canopeo persistente.',
+      'Roya de la Hoja de Cebada': 'Roya foliar de cebada que progresa con cultivo activo, humedad relativa alta y temperaturas templadas.',
+      'Fusariosis de la Espiga de Cebada': 'Riesgo sanitario de espiga ligado a lluvia/mojado durante espigazon y antesis.',
       'Fin de Ciclo': 'Complejo sanitario de soja asociado a lluvias acumuladas durante floracion y llenado.',
       'Roya del Maiz': 'Roya foliar de maiz favorecida por humedad muy alta y temperaturas templadas.',
     };
@@ -366,6 +393,10 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       'Mancha de la Hoja': 'Severidad = (-6,41 + 0,59 x DHR + 2,79 x DPr) x multiplicador varietal.',
       'Fusarium de la Espiga': 'Severidad = (20,37 + 8,63 x PMoj - 0,49 x GDN) x multiplicador varietal, dentro de la ventana de GDA.',
       'Roya Anaranjada': 'Severidad = (-63,11 + 0,96 x Tmin + 1,72 x Tmax + 3,72 x viento + 0,43 x HR) x multiplicador varietal.',
+      'Mancha en Red': 'Indice CHAMAN: ventana fenologica, dias favorables, humedad/mojado, temperatura, lluvia reciente y sensibilidad varietal.',
+      'Escaldadura de la Cebada': 'Indice CHAMAN: etapa sensible, ambiente fresco-humedo, lluvia/salpicado y continuidad de dias favorables.',
+      'Roya de la Hoja de Cebada': 'Indice CHAMAN: etapa del cultivo, humedad relativa, temperatura templada y acumulacion de dias favorables.',
+      'Fusariosis de la Espiga de Cebada': 'Indice CHAMAN: espigazon/antesis, lluvia reciente, humedad persistente, temperatura y variedad.',
       'Fin de Ciclo': 'Riesgo = (8 x Lt7 / 600) x multiplicador varietal, con Lt7 basado en dias y milimetros de lluvia mayor a 7 mm.',
       'Roya del Maiz': 'Severidad = 4,42 + 0,61 x GD + 0,57 x DHR - 30,01 x multiplicador varietal.',
     };
@@ -424,6 +455,13 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       Tmax: 'Tmax',
       viento: 'viento',
       HR: 'HR',
+      diasFavorables: 'dias favorables',
+      indiceAcumulado: 'indice acumulado',
+      lluviaAcumulada: 'lluvia ponderada',
+      humedadScore: 'humedad',
+      temperaturaScore: 'temperatura',
+      lluviaScore: 'lluvia',
+      etapaScore: 'etapa',
     };
   }
 
@@ -488,6 +526,27 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     const etapa5 = etapa4 + (etapas['R4_R5'] || 0);
     const etapa6 = etapa5 + (etapas['R5_R6'] || 0);
     const etapa7 = etapa6 + (etapas['R6_R7'] || 0);
+    if (dias < etapa1) return 0;
+    if (dias < etapa2) return 1;
+    if (dias < etapa3) return 2;
+    if (dias < etapa4) return 3;
+    if (dias < etapa5) return 4;
+    if (dias < etapa6) return 5;
+    if (dias < etapa7) return 6;
+    return 7;
+  }
+
+  private etapaCebadaActual(): number | undefined {
+    const etapas = this.siembra?.crono?.etapas as Record<string, number> | undefined;
+    const dias = this.diasDesdeSiembra();
+    if (!etapas || dias == null) return undefined;
+    const etapa1 = etapas['siembra_emergencia'] || 0;
+    const etapa2 = etapa1 + (etapas['emergencia_primer_nudo'] || 0);
+    const etapa3 = etapa2 + (etapas['primer_nudo_hoja_bandera'] || 0);
+    const etapa4 = etapa3 + (etapas['hoja_bandera_espigazon'] || 0);
+    const etapa5 = etapa4 + (etapas['espigazon_antesis'] || 0);
+    const etapa6 = etapa5 + (etapas['antesis_llenado_granos'] || 0);
+    const etapa7 = etapa6 + (etapas['llenado_granos_madurez_fisiologica'] || 0);
     if (dias < etapa1) return 0;
     if (dias < etapa2) return 1;
     if (dias < etapa3) return 2;
@@ -604,6 +663,59 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
           },
         ],
         nota: 'Exige ajuste fino por estado fenologico; validar cobertura y condicion de aplicacion.',
+      },
+      'Mancha en Red': {
+        objetivo: 'Proteger area foliar de cebada y cortar avance hacia hoja bandera.',
+        momento: 'Monitorear desde emergencia; intervenir con riesgo sostenido y sintomas/incidencia confirmada.',
+        productos: [
+          {
+            grupo: 'DMI + QoI',
+            activos: 'Triazol + estrobilurina registrados en cebada',
+            dosisHa: 'Segun producto comercial, marbete y presion sanitaria',
+          },
+          {
+            grupo: 'DMI + SDHI',
+            activos: 'Prothioconazole / Fluxapyroxad u opciones registradas',
+            dosisHa: 'Priorizar con historial del lote o presion alta',
+          },
+        ],
+        nota: 'Validar registro para cebada cervecera, carencia y destino comercial antes de recomendar.',
+      },
+      'Escaldadura de la Cebada': {
+        objetivo: 'Reducir infecciones foliares tempranas favorecidas por frio, humedad y salpicado.',
+        momento: 'Aplicar solo con ambiente predisponente sostenido y sintomas activos en etapas sensibles.',
+        productos: [
+          {
+            grupo: 'DMI + QoI/SDHI',
+            activos: 'Triazol + estrobilurina o carboxamida registrada',
+            dosisHa: 'Segun marbete y severidad confirmada',
+          },
+        ],
+        nota: 'La decision debe integrar variedad, rastrojo, rotacion y validacion de campo.',
+      },
+      'Roya de la Hoja de Cebada': {
+        objetivo: 'Sostener hojas funcionales y cortar ciclos de roya en crecimiento activo.',
+        momento: 'Priorizar desde primer nudo a llenado cuando suben HR y temperatura templada.',
+        productos: [
+          {
+            grupo: 'Triazol o mezcla doble',
+            activos: 'Tebuconazole / Prothioconazole + QoI registrado',
+            dosisHa: 'Segun marbete, presion regional y variedad',
+          },
+        ],
+        nota: 'Rotar modos de accion y confirmar registro especifico para cebada.',
+      },
+      'Fusariosis de la Espiga de Cebada': {
+        objetivo: 'Reducir infeccion de espiga y riesgo de calidad/micotoxinas.',
+        momento: 'Ventana critica en espigazon y antesis con lluvia, HR alta o mojado prolongado.',
+        productos: [
+          {
+            grupo: 'Triazol especifico espiga',
+            activos: 'Prothioconazole / Metconazole / Tebuconazole registrados',
+            dosisHa: 'Segun marbete y cobertura de espiga',
+          },
+        ],
+        nota: 'No recomendar estrobilurina sola para fusariosis; validar destino cervecero y tolerancias.',
       },
       'Roya del Tallo': {
         objetivo: 'Frenar pustulas activas en tallo y hojas.',

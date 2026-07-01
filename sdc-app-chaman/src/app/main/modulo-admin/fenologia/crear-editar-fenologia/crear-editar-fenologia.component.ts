@@ -10,7 +10,7 @@ import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 
-const CULTIVOS_DISPONIBLES_APP: Cultivo[] = ['Soja', 'Trigo', 'Maiz', 'Papa', 'Vid', 'Peral', 'Pecan', 'Manzano'];
+const CULTIVOS_DISPONIBLES_APP: Cultivo[] = ['Soja', 'Trigo', 'Maiz', 'Cebada', 'Papa', 'Vid', 'Peral', 'Pecan', 'Manzano'];
 
 @Component({
   selector: 'app-crear-editar-fenologia',

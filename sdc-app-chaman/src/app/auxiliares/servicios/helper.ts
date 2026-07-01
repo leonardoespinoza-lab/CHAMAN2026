@@ -8,6 +8,7 @@ import {
   Cultivo,
   ICrono,
   IEstablecimiento,
+  IEtapasCebada,
   IEtapasMaiz,
   IEtapasSoja,
   IEtapasTrigo,
@@ -631,6 +632,8 @@ export class HelperService {
         return this.translate.instant('Maíz');
       case 'Trigo':
         return this.translate.instant('Trigo');
+      case 'Cebada':
+        return this.translate.instant('Cebada');
       case 'Papa':
         return this.translate.instant('Papa');
       case 'Vid':
@@ -758,6 +761,45 @@ export class HelperService {
       return 3;
     }
   }
+  private getNumeroEtapaCebada(lote: ILoteTabla) {
+    const siembra = lote?.siembra;
+    const crono = lote?.siembra?.crono;
+    const fecha = new Date().toISOString();
+    if (!siembra?.fechaSiembra || !crono) return 0;
+
+    const fechaSiembra = new Date(siembra.fechaSiembra);
+    const fechaActual = new Date(fecha);
+    const diferencia = fechaActual.getTime() - fechaSiembra.getTime();
+    const diasTransucurridos = Math.floor(diferencia / (1000 * 60 * 60 * 24));
+
+    const etapasCebada = crono?.etapas as IEtapasCebada;
+
+    const etapa1 = etapasCebada?.siembra_emergencia || 0;
+    const etapa2 = etapa1 + (etapasCebada?.emergencia_primer_nudo || 0);
+    const etapa3 = etapa2 + (etapasCebada?.primer_nudo_hoja_bandera || 0);
+    const etapa4 = etapa3 + (etapasCebada?.hoja_bandera_espigazon || 0);
+    const etapa5 = etapa4 + (etapasCebada?.espigazon_antesis || 0);
+    const etapa6 = etapa5 + (etapasCebada?.antesis_llenado_granos || 0);
+    const etapa7 = etapa6 + (etapasCebada?.llenado_granos_madurez_fisiologica || 0);
+
+    if (diasTransucurridos < etapa1) {
+      return 0;
+    } else if (diasTransucurridos < etapa2) {
+      return 1;
+    } else if (diasTransucurridos < etapa3) {
+      return 2;
+    } else if (diasTransucurridos < etapa4) {
+      return 3;
+    } else if (diasTransucurridos < etapa5) {
+      return 4;
+    } else if (diasTransucurridos < etapa6) {
+      return 5;
+    } else if (diasTransucurridos < etapa7) {
+      return 6;
+    } else {
+      return 7;
+    }
+  }
   public getNumeroEtapa(lote?: ILoteTabla) {
     switch (lote?.siembra?.crono?.cultivo) {
       case 'Soja':
@@ -766,6 +808,8 @@ export class HelperService {
         return this.getNumeroEtapaTrigo(lote);
       case 'Maiz':
         return this.getNumeroEtapaMaiz(lote);
+      case 'Cebada':
+        return this.getNumeroEtapaCebada(lote);
       default:
         return 0;
     }
@@ -806,6 +850,20 @@ export class HelperService {
     const numero = this.getNumeroEtapaMaiz(lote);
     return ETAPAS_MAIZ[numero];
   }
+  private getNombreEtapaCebada(lote: ILoteTabla) {
+    const ETAPAS_CEBADA: string[] = [
+      this.translate.instant('Siembra'),
+      this.translate.instant('Emergencia'),
+      this.translate.instant('Primer Nudo'),
+      this.translate.instant('Hoja Bandera'),
+      this.translate.instant('Espigazon'),
+      this.translate.instant('Antesis'),
+      this.translate.instant('Llenado de Granos'),
+      this.translate.instant('Madurez Fisiologica'),
+    ];
+    const numero = this.getNumeroEtapaCebada(lote);
+    return ETAPAS_CEBADA[numero];
+  }
   public getNombreEtapa(lote?: ILoteTabla) {
     switch (lote?.siembra?.crono?.cultivo) {
       case 'Soja':
@@ -814,6 +872,8 @@ export class HelperService {
         return this.getNombreEtapaTrigo(lote);
       case 'Maiz':
         return this.getNombreEtapaMaiz(lote);
+      case 'Cebada':
+        return this.getNombreEtapaCebada(lote);
       default:
         return '';
     }
@@ -870,6 +930,17 @@ export class HelperService {
     etapas[1] = etapasTrigo.siembra_emergencia!;
     etapas[2] = etapas[1] + etapasTrigo.emergencia_floracion!;
     etapas[3] = etapas[2] + etapasTrigo.floracion_madurez!;
+    const fechaSiembra = new Date(siembra.fechaSiembra);
+
+    const fechaInicioEtapa = new Date(fechaSiembra.getTime() + etapas[etapaActual] * 24 * 60 * 60 * 1000);
+    return fechaInicioEtapa;
+  }
+  private getFechaInicioEtapaCebada(lote?: ILoteTabla, etapaActual?: number) {
+    const siembra = lote?.siembra;
+    const crono = lote?.siembra?.crono;
+    if (!siembra?.fechaSiembra || !crono || !etapaActual) return;
+
+    const etapas = this.getEtapasCebadaAcumuladas(crono);
     const fechaSiembra = new Date(siembra.fechaSiembra);
 
     const fechaInicioEtapa = new Date(fechaSiembra.getTime() + etapas[etapaActual] * 24 * 60 * 60 * 1000);
@@ -938,6 +1009,32 @@ export class HelperService {
     const diferencia = fechaInicioEtapaSiguiente.getTime() - fechaInicioEtapa.getTime();
     return diferencia;
   }
+  private getDuracionEtapaCebada(lote?: ILoteTabla, etapa?: number) {
+    const siembra = lote?.siembra;
+    const crono = lote?.siembra?.crono;
+    if (!siembra?.fechaSiembra || !crono || !etapa) return;
+
+    const etapas = this.getEtapasCebadaAcumuladas(crono);
+    const fechaSiembra = new Date(siembra.fechaSiembra);
+
+    const fechaInicioEtapa = new Date(fechaSiembra.getTime() + etapas[etapa] * 24 * 60 * 60 * 1000);
+    const fechaInicioEtapaSiguiente = new Date(fechaSiembra.getTime() + etapas[etapa + 1] * 24 * 60 * 60 * 1000);
+    const diferencia = fechaInicioEtapaSiguiente.getTime() - fechaInicioEtapa.getTime();
+    return diferencia;
+  }
+  private getEtapasCebadaAcumuladas(crono: ICrono): number[] {
+    const etapasCrono = crono.etapas as IEtapasCebada;
+    const etapas = [];
+    etapas[0] = 0;
+    etapas[1] = etapasCrono.siembra_emergencia || 0;
+    etapas[2] = etapas[1] + (etapasCrono.emergencia_primer_nudo || 0);
+    etapas[3] = etapas[2] + (etapasCrono.primer_nudo_hoja_bandera || 0);
+    etapas[4] = etapas[3] + (etapasCrono.hoja_bandera_espigazon || 0);
+    etapas[5] = etapas[4] + (etapasCrono.espigazon_antesis || 0);
+    etapas[6] = etapas[5] + (etapasCrono.antesis_llenado_granos || 0);
+    etapas[7] = etapas[6] + (etapasCrono.llenado_granos_madurez_fisiologica || 0);
+    return etapas;
+  }
   public getFechaInicioEtapa(lote?: ILoteTabla) {
     const etapaActual = this.getNumeroEtapa(lote);
     switch (lote?.siembra?.crono?.cultivo) {
@@ -947,6 +1044,8 @@ export class HelperService {
         return this.getFechaInicioEtapaTrigo(lote, etapaActual);
       case 'Maiz':
         return this.getFechaInicioEtapaMaiz(lote, etapaActual);
+      case 'Cebada':
+        return this.getFechaInicioEtapaCebada(lote, etapaActual);
       default:
         return;
     }
@@ -969,6 +1068,11 @@ export class HelperService {
         const duracion = this.getDuracionEtapaMaiz(lote, etapaActual);
         return new Date(inicio!.getTime() + duracion!);
       }
+      case 'Cebada': {
+        const inicio = this.getFechaInicioEtapaCebada(lote, etapaActual);
+        const duracion = this.getDuracionEtapaCebada(lote, etapaActual);
+        return new Date(inicio!.getTime() + duracion!);
+      }
       default:
         return;
     }
@@ -981,6 +1085,8 @@ export class HelperService {
         return numeroEtapa === 7;
       case 'Maiz':
         return numeroEtapa === 3;
+      case 'Cebada':
+        return numeroEtapa === 7;
       default:
         return false;
     }
@@ -1058,6 +1164,39 @@ export class HelperService {
         Emergencia: 1,
         Floracion: 2,
         Madurez: 3,
+      };
+
+      const fechaInicioEtapa = new Date(fechaSiembra.getTime() + etapas[etapaANum[etapa]]! * 24 * 60 * 60 * 1000);
+      return fechaInicioEtapa.toISOString();
+    }
+    return;
+  }
+  public getFechaInicioEtapaCebada2(
+    siembra: ISiembra,
+    etapa:
+      | 'Siembra'
+      | 'Emergencia'
+      | 'Primer Nudo'
+      | 'Hoja Bandera'
+      | 'Espigazon'
+      | 'Antesis'
+      | 'Llenado de Granos'
+      | 'Madurez Fisiologica',
+    crono?: ICrono
+  ) {
+    if (crono && siembra.fechaSiembra) {
+      const etapas = this.getEtapasCebadaAcumuladas(crono);
+      const fechaSiembra = new Date(siembra.fechaSiembra);
+
+      const etapaANum = {
+        Siembra: 0,
+        Emergencia: 1,
+        'Primer Nudo': 2,
+        'Hoja Bandera': 3,
+        Espigazon: 4,
+        Antesis: 5,
+        'Llenado de Granos': 6,
+        'Madurez Fisiologica': 7,
       };
 
       const fechaInicioEtapa = new Date(fechaSiembra.getTime() + etapas[etapaANum[etapa]]! * 24 * 60 * 60 * 1000);
@@ -1194,6 +1333,83 @@ export class HelperService {
       Emergencia: 1,
       Floracion: 2,
       Madurez: 3,
+    };
+    return etapaANum[etapa];
+  }
+
+  static getEtapaPorFechaCebada(
+    siembra: ISiembra,
+    fecha: string,
+    crono?: ICrono
+  ):
+    | 'Siembra'
+    | 'Emergencia'
+    | 'Primer Nudo'
+    | 'Hoja Bandera'
+    | 'Espigazon'
+    | 'Antesis'
+    | 'Llenado de Granos'
+    | 'Madurez Fisiologica'
+    | void {
+    if (crono && siembra.fechaSiembra) {
+      const fechaSiembra = new Date(siembra.fechaSiembra);
+      const fechaActual = new Date(fecha);
+      const diferencia = fechaActual.getTime() - fechaSiembra.getTime();
+      const diasTransucurridos = Math.floor(diferencia / (1000 * 60 * 60 * 24));
+
+      const etapasCebada = crono?.etapas as IEtapasCebada;
+      const etapa1 = etapasCebada?.siembra_emergencia || 0;
+      const etapa2 = etapa1 + (etapasCebada?.emergencia_primer_nudo || 0);
+      const etapa3 = etapa2 + (etapasCebada?.primer_nudo_hoja_bandera || 0);
+      const etapa4 = etapa3 + (etapasCebada?.hoja_bandera_espigazon || 0);
+      const etapa5 = etapa4 + (etapasCebada?.espigazon_antesis || 0);
+      const etapa6 = etapa5 + (etapasCebada?.antesis_llenado_granos || 0);
+      const etapa7 = etapa6 + (etapasCebada?.llenado_granos_madurez_fisiologica || 0);
+
+      if (diasTransucurridos < etapa1) {
+        return 'Siembra';
+      } else if (diasTransucurridos < etapa2) {
+        return 'Emergencia';
+      } else if (diasTransucurridos < etapa3) {
+        return 'Primer Nudo';
+      } else if (diasTransucurridos < etapa4) {
+        return 'Hoja Bandera';
+      } else if (diasTransucurridos < etapa5) {
+        return 'Espigazon';
+      } else if (diasTransucurridos < etapa6) {
+        return 'Antesis';
+      } else if (diasTransucurridos < etapa7) {
+        return 'Llenado de Granos';
+      } else {
+        return 'Madurez Fisiologica';
+      }
+    }
+  }
+
+  static etapaCebadaANumero(
+    etapa:
+      | 'Siembra'
+      | 'Emergencia'
+      | 'Primer Nudo'
+      | 'Hoja Bandera'
+      | 'Espigazon'
+      | 'Antesis'
+      | 'Llenado de Granos'
+      | 'Madurez Fisiologica'
+      | void
+  ) {
+    if (!etapa) {
+      return 0;
+    }
+    const etapaANum = {
+      Siembra: 0,
+      Emergencia: 1,
+      'Primer Nudo': 2,
+      'Hoja Bandera': 3,
+      Espigazon: 4,
+      Antesis: 5,
+      'Llenado de Granos': 6,
+      'Madurez Fisiologica': 7,
     };
     return etapaANum[etapa];
   }

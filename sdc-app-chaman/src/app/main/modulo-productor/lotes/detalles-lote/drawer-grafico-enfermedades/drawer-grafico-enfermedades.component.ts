@@ -30,6 +30,16 @@ export const ETAPAS_SOJA: string[] = [
   'Maduréz Fisiológica',
 ];
 export const ETAPAS_MAIZ: string[] = ['Siembra', 'Emergencia', 'Floración', 'Maduréz'];
+export const ETAPAS_CEBADA: string[] = [
+  'Siembra',
+  'Emergencia',
+  'Primer Nudo',
+  'Hoja Bandera',
+  'Espigazon',
+  'Antesis',
+  'Llenado de Granos',
+  'Madurez Fisiologica',
+];
 
 @Component({
   selector: 'app-drawer-grafico-enfermedades',
@@ -64,6 +74,10 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
     }
     if (this.siembra?.semilla?.cultivo === 'Maiz') {
       this.crearGraficoPrediccionesMaiz();
+      return;
+    }
+    if (this.siembra?.semilla?.cultivo === 'Cebada') {
+      this.crearGraficoPrediccionesCebada();
       return;
     }
   }
@@ -590,6 +604,128 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
           zIndex: 2,
         };
         plotBands.push(p);
+      }
+    }
+
+    this.chartOptions = this.chartBasicOptions(lines, plotBands, series);
+  }
+
+  private crearGraficoPrediccionesCebada(): void {
+    if (this.predicciones.length === 0) {
+      return;
+    }
+
+    const enfermedades = this.predicciones.map((p) => {
+      return p.enfermedades!.map((e) => e.enfermedad);
+    });
+    const enfermedadesUnicas = [...new Set(enfermedades.flat())];
+
+    const series: any[] = [];
+
+    for (const enfermedad of enfermedadesUnicas) {
+      series.push({
+        type: 'line',
+        name: enfermedad,
+        data: [],
+        lineWidth: 4,
+        tooltip: {
+          xDateFormat: '%d-%m-%Y',
+          pointFormat: '<strong>{point.y}%</strong>',
+          headerFormat: '<span style="font-size: 14px">{point.key}</span><br/>',
+        },
+        dataLabels: {
+          enabled: false,
+        },
+      });
+    }
+
+    for (const prediccion of this.predicciones) {
+      if (!prediccion.fecha || !prediccion.enfermedades) {
+        continue;
+      }
+      const fecha = new Date(prediccion.fecha).getTime();
+
+      for (const enfermedad of prediccion.enfermedades) {
+        for (const serie of series) {
+          if (serie.name === enfermedad.enfermedad) {
+            serie.data.push([fecha, enfermedad.resultado]);
+          }
+        }
+      }
+    }
+
+    const fechaActual = new Date().toISOString();
+    const hitos = [
+      {
+        fecha: this.helper.getFechaInicioEtapaCebada2(this.siembra!, 'Primer Nudo', this.siembra?.crono),
+        texto: ETAPAS_CEBADA[2],
+        color: '#f45b5b',
+      },
+      {
+        fecha: this.helper.getFechaInicioEtapaCebada2(this.siembra!, 'Hoja Bandera', this.siembra?.crono),
+        texto: ETAPAS_CEBADA[3],
+        color: '#7798bf',
+      },
+      {
+        fecha: this.helper.getFechaInicioEtapaCebada2(this.siembra!, 'Espigazon', this.siembra?.crono),
+        texto: ETAPAS_CEBADA[4],
+        color: '#aaeeee',
+      },
+      {
+        fecha: this.helper.getFechaInicioEtapaCebada2(this.siembra!, 'Antesis', this.siembra?.crono),
+        texto: ETAPAS_CEBADA[5],
+        color: '#ff0066',
+      },
+      {
+        fecha: this.helper.getFechaInicioEtapaCebada2(this.siembra!, 'Llenado de Granos', this.siembra?.crono),
+        texto: ETAPAS_CEBADA[6],
+        color: '#eeaaee',
+      },
+    ];
+
+    const lines: XAxisPlotLinesOptions[] = [];
+    for (const hito of hitos) {
+      if (hito.fecha && hito.fecha <= fechaActual) {
+        lines.push({
+          color: hito.color,
+          dashStyle: 'Dot',
+          width: 2,
+          value: new Date(hito.fecha).getTime(),
+          label: {
+            text: this.translate.instant(hito.texto),
+          },
+          zIndex: 3,
+        });
+      }
+    }
+
+    const fumigaciones = this.siembra?.fumigaciones;
+    const plotBands: XAxisPlotBandsOptions[] = [];
+    if (fumigaciones) {
+      const fechasFumigaciones = fumigaciones.map((f) => f.fechaFumigacion);
+
+      for (const f of fechasFumigaciones) {
+        lines.push({
+          color: '#defa40',
+          dashStyle: 'Dash',
+          width: 3,
+          value: new Date(f!).getTime(),
+          label: {
+            text: this.translate.instant('Fumigado'),
+          },
+          zIndex: 3,
+        });
+      }
+
+      for (const f of fumigaciones) {
+        const from = new Date(f.fechaFumigacion!).getTime();
+        const to = from + (f.duracion || 15) * 24 * 60 * 60 * 1000;
+        plotBands.push({
+          from,
+          to,
+          color: '#defa4028',
+          zIndex: 2,
+        });
       }
     }
 

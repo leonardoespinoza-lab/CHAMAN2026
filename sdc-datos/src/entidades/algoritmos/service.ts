@@ -77,8 +77,8 @@ export class AlgoritmosService {
         nombre: 'Prediccion de enfermedades',
         estado: 'auditable',
         descripcion:
-          'Cruza susceptibilidad varietal, etapa fenologica, humedad persistente, lluvia y temperatura por cultivo.',
-        inputs: ['Cultivo y variedad', 'Fenologia', 'Humedad relativa', 'Lluvia', 'Temperatura'],
+          'Cruza susceptibilidad varietal, etapa fenologica, zona/ciclo, humedad persistente, lluvia y temperatura por cultivo.',
+        inputs: ['Cultivo y variedad', 'Fenologia', 'Zona/ciclo', 'Humedad relativa', 'Lluvia', 'Temperatura'],
         outputs: ['riesgo por enfermedad', 'periodo critico', 'prescripcion orientativa'],
       },
       {
@@ -121,6 +121,7 @@ export class AlgoritmosService {
     const cultivo = body?.cultivo || 'Trigo';
     const variedad = body?.variedad || 'Variedad sensible';
     const etapa = body?.etapa || 'Hoja bandera';
+    const zona = body?.zona || body?.departamento || 'Zona sin definir';
     const humedad = Number(body?.humedadRelativa ?? 88);
     const horasMojado = Number(body?.horasMojado ?? 18);
     const lluvia48 = Number(body?.lluvia48h ?? 12);
@@ -170,6 +171,7 @@ export class AlgoritmosService {
         cultivo,
         variedad,
         etapa,
+        zona,
         humedadRelativa: humedad,
         horasMojado,
         lluvia48h: lluvia48,
@@ -180,6 +182,7 @@ export class AlgoritmosService {
       trazas: [
         'Riesgo = humedad persistente + horas de mojado + lluvia + temperatura + susceptibilidad varietal + ventana fenologica.',
         `Etapa evaluada: ${etapa}. Humedad ${humedad}%, mojado ${horasMojado} h, lluvia 48 h ${lluvia48} mm.`,
+        `Zona evaluada: ${zona}. En produccion el crono se resuelve por departamento, ciclo y fecha de siembra.`,
       ],
     };
   }
@@ -812,6 +815,48 @@ export class AlgoritmosService {
           lluviaCritica: 10,
           tempOptima: 23,
           prescripcion: 'Fungicida foliar en hibridos susceptibles y ambiente de alto riesgo.',
+        },
+      ],
+      Cebada: [
+        {
+          nombre: 'Mancha en Red',
+          periodo: 'Emergencia a espigazon',
+          etapas: ['Emergencia', 'Primer Nudo', 'Hoja Bandera', 'Espigazon'],
+          humedadBase: 82,
+          horasMojadoCriticas: 12,
+          lluviaCritica: 8,
+          tempOptima: 17,
+          prescripcion: 'DMI + QoI/SDHI registrado en cebada; validar destino cervecero y marbete.',
+        },
+        {
+          nombre: 'Escaldadura de la Cebada',
+          periodo: 'Emergencia a hoja bandera',
+          etapas: ['Emergencia', 'Primer Nudo', 'Hoja Bandera'],
+          humedadBase: 85,
+          horasMojadoCriticas: 14,
+          lluviaCritica: 6,
+          tempOptima: 13,
+          prescripcion: 'Triazol + estrobilurina/carboxamida registrada; integrar rastrojo y sintomas.',
+        },
+        {
+          nombre: 'Roya de la Hoja de Cebada',
+          periodo: 'Primer nudo a llenado',
+          etapas: ['Primer Nudo', 'Hoja Bandera', 'Espigazon', 'Antesis', 'Llenado de Granos'],
+          humedadBase: 70,
+          horasMojadoCriticas: 8,
+          lluviaCritica: 4,
+          tempOptima: 18,
+          prescripcion: 'Triazol o mezcla doble; proteger hojas funcionales con riesgo sostenido.',
+        },
+        {
+          nombre: 'Fusariosis de la Espiga de Cebada',
+          periodo: 'Espigazon y antesis',
+          etapas: ['Espigazon', 'Antesis', 'Llenado de Granos'],
+          humedadBase: 78,
+          horasMojadoCriticas: 18,
+          lluviaCritica: 5,
+          tempOptima: 20,
+          prescripcion: 'Triazol especifico de espiga; evitar estrobilurina sola y validar calidad/micotoxinas.',
         },
       ],
     };
