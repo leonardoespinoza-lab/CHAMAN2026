@@ -310,6 +310,12 @@ export class NavComponent implements OnInit, OnDestroy {
     return this.permisoSeleccionado?.nivel || 'Admin';
   }
 
+  public descripcionAlcance(): string {
+    const nivel = this.permisoSeleccionado?.nivel || 'Admin';
+    const rol = this.permisoSeleccionado?.rol || 'Admin';
+    return `${nivel} - ${rol}`;
+  }
+
   public accionLogo(event?: Event): void {
     this.abrirMenu(event);
   }

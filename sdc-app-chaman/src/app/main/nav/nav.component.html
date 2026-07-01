@@ -6,20 +6,26 @@
   [draggable]="false"
   [resizable]="false"
   styleClass="chaman-nav-dialog"
-  [style]="{ width: 'min(920px, calc(100vw - 1.5rem))' }"
+  [style]="{ width: 'min(940px, calc(100vw - 1.5rem))' }"
   [contentStyle]="{ padding: '0' }"
 >
     <div class="chaman-nav-shell flex flex-col h-full">
       <!-- Logo y cerrar -->
       <div class="chaman-nav-header flex items-center justify-between">
-        <span class="chaman-nav-brand inline-flex items-center gap-2">
-          <!-- Logo -->
-          @if (helper.darkTheme) {
-            <img src="images/logo-dark.png" alt="" />
-          } @else {
-            <img src="images/logo-light.png" alt="" />
-          }
-        </span>
+        <div class="chaman-nav-title">
+          <span class="chaman-nav-brand inline-flex items-center gap-2">
+            <!-- Logo -->
+            @if (helper.darkTheme) {
+              <img src="images/logo-dark.png" alt="" />
+            } @else {
+              <img src="images/logo-light.png" alt="" />
+            }
+          </span>
+          <div class="chaman-nav-context">
+            <span>{{ descripcionAlcance() }}</span>
+            <strong>{{ nombreAlcance() }}</strong>
+          </div>
+        </div>
         <!-- Boton cerrar -->
         <span>
           <p-button
@@ -338,7 +344,14 @@
                     [routerLinkActive]="['active']"
                     (click)="cerrarMenu($event)"
                   >
-                    <i class="pi pi-seedling mr-2" style="font-size: 24px; color: var(--p-primary-color)"></i>
+                    <svg
+                      [style.fill]="'var(--p-primary-color)'"
+                      [attr.width]="'24px'"
+                      [attr.height]="'24px'"
+                      class="mr-2"
+                    >
+                      <use [attr.xlink:href]="'icons/icons.svg#siembras'"></use>
+                    </svg>
                     <span class="font-medium">{{ 'Cultivo' | translate }}</span>
                   </a>
                 </li>
@@ -798,11 +811,9 @@
           ></p-button>
         </div>
         <hr class="nav-divider border-t border-0 border-surface" />
-        <div
-          class="nav-account flex items-center gap-2 rounded-border text-surface-700 dark:text-surface-100"
-        >
-          <div style="display: flex; justify-content: space-between; width: 100%; align-items: center">
-            <div style="display: flex; align-items: center" class="gap-2">
+        <div class="nav-account text-surface-700 dark:text-surface-100">
+          <div class="nav-account-row">
+            <div class="nav-account-identity">
               <p-avatar [image]="logoAlcance() || user?.datosPersonales?.['foto'] || 'images/avatar.png'" shape="circle" />
               @if (loginService.esProductor) {
                 <svg
@@ -850,24 +861,28 @@
                 <small>{{ nombreAlcance() }}</small>
               </span>
             </div>
-            <!-- Cambiar Passowrd -->
-            <p-button
-              type="button"
-              (click)="cambiarPassword()"
-              icon="pi pi-user-edit"
-              rounded="true"
-              outlined="true"
-              styleClass="h-8 w-8"
-            ></p-button>
-            <!-- Cerrar Sesión -->
-            <p-button
-              type="button"
-              (click)="logout($event)"
-              icon="pi i-salir"
-              rounded="true"
-              outlined="true"
-              styleClass="h-8 w-8"
-            ></p-button>
+            <div class="nav-account-actions">
+              <!-- Cambiar Passowrd -->
+              <p-button
+                type="button"
+                (click)="cambiarPassword()"
+                icon="pi pi-user-edit"
+                rounded="true"
+                outlined="true"
+                styleClass="h-8 w-8"
+                pTooltip="Editar perfil"
+              ></p-button>
+              <!-- Cerrar Sesión -->
+              <p-button
+                type="button"
+                (click)="logout($event)"
+                icon="pi i-salir"
+                rounded="true"
+                outlined="true"
+                styleClass="h-8 w-8"
+                pTooltip="Cerrar sesión"
+              ></p-button>
+            </div>
           </div>
         </div>
         <!-- Version -->
