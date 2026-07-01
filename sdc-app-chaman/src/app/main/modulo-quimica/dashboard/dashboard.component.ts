@@ -141,11 +141,19 @@ export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestr
       return;
     }
 
-    this.map.getView().animate({
-      center: fromLonLat(coordinates),
-      zoom: Math.max(this.map.getView().getZoom() || 0, 8),
-      duration: 350,
+    this.distribuidoresMap?.nativeElement.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
     });
+
+    setTimeout(() => {
+      this.map?.updateSize();
+      this.map?.getView().animate({
+        center: fromLonLat(coordinates),
+        zoom: 12,
+        duration: 350,
+      });
+    }, 120);
   }
 
   public exportarInformeEjecutivo(): void {
@@ -690,12 +698,12 @@ export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestr
 
     this.map = new OlMap({
       target: this.distribuidoresMap.nativeElement,
-      layers: [OpenLayersService.mapTileSatelite(19), OpenLayersService.mapReferenciasPoliticas(), this.distribuidoresLayer],
+      layers: [OpenLayersService.mapTileSatelite(16), OpenLayersService.mapReferenciasPoliticas(), this.distribuidoresLayer],
       view: new View({
         center: fromLonLat([-63.6, -34.6]),
         zoom: 4,
         minZoom: 3,
-        maxZoom: 18,
+        maxZoom: 16,
       }),
     });
 
