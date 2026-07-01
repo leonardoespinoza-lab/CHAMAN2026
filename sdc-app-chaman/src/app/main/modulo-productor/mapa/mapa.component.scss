@@ -1,20 +1,20 @@
 .map-topbar {
   position: fixed;
   z-index: 1001;
-  top: 0.65rem;
-  left: 0.75rem;
-  right: 0.75rem;
+  top: 0.85rem;
+  left: 0.95rem;
+  right: 0.95rem;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.5rem;
+  gap: 0.65rem;
   pointer-events: none;
 }
 
 .map-topbar-main {
   display: flex;
   align-items: stretch;
-  gap: 0.6rem;
+  gap: 0.7rem;
   width: 100%;
   min-width: 0;
 }
@@ -26,26 +26,52 @@
 .lot-bottom-sheet {
   color: #243149;
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(239, 253, 252, 0.54)),
-    rgba(255, 255, 255, 0.68);
-  border: 1px solid rgba(178, 206, 224, 0.52);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.18) 58%, rgba(230, 255, 252, 0.18)),
+    rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.55);
   box-shadow:
-    0 18px 56px rgba(24, 39, 75, 0.17),
-    0 1px 0 rgba(255, 255, 255, 0.68) inset;
-  backdrop-filter: blur(22px) saturate(128%);
+    0 26px 70px rgba(8, 23, 38, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.72) inset;
+  -webkit-backdrop-filter: blur(28px) saturate(145%);
+  backdrop-filter: blur(28px) saturate(145%);
+  position: relative;
 }
 
 .weather-strip {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 3.05rem;
-  border-radius: 18px;
+  min-height: 4.05rem;
+  border-radius: 22px;
   display: grid;
-  grid-template-columns: minmax(145px, 1.35fr) repeat(5, minmax(76px, 0.85fr));
+  grid-template-columns: minmax(210px, 1.45fr) repeat(5, minmax(98px, 0.85fr));
   align-items: stretch;
   gap: 0;
   overflow: hidden;
   pointer-events: auto;
+}
+
+.weather-strip::before,
+.risk-strip::before,
+.summary-action::before,
+.establishment-rail::before,
+.lot-bottom-sheet::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.52), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 52%);
+  pointer-events: none;
+}
+
+.weather-strip > *,
+.risk-strip > *,
+.summary-action > *,
+.establishment-rail > *,
+.lot-bottom-sheet > * {
+  position: relative;
+  z-index: 1;
 }
 
 .weather-title,
@@ -53,26 +79,33 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 0.45rem 0.75rem;
-  border-right: 1px solid rgba(121, 150, 185, 0.2);
+  gap: 0.08rem;
+  padding: 0.68rem 0.95rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.42);
 }
 
 .weather-title strong,
 .weather-metric strong {
-  font-size: 0.92rem;
-  line-height: 1.2;
+  color: #071827;
+  font-size: 1.06rem;
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: 0;
+  text-shadow: 0 1px 18px rgba(255, 255, 255, 0.36);
 }
 
 .weather-title small {
-  color: #64748b;
-  font-size: 0.72rem;
+  color: rgba(15, 23, 42, 0.72);
+  font-size: 0.78rem;
+  font-weight: 600;
   line-height: 1.15;
 }
 
 .weather-title span,
 .weather-metric span {
-  color: #64748b;
-  font-size: 0.66rem;
+  color: rgba(71, 85, 105, 0.78);
+  font-size: 0.68rem;
+  font-weight: 800;
   line-height: 1.15;
   text-transform: uppercase;
   letter-spacing: 0;
@@ -83,12 +116,12 @@
 }
 
 .risk-strip {
-  flex: 0 0 min(34vw, 26rem);
-  min-width: 20rem;
-  min-height: 3.05rem;
-  border-radius: 18px;
+  flex: 0 0 min(35vw, 30rem);
+  min-width: 22rem;
+  min-height: 4.05rem;
+  border-radius: 22px;
   display: grid;
-  grid-template-columns: minmax(7.4rem, 1fr) repeat(3, minmax(4.4rem, auto));
+  grid-template-columns: minmax(10.5rem, 1fr) repeat(3, minmax(5.2rem, auto));
   overflow: hidden;
   pointer-events: auto;
 }
@@ -98,39 +131,43 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 0.45rem 0.7rem;
-  border-right: 1px solid rgba(121, 150, 185, 0.2);
+  gap: 0.1rem;
+  padding: 0.68rem 0.82rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.42);
 }
 
 .risk-strip-heading span,
 .risk-mini span {
-  color: #64748b;
-  font-size: 0.62rem;
+  color: rgba(71, 85, 105, 0.78);
+  font-size: 0.66rem;
+  font-weight: 800;
   line-height: 1.1;
   text-transform: uppercase;
   letter-spacing: 0;
 }
 
 .risk-strip-heading strong {
-  color: #102a43;
-  font-size: 0.82rem;
-  line-height: 1.15;
+  color: #071827;
+  font-size: 0.98rem;
+  font-weight: 800;
+  line-height: 1.12;
 }
 
 .risk-mini {
   position: relative;
-  padding-left: 0.85rem;
+  padding-left: 1.05rem;
 }
 
 .risk-mini::before {
   content: '';
   position: absolute;
-  left: 0.42rem;
-  top: 0.72rem;
-  bottom: 0.72rem;
-  width: 0.22rem;
+  left: 0.52rem;
+  top: 0.76rem;
+  bottom: 0.76rem;
+  width: 0.26rem;
   border-radius: 999px;
   background: var(--risk-color);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--risk-color) 42%, transparent);
 }
 
 .risk-mini.low {
@@ -146,21 +183,22 @@
 }
 
 .risk-mini strong {
-  color: #102a43;
-  font-size: 0.88rem;
-  line-height: 1.15;
+  color: #071827;
+  font-size: 1.06rem;
+  font-weight: 850;
+  line-height: 1.1;
   white-space: nowrap;
 }
 
 .summary-action {
   flex: 0 0 auto;
-  border-radius: 18px;
+  border-radius: 22px;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.35rem;
+  padding: 0.42rem;
   pointer-events: auto;
-  min-height: 3.05rem;
+  min-height: 4.05rem;
 }
 
 .establishment-rail {
@@ -258,35 +296,37 @@
 
 .summary-button {
   border: 0;
-  border-radius: 14px;
-  min-height: 2.55rem;
-  padding: 0.25rem 0.8rem 0.25rem 0.35rem;
+  border-radius: 17px;
+  min-height: 3.15rem;
+  padding: 0.32rem 1rem 0.32rem 0.4rem;
   display: flex;
   align-items: center;
-  gap: 0.48rem;
-  background: rgba(35, 200, 196, 0.14);
-  color: #102a43;
+  gap: 0.58rem;
+  background: rgba(255, 255, 255, 0.24);
+  color: #071827;
   font: inherit;
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 0.98rem;
+  font-weight: 850;
   cursor: pointer;
   white-space: nowrap;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.62) inset;
 }
 
 .summary-button:hover {
-  background: rgba(35, 200, 196, 0.2);
-  color: #102a43;
+  background: rgba(255, 255, 255, 0.34);
+  color: #071827;
 }
 
 .summary-button-icon {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 10px;
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 14px;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
   color: white;
   background: linear-gradient(135deg, #23c8c4, #22c55e);
+  box-shadow: 0 14px 30px rgba(35, 200, 196, 0.28);
 }
 
 .summary-button-icon i {
