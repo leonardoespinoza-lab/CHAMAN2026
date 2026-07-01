@@ -19,8 +19,6 @@ const EXCLUDED_DIRS = new Set([
   'sdc-web-admin',
   'sdc-web-cliente',
   'sdc-api-admin',
-  'sdc-api-externa',
-  'sdc-ftp',
 ]);
 
 const patterns = [

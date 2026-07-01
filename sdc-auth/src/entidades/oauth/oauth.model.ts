@@ -118,7 +118,7 @@ export class OauthModel {
     };
     const savedToken = await this.tokenService.createToken(tokenToSave);
     if (savedToken) {
-      this.logger.verbose(`Token ${token.accessToken} saved`);
+      this.logger.verbose('Token saved');
       const returnToken: Token = {
         accessToken: savedToken.accessToken,
         client: savedToken.client as any,

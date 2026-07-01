@@ -53,7 +53,6 @@ function runtimeConfigScript() {
     API: process.env.CHAMAN_WEB_API_URL || process.env.API_URL || process.env.API || '',
     WS: process.env.CHAMAN_WEB_WS_URL || process.env.WS_URL || process.env.WS || '',
     TILES_URL: process.env.CHAMAN_WEB_TILES_URL || process.env.TILES_URL || '',
-    GOOGLE_PROVIDER_ID: process.env.GOOGLE_PROVIDER_ID || '',
   };
 
   return `window.__CHAMAN_CONFIG__ = ${JSON.stringify(config)};`;

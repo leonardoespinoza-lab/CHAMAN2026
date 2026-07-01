@@ -39,8 +39,10 @@ export class SchedulerService {
         this.tareasNdviQueue.clean(0, 0, 'failed'),
       ]);
     } catch (error) {
-      this.logger.error(error);
-      console.log(error);
+      this.logger.error(
+        error?.message || 'Error limpiando colas de scheduler',
+        error?.stack,
+      );
     }
   }
 
