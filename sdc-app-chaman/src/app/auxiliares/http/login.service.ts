@@ -47,38 +47,6 @@ export class LoginService {
     return token;
   }
 
-  public _loginGoogle(idToken: string, remember?: boolean): Observable<IToken> {
-    return this.http.post<IToken>(`${API}/auth/google-login`, {
-      credential: idToken,
-      remember,
-    });
-  }
-
-  public _loginGoogleApple(idToken: string, remember?: boolean): Observable<IToken> {
-    return this.http.post<IToken>(`${API}/auth/google-login-apple`, {
-      credential: idToken,
-      remember,
-    });
-  }
-
-  public async loginGoogle(idToken: string, remember = false): Promise<IToken> {
-    this.resetPermisos();
-    const token = await firstValueFrom(this._loginGoogle(idToken, remember));
-    this.helper.removePermiso();
-    this.helper.removeNumeroPermiso();
-    this.helper.setToken(token, remember);
-    return token;
-  }
-
-  public async loginGoogleApple(idToken: string, remember = false): Promise<IToken> {
-    this.resetPermisos();
-    const token = await firstValueFrom(this._loginGoogleApple(idToken, remember));
-    this.helper.removePermiso();
-    this.helper.removeNumeroPermiso();
-    this.helper.setToken(token, remember);
-    return token;
-  }
-
   // REFRESH TOKEN
 
   private _refreshToken(refresh_token: string): Observable<IToken> {

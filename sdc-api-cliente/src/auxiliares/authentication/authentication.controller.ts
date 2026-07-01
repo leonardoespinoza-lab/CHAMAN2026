@@ -4,6 +4,7 @@ import {
   Body,
   Logger,
   UseInterceptors,
+  NotFoundException,
 } from '@nestjs/common';
 import { AuthenticationService } from './authentication.service';
 import { IToken } from 'modelos/src';
@@ -22,6 +23,9 @@ export class AuthenticationController {
   async googleLogin(
     @Body() body: { credential: string; remember?: boolean },
   ): Promise<IToken> {
+    if (process.env.GOOGLE_LOGIN_ENABLED !== 'true') {
+      throw new NotFoundException('Login con Google deshabilitado');
+    }
     return await this.service.googleLogin(body);
   }
 
@@ -30,6 +34,9 @@ export class AuthenticationController {
   async googleLoginApple(
     @Body() body: { credential: string; remember?: boolean },
   ): Promise<IToken> {
+    if (process.env.GOOGLE_LOGIN_ENABLED !== 'true') {
+      throw new NotFoundException('Login con Google deshabilitado');
+    }
     return await this.service.googleLoginApple(body);
   }
 

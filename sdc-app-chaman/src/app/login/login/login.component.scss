@@ -129,35 +129,12 @@
     label { cursor: pointer; }
   }
 
-  &__divider {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    color: #999;
-    font-size: 0.8rem;
-    margin: 0.25rem 0;
-
-    &::before,
-    &::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: #e0e0e0;
-    }
-  }
-  .button-google{
-    background: #f44a4a;   
-  }
 }
 
 :host-context(.dark-theme) .login-form {
   &__welcome { color: #f0f0f0; }
   &__hint { color: #aaa; }
   &__remember { color: #ccc; }
-  &__divider {
-    color: #666;
-    &::before, &::after { background: #444; }
-  }
 }
 
 .version-indicator {

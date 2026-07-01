@@ -20,7 +20,7 @@
 
       <!-- Form -->
       <form [formGroup]="form" class="login-form" pFocusTrap autocomplete="on">
-        <p class="login-form__welcome">{{ 'Te damos la bienvenida a Chamán' | translate }}</p>        
+        <p class="login-form__welcome">{{ 'Te damos la bienvenida a Chamán' | translate }}</p>
 
         <div class="login-form__fields">
           <!-- Usuario -->
@@ -63,20 +63,6 @@
             [loading]="loading"
             [disabled]="!form.valid"
             [fluid]="true"
-          />
-
-          <!-- Divisor -->
-          <div class="login-form__divider">
-            <span>{{ 'o continuá con' | translate }}</span>
-          </div>
-       
-          <!-- Botón Google  -->
-          <p-button
-            icon="pi pi-google"
-            (click)="loginGoogle()"
-            [label]="'Iniciar con Google' | translate"
-            [fluid]="true"
-            severity="danger"
           />
         </div>
       </form>

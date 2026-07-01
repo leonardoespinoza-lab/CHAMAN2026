@@ -1,4 +1,4 @@
-import { Body, Controller, Logger, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Logger, NotFoundException, Post, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
 
 import { ILogin } from './login.dto';
@@ -10,6 +10,9 @@ export class OauthController {
 
   @Post('/google_login')
   async googleLogin(@Body() body: { credential: string; remember?: boolean }) {
+    if (process.env.GOOGLE_LOGIN_ENABLED !== 'true') {
+      throw new NotFoundException('Login con Google deshabilitado');
+    }
     return await this.service.googleLogin(body?.credential, body?.remember);
   }
 
@@ -17,6 +20,9 @@ export class OauthController {
   async googleLoginApple(
     @Body() body: { credential: string; remember?: boolean },
   ) {
+    if (process.env.GOOGLE_LOGIN_ENABLED !== 'true') {
+      throw new NotFoundException('Login con Google deshabilitado');
+    }
     Logger.debug(`Logueando con apple`);
     return await this.service.googleLoginApple(
       body?.credential,
