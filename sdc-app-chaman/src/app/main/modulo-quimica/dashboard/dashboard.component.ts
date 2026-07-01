@@ -30,6 +30,7 @@ import Stroke from 'ol/style/Stroke';
 import Style from 'ol/style/Style';
 import { Subscription } from 'rxjs';
 import { ChartComponent } from '../../../auxiliares/componentes/chart/chart.component';
+import { QuimicaService } from '../../../auxiliares/http/quimica.service';
 import { HelperService } from '../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../auxiliares/servicios/listados';
 import { OpenLayersService } from '../../../auxiliares/servicios/openLayers.service';
@@ -71,6 +72,7 @@ export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestr
 
   public loading = true;
   public nombreCompania = 'Compañía';
+  public logoCompania = '';
 
   public siembras: ISiembra[] = [];
   public distribuidores: IDistribuidor[] = [];
@@ -118,6 +120,7 @@ export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestr
   constructor(
     private listadosService: ListadosService,
     private helper: HelperService,
+    private quimicaService: QuimicaService,
     private translate: TranslateService,
     private activatedRoute: ActivatedRoute,
     private cdr: ChangeDetectorRef
@@ -127,6 +130,218 @@ export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestr
     this.distribuidorSeleccionado = resumen;
     this.distribuidoresLayer.changed();
     this.cdr.detectChanges();
+  }
+
+  public centrarDistribuidor(resumen: IResumenDistribuidor, event?: Event): void {
+    event?.stopPropagation();
+    this.seleccionarDistribuidor(resumen);
+
+    const coordinates = this.coordenadasDistribuidor(resumen);
+    if (!coordinates || !this.map) {
+      return;
+    }
+
+    this.map.getView().animate({
+      center: fromLonLat(coordinates),
+      zoom: Math.max(this.map.getView().getZoom() || 0, 8),
+      duration: 350,
+    });
+  }
+
+  public exportarInformeEjecutivo(): void {
+    const fecha = new Date();
+    const fechaTexto = fecha.toLocaleDateString('es-AR');
+    const nombreArchivo = `informe-${this.nombreCompania || 'compania'}-${fecha.toISOString().slice(0, 10)}`
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9-]+/g, '-')
+      .replace(/-+/g, '-')
+      .toLowerCase();
+    const reporte = window.open('', '_blank', 'width=1024,height=768');
+
+    if (!reporte) {
+      this.helper.notifWarn('El navegador bloqueo la ventana del informe. Habilita ventanas emergentes para exportar PDF.');
+      return;
+    }
+
+    const principalesCultivos = this.cultivosResumen.slice(0, 12);
+    const principalesDistribuidores = this.resumenDistribuidores
+      .filter((resumen) => resumen.hectareas > 0 || resumen.productores > 0 || resumen.lotes > 0)
+      .slice(0, 25);
+    const distribuidoresSinActividad = this.resumenDistribuidores.filter(
+      (resumen) => resumen.hectareas === 0 && resumen.productores === 0 && resumen.lotes === 0
+    ).length;
+
+    const resumenSanitario = [
+      { categoria: 'Sin prediccion', hectareas: this.riegosEnfermedadPorHectarea.nada, clase: 'muted' },
+      { categoria: 'Riesgo bajo', hectareas: this.riegosEnfermedadPorHectarea.bajo, clase: 'ok' },
+      { categoria: 'Riesgo medio', hectareas: this.riegosEnfermedadPorHectarea.medio, clase: 'warn' },
+      { categoria: 'Riesgo alto', hectareas: this.riegosEnfermedadPorHectarea.alto, clase: 'danger' },
+    ];
+
+    const rowsCultivos = principalesCultivos
+      .map(
+        (cultivo) => `
+          <tr>
+            <td>${this.escapeHtml(cultivo.cultivo)}</td>
+            <td class="number">${this.formatNumber(cultivo.lotes)}</td>
+            <td class="number">${this.formatHa(cultivo.hectareas)}</td>
+            <td>
+              <div class="bar"><span style="width:${this.porcentajeHectareas(cultivo.hectareas)}%"></span></div>
+            </td>
+          </tr>`
+      )
+      .join('');
+
+    const rowsSanidad = resumenSanitario
+      .map(
+        (item) => `
+          <tr>
+            <td><span class="status ${item.clase}"></span>${this.escapeHtml(item.categoria)}</td>
+            <td class="number">${this.formatHa(item.hectareas)}</td>
+            <td class="number">${this.porcentajeHectareas(item.hectareas)}%</td>
+          </tr>`
+      )
+      .join('');
+
+    const rowsDistribuidores = principalesDistribuidores
+      .map(
+        (resumen, index) => `
+          <tr>
+            <td class="number">${index + 1}</td>
+            <td>
+              <strong>${this.escapeHtml(resumen.nombre)}</strong>
+              <small>${this.escapeHtml(resumen.direccion || 'Sin direccion cargada')}</small>
+            </td>
+            <td class="number">${this.formatNumber(resumen.productores)}</td>
+            <td class="number">${this.formatNumber(resumen.lotes)}</td>
+            <td class="number">${this.formatHa(resumen.hectareas)}</td>
+            <td class="number">${this.formatHa(resumen.hectareasConAlerta)}</td>
+            <td>${this.escapeHtml(this.cultivosTexto(resumen))}</td>
+          </tr>`
+      )
+      .join('');
+
+    const html = `
+      <!doctype html>
+      <html lang="es">
+      <head>
+        <meta charset="utf-8">
+        <title>${this.escapeHtml(nombreArchivo)}</title>
+        <style>
+          @page { size: A4; margin: 14mm; }
+          * { box-sizing: border-box; }
+          body { margin: 0; color: #14223a; font-family: Arial, Helvetica, sans-serif; font-size: 12px; }
+          h1, h2, h3, p { margin: 0; }
+          .cover { border-bottom: 4px solid #2dd4bf; padding-bottom: 18px; margin-bottom: 18px; }
+          .eyebrow { color: #0f766e; font-size: 10px; font-weight: 700; letter-spacing: 0; text-transform: uppercase; }
+          .title-row { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; }
+          h1 { margin-top: 8px; font-size: 30px; line-height: 1.05; }
+          .subtitle { margin-top: 8px; color: #48627f; font-size: 13px; line-height: 1.4; }
+          .date { border: 1px solid #c8d7e7; border-radius: 8px; padding: 10px 12px; min-width: 132px; text-align: right; }
+          .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0; }
+          .metric { border: 1px solid #c8d7e7; border-left: 4px solid #2dd4bf; border-radius: 8px; padding: 11px; min-height: 78px; }
+          .metric.warn { border-left-color: #f59e0b; }
+          .metric span { display: block; color: #5b708c; font-size: 10px; text-transform: uppercase; }
+          .metric strong { display: block; margin-top: 8px; font-size: 22px; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+          .section { break-inside: avoid; margin-bottom: 16px; }
+          h2 { margin-bottom: 8px; font-size: 16px; }
+          table { width: 100%; border-collapse: collapse; }
+          th { background: #ecfeff; color: #182c4a; font-size: 10px; text-align: left; text-transform: uppercase; }
+          th, td { border: 1px solid #d9e4ef; padding: 7px 8px; vertical-align: top; }
+          td small { display: block; color: #64748b; margin-top: 2px; line-height: 1.25; }
+          .number { text-align: right; white-space: nowrap; }
+          .bar { width: 100%; height: 8px; border-radius: 999px; background: #e4edf6; overflow: hidden; }
+          .bar span { display: block; height: 100%; background: #2dd4bf; }
+          .status { display: inline-block; width: 9px; height: 9px; border-radius: 999px; margin-right: 7px; }
+          .status.muted { background: #94a3b8; }
+          .status.ok { background: #65a30d; }
+          .status.warn { background: #f59e0b; }
+          .status.danger { background: #dc2626; }
+          .note { border: 1px solid #c8d7e7; border-radius: 8px; background: #f8fbfd; padding: 10px; color: #48627f; line-height: 1.35; }
+          .footer { margin-top: 18px; padding-top: 10px; border-top: 1px solid #d9e4ef; color: #64748b; font-size: 10px; }
+          @media print {
+            body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <main>
+          <section class="cover">
+            <div class="title-row">
+              <div>
+                <span class="eyebrow">Informe ejecutivo Chaman</span>
+                <h1>${this.escapeHtml(this.nombreCompania)}</h1>
+                <p class="subtitle">Resumen corporativo de red comercial, productores, lotes, hectareas monitoreadas, cultivos y sanidad.</p>
+              </div>
+              <div class="date">
+                <span class="eyebrow">Fecha</span>
+                <strong>${fechaTexto}</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="metrics">
+            <article class="metric"><span>Distribuidores</span><strong>${this.formatNumber(this.totalDistribuidores)}</strong></article>
+            <article class="metric"><span>Productores</span><strong>${this.formatNumber(this.totalProductores)}</strong></article>
+            <article class="metric"><span>Lotes</span><strong>${this.formatNumber(this.totalLotes)}</strong></article>
+            <article class="metric warn"><span>Hectareas con alerta</span><strong>${this.formatHa(this.hectareasConAlerta)}</strong></article>
+            <article class="metric"><span>Hectareas monitoreadas</span><strong>${this.formatHa(this.totalHectareas)}</strong></article>
+            <article class="metric"><span>Cultivos activos</span><strong>${this.formatNumber(this.cultivosActivos)}</strong></article>
+            <article class="metric"><span>Distribuidores geolocalizados</span><strong>${this.formatNumber(this.distribuidoresConUbicacion)}</strong></article>
+            <article class="metric"><span>Sin actividad vinculada</span><strong>${this.formatNumber(distribuidoresSinActividad)}</strong></article>
+          </section>
+
+          <section class="grid">
+            <div class="section">
+              <h2>Hectareas por cultivo</h2>
+              <table>
+                <thead><tr><th>Cultivo</th><th>Lotes</th><th>Hectareas</th><th>Participacion</th></tr></thead>
+                <tbody>${rowsCultivos || '<tr><td colspan="4">Sin cultivos asociados.</td></tr>'}</tbody>
+              </table>
+            </div>
+            <div class="section">
+              <h2>Riesgo sanitario</h2>
+              <table>
+                <thead><tr><th>Categoria</th><th>Hectareas</th><th>%</th></tr></thead>
+                <tbody>${rowsSanidad}</tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>Distribuidores con actividad monitoreada</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th><th>Distribuidor</th><th>Productores</th><th>Lotes</th><th>Hectareas</th><th>Alerta</th><th>Cultivos principales</th>
+                </tr>
+              </thead>
+              <tbody>${rowsDistribuidores || '<tr><td colspan="7">Todavia no hay productores o lotes asociados a estos distribuidores.</td></tr>'}</tbody>
+            </table>
+          </section>
+
+          <section class="section">
+            <div class="note">
+              El informe se calcula con el alcance visible para la compañia activa. Los valores sanitarios resumen la ultima prediccion disponible por lote y se expresan como hectareas bajo cada categoria.
+            </div>
+          </section>
+
+          <footer class="footer">Chaman Agro - Informe ejecutivo generado automaticamente.</footer>
+        </main>
+        <script>
+          document.title = ${JSON.stringify(nombreArchivo)};
+          setTimeout(() => window.print(), 300);
+        </script>
+      </body>
+      </html>
+    `;
+
+    reporte.document.open();
+    reporte.document.write(html);
+    reporte.document.close();
   }
 
   public trackByDistribuidor(_: number, item: IResumenDistribuidor): string {
@@ -151,7 +366,24 @@ export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestr
     return resumen.cultivos
       .slice(0, 3)
       .map((cultivo) => `${cultivo.cultivo} ${Math.round(cultivo.hectareas)} ha`)
-      .join(' · ');
+      .join(' - ');
+  }
+
+  private escapeHtml(value: string | number | undefined | null): string {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  private formatNumber(value: number): string {
+    return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(value || 0);
+  }
+
+  private formatHa(value: number): string {
+    return `${this.formatNumber(Math.round(value || 0))} ha`;
   }
 
   private crearGraficoTorta(data: Highcharts.PointOptionsObject[]): Highcharts.Options {
@@ -390,7 +622,7 @@ export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestr
     this.redibujarDistribuidores();
   }
 
-  private coordenadasDistribuidor(distribuidor: IDistribuidor): [number, number] | null {
+  private coordenadasDistribuidor(distribuidor: { geojson?: IDistribuidor['geojson'] }): [number, number] | null {
     const coordinates = distribuidor.geojson?.coordinates;
     if (!Array.isArray(coordinates) || coordinates.length < 2) {
       return null;
@@ -426,7 +658,7 @@ export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestr
     this.distribuidoresSource.clear();
 
     this.resumenDistribuidores.forEach((resumen) => {
-      const coordinates = this.coordenadasDistribuidor(resumen as IDistribuidor);
+      const coordinates = this.coordenadasDistribuidor(resumen);
       if (!coordinates) {
         return;
       }
@@ -578,8 +810,34 @@ export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestr
     this.recomputarResumen();
   }
 
+  private async actualizarNombreCompania(): Promise<void> {
+    const permiso = this.helper.permiso;
+    const permisoToken = this.helper.user?.permisos?.find(
+      (item) => item.idQuimica && item.idQuimica === permiso?.idQuimica && item.quimica?.nombre
+    );
+    const nombreLocal = permiso?.quimica?.nombre || permisoToken?.quimica?.nombre;
+
+    if (nombreLocal) {
+      this.nombreCompania = nombreLocal;
+      this.logoCompania = permiso?.quimica?.logo || permisoToken?.quimica?.logo || '';
+      return;
+    }
+
+    if (!permiso?.idQuimica) {
+      return;
+    }
+
+    try {
+      const quimica = await this.quimicaService.listarPorId(permiso.idQuimica);
+      this.nombreCompania = quimica?.nombre || this.nombreCompania;
+      this.logoCompania = quimica?.logo || '';
+    } catch (error) {
+      console.warn('No se pudo resolver el nombre de la compania', error);
+    }
+  }
+
   async ngOnInit(): Promise<void> {
-    this.nombreCompania = this.helper.permiso?.quimica?.nombre || 'Compañía';
+    await this.actualizarNombreCompania();
     this.loading = true;
     this.activatedRoute.queryParams.subscribe(async () => {
       await this.cargaInicial();

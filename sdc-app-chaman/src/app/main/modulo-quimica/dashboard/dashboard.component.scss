@@ -30,6 +30,38 @@
   padding: 18px 20px;
 }
 
+.company-title,
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.company-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 58px;
+  width: 58px;
+  height: 58px;
+  overflow: hidden;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  color: #0f766e;
+  background: #ecfeff;
+  font-size: 26px;
+}
+
+.company-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 6px;
+}
+
+.export-button {
+  white-space: nowrap;
+}
+
 .company-hero h1,
 .panel-header h2 {
   margin: 0;
@@ -276,6 +308,11 @@
   background: #f8fbfd;
 }
 
+.map-action {
+  width: 34px;
+  height: 34px;
+}
+
 .crop-summary {
   display: flex;
   flex-direction: column;
@@ -344,6 +381,17 @@
   .company-hero {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .company-title,
+  .hero-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .export-button {
+    width: 100%;
   }
 
   .metric-grid,

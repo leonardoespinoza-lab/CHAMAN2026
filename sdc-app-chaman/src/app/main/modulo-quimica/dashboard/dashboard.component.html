@@ -1,14 +1,33 @@
 <div class="company-dashboard">
   <section class="company-hero">
-    <div>
-      <span class="eyebrow">{{ 'Compañía' | translate }}</span>
-      <h1>{{ nombreCompania }}</h1>
-      <p>{{ 'Red comercial, productores y hectareas bajo monitoreo agronomico.' | translate }}</p>
+    <div class="company-title">
+      <div class="company-avatar">
+        @if (logoCompania) {
+          <img [src]="logoCompania" [alt]="nombreCompania" />
+        } @else {
+          <i class="pi pi-building"></i>
+        }
+      </div>
+      <div>
+        <span class="eyebrow">{{ 'Compañía' | translate }}</span>
+        <h1>{{ nombreCompania }}</h1>
+        <p>{{ 'Red comercial, productores y hectareas bajo monitoreo agronomico.' | translate }}</p>
+      </div>
     </div>
 
-    <div class="scope-badge">
-      <i class="pi pi-sitemap"></i>
-      <span>{{ 'Alcance corporativo' | translate }}</span>
+    <div class="hero-actions">
+      <button
+        pButton
+        type="button"
+        icon="pi pi-file-pdf"
+        [label]="'Exportar PDF' | translate"
+        class="export-button"
+        (click)="exportarInformeEjecutivo()"
+      ></button>
+      <div class="scope-badge">
+        <i class="pi pi-sitemap"></i>
+        <span>{{ 'Alcance corporativo' | translate }}</span>
+      </div>
     </div>
   </section>
 
@@ -153,6 +172,7 @@
           <thead>
             <tr>
               <th>{{ 'Distribuidor' | translate }}</th>
+              <th>{{ 'Mapa' | translate }}</th>
               <th>{{ 'Productores' | translate }}</th>
               <th>{{ 'Lotes' | translate }}</th>
               <th>{{ 'Hectareas' | translate }}</th>
@@ -170,6 +190,19 @@
                   <strong>{{ item.nombre }}</strong>
                   <small>{{ item.direccion }}</small>
                 </td>
+                <td>
+                  <button
+                    pButton
+                    type="button"
+                    icon="pi pi-map-marker"
+                    class="map-action"
+                    [rounded]="true"
+                    [outlined]="true"
+                    [pTooltip]="'Ver en mapa' | translate"
+                    [disabled]="!item.geojson"
+                    (click)="centrarDistribuidor(item, $event)"
+                  ></button>
+                </td>
                 <td>{{ item.productores | number: '1.0-0' }}</td>
                 <td>{{ item.lotes | number: '1.0-0' }}</td>
                 <td>{{ item.hectareas | number: '1.0-0' }}</td>
@@ -182,7 +215,7 @@
               </tr>
             } @empty {
               <tr>
-                <td colspan="6">
+                <td colspan="7">
                   <p class="empty-state">{{ 'No hay distribuidores para este alcance.' | translate }}</p>
                 </td>
               </tr>
