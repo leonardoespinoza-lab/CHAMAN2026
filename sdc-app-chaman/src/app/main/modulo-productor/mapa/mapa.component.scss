@@ -717,66 +717,79 @@
   left: 50%;
   bottom: 1rem;
   transform: translateX(-50%);
-  width: min(1180px, calc(100vw - 2rem));
-  max-height: min(58vh, 520px);
+  width: min(1240px, calc(100vw - 2rem));
+  max-height: min(64vh, 590px);
   overflow: auto;
-  border-radius: 24px;
-  padding: 1rem;
+  border-radius: 26px;
+  padding: 1.15rem;
 }
 
 .sheet-close {
   position: absolute;
-  top: 0.85rem;
-  right: 0.85rem;
-  width: 2rem;
-  height: 2rem;
-  border: 1px solid rgba(121, 150, 185, 0.32);
+  top: 0.7rem;
+  right: 0.7rem;
+  left: auto;
+  z-index: 4;
+  width: 2.15rem;
+  height: 2.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.58);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
-  color: #334155;
+  background: rgba(255, 255, 255, 0.32);
+  color: #0f172a;
   cursor: pointer;
+  box-shadow: 0 12px 26px rgba(8, 23, 38, 0.16);
 }
 
 .sheet-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding-right: 2.6rem;
+  gap: 1.25rem;
+  padding: 0.15rem 2.7rem 0.9rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.36);
 }
 
 .sheet-header h2 {
-  margin: 0.15rem 0 0;
-  color: #14213d;
-  font-size: clamp(1.15rem, 1.4vw, 1.55rem);
-  line-height: 1.1;
+  margin: 0.2rem 0 0;
+  color: #071827;
+  font-size: clamp(1.4rem, 1.7vw, 2rem);
+  line-height: 1.05;
+  letter-spacing: 0;
 }
 
 .sheet-eyebrow {
-  color: #64748b;
-  font-size: 0.75rem;
+  color: rgba(71, 85, 105, 0.82);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .sheet-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.45rem;
+  gap: 0.48rem;
+}
+
+:host ::ng-deep .sheet-actions .p-button {
+  border-radius: 9px;
+  font-weight: 800;
+  box-shadow: 0 10px 26px rgba(8, 23, 38, 0.1);
 }
 
 .lot-summary-strip {
-  margin-top: 0.9rem;
+  margin-top: 0.95rem;
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  border: 1px solid rgba(121, 150, 185, 0.24);
-  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-radius: 18px;
   overflow: hidden;
-  background: rgba(248, 250, 252, 0.72);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .lot-summary-strip div {
-  padding: 0.65rem 0.75rem;
-  border-right: 1px solid rgba(121, 150, 185, 0.18);
+  padding: 0.78rem 0.85rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.32);
   min-width: 0;
 }
 
@@ -786,36 +799,36 @@
 
 .lot-summary-strip span,
 .service-summary-card p {
-  color: #64748b;
+  color: rgba(71, 85, 105, 0.82);
   font-size: 0.72rem;
 }
 
 .lot-summary-strip strong {
   display: block;
-  margin-top: 0.18rem;
-  color: #1e293b;
-  font-size: 0.88rem;
+  margin-top: 0.22rem;
+  color: #071827;
+  font-size: 0.95rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .service-summary-grid {
-  margin-top: 0.85rem;
+  margin-top: 0.95rem;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 0.65rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.72rem;
 }
 
 .service-summary-card {
-  min-height: 8rem;
-  border: 1px solid rgba(121, 150, 185, 0.32);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.82);
-  padding: 0.75rem;
+  min-height: 7.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.28);
+  padding: 0.88rem;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.38rem;
 }
 
 .service-summary-title {
@@ -823,8 +836,8 @@
   align-items: center;
   gap: 0.45rem;
   color: var(--p-primary-color);
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: 0.74rem;
+  font-weight: 850;
 }
 
 .service-summary-title svg {
@@ -832,9 +845,9 @@
 }
 
 .service-summary-card strong {
-  color: #172033;
-  font-size: 0.95rem;
-  line-height: 1.2;
+  color: #071827;
+  font-size: 1.05rem;
+  line-height: 1.15;
 }
 
 .service-summary-card p {
@@ -860,8 +873,9 @@
 }
 
 .yield-summary-card {
+  grid-column: span 2;
   border-color: rgba(35, 200, 196, 0.5);
-  background: linear-gradient(180deg, rgba(240, 253, 252, 0.95), rgba(255, 255, 255, 0.86));
+  background: linear-gradient(145deg, rgba(226, 255, 253, 0.5), rgba(255, 255, 255, 0.25));
 }
 
 .environment-list {
@@ -1136,6 +1150,10 @@
 
   .service-summary-grid {
     grid-template-columns: 1fr;
+  }
+
+  .yield-summary-card {
+    grid-column: auto;
   }
 
   .lot-summary-strip {
