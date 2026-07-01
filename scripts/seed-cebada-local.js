@@ -1,4 +1,5 @@
 const cebadaCronos = require('./data/cebada/cebada-buenos-aires-cronos.json');
+const cebadaVariedades = require('./data/cebada/cebada-variedades.json');
 const { MongoClient, ObjectId } = require('../sdc-datos/node_modules/mongodb');
 
 const DB_URL =
@@ -79,20 +80,7 @@ const DISEASES = [
   },
 ];
 
-const VARIETIES = [
-  { variedad: 'ANDREIA', ciclo: 'CORTO', tipo: 'CERVECERA' },
-  { variedad: 'MONTOYA', ciclo: 'LARGO', tipo: 'CERVECERA' },
-  { variedad: 'OVERTURE', ciclo: 'INTERMEDIO', tipo: 'CERVECERA' },
-  { variedad: 'SCARLETT', ciclo: 'SIN DEFINIR' },
-  { variedad: 'SHAKIRA', ciclo: 'SIN DEFINIR' },
-  { variedad: 'SINFONIA', ciclo: 'SIN DEFINIR' },
-  { variedad: 'TRAVELER', ciclo: 'SIN DEFINIR' },
-  { variedad: 'CHARLES', ciclo: 'SIN DEFINIR' },
-  { variedad: 'DANIELLE', ciclo: 'SIN DEFINIR' },
-  { variedad: 'FATIMA', ciclo: 'SIN DEFINIR' },
-  { variedad: 'JENNIFER', ciclo: 'SIN DEFINIR' },
-  { variedad: 'MILITZA INTA', ciclo: 'SIN DEFINIR' },
-];
+const VARIETIES = cebadaVariedades.varieties || [];
 
 function cleanText(value) {
   if (value === undefined || value === null) return '';
@@ -368,6 +356,7 @@ async function main() {
           ok: true,
           validateOnly: true,
           source: cebadaCronos.metadata,
+          seedSource: cebadaVariedades.metadata,
           invalidRows: cebadaCronos.invalidRows?.length || 0,
           semillas: VARIETIES.length,
           enfermedades: DISEASES.length,
@@ -397,6 +386,7 @@ async function main() {
       ok: true,
       dryRun: DRY_RUN,
       source: cebadaCronos.metadata,
+      seedSource: cebadaVariedades.metadata,
       semillas: VARIETIES.length,
       enfermedades: DISEASES.length,
       cronosDepartamentales: departmentCronos.length,

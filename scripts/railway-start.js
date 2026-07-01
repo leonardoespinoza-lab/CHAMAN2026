@@ -10,6 +10,19 @@ const cwd = service.name === 'sdc-app-chaman' ? process.cwd() : service.path;
 
 ensureSharedPackages({ compilerCwd: cwd });
 
+if (service.name === 'sdc-datos') {
+  const bootstrap = spawnSync(process.execPath, ['scripts/bootstrap-agro-catalogs.js'], {
+    cwd: process.cwd(),
+    shell: false,
+    stdio: 'inherit',
+    env: process.env,
+  });
+
+  if (bootstrap.status !== 0) {
+    process.exit(bootstrap.status || 1);
+  }
+}
+
 const result = spawnSync(service.start, {
   cwd,
   shell: true,

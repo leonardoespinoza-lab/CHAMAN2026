@@ -1,0 +1,73 @@
+{
+  "metadata": {
+    "sourceFile": "BASE CEBADA v1.xlsx",
+    "sourceSheet": "VARIEDADES",
+    "cultivo": "Cebada",
+    "notes": "Catalogo normalizado desde la hoja VARIEDADES. Las variedades con ciclo definido provienen tambien de la hoja BASE; las restantes quedan disponibles para carga de siembra, pero sin crono varietal robusto hasta completar fenologia."
+  },
+  "varieties": [
+    {
+      "variedad": "ANDREIA",
+      "ciclo": "CORTO",
+      "tipo": "CERVECERA",
+      "tieneCrono": true
+    },
+    {
+      "variedad": "MONTOYA",
+      "ciclo": "LARGO",
+      "tipo": "CERVECERA",
+      "tieneCrono": true
+    },
+    {
+      "variedad": "OVERTURE",
+      "ciclo": "INTERMEDIO",
+      "tipo": "CERVECERA",
+      "tieneCrono": true
+    },
+    {
+      "variedad": "SCARLETT",
+      "ciclo": "SIN DEFINIR",
+      "tieneCrono": false
+    },
+    {
+      "variedad": "SHAKIRA",
+      "ciclo": "SIN DEFINIR",
+      "tieneCrono": false
+    },
+    {
+      "variedad": "SINFONIA",
+      "ciclo": "SIN DEFINIR",
+      "tieneCrono": false
+    },
+    {
+      "variedad": "TRAVELER",
+      "ciclo": "SIN DEFINIR",
+      "tieneCrono": false
+    },
+    {
+      "variedad": "CHARLES",
+      "ciclo": "SIN DEFINIR",
+      "tieneCrono": false
+    },
+    {
+      "variedad": "DANIELLE",
+      "ciclo": "SIN DEFINIR",
+      "tieneCrono": false
+    },
+    {
+      "variedad": "FATIMA",
+      "ciclo": "SIN DEFINIR",
+      "tieneCrono": false
+    },
+    {
+      "variedad": "JENNIFER",
+      "ciclo": "SIN DEFINIR",
+      "tieneCrono": false
+    },
+    {
+      "variedad": "MILITZA INTA",
+      "ciclo": "SIN DEFINIR",
+      "tieneCrono": false
+    }
+  ]
+}
