@@ -8,6 +8,7 @@
 .lote-editor {
   min-height: 100%;
   padding: 1rem;
+  font-size: 1.05rem;
 }
 
 .editor-card {
@@ -37,6 +38,40 @@
   max-height: calc(100vh - 170px);
   margin-top: 1rem;
   padding-right: 0.25rem;
+}
+
+:host ::ng-deep {
+  .p-card-title {
+    font-size: clamp(1.85rem, 2.1vw, 2.6rem);
+    font-weight: 850;
+    line-height: 1.05;
+  }
+
+  .p-card-subtitle {
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+
+  .p-tab {
+    font-size: 1.12rem;
+  }
+
+  .p-inputtext,
+  .p-select,
+  .p-select-label,
+  .p-inputnumber-input,
+  .p-multiselect,
+  .p-multiselect-label {
+    font-size: 1.08rem !important;
+  }
+
+  .p-floatlabel label {
+    font-size: 0.98rem !important;
+  }
+
+  .p-button {
+    min-height: 2.95rem;
+  }
 }
 
 .form-section,
@@ -122,7 +157,7 @@
 
 .kmz-preview-item small {
   color: var(--p-text-muted-color);
-  font-size: 0.78rem;
+  font-size: 0.95rem;
   line-height: 1.15;
 }
 
@@ -208,7 +243,7 @@
   border-radius: 999px;
   padding: 0.25rem 0.65rem;
   color: var(--p-primary-color);
-  font-size: 0.86rem;
+  font-size: 0.98rem;
   font-weight: 700;
 }
 
@@ -292,7 +327,7 @@
 
 .device-layer-title span {
   color: var(--p-text-muted-color);
-  font-size: 0.86rem;
+  font-size: 0.98rem;
 }
 
 .device-layer-roots {
@@ -332,15 +367,15 @@
 .soil-lookup small,
 .soil-profile-header small,
 .soil-summary span,
-.soil-detail-grid span,
-.probe-config-card span,
-.probe-config-card small,
-.device-layers-card small,
-.device-help small,
-.select-option small {
+  .soil-detail-grid span,
+  .probe-config-card span,
+  .probe-config-card small,
+  .device-layers-card small,
+  .device-help small,
+  .select-option small {
   display: block;
   color: var(--p-text-muted-color);
-  font-size: 0.86rem;
+  font-size: 0.98rem;
 }
 
 .inherited-location {

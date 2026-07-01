@@ -717,11 +717,11 @@
   left: 50%;
   bottom: 1rem;
   transform: translateX(-50%);
-  width: min(1320px, calc(100vw - 2rem));
-  max-height: min(70vh, 660px);
+  width: min(1380px, calc(100vw - 2rem));
+  max-height: min(76vh, 720px);
   overflow: auto;
   border-radius: 26px;
-  padding: 1.3rem;
+  padding: 1.45rem;
 }
 
 .sheet-close {
@@ -752,7 +752,7 @@
 .sheet-header h2 {
   margin: 0.2rem 0 0;
   color: #071827;
-  font-size: clamp(1.75rem, 2.15vw, 2.55rem);
+  font-size: clamp(2.05rem, 2.35vw, 2.95rem);
   font-weight: 850;
   line-height: 1.05;
   letter-spacing: 0;
@@ -760,7 +760,7 @@
 
 .sheet-eyebrow {
   color: rgba(71, 85, 105, 0.82);
-  font-size: 0.84rem;
+  font-size: 0.96rem;
   font-weight: 800;
   text-transform: uppercase;
 }
@@ -774,9 +774,9 @@
 
 :host ::ng-deep .sheet-actions .p-button {
   border-radius: 9px;
-  min-height: 2.55rem;
+  min-height: 2.85rem;
   font-weight: 800;
-  font-size: 0.98rem;
+  font-size: 1.08rem;
   box-shadow: 0 10px 26px rgba(8, 23, 38, 0.1);
 }
 
@@ -791,7 +791,7 @@
 }
 
 .lot-summary-strip div {
-  padding: 0.95rem 1rem;
+  padding: 1.05rem 1rem;
   border-right: 1px solid rgba(255, 255, 255, 0.32);
   min-width: 0;
 }
@@ -803,14 +803,14 @@
 .lot-summary-strip span,
 .service-summary-card p {
   color: rgba(71, 85, 105, 0.82);
-  font-size: 0.86rem;
+  font-size: 1rem;
 }
 
 .lot-summary-strip strong {
   display: block;
   margin-top: 0.28rem;
   color: #071827;
-  font-size: 1.12rem;
+  font-size: 1.28rem;
   line-height: 1.15;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -821,18 +821,18 @@
   margin-top: 1.05rem;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.85rem;
+  gap: 0.95rem;
 }
 
 .service-summary-card {
-  min-height: 8.6rem;
+  min-height: 9.35rem;
   border: 1px solid rgba(255, 255, 255, 0.42);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.28);
-  padding: 1.05rem;
+  padding: 1.15rem;
   display: flex;
   flex-direction: column;
-  gap: 0.48rem;
+  gap: 0.55rem;
 }
 
 .service-summary-title {
@@ -840,7 +840,7 @@
   align-items: center;
   gap: 0.55rem;
   color: var(--p-primary-color);
-  font-size: 0.9rem;
+  font-size: 1rem;
   font-weight: 850;
 }
 
@@ -851,18 +851,18 @@
 }
 
 .service-summary-title i {
-  font-size: 1.18rem;
+  font-size: 1.28rem;
 }
 
 .service-summary-card strong {
   color: #071827;
-  font-size: 1.24rem;
+  font-size: 1.38rem;
   line-height: 1.15;
 }
 
 .service-summary-card p {
   margin: 0;
-  line-height: 1.34;
+  line-height: 1.42;
 }
 
 .fill-track {

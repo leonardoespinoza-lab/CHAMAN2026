@@ -7,6 +7,7 @@
 body {
   margin: 0;
   font-family: "Lato", sans-serif;
+  font-size: 16px;
 }
 
 html {
@@ -26,6 +27,10 @@ html {
   --chaman-glass-border: rgba(178, 206, 224, 0.5);
   --chaman-glass-shadow: 0 28px 90px rgba(15, 23, 42, 0.24);
   --chaman-glass-inner: 0 1px 0 rgba(255, 255, 255, 0.72) inset;
+  --chaman-readable-text: 1.05rem;
+  --chaman-readable-label: 0.96rem;
+  --chaman-readable-small: 0.92rem;
+  --chaman-control-height: 3rem;
 }
 
 .p-dialog-mask,
@@ -104,6 +109,67 @@ html {
 
 .p-drawer .p-drawer-footer {
   border-top: 1px solid rgba(121, 150, 185, 0.18);
+}
+
+.p-dialog .p-dialog-title,
+.p-drawer .p-drawer-title {
+  font-size: clamp(1.35rem, 1.4vw, 1.7rem) !important;
+  font-weight: 850 !important;
+}
+
+.p-dialog .p-dialog-content,
+.p-drawer .p-drawer-content {
+  font-size: var(--chaman-readable-text);
+}
+
+.p-inputtext,
+.p-textarea,
+.p-select,
+.p-multiselect,
+.p-datepicker-input,
+.p-inputnumber-input,
+.p-password-input {
+  min-height: var(--chaman-control-height);
+  font-size: var(--chaman-readable-text) !important;
+}
+
+.p-select-label,
+.p-multiselect-label {
+  font-size: var(--chaman-readable-text) !important;
+  line-height: 1.25;
+}
+
+.p-floatlabel label,
+.p-iftalabel label {
+  font-size: var(--chaman-readable-label) !important;
+  font-weight: 750;
+}
+
+.p-button {
+  min-height: 2.75rem;
+}
+
+.p-button .p-button-label {
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.p-tab {
+  font-size: 1.06rem !important;
+  font-weight: 850 !important;
+}
+
+.p-datatable .p-datatable-thead > tr > th,
+.p-datatable .p-datatable-tbody > tr > td {
+  font-size: 1rem;
+}
+
+.p-message,
+.p-tooltip,
+.p-popover,
+.p-select-option,
+.p-multiselect-option {
+  font-size: var(--chaman-readable-small);
 }
 
 .highcharts-credits {

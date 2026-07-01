@@ -6,6 +6,7 @@
 .implantacion-page {
   min-height: 100%;
   padding: clamp(1rem, 2vw, 2rem);
+  font-size: 1.06rem;
 }
 
 .implantacion-shell {
@@ -59,14 +60,14 @@
 
 .implantacion-header h1 {
   color: var(--p-text-color);
-  font-size: clamp(2rem, 2.5vw, 3rem);
+  font-size: clamp(2.35rem, 2.8vw, 3.35rem);
   line-height: 1.05;
   margin: 0.1rem 0;
 }
 
 .implantacion-header p {
   color: var(--p-text-muted-color);
-  font-size: 1.1rem;
+  font-size: 1.18rem;
   line-height: 1.35;
   margin: 0;
 }
@@ -96,13 +97,13 @@
 
 .material-option strong {
   color: var(--p-text-color);
-  font-size: 1rem;
+  font-size: 1.12rem;
 }
 
 .material-option span,
 .material-option small {
   color: var(--p-text-muted-color);
-  font-size: 0.95rem;
+  font-size: 1.02rem;
 }
 
 .option-row {
@@ -221,14 +222,23 @@
   }
 
   .p-tab {
-    font-size: 1.1rem;
+    font-size: 1.16rem;
     font-weight: 850;
   }
 
   .p-inputtext,
   .p-select,
+  .p-select-label,
   .p-datepicker-input {
-    font-size: 1.08rem;
+    font-size: 1.12rem !important;
+  }
+
+  .p-floatlabel label {
+    font-size: 1rem !important;
+  }
+
+  .p-button {
+    min-height: 2.95rem;
   }
 }
 
