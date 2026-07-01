@@ -168,8 +168,8 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         prediccion,
         resultado,
         enVentanaFenologica,
-        fill: this.llenadoRiesgo(resultado, !!prediccion),
-        severity: this.severidad(resultado),
+        fill: this.llenadoRiesgo(resultado, !!prediccion, enfermedad),
+        severity: this.severidad(resultado, enfermedad),
         periodo: this.periodoSusceptible(enfermedad),
         sensibilidad: this.sensibilidadVarietal(enfermedad),
         variables: this.resumenVariables(prediccion, enfermedad),
@@ -258,18 +258,28 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     return this.siembra?.ultimaPrediccion?.enfermedades?.find((item) => item.enfermedad === enfermedad);
   }
 
-  private llenadoRiesgo(resultado: number, tienePrediccion: boolean): number {
+  private umbralesRiesgo(enfermedad?: TEnfermedad): { medio: number; alto: number; escalaDirecta: boolean } {
+    if (this.siembra?.semilla?.cultivo === 'Cebada') {
+      return { medio: 35, alto: 60, escalaDirecta: true };
+    }
+    return { medio: 15, alto: 20, escalaDirecta: false };
+  }
+
+  private llenadoRiesgo(resultado: number, tienePrediccion: boolean, enfermedad?: TEnfermedad): number {
     if (!tienePrediccion) {
       return 0;
     }
-    return Math.max(8, Math.min(100, resultado * 4));
+    const umbrales = this.umbralesRiesgo(enfermedad);
+    const valor = umbrales.escalaDirecta ? resultado : resultado * 4;
+    return Math.max(8, Math.min(100, valor));
   }
 
-  private severidad(resultado: number): 'low' | 'medium' | 'high' {
-    if (resultado > 20) {
+  private severidad(resultado: number, enfermedad?: TEnfermedad): 'low' | 'medium' | 'high' {
+    const umbrales = this.umbralesRiesgo(enfermedad);
+    if (resultado >= umbrales.alto) {
       return 'high';
     }
-    if (resultado >= 15) {
+    if (resultado >= umbrales.medio) {
       return 'medium';
     }
     return 'low';
@@ -279,6 +289,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     const resistencia = this.siembra?.semilla?.resistencia?.find((item) => item.enfermedad === enfermedad);
     const multiplicador = resistencia?.multiplicador;
     if (multiplicador == null) {
+      if (this.siembra?.semilla?.cultivo === 'Cebada') {
+        return 'Sensibilidad base x1';
+      }
       return 'Sin dato varietal';
     }
     if (multiplicador >= 1.15) {
@@ -489,10 +502,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     if (!prediccion) {
       return 'Sin lectura';
     }
-    if (resultado > 20) {
+    const umbrales = this.umbralesRiesgo(enfermedad);
+    if (resultado >= umbrales.alto) {
       return 'Riesgo alto';
     }
-    if (resultado >= 15) {
+    if (resultado >= umbrales.medio) {
       return 'Riesgo medio';
     }
     return 'Riesgo bajo';

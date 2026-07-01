@@ -441,9 +441,10 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       const predicciones = lote.siembra?.ultimaPrediccion?.enfermedades || [];
       let maxRiesgo = 0; // Riesgo bajo (verde)
       predicciones.forEach((prediccion) => {
-        if (prediccion.resultado >= 20) {
+        const nivel = this.nivelRiesgoEnfermedad(lote, prediccion.resultado || 0);
+        if (nivel === 2) {
           maxRiesgo = Math.max(maxRiesgo, 2); // Riesgo alto (rojo)
-        } else if (prediccion.resultado >= 15) {
+        } else if (nivel === 1) {
           maxRiesgo = Math.max(maxRiesgo, 1); // Riesgo medio (amarillo)
         }
       });
@@ -857,16 +858,19 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   public loteEnfermedadNivel(lote?: ILoteMapa): string {
-    const max = this.maxRiesgoEnfermedad(lote || this.loteSeleccionado);
+    const seleccionado = lote || this.loteSeleccionado;
+    const max = this.maxRiesgoEnfermedad(seleccionado);
     if (max === null) return 'Pendiente';
-    if (max >= 20) return 'Riesgo alto';
-    if (max >= 15) return 'Riesgo medio';
+    const nivel = this.nivelRiesgoEnfermedad(seleccionado, max);
+    if (nivel === 2) return 'Riesgo alto';
+    if (nivel === 1) return 'Riesgo medio';
     return 'Riesgo bajo';
   }
 
   public loteEnfermedadPercent(lote?: ILoteMapa): number {
-    const max = this.maxRiesgoEnfermedad(lote || this.loteSeleccionado);
-    return max === null ? 8 : Math.max(8, Math.min(100, (max / 25) * 100));
+    const seleccionado = lote || this.loteSeleccionado;
+    const max = this.maxRiesgoEnfermedad(seleccionado);
+    return max === null ? 8 : this.progresoRiesgoEnfermedad(seleccionado, max);
   }
 
   public loteRiegoResumen(lote?: ILoteMapa): string {
@@ -1032,8 +1036,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       .map((lote) => ({ lote, riesgo: this.maxRiesgoEnfermedad(lote) }))
       .filter((item): item is { lote: ILoteMapa; riesgo: number } => item.riesgo !== null);
     const extensivos = lotes.filter((lote) => this.esCultivoExtensivo(lote));
-    const altos = lotesConRiesgo.filter((item) => item.riesgo >= 20);
-    const medios = lotesConRiesgo.filter((item) => item.riesgo >= 15 && item.riesgo < 20);
+    const altos = lotesConRiesgo.filter((item) => this.nivelRiesgoEnfermedad(item.lote, item.riesgo) === 2);
+    const medios = lotesConRiesgo.filter((item) => this.nivelRiesgoEnfermedad(item.lote, item.riesgo) === 1);
 
     if (!sembrados) {
       return this.metric('Enfermedades', 'Sin siembras', 'Todavia no hay cultivos activos para monitoreo sanitario.', 'pi pi-shield', 'neutral', 0);
@@ -1045,7 +1049,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       return this.metric('Enfermedades', `${sembrados} activos`, detalle, 'pi pi-shield', 'neutral', 8);
     }
     const peor = lotesConRiesgo.reduce((max, item) => (item.riesgo > max.riesgo ? item : max));
-    const progreso = Math.max(8, Math.min(100, (peor.riesgo / 25) * 100));
+    const progreso = this.progresoRiesgoEnfermedad(peor.lote, peor.riesgo);
     if (altos.length) {
       return this.metric(
         'Enfermedades',
@@ -1470,6 +1474,26 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     const predicciones = lote?.siembra?.ultimaPrediccion?.enfermedades || [];
     if (!predicciones.length) return null;
     return predicciones.reduce((max, item) => Math.max(max, item.resultado || 0), 0);
+  }
+
+  private umbralesRiesgoEnfermedad(lote?: ILoteMapa): { medio: number; alto: number; escalaDirecta: boolean } {
+    if (lote?.siembra?.semilla?.cultivo === 'Cebada') {
+      return { medio: 35, alto: 60, escalaDirecta: true };
+    }
+    return { medio: 15, alto: 20, escalaDirecta: false };
+  }
+
+  private nivelRiesgoEnfermedad(lote: ILoteMapa | undefined, resultado: number): 0 | 1 | 2 {
+    const umbrales = this.umbralesRiesgoEnfermedad(lote);
+    if (resultado >= umbrales.alto) return 2;
+    if (resultado >= umbrales.medio) return 1;
+    return 0;
+  }
+
+  private progresoRiesgoEnfermedad(lote: ILoteMapa | undefined, resultado: number): number {
+    const umbrales = this.umbralesRiesgoEnfermedad(lote);
+    const valor = umbrales.escalaDirecta ? resultado : (resultado / 25) * 100;
+    return Math.max(8, Math.min(100, valor));
   }
 
   private numero(value: unknown): number | null {
