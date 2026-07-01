@@ -422,25 +422,27 @@
                     </a>
                   </li>
                 }
-                <li>
-                  <a
-                    pRipple
-                    class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
-                    [routerLink]="['/usuarios']"
-                    [routerLinkActive]="['active']"
-                    (click)="cerrarMenu($event)"
-                  >
-                    <svg
-                      [style.fill]="'var(--p-primary-color)'"
-                      [attr.width]="'24px'"
-                      [attr.height]="'24px'"
-                      class="mr-2"
+                @if (puedeGestionarUsuarios()) {
+                  <li>
+                    <a
+                      pRipple
+                      class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                      [routerLink]="['/usuarios']"
+                      [routerLinkActive]="['active']"
+                      (click)="cerrarMenu($event)"
                     >
-                      <use [attr.xlink:href]="'icons/icons.svg#group'"></use>
-                    </svg>
-                    <span class="font-medium">{{ 'Usuarios' | translate }}</span>
-                  </a>
-                </li>
+                      <svg
+                        [style.fill]="'var(--p-primary-color)'"
+                        [attr.width]="'24px'"
+                        [attr.height]="'24px'"
+                        class="mr-2"
+                      >
+                        <use [attr.xlink:href]="'icons/icons.svg#group'"></use>
+                      </svg>
+                      <span class="font-medium">{{ 'Usuarios' | translate }}</span>
+                    </a>
+                  </li>
+                }
                 @if (loginService.esProductor || loginService.esEstablecimiento) {
                   <li>
                     <a

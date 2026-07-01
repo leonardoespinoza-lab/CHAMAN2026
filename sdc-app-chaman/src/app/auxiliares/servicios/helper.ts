@@ -250,10 +250,25 @@ export class HelperService {
     return token?.user;
   }
   get token(): IToken | null {
-    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-    return token ? JSON.parse(token) : null;
+    const sessionToken = this.parseStoredToken(sessionStorage.getItem('token'));
+    const localToken = this.parseStoredToken(localStorage.getItem('token'));
+
+    if (sessionToken && localToken) {
+      const usarSession = this.tokenTimestamp(sessionToken) >= this.tokenTimestamp(localToken);
+      if (usarSession) {
+        this.clearAuthStorage(localStorage);
+        return sessionToken;
+      }
+
+      this.clearAuthStorage(sessionStorage);
+      return localToken;
+    }
+
+    return sessionToken || localToken;
   }
   public setToken(token: IToken, remember = false) {
+    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     if (remember) {
       localStorage.setItem('token', JSON.stringify(token));
     } else {
@@ -274,6 +289,8 @@ export class HelperService {
     return permiso ? JSON.parse(permiso) : null;
   }
   public setPermiso(permiso: IPermiso, remember = true) {
+    localStorage.removeItem('permiso');
+    sessionStorage.removeItem('permiso');
     if (remember) {
       localStorage.setItem('permiso', JSON.stringify(permiso));
     } else {
@@ -290,6 +307,8 @@ export class HelperService {
     return numeroPermiso ? +numeroPermiso : null;
   }
   public setNumeroPermiso(numeroPermiso: number, remember = true) {
+    localStorage.removeItem('numeroPermiso');
+    sessionStorage.removeItem('numeroPermiso');
     if (remember) {
       localStorage.setItem('numeroPermiso', numeroPermiso.toString());
     } else {
@@ -299,6 +318,26 @@ export class HelperService {
   public removeNumeroPermiso() {
     localStorage.removeItem('numeroPermiso');
     sessionStorage.removeItem('numeroPermiso');
+  }
+
+  private parseStoredToken(raw: string | null): IToken | null {
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  private tokenTimestamp(token: IToken): number {
+    const expiresAt = token.accessTokenExpiresAt ? new Date(token.accessTokenExpiresAt).getTime() : 0;
+    return Number.isFinite(expiresAt) ? expiresAt : 0;
+  }
+
+  private clearAuthStorage(storage: Storage): void {
+    storage.removeItem('token');
+    storage.removeItem('permiso');
+    storage.removeItem('numeroPermiso');
   }
 
   public puedeVerModulo(modulo: ModuloPermiso | string): boolean {

@@ -259,6 +259,10 @@ export class NavComponent implements OnInit, OnDestroy {
     return true;
   }
 
+  public puedeGestionarUsuarios(): boolean {
+    return this.loginService.esAdmin || this.loginService.esQuimica || this.loginService.esDistribuidor;
+  }
+
   public mostrarMenuFlotante(): boolean {
     const ruta = this.getRutaLimpia();
     return !ruta.startsWith('/login') && !ruta.startsWith('/auth');
