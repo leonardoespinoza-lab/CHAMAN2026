@@ -25,10 +25,14 @@
 .establishment-rail,
 .lot-bottom-sheet {
   color: #243149;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(121, 150, 185, 0.34);
-  box-shadow: 0 16px 48px rgba(24, 39, 75, 0.16);
-  backdrop-filter: blur(18px);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(239, 253, 252, 0.54)),
+    rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(178, 206, 224, 0.52);
+  box-shadow:
+    0 18px 56px rgba(24, 39, 75, 0.17),
+    0 1px 0 rgba(255, 255, 255, 0.68) inset;
+  backdrop-filter: blur(22px) saturate(128%);
 }
 
 .weather-strip {
@@ -186,7 +190,7 @@
 .establishment-chip {
   border: 1px solid rgba(121, 150, 185, 0.28);
   border-radius: 12px;
-  background: rgba(248, 250, 252, 0.78);
+  background: rgba(248, 250, 252, 0.58);
   color: #1e293b;
   display: flex;
   flex-direction: column;
@@ -217,7 +221,7 @@
 .establishment-chip:hover,
 .establishment-chip.active {
   border-color: rgba(35, 200, 196, 0.72);
-  background: rgba(226, 255, 253, 0.9);
+  background: rgba(226, 255, 253, 0.76);
 }
 
 .establishment-chip.view-all {
@@ -234,9 +238,12 @@
   left: 50% !important;
   transform: translate(-50%, -50%) !important;
   margin: 0 !important;
-  border: 1px solid rgba(121, 150, 185, 0.34);
+  border: 1px solid rgba(178, 206, 224, 0.52);
   border-radius: 24px;
-  box-shadow: 0 24px 70px rgba(24, 39, 75, 0.24);
+  box-shadow:
+    0 24px 70px rgba(24, 39, 75, 0.22),
+    0 1px 0 rgba(255, 255, 255, 0.68) inset;
+  backdrop-filter: blur(24px) saturate(128%);
   overflow: hidden;
 }
 
@@ -293,9 +300,12 @@
   left: 50% !important;
   transform: translate(-50%, -50%) !important;
   margin: 0 !important;
-  border: 1px solid rgba(121, 150, 185, 0.34);
+  border: 1px solid rgba(178, 206, 224, 0.52);
   border-radius: 24px;
-  box-shadow: 0 24px 70px rgba(24, 39, 75, 0.24);
+  box-shadow:
+    0 24px 70px rgba(24, 39, 75, 0.22),
+    0 1px 0 rgba(255, 255, 255, 0.68) inset;
+  backdrop-filter: blur(24px) saturate(128%);
   overflow: hidden;
 }
 

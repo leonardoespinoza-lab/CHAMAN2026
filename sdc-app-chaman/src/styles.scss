@@ -21,6 +21,89 @@ html {
   --p-warning-color: var(--p-orange-500);
   --p-danger-color: var(--p-red-500);
   --menu-offset: 4em;
+  --chaman-glass-bg: rgba(255, 255, 255, 0.74);
+  --chaman-glass-bg-strong: rgba(255, 255, 255, 0.9);
+  --chaman-glass-border: rgba(178, 206, 224, 0.5);
+  --chaman-glass-shadow: 0 28px 90px rgba(15, 23, 42, 0.24);
+  --chaman-glass-inner: 0 1px 0 rgba(255, 255, 255, 0.72) inset;
+}
+
+.p-dialog-mask,
+.p-drawer-mask,
+.p-component-overlay,
+.p-overlay-mask {
+  background: rgba(15, 23, 42, 0.28) !important;
+  backdrop-filter: blur(4px) saturate(112%);
+}
+
+.p-dialog {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(238, 252, 252, 0.68)),
+    var(--chaman-glass-bg) !important;
+  border: 1px solid var(--chaman-glass-border) !important;
+  border-radius: 22px !important;
+  box-shadow: var(--chaman-glass-shadow), var(--chaman-glass-inner) !important;
+  backdrop-filter: blur(24px) saturate(132%);
+  overflow: hidden;
+}
+
+.p-dialog .p-dialog-header,
+.p-dialog .p-dialog-content,
+.p-dialog .p-dialog-footer {
+  background: transparent !important;
+}
+
+.p-dialog .p-dialog-header {
+  border-bottom: 1px solid rgba(121, 150, 185, 0.2);
+}
+
+.p-dialog .p-dialog-footer {
+  border-top: 1px solid rgba(121, 150, 185, 0.18);
+}
+
+.p-dialog .p-dialog-header-icon,
+.p-dialog .p-dialog-close-button {
+  background: rgba(255, 255, 255, 0.58) !important;
+  border: 1px solid rgba(35, 211, 200, 0.28) !important;
+  border-radius: 999px !important;
+  color: var(--p-primary-color) !important;
+  backdrop-filter: blur(12px);
+}
+
+.p-dialog .p-dialog-header-icon:hover,
+.p-dialog .p-dialog-close-button:hover {
+  background: rgba(224, 255, 252, 0.82) !important;
+  border-color: rgba(35, 211, 200, 0.55) !important;
+}
+
+.p-confirmdialog,
+.p-dynamic-dialog {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(238, 252, 252, 0.72)),
+    var(--chaman-glass-bg-strong) !important;
+}
+
+.p-drawer {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(240, 253, 252, 0.78)),
+    var(--chaman-glass-bg-strong) !important;
+  border: 1px solid var(--chaman-glass-border) !important;
+  box-shadow: var(--chaman-glass-shadow), var(--chaman-glass-inner) !important;
+  backdrop-filter: blur(24px) saturate(132%);
+}
+
+.p-drawer .p-drawer-header,
+.p-drawer .p-drawer-content,
+.p-drawer .p-drawer-footer {
+  background: transparent !important;
+}
+
+.p-drawer .p-drawer-header {
+  border-bottom: 1px solid rgba(121, 150, 185, 0.2);
+}
+
+.p-drawer .p-drawer-footer {
+  border-top: 1px solid rgba(121, 150, 185, 0.18);
 }
 
 .highcharts-credits {

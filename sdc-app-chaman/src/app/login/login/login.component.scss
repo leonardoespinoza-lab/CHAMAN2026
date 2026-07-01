@@ -1,23 +1,27 @@
 .login-background {
-  background-image: url("/images/login.jpg");
+  background-image:
+    linear-gradient(110deg, rgba(8, 23, 38, 0.48), rgba(8, 23, 38, 0.12) 42%, rgba(8, 23, 38, 0.28)),
+    url("/images/login.jpg");
   background-size: cover;
-  background-position: center;
+  background-position: center center;
   background-repeat: no-repeat;
   min-height: 100vh;
   width: 100%;
-  position: relative;          // ← cambiar de fixed a relative
+  position: relative;
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 1.5rem;
-  box-sizing: border-box;  
+  align-items: center;
+  justify-content: flex-end;
+  padding: clamp(1.25rem, 4vw, 4rem);
+  box-sizing: border-box;
 
   &::before {
-    content: '';
-    position: fixed;           // overlay siempre cubre pantalla
+    content: "";
+    position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.35);
-    backdrop-filter: blur(2px);
+    background:
+      radial-gradient(circle at 18% 18%, rgba(255, 222, 155, 0.2), transparent 30%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.28));
+    backdrop-filter: saturate(112%);
     z-index: 0;
   }
 }
@@ -25,22 +29,25 @@
 .login-card {
   position: relative;
   z-index: 1;
-  background: rgba(255, 255, 255, 0.97);
-  border-radius: 16px;
+  background:
+    linear-gradient(150deg, rgba(255, 255, 255, 0.86), rgba(248, 253, 253, 0.68)),
+    rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 22px;
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.18),
-    0 1px 0 rgba(255, 255, 255, 0.6) inset;
+    0 28px 80px rgba(8, 23, 38, 0.34),
+    0 1px 0 rgba(255, 255, 255, 0.82) inset;
+  backdrop-filter: blur(22px) saturate(132%);
   width: 100%;
   max-width: 420px;
-  margin: 2rem auto;           // margen superior e inferior
-  overflow: visible;            // permitir que crezca con contenido
-  margin-top: 0px;
+  margin: 0;
+  overflow: hidden;
 
   &--mobile {
-    border-radius: 0;
-    max-width: 100vw;
-    width: 100vw;
-    min-height: auto;           // no forzar altura completa
+    border-radius: 20px;
+    max-width: min(100%, 420px);
+    width: 100%;
+    min-height: auto;
     margin: 0;
     display: flex;
     flex-direction: column;
@@ -55,9 +62,9 @@
 
   .login-card--mobile & {
     flex: 1;
-    padding: 2.5rem 1.5rem;
+    padding: 2.25rem 1.35rem;
     justify-content: center;
-    min-height: auto;           // ya no fuerza 100vh
+    min-height: auto;
     box-sizing: border-box;
   }
 }
@@ -80,7 +87,7 @@
     font-size: 1.2rem;
     font-weight: 700;
     color: #1a1a2e;
-    letter-spacing: -0.01em;
+    letter-spacing: 0;
   }
 
   &__subtitle {
@@ -91,8 +98,13 @@
 }
 
 :host-context(.dark-theme) .login-logo {
-  &__title { color: #f0f0f0; }
-  &__subtitle { color: #aaa; }
+  &__title {
+    color: #f0f0f0;
+  }
+
+  &__subtitle {
+    color: #aaa;
+  }
 }
 
 .login-form {
@@ -126,33 +138,54 @@
     color: #444;
     cursor: pointer;
 
-    label { cursor: pointer; }
+    label {
+      cursor: pointer;
+    }
   }
-
 }
 
 :host-context(.dark-theme) .login-form {
-  &__welcome { color: #f0f0f0; }
-  &__hint { color: #aaa; }
-  &__remember { color: #ccc; }
+  &__welcome {
+    color: #f0f0f0;
+  }
+
+  &__hint {
+    color: #aaa;
+  }
+
+  &__remember {
+    color: #ccc;
+  }
 }
 
 .version-indicator {
   position: fixed;
   bottom: 1.25rem;
   left: 1.25rem;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(8, 23, 38, 0.44);
   color: rgba(255, 255, 255, 0.85);
   padding: 5px 11px;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 400;
   z-index: 1000;
-  backdrop-filter: blur(6px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px) saturate(130%);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   letter-spacing: 0.02em;
 }
 
 .login-form ::ng-deep p-password .p-password-toggle-mask-icon {
   cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .login-background {
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .version-indicator {
+    left: 1rem;
+    bottom: 1rem;
+  }
 }
