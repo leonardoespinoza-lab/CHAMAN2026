@@ -1,21 +1,64 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+} from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import {
   IDistribuidor,
   IEstablecimiento,
-  IFilter,
   IListado,
   ILote,
   IProductor,
   IQueryParam,
   ISiembra,
 } from 'modelos/src';
+import { Feature, Map as OlMap, View } from 'ol';
+import { FeatureLike } from 'ol/Feature';
+import { Point } from 'ol/geom';
+import VectorLayer from 'ol/layer/Vector';
+import { fromLonLat } from 'ol/proj';
+import VectorSource from 'ol/source/Vector';
+import CircleStyle from 'ol/style/Circle';
+import Fill from 'ol/style/Fill';
+import Stroke from 'ol/style/Stroke';
+import Style from 'ol/style/Style';
 import { Subscription } from 'rxjs';
 import { ChartComponent } from '../../../auxiliares/componentes/chart/chart.component';
 import { HelperService } from '../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../auxiliares/servicios/listados';
+import { OpenLayersService } from '../../../auxiliares/servicios/openLayers.service';
 import { SharedModule } from '../../../auxiliares/shared.module';
+
+interface IResumenCultivo {
+  cultivo: string;
+  hectareas: number;
+  lotes: number;
+}
+
+interface IResumenDistribuidor {
+  id: string;
+  nombre: string;
+  direccion: string;
+  geojson?: IDistribuidor['geojson'];
+  productores: number;
+  lotes: number;
+  siembras: number;
+  hectareas: number;
+  hectareasConAlerta: number;
+  riesgoBajo: number;
+  riesgoMedio: number;
+  riesgoAlto: number;
+  sinPrediccion: number;
+  cultivos: IResumenCultivo[];
+}
+
+type NivelRiesgoSanitario = 'sin-prediccion' | 'bajo' | 'medio' | 'alto';
 
 @Component({
   selector: 'app-dashboard',
@@ -23,14 +66,30 @@ import { SharedModule } from '../../../auxiliares/shared.module';
   styleUrls: ['./dashboard.component.scss'],
   imports: [SharedModule, ChartComponent],
 })
-export class DashboardQuimicaComponent implements OnInit, OnDestroy {
+export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestroy {
+  @ViewChild('distribuidoresMap') private distribuidoresMap?: ElementRef<HTMLDivElement>;
+
   public loading = true;
+  public nombreCompania = 'Compañía';
 
   public siembras: ISiembra[] = [];
   public distribuidores: IDistribuidor[] = [];
   public productores: IProductor[] = [];
   public lotes: ILote[] = [];
   public establecimientos: IEstablecimiento[] = [];
+
+  public resumenDistribuidores: IResumenDistribuidor[] = [];
+  public distribuidorSeleccionado?: IResumenDistribuidor;
+  public cultivosResumen: IResumenCultivo[] = [];
+
+  public totalDistribuidores = 0;
+  public distribuidoresConUbicacion = 0;
+  public totalProductores = 0;
+  public totalLotes = 0;
+  public totalHectareas = 0;
+  public hectareasConAlerta = 0;
+  public hectareasSinPrediccion = 0;
+  public cultivosActivos = 0;
 
   public riegosEnfermedadPorHectarea = {
     nada: 0,
@@ -39,243 +98,390 @@ export class DashboardQuimicaComponent implements OnInit, OnDestroy {
     alto: 0,
   };
 
-  //
   public chartHasPorDistribuidor?: Highcharts.Options;
-  public totalHasPorDistribuidor = 0;
-  //
-  public chartHasPorProductor?: Highcharts.Options;
-  public totalHasPorProductor = 0;
-  //
   public chartHasPorCultivo?: Highcharts.Options;
-  public totalHasSembradas = 0;
-  //
+  public chartRiesgoSanitario?: Highcharts.Options;
 
-  // Listado Continuo
   public siembras$?: Subscription;
   public productores$?: Subscription;
   public distribuidores$?: Subscription;
   public lotes$?: Subscription;
   public establecimientos$?: Subscription;
 
+  private map?: OlMap;
+  private distribuidoresSource = new VectorSource();
+  private distribuidoresLayer = new VectorLayer({
+    source: this.distribuidoresSource,
+    style: (feature) => this.estiloDistribuidor(feature),
+  });
+
   constructor(
     private listadosService: ListadosService,
     private helper: HelperService,
     private translate: TranslateService,
-    private activatedRoute: ActivatedRoute
+    private activatedRoute: ActivatedRoute,
+    private cdr: ChangeDetectorRef
   ) {}
 
-  // Calular riesgo de enfermedades
-  private calcularRiesgoEnfermedades() {
-    const siembras = this.siembras;
-    let hasNada = 0;
-    let hasBajo = 0;
-    let hasMedio = 0;
-    let hasAlto = 0;
-    for (const siembra of siembras) {
-      if (!siembra.ultimaPrediccion) {
-        hasNada += siembra.lote?.ubicacion?.superficie || 0;
-        continue;
-      }
-      const enfermedades = siembra.ultimaPrediccion?.enfermedades || [];
-      const has = siembra.lote?.ubicacion?.superficie || 0;
-      let maxRiesgo = 0;
-      for (const enfermedad of enfermedades) {
-        if (enfermedad.resultado > 20) {
-          maxRiesgo = Math.max(maxRiesgo, 2);
-        } else if (enfermedad.resultado > 15) {
-          maxRiesgo = Math.max(maxRiesgo, 1);
-        }
-      }
-      if (maxRiesgo === 0) {
-        hasBajo += has;
-      } else if (maxRiesgo === 1) {
-        hasMedio += has;
-      } else if (maxRiesgo === 2) {
-        hasAlto += has;
-      }
-    }
-
-    this.riegosEnfermedadPorHectarea = {
-      nada: hasNada,
-      bajo: hasBajo,
-      medio: hasMedio,
-      alto: hasAlto,
-    };
+  public seleccionarDistribuidor(resumen?: IResumenDistribuidor): void {
+    this.distribuidorSeleccionado = resumen;
+    this.distribuidoresLayer.changed();
+    this.cdr.detectChanges();
   }
 
-  // Graficos
+  public trackByDistribuidor(_: number, item: IResumenDistribuidor): string {
+    return item.id;
+  }
 
-  private graficoTorta(series: Highcharts.SeriesOptionsType[]) {
-    const options: Highcharts.Options = {
+  public trackByCultivo(_: number, item: IResumenCultivo): string {
+    return item.cultivo;
+  }
+
+  public porcentajeHectareas(hectareas: number): number {
+    if (!this.totalHectareas) {
+      return 0;
+    }
+    return Math.min(100, Math.round((hectareas / this.totalHectareas) * 100));
+  }
+
+  public cultivosTexto(resumen: IResumenDistribuidor): string {
+    if (!resumen.cultivos.length) {
+      return 'Sin cultivos activos';
+    }
+    return resumen.cultivos
+      .slice(0, 3)
+      .map((cultivo) => `${cultivo.cultivo} ${Math.round(cultivo.hectareas)} ha`)
+      .join(' · ');
+  }
+
+  private crearGraficoTorta(data: Highcharts.PointOptionsObject[]): Highcharts.Options {
+    return {
       chart: {
         type: 'pie',
         backgroundColor: 'transparent',
-        style: {
-          fontFamily: 'Lato, sans-serif',
-        },
+        style: { fontFamily: 'Lato, sans-serif' },
       },
-      title: {
-        text: undefined,
-      },
+      credits: { enabled: false },
+      title: { text: undefined },
       legend: {
-        labelFormat: '<b>{name}</b> ({y} has.)',
-        maxHeight: 400,
-        width: 100,
+        enabled: true,
         layout: 'vertical',
         align: 'right',
         verticalAlign: 'middle',
         itemStyle: {
-          width: 100,
-          whiteSpace: 'wrap',
-          textOverflow: 'none',
           color: 'var(--p-text-color)',
+          fontWeight: '600',
         },
       },
       tooltip: {
-        headerFormat: '<b>{point.name}</b><br/>',
-        pointFormat: '{point.name}: {point.y} has.',
+        pointFormat: '<b>{point.y:.0f} ha</b>',
       },
       plotOptions: {
         pie: {
           showInLegend: true,
-          cursor: 'pointer',
-          dataLabels: {
-            enabled: false,
-          },
+          dataLabels: { enabled: false },
+          borderWidth: 0,
         },
       },
-      series,
+      series: [
+        {
+          type: 'pie',
+          data,
+        },
+      ],
     };
-    return options;
   }
 
-  private graficoHasPorDistribuidor() {
-    this.totalHasPorDistribuidor = 0;
-    const lotes = this.lotes;
+  private actualizarGraficos(): void {
+    const distribuidoresData = this.resumenDistribuidores
+      .filter((item) => item.hectareas > 0)
+      .slice(0, 10)
+      .map((item) => ({
+        name: item.nombre,
+        y: Math.round(item.hectareas),
+      }));
 
-    const data: Highcharts.PointOptionsObject[] = [];
+    const cultivosData = this.cultivosResumen
+      .filter((item) => item.hectareas > 0)
+      .map((item) => ({
+        name: item.cultivo,
+        y: Math.round(item.hectareas),
+      }));
 
-    for (const lote of lotes) {
-      const nombreDistribuidor =
-        this.distribuidores.find((d) => d._id === lote.idDistribuidor)?.nombre || 'Sin Distribuidor';
-      const superficie = lote.ubicacion?.superficie || 0;
-      this.totalHasPorDistribuidor += superficie;
-      const index = data.findIndex((d) => d.name === nombreDistribuidor);
-      if (index === -1) {
-        data.push({
-          name: nombreDistribuidor,
-          y: superficie,
-        });
-      } else {
-        data[index].y! += superficie;
+    const riesgoData = [
+      { name: this.translate.instant('Sin prediccion'), y: Math.round(this.riegosEnfermedadPorHectarea.nada) },
+      { name: this.translate.instant('Riesgo bajo'), y: Math.round(this.riegosEnfermedadPorHectarea.bajo) },
+      { name: this.translate.instant('Riesgo medio'), y: Math.round(this.riegosEnfermedadPorHectarea.medio) },
+      { name: this.translate.instant('Riesgo alto'), y: Math.round(this.riegosEnfermedadPorHectarea.alto) },
+    ].filter((item) => item.y > 0);
+
+    this.chartHasPorDistribuidor = this.crearGraficoTorta(distribuidoresData);
+    this.chartHasPorCultivo = this.crearGraficoTorta(cultivosData);
+    this.chartRiesgoSanitario = this.crearGraficoTorta(riesgoData);
+  }
+
+  private obtenerUltimasSiembrasPorLote(): Map<string, ISiembra> {
+    const map = new Map<string, ISiembra>();
+    const ordenadas = [...this.siembras].sort((a, b) => {
+      const fechaA = new Date(a.fechaSiembra || '').getTime() || 0;
+      const fechaB = new Date(b.fechaSiembra || '').getTime() || 0;
+      return fechaB - fechaA;
+    });
+
+    ordenadas.forEach((siembra) => {
+      if (siembra.idLote && !map.has(siembra.idLote)) {
+        map.set(siembra.idLote, siembra);
       }
-    }
-
-    // Truncar valores
-    for (const d of data) {
-      d.y = Math.trunc(d.y!);
-    }
-
-    const series: Highcharts.SeriesOptionsType[] = [
-      {
-        type: 'pie',
-        data,
-      },
-    ];
-
-    this.chartHasPorDistribuidor = this.graficoTorta(series);
+    });
+    return map;
   }
 
-  private graficoHasPorProductor() {
-    this.totalHasPorProductor = 0;
-    const lotes = this.lotes;
+  private cultivoSiembra(siembra?: ISiembra): string {
+    return siembra?.semilla?.cultivo || 'Sin cultivo';
+  }
 
-    const data: Highcharts.PointOptionsObject[] = [];
+  private nivelRiesgo(siembra?: ISiembra): NivelRiesgoSanitario {
+    if (!siembra?.ultimaPrediccion) {
+      return 'sin-prediccion';
+    }
 
-    for (const lote of lotes) {
-      const productor = this.productores.find((p) => p._id === lote.idProductor)?.nombre || 'Sin Productor';
-      const superficie = lote.ubicacion?.superficie || 0;
+    const enfermedades = siembra.ultimaPrediccion.enfermedades || [];
+    const maximo = enfermedades.reduce((max, enfermedad) => Math.max(max, enfermedad.resultado || 0), 0);
 
-      this.totalHasPorProductor += superficie;
+    if (maximo > 20) {
+      return 'alto';
+    }
+    if (maximo > 15) {
+      return 'medio';
+    }
+    return 'bajo';
+  }
 
-      const index = data.findIndex((d) => d.name === productor);
-      if (index === -1) {
-        data.push({
-          name: productor,
-          y: superficie,
-        });
-      } else {
-        data[index].y! += superficie;
+  private agregarCultivo(resumenes: Map<string, IResumenCultivo>, cultivo: string, hectareas: number): void {
+    const actual = resumenes.get(cultivo) || { cultivo, hectareas: 0, lotes: 0 };
+    actual.hectareas += hectareas;
+    actual.lotes += 1;
+    resumenes.set(cultivo, actual);
+  }
+
+  private recomputarResumen(): void {
+    const resumenPorDistribuidor = new Map<string, IResumenDistribuidor>();
+    const ultimasSiembrasPorLote = this.obtenerUltimasSiembrasPorLote();
+    const cultivosGlobal = new Map<string, IResumenCultivo>();
+
+    this.distribuidores.forEach((distribuidor) => {
+      const id = distribuidor._id || distribuidor.nombre || '';
+      if (!id) {
+        return;
       }
-    }
+      resumenPorDistribuidor.set(id, {
+        id,
+        nombre: distribuidor.nombre || 'Sin nombre',
+        direccion: distribuidor.direccion || '',
+        geojson: distribuidor.geojson,
+        productores: 0,
+        lotes: 0,
+        siembras: 0,
+        hectareas: 0,
+        hectareasConAlerta: 0,
+        riesgoBajo: 0,
+        riesgoMedio: 0,
+        riesgoAlto: 0,
+        sinPrediccion: 0,
+        cultivos: [],
+      });
+    });
 
-    // Truncar valores
-    for (const d of data) {
-      d.y = Math.trunc(d.y!);
-    }
-
-    const series: Highcharts.SeriesOptionsType[] = [
-      {
-        type: 'pie',
-        name: this.translate.instant('Has. Por Productor'),
-        data,
-      },
-    ];
-
-    this.chartHasPorProductor = this.graficoTorta(series);
-  }
-
-  private graficoHasPorCultivo() {
-    this.totalHasSembradas = 0;
-    const siembras = this.siembras;
-
-    const data: Highcharts.PointOptionsObject[] = [];
-
-    for (const siembra of siembras) {
-      const cultivo = siembra.semilla?.cultivo || 'Sin Determinar';
-      const lote = this.lotes.find((l) => l._id === siembra.idLote);
-
-      const superficie = lote?.ubicacion?.superficie || 0;
-
-      this.totalHasSembradas += superficie;
-
-      const index = data.findIndex((d) => d.name === cultivo);
-      if (index === -1) {
-        data.push({
-          name: cultivo,
-          y: superficie,
-        });
-      } else {
-        data[index].y! += superficie;
+    this.productores.forEach((productor) => {
+      const idDistribuidor = productor.idDistribuidor || '';
+      const resumen = resumenPorDistribuidor.get(idDistribuidor);
+      if (resumen) {
+        resumen.productores += 1;
       }
+    });
+
+    this.totalHectareas = 0;
+    this.hectareasConAlerta = 0;
+    this.hectareasSinPrediccion = 0;
+    this.riegosEnfermedadPorHectarea = {
+      nada: 0,
+      bajo: 0,
+      medio: 0,
+      alto: 0,
+    };
+
+    const cultivosPorDistribuidor = new Map<string, Map<string, IResumenCultivo>>();
+
+    this.lotes.forEach((lote) => {
+      const idDistribuidor = lote.idDistribuidor || '';
+      const resumen = resumenPorDistribuidor.get(idDistribuidor);
+      const hectareas = lote.ubicacion?.superficie || 0;
+      const siembra = lote._id ? ultimasSiembrasPorLote.get(lote._id) : undefined;
+      const cultivo = this.cultivoSiembra(siembra);
+      const riesgo = this.nivelRiesgo(siembra);
+
+      this.totalHectareas += hectareas;
+      this.agregarCultivo(cultivosGlobal, cultivo, hectareas);
+
+      if (riesgo === 'sin-prediccion') {
+        this.riegosEnfermedadPorHectarea.nada += hectareas;
+        this.hectareasSinPrediccion += hectareas;
+      } else if (riesgo === 'bajo') {
+        this.riegosEnfermedadPorHectarea.bajo += hectareas;
+      } else if (riesgo === 'medio') {
+        this.riegosEnfermedadPorHectarea.medio += hectareas;
+        this.hectareasConAlerta += hectareas;
+      } else if (riesgo === 'alto') {
+        this.riegosEnfermedadPorHectarea.alto += hectareas;
+        this.hectareasConAlerta += hectareas;
+      }
+
+      if (!resumen) {
+        return;
+      }
+
+      resumen.lotes += 1;
+      resumen.hectareas += hectareas;
+      resumen.siembras += siembra ? 1 : 0;
+
+      if (riesgo === 'sin-prediccion') {
+        resumen.sinPrediccion += hectareas;
+      } else if (riesgo === 'bajo') {
+        resumen.riesgoBajo += hectareas;
+      } else if (riesgo === 'medio') {
+        resumen.riesgoMedio += hectareas;
+        resumen.hectareasConAlerta += hectareas;
+      } else if (riesgo === 'alto') {
+        resumen.riesgoAlto += hectareas;
+        resumen.hectareasConAlerta += hectareas;
+      }
+
+      if (!cultivosPorDistribuidor.has(resumen.id)) {
+        cultivosPorDistribuidor.set(resumen.id, new Map<string, IResumenCultivo>());
+      }
+      this.agregarCultivo(cultivosPorDistribuidor.get(resumen.id)!, cultivo, hectareas);
+    });
+
+    this.resumenDistribuidores = [...resumenPorDistribuidor.values()]
+      .map((resumen) => ({
+        ...resumen,
+        cultivos: [...(cultivosPorDistribuidor.get(resumen.id)?.values() || [])].sort(
+          (a, b) => b.hectareas - a.hectareas
+        ),
+      }))
+      .sort((a, b) => b.hectareas - a.hectareas || b.productores - a.productores || a.nombre.localeCompare(b.nombre));
+
+    this.cultivosResumen = [...cultivosGlobal.values()].sort((a, b) => b.hectareas - a.hectareas);
+    this.totalDistribuidores = this.distribuidores.length;
+    this.distribuidoresConUbicacion = this.distribuidores.filter((distribuidor) =>
+      this.coordenadasDistribuidor(distribuidor)
+    ).length;
+    this.totalProductores = this.productores.length;
+    this.totalLotes = this.lotes.length;
+    this.cultivosActivos = this.cultivosResumen.filter((item) => item.cultivo !== 'Sin cultivo').length;
+
+    if (this.distribuidorSeleccionado) {
+      this.distribuidorSeleccionado = this.resumenDistribuidores.find(
+        (item) => item.id === this.distribuidorSeleccionado?.id
+      );
     }
 
-    // Truncar valores
-    for (const d of data) {
-      d.y = Math.trunc(d.y!);
-    }
-
-    const series: Highcharts.SeriesOptionsType[] = [
-      {
-        type: 'pie',
-        name: this.translate.instant('Has. Por Cultivo'),
-        data,
-      },
-    ];
-
-    this.chartHasPorCultivo = this.graficoTorta(series);
+    this.actualizarGraficos();
+    this.redibujarDistribuidores();
   }
 
-  // Listados
+  private coordenadasDistribuidor(distribuidor: IDistribuidor): [number, number] | null {
+    const coordinates = distribuidor.geojson?.coordinates;
+    if (!Array.isArray(coordinates) || coordinates.length < 2) {
+      return null;
+    }
+
+    const lon = Number(coordinates[0]);
+    const lat = Number(coordinates[1]);
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+      return null;
+    }
+
+    return [lon, lat];
+  }
+
+  private estiloDistribuidor(feature: FeatureLike): Style {
+    const resumen = feature.get('resumen') as IResumenDistribuidor | undefined;
+    const seleccionado = resumen?.id === this.distribuidorSeleccionado?.id;
+    const tieneActividad = !!resumen && (resumen.productores > 0 || resumen.hectareas > 0);
+
+    return new Style({
+      image: new CircleStyle({
+        radius: seleccionado ? 9 : tieneActividad ? 7 : 5,
+        fill: new Fill({ color: seleccionado ? '#2dd4bf' : tieneActividad ? '#1f9d55' : '#22324a' }),
+        stroke: new Stroke({
+          color: '#ffffff',
+          width: seleccionado ? 3 : 2,
+        }),
+      }),
+    });
+  }
+
+  private redibujarDistribuidores(): void {
+    this.distribuidoresSource.clear();
+
+    this.resumenDistribuidores.forEach((resumen) => {
+      const coordinates = this.coordenadasDistribuidor(resumen as IDistribuidor);
+      if (!coordinates) {
+        return;
+      }
+
+      const feature = new Feature({
+        geometry: new Point(fromLonLat(coordinates)),
+      });
+      feature.setId(resumen.id);
+      feature.set('resumen', resumen);
+      this.distribuidoresSource.addFeature(feature);
+    });
+
+    if (!this.map || this.distribuidoresSource.isEmpty()) {
+      return;
+    }
+
+    const extent = this.distribuidoresSource.getExtent();
+    this.map.getView().fit(extent, {
+      padding: [36, 36, 36, 36],
+      maxZoom: 8,
+      duration: 250,
+    });
+  }
+
+  private inicializarMapa(): void {
+    if (!this.distribuidoresMap?.nativeElement || this.map) {
+      return;
+    }
+
+    this.map = new OlMap({
+      target: this.distribuidoresMap.nativeElement,
+      layers: [OpenLayersService.mapTileSatelite(12), OpenLayersService.mapReferenciasPoliticas(), this.distribuidoresLayer],
+      view: new View({
+        center: fromLonLat([-63.6, -34.6]),
+        zoom: 4,
+        minZoom: 3,
+        maxZoom: 18,
+      }),
+    });
+
+    this.map.on('singleclick', (event) => {
+      const feature = this.map?.forEachFeatureAtPixel(event.pixel, (featureAtPixel) => featureAtPixel as Feature);
+      const resumen = feature?.get('resumen') as IResumenDistribuidor | undefined;
+      if (resumen) {
+        this.seleccionarDistribuidor(resumen);
+      }
+    });
+
+    setTimeout(() => {
+      this.map?.updateSize();
+      this.redibujarDistribuidores();
+    }, 0);
+  }
 
   private async listarSiembras(): Promise<void> {
-    const fechaHace6Meses = new Date();
-    fechaHace6Meses.setMonth(fechaHace6Meses.getMonth() - 6);
-    const filter: IFilter<ISiembra> = {
-      fechaSiembra: {
-        $gt: fechaHace6Meses.toISOString(),
-      },
-    };
     const populate = [
       {
         path: 'semilla',
@@ -283,87 +489,108 @@ export class DashboardQuimicaComponent implements OnInit, OnDestroy {
       },
       {
         path: 'lote',
-        select: 'ubicacion',
+        select: 'ubicacion idDistribuidor idProductor',
       },
     ];
     const query: IQueryParam = {
-      sort: 'fechaSiembra',
+      sort: '-fechaSiembra',
       populate: JSON.stringify(populate),
-      filter: JSON.stringify(filter),
-      select: 'idProductor idDistribuidor idEstablecimiento idLote ultimaPrediccion idSemilla lote',
+      select: 'fechaSiembra idProductor idDistribuidor idEstablecimiento idLote ultimaPrediccion idSemilla lote',
+      limit: 0,
     };
-    //
+
     this.siembras$?.unsubscribe();
-    this.siembras$ = this.listadosService.subscribe<IListado<ISiembra>>('siembras', query).subscribe(async (data) => {
+    this.siembras$ = this.listadosService.subscribe<IListado<ISiembra>>('siembras', query).subscribe((data) => {
       this.siembras = data.datos;
-      this.graficoHasPorCultivo();
+      this.recomputarResumen();
     });
     await this.listadosService.getLastValue('siembras', query);
   }
 
   private async listarProductores(): Promise<void> {
     const query: IQueryParam = {
-      select: 'nombre',
+      select: 'nombre idDistribuidor idQuimica',
+      limit: 0,
     };
-    //
+
     this.productores$?.unsubscribe();
-    this.productores$ = this.listadosService
-      .subscribe<IListado<IProductor>>('productors', query)
-      .subscribe(async (data) => {
-        this.productores = data.datos;
-      });
+    this.productores$ = this.listadosService.subscribe<IListado<IProductor>>('productors', query).subscribe((data) => {
+      this.productores = data.datos;
+      this.recomputarResumen();
+    });
     await this.listadosService.getLastValue('productors', query);
   }
 
   private async listarDistribuidores(): Promise<void> {
     const query: IQueryParam = {
-      select: 'nombre',
+      select: 'nombre direccion geojson idQuimica',
+      sort: 'nombre',
+      limit: 0,
     };
-    //
+
     this.distribuidores$?.unsubscribe();
     this.distribuidores$ = this.listadosService
       .subscribe<IListado<IDistribuidor>>('distribuidors', query)
-      .subscribe(async (data) => {
+      .subscribe((data) => {
         this.distribuidores = data.datos;
+        this.recomputarResumen();
       });
     await this.listadosService.getLastValue('distribuidors', query);
   }
 
   private async listarLotes(): Promise<void> {
     const query: IQueryParam = {
-      select: 'nombre idDistribuidor idProductor ubicacion.superficie',
+      select: 'nombre idDistribuidor idProductor idEstablecimiento ubicacion.superficie',
+      limit: 0,
     };
-    //
+
     this.lotes$?.unsubscribe();
-    this.lotes$ = this.listadosService.subscribe<IListado<ILote>>('lotes', query).subscribe(async (data) => {
+    this.lotes$ = this.listadosService.subscribe<IListado<ILote>>('lotes', query).subscribe((data) => {
       this.lotes = data.datos;
-      this.graficoHasPorDistribuidor();
-      this.graficoHasPorProductor();
+      this.recomputarResumen();
     });
     await this.listadosService.getLastValue('lotes', query);
   }
 
-  private async cargaInicial(): Promise<void> {
-    await Promise.all([
-      this.listarSiembras(),
-      this.listarProductores(),
-      this.listarDistribuidores(),
-      this.listarLotes(),
-    ]);
-    this.graficoHasPorDistribuidor();
-    this.graficoHasPorProductor();
-    this.graficoHasPorCultivo();
-    this.calcularRiesgoEnfermedades();
+  private async listarEstablecimientos(): Promise<void> {
+    const query: IQueryParam = {
+      select: 'nombre idDistribuidor idQuimica ubicacion.superficie',
+      limit: 0,
+    };
+
+    this.establecimientos$?.unsubscribe();
+    this.establecimientos$ = this.listadosService
+      .subscribe<IListado<IEstablecimiento>>('establecimientos', query)
+      .subscribe((data) => {
+        this.establecimientos = data.datos;
+      });
+    await this.listadosService.getLastValue('establecimientos', query);
   }
 
-  //
+  private async cargaInicial(): Promise<void> {
+    await Promise.all([
+      this.listarDistribuidores(),
+      this.listarProductores(),
+      this.listarLotes(),
+      this.listarSiembras(),
+      this.listarEstablecimientos(),
+    ]);
+    this.recomputarResumen();
+  }
 
   async ngOnInit(): Promise<void> {
+    this.nombreCompania = this.helper.permiso?.quimica?.nombre || 'Compañía';
     this.loading = true;
-    this.activatedRoute.queryParams.subscribe(async (params) => {
+    this.activatedRoute.queryParams.subscribe(async () => {
       await this.cargaInicial();
+      this.loading = false;
+      this.cdr.detectChanges();
+      setTimeout(() => this.map?.updateSize(), 0);
     });
-    this.loading = false;
+  }
+
+  ngAfterViewInit(): void {
+    this.inicializarMapa();
   }
 
   ngOnDestroy(): void {
@@ -371,5 +598,7 @@ export class DashboardQuimicaComponent implements OnInit, OnDestroy {
     this.productores$?.unsubscribe();
     this.distribuidores$?.unsubscribe();
     this.lotes$?.unsubscribe();
+    this.establecimientos$?.unsubscribe();
+    this.map?.setTarget(undefined);
   }
 }

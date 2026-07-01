@@ -1,335 +1,244 @@
-<div
-  class="dashboard-container"
-  style="
-    display: flex;
-    flex-direction: column;
-    gap: 1em;
-    padding: 1em;
-    height: 100vh;
-    overflow-y: auto;
-    box-sizing: border-box;
-  "
->
-  <div style="display: flex; flex-direction: row; gap: 1em">
-    <!-- Riesgo de enfermedades por has. NADA -->
-    <div class="custom-card" style="width: 100%; border: 2px solid #9e9e9e">
-      <div style="height: 28px; display: flex; flex-direction: row; gap: 0.5em; align-items: center">
-        <svg [style.fill]="'var(--p-text-color)'" [attr.width]="'30px'" [attr.height]="'30px'">
-          <use [attr.xlink:href]="'icons/icons.svg#help'"></use>
-        </svg>
+<div class="company-dashboard">
+  <section class="company-hero">
+    <div>
+      <span class="eyebrow">{{ 'Compañía' | translate }}</span>
+      <h1>{{ nombreCompania }}</h1>
+      <p>{{ 'Red comercial, productores y hectareas bajo monitoreo agronomico.' | translate }}</p>
+    </div>
 
-        <p class="titulo-card" style="margin: 0; line-height: 16px; color: var(--p-text-color)">
-          {{ 'Sin predicción' | translate | uppercase }}
-        </p>
+    <div class="scope-badge">
+      <i class="pi pi-sitemap"></i>
+      <span>{{ 'Alcance corporativo' | translate }}</span>
+    </div>
+  </section>
+
+  <section class="metric-grid">
+    <article class="metric-card">
+      <span>{{ 'Distribuidores' | translate }}</span>
+      <strong>{{ totalDistribuidores | number: '1.0-0' }}</strong>
+      <small>{{ distribuidoresConUbicacion | number: '1.0-0' }} {{ 'con ubicacion' | translate }}</small>
+    </article>
+
+    <article class="metric-card">
+      <span>{{ 'Productores' | translate }}</span>
+      <strong>{{ totalProductores | number: '1.0-0' }}</strong>
+      <small>{{ 'clientes asociados' | translate }}</small>
+    </article>
+
+    <article class="metric-card">
+      <span>{{ 'Hectareas monitoreadas' | translate }}</span>
+      <strong>{{ totalHectareas | number: '1.0-0' }}</strong>
+      <small>{{ totalLotes | number: '1.0-0' }} {{ 'lotes' | translate }}</small>
+    </article>
+
+    <article class="metric-card alert">
+      <span>{{ 'Alerta sanitaria' | translate }}</span>
+      <strong>{{ hectareasConAlerta | number: '1.0-0' }}</strong>
+      <small>{{ 'ha con riesgo medio o alto' | translate }}</small>
+    </article>
+
+    <article class="metric-card">
+      <span>{{ 'Cultivos activos' | translate }}</span>
+      <strong>{{ cultivosActivos | number: '1.0-0' }}</strong>
+      <small>{{ 'segun ultima siembra por lote' | translate }}</small>
+    </article>
+  </section>
+
+  <section class="network-layout">
+    <div class="panel map-panel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">{{ 'Mapa de red' | translate }}</span>
+          <h2>{{ 'Distribuidores' | translate }}</h2>
+        </div>
+        <span class="pill">{{ distribuidoresConUbicacion }}/{{ totalDistribuidores }}</span>
+      </div>
+      <div #distribuidoresMap class="distributor-map"></div>
+    </div>
+
+    <aside class="panel detail-panel">
+      @if (distribuidorSeleccionado; as selected) {
+        <div class="panel-header compact">
+          <div>
+            <span class="eyebrow">{{ 'Distribuidor' | translate }}</span>
+            <h2>{{ selected.nombre }}</h2>
+          </div>
+        </div>
+
+        <p class="address">{{ selected.direccion || ('Sin direccion cargada' | translate) }}</p>
+
+        <div class="detail-grid">
+          <div>
+            <span>{{ 'Productores' | translate }}</span>
+            <strong>{{ selected.productores | number: '1.0-0' }}</strong>
+          </div>
+          <div>
+            <span>{{ 'Lotes' | translate }}</span>
+            <strong>{{ selected.lotes | number: '1.0-0' }}</strong>
+          </div>
+          <div>
+            <span>{{ 'Hectareas' | translate }}</span>
+            <strong>{{ selected.hectareas | number: '1.0-0' }}</strong>
+          </div>
+          <div>
+            <span>{{ 'Alerta' | translate }}</span>
+            <strong>{{ selected.hectareasConAlerta | number: '1.0-0' }}</strong>
+          </div>
+        </div>
+
+        <div class="mini-list">
+          <span class="eyebrow">{{ 'Cultivos' | translate }}</span>
+          @for (cultivo of selected.cultivos; track cultivo.cultivo) {
+            <div class="crop-row">
+              <span>{{ cultivo.cultivo }}</span>
+              <strong>{{ cultivo.hectareas | number: '1.0-0' }} ha</strong>
+            </div>
+          } @empty {
+            <p class="empty-state">{{ 'Sin cultivos asociados' | translate }}</p>
+          }
+        </div>
+      } @else {
+        <div class="panel-header compact">
+          <div>
+            <span class="eyebrow">{{ 'Red' | translate }}</span>
+            <h2>{{ 'Resumen corporativo' | translate }}</h2>
+          </div>
+        </div>
+
+        <div class="detail-grid">
+          <div>
+            <span>{{ 'Distribuidores' | translate }}</span>
+            <strong>{{ totalDistribuidores | number: '1.0-0' }}</strong>
+          </div>
+          <div>
+            <span>{{ 'Productores' | translate }}</span>
+            <strong>{{ totalProductores | number: '1.0-0' }}</strong>
+          </div>
+          <div>
+            <span>{{ 'Hectareas' | translate }}</span>
+            <strong>{{ totalHectareas | number: '1.0-0' }}</strong>
+          </div>
+          <div>
+            <span>{{ 'Alerta' | translate }}</span>
+            <strong>{{ hectareasConAlerta | number: '1.0-0' }}</strong>
+          </div>
+        </div>
+
+        <div class="mini-list">
+          <span class="eyebrow">{{ 'Principales cultivos' | translate }}</span>
+          @for (cultivo of cultivosResumen.slice(0, 5); track cultivo.cultivo) {
+            <div class="crop-row">
+              <span>{{ cultivo.cultivo }}</span>
+              <strong>{{ cultivo.hectareas | number: '1.0-0' }} ha</strong>
+            </div>
+          } @empty {
+            <p class="empty-state">{{ 'Sin cultivos asociados' | translate }}</p>
+          }
+        </div>
+      }
+    </aside>
+  </section>
+
+  <section class="executive-grid">
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">{{ 'Gestion aguas abajo' | translate }}</span>
+          <h2>{{ 'Resumen por distribuidor' | translate }}</h2>
+        </div>
       </div>
 
-      <div
-        style="
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          height: 100%;
-          padding-bottom: 1em;
-          margin-top: 1em;
-        "
-      >
-        <!-- <p-divider /> -->
-        @if (riegosEnfermedadPorHectarea.nada) {
-          <div style="display: flex; flex-direction: column; text-align: center">
-            <span style="font-size: 18px; font-weight: 300">{{ 'Total' | translate }}</span>
-            <span style="font-size: 40px; font-weight: bold">
-              {{ riegosEnfermedadPorHectarea.nada }}
-            </span>
-          </div>
-        } @else {
-          <p-message severity="secondary">{{ 'No hay lotes sin predicción' | translate }}</p-message>
-        }
-        <!-- <p-divider /> -->
+      <div class="table-wrap">
+        <table class="executive-table">
+          <thead>
+            <tr>
+              <th>{{ 'Distribuidor' | translate }}</th>
+              <th>{{ 'Productores' | translate }}</th>
+              <th>{{ 'Lotes' | translate }}</th>
+              <th>{{ 'Hectareas' | translate }}</th>
+              <th>{{ 'Alerta sanitaria' | translate }}</th>
+              <th>{{ 'Cultivos' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of resumenDistribuidores; track item.id) {
+              <tr
+                [class.selected]="item.id === distribuidorSeleccionado?.id"
+                (click)="seleccionarDistribuidor(item)"
+              >
+                <td>
+                  <strong>{{ item.nombre }}</strong>
+                  <small>{{ item.direccion }}</small>
+                </td>
+                <td>{{ item.productores | number: '1.0-0' }}</td>
+                <td>{{ item.lotes | number: '1.0-0' }}</td>
+                <td>{{ item.hectareas | number: '1.0-0' }}</td>
+                <td>
+                  <span class="risk-pill" [class.empty]="!item.hectareasConAlerta">
+                    {{ item.hectareasConAlerta | number: '1.0-0' }} ha
+                  </span>
+                </td>
+                <td>{{ cultivosTexto(item) }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="6">
+                  <p class="empty-state">{{ 'No hay distribuidores para este alcance.' | translate }}</p>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
       </div>
     </div>
 
-    <!-- Riesgo de enfermedades por has. BAJO -->
-    <div class="custom-card" style="width: 100%; background-color: rgba(76, 174, 79, 0.5); border: 2px solid #4caf50">
-      <div style="height: 28px; display: flex; flex-direction: row; gap: 0.5em; align-items: center">
-        <svg [style.fill]="'var(--p-text-color)'" [attr.width]="'30px'" [attr.height]="'30px'">
-          <use [attr.xlink:href]="'icons/icons.svg#success'"></use>
-        </svg>
-
-        <p class="titulo-card" style="margin: 0; line-height: 16px; color: var(--p-text-color)">
-          {{ 'Riesgo bajo' | translate | uppercase }}
-        </p>
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <span class="eyebrow">{{ 'Composicion agricola' | translate }}</span>
+          <h2>{{ 'Hectareas por cultivo' | translate }}</h2>
+        </div>
       </div>
 
-      <div
-        style="
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          height: 100%;
-          padding-bottom: 1em;
-          margin-top: 1em;
-        "
-      >
-        <!-- <p-divider /> -->
-        @if (riegosEnfermedadPorHectarea.bajo) {
-          <div style="display: flex; flex-direction: column; text-align: center">
-            <span style="font-size: 18px; font-weight: 300">{{ 'Total' | translate }}</span>
-            <span style="font-size: 40px; font-weight: bold">
-              {{ riegosEnfermedadPorHectarea.bajo }}
-            </span>
+      <div class="crop-summary">
+        @for (cultivo of cultivosResumen; track cultivo.cultivo) {
+          <div class="crop-bar-row">
+            <div>
+              <strong>{{ cultivo.cultivo }}</strong>
+              <small>{{ cultivo.lotes | number: '1.0-0' }} {{ 'lotes' | translate }}</small>
+            </div>
+            <div class="bar">
+              <span [style.width.%]="porcentajeHectareas(cultivo.hectareas)"></span>
+            </div>
+            <em>{{ cultivo.hectareas | number: '1.0-0' }} ha</em>
           </div>
-        } @else {
-          <p-message severity="success">{{ 'No hay lotes con riesgo bajo' | translate }}</p-message>
-        }
-        <!-- <p-divider /> -->
-      </div>
-    </div>
-  </div>
-
-  <div style="display: flex; flex-direction: row; gap: 1em">
-    <!-- Riesgo de enfermedades por has. MEDIO -->
-    <div class="custom-card" style="width: 100%; background-color: rgba(255, 193, 7, 0.5); border: 2px solid #ffc107">
-      <div style="height: 28px; display: flex; flex-direction: row; gap: 0.5em; align-items: center">
-        <svg [style.fill]="'var(--p-text-color)'" [attr.width]="'30px'" [attr.height]="'30px'">
-          <use [attr.xlink:href]="'icons/icons.svg#warning'"></use>
-        </svg>
-
-        <p class="titulo-card" style="margin: 0; line-height: 16px; color: var(--p-text-color)">
-          {{ 'Riesgo medio' | translate | uppercase }}
-        </p>
-      </div>
-
-      <div
-        style="
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          height: 100%;
-          padding-bottom: 1em;
-          margin-top: 1em;
-        "
-      >
-        <!-- <p-divider /> -->
-        @if (riegosEnfermedadPorHectarea.medio) {
-          <div style="display: flex; flex-direction: column; text-align: center">
-            <span style="font-size: 18px; font-weight: 300">{{ 'Total' | translate }}</span>
-            <span style="font-size: 40px; font-weight: bold">
-              {{ riegosEnfermedadPorHectarea.medio }}
-            </span>
-          </div>
-        } @else {
-          <p-message severity="warn">{{ 'No hay lotes con riesgo medio' | translate }}</p-message>
-        }
-        <!-- <p-divider /> -->
-      </div>
-    </div>
-
-    <!-- Riesgo de enfermedades por has. ALTO -->
-    <div class="custom-card" style="width: 100%; background-color: rgba(244, 67, 54, 0.5); border: 2px solid #f44336">
-      <div style="height: 28px; display: flex; flex-direction: row; gap: 0.5em; align-items: center">
-        <svg [style.fill]="'var(--p-text-color)'" [attr.width]="'30px'" [attr.height]="'30px'">
-          <use [attr.xlink:href]="'icons/icons.svg#error'"></use>
-        </svg>
-
-        <p class="titulo-card" style="margin: 0; line-height: 16px; color: var(--p-text-color)">
-          {{ 'Riesgo alto' | translate | uppercase }}
-        </p>
-      </div>
-
-      <div
-        style="
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          height: 100%;
-          padding-bottom: 1em;
-          margin-top: 1em;
-        "
-      >
-        <!-- <p-divider /> -->
-        @if (riegosEnfermedadPorHectarea.alto) {
-          <div style="display: flex; flex-direction: column; text-align: center">
-            <span style="font-size: 18px; font-weight: 300">{{ 'Total' | translate }}</span>
-            <span style="font-size: 40px; font-weight: bold">
-              {{ riegosEnfermedadPorHectarea.alto }}
-            </span>
-          </div>
-        } @else {
-          <p-message severity="error">{{ 'No hay lotes con riesgo alto' | translate }}</p-message>
-        }
-        <!-- <p-divider /> -->
-      </div>
-    </div>
-  </div>
-
-  <div style="display: flex; flex-direction: row; gap: 1em">
-    <!-- Cantidad de distribuidores -->
-    <div class="custom-card" style="width: 100%">
-      <div style="height: 28px; display: flex; flex-direction: row; gap: 0.5em; align-items: center">
-        <svg [style.fill]="'var(--p-text-color)'" [attr.width]="'30px'" [attr.height]="'30px'">
-          <use [attr.xlink:href]="'icons/icons.svg#distribuidor'"></use>
-        </svg>
-
-        <p class="titulo-card" style="margin: 0; line-height: 16px; color: var(--p-text-color)">
-          {{ 'distribuidores' | translate | uppercase }}
-        </p>
-      </div>
-
-      <div
-        style="
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          height: 100%;
-          padding-bottom: 1em;
-          margin-top: 1em;
-        "
-      >
-        @if (distribuidores.length) {
-          <div style="display: flex; flex-direction: column; text-align: center">
-            <span style="font-size: 18px; font-weight: 300">{{ 'Total' | translate }}</span>
-            <span style="font-size: 40px; font-weight: bold">
-              {{ distribuidores.length }}
-            </span>
-          </div>
-        } @else {
-          <p-message severity="info">{{ 'No hay distribuidores' | translate }}</p-message>
-        }
-      </div>
-    </div>
-
-    <!-- Cantidad de productores -->
-    <div class="custom-card" style="width: 100%">
-      <div style="height: 28px; display: flex; flex-direction: row; gap: 0.5em; align-items: center">
-        <svg [style.fill]="'var(--p-text-color)'" [attr.width]="'30px'" [attr.height]="'30px'">
-          <use [attr.xlink:href]="'icons/icons.svg#productor'"></use>
-        </svg>
-
-        <p class="titulo-card" style="margin: 0; line-height: 16px; color: var(--p-text-color)">
-          {{ 'Productores' | translate | uppercase }}
-        </p>
-      </div>
-
-      <div
-        style="
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          height: 100%;
-          padding-bottom: 1em;
-          margin-top: 1em;
-        "
-      >
-        @if (productores.length) {
-          <div style="display: flex; flex-direction: column; text-align: center">
-            <span style="font-size: 18px; font-weight: 300">{{ 'Total' | translate }}</span>
-            <span style="font-size: 40px; font-weight: bold">
-              {{ productores.length }}
-            </span>
-          </div>
-        } @else {
-          <p-message severity="info">{{ 'No hay productores' | translate }}</p-message>
+        } @empty {
+          <p class="empty-state">{{ 'Sin cultivos asociados' | translate }}</p>
         }
       </div>
     </div>
-  </div>
+  </section>
 
-  <!-- Grafico HAS por distribuidor -->
-  <div class="custom-card" style="padding: 1em 1em 0 1em">
-    <p class="titulo-card">{{ 'Hectáreas por distribuidor' | translate | uppercase }}</p>
-
-    <div style="display: flex; flex-direction: row; align-items: center; gap: 1em">
-      <!-- Icono -->
-      <div
-        style="
-          width: 45px;
-          height: 45px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: #f4ede7;
-          border-radius: 10px;
-        "
-      >
-        <svg [style.fill]="'#000'" [attr.width]="'30px'" [attr.height]="'30px'">
-          <use [attr.xlink:href]="'icons/icons.svg#distribuidor'"></use>
-        </svg>
+  <section class="chart-grid">
+    <div class="panel">
+      <div class="panel-header compact">
+        <h2>{{ 'Hectareas por distribuidor' | translate }}</h2>
       </div>
-
-      <!-- Nombre etapa  -->
-      <span style="font-size: 14px; font-weight: bold">
-        {{ 'Total Has.' | translate | uppercase }} {{ totalHasPorDistribuidor | number: '1.0-0' }}
-      </span>
+      <app-chart [options]="chartHasPorDistribuidor" [style]="'display: block; height: 260px;'"></app-chart>
     </div>
 
-    <div style="display: block; width: 100%">
-      <app-chart [options]="chartHasPorDistribuidor" [style]="'display: block; height: 200px;'"></app-chart>
-    </div>
-  </div>
-
-  <!-- Grafico HAS por productor -->
-  <div class="custom-card" style="padding: 1em 1em 0 1em">
-    <p class="titulo-card">{{ 'Hectáreas por productor' | translate | uppercase }}</p>
-
-    <div style="display: flex; flex-direction: row; align-items: center; gap: 1em">
-      <!-- Icono -->
-      <div
-        style="
-          width: 45px;
-          height: 45px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: #f4ede7;
-          border-radius: 10px;
-        "
-      >
-        <svg [style.fill]="'#000'" [attr.width]="'30px'" [attr.height]="'30px'">
-          <use [attr.xlink:href]="'icons/icons.svg#productor'"></use>
-        </svg>
+    <div class="panel">
+      <div class="panel-header compact">
+        <h2>{{ 'Hectareas por cultivo' | translate }}</h2>
       </div>
-
-      <!-- Nombre etapa  -->
-      <span style="font-size: 14px; font-weight: bold">
-        {{ 'Total Has.' | translate | uppercase }} {{ totalHasPorProductor | number: '1.0-0' }}
-      </span>
+      <app-chart [options]="chartHasPorCultivo" [style]="'display: block; height: 260px;'"></app-chart>
     </div>
 
-    <div style="display: block; width: 100%">
-      <app-chart [options]="chartHasPorProductor" [style]="'display: block; height: 200px;'"></app-chart>
-    </div>
-  </div>
-
-  <!-- Grafico HAS por cultivo -->
-  <div class="custom-card" style="padding: 1em 1em 0 1em">
-    <p class="titulo-card">{{ 'Hectáreas por cultivo' | translate | uppercase }}</p>
-
-    <div style="display: flex; flex-direction: row; align-items: center; gap: 1em">
-      <!-- Icono -->
-      <div
-        style="
-          width: 45px;
-          height: 45px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: #f4ede7;
-          border-radius: 10px;
-        "
-      >
-        <svg [style.fill]="'#000'" [attr.width]="'30px'" [attr.height]="'30px'">
-          <use [attr.xlink:href]="'icons/icons.svg#siembras'"></use>
-        </svg>
+    <div class="panel">
+      <div class="panel-header compact">
+        <h2>{{ 'Riesgo sanitario' | translate }}</h2>
       </div>
-
-      <!-- Nombre etapa  -->
-      <span style="font-size: 14px; font-weight: bold">
-        {{ 'Total Has.' | translate | uppercase }} {{ totalHasSembradas | number: '1.0-0' }}
-      </span>
+      <app-chart [options]="chartRiesgoSanitario" [style]="'display: block; height: 260px;'"></app-chart>
     </div>
-
-    <div style="display: block; width: 100%">
-      <app-chart [options]="chartHasPorCultivo" [style]="'display: block; height: 200px;'"></app-chart>
-    </div>
-  </div>
+  </section>
 </div>
