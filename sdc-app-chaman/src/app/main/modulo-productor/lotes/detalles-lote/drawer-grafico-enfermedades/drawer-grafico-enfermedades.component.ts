@@ -85,15 +85,23 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
   private chartBasicOptions(
     plotLines: XAxisPlotLinesOptions[],
     plotBands: XAxisPlotBandsOptions[],
-    series: SeriesOptionsType[]
+    series: SeriesOptionsType[],
+    scale?: {
+      title?: string;
+      max?: number;
+      bajoHasta?: number;
+      medioHasta?: number;
+    }
   ) {
-    const color0 = '#a0a0a0';
     // const color1 = '#dee8eb';
     // const color2 = '#aec6cf';
     // const color3 = '#7ea4b3';
     const color1 = '#22c55e2b';
     const color2 = '#f3d7402b';
     const color3 = '#f44a4a2b';
+    const max = scale?.max ?? 40;
+    const bajoHasta = scale?.bajoHasta ?? 15;
+    const medioHasta = scale?.medioHasta ?? 20;
 
     const options: Highcharts.Options = {
       chart: {
@@ -105,36 +113,33 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
         },
         spacing: [20, 20, 20, 20], // Mejor espaciado para pantallas grandes
       },
-      title: undefined,
+      title: {
+        text: scale?.title || '',
+      },
       yAxis: {
-        max: 40,
+        max,
         min: 0,
         title: {
-          text: this.translate.instant('Porcentaje de probabilidad (%)'),
+          text: this.translate.instant('Indice de riesgo sanitario (%)'),
           style: {
             color: 'var(--p-text-color)',
             fontSize: '14px',
           },
         },
         plotBands: [
-          // {
-          //   from: -5,
-          //   to: 0,
-          //   color: color0,
-          // },
           {
             from: 0,
-            to: 15,
+            to: bajoHasta,
             color: color1,
           },
           {
-            from: 15,
-            to: 20,
+            from: bajoHasta,
+            to: medioHasta,
             color: color2,
           },
           {
-            from: 20,
-            to: 40,
+            from: medioHasta,
+            to: max,
             color: color3,
           },
         ],
@@ -729,7 +734,12 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
       }
     }
 
-    this.chartOptions = this.chartBasicOptions(lines, plotBands, series);
+    this.chartOptions = this.chartBasicOptions(lines, plotBands, series, {
+      title: this.translate.instant('Evolucion de riesgo sanitario - Cebada'),
+      max: 100,
+      bajoHasta: 35,
+      medioHasta: 60,
+    });
   }
 
   private async listarPredicciones(): Promise<void> {
