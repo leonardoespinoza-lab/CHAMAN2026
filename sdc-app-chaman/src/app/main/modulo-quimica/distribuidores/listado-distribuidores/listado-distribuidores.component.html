@@ -10,46 +10,47 @@
     [scrollable]="true"
     scrollHeight="flex"
     (onPage)="helper.setPageSize(name, $event.rows)"
-    [globalFilterFields]="['nombre']"
+    [globalFilterFields]="['nombre', 'direccion', 'quimica.nombre']"
     stripedRows
     rowExpandMode="single"
-    dataKey="_id"
     stateStorage="session"
     [stateKey]="name"
+    styleClass="distributor-table"
   >
-    <!-- Caption -->
     <ng-template #caption>
-      <div class="flex menu-offset" style="align-items: center">
-        <!-- Buscar -->
-        <p-iconfield iconPosition="left" class="ml-auto">
-          <p-inputicon>
-            <i class="pi pi-search"></i>
-          </p-inputicon>
-          <input
-            #search
-            pInputText
-            type="text"
-            (input)="table.filterGlobal($any($event.target).value, 'contains')"
-            [placeholder]="'Buscar' | translate"
+      <div class="distributor-caption menu-offset">
+        <div>
+          <span class="eyebrow">Red comercial</span>
+          <h2>Distribuidores</h2>
+          <p>{{ datos.length | number: '1.0-0' }} sucursales cargadas, {{ distribuidoresUbicados | number: '1.0-0' }} con ubicación en mapa.</p>
+        </div>
+
+        <div class="caption-actions">
+          <p-iconfield iconPosition="left">
+            <p-inputicon>
+              <i class="pi pi-search"></i>
+            </p-inputicon>
+            <input
+              #search
+              pInputText
+              type="text"
+              (input)="table.filterGlobal($any($event.target).value, 'contains')"
+              [placeholder]="'Buscar' | translate"
+            />
+          </p-iconfield>
+          <p-button
+            [label]="'Limpiar' | translate"
+            [outlined]="true"
+            icon="pi pi-filter-slash"
+            (click)="table.clear(); search.value = ''"
           />
-        </p-iconfield>
-        <!-- Limpiar -->
-        <p-button
-          [label]="'Limpiar' | translate"
-          [outlined]="true"
-          icon="pi pi-filter-slash"
-          (click)="table.clear(); search.value = ''"
-          class="ml-2"
-        />
+        </div>
       </div>
     </ng-template>
 
-    <!-- Header -->
     <ng-template #header>
       <tr>
-        <!-- Expandir -->
-        <!-- <th style="width: 1em"></th> -->
-        <!-- Usuario -->
+        <th style="width: 3.5rem"></th>
         <th pSortableColumn="nombre">
           <div class="flex items-center gap-2">
             {{ 'Distribuidor' | translate }}
@@ -57,7 +58,8 @@
             <p-columnFilter type="text" field="nombre" display="menu" />
           </div>
         </th>
-        <!-- Acciones -->
+        <th>Ubicación</th>
+        <th>Estado</th>
         <th>
           <div class="flex items-center">
             {{ 'Acciones' | translate }}
@@ -66,33 +68,50 @@
       </tr>
     </ng-template>
 
-    <!-- Body -->
     <ng-template #body let-row let-expanded="expanded">
       <tr>
-        <!-- Expandir -->
-        <!-- <td>
-        <p-button
-          type="button"
-          pRipple
-          [pRowToggler]="row"
-          [text]="true"
-          [rounded]="true"
-          [plain]="true"
-          [icon]="expanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
-        />
-      </td> -->
-        <!-- Nombre -->
         <td>
-          <div class="column-flex-start" style="width: 100%">
-            <span>{{ row.nombre }}</span>
+          <p-button
+            type="button"
+            pRipple
+            [pRowToggler]="row"
+            [text]="true"
+            [rounded]="true"
+            [plain]="true"
+            [icon]="expanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
+          />
+        </td>
+        <td>
+          <div class="distributor-identity">
+            <span class="distributor-name">{{ row.nombre }}</span>
             @if (row?.quimica?.nombre) {
-              <span class="no-info" style="font-size: x-small">{{ row.quimica.nombre }}</span>
+              <span class="company-name">{{ row.quimica.nombre }}</span>
             }
           </div>
         </td>
         <td>
-          <div style="display: flex; flex-direction: row; gap: 0.5rem">
-            <!-- Editar -->
+          <div class="location-cell">
+            <span>{{ row.direccion || 'Sin dirección cargada' }}</span>
+            <small>{{ coordenadasTexto(row) }}</small>
+          </div>
+        </td>
+        <td>
+          <span class="location-pill" [class.pending]="!tieneUbicacion(row)">
+            <i class="pi" [class.pi-map-marker]="tieneUbicacion(row)" [class.pi-exclamation-circle]="!tieneUbicacion(row)"></i>
+            {{ tieneUbicacion(row) ? 'Ubicado' : 'Pendiente' }}
+          </span>
+        </td>
+        <td>
+          <div class="row-actions">
+            <p-button
+              [rounded]="true"
+              pTooltip="Ver en mapa"
+              icon="pi pi-map-marker"
+              severity="info"
+              [outlined]="true"
+              (click)="abrirMapa(row, $event)"
+              [disabled]="!tieneUbicacion(row)"
+            ></p-button>
             <p-button
               [rounded]="true"
               pTooltip="Editar"
@@ -100,7 +119,6 @@
               severity="warn"
               (click)="edit(row)"
             ></p-button>
-            <!-- Eliminar -->
             <p-button
               [rounded]="true"
               pTooltip="Eliminar"
@@ -114,27 +132,63 @@
       </tr>
     </ng-template>
 
-    <!-- Expanded -->
     <ng-template #expandedrow let-row>
       <tr>
-        <td colspan="2">
-          <h2 style="margin: 0; text-align: center; line-height: 2">Acá van mas detalles del usuario</h2>
+        <td colspan="5">
+          <div class="distributor-detail">
+            <div>
+              <span class="eyebrow">Detalle comercial</span>
+              <h3>{{ row.nombre }}</h3>
+              <p>{{ row.direccion || 'No tiene dirección cargada.' }}</p>
+            </div>
+
+            <div class="detail-metrics">
+              <div>
+                <span>Compañía</span>
+                <strong>{{ row?.quimica?.nombre || 'Sin compañía' }}</strong>
+              </div>
+              <div>
+                <span>Coordenadas</span>
+                <strong>{{ coordenadasTexto(row) }}</strong>
+              </div>
+              <div>
+                <span>Mapa</span>
+                <strong>{{ tieneUbicacion(row) ? 'Disponible' : 'Pendiente' }}</strong>
+              </div>
+            </div>
+
+            <div class="detail-actions">
+              <p-button
+                label="Abrir ubicación"
+                icon="pi pi-map-marker"
+                [outlined]="true"
+                (click)="abrirMapa(row, $event)"
+                [disabled]="!tieneUbicacion(row)"
+              ></p-button>
+              <p-button
+                label="Copiar coordenadas"
+                icon="pi pi-copy"
+                severity="secondary"
+                [outlined]="true"
+                (click)="copiarCoordenadas(row, $event)"
+                [disabled]="!tieneUbicacion(row)"
+              ></p-button>
+            </div>
+          </div>
         </td>
       </tr>
     </ng-template>
 
-    <!-- Sin datos -->
     <ng-template #emptymessage>
       <tr>
-        <td colspan="2">
+        <td colspan="5">
           <p-message severity="info">
-            {{ 'No se encontraron usuarios' | translate }}
+            {{ 'No se encontraron distribuidores' | translate }}
           </p-message>
         </td>
       </tr>
     </ng-template>
 
-    <!-- Footer de la tabla con botón crear -->
     <ng-template #summary>
       @if (!helper.soloLectura()) {
         <div class="flex justify-center p-3 border-t border-surface-200">

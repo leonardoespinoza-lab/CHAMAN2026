@@ -29,6 +29,10 @@ export class ListadoDistribuidoresComponent implements OnInit, OnDestroy {
     return this.helper.user;
   }
 
+  public get distribuidoresUbicados(): number {
+    return this.datos.filter((dato) => this.coordenadas(dato)).length;
+  }
+
   constructor(
     public helper: HelperService,
     private listado: ListadosService,
@@ -47,6 +51,65 @@ export class ListadoDistribuidoresComponent implements OnInit, OnDestroy {
   public async edit(data: IDistribuidor) {
     this.params.set('editDistribuidor', data);
     this.router.navigate(['distribuidores', 'editar', data._id]);
+  }
+
+  public coordenadas(dato: IDistribuidor): [number, number] | null {
+    const coordinates = dato.geojson?.coordinates;
+    if (!Array.isArray(coordinates) || coordinates.length < 2) {
+      return null;
+    }
+
+    const lon = Number(coordinates[0]);
+    const lat = Number(coordinates[1]);
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+      return null;
+    }
+
+    return [lon, lat];
+  }
+
+  public tieneUbicacion(dato: IDistribuidor): boolean {
+    return !!this.coordenadas(dato);
+  }
+
+  public coordenadasTexto(dato: IDistribuidor): string {
+    const coordinates = this.coordenadas(dato);
+    if (!coordinates) {
+      return 'Sin coordenadas';
+    }
+
+    return `${coordinates[1].toFixed(5)}, ${coordinates[0].toFixed(5)}`;
+  }
+
+  public mapsUrl(dato: IDistribuidor): string | null {
+    const coordinates = this.coordenadas(dato);
+    if (!coordinates) {
+      return null;
+    }
+
+    return `https://www.google.com/maps?q=${coordinates[1]},${coordinates[0]}`;
+  }
+
+  public abrirMapa(dato: IDistribuidor, event?: Event): void {
+    event?.stopPropagation();
+    const url = this.mapsUrl(dato);
+    if (!url) {
+      this.helper.notifWarn('Este distribuidor no tiene coordenadas cargadas.');
+      return;
+    }
+
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  public copiarCoordenadas(dato: IDistribuidor, event?: Event): void {
+    event?.stopPropagation();
+    const coordinates = this.coordenadas(dato);
+    if (!coordinates) {
+      this.helper.notifWarn('Este distribuidor no tiene coordenadas cargadas.');
+      return;
+    }
+
+    this.helper.copyToClipboard(`${coordinates[1]}, ${coordinates[0]}`);
   }
 
   public async delete(dato: IDistribuidor): Promise<void> {

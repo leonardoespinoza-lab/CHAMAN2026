@@ -1,0 +1,150 @@
+.list-view-container {
+  max-width: min(1360px, calc(100vw - 3rem));
+  margin: 0 auto;
+  padding: 1rem 0 2rem;
+}
+
+.distributor-caption {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0 1rem;
+}
+
+.distributor-caption h2,
+.distributor-detail h3 {
+  margin: 0;
+  color: var(--p-surface-900);
+  font-size: 1.35rem;
+  line-height: 1.15;
+}
+
+.distributor-caption p,
+.distributor-detail p {
+  margin: 0.25rem 0 0;
+  color: var(--p-surface-600);
+  font-size: 0.88rem;
+}
+
+.eyebrow {
+  color: var(--p-primary-color);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.caption-actions,
+.row-actions,
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.distributor-identity,
+.location-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+}
+
+.distributor-name {
+  color: var(--p-surface-900);
+  font-weight: 800;
+}
+
+.company-name,
+.location-cell small {
+  color: var(--p-surface-500);
+  font-size: 0.76rem;
+  font-style: italic;
+}
+
+.location-cell span {
+  color: var(--p-surface-800);
+  font-size: 0.9rem;
+}
+
+.location-pill {
+  align-items: center;
+  background: rgba(35, 211, 200, 0.12);
+  border: 1px solid rgba(35, 211, 200, 0.38);
+  border-radius: 999px;
+  color: var(--p-primary-color);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  white-space: nowrap;
+}
+
+.location-pill.pending {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.36);
+  color: #a16207;
+}
+
+.distributor-detail {
+  background:
+    linear-gradient(135deg, rgba(242, 251, 250, 0.92), rgba(255, 255, 255, 0.96));
+  border: 1px solid rgba(121, 150, 185, 0.28);
+  border-radius: 8px;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(220px, 1.15fr) minmax(300px, 1.6fr) auto;
+  padding: 1rem;
+}
+
+.detail-metrics {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.detail-metrics div {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(121, 150, 185, 0.22);
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.detail-metrics span {
+  color: var(--p-surface-500);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.detail-metrics strong {
+  color: var(--p-surface-900);
+  display: block;
+  font-size: 0.95rem;
+  margin-top: 0.25rem;
+}
+
+:host ::ng-deep .distributor-table .p-datatable-tbody > tr > td {
+  vertical-align: middle;
+}
+
+:host ::ng-deep .distributor-table .p-datatable-thead > tr > th {
+  background: rgba(242, 251, 250, 0.82);
+}
+
+@media (max-width: 900px) {
+  .distributor-caption,
+  .caption-actions,
+  .detail-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .distributor-detail,
+  .detail-metrics {
+    grid-template-columns: 1fr;
+  }
+}

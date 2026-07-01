@@ -101,6 +101,33 @@ a {
   overflow: auto;
 }
 
+.chaman-nav-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 250, 251, 0.94));
+  min-height: 430px;
+}
+
+.chaman-nav-header {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(240, 251, 250, 0.88));
+  border-bottom: 1px solid rgba(121, 150, 185, 0.2);
+  gap: 1rem;
+  padding: 1rem 1.35rem 0.9rem;
+}
+
+.chaman-nav-brand {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(121, 150, 185, 0.16);
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+}
+
+.chaman-nav-brand img {
+  display: block;
+  height: 3rem;
+  object-fit: contain;
+}
+
 :host ::ng-deep .chaman-nav-dialog a {
   margin: 0;
   border-radius: 18px;
@@ -119,7 +146,17 @@ a {
 }
 
 .nav-menu-scroll {
-  padding: 0 1.35rem 1rem;
+  padding: 1rem 1.35rem 1.1rem;
+}
+
+.nav-permission-switch {
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(35, 211, 200, 0.22);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(24, 39, 75, 0.06);
+  margin-bottom: 1rem;
+  padding: 0.65rem;
+  width: 100%;
 }
 
 :host ::ng-deep .chaman-nav-dialog .nav-menu-scroll > ul,
@@ -145,13 +182,14 @@ a {
 :host ::ng-deep .chaman-nav-dialog .nav-menu-scroll a {
   align-items: center;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(242, 251, 250, 0.88));
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(242, 251, 250, 0.9));
   border: 1px solid rgba(122, 150, 184, 0.28);
-  box-shadow: 0 14px 34px rgba(24, 39, 75, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 10px 26px rgba(24, 39, 75, 0.07);
   display: flex;
   gap: 0.9rem;
-  min-height: 5.35rem;
-  padding: 1rem 1.05rem;
+  min-height: 4.85rem;
+  padding: 0.9rem 1rem;
   transition:
     transform 0.16s ease,
     border-color 0.16s ease,
@@ -160,25 +198,53 @@ a {
 
 :host ::ng-deep .chaman-nav-dialog .nav-menu-scroll a:hover {
   border-color: rgba(35, 200, 196, 0.48);
-  box-shadow: 0 18px 42px rgba(24, 39, 75, 0.13);
+  box-shadow: 0 16px 34px rgba(24, 39, 75, 0.12);
   transform: translateY(-1px);
 }
 
 :host ::ng-deep .chaman-nav-dialog .nav-menu-scroll a svg {
   background: rgba(35, 211, 200, 0.14);
-  border-radius: 16px;
+  border-radius: 8px;
   box-sizing: content-box;
   flex: 0 0 auto;
-  height: 1.75rem;
+  height: 1.65rem;
   margin-right: 0 !important;
-  padding: 0.7rem;
-  width: 1.75rem;
+  padding: 0.65rem;
+  width: 1.65rem;
 }
 
 :host ::ng-deep .chaman-nav-dialog .nav-menu-scroll a span {
   color: var(--p-surface-800);
-  font-size: 1.02rem;
+  font-size: 0.98rem;
   font-weight: 800;
+}
+
+.chaman-nav-footer {
+  background: rgba(255, 255, 255, 0.72);
+  border-top: 1px solid rgba(121, 150, 185, 0.18);
+}
+
+.nav-quick-actions {
+  padding: 0.85rem 1.35rem 0.65rem;
+}
+
+.nav-divider {
+  margin: 0 1.35rem;
+}
+
+.nav-account {
+  margin: 0.85rem 1.35rem 0;
+  padding: 0.9rem;
+  background: rgba(242, 251, 250, 0.72);
+  border: 1px solid rgba(121, 150, 185, 0.2);
+}
+
+.nav-account:hover {
+  background: rgba(242, 251, 250, 0.92);
+}
+
+.nav-version {
+  padding: 0.85rem 1.35rem 1rem;
 }
 
 @keyframes chamanPulse {

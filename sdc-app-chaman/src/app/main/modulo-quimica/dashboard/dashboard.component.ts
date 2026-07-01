@@ -690,7 +690,7 @@ export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestr
 
     this.map = new OlMap({
       target: this.distribuidoresMap.nativeElement,
-      layers: [OpenLayersService.mapTileSatelite(12), OpenLayersService.mapReferenciasPoliticas(), this.distribuidoresLayer],
+      layers: [OpenLayersService.mapTileSatelite(19), OpenLayersService.mapReferenciasPoliticas(), this.distribuidoresLayer],
       view: new View({
         center: fromLonLat([-63.6, -34.6]),
         zoom: 4,

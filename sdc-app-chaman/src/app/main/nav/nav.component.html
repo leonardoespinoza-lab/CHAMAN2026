@@ -9,15 +9,15 @@
   [style]="{ width: 'min(920px, calc(100vw - 1.5rem))' }"
   [contentStyle]="{ padding: '0' }"
 >
-    <div class="flex flex-col h-full">
+    <div class="chaman-nav-shell flex flex-col h-full">
       <!-- Logo y cerrar -->
-      <div class="flex items-center justify-between px-6 pt-4 shrink-0 mb-4">
-        <span class="inline-flex items-center gap-2">
+      <div class="chaman-nav-header flex items-center justify-between">
+        <span class="chaman-nav-brand inline-flex items-center gap-2">
           <!-- Logo -->
           @if (helper.darkTheme) {
-            <img src="images/logo-dark.png" alt="" style="height: 50px" />
+            <img src="images/logo-dark.png" alt="" />
           } @else {
-            <img src="images/logo-light.png" alt="" style="height: 50px" />
+            <img src="images/logo-light.png" alt="" />
           }
         </span>
         <!-- Boton cerrar -->
@@ -36,13 +36,13 @@
       <div class="overflow-y-auto nav-menu-scroll">
         <!-- Selector de permisos -->
         @if (permisos.length > 1) {
-          <div class="row-center" style="width: 100%">
+          <div class="nav-permission-switch row-center">
             <p-select
               [options]="permisos"
               [(ngModel)]="permisoSeleccionado"
               optionLabel="nivel"
               placeholder="Permisos"
-              [style]="{ width: '95%' }"
+              [style]="{ width: '100%' }"
               (onChange)="onCambioPermiso($event.value)"
               appendTo="body"
             >
@@ -95,7 +95,6 @@
             </ng-template> -->
             </p-select>
           </div>
-          <br />
         }
         <ul class="list-none m-0">
           <li>
@@ -768,9 +767,9 @@
         </ul>
       </div>
       <!-- Avatar -->
-      <div class="mt-auto">
+      <div class="chaman-nav-footer mt-auto">
         <!-- Tema e idioma -->
-        <div class="flex items-center justify-end gap-2 px-4 pb-4">
+        <div class="nav-quick-actions flex items-center justify-end gap-2">
           <p-button
             [icon]="helper.darkTheme ? 'pi i-moon' : 'pi i-sun'"
             [rounded]="true"
@@ -798,9 +797,9 @@
             severity="secondary"
           ></p-button>
         </div>
-        <hr class="mb-4 mx-4 border-t border-0 border-surface" />
+        <hr class="nav-divider border-t border-0 border-surface" />
         <div
-          class="flex items-center p-4 gap-2 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700"
+          class="nav-account flex items-center gap-2 rounded-border text-surface-700 dark:text-surface-100"
         >
           <div style="display: flex; justify-content: space-between; width: 100%; align-items: center">
             <div style="display: flex; align-items: center" class="gap-2">
@@ -869,7 +868,7 @@
           </div>
         </div>
         <!-- Version -->
-        <div class="flex items-center justify-center p-4 text-xs text-surface-500 dark:text-surface-300">
+        <div class="nav-version flex items-center justify-center text-xs text-surface-500 dark:text-surface-300">
           <span>
             {{ 'Versión' | translate }} {{ version }}
             @if (env !== 'Production') {
