@@ -10,7 +10,28 @@ export class Quimica implements Exactly<IQuimica, Quimica> {
   nombre: string;
 
   @Prop()
+  razonSocial: string;
+
+  @Prop({ index: true })
+  cuit: string;
+
+  @Prop()
   logo: string;
+
+  @Prop()
+  email: string;
+
+  @Prop()
+  telefono: string;
+
+  @Prop()
+  web: string;
+
+  @Prop()
+  direccionFiscal: string;
+
+  @Prop()
+  observaciones: string;
 
   @Prop({ type: Date, default: Date.now })
   fechaCreacion: string;

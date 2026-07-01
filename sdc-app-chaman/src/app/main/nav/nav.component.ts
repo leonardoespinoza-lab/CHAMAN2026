@@ -274,6 +274,42 @@ export class NavComponent implements OnInit, OnDestroy {
     this.visible = false;
   }
 
+  public logoAlcance(): string | undefined {
+    if (this.permisoSeleccionado?.nivel === 'Quimica') {
+      return this.permisoSeleccionado.quimica?.logo;
+    }
+
+    if (this.permisoSeleccionado?.nivel === 'Distribuidor') {
+      return this.permisoSeleccionado.distribuidor?.logo;
+    }
+
+    if (this.permisoSeleccionado?.nivel === 'Productor') {
+      return this.permisoSeleccionado.productor?.logo;
+    }
+
+    return undefined;
+  }
+
+  public nombreAlcance(): string {
+    if (this.permisoSeleccionado?.nivel === 'Quimica') {
+      return this.permisoSeleccionado.quimica?.nombre || 'Compañía';
+    }
+
+    if (this.permisoSeleccionado?.nivel === 'Distribuidor') {
+      return this.permisoSeleccionado.distribuidor?.nombre || 'Distribuidor';
+    }
+
+    if (this.permisoSeleccionado?.nivel === 'Productor') {
+      return this.permisoSeleccionado.productor?.nombre || 'Productor';
+    }
+
+    if (this.permisoSeleccionado?.nivel === 'Establecimiento') {
+      return this.permisoSeleccionado.establecimiento?.nombre || 'Establecimiento';
+    }
+
+    return this.permisoSeleccionado?.nivel || 'Admin';
+  }
+
   public accionLogo(event?: Event): void {
     this.abrirMenu(event);
   }

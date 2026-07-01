@@ -1,4 +1,4 @@
-<div class="list-view-container">
+<div class="companies-list">
   <p-table
     #table
     *ngIf="datos"
@@ -11,53 +11,56 @@
     [scrollable]="true"
     scrollHeight="flex"
     (onPage)="helper.setPageSize(name, $event.rows)"
-    [globalFilterFields]="['nombre']"
+    [globalFilterFields]="['nombre', 'razonSocial', 'cuit', 'email', 'telefono', 'web']"
     stripedRows
     rowExpandMode="single"
-    dataKey="_id"
-    stateStorage="session"    
+    stateStorage="session"
+    [stateKey]="name"
+    styleClass="companies-table"
   >
-    <!-- Caption -->
     <ng-template #caption>
-      <div class="flex menu-offset" style="align-items: center">
-        <!-- Buscar -->
-        <p-iconfield iconPosition="left" class="ml-auto">
-          <p-inputicon>
-            <i class="pi pi-search"></i>
-          </p-inputicon>
-          <input
-            #search
-            pInputText
-            type="text"
-            (input)="table.filterGlobal($any($event.target).value, 'contains')"
-            [placeholder]="'Buscar' | translate"
+      <div class="companies-caption menu-offset">
+        <div>
+          <span class="eyebrow">Administración</span>
+          <h2>Compañías</h2>
+          <p>Identidad, datos legales y alcance corporativo para usuarios de nivel compañía.</p>
+        </div>
+
+        <div class="caption-actions">
+          <p-iconfield iconPosition="left">
+            <p-inputicon>
+              <i class="pi pi-search"></i>
+            </p-inputicon>
+            <input
+              #search
+              pInputText
+              type="text"
+              (input)="table.filterGlobal($any($event.target).value, 'contains')"
+              [placeholder]="'Buscar' | translate"
+            />
+          </p-iconfield>
+          <p-button
+            [label]="'Limpiar' | translate"
+            [outlined]="true"
+            icon="pi pi-filter-slash"
+            (click)="table.clear(); search.value = ''"
           />
-        </p-iconfield>
-        <!-- Limpiar -->
-        <p-button
-          [label]="'Limpiar' | translate"
-          [outlined]="true"
-          icon="pi pi-filter-slash"
-          (click)="table.clear(); search.value = ''"
-          class="ml-2"
-        />
+        </div>
       </div>
     </ng-template>
 
-    <!-- Header -->
     <ng-template #header>
       <tr>
-        <!-- Expandir -->
-        <!-- <th style="width: 1em"></th> -->
-        <!-- Usuario -->
         <th pSortableColumn="nombre">
           <div class="flex items-center gap-2">
-            {{ 'Compañía' | translate }}
+            Compañía
             <p-sortIcon field="nombre" />
             <p-columnFilter type="text" field="nombre" display="menu" />
           </div>
         </th>
-        <!-- Acciones -->
+        <th>CUIT</th>
+        <th>Contacto</th>
+        <th>Estado</th>
         <th>
           <div class="flex items-center">
             {{ 'Acciones' | translate }}
@@ -66,28 +69,41 @@
       </tr>
     </ng-template>
 
-    <!-- Body -->
-    <ng-template #body let-row let-expanded="expanded">
+    <ng-template #body let-row>
       <tr>
-        <!-- Expandir -->
-        <!-- <td>
-        <p-button
-          type="button"
-          pRipple
-          [pRowToggler]="row"
-          [text]="true"
-          [rounded]="true"
-          [plain]="true"
-          [icon]="expanded ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
-        />
-      </td> -->
-        <!-- Nombre -->
         <td>
-          {{ row.nombre }}
+          <div class="company-cell">
+            <div class="company-logo">
+              @if (row.logo) {
+                <img [src]="row.logo" alt="" />
+              } @else {
+                <span>{{ iniciales(row) }}</span>
+              }
+            </div>
+            <div>
+              <strong>{{ row.nombre }}</strong>
+              <small>{{ row.razonSocial || 'Razón social pendiente' }}</small>
+            </div>
+          </div>
         </td>
         <td>
-          <div style="display: flex; flex-direction: row; gap: 0.5rem">
-            <!-- Editar -->
+          <span class="data-pill" [class.pending]="!row.cuit">{{ cuitTexto(row) }}</span>
+        </td>
+        <td>
+          <div class="contact-cell">
+            <span>{{ contactoTexto(row) }}</span>
+            @if (row.direccionFiscal) {
+              <small>{{ row.direccionFiscal }}</small>
+            }
+          </div>
+        </td>
+        <td>
+          <span class="status-pill" [class.incomplete]="!row.logo || !row.cuit">
+            {{ row.logo && row.cuit ? 'Completa' : 'Completar datos' }}
+          </span>
+        </td>
+        <td>
+          <div class="row-actions">
             <p-button
               [rounded]="true"
               pTooltip="Editar"
@@ -95,7 +111,6 @@
               severity="warn"
               (click)="edit(row)"
             ></p-button>
-            <!-- Eliminar -->
             <p-button
               [rounded]="true"
               pTooltip="Eliminar"
@@ -109,32 +124,19 @@
       </tr>
     </ng-template>
 
-    <!-- Expanded -->
-    <ng-template #expandedrow let-row>
-      <tr>
-        <td colspan="2">
-          <h2 style="margin: 0; text-align: center; line-height: 2">Acá van mas detalles del usuario</h2>
-        </td>
-      </tr>
-    </ng-template>
-
-    <!-- Sin datos -->
     <ng-template #emptymessage>
       <tr>
-        <td colspan="2">
-          <p-message severity="info">
-            {{ 'No se encontraron usuarios' | translate }}
-          </p-message>
+        <td colspan="5">
+          <p-message severity="info">No se encontraron compañías</p-message>
         </td>
       </tr>
     </ng-template>
 
-    <!-- Footer de la tabla con botón crear -->
     <ng-template #summary>
       @if (!helper.soloLectura()) {
         <div class="flex justify-center p-3 border-t border-surface-200">
           <p-button
-            [label]="'Crear nueva compañía' | translate"
+            label="Crear nueva compañía"
             icon="pi pi-plus"
             severity="primary"
             [fluid]="true"

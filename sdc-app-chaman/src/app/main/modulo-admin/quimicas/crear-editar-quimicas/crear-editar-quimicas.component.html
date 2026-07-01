@@ -1,20 +1,25 @@
 <!-- <app-map-draw [formGeojson]="geojson" tipo="Polygon" [readOnlyPolygons]="geoJsonEstablecimiento"></app-map-draw> -->
 
-<div style="padding: 1em; height: 100%">
-  <div class="p-card" style="height: 100%">
-    <div
-      class="p-card-body"
-      style="height: 100%; display: flex; flex-direction: column; justify-content: space-between"
-    >
-      <div style="overflow: hidden; height: 100%">
-        <!-- Titulo -->
-        <div class="p-card-title">{{ titulo?.() }}</div>
-        <!-- Subtitulo -->
-        <div class="p-card-subtitle column-flex-start" style="gap: 5px">
-          @if (quimica) {
-            <span>{{ quimica.nombre }}</span>
-          }
-          <div class="row-flex-start" style="gap: 3px">
+<div class="company-edit-page">
+  <div class="company-edit-card">
+    <div class="company-edit-body">
+      <div class="company-edit-main">
+        <header class="company-edit-header">
+          <div class="company-logo-preview">
+            @if (logoPreview()) {
+              <img [src]="logoPreview()" alt="" />
+            } @else {
+              <span>{{ iniciales() }}</span>
+            }
+          </div>
+
+          <div>
+            <span class="eyebrow">Administración de compañía</span>
+            <h1>{{ titulo?.() }}</h1>
+            <p>{{ quimica?.nombre || 'Nueva compañía' }}</p>
+          </div>
+
+          <div class="license-toggle">
             <p-checkbox
               [(ngModel)]="mostrarLicencia"
               [binary]="true"
@@ -23,20 +28,20 @@
             />
             <label for="mostrarLicencia" class="ml-2">Editar Licencia</label>
           </div>
-        </div>
+        </header>
 
         <!-- Content -->
-        <div class="p-card-content" style="overflow: auto; height: calc(100% - 26px); margin-top: 1em">
+        <div class="company-edit-content">
           @if (form) {
             <form [formGroup]="form" autocomplete="off">
               <p-tabs [(value)]="tabValue" scrollable [lazy]="false">
                 <p-tablist>
-                  <p-tab [value]="0">{{ 'Básico' | translate }}</p-tab>
+                  <p-tab [value]="0">Básico</p-tab>
                   @if (mostrarLicencia) {
                     <p-tab [value]="1">{{ 'Elegir Licencia' | translate }}</p-tab>
                     @if (editarLicencia) {
-                      <p-tab [value]="2">{{ 'Licencia Básico' | translate }}</p-tab>
-                      <p-tab [value]="3">{{ 'Licencia Módulos' | translate }}</p-tab>
+                      <p-tab [value]="2">Licencia Básico</p-tab>
+                      <p-tab [value]="3">Licencia Módulos</p-tab>
                       <p-tab [value]="4">{{ 'Licencia Fecha' | translate }}</p-tab>
                     }
                   }
@@ -44,17 +49,82 @@
                 <p-tabpanels>
                   <!-- Basico -->
                   <p-tabpanel [value]="0">
-                    <!-- Nombre -->
-                    <p-floatlabel variant="in" class="mb-4">
-                      <input pInputText formControlName="nombre" [fluid]="true" autocomplete="new-username" />
-                      <label>{{ 'Nombre' | translate }}</label>
-                    </p-floatlabel>
+                    <section class="basic-layout">
+                      <aside class="brand-panel">
+                        <div class="brand-logo-large">
+                          @if (logoPreview()) {
+                            <img [src]="logoPreview()" alt="" />
+                          } @else {
+                            <span>{{ iniciales() }}</span>
+                          }
+                        </div>
+                        <strong>{{ form.get('nombre')?.value || 'Nombre comercial' }}</strong>
+                        <small>{{ form.get('razonSocial')?.value || 'Razón social pendiente' }}</small>
 
-                    <!-- Logo -->
-                    <p-floatlabel variant="in" class="mb-4">
-                      <input pInputText formControlName="logo" [fluid]="true" autocomplete="new-username" />
-                      <label>{{ 'Logo' | translate }}</label>
-                    </p-floatlabel>
+                        <input
+                          id="companyLogoFile"
+                          class="logo-file-input"
+                          type="file"
+                          accept="image/*"
+                          (change)="onLogoFileSelected($event)"
+                        />
+                        <label class="logo-upload-button" for="companyLogoFile">
+                          <i class="pi pi-upload"></i>
+                          Cargar logo
+                        </label>
+                        <button type="button" class="logo-clear-button" (click)="limpiarLogo()" [disabled]="!logoPreview()">
+                          Quitar logo
+                        </button>
+                        <p>PNG/JPG liviano. También se puede pegar una URL o base64 en el campo logo.</p>
+                      </aside>
+
+                      <div class="form-grid">
+                        <p-floatlabel variant="in">
+                          <input pInputText formControlName="nombre" [fluid]="true" autocomplete="off" />
+                          <label>Nombre comercial</label>
+                        </p-floatlabel>
+
+                        <p-floatlabel variant="in">
+                          <input pInputText formControlName="razonSocial" [fluid]="true" autocomplete="off" />
+                          <label>Razón social</label>
+                        </p-floatlabel>
+
+                        <p-floatlabel variant="in">
+                          <input pInputText formControlName="cuit" [fluid]="true" autocomplete="off" />
+                          <label>CUIT</label>
+                        </p-floatlabel>
+
+                        <p-floatlabel variant="in">
+                          <input pInputText formControlName="email" [fluid]="true" autocomplete="off" />
+                          <label>Email institucional</label>
+                        </p-floatlabel>
+
+                        <p-floatlabel variant="in">
+                          <input pInputText formControlName="telefono" [fluid]="true" autocomplete="off" />
+                          <label>Teléfono</label>
+                        </p-floatlabel>
+
+                        <p-floatlabel variant="in">
+                          <input pInputText formControlName="web" [fluid]="true" autocomplete="off" />
+                          <label>Sitio web</label>
+                        </p-floatlabel>
+
+                        <p-floatlabel variant="in" class="span-2">
+                          <input pInputText formControlName="direccionFiscal" [fluid]="true" autocomplete="off" />
+                          <label>Dirección fiscal</label>
+                        </p-floatlabel>
+
+                        <p-floatlabel variant="in" class="span-2">
+                          <input pInputText formControlName="logo" [fluid]="true" autocomplete="off" />
+                          <label>Logo URL/base64</label>
+                        </p-floatlabel>
+
+                        <p-floatlabel variant="in" class="span-2">
+                          <textarea pInputText formControlName="observaciones" rows="3" autocomplete="off"></textarea>
+                          <label>Observaciones internas</label>
+                        </p-floatlabel>
+                      </div>
+                    </section>
                   </p-tabpanel>
 
                   @if (mostrarLicencia && formLicencia) {
@@ -214,7 +284,7 @@
         </div>
       </div>
       <!-- Footer -->
-      <div class="p-card-footer">
+      <div class="company-edit-footer">
         <p-divider />
         <div class="flex gap-4 mt-1">
           <p-button

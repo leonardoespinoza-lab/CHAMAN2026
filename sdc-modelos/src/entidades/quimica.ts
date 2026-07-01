@@ -5,7 +5,14 @@ import { ICreateLicencia } from './licencia';
 export interface IQuimica {
   _id?: string;
   nombre?: string;
+  razonSocial?: string;
+  cuit?: string;
   logo?: string;
+  email?: string;
+  telefono?: string;
+  web?: string;
+  direccionFiscal?: string;
+  observaciones?: string;
   fechaCreacion?: string;
   idEmpresas?: string[];
   integraciones?: IIntegracion[];

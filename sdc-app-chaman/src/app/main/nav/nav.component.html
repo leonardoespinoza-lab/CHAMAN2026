@@ -803,7 +803,7 @@
         >
           <div style="display: flex; justify-content: space-between; width: 100%; align-items: center">
             <div style="display: flex; align-items: center" class="gap-2">
-              <p-avatar [image]="user?.datosPersonales?.['foto'] || 'images/avatar.png'" shape="circle" />
+              <p-avatar [image]="logoAlcance() || user?.datosPersonales?.['foto'] || 'images/avatar.png'" shape="circle" />
               @if (loginService.esProductor) {
                 <svg
                   [style.fill]="'var(--p-primary-color)'"
@@ -845,7 +845,10 @@
                   <use [attr.xlink:href]="'icons/icons.svg#admin'"></use>
                 </svg>
               }
-              <span class="font-bold">{{ helper.truncateString(user?.username!, 20) }}</span>
+              <span class="nav-user-copy">
+                <strong>{{ helper.truncateString(user?.username!, 20) }}</strong>
+                <small>{{ nombreAlcance() }}</small>
+              </span>
             </div>
             <!-- Cambiar Passowrd -->
             <p-button
@@ -904,6 +907,6 @@
   </button>
 }
 
-<div class="app-shell">
+<div class="app-shell" [class.app-shell-with-back]="mostrarVolver()">
   <router-outlet></router-outlet>
 </div>

@@ -16,6 +16,8 @@ import { SharedModule } from '../../../../auxiliares/shared.module';
   styleUrl: './crear-editar-quimicas.component.scss',
 })
 export class CrearEditarQuimicasComponent implements OnInit, OnDestroy {
+  private readonly maxLogoBytes = 450 * 1024;
+
   public loading = false;
   public quimica?: IQuimica;
   public titulo?: () => string;
@@ -51,7 +53,14 @@ export class CrearEditarQuimicasComponent implements OnInit, OnDestroy {
   private createForm(): void {
     this.form = new FormGroup({
       nombre: new FormControl(this.quimica?.nombre, Validators.required),
+      razonSocial: new FormControl(this.quimica?.razonSocial),
+      cuit: new FormControl(this.quimica?.cuit),
       logo: new FormControl(this.quimica?.logo),
+      email: new FormControl(this.quimica?.email, Validators.email),
+      telefono: new FormControl(this.quimica?.telefono),
+      web: new FormControl(this.quimica?.web),
+      direccionFiscal: new FormControl(this.quimica?.direccionFiscal),
+      observaciones: new FormControl(this.quimica?.observaciones),
     });
   }
 
@@ -78,8 +87,69 @@ export class CrearEditarQuimicasComponent implements OnInit, OnDestroy {
   // ACCIONES
 
   private getData() {
-    const data: ICreateQuimica = this.form?.value;
+    const data: ICreateQuimica = {
+      ...this.form?.value,
+      cuit: this.normalizarCuit(this.form?.value?.cuit),
+    };
     return data;
+  }
+
+  public logoPreview(): string | undefined {
+    const logo = this.form?.get('logo')?.value || this.quimica?.logo;
+    return typeof logo === 'string' && logo.trim() ? logo : undefined;
+  }
+
+  public iniciales(): string {
+    const nombre = (this.form?.get('nombre')?.value || this.quimica?.nombre || 'C').trim();
+    return nombre
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((parte: string) => parte.charAt(0).toUpperCase())
+      .join('');
+  }
+
+  public async onLogoFileSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      this.helper.notifWarn('El logo debe ser una imagen.');
+      return;
+    }
+
+    if (file.size > this.maxLogoBytes) {
+      this.helper.notifWarn('El logo debe pesar menos de 450 KB.');
+      return;
+    }
+
+    const dataUrl = await this.fileToDataUrl(file);
+    this.form?.get('logo')?.setValue(dataUrl);
+    this.form?.get('logo')?.markAsDirty();
+    this.checkDisabled();
+  }
+
+  public limpiarLogo(): void {
+    this.form?.get('logo')?.setValue('');
+    this.form?.get('logo')?.markAsDirty();
+    this.checkDisabled();
+  }
+
+  private fileToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  private normalizarCuit(cuit?: string): string | undefined {
+    const limpio = String(cuit || '').replace(/\D/g, '');
+    return limpio || undefined;
   }
 
   private getDataLicencia() {

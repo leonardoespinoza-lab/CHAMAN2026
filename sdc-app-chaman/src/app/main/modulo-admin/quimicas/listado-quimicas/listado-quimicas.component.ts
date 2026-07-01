@@ -49,6 +49,23 @@ export class ListadoQuimicasComponent implements OnInit, OnDestroy {
     this.router.navigate(['quimicas', 'editar', data._id]);
   }
 
+  public iniciales(dato: IQuimica): string {
+    const nombre = (dato.nombre || dato.razonSocial || 'C').trim();
+    return nombre
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((parte) => parte.charAt(0).toUpperCase())
+      .join('');
+  }
+
+  public cuitTexto(dato: IQuimica): string {
+    return dato.cuit || 'CUIT pendiente';
+  }
+
+  public contactoTexto(dato: IQuimica): string {
+    return dato.email || dato.telefono || dato.web || 'Sin contacto cargado';
+  }
+
   public async delete(dato: IQuimica): Promise<void> {
     this.confirmationService.confirm({
       // target: event.target as EventTarget,

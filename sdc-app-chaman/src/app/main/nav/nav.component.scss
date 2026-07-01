@@ -16,6 +16,10 @@ a {
   overflow-x: hidden;
 }
 
+.app-shell-with-back {
+  padding-top: 3.35rem;
+}
+
 .global-nav-actions {
   position: fixed;
   left: 0.5rem;
@@ -241,6 +245,25 @@ a {
 
 .nav-account:hover {
   background: rgba(242, 251, 250, 0.92);
+}
+
+.nav-user-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.nav-user-copy strong {
+  color: var(--p-surface-900);
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.nav-user-copy small {
+  color: var(--p-surface-500);
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.1;
 }
 
 .nav-version {
