@@ -64,7 +64,6 @@
         <p-progress-spinner ariaLabel="loading" [style]="{ width: '18px', height: '18px' }" />
       }
     </div>
-
   </div>
 
   @if (establecimientos.length > 1) {
@@ -74,20 +73,17 @@
         <button
           type="button"
           class="establishment-chip"
-          [class.active]="establecimientoSeleccionado?._id === establecimiento._id || establecimientoSeleccionado?.nombre === establecimiento.nombre"
+          [class.active]="
+            establecimientoSeleccionado?._id === establecimiento._id ||
+            establecimientoSeleccionado?.nombre === establecimiento.nombre
+          "
           (click)="seleccionarEstablecimiento(establecimiento)"
         >
           <strong>{{ establecimiento.nombre }}</strong>
           <small>{{ resumenEstablecimiento(establecimiento) }}</small>
         </button>
       }
-      <button
-        type="button"
-        class="establishment-chip view-all"
-        (click)="centerAllEstablecimientos()"
-      >
-        Ver todos
-      </button>
+      <button type="button" class="establishment-chip view-all" (click)="centerAllEstablecimientos()">Ver todos</button>
     </div>
   }
 </section>
@@ -458,7 +454,7 @@
 >
   <ng-template #headless>
     <!-- Barrita gris -->
-    <div style="width: 100%; display: flex; justify-content: center" (click)="loteSeleccionado = undefined">
+    <div style="width: 100%; display: flex; justify-content: center" (click)="cerrarResumenLote()">
       <div style="width: 48px; height: 4px; border-radius: 2px; background-color: #ebebeb; margin-top: 0.5em"></div>
     </div>
 
@@ -663,7 +659,8 @@
     <div class="sheet-header">
       <div>
         <span class="sheet-eyebrow">
-          {{ grupoAmbientesSeleccionado.establecimiento || 'Establecimiento' }} · {{ grupoAmbientesSeleccionado.cultivo }}
+          {{ grupoAmbientesSeleccionado.establecimiento || 'Establecimiento' }} ·
+          {{ grupoAmbientesSeleccionado.cultivo }}
         </span>
         <h2>Ambientes productivos</h2>
         <span class="sheet-eyebrow">Variedades: {{ variedadesAmbientesTexto(grupoAmbientesSeleccionado) }}</span>
@@ -693,7 +690,7 @@
 
 @if (loteSeleccionado) {
   <section class="lot-bottom-sheet">
-    <button type="button" class="sheet-close" (click)="loteSeleccionado = undefined" aria-label="Cerrar resumen">
+    <button type="button" class="sheet-close" (click)="cerrarResumenLote()" aria-label="Cerrar resumen">
       <i class="pi pi-times"></i>
     </button>
 
@@ -818,7 +815,11 @@
     'max-height': (helper.isWide$ | async) ? 'calc(100dvh - 2rem)' : 'calc(100dvh - 1rem)',
     overflow: 'hidden',
   }"
-  [contentStyle]="{ padding: '0', overflow: 'auto', 'max-height': (helper.isWide$ | async) ? 'calc(100dvh - 8rem)' : 'calc(100dvh - 6rem)' }"
+  [contentStyle]="{
+    padding: '0',
+    overflow: 'auto',
+    'max-height': (helper.isWide$ | async) ? 'calc(100dvh - 8rem)' : 'calc(100dvh - 6rem)',
+  }"
   [modal]="true"
   [draggable]="false"
   [resizable]="false"
@@ -874,10 +875,18 @@
           </header>
 
           <div class="executive-hero-kpis">
-            <span><strong>{{ resumen.lotes }}</strong> lotes</span>
-            <span><strong>{{ resumen.hectareas }}</strong> superficie</span>
-            <span><strong>{{ resumen.siembras }}</strong> siembras activas</span>
-            <span><strong>{{ resumen.perennes }}</strong> perennes</span>
+            <span
+              ><strong>{{ resumen.lotes }}</strong> lotes</span
+            >
+            <span
+              ><strong>{{ resumen.hectareas }}</strong> superficie</span
+            >
+            <span
+              ><strong>{{ resumen.siembras }}</strong> siembras activas</span
+            >
+            <span
+              ><strong>{{ resumen.perennes }}</strong> perennes</span
+            >
           </div>
 
           <section class="executive-climate-grid">

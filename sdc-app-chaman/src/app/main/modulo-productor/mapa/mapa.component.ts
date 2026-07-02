@@ -99,6 +99,14 @@ interface IResumenGerencialEstablecimiento {
   metricas: IResumenGerencialMetric[];
 }
 
+interface IMapaContexto {
+  establecimientoId?: string;
+  establecimientoNombre?: string;
+  loteId?: string;
+  loteNombre?: string;
+  updatedAt?: string;
+}
+
 @Component({
   selector: 'app-mapa',
   imports: [SharedModule, DrawerClimaComponent],
@@ -136,9 +144,9 @@ interface IResumenGerencialEstablecimiento {
 })
 export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   // Helper para convertir severity a tipo válido
-  getSeverity(severity: string | undefined): "error" | "success" | "info" | "warn" | "secondary" | "contrast" {
-    const validSeverities = ["error", "success", "info", "warn", "secondary", "contrast"];
-    return validSeverities.includes(severity || "") ? severity as any : "info";
+  getSeverity(severity: string | undefined): 'error' | 'success' | 'info' | 'warn' | 'secondary' | 'contrast' {
+    const validSeverities = ['error', 'success', 'info', 'warn', 'secondary', 'contrast'];
+    return validSeverities.includes(severity || '') ? (severity as any) : 'info';
   }
   private translate = inject(TranslateService);
 
@@ -149,6 +157,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private isFirstVisit = true; // Para controlar si es la primera visita
   private initialDataLoaded = false;
+  private readonly mapaContextoPrefix = 'chaman:mapa:contexto';
 
   public establecimientos$?: Subscription;
   public establecimientos: IEstablecimiento[] = [];
@@ -239,16 +248,30 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Helper methods for severity validation
   getValidSeverityRiego(): 'error' | 'success' | 'info' | 'warn' | 'secondary' | 'contrast' | null {
-    const validSeverities: ('error' | 'success' | 'info' | 'warn' | 'secondary' | 'contrast')[] = ['error', 'success', 'info', 'warn', 'secondary', 'contrast'];
-    return validSeverities.includes(this.loteSeleccionado?.severityRiego as any) 
-      ? this.loteSeleccionado?.severityRiego as any 
+    const validSeverities: ('error' | 'success' | 'info' | 'warn' | 'secondary' | 'contrast')[] = [
+      'error',
+      'success',
+      'info',
+      'warn',
+      'secondary',
+      'contrast',
+    ];
+    return validSeverities.includes(this.loteSeleccionado?.severityRiego as any)
+      ? (this.loteSeleccionado?.severityRiego as any)
       : null;
   }
 
   getValidSeverityHuella(): 'error' | 'success' | 'info' | 'warn' | 'secondary' | 'contrast' | null {
-    const validSeverities: ('error' | 'success' | 'info' | 'warn' | 'secondary' | 'contrast')[] = ['error', 'success', 'info', 'warn', 'secondary', 'contrast'];
-    return validSeverities.includes(this.loteSeleccionado?.severityHuella as any) 
-      ? this.loteSeleccionado?.severityHuella as any 
+    const validSeverities: ('error' | 'success' | 'info' | 'warn' | 'secondary' | 'contrast')[] = [
+      'error',
+      'success',
+      'info',
+      'warn',
+      'secondary',
+      'contrast',
+    ];
+    return validSeverities.includes(this.loteSeleccionado?.severityHuella as any)
+      ? (this.loteSeleccionado?.severityHuella as any)
       : null;
   }
 
@@ -361,6 +384,125 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     private climaService: ClimaService
   ) {}
 
+  private getMapaContextoKey(): string {
+    const user = this.helper.user as any;
+    const permiso = this.permiso as any;
+    const userKey =
+      user?._id ||
+      user?.id ||
+      user?.usuario ||
+      user?.email ||
+      permiso?._id ||
+      permiso?.idProductor ||
+      permiso?.idEstablecimiento ||
+      permiso?.idDistribuidor ||
+      permiso?.idQuimica ||
+      'anonimo';
+    return `${this.mapaContextoPrefix}:${userKey}`;
+  }
+
+  private leerContextoMapa(): IMapaContexto | undefined {
+    try {
+      const raw = sessionStorage.getItem(this.getMapaContextoKey());
+      return raw ? (JSON.parse(raw) as IMapaContexto) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private guardarContextoMapa(contexto: IMapaContexto): void {
+    sessionStorage.setItem(
+      this.getMapaContextoKey(),
+      JSON.stringify({
+        ...contexto,
+        updatedAt: new Date().toISOString(),
+      })
+    );
+  }
+
+  private limpiarContextoMapa(): void {
+    sessionStorage.removeItem(this.getMapaContextoKey());
+  }
+
+  private getEstablecimientoId(establecimiento?: IEstablecimiento): string | undefined {
+    return establecimiento?._id || establecimiento?.nombre;
+  }
+
+  private buscarEstablecimiento(id?: string, nombre?: string): IEstablecimiento | undefined {
+    return this.establecimientos.find((establecimiento) => {
+      const idMatch = !!id && (establecimiento._id === id || establecimiento.nombre === id);
+      const nombreMatch = !!nombre && establecimiento.nombre === nombre;
+      return idMatch || nombreMatch;
+    });
+  }
+
+  private buscarLote(id?: string, nombre?: string): ILoteMapa | undefined {
+    return this.lotes.find((lote) => {
+      const idMatch = !!id && lote._id === id;
+      const nombreMatch = !!nombre && lote.nombre === nombre;
+      return idMatch || nombreMatch;
+    });
+  }
+
+  private getEstablecimientoDelLote(lote?: ILoteMapa): IEstablecimiento | undefined {
+    if (!lote) {
+      return undefined;
+    }
+    return (
+      this.buscarEstablecimiento(lote.idEstablecimiento, lote.establecimiento?.nombre) ||
+      this.buscarEstablecimiento(lote.establecimiento?._id, lote.establecimiento?.nombre)
+    );
+  }
+
+  private guardarContextoEstablecimiento(establecimiento: IEstablecimiento, lote?: ILoteMapa): void {
+    this.guardarContextoMapa({
+      establecimientoId: this.getEstablecimientoId(establecimiento),
+      establecimientoNombre: establecimiento.nombre,
+      loteId: lote?._id,
+      loteNombre: lote?.nombre,
+    });
+  }
+
+  private getEstablecimientoDesdeContexto(): IEstablecimiento | undefined {
+    const contexto = this.leerContextoMapa();
+    if (!contexto) {
+      return undefined;
+    }
+
+    const lote = this.buscarLote(contexto.loteId, contexto.loteNombre);
+    const establecimientoDelLote = this.getEstablecimientoDelLote(lote);
+    return (
+      establecimientoDelLote || this.buscarEstablecimiento(contexto.establecimientoId, contexto.establecimientoNombre)
+    );
+  }
+
+  private sincronizarSeleccionConDatos(): void {
+    if (this.loteSeleccionado) {
+      const loteActualizado = this.buscarLote(this.loteSeleccionado._id, this.loteSeleccionado.nombre);
+      if (loteActualizado) {
+        this.loteSeleccionado = loteActualizado;
+        this.establecimientoSeleccionado =
+          this.getEstablecimientoDelLote(loteActualizado) || this.establecimientoSeleccionado;
+      } else {
+        this.loteSeleccionado = undefined;
+      }
+    }
+
+    if (this.establecimientoSeleccionado) {
+      this.establecimientoSeleccionado =
+        this.buscarEstablecimiento(this.establecimientoSeleccionado._id, this.establecimientoSeleccionado.nombre) ||
+        this.establecimientoSeleccionado;
+    }
+
+    if (!this.establecimientoSeleccionado) {
+      this.establecimientoSeleccionado = this.getEstablecimientoDesdeContexto();
+    }
+
+    if (this.establecimientoSeleccionado) {
+      this.selectEstablecimiento(this.establecimientoSeleccionado.nombre);
+    }
+  }
+
   // El mapa arranca en una posicion neutra y luego se encuadra con datos reales.
   private getInitialMapPosition(): { center: number[]; zoom: number } {
     const zoom = this.helper.isHandset ? 14 : 15;
@@ -380,9 +522,13 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       return;
     }
 
+    this.sincronizarSeleccionConDatos();
     const establecimientoInicial = this.getEstablecimientoInicial();
     if (establecimientoInicial) {
-      this.seleccionarEstablecimiento(establecimientoInicial, true);
+      this.seleccionarEstablecimiento(establecimientoInicial, true, {
+        preserveSelection: true,
+        persist: !this.leerContextoMapa(),
+      });
       return;
     }
 
@@ -399,6 +545,10 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   private getEstablecimientoInicial(): IEstablecimiento | undefined {
     if (this.establecimientoSeleccionado) {
       return this.establecimientoSeleccionado;
+    }
+    const establecimientoContexto = this.getEstablecimientoDesdeContexto();
+    if (establecimientoContexto) {
+      return establecimientoContexto;
     }
     const establecimientoConLotes = this.establecimientos.find((establecimiento) => {
       return this.lotesDeEstablecimiento(establecimiento).length > 0;
@@ -689,10 +839,22 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     );
   }
 
-  public seleccionarEstablecimiento(establecimiento: IEstablecimiento, markAsVisited = true): void {
+  public seleccionarEstablecimiento(
+    establecimiento: IEstablecimiento,
+    markAsVisited = true,
+    options: { preserveSelection?: boolean; persist?: boolean } = {}
+  ): void {
     this.establecimientoSeleccionado = establecimiento;
-    this.loteSeleccionado = undefined;
-    this.grupoAmbientesSeleccionado = undefined;
+    if (!options.preserveSelection) {
+      this.loteSeleccionado = undefined;
+      this.grupoAmbientesSeleccionado = undefined;
+    }
+    if (options.persist !== false) {
+      this.guardarContextoEstablecimiento(
+        establecimiento,
+        options.preserveSelection ? this.loteSeleccionado : undefined
+      );
+    }
     this.selectEstablecimiento(establecimiento.nombre);
     this.centerMapOnEstablecimiento(establecimiento, markAsVisited);
     this.changeDetectorRef.detectChanges();
@@ -701,6 +863,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   public centerAllEstablecimientos(): void {
     this.loteSeleccionado = undefined;
     this.grupoAmbientesSeleccionado = undefined;
+    this.establecimientoSeleccionado = undefined;
+    this.limpiarContextoMapa();
     this.centerMapOnBounds();
     this.isFirstVisit = false;
     this.changeDetectorRef.detectChanges();
@@ -745,10 +909,13 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   public climaVientoMax(): string {
     const pronosticos = this.getPronosticosZona();
     const maxPronostico = Math.max(
-      ...pronosticos.slice(0, 3).map((item) => this.numero(item?.velocidadViento?.max ?? item?.velocidadViento?.avg) || 0),
+      ...pronosticos
+        .slice(0, 3)
+        .map((item) => this.numero(item?.velocidadViento?.max ?? item?.velocidadViento?.avg) || 0),
       0
     );
-    const actual = this.numero(this.getClimaActual()?.velocidadViento?.last ?? this.getClimaActual()?.velocidadViento?.avg) || 0;
+    const actual =
+      this.numero(this.getClimaActual()?.velocidadViento?.last ?? this.getClimaActual()?.velocidadViento?.avg) || 0;
     return this.formatMetric(Math.max(actual, maxPronostico), 'km/h', 0);
   }
 
@@ -828,7 +995,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   public variedadAmbiente(lote?: ILoteMapa): string {
     const semilla = lote?.siembra?.semilla;
-    return [semilla?.variedad, semilla?.semillero, this.helper.translateCiclo(semilla?.ciclo)].filter(Boolean).join(' ') || lote?.nombre || 'Sin variedad';
+    return (
+      [semilla?.variedad, semilla?.semillero, this.helper.translateCiclo(semilla?.ciclo)].filter(Boolean).join(' ') ||
+      lote?.nombre ||
+      'Sin variedad'
+    );
   }
 
   public variedadesAmbientesTexto(grupo?: IGrupoAmbientesMapa): string {
@@ -840,9 +1011,22 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectInteractionLotes?.getFeatures().clear();
   }
 
+  public cerrarResumenLote(): void {
+    this.loteSeleccionado = undefined;
+    this.selectInteractionLotes?.getFeatures().clear();
+    if (this.establecimientoSeleccionado) {
+      this.guardarContextoEstablecimiento(this.establecimientoSeleccionado);
+    }
+  }
+
   public entrarAmbiente(lote: ILoteMapa): void {
     this.grupoAmbientesSeleccionado = undefined;
     this.loteSeleccionado = lote;
+    const establecimiento = this.getEstablecimientoDelLote(lote);
+    if (establecimiento) {
+      this.establecimientoSeleccionado = establecimiento;
+      this.guardarContextoEstablecimiento(establecimiento, lote);
+    }
     this.detallesLote(lote);
   }
 
@@ -861,7 +1045,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!predicciones.length) {
       return 'Sin prediccion reciente';
     }
-    const max = predicciones.reduce((prev, current) => ((current.resultado || 0) > (prev.resultado || 0) ? current : prev));
+    const max = predicciones.reduce((prev, current) =>
+      (current.resultado || 0) > (prev.resultado || 0) ? current : prev
+    );
     return `${max.enfermedad}: ${this.formatNumber(max.resultado || 0, 0)}%`;
   }
 
@@ -973,7 +1159,10 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.router.navigate(['lotes', 'editar', this.loteSeleccionado._id]);
   }
 
-  private crearResumenGerencial(establecimiento: IEstablecimiento, lotes: ILoteMapa[]): IResumenGerencialEstablecimiento {
+  private crearResumenGerencial(
+    establecimiento: IEstablecimiento,
+    lotes: ILoteMapa[]
+  ): IResumenGerencialEstablecimiento {
     const hectareas = lotes.reduce((acc, lote) => acc + (this.numero(lote.ubicacion?.superficie) || 0), 0);
     const sembrados = lotes.filter((lote) => !!lote.siembra).length;
     const perennes = lotes.filter((lote) => this.esLotePerenne(lote)).length;
@@ -999,12 +1188,15 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     };
   }
 
-  private resumenEstadoGerencial(
-    metricas: IResumenGerencialMetric[],
-    lotes: ILoteMapa[]
-  ): IResumenGerencialMetric {
+  private resumenEstadoGerencial(metricas: IResumenGerencialMetric[], lotes: ILoteMapa[]): IResumenGerencialMetric {
     if (!lotes.length) {
-      return this.metric('Estado', 'Sin lotes', 'Todavia no hay superficie cargada en este establecimiento.', 'pi pi-map-marker', 'neutral');
+      return this.metric(
+        'Estado',
+        'Sin lotes',
+        'Todavia no hay superficie cargada en este establecimiento.',
+        'pi pi-map-marker',
+        'neutral'
+      );
     }
 
     const criticos = metricas.filter((metric) => metric.tono === 'risk').length;
@@ -1048,7 +1240,14 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     const medios = lotesConRiesgo.filter((item) => this.nivelRiesgoEnfermedad(item.lote, item.riesgo) === 1);
 
     if (!sembrados) {
-      return this.metric('Enfermedades', 'Sin siembras', 'Todavia no hay cultivos activos para monitoreo sanitario.', 'pi pi-shield', 'neutral', 0);
+      return this.metric(
+        'Enfermedades',
+        'Sin siembras',
+        'Todavia no hay cultivos activos para monitoreo sanitario.',
+        'pi pi-shield',
+        'neutral',
+        0
+      );
     }
     if (!lotesConRiesgo.length) {
       const detalle = extensivos.length
@@ -1096,7 +1295,14 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       return this.metric('Riego', 'Sin lotes', 'No hay superficie cargada para evaluar.', 'pi pi-tint', 'neutral', 0);
     }
     if (!lotesConRiego.length) {
-      return this.metric('Riego', 'Sin necesidad', 'No hay riego recomendado con los datos disponibles.', 'pi pi-tint', 'ok', 5);
+      return this.metric(
+        'Riego',
+        'Sin necesidad',
+        'No hay riego recomendado con los datos disponibles.',
+        'pi pi-tint',
+        'ok',
+        5
+      );
     }
     return this.metric(
       'Riego',
@@ -1113,10 +1319,24 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       .map((lote) => this.numero(lote.huellaHidrica?.total?.litrosKg))
       .filter((valor): valor is number => valor !== null && valor > 0);
     if (!lotes.length) {
-      return this.metric('Huella', 'Sin lotes', 'No hay lotes cargados para seguimiento hidrico.', 'pi pi-compass', 'neutral', 0);
+      return this.metric(
+        'Huella',
+        'Sin lotes',
+        'No hay lotes cargados para seguimiento hidrico.',
+        'pi pi-compass',
+        'neutral',
+        0
+      );
     }
     if (!valores.length) {
-      return this.metric('Huella', 'En seguimiento', 'Acumula lluvia, riego y aplicaciones durante la campana.', 'pi pi-compass', 'neutral', 18);
+      return this.metric(
+        'Huella',
+        'En seguimiento',
+        'Acumula lluvia, riego y aplicaciones durante la campana.',
+        'pi pi-compass',
+        'neutral',
+        18
+      );
     }
     const promedio = valores.reduce((acc, valor) => acc + valor, 0) / valores.length;
     return this.metric(
@@ -1132,7 +1352,14 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   private resumenNdviGerencial(lotes: ILoteMapa[]): IResumenGerencialMetric {
     const valores = lotes.map((lote) => this.numero(lote.ndvi)).filter((valor): valor is number => valor !== null);
     if (!valores.length) {
-      return this.metric('NDVI', 'Sin escena', 'Todavia no hay lectura satelital util para los lotes.', 'pi pi-sparkles', 'neutral', 0);
+      return this.metric(
+        'NDVI',
+        'Sin escena',
+        'Todavia no hay lectura satelital util para los lotes.',
+        'pi pi-sparkles',
+        'neutral',
+        0
+      );
     }
     const promedio = valores.reduce((acc, valor) => acc + valor, 0) / valores.length;
     const tono: IResumenGerencialMetric['tono'] = promedio < 0.18 ? 'risk' : promedio < 0.28 ? 'warn' : 'ok';
@@ -1148,7 +1375,14 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private resumenFrioGerencial(lotes: ILoteMapa[], perennes: number): IResumenGerencialMetric {
     if (!perennes) {
-      return this.metric('Horas frio', 'No aplica', 'Solo se muestra para frutales y cultivos perennes.', 'pi pi-clock', 'neutral', 0);
+      return this.metric(
+        'Horas frio',
+        'No aplica',
+        'Solo se muestra para frutales y cultivos perennes.',
+        'pi pi-clock',
+        'neutral',
+        0
+      );
     }
     const avances = lotes
       .filter((lote) => this.esLotePerenne(lote))
@@ -1162,7 +1396,14 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     }>;
 
     if (!avances.length) {
-      return this.metric('Horas frio', 'Sin objetivos', 'Faltan objetivos de frio o sensor asociado en los lotes perennes.', 'pi pi-clock', 'warn', 0);
+      return this.metric(
+        'Horas frio',
+        'Sin objetivos',
+        'Faltan objetivos de frio o sensor asociado en los lotes perennes.',
+        'pi pi-clock',
+        'warn',
+        0
+      );
     }
 
     const peor = avances.reduce((min, item) => (item.progreso < min.progreso ? item : min));
@@ -1183,11 +1424,25 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     perennes: number
   ): IResumenGerencialMetric {
     if (!perennes) {
-      return this.metric('Heladas', 'No aplica', 'Solo se muestra para frutales y cultivos perennes.', 'pi pi-snowflake', 'neutral', 0);
+      return this.metric(
+        'Heladas',
+        'No aplica',
+        'Solo se muestra para frutales y cultivos perennes.',
+        'pi pi-snowflake',
+        'neutral',
+        0
+      );
     }
     const minima = this.minimaPronosticadaEstablecimiento(establecimiento, lotes);
     if (minima === null) {
-      return this.metric('Heladas', 'Sin pronostico', 'Faltan minimas pronosticadas para la ventana de riesgo.', 'pi pi-snowflake', 'neutral', 0);
+      return this.metric(
+        'Heladas',
+        'Sin pronostico',
+        'Faltan minimas pronosticadas para la ventana de riesgo.',
+        'pi pi-snowflake',
+        'neutral',
+        0
+      );
     }
     const tono: IResumenGerencialMetric['tono'] = minima <= 0 ? 'risk' : minima <= 2 ? 'warn' : 'ok';
     const detalle =
@@ -1196,7 +1451,14 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         : minima <= 2
           ? 'Cerca del umbral de helada: mantener alerta operativa.'
           : 'Sin helada probable en la ventana de pronostico.';
-    return this.metric('Heladas', `${this.formatNumber(minima, 1)} C`, detalle, 'pi pi-snowflake', tono, minima <= 0 ? 100 : minima <= 2 ? 70 : 18);
+    return this.metric(
+      'Heladas',
+      `${this.formatNumber(minima, 1)} C`,
+      detalle,
+      'pi pi-snowflake',
+      tono,
+      minima <= 0 ? 100 : minima <= 2 ? 70 : 18
+    );
   }
 
   private metric(
@@ -1271,7 +1533,13 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     const minima = this.minimaPronosticadaEstablecimiento(establecimiento, []);
 
     const clima: IResumenGerencialMetric[] = [
-      this.metric('Temperatura', this.formatMetric(temperatura, 'C', 1), 'Actual o primer pronostico disponible.', 'pi pi-sun', 'neutral'),
+      this.metric(
+        'Temperatura',
+        this.formatMetric(temperatura, 'C', 1),
+        'Actual o primer pronostico disponible.',
+        'pi pi-sun',
+        'neutral'
+      ),
     ];
 
     const humedadNum = this.numero(humedad);
@@ -1279,7 +1547,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       this.metric(
         'Humedad',
         this.formatMetric(humedad, '%', 0),
-        humedadNum !== null && humedadNum >= 90 ? 'Alta humedad: sube la vigilancia sanitaria.' : 'Humedad en rango de seguimiento.',
+        humedadNum !== null && humedadNum >= 90
+          ? 'Alta humedad: sube la vigilancia sanitaria.'
+          : 'Humedad en rango de seguimiento.',
         'pi pi-percentage',
         humedadNum !== null && humedadNum >= 90 ? 'warn' : 'ok'
       )
@@ -1301,7 +1571,12 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     let progresoMinima = 0;
     if (minima !== null) {
       tonoMinima = minima <= 0 ? 'risk' : minima <= 2 ? 'warn' : 'ok';
-      detalleMinima = minima <= 0 ? 'Alerta de helada probable.' : minima <= 2 ? 'Cerca de umbral de helada.' : 'Sin helada probable.';
+      detalleMinima =
+        minima <= 0
+          ? 'Alerta de helada probable.'
+          : minima <= 2
+            ? 'Cerca de umbral de helada.'
+            : 'Sin helada probable.';
       progresoMinima = minima <= 0 ? 100 : minima <= 2 ? 70 : 12;
     }
     clima.push(
@@ -1341,15 +1616,13 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     return cultivos.slice(0, 3).join(', ');
   }
 
-  private avanceFrioLote(lote: ILoteMapa):
-    | {
-        lote: string;
-        metric: string;
-        actual: number;
-        objetivo: number;
-        progreso: number;
-      }
-    | null {
+  private avanceFrioLote(lote: ILoteMapa): {
+    lote: string;
+    metric: string;
+    actual: number;
+    objetivo: number;
+    progreso: number;
+  } | null {
     const requerimiento = (lote.siembra?.semilla?.requerimientoFrio || {}) as any;
     const frio = (lote.dispositivos || []).map((dispositivo: any) => dispositivo?.frioAcumulado).find(Boolean) as any;
     const opciones = [
@@ -1411,7 +1684,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const establecimientoExtent = this.getFeatureExtent(this.establecimientosLayer, (feature) => {
       const featureEstablecimiento = feature.get('establecimiento') as IEstablecimiento | undefined;
-      const idMatch = featureEstablecimiento?._id && establecimiento._id && featureEstablecimiento._id === establecimiento._id;
+      const idMatch =
+        featureEstablecimiento?._id && establecimiento._id && featureEstablecimiento._id === establecimiento._id;
       const nombreMatch = featureEstablecimiento?.nombre && featureEstablecimiento.nombre === establecimiento.nombre;
       return !!idMatch || !!nombreMatch || feature.getId() === establecimiento.nombre;
     });
@@ -1424,10 +1698,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.fitMapToExtent(extent, markAsVisited);
   }
 
-  private getFeatureExtent(
-    layer: VectorLayer<Vector>,
-    predicate: (feature: Feature) => boolean
-  ): Extent | undefined {
+  private getFeatureExtent(layer: VectorLayer<Vector>, predicate: (feature: Feature) => boolean): Extent | undefined {
     const source = layer.getSource();
     if (!source) {
       return undefined;
@@ -1475,7 +1746,13 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private isValidExtent(extent?: Extent): extent is Extent {
-    return !!extent && extent.length === 4 && extent.every((value) => Number.isFinite(value)) && extent[0] <= extent[2] && extent[1] <= extent[3];
+    return (
+      !!extent &&
+      extent.length === 4 &&
+      extent.every((value) => Number.isFinite(value)) &&
+      extent[0] <= extent[2] &&
+      extent[1] <= extent[3]
+    );
   }
 
   private maxRiesgoEnfermedad(lote?: ILoteMapa): number | null {
@@ -1529,11 +1806,13 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     // Redibujar establecimientos si hay datos
     if (this.establecimientos?.length > 0) {
       await this.redibujarEstablecimientos();
+      this.sincronizarSeleccionConDatos();
     }
 
     // Redibujar lotes si hay datos
     if (this.lotes?.length > 0) {
       await this.redibujarLotes();
+      this.sincronizarSeleccionConDatos();
 
       // Solo centrar automáticamente en primera visita
       if (this.isFirstVisit) {
@@ -1657,7 +1936,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       this.handleMapDragEnd();
       this.handleMapClick();
       setTimeout(() => {
-        this.moveEnd();
         // Una vez que el mapa está completamente inicializado, redibujar datos si están disponibles
         this.redibujarDatosSiEstaDisponible();
 
@@ -1837,8 +2115,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
   private handleMapDragEnd() {
     this.map?.on('moveend', () => {
-      this.moveEnd();
-
       // Actualizar tiles climáticos si están visibles y cambió el zoom
       this.handleZoomChange();
     });
@@ -1938,16 +2214,23 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       []) as any[];
     const minimas = pronosticos
       .slice(0, 5)
-      .map((pronostico) => this.numero(pronostico?.temperatura?.min ?? pronostico?.tempMin ?? pronostico?.temperaturaMinima))
+      .map((pronostico) =>
+        this.numero(pronostico?.temperatura?.min ?? pronostico?.tempMin ?? pronostico?.temperaturaMinima)
+      )
       .filter((valor): valor is number => valor !== null);
     return minimas.length ? Math.min(...minimas) : null;
   }
 
-  private minimaPronosticadaEstablecimiento(establecimiento?: IEstablecimiento, lotes: ILoteMapa[] = []): number | null {
+  private minimaPronosticadaEstablecimiento(
+    establecimiento?: IEstablecimiento,
+    lotes: ILoteMapa[] = []
+  ): number | null {
     const pronosticos = this.getPronosticosEstablecimiento(establecimiento);
     const minimasEstablecimiento = pronosticos
       .slice(0, 5)
-      .map((pronostico) => this.numero(pronostico?.temperatura?.min ?? pronostico?.tempMin ?? pronostico?.temperaturaMinima))
+      .map((pronostico) =>
+        this.numero(pronostico?.temperatura?.min ?? pronostico?.tempMin ?? pronostico?.temperaturaMinima)
+      )
       .filter((valor): valor is number => valor !== null);
 
     if (minimasEstablecimiento.length) {
@@ -1976,11 +2259,15 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private getCultivoKey(lote: ILoteMapa): string {
-    return String(lote.siembra?.semilla?.cultivo || '').trim().toLowerCase();
+    return String(lote.siembra?.semilla?.cultivo || '')
+      .trim()
+      .toLowerCase();
   }
 
   private getVariedadKey(lote: ILoteMapa): string {
-    return String(lote.siembra?.semilla?.variedad || lote.nombre || '').trim().toLowerCase();
+    return String(lote.siembra?.semilla?.variedad || lote.nombre || '')
+      .trim()
+      .toLowerCase();
   }
 
   private prepararGruposAmbientes(): void {
@@ -2090,7 +2377,10 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         text: feature.get('nombreMapa') ?? feature.get('nombre') ?? '',
         font: feature.get('esResumenAmbientes') ? '700 12px Lato, sans-serif' : '600 11px Lato, sans-serif',
         fill: new Fill({ color: this.helper.darkTheme ? '#f8fafc' : '#111827' }),
-        stroke: new Stroke({ color: this.helper.darkTheme ? 'rgba(15, 23, 42, 0.9)' : 'rgba(255, 255, 255, 0.95)', width: 4 }),
+        stroke: new Stroke({
+          color: this.helper.darkTheme ? 'rgba(15, 23, 42, 0.9)' : 'rgba(255, 255, 255, 0.95)',
+          width: 4,
+        }),
         overflow: false,
       }),
     });
@@ -2109,9 +2399,20 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         if (grupoAmbiente) {
           this.grupoAmbientesSeleccionado = grupoAmbiente;
           this.loteSeleccionado = undefined;
+          const establecimiento = this.buscarEstablecimiento(undefined, grupoAmbiente.establecimiento);
+          if (establecimiento) {
+            this.establecimientoSeleccionado = establecimiento;
+            this.guardarContextoEstablecimiento(establecimiento);
+          }
         } else {
           this.grupoAmbientesSeleccionado = undefined;
           this.loteSeleccionado = lote as ILoteMapa;
+          const establecimiento = this.getEstablecimientoDelLote(this.loteSeleccionado);
+          if (establecimiento) {
+            this.establecimientoSeleccionado = establecimiento;
+            this.guardarContextoEstablecimiento(establecimiento, this.loteSeleccionado);
+            this.selectEstablecimiento(establecimiento.nombre);
+          }
         }
         this.changeDetectorRef.detectChanges();
       });
@@ -2187,6 +2488,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         this.selectInteractionLotes?.getFeatures().clear();
         this.loteSeleccionado = undefined;
         this.grupoAmbientesSeleccionado = undefined;
+        if (this.establecimientoSeleccionado) {
+          this.guardarContextoEstablecimiento(this.establecimientoSeleccionado);
+        }
       }
     });
   }
@@ -2272,7 +2576,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     if (combinedExtent && combinedExtent[0] !== Infinity) {
       this.map?.getView()?.fit(combinedExtent, { padding: [50, 50, 50, 50], duration: 1000 });
     }
-
   }
 
   private async redibujarImagenes() {
@@ -2280,7 +2583,10 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.clearImagesNdvi();
     await Promise.all(
       this.reportesNDVI.map(async (reporte) => {
-        if (this.getSatelliteRasterUrl(reporte.lastReporte) && reporte.lastReporte?.metadataImagen?.geojson?.coordinates) {
+        if (
+          this.getSatelliteRasterUrl(reporte.lastReporte) &&
+          reporte.lastReporte?.metadataImagen?.geojson?.coordinates
+        ) {
           this.addNdviImage(reporte.lastReporte);
         }
       })
@@ -2452,6 +2758,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
       // SIEMPRE actualiza los poligonos en el mapa
       await this.redibujarLotes();
+      this.sincronizarSeleccionConDatos();
 
       // Solo centrar mapa automáticamente en primera visita
       if (this.isFirstVisit) {
@@ -2515,6 +2822,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
         // SIEMPRE redibuja los establecimientos en el mapa
         await this.redibujarEstablecimientos();
+        this.sincronizarSeleccionConDatos();
         // Solo intentar centrar el mapa automáticamente si es primera visita
         if (this.isFirstVisit) {
           this.centerMapOnFirstVisit();
@@ -2528,6 +2836,10 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   public detallesLote(lote?: ILoteMapa) {
     const seleccionado = lote || this.loteSeleccionado;
     if (!seleccionado?._id) return;
+    const establecimiento = this.getEstablecimientoDelLote(seleccionado);
+    if (establecimiento) {
+      this.guardarContextoEstablecimiento(establecimiento, seleccionado);
+    }
     this.paramsService.set('detallesLote', seleccionado);
     this.router.navigate(['lotes', 'detalles', seleccionado._id]);
   }
@@ -2764,9 +3076,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     // Al entrar al mapa despues del login, priorizamos lotes/cercania por sobre un estado viejo guardado.
     this.isFirstVisit = true;
 
-    // 🚀 OPTIMIZACIÓN: Obtener ubicación en background sin bloquear la carga inicial
-    this.obtenerUbicacionEnBackground();
-
     this.permiso = this.helper.permiso;
 
     // Inicializar sistema de capas de clima
@@ -2774,10 +3083,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // NO llamar initMap aquí - se llamará en ngAfterViewInit
 
-    this.activatedRoute.queryParams.subscribe(async (params) => {
+    this.activatedRoute.queryParams.subscribe(async () => {
       await this.cargaInicial();
-      // Establecer el establecimiento más cercano inmediatamente después de cargar los datos
-      this.moveEnd();
     });
     this.loading.set(false);
   }
