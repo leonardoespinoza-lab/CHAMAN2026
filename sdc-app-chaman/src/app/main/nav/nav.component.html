@@ -1,14 +1,14 @@
 @if (mostrarMenuModal()) {
-<p-dialog
-  [(visible)]="visible"
-  [modal]="true"
-  [dismissableMask]="true"
-  [draggable]="false"
-  [resizable]="false"
-  styleClass="chaman-nav-dialog"
-  [style]="{ width: 'min(940px, calc(100vw - 1.5rem))' }"
-  [contentStyle]="{ padding: '0' }"
->
+  <p-dialog
+    [(visible)]="visible"
+    [modal]="true"
+    [dismissableMask]="true"
+    [draggable]="false"
+    [resizable]="false"
+    styleClass="chaman-nav-dialog"
+    [style]="{ width: 'min(940px, calc(100vw - 1.5rem))' }"
+    [contentStyle]="{ padding: '0' }"
+  >
     <div class="chaman-nav-shell flex flex-col h-full">
       <!-- Logo y cerrar -->
       <div class="chaman-nav-header flex items-center justify-between">
@@ -127,6 +127,29 @@
                     <span class="font-medium">{{ 'Inicio' | translate }}</span>
                   </a>
                 </li>
+                <!-- Alertas -->
+                <li>
+                  <a
+                    pRipple
+                    class="nav-alert-link flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                    [routerLink]="['/alertas']"
+                    [routerLinkActive]="['active']"
+                    (click)="cerrarMenu($event)"
+                  >
+                    <svg
+                      [style.fill]="'var(--p-primary-color)'"
+                      [attr.width]="'24px'"
+                      [attr.height]="'24px'"
+                      class="mr-2"
+                    >
+                      <use [attr.xlink:href]="'icons/icons.svg#alertas'"></use>
+                    </svg>
+                    <span class="font-medium">{{ 'Alertas' | translate }}</span>
+                    @if (mostrarIndicadorAlertas()) {
+                      <span class="nav-alert-badge">{{ alertasActivasLabel() }}</span>
+                    }
+                  </a>
+                </li>
               }
               <!-- Menu Distribuidor -->
               @if (loginService.esDistribuidor) {
@@ -171,6 +194,29 @@
                     <span class="font-medium">{{ 'Mapa' | translate }}</span>
                   </a>
                 </li>
+                <!-- Alertas -->
+                <li>
+                  <a
+                    pRipple
+                    class="nav-alert-link flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                    [routerLink]="['/alertas']"
+                    [routerLinkActive]="['active']"
+                    (click)="cerrarMenu($event)"
+                  >
+                    <svg
+                      [style.fill]="'var(--p-primary-color)'"
+                      [attr.width]="'24px'"
+                      [attr.height]="'24px'"
+                      class="mr-2"
+                    >
+                      <use [attr.xlink:href]="'icons/icons.svg#alertas'"></use>
+                    </svg>
+                    <span class="font-medium">{{ 'Alertas' | translate }}</span>
+                    @if (mostrarIndicadorAlertas()) {
+                      <span class="nav-alert-badge">{{ alertasActivasLabel() }}</span>
+                    }
+                  </a>
+                </li>
               }
               <!-- Menu productor -->
               @if (loginService.esProductor) {
@@ -199,7 +245,7 @@
                 <li>
                   <a
                     pRipple
-                    class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                    class="nav-alert-link flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/alertas']"
                     [routerLinkActive]="['active']"
                     (click)="cerrarMenu($event)"
@@ -213,6 +259,9 @@
                       <use [attr.xlink:href]="'icons/icons.svg#alertas'"></use>
                     </svg>
                     <span class="font-medium">{{ 'Alertas' | translate }}</span>
+                    @if (mostrarIndicadorAlertas()) {
+                      <span class="nav-alert-badge">{{ alertasActivasLabel() }}</span>
+                    }
                   </a>
                 </li>
                 <!-- Establecimientos -->
@@ -283,7 +332,7 @@
                 <li>
                   <a
                     pRipple
-                    class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                    class="nav-alert-link flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
                     [routerLink]="['/alertas']"
                     [routerLinkActive]="['active']"
                     (click)="cerrarMenu($event)"
@@ -297,6 +346,9 @@
                       <use [attr.xlink:href]="'icons/icons.svg#alertas'"></use>
                     </svg>
                     <span class="font-medium">{{ 'Alertas' | translate }}</span>
+                    @if (mostrarIndicadorAlertas()) {
+                      <span class="nav-alert-badge">{{ alertasActivasLabel() }}</span>
+                    }
                   </a>
                 </li>
                 <!-- Lotes -->
@@ -493,7 +545,9 @@
                     </span>
                     <i class="pi pi-chevron-down ml-auto"></i>
                   </a>
-                  <ul class="list-none py-0 pl-4 pr-0 m-0 overflow-y-hidden transition-all duration-[400ms] ease-in-out">
+                  <ul
+                    class="list-none py-0 pl-4 pr-0 m-0 overflow-y-hidden transition-all duration-[400ms] ease-in-out"
+                  >
                     <!-- Establecimientos -->
                     @if (loginService.esProductor) {
                       <li>
@@ -731,7 +785,10 @@
         <div class="nav-account text-surface-700 dark:text-surface-100">
           <div class="nav-account-row">
             <div class="nav-account-identity">
-              <p-avatar [image]="logoAlcance() || user?.datosPersonales?.['foto'] || 'images/avatar.png'" shape="circle" />
+              <p-avatar
+                [image]="logoAlcance() || user?.datosPersonales?.['foto'] || 'images/avatar.png'"
+                shape="circle"
+              />
               @if (loginService.esProductor) {
                 <svg
                   [style.fill]="'var(--p-primary-color)'"
@@ -813,7 +870,7 @@
         </div>
       </div>
     </div>
-</p-dialog>
+  </p-dialog>
 }
 
 <!-- Boton volver -->
@@ -836,6 +893,11 @@
     aria-label="Abrir menu Chaman"
   >
     <img src="favicon/android-chrome-192x192.png" alt="" />
+    @if (mostrarIndicadorAlertas()) {
+      <span class="launcher-alert-badge" [pTooltip]="alertaTooltip()" tooltipPosition="left">
+        {{ alertasActivasLabel() }}
+      </span>
+    }
   </button>
 }
 

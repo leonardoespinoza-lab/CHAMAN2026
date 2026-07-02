@@ -63,6 +63,7 @@ a {
   display: grid;
   place-items: center;
   animation: chamanPulse 2.4s ease-in-out infinite;
+  overflow: visible;
 }
 
 .chaman-menu-launcher img {
@@ -87,9 +88,7 @@ a {
 }
 
 :host ::ng-deep .chaman-nav-dialog.p-dialog {
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.86), rgba(235, 252, 251, 0.58)),
-    rgba(255, 255, 255, 0.68);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.86), rgba(235, 252, 251, 0.58)), rgba(255, 255, 255, 0.68);
   border: 1px solid rgba(178, 206, 224, 0.5);
   border-radius: 24px;
   box-shadow:
@@ -119,8 +118,7 @@ a {
 }
 
 .chaman-nav-header {
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(236, 254, 255, 0.46));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(236, 254, 255, 0.46));
   border-bottom: 1px solid rgba(121, 150, 185, 0.2);
   gap: 1rem;
   padding: 1.1rem 1.35rem;
@@ -229,8 +227,7 @@ a {
 
 :host ::ng-deep .chaman-nav-dialog .nav-menu-scroll a {
   align-items: center;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(247, 252, 252, 0.52));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(247, 252, 252, 0.52));
   border: 1px solid rgba(122, 150, 184, 0.26);
   border-radius: 8px;
   box-shadow: 0 8px 22px rgba(24, 39, 75, 0.06);
@@ -298,9 +295,46 @@ a {
   font-weight: 800;
 }
 
+.nav-alert-link {
+  position: relative;
+}
+
+.nav-alert-badge,
+.launcher-alert-badge {
+  align-items: center;
+  background: linear-gradient(135deg, #ff3d3d, #d61515);
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  box-shadow:
+    0 10px 24px rgba(211, 18, 18, 0.34),
+    0 0 0 4px rgba(255, 44, 44, 0.14);
+  color: #fff;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 950;
+  justify-content: center;
+  line-height: 1;
+  min-width: 1.7rem;
+  padding: 0.28rem 0.48rem;
+}
+
+.nav-alert-badge {
+  position: absolute;
+  right: 0.72rem;
+  top: 0.62rem;
+}
+
+.launcher-alert-badge {
+  position: absolute;
+  right: -0.22rem;
+  top: -0.28rem;
+  min-width: 1.85rem;
+  min-height: 1.85rem;
+  padding: 0.28rem 0.5rem;
+}
+
 .chaman-nav-footer {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(246, 249, 251, 0.7));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(246, 249, 251, 0.7));
   border-top: 1px solid rgba(121, 150, 185, 0.18);
 }
 
@@ -329,8 +363,7 @@ a {
 .nav-icon-action,
 .nav-lang-button {
   align-items: center;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(238, 252, 252, 0.5));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(238, 252, 252, 0.5));
   border: 1px solid rgba(122, 150, 184, 0.24);
   border-radius: 999px;
   color: var(--p-surface-800);

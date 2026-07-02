@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { IPermiso, IUsuario } from 'modelos/src';
+import { IAlerta, IListado, IPermiso, IQueryParam, IUsuario } from 'modelos/src';
 import { ConfirmationService } from 'primeng/api';
 import { PrimeNG } from 'primeng/config';
 import { DialogService, DynamicDialogRef } from 'primeng/dynamicdialog';
@@ -10,6 +10,7 @@ import { filter } from 'rxjs/operators';
 import { PRIMENG_BR } from '../../../../public/i18n/primeng-br';
 import { PRIMENG_EN } from '../../../../public/i18n/primeng-en';
 import { PRIMENG_ES } from '../../../../public/i18n/primeng-es';
+import { AlertaService } from '../../auxiliares/http/alerta.service';
 import { LoginService } from '../../auxiliares/http/login.service';
 import { HelperService } from '../../auxiliares/servicios/helper';
 import { ListadosService } from '../../auxiliares/servicios/listados';
@@ -36,6 +37,10 @@ export class NavComponent implements OnInit, OnDestroy {
   public permisoSeleccionado?: IPermiso;
   public rutaActual = '';
   public routerEvents$?: Subscription;
+  public alertasActivasCount = 0;
+  public alertasCriticasCount = 0;
+  public cargandoIndicadorAlertas = false;
+  private alertasWs$?: Subscription;
 
   public languageOptions = [
     { code: 'es', label: 'Español', short: 'ES', icon: 'images/flags/es.jpg' },
@@ -51,6 +56,7 @@ export class NavComponent implements OnInit, OnDestroy {
     private confirmationService: ConfirmationService,
     private translate: TranslateService,
     private primeng: PrimeNG,
+    private alertasService: AlertaService,
     private router: Router,
     private listados: ListadosService,
     private webSocketService: WebSocketService,
@@ -61,7 +67,7 @@ export class NavComponent implements OnInit, OnDestroy {
   ) {}
 
   public logout(event: Event) {
-    try{
+    try {
       this.confirmationService.confirm({
         target: event.target as EventTarget,
         header: this.translate.instant('Por favor, confirme la acción'),
@@ -85,8 +91,8 @@ export class NavComponent implements OnInit, OnDestroy {
           this.router.navigateByUrl('auth');
         },
       });
-    }catch(e){
-      console.log(e)
+    } catch (e) {
+      console.log(e);
     }
   }
 
@@ -112,9 +118,7 @@ export class NavComponent implements OnInit, OnDestroy {
         }
       }
       this.permisoSeleccionado = this.helper.permiso || this.getPermisoPrincipal(this.permisos);
-      let indice = this.permisoSeleccionado
-        ? this.encontrarIndicePermiso(this.permisos, this.permisoSeleccionado)
-        : -1;
+      let indice = this.permisoSeleccionado ? this.encontrarIndicePermiso(this.permisos, this.permisoSeleccionado) : -1;
       if (indice < 0) {
         this.permisoSeleccionado = this.getPermisoPrincipal(this.permisos);
         if (this.permisoSeleccionado) {
@@ -124,6 +128,7 @@ export class NavComponent implements OnInit, OnDestroy {
       }
       this.helper.setNumeroPermiso(Math.max(indice, 0));
       this.checkPermisos();
+      this.actualizarIndicadorAlertas();
     });
     await this.listados.getLastValue('usuarioPropio', {});
   }
@@ -219,6 +224,7 @@ export class NavComponent implements OnInit, OnDestroy {
     this.helper.setNumeroPermiso(indice);
     this.checkPermisos();
     this.reload();
+    this.actualizarIndicadorAlertas();
     this.forcedRedirect();
     this.visible = false;
   }
@@ -234,6 +240,27 @@ export class NavComponent implements OnInit, OnDestroy {
   public mostrarMenuFlotante(): boolean {
     const ruta = this.getRutaLimpia();
     return !ruta.startsWith('/login') && !ruta.startsWith('/auth');
+  }
+
+  public mostrarIndicadorAlertas(): boolean {
+    return this.puedeVerAlertas() && this.alertasActivasCount > 0;
+  }
+
+  public alertasActivasLabel(): string {
+    if (this.alertasActivasCount > 99) {
+      return '99+';
+    }
+    return String(this.alertasActivasCount);
+  }
+
+  public alertaTooltip(): string {
+    if (!this.alertasActivasCount) {
+      return 'Sin alarmas activas';
+    }
+    const altas = this.alertasCriticasCount ? `, ${this.alertasCriticasCount} de alta prioridad` : '';
+    return `${this.alertasActivasCount} alarma${this.alertasActivasCount === 1 ? '' : 's'} activa${
+      this.alertasActivasCount === 1 ? '' : 's'
+    }${altas}`;
   }
 
   public abrirMenu(event?: Event): void {
@@ -352,19 +379,81 @@ export class NavComponent implements OnInit, OnDestroy {
     // window.location.reload();
   }
 
+  private async actualizarIndicadorAlertas(): Promise<void> {
+    if (!this.puedeVerAlertas()) {
+      this.alertasActivasCount = 0;
+      this.alertasCriticasCount = 0;
+      return;
+    }
+
+    this.cargandoIndicadorAlertas = true;
+    try {
+      const query: IQueryParam = {
+        filter: JSON.stringify({ activa: true }),
+        limit: 1,
+      };
+      const altasQuery: IQueryParam = {
+        filter: JSON.stringify({
+          activa: true,
+          severidad: { $in: ['alta', 'critica'] },
+        }),
+        limit: 1,
+      };
+      const [activas, altas] = await Promise.all([
+        this.alertasService.listar(query),
+        this.alertasService.listar(altasQuery),
+      ]);
+      this.alertasActivasCount = this.totalListado(activas);
+      this.alertasCriticasCount = this.totalListado(altas);
+    } catch (error) {
+      console.warn('No se pudo actualizar el indicador de alertas', error);
+      this.alertasActivasCount = 0;
+      this.alertasCriticasCount = 0;
+    } finally {
+      this.cargandoIndicadorAlertas = false;
+    }
+  }
+
+  private puedeVerAlertas(): boolean {
+    return (
+      this.loginService.esQuimica ||
+      this.loginService.esDistribuidor ||
+      this.loginService.esProductor ||
+      this.loginService.esEstablecimiento
+    );
+  }
+
+  private totalListado(listado?: IListado<IAlerta>): number {
+    return listado?.totalCount ?? listado?.datos?.length ?? 0;
+  }
+
+  private subscribeIndicadorAlertasWs(): void {
+    this.alertasWs$?.unsubscribe();
+    this.alertasWs$ = this.webSocketService.getMessage().subscribe((message) => {
+      if (message.paths?.includes('alertas')) {
+        this.actualizarIndicadorAlertas();
+      }
+    });
+  }
+
   /// HOOKS
   public async ngOnInit(): Promise<void> {
     this.rutaActual = this.router.url;
-    this.routerEvents$ = this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe((event) => {
-      this.rutaActual = (event as NavigationEnd).urlAfterRedirects;
-    });
+    this.routerEvents$ = this.router.events
+      .pipe(filter((event) => event instanceof NavigationEnd))
+      .subscribe((event) => {
+        this.rutaActual = (event as NavigationEnd).urlAfterRedirects;
+      });
     this.checkPermisos();
     await this.subscribeUsuarioPropio();
+    this.subscribeIndicadorAlertasWs();
+    await this.actualizarIndicadorAlertas();
     this.redirect();
   }
 
   public async ngOnDestroy(): Promise<void> {
     this.user$?.unsubscribe();
     this.routerEvents$?.unsubscribe();
+    this.alertasWs$?.unsubscribe();
   }
 }
