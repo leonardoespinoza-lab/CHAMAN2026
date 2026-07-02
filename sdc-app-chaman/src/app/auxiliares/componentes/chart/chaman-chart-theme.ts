@@ -1,13 +1,13 @@
 import Highcharts from 'highcharts';
 
 export const CHAMAN_CHART_COLORS = [
-  '#2ed6cf',
-  '#2f9df4',
-  '#ff5252',
-  '#98ddc7',
-  '#f5a623',
-  '#6bd16b',
-  '#8a7cf6',
+  '#667a35',
+  '#84a94a',
+  '#d4b25b',
+  '#8a5a36',
+  '#5f9fca',
+  '#c55347',
+  '#9d8f69',
 ];
 
 const CHAMAN_FONT =
@@ -15,24 +15,24 @@ const CHAMAN_FONT =
 
 const axisBase = (kind: 'x' | 'y') => ({
   crosshair: {
-    color: 'rgba(45, 214, 207, 0.18)',
+    color: 'rgba(102, 122, 53, 0.18)',
     dashStyle: 'Solid' as const,
     width: 1,
   },
-  gridLineColor: kind === 'y' ? 'rgba(44, 62, 80, 0.12)' : 'rgba(44, 62, 80, 0.08)',
+  gridLineColor: kind === 'y' ? 'rgba(63, 74, 54, 0.14)' : 'rgba(63, 74, 54, 0.08)',
   gridLineWidth: kind === 'y' ? 1 : 0,
-  lineColor: 'rgba(44, 62, 80, 0.22)',
-  tickColor: 'rgba(44, 62, 80, 0.18)',
+  lineColor: 'rgba(63, 74, 54, 0.22)',
+  tickColor: 'rgba(63, 74, 54, 0.18)',
   labels: {
     style: {
-      color: '#516179',
+      color: '#6f7768',
       fontSize: '12px',
       fontWeight: '600',
     },
   },
   title: {
     style: {
-      color: '#2f3d53',
+      color: '#3f4a36',
       fontSize: '13px',
       fontWeight: '700',
     },
@@ -69,7 +69,7 @@ const columnBase = {
   animation: { duration: 520 },
   borderRadius: 4,
   borderWidth: 0,
-  color: 'rgba(152, 221, 199, 0.82)',
+  color: 'rgba(132, 169, 74, 0.82)',
   groupPadding: 0.08,
   maxPointWidth: 24,
   pointPadding: 0.08,
@@ -119,14 +119,14 @@ export function applyChamanHighchartsDefaults(highcharts: typeof Highcharts = Hi
     credits: { enabled: false },
     title: {
       style: {
-        color: '#2d3a4f',
+        color: '#152013',
         fontSize: '16px',
         fontWeight: '700',
       },
     },
     subtitle: {
       style: {
-        color: '#60718a',
+        color: '#6f7768',
         fontSize: '13px',
       },
     },
@@ -149,18 +149,18 @@ export function applyChamanHighchartsDefaults(highcharts: typeof Highcharts = Hi
     },
     tooltip: {
       backgroundColor: 'rgba(255, 255, 255, 0.97)',
-      borderColor: 'rgba(45, 214, 207, 0.45)',
+      borderColor: 'rgba(102, 122, 53, 0.38)',
       borderRadius: 10,
       borderWidth: 1,
       shadow: {
-        color: 'rgba(31, 47, 67, 0.16)',
+        color: 'rgba(44, 56, 36, 0.16)',
         offsetX: 0,
         offsetY: 8,
         opacity: 0.38,
         width: 14,
       },
       style: {
-        color: '#26364a',
+        color: '#152013',
         fontSize: '13px',
       },
     },
@@ -210,7 +210,7 @@ export function withChamanChartTheme(options: Highcharts.Options): Highcharts.Op
     title: {
       ...options.title,
       style: {
-        color: '#2d3a4f',
+        color: '#152013',
         fontSize: '16px',
         fontWeight: '700',
         ...(options.title?.style || {}),
@@ -219,7 +219,7 @@ export function withChamanChartTheme(options: Highcharts.Options): Highcharts.Op
     subtitle: {
       ...options.subtitle,
       style: {
-        color: '#60718a',
+        color: '#6f7768',
         fontSize: '13px',
         ...(options.subtitle?.style || {}),
       } as any,
@@ -247,18 +247,18 @@ export function withChamanChartTheme(options: Highcharts.Options): Highcharts.Op
     tooltip: {
       ...tooltip,
       backgroundColor: 'rgba(255, 255, 255, 0.97)',
-      borderColor: 'rgba(45, 214, 207, 0.45)',
+      borderColor: 'rgba(102, 122, 53, 0.38)',
       borderRadius: 10,
       borderWidth: 1,
       shadow: {
-        color: 'rgba(31, 47, 67, 0.16)',
+        color: 'rgba(44, 56, 36, 0.16)',
         offsetX: 0,
         offsetY: 8,
         opacity: 0.38,
         width: 14,
       },
       style: {
-        color: '#26364a',
+        color: '#152013',
         fontSize: '13px',
         ...(tooltip.style || {}),
       },

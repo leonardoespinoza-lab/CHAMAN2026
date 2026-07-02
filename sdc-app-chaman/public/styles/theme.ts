@@ -1,9 +1,9 @@
 import { definePreset, palette } from '@primeuix/themes';
 import Material from '@primeuix/themes/material';
 
-const primary = palette('#32E2D7');
-const rojo = palette('#F44A4A');
-const amarillo = palette('#F3D740');
+const primary = palette('#667A35');
+const rojo = palette('#C55347');
+const amarillo = palette('#D4A33D');
 // const verde = palette('#B8F44A');
 const violeta = palette('#c084fc');
 
@@ -66,7 +66,7 @@ export const MyPreset = definePreset(Material, {
       none: '0',
       xs: '2px',
       sm: '4px',
-      md: '6px',
+      md: '8px',
       lg: '8px',
       xl: '12px',
     },
@@ -390,18 +390,18 @@ export const MyPreset = definePreset(Material, {
     colorScheme: {
       light: {
         surface: {
-          0: '#ffffff',
-          50: '#f8fafc',
-          100: '#f1f5f9',
-          200: '#e2e8f0',
-          300: '#cbd5e1',
-          400: '#94a3b8',
-          500: '#64748b',
-          600: '#475569',
-          700: '#334155',
-          800: '#1e293b',
-          900: '#0f172a',
-          950: '#020617',
+          0: '#fffdf7',
+          50: '#fbfaf4',
+          100: '#f6f4ed',
+          200: '#edeae1',
+          300: '#d9d4c8',
+          400: '#aaa598',
+          500: '#777368',
+          600: '#5f5a50',
+          700: '#464238',
+          800: '#2f2c25',
+          900: '#201e19',
+          950: '#12100c',
         },
         primary: {
           color: '{primary.500}',
@@ -441,10 +441,10 @@ export const MyPreset = definePreset(Material, {
           shadow: '0 0 #0000, 0 0 #0000, 0 1px 2px 0 rgba(18, 18, 23, 0.05)',
         },
         text: {
-          color: '{surface.700}',
-          hoverColor: '{surface.800}',
-          mutedColor: '{surface.500}',
-          hoverMutedColor: '{surface.600}',
+          color: '#152013',
+          hoverColor: '#0f170e',
+          mutedColor: '#6f7768',
+          hoverMutedColor: '#3f4a36',
         },
         content: {
           background: '{surface.0}',
