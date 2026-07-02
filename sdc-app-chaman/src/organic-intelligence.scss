@@ -1,54 +1,70 @@
 /*
- * Organic Intelligence: base visual de Chaman.
- * Capa global, sin tocar logica de negocio ni componentes especificos.
+ * Organic Intelligence / Spatial Glass.
+ * Capa visual global: materiales translucidos, mapa protagonista y acento sobrio.
  */
 
 :root {
-  --chaman-ink: #152013 !important;
-  --chaman-ink-soft: #3f4a36 !important;
-  --chaman-muted: #6f7768 !important;
-  --chaman-stone: #edeae1 !important;
-  --chaman-stone-2: #f6f4ed !important;
-  --chaman-paper: #fffdf7 !important;
-  --chaman-olive: #667a35 !important;
-  --chaman-olive-deep: #405224 !important;
-  --chaman-crop: #84a94a !important;
-  --chaman-wheat: #d4b25b !important;
-  --chaman-corn: #e4c75a !important;
-  --chaman-sky: #b9d8ea !important;
-  --chaman-earth: #8a5a36 !important;
-  --chaman-glass-bg: rgba(255, 253, 247, 0.76) !important;
-  --chaman-glass-bg-strong: rgba(255, 253, 247, 0.92) !important;
-  --chaman-glass-border: rgba(111, 119, 104, 0.2) !important;
-  --chaman-glass-shadow: 0 26px 70px rgba(38, 50, 31, 0.16) !important;
-  --chaman-glass-inner: 0 1px 0 rgba(255, 255, 255, 0.8) inset !important;
-  --chaman-surface-shadow: 0 14px 36px rgba(44, 56, 36, 0.08) !important;
-  --chaman-field-bg: rgba(255, 253, 247, 0.34) !important;
-  --chaman-field-bg-hover: rgba(255, 253, 247, 0.44) !important;
-  --chaman-field-bg-focus: rgba(255, 253, 247, 0.54) !important;
-  --chaman-field-border: rgba(255, 253, 247, 0.5) !important;
-  --chaman-field-border-strong: rgba(102, 122, 53, 0.36) !important;
-  --chaman-field-shadow: 0 14px 34px rgba(32, 42, 26, 0.08), 0 1px 0 rgba(255, 255, 255, 0.56) inset !important;
-  --chaman-card-bg: rgba(255, 253, 247, 0.52) !important;
-  --chaman-card-bg-soft: rgba(255, 253, 247, 0.4) !important;
-  --chaman-card-border: rgba(42, 55, 35, 0.13) !important;
-  --chaman-card-border-hover: rgba(102, 122, 53, 0.25) !important;
-  --chaman-card-shadow: 0 14px 34px rgba(35, 46, 29, 0.07), 0 1px 0 rgba(255, 255, 255, 0.66) inset !important;
-  --chaman-card-shadow-hover: 0 18px 42px rgba(35, 46, 29, 0.11), 0 1px 0 rgba(255, 255, 255, 0.76) inset !important;
-  --p-accent-color: var(--chaman-wheat) !important;
-  --p-info-color: #5f9fca !important;
-  --p-success-color: #6f9f42 !important;
-  --p-warning-color: #d4a33d !important;
-  --p-danger-color: #c55347 !important;
+  --chaman-ink: #071827 !important;
+  --chaman-ink-soft: #243149 !important;
+  --chaman-muted: #64748b !important;
+  --chaman-muted-soft: #8a9ab0 !important;
+  --chaman-paper: #fbfdff !important;
+  --chaman-stone: #edf4f7 !important;
+  --chaman-stone-2: #f6f9fb !important;
+  --chaman-aqua: #22cfc7 !important;
+  --chaman-aqua-deep: #0f766e !important;
+  --chaman-sky: #86c5ef !important;
+  --chaman-leaf: #3fbf7f !important;
+  --chaman-wheat: #e6b84f !important;
+  --chaman-earth: #9a6a45 !important;
+
+  /*
+   * Alias historicos. Quedan vivos para componentes viejos, pero ya no pintan
+   * la app de oliva.
+   */
+  --chaman-olive: var(--chaman-aqua-deep) !important;
+  --chaman-olive-deep: var(--chaman-ink-soft) !important;
+  --chaman-crop: var(--chaman-aqua) !important;
+
+  --chaman-glass-bg: rgba(255, 255, 255, 0.58) !important;
+  --chaman-glass-bg-strong: rgba(255, 255, 255, 0.78) !important;
+  --chaman-glass-bg-subtle: rgba(248, 251, 253, 0.46) !important;
+  --chaman-glass-border: rgba(139, 163, 184, 0.26) !important;
+  --chaman-glass-border-strong: rgba(255, 255, 255, 0.68) !important;
+  --chaman-glass-shadow: 0 28px 80px rgba(15, 23, 42, 0.13) !important;
+  --chaman-glass-inner: 0 1px 0 rgba(255, 255, 255, 0.84) inset !important;
+  --chaman-surface-shadow: 0 16px 38px rgba(15, 23, 42, 0.07) !important;
+
+  --chaman-field-bg: rgba(248, 251, 255, 0.48) !important;
+  --chaman-field-bg-hover: rgba(255, 255, 255, 0.62) !important;
+  --chaman-field-bg-focus: rgba(255, 255, 255, 0.76) !important;
+  --chaman-field-border: rgba(139, 163, 184, 0.28) !important;
+  --chaman-field-border-strong: rgba(34, 207, 199, 0.44) !important;
+  --chaman-field-shadow: 0 10px 24px rgba(15, 23, 42, 0.045), var(--chaman-glass-inner) !important;
+
+  --chaman-card-bg: rgba(255, 255, 255, 0.52) !important;
+  --chaman-card-bg-soft: rgba(248, 251, 253, 0.42) !important;
+  --chaman-card-border: rgba(139, 163, 184, 0.24) !important;
+  --chaman-card-border-hover: rgba(34, 207, 199, 0.36) !important;
+  --chaman-card-shadow: 0 14px 32px rgba(15, 23, 42, 0.055), var(--chaman-glass-inner) !important;
+  --chaman-card-shadow-hover: 0 18px 44px rgba(15, 23, 42, 0.09), var(--chaman-glass-inner) !important;
+
+  --p-primary-color: var(--chaman-aqua) !important;
+  --p-primary-contrast-color: #052427 !important;
+  --p-accent-color: var(--chaman-sky) !important;
+  --p-info-color: #38a9e8 !important;
+  --p-success-color: #36b56b !important;
+  --p-warning-color: #e4a63a !important;
+  --p-danger-color: #e05246 !important;
   --p-text-color: var(--chaman-ink) !important;
   --p-text-muted-color: var(--chaman-muted) !important;
 }
 
 html {
   background:
-    radial-gradient(circle at 12% 8%, rgba(228, 199, 90, 0.12), transparent 32%),
-    radial-gradient(circle at 88% 0%, rgba(185, 216, 234, 0.2), transparent 34%),
-    linear-gradient(135deg, #fbfaf4 0%, #f4f1e8 52%, #eef4eb 100%);
+    radial-gradient(circle at 12% -12%, rgba(34, 207, 199, 0.13), transparent 34%),
+    radial-gradient(circle at 96% 0%, rgba(134, 197, 239, 0.16), transparent 38%),
+    linear-gradient(135deg, #f8fbfc 0%, #f2f6f8 48%, #eef4f7 100%);
 }
 
 body {
@@ -67,7 +83,7 @@ body {
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--chaman-wheat) 42%, white);
+  background: rgba(34, 207, 199, 0.28);
   color: var(--chaman-ink);
 }
 
@@ -86,12 +102,12 @@ body {
 .p-stepper,
 .p-message {
   background:
-    linear-gradient(145deg, rgba(255, 253, 247, 0.64), rgba(246, 244, 237, 0.34)),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(248, 251, 253, 0.38)),
     var(--chaman-card-bg) !important;
   border: 1px solid var(--chaman-card-border) !important;
   box-shadow: var(--chaman-card-shadow) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(126%);
-  backdrop-filter: blur(18px) saturate(126%);
+  -webkit-backdrop-filter: blur(22px) saturate(126%);
+  backdrop-filter: blur(22px) saturate(126%);
 }
 
 .custom-card,
@@ -116,28 +132,32 @@ html body .wind-forecast article:hover {
 
 .p-dialog {
   background:
-    radial-gradient(circle at 18% 0%, rgba(228, 199, 90, 0.18), transparent 32%),
-    radial-gradient(circle at 92% 12%, rgba(185, 216, 234, 0.18), transparent 34%),
-    linear-gradient(145deg, rgba(255, 253, 247, 0.86), rgba(246, 244, 237, 0.68)),
+    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.62), transparent 38%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(242, 248, 251, 0.48)),
     var(--chaman-glass-bg) !important;
-  border-color: rgba(255, 255, 255, 0.54) !important;
-  box-shadow:
-    0 30px 90px rgba(32, 42, 26, 0.24),
-    var(--chaman-glass-inner) !important;
+  border: 1px solid var(--chaman-glass-border-strong) !important;
+  box-shadow: var(--chaman-glass-shadow), var(--chaman-glass-inner) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(140%);
+  backdrop-filter: blur(30px) saturate(140%);
 }
 
 .p-drawer {
   background:
-    radial-gradient(circle at 10% 0%, rgba(228, 199, 90, 0.14), transparent 32%),
-    linear-gradient(160deg, rgba(255, 253, 247, 0.92), rgba(246, 244, 237, 0.76)),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.78), rgba(244, 250, 252, 0.58)),
     var(--chaman-glass-bg-strong) !important;
+  border: 1px solid var(--chaman-glass-border) !important;
+  box-shadow: var(--chaman-glass-shadow), var(--chaman-glass-inner) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(138%);
+  backdrop-filter: blur(30px) saturate(138%);
 }
 
 .p-dialog-mask,
 .p-drawer-mask,
 .p-component-overlay,
 .p-overlay-mask {
-  background: rgba(21, 32, 19, 0.28) !important;
+  background: rgba(7, 24, 39, 0.24) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(112%);
+  backdrop-filter: blur(8px) saturate(112%);
 }
 
 .p-button {
@@ -151,20 +171,21 @@ html body .wind-forecast article:hover {
 }
 
 .p-button:not(.p-button-text):not(.p-button-outlined) {
-  background: linear-gradient(135deg, var(--chaman-olive), var(--chaman-crop)) !important;
-  border-color: color-mix(in srgb, var(--chaman-olive) 72%, black) !important;
-  color: #fffdf7 !important;
-  box-shadow: 0 14px 30px rgba(79, 102, 43, 0.18);
+  background: linear-gradient(135deg, #2ddbd2, #8ee8d3) !important;
+  border-color: rgba(11, 118, 110, 0.24) !important;
+  color: #062527 !important;
+  box-shadow: 0 14px 30px rgba(34, 207, 199, 0.17), var(--chaman-glass-inner);
 }
 
 .p-button:not(.p-button-text):not(.p-button-outlined):hover {
-  box-shadow: 0 18px 40px rgba(79, 102, 43, 0.24);
+  box-shadow: 0 18px 40px rgba(34, 207, 199, 0.24), var(--chaman-glass-inner);
   transform: translateY(-1px);
 }
 
 .p-button.p-button-outlined,
 .p-button.p-button-text {
-  color: var(--chaman-olive-deep) !important;
+  color: var(--chaman-aqua-deep) !important;
+  border-color: rgba(139, 163, 184, 0.36) !important;
 }
 
 html body .p-inputtext,
@@ -187,14 +208,14 @@ html body input[type="datetime-local"],
 html body textarea,
 html body select {
   background:
-    linear-gradient(145deg, rgba(255, 253, 247, 0.38), rgba(237, 234, 225, 0.2)),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.54), rgba(246, 250, 252, 0.34)),
     var(--chaman-field-bg) !important;
   border-color: var(--chaman-field-border) !important;
   border-radius: 8px !important;
   color: var(--chaman-ink) !important;
   box-shadow: var(--chaman-field-shadow) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(132%);
-  backdrop-filter: blur(14px) saturate(132%);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
   transition:
     background 0.18s ease,
     border-color 0.18s ease,
@@ -218,9 +239,9 @@ html body input[type="datetime-local"]:hover,
 html body textarea:hover,
 html body select:hover {
   background:
-    linear-gradient(145deg, rgba(255, 253, 247, 0.46), rgba(237, 234, 225, 0.24)),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.68), rgba(246, 250, 252, 0.42)),
     var(--chaman-field-bg-hover) !important;
-  border-color: rgba(255, 253, 247, 0.64) !important;
+  border-color: rgba(34, 207, 199, 0.3) !important;
 }
 
 html body .p-inputtext:enabled:focus,
@@ -239,13 +260,13 @@ html body select:enabled:focus,
 html body .p-select:not(.p-disabled).p-focus,
 html body .p-multiselect:not(.p-disabled).p-focus {
   background:
-    linear-gradient(145deg, rgba(255, 253, 247, 0.58), rgba(237, 234, 225, 0.3)),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(246, 250, 252, 0.52)),
     var(--chaman-field-bg-focus) !important;
   border-color: var(--chaman-field-border-strong) !important;
   box-shadow:
-    0 0 0 3px rgba(102, 122, 53, 0.16),
-    0 16px 38px rgba(32, 42, 26, 0.1),
-    0 1px 0 rgba(255, 255, 255, 0.64) inset !important;
+    0 0 0 3px rgba(34, 207, 199, 0.13),
+    0 16px 38px rgba(15, 23, 42, 0.08),
+    var(--chaman-glass-inner) !important;
 }
 
 html body .p-select-overlay,
@@ -253,21 +274,22 @@ html body .p-multiselect-overlay,
 html body .p-autocomplete-overlay,
 html body .p-datepicker-panel,
 html body .p-password-overlay,
-html body .p-dropdown-panel {
+html body .p-dropdown-panel,
+html body .p-popover {
   background:
-    radial-gradient(circle at 18% 0%, rgba(228, 199, 90, 0.14), transparent 34%),
-    linear-gradient(145deg, rgba(255, 253, 247, 0.84), rgba(246, 244, 237, 0.66)),
-    rgba(255, 253, 247, 0.72) !important;
-  border: 1px solid rgba(255, 253, 247, 0.58) !important;
-  box-shadow: 0 24px 70px rgba(32, 42, 26, 0.18), var(--chaman-glass-inner) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(136%);
-  backdrop-filter: blur(22px) saturate(136%);
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.66), transparent 34%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(244, 250, 252, 0.6)),
+    var(--chaman-glass-bg-strong) !important;
+  border: 1px solid var(--chaman-glass-border-strong) !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.16), var(--chaman-glass-inner) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(136%);
+  backdrop-filter: blur(24px) saturate(136%);
 }
 
 html body .p-select-label,
 html body .p-multiselect-label,
 html body .p-placeholder {
-  color: color-mix(in srgb, var(--chaman-ink-soft) 80%, transparent) !important;
+  color: color-mix(in srgb, var(--chaman-ink-soft) 78%, transparent) !important;
 }
 
 .p-floatlabel label,
@@ -276,21 +298,21 @@ html body .p-placeholder {
 }
 
 .p-datatable .p-datatable-thead > tr > th {
-  background: rgba(242, 239, 229, 0.86) !important;
+  background: rgba(244, 249, 251, 0.68) !important;
   color: var(--chaman-ink-soft) !important;
   font-weight: 850 !important;
 }
 
 .p-datatable .p-datatable-tbody > tr {
-  background: rgba(255, 253, 247, 0.72) !important;
+  background: rgba(255, 255, 255, 0.56) !important;
 }
 
 .p-datatable .p-datatable-tbody > tr:nth-child(even) {
-  background: rgba(246, 244, 237, 0.72) !important;
+  background: rgba(247, 250, 252, 0.56) !important;
 }
 
 .p-datatable .p-datatable-tbody > tr:hover {
-  background: rgba(237, 232, 211, 0.74) !important;
+  background: rgba(232, 250, 249, 0.68) !important;
 }
 
 .p-paginator {
@@ -302,8 +324,8 @@ html body .p-placeholder {
 .p-select-option.p-select-option-selected,
 .p-multiselect-option.p-multiselect-option-selected,
 .p-tabs .p-tab-active {
-  background: color-mix(in srgb, var(--chaman-olive) 12%, white) !important;
-  color: var(--chaman-olive-deep) !important;
+  background: rgba(34, 207, 199, 0.11) !important;
+  color: var(--chaman-aqua-deep) !important;
 }
 
 .p-tag,
@@ -323,8 +345,7 @@ html body .water-footprint-card,
 html body .central-card,
 html body .camera-card {
   background:
-    radial-gradient(circle at 12% 0%, rgba(228, 199, 90, 0.08), transparent 30%),
-    linear-gradient(145deg, rgba(255, 253, 247, 0.58), rgba(242, 239, 229, 0.34)),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.58), rgba(245, 250, 252, 0.36)),
     var(--chaman-card-bg) !important;
   border: 1px solid var(--chaman-card-border) !important;
   box-shadow: var(--chaman-card-shadow) !important;
@@ -346,7 +367,7 @@ html body .wind-decision,
 html body .wind-metrics article,
 html body .wind-forecast article {
   background:
-    linear-gradient(145deg, rgba(255, 253, 247, 0.48), rgba(237, 234, 225, 0.24)),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.5), rgba(247, 250, 252, 0.32)),
     var(--chaman-card-bg-soft) !important;
   border: 1px solid var(--chaman-card-border) !important;
   box-shadow: var(--chaman-card-shadow) !important;
@@ -355,8 +376,8 @@ html body .wind-forecast article {
 html body .stage-now-panel,
 html body .frio-summary {
   background:
-    linear-gradient(145deg, rgba(255, 253, 247, 0.62), rgba(232, 226, 205, 0.3)),
-    rgba(255, 253, 247, 0.44) !important;
+    linear-gradient(145deg, rgba(255, 255, 255, 0.68), rgba(232, 250, 249, 0.34)),
+    rgba(255, 255, 255, 0.48) !important;
 }
 
 html body .stage-step,
@@ -377,47 +398,47 @@ html body .detail-days article {
 
 html body .stage-step.done,
 html body .frio-metrics article.ok {
-  border-color: rgba(111, 147, 72, 0.22) !important;
+  border-color: rgba(54, 181, 107, 0.24) !important;
 }
 
 html body .stage-step.current,
 html body .frio-metrics article.info,
 html body .irrigation-days span.should-water {
-  border-color: rgba(102, 122, 53, 0.25) !important;
+  border-color: rgba(34, 207, 199, 0.34) !important;
 }
 
 html body .frio-metrics article.warn {
-  border-color: rgba(212, 163, 61, 0.26) !important;
+  border-color: rgba(228, 166, 58, 0.28) !important;
 }
 
 html body .frio-meter,
 html body .progress-track,
 html body .step-progress {
-  background: rgba(42, 55, 35, 0.09) !important;
-  border: 1px solid rgba(42, 55, 35, 0.12) !important;
+  background: rgba(139, 163, 184, 0.13) !important;
+  border: 1px solid rgba(139, 163, 184, 0.16) !important;
 }
 
 html body .frio-meter i,
 html body .progress-track span,
 html body .step-progress span {
-  background: linear-gradient(90deg, #7f8f52, #8fb05a) !important;
+  background: linear-gradient(90deg, #2ddbd2, #6ee7b7) !important;
 }
 
 html body .wind-icon,
 html body .central-icon,
 html body .water-footprint-icon {
   background:
-    linear-gradient(145deg, rgba(255, 253, 247, 0.62), rgba(237, 234, 225, 0.28)),
-    rgba(255, 253, 247, 0.44) !important;
-  border: 1px solid rgba(102, 122, 53, 0.18) !important;
-  color: var(--chaman-olive-deep) !important;
-  box-shadow: 0 10px 24px rgba(35, 46, 29, 0.08), 0 1px 0 rgba(255, 255, 255, 0.66) inset !important;
+    linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(232, 250, 249, 0.32)),
+    rgba(255, 255, 255, 0.46) !important;
+  border: 1px solid rgba(34, 207, 199, 0.2) !important;
+  color: var(--chaman-aqua-deep) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06), var(--chaman-glass-inner) !important;
 }
 
 .titulo-card,
 .eyebrow,
 .weather-eyebrow {
-  color: var(--chaman-olive) !important;
+  color: var(--chaman-aqua-deep) !important;
 }
 
 .list-view-container,
@@ -428,12 +449,12 @@ html body .water-footprint-icon {
 
 .lote-view-container,
 .list-view-container {
-  scrollbar-color: rgba(111, 119, 104, 0.35) transparent;
+  scrollbar-color: rgba(139, 163, 184, 0.35) transparent;
 }
 
 .highcharts-tooltip-box {
-  fill: rgba(255, 253, 247, 0.96) !important;
-  stroke: rgba(102, 122, 53, 0.34) !important;
+  fill: rgba(255, 255, 255, 0.96) !important;
+  stroke: rgba(34, 207, 199, 0.32) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

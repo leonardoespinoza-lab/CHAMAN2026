@@ -16,18 +16,18 @@ html {
 }
 
 :root {
-  --p-accent-color: #b8f44a;
+  --p-accent-color: #86c5ef;
   --p-info-color: var(--p-sky-500);
   --p-help-color: var(--p-purple-500);
   --p-success-color: var(--p-green-500);
   --p-warning-color: var(--p-orange-500);
   --p-danger-color: var(--p-red-500);
   --menu-offset: 4em;
-  --chaman-glass-bg: rgba(255, 255, 255, 0.74);
-  --chaman-glass-bg-strong: rgba(255, 255, 255, 0.9);
-  --chaman-glass-border: rgba(178, 206, 224, 0.5);
-  --chaman-glass-shadow: 0 28px 90px rgba(15, 23, 42, 0.24);
-  --chaman-glass-inner: 0 1px 0 rgba(255, 255, 255, 0.72) inset;
+  --chaman-glass-bg: rgba(255, 255, 255, 0.58);
+  --chaman-glass-bg-strong: rgba(255, 255, 255, 0.78);
+  --chaman-glass-border: rgba(139, 163, 184, 0.26);
+  --chaman-glass-shadow: 0 28px 80px rgba(15, 23, 42, 0.13);
+  --chaman-glass-inner: 0 1px 0 rgba(255, 255, 255, 0.84) inset;
   --chaman-readable-text: 1.05rem;
   --chaman-readable-label: 0.96rem;
   --chaman-readable-small: 0.92rem;
@@ -44,7 +44,8 @@ html {
 
 .p-dialog {
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(238, 252, 252, 0.68)),
+    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.62), transparent 38%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(242, 248, 251, 0.48)),
     var(--chaman-glass-bg) !important;
   border: 1px solid var(--chaman-glass-border) !important;
   border-radius: 22px !important;
@@ -85,13 +86,14 @@ html {
 .p-confirmdialog,
 .p-dynamic-dialog {
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(238, 252, 252, 0.72)),
+    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.62), transparent 38%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.74), rgba(242, 248, 251, 0.54)),
     var(--chaman-glass-bg-strong) !important;
 }
 
 .p-drawer {
   background:
-    linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(240, 253, 252, 0.78)),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.78), rgba(244, 250, 252, 0.58)),
     var(--chaman-glass-bg-strong) !important;
   border: 1px solid var(--chaman-glass-border) !important;
   box-shadow: var(--chaman-glass-shadow), var(--chaman-glass-inner) !important;
