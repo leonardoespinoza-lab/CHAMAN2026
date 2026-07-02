@@ -965,6 +965,7 @@ class NDVIWorker:
         metadata = await self._run_in_executor(
             obtener_metadata_png_con_polygon, ndvi_data["ndvi_recorte"], polygon
         )
+        metadata["loteId"] = lote_id
         metadata["renderVersion"] = SATELLITE_RENDER_VERSION
         metadata["renderStrategy"] = "fixed-index-scale-quality-masked"
         metadata["qualityMask"] = ndvi_data.get("quality_mask", {})

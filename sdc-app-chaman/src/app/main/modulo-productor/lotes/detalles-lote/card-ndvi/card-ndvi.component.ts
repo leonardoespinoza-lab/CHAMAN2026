@@ -1,5 +1,15 @@
 import { CommonModule } from '@angular/common';
-import { AfterViewInit, Component, ElementRef, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  Input,
+  OnChanges,
+  OnDestroy,
+  OnInit,
+  SimpleChanges,
+  ViewChild,
+} from '@angular/core';
 import { Feature, Map, View } from 'ol';
 import { defaults as defaultControls } from 'ol/control';
 import { defaults as defaultInteractions } from 'ol/interaction';
@@ -77,7 +87,7 @@ interface ContextoAgronomicoSatelital {
   templateUrl: './card-ndvi.component.html',
   styleUrl: './card-ndvi.component.scss',
 })
-export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
+export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit {
   @Input() public lote?: ILote;
   @Input() public siembra?: ISiembra;
   @ViewChild('satelliteMapTarget') private satelliteMapTarget?: ElementRef<HTMLElement>;
@@ -99,8 +109,10 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   private satelliteLoteLayer?: VectorLayer<VectorSource>;
   private satelliteRasterLayer?: ImageLayer<Static>;
   public satelliteRasterVisible = false;
+  public satelliteRasterBlockedReason = '';
   private readonly ventanaPreferenciaSentinelDias = 6;
   private seleccionManual = false;
+  private ultimoLoteListado?: string;
 
   constructor(
     public helper: HelperService,
@@ -111,6 +123,10 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   ) {}
 
   public onSelect(reporte: IReporteNDVI): void {
+    if (!this.reporteValidoParaLote(reporte)) {
+      this.helper.notifWarn('La escena satelital no pertenece al lote actual y fue bloqueada.');
+      return;
+    }
     this.seleccionManual = true;
     this.reporte = reporte;
     this.fecha = reporte.fechaDeLaImagen ? new Date(reporte.fechaDeLaImagen) : this.hoy;
@@ -320,14 +336,37 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   public get correccionVisualLegadoActiva(): boolean {
-    return !!this.reporte?.fechaDeLaImagen && !this.renderSatelitalConfiable && this.valorCapaActiva != null;
+    return (
+      this.reporteValidoParaLote(this.reporte) &&
+      !!this.reporte?.fechaDeLaImagen &&
+      !this.renderSatelitalConfiable &&
+      this.valorCapaActiva != null
+    );
   }
 
   public get renderSatelitalConfiable(): boolean {
+    if (!this.reporteValidoParaLote(this.reporte)) {
+      return false;
+    }
+    const metadataLoteId = (this.reporte?.metadataImagen as any)?.loteId;
+    if (metadataLoteId && String(metadataLoteId) !== String(this.lote?._id || '')) {
+      return false;
+    }
     const metadata = this.reporte?.metadataImagen as any;
     const qa = this.qaCapaActiva;
     const coverage = Number(qa?.validCoveragePct ?? metadata?.qualityMask?.validCoveragePct ?? 0);
     return metadata?.renderVersion === 'fixed-index-v3' && qa?.status === 'ok' && coverage >= 3;
+  }
+
+  public get satelliteRasterWarningTitle(): string {
+    return this.satelliteRasterBlockedReason ? 'Raster bloqueado' : 'Raster no disponible';
+  }
+
+  public get satelliteRasterWarningMessage(): string {
+    return (
+      this.satelliteRasterBlockedReason ||
+      'Esta capa necesita una escena satelital procesada pixel a pixel para este lote.'
+    );
   }
 
   public get qaCapaActiva(): any {
@@ -365,7 +404,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const polygon = new Polygon([ring.map((coord) => fromLonLat(coord))]);
     const polygonExtent = polygon.getExtent();
-    const imageExtent = this.extentImagenSatelital(polygonExtent);
+    const imageExtent = this.extentImagenSatelital();
     this.satelliteRasterVisible = this.rasterSatelitalSeguro(imageExtent, polygonExtent);
 
     const feature = new Feature({ geometry: polygon });
@@ -446,16 +485,87 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
     this.satelliteMap.addLayer(this.satelliteRasterLayer);
   }
 
-  private extentImagenSatelital(fallback: Extent): Extent {
-    return fallback;
+  private extentImagenSatelital(): Extent | undefined {
+    return this.extentDesdeGeojson((this.reporte?.metadataImagen as any)?.geojson);
   }
 
-  private rasterSatelitalSeguro(extent: Extent, fallbackExtent: Extent): boolean {
-    if (!this.imagenCapaActiva || extent.some((value) => !Number.isFinite(value))) {
+  private rasterSatelitalSeguro(extent: Extent | undefined, loteExtent: Extent): boolean {
+    this.satelliteRasterBlockedReason = '';
+    if (!this.reporteValidoParaLote(this.reporte)) {
+      this.satelliteRasterBlockedReason = 'La escena recibida no coincide con el lote actual.';
       return false;
     }
 
-    return fallbackExtent.every((value) => Number.isFinite(value));
+    const metadataLoteId = (this.reporte?.metadataImagen as any)?.loteId;
+    if (metadataLoteId && String(metadataLoteId) !== String(this.lote?._id || '')) {
+      this.satelliteRasterBlockedReason = 'La metadata de la escena pertenece a otro lote.';
+      return false;
+    }
+
+    if (!this.imagenCapaActiva) {
+      this.satelliteRasterBlockedReason = 'La capa no tiene imagen raster disponible.';
+      return false;
+    }
+
+    if (!this.renderSatelitalConfiable) {
+      this.satelliteRasterBlockedReason =
+        'La escena no tiene auditoria visual y QA completo. Se bloquea para evitar lecturas cruzadas.';
+      return false;
+    }
+
+    if (!extent || !this.extentFinito(extent) || !this.extentFinito(loteExtent)) {
+      this.satelliteRasterBlockedReason = 'La metadata geoespacial de la escena no es valida.';
+      return false;
+    }
+
+    const loteArea = this.extentArea(loteExtent);
+    const imageArea = this.extentArea(extent);
+    const overlap = this.extentIntersectionArea(extent, loteExtent);
+    if (loteArea <= 0 || imageArea <= 0 || overlap <= 0) {
+      this.satelliteRasterBlockedReason = 'La imagen procesada no se superpone con el lote.';
+      return false;
+    }
+
+    const overlapRatio = overlap / loteArea;
+    const areaRatio = imageArea / loteArea;
+    if (overlapRatio < 0.65 || areaRatio < 0.35 || areaRatio > 3.5) {
+      this.satelliteRasterBlockedReason = 'La geometria de la imagen no coincide con el marco del lote.';
+      return false;
+    }
+
+    return true;
+  }
+
+  private reporteValidoParaLote(reporte?: IReporteNDVI, idLote = this.lote?._id): boolean {
+    if (!reporte || !idLote) {
+      return false;
+    }
+    return String((reporte as any).idLote || '') === String(idLote);
+  }
+
+  private extentDesdeGeojson(geojson: any): Extent | undefined {
+    const coordinates = this.coordenadasDesdeGeojson(geojson);
+    if (coordinates.length < 3) {
+      return undefined;
+    }
+    const projected = coordinates.map((coord) => fromLonLat(coord));
+    const xs = projected.map((coord) => coord[0]);
+    const ys = projected.map((coord) => coord[1]);
+    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  }
+
+  private extentFinito(extent: Extent): boolean {
+    return extent.every((value) => Number.isFinite(value)) && extent[2] > extent[0] && extent[3] > extent[1];
+  }
+
+  private extentArea(extent: Extent): number {
+    return Math.max(0, extent[2] - extent[0]) * Math.max(0, extent[3] - extent[1]);
+  }
+
+  private extentIntersectionArea(a: Extent, b: Extent): number {
+    const width = Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0]));
+    const height = Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+    return width * height;
   }
 
   private estiloMapaSatelital(): Style[] {
@@ -935,8 +1045,18 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private async listarNDVIs(): Promise<void> {
+    const idLote = this.lote?._id;
+    if (!idLote) {
+      this.ndvi$?.unsubscribe();
+      this.ndvis = [];
+      this.reporte = undefined;
+      this.satelliteRasterVisible = false;
+      this.satelliteRasterBlockedReason = 'Esperando identificador del lote para consultar escenas.';
+      return;
+    }
+
     const filter: IFilter<IReporteNDVI> = {
-      idLote: this.lote?._id,
+      idLote,
       fechaCreacion: {
         $gte: this.fechaMinima.toISOString(),
       },
@@ -949,7 +1069,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.ndvi$?.unsubscribe();
     this.ndvi$ = this.listados.subscribe<IListado<IReporteNDVI>>('reportendvis', query).subscribe((data) => {
-      this.ndvis = data.datos;
+      this.ndvis = (data.datos || []).filter((reporte) => this.reporteValidoParaLote(reporte, idLote));
       this.calcularFechaMinima();
       if (this.ndvis.length > 0) {
         const estaEnLista = this.reporte && this.ndvis.some((n) => n._id === this.reporte!._id);
@@ -964,6 +1084,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
       this.programarRenderMapaSatelital();
     });
 
+    this.ultimoLoteListado = String(idLote);
     await this.listados.getLastValue('reportendvis', query);
   }
 
@@ -1139,6 +1260,25 @@ export class CardNDVIComponent implements OnInit, OnDestroy, AfterViewInit {
   async ngOnInit(): Promise<void> {
     this.calcularFechaMinima();
     await this.listarNDVIs();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (!changes['lote']) {
+      return;
+    }
+
+    const idLote = this.lote?._id ? String(this.lote._id) : undefined;
+    if (idLote === this.ultimoLoteListado) {
+      return;
+    }
+
+    this.seleccionManual = false;
+    this.reporte = undefined;
+    this.ndvis = [];
+    this.satelliteRasterVisible = false;
+    this.calcularFechaMinima();
+    void this.listarNDVIs();
+    this.programarRenderMapaSatelital();
   }
 
   ngAfterViewInit(): void {

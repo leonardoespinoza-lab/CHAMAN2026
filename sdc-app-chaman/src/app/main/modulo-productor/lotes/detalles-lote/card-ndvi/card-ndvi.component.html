@@ -84,8 +84,8 @@
           </div>
           @if (!satelliteRasterVisible) {
             <div class="satellite-raster-warning">
-              <strong>Raster no disponible</strong>
-              <span>Esta capa necesita una escena satelital procesada pixel a pixel.</span>
+              <strong>{{ satelliteRasterWarningTitle }}</strong>
+              <span>{{ satelliteRasterWarningMessage }}</span>
             </div>
           }
           @if (satelliteRasterVisible && leyendaCapaActiva.length) {
