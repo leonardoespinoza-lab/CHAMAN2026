@@ -61,9 +61,7 @@ export class AppComponent {
   }
 
   private setInitialTheme() {
-    if (this.helper.darkTheme) {
-      this.helper.toggleTheme();
-    }
+    this.helper.forceLightTheme();
   }
 
   private async lockOrientation() {

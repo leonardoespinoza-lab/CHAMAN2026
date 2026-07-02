@@ -762,10 +762,6 @@
         <div class="nav-quick-actions">
           <span class="nav-preferences-label">Preferencias</span>
           <div class="nav-preference-group">
-            <button type="button" class="nav-icon-action" (click)="helper.toggleTheme()">
-              <i [ngClass]="helper.darkTheme ? 'pi i-moon' : 'pi i-sun'"></i>
-              <span>{{ helper.darkTheme ? 'Claro' : 'Oscuro' }}</span>
-            </button>
             <div class="nav-language-switch" aria-label="Idioma">
               @for (item of languageOptions; track item.code) {
                 <button

@@ -351,7 +351,7 @@ export class HelperService {
   // COLORES
   // *************************************** //
   get darkTheme() {
-    return localStorage.getItem('dark') === 'true';
+    return false;
   }
   get isHandset() {
     return this.breakpointObserver.isMatched('(max-width: 599px)');
@@ -361,15 +361,13 @@ export class HelperService {
     return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   }
   public toggleTheme(): void {
+    this.forceLightTheme();
+  }
+
+  public forceLightTheme(): void {
     const html = document.querySelector('html');
-    const tieneDark = html?.classList.contains('p-dark');
-    if (tieneDark) {
-      html?.classList.remove('p-dark');
-      localStorage.removeItem('dark');
-    } else {
-      html?.classList.add('p-dark');
-      localStorage.setItem('dark', 'true');
-    }
+    html?.classList.remove('p-dark');
+    localStorage.removeItem('dark');
   }
   public invertColor(color: string): string {
     if (color?.[0] === '#') {

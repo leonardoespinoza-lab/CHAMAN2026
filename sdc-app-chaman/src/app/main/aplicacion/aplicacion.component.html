@@ -1,14 +1,5 @@
 <ul class="list-none p-4 flex flex-col gap-4">
   <li class="flex items-center gap-3">
-    <span class="font-medium">{{ 'Tema de color' | translate }}</span>
-    <p-button
-      [icon]="helper.darkTheme ? 'pi i-moon' : 'pi i-sun'"
-      (click)="toggleTheme()"
-      styleClass="p-button-icon-only"
-      severity="secondary"
-    ></p-button>
-  </li>
-  <li class="flex items-center gap-3">
     <span class="font-medium">{{ 'Idioma' | translate }}</span>
     <p-select
       [options]="languages"
@@ -17,7 +8,7 @@
       optionValue="value"
       (onChange)="changeLang($event.value)"
       appendTo="body"
-      >
+    >
       <ng-template pTemplate="item" let-item>
         <div class="flex items-center gap-2">
           <img [src]="item.icon" width="24" height="24" class="rounded-full" alt="" />

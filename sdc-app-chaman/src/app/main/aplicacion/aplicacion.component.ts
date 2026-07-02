@@ -3,7 +3,6 @@ import { TranslateService } from '@ngx-translate/core';
 import { PrimeNG } from 'primeng/config';
 import { DynamicDialogRef } from 'primeng/dynamicdialog';
 import { SharedModule } from '../../auxiliares/shared.module';
-import { HelperService } from '../../auxiliares/servicios/helper';
 import { PRIMENG_BR } from '../../../../public/i18n/primeng-br';
 import { PRIMENG_EN } from '../../../../public/i18n/primeng-en';
 import { PRIMENG_ES } from '../../../../public/i18n/primeng-es';
@@ -31,7 +30,6 @@ export class AplicacionComponent implements OnInit {
   ];
 
   constructor(
-    public helper: HelperService,
     private translate: TranslateService,
     private primeng: PrimeNG,
     private ref: DynamicDialogRef
@@ -39,10 +37,6 @@ export class AplicacionComponent implements OnInit {
 
   ngOnInit(): void {
     this.lang = localStorage.getItem('lang') || this.translate.currentLang || 'es';
-  }
-
-  public toggleTheme() {
-    this.helper.toggleTheme();
   }
 
   public cerrar() {
