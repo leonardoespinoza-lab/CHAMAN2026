@@ -32,23 +32,26 @@
 
 .wind-icon {
   align-items: center;
-  background: var(--p-primary-color);
-  border-radius: 8px;
-  color: white;
+  background:
+    linear-gradient(145deg, rgba(255, 253, 247, 0.62), rgba(237, 234, 225, 0.28)),
+    rgba(255, 253, 247, 0.44);
+  border: 1px solid rgba(102, 122, 53, 0.18);
+  border-radius: 10px;
+  color: var(--chaman-olive-deep, #405224);
   display: inline-flex;
-  flex: 0 0 42px;
-  height: 42px;
+  flex: 0 0 36px;
+  height: 36px;
   justify-content: center;
-  width: 42px;
+  width: 36px;
 }
 
 .wind-icon i {
-  font-size: 1.2rem;
+  font-size: 1rem;
   transform: rotate(-20deg);
 }
 
 .wind-title p {
-  color: var(--p-primary-color);
+  color: var(--chaman-olive-deep, var(--p-primary-color));
   font-size: 1.2rem;
   font-weight: 850;
   line-height: 1;

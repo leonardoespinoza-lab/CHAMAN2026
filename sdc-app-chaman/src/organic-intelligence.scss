@@ -29,6 +29,12 @@
   --chaman-field-border: rgba(255, 253, 247, 0.5) !important;
   --chaman-field-border-strong: rgba(102, 122, 53, 0.36) !important;
   --chaman-field-shadow: 0 14px 34px rgba(32, 42, 26, 0.08), 0 1px 0 rgba(255, 255, 255, 0.56) inset !important;
+  --chaman-card-bg: rgba(255, 253, 247, 0.52) !important;
+  --chaman-card-bg-soft: rgba(255, 253, 247, 0.4) !important;
+  --chaman-card-border: rgba(42, 55, 35, 0.13) !important;
+  --chaman-card-border-hover: rgba(102, 122, 53, 0.25) !important;
+  --chaman-card-shadow: 0 14px 34px rgba(35, 46, 29, 0.07), 0 1px 0 rgba(255, 255, 255, 0.66) inset !important;
+  --chaman-card-shadow-hover: 0 18px 42px rgba(35, 46, 29, 0.11), 0 1px 0 rgba(255, 255, 255, 0.76) inset !important;
   --p-accent-color: var(--chaman-wheat) !important;
   --p-info-color: #5f9fca !important;
   --p-success-color: #6f9f42 !important;
@@ -80,10 +86,12 @@ body {
 .p-stepper,
 .p-message {
   background:
-    linear-gradient(145deg, rgba(255, 253, 247, 0.94), rgba(246, 244, 237, 0.82)),
-    var(--chaman-paper) !important;
-  border-color: rgba(111, 119, 104, 0.24) !important;
-  box-shadow: var(--chaman-surface-shadow), var(--chaman-glass-inner) !important;
+    linear-gradient(145deg, rgba(255, 253, 247, 0.64), rgba(246, 244, 237, 0.34)),
+    var(--chaman-card-bg) !important;
+  border: 1px solid var(--chaman-card-border) !important;
+  box-shadow: var(--chaman-card-shadow) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(126%);
+  backdrop-filter: blur(18px) saturate(126%);
 }
 
 .custom-card,
@@ -91,6 +99,19 @@ body {
 .p-panel,
 .p-fieldset {
   border-radius: 8px !important;
+}
+
+html body .custom-card:hover,
+html body .p-card:hover,
+html body .p-panel:hover,
+html body .chaman-action-card:hover,
+html body .stage-step:hover,
+html body .frio-metrics article:hover,
+html body .irrigation-metrics article:hover,
+html body .wind-metrics article:hover,
+html body .wind-forecast article:hover {
+  border-color: var(--chaman-card-border-hover) !important;
+  box-shadow: var(--chaman-card-shadow-hover) !important;
 }
 
 .p-dialog {
@@ -289,6 +310,108 @@ html body .p-placeholder {
 .p-badge {
   border-radius: 999px;
   font-weight: 850;
+}
+
+html body .phenology-card,
+html body .frio-card,
+html body .irrigation-card,
+html body .wind-card,
+html body .disease-card,
+html body .weed-card,
+html body .risk-card,
+html body .water-footprint-card,
+html body .central-card,
+html body .camera-card {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(228, 199, 90, 0.08), transparent 30%),
+    linear-gradient(145deg, rgba(255, 253, 247, 0.58), rgba(242, 239, 229, 0.34)),
+    var(--chaman-card-bg) !important;
+  border: 1px solid var(--chaman-card-border) !important;
+  box-shadow: var(--chaman-card-shadow) !important;
+}
+
+html body .stage-now-panel,
+html body .crop-detail-grid,
+html body .stage-context article,
+html body .stage-step,
+html body .frio-summary,
+html body .frio-metrics article,
+html body .frio-events article,
+html body .frio-chart,
+html body .frio-sensor-history,
+html body .today-box,
+html body .irrigation-metrics article,
+html body .irrigation-days span,
+html body .wind-decision,
+html body .wind-metrics article,
+html body .wind-forecast article {
+  background:
+    linear-gradient(145deg, rgba(255, 253, 247, 0.48), rgba(237, 234, 225, 0.24)),
+    var(--chaman-card-bg-soft) !important;
+  border: 1px solid var(--chaman-card-border) !important;
+  box-shadow: var(--chaman-card-shadow) !important;
+}
+
+html body .stage-now-panel,
+html body .frio-summary {
+  background:
+    linear-gradient(145deg, rgba(255, 253, 247, 0.62), rgba(232, 226, 205, 0.3)),
+    rgba(255, 253, 247, 0.44) !important;
+}
+
+html body .stage-step,
+html body .stage-step.done,
+html body .stage-step.current,
+html body .stage-step.pending,
+html body .frio-metrics article.ok,
+html body .frio-metrics article.warn,
+html body .frio-metrics article.info,
+html body .wind-decision,
+html body .detail-hero,
+html body .detail-meta article,
+html body .detail-panel,
+html body .detail-days article {
+  border-left-width: 1px !important;
+  box-shadow: var(--chaman-card-shadow) !important;
+}
+
+html body .stage-step.done,
+html body .frio-metrics article.ok {
+  border-color: rgba(111, 147, 72, 0.22) !important;
+}
+
+html body .stage-step.current,
+html body .frio-metrics article.info,
+html body .irrigation-days span.should-water {
+  border-color: rgba(102, 122, 53, 0.25) !important;
+}
+
+html body .frio-metrics article.warn {
+  border-color: rgba(212, 163, 61, 0.26) !important;
+}
+
+html body .frio-meter,
+html body .progress-track,
+html body .step-progress {
+  background: rgba(42, 55, 35, 0.09) !important;
+  border: 1px solid rgba(42, 55, 35, 0.12) !important;
+}
+
+html body .frio-meter i,
+html body .progress-track span,
+html body .step-progress span {
+  background: linear-gradient(90deg, #7f8f52, #8fb05a) !important;
+}
+
+html body .wind-icon,
+html body .central-icon,
+html body .water-footprint-icon {
+  background:
+    linear-gradient(145deg, rgba(255, 253, 247, 0.62), rgba(237, 234, 225, 0.28)),
+    rgba(255, 253, 247, 0.44) !important;
+  border: 1px solid rgba(102, 122, 53, 0.18) !important;
+  color: var(--chaman-olive-deep) !important;
+  box-shadow: 0 10px 24px rgba(35, 46, 29, 0.08), 0 1px 0 rgba(255, 255, 255, 0.66) inset !important;
 }
 
 .titulo-card,
