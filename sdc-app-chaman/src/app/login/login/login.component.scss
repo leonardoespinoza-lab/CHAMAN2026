@@ -159,26 +159,6 @@
   }
 }
 
-.login-form ::ng-deep .p-inputtext,
-.login-form ::ng-deep .p-password input {
-  background: rgba(255, 255, 255, 0.44) !important;
-  border-color: rgba(255, 255, 255, 0.54) !important;
-  box-shadow:
-    0 10px 24px rgba(15, 23, 42, 0.08),
-    0 1px 0 rgba(255, 255, 255, 0.52) inset;
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-}
-
-.login-form ::ng-deep .p-inputtext:enabled:focus,
-.login-form ::ng-deep .p-password input:enabled:focus {
-  background: rgba(255, 255, 255, 0.56) !important;
-  border-color: rgba(35, 211, 200, 0.58) !important;
-  box-shadow:
-    0 0 0 1px rgba(35, 211, 200, 0.24),
-    0 14px 30px rgba(15, 23, 42, 0.1) !important;
-}
-
 .login-form ::ng-deep .p-floatlabel label {
   color: rgba(15, 23, 42, 0.7);
 }
