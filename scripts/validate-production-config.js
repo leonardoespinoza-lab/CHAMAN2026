@@ -17,6 +17,8 @@ const SERVICE_ALIASES = {
   lora: 'lora',
   'sdc-api-externa': 'externa',
   externa: 'externa',
+  'sdc-websocket': 'websocket',
+  websocket: 'websocket',
   'sdc-ndvi-worker': 'ndvi-worker',
   'ndvi-worker': 'ndvi-worker',
 };
@@ -29,6 +31,7 @@ const BACKEND_SERVICES = new Set([
   'clima',
   'lora',
   'externa',
+  'websocket',
 ]);
 
 const SERVICE_REQUIRED = {
@@ -46,13 +49,15 @@ const SERVICE_REQUIRED = {
   predicciones: ['API_DATOS', 'API_CLIMA'],
   clima: ['API_DATOS'],
   lora: ['API_DATOS'],
-  externa: ['API_DATOS'],
-  'ndvi-worker': ['REDIS_HOST', 'API_EXTERNA_URL'],
+  externa: ['API_DATOS', 'NDVI_WORKER_TOKEN'],
+  websocket: ['API_AUTH', 'CORS_ORIGINS'],
+  'ndvi-worker': ['REDIS_HOST', 'API_EXTERNA_URL', 'NDVI_WORKER_TOKEN'],
 };
 
 const FORBIDDEN_VALUES = {
   AUTH_CLIENT_SECRET: new Set(['', '1', 'change-me', '<change-me>']),
   CLIENT_SECRET_INICIAL: new Set(['', '1', 'change-me', '<change-me>']),
+  NDVI_WORKER_TOKEN: new Set(['', '1', 'change-me', '<change-me>']),
   TIMELAPSE_ADMIN_TOKEN: new Set(['1', 'change-me', '<change-me>']),
 };
 

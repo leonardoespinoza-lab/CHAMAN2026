@@ -23,6 +23,7 @@ SAT_CLOUD_COVER_THRESHOLDS = [
 ]
 
 API_EXTERNA_URL = os.getenv("API_EXTERNA_URL", "http://localhost:5002")
+NDVI_WORKER_TOKEN = os.getenv("NDVI_WORKER_TOKEN", "")
 
 #
 PORT = int(os.getenv("PORT", "5000"))

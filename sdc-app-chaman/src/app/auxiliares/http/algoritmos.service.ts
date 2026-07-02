@@ -10,6 +10,23 @@ export interface AlgoritmoCatalogo {
   outputs: string[];
 }
 
+export interface CatalogoReadinessCultivo {
+  cultivo: string;
+  ok: boolean;
+  semillas: number;
+  enfermedades: number;
+  cronos: number;
+  malezas: number;
+  faltantes: string[];
+}
+
+export interface CatalogosReadiness {
+  ok: boolean;
+  fecha: string;
+  minimos: Record<string, unknown>;
+  cultivos: CatalogoReadinessCultivo[];
+}
+
 export interface HuellaHidricaSimulacion {
   huella: any;
   inputs: any;
@@ -36,6 +53,10 @@ export class AlgoritmosHttpService {
 
   public catalogo(): Promise<AlgoritmoCatalogo[]> {
     return this.http.get('/algoritmos');
+  }
+
+  public catalogosReadiness(): Promise<CatalogosReadiness> {
+    return this.http.get('/algoritmos/catalogos/readiness');
   }
 
   public parametrosHuella(): Promise<any> {

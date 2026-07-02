@@ -3,6 +3,7 @@ import {
   AlgoritmoCatalogo,
   AlgoritmoSimulacion,
   AlgoritmosHttpService,
+  CatalogosReadiness,
   HuellaHidricaSimulacion,
 } from '../../../auxiliares/http/algoritmos.service';
 import { SemillaService } from '../../../auxiliares/http/semilla.service';
@@ -51,6 +52,7 @@ export class AlgoritmosComponent {
   public motorModoJson = false;
   public semillasCatalogo: ISemilla[] = [];
   public semillasError = '';
+  public readiness?: CatalogosReadiness;
 
   public form = {
     cultivo: 'Trigo',
@@ -225,9 +227,14 @@ export class AlgoritmosComponent {
   public async cargar(): Promise<void> {
     this.loading = true;
     try {
-      const [catalogo, parametros] = await Promise.all([this.service.catalogo(), this.service.parametrosHuella()]);
+      const [catalogo, parametros, readiness] = await Promise.all([
+        this.service.catalogo(),
+        this.service.parametrosHuella(),
+        this.service.catalogosReadiness(),
+      ]);
       this.algoritmos = catalogo;
       this.parametrosHuella = parametros;
+      this.readiness = readiness;
       await this.cargarSemillasCatalogo();
     } catch (error) {
       this.helper.notifError(error);

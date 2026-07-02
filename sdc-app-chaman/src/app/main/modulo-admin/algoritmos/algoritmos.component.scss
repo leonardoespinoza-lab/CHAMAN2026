@@ -11,6 +11,7 @@
 
 .page-hero,
 .algorithm-summary,
+.readiness-panel,
 .formula-card,
 .tester,
 .result-card {
@@ -190,6 +191,91 @@ h3 {
   color: #52647d;
   font-size: 14px;
   line-height: 1.45;
+}
+
+.readiness-panel {
+  padding: 18px;
+}
+
+.readiness-head {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.readiness-head p {
+  color: #23d2cc;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.readiness-head h3 {
+  font-size: 20px;
+  margin-top: 3px;
+}
+
+.readiness-head strong {
+  border: 1px solid #e7a52f;
+  border-radius: 999px;
+  color: #8b5b00;
+  padding: 7px 12px;
+}
+
+.readiness-panel.ready .readiness-head strong {
+  border-color: #23d2cc;
+  color: #0a7f59;
+}
+
+.readiness-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.readiness-grid article {
+  border: 1px solid #e7a52f;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.readiness-grid article.ready {
+  border-color: #bdd0e4;
+}
+
+.readiness-grid span,
+.readiness-grid strong,
+.readiness-grid small,
+.readiness-grid em {
+  display: block;
+}
+
+.readiness-grid span {
+  color: #52647d;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.readiness-grid strong {
+  font-size: 17px;
+  margin: 4px 0;
+}
+
+.readiness-grid small,
+.readiness-grid em {
+  color: #52647d;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.readiness-grid em {
+  color: #8b5b00;
+  font-style: normal;
+  font-weight: 800;
+  margin-top: 6px;
 }
 
 .formula-card {

@@ -14,3 +14,6 @@ export const API_PREDICCIONES =
   process.env.API_PREDICCIONES || 'http://localhost:5007';
 export const API_CLIMA =
   process.env.API_CLIMA || 'http://localhost:5008/local';
+
+// Internal service token used by sdc-ndvi-worker when creating satellite reports.
+export const NDVI_WORKER_TOKEN = process.env.NDVI_WORKER_TOKEN || '';

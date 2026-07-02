@@ -23,6 +23,7 @@ from config import (
     DOWNLOAD_FOLDER,
     ENVIAR_BACKEND,
     LOCAL_NDVI_PATH,
+    NDVI_WORKER_TOKEN,
     PORT,
     REDIS_DB,
     REDIS_HOST,
@@ -1071,8 +1072,15 @@ class NDVIWorker:
                 "coleccion": output_data.get("coleccion", "desconocida"),
             }
 
+            headers = {}
+            if NDVI_WORKER_TOKEN:
+                headers["X-Chaman-Worker-Token"] = NDVI_WORKER_TOKEN
+
             response = await self.http_client.post(
-                f"{API_EXTERNA_URL}/ndvi/crear-reporte", json=payload, timeout=10.0
+                f"{API_EXTERNA_URL}/ndvi/crear-reporte",
+                json=payload,
+                headers=headers,
+                timeout=10.0,
             )
             response.raise_for_status()
             logger.info(f"📬 Notificación enviada para lote {lote_id}")

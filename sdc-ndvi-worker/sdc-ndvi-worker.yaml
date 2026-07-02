@@ -34,6 +34,11 @@ spec:
           value: "0"
         - name: API_EXTERNA_URL
           value: "http://sdc-api-externa-service"
+        - name: NDVI_WORKER_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: ndvi-worker-credentials
+              key: token
         - name: ENV
           value: "production"
         - name: ENVIAR_BACKEND

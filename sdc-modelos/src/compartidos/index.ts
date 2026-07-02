@@ -5,6 +5,7 @@ export * from './listado';
 export * from './mongo';
 export * from './queryParams';
 export * from './socket-message';
+export * from './calidad-datos';
 export * from './ubicacion';
 export * from './integraciones';
 export * from './geojson';

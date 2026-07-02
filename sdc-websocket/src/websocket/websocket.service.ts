@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ISocketMessage } from 'modelos/src';
+import { IPermiso, ISocketMessage, ISocketMessageScope } from 'modelos/src';
 import { Server } from 'ws';
 import { AuthenticationService } from '../auxiliares/authentication/authentication.service';
 import { ISocket } from './socket.interface';
@@ -65,5 +65,60 @@ export class WebsocketService {
       }
     });
     return sockets;
+  }
+
+  public getSesionesPorAlcance(
+    alcance?: ISocketMessageScope,
+    idUserFallback?: string,
+  ): ISocket[] {
+    if (!alcance || !Object.values(alcance).some(Boolean)) {
+      return idUserFallback ? this.getSesionesUsuarioPorId(idUserFallback) : [];
+    }
+
+    const sockets: ISocket[] = [];
+    this.server.clients.forEach((socket: ISocket) => {
+      if (this.usuarioPuedeRecibir(socket, alcance)) {
+        sockets.push(socket);
+      }
+    });
+    return sockets;
+  }
+
+  private usuarioPuedeRecibir(
+    socket: ISocket,
+    alcance: ISocketMessageScope,
+  ): boolean {
+    const permisos = socket.usuario?.permisos || [];
+    return permisos.some((permiso) => this.permisoPuedeRecibir(permiso, alcance));
+  }
+
+  private permisoPuedeRecibir(
+    permiso: IPermiso,
+    alcance: ISocketMessageScope,
+  ): boolean {
+    if (permiso?.nivel === 'Admin') {
+      return true;
+    }
+
+    if (permiso?.nivel === 'Quimica') {
+      return !!alcance.idQuimica && permiso.idQuimica === alcance.idQuimica;
+    }
+
+    if (permiso?.nivel === 'Distribuidor') {
+      return !!alcance.idDistribuidor && permiso.idDistribuidor === alcance.idDistribuidor;
+    }
+
+    if (permiso?.nivel === 'Productor') {
+      return !!alcance.idProductor && permiso.idProductor === alcance.idProductor;
+    }
+
+    if (permiso?.nivel === 'Establecimiento') {
+      return (
+        !!alcance.idEstablecimiento &&
+        permiso.idEstablecimiento === alcance.idEstablecimiento
+      );
+    }
+
+    return false;
   }
 }

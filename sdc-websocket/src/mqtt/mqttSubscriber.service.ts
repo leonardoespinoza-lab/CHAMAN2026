@@ -82,13 +82,7 @@ export class MqttSubscriberService {
   private handleMessageApi(message: string) {
     try {
       const mensajeWS: ISocketMessage = JSON.parse(message);
-      switch (true) {
-        default: {
-          this.sendTodosLosUsuarios(mensajeWS);
-          Logger.warn(`Paths no incluye una ruta conocida: ${mensajeWS.paths}`);
-          break;
-        }
-      }
+      this.sendUsuariosPorAlcance(mensajeWS);
     } catch (error) {
       Logger.error(`Error al parsear el mensaje: ${message}`);
     }
@@ -98,15 +92,29 @@ export class MqttSubscriberService {
 
   private async sendUsuarioPorId(mensaje: ISocketMessage, id: string) {
     this.websocketService.getSesionesUsuarioPorId(id).forEach((socket) => {
-      mensaje.motivo = 'usuarioPorId';
-      this.websocketService.sendMessageUsuario(socket, mensaje);
+      this.websocketService.sendMessageUsuario(socket, {
+        ...mensaje,
+        motivo: 'usuarioPorId',
+      });
     });
   }
 
-  private async sendTodosLosUsuarios(mensaje: ISocketMessage) {
-    this.websocketService.getSesionesUsuarios().forEach((socket: ISocket) => {
-      mensaje.motivo = 'todos';
-      this.websocketService.sendMessageUsuario(socket, mensaje);
+  private async sendUsuariosPorAlcance(mensaje: ISocketMessage) {
+    const sockets = this.websocketService.getSesionesPorAlcance(
+      mensaje.alcance,
+      mensaje.idUser,
+    );
+
+    if (!sockets.length && mensaje.idUser) {
+      this.sendUsuarioPorId(mensaje, mensaje.idUser);
+      return;
+    }
+
+    sockets.forEach((socket: ISocket) => {
+      this.websocketService.sendMessageUsuario(socket, {
+        ...mensaje,
+        motivo: mensaje.alcance ? 'alcanceTenant' : 'usuarioFallback',
+      });
     });
   }
 }

@@ -13,7 +13,10 @@ import {
   TCalidadPrediccionMalezas,
   TSeveridadPrediccionMaleza,
 } from 'modelos/src';
+import { CronosService } from '../crono/service';
+import { EnfermedadsService } from '../enfermedad/service';
 import { MalezasService } from '../maleza/service';
+import { SemillasService } from '../semilla/service';
 import {
   calcularHuellaHidrica,
   calcularSeguimientoHuellaHidrica,
@@ -31,6 +34,16 @@ export interface AlgoritmoCatalogo {
   descripcion: string;
   inputs: string[];
   outputs: string[];
+}
+
+export interface ReadinessCultivoCatalogo {
+  cultivo: string;
+  ok: boolean;
+  semillas: number;
+  enfermedades: number;
+  cronos: number;
+  malezas: number;
+  faltantes: string[];
 }
 
 interface DiaClimaMalezas {
@@ -53,7 +66,12 @@ export class AlgoritmosService {
   private readonly diasPronosticoMalezas = 7;
   private readonly maxDiasHistoricoMalezas = 180;
 
-  constructor(private readonly malezasService: MalezasService) {}
+  constructor(
+    private readonly cronosService: CronosService,
+    private readonly enfermedadsService: EnfermedadsService,
+    private readonly malezasService: MalezasService,
+    private readonly semillasService: SemillasService,
+  ) {}
 
   getCatalogo(): AlgoritmoCatalogo[] {
     return [
@@ -113,8 +131,59 @@ export class AlgoritmosService {
     return getHuellaHidricaConstantes();
   }
 
+  async getReadinessCatalogos() {
+    const cultivos = ['Trigo', 'Cebada', 'Soja', 'Maiz'];
+    const resultados = await Promise.all(cultivos.map((cultivo) => this.getReadinessCultivo(cultivo)));
+    return {
+      ok: resultados.every((item) => item.ok),
+      fecha: new Date().toISOString(),
+      minimos: {
+        semillas: 1,
+        enfermedades: 1,
+        cronos: 1,
+        malezas: 'obligatorio solo para Trigo, Soja y Maiz',
+      },
+      cultivos: resultados,
+    };
+  }
+
   simularHuellaHidrica(params: HuellaHidricaParams): HuellaHidricaResultado {
     return calcularHuellaHidrica(params);
+  }
+
+  private async getReadinessCultivo(cultivo: string): Promise<ReadinessCultivoCatalogo> {
+    const [semillas, enfermedades, cronos, malezas] = await Promise.all([
+      this.countByFilter(this.semillasService, { cultivo }),
+      this.countByFilter(this.enfermedadsService, { cultivo }),
+      this.countByFilter(this.cronosService, { cultivo }),
+      this.countByFilter(this.malezasService, { cultivosObjetivo: cultivo }),
+    ]);
+    const requiereMalezas = this.cultivosMalezas.includes(cultivo);
+    const faltantes: string[] = [];
+    if (!semillas) faltantes.push('semillas');
+    if (!enfermedades) faltantes.push('enfermedades');
+    if (!cronos) faltantes.push('cronos');
+    if (requiereMalezas && !malezas) faltantes.push('malezas');
+
+    return {
+      cultivo,
+      ok: faltantes.length === 0,
+      semillas,
+      enfermedades,
+      cronos,
+      malezas,
+      faltantes,
+    };
+  }
+
+  private async countByFilter(service: { getFilter: (query: any) => Promise<{ totalCount?: number }> }, filter: any) {
+    const resultado = await service.getFilter({
+      filter: JSON.stringify(filter),
+      limit: 0,
+      page: 0,
+      select: '_id',
+    });
+    return Number(resultado?.totalCount || 0);
   }
 
   simularEnfermedades(body: any) {

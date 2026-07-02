@@ -13,6 +13,11 @@ export class AlgoritmosController {
     return this.service.getCatalogo();
   }
 
+  @Get('catalogos/readiness')
+  getReadinessCatalogos() {
+    return this.service.getReadinessCatalogos();
+  }
+
   @Get('huella-hidrica/parametros')
   getParametrosHuellaHidrica() {
     return this.service.getParametrosHuellaHidrica();

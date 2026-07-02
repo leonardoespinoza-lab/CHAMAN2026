@@ -4,6 +4,7 @@ import { ILote } from "./lote";
 import { IProductor } from "./productor";
 import { IQuimica } from "./quimica";
 import { ISiembra } from "./siembra";
+import { ICalidadDatoMotor } from "../compartidos";
 
 export interface IPronosticoRiego {
   fecha?: string;
@@ -123,6 +124,7 @@ export interface IVariablesPrediccionRiego {
   motivoCapacidadCampo?: string;
   trazas?: string[];
   pronosticosRiego?: IPronosticoRiego[];
+  calidadDatos?: ICalidadDatoMotor;
 }
 
 export interface IPrediccionRiego {

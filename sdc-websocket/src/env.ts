@@ -17,6 +17,37 @@ export const API_DATOS =
   process.env.API_DATOS || 'http://localhost:5000';
 export const API_AUTH =
   process.env.API_AUTH || 'http://localhost:5001';
+
+const PROD_ENVS = new Set(['production', 'prod']);
+
+function parseCsv(value?: string): string[] {
+  return (value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function isProduction(env?: string): boolean {
+  return PROD_ENVS.has((env || '').toLowerCase());
+}
+
+export const WEBSOCKET_ALLOWED_ORIGINS: true | string[] = (() => {
+  const configured = parseCsv(
+    process.env.WEBSOCKET_CORS_ORIGINS || process.env.CORS_ORIGINS,
+  );
+  if (configured.length) {
+    return configured;
+  }
+  if (!isProduction(ENV)) {
+    return true;
+  }
+  return [
+    'https://app.chamanagro.ar',
+    'https://chaman2026-production.up.railway.app',
+    'https://chamanagro.ar',
+    'https://www.chamanagro.ar',
+  ];
+})();
 // MQTT
 export const MQTT_PROTOCOL = process.env.MQTT_PROTOCOL || 'tcp';
 export const MQTT_HOST = process.env.MQTT_HOST || 'broker-emqx';

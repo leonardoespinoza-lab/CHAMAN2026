@@ -10,7 +10,7 @@ import {
   OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server } from 'ws';
-import { PREFIX_PATH } from '../env';
+import { PREFIX_PATH, WEBSOCKET_ALLOWED_ORIGINS } from '../env';
 import { ISocket } from './socket.interface';
 import { WebsocketService } from './websocket.service';
 
@@ -40,7 +40,7 @@ function handleError(err: Error) {
 @WebSocketGateway({
   path: `/${PREFIX_PATH}`,
   cors: {
-    origin: '*',
+    origin: WEBSOCKET_ALLOWED_ORIGINS,
   },
 })
 export class EventsGateway

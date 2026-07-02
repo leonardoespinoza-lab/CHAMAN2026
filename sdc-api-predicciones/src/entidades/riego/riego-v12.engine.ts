@@ -2,6 +2,7 @@ import {
   Cultivo,
   ICalculoRaices,
   IClimaEstacionMeteorologica,
+  ICalidadDatoMotor,
   ICrono,
   IValores,
   ILote,
@@ -76,6 +77,7 @@ export interface ResultadoRiegoV12 {
   trazas: string[];
   estadoCapacidadCampo: EstadoCalculo;
   motivoCapacidadCampo: string;
+  calidadDatos?: ICalidadDatoMotor;
 }
 
 export function calcularRiegoV12(params: {

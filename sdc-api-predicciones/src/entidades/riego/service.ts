@@ -38,6 +38,7 @@ import {
   calcularRiegoV12,
   normalizarHumedadSueloPct,
 } from './riego-v12.engine';
+import { calcularRiegoV13Estimado } from './riego-v13-fallback.engine';
 
 interface IRespuestaInicioDiaNoche {
   primerReporteNoche: IClimaEstacionMeteorologica;
@@ -163,9 +164,8 @@ export class RiegoService {
 
       if (!idSondaSuelo && !idLanzaHumedad) {
         this.logger.warn(
-          `No se puede hacer la prediccion para la siembra ${siembra._id} del lote ${siembra.lote?.nombre} del productor ${siembra.productor?.nombre} porque no tiene sonda de suelo`,
+          `La siembra ${siembra._id} del lote ${siembra.lote?.nombre} no tiene sonda/lanza de suelo. Se usara riego V13 estimado.`,
         );
-        return;
       }
 
       Logger.log(
@@ -249,16 +249,14 @@ export class RiegoService {
         !HelperService.arrayValido(sondaSuelo) &&
         !HelperService.arrayValido(reportesLanza)
       ) {
-        this.logger.error(
-          `No se puede hacer la prediccion de riego para la siembra ${idSiembra} del lote ${siembra.lote?.nombre} del productor ${siembra.productor?.nombre} porque no hay datos de humedad de suelo`,
+        this.logger.warn(
+          `No hay datos de humedad de suelo para la siembra ${idSiembra}; se usara estimacion climatica V13.`,
         );
-        return;
       }
       if (!HelperService.arrayValido(pluviometro)) {
-        this.logger.error(
-          `No se puede hacer la prediccion de riego para la siembra ${idSiembra} del lote ${siembra.lote?.nombre} del productor ${siembra.productor?.nombre} porque no hay datos de lluvias`,
+        this.logger.warn(
+          `No hay lluvia historica para la siembra ${idSiembra}; la estimacion usara solo pronostico.`,
         );
-        return;
       }
 
       // HelperService.guardarJson('data/sondaSuelo.json', sondaSuelo);
@@ -274,20 +272,40 @@ export class RiegoService {
         datosHumedadAdaptados =
           this.adaptarDatosLoRaWANAFieldClimate(reportesLanza);
       } else {
-        datosHumedadAdaptados = sondaSuelo;
+        datosHumedadAdaptados = sondaSuelo || [];
       }
 
-      // Motor V12: integra lanza/sonda, clima, pronostico, raices, CC y PMP.
-      const resultadoRiego = calcularRiegoV12({
-        siembra,
-        lote,
-        cultivo,
-        crono,
-        suelo: suelos,
-        humedadSuelo: datosHumedadAdaptados,
-        lluviaHistorica: pluviometro,
-        pronostico7Dias,
-      });
+      const sinHumedadSuelo = !HelperService.arrayValido(datosHumedadAdaptados);
+      const resultadoRiego = sinHumedadSuelo
+        ? calcularRiegoV13Estimado({
+            siembra,
+            lote,
+            cultivo,
+            crono,
+            lluviaHistorica: pluviometro || [],
+            pronostico7Dias,
+          })
+        : calcularRiegoV12({
+            siembra,
+            lote,
+            cultivo,
+            crono,
+            suelo: suelos,
+            humedadSuelo: datosHumedadAdaptados,
+            lluviaHistorica: pluviometro || [],
+            pronostico7Dias,
+          });
+
+      resultadoRiego.calidadDatos ||= {
+        nivel: idLanzaHumedad ? 'alta' : 'media',
+        fuente: idLanzaHumedad ? 'sensor_campo' : 'estacion_asignada',
+        cobertura: 1,
+        fallback: false,
+        resumen: idLanzaHumedad
+          ? 'Calculado con lanza/sonda de humedad de suelo asignada al lote.'
+          : 'Calculado con sonda FieldClimate y pronostico climatico.',
+        limitaciones: [],
+      };
 
       const {
         calculoRaices,
@@ -311,6 +329,7 @@ export class RiegoService {
         estadoCapacidadCampo,
         motivoCapacidadCampo,
         trazas,
+        calidadDatos,
       } = resultadoRiego;
 
       const suelosActualizados = this.actualizarSueloConRiegoV12(
@@ -342,6 +361,7 @@ export class RiegoService {
         estadoCapacidadCampo,
         motivoCapacidadCampo,
         trazas,
+        calidadDatos,
         pronosticosRiego,
       };
       const regar: IResultadoPrediccionRiego[] = pronosticosRiego.map(

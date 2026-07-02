@@ -87,6 +87,7 @@ RAILWAY_DOCKERFILE_PATH=deploy/railway/sdc-ndvi-worker.Dockerfile
 ENVIAR_BACKEND=true
 CLEAN_UP=true
 API_EXTERNA_URL=http://${{chaman-externa.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-externa.PORT}}
+NDVI_WORKER_TOKEN=<mismo-secreto-largo-en-chaman-externa-y-ndvi-worker>
 NDVI_STORAGE_MODE=inline
 ```
 
