@@ -700,7 +700,7 @@
     <div class="sheet-header">
       <div>
         <span class="sheet-eyebrow">{{ loteUbicacion(loteSeleccionado) }}</span>
-        <h2>{{ 'Lote' | translate }} {{ loteSeleccionado.nombre }}</h2>
+        <h2>{{ loteTitulo(loteSeleccionado) }}</h2>
       </div>
       <div class="sheet-actions">
         <p-button label="Entrar al lote" icon="pi pi-arrow-right" (onClick)="detallesLote()" />

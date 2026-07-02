@@ -726,9 +726,9 @@
 
 .sheet-close {
   position: absolute;
-  top: 0.7rem;
-  right: 0.7rem;
-  left: auto;
+  top: 0.85rem;
+  right: auto;
+  left: 0.95rem;
   z-index: 4;
   width: 2.35rem;
   height: 2.35rem;
@@ -745,7 +745,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1.25rem;
-  padding: 0.15rem 2.7rem 0.9rem 0;
+  padding: 1.75rem 0 0.9rem 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.36);
 }
 

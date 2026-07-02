@@ -785,6 +785,14 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     return partes.length ? partes.join(' / ') : 'Ubicacion sin clasificar';
   }
 
+  public loteTitulo(lote?: ILoteMapa): string {
+    const nombre = String((lote || this.loteSeleccionado)?.nombre || '').trim();
+    if (!nombre) {
+      return 'Lote sin nombre';
+    }
+    return /^lote\b/i.test(nombre) ? nombre : `Lote ${nombre}`;
+  }
+
   public loteHectareas(lote?: ILoteMapa): string {
     const superficie = this.numero((lote || this.loteSeleccionado)?.ubicacion?.superficie);
     return superficie === null ? '-- ha' : `${this.formatNumber(superficie, 1)} ha`;
