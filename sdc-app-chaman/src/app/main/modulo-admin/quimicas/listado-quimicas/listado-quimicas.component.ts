@@ -1,12 +1,10 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { IListado, IQueryParam, IQuimica } from 'modelos/src';
 import { ConfirmationService } from 'primeng/api';
-import { Subscription } from 'rxjs';
 import { QuimicaService } from '../../../../auxiliares/http/quimica.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
-import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { ParamsService } from '../../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../../auxiliares/shared.module';
 
@@ -16,14 +14,13 @@ import { SharedModule } from '../../../../auxiliares/shared.module';
   templateUrl: './listado-quimicas.component.html',
   styleUrl: './listado-quimicas.component.scss',
 })
-export class ListadoQuimicasComponent implements OnInit, OnDestroy {
+export class ListadoQuimicasComponent implements OnInit {
   public loading = false;
 
-  public name = ListadoQuimicasComponent.name;
+  public readonly name = 'ListadoQuimicasComponent';
+  public readonly tableStateKey = 'admin-companies-table-v2';
   public datos: IQuimica[] = [];
   public totalCount = 0;
-
-  public datos$?: Subscription;
 
   get user() {
     return this.helper.user;
@@ -31,7 +28,6 @@ export class ListadoQuimicasComponent implements OnInit, OnDestroy {
 
   constructor(
     public helper: HelperService,
-    private listado: ListadosService,
     private confirmationService: ConfirmationService,
     private translate: TranslateService,
     private service: QuimicaService,
@@ -86,9 +82,8 @@ export class ListadoQuimicasComponent implements OnInit, OnDestroy {
         this.loading = true;
         try {
           await this.service.eliminar(dato._id!);
-          
-          // Solo elimina el item en cache
-          this.listado.deleteEntityItem('quimicas', dato._id!);
+          this.datos = this.datos.filter((item) => item._id !== dato._id);
+          this.totalCount = Math.max(0, this.totalCount - 1);
 
           this.helper.notifSuccess(this.translate.instant('Eliminado correctamente'));          
         } catch (error) {
@@ -108,22 +103,20 @@ export class ListadoQuimicasComponent implements OnInit, OnDestroy {
       sort: 'nombre',
     };
 
-    this.datos$?.unsubscribe();
-    this.datos$ = this.listado.subscribe<IListado<IQuimica>>('quimicas', queryParams).subscribe(async (data) => {      
-      this.totalCount = data.totalCount;
-      this.datos = data.datos;
-    });        
-
-    await this.listado.getLastValue('quimicas', queryParams);
+    const data: IListado<IQuimica> = await this.service.listar(queryParams);
+    this.totalCount = data.totalCount;
+    this.datos = data.datos;
   }
 
-  public async ngOnInit() {    
+  public async ngOnInit() {
     this.loading = true;
-    await Promise.all([this.listar()]);
+    try {
+      await this.listar();
+    } catch (error) {
+      this.helper.notifError(error);
+      this.datos = [];
+      this.totalCount = 0;
+    }
     this.loading = false;
-  }
-
-  ngOnDestroy(): void {
-    this.datos$?.unsubscribe();
   }
 }
