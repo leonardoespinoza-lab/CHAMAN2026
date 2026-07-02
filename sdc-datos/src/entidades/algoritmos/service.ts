@@ -127,6 +127,11 @@ export class AlgoritmosService {
     const lluvia48 = Number(body?.lluvia48h ?? 12);
     const temperatura = Number(body?.temperatura ?? 18);
     const susceptibilidad = Number(body?.susceptibilidad ?? 0.7);
+    const resistenciasVarietales = Array.isArray(body?.resistencia)
+      ? body.resistencia
+      : Array.isArray(body?.resistencias)
+        ? body.resistencias
+        : [];
 
     const enfermedades = this.getEnfermedadesCultivo(cultivo).map((enfermedad) => {
       const etapaActiva = enfermedad.etapas.some((item) => item.toLowerCase() === String(etapa).toLowerCase());
@@ -135,13 +140,18 @@ export class AlgoritmosService {
       const lluviaScore = this.clamp(lluvia48 / enfermedad.lluviaCritica, 0, 1);
       const tempScore = this.clamp(1 - Math.abs(temperatura - enfermedad.tempOptima) / 14, 0, 1);
       const etapaScore = etapaActiva ? 1 : 0.42;
+      const susceptibilidadEnfermedad = this.getSusceptibilidadVarietal(
+        enfermedad.nombre,
+        susceptibilidad,
+        resistenciasVarietales,
+      );
       const riesgo = this.round(
         100 *
           (0.25 * humedadScore +
             0.22 * mojadoScore +
             0.16 * lluviaScore +
             0.17 * tempScore +
-            0.12 * susceptibilidad +
+            0.12 * susceptibilidadEnfermedad +
             0.08 * etapaScore),
         1,
       );
@@ -153,6 +163,7 @@ export class AlgoritmosService {
         nivel: this.nivelRiesgo(riesgo),
         prescripcion: enfermedad.prescripcion,
         etapaActiva,
+        susceptibilidad: this.round(susceptibilidadEnfermedad, 2),
       };
     });
 
@@ -176,6 +187,7 @@ export class AlgoritmosService {
         horasMojado,
         lluvia48h: lluvia48,
         temperatura,
+        fuenteVarietal: resistenciasVarietales.length ? 'semilla.resistencia' : 'sensibilidad base manual',
       },
       enfermedades,
       serie,
@@ -183,6 +195,9 @@ export class AlgoritmosService {
         'Riesgo = humedad persistente + horas de mojado + lluvia + temperatura + susceptibilidad varietal + ventana fenologica.',
         `Etapa evaluada: ${etapa}. Humedad ${humedad}%, mojado ${horasMojado} h, lluvia 48 h ${lluvia48} mm.`,
         `Zona evaluada: ${zona}. En produccion el crono se resuelve por departamento, ciclo y fecha de siembra.`,
+        resistenciasVarietales.length
+          ? `Susceptibilidad por enfermedad tomada de semilla.resistencia (${resistenciasVarietales.length} registro(s)).`
+          : 'Sin resistencia varietal especifica: se uso susceptibilidad base manual para todas las enfermedades.',
       ],
     };
   }
@@ -862,6 +877,24 @@ export class AlgoritmosService {
     };
 
     return base[cultivo] || base.Trigo;
+  }
+
+  private getSusceptibilidadVarietal(
+    enfermedad: string,
+    base: number,
+    resistencias: Array<{ enfermedad?: string; multiplicador?: number }>,
+  ): number {
+    const match = resistencias.find((item) => this.norm(item.enfermedad) === this.norm(enfermedad));
+    const value = Number(match?.multiplicador ?? base);
+    return this.clamp(Number.isFinite(value) ? value : base, 0.05, 1.2);
+  }
+
+  private norm(value?: string): string {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toUpperCase();
   }
 
   private nivelRiesgo(riesgo: number): string {

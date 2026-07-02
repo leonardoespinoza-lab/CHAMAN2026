@@ -332,6 +332,46 @@ textarea {
   text-align: right;
 }
 
+.catalog-health {
+  align-items: center;
+  background: #effdfb;
+  border: 1px solid #23d2cc;
+  border-radius: 8px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin: -4px 0 16px;
+  padding: 12px 14px;
+}
+
+.catalog-health.warning {
+  background: #fff8e8;
+  border-color: #e7a52f;
+}
+
+.catalog-health span,
+.catalog-health small {
+  color: #52647d;
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.catalog-health strong {
+  color: #1d2b44;
+  display: block;
+  font-size: 15px;
+  margin-top: 3px;
+}
+
+.catalog-health small {
+  max-width: 380px;
+  text-align: right;
+  text-transform: none;
+}
+
 .switch-row {
   align-items: center;
   border: 1px solid #bdd0e4;
@@ -557,6 +597,16 @@ pre {
   }
 
   .formula-pill {
+    text-align: left;
+  }
+
+  .catalog-health {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .catalog-health small {
+    max-width: none;
     text-align: left;
   }
 }

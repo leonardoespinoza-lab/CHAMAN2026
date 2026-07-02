@@ -5,11 +5,13 @@ import {
   AlgoritmosHttpService,
   HuellaHidricaSimulacion,
 } from '../../../auxiliares/http/algoritmos.service';
+import { SemillaService } from '../../../auxiliares/http/semilla.service';
 import { HelperService } from '../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../auxiliares/shared.module';
+import { Cultivo, IQueryParam, IResistencia, ISemilla } from 'modelos/src';
 
 type MotorAuditableId = 'enfermedades' | 'riego' | 'malezas';
-type MotorFieldType = 'text' | 'number' | 'select' | 'boolean';
+type MotorFieldType = 'text' | 'number' | 'select' | 'boolean' | 'seed';
 
 interface MotorField {
   key: string;
@@ -47,6 +49,8 @@ export class AlgoritmosComponent {
   public loading = false;
   public modoJson = false;
   public motorModoJson = false;
+  public semillasCatalogo: ISemilla[] = [];
+  public semillasError = '';
 
   public form = {
     cultivo: 'Trigo',
@@ -70,6 +74,7 @@ export class AlgoritmosComponent {
 
   public enfermedadesForm = {
     cultivo: 'Cebada',
+    idSemilla: '',
     variedad: 'ANDREIA',
     zona: 'Azul',
     etapa: 'Hoja Bandera',
@@ -78,6 +83,7 @@ export class AlgoritmosComponent {
     lluvia48h: 9,
     temperatura: 18,
     susceptibilidad: 0.85,
+    resistencia: [] as IResistencia[],
   };
 
   public riegoForm = {
@@ -119,7 +125,12 @@ export class AlgoritmosComponent {
       persistencia: 'Motor productivo: /siembras/:id/prediccion-enfermedades',
       fields: [
         { key: 'cultivo', label: 'Cultivo', type: 'select', options: ['Trigo', 'Cebada', 'Soja', 'Maiz'] },
-        { key: 'variedad', label: 'Variedad', type: 'text', helper: 'Nombre varietal usado para sensibilidad.' },
+        {
+          key: 'idSemilla',
+          label: 'Variedad',
+          type: 'seed',
+          helper: 'Lee la base real de semillas/variedades y sus resistencias cargadas.',
+        },
         { key: 'zona', label: 'Zona / departamento', type: 'text', helper: 'Referencia de influencia para crono y calibracion regional.' },
         {
           key: 'etapa',
@@ -142,7 +153,7 @@ export class AlgoritmosComponent {
         { key: 'horasMojado', label: 'Horas de mojado', type: 'number', suffix: 'h' },
         { key: 'lluvia48h', label: 'Lluvia 48 h', type: 'number', suffix: 'mm' },
         { key: 'temperatura', label: 'Temperatura media', type: 'number', suffix: 'C' },
-        { key: 'susceptibilidad', label: 'Susceptibilidad', type: 'number', helper: '0 tolerante, 1 susceptible.' },
+        { key: 'susceptibilidad', label: 'Susceptibilidad base', type: 'number', helper: '0.05 tolerante, 1 susceptible; >1 muy susceptible.' },
       ],
     },
     riego: {
@@ -197,6 +208,7 @@ export class AlgoritmosComponent {
 
   constructor(
     private service: AlgoritmosHttpService,
+    private semillasService: SemillaService,
     private helper: HelperService
   ) {}
 
@@ -216,6 +228,7 @@ export class AlgoritmosComponent {
       const [catalogo, parametros] = await Promise.all([this.service.catalogo(), this.service.parametrosHuella()]);
       this.algoritmos = catalogo;
       this.parametrosHuella = parametros;
+      await this.cargarSemillasCatalogo();
     } catch (error) {
       this.helper.notifError(error);
     }
@@ -383,14 +396,71 @@ export class AlgoritmosComponent {
       const numeric = Number(value);
       this.motorForm[key] = field?.type === 'number' && value !== '' && Number.isFinite(numeric) ? numeric : value;
     }
+    if (this.seleccionado === 'enfermedades' && key === 'cultivo') {
+      this.sincronizarSemillaEnfermedades(false);
+    }
     this.generarMotorPayload();
+  }
+
+  public setSemillaEnfermedades(idSemilla: string): void {
+    const semilla = this.semillasCatalogo.find((item) => item._id === idSemilla);
+    if (!semilla) return;
+    this.aplicarSemillaEnfermedades(semilla);
+    this.generarMotorPayload();
+  }
+
+  public setVariedadManual(variedad: string): void {
+    this.enfermedadesForm.idSemilla = '';
+    this.enfermedadesForm.variedad = variedad;
+    this.enfermedadesForm.resistencia = [];
+    this.generarMotorPayload();
+  }
+
+  public get semillasEnfermedades(): ISemilla[] {
+    const cultivo = this.enfermedadesForm.cultivo;
+    return this.semillasCatalogo
+      .filter((semilla) => this.normalizar(semilla.cultivo) === this.normalizar(cultivo))
+      .sort((a, b) => this.seedOptionLabel(a).localeCompare(this.seedOptionLabel(b), 'es'));
+  }
+
+  public get resumenCatalogoSanitario(): string {
+    if (this.semillasError) return this.semillasError;
+    const semillas = this.semillasEnfermedades;
+    const cultivo = this.enfermedadesForm.cultivo || 'cultivo';
+    if (!semillas.length) {
+      return `No hay variedades cargadas para ${cultivo}. El banco permite simular manualmente, pero falta seed de catalogo.`;
+    }
+    const variedades = new Set(semillas.map((semilla) => this.normalizar(semilla.variedad)).filter(Boolean)).size;
+    const conResistencia = semillas.filter((semilla) => !!semilla.resistencia?.length).length;
+    const conCrono = semillas.filter((semilla) => this.semillaTieneCrono(semilla)).length;
+    return `${variedades} variedad(es) de ${cultivo}. ${conCrono} con crono/fenologia robusta y ${conResistencia} con resistencia varietal especifica.`;
+  }
+
+  public get semillaSanitariaSeleccionada(): ISemilla | undefined {
+    const id = this.enfermedadesForm.idSemilla;
+    return this.semillasCatalogo.find((semilla) => semilla._id === id);
+  }
+
+  public get advertenciaCatalogoSanitario(): string {
+    const semilla = this.semillaSanitariaSeleccionada;
+    if (!semilla) return 'Sin semilla vinculada: la simulacion usa sensibilidad base manual.';
+    if (!semilla.resistencia?.length) {
+      return `${semilla.variedad}: sin resistencia varietal especifica; se usa sensibilidad base.`;
+    }
+    return `${semilla.variedad}: resistencia varietal cargada para ${semilla.resistencia.length} enfermedad(es).`;
+  }
+
+  public seedOptionLabel(semilla: ISemilla): string {
+    return [semilla.variedad, semilla.ciclo, semilla.semillero, semilla.campania]
+      .filter(Boolean)
+      .join(' - ');
   }
 
   public generarMotorPayload(): void {
     if (!this.esMotorAuditable(this.seleccionado)) {
       return;
     }
-    this.motorPayloadJson = JSON.stringify(this.motorForm, null, 2);
+    this.motorPayloadJson = JSON.stringify(this.motorPayload(), null, 2);
   }
 
   public get inputMotorVisible(): string {
@@ -413,6 +483,97 @@ export class AlgoritmosComponent {
 
   private esMotorAuditable(id: string): id is MotorAuditableId {
     return id === 'enfermedades' || id === 'riego' || id === 'malezas';
+  }
+
+  private async cargarSemillasCatalogo(): Promise<void> {
+    this.semillasError = '';
+    const query: IQueryParam = {
+      page: 0,
+      limit: 0,
+      sort: JSON.stringify({ cultivo: 1, variedad: 1, ciclo: 1, semillero: 1 }),
+      select:
+        '_id codigoCarga fuenteBase semillero cultivo variedad ciclo resistencia campania tipoCultivo fenologiaReferencia observaciones',
+    };
+
+    try {
+      const response = await this.semillasService.listar(query);
+      this.semillasCatalogo = response.datos || [];
+      this.sincronizarSemillaEnfermedades(true);
+    } catch (error: any) {
+      this.semillasCatalogo = [];
+      this.semillasError =
+        error?.error?.message ||
+        error?.message ||
+        'No se pudo consultar la base de semillas desde el banco de algoritmos.';
+    }
+  }
+
+  private sincronizarSemillaEnfermedades(mantenerVariedad: boolean): void {
+    const semillas = this.semillasEnfermedades;
+    if (!semillas.length) {
+      this.enfermedadesForm.idSemilla = '';
+      this.enfermedadesForm.resistencia = [];
+      return;
+    }
+
+    const actual = mantenerVariedad ? this.normalizar(this.enfermedadesForm.variedad) : '';
+    const semilla =
+      semillas.find((item) => this.normalizar(item._id) === this.normalizar(this.enfermedadesForm.idSemilla)) ||
+      semillas.find((item) => actual && this.normalizar(item.variedad) === actual) ||
+      semillas[0];
+    this.aplicarSemillaEnfermedades(semilla);
+  }
+
+  private aplicarSemillaEnfermedades(semilla: ISemilla): void {
+    this.enfermedadesForm.idSemilla = semilla._id || '';
+    this.enfermedadesForm.variedad = semilla.variedad || '';
+    this.enfermedadesForm.resistencia = semilla.resistencia || [];
+    this.enfermedadesForm.susceptibilidad = this.susceptibilidadBaseDesdeSemilla(semilla);
+  }
+
+  private motorPayload(): Record<string, any> {
+    if (this.seleccionado !== 'enfermedades') return { ...this.motorForm };
+
+    const semilla = this.semillaSanitariaSeleccionada;
+    return {
+      ...this.enfermedadesForm,
+      variedad: this.enfermedadesForm.variedad || semilla?.variedad || '',
+      idSemilla: semilla?._id || this.enfermedadesForm.idSemilla || undefined,
+      semillero: semilla?.semillero,
+      ciclo: semilla?.ciclo,
+      campania: semilla?.campania,
+      fuenteBase: semilla?.fuenteBase,
+      resistencia: semilla?.resistencia || this.enfermedadesForm.resistencia || [],
+      calidadVarietal: {
+        catalogoSemillas: !!semilla,
+        resistenciaEspecifica: !!semilla?.resistencia?.length,
+        cronoFenologico: semilla ? this.semillaTieneCrono(semilla) : false,
+        observaciones: semilla?.observaciones,
+      },
+    };
+  }
+
+  private susceptibilidadBaseDesdeSemilla(semilla: ISemilla): number {
+    const valores = (semilla.resistencia || [])
+      .map((item) => Number(item.multiplicador))
+      .filter((value) => Number.isFinite(value));
+    if (!valores.length) return 0.85;
+    return Math.round(Math.max(...valores) * 100) / 100;
+  }
+
+  private semillaTieneCrono(semilla: ISemilla): boolean {
+    const ciclo = this.normalizar(semilla.ciclo);
+    if (ciclo && ciclo !== 'SIN DEFINIR') return true;
+    const texto = this.normalizar(`${semilla.observaciones || ''} ${semilla.fenologiaReferencia?.fuente || ''}`);
+    return texto.includes('CRONO') || texto.includes('FENOLOG');
+  }
+
+  private normalizar(value?: string | Cultivo): string {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toUpperCase();
   }
 
   public barHeight(value: number): string {

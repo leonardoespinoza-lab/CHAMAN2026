@@ -270,6 +270,16 @@
             <strong>{{ motorPersistencia }}</strong>
           </div>
 
+          @if (seleccionado === 'enfermedades') {
+            <div class="catalog-health" [class.warning]="!semillasEnfermedades.length || !semillaSanitariaSeleccionada?.resistencia?.length">
+              <div>
+                <span>Base varietal</span>
+                <strong>{{ resumenCatalogoSanitario }}</strong>
+              </div>
+              <small>{{ advertenciaCatalogoSanitario }}</small>
+            </div>
+          }
+
           @if (!motorModoJson) {
             <div class="input-grid motor-input-grid">
               @for (field of motorFields(); track field.key) {
@@ -291,6 +301,26 @@
                         <option [value]="option">{{ option }}</option>
                       }
                     </select>
+                  } @else if (field.type === 'seed') {
+                    @if (semillasEnfermedades.length) {
+                      <select
+                        [id]="fieldId(field.key)"
+                        [ngModel]="enfermedadesForm.idSemilla"
+                        (ngModelChange)="setSemillaEnfermedades($event)"
+                      >
+                        @for (semilla of semillasEnfermedades; track semilla._id || seedOptionLabel(semilla)) {
+                          <option [value]="semilla._id">{{ seedOptionLabel(semilla) }}</option>
+                        }
+                      </select>
+                    } @else {
+                      <input
+                        [id]="fieldId(field.key)"
+                        type="text"
+                        [ngModel]="enfermedadesForm.variedad"
+                        (ngModelChange)="setVariedadManual($event)"
+                        placeholder="Variedad manual para simulacion"
+                      />
+                    }
                   } @else if (field.type === 'boolean') {
                     <div class="switch-row">
                       <input
