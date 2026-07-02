@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { HuellaHidricaSeguimiento } from '../../../../../auxiliares/http/siembra.service';
-import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetalleSiembra } from '../detalles-lote.component';
 
@@ -19,8 +18,6 @@ export class DrawerHuellaHidricaComponent implements OnInit, OnDestroy {
   @Input() public seguimiento?: HuellaHidricaSeguimiento;
   public unidad: 'lt/kg' | 'lt/kCal' = 'lt/kg';
   public unidades = ['lt/kg', 'lt/kCal'];
-
-  constructor(public helper: HelperService) {}
 
   async ngOnInit(): Promise<void> {}
 

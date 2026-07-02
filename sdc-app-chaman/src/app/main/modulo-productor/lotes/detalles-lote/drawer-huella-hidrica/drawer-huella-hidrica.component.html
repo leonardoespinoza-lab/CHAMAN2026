@@ -1,19 +1,15 @@
-<p-drawer
-  #drawerRef
+<p-dialog
   [(visible)]="visible"
-  [position]="(helper.isWide$ | async) ? 'right' : 'bottom'"
-  [style]="{
-    'margin-top': (helper.isWide$ | async) ? '58px' : '0',
-    height: (helper.isWide$ | async) ? 'calc(100% - 58px)' : 'auto',
-    'border-radius': (helper.isWide$ | async) ? '30px 0 0 30px' : '30px 30px 0 0',
-    overflow: 'auto',
-    width: (helper.isWide$ | async) ? '520px' : '100%',
-    'max-width': (helper.isWide$ | async) ? '48vw' : '100%',
-  }"
   [modal]="true"
+  [dismissableMask]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(920px, 94vw)' }"
+  [breakpoints]="{ '720px': '96vw' }"
   (onHide)="visibleChange.emit(false)"
   [header]="'Huella hidrica' | translate"
   [closable]="true"
+  styleClass="chaman-detail-dialog water-footprint-detail-dialog"
 >
   <section class="water-drawer">
     <header class="drawer-summary">
@@ -86,4 +82,4 @@
       </section>
     }
   </section>
-</p-drawer>
+</p-dialog>
