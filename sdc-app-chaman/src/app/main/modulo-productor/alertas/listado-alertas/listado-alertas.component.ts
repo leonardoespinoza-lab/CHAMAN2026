@@ -1,4 +1,5 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
 import { EstadoAlerta, IAlerta, ICanalAlerta, IEstadoAlerta, IListado, SeveridadAlerta } from 'modelos/src';
 import { TableLazyLoadEvent } from 'primeng/table';
 import { Subscription } from 'rxjs';
@@ -6,6 +7,25 @@ import { AlertaService } from '../../../../auxiliares/http/alerta.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { SharedModule } from '../../../../auxiliares/shared.module';
+
+interface IResumenAlarmas {
+  nuevas: number;
+  activas: number;
+  alta: number;
+  finalizadas: number;
+  total: number;
+  prioridadPromedio: number;
+  calidadPromedio: number;
+  tratadas: number;
+}
+
+interface ICategoriaResumen {
+  nombre: string;
+  icono: string;
+  cantidad: number;
+  prioridad: number;
+  severidad: SeveridadAlerta;
+}
 
 @Component({
   selector: 'app-listado-alertas',
@@ -30,6 +50,7 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
   constructor(
     private alertasService: AlertaService,
     private listado: ListadosService,
+    private router: Router,
     public helper: HelperService
   ) {}
 
@@ -43,14 +64,17 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
           path: 'lote',
         },
       },
+      { path: 'productor' },
+      { path: 'establecimiento' },
+      { path: 'distribuidor' },
+      { path: 'quimica' },
     ];
     query.populate = JSON.stringify(populate);
 
     this.alertas$?.unsubscribe();
     this.alertas$ = this.listado.subscribe<IListado<IAlerta>>('alertas', query).subscribe((data) => {
-      this.data = data.datos;
-      this.totalCount = data.totalCount;
-      console.log(`listado de alertas`, data);
+      this.data = data.datos || [];
+      this.totalCount = data.totalCount || 0;
     });
     await this.listado.getLastValue('alertas', query);
     this.loading = false;
@@ -84,13 +108,166 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
     }
   }
 
-  public resumen(): { nuevas: number; activas: number; alta: number; finalizadas: number } {
+  public abrirLote(alerta?: IAlerta): void {
+    const idLote = alerta?.siembra?.lote?._id;
+    if (!idLote) {
+      this.helper.notifWarn('La alarma no tiene un lote asociado para abrir.');
+      return;
+    }
+    this.router.navigateByUrl(`/lotes/detalles/${idLote}`);
+  }
+
+  public exportarInforme(): void {
+    const resumen = this.resumen();
+    const fecha = new Date();
+    const reporte = window.open('', '_blank', 'width=1120,height=820');
+
+    if (!reporte) {
+      this.helper.notifWarn('El navegador bloqueo la ventana del informe. Habilita ventanas emergentes para exportar PDF.');
+      return;
+    }
+
+    const filas = this.alertasOrdenadas()
+      .map(
+        (alerta) => `
+          <tr>
+            <td>
+              <strong>${this.escapeHtml(this.titulo(alerta))}</strong>
+              <small>${this.escapeHtml(this.subtitulo(alerta))}</small>
+            </td>
+            <td>${this.escapeHtml(this.severidadLabel(alerta))}</td>
+            <td class="number">${this.formatNumber(this.valorRiesgo(alerta), 0)}/100</td>
+            <td>${this.escapeHtml(alerta.estadoActual || 'Nueva')}</td>
+            <td>${this.escapeHtml(this.calidad(alerta))}</td>
+            <td>${this.escapeHtml(this.fechaTexto(this.fecha(alerta)))}</td>
+          </tr>`
+      )
+      .join('');
+
+    reporte.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>Informe de alarmas Chaman</title>
+          <style>
+            body { margin: 0; padding: 34px; color: #10223a; font-family: Arial, sans-serif; }
+            header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #23d3c8; padding-bottom: 18px; }
+            h1 { margin: 0; font-size: 32px; }
+            p { color: #536886; margin: 6px 0 0; }
+            .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0; }
+            .kpi { border: 1px solid #c9d8e8; border-radius: 14px; padding: 14px; }
+            .kpi span { color: #60738f; display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+            .kpi strong { display: block; margin-top: 6px; font-size: 26px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+            th { background: #eefdfe; color: #10223a; text-align: left; padding: 11px; font-size: 12px; text-transform: uppercase; }
+            td { border-bottom: 1px solid #d9e5f0; padding: 12px 11px; vertical-align: top; }
+            td small { display: block; color: #60738f; margin-top: 4px; }
+            .number { text-align: right; font-weight: 700; }
+            footer { margin-top: 22px; color: #60738f; font-size: 12px; }
+            @media print { body { padding: 18px; } button { display: none; } }
+          </style>
+        </head>
+        <body>
+          <header>
+            <div>
+              <p>Centro operativo</p>
+              <h1>Informe de alarmas</h1>
+              <p>Eventos generados por sanidad, malezas, agroclima, sensores y motores de Chaman.</p>
+            </div>
+            <div>
+              <p>Emitido</p>
+              <strong>${this.escapeHtml(fecha.toLocaleString('es-AR'))}</strong>
+            </div>
+          </header>
+          <section class="kpis">
+            <article class="kpi"><span>Activas</span><strong>${resumen.activas}</strong></article>
+            <article class="kpi"><span>Alta prioridad</span><strong>${resumen.alta}</strong></article>
+            <article class="kpi"><span>Prioridad media</span><strong>${this.formatNumber(resumen.prioridadPromedio, 0)}</strong></article>
+            <article class="kpi"><span>Calidad dato</span><strong>${this.formatNumber(resumen.calidadPromedio, 0)}%</strong></article>
+          </section>
+          <table>
+            <thead>
+              <tr>
+                <th>Alarma</th>
+                <th>Severidad</th>
+                <th>Prioridad</th>
+                <th>Estado</th>
+                <th>Dato</th>
+                <th>Ultimo evento</th>
+              </tr>
+            </thead>
+            <tbody>${filas || '<tr><td colspan="6">Sin alarmas para informar.</td></tr>'}</tbody>
+          </table>
+          <footer>Chaman Agro - Centro de alarmas. Validar decisiones a campo antes de ejecutar acciones agronomicas.</footer>
+          <script>window.onload = () => setTimeout(() => window.print(), 250);</script>
+        </body>
+      </html>
+    `);
+    reporte.document.close();
+  }
+
+  public resumen(): IResumenAlarmas {
+    const total = this.data.length;
+    const prioridadTotal = this.data.reduce((acc, alerta) => acc + this.valorRiesgo(alerta), 0);
+    const calidadTotal = this.data.reduce((acc, alerta) => acc + this.calidadScore(alerta), 0);
     return {
       nuevas: this.data.filter((a) => a.estadoActual === 'Nueva').length,
       activas: this.data.filter((a) => a.activa !== false).length,
       alta: this.data.filter((a) => ['alta', 'critica'].includes(this.severidad(a))).length,
       finalizadas: this.data.filter((a) => a.estadoActual === 'Finalizada' || a.activa === false).length,
+      total,
+      prioridadPromedio: total ? prioridadTotal / total : 0,
+      calidadPromedio: total ? calidadTotal / total : 0,
+      tratadas: this.data.filter((a) => a.estadoActual === 'Tratada').length,
     };
+  }
+
+  public categoriasResumen(): ICategoriaResumen[] {
+    const grupos = new Map<string, ICategoriaResumen>();
+    this.data.forEach((alerta) => {
+      const nombre = this.categoriaLabel(alerta);
+      const actual =
+        grupos.get(nombre) ||
+        ({
+          nombre,
+          icono: this.categoriaIcono(alerta),
+          cantidad: 0,
+          prioridad: 0,
+          severidad: 'baja',
+        } as ICategoriaResumen);
+      actual.cantidad += 1;
+      actual.prioridad = Math.max(actual.prioridad, this.valorRiesgo(alerta));
+      actual.severidad = this.severidadPorValor(actual.prioridad);
+      grupos.set(nombre, actual);
+    });
+    return [...grupos.values()].sort((a, b) => b.prioridad - a.prioridad || b.cantidad - a.cantidad);
+  }
+
+  public alertasOrdenadas(): IAlerta[] {
+    return [...this.data].sort((a, b) => {
+      const severidad = this.ordenSeveridad(this.severidad(b)) - this.ordenSeveridad(this.severidad(a));
+      if (severidad) return severidad;
+      return this.valorRiesgo(b) - this.valorRiesgo(a);
+    });
+  }
+
+  public alertaPrincipal(): IAlerta | undefined {
+    return this.alertasOrdenadas().find((alerta) => alerta.activa !== false) || this.alertasOrdenadas()[0];
+  }
+
+  public estadoOperativo(): string {
+    const resumen = this.resumen();
+    if (!resumen.total) return 'Sin eventos activos';
+    if (resumen.alta) return 'Requiere atencion';
+    if (resumen.activas) return 'Monitoreo activo';
+    return 'Eventos cerrados';
+  }
+
+  public estadoOperativoClase(): string {
+    const resumen = this.resumen();
+    if (resumen.alta) return 'alta';
+    if (resumen.activas) return 'media';
+    return 'baja';
   }
 
   public titulo(alerta?: IAlerta): string {
@@ -102,15 +279,26 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
     if (!alerta) return '';
     const categoria = this.categoriaLabel(alerta);
     const lote = this.lote(alerta);
-    return [categoria, lote].filter(Boolean).join(' · ');
+    return [categoria, lote].filter(Boolean).join(' - ');
   }
 
   public lote(alerta?: IAlerta): string {
     return alerta?.siembra?.lote?.nombre || alerta?.establecimiento?.nombre || 'Sin lote asociado';
   }
 
+  public productor(alerta?: IAlerta): string {
+    return alerta?.productor?.nombre || alerta?.siembra?.lote?.productor?.nombre || 'Productor no informado';
+  }
+
   public fecha(alerta?: IAlerta): string | undefined {
     return alerta?.fechaUltimoEvento || alerta?.fecha || this.ultimoReporte(alerta)?.['fecha'];
+  }
+
+  public fechaTexto(fecha?: string): string {
+    if (!fecha) return 'Sin fecha';
+    const parsed = new Date(fecha);
+    if (Number.isNaN(parsed.getTime())) return String(fecha);
+    return parsed.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
   }
 
   public severidad(alerta?: IAlerta): SeveridadAlerta {
@@ -147,6 +335,25 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
       granizo: 'Agroclima',
     };
     return labels[categoria] || categoria;
+  }
+
+  public categoriaIcono(alerta?: IAlerta): string {
+    const categoria = this.slug(alerta?.categoria || this.ultimoReporte(alerta)?.['categoria'] || alerta?.tipo || 'operativa');
+    const iconos: Record<string, string> = {
+      sanitaria: 'pi-shield',
+      enfermedad: 'pi-shield',
+      malezas: 'pi-sparkles',
+      maleza: 'pi-sparkles',
+      agroclimatica: 'pi-cloud',
+      helada: 'pi-cloud',
+      granizo: 'pi-cloud',
+      riego: 'pi-tint',
+      sensor: 'pi-wifi',
+      satelital: 'pi-globe',
+      sistema: 'pi-cog',
+      operativa: 'pi-bell',
+    };
+    return iconos[categoria] || 'pi-bell';
   }
 
   public valorRiesgo(alerta?: IAlerta): number {
@@ -189,11 +396,42 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
     const calidad = alerta?.calidadDatos || this.ultimoReporte(alerta)?.['calidadDatos'];
     if (!calidad) return 'Calidad no informada';
     const nivel = calidad.nivel ? `${calidad.nivel}` : 'media';
-    return `${nivel}${calidad.fuente ? ' · ' + calidad.fuente : ''}`;
+    return `${nivel}${calidad.fuente ? ' - ' + calidad.fuente : ''}`;
+  }
+
+  public calidadDetalle(alerta?: IAlerta): string {
+    const calidad = alerta?.calidadDatos || this.ultimoReporte(alerta)?.['calidadDatos'];
+    return calidad?.detalle || 'La calidad del input depende de la fuente climatica, sensores disponibles y cobertura del motor.';
+  }
+
+  public calidadScore(alerta?: IAlerta): number {
+    const calidad = alerta?.calidadDatos || this.ultimoReporte(alerta)?.['calidadDatos'];
+    if (typeof calidad?.score === 'number') return Math.max(0, Math.min(100, calidad.score));
+    const nivel = this.slug(calidad?.nivel || '');
+    if (nivel === 'alta') return 100;
+    if (nivel === 'media') return 70;
+    if (nivel === 'baja') return 40;
+    if (nivel === 'sin-datos') return 0;
+    return 55;
   }
 
   public canales(alerta?: IAlerta): ICanalAlerta[] {
     return alerta?.canales || this.ultimoReporte(alerta)?.['canales'] || [];
+  }
+
+  public canalesActivos(alerta?: IAlerta): ICanalAlerta[] {
+    return this.canales(alerta).filter((canal) => canal.habilitado !== false);
+  }
+
+  public canalResumen(alerta?: IAlerta): string {
+    const canales = this.canalesActivos(alerta);
+    if (!canales.length) return 'App';
+    return canales.map((canal) => canal.canal || 'app').join(', ');
+  }
+
+  public origen(alerta?: IAlerta): string {
+    const reporte = this.ultimoReporte(alerta);
+    return alerta?.origen || reporte?.['origen'] || reporte?.['fuente'] || 'Motor Chaman';
   }
 
   public reportes(alerta?: IAlerta): Record<string, any>[] {
@@ -234,6 +472,13 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
       .replace(/^-+|-+$/g, '');
   }
 
+  public formatNumber(valor?: number, decimales = 0): string {
+    return new Intl.NumberFormat('es-AR', {
+      minimumFractionDigits: decimales,
+      maximumFractionDigits: decimales,
+    }).format(Number(valor) || 0);
+  }
+
   ngOnInit(): void {}
 
   ngOnDestroy(): void {
@@ -252,6 +497,16 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
     return 'baja';
   }
 
+  private ordenSeveridad(severidad: SeveridadAlerta): number {
+    const orden: Record<SeveridadAlerta, number> = {
+      baja: 1,
+      media: 2,
+      alta: 3,
+      critica: 4,
+    };
+    return orden[severidad] || 0;
+  }
+
   private comentarioEstado(estado: EstadoAlerta): string {
     const comentarios: Record<EstadoAlerta, string> = {
       Nueva: 'Alarma reabierta desde el centro de alarmas.',
@@ -260,5 +515,14 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
       Finalizada: 'Alarma finalizada desde el centro de alarmas.',
     };
     return comentarios[estado];
+  }
+
+  private escapeHtml(value?: string): string {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 }
