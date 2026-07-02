@@ -2,7 +2,7 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import { IPermiso, IUsuario } from 'modelos/src';
-import { ConfirmationService, MenuItem } from 'primeng/api';
+import { ConfirmationService } from 'primeng/api';
 import { PrimeNG } from 'primeng/config';
 import { DialogService, DynamicDialogRef } from 'primeng/dynamicdialog';
 import { Subscription } from 'rxjs';
@@ -17,7 +17,6 @@ import { PushNotificationsService } from '../../auxiliares/servicios/push-notifi
 import { WebSocketService } from '../../auxiliares/servicios/websocket';
 import { SharedModule } from '../../auxiliares/shared.module';
 import { ENV, VERSION } from '../../environments/environment';
-import { AplicacionComponent } from '../aplicacion/aplicacion.component';
 import { CambiarPasswordComponent } from '../usuarios/cambiar-password/cambiar-password.component';
 
 @Component({
@@ -38,28 +37,10 @@ export class NavComponent implements OnInit, OnDestroy {
   public rutaActual = '';
   public routerEvents$?: Subscription;
 
-  public items: MenuItem[] = [
-    {
-      label: 'Español',
-      icon: 'images/flags/es.jpg',
-      command: () => {
-        this.changeLang('es');
-      },
-    },
-    {
-      label: 'English',
-      icon: 'images/flags/en.jpg',
-      command: () => {
-        this.changeLang('en');
-      },
-    },
-    {
-      label: 'Português',
-      icon: 'images/flags/br.jpg',
-      command: () => {
-        this.changeLang('br');
-      },
-    },
+  public languageOptions = [
+    { code: 'es', label: 'Español', short: 'ES', icon: 'images/flags/es.jpg' },
+    { code: 'en', label: 'English', short: 'EN', icon: 'images/flags/en.jpg' },
+    { code: 'br', label: 'Português', short: 'PT', icon: 'images/flags/br.jpg' },
   ];
 
   ref: DynamicDialogRef<any> | null = null;
@@ -116,19 +97,6 @@ export class NavComponent implements OnInit, OnDestroy {
         nombre: this.user?.datosPersonales?.nombre || this.user?.username,
       },
       header: this.translate.instant('Cambiar contraseña'),
-    });
-  }
-
-  public openAplicacion() {
-    this.visible = false;
-    this.ref = this.dialogService.open(AplicacionComponent, {
-      header: this.translate.instant('Aplicación'),
-      style: { width: '24rem' },
-      breakpoints: {
-        '600px': '80vw',
-      },
-      modal: true,
-      dismissableMask: true,
     });
   }
 
@@ -371,6 +339,11 @@ export class NavComponent implements OnInit, OnDestroy {
         this.primeng.setTranslation(PRIMENG_BR);
         break;
     }
+  }
+
+  public idiomaActivo(lang: string): boolean {
+    const actual = this.translate.currentLang || localStorage.getItem('lang') || this.translate.defaultLang || 'es';
+    return actual === lang;
   }
 
   private reload() {

@@ -443,27 +443,6 @@
                     </a>
                   </li>
                 }
-                @if (loginService.esProductor || loginService.esEstablecimiento) {
-                  <li>
-                    <a
-                      pRipple
-                      class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
-                      [routerLink]="['/kmz']"
-                      [routerLinkActive]="['active']"
-                      (click)="cerrarMenu($event)"
-                    >
-                      <svg
-                        [style.fill]="'var(--p-primary-color)'"
-                        [attr.width]="'24px'"
-                        [attr.height]="'24px'"
-                        class="mr-2"
-                      >
-                        <use [attr.xlink:href]="'icons/icons.svg#map'"></use>
-                      </svg>
-                      <span class="font-medium">{{ 'KMZ' | translate }}</span>
-                    </a>
-                  </li>
-                }
                 @if (loginService.esAdmin) {
                   <li>
                     <a
@@ -485,23 +464,6 @@
                     </a>
                   </li>
                 }
-                <li>
-                  <a
-                    pRipple
-                    class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
-                    (click)="openAplicacion()"
-                  >
-                    <svg
-                      [style.fill]="'var(--p-primary-color)'"
-                      [attr.width]="'24px'"
-                      [attr.height]="'24px'"
-                      class="mr-2"
-                    >
-                      <use [attr.xlink:href]="'icons/icons.svg#conf'"></use>
-                    </svg>
-                    <span class="font-medium">{{ 'Aplicación' | translate }}</span>
-                  </a>
-                </li>
               </ul>
             }
             <!-- Configuracion -->
@@ -733,47 +695,6 @@
                         <span class="font-medium">{{ 'Usuarios' | translate }}</span>
                       </a>
                     </li>
-                    <!-- Aplicación -->
-                    <li>
-                      <a
-                        pRipple
-                        class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
-                        (click)="openAplicacion()"
-                      >
-                        <svg
-                          [style.fill]="'var(--p-primary-color)'"
-                          [attr.width]="'24px'"
-                          [attr.height]="'24px'"
-                          class="mr-2"
-                        >
-                          <use [attr.xlink:href]="'icons/icons.svg#conf'"></use>
-                        </svg>
-                        <span class="font-medium">{{ 'Aplicación' | translate }}</span>
-                      </a>
-                    </li>
-                    
-                    @if (loginService.esProductor || loginService.esEstablecimiento) {
-                      <!-- KMZ -->
-                      <li>
-                        <a
-                          pRipple
-                          class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
-                          [routerLink]="['/kmz']"
-                          [routerLinkActive]="['active']"
-                          (click)="cerrarMenu($event)"
-                        >
-                          <svg
-                            [style.fill]="'var(--p-primary-color)'"
-                            [attr.width]="'24px'"
-                            [attr.height]="'24px'"
-                            class="mr-2"
-                          >
-                            <use [attr.xlink:href]="'icons/icons.svg#map'"></use>
-                          </svg>
-                          <span class="font-medium">{{ 'KMZ' | translate }}</span>
-                        </a>
-                      </li>
-                    }
                   </ul>
                 </li>
               </ul>
@@ -784,33 +705,27 @@
       <!-- Avatar -->
       <div class="chaman-nav-footer mt-auto">
         <!-- Tema e idioma -->
-        <div class="nav-quick-actions flex items-center justify-end gap-2">
-          <p-button
-            [icon]="helper.darkTheme ? 'pi i-moon' : 'pi i-sun'"
-            [rounded]="true"
-            (onClick)="helper.toggleTheme()"
-            styleClass="p-button-icon-only"
-            severity="secondary"
-          />
-          <p-menu #langMenu [model]="items" [popup]="true">
-            <ng-template pTemplate="item" let-item>
-              <button
-                type="button"
-                class="p-menuitem-link flex items-center gap-2 p-2"
-                (click)="item.command?.call(this, $event)"
-              >
-                <img [src]="item.icon" alt="" width="36" height="36" class="rounded-full" />
-                <span class="text-base">{{ item.label }}</span>
-              </button>
-            </ng-template>
-          </p-menu>
-          <p-button
-            [icon]="helper.darkTheme ? 'pi i-world-dark' : 'pi i-world-light'"
-            [rounded]="true"
-            (click)="langMenu.toggle($event)"
-            styleClass="p-button-icon-only"
-            severity="secondary"
-          ></p-button>
+        <div class="nav-quick-actions">
+          <span class="nav-preferences-label">Preferencias</span>
+          <div class="nav-preference-group">
+            <button type="button" class="nav-icon-action" (click)="helper.toggleTheme()">
+              <i [ngClass]="helper.darkTheme ? 'pi i-moon' : 'pi i-sun'"></i>
+              <span>{{ helper.darkTheme ? 'Claro' : 'Oscuro' }}</span>
+            </button>
+            <div class="nav-language-switch" aria-label="Idioma">
+              @for (item of languageOptions; track item.code) {
+                <button
+                  type="button"
+                  class="nav-lang-button"
+                  [class.active]="idiomaActivo(item.code)"
+                  (click)="changeLang(item.code)"
+                >
+                  <img [src]="item.icon" alt="" />
+                  <span>{{ item.short }}</span>
+                </button>
+              }
+            </div>
+          </div>
         </div>
         <hr class="nav-divider border-t border-0 border-surface" />
         <div class="nav-account text-surface-700 dark:text-surface-100">
