@@ -100,10 +100,22 @@
                     optionValue="_id"
                     [style]="{ width: '100%' }"
                     appendTo="body"
+                    (onChange)="onLoteChange()"
+                    (onClear)="onLoteChange()"
                   />
                   <label>Lote</label>
                 </p-floatlabel>
+
+                <p-floatlabel variant="in">
+                  <input pInputText type="datetime-local" formControlName="fechaAsignacionLote" [fluid]="true" />
+                  <label>Instalado en lote desde</label>
+                </p-floatlabel>
               </div>
+
+              <p class="assignment-note">
+                Esta fecha inicia el tramo operativo del sensor en el lote actual. Chaman conserva el historial
+                completo por DevEUI y registra los tramos de instalacion anteriores para auditoria tecnica.
+              </p>
             </p-tabpanel>
 
             <p-tabpanel [value]="2">

@@ -6,7 +6,7 @@
   border: 1px solid color-mix(in srgb, var(--p-primary-color) 32%, var(--p-surface-200));
   border-radius: 8px;
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
-  min-height: 740px;
+  min-height: 640px;
   padding: 1.25rem;
   width: 100%;
 }
@@ -42,6 +42,16 @@
   margin-top: 0.2rem;
 }
 
+.soil-assignment-note {
+  background: color-mix(in srgb, var(--p-primary-color) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 28%, transparent);
+  border-radius: 8px;
+  color: var(--p-text-color) !important;
+  display: inline-block !important;
+  font-weight: 800;
+  padding: 0.35rem 0.5rem;
+}
+
 .soil-history-actions {
   align-items: center;
   display: flex;
@@ -73,7 +83,7 @@
 
 .soil-history-card app-chart {
   display: block;
-  min-height: 650px;
+  min-height: 520px;
   width: 100%;
 }
 

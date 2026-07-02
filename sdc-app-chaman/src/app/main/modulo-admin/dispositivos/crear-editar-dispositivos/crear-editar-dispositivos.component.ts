@@ -38,6 +38,7 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
   public establecimientos: IEstablecimiento[] = [];
   public lotes: ILote[] = [];
   private prefillLorawan?: Partial<IDispositivo>;
+  private loteInicial?: string;
 
   private productores$?: Subscription;
   private establecimientos$?: Subscription;
@@ -106,6 +107,7 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
 
   private createForm(): void {
     const source = this.dispositivo || this.prefillLorawan;
+    this.loteInicial = source?.idLote || '';
     this.form = new FormGroup({
       nombre: new FormControl(source?.nombre),
       deveui: new FormControl(source?.deveui, Validators.required),
@@ -114,20 +116,40 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
       idProductor: new FormControl(source?.idProductor),
       idEstablecimiento: new FormControl(source?.idEstablecimiento),
       idLote: new FormControl(source?.idLote),
+      fechaAsignacionLote: new FormControl(this.toDateTimeLocal(source?.fechaAsignacionLote)),
     });
   }
 
   private getData() {
-    return this.form?.value as ICreateDispositivo;
+    const data = { ...(this.form?.value || {}) } as ICreateDispositivo;
+    if (data.fechaAsignacionLote) {
+      data.fechaAsignacionLote = new Date(data.fechaAsignacionLote).toISOString();
+    }
+    return data;
   }
 
   public onProductorChange(): void {
     this.form?.get('idEstablecimiento')?.setValue(null);
     this.form?.get('idLote')?.setValue(null);
+    this.form?.get('fechaAsignacionLote')?.setValue(null);
   }
 
   public onEstablecimientoChange(): void {
     this.form?.get('idLote')?.setValue(null);
+    this.form?.get('fechaAsignacionLote')?.setValue(null);
+  }
+
+  public onLoteChange(): void {
+    const idLote = this.form?.get('idLote')?.value || '';
+    const fechaControl = this.form?.get('fechaAsignacionLote');
+    if (!idLote) {
+      fechaControl?.setValue(null);
+      return;
+    }
+
+    if (!fechaControl?.value || idLote !== this.loteInicial) {
+      fechaControl?.setValue(this.toDateTimeLocal(new Date().toISOString()));
+    }
   }
 
   public async guardar(): Promise<void> {
@@ -238,5 +260,13 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     this.productores$?.unsubscribe();
     this.establecimientos$?.unsubscribe();
     this.lotes$?.unsubscribe();
+  }
+
+  private toDateTimeLocal(value?: string): string | null {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    const offsetMs = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
   }
 }

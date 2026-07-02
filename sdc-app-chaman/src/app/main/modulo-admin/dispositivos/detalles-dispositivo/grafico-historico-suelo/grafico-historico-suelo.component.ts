@@ -28,6 +28,11 @@ interface NapaPoint {
   unit: string;
 }
 
+interface RainPoint {
+  x: number;
+  y: number;
+}
+
 interface ProfileRow {
   profundidad: number;
   formatted: string;
@@ -44,6 +49,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   @Input() reportes: IReporte[] = [];
   @Input() titulo?: string;
   @Input() subtitulo?: string;
+  @Input() fechaDesde?: string;
 
   public chartOptions?: any;
   public napaChartOptions?: any;
@@ -52,6 +58,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   public profileRows: ProfileRow[] = [];
   public resumen = '';
   public napaResumen = '';
+  public assignmentNotice = '';
 
   private readonly definitions: SoilMetricDefinition[] = [
     { key: 'humedad', title: 'Humedad de suelo', unit: '%', color: '#2f9fe8', decimals: 1 },
@@ -75,7 +82,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   ];
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['reportes']) {
+    if (changes['reportes'] || changes['fechaDesde']) {
       this.prepareOptions();
     }
   }
@@ -111,6 +118,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   }
 
   private prepareOptions(): void {
+    this.assignmentNotice = this.buildAssignmentNotice();
     const available = this.definitions.filter((definition) => this.hasMetric(definition.key));
     this.metricOptions = available.map((definition) => ({ label: definition.title, value: definition.key }));
 
@@ -131,14 +139,14 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const latestPoints = this.buildLatestDepthPoints(definition);
     this.profileRows = this.buildProfileRows(definition, latestPoints);
     this.resumen = this.buildResumen(definition, series, latestPoints);
-    this.chartOptions = this.buildTimeSeriesChartOptions(definition, series);
+    this.chartOptions = this.buildStackedTimeSeriesChartOptions(definition, series);
     this.napaChartOptions = this.buildNapaChartOptions();
   }
 
   private buildHistoricalSeries(definition: SoilMetricDefinition): any[] {
     const byDepth = new Map<number, HistoricalPoint[]>();
 
-    for (const reporte of this.sortedReports()) {
+    for (const reporte of this.filteredReports()) {
       const timestamp = this.getReporteTimestamp(reporte);
       if (!timestamp) continue;
 
@@ -178,13 +186,14 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         name: `${depth} cm`,
         type: 'spline',
         turboThreshold: 0,
+        custom: { decimals: definition.decimals, unit: definition.unit },
       }));
   }
 
   private buildLatestDepthPoints(definition: SoilMetricDefinition): HistoricalPoint[] {
     const latestByDepth = new Map<number, HistoricalPoint>();
 
-    for (const reporte of [...this.sortedReports()].reverse()) {
+    for (const reporte of [...this.filteredReports()].reverse()) {
       const timestamp = this.getReporteTimestamp(reporte) || Date.now();
       const profile = buildSentekProfile(reporte);
 
@@ -213,15 +222,88 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     return [...latestByDepth.values()].sort((a, b) => a.depth - b.depth);
   }
 
-  private buildTimeSeriesChartOptions(definition: SoilMetricDefinition, series: any[]): any {
+  private buildStackedTimeSeriesChartOptions(definition: SoilMetricDefinition, series: any[]): any {
+    const rainPoints = this.buildRainPoints();
+    const hasRain = rainPoints.length > 0;
+    const depthCount = Math.max(series.length, 1);
+    const chartHeight = Math.min(900, Math.max(540, depthCount * 98 + (hasRain ? 155 : 120)));
+    const topGap = 2.2;
+    const rainHeight = hasRain ? 14 : 0;
+    const soilStart = hasRain ? rainHeight + topGap : 0;
+    const soilAvailable = 88 - soilStart;
+    const soilGap = 1.4;
+    const soilHeight = Math.max(8, (soilAvailable - soilGap * Math.max(depthCount - 1, 0)) / depthCount);
+    const yAxis: any[] = [];
+
+    if (hasRain) {
+      yAxis.push({
+        title: {
+          text: 'Lluvia (mm)',
+          style: { color: '#1d72b8', fontSize: '13px', fontWeight: '800' },
+        },
+        labels: {
+          style: { color: 'var(--p-text-color)', fontSize: '12px', fontWeight: '700' },
+        },
+        min: 0,
+        top: '0%',
+        height: `${rainHeight}%`,
+        offset: 0,
+        gridLineColor: 'var(--p-surface-border)',
+        gridLineWidth: 1,
+      });
+    }
+
+    series.forEach((item, index) => {
+      const top = soilStart + index * (soilHeight + soilGap);
+      yAxis.push({
+        max: definition.key === 'humedad' ? 100 : undefined,
+        min: definition.key === 'humedad' ? 0 : undefined,
+        title: {
+          text: item.name,
+          margin: 8,
+          style: { color: item.color || definition.color, fontSize: '13px', fontWeight: '900' },
+        },
+        labels: {
+          style: { color: 'var(--p-text-color)', fontSize: '12px', fontWeight: '700' },
+        },
+        endOnTick: true,
+        gridLineColor: 'var(--p-surface-border)',
+        gridLineWidth: 1,
+        height: `${soilHeight}%`,
+        top: `${top}%`,
+        offset: 0,
+      });
+    });
+
+    const plottedSeries = [
+      ...(hasRain
+        ? [
+            {
+              color: '#1d72b8',
+              custom: { decimals: 1, unit: 'mm' },
+              data: rainPoints,
+              name: 'Lluvia',
+              pointPadding: 0.08,
+              tooltip: { valueSuffix: ' mm' },
+              type: 'column',
+              yAxis: 0,
+            },
+          ]
+        : []),
+      ...series.map((item, index) => ({
+        ...item,
+        yAxis: index + (hasRain ? 1 : 0),
+      })),
+    ];
+
     return {
       chart: {
         backgroundColor: 'transparent',
-        height: 560,
-        spacingBottom: 18,
+        height: chartHeight,
+        spacingBottom: 22,
         spacingLeft: 8,
-        spacingRight: 18,
-        spacingTop: 10,
+        spacingRight: 20,
+        spacingTop: 8,
         type: 'spline',
         zooming: { type: 'x' },
         style: {
@@ -246,21 +328,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         gridLineColor: 'var(--p-surface-border)',
         gridLineWidth: 1,
       },
-      yAxis: {
-        max: definition.key === 'humedad' ? 100 : undefined,
-        min: definition.key === 'humedad' ? 0 : undefined,
-        title: {
-          text: `${definition.title} (${definition.unit})`,
-          style: { color: definition.color, fontSize: '14px', fontWeight: '700' },
-        },
-        labels: {
-          style: { color: 'var(--p-text-color)', fontSize: '14px' },
-        },
-        endOnTick: true,
-        gridLineColor: 'var(--p-surface-border)',
-        gridLineWidth: 1,
-        startOnTick: true,
-      },
+      yAxis,
       legend: {
         align: 'center',
         enabled: true,
@@ -285,15 +353,23 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         valueSuffix: ` ${definition.unit}`,
         pointFormatter: function (this: any) {
           const point = this as HistoricalPoint & { color?: string; series?: any };
+          const custom = point.series?.userOptions?.custom || {};
+          const decimals = custom.decimals ?? definition.decimals;
+          const unit = custom.unit || definition.unit;
           const raw =
             point.raw !== undefined && point.rawUnit
               ? ` <span style="color:#60708a">(crudo ${Number(point.raw).toFixed(3)} ${point.rawUnit})</span>`
               : '';
-          return `<br/><span style="color:${point.color}">&bull;</span> ${point.series?.name || ''}: <strong>${Number(point.y).toFixed(definition.decimals)} ${definition.unit}</strong>${raw}`;
+          return `<br/><span style="color:${point.color}">&bull;</span> ${point.series?.name || ''}: <strong>${Number(point.y).toFixed(decimals)} ${unit}</strong>${raw}`;
         },
         style: { color: 'var(--p-text-color)', fontSize: '14px' },
       },
       plotOptions: {
+        column: {
+          borderWidth: 0,
+          pointPadding: 0.08,
+          groupPadding: 0.05,
+        },
         spline: {
           animation: { duration: 500 },
           enableMouseTracking: true,
@@ -317,7 +393,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           turboThreshold: 0,
         },
       },
-      series,
+      series: plottedSeries,
       credits: { enabled: false },
       accessibility: { enabled: false },
       lang: { noData: 'Sin lecturas historicas para esta variable.' },
@@ -328,7 +404,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           {
             condition: { maxWidth: 768 },
             chartOptions: {
-              chart: { height: 430 },
+              chart: { height: Math.min(chartHeight, 560) },
               legend: { itemStyle: { fontSize: '12px' } },
             },
           },
@@ -467,7 +543,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   private buildNapaPoints(): NapaPoint[] {
     const points: NapaPoint[] = [];
 
-    for (const reporte of this.sortedReports()) {
+    for (const reporte of this.filteredReports()) {
       const timestamp = this.getReporteTimestamp(reporte);
       if (!timestamp) continue;
 
@@ -498,6 +574,25 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     return points.sort((a, b) => a.x - b.x);
   }
 
+  private buildRainPoints(): RainPoint[] {
+    const points: RainPoint[] = [];
+
+    for (const reporte of this.filteredReports()) {
+      const timestamp = this.getReporteTimestamp(reporte);
+      if (!timestamp) continue;
+
+      const value = this.extractRainValue(reporte);
+      if (value === undefined) continue;
+
+      points.push({
+        x: timestamp,
+        y: Math.max(0, value),
+      });
+    }
+
+    return points.sort((a, b) => a.x - b.x);
+  }
+
   private buildResumen(
     definition: SoilMetricDefinition,
     series: any[],
@@ -516,7 +611,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   }
 
   private hasMetric(key: SoilMetricKey): boolean {
-    return this.sortedReports().some((reporte) =>
+    return this.filteredReports().some((reporte) =>
       buildSentekProfile(reporte).some((row) => !!row[key])
     );
   }
@@ -529,6 +624,34 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     return [...(this.reportes || [])].sort((a, b) => this.getReporteTimestamp(a) - this.getReporteTimestamp(b));
   }
 
+  private filteredReports(): IReporte[] {
+    const desde = this.getFechaDesdeMs();
+    return this.sortedReports().filter((reporte) => {
+      const timestamp = this.getReporteTimestamp(reporte);
+      return !desde || (!!timestamp && timestamp >= desde);
+    });
+  }
+
+  private getFechaDesdeMs(): number {
+    if (!this.fechaDesde) return 0;
+    const timestamp = new Date(this.fechaDesde).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+
+  private buildAssignmentNotice(): string {
+    const timestamp = this.getFechaDesdeMs();
+    if (!timestamp) return '';
+
+    const fecha = new Date(timestamp).toLocaleString('es-AR', {
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+    });
+    return `Tramo operativo actual desde ${fecha}. El historico tecnico completo queda conservado por DevEUI.`;
+  }
+
   private getReporteTimestamp(reporte: IReporte): number {
     return new Date(reporte.fecha || reporte.fechaCreacion || '').getTime() || 0;
   }
@@ -536,7 +659,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   private getCsvRows(): unknown[][] {
     const rows: unknown[][] = [];
 
-    for (const reporte of this.sortedReports()) {
+    for (const reporte of this.filteredReports()) {
       const timestamp = this.getReporteTimestamp(reporte);
       if (!timestamp) continue;
       const fecha = new Date(timestamp).toISOString();
@@ -554,6 +677,69 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     }
 
     return rows;
+  }
+
+  private extractRainValue(reporte: IReporte): number | undefined {
+    const valores = (reporte?.datos as any)?.valores || {};
+    const keys = [
+      'Pluviometro',
+      'Lluvia',
+      'Precipitacion',
+      'Rain',
+      'Rainfall',
+    ];
+
+    for (const key of keys) {
+      const value = this.extractRainValueFromRows(valores[key]);
+      if (value !== undefined) {
+        return value;
+      }
+    }
+
+    for (const [key, raw] of Object.entries(valores)) {
+      const normalizedKey = this.normalizeKey(key);
+      if (
+        normalizedKey.includes('pluvio') ||
+        normalizedKey.includes('lluvia') ||
+        normalizedKey.includes('precipitacion') ||
+        normalizedKey.includes('rain')
+      ) {
+        const value = this.extractRainValueFromRows(raw);
+        if (value !== undefined) {
+          return value;
+        }
+      }
+    }
+
+    return undefined;
+  }
+
+  private extractRainValueFromRows(raw: unknown): number | undefined {
+    const rows = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+    for (const row of rows) {
+      const rowValues = (row as any)?.valores || row;
+      const value = this.toNumber(
+        (rowValues as any)?.suma ??
+          (rowValues as any)?.acumulado ??
+          (rowValues as any)?.actual ??
+          (rowValues as any)?.promedio ??
+          (rowValues as any)?.value ??
+          (rowValues as any)?.valor,
+      );
+      if (value !== undefined) {
+        return value;
+      }
+    }
+
+    return undefined;
+  }
+
+  private normalizeKey(value: string): string {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
   }
 
   private toNumber(value: unknown): number | undefined {

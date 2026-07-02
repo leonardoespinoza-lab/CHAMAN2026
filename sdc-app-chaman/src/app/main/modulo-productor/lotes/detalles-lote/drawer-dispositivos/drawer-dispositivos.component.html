@@ -59,7 +59,8 @@
           <app-grafico-historico-suelo
             [reportes]="reportesHistoricos"
             [titulo]="'Historico Sentek - ' + dispositivo?.nombre"
-            [subtitulo]="'Cada linea representa una profundidad de medicion'"
+            [subtitulo]="'Lluvia arriba cuando hay dato disponible; cada banda muestra una profundidad de medicion'"
+            [fechaDesde]="dispositivo?.fechaAsignacionLote"
           ></app-grafico-historico-suelo>
         } @else {
           <div class="sensor-table-wrap">

@@ -14,6 +14,7 @@ import {
   IBateria,
   IReporte,
   IFrioAcumulado,
+  IAsignacionDispositivoLote,
 } from 'modelos/src';
 import mongoose, { Document } from 'mongoose';
 import { Distribuidor } from 'src/entidades/distribuidor/modelos/schema';
@@ -41,6 +42,12 @@ export class Dispositivo implements Exactly<IDispositivo, Dispositivo> {
 
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idLote?: string;
+
+  @Prop({ type: Date })
+  fechaAsignacionLote?: string;
+
+  @Prop({ type: [Object], default: [] })
+  historialAsignacionesLote?: IAsignacionDispositivoLote[];
   //
   @Prop({ type: String, uppercase: true, index: true })
   deveui?: string;

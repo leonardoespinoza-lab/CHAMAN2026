@@ -37,6 +37,15 @@ export interface IFrioAcumulado {
   fuente?: 'Sensor LoRa';
 }
 
+export interface IAsignacionDispositivoLote {
+  idLote?: string;
+  idProductor?: string;
+  idEstablecimiento?: string;
+  fechaDesde?: string;
+  fechaHasta?: string;
+  activa?: boolean;
+}
+
 export type TipoDispositivo =
   | 'Estación Meteorológica'
   | 'Estacion Meteorologica'
@@ -53,6 +62,8 @@ export interface IDispositivo {
   idProductor?: string;
   idEstablecimiento?: string;
   idLote?: string;
+  fechaAsignacionLote?: string;
+  historialAsignacionesLote?: IAsignacionDispositivoLote[];
   deveui?: string;
   tipo?: TipoDispositivo;
   metadata?: IMetaDataLora;

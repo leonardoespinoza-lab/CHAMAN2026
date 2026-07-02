@@ -56,6 +56,17 @@ h1 {
   padding-top: 12px;
 }
 
+.assignment-note {
+  background: color-mix(in srgb, var(--p-primary-color) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 24%, var(--p-content-border-color));
+  border-radius: 8px;
+  color: var(--p-text-color);
+  font-weight: 700;
+  line-height: 1.45;
+  margin: 16px 0 0;
+  padding: 12px 14px;
+}
+
 .lorawan-readonly {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

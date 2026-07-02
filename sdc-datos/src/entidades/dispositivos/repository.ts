@@ -5,6 +5,7 @@ import {
   IUpdateDispositivo,
   IQueryParam,
   ICreateDispositivo,
+  IAsignacionDispositivoLote,
   ILorawanUplink,
   SensoresV2,
   TipoDispositivo,
@@ -32,7 +33,18 @@ export class DispositivosRepository {
   }
 
   async create(data: ICreateDispositivo): Promise<Dispositivo> {
-    return await this.model.create(data);
+    const fechaAsignacionLote = data.fechaAsignacionLote || (data.idLote ? new Date().toISOString() : undefined);
+    const historialAsignacionesLote =
+      data.historialAsignacionesLote ||
+      (data.idLote && fechaAsignacionLote
+        ? [this.crearSegmentoAsignacion(data, fechaAsignacionLote)]
+        : []);
+
+    return await this.model.create({
+      ...data,
+      fechaAsignacionLote,
+      historialAsignacionesLote,
+    });
   }
 
   private inferDeviceFromLorawanUplink(uplink: ILorawanUplink): {
@@ -199,12 +211,161 @@ export class DispositivosRepository {
   }
 
   async update(id: string, data: IUpdateDispositivo): Promise<Dispositivo> {
-    return await this.model.findByIdAndUpdate(id, data, {
+    const updateData: IUpdateDispositivo = { ...data };
+    const unsetData: Record<string, 1> = {};
+    const cambiaLote = Object.prototype.hasOwnProperty.call(data, 'idLote');
+    const cambiaFechaAsignacion = Object.prototype.hasOwnProperty.call(data, 'fechaAsignacionLote');
+
+    if (cambiaLote || cambiaFechaAsignacion) {
+      const actual = await this.model
+        .findById(id)
+        .select('idLote idProductor idEstablecimiento fechaAsignacionLote historialAsignacionesLote')
+        .lean();
+      const loteAnterior = actual?.idLote ? String(actual.idLote) : '';
+      const loteNuevo = cambiaLote ? (data.idLote ? String(data.idLote) : '') : loteAnterior;
+      const fechaAsignacion = data.fechaAsignacionLote || actual?.fechaAsignacionLote || new Date().toISOString();
+
+      if (loteAnterior !== loteNuevo) {
+        if (loteNuevo) {
+          updateData.fechaAsignacionLote = fechaAsignacion;
+          updateData.historialAsignacionesLote = this.actualizarHistorialPorCambioDeLote(
+            actual,
+            data,
+            fechaAsignacion,
+            loteAnterior,
+            loteNuevo,
+          );
+        } else {
+          delete updateData.fechaAsignacionLote;
+          unsetData.fechaAsignacionLote = 1;
+          updateData.historialAsignacionesLote = this.actualizarHistorialPorCambioDeLote(
+            actual,
+            data,
+            fechaAsignacion,
+            loteAnterior,
+            loteNuevo,
+          );
+        }
+      } else if (cambiaFechaAsignacion && loteNuevo && data.fechaAsignacionLote) {
+        updateData.historialAsignacionesLote = this.actualizarFechaSegmentoActivo(
+          actual,
+          data,
+          data.fechaAsignacionLote,
+          loteNuevo,
+        );
+      }
+    }
+
+    const update = Object.keys(unsetData).length
+      ? { $set: updateData, $unset: unsetData }
+      : updateData;
+
+    return await this.model.findByIdAndUpdate(id, update, {
       new: true,
     });
   }
 
   async delete(id: string): Promise<Dispositivo> {
     return await this.model.findByIdAndDelete(id);
+  }
+
+  private actualizarHistorialPorCambioDeLote(
+    actual: Partial<Dispositivo> | null,
+    data: IUpdateDispositivo,
+    fechaAsignacion: string,
+    loteAnterior: string,
+    loteNuevo: string,
+  ): IAsignacionDispositivoLote[] {
+    const fecha = this.normalizarFecha(fechaAsignacion);
+    const historial = this.clonarHistorial(actual?.historialAsignacionesLote);
+
+    for (const segmento of historial) {
+      const idLoteSegmento = segmento.idLote ? String(segmento.idLote) : '';
+      const esSegmentoActual =
+        segmento.activa || (!!loteAnterior && idLoteSegmento === loteAnterior && !segmento.fechaHasta);
+
+      if (esSegmentoActual) {
+        segmento.activa = false;
+        segmento.fechaHasta = segmento.fechaHasta || fecha;
+      }
+    }
+
+    if (loteNuevo) {
+      historial.push(
+        this.crearSegmentoAsignacion(
+          {
+            ...actual,
+            ...data,
+            idLote: loteNuevo,
+          },
+          fecha,
+        ),
+      );
+    }
+
+    return historial;
+  }
+
+  private actualizarFechaSegmentoActivo(
+    actual: Partial<Dispositivo> | null,
+    data: IUpdateDispositivo,
+    fechaAsignacion: string,
+    loteActual: string,
+  ): IAsignacionDispositivoLote[] {
+    const fecha = this.normalizarFecha(fechaAsignacion);
+    const historial = this.clonarHistorial(actual?.historialAsignacionesLote);
+    let index = -1;
+
+    for (let i = historial.length - 1; i >= 0; i--) {
+      const segmento = historial[i];
+      const idLoteSegmento = segmento.idLote ? String(segmento.idLote) : '';
+      if (idLoteSegmento === loteActual && (segmento.activa || !segmento.fechaHasta)) {
+        index = i;
+        break;
+      }
+    }
+
+    if (index >= 0) {
+      historial[index] = {
+        ...historial[index],
+        activa: true,
+        fechaDesde: fecha,
+      };
+      return historial;
+    }
+
+    historial.push(
+      this.crearSegmentoAsignacion(
+        {
+          ...actual,
+          ...data,
+          idLote: loteActual,
+        },
+        fecha,
+      ),
+    );
+    return historial;
+  }
+
+  private crearSegmentoAsignacion(
+    data: Partial<IUpdateDispositivo>,
+    fechaDesde: string,
+  ): IAsignacionDispositivoLote {
+    return {
+      idLote: data.idLote ? String(data.idLote) : undefined,
+      idProductor: data.idProductor ? String(data.idProductor) : undefined,
+      idEstablecimiento: data.idEstablecimiento ? String(data.idEstablecimiento) : undefined,
+      fechaDesde: this.normalizarFecha(fechaDesde),
+      activa: true,
+    };
+  }
+
+  private clonarHistorial(historial?: IAsignacionDispositivoLote[]): IAsignacionDispositivoLote[] {
+    return Array.isArray(historial) ? historial.map((segmento) => ({ ...segmento })) : [];
+  }
+
+  private normalizarFecha(fecha?: string): string {
+    const parsed = fecha ? new Date(fecha) : new Date();
+    return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
   }
 }
