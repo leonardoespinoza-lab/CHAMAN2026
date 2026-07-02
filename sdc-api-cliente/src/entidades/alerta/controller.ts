@@ -97,6 +97,8 @@ export class AlertasController {
 
   @Put('cambiarEstado/:id')
   @Permisos(
+    { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
   )

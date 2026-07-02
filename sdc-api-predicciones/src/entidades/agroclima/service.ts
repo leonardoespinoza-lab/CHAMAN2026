@@ -102,6 +102,19 @@ export class AgroclimaService {
       await this.alertasService.registrarEventoSiembra({
         idSiembra,
         descripcion: 'Riesgo de Dano por Helada',
+        titulo: 'Riesgo de dano por helada',
+        tipo: 'helada',
+        categoria: 'agroclimatica',
+        motor: 'riesgos-agroclimaticos',
+        versionMotor: 'v1',
+        lectura: riesgos.helada.lectura,
+        recomendacion: riesgos.helada.recomendacion,
+        calidadDatos: {
+          nivel: 'media',
+          fuente: 'Open-Meteo / clima de zona',
+          detalle:
+            'Pronostico agroclimatico de zona; no reemplaza sensor local de temperatura en el lote.',
+        },
         fecha,
         eventKey,
         reporte: this.reporteAgroclimatico(riesgos.helada),
@@ -124,6 +137,19 @@ export class AgroclimaService {
       await this.alertasService.registrarEventoSiembra({
         idSiembra,
         descripcion: 'Riesgo de Granizo',
+        titulo: 'Riesgo de granizo',
+        tipo: 'granizo',
+        categoria: 'agroclimatica',
+        motor: 'riesgos-agroclimaticos',
+        versionMotor: 'v1',
+        lectura: riesgos.granizo.lectura,
+        recomendacion: riesgos.granizo.recomendacion,
+        calidadDatos: {
+          nivel: 'media',
+          fuente: 'Open-Meteo / clima de zona',
+          detalle:
+            'Senal convectiva estimada para la zona; requiere seguimiento meteorologico local.',
+        },
         fecha,
         eventKey,
         reporte: this.reporteAgroclimatico(riesgos.granizo),

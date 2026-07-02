@@ -1,0 +1,361 @@
+:host {
+  display: block;
+  padding: 1.25rem 1.5rem;
+}
+
+.alarm-center {
+  max-width: 1480px;
+  margin: 0 auto;
+}
+
+.alarm-hero {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(420px, 0.9fr) auto;
+  gap: 1rem;
+  align-items: end;
+  padding: 1rem 0 1.25rem;
+}
+
+.alarm-title span,
+.section-heading span {
+  color: var(--p-primary-color);
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.alarm-title h1 {
+  margin: 0.1rem 0;
+  color: #0f2138;
+  font-size: clamp(2rem, 3vw, 3.15rem);
+  line-height: 1;
+}
+
+.alarm-title p {
+  margin: 0;
+  color: #536886;
+  font-size: 1rem;
+}
+
+.alarm-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(92px, 1fr));
+  gap: 0.65rem;
+}
+
+.alarm-summary article,
+.detail-grid article,
+.channel-grid article,
+.timeline article {
+  border: 1px solid rgba(154, 183, 212, 0.48);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 14px 42px rgba(17, 38, 66, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.alarm-summary article {
+  padding: 0.75rem 0.9rem;
+}
+
+.alarm-summary span,
+.quality-cell small,
+.alarm-name small,
+.detail-grid span,
+.channel-grid span,
+.timeline span {
+  color: #60738f;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.alarm-summary strong {
+  display: block;
+  margin-top: 0.15rem;
+  color: #10223a;
+  font-size: 1.65rem;
+  line-height: 1;
+}
+
+.alarm-summary .high {
+  border-color: rgba(255, 127, 80, 0.52);
+}
+
+.alarm-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+:host ::ng-deep .alarm-table .p-datatable-table {
+  border-collapse: separate;
+  border-spacing: 0 0.55rem;
+}
+
+:host ::ng-deep .alarm-table .p-datatable-thead > tr > th {
+  border: 0;
+  background: rgba(239, 253, 252, 0.82);
+  color: #22354f;
+  font-size: 0.95rem;
+  font-weight: 900;
+}
+
+:host ::ng-deep .alarm-table .p-datatable-tbody > tr > td {
+  border-width: 1px 0;
+  border-color: rgba(160, 188, 218, 0.38);
+  background: rgba(255, 255, 255, 0.82);
+  color: #13243b;
+  font-size: 1rem;
+  vertical-align: middle;
+}
+
+:host ::ng-deep .alarm-table .p-datatable-tbody > tr > td:first-child {
+  border-left-width: 1px;
+  border-radius: 14px 0 0 14px;
+}
+
+:host ::ng-deep .alarm-table .p-datatable-tbody > tr > td:last-child {
+  border-right-width: 1px;
+  border-radius: 0 14px 14px 0;
+}
+
+.alarm-row {
+  cursor: pointer;
+}
+
+.alarm-row.alta td,
+.alarm-row.critica td {
+  background: rgba(255, 248, 242, 0.9) !important;
+}
+
+.alarm-name {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  min-width: 260px;
+}
+
+.alarm-icon {
+  display: grid;
+  width: 2.45rem;
+  height: 2.45rem;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(35, 211, 200, 0.12);
+  color: var(--p-primary-color);
+  font-size: 1.1rem;
+}
+
+.alarm-name strong,
+.quality-cell strong {
+  display: block;
+  color: #10223a;
+  font-size: 1.05rem;
+  line-height: 1.15;
+}
+
+.risk-cell {
+  min-width: 112px;
+}
+
+.risk-cell strong {
+  font-size: 1.55rem;
+  color: #152840;
+}
+
+.risk-cell span {
+  color: #60738f;
+  font-weight: 800;
+}
+
+.risk-bar {
+  overflow: hidden;
+  height: 0.42rem;
+  margin-top: 0.35rem;
+  border-radius: 999px;
+  background: #dfeaf3;
+}
+
+.risk-bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #23d3c8, #78c646);
+}
+
+.alta .risk-bar i,
+.critica .risk-bar i {
+  background: linear-gradient(90deg, #ffbf57, #f25555);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: #e9fbf9;
+  color: #0e766f;
+  font-weight: 900;
+}
+
+.status-pill.tratada,
+.status-pill.finalizada {
+  background: #eef3f7;
+  color: #53647d;
+}
+
+.status-pill.postergada {
+  background: #fff7df;
+  color: #8c6100;
+}
+
+.actions-col {
+  width: 130px;
+  text-align: right;
+}
+
+.ghost-action {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  min-height: 2.35rem;
+  padding: 0 0.85rem;
+  border: 1px solid rgba(35, 211, 200, 0.55);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.62);
+  color: #0b776f;
+  font-weight: 900;
+}
+
+.empty-state {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: center;
+  padding: 2rem;
+  color: #536886;
+}
+
+.empty-state i {
+  color: var(--p-primary-color);
+  font-size: 2rem;
+}
+
+.alarm-detail {
+  display: grid;
+  gap: 1rem;
+}
+
+.detail-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(35, 211, 200, 0.4);
+  border-radius: 18px;
+  background: rgba(232, 255, 252, 0.75);
+}
+
+.detail-hero.alta,
+.detail-hero.critica {
+  border-color: rgba(255, 127, 80, 0.45);
+  background: rgba(255, 246, 236, 0.78);
+}
+
+.detail-hero span,
+.detail-hero small {
+  display: block;
+  color: #536886;
+  font-weight: 800;
+}
+
+.detail-hero strong {
+  display: block;
+  color: #10223a;
+  font-size: clamp(1.5rem, 2vw, 2.1rem);
+  line-height: 1.08;
+}
+
+.detail-score {
+  min-width: 110px;
+  align-self: center;
+  text-align: center;
+}
+
+.detail-score strong {
+  font-size: 2.4rem;
+}
+
+.detail-grid,
+.channel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.detail-grid article,
+.channel-grid article,
+.timeline article {
+  padding: 0.9rem;
+}
+
+.detail-grid p,
+.channel-grid small,
+.timeline small,
+.muted {
+  margin: 0.25rem 0 0;
+  color: #1e3048;
+  font-size: 1rem;
+  line-height: 1.36;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+}
+
+.section-heading strong {
+  color: #10223a;
+  font-size: 1.2rem;
+}
+
+.timeline {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  padding-top: 0.35rem;
+}
+
+@media (max-width: 980px) {
+  .alarm-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .alarm-toolbar {
+    justify-content: stretch;
+  }
+
+  .detail-grid,
+  .channel-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  :host {
+    padding: 0.85rem;
+  }
+
+  .alarm-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

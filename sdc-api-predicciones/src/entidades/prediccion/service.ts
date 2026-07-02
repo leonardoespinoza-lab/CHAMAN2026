@@ -160,6 +160,20 @@ export class PrediccionsService {
           await this.alertasService.registrarEventoSiembra({
             idSiembra,
             descripcion: 'Riesgo de Enfermedad',
+            titulo: e.enfermedad,
+            tipo: 'enfermedad',
+            categoria: 'sanitaria',
+            motor: 'prediccion-enfermedades',
+            versionMotor: 'v2',
+            lectura: `${e.enfermedad}: ${Number(e.resultado || 0).toFixed(1)}% de riesgo calculado.`,
+            recomendacion:
+              'Validar a campo, revisar estadio fenologico, humedad y manejo antes de definir una intervencion.',
+            calidadDatos: {
+              nivel: 'media',
+              fuente: 'Clima historico diario y fenologia del lote',
+              detalle:
+                'Usa la estacion mas cercana y fallback Open-Meteo si FieldClimate no responde.',
+            },
             fecha,
             eventKey: `enfermedad:${idSiembra}:${this.slug(
               e.enfermedad,
@@ -196,6 +210,19 @@ export class PrediccionsService {
       await this.alertasService.registrarEventoSiembra({
         idSiembra,
         descripcion: 'Riesgo de Malezas',
+        titulo: nombre,
+        tipo: 'maleza',
+        categoria: 'malezas',
+        motor: 'prediccion-malezas',
+        versionMotor: 'v1',
+        lectura: `${nombre}: emergencia proyectada ${Number(especie.emergenciaProyectada7dPct || 0).toFixed(1)}%.`,
+        recomendacion: especie.recomendacion,
+        calidadDatos: {
+          nivel: 'media',
+          fuente: 'Acumulacion termica/hidrica y parametros de especie',
+          detalle:
+            'Proyeccion diaria del motor de malezas; debe cruzarse con recorrida y cobertura real.',
+        },
         fecha,
         eventKey: `maleza:${idSiembra}:${this.slug(
           especie.codigoCarga || nombre,

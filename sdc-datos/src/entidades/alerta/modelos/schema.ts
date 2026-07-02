@@ -9,6 +9,11 @@ import {
   IQuimica,
   EstadoAlerta,
   IEstadoAlerta,
+  CategoriaAlerta,
+  SeveridadAlerta,
+  ICalidadDatosAlerta,
+  ICanalAlerta,
+  ISiembra,
 } from 'modelos/src';
 import { Document } from 'mongoose';
 import { Quimica } from 'src/entidades/quimica/modelos/schema';
@@ -54,6 +59,57 @@ export class Alerta implements Exactly<IAlerta, Alerta> {
   @Prop({ type: String })
   descripcion?: string;
 
+  @Prop({ type: String })
+  titulo?: string;
+
+  @Prop({ type: String })
+  tipo?: string;
+
+  @Prop({ type: String })
+  categoria?: CategoriaAlerta;
+
+  @Prop({ type: String })
+  severidad?: SeveridadAlerta;
+
+  @Prop({ type: Number })
+  prioridad?: number;
+
+  @Prop({ type: String })
+  origen?: string;
+
+  @Prop({ type: String })
+  motor?: string;
+
+  @Prop({ type: String })
+  versionMotor?: string;
+
+  @Prop({ type: String })
+  eventKey?: string;
+
+  @Prop({ type: String })
+  dedupeKey?: string;
+
+  @Prop({ type: String })
+  lectura?: string;
+
+  @Prop({ type: String })
+  recomendacion?: string;
+
+  @Prop({ type: String })
+  accionSugerida?: string;
+
+  @Prop({ type: Object })
+  calidadDatos?: ICalidadDatosAlerta;
+
+  @Prop({ type: [Object] })
+  canales?: ICanalAlerta[];
+
+  @Prop({ type: Date })
+  fechaUltimoEvento?: string;
+
+  @Prop({ type: Date })
+  fechaVencimiento?: string;
+
   @Prop({ type: [Object] })
   reportes?: Record<string, any>[];
 
@@ -62,6 +118,7 @@ export class Alerta implements Exactly<IAlerta, Alerta> {
   distribuidor?: IDistribuidor;
   productor?: IProductor;
   establecimiento?: IEstablecimiento;
+  siembra?: ISiembra;
 }
 
 export type AlertaDocument = Alerta & Document;
@@ -104,3 +161,10 @@ AlertaSchema.virtual('siembra', {
   localField: 'idSiembra',
   ref: Siembra.name,
 });
+
+AlertaSchema.index({ idSiembra: 1, activa: 1, dedupeKey: 1 });
+AlertaSchema.index({ idProductor: 1, activa: 1, fechaUltimoEvento: -1 });
+AlertaSchema.index({ idEstablecimiento: 1, activa: 1, fechaUltimoEvento: -1 });
+AlertaSchema.index({ idDistribuidor: 1, activa: 1, fechaUltimoEvento: -1 });
+AlertaSchema.index({ idQuimica: 1, activa: 1, fechaUltimoEvento: -1 });
+AlertaSchema.index({ categoria: 1, severidad: 1, activa: 1 });
