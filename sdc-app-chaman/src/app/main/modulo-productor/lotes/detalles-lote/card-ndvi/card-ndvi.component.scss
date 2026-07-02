@@ -11,8 +11,8 @@
 .ndvi-header {
   align-items: center;
   display: flex;
-  gap: 0.7rem;
-  margin-bottom: 0.55rem;
+  gap: 0.62rem;
+  margin-bottom: 0.45rem;
 }
 
 .ndvi-header p {
@@ -27,7 +27,7 @@
 .ndvi-header span {
   color: var(--p-text-muted-color);
   display: block;
-  font-size: 1rem;
+  font-size: 1.05rem;
 }
 
 .ndvi-header-actions {
@@ -54,10 +54,10 @@
   border: 1px solid rgba(91, 124, 156, 0.22);
   border-radius: 8px;
   color: var(--p-text-muted-color);
-  font-size: 0.94rem;
+  font-size: 0.98rem;
   line-height: 1.35;
-  margin: 0 0 0.65rem;
-  padding: 0.55rem 0.7rem;
+  margin: 0 0 0.52rem;
+  padding: 0.48rem 0.65rem;
 }
 
 .ndvi-balance.ok {
@@ -78,17 +78,18 @@
 }
 
 .ndvi-content {
+  align-items: start;
   display: grid;
-  gap: 0.8rem;
-  grid-template-columns: minmax(280px, 0.62fr) minmax(300px, 1fr);
+  gap: 0.72rem;
+  grid-template-columns: minmax(380px, 0.92fr) minmax(380px, 1.08fr);
 }
 
 .satellite-timeline {
   border-bottom: 1px solid #d7e0ea;
   display: grid;
-  gap: 0.45rem;
-  margin-bottom: 0.65rem;
-  padding-bottom: 0.65rem;
+  gap: 0.38rem;
+  margin-bottom: 0.55rem;
+  padding-bottom: 0.55rem;
 }
 
 .timeline-strip {
@@ -105,9 +106,9 @@
   color: var(--p-text-color);
   cursor: pointer;
   display: grid;
-  flex: 0 0 128px;
+  flex: 0 0 118px;
   gap: 0.18rem;
-  padding: 0.48rem 0.58rem;
+  padding: 0.46rem 0.56rem;
   text-align: left;
 }
 
@@ -119,12 +120,12 @@
 .timeline-item span,
 .timeline-item small {
   color: var(--p-text-muted-color);
-  font-size: 0.94rem;
+  font-size: 0.9rem;
   font-weight: 700;
 }
 
 .timeline-item strong {
-  font-size: 0.98rem;
+  font-size: 1rem;
 }
 
 .satellite-viewer {
@@ -134,7 +135,7 @@
 
 .layer-tabs {
   display: grid;
-  gap: 0.42rem;
+  gap: 0.38rem;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
@@ -146,8 +147,8 @@
   cursor: pointer;
   display: grid;
   gap: 0.12rem;
-  min-height: 50px;
-  padding: 0.42rem 0.52rem;
+  min-height: 46px;
+  padding: 0.38rem 0.5rem;
   text-align: left;
 }
 
@@ -162,12 +163,12 @@
 }
 
 .layer-tab strong {
-  font-size: 0.98rem;
+  font-size: 1.02rem;
 }
 
 .layer-tab span {
   color: var(--p-primary-color);
-  font-size: 0.94rem;
+  font-size: 1rem;
   font-weight: 800;
 }
 
@@ -175,7 +176,7 @@
   background: #f4f7fb;
   border: 1px solid rgba(104, 132, 163, 0.42);
   border-radius: 8px;
-  height: clamp(260px, 28vw, 430px);
+  height: clamp(230px, 22vw, 360px);
   overflow: hidden;
   padding: 0;
   position: relative;
@@ -230,7 +231,7 @@
 
 .satellite-map-chip strong,
 .satellite-map-chip span {
-  font-size: 0.92rem;
+  font-size: 0.98rem;
   line-height: 1;
 }
 
@@ -241,7 +242,7 @@
 
 .satellite-map-chip small {
   color: #6d4b13;
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   font-weight: 800;
   line-height: 1;
 }
@@ -267,7 +268,7 @@
 .satellite-map-legend span {
   align-items: center;
   display: inline-flex;
-  font-size: 0.78rem;
+  font-size: 0.86rem;
   font-weight: 750;
   gap: 0.26rem;
   line-height: 1;
@@ -300,11 +301,11 @@
 }
 
 .satellite-raster-warning strong {
-  font-size: 0.86rem;
+  font-size: 0.96rem;
 }
 
 .satellite-raster-warning span {
-  font-size: 0.78rem;
+  font-size: 0.9rem;
 }
 
 .ndvi-analysis {
@@ -316,6 +317,7 @@
   flex-direction: column;
   gap: 0.5rem;
   min-height: 0;
+  align-self: start;
   padding: 0.72rem;
 }
 
@@ -331,7 +333,7 @@
 .analysis-grid span {
   color: var(--p-text-muted-color);
   display: block;
-  font-size: 0.9rem;
+  font-size: 0.96rem;
   font-weight: 700;
   line-height: 1.15;
 }
@@ -347,7 +349,7 @@
 .context,
 .recommendation {
   color: var(--p-text-muted-color);
-  font-size: 0.98rem;
+  font-size: 1.02rem;
   line-height: 1.35;
   margin: 0.35rem 0 0;
 }
@@ -362,7 +364,7 @@
   background: rgba(255, 255, 255, 0.68);
   border: 1px solid #d4deea;
   border-radius: 7px;
-  padding: 0.55rem 0.62rem;
+  padding: 0.52rem 0.6rem;
 }
 
 .analysis-grid strong {
@@ -424,9 +426,9 @@
 .satellite-module {
   border-top: 1px solid #d7e0ea;
   display: grid;
-  gap: 0.6rem;
-  margin-top: 0.7rem;
-  padding-top: 0.7rem;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
 }
 
 .satellite-title span {
@@ -446,8 +448,8 @@
 
 .satellite-grid {
   display: grid;
-  gap: 0.5rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(178px, 100%), 1fr));
+  gap: 0.45rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
 }
 
 .satellite-grid article {
@@ -455,8 +457,8 @@
   border: 1px solid #c7d4e2;
   border-radius: 8px;
   display: grid;
-  gap: 0.28rem;
-  padding: 0.58rem;
+  gap: 0.24rem;
+  padding: 0.54rem;
 }
 
 .satellite-grid article.activo {
@@ -500,7 +502,7 @@
 }
 
 .satellite-grid p {
-  font-size: 0.9rem;
+  font-size: 0.96rem;
 }
 
 .satellite-grid .layer-reading {
@@ -508,7 +510,7 @@
   border-radius: 7px;
   color: var(--p-text-color);
   font-weight: 650;
-  padding: 0.55rem;
+  padding: 0.5rem;
 }
 
 .satellite-grid article.active-layer {
@@ -516,7 +518,7 @@
 }
 
 .satellite-grid small {
-  font-size: 0.8rem;
+  font-size: 0.86rem;
   font-weight: 700;
 }
 

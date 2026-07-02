@@ -5,9 +5,9 @@
 .risk-header {
   align-items: flex-start;
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   justify-content: space-between;
-  margin-bottom: 0.9rem;
+  margin-bottom: 0.7rem;
 }
 
 .risk-header p {
@@ -35,17 +35,17 @@
 }
 
 .risk-header span {
-  font-size: 0.92rem;
+  font-size: 1rem;
 }
 
 .risk-header small {
-  font-size: 0.78rem;
+  font-size: 0.9rem;
 }
 
 .risk-action-grid {
   display: grid;
-  gap: 0.72rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
 }
 
 .risk-action-card {
@@ -58,9 +58,9 @@
   cursor: pointer;
   display: grid;
   font: inherit;
-  gap: 0.5rem;
-  min-height: 182px;
-  padding: 0.85rem;
+  gap: 0.42rem;
+  min-height: 144px;
+  padding: 0.78rem;
   text-align: left;
   transition:
     border-color 0.18s ease,
@@ -91,7 +91,7 @@
   background: rgba(111, 184, 69, 0.16);
   border-radius: 999px;
   color: var(--p-text-color);
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   font-weight: 850;
   justify-self: start;
   padding: 0.24rem 0.55rem;
@@ -107,13 +107,13 @@
 
 .risk-action-card strong {
   color: var(--p-text-color);
-  font-size: 1.15rem;
+  font-size: 1.2rem;
   line-height: 1.1;
 }
 
 .risk-value {
   color: var(--p-text-color);
-  font-size: 2.15rem;
+  font-size: 2.2rem;
   font-weight: 850;
   line-height: 0.95;
 }
@@ -142,12 +142,12 @@
 }
 
 .risk-action-card small {
-  font-size: 0.84rem;
+  font-size: 0.95rem;
   line-height: 1.28;
 }
 
 .risk-action-card em {
-  font-size: 0.82rem;
+  font-size: 0.92rem;
   font-style: normal;
   font-weight: 800;
 }

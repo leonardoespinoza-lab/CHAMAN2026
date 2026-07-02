@@ -75,7 +75,7 @@
 .stage-context span,
 .stage-now-panel > span {
   display: block;
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 800;
   line-height: 1.2;
   margin-bottom: 0.16rem;
@@ -172,6 +172,7 @@
 }
 
 .stage-context {
+  align-self: start;
   display: grid;
   gap: 0.7rem;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -181,13 +182,14 @@
   background: var(--p-surface-50);
   border: 1px solid rgba(91, 124, 156, 0.22);
   border-radius: 8px;
-  padding: 0.9rem;
+  min-height: 104px;
+  padding: 0.78rem 0.85rem;
 }
 
 .stage-context strong {
   color: var(--p-text-color);
   display: block;
-  font-size: 1.2rem;
+  font-size: 1.34rem;
   line-height: 1.14;
   margin-top: 0.18rem;
   overflow-wrap: anywhere;
@@ -196,7 +198,7 @@
 .stage-context small {
   color: var(--p-text-muted-color);
   display: block;
-  font-size: 0.9rem;
+  font-size: 0.98rem;
   line-height: 1.2;
   margin-top: 0.28rem;
 }

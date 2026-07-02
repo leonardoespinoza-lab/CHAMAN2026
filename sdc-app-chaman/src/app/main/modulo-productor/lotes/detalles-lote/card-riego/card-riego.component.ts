@@ -16,6 +16,7 @@ export class CardRiegoComponent implements OnInit, OnDestroy {
   @Input() public siembra?: ISiembra;
   @Input() public lote?: IDetallesLote;
   public verDrawerRiego: boolean = false;
+  public verDetalleRiego: boolean = false;
 
   constructor(public helper: HelperService) {}
 
@@ -81,8 +82,14 @@ export class CardRiegoComponent implements OnInit, OnDestroy {
     return Number(et0Validos.reduce((suma, et0) => suma + et0, 0).toFixed(2));
   }
 
-  public abrirDrawerRiego(): void {
+  public abrirDetalleRiego(): void {
+    this.verDetalleRiego = true;
+  }
+
+  public abrirDrawerRiego(event?: Event): void {
+    event?.stopPropagation();
     if (!this.tieneLanzaHumedad) return;
+    this.verDetalleRiego = false;
     this.verDrawerRiego = true;
   }
 

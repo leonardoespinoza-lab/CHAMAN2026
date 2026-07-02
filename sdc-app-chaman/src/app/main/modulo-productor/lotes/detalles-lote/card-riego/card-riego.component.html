@@ -1,12 +1,10 @@
-<div class="custom-card irrigation-card" [class.clickable]="tieneLanzaHumedad" (click)="abrirDrawerRiego()">
+<div class="custom-card irrigation-card clickable" (click)="abrirDetalleRiego()">
   <div class="irrigation-header">
     <div>
       <p class="titulo-card">{{ 'Riego' | translate | uppercase }}</p>
       <span>{{ resumen }}</span>
     </div>
-    @if (tieneLanzaHumedad) {
-      <strong>+</strong>
-    }
+    <strong class="detail-cue">Ver</strong>
   </div>
 
   <div class="irrigation-main">
@@ -64,6 +62,100 @@
     <p-message severity="warn" [text]="motivoAguaUtil"></p-message>
   }
 </div>
+
+<p-dialog
+  [(visible)]="verDetalleRiego"
+  [modal]="true"
+  [dismissableMask]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(760px, 94vw)' }"
+  [breakpoints]="{ '720px': '96vw' }"
+  header="Recomendacion de riego"
+  styleClass="irrigation-detail-dialog"
+>
+  <section class="irrigation-detail">
+    <div class="detail-hero" [class.disabled]="!tieneLanzaHumedad">
+      <div>
+        <span>{{ tieneLanzaHumedad ? 'Motor activo' : 'Sin sensor de humedad' }}</span>
+        <strong>
+          @if (tieneLanzaHumedad && recomendacionHoy) {
+            {{ recomendacionHoy.cantidad || 0 }} mm hoy
+          } @else {
+            Sin riego recomendado
+          }
+        </strong>
+        <p>{{ resumen }}</p>
+      </div>
+      <em>
+        @if (tieneLanzaHumedad && recomendacionHoy) {
+          {{ recomendacionHoy.cantidad || 0 }}
+        } @else {
+          N/A
+        }
+      </em>
+    </div>
+
+    <div class="detail-meta">
+      <article>
+        <span>Agua util</span>
+        <strong>
+          @if (siembra?.aguaUtilReal !== undefined && siembra?.aguaUtilReal !== null) {
+            {{ siembra?.aguaUtilReal | number: '1.1-2' }} mm
+          } @else {
+            No disponible
+          }
+        </strong>
+      </article>
+      <article>
+        <span>ET0 7 dias</span>
+        <strong>
+          @if (calcularET0Proyectada() !== null) {
+            {{ calcularET0Proyectada() | number: '1.1-2' }} mm
+          } @else {
+            No disponible
+          }
+        </strong>
+      </article>
+      <article>
+        <span>Calculo agua util</span>
+        <strong>{{ estadoAguaUtil }}</strong>
+      </article>
+    </div>
+
+    <article class="detail-panel">
+      <span>Lectura operativa</span>
+      @if (tieneLanzaHumedad) {
+        <p>Chaman cruza humedad de suelo, lluvia y ET0 para generar una recomendacion por fecha.</p>
+      } @else {
+        <p>Para activar recomendacion real hace falta una lanza o sensor de humedad asignado al lote.</p>
+      }
+      @if (motivoAguaUtil) {
+        <small>{{ motivoAguaUtil }}</small>
+      }
+    </article>
+
+    @if (recomendaciones.length) {
+      <section class="detail-days">
+        @for (item of recomendaciones; track item.fecha) {
+          <article [class.should-water]="(item.cantidad || 0) > 0">
+            <span>{{ formatearFecha(item.fecha) }}</span>
+            <strong>{{ item.cantidad || 0 }} mm</strong>
+          </article>
+        }
+      </section>
+    }
+
+    @if (tieneLanzaHumedad) {
+      <p-button
+        label="Ver curvas y profundidad"
+        icon="pi pi-chart-line"
+        [fluid]="true"
+        (onClick)="abrirDrawerRiego($event)"
+      />
+    }
+  </section>
+</p-dialog>
 
 @if (tieneLanzaHumedad) {
   <app-drawer-riego [siembra]="siembra" [lote]="lote" [(visible)]="verDrawerRiego"></app-drawer-riego>

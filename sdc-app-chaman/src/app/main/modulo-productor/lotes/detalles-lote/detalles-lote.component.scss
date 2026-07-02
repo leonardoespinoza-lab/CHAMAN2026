@@ -258,14 +258,20 @@
 :host ::ng-deep .services-stack .custom-card {
   background: var(--p-surface-0);
   border: 1px solid #bfccd9;
+  border-radius: 10px;
   box-shadow: 0 10px 24px rgba(31, 42, 68, 0.07);
-  padding: 1rem;
+  padding: 0.9rem;
 }
 
 :host ::ng-deep .services-stack .titulo-card {
-  font-size: 1.28rem;
+  font-size: clamp(1.2rem, 1.15vw, 1.42rem);
   font-weight: 800;
   letter-spacing: 0;
+  line-height: 1.05;
+}
+
+:host ::ng-deep .services-stack .custom-card small {
+  font-size: 0.92rem;
 }
 
 :host ::ng-deep .services-stack .p-button-label {
@@ -282,14 +288,23 @@
 }
 
 .monitoring-section {
-  display: flex;
-  flex-direction: column;
+  align-items: stretch;
+  display: grid;
   gap: 0.95rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: clamp(1.25rem, 4vh, 2.75rem);
 }
 
 .monitoring-section:empty {
   display: none;
+}
+
+.monitoring-section > * {
+  min-width: 0;
+}
+
+.monitoring-section app-card-viento-lote {
+  grid-column: 1 / -1;
 }
 
 .satellite-camera-row {
@@ -342,6 +357,10 @@
   }
 
   .satellite-camera-row {
+    grid-template-columns: 1fr;
+  }
+
+  .monitoring-section {
     grid-template-columns: 1fr;
   }
 
