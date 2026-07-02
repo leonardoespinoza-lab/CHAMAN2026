@@ -2,18 +2,143 @@
   <header class="hero-panel">
     <div>
       <p class="eyebrow">{{ 'Gestion del distribuidor' | translate }}</p>
-      <h1>{{ 'Resumen operativo' | translate }}</h1>
+      <h1>{{ distribuidorActual?.nombre || ('Resumen operativo' | translate) }}</h1>
       <p class="hero-copy">
-        {{ 'Productores, lotes, hectareas monitoreadas y estado sanitario consolidado.' | translate }}
+        {{ distribuidorActual?.direccion || ('Productores, lotes, hectareas monitoreadas y estado sanitario consolidado.' | translate) }}
       </p>
     </div>
 
-    <div class="health-badge" [ngClass]="estadoSanitarioClase">
-      <span>{{ 'Estado sanitario' | translate }}</span>
-      <strong>{{ estadoSanitario | translate }}</strong>
-      <small>{{ coberturaPrediccion }}% {{ 'con prediccion' | translate }}</small>
+    <div class="hero-actions">
+      <div class="health-badge" [ngClass]="estadoSanitarioClase">
+        <span>{{ 'Estado sanitario' | translate }}</span>
+        <strong>{{ estadoSanitario | translate }}</strong>
+        <small>{{ coberturaPrediccion }}% {{ 'con prediccion' | translate }}</small>
+      </div>
+
+      <button
+        pButton
+        type="button"
+        icon="pi pi-file-pdf"
+        [label]="'Exportar informe' | translate"
+        class="export-button"
+        (click)="exportarInformeDistribuidor()"
+      ></button>
     </div>
   </header>
+
+  <section class="network-grid">
+    <article class="panel-card map-card">
+      <div class="section-title">
+        <div>
+          <p class="eyebrow">{{ 'Mapa operativo' | translate }}</p>
+          <h2>{{ 'Distribuidor, productores y lotes' | translate }}</h2>
+        </div>
+        <span class="meta-pill">{{ lotesGeorreferenciados }}/{{ totalLotes }} {{ 'lotes en mapa' | translate }}</span>
+      </div>
+
+      <div #networkMap class="network-map"></div>
+
+      <div class="map-legend">
+        <span><i class="legend-dot danger"></i>{{ 'Rojo: prioridad alta' | translate }}</span>
+        <span><i class="legend-dot warn"></i>{{ 'Amarillo: atencion' | translate }}</span>
+        <span><i class="legend-dot ok"></i>{{ 'Verde: estable' | translate }}</span>
+        <span><i class="legend-dot muted"></i>{{ 'Gris: sin prediccion' | translate }}</span>
+      </div>
+    </article>
+
+    <aside class="panel-card map-detail">
+      @if (loteSeleccionado; as selected) {
+        <div class="section-title compact">
+          <div>
+            <p class="eyebrow">{{ 'Lote seleccionado' | translate }}</p>
+            <h2>{{ selected.nombre }}</h2>
+          </div>
+          <span class="status-chip" [ngClass]="selected.nivel">{{ selected.nivel | translate }}</span>
+        </div>
+
+        <div class="detail-grid">
+          <div>
+            <span>{{ 'Productor' | translate }}</span>
+            <strong>{{ selected.productor }}</strong>
+          </div>
+          <div>
+            <span>{{ 'Cultivo' | translate }}</span>
+            <strong>{{ selected.cultivo }}</strong>
+          </div>
+          <div>
+            <span>{{ 'Hectareas' | translate }}</span>
+            <strong>{{ formatHa(selected.hectareas) }}</strong>
+          </div>
+          <div>
+            <span>{{ 'Evento' | translate }}</span>
+            <strong>{{ selected.enfermedad }}</strong>
+          </div>
+        </div>
+
+        <div class="selected-score">
+          <span>{{ 'Valor sanitario' | translate }}</span>
+          <strong>{{ formatNumber(selected.resultado, 1) }}%</strong>
+        </div>
+
+        <button
+          pButton
+          type="button"
+          icon="pi pi-arrow-right"
+          [label]="'Entrar al lote' | translate"
+          class="open-lot-button"
+          (click)="abrirLote(selected)"
+        ></button>
+      } @else {
+        <div class="section-title compact">
+          <div>
+            <p class="eyebrow">{{ 'Lectura de red' | translate }}</p>
+            <h2>{{ 'Selecciona un lote' | translate }}</h2>
+          </div>
+        </div>
+
+        <div class="detail-grid">
+          <div>
+            <span>{{ 'Productores' | translate }}</span>
+            <strong>{{ productores.length | number: '1.0-0' }}</strong>
+          </div>
+          <div>
+            <span>{{ 'Lotes' | translate }}</span>
+            <strong>{{ totalLotes | number: '1.0-0' }}</strong>
+          </div>
+          <div>
+            <span>{{ 'Hectareas' | translate }}</span>
+            <strong>{{ formatHa(totalHectareas) }}</strong>
+          </div>
+          <div>
+            <span>{{ 'Alertas' | translate }}</span>
+            <strong>{{ lotesConAlerta | number: '1.0-0' }}</strong>
+          </div>
+        </div>
+
+        <p class="map-help">
+          {{ 'Los lotes amarillos o rojos requieren ingresar al detalle para revisar el evento, cultivo y recomendacion asociada.' | translate }}
+        </p>
+      }
+
+      <div class="lot-watchlist">
+        <p class="eyebrow">{{ 'Lotes a mirar primero' | translate }}</p>
+        @for (lote of lotesOperativos.slice(0, 6); track trackByLote($index, lote)) {
+          <button type="button" class="watch-row" [ngClass]="lote.nivel" (click)="seleccionarLote(lote)">
+            <span>
+              <strong>{{ lote.nombre }}</strong>
+              <small>{{ lote.productor }} - {{ lote.cultivo }}</small>
+            </span>
+            <em>{{ formatNumber(lote.resultado, 0) }}%</em>
+          </button>
+        } @empty {
+          <div class="empty-state compact">
+            <strong>{{ 'Sin lotes cargados' | translate }}</strong>
+            <span>{{ 'Todavia no hay lotes asociados para mapear.' | translate }}</span>
+          </div>
+        }
+      </div>
+    </aside>
+  </section>
 
   <div class="kpi-grid">
     <article class="kpi-card">
@@ -137,10 +262,10 @@
 
     <div class="priority-list">
       @for (alerta of alertasSanitarias; track trackByAlerta($index, alerta)) {
-        <article class="priority-row" [ngClass]="alerta.nivel">
+        <article class="priority-row" [ngClass]="alerta.nivel" (click)="abrirLote({ id: alerta.idLote, nombre: alerta.lote, productor: alerta.productor, cultivo: alerta.cultivo, hectareas: alerta.hectareas, nivel: alerta.nivel, enfermedad: alerta.enfermedad, resultado: alerta.resultado })">
           <div>
             <strong>{{ alerta.lote }}</strong>
-            <span>{{ alerta.cultivo }} · {{ alerta.enfermedad }}</span>
+            <span>{{ alerta.productor }} - {{ alerta.cultivo }} - {{ alerta.enfermedad }}</span>
           </div>
           <em>{{ formatNumber(alerta.resultado, 1) }}%</em>
           <small>{{ formatHa(alerta.hectareas) }}</small>
