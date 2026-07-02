@@ -160,21 +160,35 @@
       helper.puedeVerModulo('Riego')
     ) {
       <div class="monitoring-section">
-        @if (helper.puedeVerModulo('Clima')) {
-          <app-card-riesgos-agroclimaticos
-            class="service-panel"
-            [siembra]="siembra"
-            [lote]="lote"
-          ></app-card-riesgos-agroclimaticos>
+        @if (helper.puedeVerModulo('Clima') || helper.puedeVerModulo('Riego')) {
+          <div
+            class="operative-monitoring-row"
+            [class.single]="!helper.puedeVerModulo('Clima') || !helper.puedeVerModulo('Riego')"
+          >
+            @if (helper.puedeVerModulo('Clima')) {
+              <app-card-riesgos-agroclimaticos
+                class="service-panel"
+                [siembra]="siembra"
+                [lote]="lote"
+              ></app-card-riesgos-agroclimaticos>
+            }
+            @if (helper.puedeVerModulo('Riego')) {
+              <app-card-riego class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-riego>
+            }
+          </div>
         }
-        @if (helper.puedeVerModulo('Enfermedades')) {
-          <app-card-enfermedades class="service-panel" [siembra]="siembra"></app-card-enfermedades>
-        }
-        @if (mostrarPrediccionMalezas && helper.puedeVerModulo('Malezas')) {
-          <app-card-malezas class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-malezas>
-        }
-        @if (helper.puedeVerModulo('Riego')) {
-          <app-card-riego class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-riego>
+        @if (helper.puedeVerModulo('Enfermedades') || (mostrarPrediccionMalezas && helper.puedeVerModulo('Malezas'))) {
+          <div
+            class="sanitary-monitoring-row"
+            [class.single]="!helper.puedeVerModulo('Enfermedades') || !(mostrarPrediccionMalezas && helper.puedeVerModulo('Malezas'))"
+          >
+            @if (helper.puedeVerModulo('Enfermedades')) {
+              <app-card-enfermedades class="service-panel" [siembra]="siembra"></app-card-enfermedades>
+            }
+            @if (mostrarPrediccionMalezas && helper.puedeVerModulo('Malezas')) {
+              <app-card-malezas class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-malezas>
+            }
+          </div>
         }
         @if (helper.puedeVerModulo('Clima')) {
           <app-card-viento-lote class="service-panel" [lote]="lote"></app-card-viento-lote>
