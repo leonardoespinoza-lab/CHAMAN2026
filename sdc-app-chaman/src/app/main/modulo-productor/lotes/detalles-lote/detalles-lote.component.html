@@ -35,8 +35,8 @@
     <div class="lot-summary-toolbar">
       <div class="lot-summary-title">
         <span>Detalle operativo</span>
-        <strong>{{ lote?.nombre || 'Lote sin nombre' }}</strong>
-        <small>{{ lote?.establecimiento?.nombre || 'Sin establecimiento' }} - {{ departamentoResumen }}</small>
+        <strong>Suelo, ubicacion y potencial</strong>
+        <small>{{ contextoOperativoResumen }}</small>
       </div>
       <div class="lot-primary-actions">
         @if (helper.puedeVerModulo('Certificados')) {

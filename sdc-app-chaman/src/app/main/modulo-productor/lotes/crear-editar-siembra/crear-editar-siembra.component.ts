@@ -75,6 +75,17 @@ export class CrearEditarSiembraComponent {
     return this.esCultivoPerenne ? 'Variedad / pie' : 'Semilla';
   }
 
+  public get loteTitulo(): string {
+    if (!this.lote) {
+      return 'Chaman Agro';
+    }
+    const nombre = (this.lote.nombre || '').trim();
+    if (!nombre) {
+      return 'Lote sin nombre';
+    }
+    return /^lote\b/i.test(nombre) ? nombre : `Lote ${nombre}`;
+  }
+
   public get semillaSeleccionada(): ISemilla | undefined {
     const idSemilla = this.form?.get('idSemilla')?.value;
     return this.todasLasSemillas.find((semilla) => semilla._id === idSemilla);

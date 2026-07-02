@@ -216,6 +216,13 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     return departamento || provincia || 'Ubicacion editable en el lote';
   }
 
+  public get contextoOperativoResumen(): string {
+    if (this.departamentoResumen === 'Ubicacion editable en el lote') {
+      return 'Completar ubicacion operativa desde la edicion del lote';
+    }
+    return this.departamentoResumen;
+  }
+
   public mostrarCentralMeteorologica(): boolean {
     const establecimiento = this.lote?.establecimiento;
     return (
