@@ -44,6 +44,14 @@ export const API_METEO_SOURCE =
   process.env.API_METEO_SOURCE || 'https://www.meteosource.com/api/v1';
 export const METEO_SOURCE_KEY = process.env.METEO_SOURCE_KEY || '';
 
+export const API_METEOBLUE =
+  process.env.API_METEOBLUE || 'https://my.meteoblue.com/packages';
+export const METEOBLUE_API_KEY = process.env.METEOBLUE_API_KEY || '';
+export const METEOBLUE_DAILY_PACKAGE =
+  process.env.METEOBLUE_DAILY_PACKAGE || 'basic-day';
+export const METEOBLUE_HOURLY_PACKAGE =
+  process.env.METEOBLUE_HOURLY_PACKAGE || 'basic-1h';
+
 export const API_OMIXON =
   process.env.API_OMIXON || 'https://new.omixom.com/api/v2';
 export const OMIXON_KEY = process.env.OMIXON_KEY || '';

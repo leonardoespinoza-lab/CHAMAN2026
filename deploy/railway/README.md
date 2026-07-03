@@ -97,7 +97,7 @@ El worker usa un Dockerfile propio porque necesita Python, GDAL/rasterio y Node 
 
 ### Clima
 
-`sdc-api-clima` puede funcionar con Open-Meteo sin credenciales. FieldClimate queda opcional para clientes con estacion propia.
+`sdc-api-clima` puede funcionar con Open-Meteo sin credenciales. FieldClimate queda opcional para clientes con estacion propia. Meteoblue tambien es opcional: al cargar `METEOBLUE_API_KEY` se habilitan `/clima/meteoblue/pronostico/:lat/:lng/:dias` y `/clima/meteoblue/comparar/:lat/:lng/:dias` para contrastar fuentes y mejorar la calidad de datos.
 
 ### LoRaWAN / EMQX
 

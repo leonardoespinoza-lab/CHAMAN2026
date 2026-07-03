@@ -5,7 +5,13 @@
       <h3>{{ lote?.establecimiento?.nombre || lote?.nombre }}</h3>
       <span>{{ fuente }} - pronostico diario - {{ pronosticos.length }} dias disponibles</span>
     </div>
-    <p-button icon="pi pi-refresh" label="Actualizar" size="small" severity="secondary" [outlined]="true" />
+    <div class="climate-actions">
+      <div class="quality-pill" [ngClass]="calidadClase" [attr.title]="calidadClima.detalle">
+        <span>{{ calidadClima.label }}</span>
+        <strong>{{ calidadClima.score }}/100</strong>
+      </div>
+      <p-button icon="pi pi-refresh" label="Actualizar" size="small" severity="secondary" [outlined]="true" />
+    </div>
   </div>
 
   @if (pronosticos.length || climaActual) {

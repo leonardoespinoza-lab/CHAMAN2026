@@ -6,6 +6,7 @@ export type FuenteCalidadDato =
   | 'estacion_cercana'
   | 'open_meteo'
   | 'meteosource'
+  | 'meteoblue'
   | 'satelite'
   | 'catalogo'
   | 'manual'
@@ -16,6 +17,7 @@ export type FuenteCalidadDato =
 export interface ICalidadDatoMotor {
   nivel: NivelCalidadDato;
   fuente: FuenteCalidadDato;
+  score?: number;
   cobertura?: number;
   distanciaKm?: number;
   fechaActualizacion?: string;

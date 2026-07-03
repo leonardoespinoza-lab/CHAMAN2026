@@ -60,6 +60,12 @@ export class CardClimaLoteComponent implements OnChanges {
   public metricas: MetricClima[] = [];
   public dias: DiaClima[] = [];
   public paneles: PanelClima[] = [];
+  public calidadClima = {
+    nivel: 'media',
+    score: 62,
+    label: 'Calidad media',
+    detalle: 'Dato modelado por coordenada; sin sensor de campo confirmado.',
+  };
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['lote']) {
@@ -71,9 +77,76 @@ export class CardClimaLoteComponent implements OnChanges {
     this.pronosticos = this.lote?.establecimiento?.prediccionClimatica?.pronosticos?.slice(0, 7) || [];
     this.climaActual = this.lote?.establecimiento?.climaActual?.clima;
     this.fuente = this.pronosticos[0]?.fuente || this.climaActual?.fuente || 'Open-Meteo';
+    this.calidadClima = this.crearCalidadClima();
     this.metricas = this.crearMetricas();
     this.dias = this.crearDias();
     this.paneles = this.crearPaneles();
+  }
+
+  public get calidadClase(): string {
+    return `quality-${this.calidadClima.nivel}`;
+  }
+
+  private crearCalidadClima() {
+    const calidad =
+      this.pronosticos[0]?.calidadDatos ||
+      this.climaActual?.calidadDatos ||
+      null;
+    if (calidad) {
+      return {
+        nivel: calidad.nivel || 'media',
+        score: calidad.score ?? this.scorePorFuente(this.fuente),
+        label: `Calidad ${this.labelNivel(calidad.nivel || 'media')}`,
+        detalle: calidad.resumen || this.detallePorFuente(this.fuente),
+      };
+    }
+
+    const fuente = this.normalizarFuente(this.fuente);
+    const score = this.scorePorFuente(fuente);
+    const nivel = score >= 80 ? 'alta' : score >= 60 ? 'media' : 'baja';
+    return {
+      nivel,
+      score,
+      label: `Calidad ${this.labelNivel(nivel)}`,
+      detalle: this.detallePorFuente(fuente),
+    };
+  }
+
+  private normalizarFuente(fuente?: string): string {
+    return (fuente || '').toLowerCase().replace(/[^a-z]/g, '');
+  }
+
+  private scorePorFuente(fuente?: string): number {
+    const normalizada = this.normalizarFuente(fuente);
+    if (normalizada.includes('fieldclimate') || normalizada.includes('dispositivo')) return 92;
+    if (normalizada.includes('meteoblue')) return 85;
+    if (normalizada.includes('meteosource')) return 72;
+    if (normalizada.includes('openmeteo')) return 62;
+    return 45;
+  }
+
+  private detallePorFuente(fuente?: string): string {
+    const normalizada = this.normalizarFuente(fuente);
+    if (normalizada.includes('fieldclimate') || normalizada.includes('dispositivo')) {
+      return 'Dato de estacion o sensor asignado; mayor confianza si reporta en las ultimas 24 h.';
+    }
+    if (normalizada.includes('meteoblue')) {
+      return 'Fuente profesional por coordenada; ideal para contrastar alertas con Open-Meteo y sensores.';
+    }
+    if (normalizada.includes('meteosource')) {
+      return 'Fuente modelada por coordenada con uso operativo en pronostico y capas climaticas.';
+    }
+    if (normalizada.includes('openmeteo')) {
+      return 'Fuente abierta por coordenada; buena continuidad, menor confianza que sensor o fuente profesional contrastada.';
+    }
+    return 'Fuente climatica no identificada; revisar origen antes de decisiones criticas.';
+  }
+
+  private labelNivel(nivel: string): string {
+    if (nivel === 'alta') return 'alta';
+    if (nivel === 'media') return 'media';
+    if (nivel === 'baja') return 'baja';
+    return 'sin datos';
   }
 
   private crearMetricas(): MetricClima[] {

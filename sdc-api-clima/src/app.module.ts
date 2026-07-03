@@ -10,6 +10,7 @@ import { ApiCheckModule } from './auxiliares/api-check/api-check.module';
 import { ApiCheckService } from './auxiliares/api-check/api-check.service';
 import { HoratechModule } from './entidades/horatech/module';
 import { ClimaV2Module } from './entidades/clima-v2/module';
+import { MeteoblueModule } from './entidades/meteoblue/module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ClimaV2Module } from './entidades/clima-v2/module';
     FieldClimateModule,
     OpenWeatherModule,
     MeteoSourceModule,
+    MeteoblueModule,
     HoratechModule,
   ],
 })

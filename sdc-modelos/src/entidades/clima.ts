@@ -1,10 +1,12 @@
 import { ICoordenadas } from "../compartidos";
+import { ICalidadDatoMotor } from "../compartidos/calidad-datos";
 
 export type FuenteClima =
   | "OpenWeather"
   | "OpenMeteo"
   | "FieldClimate"
   | "MeteoSource"
+  | "Meteoblue"
   | "Omixom"
   | "Horatech"
   | "Dispositivo";
@@ -44,6 +46,7 @@ export interface IClimaEstacionMeteorologica {
   rafagaViento?: IValores;
   nivelDeAgua?: IValores; // Freatímetro
   et0?: IValores;
+  calidadDatos?: ICalidadDatoMotor;
 }
 
 export interface IPronosticoEstacionMeteorologica {
@@ -63,6 +66,7 @@ export interface IPronosticoEstacionMeteorologica {
   direccionViento?: number;
   radiacionSolar?: number;
   et0?: number;
+  calidadDatos?: ICalidadDatoMotor;
 }
 
 export interface IPronosticoMeteoSource {
@@ -79,6 +83,38 @@ export interface IPronosticoMeteoSource {
   direccionViento?: number;
   radiacionSolar?: number;
   et0?: number;
+  calidadDatos?: ICalidadDatoMotor;
+}
+
+export type FuenteComparacionClimatica = "OpenMeteo" | "Meteoblue" | "FieldClimate";
+export type EstadoComparacionClimatica = "ok" | "desvio" | "sin_datos";
+
+export interface IComparacionVariableClimatica {
+  fecha: string;
+  variable: "temperaturaMedia" | "temperaturaMin" | "temperaturaMax" | "lluvia" | "probabilidadLluvia" | "et0" | "viento";
+  unidad: string;
+  openMeteo?: number;
+  meteoblue?: number;
+  diferenciaAbs?: number;
+  diferenciaPct?: number;
+  estado: EstadoComparacionClimatica;
+}
+
+export interface IComparacionFuentesClimaticas {
+  lat: number;
+  lng: number;
+  generadoEn: string;
+  diasSolicitados: number;
+  fuentesConsultadas: FuenteComparacionClimatica[];
+  fuentePreferida: FuenteComparacionClimatica;
+  meteoblueDisponible: boolean;
+  calidadDatos: ICalidadDatoMotor;
+  resumen: string;
+  pronosticos: {
+    openMeteo: IPronosticoEstacionMeteorologica[];
+    meteoblue: IPronosticoEstacionMeteorologica[];
+  };
+  comparaciones: IComparacionVariableClimatica[];
 }
 
 export interface ISerieFrioTermicoDia {

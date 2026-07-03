@@ -5,6 +5,7 @@ import {
   API_FIELD_CLIMATE,
   API_HORATECH,
   API_METEO_SOURCE,
+  METEOBLUE_API_KEY,
   API_OMIXON,
   API_OPEN_WEATHER,
 } from 'src/env';
@@ -13,6 +14,7 @@ import { OpenWeatherService } from 'src/entidades/openWeather/service';
 import { MeteoSourceService } from 'src/entidades/meteoSource/service';
 import { OmixomService } from 'src/entidades/omixom/service';
 import { HoratechService } from 'src/entidades/horatech/service';
+import { MeteoblueService } from 'src/entidades/meteoblue/service';
 
 @Injectable()
 export class ApiCheckService {
@@ -21,6 +23,7 @@ export class ApiCheckService {
     private fieldClimate: FieldClimateService,
     private openWeather: OpenWeatherService,
     private meteoSource: MeteoSourceService,
+    private meteoblue: MeteoblueService,
     private omixom: OmixomService,
     private horatech: HoratechService,
   ) {}
@@ -67,6 +70,20 @@ export class ApiCheckService {
         ok = false;
         this.logger.error(`API_METEO_SOURCE: ${API_METEO_SOURCE} [ERROR!]`);
       }
+    }
+
+    if (METEOBLUE_API_KEY) {
+      try {
+        await this.meteoblue.checkApi();
+        this.logger.log(`METEOBLUE_API_KEY: configurada [OK!]`);
+      } catch (error) {
+        ok = false;
+        this.logger.error(`METEOBLUE_API_KEY: configurada [ERROR!]`);
+      }
+    } else {
+      this.logger.warn(
+        'METEOBLUE_API_KEY no configurada; Meteoblue queda como fuente opcional desactivada.',
+      );
     }
 
     if (API_OMIXON) {

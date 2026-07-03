@@ -158,6 +158,14 @@ function validate() {
     }
   }
 
+  if (service === 'clima' && !hasValue('METEOBLUE_API_KEY')) {
+    pushIssue(
+      issues,
+      'warn',
+      'METEOBLUE_API_KEY no esta configurada. La comparacion profesional Meteoblue queda desactivada y Open-Meteo opera sin contraste.',
+    );
+  }
+
   return issues;
 }
 
