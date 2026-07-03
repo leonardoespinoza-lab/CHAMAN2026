@@ -4,10 +4,16 @@ import {
   API_DATOS,
   API_FIELD_CLIMATE,
   API_HORATECH,
+  API_HORATECH_APIKEY,
   API_METEO_SOURCE,
   METEOBLUE_API_KEY,
+  FIELD_CLIMATE_PASS,
+  FIELD_CLIMATE_USERS,
+  METEO_SOURCE_KEY,
+  OMIXON_KEY,
   API_OMIXON,
   API_OPEN_WEATHER,
+  OPEN_WEATHER_KEY,
 } from 'src/env';
 import { FieldClimateService } from 'src/entidades/fieldClimate/service';
 import { OpenWeatherService } from 'src/entidades/openWeather/service';
@@ -34,7 +40,7 @@ export class ApiCheckService {
 
     if (API_DATOS) {
       try {
-        await this.axios.GET(`${API_DATOS}/api`);
+        await this.axios.GET(`${API_DATOS}/health`);
         this.logger.log(`API_DATOS: ${API_DATOS} [OK!]`);
       } catch (error) {
         ok = false;
@@ -42,7 +48,11 @@ export class ApiCheckService {
       }
     }
 
-    if (API_FIELD_CLIMATE) {
+    if (
+      API_FIELD_CLIMATE &&
+      FIELD_CLIMATE_USERS.length &&
+      FIELD_CLIMATE_PASS.length
+    ) {
       try {
         await this.fieldClimate.checkApi();
         this.logger.log(`API_FIELD_CLIMATE: ${API_FIELD_CLIMATE} [OK!]`);
@@ -50,9 +60,13 @@ export class ApiCheckService {
         ok = false;
         this.logger.error(`API_FIELD_CLIMATE: ${API_FIELD_CLIMATE} [ERROR!]`);
       }
+    } else {
+      this.logger.warn(
+        'API_FIELD_CLIMATE sin credenciales operativas; chequeo omitido.',
+      );
     }
 
-    if (API_OPEN_WEATHER) {
+    if (API_OPEN_WEATHER && OPEN_WEATHER_KEY) {
       try {
         await this.openWeather.checkApi();
         this.logger.log(`API_OPEN_WEATHER: ${API_OPEN_WEATHER} [OK!]`);
@@ -60,9 +74,11 @@ export class ApiCheckService {
         ok = false;
         this.logger.error(`API_OPEN_WEATHER: ${API_OPEN_WEATHER} [ERROR!]`);
       }
+    } else {
+      this.logger.warn('OPEN_WEATHER_KEY no configurada; chequeo omitido.');
     }
 
-    if (API_METEO_SOURCE) {
+    if (API_METEO_SOURCE && METEO_SOURCE_KEY) {
       try {
         await this.meteoSource.checkApi();
         this.logger.log(`API_METEO_SOURCE: ${API_METEO_SOURCE} [OK!]`);
@@ -70,6 +86,8 @@ export class ApiCheckService {
         ok = false;
         this.logger.error(`API_METEO_SOURCE: ${API_METEO_SOURCE} [ERROR!]`);
       }
+    } else {
+      this.logger.warn('METEO_SOURCE_KEY no configurada; chequeo omitido.');
     }
 
     if (METEOBLUE_API_KEY) {
@@ -86,7 +104,7 @@ export class ApiCheckService {
       );
     }
 
-    if (API_OMIXON) {
+    if (API_OMIXON && OMIXON_KEY) {
       try {
         await this.omixom.getEstaciones();
         this.logger.log(`API_OMIXON: ${API_OMIXON} [OK!]`);
@@ -94,9 +112,11 @@ export class ApiCheckService {
         ok = false;
         this.logger.error(`API_OMIXON: ${API_OMIXON} [ERROR!]`);
       }
+    } else {
+      this.logger.warn('OMIXON_KEY no configurada; chequeo omitido.');
     }
 
-    if (API_HORATECH) {
+    if (API_HORATECH && API_HORATECH_APIKEY) {
       try {
         await this.horatech.checkApi();
         this.logger.log(`API_HORATECH: ${API_HORATECH} [OK!]`);
@@ -104,6 +124,8 @@ export class ApiCheckService {
         ok = false;
         this.logger.error(`API_HORATECH: ${API_HORATECH} [ERROR!]`);
       }
+    } else {
+      this.logger.warn('API_HORATECH_APIKEY no configurada; chequeo omitido.');
     }
 
     return ok;
