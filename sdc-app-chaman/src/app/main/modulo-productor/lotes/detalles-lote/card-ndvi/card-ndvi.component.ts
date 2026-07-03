@@ -56,6 +56,13 @@ interface NdviAnalisis {
   balance72: string;
 }
 
+interface ExpectativaIndiceSatelital {
+  rango: string;
+  comparacion: string;
+  nota: string;
+  tono: 'ok' | 'warn' | 'risk';
+}
+
 interface SatelliteIndicator {
   key: keyof NonNullable<IReporteNDVI['indices']>;
   label: string;
@@ -79,6 +86,13 @@ interface ContextoAgronomicoSatelital {
   diasDesdeImplantacion?: number;
   implantacionLabel: 'Siembra' | 'Plantacion';
   texto: string;
+}
+
+interface RangoIndiceSatelital {
+  min: number;
+  max: number;
+  etiqueta: string;
+  nota: string;
 }
 
 @Component({
@@ -329,6 +343,52 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
 
   public get valorCapaActiva(): number | undefined {
     return this.valorIndice(this.capaActiva.key);
+  }
+
+  public get expectativaCapaActiva(): ExpectativaIndiceSatelital {
+    const value = this.valorCapaActiva;
+    const contexto = this.contextoAgronomico;
+    const rango = this.rangoEsperadoIndice(this.capaActiva.key, contexto);
+
+    if (value == null || !rango) {
+      return {
+        rango: 'Referencia pendiente',
+        comparacion: 'La capa todavia no tiene una referencia suficiente para comparar contra etapa.',
+        nota: 'Usar como tendencia visual y validar con recorrida.',
+        tono: 'warn',
+      };
+    }
+
+    const valor = this.redondear(value);
+    const margen = 0.02;
+    const rangoTxt = `${this.formatear(rango.min)} a ${this.formatear(rango.max)}`;
+
+    if (valor >= rango.min - margen && valor <= rango.max + margen) {
+      return {
+        rango: rangoTxt,
+        comparacion: `Dentro del rango esperado para ${contexto.cultivo} en ${contexto.etapa}.`,
+        nota: rango.nota,
+        tono: 'ok',
+      };
+    }
+
+    if (valor < rango.min - margen) {
+      const desvio = this.formatear(this.redondear(rango.min - valor));
+      return {
+        rango: rangoTxt,
+        comparacion: `${desvio} puntos por debajo de la referencia operativa de la etapa.`,
+        nota: `${rango.nota} Priorizar recorrida en sectores de menor vigor y cruzar con clima, suelo y manejo reciente.`,
+        tono: valor < rango.min - 0.12 ? 'risk' : 'warn',
+      };
+    }
+
+    const desvio = this.formatear(this.redondear(valor - rango.max));
+    return {
+      rango: rangoTxt,
+      comparacion: `${desvio} puntos por encima de la referencia operativa de la etapa.`,
+      nota: `${rango.nota} Revisar si corresponde a cobertura real, malezas, exceso de humedad o saturacion del indice.`,
+      tono: 'warn',
+    };
   }
 
   public get leyendaCapaActiva(): SatelliteLegendItem[] {
@@ -656,6 +716,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
       const fecha = new Date().toISOString();
       if (cultivo === 'Trigo')
         return this.nombreEtapaTrigo(HelperService.getEtapaPorFechaTrigo(siembra, fecha, siembra.crono));
+      if (cultivo === 'Cebada') return HelperService.getEtapaPorFechaCebada(siembra, fecha, siembra.crono) || 'Etapa cebada';
       if (cultivo === 'Soja') return HelperService.getEtapaPorFechaSoja(siembra, fecha, siembra.crono) || 'Etapa soja';
       if (cultivo === 'Maiz') return HelperService.getEtapaPorFechaMaiz(siembra, fecha, siembra.crono) || 'Etapa maiz';
     }
@@ -678,6 +739,12 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
       if (dias < 18) return 'Implantacion';
       if (dias < 75) return 'Macollaje y encanazon';
       if (dias < 105) return 'Espigazon y floracion';
+      return 'Llenado y madurez';
+    }
+    if (cultivo === 'Cebada') {
+      if (dias < 15) return 'Implantacion';
+      if (dias < 82) return 'Macollaje y encanazon';
+      if (dias < 120) return 'Espigazon y floracion';
       return 'Llenado y madurez';
     }
     return dias > 0 ? `Dia ${dias} del ciclo` : 'Etapa no definida';
@@ -801,6 +868,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     const normalizado = this.normalizarTexto(cultivo || '');
     const cultivos: Record<string, string> = {
       trigo: 'Trigo',
+      cebada: 'Cebada',
       soja: 'Soja',
       maiz: 'Maiz',
       papa: 'Papa',
@@ -810,6 +878,95 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
       manzano: 'Manzano',
     };
     return cultivos[normalizado] || cultivo || 'Cultivo';
+  }
+
+  private rangoEsperadoIndice(
+    key: SatelliteIndicator['key'],
+    contexto: ContextoAgronomicoSatelital
+  ): RangoIndiceSatelital | undefined {
+    const fase = contexto.fase;
+    const rangosPorIndice: Record<SatelliteIndicator['key'], Partial<Record<FaseSatelital, [number, number]>>> = {
+      ndvi: {
+        reposo: [0.1, 0.35],
+        implantacion: [0.1, 0.35],
+        vegetativo: [0.35, 0.7],
+        reproductivo: [0.5, 0.85],
+        madurez: [0.25, 0.6],
+        cosecha: [0.1, 0.4],
+        monitoreo: [0.35, 0.7],
+      },
+      ndmi: {
+        reposo: [-0.25, 0.05],
+        implantacion: [-0.2, 0.1],
+        vegetativo: [-0.05, 0.3],
+        reproductivo: [0, 0.35],
+        madurez: [-0.2, 0.15],
+        cosecha: [-0.25, 0.1],
+        monitoreo: [-0.05, 0.25],
+      },
+      ndwi: {
+        reposo: [-0.35, 0.05],
+        implantacion: [-0.35, 0.05],
+        vegetativo: [-0.3, 0.08],
+        reproductivo: [-0.25, 0.12],
+        madurez: [-0.35, 0.05],
+        cosecha: [-0.4, 0.02],
+        monitoreo: [-0.3, 0.08],
+      },
+      ndre: {
+        reposo: [0, 0.15],
+        implantacion: [0, 0.15],
+        vegetativo: [0.12, 0.35],
+        reproductivo: [0.18, 0.45],
+        madurez: [0.08, 0.28],
+        cosecha: [0, 0.18],
+        monitoreo: [0.1, 0.34],
+      },
+      savi: {
+        reposo: [0.02, 0.25],
+        implantacion: [0.05, 0.3],
+        vegetativo: [0.25, 0.65],
+        reproductivo: [0.35, 0.75],
+        madurez: [0.18, 0.55],
+        cosecha: [0.04, 0.28],
+        monitoreo: [0.22, 0.62],
+      },
+      evi: {
+        reposo: [0.02, 0.22],
+        implantacion: [0.05, 0.25],
+        vegetativo: [0.2, 0.55],
+        reproductivo: [0.3, 0.7],
+        madurez: [0.14, 0.45],
+        cosecha: [0.02, 0.22],
+        monitoreo: [0.18, 0.55],
+      },
+    };
+    const rango = rangosPorIndice[key]?.[fase] || rangosPorIndice[key]?.monitoreo;
+    if (!rango) return undefined;
+    return {
+      min: rango[0],
+      max: rango[1],
+      etiqueta: fase,
+      nota: this.notaRangoIndice(key, contexto),
+    };
+  }
+
+  private notaRangoIndice(key: SatelliteIndicator['key'], contexto: ContextoAgronomicoSatelital): string {
+    if (contexto.fase === 'implantacion') {
+      return 'En implantacion pesa mucho el suelo expuesto; el valor absoluto no debe reemplazar la recorrida.';
+    }
+    if (contexto.esPerenne && contexto.fase === 'reposo') {
+      return 'En reposo se evalua uniformidad, cobertura y malezas; no diagnosticar demanda hidrica activa.';
+    }
+    const notas: Record<SatelliteIndicator['key'], string> = {
+      ndvi: 'Referencia operativa de vigor/cobertura para el estadio actual.',
+      ndmi: 'Referencia operativa de humedad en canopia; confirmar con humedad de suelo si existe.',
+      ndwi: 'Referencia de superficie y agua/suelo; interpretar junto con lluvia y textura.',
+      ndre: 'Referencia de clorofila y hoja funcional; mejora cuando hay cobertura desarrollada.',
+      savi: 'Referencia de vigor corregido por suelo expuesto.',
+      evi: 'Referencia de biomasa activa, util cuando NDVI se acerca a saturacion.',
+    };
+    return notas[key];
   }
 
   private normalizarTexto(value: string): string {

@@ -80,8 +80,8 @@
 .ndvi-content {
   align-items: start;
   display: grid;
-  gap: 0.72rem;
-  grid-template-columns: minmax(380px, 0.92fr) minmax(380px, 1.08fr);
+  gap: 0.9rem;
+  grid-template-columns: minmax(560px, 1.55fr) minmax(360px, 0.45fr);
 }
 
 .satellite-timeline {
@@ -176,7 +176,7 @@
   background: #f4f7fb;
   border: 1px solid rgba(104, 132, 163, 0.42);
   border-radius: 8px;
-  height: clamp(230px, 22vw, 360px);
+  height: clamp(420px, 42vw, 680px);
   overflow: hidden;
   padding: 0;
   position: relative;
@@ -317,7 +317,7 @@
   flex-direction: column;
   gap: 0.5rem;
   min-height: 0;
-  align-self: start;
+  align-self: stretch;
   padding: 0.72rem;
 }
 
@@ -347,6 +347,7 @@
 
 .analysis-main p,
 .context,
+.expected-note,
 .recommendation {
   color: var(--p-text-muted-color);
   font-size: 1.02rem;
@@ -376,6 +377,39 @@
 
 .analysis-grid .context-card {
   grid-column: 1 / -1;
+}
+
+.analysis-grid .expected-card {
+  grid-column: 1 / -1;
+}
+
+.analysis-grid .expected-card.ok {
+  border-color: color-mix(in srgb, #61b84f, transparent 38%);
+  box-shadow: inset 3px 0 0 #61b84f;
+}
+
+.analysis-grid .expected-card.warn {
+  border-color: color-mix(in srgb, #e8a33a, transparent 30%);
+  box-shadow: inset 3px 0 0 #e8a33a;
+}
+
+.analysis-grid .expected-card.risk {
+  border-color: color-mix(in srgb, #e05d4f, transparent 30%);
+  box-shadow: inset 3px 0 0 #e05d4f;
+}
+
+.analysis-grid .expected-card small {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.94rem;
+  font-weight: 650;
+  line-height: 1.25;
+  margin-top: 0.28rem;
+}
+
+.expected-note {
+  border-left: 3px solid color-mix(in srgb, var(--p-primary-color), transparent 35%);
+  padding-left: 0.58rem;
 }
 
 .recommendation {
@@ -522,10 +556,13 @@
   font-weight: 700;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1180px) {
   .ndvi-content {
     grid-template-columns: 1fr;
   }
+}
+
+@media (max-width: 760px) {
 
   .layer-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -542,7 +579,7 @@
   }
 
   .img-container {
-    height: 230px;
+    height: 280px;
   }
 
   .satellite-map-legend {

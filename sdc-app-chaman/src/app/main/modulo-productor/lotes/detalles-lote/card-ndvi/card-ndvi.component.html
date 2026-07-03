@@ -120,8 +120,14 @@
             <span>Balance 72 h</span>
             <strong>{{ analisis.balance72 }}</strong>
           </article>
+          <article class="expected-card" [ngClass]="expectativaCapaActiva.tono">
+            <span>Esperado para etapa</span>
+            <strong>{{ expectativaCapaActiva.rango }}</strong>
+            <small>{{ expectativaCapaActiva.comparacion }}</small>
+          </article>
         </div>
         <p class="context">{{ analisis.contexto }}</p>
+        <p class="expected-note">{{ expectativaCapaActiva.nota }}</p>
         <p class="recommendation">{{ analisis.recomendacion }}</p>
       </section>
     </div>
