@@ -15,6 +15,8 @@ export interface CatalogoReadinessCultivo {
   ok: boolean;
   semillas: number;
   enfermedades: number;
+  enfermedadesMotor?: number;
+  fuenteEnfermedades?: string;
   cronos: number;
   malezas: number;
   faltantes: string[];

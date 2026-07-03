@@ -237,7 +237,7 @@ export class AlgoritmosComponent {
       this.algoritmos = catalogo;
       this.parametrosHuella = parametros;
       this.readiness = readiness;
-      await this.cargarSemillasCatalogo();
+      await this.cargarSemillasCatalogo(this.enfermedadesForm.cultivo, true);
     } catch (error) {
       this.helper.notifError(error);
     }
@@ -397,7 +397,7 @@ export class AlgoritmosComponent {
     return this.motorDefinition?.fields || [];
   }
 
-  public setMotorField(key: string, value: any): void {
+  public async setMotorField(key: string, value: any): Promise<void> {
     const field = this.motorFields().find((item) => item.key === key);
     if (field?.type === 'boolean') {
       this.motorForm[key] = !!value;
@@ -406,7 +406,9 @@ export class AlgoritmosComponent {
       this.motorForm[key] = field?.type === 'number' && value !== '' && Number.isFinite(numeric) ? numeric : value;
     }
     if (this.seleccionado === 'enfermedades' && key === 'cultivo') {
-      this.sincronizarSemillaEnfermedades(false);
+      await this.cargarSemillasCatalogo(String(value || this.enfermedadesForm.cultivo), false);
+      this.generarMotorPayload();
+      return;
     }
     this.generarMotorPayload();
   }
@@ -494,11 +496,12 @@ export class AlgoritmosComponent {
     return id === 'enfermedades' || id === 'riego' || id === 'malezas';
   }
 
-  private async cargarSemillasCatalogo(): Promise<void> {
+  private async cargarSemillasCatalogo(cultivo = this.enfermedadesForm.cultivo, mantenerVariedad = true): Promise<void> {
     this.semillasError = '';
     const query: IQueryParam = {
       page: 0,
-      limit: 500,
+      limit: 3000,
+      filter: JSON.stringify({ cultivo }),
       sort: JSON.stringify({ cultivo: 1, variedad: 1, ciclo: 1, semillero: 1 }),
       select:
         '_id codigoCarga fuenteBase semillero cultivo variedad ciclo resistencia campania tipoCultivo fenologiaReferencia observaciones',
@@ -507,7 +510,7 @@ export class AlgoritmosComponent {
     try {
       const response = await this.semillasService.listar(query);
       this.semillasCatalogo = response.datos || [];
-      this.sincronizarSemillaEnfermedades(true);
+      this.sincronizarSemillaEnfermedades(mantenerVariedad);
     } catch (error: any) {
       this.semillasCatalogo = [];
       this.semillasError =

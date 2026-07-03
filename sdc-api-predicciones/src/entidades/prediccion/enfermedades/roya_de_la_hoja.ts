@@ -59,6 +59,9 @@ export class RoyaDeLaHojaService {
     const resistencia = semilla.resistencia?.find(
       (r) => r.enfermedad === 'Roya de la Hoja',
     );
+    const IR = this.indiceResistenciaDesdeMultiplicador(
+      resistencia?.multiplicador,
+    );
 
     if (!predecir) {
       variables.DHR = 0;
@@ -69,7 +72,7 @@ export class RoyaDeLaHojaService {
       4.42 +
       0.61 * variables.GD +
       0.57 * variables.DHR -
-      30.01 * (resistencia?.multiplicador || 1);
+      30.01 * IR;
     if (resultado < 0) {
       resultado = 0;
     }
@@ -80,5 +83,13 @@ export class RoyaDeLaHojaService {
       variables,
     };
     return prediccion;
+  }
+
+  private indiceResistenciaDesdeMultiplicador(multiplicador?: number): number {
+    if (multiplicador === undefined || multiplicador === null) return 0;
+    if (multiplicador <= 0.35) return 1;
+    if (multiplicador <= 0.75) return 0.65;
+    if (multiplicador <= 1.05) return 0.35;
+    return 0;
   }
 }

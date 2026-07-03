@@ -176,7 +176,8 @@ export class PrediccionTrigoService {
               ),
               this.royaAnaranjadaService.predecir(
                 siembra.semilla,
-                { viento, hr, Tmin, Tmax },
+                { precip, hr, Tmin, Tmax, Tavg },
+                predAnterior,
                 predecir,
               ),
             ])),

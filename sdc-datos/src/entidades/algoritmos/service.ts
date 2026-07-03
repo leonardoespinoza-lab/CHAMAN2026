@@ -41,6 +41,8 @@ export interface ReadinessCultivoCatalogo {
   ok: boolean;
   semillas: number;
   enfermedades: number;
+  enfermedadesMotor?: number;
+  fuenteEnfermedades?: string;
   cronos: number;
   malezas: number;
   faltantes: string[];
@@ -158,10 +160,12 @@ export class AlgoritmosService {
       this.countByFilter(this.cronosService, { cultivo }),
       this.countByFilter(this.malezasService, { cultivosObjetivo: cultivo }),
     ]);
+    const enfermedadesMotor = this.getEnfermedadesCultivo(cultivo).length;
+    const tieneEnfermedades = enfermedades > 0 || enfermedadesMotor > 0;
     const requiereMalezas = this.cultivosMalezas.includes(cultivo);
     const faltantes: string[] = [];
     if (!semillas) faltantes.push('semillas');
-    if (!enfermedades) faltantes.push('enfermedades');
+    if (!tieneEnfermedades) faltantes.push('enfermedades');
     if (!cronos) faltantes.push('cronos');
     if (requiereMalezas && !malezas) faltantes.push('malezas');
 
@@ -170,6 +174,12 @@ export class AlgoritmosService {
       ok: faltantes.length === 0,
       semillas,
       enfermedades,
+      enfermedadesMotor,
+      fuenteEnfermedades: enfermedades
+        ? 'base-datos'
+        : enfermedadesMotor
+          ? 'motor-formulas'
+          : 'sin-base',
       cronos,
       malezas,
       faltantes,
@@ -204,6 +214,22 @@ export class AlgoritmosService {
 
     if (this.norm(cultivo) === 'CEBADA') {
       return this.simularEnfermedadesCebada({
+        cultivo,
+        variedad,
+        etapa,
+        zona,
+        humedad,
+        horasMojado,
+        lluvia48,
+        temperatura,
+        susceptibilidad,
+        resistenciasVarietales,
+        diasSimulados: Number(body?.diasSimulados ?? 10),
+      });
+    }
+
+    if (this.norm(cultivo) === 'TRIGO') {
+      return this.simularEnfermedadesTrigo({
         cultivo,
         variedad,
         etapa,
@@ -283,6 +309,141 @@ export class AlgoritmosService {
         resistenciasVarietales.length
           ? `Susceptibilidad por enfermedad tomada de semilla.resistencia (${resistenciasVarietales.length} registro(s)).`
           : 'Sin resistencia varietal especifica: se uso susceptibilidad base manual para todas las enfermedades.',
+      ],
+    };
+  }
+
+  private simularEnfermedadesTrigo(params: {
+    cultivo: string;
+    variedad: string;
+    etapa: string;
+    zona: string;
+    humedad: number;
+    horasMojado: number;
+    lluvia48: number;
+    temperatura: number;
+    susceptibilidad: number;
+    resistenciasVarietales: Array<{ enfermedad?: string; multiplicador?: number }>;
+    diasSimulados: number;
+  }) {
+    const dias = Math.max(1, Math.min(90, Math.round(params.diasSimulados || 10)));
+    const lluviaDiaria = Math.max(0, params.lluvia48 / 2);
+    const tmin = params.temperatura - 4;
+    const tmax = params.temperatura + 5;
+    const enfermedadesBase = this.getEnfermedadesCultivo('Trigo');
+    const seriePorEnfermedad: Record<string, Array<{ label: string; value: number }>> = {};
+
+    const enfermedades = enfermedadesBase.map((enfermedad) => {
+      const etapaActiva = enfermedad.etapas.some((item) => this.norm(item) === this.norm(params.etapa));
+      const kVar = this.getSusceptibilidadVarietal(
+        enfermedad.nombre,
+        params.susceptibilidad,
+        params.resistenciasVarietales,
+      );
+      const ir = this.indiceResistenciaDesdeKVar(kVar);
+      let riesgo = 0;
+      let DPr = 0;
+      let DPrHRT = 0;
+      let DHR = 0;
+      let GD = 0;
+      let DL = 0;
+      let PMoj = 0;
+      let GDN = 0;
+      let GDAcum = 0;
+
+      const serie = Array.from({ length: dias }).map((_, index) => {
+        const label = `Dia ${index + 1}`;
+        if (!etapaActiva) {
+          return { label, value: 0 };
+        }
+
+        if (enfermedad.nombre === 'Mancha Amarilla') {
+          DPr += lluviaDiaria >= 2 ? 1 : 0;
+          DPrHRT += lluviaDiaria >= 1 && params.humedad >= 80 && tmax <= 32 && tmin >= 8 ? 1 : 0;
+          riesgo = this.clamp((-2.25 + 1.62 * DPrHRT + 1.3 * DPr) * kVar, 0, 100);
+        } else if (enfermedad.nombre === 'Mancha de la Hoja') {
+          DPr += lluviaDiaria >= 10 ? 1 : 0;
+          DHR += params.humedad >= 80 ? 1 : 0;
+          riesgo = this.clamp((-6.41 + 0.59 * DHR + 2.79 * DPr) * kVar, 0, 100);
+        } else if (enfermedad.nombre === 'Roya de la Hoja') {
+          GD += this.gradosDiaRoya(params.humedad, params.temperatura);
+          DHR += lluviaDiaria <= 0.2 && params.humedad >= 70 ? 1 : 0;
+          riesgo = this.clamp(4.42 + 0.61 * GD + 0.57 * DHR - 30.01 * ir, 0, 100);
+        } else if (enfermedad.nombre === 'Roya Anaranjada') {
+          GD += this.gradosDiaRoyaAnaranjada(params.humedad, params.temperatura);
+          DHR += params.humedad > 75 && lluviaDiaria <= 5 ? 1 : 0;
+          DL += lluviaDiaria >= 0.1 && lluviaDiaria <= 2 ? 1 : 0;
+          riesgo = this.clamp(5.15 + 0.72 * GD + 0.48 * DHR + 0.35 * DL - 35.2 * ir, 0, 100);
+        } else if (enfermedad.nombre === 'Fusarium de la Espiga') {
+          GDAcum += params.temperatura;
+          PMoj += lluviaDiaria >= 0.2 && params.humedad >= 78 ? 1 : 0;
+          GDN += Math.max(tmax - 26, 0) + Math.max(9 - tmin, 0);
+          riesgo = GDAcum < 530 ? this.clamp((20.37 + 8.63 * PMoj - 0.49 * GDN) * kVar, 0, 100) : 0;
+        }
+
+        return { label, value: this.round(riesgo, 1) };
+      });
+
+      seriePorEnfermedad[enfermedad.nombre] = serie;
+      const ultimo = serie[serie.length - 1]?.value || 0;
+
+      return {
+        nombre: enfermedad.nombre,
+        periodo: enfermedad.periodo,
+        riesgo: this.round(ultimo, 1),
+        nivel: etapaActiva ? this.nivelRiesgo(ultimo) : 'fuera de ventana',
+        prescripcion: enfermedad.prescripcion,
+        etapaActiva,
+        susceptibilidad: this.round(kVar, 2),
+        indiceResistencia: this.norm(enfermedad.nombre).includes('ROYA') ? this.round(ir, 2) : undefined,
+        calidadInput: 'media',
+        fuenteFormula: enfermedad.formulaFuente || 'Enfermedades en TRIGO -V2.xlsx',
+        variables: {
+          DPr: this.round(DPr, 2),
+          DPrHRT: this.round(DPrHRT, 2),
+          DHR: this.round(DHR, 2),
+          GD: this.round(GD, 2),
+          DL: this.round(DL, 2),
+          PMoj: this.round(PMoj, 2),
+          GDN: this.round(GDN, 2),
+          GDAcum: this.round(GDAcum, 2),
+        },
+      };
+    });
+
+    const maxRiesgo = Math.max(...enfermedades.map((item) => item.riesgo), 0);
+    const mayor = enfermedades.find((item) => item.riesgo === maxRiesgo);
+    const serie = mayor ? seriePorEnfermedad[mayor.nombre] || [] : [];
+
+    return {
+      motor: 'enfermedades-trigo-v2',
+      resumen: `${params.cultivo} ${params.variedad}: ${this.nivelRiesgo(maxRiesgo)} (${this.round(maxRiesgo, 1)}%)`,
+      metricas: {
+        cultivo: params.cultivo,
+        variedad: params.variedad,
+        etapa: params.etapa,
+        zona: params.zona,
+        humedadRelativa: params.humedad,
+        horasMojado: params.horasMojado,
+        lluvia48h: params.lluvia48,
+        lluviaDiariaUsada: this.round(lluviaDiaria, 1),
+        temperatura: params.temperatura,
+        diasSimulados: dias,
+        calidadInput: 'media: banco manual/diario; en produccion toma clima historico de estacion cercana con fallback',
+        fuenteVarietal: params.resistenciasVarietales.length ? 'semilla.resistencia' : 'sensibilidad base manual',
+      },
+      enfermedades,
+      serie,
+      trazas: [
+        'Trigo V2 toma formulas de Enfermedades en TRIGO -V2.xlsx.',
+        'Mancha Amarilla: CInf=-2.25+1.62*DPrHRT+1.30*DPr, ponderado por susceptibilidad varietal.',
+        'Mancha de la Hoja: CInf=-6.41+0.59*DHR+2.79*DPr, ponderado por susceptibilidad varietal.',
+        'Roya de la Hoja: Sev%=4.42+0.61*GD+0.57*DHR-30.01*IR. IR es resistencia: resistente=1, susceptible=0.',
+        'Roya Anaranjada: Sev%=5.15+0.72*GD+0.48*DHR+0.35*DL-35.2*IR. IR es resistencia.',
+        'Fusarium de la Espiga: I%=20.37+8.63*PMoj-0.49*GDN, ponderado por perfil varietal.',
+        params.resistenciasVarietales.length
+          ? `Perfil varietal tomado de semilla.resistencia (${params.resistenciasVarietales.length} registro(s)).`
+          : 'Sin resistencia varietal especifica: el banco usa sensibilidad manual y marca calidad varietal media.',
       ],
     };
   }
@@ -1004,6 +1165,11 @@ export class AlgoritmosService {
     return this.round(Math.max(baseTermica - 12, 0), 2);
   }
 
+  private gradosDiaRoyaAnaranjada(hr: number, tavg: number): number {
+    if (hr <= 60 || tavg < 7 || tavg > 14) return 0;
+    return this.round(tavg, 2);
+  }
+
   private indiceResistenciaDesdeKVar(kVar: number): number {
     if (kVar <= 0.35) return 1;
     if (kVar <= 0.75) return 0.65;
@@ -1022,7 +1188,19 @@ export class AlgoritmosService {
           horasMojadoCriticas: 16,
           lluviaCritica: 10,
           tempOptima: 20,
+          formulaFuente: 'Modelo Mancha Amarilla - Enfermedades en TRIGO -V2.xlsx',
           prescripcion: 'Triazol + estrobilurina; proteger area foliar y hoja bandera.',
+        },
+        {
+          nombre: 'Mancha de la Hoja',
+          periodo: 'Emergencia a hoja bandera',
+          etapas: ['Emergencia', 'Macollaje', 'Hoja bandera', 'Hoja Bandera'],
+          humedadBase: 80,
+          horasMojadoCriticas: 16,
+          lluviaCritica: 10,
+          tempOptima: 18,
+          formulaFuente: 'Modelo Mancha de la Hoja - Enfermedades en TRIGO -V2.xlsx',
+          prescripcion: 'Revisar septoriosis/mancha de hoja; priorizar hoja bandera y sanidad foliar.',
         },
         {
           nombre: 'Roya de la Hoja',
@@ -1032,7 +1210,19 @@ export class AlgoritmosService {
           horasMojadoCriticas: 10,
           lluviaCritica: 6,
           tempOptima: 18,
+          formulaFuente: 'Modelo Roya de la Hoja - Enfermedades en TRIGO -V2.xlsx',
           prescripcion: 'Triazol o mezcla doble; priorizar cuando sube HR y temperatura templada.',
+        },
+        {
+          nombre: 'Roya Anaranjada',
+          periodo: 'Macollaje a llenado de granos',
+          etapas: ['Macollaje', 'Primer Nudo', 'Hoja bandera', 'Hoja Bandera', 'Espigazon', 'Antesis', 'Llenado de granos'],
+          humedadBase: 75,
+          horasMojadoCriticas: 10,
+          lluviaCritica: 4,
+          tempOptima: 12,
+          formulaFuente: 'Modelo Roya Anaranjada - Enfermedades en TRIGO -V2.xlsx',
+          prescripcion: 'Controlar hojas funcionales y resistencia varietal; usar mezcla registrada si el riesgo sostiene.',
         },
         {
           nombre: 'Fusarium de la Espiga',
@@ -1042,6 +1232,7 @@ export class AlgoritmosService {
           horasMojadoCriticas: 24,
           lluviaCritica: 15,
           tempOptima: 22,
+          formulaFuente: 'Modelo Fusarium de la Espiga - Enfermedades en TRIGO -V2.xlsx',
           prescripcion: 'Metconazole/Prothioconazole/Tebuconazole en ventana de espiga.',
         },
       ],
@@ -1117,7 +1308,8 @@ export class AlgoritmosService {
       ],
     };
 
-    return base[cultivo] || base.Trigo;
+    const key = Object.keys(base).find((item) => this.norm(item) === this.norm(cultivo));
+    return key ? base[key] : [];
   }
 
   private getSusceptibilidadVarietal(
@@ -1125,9 +1317,35 @@ export class AlgoritmosService {
     base: number,
     resistencias: Array<{ enfermedad?: string; multiplicador?: number }>,
   ): number {
-    const match = resistencias.find((item) => this.norm(item.enfermedad) === this.norm(enfermedad));
+    const match = resistencias.find((item) => this.enfermedadCoincide(item.enfermedad, enfermedad));
     const value = Number(match?.multiplicador ?? base);
     return this.clamp(Number.isFinite(value) ? value : base, 0.05, 1.2);
+  }
+
+  private enfermedadCoincide(a?: string, b?: string): boolean {
+    const na = this.norm(a);
+    const nb = this.norm(b);
+    if (!na || !nb) return false;
+    if (na === nb) return true;
+    const aa = this.aliasesEnfermedad(na);
+    const bb = this.aliasesEnfermedad(nb);
+    return aa.some((item) => bb.includes(item));
+  }
+
+  private aliasesEnfermedad(nombre: string): string[] {
+    const grupos = [
+      ['MANCHA AMARILLA', 'DRECHSLERA TRITICI', 'MA'],
+      ['MANCHA DE LA HOJA', 'SEPTORIA', 'SEPTORIOSIS', 'MH'],
+      ['ROYA DE LA HOJA', 'ROYA ANARANJADA DE LA HOJA', 'PUCCINIA TRITICINA', 'RH'],
+      ['ROYA ANARANJADA', 'ROYA AMARILLA', 'PUCCINIA STRIIFORMIS', 'RA'],
+      ['FUSARIUM DE LA ESPIGA', 'FUSARIUM', 'FUSARIOSIS', 'FE'],
+      ['MANCHA EN RED', 'DRECHSLERA TERES', 'NET BLOTCH'],
+      ['ESCALDADURA DE LA CEBADA', 'ESCALDADURA', 'RHYNCHOSPORIUM'],
+      ['ROYA DE LA HOJA DE CEBADA', 'ROYA CEBADA'],
+      ['FUSARIOSIS DE LA ESPIGA DE CEBADA', 'FUSARIOSIS CEBADA'],
+    ].map((grupo) => grupo.map((item) => this.norm(item)));
+    const grupo = grupos.find((items) => items.includes(this.norm(nombre)));
+    return grupo || [this.norm(nombre)];
   }
 
   private norm(value?: string): string {

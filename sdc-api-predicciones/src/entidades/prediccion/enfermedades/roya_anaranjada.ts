@@ -1,37 +1,63 @@
 import { Injectable } from '@nestjs/common';
-import { IPrediccionEnfermedad, ISemilla } from 'modelos/src';
+import { IPrediccion, IPrediccionEnfermedad, ISemilla } from 'modelos/src';
 
 @Injectable()
 export class RoyaAnaranjadaService {
   async predecir(
     semilla: ISemilla,
     clima: {
+      precip: number;
       Tmax: number;
       Tmin: number;
-      viento: number;
       hr: number;
+      Tavg: number;
     },
+    prediccionAnterior?: IPrediccion,
     predecir?: boolean,
   ): Promise<IPrediccionEnfermedad> {
+    const prediccionAnteriorEnfermedad = prediccionAnterior?.enfermedades.find(
+      (e) => e.enfermedad === 'Roya Anaranjada',
+    );
+    const prevVariables = (prediccionAnteriorEnfermedad?.variables || {}) as {
+      GD?: number;
+      DHR?: number;
+      DL?: number;
+    };
+    const variables = {
+      GD: Number(prevVariables.GD || 0),
+      DHR: Number(prevVariables.DHR || 0),
+      DL: Number(prevVariables.DL || 0),
+    };
+
     const resistencia = semilla.resistencia?.find(
       (r) => r.enfermedad === 'Roya Anaranjada',
     );
+    const IR = this.indiceResistenciaDesdeMultiplicador(
+      resistencia?.multiplicador,
+    );
 
-    // (SEVERIDAD = -63,11 + 0,96*x1  + 1,72*x2  + 3,72*x3  + 0,43*x4 )
-    // x1= Temperatura mínima.		x3= Velocidad del Viento.
-    // x2= Temperatura máxima.		x4= Humedad Relativa.
-
-    // a) Severidad baja	infección < 5% (royas) y < 10% (manchas)
-    // b) Severidad media	infección de entre 15 y 20% del área foliar
-    // c) Severidad alta	infección > 20% del área foliar.
+    if (predecir) {
+      if (clima.hr > 60 && clima.Tavg >= 7 && clima.Tavg <= 14) {
+        variables.GD = +(variables.GD + clima.Tavg).toFixed(2);
+      }
+      if (clima.hr > 75 && clima.precip <= 5) {
+        variables.DHR += 1;
+      }
+      if (clima.precip >= 0.1 && clima.precip <= 2) {
+        variables.DL += 1;
+      }
+    } else {
+      variables.GD = 0;
+      variables.DHR = 0;
+      variables.DL = 0;
+    }
 
     let resultado =
-      (-63.11 +
-        0.96 * clima.Tmin +
-        1.72 * clima.Tmax +
-        3.72 * clima.viento +
-        0.43 * clima.hr) *
-      (resistencia?.multiplicador || 1);
+      5.15 +
+      0.72 * variables.GD +
+      0.48 * variables.DHR +
+      0.35 * variables.DL -
+      35.2 * IR;
     if (resultado < 0) {
       resultado = 0;
     }
@@ -39,13 +65,16 @@ export class RoyaAnaranjadaService {
     const prediccion: IPrediccionEnfermedad = {
       enfermedad: 'Roya Anaranjada',
       resultado: predecir ? +resultado.toFixed(2) : 0,
-      variables: {
-        Tmin: clima.Tmin,
-        Tmax: clima.Tmax,
-        viento: clima.viento,
-        HR: clima.hr,
-      },
+      variables,
     };
     return prediccion;
+  }
+
+  private indiceResistenciaDesdeMultiplicador(multiplicador?: number): number {
+    if (multiplicador === undefined || multiplicador === null) return 0;
+    if (multiplicador <= 0.35) return 1;
+    if (multiplicador <= 0.75) return 0.65;
+    if (multiplicador <= 1.05) return 0.35;
+    return 0;
   }
 }
