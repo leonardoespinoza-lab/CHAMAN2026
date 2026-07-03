@@ -596,20 +596,52 @@ Salida:
 
 Aplica a todos los cultivos.
 
-Formula de score:
+El modulo no consume una alerta oficial de granizo ni radar meteorologico.
+Calcula un **riesgo operativo estimado** a partir de proxies convectivos de
+Open-Meteo. La lectura se limita cuando no hay disparador humedo para evitar
+falsos positivos en dias sin lluvia/chaparron.
+
+Inputs:
+
+- `weather_code`: codigos de chaparron/tormenta.
+- `CAPE`: energia convectiva.
+- `precipitation_probability`: probabilidad de precipitacion.
+- `precipitation_sum` y `showers_sum`: lluvia/chaparrones previstos.
+- `wind_gusts_10m_max`: rafagas maximas.
+- `temperature_2m_max`: contexto termico.
+
+Formula de score corregida:
 
 ```text
 score = 0
-weatherCode 96/99 suma 55
-weatherCode 95 suma 35
-weatherCode convectivo 80/81/82/95/96/99 suma 18
-CAPE >= 1800 suma 32; >= 1000 suma 25; >= 500 suma 15; >= 250 suma 8
-probabilidadLluvia >= 75 suma 18; >= 50 suma 12; >= 30 suma 6
-showers >= 8 suma 15; >= 3 suma 10; >= 1 suma 5
-rafaga >= 70 suma 12; >= 45 suma 7
-temperaturaMax >= 24 suma 4
+weatherCode 96/99 suma 30 como proxy fuerte y exige validacion local/radar
+weatherCode 95 suma 22
+weatherCode 82 suma 14; 81 suma 10; 80 suma 6
+CAPE >= 2000 suma 26; >= 1000 suma 18; >= 500 suma 10; >= 250 suma 4
+lluvia >= 20 mm suma 12; >= 10 suma 8; >= 3 suma 4
+probabilidadLluvia >= 75 suma 15; >= 50 suma 10; >= 30 suma 5
+showers >= 8 suma 15; >= 3 suma 10; >= 0,5 suma 4
+rafaga >= 70 suma 8; >= 50 suma 5
+temperaturaMax >= 24 suma 3 solo si hay tormenta o CAPE >= 250
+
+Si no hay lluvia/chaparrones/probabilidad >= 30 y no hay tormenta:
+  score maximo = 5, o 8 si CAPE >= 500
+Si hay tormenta pero falta soporte humedo:
+  score maximo = 16, o 24 para codigo 96/99
+Si hay codigo de chaparron aislado sin precipitacion asociada:
+  score maximo = 6
+
 posibilidad = clamp(round(score), 0, 100)
 ```
+
+Calidad del dato:
+
+- `media`: al menos tres soportes convectivos y cuatro variables disponibles.
+- `baja`: soporte parcial o variables incompletas.
+- `sin_datos`: no hay variables utiles.
+
+La plataforma muestra la calidad porque el dato proviene de clima de zona y no
+de sensor/radar en campo.
 
 Niveles:
 

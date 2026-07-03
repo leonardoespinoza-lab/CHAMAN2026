@@ -347,23 +347,27 @@ Recomendacion:
 
 ### Riesgos agroclimaticos
 
-Estado: funcional.
+Estado: funcional, con ajuste de calidad aplicado para granizo.
 
 Hallazgos:
 
 - Granizo aplica a cualquier cultivo.
 - Helada aplica a perennes segun estadio.
 - Riesgo se genera desde Open-Meteo/forecast y se convierte en alerta si no es bajo.
+- Granizo no consume radar ni alerta oficial: es un riesgo operativo estimado con proxies convectivos.
+- Se corrigio el falso positivo donde un `weather_code` convectivo aislado podia mostrar 18% aun sin lluvia/chaparron.
 
 Riesgo:
 
 - Granizo y helada dependen de forecast, no de sensor local.
+- Sin calidad visible, el usuario puede interpretar el porcentaje como probabilidad meteorologica oficial.
 
 Recomendacion:
 
-- Mostrar "probabilidad operativa" y no certeza.
+- Mostrar "riesgo estimado" y no certeza.
 - Incluir fuente, hora de actualizacion, ventana 24/72h y calidad.
 - Separar tarjeta compacta y modal explicativo.
+- Mantener cap bajo cuando no hay disparador humedo: sin lluvia/chaparrones/probabilidad suficiente, el riesgo queda como vigilancia residual.
 
 ### Riego
 

@@ -99,6 +99,21 @@ export interface ISerieFrioTermicoDia {
   esPronostico?: boolean;
 }
 
+export type NivelCalidadDatosAgroclima = "alta" | "media" | "baja" | "sin_datos";
+
+export interface ICalidadDatosAgroclima {
+  nivel: NivelCalidadDatosAgroclima;
+  score: number;
+  fuente: string;
+  detalle: string;
+}
+
+export interface IResultadoGranizoAgroclimatico {
+  posibilidadPct: number;
+  evidencia: string[];
+  calidadDatos: ICalidadDatosAgroclima;
+}
+
 export type TipoRiesgoAgroclimatico = "helada" | "granizo";
 export type NivelRiesgoAgroclimatico = "bajo" | "medio" | "alto";
 
@@ -124,6 +139,7 @@ export interface IDiaRiesgoAgroclimatico {
   ajusteVarietalC?: number;
   fuenteAjusteVarietal?: string;
   evidencia?: string[];
+  calidadDatos?: ICalidadDatosAgroclima;
 }
 
 export interface IRiesgoAgroclimatico {
@@ -145,6 +161,7 @@ export interface IRiesgoAgroclimatico {
   fuenteAjusteVarietal?: string;
   diasRiesgo: number;
   evidencia: string[];
+  calidadDatos?: ICalidadDatosAgroclima;
   serie: IDiaRiesgoAgroclimatico[];
 }
 

@@ -128,6 +128,20 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
     return 'Base fenologica';
   }
 
+  public calidadLabel(riesgo?: IRiesgoAgroclimatico): string {
+    const calidad = riesgo?.calidadDatos;
+    if (!calidad) return 'Calidad no informada';
+    const label =
+      calidad.nivel === 'media'
+        ? 'calidad media'
+        : calidad.nivel === 'alta'
+          ? 'calidad alta'
+          : calidad.nivel === 'sin_datos'
+            ? 'sin datos'
+            : 'calidad baja';
+    return `${label}${calidad.score !== undefined ? ` ${calidad.score}/100` : ''}`;
+  }
+
   public ngOnChanges(changes: SimpleChanges): void {
     if (changes['lote'] || changes['siembra']) {
       void this.cargar();

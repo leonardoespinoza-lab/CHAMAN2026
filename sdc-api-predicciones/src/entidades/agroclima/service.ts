@@ -18,6 +18,8 @@ import { SiembrasService } from '../siembra/service';
 export class AgroclimaService {
   private readonly logger = new Logger(AgroclimaService.name);
   private readonly timezone = 'America/Argentina/Buenos_Aires';
+  private readonly OPEN_METEO_GRANIZO_FUENTE =
+    'Open-Meteo forecast: weather_code, CAPE, precipitation_probability, showers y wind_gusts';
   private readonly forecastCache = new Map<
     string,
     { expiresAt: number; value: ISerieFrioTermicoDia[] }
@@ -145,9 +147,13 @@ export class AgroclimaService {
         lectura: riesgos.granizo.lectura,
         recomendacion: riesgos.granizo.recomendacion,
         calidadDatos: {
-          nivel: 'media',
-          fuente: 'Open-Meteo / clima de zona',
+          nivel: riesgos.granizo.calidadDatos?.nivel || 'baja',
+          score: riesgos.granizo.calidadDatos?.score,
+          fuente:
+            riesgos.granizo.calidadDatos?.fuente ||
+            'Open-Meteo / clima de zona',
           detalle:
+            riesgos.granizo.calidadDatos?.detalle ||
             'Senal convectiva estimada para la zona; requiere seguimiento meteorologico local.',
         },
         fecha,
@@ -395,7 +401,8 @@ export class AgroclimaService {
     serie: ISerieFrioTermicoDia[],
   ): IRiesgoAgroclimatico {
     const dias = serie.map((dia) => {
-      const posibilidad = this.posibilidadGranizo(dia);
+      const evaluacion = this.evaluarGranizoAgroclimatico(dia);
+      const posibilidad = evaluacion.posibilidadPct;
       const nivel: NivelRiesgoAgroclimatico =
         posibilidad >= 65 ? 'alto' : posibilidad >= 35 ? 'medio' : 'bajo';
       return {
@@ -410,7 +417,8 @@ export class AgroclimaService {
         cape: dia.cape,
         showers: dia.showers,
         rafagaViento: dia.rafagaViento,
-        evidencia: this.evidenciaGranizo(dia),
+        evidencia: evaluacion.evidencia,
+        calidadDatos: evaluacion.calidadDatos,
       };
     });
     const critico = [...dias].sort(
@@ -427,20 +435,21 @@ export class AgroclimaService {
       aplica: true,
       nivel,
       posibilidadPct: critico?.posibilidadPct || 0,
-      titulo: 'Posibilidad de granizo',
+      titulo: 'Riesgo estimado de granizo',
       lectura:
         nivel === 'alto'
-          ? 'Ventana convectiva compatible con granizo; requiere monitoreo cercano.'
+          ? 'Ventana convectiva compatible con granizo; requiere monitoreo cercano y validacion meteorologica local.'
           : nivel === 'medio'
-            ? 'Senal convectiva moderada; observar actualizaciones del pronostico.'
-            : 'Sin senal convectiva fuerte compatible con granizo.',
+            ? 'Senal convectiva moderada; observar actualizaciones del pronostico y radar disponible.'
+            : 'Sin senal humeda/convectiva suficiente para elevar riesgo de granizo.',
       recomendacion:
         nivel === 'bajo'
-          ? 'Mantener seguimiento del pronostico local.'
+          ? 'Mantener seguimiento del pronostico local; no activar acciones por granizo sin lluvia o tormenta confirmada.'
           : 'Revisar cobertura operativa, maquinaria expuesta y recorrida posterior al evento.',
       fechaCritica: critico?.fecha,
       diasRiesgo: dias.filter((dia) => dia.nivel !== 'bajo').length,
       evidencia: critico?.evidencia || [],
+      calidadDatos: critico?.calidadDatos,
       serie: dias,
     };
   }
@@ -465,6 +474,7 @@ export class AgroclimaService {
       lectura: riesgo.lectura,
       recomendacion: riesgo.recomendacion,
       evidencia: riesgo.evidencia,
+      calidadDatos: riesgo.calidadDatos,
     };
   }
 
@@ -483,6 +493,8 @@ export class AgroclimaService {
       umbralDanoLeveC: riesgo.umbralDanoLeveC,
       calibracionVarietal: riesgo.calibracionVarietal,
       ajusteVarietalC: riesgo.ajusteVarietalC,
+      calidadDatos: riesgo.calidadDatos?.nivel,
+      calidadScore: riesgo.calidadDatos?.score,
     };
   }
 
@@ -524,59 +536,154 @@ export class AgroclimaService {
     return 5;
   }
 
-  private posibilidadGranizo(dia: ISerieFrioTermicoDia): number {
+  private evaluarGranizoAgroclimatico(
+    dia: ISerieFrioTermicoDia,
+  ): {
+    posibilidadPct: number;
+    evidencia: string[];
+    calidadDatos: NonNullable<IRiesgoAgroclimatico['calidadDatos']>;
+  } {
     let score = 0;
+    const evidencia: string[] = [];
     const code = Number(dia.weatherCode);
-    if (code === 96 || code === 99) score += 55;
-    else if (code === 95) score += 35;
-    else if (this.weatherCodeConvectivo(code)) score += 18;
+    const lluvia = this.toFiniteNumber(dia.lluvia);
+    const probLluvia = this.toFiniteNumber(dia.probabilidadLluvia);
+    const showers = this.toFiniteNumber(dia.showers);
+    const cape = this.toFiniteNumber(dia.cape);
+    const rafaga = this.toFiniteNumber(dia.rafagaViento);
+    const tempMax = this.toFiniteNumber(dia.temperaturaMax);
 
-    const cape = Number(dia.cape || 0);
-    if (cape >= 1800) score += 32;
-    else if (cape >= 1000) score += 25;
-    else if (cape >= 500) score += 15;
-    else if (cape >= 250) score += 8;
+    const codeHail = code === 96 || code === 99;
+    const codeTormenta = this.weatherCodeTormenta(code);
+    const codeChaparron = this.weatherCodeChaparron(code);
+    const disparoHumedo = lluvia >= 1 || showers >= 0.5 || probLluvia >= 30;
 
-    const probLluvia = Number(dia.probabilidadLluvia || 0);
-    if (probLluvia >= 75) score += 18;
-    else if (probLluvia >= 50) score += 12;
-    else if (probLluvia >= 30) score += 6;
+    if (Number.isFinite(code)) evidencia.push(`Codigo de tiempo ${code}`);
 
-    const showers = Number(dia.showers || 0);
+    if (codeHail) {
+      score += 30;
+      evidencia.push(
+        'Codigo de tormenta con granizo usado como proxy; requiere validacion local/radar.',
+      );
+    } else if (code === 95) {
+      score += 22;
+      evidencia.push('Codigo de tormenta sin granizo explicito.');
+    } else if (code === 82) {
+      score += 14;
+      evidencia.push('Codigo de chaparron violento.');
+    } else if (code === 81) {
+      score += 10;
+      evidencia.push('Codigo de chaparron moderado.');
+    } else if (code === 80) {
+      score += 6;
+      evidencia.push('Codigo de chaparron leve.');
+    }
+
+    if (cape >= 2000) score += 26;
+    else if (cape >= 1000) score += 18;
+    else if (cape >= 500) score += 10;
+    else if (cape >= 250) score += 4;
+    if (dia.cape !== undefined) {
+      evidencia.push(`Energia convectiva CAPE ${Math.round(cape)}`);
+    }
+
+    if (lluvia >= 20) score += 12;
+    else if (lluvia >= 10) score += 8;
+    else if (lluvia >= 3) score += 4;
+    if (dia.lluvia !== undefined) evidencia.push(`Lluvia prevista ${lluvia} mm`);
+
+    if (probLluvia >= 75) score += 15;
+    else if (probLluvia >= 50) score += 10;
+    else if (probLluvia >= 30) score += 5;
+    if (dia.probabilidadLluvia !== undefined) {
+      evidencia.push(`Probabilidad de precipitacion ${probLluvia}%`);
+    }
+
     if (showers >= 8) score += 15;
     else if (showers >= 3) score += 10;
-    else if (showers >= 1) score += 5;
+    else if (showers >= 0.5) score += 4;
+    if (dia.showers !== undefined) {
+      evidencia.push(`Chaparrones previstos ${showers} mm`);
+    }
 
-    const rafaga = Number(dia.rafagaViento || 0);
-    if (rafaga >= 70) score += 12;
-    else if (rafaga >= 45) score += 7;
+    if (rafaga >= 70) score += 8;
+    else if (rafaga >= 50) score += 5;
+    if (dia.rafagaViento !== undefined) {
+      evidencia.push(`Rafagas maximas ${rafaga} km/h`);
+    }
 
-    if (Number(dia.temperaturaMax || 0) >= 24) score += 4;
-    return Math.max(0, Math.min(100, Math.round(score)));
-  }
+    if (tempMax >= 24 && (codeTormenta || cape >= 250)) score += 3;
 
-  private evidenciaGranizo(dia: ISerieFrioTermicoDia): string[] {
-    const evidencia: string[] = [];
-    if (dia.weatherCode !== undefined)
-      evidencia.push(`Codigo de tiempo ${dia.weatherCode}`);
-    if (dia.cape !== undefined)
-      evidencia.push(`Energia convectiva ${dia.cape}`);
-    if (dia.probabilidadLluvia !== undefined) {
+    if (!disparoHumedo && !codeTormenta) {
+      score = Math.min(score, cape >= 500 ? 8 : 5);
       evidencia.push(
-        `Probabilidad de precipitacion ${dia.probabilidadLluvia}%`,
+        'Sin lluvia/chaparrones suficientes: Chaman limita el riesgo para evitar falso positivo.',
+      );
+    } else if (!disparoHumedo && codeTormenta) {
+      score = Math.min(score, codeHail ? 24 : 16);
+      evidencia.push(
+        'Hay senal de tormenta, pero falta soporte de lluvia; se informa como vigilancia, no alarma fuerte.',
+      );
+    } else if (codeChaparron && lluvia < 0.5 && showers < 0.5 && probLluvia < 30) {
+      score = Math.min(score, 6);
+      evidencia.push(
+        'Codigo convectivo aislado sin precipitacion asociada; lectura corregida.',
       );
     }
-    if (dia.showers !== undefined)
-      evidencia.push(`Chaparrones previstos ${dia.showers} mm`);
-    if (dia.rafagaViento !== undefined)
-      evidencia.push(`Rafagas maximas ${dia.rafagaViento} km/h`);
-    return evidencia.length
-      ? evidencia
-      : ['Sin variables convectivas suficientes para elevar el riesgo.'];
+
+    const soportes = [
+      codeTormenta,
+      codeChaparron && disparoHumedo,
+      cape >= 500,
+      probLluvia >= 30,
+      lluvia >= 1 || showers >= 0.5,
+      rafaga >= 50,
+    ].filter(Boolean).length;
+    const variables = [
+      dia.weatherCode !== undefined,
+      dia.cape !== undefined,
+      dia.probabilidadLluvia !== undefined,
+      dia.showers !== undefined,
+      dia.rafagaViento !== undefined,
+      dia.lluvia !== undefined,
+    ].filter(Boolean).length;
+    const calidadScore = Math.round(
+      Math.min(100, (variables / 6) * 45 + Math.min(soportes, 5) * 11),
+    );
+    const nivel =
+      variables === 0
+        ? 'sin_datos'
+        : disparoHumedo && soportes >= 3 && variables >= 4
+          ? 'media'
+          : 'baja';
+
+    return {
+      posibilidadPct: Math.max(0, Math.min(100, Math.round(score))),
+      evidencia: evidencia.length
+        ? evidencia
+        : ['Sin variables convectivas suficientes para elevar el riesgo.'],
+      calidadDatos: {
+        nivel,
+        score: calidadScore,
+        fuente: this.OPEN_METEO_GRANIZO_FUENTE,
+        detalle:
+          nivel === 'media'
+            ? 'Multiples proxies convectivos respaldan el riesgo; no reemplaza radar ni alerta oficial.'
+            : 'Lectura preventiva con soporte limitado; requiere validar pronostico local antes de accionar.',
+      },
+    };
+  }
+
+  private weatherCodeTormenta(code: number): boolean {
+    return [95, 96, 99].includes(code);
+  }
+
+  private weatherCodeChaparron(code: number): boolean {
+    return [80, 81, 82].includes(code);
   }
 
   private weatherCodeConvectivo(code: number): boolean {
-    return [80, 81, 82, 95, 96, 99].includes(code);
+    return this.weatherCodeTormenta(code) || this.weatherCodeChaparron(code);
   }
 
   private dateKey(fecha = new Date().toISOString()): string {
@@ -596,5 +703,10 @@ export class AgroclimaService {
     if (!Number.isFinite(Number(value))) return undefined;
     const factor = Math.pow(10, decimals);
     return Math.round(Number(value) * factor) / factor;
+  }
+
+  private toFiniteNumber(value: unknown): number {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : 0;
   }
 }
