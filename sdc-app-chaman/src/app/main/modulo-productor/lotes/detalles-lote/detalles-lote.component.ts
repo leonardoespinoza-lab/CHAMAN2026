@@ -90,6 +90,7 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   public siembraActual? = true;
   public esUltimaEtapa?: boolean;
   public verDrawerSiembras: boolean = false;
+  public verCalidadDatos: boolean = false;
   public cargandoPrimario: boolean = false;
   public refrescandoDetalle: boolean = false;
   private readonly numeroAr = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });

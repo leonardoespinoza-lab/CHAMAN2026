@@ -48,6 +48,13 @@
             (onClick)="descargarCertificado()"
           />
         }
+        <p-button
+          label="Base operativa"
+          icon="pi pi-shield"
+          severity="secondary"
+          [outlined]="true"
+          (onClick)="verCalidadDatos = true"
+        />
         @if (!helper.soloLectura()) {
           <p-button
             label="Editar lote y suelo"
@@ -111,7 +118,19 @@
     </div>
   </section>
 
-  <app-data-quality-strip [lote]="lote" [siembra]="siembra"></app-data-quality-strip>
+  <p-dialog
+    [(visible)]="verCalidadDatos"
+    [modal]="true"
+    [dismissableMask]="true"
+    [draggable]="false"
+    [resizable]="false"
+    [style]="{ width: 'min(1260px, 94vw)' }"
+    [breakpoints]="{ '720px': '96vw' }"
+    header="Base operativa del lote"
+    styleClass="chaman-detail-dialog data-quality-dialog"
+  >
+    <app-data-quality-strip [lote]="lote" [siembra]="siembra"></app-data-quality-strip>
+  </p-dialog>
 
   @if (siembra && !siembra.fechaCosecha && helper.puedeVerModulo('EtapasFenologicas')) {
     <div class="desktop-only">

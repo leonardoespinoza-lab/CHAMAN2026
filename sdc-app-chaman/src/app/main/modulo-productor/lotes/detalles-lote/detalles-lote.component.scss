@@ -360,6 +360,23 @@
   margin-bottom: 1rem;
 }
 
+:host ::ng-deep .data-quality-dialog.p-dialog {
+  border-radius: 24px;
+  overflow: hidden;
+}
+
+:host ::ng-deep .data-quality-dialog .p-dialog-content {
+  max-height: min(74vh, 760px);
+  overflow: auto;
+  padding: 1rem;
+}
+
+:host ::ng-deep .data-quality-dialog app-data-quality-strip .custom-card {
+  border: 0;
+  box-shadow: none;
+  margin: 0;
+}
+
 @media (max-width: 980px) {
   .lot-summary-toolbar {
     flex-direction: column;
