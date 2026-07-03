@@ -40,11 +40,15 @@ export interface ReadinessCultivoCatalogo {
   cultivo: string;
   ok: boolean;
   semillas: number;
+  semillasConResistencia?: number;
+  semillasConCrono?: number;
   enfermedades: number;
   enfermedadesMotor?: number;
   fuenteEnfermedades?: string;
   cronos: number;
   malezas: number;
+  calidadCatalogo?: 'completa' | 'parcial' | 'incompleta';
+  observaciones?: string[];
   faltantes: string[];
 }
 
@@ -154,8 +158,17 @@ export class AlgoritmosService {
   }
 
   private async getReadinessCultivo(cultivo: string): Promise<ReadinessCultivoCatalogo> {
-    const [semillas, enfermedades, cronos, malezas] = await Promise.all([
+    const [
+      semillas,
+      semillasConResistencia,
+      semillasConCrono,
+      enfermedades,
+      cronos,
+      malezas,
+    ] = await Promise.all([
       this.countByFilter(this.semillasService, { cultivo }),
+      this.countByFilter(this.semillasService, { cultivo, 'resistencia.0': { $exists: true } }),
+      this.countByFilter(this.semillasService, { cultivo, ciclo: { $exists: true, $nin: ['SIN DEFINIR', ''] } }),
       this.countByFilter(this.enfermedadsService, { cultivo }),
       this.countByFilter(this.cronosService, { cultivo }),
       this.countByFilter(this.malezasService, { cultivosObjetivo: cultivo }),
@@ -168,11 +181,29 @@ export class AlgoritmosService {
     if (!tieneEnfermedades) faltantes.push('enfermedades');
     if (!cronos) faltantes.push('cronos');
     if (requiereMalezas && !malezas) faltantes.push('malezas');
+    const observaciones: string[] = [];
+    if (semillas && semillasConResistencia < semillas) {
+      observaciones.push(`${semillas - semillasConResistencia} variedad(es) sin resistencia sanitaria especifica`);
+    }
+    if (semillas && semillasConCrono < semillas) {
+      observaciones.push(`${semillas - semillasConCrono} variedad(es) sin ciclo/crono robusto`);
+    }
+    if (!enfermedades && enfermedadesMotor) {
+      observaciones.push('Enfermedades provistas por motor interno; falta espejo completo en coleccion de enfermedades');
+    }
+    const calidadCatalogo =
+      faltantes.length > 0
+        ? 'incompleta'
+        : observaciones.length
+          ? 'parcial'
+          : 'completa';
 
     return {
       cultivo,
       ok: faltantes.length === 0,
       semillas,
+      semillasConResistencia,
+      semillasConCrono,
       enfermedades,
       enfermedadesMotor,
       fuenteEnfermedades: enfermedades
@@ -182,6 +213,8 @@ export class AlgoritmosService {
           : 'sin-base',
       cronos,
       malezas,
+      calidadCatalogo,
+      observaciones,
       faltantes,
     };
   }
@@ -1171,10 +1204,10 @@ export class AlgoritmosService {
   }
 
   private indiceResistenciaDesdeKVar(kVar: number): number {
-    if (kVar <= 0.35) return 1;
-    if (kVar <= 0.75) return 0.65;
-    if (kVar <= 1.05) return 0.35;
-    return 0;
+    const susceptibilidad = this.clamp(Number(kVar) || 1, 0, 1);
+    if (susceptibilidad <= 0.1) return 1;
+    if (susceptibilidad >= 0.95) return 0;
+    return this.round(1 - susceptibilidad, 2);
   }
 
   private getEnfermedadesCultivo(cultivo: string) {

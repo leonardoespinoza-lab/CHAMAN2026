@@ -6,48 +6,53 @@ import { API_AUTH, API_CLIMA, API_DATOS, API_PREDICCIONES } from 'src/env';
 export class ApiCheckService {
   constructor(private axios: AxiosService) {}
   private logger = new Logger(ApiCheckService.name);
+
+  private getHealthCandidates(apiBase: string): string[] {
+    const base = apiBase.replace(/\/+$/, '');
+    const candidates = [`${base}/health`];
+    try {
+      const parsed = new URL(base);
+      if (parsed.pathname && parsed.pathname !== '/') {
+        candidates.push(`${parsed.origin}/health`);
+      }
+    } catch (error) {
+      this.logger.warn(`No se pudo normalizar health check para ${apiBase}`);
+    }
+    return Array.from(new Set(candidates));
+  }
+
+  private async checkApi(name: string, apiBase: string): Promise<boolean> {
+    for (const healthUrl of this.getHealthCandidates(apiBase)) {
+      try {
+        await this.axios.GET(healthUrl);
+        this.logger.log(`${name}: ${apiBase} [OK!]`);
+        return true;
+      } catch (error) {
+        this.logger.warn(`${name}: health sin respuesta en ${healthUrl}`);
+      }
+    }
+    this.logger.error(`${name}: ${apiBase} [ERROR!]`);
+    return false;
+  }
+
   async checkApis(): Promise<boolean> {
     let ok = true;
     // Checkeo de las API en los ENVS de cada microservicio
 
     if (API_DATOS) {
-      try {
-        await this.axios.GET(`${API_DATOS}/api`);
-        this.logger.log(`API_DATOS: ${API_DATOS} [OK!]`);
-      } catch (error) {
-        ok = false;
-        this.logger.error(`API_DATOS: ${API_DATOS} [ERROR!]`);
-      }
+      ok = (await this.checkApi('API_DATOS', API_DATOS)) && ok;
     }
 
     if (API_AUTH) {
-      try {
-        await this.axios.GET(`${API_AUTH}/api`);
-        this.logger.log(`API_AUTH: ${API_AUTH} [OK!]`);
-      } catch (error) {
-        ok = false;
-        this.logger.error(`API_AUTH: ${API_AUTH} [ERROR!]`);
-      }
+      ok = (await this.checkApi('API_AUTH', API_AUTH)) && ok;
     }
 
     if (API_CLIMA) {
-      try {
-        await this.axios.GET(`${API_CLIMA}/api`);
-        this.logger.log(`API_CLIMA: ${API_CLIMA} [OK!]`);
-      } catch (error) {
-        ok = false;
-        this.logger.error(`API_CLIMA: ${API_CLIMA} [ERROR!]`);
-      }
+      ok = (await this.checkApi('API_CLIMA', API_CLIMA)) && ok;
     }
 
     if (API_PREDICCIONES) {
-      try {
-        await this.axios.GET(`${API_PREDICCIONES}/api`);
-        this.logger.log(`API_PREDICCIONES: ${API_PREDICCIONES} [OK!]`);
-      } catch (error) {
-        ok = false;
-        this.logger.error(`API_PREDICCIONES: ${API_PREDICCIONES} [ERROR!]`);
-      }
+      ok = (await this.checkApi('API_PREDICCIONES', API_PREDICCIONES)) && ok;
     }
 
     return ok;

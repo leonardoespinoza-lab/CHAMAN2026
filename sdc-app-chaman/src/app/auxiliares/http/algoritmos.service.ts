@@ -14,11 +14,15 @@ export interface CatalogoReadinessCultivo {
   cultivo: string;
   ok: boolean;
   semillas: number;
+  semillasConResistencia?: number;
+  semillasConCrono?: number;
   enfermedades: number;
   enfermedadesMotor?: number;
   fuenteEnfermedades?: string;
   cronos: number;
   malezas: number;
+  calidadCatalogo?: 'completa' | 'parcial' | 'incompleta';
+  observaciones?: string[];
   faltantes: string[];
 }
 

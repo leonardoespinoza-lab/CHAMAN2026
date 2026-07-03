@@ -245,6 +245,11 @@ h3 {
   border-color: #bdd0e4;
 }
 
+.readiness-grid article.warning {
+  border-color: #e7c56a;
+  background: rgba(255, 247, 220, 0.45);
+}
+
 .readiness-grid span,
 .readiness-grid strong,
 .readiness-grid small,

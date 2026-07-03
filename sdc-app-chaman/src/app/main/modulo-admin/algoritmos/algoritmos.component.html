@@ -61,14 +61,26 @@
           </div>
           <div class="readiness-grid">
             @for (cultivo of readiness.cultivos; track cultivo.cultivo) {
-              <article [class.ready]="cultivo.ok">
+              <article [class.ready]="cultivo.ok" [class.warning]="cultivo.calidadCatalogo === 'parcial'">
                 <span>{{ cultivo.cultivo }}</span>
-                <strong>{{ cultivo.ok ? 'Completo' : 'Incompleto' }}</strong>
+                <strong>
+                  {{
+                    cultivo.calidadCatalogo === 'parcial'
+                      ? 'Parcial auditado'
+                      : cultivo.ok
+                        ? 'Completo'
+                        : 'Incompleto'
+                  }}
+                </strong>
                 <small>
-                  Semillas {{ cultivo.semillas }} · Enfermedades BD {{ cultivo.enfermedades }} · Motor
+                  Semillas {{ cultivo.semillas }} ({{ cultivo.semillasConResistencia || 0 }} con resistencia,
+                  {{ cultivo.semillasConCrono || 0 }} con crono) · Enfermedades BD {{ cultivo.enfermedades }} · Motor
                   {{ cultivo.enfermedadesMotor || 0 }} · Cronos {{ cultivo.cronos }} · Malezas {{ cultivo.malezas }}
                 </small>
                 <small>Fuente sanitaria: {{ cultivo.fuenteEnfermedades || 'sin-base' }}</small>
+                @if (cultivo.observaciones?.length) {
+                  <em>{{ cultivo.observaciones?.join(' · ') }}</em>
+                }
                 @if (cultivo.faltantes.length) {
                   <em>Falta {{ cultivo.faltantes.join(', ') }}</em>
                 }
