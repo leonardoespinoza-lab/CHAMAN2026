@@ -10,6 +10,10 @@ export class AlgoritmosRepository {
     return await this.axios.GET<any[]>(`${API_DATOS}/algoritmos`);
   }
 
+  async getReadinessCatalogos(): Promise<any> {
+    return await this.axios.GET<any>(`${API_DATOS}/algoritmos/catalogos/readiness`);
+  }
+
   async getParametrosHuellaHidrica(): Promise<any> {
     return await this.axios.GET<any>(`${API_DATOS}/algoritmos/huella-hidrica/parametros`);
   }

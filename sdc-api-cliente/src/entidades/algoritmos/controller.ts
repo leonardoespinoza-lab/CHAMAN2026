@@ -16,6 +16,12 @@ export class AlgoritmosController {
     return await this.service.getCatalogo();
   }
 
+  @Get('catalogos/readiness')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  async getReadinessCatalogos(): Promise<any> {
+    return await this.service.getReadinessCatalogos();
+  }
+
   @Get('huella-hidrica/parametros')
   @Permisos({ nivel: 'Admin', roles: ['Admin'] })
   async getParametrosHuellaHidrica(): Promise<any> {

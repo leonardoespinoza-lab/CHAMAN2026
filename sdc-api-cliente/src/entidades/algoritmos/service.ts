@@ -9,6 +9,10 @@ export class AlgoritmosService {
     return await this.repository.getCatalogo();
   }
 
+  async getReadinessCatalogos(): Promise<any> {
+    return await this.repository.getReadinessCatalogos();
+  }
+
   async getParametrosHuellaHidrica(): Promise<any> {
     return await this.repository.getParametrosHuellaHidrica();
   }

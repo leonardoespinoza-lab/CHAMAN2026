@@ -2,7 +2,47 @@
 
 Fecha: 2026-07-02  
 Alcance: revision funcional, agronomica, de datos, UX, seguridad y despliegue sobre el repo `C:\CHAMAN2026`.  
-Modo de trabajo: no se tocaron servicios de produccion, no se hizo push y no se modifico Railway.
+Modo de trabajo inicial: no se tocaron servicios de produccion desde consola Railway y no se modificaron variables productivas.
+
+## Actualizacion operativa
+
+Fecha de actualizacion: 2026-07-02.
+
+Avances aplicados:
+
+- Se agrego el proxy `GET /algoritmos/catalogos/readiness` en `sdc-api-cliente` para que Admin > Algoritmos pueda verificar desde el gateway si existen semillas, enfermedades, cronos y bases por cultivo.
+- Se valido localmente la base de Cebada: 12 variedades, 4 enfermedades, 12.829 registros cronologicos fuente y 321 cronos genericos generables por bootstrap.
+- Se agrego `npm run audit:lote-integrity`, auditor solo lectura para detectar cruces entre lotes, siembras, NDVI, alertas, sensores y predicciones.
+- Se endurecio el riesgo estimado de granizo en `sdc-api-cliente` y `sdc-api-predicciones`: si no hay volumen de lluvia/chaparron asociado, el resultado queda limitado a vigilancia residual.
+- Se compilaron correctamente `sdc-api-cliente` y `sdc-api-predicciones` despues de los cambios.
+
+Bloqueos operativos:
+
+- Railway CLI local respondio `Unauthorized`; para confirmar deploys/variables productivas hace falta reloguear Railway o revisar desde el panel.
+- No se pudo ejecutar la auditoria real de lotes contra produccion porque no hay `MONGO_URI`, `MONGO_URL`, `DATABASE_URL` o `DB_URL` disponible en esta sesion.
+- El smoke autenticado de la app live queda pendiente hasta contar con credenciales vigentes o una sesion abierta. El smoke publico confirmo app y health de API arriba.
+
+Uso del auditor de integridad:
+
+```powershell
+$env:MONGO_URI="mongodb+srv://..."
+npm run audit:lote-integrity
+```
+
+Para auditar solo testigos:
+
+```powershell
+$env:CHAMAN_AUDIT_LOTES="Gilardoni|Pecan|Cebada|Trigo"
+$env:CHAMAN_AUDIT_LIMIT="500"
+npm run audit:lote-integrity
+```
+
+En CI o predeploy puede ejecutarse estricto:
+
+```powershell
+$env:CHAMAN_AUDIT_STRICT="true"
+npm run audit:lote-integrity
+```
 
 ## Resumen ejecutivo
 

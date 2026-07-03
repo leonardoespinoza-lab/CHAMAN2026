@@ -556,7 +556,10 @@ export class AgroclimaService {
     const codeHail = code === 96 || code === 99;
     const codeTormenta = this.weatherCodeTormenta(code);
     const codeChaparron = this.weatherCodeChaparron(code);
-    const disparoHumedo = lluvia >= 1 || showers >= 0.5 || probLluvia >= 30;
+    const precipitacionActiva = lluvia >= 1 || showers >= 0.5;
+    const probabilidadAlta = probLluvia >= 45;
+    const soportePrecipitacion = lluvia >= 0.5 || showers >= 0.2;
+    const disparoHumedo = precipitacionActiva || probabilidadAlta;
 
     if (Number.isFinite(code)) evidencia.push(`Codigo de tiempo ${code}`);
 
@@ -631,12 +634,24 @@ export class AgroclimaService {
       );
     }
 
+    if (!soportePrecipitacion && codeTormenta) {
+      score = Math.min(score, codeHail ? 15 : 10);
+      evidencia.push(
+        'Tormenta sin volumen de lluvia/chaparron previsto: se informa como vigilancia residual.',
+      );
+    } else if (!soportePrecipitacion && probabilidadAlta) {
+      score = Math.min(score, 12);
+      evidencia.push(
+        'Probabilidad de precipitacion sin volumen previsto: no se eleva riesgo de granizo sin soporte humedo.',
+      );
+    }
+
     const soportes = [
       codeTormenta,
       codeChaparron && disparoHumedo,
       cape >= 500,
-      probLluvia >= 30,
-      lluvia >= 1 || showers >= 0.5,
+      probabilidadAlta,
+      precipitacionActiva,
       rafaga >= 50,
     ].filter(Boolean).length;
     const variables = [
