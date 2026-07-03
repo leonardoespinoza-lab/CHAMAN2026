@@ -227,7 +227,7 @@
 .services-stack {
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 1.15rem;
 }
 
 @media (min-width: 1024px) and (pointer: fine) and (hover: hover) {
@@ -240,13 +240,13 @@
   }
 
   .services-stack {
-    gap: 0.9rem;
+    gap: 1.25rem;
   }
 }
 
 @media (min-width: 1200px) {
   .services-stack {
-    gap: 0.95rem;
+    gap: 1.35rem;
   }
 }
 
@@ -287,12 +287,47 @@
   width: 100%;
 }
 
+.service-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.service-group-header {
+  align-items: flex-end;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0 0.2rem;
+}
+
+.service-group-header span {
+  color: var(--p-primary-color);
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.service-group-header strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: clamp(1.28rem, 1.22vw, 1.52rem);
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.08;
+  margin-top: 0.18rem;
+}
+
 .monitoring-section {
   align-items: stretch;
   display: flex;
   flex-direction: column;
   gap: 0.95rem;
-  margin-top: clamp(1.25rem, 4vh, 2.75rem);
+  margin-top: 0;
 }
 
 .monitoring-section:empty {
@@ -333,6 +368,19 @@
 }
 
 .satellite-camera-row > * {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.environment-row {
+  align-items: stretch;
+  display: grid !important;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+}
+
+.environment-row > * {
   display: flex;
   flex-direction: column;
   min-width: 0;
