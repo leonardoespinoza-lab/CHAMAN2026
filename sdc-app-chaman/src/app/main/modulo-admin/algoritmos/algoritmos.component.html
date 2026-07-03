@@ -54,7 +54,7 @@
         <section class="readiness-panel" [class.ready]="readiness.ok">
           <div class="readiness-head">
             <div>
-              <p>Catálogos agronómicos</p>
+              <p>Catalogos agronomicos</p>
               <h3>{{ readiness.ok ? 'Base lista para auditar motores' : 'Faltan datos de base' }}</h3>
             </div>
             <strong>{{ readiness.ok ? 'OK' : 'Revisar' }}</strong>
@@ -64,7 +64,11 @@
               <article [class.ready]="cultivo.ok">
                 <span>{{ cultivo.cultivo }}</span>
                 <strong>{{ cultivo.ok ? 'Completo' : 'Incompleto' }}</strong>
-                <small>Semillas {{ cultivo.semillas }} · Enfermedades {{ cultivo.enfermedades }} · Cronos {{ cultivo.cronos }} · Malezas {{ cultivo.malezas }}</small>
+                <small>
+                  Semillas {{ cultivo.semillas }} · Enfermedades BD {{ cultivo.enfermedades }} · Motor
+                  {{ cultivo.enfermedadesMotor || 0 }} · Cronos {{ cultivo.cronos }} · Malezas {{ cultivo.malezas }}
+                </small>
+                <small>Fuente sanitaria: {{ cultivo.fuenteEnfermedades || 'sin-base' }}</small>
                 @if (cultivo.faltantes.length) {
                   <em>Falta {{ cultivo.faltantes.join(', ') }}</em>
                 }
