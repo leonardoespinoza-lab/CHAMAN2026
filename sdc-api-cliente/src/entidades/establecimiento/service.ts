@@ -350,7 +350,7 @@ export class EstablecimientosService {
     data: any,
   ): IClimaEstacionMeteorologica | null {
     const dates = data?.dates || [];
-    const lastIndex = dates.length ? dates.length - 1 : -1;
+    const lastIndex = this.indiceUltimaFecha(dates);
     if (lastIndex < 0 || !Array.isArray(data?.data)) {
       return null;
     }
@@ -460,7 +460,7 @@ export class EstablecimientosService {
     data: any,
   ): IEstacionLecturaDetalle[] {
     const dates = Array.isArray(data?.dates) ? data.dates : [];
-    const lastIndex = dates.length ? dates.length - 1 : -1;
+    const lastIndex = this.indiceUltimaFecha(dates);
     if (lastIndex < 0 || !Array.isArray(data?.data)) {
       return [];
     }
@@ -578,6 +578,17 @@ export class EstablecimientosService {
   private fechaToTime(fecha: string): number {
     const date = new Date(fecha);
     return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+  }
+
+  private indiceUltimaFecha(dates: any[]): number {
+    if (!Array.isArray(dates) || !dates.length) {
+      return -1;
+    }
+    return dates.reduce((ultimoIndice, fecha, index) => {
+      const actual = this.fechaToTime(String(fecha));
+      const ultimo = this.fechaToTime(String(dates[ultimoIndice]));
+      return actual >= ultimo ? index : ultimoIndice;
+    }, 0);
   }
 
   private valorSerie(values: number[] | undefined, index: number): number | undefined {
