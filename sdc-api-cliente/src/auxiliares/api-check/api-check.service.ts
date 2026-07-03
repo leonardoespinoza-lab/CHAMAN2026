@@ -9,16 +9,15 @@ export class ApiCheckService {
 
   private getHealthCandidates(apiBase: string): string[] {
     const base = apiBase.replace(/\/+$/, '');
-    const candidates = [`${base}/health`];
     try {
       const parsed = new URL(base);
       if (parsed.pathname && parsed.pathname !== '/') {
-        candidates.push(`${parsed.origin}/health`);
+        return Array.from(new Set([`${parsed.origin}/health`, `${base}/health`]));
       }
     } catch (error) {
       this.logger.warn(`No se pudo normalizar health check para ${apiBase}`);
     }
-    return Array.from(new Set(candidates));
+    return [`${base}/health`];
   }
 
   private async checkApi(name: string, apiBase: string): Promise<boolean> {
