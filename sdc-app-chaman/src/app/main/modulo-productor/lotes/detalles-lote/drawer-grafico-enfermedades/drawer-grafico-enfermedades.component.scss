@@ -1,4 +1,108 @@
-p-divider {
-  margin-top: 0.25em;
-  margin-bottom: 0.25em;
+:host ::ng-deep .disease-chart-dialog.p-dialog {
+  border-radius: 24px !important;
+}
+
+:host ::ng-deep .disease-chart-dialog .p-dialog-content {
+  padding: 0 !important;
+}
+
+.disease-chart-shell {
+  display: grid;
+  gap: 1rem;
+  padding: 1.2rem;
+}
+
+.disease-chart-shell header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(139, 163, 184, 0.2);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.58), rgba(247, 250, 252, 0.32)),
+    rgba(255, 255, 255, 0.42);
+  box-shadow: var(--chaman-card-shadow, 0 14px 32px rgba(15, 23, 42, 0.055));
+}
+
+.disease-chart-shell header span {
+  display: block;
+  color: var(--chaman-aqua-deep, #0f766e);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.disease-chart-shell header strong {
+  display: block;
+  margin-top: 0.12rem;
+  color: var(--chaman-ink, #071827);
+  font-size: clamp(1.22rem, 1.4vw, 1.7rem);
+  line-height: 1.08;
+}
+
+.disease-chart-shell header small {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--chaman-muted, #64748b);
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.disease-chart-shell header em {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: max-content;
+  padding: 0.45rem 0.72rem;
+  border: 1px solid rgba(34, 207, 199, 0.24);
+  border-radius: 999px;
+  background: rgba(232, 250, 249, 0.58);
+  color: var(--chaman-aqua-deep, #0f766e);
+  font-style: normal;
+  font-weight: 850;
+}
+
+.chart-frame {
+  min-height: min(58vh, 560px);
+  padding: 0.7rem;
+  border: 1px solid rgba(139, 163, 184, 0.2);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(247, 250, 252, 0.35)),
+    rgba(255, 255, 255, 0.44);
+  box-shadow: var(--chaman-card-shadow, 0 14px 32px rgba(15, 23, 42, 0.055));
+}
+
+.chart-empty {
+  min-height: 18rem;
+  display: grid;
+  place-items: center;
+  gap: 0.35rem;
+  padding: 2rem;
+  border: 1px dashed rgba(139, 163, 184, 0.36);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.36);
+  color: var(--chaman-muted, #64748b);
+  text-align: center;
+}
+
+.chart-empty strong {
+  color: var(--chaman-ink, #071827);
+  font-size: 1.25rem;
+}
+
+@media (max-width: 720px) {
+  .disease-chart-shell {
+    padding: 0.85rem;
+  }
+
+  .disease-chart-shell header {
+    flex-direction: column;
+  }
+
+  .chart-frame {
+    min-height: 24rem;
+  }
 }

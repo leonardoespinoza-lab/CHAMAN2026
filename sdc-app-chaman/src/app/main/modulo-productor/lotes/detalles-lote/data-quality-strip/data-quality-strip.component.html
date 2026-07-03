@@ -1,0 +1,32 @@
+<section class="custom-card data-quality-card">
+  <div class="quality-head">
+    <div>
+      <span class="eyebrow">Confianza de datos</span>
+      <h3>Base operativa del lote</h3>
+      <p>{{ resumenGeneral }}</p>
+    </div>
+    <div class="quality-score" [ngClass]="nivelGeneral">
+      <strong>{{ scoreGeneral }}</strong>
+      <span>/100</span>
+      <small>{{ levelLabel(nivelGeneral) }}</small>
+    </div>
+  </div>
+
+  <div class="quality-grid">
+    @for (item of items; track item.label) {
+      <article [ngClass]="item.level">
+        <div class="item-title">
+          <i [class]="item.icon"></i>
+          <span>{{ item.label }}</span>
+        </div>
+        <strong>{{ item.value }}</strong>
+        <small>{{ item.source }}</small>
+        <div class="quality-meter" [style.--value]="item.score + '%'"><i></i></div>
+        <p>{{ item.detail }}</p>
+        @if (item.updated) {
+          <em>Actualizado {{ item.updated | date: 'dd/MM/yy, HH:mm' }}</em>
+        }
+      </article>
+    }
+  </div>
+</section>

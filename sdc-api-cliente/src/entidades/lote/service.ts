@@ -83,6 +83,15 @@ interface CertificadoFrio {
   };
 }
 
+interface CertificadoCalidadItem {
+  modulo: string;
+  fuente: string;
+  confianza: string;
+  score: number;
+  ultimaActualizacion: string;
+  lectura: string;
+}
+
 @Injectable()
 export class LotesService {
   private readonly logger = new Logger(LotesService.name);
@@ -1257,6 +1266,43 @@ export class LotesService {
       padding: 10px;
       background: #f8fbfe;
     }
+    .quality-board {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin: 14px 0 18px;
+    }
+    .quality-item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: linear-gradient(135deg, #ffffff, #f8fbfe);
+      min-height: 132px;
+    }
+    .quality-item span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+    .quality-item strong {
+      display: block;
+      font-size: 18px;
+      line-height: 1.15;
+    }
+    .quality-item small,
+    .quality-item em {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-style: normal;
+      margin-top: 5px;
+    }
+    .quality-item .score-meter {
+      margin: 9px 0 7px;
+    }
     footer {
       padding: 18px 32px 28px;
       color: var(--muted);
@@ -1265,7 +1311,7 @@ export class LotesService {
     @media (max-width: 900px) {
       .page { width: auto; margin: 0; border-radius: 0; }
       .hero, .two-col { grid-template-columns: 1fr; }
-      .grid, .grid.three, .executive-board { grid-template-columns: 1fr; }
+      .grid, .grid.three, .executive-board, .quality-board { grid-template-columns: 1fr; }
       .score-row { grid-template-columns: 1fr; gap: 6px; }
       .score-row strong { text-align: left; }
     }
@@ -1372,6 +1418,8 @@ export class LotesService {
 
     <section class="section">
       <h2>Fuentes de datos</h2>
+      <p class="section-copy">Cada decision debe leerse con su calidad de input. Una fuente modelada o incompleta sirve para orientar, pero las decisiones criticas deben contrastarse con sensor, recorrida o dato de campo.</p>
+      ${this.renderCalidadDatosCertificado(datos)}
       <div class="source-list">
         <div><strong>Lote y superficie</strong><br/>Poligono y ubicacion cargados en Chaman.</div>
         <div><strong>Fenologia</strong><br/>Base Chaman por cultivo/departamento o fenologia editable del cultivo.</div>
@@ -1394,6 +1442,190 @@ export class LotesService {
 
   private metricCard(label: string, value: string, detail?: string): string {
     return `<article class="card"><span>${this.escapeHtml(label)}</span><strong>${this.escapeHtml(value || '-')}</strong><small>${this.escapeHtml(detail || '')}</small></article>`;
+  }
+
+  private renderCalidadDatosCertificado(datos: CertificadoDatos): string {
+    const items = this.getCalidadDatosCertificado(datos);
+    return `<div class="quality-board">
+      ${items.map((item) => this.renderCalidadDatosItem(item)).join('')}
+    </div>`;
+  }
+
+  private renderCalidadDatosItem(item: CertificadoCalidadItem): string {
+    const score = this.limitarPorcentaje(item.score);
+    return `<article class="quality-item">
+      <span>${this.escapeHtml(item.modulo)}</span>
+      <strong>${this.escapeHtml(item.confianza)} ${this.formatNumber(score, 0)}/100</strong>
+      <div class="score-meter" style="--value:${this.formatCssNumber(score, 0)}%"><i></i></div>
+      <small>Fuente: ${this.escapeHtml(item.fuente)}</small>
+      <small>${this.escapeHtml(item.lectura)}</small>
+      <em>${this.escapeHtml(item.ultimaActualizacion)}</em>
+    </article>`;
+  }
+
+  private getCalidadDatosCertificado(datos: CertificadoDatos): CertificadoCalidadItem[] {
+    const { lote, siembra, reportesNdvi, predicciones, fertilizaciones, fumigaciones, clima } = datos;
+    const climaActual = lote.establecimiento?.climaActual as any;
+    const climaFuente =
+      climaActual?.clima?.fuente ||
+      climaActual?.fuente ||
+      lote.establecimiento?.fuenteClimaPreferida ||
+      'Open-Meteo';
+    const climaScore = this.getScoreFuenteClimatica(climaFuente, climaActual?.clima?.calidadDatos?.score);
+    const ultimoNdvi = reportesNdvi[0];
+    const ndviCoverage = this.toNumber(
+      ultimoNdvi?.metadataImagen?.qualityMask?.validCoveragePct ??
+        ultimoNdvi?.metadataImagen?.indicesStats?.ndvi?.validCoveragePct,
+    );
+    const ndviScore = ultimoNdvi
+      ? Math.max(45, Math.min(92, ndviCoverage ?? 74))
+      : 30;
+    const ultimaPrediccion = predicciones[0];
+    const enfermedades = ultimaPrediccion?.enfermedades || [];
+    const sueloScore = lote.sueloReferencia?.confianza
+      ? this.getScoreConfianzaTexto(lote.sueloReferencia.confianza)
+      : lote.suelos?.length
+        ? Math.min(82, 55 + lote.suelos.length * 7)
+        : 30;
+    const tieneSonda = !!lote.sondaSuelo || !!lote.idSondaSuelo;
+    const riegoScore = tieneSonda
+      ? 90
+      : siembra?.ultimaPrediccionRiego?.length || siembra?.aguaUtilReal != null
+        ? 62
+        : 38;
+    const operaciones = fertilizaciones.length + fumigaciones.length;
+    const manejoScore = operaciones ? Math.min(90, 55 + operaciones * 6) : 35;
+    const huellaCalidad = siembra?.huellaHidrica?.calidad || lote.huellaHidrica?.calidad;
+    const huellaScore = huellaCalidad?.score ?? (siembra?.huellaHidrica || lote.huellaHidrica ? 58 : 35);
+
+    return [
+      {
+        modulo: 'Clima',
+        fuente: climaFuente,
+        confianza: this.getConfianzaTexto(climaScore),
+        score: climaScore,
+        ultimaActualizacion: this.getActualizacionTexto(
+          climaActual?.clima?.calidadDatos?.fechaActualizacion || climaActual?.clima?.fecha || climaActual?.fecha,
+        ),
+        lectura: clima
+          ? 'Serie climatica aplicada en frio, heladas y balance operativo.'
+          : 'Sin clima consolidado para el informe; se recomienda validar fuente.',
+      },
+      {
+        modulo: 'Satelite',
+        fuente: ultimoNdvi?.coleccion || 'STAC / Worker Chaman',
+        confianza: this.getConfianzaTexto(ndviScore),
+        score: ndviScore,
+        ultimaActualizacion: this.getActualizacionTexto(ultimoNdvi?.fechaDeLaImagen || ultimoNdvi?.fechaCreacion),
+        lectura: ultimoNdvi
+          ? `Escena asociada al lote; NDVI ${this.formatMaybe(ultimoNdvi.ndviPromedio, 3)}.`
+          : 'Sin escena satelital disponible en el informe.',
+      },
+      {
+        modulo: 'Sanidad',
+        fuente: 'Motor Chaman + clima + fenologia',
+        confianza: this.getConfianzaTexto(enfermedades.length ? 68 : 35),
+        score: enfermedades.length ? 68 : 35,
+        ultimaActualizacion: this.getActualizacionTexto(ultimaPrediccion?.fechaPrediccion || ultimaPrediccion?.fecha),
+        lectura: enfermedades.length
+          ? `${enfermedades.length} enfermedad(es) con riesgo calculado.`
+          : 'Sin prediccion sanitaria vigente para esta siembra.',
+      },
+      {
+        modulo: 'Riego',
+        fuente: tieneSonda ? 'Sensor de suelo' : 'ET0 + cultivo + suelo',
+        confianza: this.getConfianzaTexto(riegoScore),
+        score: riegoScore,
+        ultimaActualizacion: this.getActualizacionTexto(this.getUltimaFechaDispositivos(lote.dispositivos)),
+        lectura: tieneSonda
+          ? 'La sonda asignada debe guiar la decision operativa.'
+          : 'Recomendacion modelada; mejora con sonda o perfil de suelo completo.',
+      },
+      {
+        modulo: 'Suelo',
+        fuente: lote.sueloReferencia?.fuente || (lote.suelos?.length ? 'Carga del lote' : 'Sin perfil'),
+        confianza: this.getConfianzaTexto(sueloScore),
+        score: sueloScore,
+        ultimaActualizacion: this.getActualizacionTexto(lote.sueloReferencia?.fechaConsulta),
+        lectura: lote.sueloReferencia?.unidadCartografica || `${lote.suelos?.length || 0} nivel(es) cargado(s).`,
+      },
+      {
+        modulo: 'Manejo',
+        fuente: 'Carga operativa Chaman',
+        confianza: this.getConfianzaTexto(manejoScore),
+        score: manejoScore,
+        ultimaActualizacion: this.getActualizacionTexto(
+          this.getUltimaFechaOperaciones(fertilizaciones, fumigaciones),
+        ),
+        lectura: operaciones
+          ? `${operaciones} registro(s) considerados en trazabilidad.`
+          : 'Sin fertilizaciones/fumigaciones registradas para la campana.',
+      },
+      {
+        modulo: 'Huella hidrica',
+        fuente: siembra?.huellaHidrica?.metodologia?.fuenteClima || 'WFN / FAO-56 + registros Chaman',
+        confianza: this.getConfianzaTexto(huellaScore),
+        score: huellaScore,
+        ultimaActualizacion: this.getActualizacionTexto(siembra?.huellaHidrica?.metodologia?.fechaCalculo),
+        lectura: huellaCalidad?.observaciones?.[0] || 'Depende de clima, riego, aplicaciones y rendimiento/cosecha.',
+      },
+    ];
+  }
+
+  private getScoreFuenteClimatica(fuente?: string, score?: number): number {
+    if (Number.isFinite(Number(score))) {
+      return Math.round(Number(score));
+    }
+    const normalizada = this.normalizar(fuente);
+    if (normalizada.includes('fieldclimate') || normalizada.includes('sensor')) return 92;
+    if (normalizada.includes('meteoblue')) return 85;
+    if (normalizada.includes('meteosource')) return 74;
+    if (normalizada.includes('open') && normalizada.includes('meteo')) return 66;
+    return 48;
+  }
+
+  private getScoreConfianzaTexto(confianza?: string): number {
+    if (confianza === 'alta') return 88;
+    if (confianza === 'media') return 68;
+    if (confianza === 'baja') return 46;
+    return 35;
+  }
+
+  private getConfianzaTexto(score: number): string {
+    if (score >= 80) return 'Alta';
+    if (score >= 60) return 'Media';
+    if (score >= 35) return 'Baja';
+    return 'Sin datos';
+  }
+
+  private getActualizacionTexto(value?: string): string {
+    return value ? `Actualizado ${this.formatDateTime(value) || this.formatDate(value)}` : 'Actualizacion no registrada';
+  }
+
+  private getUltimaFechaDispositivos(dispositivos?: IDispositivo[]): string | undefined {
+    return this.getFechaMasReciente(
+      (dispositivos || []).map((dispositivo: any) =>
+        dispositivo?.estado?.ultimoReporte || dispositivo?.ultimoReporte || dispositivo?.updatedAt,
+      ),
+    );
+  }
+
+  private getUltimaFechaOperaciones(
+    fertilizaciones: IFertilizacion[],
+    fumigaciones: IFumigacion[],
+  ): string | undefined {
+    return this.getFechaMasReciente([
+      ...fertilizaciones.map((item: any) => item.fechaFertilizacion || item.fecha),
+      ...fumigaciones.map((item: any) => item.fechaFumigacion || item.fecha),
+    ]);
+  }
+
+  private getFechaMasReciente(values: (string | undefined)[]): string | undefined {
+    return values
+      .filter(Boolean)
+      .map((fecha) => ({ fecha: fecha!, time: new Date(fecha!).getTime() }))
+      .filter((item) => Number.isFinite(item.time))
+      .sort((a, b) => b.time - a.time)[0]?.fecha;
   }
 
   private renderTableroEjecutivo(

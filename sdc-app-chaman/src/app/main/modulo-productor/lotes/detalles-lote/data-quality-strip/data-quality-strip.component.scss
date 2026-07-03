@@ -1,0 +1,209 @@
+.data-quality-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+}
+
+.quality-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.eyebrow {
+  display: block;
+  color: var(--chaman-aqua-deep, #0f766e);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+h3 {
+  margin: 0.1rem 0 0;
+  color: var(--chaman-ink, #071827);
+  font-size: clamp(1.28rem, 1.5vw, 1.75rem);
+  line-height: 1.05;
+}
+
+p {
+  margin: 0.25rem 0 0;
+  color: var(--chaman-muted, #64748b);
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.quality-score {
+  width: 5.25rem;
+  min-width: 5.25rem;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(139, 163, 184, 0.24);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(247, 250, 252, 0.34)),
+    rgba(255, 255, 255, 0.48);
+  box-shadow: var(--chaman-card-shadow, 0 14px 32px rgba(15, 23, 42, 0.055));
+}
+
+.quality-score strong {
+  color: var(--chaman-ink, #071827);
+  font-size: 1.65rem;
+  line-height: 1;
+}
+
+.quality-score span,
+.quality-score small {
+  color: var(--chaman-muted, #64748b);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.quality-score.alta {
+  border-color: rgba(54, 181, 107, 0.32);
+}
+
+.quality-score.media {
+  border-color: rgba(228, 166, 58, 0.34);
+}
+
+.quality-score.baja,
+.quality-score.sin_datos {
+  border-color: rgba(224, 82, 70, 0.28);
+}
+
+.quality-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.72rem;
+}
+
+article {
+  min-height: 11.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.36rem;
+  padding: 0.82rem;
+  border: 1px solid rgba(139, 163, 184, 0.22);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.52), rgba(247, 250, 252, 0.3)),
+    rgba(255, 255, 255, 0.42);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.045), var(--chaman-glass-inner);
+  overflow: hidden;
+}
+
+article.alta {
+  border-color: rgba(54, 181, 107, 0.26);
+}
+
+article.media {
+  border-color: rgba(228, 166, 58, 0.28);
+}
+
+article.baja,
+article.sin_datos {
+  border-color: rgba(139, 163, 184, 0.26);
+}
+
+.item-title {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  color: var(--chaman-aqua-deep, #0f766e);
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.item-title i {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(34, 207, 199, 0.11);
+  color: var(--chaman-aqua-deep, #0f766e);
+}
+
+article strong {
+  color: var(--chaman-ink, #071827);
+  font-size: 1.08rem;
+  line-height: 1.12;
+}
+
+article small,
+article em {
+  color: var(--chaman-muted, #64748b);
+  font-size: 0.86rem;
+  line-height: 1.25;
+}
+
+article em {
+  margin-top: auto;
+  font-style: normal;
+  font-weight: 750;
+}
+
+article p {
+  color: color-mix(in srgb, var(--chaman-ink-soft, #243149) 76%, transparent);
+  font-size: 0.88rem;
+}
+
+.quality-meter {
+  height: 0.44rem;
+  overflow: hidden;
+  border: 1px solid rgba(139, 163, 184, 0.16);
+  border-radius: 999px;
+  background: rgba(139, 163, 184, 0.13);
+}
+
+.quality-meter i {
+  display: block;
+  width: var(--value, 0%);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2ddbd2, #6ee7b7);
+}
+
+article.media .quality-meter i {
+  background: linear-gradient(90deg, #f7c35d, #e4a63a);
+}
+
+article.baja .quality-meter i,
+article.sin_datos .quality-meter i {
+  background: linear-gradient(90deg, #cbd5e1, #94a3b8);
+}
+
+@media (max-width: 1320px) {
+  .quality-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .quality-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .quality-score {
+    width: 100%;
+    min-width: 0;
+    aspect-ratio: auto;
+    grid-template-columns: auto auto 1fr;
+    justify-content: start;
+    gap: 0.2rem;
+    padding: 0.8rem 1rem;
+  }
+
+  .quality-grid {
+    grid-template-columns: 1fr;
+  }
+
+  article {
+    min-height: auto;
+  }
+}

@@ -53,7 +53,7 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
   @Output() public visibleChange = new EventEmitter<boolean>();
   @Input() public siembra?: IDetalleSiembra;
   private predicciones$?: Subscription;
-  private predicciones: IPrediccion[] = [];
+  public predicciones: IPrediccion[] = [];
 
   public chartOptions?: Highcharts.Options;
 
@@ -96,9 +96,9 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
     // const color1 = '#dee8eb';
     // const color2 = '#aec6cf';
     // const color3 = '#7ea4b3';
-    const color1 = '#22c55e2b';
-    const color2 = '#f3d7402b';
-    const color3 = '#f44a4a2b';
+    const color1 = 'rgba(54, 181, 107, 0.13)';
+    const color2 = 'rgba(230, 184, 79, 0.16)';
+    const color3 = 'rgba(224, 82, 70, 0.14)';
     const max = scale?.max ?? 40;
     const bajoHasta = scale?.bajoHasta ?? 15;
     const medioHasta = scale?.medioHasta ?? 20;
@@ -108,13 +108,18 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
         type: 'line',
         backgroundColor: 'transparent',
         style: {
-          fontFamily: 'Lato, sans-serif',
+          fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           color: 'var(--p-text-color)',
         },
-        spacing: [20, 20, 20, 20], // Mejor espaciado para pantallas grandes
+        spacing: [22, 22, 18, 18],
       },
       title: {
-        text: scale?.title || '',
+        text: scale?.title || this.translate.instant('Evolucion de riesgo sanitario'),
+        align: 'left',
+      },
+      subtitle: {
+        text: this.translate.instant('Probabilidad calculada por enfermedad, con bandas operativas de riesgo.'),
+        align: 'left',
       },
       yAxis: {
         max,
@@ -123,7 +128,8 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
           text: this.translate.instant('Indice de riesgo sanitario (%)'),
           style: {
             color: 'var(--p-text-color)',
-            fontSize: '14px',
+            fontSize: '13px',
+            fontWeight: '700',
           },
         },
         plotBands: [
@@ -146,6 +152,8 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
         labels: {
           style: {
             color: 'var(--p-text-color)',
+            fontSize: '12px',
+            fontWeight: '650',
           },
         },
       },
@@ -156,6 +164,8 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
         labels: {
           style: {
             color: 'var(--p-text-color)',
+            fontSize: '12px',
+            fontWeight: '650',
           },
         },
       },
@@ -171,6 +181,11 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
         itemMarginBottom: 8,
         symbolWidth: 25,
       },
+      tooltip: {
+        shared: true,
+        xDateFormat: '%d/%m/%Y',
+        valueSuffix: '%',
+      },
       plotOptions: {
         series: {
           marker: {
@@ -179,7 +194,7 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
           label: {
             connectorAllowed: false,
           },
-          lineWidth: 3,
+          lineWidth: 2.5,
         },
       },
       series,

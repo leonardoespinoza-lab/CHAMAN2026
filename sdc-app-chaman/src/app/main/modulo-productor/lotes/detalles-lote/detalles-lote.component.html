@@ -111,6 +111,8 @@
     </div>
   </section>
 
+  <app-data-quality-strip [lote]="lote" [siembra]="siembra"></app-data-quality-strip>
+
   @if (siembra && !siembra.fechaCosecha && helper.puedeVerModulo('EtapasFenologicas')) {
     <div class="desktop-only">
       <app-card-etapas-fenologicas [lote]="lote" [siembra]="siembra"></app-card-etapas-fenologicas>

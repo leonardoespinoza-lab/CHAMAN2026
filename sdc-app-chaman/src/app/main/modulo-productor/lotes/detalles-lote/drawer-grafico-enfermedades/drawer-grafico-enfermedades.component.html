@@ -1,35 +1,38 @@
-<!-- Resumen del servicio monitoreo de enfermedades-->
-<p-drawer
-  #drawerRef
+<p-dialog
   [(visible)]="visible"
-  [position]="(helper.isWide$ | async) ? 'right' : 'bottom'"
-  [style]="{
-    'margin-top': (helper.isWide$ | async) ? '58px' : '0',
-    height: (helper.isWide$ | async) ? 'calc(100% - 58px)' : 'auto',
-    'border-radius': (helper.isWide$ | async) ? '30px 0 0 30px' : '30px 30px 0 0',
-    overflow: 'auto',
-    width: (helper.isWide$ | async) ? '900px' : '100%',
-    'max-width': (helper.isWide$ | async) ? '70vw' : '100%',
-  }"
   [modal]="true"
-  (onHide)="visibleChange.emit(false)"
+  [dismissableMask]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(1080px, 94vw)' }"
+  [breakpoints]="{ '720px': '96vw' }"
   [header]="'Monitoreo de enfermedades' | translate"
-  [closable]="true"
+  styleClass="chaman-detail-dialog disease-chart-dialog"
+  (onHide)="visibleChange.emit(false)"
 >
-  <div
-    [style]="{
-      padding: (helper.isWide$ | async) ? '1.5em' : '1em',
-      height: '100%',
-      display: 'flex',
-      'flex-direction': 'column',
-      'justify-content': 'center',
-    }"
-  >
-    <app-chart
-      [options]="chartOptions"
-      [style]="
-        (helper.isWide$ | async) ? 'display: block; height: 600px; width: 100%' : 'display: block; height: 400px'
-      "
-    ></app-chart>
-  </div>
-</p-drawer>
+  <section class="disease-chart-shell">
+    <header>
+      <div>
+        <span>Curvas sanitarias</span>
+        <strong>{{ siembra?.semilla?.cultivo || 'Cultivo' }}{{ siembra?.semilla?.variedad ? ' - ' + siembra?.semilla?.variedad : '' }}</strong>
+        <small>Serie historica del motor sanitario. La lectura debe cruzarse con etapa, clima, recorrida y manejo.</small>
+      </div>
+      @if (predicciones.length) {
+        <em>{{ predicciones.length }} lectura(s)</em>
+      }
+    </header>
+
+    @if (loading) {
+      <div class="chart-empty">Cargando curvas sanitarias...</div>
+    } @else if (chartOptions) {
+      <div class="chart-frame">
+        <app-chart [options]="chartOptions" style="display: block; height: min(58vh, 560px); width: 100%"></app-chart>
+      </div>
+    } @else {
+      <div class="chart-empty">
+        <strong>Sin serie suficiente</strong>
+        <span>Necesitamos predicciones historicas de esta siembra para graficar la evolucion sanitaria.</span>
+      </div>
+    }
+  </section>
+</p-dialog>
