@@ -406,10 +406,10 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       'Mancha de la Hoja': 'Severidad = (-6,41 + 0,59 x DHR + 2,79 x DPr) x multiplicador varietal.',
       'Fusarium de la Espiga': 'Severidad = (20,37 + 8,63 x PMoj - 0,49 x GDN) x multiplicador varietal, dentro de la ventana de GDA.',
       'Roya Anaranjada': 'Severidad = (-63,11 + 0,96 x Tmin + 1,72 x Tmax + 3,72 x viento + 0,43 x HR) x multiplicador varietal.',
-      'Mancha en Red': 'Indice CHAMAN: ventana fenologica, dias favorables, humedad/mojado, temperatura, lluvia reciente y sensibilidad varietal.',
-      'Escaldadura de la Cebada': 'Indice CHAMAN: etapa sensible, ambiente fresco-humedo, lluvia/salpicado y continuidad de dias favorables.',
-      'Roya de la Hoja de Cebada': 'Indice CHAMAN: etapa del cultivo, humedad relativa, temperatura templada y acumulacion de dias favorables.',
-      'Fusariosis de la Espiga de Cebada': 'Indice CHAMAN: espigazon/antesis, lluvia reciente, humedad persistente, temperatura y variedad.',
+      'Mancha en Red': 'Cebada V2: respuesta horaria de temperatura y humedad, tasa diaria por perfil varietal y avance acumulado.',
+      'Escaldadura de la Cebada': 'Cebada V2: riesgo de infeccion por temperatura fresca, mojado foliar, lluvia/salpicado y perfil varietal.',
+      'Roya de la Hoja de Cebada': 'Cebada V2: severidad por grados dia, dias con HR sostenida y perfil de resistencia.',
+      'Fusariosis de la Espiga de Cebada': 'Cebada V2: mojado de espiga, grados dia negativos/estresantes y perfil varietal durante ventana critica.',
       'Fin de Ciclo': 'Riesgo = (8 x Lt7 / 600) x multiplicador varietal, con Lt7 basado en dias y milimetros de lluvia mayor a 7 mm.',
       'Roya del Maiz': 'Severidad = 4,42 + 0,61 x GD + 0,57 x DHR - 30,01 x multiplicador varietal.',
     };
@@ -475,6 +475,17 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       temperaturaScore: 'temperatura',
       lluviaScore: 'lluvia',
       etapaScore: 'etapa',
+      formulaVersion: 'version',
+      fTemp: 'f temp',
+      fHMF: 'f mojado',
+      fPP: 'f lluvia',
+      kVar: 'perfil varietal',
+      ri: 'RI',
+      horasMojado: 'horas mojado',
+      lluviaDiaria: 'lluvia diaria',
+      factorHumedad: 'factor HR',
+      tasaDiaria: 'tasa diaria',
+      severidadAcumulada: 'severidad acum.',
     };
   }
 

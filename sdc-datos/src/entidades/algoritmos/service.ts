@@ -202,6 +202,22 @@ export class AlgoritmosService {
         ? body.resistencias
         : [];
 
+    if (this.norm(cultivo) === 'CEBADA') {
+      return this.simularEnfermedadesCebada({
+        cultivo,
+        variedad,
+        etapa,
+        zona,
+        humedad,
+        horasMojado,
+        lluvia48,
+        temperatura,
+        susceptibilidad,
+        resistenciasVarietales,
+        diasSimulados: Number(body?.diasSimulados ?? 10),
+      });
+    }
+
     const enfermedades = this.getEnfermedadesCultivo(cultivo).map((enfermedad) => {
       const etapaActiva = enfermedad.etapas.some((item) => item.toLowerCase() === String(etapa).toLowerCase());
       const humedadScore = this.clamp((humedad - enfermedad.humedadBase) / 18, 0, 1);
@@ -267,6 +283,115 @@ export class AlgoritmosService {
         resistenciasVarietales.length
           ? `Susceptibilidad por enfermedad tomada de semilla.resistencia (${resistenciasVarietales.length} registro(s)).`
           : 'Sin resistencia varietal especifica: se uso susceptibilidad base manual para todas las enfermedades.',
+      ],
+    };
+  }
+
+  private simularEnfermedadesCebada(params: {
+    cultivo: string;
+    variedad: string;
+    etapa: string;
+    zona: string;
+    humedad: number;
+    horasMojado: number;
+    lluvia48: number;
+    temperatura: number;
+    susceptibilidad: number;
+    resistenciasVarietales: Array<{ enfermedad?: string; multiplicador?: number }>;
+    diasSimulados: number;
+  }) {
+    const dias = Math.max(1, Math.min(60, Math.round(params.diasSimulados || 10)));
+    const lluviaDiaria = Math.max(0, params.lluvia48 / 2);
+    const tmin = params.temperatura - 4;
+    const tmax = params.temperatura + 5;
+    const enfermedadesBase = this.getEnfermedadesCultivo('Cebada');
+    const seriePorEnfermedad: Record<string, Array<{ label: string; value: number }>> = {};
+    const enfermedades = enfermedadesBase.map((enfermedad) => {
+      const etapaActiva = enfermedad.etapas.some((item) => item.toLowerCase() === String(params.etapa).toLowerCase());
+      const kVar = this.getSusceptibilidadVarietal(
+        enfermedad.nombre,
+        params.susceptibilidad,
+        params.resistenciasVarietales,
+      );
+      let riesgo = 0;
+      let GD = 0;
+      let DHR = 0;
+      let PMoj = 0;
+      let GDN = 0;
+      let GDAcum = 0;
+      const serie = Array.from({ length: dias }).map((_, index) => {
+        const label = `Dia ${index + 1}`;
+        if (!etapaActiva) {
+          return { label, value: 0 };
+        }
+        if (enfermedad.nombre === 'Mancha en Red') {
+          const fTemp = this.factorTempManchaRed(params.temperatura);
+          const fHum = this.factorHumedadManchaRed(params.humedad);
+          const tasa = fTemp * fHum * kVar;
+          riesgo = tasa > 0 ? (riesgo <= 0 ? (tasa > 0.2 ? 0.1 : 0) : riesgo + tasa * riesgo * (1 - riesgo / 100)) : riesgo;
+        } else if (enfermedad.nombre === 'Escaldadura de la Cebada') {
+          const fTemp = this.factorTempEscaldadura(params.temperatura);
+          const fHMF = this.factorHMF(params.horasMojado);
+          const fPP = this.factorPPEscaldadura(lluviaDiaria);
+          riesgo = this.clamp(fTemp * fHMF * fPP * kVar * 100, 0, 100);
+        } else if (enfermedad.nombre === 'Roya de la Hoja de Cebada') {
+          GD += this.gradosDiaRoya(params.humedad, params.temperatura);
+          DHR += lluviaDiaria <= 0.2 && params.humedad >= 70 ? 1 : 0;
+          riesgo = this.clamp(4.42 + 0.61 * GD + 0.57 * DHR - 30.01 * this.indiceResistenciaDesdeKVar(kVar), 0, 100);
+        } else if (enfermedad.nombre === 'Fusariosis de la Espiga de Cebada') {
+          GDAcum += params.temperatura;
+          PMoj += lluviaDiaria >= 0.2 && params.humedad >= 78 ? 1 : 0;
+          GDN += Math.max(tmax - 26, 0) + Math.max(9 - tmin, 0);
+          riesgo = GDAcum < 530 ? this.clamp((20.37 + 8.63 * PMoj - 0.49 * GDN) * kVar, 0, 100) : 0;
+        }
+        return { label, value: this.round(riesgo, 1) };
+      });
+      seriePorEnfermedad[enfermedad.nombre] = serie;
+      const ultimo = serie[serie.length - 1]?.value || 0;
+      return {
+        nombre: enfermedad.nombre,
+        periodo: enfermedad.periodo,
+        riesgo: this.round(ultimo, 1),
+        nivel: etapaActiva ? this.nivelRiesgo(ultimo) : 'fuera de ventana',
+        prescripcion: enfermedad.prescripcion,
+        etapaActiva,
+        susceptibilidad: this.round(kVar, 2),
+        calidadInput: 'media',
+        fuenteFormula: enfermedad.formulaFuente || 'ENFERMEDADES EN CEBADA.xlsx',
+      };
+    });
+    const maxRiesgo = Math.max(...enfermedades.map((item) => item.riesgo), 0);
+    const mayor = enfermedades.find((item) => item.riesgo === maxRiesgo);
+    const serie = mayor ? seriePorEnfermedad[mayor.nombre] || [] : [];
+
+    return {
+      motor: 'enfermedades-cebada-v2',
+      resumen: `${params.cultivo} ${params.variedad}: ${this.nivelRiesgo(maxRiesgo)} (${this.round(maxRiesgo, 1)}%)`,
+      metricas: {
+        cultivo: params.cultivo,
+        variedad: params.variedad,
+        etapa: params.etapa,
+        zona: params.zona,
+        humedadRelativa: params.humedad,
+        horasMojado: params.horasMojado,
+        lluvia48h: params.lluvia48,
+        lluviaDiariaUsada: this.round(lluviaDiaria, 1),
+        temperatura: params.temperatura,
+        diasSimulados: dias,
+        calidadInput: 'media: sin sensor horario de canopeo, usa proxy diario/manual',
+        fuenteVarietal: params.resistenciasVarietales.length ? 'semilla.resistencia' : 'sensibilidad base manual',
+      },
+      enfermedades,
+      serie,
+      trazas: [
+        'Cebada V2 toma formulas del Excel ENFERMEDADES EN CEBADA.xlsx.',
+        'Mancha en Red: F_Temp=(T-5)*(30-T)/150, F_Hum por HR >=90/80 y acumulacion logistica diaria.',
+        'Escaldadura: RI=f(T) trapezoidal x f(HMF) x f(PP) x Kvar.',
+        'Roya de la Hoja de Cebada: Sev%=4.42+0.61*GD+0.57*DHR-30.01*IR.',
+        'Fusariosis de la Espiga de Cebada: I%=20.37+8.63*PMoj-0.49*GDN, ponderado por perfil varietal.',
+        params.resistenciasVarietales.length
+          ? `Perfil varietal tomado de semilla.resistencia (${params.resistenciasVarietales.length} registro(s)).`
+          : 'Sin resistencia varietal especifica: el banco usa sensibilidad manual y marca calidad varietal media.',
       ],
     };
   }
@@ -843,6 +968,49 @@ export class AlgoritmosService {
     return { lat, lng };
   }
 
+  private factorTempManchaRed(temperatura: number): number {
+    if (temperatura < 5 || temperatura > 30) return 0;
+    return this.round(((temperatura - 5) * (30 - temperatura)) / 150, 4);
+  }
+
+  private factorHumedadManchaRed(hr: number): number {
+    if (hr >= 90) return 1;
+    if (hr >= 80) return 0.5;
+    return 0;
+  }
+
+  private factorTempEscaldadura(temperatura: number): number {
+    if (temperatura < 4 || temperatura > 25) return 0;
+    if (temperatura >= 10 && temperatura <= 18) return 1;
+    if (temperatura < 10) return this.clamp((temperatura - 4) / 6, 0, 1);
+    return this.clamp((25 - temperatura) / 7, 0, 1);
+  }
+
+  private factorHMF(horasMojado: number): number {
+    if (horasMojado < 12) return 0;
+    if (horasMojado >= 24) return 1;
+    return this.clamp((horasMojado - 12) / 12, 0, 1);
+  }
+
+  private factorPPEscaldadura(lluvia: number): number {
+    if (lluvia < 1) return 0.2;
+    if (lluvia >= 5) return 1;
+    return this.clamp(0.2 + ((lluvia - 1) / 4) * 0.8, 0.2, 1);
+  }
+
+  private gradosDiaRoya(hr: number, tavg: number): number {
+    if (hr < 49 || tavg < 12) return 0;
+    const baseTermica = tavg >= 18 ? 18 : tavg;
+    return this.round(Math.max(baseTermica - 12, 0), 2);
+  }
+
+  private indiceResistenciaDesdeKVar(kVar: number): number {
+    if (kVar <= 0.35) return 1;
+    if (kVar <= 0.75) return 0.65;
+    if (kVar <= 1.05) return 0.35;
+    return 0;
+  }
+
   private getEnfermedadesCultivo(cultivo: string) {
     const base: Record<string, Array<Record<string, any>>> = {
       Trigo: [
@@ -910,6 +1078,7 @@ export class AlgoritmosService {
           horasMojadoCriticas: 12,
           lluviaCritica: 8,
           tempOptima: 17,
+          formulaFuente: 'MANCHA EN RED - ENFERMEDADES EN CEBADA.xlsx',
           prescripcion: 'DMI + QoI/SDHI registrado en cebada; validar destino cervecero y marbete.',
         },
         {
@@ -920,6 +1089,7 @@ export class AlgoritmosService {
           horasMojadoCriticas: 14,
           lluviaCritica: 6,
           tempOptima: 13,
+          formulaFuente: 'ESCALDADURA - ENFERMEDADES EN CEBADA.xlsx',
           prescripcion: 'Triazol + estrobilurina/carboxamida registrada; integrar rastrojo y sintomas.',
         },
         {
@@ -930,6 +1100,7 @@ export class AlgoritmosService {
           horasMojadoCriticas: 8,
           lluviaCritica: 4,
           tempOptima: 18,
+          formulaFuente: 'Hoja auxiliar - ENFERMEDADES EN CEBADA.xlsx',
           prescripcion: 'Triazol o mezcla doble; proteger hojas funcionales con riesgo sostenido.',
         },
         {
@@ -940,6 +1111,7 @@ export class AlgoritmosService {
           horasMojadoCriticas: 18,
           lluviaCritica: 5,
           tempOptima: 20,
+          formulaFuente: 'Hoja auxiliar - ENFERMEDADES EN CEBADA.xlsx',
           prescripcion: 'Triazol especifico de espiga; evitar estrobilurina sola y validar calidad/micotoxinas.',
         },
       ],

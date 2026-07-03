@@ -39,6 +39,22 @@ export interface IVariablesEnfermedadCebada {
   temperaturaScore?: number;
   lluviaScore?: number;
   etapaScore?: number;
+  formulaVersion?: number;
+  fTemp?: number;
+  fHMF?: number;
+  fPP?: number;
+  kVar?: number;
+  ri?: number;
+  horasMojado?: number;
+  lluviaDiaria?: number;
+  factorHumedad?: number;
+  tasaDiaria?: number;
+  severidadAcumulada?: number;
+  GD?: number;
+  DHR?: number;
+  PMoj?: number;
+  GDN?: number;
+  GDAcum?: number;
 }
 
 export interface IVariablesFinDeCiclo {

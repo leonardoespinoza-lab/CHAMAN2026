@@ -418,6 +418,9 @@
                       <strong>{{ enfermedad['nombre'] }}</strong>
                     </div>
                     <em>{{ enfermedad['riesgo'] }}% - {{ enfermedad['nivel'] }}</em>
+                    @if (enfermedad['calidadInput'] || enfermedad['fuenteFormula']) {
+                      <small>{{ enfermedad['calidadInput'] || 'input auditado' }} · {{ enfermedad['fuenteFormula'] || 'fuente interna' }}</small>
+                    }
                     <p>{{ enfermedad['prescripcion'] }}</p>
                   </article>
                 }

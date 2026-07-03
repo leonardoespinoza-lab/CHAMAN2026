@@ -39,7 +39,7 @@ const DISEASES = [
     cultivo: CROP,
     etapas: [1, 2, 3, 4, 5],
     formula:
-      'Motor CHAMAN Cebada: pondera ventana fenologica, humedad persistente, temperatura templada y lluvia reciente. No expone formula propietaria completa.',
+      'Cebada V2: F_Temp=(T-5)*(30-T)/150, F_Hum por HR >=90/80, tasa diaria x Kvar y severidad acumulada logistica.',
     tempMin: 10,
     tempMax: 27,
     rocioMin: 82,
@@ -50,7 +50,7 @@ const DISEASES = [
     cultivo: CROP,
     etapas: [1, 2, 3, 4],
     formula:
-      'Motor CHAMAN Cebada: prioriza estadios tempranos, ambiente fresco-humedo, mojado foliar y lluvia reciente. Validar con recorrida.',
+      'Cebada V2: RI=f(T) trapezoidal 4-25 C x f(HMF) 12-24 h x f(PP) 1-5 mm x Kvar.',
     tempMin: 5,
     tempMax: 22,
     rocioMin: 85,
@@ -61,7 +61,7 @@ const DISEASES = [
     cultivo: CROP,
     etapas: [2, 3, 4, 5, 6],
     formula:
-      'Motor CHAMAN Cebada: combina tejido verde funcional, humedad ambiente, temperatura favorable y acumulacion diaria.',
+      'Cebada V2: Sev%=4.42+0.61*GD+0.57*DHR-30.01*IR con GD/DHR acumulados.',
     tempMin: 10,
     tempMax: 27,
     rocioMin: 70,
@@ -72,7 +72,7 @@ const DISEASES = [
     cultivo: CROP,
     etapas: [4, 5, 6],
     formula:
-      'Motor CHAMAN Cebada: concentra el riesgo en espigazon/antesis, lluvia, humedad elevada y temperaturas templadas.',
+      'Cebada V2: I%=20.37+8.63*PMoj-0.49*GDN, ponderado por perfil varietal.',
     tempMin: 15,
     tempMax: 30,
     rocioMin: 78,

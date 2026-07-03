@@ -84,6 +84,7 @@ export class AlgoritmosComponent {
     horasMojado: 16,
     lluvia48h: 9,
     temperatura: 18,
+    diasSimulados: 10,
     susceptibilidad: 0.85,
     resistencia: [] as IResistencia[],
   };
@@ -155,6 +156,7 @@ export class AlgoritmosComponent {
         { key: 'horasMojado', label: 'Horas de mojado', type: 'number', suffix: 'h' },
         { key: 'lluvia48h', label: 'Lluvia 48 h', type: 'number', suffix: 'mm' },
         { key: 'temperatura', label: 'Temperatura media', type: 'number', suffix: 'C' },
+        { key: 'diasSimulados', label: 'Dias simulados', type: 'number', helper: 'Necesario para modelos acumulativos como Mancha en Red y Fusariosis.' },
         { key: 'susceptibilidad', label: 'Susceptibilidad base', type: 'number', helper: '0.05 tolerante, 1 susceptible; >1 muy susceptible.' },
       ],
     },
@@ -496,7 +498,7 @@ export class AlgoritmosComponent {
     this.semillasError = '';
     const query: IQueryParam = {
       page: 0,
-      limit: 0,
+      limit: 500,
       sort: JSON.stringify({ cultivo: 1, variedad: 1, ciclo: 1, semillero: 1 }),
       select:
         '_id codigoCarga fuenteBase semillero cultivo variedad ciclo resistencia campania tipoCultivo fenologiaReferencia observaciones',

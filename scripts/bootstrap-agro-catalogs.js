@@ -18,6 +18,7 @@ const CEBADA_EXPECTED = {
   semillas: 12,
   enfermedades: 4,
   cronosMin: 12000,
+  enfermedadesV2: 4,
 };
 
 function log(message, extra) {
@@ -48,19 +49,24 @@ function runSeed(scriptName) {
 }
 
 async function getCebadaCounts(db) {
-  const [semillas, enfermedades, cronos] = await Promise.all([
+  const [semillas, enfermedades, enfermedadesV2, cronos] = await Promise.all([
     db.collection('semillas').countDocuments({ cultivo: 'Cebada' }),
     db.collection('enfermedads').countDocuments({ cultivo: 'Cebada' }),
+    db.collection('enfermedads').countDocuments({
+      cultivo: 'Cebada',
+      formula: /Cebada V2/,
+    }),
     db.collection('cronos').countDocuments({ cultivo: 'Cebada' }),
   ]);
 
-  return { semillas, enfermedades, cronos };
+  return { semillas, enfermedades, enfermedadesV2, cronos };
 }
 
 function isCebadaComplete(counts) {
   return (
     counts.semillas >= CEBADA_EXPECTED.semillas &&
     counts.enfermedades >= CEBADA_EXPECTED.enfermedades &&
+    counts.enfermedadesV2 >= CEBADA_EXPECTED.enfermedadesV2 &&
     counts.cronos >= CEBADA_EXPECTED.cronosMin
   );
 }
