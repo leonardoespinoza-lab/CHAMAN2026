@@ -50,6 +50,7 @@ import { AlgoritmosModule } from './entidades/algoritmos/module';
 import { CamarasModule } from './entidades/camara/module';
 import { FieldClimateIntegracionModule } from './entidades/fieldclimate-integracion/module';
 import { NapasModule } from './entidades/napas/module';
+import { IaMalezasModule } from './entidades/ia-malezas/module';
 import { REDIS_HOST, REDIS_PORT, REDIS_PASSWORD } from './env';
 
 @Module({
@@ -106,6 +107,7 @@ import { REDIS_HOST, REDIS_PORT, REDIS_PASSWORD } from './env';
     AlgoritmosModule,
     FieldClimateIntegracionModule,
     NapasModule,
+    IaMalezasModule,
   ],
   controllers: [],
   providers: [{ provide: APP_INTERCEPTOR, useClass: MqttInterceptor }],

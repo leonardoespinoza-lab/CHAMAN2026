@@ -69,6 +69,13 @@ const services = {
     build: 'python -m py_compile worker.py calcular_ndvi.py recorte.py storage.py config.py geo.py health.py cleaner.py',
     start: 'python worker.py',
   },
+  'sdc-weed-ai': {
+    aliases: ['chaman-weed-ai', 'weed-ai', 'ia-malezas'],
+    path: 'sdc-weed-ai',
+    install: 'python -m pip install --upgrade pip && python -m pip install -r requirements.txt',
+    build: 'python -m py_compile main.py start.py',
+    start: 'python start.py',
+  },
 };
 
 function getServiceName() {

@@ -1,0 +1,202 @@
+<section class="weed-ai-page">
+  <header class="page-hero">
+    <div>
+      <p class="eyebrow">Backoffice experimental</p>
+      <h1>Motor IA Malezas</h1>
+      <p>
+        Carga de imagenes, inferencia YOLO y auditoria interna de detecciones.
+        No visible para clientes finales.
+      </p>
+    </div>
+    <div class="health-card" [class.degraded]="health['status'] !== 'ok'">
+      <span>Motor</span>
+      <strong>{{ health['status'] || 'consultando' }}</strong>
+      <small>{{ health['model_version'] || health['modelVersion'] || health['mode'] || 'sin version' }}</small>
+      <p-button icon="pi pi-refresh" label="Health" size="small" outlined="true" (onClick)="loadHealth()" />
+    </div>
+  </header>
+
+  <div class="upload-panel">
+    <div class="panel-title">
+      <div>
+        <p class="eyebrow">Banco de imagenes</p>
+        <h2>Nueva carga</h2>
+      </div>
+      <p-button
+        label="Cargar imagenes"
+        icon="pi pi-upload"
+        [loading]="uploading"
+        [disabled]="!selectedFiles.length"
+        (onClick)="upload()"
+      />
+    </div>
+
+    <div class="form-grid">
+      <label>
+        <span>Ensayo</span>
+        <input pInputText [(ngModel)]="form.ensayoId" placeholder="Ensayo o protocolo" />
+      </label>
+      <label>
+        <span>Lote ID</span>
+        <input pInputText [(ngModel)]="form.loteId" placeholder="ID interno del lote" />
+      </label>
+      <label>
+        <span>Lote</span>
+        <input pInputText [(ngModel)]="form.loteNombre" placeholder="Nombre visible" />
+      </label>
+      <label>
+        <span>Cultivo</span>
+        <input pInputText [(ngModel)]="form.cultivo" placeholder="Trigo, Cebada, Soja..." />
+      </label>
+      <label>
+        <span>Campania</span>
+        <input pInputText [(ngModel)]="form.campania" />
+      </label>
+      <label>
+        <span>Fecha</span>
+        <input pInputText type="date" [(ngModel)]="form.fecha" />
+      </label>
+      <label>
+        <span>Tipo de analisis</span>
+        <p-select
+          [options]="analysisTypes"
+          optionLabel="label"
+          optionValue="value"
+          [(ngModel)]="form.tipoAnalisis"
+          appendTo="body"
+        />
+      </label>
+      <label class="file-field">
+        <span>Imagenes</span>
+        <input type="file" accept="image/*" multiple (change)="onFilesSelected($event)" />
+        <small>{{ selectedFiles.length || 0 }} archivo(s) seleccionados</small>
+      </label>
+    </div>
+  </div>
+
+  <div class="filters-panel">
+    <label>
+      <span>Campania</span>
+      <input pInputText [(ngModel)]="filters.campania" />
+    </label>
+    <label>
+      <span>Lote</span>
+      <input pInputText [(ngModel)]="filters.lote" />
+    </label>
+    <label>
+      <span>Cultivo</span>
+      <input pInputText [(ngModel)]="filters.cultivo" />
+    </label>
+    <label>
+      <span>Clase detectada</span>
+      <input pInputText [(ngModel)]="filters.clase" placeholder="amaranthus" />
+    </label>
+    <label>
+      <span>Fecha</span>
+      <input pInputText type="date" [(ngModel)]="filters.fecha" />
+    </label>
+    <p-button label="Recargar" icon="pi pi-refresh" outlined="true" [loading]="loading" (onClick)="loadAnalyses()" />
+  </div>
+
+  <div class="workspace">
+    <aside class="analysis-list">
+      <div class="list-header">
+        <div>
+          <p class="eyebrow">Historico</p>
+          <h2>{{ filteredAnalyses.length }} analisis</h2>
+        </div>
+      </div>
+
+      @for (analysis of filteredAnalyses; track analysis._id) {
+        <button
+          type="button"
+          class="analysis-row"
+          [class.active]="selected?._id === analysis._id"
+          (click)="selectAnalysis(analysis)"
+        >
+          <span class="row-status" [class]="statusClass(analysis.estado)">{{ analysis.estado || 'pendiente' }}</span>
+          <strong>{{ analysis.loteNombre || analysis.loteId || 'Lote sin asociar' }}</strong>
+          <small>{{ analysis.cultivo || 'Cultivo sin cargar' }} · {{ analysis.fecha || 'sin fecha' }}</small>
+          <span>{{ totalDetections(analysis) }} deteccion(es) · max {{ maxConfidence(analysis) }}</span>
+        </button>
+      } @empty {
+        <div class="empty-state">No hay imagenes cargadas con esos filtros.</div>
+      }
+    </aside>
+
+    <main class="analysis-detail">
+      @if (selected) {
+        <div class="detail-header">
+          <div>
+            <p class="eyebrow">Analisis seleccionado</p>
+            <h2>{{ selected.loteNombre || selected.loteId || selected.originalFilename }}</h2>
+            <span>{{ selected.cultivo || 'sin cultivo' }} · {{ selected.campania || 'sin campania' }} · {{ selected.fecha || 'sin fecha' }}</span>
+          </div>
+          <div class="detail-actions">
+            <span class="row-status" [class]="statusClass(selected.estado)">{{ selected.estado }}</span>
+            <p-button
+              label="Analizar"
+              icon="pi pi-play"
+              [loading]="analyzingId === selected._id"
+              [disabled]="selected.estado === 'procesando'"
+              (onClick)="analyze(selected)"
+            />
+          </div>
+        </div>
+
+        <div class="image-grid">
+          <article>
+            <h3>Imagen original</h3>
+            @if (originalImageUrl) {
+              <img [src]="originalImageUrl" alt="Imagen original" />
+            } @else {
+              <div class="image-placeholder">Sin imagen original</div>
+            }
+          </article>
+          <article>
+            <h3>Imagen procesada</h3>
+            @if (processedImageUrl) {
+              <img [src]="processedImageUrl" alt="Imagen procesada" />
+            } @else {
+              <div class="image-placeholder">Analizar para ver bounding boxes</div>
+            }
+          </article>
+        </div>
+
+        <div class="result-grid">
+          <article class="detections-card">
+            <h3>Detecciones</h3>
+            <div class="summary-strip">
+              <span>Total <strong>{{ totalDetections(selected) }}</strong></span>
+              <span>Max confianza <strong>{{ maxConfidence(selected) }}</strong></span>
+              <span>Modelo <strong>{{ selected.modelVersion || 'pendiente' }}</strong></span>
+            </div>
+            <div class="detections-table">
+              <div class="table-head">
+                <span>Clase</span>
+                <span>Confianza</span>
+                <span>Bounding box</span>
+              </div>
+              @for (det of selectedDetections; track det.class + det.confidence + det.bbox.x1) {
+                <div>
+                  <strong>{{ det.class }}</strong>
+                  <span>{{ confidence(det.confidence) }}</span>
+                  <code>{{ det.bbox.x1 }},{{ det.bbox.y1 }} / {{ det.bbox.x2 }},{{ det.bbox.y2 }}</code>
+                </div>
+              } @empty {
+                <p>No hay detecciones guardadas todavia.</p>
+              }
+            </div>
+          </article>
+
+          <article class="json-card">
+            <h3>JSON crudo</h3>
+            <pre>{{ rawJson }}</pre>
+          </article>
+        </div>
+      } @else {
+        <div class="empty-state big">Seleccione o cargue una imagen para comenzar.</div>
+      }
+    </main>
+  </div>
+</section>

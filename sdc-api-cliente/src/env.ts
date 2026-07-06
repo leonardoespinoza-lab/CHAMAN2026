@@ -23,6 +23,13 @@ export const API_CLIMA =
   process.env.API_CLIMA || 'http://127.0.0.1:5008/local';
 export const API_FTP =
   process.env.API_FTP || 'https://chaman-ftp-production.up.railway.app';
+export const API_WEED_AI =
+  process.env.API_WEED_AI || 'http://127.0.0.1:8080';
+export const WEED_AI_TIMEOUT_MS = +process.env.WEED_AI_TIMEOUT_MS || 30000;
+export const WEED_AI_STORAGE_DIR =
+  process.env.WEED_AI_STORAGE_DIR || 'storage/ia-malezas';
+export const WEED_AI_DISABLE_FALLBACK =
+  process.env.WEED_AI_DISABLE_FALLBACK === 'true';
 export const TIMELAPSE_ADMIN_TOKEN =
   process.env.TIMELAPSE_ADMIN_TOKEN || '';
 // OAuth client used by the public gateway when talking to sdc-auth.

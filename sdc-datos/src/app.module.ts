@@ -39,6 +39,7 @@ import { MalezasModule } from './entidades/maleza/module';
 import { LorawanUplinksModule } from './entidades/lorawan-uplinks/module';
 import { AlgoritmosModule } from './entidades/algoritmos/module';
 import { SuelosIntaModule } from './entidades/suelo-inta/module';
+import { IaMalezasModule } from './entidades/ia-malezas/module';
 
 @Module({
   imports: [
@@ -80,6 +81,7 @@ import { SuelosIntaModule } from './entidades/suelo-inta/module';
     LorawanUplinksModule,
     AlgoritmosModule,
     SuelosIntaModule,
+    IaMalezasModule,
   ],
   controllers: [HealthController],
   providers: [],

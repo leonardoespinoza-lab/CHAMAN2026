@@ -41,6 +41,7 @@ import { CrearEditarFenologiaComponent } from './main/modulo-admin/fenologia/cre
 import { ListadoFenologiaComponent } from './main/modulo-admin/fenologia/listado-fenologia/listado-fenologia.component';
 import { AlgoritmosComponent } from './main/modulo-admin/algoritmos/algoritmos.component';
 import { FieldClimateIntegracionComponent } from './main/modulo-admin/fieldclimate-integracion/fieldclimate-integracion.component';
+import { MotorIaMalezasComponent } from './main/modulo-admin/motor-ia-malezas/motor-ia-malezas.component';
 
 const adminOnly = { canActivate: [roleGuard], data: { niveles: ['Admin'] } };
 const quimicaScope = { canActivate: [roleGuard], data: { niveles: ['Admin', 'Quimica'] } };
@@ -129,6 +130,7 @@ export const routes: Routes = [
       { path: 'fenologias/crear', component: CrearEditarFenologiaComponent, ...adminOnly },
       // Algoritmos
       { path: 'algoritmos', component: AlgoritmosComponent, ...adminOnly },
+      { path: 'motor-ia-malezas', component: MotorIaMalezasComponent, ...adminOnly },
       // FieldClimate
       { path: 'fieldclimate', component: FieldClimateIntegracionComponent, ...adminOnly },
 

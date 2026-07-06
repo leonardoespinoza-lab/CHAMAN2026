@@ -27,6 +27,7 @@ export class DashboardAdminComponent {
     { label: 'LoRaWAN', icon: 'pi pi-microchip', route: '/dispositivos/crear' },
     { label: 'FieldClimate', icon: 'pi pi-cloud', route: '/fieldclimate' },
     { label: 'Algoritmos', icon: 'pi pi-sliders-h', route: '/algoritmos' },
+    { label: 'IA Malezas', icon: 'pi pi-image', route: '/motor-ia-malezas' },
   ];
 
   public readonly cards: AdminServiceCard[] = [
@@ -116,6 +117,14 @@ export class DashboardAdminComponent {
       icon: 'pi pi-camera',
       route: '/camaras',
       group: 'Monitoreo',
+      status: 'Monitoreo',
+    },
+    {
+      title: 'Motor IA Malezas',
+      description: 'Carga experimental de imagenes, inferencia YOLO y auditoria de detecciones por lote o ensayo.',
+      icon: 'pi pi-image',
+      route: '/motor-ia-malezas',
+      group: 'IA experimental',
       status: 'Monitoreo',
     },
   ];

@@ -23,6 +23,11 @@ logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+storage/
+**/storage/
+__pycache__/
+**/__pycache__/
+*.pyc
 
 # Local cloud credentials and service accounts
 **/google-credentials.json
