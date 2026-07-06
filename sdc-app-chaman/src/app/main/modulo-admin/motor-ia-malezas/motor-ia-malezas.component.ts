@@ -4,8 +4,10 @@ import {
   IaMalezaDetection,
   IaMalezasService,
 } from '../../../auxiliares/http/ia-malezas.service';
+import { CamaraService } from '../../../auxiliares/http/camara.service';
 import { HelperService } from '../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../auxiliares/shared.module';
+import { ICamara, IFoto } from 'modelos/src';
 
 @Component({
   selector: 'app-motor-ia-malezas',
@@ -19,11 +21,19 @@ export class MotorIaMalezasComponent implements OnInit, OnDestroy {
   public analyzingId = '';
   public health: Record<string, any> = {};
   public analyses: IaMalezaAnalisis[] = [];
+  public cameras: ICamara[] = [];
+  public cameraPhotos: IFoto[] = [];
   public selected?: IaMalezaAnalisis;
+  public selectedCamera?: ICamara;
+  public selectedPhoto?: IFoto;
   public selectedFiles: File[] = [];
 
   public originalImageUrl = '';
   public processedImageUrl = '';
+  public processedNatural = { width: 0, height: 0 };
+  public loadingCameras = false;
+  public loadingPhotos = false;
+  public importingPhoto = false;
 
   public form = {
     ensayoId: '',
@@ -48,11 +58,12 @@ export class MotorIaMalezasComponent implements OnInit, OnDestroy {
 
   constructor(
     private iaMalezasService: IaMalezasService,
+    private camaraService: CamaraService,
     public helper: HelperService
   ) {}
 
   public async ngOnInit(): Promise<void> {
-    await Promise.all([this.loadHealth(), this.loadAnalyses()]);
+    await Promise.all([this.loadHealth(), this.loadAnalyses(), this.loadCameras()]);
   }
 
   public ngOnDestroy(): void {
@@ -81,6 +92,16 @@ export class MotorIaMalezasComponent implements OnInit, OnDestroy {
     return this.selected?.detections || [];
   }
 
+  get selectedSummary(): Record<string, any> {
+    return this.selected?.summary || {};
+  }
+
+  get mainDetection(): IaMalezaDetection | undefined {
+    return [...this.selectedDetections]
+      .filter((item) => !['cultivo', 'suelo'].includes(item.class))
+      .sort((a, b) => b.confidence - a.confidence)[0];
+  }
+
   public async loadHealth(): Promise<void> {
     try {
       this.health = await this.iaMalezasService.health();
@@ -104,6 +125,66 @@ export class MotorIaMalezasComponent implements OnInit, OnDestroy {
       this.helper.notifError(error);
     } finally {
       this.loading = false;
+    }
+  }
+
+  public async loadCameras(): Promise<void> {
+    this.loadingCameras = true;
+    try {
+      const data = await this.camaraService.listar({ limit: 0, sort: 'nombre' });
+      this.cameras = data.datos || [];
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.loadingCameras = false;
+    }
+  }
+
+  public async selectCamera(serial?: string): Promise<void> {
+    this.selectedCamera = this.cameras.find((item) => item.serialCamara === serial);
+    this.selectedPhoto = undefined;
+    this.cameraPhotos = [];
+    if (!this.selectedCamera?.serialCamara) return;
+    this.loadingPhotos = true;
+    try {
+      const data = await this.camaraService.listarFotos(this.selectedCamera.serialCamara, {
+        limit: 24,
+        sort: '-fechaCreacion',
+      });
+      this.cameraPhotos = data.datos || [];
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.loadingPhotos = false;
+    }
+  }
+
+  public selectPhoto(photo: IFoto): void {
+    this.selectedPhoto = photo;
+    const lote = this.selectedCamera?.lotes?.find((item) => item._id === photo.idLote) || this.selectedCamera?.lotes?.[0];
+    this.form.loteId = photo.idLote || lote?._id || this.form.loteId;
+    this.form.loteNombre = lote?.nombre || this.form.loteNombre;
+    this.form.fecha = photo.fechaCreacion ? new Date(photo.fechaCreacion).toISOString().slice(0, 10) : this.form.fecha;
+  }
+
+  public async importSelectedPhoto(): Promise<void> {
+    if (!this.selectedPhoto?._id) {
+      this.helper.notifError('Seleccione una imagen de camara');
+      return;
+    }
+    this.importingPhoto = true;
+    try {
+      const imported = await this.iaMalezasService.importarFoto({
+        ...this.form,
+        fotoId: this.selectedPhoto._id,
+      });
+      this.helper.notifSuccess('Imagen de camara importada al motor IA');
+      await this.loadAnalyses();
+      await this.selectAnalysis(imported);
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.importingPhoto = false;
     }
   }
 
@@ -160,6 +241,33 @@ export class MotorIaMalezasComponent implements OnInit, OnDestroy {
     return `${Math.round((value || 0) * 100)}%`;
   }
 
+  public severityClass(det?: IaMalezaDetection): string {
+    return `severity-${det?.severity || 'medio'}`;
+  }
+
+  public bboxStyle(det: IaMalezaDetection): Record<string, string> {
+    const width = this.processedNatural.width || 1;
+    const height = this.processedNatural.height || 1;
+    const x = Math.max(0, (det.bbox.x1 / width) * 100);
+    const y = Math.max(0, (det.bbox.y1 / height) * 100);
+    const w = Math.max(1, ((det.bbox.x2 - det.bbox.x1) / width) * 100);
+    const h = Math.max(1, ((det.bbox.y2 - det.bbox.y1) / height) * 100);
+    return {
+      left: `${x}%`,
+      top: `${y}%`,
+      width: `${Math.min(w, 100 - x)}%`,
+      height: `${Math.min(h, 100 - y)}%`,
+    };
+  }
+
+  public onProcessedImageLoad(event: Event): void {
+    const img = event.target as HTMLImageElement;
+    this.processedNatural = {
+      width: img.naturalWidth || 0,
+      height: img.naturalHeight || 0,
+    };
+  }
+
   public totalDetections(item?: IaMalezaAnalisis): number {
     return item?.summary?.['total_detections'] || item?.detections?.length || 0;
   }
@@ -188,6 +296,7 @@ export class MotorIaMalezasComponent implements OnInit, OnDestroy {
     if (this.processedImageUrl) URL.revokeObjectURL(this.processedImageUrl);
     this.originalImageUrl = '';
     this.processedImageUrl = '';
+    this.processedNatural = { width: 0, height: 0 };
   }
 
   private today(): string {

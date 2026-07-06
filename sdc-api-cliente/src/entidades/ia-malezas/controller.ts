@@ -51,6 +51,12 @@ export class IaMalezasController {
     return await this.service.upload(files, body);
   }
 
+  @Post('importar-foto')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  public async importFoto(@Body() body: Record<string, any>) {
+    return await this.service.importFoto(body);
+  }
+
   @Post(':id/analyze')
   @Permisos({ nivel: 'Admin', roles: ['Admin'] })
   public async analyze(@Param('id') id: string) {

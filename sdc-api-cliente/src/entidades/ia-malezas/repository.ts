@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { IListado, IQueryParam } from 'modelos/src';
+import { IFoto, IListado, IQueryParam } from 'modelos/src';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 import { API_DATOS } from '../../env';
 import { IaMalezaAnalisis } from './types';
@@ -34,5 +34,10 @@ export class IaMalezasRepository {
   async delete(id: string): Promise<IaMalezaAnalisis> {
     const url = `${API_DATOS}/ia-malezas/${id}`;
     return await this.axios.DELETE<IaMalezaAnalisis>(url);
+  }
+
+  async getFotoById(id: string): Promise<IFoto> {
+    const url = `${API_DATOS}/fotos/${id}`;
+    return await this.axios.GET<IFoto>(url);
   }
 }

@@ -74,6 +74,65 @@
     </div>
   </div>
 
+  <div class="camera-panel">
+    <div class="panel-title">
+      <div>
+        <p class="eyebrow">Imagenes internas</p>
+        <h2>Camaras Chamán</h2>
+        <p>Importa capturas ya guardadas en la plataforma para analizarlas con el motor IA.</p>
+      </div>
+      <div class="camera-actions">
+        <p-button icon="pi pi-refresh" label="Camaras" outlined="true" [loading]="loadingCameras" (onClick)="loadCameras()" />
+        <p-button
+          icon="pi pi-plus"
+          label="Importar foto"
+          [loading]="importingPhoto"
+          [disabled]="!selectedPhoto"
+          (onClick)="importSelectedPhoto()"
+        />
+      </div>
+    </div>
+    <div class="camera-grid">
+      <label>
+        <span>Camara</span>
+        <select [ngModel]="selectedCamera?.serialCamara" (ngModelChange)="selectCamera($event)">
+          <option value="">Seleccionar camara</option>
+          @for (camera of cameras; track camera.serialCamara) {
+            <option [value]="camera.serialCamara">
+              {{ camera.nombre || camera.serialCamara }} · {{ camera.totalFotos || 0 }} fotos
+            </option>
+          }
+        </select>
+      </label>
+      <div class="camera-context">
+        <span>Contexto</span>
+        <strong>{{ selectedCamera?.nombre || 'Sin camara seleccionada' }}</strong>
+        <small>
+          {{ selectedCamera?.serialCamara || '-' }}
+          @if (selectedCamera?.lotes?.length) {
+            · {{ selectedCamera?.lotes?.length }} lote(s) asociado(s)
+          }
+        </small>
+      </div>
+    </div>
+    <div class="photo-strip">
+      @if (loadingPhotos) {
+        <div class="empty-state">Cargando capturas...</div>
+      } @else {
+        @for (photo of cameraPhotos; track photo._id || photo.url) {
+          <button type="button" class="photo-thumb" [class.active]="selectedPhoto?._id === photo._id" (click)="selectPhoto(photo)">
+            @if (photo.url) {
+              <img [src]="photo.url" alt="Foto de camara" />
+            }
+            <span>{{ photo.fechaCreacion | date: 'dd/MM HH:mm' }}</span>
+          </button>
+        } @empty {
+          <div class="empty-state">Seleccione una camara para ver sus ultimas capturas.</div>
+        }
+      }
+    </div>
+  </div>
+
   <div class="filters-panel">
     <label>
       <span>Campania</span>
@@ -130,7 +189,13 @@
           <div>
             <p class="eyebrow">Analisis seleccionado</p>
             <h2>{{ selected.loteNombre || selected.loteId || selected.originalFilename }}</h2>
-            <span>{{ selected.cultivo || 'sin cultivo' }} · {{ selected.campania || 'sin campania' }} · {{ selected.fecha || 'sin fecha' }}</span>
+            <span>
+              {{ selected.cultivo || 'sin cultivo' }} · {{ selected.campania || 'sin campania' }} ·
+              {{ selected.fecha || 'sin fecha' }}
+              @if (selected.sourceType === 'chaman_camera') {
+                · Camara {{ selected.cameraSerial || selected.sourcePhotoId }}
+              }
+            </span>
           </div>
           <div class="detail-actions">
             <span class="row-status" [class]="statusClass(selected.estado)">{{ selected.estado }}</span>
@@ -141,6 +206,27 @@
               [disabled]="selected.estado === 'procesando'"
               (onClick)="analyze(selected)"
             />
+          </div>
+        </div>
+
+        <div class="insight-panel">
+          <div class="main-weed" [class]="severityClass(mainDetection)">
+            <span>Especie probable</span>
+            <strong>{{ mainDetection?.label || 'Sin maleza clasificada' }}</strong>
+            <small>{{ mainDetection?.group || 'La deteccion requiere mas evidencia visual' }}</small>
+          </div>
+          <div>
+            <span>Lectura agronomica</span>
+            <p>{{ selectedSummary['lectura_agronomica'] || 'Analizar la imagen para generar una lectura agronomica.' }}</p>
+          </div>
+          <div>
+            <span>Accion sugerida</span>
+            <p>{{ selectedSummary['accion_sugerida'] || 'Mantener monitoreo y confirmar a campo.' }}</p>
+          </div>
+          <div>
+            <span>Calidad visual</span>
+            <strong>{{ selectedSummary['calidad_visual'] || 'pendiente' }}</strong>
+            <small>{{ selectedSummary['species_detected']?.join(', ') || 'Sin especie confirmada' }}</small>
           </div>
         </div>
 
@@ -156,7 +242,17 @@
           <article>
             <h3>Imagen procesada</h3>
             @if (processedImageUrl) {
-              <img [src]="processedImageUrl" alt="Imagen procesada" />
+              <div class="processed-wrap">
+                <img [src]="processedImageUrl" alt="Imagen procesada" (load)="onProcessedImageLoad($event)" />
+                @for (det of selectedDetections; track det.class + det.confidence + det.bbox.x1) {
+                  @if (processedNatural.width && det.class !== 'suelo') {
+                    <span class="bbox" [class]="severityClass(det)" [ngStyle]="bboxStyle(det)">
+                      <b>{{ det.label || det.class }}</b>
+                      <small>{{ confidence(det.confidence) }}</small>
+                    </span>
+                  }
+                }
+              </div>
             } @else {
               <div class="image-placeholder">Analizar para ver bounding boxes</div>
             }
@@ -179,9 +275,10 @@
               </div>
               @for (det of selectedDetections; track det.class + det.confidence + det.bbox.x1) {
                 <div>
-                  <strong>{{ det.class }}</strong>
+                  <strong>{{ det.label || det.class }}</strong>
                   <span>{{ confidence(det.confidence) }}</span>
                   <code>{{ det.bbox.x1 }},{{ det.bbox.y1 }} / {{ det.bbox.x2 }},{{ det.bbox.y2 }}</code>
+                  <small>{{ det.agronomicNote || 'Sin nota agronomica' }}</small>
                 </div>
               } @empty {
                 <p>No hay detecciones guardadas todavia.</p>

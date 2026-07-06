@@ -7,6 +7,11 @@ export type IaMalezaEstado = 'pendiente' | 'procesando' | 'completado' | 'error'
 export interface IaMalezaDetection {
   class: string;
   confidence: number;
+  label?: string;
+  group?: string;
+  agronomicNote?: string;
+  recommendation?: string;
+  severity?: 'informativo' | 'bajo' | 'medio' | 'alto';
   bbox: {
     x1: number;
     y1: number;
@@ -30,6 +35,10 @@ export interface IaMalezaAnalisis {
   sizeBytes?: number;
   originalImageUrl?: string;
   processedImageUrl?: string;
+  sourceType?: 'upload' | 'chaman_camera';
+  sourcePhotoId?: string;
+  cameraSerial?: string;
+  cameraUrl?: string;
   modelVersion?: string;
   detections?: IaMalezaDetection[];
   summary?: Record<string, any>;
@@ -76,6 +85,10 @@ export class IaMalezasService {
 
   public analizar(id: string): Promise<IaMalezaAnalisis> {
     return this.http.post<IaMalezaAnalisis>(`/ia-malezas/${id}/analyze`, {});
+  }
+
+  public importarFoto(payload: IaMalezasUploadPayload & { fotoId: string }): Promise<IaMalezaAnalisis> {
+    return this.http.post<IaMalezaAnalisis>('/ia-malezas/importar-foto', payload);
   }
 
   public imagen(id: string, tipo: 'original' | 'procesada'): Promise<Blob> {

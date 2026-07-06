@@ -3,6 +3,11 @@ export type IaMalezaEstado = 'pendiente' | 'procesando' | 'completado' | 'error'
 export interface IaMalezaDetection {
   class: string;
   confidence: number;
+  label?: string;
+  group?: string;
+  agronomicNote?: string;
+  recommendation?: string;
+  severity?: 'informativo' | 'bajo' | 'medio' | 'alto';
   bbox: {
     x1: number;
     y1: number;
@@ -28,6 +33,10 @@ export interface IaMalezaAnalisis {
   processedImagePath?: string;
   originalImageUrl?: string;
   processedImageUrl?: string;
+  sourceType?: 'upload' | 'chaman_camera';
+  sourcePhotoId?: string;
+  cameraSerial?: string;
+  cameraUrl?: string;
   modelVersion?: string;
   detections?: IaMalezaDetection[];
   summary?: Record<string, any>;
