@@ -21,6 +21,23 @@ if (service.name === 'sdc-datos') {
   if (bootstrap.status !== 0) {
     process.exit(bootstrap.status || 1);
   }
+
+  if (process.env.CHAMAN_TESTING_BOOTSTRAP === 'true') {
+    const bootstrapAdmin = spawnSync(
+      process.execPath,
+      ['scripts/seed-testing-admin.js'],
+      {
+        cwd: process.cwd(),
+        shell: false,
+        stdio: 'inherit',
+        env: process.env,
+      },
+    );
+
+    if (bootstrapAdmin.status !== 0) {
+      process.exit(bootstrapAdmin.status || 1);
+    }
+  }
 }
 
 const result = spawnSync(service.start, {
