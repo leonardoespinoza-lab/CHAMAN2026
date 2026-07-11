@@ -272,7 +272,9 @@ export class ClimaService {
     const startDate = this.getFechaOpenMeteo(minDate);
     const endDate = this.getFechaOpenMeteo(maxDate);
     const inicio = new Date(`${startDate}T00:00:00Z`);
-    const hoy = new Date(`${this.getFechaOpenMeteo(new Date().toISOString())}T00:00:00Z`);
+    const hoy = new Date(
+      `${this.getFechaOpenMeteo(new Date().toISOString())}T00:00:00Z`,
+    );
     const diasHaciaAtras = (hoy.getTime() - inicio.getTime()) / 86400000;
     const baseUrl =
       diasHaciaAtras <= 92
@@ -541,13 +543,17 @@ export class ClimaService {
         'relative_humidity_2m_mean',
         'precipitation_sum',
         'precipitation_probability_max',
+        'showers_sum',
+        'weather_code',
         'wind_speed_10m_max',
         'wind_speed_10m_mean',
+        'wind_gusts_10m_max',
         'wind_direction_10m_dominant',
         'shortwave_radiation_sum',
         'et0_fao_evapotranspiration',
       ].join(','),
     );
+    url.searchParams.set('hourly', 'cape');
 
     const data = await this.fetchOpenMeteoJson(url, 'pronostico');
     if (!data) {
@@ -556,6 +562,7 @@ export class ClimaService {
 
     const daily = data?.daily;
     const fechas: string[] = daily?.time || [];
+    const capePorFecha = this.agruparCapeHorario(data?.hourly);
     return fechas.map((fecha, index) => {
       const fechaIso = new Date(`${fecha}T12:00:00`).toISOString();
       const date = new Date(fechaIso);
@@ -580,11 +587,27 @@ export class ClimaService {
         },
         lluvia: daily.precipitation_sum?.[index],
         probabilidadLluvia: daily.precipitation_probability_max?.[index],
+        showers: daily.showers_sum?.[index],
+        weatherCode: daily.weather_code?.[index],
+        cape: capePorFecha.get(fecha),
+        rafagaViento: daily.wind_gusts_10m_max?.[index],
         direccionViento: daily.wind_direction_10m_dominant?.[index],
         radiacionSolar: daily.shortwave_radiation_sum?.[index],
         et0: daily.et0_fao_evapotranspiration?.[index],
       };
     });
+  }
+
+  private agruparCapeHorario(hourly: any): Map<string, number> {
+    const capePorFecha = new Map<string, number>();
+    const tiempos: string[] = hourly?.time || [];
+    tiempos.forEach((tiempo, index) => {
+      const fecha = String(tiempo || '').slice(0, 10);
+      const cape = Number(hourly?.cape?.[index]);
+      if (!fecha || !Number.isFinite(cape)) return;
+      capePorFecha.set(fecha, Math.max(capePorFecha.get(fecha) || 0, cape));
+    });
+    return capePorFecha;
   }
 
   // Parseo de datos de estaciones meteorológicas

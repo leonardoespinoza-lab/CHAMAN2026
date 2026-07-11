@@ -1,7 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import Highcharts from 'highcharts';
-import { IClimaEstacionMeteorologica, IPronosticoEstacionMeteorologica } from 'modelos/src';
+import {
+  esCodigoChaparron,
+  esCodigoTormenta,
+  evaluarRiesgoGranizoAgroclimatico,
+  IClimaEstacionMeteorologica,
+  IPronosticoEstacionMeteorologica,
+  IResultadoGranizoAgroclimatico,
+} from 'modelos/src';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
@@ -23,8 +30,13 @@ interface DiaClima {
   lluvia: string;
   probabilidad: string;
   viento: string;
+  rafaga: string;
+  cape: string;
+  showers: string;
+  riesgoConvectivo: string;
   et0: string;
   vpd: string;
+  tone: 'ok' | 'watch' | 'alert';
   lluviaPct: number;
   humedadPct: number;
 }
@@ -88,10 +100,7 @@ export class CardClimaLoteComponent implements OnChanges {
   }
 
   private crearCalidadClima() {
-    const calidad =
-      this.pronosticos[0]?.calidadDatos ||
-      this.climaActual?.calidadDatos ||
-      null;
+    const calidad = this.pronosticos[0]?.calidadDatos || this.climaActual?.calidadDatos || null;
     if (calidad) {
       return {
         nivel: calidad.nivel || 'media',
@@ -158,6 +167,17 @@ export class CardClimaLoteComponent implements OnChanges {
     const probLluvia = this.max(this.probabilidadesLluvia);
     const vpdMax72 = this.max(this.vpds.slice(0, 3));
     const vientoMax72 = this.max(this.vientos.slice(0, 3));
+    const riesgos = this.pronosticos.map((pronostico) => ({
+      fecha: pronostico.fecha,
+      evaluacion: this.evaluarGranizo(pronostico),
+    }));
+    const riesgoCritico = riesgos.reduce(
+      (maximo, item) => (item.evaluacion.posibilidadPct > maximo.evaluacion.posibilidadPct ? item : maximo),
+      riesgos[0] || {
+        fecha: undefined,
+        evaluacion: this.evaluarGranizo({}),
+      }
+    );
 
     return [
       {
@@ -174,12 +194,46 @@ export class CardClimaLoteComponent implements OnChanges {
         tone: lluvia72 > 4 ? 'warn' : 'ok',
         fill: this.limitar((lluvia72 / 35) * 100),
       },
-      { label: 'HR max 72 h', value: this.formatear(humedadMax72, '%'), detail: 'Mojado foliar probable', tone: humedadMax72 > 92 ? 'warn' : 'ok' },
+      {
+        label: 'HR max 72 h',
+        value: this.formatear(humedadMax72, '%'),
+        detail: 'Mojado foliar probable',
+        tone: humedadMax72 > 92 ? 'warn' : 'ok',
+      },
       { label: 'ET0 72 h', value: this.formatear(et072, 'mm'), detail: 'Demanda atmosferica', tone: 'info' },
-      { label: 'Balance 72 h', value: this.formatear(balance, 'mm'), detail: 'Lluvia menos ET0', tone: balance < -2 ? 'warn' : 'ok' },
-      { label: 'Prob. lluvia', value: this.formatear(probLluvia, '%'), detail: 'Maxima diaria', tone: probLluvia > 60 ? 'warn' : 'ok' },
-      { label: 'VPD max', value: this.formatear(vpdMax72, 'kPa'), detail: 'Secado del ambiente', tone: vpdMax72 > 1.2 ? 'warn' : 'ok' },
-      { label: 'Viento max', value: this.formatear(vientoMax72, 'km/h'), detail: 'Aireacion / aplicaciones', tone: vientoMax72 > 25 ? 'warn' : 'info' },
+      {
+        label: 'Balance 72 h',
+        value: this.formatear(balance, 'mm'),
+        detail: 'Lluvia menos ET0',
+        tone: balance < -2 ? 'warn' : 'ok',
+      },
+      {
+        label: 'Prob. lluvia',
+        value: this.formatear(probLluvia, '%'),
+        detail: 'Maxima diaria',
+        tone: probLluvia > 60 ? 'warn' : 'ok',
+      },
+      {
+        label: 'Riesgo conv. 7 d',
+        value: `${riesgoCritico.evaluacion.posibilidadPct}/100`,
+        detail: riesgoCritico.fecha
+          ? `Maximo ${this.nombreDia(riesgoCritico.fecha)}; indice preventivo`
+          : 'Sin ventana evaluable',
+        tone: riesgoCritico.evaluacion.posibilidadPct >= 35 ? 'warn' : 'ok',
+        fill: riesgoCritico.evaluacion.posibilidadPct,
+      },
+      {
+        label: 'VPD max',
+        value: this.formatear(vpdMax72, 'kPa'),
+        detail: 'Secado del ambiente',
+        tone: vpdMax72 > 1.2 ? 'warn' : 'ok',
+      },
+      {
+        label: 'Viento max',
+        value: this.formatear(vientoMax72, 'km/h'),
+        detail: 'Aireacion / aplicaciones',
+        tone: vientoMax72 > 25 ? 'warn' : 'info',
+      },
     ];
   }
 
@@ -192,19 +246,28 @@ export class CardClimaLoteComponent implements OnChanges {
       const humedad = this.numero(p.humedad?.max ?? p.humedad?.avg) || 0;
       const lluvia = this.numero(p.lluvia) || 0;
       const probabilidad = this.numero(p.probabilidadLluvia) || 0;
-      const vpd = this.calcularVpd(this.numero(p.temperatura?.avg ?? p.temperatura?.max), this.numero(p.humedad?.avg ?? p.humedad?.max));
+      const vpd = this.calcularVpd(
+        this.numero(p.temperatura?.avg ?? p.temperatura?.max),
+        this.numero(p.humedad?.avg ?? p.humedad?.max)
+      );
+      const riesgoGranizo = this.evaluarGranizo(p);
 
       return {
         fecha: p.fecha,
         label: index === 0 ? 'Hoy' : this.nombreDia(p.fecha),
-        estado: this.estadoDia(humedad, lluvia, probabilidad),
+        estado: this.estadoDia(p, humedad, lluvia, probabilidad, riesgoGranizo),
         temp: `${this.valor(tempMin)} / ${this.valor(tempMax)} C`,
         humedad: this.formatear(humedad, '%'),
         lluvia: this.formatear(lluvia, 'mm'),
         probabilidad: this.formatear(probabilidad, '%'),
         viento: this.formatear(this.numero(p.velocidadViento?.max ?? p.velocidadViento?.avg), 'km/h'),
+        rafaga: this.formatear(this.rafagaPronostico(p), 'km/h'),
+        cape: this.formatear(this.numero(p.cape), 'J/kg'),
+        showers: this.formatear(this.numero(p.showers), 'mm'),
+        riesgoConvectivo: `${riesgoGranizo.posibilidadPct}/100`,
         et0: this.formatear(this.numero(p.et0), 'mm'),
         vpd: this.formatear(vpd, 'kPa'),
+        tone: riesgoGranizo.posibilidadPct >= 65 ? 'alert' : riesgoGranizo.posibilidadPct >= 35 ? 'watch' : 'ok',
         lluviaPct: Math.max(4, (lluvia / lluviaMax) * 100),
         humedadPct: Math.max(4, humedad),
       };
@@ -213,7 +276,10 @@ export class CardClimaLoteComponent implements OnChanges {
 
   private crearPaneles(): PanelClima[] {
     const puntoRocio = this.pronosticos.map((p) =>
-      this.calcularPuntoRocio(this.numero(p.temperatura?.avg ?? p.temperatura?.max), this.numero(p.humedad?.avg ?? p.humedad?.max)),
+      this.calcularPuntoRocio(
+        this.numero(p.temperatura?.avg ?? p.temperatura?.max),
+        this.numero(p.humedad?.avg ?? p.humedad?.max)
+      )
     );
 
     return [
@@ -285,7 +351,10 @@ export class CardClimaLoteComponent implements OnChanges {
 
   private get vpdSerie(): Array<number | null> {
     return this.pronosticos.map((p) =>
-      this.calcularVpd(this.numero(p.temperatura?.avg ?? p.temperatura?.max), this.numero(p.humedad?.avg ?? p.humedad?.max)),
+      this.calcularVpd(
+        this.numero(p.temperatura?.avg ?? p.temperatura?.max),
+        this.numero(p.humedad?.avg ?? p.humedad?.max)
+      )
     );
   }
 
@@ -296,7 +365,7 @@ export class CardClimaLoteComponent implements OnChanges {
     tipo: 'spline' | 'column' = 'spline',
     unidad = '',
     yAxis = 0,
-    decimales = 1,
+    decimales = 1
   ): SerieClima {
     return {
       label,
@@ -471,7 +540,42 @@ export class CardClimaLoteComponent implements OnChanges {
     return this.redondear(svp * (1 - humedad / 100));
   }
 
-  private estadoDia(humedad: number, lluvia: number, probabilidad: number): string {
+  private evaluarGranizo(pronostico: Partial<IPronosticoEstacionMeteorologica>): IResultadoGranizoAgroclimatico {
+    return evaluarRiesgoGranizoAgroclimatico({
+      temperaturaMax: this.numero(pronostico.temperatura?.max) ?? undefined,
+      lluvia: this.numero(pronostico.lluvia) ?? undefined,
+      probabilidadLluvia: this.numero(pronostico.probabilidadLluvia) ?? undefined,
+      weatherCode: this.numero(pronostico.weatherCode) ?? undefined,
+      cape: this.numero(pronostico.cape) ?? undefined,
+      showers: this.numero(pronostico.showers) ?? undefined,
+      rafagaViento: this.rafagaPronostico(pronostico) ?? undefined,
+    });
+  }
+
+  private rafagaPronostico(pronostico: Partial<IPronosticoEstacionMeteorologica>): number | null {
+    const rafaga = pronostico.rafagaViento;
+    return this.numero(typeof rafaga === 'number' ? rafaga : (rafaga?.max ?? rafaga?.last ?? rafaga?.avg));
+  }
+
+  private estadoDia(
+    pronostico: IPronosticoEstacionMeteorologica,
+    humedad: number,
+    lluvia: number,
+    probabilidad: number,
+    riesgoGranizo: IResultadoGranizoAgroclimatico
+  ): string {
+    const code = Number(pronostico.weatherCode);
+    if ((code === 96 || code === 99) && riesgoGranizo.posibilidadPct >= 35) {
+      return 'Tormenta con granizo';
+    }
+    if (esCodigoTormenta(code) && riesgoGranizo.posibilidadPct >= 35) {
+      return 'Tormenta probable';
+    }
+    if (riesgoGranizo.posibilidadPct >= 65) return 'Riesgo convectivo alto';
+    if (riesgoGranizo.posibilidadPct >= 35) return 'Riesgo convectivo medio';
+    if (esCodigoChaparron(code) && (lluvia >= 0.5 || (pronostico.showers || 0) >= 0.5)) {
+      return 'Chaparrones';
+    }
     if (lluvia > 3 || probabilidad >= 70) return 'Lluvia probable';
     if (humedad >= 94) return 'Alta humedad';
     if (humedad >= 86) return 'Monitorear';

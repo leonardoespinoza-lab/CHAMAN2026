@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import {
   CONFIGURACION_FRIO_CULTIVOS,
   esCultivoPerenne,
+  evaluarRiesgoGranizoAgroclimatico,
   esPlantacionPerenneJoven,
   getEdadPerenneAnios,
   getFenologiaJuvenilPerenne,
@@ -34,8 +35,6 @@ interface IOpenMeteoHourlyTemp {
 export class ClimaService {
   private readonly logger = new Logger(ClimaService.name);
   private readonly timezone = 'America/Argentina/Buenos_Aires';
-  private readonly OPEN_METEO_GRANIZO_FUENTE =
-    'Open-Meteo forecast: weather_code, CAPE, precipitation_probability, showers y wind_gusts';
   private readonly FRIO_TERMICO_CACHE_TTL_MS = 15 * 60 * 1000;
   private readonly FRIO_TERMICO_CACHE_MAX = 500;
   private readonly frioTermicoCache = new Map<
@@ -802,16 +801,22 @@ export class ClimaService {
         this.toDateKey(frioDesde),
         this.toDateKey(historicoHasta),
       );
-      const hourlyForecast = await this.fetchOpenMeteoHourlyForecast(latNum, lngNum);
-      const hourlyFrio = this.mergeHourlySeries(hourlyHistorico, hourlyForecast).filter(
-        (hora) =>
-          this.entreFechas(
-            hora.time.slice(0, 10),
-            this.toDateKey(frioDesde),
-            this.toDateKey(hoy),
-          ),
+      const hourlyForecast = await this.fetchOpenMeteoHourlyForecast(
+        latNum,
+        lngNum,
       );
-      porcionesFrioPorDia = this.calcularPorcionesFrioDinamicoPorDia(hourlyFrio);
+      const hourlyFrio = this.mergeHourlySeries(
+        hourlyHistorico,
+        hourlyForecast,
+      ).filter((hora) =>
+        this.entreFechas(
+          hora.time.slice(0, 10),
+          this.toDateKey(frioDesde),
+          this.toDateKey(hoy),
+        ),
+      );
+      porcionesFrioPorDia =
+        this.calcularPorcionesFrioDinamicoPorDia(hourlyFrio);
       if (!porcionesFrioPorDia.size) {
         throw new Error('Open-Meteo no devolvio temperaturas horarias utiles.');
       }
@@ -1085,8 +1090,7 @@ export class ClimaService {
       observaciones.push(
         `HFE objetivo ${resultado.horasFrioEfectivasObjetivo} fuera de rango para Pecan; se uso base ${config.horasFrioEfectivasObjetivo}.`,
       );
-      resultado.horasFrioEfectivasObjetivo =
-        config.horasFrioEfectivasObjetivo;
+      resultado.horasFrioEfectivasObjetivo = config.horasFrioEfectivasObjetivo;
     }
 
     if (
@@ -1756,157 +1760,12 @@ export class ClimaService {
     return 5;
   }
 
-  private evaluarGranizoAgroclimatico(
-    dia: ISerieFrioTermicoDia,
-  ): {
+  private evaluarGranizoAgroclimatico(dia: ISerieFrioTermicoDia): {
     posibilidadPct: number;
     evidencia: string[];
     calidadDatos: NonNullable<IRiesgoAgroclimatico['calidadDatos']>;
   } {
-    let score = 0;
-    const evidencia: string[] = [];
-    const code = Number(dia.weatherCode);
-    const lluvia = this.toFiniteNumber(dia.lluvia);
-    const probLluvia = this.toFiniteNumber(dia.probabilidadLluvia);
-    const showers = this.toFiniteNumber(dia.showers);
-    const cape = this.toFiniteNumber(dia.cape);
-    const rafaga = this.toFiniteNumber(dia.rafagaViento);
-    const tempMax = this.toFiniteNumber(dia.temperaturaMax);
-
-    const codeHail = code === 96 || code === 99;
-    const codeTormenta = this.weatherCodeTormenta(code);
-    const codeChaparron = this.weatherCodeChaparron(code);
-    const precipitacionActiva = lluvia >= 1 || showers >= 0.5;
-    const probabilidadAlta = probLluvia >= 45;
-    const soportePrecipitacion = lluvia >= 0.5 || showers >= 0.2;
-    const disparoHumedo = precipitacionActiva || probabilidadAlta;
-
-    if (Number.isFinite(code)) evidencia.push(`Codigo de tiempo ${code}`);
-
-    if (codeHail) {
-      score += 30;
-      evidencia.push(
-        'Codigo de tormenta con granizo usado como proxy; requiere validacion local/radar.',
-      );
-    } else if (code === 95) {
-      score += 22;
-      evidencia.push('Codigo de tormenta sin granizo explicito.');
-    } else if (code === 82) {
-      score += 14;
-      evidencia.push('Codigo de chaparron violento.');
-    } else if (code === 81) {
-      score += 10;
-      evidencia.push('Codigo de chaparron moderado.');
-    } else if (code === 80) {
-      score += 6;
-      evidencia.push('Codigo de chaparron leve.');
-    }
-
-    if (cape >= 2000) score += 26;
-    else if (cape >= 1000) score += 18;
-    else if (cape >= 500) score += 10;
-    else if (cape >= 250) score += 4;
-    if (dia.cape !== undefined) {
-      evidencia.push(`Energia convectiva CAPE ${Math.round(cape)}`);
-    }
-
-    if (lluvia >= 20) score += 12;
-    else if (lluvia >= 10) score += 8;
-    else if (lluvia >= 3) score += 4;
-    if (dia.lluvia !== undefined) evidencia.push(`Lluvia prevista ${lluvia} mm`);
-
-    if (probLluvia >= 75) score += 15;
-    else if (probLluvia >= 50) score += 10;
-    else if (probLluvia >= 30) score += 5;
-    if (dia.probabilidadLluvia !== undefined) {
-      evidencia.push(`Probabilidad de precipitacion ${probLluvia}%`);
-    }
-
-    if (showers >= 8) score += 15;
-    else if (showers >= 3) score += 10;
-    else if (showers >= 0.5) score += 4;
-    if (dia.showers !== undefined) {
-      evidencia.push(`Chaparrones previstos ${showers} mm`);
-    }
-
-    if (rafaga >= 70) score += 8;
-    else if (rafaga >= 50) score += 5;
-    if (dia.rafagaViento !== undefined) {
-      evidencia.push(`Rafagas maximas ${rafaga} km/h`);
-    }
-
-    if (tempMax >= 24 && (codeTormenta || cape >= 250)) score += 3;
-
-    if (!disparoHumedo && !codeTormenta) {
-      score = Math.min(score, cape >= 500 ? 8 : 5);
-      evidencia.push(
-        'Sin lluvia/chaparrones suficientes: Chaman limita el riesgo para evitar falso positivo.',
-      );
-    } else if (!disparoHumedo && codeTormenta) {
-      score = Math.min(score, codeHail ? 24 : 16);
-      evidencia.push(
-        'Hay senal de tormenta, pero falta soporte de lluvia; se informa como vigilancia, no alarma fuerte.',
-      );
-    } else if (codeChaparron && lluvia < 0.5 && showers < 0.5 && probLluvia < 30) {
-      score = Math.min(score, 6);
-      evidencia.push(
-        'Codigo convectivo aislado sin precipitacion asociada; lectura corregida.',
-      );
-    }
-
-    if (!soportePrecipitacion && codeTormenta) {
-      score = Math.min(score, codeHail ? 15 : 10);
-      evidencia.push(
-        'Tormenta sin volumen de lluvia/chaparron previsto: se informa como vigilancia residual.',
-      );
-    } else if (!soportePrecipitacion && probabilidadAlta) {
-      score = Math.min(score, 12);
-      evidencia.push(
-        'Probabilidad de precipitacion sin volumen previsto: no se eleva riesgo de granizo sin soporte humedo.',
-      );
-    }
-
-    const soportes = [
-      codeTormenta,
-      codeChaparron && disparoHumedo,
-      cape >= 500,
-      probabilidadAlta,
-      precipitacionActiva,
-      rafaga >= 50,
-    ].filter(Boolean).length;
-    const variables = [
-      dia.weatherCode !== undefined,
-      dia.cape !== undefined,
-      dia.probabilidadLluvia !== undefined,
-      dia.showers !== undefined,
-      dia.rafagaViento !== undefined,
-      dia.lluvia !== undefined,
-    ].filter(Boolean).length;
-    const calidadScore = Math.round(
-      Math.min(100, (variables / 6) * 45 + Math.min(soportes, 5) * 11),
-    );
-    const nivel =
-      variables === 0
-        ? 'sin_datos'
-        : disparoHumedo && soportes >= 3 && variables >= 4
-          ? 'media'
-          : 'baja';
-
-    return {
-      posibilidadPct: Math.max(0, Math.min(100, Math.round(score))),
-      evidencia: evidencia.length
-        ? evidencia
-        : ['Sin variables convectivas suficientes para elevar el riesgo.'],
-      calidadDatos: {
-        nivel,
-        score: calidadScore,
-        fuente: this.OPEN_METEO_GRANIZO_FUENTE,
-        detalle:
-          nivel === 'media'
-            ? 'Multiples proxies convectivos respaldan el riesgo; no reemplaza radar ni alerta oficial.'
-            : 'Lectura preventiva con soporte limitado; requiere validar pronostico local antes de accionar.',
-      },
-    };
+    return evaluarRiesgoGranizoAgroclimatico(dia);
   }
 
   private weatherCodeTormenta(code: number): boolean {

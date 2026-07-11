@@ -66,6 +66,10 @@ export interface IPronosticoEstacionMeteorologica {
   direccionViento?: number;
   radiacionSolar?: number;
   et0?: number;
+  weatherCode?: number;
+  cape?: number;
+  showers?: number;
+  rafagaViento?: number | IValores;
   calidadDatos?: ICalidadDatoMotor;
 }
 
@@ -86,12 +90,22 @@ export interface IPronosticoMeteoSource {
   calidadDatos?: ICalidadDatoMotor;
 }
 
-export type FuenteComparacionClimatica = "OpenMeteo" | "Meteoblue" | "FieldClimate";
+export type FuenteComparacionClimatica =
+  | "OpenMeteo"
+  | "Meteoblue"
+  | "FieldClimate";
 export type EstadoComparacionClimatica = "ok" | "desvio" | "sin_datos";
 
 export interface IComparacionVariableClimatica {
   fecha: string;
-  variable: "temperaturaMedia" | "temperaturaMin" | "temperaturaMax" | "lluvia" | "probabilidadLluvia" | "et0" | "viento";
+  variable:
+    | "temperaturaMedia"
+    | "temperaturaMin"
+    | "temperaturaMax"
+    | "lluvia"
+    | "probabilidadLluvia"
+    | "et0"
+    | "viento";
   unidad: string;
   openMeteo?: number;
   meteoblue?: number;
@@ -135,7 +149,11 @@ export interface ISerieFrioTermicoDia {
   esPronostico?: boolean;
 }
 
-export type NivelCalidadDatosAgroclima = "alta" | "media" | "baja" | "sin_datos";
+export type NivelCalidadDatosAgroclima =
+  | "alta"
+  | "media"
+  | "baja"
+  | "sin_datos";
 
 export interface ICalidadDatosAgroclima {
   nivel: NivelCalidadDatosAgroclima;
@@ -148,6 +166,194 @@ export interface IResultadoGranizoAgroclimatico {
   posibilidadPct: number;
   evidencia: string[];
   calidadDatos: ICalidadDatosAgroclima;
+}
+
+export const FUENTE_RIESGO_GRANIZO_OPEN_METEO =
+  "Open-Meteo forecast: weather_code, CAPE, precipitation_probability, showers y wind_gusts";
+
+export function esCodigoTormenta(weatherCode: number): boolean {
+  return [95, 96, 99].includes(weatherCode);
+}
+
+export function esCodigoChaparron(weatherCode: number): boolean {
+  return [80, 81, 82].includes(weatherCode);
+}
+
+export function esCodigoConvectivo(weatherCode: number): boolean {
+  return esCodigoTormenta(weatherCode) || esCodigoChaparron(weatherCode);
+}
+
+/**
+ * Indice preventivo de riesgo de granizo (0-100) basado en proxies convectivos.
+ * No representa una probabilidad meteorologica oficial y debe mostrarse como
+ * indice de riesgo. La compuerta humeda evita elevar el indice por CAPE o por
+ * un codigo convectivo aislado sin precipitacion asociada.
+ */
+export function evaluarRiesgoGranizoAgroclimatico(
+  dia: Pick<
+    ISerieFrioTermicoDia,
+    | "lluvia"
+    | "probabilidadLluvia"
+    | "weatherCode"
+    | "cape"
+    | "showers"
+    | "rafagaViento"
+    | "temperaturaMax"
+  >,
+): IResultadoGranizoAgroclimatico {
+  let score = 0;
+  const evidencia: string[] = [];
+  const toFiniteNumber = (value: unknown): number => {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : 0;
+  };
+  const code = Number(dia.weatherCode);
+  const lluvia = toFiniteNumber(dia.lluvia);
+  const probLluvia = toFiniteNumber(dia.probabilidadLluvia);
+  const showers = toFiniteNumber(dia.showers);
+  const cape = toFiniteNumber(dia.cape);
+  const rafaga = toFiniteNumber(dia.rafagaViento);
+  const tempMax = toFiniteNumber(dia.temperaturaMax);
+
+  const codeHail = code === 96 || code === 99;
+  const codeTormenta = esCodigoTormenta(code);
+  const codeChaparron = esCodigoChaparron(code);
+  const precipitacionActiva = lluvia >= 1 || showers >= 0.5;
+  const probabilidadAlta = probLluvia >= 45;
+  const soportePrecipitacion = lluvia >= 0.5 || showers >= 0.2;
+  const disparoHumedo = precipitacionActiva || probabilidadAlta;
+
+  if (Number.isFinite(code)) evidencia.push(`Codigo de tiempo ${code}`);
+
+  if (codeHail) {
+    score += 30;
+    evidencia.push(
+      "Codigo de tormenta con granizo usado como proxy; requiere validacion local/radar.",
+    );
+  } else if (code === 95) {
+    score += 22;
+    evidencia.push("Codigo de tormenta sin granizo explicito.");
+  } else if (code === 82) {
+    score += 14;
+    evidencia.push("Codigo de chaparron violento.");
+  } else if (code === 81) {
+    score += 10;
+    evidencia.push("Codigo de chaparron moderado.");
+  } else if (code === 80) {
+    score += 6;
+    evidencia.push("Codigo de chaparron leve.");
+  }
+
+  if (cape >= 2000) score += 26;
+  else if (cape >= 1000) score += 18;
+  else if (cape >= 500) score += 10;
+  else if (cape >= 250) score += 4;
+  if (dia.cape !== undefined) {
+    evidencia.push(`Energia convectiva CAPE ${Math.round(cape)}`);
+  }
+
+  if (lluvia >= 20) score += 12;
+  else if (lluvia >= 10) score += 8;
+  else if (lluvia >= 3) score += 4;
+  if (dia.lluvia !== undefined) evidencia.push(`Lluvia prevista ${lluvia} mm`);
+
+  if (probLluvia >= 75) score += 15;
+  else if (probLluvia >= 50) score += 10;
+  else if (probLluvia >= 30) score += 5;
+  if (dia.probabilidadLluvia !== undefined) {
+    evidencia.push(`Probabilidad de precipitacion ${probLluvia}%`);
+  }
+
+  if (showers >= 8) score += 15;
+  else if (showers >= 3) score += 10;
+  else if (showers >= 0.5) score += 4;
+  if (dia.showers !== undefined) {
+    evidencia.push(`Chaparrones previstos ${showers} mm`);
+  }
+
+  if (rafaga >= 70) score += 8;
+  else if (rafaga >= 50) score += 5;
+  if (dia.rafagaViento !== undefined) {
+    evidencia.push(`Rafagas maximas ${rafaga} km/h`);
+  }
+
+  if (tempMax >= 24 && (codeTormenta || cape >= 250)) score += 3;
+
+  if (!disparoHumedo && !codeTormenta) {
+    score = Math.min(score, cape >= 500 ? 8 : 5);
+    evidencia.push(
+      "Sin lluvia/chaparrones suficientes: Chaman limita el riesgo para evitar falso positivo.",
+    );
+  } else if (!disparoHumedo && codeTormenta) {
+    score = Math.min(score, codeHail ? 24 : 16);
+    evidencia.push(
+      "Hay senal de tormenta, pero falta soporte de lluvia; se informa como vigilancia, no alarma fuerte.",
+    );
+  } else if (
+    codeChaparron &&
+    lluvia < 0.5 &&
+    showers < 0.5 &&
+    probLluvia < 30
+  ) {
+    score = Math.min(score, 6);
+    evidencia.push(
+      "Codigo convectivo aislado sin precipitacion asociada; lectura corregida.",
+    );
+  }
+
+  if (!soportePrecipitacion && codeTormenta) {
+    score = Math.min(score, codeHail ? 15 : 10);
+    evidencia.push(
+      "Tormenta sin volumen de lluvia/chaparron previsto: se informa como vigilancia residual.",
+    );
+  } else if (!soportePrecipitacion && probabilidadAlta) {
+    score = Math.min(score, 12);
+    evidencia.push(
+      "Probabilidad de precipitacion sin volumen previsto: no se eleva riesgo de granizo sin soporte humedo.",
+    );
+  }
+
+  const soportes = [
+    codeTormenta,
+    codeChaparron && disparoHumedo,
+    cape >= 500,
+    probabilidadAlta,
+    precipitacionActiva,
+    rafaga >= 50,
+  ].filter(Boolean).length;
+  const variables = [
+    dia.weatherCode !== undefined,
+    dia.cape !== undefined,
+    dia.probabilidadLluvia !== undefined,
+    dia.showers !== undefined,
+    dia.rafagaViento !== undefined,
+    dia.lluvia !== undefined,
+  ].filter(Boolean).length;
+  const calidadScore = Math.round(
+    Math.min(100, (variables / 6) * 45 + Math.min(soportes, 5) * 11),
+  );
+  const nivel =
+    variables === 0
+      ? "sin_datos"
+      : disparoHumedo && soportes >= 3 && variables >= 4
+        ? "media"
+        : "baja";
+
+  return {
+    posibilidadPct: Math.max(0, Math.min(100, Math.round(score))),
+    evidencia: evidencia.length
+      ? evidencia
+      : ["Sin variables convectivas suficientes para elevar el riesgo."],
+    calidadDatos: {
+      nivel,
+      score: calidadScore,
+      fuente: FUENTE_RIESGO_GRANIZO_OPEN_METEO,
+      detalle:
+        nivel === "media"
+          ? "Multiples proxies convectivos respaldan el riesgo; no reemplaza radar ni alerta oficial."
+          : "Lectura preventiva con soporte limitado; requiere validar pronostico local antes de accionar.",
+    },
+  };
 }
 
 export type TipoRiesgoAgroclimatico = "helada" | "granizo";

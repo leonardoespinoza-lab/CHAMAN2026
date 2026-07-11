@@ -129,9 +129,7 @@
 }
 
 .rain-accumulation {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0)),
-    var(--p-surface-100);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0)), var(--p-surface-100);
   border: 1px solid #c7d4e2;
   border-radius: 999px;
   height: 16px;
@@ -161,6 +159,24 @@
   border: 1px solid var(--p-surface-200);
   border-radius: 7px;
   padding: 0.62rem;
+}
+
+.daily-strip article.convective-watch {
+  border-color: rgba(232, 163, 58, 0.72);
+  box-shadow: inset 0 3px 0 rgba(232, 163, 58, 0.82);
+}
+
+.daily-strip article.convective-alert {
+  border-color: rgba(224, 76, 76, 0.72);
+  box-shadow: inset 0 3px 0 rgba(224, 76, 76, 0.88);
+}
+
+.daily-strip article.convective-watch header span {
+  color: #b86d00;
+}
+
+.daily-strip article.convective-alert header span {
+  color: #c83f3f;
 }
 
 .daily-strip header {
@@ -232,9 +248,7 @@
 }
 
 .weather-panels section {
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(243, 252, 250, 0.76)),
-    var(--p-surface-0);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(243, 252, 250, 0.76)), var(--p-surface-0);
   border: 1.5px solid rgba(86, 117, 150, 0.28);
   border-radius: 8px;
   min-height: 318px;

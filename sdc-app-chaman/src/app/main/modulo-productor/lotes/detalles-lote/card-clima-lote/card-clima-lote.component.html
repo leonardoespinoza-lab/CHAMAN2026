@@ -33,6 +33,7 @@
     <div class="daily-strip">
       @for (dia of dias; track dia.fecha) {
         <article
+          [ngClass]="'convective-' + dia.tone"
           [attr.title]="
             dia.label +
             ' | Temp ' +
@@ -41,6 +42,8 @@
             dia.humedad +
             ' | Lluvia ' +
             dia.lluvia +
+            ' | Riesgo convectivo ' +
+            dia.riesgoConvectivo +
             ' | ET0 ' +
             dia.et0
           "
@@ -50,13 +53,39 @@
             <span>{{ dia.estado }}</span>
           </header>
           <div class="daily-values">
-            <span>Temp <strong>{{ dia.temp }}</strong></span>
-            <span>HR <strong>{{ dia.humedad }}</strong></span>
-            <span>Lluvia <strong>{{ dia.lluvia }}</strong></span>
-            <span>Prob. <strong>{{ dia.probabilidad }}</strong></span>
-            <span>Viento <strong>{{ dia.viento }}</strong></span>
-            <span>ET0 <strong>{{ dia.et0 }}</strong></span>
-            <span>VPD <strong>{{ dia.vpd }}</strong></span>
+            <span
+              >Temp <strong>{{ dia.temp }}</strong></span
+            >
+            <span
+              >HR <strong>{{ dia.humedad }}</strong></span
+            >
+            <span
+              >Lluvia <strong>{{ dia.lluvia }}</strong></span
+            >
+            <span
+              >Prob. <strong>{{ dia.probabilidad }}</strong></span
+            >
+            <span
+              >Viento <strong>{{ dia.viento }}</strong></span
+            >
+            <span
+              >Rafaga <strong>{{ dia.rafaga }}</strong></span
+            >
+            <span
+              >CAPE <strong>{{ dia.cape }}</strong></span
+            >
+            <span
+              >Chap. <strong>{{ dia.showers }}</strong></span
+            >
+            <span
+              >Indice conv. <strong>{{ dia.riesgoConvectivo }}</strong></span
+            >
+            <span
+              >ET0 <strong>{{ dia.et0 }}</strong></span
+            >
+            <span
+              >VPD <strong>{{ dia.vpd }}</strong></span
+            >
           </div>
           <div class="daily-bars">
             <span class="rain" [style.width.%]="dia.lluviaPct" [attr.title]="'Lluvia ' + dia.lluvia"></span>

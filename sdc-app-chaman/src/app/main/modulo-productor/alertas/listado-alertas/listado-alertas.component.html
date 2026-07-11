@@ -77,9 +77,9 @@
         </article>
 
         <article class="command-card">
-          <span>Prioridad media</span>
-          <strong>{{ formatNumber(resumen().prioridadPromedio, 0) }}</strong>
-          <small>Promedio de la vista actual</small>
+          <span>Indice medio</span>
+          <strong>{{ formatNumber(resumen().riesgoPromedio, 0) }}</strong>
+          <small>Promedio del indice de riesgo visible</small>
         </article>
 
         <article class="command-card">
@@ -97,7 +97,12 @@
           </div>
 
           @if (alertaPrincipal(); as principal) {
-            <button type="button" class="leader-card" [ngClass]="severidad(principal)" (click)="abrirDetalle(principal)">
+            <button
+              type="button"
+              class="leader-card"
+              [ngClass]="severidad(principal)"
+              (click)="abrirDetalle(principal)"
+            >
               <span class="leader-icon"><i class="pi" [ngClass]="categoriaIcono(principal)"></i></span>
               <span class="leader-main">
                 <small>{{ categoriaLabel(principal) }} - {{ severidadLabel(principal) }}</small>
@@ -106,7 +111,7 @@
               </span>
               <span class="leader-score">
                 <strong>{{ formatNumber(valorRiesgo(principal), 0) }}</strong>
-                <small>/100</small>
+                <small>/100 indice</small>
               </span>
             </button>
           } @else {
@@ -132,7 +137,7 @@
                   <strong>{{ categoria.nombre }}</strong>
                   <small>{{ categoria.cantidad }} evento(s)</small>
                 </span>
-                <em>{{ formatNumber(categoria.prioridad, 0) }}</em>
+                <em>{{ formatNumber(categoria.riesgo, 0) }}</em>
               </div>
             } @empty {
               <div class="empty-state compact">
@@ -190,6 +195,9 @@
                 <span class="status-pill" [ngClass]="estadoClase(row)">{{ row.estadoActual || 'Nueva' }}</span>
                 <span>{{ categoriaLabel(row) }}</span>
                 <span>{{ fechaTexto(fecha(row)) }}</span>
+                @if (fechaCritica(row)) {
+                  <span class="forecast-date"><i class="pi pi-calendar"></i>Previsto {{ fechaCriticaTexto(row) }}</span>
+                }
               </div>
 
               <h2>{{ titulo(row) }}</h2>
@@ -205,7 +213,7 @@
             <div class="alarm-score">
               <span>{{ severidadLabel(row) }}</span>
               <strong>{{ formatNumber(valorRiesgo(row), 0) }}</strong>
-              <small>/100</small>
+              <small>/100 indice</small>
               <div class="risk-bar">
                 <i [style.width.%]="valorRiesgo(row)"></i>
               </div>
@@ -260,12 +268,17 @@
           <span>{{ categoriaLabel(alerta) }} - {{ severidadLabel(alerta) }}</span>
           <h2>{{ titulo(alerta) }}</h2>
           <p>{{ lote(alerta) }} - {{ productor(alerta) }} - {{ fechaTexto(fecha(alerta)) }}</p>
+          @if (fechaCritica(alerta)) {
+            <p class="critical-date">
+              <i class="pi pi-calendar"></i> Ventana de 7 dias - maximo previsto {{ fechaCriticaTexto(alerta) }}
+            </p>
+          }
         </div>
 
         <div class="detail-score">
           <strong>{{ formatNumber(valorRiesgo(alerta), 0) }}</strong>
           <span>/100</span>
-          <small>prioridad</small>
+          <small>indice de riesgo</small>
         </div>
       </div>
 
@@ -284,6 +297,12 @@
           <span>Calidad del dato</span>
           <strong>{{ calidad(alerta) }}</strong>
           <p>{{ calidadDetalle(alerta) }}</p>
+        </article>
+
+        <article>
+          <span>Prioridad operativa</span>
+          <strong>{{ formatNumber(prioridadOperativa(alerta), 0) }}/100</strong>
+          <p>Ordena la cola; no es una probabilidad meteorologica.</p>
         </article>
 
         <article>
@@ -338,7 +357,10 @@
               <article>
                 <span>{{ fechaTexto(reporteFecha(reporte)) }}</span>
                 <strong>{{ reporteTitulo(reporte, alerta) }}</strong>
-                <small>Riesgo {{ formatNumber(reporteRiesgo(reporte, alerta), 1) }}%</small>
+                <small>Indice de riesgo {{ formatNumber(reporteRiesgo(reporte, alerta), 1) }}/100</small>
+                @if (reporteFechaCritica(reporte)) {
+                  <small>Fecha critica {{ fechaDiaTexto(reporteFechaCritica(reporte)) }}</small>
+                }
               </article>
             } @empty {
               <article>

@@ -1,0 +1,40 @@
+import { SimpleChange } from '@angular/core';
+import { CardClimaLoteComponent } from './card-clima-lote.component';
+
+describe('CardClimaLoteComponent', () => {
+  it('muestra la senal convectiva con las mismas variables del motor de granizo', () => {
+    const component = new CardClimaLoteComponent();
+    component.lote = {
+      nombre: 'Lote de prueba',
+      establecimiento: {
+        nombre: 'Los Recentrales',
+        prediccionClimatica: {
+          pronosticos: [
+            {
+              fuente: 'OpenMeteo',
+              fecha: '2026-07-17T15:00:00.000Z',
+              temperatura: { max: 19.9, min: 14.1, avg: 17 },
+              humedad: { max: 99, avg: 90 },
+              lluvia: 12.6,
+              probabilidadLluvia: 38,
+              showers: 12.6,
+              weatherCode: 95,
+              cape: 1500,
+              rafagaViento: 22.9,
+              velocidadViento: { max: 22.9 },
+              et0: 1.2,
+            },
+          ],
+        },
+      },
+    } as any;
+
+    component.ngOnChanges({
+      lote: new SimpleChange(undefined, component.lote, true),
+    });
+
+    expect(component.dias[0].estado).toBe('Tormenta probable');
+    expect(component.dias[0].riesgoConvectivo).toBe('68/100');
+    expect(component.metricas.find((item) => item.label === 'Riesgo conv. 7 d')?.value).toBe('68/100');
+  });
+});

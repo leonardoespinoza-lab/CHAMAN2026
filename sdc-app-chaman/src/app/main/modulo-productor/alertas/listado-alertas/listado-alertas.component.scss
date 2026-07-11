@@ -31,9 +31,7 @@
 .timeline > article {
   border: 1px solid rgba(154, 183, 212, 0.52);
   border-radius: 18px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(241, 255, 253, 0.68)),
-    rgba(255, 255, 255, 0.72);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(241, 255, 253, 0.68)), rgba(255, 255, 255, 0.72);
   box-shadow:
     0 18px 48px rgba(18, 38, 64, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.82);
@@ -382,9 +380,7 @@
 .alarm-card.alta,
 .alarm-card.critica {
   border-left-color: #f25555;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 246, 241, 0.74)),
-    rgba(255, 255, 255, 0.72);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 246, 241, 0.74)), rgba(255, 255, 255, 0.72);
 }
 
 .alarm-main {
@@ -407,6 +403,10 @@
   color: #60738f;
   font-size: 0.93rem;
   font-weight: 800;
+}
+
+.alarm-meta .forecast-date {
+  color: #b86d00;
 }
 
 .alarm-main h2 {
@@ -534,9 +534,7 @@
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: 28px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(239, 255, 252, 0.68)),
-    rgba(255, 255, 255, 0.74);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(239, 255, 252, 0.68)), rgba(255, 255, 255, 0.74);
   box-shadow: 0 30px 90px rgba(9, 24, 44, 0.24);
   backdrop-filter: blur(22px);
 }
@@ -604,6 +602,13 @@
   margin: 0;
   color: #526986;
   font-size: 1.05rem;
+}
+
+.detail-title .critical-date {
+  color: #b86d00;
+  font-size: 0.95rem;
+  font-weight: 800;
+  margin-top: 0.35rem;
 }
 
 .detail-score {

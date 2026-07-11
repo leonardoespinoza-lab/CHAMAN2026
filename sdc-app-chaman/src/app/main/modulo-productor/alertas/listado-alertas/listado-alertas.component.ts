@@ -14,7 +14,7 @@ interface IResumenAlarmas {
   alta: number;
   finalizadas: number;
   total: number;
-  prioridadPromedio: number;
+  riesgoPromedio: number;
   calidadPromedio: number;
   tratadas: number;
 }
@@ -23,7 +23,7 @@ interface ICategoriaResumen {
   nombre: string;
   icono: string;
   cantidad: number;
-  prioridad: number;
+  riesgo: number;
   severidad: SeveridadAlerta;
 }
 
@@ -123,7 +123,9 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
     const reporte = window.open('', '_blank', 'width=1120,height=820');
 
     if (!reporte) {
-      this.helper.notifWarn('El navegador bloqueo la ventana del informe. Habilita ventanas emergentes para exportar PDF.');
+      this.helper.notifWarn(
+        'El navegador bloqueo la ventana del informe. Habilita ventanas emergentes para exportar PDF.'
+      );
       return;
     }
 
@@ -182,7 +184,7 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
           <section class="kpis">
             <article class="kpi"><span>Activas</span><strong>${resumen.activas}</strong></article>
             <article class="kpi"><span>Alta prioridad</span><strong>${resumen.alta}</strong></article>
-            <article class="kpi"><span>Prioridad media</span><strong>${this.formatNumber(resumen.prioridadPromedio, 0)}</strong></article>
+            <article class="kpi"><span>Indice medio</span><strong>${this.formatNumber(resumen.riesgoPromedio, 0)}</strong></article>
             <article class="kpi"><span>Calidad dato</span><strong>${this.formatNumber(resumen.calidadPromedio, 0)}%</strong></article>
           </section>
           <table>
@@ -190,7 +192,7 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
               <tr>
                 <th>Alarma</th>
                 <th>Severidad</th>
-                <th>Prioridad</th>
+                <th>Indice de riesgo</th>
                 <th>Estado</th>
                 <th>Dato</th>
                 <th>Ultimo evento</th>
@@ -208,7 +210,7 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
 
   public resumen(): IResumenAlarmas {
     const total = this.data.length;
-    const prioridadTotal = this.data.reduce((acc, alerta) => acc + this.valorRiesgo(alerta), 0);
+    const riesgoTotal = this.data.reduce((acc, alerta) => acc + this.valorRiesgo(alerta), 0);
     const calidadTotal = this.data.reduce((acc, alerta) => acc + this.calidadScore(alerta), 0);
     return {
       nuevas: this.data.filter((a) => a.estadoActual === 'Nueva').length,
@@ -216,7 +218,7 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
       alta: this.data.filter((a) => ['alta', 'critica'].includes(this.severidad(a))).length,
       finalizadas: this.data.filter((a) => a.estadoActual === 'Finalizada' || a.activa === false).length,
       total,
-      prioridadPromedio: total ? prioridadTotal / total : 0,
+      riesgoPromedio: total ? riesgoTotal / total : 0,
       calidadPromedio: total ? calidadTotal / total : 0,
       tratadas: this.data.filter((a) => a.estadoActual === 'Tratada').length,
     };
@@ -232,15 +234,15 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
           nombre,
           icono: this.categoriaIcono(alerta),
           cantidad: 0,
-          prioridad: 0,
+          riesgo: 0,
           severidad: 'baja',
         } as ICategoriaResumen);
       actual.cantidad += 1;
-      actual.prioridad = Math.max(actual.prioridad, this.valorRiesgo(alerta));
-      actual.severidad = this.severidadPorValor(actual.prioridad);
+      actual.riesgo = Math.max(actual.riesgo, this.valorRiesgo(alerta));
+      actual.severidad = this.severidadPorValor(actual.riesgo);
       grupos.set(nombre, actual);
     });
-    return [...grupos.values()].sort((a, b) => b.prioridad - a.prioridad || b.cantidad - a.cantidad);
+    return [...grupos.values()].sort((a, b) => b.riesgo - a.riesgo || b.cantidad - a.cantidad);
   }
 
   public alertasOrdenadas(): IAlerta[] {
@@ -338,7 +340,9 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
   }
 
   public categoriaIcono(alerta?: IAlerta): string {
-    const categoria = this.slug(alerta?.categoria || this.ultimoReporte(alerta)?.['categoria'] || alerta?.tipo || 'operativa');
+    const categoria = this.slug(
+      alerta?.categoria || this.ultimoReporte(alerta)?.['categoria'] || alerta?.tipo || 'operativa'
+    );
     const iconos: Record<string, string> = {
       sanitaria: 'pi-shield',
       enfermedad: 'pi-shield',
@@ -359,15 +363,45 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
   public valorRiesgo(alerta?: IAlerta): number {
     const reporte = this.ultimoReporte(alerta);
     const valor =
-      alerta?.prioridad ??
       reporte?.['resultado'] ??
       reporte?.['riesgoPct'] ??
       reporte?.['posibilidadPct'] ??
       reporte?.['avancePct'] ??
       reporte?.['emergenciaPct'] ??
       reporte?.['score'] ??
+      alerta?.prioridad ??
       0;
     return Math.max(0, Math.min(100, Number(valor) || 0));
+  }
+
+  public prioridadOperativa(alerta?: IAlerta): number {
+    const valor = alerta?.prioridad ?? this.ultimoReporte(alerta)?.['prioridad'] ?? 0;
+    return Math.max(0, Math.min(100, Number(valor) || 0));
+  }
+
+  public fechaCritica(alerta?: IAlerta): string | undefined {
+    return this.ultimoReporte(alerta)?.['fechaCritica'];
+  }
+
+  public fechaCriticaTexto(alerta?: IAlerta): string {
+    return this.fechaDiaTexto(this.fechaCritica(alerta));
+  }
+
+  public reporteFechaCritica(reporte: Record<string, any>): string | undefined {
+    return reporte?.['fechaCritica'];
+  }
+
+  public fechaDiaTexto(fecha?: string): string {
+    if (!fecha) return 'Sin fecha critica';
+    const fechaLocal = /^\d{4}-\d{2}-\d{2}$/.test(fecha) ? `${fecha}T12:00:00` : fecha;
+    const parsed = new Date(fechaLocal);
+    if (Number.isNaN(parsed.getTime())) return String(fecha);
+    return parsed.toLocaleDateString('es-AR', {
+      weekday: 'short',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   }
 
   public lectura(alerta?: IAlerta): string {
@@ -401,7 +435,10 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
 
   public calidadDetalle(alerta?: IAlerta): string {
     const calidad = alerta?.calidadDatos || this.ultimoReporte(alerta)?.['calidadDatos'];
-    return calidad?.detalle || 'La calidad del input depende de la fuente climatica, sensores disponibles y cobertura del motor.';
+    return (
+      calidad?.detalle ||
+      'La calidad del input depende de la fuente climatica, sensores disponibles y cobertura del motor.'
+    );
   }
 
   public calidadScore(alerta?: IAlerta): number {
@@ -450,11 +487,11 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
 
   public reporteRiesgo(reporte: Record<string, any>, alerta?: IAlerta): number {
     const valor =
-      reporte?.['resultado'] ||
-      reporte?.['posibilidadPct'] ||
-      reporte?.['avancePct'] ||
-      reporte?.['emergenciaPct'] ||
-      reporte?.['prioridad'] ||
+      reporte?.['resultado'] ??
+      reporte?.['posibilidadPct'] ??
+      reporte?.['avancePct'] ??
+      reporte?.['emergenciaPct'] ??
+      reporte?.['prioridad'] ??
       this.valorRiesgo(alerta);
     return Math.max(0, Math.min(100, Number(valor) || 0));
   }
