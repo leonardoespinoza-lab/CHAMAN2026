@@ -148,7 +148,11 @@ async function main() {
     clientClosed = true;
 
     if (!isBaseComplete(baseBefore)) {
-      runSeed('seed-master-data-local.js');
+      runSeed(
+        process.env.CHAMAN_TESTING_BOOTSTRAP === 'true'
+          ? 'seed-testing-base.js'
+          : 'seed-master-data-local.js',
+      );
     }
     if (!isCebadaComplete(cebadaBefore)) {
       runSeed('seed-cebada-local.js');
