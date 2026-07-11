@@ -11,7 +11,12 @@ const NORMALIZED_CATALOG_PATH = path.join(
   'data',
   'arveja-2025-2026.json',
 );
-const DB_URL = process.env.DB_URL || 'mongodb://127.0.0.1:27017';
+const DB_URL =
+  process.env.MONGO_URI ||
+  process.env.MONGO_URL ||
+  process.env.DATABASE_URL ||
+  process.env.DB_URL ||
+  'mongodb://127.0.0.1:27017';
 const DB_NAME = process.env.DB_NAME || 'chaman';
 const CAMPANIA = process.env.CHAMAN_ARVEJA_CAMPANIA || '2025-2026';
 const DRY_RUN = ['true', '1'].includes(
