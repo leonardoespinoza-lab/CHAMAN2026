@@ -98,10 +98,13 @@ export function enfermedadCoincide(
 
 export function campaniaAOrden(value?: string): number {
   const text = String(value || "").trim();
-  const years = [...text.matchAll(/(?:20)?(\d{2})/g)].map((match) => {
+  const years: number[] = [];
+  const pattern = /(?:20)?(\d{2})/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
     const year = Number(match[1]);
-    return year >= 70 ? 1900 + year : 2000 + year;
-  });
+    years.push(year >= 70 ? 1900 + year : 2000 + year);
+  }
   if (!years.length) return 0;
   return years[0] * 10000 + (years[1] || years[0]);
 }
