@@ -13,6 +13,7 @@ const DRY_RUN = ['true', '1'].includes(
   String(process.env.CHAMAN_CEBADA_DRY_RUN || process.env.CHAMAN_DRY_RUN || '').toLowerCase(),
 );
 const VALIDATE_ONLY = process.env.CHAMAN_CEBADA_VALIDATE_ONLY === 'true';
+const ALLOW_PARTIAL = process.env.CHAMAN_CEBADA_ALLOW_PARTIAL === 'true';
 const SERVER_SELECTION_TIMEOUT_MS = Number(
   process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 10000,
 );
@@ -418,9 +419,15 @@ async function main() {
       varieties: VARIETIES.map((item) => `${item.variedad} (${item.ciclo})`),
     };
 
-    if (missing.size) {
+    if (missing.size && !ALLOW_PARTIAL) {
       console.log(JSON.stringify(summary, null, 2));
       throw new Error('Hay departamentos de Cebada sin mapear. Revisar aliases antes de cargar.');
+    }
+
+    if (missing.size) {
+      console.warn(
+        `[cebada] ${missing.size} departamentos sin mapear; se cargaran semillas, enfermedades, cronos genericos y los cronos departamentales disponibles.`,
+      );
     }
 
     if (DRY_RUN) {

@@ -17,7 +17,7 @@ const STRICT = process.env.CHAMAN_BOOTSTRAP_STRICT === 'true';
 const CEBADA_EXPECTED = {
   semillas: 12,
   enfermedades: 4,
-  cronosMin: 12000,
+  cronosMin: process.env.CHAMAN_CEBADA_ALLOW_PARTIAL === 'true' ? 300 : 12000,
   enfermedadesV2: 4,
 };
 const ARVEJA_EXPECTED = { semillas: 19 };
