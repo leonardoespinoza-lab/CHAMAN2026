@@ -275,6 +275,17 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     return !!cultivo && CULTIVOS_CON_PREDICCION_MALEZAS.includes(cultivo);
   }
 
+  public get mostrarRiesgosAgroclimaticos(): boolean {
+    const centro =
+      this.lote?.ubicacion?.centro ||
+      this.lote?.establecimiento?.ubicacion?.[0]?.centro;
+    return !!centro && !!this.siembra?.semilla?.cultivo && !this.siembra?.fechaCosecha;
+  }
+
+  public get requiereImplantacion(): boolean {
+    return !this.siembra || !!(this.siembraActual && this.siembra.fechaCosecha);
+  }
+
   public get esPlantacion(): boolean {
     return esCultivoPerenne(this.siembra?.semilla?.cultivo);
   }

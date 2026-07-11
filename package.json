@@ -32,6 +32,7 @@
     "audit:secrets": "node scripts/audit-config-secrets.js",
     "audit:logs": "node scripts/audit-sensitive-logs.js",
     "audit:prod-config": "node scripts/validate-production-config.js",
+    "audit:deployment-topology": "node scripts/validate-deployment-topology.js",
     "audit:lote-integrity": "node scripts/audit-lote-data-integrity.js",
     "railway:build": "node scripts/railway-build.js",
     "railway:start": "node scripts/railway-start.js"

@@ -21,8 +21,15 @@
 
           <p-tabpanels>
             <p-tabpanel [value]="0">
-              <div class="form-grid">
-                <p-floatlabel variant="in">
+              <section class="form-stage">
+                <header class="form-stage-heading">
+                  <span>Paso 1 de 2</span>
+                  <strong>Datos principales de la implantacion</strong>
+                  <small>Estos tres datos determinan el ciclo, la fenologia y los servicios disponibles.</small>
+                </header>
+
+                <div class="form-grid">
+                <p-floatlabel variant="in" class="field-date">
                   <p-datepicker
                     formControlName="fechaSiembra"
                     showIcon
@@ -33,7 +40,7 @@
                   <label>{{ etiquetaFechaSiembra | translate }}</label>
                 </p-floatlabel>
 
-                <p-floatlabel variant="in">
+                <p-floatlabel variant="in" class="field-crop">
                   <p-select
                     [loading]="loading"
                     [options]="cultivosDisponibles"
@@ -45,7 +52,7 @@
                   <label>Cultivo</label>
                 </p-floatlabel>
 
-                <p-floatlabel variant="in" class="span-2">
+                <p-floatlabel variant="in" class="field-material">
                   <p-select
                     [loading]="loading"
                     [options]="semillas"
@@ -58,6 +65,9 @@
                     [appendTo]="'body'"
                     [virtualScroll]="true"
                     [virtualScrollItemSize]="52"
+                    scrollHeight="260px"
+                    emptyMessage="No hay variedades cargadas para este cultivo"
+                    emptyFilterMessage="No hay coincidencias"
                   >
                     <ng-template #selectedItem let-selectedOption>
                       <div class="material-option">
@@ -80,7 +90,31 @@
                   </p-select>
                   <label>{{ etiquetaMaterial | translate }}</label>
                 </p-floatlabel>
-              </div>
+                </div>
+
+                @if (cultivoSeleccionado && !loading && semillas.length === 0) {
+                  <p-message severity="warn">
+                    No hay variedades disponibles para {{ cultivoSeleccionado }}. Revisa el catalogo antes de guardar la siembra.
+                  </p-message>
+                }
+
+                @if (semillaSeleccionada; as material) {
+                  <div class="material-summary">
+                    <article>
+                      <span>Variedad</span>
+                      <strong>{{ material.variedad | titlecase }}</strong>
+                    </article>
+                    <article>
+                      <span>Semillero</span>
+                      <strong>{{ material.semillero | titlecase }}</strong>
+                    </article>
+                    <article>
+                      <span>Ciclo</span>
+                      <strong>{{ material.ciclo | titlecase }}</strong>
+                    </article>
+                  </div>
+                }
+              </section>
 
               @if (esCultivoPerenne) {
                 <section class="perennial-panel">

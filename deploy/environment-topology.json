@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "codePromotion": {
+    "testingBranchPattern": "^(codex|staging)/",
+    "productionBranch": "main",
+    "requireSameCommitAcrossStatelessServices": true,
+    "copyBuiltFilesBetweenEnvironments": false
+  },
+  "dataPolicy": {
+    "cloneDirection": "production-to-testing",
+    "promoteTestingDatabase": false,
+    "sanitizeCollectionsAfterClone": ["tokens", "tokenpushes"],
+    "productionChanges": "versioned-idempotent-migrations-only"
+  },
+  "services": [
+    {
+      "role": "web",
+      "selector": "sdc-app-chaman",
+      "port": 8080,
+      "production": "CHAMAN2026",
+      "testing": "testing-web",
+      "stateful": false
+    },
+    {
+      "role": "api",
+      "selector": "sdc-api-cliente",
+      "port": 5002,
+      "production": "chaman-api",
+      "testing": "testing-api",
+      "stateful": false
+    },
+    {
+      "role": "auth",
+      "selector": "sdc-auth",
+      "port": 5001,
+      "production": "chaman-auth",
+      "testing": "testing-auth",
+      "stateful": false
+    },
+    {
+      "role": "datos",
+      "selector": "sdc-datos",
+      "port": 5000,
+      "production": "chaman-datos",
+      "testing": "testing-datos",
+      "stateful": false
+    },
+    {
+      "role": "clima",
+      "selector": "sdc-api-clima",
+      "port": 5008,
+      "production": "chaman-clima",
+      "testing": "testing-clima",
+      "stateful": false
+    },
+    {
+      "role": "predicciones",
+      "selector": "sdc-api-predicciones",
+      "port": 5007,
+      "production": "chaman-predicciones",
+      "testing": "testing-predicciones",
+      "stateful": false
+    },
+    {
+      "role": "externa",
+      "selector": "sdc-api-externa",
+      "port": 5009,
+      "production": "chaman-externa",
+      "testing": "testing-externa",
+      "stateful": false
+    },
+    {
+      "role": "ftp",
+      "selector": "sdc-ftp",
+      "port": 2121,
+      "production": "chaman-ftp",
+      "testing": "testing-ftp",
+      "stateful": true,
+      "testingSafety": ["HIKCONNECT_ENABLED=false"]
+    },
+    {
+      "role": "lora",
+      "selector": "sdc-api-lora",
+      "port": 5012,
+      "production": "chaman-lora",
+      "testing": "testing-lora",
+      "stateful": false,
+      "testingSafety": ["LORAWAN_MQTT_ENABLED=false"]
+    },
+    {
+      "role": "ndvi-worker",
+      "selector": "sdc-ndvi-worker",
+      "port": 5010,
+      "production": "chaman-ndvi-worker",
+      "testing": "testing-ndvi-worker",
+      "stateful": false,
+      "testingSafety": ["NDVI_STORAGE_MODE=inline"]
+    },
+    {
+      "role": "mongodb",
+      "selector": "mongo:8.0",
+      "port": 27017,
+      "production": "MongoDB",
+      "testing": "MongoDB-dEb1",
+      "stateful": true
+    },
+    {
+      "role": "redis",
+      "selector": "redis:8.2.1",
+      "port": 6379,
+      "production": "Redis",
+      "testing": "Redis-Yfz7",
+      "stateful": true
+    }
+  ]
+}
