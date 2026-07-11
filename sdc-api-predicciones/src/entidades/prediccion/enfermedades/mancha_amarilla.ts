@@ -5,6 +5,15 @@ import {
   ISemilla,
   IVariablesManchaAmarilla,
 } from 'modelos/src';
+import {
+  calcularManchaAmarilla,
+  resolverResistencia,
+} from 'modelos/src/motores/enfermedades';
+import {
+  camposClimaticosFaltantes,
+  crearPrediccionSinDatos,
+  metadataResistencia,
+} from './calidad';
 
 @Injectable()
 export class ManchaAmarillaService {
@@ -19,6 +28,20 @@ export class ManchaAmarillaService {
     prediccionAnterior?: IPrediccion,
     predecir?: boolean,
   ): Promise<IPrediccionEnfermedad> {
+    const faltantes = camposClimaticosFaltantes(clima, [
+      'precip',
+      'hr',
+      'Tmax',
+      'Tmin',
+    ]);
+    if (faltantes.length) {
+      return crearPrediccionSinDatos(
+        'Mancha Amarilla',
+        'trigo.mancha_amarilla',
+        faltantes,
+        'Enfermedades en TRIGO -V2.xlsx / Mancha Amarilla',
+      );
+    }
     const prediccionAnteriorEnfermedad = prediccionAnterior?.enfermedades.find(
       (e) => e.enfermedad === 'Mancha Amarilla',
     );
@@ -49,8 +72,9 @@ export class ManchaAmarillaService {
       variables.DPrHRT = predecir ? variables.DPrHRT + 1 : 0;
     }
 
-    const resistencia = semilla.resistencia?.find(
-      (r) => r.enfermedad === 'Mancha Amarilla',
+    const resistencia = resolverResistencia(
+      semilla.resistencia,
+      'trigo.mancha_amarilla',
     );
 
     if (!predecir) {
@@ -58,16 +82,24 @@ export class ManchaAmarillaService {
       variables.DPrHRT = 0;
     }
 
-    let resultado =
-      (-2.25 + 1.62 * variables.DPrHRT + 1.3 * variables.DPr) *
-      (resistencia?.multiplicador || 1);
-    if (resultado < 0) {
-      resultado = 0;
-    }
+    const resultado = calcularManchaAmarilla(
+      variables.DPrHRT,
+      variables.DPr,
+      resistencia.multiplicador,
+    );
 
     const prediccion: IPrediccionEnfermedad = {
       enfermedad: 'Mancha Amarilla',
+      idEnfermedad: 'trigo.mancha_amarilla',
       resultado: predecir ? +resultado.toFixed(2) : 0,
+      estado: 'calculado',
+      ...metadataResistencia(resistencia),
+      modelo: {
+        id: 'trigo.mancha_amarilla',
+        version: 3,
+        fuente: 'Enfermedades en TRIGO -V2.xlsx / Mancha Amarilla',
+        resolucion: 'diaria',
+      },
       variables,
     };
     return prediccion;

@@ -5,6 +5,16 @@ import {
   ISemilla,
   IVariablesRoyaDelMaiz,
 } from 'modelos/src';
+import {
+  calcularRoyaHoja,
+  gradosDiaRoyaMaiz,
+  resolverResistencia,
+} from 'modelos/src/motores/enfermedades';
+import {
+  camposClimaticosFaltantes,
+  crearPrediccionSinDatos,
+  metadataResistencia,
+} from './calidad';
 
 @Injectable()
 export class RoyaDelMaizService {
@@ -18,7 +28,20 @@ export class RoyaDelMaizService {
     prediccionAnterior?: IPrediccion,
     predecir?: boolean,
   ): Promise<IPrediccionEnfermedad> {
-    // Sev% = 4,42 + 0,61 GD - 0,57 DHR – 30,01 IR
+    const faltantes = camposClimaticosFaltantes(clima, [
+      'precip',
+      'hr',
+      'Tavg',
+    ]);
+    if (faltantes.length) {
+      return crearPrediccionSinDatos(
+        'Roya del Maiz',
+        'maiz.roya',
+        faltantes,
+        'Enfermedades en TRIGO -V2.xlsx / Roya de la Hoja',
+      );
+    }
+    // Sev% = 4,42 + 0,61 GD + 0,57 DHR - 30,01 IR
 
     const prediccionAnteriorEnfermedad = prediccionAnterior?.enfermedades.find(
       (e) => e.enfermedad === 'Roya del Maiz',
@@ -36,19 +59,7 @@ export class RoyaDelMaizService {
     };
 
     // Grados Dia
-    let TB = 0;
-    let GD = 0;
-    if (clima.hr >= 95) {
-      if (clima.Tavg >= 17) {
-        TB = 17;
-      }
-      if (clima.Tavg < 17 && clima.Tavg >= 8) {
-        TB = clima.Tavg;
-      }
-    }
-    if (TB) {
-      GD = predecir ? TB - 8 : 0;
-    }
+    const GD = predecir ? gradosDiaRoyaMaiz(clima.hr, clima.Tavg) : 0;
 
     variables.GD = +(variables.GD + GD).toFixed(2);
 
@@ -58,19 +69,17 @@ export class RoyaDelMaizService {
     }
 
     // Resistencia
-    const resistencia = semilla.resistencia?.find(
-      (r) => r.enfermedad === 'Roya del Maiz',
+    const resistencia = resolverResistencia(
+      semilla.resistencia,
+      'maiz.roya',
     );
 
     // Formula
-    let resultado =
-      4.42 +
-      0.61 * variables.GD +
-      0.57 * variables.DHR -
-      30.01 * (resistencia?.multiplicador || 1);
-    if (resultado < 0) {
-      resultado = 0;
-    }
+    const resultado = calcularRoyaHoja(
+      variables.GD,
+      variables.DHR,
+      resistencia.indiceResistencia,
+    );
 
     if (!predecir) {
       variables.DHR = 0;
@@ -79,7 +88,16 @@ export class RoyaDelMaizService {
 
     const prediccion: IPrediccionEnfermedad = {
       enfermedad: 'Roya del Maiz',
+      idEnfermedad: 'maiz.roya',
       resultado: predecir ? +resultado.toFixed(2) : 0,
+      estado: 'calculado',
+      ...metadataResistencia(resistencia),
+      modelo: {
+        id: 'maiz.roya',
+        version: 3,
+        fuente: 'Enfermedades en TRIGO -V2.xlsx / Roya de la Hoja',
+        resolucion: 'diaria',
+      },
       variables,
     };
     return prediccion;

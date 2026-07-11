@@ -16,6 +16,10 @@ import { IForecast, TDataForecast } from '../fieldClimate/modelos/forecast';
 import SunCalc from 'suncalc';
 import { IForecastOpenWeather } from '../openWeather/modelos/modelos';
 import { MeteoSourceService } from '../meteoSource/service';
+import {
+  evaluarCoberturaClimatica,
+  fusionarClimaConFallback,
+} from './calidad-clima';
 import { IForecastMeteoSource } from '../meteoSource/modelos/modelos';
 import {
   IValores,
@@ -1141,7 +1145,82 @@ export class ClimaService {
     minDate: string,
     maxDate: string,
     dataGroup?: 'raw' | 'hourly' | 'daily' | 'monthly',
+    idEstacionMeteorologica?: string,
+    soloEstacionAsociada = false,
   ): Promise<IClimaEstacionMeteorologica[]> {
+    if (soloEstacionAsociada) {
+      let datosAsociados: IClimaEstacionMeteorologica[] = [];
+      if (idEstacionMeteorologica) {
+        try {
+          const estacion = await this.estacionsService.getById(
+            idEstacionMeteorologica,
+          );
+          if (estacion?.origen === 'FieldClimate' && estacion.idExterno) {
+            const reporte = await this.fieldClimate.getDataBetweenDates(
+              estacion.idExterno,
+              dataGroup || 'daily',
+              new Date(minDate).getTime(),
+              new Date(maxDate).getTime(),
+              estacion.user,
+              estacion.pass,
+            );
+            if (reporte) {
+              datosAsociados = this.parsearClimaFieldClimate(
+                estacion as IEstacionCercana,
+                reporte,
+                dataGroup,
+              );
+            }
+          } else {
+            this.logger.warn(
+              `La estaciÃ³n asociada ${idEstacionMeteorologica} no es FieldClimate; se usarÃ¡ Open-Meteo.`,
+            );
+          }
+        } catch (error) {
+          this.logger.error(
+            `No se pudo consultar la estaciÃ³n asociada ${idEstacionMeteorologica}: ${error}`,
+          );
+        }
+      } else {
+        this.logger.log(
+          'El establecimiento no tiene una central FieldClimate asociada; se usarÃ¡ Open-Meteo.',
+        );
+      }
+
+      const cobertura = evaluarCoberturaClimatica(
+        datosAsociados,
+        minDate,
+        maxDate,
+        dataGroup,
+      );
+      if (cobertura.cobertura >= 1) {
+        return fusionarClimaConFallback(
+          datosAsociados,
+          [],
+          minDate,
+          maxDate,
+          dataGroup,
+        ).datos;
+      }
+
+      const openMeteo = await this.getOpenMeteoEntreFechas(
+        ubicacion,
+        minDate,
+        maxDate,
+      );
+      const fusion = fusionarClimaConFallback(
+        datosAsociados,
+        openMeteo,
+        minDate,
+        maxDate,
+        dataGroup,
+      );
+      this.logger.log(
+        `Fuente sanitaria: FieldClimate asociado ${fusion.diasFieldClimate}/${fusion.diasEsperados} dÃ­a(s); Open-Meteo ${fusion.diasFallback} dÃ­a(s).`,
+      );
+      return fusion.datos;
+    }
+
     try {
       const res = await this.fieldClimate.getEstacionMasCercanaEntreFechas(
         ubicacion,
@@ -1156,7 +1235,37 @@ export class ClimaService {
           dataGroup,
         );
         if (parseado.length > 0) {
-          return parseado;
+          const cobertura = evaluarCoberturaClimatica(
+            parseado,
+            minDate,
+            maxDate,
+            dataGroup,
+          );
+          if (cobertura.cobertura >= 1) {
+            return fusionarClimaConFallback(
+              parseado,
+              [],
+              minDate,
+              maxDate,
+              dataGroup,
+            ).datos;
+          }
+          const openMeteo = await this.getOpenMeteoEntreFechas(
+            ubicacion,
+            minDate,
+            maxDate,
+          );
+          const fusion = fusionarClimaConFallback(
+            parseado,
+            openMeteo,
+            minDate,
+            maxDate,
+            dataGroup,
+          );
+          this.logger.warn(
+            `FieldClimate incompleto (${fusion.diasFieldClimate}/${fusion.diasEsperados} dias); Open-Meteo completo ${fusion.diasFallback} dia(s).`,
+          );
+          return fusion.datos;
         }
       }
     } catch (error) {
@@ -1165,7 +1274,18 @@ export class ClimaService {
       );
     }
 
-    return this.getOpenMeteoEntreFechas(ubicacion, minDate, maxDate);
+    const openMeteo = await this.getOpenMeteoEntreFechas(
+      ubicacion,
+      minDate,
+      maxDate,
+    );
+    return fusionarClimaConFallback(
+      [],
+      openMeteo,
+      minDate,
+      maxDate,
+      dataGroup,
+    ).datos;
   }
 
   async getClimaActualMasCercano(

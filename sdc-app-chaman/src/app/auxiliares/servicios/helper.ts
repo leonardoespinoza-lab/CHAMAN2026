@@ -671,6 +671,8 @@ export class HelperService {
         return this.translate.instant('Trigo');
       case 'Cebada':
         return this.translate.instant('Cebada');
+      case 'Arveja':
+        return this.translate.instant('Arveja');
       case 'Papa':
         return this.translate.instant('Papa');
       case 'Vid':
@@ -690,6 +692,10 @@ export class HelperService {
         return this.translate.instant('Corto');
       case 'intermedio':
         return this.translate.instant('Intermedio');
+      case 'intermedio-corto':
+        return this.translate.instant('Intermedio-corto');
+      case 'intermedio-largo':
+        return this.translate.instant('Intermedio-largo');
       case 'largo':
         return this.translate.instant('Largo');
       default:

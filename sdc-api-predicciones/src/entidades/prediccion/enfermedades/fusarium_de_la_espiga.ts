@@ -5,6 +5,15 @@ import {
   ISemilla,
   IVariablesFusariumDeLaEspiga,
 } from 'modelos/src';
+import {
+  calcularFusariumEspiga,
+  resolverResistencia,
+} from 'modelos/src/motores/enfermedades';
+import {
+  camposClimaticosFaltantes,
+  crearPrediccionSinDatos,
+  metadataResistencia,
+} from './calidad';
 
 @Injectable()
 export class FusariumDeLaEspigaService {
@@ -22,6 +31,23 @@ export class FusariumDeLaEspigaService {
     prediccionAnterior?: IPrediccion,
     predecir?: boolean,
   ): Promise<IPrediccionEnfermedad> {
+    const faltantes = camposClimaticosFaltantes(clima, [
+      'precip',
+      'precipAnterior',
+      'hr',
+      'hrAnterior',
+      'Tavg',
+      'Tmin',
+      'Tmax',
+    ]);
+    if (faltantes.length) {
+      return crearPrediccionSinDatos(
+        'Fusarium de la Espiga',
+        'trigo.fusarium_espiga',
+        faltantes,
+        'Enfermedades en TRIGO -V2.xlsx / FUSARIUM',
+      );
+    }
     const prediccionAnteriorEnfermedad = prediccionAnterior?.enfermedades.find(
       (e) => e.enfermedad === 'Fusarium de la Espiga',
     );
@@ -76,16 +102,16 @@ export class FusariumDeLaEspigaService {
       }
       variables.GDN = predecir ? +(variables.GDN + resisual).toFixed(2) : 0;
 
-      const resistencia = semilla.resistencia?.find(
-        (r) => r.enfermedad === 'Fusarium de la Espiga',
+      const resistencia = resolverResistencia(
+        semilla.resistencia,
+        'trigo.fusarium_espiga',
       );
 
-      let resultado =
-        (20.37 + 8.63 * variables.PMoj - 0.49 * variables.GDN) *
-        (resistencia?.multiplicador || 1);
-      if (resultado < 0) {
-        resultado = 0;
-      }
+      const resultado = calcularFusariumEspiga(
+        variables.PMoj,
+        variables.GDN,
+        resistencia.multiplicador,
+      );
 
       if (!predecir) {
         variables.PMoj = 0;
@@ -95,10 +121,37 @@ export class FusariumDeLaEspigaService {
 
       const prediccion: IPrediccionEnfermedad = {
         enfermedad: 'Fusarium de la Espiga',
+        idEnfermedad: 'trigo.fusarium_espiga',
         resultado: predecir ? +resultado.toFixed(2) : 0,
+        estado: 'calculado',
+        ...metadataResistencia(resistencia),
+        modelo: {
+          id: 'trigo.fusarium_espiga',
+          version: 3,
+          fuente: 'Enfermedades en TRIGO -V2.xlsx / FUSARIUM',
+          resolucion: 'diaria',
+        },
         variables,
       };
       return prediccion;
     }
+    const resistencia = resolverResistencia(
+      semilla.resistencia,
+      'trigo.fusarium_espiga',
+    );
+    return {
+      enfermedad: 'Fusarium de la Espiga',
+      idEnfermedad: 'trigo.fusarium_espiga',
+      resultado: 0,
+      estado: 'fuera_ventana',
+      ...metadataResistencia(resistencia),
+      modelo: {
+        id: 'trigo.fusarium_espiga',
+        version: 3,
+        fuente: 'Enfermedades en TRIGO -V2.xlsx / FUSARIUM',
+        resolucion: 'diaria',
+      },
+      variables,
+    };
   }
 }

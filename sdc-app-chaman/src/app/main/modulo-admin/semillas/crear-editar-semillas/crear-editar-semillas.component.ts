@@ -1,7 +1,11 @@
 import { Component, OnInit, OnDestroy  } from '@angular/core';
 import { FormArray, FormControl, FormGroup, Validators } from '@angular/forms';
 import { TranslateService } from '@ngx-translate/core';
-import { Cultivo, ICreateSemilla, ISemilla, IListado, IQueryParam } from 'modelos/src';
+import { Cultivo, ICreateSemilla, IResistencia, ISemilla, IListado, IQueryParam } from 'modelos/src';
+import {
+  ENFERMEDADES_CANONICAS,
+  getEnfermedadCanonica,
+} from 'modelos/src/motores/enfermedades';
 import { SemillaService } from '../../../../auxiliares/http/semilla.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
 import { ParamsService } from '../../../../auxiliares/servicios/params.service';
@@ -10,7 +14,7 @@ import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 
-const CULTIVOS_DISPONIBLES_APP: Cultivo[] = ['Soja', 'Trigo', 'Maiz', 'Papa', 'Vid', 'Peral', 'Pecan', 'Manzano'];
+const CULTIVOS_DISPONIBLES_APP: Cultivo[] = ['Soja', 'Trigo', 'Maiz', 'Cebada', 'Arveja', 'Papa', 'Vid', 'Peral', 'Pecan', 'Manzano'];
 
 @Component({
   selector: 'app-crear-editar-semillas',
@@ -24,30 +28,11 @@ export class CrearEditarSemillasComponent implements OnInit, OnDestroy {
   public titulo?: () => string;
   public form?: FormGroup;
 
-  public ciclos = ['LARGO', 'INTERMEDIO', 'CORTO', 'TEMPRANO', 'MUY TEMPRANO', 'MEDIA', 'TARDIA', 'GENERAL'];
-  public enfermedades = [
-    'Roya de la Hoja',
-    'Mancha Amarilla',
-    'Mancha de la Hoja',
-    'Fusarium de la Espiga',
-    'Roya del Maíz',
-    'Roya Anaranjada',
-    'Fin de Ciclo Soja',
-    'Oidio',
-    'Botritis',
-    'Mildiu',
-    'Tizon Tardio',
-    'Tizon Temprano',
-    'Rhizoctonia',
-    'Sarna del Manzano',
-    'Sarna del Peral',
-    'Sarna del Pecan',
-    'Oidio del Manzano',
-    'Fuego Bacteriano',
-    'Carpocapsa',
-    'Psila del Peral',
-    'Bacteriosis del Pecan',
-  ];
+  public ciclos = ['LARGO', 'INTERMEDIO-LARGO', 'INTERMEDIO', 'INTERMEDIO-CORTO', 'CORTO', 'TEMPRANO', 'MUY TEMPRANO', 'MEDIA', 'TARDIA', 'GENERAL'];
+  public enfermedades = ENFERMEDADES_CANONICAS.map((item) => item.nombre);
+  public perfilesResistencia = ['R', 'MR', 'I', 'MS', 'S', 'T', 'MT', 'DESCONOCIDA'];
+  public estadosResistencia = ['observada', 'historica', 'inferida', 'desconocida'];
+  public confianzasResistencia = ['alta', 'media', 'baja', 'sin_datos'];
   public cultivosDisponibles: Cultivo[] = [];
   private datos$?: Subscription;
 
@@ -64,16 +49,24 @@ export class CrearEditarSemillasComponent implements OnInit, OnDestroy {
     private listado: ListadosService,
   ) {}
 
-  private crearControlResistencia(enfermedad = '', multiplicador: number | null = null): FormGroup {
+  private crearControlResistencia(resistencia: Partial<IResistencia> = {}): FormGroup {
     return new FormGroup({
-      enfermedad: new FormControl(enfermedad, Validators.required),
-      multiplicador: new FormControl(multiplicador, [Validators.required, Validators.min(0), Validators.max(1)]),
+      enfermedad: new FormControl(resistencia.enfermedad || '', Validators.required),
+      multiplicador: new FormControl(resistencia.multiplicador ?? null, [Validators.required, Validators.min(0.01), Validators.max(1.4)]),
+      indiceResistencia: new FormControl(resistencia.indiceResistencia ?? null, [Validators.min(0), Validators.max(1)]),
+      perfil: new FormControl(resistencia.perfil || 'DESCONOCIDA'),
+      estado: new FormControl(resistencia.estado || 'desconocida', Validators.required),
+      confianza: new FormControl(resistencia.confianza || 'sin_datos', Validators.required),
+      fuente: new FormControl(resistencia.fuente || ''),
+      campaniaFuente: new FormControl(resistencia.campaniaFuente || ''),
+      fechaFuente: new FormControl(resistencia.fechaFuente || ''),
+      observaciones: new FormControl(resistencia.observaciones || ''),
     });
   }
 
   private createForm(): void {
     const resistenciaControls = (this.semilla?.resistencia || []).map((r) =>
-      this.crearControlResistencia(r.enfermedad, r.multiplicador)
+      this.crearControlResistencia(r)
     );
 
     this.form = new FormGroup({
@@ -123,7 +116,14 @@ export class CrearEditarSemillasComponent implements OnInit, OnDestroy {
         requerimientoFrio: this.form?.value.requerimientoFrio,
         fenologiaReferencia: this.form?.value.fenologiaReferencia,
         observaciones: this.form?.value.observaciones || undefined,
-        resistencia: this.form?.value.resistencia,
+        resistencia: (this.form?.value.resistencia || []).map((item: IResistencia) => {
+          const canonica = getEnfermedadCanonica(item.enfermedad);
+          return {
+            ...item,
+            idEnfermedad: canonica?.id,
+            enfermedad: canonica?.nombre || item.enfermedad,
+          };
+        }),
       };
       if (this.semilla?._id) {
         await this.service.editar(this.semilla._id, data);

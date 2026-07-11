@@ -11,6 +11,7 @@ import {
   getFenologiaJuvenilPerenne,
   getEtapasPerennesReferencia,
   getNombreImplantacion,
+  IFenologiaReferencia,
   IRegistroFenologico,
   ISemilla,
   ISiembra,
@@ -140,6 +141,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   public fuenteFenologiaJoven = '';
   public etiquetaImplantacion: 'Siembra' | 'Plantacion' = 'Siembra';
   public campaniaTexto = '';
+  public fenologiaTermica?: IFenologiaReferencia;
   public registroDialogVisible = false;
   public guardandoRegistro = false;
   public registroEditandoId?: string;
@@ -175,8 +177,6 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   public get registrosFenologicos(): IRegistroFenologico[] {
-    const cultivo = this.canonicalCultivo(this.siembraActual?.semilla?.cultivo || this.cultivo);
-    if (!esCultivoPerenne(cultivo)) return [];
     return [...(this.siembraActual?.registrosFenologicos || [])].sort((a, b) =>
       String(a.fecha || '').localeCompare(String(b.fecha || '')),
     );
@@ -187,12 +187,25 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   public get etapaOptions(): Array<{ label: string; value: string }> {
-    return this.etapas.map((etapa) => ({ label: etapa.nombre, value: etapa.nombre }));
+    return this.etapasRegistroNombres.map((nombre) => ({ label: nombre, value: nombre }));
   }
 
   public get puedeRegistrarFenologiaCampo(): boolean {
-    const cultivo = this.canonicalCultivo(this.siembraActual?.semilla?.cultivo || this.cultivo);
-    return !!this.siembraActual?._id && this.etapas.length > 0 && esCultivoPerenne(cultivo);
+    return !!this.siembraActual?._id && this.etapasRegistroNombres.length > 0;
+  }
+
+  public get etapasRegistroNombres(): string[] {
+    if (this.etapas.length) return this.etapas.map((etapa) => etapa.nombre);
+    const observables = this.fenologiaTermica?.etapasObservables || [];
+    return [...new Set(observables.map((etapa) => String(etapa).trim()).filter(Boolean))];
+  }
+
+  public get rangosTermicos(): Array<{ etapa: string; min: number; max: number }> {
+    return Object.entries(this.fenologiaTermica?.rangosTermicos || {}).map(([etapa, rango]) => ({
+      etapa,
+      min: Number(rango.min),
+      max: Number(rango.max),
+    }));
   }
 
   public get diasDesdeImplantacion(): number {
@@ -308,10 +321,14 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   public registroEtapa(etapa: FenologiaStage): IRegistroFenologico | undefined {
+    return this.buscarRegistroEtapa(etapa.nombre);
+  }
+
+  private buscarRegistroEtapa(nombre: string): IRegistroFenologico | undefined {
     return this.registrosFenologicos.find(
       (registro) =>
-        registro.etapa === etapa.nombre &&
-        registro.campania === this.campaniaTexto &&
+        registro.etapa === nombre &&
+        (!this.campaniaTexto || !registro.campania || registro.campania === this.campaniaTexto) &&
         (registro.accion || 'inicio') === 'inicio',
     );
   }
@@ -322,21 +339,21 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
   public abrirRegistroEtapa(etapa?: FenologiaStage): void {
     if (!this.puedeRegistrarFenologiaCampo) {
-      this.helper.notifWarn('El registro manual de etapas esta habilitado solo para cultivos perennes.');
+      this.helper.notifWarn('No hay una siembra activa o etapas fenologicas disponibles para registrar.');
       return;
     }
 
-    const etapaObjetivo = etapa || this.etapaActualDetalle;
-    if (!this.siembraActual?._id || !etapaObjetivo) {
+    const nombreEtapa = etapa?.nombre || this.etapaActualDetalle?.nombre || this.etapasRegistroNombres[0];
+    if (!this.siembraActual?._id || !nombreEtapa) {
       this.helper.notifWarn('No hay siembra activa o etapa disponible para registrar.');
       return;
     }
 
-    const existente = this.registroEtapa(etapaObjetivo);
+    const existente = this.buscarRegistroEtapa(nombreEtapa);
     this.registroEditandoId = existente?.id;
     this.registroForm = {
-      fecha: existente?.fecha ? new Date(existente.fecha) : new Date(etapaObjetivo.fecha),
-      etapa: existente?.etapa || etapaObjetivo.nombre,
+      fecha: existente?.fecha ? new Date(existente.fecha) : etapa?.fecha ? new Date(etapa.fecha) : new Date(),
+      etapa: existente?.etapa || nombreEtapa,
       observaciones: existente?.observaciones || '',
     };
     this.registroDialogVisible = true;
@@ -345,7 +362,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   public async guardarRegistroFenologico(): Promise<void> {
     const siembra = this.siembraActual;
     if (!this.puedeRegistrarFenologiaCampo) {
-      this.helper.notifWarn('El registro manual de etapas esta habilitado solo para cultivos perennes.');
+      this.helper.notifWarn('No hay una siembra activa o etapas fenologicas disponibles para registrar.');
       return;
     }
 
@@ -415,6 +432,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
     if (!siembra?.fechaSiembra || !siembra.semilla?.cultivo) {
       this.etapas = [];
+      this.fenologiaTermica = undefined;
       this.etapaActual = undefined;
       this.progreso = 0;
       return;
@@ -444,6 +462,9 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     );
     this.fuenteFenologiaJoven = fenologiaJoven?.fuente || '';
     this.campaniaTexto = '';
+    this.fenologiaTermica = siembra.semilla?.fenologiaReferencia?.unidadEtapas === 'grados_dia'
+      ? siembra.semilla.fenologiaReferencia
+      : undefined;
 
     const etapasDisponibles = this.getEtapasDisponibles(cultivo, siembra.semilla, etapasCrono);
 
@@ -591,6 +612,12 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       return this.normalizarEtapas(etapasSemilla);
     }
 
+    if (cultivo === 'Arveja' && semilla?.fenologiaReferencia?.unidadEtapas === 'grados_dia') {
+      this.fuenteFenologia = 'semilla';
+      this.fuenteTexto = 'referencia termica de semilla; calibracion pendiente';
+      return {};
+    }
+
     this.fuenteFenologia = 'base';
     this.fuenteTexto = 'base editable';
     const etapasPerennes = getEtapasPerennesReferencia(cultivo);
@@ -641,6 +668,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       soja: 'Soja',
       maiz: 'Maiz',
       cebada: 'Cebada',
+      arveja: 'Arveja',
       papa: 'Papa',
       vid: 'Vid',
       peral: 'Peral',

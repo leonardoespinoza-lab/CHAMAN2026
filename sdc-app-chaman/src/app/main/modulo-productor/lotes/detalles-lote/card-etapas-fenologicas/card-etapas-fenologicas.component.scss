@@ -425,6 +425,73 @@
   color: var(--p-text-muted-color);
 }
 
+.thermal-reference {
+  background: color-mix(in srgb, #f59e0b, white 94%);
+  border: 1px solid color-mix(in srgb, #f59e0b, white 62%);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.8rem;
+  padding: 0.9rem;
+}
+
+.thermal-reference-heading {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.thermal-reference-heading div {
+  display: grid;
+  gap: 0.14rem;
+}
+
+.thermal-reference-heading span,
+.thermal-ranges span {
+  color: var(--p-text-muted-color);
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.thermal-reference-heading strong {
+  color: var(--p-text-color);
+  font-size: 1.08rem;
+}
+
+.thermal-reference-heading small {
+  background: color-mix(in srgb, #f59e0b, white 82%);
+  border-radius: 999px;
+  color: #8a5200;
+  font-weight: 800;
+  padding: 0.35rem 0.55rem;
+}
+
+.thermal-ranges {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.thermal-ranges article {
+  background: var(--p-surface-0);
+  border: 1px solid rgba(91, 124, 156, 0.2);
+  border-radius: 7px;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.7rem;
+}
+
+.thermal-ranges strong {
+  color: var(--p-text-color);
+}
+
+.thermal-reference > p {
+  color: var(--p-text-muted-color);
+  line-height: 1.35;
+  margin: 0;
+}
+
 @media (max-width: 1023px) {
   .phenology-heading,
   .phenology-overview {

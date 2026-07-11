@@ -15,9 +15,16 @@ export class ClimaRepository {
     lng: number,
     from: string,
     to: string,
+    dataGroup?: 'raw' | 'hourly' | 'daily' | 'monthly',
+    idEstacionMeteorologica?: string,
   ): Promise<IClimaEstacionMeteorologica[]> {
     const url = `${API_CLIMA}/clima/estacion/cerca/${lat}/${lng}/${from}/${to}`;
-    return await this.axios.GET<IClimaEstacionMeteorologica[]>(url, {});
+    const params = {
+      dataGroup,
+      idEstacionMeteorologica,
+      soloEstacionAsociada: true,
+    };
+    return await this.axios.GET<IClimaEstacionMeteorologica[]>(url, { params });
   }
 
   async getPluviometroMasCercanaEntreFechas(

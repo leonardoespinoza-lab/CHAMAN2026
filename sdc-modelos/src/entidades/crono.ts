@@ -6,6 +6,7 @@ export const CULTIVOS_ANUALES = [
   "Maiz",
   "Papa",
   "Cebada",
+  "Arveja",
 ] as const;
 export const CULTIVOS_PERENNES = ["Vid", "Peral", "Pecan", "Manzano"] as const;
 export const CULTIVOS_DISPONIBLES = [

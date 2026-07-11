@@ -5,6 +5,15 @@ import {
   ISemilla,
   IVariablesFinDeCiclo,
 } from 'modelos/src';
+import {
+  calcularFinCicloSoja,
+  resolverResistencia,
+} from 'modelos/src/motores/enfermedades';
+import {
+  camposClimaticosFaltantes,
+  crearPrediccionSinDatos,
+  metadataResistencia,
+} from './calidad';
 
 @Injectable()
 export class FinCicloSojaService {
@@ -16,6 +25,15 @@ export class FinCicloSojaService {
     prediccionAnterior?: IPrediccion,
     predecir?: boolean,
   ): Promise<IPrediccionEnfermedad> {
+    const faltantes = camposClimaticosFaltantes(clima, ['precip']);
+    if (faltantes.length) {
+      return crearPrediccionSinDatos(
+        'Fin de Ciclo',
+        'soja.fin_ciclo',
+        faltantes,
+        'Modelo Fin de Ciclo de Soja',
+      );
+    }
     const prediccionAnteriorEnfermedad = prediccionAnterior?.enfermedades.find(
       (e) => e.enfermedad === 'Fin de Ciclo',
     );
@@ -46,15 +64,15 @@ export class FinCicloSojaService {
       variables.Lt7 = variables.DPr7 * variables.PtAc7;
     }
 
-    const resistencia = semilla.resistencia?.find(
-      (r) => r.enfermedad === 'Fin de Ciclo',
+    const resistencia = resolverResistencia(
+      semilla.resistencia,
+      'soja.fin_ciclo',
     );
 
-    let resultado =
-      ((8 * variables.Lt7) / 600) * (resistencia?.multiplicador || 1);
-    if (resultado < 0) {
-      resultado = 0;
-    }
+    const resultado = calcularFinCicloSoja(
+      variables.Lt7,
+      resistencia.multiplicador,
+    );
 
     if (!predecir) {
       variables.PtAc7 = 0;
@@ -64,7 +82,16 @@ export class FinCicloSojaService {
 
     const prediccion: IPrediccionEnfermedad = {
       enfermedad: 'Fin de Ciclo',
+      idEnfermedad: 'soja.fin_ciclo',
       resultado: predecir ? +resultado.toFixed(2) : 0,
+      estado: 'calculado',
+      ...metadataResistencia(resistencia),
+      modelo: {
+        id: 'soja.fin_ciclo',
+        version: 3,
+        fuente: 'Modelo Fin de Ciclo de Soja',
+        resolucion: 'diaria',
+      },
       variables,
     };
     return prediccion;

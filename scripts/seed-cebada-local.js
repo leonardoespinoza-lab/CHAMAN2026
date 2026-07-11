@@ -9,7 +9,9 @@ const DB_URL =
   process.env.DB_URL ||
   'mongodb://127.0.0.1:27017';
 const DB_NAME = process.env.DB_NAME || 'chaman';
-const DRY_RUN = process.env.CHAMAN_CEBADA_DRY_RUN === 'true';
+const DRY_RUN = ['true', '1'].includes(
+  String(process.env.CHAMAN_CEBADA_DRY_RUN || process.env.CHAMAN_DRY_RUN || '').toLowerCase(),
+);
 const VALIDATE_ONLY = process.env.CHAMAN_CEBADA_VALIDATE_ONLY === 'true';
 const SERVER_SELECTION_TIMEOUT_MS = Number(
   process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 10000,
@@ -307,6 +309,27 @@ function buildDiseaseOps() {
 }
 
 function buildSeedOps() {
+  const resistenciasDesconocidas = DISEASES.map((enfermedad) => ({
+    enfermedad: enfermedad.nombre,
+    idEnfermedad:
+      enfermedad.nombre === 'Mancha en Red'
+        ? 'cebada.mancha_red'
+        : enfermedad.nombre === 'Escaldadura de la Cebada'
+          ? 'cebada.escaldadura'
+          : enfermedad.nombre === 'Roya de la Hoja de Cebada'
+            ? 'cebada.roya_hoja'
+            : 'cebada.fusariosis_espiga',
+    multiplicador: 1,
+    indiceResistencia: 0,
+    perfil: 'DESCONOCIDA',
+    estado: 'desconocida',
+    confianza: 'sin_datos',
+    fuente: 'BASE CEBADA v1.xlsx no contiene resistencia varietal',
+    campaniaFuente: '2026-2027',
+    fechaFuente: '2026-07-01',
+    observaciones:
+      'Escenario conservador para cálculo; no equivale a susceptibilidad observada.',
+  }));
   return VARIETIES.map((item) => {
     const doc = {
       codigoCarga: `CEBADA-${norm(item.variedad).replace(/[^A-Z0-9]+/g, '-')}`,
@@ -317,7 +340,7 @@ function buildSeedOps() {
       ciclo: norm(item.ciclo),
       campania: '2026-2027',
       tipoCultivo: 'Anual',
-      resistencia: [],
+      resistencia: resistenciasDesconocidas,
       fenologiaReferencia: {
         brotacion: 'Emergencia segun crono por zona, fecha de siembra, ciclo y variedad.',
         floracion: 'Espigazon/antesis segun crono de la base Cebada v1.',

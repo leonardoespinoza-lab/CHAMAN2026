@@ -17,6 +17,7 @@ export type TEnfermedad =
   | "Fin de Ciclo"
   // Maiz
   | "Roya del Maiz"
+  | "Tizon Foliar del Maiz"
   // Vid
   | "Oidio"
   | "Botritis"
@@ -38,7 +39,63 @@ export type TEnfermedad =
 export interface IResistencia {
   multiplicador?: number;
   enfermedad?: TEnfermedad;
+  idEnfermedad?: TEnfermedadId;
+  indiceResistencia?: number;
+  perfil?: TPerfilResistencia;
+  estado?: TEstadoResistencia;
+  confianza?: TConfianzaResistencia;
+  fuente?: string;
+  campaniaFuente?: string;
+  fechaFuente?: string;
+  observaciones?: string;
 }
+
+export type TEnfermedadId =
+  | "trigo.fusarium_espiga"
+  | "trigo.mancha_amarilla"
+  | "trigo.mancha_hoja"
+  | "trigo.roya_hoja"
+  | "trigo.roya_tallo"
+  | "trigo.roya_anaranjada"
+  | "cebada.mancha_red"
+  | "cebada.escaldadura"
+  | "cebada.roya_hoja"
+  | "cebada.fusariosis_espiga"
+  | "soja.fin_ciclo"
+  | "maiz.roya"
+  | "maiz.tizon_foliar"
+  | "vid.oidio"
+  | "vid.botritis"
+  | "vid.mildiu"
+  | "papa.tizon_tardio"
+  | "papa.tizon_temprano"
+  | "papa.rhizoctonia"
+  | "manzano.sarna"
+  | "manzano.oidio"
+  | "frutales.fuego_bacteriano"
+  | "manzano.carpocapsa"
+  | "peral.sarna"
+  | "peral.psila"
+  | "pecan.sarna"
+  | "pecan.bacteriosis";
+
+export type TPerfilResistencia =
+  | "R"
+  | "MR"
+  | "I"
+  | "MS"
+  | "S"
+  | "T"
+  | "MT"
+  | "DESCONOCIDA";
+
+export type TEstadoResistencia =
+  | "observada"
+  | "historica"
+  | "inferida"
+  | "desconocida";
+
+export type TConfianzaResistencia = "alta" | "media" | "baja" | "sin_datos";
 
 export interface IRequerimientoFrio {
   horasFrio?: number;
@@ -57,6 +114,12 @@ export interface IFenologiaReferencia {
   etapas?: Record<string, number | string>;
   edadProductivaDesdeAnios?: number;
   etapasJuveniles?: Record<string, number | string>;
+  unidadEtapas?: "dias" | "grados_dia";
+  temperaturaBaseC?: number;
+  rangosTermicos?: Record<string, { min: number; max: number }>;
+  etapasObservables?: string[];
+  estadoModelo?: "validado" | "referencia" | "requiere_calibracion";
+  observacionesModelo?: string;
   fuente?: string;
   editable?: boolean;
 }

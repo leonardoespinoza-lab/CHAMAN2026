@@ -3,6 +3,12 @@ import { IEstablecimiento } from "./establecimiento";
 import { IProductor } from "./productor";
 import { IQuimica } from "./quimica";
 import { TEnfermedad } from "./semilla";
+import {
+  IResistencia,
+  TEnfermedadId,
+  TEstadoResistencia,
+} from "./semilla";
+import { ICalidadDatoMotor } from "../compartidos";
 import { ISiembra } from "./siembra";
 
 export interface IVariablesRoyaDeLaHoja {
@@ -65,7 +71,28 @@ export interface IVariablesFinDeCiclo {
 
 export interface IPrediccionEnfermedad {
   enfermedad: TEnfermedad;
+  idEnfermedad?: TEnfermedadId;
   resultado: number;
+  estado?: "calculado" | "sin_datos" | "fuera_ventana";
+  calidadDatos?: ICalidadDatoMotor;
+  resistenciaUsada?: Pick<
+    IResistencia,
+    | "idEnfermedad"
+    | "enfermedad"
+    | "multiplicador"
+    | "indiceResistencia"
+    | "perfil"
+    | "estado"
+    | "confianza"
+    | "fuente"
+    | "campaniaFuente"
+  > & { estado?: TEstadoResistencia };
+  modelo?: {
+    id: string;
+    version: number;
+    fuente: string;
+    resolucion?: "horaria" | "diaria" | "proxy_diario";
+  };
   variables:
     | IVariablesRoyaDeLaHoja
     | IVariablesManchaAmarilla
@@ -99,6 +126,9 @@ export interface IPrediccion {
   fechaPrediccion?: string;
   etapa?: number;
   nombreEtapa?: string;
+  fuenteFenologia?: "observada" | "crono";
+  registroFenologicoId?: string;
+  calidadFenologia?: ICalidadDatoMotor;
   idSiembra?: string;
   enfermedades?: IPrediccionEnfermedad[];
   estacion?: IPrediccionEstacion;

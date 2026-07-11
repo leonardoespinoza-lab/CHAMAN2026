@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ClimaRepository } from './repository';
-import { IClimaEstacionMeteorologica } from 'modelos/src';
+import {
+  IClimaEstacionMeteorologica,
+  IEstablecimiento,
+} from 'modelos/src';
 
 export type TCiclo = 'Corto' | 'Intermedio' | 'Largo';
 
@@ -13,12 +16,23 @@ export class ClimaService {
     lng: number,
     from: string,
     to: string,
+    dataGroup?: 'raw' | 'hourly' | 'daily' | 'monthly',
+    establecimiento?: Pick<
+      IEstablecimiento,
+      'idEstacionMeteorologica' | 'fuenteClimaPreferida'
+    >,
   ): Promise<IClimaEstacionMeteorologica[]> {
+    const idEstacionMeteorologica =
+      establecimiento?.fuenteClimaPreferida === 'Open-Meteo'
+        ? undefined
+        : establecimiento?.idEstacionMeteorologica;
     return await this.repository.getEstacionMasCercanaEntreFechas(
       lat,
       lng,
       from,
       to,
+      dataGroup,
+      idEstacionMeteorologica,
     );
   }
 

@@ -5,6 +5,15 @@ import {
   ISemilla,
   IVariablesRoyaDeLaHoja,
 } from 'modelos/src';
+import {
+  calcularRoyaHoja,
+  resolverResistencia,
+} from 'modelos/src/motores/enfermedades';
+import {
+  camposClimaticosFaltantes,
+  crearPrediccionSinDatos,
+  metadataResistencia,
+} from './calidad';
 
 @Injectable()
 export class RoyaDeLaHojaService {
@@ -18,6 +27,19 @@ export class RoyaDeLaHojaService {
     prediccionAnterior?: IPrediccion,
     predecir?: boolean,
   ): Promise<IPrediccionEnfermedad> {
+    const faltantes = camposClimaticosFaltantes(clima, [
+      'precip',
+      'hr',
+      'Tavg',
+    ]);
+    if (faltantes.length) {
+      return crearPrediccionSinDatos(
+        'Roya de la Hoja',
+        'trigo.roya_hoja',
+        faltantes,
+        'Enfermedades en TRIGO -V2.xlsx / Roya de la Hoja',
+      );
+    }
     const prediccionAnteriorEnfermedad = prediccionAnterior?.enfermedades.find(
       (e) => e.enfermedad === 'Roya de la Hoja',
     );
@@ -56,11 +78,9 @@ export class RoyaDeLaHojaService {
       variables.DHR = predecir ? variables.DHR + 1 : 0;
     }
 
-    const resistencia = semilla.resistencia?.find(
-      (r) => r.enfermedad === 'Roya de la Hoja',
-    );
-    const IR = this.indiceResistenciaDesdeMultiplicador(
-      resistencia?.multiplicador,
+    const resistencia = resolverResistencia(
+      semilla.resistencia,
+      'trigo.roya_hoja',
     );
 
     if (!predecir) {
@@ -68,28 +88,27 @@ export class RoyaDeLaHojaService {
       variables.GD = 0;
     }
 
-    let resultado =
-      4.42 +
-      0.61 * variables.GD +
-      0.57 * variables.DHR -
-      30.01 * IR;
-    if (resultado < 0) {
-      resultado = 0;
-    }
+    const resultado = calcularRoyaHoja(
+      variables.GD,
+      variables.DHR,
+      resistencia.indiceResistencia,
+    );
 
     const prediccion: IPrediccionEnfermedad = {
       enfermedad: 'Roya de la Hoja',
+      idEnfermedad: 'trigo.roya_hoja',
       resultado: predecir ? +resultado.toFixed(2) : 0,
+      estado: 'calculado',
+      ...metadataResistencia(resistencia),
+      modelo: {
+        id: 'trigo.roya_hoja',
+        version: 3,
+        fuente: 'Enfermedades en TRIGO -V2.xlsx / Roya de la Hoja',
+        resolucion: 'diaria',
+      },
       variables,
     };
     return prediccion;
   }
 
-  private indiceResistenciaDesdeMultiplicador(multiplicador?: number): number {
-    if (multiplicador === undefined || multiplicador === null) return 0;
-    if (multiplicador <= 0.35) return 1;
-    if (multiplicador <= 0.75) return 0.65;
-    if (multiplicador <= 1.05) return 0.35;
-    return 0;
-  }
 }
