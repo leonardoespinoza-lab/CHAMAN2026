@@ -34,10 +34,10 @@ export class Prediccion implements Exactly<IPrediccion, Prediccion> {
   @Prop()
   nombreEtapa: string;
 
-  @Prop()
+  @Prop({ type: String })
   fuenteFenologia?: IPrediccion['fuenteFenologia'];
 
-  @Prop()
+  @Prop({ type: String })
   registroFenologicoId?: string;
 
   @Prop({ type: Object })
