@@ -21,6 +21,12 @@ const CEBADA_EXPECTED = {
   enfermedadesV2: 4,
 };
 const ARVEJA_EXPECTED = { semillas: 19 };
+const BASE_EXPECTED = {
+  provincias: 1,
+  departamentos: 1,
+  semillasAnuales: 1,
+  cronos: 1,
+};
 
 function log(message, extra) {
   if (extra) {
@@ -71,6 +77,16 @@ async function getArvejaCounts(db) {
   return { semillas };
 }
 
+async function getBaseCounts(db) {
+  const [provincias, departamentos, semillasAnuales, cronos] = await Promise.all([
+    db.collection('provincias').countDocuments(),
+    db.collection('departamentos').countDocuments(),
+    db.collection('semillas').countDocuments({ cultivo: { $in: ['Trigo', 'Soja', 'Maiz'] } }),
+    db.collection('cronos').countDocuments(),
+  ]);
+  return { provincias, departamentos, semillasAnuales, cronos };
+}
+
 function isCebadaComplete(counts) {
   return (
     counts.semillas >= CEBADA_EXPECTED.semillas &&
@@ -82,6 +98,12 @@ function isCebadaComplete(counts) {
 
 function isArvejaComplete(counts) {
   return counts.semillas >= ARVEJA_EXPECTED.semillas;
+}
+
+function isBaseComplete(counts) {
+  return Object.entries(BASE_EXPECTED).every(
+    ([key, expected]) => Number(counts[key] || 0) >= expected,
+  );
 }
 
 async function main() {
@@ -102,23 +124,32 @@ async function main() {
 
   try {
     const db = client.db(DB_NAME);
-    const [cebadaBefore, arvejaBefore] = await Promise.all([
+    const [baseBefore, cebadaBefore, arvejaBefore] = await Promise.all([
+      getBaseCounts(db),
       getCebadaCounts(db),
       getArvejaCounts(db),
     ]);
 
-    if (isCebadaComplete(cebadaBefore) && isArvejaComplete(arvejaBefore)) {
-      log('Catalogos completos', { cebada: cebadaBefore, arveja: arvejaBefore });
+    if (
+      isBaseComplete(baseBefore) &&
+      isCebadaComplete(cebadaBefore) &&
+      isArvejaComplete(arvejaBefore)
+    ) {
+      log('Catalogos completos', { base: baseBefore, cebada: cebadaBefore, arveja: arvejaBefore });
       return;
     }
 
     log('Catalogos incompletos; ejecutando seeds idempotentes', {
+      base: baseBefore,
       cebada: cebadaBefore,
       arveja: arvejaBefore,
     });
     await client.close();
     clientClosed = true;
 
+    if (!isBaseComplete(baseBefore)) {
+      runSeed('seed-master-data-local.js');
+    }
     if (!isCebadaComplete(cebadaBefore)) {
       runSeed('seed-cebada-local.js');
     }
@@ -131,16 +162,22 @@ async function main() {
     });
     try {
       const verifyDb = verifyClient.db(DB_NAME);
-      const [cebadaAfter, arvejaAfter] = await Promise.all([
+      const [baseAfter, cebadaAfter, arvejaAfter] = await Promise.all([
+        getBaseCounts(verifyDb),
         getCebadaCounts(verifyDb),
         getArvejaCounts(verifyDb),
       ]);
-      if (!isCebadaComplete(cebadaAfter) || !isArvejaComplete(arvejaAfter)) {
+      if (
+        !isBaseComplete(baseAfter) ||
+        !isCebadaComplete(cebadaAfter) ||
+        !isArvejaComplete(arvejaAfter)
+      ) {
         throw new Error(
-          `Catalogos siguen incompletos: ${JSON.stringify({ cebada: cebadaAfter, arveja: arvejaAfter })}`,
+          `Catalogos siguen incompletos: ${JSON.stringify({ base: baseAfter, cebada: cebadaAfter, arveja: arvejaAfter })}`,
         );
       }
       log('Catalogos cargados correctamente', {
+        base: baseAfter,
         cebada: cebadaAfter,
         arveja: arvejaAfter,
       });

@@ -348,6 +348,18 @@ function buildSeedsFromExcel(data) {
   return [...unique.values()].map(({ __sourceRows, ...semilla }) => semilla);
 }
 
+function buildSeedsFromBundledCatalog() {
+  const bundled = loadTsArray(path.join(DATA_DIR, 'semillas.ts'));
+  return bundled
+    .filter((semilla) => ['Trigo', 'Soja', 'Maiz'].includes(semilla.cultivo))
+    .map((semilla) => ({
+      ...semilla,
+      ciclo: norm(semilla.ciclo),
+      campania: semilla.campania || CAMPANIA,
+      fuenteBase: semilla.fuenteBase || 'Catalogo base incluido en el repositorio',
+    }));
+}
+
 function mergeDuplicateSeeds(existing, incoming) {
   const sourceRows = [...new Set([...(existing.__sourceRows || []), ...(incoming.__sourceRows || [])])];
   const existingByDisease = new Map(
@@ -429,8 +441,10 @@ async function main() {
   const provincias = loadTsArray(path.join(DATA_DIR, 'provincias.ts'));
   const departamentos = loadTsArray(path.join(DATA_DIR, 'departamentos.ts'));
   const enfermedades = loadTsArray(path.join(DATA_DIR, 'enfermedad.ts'));
-  const excelData = readVarietiesFromExcel();
-  const semillas = buildSeedsFromExcel(excelData);
+  const usandoExcel = fs.existsSync(EXCEL_PATH);
+  const semillas = usandoExcel
+    ? buildSeedsFromExcel(readVarietiesFromExcel())
+    : buildSeedsFromBundledCatalog();
   const cronos = buildCronos(departamentos, provincias);
 
   if (DRY_RUN) {
@@ -458,6 +472,9 @@ async function main() {
             trigoHistorico: TRIGO_MODEL_PATH,
             maiz: MAIZ_BASE_PATH,
             catalogoActual: CURRENT_CATALOG_PATH,
+            catalogoBundled: usandoExcel
+              ? undefined
+              : path.join(DATA_DIR, 'semillas.ts'),
           },
           semillas: semillas.length,
           cronos: cronos.length,
