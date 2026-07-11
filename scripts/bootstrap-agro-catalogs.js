@@ -20,6 +20,7 @@ const CEBADA_EXPECTED = {
   cronosMin: 12000,
   enfermedadesV2: 4,
 };
+const ARVEJA_EXPECTED = { semillas: 19 };
 
 function log(message, extra) {
   if (extra) {
@@ -62,6 +63,14 @@ async function getCebadaCounts(db) {
   return { semillas, enfermedades, enfermedadesV2, cronos };
 }
 
+async function getArvejaCounts(db) {
+  const semillas = await db.collection('semillas').countDocuments({
+    cultivo: 'Arveja',
+    campania: '2025-2026',
+  });
+  return { semillas };
+}
+
 function isCebadaComplete(counts) {
   return (
     counts.semillas >= CEBADA_EXPECTED.semillas &&
@@ -69,6 +78,10 @@ function isCebadaComplete(counts) {
     counts.enfermedadesV2 >= CEBADA_EXPECTED.enfermedadesV2 &&
     counts.cronos >= CEBADA_EXPECTED.cronosMin
   );
+}
+
+function isArvejaComplete(counts) {
+  return counts.semillas >= ARVEJA_EXPECTED.semillas;
 }
 
 async function main() {
@@ -89,28 +102,48 @@ async function main() {
 
   try {
     const db = client.db(DB_NAME);
-    const before = await getCebadaCounts(db);
+    const [cebadaBefore, arvejaBefore] = await Promise.all([
+      getCebadaCounts(db),
+      getArvejaCounts(db),
+    ]);
 
-    if (isCebadaComplete(before)) {
-      log('Cebada completo', before);
+    if (isCebadaComplete(cebadaBefore) && isArvejaComplete(arvejaBefore)) {
+      log('Catalogos completos', { cebada: cebadaBefore, arveja: arvejaBefore });
       return;
     }
 
-    log('Cebada incompleto; ejecutando seed idempotente', before);
+    log('Catalogos incompletos; ejecutando seeds idempotentes', {
+      cebada: cebadaBefore,
+      arveja: arvejaBefore,
+    });
     await client.close();
     clientClosed = true;
 
-    runSeed('seed-cebada-local.js');
+    if (!isCebadaComplete(cebadaBefore)) {
+      runSeed('seed-cebada-local.js');
+    }
+    if (!isArvejaComplete(arvejaBefore)) {
+      runSeed('seed-arveja-local.js');
+    }
 
     const verifyClient = await MongoClient.connect(DB_URL, {
       serverSelectionTimeoutMS: SERVER_SELECTION_TIMEOUT_MS,
     });
     try {
-      const after = await getCebadaCounts(verifyClient.db(DB_NAME));
-      if (!isCebadaComplete(after)) {
-        throw new Error(`Cebada sigue incompleto: ${JSON.stringify(after)}`);
+      const verifyDb = verifyClient.db(DB_NAME);
+      const [cebadaAfter, arvejaAfter] = await Promise.all([
+        getCebadaCounts(verifyDb),
+        getArvejaCounts(verifyDb),
+      ]);
+      if (!isCebadaComplete(cebadaAfter) || !isArvejaComplete(arvejaAfter)) {
+        throw new Error(
+          `Catalogos siguen incompletos: ${JSON.stringify({ cebada: cebadaAfter, arveja: arvejaAfter })}`,
+        );
       }
-      log('Cebada cargado correctamente', after);
+      log('Catalogos cargados correctamente', {
+        cebada: cebadaAfter,
+        arveja: arvejaAfter,
+      });
     } finally {
       await verifyClient.close();
     }

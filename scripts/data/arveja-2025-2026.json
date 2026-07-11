@@ -1,0 +1,27 @@
+{
+  "cultivo": "Arveja",
+  "campania": "2025-2026",
+  "fuente": "ARVEJA.xlsx / VARIEDADES",
+  "fechaRecepcion": "2026-07-11",
+  "variedades": [
+    { "semillero": "AFA", "variedad": "MEADOW", "ciclo": "INTERMEDIO" },
+    { "semillero": "AFA", "variedad": "VIPER", "ciclo": "INTERMEDIO-CORTO" },
+    { "semillero": "ARVES", "variedad": "BICENTENARIO", "ciclo": "INTERMEDIO-CORTO" },
+    { "semillero": "BIOSEMINIS", "variedad": "AVIRON", "ciclo": "INTERMEDIO-LARGO" },
+    { "semillero": "BIOSEMINIS", "variedad": "REUSSITE", "ciclo": "INTERMEDIO" },
+    { "semillero": "BIOSEMINIS", "variedad": "YAMS", "ciclo": "INTERMEDIO" },
+    { "semillero": "BUCK", "variedad": "FACON", "ciclo": "INTERMEDIO-CORTO" },
+    { "semillero": "ELEMENTA FOODS", "variedad": "AVENGER", "ciclo": "INTERMEDIO" },
+    { "semillero": "FCA-INTA", "variedad": "FCA 308", "ciclo": "INTERMEDIO" },
+    { "semillero": "FCA-INTA", "variedad": "FCA 313", "ciclo": "INTERMEDIO" },
+    { "semillero": "FCA-INTA", "variedad": "FCA 320", "ciclo": "CORTO" },
+    { "semillero": "FCA-INTA", "variedad": "PRIMOGENITA", "ciclo": "LARGO" },
+    { "semillero": "LIHUE TUE", "variedad": "ARAGON", "ciclo": "INTERMEDIO-CORTO" },
+    { "semillero": "RAGT", "variedad": "ASTRONAUTE", "ciclo": "INTERMEDIO-CORTO" },
+    { "semillero": "RAGT", "variedad": "CARRINGTON", "ciclo": "INTERMEDIO-LARGO" },
+    { "semillero": "RAGT", "variedad": "FEROE", "ciclo": "INTERMEDIO-LARGO" },
+    { "semillero": "RAGT", "variedad": "ORCHESTRA", "ciclo": "INTERMEDIO-LARGO" },
+    { "semillero": "RAGT", "variedad": "SKOL", "ciclo": "INTERMEDIO-LARGO" },
+    { "semillero": "SOUTHERM SEEDES", "variedad": "KINGFISHER", "ciclo": "INTERMEDIO-LARGO" }
+  ]
+}

@@ -1,10 +1,16 @@
 const fs = require('fs');
+const path = require('path');
 const { spawnSync } = require('child_process');
 const { MongoClient } = require('../sdc-datos/node_modules/mongodb');
 
 const EXCEL_PATH =
   process.env.CHAMAN_ARVEJA_XLSX ||
   'C:\\Users\\lespinoza\\Downloads\\ARVEJA.xlsx';
+const NORMALIZED_CATALOG_PATH = path.join(
+  __dirname,
+  'data',
+  'arveja-2025-2026.json',
+);
 const DB_URL = process.env.DB_URL || 'mongodb://127.0.0.1:27017';
 const DB_NAME = process.env.DB_NAME || 'chaman';
 const CAMPANIA = process.env.CHAMAN_ARVEJA_CAMPANIA || '2025-2026';
@@ -36,7 +42,8 @@ function norm(value) {
 
 function readVarieties() {
   if (!fs.existsSync(EXCEL_PATH)) {
-    throw new Error(`No se encontro la base de Arveja: ${EXCEL_PATH}`);
+    const normalized = JSON.parse(fs.readFileSync(NORMALIZED_CATALOG_PATH, 'utf8'));
+    return normalized.variedades || [];
   }
   const code = `
 import json
@@ -64,7 +71,9 @@ print(json.dumps(rows, ensure_ascii=False))
 }
 
 function buildSeeds(rows) {
-  const sourceDate = fs.statSync(EXCEL_PATH).mtime.toISOString().slice(0, 10);
+  const sourceDate = fs.existsSync(EXCEL_PATH)
+    ? fs.statSync(EXCEL_PATH).mtime.toISOString().slice(0, 10)
+    : JSON.parse(fs.readFileSync(NORMALIZED_CATALOG_PATH, 'utf8')).fechaRecepcion;
   const unique = new Map();
   for (const row of rows) {
     const ciclo = norm(row.ciclo);
@@ -122,6 +131,7 @@ async function main() {
       ok: true,
       dryRun: true,
       fuente: EXCEL_PATH,
+      catalogoNormalizado: NORMALIZED_CATALOG_PATH,
       campania: CAMPANIA,
       semillas: semillas.length,
       cronos: 0,
