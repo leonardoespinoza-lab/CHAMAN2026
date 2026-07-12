@@ -54,7 +54,7 @@
         <div class="stage-progress">
           <div>
             <strong>{{ progresoEtapaActual | number: '1.0-0' }}%</strong>
-            <span>avance de la etapa</span>
+            <span>{{ fenologiaTermica ? 'avance termico de la fase' : 'avance de la etapa' }}</span>
           </div>
           <div class="progress-track">
             <span [style.width.%]="progresoEtapaActual"></span>
@@ -87,7 +87,7 @@
           <article class="stage-step" [ngClass]="etapa.estado">
             <span class="stage-status">{{ etapaEstadoTexto(etapa, i) }}</span>
             <strong>{{ etapa.nombre }}</strong>
-            <small>{{ etapa.fecha | date: 'd/M' }}</small>
+            <small>{{ etapa.fecha ? (etapa.fecha | date: 'd/M') : (etapa.requiereCampo ? 'Observacion' : 'Fecha no alcanzada') }}</small>
             <em>{{ etapaDetalleTexto(etapa, i) }}</em>
             @if (registroEtapa(etapa)) {
               <span class="stage-registered">Campo {{ registroEtapa(etapa)?.fecha | date: 'd/M' }}</span>
@@ -140,6 +140,57 @@
         <p>{{ 'Datos insuficientes para mostrar la etapa fenologica.' | translate }}</p>
       </div>
     }
+  }
+
+  @if (fenologiaTermica && etapas.length > 0) {
+    <section class="thermal-reference thermal-control">
+      <div class="thermal-reference-heading">
+        <div>
+          <span>Control del modelo termico</span>
+          <strong>
+            {{ gradosDiaFenologiaTexto }}
+            @if (fenologiaTermica.temperaturaBaseC !== undefined) {
+              - Tb {{ fenologiaTermica.temperaturaBaseC }} °C
+            }
+          </strong>
+        </div>
+        <small>Estado: {{ estadoModeloTermicoTexto }}</small>
+      </div>
+      <div class="thermal-metadata">
+        <article>
+          <span>Fuente climatica</span>
+          <strong>{{ fuenteFenologiaTermicaTexto }}</strong>
+        </article>
+        <article>
+          <span>Periodo calculado</span>
+          <strong>
+            {{ datosFenologiaTermica?.periodoTermico?.desde ? (datosFenologiaTermica?.periodoTermico?.desde | date: 'd/M/yy') : 'Pendiente' }}
+            @if (datosFenologiaTermica?.periodoTermico?.dias) {
+              · {{ datosFenologiaTermica?.periodoTermico?.dias }} dias
+            }
+          </strong>
+        </article>
+        <article>
+          <span>R3</span>
+          <strong>Confirmacion visual obligatoria</strong>
+        </article>
+      </div>
+      <div class="thermal-ranges">
+        @for (rango of rangosTermicos; track rango.etapa) {
+          <article>
+            <span>{{ rango.etapa }}</span>
+            <strong>{{ rango.min }}-{{ rango.max }} GDD</strong>
+          </article>
+        }
+      </div>
+      @if (errorFenologiaTermica) {
+        <p class="thermal-warning">{{ errorFenologiaTermica }}</p>
+      }
+      @for (advertencia of estadoFenologiaTermica?.advertencias || []; track advertencia) {
+        <p class="thermal-warning">{{ advertencia }}</p>
+      }
+      <p>{{ fenologiaTermica.observacionesModelo || 'La referencia requiere validacion agronomica antes de proyectar fechas.' }}</p>
+    </section>
   }
 </div>
 

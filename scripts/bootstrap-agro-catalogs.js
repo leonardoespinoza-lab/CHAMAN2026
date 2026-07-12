@@ -20,7 +20,7 @@ const CEBADA_EXPECTED = {
   cronosMin: process.env.CHAMAN_CEBADA_ALLOW_PARTIAL === 'true' ? 300 : 12000,
   enfermedadesV2: 4,
 };
-const ARVEJA_EXPECTED = { semillas: 19 };
+const ARVEJA_EXPECTED = { semillas: 19, modeloTermicoV2: 19 };
 const BASE_EXPECTED = {
   provincias: 1,
   departamentos: 1,
@@ -70,11 +70,16 @@ async function getCebadaCounts(db) {
 }
 
 async function getArvejaCounts(db) {
-  const semillas = await db.collection('semillas').countDocuments({
-    cultivo: 'Arveja',
-    campania: '2025-2026',
-  });
-  return { semillas };
+  const filtro = { cultivo: 'Arveja', campania: '2025-2026' };
+  const [semillas, modeloTermicoV2] = await Promise.all([
+    db.collection('semillas').countDocuments(filtro),
+    db.collection('semillas').countDocuments({
+      ...filtro,
+      'fenologiaReferencia.temperaturaBaseC': 3,
+      'fenologiaReferencia.observacionesModelo': /R3 no tiene umbral numerico/,
+    }),
+  ]);
+  return { semillas, modeloTermicoV2 };
 }
 
 async function getBaseCounts(db) {
@@ -97,7 +102,10 @@ function isCebadaComplete(counts) {
 }
 
 function isArvejaComplete(counts) {
-  return counts.semillas >= ARVEJA_EXPECTED.semillas;
+  return (
+    counts.semillas >= ARVEJA_EXPECTED.semillas &&
+    counts.modeloTermicoV2 >= ARVEJA_EXPECTED.modeloTermicoV2
+  );
 }
 
 function isBaseComplete(counts) {

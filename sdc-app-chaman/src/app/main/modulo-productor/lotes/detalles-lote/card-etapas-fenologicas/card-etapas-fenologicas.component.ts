@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
 import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
+import { ClimaService } from '../../../../../auxiliares/http/clima.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
@@ -12,9 +13,13 @@ import {
   getEtapasPerennesReferencia,
   getNombreImplantacion,
   IFenologiaReferencia,
+  IEstadoFenologiaArveja,
+  IFrioTermicoCultivo,
   IRegistroFenologico,
   ISemilla,
   ISiembra,
+  construirHitosFenologiaArveja,
+  resolverFenologiaTermicaArveja,
 } from 'modelos/src';
 import {
   ETAPAS_CEBADA,
@@ -25,10 +30,14 @@ import {
 
 interface FenologiaStage {
   nombre: string;
-  fecha: Date;
+  codigo?: string;
+  fecha?: Date;
   periodoDias?: number;
   posicion: number;
   estado: 'done' | 'current' | 'pending';
+  umbralMinGdd?: number;
+  umbralMaxGdd?: number;
+  requiereCampo?: boolean;
 }
 
 type FuenteFenologia = 'crono' | 'semilla' | 'base';
@@ -142,6 +151,10 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   public etiquetaImplantacion: 'Siembra' | 'Plantacion' = 'Siembra';
   public campaniaTexto = '';
   public fenologiaTermica?: IFenologiaReferencia;
+  public datosFenologiaTermica?: IFrioTermicoCultivo;
+  public estadoFenologiaTermica?: IEstadoFenologiaArveja;
+  public cargandoFenologiaTermica = false;
+  public errorFenologiaTermica = '';
   public registroDialogVisible = false;
   public guardandoRegistro = false;
   public registroEditandoId?: string;
@@ -151,6 +164,8 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     observaciones: '',
   };
   private readonly diaMs = 86400000;
+  private solicitudFenologiaTermica = 0;
+  private ultimoKeyFenologiaTermica = '';
 
   public get timelineMinWidth(): string {
     const etapasVisibles = Math.max(this.etapas.length, 1);
@@ -208,6 +223,30 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     }));
   }
 
+  public get fuenteFenologiaTermicaTexto(): string {
+    if (this.estadoFenologiaTermica?.fuente === 'campo') return 'Campo + contraste termico';
+    if (this.datosFenologiaTermica?.fuente === 'FieldClimate + OpenMeteo') return 'FieldClimate + respaldo Open-Meteo';
+    if (this.datosFenologiaTermica?.fuente === 'FieldClimate') return 'FieldClimate asociado';
+    if (this.datosFenologiaTermica?.fuente === 'OpenMeteo') return 'Open-Meteo automatico';
+    return 'Sin clima consolidado';
+  }
+
+  public get estadoModeloTermicoTexto(): string {
+    if (this.estadoFenologiaTermica?.fuente === 'campo') return 'confirmado en campo';
+    if (this.errorFenologiaTermica) return 'dato climatico pendiente';
+    if (this.cargandoFenologiaTermica) return 'calculando';
+    return this.fenologiaTermica?.estadoModelo === 'validado'
+      ? 'validado'
+      : this.fenologiaTermica?.estadoModelo === 'referencia'
+        ? 'referencia operativa'
+        : 'calibracion pendiente';
+  }
+
+  public get gradosDiaFenologiaTexto(): string {
+    const valor = this.estadoFenologiaTermica?.gradosDiaAcumulados;
+    return valor === undefined ? 'Sin acumulado' : `${valor.toFixed(1)} GDD acumulados`;
+  }
+
   public get diasDesdeImplantacion(): number {
     const fecha = this.siembra?.fechaSiembra || this.lote?.siembra?.fechaSiembra;
     if (!fecha) return 0;
@@ -216,24 +255,27 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
   public get diasDesdeEtapaActual(): number {
     const actual = this.etapaActualDetalle;
-    if (!actual) return 0;
+    if (!actual?.fecha) return 0;
     return Math.max(0, Math.floor((Date.now() - actual.fecha.getTime()) / this.diaMs));
   }
 
   public get diasHastaProximaEtapa(): number | undefined {
     const proxima = this.proximaEtapaDetalle;
-    if (!proxima) return undefined;
+    if (!proxima?.fecha) return undefined;
     return Math.max(0, Math.ceil((proxima.fecha.getTime() - Date.now()) / this.diaMs));
   }
 
   public get duracionEtapaActual(): number | undefined {
     const actual = this.etapaActualDetalle;
     const proxima = this.proximaEtapaDetalle;
-    if (!actual || !proxima) return undefined;
+    if (!actual?.fecha || !proxima?.fecha) return undefined;
     return Math.max(1, Math.round((proxima.fecha.getTime() - actual.fecha.getTime()) / this.diaMs));
   }
 
   public get progresoEtapaActual(): number {
+    if (this.estadoFenologiaTermica) {
+      return this.estadoFenologiaTermica.progresoEtapaPct;
+    }
     const duracion = this.duracionEtapaActual;
     if (!duracion) {
       return this.proximaEtapaDetalle ? 0 : 100;
@@ -245,6 +287,20 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     const actual = this.etapaActualDetalle;
     if (!actual) {
       return 'No hay datos suficientes para ubicar el lote en el ciclo.';
+    }
+    if (this.fenologiaTermica && this.estadoFenologiaTermica) {
+      if (this.estadoFenologiaTermica.fuente === 'campo') {
+        return `Etapa confirmada por observacion de campo. El modelo termico queda como contraste y no reemplaza el registro real.`;
+      }
+      if (this.cargandoFenologiaTermica) {
+        return 'Calculando grados-dia desde la fecha de siembra con la fuente climatica disponible.';
+      }
+      const gdd = this.estadoFenologiaTermica.gradosDiaAcumulados;
+      const base = this.fenologiaTermica.temperaturaBaseC;
+      const fuente = this.datosFenologiaTermica?.fuente || 'sin fuente climatica';
+      return gdd === undefined
+        ? `Etapa inicial de referencia. Falta clima historico para calcular el avance termico.`
+        : `Estimacion con ${gdd.toFixed(1)} GDD desde la siembra, Tb ${base ?? '-'} C, fuente ${fuente}. Confirmar visualmente antes de decisiones sanitarias.`;
     }
     if (this.plantacionJoven) {
       const edad = this.edadPlantacionLabel;
@@ -262,7 +318,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   public get resumenFenologico(): string {
-    const fuente = this.plantacionJoven
+    const fuente = this.fenologiaTermica
+      ? this.estadoFenologiaTermica?.fuente === 'campo'
+        ? 'registro de campo prioritario'
+        : 'modelo termico auditable'
+      : this.plantacionJoven
       ? 'plantacion joven'
       : this.esPerenne
         ? 'campania perenne'
@@ -287,6 +347,10 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   public get siguienteHitoTexto(): string {
     const proxima = this.proximaEtapaDetalle;
     if (!proxima) return 'Sin proximo hito';
+    if (proxima.requiereCampo) return `${proxima.codigo || 'R3'}: confirmar en campo`;
+    if (!proxima.fecha && proxima.umbralMinGdd !== undefined) {
+      return `${proxima.codigo || proxima.nombre}: ${proxima.umbralMinGdd}-${proxima.umbralMaxGdd} GDD`;
+    }
     const dias = this.diasHastaProximaEtapa ?? 0;
     if (dias === 0) return `${proxima.nombre} puede estar iniciando`;
     return `${proxima.nombre} en ${dias} d`;
@@ -301,6 +365,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   public etapaDetalleTexto(etapa: FenologiaStage, index: number): string {
+    if (etapa.requiereCampo) return 'Sin umbral en la fuente; observar en campo';
+    if (etapa.umbralMinGdd !== undefined) {
+      if (etapa.umbralMinGdd === 0 && etapa.umbralMaxGdd === 0) return 'Inicio de la acumulacion termica';
+      return `${etapa.umbralMinGdd}-${etapa.umbralMaxGdd} GDD acumulados`;
+    }
     if (etapa.estado === 'current') {
       const duracion = this.duracionEtapaActual;
       return duracion ? `${this.diasDesdeEtapaActual} de ${duracion} d` : `${this.diasDesdeEtapaActual} d`;
@@ -327,7 +396,8 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   private buscarRegistroEtapa(nombre: string): IRegistroFenologico | undefined {
     return this.registrosFenologicos.find(
       (registro) =>
-        registro.etapa === nombre &&
+        (registro.etapa === nombre ||
+          (this.cultivo === 'Arveja' && this.codigoEtapaArveja(registro.etapa) === this.codigoEtapaArveja(nombre))) &&
         (!this.campaniaTexto || !registro.campania || registro.campania === this.campaniaTexto) &&
         (registro.accion || 'inicio') === 'inicio',
     );
@@ -414,15 +484,18 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   constructor(
     public helper: HelperService,
     private siembraService: SiembraService,
+    private climaService: ClimaService,
   ) {}
 
   ngOnInit(): void {
     this.crearTimeline();
+    void this.cargarFenologiaTermicaArveja();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['lote'] || changes['siembra']) {
       this.crearTimeline();
+      void this.cargarFenologiaTermicaArveja();
     }
   }
 
@@ -542,9 +615,13 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     }
 
     if (!etapasConfig.nombres.length) {
-      this.etapas = [];
-      this.etapaActual = undefined;
-      this.progreso = 0;
+      if (cultivo === 'Arveja' && this.fenologiaTermica) {
+        this.crearTimelineTermicaArveja();
+      } else {
+        this.etapas = [];
+        this.etapaActual = undefined;
+        this.progreso = 0;
+      }
       return;
     }
 
@@ -576,6 +653,151 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
         estado,
       };
     });
+  }
+
+  private async cargarFenologiaTermicaArveja(): Promise<void> {
+    const siembra = this.siembraActual;
+    const cultivo = this.canonicalCultivo(siembra?.semilla?.cultivo);
+    const referencia = siembra?.semilla?.fenologiaReferencia;
+    if (cultivo !== 'Arveja' || referencia?.unidadEtapas !== 'grados_dia' || !siembra?.fechaSiembra) {
+      this.datosFenologiaTermica = undefined;
+      this.estadoFenologiaTermica = undefined;
+      this.errorFenologiaTermica = '';
+      this.cargandoFenologiaTermica = false;
+      this.ultimoKeyFenologiaTermica = '';
+      return;
+    }
+
+    const coordenadas = siembra.coordenadas || this.lote?.ubicacion?.centro;
+    const lat = Number(coordenadas?.lat);
+    const lng = Number(coordenadas?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      this.datosFenologiaTermica = undefined;
+      this.errorFenologiaTermica = 'Falta la ubicacion del lote para calcular grados-dia.';
+      this.crearTimelineTermicaArveja();
+      return;
+    }
+
+    const key = [lat, lng, siembra.fechaSiembra, siembra.semilla?.variedad, referencia.temperaturaBaseC].join('|');
+    if (key === this.ultimoKeyFenologiaTermica && (this.cargandoFenologiaTermica || this.datosFenologiaTermica)) {
+      return;
+    }
+    this.ultimoKeyFenologiaTermica = key;
+    this.datosFenologiaTermica = undefined;
+    const solicitud = ++this.solicitudFenologiaTermica;
+    const hitos = construirHitosFenologiaArveja(referencia);
+    const emergencia = hitos.find((hito) => hito.codigo === 'E');
+    const floracion = hitos.find((hito) => hito.codigo === 'R1');
+    const medio = (min?: number, max?: number): number | undefined =>
+      Number.isFinite(min) && Number.isFinite(max) ? (Number(min) + Number(max)) / 2 : undefined;
+
+    this.cargandoFenologiaTermica = true;
+    this.errorFenologiaTermica = '';
+    this.crearTimelineTermicaArveja();
+    try {
+      const data = await this.climaService.getFrioTermico(lat, lng, {
+        cultivo: 'Arveja',
+        variedad: siembra.semilla?.variedad,
+        fechaSiembra: String(siembra.fechaSiembra).slice(0, 10),
+        idEstacionMeteorologica: this.lote?.establecimiento?.idEstacionMeteorologica,
+        temperaturaBaseGradosDia: referencia.temperaturaBaseC,
+        gradosDiaBrotacionObjetivo: medio(emergencia?.umbralMinGdd, emergencia?.umbralMaxGdd),
+        gradosDiaFloracionObjetivo: medio(floracion?.umbralMinGdd, floracion?.umbralMaxGdd),
+      });
+      if (solicitud !== this.solicitudFenologiaTermica) return;
+      this.datosFenologiaTermica = data;
+    } catch (error: any) {
+      if (solicitud !== this.solicitudFenologiaTermica) return;
+      this.datosFenologiaTermica = undefined;
+      this.errorFenologiaTermica =
+        error?.error?.message || error?.message || 'No se pudo obtener el clima historico para la fenologia.';
+    } finally {
+      if (solicitud === this.solicitudFenologiaTermica) {
+        this.cargandoFenologiaTermica = false;
+        this.crearTimelineTermicaArveja();
+      }
+    }
+  }
+
+  private crearTimelineTermicaArveja(): void {
+    const siembra = this.siembraActual;
+    const referencia = this.fenologiaTermica || siembra?.semilla?.fenologiaReferencia;
+    if (!siembra?.fechaSiembra || referencia?.unidadEtapas !== 'grados_dia') {
+      this.etapas = [];
+      this.etapaActual = undefined;
+      this.progreso = 0;
+      return;
+    }
+
+    const ultimoCampo = this.ultimoRegistroFenologico;
+    const estado = resolverFenologiaTermicaArveja({
+      referencia,
+      gradosDiaAcumulados: this.datosFenologiaTermica?.acumulados.gradosDia,
+      etapaCampo: ultimoCampo?.etapa,
+    });
+    this.estadoFenologiaTermica = estado;
+    this.etapaActual = estado.nombre;
+    this.fuenteFenologia = 'semilla';
+    this.fuenteTexto = estado.fuente === 'campo' ? 'registro de campo prioritario' : 'modelo termico auditable';
+
+    const madurez = estado.hitos.find((hito) => hito.codigo === 'MF');
+    const objetivoTotal = madurez?.umbralMinGdd !== undefined && madurez.umbralMaxGdd !== undefined
+      ? (madurez.umbralMinGdd + madurez.umbralMaxGdd) / 2
+      : undefined;
+    this.progreso = objetivoTotal && estado.gradosDiaAcumulados !== undefined
+      ? this.limitar((estado.gradosDiaAcumulados / objetivoTotal) * 100)
+      : 0;
+
+    this.etapas = estado.hitos.map((hito, index) => {
+      const registro = this.registroPorCodigoArveja(hito.codigo);
+      return {
+        codigo: hito.codigo,
+        nombre: hito.nombre,
+        fecha: registro?.fecha
+          ? new Date(registro.fecha)
+          : this.fechaHitoTermicoArveja(hito.umbralMinGdd, hito.umbralMaxGdd, hito.codigo),
+        posicion: this.posicionUniforme(index, estado.hitos.length),
+        estado: index < estado.indice ? 'done' : index === estado.indice ? 'current' : 'pending',
+        umbralMinGdd: hito.umbralMinGdd,
+        umbralMaxGdd: hito.umbralMaxGdd,
+        requiereCampo: !hito.calculable,
+      };
+    });
+  }
+
+  private fechaHitoTermicoArveja(
+    min?: number,
+    max?: number,
+    codigo?: string,
+  ): Date | undefined {
+    const fechaSiembra = this.siembraActual?.fechaSiembra;
+    if (codigo === 'S') return fechaSiembra ? new Date(fechaSiembra) : undefined;
+    if (!Number.isFinite(min) || !Number.isFinite(max)) return undefined;
+    const objetivo = (Number(min) + Number(max)) / 2;
+    const desde = String(fechaSiembra || '').slice(0, 10);
+    let acumulado = 0;
+    for (const dia of this.datosFenologiaTermica?.serie || []) {
+      if (dia.fecha < desde) continue;
+      acumulado += Number(dia.gradosDia || 0);
+      if (acumulado >= objetivo) return new Date(`${dia.fecha}T12:00:00`);
+    }
+    return undefined;
+  }
+
+  private registroPorCodigoArveja(codigo: string): IRegistroFenologico | undefined {
+    return [...this.registrosFenologicos]
+      .reverse()
+      .find((registro) => this.codigoEtapaArveja(registro.etapa) === codigo);
+  }
+
+  private codigoEtapaArveja(etapa?: string): string | undefined {
+    const value = String(etapa || '').trim().toUpperCase();
+    if (value.startsWith('MF')) return 'MF';
+    if (value.startsWith('R3')) return 'R3';
+    if (value.startsWith('R1')) return 'R1';
+    if (value.startsWith('E')) return 'E';
+    if (value.startsWith('S')) return 'S';
+    return undefined;
   }
 
   private getEtapasDisponibles(

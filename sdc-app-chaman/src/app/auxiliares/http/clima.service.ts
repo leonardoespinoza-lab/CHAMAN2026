@@ -105,6 +105,7 @@ export class ClimaService {
       edadProductivaDesdeAnios?: number;
       ajusteHeladaC?: number;
       fuenteAjusteVarietal?: string;
+      idEstacionMeteorologica?: string;
     } = {}
   ): Promise<IFrioTermicoCultivo> {
     const query = Object.fromEntries(

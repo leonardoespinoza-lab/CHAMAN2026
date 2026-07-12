@@ -96,7 +96,7 @@ function buildSeeds(rows) {
       tipoCultivo: 'Anual',
       fenologiaReferencia: {
         unidadEtapas: 'grados_dia',
-        temperaturaBaseC: 0,
+        temperaturaBaseC: 3,
         rangosTermicos,
         etapasObservables: [
           'S (Siembra)',
@@ -106,11 +106,11 @@ function buildSeeds(rows) {
           'MF (Madurez fisiologica)',
         ],
         estadoModelo: 'referencia',
-        fuente: `ARVEJA.xlsx / PYTHON; archivo recibido ${sourceDate}; Olivier y Annandale 1998; Ney y Turc 1993`,
+        fuente: `ARVEJA.xlsx / PYTHON; archivo recibido ${sourceDate}; Olivier y Annandale 1998`,
         fuenteUrl: 'https://doi.org/10.1016/S0378-4290(97)00097-X',
         editable: true,
         observacionesModelo:
-          'Se adopta temperatura base 0 C para arveja de campo. Estudios de tiempo termico en Pisum sativum respaldan Tb=0 C para germinacion y desarrollo reproductivo; el bloque de 4 C del Excel nombra una funcion de avena y no se usa. Los umbrales GDD varietales siguen como referencia y deben calibrarse con observaciones locales.',
+          'Referencia operativa con Tb 3 C segun Olivier y Annandale (1998), compatible con los rangos termicos publicados para emergencia, floracion y madurez. El Excel es contradictorio: el texto indica 0 C y el codigo pegado usa 4 C en una funcion de avena. R3 no tiene umbral numerico y se confirma en campo. Los umbrales varietales requieren calibracion local antes de considerarse validados.',
       },
       observaciones:
         'Catalogo habilitado para crear lotes y registrar fenologia. La fuente no incluye perfiles de resistencia ni un modelo validado de enfermedades para Arveja.',
@@ -144,7 +144,7 @@ async function main() {
       enfermedades: 0,
       ciclos,
       advertencia:
-        'No se crean cronos en dias ni enfermedades: la base no trae fechas completas. Se adopta Tb=0 C para arveja de campo y se conservan los umbrales GDD como referencia operativa.',
+        'No se crean cronos en dias ni enfermedades: la base no trae fechas completas. Se usa Tb=3 C como referencia cientifica trazable; R3 requiere observacion de campo y los umbrales se conservan como referencia operativa.',
       muestras: semillas.slice(0, 3),
     }, null, 2));
     return;
