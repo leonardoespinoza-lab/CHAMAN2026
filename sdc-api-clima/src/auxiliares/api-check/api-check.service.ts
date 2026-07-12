@@ -3,8 +3,6 @@ import { AxiosService } from '../axios/axios.service';
 import {
   API_DATOS,
   API_FIELD_CLIMATE,
-  API_HORATECH,
-  API_HORATECH_APIKEY,
   API_METEO_SOURCE,
   METEOBLUE_API_KEY,
   FIELD_CLIMATE_PASS,
@@ -19,7 +17,6 @@ import { FieldClimateService } from 'src/entidades/fieldClimate/service';
 import { OpenWeatherService } from 'src/entidades/openWeather/service';
 import { MeteoSourceService } from 'src/entidades/meteoSource/service';
 import { OmixomService } from 'src/entidades/omixom/service';
-import { HoratechService } from 'src/entidades/horatech/service';
 import { MeteoblueService } from 'src/entidades/meteoblue/service';
 
 @Injectable()
@@ -31,7 +28,6 @@ export class ApiCheckService {
     private meteoSource: MeteoSourceService,
     private meteoblue: MeteoblueService,
     private omixom: OmixomService,
-    private horatech: HoratechService,
   ) {}
   private logger = new Logger(ApiCheckService.name);
   async checkApis(): Promise<boolean> {
@@ -114,18 +110,6 @@ export class ApiCheckService {
       }
     } else {
       this.logger.warn('OMIXON_KEY no configurada; chequeo omitido.');
-    }
-
-    if (API_HORATECH && API_HORATECH_APIKEY) {
-      try {
-        await this.horatech.checkApi();
-        this.logger.log(`API_HORATECH: ${API_HORATECH} [OK!]`);
-      } catch (error) {
-        ok = false;
-        this.logger.error(`API_HORATECH: ${API_HORATECH} [ERROR!]`);
-      }
-    } else {
-      this.logger.warn('API_HORATECH_APIKEY no configurada; chequeo omitido.');
     }
 
     return ok;

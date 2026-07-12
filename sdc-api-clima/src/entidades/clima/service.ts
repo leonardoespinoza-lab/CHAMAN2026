@@ -43,7 +43,11 @@ export class ClimaService {
   >();
   private readonly openMeteoPendiente = new Map<string, Promise<any | null>>();
   private readonly openMeteoCacheMs = 10 * 60 * 1000;
+  private readonly openMeteoStaleMs = 24 * 60 * 60 * 1000;
+  private readonly openMeteoTimeoutMs = 12_000;
   private readonly openMeteoReintentosMs = [1500, 3000];
+  private openMeteoFallosConsecutivos = 0;
+  private openMeteoCircuitoHasta = 0;
   // En lugar de mandar vacío, mando esto
   private prediccionDefault: nivelPrediccion[] = [
     //DEFAUL (TODO EN 3)
@@ -143,14 +147,18 @@ export class ClimaService {
       return cacheado.data;
     }
 
+    if (this.openMeteoCircuitoHasta > Date.now()) {
+      return this.getOpenMeteoStale(cacheado, contexto, 'circuito abierto');
+    }
+
     const pendiente = this.openMeteoPendiente.get(key);
     if (pendiente) {
       return pendiente;
     }
 
-    const promesa = this.fetchOpenMeteoJsonSinCache(key, contexto).finally(() =>
-      this.openMeteoPendiente.delete(key),
-    );
+    const promesa = this.fetchOpenMeteoJsonSinCache(key, contexto)
+      .then((data) => data ?? this.getOpenMeteoStale(cacheado, contexto, 'fuente no disponible'))
+      .finally(() => this.openMeteoPendiente.delete(key));
     this.openMeteoPendiente.set(key, promesa);
     return promesa;
   }
@@ -165,13 +173,22 @@ export class ClimaService {
       intento++
     ) {
       try {
-        const response = await fetch(url);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), this.openMeteoTimeoutMs);
+        const response = await fetch(url, { signal: controller.signal }).finally(() =>
+          clearTimeout(timeout),
+        );
         if (response.ok) {
           const data = await response.json();
+          if (!data || typeof data !== 'object' || data.error) {
+            throw new Error('respuesta JSON invalida');
+          }
           this.openMeteoCache.set(url, {
             expiresAt: Date.now() + this.openMeteoCacheMs,
             data,
           });
+          this.openMeteoFallosConsecutivos = 0;
+          this.openMeteoCircuitoHasta = 0;
           return data;
         }
 
@@ -188,12 +205,13 @@ export class ClimaService {
         }
 
         this.logger.error(
-          `Open-Meteo ${contexto} respondio ${response.status} para ${url}`,
+          `Open-Meteo ${contexto} respondio ${response.status}.`,
         );
+        this.registrarFalloOpenMeteo();
         return null;
       } catch (error) {
         if (intento < this.openMeteoReintentosMs.length) {
-          const espera = this.openMeteoReintentosMs[intento];
+          const espera = this.withJitter(this.openMeteoReintentosMs[intento]);
           this.logger.warn(
             `Error Open-Meteo ${contexto}; reintento en ${espera} ms: ${error}`,
           );
@@ -202,6 +220,7 @@ export class ClimaService {
         }
 
         this.logger.error(`Error al obtener Open-Meteo ${contexto}: ${error}`);
+        this.registrarFalloOpenMeteo();
         return null;
       }
     }
@@ -223,7 +242,31 @@ export class ClimaService {
       }
     }
 
-    return this.openMeteoReintentosMs[intento] || 3000;
+    return this.withJitter(this.openMeteoReintentosMs[intento] || 3000);
+  }
+
+  private withJitter(ms: number): number {
+    return Math.round(ms * (0.8 + Math.random() * 0.4));
+  }
+
+  private registrarFalloOpenMeteo(): void {
+    this.openMeteoFallosConsecutivos += 1;
+    if (this.openMeteoFallosConsecutivos >= 5) {
+      this.openMeteoCircuitoHasta = Date.now() + 60_000;
+      this.logger.warn('Circuito Open-Meteo abierto por 60 segundos.');
+    }
+  }
+
+  private getOpenMeteoStale(
+    cacheado: { expiresAt: number; data: any } | undefined,
+    contexto: string,
+    motivo: string,
+  ): any | null {
+    if (!cacheado || cacheado.expiresAt + this.openMeteoStaleMs <= Date.now()) {
+      return null;
+    }
+    this.logger.warn(`Open-Meteo ${contexto}: usando cache de emergencia (${motivo}).`);
+    return cacheado.data;
   }
 
   private esDiaONoche(fecha: Date, latitud: number, longitud: number) {
@@ -804,6 +847,10 @@ export class ClimaService {
     reportes: IStationData,
     dataGroup: 'raw' | 'hourly' | 'daily' | 'monthly' = 'daily',
   ): IClimaEstacionMeteorologica[] {
+    if (!Array.isArray(reportes?.dates) || !Array.isArray(reportes?.data)) {
+      this.logger.warn('FieldClimate devolvio una respuesta historica invalida; se activa fallback.');
+      return [];
+    }
     const fechas: string[] = [];
     const array: IClimaEstacionMeteorologica[] = [];
 
@@ -992,6 +1039,10 @@ export class ClimaService {
     estacion: IEstacionCercana,
     reportes: IForecast,
   ): IPronosticoEstacionMeteorologica[] {
+    if (!Array.isArray(reportes?.dates) || !Array.isArray(reportes?.data)) {
+      this.logger.warn('FieldClimate devolvio un pronostico invalido; se activa fallback.');
+      return [];
+    }
     const fechas: string[] = [];
     const array: IPronosticoEstacionMeteorologica[] = [];
 
@@ -2366,7 +2417,8 @@ export class ClimaService {
   private async checkReporte(estacion: IEstacionCercana) {
     // Chequeo que tenga un reporte actual
     const hoyDate = new Date();
-    const ayer = new Date(hoyDate.setDate(hoyDate.getDate() - 1));
+    const ayer = new Date(hoyDate);
+    ayer.setDate(ayer.getDate() - 1);
 
     let fechaUltimoReporte;
     if (estacion.origen === 'FieldClimate') {

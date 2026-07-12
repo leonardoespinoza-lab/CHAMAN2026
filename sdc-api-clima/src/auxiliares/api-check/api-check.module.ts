@@ -6,7 +6,6 @@ import { OpenWeatherModule } from 'src/entidades/openWeather/module';
 import { MeteoSourceModule } from 'src/entidades/meteoSource/module';
 import { MeteoblueModule } from 'src/entidades/meteoblue/module';
 import { OmixomModule } from 'src/entidades/omixom/module';
-import { HoratechModule } from 'src/entidades/horatech/module';
 
 @Module({
   imports: [
@@ -16,7 +15,6 @@ import { HoratechModule } from 'src/entidades/horatech/module';
     MeteoSourceModule,
     MeteoblueModule,
     OmixomModule,
-    HoratechModule,
   ],
   providers: [ApiCheckService],
   exports: [ApiCheckService],

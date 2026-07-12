@@ -10,7 +10,7 @@ import {
   OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server } from 'ws';
-import { PREFIX_PATH, WEBSOCKET_ALLOWED_ORIGINS } from '../env';
+import { PREFIX_PATH, WEBSOCKET_AUTH_TIMEOUT_MS } from '../env';
 import { ISocket } from './socket.interface';
 import { WebsocketService } from './websocket.service';
 
@@ -39,9 +39,6 @@ function handleError(err: Error) {
 
 @WebSocketGateway({
   path: `/${PREFIX_PATH}`,
-  cors: {
-    origin: WEBSOCKET_ALLOWED_ORIGINS,
-  },
 })
 export class EventsGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
@@ -66,12 +63,19 @@ export class EventsGateway
       `Cliente conectado. Conexiones totales: ${this.server.clients.size}`,
     );
     socket.failedPings = 0;
+    socket.authTimer = setTimeout(() => {
+      if (!socket.usuario) {
+        this.logger.warn('Socket cerrado por no autenticarse dentro del plazo.');
+        socket.close(4401, 'Autenticacion requerida');
+      }
+    }, WEBSOCKET_AUTH_TIMEOUT_MS);
     socket.on('pong', heartbeat);
     socket.on('ping', handlePing);
     socket.on('error', handleError);
   }
 
   async handleDisconnect(@ConnectedSocket() socket: ISocket) {
+    if (socket.authTimer) clearTimeout(socket.authTimer);
     this.logger.verbose(
       `Usuario ${socket.usuario?.username} desconectado, Conexiones totales: ${this.server.clients.size}`,
     );
@@ -81,11 +85,11 @@ export class EventsGateway
     if (this.server) {
       this.interval = setInterval(() => {
         this.server.clients.forEach((ws: ISocket) => {
-          if (ws.failedPings === 3) {
+          if ((ws.failedPings || 0) >= 3) {
             return ws?.terminate();
           }
-          ws.failedPings++;
-          ws.ping();
+          ws.failedPings = (ws.failedPings || 0) + 1;
+          if (ws.readyState === ws.OPEN) ws.ping();
         });
       }, 10000);
     } else {

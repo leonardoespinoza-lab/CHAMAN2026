@@ -24,6 +24,7 @@ jobs:
       - run: node scripts/validate-deployment-topology.js
       - run: node scripts/audit-config-secrets.js
       - run: node scripts/audit-sensitive-logs.js
+      - run: node scripts/test-soja-recso-matrix.js
 
   core-tests:
     name: test-${{ matrix.service }}
@@ -31,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [sdc-datos, sdc-api-clima, sdc-api-predicciones]
+        service: [sdc-datos, sdc-api-clima, sdc-api-predicciones, sdc-websocket]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

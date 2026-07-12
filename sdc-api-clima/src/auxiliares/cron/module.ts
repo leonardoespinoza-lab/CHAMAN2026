@@ -6,7 +6,6 @@ import { CronController } from './controller';
 import { OmixomModule } from 'src/entidades/omixom/module';
 import { LotesModule } from 'src/entidades/lote/module';
 import { ClimaModule } from 'src/entidades/clima/module';
-import { HoratechModule } from '../../entidades/horatech/module';
 
 @Module({
   imports: [
@@ -15,7 +14,6 @@ import { HoratechModule } from '../../entidades/horatech/module';
     OmixomModule,
     LotesModule,
     ClimaModule,
-    HoratechModule,
   ],
   controllers: [CronController],
   providers: [CronService],

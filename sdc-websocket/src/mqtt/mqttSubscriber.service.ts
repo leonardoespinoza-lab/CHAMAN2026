@@ -25,6 +25,8 @@ export class MqttSubscriberService implements OnModuleDestroy {
   private readonly logger = new Logger('RealtimeSubscriber');
   private mqtt?: MQTT.AsyncMqttClient;
   private redis?: Redis;
+  private connected = false;
+  private lastError?: string;
 
   constructor(private websocketService: WebsocketService) {
     void this.connect();
@@ -42,10 +44,11 @@ export class MqttSubscriberService implements OnModuleDestroy {
         });
         this.redis.on('message', (_channel, message) => this.handleMessageApi(message));
         this.redis.on('error', (error) =>
-          this.logger.error(`Redis realtime: ${error.message}`),
+          this.registerError(`Redis realtime: ${error.message}`),
         );
         await this.redis.connect();
         await this.redis.subscribe(REALTIME_CHANNEL);
+        this.connected = true;
         this.logger.log(`Redis Pub/Sub suscripto a ${REALTIME_CHANNEL}`);
         return;
       }
@@ -65,14 +68,16 @@ export class MqttSubscriberService implements OnModuleDestroy {
           this.handleMessageApi(message.toString()),
         );
         await this.mqtt.subscribe(MQTT_TOPIC_APIS, { qos: 1 });
+        this.connected = true;
         this.logger.log(`MQTT suscripto a ${MQTT_TOPIC_APIS}`);
         return;
       }
 
       this.logger.log('Transporte realtime deshabilitado explicitamente.');
+      this.connected = true;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      this.logger.error(`No se pudo iniciar realtime: ${detail}`);
+      this.registerError(`No se pudo iniciar realtime: ${detail}`);
     }
   }
 
@@ -83,7 +88,7 @@ export class MqttSubscriberService implements OnModuleDestroy {
         mensaje.alcance,
         mensaje.idUser,
       );
-      if (!sockets.length && mensaje.idUser) {
+      if (!sockets.length && mensaje.idUser && !mensaje.alcance) {
         this.sendUsuarioPorId(mensaje, mensaje.idUser);
         return;
       }
@@ -98,6 +103,20 @@ export class MqttSubscriberService implements OnModuleDestroy {
     }
   }
 
+  private registerError(message: string): void {
+    this.connected = false;
+    this.lastError = message;
+    this.logger.error(message);
+  }
+
+  public getStatus(): { transport: string; connected: boolean; lastError?: string } {
+    return {
+      transport: REALTIME_TRANSPORT,
+      connected: this.connected,
+      lastError: this.lastError,
+    };
+  }
+
   private sendUsuarioPorId(mensaje: ISocketMessage, id: string): void {
     this.websocketService.getSesionesUsuarioPorId(id).forEach((socket) => {
       void this.websocketService.sendMessageUsuario(socket, {
@@ -108,6 +127,7 @@ export class MqttSubscriberService implements OnModuleDestroy {
   }
 
   public async onModuleDestroy(): Promise<void> {
+    this.connected = false;
     await this.mqtt?.end();
     if (this.redis) await this.redis.quit();
   }

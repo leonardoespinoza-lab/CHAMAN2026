@@ -1,12 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { IPermiso, ISocketMessage, ISocketMessageScope } from 'modelos/src';
-import { Server } from 'ws';
+import { Server, WebSocket } from 'ws';
 import { AuthenticationService } from '../auxiliares/authentication/authentication.service';
 import { ISocket } from './socket.interface';
+import { WEBSOCKET_MAX_IDENTITY_LENGTH } from '../env';
 
 @Injectable()
 export class WebsocketService {
   private server?: Server;
+  private readonly logger = new Logger(WebsocketService.name);
 
   constructor(private auth: AuthenticationService) {}
 
@@ -26,11 +28,19 @@ export class WebsocketService {
     socket: ISocket,
   ): Promise<string> {
     try {
-      const token = await this.auth.authorization(data);
+      const authorization = typeof data === 'string' ? data.trim() : '';
+      if (!authorization || authorization.length > WEBSOCKET_MAX_IDENTITY_LENGTH) {
+        throw new Error('Credencial WebSocket invalida');
+      }
+      const token = await this.auth.authorization(authorization);
+      if (!token?.user?._id) throw new Error('Usuario WebSocket invalido');
       socket.usuario = token.user;
-      return `Sesion WS iniciada ${socket.usuario?.username}. Conexiones totales: ${this.server.clients.size}`;
+      if (socket.authTimer) clearTimeout(socket.authTimer);
+      return `Sesion WS iniciada. Conexiones totales: ${this.server?.clients.size || 0}`;
     } catch (error) {
-      return error.message;
+      this.logger.warn('Autenticacion WebSocket rechazada.');
+      socket.close(4401, 'Autenticacion invalida');
+      return 'Autenticacion invalida';
     }
   }
 
@@ -39,6 +49,7 @@ export class WebsocketService {
     data: ISocketMessage,
   ): Promise<string> {
     try {
+      if (socket.readyState !== WebSocket.OPEN) return 'Socket no disponible';
       socket.send(JSON.stringify(data));
       // this.logger.verbose(`Mensaje enviado a usuario ${socket.id}`);
     } catch (error) {
@@ -49,7 +60,7 @@ export class WebsocketService {
   // Listados de sesiones de  usuarios
   public getSesionesUsuarios(): ISocket[] {
     const sockets = [];
-    this.server.clients.forEach((ws: ISocket) => {
+    this.server?.clients.forEach((ws: ISocket) => {
       if (ws.usuario) {
         sockets.push(ws);
       }
@@ -59,7 +70,7 @@ export class WebsocketService {
 
   public getSesionesUsuarioPorId(idUser: string): ISocket[] {
     const sockets: ISocket[] = [];
-    this.server.clients.forEach((socket: ISocket) => {
+    this.server?.clients.forEach((socket: ISocket) => {
       if (socket.usuario?._id === idUser) {
         sockets.push(socket);
       }
@@ -76,7 +87,7 @@ export class WebsocketService {
     }
 
     const sockets: ISocket[] = [];
-    this.server.clients.forEach((socket: ISocket) => {
+    this.server?.clients.forEach((socket: ISocket) => {
       if (this.usuarioPuedeRecibir(socket, alcance)) {
         sockets.push(socket);
       }

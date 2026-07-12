@@ -34,4 +34,17 @@ describe('WebsocketService tenant scope', () => {
       objetivo,
     ]);
   });
+
+  it('no usa id de usuario como bypass cuando existe alcance tenant', () => {
+    const service = new WebsocketService({} as any);
+    const objetivo = socket('usuario-a', []);
+    service.setServer({ clients: new Set([objetivo]) } as any);
+
+    expect(
+      service.getSesionesPorAlcance(
+        { idProductor: 'productor-sin-permiso' },
+        'usuario-a',
+      ),
+    ).toEqual([]);
+  });
 });

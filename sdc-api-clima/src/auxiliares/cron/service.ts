@@ -11,7 +11,6 @@ import {
   Sensores,
 } from 'modelos/src';
 import {
-  API_HORATECH_APIKEY,
   CRON_TEST,
   FIELD_CLIMATE_PASS,
   FIELD_CLIMATE_USERS,
@@ -21,7 +20,6 @@ import { LogService } from '../logsService/service';
 import { OmixomService } from 'src/entidades/omixom/service';
 import { LotesService } from 'src/entidades/lote/service';
 import { ClimaService } from 'src/entidades/clima/service';
-import { HoratechService } from 'src/entidades/horatech/service';
 
 @Injectable()
 export class CronService {
@@ -75,32 +73,12 @@ export class CronService {
     batteryTemperature: 'otro',
   };
 
-  private sensoresHoratechMap: Record<string, Sensores[]> = {
-    'Estacion Meteorologica': [
-      'temperatura',
-      'humedad',
-      'presion',
-      'radiacion_solar',
-      'viento_velocidad',
-      'viento_direccion',
-      'pluviometro',
-    ],
-    Freatimetro: ['napa', 'otro'],
-    Pluviometro: ['pluviometro', 'otro'],
-    'Sensor Humedad de Suelo': [
-      'humedad_suelo_superficial',
-      'temperatura_suelo',
-    ],
-    'Lanza de Humedad': ['humedad_suelo_profundidad', 'temperatura_suelo'],
-  };
-
   constructor(
     private estacionesService: EstacionsService,
     private fieldClimate: FieldClimateService,
     private omixom: OmixomService,
     private lotesService: LotesService,
     private climasService: ClimaService,
-    private horatech: HoratechService,
   ) {
     this.logger.verbose('CronService iniciado');
     this.logger.verbose(`CRON_TEST: ${CRON_TEST ? '👍' : '👎'}`);
@@ -118,7 +96,6 @@ export class CronService {
     Logger.log(`Iniciando actualización de estaciones`);
     await this.getEstacionesFieldClimate();
     await this.getEstacionesOmixom();
-    await this.getEstacionesHoratech();
     const res = Logger.log('Estaciones actualizadas');
     return res;
   }
@@ -270,75 +247,6 @@ export class CronService {
     }
   }
 
-  private async getEstacionesHoratech() {
-    const estaciones = (await this.horatech.getDispositivos()).datos;
-    const stations: ICreateEstacion[] = [];
-    for (const e of estaciones) {
-      const idExterno = `${e.deveui}`;
-      const coordenada = {
-        lat: +e.ubicacion.lat,
-        lng: +e.ubicacion.lng,
-      };
-      // Normalizar sensores
-      const setSensores = new Set<Sensores>(); // Usar Set para evitar duplicados
-      const tipoDispositivo = e.tipo;
-      const sensores = this.sensoresHoratechMap[tipoDispositivo];
-
-      if (!sensores) {
-        this.logger.warn(
-          `Tipo de dispositivo no soportado: ${tipoDispositivo}`,
-        );
-        continue;
-      }
-
-      sensores.forEach((sensor) => setSensores.add(sensor));
-
-      const create: ICreateEstacion = {
-        origen: 'Horatech',
-        idExterno,
-        position: {
-          geo: {
-            type: 'Point',
-            coordinates: [coordenada.lng, coordenada.lat],
-          },
-          altitude: 0,
-          hdop: 0,
-          measure_time: 0,
-          timezoneCode: 'America/Argentina/Buenos_Aires',
-        },
-        name: {
-          original: e.nombre,
-          custom: e.nombre,
-        },
-        apikey: API_HORATECH_APIKEY,
-        dates: {
-          created_at: new Date().toISOString(),
-          last_communication: e.ultimoReporte?.fecha,
-          min_date: new Date().toISOString(),
-          max_date: e.ultimoReporte?.fecha,
-        },
-        info: {
-          device_name: e.nombre,
-          uid: e.deveui,
-          firmware: '',
-          hardware: '',
-          programmed: '',
-          apn_table: 0,
-          description: e.nombre,
-        },
-        sensores,
-      };
-      stations.push(create);
-    }
-    this.logger.debug(`Estaciones obtenidas de Horatech: ${stations.length}`);
-    if (stations.length === 0) {
-      this.logger.warn('No se encontraron estaciones de Horatech');
-      return;
-    }
-    // Actualizo las estaciones en la base de datos
-    await this.estacionesService.upsertMany(stations);
-  }
-
   private async calcularNivelesPrediccionLotes() {
     try {
       /// 1 - Traigo los lotes
@@ -401,7 +309,8 @@ export class CronService {
   private async checkReporte(estacion: IEstacionCercana) {
     // Chequeo que tenga un reporte actual
     const hoyDate = new Date();
-    const ayer = new Date(hoyDate.setDate(hoyDate.getDate() - 1));
+    const ayer = new Date(hoyDate);
+    ayer.setDate(ayer.getDate() - 1);
 
     let fechaUltimoReporte;
 

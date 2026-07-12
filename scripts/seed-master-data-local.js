@@ -3,6 +3,9 @@ const path = require('path');
 const vm = require('vm');
 const { spawnSync } = require('child_process');
 const { MongoClient, ObjectId } = require('../sdc-datos/node_modules/mongodb');
+const {
+  buildResistance: buildSojaSanitaryResistance,
+} = require('./migrations/20260712-soja-recso-matrix-v2');
 
 const ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(ROOT, 'sdc-api-admin', 'src', 'auxiliares', 'inicial', 'datos');
@@ -366,19 +369,28 @@ function buildSeedsFromExcel(data) {
     const existing = unique.get(key);
     unique.set(key, existing ? mergeDuplicateSeeds(existing, semilla) : semilla);
   }
-  return [...unique.values()].map(({ __sourceRows, ...semilla }) => semilla);
+  return [...unique.values()].map(({ __sourceRows, ...semilla }) =>
+    semilla.cultivo === 'Soja'
+      ? { ...semilla, resistencia: buildSojaSanitaryResistance(semilla) }
+      : semilla,
+  );
 }
 
 function buildSeedsFromBundledCatalog() {
   const bundled = loadTsArray(path.join(DATA_DIR, 'semillas.ts'));
   return bundled
     .filter((semilla) => ['Trigo', 'Soja', 'Maiz'].includes(semilla.cultivo))
-    .map((semilla) => ({
-      ...semilla,
-      ciclo: norm(semilla.ciclo),
-      campania: semilla.campania || CAMPANIA,
-      fuenteBase: semilla.fuenteBase || 'Catalogo base incluido en el repositorio',
-    }));
+    .map((semilla) => {
+      const normalized = {
+        ...semilla,
+        ciclo: norm(semilla.ciclo),
+        campania: semilla.campania || CAMPANIA,
+        fuenteBase: semilla.fuenteBase || 'Catalogo base incluido en el repositorio',
+      };
+      return normalized.cultivo === 'Soja'
+        ? { ...normalized, resistencia: buildSojaSanitaryResistance(normalized) }
+        : normalized;
+    });
 }
 
 function mergeDuplicateSeeds(existing, incoming) {

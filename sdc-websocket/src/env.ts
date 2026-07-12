@@ -38,7 +38,7 @@ export const WEBSOCKET_ALLOWED_ORIGINS: true | string[] = (() => {
   if (configured.length) {
     return configured;
   }
-  if (!isProduction(ENV)) {
+  if (ENV === 'local') {
     return true;
   }
   return [
@@ -48,6 +48,18 @@ export const WEBSOCKET_ALLOWED_ORIGINS: true | string[] = (() => {
     'https://www.chamanagro.ar',
   ];
 })();
+export const WEBSOCKET_MAX_PAYLOAD_BYTES = Math.max(
+  1024,
+  +(process.env.WEBSOCKET_MAX_PAYLOAD_BYTES || 16 * 1024),
+);
+export const WEBSOCKET_AUTH_TIMEOUT_MS = Math.max(
+  1000,
+  +(process.env.WEBSOCKET_AUTH_TIMEOUT_MS || 10_000),
+);
+export const WEBSOCKET_MAX_IDENTITY_LENGTH = Math.max(
+  256,
+  +(process.env.WEBSOCKET_MAX_IDENTITY_LENGTH || 8_192),
+);
 // MQTT
 export const MQTT_PROTOCOL = process.env.MQTT_PROTOCOL || 'tcp';
 export const MQTT_HOST = process.env.MQTT_HOST || 'broker-emqx';

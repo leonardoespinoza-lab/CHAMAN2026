@@ -15,6 +15,10 @@ export type TEnfermedad =
   | "Fusariosis de la Espiga de Cebada"
   // Soja
   | "Fin de Ciclo"
+  | "Cancro del Tallo de la Soja"
+  | "Podredumbre de Raiz y Tallo por Phytophthora"
+  | "Sindrome de Muerte Repentina"
+  | "Mancha Ojo de Rana"
   // Maiz
   | "Roya del Maiz"
   | "Tizon Foliar del Maiz"
@@ -53,6 +57,14 @@ export interface IResistencia {
   campaniaFuente?: string;
   fechaFuente?: string;
   observaciones?: string;
+  detalleSanitario?: {
+    metodo?: string;
+    valorCampo?: number;
+    unidad?: string;
+    patotiposResistentes?: string[];
+    patotiposSusceptibles?: string[];
+    interpretacion?: string;
+  };
 }
 
 export type TEnfermedadId =
@@ -67,6 +79,10 @@ export type TEnfermedadId =
   | "cebada.roya_hoja"
   | "cebada.fusariosis_espiga"
   | "soja.fin_ciclo"
+  | "soja.cancro_tallo"
+  | "soja.phytophthora"
+  | "soja.muerte_repentina"
+  | "soja.mancha_ojo_rana"
   | "maiz.roya"
   | "maiz.tizon_foliar"
   | "arveja.ascochyta"
