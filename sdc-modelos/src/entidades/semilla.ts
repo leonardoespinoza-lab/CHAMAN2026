@@ -45,6 +45,7 @@ export interface IResistencia {
   estado?: TEstadoResistencia;
   confianza?: TConfianzaResistencia;
   fuente?: string;
+  fuenteUrl?: string;
   campaniaFuente?: string;
   fechaFuente?: string;
   observaciones?: string;
@@ -121,6 +122,7 @@ export interface IFenologiaReferencia {
   estadoModelo?: "validado" | "referencia" | "requiere_calibracion";
   observacionesModelo?: string;
   fuente?: string;
+  fuenteUrl?: string;
   editable?: boolean;
 }
 

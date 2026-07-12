@@ -438,6 +438,7 @@ export class NavComponent implements OnInit, OnDestroy {
 
   /// HOOKS
   public async ngOnInit(): Promise<void> {
+    this.webSocketService.initWs();
     this.rutaActual = this.router.url;
     this.routerEvents$ = this.router.events
       .pipe(filter((event) => event instanceof NavigationEnd))

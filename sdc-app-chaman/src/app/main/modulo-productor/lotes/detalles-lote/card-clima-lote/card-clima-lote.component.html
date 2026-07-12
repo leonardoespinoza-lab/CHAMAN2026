@@ -10,7 +10,16 @@
         <span>{{ calidadClima.label }}</span>
         <strong>{{ calidadClima.score }}/100</strong>
       </div>
-      <p-button icon="pi pi-refresh" label="Actualizar" size="small" severity="secondary" [outlined]="true" />
+      <p-button
+        icon="pi pi-refresh"
+        label="Actualizar"
+        size="small"
+        severity="secondary"
+        [outlined]="true"
+        [loading]="actualizando"
+        [disabled]="actualizando"
+        (onClick)="solicitarActualizacion()"
+      />
     </div>
   </div>
 

@@ -85,6 +85,7 @@ export interface IPrediccionEnfermedad {
     | "estado"
     | "confianza"
     | "fuente"
+    | "fuenteUrl"
     | "campaniaFuente"
   > & { estado?: TEstadoResistencia };
   modelo?: {

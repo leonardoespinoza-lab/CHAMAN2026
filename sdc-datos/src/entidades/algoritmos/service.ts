@@ -61,9 +61,14 @@ export interface ReadinessCultivoCatalogo {
   coberturaResistenciaEnfermedades?: Array<{
     idEnfermedad: string;
     enfermedad: string;
-    cubiertas: number;
+    conEntrada: number;
+    observadas: number;
+    historicas: number;
+    inferidas: number;
+    desconocidas: number;
     total: number;
-    porcentaje: number;
+    coberturaMatrizPct: number;
+    coberturaValidadaPct: number;
   }>;
   enfermedades: number;
   enfermedadesMotor?: number;
@@ -226,52 +231,66 @@ export class AlgoritmosService {
       .filter((item) => item?.motor === 'operativo');
     const coberturaResistenciaEnfermedades = await Promise.all(
       enfermedadesOperativas.map(async (enfermedad) => {
-        const cubiertas = await this.countByFilter(this.semillasService, {
-          cultivo,
-          resistencia: {
-            $elemMatch: {
-              $and: [
-                {
-                  $or: [
-                    { idEnfermedad: enfermedad.id },
-                    { enfermedad: enfermedad.nombre },
-                  ],
-                },
-                {
-                  $or: [
-                    { estado: { $in: ['observada', 'historica'] } },
-                    {
-                      estado: { $exists: false },
-                      multiplicador: { $exists: true },
-                    },
-                  ],
-                },
-              ],
-            },
-          },
-        });
+        const diseaseFilter = {
+          $or: [
+            { idEnfermedad: enfermedad.id },
+            { enfermedad: enfermedad.nombre },
+          ],
+        };
+        const countEstado = (estado: string) =>
+          this.countByFilter(this.semillasService, {
+            cultivo,
+            resistencia: { $elemMatch: { ...diseaseFilter, estado } },
+          });
+        const [conEntrada, observadas, historicas, inferidas, desconocidas] =
+          await Promise.all([
+            this.countByFilter(this.semillasService, {
+              cultivo,
+              resistencia: { $elemMatch: diseaseFilter },
+            }),
+            countEstado('observada'),
+            countEstado('historica'),
+            countEstado('inferida'),
+            countEstado('desconocida'),
+          ]);
+        const validadas = observadas + historicas;
         return {
           idEnfermedad: enfermedad.id,
           enfermedad: enfermedad.nombre,
-          cubiertas,
+          conEntrada,
+          observadas,
+          historicas,
+          inferidas,
+          desconocidas,
           total: semillas,
-          porcentaje: semillas ? this.round((cubiertas / semillas) * 100, 1) : 0,
+          coberturaMatrizPct: semillas
+            ? this.round((conEntrada / semillas) * 100, 1)
+            : 0,
+          coberturaValidadaPct: semillas
+            ? this.round((validadas / semillas) * 100, 1)
+            : 0,
         };
       }),
     );
     const tieneEnfermedades = enfermedades > 0 || enfermedadesMotor > 0;
     const requiereMalezas = this.cultivosMalezas.includes(cultivo);
     const faltantes: string[] = [];
+    const observaciones: string[] = [];
     if (!semillas) faltantes.push('semillas');
     if (!tieneEnfermedades) faltantes.push('enfermedades');
     if (!cronos) faltantes.push('cronos');
     if (requiereMalezas && !malezas) faltantes.push('malezas');
     for (const cobertura of coberturaResistenciaEnfermedades) {
-      if (cobertura.cubiertas < cobertura.total) {
-        faltantes.push(`resistencia:${cobertura.idEnfermedad}`);
+      if (cobertura.conEntrada < cobertura.total) {
+        faltantes.push(`matriz-resistencia:${cobertura.idEnfermedad}`);
+      }
+      if (cobertura.coberturaValidadaPct < 100) {
+        observaciones.push(
+          `${cobertura.idEnfermedad}: ${cobertura.coberturaValidadaPct}% con perfil observado/historico; ` +
+            `${cobertura.desconocidas} variedad(es) usan escenario conservador y confianza baja`,
+        );
       }
     }
-    const observaciones: string[] = [];
     if (semillas && semillasConResistencia < semillas) {
       observaciones.push(`${semillas - semillasConResistencia} variedad(es) sin resistencia sanitaria especifica`);
     }

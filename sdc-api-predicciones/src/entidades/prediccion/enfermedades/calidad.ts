@@ -52,6 +52,7 @@ export function metadataResistencia(resuelta: IResistenciaResuelta) {
           estado: resistencia.estado,
           confianza: resistencia.confianza,
           fuente: resistencia.fuente,
+          fuenteUrl: resistencia.fuenteUrl,
           campaniaFuente: resistencia.campaniaFuente,
         }
       : { estado: 'desconocida' as const },

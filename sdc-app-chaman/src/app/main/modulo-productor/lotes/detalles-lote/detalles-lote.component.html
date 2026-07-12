@@ -133,13 +133,7 @@
   </p-dialog>
 
   @if (siembra && !siembra.fechaCosecha && helper.puedeVerModulo('EtapasFenologicas')) {
-    <div class="desktop-only">
-      <app-card-etapas-fenologicas [lote]="lote" [siembra]="siembra"></app-card-etapas-fenologicas>
-    </div>
-
-    <div class="mobile-only">
-      <app-card-etapas-fenologicas [lote]="lote" [siembra]="siembra"></app-card-etapas-fenologicas>
-    </div>
+    <app-card-etapas-fenologicas [lote]="lote" [siembra]="siembra"></app-card-etapas-fenologicas>
   }
 
   @if (!helper.soloLectura()) {
@@ -260,7 +254,12 @@
           @if (mostrarCentralMeteorologica()) {
             <app-card-central-meteorologica class="service-panel" [lote]="lote"></app-card-central-meteorologica>
           }
-          <app-card-clima-lote class="service-panel climate-section" [lote]="lote"></app-card-clima-lote>
+          <app-card-clima-lote
+            class="service-panel climate-section"
+            [lote]="lote"
+            [actualizando]="refrescandoDetalle"
+            (actualizar)="refrescarDetalle()"
+          ></app-card-clima-lote>
         }
       </section>
     }

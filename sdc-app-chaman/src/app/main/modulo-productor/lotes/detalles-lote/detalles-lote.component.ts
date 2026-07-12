@@ -131,6 +131,12 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     this.publicarSiembra(siembraCompleta, this.lote?.idSiembra === siembraCompleta._id);
   }
 
+  public async refrescarDetalle(): Promise<void> {
+    const idLote = this.lote?._id || this.activatedRoute.snapshot.paramMap.get('id');
+    if (!idLote || this.refrescandoDetalle) return;
+    await this.cargarLoteEnSegundoPlano(idLote);
+  }
+
   public async sembrar(): Promise<void> {
     const data = this.lote;
     this.params.set('sembrarLote', data);

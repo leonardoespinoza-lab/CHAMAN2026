@@ -27,6 +27,7 @@ const CAMPANIA = '2025-2026';
 const DRY_RUN = ['true', '1'].includes(
   String(process.env.CHAMAN_MASTER_DATA_DRY_RUN || process.env.CHAMAN_DRY_RUN || '').toLowerCase(),
 );
+const SEEDS_ONLY = process.env.CHAMAN_MASTER_DATA_SEEDS_ONLY === 'true';
 
 const PYTHON =
   process.env.CHAMAN_PYTHON ||
@@ -136,6 +137,7 @@ function resistance(enfermedad, idEnfermedad, rating, metadata = {}) {
       ? 'sin_datos'
       : metadata.confianza || 'alta',
     fuente: metadata.fuente,
+    fuenteUrl: metadata.fuenteUrl,
     campaniaFuente: metadata.campaniaFuente,
     fechaFuente: metadata.fechaFuente,
     observaciones:
@@ -238,6 +240,12 @@ function varietyMatchKey(semillero, variedad) {
   return `${seedCompany}|${cultivar}`;
 }
 
+function varietyNameKey(variedad) {
+  return norm(variedad)
+    .replace(/^(LIMA GRAIN|LIMAGRAIN|LG|BUCK|ACA|KLEIN|BIOCERES|BIOSEMINIS|NIDERA|DON MARIO|DM|MS INTA)\s+/, '')
+    .replace(/[^A-Z0-9]/g, '');
+}
+
 function buildSeedsFromExcel(data) {
   const semillas = [];
   const fechaCatalogo = fs.statSync(EXCEL_PATH).mtime.toISOString().slice(0, 10);
@@ -248,16 +256,27 @@ function buildSeedsFromExcel(data) {
       row,
     ]),
   );
+  const historicosPorNombre = new Map();
+  for (const row of data.trigoHistorico || []) {
+    const key = varietyNameKey(row.VARIEDAD);
+    if (!key) continue;
+    if (historicosPorNombre.has(key)) {
+      historicosPorNombre.set(key, undefined);
+    } else {
+      historicosPorNombre.set(key, row);
+    }
+  }
   const fuenteTrigoReciente = {
     fuente: `${path.basename(EXCEL_PATH)} / TRIGO 25-26`,
+    fuenteUrl: 'https://www.argentina.gob.ar/sites/default/files/2026/04/inta_crcordoba_eeamarcosjuarez_alberione_e_comportamiento.pdf',
     campaniaFuente: '2025-2026',
     fechaFuente: fechaCatalogo,
   };
 
   for (const row of data.trigo) {
-    const historica = trigoHistorico.get(
-      varietyMatchKey(row.SEMILLERO, row.VARIEDAD),
-    );
+    const historica =
+      trigoHistorico.get(varietyMatchKey(row.SEMILLERO, row.VARIEDAD)) ||
+      historicosPorNombre.get(varietyNameKey(row.VARIEDAD));
     const resistencia = [
       resistance('Roya de la Hoja', 'trigo.roya_hoja', row.RH ?? row['ROYA DE LA HOJA'], fuenteTrigoReciente),
       resistance('Roya del Tallo', 'trigo.roya_tallo', row.RT ?? row['ROYA DEL TALLO'], fuenteTrigoReciente),
@@ -268,7 +287,7 @@ function buildSeedsFromExcel(data) {
         'Mancha de la Hoja',
         'trigo.mancha_hoja',
         historica?.SH,
-        historica
+        historica?.SH
           ? {
               fuente: 'Enfermedades en TRIGO -V2.xlsx / VARIEDADES 20-21 / SH',
               campaniaFuente: '2020-2021',
@@ -279,7 +298,9 @@ function buildSeedsFromExcel(data) {
             }
           : {
               ...fuenteTrigoReciente,
-              observaciones: 'La campaña 2025-2026 no informa Septoria/Mancha de la Hoja y no se encontró coincidencia histórica.',
+              observaciones: historica
+                ? 'La campaña 2025-2026 no informa Septoria/Mancha de la Hoja; la variedad coincide con 2020-2021, pero esa fila tampoco contiene SH.'
+                : 'La campaña 2025-2026 no informa Septoria/Mancha de la Hoja y no se encontró coincidencia histórica.',
             },
       ),
     ];
@@ -492,37 +513,43 @@ async function main() {
   const db = client.db(DB_NAME);
 
   try {
-    console.log(`Cargando provincias: ${provincias.length}`);
-    const provinciasRes = await bulkWrite(db.collection('provincias'), upsertByIdDocs(provincias));
+    let provinciasRes = { skipped: SEEDS_ONLY };
+    let departamentosRes = { skipped: SEEDS_ONLY };
+    let enfermedadesRes = { skipped: SEEDS_ONLY };
+    let cronosRes = { skipped: SEEDS_ONLY };
+    if (!SEEDS_ONLY) {
+      console.log(`Cargando provincias: ${provincias.length}`);
+      provinciasRes = await bulkWrite(db.collection('provincias'), upsertByIdDocs(provincias));
 
-    console.log(`Cargando departamentos: ${departamentos.length}`);
-    const departamentosRes = await bulkWrite(db.collection('departamentos'), upsertByIdDocs(departamentos, ['idProvincia']));
+      console.log(`Cargando departamentos: ${departamentos.length}`);
+      departamentosRes = await bulkWrite(db.collection('departamentos'), upsertByIdDocs(departamentos, ['idProvincia']));
 
-    console.log(`Cargando enfermedades: ${enfermedades.length}`);
-    const enfermedadesOps = enfermedades.map((doc) => ({
-      updateOne: {
-        filter: { nombre: doc.nombre, cultivo: doc.cultivo },
-        update: { $set: doc },
-        upsert: true,
-      },
-    }));
-    const enfermedadesRes = await bulkWrite(db.collection('enfermedads'), enfermedadesOps);
-
-    console.log(`Cargando cronos/fenologias: ${cronos.length}`);
-    const cronosOps = cronos.map((doc) => ({
-      updateOne: {
-        filter: {
-          cultivo: doc.cultivo,
-          idDepartamento: doc.idDepartamento,
-          ciclo: doc.ciclo,
-          mesSiembra: doc.mesSiembra,
-          diaSiembra: doc.diaSiembra,
+      console.log(`Cargando enfermedades: ${enfermedades.length}`);
+      const enfermedadesOps = enfermedades.map((doc) => ({
+        updateOne: {
+          filter: { nombre: doc.nombre, cultivo: doc.cultivo },
+          update: { $set: doc },
+          upsert: true,
         },
-        update: { $set: doc },
-        upsert: true,
-      },
-    }));
-    const cronosRes = await bulkWrite(db.collection('cronos'), cronosOps);
+      }));
+      enfermedadesRes = await bulkWrite(db.collection('enfermedads'), enfermedadesOps);
+
+      console.log(`Cargando cronos/fenologias: ${cronos.length}`);
+      const cronosOps = cronos.map((doc) => ({
+        updateOne: {
+          filter: {
+            cultivo: doc.cultivo,
+            idDepartamento: doc.idDepartamento,
+            ciclo: doc.ciclo,
+            mesSiembra: doc.mesSiembra,
+            diaSiembra: doc.diaSiembra,
+          },
+          update: { $set: doc },
+          upsert: true,
+        },
+      }));
+      cronosRes = await bulkWrite(db.collection('cronos'), cronosOps);
+    }
 
     console.log(`Cargando semillas ${CAMPANIA}: ${semillas.length}`);
     const semillasOps = semillas.map((doc) => ({
@@ -551,6 +578,7 @@ async function main() {
           ok: true,
           sourceExcel: EXCEL_PATH,
           campania: CAMPANIA,
+          seedsOnly: SEEDS_ONLY,
           results: {
             provincias: provinciasRes,
             departamentos: departamentosRes,

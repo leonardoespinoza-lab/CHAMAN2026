@@ -48,6 +48,13 @@ const services = {
     build: 'npm run build',
     start: 'npm run start:prod',
   },
+  'sdc-websocket': {
+    aliases: ['chaman-websocket', 'websocket', 'ws'],
+    path: 'sdc-websocket',
+    install: 'npm ci',
+    build: 'npm run build',
+    start: 'npm run start:prod',
+  },
   'sdc-ftp': {
     aliases: ['chaman-ftp', 'ftp', 'timelapse-ftp', 'time-lapse-ftp'],
     path: 'sdc-ftp',

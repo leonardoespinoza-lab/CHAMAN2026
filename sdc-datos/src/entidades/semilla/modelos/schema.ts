@@ -43,6 +43,9 @@ class ResistenciaSemilla implements IResistencia {
   fuente?: string;
 
   @Prop()
+  fuenteUrl?: string;
+
+  @Prop()
   campaniaFuente?: string;
 
   @Prop()

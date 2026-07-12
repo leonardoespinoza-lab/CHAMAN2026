@@ -106,10 +106,11 @@ function buildSeeds(rows) {
           'MF (Madurez fisiologica)',
         ],
         estadoModelo: 'referencia',
-        fuente: `ARVEJA.xlsx / PYTHON; archivo recibido ${sourceDate}; Field pea Tb=0 C: Ontario Agronomy Guide y Bueckert et al. 2021`,
+        fuente: `ARVEJA.xlsx / PYTHON; archivo recibido ${sourceDate}; Olivier y Annandale 1998; Ney y Turc 1993`,
+        fuenteUrl: 'https://doi.org/10.1016/S0378-4290(97)00097-X',
         editable: true,
         observacionesModelo:
-          'Se adopta temperatura base 0 C para arveja de campo. Coincide con el texto agronomico del Excel y con bibliografia de field pea; se descarta el bloque de 4 C porque nombra una funcion de avena y no es consistente con la especie. Los registros observados del lote deben usarse para ajustar la respuesta varietal local.',
+          'Se adopta temperatura base 0 C para arveja de campo. Estudios de tiempo termico en Pisum sativum respaldan Tb=0 C para germinacion y desarrollo reproductivo; el bloque de 4 C del Excel nombra una funcion de avena y no se usa. Los umbrales GDD varietales siguen como referencia y deben calibrarse con observaciones locales.',
       },
       observaciones:
         'Catalogo habilitado para crear lotes y registrar fenologia. La fuente no incluye perfiles de resistencia ni un modelo validado de enfermedades para Arveja.',

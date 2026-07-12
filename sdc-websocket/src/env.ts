@@ -58,3 +58,10 @@ export const MQTT_CLIENT_ID =
   process.env.MQTT_CLIENT_ID || 'sdc-websocket-local';
 export const MQTT_TOPIC_APIS =
   process.env.MQTT_TOPIC_APIS || 'sdc-websocket-local';
+export const REALTIME_TRANSPORT = process.env.REALTIME_TRANSPORT || 'disabled';
+export const REALTIME_CHANNEL =
+  process.env.REALTIME_CHANNEL || MQTT_TOPIC_APIS || 'chaman-realtime-events';
+export const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
+export const REDIS_PORT = +process.env.REDIS_PORT || 6379;
+export const REDIS_PASSWORD = process.env.REDIS_PASSWORD || '';
+export const REDIS_DB = +process.env.REDIS_DB || 0;

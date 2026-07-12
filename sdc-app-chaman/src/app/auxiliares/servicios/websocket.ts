@@ -1,99 +1,104 @@
 import { Injectable } from '@angular/core';
 import { ISocketMessage } from 'modelos/src';
-import { interval, Observable, Subject } from 'rxjs';
-import { takeWhile } from 'rxjs/operators';
+import { Observable, Subject, Subscription } from 'rxjs';
 import { WebSocketSubject, webSocket } from 'rxjs/webSocket';
-import { HelperService } from './helper';
 import { WS } from '../../environments/environment';
+import { HelperService } from './helper';
 
 @Injectable({
   providedIn: 'root',
 })
 export class WebSocketService {
-  private socket$?: WebSocketSubject<any>;
+  private socket$?: WebSocketSubject<ISocketMessage | Record<string, unknown>>;
   private socketMsg$ = new Subject<ISocketMessage>();
+  private socketSubscription?: Subscription;
+  private reconnectTimer?: ReturnType<typeof setTimeout>;
+  private reconnectAttempt = 0;
+  private closedByUser = false;
 
   constructor(private helper: HelperService) {
     this.initWs();
   }
 
-  public initWs() {
-  const token = this.helper.accessToken;
+  public initWs(): void {
+    const token = this.helper.accessToken;
+    if (!WS || !token || this.socket$) return;
 
-  if (token && WS) {
+    this.closedByUser = false;
+    this.clearReconnectTimer();
     try {
       this.socket$ = webSocket({
         url: WS,
-        
         openObserver: {
           next: () => {
-            console.log('✅ WebSocket CONECTADO');
-            this.sendToken(token); // 👈 ahora sí, en el momento correcto
-          }
+            this.reconnectAttempt = 0;
+            this.sendToken(token);
+          },
         },
-        
         closeObserver: {
           next: () => {
-            console.log('❌ WebSocket CERRADO');
-          }
-        }
+            this.resetSocket();
+            this.scheduleReconnect();
+          },
+        },
       });
 
-      this.socket$.subscribe(
-        (message: ISocketMessage) => {
-          console.log('📩 Mensaje recibido:', message);
-          this.handleMessage(message);
+      this.socketSubscription = this.socket$.subscribe({
+        next: (message) => this.handleMessage(message as ISocketMessage),
+        error: () => {
+          this.resetSocket();
+          this.scheduleReconnect();
         },
-        (error: Error) => {
-          console.error('🚨 Error WS:', error);
-          this.handleError(error);
-        }
-      );
-
-      console.log(`Intentando conectar a ${WS}`);
-
-    } catch (error) {
-      console.log(`Error al iniciar WebSocket ${error}`);
+        complete: () => this.resetSocket(),
+      });
+    } catch {
+      this.resetSocket();
+      this.scheduleReconnect();
     }
-  } else {
-    console.warn('No hay token o websocketServer');
-  }
-}
-
-  private sendToken(token: string) {
-    // Envio de mensaje con el token
-    const identity = {
-      event: 'identity',
-      data: `Bearer ${token}`,
-    };
-    this.socket$?.next(identity);
   }
 
-  public closeWS() {
+  public closeWS(): void {
+    this.closedByUser = true;
+    this.clearReconnectTimer();
     this.socket$?.complete();
+    this.resetSocket();
   }
 
   public getMessage(): Observable<ISocketMessage> {
     return this.socketMsg$.asObservable();
   }
 
-  // WS Handlers
-
-  private handleMessage(message: ISocketMessage) {
-    // console.log(message);
-    this.socketMsg$.next(message);
-  }
-
-  private handleError(error: Error) {
-    console.log('WebSocket error reconectando...');
-    this.socket$ = undefined;
-    const reconect = interval(1000).pipe(takeWhile(() => !this.socket$));
-    reconect.subscribe(() => {
-      this.initWs();
+  private sendToken(token: string): void {
+    this.socket$?.next({
+      event: 'identity',
+      data: `Bearer ${token}`,
     });
   }
 
-  private closed() {
-    console.log('WebSocket closed');
+  private handleMessage(message: ISocketMessage): void {
+    this.socketMsg$.next(message);
+  }
+
+  private scheduleReconnect(): void {
+    if (this.closedByUser || !WS || !this.helper.accessToken || this.reconnectTimer) return;
+    const delay = Math.min(1000 * 2 ** this.reconnectAttempt, 30000);
+    this.reconnectAttempt += 1;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = undefined;
+      this.initWs();
+    }, delay);
+  }
+
+  private resetSocket(): void {
+    this.socketSubscription?.unsubscribe();
+    this.socketSubscription = undefined;
+    this.socket$ = undefined;
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
   }
 }

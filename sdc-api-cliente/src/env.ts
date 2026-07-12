@@ -33,8 +33,10 @@ export const WEED_AI_DISABLE_FALLBACK =
 export const TIMELAPSE_ADMIN_TOKEN =
   process.env.TIMELAPSE_ADMIN_TOKEN || '';
 // OAuth client used by the public gateway when talking to sdc-auth.
-export const AUTH_CLIENT_ID = process.env.AUTH_CLIENT_ID || '1';
-export const AUTH_CLIENT_SECRET = process.env.AUTH_CLIENT_SECRET || '1';
+export const AUTH_CLIENT_ID =
+  process.env.AUTH_CLIENT_ID || (ENV === 'production' ? '' : '1');
+export const AUTH_CLIENT_SECRET =
+  process.env.AUTH_CLIENT_SECRET || (ENV === 'production' ? '' : '1');
 // MQTT
 export const MQTT_ENABLED = process.env.MQTT_ENABLED === 'true';
 export const MQTT_PROTOCOL = process.env.MQTT_PROTOCOL || 'ssl';
@@ -64,6 +66,10 @@ export const REDIS_CONNECT_TIMEOUT =
 export const REDIS_COMMAND_TIMEOUT = +process.env.REDIS_COMMAND_TIMEOUT || 5000;
 export const REDIS_RETRY_ATTEMPTS = +process.env.REDIS_RETRY_ATTEMPTS || 3;
 export const REDIS_RETRY_DELAY = +process.env.REDIS_RETRY_DELAY || 1000;
+export const REALTIME_TRANSPORT =
+  process.env.REALTIME_TRANSPORT || (MQTT_ENABLED ? 'mqtt' : 'disabled');
+export const REALTIME_CHANNEL =
+  process.env.REALTIME_CHANNEL || MQTT_TOPIC_APIS || 'chaman-realtime-events';
 
 // CACHE SETTINGS
 export const TILE_CACHE_TTL = +process.env.TILE_CACHE_TTL || 3600; // 60 minutos (optimizado para datos climáticos)

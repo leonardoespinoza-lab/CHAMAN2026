@@ -14,11 +14,39 @@ const DRY_RUN = ['true', '1'].includes(
 );
 const VALIDATE_ONLY = process.env.CHAMAN_CEBADA_VALIDATE_ONLY === 'true';
 const ALLOW_PARTIAL = process.env.CHAMAN_CEBADA_ALLOW_PARTIAL === 'true';
+const SEEDS_ONLY = process.env.CHAMAN_CEBADA_SEEDS_ONLY === 'true';
 const SERVER_SELECTION_TIMEOUT_MS = Number(
   process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 10000,
 );
 const CROP = 'Cebada';
 const SOURCE = 'BASE CEBADA v1.xlsx';
+const SANITARY_SOURCE =
+  'INTA EEA Marcos Juarez, Evaluacion de cultivares de cebada cervecera 2024, Cuadro 5';
+const SANITARY_SOURCE_URL =
+  'https://www.argentina.gob.ar/sites/default/files/2025/03/inta_crcordoba_eeamarcosjuarez_donaire_g_evaluacion_cebc.pdf';
+
+// R, I (rango MR-MS) y S se conservan tal como los publica la fuente.
+// I usa el punto medio entre MR (0.50) y MS (0.75), con confianza media.
+const SANITARY_PROFILES_2024 = {
+  ANDREIA: { escaldadura: 'S', manchaRed: 'I', royaHoja: 'R' },
+  CHARLES: { escaldadura: 'R', manchaRed: 'I', royaHoja: 'R' },
+  FATIMA: { escaldadura: 'I', manchaRed: 'I', royaHoja: 'R' },
+  JENNIFER: { escaldadura: 'S', manchaRed: 'I', royaHoja: 'R' },
+  'MILITZA INTA': { escaldadura: 'R', manchaRed: 'I', royaHoja: 'I' },
+  MONTOYA: { escaldadura: 'R', manchaRed: 'R', royaHoja: 'R' },
+  OVERTURE: { escaldadura: 'R', manchaRed: 'R', royaHoja: 'R' },
+  SINFONIA: { escaldadura: 'I', manchaRed: 'R', royaHoja: 'R' },
+};
+
+const SANITARY_PROFILES_2017 = {
+  DANIELLE: { escaldadura: 'S', manchaRed: 'MR' },
+  SHAKIRA: { manchaRed: 'S' },
+  TRAVELER: { manchaRed: 'S' },
+};
+const SANITARY_SOURCE_2017 =
+  'Red Nacional de Cebada Cervecera, valoracion del perfil sanitario 2017';
+const SANITARY_SOURCE_2017_URL =
+  'https://cebadacervecera.com.ar/wp-content/uploads/2018/05/2017-Aspecto-sanitario.pdf';
 
 const DEPARTMENT_ALIASES = {
   'ADOLFO GONZALEZ CHAVEZ': 'ADOLFO GONZALES CHAVES',
@@ -309,28 +337,85 @@ function buildDiseaseOps() {
   }));
 }
 
-function buildSeedOps() {
-  const resistenciasDesconocidas = DISEASES.map((enfermedad) => ({
-    enfermedad: enfermedad.nombre,
-    idEnfermedad:
-      enfermedad.nombre === 'Mancha en Red'
-        ? 'cebada.mancha_red'
-        : enfermedad.nombre === 'Escaldadura de la Cebada'
-          ? 'cebada.escaldadura'
-          : enfermedad.nombre === 'Roya de la Hoja de Cebada'
-            ? 'cebada.roya_hoja'
-            : 'cebada.fusariosis_espiga',
+function knownResistance(enfermedad, idEnfermedad, perfil, metadata = {}) {
+  const values = {
+    R: { multiplicador: 0.3, indiceResistencia: 1 },
+    MR: { multiplicador: 0.5, indiceResistencia: 2 / 3 },
+    I: { multiplicador: 0.625, indiceResistencia: 0.5 },
+    S: { multiplicador: 1, indiceResistencia: 0 },
+  };
+  return {
+    enfermedad,
+    idEnfermedad,
+    ...values[perfil],
+    perfil,
+    estado: 'historica',
+    confianza: metadata.confianza || (perfil === 'I' ? 'media' : 'alta'),
+    fuente: metadata.fuente || SANITARY_SOURCE,
+    fuenteUrl: metadata.fuenteUrl || SANITARY_SOURCE_URL,
+    campaniaFuente: metadata.campaniaFuente || '2024-2025',
+    fechaFuente: metadata.fechaFuente || '2025-03-01',
+    observaciones:
+      metadata.observaciones ||
+      (perfil === 'I'
+        ? 'La fuente informa un rango MR-MS; se usa su punto medio solo para calculo y se conserva confianza media.'
+        : 'Perfil sanitario publicado por INTA; corresponde al informe de la campania 2024.'),
+  };
+}
+
+function unknownResistance(enfermedad, idEnfermedad, observaciones) {
+  return {
+    enfermedad,
+    idEnfermedad,
     multiplicador: 1,
     indiceResistencia: 0,
     perfil: 'DESCONOCIDA',
     estado: 'desconocida',
     confianza: 'sin_datos',
-    fuente: 'BASE CEBADA v1.xlsx no contiene resistencia varietal',
+    fuente: `${SOURCE}; busqueda complementaria INTA/INASE al 2026-07-12`,
     campaniaFuente: '2026-2027',
-    fechaFuente: '2026-07-01',
+    fechaFuente: '2026-07-12',
     observaciones:
-      'Escenario conservador para cálculo; no equivale a susceptibilidad observada.',
-  }));
+      observaciones ||
+      'Escenario conservador para calculo; no equivale a susceptibilidad observada.',
+  };
+}
+
+function buildResistanceMatrix(variedad) {
+  const key = norm(variedad);
+  const currentProfile = SANITARY_PROFILES_2024[key];
+  const olderProfile = SANITARY_PROFILES_2017[key];
+  const profile = currentProfile || olderProfile;
+  const metadata = currentProfile
+    ? {}
+    : {
+        fuente: SANITARY_SOURCE_2017,
+        fuenteUrl: SANITARY_SOURCE_2017_URL,
+        campaniaFuente: '2017-2018',
+        fechaFuente: '2018-05-08',
+        confianza: 'baja',
+        observaciones:
+          'Perfil cualitativo de la Red Nacional 2017; se conserva como antecedente historico de baja confianza.',
+      };
+  return [
+    profile?.manchaRed
+      ? knownResistance('Mancha en Red', 'cebada.mancha_red', profile.manchaRed, metadata)
+      : unknownResistance('Mancha en Red', 'cebada.mancha_red'),
+    profile?.escaldadura
+      ? knownResistance('Escaldadura de la Cebada', 'cebada.escaldadura', profile.escaldadura, metadata)
+      : unknownResistance('Escaldadura de la Cebada', 'cebada.escaldadura'),
+    profile?.royaHoja
+      ? knownResistance('Roya de la Hoja de Cebada', 'cebada.roya_hoja', profile.royaHoja, metadata)
+      : unknownResistance('Roya de la Hoja de Cebada', 'cebada.roya_hoja'),
+    unknownResistance(
+      'Fusariosis de la Espiga de Cebada',
+      'cebada.fusariosis_espiga',
+      'La fuente INTA 2024 no publica respuesta varietal a Fusariosis de la Espiga; se mantiene escenario conservador.',
+    ),
+  ];
+}
+
+function buildSeedOps() {
   return VARIETIES.map((item) => {
     const doc = {
       codigoCarga: `CEBADA-${norm(item.variedad).replace(/[^A-Z0-9]+/g, '-')}`,
@@ -341,7 +426,7 @@ function buildSeedOps() {
       ciclo: norm(item.ciclo),
       campania: '2026-2027',
       tipoCultivo: 'Anual',
-      resistencia: resistenciasDesconocidas,
+      resistencia: buildResistanceMatrix(item.variedad),
       fenologiaReferencia: {
         brotacion: 'Emergencia segun crono por zona, fecha de siembra, ciclo y variedad.',
         floracion: 'Espigazon/antesis segun crono de la base Cebada v1.',
@@ -374,6 +459,14 @@ async function main() {
   const records = cebadaCronos.records || [];
   if (VALIDATE_ONLY) {
     const genericCronos = buildGenericCronos(records);
+    const matrizSanitaria = VARIETIES.flatMap((item) =>
+      buildResistanceMatrix(item.variedad).map((resistencia) => ({
+        variedad: item.variedad,
+        idEnfermedad: resistencia.idEnfermedad,
+        perfil: resistencia.perfil,
+        estado: resistencia.estado,
+      })),
+    );
     console.log(
       JSON.stringify(
         {
@@ -384,6 +477,16 @@ async function main() {
           invalidRows: cebadaCronos.invalidRows?.length || 0,
           semillas: VARIETIES.length,
           enfermedades: DISEASES.length,
+          matrizSanitaria: {
+            filas: matrizSanitaria.length,
+            esperadas: VARIETIES.length * DISEASES.length,
+            historicas: matrizSanitaria.filter((item) => item.estado === 'historica').length,
+            desconocidas: matrizSanitaria.filter((item) => item.estado === 'desconocida').length,
+            variedadesConPerfilINTA2024: Object.keys(SANITARY_PROFILES_2024).length,
+            variedadesConPerfilRed2017: Object.keys(SANITARY_PROFILES_2017).length,
+            fuente: SANITARY_SOURCE,
+            fuenteUrl: SANITARY_SOURCE_URL,
+          },
           cronosFuente: records.length,
           cronosGenericos: genericCronos.length,
           variedadesConCrono: [...new Set(records.map((row) => row.cultivar))],
@@ -435,10 +538,14 @@ async function main() {
       return;
     }
 
-    await ensureCronoVarietyIndex(db);
     const semillasRes = await bulkWrite(db.collection('semillas'), buildSeedOps());
-    const enfermedadesRes = await bulkWrite(db.collection('enfermedads'), buildDiseaseOps());
-    const cronosRes = await bulkWrite(db.collection('cronos'), buildCronoOps(cronos));
+    let enfermedadesRes = { skipped: SEEDS_ONLY };
+    let cronosRes = { skipped: SEEDS_ONLY };
+    if (!SEEDS_ONLY) {
+      await ensureCronoVarietyIndex(db);
+      enfermedadesRes = await bulkWrite(db.collection('enfermedads'), buildDiseaseOps());
+      cronosRes = await bulkWrite(db.collection('cronos'), buildCronoOps(cronos));
+    }
 
     console.log(
       JSON.stringify(
