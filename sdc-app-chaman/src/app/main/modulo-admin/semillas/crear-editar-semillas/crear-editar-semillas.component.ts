@@ -5,7 +5,7 @@ import { Cultivo, ICreateSemilla, IResistencia, ISemilla, IListado, IQueryParam 
 import {
   ENFERMEDADES_CANONICAS,
   getEnfermedadCanonica,
-} from 'modelos/src/motores/enfermedades';
+} from 'modelos/src';
 import { SemillaService } from '../../../../auxiliares/http/semilla.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
 import { ParamsService } from '../../../../auxiliares/servicios/params.service';

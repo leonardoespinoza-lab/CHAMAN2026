@@ -1,13 +1,16 @@
 import {
   acumularSeveridadManchaRed,
   calcularRoyaHoja,
+  evaluarAscochytaArveja,
+  evaluarMildiuArveja,
+  evaluarOidioArveja,
   getEnfermedadCanonica,
   gradosDiaRoyaMaiz,
   indiceResistenciaDesdeMultiplicador,
   resolverResistencia,
   seleccionarResistenciaMasReciente,
   tasaDiariaManchaRedHoraria,
-} from 'modelos/src/motores/enfermedades';
+} from 'modelos/src';
 
 describe('motor canonico de enfermedades', () => {
   it('resuelve los alias de UI al mismo identificador estable', () => {
@@ -91,5 +94,22 @@ describe('motor canonico de enfermedades', () => {
     const tasa = tasaDiariaManchaRedHoraria(horas, 1.2);
     expect(tasa).toBeCloseTo(0.419, 3);
     expect(acumularSeveridadManchaRed(0, tasa)).toBe(0.1);
+  });
+
+  it('clasifica mildiu de arveja con los umbrales experimentales publicados', () => {
+    expect(evaluarMildiuArveja({ temperatura: 16, horasMojado: 6, humedadRelativa: 94 }).nivel).toBe('alto');
+    expect(evaluarMildiuArveja({ temperatura: 16, horasMojado: 4, humedadRelativa: 85 }).nivel).toBe('medio');
+    expect(evaluarMildiuArveja({ temperatura: 16, horasMojado: 3, humedadRelativa: 98 }).nivel).toBe('bajo');
+  });
+
+  it('mantiene Ascochyta como aptitud ambiental y exige mojado mas lluvia para nivel alto', () => {
+    expect(evaluarAscochytaArveja({ temperatura: 20, horasMojado: 8, lluviaMm: 2 }).nivel).toBe('alto');
+    expect(evaluarAscochytaArveja({ temperatura: 20, horasMojado: 8, lluviaMm: 0 }).nivel).toBe('medio');
+    expect(evaluarAscochytaArveja({ temperatura: 20, horasMojado: 2, lluviaMm: 10 }).nivel).toBe('bajo');
+  });
+
+  it('solo prioriza oidio de arveja desde la etapa reproductiva', () => {
+    expect(evaluarOidioArveja({ temperatura: 24, lluviaMm: 0, etapaReproductiva: true }).nivel).toBe('alto');
+    expect(evaluarOidioArveja({ temperatura: 24, lluviaMm: 0, etapaReproductiva: false }).nivel).toBe('bajo');
   });
 });

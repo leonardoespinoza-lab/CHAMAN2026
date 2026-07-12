@@ -18,6 +18,10 @@ export type TEnfermedad =
   // Maiz
   | "Roya del Maiz"
   | "Tizon Foliar del Maiz"
+  // Arveja (screening ambiental experimental)
+  | "Complejo Ascochyta de la Arveja"
+  | "Mildiu de la Arveja"
+  | "Oidio de la Arveja"
   // Vid
   | "Oidio"
   | "Botritis"
@@ -65,6 +69,9 @@ export type TEnfermedadId =
   | "soja.fin_ciclo"
   | "maiz.roya"
   | "maiz.tizon_foliar"
+  | "arveja.ascochyta"
+  | "arveja.mildiu"
+  | "arveja.oidio"
   | "vid.oidio"
   | "vid.botritis"
   | "vid.mildiu"

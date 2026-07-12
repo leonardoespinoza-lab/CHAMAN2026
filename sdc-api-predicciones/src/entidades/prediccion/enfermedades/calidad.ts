@@ -3,7 +3,7 @@ import {
   TEnfermedad,
   TEnfermedadId,
 } from 'modelos/src';
-import { IResistenciaResuelta } from 'modelos/src/motores/enfermedades';
+import { IResistenciaResuelta } from 'modelos/src';
 
 export function camposClimaticosFaltantes(
   clima: Record<string, unknown>,

@@ -9,7 +9,7 @@ import {
   calcularRoyaHoja,
   gradosDiaRoyaMaiz,
   resolverResistencia,
-} from 'modelos/src/motores/enfermedades';
+} from 'modelos/src';
 import {
   camposClimaticosFaltantes,
   crearPrediccionSinDatos,

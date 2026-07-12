@@ -2,7 +2,7 @@ import {
   calcularFinCicloSoja,
   calcularRoyaHoja,
   gradosDiaRoyaMaiz,
-} from 'modelos/src/motores/enfermedades';
+} from 'modelos/src';
 import { AlgoritmosService } from './service';
 
 describe('simulador admin y motor canonico de enfermedades', () => {
@@ -118,5 +118,43 @@ describe('simulador admin y motor canonico de enfermedades', () => {
 
     expect(tizon.nivel).toBe('sin modelo científico validado');
     expect(tizon.riesgo).toBe(0);
+  });
+
+  it('simula el screening de mildiu de arveja sin presentarlo como porcentaje', () => {
+    const result: any = service.simularEnfermedades({
+      cultivo: 'Arveja',
+      variedad: 'KINGFISHER',
+      etapa: 'E',
+      humedadRelativa: 94,
+      horasMojado: 6,
+      lluvia48h: 2,
+      temperatura: 16,
+    });
+    const mildiu = result.enfermedades.find(
+      (item: any) => item.idEnfermedad === 'arveja.mildiu',
+    );
+
+    expect(result.modo).toBe('screening_ambiental');
+    expect(mildiu.nivel).toBe('alto');
+    expect(mildiu.riesgo).toBe(80);
+    expect(mildiu.resistenciaEstado).toBe('desconocida');
+    expect(result.trazas.join(' ')).toContain('no son porcentajes');
+  });
+
+  it('mantiene oidio de arveja fuera de ventana antes de floracion', () => {
+    const result: any = service.simularEnfermedades({
+      cultivo: 'Arveja',
+      etapa: 'E',
+      humedadRelativa: 70,
+      horasMojado: 0,
+      lluvia48h: 0,
+      temperatura: 24,
+    });
+    const oidio = result.enfermedades.find(
+      (item: any) => item.idEnfermedad === 'arveja.oidio',
+    );
+
+    expect(oidio.nivel).toBe('fuera de ventana');
+    expect(oidio.riesgo).toBe(0);
   });
 });

@@ -35,13 +35,16 @@ import {
   calcularManchaHoja,
   calcularRoyaAnaranjada,
   calcularRoyaHoja,
+  evaluarAscochytaArveja,
+  evaluarMildiuArveja,
+  evaluarOidioArveja,
   gradosDiaRoya,
   gradosDiaRoyaAnaranjada,
   gradosDiaRoyaMaiz,
   getEnfermedadCanonica,
   resolverResistencia,
   tasaDiariaManchaRedHoraria,
-} from 'modelos/src/motores/enfermedades';
+} from 'modelos/src';
 
 export interface AlgoritmoCatalogo {
   id: string;
@@ -177,7 +180,7 @@ export class AlgoritmosService {
   }
 
   async getReadinessCatalogos() {
-    const cultivos = ['Trigo', 'Cebada', 'Soja', 'Maiz'];
+    const cultivos = ['Trigo', 'Cebada', 'Soja', 'Maiz', 'Arveja'];
     const resultados = await Promise.all(cultivos.map((cultivo) => this.getReadinessCultivo(cultivo)));
     return {
       ok: resultados.every((item) => item.ok),
@@ -229,8 +232,9 @@ export class AlgoritmosService {
     const enfermedadesOperativas = this.getEnfermedadesCultivo(cultivo)
       .map((item) => getEnfermedadCanonica(item.nombre))
       .filter((item) => item?.motor === 'operativo');
+    const requiereMatrizResistencia = this.norm(cultivo) !== 'ARVEJA';
     const coberturaResistenciaEnfermedades = await Promise.all(
-      enfermedadesOperativas.map(async (enfermedad) => {
+      (requiereMatrizResistencia ? enfermedadesOperativas : []).map(async (enfermedad) => {
         const diseaseFilter = {
           $or: [
             { idEnfermedad: enfermedad.id },
@@ -278,7 +282,7 @@ export class AlgoritmosService {
     const observaciones: string[] = [];
     if (!semillas) faltantes.push('semillas');
     if (!tieneEnfermedades) faltantes.push('enfermedades');
-    if (!cronos) faltantes.push('cronos');
+    if (!cronos && this.norm(cultivo) !== 'ARVEJA') faltantes.push('cronos');
     if (requiereMalezas && !malezas) faltantes.push('malezas');
     for (const cobertura of coberturaResistenciaEnfermedades) {
       if (cobertura.conEntrada < cobertura.total) {
@@ -291,8 +295,13 @@ export class AlgoritmosService {
         );
       }
     }
-    if (semillas && semillasConResistencia < semillas) {
+    if (semillas && semillasConResistencia < semillas && requiereMatrizResistencia) {
       observaciones.push(`${semillas - semillasConResistencia} variedad(es) sin resistencia sanitaria especifica`);
+    }
+    if (this.norm(cultivo) === 'ARVEJA') {
+      observaciones.push(
+        'Piloto experimental: fenologia termica desde la semilla; resistencia varietal sin datos y sin prescripciones/alertas automaticas',
+      );
     }
     if (semillas && semillasConCrono < semillas) {
       observaciones.push(`${semillas - semillasConCrono} variedad(es) sin ciclo/crono robusto`);
@@ -316,7 +325,9 @@ export class AlgoritmosService {
       coberturaResistenciaEnfermedades,
       enfermedades,
       enfermedadesMotor,
-      fuenteEnfermedades: enfermedades
+      fuenteEnfermedades: this.norm(cultivo) === 'ARVEJA'
+        ? 'motor-experimental'
+        : enfermedades
         ? 'base-datos'
         : enfermedadesMotor
           ? 'motor-formulas'
@@ -412,6 +423,19 @@ export class AlgoritmosService {
         susceptibilidad,
         resistenciasVarietales,
         diasSimulados: Number(body?.diasSimulados ?? 10),
+      });
+    }
+
+    if (this.norm(cultivo) === 'ARVEJA') {
+      return this.simularEnfermedadesArveja({
+        cultivo,
+        variedad,
+        etapa,
+        zona,
+        humedad,
+        horasMojado,
+        lluvia48,
+        temperatura,
       });
     }
 
@@ -1525,6 +1549,98 @@ export class AlgoritmosService {
     return this.round(1 - susceptibilidad, 2);
   }
 
+  private simularEnfermedadesArveja(params: {
+    cultivo: string;
+    variedad: string;
+    etapa: string;
+    zona: string;
+    humedad: number;
+    horasMojado: number;
+    lluvia48: number;
+    temperatura: number;
+  }) {
+    const etapaNormalizada = this.norm(params.etapa);
+    const etapaReproductiva = [
+      'R1',
+      'R3',
+      'FLORACION',
+      'FORMACION DE VAINAS',
+    ].includes(etapaNormalizada);
+    const evaluaciones = [
+      {
+        idEnfermedad: 'arveja.ascochyta',
+        nombre: 'Complejo Ascochyta de la Arveja',
+        periodo: 'Emergencia a formacion de vainas',
+        etapaActiva: !['S', 'SIEMBRA', 'MF', 'MADUREZ FISIOLOGICA'].includes(etapaNormalizada),
+        fuente: 'Roger y Tivoli (1999); aptitud ambiental, no probabilidad de infeccion',
+        evaluacion: evaluarAscochytaArveja({
+          temperatura: params.temperatura,
+          horasMojado: params.horasMojado,
+          lluviaMm: params.lluvia48,
+        }),
+      },
+      {
+        idEnfermedad: 'arveja.mildiu',
+        nombre: 'Mildiu de la Arveja',
+        periodo: 'Emergencia a inicio de floracion',
+        etapaActiva: ['E', 'EMERGENCIA', 'R1', 'FLORACION'].includes(etapaNormalizada),
+        fuente: 'Pegg y Mence (1970); umbrales de infeccion y esporulacion',
+        evaluacion: evaluarMildiuArveja({
+          temperatura: params.temperatura,
+          horasMojado: params.horasMojado,
+          humedadRelativa: params.humedad,
+        }),
+      },
+      {
+        idEnfermedad: 'arveja.oidio',
+        nombre: 'Oidio de la Arveja',
+        periodo: 'Floracion a formacion de vainas',
+        etapaActiva: etapaReproductiva,
+        fuente: 'INTA Parana; prioridad de monitoreo experimental',
+        evaluacion: evaluarOidioArveja({
+          temperatura: params.temperatura,
+          lluviaMm: params.lluvia48,
+          etapaReproductiva,
+        }),
+      },
+    ].map((item) => ({
+      ...item,
+      riesgo: item.etapaActiva ? item.evaluacion.indiceAmbiental : 0,
+      nivel: item.etapaActiva ? item.evaluacion.nivel : 'fuera de ventana',
+      fundamentos: item.evaluacion.fundamentos,
+      resistenciaEstado: 'desconocida',
+      resistenciaFuente: 'Sin dato varietal publicado para la variedad seleccionada',
+      prescripcion: 'No habilitada en el piloto experimental',
+    }));
+    const activas = evaluaciones.filter((item) => item.etapaActiva);
+    const maxIndice = Math.max(...activas.map((item) => item.riesgo), 0);
+    const nivel = maxIndice >= 80 ? 'alto' : maxIndice >= 50 ? 'medio' : 'bajo';
+
+    return {
+      motor: 'enfermedades-arveja-experimental',
+      modo: 'screening_ambiental',
+      resumen: `${params.cultivo} ${params.variedad}: aptitud ambiental ${nivel}; no equivale a infeccion confirmada.`,
+      metricas: {
+        cultivo: params.cultivo,
+        variedad: params.variedad,
+        etapa: params.etapa,
+        zona: params.zona,
+        humedadRelativa: params.humedad,
+        horasMojado: params.horasMojado,
+        lluvia48h: params.lluvia48,
+        temperatura: params.temperatura,
+        resistenciaVarietal: 'sin_datos',
+      },
+      enfermedades: evaluaciones,
+      serie: [],
+      trazas: [
+        'Los valores 20/50/80 son indices ordinales para bajo/medio/alto; no son porcentajes de infeccion.',
+        'No se generan alertas, prescripciones ni recomendaciones quimicas automaticas.',
+        'La confirmacion de sintomas, inoculo, rastrojo y resistencia varietal requiere observacion de campo.',
+      ],
+    };
+  }
+
   private getEnfermedadesCultivo(cultivo: string) {
     const base: Record<string, Array<Record<string, any>>> = {
       Trigo: [
@@ -1665,6 +1781,41 @@ export class AlgoritmosService {
           tempOptima: 20,
           formulaFuente: 'Hoja auxiliar - ENFERMEDADES EN CEBADA.xlsx',
           prescripcion: 'Triazol especifico de espiga; evitar estrobilurina sola y validar calidad/micotoxinas.',
+        },
+      ],
+      Arveja: [
+        {
+          nombre: 'Complejo Ascochyta de la Arveja',
+          periodo: 'Emergencia a formacion de vainas',
+          etapas: ['E', 'Emergencia', 'R1', 'R3', 'Formacion de vainas'],
+          humedadBase: 80,
+          horasMojadoCriticas: 8,
+          lluviaCritica: 0.1,
+          tempOptima: 20,
+          formulaFuente: 'Roger y Tivoli (1999); screening ambiental experimental',
+          prescripcion: 'Sin prescripcion automatica; confirmar sintomas e inoculo a campo.',
+        },
+        {
+          nombre: 'Mildiu de la Arveja',
+          periodo: 'Emergencia a inicio de floracion',
+          etapas: ['E', 'Emergencia', 'R1'],
+          humedadBase: 91,
+          horasMojadoCriticas: 4,
+          lluviaCritica: 0,
+          tempOptima: 16,
+          formulaFuente: 'Pegg y Mence (1970); screening ambiental experimental',
+          prescripcion: 'Sin prescripcion automatica; confirmar sintomas a campo.',
+        },
+        {
+          nombre: 'Oidio de la Arveja',
+          periodo: 'Floracion a formacion de vainas',
+          etapas: ['R1', 'R3', 'Floracion', 'Formacion de vainas'],
+          humedadBase: 50,
+          horasMojadoCriticas: 0,
+          lluviaCritica: 1,
+          tempOptima: 24,
+          formulaFuente: 'INTA Parana; screening de prioridad de monitoreo',
+          prescripcion: 'Sin prescripcion automatica; confirmar signos a campo.',
         },
       ],
     };

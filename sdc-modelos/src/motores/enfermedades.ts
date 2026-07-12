@@ -10,7 +10,7 @@ export interface IDefinicionEnfermedad {
   nombre: TEnfermedad;
   cultivo: string;
   aliases: string[];
-  motor: "operativo" | "sin_modelo";
+  motor: "operativo" | "experimental" | "sin_modelo";
 }
 
 export const ENFERMEDADES_CANONICAS: IDefinicionEnfermedad[] = [
@@ -27,6 +27,9 @@ export const ENFERMEDADES_CANONICAS: IDefinicionEnfermedad[] = [
   { id: "soja.fin_ciclo", nombre: "Fin de Ciclo", cultivo: "Soja", aliases: ["Fin de Ciclo Soja", "EFC"], motor: "operativo" },
   { id: "maiz.roya", nombre: "Roya del Maiz", cultivo: "Maiz", aliases: ["Roya del Maíz", "Roya maiz"], motor: "operativo" },
   { id: "maiz.tizon_foliar", nombre: "Tizon Foliar del Maiz", cultivo: "Maiz", aliases: ["Tizon foliar", "Tizón foliar", "Tizon"], motor: "sin_modelo" },
+  { id: "arveja.ascochyta", nombre: "Complejo Ascochyta de la Arveja", cultivo: "Arveja", aliases: ["Ascochyta", "Tizon de la arveja", "Mancha negra de la arveja"], motor: "experimental" },
+  { id: "arveja.mildiu", nombre: "Mildiu de la Arveja", cultivo: "Arveja", aliases: ["Peronospora viciae", "Mildiu arveja"], motor: "experimental" },
+  { id: "arveja.oidio", nombre: "Oidio de la Arveja", cultivo: "Arveja", aliases: ["Erysiphe pisi", "Oidio arveja"], motor: "experimental" },
   { id: "vid.oidio", nombre: "Oidio", cultivo: "Vid", aliases: [], motor: "sin_modelo" },
   { id: "vid.botritis", nombre: "Botritis", cultivo: "Vid", aliases: [], motor: "sin_modelo" },
   { id: "vid.mildiu", nombre: "Mildiu", cultivo: "Vid", aliases: [], motor: "sin_modelo" },
@@ -54,6 +57,115 @@ export interface IResistenciaResuelta {
 export interface IHoraClimaEnfermedad {
   temperatura: number;
   humedadRelativa: number;
+}
+
+export type TNivelScreeningArveja = "bajo" | "medio" | "alto";
+
+export interface IScreeningEnfermedadArveja {
+  nivel: TNivelScreeningArveja;
+  indiceAmbiental: number;
+  fundamentos: string[];
+}
+
+/**
+ * Screening ambiental, no probabilidad de infeccion. Los indices 20/50/80
+ * permiten ordenar la UI sin presentar una precision epidemiologica falsa.
+ */
+function screeningArveja(
+  nivel: TNivelScreeningArveja,
+  fundamentos: string[],
+): IScreeningEnfermedadArveja {
+  return {
+    nivel,
+    indiceAmbiental: nivel === "alto" ? 80 : nivel === "medio" ? 50 : 20,
+    fundamentos,
+  };
+}
+
+export function evaluarAscochytaArveja(input: {
+  temperatura: number;
+  horasMojado: number;
+  lluviaMm: number;
+}): IScreeningEnfermedadArveja {
+  const temperatura = Number(input.temperatura);
+  const horasMojado = Number(input.horasMojado);
+  const lluviaMm = Number(input.lluviaMm);
+  if (![temperatura, horasMojado, lluviaMm].every(Number.isFinite)) {
+    return screeningArveja("bajo", ["Variables climaticas incompletas"]);
+  }
+  if (
+    temperatura >= 15 &&
+    temperatura <= 25 &&
+    horasMojado >= 8 &&
+    lluviaMm > 0
+  ) {
+    return screeningArveja("alto", [
+      "Temperatura proxima al optimo experimental de 20 C",
+      "Al menos 8 h de mojado y lluvia con potencial de dispersion",
+    ]);
+  }
+  if (temperatura >= 5 && temperatura <= 30 && horasMojado >= 6) {
+    return screeningArveja("medio", [
+      "Temperatura compatible y mojado foliar sostenido",
+    ]);
+  }
+  return screeningArveja("bajo", ["Ambiente poco favorable en esta lectura"]);
+}
+
+export function evaluarMildiuArveja(input: {
+  temperatura: number;
+  horasMojado: number;
+  humedadRelativa: number;
+}): IScreeningEnfermedadArveja {
+  const temperatura = Number(input.temperatura);
+  const horasMojado = Number(input.horasMojado);
+  const humedadRelativa = Number(input.humedadRelativa);
+  if (![temperatura, horasMojado, humedadRelativa].every(Number.isFinite)) {
+    return screeningArveja("bajo", ["Variables climaticas incompletas"]);
+  }
+  if (
+    temperatura >= 8 &&
+    temperatura <= 20 &&
+    horasMojado >= 6 &&
+    humedadRelativa >= 91
+  ) {
+    return screeningArveja("alto", [
+      "6 h o mas de mojado entre 8 y 20 C",
+      "HR compatible con esporulacion (91% o superior)",
+    ]);
+  }
+  if (temperatura >= 1 && temperatura <= 24 && horasMojado >= 4) {
+    return screeningArveja("medio", [
+      "Se alcanza el minimo experimental de 4 h de mojado",
+    ]);
+  }
+  return screeningArveja("bajo", ["No se alcanza la ventana minima de infeccion"]);
+}
+
+export function evaluarOidioArveja(input: {
+  temperatura: number;
+  lluviaMm: number;
+  etapaReproductiva: boolean;
+}): IScreeningEnfermedadArveja {
+  const temperatura = Number(input.temperatura);
+  const lluviaMm = Number(input.lluviaMm);
+  if (![temperatura, lluviaMm].every(Number.isFinite)) {
+    return screeningArveja("bajo", ["Variables climaticas incompletas"]);
+  }
+  if (!input.etapaReproductiva) {
+    return screeningArveja("bajo", ["Fuera de la ventana desde floracion a vainas"]);
+  }
+  if (temperatura >= 18 && temperatura <= 28 && lluviaMm < 1) {
+    return screeningArveja("alto", [
+      "Etapa reproductiva con ambiente templado-calido y seco",
+    ]);
+  }
+  if (temperatura >= 12 && temperatura <= 30 && lluviaMm < 5) {
+    return screeningArveja("medio", [
+      "Etapa reproductiva con ambiente compatible para monitoreo",
+    ]);
+  }
+  return screeningArveja("bajo", ["Prioridad de monitoreo reducida en esta lectura"]);
 }
 
 export const limitar = (value: number, min = 0, max = 100): number =>

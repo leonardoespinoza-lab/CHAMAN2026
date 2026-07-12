@@ -433,7 +433,11 @@
                       <span>{{ enfermedad['periodo'] }}</span>
                       <strong>{{ enfermedad['nombre'] }}</strong>
                     </div>
-                    <em>{{ enfermedad['riesgo'] }}% - {{ enfermedad['nivel'] }}</em>
+                    @if (resultadoMotor.modo === 'screening_ambiental') {
+                      <em>{{ enfermedad['nivel'] }} · indice ordinal {{ enfermedad['riesgo'] }}</em>
+                    } @else {
+                      <em>{{ enfermedad['riesgo'] }}% - {{ enfermedad['nivel'] }}</em>
+                    }
                     @if (enfermedad['calidadInput'] || enfermedad['fuenteFormula']) {
                       <small>{{ enfermedad['calidadInput'] || 'input auditado' }} · {{ enfermedad['fuenteFormula'] || 'fuente interna' }}</small>
                     }

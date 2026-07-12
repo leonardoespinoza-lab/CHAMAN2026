@@ -30,7 +30,7 @@
         >
           <span class="status-pill">{{ item.estadoCorto }}</span>
           <strong>{{ item.enfermedad }}</strong>
-          <span class="risk-value">{{ item.resultado | number: '1.0-1' }}%</span>
+          <span class="risk-value">{{ item.resultadoEtiqueta }}</span>
           <span class="risk-track"><i></i></span>
           <small>{{ item.lecturaCorta }}</small>
         </button>
@@ -61,7 +61,7 @@
           <strong>{{ detalle.enfermedad }}</strong>
           <small>{{ detalle.descripcion }}</small>
         </div>
-        <em>{{ detalle.resultado | number: '1.0-1' }}%</em>
+        <em>{{ detalle.resultadoEtiqueta }}</em>
       </div>
 
       <div class="detail-meta">
@@ -128,7 +128,7 @@
         />
       </section>
 
-      @if (enfermedadConfirmada(detalle.enfermedad)) {
+      @if (enfermedadConfirmada(detalle.enfermedad) && !esScreeningExperimental) {
         <section class="prescription-panel">
           <div class="prescription-heading">
             <div>
@@ -157,7 +157,7 @@
       }
 
       <div class="detail-actions">
-        @if (tienePredicciones) {
+        @if (tienePredicciones && !esScreeningExperimental) {
           <p-button
             icon="pi pi-chart-line"
             label="Ver curvas"
@@ -171,7 +171,7 @@
   }
 </p-dialog>
 
-@if (tienePredicciones) {
+@if (tienePredicciones && !esScreeningExperimental) {
   <app-drawer-grafico-enfermedades
     [siembra]="siembra"
     [(visible)]="verDrawerGraficoEnfermedades"

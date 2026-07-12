@@ -3,7 +3,7 @@ import { IPrediccion, IPrediccionEnfermedad, ISemilla } from 'modelos/src';
 import {
   calcularRoyaAnaranjada,
   resolverResistencia,
-} from 'modelos/src/motores/enfermedades';
+} from 'modelos/src';
 import {
   camposClimaticosFaltantes,
   crearPrediccionSinDatos,

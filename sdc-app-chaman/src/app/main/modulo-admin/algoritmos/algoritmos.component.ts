@@ -127,7 +127,7 @@ export class AlgoritmosComponent {
       endpoint: 'POST /algoritmos/enfermedades/simular',
       persistencia: 'Motor productivo: /siembras/:id/prediccion-enfermedades',
       fields: [
-        { key: 'cultivo', label: 'Cultivo', type: 'select', options: ['Trigo', 'Cebada', 'Soja', 'Maiz'] },
+        { key: 'cultivo', label: 'Cultivo', type: 'select', options: ['Trigo', 'Cebada', 'Soja', 'Maiz', 'Arveja'] },
         {
           key: 'idSemilla',
           label: 'Variedad',
@@ -150,6 +150,10 @@ export class AlgoritmosComponent {
             'Floracion',
             'Llenado de granos',
             'Llenado de Granos',
+            'E',
+            'R1',
+            'R3',
+            'MF',
           ],
         },
         { key: 'humedadRelativa', label: 'Humedad relativa', type: 'number', suffix: '%' },
@@ -457,6 +461,9 @@ export class AlgoritmosComponent {
   public get advertenciaCatalogoSanitario(): string {
     const semilla = this.semillaSanitariaSeleccionada;
     if (!semilla) return 'Sin semilla vinculada: la simulacion usa sensibilidad base manual.';
+    if (this.normalizar(semilla.cultivo) === 'ARVEJA') {
+      return `${semilla.variedad}: resistencia varietal sin datos; el screening no asume susceptibilidad.`;
+    }
     if (!semilla.resistencia?.length) {
       return `${semilla.variedad}: sin resistencia varietal especifica; se usa sensibilidad base.`;
     }

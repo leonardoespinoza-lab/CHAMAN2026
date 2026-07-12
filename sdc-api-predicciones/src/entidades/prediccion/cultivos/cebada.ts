@@ -24,7 +24,7 @@ import {
   IHoraClimaEnfermedad,
   resolverResistencia,
   tasaDiariaManchaRedHoraria,
-} from 'modelos/src/motores/enfermedades';
+} from 'modelos/src';
 import { HelperService } from '../../../auxiliares/helper';
 import { CronosService } from '../../crono/service';
 import { SiembrasService } from '../../siembra/service';

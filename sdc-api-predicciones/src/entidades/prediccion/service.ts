@@ -12,6 +12,7 @@ import { AlertasService } from '../alerta/service';
 import { PrediccionMaizService } from './cultivos/maiz';
 import { PREDICCIONES_MALEZAS_LIMIT } from '../../env';
 import { PrediccionCebadaService } from './cultivos/cebada';
+import { PrediccionArvejaService } from './cultivos/arveja';
 
 @Injectable()
 export class PrediccionsService {
@@ -22,6 +23,7 @@ export class PrediccionsService {
     private prediccionSojaService: PrediccionSojaService,
     private prediccionMaizService: PrediccionMaizService,
     private prediccionCebadaService: PrediccionCebadaService,
+    private prediccionArvejaService: PrediccionArvejaService,
     private notificacionesService: NotificacionsService,
     private alertasService: AlertasService,
   ) {}
@@ -99,6 +101,10 @@ export class PrediccionsService {
           predicciones =
             await this.prediccionCebadaService.hacerPredicciones(siembra);
           break;
+        case 'Arveja':
+          predicciones =
+            await this.prediccionArvejaService.hacerPredicciones(siembra);
+          break;
       }
 
       if (!predicciones?.length) {
@@ -106,6 +112,9 @@ export class PrediccionsService {
       }
 
       try {
+        // Arveja permanece como screening experimental: no crea notificaciones
+        // ni alertas hasta validacion contra observaciones de campo.
+        if (siembra.semilla?.cultivo === 'Arveja') return predicciones;
         await Promise.all([
           this.notificacionesService.enviarNotificaciones(
             predicciones,

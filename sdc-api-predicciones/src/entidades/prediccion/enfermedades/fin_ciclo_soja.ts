@@ -8,7 +8,7 @@ import {
 import {
   calcularFinCicloSoja,
   resolverResistencia,
-} from 'modelos/src/motores/enfermedades';
+} from 'modelos/src';
 import {
   camposClimaticosFaltantes,
   crearPrediccionSinDatos,
