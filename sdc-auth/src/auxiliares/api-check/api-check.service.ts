@@ -12,7 +12,7 @@ export class ApiCheckService {
 
     if (API_DATOS) {
       try {
-        await this.axios.GET(`${API_DATOS}/api`);
+        await this.axios.GET(`${API_DATOS.replace(/\/+$/, '')}/health`);
         this.logger.log(`API_DATOS: ${API_DATOS} [OK!]`);
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (error) {

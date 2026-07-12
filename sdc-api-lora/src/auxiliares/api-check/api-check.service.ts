@@ -10,7 +10,7 @@ export class ApiCheckService {
     // Checkeo de las API en los ENVS de cada microservicio
     if (API_DATOS) {
       try {
-        await this.axios.GET(`${API_DATOS}/api`);
+        await this.axios.GET(`${API_DATOS.replace(/\/+$/, '')}/health`);
         this.logger.log(`API_DATOS: ${API_DATOS} [OK!]`);
       } catch (error) {
         this.logger.error(`API_DATOS: ${API_DATOS} [ERROR!]`);
