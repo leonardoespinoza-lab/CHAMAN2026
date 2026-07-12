@@ -12,6 +12,7 @@ import { AlertasService } from '../alerta/service';
 import { PrediccionMaizService } from './cultivos/maiz';
 import { PREDICCIONES_MALEZAS_LIMIT } from '../../env';
 import { PrediccionCebadaService } from './cultivos/cebada';
+import { PrediccionArvejaService } from './cultivos/arveja';
 
 @Injectable()
 export class PrediccionsService {
@@ -22,6 +23,7 @@ export class PrediccionsService {
     private prediccionSojaService: PrediccionSojaService,
     private prediccionMaizService: PrediccionMaizService,
     private prediccionCebadaService: PrediccionCebadaService,
+    private prediccionArvejaService: PrediccionArvejaService,
     private notificacionesService: NotificacionsService,
     private alertasService: AlertasService,
   ) {}
@@ -99,6 +101,10 @@ export class PrediccionsService {
           predicciones =
             await this.prediccionCebadaService.hacerPredicciones(siembra);
           break;
+        case 'Arveja':
+          predicciones =
+            await this.prediccionArvejaService.hacerPredicciones(siembra);
+          break;
       }
 
       if (!predicciones?.length) {
@@ -106,6 +112,9 @@ export class PrediccionsService {
       }
 
       try {
+        // Arveja permanece como screening experimental: no crea notificaciones
+        // ni alertas hasta validacion contra observaciones de campo.
+        if (siembra.semilla?.cultivo === 'Arveja') return predicciones;
         await Promise.all([
           this.notificacionesService.enviarNotificaciones(
             predicciones,
@@ -155,7 +164,7 @@ export class PrediccionsService {
     const fecha = new Date().toISOString();
     for (const p of predicciones) {
       for (const e of p.enfermedades) {
-        if (e.resultado >= 15) {
+        if (e.estado !== 'sin_datos' && e.resultado >= 15) {
           const idSiembra = p.idSiembra || siembra._id;
           await this.alertasService.registrarEventoSiembra({
             idSiembra,
@@ -164,15 +173,26 @@ export class PrediccionsService {
             tipo: 'enfermedad',
             categoria: 'sanitaria',
             motor: 'prediccion-enfermedades',
-            versionMotor: 'v2',
+            versionMotor: 'v3',
             lectura: `${e.enfermedad}: ${Number(e.resultado || 0).toFixed(1)}% de riesgo calculado.`,
             recomendacion:
               'Validar a campo, revisar estadio fenologico, humedad y manejo antes de definir una intervencion.',
             calidadDatos: {
-              nivel: 'media',
-              fuente: 'Clima historico diario y fenologia del lote',
-              detalle:
-                'Usa la estacion mas cercana y fallback Open-Meteo si FieldClimate no responde.',
+              nivel:
+                e.calidadDatos?.nivel === 'alta'
+                  ? 'alta'
+                  : e.calidadDatos?.nivel === 'baja' ||
+                      e.calidadDatos?.nivel === 'sin_datos'
+                    ? 'baja'
+                    : 'media',
+              fuente:
+                e.calidadDatos?.resumen ||
+                'Clima historico y fenologia del lote',
+              detalle: [
+                ...(e.calidadDatos?.limitaciones || []),
+                `Fenologia: ${p.fuenteFenologia || 'crono'}.`,
+                `Modelo: ${e.modelo?.id || e.enfermedad} v${e.modelo?.version || 3}.`,
+              ].join(' '),
             },
             fecha,
             eventKey: `enfermedad:${idSiembra}:${this.slug(

@@ -84,6 +84,7 @@ export class ClimaController {
     @Query('edadProductivaDesdeAnios') edadProductivaDesdeAnios?: string,
     @Query('ajusteHeladaC') ajusteHeladaC?: string,
     @Query('fuenteAjusteVarietal') fuenteAjusteVarietal?: string,
+    @Query('idEstacionMeteorologica') idEstacionMeteorologica?: string,
   ) {
     return await this.service.getFrioTermico(
       Number(lat),
@@ -113,6 +114,7 @@ export class ClimaController {
         ),
         ajusteVarietalC: this.toNumberOrUndefined(ajusteHeladaC),
         fuenteAjusteVarietal,
+        idEstacionMeteorologica,
       },
     );
   }

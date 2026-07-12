@@ -17,8 +17,15 @@ const STRICT = process.env.CHAMAN_BOOTSTRAP_STRICT === 'true';
 const CEBADA_EXPECTED = {
   semillas: 12,
   enfermedades: 4,
-  cronosMin: 12000,
+  cronosMin: process.env.CHAMAN_CEBADA_ALLOW_PARTIAL === 'true' ? 300 : 12000,
   enfermedadesV2: 4,
+};
+const ARVEJA_EXPECTED = { semillas: 19, modeloTermicoV2: 19 };
+const BASE_EXPECTED = {
+  provincias: 1,
+  departamentos: 1,
+  semillasAnuales: 1,
+  cronos: 1,
 };
 
 function log(message, extra) {
@@ -62,12 +69,48 @@ async function getCebadaCounts(db) {
   return { semillas, enfermedades, enfermedadesV2, cronos };
 }
 
+async function getArvejaCounts(db) {
+  const filtro = { cultivo: 'Arveja', campania: '2025-2026' };
+  const [semillas, modeloTermicoV2] = await Promise.all([
+    db.collection('semillas').countDocuments(filtro),
+    db.collection('semillas').countDocuments({
+      ...filtro,
+      'fenologiaReferencia.temperaturaBaseC': 3,
+      'fenologiaReferencia.observacionesModelo': /R3 no tiene umbral numerico/,
+    }),
+  ]);
+  return { semillas, modeloTermicoV2 };
+}
+
+async function getBaseCounts(db) {
+  const [provincias, departamentos, semillasAnuales, cronos] = await Promise.all([
+    db.collection('provincias').countDocuments(),
+    db.collection('departamentos').countDocuments(),
+    db.collection('semillas').countDocuments({ cultivo: { $in: ['Trigo', 'Soja', 'Maiz'] } }),
+    db.collection('cronos').countDocuments(),
+  ]);
+  return { provincias, departamentos, semillasAnuales, cronos };
+}
+
 function isCebadaComplete(counts) {
   return (
     counts.semillas >= CEBADA_EXPECTED.semillas &&
     counts.enfermedades >= CEBADA_EXPECTED.enfermedades &&
     counts.enfermedadesV2 >= CEBADA_EXPECTED.enfermedadesV2 &&
     counts.cronos >= CEBADA_EXPECTED.cronosMin
+  );
+}
+
+function isArvejaComplete(counts) {
+  return (
+    counts.semillas >= ARVEJA_EXPECTED.semillas &&
+    counts.modeloTermicoV2 >= ARVEJA_EXPECTED.modeloTermicoV2
+  );
+}
+
+function isBaseComplete(counts) {
+  return Object.entries(BASE_EXPECTED).every(
+    ([key, expected]) => Number(counts[key] || 0) >= expected,
   );
 }
 
@@ -89,28 +132,67 @@ async function main() {
 
   try {
     const db = client.db(DB_NAME);
-    const before = await getCebadaCounts(db);
+    const [baseBefore, cebadaBefore, arvejaBefore] = await Promise.all([
+      getBaseCounts(db),
+      getCebadaCounts(db),
+      getArvejaCounts(db),
+    ]);
 
-    if (isCebadaComplete(before)) {
-      log('Cebada completo', before);
+    if (
+      isBaseComplete(baseBefore) &&
+      isCebadaComplete(cebadaBefore) &&
+      isArvejaComplete(arvejaBefore)
+    ) {
+      log('Catalogos completos', { base: baseBefore, cebada: cebadaBefore, arveja: arvejaBefore });
       return;
     }
 
-    log('Cebada incompleto; ejecutando seed idempotente', before);
+    log('Catalogos incompletos; ejecutando seeds idempotentes', {
+      base: baseBefore,
+      cebada: cebadaBefore,
+      arveja: arvejaBefore,
+    });
     await client.close();
     clientClosed = true;
 
-    runSeed('seed-cebada-local.js');
+    if (!isBaseComplete(baseBefore)) {
+      runSeed(
+        process.env.CHAMAN_TESTING_BOOTSTRAP === 'true'
+          ? 'seed-testing-base.js'
+          : 'seed-master-data-local.js',
+      );
+    }
+    if (!isCebadaComplete(cebadaBefore)) {
+      runSeed('seed-cebada-local.js');
+    }
+    if (!isArvejaComplete(arvejaBefore)) {
+      runSeed('seed-arveja-local.js');
+    }
 
     const verifyClient = await MongoClient.connect(DB_URL, {
       serverSelectionTimeoutMS: SERVER_SELECTION_TIMEOUT_MS,
     });
     try {
-      const after = await getCebadaCounts(verifyClient.db(DB_NAME));
-      if (!isCebadaComplete(after)) {
-        throw new Error(`Cebada sigue incompleto: ${JSON.stringify(after)}`);
+      const verifyDb = verifyClient.db(DB_NAME);
+      const [baseAfter, cebadaAfter, arvejaAfter] = await Promise.all([
+        getBaseCounts(verifyDb),
+        getCebadaCounts(verifyDb),
+        getArvejaCounts(verifyDb),
+      ]);
+      if (
+        !isBaseComplete(baseAfter) ||
+        !isCebadaComplete(cebadaAfter) ||
+        !isArvejaComplete(arvejaAfter)
+      ) {
+        throw new Error(
+          `Catalogos siguen incompletos: ${JSON.stringify({ base: baseAfter, cebada: cebadaAfter, arveja: arvejaAfter })}`,
+        );
       }
-      log('Cebada cargado correctamente', after);
+      log('Catalogos cargados correctamente', {
+        base: baseAfter,
+        cebada: cebadaAfter,
+        arveja: arvejaAfter,
+      });
     } finally {
       await verifyClient.close();
     }

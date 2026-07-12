@@ -12,6 +12,10 @@ import { HelperService } from '../../../auxiliares/helper';
 import { CronosService } from '../../crono/service';
 import { SiembrasService } from '../../siembra/service';
 import { FinCicloSojaService } from '../enfermedades/fin_ciclo_soja';
+import {
+  aplicarEtapaFenologicaObservada,
+  resolverEtapaFenologicaObservada,
+} from '../fenologia-observada';
 import { PrediccionsRepository } from '../repository';
 import { ClimaService } from '../../clima/service';
 import { FumigacionsService } from 'src/entidades/fumigacion/service';
@@ -67,6 +71,8 @@ export class PrediccionSojaService {
         siembra.coordenadas.lng,
         dateAnteriorADesde2.toISOString(),
         dateHasta.toISOString(),
+        undefined,
+        siembra.establecimiento,
       );
       if (!clima.length) {
         Logger.warn(
@@ -97,7 +103,16 @@ export class PrediccionSojaService {
           );
         }
 
-        const etapa = this.getEtapaPorFecha(siembra, crono, fecha);
+        const etapaCrono = this.getEtapaPorFecha(siembra, crono, fecha);
+        const fenologiaObservada = resolverEtapaFenologicaObservada(
+          siembra,
+          fecha,
+          'Soja',
+        );
+        const etapa = aplicarEtapaFenologicaObservada(
+          etapaCrono,
+          fenologiaObservada,
+        );
 
         const distancia = clima[0].distancia;
 
@@ -116,6 +131,20 @@ export class PrediccionSojaService {
           fecha: fecha.toISOString(),
           fechaPrediccion: fecha.toISOString().split('T')[0],
           nombreEtapa: etapa,
+          fuenteFenologia: fenologiaObservada ? 'observada' : 'crono',
+          registroFenologicoId: fenologiaObservada?.registro.id,
+          calidadFenologia: {
+            nivel: fenologiaObservada ? 'alta' : 'media',
+            fuente: fenologiaObservada ? 'manual' : 'estimado',
+            cobertura: 1,
+            fallback: !fenologiaObservada,
+            resumen: fenologiaObservada
+              ? 'Etapa observada a campo.'
+              : 'Etapa estimada desde fecha de siembra y crono.',
+            limitaciones: fenologiaObservada
+              ? []
+              : ['No hay observación fenológica de campo anterior a la fecha.'],
+          },
           enfermedades: [],
           estacion: {
             idEstacion: clima[0]?.estacion,
@@ -199,6 +228,20 @@ export class PrediccionSojaService {
     crono: ICrono,
     fecha: Date,
   ): 'Siembra' | 'Emergencia' | 'R1' | 'R3' | 'R5' | 'R7' {
+    const observada = resolverEtapaFenologicaObservada(
+      siembra,
+      fecha,
+      'Soja',
+    );
+    if (typeof observada?.etapa === 'string') {
+      return observada.etapa as
+        | 'Siembra'
+        | 'Emergencia'
+        | 'R1'
+        | 'R3'
+        | 'R5'
+        | 'R7';
+    }
     const fechaSiembra = new Date(siembra.fechaSiembra);
     const fechaActual = fecha;
     const diferencia = fechaActual.getTime() - fechaSiembra.getTime();

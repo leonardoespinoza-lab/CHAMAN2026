@@ -1,0 +1,76 @@
+const fs = require('fs');
+const path = require('path');
+const { services: railwayServices } = require('./railway-services');
+
+const manifestPath = path.join(__dirname, '..', 'deploy', 'environment-topology.json');
+const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+const requiredRoles = [
+  'web',
+  'api',
+  'auth',
+  'datos',
+  'clima',
+  'predicciones',
+  'externa',
+  'ftp',
+  'lora',
+  'ndvi-worker',
+  'mongodb',
+  'redis',
+];
+const issues = [];
+
+function duplicateValues(values) {
+  return [...new Set(values.filter((value, index) => values.indexOf(value) !== index))];
+}
+
+for (const role of requiredRoles) {
+  if (!manifest.services.some((service) => service.role === role)) {
+    issues.push(`Falta el rol requerido: ${role}`);
+  }
+}
+
+for (const duplicate of duplicateValues(manifest.services.map((service) => service.role))) {
+  issues.push(`Rol duplicado: ${duplicate}`);
+}
+for (const duplicate of duplicateValues(manifest.services.map((service) => service.production))) {
+  issues.push(`Servicio productivo duplicado: ${duplicate}`);
+}
+for (const duplicate of duplicateValues(manifest.services.map((service) => service.testing))) {
+  issues.push(`Servicio de testing duplicado: ${duplicate}`);
+}
+
+for (const service of manifest.services) {
+  if (!service.role || !service.selector || !service.production || !service.testing || !service.port) {
+    issues.push(`Definicion incompleta para ${service.role || 'rol desconocido'}`);
+  }
+  if (service.production === service.testing) {
+    issues.push(`${service.role}: produccion y testing no pueden compartir nombre de servicio`);
+  }
+  if (service.selector.startsWith('sdc-') && !railwayServices[service.selector]) {
+    issues.push(`${service.role}: CHAMAN_SERVICE no reconocido: ${service.selector}`);
+  }
+}
+
+if (manifest.dataPolicy?.cloneDirection !== 'production-to-testing') {
+  issues.push('La unica direccion de clonado admitida es production-to-testing');
+}
+if (manifest.dataPolicy?.promoteTestingDatabase !== false) {
+  issues.push('La base de testing nunca debe promoverse completa a produccion');
+}
+if (manifest.codePromotion?.productionBranch !== 'main') {
+  issues.push('La rama productiva declarada debe ser main');
+}
+if (!manifest.codePromotion?.requireSameCommitAcrossStatelessServices) {
+  issues.push('Los servicios sin estado deben desplegar exactamente el mismo commit');
+}
+
+if (issues.length) {
+  console.error('Topologia de despliegue invalida:');
+  for (const issue of issues) console.error(`- ${issue}`);
+  process.exit(1);
+}
+
+console.log(
+  `Topologia OK: ${manifest.services.length} roles, bases aisladas y promocion por commit.`,
+);

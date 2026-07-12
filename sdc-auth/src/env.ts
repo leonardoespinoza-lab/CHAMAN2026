@@ -16,8 +16,10 @@ export const PREFIX_PATH =
 export const API_DATOS =
   process.env.API_DATOS || 'http://127.0.0.1:5000';
 // DATOS INICIALES
-export const CLIENT_ID_INICIAL = process.env.CLIENT_ID_INICIAL || '1';
-export const CLIENT_SECRET_INICIAL = process.env.CLIENT_SECRET_INICIAL || '1';
+export const CLIENT_ID_INICIAL =
+  process.env.CLIENT_ID_INICIAL || (ENV === 'production' ? '' : '1');
+export const CLIENT_SECRET_INICIAL =
+  process.env.CLIENT_SECRET_INICIAL || (ENV === 'production' ? '' : '1');
 export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 export const APPLE_CLIENT_ID = process.env.APPLE_CLIENT_ID || '';
 

@@ -50,7 +50,7 @@ const SERVICE_REQUIRED = {
   clima: ['API_DATOS'],
   lora: ['API_DATOS'],
   externa: ['API_DATOS', 'NDVI_WORKER_TOKEN'],
-  websocket: ['API_AUTH', 'CORS_ORIGINS'],
+  websocket: ['API_AUTH', 'API_DATOS', 'CORS_ORIGINS'],
   'ndvi-worker': ['REDIS_HOST', 'API_EXTERNA_URL', 'NDVI_WORKER_TOKEN'],
 };
 
@@ -163,6 +163,18 @@ function validate() {
       issues,
       'warn',
       'METEOBLUE_API_KEY no esta configurada. La comparacion profesional Meteoblue queda desactivada y Open-Meteo opera sin contraste.',
+    );
+  }
+
+  if (getValue('REALTIME_TRANSPORT') === 'redis' && !hasValue('REDIS_HOST')) {
+    pushIssue(issues, 'error', 'REALTIME_TRANSPORT=redis pero falta REDIS_HOST');
+  }
+
+  if (service === 'websocket' && !['redis', 'mqtt'].includes(getValue('REALTIME_TRANSPORT'))) {
+    pushIssue(
+      issues,
+      'error',
+      'WebSocket requiere REALTIME_TRANSPORT=redis o mqtt para distribuir eventos',
     );
   }
 

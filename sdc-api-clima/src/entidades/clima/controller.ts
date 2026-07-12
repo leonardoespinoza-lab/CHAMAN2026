@@ -20,12 +20,16 @@ export class ClimaController {
     @Param('fechaDesde') fechaDesde: string,
     @Param('fechaHasta') fechaHasta: string,
     @Query('dataGroup') dataGroup: 'raw' | 'hourly' | 'daily' | 'monthly',
+    @Query('idEstacionMeteorologica') idEstacionMeteorologica?: string,
+    @Query('soloEstacionAsociada') soloEstacionAsociada?: string,
   ) {
     return await this.service.getEstacionMasCercanaEntreFechas(
       { lat, lng },
       fechaDesde,
       fechaHasta,
       dataGroup,
+      idEstacionMeteorologica,
+      soloEstacionAsociada === 'true',
     );
   }
 

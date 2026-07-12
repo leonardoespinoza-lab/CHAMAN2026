@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
 import Highcharts from 'highcharts';
 import {
   esCodigoChaparron,
@@ -65,6 +65,8 @@ interface PanelClima {
 })
 export class CardClimaLoteComponent implements OnChanges {
   @Input() public lote?: IDetallesLote;
+  @Input() public actualizando = false;
+  @Output() public actualizar = new EventEmitter<void>();
 
   public pronosticos: IPronosticoEstacionMeteorologica[] = [];
   public climaActual?: IClimaEstacionMeteorologica;
@@ -97,6 +99,12 @@ export class CardClimaLoteComponent implements OnChanges {
 
   public get calidadClase(): string {
     return `quality-${this.calidadClima.nivel}`;
+  }
+
+  public solicitarActualizacion(): void {
+    if (!this.actualizando) {
+      this.actualizar.emit();
+    }
   }
 
   private crearCalidadClima() {

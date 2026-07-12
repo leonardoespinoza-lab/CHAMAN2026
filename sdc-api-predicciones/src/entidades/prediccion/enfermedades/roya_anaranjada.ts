@@ -1,5 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { IPrediccion, IPrediccionEnfermedad, ISemilla } from 'modelos/src';
+import {
+  calcularRoyaAnaranjada,
+  resolverResistencia,
+} from 'modelos/src';
+import {
+  camposClimaticosFaltantes,
+  crearPrediccionSinDatos,
+  metadataResistencia,
+} from './calidad';
 
 @Injectable()
 export class RoyaAnaranjadaService {
@@ -15,6 +24,21 @@ export class RoyaAnaranjadaService {
     prediccionAnterior?: IPrediccion,
     predecir?: boolean,
   ): Promise<IPrediccionEnfermedad> {
+    const faltantes = camposClimaticosFaltantes(clima, [
+      'precip',
+      'Tmax',
+      'Tmin',
+      'hr',
+      'Tavg',
+    ]);
+    if (faltantes.length) {
+      return crearPrediccionSinDatos(
+        'Roya Anaranjada',
+        'trigo.roya_anaranjada',
+        faltantes,
+        'Enfermedades en TRIGO -V2.xlsx / Roya Anaranjada',
+      );
+    }
     const prediccionAnteriorEnfermedad = prediccionAnterior?.enfermedades.find(
       (e) => e.enfermedad === 'Roya Anaranjada',
     );
@@ -29,11 +53,9 @@ export class RoyaAnaranjadaService {
       DL: Number(prevVariables.DL || 0),
     };
 
-    const resistencia = semilla.resistencia?.find(
-      (r) => r.enfermedad === 'Roya Anaranjada',
-    );
-    const IR = this.indiceResistenciaDesdeMultiplicador(
-      resistencia?.multiplicador,
+    const resistencia = resolverResistencia(
+      semilla.resistencia,
+      'trigo.roya_anaranjada',
     );
 
     if (predecir) {
@@ -52,29 +74,28 @@ export class RoyaAnaranjadaService {
       variables.DL = 0;
     }
 
-    let resultado =
-      5.15 +
-      0.72 * variables.GD +
-      0.48 * variables.DHR +
-      0.35 * variables.DL -
-      35.2 * IR;
-    if (resultado < 0) {
-      resultado = 0;
-    }
+    const resultado = calcularRoyaAnaranjada(
+      variables.GD,
+      variables.DHR,
+      variables.DL,
+      resistencia.indiceResistencia,
+    );
 
     const prediccion: IPrediccionEnfermedad = {
       enfermedad: 'Roya Anaranjada',
+      idEnfermedad: 'trigo.roya_anaranjada',
       resultado: predecir ? +resultado.toFixed(2) : 0,
+      estado: 'calculado',
+      ...metadataResistencia(resistencia),
+      modelo: {
+        id: 'trigo.roya_anaranjada',
+        version: 3,
+        fuente: 'Enfermedades en TRIGO -V2.xlsx / Roya Anaranjada',
+        resolucion: 'diaria',
+      },
       variables,
     };
     return prediccion;
   }
 
-  private indiceResistenciaDesdeMultiplicador(multiplicador?: number): number {
-    if (multiplicador === undefined || multiplicador === null) return 0;
-    if (multiplicador <= 0.35) return 1;
-    if (multiplicador <= 0.75) return 0.65;
-    if (multiplicador <= 1.05) return 0.35;
-    return 0;
-  }
 }

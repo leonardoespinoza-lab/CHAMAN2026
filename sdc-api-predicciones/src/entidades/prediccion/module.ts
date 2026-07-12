@@ -21,6 +21,7 @@ import { RoyaDelMaizService } from './enfermedades/roya_del_maiz';
 import { RoyaAnaranjadaService } from './enfermedades/roya_anaranjada';
 import { AgroclimaModule } from '../agroclima/module';
 import { PrediccionCebadaService } from './cultivos/cebada';
+import { PrediccionArvejaService } from './cultivos/arveja';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { PrediccionCebadaService } from './cultivos/cebada';
     PrediccionSojaService,
     PrediccionMaizService,
     PrediccionCebadaService,
+    PrediccionArvejaService,
     // Endermedades Trigo
     FusariumDeLaEspigaService,
     ManchaAmarillaService,

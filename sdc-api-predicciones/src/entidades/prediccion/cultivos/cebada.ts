@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   ICreatePrediccion,
+  IClimaEstacionMeteorologica,
   ICrono,
   IEtapasCebada,
   IPrediccion,
@@ -10,6 +11,19 @@ import {
   ISiembra,
   IVariablesEnfermedadCebada,
   TEnfermedad,
+  TEnfermedadId,
+} from 'modelos/src';
+import {
+  acumularSeveridadManchaRed,
+  calcularEscaldadura,
+  calcularFusariumEspiga,
+  calcularRoyaHoja,
+  factorHumedadManchaRed,
+  factorTemperaturaManchaRed,
+  gradosDiaRoya,
+  IHoraClimaEnfermedad,
+  resolverResistencia,
+  tasaDiariaManchaRedHoraria,
 } from 'modelos/src';
 import { HelperService } from '../../../auxiliares/helper';
 import { CronosService } from '../../crono/service';
@@ -17,6 +31,15 @@ import { SiembrasService } from '../../siembra/service';
 import { ClimaService } from '../../clima/service';
 import { FumigacionsService } from 'src/entidades/fumigacion/service';
 import { PrediccionsRepository } from '../repository';
+import {
+  aplicarEtapaFenologicaObservada,
+  resolverEtapaFenologicaObservada,
+} from '../fenologia-observada';
+import {
+  camposClimaticosFaltantes,
+  crearPrediccionSinDatos,
+  metadataResistencia,
+} from '../enfermedades/calidad';
 
 type EnfermedadCebada = Extract<
   TEnfermedad,
@@ -27,34 +50,53 @@ type EnfermedadCebada = Extract<
 >;
 
 interface ConfigEnfermedadCebada {
+  id: TEnfermedadId;
   nombre: EnfermedadCebada;
   etapaMin: number;
   etapaMax: number;
   formula: 'mancha_red' | 'escaldadura' | 'roya_hoja' | 'fusariosis';
 }
 
+interface ClimaDiaCebada {
+  hr: number;
+  hrAnterior: number;
+  tavg: number;
+  tmin: number;
+  tmax: number;
+  precip: number;
+  precipAnterior: number;
+  horas: IHoraClimaEnfermedad[];
+  horasMojado: number;
+  coberturaHoraria: number;
+  resolucion: 'horaria' | 'proxy_diario';
+}
+
 @Injectable()
 export class PrediccionCebadaService {
   private readonly enfermedades: ConfigEnfermedadCebada[] = [
     {
+      id: 'cebada.mancha_red',
       nombre: 'Mancha en Red',
       etapaMin: 1,
       etapaMax: 5,
       formula: 'mancha_red',
     },
     {
+      id: 'cebada.escaldadura',
       nombre: 'Escaldadura de la Cebada',
       etapaMin: 1,
       etapaMax: 4,
       formula: 'escaldadura',
     },
     {
+      id: 'cebada.roya_hoja',
       nombre: 'Roya de la Hoja de Cebada',
       etapaMin: 2,
       etapaMax: 6,
       formula: 'roya_hoja',
     },
     {
+      id: 'cebada.fusariosis_espiga',
       nombre: 'Fusariosis de la Espiga de Cebada',
       etapaMin: 4,
       etapaMax: 6,
@@ -105,6 +147,8 @@ export class PrediccionCebadaService {
       siembra.coordenadas.lng,
       dateAnteriorADesde.toISOString(),
       dateHasta.toISOString(),
+      'hourly',
+      siembra.establecimiento,
     );
 
     if (!clima.length) {
@@ -128,7 +172,23 @@ export class PrediccionCebadaService {
       const fechaIso = fecha.toISOString();
       const fechaAnteriorIso = this.diaAnterior(fecha).toISOString();
       const predecir = !fechasFumigadas.includes(fechaIso);
-      const etapa = this.getEtapaPorFecha(siembra, crono, fecha);
+      const etapaCrono = this.getEtapaPorFecha(siembra, crono, fecha);
+      const fenologiaObservada = resolverEtapaFenologicaObservada(
+        siembra,
+        fecha,
+        'Cebada',
+      );
+      const etapa = aplicarEtapaFenologicaObservada(
+        etapaCrono,
+        fenologiaObservada,
+      );
+      const climaHoy = this.getClimaDia(clima, fechaIso);
+      const climaAnterior = this.getClimaDia(clima, fechaAnteriorIso);
+      const climaDia: ClimaDiaCebada = {
+        ...climaHoy,
+        hrAnterior: climaAnterior.hr,
+        precipAnterior: climaAnterior.precip,
+      };
       const enfermedades = this.enfermedades
         .filter((config) => this.estaEnVentana(etapa, config))
         .map((config) =>
@@ -136,19 +196,7 @@ export class PrediccionCebadaService {
             config,
             semilla: siembra.semilla,
             etapa,
-            clima: {
-              hr: this.toNumber(HelperService.getHR(clima, fechaIso)),
-              hrAnterior: this.toNumber(
-                HelperService.getHR(clima, fechaAnteriorIso),
-              ),
-              tavg: this.toNumber(HelperService.getTAvg(clima, fechaIso)),
-              tmin: this.toNumber(HelperService.getTMin(clima, fechaIso)),
-              tmax: this.toNumber(HelperService.getTMax(clima, fechaIso)),
-              precip: this.toNumber(HelperService.getPrecip(clima, fechaIso)),
-              precipAnterior: this.toNumber(
-                HelperService.getPrecip(clima, fechaAnteriorIso),
-              ),
-            },
+            clima: climaDia,
             prediccionAnterior: predAnterior,
             predecir,
           }),
@@ -168,15 +216,29 @@ export class PrediccionCebadaService {
         fechaPrediccion: fechaIso.split('T')[0],
         etapa,
         nombreEtapa: this.getNombreEtapa(etapa),
+        fuenteFenologia: fenologiaObservada ? 'observada' : 'crono',
+        registroFenologicoId: fenologiaObservada?.registro.id,
+        calidadFenologia: {
+          nivel: fenologiaObservada ? 'alta' : 'media',
+          fuente: fenologiaObservada ? 'manual' : 'estimado',
+          cobertura: 1,
+          fallback: !fenologiaObservada,
+          resumen: fenologiaObservada
+            ? 'Etapa observada a campo.'
+            : 'Etapa estimada desde fecha de siembra y crono.',
+          limitaciones: fenologiaObservada
+            ? []
+            : ['No hay observación fenológica de campo anterior a la fecha.'],
+        },
         enfermedades,
         estacion: {
           idEstacion: clima[0].estacion,
           distanciaMetros: clima[0].distancia,
-          humedadRelativa: HelperService.getHR(clima, fechaIso),
-          precipitaciones: HelperService.getPrecip(clima, fechaIso),
-          temperaturaMaxima: HelperService.getTMax(clima, fechaIso),
-          temperaturaMinima: HelperService.getTMin(clima, fechaIso),
-          temperaturaPromedio: HelperService.getTAvg(clima, fechaIso),
+          humedadRelativa: climaDia.hr,
+          precipitaciones: climaDia.precip,
+          temperaturaMaxima: climaDia.tmax,
+          temperaturaMinima: climaDia.tmin,
+          temperaturaPromedio: climaDia.tavg,
         },
       };
 
@@ -200,19 +262,68 @@ export class PrediccionCebadaService {
     return prediccionesCreadas;
   }
 
+  private getClimaDia(
+    clima: IClimaEstacionMeteorologica[],
+    fechaIso: string,
+  ): Omit<ClimaDiaCebada, 'hrAnterior' | 'precipAnterior'> {
+    const fecha = fechaIso.split('T')[0];
+    const filas = clima.filter((item) => item.fecha?.includes(fecha));
+    const horas = filas
+      .map((item) => ({
+        temperatura: Number(item.temperatura?.avg ?? item.temperatura?.last),
+        humedadRelativa: Number(item.humedad?.avg ?? item.humedad?.last),
+      }))
+      .filter(
+        (item) =>
+          Number.isFinite(item.temperatura) &&
+          Number.isFinite(item.humedadRelativa),
+      );
+    const tieneResolucionHoraria = filas.length >= 18 && horas.length >= 18;
+    const promedio = (values: number[]): number =>
+      values.length
+        ? values.reduce((sum, value) => sum + value, 0) / values.length
+        : Number.NaN;
+    const temperatures = horas.map((item) => item.temperatura);
+    const humidities = horas.map((item) => item.humedadRelativa);
+
+    if (tieneResolucionHoraria) {
+      const precipitaciones = filas
+        .map((item) => Number(item.lluvia?.sum ?? item.lluvia?.last ?? 0))
+        .filter(Number.isFinite);
+      return {
+        hr: promedio(humidities),
+        tavg: promedio(temperatures),
+        tmin: Math.min(...temperatures),
+        tmax: Math.max(...temperatures),
+        precip: precipitaciones.reduce((sum, value) => sum + value, 0),
+        horas,
+        horasMojado:
+          horas.filter((item) => item.humedadRelativa >= 90).length *
+          (24 / horas.length),
+        coberturaHoraria: Math.min(horas.length / 24, 1),
+        resolucion: 'horaria',
+      };
+    }
+
+    const hr = Number(HelperService.getHR(clima, fechaIso));
+    return {
+      hr,
+      tavg: Number(HelperService.getTAvg(clima, fechaIso)),
+      tmin: Number(HelperService.getTMin(clima, fechaIso)),
+      tmax: Number(HelperService.getTMax(clima, fechaIso)),
+      precip: Number(HelperService.getPrecip(clima, fechaIso)),
+      horas: [],
+      horasMojado: Number.isFinite(hr) ? this.horasMojadoProxy(hr) : Number.NaN,
+      coberturaHoraria: 0,
+      resolucion: 'proxy_diario',
+    };
+  }
+
   private predecirEnfermedad(params: {
     config: ConfigEnfermedadCebada;
     semilla?: ISemilla;
     etapa: number;
-    clima: {
-      hr: number;
-      hrAnterior: number;
-      tavg: number;
-      tmin: number;
-      tmax: number;
-      precip: number;
-      precipAnterior: number;
-    };
+    clima: ClimaDiaCebada;
     prediccionAnterior?: IPrediccion;
     predecir: boolean;
   }): IPrediccionEnfermedad {
@@ -221,9 +332,43 @@ export class PrediccionCebadaService {
     if (!predecir) {
       return {
         enfermedad: config.nombre,
+        idEnfermedad: config.id,
         resultado: 0,
-        variables: { formulaVersion: 2, etapaScore: 0 },
+        estado: 'calculado',
+        modelo: {
+          id: config.id,
+          version: 3,
+          fuente: 'ENFERMEDADES EN CEBADA.xlsx',
+          resolucion: clima.resolucion,
+        },
+        variables: { formulaVersion: 3, etapaScore: 0 },
       };
+    }
+    const camposPorFormula: Record<ConfigEnfermedadCebada['formula'], string[]> = {
+      mancha_red: ['hr', 'tavg'],
+      escaldadura: ['tavg', 'horasMojado', 'precip'],
+      roya_hoja: ['hr', 'tavg', 'precip'],
+      fusariosis: [
+        'hr',
+        'hrAnterior',
+        'tavg',
+        'tmin',
+        'tmax',
+        'precip',
+        'precipAnterior',
+      ],
+    };
+    const faltantes = camposClimaticosFaltantes(
+      clima as unknown as Record<string, unknown>,
+      camposPorFormula[config.formula],
+    );
+    if (faltantes.length) {
+      return crearPrediccionSinDatos(
+        config.nombre,
+        config.id,
+        faltantes,
+        'ENFERMEDADES EN CEBADA.xlsx',
+      );
     }
     const anterior = prediccionAnterior?.enfermedades?.find(
       (e) => e.enfermedad === config.nombre,
@@ -231,7 +376,7 @@ export class PrediccionCebadaService {
     const variablesAnterioresRaw =
       (anterior?.variables as IVariablesEnfermedadCebada) || {};
     const variablesAnteriores =
-      variablesAnterioresRaw.formulaVersion === 2
+      [2, 3].includes(variablesAnterioresRaw.formulaVersion)
         ? variablesAnterioresRaw
         : {};
 
@@ -250,38 +395,45 @@ export class PrediccionCebadaService {
   private predecirManchaEnRed(
     config: ConfigEnfermedadCebada,
     semilla: ISemilla | undefined,
-    clima: {
-      hr: number;
-      tavg: number;
-      precip: number;
-    },
+    clima: ClimaDiaCebada,
     anteriores: IVariablesEnfermedadCebada,
   ): IPrediccionEnfermedad {
-    const fTemp = this.factorTempManchaRed(clima.tavg);
-    const factorHumedad = this.factorHumedadManchaRed(clima.hr);
-    const kVar = this.getKVar(semilla, config.nombre, 1);
-    const tasaDiaria = fTemp * factorHumedad * kVar;
+    const resistencia = resolverResistencia(
+      semilla?.resistencia,
+      config.id,
+    );
+    const fTemp = factorTemperaturaManchaRed(clima.tavg);
+    const factorHumedad = factorHumedadManchaRed(clima.hr);
+    const tasaDiaria =
+      clima.resolucion === 'horaria'
+        ? tasaDiariaManchaRedHoraria(
+            clima.horas,
+            resistencia.multiplicador,
+          )
+        : fTemp * factorHumedad * resistencia.multiplicador;
     const previa = this.toNumber(
       anteriores.severidadAcumulada ?? anteriores.indiceAcumulado,
     );
-    const severidadAcumulada =
-      tasaDiaria > 0
-        ? previa <= 0
-          ? tasaDiaria > 0.2
-            ? 0.1
-            : 0
-          : previa + tasaDiaria * previa * (1 - previa / 100)
-        : previa;
+    const severidadAcumulada = acumularSeveridadManchaRed(previa, tasaDiaria);
     const resultado = this.round(this.clamp(severidadAcumulada, 0, 100), 2);
 
     return {
       enfermedad: config.nombre,
+      idEnfermedad: config.id,
       resultado,
+      estado: 'calculado',
+      ...metadataResistencia(resistencia),
+      modelo: {
+        id: config.id,
+        version: 3,
+        fuente: 'ENFERMEDADES EN CEBADA.xlsx / MANCHA EN RED',
+        resolucion: clima.resolucion,
+      },
       variables: {
-        formulaVersion: 2,
+        formulaVersion: 3,
         fTemp: this.round(fTemp, 3),
         factorHumedad: this.round(factorHumedad, 3),
-        kVar: this.round(kVar, 2),
+        kVar: this.round(resistencia.multiplicador, 2),
         tasaDiaria: this.round(tasaDiaria, 3),
         severidadAcumulada: resultado,
         humedadScore: this.round(factorHumedad, 3),
@@ -296,29 +448,45 @@ export class PrediccionCebadaService {
     config: ConfigEnfermedadCebada,
     semilla: ISemilla | undefined,
     etapa: number,
-    clima: {
-      hr: number;
-      tavg: number;
-      precip: number;
-    },
+    clima: ClimaDiaCebada,
   ): IPrediccionEnfermedad {
     const fTemp = this.factorTempEscaldadura(clima.tavg);
-    const horasMojado = this.horasMojadoProxy(clima.hr);
+    const horasMojado = clima.horasMojado;
     const fHMF = this.factorHMF(horasMojado);
     const fPP = this.factorPPEscaldadura(clima.precip);
-    const kVar = this.getKVar(semilla, config.nombre, 1);
-    const ri = fTemp * fHMF * fPP * kVar;
-    const resultado = this.round(this.clamp(ri * 100, 0, 100), 2);
+    const resistencia = resolverResistencia(
+      semilla?.resistencia,
+      config.id,
+    );
+    const ri = fTemp * fHMF * fPP * resistencia.multiplicador;
+    const resultado = this.round(
+      calcularEscaldadura(
+        clima.tavg,
+        horasMojado,
+        clima.precip,
+        resistencia.multiplicador,
+      ),
+      2,
+    );
 
     return {
       enfermedad: config.nombre,
+      idEnfermedad: config.id,
       resultado,
+      estado: 'calculado',
+      ...metadataResistencia(resistencia),
+      modelo: {
+        id: config.id,
+        version: 3,
+        fuente: 'ENFERMEDADES EN CEBADA.xlsx / ESCALDADURA',
+        resolucion: clima.resolucion,
+      },
       variables: {
-        formulaVersion: 2,
+        formulaVersion: 3,
         fTemp: this.round(fTemp, 3),
         fHMF: this.round(fHMF, 3),
         fPP: this.round(fPP, 3),
-        kVar: this.round(kVar, 2),
+        kVar: this.round(resistencia.multiplicador, 2),
         ri: this.round(ri, 3),
         horasMojado: this.round(horasMojado, 1),
         lluviaDiaria: this.round(clima.precip, 1),
@@ -333,31 +501,39 @@ export class PrediccionCebadaService {
   private predecirRoyaHoja(
     config: ConfigEnfermedadCebada,
     semilla: ISemilla | undefined,
-    clima: {
-      hr: number;
-      tavg: number;
-      precip: number;
-    },
+    clima: ClimaDiaCebada,
     anteriores: IVariablesEnfermedadCebada,
   ): IPrediccionEnfermedad {
-    const gdDia = this.gradosDiaRoya(clima.hr, clima.tavg);
+    const gdDia = gradosDiaRoya(clima.hr, clima.tavg);
     const dhrDia = clima.precip <= 0.2 && clima.hr >= 70 ? 1 : 0;
     const GD = this.round(this.toNumber(anteriores.GD) + gdDia, 2);
     const DHR = this.round(this.toNumber(anteriores.DHR) + dhrDia, 0);
-    const IR = this.indiceResistencia(semilla, config.nombre);
+    const resistencia = resolverResistencia(
+      semilla?.resistencia,
+      config.id,
+    );
     const resultado = this.round(
-      this.clamp(4.42 + 0.61 * GD + 0.57 * DHR - 30.01 * IR, 0, 100),
+      calcularRoyaHoja(GD, DHR, resistencia.indiceResistencia),
       2,
     );
 
     return {
       enfermedad: config.nombre,
+      idEnfermedad: config.id,
       resultado,
+      estado: 'calculado',
+      ...metadataResistencia(resistencia),
+      modelo: {
+        id: config.id,
+        version: 3,
+        fuente: 'ENFERMEDADES EN CEBADA.xlsx / Hoja1',
+        resolucion: clima.resolucion,
+      },
       variables: {
-        formulaVersion: 2,
+        formulaVersion: 3,
         GD,
         DHR,
-        kVar: this.round(this.getKVar(semilla, config.nombre, 1), 2),
+        kVar: this.round(resistencia.multiplicador, 2),
         temperaturaScore: this.round(gdDia, 2),
         humedadScore: dhrDia,
         lluviaScore: clima.precip <= 0.2 ? 1 : 0,
@@ -369,15 +545,7 @@ export class PrediccionCebadaService {
   private predecirFusariosis(
     config: ConfigEnfermedadCebada,
     semilla: ISemilla | undefined,
-    clima: {
-      hr: number;
-      hrAnterior: number;
-      tavg: number;
-      tmin: number;
-      tmax: number;
-      precip: number;
-      precipAnterior: number;
-    },
+    clima: ClimaDiaCebada,
     anteriores: IVariablesEnfermedadCebada,
   ): IPrediccionEnfermedad {
     const gdaAnterior = this.toNumber(anteriores.GDAcum);
@@ -394,24 +562,39 @@ export class PrediccionCebadaService {
     if (clima.tmax > 26) residual += clima.tmax - 26;
     if (clima.tmin < 9) residual += 9 - clima.tmin;
     const GDN = this.round(this.toNumber(anteriores.GDN) + residual, 2);
-    const kVar = this.getKVar(semilla, config.nombre, 1);
+    const resistencia = resolverResistencia(
+      semilla?.resistencia,
+      config.id,
+    );
     const activo = GDAcum < 530;
-    const resultado = activo
-      ? this.round(
-          this.clamp((20.37 + 8.63 * PMoj - 0.49 * GDN) * kVar, 0, 100),
-          2,
-        )
-      : 0;
+    const resultado = this.round(
+      calcularFusariumEspiga(
+        PMoj,
+        GDN,
+        resistencia.multiplicador,
+        activo,
+      ),
+      2,
+    );
 
     return {
       enfermedad: config.nombre,
+      idEnfermedad: config.id,
       resultado,
+      estado: activo ? 'calculado' : 'fuera_ventana',
+      ...metadataResistencia(resistencia),
+      modelo: {
+        id: config.id,
+        version: 3,
+        fuente: 'ENFERMEDADES EN CEBADA.xlsx / modelo Fusarium',
+        resolucion: clima.resolucion,
+      },
       variables: {
-        formulaVersion: 2,
+        formulaVersion: 3,
         PMoj,
         GDN,
         GDAcum,
-        kVar: this.round(kVar, 2),
+        kVar: this.round(resistencia.multiplicador, 2),
         humedadScore: periodoMojado,
         temperaturaScore: this.round(residual, 2),
         lluviaScore: clima.precip >= 0.2 ? 1 : 0,
@@ -425,17 +608,6 @@ export class PrediccionCebadaService {
     config: ConfigEnfermedadCebada,
   ): boolean {
     return etapa >= config.etapaMin && etapa <= config.etapaMax;
-  }
-
-  private factorTempManchaRed(temperatura: number): number {
-    if (temperatura < 5 || temperatura > 30) return 0;
-    return this.round(((temperatura - 5) * (30 - temperatura)) / 150, 4);
-  }
-
-  private factorHumedadManchaRed(hr: number): number {
-    if (hr >= 90) return 1;
-    if (hr >= 80) return 0.5;
-    return 0;
   }
 
   private factorTempEscaldadura(temperatura: number): number {
@@ -463,37 +635,6 @@ export class PrediccionCebadaService {
     return this.clamp(0.2 + ((lluvia - 1) / 4) * 0.8, 0.2, 1);
   }
 
-  private gradosDiaRoya(hr: number, tavg: number): number {
-    if (hr < 49 || tavg < 12) return 0;
-    const baseTermica = tavg >= 18 ? 18 : tavg;
-    return this.round(Math.max(baseTermica - 12, 0), 2);
-  }
-
-  private getKVar(
-    semilla: ISemilla | undefined,
-    enfermedad: EnfermedadCebada,
-    fallback: number,
-  ): number {
-    const value = semilla?.resistencia?.find((r) => r.enfermedad === enfermedad)
-      ?.multiplicador;
-    const numeric = this.toNumber(value, fallback);
-    return this.clamp(numeric, 0.05, 1.4);
-  }
-
-  private indiceResistencia(
-    semilla: ISemilla | undefined,
-    enfermedad: EnfermedadCebada,
-  ): number {
-    const value = semilla?.resistencia?.find((r) => r.enfermedad === enfermedad)
-      ?.multiplicador;
-    if (value === undefined || value === null) return 0;
-    const numeric = this.toNumber(value, 0);
-    if (numeric <= 0.35) return 1;
-    if (numeric <= 0.75) return 0.65;
-    if (numeric <= 1.05) return 0.35;
-    return 0;
-  }
-
   private async getUltimaPrediccion(
     idSiembra: string,
   ): Promise<IPrediccion | undefined> {
@@ -507,6 +648,12 @@ export class PrediccionCebadaService {
   }
 
   private getEtapaPorFecha(siembra: ISiembra, crono: ICrono, fecha: Date) {
+    const observada = resolverEtapaFenologicaObservada(
+      siembra,
+      fecha,
+      'Cebada',
+    );
+    if (typeof observada?.etapa === 'number') return observada.etapa;
     const fechaSiembra = new Date(siembra.fechaSiembra);
     const diferencia = fecha.getTime() - fechaSiembra.getTime();
     const diasTranscurridos = Math.floor(diferencia / (1000 * 60 * 60 * 24));

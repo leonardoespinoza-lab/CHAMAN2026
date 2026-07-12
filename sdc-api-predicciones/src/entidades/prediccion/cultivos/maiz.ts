@@ -14,6 +14,10 @@ import { PrediccionsRepository } from '../repository';
 import { ClimaService } from '../../clima/service';
 import { FumigacionsService } from 'src/entidades/fumigacion/service';
 import { RoyaDelMaizService } from '../enfermedades/roya_del_maiz';
+import {
+  aplicarEtapaFenologicaObservada,
+  resolverEtapaFenologicaObservada,
+} from '../fenologia-observada';
 
 @Injectable()
 export class PrediccionMaizService {
@@ -66,6 +70,8 @@ export class PrediccionMaizService {
         siembra.coordenadas.lng,
         dateAnteriorADesde2.toISOString(),
         dateHasta.toISOString(),
+        undefined,
+        siembra.establecimiento,
       );
       if (!clima.length) {
         Logger.warn(
@@ -94,7 +100,16 @@ export class PrediccionMaizService {
           );
         }
 
-        const etapa = this.getEtapaPorFecha(siembra, crono, fecha);
+        const etapaCrono = this.getEtapaPorFecha(siembra, crono, fecha);
+        const fenologiaObservada = resolverEtapaFenologicaObservada(
+          siembra,
+          fecha,
+          'Maiz',
+        );
+        const etapa = aplicarEtapaFenologicaObservada(
+          etapaCrono,
+          fenologiaObservada,
+        );
 
         const distancia = clima[0].distancia;
 
@@ -114,6 +129,20 @@ export class PrediccionMaizService {
           fechaPrediccion: fecha.toISOString().split('T')[0],
           etapa,
           nombreEtapa: this.nombreEtapa(etapa),
+          fuenteFenologia: fenologiaObservada ? 'observada' : 'crono',
+          registroFenologicoId: fenologiaObservada?.registro.id,
+          calidadFenologia: {
+            nivel: fenologiaObservada ? 'alta' : 'media',
+            fuente: fenologiaObservada ? 'manual' : 'estimado',
+            cobertura: 1,
+            fallback: !fenologiaObservada,
+            resumen: fenologiaObservada
+              ? 'Etapa observada a campo.'
+              : 'Etapa estimada desde fecha de siembra y crono.',
+            limitaciones: fenologiaObservada
+              ? []
+              : ['No hay observación fenológica de campo anterior a la fecha.'],
+          },
           enfermedades: [],
           estacion: {
             idEstacion: clima[0].estacion,
@@ -198,6 +227,12 @@ export class PrediccionMaizService {
    * @returns Etapa en la que esta la siembra en la fecha dada
    */
   private getEtapaPorFecha(siembra: ISiembra, crono: ICrono, fecha: Date) {
+    const observada = resolverEtapaFenologicaObservada(
+      siembra,
+      fecha,
+      'Maiz',
+    );
+    if (typeof observada?.etapa === 'number') return observada.etapa;
     const fechaSiembra = new Date(siembra.fechaSiembra);
     const fechaActual = fecha;
     const diferencia = fechaActual.getTime() - fechaSiembra.getTime();

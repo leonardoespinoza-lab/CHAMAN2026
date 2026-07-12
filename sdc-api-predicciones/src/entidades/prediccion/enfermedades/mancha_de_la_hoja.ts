@@ -5,6 +5,15 @@ import {
   ISemilla,
   IVariablesManchaDeLaHoja,
 } from 'modelos/src';
+import {
+  calcularManchaHoja,
+  resolverResistencia,
+} from 'modelos/src';
+import {
+  camposClimaticosFaltantes,
+  crearPrediccionSinDatos,
+  metadataResistencia,
+} from './calidad';
 
 @Injectable()
 export class ManchaDeLaHojaService {
@@ -17,6 +26,15 @@ export class ManchaDeLaHojaService {
     prediccionAnterior?: IPrediccion,
     predecir?: boolean,
   ): Promise<IPrediccionEnfermedad> {
+    const faltantes = camposClimaticosFaltantes(clima, ['precip', 'hr']);
+    if (faltantes.length) {
+      return crearPrediccionSinDatos(
+        'Mancha de la Hoja',
+        'trigo.mancha_hoja',
+        faltantes,
+        'Enfermedades en TRIGO -V2.xlsx / Mancha de la Hoja',
+      );
+    }
     const prediccionAnteriorEnfermedad = prediccionAnterior?.enfermedades.find(
       (e) => e.enfermedad === 'Mancha de la Hoja',
     );
@@ -40,10 +58,11 @@ export class ManchaDeLaHojaService {
       variables.DHR = predecir ? variables.DHR + 1 : 0;
     }
 
-    const resistencia = semilla.resistencia?.find(
-      (r) => r.enfermedad === 'Mancha de la Hoja',
+    const resistencia = resolverResistencia(
+      semilla.resistencia,
+      'trigo.mancha_hoja',
     );
-    if (!resistencia) {
+    if (resistencia.desconocida) {
       Logger.debug(
         `No se encontró resistencia para "Mancha de la Hoja" en la semilla ${JSON.stringify(
           semilla,
@@ -51,12 +70,11 @@ export class ManchaDeLaHojaService {
       );
     }
 
-    let resultado =
-      (-6.41 + 0.59 * variables.DHR + 2.79 * variables.DPr) *
-      (resistencia?.multiplicador || 1);
-    if (resultado < 0) {
-      resultado = 0;
-    }
+    const resultado = calcularManchaHoja(
+      variables.DHR,
+      variables.DPr,
+      resistencia.multiplicador,
+    );
 
     if (!predecir) {
       variables.DPr = 0;
@@ -65,7 +83,16 @@ export class ManchaDeLaHojaService {
 
     const prediccion: IPrediccionEnfermedad = {
       enfermedad: 'Mancha de la Hoja',
+      idEnfermedad: 'trigo.mancha_hoja',
       resultado: predecir ? +resultado.toFixed(2) : 0,
+      estado: 'calculado',
+      ...metadataResistencia(resistencia),
+      modelo: {
+        id: 'trigo.mancha_hoja',
+        version: 3,
+        fuente: 'Enfermedades en TRIGO -V2.xlsx / Mancha de la Hoja',
+        resolucion: 'diaria',
+      },
       variables,
     };
     return prediccion;

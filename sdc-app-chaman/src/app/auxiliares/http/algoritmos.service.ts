@@ -44,6 +44,7 @@ export interface HuellaHidricaSimulacion {
 
 export interface AlgoritmoSimulacion {
   motor: string;
+  modo?: string;
   resumen: string;
   metricas: Record<string, any>;
   serie: Array<{ label: string; value: number }>;

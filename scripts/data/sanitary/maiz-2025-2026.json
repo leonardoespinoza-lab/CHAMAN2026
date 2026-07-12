@@ -1,0 +1,1453 @@
+{
+  "metadata": {
+    "sourceFile": "VARIEDADES TRIGO SOJA MAIZ 2026.xlsx",
+    "sourceSheet": "MAIZ 25-26",
+    "campania": "2025-2026",
+    "fechaNormalizacion": "2026-07-12",
+    "registros": 206
+  },
+  "resistencias": [
+    {
+      "semillero": "NIDERA",
+      "variedad": "NS 7921 VIPTERA3 CL",
+      "ciclo": "INTERMEDIO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "NIDERA",
+      "variedad": "NS 7621 VIPTERA3",
+      "ciclo": "PRECOZ",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "NIDERA",
+      "variedad": "NS 7818 VIP3",
+      "ciclo": "INTERMEDIO",
+      "roya": "R",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "NIDERA",
+      "variedad": "NS 7917 VT3P",
+      "ciclo": "INTERMEDIO",
+      "roya": "R",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "NIDERA",
+      "variedad": "AX 7761 VT3P",
+      "ciclo": "PRECOZ",
+      "roya": "R",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "NIDERA",
+      "variedad": "AX 7784 VT3P",
+      "ciclo": "PRECOZ",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "NIDERA",
+      "variedad": "AX 7822 CL VT3P",
+      "ciclo": "INTERMEDIO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "BRV 8380PWUE",
+      "ciclo": "INTERMEDIO",
+      "roya": "R",
+      "tizon": null
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "BRV 8472PWU",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "NEXT 22.6PWUE",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "NEXT 22.6PWE",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "NEXT 22.6PWU",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": null
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "NEXT 25.8PWU",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "BRV 507PWU",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": null
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "BRV 510PWU",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": null
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "BRV 505PW",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK74-47 VT3P",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-08",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-70",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK73-20 VTPRO4",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK73-03",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-20 VTPRO4",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK70-20R",
+      "ciclo": "INTERMEDIO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-72",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK73-30",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-10 VTPRO4",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-27",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 725 TRECEPTA",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 723 TRECEPTA",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 723 RR2",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 721 VTPRO4",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 720 VT3P",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 720 VT3P RIB COMPLETO",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 722 VT3P",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 722 VT3P RIB COMPLETO",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 722 RR2",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 718 VT3P",
+      "ciclo": "INTERMEDIO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 721 RR2",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 785 VT3P",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": null
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 785 TRECEPTA",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 785 RR2",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 795",
+      "ciclo": "INTERMEDIO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 719",
+      "ciclo": "INTERMEDIO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 626",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": null
+    },
+    {
+      "semillero": "STINE",
+      "variedad": "ST 9910-20",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": null
+    },
+    {
+      "semillero": "STINE",
+      "variedad": "ST 120-09 RG",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": null
+    },
+    {
+      "semillero": "STINE",
+      "variedad": "ST 9820 CL",
+      "ciclo": "INTERMEDIO",
+      "roya": "R",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "STINE",
+      "variedad": "ST 9741",
+      "ciclo": "PRECOZ",
+      "roya": "R",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "STINE",
+      "variedad": "ST 9739 E-20",
+      "ciclo": "PRECOZ",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "STINE",
+      "variedad": "ST 9734-20",
+      "ciclo": "PRECOZ",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "STINE",
+      "variedad": "ST 9734",
+      "ciclo": "PRECOZ",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "PIONEER",
+      "variedad": "P2021 PWUE",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "R"
+    },
+    {
+      "semillero": "PIONEER",
+      "variedad": "P2021 PWUE",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "PIONEER",
+      "variedad": "P2167 VYHR",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "S"
+    },
+    {
+      "semillero": "PIONEER",
+      "variedad": "P1804 PWUE",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "R"
+    },
+    {
+      "semillero": "PIONEER",
+      "variedad": "P1815 VYHR",
+      "ciclo": "INTERMEDIO",
+      "roya": "R",
+      "tizon": null
+    },
+    {
+      "semillero": "PIONEER",
+      "variedad": "P2089 VYHR",
+      "ciclo": "PRECOZ",
+      "roya": "S",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "PIONEER",
+      "variedad": "P2005 YHR",
+      "ciclo": "INTERMEDIO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "PIONEER",
+      "variedad": "P1833 VYHR",
+      "ciclo": "INTERMEDIO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "PIONEER",
+      "variedad": "P2353 PWU",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": null
+    },
+    {
+      "semillero": "PIONEER",
+      "variedad": "P0622 VYHR",
+      "ciclo": "PRECOZ",
+      "roya": "S",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "PIONEER",
+      "variedad": "P9946 VYHR",
+      "ciclo": "PRECOZ",
+      "roya": "S",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DON MARIO",
+      "variedad": "2773 TRE",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": null
+    },
+    {
+      "semillero": "DON MARIO",
+      "variedad": "2789 VP3",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": null
+    },
+    {
+      "semillero": "DON MARIO",
+      "variedad": "2773 VP3P",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": null
+    },
+    {
+      "semillero": "DON MARIO",
+      "variedad": "2738 MGR2",
+      "ciclo": "INTERMEDIO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "DON MARIO",
+      "variedad": "2712 TRE",
+      "ciclo": "INTERMEDIO",
+      "roya": "R",
+      "tizon": null
+    },
+    {
+      "semillero": "DON MARIO",
+      "variedad": "2772 TRE",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": null
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "Dk 69-62",
+      "ciclo": "INTERMEDIO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-70 TRECEPTA",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK74-47 TRECEPTA",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK77-02",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK77-10 VTPRO4",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "BRV 8472PWUE",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "BRV 8421PWUE",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "PIONEER",
+      "variedad": "P2297 PWUE",
+      "ciclo": "LARGO",
+      "roya": "S",
+      "tizon": "R"
+    },
+    {
+      "semillero": "PIONEER",
+      "variedad": "P1669 VYHR",
+      "ciclo": "PRECOZ",
+      "roya": "R",
+      "tizon": "S"
+    },
+    {
+      "semillero": "PIONEER",
+      "variedad": "P2353 PWU",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 344",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": null
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 721 TRECEPTA",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 123",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 125",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": null
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 785 VTPRO4",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA 482 VT3 PRO",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA VG 48 RR2",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA 480 RR2",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA 470 RR2",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "S"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA 470 VT3 PRO",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "S"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA 514 FLINT",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA 484 VT3 PRO",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA 476 VT3 PRO",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA 481 VT3 PRO",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA 473 VT3 PRO",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA 476 TRECEPTA",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA 490 VIP 3",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA 473 TRECEPTA",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "CREDENZ",
+      "variedad": "BASF 7344 VT TRIPLE PRO",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "CREDENZ",
+      "variedad": "BASF 7349 VT TRIPLE PRO",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "NUSEED",
+      "variedad": "3790 RR2 CL",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "NUSEED",
+      "variedad": "NUCORN 2550 BTRG",
+      "ciclo": "PRECOZ",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "NUSEED",
+      "variedad": "NUCORN 2881 MGRR2",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "NUSEED",
+      "variedad": "NUCORN 2881 VT 3 PRO",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "LG 304849 VIP3",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "LG 30870 VT3P",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "S"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "SRM 566 VT3PCL",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "SRM 566 VT3P",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "SRM 566 MGCLRR2",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "SRM 566 MGCL",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "SRM 566 RR2",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "SRM 6620 VT3P",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "LG 30660 VIP3",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "LG 30680 VIP3",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "LG 30695 VIP3",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "LG 30695 VT3P",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "LG 30695 RR2",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "LG 36538 VIP3",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "LG 36837 VT3P",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": null
+    },
+    {
+      "semillero": "NK",
+      "variedad": "NK 842 VIPTERA 3",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "NK",
+      "variedad": "NK 870 VIPTERA 3",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "NK",
+      "variedad": "NK 855 VIPTERA 3",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "NK",
+      "variedad": "SYN 897 VIPTERA 3",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "NK",
+      "variedad": "SYN 979 VIPTERA 3",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "S"
+    },
+    {
+      "semillero": "NK",
+      "variedad": "SYN 840 VIPTERA 3",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "NK",
+      "variedad": "SYN 126 VIPTERA 3",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "NK",
+      "variedad": "SYN 505 VIPTERA 3",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "HORUS",
+      "variedad": "HO 12123 IF 3",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "NORD",
+      "variedad": "ACIS PWU",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "R"
+    },
+    {
+      "semillero": "NORD",
+      "variedad": "ACRUX PWUE",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "NORD",
+      "variedad": "ARON PWUE",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "NORD",
+      "variedad": "BORAX PWUE",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "NORD",
+      "variedad": "ZEFIR PWUE",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "NIDERA",
+      "variedad": "NS 7765 VIPTERA3",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "NIDERA",
+      "variedad": "SS 2223S VIPTERA3",
+      "ciclo": "INTERMEDIO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "NIDERA",
+      "variedad": "NS 7624 VIPTERA3CL",
+      "ciclo": "PRECOZ",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "NIDERA",
+      "variedad": "NS 7626 VIPTERA3CL",
+      "ciclo": "PRECOZ",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "NIDERA",
+      "variedad": "NS 7800 CLTG",
+      "ciclo": "INTERMEDIO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "BRV 8380PWUE",
+      "ciclo": "INTERMEDIO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "B 510 PWUE",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "RFG22RRE",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "BREVANT",
+      "variedad": "NEXT 25.8 PWUE",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "R"
+    },
+    {
+      "semillero": "NORD",
+      "variedad": "ACRUX PWE",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK73-73 TRECEPTA",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-72 TRECEPTA",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-72 RIB COMPLETO",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-72 ROUDUP READY MAIZ 2",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK74-47 TRECEPTA RIB COMPLETO",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK73-03 TRECEPTA",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK69-62 TRECEPTA",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-20 VT TRIPLE PRO 4",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-20 VT TRIPLE PRO 4 RIB COMPLETO",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-08 TRECEPTA",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-10 VT TRIPLE PRO 4",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-10 VT TRIPLE PRO 4 RIB COMPLETO",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-10 ROUDUP READY MAIZ 2",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK 81-11 TRECEPTA",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "Dk 77-02 TRECEPTA",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "Dk 76-12 VT TRIPLE PRO 4",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK77-10RR2",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK76-12RR2",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-12RR2",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "DEKALB",
+      "variedad": "DK72-20RR2",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA 471 VT3 PRO",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA 477 VT3 CL",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ACA",
+      "variedad": "ACA VG 52 RR2",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "CREDENZ",
+      "variedad": "BASF 7339 VIPTERA 3",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "CREDENZ",
+      "variedad": "Refugio 2724 TG CL",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "CREDENZ",
+      "variedad": "BASF 5747 Viptera 3 CL",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "CREDENZ",
+      "variedad": "Refugio 2724 TG CL",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "CREDENZ",
+      "variedad": "Refugio 2300 RR2",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "CREDENZ",
+      "variedad": "BASF 5575 VT TRIPLE PRO",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "ILLINOIS",
+      "variedad": "IS 550 VT3P RR2",
+      "ciclo": "PRECOZ",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "ILLINOIS",
+      "variedad": "IS 799 VT3P",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "ILLINOIS",
+      "variedad": "IS 782 VIP3",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "ILLINOIS",
+      "variedad": "IS 695 MG RR2",
+      "ciclo": "PRECOZ",
+      "roya": "R",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ILLINOIS",
+      "variedad": "IS 799 TRE",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "ILLINOIS",
+      "variedad": "IS 7.24 TRE",
+      "ciclo": "LARGO",
+      "roya": "R",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "NK",
+      "variedad": "NK 825 VIPTERA 3 CL",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "NK",
+      "variedad": "NK 835 VIPTERA 3",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "LIMAGRAIN",
+      "variedad": "LG 30646 VIPR",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 3-02 TRECEPTA",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "LA TIJERETA",
+      "variedad": "LT 3-44 TRECEPTA",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "STINE",
+      "variedad": "ST 9736 - CL",
+      "ciclo": "PRECOZ",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "STINE",
+      "variedad": "ST 9742 RG",
+      "ciclo": "PRECOZ",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "STINE",
+      "variedad": "ST 9939",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "STINE",
+      "variedad": "ST 9942 T",
+      "ciclo": "LARGO",
+      "roya": "S",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "STINE",
+      "variedad": "ST 9942 RG",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "STINE",
+      "variedad": "ST 9977",
+      "ciclo": "LARGO",
+      "roya": "S",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "SUPRA",
+      "variedad": "S 11 - 762 VIP3",
+      "ciclo": "PRECOZ",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "SUPRA",
+      "variedad": "KWS 16 - 607 VIP3",
+      "ciclo": "INTERMEDIO",
+      "roya": "R",
+      "tizon": "R"
+    },
+    {
+      "semillero": "SUPRA",
+      "variedad": "KWS 3916 VIP3",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "SUPRA",
+      "variedad": "KM 3916 RR2",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "SUPRA",
+      "variedad": "S 13 - 916 VIP3",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "SUPRA",
+      "variedad": "S 13 - 160 VIP3",
+      "ciclo": "INTERMEDIO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "SUPRA",
+      "variedad": "KM 4216 VIP3",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "SUPRA",
+      "variedad": "KM 4216 G",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "SUPRA",
+      "variedad": "KWS 14 - 408 VIP3",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "SUPRA",
+      "variedad": "KWS 16 - 959 VIP3",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "SUPRA",
+      "variedad": "KWS 19 - 120 VIP3",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "SUPRA",
+      "variedad": "K 9606 VIP3",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "SUPRA",
+      "variedad": "K 7510 VIP3",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MR"
+    },
+    {
+      "semillero": "ADVANTA",
+      "variedad": "ADV 8066 TRE",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ADVANTA",
+      "variedad": "ADV 8122 VT3PRO",
+      "ciclo": "LARGO",
+      "roya": "MR",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ADVANTA",
+      "variedad": "ADV 8413 VIP3",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ADVANTA",
+      "variedad": "ADV 8510 VIP3",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ADVANTA",
+      "variedad": "ADV 8620 VT3P",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    },
+    {
+      "semillero": "ADVANTA",
+      "variedad": "ADV 8620 GR",
+      "ciclo": "LARGO",
+      "roya": "MS",
+      "tizon": "MS"
+    }
+  ]
+}

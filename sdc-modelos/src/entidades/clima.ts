@@ -133,6 +133,8 @@ export interface IComparacionFuentesClimaticas {
 
 export interface ISerieFrioTermicoDia {
   fecha: string;
+  fuente?: FuenteClima;
+  calidadDatos?: ICalidadDatoMotor;
   temperaturaMin?: number;
   temperaturaMax?: number;
   temperaturaMedia?: number;
@@ -418,7 +420,7 @@ export interface IResumenRiesgosAgroclimaticos {
 }
 
 export interface IFrioTermicoCultivo {
-  fuente: "OpenMeteo";
+  fuente: "OpenMeteo" | "FieldClimate" | "FieldClimate + OpenMeteo";
   lat: number;
   lng: number;
   cultivo?: string;

@@ -127,7 +127,7 @@ export class AlgoritmosComponent {
       endpoint: 'POST /algoritmos/enfermedades/simular',
       persistencia: 'Motor productivo: /siembras/:id/prediccion-enfermedades',
       fields: [
-        { key: 'cultivo', label: 'Cultivo', type: 'select', options: ['Trigo', 'Cebada', 'Soja', 'Maiz'] },
+        { key: 'cultivo', label: 'Cultivo', type: 'select', options: ['Trigo', 'Cebada', 'Soja', 'Maiz', 'Arveja'] },
         {
           key: 'idSemilla',
           label: 'Variedad',
@@ -150,6 +150,10 @@ export class AlgoritmosComponent {
             'Floracion',
             'Llenado de granos',
             'Llenado de Granos',
+            'E',
+            'R1',
+            'R3',
+            'MF',
           ],
         },
         { key: 'humedadRelativa', label: 'Humedad relativa', type: 'number', suffix: '%' },
@@ -442,7 +446,9 @@ export class AlgoritmosComponent {
       return `No hay variedades cargadas para ${cultivo}. El banco permite simular manualmente, pero falta seed de catalogo.`;
     }
     const variedades = new Set(semillas.map((semilla) => this.normalizar(semilla.variedad)).filter(Boolean)).size;
-    const conResistencia = semillas.filter((semilla) => !!semilla.resistencia?.length).length;
+    const conResistencia = semillas.filter((semilla) =>
+      this.semillaTieneResistenciaEspecifica(semilla),
+    ).length;
     const conCrono = semillas.filter((semilla) => this.semillaTieneCrono(semilla)).length;
     return `${variedades} variedad(es) de ${cultivo}. ${conCrono} con crono/fenologia robusta y ${conResistencia} con resistencia varietal especifica.`;
   }
@@ -455,8 +461,14 @@ export class AlgoritmosComponent {
   public get advertenciaCatalogoSanitario(): string {
     const semilla = this.semillaSanitariaSeleccionada;
     if (!semilla) return 'Sin semilla vinculada: la simulacion usa sensibilidad base manual.';
+    if (this.normalizar(semilla.cultivo) === 'ARVEJA') {
+      return `${semilla.variedad}: resistencia varietal sin datos; el screening no asume susceptibilidad.`;
+    }
     if (!semilla.resistencia?.length) {
       return `${semilla.variedad}: sin resistencia varietal especifica; se usa sensibilidad base.`;
+    }
+    if (!this.semillaTieneResistenciaEspecifica(semilla)) {
+      return `${semilla.variedad}: matriz sanitaria presente, pero sin perfiles varietales observados/historicos; se usa escenario conservador.`;
     }
     return `${semilla.variedad}: resistencia varietal cargada para ${semilla.resistencia.length} enfermedad(es).`;
   }
@@ -558,7 +570,9 @@ export class AlgoritmosComponent {
       resistencia: semilla?.resistencia || this.enfermedadesForm.resistencia || [],
       calidadVarietal: {
         catalogoSemillas: !!semilla,
-        resistenciaEspecifica: !!semilla?.resistencia?.length,
+        resistenciaEspecifica: semilla
+          ? this.semillaTieneResistenciaEspecifica(semilla)
+          : false,
         cronoFenologico: semilla ? this.semillaTieneCrono(semilla) : false,
         observaciones: semilla?.observaciones,
       },
@@ -575,9 +589,14 @@ export class AlgoritmosComponent {
 
   private semillaTieneCrono(semilla: ISemilla): boolean {
     const ciclo = this.normalizar(semilla.ciclo);
-    if (ciclo && ciclo !== 'SIN DEFINIR') return true;
-    const texto = this.normalizar(`${semilla.observaciones || ''} ${semilla.fenologiaReferencia?.fuente || ''}`);
-    return texto.includes('CRONO') || texto.includes('FENOLOG');
+    return Boolean(ciclo && ciclo !== 'SIN DEFINIR');
+  }
+
+  private semillaTieneResistenciaEspecifica(semilla: ISemilla): boolean {
+    return (semilla.resistencia || []).some((item) => {
+      if (['observada', 'historica'].includes(item.estado || '')) return true;
+      return !item.estado && Number.isFinite(Number(item.multiplicador));
+    });
   }
 
   private normalizar(value?: string | Cultivo): string {

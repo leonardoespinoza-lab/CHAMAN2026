@@ -35,6 +35,7 @@ interface DiseaseInsight {
   enfermedad: TEnfermedad;
   prediccion?: IPrediccionEnfermedad;
   resultado: number;
+  resultadoEtiqueta: string;
   enVentanaFenologica: boolean;
   fill: number;
   severity: 'low' | 'medium' | 'high';
@@ -64,7 +65,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   public actualizandoPrediccion = false;
   public enfermedadSeleccionada?: DiseaseInsight;
   public prescripcionSeleccionadaGrupo?: string;
-  private readonly cultivosConMotorSanitario = new Set(['Trigo', 'Soja', 'Maiz', 'Cebada']);
+  private readonly cultivosConMotorSanitario = new Set(['Trigo', 'Soja', 'Maiz', 'Cebada', 'Arveja']);
   private readonly enfermedadesConfirmadas = new Set<TEnfermedad>();
 
   constructor(
@@ -85,7 +86,12 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     return !!cultivo && this.cultivosConMotorSanitario.has(cultivo);
   }
 
+  public get esScreeningExperimental(): boolean {
+    return this.siembra?.semilla?.cultivo === 'Arveja';
+  }
+
   public get etiquetaBotonActualizacion(): string {
+    if (this.esScreeningExperimental) return 'Actualizar screening';
     return this.tieneMotorSanitario ? 'Actualizar riesgo' : 'Motor en calibracion';
   }
 
@@ -167,6 +173,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         enfermedad,
         prediccion,
         resultado,
+        resultadoEtiqueta: this.resultadoEtiqueta(prediccion, resultado),
         enVentanaFenologica,
         fill: this.llenadoRiesgo(resultado, !!prediccion, enfermedad),
         severity: this.severidad(resultado, enfermedad),
@@ -188,6 +195,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   public get resumenGeneral(): string {
     const cultivo = this.siembra?.semilla?.cultivo || 'cultivo';
     const variedad = this.siembra?.semilla?.variedad || 'la variedad';
+    if (this.esScreeningExperimental) {
+      return `${variedad}: screening ambiental experimental para Arveja; requiere confirmacion a campo.`;
+    }
     if (!this.tieneMotorSanitario) {
       return `${variedad}: motor sanitario en calibracion para ${cultivo}.`;
     }
@@ -236,6 +246,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     if (cultivo === 'Maiz') {
       return ['Roya del Maiz'];
     }
+    if (cultivo === 'Arveja') {
+      return ['Complejo Ascochyta de la Arveja', 'Mildiu de la Arveja', 'Oidio de la Arveja'];
+    }
     if (cultivo === 'Vid') {
       return ['Oidio', 'Botritis', 'Mildiu'];
     }
@@ -259,6 +272,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   private umbralesRiesgo(enfermedad?: TEnfermedad): { medio: number; alto: number; escalaDirecta: boolean } {
+    if (this.esScreeningExperimental) {
+      return { medio: 50, alto: 80, escalaDirecta: true };
+    }
     if (this.siembra?.semilla?.cultivo === 'Cebada') {
       return { medio: 35, alto: 60, escalaDirecta: true };
     }
@@ -286,6 +302,10 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   private sensibilidadVarietal(enfermedad: TEnfermedad): string {
+    if (this.esScreeningExperimental) {
+      const variedad = this.siembra?.semilla?.variedad || 'la variedad';
+      return `Sin dato varietal publicado; no se asume susceptibilidad para ${variedad}.`;
+    }
     const resistencia = this.siembra?.semilla?.resistencia?.find((item) => item.enfermedad === enfermedad);
     const multiplicador = resistencia?.multiplicador;
     if (multiplicador == null) {
@@ -317,6 +337,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       'Fusariosis de la Espiga de Cebada': 'Ventana critica en espigazon, antesis y llenado temprano con lluvia y mojado.',
       'Fin de Ciclo': 'Mayor riesgo en floracion y llenado.',
       'Roya del Maiz': 'Puede presentarse desde vegetativo avanzado hasta llenado.',
+      'Complejo Ascochyta de la Arveja': 'Screening desde emergencia hasta formacion de vainas; integrar rastrojo, rotacion y sanidad de semilla.',
+      'Mildiu de la Arveja': 'Mayor atencion desde emergencia hasta inicio de floracion con mojado y humedad muy alta.',
+      'Oidio de la Arveja': 'Ventana de monitoreo desde floracion hasta formacion de vainas.',
       Oidio: 'Brotes activos, floracion y desarrollo de racimos con humedad favorable.',
       Botritis: 'Floracion, cierre de racimo y madurez con mojado o humedad alta.',
       Mildiu: 'Desde brotacion hasta canopia activa, especialmente despues de lluvias.',
@@ -379,6 +402,13 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       if (etapa == null) return true;
       return enfermedad === 'Roya del Maiz' && (etapa === 1 || etapa === 2);
     }
+    if (cultivo === 'Arveja') {
+      const codigo = this.codigoEtapaArvejaActual();
+      if (!codigo) return true;
+      if (enfermedad === 'Complejo Ascochyta de la Arveja') return ['E', 'R1', 'R3'].includes(codigo);
+      if (enfermedad === 'Mildiu de la Arveja') return ['E', 'R1'].includes(codigo);
+      if (enfermedad === 'Oidio de la Arveja') return ['R1', 'R3'].includes(codigo);
+    }
     return false;
   }
 
@@ -395,6 +425,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       'Fusariosis de la Espiga de Cebada': 'Riesgo sanitario de espiga ligado a lluvia/mojado durante espigazon y antesis.',
       'Fin de Ciclo': 'Complejo sanitario de soja asociado a lluvias acumuladas durante floracion y llenado.',
       'Roya del Maiz': 'Roya foliar de maiz favorecida por humedad muy alta y temperaturas templadas.',
+      'Complejo Ascochyta de la Arveja': 'Complejo sanitario favorecido por mojado, temperatura templada y lluvia; el clima no confirma presencia de inoculo.',
+      'Mildiu de la Arveja': 'Enfermedad favorecida por periodos frescos-humedos y mojado foliar sostenido.',
+      'Oidio de la Arveja': 'Enfermedad relevante en floracion y vainas; este piloto indica prioridad de recorrida, no infeccion.',
     };
     return textos[enfermedad] || 'Riesgo sanitario configurado por cultivo, etapa fenologica y ambiente.';
   }
@@ -412,6 +445,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       'Fusariosis de la Espiga de Cebada': 'Cebada V2: mojado de espiga, grados dia negativos/estresantes y perfil varietal durante ventana critica.',
       'Fin de Ciclo': 'Riesgo = (8 x Lt7 / 600) x multiplicador varietal, con Lt7 basado en dias y milimetros de lluvia mayor a 7 mm.',
       'Roya del Maiz': 'Severidad = 4,42 + 0,61 x GD + 0,57 x DHR - 30,01 x multiplicador varietal.',
+      'Complejo Ascochyta de la Arveja': 'Screening ordinal: temperatura, horas de mojado y lluvia. No calcula probabilidad ni severidad.',
+      'Mildiu de la Arveja': 'Screening ordinal: minimo 4 h de mojado; nivel alto con 6 h, 8-20 C y HR igual o mayor a 91%.',
+      'Oidio de la Arveja': 'Prioridad ordinal de monitoreo desde floracion, usando temperatura y ausencia de lluvia.',
     };
     return calculos[enfermedad] || 'Modelo en calibracion: cruza cultivo, etapa, clima y sensibilidad varietal.';
   }
@@ -486,6 +522,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       factorHumedad: 'factor HR',
       tasaDiaria: 'tasa diaria',
       severidadAcumulada: 'severidad acum.',
+      temperaturaMedia: 'temperatura media',
+      humedadRelativa: 'HR',
+      nivelOrdinal: 'nivel ordinal',
     };
   }
 
@@ -499,6 +538,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     }
     if (!prediccion) {
       return 'listo para calcular';
+    }
+    if (this.esScreeningExperimental) {
+      return 'aptitud ambiental calculada; no confirma infeccion';
     }
     return 'riesgo calculado';
   }
@@ -515,12 +557,12 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     }
     const umbrales = this.umbralesRiesgo(enfermedad);
     if (resultado >= umbrales.alto) {
-      return 'Riesgo alto';
+      return this.esScreeningExperimental ? 'Ambiente alto' : 'Riesgo alto';
     }
     if (resultado >= umbrales.medio) {
-      return 'Riesgo medio';
+      return this.esScreeningExperimental ? 'Ambiente medio' : 'Riesgo medio';
     }
-    return 'Riesgo bajo';
+    return this.esScreeningExperimental ? 'Ambiente bajo' : 'Riesgo bajo';
   }
 
   private lecturaCorta(
@@ -536,6 +578,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     }
     if (!prediccion) {
       return 'Calculo disponible al actualizar riesgo.';
+    }
+    if (this.esScreeningExperimental) {
+      return `${estadoCalculo}. Resistencia varietal sin datos; validar sintomas a campo.`;
     }
     return `${estadoCalculo}. ${this.sensibilidadVarietal(enfermedad)}.`;
   }
@@ -610,6 +655,27 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     if (dias < floracion) return 1;
     if (dias < madurez) return 2;
     return 3;
+  }
+
+  private codigoEtapaArvejaActual(): 'S' | 'E' | 'R1' | 'R3' | 'MF' | undefined {
+    const nombre = this.siembra?.ultimaPrediccion?.nombreEtapa ||
+      [...(this.siembra?.registrosFenologicos || [])]
+        .sort((a, b) => new Date(b.fecha || b.creadoEn || '').getTime() - new Date(a.fecha || a.creadoEn || '').getTime())[0]?.etapa;
+    const normalizado = String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    if (normalizado.includes('MF') || normalizado.includes('MADUREZ FISIOLOGICA')) return 'MF';
+    if (normalizado.includes('R3') || normalizado.includes('FORMACION DE VAINAS')) return 'R3';
+    if (normalizado.includes('R1') || normalizado.includes('FLORACION')) return 'R1';
+    if (normalizado.includes('EMERGENCIA') || normalizado.startsWith('E')) return 'E';
+    if (normalizado.includes('SIEMBRA') || normalizado.startsWith('S')) return 'S';
+    return undefined;
+  }
+
+  private resultadoEtiqueta(prediccion: IPrediccionEnfermedad | undefined, resultado: number): string {
+    if (!prediccion) return '—';
+    if (!this.esScreeningExperimental) return `${resultado.toFixed(1)}%`;
+    if (resultado >= 80) return 'Alto';
+    if (resultado >= 50) return 'Medio';
+    return 'Bajo';
   }
 
   private diasDesdeSiembra(): number | undefined {

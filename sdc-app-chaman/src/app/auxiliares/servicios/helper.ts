@@ -671,6 +671,8 @@ export class HelperService {
         return this.translate.instant('Trigo');
       case 'Cebada':
         return this.translate.instant('Cebada');
+      case 'Arveja':
+        return this.translate.instant('Arveja');
       case 'Papa':
         return this.translate.instant('Papa');
       case 'Vid':
@@ -690,6 +692,10 @@ export class HelperService {
         return this.translate.instant('Corto');
       case 'intermedio':
         return this.translate.instant('Intermedio');
+      case 'intermedio-corto':
+        return this.translate.instant('Intermedio-corto');
+      case 'intermedio-largo':
+        return this.translate.instant('Intermedio-largo');
       case 'largo':
         return this.translate.instant('Largo');
       default:
@@ -1481,11 +1487,12 @@ export class HelperService {
     }
   }
 
-  public truncateString(str: string, length: number): string {
-    if (str.length > length) {
-      return str.substring(0, length) + '...';
+  public truncateString(str: string | null | undefined, length: number): string {
+    const value = String(str ?? '');
+    if (value.length > length) {
+      return value.substring(0, length) + '...';
     }
-    return str;
+    return value;
   }
 
   // FEchas

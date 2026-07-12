@@ -131,6 +131,12 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     this.publicarSiembra(siembraCompleta, this.lote?.idSiembra === siembraCompleta._id);
   }
 
+  public async refrescarDetalle(): Promise<void> {
+    const idLote = this.lote?._id || this.activatedRoute.snapshot.paramMap.get('id');
+    if (!idLote || this.refrescandoDetalle) return;
+    await this.cargarLoteEnSegundoPlano(idLote);
+  }
+
   public async sembrar(): Promise<void> {
     const data = this.lote;
     this.params.set('sembrarLote', data);
@@ -273,6 +279,17 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   public get mostrarPrediccionMalezas(): boolean {
     const cultivo = this.siembra?.semilla?.cultivo;
     return !!cultivo && CULTIVOS_CON_PREDICCION_MALEZAS.includes(cultivo);
+  }
+
+  public get mostrarRiesgosAgroclimaticos(): boolean {
+    const centro =
+      this.lote?.ubicacion?.centro ||
+      this.lote?.establecimiento?.ubicacion?.[0]?.centro;
+    return !!centro && !!this.siembra?.semilla?.cultivo && !this.siembra?.fechaCosecha;
+  }
+
+  public get requiereImplantacion(): boolean {
+    return !this.siembra || !!(this.siembraActual && this.siembra.fechaCosecha);
   }
 
   public get esPlantacion(): boolean {

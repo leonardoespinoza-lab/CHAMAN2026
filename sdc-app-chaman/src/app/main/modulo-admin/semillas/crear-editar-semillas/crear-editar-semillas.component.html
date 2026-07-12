@@ -138,11 +138,74 @@
                               type="number"
                               formControlName="multiplicador"
                               [fluid]="true"
-                              min="0"
-                              max="1"
+                              min="0.01"
+                              max="1.4"
                               step="0.05"
                             />
-                            <label>{{ 'Multiplicador (0–1)' | translate }}</label>
+                            <label>{{ 'Multiplicador (0,01–1,4)' | translate }}</label>
+                          </p-floatlabel>
+
+                          <p-floatlabel variant="in" class="mb-4">
+                            <input
+                              pInputText
+                              type="number"
+                              formControlName="indiceResistencia"
+                              [fluid]="true"
+                              min="0"
+                              max="1"
+                              step="0.01"
+                            />
+                            <label>{{ 'Índice de resistencia IR (0–1)' | translate }}</label>
+                          </p-floatlabel>
+
+                          <p-floatlabel variant="in" class="mb-4">
+                            <p-select
+                              [options]="perfilesResistencia"
+                              formControlName="perfil"
+                              [fluid]="true"
+                              [appendTo]="'body'"
+                            ></p-select>
+                            <label>{{ 'Perfil varietal' | translate }}</label>
+                          </p-floatlabel>
+
+                          <p-floatlabel variant="in" class="mb-4">
+                            <p-select
+                              [options]="estadosResistencia"
+                              formControlName="estado"
+                              [fluid]="true"
+                              [appendTo]="'body'"
+                            ></p-select>
+                            <label>{{ 'Estado del dato' | translate }}</label>
+                          </p-floatlabel>
+
+                          <p-floatlabel variant="in" class="mb-4">
+                            <p-select
+                              [options]="confianzasResistencia"
+                              formControlName="confianza"
+                              [fluid]="true"
+                              [appendTo]="'body'"
+                            ></p-select>
+                            <label>{{ 'Confianza' | translate }}</label>
+                          </p-floatlabel>
+
+                          <p-floatlabel variant="in" class="mb-4">
+                            <input pInputText formControlName="campaniaFuente" [fluid]="true" />
+                            <label>{{ 'Campaña de la fuente' | translate }}</label>
+                          </p-floatlabel>
+
+                          <p-floatlabel variant="in" class="mb-4">
+                            <input pInputText formControlName="fuente" [fluid]="true" />
+                            <label>{{ 'Fuente' | translate }}</label>
+                          </p-floatlabel>
+
+                          <p-floatlabel variant="in" class="mb-4">
+                            <input pInputText type="date" formControlName="fechaFuente" [fluid]="true" />
+                            <label>{{ 'Fecha de la fuente' | translate }}</label>
+                          </p-floatlabel>
+
+                          <p-floatlabel variant="in" class="mb-4">
+                            <input pInputText formControlName="observaciones" [fluid]="true" />
+                            <label>{{ 'Observaciones del dato' | translate }}</label>
                           </p-floatlabel>
 
                           <!-- Eliminar entrada -->

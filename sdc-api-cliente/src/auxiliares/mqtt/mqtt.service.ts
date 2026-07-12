@@ -1,15 +1,21 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import * as MQTT from 'async-mqtt';
+import Redis from 'ioredis';
 import {
   ENV,
-  MQTT_ENABLED,
   MQTT_CLIENT_ID,
   MQTT_HOST,
   MQTT_PASS,
   MQTT_PORT,
   MQTT_PROTOCOL,
   MQTT_USER,
+  REALTIME_CHANNEL,
+  REALTIME_TRANSPORT,
+  REDIS_DB,
+  REDIS_HOST,
+  REDIS_PASSWORD,
+  REDIS_PORT,
 } from '../../env';
-import * as MQTT from 'async-mqtt';
 
 enum Protocol {
   ws = 'ws',
@@ -22,58 +28,75 @@ enum Protocol {
   wxs = 'wxs',
 }
 
-const mqttOptions: MQTT.IClientOptions = {
-  clientId: MQTT_CLIENT_ID,
-  host: MQTT_HOST,
-  port: +MQTT_PORT,
-  username: MQTT_USER,
-  password: MQTT_PASS,
-  keepalive: 20,
-  protocol: MQTT_PROTOCOL as Protocol,
-};
-
 @Injectable()
-export class MqttService {
-  private logger = new Logger('MqttService');
-  private client?: MQTT.AsyncMqttClient;
+export class MqttService implements OnModuleDestroy {
+  private readonly logger = new Logger('RealtimePublisher');
+  private mqtt?: MQTT.AsyncMqttClient;
+  private redis?: Redis;
 
   constructor() {
-    if (MQTT_ENABLED) {
-      this.connect();
-    } else {
-      this.logger.verbose('MQTT deshabilitado. Definir MQTT_ENABLED=true para activar broker externo.');
-    }
+    void this.connect().catch((error) => {
+      const detail = error instanceof Error ? error.message : String(error);
+      this.logger.error(`No se pudo iniciar el publicador realtime: ${detail}`);
+    });
   }
 
-  private async connect() {
-    if (!MQTT_ENABLED) {
+  private async connect(): Promise<void> {
+    if (REALTIME_TRANSPORT === 'redis') {
+      this.redis = new Redis({
+        host: REDIS_HOST,
+        port: REDIS_PORT,
+        password: REDIS_PASSWORD || undefined,
+        db: REDIS_DB,
+        lazyConnect: true,
+        maxRetriesPerRequest: 2,
+      });
+      this.redis.on('error', (error) =>
+        this.logger.error(`Redis realtime: ${error.message}`),
+      );
+      await this.redis.connect();
+      this.logger.log(`Redis Pub/Sub activo en ${REALTIME_CHANNEL}`);
       return;
     }
 
-    try {
+    if (REALTIME_TRANSPORT === 'mqtt') {
       const host = `${MQTT_PROTOCOL}://${MQTT_HOST}:${MQTT_PORT}`;
-      this.logger.verbose(`Connecting to MQTT broker... ${host}`);
-      this.client = await MQTT.connectAsync(host, mqttOptions);
-      this.logger.verbose('MQTT connected');
+      this.mqtt = await MQTT.connectAsync(host, {
+        clientId: MQTT_CLIENT_ID,
+        host: MQTT_HOST,
+        port: MQTT_PORT,
+        username: MQTT_USER,
+        password: MQTT_PASS,
+        keepalive: 20,
+        protocol: MQTT_PROTOCOL as Protocol,
+      });
+      this.logger.log('MQTT realtime activo');
+      return;
+    }
+
+    this.logger.log('Actualizaciones realtime deshabilitadas explicitamente.');
+  }
+
+  public async sendMessage(topic: string, message: string): Promise<void> {
+    try {
+      if (REALTIME_TRANSPORT === 'redis') {
+        if (!this.redis || this.redis.status !== 'ready') await this.connect();
+        await this.redis?.publish(REALTIME_CHANNEL, message);
+      } else if (REALTIME_TRANSPORT === 'mqtt') {
+        if (!this.mqtt) await this.connect();
+        await this.mqtt?.publish(topic, message);
+      }
     } catch (error) {
-      if (ENV !== 'local') {
-        this.logger.error(error);
-        process.exit(1);
+      const detail = error instanceof Error ? error.message : String(error);
+      this.logger.error(`No se pudo publicar evento realtime: ${detail}`);
+      if (ENV === 'production') {
+        this.logger.warn('La operacion HTTP continuo; realtime reintentara en el proximo evento.');
       }
     }
   }
 
-  public async sendMessage(topic: string, message: string) {
-    if (!MQTT_ENABLED) {
-      return;
-    }
-
-    if (!this.client) {
-      await this.connect();
-    }
-    if (this.client) {
-      await this.client.publish(topic, message);
-      this.logger.verbose(`MQTT message sent to ${topic}`);
-    }
+  public async onModuleDestroy(): Promise<void> {
+    await this.mqtt?.end();
+    if (this.redis) await this.redis.quit();
   }
 }

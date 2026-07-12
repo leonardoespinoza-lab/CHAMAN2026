@@ -11,7 +11,9 @@ const DB_URL =
   process.env.DB_URL ||
   'mongodb://127.0.0.1:27017';
 const DB_NAME = process.env.DB_NAME || 'chaman';
-const DRY_RUN = process.env.CHAMAN_EXPANDED_CROPS_DRY_RUN === 'true';
+const DRY_RUN = ['true', '1'].includes(
+  String(process.env.CHAMAN_EXPANDED_CROPS_DRY_RUN || process.env.CHAMAN_DRY_RUN || '').toLowerCase(),
+);
 const bundledPython = path.join(
   os.homedir(),
   '.cache',
@@ -407,10 +409,47 @@ function ratingToMultiplier(value) {
   return map[key];
 }
 
-function resistance(enfermedad, rating) {
+function ratingToResistanceIndex(rating) {
+  const key = norm(rating);
+  const map = {
+    R: 1,
+    MR: 2 / 3,
+    MT: 2 / 3,
+    MS: 1 / 3,
+    S: 0,
+    I: 0,
+    ALTA: 2 / 3,
+    MEDIA: 1 / 3,
+    MODERADA: 1 / 3,
+    BAJA: 0,
+    SUSCEPTIBLE: 0,
+    SUCEPTIBLE: 0,
+    TOLERANTE: 2 / 3,
+    RESISTENTE: 1,
+  };
+  return map[key];
+}
+
+function resistance(enfermedad, idEnfermedad, rating, metadata = {}) {
   const multiplicador = ratingToMultiplier(rating);
-  if (multiplicador === undefined) return undefined;
-  return { enfermedad, multiplicador };
+  const desconocida = multiplicador === undefined;
+  return {
+    enfermedad,
+    idEnfermedad,
+    multiplicador: desconocida ? 1 : multiplicador,
+    indiceResistencia: desconocida ? 0 : ratingToResistanceIndex(rating),
+    perfil: desconocida ? 'DESCONOCIDA' : norm(rating),
+    estado: desconocida ? 'desconocida' : metadata.estado || 'observada',
+    confianza: desconocida ? 'sin_datos' : metadata.confianza || 'alta',
+    fuente: metadata.fuente,
+    campaniaFuente: metadata.campaniaFuente,
+    fechaFuente: metadata.fechaFuente,
+    observaciones:
+      metadata.observaciones ||
+      (desconocida
+        ? 'La fuente no informa este perfil específico; no equivale a susceptible observado.'
+        : undefined),
+  };
 }
 
 function readWorkbook(crop, filePath) {
@@ -458,39 +497,63 @@ print(json.dumps(out))
 }
 
 function inferResistance(crop, row) {
+  const base = {
+    fuente: `${path.basename(WORKBOOKS[crop] || 'base no identificada')} / hoja principal`,
+    campaniaFuente: cleanText(row.campania) || CAMPAIGN_BY_CROP[crop],
+    fechaFuente: '2026-06-11',
+  };
   if (crop === 'Vid') {
     return [
-      resistance('Oidio', row.OIDIO),
-      resistance('Botritis', row.BOTRITIS),
-      resistance('Mildiu', row.MILDIU),
-    ].filter(Boolean);
+      resistance('Oidio', 'vid.oidio', row.OIDIO, base),
+      resistance('Botritis', 'vid.botritis', row.BOTRITIS, base),
+      resistance('Mildiu', 'vid.mildiu', row.MILDIU, base),
+    ];
   }
   if (crop === 'Papa') {
     return [
-      resistance('Tizon Tardio', row.Resistencia_a_P_infestans),
-      resistance('Rhizoctonia', row.Resistencia_a_Rhizoctonia_solani),
-    ].filter(Boolean);
+      resistance('Tizon Tardio', 'papa.tizon_tardio', row.Resistencia_a_P_infestans, base),
+      resistance('Rhizoctonia', 'papa.rhizoctonia', row.Resistencia_a_Rhizoctonia_solani, base),
+      resistance('Tizon Temprano', 'papa.tizon_temprano', undefined, base),
+    ];
   }
   if (crop === 'Manzano') {
+    const inferida = {
+      ...base,
+      estado: 'inferida',
+      confianza: 'baja',
+      observaciones: 'La columna resistencia es genérica; se conserva como inferencia y no como evidencia específica por enfermedad.',
+    };
     return [
-      resistance('Sarna del Manzano', row.resistencia),
-      resistance('Oidio del Manzano', row.resistencia),
-      resistance('Fuego Bacteriano', row.resistencia),
-      resistance('Carpocapsa', 'MEDIA'),
-    ].filter(Boolean);
+      resistance('Sarna del Manzano', 'manzano.sarna', row.resistencia, inferida),
+      resistance('Oidio del Manzano', 'manzano.oidio', row.resistencia, inferida),
+      resistance('Fuego Bacteriano', 'frutales.fuego_bacteriano', row.resistencia, inferida),
+      resistance('Carpocapsa', 'manzano.carpocapsa', undefined, base),
+    ];
   }
   if (crop === 'Peral') {
+    const inferida = {
+      ...base,
+      estado: 'inferida',
+      confianza: 'baja',
+      observaciones: 'La columna resistencia es genérica; se conserva como inferencia y no como evidencia específica por enfermedad.',
+    };
     return [
-      resistance('Sarna del Peral', row.resistencia),
-      resistance('Fuego Bacteriano', row.resistencia),
-      resistance('Psila del Peral', 'MEDIA'),
-    ].filter(Boolean);
+      resistance('Sarna del Peral', 'peral.sarna', row.resistencia, inferida),
+      resistance('Fuego Bacteriano', 'frutales.fuego_bacteriano', row.resistencia, inferida),
+      resistance('Psila del Peral', 'peral.psila', undefined, base),
+    ];
   }
   if (crop === 'Pecan') {
+    const inferida = {
+      ...base,
+      estado: 'inferida',
+      confianza: 'baja',
+      observaciones: 'La columna resistencia es genérica; se conserva como inferencia y no como evidencia específica por enfermedad.',
+    };
     return [
-      resistance('Sarna del Pecan', row.resistencia),
-      resistance('Bacteriosis del Pecan', row.resistencia),
-    ].filter(Boolean);
+      resistance('Sarna del Pecan', 'pecan.sarna', row.resistencia, inferida),
+      resistance('Bacteriosis del Pecan', 'pecan.bacteriosis', row.resistencia, inferida),
+    ];
   }
   return [];
 }
@@ -571,7 +634,15 @@ function buildCronos(seeds) {
 function buildSeedOps(seeds) {
   return seeds.map((doc) => ({
     updateOne: {
-      filter: { codigoCarga: doc.codigoCarga },
+      // Debe coincidir con el indice unico real. `codigoCarga` pudo cambiar
+      // entre versiones del importador y no es una identidad suficiente.
+      filter: {
+        cultivo: doc.cultivo,
+        semillero: doc.semillero,
+        variedad: doc.variedad,
+        ciclo: doc.ciclo,
+        campania: doc.campania,
+      },
       update: { $set: doc },
       upsert: true,
     },

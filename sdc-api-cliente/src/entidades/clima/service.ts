@@ -9,6 +9,7 @@ import {
   getEdadPerenneAnios,
   getFenologiaJuvenilPerenne,
   IConfiguracionFrioCultivo,
+  IClimaEstacionMeteorologica,
   IEstablecimiento,
   IFrioTermicoCultivo,
   IResumenRiesgosAgroclimaticos,
@@ -707,6 +708,7 @@ export class ClimaService {
       edadProductivaDesdeAnios?: number;
       ajusteVarietalC?: number;
       fuenteAjusteVarietal?: string;
+      idEstacionMeteorologica?: string;
     } = {},
   ): Promise<IFrioTermicoCultivo> {
     const latNum = Number(lat);
@@ -777,15 +779,20 @@ export class ClimaService {
     }
 
     const frioDesde = this.getInicioFrio(hoy);
-    const termicoDesde = this.getInicioTermico(hoy);
+    const termicoDesde = this.getInicioTermicoCultivo(
+      hoy,
+      cultivo,
+      contextoHelada.fechaSiembra,
+    );
+    const datosDesde = termicoDesde < frioDesde ? termicoDesde : frioDesde;
     const ayer = this.addDays(this.startOfDay(hoy), -1);
-    const historicoHasta = ayer >= frioDesde ? ayer : frioDesde;
-    const historico = await this.fetchOpenMeteoDaily(
+    const historicoHasta = ayer >= datosDesde ? ayer : datosDesde;
+    const historico = await this.fetchHistoricoClimaticoAutomatico(
       latNum,
       lngNum,
-      this.toDateKey(frioDesde),
+      this.toDateKey(datosDesde),
       this.toDateKey(historicoHasta),
-      false,
+      contextoHelada.idEstacionMeteorologica,
     );
     const forecast = await this.fetchOpenMeteoForecast(latNum, lngNum);
     let calculoPorciones: 'dinamico_horario' | 'estimado_hfe' =
@@ -830,7 +837,7 @@ export class ClimaService {
       );
     }
     const serieBase = this.mergeSeries(historico, forecast);
-    const baseTermica = requerimientos.temperaturaBaseGradosDia || 10;
+    const baseTermica = requerimientos.temperaturaBaseGradosDia ?? 10;
     const serie = serieBase.map((dia) => {
       const horasFrio = this.estimarHorasFrio(
         dia.temperaturaMin,
@@ -944,8 +951,14 @@ export class ClimaService {
         : undefined,
     };
 
+    const fuentesHistoricas = new Set(historico.map((dia) => dia.fuente).filter(Boolean));
+    const fuenteResultado: IFrioTermicoCultivo['fuente'] = fuentesHistoricas.has('FieldClimate')
+      ? fuentesHistoricas.has('OpenMeteo')
+        ? 'FieldClimate + OpenMeteo'
+        : 'FieldClimate'
+      : 'OpenMeteo';
     const resultado: IFrioTermicoCultivo = {
-      fuente: 'OpenMeteo',
+      fuente: fuenteResultado,
       lat: latNum,
       lng: lngNum,
       cultivo,
@@ -1000,6 +1013,7 @@ export class ClimaService {
       edadProductivaDesdeAnios?: number;
       ajusteVarietalC?: number;
       fuenteAjusteVarietal?: string;
+      idEstacionMeteorologica?: string;
     } = {},
   ): Promise<IResumenRiesgosAgroclimaticos> {
     const latNum = Number(lat);
@@ -1033,6 +1047,7 @@ export class ClimaService {
       edadProductivaDesdeAnios?: number;
       ajusteVarietalC?: number;
       fuenteAjusteVarietal?: string;
+      idEstacionMeteorologica?: string;
     } = {},
   ): string {
     const req = Object.entries(requerimientos)
@@ -1048,6 +1063,7 @@ export class ClimaService {
       contextoHelada.edadProductivaDesdeAnios ?? '',
       contextoHelada.ajusteVarietalC ?? '',
       contextoHelada.fuenteAjusteVarietal || '',
+      contextoHelada.idEstacionMeteorologica || '',
       this.toDateKey(new Date()),
       req,
     ].join('|');
@@ -1284,6 +1300,59 @@ export class ClimaService {
     }
   }
 
+  private async fetchHistoricoClimaticoAutomatico(
+    lat: number,
+    lng: number,
+    from: string,
+    to: string,
+    idEstacionMeteorologica?: string,
+  ): Promise<ISerieFrioTermicoDia[]> {
+    if (from > to) return [];
+    const url = `${API_CLIMA}/clima/estacion/cerca/${lat}/${lng}/${from}/${to}`;
+    try {
+      const rows = await this.axiosService.GET<IClimaEstacionMeteorologica[]>(url, {
+        params: {
+          dataGroup: 'daily',
+          soloEstacionAsociada: 'true',
+          ...(idEstacionMeteorologica ? { idEstacionMeteorologica } : {}),
+        },
+      });
+      const serie = (rows || [])
+        .map((row): ISerieFrioTermicoDia | undefined => {
+          const fecha = String(row.fecha || '').slice(0, 10);
+          if (!fecha) return undefined;
+          const media = this.numeroFinito(row.temperatura?.avg ?? row.temperatura?.last);
+          const min = this.numeroFinito(row.temperatura?.min ?? media);
+          const max = this.numeroFinito(row.temperatura?.max ?? media);
+          if (min === undefined || max === undefined) return undefined;
+          return {
+            fecha,
+            fuente: row.fuente === 'FieldClimate' ? 'FieldClimate' : 'OpenMeteo',
+            calidadDatos: row.calidadDatos,
+            temperaturaMin: min,
+            temperaturaMax: max,
+            temperaturaMedia: media ?? this.round((min + max) / 2),
+            lluvia:
+              this.numeroFinito(row.lluvia?.sum ?? row.lluvia?.avg ?? row.lluvia?.last) ?? 0,
+            esPronostico: false,
+          };
+        })
+        .filter((row): row is ISerieFrioTermicoDia => !!row);
+      if (serie.length) return this.mergeSeries([], serie);
+      throw new Error('La fuente climatica automatica no devolvio dias utiles.');
+    } catch (error: any) {
+      this.logger.warn(
+        `Clima historico automatico sin respuesta; se usa Open-Meteo directo (${lat}, ${lng}): ${error?.message || error}`,
+      );
+      return this.fetchOpenMeteoDaily(lat, lng, from, to, false);
+    }
+  }
+
+  private numeroFinito(value: unknown): number | undefined {
+    const numero = Number(value);
+    return Number.isFinite(numero) ? numero : undefined;
+  }
+
   private async fetchOpenMeteoDaily(
     lat: number,
     lng: number,
@@ -1466,6 +1535,7 @@ export class ClimaService {
     const fechas: string[] = daily.time || [];
     return fechas.map((fecha, index) => ({
       fecha,
+      fuente: 'OpenMeteo',
       temperaturaMax: this.round(daily.temperature_2m_max?.[index]),
       temperaturaMin: this.round(daily.temperature_2m_min?.[index]),
       temperaturaMedia: this.round(daily.temperature_2m_mean?.[index]),
@@ -1800,6 +1870,22 @@ export class ClimaService {
     const year =
       fecha.getMonth() + 1 >= 8 ? fecha.getFullYear() : fecha.getFullYear() - 1;
     return new Date(Date.UTC(year, 7, 1));
+  }
+
+  private getInicioTermicoCultivo(
+    hoy: Date,
+    cultivo?: string,
+    fechaSiembra?: string,
+  ): Date {
+    if (!esCultivoPerenne(cultivo) && fechaSiembra) {
+      const fechaKey = String(fechaSiembra).slice(0, 10);
+      const siembra = new Date(`${fechaKey}T00:00:00.000Z`);
+      const inicioHoy = this.startOfDay(hoy);
+      if (!Number.isNaN(siembra.getTime()) && siembra <= inicioHoy) {
+        return siembra;
+      }
+    }
+    return this.getInicioTermico(hoy);
   }
 
   private estimarHorasFrio(tempMin?: number, tempMax?: number): number {

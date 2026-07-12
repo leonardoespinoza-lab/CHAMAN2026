@@ -10,7 +10,7 @@ import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 
-const CULTIVOS_DISPONIBLES_APP: Cultivo[] = ['Soja', 'Trigo', 'Maiz', 'Cebada', 'Papa', 'Vid', 'Peral', 'Pecan', 'Manzano'];
+const CULTIVOS_DISPONIBLES_APP: Cultivo[] = ['Soja', 'Trigo', 'Maiz', 'Cebada', 'Arveja', 'Papa', 'Vid', 'Peral', 'Pecan', 'Manzano'];
 
 @Component({
   selector: 'app-crear-editar-fenologia',
@@ -24,7 +24,7 @@ export class CrearEditarFenologiaComponent implements OnInit, OnDestroy {
   public fenologia?: IFenologia;
   public titulo?: () => string;
   public form!: FormGroup;
-  public ciclos = ['LARGO', 'INTERMEDIO', 'CORTO'];  
+  public ciclos = ['LARGO', 'INTERMEDIO-LARGO', 'INTERMEDIO', 'INTERMEDIO-CORTO', 'CORTO'];
   public departamentos$?: Subscription;
   private datos$?: Subscription;
   public departamentos: IDepartamento[] = [];

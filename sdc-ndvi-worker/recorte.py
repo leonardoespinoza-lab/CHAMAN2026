@@ -101,8 +101,13 @@ def recortar_ndvi(ndvi_tif_path: str, polygon: Polygon, output_tif_path: str):
     """Recorta un GeoTIFF usando el poligono del lote."""
     try:
         with rasterio.open(ndvi_tif_path) as src:
-            dtype = src.meta.get("dtype", "uint16")
-            nodata = 0 if dtype == "uint16" else np.nan
+            dtype = np.dtype(src.dtypes[0])
+            # Las bandas de indices son flotantes, pero SCL y otras bandas de
+            # calidad usan enteros (por ejemplo uint8). NaN no es representable
+            # en un raster entero y Rasterio falla antes de poder recortarlo.
+            nodata = src.nodata
+            if nodata is None:
+                nodata = 0 if np.issubdtype(dtype, np.integer) else np.nan
             geom_reproj = _reproject_geom(polygon, "EPSG:4326", src.crs)
             out_image, out_transform = mask(
                 src, [mapping(geom_reproj)], crop=True, nodata=nodata, all_touched=True

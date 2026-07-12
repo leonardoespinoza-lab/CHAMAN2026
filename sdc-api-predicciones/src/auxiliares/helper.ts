@@ -120,8 +120,8 @@ export class HelperService {
       const fechaFumigacion = new Date(f.fechaFumigacion);
       fechaFumigacion.setUTCHours(3, 0, 0, 0);
       for (let index = 0; index < (f.duracion || 15); index++) {
-        fechaFumigacion.setDate(fechaFumigacion.getDate() + 1);
         fechas.push(fechaFumigacion.toISOString());
+        fechaFumigacion.setUTCDate(fechaFumigacion.getUTCDate() + 1);
       }
     });
     return fechas;

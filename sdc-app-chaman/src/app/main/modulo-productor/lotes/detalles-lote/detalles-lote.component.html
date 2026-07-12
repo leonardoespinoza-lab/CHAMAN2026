@@ -133,24 +133,26 @@
   </p-dialog>
 
   @if (siembra && !siembra.fechaCosecha && helper.puedeVerModulo('EtapasFenologicas')) {
-    <div class="desktop-only">
-      <app-card-etapas-fenologicas [lote]="lote" [siembra]="siembra"></app-card-etapas-fenologicas>
-    </div>
-
-    <div class="mobile-only">
-      <app-card-etapas-fenologicas [lote]="lote" [siembra]="siembra"></app-card-etapas-fenologicas>
-    </div>
+    <app-card-etapas-fenologicas [lote]="lote" [siembra]="siembra"></app-card-etapas-fenologicas>
   }
 
   @if (!helper.soloLectura()) {
-    @if (!siembra || (siembraActual && siembra.fechaCosecha)) {
-      <p-button
-        [label]="esPlantacion ? 'Crear nueva plantacion' : ('Crear nueva siembra' | translate)"
-        [fluid]="true"
-        [outlined]="true"
-        styleClass="w-full"
-        (onClick)="sembrar()"
-      />
+    @if (requiereImplantacion) {
+      <section class="implantation-empty-state">
+        <div class="implantation-empty-icon">
+          <i class="pi pi-plus-circle"></i>
+        </div>
+        <div class="implantation-empty-copy">
+          <span>Proximo paso</span>
+          <strong>Activar una nueva campana</strong>
+          <small>Selecciona cultivo, variedad y fecha para ordenar fenologia, sanidad y seguimiento satelital.</small>
+        </div>
+        <p-button
+          [label]="esPlantacion ? 'Crear nueva plantacion' : ('Crear nueva siembra' | translate)"
+          icon="pi pi-plus"
+          (onClick)="sembrar()"
+        />
+      </section>
     }
   }
 
@@ -174,12 +176,12 @@
             <strong>Riesgos y recomendaciones</strong>
           </div>
         </div>
-        @if (helper.puedeVerModulo('Clima') || helper.puedeVerModulo('Riego')) {
+        @if ((helper.puedeVerModulo('Clima') && mostrarRiesgosAgroclimaticos) || helper.puedeVerModulo('Riego')) {
           <div
             class="operative-monitoring-row"
-            [class.single]="!helper.puedeVerModulo('Clima') || !helper.puedeVerModulo('Riego')"
+            [class.single]="!(helper.puedeVerModulo('Clima') && mostrarRiesgosAgroclimaticos) || !helper.puedeVerModulo('Riego')"
           >
-            @if (helper.puedeVerModulo('Clima')) {
+            @if (helper.puedeVerModulo('Clima') && mostrarRiesgosAgroclimaticos) {
               <app-card-riesgos-agroclimaticos
                 class="service-panel"
                 [siembra]="siembra"
@@ -252,7 +254,12 @@
           @if (mostrarCentralMeteorologica()) {
             <app-card-central-meteorologica class="service-panel" [lote]="lote"></app-card-central-meteorologica>
           }
-          <app-card-clima-lote class="service-panel climate-section" [lote]="lote"></app-card-clima-lote>
+          <app-card-clima-lote
+            class="service-panel climate-section"
+            [lote]="lote"
+            [actualizando]="refrescandoDetalle"
+            (actualizar)="refrescarDetalle()"
+          ></app-card-clima-lote>
         }
       </section>
     }

@@ -34,6 +34,15 @@ export class Prediccion implements Exactly<IPrediccion, Prediccion> {
   @Prop()
   nombreEtapa: string;
 
+  @Prop({ type: String })
+  fuenteFenologia?: IPrediccion['fuenteFenologia'];
+
+  @Prop({ type: String })
+  registroFenologicoId?: string;
+
+  @Prop({ type: Object })
+  calidadFenologia?: IPrediccion['calidadFenologia'];
+
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idSiembra: string;
 
