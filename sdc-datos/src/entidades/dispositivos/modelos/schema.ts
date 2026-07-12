@@ -96,7 +96,6 @@ export const DispositivoSchema = SchemaFactory.createForClass(Dispositivo);
 DispositivoSchema.set('toJSON', { virtuals: true, getters: true });
 
 DispositivoSchema.index({ geojson: '2dsphere' });
-DispositivoSchema.index({ deveui: 1 });
 
 DispositivoSchema.virtual('quimica', {
   foreignField: '_id',
