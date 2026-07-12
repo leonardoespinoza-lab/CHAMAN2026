@@ -236,7 +236,16 @@ async function apply(db) {
     migrationId: MIGRATION_ID,
     status: 'applied',
   });
-  if (applied) throw new Error(`La migracion ya fue aplicada el ${applied.appliedAt}`);
+  if (applied) {
+    return {
+      ok: true,
+      migrationId: MIGRATION_ID,
+      mode: 'apply',
+      alreadyApplied: true,
+      appliedAt: applied.appliedAt,
+      matrixAfter: await summary(db),
+    };
+  }
 
   const seeds = await db.collection('semillas').find(FILTER).toArray();
   await db.collection(BACKUP_COLLECTION).deleteMany({ migrationId: MIGRATION_ID });

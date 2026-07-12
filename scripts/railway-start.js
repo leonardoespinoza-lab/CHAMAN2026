@@ -78,6 +78,29 @@ if (
   }
 }
 
+// Migracion sanitaria de soja: opt-in, reversible y separada del bootstrap.
+// El modo plan no escribe; apply/rollback exigen la confirmacion propia del script.
+if (
+  service.name === 'sdc-datos' &&
+  process.env.CHAMAN_RUN_SOJA_RECSO_MIGRATION_ON_START === 'true'
+) {
+  const mode = process.env.CHAMAN_SOJA_RECSO_MIGRATION_MODE || 'plan';
+  const migration = spawnSync(
+    process.execPath,
+    ['scripts/migrations/20260712-soja-recso-matrix-v2.js', mode],
+    {
+      cwd: process.cwd(),
+      shell: false,
+      stdio: 'inherit',
+      env: process.env,
+    },
+  );
+
+  if (migration.status !== 0) {
+    process.exit(migration.status || 1);
+  }
+}
+
 const result = spawnSync(service.start, {
   cwd,
   shell: true,
