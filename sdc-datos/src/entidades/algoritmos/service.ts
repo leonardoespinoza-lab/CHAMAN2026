@@ -201,81 +201,81 @@ export class AlgoritmosService {
 
   private async getReadinessCultivo(cultivo: string): Promise<ReadinessCultivoCatalogo> {
     const [
-      semillas,
-      semillasConResistencia,
-      semillasConCrono,
+      catalogoSemillas,
       enfermedades,
       cronos,
       malezas,
     ] = await Promise.all([
-      this.countByFilter(this.semillasService, { cultivo }),
-      this.countByFilter(this.semillasService, {
-        cultivo,
-        resistencia: {
-          $elemMatch: {
-            $or: [
-              { estado: { $in: ['observada', 'historica'] } },
-              {
-                estado: { $exists: false },
-                multiplicador: { $exists: true },
-              },
-            ],
-          },
-        },
+      this.semillasService.getFilter({
+        filter: JSON.stringify({ cultivo }),
+        limit: 0,
+        page: 0,
+        select: '_id ciclo resistencia',
       }),
-      this.countByFilter(this.semillasService, { cultivo, ciclo: { $exists: true, $nin: ['SIN DEFINIR', ''] } }),
       this.countByFilter(this.enfermedadsService, { cultivo }),
       this.countByFilter(this.cronosService, { cultivo }),
       this.countByFilter(this.malezasService, { cultivosObjetivo: cultivo }),
     ]);
+    const filasSemillas = Array.isArray(catalogoSemillas?.datos)
+      ? (catalogoSemillas.datos as any[])
+      : [];
+    const semillas = Number(catalogoSemillas?.totalCount || filasSemillas.length);
+    const esEvidenciaSanitariaEspecifica = (resistencia: any) =>
+      ['observada', 'historica'].includes(String(resistencia?.estado || '').toLowerCase()) ||
+      (!resistencia?.estado &&
+        resistencia?.multiplicador != null &&
+        Number.isFinite(Number(resistencia.multiplicador)));
+    const semillasConResistencia = filasSemillas.filter((semilla) =>
+      (semilla?.resistencia || []).some(esEvidenciaSanitariaEspecifica),
+    ).length;
+    const semillasConCrono = filasSemillas.filter((semilla) => {
+      const ciclo = String(semilla?.ciclo || '').trim().toUpperCase();
+      return ciclo && ciclo !== 'SIN DEFINIR';
+    }).length;
     const enfermedadesMotor = this.getEnfermedadesCultivo(cultivo).length;
     const enfermedadesOperativas = this.getEnfermedadesCultivo(cultivo)
       .map((item) => getEnfermedadCanonica(item.nombre))
       .filter((item) => item?.motor === 'operativo');
     const requiereMatrizResistencia = this.norm(cultivo) !== 'ARVEJA';
-    const coberturaResistenciaEnfermedades = await Promise.all(
-      (requiereMatrizResistencia ? enfermedadesOperativas : []).map(async (enfermedad) => {
-        const diseaseFilter = {
-          $or: [
-            { idEnfermedad: enfermedad.id },
-            { enfermedad: enfermedad.nombre },
-          ],
-        };
-        const countEstado = (estado: string) =>
-          this.countByFilter(this.semillasService, {
-            cultivo,
-            resistencia: { $elemMatch: { ...diseaseFilter, estado } },
-          });
-        const [conEntrada, observadas, historicas, inferidas, desconocidas] =
-          await Promise.all([
-            this.countByFilter(this.semillasService, {
-              cultivo,
-              resistencia: { $elemMatch: diseaseFilter },
-            }),
-            countEstado('observada'),
-            countEstado('historica'),
-            countEstado('inferida'),
-            countEstado('desconocida'),
-          ]);
-        const validadas = observadas + historicas;
-        return {
-          idEnfermedad: enfermedad.id,
-          enfermedad: enfermedad.nombre,
-          conEntrada,
-          observadas,
-          historicas,
-          inferidas,
-          desconocidas,
-          total: semillas,
-          coberturaMatrizPct: semillas
-            ? this.round((conEntrada / semillas) * 100, 1)
-            : 0,
-          coberturaValidadaPct: semillas
-            ? this.round((validadas / semillas) * 100, 1)
-            : 0,
-        };
-      }),
-    );
+    const coberturaResistenciaEnfermedades = (
+      requiereMatrizResistencia ? enfermedadesOperativas : []
+    ).map((enfermedad) => {
+      const entradas = filasSemillas
+        .map((semilla) =>
+          (semilla?.resistencia || []).find(
+            (item: any) =>
+              item?.idEnfermedad === enfermedad.id ||
+              item?.enfermedad === enfermedad.nombre,
+          ),
+        )
+        .filter(Boolean);
+      const countEstado = (estado: string) =>
+        entradas.filter(
+          (item: any) => String(item?.estado || '').toLowerCase() === estado,
+        ).length;
+      const conEntrada = entradas.length;
+      const observadas = countEstado('observada');
+      const historicas = countEstado('historica');
+      const inferidas = countEstado('inferida');
+      const desconocidas = countEstado('desconocida');
+      const validadas = observadas + historicas;
+      return {
+        idEnfermedad: enfermedad.id,
+        enfermedad: enfermedad.nombre,
+        conEntrada,
+        observadas,
+        historicas,
+        inferidas,
+        desconocidas,
+        total: semillas,
+        coberturaMatrizPct: semillas
+          ? this.round((conEntrada / semillas) * 100, 1)
+          : 0,
+        coberturaValidadaPct: semillas
+          ? this.round((validadas / semillas) * 100, 1)
+          : 0,
+      };
+    });
     const tieneEnfermedades = enfermedades > 0 || enfermedadesMotor > 0;
     const requiereMalezas = this.cultivosMalezas.includes(cultivo);
     const faltantes: string[] = [];

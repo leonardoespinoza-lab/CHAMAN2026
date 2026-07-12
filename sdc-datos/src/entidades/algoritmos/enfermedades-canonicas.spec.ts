@@ -157,4 +157,63 @@ describe('simulador admin y motor canonico de enfermedades', () => {
     expect(oidio.nivel).toBe('fuera de ventana');
     expect(oidio.riesgo).toBe(0);
   });
+
+  it('audita la matriz sanitaria estructurada sin depender de filtros anidados', async () => {
+    const catalogo = [
+      {
+        ciclo: 'IV',
+        resistencia: [
+          {
+            idEnfermedad: 'soja.cancro_tallo',
+            estado: 'historica',
+            confianza: 'alta',
+          },
+        ],
+      },
+      {
+        ciclo: 'V',
+        resistencia: [
+          {
+            idEnfermedad: 'soja.fin_ciclo',
+            estado: 'desconocida',
+            confianza: 'sin_datos',
+          },
+        ],
+      },
+    ];
+    const semillasService = {
+      getFilter: jest.fn(async ({ filter }: any) => {
+        const cultivo = JSON.parse(filter || '{}').cultivo;
+        return cultivo === 'Soja'
+          ? { totalCount: catalogo.length, datos: catalogo }
+          : { totalCount: 0, datos: [] };
+      }),
+    };
+    const contadorVacio = {
+      getFilter: jest.fn(async () => ({ totalCount: 0, datos: [] })),
+    };
+    const servicio = new AlgoritmosService(
+      contadorVacio as any,
+      contadorVacio as any,
+      contadorVacio as any,
+      semillasService as any,
+    );
+
+    const readiness = await servicio.getReadinessCatalogos();
+    const soja = readiness.cultivos.find((item) => item.cultivo === 'Soja');
+
+    expect(soja?.semillas).toBe(2);
+    expect(soja?.semillasConResistencia).toBe(1);
+    expect(soja?.semillasConCrono).toBe(2);
+    expect(
+      soja?.coberturaResistenciaEnfermedades?.find(
+        (item) => item.idEnfermedad === 'soja.fin_ciclo',
+      ),
+    ).toMatchObject({
+      conEntrada: 1,
+      desconocidas: 1,
+      coberturaMatrizPct: 50,
+      coberturaValidadaPct: 0,
+    });
+  });
 });

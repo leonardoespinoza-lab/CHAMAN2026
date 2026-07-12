@@ -53,6 +53,9 @@ class ResistenciaSemilla implements IResistencia {
 
   @Prop()
   observaciones?: string;
+
+  @Prop({ type: Object })
+  detalleSanitario?: IResistencia['detalleSanitario'];
 }
 
 const ResistenciaSemillaSchema = SchemaFactory.createForClass(ResistenciaSemilla);
