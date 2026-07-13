@@ -52,22 +52,79 @@
       </div>
     </section>
 
+    <section class="satellite-index-controls" aria-label="Índice satelital visualizado">
+      <div class="satellite-title compact">
+        <span>Índice visualizado</span>
+        <strong>Mapa, curva e interpretación sincronizados</strong>
+      </div>
+      <div class="layer-tabs" role="list">
+        @for (indicator of satelliteIndicators; track indicator.key) {
+          <button
+            type="button"
+            class="layer-tab"
+            [class.active]="capaActiva.key === indicator.key"
+            [disabled]="indicator.status !== 'activo'"
+            [attr.aria-pressed]="capaActiva.key === indicator.key"
+            (click)="seleccionarCapa(indicator)"
+          >
+            <strong>{{ indicator.label }}</strong>
+            <span>{{ indicator.value }}</span>
+          </button>
+        }
+      </div>
+    </section>
+
+    <section class="satellite-history-chart">
+      <div class="history-chart-header">
+        <div>
+          <span>Serie temporal por escenas limpias</span>
+          <strong>Evolución de {{ capaActiva.label }}</strong>
+          <small>{{ historialIndiceResumen }}</small>
+        </div>
+        <div class="history-scale-note">
+          <b>−1 a 1</b>
+          <span>Eje ampliado al rango observado</span>
+        </div>
+      </div>
+
+      @if (historialIndiceOptions) {
+        <app-chart [options]="historialIndiceOptions" [style]="'display:block;width:100%;height:300px'"></app-chart>
+      } @else {
+        <div class="history-empty">
+          <i class="pi pi-chart-line"></i>
+          <span>No hay lecturas válidas suficientes de {{ capaActiva.label }} para graficar.</span>
+        </div>
+      }
+
+      @if (puntoHistorialSeleccionado; as point) {
+        <div class="history-selected-scene">
+          <span>
+            <small>Escena seleccionada</small>
+            <strong>{{ point.timestamp | date: 'd MMM y' }}</strong>
+          </span>
+          <span>
+            <small>{{ capaActiva.label }}</small>
+            <strong>{{ point.value == null ? 'Sin lectura' : (point.value | number: '1.0-3') }}</strong>
+          </span>
+          <span class="history-stage">
+            <small>Etapa fenológica</small>
+            <strong>{{ point.stage.name }}</strong>
+            <em [class.confirmed]="point.stage.confirmed">{{ point.stage.source }}</em>
+          </span>
+          <span>
+            <small>Fuente satelital</small>
+            <strong>{{ point.collection }}</strong>
+          </span>
+        </div>
+      }
+      <p class="history-method-note">
+        <i class="pi pi-info-circle"></i>
+        {{ mensajeHistorialIndice }} La etapa de campo tiene prioridad sobre las referencias calculadas.
+      </p>
+    </section>
+
     <div class="ndvi-content">
       <div class="satellite-viewer">
-        <div class="layer-tabs" role="list">
-          @for (indicator of satelliteIndicators; track indicator.label) {
-            <button
-              type="button"
-              class="layer-tab"
-              [class.active]="capaActiva.key === indicator.key"
-              [disabled]="indicator.status !== 'activo'"
-              (click)="seleccionarCapa(indicator)"
-            >
-              <strong>{{ indicator.label }}</strong>
-              <span>{{ indicator.value }}</span>
-            </button>
-          }
-        </div>
         <div class="img-container">
           <div #satelliteMapTarget class="satellite-ol-map"></div>
           @if (valorCapaActiva == null) {

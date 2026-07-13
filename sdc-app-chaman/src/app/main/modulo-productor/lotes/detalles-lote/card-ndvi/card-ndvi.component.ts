@@ -10,6 +10,7 @@ import {
   SimpleChanges,
   ViewChild,
 } from '@angular/core';
+import Highcharts from 'highcharts';
 import { Feature, Map, View } from 'ol';
 import { defaults as defaultControls } from 'ol/control';
 import { defaults as defaultInteractions } from 'ol/interaction';
@@ -39,6 +40,7 @@ import {
 import { Subscription } from 'rxjs';
 import { LoteService } from '../../../../../auxiliares/http/lote.service';
 import { ReporteNDVIService } from '../../../../../auxiliares/http/reporte-ndvis.service';
+import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { DialogHandlerService } from '../../../../../auxiliares/servicios/dialog-handler.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../../auxiliares/servicios/listados';
@@ -46,6 +48,11 @@ import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { ENV } from '../../../../../environments/environment';
 import { NdviLegendComponent } from '../../ndvi-legend/ndvi-legend.component';
 import { colorForSatelliteIndex, legendForSatelliteIndex, SatelliteLegendItem } from './satellite-index-palettes';
+import {
+  buildSatelliteIndexHistory,
+  SatelliteIndexHistoryPoint,
+  SatelliteStageAtDate,
+} from './satellite-index-history';
 
 interface NdviAnalisis {
   estado: string;
@@ -99,7 +106,7 @@ interface RangoIndiceSatelital {
 
 @Component({
   selector: 'app-card-ndvi',
-  imports: [CommonModule, SharedModule],
+  imports: [CommonModule, SharedModule, ChartComponent],
   templateUrl: './card-ndvi.component.html',
   styleUrl: './card-ndvi.component.scss',
 })
@@ -118,6 +125,8 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   public generandoSatelital = false;
   public readonly esLocal = ENV === 'Local';
   public capaSatelitalActiva: SatelliteIndicator['key'] = 'ndvi';
+  public historialIndice: SatelliteIndexHistoryPoint[] = [];
+  public historialIndiceOptions?: Highcharts.Options;
 
   private ndvi$?: Subscription;
   private refreshTimeout?: ReturnType<typeof setTimeout>;
@@ -148,6 +157,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     this.seleccionManual = true;
     this.reporte = reporte;
     this.fecha = reporte.fechaDeLaImagen ? new Date(reporte.fechaDeLaImagen) : this.hoy;
+    this.actualizarHistorialIndice();
     this.programarRenderMapaSatelital();
   }
 
@@ -448,11 +458,284 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     return Number.isFinite(coverage) && coverage > 0 ? `QA ${this.formatear(coverage)}%` : '';
   }
 
+  public get historialLecturasValidas(): number {
+    return this.historialIndice.filter((point) => point.value != null).length;
+  }
+
+  public get historialIndiceResumen(): string {
+    if (!this.historialIndice.length) {
+      return 'Sin escenas fechadas para construir la serie';
+    }
+
+    const first = this.historialIndice[0];
+    const last = this.historialIndice[this.historialIndice.length - 1];
+    const rango =
+      first.timestamp === last.timestamp
+        ? this.formatearFechaHistorial(first.timestamp, true)
+        : `${this.formatearFechaHistorial(first.timestamp)} – ${this.formatearFechaHistorial(last.timestamp, true)}`;
+    return `${this.historialLecturasValidas} de ${this.historialIndice.length} escenas con lectura · ${rango}`;
+  }
+
+  public get mensajeHistorialIndice(): string {
+    if (!this.historialIndice.length || this.historialLecturasValidas === 0) {
+      return `Las escenas guardadas todavía no contienen valores válidos de ${this.capaActiva.label}.`;
+    }
+    if (this.historialLecturasValidas === 1) {
+      return 'Hay una sola lectura: se muestra el punto, pero todavía no existe una tendencia temporal.';
+    }
+    if (this.historialLecturasValidas < 4) {
+      return 'Serie corta: la unión entre puntos ayuda a leer el cambio, pero no representa mediciones continuas.';
+    }
+    const faltantes = this.historialIndice.length - this.historialLecturasValidas;
+    return faltantes > 0
+      ? `${faltantes} escena${faltantes === 1 ? '' : 's'} sin lectura válida interrumpe${faltantes === 1 ? '' : 'n'} la curva.`
+      : 'Cada marcador es una escena satelital real; la línea solo conecta observaciones discretas.';
+  }
+
+  public get puntoHistorialSeleccionado(): SatelliteIndexHistoryPoint | undefined {
+    const reporteId = this.reporte?._id;
+    const fecha = this.fechaReporteMs(this.reporte || {});
+    return this.historialIndice.find((point) => (reporteId ? point.reportId === reporteId : point.timestamp === fecha));
+  }
+
   public seleccionarCapa(indicator: SatelliteIndicator): void {
     if (indicator.status === 'activo') {
       this.capaSatelitalActiva = indicator.key;
+      this.actualizarHistorialIndice();
       this.programarRenderMapaSatelital();
     }
+  }
+
+  private actualizarHistorialIndice(): void {
+    this.historialIndice = buildSatelliteIndexHistory(this.ndvis, this.capaSatelitalActiva, (date) =>
+      this.etapaParaFechaHistorica(date)
+    );
+    this.historialIndiceOptions = this.crearOpcionesHistorialIndice();
+  }
+
+  private crearOpcionesHistorialIndice(): Highcharts.Options | undefined {
+    const valid = this.historialIndice.filter(
+      (point): point is SatelliteIndexHistoryPoint & { value: number } => point.value != null
+    );
+    if (!valid.length) {
+      return undefined;
+    }
+
+    const label = this.capaActiva.label;
+    const selectedId = this.reporte?._id;
+    const [min, max] = this.rangoEjeHistorial(valid.map((point) => point.value));
+    const data = this.historialIndice.map((point) => {
+      const selected = selectedId
+        ? point.reportId === selectedId
+        : point.timestamp === this.fechaReporteMs(this.reporte || {});
+      const custom = {
+        reportId: point.reportId,
+        date: this.formatearFechaHistorial(point.timestamp, true),
+        stage: this.escapeHtml(point.stage.name),
+        stageSource: this.escapeHtml(point.stage.source),
+        collection: this.escapeHtml(point.collection),
+        quality: point.qualityCoveragePct == null ? '' : `${this.formatear(point.qualityCoveragePct)}%`,
+        invalidReason: point.invalidReason,
+      };
+      return {
+        x: point.timestamp,
+        y: point.value,
+        custom,
+        marker: {
+          enabled: point.value != null,
+          fillColor: selected ? '#071827' : '#22cfc7',
+          lineColor: '#ffffff',
+          lineWidth: selected ? 3 : 2,
+          radius: selected ? 6 : 4,
+        },
+        dataLabels:
+          selected && point.value != null
+            ? {
+                enabled: true,
+                format: `${label} {point.y:.2f}`,
+                backgroundColor: 'rgba(7, 24, 39, 0.9)',
+                borderRadius: 6,
+                color: '#ffffff',
+                crop: false,
+                overflow: 'allow',
+                padding: 5,
+                style: { fontSize: '11px', fontWeight: '700', textOutline: 'none' },
+                y: -14,
+              }
+            : { enabled: false },
+      } as Highcharts.PointOptionsObject;
+    });
+
+    return {
+      chart: {
+        type: 'line',
+        height: 300,
+        marginTop: 38,
+        zooming: { type: 'x' },
+      },
+      title: { text: undefined },
+      subtitle: { text: undefined },
+      xAxis: {
+        type: 'datetime',
+        title: { text: 'Fecha de la escena' },
+        dateTimeLabelFormats: {
+          day: '%e %b',
+          week: '%e %b',
+          month: '%b %Y',
+        },
+        plotBands: this.crearBandasFenologicas(this.historialIndice),
+      },
+      yAxis: {
+        min,
+        max,
+        endOnTick: false,
+        startOnTick: false,
+        tickAmount: 5,
+        title: { text: `${label} · valor normalizado` },
+        plotLines: [
+          {
+            value: 0,
+            color: 'rgba(100, 116, 139, 0.45)',
+            dashStyle: 'ShortDash',
+            width: 1,
+            zIndex: 1,
+          },
+        ],
+      },
+      legend: { enabled: false },
+      tooltip: {
+        useHTML: true,
+        formatter: function () {
+          const custom = (this.point.options as any).custom || {};
+          const value =
+            typeof this.y === 'number' ? this.y.toLocaleString('es-AR', { maximumFractionDigits: 3 }) : 'Sin lectura';
+          const quality = custom.quality ? `<br><span>Área útil QA: <b>${custom.quality}</b></span>` : '';
+          return [
+            `<b>${label} ${value}</b>`,
+            `<br><span>${custom.date}</span>`,
+            `<br><span>Etapa: <b>${custom.stage}</b></span>`,
+            `<br><span>Fenología: ${custom.stageSource}</span>`,
+            `<br><span>Escena: ${custom.collection}</span>`,
+            quality,
+          ].join('');
+        },
+      },
+      plotOptions: {
+        line: {
+          lineWidth: valid.length > 1 ? 2.5 : 0,
+          marker: { enabled: true },
+        },
+        series: {
+          connectNulls: false,
+          cursor: 'pointer',
+          point: {
+            events: {
+              click: (event) => {
+                const reportId = ((event.point.options as any).custom || {}).reportId;
+                const report = this.ndvis.find((item) => item._id === reportId);
+                if (report) {
+                  this.onSelect(report);
+                }
+              },
+            },
+          },
+        },
+      },
+      series: [
+        {
+          type: 'line',
+          name: label,
+          color: '#22cfc7',
+          data,
+        },
+      ],
+    };
+  }
+
+  private crearBandasFenologicas(points: SatelliteIndexHistoryPoint[]): Highcharts.XAxisPlotBandsOptions[] {
+    if (!points.length) return [];
+    const day = 86400000;
+    const segments = points.map((point, index) => {
+      const previous = points[index - 1]?.timestamp;
+      const next = points[index + 1]?.timestamp;
+      const from =
+        previous == null
+          ? point.timestamp - Math.max(day, ((next || point.timestamp + day) - point.timestamp) / 2)
+          : (previous + point.timestamp) / 2;
+      const to =
+        next == null
+          ? point.timestamp + Math.max(day, (point.timestamp - (previous || point.timestamp - day)) / 2)
+          : (point.timestamp + next) / 2;
+      return { from, to, stage: point.stage };
+    });
+
+    const grouped: Array<{ from: number; to: number; stage: SatelliteStageAtDate }> = [];
+    segments.forEach((segment) => {
+      const last = grouped[grouped.length - 1];
+      if (last && last.stage.name === segment.stage.name && last.stage.source === segment.stage.source) {
+        last.to = segment.to;
+      } else {
+        grouped.push({ ...segment });
+      }
+    });
+
+    return grouped.map((segment, index) => ({
+      from: segment.from,
+      to: segment.to,
+      color: segment.stage.confirmed
+        ? index % 2 === 0
+          ? 'rgba(34, 207, 199, 0.08)'
+          : 'rgba(56, 169, 232, 0.07)'
+        : 'rgba(148, 163, 184, 0.07)',
+      label: {
+        text: this.abreviarEtapa(segment.stage.name),
+        align: 'center',
+        verticalAlign: 'top',
+        y: 4,
+        style: {
+          color: '#52637a',
+          fontSize: '10px',
+          fontWeight: '700',
+          textOutline: 'none',
+        },
+      },
+      zIndex: 0,
+    }));
+  }
+
+  private rangoEjeHistorial(values: number[]): [number, number] {
+    const dataMin = Math.min(...values);
+    const dataMax = Math.max(...values);
+    const center = (dataMin + dataMax) / 2;
+    const span = Math.max(0.3, dataMax - dataMin + 0.16);
+    let min = Math.max(-1, center - span / 2);
+    let max = Math.min(1, center + span / 2);
+    if (max - min < 0.3) {
+      if (min <= -1) max = Math.min(1, min + 0.3);
+      if (max >= 1) min = Math.max(-1, max - 0.3);
+    }
+    return [Math.floor(min * 20) / 20, Math.ceil(max * 20) / 20];
+  }
+
+  private formatearFechaHistorial(timestamp: number, includeYear = false): string {
+    return new Date(timestamp).toLocaleDateString('es-AR', {
+      day: 'numeric',
+      month: 'short',
+      ...(includeYear ? { year: 'numeric' as const } : {}),
+    });
+  }
+
+  private abreviarEtapa(value: string): string {
+    return value.length > 28 ? `${value.slice(0, 27)}…` : value;
+  }
+
+  private escapeHtml(value: string): string {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   private programarRenderMapaSatelital(): void {
@@ -628,9 +911,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   }
 
   private estiloMapaSatelital(): Style[] {
-    const fillColor = this.correccionVisualLegadoActiva
-      ? this.colorCapaActiva(0.72)
-      : 'rgba(255, 255, 255, 0)';
+    const fillColor = this.correccionVisualLegadoActiva ? this.colorCapaActiva(0.72) : 'rgba(255, 255, 255, 0)';
     return [
       new Style({
         fill: new Fill({ color: fillColor }),
@@ -661,8 +942,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     }
 
     const transform = multiplyTransform(inversePixelTransform.slice(), frameState.coordinateToPixelTransform);
-    const polygons =
-      geometry instanceof MultiPolygon ? geometry.getCoordinates() : [geometry.getCoordinates()];
+    const polygons = geometry instanceof MultiPolygon ? geometry.getCoordinates() : [geometry.getCoordinates()];
 
     context.save();
     context.beginPath();
@@ -698,9 +978,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
       if (!Array.isArray(polygon)) {
         return [];
       }
-      return polygon
-        .map((ring) => this.proyectarAnillo(ring))
-        .filter((ring) => ring.length >= 4);
+      return polygon.map((ring) => this.proyectarAnillo(ring)).filter((ring) => ring.length >= 4);
     };
 
     if (geometry?.type === 'MultiPolygon') {
@@ -744,7 +1022,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     const semilla = this.siembra?.semilla;
     const cultivo = this.canonicalCultivo(semilla?.cultivo);
     const esPerenne = esCultivoPerenne(cultivo);
-    const etapa = this.etapaSatelital(cultivo, esPerenne);
+    const etapa = this.etapaParaFechaHistorica(new Date()).name;
     const fase = this.faseSatelital(cultivo, etapa, esPerenne);
     const diasDesdeImplantacion = this.diasDesdeImplantacion();
     const implantacionLabel = getNombreImplantacion(cultivo);
@@ -772,22 +1050,105 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     };
   }
 
-  private etapaSatelital(cultivo: string, esPerenne: boolean): string {
-    if (esPerenne) {
-      return this.etapaSatelitalPerenne(cultivo);
-    }
-
+  private etapaParaFechaHistorica(fecha: Date): SatelliteStageAtDate {
     const siembra = this.siembra;
-    if (siembra?.crono) {
-      const fecha = new Date().toISOString();
-      if (cultivo === 'Trigo')
-        return this.nombreEtapaTrigo(HelperService.getEtapaPorFechaTrigo(siembra, fecha, siembra.crono));
-      if (cultivo === 'Cebada') return HelperService.getEtapaPorFechaCebada(siembra, fecha, siembra.crono) || 'Etapa cebada';
-      if (cultivo === 'Soja') return HelperService.getEtapaPorFechaSoja(siembra, fecha, siembra.crono) || 'Etapa soja';
-      if (cultivo === 'Maiz') return HelperService.getEtapaPorFechaMaiz(siembra, fecha, siembra.crono) || 'Etapa maiz';
+    const cultivo = this.canonicalCultivo(siembra?.semilla?.cultivo);
+    if (!Number.isFinite(fecha.getTime())) {
+      return { name: 'Sin etapa confirmada', source: 'Fecha de escena inválida', confirmed: false };
     }
 
-    const dias = this.diasDesdeImplantacion() ?? 0;
+    const registro = [...(siembra?.registrosFenologicos || [])]
+      .filter((item) => item.etapa && item.fecha && new Date(item.fecha).getTime() <= fecha.getTime())
+      .sort((a, b) => new Date(b.fecha!).getTime() - new Date(a.fecha!).getTime())[0];
+    if (registro?.etapa) {
+      return {
+        name: registro.etapa,
+        source: 'Registro de campo',
+        confirmed: true,
+      };
+    }
+
+    if (!siembra) {
+      return { name: 'Sin etapa confirmada', source: 'No hay una siembra asociada', confirmed: false };
+    }
+
+    if (esCultivoPerenne(cultivo)) {
+      return {
+        name: this.etapaSatelitalPerenne(cultivo, fecha),
+        source: 'Referencia de campaña perenne',
+        confirmed: false,
+      };
+    }
+
+    const fechaSiembra = siembra.fechaSiembra ? new Date(siembra.fechaSiembra) : undefined;
+    if (!fechaSiembra || !Number.isFinite(fechaSiembra.getTime())) {
+      return { name: 'Sin etapa confirmada', source: 'Falta fecha de siembra', confirmed: false };
+    }
+    const dias = Math.floor((fecha.getTime() - fechaSiembra.getTime()) / 86400000);
+    if (dias < 0) {
+      return { name: 'Pre-siembra', source: 'Fecha anterior a la siembra', confirmed: false };
+    }
+
+    if (siembra.crono) {
+      const iso = fecha.toISOString();
+      if (cultivo === 'Trigo') {
+        return {
+          name: this.nombreEtapaTrigo(HelperService.getEtapaPorFechaTrigo(siembra, iso, siembra.crono)),
+          source: 'Cronología de la siembra',
+          confirmed: false,
+        };
+      }
+      if (cultivo === 'Cebada') {
+        return {
+          name: HelperService.getEtapaPorFechaCebada(siembra, iso, siembra.crono) || 'Etapa cebada',
+          source: 'Cronología de la siembra',
+          confirmed: false,
+        };
+      }
+      if (cultivo === 'Soja') {
+        return {
+          name: HelperService.getEtapaPorFechaSoja(siembra, iso, siembra.crono) || 'Etapa soja',
+          source: 'Cronología de la siembra',
+          confirmed: false,
+        };
+      }
+      if (cultivo === 'Maiz') {
+        return {
+          name: HelperService.getEtapaPorFechaMaiz(siembra, iso, siembra.crono) || 'Etapa maíz',
+          source: 'Cronología de la siembra',
+          confirmed: false,
+        };
+      }
+    }
+
+    const referencia = siembra.semilla?.fenologiaReferencia;
+    if (referencia?.unidadEtapas === 'dias' && referencia.etapas) {
+      const etapas = this.normalizarEtapasSatelitales(referencia.etapas).sort((a, b) => a.dia - b.dia);
+      let etapa = etapas[0]?.nombre;
+      etapas.forEach((item) => {
+        if (dias >= item.dia) etapa = item.nombre;
+      });
+      if (etapa) {
+        return { name: etapa, source: 'Referencia fenológica de la variedad', confirmed: false };
+      }
+    }
+
+    if (referencia?.unidadEtapas === 'grados_dia') {
+      return {
+        name: `Etapa térmica sin confirmar · día ${dias}`,
+        source: 'Requiere GDD histórico o registro de campo',
+        confirmed: false,
+      };
+    }
+
+    return {
+      name: this.etapaCalendarioReferencia(cultivo, dias),
+      source: 'Referencia calendario operativa',
+      confirmed: false,
+    };
+  }
+
+  private etapaCalendarioReferencia(cultivo: string, dias: number): string {
     if (cultivo === 'Soja') {
       if (dias < 10) return 'Implantacion';
       if (dias < 45) return 'Vegetativo';
@@ -833,7 +1194,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     return typeof etapa === 'string' && etapa ? etapa : 'Etapa trigo';
   }
 
-  private etapaSatelitalPerenne(cultivo: string): string {
+  private etapaSatelitalPerenne(cultivo: string, fecha: Date): string {
     const etapasSemilla = this.siembra?.semilla?.fenologiaReferencia?.etapas;
     const etapas =
       etapasSemilla && Object.keys(etapasSemilla).length
@@ -847,9 +1208,8 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
       return 'Campania perenne';
     }
 
-    const inicio = this.inicioCampaniaPerenne();
-    const hoy = new Date();
-    const diaCampania = Math.max(0, Math.min(365, Math.floor((hoy.getTime() - inicio.getTime()) / 86400000)));
+    const inicio = this.inicioCampaniaPerenne(fecha);
+    const diaCampania = Math.max(0, Math.min(365, Math.floor((fecha.getTime() - inicio.getTime()) / 86400000)));
     let actual = etapas[0].nombre;
     etapas
       .sort((a, b) => a.dia - b.dia)
@@ -917,17 +1277,16 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     return 'monitoreo';
   }
 
-  private inicioCampaniaPerenne(): Date {
-    const hoy = new Date();
-    const year = hoy.getMonth() + 1 >= 7 ? hoy.getFullYear() : hoy.getFullYear() - 1;
+  private inicioCampaniaPerenne(fecha = new Date()): Date {
+    const year = fecha.getMonth() + 1 >= 7 ? fecha.getFullYear() : fecha.getFullYear() - 1;
     return new Date(year, 6, 1);
   }
 
-  private diasDesdeImplantacion(): number | undefined {
+  private diasDesdeImplantacion(fecha = new Date()): number | undefined {
     if (!this.siembra?.fechaSiembra) {
       return undefined;
     }
-    return Math.max(0, Math.floor((Date.now() - new Date(this.siembra.fechaSiembra).getTime()) / 86400000));
+    return Math.max(0, Math.floor((fecha.getTime() - new Date(this.siembra.fechaSiembra).getTime()) / 86400000));
   }
 
   private canonicalCultivo(cultivo?: string): string {
@@ -935,6 +1294,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     const cultivos: Record<string, string> = {
       trigo: 'Trigo',
       cebada: 'Cebada',
+      arveja: 'Arveja',
       soja: 'Soja',
       maiz: 'Maiz',
       papa: 'Papa',
@@ -1227,19 +1587,21 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   }
 
   private calcularFechaMinima(): void {
-    if (this.ndvis.length > 0) {
-      const fechaMinimaNDVI = new Date(this.ndvis[this.ndvis.length - 1].fechaCreacion!);
-      this.fechaMinima = new Date(
-        fechaMinimaNDVI.getFullYear(),
-        fechaMinimaNDVI.getMonth(),
-        fechaMinimaNDVI.getDate() + 1
+    const cultivo = this.canonicalCultivo(this.siembra?.semilla?.cultivo);
+    if (esCultivoPerenne(cultivo)) {
+      this.fechaMinima = this.inicioCampaniaPerenne(
+        this.siembra?.fechaCosecha ? new Date(this.siembra.fechaCosecha) : this.hoy
       );
-    } else if (this.siembra?.fechaCosecha) {
-      const fechaCosecha = new Date(this.siembra.fechaCosecha);
-      this.fechaMinima = new Date(fechaCosecha.getFullYear(), fechaCosecha.getMonth(), fechaCosecha.getDate() + 1);
-    } else {
-      this.fechaMinima = new Date(this.hoy.getFullYear(), this.hoy.getMonth() - 1, this.hoy.getDate() + 1);
+      return;
     }
+
+    const fechaSiembra = this.siembra?.fechaSiembra ? new Date(this.siembra.fechaSiembra) : undefined;
+    if (fechaSiembra && Number.isFinite(fechaSiembra.getTime())) {
+      this.fechaMinima = new Date(fechaSiembra.getFullYear(), fechaSiembra.getMonth(), fechaSiembra.getDate() - 1);
+      return;
+    }
+
+    this.fechaMinima = new Date(this.hoy.getFullYear(), this.hoy.getMonth() - 6, this.hoy.getDate());
   }
 
   private reportePreferido(reportes: IReporteNDVI[]): IReporteNDVI {
@@ -1273,6 +1635,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
       this.ndvi$?.unsubscribe();
       this.ndvis = [];
       this.reporte = undefined;
+      this.actualizarHistorialIndice();
       this.satelliteRasterVisible = false;
       this.satelliteRasterBlockedReason = 'Esperando identificador del lote para consultar escenas.';
       return;
@@ -1280,20 +1643,21 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
 
     const filter: IFilter<IReporteNDVI> = {
       idLote,
-      fechaCreacion: {
+      fechaDeLaImagen: {
         $gte: this.fechaMinima.toISOString(),
       },
     };
     const query: IQueryParam = {
       filter: JSON.stringify(filter),
       limit: 0,
-      sort: '-fechaCreacion',
+      sort: '-fechaDeLaImagen',
     };
 
     this.ndvi$?.unsubscribe();
     this.ndvi$ = this.listados.subscribe<IListado<IReporteNDVI>>('reportendvis', query).subscribe((data) => {
-      this.ndvis = (data.datos || []).filter((reporte) => this.reporteValidoParaLote(reporte, idLote));
-      this.calcularFechaMinima();
+      this.ndvis = (data.datos || [])
+        .filter((reporte) => this.reporteValidoParaLote(reporte, idLote))
+        .sort((a, b) => this.fechaReporteMs(b) - this.fechaReporteMs(a));
       if (this.ndvis.length > 0) {
         const estaEnLista = this.reporte && this.ndvis.some((n) => n._id === this.reporte!._id);
         const preferido = this.reportePreferido(this.ndvis);
@@ -1304,6 +1668,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
       } else {
         this.reporte = undefined;
       }
+      this.actualizarHistorialIndice();
       this.programarRenderMapaSatelital();
     });
 
@@ -1486,20 +1851,25 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (!changes['lote']) {
+    const loteCambio = !!changes['lote'];
+    const siembraCambio = !!changes['siembra'];
+    if (!loteCambio && !siembraCambio) {
       return;
     }
 
     const idLote = this.lote?._id ? String(this.lote._id) : undefined;
-    if (idLote === this.ultimoLoteListado) {
+    if (idLote === this.ultimoLoteListado && !siembraCambio) {
       return;
     }
 
-    this.seleccionManual = false;
-    this.reporte = undefined;
-    this.ndvis = [];
-    this.satelliteRasterVisible = false;
+    if (loteCambio && idLote !== this.ultimoLoteListado) {
+      this.seleccionManual = false;
+      this.reporte = undefined;
+      this.ndvis = [];
+      this.satelliteRasterVisible = false;
+    }
     this.calcularFechaMinima();
+    this.actualizarHistorialIndice();
     void this.listarNDVIs();
     this.programarRenderMapaSatelital();
   }
