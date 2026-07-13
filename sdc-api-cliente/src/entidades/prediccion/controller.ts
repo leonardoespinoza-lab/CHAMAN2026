@@ -7,7 +7,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { PrediccionsService } from './service';
-import { IPrediccion, IListado, IQueryParam, IPermiso } from 'modelos/src';
+import {
+  IPrediccion,
+  IListado,
+  IQueryParam,
+  IPermiso,
+  IResumenRiesgosAgroclimaticos,
+} from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { GetPermiso } from '../../auxiliares/authorization/get-permiso.decorator';
@@ -36,6 +42,15 @@ export class PrediccionsController {
     @GetPermiso() permiso: IPermiso,
   ): Promise<StreamableFile> {
     return new StreamableFile(await this.service.export(query, permiso));
+  }
+
+  @Get('/:idSiembra/agroclima')
+  @Permisos(...PERMISOS_AUTENTICADOS)
+  public async agroclima(
+    @Param('idSiembra') idSiembra: string,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<IResumenRiesgosAgroclimaticos> {
+    return await this.service.agroclima(idSiembra, permiso);
   }
 
   @Get('/:id')

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import {
   IPrediccion,
+  ISiembra,
   IListado,
   IQueryParam,
   IResumenRiesgosAgroclimaticos,
@@ -35,5 +36,10 @@ export class PrediccionsRepository {
   async agroclima(idSiembra: string): Promise<IResumenRiesgosAgroclimaticos> {
     const url = `${API_PREDICCIONES}/prediccions/${idSiembra}/agroclima`;
     return await this.axios.GET(url);
+  }
+
+  async getSiembraById(idSiembra: string): Promise<ISiembra> {
+    const url = `${API_DATOS}/siembras/${idSiembra}`;
+    return await this.axios.GET<ISiembra>(url);
   }
 }

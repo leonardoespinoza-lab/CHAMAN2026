@@ -65,13 +65,22 @@ export class PrediccionsService {
     return await this.repository.prediccion(idSiembra);
   }
 
-  async agroclima(idSiembra: string): Promise<IResumenRiesgosAgroclimaticos> {
+  async agroclima(
+    idSiembra: string,
+    permiso?: IPermiso,
+  ): Promise<IResumenRiesgosAgroclimaticos> {
+    if (permiso) {
+      const siembra = await this.repository.getSiembraById(idSiembra);
+      if (!this.puedeVer(siembra, permiso)) {
+        throw new Error('No tiene permiso para evaluar esta siembra');
+      }
+    }
     return await this.repository.agroclima(idSiembra);
   }
 
   // Private
 
-  private puedeVer(data: IPrediccion, permiso: IPermiso): boolean {
+  private puedeVer(data: Partial<IPrediccion>, permiso: IPermiso): boolean {
     if (permiso.nivel === 'Admin') {
       return true;
     }
