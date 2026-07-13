@@ -26,6 +26,26 @@ describe('fenologia termica de arveja', () => {
     expect(hitos[4]).toMatchObject({ umbralMinGdd: 1395, umbralMaxGdd: 1560 });
   });
 
+  it('aplica los umbrales conservadores de vigilancia convectiva en la ruta directa', () => {
+    const service = Object.create(ClimaService.prototype) as any;
+    const riesgo = service.calcularRiesgoGranizo([
+      {
+        fecha: '2026-07-17',
+        weatherCode: 95,
+        cape: 1200,
+        lluvia: 2,
+        showers: 4,
+        probabilidadLluvia: 70,
+        rafagaViento: 52,
+      },
+    ]);
+
+    expect(riesgo.posibilidadPct).toBe(53);
+    expect(riesgo.nivel).toBe('medio');
+    expect(riesgo.titulo).toBe('Vigilancia convectiva por granizo');
+    expect(riesgo.recomendacion).toContain('informativa');
+  });
+
   it('ubica el lote por acumulacion termica', () => {
     const estado = resolverFenologiaTermicaArveja({
       referencia,

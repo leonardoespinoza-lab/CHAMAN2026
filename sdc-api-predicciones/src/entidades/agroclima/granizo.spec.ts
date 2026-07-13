@@ -32,7 +32,7 @@ describe('evaluarRiesgoGranizoAgroclimatico', () => {
     expect(resultado.posibilidadPct).toBe(15);
   });
 
-  it('eleva el indice cuando coinciden tormenta, CAPE y precipitacion', () => {
+  it('mantiene como vigilancia la convergencia moderada sin duplicar lluvia y chaparrones', () => {
     const resultado = evaluarRiesgoGranizoAgroclimatico({
       weatherCode: 95,
       cape: 1500,
@@ -43,11 +43,12 @@ describe('evaluarRiesgoGranizoAgroclimatico', () => {
       temperaturaMax: 19.9,
     });
 
-    expect(resultado.posibilidadPct).toBe(68);
+    expect(resultado.posibilidadPct).toBe(51);
     expect(resultado.calidadDatos.nivel).toBe('media');
+    expect(resultado.calidadDatos.score).toBeLessThanOrEqual(64);
   });
 
-  it('produce un indice alto con multiples soportes severos independientes', () => {
+  it('produce senal fuerte solo con codigo de granizo y soportes severos convergentes', () => {
     const resultado = evaluarRiesgoGranizoAgroclimatico({
       weatherCode: 99,
       cape: 2200,
@@ -58,7 +59,47 @@ describe('evaluarRiesgoGranizoAgroclimatico', () => {
       temperaturaMax: 25,
     });
 
-    expect(resultado.posibilidadPct).toBe(92);
+    expect(resultado.posibilidadPct).toBe(71);
     expect(resultado.calidadDatos.nivel).toBe('media');
+  });
+
+  it('no cuenta dos veces el volumen si lluvia y chaparrones expresan el mismo evento', () => {
+    const base = {
+      weatherCode: 95,
+      cape: 1500,
+      lluvia: 12,
+      probabilidadLluvia: 38,
+      rafagaViento: 25,
+      temperaturaMax: 20,
+    };
+
+    const soloLluvia = evaluarRiesgoGranizoAgroclimatico({
+      ...base,
+      showers: 0,
+    });
+    const lluviaYChaparron = evaluarRiesgoGranizoAgroclimatico({
+      ...base,
+      showers: 12,
+    });
+
+    expect(lluviaYChaparron.posibilidadPct).toBe(soloLluvia.posibilidadPct);
+    expect(lluviaYChaparron.posibilidadPct).toBeLessThan(70);
+  });
+
+  it('permite senal fuerte sin codigo explicito solo ante convergencia excepcional', () => {
+    const resultado = evaluarRiesgoGranizoAgroclimatico({
+      weatherCode: 95,
+      cape: 2600,
+      lluvia: 12,
+      probabilidadLluvia: 65,
+      showers: 12,
+      rafagaViento: 65,
+      temperaturaMax: 27,
+    });
+
+    expect(resultado.posibilidadPct).toBe(70);
+    expect(resultado.evidencia).toContain(
+      'Convergencia severa excepcional sin codigo explicito de granizo.',
+    );
   });
 });

@@ -227,7 +227,7 @@ export class CardClimaLoteComponent implements OnChanges {
         detail: riesgoCritico.fecha
           ? `Maximo ${this.nombreDia(riesgoCritico.fecha)}; indice preventivo`
           : 'Sin ventana evaluable',
-        tone: riesgoCritico.evaluacion.posibilidadPct >= 35 ? 'warn' : 'ok',
+        tone: riesgoCritico.evaluacion.posibilidadPct >= 40 ? 'warn' : 'ok',
         fill: riesgoCritico.evaluacion.posibilidadPct,
       },
       {
@@ -275,7 +275,7 @@ export class CardClimaLoteComponent implements OnChanges {
         riesgoConvectivo: `${riesgoGranizo.posibilidadPct}/100`,
         et0: this.formatear(this.numero(p.et0), 'mm'),
         vpd: this.formatear(vpd, 'kPa'),
-        tone: riesgoGranizo.posibilidadPct >= 65 ? 'alert' : riesgoGranizo.posibilidadPct >= 35 ? 'watch' : 'ok',
+        tone: riesgoGranizo.posibilidadPct >= 70 ? 'alert' : riesgoGranizo.posibilidadPct >= 40 ? 'watch' : 'ok',
         lluviaPct: Math.max(4, (lluvia / lluviaMax) * 100),
         humedadPct: Math.max(4, humedad),
       };
@@ -573,14 +573,14 @@ export class CardClimaLoteComponent implements OnChanges {
     riesgoGranizo: IResultadoGranizoAgroclimatico
   ): string {
     const code = Number(pronostico.weatherCode);
-    if ((code === 96 || code === 99) && riesgoGranizo.posibilidadPct >= 35) {
-      return 'Tormenta con granizo';
+    if ((code === 96 || code === 99) && riesgoGranizo.posibilidadPct >= 40) {
+      return 'Tormenta con senal de granizo';
     }
-    if (esCodigoTormenta(code) && riesgoGranizo.posibilidadPct >= 35) {
-      return 'Tormenta probable';
+    if (esCodigoTormenta(code) && riesgoGranizo.posibilidadPct >= 40) {
+      return 'Tormenta prevista';
     }
-    if (riesgoGranizo.posibilidadPct >= 65) return 'Riesgo convectivo alto';
-    if (riesgoGranizo.posibilidadPct >= 35) return 'Riesgo convectivo medio';
+    if (riesgoGranizo.posibilidadPct >= 70) return 'Senal convectiva fuerte';
+    if (riesgoGranizo.posibilidadPct >= 40) return 'Vigilancia convectiva';
     if (esCodigoChaparron(code) && (lluvia >= 0.5 || (pronostico.showers || 0) >= 0.5)) {
       return 'Chaparrones';
     }

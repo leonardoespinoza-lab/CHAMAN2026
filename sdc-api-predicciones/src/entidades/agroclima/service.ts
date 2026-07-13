@@ -139,16 +139,16 @@ export class AgroclimaService {
       );
     }
 
-    if (riesgos.granizo.nivel !== 'bajo') {
+    if (this.debeEmitirAlertaGranizo(riesgos.granizo, fecha)) {
       const eventKey = `granizo:${idSiembra}:${this.dateKey(fecha)}`;
       await this.alertasService.registrarEventoSiembra({
         idSiembra,
         descripcion: 'Riesgo de Granizo',
-        titulo: 'Riesgo de granizo',
+        titulo: 'Vigilancia convectiva por granizo',
         tipo: 'granizo',
         categoria: 'agroclimatica',
         motor: 'riesgos-agroclimaticos',
-        versionMotor: 'v1',
+        versionMotor: 'v2-conservador',
         lectura: riesgos.granizo.lectura,
         recomendacion: riesgos.granizo.recomendacion,
         calidadDatos: {
@@ -167,7 +167,7 @@ export class AgroclimaService {
         tenant: this.tenant(siembra),
       });
       await this.notificacionesService.enviarEventoAgroclimatico({
-        titulo: 'Alerta de granizo',
+        titulo: 'Alerta preventiva de granizo',
         mensaje: `${siembra.semilla?.cultivo || 'Cultivo'} en ${
           siembra.lote?.nombre || 'lote'
         }: ${riesgos.granizo.lectura}`,
@@ -180,7 +180,7 @@ export class AgroclimaService {
       await this.alertasService.finalizarEventoSiembra(
         idSiembra,
         'Riesgo de Granizo',
-        'Finalizada automaticamente: el pronostico vigente ya no mantiene una ventana convectiva media o alta.',
+        'Finalizada automaticamente: el pronostico vigente no mantiene una senal severa convergente dentro de las proximas 72 horas.',
       );
     }
 
@@ -415,7 +415,7 @@ export class AgroclimaService {
       const evaluacion = this.evaluarGranizoAgroclimatico(dia);
       const posibilidad = evaluacion.posibilidadPct;
       const nivel: NivelRiesgoAgroclimatico =
-        posibilidad >= 65 ? 'alto' : posibilidad >= 35 ? 'medio' : 'bajo';
+        posibilidad >= 70 ? 'alto' : posibilidad >= 40 ? 'medio' : 'bajo';
       return {
         fecha: dia.fecha,
         nivel,
@@ -436,9 +436,9 @@ export class AgroclimaService {
       (a, b) => b.posibilidadPct - a.posibilidadPct,
     )[0];
     const nivel =
-      critico?.posibilidadPct >= 65
+      critico?.posibilidadPct >= 70
         ? 'alto'
-        : critico?.posibilidadPct >= 35
+        : critico?.posibilidadPct >= 40
           ? 'medio'
           : 'bajo';
     return {
@@ -446,17 +446,19 @@ export class AgroclimaService {
       aplica: true,
       nivel,
       posibilidadPct: critico?.posibilidadPct || 0,
-      titulo: 'Riesgo estimado de granizo',
+      titulo: 'Vigilancia convectiva por granizo',
       lectura:
         nivel === 'alto'
-          ? 'Ventana convectiva compatible con granizo; requiere monitoreo cercano y validacion meteorologica local.'
+          ? 'Senal convectiva severa convergente; requiere validacion con pronostico oficial, radar disponible y observacion local.'
           : nivel === 'medio'
-            ? 'Senal convectiva moderada; observar actualizaciones del pronostico y radar disponible.'
-            : 'Sin senal humeda/convectiva suficiente para elevar riesgo de granizo.',
+            ? 'Vigilancia convectiva: hay proxies compatibles, pero no alcanzan criterio de alerta por granizo.'
+            : 'Sin senal convectiva convergente suficiente para elevar la vigilancia por granizo.',
       recomendacion:
         nivel === 'bajo'
-          ? 'Mantener seguimiento del pronostico local; no activar acciones por granizo sin lluvia o tormenta confirmada.'
-          : 'Revisar cobertura operativa, maquinaria expuesta y recorrida posterior al evento.',
+          ? 'Mantener seguimiento habitual; no activar acciones por granizo sin tormenta confirmada.'
+          : nivel === 'medio'
+            ? 'Revisar la proxima actualizacion. Esta lectura es informativa y no justifica por si sola una accion de emergencia.'
+            : 'Confirmar con alerta oficial o radar antes de movilizar recursos; proteger personal y operaciones si la amenaza se valida.',
       fechaCritica: critico?.fecha,
       diasRiesgo: dias.filter((dia) => dia.nivel !== 'bajo').length,
       evidencia: critico?.evidencia || [],
@@ -553,6 +555,45 @@ export class AgroclimaService {
     calidadDatos: NonNullable<IRiesgoAgroclimatico['calidadDatos']>;
   } {
     return evaluarRiesgoGranizoAgroclimatico(dia);
+  }
+
+  private debeEmitirAlertaGranizo(
+    riesgo: IRiesgoAgroclimatico,
+    fechaActual = new Date().toISOString(),
+  ): boolean {
+    if (
+      riesgo.nivel !== 'alto' ||
+      riesgo.posibilidadPct < 70 ||
+      riesgo.calidadDatos?.nivel !== 'media' ||
+      !riesgo.fechaCritica
+    ) {
+      return false;
+    }
+
+    const hoy = new Date(`${this.dateKey(fechaActual)}T12:00:00Z`);
+    const critica = new Date(`${riesgo.fechaCritica.slice(0, 10)}T12:00:00Z`);
+    const dias = Math.round(
+      (critica.getTime() - hoy.getTime()) / (24 * 60 * 60 * 1000),
+    );
+    if (!Number.isFinite(dias) || dias < 0 || dias > 3) return false;
+
+    const dia = riesgo.serie.find(
+      (item) => item.fecha.slice(0, 10) === riesgo.fechaCritica?.slice(0, 10),
+    );
+    if (!dia) return false;
+    const code = Number(dia.weatherCode);
+    const intensidad = Math.max(
+      Number(dia.lluvia || 0),
+      Number(dia.showers || 0),
+    );
+    const codigoGranizo = code === 96 || code === 99;
+    const convergenciaExcepcional =
+      code === 95 &&
+      Number(dia.cape || 0) >= 2500 &&
+      intensidad >= 10 &&
+      Number(dia.probabilidadLluvia || 0) >= 60 &&
+      Number(dia.rafagaViento || 0) >= 60;
+    return codigoGranizo || convergenciaExcepcional;
   }
 
   private weatherCodeTormenta(code: number): boolean {

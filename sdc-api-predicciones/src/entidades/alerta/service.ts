@@ -157,8 +157,10 @@ export class AlertasService {
         titulo: normalizado.titulo,
         tipo: normalizado.tipo,
         categoria: normalizado.categoria,
-        severidad: this.severidadMayor(alerta.severidad, normalizado.severidad),
-        prioridad: Math.max(alerta.prioridad || 0, normalizado.prioridad),
+        // El reporte conserva el maximo historico. La cabecera debe representar
+        // el estado vigente para que una alerta pueda desescalar correctamente.
+        severidad: normalizado.severidad,
+        prioridad: normalizado.prioridad,
         origen: normalizado.origen,
         motor: normalizado.motor,
         versionMotor: normalizado.versionMotor,
@@ -347,20 +349,6 @@ export class AlertasService {
       critica: 100,
     };
     return pesos[severidad];
-  }
-
-  private severidadMayor(
-    actual: SeveridadAlerta | undefined,
-    nueva: SeveridadAlerta,
-  ): SeveridadAlerta {
-    const peso: Record<SeveridadAlerta, number> = {
-      baja: 1,
-      media: 2,
-      alta: 3,
-      critica: 4,
-    };
-    if (!actual) return nueva;
-    return peso[nueva] > peso[actual] ? nueva : actual;
   }
 
   private canalesPorSeveridad(severidad: SeveridadAlerta): ICanalAlerta[] {

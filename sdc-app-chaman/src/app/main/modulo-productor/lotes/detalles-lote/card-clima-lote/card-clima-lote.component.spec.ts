@@ -33,8 +33,8 @@ describe('CardClimaLoteComponent', () => {
       lote: new SimpleChange(undefined, component.lote, true),
     });
 
-    expect(component.dias[0].estado).toBe('Tormenta probable');
-    expect(component.dias[0].riesgoConvectivo).toBe('68/100');
-    expect(component.metricas.find((item) => item.label === 'Riesgo conv. 7 d')?.value).toBe('68/100');
+    expect(component.dias[0].estado).toBe('Tormenta prevista');
+    expect(component.dias[0].riesgoConvectivo).toBe('51/100');
+    expect(component.metricas.find((item) => item.label === 'Riesgo conv. 7 d')?.value).toBe('51/100');
   });
 });

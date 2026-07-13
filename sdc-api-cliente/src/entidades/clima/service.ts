@@ -1761,7 +1761,7 @@ export class ClimaService {
       const evaluacion = this.evaluarGranizoAgroclimatico(dia);
       const posibilidad = evaluacion.posibilidadPct;
       const nivel: NivelRiesgoAgroclimatico =
-        posibilidad >= 65 ? 'alto' : posibilidad >= 35 ? 'medio' : 'bajo';
+        posibilidad >= 70 ? 'alto' : posibilidad >= 40 ? 'medio' : 'bajo';
       return {
         fecha: dia.fecha,
         nivel,
@@ -1783,9 +1783,9 @@ export class ClimaService {
     )[0];
     const diasRiesgo = dias.filter((dia) => dia.nivel !== 'bajo').length;
     const nivel =
-      critico?.posibilidadPct >= 65
+      critico?.posibilidadPct >= 70
         ? 'alto'
-        : critico?.posibilidadPct >= 35
+        : critico?.posibilidadPct >= 40
           ? 'medio'
           : 'bajo';
     return {
@@ -1793,17 +1793,19 @@ export class ClimaService {
       aplica: true,
       nivel,
       posibilidadPct: critico?.posibilidadPct || 0,
-      titulo: 'Riesgo estimado de granizo',
+      titulo: 'Vigilancia convectiva por granizo',
       lectura:
         nivel === 'alto'
-          ? 'Ventana convectiva compatible con granizo; requiere monitoreo cercano y validacion meteorologica local.'
+          ? 'Senal convectiva severa convergente; requiere validacion con pronostico oficial, radar disponible y observacion local.'
           : nivel === 'medio'
-            ? 'Senal convectiva moderada; observar actualizaciones del pronostico y radar disponible.'
-            : 'Sin senal humeda/convectiva suficiente para elevar riesgo de granizo.',
+            ? 'Vigilancia convectiva: hay proxies compatibles, pero no alcanzan criterio de alerta por granizo.'
+            : 'Sin senal convectiva convergente suficiente para elevar la vigilancia por granizo.',
       recomendacion:
         nivel === 'bajo'
-          ? 'Mantener seguimiento del pronostico local; no activar acciones por granizo sin lluvia o tormenta confirmada.'
-          : 'Revisar cobertura operativa, maquinaria expuesta y recorrida posterior al evento.',
+          ? 'Mantener seguimiento habitual; no activar acciones por granizo sin tormenta confirmada.'
+          : nivel === 'medio'
+            ? 'Revisar la proxima actualizacion. Esta lectura es informativa y no justifica por si sola una accion de emergencia.'
+            : 'Confirmar con alerta oficial o radar antes de movilizar recursos; proteger personal y operaciones si la amenaza se valida.',
       fechaCritica: critico?.fecha,
       diasRiesgo,
       evidencia: critico?.evidencia || [],

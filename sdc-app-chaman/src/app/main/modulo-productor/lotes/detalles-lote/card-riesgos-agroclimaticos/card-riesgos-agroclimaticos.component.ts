@@ -45,7 +45,7 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
   public get resumen(): string {
     if (!this.items.length) return 'Pronostico operativo por lote.';
     const mayor = [...this.items].sort((a, b) => b.posibilidadPct - a.posibilidadPct)[0];
-    return `${mayor.titulo}: ${mayor.nivel} (${mayor.posibilidadPct}%).`;
+    return `${mayor.titulo}: ${this.nivelLabel(mayor.nivel, mayor.tipo)} (${this.valorLabel(mayor)}).`;
   }
 
   public abrirDetalle(riesgo: IRiesgoAgroclimatico): void {
@@ -113,8 +113,19 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
     }
   }
 
-  public nivelLabel(nivel?: string): string {
+  public nivelLabel(nivel?: string, tipo?: string): string {
+    if (tipo === 'granizo') {
+      if (nivel === 'alto') return 'SENAL FUERTE';
+      if (nivel === 'medio') return 'VIGILANCIA';
+      return 'SIN SENAL';
+    }
     return (nivel || 'bajo').toUpperCase();
+  }
+
+  public valorLabel(riesgo?: Pick<IRiesgoAgroclimatico, 'tipo' | 'posibilidadPct'>): string {
+    if (!riesgo) return '-';
+    const valor = Math.round(Number(riesgo.posibilidadPct) || 0);
+    return riesgo.tipo === 'granizo' ? `${valor}/100 indice` : `${valor}%`;
   }
 
   public fechaLabel(fecha?: string): string {

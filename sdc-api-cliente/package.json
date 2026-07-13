@@ -72,9 +72,9 @@
   },
   "jest": {
     "moduleFileExtensions": [
-      "js",
+      "ts",
       "json",
-      "ts"
+      "js"
     ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
