@@ -31,7 +31,7 @@ export class FieldClimateIntegracionComponent implements OnInit {
 
   constructor(
     private service: FieldClimateIntegracionService,
-    private router: Router,
+    private router: Router
   ) {}
 
   async ngOnInit() {
@@ -94,12 +94,65 @@ export class FieldClimateIntegracionComponent implements OnInit {
     }
   }
 
+  public async sincronizar(central: IEstacion) {
+    if (!central._id) return;
+    this.error = '';
+    this.message = '';
+    this.savingId = central._id;
+    try {
+      const actualizada = await this.service.sincronizar(central._id);
+      this.message = actualizada.estado?.reportando
+        ? `${this.nombreCentral(actualizada)} sincronizada y reportando.`
+        : `${this.nombreCentral(actualizada)} sincronizada, pero sin una lectura reciente.`;
+      await this.cargarCentrales();
+    } catch (error: any) {
+      this.error = error?.error?.message || error?.message || 'No se pudo sincronizar la central.';
+      await this.cargarCentrales();
+    } finally {
+      this.savingId = null;
+    }
+  }
+
   public nombreCentral(central: IEstacion | FieldClimateStationPreview): string {
-    return central?.name?.custom || central?.name?.original || central?.info?.device_name || central?.idExterno || 'Central sin nombre';
+    return (
+      central?.name?.custom ||
+      central?.name?.original ||
+      central?.info?.device_name ||
+      central?.idExterno ||
+      'Central sin nombre'
+    );
   }
 
   public ultimoDato(central: IEstacion | FieldClimateStationPreview): string {
+    if ('estado' in central && central.estado?.ultimaLectura) {
+      return central.estado.ultimaLectura;
+    }
     return central?.dates?.last_communication || central?.dates?.max_date || '-';
+  }
+
+  public estadoCentral(central: IEstacion): string {
+    switch (central.estado?.conexion) {
+      case 'reportando':
+        return 'Reportando';
+      case 'demorada':
+        return 'Lectura demorada';
+      case 'sin_datos':
+        return 'Sin datos recientes';
+      case 'error_autenticacion':
+        return 'Revisar acceso';
+      case 'error':
+        return 'Error de sincronizacion';
+      default:
+        return 'Pendiente de comprobar';
+    }
+  }
+
+  public estadoClase(central: IEstacion): string {
+    return central.estado?.conexion || 'pendiente';
+  }
+
+  public ultimoSync(central: IEstacion): string {
+    return central.estado?.ultimoSync || '-';
   }
 
   public coords(central: IEstacion | FieldClimateStationPreview): string {
@@ -123,12 +176,15 @@ export class FieldClimateIntegracionComponent implements OnInit {
     try {
       const res = await this.service.listarCentrales({ limit: 200 });
       this.centrales = res.datos || [];
-      this.asignaciones = this.centrales.reduce((acc, central) => {
-        if (central._id) {
-          acc[central._id] = central.idEstablecimiento || '';
-        }
-        return acc;
-      }, {} as Record<string, string>);
+      this.asignaciones = this.centrales.reduce(
+        (acc, central) => {
+          if (central._id) {
+            acc[central._id] = central.idEstablecimiento || '';
+          }
+          return acc;
+        },
+        {} as Record<string, string>
+      );
     } finally {
       this.loadingCentrales = false;
     }

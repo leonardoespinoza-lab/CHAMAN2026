@@ -19,6 +19,11 @@ import { ClimaRepository } from '../clima/repository';
 import { ProductorsService } from '../productor/service';
 import { CLIMA_CACHE_TTL_MINUTES } from '../../env';
 import { EstacionsService } from '../estacion/service';
+import {
+  protectFieldClimateCredential,
+  revealFieldClimateCredential,
+} from '../../auxiliares/fieldclimate-credentials';
+import { fieldClimateStatus } from '../../auxiliares/fieldclimate-status';
 
 @Injectable()
 export class EstablecimientosService {
@@ -305,19 +310,45 @@ export class EstablecimientosService {
     if (est.fuenteClimaPreferida !== 'FieldClimate') {
       return null;
     }
+    let central: IEstacion | null = null;
     try {
-      const central = await this.getCentralFieldClimate(est);
+      central = await this.getCentralFieldClimate(est);
       if (!central?.idExterno || !central.user || !central.pass) {
         return null;
       }
+      const username = revealFieldClimateCredential(central.user);
+      const password = revealFieldClimateCredential(central.pass);
       const data = await this.climaRepository.getFieldClimateLastData(
         central.idExterno,
-        central.user,
-        central.pass,
+        username,
+        password,
       );
       await this.actualizarCentralFieldClimateDetalle(central, data);
       return this.normalizarFieldClimateActual(central, data);
     } catch (error) {
+      if (central?._id) {
+        const status = Number(
+          (error as any)?.status || (error as any)?.response?.status || 0,
+        );
+        await this.estacionsService
+          .update(central._id, {
+            estado: {
+              ...central.estado,
+              activa: central.estado?.activa !== false,
+              ultimoSync: new Date().toISOString(),
+              ultimoError:
+                status === 401 || status === 403
+                  ? 'Credenciales FieldClimate rechazadas'
+                  : 'No se pudo consultar FieldClimate',
+              reportando: false,
+              conexion:
+                status === 401 || status === 403
+                  ? 'error_autenticacion'
+                  : 'error',
+            },
+          })
+          .catch(() => undefined);
+      }
       Logger.warn(
         `No se pudo usar FieldClimate para establecimiento ${est._id}; se usa respaldo Open-Meteo`,
       );
@@ -354,13 +385,22 @@ export class EstablecimientosService {
     if (lastIndex < 0 || !Array.isArray(data?.data)) {
       return null;
     }
+    const status = fieldClimateStatus(String(dates[lastIndex] || ''));
+    if (!status.reportando) {
+      Logger.warn(
+        `FieldClimate sin lectura reciente para central ${central.idExterno}; se usa respaldo Open-Meteo`,
+      );
+      return null;
+    }
     const lectura = (
       matcher: (name: string) => boolean,
       preferencia: (name: string) => number = () => 0,
     ): IValores | undefined => {
       const serie = data.data
         .filter((item) => {
-          const name = String(item?.name || item?.name_original || '').toLowerCase();
+          const name = String(
+            item?.name || item?.name_original || '',
+          ).toLowerCase();
           return matcher(name);
         })
         .sort((a, b) => {
@@ -383,34 +423,42 @@ export class EstablecimientosService {
     return {
       fuente: 'FieldClimate',
       fecha: dates[lastIndex],
-      estacion: central.name?.custom || central.name?.original || central.idExterno,
+      estacion:
+        central.name?.custom || central.name?.original || central.idExterno,
       ubicacion: coordinates?.length
         ? { lng: coordinates[0], lat: coordinates[1] }
         : undefined,
-      temperatura: lectura((name) =>
-        name.includes('air temperature') ||
-        name.includes('i2c temperature') ||
-        (name.includes('temperature') && !name.includes('soil')),
+      temperatura: lectura(
+        (name) =>
+          name.includes('air temperature') ||
+          name.includes('i2c temperature') ||
+          (name.includes('temperature') && !name.includes('soil')),
         (name) => {
           if (name.includes('air temperature')) return 3;
-          if (name.includes('temperature') && !name.includes('i2c') && !name.includes('soil')) return 2;
+          if (
+            name.includes('temperature') &&
+            !name.includes('i2c') &&
+            !name.includes('soil')
+          )
+            return 2;
           if (name.includes('i2c temperature')) return 1;
           return 0;
         },
       ),
-      humedad: lectura((name) =>
-        name.includes('relative humidity') ||
-        name.includes('rel humidity') ||
-        name === 'rh',
+      humedad: lectura(
+        (name) =>
+          name.includes('relative humidity') ||
+          name.includes('rel humidity') ||
+          name === 'rh',
       ),
-      lluvia: lectura((name) =>
-        name.includes('precipitation') || name.includes('rain'),
+      lluvia: lectura(
+        (name) => name.includes('precipitation') || name.includes('rain'),
       ),
-      velocidadViento: lectura((name) =>
-        name.includes('wind speed') && !name.includes('gust'),
+      velocidadViento: lectura(
+        (name) => name.includes('wind speed') && !name.includes('gust'),
       ),
-      direccionViento: lectura((name) =>
-        name.includes('wind dir') || name.includes('wind direction'),
+      direccionViento: lectura(
+        (name) => name.includes('wind dir') || name.includes('wind direction'),
       ),
       rafagaViento: lectura((name) => name.includes('gust')),
       radiacionSolar: lectura((name) => name.includes('solar radiation')),
@@ -430,6 +478,8 @@ export class EstablecimientosService {
     if (!ultimaLecturaDetalle.length) {
       return;
     }
+    const ultimaLectura = ultimaLecturaDetalle[0]?.fecha;
+    const status = fieldClimateStatus(ultimaLectura);
     const historialLecturas = this.mergeHistorialFieldClimate(
       central.historialLecturas || [],
       this.obtenerHistorialLecturasFieldClimate(data),
@@ -441,12 +491,28 @@ export class EstablecimientosService {
     ultimaLecturaDetalle.forEach((lectura) => variables.add(lectura.label));
     try {
       await this.estacionsService.update(central._id, {
+        user: protectFieldClimateCredential(central.user),
+        pass: protectFieldClimateCredential(central.pass),
+        dates: {
+          ...central.dates,
+          ...(ultimaLectura
+            ? {
+                max_date: ultimaLectura,
+                last_communication: ultimaLectura,
+              }
+            : {}),
+        },
         variablesDisponibles: Array.from(variables).sort(),
         ultimaLecturaDetalle,
         historialLecturas,
         estado: {
+          ...central.estado,
           activa: true,
           ultimoSync: new Date().toISOString(),
+          ultimoError: null,
+          ultimaLectura: status.ultimaLectura,
+          reportando: status.reportando,
+          conexion: status.conexion,
         },
       });
     } catch {
@@ -591,7 +657,10 @@ export class EstablecimientosService {
     }, 0);
   }
 
-  private valorSerie(values: number[] | undefined, index: number): number | undefined {
+  private valorSerie(
+    values: number[] | undefined,
+    index: number,
+  ): number | undefined {
     if (!Array.isArray(values)) {
       return undefined;
     }

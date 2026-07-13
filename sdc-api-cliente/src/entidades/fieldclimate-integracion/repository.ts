@@ -20,7 +20,9 @@ export interface FieldClimateCredentials {
 export class FieldClimateIntegracionRepository {
   constructor(private axios: AxiosService) {}
 
-  async descubrirCentrales(credentials: FieldClimateCredentials): Promise<any[]> {
+  async descubrirCentrales(
+    credentials: FieldClimateCredentials,
+  ): Promise<any[]> {
     const url = `${API_CLIMA}/fieldclimate/integracion/stations`;
     return await this.axios.POST<any[]>(url, credentials);
   }
@@ -64,6 +66,11 @@ export class FieldClimateIntegracionRepository {
   async listarCentrales(params: IQueryParam): Promise<IListado<IEstacion>> {
     const url = `${API_DATOS}/estacions`;
     return await this.axios.GET<IListado<IEstacion>>(url, { params });
+  }
+
+  async obtenerCentralChaman(id: string): Promise<IEstacion> {
+    const url = `${API_DATOS}/estacions/${id}`;
+    return await this.axios.GET<IEstacion>(url);
   }
 
   async actualizarCentral(

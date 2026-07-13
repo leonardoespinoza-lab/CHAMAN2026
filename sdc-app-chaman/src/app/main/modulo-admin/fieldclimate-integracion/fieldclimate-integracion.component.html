@@ -7,7 +7,8 @@
       <p class="eyebrow">Integraciones</p>
       <h1>Centrales meteorologicas FieldClimate</h1>
       <p>
-        Descubri centrales desde una cuenta FieldClimate, importalas a Chaman y asignalas al establecimiento donde estan instaladas.
+        Descubri centrales desde una cuenta FieldClimate, importalas a Chaman y asignalas al establecimiento donde estan
+        instaladas.
       </p>
     </div>
   </header>
@@ -22,7 +23,10 @@
   <article class="panel connection-panel">
     <div>
       <h2>Conexion FieldClimate</h2>
-      <p>Las credenciales se usan para descubrir/importar centrales y no se muestran luego en la pantalla.</p>
+      <p>
+        Las credenciales se cifran en el backend, no se devuelven al navegador y se usan solo para consultar las
+        centrales.
+      </p>
     </div>
     <div class="credentials-form">
       <label>
@@ -52,9 +56,7 @@
     </div>
 
     @if (!descubiertas.length) {
-      <div class="empty-state">
-        Ingresa usuario y password FieldClimate para listar las centrales disponibles.
-      </div>
+      <div class="empty-state">Ingresa usuario y password FieldClimate para listar las centrales disponibles.</div>
     } @else {
       <div class="station-grid">
         @for (station of descubiertas; track station.idExterno) {
@@ -115,16 +117,37 @@
                 <h3>{{ nombreCentral(central) }}</h3>
                 <p>{{ central.info?.device_name || central.idExterno }}</p>
               </div>
-              <span class="status-chip" [class.assigned]="central.idEstablecimiento">
-                {{ central.idEstablecimiento ? 'Asignada' : 'Sin asignar' }}
-              </span>
+              <div class="status-stack">
+                <span class="status-chip" [class.assigned]="central.idEstablecimiento">
+                  {{ central.idEstablecimiento ? 'Asignada' : 'Sin asignar' }}
+                </span>
+                <span class="status-chip connection" [ngClass]="estadoClase(central)">
+                  {{ estadoCentral(central) }}
+                </span>
+              </div>
             </div>
 
             <div class="central-meta">
-              <span>Ultimo dato: <strong>{{ ultimoDato(central) }}</strong></span>
-              <span>Ubicacion: <strong>{{ coords(central) }}</strong></span>
-              <span>Actual: <strong>{{ establecimientoNombre(central.idEstablecimiento) }}</strong></span>
-              <span>Variables: <strong>{{ variables(central) }}</strong></span>
+              <span
+                >Ultimo dato: <strong>{{ ultimoDato(central) }}</strong></span
+              >
+              <span
+                >Ubicacion: <strong>{{ coords(central) }}</strong></span
+              >
+              <span
+                >Actual: <strong>{{ establecimientoNombre(central.idEstablecimiento) }}</strong></span
+              >
+              <span
+                >Variables: <strong>{{ variables(central) }}</strong></span
+              >
+              <span
+                >Sincronizacion: <strong>{{ ultimoSync(central) }}</strong></span
+              >
+              @if (central.estado?.ultimoError) {
+                <span class="central-error"
+                  >Diagnostico: <strong>{{ central.estado?.ultimoError }}</strong></span
+                >
+              }
             </div>
 
             <div class="assign-row">
@@ -139,6 +162,13 @@
                 icon="pi pi-check"
                 [loading]="savingId === central._id"
                 (onClick)="asignar(central)"
+              />
+              <p-button
+                label="Sincronizar ahora"
+                icon="pi pi-refresh"
+                severity="secondary"
+                [loading]="savingId === central._id"
+                (onClick)="sincronizar(central)"
               />
             </div>
           </article>

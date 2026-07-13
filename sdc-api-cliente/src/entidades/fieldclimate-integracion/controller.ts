@@ -1,6 +1,20 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { IEstablecimiento, IEstacion, IListado, IQueryParam } from 'modelos/src';
+import {
+  IEstablecimiento,
+  IEstacion,
+  IListado,
+  IQueryParam,
+} from 'modelos/src';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { FieldClimateIntegracionService } from './service';
@@ -44,5 +58,11 @@ export class FieldClimateIntegracionController {
     @Body() body: { idEstablecimiento: string },
   ): Promise<IEstacion> {
     return await this.service.asignar(id, body);
+  }
+
+  @Post('centrales/:id/sincronizar')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  async sincronizar(@Param('id') id: string): Promise<IEstacion> {
+    return await this.service.sincronizar(id);
   }
 }

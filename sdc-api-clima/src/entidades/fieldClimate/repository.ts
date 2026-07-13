@@ -1,5 +1,9 @@
-import { Injectable } from '@nestjs/common';
-import { API_FIELD_CLIMATE } from '../../env';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  API_FIELD_CLIMATE,
+  FIELDCLIMATE_OAUTH_CLIENT_ID,
+  FIELDCLIMATE_OAUTH_CLIENT_SECRET,
+} from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 import { HelperService } from '../../auxiliares/helper';
 import { IStation } from './modelos/station';
@@ -27,6 +31,11 @@ export class FieldClimateRepository {
   // Login
 
   async login(username: string, password: string): Promise<Token> {
+    if (!FIELDCLIMATE_OAUTH_CLIENT_SECRET) {
+      throw new ServiceUnavailableException(
+        'Integracion FieldClimate no configurada',
+      );
+    }
     try {
       const url = 'https://oauth.fieldclimate.com/token';
 
@@ -36,8 +45,8 @@ export class FieldClimateRepository {
       };
 
       const body = {
-        client_id: 'FieldclimateNG',
-        client_secret: '618a5baf48287eecbdfc754e9c933a',
+        client_id: FIELDCLIMATE_OAUTH_CLIENT_ID,
+        client_secret: FIELDCLIMATE_OAUTH_CLIENT_SECRET,
         grant_type: 'password',
         password,
         username,
@@ -48,7 +57,7 @@ export class FieldClimateRepository {
       this.token[username] = token;
       return token;
     } catch (error) {
-      console.error(error);
+      this.logger.error('Fallo la autenticacion contra FieldClimate');
       throw error;
     }
   }

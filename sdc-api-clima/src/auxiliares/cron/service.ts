@@ -10,16 +10,13 @@ import {
   nivelPrediccion,
   Sensores,
 } from 'modelos/src';
-import {
-  CRON_TEST,
-  FIELD_CLIMATE_PASS,
-  FIELD_CLIMATE_USERS,
-} from '../../env';
+import { CRON_TEST, FIELD_CLIMATE_PASS, FIELD_CLIMATE_USERS } from '../../env';
 import { FieldClimateService } from '../../entidades/fieldClimate/service';
 import { LogService } from '../logsService/service';
 import { OmixomService } from 'src/entidades/omixom/service';
 import { LotesService } from 'src/entidades/lote/service';
 import { ClimaService } from 'src/entidades/clima/service';
+import { protectFieldClimateCredential } from '../fieldclimate-credentials';
 
 @Injectable()
 export class CronService {
@@ -159,8 +156,8 @@ export class CronService {
         const create: ICreateEstacion = {
           origen: 'FieldClimate',
           idExterno,
-          user,
-          pass,
+          user: protectFieldClimateCredential(user),
+          pass: protectFieldClimateCredential(pass),
           dates: station.dates,
           info: station.info,
           position: station.position,
@@ -370,29 +367,29 @@ export class CronService {
 
 export enum ModuleType {
   'Alertas de Heladas y Agroapp' = 'Alerta de heladas',
-  'BUI' = 'Build Up Index', // Build Up Index
+  BUI = 'Build Up Index', // Build Up Index
   'Nivel de Batería' = 'Batería',
-  'DC' = 'Drought Code', // Drought Code
-  'DMC' = 'Duff Moisture Code', // Duff Moisture Code
+  DC = 'Drought Code', // Drought Code
+  DMC = 'Duff Moisture Code', // Duff Moisture Code
   'Delta T' = 'Delta Temperatura', // Diferencia de Temperatura
   'Delta T - Recomendación' = 'Delta Temperatura - Recomendación',
   'Dirección de Viento' = 'Dirección de Viento',
-  'Evapotranspiración' = 'Evapotranspiración',
-  'FFMC' = 'Fine Fuel Moisture Code', // Fine Fuel Moisture Code
+  Evapotranspiración = 'Evapotranspiración',
+  FFMC = 'Fine Fuel Moisture Code', // Fine Fuel Moisture Code
   'Fase Lunar, Amanecer y Ocaso' = 'Fase Lunar, Amanecer y Ocaso',
-  'Humedad' = 'Humedad',
-  'ISI' = 'Initial Spread Index', // Initial Spread Index
-  'ITH' = 'Inicio de Temporada de Heladas', // Inicio de Temporada de Heladas
+  Humedad = 'Humedad',
+  ISI = 'Initial Spread Index', // Initial Spread Index
+  ITH = 'Inicio de Temporada de Heladas', // Inicio de Temporada de Heladas
   'Indice de peligro de incendios' = 'Indice de peligro de incendios',
   'Nivel de agua subterranea' = 'Nivel de Napa Freática',
   'Panel Solar' = 'Panel Solar',
-  'Presión' = 'Presión',
+  Presión = 'Presión',
   'Punto de rocío' = 'Punto de rocío',
   'Radiación Solar' = 'Radiación Solar',
   'Registro de lluvia' = 'Registro de lluvia',
   'Rafaga de Viento' = 'Ráfaga de Viento',
   'Señal GPRS' = 'Señal',
-  'Temperatura' = 'Temperatura',
+  Temperatura = 'Temperatura',
   'Temperatura de suelo' = 'Temperatura de suelo',
   'Velocidad de Viento' = 'Velocidad de Viento',
 }

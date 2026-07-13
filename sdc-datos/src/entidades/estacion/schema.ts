@@ -81,7 +81,11 @@ export class Estacion implements Exactly<IEstacion, Estacion> {
   estado?: {
     activa?: boolean;
     ultimoSync?: string;
-    ultimoError?: string;
+    ultimoError?: string | null;
+    ultimaLectura?: string;
+    reportando?: boolean;
+    conexion?:
+      'reportando' | 'demorada' | 'sin_datos' | 'error_autenticacion' | 'error';
   };
 
   @Prop({ type: [Object] })

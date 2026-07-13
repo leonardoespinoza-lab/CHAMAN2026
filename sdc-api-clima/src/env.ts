@@ -15,8 +15,7 @@ export const PREFIX_PATH =
 export const DEBUG =
   process.env.DEBUG === 'true' ? true : ENV === 'local' ? true : false;
 // APIS
-export const API_DATOS =
-  process.env.API_DATOS || 'http://127.0.0.1:5000';
+export const API_DATOS = process.env.API_DATOS || 'http://127.0.0.1:5000';
 // Field Climate
 export const API_FIELD_CLIMATE =
   process.env.API_FIELD_CLIMATE || 'https://api.fieldclimate.com/v2';
@@ -29,6 +28,12 @@ export const FIELD_CLIMATE_USERS: string[] = JSON.parse(
 export const FIELD_CLIMATE_PASS: string[] = JSON.parse(
   process.env.FIELD_CLIMATE_PASS || '[]',
 );
+export const FIELDCLIMATE_CREDENTIALS_KEY =
+  process.env.FIELDCLIMATE_CREDENTIALS_KEY || '';
+export const FIELDCLIMATE_OAUTH_CLIENT_ID =
+  process.env.FIELDCLIMATE_OAUTH_CLIENT_ID || 'FieldclimateNG';
+export const FIELDCLIMATE_OAUTH_CLIENT_SECRET =
+  process.env.FIELDCLIMATE_OAUTH_CLIENT_SECRET || '';
 
 // Open Weather
 export const API_OPEN_WEATHER =

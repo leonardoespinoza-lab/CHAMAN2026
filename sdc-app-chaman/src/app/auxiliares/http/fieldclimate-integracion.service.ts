@@ -42,7 +42,9 @@ export class FieldClimateIntegracionService {
     return this.http.post('/fieldclimate-integraciones/descubrir', credentials);
   }
 
-  public importar(data: FieldClimateCredentials & { stationId: string; idEstablecimiento?: string }): Promise<IEstacion> {
+  public importar(
+    data: FieldClimateCredentials & { stationId: string; idEstablecimiento?: string }
+  ): Promise<IEstacion> {
     return this.http.post('/fieldclimate-integraciones/importar', data);
   }
 
@@ -56,5 +58,9 @@ export class FieldClimateIntegracionService {
 
   public asignar(idCentral: string, idEstablecimiento: string): Promise<IEstacion> {
     return this.http.put(`/fieldclimate-integraciones/centrales/${idCentral}/asignar`, { idEstablecimiento });
+  }
+
+  public sincronizar(idCentral: string): Promise<IEstacion> {
+    return this.http.post(`/fieldclimate-integraciones/centrales/${idCentral}/sincronizar`, {});
   }
 }

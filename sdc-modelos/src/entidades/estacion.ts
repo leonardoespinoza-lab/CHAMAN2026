@@ -1,19 +1,19 @@
-import { Module } from './omixom';
+import { Module } from "./omixom";
 
 export type Sensores =
-  | 'temperatura'
-  | 'temperatura_suelo'
-  | 'humedad'
-  | 'humedad_suelo_superficial' // SHS Pinche ahí nomás
-  | 'humedad_suelo_profundidad' // LANZA Muchos valores
-  | 'viento_velocidad'
-  | 'viento_direccion'
-  | 'pluviometro' // Lluvia en general
-  | 'presion'
-  | 'evapotranspiracion'
-  | 'radiacion_solar'
-  | 'napa' // Freatimetro
-  | 'otro'; // Sensores que no sé que son
+  | "temperatura"
+  | "temperatura_suelo"
+  | "humedad"
+  | "humedad_suelo_superficial" // SHS Pinche ahí nomás
+  | "humedad_suelo_profundidad" // LANZA Muchos valores
+  | "viento_velocidad"
+  | "viento_direccion"
+  | "pluviometro" // Lluvia en general
+  | "presion"
+  | "evapotranspiracion"
+  | "radiacion_solar"
+  | "napa" // Freatimetro
+  | "otro"; // Sensores que no sé que son
 
 export interface IEstacionSensorDetalle {
   label: string;
@@ -46,9 +46,12 @@ export interface IEstacionLecturaHistorica extends IEstacionLecturaDetalle {
   fecha: string;
 }
 
+export type EstadoConexionEstacion =
+  "reportando" | "demorada" | "sin_datos" | "error_autenticacion" | "error";
+
 export interface IEstacion {
   _id?: string;
-  origen?: 'FieldClimate' | 'Chaman' | 'Omixom' | 'Horatech';
+  origen?: "FieldClimate" | "Chaman" | "Omixom" | "Horatech";
   // id de field climate o Omixom
   idExterno?: string;
   user?: string;
@@ -87,7 +90,7 @@ export interface IEstacion {
   };
   /**
    * Sensores que tiene la estación - Cambia según el origen
-  */
+   */
   sensores?: Sensores[]; // ["temperatura", "humedad", "viento", "radiacion"]
   idEstablecimiento?: string;
   variablesDisponibles?: string[];
@@ -97,7 +100,10 @@ export interface IEstacion {
   estado?: {
     activa?: boolean;
     ultimoSync?: string;
-    ultimoError?: string;
+    ultimoError?: string | null;
+    ultimaLectura?: string;
+    reportando?: boolean;
+    conexion?: EstadoConexionEstacion;
   };
   /**
    * Modulos que tiene la estación - solo para Omixom
@@ -106,10 +112,14 @@ export interface IEstacion {
   modulos?: Module[];
 }
 
-type OmitirCreate = '_id';
-export interface ICreateEstacion
-  extends Omit<Partial<IEstacion>, OmitirCreate> {}
+type OmitirCreate = "_id";
+export interface ICreateEstacion extends Omit<
+  Partial<IEstacion>,
+  OmitirCreate
+> {}
 
-type OmitirUpdate = '_id';
-export interface IUpdateEstacion
-  extends Omit<Partial<IEstacion>, OmitirUpdate> {}
+type OmitirUpdate = "_id";
+export interface IUpdateEstacion extends Omit<
+  Partial<IEstacion>,
+  OmitirUpdate
+> {}

@@ -5,6 +5,7 @@ import { FieldClimateRepository } from './repository';
 import { IEstacion } from 'modelos/src';
 import { EstacionsService, IEstacionCercana } from '../estacion/service';
 import { FIELD_CLIMATE_PASS, FIELD_CLIMATE_USERS } from 'src/env';
+import { revealFieldClimateCredential } from '../../auxiliares/fieldclimate-credentials';
 
 @Injectable()
 export class FieldClimateService {
@@ -13,6 +14,13 @@ export class FieldClimateService {
     private estacion: EstacionsService,
   ) {}
 
+  private credenciales(username: string, password: string) {
+    return {
+      username: revealFieldClimateCredential(username),
+      password: revealFieldClimateCredential(password),
+    };
+  }
+
   private getFechaQuery(fecha: number): number {
     const date = new Date(fecha);
     date.setHours(date.getHours() - 3);
@@ -20,27 +28,53 @@ export class FieldClimateService {
   }
 
   async systemStatus(username: string, password: string) {
-    return await this.repository.systemStatus(username, password);
+    const credentials = this.credenciales(username, password);
+    return await this.repository.systemStatus(
+      credentials.username,
+      credentials.password,
+    );
   }
 
   async getSystemTypes(username: string, password: string) {
-    return await this.repository.getSystemTypes(username, password);
+    const credentials = this.credenciales(username, password);
+    return await this.repository.getSystemTypes(
+      credentials.username,
+      credentials.password,
+    );
   }
 
   async getStations(username: string, password: string) {
-    return await this.repository.getStations(username, password);
+    const credentials = this.credenciales(username, password);
+    return await this.repository.getStations(
+      credentials.username,
+      credentials.password,
+    );
   }
 
   async getStation(id: string, username: string, password: string) {
-    return await this.repository.getStation(id, username, password);
+    const credentials = this.credenciales(username, password);
+    return await this.repository.getStation(
+      id,
+      credentials.username,
+      credentials.password,
+    );
   }
 
   async getStationSensors(id: string, username: string, password: string) {
-    return await this.repository.getStationSensors(id, username, password);
+    const credentials = this.credenciales(username, password);
+    return await this.repository.getStationSensors(
+      id,
+      credentials.username,
+      credentials.password,
+    );
   }
 
   async getLicenses(username: string, password: string) {
-    return await this.repository.getLicenses(username, password);
+    const credentials = this.credenciales(username, password);
+    return await this.repository.getLicenses(
+      credentials.username,
+      credentials.password,
+    );
   }
 
   async getMinMaxTimeData(
@@ -48,10 +82,11 @@ export class FieldClimateService {
     username: string,
     password: string,
   ) {
+    const credentials = this.credenciales(username, password);
     return await this.repository.getMinMaxTimeData(
       stationId,
-      username,
-      password,
+      credentials.username,
+      credentials.password,
     );
   }
 
@@ -76,13 +111,14 @@ export class FieldClimateService {
     const from = this.getFechaQuery(startDate);
     const to = this.getFechaQuery(endDate);
 
+    const credentials = this.credenciales(username, password);
     return await this.repository.getDataBetweenDates(
       stationId,
       dataGroup,
       from,
       to,
-      username,
-      password,
+      credentials.username,
+      credentials.password,
     );
   }
 
@@ -93,17 +129,23 @@ export class FieldClimateService {
     username: string,
     password: string,
   ) {
+    const credentials = this.credenciales(username, password);
     return await this.repository.getLastData(
       stationId,
       dataGroup,
       timePeriod,
-      username,
-      password,
+      credentials.username,
+      credentials.password,
     );
   }
 
   async getForecast(stationId: string, username: string, password: string) {
-    return await this.repository.getForecast(stationId, username, password);
+    const credentials = this.credenciales(username, password);
+    return await this.repository.getForecast(
+      stationId,
+      credentials.username,
+      credentials.password,
+    );
   }
 
   // Custom

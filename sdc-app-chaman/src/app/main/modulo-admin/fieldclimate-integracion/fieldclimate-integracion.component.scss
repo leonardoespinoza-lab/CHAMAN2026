@@ -234,6 +234,35 @@ dd {
   background: color-mix(in srgb, var(--p-primary-color) 10%, transparent);
 }
 
+.status-stack {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.status-chip.connection.reportando {
+  border-color: color-mix(in srgb, #16a34a 55%, var(--p-content-border-color));
+  color: #15803d;
+  background: color-mix(in srgb, #22c55e 12%, transparent);
+}
+
+.status-chip.connection.demorada,
+.status-chip.connection.pendiente {
+  border-color: color-mix(in srgb, #d97706 50%, var(--p-content-border-color));
+  color: #b45309;
+  background: color-mix(in srgb, #f59e0b 11%, transparent);
+}
+
+.status-chip.connection.sin_datos,
+.status-chip.connection.error_autenticacion,
+.status-chip.connection.error {
+  border-color: color-mix(in srgb, #dc2626 48%, var(--p-content-border-color));
+  color: #b91c1c;
+  background: color-mix(in srgb, #ef4444 10%, transparent);
+}
+
 .central-meta {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -254,12 +283,17 @@ dd {
   white-space: nowrap;
 }
 
+.central-meta .central-error strong {
+  color: #b91c1c;
+}
+
 .assign-row {
   gap: 10px;
 }
 
 .assign-row select {
   flex: 1;
+  min-width: 220px;
 }
 
 @media (max-width: 1100px) {

@@ -14,6 +14,11 @@ import {
   FieldClimateCredentials,
   FieldClimateIntegracionRepository,
 } from './repository';
+import {
+  protectFieldClimateCredential,
+  revealFieldClimateCredential,
+} from '../../auxiliares/fieldclimate-credentials';
+import { fieldClimateStatus } from '../../auxiliares/fieldclimate-status';
 
 interface DescubrirCentralesBody extends FieldClimateCredentials {}
 
@@ -33,7 +38,9 @@ export class FieldClimateIntegracionService {
   async descubrir(body: DescubrirCentralesBody): Promise<any[]> {
     this.validarCredenciales(body);
     const centrales = await this.repository.descubrirCentrales(body);
-    return centrales.map((central) => this.sanitizeFieldClimateStation(central));
+    return centrales.map((central) =>
+      this.sanitizeFieldClimateStation(central),
+    );
   }
 
   async importar(body: ImportarCentralBody): Promise<IEstacion> {
@@ -88,6 +95,63 @@ export class FieldClimateIntegracionService {
     return this.sanitizeEstacion(estacion);
   }
 
+  async sincronizar(idCentral: string): Promise<IEstacion> {
+    const central = await this.repository.obtenerCentralChaman(idCentral);
+    if (!central || central.origen !== 'FieldClimate' || !central.idExterno) {
+      throw new BadRequestException('Central FieldClimate no encontrada');
+    }
+    if (!central.user || !central.pass) {
+      throw new BadRequestException(
+        'La central no tiene credenciales FieldClimate configuradas',
+      );
+    }
+
+    const credentials: FieldClimateCredentials = {
+      username: revealFieldClimateCredential(central.user),
+      password: revealFieldClimateCredential(central.pass),
+    };
+    try {
+      const [station, sensoresRaw, ultimosDatosRaw] = await Promise.all([
+        this.repository.obtenerCentral(central.idExterno, credentials),
+        this.repository
+          .obtenerSensores(central.idExterno, credentials)
+          .catch(() => []),
+        this.repository.obtenerUltimosDatos(central.idExterno, credentials),
+      ]);
+      const data = this.mapCentralChaman(
+        station,
+        sensoresRaw,
+        ultimosDatosRaw,
+        credentials,
+        central.idEstablecimiento,
+        central,
+      );
+      const actualizada = await this.repository.upsertCentral(data);
+      return this.sanitizeEstacion(actualizada);
+    } catch (error: any) {
+      const status = Number(error?.status || error?.response?.status || 0);
+      await this.repository.actualizarCentral(idCentral, {
+        estado: {
+          ...central.estado,
+          activa: central.estado?.activa !== false,
+          ultimoSync: new Date().toISOString(),
+          ultimoError:
+            status === 401 || status === 403
+              ? 'Credenciales FieldClimate rechazadas'
+              : 'No se pudo consultar FieldClimate',
+          reportando: false,
+          conexion:
+            status === 401 || status === 403 ? 'error_autenticacion' : 'error',
+        },
+      });
+      throw new BadRequestException(
+        status === 401 || status === 403
+          ? 'FieldClimate rechazo las credenciales guardadas'
+          : 'No se pudo sincronizar la central con FieldClimate',
+      );
+    }
+  }
+
   async listar(params: IQueryParam = {}): Promise<IListado<IEstacion>> {
     const query = this.agregarFiltroFieldClimate(params);
     const res = await this.repository.listarCentrales(query);
@@ -116,9 +180,11 @@ export class FieldClimateIntegracionService {
       throw new BadRequestException('Debe indicar central y establecimiento');
     }
     const fecha = new Date().toISOString();
+    const existente = await this.repository.obtenerCentralChaman(idCentral);
     const central = await this.repository.actualizarCentral(idCentral, {
       idEstablecimiento: body.idEstablecimiento,
       estado: {
+        ...existente?.estado,
         activa: true,
         ultimoSync: fecha,
       },
@@ -132,7 +198,9 @@ export class FieldClimateIntegracionService {
 
   private validarCredenciales(credentials: FieldClimateCredentials) {
     if (!credentials?.username || !credentials?.password) {
-      throw new BadRequestException('Usuario y password FieldClimate requeridos');
+      throw new BadRequestException(
+        'Usuario y password FieldClimate requeridos',
+      );
     }
   }
 
@@ -162,26 +230,41 @@ export class FieldClimateIntegracionService {
     ultimosDatosRaw: any,
     credentials: FieldClimateCredentials,
     idEstablecimiento?: string,
+    existente?: IEstacion,
   ): ICreateEstacion {
     const idExterno = this.getStationExternalId(station);
     const sensores = this.inferirSensores(station, sensoresRaw);
     const sensoresDetalle = this.obtenerSensoresDetalle(sensoresRaw);
-    const ultimaLecturaDetalle = this.obtenerUltimaLecturaDetalle(
-      ultimosDatosRaw,
+    const ultimaLecturaDetalle =
+      this.obtenerUltimaLecturaDetalle(ultimosDatosRaw);
+    const historialLecturas = this.mergeHistorialLecturas(
+      existente?.historialLecturas || [],
+      this.obtenerHistorialLecturas(ultimosDatosRaw),
     );
-    const historialLecturas = this.obtenerHistorialLecturas(ultimosDatosRaw);
     const variablesDisponibles = this.obtenerVariables(
       sensoresRaw,
       ultimosDatosRaw,
     );
+    const ultimaLectura = this.ultimaFecha(ultimosDatosRaw);
+    const status = fieldClimateStatus(ultimaLectura);
+    const dates = {
+      ...(existente?.dates || {}),
+      ...(station?.dates || {}),
+      ...(ultimaLectura && !station?.dates?.max_date
+        ? { max_date: ultimaLectura }
+        : {}),
+      ...(ultimaLectura && !station?.dates?.last_communication
+        ? { last_communication: ultimaLectura }
+        : {}),
+    } as IEstacion['dates'];
     return {
       origen: 'FieldClimate',
       idExterno,
-      user: credentials.username,
-      pass: credentials.password,
+      user: protectFieldClimateCredential(credentials.username),
+      pass: protectFieldClimateCredential(credentials.password),
       name: station.name,
       info: station.info,
-      dates: station.dates,
+      dates,
       position: station.position,
       sensores,
       variablesDisponibles,
@@ -190,8 +273,13 @@ export class FieldClimateIntegracionService {
       historialLecturas,
       idEstablecimiento,
       estado: {
-        activa: true,
+        ...existente?.estado,
+        activa: existente?.estado?.activa !== false,
         ultimoSync: new Date().toISOString(),
+        ultimoError: null,
+        ultimaLectura: status.ultimaLectura,
+        reportando: status.reportando,
+        conexion: status.conexion,
       },
     };
   }
@@ -218,9 +306,13 @@ export class FieldClimateIntegracionService {
     }
 
     for (const sensor of this.flattenSensores(sensoresRaw)) {
-      const name = String(sensor?.name || sensor?.name_custom || '').toLowerCase();
+      const name = String(
+        sensor?.name || sensor?.name_custom || '',
+      ).toLowerCase();
       if (name.includes('air temperature') || name.includes('temperature')) {
-        sensores.add(name.includes('soil') ? 'temperatura_suelo' : 'temperatura');
+        sensores.add(
+          name.includes('soil') ? 'temperatura_suelo' : 'temperatura',
+        );
       }
       if (name.includes('relative humidity') || name.includes('humidity')) {
         sensores.add('humedad');
@@ -248,10 +340,7 @@ export class FieldClimateIntegracionService {
     return Array.from(sensores);
   }
 
-  private obtenerVariables(
-    sensoresRaw: any,
-    ultimosDatosRaw?: any,
-  ): string[] {
+  private obtenerVariables(sensoresRaw: any, ultimosDatosRaw?: any): string[] {
     const variables = new Set<string>();
     this.flattenSensores(sensoresRaw).forEach((sensor) => {
       const name = sensor?.name_custom || sensor?.name;
@@ -392,6 +481,36 @@ export class FieldClimateIntegracionService {
       });
     });
     return lecturas.slice(-12000);
+  }
+
+  private mergeHistorialLecturas(
+    actual: IEstacionLecturaHistorica[],
+    nuevo: IEstacionLecturaHistorica[],
+  ): IEstacionLecturaHistorica[] {
+    const porLectura = new Map<string, IEstacionLecturaHistorica>();
+    [...actual, ...nuevo].forEach((lectura) => {
+      if (!lectura?.fecha || !lectura?.label) return;
+      const key = [
+        lectura.fecha,
+        lectura.label,
+        lectura.code ?? '',
+        lectura.ch ?? '',
+        lectura.group ?? '',
+      ].join('|');
+      porLectura.set(key, lectura);
+    });
+    return Array.from(porLectura.values())
+      .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+      .slice(-12000);
+  }
+
+  private ultimaFecha(data: any): string | undefined {
+    const dates = Array.isArray(data?.dates) ? data.dates : [];
+    return dates
+      .map((fecha) => String(fecha || '').trim())
+      .filter(Boolean)
+      .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+      .at(-1);
   }
 
   private flattenLecturas(ultimosDatosRaw: any): any[] {

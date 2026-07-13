@@ -21,7 +21,7 @@ export class EstacionsController {
   public async getFiltered(
     @Query() query: IQueryParam,
   ): Promise<IListado<IEstacion>> {
-    return await this.service.getFiltered(query);
+    return this.sanitizeListado(await this.service.getFiltered(query));
   }
 
   @Get('suelo')
@@ -34,7 +34,7 @@ export class EstacionsController {
   public async getSueloFiltered(
     @Query() query: IQueryParam,
   ): Promise<IListado<IEstacion>> {
-    return await this.service.getSueloFiltered(query);
+    return this.sanitizeListado(await this.service.getSueloFiltered(query));
   }
 
   @Get('/:id')
@@ -45,6 +45,23 @@ export class EstacionsController {
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   public async getById(@Param('id') id: string): Promise<IEstacion> {
-    return await this.service.getById(id);
+    return this.sanitize(await this.service.getById(id));
+  }
+
+  private sanitizeListado(data: IListado<IEstacion>): IListado<IEstacion> {
+    return {
+      ...data,
+      datos: (data?.datos || []).map((item) => this.sanitize(item)),
+    };
+  }
+
+  private sanitize(data: IEstacion): IEstacion {
+    if (!data) return data;
+    return {
+      ...data,
+      user: undefined,
+      pass: undefined,
+      apikey: undefined,
+    };
   }
 }

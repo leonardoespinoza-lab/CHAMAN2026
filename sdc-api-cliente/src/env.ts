@@ -13,25 +13,20 @@ export const PREFIX_PATH =
         ? `${PREFIX}-dev`
         : '';
 // APIS
-export const API_DATOS =
-  process.env.API_DATOS || 'http://127.0.0.1:5000';
-export const API_AUTH =
-  process.env.API_AUTH || 'http://127.0.0.1:5001';
+export const API_DATOS = process.env.API_DATOS || 'http://127.0.0.1:5000';
+export const API_AUTH = process.env.API_AUTH || 'http://127.0.0.1:5001';
 export const API_PREDICCIONES =
   process.env.API_PREDICCIONES || 'http://127.0.0.1:5007';
-export const API_CLIMA =
-  process.env.API_CLIMA || 'http://127.0.0.1:5008/local';
+export const API_CLIMA = process.env.API_CLIMA || 'http://127.0.0.1:5008/local';
 export const API_FTP =
   process.env.API_FTP || 'https://chaman-ftp-production.up.railway.app';
-export const API_WEED_AI =
-  process.env.API_WEED_AI || 'http://127.0.0.1:8080';
+export const API_WEED_AI = process.env.API_WEED_AI || 'http://127.0.0.1:8080';
 export const WEED_AI_TIMEOUT_MS = +process.env.WEED_AI_TIMEOUT_MS || 30000;
 export const WEED_AI_STORAGE_DIR =
   process.env.WEED_AI_STORAGE_DIR || 'storage/ia-malezas';
 export const WEED_AI_DISABLE_FALLBACK =
   process.env.WEED_AI_DISABLE_FALLBACK === 'true';
-export const TIMELAPSE_ADMIN_TOKEN =
-  process.env.TIMELAPSE_ADMIN_TOKEN || '';
+export const TIMELAPSE_ADMIN_TOKEN = process.env.TIMELAPSE_ADMIN_TOKEN || '';
 // OAuth client used by the public gateway when talking to sdc-auth.
 export const AUTH_CLIENT_ID =
   process.env.AUTH_CLIENT_ID || (ENV === 'production' ? '' : '1');
@@ -56,8 +51,11 @@ export const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 export const REDIS_PORT = +process.env.REDIS_PORT || 56826; //6379;
 export const REDIS_PASSWORD = process.env.REDIS_PASSWORD || '';
 export const REDIS_DB = +process.env.REDIS_DB || 0;
-export const REDIS_NDVI_DB =
-  +(process.env.REDIS_NDVI_DB || process.env.REDIS_DB || 0);
+export const REDIS_NDVI_DB = +(
+  process.env.REDIS_NDVI_DB ||
+  process.env.REDIS_DB ||
+  0
+);
 export const REDIS_NDVI_QUEUE =
   process.env.REDIS_NDVI_QUEUE || process.env.REDIS_QUEUE || 'tareas-ndvi';
 export const REDIS_KEY_PREFIX = process.env.REDIS_KEY_PREFIX || 'sdc-cliente';
@@ -82,6 +80,10 @@ export const CLIMA_SYNC_INTERVAL_MS =
   +process.env.CLIMA_SYNC_INTERVAL_MS || 15 * 60 * 1000;
 export const CLIMA_CACHE_TTL_MINUTES =
   +process.env.CLIMA_CACHE_TTL_MINUTES || 15;
+export const FIELDCLIMATE_CREDENTIALS_KEY =
+  process.env.FIELDCLIMATE_CREDENTIALS_KEY || '';
+export const FIELDCLIMATE_MAX_DATA_AGE_HOURS =
+  +process.env.FIELDCLIMATE_MAX_DATA_AGE_HOURS || 6;
 
 // SATELITE
 export const NDVI_SYNC_ENABLED =
