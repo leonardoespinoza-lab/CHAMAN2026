@@ -10,7 +10,7 @@ describe('PhenologyPlantComponent', () => {
     fixture = TestBed.createComponent(PhenologyPlantComponent);
   });
 
-  it('renderiza una ilustracion botanica especifica para los diez cultivos disponibles', () => {
+  it('renderiza una referencia fotografica especifica para los diez cultivos disponibles', () => {
     for (const cultivo of CULTIVOS_DISPONIBLES) {
       fixture.componentRef.setInput('cultivo', cultivo);
       fixture.detectChanges();
@@ -21,8 +21,10 @@ describe('PhenologyPlantComponent', () => {
         .toLowerCase();
       const shell = fixture.nativeElement.querySelector(`.crop-${key}`);
 
-      expect(shell).withContext(`Ilustracion faltante para ${cultivo}`).not.toBeNull();
-      expect(shell.querySelectorAll('svg').length).withContext(`SVG faltante para ${cultivo}`).toBe(1);
+      const image = shell.querySelector('img.specimen-photo');
+      expect(shell).withContext(`Referencia faltante para ${cultivo}`).not.toBeNull();
+      expect(image).withContext(`Fotografia faltante para ${cultivo}`).not.toBeNull();
+      expect(image.getAttribute('src')).toContain(`/photo/${key}/`);
     }
   });
 
@@ -37,5 +39,22 @@ describe('PhenologyPlantComponent', () => {
     expect(shell.classList.contains('phase-reproductive')).toBeTrue();
     expect(shell.classList.contains('is-current')).toBeTrue();
     expect(fixture.componentInstance.escala).toBe(1);
+  });
+
+  it('selecciona el especimen fotografico segun el estadio agronomico', () => {
+    fixture.componentRef.setInput('cultivo', 'Arveja');
+    fixture.componentRef.setInput('etapa', 'R1 - Inicio de floracion');
+    fixture.componentRef.setInput('fase', 'reproductive');
+    fixture.detectChanges();
+    expect(fixture.componentInstance.assetPath).toContain('/arveja/reproductive.webp');
+
+    fixture.componentRef.setInput('etapa', 'R3 - Formacion de vainas');
+    fixture.detectChanges();
+    expect(fixture.componentInstance.assetPath).toContain('/arveja/maturity.webp');
+
+    fixture.componentRef.setInput('cultivo', 'Manzano');
+    fixture.componentRef.setInput('etapa', 'Floracion plena');
+    fixture.detectChanges();
+    expect(fixture.componentInstance.assetPath).toContain('/manzano/vegetative.webp');
   });
 });

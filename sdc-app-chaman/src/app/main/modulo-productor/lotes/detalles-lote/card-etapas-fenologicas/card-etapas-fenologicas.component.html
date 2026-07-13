@@ -112,9 +112,12 @@
               <div class="plant-visual">
                 <app-phenology-plant
                   [cultivo]="cultivo"
+                  [etapa]="etapa.nombre"
                   [fase]="faseVisual(etapa, i)"
                   [crecimiento]="alturaVisual(etapa, i)"
                   [actual]="etapa.estado === 'current'"
+                  [indice]="i"
+                  [total]="etapas.length"
                 ></app-phenology-plant>
               </div>
 

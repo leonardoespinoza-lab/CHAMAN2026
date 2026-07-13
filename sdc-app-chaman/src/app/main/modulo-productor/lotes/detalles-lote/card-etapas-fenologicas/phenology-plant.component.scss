@@ -5,324 +5,61 @@
 }
 
 .botanical-shell {
-  --leaf: #73bd4f;
-  --leaf-light: #a6d860;
-  --leaf-dark: #2f7441;
-  --stem: #579b42;
-  --fruit: #d4c76a;
   align-items: end;
   display: flex;
   height: 100%;
   justify-content: center;
+  margin: 0;
+  overflow: hidden;
+  position: relative;
   width: 100%;
 }
 
-.botanical-shell.crop-maiz {
-  --leaf: #7ebe43;
-  --leaf-light: #b7d957;
-  --stem: #6eaa3c;
-  --fruit: #f1c94a;
-}
-
-.botanical-shell.crop-trigo,
-.botanical-shell.crop-cebada {
-  --leaf: #82b94d;
-  --leaf-light: #c6d066;
-  --stem: #7da544;
-  --fruit: #dec367;
-}
-
-.botanical-shell.crop-papa {
-  --leaf: #66a94f;
-  --leaf-light: #94cc64;
-  --fruit: #c69b68;
-}
-
-.botanical-shell.crop-vid {
-  --leaf: #6aaf47;
-  --leaf-light: #9cd25c;
-  --fruit: #a879cb;
-}
-
-.botanical-shell.crop-manzano {
-  --fruit: #e75b4d;
-}
-
-.botanical-shell.crop-peral {
-  --fruit: #d8cf4d;
-}
-
-.botanical-shell.crop-pecan {
-  --fruit: #b98852;
-}
-
-svg {
-  height: 154px;
-  max-width: 118px;
-  overflow: visible;
-  width: 92%;
-}
-
-.plant-main {
-  opacity: 1;
-  transform: scale(var(--plant-growth, 1));
-  transform-box: fill-box;
-  transform-origin: center bottom;
+.specimen-photo {
+  filter: drop-shadow(0 8px 8px rgba(24, 71, 61, 0.13));
+  height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  position: relative;
+  transform: translateY(2px);
   transition:
     filter 0.2s ease,
     opacity 0.2s ease,
     transform 0.2s ease;
+  width: 100%;
+  z-index: 2;
 }
 
-.stem,
-.branch,
-.tendril,
-.root,
-.awn,
-.grain-line,
-.leaf-stem,
-.silk,
-.tree-branch {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.specimen-halo {
+  background: radial-gradient(circle, rgba(154, 224, 173, 0.2), rgba(213, 246, 229, 0.04) 58%, transparent 72%);
+  border-radius: 50%;
+  bottom: 5%;
+  height: 72%;
+  position: absolute;
+  width: 86%;
+  z-index: 0;
 }
 
-.stem,
-.branch {
-  stroke: var(--stem);
-  stroke-width: 3.5;
+.specimen-baseline {
+  background: linear-gradient(90deg, transparent, rgba(112, 143, 104, 0.35), transparent);
+  bottom: 2px;
+  height: 1px;
+  position: absolute;
+  width: 74%;
+  z-index: 1;
 }
 
-.stem.thick {
-  stroke-width: 5;
+.phase-maturity .specimen-photo,
+.phase-harvest .specimen-photo {
+  filter: drop-shadow(0 8px 8px rgba(82, 72, 39, 0.14));
 }
 
-.tendril {
-  stroke: var(--leaf-light);
-  stroke-width: 2;
+.is-current .specimen-photo {
+  filter: drop-shadow(0 10px 10px rgba(19, 91, 71, 0.18)) drop-shadow(0 0 6px rgba(141, 218, 78, 0.2));
+  transform: translateY(0) scale(1.035);
 }
 
-.root {
-  stroke: #c3a36d;
-  stroke-width: 2;
-}
-
-.leaf-pair ellipse,
-.soy-leaf path,
-.potato-leaf ellipse,
-.single-leaf,
-.tree-leaves ellipse,
-.pecan-leaves ellipse {
-  fill: var(--leaf);
-  stroke: var(--leaf-dark);
-  stroke-width: 1;
-}
-
-.leaf-pair ellipse:nth-child(even),
-.soy-leaf path:nth-child(even),
-.potato-leaf ellipse:nth-child(even),
-.tree-leaves ellipse:nth-child(even) {
-  fill: var(--leaf-light);
-}
-
-.plant-flower,
-.plant-fruit,
-.plant-seed,
-.plant-shoot,
-.plant-dormant {
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.plant-flower {
-  fill: #f5f3e4;
-  stroke: #d7d4bd;
-  stroke-width: 1;
-}
-
-.soy-flower {
-  fill: #d9a6df;
-  stroke: #a46cac;
-}
-
-.flower-center {
-  fill: #f1c94c;
-}
-
-.plant-fruit {
-  fill: var(--fruit);
-  stroke: color-mix(in srgb, var(--fruit), #513921 35%);
-  stroke-width: 1;
-}
-
-.pea-pods,
-.soy-pods {
-  fill: #86be4b;
-  stroke: #356f3b;
-}
-
-.pea-pods circle {
-  fill: #d7e776;
-  stroke: none;
-}
-
-.corn-stalk {
-  fill: var(--stem);
-  stroke: #3d7838;
-  stroke-width: 1;
-}
-
-.corn-leaf,
-.cereal-leaf {
-  fill: var(--leaf);
-  stroke: var(--leaf-dark);
-  stroke-width: 1;
-}
-
-.corn-tassel .awn,
-.cereal-head .awn,
-.cereal-head .grain-line {
-  stroke: var(--fruit);
-  stroke-width: 2;
-}
-
-.cereal-head .ear {
-  fill: var(--fruit);
-  stroke: #9b7e36;
-  stroke-width: 1;
-}
-
-.corn-ear .husk {
-  fill: none;
-  stroke: var(--leaf-light);
-  stroke-width: 3;
-}
-
-.corn-ear .silk {
-  stroke: #e1c870;
-  stroke-width: 1.5;
-}
-
-.potato-flower {
-  fill: #d5b5e5;
-  stroke: #9d75b5;
-}
-
-.potato-tubers,
-.potato-seed {
-  fill: #c8a071;
-  stroke: #7c5938;
-  stroke-width: 1;
-}
-
-.tuber-eye {
-  fill: #735335;
-  stroke: none;
-}
-
-.woody,
-.trunk {
-  fill: #87613d;
-  stroke: #b18451;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2;
-}
-
-.vine-leaf {
-  fill: var(--leaf);
-  stroke: var(--leaf-dark);
-  stroke-width: 1;
-}
-
-.grape-flower,
-.grape-cluster {
-  stroke-width: 0.8;
-}
-
-.tree-branch,
-.leaf-stem {
-  stroke: #87613d;
-  stroke-width: 3;
-}
-
-.tree-blossom {
-  fill: #fff6f3;
-  stroke: #e6b7b3;
-}
-
-.pecan-catkins {
-  fill: none;
-  stroke: #c9b657;
-  stroke-width: 4;
-  stroke-linecap: round;
-}
-
-.plant-seed {
-  fill: var(--fruit);
-  stroke: color-mix(in srgb, var(--fruit), #3e2a1a 45%);
-  stroke-width: 1.5;
-}
-
-.plant-seed path {
-  fill: none;
-  stroke: color-mix(in srgb, var(--fruit), #3e2a1a 55%);
-  stroke-width: 1.2;
-}
-
-.plant-shoot .stem,
-.plant-shoot .woody,
-.plant-shoot .trunk {
-  stroke: var(--stem);
-}
-
-.plant-dormant .trunk,
-.plant-dormant .woody,
-.plant-dormant .tree-branch {
-  fill: none;
-  stroke: #96704c;
-  stroke-width: 4;
-}
-
-.phase-implantation .plant-main {
-  opacity: 0;
-}
-
-.phase-implantation .plant-seed,
-.phase-implantation .plant-shoot {
-  opacity: 1;
-}
-
-.phase-reproductive .plant-flower,
-.phase-reproductive .plant-main,
-.phase-maturity .plant-main,
-.phase-maturity .plant-fruit,
-.phase-harvest .plant-main,
-.phase-harvest .plant-fruit {
-  opacity: 1;
-}
-
-.phase-maturity .plant-main,
-.phase-harvest .plant-main {
-  filter: saturate(0.82) sepia(0.12);
-}
-
-.phase-harvest .plant-main {
-  opacity: 0.78;
-}
-
-.phase-rest .plant-main {
-  opacity: 0.08;
-}
-
-.phase-rest .plant-dormant {
-  opacity: 1;
-}
-
-.is-current .plant-main,
-.is-current .plant-seed,
-.is-current .plant-shoot,
-.is-current .plant-dormant {
-  filter: drop-shadow(0 0 5px rgba(202, 255, 61, 0.32));
+.is-current .specimen-halo {
+  background: radial-gradient(circle, rgba(194, 246, 100, 0.3), rgba(217, 250, 179, 0.08) 56%, transparent 74%);
 }
