@@ -369,7 +369,7 @@
   grid-auto-columns: minmax(135px, 1fr);
   grid-auto-flow: column;
   isolation: isolate;
-  min-height: 292px;
+  min-height: 308px;
   min-width: var(--stage-min-width, 760px);
   padding: 0.8rem 0.55rem 0;
   position: relative;
@@ -379,7 +379,7 @@
   align-items: center;
   border-left: 1px solid rgba(219, 255, 243, 0.11);
   display: grid;
-  grid-template-rows: 24px 154px minmax(76px, auto);
+  grid-template-rows: 24px 154px minmax(92px, auto);
   justify-items: center;
   min-width: 0;
   padding: 0 0.42rem 0.65rem;
@@ -440,7 +440,6 @@
 
 .plant-visual {
   align-items: end;
-  color: var(--crop-accent-soft);
   display: flex;
   height: 154px;
   justify-content: center;
@@ -449,97 +448,19 @@
   z-index: 2;
 }
 
-.plant-visual svg {
-  height: 148px;
-  max-width: 112px;
-  overflow: visible;
-  width: 86%;
-}
-
-.plant-body {
-  opacity: 0.95;
-  transform: scale(var(--growth-scale, 1));
-  transform-box: fill-box;
-  transform-origin: center bottom;
-  transition: transform 0.2s ease;
-}
-
-.growth-stage.current .plant-body {
-  filter: drop-shadow(0 0 7px rgba(202, 255, 61, 0.34));
-}
-
-.plant-stem,
-.plant-root,
-.plant-cane {
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 4;
-}
-
-.plant-root {
-  color: #c2a66d;
-  stroke-width: 2.5;
-}
-
-.plant-leaf,
-.tree-canopy {
-  fill: var(--crop-accent-soft);
-  stroke: rgba(226, 255, 185, 0.42);
-  stroke-width: 0.8;
-}
-
-.plant-trunk {
-  fill: #8f6840;
-  stroke: #b38a55;
-  stroke-width: 1;
-}
-
-.plant-reproductive {
-  fill: var(--crop-fruit);
-  stroke: var(--crop-fruit);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 2.4;
-}
-
-.plant-seed {
-  fill: #d5b25d;
-  opacity: 0;
-}
-
-.phase-implantation .plant-seed {
-  opacity: 1;
-}
-
-.phase-implantation .plant-reproductive,
-.phase-vegetative .plant-reproductive,
-.phase-rest .plant-reproductive {
-  opacity: 0;
-}
-
-.phase-maturity .plant-leaf,
-.phase-harvest .plant-leaf,
-.phase-maturity .tree-canopy,
-.phase-harvest .tree-canopy {
-  fill: color-mix(in srgb, var(--crop-accent-soft), #c9ab6e 42%);
-}
-
-.phase-harvest .plant-body,
-.phase-rest .plant-body {
-  opacity: 0.68;
-}
-
 .growth-label {
   align-self: stretch;
+  background: rgba(4, 28, 29, 0.72);
+  border-top: 1px solid rgba(218, 255, 244, 0.11);
   display: grid;
   grid-template-rows: auto auto 1fr;
   justify-items: center;
   min-width: 0;
-  padding: 0.45rem 0.15rem 0;
+  padding: 0.68rem 0.32rem 0.32rem;
+  position: relative;
   text-align: center;
   width: 100%;
+  z-index: 2;
 }
 
 .growth-label strong {
@@ -575,9 +496,9 @@
     radial-gradient(ellipse at 22% 28%, rgba(202, 176, 98, 0.26) 0 2px, transparent 3px),
     radial-gradient(ellipse at 68% 65%, rgba(136, 174, 71, 0.22) 0 2px, transparent 3px),
     linear-gradient(#725238 0 22%, #563824 23% 64%, #412b20 65%);
-  bottom: 76px;
+  bottom: 92px;
   box-shadow: inset 0 3px rgba(228, 194, 119, 0.13);
-  height: 17px;
+  height: 14px;
   left: 0;
   pointer-events: none;
   position: absolute;

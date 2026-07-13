@@ -109,99 +109,13 @@
                 <span class="growth-order">{{ i + 1 }}</span>
               }
 
-              <div class="plant-visual" [style.--growth-scale]="alturaVisual(etapa, i) / 100">
-                @switch (arquitecturaVisual) {
-                  @case ('cereal') {
-                    <svg viewBox="0 0 100 150" aria-hidden="true">
-                      <g class="plant-body">
-                        <path class="plant-stem" d="M50 137 C49 105 50 73 50 29" />
-                        <path class="plant-leaf" d="M50 111 C34 101 23 103 16 112 C31 116 42 117 50 111Z" />
-                        <path class="plant-leaf" d="M50 94 C66 81 78 82 85 90 C70 97 60 99 50 94Z" />
-                        <path class="plant-leaf" d="M50 76 C37 64 26 65 20 73 C33 79 42 81 50 76Z" />
-                        <path class="plant-leaf" d="M50 59 C62 47 72 48 78 55 C67 61 58 64 50 59Z" />
-                        <g class="plant-reproductive">
-                          <path d="M50 33 C40 25 39 14 50 5 C61 14 60 25 50 33Z" />
-                          <path d="M50 31 L38 19 M50 25 L62 13 M50 19 L40 8 M50 15 L59 5" />
-                        </g>
-                        <ellipse class="plant-seed" cx="50" cy="137" rx="10" ry="6" />
-                      </g>
-                    </svg>
-                  }
-                  @case ('legume') {
-                    <svg viewBox="0 0 100 150" aria-hidden="true">
-                      <g class="plant-body">
-                        <path
-                          class="plant-stem"
-                          d="M50 138 C48 109 51 77 48 34 M49 90 C34 78 28 65 25 53 M50 103 C65 91 72 76 75 62"
-                        />
-                        <ellipse class="plant-leaf" cx="29" cy="59" rx="13" ry="7" transform="rotate(28 29 59)" />
-                        <ellipse class="plant-leaf" cx="37" cy="78" rx="14" ry="7" transform="rotate(25 37 78)" />
-                        <ellipse class="plant-leaf" cx="69" cy="68" rx="14" ry="7" transform="rotate(-30 69 68)" />
-                        <ellipse class="plant-leaf" cx="65" cy="91" rx="14" ry="7" transform="rotate(-26 65 91)" />
-                        <ellipse class="plant-leaf" cx="47" cy="40" rx="11" ry="7" />
-                        <g class="plant-reproductive">
-                          <path d="M35 87 C26 89 24 101 35 105 C46 102 46 90 35 87Z" />
-                          <path d="M67 76 C58 78 57 89 66 94 C77 92 78 80 67 76Z" />
-                        </g>
-                        <ellipse class="plant-seed" cx="50" cy="138" rx="10" ry="6" />
-                      </g>
-                    </svg>
-                  }
-                  @case ('tuber') {
-                    <svg viewBox="0 0 100 150" aria-hidden="true">
-                      <g class="plant-body">
-                        <path class="plant-stem" d="M50 101 L50 45 M50 70 L27 56 M50 78 L73 60" />
-                        <ellipse class="plant-leaf" cx="28" cy="54" rx="15" ry="9" transform="rotate(24 28 54)" />
-                        <ellipse class="plant-leaf" cx="72" cy="58" rx="15" ry="9" transform="rotate(-24 72 58)" />
-                        <ellipse class="plant-leaf" cx="48" cy="42" rx="14" ry="9" />
-                        <path
-                          class="plant-root"
-                          d="M50 100 C41 113 36 123 31 139 M50 101 C59 114 64 125 70 139 M50 103 L50 141"
-                        />
-                        <g class="plant-reproductive">
-                          <ellipse cx="31" cy="130" rx="12" ry="8" />
-                          <ellipse cx="51" cy="137" rx="13" ry="8" />
-                          <ellipse cx="70" cy="128" rx="11" ry="7" />
-                        </g>
-                        <ellipse class="plant-seed" cx="50" cy="137" rx="10" ry="6" />
-                      </g>
-                    </svg>
-                  }
-                  @case ('vine') {
-                    <svg viewBox="0 0 100 150" aria-hidden="true">
-                      <g class="plant-body">
-                        <path class="plant-stem" d="M43 139 C44 106 47 76 51 42 C55 28 68 22 78 28" />
-                        <path class="plant-stem plant-cane" d="M23 51 C42 45 61 45 82 51" />
-                        <path class="plant-leaf" d="M36 66 C18 54 12 69 24 79 C14 91 31 99 40 86 C51 92 58 75 45 69Z" />
-                        <path class="plant-leaf" d="M69 55 C55 44 51 58 58 68 C52 77 68 84 74 72 C84 75 90 61 79 57Z" />
-                        <g class="plant-reproductive plant-cluster">
-                          <circle cx="61" cy="82" r="5" />
-                          <circle cx="70" cy="83" r="5" />
-                          <circle cx="65" cy="91" r="5" />
-                          <circle cx="74" cy="92" r="5" />
-                          <circle cx="68" cy="100" r="5" />
-                        </g>
-                        <ellipse class="plant-seed" cx="44" cy="138" rx="10" ry="6" />
-                      </g>
-                    </svg>
-                  }
-                  @default {
-                    <svg viewBox="0 0 100 150" aria-hidden="true">
-                      <g class="plant-body">
-                        <path class="plant-trunk" d="M45 139 C46 116 48 96 50 77 C51 96 54 116 56 139Z" />
-                        <circle class="tree-canopy" cx="50" cy="58" r="27" />
-                        <circle class="tree-canopy" cx="31" cy="70" r="19" />
-                        <circle class="tree-canopy" cx="70" cy="70" r="19" />
-                        <g class="plant-reproductive plant-fruit">
-                          <circle cx="35" cy="61" r="4" />
-                          <circle cx="55" cy="48" r="4" />
-                          <circle cx="68" cy="70" r="4" />
-                        </g>
-                        <ellipse class="plant-seed" cx="50" cy="139" rx="10" ry="6" />
-                      </g>
-                    </svg>
-                  }
-                }
+              <div class="plant-visual">
+                <app-phenology-plant
+                  [cultivo]="cultivo"
+                  [fase]="faseVisual(etapa, i)"
+                  [crecimiento]="alturaVisual(etapa, i)"
+                  [actual]="etapa.estado === 'current'"
+                ></app-phenology-plant>
               </div>
 
               <div class="growth-label">

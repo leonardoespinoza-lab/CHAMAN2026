@@ -1,6 +1,7 @@
 param(
   [string]$Source = (Join-Path $PSScriptRoot '..\public\images\chaman-mark.png'),
-  [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\public\favicon')
+  [string]$OutputDirectory = (Join-Path $PSScriptRoot '..\public\favicon'),
+  [string]$ImagesDirectory = (Join-Path $PSScriptRoot '..\public\images')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -37,7 +38,9 @@ try {
     param(
       [int]$Size,
       [string]$FileName,
-      [double]$MarkCoverage = 0.64
+      [double]$MarkCoverage = 0.64,
+      [string]$Directory = $OutputDirectory,
+      [bool]$Transparent = $false
     )
 
     $bitmap = New-Object System.Drawing.Bitmap($Size, $Size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -46,7 +49,7 @@ try {
     $markGraphics = [System.Drawing.Graphics]::FromImage($resizedMark)
 
     try {
-      $graphics.Clear($background)
+      $graphics.Clear($(if ($Transparent) { [System.Drawing.Color]::Transparent } else { $background }))
       $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
       $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
       $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
@@ -87,7 +90,7 @@ try {
       }
 
       $graphics.DrawImageUnscaled($resizedMark, 0, 0)
-      $outputPath = Join-Path $OutputDirectory $FileName
+      $outputPath = Join-Path $Directory $FileName
       $bitmap.Save($outputPath, [System.Drawing.Imaging.ImageFormat]::Png)
       return $bitmap.Clone()
     }
@@ -105,6 +108,7 @@ try {
   $icon192 = New-ChamanIcon -Size 192 -FileName 'android-chrome-192x192.png'
   $icon512 = New-ChamanIcon -Size 512 -FileName 'android-chrome-512x512.png'
   $maskable512 = New-ChamanIcon -Size 512 -FileName 'maskable-512x512.png' -MarkCoverage 0.58
+  $transparentMark = New-ChamanIcon -Size 512 -FileName 'chaman-mark-fluor.png' -MarkCoverage 0.84 -Directory $ImagesDirectory -Transparent $true
 
   try {
     $iconHandle = $icon32.GetHicon()
@@ -125,6 +129,7 @@ try {
     $icon192.Dispose()
     $icon512.Dispose()
     $maskable512.Dispose()
+    $transparentMark.Dispose()
   }
 }
 finally {

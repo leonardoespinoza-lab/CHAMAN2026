@@ -34,6 +34,7 @@ import {
   phenologyVisualPhase,
   phenologyVisualPhaseLabel,
 } from './phenology-visual';
+import { PhenologyPlantComponent } from './phenology-plant.component';
 
 interface FenologiaStage {
   nombre: string;
@@ -136,7 +137,7 @@ const ETAPAS_BASE_POR_CULTIVO: Record<string, Record<string, number>> = {
 
 @Component({
   selector: 'app-card-etapas-fenologicas',
-  imports: [CommonModule, SharedModule],
+  imports: [CommonModule, SharedModule, PhenologyPlantComponent],
   templateUrl: './card-etapas-fenologicas.component.html',
   styleUrl: './card-etapas-fenologicas.component.scss',
 })
@@ -186,10 +187,6 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
   public get arquitecturaVisual() {
     return phenologyCropArchitecture(this.cultivo);
-  }
-
-  public get indiceEtapaActualVisual(): number {
-    return Math.max(0, this.indiceEtapaActual());
   }
 
   public faseVisual(etapa: FenologiaStage, index: number): PhenologyVisualPhase {
