@@ -108,7 +108,7 @@ try {
   $icon192 = New-ChamanIcon -Size 192 -FileName 'android-chrome-192x192.png'
   $icon512 = New-ChamanIcon -Size 512 -FileName 'android-chrome-512x512.png'
   $maskable512 = New-ChamanIcon -Size 512 -FileName 'maskable-512x512.png' -MarkCoverage 0.58
-  $transparentMark = New-ChamanIcon -Size 512 -FileName 'chaman-mark-fluor.png' -MarkCoverage 0.84 -Directory $ImagesDirectory -Transparent $true
+  $transparentMark = New-ChamanIcon -Size 512 -FileName 'chaman-mark-fluor.png' -MarkCoverage 0.92 -Directory $ImagesDirectory -Transparent $true
 
   try {
     $iconHandle = $icon32.GetHicon()
