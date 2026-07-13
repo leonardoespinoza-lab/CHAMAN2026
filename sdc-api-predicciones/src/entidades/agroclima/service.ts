@@ -131,6 +131,12 @@ export class AgroclimaService {
         data: this.dataNotificacion('helada', riesgos.helada, idSiembra),
       });
       eventos += 1;
+    } else {
+      await this.alertasService.finalizarEventoSiembra(
+        idSiembra,
+        'Riesgo de Dano por Helada',
+        'Finalizada automaticamente: el pronostico vigente ya no mantiene una ventana de helada media o alta.',
+      );
     }
 
     if (riesgos.granizo.nivel !== 'bajo') {
@@ -170,6 +176,12 @@ export class AgroclimaService {
         data: this.dataNotificacion('granizo', riesgos.granizo, idSiembra),
       });
       eventos += 1;
+    } else {
+      await this.alertasService.finalizarEventoSiembra(
+        idSiembra,
+        'Riesgo de Granizo',
+        'Finalizada automaticamente: el pronostico vigente ya no mantiene una ventana convectiva media o alta.',
+      );
     }
 
     return eventos;

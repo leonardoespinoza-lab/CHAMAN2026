@@ -99,6 +99,36 @@ export class AlertasService {
     return await this.repository.create(data);
   }
 
+  async finalizarEventoSiembra(
+    idSiembra: string,
+    descripcion: string,
+    comentario: string,
+    dedupeKey?: string,
+  ): Promise<boolean> {
+    const alerta = await this.getByIdSiembraActiva(
+      idSiembra,
+      descripcion,
+      dedupeKey,
+    );
+    if (!alerta?._id) return false;
+
+    const fecha = new Date().toISOString();
+    await this.update(alerta._id, {
+      activa: false,
+      estadoActual: 'Finalizada',
+      fechaVencimiento: fecha,
+      estados: [
+        ...(alerta.estados || []),
+        {
+          fecha,
+          estado: 'Finalizada',
+          comentario,
+        },
+      ],
+    });
+    return true;
+  }
+
   async registrarEventoSiembra(
     evento: EventoSiembra,
   ): Promise<{ alerta?: IAlerta; creada: boolean; duplicada: boolean }> {

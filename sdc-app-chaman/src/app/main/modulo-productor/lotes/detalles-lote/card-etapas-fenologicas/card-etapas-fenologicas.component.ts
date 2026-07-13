@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges } from '@angular/core';
 import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
 import { ClimaService } from '../../../../../auxiliares/http/clima.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
@@ -136,6 +136,7 @@ const ETAPAS_BASE_POR_CULTIVO: Record<string, Record<string, number>> = {
 export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDestroy {
   @Input() public lote?: IDetallesLote;
   @Input() public siembra?: ISiembra;
+  @Output() public estadoFenologiaTermicaChange = new EventEmitter<IEstadoFenologiaArveja | undefined>();
   public etapaActual?: string;
   public cultivo?: string;
   public cultivoClass = 'cultivo-trigo';
@@ -662,6 +663,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     if (cultivo !== 'Arveja' || referencia?.unidadEtapas !== 'grados_dia' || !siembra?.fechaSiembra) {
       this.datosFenologiaTermica = undefined;
       this.estadoFenologiaTermica = undefined;
+      this.estadoFenologiaTermicaChange.emit(undefined);
       this.errorFenologiaTermica = '';
       this.cargandoFenologiaTermica = false;
       this.ultimoKeyFenologiaTermica = '';
@@ -725,6 +727,8 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     if (!siembra?.fechaSiembra || referencia?.unidadEtapas !== 'grados_dia') {
       this.etapas = [];
       this.etapaActual = undefined;
+      this.estadoFenologiaTermica = undefined;
+      this.estadoFenologiaTermicaChange.emit(undefined);
       this.progreso = 0;
       return;
     }
@@ -736,6 +740,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       etapaCampo: ultimoCampo?.etapa,
     });
     this.estadoFenologiaTermica = estado;
+    this.estadoFenologiaTermicaChange.emit(estado);
     this.etapaActual = estado.nombre;
     this.fuenteFenologia = 'semilla';
     this.fuenteTexto = estado.fuente === 'campo' ? 'registro de campo prioritario' : 'modelo termico auditable';

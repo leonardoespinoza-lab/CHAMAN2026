@@ -7,6 +7,7 @@ import {
   ICrono,
   IFertilizacion,
   IFumigacion,
+  IEstadoFenologiaArveja,
   IQueryParam,
   ISiembra,
 } from 'modelos/src';
@@ -91,6 +92,7 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   public esUltimaEtapa?: boolean;
   public verDrawerSiembras: boolean = false;
   public verCalidadDatos: boolean = false;
+  public estadoFenologiaArveja?: IEstadoFenologiaArveja;
   public cargandoPrimario: boolean = false;
   public refrescandoDetalle: boolean = false;
   private readonly numeroAr = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });

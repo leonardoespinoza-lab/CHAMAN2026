@@ -133,7 +133,11 @@
   </p-dialog>
 
   @if (siembra && !siembra.fechaCosecha && helper.puedeVerModulo('EtapasFenologicas')) {
-    <app-card-etapas-fenologicas [lote]="lote" [siembra]="siembra"></app-card-etapas-fenologicas>
+    <app-card-etapas-fenologicas
+      [lote]="lote"
+      [siembra]="siembra"
+      (estadoFenologiaTermicaChange)="estadoFenologiaArveja = $event"
+    ></app-card-etapas-fenologicas>
   }
 
   @if (!helper.soloLectura()) {
@@ -199,7 +203,11 @@
             [class.single]="!helper.puedeVerModulo('Enfermedades') || !(mostrarPrediccionMalezas && helper.puedeVerModulo('Malezas'))"
           >
             @if (helper.puedeVerModulo('Enfermedades')) {
-              <app-card-enfermedades class="service-panel" [siembra]="siembra"></app-card-enfermedades>
+              <app-card-enfermedades
+                class="service-panel"
+                [siembra]="siembra"
+                [estadoFenologiaArveja]="estadoFenologiaArveja"
+              ></app-card-enfermedades>
             }
             @if (mostrarPrediccionMalezas && helper.puedeVerModulo('Malezas')) {
               <app-card-malezas class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-malezas>

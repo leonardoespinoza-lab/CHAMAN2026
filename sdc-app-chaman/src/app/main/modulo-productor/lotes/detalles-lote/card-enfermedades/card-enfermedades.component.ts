@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
-import { IPrediccionEnfermedad, ISiembra, TEnfermedad } from 'modelos/src';
+import { IEstadoFenologiaArveja, IPrediccionEnfermedad, ISiembra, TEnfermedad } from 'modelos/src';
 import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
@@ -60,6 +60,7 @@ interface DiseaseInsight {
 })
 export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   @Input() public siembra?: ISiembra;
+  @Input() public estadoFenologiaArveja?: IEstadoFenologiaArveja;
   public verDrawerGraficoEnfermedades = false;
   public verDetalleEnfermedad = false;
   public actualizandoPrediccion = false;
@@ -658,6 +659,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   private codigoEtapaArvejaActual(): 'S' | 'E' | 'R1' | 'R3' | 'MF' | undefined {
+    if (this.estadoFenologiaArveja?.codigo) {
+      return this.estadoFenologiaArveja.codigo;
+    }
     const nombre = this.siembra?.ultimaPrediccion?.nombreEtapa ||
       [...(this.siembra?.registrosFenologicos || [])]
         .sort((a, b) => new Date(b.fecha || b.creadoEn || '').getTime() - new Date(a.fecha || a.creadoEn || '').getTime())[0]?.etapa;
