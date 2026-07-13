@@ -26,6 +26,8 @@ import {
   IFitosanitarioAplicacionResumen,
   IFitosanitarioRiesgoSanitario,
   TNivelCargaFitosanitaria,
+  esCultivoPerenne,
+  getEtapasPerennesReferencia,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { LotesRepository } from './repository';
@@ -90,6 +92,31 @@ interface CertificadoCalidadItem {
   score: number;
   ultimaActualizacion: string;
   lectura: string;
+}
+
+interface CertificadoNdviPunto {
+  fechaIso: string;
+  fecha: string;
+  time: number;
+  valor: number;
+  delta?: number;
+  diaCultivo?: number;
+  etapa: string;
+  etapaFuente: string;
+  etapaConfirmada: boolean;
+  coberturaValida?: number;
+  coleccion: string;
+  ndmi?: number;
+  ndwi?: number;
+  ndre?: number;
+  savi?: number;
+  evi?: number;
+}
+
+interface CertificadoEtapaSatelital {
+  nombre: string;
+  fuente: string;
+  confirmada: boolean;
 }
 
 @Injectable()
@@ -1205,6 +1232,53 @@ export class LotesService {
       border: 1px solid var(--line);
       border-radius: 12px;
     }
+    .ndvi-tracking {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      overflow: hidden;
+      margin: 14px 0;
+    }
+    .ndvi-summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      border-bottom: 1px solid var(--line);
+      background: #f8fbfe;
+    }
+    .ndvi-summary div {
+      padding: 12px 14px;
+      border-right: 1px solid var(--line);
+    }
+    .ndvi-summary div:last-child { border-right: 0; }
+    .ndvi-summary span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+    .ndvi-summary strong { display: block; font-size: 17px; }
+    .ndvi-chart {
+      display: block;
+      width: 100%;
+      height: auto;
+      min-height: 250px;
+      background: #fff;
+    }
+    .chart-caption {
+      margin: 0;
+      padding: 10px 14px 12px;
+      color: var(--muted);
+      font-size: 12px;
+      border-top: 1px solid #e7eff6;
+    }
+    .tracking-table td:nth-child(4),
+    .tracking-table td:nth-child(5) {
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
     .bar {
       height: 12px;
       border-radius: 999px;
@@ -1314,11 +1388,17 @@ export class LotesService {
       .grid, .grid.three, .executive-board, .quality-board { grid-template-columns: 1fr; }
       .score-row { grid-template-columns: 1fr; gap: 6px; }
       .score-row strong { text-align: left; }
+      .ndvi-summary { grid-template-columns: repeat(2, 1fr); }
+      .ndvi-summary div:nth-child(2) { border-right: 0; }
+      .ndvi-summary div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+      .tracking-table { font-size: 12px; }
     }
     @media print {
       body { background: white; }
       .page { width: auto; margin: 0; border: none; border-radius: 0; box-shadow: none; }
-      .section { break-inside: avoid; }
+      .section { break-inside: auto; }
+      .card, .score-card, .summary-chart, .ndvi-tracking, table { break-inside: avoid; }
+      .ndvi-chart { min-height: 0; }
     }
   </style>
 </head>
@@ -1409,11 +1489,11 @@ export class LotesService {
     </section>
 
     <section class="section">
-      <h2>Complemento satelital</h2>
-      <p>Los indices satelitales se informan como evidencia complementaria de vigor, agua y cobertura. La lectura principal del informe prioriza fenologia, sanidad, aplicaciones, suelo, agua y observacion a campo.</p>
-      ${this.renderNdviSparkline(reportesNdvi)}
+      <h2>Seguimiento satelital del cultivo</h2>
+      <p>La curva principal usa una escala NDVI fija de 0 a 1 para que los cambios sean comparables entre fechas y no se exageren variaciones pequenas. Cada escena se relaciona con el dia del ciclo y la mejor referencia fenologica disponible.</p>
+      ${this.renderNdviSparkline(reportesNdvi, siembra)}
       <div class="note"><strong>Lectura satelital:</strong> ${this.escapeHtml(this.getResumenSatelital(reportesNdvi))}</div>
-      ${this.renderTablaSatelital(reportesNdvi)}
+      ${this.renderTablaSatelital(reportesNdvi, siembra)}
     </section>
 
     <section class="section">
@@ -1868,53 +1948,283 @@ export class LotesService {
     return `Ultima escena ${ultimo.fecha || 'sin fecha'} con NDVI ${this.formatNumber(Number(ultimo.valor), 3)}; tendencia ${tendencia} contra ${anterior.fecha || 'escena anterior'} (${this.formatNumber(diferencia, 3)}).`;
   }
 
-  private renderNdviSparkline(reportes: IReporteNDVI[]): string {
-    const puntos = reportes
-      .slice()
-      .reverse()
-      .map((reporte) => ({
-        fecha: this.formatDate(reporte.fechaDeLaImagen || reporte.fechaDelReporte || reporte.fechaCreacion),
-        valor: this.toNumber(reporte.indices?.ndvi ?? reporte.ndviPromedio),
-      }))
-      .filter((item) => Number.isFinite(item.valor));
-
+  private renderNdviSparkline(reportes: IReporteNDVI[], siembra?: ISiembra): string {
+    const puntos = this.getPuntosNdviCertificado(reportes, siembra);
     if (!puntos.length) {
-      return '<div class="chart" style="display:grid;place-items:center;color:#9fb1c7;">Sin escenas satelitales procesadas</div>';
+      return '<div class="chart" style="display:grid;place-items:center;color:#60708c;">Sin escenas satelitales procesadas</div>';
     }
 
-    const min = Math.min(...puntos.map((item) => item.valor));
-    const max = Math.max(...puntos.map((item) => item.valor));
-    const rango = max - min || 1;
-    const coords = puntos.map((item, index) => {
-      const x = 24 + (index * 552) / Math.max(puntos.length - 1, 1);
-      const y = 124 - ((item.valor - min) * 88) / rango;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    });
-    const labels = puntos.map((item, index) => {
-      const x = 24 + (index * 552) / Math.max(puntos.length - 1, 1);
-      const y = 144;
-      return `<text x="${x.toFixed(1)}" y="${y}" text-anchor="middle" fill="#9fb1c7" font-size="10">${this.escapeHtml(item.fecha || '')}</text>`;
-    }).join('');
+    const width = 760;
+    const height = 286;
+    const left = 62;
+    const right = 730;
+    const top = 38;
+    const bottom = 208;
+    const x = (index: number) => left + (index * (right - left)) / Math.max(puntos.length - 1, 1);
+    const y = (valor: number) => {
+      const normalizado = Math.max(0, Math.min(1, valor));
+      return bottom - normalizado * (bottom - top);
+    };
+    const coords = puntos.map((item, index) => ({
+      x: x(index),
+      y: y(item.valor),
+      item,
+    }));
+    const area = [`${left},${bottom}`, ...coords.map((item) => `${item.x.toFixed(1)},${item.y.toFixed(1)}`), `${right},${bottom}`].join(' ');
+    const grilla = [0, 0.2, 0.4, 0.6, 0.8, 1]
+      .map((tick) => {
+        const tickY = y(tick);
+        return `<line x1="${left}" x2="${right}" y1="${tickY.toFixed(1)}" y2="${tickY.toFixed(1)}" stroke="#dbe6ef" stroke-width="1" />
+          <text x="${left - 12}" y="${(tickY + 4).toFixed(1)}" text-anchor="end" fill="#60708c" font-size="11">${this.formatCssNumber(tick, 1)}</text>`;
+      })
+      .join('');
+    const puntosSvg = coords
+      .map(({ x: pointX, y: pointY, item }, index) => {
+        const etiquetaY = Math.max(top + 13, pointY - 12);
+        const dia = item.diaCultivo === undefined ? 'Sin dia' : `D+${item.diaCultivo}`;
+        const fechaCorta = this.formatDateShort(item.fechaIso);
+        const pointClass = index === coords.length - 1 ? '#132235' : '#2ed4ca';
+        return `<g>
+          <line x1="${pointX.toFixed(1)}" x2="${pointX.toFixed(1)}" y1="${bottom}" y2="${(bottom + 7).toFixed(1)}" stroke="#9fb1c7" />
+          <circle cx="${pointX.toFixed(1)}" cy="${pointY.toFixed(1)}" r="7" fill="#ffffff" stroke="${pointClass}" stroke-width="3" />
+          <text x="${pointX.toFixed(1)}" y="${etiquetaY.toFixed(1)}" text-anchor="middle" fill="#1f3047" font-size="11" font-weight="700">${this.escapeHtml(this.formatNumber(item.valor, 3))}</text>
+          <text x="${pointX.toFixed(1)}" y="230" text-anchor="middle" fill="#1f3047" font-size="11" font-weight="700">${this.escapeHtml(fechaCorta)}</text>
+          <text x="${pointX.toFixed(1)}" y="246" text-anchor="middle" fill="#60708c" font-size="10">${this.escapeHtml(dia)}</text>
+        </g>`;
+      })
+      .join('');
+    const ultimo = puntos[puntos.length - 1];
+    const primero = puntos[0];
+    const cambio = ultimo.valor - primero.valor;
+    const cambioTexto = puntos.length > 1 ? `${cambio >= 0 ? '+' : ''}${this.formatNumber(cambio, 3)}` : 'Sin comparacion';
+    const periodo = puntos.length > 1 ? `${this.formatDateShort(primero.fechaIso)} a ${this.formatDateShort(ultimo.fechaIso)}` : this.formatDateShort(ultimo.fechaIso);
 
-    return `<svg class="chart" viewBox="0 0 600 160" role="img" aria-label="Evolucion NDVI">
-      <defs>
-        <linearGradient id="lineaNdvi" x1="0" x2="1">
-          <stop offset="0%" stop-color="#2ed4ca" />
-          <stop offset="100%" stop-color="#68be4a" />
-        </linearGradient>
-      </defs>
-      <g opacity="0.18">
-        <line x1="24" x2="576" y1="36" y2="36" stroke="#ffffff" />
-        <line x1="24" x2="576" y1="80" y2="80" stroke="#ffffff" />
-        <line x1="24" x2="576" y1="124" y2="124" stroke="#ffffff" />
-      </g>
-      <polyline fill="none" stroke="url(#lineaNdvi)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" points="${coords.join(' ')}" />
-      ${coords.map((coord) => {
-        const [x, y] = coord.split(',');
-        return `<circle cx="${x}" cy="${y}" r="4" fill="#2ed4ca" />`;
-      }).join('')}
-      ${labels}
-    </svg>`;
+    return `<div class="ndvi-tracking">
+      <div class="ndvi-summary">
+        <div><span>Ultima lectura</span><strong>NDVI ${this.escapeHtml(this.formatNumber(ultimo.valor, 3))}</strong></div>
+        <div><span>Cambio del periodo</span><strong>${this.escapeHtml(cambioTexto)}</strong></div>
+        <div><span>Escenas comparables</span><strong>${puntos.length}</strong></div>
+        <div><span>Etapa en ultima escena</span><strong>${this.escapeHtml(ultimo.etapa)}</strong></div>
+      </div>
+      <svg class="ndvi-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Evolucion temporal de NDVI en escala fija de cero a uno">
+        <defs>
+          <linearGradient id="areaNdvi" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#2ed4ca" stop-opacity="0.28" />
+            <stop offset="100%" stop-color="#2ed4ca" stop-opacity="0.03" />
+          </linearGradient>
+          <linearGradient id="lineaNdvi" x1="0" x2="1">
+            <stop offset="0%" stop-color="#2ed4ca" />
+            <stop offset="100%" stop-color="#68be4a" />
+          </linearGradient>
+        </defs>
+        <text x="${left}" y="20" fill="#1f3047" font-size="12" font-weight="700">NDVI medio del lote Ã‚Â· escala fija 0-1</text>
+        ${grilla}
+        <line x1="${left}" x2="${left}" y1="${top}" y2="${bottom}" stroke="#9fb1c7" />
+        <line x1="${left}" x2="${right}" y1="${bottom}" y2="${bottom}" stroke="#9fb1c7" />
+        <polygon points="${area}" fill="url(#areaNdvi)" />
+        <polyline fill="none" stroke="url(#lineaNdvi)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" points="${coords.map((item) => `${item.x.toFixed(1)},${item.y.toFixed(1)}`).join(' ')}" />
+        ${puntosSvg}
+        <text x="${(left + right) / 2}" y="274" text-anchor="middle" fill="#60708c" font-size="11">Fecha de escena y dia desde implantacion Ã‚Â· periodo ${this.escapeHtml(periodo)}</text>
+      </svg>
+      <p class="chart-caption">La escala permanece fija entre informes. Los cambios deben interpretarse contra fenologia, calidad de escena, clima, manejo y recorrida; NDVI por si solo no diagnostica causa.</p>
+    </div>`;
+  }
+
+  private getPuntosNdviCertificado(reportes: IReporteNDVI[], siembra?: ISiembra): CertificadoNdviPunto[] {
+    const puntos = reportes
+      .map((reporte): CertificadoNdviPunto | undefined => {
+        const fechaIso = reporte.fechaDeLaImagen || reporte.fechaDelReporte || reporte.fechaCreacion || '';
+        const time = new Date(fechaIso).getTime();
+        const valor = this.toNumber(reporte.indices?.ndvi ?? reporte.ndviPromedio);
+        if (!Number.isFinite(time) || !Number.isFinite(valor) || valor < -1 || valor > 1) {
+          return undefined;
+        }
+        const etapa = this.getEtapaSatelitalCertificado(siembra, new Date(time));
+        return {
+          fechaIso,
+          fecha: this.formatDate(fechaIso),
+          time,
+          valor,
+          diaCultivo: this.getDiasEntreFechas(siembra?.fechaSiembra, fechaIso),
+          etapa: etapa.nombre,
+          etapaFuente: etapa.fuente,
+          etapaConfirmada: etapa.confirmada,
+          coberturaValida: this.getCoberturaNdvi(reporte),
+          coleccion: reporte.coleccion || 'Satelite',
+          ndmi: this.getIndiceSatelitalValido(reporte.indices?.ndmi),
+          ndwi: this.getIndiceSatelitalValido(reporte.indices?.ndwi),
+          ndre: this.getIndiceSatelitalValido(reporte.indices?.ndre),
+          savi: this.getIndiceSatelitalValido(reporte.indices?.savi),
+          evi: this.getIndiceSatelitalValido(reporte.indices?.evi),
+        };
+      })
+      .filter((item): item is CertificadoNdviPunto => !!item)
+      .sort((a, b) => a.time - b.time);
+
+    puntos.forEach((punto, index) => {
+      if (index > 0) {
+        punto.delta = punto.valor - puntos[index - 1].valor;
+      }
+    });
+    return puntos;
+  }
+
+  private getIndiceSatelitalValido(value: unknown): number | undefined {
+    const numero = this.toNumber(value);
+    return Number.isFinite(numero) && numero >= -1 && numero <= 1 ? numero : undefined;
+  }
+
+  private getCoberturaNdvi(reporte: IReporteNDVI): number | undefined {
+    const cobertura = this.toNumber(reporte.metadataImagen?.qualityMask?.validCoveragePct ?? reporte.metadataImagen?.indicesStats?.ndvi?.validCoveragePct);
+    return Number.isFinite(cobertura) ? Math.max(0, Math.min(100, cobertura)) : undefined;
+  }
+
+  private getEtapaSatelitalCertificado(siembra: ISiembra | undefined, fecha: Date): CertificadoEtapaSatelital {
+    if (!Number.isFinite(fecha.getTime())) {
+      return {
+        nombre: 'Sin etapa confirmada',
+        fuente: 'Fecha de escena invalida',
+        confirmada: false,
+      };
+    }
+
+    const registro = [...(siembra?.registrosFenologicos || [])]
+      .filter((item) => {
+        const time = new Date(item.fecha || '').getTime();
+        return !!item.etapa && Number.isFinite(time) && time <= fecha.getTime();
+      })
+      .sort((a, b) => new Date(b.fecha || '').getTime() - new Date(a.fecha || '').getTime())[0];
+    if (registro?.etapa) {
+      return {
+        nombre: registro.etapa,
+        fuente: 'Registro de campo',
+        confirmada: true,
+      };
+    }
+
+    const cultivo = siembra?.semilla?.cultivo;
+    if (esCultivoPerenne(cultivo)) {
+      const referencia = siembra?.semilla?.fenologiaReferencia?.etapas;
+      const etapas =
+        referencia && Object.keys(referencia).length
+          ? Object.entries(referencia)
+              .map(([nombre, value]) => ({
+                nombre: this.prettyKey(nombre),
+                dia: Number(String(value).replace(',', '.')),
+              }))
+              .filter((item) => Number.isFinite(item.dia))
+          : getEtapasPerennesReferencia(cultivo).map((item) => ({
+              nombre: item.nombre,
+              dia: item.dia,
+            }));
+      if (etapas.length) {
+        const inicioCampania = new Date(fecha.getMonth() + 1 >= 7 ? fecha.getFullYear() : fecha.getFullYear() - 1, 6, 1);
+        const diaCampania = Math.max(0, Math.floor((fecha.getTime() - inicioCampania.getTime()) / 86400000));
+        let etapa = etapas.sort((a, b) => a.dia - b.dia)[0].nombre;
+        for (const item of etapas) {
+          if (diaCampania >= item.dia) {
+            etapa = item.nombre;
+          }
+        }
+        return {
+          nombre: etapa,
+          fuente: referencia ? 'Referencia fenologica de la variedad' : 'Referencia de campania perenne',
+          confirmada: false,
+        };
+      }
+    }
+
+    if (!siembra?.fechaSiembra) {
+      return {
+        nombre: 'Sin etapa confirmada',
+        fuente: 'Falta fecha de implantacion',
+        confirmada: false,
+      };
+    }
+    const dias = this.getDiasEntreFechas(siembra.fechaSiembra, fecha.toISOString());
+    if (dias === undefined) {
+      return {
+        nombre: 'Sin etapa confirmada',
+        fuente: 'Fecha de implantacion invalida',
+        confirmada: false,
+      };
+    }
+    if (dias < 0) {
+      return {
+        nombre: 'Pre-siembra',
+        fuente: 'Escena anterior a la implantacion',
+        confirmada: false,
+      };
+    }
+
+    const referencia = siembra.semilla?.fenologiaReferencia;
+    if (referencia?.unidadEtapas === 'grados_dia') {
+      return {
+        nombre: `Dia ${dias} Ã‚Â· etapa termica a confirmar`,
+        fuente: 'La etapa requiere GDD historico o registro de campo',
+        confirmada: false,
+      };
+    }
+
+    const etapas = siembra.crono?.etapas || (referencia?.unidadEtapas === 'dias' ? referencia.etapas : undefined);
+    const etapa = this.getEtapaPorDuraciones(etapas as Record<string, number | string> | undefined, dias);
+    if (etapa) {
+      return {
+        nombre: etapa,
+        fuente: siembra.crono ? 'Cronologia de la siembra' : 'Referencia fenologica de la variedad',
+        confirmada: false,
+      };
+    }
+
+    return {
+      nombre: `Dia ${dias} Ã‚Â· etapa no registrada`,
+      fuente: 'Sin cronologia fenologica util para esa fecha',
+      confirmada: false,
+    };
+  }
+
+  private getEtapaPorDuraciones(etapas: Record<string, number | string> | undefined, dias: number): string | undefined {
+    const items = Object.entries(etapas || {})
+      .map(([nombre, value]) => ({
+        nombre: this.prettyKey(nombre),
+        duracion: Number(String(value).replace(',', '.')),
+      }))
+      .filter((item) => Number.isFinite(item.duracion) && item.duracion >= 0);
+    if (!items.length) {
+      return undefined;
+    }
+
+    const sonHitosAcumulados = items.every((item, index) => index === 0 || item.duracion >= items[index - 1].duracion);
+    if (sonHitosAcumulados) {
+      let actual = items[0].nombre;
+      for (const item of items) {
+        if (dias >= item.duracion) {
+          actual = item.nombre;
+        }
+      }
+      return actual;
+    }
+
+    let acumulado = 0;
+    for (const item of items) {
+      acumulado += item.duracion;
+      if (dias < acumulado) {
+        return item.nombre;
+      }
+    }
+    return items[items.length - 1].nombre;
+  }
+
+  private getDiasEntreFechas(desde?: string, hasta?: string): number | undefined {
+    if (!desde || !hasta) {
+      return undefined;
+    }
+    const desdeTime = new Date(desde).getTime();
+    const hastaTime = new Date(hasta).getTime();
+    if (!Number.isFinite(desdeTime) || !Number.isFinite(hastaTime)) {
+      return undefined;
+    }
+    return Math.floor((hastaTime - desdeTime) / 86400000);
   }
 
   private renderClimaSparkline(clima?: IFrioTermicoCultivo): string {
@@ -2020,19 +2330,49 @@ export class LotesService {
       <div class="note"><strong>Lectura climatica:</strong> ${this.escapeHtml(clima.lectura)}</div>`;
   }
 
-  private renderTablaSatelital(reportes: IReporteNDVI[]): string {
-    if (!reportes.length) {
+  private renderTablaSatelital(reportes: IReporteNDVI[], siembra?: ISiembra): string {
+    const puntos = this.getPuntosNdviCertificado(reportes, siembra);
+    if (!puntos.length) {
       return '<p>Sin reportes satelitales procesados para este lote.</p>';
     }
-    const rows = reportes.slice(0, 6).map((reporte) => `
-      <tr>
-        <td>${this.escapeHtml(this.formatDate(reporte.fechaDeLaImagen || reporte.fechaDelReporte || reporte.fechaCreacion) || '-')}</td>
-        <td>${this.escapeHtml(this.formatMaybe(reporte.indices?.ndvi ?? reporte.ndviPromedio, 3))}</td>
-        <td>${this.escapeHtml(this.formatMaybe(reporte.indices?.ndmi, 3))}</td>
-        <td>${this.escapeHtml(this.formatMaybe(reporte.indices?.ndwi, 3))}</td>
-        <td>${this.escapeHtml(reporte.coleccion || '-')}</td>
-      </tr>`).join('');
-    return `<table><thead><tr><th>Escena</th><th>NDVI</th><th>NDMI</th><th>NDWI</th><th>Fuente</th></tr></thead><tbody>${rows}</tbody></table>`;
+    const rows = puntos
+      .map((punto) => {
+        const delta = punto.delta === undefined ? 'Base' : `${punto.delta >= 0 ? '+' : ''}${this.formatNumber(punto.delta, 3)}`;
+        const dia = punto.diaCultivo === undefined ? '-' : `D+${punto.diaCultivo}`;
+        const calidad = punto.coberturaValida === undefined ? 'No informada' : `${this.formatNumber(punto.coberturaValida, 1)}% valida`;
+        const etapaEstado = punto.etapaConfirmada ? 'Confirmada a campo' : 'Referencia estimada';
+        return `<tr>
+        <td>${this.escapeHtml(punto.fecha || '-')}</td>
+        <td>${this.escapeHtml(dia)}</td>
+        <td><strong>${this.escapeHtml(punto.etapa)}</strong><br><small>${this.escapeHtml(`${etapaEstado} Ã‚Â· ${punto.etapaFuente}`)}</small></td>
+        <td>${this.escapeHtml(this.formatNumber(punto.valor, 3))}</td>
+        <td>${this.escapeHtml(delta)}</td>
+        <td>${this.escapeHtml(calidad)}</td>
+        <td>${this.escapeHtml(punto.coleccion)}</td>
+      </tr>`;
+      })
+      .join('');
+    const complementarios = puntos
+      .filter((punto) => [punto.ndre, punto.evi, punto.savi, punto.ndmi, punto.ndwi].some((value) => Number.isFinite(value)))
+      .map(
+        (punto) => `<tr>
+        <td>${this.escapeHtml(punto.fecha || '-')}</td>
+        <td>${this.escapeHtml(this.formatMaybe(punto.ndre, 3))}</td>
+        <td>${this.escapeHtml(this.formatMaybe(punto.evi, 3))}</td>
+        <td>${this.escapeHtml(this.formatMaybe(punto.savi, 3))}</td>
+        <td>${this.escapeHtml(this.formatMaybe(punto.ndmi, 3))}</td>
+        <td>${this.escapeHtml(this.formatMaybe(punto.ndwi, 3))}</td>
+      </tr>`,
+      )
+      .join('');
+    const tablaComplementaria = complementarios
+      ? `<h3 style="margin-top:18px;">Indices complementarios por escena</h3>
+        <p class="section-copy">NDRE aporta sensibilidad a clorofila; EVI y SAVI complementan vigor/cobertura; NDMI y NDWI aportan contexto hidrico. No deben compararse como si fueran la misma variable.</p>
+        <table><thead><tr><th>Escena</th><th>NDRE</th><th>EVI</th><th>SAVI</th><th>NDMI</th><th>NDWI</th></tr></thead><tbody>${complementarios}</tbody></table>`
+      : '';
+    return `<h3>Trazabilidad de escenas</h3>
+      <table class="tracking-table"><thead><tr><th>Escena</th><th>Dia ciclo</th><th>Etapa fenologica</th><th>NDVI</th><th>Cambio</th><th>Calidad</th><th>Fuente</th></tr></thead><tbody>${rows}</tbody></table>
+      ${tablaComplementaria}`;
   }
 
   private renderTablaFenologia(items: { nombre: string; valor: string }[], siembra?: ISiembra): string {
@@ -2579,6 +2919,20 @@ export class LotesService {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
+    }).format(fecha);
+  }
+
+  private formatDateShort(value?: string): string {
+    if (!value) {
+      return '';
+    }
+    const fecha = new Date(value);
+    if (!Number.isFinite(fecha.getTime())) {
+      return '';
+    }
+    return new Intl.DateTimeFormat('es-AR', {
+      day: '2-digit',
+      month: '2-digit',
     }).format(fecha);
   }
 
