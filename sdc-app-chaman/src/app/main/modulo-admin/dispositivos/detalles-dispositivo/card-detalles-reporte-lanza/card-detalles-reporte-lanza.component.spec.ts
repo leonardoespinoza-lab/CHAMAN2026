@@ -8,12 +8,12 @@ describe('CardDetallesReporteLanzaComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [CardDetallesReporteLanzaComponent]
-    })
-    .compileComponents();
+      imports: [CardDetallesReporteLanzaComponent],
+    }).compileComponents();
 
     fixture = TestBed.createComponent(CardDetallesReporteLanzaComponent);
     component = fixture.componentInstance;
+    component.data = { profundidad: 20 } as any;
     fixture.detectChanges();
   });
 
