@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { IRiesgoAgroclimatico, IResumenRiesgosAgroclimaticos, ISiembra } from 'modelos/src';
 import { ClimaService } from '../../../../../auxiliares/http/clima.service';
+import { PrediccionService } from '../../../../../auxiliares/http/prediccion.service';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
 
@@ -26,7 +27,10 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
 
   private ultimoKey = '';
 
-  constructor(private climaService: ClimaService) {}
+  constructor(
+    private climaService: ClimaService,
+    private prediccionService: PrediccionService
+  ) {}
 
   public get mostrar(): boolean {
     return !!this.centro && !!this.siembra?.semilla?.cultivo && !this.siembra?.fechaCosecha;
@@ -87,14 +91,16 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
     this.loading = true;
     this.error = undefined;
     try {
-      const request = this.climaService.getRiesgosAgroclimaticos(this.centro.lat, this.centro.lng, {
-        cultivo: this.siembra?.semilla?.cultivo,
-        variedad: this.siembra?.semilla?.variedad,
-        fechaSiembra: this.siembra?.fechaSiembra,
-        edadProductivaDesdeAnios: this.siembra?.semilla?.fenologiaReferencia?.edadProductivaDesdeAnios,
-        ajusteHeladaC: this.siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
-        fuenteAjusteVarietal: this.siembra?.semilla?.sensibilidadHelada?.fuente,
-      });
+      const request = this.siembra?._id
+        ? this.prediccionService.listarRiesgosAgroclimaticos(this.siembra._id)
+        : this.climaService.getRiesgosAgroclimaticos(this.centro.lat, this.centro.lng, {
+            cultivo: this.siembra?.semilla?.cultivo,
+            variedad: this.siembra?.semilla?.variedad,
+            fechaSiembra: this.siembra?.fechaSiembra,
+            edadProductivaDesdeAnios: this.siembra?.semilla?.fenologiaReferencia?.edadProductivaDesdeAnios,
+            ajusteHeladaC: this.siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
+            fuenteAjusteVarietal: this.siembra?.semilla?.sensibilidadHelada?.fuente,
+          });
       CardRiesgosAgroclimaticosComponent.pending.set(key, request);
       this.riesgos = await request;
       this.ultimoKey = key;

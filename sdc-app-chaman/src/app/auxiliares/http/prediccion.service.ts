@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { IPrediccion, IListado, IQueryParam } from 'modelos/src';
+import { IPrediccion, IListado, IQueryParam, IResumenRiesgosAgroclimaticos } from 'modelos/src';
 import { HttpService } from './http.service';
 
 @Injectable({
@@ -15,6 +15,10 @@ export class PrediccionService {
 
   public listarPorId(id: string): Promise<IPrediccion> {
     return this.http.get(`/prediccions/${id}`);
+  }
+
+  public listarRiesgosAgroclimaticos(idSiembra: string): Promise<IResumenRiesgosAgroclimaticos> {
+    return this.http.get(`/prediccions/${idSiembra}/agroclima`);
   }
 
   public async exportar(params?: IQueryParam, filename = 'prediccion.xlsx'): Promise<void> {
