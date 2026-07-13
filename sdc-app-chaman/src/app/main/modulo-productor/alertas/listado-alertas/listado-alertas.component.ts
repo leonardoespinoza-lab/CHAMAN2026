@@ -215,7 +215,9 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
     return {
       nuevas: this.data.filter((a) => a.estadoActual === 'Nueva').length,
       activas: this.data.filter((a) => a.activa !== false).length,
-      alta: this.data.filter((a) => ['alta', 'critica'].includes(this.severidad(a))).length,
+      alta: this.data.filter(
+        (a) => a.activa !== false && ['alta', 'critica'].includes(this.severidad(a)),
+      ).length,
       finalizadas: this.data.filter((a) => a.estadoActual === 'Finalizada' || a.activa === false).length,
       total,
       riesgoPromedio: total ? riesgoTotal / total : 0,

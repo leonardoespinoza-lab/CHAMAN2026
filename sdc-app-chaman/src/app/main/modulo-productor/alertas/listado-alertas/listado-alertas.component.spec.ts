@@ -36,4 +36,15 @@ describe('ListadoAlertasComponent', () => {
     expect(component.valorRiesgo(alerta)).toBe(0);
     expect(component.reporteRiesgo(alerta.reportes[0], alerta)).toBe(0);
   });
+
+  it('excluye eventos finalizados del contador de alta prioridad', () => {
+    component.data = [
+      { activa: true, severidad: 'alta', estadoActual: 'Nueva' },
+      { activa: false, severidad: 'alta', estadoActual: 'Finalizada' },
+      { activa: true, severidad: 'media', estadoActual: 'Nueva' },
+    ] as any;
+
+    expect(component.resumen().activas).toBe(2);
+    expect(component.resumen().alta).toBe(1);
+  });
 });
