@@ -16,7 +16,7 @@
 }
 
 .specimen-photo {
-  filter: drop-shadow(0 8px 8px rgba(24, 71, 61, 0.13));
+  filter: drop-shadow(0 7px 6px rgba(25, 49, 37, 0.2));
   height: 100%;
   max-width: 100%;
   object-fit: contain;
@@ -32,22 +32,11 @@
 }
 
 .specimen-halo {
-  background: radial-gradient(circle, rgba(154, 224, 173, 0.2), rgba(213, 246, 229, 0.04) 58%, transparent 72%);
-  border-radius: 50%;
-  bottom: 5%;
-  height: 72%;
-  position: absolute;
-  width: 86%;
-  z-index: 0;
+  display: none;
 }
 
 .specimen-baseline {
-  background: linear-gradient(90deg, transparent, rgba(112, 143, 104, 0.35), transparent);
-  bottom: 2px;
-  height: 1px;
-  position: absolute;
-  width: 74%;
-  z-index: 1;
+  display: none;
 }
 
 .phase-maturity .specimen-photo,
@@ -58,8 +47,4 @@
 .is-current .specimen-photo {
   filter: drop-shadow(0 10px 10px rgba(19, 91, 71, 0.18)) drop-shadow(0 0 6px rgba(141, 218, 78, 0.2));
   transform: translateY(0) scale(1.035);
-}
-
-.is-current .specimen-halo {
-  background: radial-gradient(circle, rgba(194, 246, 100, 0.3), rgba(217, 250, 179, 0.08) 56%, transparent 74%);
 }
