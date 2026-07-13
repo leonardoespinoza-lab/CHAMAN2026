@@ -4,10 +4,7 @@
       <use [attr.xlink:href]="'icons/icons.svg#plantas'"></use>
     </svg>
     <div>
-      <p class="titulo-card">
-        <p-button icon="pi pi-info-circle" [rounded]="true" [text]="true" (onClick)="mostrarLeyenda()" />
-        {{ 'Modulo satelital' | uppercase }}
-      </p>
+      <p class="titulo-card">{{ 'Modulo satelital' | uppercase }}</p>
       <span>
         @if (reporte?.ndviPromedio) {
           {{ subtituloSatelital }}
@@ -17,6 +14,13 @@
       </span>
     </div>
     <div class="ndvi-header-actions">
+      <p-button
+        icon="pi pi-info-circle"
+        label="Guía de índices"
+        severity="secondary"
+        [text]="true"
+        (onClick)="abrirDetalleCapas()"
+      />
       <strong class="ndvi-balance" [ngClass]="[analisis.tono, imagenAtrasada ? 'stale' : '']">
         {{ estadoEscenaSatelital }}
       </strong>
@@ -81,14 +85,28 @@
           <strong>Evolución de {{ capaActiva.label }}</strong>
           <small>{{ historialIndiceResumen }}</small>
         </div>
-        <div class="history-scale-note">
-          <b>−1 a 1</b>
-          <span>Eje ampliado al rango observado</span>
+        <div class="history-header-actions">
+          <div class="history-scale-note">
+            <span>Rango del índice</span>
+            <b>−1 a 1</b>
+          </div>
+          <p-button
+            icon="pi pi-window-maximize"
+            label="Ampliar curva"
+            severity="secondary"
+            [outlined]="true"
+            [disabled]="!historialIndiceOptions"
+            (onClick)="abrirGraficoSatelital()"
+          />
         </div>
       </div>
 
       @if (historialIndiceOptions) {
-        <app-chart [options]="historialIndiceOptions" [style]="'display:block;width:100%;height:300px'"></app-chart>
+        <app-chart
+          class="satellite-history-chart-compact"
+          [options]="historialIndiceOptions"
+          [style]="'display:block;width:100%;height:190px'"
+        ></app-chart>
       } @else {
         <div class="history-empty">
           <i class="pi pi-chart-line"></i>
@@ -189,24 +207,19 @@
       </section>
     </div>
 
-    <section class="satellite-module">
-      <div class="satellite-title">
-        <span>Modulo satelital</span>
-        <strong>Capas e interpretacion</strong>
+    <section class="satellite-details-cta">
+      <div>
+        <span>Interpretación avanzada</span>
+        <strong>{{ satelliteIndicators.length }} índices disponibles</strong>
+        <small>Definiciones, lectura agronómica, valor actual y fuente de cada capa.</small>
       </div>
-      <div class="satellite-grid">
-        @for (indicator of satelliteIndicators; track indicator.label) {
-          <article [ngClass]="indicator.status" [class.active-layer]="capaActiva.key === indicator.key">
-            <div>
-              <strong>{{ indicator.label }}</strong>
-              <em>{{ indicator.value }}</em>
-            </div>
-            <p>{{ indicator.detail }}</p>
-            <p class="layer-reading">{{ indicator.lectura }}</p>
-            <small>{{ indicator.source }}</small>
-          </article>
-        }
-      </div>
+      <p-button
+        icon="pi pi-info-circle"
+        label="Ver capas e interpretación"
+        severity="secondary"
+        [outlined]="true"
+        (onClick)="abrirDetalleCapas()"
+      />
     </section>
   } @else {
     <div class="empty-ndvi">
@@ -243,24 +256,118 @@
           (click)="generarMuestraLocal($event)"
         />
       }
-      <section class="satellite-module empty-module">
-        <div class="satellite-title">
-          <span>Modulo satelital</span>
-          <strong>Capas preparadas</strong>
+      <section class="satellite-details-cta empty-module">
+        <div>
+          <span>Capas preparadas</span>
+          <strong>{{ satelliteIndicators.length }} índices listos para procesar</strong>
+          <small>Consultá qué aporta cada índice mientras se obtiene la primera escena limpia.</small>
         </div>
-        <div class="satellite-grid">
-          @for (indicator of satelliteIndicators; track indicator.label) {
-            <article [ngClass]="indicator.status">
-              <div>
-                <strong>{{ indicator.label }}</strong>
-                <em>{{ indicator.value }}</em>
-              </div>
-              <p>{{ indicator.detail }}</p>
-              <small>{{ indicator.source }}</small>
-            </article>
-          }
-        </div>
+        <p-button
+          icon="pi pi-info-circle"
+          label="Conocer los índices"
+          severity="secondary"
+          [outlined]="true"
+          (onClick)="abrirDetalleCapas()"
+        />
       </section>
     </div>
   }
+
+  <p-dialog
+    [(visible)]="detalleCapasVisible"
+    [modal]="true"
+    [dismissableMask]="true"
+    [draggable]="false"
+    [resizable]="false"
+    [style]="{ width: 'min(1040px, 94vw)' }"
+    [breakpoints]="{ '720px': '96vw' }"
+    header="Capas satelitales e interpretación"
+    styleClass="chaman-detail-dialog satellite-detail-dialog"
+  >
+    <section class="satellite-dialog-content">
+      <div class="satellite-dialog-intro">
+        <div>
+          <span>Lectura sincronizada</span>
+          <strong>{{ capaActiva.label }} {{ capaActiva.value }}</strong>
+          <small>Los índices orientan la recorrida; no reemplazan la validación agronómica a campo.</small>
+        </div>
+        <p-button
+          icon="pi pi-palette"
+          label="Leyenda de colores NDVI"
+          severity="secondary"
+          [text]="true"
+          (onClick)="mostrarLeyenda()"
+        />
+      </div>
+      <div class="satellite-grid satellite-grid-dialog">
+        @for (indicator of satelliteIndicators; track indicator.key) {
+          <article [ngClass]="indicator.status" [class.active-layer]="capaActiva.key === indicator.key">
+            <div>
+              <strong>{{ indicator.label }}</strong>
+              <em>{{ indicator.value }}</em>
+            </div>
+            <p>{{ indicator.detail }}</p>
+            <p class="layer-reading">{{ indicator.lectura }}</p>
+            <small>{{ indicator.source }}</small>
+          </article>
+        }
+      </div>
+    </section>
+  </p-dialog>
+
+  <p-dialog
+    [(visible)]="graficoSatelitalVisible"
+    [modal]="true"
+    [dismissableMask]="true"
+    [draggable]="false"
+    [resizable]="false"
+    [style]="{ width: 'min(1180px, 96vw)' }"
+    [breakpoints]="{ '720px': '97vw' }"
+    [header]="'Evolución de ' + capaActiva.label"
+    styleClass="chaman-detail-dialog satellite-chart-dialog"
+  >
+    <section class="satellite-chart-dialog-content">
+      <div class="satellite-dialog-chart-header">
+        <div>
+          <span>Serie temporal por escenas limpias</span>
+          <strong>{{ historialIndiceResumen }}</strong>
+        </div>
+        <div class="history-scale-note">
+          <span>Rango del índice</span>
+          <b>−1 a 1</b>
+        </div>
+      </div>
+      @if (historialIndiceOptions) {
+        <app-chart
+          [options]="historialIndiceOptions"
+          [style]="'display:block;width:100%;height:min(56vh,520px);min-height:340px'"
+        ></app-chart>
+      }
+      @if (puntoHistorialSeleccionado; as point) {
+        <div class="history-selected-scene dialog-scene">
+          <span>
+            <small>Escena seleccionada</small>
+            <strong>{{ point.timestamp | date: 'd MMM y' }}</strong>
+          </span>
+          <span>
+            <small>{{ capaActiva.label }}</small>
+            <strong>{{ point.value == null ? 'Sin lectura' : (point.value | number: '1.0-3') }}</strong>
+          </span>
+          <span class="history-stage">
+            <small>Etapa fenológica</small>
+            <strong>{{ point.stage.name }}</strong>
+            <em [class.confirmed]="point.stage.confirmed">{{ point.stage.source }}</em>
+          </span>
+          <span>
+            <small>Fuente satelital</small>
+            <strong>{{ point.collection }}</strong>
+          </span>
+        </div>
+      }
+      <p class="history-method-note">
+        <i class="pi pi-info-circle"></i>
+        {{ mensajeHistorialIndice }} La etapa de campo tiene prioridad sobre las referencias calculadas.
+      </p>
+    </section>
+  </p-dialog>
 </div>

@@ -123,6 +123,8 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   public ndvis: IReporteNDVI[] = [];
   public generandoMuestra = false;
   public generandoSatelital = false;
+  public detalleCapasVisible = false;
+  public graficoSatelitalVisible = false;
   public readonly esLocal = ENV === 'Local';
   public capaSatelitalActiva: SatelliteIndicator['key'] = 'ndvi';
   public historialIndice: SatelliteIndexHistoryPoint[] = [];
@@ -159,6 +161,15 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     this.fecha = reporte.fechaDeLaImagen ? new Date(reporte.fechaDeLaImagen) : this.hoy;
     this.actualizarHistorialIndice();
     this.programarRenderMapaSatelital();
+  }
+
+  public abrirDetalleCapas(): void {
+    this.detalleCapasVisible = true;
+  }
+
+  public abrirGraficoSatelital(): void {
+    if (!this.historialIndiceOptions) return;
+    this.graficoSatelitalVisible = true;
   }
 
   public get analisis(): NdviAnalisis {
