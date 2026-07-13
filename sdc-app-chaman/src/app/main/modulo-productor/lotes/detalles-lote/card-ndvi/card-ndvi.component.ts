@@ -14,7 +14,7 @@ import { Feature, Map, View } from 'ol';
 import { defaults as defaultControls } from 'ol/control';
 import { defaults as defaultInteractions } from 'ol/interaction';
 import { Extent } from 'ol/extent';
-import { Polygon } from 'ol/geom';
+import { MultiPolygon, Polygon } from 'ol/geom';
 import ImageLayer from 'ol/layer/Image';
 import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
@@ -22,6 +22,8 @@ import { fromLonLat } from 'ol/proj';
 import { Vector as VectorSource, XYZ } from 'ol/source';
 import Static from 'ol/source/ImageStatic';
 import { Fill, Stroke, Style } from 'ol/style';
+import RenderEvent from 'ol/render/Event';
+import { apply as applyTransform, multiply as multiplyTransform } from 'ol/transform';
 import {
   esCultivoPerenne,
   getEtapasPerennesReferencia,
@@ -122,6 +124,8 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   private satelliteMap?: Map;
   private satelliteLoteLayer?: VectorLayer<VectorSource>;
   private satelliteRasterLayer?: ImageLayer<Static>;
+  private satelliteClipGeometry?: Polygon | MultiPolygon;
+  private satelliteClipActive = false;
   public satelliteRasterVisible = false;
   public satelliteRasterBlockedReason = '';
   private readonly ventanaPreferenciaSentinelDias = 6;
@@ -457,15 +461,15 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
 
   private renderizarMapaSatelital(): void {
     const target = this.satelliteMapTarget?.nativeElement;
-    const ring = this.coordenadasLote();
-    if (!target || ring.length < 3) {
+    const polygon = this.geometriaDesdeGeojson((this.lote as any)?.ubicacion?.geojson);
+    if (!target || !polygon) {
       return;
     }
 
-    const polygon = new Polygon([ring.map((coord) => fromLonLat(coord))]);
     const polygonExtent = polygon.getExtent();
     const imageExtent = this.extentImagenSatelital();
     this.satelliteRasterVisible = this.rasterSatelitalSeguro(imageExtent, polygonExtent);
+    this.satelliteClipGeometry = polygon;
 
     const feature = new Feature({ geometry: polygon });
     feature.setStyle(this.estiloMapaSatelital());
@@ -496,7 +500,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
           this.satelliteLoteLayer,
         ],
         view: new View({
-          center: fromLonLat(ring[0]),
+          center: [(polygonExtent[0] + polygonExtent[2]) / 2, (polygonExtent[1] + polygonExtent[3]) / 2],
           zoom: 14,
         }),
       });
@@ -542,6 +546,8 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
       zIndex: 10,
       extent,
     });
+    this.satelliteRasterLayer.on('prerender', this.aplicarRecorteRaster);
+    this.satelliteRasterLayer.on('postrender', this.restaurarRecorteRaster);
     this.satelliteMap.addLayer(this.satelliteRasterLayer);
   }
 
@@ -604,14 +610,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   }
 
   private extentDesdeGeojson(geojson: any): Extent | undefined {
-    const coordinates = this.coordenadasDesdeGeojson(geojson);
-    if (coordinates.length < 3) {
-      return undefined;
-    }
-    const projected = coordinates.map((coord) => fromLonLat(coord));
-    const xs = projected.map((coord) => coord[0]);
-    const ys = projected.map((coord) => coord[1]);
-    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    return this.geometriaDesdeGeojson(geojson)?.getExtent();
   }
 
   private extentFinito(extent: Extent): boolean {
@@ -652,26 +651,93 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     return color.replace(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*[\d.]+\)/, `rgba($1, $2, $3, ${opacity})`);
   }
 
-  private coordenadasLote(): Array<[number, number]> {
-    const geojson = (this.lote as any)?.ubicacion?.geojson;
-    return this.coordenadasDesdeGeojson(geojson);
+  private readonly aplicarRecorteRaster = (event: RenderEvent): void => {
+    const context = event.context as CanvasRenderingContext2D | undefined;
+    const frameState = event.frameState;
+    const inversePixelTransform = event.inversePixelTransform;
+    const geometry = this.satelliteClipGeometry;
+    if (!context || !frameState || !inversePixelTransform || !geometry || typeof context.clip !== 'function') {
+      return;
+    }
+
+    const transform = multiplyTransform(inversePixelTransform.slice(), frameState.coordinateToPixelTransform);
+    const polygons =
+      geometry instanceof MultiPolygon ? geometry.getCoordinates() : [geometry.getCoordinates()];
+
+    context.save();
+    context.beginPath();
+    for (const polygon of polygons) {
+      for (const ring of polygon) {
+        ring.forEach((coordinate, index) => {
+          const pixel = applyTransform(transform, coordinate.slice());
+          if (index === 0) {
+            context.moveTo(pixel[0], pixel[1]);
+          } else {
+            context.lineTo(pixel[0], pixel[1]);
+          }
+        });
+        context.closePath();
+      }
+    }
+    context.clip('evenodd');
+    this.satelliteClipActive = true;
+  };
+
+  private readonly restaurarRecorteRaster = (event: RenderEvent): void => {
+    if (!this.satelliteClipActive) {
+      return;
+    }
+    const context = event.context as CanvasRenderingContext2D | undefined;
+    context?.restore();
+    this.satelliteClipActive = false;
+  };
+
+  private geometriaDesdeGeojson(geojson: any): Polygon | MultiPolygon | undefined {
+    const geometry = geojson?.type === 'Feature' ? geojson.geometry : geojson;
+    const proyectarPoligono = (polygon: unknown): Array<Array<[number, number]>> => {
+      if (!Array.isArray(polygon)) {
+        return [];
+      }
+      return polygon
+        .map((ring) => this.proyectarAnillo(ring))
+        .filter((ring) => ring.length >= 4);
+    };
+
+    if (geometry?.type === 'MultiPolygon') {
+      const polygons = (Array.isArray(geometry.coordinates) ? geometry.coordinates : [])
+        .map((polygon: unknown) => proyectarPoligono(polygon))
+        .filter((polygon: Array<Array<[number, number]>>) => polygon.length > 0);
+      return polygons.length ? new MultiPolygon(polygons) : undefined;
+    }
+
+    const polygon = proyectarPoligono(geometry?.coordinates);
+    return polygon.length ? new Polygon(polygon) : undefined;
   }
 
-  private coordenadasDesdeGeojson(geojson: any): Array<[number, number]> {
-    const coordinates = geojson?.type === 'MultiPolygon' ? geojson?.coordinates?.[0]?.[0] : geojson?.coordinates?.[0];
-    if (!Array.isArray(coordinates)) {
+  private proyectarAnillo(ring: unknown): Array<[number, number]> {
+    if (!Array.isArray(ring)) {
       return [];
     }
-    return coordinates
+    const coordinates = ring
       .map((coord: unknown) => {
         if (!Array.isArray(coord) || coord.length < 2) {
           return null;
         }
         const lng = Number(coord[0]);
         const lat = Number(coord[1]);
-        return Number.isFinite(lng) && Number.isFinite(lat) ? ([lng, lat] as [number, number]) : null;
+        return Number.isFinite(lng) && Number.isFinite(lat) ? (fromLonLat([lng, lat]) as [number, number]) : null;
       })
       .filter((coord): coord is [number, number] => !!coord);
+
+    if (coordinates.length < 3) {
+      return [];
+    }
+    const first = coordinates[0];
+    const last = coordinates[coordinates.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) {
+      coordinates.push([...first] as [number, number]);
+    }
+    return coordinates;
   }
 
   private get contextoAgronomico(): ContextoAgronomicoSatelital {
