@@ -12,8 +12,6 @@
     (onPage)="helper.setPageSize(name, $event.rows)"
     [globalFilterFields]="['nombre', 'establecimiento.nombre', 'siembra.semilla.cultivo', 'siembra.semilla.variedad']"
     rowExpandMode="single"
-    stateStorage="session"
-    [stateKey]="name"
   >
     <ng-template #caption>
       <div class="lots-toolbar menu-offset">
