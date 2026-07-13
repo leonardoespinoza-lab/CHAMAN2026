@@ -215,6 +215,376 @@
   margin-top: 0.28rem;
 }
 
+.growth-board {
+  --crop-accent: #c8f548;
+  --crop-accent-soft: #8fbf35;
+  --crop-fruit: #f5ca49;
+  background:
+    radial-gradient(circle at 82% 8%, rgba(200, 245, 72, 0.13), transparent 27%),
+    linear-gradient(145deg, #0a302e 0%, #0b2427 58%, #101f27 100%);
+  border: 1px solid rgba(36, 204, 187, 0.32);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px rgba(8, 39, 38, 0.14);
+  color: #effff9;
+  overflow: hidden;
+}
+
+.growth-board.cultivo-trigo,
+.growth-board.cultivo-cebada {
+  --crop-accent: #e8d46b;
+  --crop-accent-soft: #9fbd3d;
+  --crop-fruit: #f3d36c;
+}
+
+.growth-board.cultivo-maiz {
+  --crop-accent: #d7f43e;
+  --crop-accent-soft: #72bc35;
+  --crop-fruit: #ffd34f;
+}
+
+.growth-board.cultivo-soja,
+.growth-board.cultivo-arveja {
+  --crop-accent: #aff04c;
+  --crop-accent-soft: #52bd62;
+  --crop-fruit: #dfef75;
+}
+
+.growth-board.cultivo-papa {
+  --crop-accent: #9ee65c;
+  --crop-accent-soft: #58ae58;
+  --crop-fruit: #d2a66d;
+}
+
+.growth-board.cultivo-vid {
+  --crop-accent: #b8ef4f;
+  --crop-accent-soft: #63b35d;
+  --crop-fruit: #b987e8;
+}
+
+.growth-board.cultivo-manzano,
+.growth-board.cultivo-peral {
+  --crop-accent: #aeea4e;
+  --crop-accent-soft: #55ad52;
+  --crop-fruit: #ff776f;
+}
+
+.growth-board.cultivo-pecan {
+  --crop-accent: #a6df4b;
+  --crop-accent-soft: #4f9e51;
+  --crop-fruit: #c69a5c;
+}
+
+.growth-board-heading {
+  align-items: center;
+  border-bottom: 1px solid rgba(210, 255, 239, 0.14);
+  display: flex;
+  gap: 1.25rem;
+  justify-content: space-between;
+  padding: 1rem 1.1rem 0.9rem;
+}
+
+.growth-board-heading > div:first-child {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+}
+
+.growth-board-heading span,
+.growth-board-heading small {
+  color: rgba(231, 255, 248, 0.72);
+}
+
+.growth-board-heading span {
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.growth-board-heading strong {
+  color: #ffffff;
+  font-size: 1.08rem;
+  line-height: 1.15;
+}
+
+.growth-board-heading small {
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+.current-stage-chip {
+  align-items: center;
+  background: #caff3d;
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 3px rgba(202, 255, 61, 0.12),
+    0 10px 24px rgba(0, 0, 0, 0.22);
+  color: #0b2928;
+  display: grid;
+  flex: 0 0 min(260px, 34%);
+  grid-template-columns: auto 1fr;
+  padding: 0.58rem 0.72rem;
+}
+
+.current-stage-chip i {
+  font-size: 1.08rem;
+  grid-row: 1 / span 2;
+  margin-right: 0.58rem;
+}
+
+.current-stage-chip span {
+  color: #274334;
+  font-size: 0.64rem;
+  line-height: 1;
+}
+
+.current-stage-chip strong {
+  color: #0b2928;
+  font-size: 0.94rem;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.growth-board-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-color: rgba(202, 255, 61, 0.46) transparent;
+  scrollbar-width: thin;
+  touch-action: pan-x;
+}
+
+.growth-board-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.growth-board-scroll::-webkit-scrollbar-thumb {
+  background: rgba(202, 255, 61, 0.46);
+  border-radius: 999px;
+}
+
+.growth-sequence {
+  display: grid;
+  grid-auto-columns: minmax(135px, 1fr);
+  grid-auto-flow: column;
+  isolation: isolate;
+  min-height: 292px;
+  min-width: var(--stage-min-width, 760px);
+  padding: 0.8rem 0.55rem 0;
+  position: relative;
+}
+
+.growth-stage {
+  align-items: center;
+  border-left: 1px solid rgba(219, 255, 243, 0.11);
+  display: grid;
+  grid-template-rows: 24px 154px minmax(76px, auto);
+  justify-items: center;
+  min-width: 0;
+  padding: 0 0.42rem 0.65rem;
+  position: relative;
+  transition:
+    background 0.18s ease,
+    opacity 0.18s ease;
+  z-index: 1;
+}
+
+.growth-stage:first-child {
+  border-left: 0;
+}
+
+.growth-stage.done {
+  background: linear-gradient(to bottom, rgba(113, 202, 98, 0.07), transparent 68%);
+}
+
+.growth-stage.pending {
+  opacity: 0.62;
+}
+
+.growth-stage.current {
+  background: linear-gradient(to bottom, rgba(202, 255, 61, 0.16), rgba(202, 255, 61, 0.03) 72%);
+  box-shadow:
+    inset 0 3px #caff3d,
+    inset 0 0 0 1px rgba(202, 255, 61, 0.38);
+  opacity: 1;
+}
+
+.growth-order,
+.growth-now {
+  align-items: center;
+  align-self: center;
+  display: inline-flex;
+  font-size: 0.66rem;
+  font-weight: 850;
+  gap: 0.3rem;
+  justify-content: center;
+  line-height: 1;
+}
+
+.growth-order {
+  background: rgba(230, 255, 248, 0.12);
+  border-radius: 50%;
+  color: rgba(236, 255, 250, 0.78);
+  height: 20px;
+  width: 20px;
+}
+
+.growth-now {
+  background: #caff3d;
+  border-radius: 999px;
+  color: #092725;
+  padding: 0.32rem 0.52rem;
+  text-transform: uppercase;
+}
+
+.plant-visual {
+  align-items: end;
+  color: var(--crop-accent-soft);
+  display: flex;
+  height: 154px;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+  z-index: 2;
+}
+
+.plant-visual svg {
+  height: 148px;
+  max-width: 112px;
+  overflow: visible;
+  width: 86%;
+}
+
+.plant-body {
+  opacity: 0.95;
+  transform: scale(var(--growth-scale, 1));
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  transition: transform 0.2s ease;
+}
+
+.growth-stage.current .plant-body {
+  filter: drop-shadow(0 0 7px rgba(202, 255, 61, 0.34));
+}
+
+.plant-stem,
+.plant-root,
+.plant-cane {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 4;
+}
+
+.plant-root {
+  color: #c2a66d;
+  stroke-width: 2.5;
+}
+
+.plant-leaf,
+.tree-canopy {
+  fill: var(--crop-accent-soft);
+  stroke: rgba(226, 255, 185, 0.42);
+  stroke-width: 0.8;
+}
+
+.plant-trunk {
+  fill: #8f6840;
+  stroke: #b38a55;
+  stroke-width: 1;
+}
+
+.plant-reproductive {
+  fill: var(--crop-fruit);
+  stroke: var(--crop-fruit);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
+}
+
+.plant-seed {
+  fill: #d5b25d;
+  opacity: 0;
+}
+
+.phase-implantation .plant-seed {
+  opacity: 1;
+}
+
+.phase-implantation .plant-reproductive,
+.phase-vegetative .plant-reproductive,
+.phase-rest .plant-reproductive {
+  opacity: 0;
+}
+
+.phase-maturity .plant-leaf,
+.phase-harvest .plant-leaf,
+.phase-maturity .tree-canopy,
+.phase-harvest .tree-canopy {
+  fill: color-mix(in srgb, var(--crop-accent-soft), #c9ab6e 42%);
+}
+
+.phase-harvest .plant-body,
+.phase-rest .plant-body {
+  opacity: 0.68;
+}
+
+.growth-label {
+  align-self: stretch;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  justify-items: center;
+  min-width: 0;
+  padding: 0.45rem 0.15rem 0;
+  text-align: center;
+  width: 100%;
+}
+
+.growth-label strong {
+  color: #ffffff;
+  font-size: 0.82rem;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+.growth-label span {
+  color: var(--crop-accent);
+  font-size: 0.62rem;
+  font-weight: 850;
+  line-height: 1.12;
+  margin-top: 0.28rem;
+  text-transform: uppercase;
+}
+
+.growth-label small {
+  align-self: end;
+  color: rgba(232, 255, 248, 0.68);
+  font-size: 0.68rem;
+  line-height: 1.1;
+  margin-top: 0.38rem;
+}
+
+.growth-stage.current .growth-label strong {
+  color: #d9ff62;
+}
+
+.growth-soil {
+  background:
+    radial-gradient(ellipse at 22% 28%, rgba(202, 176, 98, 0.26) 0 2px, transparent 3px),
+    radial-gradient(ellipse at 68% 65%, rgba(136, 174, 71, 0.22) 0 2px, transparent 3px),
+    linear-gradient(#725238 0 22%, #563824 23% 64%, #412b20 65%);
+  bottom: 76px;
+  box-shadow: inset 0 3px rgba(228, 194, 119, 0.13);
+  height: 17px;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  z-index: 0;
+}
+
 .stage-journey {
   margin-top: 0;
   overflow: visible;
@@ -327,7 +697,10 @@
   margin-top: 0.5rem;
   min-height: 30px;
   padding: 0.4rem 0.48rem;
-  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
   width: 100%;
 }
 
@@ -588,5 +961,20 @@
 
   .stage-journey-scroll {
     grid-auto-columns: minmax(132px, 1fr);
+  }
+
+  .growth-board-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .current-stage-chip {
+    flex-basis: auto;
+    width: 100%;
+  }
+
+  .growth-sequence {
+    grid-auto-columns: minmax(128px, 1fr);
   }
 }

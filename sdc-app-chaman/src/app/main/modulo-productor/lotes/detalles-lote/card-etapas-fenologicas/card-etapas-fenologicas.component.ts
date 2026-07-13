@@ -27,6 +27,13 @@ import {
   ETAPAS_SOJA,
   ETAPAS_TRIGO,
 } from '../drawer-grafico-enfermedades/drawer-grafico-enfermedades.component';
+import {
+  phenologyCropArchitecture,
+  phenologyGrowthPercent,
+  PhenologyVisualPhase,
+  phenologyVisualPhase,
+  phenologyVisualPhaseLabel,
+} from './phenology-visual';
 
 interface FenologiaStage {
   nombre: string;
@@ -177,6 +184,31 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     return this.etapas.find((etapa) => etapa.estado === 'current') || this.etapas[0];
   }
 
+  public get arquitecturaVisual() {
+    return phenologyCropArchitecture(this.cultivo);
+  }
+
+  public get indiceEtapaActualVisual(): number {
+    return Math.max(0, this.indiceEtapaActual());
+  }
+
+  public faseVisual(etapa: FenologiaStage, index: number): PhenologyVisualPhase {
+    return phenologyVisualPhase(etapa.nombre, index, this.etapas.length);
+  }
+
+  public faseVisualTexto(etapa: FenologiaStage, index: number): string {
+    return phenologyVisualPhaseLabel(this.faseVisual(etapa, index));
+  }
+
+  public alturaVisual(etapa: FenologiaStage, index: number): number {
+    return phenologyGrowthPercent(index, this.etapas.length, this.faseVisual(etapa, index));
+  }
+
+  public etiquetaVisualEtapa(etapa: FenologiaStage, index: number): string {
+    const estado = etapa.estado === 'current' ? 'Estadio actual' : this.etapaEstadoTexto(etapa, index);
+    return `${estado}: ${etapa.nombre}. ${this.faseVisualTexto(etapa, index)}.`;
+  }
+
   public get etapaAnteriorDetalle(): FenologiaStage | undefined {
     const index = this.indiceEtapaActual();
     return index > 0 ? this.etapas[index - 1] : undefined;
@@ -194,7 +226,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
   public get registrosFenologicos(): IRegistroFenologico[] {
     return [...(this.siembraActual?.registrosFenologicos || [])].sort((a, b) =>
-      String(a.fecha || '').localeCompare(String(b.fecha || '')),
+      String(a.fecha || '').localeCompare(String(b.fecha || ''))
     );
   }
 
@@ -324,19 +356,17 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
         ? 'registro de campo prioritario'
         : 'modelo termico auditable'
       : this.plantacionJoven
-      ? 'plantacion joven'
-      : this.esPerenne
-        ? 'campania perenne'
-        : this.fuenteTexto;
+        ? 'plantacion joven'
+        : this.esPerenne
+          ? 'campania perenne'
+          : this.fuenteTexto;
     const campania = this.campaniaTexto ? ` ${this.campaniaTexto}` : '';
     return `${this.cultivo || 'Cultivo'} - ${this.etapas.length} etapas - ${fuente}${campania}`;
   }
 
   public get edadPlantacionLabel(): string {
     if (this.edadPlantacionAnios === undefined) return 'edad sin calcular';
-    return this.edadPlantacionAnios === 1
-      ? '1 año'
-      : `${this.edadPlantacionAnios} años`;
+    return this.edadPlantacionAnios === 1 ? '1 año' : `${this.edadPlantacionAnios} años`;
   }
 
   public get detalleEdadProductiva(): string {
@@ -400,7 +430,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
         (registro.etapa === nombre ||
           (this.cultivo === 'Arveja' && this.codigoEtapaArveja(registro.etapa) === this.codigoEtapaArveja(nombre))) &&
         (!this.campaniaTexto || !registro.campania || registro.campania === this.campaniaTexto) &&
-        (registro.accion || 'inicio') === 'inicio',
+        (registro.accion || 'inicio') === 'inicio'
     );
   }
 
@@ -485,7 +515,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   constructor(
     public helper: HelperService,
     private siembraService: SiembraService,
-    private climaService: ClimaService,
+    private climaService: ClimaService
   ) {}
 
   ngOnInit(): void {
@@ -532,13 +562,14 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       cultivo,
       siembra.fechaSiembra,
       new Date(),
-      this.edadProductivaDesdeAnios,
+      this.edadProductivaDesdeAnios
     );
     this.fuenteFenologiaJoven = fenologiaJoven?.fuente || '';
     this.campaniaTexto = '';
-    this.fenologiaTermica = siembra.semilla?.fenologiaReferencia?.unidadEtapas === 'grados_dia'
-      ? siembra.semilla.fenologiaReferencia
-      : undefined;
+    this.fenologiaTermica =
+      siembra.semilla?.fenologiaReferencia?.unidadEtapas === 'grados_dia'
+        ? siembra.semilla.fenologiaReferencia
+        : undefined;
 
     const etapasDisponibles = this.getEtapasDisponibles(cultivo, siembra.semilla, etapasCrono);
 
@@ -554,7 +585,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
         if (crono) {
           etapaActualNumero = HelperService.getEtapaPorFechaTrigo(siembra, new Date().toISOString(), crono);
         } else {
-          etapaActualNumero = this.getEtapaGenericaPorFecha(fechaBase, ['Siembra', ...Object.keys(etapasDisponibles)], etapasDisponibles);
+          etapaActualNumero = this.getEtapaGenericaPorFecha(
+            fechaBase,
+            ['Siembra', ...Object.keys(etapasDisponibles)],
+            etapasDisponibles
+          );
         }
         etapasConfig = {
           nombres: ETAPAS_TRIGO,
@@ -566,7 +601,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
           const etapaSojaStr = HelperService.getEtapaPorFechaSoja(siembra, new Date().toISOString(), crono);
           etapaActualNumero = HelperService.etapaSojaANumero(etapaSojaStr);
         } else {
-          etapaActualNumero = this.getEtapaGenericaPorFecha(fechaBase, ['Siembra', ...Object.keys(etapasDisponibles)], etapasDisponibles);
+          etapaActualNumero = this.getEtapaGenericaPorFecha(
+            fechaBase,
+            ['Siembra', ...Object.keys(etapasDisponibles)],
+            etapasDisponibles
+          );
         }
         etapasConfig = {
           nombres: ETAPAS_SOJA,
@@ -579,7 +618,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
           const etapaMaizStr = HelperService.getEtapaPorFechaMaiz(siembra, new Date().toISOString(), crono);
           etapaActualNumero = HelperService.etapaMaizANumero(etapaMaizStr);
         } else {
-          etapaActualNumero = this.getEtapaGenericaPorFecha(fechaBase, ['Siembra', ...Object.keys(etapasDisponibles)], etapasDisponibles);
+          etapaActualNumero = this.getEtapaGenericaPorFecha(
+            fechaBase,
+            ['Siembra', ...Object.keys(etapasDisponibles)],
+            etapasDisponibles
+          );
         }
         etapasConfig = {
           nombres: ETAPAS_MAIZ,
@@ -592,7 +635,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
           const etapaCebadaStr = HelperService.getEtapaPorFechaCebada(siembra, new Date().toISOString(), crono);
           etapaActualNumero = HelperService.etapaCebadaANumero(etapaCebadaStr);
         } else {
-          etapaActualNumero = this.getEtapaGenericaPorFecha(fechaBase, ['Siembra', ...Object.keys(etapasDisponibles)], etapasDisponibles);
+          etapaActualNumero = this.getEtapaGenericaPorFecha(
+            fechaBase,
+            ['Siembra', ...Object.keys(etapasDisponibles)],
+            etapasDisponibles
+          );
         }
         etapasConfig = {
           nombres: ETAPAS_CEBADA,
@@ -637,14 +684,15 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     const fechaFin = fechas[fechas.length - 1].getTime();
     const duracionTotal = Math.max(fechaFin - fechaInicio, 1);
     this.progreso = this.limitar(((Date.now() - fechaInicio) / duracionTotal) * 100);
-    this.etapaActual =
-      etapaActualNumero > -1 ? etapasConfig.nombres[etapaActualNumero] : etapasConfig.nombres[0];
+    this.etapaActual = etapaActualNumero > -1 ? etapasConfig.nombres[etapaActualNumero] : etapasConfig.nombres[0];
 
     this.etapas = etapasConfig.nombres.map((nombre, index) => {
       const posicion = this.posicionUniforme(index, etapasConfig.nombres.length);
       const estado = index < etapaActualNumero ? 'done' : index === etapaActualNumero ? 'current' : 'pending';
       const periodoDias =
-        index > 0 ? Math.max(1, Math.round((fechas[index].getTime() - fechas[index - 1].getTime()) / this.diaMs)) : undefined;
+        index > 0
+          ? Math.max(1, Math.round((fechas[index].getTime() - fechas[index - 1].getTime()) / this.diaMs))
+          : undefined;
 
       return {
         nombre,
@@ -746,12 +794,14 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     this.fuenteTexto = estado.fuente === 'campo' ? 'registro de campo prioritario' : 'modelo termico auditable';
 
     const madurez = estado.hitos.find((hito) => hito.codigo === 'MF');
-    const objetivoTotal = madurez?.umbralMinGdd !== undefined && madurez.umbralMaxGdd !== undefined
-      ? (madurez.umbralMinGdd + madurez.umbralMaxGdd) / 2
-      : undefined;
-    this.progreso = objetivoTotal && estado.gradosDiaAcumulados !== undefined
-      ? this.limitar((estado.gradosDiaAcumulados / objetivoTotal) * 100)
-      : 0;
+    const objetivoTotal =
+      madurez?.umbralMinGdd !== undefined && madurez.umbralMaxGdd !== undefined
+        ? (madurez.umbralMinGdd + madurez.umbralMaxGdd) / 2
+        : undefined;
+    this.progreso =
+      objetivoTotal && estado.gradosDiaAcumulados !== undefined
+        ? this.limitar((estado.gradosDiaAcumulados / objetivoTotal) * 100)
+        : 0;
 
     this.etapas = estado.hitos.map((hito, index) => {
       const registro = this.registroPorCodigoArveja(hito.codigo);
@@ -770,11 +820,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     });
   }
 
-  private fechaHitoTermicoArveja(
-    min?: number,
-    max?: number,
-    codigo?: string,
-  ): Date | undefined {
+  private fechaHitoTermicoArveja(min?: number, max?: number, codigo?: string): Date | undefined {
     const fechaSiembra = this.siembraActual?.fechaSiembra;
     if (codigo === 'S') return fechaSiembra ? new Date(fechaSiembra) : undefined;
     if (!Number.isFinite(min) || !Number.isFinite(max)) return undefined;
@@ -796,7 +842,9 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   private codigoEtapaArveja(etapa?: string): string | undefined {
-    const value = String(etapa || '').trim().toUpperCase();
+    const value = String(etapa || '')
+      .trim()
+      .toUpperCase();
     if (value.startsWith('MF')) return 'MF';
     if (value.startsWith('R3')) return 'R3';
     if (value.startsWith('R1')) return 'R1';
@@ -854,12 +902,14 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
         return acc;
       }, {});
     }
-    return ETAPAS_BASE_POR_CULTIVO[cultivo] || {
-      Inicio: 0,
-      Desarrollo: 30,
-      Monitoreo: 30,
-      Cierre: 30,
-    };
+    return (
+      ETAPAS_BASE_POR_CULTIVO[cultivo] || {
+        Inicio: 0,
+        Desarrollo: 30,
+        Monitoreo: 30,
+        Cierre: 30,
+      }
+    );
   }
 
   private normalizarEtapas(etapas: Record<string, number | string>): Record<string, number> {
@@ -925,10 +975,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
     const inicioCampania = this.getInicioCampaniaPerenne(cultivo);
     const hoy = new Date();
-    const diaCampania = Math.max(
-      0,
-      Math.min(365, Math.floor((hoy.getTime() - inicioCampania.getTime()) / this.diaMs))
-    );
+    const diaCampania = Math.max(0, Math.min(365, Math.floor((hoy.getTime() - inicioCampania.getTime()) / this.diaMs)));
     const etapasCiclo = [...etapas];
     const ultima = etapasCiclo[etapasCiclo.length - 1];
     if (ultima.dia < 355) {

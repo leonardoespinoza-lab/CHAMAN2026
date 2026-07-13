@@ -65,7 +65,7 @@
       <div class="stage-context">
         <article>
           <span>{{ plantacionJoven ? 'Edad de planta' : etiquetaImplantacion }}</span>
-          <strong>{{ plantacionJoven ? edadPlantacionLabel : (diasDesdeImplantacion + ' d') }}</strong>
+          <strong>{{ plantacionJoven ? edadPlantacionLabel : diasDesdeImplantacion + ' d' }}</strong>
           <small>{{ detalleEdadProductiva }}</small>
         </article>
         <article>
@@ -81,13 +81,152 @@
       </div>
     </div>
 
+    <section class="growth-board" [ngClass]="[cultivoClass, 'architecture-' + arquitecturaVisual]">
+      <div class="growth-board-heading">
+        <div>
+          <span>Secuencia fenologica del cultivo</span>
+          <strong>{{ cultivo }} · {{ etapas.length }} estadios operativos</strong>
+          <small>La ilustracion ordena el ciclo; las fechas y el estado provienen de {{ fuenteTexto }}.</small>
+        </div>
+        <div class="current-stage-chip">
+          <i class="pi pi-map-marker"></i>
+          <span>Estadio actual</span>
+          <strong>{{ etapaActual || 'Sin etapa confirmada' }}</strong>
+        </div>
+      </div>
+
+      <div class="growth-board-scroll">
+        <div class="growth-sequence" [style.--stage-min-width]="timelineMinWidth">
+          @for (etapa of etapas; track etapa.nombre; let i = $index) {
+            <article
+              class="growth-stage"
+              [ngClass]="[etapa.estado, 'phase-' + faseVisual(etapa, i)]"
+              [attr.aria-label]="etiquetaVisualEtapa(etapa, i)"
+            >
+              @if (etapa.estado === 'current') {
+                <span class="growth-now"><i class="pi pi-map-marker"></i> Ahora</span>
+              } @else {
+                <span class="growth-order">{{ i + 1 }}</span>
+              }
+
+              <div class="plant-visual" [style.--growth-scale]="alturaVisual(etapa, i) / 100">
+                @switch (arquitecturaVisual) {
+                  @case ('cereal') {
+                    <svg viewBox="0 0 100 150" aria-hidden="true">
+                      <g class="plant-body">
+                        <path class="plant-stem" d="M50 137 C49 105 50 73 50 29" />
+                        <path class="plant-leaf" d="M50 111 C34 101 23 103 16 112 C31 116 42 117 50 111Z" />
+                        <path class="plant-leaf" d="M50 94 C66 81 78 82 85 90 C70 97 60 99 50 94Z" />
+                        <path class="plant-leaf" d="M50 76 C37 64 26 65 20 73 C33 79 42 81 50 76Z" />
+                        <path class="plant-leaf" d="M50 59 C62 47 72 48 78 55 C67 61 58 64 50 59Z" />
+                        <g class="plant-reproductive">
+                          <path d="M50 33 C40 25 39 14 50 5 C61 14 60 25 50 33Z" />
+                          <path d="M50 31 L38 19 M50 25 L62 13 M50 19 L40 8 M50 15 L59 5" />
+                        </g>
+                        <ellipse class="plant-seed" cx="50" cy="137" rx="10" ry="6" />
+                      </g>
+                    </svg>
+                  }
+                  @case ('legume') {
+                    <svg viewBox="0 0 100 150" aria-hidden="true">
+                      <g class="plant-body">
+                        <path
+                          class="plant-stem"
+                          d="M50 138 C48 109 51 77 48 34 M49 90 C34 78 28 65 25 53 M50 103 C65 91 72 76 75 62"
+                        />
+                        <ellipse class="plant-leaf" cx="29" cy="59" rx="13" ry="7" transform="rotate(28 29 59)" />
+                        <ellipse class="plant-leaf" cx="37" cy="78" rx="14" ry="7" transform="rotate(25 37 78)" />
+                        <ellipse class="plant-leaf" cx="69" cy="68" rx="14" ry="7" transform="rotate(-30 69 68)" />
+                        <ellipse class="plant-leaf" cx="65" cy="91" rx="14" ry="7" transform="rotate(-26 65 91)" />
+                        <ellipse class="plant-leaf" cx="47" cy="40" rx="11" ry="7" />
+                        <g class="plant-reproductive">
+                          <path d="M35 87 C26 89 24 101 35 105 C46 102 46 90 35 87Z" />
+                          <path d="M67 76 C58 78 57 89 66 94 C77 92 78 80 67 76Z" />
+                        </g>
+                        <ellipse class="plant-seed" cx="50" cy="138" rx="10" ry="6" />
+                      </g>
+                    </svg>
+                  }
+                  @case ('tuber') {
+                    <svg viewBox="0 0 100 150" aria-hidden="true">
+                      <g class="plant-body">
+                        <path class="plant-stem" d="M50 101 L50 45 M50 70 L27 56 M50 78 L73 60" />
+                        <ellipse class="plant-leaf" cx="28" cy="54" rx="15" ry="9" transform="rotate(24 28 54)" />
+                        <ellipse class="plant-leaf" cx="72" cy="58" rx="15" ry="9" transform="rotate(-24 72 58)" />
+                        <ellipse class="plant-leaf" cx="48" cy="42" rx="14" ry="9" />
+                        <path
+                          class="plant-root"
+                          d="M50 100 C41 113 36 123 31 139 M50 101 C59 114 64 125 70 139 M50 103 L50 141"
+                        />
+                        <g class="plant-reproductive">
+                          <ellipse cx="31" cy="130" rx="12" ry="8" />
+                          <ellipse cx="51" cy="137" rx="13" ry="8" />
+                          <ellipse cx="70" cy="128" rx="11" ry="7" />
+                        </g>
+                        <ellipse class="plant-seed" cx="50" cy="137" rx="10" ry="6" />
+                      </g>
+                    </svg>
+                  }
+                  @case ('vine') {
+                    <svg viewBox="0 0 100 150" aria-hidden="true">
+                      <g class="plant-body">
+                        <path class="plant-stem" d="M43 139 C44 106 47 76 51 42 C55 28 68 22 78 28" />
+                        <path class="plant-stem plant-cane" d="M23 51 C42 45 61 45 82 51" />
+                        <path class="plant-leaf" d="M36 66 C18 54 12 69 24 79 C14 91 31 99 40 86 C51 92 58 75 45 69Z" />
+                        <path class="plant-leaf" d="M69 55 C55 44 51 58 58 68 C52 77 68 84 74 72 C84 75 90 61 79 57Z" />
+                        <g class="plant-reproductive plant-cluster">
+                          <circle cx="61" cy="82" r="5" />
+                          <circle cx="70" cy="83" r="5" />
+                          <circle cx="65" cy="91" r="5" />
+                          <circle cx="74" cy="92" r="5" />
+                          <circle cx="68" cy="100" r="5" />
+                        </g>
+                        <ellipse class="plant-seed" cx="44" cy="138" rx="10" ry="6" />
+                      </g>
+                    </svg>
+                  }
+                  @default {
+                    <svg viewBox="0 0 100 150" aria-hidden="true">
+                      <g class="plant-body">
+                        <path class="plant-trunk" d="M45 139 C46 116 48 96 50 77 C51 96 54 116 56 139Z" />
+                        <circle class="tree-canopy" cx="50" cy="58" r="27" />
+                        <circle class="tree-canopy" cx="31" cy="70" r="19" />
+                        <circle class="tree-canopy" cx="70" cy="70" r="19" />
+                        <g class="plant-reproductive plant-fruit">
+                          <circle cx="35" cy="61" r="4" />
+                          <circle cx="55" cy="48" r="4" />
+                          <circle cx="68" cy="70" r="4" />
+                        </g>
+                        <ellipse class="plant-seed" cx="50" cy="139" rx="10" ry="6" />
+                      </g>
+                    </svg>
+                  }
+                }
+              </div>
+
+              <div class="growth-label">
+                <strong>{{ etapa.nombre }}</strong>
+                <span>{{ faseVisualTexto(etapa, i) }}</span>
+                <small>{{
+                  etapa.fecha ? (etapa.fecha | date: 'd MMM') : etapa.requiereCampo ? 'Confirmar a campo' : 'Sin fecha'
+                }}</small>
+              </div>
+            </article>
+          }
+          <div class="growth-soil" aria-hidden="true"></div>
+        </div>
+      </div>
+    </section>
+
     <div class="stage-journey" [style.--stage-min-width]="timelineMinWidth">
       <div class="stage-journey-scroll">
         @for (etapa of etapas; track etapa.nombre; let i = $index) {
           <article class="stage-step" [ngClass]="etapa.estado">
             <span class="stage-status">{{ etapaEstadoTexto(etapa, i) }}</span>
             <strong>{{ etapa.nombre }}</strong>
-            <small>{{ etapa.fecha ? (etapa.fecha | date: 'd/M') : (etapa.requiereCampo ? 'Observacion' : 'Fecha no alcanzada') }}</small>
+            <small>{{
+              etapa.fecha ? (etapa.fecha | date: 'd/M') : etapa.requiereCampo ? 'Observacion' : 'Fecha no alcanzada'
+            }}</small>
             <em>{{ etapaDetalleTexto(etapa, i) }}</em>
             @if (registroEtapa(etapa)) {
               <span class="stage-registered">Campo {{ registroEtapa(etapa)?.fecha | date: 'd/M' }}</span>
@@ -120,7 +259,13 @@
           </div>
           <small>
             Estado:
-            {{ fenologiaTermica.estadoModelo === 'validado' ? 'validado' : fenologiaTermica.estadoModelo === 'referencia' ? 'referencia operativa' : 'calibracion pendiente' }}
+            {{
+              fenologiaTermica.estadoModelo === 'validado'
+                ? 'validado'
+                : fenologiaTermica.estadoModelo === 'referencia'
+                  ? 'referencia operativa'
+                  : 'calibracion pendiente'
+            }}
           </small>
         </div>
         <div class="thermal-ranges">
@@ -132,7 +277,10 @@
           }
         </div>
         <p>
-          {{ fenologiaTermica.observacionesModelo || 'La referencia requiere validacion agronomica antes de proyectar fechas.' }}
+          {{
+            fenologiaTermica.observacionesModelo ||
+              'La referencia requiere validacion agronomica antes de proyectar fechas.'
+          }}
         </p>
       </section>
     } @else {
@@ -164,7 +312,11 @@
         <article>
           <span>Periodo calculado</span>
           <strong>
-            {{ datosFenologiaTermica?.periodoTermico?.desde ? (datosFenologiaTermica?.periodoTermico?.desde | date: 'd/M/yy') : 'Pendiente' }}
+            {{
+              datosFenologiaTermica?.periodoTermico?.desde
+                ? (datosFenologiaTermica?.periodoTermico?.desde | date: 'd/M/yy')
+                : 'Pendiente'
+            }}
             @if (datosFenologiaTermica?.periodoTermico?.dias) {
               · {{ datosFenologiaTermica?.periodoTermico?.dias }} dias
             }
@@ -189,7 +341,12 @@
       @for (advertencia of estadoFenologiaTermica?.advertencias || []; track advertencia) {
         <p class="thermal-warning">{{ advertencia }}</p>
       }
-      <p>{{ fenologiaTermica.observacionesModelo || 'La referencia requiere validacion agronomica antes de proyectar fechas.' }}</p>
+      <p>
+        {{
+          fenologiaTermica.observacionesModelo ||
+            'La referencia requiere validacion agronomica antes de proyectar fechas.'
+        }}
+      </p>
     </section>
   }
 </div>
@@ -206,7 +363,10 @@
     <ng-template pTemplate="header">
       <div class="register-dialog-heading">
         <span>Registro fenologico de campo</span>
-        <strong>{{ siembraActual?.semilla?.cultivo || 'Cultivo' }} - {{ siembraActual?.semilla?.variedad || 'Variedad' }}</strong>
+        <strong
+          >{{ siembraActual?.semilla?.cultivo || 'Cultivo' }} -
+          {{ siembraActual?.semilla?.variedad || 'Variedad' }}</strong
+        >
       </div>
     </ng-template>
 
@@ -255,9 +415,7 @@
         </article>
         <article>
           <span>Frio requerido</span>
-          <strong>
-            {{ siembraActual?.semilla?.requerimientoFrio?.horasFrio || '-' }} HF
-          </strong>
+          <strong> {{ siembraActual?.semilla?.requerimientoFrio?.horasFrio || '-' }} HF </strong>
         </article>
         <article>
           <span>CP requerido</span>
