@@ -308,16 +308,29 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
   private indicadorClima(data: ILoteTabla): IndicadorLote {
     const pronostico = data.establecimiento?.prediccionClimatica?.pronosticos?.[0] as any;
     const calidad = pronostico?.calidadDatos;
-    const nivelFuente = String(calidad?.nivel || '').toLowerCase();
-    if (['alta', 'media', 'baja'].includes(nivelFuente)) {
+    const fuente = String(pronostico?.fuente || '');
+    const fuenteNormalizada = fuente.toLowerCase().replace(/[^a-z]/g, '');
+    const scoreFuente = fuenteNormalizada.includes('fieldclimate')
+      ? 92
+      : fuenteNormalizada.includes('meteoblue')
+        ? 85
+        : fuenteNormalizada.includes('meteosource')
+          ? 72
+          : fuenteNormalizada.includes('openmeteo')
+            ? 62
+            : undefined;
+    const score = Number(calidad?.score ?? scoreFuente);
+    const nivelFuente = String(
+      calidad?.nivel || (Number.isFinite(score) ? (score >= 80 ? 'alta' : score >= 60 ? 'media' : 'baja') : ''),
+    ).toLowerCase();
+    if (pronostico && ['alta', 'media', 'baja'].includes(nivelFuente)) {
       const etiqueta = nivelFuente.charAt(0).toUpperCase() + nivelFuente.slice(1);
-      const score = Number(calidad?.score);
-      const fuente = pronostico?.fuente || 'fuente climatica activa';
+      const fuenteActiva = fuente || 'fuente climatica activa';
       return {
         label: 'Clima',
         value: etiqueta,
         detail: Number.isFinite(score) ? `${this.entero.format(score)}/100` : 'Calidad',
-        tooltip: `Calidad ${nivelFuente} de ${fuente}${Number.isFinite(score) ? ` (${this.entero.format(score)}/100)` : ''}.`,
+        tooltip: `Calidad ${nivelFuente} de ${fuenteActiva}${Number.isFinite(score) ? ` (${this.entero.format(score)}/100)` : ''}.`,
         tone: nivelFuente === 'alta' ? 'ok' : nivelFuente === 'media' ? 'warn' : 'danger',
       };
     }
