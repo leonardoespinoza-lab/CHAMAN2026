@@ -92,6 +92,14 @@ export class CardSueloAmbienteComponent implements OnChanges, OnDestroy {
     return `${summary.depthFromCm}–${summary.depthToCm} cm`;
   }
 
+  public get hasCoverage(): boolean {
+    return Number.isFinite(this.assessment?.source?.coveragePercentage);
+  }
+
+  public get hasResolution(): boolean {
+    return Number.isFinite(this.assessment?.source?.resolutionMeters);
+  }
+
   public drainageLabel(value?: TClaseDrenajeSuelo): string {
     const labels: Record<TClaseDrenajeSuelo, string> = {
       excessive: 'Excesivo',

@@ -39,7 +39,9 @@ test("Suelo y ambiente aparece una sola vez a nivel de lote", () => {
 
 test("la tarjeta informa textura, fuente, confianza, profundidad y fósforo no medido", () => {
   for (const value of [
-    "Textura del suelo",
+    "Textura operativa",
+    "Estimación cartográfica",
+    "SoilGrids:",
     "sourceLabel",
     "confidenceLabel",
     "depthLabel",

@@ -36,9 +36,18 @@
   } @else if (hasResult) {
     <div class="soil-summary">
       <article class="texture-main">
-        <span>Textura del suelo</span>
+        <span>Textura operativa</span>
         <strong>{{ textureLabel }}</strong>
-        <small>{{ assessment?.summary?.usdaTexture || 'Clase USDA no disponible' }} · {{ depthLabel }}</small>
+        @if (assessment?.manualConflict) {
+          <small>
+            Estimación cartográfica: {{ assessment?.summary?.estimatedTexture || 'no disponible' }} · Composición
+            SoilGrids: {{ assessment?.summary?.usdaTexture || 'sin clase USDA' }} · {{ depthLabel }}
+          </small>
+        } @else {
+          <small
+            >Clase USDA SoilGrids: {{ assessment?.summary?.usdaTexture || 'no disponible' }} · {{ depthLabel }}</small
+          >
+        }
       </article>
       <article>
         <span>Composición 0–30 cm</span>
@@ -126,7 +135,11 @@
                   }
                 </span>
               </div>
-              <small>{{ layer.chamanTexture || 'Sin clase' }} · {{ layer.validPixels || 0 }} píxeles válidos</small>
+              <small>
+                Arena {{ number(layer.sandQ50) }}% · Limo {{ number(layer.siltQ50) }}% · Arcilla
+                {{ number(layer.clayQ50) }}% · {{ layer.chamanTexture || 'Sin clase' }} ·
+                {{ layer.validPixels || 0 }} píxeles válidos
+              </small>
             </div>
           }
         </div>
@@ -183,10 +196,10 @@
 
   <footer>
     <span>{{ assessment?.source?.provider || 'Motor edáfico Chaman' }}</span>
-    @if (assessment?.source?.coveragePercentage !== undefined) {
+    @if (hasCoverage) {
       <span>Cobertura {{ number(assessment?.source?.coveragePercentage) }}%</span>
     }
-    @if (assessment?.source?.resolutionMeters) {
+    @if (hasResolution) {
       <span>Resolución {{ assessment?.source?.resolutionMeters }} m</span>
     }
     @if (assessment?.calculatedAt) {
