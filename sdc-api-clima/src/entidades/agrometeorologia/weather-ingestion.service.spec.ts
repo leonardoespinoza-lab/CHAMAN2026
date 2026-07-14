@@ -29,4 +29,35 @@ describe('WeatherIngestionService', () => {
       (service as any).stationFreshnessWarning(undefined, [], true),
     ).toBeUndefined();
   });
+
+  it('continua desde dos dias antes del ultimo consolidado', async () => {
+    const repository = {
+      getObservaciones: jest
+        .fn()
+        .mockResolvedValueOnce({
+          datos: [{ fechaLocal: '2020-01-01' }],
+        })
+        .mockResolvedValueOnce({
+          datos: [{ fechaLocal: '2026-07-13' }],
+        }),
+    };
+    const incremental = new WeatherIngestionService(
+      {} as any,
+      repository as any,
+      {} as any,
+    );
+
+    await expect(
+      (incremental as any).resolverDesdeIncremental(
+        'est-1',
+        '2020-01-01',
+      ),
+    ).resolves.toBe('2026-07-11');
+    expect(repository.getObservaciones.mock.calls[0][0].sort).toBe(
+      'timestamp',
+    );
+    expect(repository.getObservaciones.mock.calls[1][0].sort).toBe(
+      '-timestamp',
+    );
+  });
 });

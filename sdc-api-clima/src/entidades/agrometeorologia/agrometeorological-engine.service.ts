@@ -578,7 +578,7 @@ export class AgrometeorologicalEngineService {
           $lte: rows[rows.length - 1].fecha,
         },
       }),
-      sort: JSON.stringify({ timestamp: 1 }),
+      sort: 'timestamp',
       limit: 0,
     });
     const weatherByDate = new Map(

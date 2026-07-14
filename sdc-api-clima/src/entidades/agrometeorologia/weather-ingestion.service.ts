@@ -276,12 +276,12 @@ export class WeatherIngestionService {
       const [first, last] = await Promise.all([
         this.repository.getObservaciones({
           filter: JSON.stringify(filter),
-          sort: JSON.stringify({ timestamp: 1 }),
+          sort: 'timestamp',
           limit: 1,
         }),
         this.repository.getObservaciones({
           filter: JSON.stringify(filter),
-          sort: JSON.stringify({ timestamp: -1 }),
+          sort: '-timestamp',
           limit: 1,
         }),
       ]);
