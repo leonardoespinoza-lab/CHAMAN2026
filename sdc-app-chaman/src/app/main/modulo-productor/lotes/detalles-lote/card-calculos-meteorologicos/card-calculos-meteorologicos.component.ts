@@ -489,9 +489,15 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
           {
             condition: { maxWidth: 700 },
             chartOptions: {
-              chart: { spacing: [18, 10, 12, 10] },
+              chart: { spacing: [18, 10, 16, 10] },
               title: { style: { fontSize: '14px' } },
               subtitle: { style: { fontSize: '11px' } },
+              xAxis: {
+                labels: {
+                  step: Math.max(1, Math.ceil(dias.length / 6)),
+                  style: { color: '#607286', fontSize: '10px', fontWeight: '600' },
+                },
+              },
               legend: {
                 itemDistance: 10,
                 itemStyle: { fontSize: '11px' },

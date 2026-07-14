@@ -379,17 +379,22 @@
     margin-inline: 0.75rem;
   }
   .chart-tabs {
-    display: flex;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
   }
   .chart-tabs button {
-    flex: 0 0 auto;
+    min-width: 0;
+    white-space: normal;
+  }
+  .chart-tabs button:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
   .chart-canvas {
     padding-inline: 0;
   }
   :host ::ng-deep .chart-canvas highcharts-chart {
-    height: 360px !important;
+    height: 470px !important;
   }
   .agromet-footer {
     flex-direction: column;
