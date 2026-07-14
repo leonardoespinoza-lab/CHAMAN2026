@@ -1858,7 +1858,10 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
 
   async ngOnInit(): Promise<void> {
     this.calcularFechaMinima();
-    await this.listarNDVIs();
+    const idLote = this.lote?._id ? String(this.lote._id) : undefined;
+    if (idLote && idLote !== this.ultimoLoteListado) {
+      await this.listarNDVIs();
+    }
   }
 
   ngOnChanges(changes: SimpleChanges): void {

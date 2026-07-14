@@ -22,6 +22,10 @@ export class SoilIntelligenceJobsService
   private readonly logger = new Logger(SoilIntelligenceJobsService.name);
   private startupTimer?: ReturnType<typeof setTimeout>;
   private running?: Promise<unknown>;
+  private recoveryRunning?: Promise<{
+    attempted: number;
+    completed: number;
+  }>;
 
   constructor(
     private readonly engine: LotSoilIntelligenceEngine,
@@ -32,19 +36,7 @@ export class SoilIntelligenceJobsService
     if (!SOIL_INTELLIGENCE_ENABLED) return;
     this.startupTimer = setTimeout(() => {
       this.startupTimer = undefined;
-      void this.recover().catch((error) =>
-        this.logger.error(
-          `Recuperación edáfica inicial falló: ${error?.message || error}`,
-        ),
-      );
-      if (SOIL_INTELLIGENCE_STARTUP_BACKFILL_LIMIT > 0) {
-        void this.backfill(SOIL_INTELLIGENCE_STARTUP_BACKFILL_LIMIT).catch(
-          (error) =>
-            this.logger.error(
-              `Backfill edáfico inicial falló: ${error?.message || error}`,
-            ),
-        );
-      }
+      void this.initializeStartup();
     }, SOIL_INTELLIGENCE_STARTUP_DELAY_MS);
   }
 
@@ -56,7 +48,7 @@ export class SoilIntelligenceJobsService
     timeZone: 'America/Argentina/Buenos_Aires',
   })
   scheduledRecovery(): void {
-    if (!SOIL_INTELLIGENCE_ENABLED) return;
+    if (!SOIL_INTELLIGENCE_ENABLED || this.running) return;
     void this.recover().catch(() => undefined);
   }
 
@@ -68,7 +60,18 @@ export class SoilIntelligenceJobsService
     return this.running;
   }
 
-  async recover(): Promise<{ attempted: number; completed: number }> {
+  recover(): Promise<{ attempted: number; completed: number }> {
+    if (this.recoveryRunning) return this.recoveryRunning;
+    this.recoveryRunning = this.runRecovery().finally(() => {
+      this.recoveryRunning = undefined;
+    });
+    return this.recoveryRunning;
+  }
+
+  private async runRecovery(): Promise<{
+    attempted: number;
+    completed: number;
+  }> {
     const pending = await this.repository.claimPending(
       SOIL_INTELLIGENCE_RECOVERY_LIMIT,
     );
@@ -87,5 +90,23 @@ export class SoilIntelligenceJobsService
       }
     }
     return { attempted: pending.length, completed };
+  }
+
+  private async initializeStartup(): Promise<void> {
+    try {
+      await this.recover();
+    } catch (error) {
+      this.logger.error(
+        `Recuperación edáfica inicial falló: ${error?.message || error}`,
+      );
+    }
+    if (SOIL_INTELLIGENCE_STARTUP_BACKFILL_LIMIT <= 0) return;
+    try {
+      await this.backfill(SOIL_INTELLIGENCE_STARTUP_BACKFILL_LIMIT);
+    } catch (error) {
+      this.logger.error(
+        `Backfill edáfico inicial falló: ${error?.message || error}`,
+      );
+    }
   }
 }

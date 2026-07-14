@@ -67,3 +67,16 @@ test("renderiza composición por profundidad, estados, nulls y móvil sin botón
   assert.doesNotMatch(card, /label="Calcular"/i);
   assert.match(cardCss, /@media \(max-width: 620px\)/);
 });
+
+test("prioriza el bloque operativo y difiere servicios pesados e historial", () => {
+  assert.match(detail, /@defer \(on viewport; prefetch on idle\)/);
+  assert.match(detail, /services-deferred-placeholder/);
+  assert.match(
+    detail,
+    /@defer \(when verDrawerSiembras\) \{[\s\S]*?<app-drawer-listado-siembras/,
+  );
+  assert.ok(
+    detail.indexOf("<app-card-suelo-ambiente") <
+      detail.indexOf("@defer (on viewport; prefetch on idle)"),
+  );
+});

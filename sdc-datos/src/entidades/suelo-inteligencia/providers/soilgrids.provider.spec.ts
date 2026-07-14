@@ -62,4 +62,35 @@ describe('SoilGridsProvider', () => {
       /fuera de tolerancia/i,
     );
   });
+
+  it('limita la concurrencia y conserva el orden de los resultados', async () => {
+    let active = 0;
+    let maximumActive = 0;
+    const tasks = [30, 5, 15, 1].map((delay, index) => async () => {
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      active -= 1;
+      return index;
+    });
+
+    const results = await (provider as any).settledWithLimit(tasks, 2);
+
+    expect(maximumActive).toBe(2);
+    expect(results.map((result) => result.value)).toEqual([0, 1, 2, 3]);
+  });
+
+  it('usa valores seguros cuando una concurrencia de entorno es inválida', () => {
+    const previous = process.env.SOILGRIDS_GLOBAL_CONCURRENCY;
+    process.env.SOILGRIDS_GLOBAL_CONCURRENCY = 'no-es-un-numero';
+    try {
+      expect(
+        (provider as any).concurrency('SOILGRIDS_GLOBAL_CONCURRENCY', 10),
+      ).toBe(10);
+    } finally {
+      if (previous === undefined)
+        delete process.env.SOILGRIDS_GLOBAL_CONCURRENCY;
+      else process.env.SOILGRIDS_GLOBAL_CONCURRENCY = previous;
+    }
+  });
 });

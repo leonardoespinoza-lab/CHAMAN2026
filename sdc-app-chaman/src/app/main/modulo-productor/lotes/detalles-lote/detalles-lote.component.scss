@@ -104,9 +104,7 @@
 }
 
 .lot-summary-card {
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(245, 250, 252, 0.92)),
-    var(--p-surface-0);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(245, 250, 252, 0.92)), var(--p-surface-0);
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -228,6 +226,103 @@
   display: flex;
   flex-direction: column;
   gap: 1.15rem;
+}
+
+.services-deferred-placeholder {
+  align-items: center;
+  background:
+    linear-gradient(125deg, color-mix(in srgb, var(--p-primary-color), white 94%), rgba(255, 255, 255, 0.96)),
+    var(--p-surface-0);
+  border: 1px solid color-mix(in srgb, var(--p-primary-color), var(--p-surface-300) 74%);
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(31, 42, 68, 0.05);
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 138px;
+  overflow: hidden;
+  padding: 1rem 1.1rem 1.2rem;
+  position: relative;
+}
+
+.services-deferred-placeholder__icon {
+  align-items: center;
+  background: color-mix(in srgb, var(--p-primary-color), white 86%);
+  border-radius: 10px;
+  color: var(--p-primary-color);
+  display: flex;
+  font-size: 1.15rem;
+  height: 44px;
+  justify-content: center;
+  width: 44px;
+}
+
+.services-deferred-placeholder__copy span,
+.services-deferred-placeholder__copy strong,
+.services-deferred-placeholder__copy small {
+  display: block;
+}
+
+.services-deferred-placeholder__copy span {
+  color: var(--p-primary-color);
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.services-deferred-placeholder__copy strong {
+  color: var(--p-text-color);
+  font-size: 1.1rem;
+  line-height: 1.2;
+  margin-top: 0.15rem;
+}
+
+.services-deferred-placeholder__copy small {
+  color: var(--p-text-muted-color);
+  font-size: 0.9rem;
+  line-height: 1.35;
+  margin-top: 0.2rem;
+}
+
+.services-deferred-placeholder__progress {
+  background: color-mix(in srgb, var(--p-surface-300), transparent 28%);
+  border-radius: 999px;
+  bottom: 0.65rem;
+  height: 3px;
+  left: 1.1rem;
+  overflow: hidden;
+  position: absolute;
+  right: 1.1rem;
+}
+
+.services-deferred-placeholder__progress span {
+  animation: services-placeholder-progress 1.4s ease-in-out infinite;
+  background: var(--p-primary-color);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transform: translateX(-100%);
+  width: 42%;
+}
+
+@keyframes services-placeholder-progress {
+  50% {
+    transform: translateX(138%);
+  }
+
+  100% {
+    transform: translateX(338%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .services-deferred-placeholder__progress span {
+    animation: none;
+    opacity: 0.7;
+    transform: none;
+    width: 100%;
+  }
 }
 
 .implantation-empty-state {
@@ -535,5 +630,17 @@
 
   .implantation-empty-state p-button {
     grid-column: 1 / -1;
+  }
+
+  .services-deferred-placeholder {
+    align-items: start;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-height: 156px;
+    padding-inline: 0.9rem;
+  }
+
+  .services-deferred-placeholder__progress {
+    left: 0.9rem;
+    right: 0.9rem;
   }
 }

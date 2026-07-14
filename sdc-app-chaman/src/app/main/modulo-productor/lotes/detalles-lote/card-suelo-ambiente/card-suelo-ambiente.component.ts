@@ -21,11 +21,27 @@ export class CardSueloAmbienteComponent implements OnChanges, OnDestroy {
   private pollTimer?: ReturnType<typeof setTimeout>;
   private pollCount = 0;
   private readonly maxPolls = 20;
+  private assessmentKey?: string;
+  private loadGeneration = 0;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (!changes['lote']) return;
+    const nextKey = this.currentAssessmentKey();
+    if (!nextKey) {
+      this.loadGeneration += 1;
+      this.assessmentKey = undefined;
+      this.clearPolling();
+      this.assessment = undefined;
+      this.loading = false;
+      this.retrying = false;
+      return;
+    }
+    if (nextKey === this.assessmentKey) return;
+    this.loadGeneration += 1;
+    this.assessmentKey = nextKey;
     this.clearPolling();
     this.assessment = undefined;
+    this.retrying = false;
     if (this.lote?._id) void this.load(true);
   }
 
@@ -154,27 +170,37 @@ export class CardSueloAmbienteComponent implements OnChanges, OnDestroy {
 
   public async retry(): Promise<void> {
     if (!this.lote?._id || this.retrying) return;
+    const id = this.lote._id;
+    const assessmentKey = this.assessmentKey;
+    const generation = this.loadGeneration;
     this.retrying = true;
     try {
-      this.assessment = await this.loteService.reprocesarSueloAmbiente(this.lote._id);
+      const assessment = await this.loteService.reprocesarSueloAmbiente(id);
+      if (!this.isCurrentLoad(id, assessmentKey, generation)) return;
+      this.assessment = assessment;
       this.schedulePolling();
     } catch (error) {
-      this.helper.notifError(error);
+      if (this.isCurrentLoad(id, assessmentKey, generation)) this.helper.notifError(error);
     } finally {
-      this.retrying = false;
+      if (this.isCurrentLoad(id, assessmentKey, generation)) this.retrying = false;
     }
   }
 
   private async load(showLoading: boolean): Promise<void> {
     if (!this.lote?._id) return;
+    const id = this.lote._id;
+    const assessmentKey = this.assessmentKey;
+    const generation = this.loadGeneration;
     if (showLoading) this.loading = true;
     try {
-      this.assessment = await this.loteService.sueloAmbiente(this.lote._id);
+      const assessment = await this.loteService.sueloAmbiente(id);
+      if (!this.isCurrentLoad(id, assessmentKey, generation)) return;
+      this.assessment = assessment;
       this.schedulePolling();
     } catch {
-      this.assessment = null;
+      if (this.isCurrentLoad(id, assessmentKey, generation)) this.assessment = null;
     } finally {
-      this.loading = false;
+      if (this.isCurrentLoad(id, assessmentKey, generation)) this.loading = false;
     }
   }
 
@@ -194,5 +220,15 @@ export class CardSueloAmbienteComponent implements OnChanges, OnDestroy {
   private range(low?: number, high?: number): string {
     if (!Number.isFinite(low) || !Number.isFinite(high)) return '';
     return `${this.number(low)}–${this.number(high)}%`;
+  }
+
+  private currentAssessmentKey(): string | undefined {
+    if (!this.lote?._id) return undefined;
+    const geometry = this.lote.ubicacion?.geojson?.coordinates || this.lote.ubicacion?.poligono || [];
+    return `${this.lote._id}:${JSON.stringify(geometry)}:${this.lote.sueloFechaConfirmacion || ''}`;
+  }
+
+  private isCurrentLoad(id: string, assessmentKey: string | undefined, generation: number): boolean {
+    return this.lote?._id === id && this.assessmentKey === assessmentKey && this.loadGeneration === generation;
   }
 }

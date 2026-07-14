@@ -58,8 +58,26 @@ export class LotSoilIntelligenceEngine {
   ) {}
 
   async get(loteId: string): Promise<IInteligenciaSueloLote | null> {
-    const current = await this.repository.getByLot(loteId);
-    return current || this.request(loteId, 'lazy_read');
+    const [current, lot] = await Promise.all([
+      this.repository.getByLot(loteId),
+      this.lots.findById(loteId).lean(),
+    ]);
+    if (!lot) throw new NotFoundException('Lote no encontrado');
+
+    try {
+      const geometry = this.geometryNormalizer.normalize(lot.ubicacion);
+      const expectedResolutionKey = this.resolutionKey(
+        loteId,
+        geometry.geometryHash,
+        lot,
+      );
+      if (current?.resolutionKey === expectedResolutionKey) return current;
+    } catch {
+      // request() persiste missing_geometry/invalid_geometry con el detalle
+      // de la normalizacion para que la API no entregue una lectura vieja.
+    }
+
+    return this.request(loteId, 'lazy_read');
   }
 
   async request(
@@ -91,13 +109,17 @@ export class LotSoilIntelligenceEngine {
       });
     }
 
-    const resolutionKey = this.resolutionKey(loteId, geometry.geometryHash);
+    const resolutionKey = this.resolutionKey(
+      loteId,
+      geometry.geometryHash,
+      lot,
+    );
     const existing = await this.repository.getByLot(loteId);
     if (
       existing &&
       !options.force &&
       existing.resolutionKey === resolutionKey &&
-      ['ready', 'no_coverage'].includes(existing.status)
+      ['ready', 'partial', 'no_coverage'].includes(existing.status)
     ) {
       return existing;
     }
@@ -123,21 +145,9 @@ export class LotSoilIntelligenceEngine {
     this.inFlight.set(resolutionKey, task);
     void task.then(
       () => this.inFlight.delete(resolutionKey),
-      async (error) => {
+      (error) => {
         this.inFlight.delete(resolutionKey);
-        await this.repository.complete(loteId, {
-          status: 'failed',
-          warnings: [error?.message || `${error}`],
-          calculatedAt: new Date().toISOString(),
-        });
-        this.logger.error(
-          JSON.stringify({
-            event: 'soil_intelligence_failed',
-            loteId,
-            resolutionKey,
-            error: error?.message || `${error}`,
-          }),
-        );
+        void this.persistFailure(loteId, resolutionKey, error);
       },
     );
     return options.immediate ? task : pending;
@@ -178,16 +188,65 @@ export class LotSoilIntelligenceEngine {
     return { total: lots.length, ready, partial, failed };
   }
 
+  private async persistFailure(
+    loteId: string,
+    resolutionKey: string,
+    error: any,
+  ): Promise<void> {
+    try {
+      const failed = await this.repository.complete(loteId, resolutionKey, {
+        status: 'failed',
+        warnings: [error?.message || `${error}`],
+        calculatedAt: new Date().toISOString(),
+      });
+      this.logger.error(
+        JSON.stringify(
+          failed
+            ? {
+                event: 'soil_intelligence_failed',
+                loteId,
+                resolutionKey,
+                error: error?.message || `${error}`,
+              }
+            : {
+                event: 'soil_intelligence_discarded',
+                loteId,
+                resolutionKey,
+                phase: 'failed',
+              },
+        ),
+      );
+    } catch (persistenceError) {
+      this.logger.error(
+        JSON.stringify({
+          event: 'soil_intelligence_failure_persistence_failed',
+          loteId,
+          resolutionKey,
+          error: persistenceError?.message || `${persistenceError}`,
+        }),
+      );
+    }
+  }
+
   private async process(input: {
     lot: any;
     geometry: ReturnType<LotGeometryNormalizer['normalize']>;
     resolutionKey: string;
     reason: TMotivoInteligenciaSuelo;
   }): Promise<IInteligenciaSueloLote> {
-    await this.repository.complete(`${input.lot._id}`, {
-      status: 'processing',
-      processingStartedAt: new Date().toISOString(),
-    });
+    const processStartedAt = Date.now();
+    if (!(await this.isCurrentResolution(input))) {
+      return this.discardedResult(input, 'processing');
+    }
+    const claimed = await this.repository.complete(
+      `${input.lot._id}`,
+      input.resolutionKey,
+      {
+        status: 'processing',
+        processingStartedAt: new Date().toISOString(),
+      },
+    );
+    if (!claimed) return this.discardedResult(input, 'processing');
     const location = await this.locationService.getCurrent(`${input.lot._id}`);
     const province = location?.provincia?.nombre;
     const [intaResult, soilGridsResult] = await Promise.all([
@@ -338,66 +397,76 @@ export class LotSoilIntelligenceEngine {
       confidence.factors,
     );
     const calculatedAt = new Date().toISOString();
-    const result = await this.repository.complete(`${input.lot._id}`, {
-      status,
-      geometryHash: input.geometry.geometryHash,
-      resolutionKey: input.resolutionKey,
-      summary,
-      taxonomy: {
-        intaUnit: dominantUnit?.unitName || dominantUnit?.unitSymbol,
-        series: dominantUnit?.seriesName,
-        order: dominantUnit?.taxonomy?.order,
-        suborder: dominantUnit?.taxonomy?.suborder,
-        greatGroup: dominantUnit?.taxonomy?.greatGroup,
-        subgroup: dominantUnit?.taxonomy?.subgroup,
-        capabilityClass: dominantUnit?.capabilityClass,
-      },
-      source: {
-        type: sourceType,
-        provider:
-          sourceType === 'mixed' ? 'INTA + ISRIC' : sources[0]?.provider,
+    if (!(await this.isCurrentResolution(input))) {
+      return this.discardedResult(input, 'completion');
+    }
+    const result = await this.repository.complete(
+      `${input.lot._id}`,
+      input.resolutionKey,
+      {
+        status,
+        geometryHash: input.geometry.geometryHash,
+        resolutionKey: input.resolutionKey,
+        summary,
+        taxonomy: {
+          intaUnit: dominantUnit?.unitName || dominantUnit?.unitSymbol,
+          series: dominantUnit?.seriesName,
+          order: dominantUnit?.taxonomy?.order,
+          suborder: dominantUnit?.taxonomy?.suborder,
+          greatGroup: dominantUnit?.taxonomy?.greatGroup,
+          subgroup: dominantUnit?.taxonomy?.subgroup,
+          capabilityClass: dominantUnit?.capabilityClass,
+        },
+        source: {
+          type: sourceType,
+          provider:
+            sourceType === 'mixed' ? 'INTA + ISRIC' : sources[0]?.provider,
+          coveragePercentage: Math.max(
+            intaResult.coveragePercentage,
+            soilGridsResult.coveragePercentage,
+          ),
+          resolutionMeters: soilGridsResult.profile.length
+            ? SOILGRIDS_RESOLUTION_METERS
+            : undefined,
+          confidence: confidence.level,
+          confidenceScore: confidence.score,
+          confidenceFactors: confidence.factors,
+          calculatedAt,
+          sourceVersion: `${INTA_LAYER_REGISTRY_VERSION}; ${SOILGRIDS_SOURCE_VERSION}`,
+        },
+        sources,
+        depthProfile: soilGridsResult.profile,
+        soilUnits: intaResult.units,
+        propertyProvenance: this.provenance(summary, intaResult.units),
         coveragePercentage: Math.max(
           intaResult.coveragePercentage,
           soilGridsResult.coveragePercentage,
         ),
-        resolutionMeters: soilGridsResult.profile.length
-          ? SOILGRIDS_RESOLUTION_METERS
-          : undefined,
-        confidence: confidence.level,
-        confidenceScore: confidence.score,
-        confidenceFactors: confidence.factors,
+        heterogeneityFlag: heterogeneous,
+        manualConflict,
+        engineVersion: SOIL_INTELLIGENCE_ENGINE_VERSION,
+        mappingVersion: TEXTURE_MAPPING_VERSION,
+        sourceVersions: {
+          ...intaResult.sourceVersions,
+          soilgrids: SOILGRIDS_SOURCE_VERSION,
+          confidence: SOIL_CONFIDENCE_VERSION,
+        },
+        warnings: [...new Set(warnings)],
+        qualityFlags: [
+          'Estadística zonal calculada sobre el polígono completo.',
+          'Propiedades SoilGrids convertidas desde enteros escalados a unidades convencionales.',
+          `Mapeo textural ${TEXTURE_MAPPING_VERSION}.`,
+          ...new Set(
+            soilGridsResult.profile.flatMap(
+              (layer) => layer.qualityFlags || [],
+            ),
+          ),
+        ],
+        reason: input.reason,
         calculatedAt,
-        sourceVersion: `${INTA_LAYER_REGISTRY_VERSION}; ${SOILGRIDS_SOURCE_VERSION}`,
       },
-      sources,
-      depthProfile: soilGridsResult.profile,
-      soilUnits: intaResult.units,
-      propertyProvenance: this.provenance(summary, intaResult.units),
-      coveragePercentage: Math.max(
-        intaResult.coveragePercentage,
-        soilGridsResult.coveragePercentage,
-      ),
-      heterogeneityFlag: heterogeneous,
-      manualConflict,
-      engineVersion: SOIL_INTELLIGENCE_ENGINE_VERSION,
-      mappingVersion: TEXTURE_MAPPING_VERSION,
-      sourceVersions: {
-        ...intaResult.sourceVersions,
-        soilgrids: SOILGRIDS_SOURCE_VERSION,
-        confidence: SOIL_CONFIDENCE_VERSION,
-      },
-      warnings: [...new Set(warnings)],
-      qualityFlags: [
-        'Estadística zonal calculada sobre el polígono completo.',
-        'Propiedades SoilGrids convertidas desde enteros escalados a unidades convencionales.',
-        `Mapeo textural ${TEXTURE_MAPPING_VERSION}.`,
-        ...new Set(
-          soilGridsResult.profile.flatMap((layer) => layer.qualityFlags || []),
-        ),
-      ],
-      reason: input.reason,
-      calculatedAt,
-    });
+    );
+    if (!result) return this.discardedResult(input, 'completion');
     await this.completeOperationalSoilIfEmpty(input.lot, summary);
     this.logger.log(
       JSON.stringify({
@@ -410,6 +479,7 @@ export class LotSoilIntelligenceEngine {
         depthLayers: soilGridsResult.profile.length,
         soilUnits: intaResult.units.length,
         engineVersion: SOIL_INTELLIGENCE_ENGINE_VERSION,
+        durationMs: Date.now() - processStartedAt,
       }),
     );
     return result;
@@ -665,12 +735,58 @@ export class LotSoilIntelligenceEngine {
     await this.lots.updateOne({ _id: lot._id }, { $set: update });
   }
 
-  private resolutionKey(loteId: string, geometryHash: string): string {
+  private async discardedResult(
+    input: {
+      lot: any;
+      geometry: ReturnType<LotGeometryNormalizer['normalize']>;
+      resolutionKey: string;
+      reason: TMotivoInteligenciaSuelo;
+    },
+    phase: 'processing' | 'completion',
+  ): Promise<IInteligenciaSueloLote> {
+    this.logger.warn(
+      JSON.stringify({
+        event: 'soil_intelligence_discarded',
+        loteId: `${input.lot._id}`,
+        resolutionKey: input.resolutionKey,
+        phase,
+      }),
+    );
+    const current = await this.repository.getByLot(`${input.lot._id}`);
+    if (current) return current;
+    throw new Error('La evaluacion de suelo fue reemplazada por una nueva');
+  }
+
+  private async isCurrentResolution(input: {
+    lot: any;
+    geometry: ReturnType<LotGeometryNormalizer['normalize']>;
+    resolutionKey: string;
+    reason: TMotivoInteligenciaSuelo;
+  }): Promise<boolean> {
+    const lot = await this.lots.findById(`${input.lot._id}`).lean();
+    if (!lot) return false;
+    try {
+      const geometry = this.geometryNormalizer.normalize(lot.ubicacion);
+      return (
+        this.resolutionKey(`${lot._id}`, geometry.geometryHash, lot) ===
+        input.resolutionKey
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  private resolutionKey(
+    loteId: string,
+    geometryHash: string,
+    lot: any,
+  ): string {
     return createHash('sha256')
       .update(
         [
           loteId,
           geometryHash,
+          this.manualSoilFingerprint(lot),
           SOIL_INTELLIGENCE_ENGINE_VERSION,
           TEXTURE_MAPPING_VERSION,
           INTA_LAYER_REGISTRY_VERSION,
@@ -678,6 +794,58 @@ export class LotSoilIntelligenceEngine {
         ].join(':'),
       )
       .digest('hex');
+  }
+
+  private manualSoilFingerprint(lot: any): string {
+    const fields = {
+      suelos: lot.suelos,
+      capacidadDeCampo: lot.capacidadDeCampo,
+      puntoMarchitez: lot.puntoMarchitez,
+      sueloReferencia: lot.sueloReferencia,
+      texturaLixiviacion: lot.texturaLixiviacion,
+      texturaEscorrentia: lot.texturaEscorrentia,
+    };
+    const hasValues = Object.values(fields).some((value) =>
+      Array.isArray(value)
+        ? value.length > 0
+        : value !== undefined && value !== null && value !== '',
+    );
+    const manualSource = ['manual', 'laboratory', 'sensor'].includes(
+      lot.sueloProcedencia,
+    );
+    const isManual =
+      lot.sueloConfirmadoPorUsuario === true ||
+      manualSource ||
+      (!lot.sueloProcedencia && hasValues);
+    if (!isManual) return 'automatic-soil';
+
+    return createHash('sha256')
+      .update(
+        JSON.stringify(
+          this.stableValue({
+            source: lot.sueloProcedencia || 'legacy-manual',
+            confirmed: lot.sueloConfirmadoPorUsuario,
+            confirmedAt: lot.sueloFechaConfirmacion,
+            fields,
+          }),
+        ),
+      )
+      .digest('hex');
+  }
+
+  private stableValue(value: unknown): unknown {
+    if (Array.isArray(value)) {
+      return value.map((entry) => this.stableValue(entry));
+    }
+    if (value instanceof Date) return value.toISOString();
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value as Record<string, unknown>)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([key, entry]) => [key, this.stableValue(entry)]),
+      );
+    }
+    return value;
   }
 
   private round(value: number, digits = 2): number {

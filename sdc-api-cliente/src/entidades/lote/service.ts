@@ -133,10 +133,7 @@ export class LotesService {
   ) {}
 
   async getById(id: string, permiso: IPermiso): Promise<ILote> {
-    const data = await this.repository.getById(id);
-    if (!this.puedeVer(data, permiso)) {
-      throw new BadRequestException('No tiene permiso para ver este lote');
-    }
+    const data = await this.assertCanView(id, permiso);
     try {
       data.ubicacionAdministrativa =
         (await this.repository.getAdministrativeLocation(id)) as any;
@@ -166,7 +163,7 @@ export class LotesService {
     id: string,
     permiso: IPermiso,
   ): Promise<IInteligenciaSueloLote | null> {
-    await this.getById(id, permiso);
+    await this.assertCanView(id, permiso);
     return this.repository.getSoilIntelligence(id);
   }
 
@@ -174,7 +171,7 @@ export class LotesService {
     id: string,
     permiso: IPermiso,
   ): Promise<IInteligenciaSueloLote> {
-    await this.getById(id, permiso);
+    await this.assertCanView(id, permiso);
     return this.repository.reprocessSoilIntelligence(id);
   }
 
@@ -584,6 +581,14 @@ export class LotesService {
   }
 
   // Private
+
+  private async assertCanView(id: string, permiso: IPermiso): Promise<ILote> {
+    const data = await this.repository.getById(id);
+    if (!this.puedeVer(data, permiso)) {
+      throw new BadRequestException('No tiene permiso para ver este lote');
+    }
+    return data;
+  }
 
   private async getSiembraFitosanitaria(
     lote: ILote,

@@ -31,10 +31,11 @@ export class SoilIntelligenceRepository {
 
   async complete(
     loteId: string,
+    resolutionKey: string,
     data: Partial<IInteligenciaSueloLote>,
-  ): Promise<IInteligenciaSueloLote> {
+  ): Promise<IInteligenciaSueloLote | null> {
     return (await this.assessments.findOneAndUpdate(
-      { loteId },
+      { loteId, resolutionKey },
       { $set: data },
       { new: true },
     )) as any;
@@ -43,13 +44,18 @@ export class SoilIntelligenceRepository {
   async claimPending(limit = 1): Promise<IInteligenciaSueloLote[]> {
     const rows: IInteligenciaSueloLote[] = [];
     const staleProcessing = new Date(Date.now() - 30 * 60_000).toISOString();
+    const retryAfter = new Date(Date.now() - 30 * 60_000);
     for (let index = 0; index < Math.max(0, limit); index++) {
       const claimed = await this.assessments
         .findOneAndUpdate(
           {
             attempts: { $lt: 4 },
             $or: [
-              { status: { $in: ['pending', 'partial', 'failed'] } },
+              { status: 'pending' },
+              {
+                status: { $in: ['partial', 'failed'] },
+                updatedAt: { $lt: retryAfter },
+              },
               {
                 status: 'processing',
                 processingStartedAt: { $lt: staleProcessing },

@@ -76,4 +76,15 @@ describe('CardNDVIComponent - historial satelital', () => {
     expect(component.historialIndice[0].stage.source).toContain('GDD histórico');
     expect(component.historialIndice[0].stage.confirmed).toBeFalse();
   });
+
+  it('no repite la consulta inicial si ngOnChanges ya cargó el mismo lote', async () => {
+    const component = createComponent();
+    component.lote = { _id: 'lot-1' } as any;
+    (component as any).ultimoLoteListado = 'lot-1';
+    const listar = spyOn<any>(component, 'listarNDVIs').and.resolveTo();
+
+    await component.ngOnInit();
+
+    expect(listar).not.toHaveBeenCalled();
+  });
 });

@@ -51,6 +51,8 @@ export class SoilGridsProvider {
     string,
     { expiresAt: number; stats: RasterStatistics }
   >();
+  private activeCoverageRequests = 0;
+  private readonly coverageWaiters: Array<() => void> = [];
 
   constructor(private readonly classifier: SoilTextureClassifier) {}
 
@@ -75,17 +77,22 @@ export class SoilGridsProvider {
       );
     }
 
+    const depthResults = await this.settledWithLimit(
+      SOILGRIDS_DEPTHS.map((depth) => () => this.readDepth(geometry, depth)),
+      this.concurrency('SOILGRIDS_DEPTH_CONCURRENCY', 2),
+    );
     const profile: IPerfilProfundidadSuelo[] = [];
-    for (const depth of SOILGRIDS_DEPTHS) {
-      try {
-        const layer = await this.readDepth(geometry, depth);
-        if (layer) profile.push(layer);
-      } catch (error) {
+    for (let index = 0; index < depthResults.length; index++) {
+      const depth = SOILGRIDS_DEPTHS[index];
+      const result = depthResults[index];
+      if (result.status === 'fulfilled') {
+        if (result.value) profile.push(result.value);
+      } else {
         warnings.push(
           `SoilGrids no pudo completar ${depth.fromCm}–${depth.toCm} cm.`,
         );
         this.logger.warn(
-          `SoilGrids ${depth.code} fallo: ${error?.message || error}`,
+          `SoilGrids ${depth.code} fallo: ${result.reason?.message || result.reason}`,
         );
       }
     }
@@ -146,7 +153,7 @@ export class SoilGridsProvider {
       }));
     const results = await this.settledWithLimit(
       [...textureRequests, ...otherRequests],
-      Number(process.env.SOILGRIDS_MAX_CONCURRENCY || 5),
+      this.concurrency('SOILGRIDS_MAX_CONCURRENCY', 5),
     );
     const byKey = new Map<string, RasterStatistics>();
     for (const result of results) {
@@ -324,27 +331,30 @@ export class SoilGridsProvider {
     const cacheKey = `${geometry.geometryHash}:${property}:${depthCode}:${quantile}`;
     const cached = this.cache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.stats;
+    if (cached) this.cache.delete(cacheKey);
 
     const bounds = bbox(feature(geometry.geometry as any));
     const { width, height } = this.rasterDimensions(bounds);
     const coverageId = `${property}_${depthCode}_${quantile}`;
-    const response = await axios.get<ArrayBuffer>(
-      `https://maps.isric.org/mapserv?map=/map/${property}.map`,
-      {
-        responseType: 'arraybuffer',
-        timeout: Number(process.env.SOILGRIDS_TIMEOUT_MS || 30_000),
-        params: {
-          SERVICE: 'WCS',
-          VERSION: '1.0.0',
-          REQUEST: 'GetCoverage',
-          COVERAGE: coverageId,
-          CRS: 'EPSG:4326',
-          BBOX: bounds.join(','),
-          WIDTH: width,
-          HEIGHT: height,
-          FORMAT: 'GEOTIFF_INT16',
+    const response = await this.withCoverageSlot(() =>
+      axios.get<ArrayBuffer>(
+        `https://maps.isric.org/mapserv?map=/map/${property}.map`,
+        {
+          responseType: 'arraybuffer',
+          timeout: Number(process.env.SOILGRIDS_TIMEOUT_MS || 30_000),
+          params: {
+            SERVICE: 'WCS',
+            VERSION: '1.0.0',
+            REQUEST: 'GetCoverage',
+            COVERAGE: coverageId,
+            CRS: 'EPSG:4326',
+            BBOX: bounds.join(','),
+            WIDTH: width,
+            HEIGHT: height,
+            FORMAT: 'GEOTIFF_INT16',
+          },
         },
-      },
+      ),
     );
     const buffer = this.toArrayBuffer(response.data);
     const { fromArrayBuffer } = await import('geotiff');
@@ -367,6 +377,7 @@ export class SoilGridsProvider {
       stats,
       expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
     });
+    this.trimCache();
     return stats;
   }
 
@@ -516,6 +527,53 @@ export class SoilGridsProvider {
     );
     await Promise.all(workers);
     return results;
+  }
+
+  private async withCoverageSlot<T>(task: () => Promise<T>): Promise<T> {
+    await this.acquireCoverageSlot();
+    try {
+      return await task();
+    } finally {
+      this.releaseCoverageSlot();
+    }
+  }
+
+  private async acquireCoverageSlot(): Promise<void> {
+    const concurrency = this.concurrency('SOILGRIDS_GLOBAL_CONCURRENCY', 10);
+    if (this.activeCoverageRequests < concurrency) {
+      this.activeCoverageRequests += 1;
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      this.coverageWaiters.push(() => {
+        this.activeCoverageRequests += 1;
+        resolve();
+      });
+    });
+  }
+
+  private releaseCoverageSlot(): void {
+    this.activeCoverageRequests = Math.max(0, this.activeCoverageRequests - 1);
+    this.coverageWaiters.shift()?.();
+  }
+
+  private trimCache(): void {
+    const configured = Number(process.env.SOILGRIDS_CACHE_MAX_ENTRIES || 2_000);
+    const maxEntries = Number.isFinite(configured)
+      ? Math.max(100, Math.trunc(configured))
+      : 2_000;
+    while (this.cache.size > maxEntries) {
+      const oldest = this.cache.keys().next().value as string | undefined;
+      if (!oldest) break;
+      this.cache.delete(oldest);
+    }
+  }
+
+  private concurrency(name: string, fallback: number): number {
+    const configured = Number(process.env[name] || fallback);
+    return Number.isFinite(configured)
+      ? Math.max(1, Math.trunc(configured))
+      : fallback;
   }
 
   private toArrayBuffer(data: ArrayBuffer | ArrayBufferView): ArrayBuffer {

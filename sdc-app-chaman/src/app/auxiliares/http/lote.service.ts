@@ -15,6 +15,10 @@ import { HttpService } from './http.service';
   providedIn: 'root',
 })
 export class LoteService {
+  private readonly soilAssessmentCache = new Map<string, { expiresAt: number; value: IInteligenciaSueloLote | null }>();
+  private readonly soilAssessmentPending = new Map<string, Promise<IInteligenciaSueloLote | null>>();
+  private readonly soilAssessmentGeneration = new Map<string, number>();
+
   constructor(private http: HttpService) {}
 
   public listar(params?: IQueryParam): Promise<IListado<ILote>> {
@@ -47,10 +51,40 @@ export class LoteService {
   }
 
   public sueloAmbiente(id: string): Promise<IInteligenciaSueloLote | null> {
-    return this.http.get(`/lotes/${id}/suelo-ambiente`);
+    const cached = this.soilAssessmentCache.get(id);
+    if (cached && cached.expiresAt > Date.now()) {
+      return Promise.resolve(cached.value);
+    }
+    const pending = this.soilAssessmentPending.get(id);
+    if (pending) return pending;
+
+    const generation = this.soilAssessmentGeneration.get(id) || 0;
+    const rawRequest = this.http
+      .get<IInteligenciaSueloLote | null>(`/lotes/${id}/suelo-ambiente`)
+      .then((assessment) => {
+        if (
+          (this.soilAssessmentGeneration.get(id) || 0) === generation &&
+          assessment &&
+          ['ready', 'partial', 'no_coverage'].includes(assessment.status)
+        ) {
+          this.soilAssessmentCache.set(id, {
+            expiresAt: Date.now() + 5 * 60_000,
+            value: assessment,
+          });
+        }
+        return assessment;
+      });
+    const request = rawRequest.finally(() => {
+      if (this.soilAssessmentPending.get(id) === request) {
+        this.soilAssessmentPending.delete(id);
+      }
+    });
+    this.soilAssessmentPending.set(id, request);
+    return request;
   }
 
   public reprocesarSueloAmbiente(id: string): Promise<IInteligenciaSueloLote> {
+    this.invalidateSoilAssessment(id);
     return this.http.post(`/lotes/${id}/suelo-ambiente/reprocesar`, {});
   }
 
@@ -67,10 +101,17 @@ export class LoteService {
   }
 
   public editar(id: string, dato: IUpdateLote): Promise<ILote> {
+    this.invalidateSoilAssessment(id);
     return this.http.put(`/lotes/${id}`, dato);
   }
 
   public eliminar(id: string): Promise<void> {
     return this.http.delete(`/lotes/${id}`);
+  }
+
+  private invalidateSoilAssessment(id: string): void {
+    this.soilAssessmentGeneration.set(id, (this.soilAssessmentGeneration.get(id) || 0) + 1);
+    this.soilAssessmentCache.delete(id);
+    this.soilAssessmentPending.delete(id);
   }
 }

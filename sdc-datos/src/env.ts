@@ -66,7 +66,7 @@ export const SOIL_INTELLIGENCE_STARTUP_BACKFILL_LIMIT =
 export const SOIL_INTELLIGENCE_RECOVERY_LIMIT =
   +process.env.SOIL_INTELLIGENCE_RECOVERY_LIMIT || 2;
 export const SOIL_INTELLIGENCE_CRON =
-  process.env.SOIL_INTELLIGENCE_CRON || '0 4 * * 0';
+  process.env.SOIL_INTELLIGENCE_CRON || '*/2 * * * *';
 
 // Solo incluir autenticación si hay usuario Y contraseña no vacíos
 const authOptions =

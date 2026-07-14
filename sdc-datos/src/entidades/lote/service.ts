@@ -29,8 +29,7 @@ export class LotesService {
   async create(dato: ICreateLote) {
     dato = this.withManualSoilProvenance(this.withoutAutomaticDepartment(dato));
     const created = await this.repository.create(dato);
-    this.requestLocationResolution(`${created._id}`, 'lot_created');
-    this.requestSoilResolution(`${created._id}`, 'lot_created');
+    this.requestSpatialResolution(`${created._id}`, 'lot_created');
     return created;
   }
 
@@ -51,11 +50,7 @@ export class LotesService {
           current?.ubicacion?.geojson?.coordinates?.length ||
           current?.ubicacion?.poligono?.length
         );
-        this.requestLocationResolution(
-          id,
-          hadGeometry ? 'geometry_changed' : 'geometry_added',
-        );
-        this.requestSoilResolution(
+        this.requestSpatialResolution(
           id,
           hadGeometry ? 'geometry_changed' : 'geometry_added',
         );
@@ -79,17 +74,26 @@ export class LotesService {
     return await this.repository.deleteMany(query);
   }
 
-  private requestLocationResolution(
+  private requestSpatialResolution(
     loteId: string,
     motivo: 'lot_created' | 'geometry_added' | 'geometry_changed',
   ): void {
-    this.lotLocationService
-      .requestResolution(loteId, motivo)
-      .catch((error) =>
+    void (async () => {
+      try {
+        await this.lotLocationService.requestResolution(loteId, motivo, {
+          immediate: true,
+        });
+      } catch (error) {
         this.logger.error(
           `No se pudo encolar la ubicacion administrativa del lote ${loteId}: ${error?.message || error}`,
-        ),
-      );
+        );
+      }
+
+      // El suelo depende de la provincia resuelta para priorizar las capas
+      // INTA. Aun si la ubicacion falla, SoilGrids debe poder completar la
+      // evaluacion, por eso este segundo intento nunca se omite.
+      this.requestSoilResolution(loteId, motivo);
+    })();
   }
 
   private withoutAutomaticDepartment<T>(input: T): T {
