@@ -52,7 +52,10 @@
                       <section class="kmz-import-card">
                         <div class="kmz-import-copy">
                           <strong>Importar KML/KMZ</strong>
-                          <small>Completa este lote con un poligono o crea varios lotes dentro del establecimiento seleccionado.</small>
+                          <small
+                            >Completa este lote con un poligono o crea varios lotes dentro del establecimiento
+                            seleccionado.</small
+                          >
                         </div>
                         <p-fileupload
                           mode="basic"
@@ -70,7 +73,11 @@
                         <section class="kmz-import-preview">
                           <div class="kmz-preview-header">
                             <div>
-                              <strong>{{ kmzPoligonos.length }} lote{{ kmzPoligonos.length === 1 ? '' : 's' }} detectado{{ kmzPoligonos.length === 1 ? '' : 's' }}</strong>
+                              <strong
+                                >{{ kmzPoligonos.length }} lote{{ kmzPoligonos.length === 1 ? '' : 's' }} detectado{{
+                                  kmzPoligonos.length === 1 ? '' : 's'
+                                }}</strong
+                              >
                               <small>{{ kmzNombreArchivo }}</small>
                             </div>
                             <p-button
@@ -84,7 +91,11 @@
                           </div>
                           <div class="kmz-preview-grid">
                             @for (poligono of kmzPoligonos; track poligono.id) {
-                              <button type="button" class="kmz-preview-item" (click)="aplicarPoligonoImportado(poligono)">
+                              <button
+                                type="button"
+                                class="kmz-preview-item"
+                                (click)="aplicarPoligonoImportado(poligono)"
+                              >
                                 <strong>{{ poligono.nombre }}</strong>
                                 @if (poligono.nombreOriginal) {
                                   <small>Origen: {{ poligono.nombreOriginal }}</small>
@@ -98,10 +109,11 @@
 
                       @if (establecimientoSeleccionado) {
                         <p-message severity="info" class="inherited-location">
-                          Ubicacion heredada del establecimiento: {{ referenciaUbicacionEstablecimiento }}
+                          Contexto oficial del establecimiento: {{ referenciaUbicacionEstablecimiento }}
                           @if (departamentoHeredadoTexto) {
                             <br />
-                            Departamento para algoritmos: {{ departamentoHeredadoTexto | titlecase }}
+                            Referencia territorial: {{ departamentoHeredadoTexto | titlecase }}. El lote se resolvera
+                            con su propio poligono al guardar.
                           }
                         </p-message>
                       }
@@ -129,12 +141,24 @@
                   <p-tabpanel [value]="2">
                     <section class="form-grid">
                       <p-floatlabel variant="in">
-                        <p-inputnumber formControlName="capacidadDeCampo" [min]="0" [max]="100" [fluid]="true" suffix="%" />
+                        <p-inputnumber
+                          formControlName="capacidadDeCampo"
+                          [min]="0"
+                          [max]="100"
+                          [fluid]="true"
+                          suffix="%"
+                        />
                         <label>{{ 'Capacidad de campo' | translate }}</label>
                       </p-floatlabel>
 
                       <p-floatlabel variant="in">
-                        <p-inputnumber formControlName="puntoMarchitez" [min]="0" [max]="100" [fluid]="true" suffix="%" />
+                        <p-inputnumber
+                          formControlName="puntoMarchitez"
+                          [min]="0"
+                          [max]="100"
+                          [fluid]="true"
+                          suffix="%"
+                        />
                         <label>{{ 'Punto de marchitez' | translate }}</label>
                       </p-floatlabel>
 
@@ -161,7 +185,8 @@
                         <div>
                           <strong>Suelo del lote</strong>
                           <small>
-                            Seleccion manual editable. Estos valores alimentan riego, huella hidrica y los algoritmos del lote.
+                            Seleccion manual editable. Estos valores alimentan riego, huella hidrica y los algoritmos
+                            del lote.
                           </small>
                         </div>
                       </div>
@@ -180,19 +205,31 @@
                         </p-floatlabel>
 
                         <p-floatlabel variant="in">
-                          <p-inputnumber formControlName="capacidadDeCampo" [min]="0" [max]="100" [fluid]="true" suffix="%" />
+                          <p-inputnumber
+                            formControlName="capacidadDeCampo"
+                            [min]="0"
+                            [max]="100"
+                            [fluid]="true"
+                            suffix="%"
+                          />
                           <label>{{ 'Capacidad de campo' | translate }}</label>
                         </p-floatlabel>
 
                         <p-floatlabel variant="in">
-                          <p-inputnumber formControlName="puntoMarchitez" [min]="0" [max]="100" [fluid]="true" suffix="%" />
+                          <p-inputnumber
+                            formControlName="puntoMarchitez"
+                            [min]="0"
+                            [max]="100"
+                            [fluid]="true"
+                            suffix="%"
+                          />
                           <label>{{ 'Punto de marchitez' | translate }}</label>
                         </p-floatlabel>
                       </div>
 
                       <p-message severity="info">
-                        Las profundidades, sensores y presencia de raices se configuran en la solapa Dispositivos cuando el lote
-                        tiene una lanza de humedad asignada.
+                        Las profundidades, sensores y presencia de raices se configuran en la solapa Dispositivos cuando
+                        el lote tiene una lanza de humedad asignada.
                       </p-message>
                     </section>
                   </p-tabpanel>
@@ -296,7 +333,8 @@
                       <div class="device-help">
                         <strong>Dispositivos del lote</strong>
                         <small>
-                          Aca se asignan sensores y estaciones. Sus datos alimentan riego, clima, frio y algoritmos del backend.
+                          Aca se asignan sensores y estaciones. Sus datos alimentan riego, clima, frio y algoritmos del
+                          backend.
                         </small>
                       </div>
 
@@ -318,7 +356,12 @@
                           <ng-template let-dispositivo pTemplate="item">
                             <div class="select-option">
                               <strong>{{ dispositivo.nombre }}</strong>
-                              <small>{{ dispositivo.tipo }} @if (dispositivo.deveui) { - {{ dispositivo.deveui }} }</small>
+                              <small
+                                >{{ dispositivo.tipo }}
+                                @if (dispositivo.deveui) {
+                                  - {{ dispositivo.deveui }}
+                                }
+                              </small>
                             </div>
                           </ng-template>
                         </p-multiselect>
@@ -346,8 +389,8 @@
                             <div>
                               <strong>Capas de medicion</strong>
                               <small>
-                                Configuracion de profundidades y raices para convertir las lecturas del sensor en recomendacion
-                                de riego.
+                                Configuracion de profundidades y raices para convertir las lecturas del sensor en
+                                recomendacion de riego.
                               </small>
                             </div>
                             <p-button
@@ -373,7 +416,13 @@
                                 </p-floatlabel>
 
                                 <p-floatlabel variant="in">
-                                  <p-inputnumber formControlName="profundidad" [min]="1" [max]="300" [fluid]="true" suffix=" cm" />
+                                  <p-inputnumber
+                                    formControlName="profundidad"
+                                    [min]="1"
+                                    [max]="300"
+                                    [fluid]="true"
+                                    suffix=" cm"
+                                  />
                                   <label>{{ 'Profundidad' | translate }}</label>
                                 </p-floatlabel>
 
@@ -414,7 +463,9 @@
                         >
                           <ng-template #selectedItem let-selectedOption>
                             <div class="select-option">
-                              <span>{{ selectedOption.name?.custom || selectedOption.name?.original | titlecase }}</span>
+                              <span>{{
+                                selectedOption.name?.custom || selectedOption.name?.original | titlecase
+                              }}</span>
                             </div>
                           </ng-template>
                           <ng-template let-option #item>

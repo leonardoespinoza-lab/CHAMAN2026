@@ -25,12 +25,15 @@ export class LotesService {
   }
 
   async create(dato: ICreateLote) {
-    const created = await this.repository.create(dato);
+    const created = await this.repository.create(
+      this.withoutAutomaticDepartment(dato),
+    );
     this.requestLocationResolution(`${created._id}`, 'lot_created');
     return created;
   }
 
   async update(id: string, dato: IUpdateLote) {
+    dato = this.withoutAutomaticDepartment(dato);
     const geometryChanged = Object.prototype.hasOwnProperty.call(
       dato,
       'ubicacion',
@@ -78,5 +81,12 @@ export class LotesService {
           `No se pudo encolar la ubicacion administrativa del lote ${loteId}: ${error?.message || error}`,
         ),
       );
+  }
+
+  private withoutAutomaticDepartment<T>(input: T): T {
+    const data = { ...input } as T & Record<string, unknown>;
+    delete data.idDepartamento;
+    delete data.ubicacionDepartamentoLegado;
+    return data;
   }
 }

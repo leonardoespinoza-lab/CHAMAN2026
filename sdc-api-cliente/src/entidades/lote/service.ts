@@ -167,6 +167,7 @@ export class LotesService {
   }
 
   async create(data: ICreateLote, permiso): Promise<ILote> {
+    data = this.withoutAutomaticDepartment(data);
     if (data.ubicacion?.poligono?.length) {
       data.ubicacion.geojson = {
         type: 'Polygon',
@@ -204,6 +205,7 @@ export class LotesService {
     data: IUpdateLote,
     permiso: IPermiso,
   ): Promise<ILote> {
+    data = this.withoutAutomaticDepartment(data);
     const current = await this.getById(id, permiso);
     if (data.ubicacion?.poligono?.length) {
       data.ubicacion.geojson = {
@@ -246,6 +248,13 @@ export class LotesService {
       'idEstablecimiento',
     ];
     return keys.some((key) => Object.prototype.hasOwnProperty.call(data, key));
+  }
+
+  private withoutAutomaticDepartment<T>(input: T): T {
+    const data = { ...input } as T & Record<string, unknown>;
+    delete data.idDepartamento;
+    delete data.ubicacionDepartamentoLegado;
+    return data;
   }
 
   async delete(idLote: string, permiso: IPermiso): Promise<ILote> {

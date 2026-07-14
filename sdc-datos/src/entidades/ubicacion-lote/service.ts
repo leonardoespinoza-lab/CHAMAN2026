@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { createHash } from 'crypto';
 import {
@@ -8,6 +13,10 @@ import {
 import { Model } from 'mongoose';
 import { LOT_LOCATION_RESOLVER_VERSION } from '../../env';
 import { Lote, LoteDocument } from '../lote/modelos/schema';
+import {
+  Departamento,
+  DepartamentoDocument,
+} from '../departamento/modelos/schema';
 import { LotGeometryNormalizer } from './geometry-normalizer.service';
 import { LotAdministrativeResolver } from './resolver.service';
 import { LotLocationRepository } from './repository';
@@ -25,6 +34,9 @@ export class LotLocationService {
     private readonly repository: LotLocationRepository,
     private readonly normalizer: LotGeometryNormalizer,
     private readonly resolver: LotAdministrativeResolver,
+    @Optional()
+    @InjectModel(Departamento.name)
+    private readonly departamentos?: Model<DepartamentoDocument>,
   ) {}
 
   async getCurrent(
@@ -240,6 +252,7 @@ export class LotLocationService {
         geometry: input.normalized,
         manualDepartment,
       });
+      await this.synchronizeAlgorithmDepartment(input.lot, resolved.location);
       await this.repository.replaceIntersections(
         input.resolutionKey,
         `${input.lot._id}`,
@@ -285,5 +298,84 @@ export class LotLocationService {
         `${loteId}:${geometryHash}:${sourceVersion}:${LOT_LOCATION_RESOLVER_VERSION}`,
       )
       .digest('hex');
+  }
+
+  private async synchronizeAlgorithmDepartment(
+    lot: any,
+    location: Partial<IUbicacionAdministrativaLote>,
+  ): Promise<void> {
+    const official = location.nivelAdministrativo2?.nombre;
+    const province = location.provincia?.nombre;
+    const coverage = Number(location.coberturaPorcentaje || 0);
+    if (
+      location.confianza !== 'alta' ||
+      coverage < 99.5 ||
+      !official ||
+      !province
+    ) {
+      return;
+    }
+    if (!this.departamentos) {
+      location.advertencias = [
+        ...(location.advertencias || []),
+        'No se pudo verificar la equivalencia con la base interna de departamentos.',
+      ];
+      return;
+    }
+
+    const departments = await this.departamentos
+      .find()
+      .populate('provincia')
+      .lean();
+    const candidates = departments.filter(
+      (department) =>
+        this.normalize(department.nombre) === this.normalize(official) &&
+        this.normalize(department.provincia?.nombre) ===
+          this.normalize(province),
+    );
+    if (candidates.length !== 1) {
+      location.advertencias = [
+        ...(location.advertencias || []),
+        candidates.length
+          ? 'La jurisdiccion oficial coincide con mas de un departamento interno; se conserva el valor operativo anterior.'
+          : 'La jurisdiccion oficial aun no tiene una equivalencia exacta en la base interna; se conserva el valor operativo anterior.',
+      ];
+      return;
+    }
+
+    const selectedId = `${candidates[0]._id}`;
+    if (`${lot.idDepartamento || ''}` === selectedId) return;
+
+    const update: Record<string, unknown> = { idDepartamento: selectedId };
+    if (lot.idDepartamento && !lot.ubicacionDepartamentoLegado) {
+      update.ubicacionDepartamentoLegado = {
+        idDepartamento: `${lot.idDepartamento}`,
+        nombre: lot.departamento?.nombre,
+        provincia: lot.departamento?.provincia?.nombre,
+        origen: 'desconocido',
+        fechaPreservacion: new Date().toISOString(),
+      };
+    }
+    await this.lotes.updateOne({ _id: lot._id }, { $set: update });
+
+    location.advertencias = (location.advertencias || []).filter(
+      (warning) => !warning.includes('No fue sobrescrita'),
+    );
+    if (location.conflictoManual?.existe) {
+      location.conflictoManual = {
+        ...location.conflictoManual,
+        existe: false,
+        detalle:
+          'La referencia anterior fue preservada como legado y el departamento operativo se sincronizo con GeoRef mediante coincidencia exacta y de alta confianza.',
+      };
+    }
+  }
+
+  private normalize(value?: string): string {
+    return `${value || ''}`
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
   }
 }

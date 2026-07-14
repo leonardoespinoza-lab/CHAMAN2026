@@ -3,6 +3,7 @@ import {
   IGeoJSONPolygon,
   IGeoJSONMultiPolygon,
 } from "../compartidos/geojson";
+import { DireccionV2 } from "../compartidos/coordenadas";
 
 export type TEstadoUbicacionLote =
   | "missing_geometry"
@@ -31,6 +32,15 @@ export type TMotivoResolucionUbicacionLote =
   | "resolver_version_changed"
   | "partial_retry"
   | "failed_retry"
+  | "backfill"
+  | "manual_retry";
+
+export type TMotivoResolucionUbicacionEstablecimiento =
+  | "establishment_created"
+  | "geometry_added"
+  | "geometry_changed"
+  | "source_version_changed"
+  | "resolver_version_changed"
   | "backfill"
   | "manual_retry";
 
@@ -110,4 +120,26 @@ export interface IEventoResolucionUbicacionLote {
   geometryHash?: string;
   requestedAt: string;
   requestedBy?: string;
+}
+
+export interface IUbicacionAdministrativaEstablecimiento
+  extends Omit<IUbicacionAdministrativaLote, "loteId" | "motivo"> {
+  establecimientoId: string;
+  motivo?: TMotivoResolucionUbicacionEstablecimiento;
+}
+
+export interface IUbicacionAdministrativaLegadaEstablecimiento {
+  valor: DireccionV2;
+  origen: "manual" | "busqueda_geografica" | "reverse_geocoding" | "desconocido";
+  fechaPreservacion: string;
+  soloLectura: true;
+  migracionId?: string;
+}
+
+export interface IDepartamentoLegadoLote {
+  idDepartamento?: string;
+  nombre?: string;
+  provincia?: string;
+  origen: "manual" | "heredado_establecimiento" | "desconocido";
+  fechaPreservacion: string;
 }

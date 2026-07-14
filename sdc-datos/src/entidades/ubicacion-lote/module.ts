@@ -5,6 +5,10 @@ import {
   DepartamentoSchema,
 } from '../departamento/modelos/schema';
 import { Lote, LoteSchema } from '../lote/modelos/schema';
+import {
+  Establecimiento,
+  EstablecimientoSchema,
+} from '../establecimiento/modelos/schema';
 import { Provincia, ProvinciaSchema } from '../provincia/modelos/schema';
 import { LotLocationConfidenceService } from './confidence.service';
 import { LotLocationController } from './controller';
@@ -31,11 +35,17 @@ import {
 import { LotAdministrativeResolver } from './resolver.service';
 import { LotLocationRepository } from './repository';
 import { LotLocationService } from './service';
+import { EstablishmentLocationService } from './establishment-location.service';
+import {
+  EstablishmentAdministrativeLocation,
+  EstablishmentAdministrativeLocationSchema,
+} from './modelos/establishment-location.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Lote.name, schema: LoteSchema },
+      { name: Establecimiento.name, schema: EstablecimientoSchema },
       { name: Departamento.name, schema: DepartamentoSchema },
       { name: Provincia.name, schema: ProvinciaSchema },
       { name: GeorefCatalogEntity.name, schema: GeorefCatalogEntitySchema },
@@ -49,6 +59,10 @@ import { LotLocationService } from './service';
         name: LotAdministrativeIntersection.name,
         schema: LotAdministrativeIntersectionSchema,
       },
+      {
+        name: EstablishmentAdministrativeLocation.name,
+        schema: EstablishmentAdministrativeLocationSchema,
+      },
     ]),
   ],
   controllers: [LotLocationController],
@@ -59,9 +73,14 @@ import { LotLocationService } from './service';
     LotAdministrativeResolver,
     GeorefCatalogSyncService,
     LotLocationService,
+    EstablishmentLocationService,
     LotLocationInternalGuard,
     LotLocationJobsService,
   ],
-  exports: [LotLocationService, LotLocationRepository],
+  exports: [
+    LotLocationService,
+    EstablishmentLocationService,
+    LotLocationRepository,
+  ],
 })
 export class LotLocationModule {}

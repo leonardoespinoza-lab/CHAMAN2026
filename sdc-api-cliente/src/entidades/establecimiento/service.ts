@@ -67,6 +67,7 @@ export class EstablecimientosService {
     data: ICreateEstablecimiento,
     permiso: IPermiso,
   ): Promise<IEstablecimiento> {
+    data = this.withoutAutomaticLocation(data);
     if (data.ubicacion?.length) {
       for (const u of data.ubicacion) {
         if (u.poligono?.length && !u.geojson) {
@@ -99,6 +100,7 @@ export class EstablecimientosService {
     data: IUpdateEstablecimiento,
     permiso: IPermiso,
   ): Promise<IEstablecimiento> {
+    data = this.withoutAutomaticLocation(data);
     await this.getById(id, permiso);
     if (data.ubicacion?.length) {
       for (const u of data.ubicacion) {
@@ -745,5 +747,13 @@ export class EstablecimientosService {
       filtro.$and = $and;
       query.filter = JSON.stringify(filtro);
     }
+  }
+
+  private withoutAutomaticLocation<T>(input: T): T {
+    const data = { ...input } as T & Record<string, unknown>;
+    delete data.ubicacionAdministrativa;
+    delete data.ubicacionAdministrativaLegada;
+    delete data.ubicacionOficial;
+    return data;
   }
 }

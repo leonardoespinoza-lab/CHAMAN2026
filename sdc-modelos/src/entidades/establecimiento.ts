@@ -8,6 +8,10 @@ import { IDistribuidor } from "./distribuidor";
 import { IEstacion } from "./estacion";
 import { IProductor } from "./productor";
 import { IQuimica } from "./quimica";
+import {
+  IUbicacionAdministrativaEstablecimiento,
+  IUbicacionAdministrativaLegadaEstablecimiento,
+} from "./ubicacion-lote";
 
 export interface IEstablecimiento {
   _id?: string;
@@ -16,7 +20,10 @@ export interface IEstablecimiento {
   idProductor?: string;
   nombre?: string;
   ubicacion?: IUbicacion[];
+  /** @deprecated Solo lectura. Se conserva para compatibilidad y auditoria. */
   ubicacionAdministrativa?: DireccionV2;
+  ubicacionAdministrativaLegada?: IUbicacionAdministrativaLegadaEstablecimiento;
+  ubicacionOficial?: IUbicacionAdministrativaEstablecimiento;
   idEstacionMeteorologica?: string;
   fuenteClimaPreferida?: "FieldClimate" | "Open-Meteo" | "Chaman";
   fechaCreacion?: string;
@@ -35,10 +42,20 @@ export interface IEstablecimiento {
   estacionMeteorologica?: IEstacion;
 }
 
-type OmitirCreate = "_id" | "fechaCreacion";
+type OmitirCreate =
+  | "_id"
+  | "fechaCreacion"
+  | "ubicacionAdministrativa"
+  | "ubicacionAdministrativaLegada"
+  | "ubicacionOficial";
 export interface ICreateEstablecimiento
   extends Omit<Partial<IEstablecimiento>, OmitirCreate> {}
 
-type OmitirUpdate = "_id" | "fechaCreacion";
+type OmitirUpdate =
+  | "_id"
+  | "fechaCreacion"
+  | "ubicacionAdministrativa"
+  | "ubicacionAdministrativaLegada"
+  | "ubicacionOficial";
 export interface IUpdateEstablecimiento
   extends Omit<Partial<IEstablecimiento>, OmitirUpdate> {}

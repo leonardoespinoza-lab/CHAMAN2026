@@ -11,6 +11,8 @@ import {
   IPronosticoEstacionMeteorologica,
   IClimaEstacionMeteorologica,
   DireccionV2,
+  IUbicacionAdministrativaEstablecimiento,
+  IUbicacionAdministrativaLegadaEstablecimiento,
 } from 'modelos/src';
 import { Document } from 'mongoose';
 import { Quimica } from '../../quimica/modelos/schema';
@@ -19,9 +21,10 @@ import { Productor } from '../../productor/modelos/schema';
 import { Estacion } from '../../estacion/schema';
 
 @Schema()
-export class Establecimiento
-  implements Exactly<IEstablecimiento, Establecimiento>
-{
+export class Establecimiento implements Exactly<
+  IEstablecimiento,
+  Establecimiento
+> {
   _id: string;
 
   @Prop({ type: mongoose.Schema.Types.ObjectId })
@@ -41,6 +44,12 @@ export class Establecimiento
 
   @Prop({ type: Object })
   ubicacionAdministrativa?: DireccionV2;
+
+  @Prop({ type: Object })
+  ubicacionAdministrativaLegada?: IUbicacionAdministrativaLegadaEstablecimiento;
+
+  @Prop({ type: Object })
+  ubicacionOficial?: IUbicacionAdministrativaEstablecimiento;
 
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idEstacionMeteorologica?: string;

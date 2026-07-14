@@ -8,7 +8,7 @@
 - el snapshot oficial de GeoRef;
 - la versión del motor de resolución.
 
-El motor no modifica el departamento manual histórico, no cambia las coordenadas utilizadas por Open-Meteo o FieldClimate y no forma parte del motor de suelos. Si el dato manual difiere del resultado oficial, ambos se conservan y se muestra un conflicto explícito.
+El motor no cambia las coordenadas utilizadas por Open-Meteo o FieldClimate y no forma parte del motor de suelos. El departamento operativo se sincroniza con la base interna únicamente cuando GeoRef entrega una cobertura de al menos 99,5%, confianza alta y existe una única coincidencia exacta de provincia y departamento. Antes de reemplazarlo, el valor histórico se preserva como legado auditable. Si alguna condición no se cumple, se conserva el valor operativo anterior y se emite una advertencia.
 
 ## Fuente y licencia
 
@@ -67,6 +67,9 @@ MongoDB ya era la solución espacial operativa de Chaman (`2dsphere`), por lo qu
 - `georef_catalog_state`: puntero único al snapshot activo. Su actualización es la activación atómica.
 - `lot_administrative_locations`: historial idempotente de resoluciones; una sola queda `isCurrent` por lote.
 - `lot_administrative_intersections`: todas las jurisdicciones intersectadas, área y porcentaje.
+- `establishment_administrative_locations`: historial inmutable de resoluciones territoriales de establecimientos.
+- `establecimientos.ubicacionOficial`: resultado actual calculado desde el polígono final.
+- `establecimientos.ubicacionAdministrativaLegada`: copia de solo lectura de la referencia histórica que antes se cargaba manualmente.
 
 La importación valida mínimos esperados antes de activar. Si hay error, se marca el snapshot como fallido, se eliminan sus entidades parciales y el puntero activo anterior no cambia.
 
@@ -113,6 +116,8 @@ Motivos soportados por el contrato `IEventoResolucionUbicacionLote`:
 
 Los flujos actuales de crear, importar KML/KMZ y editar pasan por `lotes.create/update`, por lo que disparan automáticamente el motor. El contrato deja preparados split/merge para futuros flujos explícitos.
 
+Los establecimientos usan el mismo catálogo y las mismas reglas espaciales. Buscar provincia, localidad, departamento o paraje solamente centra el mapa: no guarda un dato territorial definitivo. Crear, importar o editar el polígono del establecimiento dispara `establishment_created`, `geometry_added` o `geometry_changed`. Cada lote se resuelve luego con su propio polígono; nunca hereda ciegamente el departamento del establecimiento.
+
 Trabajos:
 
 - sincronización semanal configurable del catálogo;
@@ -131,9 +136,12 @@ Servicio de datos, protegido con `x-chaman-internal-token`:
 
 - `GET /lot-locations/lotes/:id`;
 - `POST /lot-locations/lotes/:id/resolve`;
+- `GET /lot-locations/establecimientos/:id`;
+- `POST /lot-locations/establecimientos/:id/resolve`;
 - `GET /lot-locations/admin/status`;
 - `POST /lot-locations/admin/sync`;
 - `POST /lot-locations/admin/backfill`;
+- `POST /lot-locations/admin/backfill-establishments`;
 - `POST /lot-locations/admin/sync-and-backfill`.
 
 ## Estados de interfaz
@@ -172,6 +180,18 @@ npm run migrate:lot-location:rollback
 ```
 
 El rollback elimina los índices de esta migración. Sólo elimina colecciones creadas por ella si siguen vacías; si ya contienen snapshots o resoluciones, las preserva para no perder información.
+
+La automatización de establecimientos tiene una migración independiente. Copia la referencia manual como legado de solo lectura, crea el historial y no borra el dato anterior:
+
+```powershell
+$env:MONGO_URI='<mongo>'
+$env:DB_NAME='chaman'
+npm run migrate:establishment-location:plan
+$env:CHAMAN_MIGRATION_CONFIRM='20260714-establishment-location-automation-v1:apply'
+npm run migrate:establishment-location:apply
+```
+
+Su rollback sólo retira las copias de legado creadas por esa migración y elimina la colección histórica si continúa vacía. Si ya contiene resoluciones, la preserva.
 
 ### Variables
 

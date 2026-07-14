@@ -125,6 +125,17 @@
   align-items: flex-start;
 }
 
+.map-reference-card > div,
+.map-reference-official {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.map-reference-official {
+  text-align: right;
+}
+
 .kmz-import-card,
 .kmz-import-preview {
   align-items: flex-start;
@@ -226,6 +237,10 @@
 
   .admin-location-value {
     min-width: 0;
+    text-align: left;
+  }
+
+  .map-reference-official {
     text-align: left;
   }
 }

@@ -31,7 +31,10 @@
                       <section class="kmz-import-card">
                         <div class="kmz-import-copy">
                           <strong>Importar KML/KMZ</strong>
-                          <small>Usa poligonos del archivo para completar este establecimiento o crear varios automaticamente.</small>
+                          <small
+                            >Usa poligonos del archivo para completar este establecimiento o crear varios
+                            automaticamente.</small
+                          >
                         </div>
                         <p-fileupload
                           mode="basic"
@@ -49,7 +52,12 @@
                         <section class="kmz-import-preview">
                           <div class="kmz-preview-header">
                             <div>
-                              <strong>{{ kmzPoligonos.length }} poligono{{ kmzPoligonos.length === 1 ? '' : 's' }} detectado{{ kmzPoligonos.length === 1 ? '' : 's' }}</strong>
+                              <strong
+                                >{{ kmzPoligonos.length }} poligono{{
+                                  kmzPoligonos.length === 1 ? '' : 's'
+                                }}
+                                detectado{{ kmzPoligonos.length === 1 ? '' : 's' }}</strong
+                              >
                               <small>{{ kmzNombreArchivo }}</small>
                             </div>
                             <p-button
@@ -63,7 +71,11 @@
                           </div>
                           <div class="kmz-preview-grid">
                             @for (poligono of kmzPoligonos; track poligono.id) {
-                              <button type="button" class="kmz-preview-item" (click)="aplicarPoligonoImportado(poligono)">
+                              <button
+                                type="button"
+                                class="kmz-preview-item"
+                                (click)="aplicarPoligonoImportado(poligono)"
+                              >
                                 <strong>{{ poligono.nombre }}</strong>
                                 @if (poligono.nombreOriginal) {
                                   <small>Origen: {{ poligono.nombreOriginal }}</small>
@@ -77,8 +89,10 @@
 
                       <section class="admin-location-card">
                         <div>
-                          <strong>Referencia administrativa</strong>
-                          <small>Se guarda con el establecimiento y ayuda a ubicar clima, lotes y reportes.</small>
+                          <strong>Ubicacion territorial oficial</strong>
+                          <small
+                            >Chaman la calcula desde el poligono final con GeoRef. No se completa manualmente.</small
+                          >
                         </div>
                         <div class="admin-location-value">
                           <span>{{ referenciaUbicacion }}</span>
@@ -93,8 +107,11 @@
                   <p-tabpanel [value]="1">
                     <section class="location-search">
                       <div class="location-search-title">
-                        <strong>Buscar zona del establecimiento</strong>
-                        <small>Filtra por provincia y escribi localidad o departamento para centrar el mapa antes de dibujar.</small>
+                        <strong>Buscar para centrar el mapa</strong>
+                        <small
+                          >La busqueda solo orienta la vista. La ubicacion oficial se define desde el poligono
+                          guardado.</small
+                        >
                       </div>
 
                       <p-select
@@ -142,19 +159,32 @@
 
                     @if (ubicacionDetectada) {
                       <p-message severity="info" class="mb-4">
-                        {{ ubicacionDetectada.localidad || ubicacionDetectada.partido || ubicacionDetectada.direccion || 'Ubicacion detectada' }}
+                        Zona orientativa:
+                        {{
+                          ubicacionDetectada.localidad ||
+                            ubicacionDetectada.partido ||
+                            ubicacionDetectada.direccion ||
+                            'Ubicacion detectada'
+                        }}
                         @if (ubicacionDetectada.provincia) {
                           - {{ ubicacionDetectada.provincia }}
                         }
+                        . No se guardara como dato territorial definitivo.
                       </p-message>
                     }
 
                     <section class="map-reference-card">
-                      <span>Referencia guardada</span>
-                      <strong>{{ referenciaUbicacion }}</strong>
-                      @if (referenciaCoordenadas) {
-                        <small>{{ referenciaCoordenadas }}</small>
-                      }
+                      <div>
+                        <span>Zona de busqueda (orientativa)</span>
+                        <strong>{{ referenciaBusqueda }}</strong>
+                      </div>
+                      <div class="map-reference-official">
+                        <span>Resultado oficial</span>
+                        <strong>{{ referenciaUbicacion }}</strong>
+                        @if (referenciaCoordenadas) {
+                          <small>{{ referenciaCoordenadas }}</small>
+                        }
+                      </div>
                     </section>
 
                     @if (tabValue === 1) {

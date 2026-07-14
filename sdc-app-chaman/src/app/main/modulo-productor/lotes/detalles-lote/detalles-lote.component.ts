@@ -223,17 +223,21 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   }
 
   public get departamentoResumen(): string {
-    const departamento = this.lote?.departamento?.nombre;
-    const provincia = this.lote?.departamento?.provincia?.nombre;
+    const oficial = this.lote?.ubicacionAdministrativa;
+    const departamento = oficial?.nivelAdministrativo2?.nombre || this.lote?.departamento?.nombre;
+    const provincia = oficial?.provincia?.nombre || this.lote?.departamento?.provincia?.nombre;
     if (departamento && provincia) {
       return `${departamento}, ${provincia}`;
     }
-    return departamento || provincia || 'Ubicacion editable en el lote';
+    if (oficial?.estado === 'processing' || oficial?.estado === 'pending') {
+      return 'Ubicacion oficial en proceso';
+    }
+    return departamento || provincia || 'Ubicacion oficial pendiente';
   }
 
   public get contextoOperativoResumen(): string {
-    if (this.departamentoResumen === 'Ubicacion editable en el lote') {
-      return 'Completar ubicacion operativa desde la edicion del lote';
+    if (this.departamentoResumen === 'Ubicacion oficial pendiente') {
+      return 'Se calculara automaticamente desde el poligono del lote';
     }
     return this.departamentoResumen;
   }

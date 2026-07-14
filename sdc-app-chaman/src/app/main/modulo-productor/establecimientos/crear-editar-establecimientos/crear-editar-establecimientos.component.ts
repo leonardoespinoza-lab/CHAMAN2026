@@ -76,7 +76,6 @@ export class CrearEditarEstablecimientosComponent {
   private createForm(): void {
     this.form = new FormGroup({
       nombre: new FormControl(this.establecimiento?.nombre, Validators.required),
-      ubicacionAdministrativa: new FormControl(this.establecimiento?.ubicacionAdministrativa),
     });
   }
 
@@ -111,7 +110,7 @@ export class CrearEditarEstablecimientosComponent {
           provincia: this.provinciaBusqueda?.provincia,
         }),
         { resultados: [] },
-        8000,
+        8000
       );
       this.ubicacionesSugeridas = this.combinarZonas(response.resultados || [], this.ubicacionesSugeridas);
     } catch (error) {
@@ -146,7 +145,7 @@ export class CrearEditarEstablecimientosComponent {
           provincia: this.provinciaBusqueda?.provincia,
         }),
         { resultados: [] },
-        8000,
+        8000
       );
       const zona = zonas.resultados?.[0];
       if (zona?.coordenadas) {
@@ -158,7 +157,7 @@ export class CrearEditarEstablecimientosComponent {
         'geocodificacion',
         this.geonode.geocode({ text: texto }),
         undefined,
-        8000,
+        8000
       );
       if (!coordenadas || !Number.isFinite(coordenadas.lat) || !Number.isFinite(coordenadas.lng)) {
         this.helper.notifWarn('No se encontraron coordenadas para esa busqueda.');
@@ -166,7 +165,7 @@ export class CrearEditarEstablecimientosComponent {
       }
 
       this.centrarMapa(coordenadas);
-      this.actualizarUbicacionAdministrativa({
+      this.actualizarZonaOrientativa({
         direccion: texto,
         provincia: this.provinciaBusqueda?.provincia,
         coordenadas,
@@ -184,7 +183,7 @@ export class CrearEditarEstablecimientosComponent {
     this.busquedaUbicacion = zona;
     this.sincronizarProvinciaBusqueda(zona.provincia);
     this.centrarMapa(zona.coordenadas);
-    this.actualizarUbicacionAdministrativa({
+    this.actualizarZonaOrientativa({
       localidad: zona.localidad,
       partido: zona.departamento,
       provincia: zona.provincia,
@@ -202,40 +201,47 @@ export class CrearEditarEstablecimientosComponent {
   }
 
   public get referenciaUbicacion(): string {
-    const ubicacion = this.ubicacionAdministrativaActual();
-    const partes = [ubicacion?.localidad, ubicacion?.partido, ubicacion?.provincia].filter(Boolean);
+    const ubicacion = this.establecimiento?.ubicacionOficial;
+    const jurisdiccion = ubicacion?.nivelAdministrativo2;
+    const partes = [ubicacion?.localidadReferencia?.nombre, jurisdiccion?.nombre, ubicacion?.provincia?.nombre].filter(
+      Boolean
+    );
     if (partes.length) return partes.join(' / ');
-    if (ubicacion?.direccion) return ubicacion.direccion;
-    return 'Sin referencia administrativa guardada';
+    if (ubicacion?.estado === 'processing' || ubicacion?.estado === 'pending') {
+      return 'Calculando ubicacion oficial';
+    }
+    if (ubicacion?.estado === 'failed') return 'Ubicacion oficial pendiente de reintento';
+    return this.establecimiento ? 'Pendiente de resolucion oficial' : 'Se calculara automaticamente al guardar';
   }
 
   public get referenciaCoordenadas(): string | undefined {
-    const coordenadas = this.ubicacionAdministrativaActual()?.coordenadas || this.obtenerCentroMultipoligono();
+    const punto = this.establecimiento?.ubicacionOficial?.puntoRepresentativo?.coordinates;
+    const coordenadas = punto?.length ? { lng: punto[0], lat: punto[1] } : this.obtenerCentroMultipoligono();
     if (!Number.isFinite(coordenadas?.lat) || !Number.isFinite(coordenadas?.lng)) return undefined;
     return `${coordenadas!.lat.toFixed(5)}, ${coordenadas!.lng.toFixed(5)}`;
   }
 
+  public get referenciaBusqueda(): string {
+    const ubicacion = this.ubicacionDetectada;
+    const partes = [ubicacion?.localidad, ubicacion?.partido, ubicacion?.provincia].filter(Boolean);
+    return partes.join(' / ') || ubicacion?.direccion || 'Busca una zona para centrar el mapa';
+  }
+
   public cambioProvinciaBusqueda(): void {
     if (!this.provinciaBusqueda) return;
-    const actual = this.ubicacionAdministrativaActual();
-    this.actualizarUbicacionAdministrativa({
-      ...actual,
+    this.actualizarZonaOrientativa({
       provincia: this.provinciaBusqueda.provincia,
-      direccion: actual?.direccion || this.provinciaBusqueda.label,
-      coordenadas: actual?.coordenadas || this.provinciaBusqueda.coordenadas,
+      direccion: this.provinciaBusqueda.label,
+      coordenadas: this.provinciaBusqueda.coordenadas,
     });
     if (this.provinciaBusqueda.coordenadas) this.centrarMapa(this.provinciaBusqueda.coordenadas);
   }
 
-  private ubicacionAdministrativaActual(): DireccionV2 | undefined {
-    return (
-      (this.form?.get('ubicacionAdministrativa')?.value as DireccionV2 | undefined) ||
-      this.ubicacionDetectada ||
-      this.establecimiento?.ubicacionAdministrativa
-    );
+  private zonaOrientativaActual(): DireccionV2 | undefined {
+    return this.ubicacionDetectada;
   }
 
-  private actualizarUbicacionAdministrativa(ubicacion?: DireccionV2): void {
+  private actualizarZonaOrientativa(ubicacion?: DireccionV2): void {
     if (!ubicacion) return;
     const tieneDatos =
       !!ubicacion.localidad ||
@@ -245,16 +251,19 @@ export class CrearEditarEstablecimientosComponent {
       !!ubicacion.coordenadas;
     if (!tieneDatos) return;
     this.ubicacionDetectada = ubicacion;
-    this.form?.get('ubicacionAdministrativa')?.setValue(ubicacion);
   }
 
-  private inicializarUbicacionAdministrativa(): void {
-    const ubicacion = this.establecimiento?.ubicacionAdministrativa;
-    if (!ubicacion) return;
-    this.actualizarUbicacionAdministrativa(ubicacion);
-    this.busquedaUbicacion = ubicacion.direccion || ubicacion.localidad || ubicacion.partido || '';
-    this.sincronizarProvinciaBusqueda(ubicacion.provincia);
-    if (ubicacion.coordenadas) this.centrarMapa(ubicacion.coordenadas);
+  private inicializarMapaDesdeUbicacion(): void {
+    const oficial = this.establecimiento?.ubicacionOficial;
+    const coordenadas = oficial?.puntoRepresentativo?.coordinates;
+    if (coordenadas?.length) {
+      this.centrarMapa({ lng: coordenadas[0], lat: coordenadas[1] });
+      this.sincronizarProvinciaBusqueda(oficial?.provincia?.nombre);
+      return;
+    }
+    const legado =
+      this.establecimiento?.ubicacionAdministrativaLegada?.valor || this.establecimiento?.ubicacionAdministrativa;
+    if (legado?.coordenadas) this.centrarMapa(legado.coordenadas);
   }
 
   private obtenerCentroMultipoligono(): ICoordenadas | undefined {
@@ -269,31 +278,6 @@ export class CrearEditarEstablecimientosComponent {
     return { lat: centro[1], lng: centro[0] };
   }
 
-  private async completarUbicacionAdministrativaDesdePoligono(): Promise<void> {
-    const actual = this.ubicacionAdministrativaActual();
-    if (actual?.localidad || actual?.partido || actual?.provincia) return;
-
-    const centro = this.obtenerCentroMultipoligono();
-    if (!centro) return;
-
-    const geojson: IGeoJSONPoint = {
-      type: 'Point',
-      coordinates: [centro.lng, centro.lat],
-    };
-    const ubicacion = await this.valorConTimeout<DireccionV2 | undefined>(
-      'ubicacion administrativa del establecimiento',
-      this.geonode.reverse({ geojson }),
-      undefined,
-      6000,
-    );
-    if (ubicacion) {
-      this.actualizarUbicacionAdministrativa({
-        ...ubicacion,
-        coordenadas: ubicacion.coordenadas || centro,
-      });
-    }
-  }
-
   private async listarProvinciasGeograficas(): Promise<void> {
     this.provinciasGeograficas = PROVINCIAS_ARGENTINA_BASE;
     try {
@@ -301,7 +285,7 @@ export class CrearEditarEstablecimientosComponent {
         'provincias geograficas',
         this.geonode.provincias(),
         { resultados: [] },
-        8000,
+        8000
       );
       this.provinciasGeograficas = this.combinarZonas(response.resultados || [], PROVINCIAS_ARGENTINA_BASE);
     } catch (error) {
@@ -331,9 +315,7 @@ export class CrearEditarEstablecimientosComponent {
   private sincronizarProvinciaBusqueda(provincia?: string): void {
     if (!provincia) return;
     const normalizada = this.normalizarTexto(provincia);
-    const encontrada = this.provinciasGeograficas.find(
-      (item) => this.normalizarTexto(item.provincia) === normalizada,
-    );
+    const encontrada = this.provinciasGeograficas.find((item) => this.normalizarTexto(item.provincia) === normalizada);
     if (encontrada) this.provinciaBusqueda = encontrada;
   }
 
@@ -342,7 +324,7 @@ export class CrearEditarEstablecimientosComponent {
     for (const grupo of grupos) {
       for (const zona of grupo || []) {
         const key = this.normalizarTexto(
-          [zona.tipo, zona.provincia, zona.departamento, zona.localidad, zona.label].filter(Boolean).join('|'),
+          [zona.tipo, zona.provincia, zona.departamento, zona.localidad, zona.label].filter(Boolean).join('|')
         );
         if (key && !zonas.has(key)) zonas.set(key, zona);
       }
@@ -388,8 +370,6 @@ export class CrearEditarEstablecimientosComponent {
 
   private getData() {
     const data: ICreateEstablecimiento = { ...this.form?.value };
-    const ubicacionAdministrativa = this.ubicacionAdministrativaActual();
-    if (ubicacionAdministrativa) data.ubicacionAdministrativa = ubicacionAdministrativa;
 
     const ubicaciones: IUbicacion[] = [];
     if (this.multipolygon?.coordinates?.length) {
@@ -414,7 +394,6 @@ export class CrearEditarEstablecimientosComponent {
   public async guardar(): Promise<void> {
     this.loading = true;
     try {
-      await this.completarUbicacionAdministrativaDesdePoligono();
       const data = this.getData();
       if (this.establecimiento?._id) {
         await this.service.editar(this.establecimiento._id, data);
@@ -487,8 +466,8 @@ export class CrearEditarEstablecimientosComponent {
       type: 'Point',
       coordinates: [poligono.centro.lng, poligono.centro.lat],
     };
-    const actual = this.ubicacionAdministrativaActual();
-    this.actualizarUbicacionAdministrativa({
+    const actual = this.zonaOrientativaActual();
+    this.actualizarZonaOrientativa({
       ...actual,
       direccion: actual?.direccion || `Importado desde ${this.kmzNombreArchivo || 'KML/KMZ'}`,
       coordenadas: actual?.coordenadas || poligono.centro,
@@ -499,7 +478,9 @@ export class CrearEditarEstablecimientosComponent {
   public async crearEstablecimientosImportados(): Promise<void> {
     if (!this.kmzPoligonos.length) return;
     const cantidad = this.kmzPoligonos.length;
-    const confirmar = window.confirm(`Crear ${cantidad} establecimiento${cantidad === 1 ? '' : 's'} desde el archivo importado?`);
+    const confirmar = window.confirm(
+      `Crear ${cantidad} establecimiento${cantidad === 1 ? '' : 's'} desde el archivo importado?`
+    );
     if (!confirmar) return;
 
     this.loading = true;
@@ -507,7 +488,6 @@ export class CrearEditarEstablecimientosComponent {
     let errores = 0;
     try {
       for (const poligono of this.kmzPoligonos) {
-        const ubicacionAdministrativa = this.ubicacionAdministrativaActual();
         const data: ICreateEstablecimiento = {
           nombre: poligono.nombre,
           ubicacion: [
@@ -517,15 +497,6 @@ export class CrearEditarEstablecimientosComponent {
               superficie: poligono.superficie,
             },
           ],
-          ubicacionAdministrativa: ubicacionAdministrativa
-            ? {
-                ...ubicacionAdministrativa,
-                coordenadas: ubicacionAdministrativa.coordenadas || poligono.centro,
-              }
-            : {
-                direccion: `Importado desde ${this.kmzNombreArchivo || 'KML/KMZ'}`,
-                coordenadas: poligono.centro,
-              },
         };
 
         try {
@@ -539,10 +510,14 @@ export class CrearEditarEstablecimientosComponent {
       }
 
       if (creados) {
-        this.helper.notifSuccess(`${creados} establecimiento${creados === 1 ? '' : 's'} creado${creados === 1 ? '' : 's'} desde KMZ/KML.`);
+        this.helper.notifSuccess(
+          `${creados} establecimiento${creados === 1 ? '' : 's'} creado${creados === 1 ? '' : 's'} desde KMZ/KML.`
+        );
       }
       if (errores) {
-        this.helper.notifWarn(`${errores} poligono${errores === 1 ? '' : 's'} no se pudieron crear. Revisa permisos o datos del archivo.`);
+        this.helper.notifWarn(
+          `${errores} poligono${errores === 1 ? '' : 's'} no se pudieron crear. Revisa permisos o datos del archivo.`
+        );
       }
       if (creados) this.volver();
     } finally {
@@ -588,7 +563,7 @@ export class CrearEditarEstablecimientosComponent {
     this.initMultipolygon();
     this.createForm();
     await this.listarProvinciasGeograficas();
-    this.inicializarUbicacionAdministrativa();
+    this.inicializarMapaDesdeUbicacion();
     this.loading = false;
   }
 }

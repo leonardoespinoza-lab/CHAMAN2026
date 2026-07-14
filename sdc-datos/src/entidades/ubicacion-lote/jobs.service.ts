@@ -8,6 +8,7 @@ import {
 } from '../../env';
 import { GeorefCatalogSyncService } from './georef-sync.service';
 import { LotLocationService } from './service';
+import { EstablishmentLocationService } from './establishment-location.service';
 
 @Injectable()
 export class LotLocationJobsService implements OnModuleInit {
@@ -17,6 +18,7 @@ export class LotLocationJobsService implements OnModuleInit {
   constructor(
     private readonly syncService: GeorefCatalogSyncService,
     private readonly locationService: LotLocationService,
+    private readonly establishmentLocationService: EstablishmentLocationService,
   ) {}
 
   onModuleInit(): void {
@@ -54,10 +56,15 @@ export class LotLocationJobsService implements OnModuleInit {
         sync.activated ? 'source_version_changed' : reason,
         GEOREF_BACKFILL_LIMIT,
       );
+      const establishmentBackfill =
+        await this.establishmentLocationService.backfill(
+          sync.activated ? 'source_version_changed' : reason,
+          GEOREF_BACKFILL_LIMIT,
+        );
       this.logger.log(
-        `GeoRef ${sync.snapshotId}; backfill ${JSON.stringify(backfill)}.`,
+        `GeoRef ${sync.snapshotId}; lotes ${JSON.stringify(backfill)}; establecimientos ${JSON.stringify(establishmentBackfill)}.`,
       );
-      return { sync, backfill };
+      return { sync, backfill, establishmentBackfill };
     } catch (error) {
       this.logger.error(`Job de ubicacion fallo: ${error?.message || error}`);
       throw error;
