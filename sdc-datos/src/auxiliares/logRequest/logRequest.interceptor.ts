@@ -52,6 +52,7 @@ const faint = colorIfAllowed((text: string) => `\x1B[2m${text}\x1B[0m`);
 
 const REDACTED = '[redacted]';
 const OMITTED = '[omitted-large-payload]';
+const MAX_LOG_ARRAY_ITEMS = 20;
 const SENSITIVE_KEYS = new Set([
   'password',
   'pass',
@@ -78,12 +79,16 @@ const LARGE_PAYLOAD_KEYS = new Set([
   'base64',
 ]);
 
-function sanitizeLogData(value: any): any {
+export function sanitizeLogData(value: any): any {
   if (typeof value === 'string') {
     return value.startsWith('data:image/') || value.length > 2000 ? OMITTED : value;
   }
 
-  if (Array.isArray(value)) return value.map((item) => sanitizeLogData(item));
+  if (Array.isArray(value)) {
+    return value.length > MAX_LOG_ARRAY_ITEMS
+      ? `[omitted-array:${value.length}]`
+      : value.map((item) => sanitizeLogData(item));
+  }
   if (!value || typeof value !== 'object') return value;
 
   return Object.entries(value).reduce((result, [key, item]) => {
