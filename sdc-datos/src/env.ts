@@ -21,7 +21,8 @@ export const AGROMETEO_INTERNAL_TOKEN =
 export const LOT_LOCATION_INTERNAL_TOKEN =
   process.env.LOT_LOCATION_INTERNAL_TOKEN || '';
 export const GEOREF_SYNC_ENABLED =
-  process.env.GEOREF_SYNC_ENABLED !== 'false' && ENV !== 'test';
+  process.env.GEOREF_SYNC_ENABLED !== 'false' &&
+  process.env.NODE_ENV !== 'test';
 export const GEOREF_BASE_URL =
   process.env.GEOREF_BASE_URL || 'https://apis.datos.gob.ar/georef/api/v2.0';
 export const GEOREF_SYNC_CRON = process.env.GEOREF_SYNC_CRON || '15 3 * * 0';
