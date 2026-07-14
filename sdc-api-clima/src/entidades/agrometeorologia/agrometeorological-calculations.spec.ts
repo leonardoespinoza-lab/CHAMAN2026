@@ -5,6 +5,7 @@ import {
   calcularGdd,
   calcularMojadoFoliarEstimado,
   calcularVpdKpa,
+  PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA,
 } from 'modelos/src';
 
 describe('calculos agrometeorologicos puros', () => {
@@ -25,6 +26,15 @@ describe('calculos agrometeorologicos puros', () => {
         upperTemperatureC: 30,
       }),
     ).toBeCloseTo(10, 6);
+  });
+
+  it('usa en trigo la referencia termica FAO AquaCrop de 0 a 26 C', () => {
+    expect(
+      PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA.Trigo?.temperaturaBaseC,
+    ).toBe(0);
+    expect(
+      PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA.Trigo?.temperaturaSuperiorC,
+    ).toBe(26);
   });
 
   it('calcula VPD en kPa y conserva los limites fisicos', () => {

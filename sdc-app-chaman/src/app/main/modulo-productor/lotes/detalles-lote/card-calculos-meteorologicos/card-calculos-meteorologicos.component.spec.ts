@@ -13,7 +13,14 @@ describe('CardCalculosMeteorologicosComponent', () => {
   }
 
   const response = (overrides: Partial<IRespuestaAgrometeorologiaSiembra> = {}): IRespuestaAgrometeorologiaSiembra => ({
-    summary: { gddAccumulated: 125, rainAccumulatedMm: 32, vpdMeanKpa: 0.8 },
+    summary: {
+      gddAccumulated: 125,
+      gddThroughDate: '2026-07-13',
+      gddBaseTemperatureC: 0,
+      gddUpperTemperatureC: 26,
+      rainAccumulatedMm: 32,
+      vpdMeanKpa: 0.8,
+    },
     dataSource: {
       type: 'open_meteo',
       completenessPercentage: 92,
@@ -25,9 +32,15 @@ describe('CardCalculosMeteorologicosComponent', () => {
         isForecast: false,
         stage: 'Emergencia',
         weather: {},
-        metrics: { temperatureMinC: 8, temperatureMeanC: 14, temperatureMaxC: 20, gddAccumulated: 5 },
+        metrics: {
+          temperatureMinC: 8,
+          temperatureMeanC: 14,
+          temperatureMaxC: 20,
+          gddAccumulated: 5,
+          rootZoneSoilMoistureM3M3: 0.2,
+        },
         source: 'open_meteo',
-        sourceByVariable: {},
+        sourceByVariable: { soilMoistureM3M3: 'derived_open_meteo' },
         qualityFlags: [],
         warnings: [],
       },
@@ -58,6 +71,11 @@ describe('CardCalculosMeteorologicosComponent', () => {
     expect(component.fuenteLabel).toBe('Open-Meteo');
     expect(component.estadosSerie).toEqual(['Estimado', 'Pronostico']);
     expect(component.chartOptions?.series?.length).toBeGreaterThan(3);
+    expect(component.fuenteDetail).toContain('cobertura de variables');
+    expect(component.historialLabel).toBe('Reanalisis modelado');
+    expect(component.metricas[0].detail).toContain('13 jul');
+    expect(component.metricas[0].detail).toContain('Tb 0 C');
+    expect(component.sueloSubtitle).toContain('no reemplaza una sonda');
   });
 
   it('informa correctamente una fuente mixta con central', async () => {

@@ -5,8 +5,8 @@ import {
   VariableMeteorologicaNormalizada,
 } from "../entidades";
 
-export const AGROMET_ENGINE_VERSION = "agromet-1.0.2";
-export const AGROMET_DEFAULT_PARAMETERS_VERSION = "agromet-reference-2026.07";
+export const AGROMET_ENGINE_VERSION = "agromet-1.0.3";
+export const AGROMET_DEFAULT_PARAMETERS_VERSION = "agromet-reference-2026.07.1";
 
 export interface ICalculoGddParams {
   temperatureMinC?: number;
@@ -146,9 +146,10 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
   Trigo: {
     version: AGROMET_DEFAULT_PARAMETERS_VERSION,
     estado: "referencia",
-    fuente: "FAO-56 y fenología térmica CHAMAN; calibrar por variedad",
+    fuente:
+      "FAO AquaCrop y fenología térmica CHAMAN; calibrar por variedad",
     temperaturaBaseC: 0,
-    temperaturaSuperiorC: 30,
+    temperaturaSuperiorC: 26,
     kcInicial: 0.3,
     kcMedio: 1.15,
     kcFinal: 0.4,

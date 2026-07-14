@@ -148,6 +148,8 @@ export interface IMetricasAgrometeorologicasDiarias {
   thermalStressDay?: boolean;
   gddDaily?: number;
   gddAccumulated?: number;
+  gddBaseTemperatureC?: number;
+  gddUpperTemperatureC?: number;
   gddFromEmergence?: number;
   gddCurrentStage?: number;
   photoperiodHours?: number;
@@ -228,6 +230,9 @@ export interface IIndicadorAgrometeorologicoDiario {
 
 export interface IResumenAgrometeorologico {
   gddAccumulated?: number;
+  gddThroughDate?: string;
+  gddBaseTemperatureC?: number;
+  gddUpperTemperatureC?: number;
   rainAccumulatedMm?: number;
   et0AccumulatedMm?: number;
   etcAccumulatedMm?: number;

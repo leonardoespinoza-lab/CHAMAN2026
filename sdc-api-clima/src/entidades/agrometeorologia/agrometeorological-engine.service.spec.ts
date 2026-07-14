@@ -128,12 +128,20 @@ describe('AgrometeorologicalEngineService', () => {
       granularidad: 'hourly',
       estado: 'estimated',
       esPronostico: false,
-      valores: { temperatureC, relativeHumidityPct: 75, precipitationMm: 0 },
+      valores: {
+        temperatureC,
+        relativeHumidityPct: 75,
+        precipitationMm: 0,
+        soilTemperatureC: { '0-7': 11 + index, '7-28': 10 + index },
+        soilMoistureM3M3: { '0-7': 0.22, '7-28': 0.2 },
+      },
       fuente: 'open_meteo',
       fuentePorVariable: {
         temperatureC: 'open_meteo',
         relativeHumidityPct: 'open_meteo',
         precipitationMm: 'open_meteo',
+        soilTemperatureC: 'open_meteo',
+        soilMoistureM3M3: 'open_meteo',
       },
       banderasCalidad: [],
       completitudPct: 45,
@@ -159,6 +167,14 @@ describe('AgrometeorologicalEngineService', () => {
       {
         _id: '64b000000000000000000002',
         idEstablecimiento: '64b000000000000000000003',
+        suelos: [
+          {
+            profundidad: 28,
+            capacidadDeCampo: 30,
+            puntoMarchitez: 12,
+            hayRaices: true,
+          },
+        ],
       } as any,
       { lat: -33, lng: -61.9 },
       hourly,
@@ -167,6 +183,13 @@ describe('AgrometeorologicalEngineService', () => {
     expect(result.metricas.heatHours).toBe(1);
     expect(result.metricas.chillingHours).toBe(1);
     expect(result.metricas.vpdMeanKpa).toBeGreaterThanOrEqual(0);
+    expect(result.fuentePorVariable.soilMoistureM3M3).toBe(
+      'derived_open_meteo',
+    );
+    expect(result.banderasCalidad).toContain('modeled_soil_open_meteo');
+    expect(result.advertencias.join(' ')).toContain(
+      'modelo de suelo Open-Meteo',
+    );
   });
 
   it('acumula dias secos y vuelve a cero cuando supera el umbral de lluvia', () => {
@@ -361,7 +384,11 @@ describe('AgrometeorologicalEngineService', () => {
           idEstablecimiento: '64b000000000000000000003',
           fecha: '2026-07-03',
           etapaFenologica: 'Emergencia',
-          metricas: { gddAccumulated: 30 },
+          metricas: {
+            gddAccumulated: 30,
+            gddBaseTemperatureC: 0,
+            gddUpperTemperatureC: 26,
+          },
           fuente: 'open_meteo',
           fuentePorVariable: {},
           banderasCalidad: [],
@@ -419,6 +446,9 @@ describe('AgrometeorologicalEngineService', () => {
       '2026-07-03',
     ]);
     expect(getIndicadores.mock.calls[0][0].sort).toBe('fecha');
+    expect(response.summary.gddThroughDate).toBe('2026-07-03');
+    expect(response.summary.gddBaseTemperatureC).toBe(0);
+    expect(response.summary.gddUpperTemperatureC).toBe(26);
   });
 
   it('persiste historiales largos en lotes acotados', async () => {

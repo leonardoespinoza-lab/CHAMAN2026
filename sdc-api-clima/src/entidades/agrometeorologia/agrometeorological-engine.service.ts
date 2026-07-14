@@ -454,6 +454,19 @@ export class AgrometeorologicalEngineService {
       if ((daily?.completitudPct ?? 0) < 70) {
         dayWarnings.push('Cobertura meteorologica incompleta para este dia.');
       }
+      const soilModelSource = derived.sourceByVariable.soilMoistureM3M3;
+      if (
+        rootMoisture !== undefined &&
+        soilModelSource === 'derived_open_meteo'
+      ) {
+        dayWarnings.push(
+          'La humedad y temperatura del suelo provienen del modelo de suelo Open-Meteo por capas; no son una medicion con sonda en el lote.',
+        );
+      } else if (rootMoisture !== undefined && soilModelSource === 'mixed') {
+        dayWarnings.push(
+          'La humedad del suelo combina sensores disponibles con capas modeladas de Open-Meteo; revisar la fuente por variable.',
+        );
+      }
       const metrics: IMetricasAgrometeorologicasDiarias = {
         temperatureMinC: weather.temperatureMinC,
         temperatureMeanC: weather.temperatureMeanC,
@@ -472,6 +485,8 @@ export class AgrometeorologicalEngineService {
               : undefined,
         gddDaily: gdd,
         gddAccumulated,
+        gddBaseTemperatureC: parameters.temperaturaBaseC,
+        gddUpperTemperatureC: parameters.temperaturaSuperiorC,
         gddFromEmergence: emergenceDate ? gddFromEmergence : undefined,
         gddCurrentStage: gddStage,
         photoperiodHours: photoperiod,
@@ -565,6 +580,10 @@ export class AgrometeorologicalEngineService {
             ...(derived.leafWetnessHours !== undefined
               ? ['estimated_leaf_wetness']
               : []),
+            ...(soilModelSource === 'derived_open_meteo'
+              ? ['modeled_soil_open_meteo']
+              : []),
+            ...(soilModelSource === 'mixed' ? ['mixed_soil_sources'] : []),
           ]),
         ],
         advertencias: [...new Set(dayWarnings)],
@@ -672,6 +691,11 @@ export class AgrometeorologicalEngineService {
     return {
       summary: {
         gddAccumulated: latestObserved.metricas.gddAccumulated,
+        gddThroughDate: latestObserved.fecha,
+        gddBaseTemperatureC:
+          latestObserved.metricas.gddBaseTemperatureC,
+        gddUpperTemperatureC:
+          latestObserved.metricas.gddUpperTemperatureC,
         rainAccumulatedMm: latestObserved.metricas.rainAccumulatedMm,
         et0AccumulatedMm: latestObserved.metricas.et0AccumulatedMm,
         etcAccumulatedMm: latestObserved.metricas.etcAccumulatedMm,
@@ -760,6 +784,14 @@ export class AgrometeorologicalEngineService {
       hours,
       'shortwaveRadiationWm2',
     );
+    const soilTemperatureSource = this.derivedSourceFromHours(
+      hours,
+      'soilTemperatureC',
+    );
+    const soilMoistureSource = this.derivedSourceFromHours(
+      hours,
+      'soilMoistureM3M3',
+    );
     if (tempSource) {
       sourceByVariable.temperatureMinC = tempSource;
       sourceByVariable.temperatureMeanC = tempSource;
@@ -773,6 +805,10 @@ export class AgrometeorologicalEngineService {
     if (rainSource) sourceByVariable.precipitationMm = rainSource;
     if (radiationSource)
       sourceByVariable.shortwaveRadiationMjM2 = radiationSource;
+    if (soilTemperature && soilTemperatureSource)
+      sourceByVariable.soilTemperatureC = soilTemperatureSource;
+    if (soilMoisture && soilMoistureSource)
+      sourceByVariable.soilMoistureM3M3 = soilMoistureSource;
     if (vpdValues.length)
       sourceByVariable.vpdMeanKpa = this.combineDerivedSources(
         tempSource,
@@ -1202,6 +1238,7 @@ export class AgrometeorologicalEngineService {
     const open = [...sources].some(
       (value) => value.includes('open_meteo') || value === 'gap_filled',
     );
+    if (sources.has('mixed')) return 'mixed';
     if (station && open) return 'mixed';
     if (station) return 'derived_station';
     if (open) return 'derived_open_meteo';

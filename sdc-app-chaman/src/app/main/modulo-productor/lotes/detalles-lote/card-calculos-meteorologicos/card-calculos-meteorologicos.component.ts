@@ -1,7 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, Input, OnChanges, SimpleChanges } from '@angular/core';
 import Highcharts from 'highcharts';
-import { IRespuestaAgrometeorologiaSiembra, ISerieAgrometeorologicaDia, ISiembra } from 'modelos/src';
+import {
+  IRespuestaAgrometeorologiaSiembra,
+  IResumenAgrometeorologico,
+  ISerieAgrometeorologicaDia,
+  ISiembra,
+} from 'modelos/src';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
 
@@ -81,7 +86,47 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     if (!this.data) return '';
     const completitud = this.numero(this.data.dataSource.completenessPercentage, 0);
     const actualizacion = this.fechaHora(this.data.dataSource.lastCalculatedAt);
-    return `${completitud}% de completitud${actualizacion ? ` - actualizado ${actualizacion}` : ''}`;
+    return `${completitud}% de cobertura de variables${actualizacion ? ` - actualizado ${actualizacion}` : ''}`;
+  }
+
+  public get historialLabel(): string {
+    switch (this.data?.dataSource.type) {
+      case 'station':
+        return 'Medido';
+      case 'mixed':
+        return 'Historico mixto';
+      case 'open_meteo':
+        return 'Reanalisis modelado';
+      default:
+        return 'Historico';
+    }
+  }
+
+  public get sueloTieneSensor(): boolean {
+    return !!this.data?.series.some((dia) =>
+      [dia.sourceByVariable.soilMoistureM3M3, dia.sourceByVariable.soilTemperatureC].some(
+        (source) => String(source || '').includes('station') || source === 'mixed'
+      )
+    );
+  }
+
+  public get sueloModelado(): boolean {
+    return !!this.data?.series.some((dia) =>
+      [dia.sourceByVariable.soilMoistureM3M3, dia.sourceByVariable.soilTemperatureC].some(
+        (source) => String(source || '').includes('open_meteo') || source === 'mixed'
+      )
+    );
+  }
+
+  public get sueloSubtitle(): string {
+    if (this.sueloTieneSensor && this.sueloModelado) {
+      return 'Sensor del lote prioritario; Open-Meteo completa las capas ausentes';
+    }
+    if (this.sueloTieneSensor) return 'Lecturas de sensores asociados al lote';
+    if (this.sueloModelado) {
+      return 'Modelo de suelo Open-Meteo por capas; no reemplaza una sonda en el lote';
+    }
+    return 'Balance hidrico estimado; requiere validacion con medicion de campo';
   }
 
   public get hayDatos(): boolean {
@@ -161,13 +206,14 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
 
   private prepararVista(): void {
     const r = this.data?.summary;
+    const detalleGdd = r ? this.detalleGdd(r) : '';
     this.metricas = !r
       ? []
       : [
           {
-            label: 'Grados dia',
+            label: 'Grados dia cerrados',
             value: this.valor(r.gddAccumulated, 'GDD', 0),
-            detail: 'Acumulados del ciclo vigente',
+            detail: detalleGdd,
             tone: 'thermal',
           },
           {
@@ -185,7 +231,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
           {
             label: 'Agua disponible',
             value: this.valor(r.availableWaterPercentage, '%', 0),
-            detail: `Deficit ${this.valor(r.waterDeficitMm, 'mm')}`,
+            detail: `Deficit ${this.valor(r.waterDeficitMm, 'mm')}${this.sueloTieneSensor ? '' : ' · modelo sin sonda'}`,
             tone: 'water',
           },
           {
@@ -366,7 +412,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     return this.baseChart(
       dias,
       'Estado estimado de la zona radicular',
-      'Sensores cuando existen; balance modelado como respaldo',
+      this.sueloSubtitle,
       [
         ...depthSeries,
         ...(moistureDepths.length
@@ -632,7 +678,9 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
 
   private fechaCorta(fecha: string): string {
     const date = new Date(`${fecha}T12:00:00`);
-    return Number.isNaN(date.getTime()) ? fecha : date.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
+    if (Number.isNaN(date.getTime())) return fecha;
+    const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return `${date.getDate()} ${meses[date.getMonth()]}`;
   }
 
   private fechaHora(fecha?: string): string {
@@ -641,6 +689,21 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     return Number.isNaN(date.getTime())
       ? ''
       : date.toLocaleString('es-AR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+
+  private detalleGdd(resumen: IResumenAgrometeorologico): string {
+    const partes = [
+      resumen.gddThroughDate
+        ? `Cerrado al ${this.fechaCorta(resumen.gddThroughDate)}`
+        : 'Sin incluir el pronostico',
+    ];
+    if (this.esNumero(resumen.gddBaseTemperatureC)) {
+      partes.push(`Tb ${this.numero(resumen.gddBaseTemperatureC, 0)} C`);
+    }
+    if (this.esNumero(resumen.gddUpperTemperatureC)) {
+      partes.push(`techo ${this.numero(resumen.gddUpperTemperatureC, 0)} C`);
+    }
+    return partes.join(' · ');
   }
 
   private esNumero(valor: unknown): valor is number {
