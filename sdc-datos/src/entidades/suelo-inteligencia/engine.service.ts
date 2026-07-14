@@ -35,7 +35,7 @@ import {
   SoilTextureClassifier,
 } from './texture-classifier.service';
 
-export const SOIL_INTELLIGENCE_ENGINE_VERSION = 'lot-soil-v1.0.0';
+export const SOIL_INTELLIGENCE_ENGINE_VERSION = 'lot-soil-v1.0.1';
 export const DOMINANT_SOIL_UNIT_THRESHOLD = 60;
 
 @Injectable()
@@ -391,6 +391,9 @@ export class LotSoilIntelligenceEngine {
         'Estadística zonal calculada sobre el polígono completo.',
         'Propiedades SoilGrids convertidas desde enteros escalados a unidades convencionales.',
         `Mapeo textural ${TEXTURE_MAPPING_VERSION}.`,
+        ...new Set(
+          soilGridsResult.profile.flatMap((layer) => layer.qualityFlags || []),
+        ),
       ],
       reason: input.reason,
       calculatedAt,

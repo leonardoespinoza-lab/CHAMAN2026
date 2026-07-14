@@ -49,4 +49,17 @@ describe('SoilGridsProvider', () => {
     expect(result.spatialLow).toBe(10);
     expect(result.spatialHigh).toBe(40);
   });
+
+  it('cierra la composición SoilGrids y conserva la suma observada', () => {
+    const result = (provider as any).closeTextureComposition(8, 55, 27.5);
+    expect(result.originalSum).toBeCloseTo(90.5, 4);
+    expect(result.closureApplied).toBe(true);
+    expect(result.sand + result.silt + result.clay).toBeCloseTo(100, 8);
+  });
+
+  it('rechaza composiciones SoilGrids con desvíos excesivos', () => {
+    expect(() => (provider as any).closeTextureComposition(5, 45, 25)).toThrow(
+      /fuera de tolerancia/i,
+    );
+  });
 });

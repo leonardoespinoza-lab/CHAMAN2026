@@ -26,6 +26,8 @@ import { SoilGridsProviderResult } from './provider.types';
 
 type SoilGridsQuantile = 'Q0.05' | 'Q0.5' | 'Q0.95';
 
+export const SOILGRIDS_TEXTURE_CLOSURE_MAX_DEVIATION = 15;
+
 interface RasterStatistics {
   weightedMean: number;
   median: number;
@@ -164,10 +166,15 @@ export class SoilGridsProvider {
     const clay = get('clay');
     if (!sand || !silt || !clay) return null;
 
-    const classification = this.classifier.classify(
+    const closedTexture = this.closeTextureComposition(
       sand.weightedMean,
       silt.weightedMean,
       clay.weightedMean,
+    );
+    const classification = this.classifier.classify(
+      closedTexture.sand,
+      closedTexture.silt,
+      closedTexture.clay,
     );
     const fieldCapacity = get('wv0033')?.weightedMean;
     const wiltingPoint = get('wv1500')?.weightedMean;
@@ -214,6 +221,8 @@ export class SoilGridsProvider {
       clayQ05: this.round(q05('clay')),
       clayQ50: this.round(classification.fractions.clay),
       clayQ95: this.round(q95('clay')),
+      textureCompositionOriginalSum: this.round(closedTexture.originalSum),
+      textureCompositionClosureApplied: closedTexture.closureApplied,
       usdaTexture: classification.usda,
       chamanTexture: classification.chaman,
       bulkDensityKgDm3: this.round(get('bdod')?.weightedMean, 3),
@@ -248,16 +257,61 @@ export class SoilGridsProvider {
       ),
       source: 'soilgrids',
       confidence:
-        coverage >= 90 && (uncertaintyRatio ?? 99) <= 1 ? 'medium' : 'low',
+        coverage >= 90 &&
+        (uncertaintyRatio ?? 99) <= 1 &&
+        Math.abs(closedTexture.originalSum - 100) <= 5
+          ? 'medium'
+          : 'low',
       qualityFlags: [
         `${SOILGRIDS_ATTRIBUTION}; mediana predictiva y estadística zonal ponderada por superficie.`,
-        ...(classification.fractions.normalized
-          ? ['Fracciones normalizadas dentro de tolerancia a 100%.']
+        ...(closedTexture.closureApplied
+          ? [
+              `Cierre composicional SoilGrids aplicado: suma Q0.50 original ${closedTexture.originalSum.toFixed(2)}%, normalizada a 100%.`,
+            ]
           : []),
         ...(Number.isFinite(uncertaintyRatio)
           ? [`Incertidumbre relativa media: ${uncertaintyRatio!.toFixed(2)}.`]
           : []),
       ],
+    };
+  }
+
+  private closeTextureComposition(
+    sand: number,
+    silt: number,
+    clay: number,
+  ): {
+    sand: number;
+    silt: number;
+    clay: number;
+    originalSum: number;
+    closureApplied: boolean;
+  } {
+    const fractions = [sand, silt, clay];
+    if (
+      fractions.some(
+        (fraction) =>
+          !Number.isFinite(fraction) || fraction < 0 || fraction > 100,
+      )
+    ) {
+      throw new Error('Fracciones texturales SoilGrids inválidas.');
+    }
+    const originalSum = sand + silt + clay;
+    if (
+      originalSum <= 0 ||
+      Math.abs(originalSum - 100) > SOILGRIDS_TEXTURE_CLOSURE_MAX_DEVIATION
+    ) {
+      throw new Error(
+        `Composición SoilGrids fuera de tolerancia: ${originalSum.toFixed(2)}%.`,
+      );
+    }
+    const factor = 100 / originalSum;
+    return {
+      sand: sand * factor,
+      silt: silt * factor,
+      clay: clay * factor,
+      originalSum,
+      closureApplied: Math.abs(originalSum - 100) > 0.01,
     };
   }
 

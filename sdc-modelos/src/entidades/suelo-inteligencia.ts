@@ -110,6 +110,8 @@ export interface IPerfilProfundidadSuelo {
   clayQ05?: number;
   clayQ50?: number;
   clayQ95?: number;
+  textureCompositionOriginalSum?: number;
+  textureCompositionClosureApplied?: boolean;
   usdaTexture?: TClaseTexturalUsda;
   chamanTexture?: TTexturaSuelo;
   bulkDensityKgDm3?: number;

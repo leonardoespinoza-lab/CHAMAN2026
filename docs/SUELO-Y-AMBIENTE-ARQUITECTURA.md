@@ -41,10 +41,11 @@ Factores de conversión: [documentación oficial SoilGrids](https://docs.isric.o
 
 ## Textura
 
-1. Se validan arena, limo y arcilla y solo se normalizan a 100 dentro de ±3 puntos (tolerancia al redondeo y remuestreo independiente de las capas WCS).
-2. Se calcula la clase USDA completa de doce categorías.
-3. Se reduce mediante el mapeo versionado `chaman-7-v1` a las siete clases existentes.
-4. La textura canónica inicial representa 0–30 cm con ponderación 5/10/15 cm.
+1. El clasificador genérico valida arena, limo y arcilla y solo normaliza a 100 dentro de ±3 puntos.
+2. Para las capas Q0.50 del WCS de SoilGrids se aplica un cierre composicional explícito hasta ±15 puntos, porque las tres predicciones se recuperan y remuestrean por separado. Se conserva la suma original, se agrega una bandera de calidad y se reduce la confianza cuando el ajuste supera 5 puntos; por encima de 15 se rechaza el horizonte.
+3. Se calcula la clase USDA completa de doce categorías.
+4. Se reduce mediante el mapeo versionado `chaman-7-v1` a las siete clases existentes.
+5. La textura canónica inicial representa 0–30 cm con ponderación 5/10/15 cm.
 
 La referencia normativa es el [Soil Survey Manual / triángulo textural USDA NRCS](https://www.nrcs.usda.gov/sites/default/files/2022-09/Soil-Survey-Manual.pdf).
 

@@ -80,6 +80,7 @@ describe('SoilIntelligenceConfidenceService', () => {
             depthToCm: 5,
             source: 'soilgrids',
             confidence: 'low',
+            textureCompositionOriginalSum: 90.5,
           },
         ],
         coveragePercentage: 80,
@@ -94,5 +95,6 @@ describe('SoilIntelligenceConfidenceService', () => {
     });
     expect(result.level).toBe('low');
     expect(result.factors.join(' ')).toMatch(/menor que una celda/i);
+    expect(result.factors.join(' ')).toMatch(/cierre composicional/i);
   });
 });

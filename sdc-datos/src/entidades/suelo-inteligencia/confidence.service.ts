@@ -7,7 +7,7 @@ import {
   SoilGridsProviderResult,
 } from './providers/provider.types';
 
-export const SOIL_CONFIDENCE_VERSION = 'soil-confidence-v1';
+export const SOIL_CONFIDENCE_VERSION = 'soil-confidence-v2';
 
 @Injectable()
 export class SoilIntelligenceConfidenceService {
@@ -62,6 +62,22 @@ export class SoilIntelligenceConfidenceService {
       score -= 0.08;
       factors.push(
         'Una o más capas INTA estuvieron temporalmente indisponibles.',
+      );
+    }
+    const maximumTextureClosureDeviation = input.soilgrids.profile.reduce(
+      (maximum, layer) =>
+        Number.isFinite(layer.textureCompositionOriginalSum)
+          ? Math.max(
+              maximum,
+              Math.abs(layer.textureCompositionOriginalSum! - 100),
+            )
+          : maximum,
+      0,
+    );
+    if (maximumTextureClosureDeviation > 5) {
+      score -= 0.1;
+      factors.push(
+        `Cierre composicional SoilGrids máximo: ${maximumTextureClosureDeviation.toFixed(1)} puntos.`,
       );
     }
     if (input.intaTexture && input.soilgridsTexture) {
