@@ -60,7 +60,6 @@ export class LotesService {
       idDistribuidor: establecimiento.idDistribuidor,
       idQuimica: establecimiento.idQuimica,
       idProductor: establecimiento.idProductor,
-      idDepartamento: body.idDepartamento,
       capacidadDeRiego: body.capacidadDeRiego,
       anchoDeBulbo: 1,
       metrosLinealesHas: 10000,

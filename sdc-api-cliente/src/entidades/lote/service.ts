@@ -136,7 +136,29 @@ export class LotesService {
     if (!this.puedeVer(data, permiso)) {
       throw new BadRequestException('No tiene permiso para ver este lote');
     }
+    try {
+      data.ubicacionAdministrativa =
+        (await this.repository.getAdministrativeLocation(id)) as any;
+    } catch (error) {
+      this.logger.warn(
+        `Ubicacion administrativa persistida no disponible para lote ${id}: ${error?.message || error}`,
+      );
+    }
     return data;
+  }
+
+  async getAdministrativeLocation(id: string, permiso: IPermiso) {
+    await this.getById(id, permiso);
+    return await this.repository.getAdministrativeLocation(id);
+  }
+
+  async resolveAdministrativeLocation(
+    id: string,
+    permiso: IPermiso,
+    force = false,
+  ) {
+    await this.getById(id, permiso);
+    return await this.repository.resolveAdministrativeLocation(id, force);
   }
 
   async get(filtro: IQueryParam, permiso: IPermiso): Promise<IListado<ILote>> {
@@ -145,6 +167,7 @@ export class LotesService {
   }
 
   async create(data: ICreateLote, permiso): Promise<ILote> {
+    data = this.withoutAutomaticDepartment(data);
     if (data.ubicacion?.poligono?.length) {
       data.ubicacion.geojson = {
         type: 'Polygon',
@@ -182,6 +205,7 @@ export class LotesService {
     data: IUpdateLote,
     permiso: IPermiso,
   ): Promise<ILote> {
+    data = this.withoutAutomaticDepartment(data);
     const current = await this.getById(id, permiso);
     if (data.ubicacion?.poligono?.length) {
       data.ubicacion.geojson = {
@@ -224,6 +248,13 @@ export class LotesService {
       'idEstablecimiento',
     ];
     return keys.some((key) => Object.prototype.hasOwnProperty.call(data, key));
+  }
+
+  private withoutAutomaticDepartment<T>(input: T): T {
+    const data = { ...input } as T & Record<string, unknown>;
+    delete data.idDepartamento;
+    delete data.ubicacionDepartamentoLegado;
+    return data;
   }
 
   async delete(idLote: string, permiso: IPermiso): Promise<ILote> {

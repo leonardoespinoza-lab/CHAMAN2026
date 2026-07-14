@@ -42,9 +42,11 @@ import { SuelosIntaModule } from './entidades/suelo-inta/module';
 import { IaMalezasModule } from './entidades/ia-malezas/module';
 import { ObservacionesMeteorologicasModule } from './entidades/observacion-meteorologica/module';
 import { IndicadoresAgrometeorologicosModule } from './entidades/indicador-agrometeorologico/module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     MongooseModule.forRoot(DB_URL, DB_OPTIONS),
     OauthModule,
     UsuariosModule,

@@ -9,6 +9,10 @@ import { IProductor } from "./productor";
 import { IQuimica } from "./quimica";
 import { TEnfermedad } from "./semilla";
 import { IHuellaHidrica, ISiembra } from "./siembra";
+import {
+  IDepartamentoLegadoLote,
+  IUbicacionAdministrativaLote,
+} from "./ubicacion-lote";
 
 export type TTexturaSuelo =
   | "Arcilloso"
@@ -46,7 +50,7 @@ export interface ISueloReferencia {
   fuente?: string;
   servicio?: string;
   fechaConsulta?: string;
-  confianza?: 'alta' | 'media' | 'baja';
+  confianza?: "alta" | "media" | "baja";
   provincia?: string;
   unidadCartografica?: string;
   tipoUnidad?: string;
@@ -105,6 +109,7 @@ export interface ILote {
   idProductor?: string;
   idEstablecimiento?: string;
   idDepartamento?: string;
+  ubicacionDepartamentoLegado?: IDepartamentoLegadoLote;
   idsDispositivo?: string[]; // Dispositivos asociados al lote
   // Datos para Huella Hídrica
   depositoN?: TTipoDepositoN;
@@ -119,6 +124,7 @@ export interface ILote {
   // Id de la ultima siembra del lote
   idSiembra?: string;
   calidadClima?: ICalidadClima;
+  ubicacionAdministrativa?: IUbicacionAdministrativaLote;
   // Populate
   quimica?: IQuimica;
   distribuidor?: IDistribuidor;
@@ -137,8 +143,11 @@ type OmitirCreate =
   | "productor"
   | "establecimiento"
   | "departamento"
+  | "idDepartamento"
   | "sondaSuelo"
-  | "dispositivos";
+  | "dispositivos"
+  | "ubicacionAdministrativa"
+  | "ubicacionDepartamentoLegado";
 export interface ICreateLote extends Omit<Partial<ILote>, OmitirCreate> {}
 
 type OmitirUpdate =
@@ -148,6 +157,9 @@ type OmitirUpdate =
   | "productor"
   | "establecimiento"
   | "departamento"
+  | "idDepartamento"
   | "sondaSuelo"
-  | "dispositivos";
+  | "dispositivos"
+  | "ubicacionAdministrativa"
+  | "ubicacionDepartamentoLegado";
 export interface IUpdateLote extends Omit<Partial<ILote>, OmitirUpdate> {}

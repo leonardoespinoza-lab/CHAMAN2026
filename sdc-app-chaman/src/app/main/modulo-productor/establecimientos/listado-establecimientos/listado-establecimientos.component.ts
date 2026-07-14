@@ -113,12 +113,16 @@ export class ListadoEstablecimientosComponent implements OnInit, OnDestroy {
   }
 
   public ubicacionResumen(data: IEstablecimiento): string {
-    const ubicacion = data.ubicacionAdministrativa;
-    const partes = this.unicos([ubicacion?.localidad, ubicacion?.partido, ubicacion?.provincia]);
+    const ubicacion = data.ubicacionOficial;
+    const partes = this.unicos([
+      ubicacion?.localidadReferencia?.nombre,
+      ubicacion?.nivelAdministrativo2?.nombre,
+      ubicacion?.provincia?.nombre,
+    ]);
     if (partes.length) return partes.join(' - ');
-    if (ubicacion?.direccion) return ubicacion.direccion;
 
-    const centro = data.ubicacion?.[0]?.centro || ubicacion?.coordenadas;
+    const punto = ubicacion?.puntoRepresentativo?.coordinates;
+    const centro = data.ubicacion?.[0]?.centro || (punto?.length ? { lng: punto[0], lat: punto[1] } : undefined);
     if (centro?.lat != null && centro?.lng != null) {
       return `${this.numero.format(Number(centro.lat))}, ${this.numero.format(Number(centro.lng))}`;
     }
@@ -183,9 +187,10 @@ export class ListadoEstablecimientosComponent implements OnInit, OnDestroy {
       label: 'Superficie',
       value: total > 0 ? this.numero.format(total) : 'Pendiente',
       detail: total > 0 ? 'ha cargadas' : 'Sin hectareas',
-      tooltip: total > 0
-        ? `${this.numero.format(total)} ha calculadas desde lotes o poligono del establecimiento.`
-        : 'Dibujar poligono o cargar lotes para calcular superficie.',
+      tooltip:
+        total > 0
+          ? `${this.numero.format(total)} ha calculadas desde lotes o poligono del establecimiento.`
+          : 'Dibujar poligono o cargar lotes para calcular superficie.',
       tone: total > 0 ? 'ok' : 'warn',
     };
   }
@@ -292,7 +297,8 @@ export class ListadoEstablecimientosComponent implements OnInit, OnDestroy {
   }
 
   private tieneUbicacion(data: IEstablecimiento): boolean {
-    const centro = data.ubicacion?.[0]?.centro || data.ubicacionAdministrativa?.coordenadas;
+    const punto = data.ubicacionOficial?.puntoRepresentativo?.coordinates;
+    const centro = data.ubicacion?.[0]?.centro || (punto?.length ? { lng: punto[0], lat: punto[1] } : undefined);
     return centro?.lat != null && centro?.lng != null;
   }
 

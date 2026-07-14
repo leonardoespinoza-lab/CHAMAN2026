@@ -21,6 +21,8 @@ import {
   ICalidadClima,
   IDispositivo,
   ISueloReferencia,
+  IUbicacionAdministrativaLote,
+  IDepartamentoLegadoLote,
 } from 'modelos/src';
 import { Document } from 'mongoose';
 import { Quimica } from '../../quimica/modelos/schema';
@@ -83,6 +85,9 @@ export class Lote implements Exactly<ILote, Lote> {
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idDepartamento?: string;
 
+  @Prop({ type: Object })
+  ubicacionDepartamentoLegado?: IDepartamentoLegadoLote;
+
   @Prop({ type: [mongoose.Schema.Types.ObjectId] })
   idsDispositivo?: string[]; // Dispositivos asociados al lote
 
@@ -127,6 +132,7 @@ export class Lote implements Exactly<ILote, Lote> {
   sondaSuelo?: IEstacion;
   siembra?: ISiembra;
   dispositivos?: IDispositivo[];
+  ubicacionAdministrativa?: IUbicacionAdministrativaLote;
 }
 
 export type LoteDocument = Lote & Document;

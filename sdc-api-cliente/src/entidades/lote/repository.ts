@@ -9,6 +9,7 @@ import {
 } from 'modelos/src';
 import {
   AGROMETEO_INTERNAL_TOKEN,
+  LOT_LOCATION_INTERNAL_TOKEN,
   API_CLIMA,
   API_DATOS,
   API_PREDICCIONES,
@@ -67,6 +68,28 @@ export class LotesRepository {
       {
         headers: AGROMETEO_INTERNAL_TOKEN
           ? { 'x-chaman-internal-token': AGROMETEO_INTERNAL_TOKEN }
+          : {},
+      },
+    );
+  }
+
+  async getAdministrativeLocation(idLote: string) {
+    const url = `${API_DATOS}/lot-locations/lotes/${idLote}`;
+    return await this.axios.GET(url, {
+      headers: LOT_LOCATION_INTERNAL_TOKEN
+        ? { 'x-chaman-internal-token': LOT_LOCATION_INTERNAL_TOKEN }
+        : {},
+    });
+  }
+
+  async resolveAdministrativeLocation(idLote: string, force = false) {
+    const url = `${API_DATOS}/lot-locations/lotes/${idLote}/resolve`;
+    return await this.axios.POST(
+      url,
+      { motivo: 'manual_retry', force },
+      {
+        headers: LOT_LOCATION_INTERNAL_TOKEN
+          ? { 'x-chaman-internal-token': LOT_LOCATION_INTERNAL_TOKEN }
           : {},
       },
     );

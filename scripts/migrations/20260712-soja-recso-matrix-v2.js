@@ -1,4 +1,3 @@
-const { MongoClient } = require('../../sdc-datos/node_modules/mongodb');
 const recsoCurrent = require('../data/sanitary/soja-recso-2024-2025');
 const recsoHistorical = require('../data/sanitary/soja-recso-2023-2024');
 
@@ -314,6 +313,7 @@ async function main() {
   if (!['plan', 'apply', 'rollback'].includes(mode)) {
     throw new Error('Modo invalido. Usar plan, apply o rollback.');
   }
+  const { MongoClient } = require('../../sdc-datos/node_modules/mongodb');
   const client = await MongoClient.connect(DB_URL, {
     serverSelectionTimeoutMS: Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 10000),
   });

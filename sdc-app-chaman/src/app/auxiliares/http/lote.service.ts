@@ -1,5 +1,13 @@
 import { Injectable } from '@angular/core';
-import { ICargaFitosanitaria, ILote, ICreateLote, IListado, IQueryParam, IUpdateLote } from 'modelos/src';
+import {
+  ICargaFitosanitaria,
+  ILote,
+  ICreateLote,
+  IListado,
+  IQueryParam,
+  IUbicacionAdministrativaLote,
+  IUpdateLote,
+} from 'modelos/src';
 import { HttpService } from './http.service';
 
 @Injectable({
@@ -27,6 +35,14 @@ export class LoteService {
 
   public cargaFitosanitaria(id: string): Promise<ICargaFitosanitaria> {
     return this.http.get(`/lotes/${id}/carga-fitosanitaria`);
+  }
+
+  public ubicacionAdministrativa(id: string): Promise<IUbicacionAdministrativaLote | null> {
+    return this.http.get(`/lotes/${id}/ubicacion`);
+  }
+
+  public reprocesarUbicacionAdministrativa(id: string, force = true): Promise<IUbicacionAdministrativaLote> {
+    return this.http.post(`/lotes/${id}/ubicacion/reprocesar`, {}, { params: { force } });
   }
 
   public sueloInta(lat: number, lng: number): Promise<any> {

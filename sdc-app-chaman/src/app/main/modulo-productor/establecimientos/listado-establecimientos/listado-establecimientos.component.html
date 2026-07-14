@@ -12,11 +12,11 @@
     (onPage)="helper.setPageSize(name, $event.rows)"
     [globalFilterFields]="[
       'nombre',
-      'ubicacionAdministrativa.localidad',
-      'ubicacionAdministrativa.partido',
-      'ubicacionAdministrativa.provincia',
+      'ubicacionOficial.localidadReferencia.nombre',
+      'ubicacionOficial.nivelAdministrativo2.nombre',
+      'ubicacionOficial.provincia.nombre',
       'productor.nombre',
-      'fuenteClimaPreferida'
+      'fuenteClimaPreferida',
     ]"
     rowExpandMode="single"
   >
