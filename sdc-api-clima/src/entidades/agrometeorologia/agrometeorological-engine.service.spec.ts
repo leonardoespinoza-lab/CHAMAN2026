@@ -276,6 +276,83 @@ describe('AgrometeorologicalEngineService', () => {
     jest.useRealTimers();
   });
 
+  it('usa los nombres y limites del crono oficial en cultivos anuales', () => {
+    const cases = [
+      {
+        crop: 'Trigo',
+        sowing: '2026-04-01',
+        date: '2026-07-13',
+        stages: {
+          R0_R1: 9,
+          R1_R2: 92,
+          R2_R3: 18,
+          R3_R4: 19,
+          R4_R5: 6,
+          R5_R6: 10,
+          R6_R7: 36,
+        },
+        expected: 'Espiguilla Terminal',
+      },
+      {
+        crop: 'Soja',
+        sowing: '2026-01-01',
+        date: '2026-02-14',
+        stages: {
+          siembra_emergencia: 8,
+          emergencia_R1: 35,
+          R1_R3: 18,
+          R3_R5: 28,
+          R5_R7: 38,
+        },
+        expected: 'Floracion',
+      },
+      {
+        crop: 'Maiz',
+        sowing: '2026-01-01',
+        date: '2026-03-16',
+        stages: {
+          siembra_emergencia: 8,
+          emergencia_floracion: 65,
+          floracion_madurez: 55,
+        },
+        expected: 'Floracion',
+      },
+      {
+        crop: 'Cebada',
+        sowing: '2026-04-01',
+        date: '2026-07-06',
+        stages: {
+          siembra_emergencia: 15,
+          emergencia_primer_nudo: 67,
+          primer_nudo_hoja_bandera: 14,
+          hoja_bandera_espigazon: 18,
+          espigazon_antesis: 7,
+          antesis_llenado_granos: 4,
+          llenado_granos_madurez_fisiologica: 30,
+        },
+        expected: 'Hoja Bandera',
+      },
+    ];
+
+    for (const item of cases) {
+      const stage = (engine as any).resolveStage(
+        {
+          fechaSiembra: item.sowing,
+          semilla: {
+            cultivo: item.crop,
+            fenologiaReferencia: {
+              rangosTermicos: { codigo_generico: { min: 0, max: 99999 } },
+            },
+          },
+          crono: { etapas: item.stages },
+        },
+        item.date,
+        500,
+      );
+      expect(stage).toBe(item.expected);
+    }
+  });
+
   it('persiste historiales largos en lotes acotados', async () => {
     const upsertIndicadores = jest.fn().mockResolvedValue(undefined);
     const service = new AgrometeorologicalEngineService(

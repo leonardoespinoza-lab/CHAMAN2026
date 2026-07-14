@@ -38,6 +38,37 @@ import { AgrometeorologiaRepository } from './repository';
 import { WeatherIngestionService } from './weather-ingestion.service';
 
 const INDICATOR_PERSIST_BATCH_SIZE = 100;
+const ANNUAL_CHRONO_STAGE_LABELS: Record<string, string[]> = {
+  trigo: [
+    'Siembra',
+    'Emergencia',
+    'Espiguilla Terminal',
+    'Hoja Bandera',
+    'Espigazon',
+    'Antesis',
+    'Llenado de Granos',
+    'Madurez Fisiologica',
+  ],
+  soja: [
+    'Siembra',
+    'Emergencia',
+    'Floracion',
+    'Fructificacion',
+    'Inicio de llenado',
+    'Madurez Fisiologica',
+  ],
+  maiz: ['Siembra', 'Emergencia', 'Floracion', 'Madurez'],
+  cebada: [
+    'Siembra',
+    'Emergencia',
+    'Primer Nudo',
+    'Hoja Bandera',
+    'Espigazon',
+    'Antesis',
+    'Llenado de Granos',
+    'Madurez Fisiologica',
+  ],
+};
 import { AGROMETEO_FORECAST_MAX_AGE_HOURS } from '../../env';
 
 interface ISoilProfile {
@@ -955,21 +986,11 @@ export class AgrometeorologicalEngineService {
       .sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)))
       .pop();
     if (field?.etapa) return field.etapa;
-    const thermalRanges = siembra.semilla?.fenologiaReferencia?.rangosTermicos;
-    if (thermalRanges) {
-      const match = Object.entries(thermalRanges).find(
-        ([, range]) =>
-          accumulatedGdd >= range.min && accumulatedGdd <= range.max,
-      );
-      if (match) return this.humanizeStage(match[0]);
-    }
     const stages = (siembra.crono?.etapas || {}) as Record<string, number>;
     const entries = Object.entries(stages).filter(([, value]) =>
       Number.isFinite(Number(value)),
     );
-    if (!entries.length) return 'Ciclo en seguimiento';
-    const days = this.daysBetween(siembra.fechaSiembra, date);
-    if (esCultivoPerenne(siembra.semilla?.cultivo)) {
+    if (entries.length && esCultivoPerenne(siembra.semilla?.cultivo)) {
       const sorted = entries
         .map(([name, value]) => ({ name, day: Number(value) }))
         .sort((a, b) => a.day - b.day);
@@ -980,14 +1001,38 @@ export class AgrometeorologicalEngineService {
           sorted[0].name,
       );
     }
-    let accumulated = 0;
-    let stage = entries[0][0];
-    for (const [name, duration] of entries) {
-      accumulated += Math.max(0, Number(duration));
-      if (days >= accumulated) stage = name;
-      else break;
+    if (entries.length) {
+      const days = this.daysBetween(siembra.fechaSiembra, date);
+      const labels =
+        ANNUAL_CHRONO_STAGE_LABELS[this.normalize(siembra.semilla?.cultivo)];
+      if (labels?.length === entries.length + 1) {
+        let stageIndex = 0;
+        let accumulated = 0;
+        for (const [, duration] of entries) {
+          accumulated += Math.max(0, Number(duration));
+          if (days >= accumulated) stageIndex += 1;
+          else break;
+        }
+        return labels[Math.min(stageIndex, labels.length - 1)];
+      }
+      let accumulated = 0;
+      let stage = entries[0][0];
+      for (const [name, duration] of entries) {
+        accumulated += Math.max(0, Number(duration));
+        if (days >= accumulated) stage = name;
+        else break;
+      }
+      return this.humanizeStage(stage);
     }
-    return this.humanizeStage(stage);
+    const thermalRanges = siembra.semilla?.fenologiaReferencia?.rangosTermicos;
+    if (thermalRanges) {
+      const match = Object.entries(thermalRanges).find(
+        ([, range]) =>
+          accumulatedGdd >= range.min && accumulatedGdd <= range.max,
+      );
+      if (match) return this.humanizeStage(match[0]);
+    }
+    return 'Ciclo en seguimiento';
   }
 
   private resolveThresholds(
