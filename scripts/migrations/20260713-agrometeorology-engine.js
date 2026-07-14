@@ -103,6 +103,40 @@ async function safeDropIndex(collection, name) {
     await collection.dropIndex(name);
 }
 
+function sameIndexKey(left, right) {
+  return JSON.stringify(left || {}) === JSON.stringify(right || {});
+}
+
+async function ensureIndex(collection, definition) {
+  const indexes = await collection.indexes();
+  const sameName = indexes.find(
+    (index) => index.name === definition.options.name,
+  );
+  if (sameName) {
+    if (
+      !sameIndexKey(sameName.key, definition.key) ||
+      Boolean(sameName.unique) !== Boolean(definition.options.unique)
+    ) {
+      throw new Error(
+        `El indice ${definition.options.name} existe con una definicion incompatible.`,
+      );
+    }
+    return sameName.name;
+  }
+
+  const equivalent = indexes.find((index) =>
+    sameIndexKey(index.key, definition.key),
+  );
+  if (equivalent) {
+    if (definition.options.unique && !equivalent.unique) {
+      await collection.dropIndex(equivalent.name);
+    } else {
+      return equivalent.name;
+    }
+  }
+  return await collection.createIndex(definition.key, definition.options);
+}
+
 async function plan(db) {
   const output = { migrationId: MIGRATION_ID, mode: "plan", collections: {} };
   for (const [key, name] of Object.entries(COLLECTIONS)) {
@@ -182,10 +216,8 @@ async function apply(db) {
     indicatorDuplicates,
   );
 
-  for (const index of INDEXES.weather)
-    await weather.createIndex(index.key, index.options);
-  for (const index of INDEXES.indicators)
-    await indicators.createIndex(index.key, index.options);
+  for (const index of INDEXES.weather) await ensureIndex(weather, index);
+  for (const index of INDEXES.indicators) await ensureIndex(indicators, index);
   await manifest.updateOne(
     { migrationId: MIGRATION_ID },
     {
