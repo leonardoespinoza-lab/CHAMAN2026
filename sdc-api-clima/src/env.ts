@@ -77,7 +77,8 @@ export const CRON_TEST =
 
 // Motor agrometeorologico
 export const AGROMETEO_CRON_ENABLED =
-  process.env.AGROMETEO_CRON_ENABLED !== 'false' && ENV !== 'test';
+  process.env.AGROMETEO_CRON_ENABLED === 'true' ||
+  (process.env.AGROMETEO_CRON_ENABLED !== 'false' && ENV !== 'test');
 export const AGROMETEO_FORECAST_DAYS = Math.max(
   1,
   Math.min(14, +process.env.AGROMETEO_FORECAST_DAYS || 7),
