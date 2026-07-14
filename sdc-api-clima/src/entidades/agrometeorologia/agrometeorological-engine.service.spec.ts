@@ -223,4 +223,22 @@ describe('AgrometeorologicalEngineService', () => {
     expect(result.metricas.gddDaily).toBeUndefined();
     expect(result.advertencias.join(' ')).toContain('GDD no calculable');
   });
+
+  it('persiste historiales largos en lotes acotados', async () => {
+    const upsertIndicadores = jest.fn().mockResolvedValue(undefined);
+    const service = new AgrometeorologicalEngineService(
+      { upsertIndicadores } as any,
+      {} as any,
+    );
+    const indicators = Array.from({ length: 251 }, (_, index) => ({
+      fecha: `2026-01-${String((index % 28) + 1).padStart(2, '0')}`,
+    })) as any;
+
+    await (service as any).persistInBatches(indicators);
+
+    expect(upsertIndicadores).toHaveBeenCalledTimes(3);
+    expect(upsertIndicadores.mock.calls.map(([batch]) => batch.length)).toEqual([
+      100, 100, 51,
+    ]);
+  });
 });

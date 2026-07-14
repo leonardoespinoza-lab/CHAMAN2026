@@ -36,6 +36,8 @@ import {
 } from 'modelos/src';
 import { AgrometeorologiaRepository } from './repository';
 import { WeatherIngestionService } from './weather-ingestion.service';
+
+const INDICATOR_PERSIST_BATCH_SIZE = 100;
 import { AGROMETEO_FORECAST_MAX_AGE_HOURS } from '../../env';
 
 interface ISoilProfile {
@@ -137,7 +139,7 @@ export class AgrometeorologicalEngineService {
       observations,
       syncWarnings,
     );
-    await this.persistInBatches(calculated, 500);
+    await this.persistInBatches(calculated);
     const warnings = [
       ...new Set(calculated.flatMap((item) => item.advertencias)),
     ];
@@ -1070,7 +1072,7 @@ export class AgrometeorologicalEngineService {
 
   private async persistInBatches(
     indicators: ICreateIndicadorAgrometeorologico[],
-    size: number,
+    size = INDICATOR_PERSIST_BATCH_SIZE,
   ): Promise<void> {
     for (let index = 0; index < indicators.length; index += size) {
       await this.repository.upsertIndicadores(
