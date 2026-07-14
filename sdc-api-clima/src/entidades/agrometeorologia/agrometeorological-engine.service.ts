@@ -595,16 +595,18 @@ export class AgrometeorologicalEngineService {
     }
     const indicators = await this.repository.getIndicadores({
       filter: JSON.stringify(filter),
-      sort: JSON.stringify({ fecha: 1 }),
+      sort: 'fecha',
       limit: 0,
     });
     const indicatorForecastCutoff =
       Date.now() - AGROMETEO_FORECAST_MAX_AGE_HOURS * 3600000;
-    const rows = (indicators.datos || []).filter(
-      (item) =>
-        !item.esPronostico ||
-        new Date(item.calculadoEn).getTime() >= indicatorForecastCutoff,
-    );
+    const rows = (indicators.datos || [])
+      .filter(
+        (item) =>
+          !item.esPronostico ||
+          new Date(item.calculadoEn).getTime() >= indicatorForecastCutoff,
+      )
+      .sort((a, b) => a.fecha.localeCompare(b.fecha));
     if (!rows.length) {
       return {
         summary: {},

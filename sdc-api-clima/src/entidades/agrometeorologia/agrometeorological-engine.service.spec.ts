@@ -353,6 +353,74 @@ describe('AgrometeorologicalEngineService', () => {
     }
   });
 
+  it('ordena cronologicamente la respuesta aunque el repositorio entregue filas mezcladas', async () => {
+    const getIndicadores = jest.fn().mockResolvedValue({
+      datos: [
+        {
+          idSiembra: '64b000000000000000000001',
+          idEstablecimiento: '64b000000000000000000003',
+          fecha: '2026-07-03',
+          etapaFenologica: 'Emergencia',
+          metricas: { gddAccumulated: 30 },
+          fuente: 'open_meteo',
+          fuentePorVariable: {},
+          banderasCalidad: [],
+          advertencias: [],
+          completitudPct: 100,
+          esPronostico: false,
+          calculadoEn: '2026-07-03T18:00:00.000Z',
+          versionParametros: 'test-v1',
+        },
+        {
+          idSiembra: '64b000000000000000000001',
+          idEstablecimiento: '64b000000000000000000003',
+          fecha: '2026-07-01',
+          etapaFenologica: 'Siembra',
+          metricas: { gddAccumulated: 10 },
+          fuente: 'open_meteo',
+          fuentePorVariable: {},
+          banderasCalidad: [],
+          advertencias: [],
+          completitudPct: 100,
+          esPronostico: false,
+          calculadoEn: '2026-07-01T18:00:00.000Z',
+          versionParametros: 'test-v1',
+        },
+        {
+          idSiembra: '64b000000000000000000001',
+          idEstablecimiento: '64b000000000000000000003',
+          fecha: '2026-07-02',
+          etapaFenologica: 'Emergencia',
+          metricas: { gddAccumulated: 20 },
+          fuente: 'open_meteo',
+          fuentePorVariable: {},
+          banderasCalidad: [],
+          advertencias: [],
+          completitudPct: 100,
+          esPronostico: false,
+          calculadoEn: '2026-07-02T18:00:00.000Z',
+          versionParametros: 'test-v1',
+        },
+      ],
+    });
+    const service = new AgrometeorologicalEngineService(
+      {
+        getIndicadores,
+        getObservaciones: jest.fn().mockResolvedValue({ datos: [] }),
+      } as any,
+      {} as any,
+    );
+
+    const response = await service.getResponse('64b000000000000000000001');
+
+    expect(response.series.map((item) => item.date)).toEqual([
+      '2026-07-01',
+      '2026-07-02',
+      '2026-07-03',
+    ]);
+    expect(getIndicadores.mock.calls[0][0].sort).toBe('fecha');
+  });
+
   it('persiste historiales largos en lotes acotados', async () => {
     const upsertIndicadores = jest.fn().mockResolvedValue(undefined);
     const service = new AgrometeorologicalEngineService(
