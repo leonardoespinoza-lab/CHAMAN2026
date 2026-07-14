@@ -164,6 +164,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   public estadoFenologiaTermica?: IEstadoFenologiaArveja;
   public cargandoFenologiaTermica = false;
   public errorFenologiaTermica = '';
+  public detalleEtapasDialogVisible = false;
   public registroDialogVisible = false;
   public guardandoRegistro = false;
   public registroEditandoId?: string;
@@ -435,6 +436,10 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     return this.registroEtapa(etapa) ? 'Editar inicio' : 'Registrar inicio';
   }
 
+  public abrirDetalleEtapas(): void {
+    this.detalleEtapasDialogVisible = true;
+  }
+
   public abrirRegistroEtapa(etapa?: FenologiaStage): void {
     if (!this.puedeRegistrarFenologiaCampo) {
       this.helper.notifWarn('No hay una siembra activa o etapas fenologicas disponibles para registrar.');
@@ -454,6 +459,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       etapa: existente?.etapa || nombreEtapa,
       observaciones: existente?.observaciones || '',
     };
+    this.detalleEtapasDialogVisible = false;
     this.registroDialogVisible = true;
   }
 

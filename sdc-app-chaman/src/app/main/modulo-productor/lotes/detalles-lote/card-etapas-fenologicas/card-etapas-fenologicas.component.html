@@ -11,16 +11,6 @@
           </small>
         }
       </div>
-      @if (puedeRegistrarFenologiaCampo) {
-        <p-button
-          label="Registrar etapa"
-          icon="pi pi-calendar-plus"
-          severity="secondary"
-          [outlined]="true"
-          size="small"
-          (click)="abrirRegistroEtapa()"
-        ></p-button>
-      }
     </div>
 
     <div class="crop-detail-grid">
@@ -88,10 +78,15 @@
           <strong>{{ cultivo }} · {{ etapas.length }} estadios operativos</strong>
           <small>La ilustracion ordena el ciclo; las fechas y el estado provienen de {{ fuenteTexto }}.</small>
         </div>
-        <div class="current-stage-chip">
-          <i class="pi pi-map-marker"></i>
-          <span>Estadio actual</span>
-          <strong>{{ etapaActual || 'Sin etapa confirmada' }}</strong>
+        <div class="growth-board-actions">
+          <div class="current-stage-chip">
+            <span>Estadio actual</span>
+            <strong>{{ etapaActual || 'Sin etapa confirmada' }}</strong>
+          </div>
+          <button type="button" class="stages-detail-trigger" (click)="abrirDetalleEtapas()">
+            <i class="pi pi-list"></i>
+            Ver etapas y registros
+          </button>
         </div>
       </div>
 
@@ -104,7 +99,7 @@
               [attr.aria-label]="etiquetaVisualEtapa(etapa, i)"
             >
               @if (etapa.estado === 'current') {
-                <span class="growth-now"><i class="pi pi-map-marker"></i> Ahora</span>
+                <span class="growth-now">Ahora</span>
               } @else {
                 <span class="growth-order">{{ i + 1 }}</span>
               }
@@ -127,6 +122,12 @@
                 <small>{{
                   etapa.fecha ? (etapa.fecha | date: 'd MMM') : etapa.requiereCampo ? 'Confirmar a campo' : 'Sin fecha'
                 }}</small>
+                @if (puedeRegistrarFenologiaCampo) {
+                  <button type="button" class="growth-register-btn" (click)="abrirRegistroEtapa(etapa)">
+                    <i class="pi pi-calendar-plus"></i>
+                    {{ registroEtapa(etapa) ? 'Editar' : 'Registrar' }}
+                  </button>
+                }
               </div>
             </article>
           }
@@ -134,33 +135,6 @@
         </div>
       </div>
     </section>
-
-    <div class="stage-journey" [style.--stage-min-width]="timelineMinWidth">
-      <div class="stage-journey-scroll">
-        @for (etapa of etapas; track etapa.nombre; let i = $index) {
-          <article class="stage-step" [ngClass]="etapa.estado">
-            <span class="stage-status">{{ etapaEstadoTexto(etapa, i) }}</span>
-            <strong>{{ etapa.nombre }}</strong>
-            <small>{{
-              etapa.fecha ? (etapa.fecha | date: 'd/M') : etapa.requiereCampo ? 'Observacion' : 'Fecha no alcanzada'
-            }}</small>
-            <em>{{ etapaDetalleTexto(etapa, i) }}</em>
-            @if (registroEtapa(etapa)) {
-              <span class="stage-registered">Campo {{ registroEtapa(etapa)?.fecha | date: 'd/M' }}</span>
-            }
-            <div class="step-progress">
-              <span [style.width.%]="etapaProgreso(etapa)"></span>
-            </div>
-            @if (puedeRegistrarFenologiaCampo) {
-              <button type="button" class="stage-register-btn" (click)="abrirRegistroEtapa(etapa)">
-                <i class="pi pi-calendar-plus"></i>
-                {{ textoBotonRegistro(etapa) }}
-              </button>
-            }
-          </article>
-        }
-      </div>
-    </div>
   } @else {
     @if (fenologiaTermica) {
       <section class="thermal-reference">
@@ -267,6 +241,51 @@
     </section>
   }
 </div>
+
+<p-dialog
+  [(visible)]="detalleEtapasDialogVisible"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(1080px, 96vw)' }"
+  [breakpoints]="{ '720px': '96vw' }"
+  styleClass="chaman-detail-dialog phenology-stages-dialog"
+>
+  <ng-template pTemplate="header">
+    <div class="stages-dialog-heading">
+      <span>Detalle fenologico y registros</span>
+      <strong>{{ cultivo }} · {{ etapaActual || 'Sin etapa confirmada' }}</strong>
+      <small>Fechas proyectadas, avance del ciclo y observaciones registradas a campo.</small>
+    </div>
+  </ng-template>
+
+  <div class="stage-journey stage-journey-modal" [style.--stage-min-width]="timelineMinWidth">
+    <div class="stage-journey-scroll">
+      @for (etapa of etapas; track etapa.nombre; let i = $index) {
+        <article class="stage-step" [ngClass]="etapa.estado">
+          <span class="stage-status">{{ etapaEstadoTexto(etapa, i) }}</span>
+          <strong>{{ etapa.nombre }}</strong>
+          <small>{{
+            etapa.fecha ? (etapa.fecha | date: 'd/M') : etapa.requiereCampo ? 'Observacion' : 'Fecha no alcanzada'
+          }}</small>
+          <em>{{ etapaDetalleTexto(etapa, i) }}</em>
+          @if (registroEtapa(etapa)) {
+            <span class="stage-registered">Campo {{ registroEtapa(etapa)?.fecha | date: 'd/M' }}</span>
+          }
+          <div class="step-progress">
+            <span [style.width.%]="etapaProgreso(etapa)"></span>
+          </div>
+          @if (puedeRegistrarFenologiaCampo) {
+            <button type="button" class="stage-register-btn" (click)="abrirRegistroEtapa(etapa)">
+              <i class="pi pi-calendar-plus"></i>
+              {{ textoBotonRegistro(etapa) }}
+            </button>
+          }
+        </article>
+      }
+    </div>
+  </div>
+</p-dialog>
 
 @if (puedeRegistrarFenologiaCampo) {
   <p-dialog
