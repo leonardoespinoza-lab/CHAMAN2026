@@ -1,5 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { AfterViewInit, Component, EventEmitter, Input, Output, SimpleChanges } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  EventEmitter,
+  Input,
+  OnDestroy,
+  Output,
+  SimpleChanges,
+  ViewChild,
+} from '@angular/core';
 import { FormGroup } from '@angular/forms';
 import { IGeoJSONCircle, IGeoJSONLineString, IGeoJSONMultiPolygon, IGeoJSONPoint, IGeoJSONPolygon } from 'modelos/src';
 import { Feature, Map, View } from 'ol';
@@ -22,9 +32,12 @@ import { SharedModule } from '../../shared.module';
   templateUrl: './map-draw.component.html',
   styleUrl: './map-draw.component.scss',
 })
-export class MapDrawComponent implements AfterViewInit {
+export class MapDrawComponent implements AfterViewInit, OnDestroy {
+  @ViewChild('mapContainer', { static: true }) private mapContainer!: ElementRef<HTMLElement>;
+
   private currentPosition?: IGeoJSONPoint;
   private modificacionLocal = false;
+  private resizeObserver?: ResizeObserver;
   @Input() formGeojson?: FormGroup;
   @Input() centrarA?: IGeoJSONPoint;
   @Input() public tipo?: 'Point' | 'LineString' | 'Polygon' | 'Circle' | 'MultiPolygon';
@@ -134,7 +147,7 @@ export class MapDrawComponent implements AfterViewInit {
     const zoom = this.helper.isHandset ? 13 : 15;
 
     this.map = new Map({
-      target: 'map-draw',
+      target: this.mapContainer.nativeElement,
       controls: [],
       layers: [
         new TileLayer({
@@ -164,6 +177,9 @@ export class MapDrawComponent implements AfterViewInit {
         projection: 'EPSG:4326',
       }),
     });
+
+    this.resizeObserver = new ResizeObserver(() => this.map?.updateSize());
+    this.resizeObserver.observe(this.mapContainer.nativeElement);
 
     if (this.color) {
       this.s = {
@@ -589,8 +605,19 @@ export class MapDrawComponent implements AfterViewInit {
     });
   }
 
+  private async waitForMapContainerLayout(): Promise<void> {
+    const container = this.mapContainer.nativeElement;
+    const maxFrames = 30;
+
+    for (let frame = 0; frame < maxFrames; frame += 1) {
+      if (container.clientWidth > 0 && container.clientHeight > 0) return;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    }
+  }
+
   async ngAfterViewInit(): Promise<void> {
     this.currentPosition = await this.helper.getCurrentPosition();
+    await this.waitForMapContainerLayout();
     await this.initMap();
     this.initDraw();
     this.handleModify();
@@ -609,6 +636,11 @@ export class MapDrawComponent implements AfterViewInit {
     this.formGeojson?.get('coordinates')?.valueChanges.subscribe(() => {
       this.updatePunto();
     });
+  }
+
+  ngOnDestroy(): void {
+    this.resizeObserver?.disconnect();
+    this.map?.setTarget(undefined);
   }
 
   ngOnChanges(changes: SimpleChanges): void {
