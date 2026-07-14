@@ -77,6 +77,64 @@ describe('CardSueloAmbienteComponent request lifecycle', () => {
     expect(component.assessment).toBeUndefined();
     expect(component.loading).toBeFalse();
   });
+
+  it('keeps canonical cartography primary and exposes a confirmed override separately', () => {
+    component.lote = {
+      _id: 'lot-1',
+      sueloConfirmadoPorUsuario: true,
+      sueloProcedencia: 'manual',
+    };
+    component.assessment = {
+      loteId: 'lot-1',
+      status: 'ready',
+      summary: {
+        canonicalTexture: 'Franco limoso',
+        estimatedTexture: 'Franco limoso',
+        operationalTexture: 'Arcilloso',
+        operationalTextureSource: 'manual',
+        depthFromCm: 0,
+        depthToCm: 30,
+      },
+      sources: [
+        { type: 'inta', provider: 'INTA', confidence: 'medium' },
+        { type: 'soilgrids', provider: 'SoilGrids', confidence: 'medium' },
+      ],
+    };
+
+    expect(component.canonicalTextureLabel).toBe('Franco limoso');
+    expect(component.operationalTextureLabel).toBe('Arcilloso');
+    expect(component.hasOperationalOverride).toBeTrue();
+    expect(component.sourceLabel).toBe('INTA + SoilGrids');
+    expect(component.operationalSourceLabel).toBe('Confirmado por usuario');
+  });
+
+  it('shows an unconfirmed manual value as legacy instead of confirmed', () => {
+    component.lote = {
+      _id: 'lot-legacy',
+      sueloProcedencia: 'manual',
+    };
+    component.assessment = {
+      loteId: 'lot-legacy',
+      status: 'ready',
+      source: { type: 'manual', confidence: 'low' },
+      summary: {
+        canonicalTexture: 'Franco limoso',
+        estimatedTexture: 'Franco limoso',
+        operationalTexture: 'Arcilloso',
+        operationalTextureSource: 'manual',
+        depthFromCm: 0,
+        depthToCm: 30,
+      },
+      manualConflict: true,
+    };
+
+    expect(component.hasOperationalOverride).toBeTrue();
+    expect(component.isOperationalTextureConfirmed).toBeFalse();
+    expect(component.sourceLabel).toBe('Solo dato legacy');
+    expect(component.operationalTextureTitle).toBe('Alternativa legacy');
+    expect(component.operationalSourceLabel).toBe('Dato legacy no confirmado');
+    expect(component.operationalConflictTitle).toContain('alternativa legacy');
+  });
 });
 
 function lot(id: string, longitude: number): any {

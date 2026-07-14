@@ -32,6 +32,14 @@ import { ParamsService } from '../../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../../auxiliares/shared.module';
 import { ILoteTabla } from '../listado-lotes/listado-lotes.component';
 
+type SoilOverridePayloadName =
+  | 'suelos'
+  | 'capacidadDeCampo'
+  | 'puntoMarchitez'
+  | 'sueloReferencia'
+  | 'texturaLixiviacion'
+  | 'texturaEscorrentia';
+
 @Component({
   selector: 'app-crear-editar-lote',
   imports: [SharedModule, MapDrawComponent],
@@ -60,6 +68,15 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
   public kmzImportando = false;
   public kmzNombreArchivo = '';
   public kmzPoligonos: IKmzPolygonImportado[] = [];
+  private readonly explicitlyEditedSoilPayloadNames = new Set<SoilOverridePayloadName>();
+  private readonly soilOverridePayloadNames: SoilOverridePayloadName[] = [
+    'suelos',
+    'capacidadDeCampo',
+    'puntoMarchitez',
+    'sueloReferencia',
+    'texturaLixiviacion',
+    'texturaEscorrentia',
+  ];
 
   public texturas: TTexturaSuelo[] = [
     'Arcilloso',
@@ -164,10 +181,14 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
     });
   }
   public agregarSuelo() {
+    this.markSoilPayloadEdited('suelos');
     this.suelos.push(this.agregarSueloFormGroup(this.sueloNuevoSugerido()));
+    this.suelos.markAsDirty();
   }
   public borrarSuelo(i: number) {
+    this.markSoilPayloadEdited('suelos');
     this.suelos.removeAt(i);
+    this.suelos.markAsDirty();
   }
   private createForm(): void {
     this.form = new FormGroup({
@@ -231,17 +252,27 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
     }
   }
 
-  public onDispositivosChange(): void {
+  public onDispositivosChange(userInitiated = true): void {
     const lanza = this.lanzaSueloSeleccionada;
     if (!lanza) return;
     if (this.debeAutocompletarCapasDesdeLanza()) {
-      this.prepararCapasDesdeLanza(false);
+      this.prepararCapasDesdeLanza(false, userInitiated);
     }
   }
 
   public cambioTipoSueloManual(aplicarValores = true): void {
     if (!this.form) return;
-    const textura = (this.form.get('tipoSueloManual')?.value || 'Franco') as TTexturaSuelo;
+    const textura = this.form.get('tipoSueloManual')?.value as TTexturaSuelo | undefined;
+    if (!textura) return;
+    if (aplicarValores) {
+      this.markSoilPayloadEdited(
+        'suelos',
+        'capacidadDeCampo',
+        'puntoMarchitez',
+        'texturaLixiviacion',
+        'texturaEscorrentia'
+      );
+    }
     const agua = this.capacidadPorTextura(textura);
 
     const capacidadActual = this.form.get('capacidadDeCampo')?.value;
@@ -263,19 +294,12 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
     this.sincronizarSueloManualEnCapas();
   }
 
-  public prepararCapasDesdeLanza(forzar = true): void {
+  public prepararCapasDesdeLanza(forzar = true, markAsUserEdit = true): void {
     const lanza = this.lanzaSueloSeleccionada;
     const profundidades = this.profundidadesLanza(lanza);
     if (!lanza || !profundidades.length || !this.suelos) {
       this.helper.notifWarn('No pude detectar capas de medicion en la lanza seleccionada.');
       return;
-    }
-
-    const textura = this.texturaPrincipalLote();
-    const agua = this.capacidadPorTextura(textura);
-
-    if (forzar) {
-      this.suelos.clear();
     }
 
     for (let i = 0; i < profundidades.length; i++) {
@@ -284,10 +308,7 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
           this.agregarSueloFormGroup({
             numeroDeSensor: i + 1,
             profundidad: profundidades[i],
-            textura,
             hayRaices: i < 6,
-            capacidadDeCampo: agua.capacidadDeCampo,
-            puntoMarchitez: agua.puntoMarchitez,
           })
         );
         continue;
@@ -297,16 +318,15 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
       const patch: Partial<ISuelo> = {};
       if (forzar || this.esValorVacio(group.get('numeroDeSensor')?.value)) patch.numeroDeSensor = i + 1;
       if (forzar || this.esValorVacio(group.get('profundidad')?.value)) patch.profundidad = profundidades[i];
-      if (forzar || this.esValorVacio(group.get('textura')?.value)) patch.textura = textura;
-      if (forzar || this.esValorVacio(group.get('capacidadDeCampo')?.value))
-        patch.capacidadDeCampo = agua.capacidadDeCampo;
-      if (forzar || this.esValorVacio(group.get('puntoMarchitez')?.value)) patch.puntoMarchitez = agua.puntoMarchitez;
       if (forzar || this.esValorVacio(group.get('hayRaices')?.value)) patch.hayRaices = i < 6;
       group.patchValue(patch);
     }
 
-    this.suelos.markAsDirty();
-    this.helper.notifSuccess(`${profundidades.length} capas de suelo preparadas desde la lanza seleccionada.`);
+    if (markAsUserEdit) {
+      this.suelos.markAsDirty();
+      this.markSoilPayloadEdited('suelos');
+      this.helper.notifSuccess(`${profundidades.length} capas de suelo preparadas desde la lanza seleccionada.`);
+    }
   }
 
   public esLanzaSuelo(dispositivo?: IDispositivo): boolean {
@@ -358,12 +378,18 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
         }
       }
       this.form.patchValue(patch);
+      for (const name of this.soilOverridePayloadNames) {
+        if (Object.prototype.hasOwnProperty.call(patch, name)) {
+          this.markSoilPayloadEdited(name);
+        }
+      }
 
       if (sugerencias.suelos?.length) {
         this.suelos.clear();
         for (const suelo of sugerencias.suelos) {
           this.suelos.push(this.agregarSueloFormGroup(suelo));
         }
+        this.markSoilPayloadEdited('suelos');
       }
 
       this.helper.notifSuccess('Suelo INTA aplicado. Podes ajustar los valores antes de guardar.');
@@ -441,7 +467,7 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
     return this.toNumero(match[1]);
   }
 
-  private texturaPrincipalLote(): TTexturaSuelo {
+  private texturaPrincipalLote(): TTexturaSuelo | undefined {
     const manual = this.form?.get('tipoSueloManual')?.value as TTexturaSuelo | undefined;
     if (manual) return manual;
 
@@ -460,19 +486,20 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
     );
   }
 
-  private texturaInicialLote(): TTexturaSuelo {
+  private texturaInicialLote(): TTexturaSuelo | undefined {
     const desdePerfil = this.lote?.suelos?.map((suelo) => suelo.textura).find(Boolean) as TTexturaSuelo | undefined;
     const desdeHuella = (this.lote?.texturaLixiviacion || this.lote?.texturaEscorrentia) as TTexturaSuelo | undefined;
     const desdeReferencia = this.texturaDesdeTexto(
       this.lote?.sueloReferencia?.texturaSuperficial || this.lote?.sueloReferencia?.texturaSubsuelo
     );
-    return desdePerfil || desdeHuella || desdeReferencia || 'Franco';
+    return desdePerfil || desdeHuella || desdeReferencia;
   }
 
   private sincronizarSueloManualEnCapas(): void {
     if (!this.form || !this.suelos) return;
 
-    const textura = (this.form.get('tipoSueloManual')?.value || 'Franco') as TTexturaSuelo;
+    const textura = this.form.get('tipoSueloManual')?.value as TTexturaSuelo | undefined;
+    if (!textura) return;
     const agua = this.capacidadPorTextura(textura);
     const capacidadDeCampo = this.form.get('capacidadDeCampo')?.value ?? agua.capacidadDeCampo;
     const puntoMarchitez = this.form.get('puntoMarchitez')?.value ?? agua.puntoMarchitez;
@@ -501,18 +528,19 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
     }
   }
 
-  private texturaDesdeTexto(value?: string): TTexturaSuelo {
+  private texturaDesdeTexto(value?: string): TTexturaSuelo | undefined {
     const texto = this.normalizarTexto(value);
+    if (!texto) return undefined;
     if (texto.includes('lim') && texto.includes('franco')) return 'Franco limoso';
     if (texto.includes('lim')) return 'Limoso';
     if (texto.includes('aren') && texto.includes('franco')) return 'Franco arenoso';
     if (texto.includes('aren')) return 'Arenoso';
     if (texto.includes('arcill') && texto.includes('franco')) return 'Franco arcilloso';
     if (texto.includes('arcill')) return 'Arcilloso';
-    return 'Franco';
+    return texto.includes('franco') ? 'Franco' : undefined;
   }
 
-  private capacidadPorTextura(textura: TTexturaSuelo): Pick<ISuelo, 'capacidadDeCampo' | 'puntoMarchitez'> {
+  private capacidadPorTextura(textura?: TTexturaSuelo): Pick<ISuelo, 'capacidadDeCampo' | 'puntoMarchitez'> {
     const valores: Record<TTexturaSuelo, Pick<ISuelo, 'capacidadDeCampo' | 'puntoMarchitez'>> = {
       Arcilloso: { capacidadDeCampo: 40, puntoMarchitez: 22 },
       'Franco arcilloso': { capacidadDeCampo: 35, puntoMarchitez: 18 },
@@ -522,7 +550,7 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
       'Franco arenoso': { capacidadDeCampo: 22, puntoMarchitez: 10 },
       Arenoso: { capacidadDeCampo: 14, puntoMarchitez: 6 },
     };
-    return valores[textura];
+    return textura ? valores[textura] : {};
   }
 
   private textoDispositivo(dispositivo: IDispositivo): string {
@@ -543,9 +571,9 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
   // ACCIONES
 
   private getData() {
-    this.sincronizarSueloManualEnCapas();
     this.sincronizarDesdeEstablecimiento();
     const data: ICreateLote = this.form?.value;
+    this.omitUnchangedSoilOverrides(data);
     delete (data as any).tipoSueloManual;
     delete (data as any).idDepartamento;
     if (data.ubicacion?.geojson?.coordinates?.length) {
@@ -559,6 +587,39 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
       data.ubicacion.centro = this.form.get('ubicacion.centro')?.value;
     }
     return data;
+  }
+
+  private markSoilPayloadEdited(...names: SoilOverridePayloadName[]): void {
+    for (const name of names) this.explicitlyEditedSoilPayloadNames.add(name);
+  }
+
+  private soilPayloadWasEdited(name: SoilOverridePayloadName): boolean {
+    if (this.explicitlyEditedSoilPayloadNames.has(name)) return true;
+    if (name === 'suelos') return !!this.suelos?.dirty;
+    return !!this.form?.get(name)?.dirty;
+  }
+
+  private omitUnchangedSoilOverrides(data: ICreateLote): void {
+    for (const name of this.soilOverridePayloadNames) {
+      if (!this.soilPayloadWasEdited(name)) {
+        delete (data as Record<string, unknown>)[name];
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'suelos')) {
+      data.suelos = this.sanitizeSoilLayers(data.suelos);
+    }
+  }
+
+  private sanitizeSoilLayers(layers?: ISuelo[]): ISuelo[] {
+    return (layers || [])
+      .map((layer) => {
+        const clean = { ...layer } as Record<string, unknown>;
+        for (const [key, value] of Object.entries(clean)) {
+          if (value === undefined || value === null || value === '') delete clean[key];
+        }
+        return clean as ISuelo;
+      })
+      .filter((layer) => Object.keys(layer).length > 0);
   }
 
   public async guardar(): Promise<void> {
@@ -670,7 +731,6 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
     let errores = 0;
     try {
       this.sincronizarDesdeEstablecimiento();
-      this.sincronizarSueloManualEnCapas();
 
       for (const poligono of this.kmzPoligonos) {
         try {
@@ -702,7 +762,7 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
   private getDataLoteImportado(poligono: IKmzPolygonImportado): ICreateLote {
     const geojson = poligono.geojson;
     const suelos = ((this.suelos?.value || []) as ISuelo[]).map((suelo) => ({ ...suelo }));
-    return {
+    const data: ICreateLote = {
       nombre: poligono.nombre,
       idEstablecimiento: this.form?.get('idEstablecimiento')?.value,
       sueloReferencia: this.form?.get('sueloReferencia')?.value,
@@ -725,6 +785,8 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
       erosionEscorrentiaPendiente: this.form?.get('erosionEscorrentiaPendiente')?.value,
       contenidoP: this.form?.get('contenidoP')?.value,
     };
+    this.omitUnchangedSoilOverrides(data);
+    return data;
   }
 
   private sincronizarDesdeEstablecimiento(): void {
@@ -891,7 +953,6 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
         ? () => this.translate.instant(`Editar lote`)
         : () => this.translate.instant('Crear lote');
       this.createForm();
-      this.cambioTipoSueloManual(false);
       await Promise.all([
         this.cargarListadoInicial('establecimientos', () => this.listarEstablecimientos()),
         this.cargarListadoInicial('sondas de suelo legacy', () => this.listarSondasSuelo()),
@@ -900,7 +961,7 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
 
       this.sincronizarDesdeEstablecimiento();
       this.cambioSondaSuelo();
-      this.onDispositivosChange();
+      this.onDispositivosChange(false);
       console.log('form', this.form?.value);
     } finally {
       this.loading = false;

@@ -12,6 +12,7 @@ import {
 import {
   AGROMETEO_INTERNAL_TOKEN,
   LOT_LOCATION_INTERNAL_TOKEN,
+  SOIL_INTELLIGENCE_INTERNAL_TOKEN,
   API_CLIMA,
   API_DATOS,
   API_PREDICCIONES,
@@ -102,8 +103,8 @@ export class LotesRepository {
   ): Promise<IInteligenciaSueloLote | null> {
     const url = `${API_DATOS}/soil-intelligence/lots/${idLote}`;
     return await this.axios.GET<IInteligenciaSueloLote | null>(url, {
-      headers: LOT_LOCATION_INTERNAL_TOKEN
-        ? { 'x-chaman-internal-token': LOT_LOCATION_INTERNAL_TOKEN }
+      headers: SOIL_INTELLIGENCE_INTERNAL_TOKEN
+        ? { 'x-chaman-internal-token': SOIL_INTELLIGENCE_INTERNAL_TOKEN }
         : {},
     });
   }
@@ -113,8 +114,8 @@ export class LotesRepository {
   ): Promise<IEntradasAgronomicasSuelo | null> {
     const url = `${API_DATOS}/soil-intelligence/lots/${idLote}/agronomic-inputs`;
     return await this.axios.GET<IEntradasAgronomicasSuelo | null>(url, {
-      headers: LOT_LOCATION_INTERNAL_TOKEN
-        ? { 'x-chaman-internal-token': LOT_LOCATION_INTERNAL_TOKEN }
+      headers: SOIL_INTELLIGENCE_INTERNAL_TOKEN
+        ? { 'x-chaman-internal-token': SOIL_INTELLIGENCE_INTERNAL_TOKEN }
         : {},
     });
   }
@@ -125,8 +126,8 @@ export class LotesRepository {
       url,
       { reason: 'manual_retry', force: true },
       {
-        headers: LOT_LOCATION_INTERNAL_TOKEN
-          ? { 'x-chaman-internal-token': LOT_LOCATION_INTERNAL_TOKEN }
+        headers: SOIL_INTELLIGENCE_INTERNAL_TOKEN
+          ? { 'x-chaman-internal-token': SOIL_INTELLIGENCE_INTERNAL_TOKEN }
           : {},
       },
     );

@@ -185,8 +185,8 @@
                         <div>
                           <strong>Suelo del lote</strong>
                           <small>
-                            Seleccion manual editable. Estos valores alimentan riego, huella hidrica y los algoritmos
-                            del lote.
+                            Override manual opcional. Si no modificas estos controles, Chaman conserva la
+                            caracterizacion automatica del poligono.
                           </small>
                         </div>
                       </div>
@@ -201,7 +201,7 @@
                             [appendTo]="'body'"
                             (onChange)="cambioTipoSueloManual()"
                           />
-                          <label>{{ 'Tipo de suelo' | translate }}</label>
+                          <label>{{ 'Override de textura' | translate }}</label>
                         </p-floatlabel>
 
                         <p-floatlabel variant="in">
@@ -228,8 +228,8 @@
                       </div>
 
                       <p-message severity="info">
-                        Las profundidades, sensores y presencia de raices se configuran en la solapa Dispositivos cuando
-                        el lote tiene una lanza de humedad asignada.
+                        Confirmar valores aqui les da prioridad operativa sobre la cartografia. Las profundidades,
+                        sensores y presencia de raices se configuran en Dispositivos cuando existe una lanza asociada.
                       </p-message>
                     </section>
                   </p-tabpanel>

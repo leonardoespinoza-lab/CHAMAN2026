@@ -7,6 +7,7 @@ import {
   IUpdatePrediccionRiego,
   IFilter,
   IPopulate,
+  IEntradasAgronomicasSuelo,
 } from 'modelos/src';
 import { PrediccionRiegoRepository } from './repository';
 
@@ -37,6 +38,12 @@ export class PrediccionRiegoService {
     return await this.repository.delete(id);
   }
 
+  async getAgronomicInputsByLot(
+    idLote: string,
+  ): Promise<IEntradasAgronomicasSuelo | null> {
+    return await this.repository.getAgronomicInputsByLot(idLote);
+  }
+
   async getBySiembraYFecha(
     idSiembra: string,
     fecha?: string,
@@ -44,7 +51,7 @@ export class PrediccionRiegoService {
     const populate: IPopulate = [
       {
         path: 'lote',
-        select: 'nombre puntoMarchitez capacidadDeCampo',
+        select: '_id nombre puntoMarchitez capacidadDeCampo',
       },
     ];
     const filter: IFilter<IPrediccionRiego> = {

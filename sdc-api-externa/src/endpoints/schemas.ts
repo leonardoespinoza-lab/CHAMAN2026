@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Cultivo, ISemilla } from 'modelos/src';
 
 export class Coordinates {
@@ -138,10 +138,16 @@ export class ResponseIrrigationPrediction {
   @ApiProperty({ description: 'Nombre del lote' })
   lote?: string;
 
-  @ApiProperty({ description: 'Capacidad de campo promedio en %' })
+  @ApiPropertyOptional({
+    description:
+      'Capacidad de campo promedio en %. Se omite cuando no existe una caracterizacion vigente ni legacy.',
+  })
   capacidadDeCampo?: number;
 
-  @ApiProperty({ description: 'Punto de marchitez en %' })
+  @ApiPropertyOptional({
+    description:
+      'Punto de marchitez en %. Se omite cuando no existe una caracterizacion vigente ni legacy.',
+  })
   puntoDeMarchitez?: number;
 
   @ApiProperty({ example: '2024-12-31' })

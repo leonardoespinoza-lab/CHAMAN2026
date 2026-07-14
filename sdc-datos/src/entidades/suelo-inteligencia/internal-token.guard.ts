@@ -12,7 +12,7 @@ import { ENV, SOIL_INTELLIGENCE_INTERNAL_TOKEN } from '../../env';
 export class SoilIntelligenceInternalGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     if (!SOIL_INTELLIGENCE_INTERNAL_TOKEN) {
-      if (ENV === 'production') {
+      if (ENV === 'production' || process.env.NODE_ENV === 'production') {
         throw new ServiceUnavailableException(
           'SOIL_INTELLIGENCE_INTERNAL_TOKEN no configurado',
         );

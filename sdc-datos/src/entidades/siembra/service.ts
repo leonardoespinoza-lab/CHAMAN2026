@@ -1,19 +1,29 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { ICreateSiembra, IQueryParam, IUpdateLote, IUpdateSiembra } from 'modelos/src';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  aplicarEntradasAgronomicasSuelo,
+  ICreateSiembra,
+  IQueryParam,
+  IUpdateLote,
+  IUpdateSiembra,
+} from 'modelos/src';
 import { AlgoritmosService } from '../algoritmos/service';
 import { FertilizacionsService } from '../fertilizacion/service';
 import { FumigacionsService } from '../fumigacion/service';
 import { LotesService } from '../lote/service';
+import { SoilAgronomicInputsService } from '../suelo-inteligencia/agronomic-inputs.service';
 import { SiembrasRepository } from './repository';
 
 @Injectable()
 export class SiembrasService {
+  private readonly logger = new Logger(SiembrasService.name);
+
   constructor(
     private repository: SiembrasRepository,
     private lotesService: LotesService,
     private fertilizacionsService: FertilizacionsService,
     private fumigacionsService: FumigacionsService,
     private algoritmosService: AlgoritmosService,
+    private soilInputsService: SoilAgronomicInputsService,
   ) {}
 
   async getFilter(query: IQueryParam) {
@@ -50,7 +60,8 @@ export class SiembrasService {
 
   async cosechar(id: string, dato: IUpdateSiembra) {
     const siembra = await this.getById(id);
-    const lote = await this.lotesService.getById(siembra.idLote);
+    const lotePersistido = await this.lotesService.getById(siembra.idLote);
+    const lote = await this.withCanonicalSoil(lotePersistido);
 
     const rendimientoSeco = this.algoritmosService.calcularHumedadSeca(
       dato.rendimientoObtenidoKgHa,
@@ -98,8 +109,11 @@ export class SiembrasService {
     };
 
     const loteUpdate: IUpdateLote = { huellaHidrica: resultado.huella };
-    if (lote.suelos?.length) {
-      loteUpdate.suelos = lote.suelos.map((suelo) => ({ ...suelo, hayRaices: false }));
+    if (lotePersistido.suelos?.length) {
+      loteUpdate.suelos = lotePersistido.suelos.map((suelo) => ({
+        ...suelo,
+        hayRaices: false,
+      }));
     }
 
     const [updated] = await Promise.all([
@@ -115,7 +129,9 @@ export class SiembrasService {
 
   async seguimientoHuellaHidrica(id: string) {
     const siembra = await this.getById(id);
-    const lote = await this.lotesService.getById(siembra.idLote);
+    const lote = await this.withCanonicalSoil(
+      await this.lotesService.getById(siembra.idLote),
+    );
     const fechaSiembra = siembra.fechaSiembra ? new Date(siembra.fechaSiembra) : new Date();
     fechaSiembra.setDate(fechaSiembra.getDate() - 30);
     const hasta = (siembra.fechaCosecha ? new Date(siembra.fechaCosecha) : new Date()).toISOString();
@@ -140,6 +156,18 @@ export class SiembrasService {
       fertilizaciones: fertilizaciones.datos,
       fumigaciones: fumigaciones.datos,
     });
+  }
+
+  private async withCanonicalSoil(lote: any) {
+    try {
+      const inputs = await this.soilInputsService.getForLot(`${lote._id}`);
+      return aplicarEntradasAgronomicasSuelo(lote, inputs);
+    } catch (error) {
+      this.logger.warn(
+        `Entradas edaficas canonicas no disponibles para huella del lote ${lote?._id || ''}; se conserva el perfil previo: ${error?.message || error}`,
+      );
+      return aplicarEntradasAgronomicasSuelo(lote, null);
+    }
   }
 
   async prediccionMalezas(id: string) {

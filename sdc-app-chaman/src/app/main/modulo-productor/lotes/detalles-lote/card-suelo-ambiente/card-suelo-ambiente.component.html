@@ -13,7 +13,9 @@
     <div class="status-cluster">
       @if (hasResult) {
         <span class="source-badge">{{ sourceLabel }}</span>
-        <span class="confidence-badge">{{ confidenceLabel }}</span>
+        @if (assessment?.summary?.canonicalTexture || assessment?.summary?.estimatedTexture) {
+          <span class="confidence-badge">{{ confidenceLabel }}</span>
+        }
       } @else if (processing) {
         <span class="confidence-badge processing"><i class="pi pi-spin pi-spinner"></i> Procesando</span>
       }
@@ -36,19 +38,20 @@
   } @else if (hasResult) {
     <div class="soil-summary">
       <article class="texture-main">
-        <span>Textura operativa</span>
-        <strong>{{ textureLabel }}</strong>
-        @if (assessment?.manualConflict) {
-          <small>
-            Estimación cartográfica: {{ assessment?.summary?.estimatedTexture || 'no disponible' }} · Composición
-            SoilGrids: {{ assessment?.summary?.usdaTexture || 'sin clase USDA' }} · {{ depthLabel }}
-          </small>
-        } @else {
-          <small
-            >Clase USDA SoilGrids: {{ assessment?.summary?.usdaTexture || 'no disponible' }} · {{ depthLabel }}</small
-          >
-        }
+        <span>{{ primaryTextureTitle }}</span>
+        <strong>{{ canonicalTextureLabel }}</strong>
+        <small>
+          Referencia principal del motor edáfico · Clase USDA SoilGrids:
+          {{ assessment?.summary?.usdaTexture || 'no disponible' }} · {{ depthLabel }}
+        </small>
       </article>
+      @if (hasOperationalOverride) {
+        <article class="texture-override">
+          <span>{{ operationalTextureTitle }}</span>
+          <strong>{{ operationalTextureLabel }}</strong>
+          <small>{{ operationalSourceLabel }} · {{ operationalTextureDetail }}</small>
+        </article>
+      }
       <article>
         <span>Composición 0–30 cm</span>
         <strong>
@@ -83,8 +86,8 @@
       <div class="notice conflict">
         <i class="pi pi-exclamation-triangle"></i>
         <div>
-          <strong>Dato confirmado conservado</strong>
-          <span>La estimación automática difiere de la textura operativa y se muestra solo como contraste.</span>
+          <strong>{{ operationalConflictTitle }}</strong>
+          <span>{{ operationalConflictDetail }}</span>
         </div>
       </div>
     }

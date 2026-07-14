@@ -271,10 +271,29 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
 
   public get sueloDetalleResumen(): string {
     const niveles = this.lote?.suelos?.filter((suelo) => suelo.textura || suelo.profundidad) || [];
-    if (!niveles.length) {
-      return 'Puede completarse desde INTA o editarse manualmente';
+    const sources: Record<string, string> = {
+      manual: 'Override confirmado',
+      laboratory: 'Análisis de laboratorio',
+      sensor: 'Calibrado con sensor',
+      inta_local: 'Cartografía INTA regional',
+      inta_national: 'Cartografía INTA nacional',
+      sisinta: 'Referencia SISINTA',
+      soilgrids: 'Estimación SoilGrids',
+      derived: 'Estimación cartográfica',
+      unknown: 'Fuente pendiente',
+    };
+    const source = this.lote?.sueloConfirmadoPorUsuario
+      ? 'Override confirmado'
+      : this.lote?.sueloProcedencia
+        ? sources[this.lote.sueloProcedencia]
+        : this.sueloResumen === 'Sin dato'
+          ? sources['unknown']
+          : 'Dato legacy sin fuente';
+    if (!niveles.length && this.sueloResumen === 'Sin dato') {
+      return 'Se caracteriza automáticamente desde el polígono';
     }
-    return `${niveles.length} nivel${niveles.length === 1 ? '' : 'es'} cargado${niveles.length === 1 ? '' : 's'}`;
+    const profile = niveles.length ? `${niveles.length} nivel${niveles.length === 1 ? '' : 'es'}` : '';
+    return [source, profile].filter(Boolean).join(' · ');
   }
 
   public get rindeResumen(): string {

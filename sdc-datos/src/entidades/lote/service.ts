@@ -27,7 +27,10 @@ export class LotesService {
   }
 
   async create(dato: ICreateLote) {
-    dato = this.withManualSoilProvenance(this.withoutAutomaticDepartment(dato));
+    dato = this.withManualSoilProvenance(
+      this.withoutAutomaticDepartment(dato),
+      this.hasPhysicalSoilChange(undefined, dato),
+    );
     const created = await this.repository.create(dato);
     this.requestSpatialResolution(`${created._id}`, 'lot_created');
     return created;
@@ -35,14 +38,19 @@ export class LotesService {
 
   async update(id: string, dato: IUpdateLote) {
     dato = this.withoutAutomaticDepartment(dato);
-    dato = this.withManualSoilProvenance(dato);
     const geometryChanged = Object.prototype.hasOwnProperty.call(
       dato,
       'ubicacion',
     );
-    const current = geometryChanged
-      ? await this.repository.getById(id)
-      : undefined;
+    const hasSoilPayload = this.hasSoilPayload(dato);
+    const current =
+      geometryChanged || hasSoilPayload
+        ? await this.repository.getById(id)
+        : undefined;
+    const manualSoilChanged = hasSoilPayload
+      ? this.hasPhysicalSoilChange(current, dato)
+      : false;
+    dato = this.withManualSoilProvenance(dato, manualSoilChanged);
     const updated = await this.repository.update(id, dato);
     if (updated) {
       if (geometryChanged) {
@@ -54,7 +62,7 @@ export class LotesService {
           id,
           hadGeometry ? 'geometry_changed' : 'geometry_added',
         );
-      } else if (this.hasManualSoilChange(dato)) {
+      } else if (manualSoilChanged) {
         this.requestSoilResolution(id, 'manual_value_changed');
       }
       return updated;
@@ -120,7 +128,7 @@ export class LotesService {
       );
   }
 
-  private hasManualSoilChange(data: IUpdateLote): boolean {
+  private hasSoilPayload(data: IUpdateLote | ICreateLote): boolean {
     return [
       'suelos',
       'capacidadDeCampo',
@@ -131,10 +139,81 @@ export class LotesService {
     ].some((key) => Object.prototype.hasOwnProperty.call(data, key));
   }
 
+  /**
+   * Separa una modificacion fisica del suelo de cambios dinamicos del cultivo
+   * (por ejemplo `hayRaices`) o del mapeo de sensores. Antes cualquier PUT que
+   * incluyera `suelos` convertia todo el lote en una observacion manual, aun
+   * cuando riego solo actualizaba raices o el formulario reenviaba los mismos
+   * valores.
+   */
+  private hasPhysicalSoilChange(current: any, data: IUpdateLote): boolean {
+    const scalarFields = [
+      'capacidadDeCampo',
+      'puntoMarchitez',
+      'sueloReferencia',
+      'texturaLixiviacion',
+      'texturaEscorrentia',
+    ];
+    for (const key of scalarFields) {
+      if (
+        Object.prototype.hasOwnProperty.call(data, key) &&
+        !this.sameValue((current as any)?.[key], (data as any)[key])
+      ) {
+        return true;
+      }
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(data, 'suelos')) return false;
+    return !this.sameValue(
+      this.physicalLayers(current?.suelos),
+      this.physicalLayers(data.suelos),
+    );
+  }
+
+  private physicalLayers(layers: any[] | undefined): unknown[] {
+    return (layers || [])
+      .map((layer, index) => ({
+        index,
+        textura: layer?.textura,
+        capacidadDeCampo: layer?.capacidadDeCampo,
+        puntoMarchitez: layer?.puntoMarchitez,
+        hasTexture: Object.prototype.hasOwnProperty.call(
+          layer || {},
+          'textura',
+        ),
+        hasFieldCapacity: Object.prototype.hasOwnProperty.call(
+          layer || {},
+          'capacidadDeCampo',
+        ),
+        hasWiltingPoint: Object.prototype.hasOwnProperty.call(
+          layer || {},
+          'puntoMarchitez',
+        ),
+      }))
+      .filter(
+        (layer) =>
+          layer.hasTexture || layer.hasFieldCapacity || layer.hasWiltingPoint,
+      );
+  }
+
+  private sameValue(left: unknown, right: unknown): boolean {
+    return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+  }
+
   private withManualSoilProvenance<T extends ICreateLote | IUpdateLote>(
     data: T,
+    physicalSoilChanged: boolean,
   ): T {
-    if (!this.hasManualSoilChange(data as IUpdateLote)) return data;
+    if (!physicalSoilChanged) return data;
+    // Una calibracion generada por la sonda conserva su procedencia. Los
+    // valores cartograficos automaticos no pasan por este servicio: los
+    // persiste exclusivamente el motor de inteligencia de suelo.
+    if (
+      data.sueloProcedencia === 'sensor' &&
+      data.sueloConfirmadoPorUsuario !== true
+    ) {
+      return data;
+    }
     return {
       ...data,
       sueloProcedencia: 'manual',

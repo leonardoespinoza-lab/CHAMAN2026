@@ -3,6 +3,7 @@ import SunCalc from 'suncalc';
 import {
   AGROMET_DEFAULT_PARAMETERS_VERSION,
   AGROMET_ENGINE_VERSION,
+  aplicarEntradasAgronomicasSuelo,
   calcularBalanceHidrico,
   calcularCapacidadAguaUtilMm,
   calcularEt0Fao56,
@@ -228,6 +229,7 @@ export class AgrometeorologicalEngineService {
     inheritedWarnings: string[] = [],
     soilInputs?: IEntradasAgronomicasSuelo,
   ): ICreateIndicadorAgrometeorologico[] {
+    lote = aplicarEntradasAgronomicasSuelo(lote, soilInputs);
     const crop = siembra.semilla?.cultivo;
     const reference = crop
       ? PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA[crop]
@@ -935,6 +937,11 @@ export class AgrometeorologicalEngineService {
       )
       .sort((a, b) => a.depth - b.depth);
     if (layers.length) {
+      const canonicalHydraulicProfile = !!soilInputs?.depthLayers?.length;
+      const canonicalProfileConfirmed = [
+        'confirmed_laboratory',
+        'confirmed_sensor',
+      ].includes(soilInputs?.selectionReason || '');
       let previousDepth = 0;
       let capacity = 0;
       let weightedFc = 0;
@@ -953,8 +960,11 @@ export class AgrometeorologicalEngineService {
         wiltingPoint:
           previousDepth > 0 ? weightedWp / previousDepth : undefined,
         rootDepthCm: previousDepth,
-        estimated: false,
-        source: 'confirmed_lot',
+        estimated: canonicalHydraulicProfile && !canonicalProfileConfirmed,
+        source:
+          canonicalHydraulicProfile && !canonicalProfileConfirmed
+            ? 'soil_intelligence'
+            : 'confirmed_lot',
       };
     }
     const rootDepth =

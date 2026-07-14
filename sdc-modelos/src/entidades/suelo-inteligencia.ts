@@ -1,4 +1,4 @@
-import { TTexturaSuelo } from "./lote";
+import type { ILote, ISuelo, TTexturaSuelo } from "./lote";
 
 export type TEstadoInteligenciaSuelo =
   | "missing_geometry"
@@ -246,10 +246,54 @@ export interface IInteligenciaSueloLote {
   updatedAt?: string;
 }
 
+export const SOIL_AGRONOMIC_SELECTION_POLICY_VERSION =
+  "soil-agronomic-selection-v1.0.0";
+
+export type TRazonSeleccionAgronomicaSuelo =
+  | "confirmed_laboratory"
+  | "confirmed_sensor"
+  | "automatic_assessment"
+  | "manual_fallback"
+  | "legacy_fallback"
+  | "unavailable";
+
+export interface ICapaEntradasAgronomicasSuelo {
+  depthFromCm: number;
+  depthToCm: number;
+  texture?: TTexturaSuelo;
+  fieldCapacityPercentage?: number;
+  wiltingPointPercentage?: number;
+  availableWaterMmPerMeter?: number;
+  source: TFuentePropiedadSuelo;
+  confidence: TConfianzaInteligenciaSuelo;
+}
+
+export interface IAlternativaEntradasAgronomicasSuelo {
+  source: TFuentePropiedadSuelo;
+  confirmed: boolean;
+  reason: string;
+  operationalTexture?: TTexturaSuelo;
+  fieldCapacityPercentage?: number;
+  wiltingPointPercentage?: number;
+  depthLayers?: ICapaEntradasAgronomicasSuelo[];
+}
+
 export interface IEntradasAgronomicasSuelo {
   loteId: string;
+  status: TEstadoInteligenciaSuelo;
+  stale: boolean;
+  calculatedAt?: string;
+  resolutionKey?: string;
+  selectionPolicyVersion: string;
+  selectionReason: TRazonSeleccionAgronomicaSuelo;
   operationalTexture?: TTexturaSuelo;
   estimatedTexture?: TTexturaSuelo;
+  fieldCapacityPercentage?: number;
+  wiltingPointPercentage?: number;
+  depthLayers: ICapaEntradasAgronomicasSuelo[];
+  provenance: Record<string, IPropiedadSuelo<unknown>>;
+  alternatives?: IAlternativaEntradasAgronomicasSuelo[];
+  conflicts?: string[];
   sandPercentage?: number;
   siltPercentage?: number;
   clayPercentage?: number;
@@ -264,4 +308,136 @@ export interface IEntradasAgronomicasSuelo {
   source?: TFuenteResumenSuelo;
   confidence?: TConfianzaInteligenciaSuelo;
   warnings?: string[];
+}
+
+/**
+ * Proyecta una seleccion edafica vigente sobre una copia del lote. La funcion
+ * no decide precedencia y nunca modifica el objeto recibido.
+ */
+function capacidadCampoCanonica(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 100
+    ? parsed
+    : undefined;
+}
+
+function puntoMarchitezCanonico(
+  value: unknown,
+  fieldCapacity?: number,
+): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) return undefined;
+  return fieldCapacity === undefined || parsed < fieldCapacity
+    ? parsed
+    : undefined;
+}
+
+export function aplicarEntradasAgronomicasSuelo<T extends ILote>(
+  lote: T,
+  inputs?: IEntradasAgronomicasSuelo | null,
+): T {
+  const cloned = {
+    ...lote,
+    suelos: lote.suelos?.map((layer) => ({ ...layer })),
+  } as T;
+  const usableStatus: TEstadoInteligenciaSuelo[] = [
+    "ready",
+    "partial",
+    "no_coverage",
+  ];
+  if (!inputs || inputs.stale || !usableStatus.includes(inputs.status)) {
+    return cloned;
+  }
+
+  if (inputs.operationalTexture) {
+    cloned.texturaLixiviacion = inputs.operationalTexture;
+    cloned.texturaEscorrentia = inputs.operationalTexture;
+  }
+  const fieldCapacity =
+    capacidadCampoCanonica(inputs.fieldCapacityPercentage) ??
+    capacidadCampoCanonica(lote.capacidadDeCampo);
+  const wiltingPoint =
+    puntoMarchitezCanonico(inputs.wiltingPointPercentage, fieldCapacity) ??
+    puntoMarchitezCanonico(lote.puntoMarchitez, fieldCapacity);
+  cloned.capacidadDeCampo = fieldCapacity;
+  cloned.puntoMarchitez = wiltingPoint;
+  if (inputs.depthLayers.length) {
+    const existing = lote.suelos || [];
+    const hasSensorLayout = existing.some((layer) => {
+      const sensorNumber = Number(layer.numeroDeSensor);
+      return Number.isInteger(sensorNumber) && sensorNumber > 0;
+    });
+    if (hasSensorLayout) {
+      cloned.suelos = existing.map((current, index): ISuelo => {
+        const depth = Number(current.profundidad);
+        const containing = Number.isFinite(depth)
+          ? inputs.depthLayers.find(
+              (layer) => depth > layer.depthFromCm && depth <= layer.depthToCm,
+            )
+          : undefined;
+        const nearest = Number.isFinite(depth)
+          ? [...inputs.depthLayers].sort((left, right) => {
+              const distance = (layer: ICapaEntradasAgronomicasSuelo) =>
+                depth < layer.depthFromCm
+                  ? layer.depthFromCm - depth
+                  : depth > layer.depthToCm
+                    ? depth - layer.depthToCm
+                    : 0;
+              return distance(left) - distance(right);
+            })[0]
+          : inputs.depthLayers[index] || inputs.depthLayers[0];
+        const selected = containing || nearest;
+        const selectedFieldCapacity =
+          capacidadCampoCanonica(selected?.fieldCapacityPercentage) ??
+          capacidadCampoCanonica(current.capacidadDeCampo);
+        const selectedWiltingPoint =
+          puntoMarchitezCanonico(
+            selected?.wiltingPointPercentage,
+            selectedFieldCapacity,
+          ) ??
+          puntoMarchitezCanonico(current.puntoMarchitez, selectedFieldCapacity);
+        return {
+          ...current,
+          textura:
+            selected?.texture || inputs.operationalTexture || current.textura,
+          capacidadDeCampo: selectedFieldCapacity,
+          puntoMarchitez: selectedWiltingPoint,
+        };
+      });
+    } else {
+      const existingByDepth = existing
+        .filter((layer) => Number.isFinite(Number(layer.profundidad)))
+        .sort(
+          (left, right) => Number(left.profundidad) - Number(right.profundidad),
+        );
+      cloned.suelos = inputs.depthLayers.map((layer, index): ISuelo => {
+        const layerFieldCapacity = capacidadCampoCanonica(
+          layer.fieldCapacityPercentage,
+        );
+        const layerWiltingPoint = puntoMarchitezCanonico(
+          layer.wiltingPointPercentage,
+          layerFieldCapacity,
+        );
+        const rootSource =
+          existingByDepth.find(
+            (current) => layer.depthToCm <= Number(current.profundidad),
+          ) ||
+          existing[index] ||
+          existing[existing.length - 1];
+        return {
+          profundidad: layer.depthToCm,
+          textura: layer.texture || inputs.operationalTexture,
+          capacidadDeCampo: layerFieldCapacity,
+          puntoMarchitez: layerWiltingPoint,
+          ...(rootSource &&
+          Object.prototype.hasOwnProperty.call(rootSource, "hayRaices")
+            ? { hayRaices: rootSource.hayRaices }
+            : {}),
+        };
+      });
+    }
+  }
+  return cloned;
 }

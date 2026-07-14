@@ -8,6 +8,8 @@ import {
   IPropiedadSuelo,
   IResumenInteligenciaSuelo,
   IUnidadSueloLote,
+  TConfianzaInteligenciaSuelo,
+  TFuentePropiedadSuelo,
   TMotivoInteligenciaSuelo,
   TTexturaSuelo,
 } from 'modelos/src';
@@ -35,7 +37,7 @@ import {
   SoilTextureClassifier,
 } from './texture-classifier.service';
 
-export const SOIL_INTELLIGENCE_ENGINE_VERSION = 'lot-soil-v1.0.1';
+export const SOIL_INTELLIGENCE_ENGINE_VERSION = 'lot-soil-v1.1.0';
 export const DOMINANT_SOIL_UNIT_THRESHOLD = 60;
 
 @Injectable()
@@ -437,7 +439,11 @@ export class LotSoilIntelligenceEngine {
         sources,
         depthProfile: soilGridsResult.profile,
         soilUnits: intaResult.units,
-        propertyProvenance: this.provenance(summary, intaResult.units),
+        propertyProvenance: this.provenance(
+          summary,
+          intaResult.units,
+          soilGridsResult.profile,
+        ),
         coveragePercentage: Math.max(
           intaResult.coveragePercentage,
           soilGridsResult.coveragePercentage,
@@ -467,7 +473,6 @@ export class LotSoilIntelligenceEngine {
       },
     );
     if (!result) return this.discardedResult(input, 'completion');
-    await this.completeOperationalSoilIfEmpty(input.lot, summary);
     this.logger.log(
       JSON.stringify({
         event: 'soil_intelligence_completed',
@@ -655,84 +660,198 @@ export class LotSoilIntelligenceEngine {
   private provenance(
     summary: IResumenInteligenciaSuelo,
     units: IUnidadSueloLote[],
+    profile: IPerfilProfundidadSuelo[],
   ): Record<string, IPropiedadSuelo<unknown>> {
     const textureSource = this.estimatedTextureSource(units);
+    const drainageUnit = units.find(
+      (unit) => unit.drainageClass && unit.drainageClass !== 'unknown',
+    );
+    const dominantUnit = units[0];
+    const confidenceForDepth = (
+      fromCm: number,
+      toCm: number,
+    ): TConfianzaInteligenciaSuelo => {
+      const rank: Record<TConfianzaInteligenciaSuelo, number> = {
+        unavailable: 0,
+        low: 1,
+        medium: 2,
+        high: 3,
+      };
+      const relevant = profile.filter(
+        (layer) => layer.depthToCm > fromCm && layer.depthFromCm < toCm,
+      );
+      if (!relevant.length) return 'unavailable';
+      return relevant.reduce(
+        (lowest, layer) =>
+          rank[layer.confidence] < rank[lowest] ? layer.confidence : lowest,
+        relevant[0].confidence,
+      );
+    };
     const estimated = (
       value: unknown,
       unit: string,
-      source: 'soilgrids' | 'inta_local' | 'inta_national' = 'soilgrids',
+      source: TFuentePropiedadSuelo = 'soilgrids',
       method = 'estadística zonal ponderada por superficie',
+      depthFromCm = 0,
+      depthToCm = 30,
+      confidence: TConfianzaInteligenciaSuelo = source === 'soilgrids'
+        ? confidenceForDepth(depthFromCm, depthToCm)
+        : 'medium',
+      observedOrEstimated: IPropiedadSuelo['observedOrEstimated'] = 'estimated',
     ): IPropiedadSuelo<unknown> => ({
       value,
       unit,
       source,
       method,
-      depthFromCm: 0,
-      depthToCm: 30,
-      observedOrEstimated: 'estimated',
-      confidence: source === 'soilgrids' ? 'medium' : 'medium',
+      depthFromCm,
+      depthToCm,
+      observedOrEstimated:
+        value === undefined ? 'unknown' : observedOrEstimated,
+      confidence: value === undefined ? 'unavailable' : confidence,
       sourceVersion:
         source === 'soilgrids'
           ? SOILGRIDS_SOURCE_VERSION
-          : INTA_LAYER_REGISTRY_VERSION,
+          : ['inta_local', 'inta_national'].includes(source)
+            ? INTA_LAYER_REGISTRY_VERSION
+            : undefined,
     });
+    const fieldCapacity = this.weightedMetric(
+      profile,
+      'fieldCapacityPercentage',
+      0,
+      100,
+    );
+    const wiltingPoint = this.weightedMetric(
+      profile,
+      'wiltingPointPercentage',
+      0,
+      100,
+    );
     return {
+      operationalTexture: estimated(
+        summary.operationalTexture,
+        'clase',
+        summary.operationalTextureSource || 'unknown',
+        ['laboratory', 'sensor'].includes(
+          summary.operationalTextureSource || '',
+        )
+          ? 'dato operativo confirmado del lote'
+          : 'selección operativa del motor edáfico',
+        0,
+        30,
+        ['laboratory', 'sensor'].includes(
+          summary.operationalTextureSource || '',
+        )
+          ? 'medium'
+          : undefined,
+        ['laboratory', 'sensor'].includes(
+          summary.operationalTextureSource || '',
+        )
+          ? 'observed'
+          : 'estimated',
+      ),
       canonicalTexture: estimated(
         summary.estimatedTexture,
         'clase',
         textureSource,
-        'USDA completo + reducción Chaman-7',
+        textureSource === 'soilgrids'
+          ? 'fracciones SoilGrids, clasificación USDA y reducción Chaman-7'
+          : 'atributo textural INTA normalizado a Chaman-7',
       ),
       sandPercentage: estimated(summary.sandPercentage, '%'),
       siltPercentage: estimated(summary.siltPercentage, '%'),
       clayPercentage: estimated(summary.clayPercentage, '%'),
+      drainageClass: estimated(
+        summary.drainageClass,
+        'clase',
+        drainageUnit?.source || 'unknown',
+        drainageUnit
+          ? 'atributo de drenaje de unidad cartográfica INTA'
+          : 'sin fuente cartográfica de drenaje',
+        0,
+        30,
+        drainageUnit ? 'medium' : 'unavailable',
+      ),
+      fieldCapacityPercentage: estimated(
+        fieldCapacity,
+        '% v/v',
+        'soilgrids',
+        'contenido de agua a 33 kPa ponderado por espesor',
+        0,
+        100,
+      ),
+      wiltingPointPercentage: estimated(
+        wiltingPoint,
+        '% v/v',
+        'soilgrids',
+        'contenido de agua a 1500 kPa ponderado por espesor',
+        0,
+        100,
+      ),
       availableWaterMmPerMeter: estimated(
         summary.availableWaterMmPerMeter,
         'mm/m',
         'soilgrids',
-        'agua 33 kPa menos agua 1500 kPa',
+        'agua a 33 kPa menos agua a 1500 kPa, ponderada por espesor',
+        0,
+        100,
+      ),
+      rootZoneAvailableWaterMm: estimated(
+        summary.rootZoneAvailableWaterMm,
+        'mm',
+        'derived',
+        'agua disponible por metro multiplicada por profundidad efectiva',
+        0,
+        summary.effectiveDepthCm || 100,
+        confidenceForDepth(0, Math.min(summary.effectiveDepthCm || 100, 200)),
+      ),
+      effectiveDepthCm: estimated(
+        summary.effectiveDepthCm,
+        'cm',
+        dominantUnit ? dominantUnit.source : 'derived',
+        dominantUnit
+          ? 'profundidad efectiva informada por unidad cartográfica INTA'
+          : 'valor operativo de respaldo del motor',
+        0,
+        summary.effectiveDepthCm || 100,
+        dominantUnit ? 'medium' : 'low',
+      ),
+      ph: estimated(summary.ph, 'pH', 'soilgrids', 'pH en agua', 0, 30),
+      organicCarbonGKg: estimated(
+        summary.organicCarbonGKg,
+        'g/kg',
+        'soilgrids',
+        'carbono orgánico del suelo',
+      ),
+      organicMatterEstimatedPercentage: estimated(
+        summary.organicMatterEstimatedPercentage,
+        '%',
+        'derived',
+        'carbono orgánico multiplicado por factor de Van Bemmelen 1.724',
+        0,
+        30,
+        confidenceForDepth(0, 30),
+      ),
+      cecCmolKg: estimated(
+        summary.cecCmolKg,
+        'cmol(c)/kg',
+        'soilgrids',
+        'capacidad de intercambio catiónico a pH 7',
+      ),
+      bulkDensityKgDm3: estimated(
+        summary.bulkDensityKgDm3,
+        'kg/dm3',
+        'soilgrids',
+        'densidad aparente ponderada 0-30 cm',
+      ),
+      coarseFragmentsPercentage: estimated(
+        summary.coarseFragmentsPercentage,
+        'vol%',
+        'soilgrids',
+        'fragmentos gruesos ponderados 0-30 cm',
       ),
       phosphorusAvailable: summary.phosphorusAvailable as any,
     };
-  }
-
-  private async completeOperationalSoilIfEmpty(
-    lot: any,
-    summary: IResumenInteligenciaSuelo,
-  ): Promise<void> {
-    if (this.operationalTexture(lot) || !summary.estimatedTexture) return;
-    const update: Record<string, unknown> = {
-      texturaLixiviacion: summary.estimatedTexture,
-      texturaEscorrentia: summary.estimatedTexture,
-      sueloProcedencia: summary.operationalTextureSource || 'derived',
-      sueloConfirmadoPorUsuario: false,
-    };
-    const top = summary;
-    if (
-      !Number.isFinite(lot.capacidadDeCampo) &&
-      Number.isFinite(top.availableWaterMmPerMeter)
-    ) {
-      const profile = await this.repository.getByLot(`${lot._id}`);
-      const first = profile?.depthProfile?.[0];
-      if (Number.isFinite(first?.fieldCapacityPercentage)) {
-        update.capacidadDeCampo = first!.fieldCapacityPercentage;
-      }
-      if (Number.isFinite(first?.wiltingPointPercentage)) {
-        update.puntoMarchitez = first!.wiltingPointPercentage;
-      }
-    }
-    if (!lot.suelos?.length) {
-      update.suelos = [
-        {
-          profundidad: 30,
-          textura: summary.estimatedTexture,
-          hayRaices: true,
-          capacidadDeCampo: update.capacidadDeCampo,
-          puntoMarchitez: update.puntoMarchitez,
-        },
-      ];
-    }
-    await this.lots.updateOne({ _id: lot._id }, { $set: update });
   }
 
   private async discardedResult(
@@ -798,7 +917,7 @@ export class LotSoilIntelligenceEngine {
 
   private manualSoilFingerprint(lot: any): string {
     const fields = {
-      suelos: lot.suelos,
+      suelos: this.soilLayersForFingerprint(lot.suelos),
       capacidadDeCampo: lot.capacidadDeCampo,
       puntoMarchitez: lot.puntoMarchitez,
       sueloReferencia: lot.sueloReferencia,
@@ -831,6 +950,21 @@ export class LotSoilIntelligenceEngine {
         ),
       )
       .digest('hex');
+  }
+
+  private soilLayersForFingerprint(layers: any[] | undefined): unknown[] {
+    return (layers || [])
+      .map((layer) => ({
+        profundidad: layer?.profundidad,
+        textura: layer?.textura,
+        capacidadDeCampo: layer?.capacidadDeCampo,
+        puntoMarchitez: layer?.puntoMarchitez,
+      }))
+      .filter((layer) =>
+        Object.values(layer).some(
+          (value) => value !== undefined && value !== null && value !== '',
+        ),
+      );
   }
 
   private stableValue(value: unknown): unknown {

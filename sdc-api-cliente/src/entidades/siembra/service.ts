@@ -212,38 +212,11 @@ export class SiembrasService {
     data: IUpdateSiembra,
     permiso: IPermiso,
   ): Promise<ISiembra> {
-    // Traigo la siembra a cosechar
     const siembra = await this.getById(id, permiso);
-    // Actualizo los suelos del lote de la siembra (elimina las raices)
-    const lote = await this.lotesService.getById(siembra.idLote, permiso);
-    if (lote) {
-      if (lote.suelos) {
-        for (const l of lote.suelos) {
-          l.hayRaices = false;
-        }
-        await this.lotesService.update(lote._id, lote, permiso);
-      }
-    }
-    // Actualizo la siembra
-    data.rendimientoObtenidoKgHaSeco =
-      data.rendimientoObtenidoKgHa * (100 / (100 + data.humedadCosecha));
-    data.activa = false;
-
-    siembra.fechaCosecha = data.fechaCosecha;
-    siembra.rendimientoObtenidoKgHaSeco = data.rendimientoObtenidoKgHaSeco;
-    const huellaHidrica = await this.calcularHuellaHidrica(
-      siembra,
-      lote,
-      permiso,
-    );
-    data.huellaHidrica = huellaHidrica;
-    await this.calcularHuellaHidrica(siembra, lote, permiso);
-    // return siembra;
-    const [updated] = await Promise.all([
-      this.repository.update(id, data),
-      this.lotesService.update(lote._id, { huellaHidrica }, permiso),
-    ]);
-    return updated;
+    // La autorizacion del lote se mantiene en la API publica, pero el calculo
+    // y los efectos de cosecha se ejecutan una unica vez en sdc-datos.
+    await this.lotesService.getById(siembra.idLote, permiso);
+    return this.repository.cosechar(id, data);
   }
 
   async update(

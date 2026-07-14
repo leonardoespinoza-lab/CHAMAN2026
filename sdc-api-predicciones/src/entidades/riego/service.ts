@@ -23,6 +23,7 @@ import {
   ISiembra,
   ISuelo,
   IVariablesPrediccionRiego,
+  aplicarEntradasAgronomicasSuelo,
 } from 'modelos/src';
 import { ClimaService } from '../clima/service';
 import { HelperService } from '../../auxiliares/helper';
@@ -118,9 +119,12 @@ export class RiegoService {
   }
 
   async prediccion(idSiembra: string): Promise<any> {
-    const siembra: ISiembra = await this.siembrasService.getById(idSiembra);
+    let siembra: ISiembra = await this.siembrasService.getById(idSiembra);
     try {
-      const lote = siembra.lote;
+      const lotePersistido = siembra.lote;
+      const lote =
+        await this.resolverLoteConEntradasAgronomicas(lotePersistido);
+      siembra = { ...siembra, lote };
       const idSondaSuelo = lote.idSondaSuelo;
       // Para el riego necesito "Sensor de Humedad de Suelo" (Tienen que estar en idsDispositivo)
       // También neeceisto pluviometro o estación con lluvia
@@ -188,7 +192,12 @@ export class RiegoService {
         return;
       }
       const crono = siembra.crono;
-      const suelos = lote.suelos || [];
+      const suelosPersistidosConSensor =
+        this.getSuelosPersistidosConMapeoSensor(lotePersistido);
+      const suelos = this.getSuelosParaRiegoV12(
+        lote,
+        suelosPersistidosConSensor,
+      );
 
       // Prediccion de riego - Obtener datos de la sonda de suelo y pronostico a 7 dias
       const f = this.getFechasDatos(undefined, 21);
@@ -332,10 +341,14 @@ export class RiegoService {
         calidadDatos,
       } = resultadoRiego;
 
-      const suelosActualizados = this.actualizarSueloConRiegoV12(
-        lote,
-        suelos,
+      const suelosSensorActualizados = this.actualizarSueloConRiegoV12(
+        suelosPersistidosConSensor,
         nivelesLecturaSensor,
+      );
+      const suelosActualizados = this.mergeSuelosConActualizacionSensor(
+        lotePersistido,
+        suelosPersistidosConSensor,
+        suelosSensorActualizados,
       );
 
       // Guardar resultado auditable del motor de riego V12.
@@ -385,11 +398,26 @@ export class RiegoService {
         idSiembra: siembra._id,
         idLote: siembra.idLote,
         fechaPrediccion:
-          regar[0]?.fecha?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+          regar[0]?.fecha?.slice(0, 10) ||
+          new Date().toISOString().slice(0, 10),
         regar,
         variables,
       };
       try {
+        const tieneCalibracionSensor = nivelesLecturaSensor.some(
+          (nivel) => nivel.fuenteCapacidadCampo === 'auto',
+        );
+        const persistenciaSensor = nivelesLecturaSensor.length
+          ? this.lotesService.update(lotePersistido._id, {
+              suelos: suelosActualizados,
+              ...(tieneCalibracionSensor
+                ? {
+                    sueloProcedencia: 'sensor' as const,
+                    sueloConfirmadoPorUsuario: false,
+                  }
+                : {}),
+            })
+          : Promise.resolve(lotePersistido);
         const [prediccion] = await Promise.all([
           this.prediccionRiegoService.create(create),
           this.siembrasService.update(idSiembra, {
@@ -398,9 +426,7 @@ export class RiegoService {
             estadoCalculoAguaUtil,
             motivoCalculoAguaUtil,
           }),
-          this.lotesService.update(lote._id, {
-            suelos: suelosActualizados,
-          }),
+          persistenciaSensor,
         ]);
 
         // Log resumen de la predicción completada
@@ -500,6 +526,8 @@ export class RiegoService {
         );
         await this.lotesService.update(lote._id, {
           suelos,
+          sueloProcedencia: 'sensor',
+          sueloConfirmadoPorUsuario: false,
         });
       }
     }
@@ -508,6 +536,73 @@ export class RiegoService {
   }
 
   //
+
+  private async resolverLoteConEntradasAgronomicas(
+    lote: ILote,
+  ): Promise<ILote> {
+    if (!lote?._id) return aplicarEntradasAgronomicasSuelo(lote, null);
+    try {
+      const inputs = await this.lotesService.getSoilAgronomicInputs(lote._id);
+      return aplicarEntradasAgronomicasSuelo(lote, inputs);
+    } catch (error) {
+      this.logger.warn(
+        `Entradas edaficas no disponibles para riego del lote ${lote._id}; se conserva el perfil operativo previo: ${error?.message || error}`,
+      );
+      return aplicarEntradasAgronomicasSuelo(lote, null);
+    }
+  }
+
+  /**
+   * Una profundidad cartografica no identifica por si sola un canal fisico.
+   * Solo un numero de sensor persistido se considera un mapeo operativo.
+   */
+  private getSuelosPersistidosConMapeoSensor(lote: ILote): ISuelo[] {
+    return (lote.suelos || []).filter((suelo) => {
+      const numeroDeSensor = Number(suelo.numeroDeSensor);
+      return Number.isInteger(numeroDeSensor) && numeroDeSensor > 0;
+    });
+  }
+
+  /**
+   * Conserva el layout de una sonda ya mapeada y toma de la copia canonica sus
+   * propiedades por profundidad. Sin mapeo real devuelve [] para que V12
+   * infiera todos los canales presentes en humedadSuelo.
+   */
+  private getSuelosParaRiegoV12(
+    loteCanonico: ILote,
+    suelosPersistidosConSensor: ISuelo[],
+  ): ISuelo[] {
+    if (!suelosPersistidosConSensor.length) return [];
+    const sensores = new Set(
+      suelosPersistidosConSensor.map((suelo) => Number(suelo.numeroDeSensor)),
+    );
+    return (loteCanonico.suelos || []).filter((suelo) =>
+      sensores.has(Number(suelo.numeroDeSensor)),
+    );
+  }
+
+  /**
+   * Al actualizar una sonda ya mapeada conserva cualquier capa no asociada a
+   * sensores. Si aun no habia mapeo, el nuevo layout inferido reemplaza la
+   * capa automatica legacy que no representaba canales fisicos.
+   */
+  private mergeSuelosConActualizacionSensor(
+    lotePersistido: ILote,
+    suelosPersistidosConSensor: ISuelo[],
+    suelosSensorActualizados: ISuelo[],
+  ): ISuelo[] {
+    if (!suelosPersistidosConSensor.length) return suelosSensorActualizados;
+    const actualizados = new Map(
+      suelosSensorActualizados.map((suelo) => [
+        Number(suelo.numeroDeSensor),
+        suelo,
+      ]),
+    );
+    return (lotePersistido.suelos || []).map((suelo) => {
+      const numeroDeSensor = Number(suelo.numeroDeSensor);
+      return actualizados.get(numeroDeSensor) || suelo;
+    });
+  }
 
   private calcularCapacidadCampo(
     fecha: string,
@@ -834,7 +929,6 @@ export class RiegoService {
   }
 
   private actualizarSueloConRiegoV12(
-    lote: ILote,
     suelos: ISuelo[] = [],
     nivelesLecturaSensor: INivelLecturaSensor[] = [],
   ): ISuelo[] {
@@ -859,14 +953,31 @@ export class RiegoService {
 
       if (!lectura) return suelo;
 
+      const capacidadSensor =
+        lectura.fuenteCapacidadCampo === 'auto'
+          ? lectura.capacidadCampo
+          : undefined;
+      const conservarCapacidad = Object.prototype.hasOwnProperty.call(
+        suelo,
+        'capacidadDeCampo',
+      );
+      const conservarMarchitez = Object.prototype.hasOwnProperty.call(
+        suelo,
+        'puntoMarchitez',
+      );
+
       return {
         ...suelo,
-        numeroDeSensor: suelo.numeroDeSensor || lectura.numeroDeSensor || index + 1,
-        profundidad: suelo.profundidad || lectura.profundidad || (index + 1) * 10,
-        capacidadDeCampo:
-          lectura.capacidadCampo ?? suelo.capacidadDeCampo ?? lote.capacidadDeCampo,
-        puntoMarchitez:
-          lectura.puntoMarchitez ?? suelo.puntoMarchitez ?? lote.puntoMarchitez,
+        numeroDeSensor:
+          suelo.numeroDeSensor || lectura.numeroDeSensor || index + 1,
+        profundidad:
+          suelo.profundidad || lectura.profundidad || (index + 1) * 10,
+        ...(Number.isFinite(capacidadSensor)
+          ? { capacidadDeCampo: capacidadSensor }
+          : conservarCapacidad
+            ? { capacidadDeCampo: suelo.capacidadDeCampo }
+            : {}),
+        ...(conservarMarchitez ? { puntoMarchitez: suelo.puntoMarchitez } : {}),
         hayRaices: lectura.hayRaices ?? suelo.hayRaices,
       };
     });

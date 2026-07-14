@@ -120,6 +120,10 @@ h3 {
 .soil-summary article.texture-main {
   border-color: color-mix(in srgb, var(--p-primary-color), #d4dee7 60%);
 }
+.soil-summary article.texture-override {
+  background: color-mix(in srgb, var(--p-primary-color), white 94%);
+  border-color: color-mix(in srgb, var(--p-primary-color), #d4dee7 72%);
+}
 .soil-summary strong {
   color: var(--p-text-color);
   display: block;
@@ -129,6 +133,10 @@ h3 {
 }
 .texture-main strong {
   font-size: 1.2rem;
+}
+.texture-override strong {
+  color: color-mix(in srgb, var(--p-primary-color), var(--p-text-color) 36%);
+  font-size: 1.08rem;
 }
 
 .profile-panel,

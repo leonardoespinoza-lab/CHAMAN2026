@@ -5,8 +5,9 @@ import {
   IListado,
   IQueryParam,
   IUpdatePrediccionRiego,
+  IEntradasAgronomicasSuelo,
 } from 'modelos/src';
-import { API_DATOS } from '../../env';
+import { API_DATOS, SOIL_INTELLIGENCE_INTERNAL_TOKEN } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 
 @Injectable()
@@ -22,6 +23,18 @@ export class PrediccionRiegoRepository {
     const url = `${API_DATOS}/prediccion-riego`;
     return await this.axios.GET<IListado<IPrediccionRiego>>(url, {
       params: filtro,
+    });
+  }
+
+  async getAgronomicInputsByLot(
+    idLote: string,
+  ): Promise<IEntradasAgronomicasSuelo | null> {
+    const encodedLotId = encodeURIComponent(idLote);
+    const url = `${API_DATOS}/soil-intelligence/lots/${encodedLotId}/agronomic-inputs`;
+    return await this.axios.GET<IEntradasAgronomicasSuelo | null>(url, {
+      headers: SOIL_INTELLIGENCE_INTERNAL_TOKEN
+        ? { 'x-chaman-internal-token': SOIL_INTELLIGENCE_INTERNAL_TOKEN }
+        : {},
     });
   }
 

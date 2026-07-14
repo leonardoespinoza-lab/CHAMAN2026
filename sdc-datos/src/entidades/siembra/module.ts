@@ -8,6 +8,7 @@ import { LotesModule } from '../lote/module';
 import { FertilizacionsModule } from '../fertilizacion/module';
 import { FumigacionsModule } from '../fumigacion/module';
 import { AlgoritmosModule } from '../algoritmos/module';
+import { SoilIntelligenceModule } from '../suelo-inteligencia/module';
 
 @Module({
   controllers: [SiembrasController],
@@ -19,6 +20,7 @@ import { AlgoritmosModule } from '../algoritmos/module';
     FertilizacionsModule,
     FumigacionsModule,
     AlgoritmosModule,
+    SoilIntelligenceModule,
   ],
 })
 export class SiembrasModule {}

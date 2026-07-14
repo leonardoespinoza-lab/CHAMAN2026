@@ -5,8 +5,9 @@ import {
   IQueryParam,
   ICreateLote,
   IUpdateLote,
+  IEntradasAgronomicasSuelo,
 } from 'modelos/src';
-import { API_DATOS } from '../../env';
+import { API_DATOS, SOIL_INTELLIGENCE_INTERNAL_TOKEN } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 
 @Injectable()
@@ -16,6 +17,17 @@ export class LotesRepository {
   async getById(id: string): Promise<ILote> {
     const url = `${API_DATOS}/lotes/${id}`;
     return await this.axios.GET<ILote>(url);
+  }
+
+  async getSoilAgronomicInputs(
+    id: string,
+  ): Promise<IEntradasAgronomicasSuelo | null> {
+    const url = `${API_DATOS}/soil-intelligence/lots/${id}/agronomic-inputs`;
+    return this.axios.GET<IEntradasAgronomicasSuelo | null>(url, {
+      headers: SOIL_INTELLIGENCE_INTERNAL_TOKEN
+        ? { 'x-chaman-internal-token': SOIL_INTELLIGENCE_INTERNAL_TOKEN }
+        : {},
+    });
   }
 
   async get(params: IQueryParam): Promise<IListado<ILote>> {

@@ -140,10 +140,15 @@ describe('AgrometeorologicalEngineService', () => {
       [],
       {
         loteId: lote._id,
+        status: 'ready',
+        stale: false,
+        selectionPolicyVersion: 'test-v1',
+        selectionReason: 'automatic_assessment',
+        depthLayers: [],
+        provenance: {},
         rootZoneAvailableWaterMm: 142,
         effectiveDepthCm: 100,
         confidence: 'medium',
-        estimated: true,
       } as any,
     );
 
@@ -170,10 +175,15 @@ describe('AgrometeorologicalEngineService', () => {
       [],
       {
         loteId: lote._id,
+        status: 'ready',
+        stale: false,
+        selectionPolicyVersion: 'test-v1',
+        selectionReason: 'automatic_assessment',
+        depthLayers: [],
+        provenance: {},
         rootZoneAvailableWaterMm: 142,
         effectiveDepthCm: 100,
         confidence: 'medium',
-        estimated: true,
       } as any,
     );
 
@@ -181,6 +191,86 @@ describe('AgrometeorologicalEngineService', () => {
     expect(confirmed.advertencias.join(' ')).not.toContain(
       'perfil edáfico estimado',
     );
+  });
+
+  it('aplica capas canonicas antes del balance y conserva su condicion estimada', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2026-07-10',
+        semilla: { cultivo: 'Soja' },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        capacidadDeCampo: 18,
+        puntoMarchitez: 9,
+        suelos: [],
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [daily('2026-07-10', 8, 16, 24)],
+      [],
+      {
+        loteId: '64b000000000000000000002',
+        status: 'ready',
+        stale: false,
+        selectionPolicyVersion: 'test-v1',
+        selectionReason: 'automatic_assessment',
+        fieldCapacityPercentage: 30,
+        wiltingPointPercentage: 15,
+        depthLayers: [
+          {
+            depthFromCm: 0,
+            depthToCm: 100,
+            fieldCapacityPercentage: 30,
+            wiltingPointPercentage: 15,
+            source: 'soilgrids',
+            confidence: 'medium',
+          },
+        ],
+        provenance: {},
+      } as any,
+    );
+
+    expect(result.metricas.availableWaterCapacityMm).toBe(150);
+    expect(result.advertencias.join(' ')).toContain('estimado');
+  });
+
+  it('conserva el lote legado cuando el assessment esta vencido', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2026-07-10',
+        semilla: { cultivo: 'Soja' },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        capacidadDeCampo: 30,
+        puntoMarchitez: 12,
+        sueloReferencia: { profundidadCm: 100 },
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [daily('2026-07-10', 8, 16, 24)],
+      [],
+      {
+        loteId: '64b000000000000000000002',
+        status: 'ready',
+        stale: true,
+        selectionPolicyVersion: 'test-v1',
+        selectionReason: 'automatic_assessment',
+        fieldCapacityPercentage: 40,
+        wiltingPointPercentage: 20,
+        depthLayers: [],
+        provenance: {},
+      } as any,
+    );
+
+    expect(result.metricas.availableWaterCapacityMm).toBe(180);
   });
 
   it('calcula horas de frio y calor desde la serie horaria', () => {

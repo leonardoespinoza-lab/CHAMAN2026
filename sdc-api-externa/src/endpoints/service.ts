@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   ResponseDiseasePrediction,
   ResponseIrrigationPrediction,
@@ -18,6 +18,7 @@ import {
   ILote,
   IPopulate,
   ISemilla,
+  aplicarEntradasAgronomicasSuelo,
 } from 'modelos/src';
 import { EstablecimientosService } from '../entidades/establecimiento/service';
 import { LotesService } from '../entidades/lote/service';
@@ -112,15 +113,33 @@ export class EndpointsService {
     idSiembra: string,
     fecha?: string,
   ) {
+    await this.siembrasService.getById(idSiembra, apikey);
     const prediccion = await this.prediccionRiegoService.getBySiembraYFecha(
       idSiembra,
       fecha,
     );
+    let lote = prediccion?.lote;
+    const idLote = lote?._id || prediccion?.idLote;
+    if (idLote) {
+      try {
+        const inputs =
+          await this.prediccionRiegoService.getAgronomicInputsByLot(idLote);
+        lote = aplicarEntradasAgronomicasSuelo(
+          lote || ({ _id: idLote } as ILote),
+          inputs,
+        );
+      } catch {
+        Logger.warn(
+          `No se pudo consultar el contrato edafico vigente del lote ${idLote}; se conserva el fallback legacy`,
+          EndpointsService.name,
+        );
+      }
+    }
     const res: ResponseIrrigationPrediction = {
       idSiembra,
-      lote: prediccion?.lote?.nombre || 'Sin lote',
-      capacidadDeCampo: prediccion?.lote?.capacidadDeCampo || 0,
-      puntoDeMarchitez: prediccion?.lote?.puntoMarchitez || 0,
+      lote: lote?.nombre || 'Sin lote',
+      capacidadDeCampo: lote?.capacidadDeCampo,
+      puntoDeMarchitez: lote?.puntoMarchitez,
       fecha: prediccion?.fechaPrediccion,
       recomendacion: prediccion?.regar,
     };

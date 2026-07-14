@@ -76,6 +76,11 @@ export class SiembrasRepository {
     return await this.axios.PUT<ISiembra>(url, data);
   }
 
+  async cosechar(id: string, data: IUpdateSiembra): Promise<ISiembra> {
+    const url = `${API_DATOS}/siembras/cosechar/${id}`;
+    return await this.axios.PUT<ISiembra>(url, data);
+  }
+
   async registrarEtapaFenologica(
     id: string,
     registrosFenologicos: IRegistroFenologico[],

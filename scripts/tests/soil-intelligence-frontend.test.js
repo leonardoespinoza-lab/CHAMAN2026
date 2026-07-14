@@ -27,6 +27,18 @@ const cardCss = fs.readFileSync(
   path.join(cardPath, "card-suelo-ambiente.component.scss"),
   "utf8",
 );
+const editorPath = path.join(
+  root,
+  "sdc-app-chaman/src/app/main/modulo-productor/lotes/crear-editar-lote",
+);
+const editorTs = fs.readFileSync(
+  path.join(editorPath, "crear-editar-lote.component.ts"),
+  "utf8",
+);
+const editorHtml = fs.readFileSync(
+  path.join(editorPath, "crear-editar-lote.component.html"),
+  "utf8",
+);
 
 test("Suelo y ambiente aparece una sola vez a nivel de lote", () => {
   assert.equal((detail.match(/<app-card-suelo-ambiente/g) || []).length, 1);
@@ -37,11 +49,12 @@ test("Suelo y ambiente aparece una sola vez a nivel de lote", () => {
   assert.match(card, /<h2>Suelo y ambiente<\/h2>/);
 });
 
-test("la tarjeta informa textura, fuente, confianza, profundidad y fósforo no medido", () => {
+test("la tarjeta separa cartografía canónica, override, fuente y fósforo no medido", () => {
   for (const value of [
-    "Textura operativa",
-    "Estimación cartográfica",
-    "SoilGrids:",
+    "Textura cartográfica canónica",
+    "Override operativo",
+    "canonicalTextureLabel",
+    "operationalSourceLabel",
     "sourceLabel",
     "confidenceLabel",
     "depthLabel",
@@ -50,6 +63,36 @@ test("la tarjeta informa textura, fuente, confianza, profundidad y fósforo no m
   ]) {
     assert.match(`${card}\n${cardTs}`, new RegExp(value, "i"));
   }
+});
+
+test("el editor no inventa suelo ni lo reenvía durante una edición neutra", () => {
+  assert.doesNotMatch(editorTs, /this\.cambioTipoSueloManual\(false\)/);
+  assert.doesNotMatch(
+    editorTs,
+    /return desdePerfil \|\| desdeHuella \|\| desdeReferencia \|\| ['"]Franco['"]/,
+  );
+  assert.match(editorTs, /omitUnchangedSoilOverrides\(data\)/);
+  assert.match(editorTs, /soilPayloadWasEdited\(name/);
+  assert.match(editorTs, /sanitizeSoilLayers/);
+  assert.doesNotMatch(editorTs, /shouldSynchronizeManualWaterValues/);
+  for (const key of [
+    "suelos",
+    "capacidadDeCampo",
+    "puntoMarchitez",
+    "sueloReferencia",
+    "texturaLixiviacion",
+    "texturaEscorrentia",
+  ]) {
+    assert.match(editorTs, new RegExp(`['"]${key}['"]`));
+  }
+  assert.match(editorHtml, /Override manual opcional/);
+});
+
+test("un dato manual legacy nunca se rotula como confirmado", () => {
+  assert.match(cardTs, /Dato legacy no confirmado/);
+  assert.match(cardTs, /Alternativa legacy/);
+  assert.match(cardTs, /isOperationalTextureConfirmed/);
+  assert.match(card, /operationalTextureDetail/);
 });
 
 test("renderiza composición por profundidad, estados, nulls y móvil sin botón Calcular", () => {
@@ -81,6 +124,8 @@ test("prioriza el bloque operativo y difiere servicios pesados e historial", () 
   );
   assert.ok(
     detail.indexOf("<app-card-suelo-ambiente") <
-      detail.indexOf("@defer (on viewport; on interaction(loadServicesTrigger); prefetch on idle)"),
+      detail.indexOf(
+        "@defer (on viewport; on interaction(loadServicesTrigger); prefetch on idle)",
+      ),
   );
 });

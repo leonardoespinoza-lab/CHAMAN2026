@@ -28,6 +28,7 @@ import {
   esCultivoPerenne,
   getEtapasPerennesReferencia,
   IInteligenciaSueloLote,
+  aplicarEntradasAgronomicasSuelo,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { LotesRepository } from './repository';
@@ -319,7 +320,9 @@ export class LotesService {
   }
 
   async generarCertificado(id: string, permiso: IPermiso): Promise<string> {
-    const lote = await this.getById(id, permiso);
+    const lote = await this.resolveLotWithSoilInputs(
+      await this.getById(id, permiso),
+    );
     const siembra = lote.siembra;
 
     const [reportesNdvi, predicciones, fertilizaciones, fumigaciones, clima] =
@@ -581,6 +584,19 @@ export class LotesService {
   }
 
   // Private
+
+  private async resolveLotWithSoilInputs(lote: ILote): Promise<ILote> {
+    if (!lote?._id) return aplicarEntradasAgronomicasSuelo(lote, null);
+    try {
+      const inputs = await this.repository.getSoilAgronomicInputs(lote._id);
+      return aplicarEntradasAgronomicasSuelo(lote, inputs);
+    } catch (error) {
+      this.logger.warn(
+        `Entradas edaficas no disponibles para el informe del lote ${lote._id}; se conserva el perfil operativo previo: ${error?.message || error}`,
+      );
+      return aplicarEntradasAgronomicasSuelo(lote, null);
+    }
+  }
 
   private async assertCanView(id: string, permiso: IPermiso): Promise<ILote> {
     const data = await this.repository.getById(id);

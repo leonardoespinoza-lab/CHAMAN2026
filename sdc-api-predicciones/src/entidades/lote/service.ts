@@ -5,6 +5,7 @@ import {
   ILote,
   IQueryParam,
   IUpdateLote,
+  IEntradasAgronomicasSuelo,
 } from 'modelos/src';
 import { LotesRepository } from './repository';
 
@@ -20,11 +21,18 @@ export class LotesService {
     return await this.repository.get(filtro);
   }
 
+  async getSoilAgronomicInputs(
+    id: string,
+  ): Promise<IEntradasAgronomicasSuelo | null> {
+    return this.repository.getSoilAgronomicInputs(id);
+  }
+
   async getByIdSonda(idSondaSuelo: string): Promise<ILote[]> {
     const filter: IFilter<ILote> = { idSondaSuelo };
     const query: IQueryParam = {
       filter: JSON.stringify(filter),
-      select: 'nombre',
+      select:
+        'nombre suelos capacidadDeCampo puntoMarchitez sueloProcedencia sueloConfirmadoPorUsuario sueloFechaConfirmacion',
     };
     return (await this.repository.get(query)).datos;
   }

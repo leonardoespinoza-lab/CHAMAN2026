@@ -84,22 +84,104 @@ export class CardSueloAmbienteComponent implements OnChanges, OnDestroy {
   }
 
   public get sourceLabel(): string {
+    const sourceTypes = new Set((this.assessment?.sources || []).map((source) => source.type));
+    if (sourceTypes.has('inta') && sourceTypes.has('soilgrids')) return 'INTA + SoilGrids';
+    if (sourceTypes.has('inta')) return 'INTA';
+    if (sourceTypes.has('soilgrids')) return 'SoilGrids';
     const labels: Record<string, string> = {
-      manual: 'Confirmado por usuario',
-      laboratory: 'Laboratorio',
+      manual: this.isOperationalTextureConfirmed ? 'Solo dato confirmado' : 'Solo dato legacy',
+      laboratory: 'Solo laboratorio',
       inta: 'INTA',
       soilgrids: 'SoilGrids',
-      mixed: 'Fuente mixta',
+      mixed: 'INTA + SoilGrids',
       derived: 'Estimado',
       unknown: 'Fuente pendiente',
     };
     return labels[this.assessment?.source?.type || 'unknown'];
   }
 
-  public get textureLabel(): string {
+  public get canonicalTextureLabel(): string {
     return (
-      this.assessment?.summary?.operationalTexture || this.assessment?.summary?.estimatedTexture || 'Sin determinar'
+      this.assessment?.summary?.canonicalTexture ||
+      this.assessment?.summary?.estimatedTexture ||
+      this.assessment?.summary?.operationalTexture ||
+      'Sin determinar'
     );
+  }
+
+  public get primaryTextureTitle(): string {
+    return this.assessment?.summary?.canonicalTexture || this.assessment?.summary?.estimatedTexture
+      ? 'Textura cartográfica canónica'
+      : 'Textura disponible';
+  }
+
+  public get hasOperationalOverride(): boolean {
+    const summary = this.assessment?.summary;
+    if (!summary?.operationalTexture || !(summary.canonicalTexture || summary.estimatedTexture)) return false;
+    const source = summary.operationalTextureSource;
+    return (
+      this.lote?.sueloConfirmadoPorUsuario === true ||
+      source === 'manual' ||
+      source === 'laboratory' ||
+      source === 'sensor'
+    );
+  }
+
+  public get operationalTextureLabel(): string {
+    return this.assessment?.summary?.operationalTexture || 'Sin override';
+  }
+
+  public get isOperationalTextureConfirmed(): boolean {
+    return this.lote?.sueloConfirmadoPorUsuario === true;
+  }
+
+  public get operationalTextureTitle(): string {
+    if (this.isOperationalTextureConfirmed) return 'Override operativo confirmado';
+    return this.assessment?.summary?.operationalTextureSource === 'manual'
+      ? 'Alternativa legacy'
+      : 'Alternativa operativa';
+  }
+
+  public get operationalSourceLabel(): string {
+    const source = this.assessment?.summary?.operationalTextureSource || this.lote?.sueloProcedencia || 'unknown';
+    if (source === 'manual') {
+      return this.isOperationalTextureConfirmed ? 'Confirmado por usuario' : 'Dato legacy no confirmado';
+    }
+    const labels: Record<string, string> = {
+      laboratory: 'Análisis de laboratorio',
+      sensor: 'Calibrado con sensor',
+      inta_local: 'INTA regional',
+      inta_national: 'INTA nacional',
+      sisinta: 'SISINTA',
+      soilgrids: 'SoilGrids',
+      derived: 'Estimación derivada',
+      unknown: 'Origen no identificado',
+    };
+    return labels[source] || labels['unknown'];
+  }
+
+  public get operationalTextureDetail(): string {
+    if (this.isOperationalTextureConfirmed) return 'Tiene prioridad operativa por confirmación explícita.';
+    if (this.assessment?.summary?.operationalTextureSource === 'manual') {
+      return 'Referencia histórica; requiere confirmación antes de tratarla como validada.';
+    }
+    return 'Se muestra separada de la cartografía automática.';
+  }
+
+  public get operationalConflictTitle(): string {
+    if (this.isOperationalTextureConfirmed) return 'El override confirmado difiere de la cartografía canónica';
+    return this.assessment?.summary?.operationalTextureSource === 'manual'
+      ? 'La alternativa legacy difiere de la cartografía canónica'
+      : 'La alternativa operativa difiere de la cartografía canónica';
+  }
+
+  public get operationalConflictDetail(): string {
+    if (this.isOperationalTextureConfirmed) {
+      return 'La referencia automática permanece visible; el valor confirmado conserva su prioridad operativa.';
+    }
+    return this.assessment?.summary?.operationalTextureSource === 'manual'
+      ? 'La referencia automática permanece principal; el dato legacy se muestra sin atribuirle confirmación.'
+      : 'La referencia automática permanece principal y la alternativa se informa con su origen.';
   }
 
   public get depthLabel(): string {
