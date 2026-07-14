@@ -27,6 +27,7 @@ import {
   ISerieAgrometeorologicaDia,
   ISiembra,
   IValoresMeteorologicosNormalizados,
+  IEntradasAgronomicasSuelo,
   normalizarContenidoVolumetrico,
   numeroFinito,
   PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA,
@@ -77,6 +78,7 @@ interface ISoilProfile {
   wiltingPoint?: number;
   rootDepthCm?: number;
   estimated: boolean;
+  source?: 'confirmed_lot' | 'soil_intelligence' | 'crop_reference';
 }
 
 interface IDailyDerived {
@@ -169,12 +171,24 @@ export class AgrometeorologicalEngineService {
       establecimiento._id,
       cycleStart,
     );
+    let soilInputs: IEntradasAgronomicasSuelo | null = null;
+    try {
+      soilInputs = await this.repository.getSoilAgronomicInputs(lote._id);
+    } catch (error) {
+      syncWarnings.push(
+        `Motor de suelo no disponible temporalmente; se conserva la lógica hídrica previa.`,
+      );
+      this.logger.warn(
+        `Entradas edáficas no disponibles para lote ${lote._id}: ${error?.message || error}`,
+      );
+    }
     const calculated = this.calculateIndicators(
       siembra,
       lote,
       coordinates,
       observations,
       syncWarnings,
+      soilInputs || undefined,
     );
     await this.persistInBatches(calculated);
     const warnings = [
@@ -212,6 +226,7 @@ export class AgrometeorologicalEngineService {
     coordinates: ICoordenadas,
     observations: IObservacionMeteorologicaNormalizada[],
     inheritedWarnings: string[] = [],
+    soilInputs?: IEntradasAgronomicasSuelo,
   ): ICreateIndicadorAgrometeorologico[] {
     const crop = siembra.semilla?.cultivo;
     const reference = crop
@@ -262,14 +277,16 @@ export class AgrometeorologicalEngineService {
     const dailyByDate = new Map(
       dailyPersisted.map((item) => [item.fechaLocal, item]),
     );
-    const profile = this.resolveSoilProfile(lote, parameters);
+    const profile = this.resolveSoilProfile(lote, parameters, soilInputs);
     if (!profile.capacityMm) {
       globalWarnings.push(
         'Balance hidrico no calculable: faltan capacidad de campo, punto de marchitez o profundidad radicular.',
       );
     } else if (profile.estimated) {
       globalWarnings.push(
-        'La capacidad de agua util usa una referencia del lote o cultivo y requiere validacion de perfil.',
+        profile.source === 'soil_intelligence'
+          ? 'La capacidad de agua útil proviene del perfil edáfico estimado; validar con análisis o sensor cuando esté disponible.'
+          : 'La capacidad de agua util usa una referencia del lote o cultivo y requiere validacion de perfil.',
       );
     }
     const irrigationByDate = this.resolveIrrigationEvents(siembra);
@@ -692,10 +709,8 @@ export class AgrometeorologicalEngineService {
       summary: {
         gddAccumulated: latestObserved.metricas.gddAccumulated,
         gddThroughDate: latestObserved.fecha,
-        gddBaseTemperatureC:
-          latestObserved.metricas.gddBaseTemperatureC,
-        gddUpperTemperatureC:
-          latestObserved.metricas.gddUpperTemperatureC,
+        gddBaseTemperatureC: latestObserved.metricas.gddBaseTemperatureC,
+        gddUpperTemperatureC: latestObserved.metricas.gddUpperTemperatureC,
         rainAccumulatedMm: latestObserved.metricas.rainAccumulatedMm,
         et0AccumulatedMm: latestObserved.metricas.et0AccumulatedMm,
         etcAccumulatedMm: latestObserved.metricas.etcAccumulatedMm,
@@ -901,6 +916,7 @@ export class AgrometeorologicalEngineService {
   private resolveSoilProfile(
     lote: ILote,
     parameters: IParametrosAgrometeorologicos,
+    soilInputs?: IEntradasAgronomicasSuelo,
   ): ISoilProfile {
     const layers = [...(lote.suelos || [])]
       .filter((item) => item.hayRaices !== false)
@@ -938,20 +954,38 @@ export class AgrometeorologicalEngineService {
           previousDepth > 0 ? weightedWp / previousDepth : undefined,
         rootDepthCm: previousDepth,
         estimated: false,
+        source: 'confirmed_lot',
       };
     }
     const rootDepth =
       parameters.profundidadRadicularCm ?? lote.sueloReferencia?.profundidadCm;
+    const legacyCapacity = calcularCapacidadAguaUtilMm(
+      lote.capacidadDeCampo,
+      lote.puntoMarchitez,
+      rootDepth,
+    );
+    if (legacyCapacity !== undefined) {
+      return {
+        capacityMm: legacyCapacity,
+        fieldCapacity: normalizarContenidoVolumetrico(lote.capacidadDeCampo),
+        wiltingPoint: normalizarContenidoVolumetrico(lote.puntoMarchitez),
+        rootDepthCm: rootDepth,
+        estimated: true,
+        source: 'crop_reference',
+      };
+    }
+    const estimatedRootDepth = rootDepth ?? soilInputs?.effectiveDepthCm ?? 100;
+    const soilCapacity =
+      soilInputs?.rootZoneAvailableWaterMm ??
+      (Number.isFinite(soilInputs?.availableWaterMmPerMeter)
+        ? soilInputs!.availableWaterMmPerMeter! * (estimatedRootDepth / 100)
+        : undefined);
     return {
-      capacityMm: calcularCapacidadAguaUtilMm(
-        lote.capacidadDeCampo,
-        lote.puntoMarchitez,
-        rootDepth,
-      ),
-      fieldCapacity: normalizarContenidoVolumetrico(lote.capacidadDeCampo),
-      wiltingPoint: normalizarContenidoVolumetrico(lote.puntoMarchitez),
-      rootDepthCm: rootDepth,
+      capacityMm: soilCapacity,
+      rootDepthCm: estimatedRootDepth,
       estimated: true,
+      source:
+        soilCapacity !== undefined ? 'soil_intelligence' : 'crop_reference',
     };
   }
 

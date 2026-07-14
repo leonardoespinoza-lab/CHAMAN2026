@@ -43,6 +43,7 @@ import { IaMalezasModule } from './entidades/ia-malezas/module';
 import { ObservacionesMeteorologicasModule } from './entidades/observacion-meteorologica/module';
 import { IndicadoresAgrometeorologicosModule } from './entidades/indicador-agrometeorologico/module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { SoilIntelligenceModule } from './entidades/suelo-inteligencia/module';
 
 @Module({
   imports: [
@@ -88,6 +89,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     IaMalezasModule,
     ObservacionesMeteorologicasModule,
     IndicadoresAgrometeorologicosModule,
+    SoilIntelligenceModule,
   ],
   controllers: [HealthController],
   providers: [],

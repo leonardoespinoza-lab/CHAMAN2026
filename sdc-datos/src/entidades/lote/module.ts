@@ -5,6 +5,7 @@ import { LotesRepository } from './repository';
 import { Lote, LoteSchema } from './modelos/schema';
 import { MongooseModule } from '@nestjs/mongoose';
 import { LotLocationModule } from '../ubicacion-lote/module';
+import { SoilIntelligenceModule } from '../suelo-inteligencia/module';
 
 @Module({
   controllers: [LotesController],
@@ -13,6 +14,7 @@ import { LotLocationModule } from '../ubicacion-lote/module';
   imports: [
     MongooseModule.forFeature([{ name: Lote.name, schema: LoteSchema }]),
     LotLocationModule,
+    SoilIntelligenceModule,
   ],
 })
 export class LotesModule {}

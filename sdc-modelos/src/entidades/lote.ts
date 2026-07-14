@@ -13,6 +13,7 @@ import {
   IDepartamentoLegadoLote,
   IUbicacionAdministrativaLote,
 } from "./ubicacion-lote";
+import { TFuentePropiedadSuelo } from "./suelo-inteligencia";
 
 export type TTexturaSuelo =
   | "Arcilloso"
@@ -98,6 +99,9 @@ export interface ILote {
   capacidadDeCampo?: number;
   idSondaSuelo?: string;
   sueloReferencia?: ISueloReferencia;
+  sueloProcedencia?: TFuentePropiedadSuelo;
+  sueloConfirmadoPorUsuario?: boolean;
+  sueloFechaConfirmacion?: string;
   suelos?: ISuelo[];
   capacidadDeRiego?: number;
   puntoMarchitez?: number;

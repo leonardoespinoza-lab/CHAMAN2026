@@ -81,6 +81,8 @@ import {
     LotLocationService,
     EstablishmentLocationService,
     LotLocationRepository,
+    LotGeometryNormalizer,
+    LotLocationInternalGuard,
   ],
 })
 export class LotLocationModule {}

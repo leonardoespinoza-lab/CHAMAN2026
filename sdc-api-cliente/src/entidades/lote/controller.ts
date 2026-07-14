@@ -19,6 +19,7 @@ import {
   IUpdateLote,
   IPermiso,
   ICargaFitosanitaria,
+  IInteligenciaSueloLote,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
@@ -145,6 +146,34 @@ export class LotesController {
       permiso,
       force === 'true',
     );
+  }
+
+  @Get('/:id/suelo-ambiente')
+  @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+  )
+  public async getSoilIntelligence(
+    @Param('id') id: string,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<IInteligenciaSueloLote | null> {
+    return this.service.getSoilIntelligence(id, permiso);
+  }
+
+  @Post('/:id/suelo-ambiente/reprocesar')
+  @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+  )
+  public async reprocessSoilIntelligence(
+    @Param('id') id: string,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<IInteligenciaSueloLote> {
+    return this.service.reprocessSoilIntelligence(id, permiso);
   }
 
   @Get('/:id')

@@ -7,6 +7,7 @@ import {
   IQueryParam,
   IUbicacionAdministrativaLote,
   IUpdateLote,
+  IInteligenciaSueloLote,
 } from 'modelos/src';
 import { HttpService } from './http.service';
 
@@ -43,6 +44,14 @@ export class LoteService {
 
   public reprocesarUbicacionAdministrativa(id: string, force = true): Promise<IUbicacionAdministrativaLote> {
     return this.http.post(`/lotes/${id}/ubicacion/reprocesar`, {}, { params: { force } });
+  }
+
+  public sueloAmbiente(id: string): Promise<IInteligenciaSueloLote | null> {
+    return this.http.get(`/lotes/${id}/suelo-ambiente`);
+  }
+
+  public reprocesarSueloAmbiente(id: string): Promise<IInteligenciaSueloLote> {
+    return this.http.post(`/lotes/${id}/suelo-ambiente/reprocesar`, {});
   }
 
   public sueloInta(lat: number, lng: number): Promise<any> {

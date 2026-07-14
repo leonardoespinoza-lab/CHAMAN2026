@@ -6,6 +6,8 @@ import {
   ICreateLote,
   IUpdateLote,
   ISueloInta,
+  IInteligenciaSueloLote,
+  IEntradasAgronomicasSuelo,
 } from 'modelos/src';
 import {
   AGROMETEO_INTERNAL_TOKEN,
@@ -87,6 +89,41 @@ export class LotesRepository {
     return await this.axios.POST(
       url,
       { motivo: 'manual_retry', force },
+      {
+        headers: LOT_LOCATION_INTERNAL_TOKEN
+          ? { 'x-chaman-internal-token': LOT_LOCATION_INTERNAL_TOKEN }
+          : {},
+      },
+    );
+  }
+
+  async getSoilIntelligence(
+    idLote: string,
+  ): Promise<IInteligenciaSueloLote | null> {
+    const url = `${API_DATOS}/soil-intelligence/lots/${idLote}`;
+    return await this.axios.GET<IInteligenciaSueloLote | null>(url, {
+      headers: LOT_LOCATION_INTERNAL_TOKEN
+        ? { 'x-chaman-internal-token': LOT_LOCATION_INTERNAL_TOKEN }
+        : {},
+    });
+  }
+
+  async getSoilAgronomicInputs(
+    idLote: string,
+  ): Promise<IEntradasAgronomicasSuelo | null> {
+    const url = `${API_DATOS}/soil-intelligence/lots/${idLote}/agronomic-inputs`;
+    return await this.axios.GET<IEntradasAgronomicasSuelo | null>(url, {
+      headers: LOT_LOCATION_INTERNAL_TOKEN
+        ? { 'x-chaman-internal-token': LOT_LOCATION_INTERNAL_TOKEN }
+        : {},
+    });
+  }
+
+  async reprocessSoilIntelligence(idLote: string) {
+    const url = `${API_DATOS}/soil-intelligence/lots/${idLote}/reprocess`;
+    return await this.axios.POST<IInteligenciaSueloLote>(
+      url,
+      { reason: 'manual_retry', force: true },
       {
         headers: LOT_LOCATION_INTERNAL_TOKEN
           ? { 'x-chaman-internal-token': LOT_LOCATION_INTERNAL_TOKEN }

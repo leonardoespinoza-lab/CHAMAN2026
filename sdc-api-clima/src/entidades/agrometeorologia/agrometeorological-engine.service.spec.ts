@@ -119,6 +119,70 @@ describe('AgrometeorologicalEngineService', () => {
     );
   });
 
+  it('usa el perfil edafico estimado solo cuando el lote no tiene capacidad confirmada', () => {
+    const siembra = {
+      _id: '64b000000000000000000001',
+      idLote: '64b000000000000000000002',
+      idEstablecimiento: '64b000000000000000000003',
+      fechaSiembra: '2026-07-10',
+      semilla: { cultivo: 'Soja' },
+    } as any;
+    const lote = {
+      _id: '64b000000000000000000002',
+      idEstablecimiento: '64b000000000000000000003',
+    } as any;
+
+    const [estimated] = engine.calculateIndicators(
+      siembra,
+      lote,
+      { lat: -33, lng: -61.9 },
+      [daily('2026-07-10', 8, 16, 24)],
+      [],
+      {
+        loteId: lote._id,
+        rootZoneAvailableWaterMm: 142,
+        effectiveDepthCm: 100,
+        confidence: 'medium',
+        estimated: true,
+      } as any,
+    );
+
+    expect(estimated.metricas.availableWaterCapacityMm).toBe(142);
+    expect(estimated.advertencias.join(' ')).toContain(
+      'perfil edáfico estimado',
+    );
+
+    const [confirmed] = engine.calculateIndicators(
+      siembra,
+      {
+        ...lote,
+        suelos: [
+          {
+            profundidad: 100,
+            capacidadDeCampo: 30,
+            puntoMarchitez: 15,
+            hayRaices: true,
+          },
+        ],
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [daily('2026-07-10', 8, 16, 24)],
+      [],
+      {
+        loteId: lote._id,
+        rootZoneAvailableWaterMm: 142,
+        effectiveDepthCm: 100,
+        confidence: 'medium',
+        estimated: true,
+      } as any,
+    );
+
+    expect(confirmed.metricas.availableWaterCapacityMm).toBe(150);
+    expect(confirmed.advertencias.join(' ')).not.toContain(
+      'perfil edáfico estimado',
+    );
+  });
+
   it('calcula horas de frio y calor desde la serie horaria', () => {
     const hourly = [-2, 5, 20, 36].map((temperatureC, index) => ({
       idEstablecimiento: '64b000000000000000000003',

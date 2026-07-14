@@ -39,3 +39,4 @@ export * from "./suelo-inta";
 export * from "./napa";
 export * from "./agrometeorologia";
 export * from "./ubicacion-lote";
+export * from "./suelo-inteligencia";

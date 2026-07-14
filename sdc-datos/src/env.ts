@@ -20,6 +20,10 @@ export const AGROMETEO_INTERNAL_TOKEN =
   process.env.AGROMETEO_INTERNAL_TOKEN || '';
 export const LOT_LOCATION_INTERNAL_TOKEN =
   process.env.LOT_LOCATION_INTERNAL_TOKEN || '';
+export const SOIL_INTELLIGENCE_INTERNAL_TOKEN =
+  process.env.SOIL_INTELLIGENCE_INTERNAL_TOKEN ||
+  LOT_LOCATION_INTERNAL_TOKEN ||
+  AGROMETEO_INTERNAL_TOKEN;
 export const GEOREF_SYNC_ENABLED =
   process.env.GEOREF_SYNC_ENABLED !== 'false' &&
   process.env.NODE_ENV !== 'test';
@@ -52,6 +56,17 @@ export const GEOREF_SETTLEMENT_MAX_DISTANCE_METERS =
   +process.env.GEOREF_SETTLEMENT_MAX_DISTANCE_METERS || 25_000;
 export const LOT_LOCATION_RESOLVER_VERSION =
   process.env.LOT_LOCATION_RESOLVER_VERSION || 'lot-location-v1.0.0';
+export const SOIL_INTELLIGENCE_ENABLED =
+  process.env.SOIL_INTELLIGENCE_ENABLED !== 'false' &&
+  process.env.NODE_ENV !== 'test';
+export const SOIL_INTELLIGENCE_STARTUP_DELAY_MS =
+  +process.env.SOIL_INTELLIGENCE_STARTUP_DELAY_MS || 45_000;
+export const SOIL_INTELLIGENCE_STARTUP_BACKFILL_LIMIT =
+  +process.env.SOIL_INTELLIGENCE_STARTUP_BACKFILL_LIMIT || 0;
+export const SOIL_INTELLIGENCE_RECOVERY_LIMIT =
+  +process.env.SOIL_INTELLIGENCE_RECOVERY_LIMIT || 2;
+export const SOIL_INTELLIGENCE_CRON =
+  process.env.SOIL_INTELLIGENCE_CRON || '0 4 * * 0';
 
 // Solo incluir autenticación si hay usuario Y contraseña no vacíos
 const authOptions =

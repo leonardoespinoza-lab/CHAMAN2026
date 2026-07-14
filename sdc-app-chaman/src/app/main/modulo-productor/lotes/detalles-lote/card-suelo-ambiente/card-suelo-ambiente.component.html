@@ -1,0 +1,196 @@
+<section
+  class="soil-card"
+  [class.partial]="status === 'partial'"
+  [class.issue]="!hasResult && !processing"
+  [attr.data-confidence]="assessment?.source?.confidence || 'unavailable'"
+>
+  <header class="soil-header">
+    <div>
+      <span class="eyebrow">Perfil edáfico del lote</span>
+      <h2>Suelo y ambiente</h2>
+      <small>Caracterización automática por polígono; los datos confirmados nunca se sobrescriben.</small>
+    </div>
+    <div class="status-cluster">
+      @if (hasResult) {
+        <span class="source-badge">{{ sourceLabel }}</span>
+        <span class="confidence-badge">{{ confidenceLabel }}</span>
+      } @else if (processing) {
+        <span class="confidence-badge processing"><i class="pi pi-spin pi-spinner"></i> Procesando</span>
+      }
+    </div>
+  </header>
+
+  @if (loading) {
+    <div class="soil-skeleton" aria-label="Cargando suelo y ambiente">
+      <span></span><span></span><span></span><span></span>
+    </div>
+  } @else if (processing) {
+    <div class="processing-state">
+      <i class="pi pi-chart-bar"></i>
+      <div>
+        <strong>{{ stateText() }}</strong>
+        <small>El trabajo es asíncrono y no bloquea el resto de los servicios del lote.</small>
+      </div>
+      <div class="progress-track"><span></span></div>
+    </div>
+  } @else if (hasResult) {
+    <div class="soil-summary">
+      <article class="texture-main">
+        <span>Textura del suelo</span>
+        <strong>{{ textureLabel }}</strong>
+        <small>{{ assessment?.summary?.usdaTexture || 'Clase USDA no disponible' }} · {{ depthLabel }}</small>
+      </article>
+      <article>
+        <span>Composición 0–30 cm</span>
+        <strong>
+          {{ number(assessment?.summary?.sandPercentage) }}% arena · {{ number(assessment?.summary?.siltPercentage) }}%
+          limo · {{ number(assessment?.summary?.clayPercentage) }}% arcilla
+        </strong>
+        <small>Cálculo ponderado por espesor</small>
+      </article>
+      <article>
+        <span>Drenaje edáfico</span>
+        <strong>{{ drainageLabel(assessment?.summary?.drainageClass) }}</strong>
+        <small>No equivale al riesgo meteorológico actual de anegamiento</small>
+      </article>
+      <article>
+        <span>Agua útil estimada</span>
+        <strong>{{ number(assessment?.summary?.availableWaterMmPerMeter) }} mm/m</strong>
+        <small>Zona radicular de referencia: {{ number(assessment?.summary?.rootZoneAvailableWaterMm) }} mm</small>
+      </article>
+      <article>
+        <span>Unidad / serie INTA</span>
+        <strong>{{ assessment?.taxonomy?.intaUnit || assessment?.taxonomy?.series || 'No informada' }}</strong>
+        <small>{{ assessment?.taxonomy?.order || 'Taxonomía no informada' }}</small>
+      </article>
+      <article>
+        <span>Fósforo disponible</span>
+        <strong>No medido</strong>
+        <small>Requiere laboratorio, método, profundidad y fecha identificados</small>
+      </article>
+    </div>
+
+    @if (assessment?.manualConflict) {
+      <div class="notice conflict">
+        <i class="pi pi-exclamation-triangle"></i>
+        <div>
+          <strong>Dato confirmado conservado</strong>
+          <span>La estimación automática difiere de la textura operativa y se muestra solo como contraste.</span>
+        </div>
+      </div>
+    }
+
+    @if (profile.length) {
+      <section class="profile-panel">
+        <div class="panel-heading">
+          <div>
+            <span>Perfil 0–200 cm</span>
+            <h3>Composición por profundidad</h3>
+          </div>
+          <div class="legend" aria-label="Leyenda de composición">
+            <span><i class="sand"></i>Arena</span>
+            <span><i class="silt"></i>Limo</span>
+            <span><i class="clay"></i>Arcilla</span>
+          </div>
+        </div>
+        <div class="profile-chart">
+          @for (layer of profile; track layer.depthFromCm + '-' + layer.depthToCm) {
+            <div class="profile-row">
+              <strong>{{ layer.depthFromCm }}–{{ layer.depthToCm }} cm</strong>
+              <div
+                class="composition-track"
+                [attr.title]="layerUncertainty(layer)"
+                [attr.aria-label]="
+                  'Arena ' +
+                  number(layer.sandQ50) +
+                  '%, limo ' +
+                  number(layer.siltQ50) +
+                  '%, arcilla ' +
+                  number(layer.clayQ50) +
+                  '%'
+                "
+              >
+                <span class="sand" [style.width.%]="width(layer.sandQ50)">
+                  @if (width(layer.sandQ50) >= 15) {
+                    {{ number(layer.sandQ50) }}%
+                  }
+                </span>
+                <span class="silt" [style.width.%]="width(layer.siltQ50)">
+                  @if (width(layer.siltQ50) >= 15) {
+                    {{ number(layer.siltQ50) }}%
+                  }
+                </span>
+                <span class="clay" [style.width.%]="width(layer.clayQ50)">
+                  @if (width(layer.clayQ50) >= 15) {
+                    {{ number(layer.clayQ50) }}%
+                  }
+                </span>
+              </div>
+              <small>{{ layer.chamanTexture || 'Sin clase' }} · {{ layer.validPixels || 0 }} píxeles válidos</small>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    @if (hasWaterProfile) {
+      <section class="water-panel">
+        <div class="panel-heading">
+          <div>
+            <span>Reserva potencial</span>
+            <h3>Agua disponible por profundidad</h3>
+          </div>
+          <small>Estimación SoilGrids: 33 kPa menos 1500 kPa</small>
+        </div>
+        <div class="water-grid">
+          @for (layer of profile; track 'water-' + layer.depthFromCm) {
+            @if (layer.fieldCapacityPercentage !== undefined && layer.wiltingPointPercentage !== undefined) {
+              <article>
+                <strong>{{ layer.depthFromCm }}–{{ layer.depthToCm }} cm</strong>
+                <div class="water-track" title="Capacidad de campo y punto de marchitez en porcentaje volumétrico">
+                  <span class="field" [style.width.%]="waterWidth(layer.fieldCapacityPercentage)"></span>
+                  <span class="wilting" [style.left.%]="waterWidth(layer.wiltingPointPercentage)"></span>
+                </div>
+                <small>
+                  CC {{ number(layer.fieldCapacityPercentage) }}% · PMP {{ number(layer.wiltingPointPercentage) }}% ·
+                  {{ number(layer.availableWaterMmPerMeter) }} mm/m
+                </small>
+              </article>
+            }
+          }
+        </div>
+      </section>
+    }
+
+    @if (assessment?.warnings?.length) {
+      <div class="notice">
+        <i class="pi pi-info-circle"></i>
+        <span>{{ assessment?.warnings?.join(' ') }}</span>
+      </div>
+    }
+  } @else {
+    <div class="empty-state">
+      <i class="pi pi-map"></i>
+      <div>
+        <strong>{{ stateText() }}</strong>
+        <small>La textura manual existente y cualquier análisis de laboratorio permanecen intactos.</small>
+      </div>
+      @if ((status === 'failed' || status === 'source_unavailable') && !helper.soloLectura()) {
+        <p-button label="Reintentar" icon="pi pi-refresh" [loading]="retrying" [outlined]="true" (onClick)="retry()" />
+      }
+    </div>
+  }
+
+  <footer>
+    <span>{{ assessment?.source?.provider || 'Motor edáfico Chaman' }}</span>
+    @if (assessment?.source?.coveragePercentage !== undefined) {
+      <span>Cobertura {{ number(assessment?.source?.coveragePercentage) }}%</span>
+    }
+    @if (assessment?.source?.resolutionMeters) {
+      <span>Resolución {{ assessment?.source?.resolutionMeters }} m</span>
+    }
+    @if (assessment?.calculatedAt) {
+      <span>Actualizado {{ assessment?.calculatedAt | date: 'short' }}</span>
+    }
+  </footer>
+</section>

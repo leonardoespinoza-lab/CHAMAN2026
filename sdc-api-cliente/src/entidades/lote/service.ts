@@ -27,6 +27,7 @@ import {
   TNivelCargaFitosanitaria,
   esCultivoPerenne,
   getEtapasPerennesReferencia,
+  IInteligenciaSueloLote,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { LotesRepository } from './repository';
@@ -159,6 +160,22 @@ export class LotesService {
   ) {
     await this.getById(id, permiso);
     return await this.repository.resolveAdministrativeLocation(id, force);
+  }
+
+  async getSoilIntelligence(
+    id: string,
+    permiso: IPermiso,
+  ): Promise<IInteligenciaSueloLote | null> {
+    await this.getById(id, permiso);
+    return this.repository.getSoilIntelligence(id);
+  }
+
+  async reprocessSoilIntelligence(
+    id: string,
+    permiso: IPermiso,
+  ): Promise<IInteligenciaSueloLote> {
+    await this.getById(id, permiso);
+    return this.repository.reprocessSoilIntelligence(id);
   }
 
   async get(filtro: IQueryParam, permiso: IPermiso): Promise<IListado<ILote>> {
@@ -526,27 +543,20 @@ export class LotesService {
     }
 
     try {
-      const delta = 0.05;
+      const delta = 0.0001;
       const response = await this.axios.GET<IntaFeatureCollection>(
-        'https://geo-backend.inta.gob.ar/geoserver/wms',
+        'https://geo-backend.inta.gob.ar/geoserver/ows',
         {
           timeout: 12000,
           params: {
-            SERVICE: 'WMS',
-            VERSION: '1.3.0',
-            REQUEST: 'GetFeatureInfo',
-            LAYERS: 'geonode:suelos_argentina_1_500',
-            QUERY_LAYERS: 'geonode:suelos_argentina_1_500',
-            INFO_FORMAT: 'application/json',
-            FEATURE_COUNT: 3,
-            CRS: 'CRS:84',
-            BBOX: `${lng - delta},${lat - delta},${lng + delta},${lat + delta}`,
-            WIDTH: 101,
-            HEIGHT: 101,
-            I: 50,
-            J: 50,
-            FORMAT: 'image/png',
-            STYLES: '',
+            service: 'WFS',
+            version: '2.0.0',
+            request: 'GetFeature',
+            typeNames: 'geonode:suelos_argentina_1_500',
+            outputFormat: 'application/json',
+            srsName: 'EPSG:4326',
+            count: 3,
+            bbox: `${lng - delta},${lat - delta},${lng + delta},${lat + delta},EPSG:4326`,
           },
         },
       );
@@ -3507,7 +3517,7 @@ export class LotesService {
   private crearRespuestaSueloInta(lat: number, lng: number): SueloIntaResponse {
     return {
       fuente: 'INTA Atlas de Suelos 1:500.000/1:1.000.000',
-      servicio: 'geo-backend.inta.gob.ar/geoserver/wms',
+      servicio: 'geo-backend.inta.gob.ar/geoserver/ows (WFS)',
       fechaConsulta: new Date().toISOString(),
       ubicacion: { lat, lng },
       encontrado: false,

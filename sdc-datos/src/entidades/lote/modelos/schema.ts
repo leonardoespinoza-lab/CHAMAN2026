@@ -23,6 +23,7 @@ import {
   ISueloReferencia,
   IUbicacionAdministrativaLote,
   IDepartamentoLegadoLote,
+  TFuentePropiedadSuelo,
 } from 'modelos/src';
 import { Document } from 'mongoose';
 import { Quimica } from '../../quimica/modelos/schema';
@@ -51,6 +52,15 @@ export class Lote implements Exactly<ILote, Lote> {
 
   @Prop({ type: Object })
   sueloReferencia?: ISueloReferencia;
+
+  @Prop({ index: true })
+  sueloProcedencia?: TFuentePropiedadSuelo;
+
+  @Prop()
+  sueloConfirmadoPorUsuario?: boolean;
+
+  @Prop()
+  sueloFechaConfirmacion?: string;
 
   @Prop({ type: [Object] })
   suelos?: ISuelo[];

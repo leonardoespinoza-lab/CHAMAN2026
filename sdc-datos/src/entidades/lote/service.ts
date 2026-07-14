@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ICreateLote, IQueryParam, IUpdateLote } from 'modelos/src';
 import { LotesRepository } from './repository';
 import { LotLocationService } from '../ubicacion-lote/service';
+import { LotSoilIntelligenceEngine } from '../suelo-inteligencia/engine.service';
 
 @Injectable()
 export class LotesService {
@@ -10,6 +11,7 @@ export class LotesService {
   constructor(
     private repository: LotesRepository,
     private lotLocationService: LotLocationService,
+    private soilIntelligence: LotSoilIntelligenceEngine,
   ) {}
 
   async getFilter(query: IQueryParam) {
@@ -25,15 +27,16 @@ export class LotesService {
   }
 
   async create(dato: ICreateLote) {
-    const created = await this.repository.create(
-      this.withoutAutomaticDepartment(dato),
-    );
+    dato = this.withManualSoilProvenance(this.withoutAutomaticDepartment(dato));
+    const created = await this.repository.create(dato);
     this.requestLocationResolution(`${created._id}`, 'lot_created');
+    this.requestSoilResolution(`${created._id}`, 'lot_created');
     return created;
   }
 
   async update(id: string, dato: IUpdateLote) {
     dato = this.withoutAutomaticDepartment(dato);
+    dato = this.withManualSoilProvenance(dato);
     const geometryChanged = Object.prototype.hasOwnProperty.call(
       dato,
       'ubicacion',
@@ -52,6 +55,12 @@ export class LotesService {
           id,
           hadGeometry ? 'geometry_changed' : 'geometry_added',
         );
+        this.requestSoilResolution(
+          id,
+          hadGeometry ? 'geometry_changed' : 'geometry_added',
+        );
+      } else if (this.hasManualSoilChange(dato)) {
+        this.requestSoilResolution(id, 'manual_value_changed');
       }
       return updated;
     }
@@ -88,5 +97,45 @@ export class LotesService {
     delete data.idDepartamento;
     delete data.ubicacionDepartamentoLegado;
     return data;
+  }
+
+  private requestSoilResolution(
+    loteId: string,
+    reason:
+      | 'lot_created'
+      | 'geometry_added'
+      | 'geometry_changed'
+      | 'manual_value_changed',
+  ): void {
+    this.soilIntelligence
+      .request(loteId, reason)
+      .catch((error) =>
+        this.logger.error(
+          `No se pudo encolar la inteligencia de suelo del lote ${loteId}: ${error?.message || error}`,
+        ),
+      );
+  }
+
+  private hasManualSoilChange(data: IUpdateLote): boolean {
+    return [
+      'suelos',
+      'capacidadDeCampo',
+      'puntoMarchitez',
+      'sueloReferencia',
+      'texturaLixiviacion',
+      'texturaEscorrentia',
+    ].some((key) => Object.prototype.hasOwnProperty.call(data, key));
+  }
+
+  private withManualSoilProvenance<T extends ICreateLote | IUpdateLote>(
+    data: T,
+  ): T {
+    if (!this.hasManualSoilChange(data as IUpdateLote)) return data;
+    return {
+      ...data,
+      sueloProcedencia: 'manual',
+      sueloConfirmadoPorUsuario: true,
+      sueloFechaConfirmacion: new Date().toISOString(),
+    } as T;
   }
 }

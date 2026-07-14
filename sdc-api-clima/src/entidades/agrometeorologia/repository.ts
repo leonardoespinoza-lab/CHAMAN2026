@@ -9,8 +9,13 @@ import {
   IObservacionMeteorologicaNormalizada,
   IQueryParam,
   ISiembra,
+  IEntradasAgronomicasSuelo,
 } from 'modelos/src';
-import { AGROMETEO_INTERNAL_TOKEN, API_DATOS } from '../../env';
+import {
+  AGROMETEO_INTERNAL_TOKEN,
+  API_DATOS,
+  SOIL_INTELLIGENCE_INTERNAL_TOKEN,
+} from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 
 @Injectable()
@@ -35,6 +40,19 @@ export class AgrometeorologiaRepository {
 
   getLote(id: string): Promise<ILote> {
     return this.axios.GET<ILote>(`${API_DATOS}/lotes/${id}`);
+  }
+
+  getSoilAgronomicInputs(
+    id: string,
+  ): Promise<IEntradasAgronomicasSuelo | null> {
+    return this.axios.GET<IEntradasAgronomicasSuelo | null>(
+      `${API_DATOS}/soil-intelligence/lots/${id}/agronomic-inputs`,
+      {
+        headers: SOIL_INTELLIGENCE_INTERNAL_TOKEN
+          ? { 'x-chaman-internal-token': SOIL_INTELLIGENCE_INTERNAL_TOKEN }
+          : {},
+      },
+    );
   }
 
   getObservaciones(
