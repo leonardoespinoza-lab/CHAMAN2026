@@ -1,19 +1,28 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import {
   GEOREF_BACKFILL_LIMIT,
   GEOREF_SYNC_CRON,
   GEOREF_SYNC_ENABLED,
+  GEOREF_SYNC_STARTUP_MAX_ATTEMPTS,
   GEOREF_SYNC_STARTUP_DELAY_MS,
+  GEOREF_SYNC_STARTUP_RETRY_MAX_MS,
+  GEOREF_SYNC_STARTUP_RETRY_MS,
 } from '../../env';
 import { GeorefCatalogSyncService } from './georef-sync.service';
 import { LotLocationService } from './service';
 import { EstablishmentLocationService } from './establishment-location.service';
 
 @Injectable()
-export class LotLocationJobsService implements OnModuleInit {
+export class LotLocationJobsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LotLocationJobsService.name);
   private running?: Promise<unknown>;
+  private startupTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
     private readonly syncService: GeorefCatalogSyncService,
@@ -23,16 +32,40 @@ export class LotLocationJobsService implements OnModuleInit {
 
   onModuleInit(): void {
     if (!GEOREF_SYNC_ENABLED) return;
-    setTimeout(
-      () => void this.run(false, 'backfill'),
-      GEOREF_SYNC_STARTUP_DELAY_MS,
-    );
+    this.scheduleStartupAttempt(GEOREF_SYNC_STARTUP_DELAY_MS, 0);
+  }
+
+  onModuleDestroy(): void {
+    if (this.startupTimer) clearTimeout(this.startupTimer);
   }
 
   @Cron(GEOREF_SYNC_CRON, { timeZone: 'America/Argentina/Buenos_Aires' })
   scheduledSync(): void {
     if (!GEOREF_SYNC_ENABLED) return;
-    void this.run(false, 'source_version_changed');
+    void this.run(false, 'source_version_changed').catch(() => undefined);
+  }
+
+  private scheduleStartupAttempt(delayMs: number, attemptIndex: number): void {
+    this.startupTimer = setTimeout(() => {
+      this.startupTimer = undefined;
+      void this.run(false, 'backfill').catch((error) => {
+        const attemptsUsed = attemptIndex + 1;
+        if (attemptsUsed >= GEOREF_SYNC_STARTUP_MAX_ATTEMPTS) {
+          this.logger.error(
+            `GeoRef no pudo iniciar despues de ${attemptsUsed} intentos; se conserva el servicio activo y el cron reintentara.`,
+          );
+          return;
+        }
+        const retryDelay = Math.min(
+          GEOREF_SYNC_STARTUP_RETRY_MS * 2 ** attemptIndex,
+          GEOREF_SYNC_STARTUP_RETRY_MAX_MS,
+        );
+        this.logger.warn(
+          `GeoRef inicial no disponible (${error?.message || error}); reintento ${attemptsUsed + 1}/${GEOREF_SYNC_STARTUP_MAX_ATTEMPTS} en ${retryDelay} ms.`,
+        );
+        this.scheduleStartupAttempt(retryDelay, attemptsUsed);
+      });
+    }, delayMs);
   }
 
   run(

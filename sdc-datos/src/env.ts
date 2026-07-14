@@ -28,6 +28,12 @@ export const GEOREF_BASE_URL =
 export const GEOREF_SYNC_CRON = process.env.GEOREF_SYNC_CRON || '15 3 * * 0';
 export const GEOREF_SYNC_STARTUP_DELAY_MS =
   +process.env.GEOREF_SYNC_STARTUP_DELAY_MS || 30_000;
+export const GEOREF_SYNC_STARTUP_RETRY_MS =
+  +process.env.GEOREF_SYNC_STARTUP_RETRY_MS || 60_000;
+export const GEOREF_SYNC_STARTUP_RETRY_MAX_MS =
+  +process.env.GEOREF_SYNC_STARTUP_RETRY_MAX_MS || 5 * 60_000;
+export const GEOREF_SYNC_STARTUP_MAX_ATTEMPTS =
+  +process.env.GEOREF_SYNC_STARTUP_MAX_ATTEMPTS || 10;
 export const GEOREF_SYNC_LOCK_TTL_MS =
   +process.env.GEOREF_SYNC_LOCK_TTL_MS || 30 * 60_000;
 export const GEOREF_REQUEST_TIMEOUT_MS =
