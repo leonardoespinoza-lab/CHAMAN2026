@@ -6,7 +6,7 @@ import {
   ICreateEstablecimiento,
   IUpdateEstablecimiento,
 } from 'modelos/src';
-import { API_DATOS } from '../../env';
+import { AGROMETEO_INTERNAL_TOKEN, API_CLIMA, API_DATOS } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 
 @Injectable()
@@ -39,5 +39,18 @@ export class EstablecimientosRepository {
   async delete(id: string): Promise<IEstablecimiento> {
     const url = `${API_DATOS}/establecimientos/${id}`;
     return await this.axios.DELETE<IEstablecimiento>(url);
+  }
+
+  async reprocesarAgrometeorologia(id: string): Promise<void> {
+    const url = `${API_CLIMA}/agrometeorologia/establecimientos/${id}/reprocesar`;
+    await this.axios.POST<void>(
+      url,
+      {},
+      {
+        headers: AGROMETEO_INTERNAL_TOKEN
+          ? { 'x-chaman-internal-token': AGROMETEO_INTERNAL_TOKEN }
+          : {},
+      },
+    );
   }
 }

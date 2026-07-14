@@ -1,4 +1,5 @@
 import { Cultivo, FaseHeladaFenologica, TipoCicloCultivo } from "./crono";
+import { IParametrosAgrometeorologicos } from "./agrometeorologia";
 
 export type TEnfermedad =
   // Trigo
@@ -171,6 +172,7 @@ export interface ISemilla {
   requerimientoFrio?: IRequerimientoFrio;
   fenologiaReferencia?: IFenologiaReferencia;
   sensibilidadHelada?: ISensibilidadHelada;
+  parametrosAgrometeorologicos?: IParametrosAgrometeorologicos;
   observaciones?: string;
 }
 

@@ -58,7 +58,8 @@ class ResistenciaSemilla implements IResistencia {
   detalleSanitario?: IResistencia['detalleSanitario'];
 }
 
-const ResistenciaSemillaSchema = SchemaFactory.createForClass(ResistenciaSemilla);
+const ResistenciaSemillaSchema =
+  SchemaFactory.createForClass(ResistenciaSemilla);
 
 @Schema()
 export class Semilla implements Exactly<ISemilla, Semilla> {
@@ -111,6 +112,9 @@ export class Semilla implements Exactly<ISemilla, Semilla> {
 
   @Prop({ type: Object })
   fenologiaReferencia?: ISemilla['fenologiaReferencia'];
+
+  @Prop({ type: Object })
+  parametrosAgrometeorologicos?: ISemilla['parametrosAgrometeorologicos'];
 
   @Prop()
   observaciones?: string;

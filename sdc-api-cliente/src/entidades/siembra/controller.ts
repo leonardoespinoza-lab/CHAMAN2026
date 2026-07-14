@@ -20,6 +20,7 @@ import {
   IPrediccion,
   IResultadoPrediccionMalezas,
   IRegistroFenologico,
+  IRespuestaAgrometeorologiaSiembra,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
@@ -58,6 +59,22 @@ export class SiembrasController {
     @GetPermiso() permiso: IPermiso,
   ): Promise<any> {
     return await this.service.seguimientoHuellaHidrica(id, permiso);
+  }
+
+  @Get('/:id/agrometeorologia')
+  @Permisos(
+    { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+  )
+  public async agrometeorologia(
+    @Param('id') id: string,
+    @Query('desde') desde: string | undefined,
+    @Query('hasta') hasta: string | undefined,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<IRespuestaAgrometeorologiaSiembra> {
+    return await this.service.agrometeorologia(id, desde, hasta, permiso);
   }
 
   @Get('/:id')

@@ -27,6 +27,7 @@ import { fieldClimateStatus } from '../../auxiliares/fieldclimate-status';
 
 @Injectable()
 export class EstablecimientosService {
+  private readonly logger = new Logger(EstablecimientosService.name);
   private readonly pronosticoPendiente = new Map<string, Promise<void>>();
   private readonly climaPendiente = new Map<string, Promise<void>>();
 
@@ -114,7 +115,20 @@ export class EstablecimientosService {
         'No tiene permiso para actualizar este establecimiento',
       );
     }
-    return await this.repository.update(id, data);
+    const updated = await this.repository.update(id, data);
+    if (
+      Object.prototype.hasOwnProperty.call(data, 'idEstacionMeteorologica') ||
+      Object.prototype.hasOwnProperty.call(data, 'ubicacion')
+    ) {
+      this.repository
+        .reprocesarAgrometeorologia(id)
+        .catch((error) =>
+          this.logger.error(
+            `Error al reprocesar agrometeorologia del establecimiento ${id}: ${error}`,
+          ),
+        );
+    }
+    return updated;
   }
 
   async delete(id: string, permiso: IPermiso): Promise<IEstablecimiento> {

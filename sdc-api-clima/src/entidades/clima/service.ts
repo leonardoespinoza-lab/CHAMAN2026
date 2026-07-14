@@ -157,7 +157,11 @@ export class ClimaService {
     }
 
     const promesa = this.fetchOpenMeteoJsonSinCache(key, contexto)
-      .then((data) => data ?? this.getOpenMeteoStale(cacheado, contexto, 'fuente no disponible'))
+      .then(
+        (data) =>
+          data ??
+          this.getOpenMeteoStale(cacheado, contexto, 'fuente no disponible'),
+      )
       .finally(() => this.openMeteoPendiente.delete(key));
     this.openMeteoPendiente.set(key, promesa);
     return promesa;
@@ -174,10 +178,13 @@ export class ClimaService {
     ) {
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), this.openMeteoTimeoutMs);
-        const response = await fetch(url, { signal: controller.signal }).finally(() =>
-          clearTimeout(timeout),
+        const timeout = setTimeout(
+          () => controller.abort(),
+          this.openMeteoTimeoutMs,
         );
+        const response = await fetch(url, {
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timeout));
         if (response.ok) {
           const data = await response.json();
           if (!data || typeof data !== 'object' || data.error) {
@@ -265,7 +272,9 @@ export class ClimaService {
     if (!cacheado || cacheado.expiresAt + this.openMeteoStaleMs <= Date.now()) {
       return null;
     }
-    this.logger.warn(`Open-Meteo ${contexto}: usando cache de emergencia (${motivo}).`);
+    this.logger.warn(
+      `Open-Meteo ${contexto}: usando cache de emergencia (${motivo}).`,
+    );
     return cacheado.data;
   }
 
@@ -357,6 +366,156 @@ export class ClimaService {
       return [];
     }
     return this.parsearClimaOpenMeteo(data, ubicacion);
+  }
+
+  /**
+   * Serie horaria y diaria de Open-Meteo para el motor agrometeorologico.
+   * Reutiliza el mismo cliente resiliente, cache, reintentos y circuito de
+   * proteccion del resto del servicio; no crea un segundo cliente HTTP.
+   */
+  public async getOpenMeteoAgrometeorologia(
+    ubicacion: ICoordenadas,
+    minDate: string,
+    maxDate: string,
+    forecast = false,
+  ): Promise<any | null> {
+    const startDate = this.getFechaOpenMeteo(minDate);
+    const endDate = this.getFechaOpenMeteo(maxDate);
+    const baseUrl = forecast
+      ? `${API_OPEN_METEO}/forecast`
+      : `${API_OPEN_METEO_ARCHIVE}/archive`;
+    const url = new URL(baseUrl);
+    url.searchParams.set('latitude', `${ubicacion.lat}`);
+    url.searchParams.set('longitude', `${ubicacion.lng}`);
+    url.searchParams.set('timezone', 'auto');
+    url.searchParams.set('start_date', startDate);
+    url.searchParams.set('end_date', endDate);
+    url.searchParams.set('wind_speed_unit', 'ms');
+    url.searchParams.set('precipitation_unit', 'mm');
+    url.searchParams.set(
+      'hourly',
+      [
+        'temperature_2m',
+        'relative_humidity_2m',
+        'dew_point_2m',
+        'precipitation',
+        'rain',
+        'wind_speed_10m',
+        'wind_direction_10m',
+        'wind_gusts_10m',
+        'shortwave_radiation',
+        'vapour_pressure_deficit',
+        'et0_fao_evapotranspiration',
+        'soil_temperature_0_to_7cm',
+        'soil_temperature_7_to_28cm',
+        'soil_temperature_28_to_100cm',
+        'soil_temperature_100_to_255cm',
+        'soil_moisture_0_to_7cm',
+        'soil_moisture_7_to_28cm',
+        'soil_moisture_28_to_100cm',
+        'soil_moisture_100_to_255cm',
+        'sunshine_duration',
+      ].join(','),
+    );
+    url.searchParams.set(
+      'daily',
+      [
+        'temperature_2m_max',
+        'temperature_2m_min',
+        'temperature_2m_mean',
+        'relative_humidity_2m_max',
+        'relative_humidity_2m_min',
+        'relative_humidity_2m_mean',
+        'dew_point_2m_mean',
+        'precipitation_sum',
+        'rain_sum',
+        'precipitation_hours',
+        'wind_speed_10m_max',
+        'wind_speed_10m_mean',
+        'wind_direction_10m_dominant',
+        'wind_gusts_10m_max',
+        'shortwave_radiation_sum',
+        'et0_fao_evapotranspiration',
+        'sunshine_duration',
+        'daylight_duration',
+        'sunrise',
+        'sunset',
+      ].join(','),
+    );
+    return await this.fetchOpenMeteoJson(
+      url,
+      forecast ? 'agrometeorologia pronostico' : 'agrometeorologia historica',
+    );
+  }
+
+  /** Devuelve solo la central explicitamente asociada, sin fallback. */
+  public async getDatosEstacionAsociada(
+    idEstacionMeteorologica: string | undefined,
+    minDate: string,
+    maxDate: string,
+    dataGroup: 'raw' | 'hourly' | 'daily' | 'monthly' = 'hourly',
+  ): Promise<{
+    estacion?: IEstacion;
+    datos: IClimaEstacionMeteorologica[];
+    advertencias: string[];
+  }> {
+    if (!idEstacionMeteorologica) {
+      return { datos: [], advertencias: [] };
+    }
+    try {
+      const estacion = await this.estacionsService.getById(
+        idEstacionMeteorologica,
+      );
+      if (
+        !estacion ||
+        estacion.origen !== 'FieldClimate' ||
+        !estacion.idExterno ||
+        !estacion.user ||
+        !estacion.pass
+      ) {
+        return {
+          estacion,
+          datos: [],
+          advertencias: [
+            'La central asociada no esta disponible o no tiene credenciales validas; se usa Open-Meteo.',
+          ],
+        };
+      }
+      const reporte = await this.fieldClimate.getDataBetweenDates(
+        estacion.idExterno,
+        dataGroup,
+        new Date(minDate).getTime(),
+        new Date(maxDate).getTime(),
+        estacion.user,
+        estacion.pass,
+      );
+      const datos = reporte
+        ? this.parsearClimaFieldClimate(
+            estacion as IEstacionCercana,
+            reporte,
+            dataGroup,
+          )
+        : [];
+      return {
+        estacion,
+        datos,
+        advertencias: datos.length
+          ? []
+          : [
+              'La central asociada no entrego datos validos para el periodo; se usa Open-Meteo.',
+            ],
+      };
+    } catch (error) {
+      this.logger.error(
+        `No se pudo leer la central asociada ${idEstacionMeteorologica}: ${error}`,
+      );
+      return {
+        datos: [],
+        advertencias: [
+          'La central asociada no respondio; los faltantes se completaron con Open-Meteo.',
+        ],
+      };
+    }
   }
 
   private async getOpenMeteoActual(
@@ -848,7 +1007,9 @@ export class ClimaService {
     dataGroup: 'raw' | 'hourly' | 'daily' | 'monthly' = 'daily',
   ): IClimaEstacionMeteorologica[] {
     if (!Array.isArray(reportes?.dates) || !Array.isArray(reportes?.data)) {
-      this.logger.warn('FieldClimate devolvio una respuesta historica invalida; se activa fallback.');
+      this.logger.warn(
+        'FieldClimate devolvio una respuesta historica invalida; se activa fallback.',
+      );
       return [];
     }
     const fechas: string[] = [];
@@ -1040,7 +1201,9 @@ export class ClimaService {
     reportes: IForecast,
   ): IPronosticoEstacionMeteorologica[] {
     if (!Array.isArray(reportes?.dates) || !Array.isArray(reportes?.data)) {
-      this.logger.warn('FieldClimate devolvio un pronostico invalido; se activa fallback.');
+      this.logger.warn(
+        'FieldClimate devolvio un pronostico invalido; se activa fallback.',
+      );
       return [];
     }
     const fechas: string[] = [];
@@ -1330,13 +1493,8 @@ export class ClimaService {
       minDate,
       maxDate,
     );
-    return fusionarClimaConFallback(
-      [],
-      openMeteo,
-      minDate,
-      maxDate,
-      dataGroup,
-    ).datos;
+    return fusionarClimaConFallback([], openMeteo, minDate, maxDate, dataGroup)
+      .datos;
   }
 
   async getClimaActualMasCercano(

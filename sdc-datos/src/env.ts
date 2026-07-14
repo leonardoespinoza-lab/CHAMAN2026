@@ -16,11 +16,14 @@ export const DB_USER = process.env.DB_USER || '';
 export const DB_PASS = process.env.DB_PASS || '';
 
 export const DB_URL = DB_FULL_URI || `mongodb://${DB_HOST}:${DB_PORT}`;
+export const AGROMETEO_INTERNAL_TOKEN =
+  process.env.AGROMETEO_INTERNAL_TOKEN || '';
 
 // Solo incluir autenticación si hay usuario Y contraseña no vacíos
-const authOptions = (DB_USER && DB_PASS && DB_USER !== '' && DB_PASS !== '') 
-  ? { user: DB_USER, pass: DB_PASS } 
-  : {};
+const authOptions =
+  DB_USER && DB_PASS && DB_USER !== '' && DB_PASS !== ''
+    ? { user: DB_USER, pass: DB_PASS }
+    : {};
 
 export const DB_OPTIONS: MongooseModuleOptions = {
   ...authOptions,

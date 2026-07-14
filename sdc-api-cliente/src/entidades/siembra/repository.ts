@@ -7,8 +7,9 @@ import {
   IUpdateSiembra,
   IResultadoPrediccionMalezas,
   IRegistroFenologico,
+  IRespuestaAgrometeorologiaSiembra,
 } from 'modelos/src';
-import { API_DATOS } from '../../env';
+import { AGROMETEO_INTERNAL_TOKEN, API_CLIMA, API_DATOS } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 
 @Injectable()
@@ -23,6 +24,36 @@ export class SiembrasRepository {
   async seguimientoHuellaHidrica(id: string): Promise<any> {
     const url = `${API_DATOS}/siembras/${id}/huella-hidrica/seguimiento`;
     return await this.axios.GET<any>(url);
+  }
+
+  async agrometeorologia(
+    id: string,
+    desde?: string,
+    hasta?: string,
+  ): Promise<IRespuestaAgrometeorologiaSiembra> {
+    const url = `${API_CLIMA}/agrometeorologia/siembras/${id}`;
+    return await this.axios.GET<IRespuestaAgrometeorologiaSiembra>(url, {
+      params: { from: desde, to: hasta },
+      headers: this.agrometeorologiaHeaders(),
+    });
+  }
+
+  async reprocesarAgrometeorologia(
+    id: string,
+    sincronizarClima = true,
+  ): Promise<void> {
+    const url = `${API_CLIMA}/agrometeorologia/siembras/${id}/reprocesar`;
+    await this.axios.POST<void>(
+      url,
+      { sincronizarClima },
+      { headers: this.agrometeorologiaHeaders() },
+    );
+  }
+
+  private agrometeorologiaHeaders(): Record<string, string> {
+    return AGROMETEO_INTERNAL_TOKEN
+      ? { 'x-chaman-internal-token': AGROMETEO_INTERNAL_TOKEN }
+      : {};
   }
 
   async prediccionMalezas(id: string): Promise<IResultadoPrediccionMalezas> {

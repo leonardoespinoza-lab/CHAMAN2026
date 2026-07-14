@@ -8,6 +8,7 @@ import {
   IResultadoPrediccionMalezas,
   IRegistroFenologico,
   IUpdateSiembra,
+  IRespuestaAgrometeorologiaSiembra,
 } from 'modelos/src';
 import { HttpService } from './http.service';
 
@@ -98,6 +99,15 @@ export class SiembraService {
 
   public seguimientoHuellaHidrica(id: string): Promise<HuellaHidricaSeguimiento> {
     return this.http.get(`/siembras/${id}/huella-hidrica/seguimiento`);
+  }
+
+  public agrometeorologia(id: string, desde?: string, hasta?: string): Promise<IRespuestaAgrometeorologiaSiembra> {
+    const params: Record<string, string> = {};
+    if (desde) params['desde'] = desde;
+    if (hasta) params['hasta'] = hasta;
+    return this.http.get(`/siembras/${id}/agrometeorologia`, {
+      params,
+    });
   }
 
   public registrarEtapaFenologica(id: string, dato: IRegistroFenologico): Promise<ISiembra> {

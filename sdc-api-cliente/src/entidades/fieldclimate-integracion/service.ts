@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
   ICreateEstacion,
   IEstablecimiento,
@@ -20,7 +20,7 @@ import {
 } from '../../auxiliares/fieldclimate-credentials';
 import { fieldClimateStatus } from '../../auxiliares/fieldclimate-status';
 
-interface DescubrirCentralesBody extends FieldClimateCredentials {}
+type DescubrirCentralesBody = FieldClimateCredentials;
 
 interface ImportarCentralBody extends FieldClimateCredentials {
   stationId: string;
@@ -33,6 +33,8 @@ interface AsignarCentralBody {
 
 @Injectable()
 export class FieldClimateIntegracionService {
+  private readonly logger = new Logger(FieldClimateIntegracionService.name);
+
   constructor(private repository: FieldClimateIntegracionRepository) {}
 
   async descubrir(body: DescubrirCentralesBody): Promise<any[]> {
@@ -193,6 +195,13 @@ export class FieldClimateIntegracionService {
       idEstacionMeteorologica: idCentral,
       fuenteClimaPreferida: 'FieldClimate',
     });
+    this.repository
+      .reprocesarAgrometeorologia(body.idEstablecimiento)
+      .catch((error) =>
+        this.logger.error(
+          `No se pudo reprocesar agrometeorologia al asociar la central: ${error}`,
+        ),
+      );
     return this.sanitizeEstacion(central);
   }
 

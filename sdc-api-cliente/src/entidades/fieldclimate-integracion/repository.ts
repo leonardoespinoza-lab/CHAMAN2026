@@ -8,7 +8,7 @@ import {
   IUpdateEstablecimiento,
   IUpdateEstacion,
 } from 'modelos/src';
-import { API_CLIMA, API_DATOS } from '../../env';
+import { AGROMETEO_INTERNAL_TOKEN, API_CLIMA, API_DATOS } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 
 export interface FieldClimateCredentials {
@@ -94,5 +94,18 @@ export class FieldClimateIntegracionRepository {
   ): Promise<IListado<IEstablecimiento>> {
     const url = `${API_DATOS}/establecimientos`;
     return await this.axios.GET<IListado<IEstablecimiento>>(url, { params });
+  }
+
+  async reprocesarAgrometeorologia(idEstablecimiento: string): Promise<void> {
+    const url = `${API_CLIMA}/agrometeorologia/establecimientos/${idEstablecimiento}/reprocesar`;
+    await this.axios.POST<void>(
+      url,
+      {},
+      {
+        headers: AGROMETEO_INTERNAL_TOKEN
+          ? { 'x-chaman-internal-token': AGROMETEO_INTERNAL_TOKEN }
+          : {},
+      },
+    );
   }
 }

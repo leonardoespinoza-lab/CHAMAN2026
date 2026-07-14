@@ -23,6 +23,7 @@ import { ILoteTabla } from '../listado-lotes/listado-lotes.component';
 import { CardClimaLoteComponent } from './card-clima-lote/card-clima-lote.component';
 import { CardCamarasLoteComponent } from './card-camaras-lote/card-camaras-lote.component';
 import { CardCargaFitosanitariaComponent } from './card-carga-fitosanitaria/card-carga-fitosanitaria.component';
+import { CardCalculosMeteorologicosComponent } from './card-calculos-meteorologicos/card-calculos-meteorologicos.component';
 import { CardCentralMeteorologicaComponent } from './card-central-meteorologica/card-central-meteorologica.component';
 import { CardDispositivosComponent } from './card-dispositivos/card-dispositivos.component';
 import { CardEnfermedadesComponent } from './card-enfermedades/card-enfermedades.component';
@@ -74,6 +75,7 @@ export interface IDetallesLote extends ILoteTabla {
     CardCamarasLoteComponent,
     CardVientoLoteComponent,
     CardCargaFitosanitariaComponent,
+    CardCalculosMeteorologicosComponent,
     DataQualityStripComponent,
   ],
   templateUrl: './detalles-lote.component.html',
@@ -284,9 +286,7 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   }
 
   public get mostrarRiesgosAgroclimaticos(): boolean {
-    const centro =
-      this.lote?.ubicacion?.centro ||
-      this.lote?.establecimiento?.ubicacion?.[0]?.centro;
+    const centro = this.lote?.ubicacion?.centro || this.lote?.establecimiento?.ubicacion?.[0]?.centro;
     return !!centro && !!this.siembra?.semilla?.cultivo && !this.siembra?.fechaCosecha;
   }
 

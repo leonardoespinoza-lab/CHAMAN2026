@@ -1,0 +1,116 @@
+<section class="custom-card agromet-card">
+  <header class="agromet-header">
+    <div>
+      <p class="titulo-card">CÁLCULOS METEOROLÓGICOS</p>
+      <span>Lectura integrada del cultivo, el agua, la atmosfera y el suelo</span>
+    </div>
+    @if (data) {
+      <div
+        class="source-badge"
+        [class.station]="data.dataSource.type === 'station'"
+        [class.mixed]="data.dataSource.type === 'mixed'"
+      >
+        <i
+          class="pi"
+          [class.pi-cloud]="data.dataSource.type === 'open_meteo'"
+          [class.pi-building]="data.dataSource.type === 'station'"
+          [class.pi-sync]="data.dataSource.type === 'mixed'"
+        ></i>
+        <div>
+          <strong>{{ fuenteLabel }}</strong>
+          <small>{{ fuenteDetail }}</small>
+          <span class="state-chips">
+            @for (estado of estadosSerie; track estado) {
+              <em>{{ estado }}</em>
+            }
+          </span>
+        </div>
+      </div>
+    }
+  </header>
+
+  @if (loading) {
+    <div class="skeleton-grid" aria-label="Cargando calculos meteorologicos">
+      @for (item of [1, 2, 3, 4, 5, 6]; track item) {
+        <i></i>
+      }
+    </div>
+    <div class="skeleton-chart"></div>
+  } @else if (error) {
+    <div class="agromet-state warn">
+      <i class="pi pi-exclamation-triangle"></i>
+      <div>
+        <strong>No se pudo leer el seguimiento meteorologico.</strong><span>{{ error }}</span>
+      </div>
+      <button type="button" (click)="cargar(true)">Reintentar</button>
+    </div>
+  } @else if (!hayDatos) {
+    <div class="agromet-state">
+      <i class="pi pi-clock"></i>
+      <div>
+        <strong>Preparando la primera serie meteorologica.</strong>
+        <span>El proceso automatico usara la central asociada cuando sea valida y Open-Meteo como respaldo.</span>
+      </div>
+    </div>
+  } @else {
+    @if (advertenciaFuente) {
+      <div class="source-warning">
+        <i class="pi pi-info-circle"></i><span>{{ advertenciaFuente }}</span>
+      </div>
+    }
+    <div class="metric-grid">
+      @for (metrica of metricas; track metrica.label) {
+        <article [attr.data-tone]="metrica.tone">
+          <span>{{ metrica.label }}</span>
+          <strong>{{ metrica.value }}</strong>
+          <small>{{ metrica.detail }}</small>
+        </article>
+      }
+    </div>
+
+    <nav class="period-toolbar" aria-label="Periodo del seguimiento">
+      <span>Periodo</span>
+      <div>
+        @for (item of periodos; track item.value) {
+          <button type="button" [class.active]="periodo === item.value" (click)="cambiarPeriodo(item.value)">
+            {{ item.label }}
+          </button>
+        }
+      </div>
+    </nav>
+
+    <div class="chart-shell">
+      <nav class="chart-tabs" aria-label="Variable meteorologica">
+        @for (item of graficos; track item.value) {
+          @if (item.value !== 'suelo' || mostrarSuelo) {
+            <button type="button" [class.active]="grafico === item.value" (click)="cambiarGrafico(item.value)">
+              <i [class]="item.icon"></i><span>{{ item.label }}</span>
+            </button>
+          }
+        }
+      </nav>
+      @if (chartOptions) {
+        <app-chart [options]="chartOptions" [style]="'display:block;width:100%;height:330px'"></app-chart>
+      }
+    </div>
+
+    <footer class="agromet-footer">
+      <div>
+        <i class="pi pi-shield"></i>
+        <span>Observado: linea continua. Pronostico: linea punteada. Las franjas identifican etapas fenologicas.</span>
+      </div>
+      <span>Motor {{ data?.calculationVersion }} / parametros {{ data?.parametersVersion }}</span>
+    </footer>
+
+    @if (data?.warnings?.length) {
+      <details class="quality-details">
+        <summary>Calidad y supuestos ({{ data?.warnings?.length }})</summary>
+        <ul>
+          @for (warning of data?.warnings; track warning) {
+            <li>{{ warning }}</li>
+          }
+        </ul>
+      </details>
+    }
+  }
+</section>

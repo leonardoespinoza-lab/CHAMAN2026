@@ -40,6 +40,8 @@ import { LorawanUplinksModule } from './entidades/lorawan-uplinks/module';
 import { AlgoritmosModule } from './entidades/algoritmos/module';
 import { SuelosIntaModule } from './entidades/suelo-inta/module';
 import { IaMalezasModule } from './entidades/ia-malezas/module';
+import { ObservacionesMeteorologicasModule } from './entidades/observacion-meteorologica/module';
+import { IndicadoresAgrometeorologicosModule } from './entidades/indicador-agrometeorologico/module';
 
 @Module({
   imports: [
@@ -82,6 +84,8 @@ import { IaMalezasModule } from './entidades/ia-malezas/module';
     AlgoritmosModule,
     SuelosIntaModule,
     IaMalezasModule,
+    ObservacionesMeteorologicasModule,
+    IndicadoresAgrometeorologicosModule,
   ],
   controllers: [HealthController],
   providers: [],

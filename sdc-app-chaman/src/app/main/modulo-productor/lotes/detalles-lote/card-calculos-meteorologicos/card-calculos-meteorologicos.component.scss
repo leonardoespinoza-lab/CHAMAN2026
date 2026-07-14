@@ -1,0 +1,363 @@
+:host {
+  display: block;
+  margin-top: 1rem;
+}
+
+.agromet-card {
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 25%, var(--p-surface-border));
+}
+
+.agromet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.1rem 0.85rem;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--p-primary-50) 72%, transparent), transparent 62%);
+}
+
+.agromet-header > div:first-child {
+  display: grid;
+  gap: 0.18rem;
+}
+.agromet-header .titulo-card {
+  margin: 0;
+}
+.agromet-header span {
+  color: var(--p-text-muted-color);
+  font-size: 0.82rem;
+}
+
+.source-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 12rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid color-mix(in srgb, #48a9e6 35%, var(--p-surface-border));
+  border-radius: 12px;
+  background: color-mix(in srgb, #e7f5ff 62%, var(--p-content-background));
+}
+
+.source-badge.station {
+  border-color: color-mix(in srgb, var(--p-primary-color) 42%, var(--p-surface-border));
+}
+.source-badge.mixed {
+  border-color: color-mix(in srgb, #7a64d1 40%, var(--p-surface-border));
+}
+.source-badge > i {
+  color: var(--p-primary-color);
+  font-size: 1.05rem;
+}
+.source-badge > div {
+  display: grid;
+  gap: 0.08rem;
+}
+.source-badge strong {
+  color: var(--p-text-color);
+  font-size: 0.78rem;
+}
+.source-badge small {
+  color: var(--p-text-muted-color);
+  font-size: 0.67rem;
+}
+.state-chips {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.15rem;
+}
+.state-chips em {
+  padding: 0.12rem 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--p-primary-100) 74%, transparent);
+  color: var(--p-primary-700);
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.55rem;
+  padding: 0.85rem 1.1rem;
+}
+.source-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 1.1rem 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid color-mix(in srgb, #e7a53c 35%, var(--p-surface-border));
+  border-radius: 9px;
+  background: color-mix(in srgb, #fff4d8 58%, var(--p-content-background));
+  color: var(--p-text-color);
+  font-size: 0.72rem;
+}
+.source-warning i {
+  color: #c98216;
+}
+
+.metric-grid article {
+  position: relative;
+  display: grid;
+  gap: 0.18rem;
+  min-height: 5.2rem;
+  padding: 0.72rem 0.75rem 0.65rem;
+  overflow: hidden;
+  border: 1px solid var(--p-surface-border);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--p-content-background) 92%, var(--p-primary-50));
+}
+
+.metric-grid article::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  content: "";
+  background: var(--metric-color, var(--p-primary-color));
+}
+.metric-grid article[data-tone="thermal"] {
+  --metric-color: #ef8d3b;
+}
+.metric-grid article[data-tone="water"] {
+  --metric-color: #3aa9d8;
+}
+.metric-grid article[data-tone="atmosphere"] {
+  --metric-color: #7a64d1;
+}
+.metric-grid article span {
+  color: var(--p-text-muted-color);
+  font-size: 0.68rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+.metric-grid article strong {
+  color: var(--p-text-color);
+  font-size: 1.05rem;
+  line-height: 1.1;
+}
+.metric-grid article small {
+  color: var(--p-text-muted-color);
+  font-size: 0.68rem;
+  line-height: 1.25;
+}
+
+.period-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin: 0 1.1rem 0.65rem;
+  padding: 0.45rem 0.5rem 0.45rem 0.75rem;
+  border: 1px solid var(--p-surface-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--p-content-background) 86%, var(--p-surface-50));
+}
+.period-toolbar > span {
+  color: var(--p-text-muted-color);
+  font-size: 0.73rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+.period-toolbar > div {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+.period-toolbar button,
+.chart-tabs button,
+.agromet-state button {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--p-text-muted-color);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.73rem;
+  font-weight: 700;
+  padding: 0.4rem 0.62rem;
+}
+.period-toolbar button:hover,
+.chart-tabs button:hover {
+  background: var(--p-surface-100);
+  color: var(--p-text-color);
+}
+.period-toolbar button.active,
+.chart-tabs button.active {
+  border-color: color-mix(in srgb, var(--p-primary-color) 34%, transparent);
+  background: color-mix(in srgb, var(--p-primary-50) 78%, var(--p-content-background));
+  color: var(--p-primary-700);
+}
+
+.chart-shell {
+  margin: 0 1.1rem 0.75rem;
+  border: 1px solid var(--p-surface-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.chart-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.3rem;
+  padding: 0.45rem;
+  border-bottom: 1px solid var(--p-surface-border);
+  background: var(--p-surface-50);
+}
+.chart-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+.chart-tabs i {
+  font-size: 0.78rem;
+}
+
+.agromet-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1.1rem 0.8rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.68rem;
+}
+.agromet-footer div {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.agromet-footer i {
+  color: var(--p-primary-color);
+}
+
+.quality-details {
+  margin: 0 1.1rem 1rem;
+  border-top: 1px dashed var(--p-surface-border);
+  padding-top: 0.65rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.72rem;
+}
+.quality-details summary {
+  cursor: pointer;
+  font-weight: 750;
+}
+.quality-details ul {
+  margin: 0.55rem 0 0;
+  padding-left: 1.1rem;
+}
+.quality-details li + li {
+  margin-top: 0.3rem;
+}
+
+.agromet-state {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 0.85rem 1.1rem 1.1rem;
+  padding: 1rem;
+  border: 1px dashed var(--p-surface-border);
+  border-radius: 12px;
+  background: var(--p-surface-50);
+}
+.agromet-state > i {
+  color: var(--p-primary-color);
+  font-size: 1.25rem;
+}
+.agromet-state > div {
+  display: grid;
+  flex: 1;
+  gap: 0.18rem;
+}
+.agromet-state strong {
+  font-size: 0.85rem;
+}
+.agromet-state span {
+  color: var(--p-text-muted-color);
+  font-size: 0.76rem;
+}
+.agromet-state.warn > i {
+  color: #e28a2b;
+}
+.agromet-state button {
+  border-color: var(--p-surface-border);
+  background: var(--p-content-background);
+  color: var(--p-primary-color);
+}
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.55rem;
+  padding: 1rem 1.1rem;
+}
+.skeleton-grid i,
+.skeleton-chart {
+  animation: pulse 1.4s ease-in-out infinite;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--p-surface-100), var(--p-surface-200), var(--p-surface-100));
+  background-size: 200% 100%;
+}
+.skeleton-grid i {
+  height: 5rem;
+}
+.skeleton-chart {
+  height: 20rem;
+  margin: 0 1.1rem 1rem;
+}
+@keyframes pulse {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@media (max-width: 1080px) {
+  .metric-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 720px) {
+  :host {
+    margin-top: 0.7rem;
+  }
+  .agromet-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .source-badge {
+    min-width: 0;
+  }
+  .metric-grid,
+  .skeleton-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-inline: 0.75rem;
+  }
+  .period-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    margin-inline: 0.75rem;
+  }
+  .chart-shell {
+    margin-inline: 0.75rem;
+  }
+  .chart-tabs {
+    display: flex;
+    overflow-x: auto;
+  }
+  .chart-tabs button {
+    flex: 0 0 auto;
+  }
+  .agromet-footer {
+    flex-direction: column;
+    padding-inline: 0.75rem;
+  }
+  .quality-details,
+  .agromet-state {
+    margin-inline: 0.75rem;
+  }
+}

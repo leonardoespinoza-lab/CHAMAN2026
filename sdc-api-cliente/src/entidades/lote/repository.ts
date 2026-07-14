@@ -7,7 +7,12 @@ import {
   IUpdateLote,
   ISueloInta,
 } from 'modelos/src';
-import { API_DATOS, API_PREDICCIONES } from '../../env';
+import {
+  AGROMETEO_INTERNAL_TOKEN,
+  API_CLIMA,
+  API_DATOS,
+  API_PREDICCIONES,
+} from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 
 @Injectable()
@@ -44,10 +49,26 @@ export class LotesRepository {
     return await this.axios.GET(url);
   }
 
-  async getSueloIntaLocal(lat: number, lng: number): Promise<ISueloInta | null> {
+  async getSueloIntaLocal(
+    lat: number,
+    lng: number,
+  ): Promise<ISueloInta | null> {
     const url = `${API_DATOS}/suelos-inta/punto`;
     return await this.axios.GET<ISueloInta | null>(url, {
       params: { lat, lng },
     });
+  }
+
+  async reprocesarAgrometeorologia(idSiembra: string): Promise<void> {
+    const url = `${API_CLIMA}/agrometeorologia/siembras/${idSiembra}/reprocesar`;
+    await this.axios.POST<void>(
+      url,
+      { sincronizarClima: true },
+      {
+        headers: AGROMETEO_INTERNAL_TOKEN
+          ? { 'x-chaman-internal-token': AGROMETEO_INTERNAL_TOKEN }
+          : {},
+      },
+    );
   }
 }

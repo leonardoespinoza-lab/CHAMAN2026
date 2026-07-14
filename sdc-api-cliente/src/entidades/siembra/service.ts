@@ -26,6 +26,7 @@ import {
   IPrediccion,
   IResultadoPrediccionMalezas,
   IRegistroFenologico,
+  IRespuestaAgrometeorologiaSiembra,
   esCultivoPerenne,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
@@ -89,6 +90,16 @@ export class SiembrasService {
     return await this.repository.prediccionMalezas(id);
   }
 
+  async agrometeorologia(
+    id: string,
+    desde: string | undefined,
+    hasta: string | undefined,
+    permiso: IPermiso,
+  ): Promise<IRespuestaAgrometeorologiaSiembra> {
+    await this.getById(id, permiso);
+    return await this.repository.agrometeorologia(id, desde, hasta);
+  }
+
   async registrarEtapaFenologica(
     id: string,
     registro: IRegistroFenologico,
@@ -145,6 +156,7 @@ export class SiembrasService {
     }
 
     await this.repository.registrarEtapaFenologica(id, registros);
+    this.reprocesarAgrometeorologia(id, false);
     return await this.getById(id, permiso);
   }
 
@@ -190,6 +202,7 @@ export class SiembrasService {
     }
     await this.crearPrediccion(idSiembra);
     this.evaluarAgroclima(idSiembra);
+    this.reprocesarAgrometeorologia(idSiembra);
     this.encolarNdvi(data.idLote, permiso);
     return await this.getById(created._id, permiso);
   }
@@ -255,6 +268,7 @@ export class SiembrasService {
     await this.repository.update(id, data);
     await this.actualizarPrediccion(id, permiso);
     this.evaluarAgroclima(id);
+    this.reprocesarAgrometeorologia(id);
     this.encolarNdvi(data.idLote, permiso);
     return await this.getById(id, permiso);
   }
@@ -966,6 +980,20 @@ export class SiembrasService {
       );
     }
     return false;
+  }
+
+  private reprocesarAgrometeorologia(
+    idSiembra: string,
+    sincronizarClima = true,
+  ) {
+    this.repository
+      .reprocesarAgrometeorologia(idSiembra, sincronizarClima)
+      .catch((error) => {
+        this.logger.error(
+          `Error al reprocesar calculos meteorologicos para la siembra ${idSiembra}`,
+        );
+        console.error(error);
+      });
   }
 
   private crearIdRegistroFenologico(): string {

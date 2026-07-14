@@ -75,6 +75,32 @@ export const DISTANCIA_MALA = +process.env.DISTANCIA_MALA || 100;
 export const CRON_TEST =
   process.env.CRON_TEST === 'true' ? true : false || false;
 
+// Motor agrometeorologico
+export const AGROMETEO_CRON_ENABLED =
+  process.env.AGROMETEO_CRON_ENABLED !== 'false' && ENV !== 'test';
+export const AGROMETEO_FORECAST_DAYS = Math.max(
+  1,
+  Math.min(14, +process.env.AGROMETEO_FORECAST_DAYS || 7),
+);
+export const AGROMETEO_CHUNK_DAYS = Math.max(
+  7,
+  Math.min(180, +process.env.AGROMETEO_CHUNK_DAYS || 90),
+);
+export const AGROMETEO_BATCH_SIZE = Math.max(
+  1,
+  Math.min(100, +process.env.AGROMETEO_BATCH_SIZE || 20),
+);
+export const FIELDCLIMATE_MAX_DATA_AGE_HOURS = Math.max(
+  1,
+  +process.env.FIELDCLIMATE_MAX_DATA_AGE_HOURS || 6,
+);
+export const AGROMETEO_INTERNAL_TOKEN =
+  process.env.AGROMETEO_INTERNAL_TOKEN || '';
+export const AGROMETEO_FORECAST_MAX_AGE_HOURS = Math.max(
+  1,
+  +process.env.AGROMETEO_FORECAST_MAX_AGE_HOURS || 8,
+);
+
 // vuz3mvthpubz0aophqk762tkggo22tke1c12wy9m
 
 // https://www.meteosource.com/api/v1/free/point?lat=-35.56881685355293&lon=-58.01234247508361&sections=all&timezone=UTC&language=en&units=metric&key=vuz3mvthpubz0aophqk762tkggo22tke1c12wy9m
