@@ -112,6 +112,7 @@ export class AgrometeorologicalEngineService {
     if (!lote?._id || !establecimiento?._id) {
       throw new Error('La siembra no tiene lote o establecimiento resoluble.');
     }
+    const cycleStart = this.resolveCycleStart(siembra);
     const coordinates = this.resolveCoordinates(siembra, lote, establecimiento);
     if (!coordinates) {
       throw new Error(
@@ -119,18 +120,23 @@ export class AgrometeorologicalEngineService {
       );
     }
     const syncWarnings: string[] = [];
+    if (cycleStart !== String(siembra.fechaSiembra).slice(0, 10)) {
+      syncWarnings.push(
+        `Cultivo perenne: se conserva la implantacion ${String(siembra.fechaSiembra).slice(0, 10)} y la campaña meteorologica vigente comienza ${cycleStart}.`,
+      );
+    }
     if (options.sincronizarClima !== false) {
       const sync = await this.ingestion.sincronizar(
         establecimiento,
         coordinates,
-        siembra.fechaSiembra,
+        cycleStart,
         options.forceBackfill,
       );
       syncWarnings.push(...sync.advertencias);
     }
     const observations = await this.loadObservations(
       establecimiento._id,
-      siembra.fechaSiembra,
+      cycleStart,
     );
     const calculated = this.calculateIndicators(
       siembra,
@@ -153,6 +159,20 @@ export class AgrometeorologicalEngineService {
       }),
     );
     return { indicadores: calculated.length, advertencias: warnings };
+  }
+
+  /**
+   * Separa la fecha historica de implantacion del inicio de la campaña que
+   * corresponde recalcular. En perennes la implantacion define la edad del
+   * monte, pero los acumulados operativos se reinician cada campaña julio-junio.
+   */
+  resolveCycleStart(siembra: ISiembra, referenceDate?: string): string {
+    const implantationDate = String(siembra.fechaSiembra || '').slice(0, 10);
+    if (!esCultivoPerenne(siembra.semilla?.cultivo)) return implantationDate;
+    const currentReference =
+      referenceDate || new Date().toISOString().slice(0, 10);
+    const campaignStart = this.perennialCampaignStart(currentReference);
+    return implantationDate > campaignStart ? implantationDate : campaignStart;
   }
 
   calculateIndicators(
@@ -249,9 +269,10 @@ export class AgrometeorologicalEngineService {
     const rainfallHistory: Array<{ date: string; value?: number }> = [];
     const radiationHistory: Array<{ date: string; value?: number }> = [];
     const results: ICreateIndicadorAgrometeorologico[] = [];
+    const cycleStart = this.resolveCycleStart(siembra);
 
     for (const date of dates) {
-      if (date < String(siembra.fechaSiembra).slice(0, 10)) continue;
+      if (date < cycleStart) continue;
       const daily = dailyByDate.get(date);
       const hours = hourlyByDate.get(date) || [];
       const thresholds = this.resolveThresholds(

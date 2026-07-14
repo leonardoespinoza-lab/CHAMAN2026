@@ -72,7 +72,12 @@
       <span>Periodo</span>
       <div>
         @for (item of periodos; track item.value) {
-          <button type="button" [class.active]="periodo === item.value" (click)="cambiarPeriodo(item.value)">
+          <button
+            type="button"
+            [class.active]="periodo === item.value"
+            [attr.aria-pressed]="periodo === item.value"
+            (click)="cambiarPeriodo(item.value)"
+          >
             {{ item.label }}
           </button>
         }
@@ -80,18 +85,27 @@
     </nav>
 
     <div class="chart-shell">
-      <nav class="chart-tabs" aria-label="Variable meteorologica">
+      <nav class="chart-tabs" aria-label="Variable meteorologica" role="tablist">
         @for (item of graficos; track item.value) {
           @if (item.value !== 'suelo' || mostrarSuelo) {
-            <button type="button" [class.active]="grafico === item.value" (click)="cambiarGrafico(item.value)">
+            <button
+              type="button"
+              role="tab"
+              [class.active]="grafico === item.value"
+              [attr.aria-selected]="grafico === item.value"
+              aria-controls="agromet-chart-panel"
+              (click)="cambiarGrafico(item.value)"
+            >
               <i [class]="item.icon"></i><span>{{ item.label }}</span>
             </button>
           }
         }
       </nav>
-      @if (chartOptions) {
-        <app-chart [options]="chartOptions" [style]="'display:block;width:100%;height:330px'"></app-chart>
-      }
+      <div id="agromet-chart-panel" class="chart-canvas" role="tabpanel" [attr.aria-label]="graficoLabel">
+        @if (chartOptions) {
+          <app-chart [options]="chartOptions" [style]="'display:block;width:100%;height:390px'"></app-chart>
+        }
+      </div>
     </div>
 
     <footer class="agromet-footer">

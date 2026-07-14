@@ -75,7 +75,7 @@ export class AgrometeorologiaBatchService {
             throw new Error('Establecimiento sin coordenadas validas.');
           }
           const earliest = group
-            .map((item) => String(item.fechaSiembra).slice(0, 10))
+            .map((item) => this.engine.resolveCycleStart(item))
             .sort()[0];
           await this.ingestion.sincronizar(
             establishment,

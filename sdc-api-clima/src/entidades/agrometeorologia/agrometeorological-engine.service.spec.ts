@@ -224,6 +224,58 @@ describe('AgrometeorologicalEngineService', () => {
     expect(result.advertencias.join(' ')).toContain('GDD no calculable');
   });
 
+  it('conserva la implantacion historica de perennes y abre solo la campaña vigente', () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-13T18:00:00.000Z'));
+
+    expect(
+      engine.resolveCycleStart({
+        fechaSiembra: '2020-08-15',
+        semilla: { cultivo: 'Manzano' },
+      } as any),
+    ).toBe('2026-07-01');
+    expect(
+      engine.resolveCycleStart({
+        fechaSiembra: '2026-05-10',
+        semilla: { cultivo: 'Trigo' },
+      } as any),
+    ).toBe('2026-05-10');
+
+    jest.useRealTimers();
+  });
+
+  it('no mezcla campañas anteriores en acumulados de un cultivo perenne', () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-13T18:00:00.000Z'));
+    const results = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2020-08-15',
+        semilla: { cultivo: 'Pecan' },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [
+        daily('2025-07-10', 8, 16, 24),
+        daily('2026-06-30', 8, 16, 24),
+        daily('2026-07-01', 8, 16, 24),
+        daily('2026-07-02', 10, 18, 26),
+      ],
+    );
+
+    expect(results.map((item) => item.fecha)).toEqual([
+      '2026-07-01',
+      '2026-07-02',
+    ]);
+    expect(results[0].metricas.gddAccumulated).toBe(
+      results[0].metricas.gddDaily,
+    );
+    jest.useRealTimers();
+  });
+
   it('persiste historiales largos en lotes acotados', async () => {
     const upsertIndicadores = jest.fn().mockResolvedValue(undefined);
     const service = new AgrometeorologicalEngineService(
@@ -237,8 +289,8 @@ describe('AgrometeorologicalEngineService', () => {
     await (service as any).persistInBatches(indicators);
 
     expect(upsertIndicadores).toHaveBeenCalledTimes(3);
-    expect(upsertIndicadores.mock.calls.map(([batch]) => batch.length)).toEqual([
-      100, 100, 51,
-    ]);
+    expect(upsertIndicadores.mock.calls.map(([batch]) => batch.length)).toEqual(
+      [100, 100, 51],
+    );
   });
 });

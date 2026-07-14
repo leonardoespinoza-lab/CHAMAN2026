@@ -38,7 +38,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     { label: '7 dias', value: 7 },
     { label: '30 dias', value: 30 },
     { label: '90 dias', value: 90 },
-    { label: 'Desde siembra', value: 'ciclo' },
+    { label: 'Ciclo vigente', value: 'ciclo' },
   ];
 
   public readonly graficos: Array<{ label: string; value: Grafico; icon: string }> = [
@@ -58,6 +58,10 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
         this.esNumero(dia.metrics.rootZoneSoilTemperatureC) ||
         this.esNumero(dia.metrics.availableWaterPercentage)
     );
+  }
+
+  public get graficoLabel(): string {
+    return this.graficos.find((item) => item.value === this.grafico)?.label || 'Seguimiento meteorologico';
   }
 
   public get fuenteLabel(): string {
@@ -163,7 +167,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
           {
             label: 'Grados dia',
             value: this.valor(r.gddAccumulated, 'GDD', 0),
-            detail: 'Acumulados desde la siembra',
+            detail: 'Acumulados del ciclo vigente',
             tone: 'thermal',
           },
           {
@@ -422,9 +426,8 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     return {
       chart: {
         type: 'spline',
-        height: 330,
         backgroundColor: 'transparent',
-        spacing: [18, 16, 10, 10],
+        spacing: [20, 24, 14, 18],
         zooming: { type: 'x' },
       },
       title: { text: titulo, align: 'left', style: { fontSize: '15px', fontWeight: '800' } },
@@ -432,9 +435,14 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
       xAxis: {
         categories: dias.map((dia) => this.fechaCorta(dia.date)),
         crosshair: true,
+        lineWidth: 0,
+        tickLength: 0,
         plotLines,
         plotBands: this.bandasFenologicas(dias),
-        labels: { step: Math.max(1, Math.ceil(dias.length / 12)) },
+        labels: {
+          step: Math.max(1, Math.ceil(dias.length / 12)),
+          style: { color: '#607286', fontSize: '11px', fontWeight: '600' },
+        },
       },
       yAxis,
       series,
@@ -447,18 +455,51 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
           const dia = dias[index];
           const cabecera = `<strong>${dia?.date || context.key}</strong>${dia?.stage ? `<br><span>Etapa: ${dia.stage}</span>` : ''}`;
           const filas = (context.points || [])
-            .map(
-              (point: any) =>
-                `<br><span style="color:${point.color}">●</span> ${point.series.name}: <b>${point.y}</b>${point.series.userOptions?.custom?.suffix || ''}`
-            )
+            .map((point: any) => {
+              const value = Number(point.y).toLocaleString('es-AR', {
+                maximumFractionDigits: 2,
+              });
+              return `<br><span style="color:${point.color}">&#9679;</span> ${point.series.name}: <b>${value}</b>${point.series.userOptions?.custom?.suffix || ''}`;
+            })
             .join('');
           return `${cabecera}${filas}`;
         },
       },
-      legend: { align: 'center', verticalAlign: 'bottom', itemDistance: 16 },
+      legend: {
+        align: 'center',
+        verticalAlign: 'bottom',
+        layout: 'horizontal',
+        margin: 16,
+        itemDistance: 16,
+        itemMarginBottom: 5,
+        navigation: { enabled: true },
+      },
       plotOptions: {
-        series: { connectNulls: false, turboThreshold: 0, marker: { enabled: dias.length <= 45, radius: 2.2 } },
+        series: {
+          connectNulls: false,
+          turboThreshold: 0,
+          lineWidth: 2.3,
+          marker: { enabled: dias.length <= 45, radius: 2.4 },
+          states: { hover: { lineWidthPlus: 0.5 }, inactive: { opacity: 0.42 } },
+        },
         column: { borderWidth: 0, borderRadius: 3, groupPadding: 0.08, pointPadding: 0.06 },
+      },
+      responsive: {
+        rules: [
+          {
+            condition: { maxWidth: 700 },
+            chartOptions: {
+              chart: { spacing: [18, 10, 12, 10] },
+              title: { style: { fontSize: '14px' } },
+              subtitle: { style: { fontSize: '11px' } },
+              legend: {
+                itemDistance: 10,
+                itemStyle: { fontSize: '11px' },
+                symbolWidth: 16,
+              },
+            },
+          },
+        ],
       },
       credits: { enabled: false },
       accessibility: { enabled: false },
@@ -529,12 +570,13 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
 
   private eje(title: string, opposite = false, min?: number, max?: number, visible = true): Highcharts.YAxisOptions {
     return {
-      title: { text: title },
       opposite,
       min,
       max,
       visible,
       gridLineColor: 'rgba(119, 150, 180, 0.16)',
+      labels: { style: { color: '#607286', fontSize: '11px' } },
+      title: { text: title, style: { color: '#33485c', fontSize: '11px', fontWeight: '700' } },
     };
   }
 
