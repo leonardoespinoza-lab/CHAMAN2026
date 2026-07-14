@@ -164,7 +164,7 @@
     }
   }
 
-  @defer (on viewport; prefetch on idle) {
+  @defer (on viewport; on interaction(loadServicesTrigger); prefetch on idle) {
     <div class="services-stack">
       @if (siembra?.fechaCosecha) {
         <app-card-rendimiento class="service-panel" [siembra]="siembra"></app-card-rendimiento>
@@ -335,6 +335,9 @@
         <span>Servicios del lote</span>
         <strong>Preparando indicadores y recomendaciones</strong>
         <small>Se cargan al llegar a esta seccion para priorizar la informacion operativa principal.</small>
+        <button #loadServicesTrigger type="button" class="services-deferred-placeholder__action">
+          Cargar servicios ahora
+        </button>
       </div>
       <div class="services-deferred-placeholder__progress" aria-hidden="true">
         <span></span>

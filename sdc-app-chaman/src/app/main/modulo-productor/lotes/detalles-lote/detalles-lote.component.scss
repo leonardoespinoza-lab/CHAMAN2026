@@ -285,6 +285,29 @@
   margin-top: 0.2rem;
 }
 
+.services-deferred-placeholder__action {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--p-primary-color), transparent 45%);
+  border-radius: 999px;
+  color: var(--p-primary-color);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  margin-top: 0.65rem;
+  padding: 0.42rem 0.78rem;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.services-deferred-placeholder__action:hover,
+.services-deferred-placeholder__action:focus-visible {
+  background: color-mix(in srgb, var(--p-primary-color), transparent 91%);
+  border-color: var(--p-primary-color);
+  outline: none;
+}
+
 .services-deferred-placeholder__progress {
   background: color-mix(in srgb, var(--p-surface-300), transparent 28%);
   border-radius: 999px;

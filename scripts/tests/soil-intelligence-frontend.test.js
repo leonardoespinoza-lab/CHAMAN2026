@@ -69,7 +69,11 @@ test("renderiza composición por profundidad, estados, nulls y móvil sin botón
 });
 
 test("prioriza el bloque operativo y difiere servicios pesados e historial", () => {
-  assert.match(detail, /@defer \(on viewport; prefetch on idle\)/);
+  assert.match(
+    detail,
+    /@defer \(on viewport; on interaction\(loadServicesTrigger\); prefetch on idle\)/,
+  );
+  assert.match(detail, /#loadServicesTrigger/);
   assert.match(detail, /services-deferred-placeholder/);
   assert.match(
     detail,
@@ -77,6 +81,6 @@ test("prioriza el bloque operativo y difiere servicios pesados e historial", () 
   );
   assert.ok(
     detail.indexOf("<app-card-suelo-ambiente") <
-      detail.indexOf("@defer (on viewport; prefetch on idle)"),
+      detail.indexOf("@defer (on viewport; on interaction(loadServicesTrigger); prefetch on idle)"),
   );
 });
