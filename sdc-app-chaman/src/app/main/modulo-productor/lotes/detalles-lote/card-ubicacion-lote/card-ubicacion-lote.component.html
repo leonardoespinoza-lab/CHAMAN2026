@@ -1,0 +1,111 @@
+<section class="location-card" [class.partial]="estado === 'partial'" [class.issue]="!listo && !procesando">
+  <header class="location-header">
+    <div>
+      <span class="eyebrow">Contexto territorial oficial</span>
+      <h2>Ubicación del lote</h2>
+      <small
+        >Se calcula una sola vez por geometría y versión del catálogo; no modifica tus coordenadas
+        meteorológicas.</small
+      >
+    </div>
+    <div class="header-status" [attr.data-level]="ubicacion?.confianza || 'sin_calcular'">
+      <i class="pi" [class.pi-spin]="procesando" [class.pi-spinner]="procesando" [class.pi-verified]="listo"></i>
+      <span>{{ confianzaLabel }}</span>
+    </div>
+  </header>
+
+  @if (procesando) {
+    <div class="processing-state">
+      <i class="pi pi-map-marker"></i>
+      <div>
+        <strong>{{ estado === 'processing' ? 'Resolviendo ubicación exacta' : 'Ubicación en cola' }}</strong>
+        <small>{{ estadoTexto() }}</small>
+      </div>
+      <div class="progress-track"><span></span></div>
+    </div>
+  } @else if (listo) {
+    <div class="location-grid">
+      <article class="primary-location">
+        <span>Provincia</span>
+        <strong>{{ ubicacion?.provincia?.nombre || 'Sin determinar' }}</strong>
+        <small>ID oficial {{ ubicacion?.provincia?.id || '—' }}</small>
+      </article>
+      <article class="primary-location">
+        <span>Jurisdicción</span>
+        <strong>{{ tituloAdministrativo }}</strong>
+        <small>Cobertura territorial {{ cobertura(ubicacion?.coberturaPorcentaje) }}</small>
+      </article>
+      <article>
+        <span>Municipio / gobierno local</span>
+        <strong>{{
+          ubicacion?.municipio?.nombre || ubicacion?.gobiernoLocal?.nombre || 'No informado oficialmente'
+        }}</strong>
+        <small>{{
+          ubicacion?.municipio?.categoria || ubicacion?.gobiernoLocal?.categoria || 'Puede ser nulo en áreas rurales'
+        }}</small>
+      </article>
+      <article>
+        <span>Localidad de referencia</span>
+        <strong>{{ ubicacion?.localidadReferencia?.nombre || 'Sin localidad cercana' }}</strong>
+        <small>{{ distancia(ubicacion?.localidadReferencia?.distanciaMetros) }}</small>
+      </article>
+      <article>
+        <span>Localidad censal</span>
+        <strong>{{ ubicacion?.localidadCensal?.nombre || 'Fuera de una localidad censal' }}</strong>
+        <small>{{ ubicacion?.localidadCensal?.categoria || 'Cruce poligonal oficial INDEC' }}</small>
+      </article>
+      <article>
+        <span>Paraje / asentamiento cercano</span>
+        <strong>{{ ubicacion?.asentamientoCercano?.nombre || 'Sin referencia útil en 25 km' }}</strong>
+        <small>{{ distancia(ubicacion?.asentamientoCercano?.distanciaMetros) }}</small>
+      </article>
+    </div>
+
+    @if (ubicacion?.jurisdiccionesSecundarias?.length) {
+      <div class="secondary-jurisdictions">
+        <span>El lote cruza límites:</span>
+        @for (item of ubicacion?.jurisdiccionesSecundarias; track item.recurso + ':' + item.id) {
+          <strong>{{ item.nombre }} · {{ cobertura(item.porcentajeLote) }}</strong>
+        }
+      </div>
+    }
+
+    @if (ubicacion?.conflictoManual?.existe) {
+      <div class="notice conflict">
+        <i class="pi pi-exclamation-triangle"></i>
+        <span>{{ ubicacion?.conflictoManual?.detalle }}</span>
+      </div>
+    }
+    @if (ubicacion?.advertencias?.length) {
+      <div class="notice">
+        <i class="pi pi-info-circle"></i>
+        <span>{{ ubicacion?.advertencias?.join(' ') }}</span>
+      </div>
+    }
+  } @else {
+    <div class="empty-state">
+      <i class="pi pi-map"></i>
+      <div>
+        <strong>{{ estadoTexto() }}</strong>
+        <small>El departamento manual existente se conserva y nunca se sobrescribe automáticamente.</small>
+      </div>
+      @if (estado === 'failed' || estado === 'source_unavailable') {
+        <p-button
+          label="Reintentar"
+          icon="pi pi-refresh"
+          [loading]="reintentando"
+          [outlined]="true"
+          (onClick)="reintentar()"
+        />
+      }
+    </div>
+  }
+
+  <footer>
+    <span>{{ fuenteLabel }}</span>
+    <span>{{ ubicacion?.metodo || 'Intersección del polígono completo' }}</span>
+    @if (ubicacion?.fechaResolucion) {
+      <span>Actualizado {{ ubicacion?.fechaResolucion | date: 'short' }}</span>
+    }
+  </footer>
+</section>

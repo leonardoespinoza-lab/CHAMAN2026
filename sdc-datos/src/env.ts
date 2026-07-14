@@ -18,6 +18,33 @@ export const DB_PASS = process.env.DB_PASS || '';
 export const DB_URL = DB_FULL_URI || `mongodb://${DB_HOST}:${DB_PORT}`;
 export const AGROMETEO_INTERNAL_TOKEN =
   process.env.AGROMETEO_INTERNAL_TOKEN || '';
+export const LOT_LOCATION_INTERNAL_TOKEN =
+  process.env.LOT_LOCATION_INTERNAL_TOKEN || '';
+export const GEOREF_SYNC_ENABLED =
+  process.env.GEOREF_SYNC_ENABLED !== 'false' && ENV !== 'test';
+export const GEOREF_BASE_URL =
+  process.env.GEOREF_BASE_URL || 'https://apis.datos.gob.ar/georef/api/v2.0';
+export const GEOREF_SYNC_CRON = process.env.GEOREF_SYNC_CRON || '15 3 * * 0';
+export const GEOREF_SYNC_STARTUP_DELAY_MS =
+  +process.env.GEOREF_SYNC_STARTUP_DELAY_MS || 30_000;
+export const GEOREF_SYNC_LOCK_TTL_MS =
+  +process.env.GEOREF_SYNC_LOCK_TTL_MS || 30 * 60_000;
+export const GEOREF_REQUEST_TIMEOUT_MS =
+  +process.env.GEOREF_REQUEST_TIMEOUT_MS || 120_000;
+const georefRequestRetries = Number(process.env.GEOREF_REQUEST_RETRIES);
+export const GEOREF_REQUEST_RETRIES =
+  Number.isFinite(georefRequestRetries) && georefRequestRetries >= 0
+    ? georefRequestRetries
+    : 3;
+export const GEOREF_RETRY_BASE_DELAY_MS =
+  +process.env.GEOREF_RETRY_BASE_DELAY_MS || 1_000;
+export const GEOREF_BACKFILL_LIMIT = +process.env.GEOREF_BACKFILL_LIMIT || 0;
+export const GEOREF_LOCALITY_MAX_DISTANCE_METERS =
+  +process.env.GEOREF_LOCALITY_MAX_DISTANCE_METERS || 100_000;
+export const GEOREF_SETTLEMENT_MAX_DISTANCE_METERS =
+  +process.env.GEOREF_SETTLEMENT_MAX_DISTANCE_METERS || 25_000;
+export const LOT_LOCATION_RESOLVER_VERSION =
+  process.env.LOT_LOCATION_RESOLVER_VERSION || 'lot-location-v1.0.0';
 
 // Solo incluir autenticación si hay usuario Y contraseña no vacíos
 const authOptions =

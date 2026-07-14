@@ -33,6 +33,9 @@
     "migrate:agromet:plan": "node scripts/migrations/20260713-agrometeorology-engine.js plan",
     "migrate:agromet:apply": "node scripts/migrations/20260713-agrometeorology-engine.js apply",
     "migrate:agromet:rollback": "node scripts/migrations/20260713-agrometeorology-engine.js rollback",
+    "migrate:lot-location:plan": "node scripts/migrations/20260714-lot-administrative-location.js plan",
+    "migrate:lot-location:apply": "node scripts/migrations/20260714-lot-administrative-location.js apply",
+    "migrate:lot-location:rollback": "node scripts/migrations/20260714-lot-administrative-location.js rollback",
     "seed:kleppe-frutales": "node scripts/seed-kleppe-frutales-local.js",
     "seed:weeds": "node scripts/seed-weeds-gompertz-local.js",
     "seed:demo": "node scripts/seed-demo-hierarchy-local.js",
@@ -44,6 +47,7 @@
     "audit:deployment-topology": "node scripts/validate-deployment-topology.js",
     "audit:lote-integrity": "node scripts/audit-lote-data-integrity.js",
     "test:agromet:frontend": "node --test scripts/tests/agrometeorology-frontend.test.js",
+    "test:lot-location:frontend": "node --test scripts/tests/lot-location-frontend.test.js",
     "railway:build": "node scripts/railway-build.js",
     "railway:start": "node scripts/railway-start.js"
   },

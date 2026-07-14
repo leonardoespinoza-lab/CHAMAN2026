@@ -68,9 +68,7 @@ export class LotesController {
 
   @Post('ndvi/normalizar')
   @Permisos({ nivel: 'Admin', roles: ['Admin'] })
-  public async normalizarNdviLegacy(
-    @Query('limit') limit?: string,
-  ): Promise<{
+  public async normalizarNdviLegacy(@Query('limit') limit?: string): Promise<{
     total: number;
     encolados: number;
     omitidos: number;
@@ -114,6 +112,39 @@ export class LotesController {
     @GetPermiso() permiso: IPermiso,
   ): Promise<ICargaFitosanitaria> {
     return await this.service.getCargaFitosanitaria(id, permiso);
+  }
+
+  @Get('/:id/ubicacion')
+  @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+  )
+  public async getUbicacionAdministrativa(
+    @Param('id') id: string,
+    @GetPermiso() permiso: IPermiso,
+  ) {
+    return await this.service.getAdministrativeLocation(id, permiso);
+  }
+
+  @Post('/:id/ubicacion/reprocesar')
+  @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+  )
+  public async reprocesarUbicacionAdministrativa(
+    @Param('id') id: string,
+    @Query('force') force: string,
+    @GetPermiso() permiso: IPermiso,
+  ) {
+    return await this.service.resolveAdministrativeLocation(
+      id,
+      permiso,
+      force === 'true',
+    );
   }
 
   @Get('/:id')

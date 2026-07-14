@@ -136,7 +136,29 @@ export class LotesService {
     if (!this.puedeVer(data, permiso)) {
       throw new BadRequestException('No tiene permiso para ver este lote');
     }
+    try {
+      data.ubicacionAdministrativa =
+        (await this.repository.getAdministrativeLocation(id)) as any;
+    } catch (error) {
+      this.logger.warn(
+        `Ubicacion administrativa persistida no disponible para lote ${id}: ${error?.message || error}`,
+      );
+    }
     return data;
+  }
+
+  async getAdministrativeLocation(id: string, permiso: IPermiso) {
+    await this.getById(id, permiso);
+    return await this.repository.getAdministrativeLocation(id);
+  }
+
+  async resolveAdministrativeLocation(
+    id: string,
+    permiso: IPermiso,
+    force = false,
+  ) {
+    await this.getById(id, permiso);
+    return await this.repository.resolveAdministrativeLocation(id, force);
   }
 
   async get(filtro: IQueryParam, permiso: IPermiso): Promise<IListado<ILote>> {

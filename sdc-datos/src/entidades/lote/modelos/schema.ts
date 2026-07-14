@@ -21,6 +21,7 @@ import {
   ICalidadClima,
   IDispositivo,
   ISueloReferencia,
+  IUbicacionAdministrativaLote,
 } from 'modelos/src';
 import { Document } from 'mongoose';
 import { Quimica } from '../../quimica/modelos/schema';
@@ -127,6 +128,7 @@ export class Lote implements Exactly<ILote, Lote> {
   sondaSuelo?: IEstacion;
   siembra?: ISiembra;
   dispositivos?: IDispositivo[];
+  ubicacionAdministrativa?: IUbicacionAdministrativaLote;
 }
 
 export type LoteDocument = Lote & Document;
