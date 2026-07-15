@@ -4,6 +4,7 @@ import {
   TEnfermedadId,
   TEstadoResistencia,
 } from "../entidades/semilla";
+import { ICalidadDatoMotor } from "../compartidos/calidad-datos";
 
 export interface IDefinicionEnfermedad {
   id: TEnfermedadId;
@@ -13,41 +14,286 @@ export interface IDefinicionEnfermedad {
   motor: "operativo" | "experimental" | "sin_modelo";
 }
 
+/**
+ * Versión funcional del motor sanitario de trigo aprobada en julio de 2026.
+ * La versión forma parte del dato: nunca deben continuarse acumuladores de una
+ * versión anterior después de cambiar una fórmula o su ventana de cálculo.
+ */
+export const TRIGO_MOTOR_SANITARIO_VERSION = 4;
+export const TRIGO_GDD_BASE_0_INICIO_MIN = 800;
+export const TRIGO_GDD_BASE_0_INICIO_CONSERVADOR = 850;
+export const TRIGO_GDD_COBERTURA_MINIMA = 0.9;
+export const TRIGO_FUSARIUM_GDD_BASE_0_MAX = 530;
+export const ROYA_AMARILLA_VENTANA_HORAS = 10 * 24;
+export const ROYA_AMARILLA_COBERTURA_HORARIA_MINIMA = 0.9;
+export const ROYA_AMARILLA_RACHA_MINIMA_HORAS = 4;
+export const ROYA_AMARILLA_UMBRAL_TEMPRANO_PCT = 5;
+export const ROYA_AMARILLA_UMBRAL_FUERTE_PCT = 15;
+export const ROYA_AMARILLA_UMBRAL_MUY_FUERTE_PCT = 20;
+
+export interface IContextoVentanaSanitariaTrigo {
+  gddBase0DesdeSiembra: number;
+  coberturaGdd: number;
+  etapa: number;
+  fenologiaObservada: boolean;
+  calidadClima?: ICalidadDatoMotor;
+}
+
+export interface IResultadoVentanaSanitariaTrigo {
+  activa: boolean;
+  inicioPorFenologiaObservada: boolean;
+  umbralGddAplicado: number;
+  coberturaSuficiente: boolean;
+}
+
 export const ENFERMEDADES_CANONICAS: IDefinicionEnfermedad[] = [
-  { id: "trigo.mancha_amarilla", nombre: "Mancha Amarilla", cultivo: "Trigo", aliases: ["MA", "Drechslera tritici"], motor: "operativo" },
-  { id: "trigo.mancha_hoja", nombre: "Mancha de la Hoja", cultivo: "Trigo", aliases: ["MH", "SH", "Septoria", "Septoriosis"], motor: "operativo" },
-  { id: "trigo.roya_hoja", nombre: "Roya de la Hoja", cultivo: "Trigo", aliases: ["RH", "Puccinia triticina", "Roya anaranjada de la hoja"], motor: "operativo" },
-  { id: "trigo.roya_tallo", nombre: "Roya del Tallo", cultivo: "Trigo", aliases: ["RT", "Puccinia graminis"], motor: "sin_modelo" },
-  { id: "trigo.roya_anaranjada", nombre: "Roya Anaranjada", cultivo: "Trigo", aliases: ["RA", "Roya Amarilla", "Puccinia striiformis"], motor: "operativo" },
-  { id: "trigo.fusarium_espiga", nombre: "Fusarium de la Espiga", cultivo: "Trigo", aliases: ["FE", "Fusarium", "Fusariosis"], motor: "operativo" },
-  { id: "cebada.mancha_red", nombre: "Mancha en Red", cultivo: "Cebada", aliases: ["Drechslera teres", "Net blotch"], motor: "operativo" },
-  { id: "cebada.escaldadura", nombre: "Escaldadura de la Cebada", cultivo: "Cebada", aliases: ["Escaldadura", "Rhynchosporium"], motor: "operativo" },
-  { id: "cebada.roya_hoja", nombre: "Roya de la Hoja de Cebada", cultivo: "Cebada", aliases: ["Roya cebada"], motor: "operativo" },
-  { id: "cebada.fusariosis_espiga", nombre: "Fusariosis de la Espiga de Cebada", cultivo: "Cebada", aliases: ["Fusariosis cebada"], motor: "operativo" },
-  { id: "soja.fin_ciclo", nombre: "Fin de Ciclo", cultivo: "Soja", aliases: ["Fin de Ciclo Soja", "EFC"], motor: "operativo" },
-  { id: "soja.cancro_tallo", nombre: "Cancro del Tallo de la Soja", cultivo: "Soja", aliases: ["Cancro del tallo", "CAN", "Diaporthe phaseolorum"], motor: "sin_modelo" },
-  { id: "soja.phytophthora", nombre: "Podredumbre de Raiz y Tallo por Phytophthora", cultivo: "Soja", aliases: ["Phytophthora", "PH", "Phytophthora sojae"], motor: "sin_modelo" },
-  { id: "soja.muerte_repentina", nombre: "Sindrome de Muerte Repentina", cultivo: "Soja", aliases: ["Muerte subita", "SMR", "Fusarium virguliforme"], motor: "sin_modelo" },
-  { id: "soja.mancha_ojo_rana", nombre: "Mancha Ojo de Rana", cultivo: "Soja", aliases: ["MOR", "Cercospora sojina"], motor: "sin_modelo" },
-  { id: "maiz.roya", nombre: "Roya del Maiz", cultivo: "Maiz", aliases: ["Roya del Maíz", "Roya maiz"], motor: "operativo" },
-  { id: "maiz.tizon_foliar", nombre: "Tizon Foliar del Maiz", cultivo: "Maiz", aliases: ["Tizon foliar", "Tizón foliar", "Tizon"], motor: "sin_modelo" },
-  { id: "arveja.ascochyta", nombre: "Complejo Ascochyta de la Arveja", cultivo: "Arveja", aliases: ["Ascochyta", "Tizon de la arveja", "Mancha negra de la arveja"], motor: "experimental" },
-  { id: "arveja.mildiu", nombre: "Mildiu de la Arveja", cultivo: "Arveja", aliases: ["Peronospora viciae", "Mildiu arveja"], motor: "experimental" },
-  { id: "arveja.oidio", nombre: "Oidio de la Arveja", cultivo: "Arveja", aliases: ["Erysiphe pisi", "Oidio arveja"], motor: "experimental" },
-  { id: "vid.oidio", nombre: "Oidio", cultivo: "Vid", aliases: [], motor: "sin_modelo" },
-  { id: "vid.botritis", nombre: "Botritis", cultivo: "Vid", aliases: [], motor: "sin_modelo" },
-  { id: "vid.mildiu", nombre: "Mildiu", cultivo: "Vid", aliases: [], motor: "sin_modelo" },
-  { id: "papa.tizon_tardio", nombre: "Tizon Tardio", cultivo: "Papa", aliases: ["Phytophthora infestans"], motor: "sin_modelo" },
-  { id: "papa.tizon_temprano", nombre: "Tizon Temprano", cultivo: "Papa", aliases: [], motor: "sin_modelo" },
-  { id: "papa.rhizoctonia", nombre: "Rhizoctonia", cultivo: "Papa", aliases: ["Rhizoctonia solani"], motor: "sin_modelo" },
-  { id: "manzano.sarna", nombre: "Sarna del Manzano", cultivo: "Manzano", aliases: [], motor: "sin_modelo" },
-  { id: "manzano.oidio", nombre: "Oidio del Manzano", cultivo: "Manzano", aliases: [], motor: "sin_modelo" },
-  { id: "frutales.fuego_bacteriano", nombre: "Fuego Bacteriano", cultivo: "Frutales", aliases: [], motor: "sin_modelo" },
-  { id: "manzano.carpocapsa", nombre: "Carpocapsa", cultivo: "Manzano", aliases: [], motor: "sin_modelo" },
-  { id: "peral.sarna", nombre: "Sarna del Peral", cultivo: "Peral", aliases: [], motor: "sin_modelo" },
-  { id: "peral.psila", nombre: "Psila del Peral", cultivo: "Peral", aliases: [], motor: "sin_modelo" },
-  { id: "pecan.sarna", nombre: "Sarna del Pecan", cultivo: "Pecan", aliases: [], motor: "sin_modelo" },
-  { id: "pecan.bacteriosis", nombre: "Bacteriosis del Pecan", cultivo: "Pecan", aliases: [], motor: "sin_modelo" },
+  {
+    id: "trigo.mancha_amarilla",
+    nombre: "Mancha Amarilla",
+    cultivo: "Trigo",
+    aliases: ["MA", "Drechslera tritici"],
+    motor: "operativo",
+  },
+  {
+    id: "trigo.mancha_hoja",
+    nombre: "Mancha de la Hoja",
+    cultivo: "Trigo",
+    aliases: ["MH", "SH", "Septoria", "Septoriosis"],
+    motor: "operativo",
+  },
+  {
+    id: "trigo.roya_hoja",
+    nombre: "Roya de la Hoja",
+    cultivo: "Trigo",
+    aliases: ["RH", "Puccinia triticina", "Roya anaranjada de la hoja"],
+    motor: "operativo",
+  },
+  {
+    id: "trigo.roya_tallo",
+    nombre: "Roya del Tallo",
+    cultivo: "Trigo",
+    aliases: ["RT", "Puccinia graminis"],
+    motor: "sin_modelo",
+  },
+  {
+    id: "trigo.roya_anaranjada",
+    nombre: "Roya Amarilla/Estriada",
+    cultivo: "Trigo",
+    aliases: [
+      "RA",
+      "Roya Anaranjada",
+      "Roya Amarilla",
+      "Roya Amarilla o Estriada",
+      "Puccinia striiformis",
+    ],
+    // El identificador se conserva por compatibilidad. P. striiformis es roya
+    // amarilla/estriada y la ecuación operativa recibida aún no tiene una
+    // publicación o validación regional trazable.
+    motor: "experimental",
+  },
+  {
+    id: "trigo.fusarium_espiga",
+    nombre: "Fusarium de la Espiga",
+    cultivo: "Trigo",
+    aliases: ["FE", "Fusarium", "Fusariosis"],
+    motor: "operativo",
+  },
+  {
+    id: "cebada.mancha_red",
+    nombre: "Mancha en Red",
+    cultivo: "Cebada",
+    aliases: ["Drechslera teres", "Net blotch"],
+    motor: "operativo",
+  },
+  {
+    id: "cebada.escaldadura",
+    nombre: "Escaldadura de la Cebada",
+    cultivo: "Cebada",
+    aliases: ["Escaldadura", "Rhynchosporium"],
+    motor: "operativo",
+  },
+  {
+    id: "cebada.roya_hoja",
+    nombre: "Roya de la Hoja de Cebada",
+    cultivo: "Cebada",
+    aliases: ["Roya cebada"],
+    motor: "operativo",
+  },
+  {
+    id: "cebada.fusariosis_espiga",
+    nombre: "Fusariosis de la Espiga de Cebada",
+    cultivo: "Cebada",
+    aliases: ["Fusariosis cebada"],
+    motor: "operativo",
+  },
+  {
+    id: "soja.fin_ciclo",
+    nombre: "Fin de Ciclo",
+    cultivo: "Soja",
+    aliases: ["Fin de Ciclo Soja", "EFC"],
+    motor: "operativo",
+  },
+  {
+    id: "soja.cancro_tallo",
+    nombre: "Cancro del Tallo de la Soja",
+    cultivo: "Soja",
+    aliases: ["Cancro del tallo", "CAN", "Diaporthe phaseolorum"],
+    motor: "sin_modelo",
+  },
+  {
+    id: "soja.phytophthora",
+    nombre: "Podredumbre de Raiz y Tallo por Phytophthora",
+    cultivo: "Soja",
+    aliases: ["Phytophthora", "PH", "Phytophthora sojae"],
+    motor: "sin_modelo",
+  },
+  {
+    id: "soja.muerte_repentina",
+    nombre: "Sindrome de Muerte Repentina",
+    cultivo: "Soja",
+    aliases: ["Muerte subita", "SMR", "Fusarium virguliforme"],
+    motor: "sin_modelo",
+  },
+  {
+    id: "soja.mancha_ojo_rana",
+    nombre: "Mancha Ojo de Rana",
+    cultivo: "Soja",
+    aliases: ["MOR", "Cercospora sojina"],
+    motor: "sin_modelo",
+  },
+  {
+    id: "maiz.roya",
+    nombre: "Roya del Maiz",
+    cultivo: "Maiz",
+    aliases: ["Roya del Maíz", "Roya maiz"],
+    motor: "operativo",
+  },
+  {
+    id: "maiz.tizon_foliar",
+    nombre: "Tizon Foliar del Maiz",
+    cultivo: "Maiz",
+    aliases: ["Tizon foliar", "Tizón foliar", "Tizon"],
+    motor: "sin_modelo",
+  },
+  {
+    id: "arveja.ascochyta",
+    nombre: "Complejo Ascochyta de la Arveja",
+    cultivo: "Arveja",
+    aliases: ["Ascochyta", "Tizon de la arveja", "Mancha negra de la arveja"],
+    motor: "experimental",
+  },
+  {
+    id: "arveja.mildiu",
+    nombre: "Mildiu de la Arveja",
+    cultivo: "Arveja",
+    aliases: ["Peronospora viciae", "Mildiu arveja"],
+    motor: "experimental",
+  },
+  {
+    id: "arveja.oidio",
+    nombre: "Oidio de la Arveja",
+    cultivo: "Arveja",
+    aliases: ["Erysiphe pisi", "Oidio arveja"],
+    motor: "experimental",
+  },
+  {
+    id: "vid.oidio",
+    nombre: "Oidio",
+    cultivo: "Vid",
+    aliases: [],
+    motor: "sin_modelo",
+  },
+  {
+    id: "vid.botritis",
+    nombre: "Botritis",
+    cultivo: "Vid",
+    aliases: [],
+    motor: "sin_modelo",
+  },
+  {
+    id: "vid.mildiu",
+    nombre: "Mildiu",
+    cultivo: "Vid",
+    aliases: [],
+    motor: "sin_modelo",
+  },
+  {
+    id: "papa.tizon_tardio",
+    nombre: "Tizon Tardio",
+    cultivo: "Papa",
+    aliases: ["Phytophthora infestans"],
+    motor: "sin_modelo",
+  },
+  {
+    id: "papa.tizon_temprano",
+    nombre: "Tizon Temprano",
+    cultivo: "Papa",
+    aliases: [],
+    motor: "sin_modelo",
+  },
+  {
+    id: "papa.rhizoctonia",
+    nombre: "Rhizoctonia",
+    cultivo: "Papa",
+    aliases: ["Rhizoctonia solani"],
+    motor: "sin_modelo",
+  },
+  {
+    id: "manzano.sarna",
+    nombre: "Sarna del Manzano",
+    cultivo: "Manzano",
+    aliases: [],
+    motor: "sin_modelo",
+  },
+  {
+    id: "manzano.oidio",
+    nombre: "Oidio del Manzano",
+    cultivo: "Manzano",
+    aliases: [],
+    motor: "sin_modelo",
+  },
+  {
+    id: "frutales.fuego_bacteriano",
+    nombre: "Fuego Bacteriano",
+    cultivo: "Frutales",
+    aliases: [],
+    motor: "sin_modelo",
+  },
+  {
+    id: "manzano.carpocapsa",
+    nombre: "Carpocapsa",
+    cultivo: "Manzano",
+    aliases: [],
+    motor: "sin_modelo",
+  },
+  {
+    id: "peral.sarna",
+    nombre: "Sarna del Peral",
+    cultivo: "Peral",
+    aliases: [],
+    motor: "sin_modelo",
+  },
+  {
+    id: "peral.psila",
+    nombre: "Psila del Peral",
+    cultivo: "Peral",
+    aliases: [],
+    motor: "sin_modelo",
+  },
+  {
+    id: "pecan.sarna",
+    nombre: "Sarna del Pecan",
+    cultivo: "Pecan",
+    aliases: [],
+    motor: "sin_modelo",
+  },
+  {
+    id: "pecan.bacteriosis",
+    nombre: "Bacteriosis del Pecan",
+    cultivo: "Pecan",
+    aliases: [],
+    motor: "sin_modelo",
+  },
 ];
 
 export interface IResistenciaResuelta {
@@ -56,11 +302,140 @@ export interface IResistenciaResuelta {
   indiceResistencia: number;
   estado: TEstadoResistencia;
   desconocida: boolean;
+  limitaciones: string[];
 }
 
 export interface IHoraClimaEnfermedad {
   temperatura: number;
   humedadRelativa: number;
+}
+
+export interface IHoraRoyaAmarilla {
+  fecha: string;
+  temperatura?: number;
+  humedadRelativa?: number;
+  lluviaMm?: number;
+}
+
+export type TNivelOportunidadRoyaAmarilla =
+  | "sin_datos"
+  | "sin_senal"
+  | "senal_temprana"
+  | "fuerte"
+  | "muy_fuerte";
+
+export interface IResultadoRoyaAmarillaElJarroudi {
+  calculable: boolean;
+  horasEsperadas: number;
+  horasValidas: number;
+  cobertura: number;
+  horasFavorables: number;
+  rachasFavorables: number;
+  rachaMaximaHoras: number;
+  frecuenciaAmbientalPct: number;
+  nivel: TNivelOportunidadRoyaAmarilla;
+}
+
+/**
+ * Oportunidad ambiental de infeccion de roya amarilla/estriada.
+ *
+ * Criterio horario publicado por El Jarroudi et al. (2017),
+ * DOI 10.1094/PDIS-12-16-1766-RE: 4 < T < 16 C, HR > 92 % y lluvia
+ * <= 0,1 mm durante, como minimo, cuatro horas consecutivas. Chaman aplica
+ * el criterio a una ventana movil de diez dias (adaptacion declarada) y no lo
+ * interpreta como presencia, incidencia ni severidad de enfermedad.
+ */
+export function evaluarRoyaAmarillaElJarroudi2017(
+  horas: IHoraRoyaAmarilla[],
+): IResultadoRoyaAmarillaElJarroudi {
+  const unicas = new Map<number, IHoraRoyaAmarilla>();
+  for (const hora of horas || []) {
+    const instante = new Date(hora?.fecha).getTime();
+    if (Number.isFinite(instante)) unicas.set(instante, hora);
+  }
+  const todasOrdenadas = [...unicas.entries()].sort(([a], [b]) => a - b);
+  const ultimoInstante = todasOrdenadas[todasOrdenadas.length - 1]?.[0];
+  const primerInstante = Number.isFinite(ultimoInstante)
+    ? Number(ultimoInstante) -
+      (ROYA_AMARILLA_VENTANA_HORAS - 1) * 60 * 60 * 1000
+    : Number.POSITIVE_INFINITY;
+  const ordenadas = todasOrdenadas.filter(
+    ([instante]) => instante >= primerInstante && instante <= ultimoInstante,
+  );
+
+  let horasValidas = 0;
+  let horasFavorables = 0;
+  let rachasFavorables = 0;
+  let rachaActual = 0;
+  let rachaMaximaHoras = 0;
+  let instanteAnterior: number | undefined;
+
+  const cerrarRacha = () => {
+    if (rachaActual >= ROYA_AMARILLA_RACHA_MINIMA_HORAS) {
+      horasFavorables += rachaActual;
+      rachasFavorables += 1;
+      rachaMaximaHoras = Math.max(rachaMaximaHoras, rachaActual);
+    }
+    rachaActual = 0;
+  };
+
+  for (const [instante, hora] of ordenadas) {
+    const temperatura = Number(hora.temperatura);
+    const humedad = Number(hora.humedadRelativa);
+    const lluvia = Number(hora.lluviaMm);
+    const valida =
+      Number.isFinite(temperatura) &&
+      Number.isFinite(humedad) &&
+      Number.isFinite(lluvia) &&
+      temperatura >= -60 &&
+      temperatura <= 60 &&
+      humedad >= 0 &&
+      humedad <= 100 &&
+      lluvia >= 0;
+    const consecutiva =
+      instanteAnterior !== undefined &&
+      Math.abs(instante - instanteAnterior - 60 * 60 * 1000) <= 60 * 1000;
+    if (!consecutiva && instanteAnterior !== undefined) cerrarRacha();
+
+    if (!valida) {
+      cerrarRacha();
+      instanteAnterior = instante;
+      continue;
+    }
+    horasValidas += 1;
+    const favorable =
+      temperatura > 4 && temperatura < 16 && humedad > 92 && lluvia <= 0.1;
+    if (favorable) rachaActual += 1;
+    else cerrarRacha();
+    instanteAnterior = instante;
+  }
+  cerrarRacha();
+
+  const cobertura = Math.min(1, horasValidas / ROYA_AMARILLA_VENTANA_HORAS);
+  const calculable = cobertura >= ROYA_AMARILLA_COBERTURA_HORARIA_MINIMA;
+  const frecuenciaAmbientalPct =
+    (horasFavorables / ROYA_AMARILLA_VENTANA_HORAS) * 100;
+  const nivel: TNivelOportunidadRoyaAmarilla = !calculable
+    ? "sin_datos"
+    : frecuenciaAmbientalPct >= ROYA_AMARILLA_UMBRAL_MUY_FUERTE_PCT
+      ? "muy_fuerte"
+      : frecuenciaAmbientalPct >= ROYA_AMARILLA_UMBRAL_FUERTE_PCT
+        ? "fuerte"
+        : frecuenciaAmbientalPct >= ROYA_AMARILLA_UMBRAL_TEMPRANO_PCT
+          ? "senal_temprana"
+          : "sin_senal";
+
+  return {
+    calculable,
+    horasEsperadas: ROYA_AMARILLA_VENTANA_HORAS,
+    horasValidas,
+    cobertura: +cobertura.toFixed(4),
+    horasFavorables,
+    rachasFavorables,
+    rachaMaximaHoras,
+    frecuenciaAmbientalPct: +frecuenciaAmbientalPct.toFixed(2),
+    nivel,
+  };
 }
 
 export type TNivelScreeningArveja = "bajo" | "medio" | "alto";
@@ -143,7 +518,9 @@ export function evaluarMildiuArveja(input: {
       "Se alcanza el minimo experimental de 4 h de mojado",
     ]);
   }
-  return screeningArveja("bajo", ["No se alcanza la ventana minima de infeccion"]);
+  return screeningArveja("bajo", [
+    "No se alcanza la ventana minima de infeccion",
+  ]);
 }
 
 export function evaluarOidioArveja(input: {
@@ -157,7 +534,9 @@ export function evaluarOidioArveja(input: {
     return screeningArveja("bajo", ["Variables climaticas incompletas"]);
   }
   if (!input.etapaReproductiva) {
-    return screeningArveja("bajo", ["Fuera de la ventana desde floracion a vainas"]);
+    return screeningArveja("bajo", [
+      "Fuera de la ventana desde floracion a vainas",
+    ]);
   }
   if (temperatura >= 18 && temperatura <= 28 && lluviaMm < 1) {
     return screeningArveja("alto", [
@@ -169,7 +548,9 @@ export function evaluarOidioArveja(input: {
       "Etapa reproductiva con ambiente compatible para monitoreo",
     ]);
   }
-  return screeningArveja("bajo", ["Prioridad de monitoreo reducida en esta lectura"]);
+  return screeningArveja("bajo", [
+    "Prioridad de monitoreo reducida en esta lectura",
+  ]);
 }
 
 export const limitar = (value: number, min = 0, max = 100): number =>
@@ -239,9 +620,12 @@ export function seleccionarResistenciaMasReciente(
   return [...(resistencias || [])]
     .filter((item) => enfermedadCoincide(item, disease))
     .sort((a, b) => {
-      const byCampaign = campaniaAOrden(b.campaniaFuente) - campaniaAOrden(a.campaniaFuente);
+      const byCampaign =
+        campaniaAOrden(b.campaniaFuente) - campaniaAOrden(a.campaniaFuente);
       if (byCampaign) return byCampaign;
-      const byDate = String(b.fechaFuente || "").localeCompare(String(a.fechaFuente || ""));
+      const byDate = String(b.fechaFuente || "").localeCompare(
+        String(a.fechaFuente || ""),
+      );
       if (byDate) return byDate;
       return prioridadEstado(b.estado) - prioridadEstado(a.estado);
     })[0];
@@ -265,16 +649,71 @@ export function resolverResistencia(
   fallbackMultiplicador = 1,
 ): IResistenciaResuelta {
   const resistencia = seleccionarResistenciaMasReciente(resistencias, disease);
-  const desconocida = !resistencia || resistencia.estado === "desconocida";
-  const multiplicador = limitar(
-    Number(resistencia?.multiplicador ?? fallbackMultiplicador),
-    0.01,
-    1.4,
+  const definicion = getEnfermedadCanonica(disease);
+  const estadoTrazable = ["observada", "historica", "inferida"].includes(
+    String(resistencia?.estado || ""),
   );
+  const multiplicadorCargado =
+    resistencia?.multiplicador !== undefined &&
+    resistencia?.multiplicador !== null &&
+    String(resistencia.multiplicador).trim() !== "" &&
+    Number.isFinite(Number(resistencia.multiplicador));
+  const factoresTrigo: Record<string, number> = {
+    S: 1,
+    MS: 0.75,
+    MR: 0.5,
+    R: 0.05,
+  };
+  const perfil = String(resistencia?.perfil || "")
+    .trim()
+    .toUpperCase();
+  const factorEsperado = factoresTrigo[perfil];
+  const perfilTrigoCoherente =
+    definicion?.cultivo !== "Trigo" ||
+    (factorEsperado !== undefined &&
+      multiplicadorCargado &&
+      Math.abs(Number(resistencia?.multiplicador) - factorEsperado) < 0.0001);
+  const limitaciones = [
+    ...(!resistencia ? ["Sin resistencia varietal para la enfermedad."] : []),
+    ...(resistencia && !estadoTrazable
+      ? ["Registro varietal sin estado trazable."]
+      : []),
+    ...(resistencia && !multiplicadorCargado
+      ? ["Registro varietal sin factor numerico utilizable."]
+      : []),
+    ...(resistencia && !perfilTrigoCoherente
+      ? [
+          `Perfil/factor varietal inconsistente para trigo (${perfil || "sin perfil"}/${String(
+            resistencia.multiplicador ?? "sin factor",
+          )}).`,
+        ]
+      : []),
+  ];
+  // Los documentos legados pueden contener una etiqueta de enfermedad pero
+  // no estado/fuente ni factor utilizable. Eso es dato desconocido, no una
+  // observacion susceptible habilitada para emitir alertas.
+  const desconocida =
+    !resistencia ||
+    !estadoTrazable ||
+    !multiplicadorCargado ||
+    !perfilTrigoCoherente;
+  const multiplicadorUtilizable = desconocida
+    ? fallbackMultiplicador
+    : Number(resistencia?.multiplicador);
+  const multiplicador = limitar(Number(multiplicadorUtilizable), 0.01, 1.4);
+  const indiceCargado =
+    resistencia?.indiceResistencia !== undefined &&
+    resistencia?.indiceResistencia !== null &&
+    String(resistencia.indiceResistencia).trim() !== "" &&
+    Number.isFinite(Number(resistencia.indiceResistencia));
+  // Una resistencia desconocida nunca debe reducir el riesgo sanitario. Si el
+  // registro no es trazable, se deriva el indice desde el fallback susceptible
+  // (multiplicador 1 => indice 0), aunque un documento legado traiga un IR alto.
   const indiceResistencia = limitar(
     Number(
-      resistencia?.indiceResistencia ??
-        indiceResistenciaDesdeMultiplicador(resistencia?.multiplicador),
+      !desconocida && indiceCargado
+        ? resistencia?.indiceResistencia
+        : indiceResistenciaDesdeMultiplicador(multiplicadorUtilizable),
     ),
     0,
     1,
@@ -285,6 +724,143 @@ export function resolverResistencia(
     indiceResistencia,
     estado: resistencia?.estado || "desconocida",
     desconocida,
+    limitaciones,
+  };
+}
+
+export interface ICandidatoAlertaSanitaria {
+  idEnfermedad?: TEnfermedadId;
+  resultado: number;
+  estado?: "calculado" | "sin_datos" | "fuera_ventana";
+  modelo?: {
+    version: number;
+    validacion?: "operativo" | "operativo_provisional" | "experimental";
+  };
+  calidadDatos?: {
+    nivel?: "alta" | "media" | "baja" | "sin_datos";
+  };
+  resistenciaUsada?: {
+    estado?: TEstadoResistencia;
+    confianza?: "alta" | "media" | "baja" | "sin_datos";
+    campaniaFuente?: string;
+    fechaFuente?: string;
+  };
+  variables?: unknown;
+}
+
+export const UMBRAL_ALERTA_SANITARIA = 15;
+export const VIGENCIA_ALERTA_SANITARIA_HORAS = 72;
+
+export function esFechaPrediccionSanitariaReciente(
+  fecha?: string,
+  ahoraMs = Date.now(),
+): boolean {
+  if (!fecha) return false;
+  const fechaMs = new Date(fecha).getTime();
+  if (!Number.isFinite(fechaMs)) return false;
+  const edadHoras = (ahoraMs - fechaMs) / (1000 * 60 * 60);
+  // Se tolera hasta un día futuro por diferencias de corte civil/UTC, pero un
+  // backfill histórico nunca debe disparar una notificación actual.
+  return edadHoras >= -24 && edadHoras <= VIGENCIA_ALERTA_SANITARIA_HORAS;
+}
+
+/**
+ * Una salida meteorológica puede alimentar una alerta sólo si pertenece a un
+ * modelo operativo vigente y cuenta con datos varietales utilizables. Los
+ * modelos experimentales siguen visibles para evaluación, pero no notifican.
+ */
+export function esPrediccionSanitariaAlertable(
+  prediccion: ICandidatoAlertaSanitaria,
+): boolean {
+  const variables = (prediccion.variables || {}) as {
+    PMoj?: number;
+    resultadoCrudo?: number;
+  };
+  if (prediccion.estado !== "calculado") return false;
+  if (!Number.isFinite(prediccion.resultado)) return false;
+  if (prediccion.resultado < UMBRAL_ALERTA_SANITARIA) return false;
+  if (
+    prediccion.calidadDatos?.nivel === "baja" ||
+    prediccion.calidadDatos?.nivel === "sin_datos"
+  ) {
+    return false;
+  }
+  if (prediccion.resistenciaUsada?.estado === "desconocida") return false;
+  const definicion = getEnfermedadPorId(prediccion.idEnfermedad);
+  if (!definicion || definicion.motor !== "operativo") return false;
+  if (
+    definicion.cultivo === "Trigo" &&
+    Number(prediccion.modelo?.version || 0) < TRIGO_MOTOR_SANITARIO_VERSION
+  ) {
+    return false;
+  }
+  if (definicion.cultivo === "Trigo") {
+    // Las ecuaciones contractuales se muestran y auditan, pero una salida
+    // provisional no se transforma en alarma hasta completar validacion de
+    // fuente, ventana, region y desempeño contra observaciones de campo.
+    if (prediccion.modelo?.validacion !== "operativo") return false;
+    const confianza = prediccion.resistenciaUsada?.confianza;
+    if (confianza !== "alta" && confianza !== "media") return false;
+    const ordenCampania = campaniaAOrden(
+      prediccion.resistenciaUsada?.campaniaFuente,
+    );
+    const anioCampania = ordenCampania % 10000;
+    const anioActual = new Date().getUTCFullYear();
+    if (!anioCampania || anioActual - anioCampania > 2) return false;
+    const resultadoCrudo = Number(variables.resultadoCrudo);
+    if (
+      !Number.isFinite(resultadoCrudo) ||
+      resultadoCrudo < 0 ||
+      resultadoCrudo > 100
+    ) {
+      return false;
+    }
+  }
+  // El intercepto del modelo de Fusarium supera por si solo el umbral general
+  // de alerta. Sin al menos un periodo de mojado compatible no hay evidencia
+  // ambiental suficiente para transformar esa salida basal en una alarma.
+  if (
+    prediccion.idEnfermedad === "trigo.fusarium_espiga" &&
+    Number(variables.PMoj || 0) < 1
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Acumulación térmica diaria con temperatura base 0 °C.
+ * Los valores negativos no pueden restar desarrollo térmico.
+ */
+export function gradosDiaBase0(temperaturaMedia: number): number {
+  return Number.isFinite(temperaturaMedia) ? Math.max(temperaturaMedia, 0) : 0;
+}
+
+/**
+ * Abre la ventana foliar al observar a campo el fin de macollaje/espiguilla
+ * terminal, o de forma conservadora a los 850 GDD base 0 con al menos 90 % de
+ * cobertura térmica desde siembra. El rango 800–850 GDD queda trazado sin
+ * adelantar una alarma cuando sólo hay fenología estimada.
+ */
+export function resolverVentanaSanitariaFoliarTrigo(
+  contexto: IContextoVentanaSanitariaTrigo,
+): IResultadoVentanaSanitariaTrigo {
+  const gdd = Math.max(Number(contexto.gddBase0DesdeSiembra) || 0, 0);
+  const cobertura = limitar(Number(contexto.coberturaGdd) || 0, 0, 1);
+  const coberturaSuficiente = cobertura >= TRIGO_GDD_COBERTURA_MINIMA;
+  const inicioPorFenologiaObservada =
+    Boolean(contexto.fenologiaObservada) && Number(contexto.etapa) >= 2;
+  const activa =
+    inicioPorFenologiaObservada ||
+    (coberturaSuficiente && gdd >= TRIGO_GDD_BASE_0_INICIO_CONSERVADOR);
+
+  return {
+    activa,
+    inicioPorFenologiaObservada,
+    umbralGddAplicado: inicioPorFenologiaObservada
+      ? TRIGO_GDD_BASE_0_INICIO_MIN
+      : TRIGO_GDD_BASE_0_INICIO_CONSERVADOR,
+    coberturaSuficiente,
   };
 }
 
@@ -293,7 +869,15 @@ export function calcularManchaAmarilla(
   DPr: number,
   multiplicador: number,
 ): number {
-  return limitar((-2.25 + 1.62 * DPrHRT + 1.3 * DPr) * multiplicador);
+  return limitar(calcularManchaAmarillaCrudo(DPrHRT, DPr, multiplicador));
+}
+
+export function calcularManchaAmarillaCrudo(
+  DPrHRT: number,
+  DPr: number,
+  multiplicador: number,
+): number {
+  return (-2.25 + 1.62 * DPrHRT + 1.3 * DPr) * multiplicador;
 }
 
 export function calcularManchaHoja(
@@ -301,7 +885,15 @@ export function calcularManchaHoja(
   DPr: number,
   multiplicador: number,
 ): number {
-  return limitar((-6.41 + 0.59 * DHR + 2.79 * DPr) * multiplicador);
+  return limitar(calcularManchaHojaCrudo(DHR, DPr, multiplicador));
+}
+
+export function calcularManchaHojaCrudo(
+  DHR: number,
+  DPr: number,
+  multiplicador: number,
+): number {
+  return (-6.41 + 0.59 * DHR + 2.79 * DPr) * multiplicador;
 }
 
 export function calcularRoyaHoja(
@@ -312,6 +904,35 @@ export function calcularRoyaHoja(
   return limitar(4.42 + 0.61 * GD + 0.57 * DHR - 30.01 * indiceResistencia);
 }
 
+/**
+ * Contrato funcional trigo 2026. El valor varietal S=1, MS=.75, MR=.5,
+ * R=.05 se comporta como factor de susceptibilidad, aunque la fuente recibida
+ * lo rotule "índice de resistencia". Se mantiene el nombre correcto en código
+ * para evitar una nueva inversión accidental.
+ */
+export function calcularRoyaHojaTrigo2026(
+  GD: number,
+  DHR: number,
+  factorSusceptibilidad: number,
+): number {
+  return limitar(
+    calcularRoyaHojaTrigo2026Crudo(GD, DHR, factorSusceptibilidad),
+  );
+}
+
+export function calcularRoyaHojaTrigo2026Crudo(
+  GD: number,
+  DHR: number,
+  factorSusceptibilidad: number,
+): number {
+  const factor = limitar(factorSusceptibilidad, 0, 1);
+  return 4.42 + 0.61 * GD + 0.57 * DHR - 30.01 * (1 - factor);
+}
+
+/**
+ * @deprecated Formula historica conservada solo para compatibilidad y auditoria.
+ * No usar en flujos productivos de trigo 2026.
+ */
 export function calcularRoyaAnaranjada(
   GD: number,
   DHR: number,
@@ -323,6 +944,32 @@ export function calcularRoyaAnaranjada(
   );
 }
 
+/**
+ * Ecuación operativa recibida para el registro legado "Roya Anaranjada".
+ * El catálogo la mantiene experimental porque P. striiformis corresponde a
+ * roya amarilla/estriada y aún falta una fuente de validación trazable.
+ */
+export function calcularRoyaAnaranjadaTrigo2026(
+  GD: number,
+  DHR: number,
+  DL: number,
+  factorSusceptibilidad: number,
+): number {
+  return limitar(
+    calcularRoyaAnaranjadaTrigo2026Crudo(GD, DHR, DL, factorSusceptibilidad),
+  );
+}
+
+export function calcularRoyaAnaranjadaTrigo2026Crudo(
+  GD: number,
+  DHR: number,
+  DL: number,
+  factorSusceptibilidad: number,
+): number {
+  const factor = limitar(factorSusceptibilidad, 0, 1);
+  return 5.15 + 0.72 * GD + 0.48 * DHR + 0.35 * DL - 35.2 * (1 - factor);
+}
+
 export function calcularFusariumEspiga(
   PMoj: number,
   GDN: number,
@@ -330,8 +977,16 @@ export function calcularFusariumEspiga(
   activo = true,
 ): number {
   return activo
-    ? limitar((20.37 + 8.63 * PMoj - 0.49 * GDN) * multiplicador)
+    ? limitar(calcularFusariumEspigaCrudo(PMoj, GDN, multiplicador))
     : 0;
+}
+
+export function calcularFusariumEspigaCrudo(
+  PMoj: number,
+  GDN: number,
+  multiplicador: number,
+): number {
+  return (20.37 + 8.63 * PMoj - 0.49 * GDN) * multiplicador;
 }
 
 export function calcularFinCicloSoja(
@@ -342,7 +997,8 @@ export function calcularFinCicloSoja(
 }
 
 export function factorTemperaturaManchaRed(temperatura: number): number {
-  if (!Number.isFinite(temperatura) || temperatura < 5 || temperatura > 30) return 0;
+  if (!Number.isFinite(temperatura) || temperatura < 5 || temperatura > 30)
+    return 0;
   return ((temperatura - 5) * (30 - temperatura)) / 150;
 }
 
@@ -364,15 +1020,16 @@ export function tasaDiariaManchaRedHoraria(
   );
   if (!validas.length) return 0;
   return (
-    validas.reduce(
+    (validas.reduce(
       (sum, hora) =>
         sum +
         factorTemperaturaManchaRed(hora.temperatura) *
           factorHumedadManchaRed(hora.humedadRelativa),
       0,
     ) /
-    validas.length
-  ) * multiplicador;
+      validas.length) *
+    multiplicador
+  );
 }
 
 export function acumularSeveridadManchaRed(
@@ -386,7 +1043,8 @@ export function acumularSeveridadManchaRed(
 }
 
 export function factorTemperaturaEscaldadura(temperatura: number): number {
-  if (!Number.isFinite(temperatura) || temperatura < 4 || temperatura > 25) return 0;
+  if (!Number.isFinite(temperatura) || temperatura < 4 || temperatura > 25)
+    return 0;
   if (temperatura >= 10 && temperatura <= 18) return 1;
   if (temperatura < 10) return limitar((temperatura - 4) / 6, 0, 1);
   return limitar((25 - temperatura) / 7, 0, 1);
@@ -422,11 +1080,14 @@ export function calcularEscaldadura(
 
 export function gradosDiaRoya(hr: number, temperaturaMedia: number): number {
   if (!Number.isFinite(hr) || !Number.isFinite(temperaturaMedia)) return 0;
-  if (hr < 49 || temperaturaMedia < 12) return 0;
+  if (hr <= 49 || temperaturaMedia < 12) return 0;
   return Math.max(Math.min(temperaturaMedia, 18) - 12, 0);
 }
 
-export function gradosDiaRoyaMaiz(hr: number, temperaturaMedia: number): number {
+export function gradosDiaRoyaMaiz(
+  hr: number,
+  temperaturaMedia: number,
+): number {
   if (!Number.isFinite(hr) || !Number.isFinite(temperaturaMedia)) return 0;
   if (hr < 95 || temperaturaMedia < 8) return 0;
   return Math.max(Math.min(temperaturaMedia, 17) - 8, 0);

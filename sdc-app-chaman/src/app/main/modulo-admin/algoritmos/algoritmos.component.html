@@ -431,9 +431,11 @@
                   <article>
                     <div>
                       <span>{{ enfermedad['periodo'] }}</span>
-                      <strong>{{ enfermedad['nombre'] }}</strong>
+                      <strong>{{ enfermedad['nombreVisible'] || enfermedad['nombre'] }}</strong>
                     </div>
-                    @if (resultadoMotor.modo === 'screening_ambiental') {
+                    @if (enfermedad['salidaOperativa'] === false) {
+                      <em>{{ enfermedad['nivel'] }}</em>
+                    } @else if (resultadoMotor.modo === 'screening_ambiental') {
                       <em>{{ enfermedad['nivel'] }} · indice ordinal {{ enfermedad['riesgo'] }}</em>
                     } @else {
                       <em>{{ enfermedad['riesgo'] }}% - {{ enfermedad['nivel'] }}</em>

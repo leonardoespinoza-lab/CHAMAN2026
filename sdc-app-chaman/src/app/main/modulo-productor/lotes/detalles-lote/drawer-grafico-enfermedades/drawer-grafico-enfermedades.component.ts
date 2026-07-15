@@ -2,13 +2,14 @@ import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { SeriesOptionsType, XAxisPlotBandsOptions, XAxisPlotLinesOptions } from 'highcharts';
-import { IListado, IPrediccion, IQueryParam } from 'modelos/src';
+import { IListado, IPrediccion, IQueryParam, TRIGO_MOTOR_SANITARIO_VERSION } from 'modelos/src';
 import { Subscription } from 'rxjs';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../../auxiliares/servicios/listados';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetalleSiembra } from '../detalles-lote.component';
+import { construirSeriesSanitariasTrigo } from './serie-sanitaria-trigo';
 
 export const ETAPAS_TRIGO: string[] = [
   'Siembra',
@@ -114,18 +115,20 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
         spacing: [22, 22, 18, 18],
       },
       title: {
-        text: scale?.title || this.translate.instant('Evolucion de riesgo sanitario'),
+        text: scale?.title || this.translate.instant('Evolucion de salidas sanitarias'),
         align: 'left',
       },
       subtitle: {
-        text: this.translate.instant('Probabilidad calculada por enfermedad, con bandas operativas de riesgo.'),
+        text: this.translate.instant(
+          'Valor calculado por cada modelo; no equivale por si solo a presencia o probabilidad de enfermedad.'
+        ),
         align: 'left',
       },
       yAxis: {
         max,
         min: 0,
         title: {
-          text: this.translate.instant('Indice de riesgo sanitario (%)'),
+          text: this.translate.instant('Valor calculado (%)'),
           style: {
             color: 'var(--p-text-color)',
             fontSize: '13px',
@@ -208,46 +211,30 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const enfermedades = this.predicciones.map((p) => {
-      return p.enfermedades!.map((e) => e.enfermedad);
-    });
-    const enfermedadesUnicas = [...new Set(enfermedades.flat())];
-
-    const series: any[] = [];
-
-    for (const enfermedad of enfermedadesUnicas) {
-      series.push({
-        type: 'line',
-        name: enfermedad,
-        data: [],
-        lineWidth: 4,
-        tooltip: {
-          xDateFormat: '%d-%m-%Y',
-          pointFormat: '<strong>{point.y}%</strong>',
-          headerFormat: '<span style="font-size: 14px">{point.key}</span><br/>',
-        },
-        dataLabels: {
-          enabled: false, // Deshabilitamos para mejor legibilidad en el gráfico expandido
-        },
-      });
-    }
-
-    for (const prediccion of this.predicciones) {
-      if (!prediccion.fecha || !prediccion.enfermedades) {
-        continue;
-      }
-      const fecha = new Date(prediccion.fecha).getTime();
-
-      for (const enfermedad of prediccion.enfermedades) {
-        const valor = enfermedad.resultado;
-
-        for (const serie of series) {
-          if (serie.name === enfermedad.enfermedad) {
-            serie.data.push([fecha, valor]);
-          }
-        }
-      }
-    }
+    const series: any[] = construirSeriesSanitariasTrigo(this.predicciones).map((serie) => ({
+      type: 'line',
+      id: `${serie.idEnfermedad}-${serie.versionEtiqueta}`,
+      name: `${serie.nombre}${
+        serie.idEnfermedad === 'trigo.roya_anaranjada' ? ' · oportunidad ambiental' : ''
+      } · ${serie.versionEtiqueta}`,
+      data: serie.data,
+      connectNulls: false,
+      lineWidth: serie.version === TRIGO_MOTOR_SANITARIO_VERSION ? 4 : 2,
+      dashStyle: serie.version === TRIGO_MOTOR_SANITARIO_VERSION ? 'Solid' : 'ShortDash',
+      opacity: serie.version === TRIGO_MOTOR_SANITARIO_VERSION ? 1 : 0.72,
+      custom: {
+        idEnfermedad: serie.idEnfermedad,
+        version: serie.versionEtiqueta,
+      },
+      tooltip: {
+        xDateFormat: '%d-%m-%Y',
+        pointFormat: '<span>{series.name}</span><br/><strong>{point.y}%</strong>',
+        headerFormat: '<span style="font-size: 14px">{point.key}</span><br/>',
+      },
+      dataLabels: {
+        enabled: false, // Deshabilitamos para mejor legibilidad en el gráfico expandido
+      },
+    }));
 
     const fechaActual = new Date().toISOString();
     const fechaEtapa2 = this.helper.getFechaInicioEtapaTrigo2(this.siembra!, 2, this.siembra?.crono);
@@ -354,6 +341,12 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
     }
 
     this.chartOptions = this.chartBasicOptions(plotLines, plotBands, series);
+    this.chartOptions.subtitle = {
+      text: this.translate.instant(
+        'Cada version del motor se muestra por separado. Los cortes indican dias fuera de ventana, sin datos o con calidad insuficiente.'
+      ),
+      align: 'left',
+    };
   }
 
   private crearGraficoPrediccionesSoja(): void {

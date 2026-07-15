@@ -1,10 +1,18 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
-import { IEstadoFenologiaArveja, IPrediccionEnfermedad, ISiembra, TEnfermedad } from 'modelos/src';
+import {
+  IEstadoFenologiaArveja,
+  IPrediccionEnfermedad,
+  ISiembra,
+  resolverResistencia,
+  TEnfermedad,
+  TRIGO_MOTOR_SANITARIO_VERSION,
+} from 'modelos/src';
 import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { DrawerGraficoEnfermedadesComponent } from '../drawer-grafico-enfermedades/drawer-grafico-enfermedades.component';
+import { buscarPrediccionEnfermedadCanonica } from './enfermedad-card-compat';
 
 interface ProductoPrescripcion {
   grupo: string;
@@ -33,6 +41,7 @@ interface PrescripcionOption {
 
 interface DiseaseInsight {
   enfermedad: TEnfermedad;
+  nombreVisible: string;
   prediccion?: IPrediccionEnfermedad;
   resultado: number;
   resultadoEtiqueta: string;
@@ -50,6 +59,7 @@ interface DiseaseInsight {
   calculo: string;
   prescripcion: PrescripcionEnfermedad;
   mostrarPrescripcion: boolean;
+  salidaOperativa: boolean;
 }
 
 @Component({
@@ -71,7 +81,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
 
   constructor(
     public helper: HelperService,
-    private siembraService: SiembraService,
+    private siembraService: SiembraService
   ) {}
 
   async ngOnInit(): Promise<void> {}
@@ -146,6 +156,12 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   public alternarConfirmacion(enfermedad: TEnfermedad): void {
+    if (
+      this.esRegistroRoyaAmarillaExperimental(enfermedad) ||
+      !this.esPrediccionOperativa(this.prediccionPorEnfermedad(enfermedad))
+    ) {
+      return;
+    }
     if (this.enfermedadesConfirmadas.has(enfermedad)) {
       this.enfermedadesConfirmadas.delete(enfermedad);
       this.prescripcionSeleccionadaGrupo = undefined;
@@ -156,6 +172,12 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   public enfermedadConfirmada(enfermedad: TEnfermedad): boolean {
+    if (
+      this.esRegistroRoyaAmarillaExperimental(enfermedad) ||
+      !this.esPrediccionOperativa(this.prediccionPorEnfermedad(enfermedad))
+    ) {
+      return false;
+    }
     return this.enfermedadesConfirmadas.has(enfermedad);
   }
 
@@ -167,28 +189,34 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   public get enfermedadInsights(): DiseaseInsight[] {
     return this.enfermedadesEsperadas().map((enfermedad) => {
       const prediccion = this.prediccionPorEnfermedad(enfermedad);
-      const resultado = prediccion?.resultado ?? 0;
-      const enVentanaFenologica = this.estaEnVentanaFenologica(enfermedad);
-      const estadoCalculo = this.estadoCalculo(prediccion, enfermedad);
+      const prediccionVigente = this.esPrediccionVigente(prediccion);
+      const esExperimental = this.esRegistroRoyaAmarillaExperimental(enfermedad);
+      const resultado = prediccionVigente ? (prediccion?.resultado ?? 0) : 0;
+      const enVentanaFenologica =
+        prediccion?.estado === 'fuera_ventana' ? false : this.estaEnVentanaFenologica(enfermedad);
+      const estadoCalculo = this.estadoCalculo(prediccion, enfermedad, prediccionVigente);
+      const salidaOperativa = this.esPrediccionOperativa(prediccion) && !esExperimental;
       return {
         enfermedad,
+        nombreVisible: this.nombreVisibleEnfermedad(enfermedad),
         prediccion,
         resultado,
-        resultadoEtiqueta: this.resultadoEtiqueta(prediccion, resultado),
+        resultadoEtiqueta: this.resultadoEtiqueta(prediccion, resultado, enfermedad, prediccionVigente),
         enVentanaFenologica,
-        fill: this.llenadoRiesgo(resultado, !!prediccion, enfermedad),
-        severity: this.severidad(resultado, enfermedad),
+        fill: salidaOperativa ? this.llenadoRiesgo(resultado, !!prediccion, enfermedad) : 0,
+        severity: salidaOperativa ? this.severidad(resultado, enfermedad) : 'low',
         periodo: this.periodoSusceptible(enfermedad),
         sensibilidad: this.sensibilidadVarietal(enfermedad),
         variables: this.resumenVariables(prediccion, enfermedad),
         variablesDetalladas: this.variablesDetalladas(prediccion),
         estadoCalculo,
-        estadoCorto: this.estadoCorto(prediccion, enfermedad, resultado),
-        lecturaCorta: this.lecturaCorta(prediccion, enfermedad, estadoCalculo),
+        estadoCorto: this.estadoCorto(prediccion, enfermedad, resultado, prediccionVigente),
+        lecturaCorta: this.lecturaCorta(prediccion, enfermedad, estadoCalculo, prediccionVigente),
         descripcion: this.descripcionEnfermedad(enfermedad),
         calculo: this.calculoEnfermedad(enfermedad),
         prescripcion: this.prescripcionPorEnfermedad(enfermedad),
-        mostrarPrescripcion: this.tieneMotorSanitario && enVentanaFenologica,
+        mostrarPrescripcion: this.tieneMotorSanitario && enVentanaFenologica && salidaOperativa,
+        salidaOperativa,
       };
     });
   }
@@ -204,14 +232,16 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     }
     if (!this.tienePredicciones) {
       const tieneVentanaActiva = this.enfermedadesEsperadas().some((enfermedad) =>
-        this.estaEnVentanaFenologica(enfermedad),
+        this.estaEnVentanaFenologica(enfermedad)
       );
       if (!tieneVentanaActiva) {
         return `${variedad}: fuera de ventana sanitaria actual para ${cultivo}.`;
       }
       return `${variedad}: monitoreo activo para ${cultivo}.`;
     }
-    const mayor = [...this.enfermedadInsights].sort((a, b) => b.resultado - a.resultado)[0];
+    const mayor = this.enfermedadInsights
+      .filter((item) => item.salidaOperativa)
+      .sort((a, b) => b.resultado - a.resultado)[0];
     return mayor ? `Mayor atencion: ${mayor.enfermedad}` : `Monitoreo activo para ${cultivo}.`;
   }
 
@@ -239,7 +269,12 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return ['Mancha Amarilla', 'Roya de la Hoja', 'Roya Anaranjada', 'Mancha de la Hoja', 'Fusarium de la Espiga'];
     }
     if (cultivo === 'Cebada') {
-      return ['Mancha en Red', 'Escaldadura de la Cebada', 'Roya de la Hoja de Cebada', 'Fusariosis de la Espiga de Cebada'];
+      return [
+        'Mancha en Red',
+        'Escaldadura de la Cebada',
+        'Roya de la Hoja de Cebada',
+        'Fusariosis de la Espiga de Cebada',
+      ];
     }
     if (cultivo === 'Soja') {
       return ['Fin de Ciclo'];
@@ -269,7 +304,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   private prediccionPorEnfermedad(enfermedad: TEnfermedad): IPrediccionEnfermedad | undefined {
-    return this.siembra?.ultimaPrediccion?.enfermedades?.find((item) => item.enfermedad === enfermedad);
+    return buscarPrediccionEnfermedadCanonica(this.siembra?.ultimaPrediccion?.enfermedades, enfermedad);
   }
 
   private umbralesRiesgo(enfermedad?: TEnfermedad): { medio: number; alto: number; escalaDirecta: boolean } {
@@ -307,38 +342,44 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       const variedad = this.siembra?.semilla?.variedad || 'la variedad';
       return `Sin dato varietal publicado; no se asume susceptibilidad para ${variedad}.`;
     }
-    const resistencia = this.siembra?.semilla?.resistencia?.find((item) => item.enfermedad === enfermedad);
+    const prediccion = this.prediccionPorEnfermedad(enfermedad);
+    const resuelta = resolverResistencia(this.siembra?.semilla?.resistencia, prediccion?.idEnfermedad || enfermedad);
+    const resistencia =
+      prediccion?.resistenciaUsada?.multiplicador != null ? prediccion.resistenciaUsada : resuelta.resistencia;
     const multiplicador = resistencia?.multiplicador;
     if (multiplicador == null) {
-      if (this.siembra?.semilla?.cultivo === 'Cebada') {
-        return 'Sensibilidad base x1';
-      }
-      return 'Sin dato varietal';
+      return 'Sin dato varietal trazable; no habilita alerta automatica';
     }
-    if (multiplicador >= 1.15) {
-      return `Susceptible x${multiplicador}`;
-    }
-    if (multiplicador <= 0.85) {
-      return `Tolerante x${multiplicador}`;
-    }
-    return `Media x${multiplicador}`;
+    const perfil = resistencia?.perfil || 'sin perfil';
+    const campania = resistencia?.campaniaFuente ? ` · campaña ${resistencia.campaniaFuente}` : '';
+    const confianza = resistencia?.confianza ? ` · confianza ${resistencia.confianza}` : '';
+    const lectura = `Perfil ${perfil} · factor ${Number(multiplicador).toLocaleString('es-AR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}${campania}${confianza}`;
+    return this.esRegistroRoyaAmarillaExperimental(enfermedad)
+      ? `${lectura}. Modifica solo la prioridad interna de recorrida; no altera ni simula un porcentaje de enfermedad.`
+      : lectura;
   }
 
   private periodoSusceptible(enfermedad: TEnfermedad): string {
     const periodos: Partial<Record<TEnfermedad, string>> = {
-      'Mancha Amarilla': 'Puede presentarse desde emergencia hasta hoja bandera.',
-      'Roya de la Hoja': 'Puede presentarse desde hoja bandera hasta llenado de granos.',
-      'Mancha de la Hoja': 'Puede presentarse en vegetativo y reproductivo temprano.',
-      'Fusarium de la Espiga': 'Ventana critica en espigazon y antesis.',
+      'Mancha Amarilla': 'Conteo desde 800-850 GDD base 0 C desde siembra (fin de macollaje).',
+      'Roya de la Hoja': 'Conteo desde 800-850 GDD base 0 C desde siembra; seguir hojas funcionales.',
+      'Mancha de la Hoja': 'Conteo desde 800-850 GDD base 0 C desde siembra (fin de macollaje).',
+      'Fusarium de la Espiga': 'Desde Antesis/primeras espigas con anteras hasta acumular 530 GDD base 0 C.',
       'Roya del Tallo': 'Mayor riesgo en trigo tardio con cultivo activo.',
-      'Roya Anaranjada': 'Mayor riesgo durante crecimiento activo.',
+      'Roya Anaranjada':
+        'Roya amarilla/estriada (P. striiformis): ventana principal desde fin de macollaje/encañazon hasta grano pastoso; modelo horario experimental.',
       'Mancha en Red': 'Mayor riesgo desde emergencia a espigazon con humedad, mojado y temperatura templada.',
       'Escaldadura de la Cebada': 'Riesgo temprano a hoja bandera con periodos frescos, lluvia y humedad persistente.',
       'Roya de la Hoja de Cebada': 'Desde primer nudo a llenado, especialmente con HR alta y temperaturas templadas.',
-      'Fusariosis de la Espiga de Cebada': 'Ventana critica en espigazon, antesis y llenado temprano con lluvia y mojado.',
+      'Fusariosis de la Espiga de Cebada':
+        'Ventana critica en espigazon, antesis y llenado temprano con lluvia y mojado.',
       'Fin de Ciclo': 'Mayor riesgo en floracion y llenado.',
       'Roya del Maiz': 'Puede presentarse desde vegetativo avanzado hasta llenado.',
-      'Complejo Ascochyta de la Arveja': 'Screening desde emergencia hasta formacion de vainas; integrar rastrojo, rotacion y sanidad de semilla.',
+      'Complejo Ascochyta de la Arveja':
+        'Screening desde emergencia hasta formacion de vainas; integrar rastrojo, rotacion y sanidad de semilla.',
       'Mildiu de la Arveja': 'Mayor atencion desde emergencia hasta inicio de floracion con mojado y humedad muy alta.',
       'Oidio de la Arveja': 'Ventana de monitoreo desde floracion hasta formacion de vainas.',
       Oidio: 'Brotes activos, floracion y desarrollo de racimos con humedad favorable.',
@@ -368,13 +409,13 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       const etapa = this.etapaTrigoActual();
       if (etapa == null) return true;
       if (enfermedad === 'Mancha Amarilla' || enfermedad === 'Mancha de la Hoja') {
-        return etapa >= 1 && etapa <= 4;
+        return etapa >= 2 && etapa <= 4;
       }
       if (enfermedad === 'Roya de la Hoja' || enfermedad === 'Roya Anaranjada') {
         return etapa >= 2 && etapa <= 6;
       }
       if (enfermedad === 'Fusarium de la Espiga') {
-        return etapa >= 4 && etapa <= 6;
+        return etapa >= 5 && etapa <= 6;
       }
     }
     if (cultivo === 'Cebada') {
@@ -418,17 +459,25 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       'Mancha Amarilla': 'Enfermedad foliar de trigo favorecida por lluvias, humedad alta y temperaturas templadas.',
       'Roya de la Hoja': 'Roya foliar de trigo que progresa con humedad sostenida y cultivo activo.',
       'Mancha de la Hoja': 'Complejo de manchas foliares que aumenta con humedad alta y precipitaciones relevantes.',
-      'Fusarium de la Espiga': 'Enfermedad de espiga con ventana corta en espigazon/antesis y riesgo asociado a mojado floral.',
-      'Roya Anaranjada': 'Roya de avance rapido asociada a temperatura, humedad y viento durante crecimiento activo.',
-      'Mancha en Red': 'Enfermedad foliar de cebada favorecida por rastrojo infectado, humedad, lluvias y temperaturas templadas.',
-      'Escaldadura de la Cebada': 'Enfermedad foliar de cebada asociada a clima fresco-humedo, salpicado de lluvia y canopeo persistente.',
-      'Roya de la Hoja de Cebada': 'Roya foliar de cebada que progresa con cultivo activo, humedad relativa alta y temperaturas templadas.',
-      'Fusariosis de la Espiga de Cebada': 'Riesgo sanitario de espiga ligado a lluvia/mojado durante espigazon y antesis.',
+      'Fusarium de la Espiga':
+        'Estimador meteorologico acumulado parcial durante la ventana floral. No equivale a incidencia final, severidad observada ni diagnostico a campo.',
+      'Roya Anaranjada':
+        'Oportunidad ambiental horaria para roya amarilla/estriada (P. striiformis). No confirma inoculo, infeccion, sintomas, incidencia ni severidad.',
+      'Mancha en Red':
+        'Enfermedad foliar de cebada favorecida por rastrojo infectado, humedad, lluvias y temperaturas templadas.',
+      'Escaldadura de la Cebada':
+        'Enfermedad foliar de cebada asociada a clima fresco-humedo, salpicado de lluvia y canopeo persistente.',
+      'Roya de la Hoja de Cebada':
+        'Roya foliar de cebada que progresa con cultivo activo, humedad relativa alta y temperaturas templadas.',
+      'Fusariosis de la Espiga de Cebada':
+        'Riesgo sanitario de espiga ligado a lluvia/mojado durante espigazon y antesis.',
       'Fin de Ciclo': 'Complejo sanitario de soja asociado a lluvias acumuladas durante floracion y llenado.',
       'Roya del Maiz': 'Roya foliar de maiz favorecida por humedad muy alta y temperaturas templadas.',
-      'Complejo Ascochyta de la Arveja': 'Complejo sanitario favorecido por mojado, temperatura templada y lluvia; el clima no confirma presencia de inoculo.',
+      'Complejo Ascochyta de la Arveja':
+        'Complejo sanitario favorecido por mojado, temperatura templada y lluvia; el clima no confirma presencia de inoculo.',
       'Mildiu de la Arveja': 'Enfermedad favorecida por periodos frescos-humedos y mojado foliar sostenido.',
-      'Oidio de la Arveja': 'Enfermedad relevante en floracion y vainas; este piloto indica prioridad de recorrida, no infeccion.',
+      'Oidio de la Arveja':
+        'Enfermedad relevante en floracion y vainas; este piloto indica prioridad de recorrida, no infeccion.',
     };
     return textos[enfermedad] || 'Riesgo sanitario configurado por cultivo, etapa fenologica y ambiente.';
   }
@@ -436,18 +485,27 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   private calculoEnfermedad(enfermedad: TEnfermedad): string {
     const calculos: Partial<Record<TEnfermedad, string>> = {
       'Mancha Amarilla': 'Severidad = (-2,25 + 1,62 x DPrHRT + 1,30 x DPr) x multiplicador varietal.',
-      'Roya de la Hoja': 'Severidad = 4,42 + 0,61 x GD + 0,57 x DHR - 30,01 x multiplicador varietal.',
+      'Roya de la Hoja': 'Severidad = 4,42 + 0,61 x GD + 0,57 x DHR - 30,01 x (1 - factor de susceptibilidad).',
       'Mancha de la Hoja': 'Severidad = (-6,41 + 0,59 x DHR + 2,79 x DPr) x multiplicador varietal.',
-      'Fusarium de la Espiga': 'Severidad = (20,37 + 8,63 x PMoj - 0,49 x GDN) x multiplicador varietal, dentro de la ventana de GDA.',
-      'Roya Anaranjada': 'Severidad = (-63,11 + 0,96 x Tmin + 1,72 x Tmax + 3,72 x viento + 0,43 x HR) x multiplicador varietal.',
-      'Mancha en Red': 'Cebada V2: respuesta horaria de temperatura y humedad, tasa diaria por perfil varietal y avance acumulado.',
-      'Escaldadura de la Cebada': 'Cebada V2: riesgo de infeccion por temperatura fresca, mojado foliar, lluvia/salpicado y perfil varietal.',
-      'Roya de la Hoja de Cebada': 'Cebada V2: severidad por grados dia, dias con HR sostenida y perfil de resistencia.',
-      'Fusariosis de la Espiga de Cebada': 'Cebada V2: mojado de espiga, grados dia negativos/estresantes y perfil varietal durante ventana critica.',
-      'Fin de Ciclo': 'Riesgo = (8 x Lt7 / 600) x multiplicador varietal, con Lt7 basado en dias y milimetros de lluvia mayor a 7 mm.',
+      'Fusarium de la Espiga':
+        'Estimador acumulado parcial = (20,37 + 8,63 x PMoj - 0,49 x GDN) x factor de susceptibilidad. La ecuacion publicada corresponde a una ventana completa; Chaman no presenta el valor diario parcial como incidencia final ni como severidad observada.',
+      'Roya Anaranjada':
+        'El Jarroudi 2017: cuenta rachas de al menos 4 h con 4<T<16 C, HR>92% y lluvia<=0,1 mm en una ventana movil de 10 dias. 5% es señal temprana, 15% oportunidad fuerte y 20% muy fuerte. La formula contractual 5,15 + 0,72 GD + 0,48 DHR + 0,35 DL - 35,2 (1-I) queda solo en sombra, sin alertas.',
+      'Mancha en Red':
+        'Cebada V2: respuesta horaria de temperatura y humedad, tasa diaria por perfil varietal y avance acumulado.',
+      'Escaldadura de la Cebada':
+        'Cebada V2: riesgo de infeccion por temperatura fresca, mojado foliar, lluvia/salpicado y perfil varietal.',
+      'Roya de la Hoja de Cebada':
+        'Cebada V2: severidad por grados dia, dias con HR sostenida y perfil de resistencia.',
+      'Fusariosis de la Espiga de Cebada':
+        'Cebada V2: mojado de espiga, grados dia negativos/estresantes y perfil varietal durante ventana critica.',
+      'Fin de Ciclo':
+        'Riesgo = (8 x Lt7 / 600) x multiplicador varietal, con Lt7 basado en dias y milimetros de lluvia mayor a 7 mm.',
       'Roya del Maiz': 'Severidad = 4,42 + 0,61 x GD + 0,57 x DHR - 30,01 x multiplicador varietal.',
-      'Complejo Ascochyta de la Arveja': 'Screening ordinal: temperatura, horas de mojado y lluvia. No calcula probabilidad ni severidad.',
-      'Mildiu de la Arveja': 'Screening ordinal: minimo 4 h de mojado; nivel alto con 6 h, 8-20 C y HR igual o mayor a 91%.',
+      'Complejo Ascochyta de la Arveja':
+        'Screening ordinal: temperatura, horas de mojado y lluvia. No calcula probabilidad ni severidad.',
+      'Mildiu de la Arveja':
+        'Screening ordinal: minimo 4 h de mojado; nivel alto con 6 h, 8-20 C y HR igual o mayor a 91%.',
       'Oidio de la Arveja': 'Prioridad ordinal de monitoreo desde floracion, usando temperatura y ausencia de lluvia.',
     };
     return calculos[enfermedad] || 'Modelo en calibracion: cruza cultivo, etapa, clima y sensibilidad varietal.';
@@ -498,6 +556,27 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       GDN: 'GDN',
       GDAcum: 'GDA',
       GD: 'GD',
+      DL: 'dias con lluvia',
+      horasEsperadas10d: 'horas esperadas (10 d)',
+      horasValidas10d: 'horas validas (10 d)',
+      coberturaHoraria10d: 'cobertura horaria',
+      horasFavorables10d: 'horas favorables en rachas',
+      rachasFavorables10d: 'rachas favorables',
+      rachaMaximaHoras: 'racha maxima (h)',
+      frecuenciaAmbientalPct: 'frecuencia ambiental (no enfermedad)',
+      umbralSenalTempranaPct: 'umbral señal temprana',
+      umbralFuertePct: 'umbral oportunidad fuerte',
+      umbralMuyFuertePct: 'umbral oportunidad muy fuerte',
+      nivelOportunidad: 'nivel de oportunidad',
+      prioridadInterna: 'prioridad interna varietal',
+      resultadoContractualCrudo: 'contrato en sombra (crudo)',
+      resultadoContractualLimitado: 'contrato en sombra (0-100)',
+      GDDBase0Siembra: 'GDD base 0 desde siembra',
+      coberturaGdd: 'cobertura GDD',
+      umbralInicioGdd: 'umbral de inicio',
+      inicioPorFenologiaObservada: 'inicio fenologico observado',
+      factorSusceptibilidad: 'factor de susceptibilidad',
+      resultadoCrudo: 'resultado crudo',
       PtAc7: 'lluvia > 7',
       DPr7: 'dias > 7',
       Lt7: 'persistencia',
@@ -529,8 +608,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     };
   }
 
-
-  private estadoCalculo(prediccion?: IPrediccionEnfermedad, enfermedad?: TEnfermedad): string {
+  private estadoCalculo(
+    prediccion?: IPrediccionEnfermedad,
+    enfermedad?: TEnfermedad,
+    prediccionVigente = true
+  ): string {
     if (!this.tieneMotorSanitario) {
       return 'motor en calibracion';
     }
@@ -540,13 +622,36 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     if (!prediccion) {
       return 'listo para calcular';
     }
+    if (!prediccionVigente) {
+      return `lectura de motor anterior; actualizar a v${TRIGO_MOTOR_SANITARIO_VERSION}`;
+    }
+    if (prediccion.estado === 'fuera_ventana') {
+      return 'fuera de ventana sanitaria';
+    }
+    if (prediccion.estado === 'sin_datos') {
+      return 'sin datos suficientes para calcular';
+    }
+    if (enfermedad && this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
+      return 'salida experimental; no confirma diagnostico ni genera alerta';
+    }
+    if (this.esCalidadNoOperativa(prediccion)) {
+      return 'resultado de baja confianza; no genera alerta ni prescripcion';
+    }
+    if (this.esSalidaProvisionalTrigo(prediccion)) {
+      return 'estimador provisional visible; sin alerta ni prescripcion automatica';
+    }
     if (this.esScreeningExperimental) {
       return 'aptitud ambiental calculada; no confirma infeccion';
     }
     return 'riesgo calculado';
   }
 
-  private estadoCorto(prediccion: IPrediccionEnfermedad | undefined, enfermedad: TEnfermedad, resultado: number): string {
+  private estadoCorto(
+    prediccion: IPrediccionEnfermedad | undefined,
+    enfermedad: TEnfermedad,
+    resultado: number,
+    prediccionVigente = true
+  ): string {
     if (!this.tieneMotorSanitario) {
       return 'En calibracion';
     }
@@ -555,6 +660,24 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     }
     if (!prediccion) {
       return 'Sin lectura';
+    }
+    if (!prediccionVigente) {
+      return `Actualizar v${TRIGO_MOTOR_SANITARIO_VERSION}`;
+    }
+    if (prediccion.estado === 'fuera_ventana') {
+      return 'Fuera de ventana';
+    }
+    if (prediccion.estado === 'sin_datos') {
+      return 'Sin datos';
+    }
+    if (this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
+      return 'Experimental';
+    }
+    if (this.esCalidadNoOperativa(prediccion)) {
+      return 'Baja confianza';
+    }
+    if (this.esSalidaProvisionalTrigo(prediccion)) {
+      return 'Provisional';
     }
     const umbrales = this.umbralesRiesgo(enfermedad);
     if (resultado >= umbrales.alto) {
@@ -570,6 +693,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     prediccion: IPrediccionEnfermedad | undefined,
     enfermedad: TEnfermedad,
     estadoCalculo: string,
+    prediccionVigente = true
   ): string {
     if (!this.tieneMotorSanitario) {
       return 'Modelo reservado para calibracion del cultivo.';
@@ -579,6 +703,27 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     }
     if (!prediccion) {
       return 'Calculo disponible al actualizar riesgo.';
+    }
+    if (!prediccionVigente) {
+      return `Lectura no vigente: recalcular con el motor sanitario v${TRIGO_MOTOR_SANITARIO_VERSION}.`;
+    }
+    if (prediccion.estado === 'fuera_ventana') {
+      return 'El cultivo no se encuentra en la ventana habilitada para este modelo.';
+    }
+    if (prediccion.estado === 'sin_datos') {
+      return prediccion.calidadDatos?.resumen || 'Faltan variables climaticas para calcular sin inventar datos.';
+    }
+    if (this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
+      const variables = prediccion.variables as Record<string, number>;
+      const frecuencia = Number(variables['frecuenciaAmbientalPct'] || 0);
+      const cobertura = Number(variables['coberturaHoraria10d'] || 0) * 100;
+      return `Roya amarilla/estriada: ${frecuencia.toFixed(1)}% de horas favorables en rachas (cobertura ${cobertura.toFixed(0)}%). Es oportunidad ambiental experimental, no enfermedad declarada ni alerta.`;
+    }
+    if (this.esCalidadNoOperativa(prediccion)) {
+      return `${prediccion.calidadDatos?.resumen || estadoCalculo}. Requiere revisar datos y validar a campo.`;
+    }
+    if (this.esSalidaProvisionalTrigo(prediccion)) {
+      return `${estadoCalculo}. Es una salida para seguimiento y calibracion; no declara enfermedad.`;
     }
     if (this.esScreeningExperimental) {
       return `${estadoCalculo}. Resistencia varietal sin datos; validar sintomas a campo.`;
@@ -662,10 +807,15 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     if (this.estadoFenologiaArveja?.codigo) {
       return this.estadoFenologiaArveja.codigo;
     }
-    const nombre = this.siembra?.ultimaPrediccion?.nombreEtapa ||
-      [...(this.siembra?.registrosFenologicos || [])]
-        .sort((a, b) => new Date(b.fecha || b.creadoEn || '').getTime() - new Date(a.fecha || a.creadoEn || '').getTime())[0]?.etapa;
-    const normalizado = String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    const nombre =
+      this.siembra?.ultimaPrediccion?.nombreEtapa ||
+      [...(this.siembra?.registrosFenologicos || [])].sort(
+        (a, b) => new Date(b.fecha || b.creadoEn || '').getTime() - new Date(a.fecha || a.creadoEn || '').getTime()
+      )[0]?.etapa;
+    const normalizado = String(nombre || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase();
     if (normalizado.includes('MF') || normalizado.includes('MADUREZ FISIOLOGICA')) return 'MF';
     if (normalizado.includes('R3') || normalizado.includes('FORMACION DE VAINAS')) return 'R3';
     if (normalizado.includes('R1') || normalizado.includes('FLORACION')) return 'R1';
@@ -674,12 +824,67 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     return undefined;
   }
 
-  private resultadoEtiqueta(prediccion: IPrediccionEnfermedad | undefined, resultado: number): string {
+  private resultadoEtiqueta(
+    prediccion: IPrediccionEnfermedad | undefined,
+    resultado: number,
+    enfermedad?: TEnfermedad,
+    prediccionVigente = true
+  ): string {
     if (!prediccion) return '—';
+    if (!prediccionVigente) return `Actualizar v${TRIGO_MOTOR_SANITARIO_VERSION}`;
+    if (prediccion.estado === 'fuera_ventana' || prediccion.estado === 'sin_datos') return '—';
+    if (enfermedad && this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
+      const nivel = Number((prediccion.variables as Record<string, number>)['nivelOportunidad'] || 0);
+      if (nivel >= 3) return 'Oportunidad muy fuerte';
+      if (nivel >= 2) return 'Oportunidad fuerte';
+      if (nivel >= 1) return 'Señal temprana';
+      return 'Sin señal ambiental';
+    }
     if (!this.esScreeningExperimental) return `${resultado.toFixed(1)}%`;
     if (resultado >= 80) return 'Alto';
     if (resultado >= 50) return 'Medio';
     return 'Bajo';
+  }
+
+  private esPrediccionVigente(prediccion?: IPrediccionEnfermedad): boolean {
+    if (!prediccion || this.siembra?.semilla?.cultivo !== 'Trigo') {
+      return true;
+    }
+    return Number(prediccion.modelo?.version || 0) >= TRIGO_MOTOR_SANITARIO_VERSION;
+  }
+
+  private esCalidadNoOperativa(prediccion?: IPrediccionEnfermedad): boolean {
+    return ['baja', 'sin_datos'].includes(String(prediccion?.calidadDatos?.nivel || ''));
+  }
+
+  private esPrediccionOperativa(prediccion?: IPrediccionEnfermedad): boolean {
+    return (
+      !!prediccion &&
+      this.esPrediccionVigente(prediccion) &&
+      prediccion.estado === 'calculado' &&
+      prediccion.modelo?.validacion !== 'experimental' &&
+      !this.esSalidaProvisionalTrigo(prediccion) &&
+      !this.esCalidadNoOperativa(prediccion)
+    );
+  }
+
+  private esSalidaProvisionalTrigo(prediccion?: IPrediccionEnfermedad): boolean {
+    return this.siembra?.semilla?.cultivo === 'Trigo' && prediccion?.modelo?.validacion !== 'operativo';
+  }
+
+  private esRegistroRoyaAmarillaExperimental(enfermedad?: TEnfermedad | string): boolean {
+    if (this.siembra?.semilla?.cultivo !== 'Trigo') {
+      return false;
+    }
+    const normalizado = String(enfermedad || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase();
+    return normalizado === 'ROYA ANARANJADA' || normalizado.includes('ROYA AMARILLA/ESTRIADA');
+  }
+
+  private nombreVisibleEnfermedad(enfermedad: TEnfermedad): string {
+    return this.esRegistroRoyaAmarillaExperimental(enfermedad) ? 'Roya Amarilla/Estriada (experimental)' : enfermedad;
   }
 
   private diasDesdeSiembra(): number | undefined {
@@ -825,16 +1030,16 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         nota: 'Base inicial pendiente de parametrizar por zona.',
       },
       'Roya Anaranjada': {
-        objetivo: 'Proteger cultivo durante crecimiento activo.',
-        momento: 'Usar cuando el monitoreo confirme incremento de riesgo.',
+        objetivo: 'Mantener el registro legado separado de un diagnostico operativo.',
+        momento: 'Confirmar especie, sintomas y criterio fitopatologico antes de cualquier decision.',
         productos: [
           {
-            grupo: 'Triazol',
-            activos: 'Ciproconazole / Tebuconazole',
-            dosisHa: 'Segun marbete del producto cargado',
+            grupo: 'Sin prescripcion automatica',
+            activos: 'Requiere validacion taxonomica y de campo',
+            dosisHa: 'No aplica',
           },
         ],
-        nota: 'Base inicial pendiente de parametrizar por cultivo.',
+        nota: 'P. striiformis corresponde a roya amarilla/estriada; esta salida es experimental y no genera alerta.',
       },
       'Fin de Ciclo': {
         objetivo: 'Proteger area foliar en floracion y llenado.',
@@ -870,7 +1075,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         momento: 'Priorizar aplicaciones preventivas cuando el monitoreo y clima indiquen riesgo.',
         productos: [
           { grupo: 'Multisitio', activos: 'Azufre', dosisHa: 'Segun marbete, temperatura y formulado' },
-          { grupo: 'DMI/QoI/SDHI', activos: 'Triazoles, estrobilurinas o carboxamidas registradas', dosisHa: 'Rotar modos de accion y validar etiqueta' },
+          {
+            grupo: 'DMI/QoI/SDHI',
+            activos: 'Triazoles, estrobilurinas o carboxamidas registradas',
+            dosisHa: 'Rotar modos de accion y validar etiqueta',
+          },
         ],
         nota: 'Validar registro por cultivo, destino y restricciones de residuo antes de aplicar.',
       },
@@ -878,7 +1087,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         objetivo: 'Proteger floracion/racimo y reducir infecciones latentes.',
         momento: 'Floracion, cierre de racimo y pre-cosecha si hay humedad sostenida.',
         productos: [
-          { grupo: 'Botriticidas especificos', activos: 'Ciprodinil + Fludioxonil / Boscalid / Fenhexamid', dosisHa: 'Segun producto comercial y marbete' },
+          {
+            grupo: 'Botriticidas especificos',
+            activos: 'Ciprodinil + Fludioxonil / Boscalid / Fenhexamid',
+            dosisHa: 'Segun producto comercial y marbete',
+          },
         ],
         nota: 'La cobertura y rotacion anti-resistencia son criticas.',
       },
@@ -887,7 +1100,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         momento: 'Canopia activa con lluvia o pronostico predisponente.',
         productos: [
           { grupo: 'Preventivos', activos: 'Cobre / Mancozeb', dosisHa: 'Segun marbete' },
-          { grupo: 'Sistemicos especificos', activos: 'Metalaxil-M u otros oomyceticidas registrados', dosisHa: 'Usar en rotacion, no repetir sin criterio tecnico' },
+          {
+            grupo: 'Sistemicos especificos',
+            activos: 'Metalaxil-M u otros oomyceticidas registrados',
+            dosisHa: 'Usar en rotacion, no repetir sin criterio tecnico',
+          },
         ],
         nota: 'Confirmar registro para vid y estrategia anti-resistencia.',
       },
@@ -895,8 +1112,16 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         objetivo: 'Proteger follaje y tuberculos contra Phytophthora infestans.',
         momento: 'Emergencia a llenado con HR alta, lluvia o mojado foliar.',
         productos: [
-          { grupo: 'Preventivos', activos: 'Mancozeb / Cobre / Clorotalonil donde este registrado', dosisHa: 'Segun marbete' },
-          { grupo: 'Especificos oomycetes', activos: 'Metalaxil-M / Cymoxanil / Mandipropamid registrados', dosisHa: 'Segun riesgo y etiqueta' },
+          {
+            grupo: 'Preventivos',
+            activos: 'Mancozeb / Cobre / Clorotalonil donde este registrado',
+            dosisHa: 'Segun marbete',
+          },
+          {
+            grupo: 'Especificos oomycetes',
+            activos: 'Metalaxil-M / Cymoxanil / Mandipropamid registrados',
+            dosisHa: 'Segun riesgo y etiqueta',
+          },
         ],
         nota: 'No recomendar sin confirmar destino, carencia y registro vigente.',
       },
@@ -904,7 +1129,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         objetivo: 'Reducir avance de Alternaria en follaje activo.',
         momento: 'Vegetativo avanzado/llenado con estres y humedad favorable.',
         productos: [
-          { grupo: 'DMI/QoI/SDHI', activos: 'Difenoconazole / Azoxistrobina / Boscalid registrados', dosisHa: 'Segun marbete' },
+          {
+            grupo: 'DMI/QoI/SDHI',
+            activos: 'Difenoconazole / Azoxistrobina / Boscalid registrados',
+            dosisHa: 'Segun marbete',
+          },
         ],
         nota: 'Combinar con manejo de estres y monitoreo de manchas activas.',
       },
@@ -912,7 +1141,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         objetivo: 'Reducir dano temprano en brotes, estolones y tuberculos.',
         momento: 'Tratamiento/arranque y emergencia segun historial del lote.',
         productos: [
-          { grupo: 'Tratamiento preventivo', activos: 'Flutolanil / Azoxistrobina u opciones registradas', dosisHa: 'Segun formulado y posicion de aplicacion' },
+          {
+            grupo: 'Tratamiento preventivo',
+            activos: 'Flutolanil / Azoxistrobina u opciones registradas',
+            dosisHa: 'Segun formulado y posicion de aplicacion',
+          },
         ],
         nota: 'Depende mucho de semilla, suelo e historial; validar estrategia tecnica.',
       },
@@ -920,8 +1153,16 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         objetivo: 'Proteger tejido verde y fruto joven durante infecciones primarias.',
         momento: 'Brotacion a cuaje con mojado foliar.',
         productos: [
-          { grupo: 'Preventivos multisitio', activos: 'Captan / Mancozeb / Cobre segun ventana', dosisHa: 'Segun marbete' },
-          { grupo: 'Curativos/mezclas', activos: 'Difenoconazole u otros DMI registrados', dosisHa: 'Rotar modos de accion' },
+          {
+            grupo: 'Preventivos multisitio',
+            activos: 'Captan / Mancozeb / Cobre segun ventana',
+            dosisHa: 'Segun marbete',
+          },
+          {
+            grupo: 'Curativos/mezclas',
+            activos: 'Difenoconazole u otros DMI registrados',
+            dosisHa: 'Rotar modos de accion',
+          },
         ],
         nota: 'Ajustar por estadio, carencia y mercado destino.',
       },
@@ -929,7 +1170,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         objetivo: 'Proteger tejido verde y fruto joven durante mojados infectivos.',
         momento: 'Brotacion, floracion y cuaje con humedad alta.',
         productos: [
-          { grupo: 'Preventivos multisitio', activos: 'Captan / Mancozeb / Cobre segun registro', dosisHa: 'Segun marbete' },
+          {
+            grupo: 'Preventivos multisitio',
+            activos: 'Captan / Mancozeb / Cobre segun registro',
+            dosisHa: 'Segun marbete',
+          },
           { grupo: 'DMI', activos: 'Difenoconazole registrado', dosisHa: 'Segun etiqueta y riesgo' },
         ],
         nota: 'Validar sensibilidad varietal y registro para peral.',
@@ -938,7 +1183,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         objetivo: 'Proteger brotes, hojas y nuez joven en humedad alta.',
         momento: 'Brotacion a llenado de nuez con mojado prolongado.',
         productos: [
-          { grupo: 'Preventivos/mezclas', activos: 'Cobre / DMI / QoI registrados para pecan', dosisHa: 'Segun marbete local' },
+          {
+            grupo: 'Preventivos/mezclas',
+            activos: 'Cobre / DMI / QoI registrados para pecan',
+            dosisHa: 'Segun marbete local',
+          },
         ],
         nota: 'Base inicial: requiere validacion regional y de etiqueta.',
       },
@@ -954,7 +1203,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         objetivo: 'Reducir infeccion floral y avance bacteriano en brotes.',
         momento: 'Floracion con temperatura templada/calida y humedad.',
         productos: [
-          { grupo: 'Bactericidas/preventivos', activos: 'Cobre u opciones registradas segun zona', dosisHa: 'Segun marbete' },
+          {
+            grupo: 'Bactericidas/preventivos',
+            activos: 'Cobre u opciones registradas segun zona',
+            dosisHa: 'Segun marbete',
+          },
         ],
         nota: 'El manejo cultural y alerta temprana son tan importantes como la aplicacion.',
       },
@@ -962,7 +1215,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         objetivo: 'Proteger fruto segun vuelo y grados-dia.',
         momento: 'Aplicar por umbral/trampas/modelo, no por calendario fijo.',
         productos: [
-          { grupo: 'Insecticidas especificos', activos: 'Clorantraniliprol / reguladores / opciones registradas', dosisHa: 'Segun marbete y momento de oviposicion' },
+          {
+            grupo: 'Insecticidas especificos',
+            activos: 'Clorantraniliprol / reguladores / opciones registradas',
+            dosisHa: 'Segun marbete y momento de oviposicion',
+          },
         ],
         nota: 'Es plaga sanitaria; validar monitoreo, carencia y mercado.',
       },
@@ -970,16 +1227,18 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         objetivo: 'Reducir poblaciones de ninfas/adultos y dano por melaza.',
         momento: 'Intervenir por umbral de monitoreo y estado fenologico.',
         productos: [
-          { grupo: 'Insecticidas/aceites registrados', activos: 'Aceites, reguladores u opciones registradas', dosisHa: 'Segun marbete' },
+          {
+            grupo: 'Insecticidas/aceites registrados',
+            activos: 'Aceites, reguladores u opciones registradas',
+            dosisHa: 'Segun marbete',
+          },
         ],
         nota: 'Integrar control biologico y evitar aplicaciones que disparen resurgencia.',
       },
       'Bacteriosis del Pecan': {
         objetivo: 'Reducir infeccion en brotes y frutos jovenes.',
         momento: 'Lluvias, viento/heridas y humedad alta.',
-        productos: [
-          { grupo: 'Preventivos', activos: 'Cobre u opciones registradas', dosisHa: 'Segun marbete' },
-        ],
+        productos: [{ grupo: 'Preventivos', activos: 'Cobre u opciones registradas', dosisHa: 'Segun marbete' }],
         nota: 'Base inicial pendiente de validacion regional.',
       },
     };

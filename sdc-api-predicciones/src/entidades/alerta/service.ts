@@ -105,11 +105,17 @@ export class AlertasService {
     comentario: string,
     dedupeKey?: string,
   ): Promise<boolean> {
-    const alerta = await this.getByIdSiembraActiva(
+    let alerta = await this.getByIdSiembraActiva(
       idSiembra,
       descripcion,
       dedupeKey,
     );
+    if (!alerta && this.esClaveSanitaria(dedupeKey)) {
+      alerta = await this.getAlertaSanitariaLegadaActiva(
+        idSiembra,
+        this.tituloSanitarioDesdeDescripcion(descripcion),
+      );
+    }
     if (!alerta?._id) return false;
 
     const fecha = new Date().toISOString();
@@ -146,6 +152,13 @@ export class AlertasService {
       );
     }
 
+    if (!alerta && this.esClaveSanitaria(normalizado.dedupeKey)) {
+      alerta = await this.getAlertaSanitariaLegadaActiva(
+        evento.idSiembra,
+        normalizado.titulo,
+      );
+    }
+
     if (alerta) {
       const reportes = alerta.reportes || [];
       const duplicada = reportes.some((r) => r?.eventKey === evento.eventKey);
@@ -154,6 +167,7 @@ export class AlertasService {
       }
       const update: IUpdateAlerta = {
         reportes: [...reportes, normalizado.reporte],
+        descripcion: evento.descripcion,
         titulo: normalizado.titulo,
         tipo: normalizado.tipo,
         categoria: normalizado.categoria,
@@ -219,6 +233,41 @@ export class AlertasService {
       creada: true,
       duplicada: false,
     };
+  }
+
+  /**
+   * Antes de v4 todas las patologias compartian la descripcion generica
+   * "Riesgo de Enfermedad" y no tenian dedupeKey por enfermedad. Esta busqueda
+   * acotada permite cerrar o migrar esas alertas sin dejar eventos legados
+   * activos ni mezclar enfermedades distintas.
+   */
+  private async getAlertaSanitariaLegadaActiva(
+    idSiembra: string,
+    titulo?: string,
+  ): Promise<IAlerta | undefined> {
+    if (!titulo) return undefined;
+    const query: IQueryParam = {
+      filter: JSON.stringify({
+        idSiembra,
+        activa: true,
+        descripcion: 'Riesgo de Enfermedad',
+        titulo,
+      }),
+      sort: '-fechaUltimoEvento,-fecha',
+      limit: 1,
+    };
+    const res = await this.repository.get(query);
+    return res.datos[0];
+  }
+
+  private esClaveSanitaria(dedupeKey?: string): boolean {
+    return String(dedupeKey || '').includes(':sanitaria:enfermedad:');
+  }
+
+  private tituloSanitarioDesdeDescripcion(descripcion?: string): string {
+    return String(descripcion || '')
+      .replace(/^Predicci[oó]n sanitaria:\s*/i, '')
+      .trim();
   }
 
   private normalizarEvento(evento: EventoSiembra): EventoNormalizado {

@@ -29,7 +29,7 @@
           (click)="abrirDetalleEnfermedad(item)"
         >
           <span class="status-pill">{{ item.estadoCorto }}</span>
-          <strong>{{ item.enfermedad }}</strong>
+          <strong>{{ item.nombreVisible }}</strong>
           <span class="risk-value">{{ item.resultadoEtiqueta }}</span>
           <span class="risk-track"><i></i></span>
           <small>{{ item.lecturaCorta }}</small>
@@ -49,7 +49,7 @@
   [resizable]="false"
   [style]="{ width: 'min(920px, 94vw)' }"
   [breakpoints]="{ '720px': '96vw' }"
-  [header]="enfermedadSeleccionada?.enfermedad || 'Detalle sanitario'"
+  [header]="enfermedadSeleccionada?.nombreVisible || 'Detalle sanitario'"
   styleClass="chaman-detail-dialog disease-detail-dialog"
   (onHide)="cerrarDetalleEnfermedad()"
 >
@@ -58,7 +58,7 @@
       <div class="detail-hero" [ngClass]="detalle.severity">
         <div>
           <span>{{ detalle.estadoCorto }}</span>
-          <strong>{{ detalle.enfermedad }}</strong>
+          <strong>{{ detalle.nombreVisible }}</strong>
           <small>{{ detalle.descripcion }}</small>
         </div>
         <em>{{ detalle.resultadoEtiqueta }}</em>
@@ -115,20 +115,36 @@
         </div>
       }
 
-      <section class="decision-panel" [class.confirmed]="enfermedadConfirmada(detalle.enfermedad)">
-        <div class="decision-copy">
-          <strong>Confirmacion de campo</strong>
-          <span>{{ enfermedadConfirmada(detalle.enfermedad) ? 'Enfermedad confirmada en esta revision.' : 'Confirmar solo con recorrido, sintomas o criterio tecnico.' }}</span>
-        </div>
-        <p-button
-          [label]="enfermedadConfirmada(detalle.enfermedad) ? 'Quitar confirmacion' : 'Confirmar enfermedad'"
-          [severity]="enfermedadConfirmada(detalle.enfermedad) ? 'success' : 'secondary'"
-          [outlined]="!enfermedadConfirmada(detalle.enfermedad)"
-          (click)="alternarConfirmacion(detalle.enfermedad)"
-        />
-      </section>
+      @if (detalle.salidaOperativa) {
+        <section class="decision-panel" [class.confirmed]="enfermedadConfirmada(detalle.enfermedad)">
+          <div class="decision-copy">
+            <strong>Confirmacion de campo</strong>
+            <span>{{
+              enfermedadConfirmada(detalle.enfermedad)
+                ? 'Enfermedad confirmada en esta revision.'
+                : 'Confirmar solo con recorrido, sintomas o criterio tecnico.'
+            }}</span>
+          </div>
+          <p-button
+            [label]="enfermedadConfirmada(detalle.enfermedad) ? 'Quitar confirmacion' : 'Confirmar enfermedad'"
+            [severity]="enfermedadConfirmada(detalle.enfermedad) ? 'success' : 'secondary'"
+            [outlined]="!enfermedadConfirmada(detalle.enfermedad)"
+            (click)="alternarConfirmacion(detalle.enfermedad)"
+          />
+        </section>
+      } @else {
+        <section class="decision-panel">
+          <div class="decision-copy">
+            <strong>Seguimiento sin automatizacion</strong>
+            <span
+              >Esta salida sirve para recorrida y calibracion. No habilita confirmacion digital, alerta, push ni
+              prescripcion automatica.</span
+            >
+          </div>
+        </section>
+      }
 
-      @if (enfermedadConfirmada(detalle.enfermedad) && !esScreeningExperimental) {
+      @if (enfermedadConfirmada(detalle.enfermedad) && detalle.mostrarPrescripcion && !esScreeningExperimental) {
         <section class="prescription-panel">
           <div class="prescription-heading">
             <div>

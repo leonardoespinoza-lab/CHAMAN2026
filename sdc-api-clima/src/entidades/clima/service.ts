@@ -19,6 +19,7 @@ import { MeteoSourceService } from '../meteoSource/service';
 import {
   evaluarCoberturaClimatica,
   fusionarClimaConFallback,
+  marcarResolucionOpenMeteo,
 } from './calidad-clima';
 import { IForecastMeteoSource } from '../meteoSource/modelos/modelos';
 import {
@@ -324,48 +325,187 @@ export class ClimaService {
     ubicacion: ICoordenadas,
     minDate: string,
     maxDate: string,
+    dataGroup: 'raw' | 'hourly' | 'daily' | 'monthly' = 'daily',
   ): Promise<IClimaEstacionMeteorologica[]> {
-    const startDate = this.getFechaOpenMeteo(minDate);
-    const endDate = this.getFechaOpenMeteo(maxDate);
+    if (dataGroup === 'hourly' || dataGroup === 'raw') {
+      const horario = await this.getOpenMeteoHorarioEntreFechas(
+        ubicacion,
+        minDate,
+        maxDate,
+        dataGroup,
+      );
+      const cobertura = evaluarCoberturaClimatica(
+        horario,
+        minDate,
+        maxDate,
+        'hourly',
+      );
+      if (cobertura.cobertura >= 1) {
+        return horario;
+      }
+
+      // El agregado diario es una ultima red de seguridad. Solo se consulta
+      // cuando Open-Meteo no entrego al menos 18 horas validas por cada dia.
+      const diario = await this.getOpenMeteoDiarioEntreFechas(
+        ubicacion,
+        minDate,
+        maxDate,
+      );
+      return [...horario, ...diario];
+    }
+
+    return this.getOpenMeteoDiarioEntreFechas(ubicacion, minDate, maxDate);
+  }
+
+  private getOpenMeteoBaseUrl(startDate: string): string {
     const inicio = new Date(`${startDate}T00:00:00Z`);
     const hoy = new Date(
       `${this.getFechaOpenMeteo(new Date().toISOString())}T00:00:00Z`,
     );
     const diasHaciaAtras = (hoy.getTime() - inicio.getTime()) / 86400000;
-    const baseUrl =
-      diasHaciaAtras <= 92
-        ? `${API_OPEN_METEO}/forecast`
-        : `${API_OPEN_METEO_ARCHIVE}/archive`;
+    return diasHaciaAtras <= 92
+      ? `${API_OPEN_METEO}/forecast`
+      : `${API_OPEN_METEO_ARCHIVE}/archive`;
+  }
 
-    const url = new URL(baseUrl);
-    url.searchParams.set('latitude', `${ubicacion.lat}`);
-    url.searchParams.set('longitude', `${ubicacion.lng}`);
-    url.searchParams.set('timezone', 'auto');
-    url.searchParams.set('start_date', startDate);
-    url.searchParams.set('end_date', endDate);
-    url.searchParams.set(
-      'daily',
-      [
-        'temperature_2m_max',
-        'temperature_2m_min',
-        'temperature_2m_mean',
-        'relative_humidity_2m_max',
-        'relative_humidity_2m_min',
-        'relative_humidity_2m_mean',
-        'precipitation_sum',
-        'wind_speed_10m_max',
-        'wind_speed_10m_mean',
-        'wind_direction_10m_dominant',
-        'shortwave_radiation_sum',
-        'et0_fao_evapotranspiration',
-      ].join(','),
-    );
-
-    const data = await this.fetchOpenMeteoJson(url, 'historico');
-    if (!data) {
+  /**
+   * Open-Meteo expone los ultimos 92 dias en Forecast y el historico anterior
+   * en Archive. Un rango que cruza ese limite no puede enviarse completo a un
+   * solo endpoint: Archive puede no contener los dias recientes. Se divide sin
+   * solapar dias para conservar una serie continua y trazable.
+   */
+  private getOpenMeteoRangos(
+    minDate: string,
+    maxDate: string,
+  ): Array<{ baseUrl: string; startDate: string; endDate: string }> {
+    const startDate = this.getFechaOpenMeteo(minDate);
+    const endExclusiveDate = this.getFechaOpenMeteo(maxDate);
+    const inicio = new Date(`${startDate}T00:00:00Z`);
+    const finExclusivo = new Date(`${endExclusiveDate}T00:00:00Z`);
+    if (
+      !Number.isFinite(inicio.getTime()) ||
+      !Number.isFinite(finExclusivo.getTime()) ||
+      inicio >= finExclusivo
+    ) {
       return [];
     }
-    return this.parsearClimaOpenMeteo(data, ubicacion);
+
+    // El contrato interno es [minDate, maxDate), mientras Open-Meteo incluye
+    // end_date. Se resta un dia una unica vez antes de dividir endpoints.
+    const finInclusivo = new Date(finExclusivo);
+    finInclusivo.setUTCDate(finInclusivo.getUTCDate() - 1);
+    const endDate = finInclusivo.toISOString().slice(0, 10);
+    const hoy = new Date(
+      `${this.getFechaOpenMeteo(new Date().toISOString())}T00:00:00Z`,
+    );
+    const inicioForecast = new Date(hoy);
+    inicioForecast.setUTCDate(inicioForecast.getUTCDate() - 92);
+    const fechaInicioForecast = inicioForecast.toISOString().slice(0, 10);
+
+    if (startDate < fechaInicioForecast && endDate >= fechaInicioForecast) {
+      const finArchive = new Date(`${fechaInicioForecast}T00:00:00Z`);
+      finArchive.setUTCDate(finArchive.getUTCDate() - 1);
+      return [
+        {
+          baseUrl: `${API_OPEN_METEO_ARCHIVE}/archive`,
+          startDate,
+          endDate: finArchive.toISOString().slice(0, 10),
+        },
+        {
+          baseUrl: `${API_OPEN_METEO}/forecast`,
+          startDate: fechaInicioForecast,
+          endDate,
+        },
+      ];
+    }
+
+    return [
+      {
+        baseUrl: this.getOpenMeteoBaseUrl(startDate),
+        startDate,
+        endDate,
+      },
+    ];
+  }
+
+  private async getOpenMeteoDiarioEntreFechas(
+    ubicacion: ICoordenadas,
+    minDate: string,
+    maxDate: string,
+  ): Promise<IClimaEstacionMeteorologica[]> {
+    const rangos = this.getOpenMeteoRangos(minDate, maxDate);
+    const resultados = await Promise.all(
+      rangos.map(async ({ baseUrl, startDate, endDate }) => {
+        const url = new URL(baseUrl);
+        url.searchParams.set('latitude', `${ubicacion.lat}`);
+        url.searchParams.set('longitude', `${ubicacion.lng}`);
+        url.searchParams.set('timezone', 'auto');
+        url.searchParams.set('start_date', startDate);
+        url.searchParams.set('end_date', endDate);
+        url.searchParams.set(
+          'daily',
+          [
+            'temperature_2m_max',
+            'temperature_2m_min',
+            'temperature_2m_mean',
+            'relative_humidity_2m_max',
+            'relative_humidity_2m_min',
+            'relative_humidity_2m_mean',
+            'precipitation_sum',
+            'wind_speed_10m_max',
+            'wind_speed_10m_mean',
+            'wind_direction_10m_dominant',
+            'shortwave_radiation_sum',
+            'et0_fao_evapotranspiration',
+          ].join(','),
+        );
+
+        const data = await this.fetchOpenMeteoJson(url, 'historico');
+        return data ? this.parsearClimaOpenMeteo(data, ubicacion) : [];
+      }),
+    );
+    return resultados.flat();
+  }
+
+  private async getOpenMeteoHorarioEntreFechas(
+    ubicacion: ICoordenadas,
+    minDate: string,
+    maxDate: string,
+    dataGroup: 'raw' | 'hourly',
+  ): Promise<IClimaEstacionMeteorologica[]> {
+    const rangos = this.getOpenMeteoRangos(minDate, maxDate);
+    const resultados = await Promise.all(
+      rangos.map(async ({ baseUrl, startDate, endDate }) => {
+        const url = new URL(baseUrl);
+        url.searchParams.set('latitude', `${ubicacion.lat}`);
+        url.searchParams.set('longitude', `${ubicacion.lng}`);
+        url.searchParams.set('timezone', 'auto');
+        url.searchParams.set('start_date', startDate);
+        url.searchParams.set('end_date', endDate);
+        url.searchParams.set('temperature_unit', 'celsius');
+        url.searchParams.set('wind_speed_unit', 'kmh');
+        url.searchParams.set('precipitation_unit', 'mm');
+        url.searchParams.set(
+          'hourly',
+          [
+            'temperature_2m',
+            'relative_humidity_2m',
+            'precipitation',
+            'rain',
+            'wind_speed_10m',
+          ].join(','),
+        );
+
+        const data = await this.fetchOpenMeteoJson(
+          url,
+          'historico horario',
+        );
+        return data
+          ? this.parsearClimaHorarioOpenMeteo(data, ubicacion, dataGroup)
+          : [];
+      }),
+    );
+    return resultados.flat();
   }
 
   /**
@@ -677,6 +817,112 @@ export class ClimaService {
     return 'Condicion actual';
   }
 
+  private toOpenMeteoNumber(value: unknown): number | undefined {
+    if (
+      value === null ||
+      value === undefined ||
+      value === '' ||
+      typeof value === 'boolean'
+    ) {
+      return undefined;
+    }
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : undefined;
+  }
+
+  private parsearClimaHorarioOpenMeteo(
+    data: any,
+    ubicacion: ICoordenadas,
+    dataGroup: 'raw' | 'hourly',
+  ): IClimaEstacionMeteorologica[] {
+    const hourly = data?.hourly;
+    const fechas: string[] = Array.isArray(hourly?.time) ? hourly.time : [];
+    if (!fechas.length) {
+      return [];
+    }
+
+    const offset = this.formatUtcOffset(
+      this.toOpenMeteoNumber(data?.utc_offset_seconds) || 0,
+    );
+    const filas: IClimaEstacionMeteorologica[] = [];
+
+    fechas.forEach((fechaLocal, index) => {
+      if (typeof fechaLocal !== 'string' || !fechaLocal.includes('T')) {
+        return;
+      }
+      const fechaConSegundos =
+        fechaLocal.length === 16 ? `${fechaLocal}:00` : fechaLocal;
+      const fecha = `${fechaConSegundos}${offset}`;
+      const date = new Date(fecha);
+      if (!Number.isFinite(date.getTime())) {
+        return;
+      }
+
+      const temperatura = this.toOpenMeteoNumber(
+        hourly.temperature_2m?.[index],
+      );
+      const humedad = this.toOpenMeteoNumber(
+        hourly.relative_humidity_2m?.[index],
+      );
+      const precipitacion = this.toOpenMeteoNumber(
+        hourly.precipitation?.[index],
+      );
+      const lluvia =
+        precipitacion ?? this.toOpenMeteoNumber(hourly.rain?.[index]);
+      const viento = this.toOpenMeteoNumber(hourly.wind_speed_10m?.[index]);
+
+      filas.push({
+        fuente: 'OpenMeteo' as any,
+        distancia: null,
+        estacion: 'Open-Meteo',
+        ubicacion,
+        // Se conserva el dia/hora local y su offset. Convertirlo a UTC antes
+        // de fusionar moveria las ultimas horas al dia siguiente.
+        fecha,
+        diaNoche: this.esDiaONoche(date, ubicacion.lat, ubicacion.lng),
+        temperatura: { avg: temperatura, last: temperatura },
+        humedad: { avg: humedad, last: humedad },
+        lluvia: { sum: lluvia, last: lluvia, result: lluvia },
+        velocidadViento: { avg: viento, last: viento },
+      });
+    });
+
+    const validasPorDia = new Map<string, number>();
+    for (const fila of filas) {
+      const valida =
+        this.toOpenMeteoNumber(fila.temperatura?.avg) !== undefined &&
+        this.toOpenMeteoNumber(fila.humedad?.avg) !== undefined &&
+        this.toOpenMeteoNumber(fila.lluvia?.sum) !== undefined;
+      if (valida) {
+        const fecha = String(fila.fecha).split('T')[0];
+        validasPorDia.set(fecha, (validasPorDia.get(fecha) || 0) + 1);
+      }
+    }
+
+    return filas.map((fila) => {
+      const fecha = String(fila.fecha).split('T')[0];
+      const horasValidas = validasPorDia.get(fecha) || 0;
+      const cobertura = Math.min(1, horasValidas / 24);
+      fila.calidadDatos = {
+        nivel: horasValidas >= 18 ? 'media' : 'baja',
+        fuente: 'open_meteo',
+        score: Math.round(cobertura * 85),
+        cobertura,
+        fallback: true,
+        resumen: `${horasValidas} de 24 horas validas de Open-Meteo para el dia.`,
+        limitaciones: [
+          'Fuente meteorologica modelada; no sustituye una medicion de la central del lote.',
+          ...(dataGroup === 'raw'
+            ? [
+                'Open-Meteo no ofrece datos crudos de sensor; se entrega su resolucion horaria.',
+              ]
+            : []),
+        ],
+      };
+      return marcarResolucionOpenMeteo(fila, 'hourly');
+    });
+  }
+
   private parsearClimaOpenMeteo(
     data: any,
     ubicacion: ICoordenadas,
@@ -687,46 +933,58 @@ export class ClimaService {
     return fechas.map((fecha, index) => {
       const fechaIso = new Date(`${fecha}T12:00:00`).toISOString();
       const date = new Date(fechaIso);
-      return {
-        fuente: 'OpenMeteo' as any,
-        distancia: null,
-        estacion: 'Open-Meteo',
-        ubicacion,
-        fecha: fechaIso,
-        diaNoche: this.esDiaONoche(date, ubicacion.lat, ubicacion.lng),
-        temperatura: {
-          max: daily.temperature_2m_max?.[index],
-          min: daily.temperature_2m_min?.[index],
-          avg: daily.temperature_2m_mean?.[index],
-          last: daily.temperature_2m_mean?.[index],
+      return marcarResolucionOpenMeteo(
+        {
+          fuente: 'OpenMeteo' as any,
+          distancia: null,
+          estacion: 'Open-Meteo',
+          ubicacion,
+          fecha: fechaIso,
+          diaNoche: this.esDiaONoche(date, ubicacion.lat, ubicacion.lng),
+          temperatura: {
+            max: daily.temperature_2m_max?.[index],
+            min: daily.temperature_2m_min?.[index],
+            avg: daily.temperature_2m_mean?.[index],
+            last: daily.temperature_2m_mean?.[index],
+          },
+          humedad: {
+            max: daily.relative_humidity_2m_max?.[index],
+            min: daily.relative_humidity_2m_min?.[index],
+            avg: daily.relative_humidity_2m_mean?.[index],
+            last: daily.relative_humidity_2m_mean?.[index],
+          },
+          lluvia: {
+            sum: daily.precipitation_sum?.[index],
+            result: daily.precipitation_sum?.[index],
+          },
+          velocidadViento: {
+            max: daily.wind_speed_10m_max?.[index],
+            avg: daily.wind_speed_10m_mean?.[index],
+            last: daily.wind_speed_10m_mean?.[index],
+          },
+          direccionViento: {
+            avg: daily.wind_direction_10m_dominant?.[index],
+          },
+          radiacionSolar: {
+            sum: daily.shortwave_radiation_sum?.[index],
+            result: daily.shortwave_radiation_sum?.[index],
+          },
+          et0: {
+            sum: daily.et0_fao_evapotranspiration?.[index],
+            result: daily.et0_fao_evapotranspiration?.[index],
+          },
+          calidadDatos: {
+            nivel: 'media' as const,
+            fuente: 'open_meteo' as const,
+            score: 75,
+            cobertura: 1,
+            fallback: true,
+            resumen: 'Agregado diario modelado por Open-Meteo.',
+            limitaciones: [],
+          },
         },
-        humedad: {
-          max: daily.relative_humidity_2m_max?.[index],
-          min: daily.relative_humidity_2m_min?.[index],
-          avg: daily.relative_humidity_2m_mean?.[index],
-          last: daily.relative_humidity_2m_mean?.[index],
-        },
-        lluvia: {
-          sum: daily.precipitation_sum?.[index],
-          result: daily.precipitation_sum?.[index],
-        },
-        velocidadViento: {
-          max: daily.wind_speed_10m_max?.[index],
-          avg: daily.wind_speed_10m_mean?.[index],
-          last: daily.wind_speed_10m_mean?.[index],
-        },
-        direccionViento: {
-          avg: daily.wind_direction_10m_dominant?.[index],
-        },
-        radiacionSolar: {
-          sum: daily.shortwave_radiation_sum?.[index],
-          result: daily.shortwave_radiation_sum?.[index],
-        },
-        et0: {
-          sum: daily.et0_fao_evapotranspiration?.[index],
-          result: daily.et0_fao_evapotranspiration?.[index],
-        },
-      };
+        'daily',
+      );
     });
   }
 
@@ -1414,6 +1672,7 @@ export class ClimaService {
           minDate,
           maxDate,
           dataGroup,
+          'estacion_asignada',
         ).datos;
       }
 
@@ -1421,6 +1680,7 @@ export class ClimaService {
         ubicacion,
         minDate,
         maxDate,
+        dataGroup || 'daily',
       );
       const fusion = fusionarClimaConFallback(
         datosAsociados,
@@ -1428,6 +1688,7 @@ export class ClimaService {
         minDate,
         maxDate,
         dataGroup,
+        'estacion_asignada',
       );
       this.logger.log(
         `Fuente sanitaria: FieldClimate asociado ${fusion.diasFieldClimate}/${fusion.diasEsperados} dÃ­a(s); Open-Meteo ${fusion.diasFallback} dÃ­a(s).`,
@@ -1468,6 +1729,7 @@ export class ClimaService {
             ubicacion,
             minDate,
             maxDate,
+            dataGroup || 'daily',
           );
           const fusion = fusionarClimaConFallback(
             parseado,
@@ -1492,6 +1754,7 @@ export class ClimaService {
       ubicacion,
       minDate,
       maxDate,
+      dataGroup || 'daily',
     );
     return fusionarClimaConFallback([], openMeteo, minDate, maxDate, dataGroup)
       .datos;

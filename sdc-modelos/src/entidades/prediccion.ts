@@ -3,17 +3,56 @@ import { IEstablecimiento } from "./establecimiento";
 import { IProductor } from "./productor";
 import { IQuimica } from "./quimica";
 import { TEnfermedad } from "./semilla";
-import {
-  IResistencia,
-  TEnfermedadId,
-  TEstadoResistencia,
-} from "./semilla";
+import { IResistencia, TEnfermedadId, TEstadoResistencia } from "./semilla";
 import { ICalidadDatoMotor } from "../compartidos";
 import { ISiembra } from "./siembra";
+import { FuenteClima } from "./clima";
 
 export interface IVariablesRoyaDeLaHoja {
   GD?: number; // Grados Dia
-  DHR?: number; // Dias sin lluvia (>= 0.2) y HR >= 70%
+  DHR?: number; // Dias con precipitacion <= 0,2 mm y HR > 70%
+  DL?: number;
+  GDDBase0Siembra?: number;
+  coberturaGdd?: number;
+  umbralInicioGdd?: number;
+  inicioPorFenologiaObservada?: number;
+  factorSusceptibilidad?: number;
+  resultadoCrudo?: number;
+  formulaVersion?: number;
+}
+
+/**
+ * Trazas del modelo horario de oportunidad ambiental para roya amarilla.
+ * El identificador persistido sigue siendo `trigo.roya_anaranjada` por
+ * compatibilidad con las campañas existentes. Ninguno de estos valores es un
+ * porcentaje observado o pronosticado de enfermedad.
+ */
+export interface IVariablesRoyaAmarillaEstriada {
+  // Acumuladores del contrato recibido, conservados solamente en sombra.
+  GD?: number;
+  DHR?: number;
+  DL?: number;
+  resultadoContractualCrudo?: number;
+  resultadoContractualLimitado?: number;
+  // Modelo ambiental horario publicado (El Jarroudi et al., 2017).
+  horasEsperadas10d?: number;
+  horasValidas10d?: number;
+  coberturaHoraria10d?: number;
+  horasFavorables10d?: number;
+  rachasFavorables10d?: number;
+  rachaMaximaHoras?: number;
+  frecuenciaAmbientalPct?: number;
+  umbralSenalTempranaPct?: number;
+  umbralFuertePct?: number;
+  umbralMuyFuertePct?: number;
+  nivelOportunidad?: number;
+  factorSusceptibilidad?: number;
+  prioridadInterna?: number;
+  GDDBase0Siembra?: number;
+  coberturaGdd?: number;
+  umbralInicioGdd?: number;
+  inicioPorFenologiaObservada?: number;
+  formulaVersion?: number;
 }
 
 export interface IVariablesRoyaDelMaiz {
@@ -24,17 +63,37 @@ export interface IVariablesRoyaDelMaiz {
 export interface IVariablesManchaAmarilla {
   DPrHRT?: number; // Dias con lluvia > 1mm y HR >= 80% y temp max <= 32°C y temp min >= 8°C
   DPr?: number; // Dias con lluvia > 2mm
+  GDDBase0Siembra?: number;
+  coberturaGdd?: number;
+  umbralInicioGdd?: number;
+  inicioPorFenologiaObservada?: number;
+  factorSusceptibilidad?: number;
+  resultadoCrudo?: number;
+  formulaVersion?: number;
 }
 
 export interface IVariablesManchaDeLaHoja {
   DPr?: number; // Dias con lluvia > 10mm
   DHR?: number; // Dias con HR >= 80%
+  GDDBase0Siembra?: number;
+  coberturaGdd?: number;
+  umbralInicioGdd?: number;
+  inicioPorFenologiaObservada?: number;
+  factorSusceptibilidad?: number;
+  resultadoCrudo?: number;
+  formulaVersion?: number;
 }
 
 export interface IVariablesFusariumDeLaEspiga {
   PMoj?: number; // número de períodos de mojado de 2 días con registro de precipitación > 0,2 y HR>81% en el día 1 y una HR≥78% en el día 2.
   GDN?: number;
   GDAcum?: number; // Grados dia acumulados
+  diasClimaEsperados?: number;
+  diasClimaValidos?: number;
+  coberturaClima?: number;
+  factorSusceptibilidad?: number;
+  resultadoCrudo?: number;
+  formulaVersion?: number;
 }
 
 export interface IVariablesEnfermedadCebada {
@@ -75,6 +134,7 @@ export interface IPrediccionEnfermedad {
   resultado: number;
   estado?: "calculado" | "sin_datos" | "fuera_ventana";
   calidadDatos?: ICalidadDatoMotor;
+  calidadClima?: ICalidadDatoMotor;
   resistenciaUsada?: Pick<
     IResistencia,
     | "idEnfermedad"
@@ -93,9 +153,12 @@ export interface IPrediccionEnfermedad {
     version: number;
     fuente: string;
     resolucion?: "horaria" | "diaria" | "proxy_diario";
+    validacion?: "operativo" | "operativo_provisional" | "experimental";
+    alcance?: string;
   };
   variables:
     | IVariablesRoyaDeLaHoja
+    | IVariablesRoyaAmarillaEstriada
     | IVariablesManchaAmarilla
     | IVariablesManchaDeLaHoja
     | IVariablesFusariumDeLaEspiga
@@ -107,6 +170,7 @@ export interface IPrediccionEnfermedad {
 
 export interface IPrediccionEstacion {
   idEstacion: string;
+  fuente?: FuenteClima;
   distanciaMetros: number;
   precipitaciones: number;
   humedadRelativa: number;
@@ -153,8 +217,10 @@ type OmitirCreate =
   | "distribuidor"
   | "productor"
   | "establecimiento";
-export interface ICreatePrediccion
-  extends Omit<Partial<IPrediccion>, OmitirCreate> {}
+export interface ICreatePrediccion extends Omit<
+  Partial<IPrediccion>,
+  OmitirCreate
+> {}
 
 type OmitirUpdate =
   | "_id"
@@ -163,5 +229,7 @@ type OmitirUpdate =
   | "distribuidor"
   | "productor"
   | "establecimiento";
-export interface IUpdatePrediccion
-  extends Omit<Partial<IPrediccion>, OmitirUpdate> {}
+export interface IUpdatePrediccion extends Omit<
+  Partial<IPrediccion>,
+  OmitirUpdate
+> {}

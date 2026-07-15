@@ -58,5 +58,5 @@ servicios sin estado que declaren el mismo release.
 
 - `testing` es persistente y aislado.
 - Produccion sigue `main`; testing sigue la rama candidata.
-- Los 12 roles definidos en `deploy/environment-topology.json` deben existir en ambos entornos.
+- Los 13 roles definidos en `deploy/environment-topology.json` deben existir en ambos entornos.
 - Antes de aprobar, todos los servicios sin estado de testing deben reportar el mismo SHA.
