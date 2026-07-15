@@ -23,8 +23,12 @@ describe('SoilAgronomicInputsService canonical selection', () => {
       siltPercentage: 30,
       clayPercentage: 50,
       availableWaterMmPerMeter: 163,
+      profileAvailableWaterMm: 163,
       rootZoneAvailableWaterMm: 163,
       effectiveDepthCm: 100,
+      effectiveDepthSource: 'operational_fallback',
+      effectiveDepthConfidence: 'low',
+      effectiveDepthIsFallback: true,
     },
     source: { type: 'mixed', confidence: 'medium' },
     sources: [
@@ -41,6 +45,16 @@ describe('SoilAgronomicInputsService canonical selection', () => {
         depthToCm: 30,
         observedOrEstimated: 'estimated',
         confidence: 'medium',
+      },
+      availableWaterMmPerMeter: {
+        value: 163,
+        unit: 'mm/m',
+        source: 'soilgrids',
+        method: 'CC menos PMP',
+        depthFromCm: 0,
+        depthToCm: 100,
+        observedOrEstimated: 'estimated',
+        confidence: 'low',
       },
     },
     depthProfile: [
@@ -97,11 +111,18 @@ describe('SoilAgronomicInputsService canonical selection', () => {
       fieldCapacityPercentage: 29.6,
       wiltingPointPercentage: 13.3,
       availableWaterMmPerMeter: 163,
+      profileAvailableWaterMm: 163,
+      rootZoneAvailableWaterMm: 163,
+      effectiveDepthCm: 100,
+      effectiveDepthSource: 'operational_fallback',
+      effectiveDepthConfidence: 'low',
+      effectiveDepthIsFallback: true,
     });
     expect(result?.provenance.availableWaterMmPerMeter).toMatchObject({
       source: 'soilgrids',
       depthFromCm: 0,
       depthToCm: 100,
+      confidence: 'low',
     });
     expect(result?.alternatives?.[0]).toMatchObject({
       source: 'manual',
@@ -256,6 +277,7 @@ describe('SoilAgronomicInputsService canonical selection', () => {
       lean: jest.fn().mockResolvedValue({ _id: 'lot-1' }),
     });
     const assessment = automaticAssessment();
+    assessment.summary.profileAvailableWaterMm = -25;
     assessment.summary.rootZoneAvailableWaterMm = -25;
     assessment.depthProfile = [
       {
@@ -286,6 +308,7 @@ describe('SoilAgronomicInputsService canonical selection', () => {
     expect(result?.fieldCapacityPercentage).toBe(20);
     expect(result?.wiltingPointPercentage).toBeUndefined();
     expect(result?.availableWaterMmPerMeter).toBeUndefined();
+    expect(result?.profileAvailableWaterMm).toBeUndefined();
     expect(result?.rootZoneAvailableWaterMm).toBeUndefined();
     expect(result?.depthLayers[0]).toMatchObject({
       fieldCapacityPercentage: 20,

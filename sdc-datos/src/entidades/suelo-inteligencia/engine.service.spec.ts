@@ -71,6 +71,107 @@ describe('LotSoilIntelligenceEngine protection rules', () => {
     });
   });
 
+  it('marca 100 cm como fallback operativo y no como profundidad medida', () => {
+    expect((engine as any).effectiveDepth()).toEqual({
+      value: 100,
+      source: 'operational_fallback',
+      confidence: 'low',
+      isFallback: true,
+    });
+    expect(
+      (engine as any).effectiveDepth({
+        source: 'inta_local',
+        rawAttributes: { profund_s1: 85 },
+      }),
+    ).toEqual({
+      value: 85,
+      source: 'inta_cartographic',
+      confidence: 'medium',
+      isFallback: false,
+    });
+  });
+
+  it('fuerza confianza hidrica baja cuando SoilGrids no resuelve la escala del lote', () => {
+    const provenance = (engine as any).provenance(
+      {
+        availableWaterMmPerMeter: 158,
+        profileAvailableWaterMm: 158,
+        effectiveDepthCm: 100,
+        effectiveDepthSource: 'operational_fallback',
+        effectiveDepthConfidence: 'low',
+      },
+      [],
+      [
+        {
+          depthFromCm: 0,
+          depthToCm: 100,
+          fieldCapacityPercentage: 30,
+          wiltingPointPercentage: 14.2,
+          confidence: 'medium',
+          source: 'soilgrids',
+        },
+      ],
+      'low',
+    );
+
+    expect(provenance.availableWaterMmPerMeter.confidence).toBe('low');
+    expect(provenance.profileAvailableWaterMm).toMatchObject({
+      value: 158,
+      confidence: 'low',
+      observedOrEstimated: 'estimated',
+    });
+    expect(provenance.effectiveDepthCm).toMatchObject({
+      source: 'derived',
+      confidence: 'low',
+      observedOrEstimated: 'reference',
+    });
+  });
+
+  it('integra CC-PMP por espesor real y no extrapola un promedio superficial', () => {
+    const profile = [
+      {
+        depthFromCm: 0,
+        depthToCm: 30,
+        availableWaterMmPerMeter: 180,
+      },
+      {
+        depthFromCm: 30,
+        depthToCm: 100,
+        availableWaterMmPerMeter: 150,
+      },
+      {
+        depthFromCm: 100,
+        depthToCm: 200,
+        availableWaterMmPerMeter: 100,
+      },
+    ];
+
+    expect(
+      (engine as any).integratedMetric(
+        profile,
+        'availableWaterMmPerMeter',
+        0,
+        200,
+      ),
+    ).toBe(259);
+    expect(
+      (engine as any).integratedMetric(
+        profile.slice(0, 2),
+        'availableWaterMmPerMeter',
+        0,
+        200,
+      ),
+    ).toBeUndefined();
+    expect(
+      (engine as any).integratedMetric(
+        [profile[0], profile[2]],
+        'availableWaterMmPerMeter',
+        0,
+        200,
+      ),
+    ).toBeUndefined();
+  });
+
   it('invalida una lectura cuando cambia la geometria', async () => {
     updates.findById.mockReturnValue({
       lean: jest.fn().mockResolvedValue({ _id: 'lot-3', ubicacion: {} }),

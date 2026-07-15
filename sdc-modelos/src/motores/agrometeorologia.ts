@@ -5,8 +5,8 @@ import {
   VariableMeteorologicaNormalizada,
 } from "../entidades";
 
-export const AGROMET_ENGINE_VERSION = "agromet-1.0.3";
-export const AGROMET_DEFAULT_PARAMETERS_VERSION = "agromet-reference-2026.07.1";
+export const AGROMET_ENGINE_VERSION = "agromet-1.1.0";
+export const AGROMET_DEFAULT_PARAMETERS_VERSION = "agromet-reference-2026.07.2";
 
 export interface ICalculoGddParams {
   temperatureMinC?: number;
@@ -120,6 +120,9 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
     umbralFrioC: 8,
     umbralCalorC: 35,
     umbralVpdKpa: 2,
+    // FAO: valor conservador para evitar sobreestimar el volumen explorado.
+    // Es una referencia de cultivo, no una profundidad medida en el lote.
+    profundidadRadicularCm: 100,
     umbralDiaLluviaMm: 0.2,
     coeficientePrecipitacionEfectiva: 0.8,
     coeficienteEscurrimiento: 0.08,
@@ -138,6 +141,7 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
     umbralFrioC: 8,
     umbralCalorC: 35,
     umbralVpdKpa: 1.8,
+    profundidadRadicularCm: 60,
     umbralDiaLluviaMm: 0.2,
     coeficientePrecipitacionEfectiva: 0.8,
     coeficienteEscurrimiento: 0.08,
@@ -157,6 +161,7 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
     umbralCalorC: 30,
     umbralVpdKpa: 1.6,
     rangoVernalizacionC: { min: 0, max: 10 },
+    profundidadRadicularCm: 100,
     umbralDiaLluviaMm: 0.2,
     coeficientePrecipitacionEfectiva: 0.82,
     coeficienteEscurrimiento: 0.07,
@@ -175,6 +180,7 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
     umbralCalorC: 30,
     umbralVpdKpa: 1.6,
     rangoVernalizacionC: { min: 0, max: 10 },
+    profundidadRadicularCm: 100,
     umbralDiaLluviaMm: 0.2,
     coeficientePrecipitacionEfectiva: 0.82,
     coeficienteEscurrimiento: 0.07,
@@ -193,6 +199,7 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
     umbralFrioC: 0,
     umbralCalorC: 30,
     umbralVpdKpa: 1.6,
+    profundidadRadicularCm: 60,
     umbralDiaLluviaMm: 0.2,
     coeficientePrecipitacionEfectiva: 0.82,
     coeficienteEscurrimiento: 0.07,
@@ -210,15 +217,17 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
     umbralFrioC: 3,
     umbralCalorC: 30,
     umbralVpdKpa: 1.6,
+    profundidadRadicularCm: 40,
     umbralDiaLluviaMm: 0.2,
     coeficientePrecipitacionEfectiva: 0.8,
     coeficienteEscurrimiento: 0.08,
     coeficienteDrenaje: 0.25,
   },
-  Vid: perennialReference(10, 0.3, 0.85, 0.45),
-  Manzano: perennialReference(7, 0.55, 1.05, 0.8),
-  Peral: perennialReference(7, 0.55, 1.05, 0.8),
-  Pecan: perennialReference(10, 0.5, 1.05, 0.75),
+  Vid: perennialReference(10, 0.3, 0.85, 0.45, 100),
+  Manzano: perennialReference(7, 0.55, 1.05, 0.8, 100),
+  Peral: perennialReference(7, 0.55, 1.05, 0.8, 100),
+  // Referencia conservadora provisional de Chaman; requiere calibracion local.
+  Pecan: perennialReference(10, 0.5, 1.05, 0.75, 100),
 };
 
 function perennialReference(
@@ -226,6 +235,7 @@ function perennialReference(
   kcInitial: number,
   kcMid: number,
   kcEnd: number,
+  rootDepthCm: number,
 ): IParametrosAgrometeorologicos {
   return {
     version: AGROMET_DEFAULT_PARAMETERS_VERSION,
@@ -240,6 +250,9 @@ function perennialReference(
     umbralFrioC: 0,
     umbralCalorC: 35,
     umbralVpdKpa: 2,
+    // Referencia conservadora de cultivo (rango FAO para frutales/vid; Pecan
+    // queda provisional en Chaman). La profundidad local validada prevalece.
+    profundidadRadicularCm: rootDepthCm,
     umbralDiaLluviaMm: 0.2,
     coeficientePrecipitacionEfectiva: 0.78,
     coeficienteEscurrimiento: 0.1,

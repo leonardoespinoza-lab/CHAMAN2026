@@ -109,9 +109,12 @@ export class SoilAgronomicInputsService {
     const selectedDepthCm = selected?.depthLayers.length
       ? Math.max(...selected.depthLayers.map((layer) => layer.depthToCm))
       : undefined;
-    const rootZoneAvailableWaterMm =
+    const profileAvailableWaterMm =
       selected === automatic
-        ? this.nonNegative(summary?.rootZoneAvailableWaterMm)
+        ? this.nonNegative(
+            summary?.profileAvailableWaterMm,
+            summary?.rootZoneAvailableWaterMm,
+          )
         : Number.isFinite(availableWaterMmPerMeter) &&
             Number.isFinite(selectedDepthCm)
           ? Number(
@@ -140,9 +143,16 @@ export class SoilAgronomicInputsService {
       clayPercentage: summary?.clayPercentage,
       drainageClass: summary?.drainageClass,
       availableWaterMmPerMeter,
-      rootZoneAvailableWaterMm,
+      profileAvailableWaterMm,
+      rootZoneAvailableWaterMm: profileAvailableWaterMm,
       effectiveDepthCm:
         selected === automatic ? summary?.effectiveDepthCm : selectedDepthCm,
+      effectiveDepthSource:
+        selected === automatic ? summary?.effectiveDepthSource : undefined,
+      effectiveDepthConfidence:
+        selected === automatic ? summary?.effectiveDepthConfidence : undefined,
+      effectiveDepthIsFallback:
+        selected === automatic ? summary?.effectiveDepthIsFallback : undefined,
       bulkDensityKgDm3: summary?.bulkDensityKgDm3,
       coarseFragmentsPercentage: summary?.coarseFragmentsPercentage,
       ph: summary?.ph,
@@ -201,6 +211,15 @@ export class SoilAgronomicInputsService {
       this.weighted(depthLayers, 'wiltingPointPercentage', 0, 100),
     );
     const profileConfidence = this.profileConfidence(depthLayers, 0, 100);
+    const fieldCapacityConfidence =
+      assessment.propertyProvenance?.fieldCapacityPercentage?.confidence ||
+      profileConfidence;
+    const wiltingPointConfidence =
+      assessment.propertyProvenance?.wiltingPointPercentage?.confidence ||
+      profileConfidence;
+    const availableWaterConfidence =
+      assessment.propertyProvenance?.availableWaterMmPerMeter?.confidence ||
+      profileConfidence;
     const provenance = {
       ...(assessment.propertyProvenance || {}),
       operationalTexture: this.property(
@@ -219,7 +238,7 @@ export class SoilAgronomicInputsService {
         'contenido de agua a 33 kPa ponderado por espesor',
         0,
         100,
-        profileConfidence,
+        fieldCapacityConfidence,
       ),
       wiltingPointPercentage: this.property(
         wiltingPoint,
@@ -228,7 +247,7 @@ export class SoilAgronomicInputsService {
         'contenido de agua a 1500 kPa ponderado por espesor',
         0,
         100,
-        profileConfidence,
+        wiltingPointConfidence,
       ),
       availableWaterMmPerMeter: this.property(
         this.weighted(depthLayers, 'availableWaterMmPerMeter', 0, 100),
@@ -237,7 +256,7 @@ export class SoilAgronomicInputsService {
         'diferencia entre agua a 33 kPa y 1500 kPa ponderada 0-100 cm',
         0,
         100,
-        profileConfidence,
+        availableWaterConfidence,
       ),
     };
     return {

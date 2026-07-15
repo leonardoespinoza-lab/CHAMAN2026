@@ -37,6 +37,29 @@ describe('calculos agrometeorologicos puros', () => {
     ).toBe(26);
   });
 
+  it('define profundidades radiculares conservadoras para todos los cultivos', () => {
+    const expectedDepths = {
+      Maiz: 100,
+      Soja: 60,
+      Trigo: 100,
+      Cebada: 100,
+      Arveja: 60,
+      Papa: 40,
+      Vid: 100,
+      Manzano: 100,
+      Peral: 100,
+      Pecan: 100,
+    } as const;
+
+    for (const [crop, depthCm] of Object.entries(expectedDepths)) {
+      expect(
+        PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA[
+          crop as keyof typeof PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA
+        ]?.profundidadRadicularCm,
+      ).toBe(depthCm);
+    }
+  });
+
   it('calcula VPD en kPa y conserva los limites fisicos', () => {
     expect(calcularVpdKpa(25, 50)).toBeCloseTo(1.58, 2);
     expect(calcularVpdKpa(25, 100)).toBeCloseTo(0, 6);

@@ -124,6 +124,10 @@ h3 {
   background: color-mix(in srgb, var(--p-primary-color), white 94%);
   border-color: color-mix(in srgb, var(--p-primary-color), #d4dee7 72%);
 }
+.soil-summary article.water-capacity[data-hydraulic-confidence="low"] {
+  background: #fffaf1;
+  border-color: #e3bd75;
+}
 .soil-summary strong {
   color: var(--p-text-color);
   display: block;
@@ -258,6 +262,14 @@ h3 {
 .notice.conflict {
   background: #fff5e5;
   color: #795a1a;
+}
+.notice.caution {
+  background: #fff9ed;
+  border: 1px solid #ecd49f;
+  color: #6d5420;
+}
+.notice.caution span + span {
+  margin-top: 0.22rem;
 }
 .notice strong,
 .notice span {

@@ -65,12 +65,15 @@
         <strong>{{ drainageLabel(assessment?.summary?.drainageClass) }}</strong>
         <small>No equivale al riesgo meteorológico actual de anegamiento</small>
       </article>
-      <article>
+      <article class="water-capacity" [attr.data-hydraulic-confidence]="hydraulicConfidence">
         <span>Capacidad potencial del suelo (agua útil)</span>
         <strong>{{ number(assessment?.summary?.availableWaterMmPerMeter) }} mm/m</strong>
+        <small>{{ hydraulicConfidenceLabel }} · SoilGrids {{ soilGridsResolutionMeters || 250 }} m</small>
+        <small>{{ effectiveDepthDescription }} · {{ effectiveDepthConfidenceLabel }}</small>
         <small>
-          Estimación CC–PMP · Perfil de referencia {{ number(assessment?.summary?.effectiveDepthCm) }} cm:
-          {{ number(assessment?.summary?.rootZoneAvailableWaterMm) }} mm · No representa humedad actual
+          Potencial CC–PMP para ese perfil:
+          {{ number(assessment?.summary?.profileAvailableWaterMm ?? assessment?.summary?.rootZoneAvailableWaterMm) }}
+          mm. No representa humedad actual ni reserva aprovechable efectiva.
         </small>
       </article>
       <article>
@@ -91,6 +94,30 @@
         <div>
           <strong>{{ operationalConflictTitle }}</strong>
           <span>{{ operationalConflictDetail }}</span>
+        </div>
+      </div>
+    }
+
+    @if (isSmallerThanSoilGridsCell) {
+      <div class="notice caution">
+        <i class="pi pi-info-circle"></i>
+        <div>
+          <strong>Escala regional del valor hídrico</strong>
+          <span>{{ soilGridsScaleWarning }}</span>
+        </div>
+      </div>
+    }
+
+    @if (intaLimitations.length) {
+      <div class="notice caution">
+        <i class="pi pi-exclamation-triangle"></i>
+        <div>
+          <strong>Limitaciones cartográficas INTA</strong>
+          <span>{{ intaLimitations.join(' · ') }}</span>
+          <span>
+            No se descuentan automáticamente de CC–PMP. Sin CE, sodicidad y profundidad validadas no se calcula una
+            reserva aprovechable efectiva.
+          </span>
         </div>
       </div>
     }

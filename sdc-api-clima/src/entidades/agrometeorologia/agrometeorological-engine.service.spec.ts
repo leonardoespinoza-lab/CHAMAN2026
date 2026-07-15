@@ -40,6 +40,15 @@ describe('AgrometeorologicalEngineService', () => {
     completitudPct: 90,
     obtenidoEn: `${date}T16:00:00.000Z`,
   });
+  const dailyWithSoil = (
+    date: string,
+    soilMoistureM3M3: Record<string, number>,
+  ): IObservacionMeteorologicaNormalizada => {
+    const observation = daily(date, 8, 16, 24);
+    observation.valores.soilMoistureM3M3 = soilMoistureM3M3;
+    observation.fuentePorVariable.soilMoistureM3M3 = 'open_meteo';
+    return observation;
+  };
 
   it('genera una serie diaria acumulativa, trazable y determinista', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-13T18:00:00.000Z'));
@@ -119,7 +128,7 @@ describe('AgrometeorologicalEngineService', () => {
     );
   });
 
-  it('usa el perfil edafico estimado solo cuando el lote no tiene capacidad confirmada', () => {
+  it('no convierte capacidad potencial del perfil en TAW sin capas hidraulicas continuas', () => {
     const siembra = {
       _id: '64b000000000000000000001',
       idLote: '64b000000000000000000002',
@@ -152,9 +161,12 @@ describe('AgrometeorologicalEngineService', () => {
       } as any,
     );
 
-    expect(estimated.metricas.availableWaterCapacityMm).toBe(142);
+    expect(estimated.metricas.availableWaterCapacityMm).toBeUndefined();
+    expect(estimated.banderasCalidad).toContain(
+      'potential_profile_capacity_not_root_zone',
+    );
     expect(estimated.advertencias.join(' ')).toContain(
-      'perfil edáfico estimado',
+      'capacidad potencial del perfil es descriptiva',
     );
 
     const [confirmed] = engine.calculateIndicators(
@@ -234,7 +246,7 @@ describe('AgrometeorologicalEngineService', () => {
       } as any,
     );
 
-    expect(result.metricas.availableWaterCapacityMm).toBe(150);
+    expect(result.metricas.availableWaterCapacityMm).toBe(90);
     expect(result.advertencias.join(' ')).toContain('estimado');
   });
 
@@ -270,7 +282,569 @@ describe('AgrometeorologicalEngineService', () => {
       } as any,
     );
 
-    expect(result.metricas.availableWaterCapacityMm).toBe(180);
+    expect(result.metricas.availableWaterCapacityMm).toBeCloseTo(108, 6);
+  });
+
+  it('recorta un perfil 0-200 cm a la raiz objetivo sin integrar el ultimo horizonte', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2026-07-10',
+        semilla: {
+          cultivo: 'Maiz',
+          parametrosAgrometeorologicos: {
+            version: 'root-100-test',
+            estado: 'validado',
+            profundidadRadicularCm: 100,
+          },
+        },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        suelos: [
+          { profundidad: 50, capacidadDeCampo: 30, puntoMarchitez: 10 },
+          { profundidad: 100, capacidadDeCampo: 30, puntoMarchitez: 10 },
+          { profundidad: 200, capacidadDeCampo: 55, puntoMarchitez: 10 },
+        ],
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [
+        dailyWithSoil('2026-07-10', {
+          '0-50': 0.2,
+          '50-100': 0.3,
+          '100-200': 0.9,
+        }),
+      ],
+    );
+
+    expect(result.metricas.availableWaterCapacityMm).toBe(200);
+    expect(result.metricas.rootZoneSoilMoistureM3M3).toBeCloseTo(0.25, 6);
+  });
+
+  it('pondera parcialmente la ultima capa cuando el limite cae dentro del horizonte', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2026-07-10',
+        semilla: {
+          cultivo: 'Maiz',
+          parametrosAgrometeorologicos: {
+            version: 'partial-layer-test',
+            estado: 'validado',
+            profundidadRadicularCm: 50,
+          },
+        },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        suelos: [
+          { profundidad: 30, capacidadDeCampo: 30, puntoMarchitez: 10 },
+          { profundidad: 100, capacidadDeCampo: 40, puntoMarchitez: 10 },
+        ],
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [dailyWithSoil('2026-07-10', { '0-30': 0.1, '30-100': 0.3 })],
+    );
+
+    expect(result.metricas.availableWaterCapacityMm).toBe(120);
+    expect(result.metricas.rootZoneSoilMoistureM3M3).toBeCloseTo(0.18, 6);
+  });
+
+  it('integra SoilGrids con bounds explicitos aunque el lote tenga sensores puntuales', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2026-07-10',
+        semilla: {
+          cultivo: 'Maiz',
+          parametrosAgrometeorologicos: {
+            version: 'explicit-bounds-test',
+            estado: 'validado',
+            profundidadRadicularCm: 60,
+          },
+        },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        suelos: [
+          { profundidad: 20, numeroDeSensor: 1 },
+          { profundidad: 80, numeroDeSensor: 2 },
+          { profundidad: 200, numeroDeSensor: 3 },
+        ],
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [daily('2026-07-10', 8, 16, 24)],
+      [],
+      {
+        loteId: '64b000000000000000000002',
+        status: 'ready',
+        stale: false,
+        selectionPolicyVersion: 'test-v1',
+        selectionReason: 'automatic_assessment',
+        confidence: 'medium',
+        effectiveDepthCm: 100,
+        effectiveDepthConfidence: 'medium',
+        effectiveDepthIsFallback: false,
+        depthLayers: [
+          {
+            depthFromCm: 0,
+            depthToCm: 40,
+            fieldCapacityPercentage: 30,
+            wiltingPointPercentage: 10,
+            source: 'soilgrids',
+            confidence: 'medium',
+          },
+          {
+            depthFromCm: 40,
+            depthToCm: 100,
+            fieldCapacityPercentage: 25,
+            wiltingPointPercentage: 15,
+            source: 'soilgrids',
+            confidence: 'medium',
+          },
+          {
+            depthFromCm: 100,
+            depthToCm: 200,
+            fieldCapacityPercentage: 50,
+            wiltingPointPercentage: 10,
+            source: 'soilgrids',
+            confidence: 'medium',
+          },
+        ],
+        provenance: {},
+      } as any,
+    );
+
+    expect(result.metricas.availableWaterCapacityMm).toBeCloseTo(100, 6);
+    expect(result.banderasCalidad).not.toContain(
+      'point_sensor_not_hydraulic_profile',
+    );
+  });
+
+  it('no convierte profundidades de sensores puntuales en horizontes hidraulicos', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2026-07-10',
+        semilla: {
+          cultivo: 'Maiz',
+          parametrosAgrometeorologicos: {
+            version: 'point-sensor-test',
+            estado: 'validado',
+            profundidadRadicularCm: 100,
+          },
+        },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        suelos: [
+          {
+            profundidad: 20,
+            numeroDeSensor: 1,
+            capacidadDeCampo: 30,
+            puntoMarchitez: 10,
+          },
+          {
+            profundidad: 200,
+            numeroDeSensor: 2,
+            capacidadDeCampo: 50,
+            puntoMarchitez: 10,
+          },
+        ],
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [daily('2026-07-10', 8, 16, 24)],
+    );
+
+    expect(result.metricas.availableWaterCapacityMm).toBeUndefined();
+    expect(result.banderasCalidad).toContain(
+      'point_sensor_not_hydraulic_profile',
+    );
+    expect(result.advertencias.join(' ')).toContain(
+      'puntos de medicion y no limites de horizontes',
+    );
+  });
+
+  it('ignora capas artificiales derivadas de sensores puntuales aunque figuren confirmadas', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2026-07-10',
+        semilla: {
+          cultivo: 'Maiz',
+          parametrosAgrometeorologicos: {
+            version: 'confirmed-point-sensor-test',
+            estado: 'validado',
+            profundidadRadicularCm: 100,
+          },
+        },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        suelos: [
+          { profundidad: 20, numeroDeSensor: 1 },
+          { profundidad: 80, numeroDeSensor: 2 },
+        ],
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [daily('2026-07-10', 8, 16, 24)],
+      [],
+      {
+        loteId: '64b000000000000000000002',
+        status: 'ready',
+        stale: false,
+        selectionPolicyVersion: 'test-v1',
+        selectionReason: 'confirmed_sensor',
+        depthLayers: [
+          {
+            depthFromCm: 0,
+            depthToCm: 20,
+            fieldCapacityPercentage: 30,
+            wiltingPointPercentage: 10,
+            source: 'sensor',
+            confidence: 'high',
+          },
+          {
+            depthFromCm: 20,
+            depthToCm: 80,
+            fieldCapacityPercentage: 40,
+            wiltingPointPercentage: 15,
+            source: 'sensor',
+            confidence: 'high',
+          },
+        ],
+        provenance: {},
+      } as any,
+    );
+
+    expect(result.metricas.availableWaterCapacityMm).toBeUndefined();
+    expect(result.banderasCalidad).toContain(
+      'point_sensor_not_hydraulic_profile',
+    );
+    expect(result.advertencias.join(' ')).toContain(
+      'puntos de medicion y no limites de horizontes',
+    );
+  });
+
+  it('no llama promedio radicular a capas meteorologicas que cubren solo parte de Zr', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2026-07-10',
+        semilla: {
+          cultivo: 'Maiz',
+          parametrosAgrometeorologicos: {
+            version: 'strict-root-model-coverage-test',
+            estado: 'validado',
+            profundidadRadicularCm: 100,
+          },
+        },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        capacidadDeCampo: 30,
+        puntoMarchitez: 10,
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [dailyWithSoil('2026-07-10', { '0-7': 0.22, '7-28': 0.2 })],
+    );
+
+    expect(result.metricas.rootZoneSoilMoistureM3M3).toBeUndefined();
+    expect(result.metricas.soilMoistureM3M3).toEqual({
+      '0-7': 0.22,
+      '7-28': 0.2,
+    });
+    expect(result.banderasCalidad).toContain(
+      'incomplete_root_zone_model_coverage',
+    );
+  });
+
+  it('prioriza raiz observada en un perenne y conserva su campana vigente', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2020-08-15',
+        semilla: { cultivo: 'Manzano' },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        suelos: [
+          {
+            profundidad: 100,
+            capacidadDeCampo: 30,
+            puntoMarchitez: 10,
+            hayRaices: true,
+          },
+          {
+            profundidad: 150,
+            capacidadDeCampo: 30,
+            puntoMarchitez: 10,
+            hayRaices: true,
+          },
+          {
+            profundidad: 200,
+            capacidadDeCampo: 50,
+            puntoMarchitez: 10,
+            hayRaices: false,
+          },
+        ],
+      } as any,
+      { lat: -39, lng: -67.6 },
+      [daily('2026-07-10', 1, 8, 15)],
+    );
+
+    expect(result.metricas.availableWaterCapacityMm).toBe(300);
+    expect(result.banderasCalidad).not.toContain('screening_root_depth');
+  });
+
+  it('no propaga una raiz observada hacia capas SoilGrids mas profundas', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2020-08-15',
+        semilla: {
+          cultivo: 'Manzano',
+          parametrosAgrometeorologicos: {
+            version: 'original-root-evidence-test',
+            estado: 'validado',
+            profundidadRadicularCm: 180,
+          },
+        },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        suelos: [
+          {
+            profundidad: 100,
+            capacidadDeCampo: 30,
+            puntoMarchitez: 10,
+            hayRaices: true,
+          },
+        ],
+      } as any,
+      { lat: -39, lng: -67.6 },
+      [daily('2026-07-10', 1, 8, 15)],
+      [],
+      {
+        loteId: '64b000000000000000000002',
+        status: 'ready',
+        stale: false,
+        selectionPolicyVersion: 'test-v1',
+        selectionReason: 'automatic_assessment',
+        effectiveDepthCm: 200,
+        effectiveDepthSource: 'inta_cartographic',
+        effectiveDepthConfidence: 'medium',
+        effectiveDepthIsFallback: false,
+        depthLayers: [
+          {
+            depthFromCm: 0,
+            depthToCm: 100,
+            fieldCapacityPercentage: 30,
+            wiltingPointPercentage: 10,
+            source: 'soilgrids',
+            confidence: 'low',
+          },
+          {
+            depthFromCm: 100,
+            depthToCm: 200,
+            fieldCapacityPercentage: 50,
+            wiltingPointPercentage: 10,
+            source: 'soilgrids',
+            confidence: 'low',
+          },
+        ],
+        provenance: {},
+      } as any,
+    );
+
+    expect(result.metricas.availableWaterCapacityMm).toBe(200);
+    expect(result.banderasCalidad).not.toContain('screening_root_depth');
+  });
+
+  it('sin raiz conocida usa screening 100 cm y nunca infiere 200 cm del perfil', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2026-07-10',
+        semilla: {},
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        suelos: [
+          { profundidad: 100, capacidadDeCampo: 30, puntoMarchitez: 10 },
+          { profundidad: 200, capacidadDeCampo: 50, puntoMarchitez: 10 },
+        ],
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [dailyWithSoil('2026-07-10', { '0-100': 0.2, '100-200': 0.8 })],
+    );
+
+    expect(result.metricas.availableWaterCapacityMm).toBe(200);
+    expect(result.metricas.rootZoneSoilMoistureM3M3).toBeCloseTo(0.2, 6);
+    expect(result.banderasCalidad).toContain('screening_root_depth');
+    expect(result.banderasCalidad).toContain('screening_water_balance');
+    expect(result.advertencias.join(' ')).toContain(
+      'fallback operativo conservador de 100 cm',
+    );
+  });
+
+  it('usa la profundidad edafica fallback solo como techo de una raiz de cultivo', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2026-07-10',
+        semilla: {
+          cultivo: 'Maiz',
+          parametrosAgrometeorologicos: {
+            version: 'effective-depth-cap-test',
+            estado: 'validado',
+            profundidadRadicularCm: 150,
+          },
+        },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [dailyWithSoil('2026-07-10', { '0-100': 0.2, '100-200': 0.8 })],
+      [],
+      {
+        loteId: '64b000000000000000000002',
+        status: 'ready',
+        stale: false,
+        selectionPolicyVersion: 'test-v1',
+        selectionReason: 'automatic_assessment',
+        effectiveDepthCm: 100,
+        effectiveDepthSource: 'operational_fallback',
+        effectiveDepthConfidence: 'low',
+        effectiveDepthIsFallback: true,
+        confidence: 'low',
+        depthLayers: [
+          {
+            depthFromCm: 0,
+            depthToCm: 100,
+            fieldCapacityPercentage: 30,
+            wiltingPointPercentage: 10,
+            source: 'soilgrids',
+            confidence: 'low',
+          },
+          {
+            depthFromCm: 100,
+            depthToCm: 200,
+            fieldCapacityPercentage: 50,
+            wiltingPointPercentage: 10,
+            source: 'soilgrids',
+            confidence: 'low',
+          },
+        ],
+        provenance: {},
+      } as any,
+    );
+
+    expect(result.metricas.availableWaterCapacityMm).toBe(200);
+    expect(result.metricas.rootZoneSoilMoistureM3M3).toBeCloseTo(0.2, 6);
+    expect(result.banderasCalidad).toContain('screening_effective_soil_depth');
+    expect(result.banderasCalidad).toContain('screening_water_balance');
+    expect(result.advertencias.join(' ')).toContain(
+      'se usa solo como techo del calculo',
+    );
+  });
+
+  it('no informa TAW total cuando la cobertura hidraulica no alcanza la raiz objetivo', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2026-07-10',
+        semilla: {
+          cultivo: 'Maiz',
+          parametrosAgrometeorologicos: {
+            version: 'incomplete-profile-test',
+            estado: 'validado',
+            profundidadRadicularCm: 100,
+          },
+        },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        capacidadDeCampo: 30,
+        puntoMarchitez: 10,
+        suelos: [{ profundidad: 40, capacidadDeCampo: 30, puntoMarchitez: 10 }],
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [daily('2026-07-10', 8, 16, 24)],
+    );
+
+    expect(result.metricas.availableWaterCapacityMm).toBeUndefined();
+    expect(result.banderasCalidad).toContain('incomplete_hydraulic_root_zone');
+    expect(result.advertencias.join(' ')).toContain(
+      'No se extrapola la ultima capa',
+    );
+  });
+
+  it('invalida el balance si FC y PMP abren un hueco dentro de la zona radicular', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2026-07-10',
+        semilla: {
+          cultivo: 'Maiz',
+          parametrosAgrometeorologicos: {
+            version: 'hydraulic-gap-test',
+            estado: 'validado',
+            profundidadRadicularCm: 90,
+          },
+        },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        suelos: [
+          { profundidad: 30, capacidadDeCampo: 30, puntoMarchitez: 10 },
+          { profundidad: 60, capacidadDeCampo: 10, puntoMarchitez: 10 },
+          { profundidad: 100, capacidadDeCampo: 30, puntoMarchitez: 10 },
+        ],
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [daily('2026-07-10', 8, 16, 24)],
+    );
+
+    expect(result.metricas.availableWaterCapacityMm).toBeUndefined();
+    expect(result.banderasCalidad).toContain('incomplete_hydraulic_root_zone');
   });
 
   it('no interpreta un cero sin estado valido como agua util medida', () => {

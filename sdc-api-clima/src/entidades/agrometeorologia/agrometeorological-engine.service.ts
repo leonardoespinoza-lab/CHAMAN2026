@@ -78,9 +78,45 @@ interface ISoilProfile {
   fieldCapacity?: number;
   wiltingPoint?: number;
   rootDepthCm?: number;
+  hydraulicCoverageCm?: number;
   estimated: boolean;
   source?: 'confirmed_lot' | 'soil_intelligence' | 'crop_reference';
+  depthSource?:
+    | 'crop_parameter'
+    | 'confirmed_root_profile'
+    | 'operational_fallback';
+  depthConfidence?: 'high' | 'medium' | 'low' | 'unavailable';
+  depthIsFallback?: boolean;
+  effectiveDepthLimitCm?: number;
+  effectiveDepthSource?: string;
+  effectiveDepthConfidence?: 'high' | 'medium' | 'low' | 'unavailable';
+  effectiveDepthIsFallback?: boolean;
+  limitedByEffectiveDepth?: boolean;
+  hydraulicDepthLimitCm?: number;
+  limitedByHydraulicCoverage?: boolean;
+  requestedRootDepthCm?: number;
+  incompleteHydraulicCoverage?: boolean;
+  hydraulicIsScreening?: boolean;
+  pointSensorHydraulicsIgnored?: boolean;
+  potentialProfileCapacityIgnored?: boolean;
 }
+
+interface IRootDepthResolution {
+  depthCm: number;
+  source: NonNullable<ISoilProfile['depthSource']>;
+  confidence: NonNullable<ISoilProfile['depthConfidence']>;
+  estimated: boolean;
+  isFallback: boolean;
+  effectiveDepthLimitCm?: number;
+  effectiveDepthSource?: string;
+  effectiveDepthConfidence?: 'high' | 'medium' | 'low' | 'unavailable';
+  effectiveDepthIsFallback?: boolean;
+  limitedByEffectiveDepth: boolean;
+}
+
+const OPERATIONAL_ROOT_DEPTH_FALLBACK_CM = 100;
+const MAX_VALID_ROOT_DEPTH_CM = 500;
+const ROOT_ZONE_COVERAGE_TOLERANCE_CM = 1;
 
 interface IDailyDerived {
   temperatureMinC?: number;
@@ -229,6 +265,7 @@ export class AgrometeorologicalEngineService {
     inheritedWarnings: string[] = [],
     soilInputs?: IEntradasAgronomicasSuelo,
   ): ICreateIndicadorAgrometeorologico[] {
+    const lotWithOriginalRootEvidence = lote;
     lote = aplicarEntradasAgronomicasSuelo(lote, soilInputs);
     const crop = siembra.semilla?.cultivo;
     const reference = crop
@@ -279,7 +316,66 @@ export class AgrometeorologicalEngineService {
     const dailyByDate = new Map(
       dailyPersisted.map((item) => [item.fechaLocal, item]),
     );
-    const profile = this.resolveSoilProfile(lote, parameters, soilInputs);
+    const profile = this.resolveSoilProfile(
+      lote,
+      parameters,
+      soilInputs,
+      lotWithOriginalRootEvidence,
+    );
+    if (profile.depthIsFallback) {
+      globalWarnings.push(
+        `La profundidad radicular no esta medida ni calibrada; se usa un fallback operativo conservador de ${profile.rootDepthCm} cm y nunca la profundidad total del perfil edafico.`,
+      );
+    }
+    if (
+      profile.effectiveDepthLimitCm !== undefined &&
+      profile.effectiveDepthIsFallback
+    ) {
+      globalWarnings.push(
+        `La profundidad efectiva edafica de ${profile.effectiveDepthLimitCm} cm es un fallback de screening y se usa solo como techo del calculo; no es una medicion de raices.`,
+      );
+    } else if (
+      profile.effectiveDepthLimitCm !== undefined &&
+      profile.limitedByEffectiveDepth
+    ) {
+      globalWarnings.push(
+        `La zona de balance se limita a ${profile.rootDepthCm} cm por la profundidad efectiva edafica; ese limite no representa por si solo una profundidad radicular medida.`,
+      );
+    }
+    if (
+      profile.incompleteHydraulicCoverage &&
+      profile.requestedRootDepthCm !== undefined
+    ) {
+      globalWarnings.push(
+        `Cobertura hidraulica incompleta: el perfil verificable cubre ${profile.hydraulicDepthLimitCm ?? 0} de ${profile.requestedRootDepthCm} cm. No se extrapola la ultima capa ni se informa capacidad total de agua util.`,
+      );
+    }
+    if (profile.pointSensorHydraulicsIgnored) {
+      globalWarnings.push(
+        'Las profundidades de sensores son puntos de medicion y no limites de horizontes; no se integran como un perfil hidraulico sin capas calibradas.',
+      );
+    }
+    if (profile.potentialProfileCapacityIgnored) {
+      globalWarnings.push(
+        'La capacidad potencial del perfil es descriptiva y no se convierte en agua disponible de la zona radicular sin capas hidraulicas continuas hasta la profundidad de raices.',
+      );
+    }
+    if (profile.hydraulicIsScreening) {
+      globalWarnings.push(
+        'La parametrizacion hidraulica es de screening; confirmar limites de horizontes, capacidad de campo y punto de marchitez para uso operativo.',
+      );
+    }
+    if (
+      profile.rootDepthCm !== undefined &&
+      profile.hydraulicCoverageCm !== undefined &&
+      profile.requestedRootDepthCm !== undefined &&
+      profile.hydraulicCoverageCm + ROOT_ZONE_COVERAGE_TOLERANCE_CM <
+        profile.requestedRootDepthCm
+    ) {
+      globalWarnings.push(
+        `El perfil hidraulico cubre ${Number(profile.hydraulicCoverageCm.toFixed(1))} de ${profile.requestedRootDepthCm} cm de la zona objetivo.`,
+      );
+    }
     if (!profile.capacityMm) {
       globalWarnings.push(
         'Balance hidrico no calculable: faltan capacidad de campo, punto de marchitez o profundidad radicular.',
@@ -341,7 +437,7 @@ export class AgrometeorologicalEngineService {
         hours,
         thresholds,
         parameters,
-        profile.rootDepthCm,
+        profile.requestedRootDepthCm ?? profile.rootDepthCm,
       );
       const weather = this.mergeDailyWeather(daily?.valores, derived);
       const stage = this.resolveStage(siembra, date, gddAccumulated);
@@ -438,15 +534,24 @@ export class AgrometeorologicalEngineService {
 
       const rootMoisture =
         derived.rootZoneSoilMoistureM3M3 ??
-        promedioPonderadoZonaRadicular(
+        this.rootZoneAverage(
           weather.soilMoistureM3M3,
-          profile.rootDepthCm,
+          profile.requestedRootDepthCm ?? profile.rootDepthCm,
         );
       const rootTemperature =
         derived.rootZoneSoilTemperatureC ??
-        promedioPonderadoZonaRadicular(
+        this.rootZoneAverage(
           weather.soilTemperatureC,
-          profile.rootDepthCm,
+          profile.requestedRootDepthCm ?? profile.rootDepthCm,
+        );
+      const incompleteRootZoneModelCoverage =
+        this.hasIncompleteRootZoneCoverage(
+          weather.soilMoistureM3M3,
+          profile.requestedRootDepthCm ?? profile.rootDepthCm,
+        ) ||
+        this.hasIncompleteRootZoneCoverage(
+          weather.soilTemperatureC,
+          profile.requestedRootDepthCm ?? profile.rootDepthCm,
         );
       const measuredStorage = this.storageFromSoilMoisture(
         rootMoisture,
@@ -480,6 +585,11 @@ export class AgrometeorologicalEngineService {
         );
       if ((daily?.completitudPct ?? 0) < 70) {
         dayWarnings.push('Cobertura meteorologica incompleta para este dia.');
+      }
+      if (incompleteRootZoneModelCoverage) {
+        dayWarnings.push(
+          'Las capas meteorologicas de suelo no cubren de forma contigua toda la zona radicular; no se informa un promedio radicular parcial.',
+        );
       }
       const soilModelSource = derived.sourceByVariable.soilMoistureM3M3;
       if (
@@ -611,6 +721,32 @@ export class AgrometeorologicalEngineService {
               ? ['modeled_soil_open_meteo']
               : []),
             ...(soilModelSource === 'mixed' ? ['mixed_soil_sources'] : []),
+            ...(profile.depthIsFallback ? ['screening_root_depth'] : []),
+            ...(profile.effectiveDepthIsFallback
+              ? ['screening_effective_soil_depth']
+              : []),
+            ...(profile.incompleteHydraulicCoverage
+              ? ['incomplete_hydraulic_root_zone']
+              : []),
+            ...(profile.hydraulicIsScreening
+              ? ['screening_hydraulic_profile']
+              : []),
+            ...(profile.pointSensorHydraulicsIgnored
+              ? ['point_sensor_not_hydraulic_profile']
+              : []),
+            ...(profile.potentialProfileCapacityIgnored
+              ? ['potential_profile_capacity_not_root_zone']
+              : []),
+            ...(incompleteRootZoneModelCoverage
+              ? ['incomplete_root_zone_model_coverage']
+              : []),
+            ...(profile.depthIsFallback ||
+            (profile.depthSource === 'crop_parameter' &&
+              profile.depthConfidence === 'low') ||
+            profile.effectiveDepthIsFallback ||
+            profile.hydraulicIsScreening
+              ? ['screening_water_balance']
+              : []),
           ]),
         ],
         advertencias: [...new Set(dayWarnings)],
@@ -879,18 +1015,80 @@ export class AgrometeorologicalEngineService {
         ? this.sum(radiation) * 0.0036
         : undefined,
       et0Mm: et0Hourly.length ? this.sum(et0Hourly) : undefined,
-      rootZoneSoilTemperatureC: promedioPonderadoZonaRadicular(
+      rootZoneSoilTemperatureC: this.rootZoneAverage(
         soilTemperature,
         rootDepthCm,
       ),
-      rootZoneSoilMoistureM3M3: promedioPonderadoZonaRadicular(
-        soilMoisture,
-        rootDepthCm,
-      ),
+      rootZoneSoilMoistureM3M3: this.rootZoneAverage(soilMoisture, rootDepthCm),
       soilTemperatureC: soilTemperature,
       soilMoistureM3M3: soilMoisture,
       sourceByVariable,
     };
+  }
+
+  /**
+   * Nunca delega una profundidad ausente al helper generico: ese helper usa
+   * la ultima capa disponible y, con SoilGrids, puede convertir 200 cm de
+   * perfil edafico en una falsa profundidad radicular.
+   */
+  private rootZoneAverage(
+    valuesByDepth: Record<string, number> | undefined,
+    rootDepthCm?: number,
+  ): number | undefined {
+    const targetDepth = this.validRootDepth(rootDepthCm);
+    return targetDepth === undefined ||
+      !this.hasCompleteRootZoneCoverage(valuesByDepth, targetDepth)
+      ? undefined
+      : promedioPonderadoZonaRadicular(valuesByDepth, targetDepth);
+  }
+
+  private hasIncompleteRootZoneCoverage(
+    valuesByDepth: Record<string, number> | undefined,
+    rootDepthCm?: number,
+  ): boolean {
+    return !!(
+      valuesByDepth &&
+      Object.keys(valuesByDepth).length &&
+      !this.hasCompleteRootZoneCoverage(valuesByDepth, rootDepthCm)
+    );
+  }
+
+  private hasCompleteRootZoneCoverage(
+    valuesByDepth: Record<string, number> | undefined,
+    rootDepthCm?: number,
+  ): boolean {
+    const targetDepth = this.validRootDepth(rootDepthCm);
+    if (!valuesByDepth || targetDepth === undefined) return false;
+    const layers = Object.entries(valuesByDepth)
+      .map(([range, value]) => {
+        const depths =
+          range.match(/\d+(?:\.\d+)?/g)?.map((item) => Number(item)) || [];
+        return {
+          from: depths.length >= 2 ? depths[0] : 0,
+          to: depths.length >= 2 ? depths[1] : depths[0],
+          value: numeroFinito(value),
+        };
+      })
+      .filter(
+        (layer): layer is { from: number; to: number; value: number } =>
+          layer.value !== undefined &&
+          Number.isFinite(layer.from) &&
+          Number.isFinite(layer.to) &&
+          layer.to > layer.from,
+      )
+      .sort((left, right) => left.from - right.from || left.to - right.to);
+    let coveredTo = 0;
+    for (const layer of layers) {
+      if (layer.to <= coveredTo) continue;
+      if (layer.from > coveredTo + ROOT_ZONE_COVERAGE_TOLERANCE_CM) {
+        return false;
+      }
+      coveredTo = Math.max(coveredTo, layer.to);
+      if (coveredTo + ROOT_ZONE_COVERAGE_TOLERANCE_CM >= targetDepth) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private mergeDailyWeather(
@@ -927,84 +1125,386 @@ export class AgrometeorologicalEngineService {
     lote: ILote,
     parameters: IParametrosAgrometeorologicos,
     soilInputs?: IEntradasAgronomicasSuelo,
+    lotWithOriginalRootEvidence: ILote = lote,
   ): ISoilProfile {
-    const layers = [...(lote.suelos || [])]
-      .filter((item) => item.hayRaices !== false)
-      .map((item) => ({
-        depth: numeroFinito(item.profundidad),
-        fc: normalizarContenidoVolumetrico(item.capacidadDeCampo),
-        wp: normalizarContenidoVolumetrico(item.puntoMarchitez),
-      }))
+    const rootDepth = this.resolveTargetRootDepth(
+      lote,
+      parameters,
+      soilInputs,
+      lotWithOriginalRootEvidence,
+    );
+    const pointSensorLayout = (lote.suelos || []).some((layer) => {
+      const sensorNumber = numeroFinito(layer.numeroDeSensor);
+      return sensorNumber !== undefined && sensorNumber > 0;
+    });
+    const pointSensorProfile =
+      pointSensorLayout && soilInputs?.selectionReason === 'confirmed_sensor';
+    const canonicalHydraulicProfile = this.usableSoilInputs(soilInputs)
+      ? !!soilInputs?.depthLayers?.length && !pointSensorProfile
+      : false;
+    const canonicalProfileConfirmed = [
+      'confirmed_laboratory',
+      'confirmed_sensor',
+    ].includes(soilInputs?.selectionReason || '');
+    const canonicalLayers = canonicalHydraulicProfile
+      ? (soilInputs?.depthLayers || []).map((layer) => ({
+          from: numeroFinito(layer.depthFromCm),
+          to: numeroFinito(layer.depthToCm),
+          fc: normalizarContenidoVolumetrico(layer.fieldCapacityPercentage),
+          wp: normalizarContenidoVolumetrico(layer.wiltingPointPercentage),
+        }))
+      : [];
+    const legacyEndpoints = pointSensorLayout
+      ? []
+      : [...(lote.suelos || [])]
+          .map((layer) => ({
+            depth: numeroFinito(layer.profundidad),
+            fc: normalizarContenidoVolumetrico(layer.capacidadDeCampo),
+            wp: normalizarContenidoVolumetrico(layer.puntoMarchitez),
+          }))
+          .filter(
+            (
+              layer,
+            ): layer is {
+              depth: number;
+              fc: number | undefined;
+              wp: number | undefined;
+            } => layer.depth !== undefined && layer.depth > 0,
+          )
+          .sort((left, right) => left.depth - right.depth);
+    let previousLegacyDepth = 0;
+    const legacyLayers = legacyEndpoints.map((layer) => {
+      const mapped = {
+        from: previousLegacyDepth,
+        to: layer.depth,
+        fc: layer.fc,
+        wp: layer.wp,
+      };
+      previousLegacyDepth = layer.depth;
+      return mapped;
+    });
+    const layers = (canonicalHydraulicProfile ? canonicalLayers : legacyLayers)
       .filter(
-        (item): item is { depth: number; fc: number; wp: number } =>
-          item.depth !== undefined &&
-          item.depth > 0 &&
-          item.fc !== undefined &&
-          item.wp !== undefined &&
-          item.fc > item.wp,
+        (
+          layer,
+        ): layer is {
+          from: number;
+          to: number;
+          fc: number | undefined;
+          wp: number | undefined;
+        } =>
+          layer.from !== undefined &&
+          layer.to !== undefined &&
+          layer.from >= 0 &&
+          layer.to > layer.from,
       )
-      .sort((a, b) => a.depth - b.depth);
+      .sort((left, right) => left.from - right.from || left.to - right.to);
+    let previousHydraulicDepth = 0;
+    let hydraulicDepthLimit: number | undefined;
+    for (const layer of layers) {
+      if (layer.to <= previousHydraulicDepth) continue;
+      if (
+        layer.from >
+        previousHydraulicDepth + ROOT_ZONE_COVERAGE_TOLERANCE_CM
+      ) {
+        break;
+      }
+      if (
+        layer.fc === undefined ||
+        layer.wp === undefined ||
+        layer.fc <= layer.wp
+      ) {
+        break;
+      }
+      previousHydraulicDepth = Math.max(previousHydraulicDepth, layer.to);
+      hydraulicDepthLimit = previousHydraulicDepth;
+    }
+    const targetDepthCm =
+      hydraulicDepthLimit !== undefined
+        ? Math.min(rootDepth.depthCm, hydraulicDepthLimit)
+        : rootDepth.depthCm;
+    const depthMetadata: Pick<
+      ISoilProfile,
+      | 'depthSource'
+      | 'depthConfidence'
+      | 'depthIsFallback'
+      | 'effectiveDepthLimitCm'
+      | 'effectiveDepthSource'
+      | 'effectiveDepthConfidence'
+      | 'effectiveDepthIsFallback'
+      | 'limitedByEffectiveDepth'
+      | 'hydraulicDepthLimitCm'
+      | 'limitedByHydraulicCoverage'
+      | 'requestedRootDepthCm'
+      | 'incompleteHydraulicCoverage'
+      | 'hydraulicIsScreening'
+      | 'pointSensorHydraulicsIgnored'
+      | 'potentialProfileCapacityIgnored'
+    > = {
+      depthSource: rootDepth.source,
+      depthConfidence: rootDepth.confidence,
+      depthIsFallback: rootDepth.isFallback,
+      effectiveDepthLimitCm: rootDepth.effectiveDepthLimitCm,
+      effectiveDepthSource: rootDepth.effectiveDepthSource,
+      effectiveDepthConfidence: rootDepth.effectiveDepthConfidence,
+      effectiveDepthIsFallback: rootDepth.effectiveDepthIsFallback,
+      limitedByEffectiveDepth: rootDepth.limitedByEffectiveDepth,
+      hydraulicDepthLimitCm: hydraulicDepthLimit,
+      limitedByHydraulicCoverage:
+        hydraulicDepthLimit !== undefined &&
+        hydraulicDepthLimit < rootDepth.depthCm,
+      requestedRootDepthCm: rootDepth.depthCm,
+      incompleteHydraulicCoverage:
+        layers.length > 0 &&
+        (hydraulicDepthLimit === undefined ||
+          hydraulicDepthLimit + 1 < rootDepth.depthCm),
+      hydraulicIsScreening:
+        !canonicalHydraulicProfile || !canonicalProfileConfirmed,
+      pointSensorHydraulicsIgnored:
+        pointSensorLayout && !canonicalHydraulicProfile,
+      potentialProfileCapacityIgnored:
+        !canonicalHydraulicProfile &&
+        (numeroFinito(soilInputs?.profileAvailableWaterMm) !== undefined ||
+          numeroFinito(soilInputs?.rootZoneAvailableWaterMm) !== undefined ||
+          numeroFinito(soilInputs?.availableWaterMmPerMeter) !== undefined),
+    };
     if (layers.length) {
-      const canonicalHydraulicProfile = !!soilInputs?.depthLayers?.length;
-      const canonicalProfileConfirmed = [
-        'confirmed_laboratory',
-        'confirmed_sensor',
-      ].includes(soilInputs?.selectionReason || '');
-      let previousDepth = 0;
       let capacity = 0;
       let weightedFc = 0;
       let weightedWp = 0;
+      let hydraulicCoverage = 0;
+      let integrationCursor = 0;
       for (const layer of layers) {
-        const thickness = Math.max(0, layer.depth - previousDepth);
+        if (layer.to <= integrationCursor) continue;
+        if (layer.from > integrationCursor + ROOT_ZONE_COVERAGE_TOLERANCE_CM) {
+          break;
+        }
+        const layerTop = Math.max(layer.from, integrationCursor);
+        const thickness = Math.max(
+          0,
+          Math.min(layer.to, targetDepthCm) - layerTop,
+        );
+        if (layerTop >= targetDepthCm) break;
+        if (
+          thickness <= 0 ||
+          layer.fc === undefined ||
+          layer.wp === undefined ||
+          layer.fc <= layer.wp
+        ) {
+          continue;
+        }
         capacity += (layer.fc - layer.wp) * thickness * 10;
         weightedFc += layer.fc * thickness;
         weightedWp += layer.wp * thickness;
-        previousDepth = layer.depth;
+        hydraulicCoverage += thickness;
+        integrationCursor = Math.max(integrationCursor, layer.to);
+      }
+      if (capacity > 0 && hydraulicCoverage > 0) {
+        if (depthMetadata.incompleteHydraulicCoverage) {
+          return {
+            rootDepthCm: targetDepthCm,
+            hydraulicCoverageCm: hydraulicCoverage,
+            estimated: true,
+            source:
+              canonicalHydraulicProfile && !canonicalProfileConfirmed
+                ? 'soil_intelligence'
+                : 'confirmed_lot',
+            ...depthMetadata,
+          };
+        }
+        return {
+          capacityMm: capacity,
+          fieldCapacity: weightedFc / hydraulicCoverage,
+          wiltingPoint: weightedWp / hydraulicCoverage,
+          rootDepthCm: targetDepthCm,
+          hydraulicCoverageCm: hydraulicCoverage,
+          estimated:
+            rootDepth.estimated ||
+            (canonicalHydraulicProfile && !canonicalProfileConfirmed),
+          source:
+            canonicalHydraulicProfile && !canonicalProfileConfirmed
+              ? 'soil_intelligence'
+              : 'confirmed_lot',
+          ...depthMetadata,
+        };
       }
       return {
-        capacityMm: capacity > 0 ? capacity : undefined,
-        fieldCapacity:
-          previousDepth > 0 ? weightedFc / previousDepth : undefined,
-        wiltingPoint:
-          previousDepth > 0 ? weightedWp / previousDepth : undefined,
-        rootDepthCm: previousDepth,
-        estimated: canonicalHydraulicProfile && !canonicalProfileConfirmed,
+        rootDepthCm: targetDepthCm,
+        hydraulicCoverageCm: hydraulicCoverage,
+        estimated: true,
         source:
           canonicalHydraulicProfile && !canonicalProfileConfirmed
             ? 'soil_intelligence'
             : 'confirmed_lot',
+        ...depthMetadata,
       };
     }
-    const rootDepth =
-      parameters.profundidadRadicularCm ?? lote.sueloReferencia?.profundidadCm;
     const legacyCapacity = calcularCapacidadAguaUtilMm(
       lote.capacidadDeCampo,
       lote.puntoMarchitez,
-      rootDepth,
+      targetDepthCm,
     );
     if (legacyCapacity !== undefined) {
       return {
         capacityMm: legacyCapacity,
         fieldCapacity: normalizarContenidoVolumetrico(lote.capacidadDeCampo),
         wiltingPoint: normalizarContenidoVolumetrico(lote.puntoMarchitez),
-        rootDepthCm: rootDepth,
-        estimated: true,
+        rootDepthCm: targetDepthCm,
+        estimated: rootDepth.estimated || !lote.sueloConfirmadoPorUsuario,
         source: 'crop_reference',
+        ...depthMetadata,
       };
     }
-    const estimatedRootDepth = rootDepth ?? soilInputs?.effectiveDepthCm ?? 100;
-    const soilCapacity =
-      soilInputs?.rootZoneAvailableWaterMm ??
-      (Number.isFinite(soilInputs?.availableWaterMmPerMeter)
-        ? soilInputs!.availableWaterMmPerMeter! * (estimatedRootDepth / 100)
-        : undefined);
     return {
-      capacityMm: soilCapacity,
-      rootDepthCm: estimatedRootDepth,
+      rootDepthCm: targetDepthCm,
       estimated: true,
-      source:
-        soilCapacity !== undefined ? 'soil_intelligence' : 'crop_reference',
+      source: 'crop_reference',
+      ...depthMetadata,
     };
+  }
+
+  private resolveTargetRootDepth(
+    lote: ILote,
+    parameters: IParametrosAgrometeorologicos,
+    soilInputs?: IEntradasAgronomicasSuelo,
+    lotWithOriginalRootEvidence: ILote = lote,
+  ): IRootDepthResolution {
+    const explicitRootDepths = (lotWithOriginalRootEvidence.suelos || [])
+      .filter((layer) => layer.hayRaices === true)
+      .map((layer) => this.validRootDepth(layer.profundidad))
+      .filter((depth): depth is number => depth !== undefined);
+    const parameterDepth = this.validRootDepth(
+      parameters.profundidadRadicularCm,
+    );
+    const validatedParameter = parameters.estado === 'validado';
+    const baseRoot: Omit<
+      IRootDepthResolution,
+      | 'effectiveDepthLimitCm'
+      | 'effectiveDepthSource'
+      | 'effectiveDepthConfidence'
+      | 'effectiveDepthIsFallback'
+      | 'limitedByEffectiveDepth'
+    > = explicitRootDepths.length
+      ? {
+          depthCm: Math.max(...explicitRootDepths),
+          source: 'confirmed_root_profile',
+          confidence: 'medium',
+          estimated: false,
+          isFallback: false,
+        }
+      : parameterDepth !== undefined
+        ? {
+            depthCm: parameterDepth,
+            source: 'crop_parameter',
+            confidence: validatedParameter ? 'high' : 'low',
+            estimated: !validatedParameter,
+            isFallback: false,
+          }
+        : {
+            depthCm: OPERATIONAL_ROOT_DEPTH_FALLBACK_CM,
+            source: 'operational_fallback',
+            confidence: 'low',
+            estimated: true,
+            isFallback: true,
+          };
+
+    const effectiveDepth = this.resolveEffectiveSoilDepth(lote, soilInputs);
+    const calculationDepth = effectiveDepth
+      ? Math.min(baseRoot.depthCm, effectiveDepth.depthCm)
+      : baseRoot.depthCm;
+    return {
+      ...baseRoot,
+      depthCm: calculationDepth,
+      estimated: baseRoot.estimated || !!effectiveDepth?.estimated,
+      effectiveDepthLimitCm: effectiveDepth?.depthCm,
+      effectiveDepthSource: effectiveDepth?.source,
+      effectiveDepthConfidence: effectiveDepth?.confidence,
+      effectiveDepthIsFallback: effectiveDepth?.isFallback,
+      limitedByEffectiveDepth:
+        !!effectiveDepth && effectiveDepth.depthCm < baseRoot.depthCm,
+    };
+  }
+
+  private resolveEffectiveSoilDepth(
+    lote: ILote,
+    soilInputs?: IEntradasAgronomicasSuelo,
+  ):
+    | {
+        depthCm: number;
+        source: string;
+        confidence: 'high' | 'medium' | 'low' | 'unavailable';
+        estimated: boolean;
+        isFallback: boolean;
+      }
+    | undefined {
+    const confirmedSoilDepth = lote.sueloConfirmadoPorUsuario
+      ? this.validRootDepth(lote.sueloReferencia?.profundidadCm)
+      : undefined;
+    if (confirmedSoilDepth !== undefined) {
+      return {
+        depthCm: confirmedSoilDepth,
+        source: lote.sueloReferencia?.fuente || 'confirmed_lot',
+        confidence:
+          lote.sueloReferencia?.confianza === 'alta'
+            ? 'high'
+            : lote.sueloReferencia?.confianza === 'baja'
+              ? 'low'
+              : 'medium',
+        estimated: false,
+        isFallback: false,
+      };
+    }
+
+    if (!this.usableSoilInputs(soilInputs)) return undefined;
+    const metadata = soilInputs!;
+    const provenance = soilInputs?.provenance?.effectiveDepthCm;
+    const intelligenceDepth = this.validRootDepth(
+      soilInputs?.effectiveDepthCm ?? provenance?.value,
+    );
+    const confidence =
+      metadata.effectiveDepthConfidence ??
+      provenance?.confidence ??
+      soilInputs?.confidence ??
+      'low';
+    if (intelligenceDepth === undefined || confidence === 'unavailable') {
+      return undefined;
+    }
+    const method = String(provenance?.method || '').toLowerCase();
+    const isFallback =
+      metadata.effectiveDepthIsFallback === true ||
+      method.includes('respaldo') ||
+      method.includes('fallback');
+    const confirmed = ['confirmed_laboratory', 'confirmed_sensor'].includes(
+      soilInputs!.selectionReason,
+    );
+    return {
+      depthCm: intelligenceDepth,
+      source:
+        metadata.effectiveDepthSource ||
+        provenance?.source ||
+        soilInputs?.source ||
+        'soil_intelligence',
+      confidence,
+      estimated: !confirmed,
+      isFallback,
+    };
+  }
+
+  private usableSoilInputs(soilInputs?: IEntradasAgronomicasSuelo): boolean {
+    return !!(
+      soilInputs &&
+      !soilInputs.stale &&
+      ['ready', 'partial', 'no_coverage'].includes(soilInputs.status)
+    );
+  }
+
+  private validRootDepth(value: unknown): number | undefined {
+    const parsed = numeroFinito(value);
+    return parsed !== undefined &&
+      parsed > 0 &&
+      parsed <= MAX_VALID_ROOT_DEPTH_CM
+      ? parsed
+      : undefined;
   }
 
   private storageFromSoilMoisture(

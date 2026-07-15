@@ -97,10 +97,28 @@ test("un dato manual legacy nunca se rotula como confirmado", () => {
 
 test("distingue capacidad potencial del suelo de humedad actual", () => {
   assert.match(card, /Capacidad potencial del suelo \(agua útil\)/);
-  assert.match(card, /Estimación CC–PMP/);
-  assert.match(card, /Perfil de referencia/);
-  assert.match(card, /No representa humedad actual/);
+  assert.match(card, /Potencial CC–PMP para ese perfil/);
+  assert.match(
+    card,
+    /No representa[\s\S]*humedad actual ni reserva aprovechable efectiva/,
+  );
   assert.doesNotMatch(card, /Zona radicular de referencia/);
+});
+
+test("expone escala, confianza hídrica, profundidad y limitaciones sin fingir mediciones", () => {
+  for (const value of [
+    "hydraulicConfidenceLabel",
+    "effectiveDepthDescription",
+    "effectiveDepthConfidenceLabel",
+    "isSmallerThanSoilGridsCell",
+    "Escala regional del valor hídrico",
+    "Limitaciones cartográficas INTA",
+    "No se descuentan automáticamente de CC–PMP",
+  ]) {
+    assert.match(`${card}\n${cardTs}`, new RegExp(value, "i"));
+  }
+  assert.match(cardTs, /fallback; no medido/);
+  assert.match(cardTs, /no medida en el lote/);
 });
 
 test("renderiza composición por profundidad, estados, nulls y móvil sin botón Calcular", () => {

@@ -32,9 +32,20 @@ export type TFuenteResumenSuelo =
   | "unknown";
 
 export type TConfianzaInteligenciaSuelo =
-  | "high"
-  | "medium"
-  | "low"
+  "high" | "medium" | "low" | "unavailable";
+
+/**
+ * Procedencia de la profundidad usada por los motores edaficos. El origen se
+ * mantiene separado del valor para no presentar una referencia cartografica o
+ * un fallback operativo como si fuera una medicion realizada en el lote.
+ */
+export type TOrigenProfundidadEfectivaSuelo =
+  | "measured_sensor"
+  | "measured_laboratory"
+  | "manual_confirmed"
+  | "inta_cartographic"
+  | "crop_reference"
+  | "operational_fallback"
   | "unavailable";
 
 export type TClaseDrenajeSuelo =
@@ -195,8 +206,14 @@ export interface IResumenInteligenciaSuelo {
   clayPercentage?: number;
   drainageClass?: TClaseDrenajeSuelo;
   availableWaterMmPerMeter?: number;
+  /** Capacidad potencial CC-PMP integrada en el perfil de referencia. */
+  profileAvailableWaterMm?: number;
+  /** @deprecated Usar profileAvailableWaterMm. */
   rootZoneAvailableWaterMm?: number;
   effectiveDepthCm?: number;
+  effectiveDepthSource?: TOrigenProfundidadEfectivaSuelo;
+  effectiveDepthConfidence?: TConfianzaInteligenciaSuelo;
+  effectiveDepthIsFallback?: boolean;
   ph?: number;
   organicCarbonGKg?: number;
   organicMatterEstimatedPercentage?: number;
@@ -299,8 +316,14 @@ export interface IEntradasAgronomicasSuelo {
   clayPercentage?: number;
   drainageClass?: TClaseDrenajeSuelo;
   availableWaterMmPerMeter?: number;
+  /** Capacidad potencial CC-PMP integrada en el perfil de referencia. */
+  profileAvailableWaterMm?: number;
+  /** @deprecated Usar profileAvailableWaterMm. */
   rootZoneAvailableWaterMm?: number;
   effectiveDepthCm?: number;
+  effectiveDepthSource?: TOrigenProfundidadEfectivaSuelo;
+  effectiveDepthConfidence?: TConfianzaInteligenciaSuelo;
+  effectiveDepthIsFallback?: boolean;
   bulkDensityKgDm3?: number;
   coarseFragmentsPercentage?: number;
   ph?: number;

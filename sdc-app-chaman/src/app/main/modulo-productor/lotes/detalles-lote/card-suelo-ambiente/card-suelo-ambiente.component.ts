@@ -1,5 +1,12 @@
 import { Component, inject, Input, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
-import { IInteligenciaSueloLote, ILote, IPerfilProfundidadSuelo, TClaseDrenajeSuelo } from 'modelos/src';
+import {
+  IInteligenciaSueloLote,
+  ILote,
+  IPerfilProfundidadSuelo,
+  TClaseDrenajeSuelo,
+  TConfianzaInteligenciaSuelo,
+  TOrigenProfundidadEfectivaSuelo,
+} from 'modelos/src';
 import { LoteService } from '../../../../../auxiliares/http/lote.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
@@ -74,13 +81,81 @@ export class CardSueloAmbienteComponent implements OnChanges, OnDestroy {
   }
 
   public get confidenceLabel(): string {
-    const labels: Record<string, string> = {
-      high: 'Confianza alta',
-      medium: 'Confianza media',
-      low: 'Confianza baja',
-      unavailable: 'Sin confianza calculable',
+    return this.confidenceText(this.assessment?.source?.confidence);
+  }
+
+  public get hydraulicConfidence(): TConfianzaInteligenciaSuelo {
+    if (this.isSmallerThanSoilGridsCell) return 'low';
+    return this.assessment?.propertyProvenance?.['availableWaterMmPerMeter']?.confidence || 'unavailable';
+  }
+
+  public get hydraulicConfidenceLabel(): string {
+    return this.confidenceText(this.hydraulicConfidence, 'Confianza hídrica');
+  }
+
+  public get effectiveDepthConfidenceLabel(): string {
+    return this.confidenceText(
+      this.assessment?.summary?.effectiveDepthConfidence ||
+        this.assessment?.propertyProvenance?.['effectiveDepthCm']?.confidence,
+      'Confianza de profundidad'
+    );
+  }
+
+  public get effectiveDepthDescription(): string {
+    const summary = this.assessment?.summary;
+    const depth = this.number(summary?.effectiveDepthCm);
+    const source = summary?.effectiveDepthSource;
+    const labels: Record<TOrigenProfundidadEfectivaSuelo, string> = {
+      measured_sensor: `Profundidad medida por sensor: ${depth} cm`,
+      measured_laboratory: `Profundidad validada por laboratorio: ${depth} cm`,
+      manual_confirmed: `Profundidad confirmada: ${depth} cm`,
+      inta_cartographic: `Referencia cartográfica INTA: ${depth} cm (no medida en el lote)`,
+      crop_reference: `Referencia agronómica del cultivo: ${depth} cm (no medida en el lote)`,
+      operational_fallback: `Perfil operativo de referencia: ${depth} cm (fallback; no medido)`,
+      unavailable: `Perfil de cálculo: ${depth} cm (origen pendiente)`,
     };
-    return labels[this.assessment?.source?.confidence || 'unavailable'];
+    if (summary?.effectiveDepthIsFallback === true) return labels.operational_fallback;
+    return labels[source || 'unavailable'];
+  }
+
+  public get soilGridsResolutionMeters(): number | undefined {
+    return (this.assessment?.sources || []).find((source) => source.type === 'soilgrids')?.resolutionMeters;
+  }
+
+  public get isSmallerThanSoilGridsCell(): boolean {
+    const factors = [
+      ...(this.assessment?.source?.confidenceFactors || []),
+      ...(this.assessment?.sources || []).flatMap((source) => source.confidenceFactors || []),
+    ];
+    if (factors.some((factor) => /menor que una celda SoilGrids/i.test(factor))) return true;
+    const areaM2 = this.lote?.ubicacionAdministrativa?.superficieCalculadaM2;
+    const resolution = this.soilGridsResolutionMeters;
+    return Number.isFinite(areaM2) && Number.isFinite(resolution) && areaM2! < resolution! ** 2;
+  }
+
+  public get soilGridsScaleWarning(): string {
+    const resolution = this.soilGridsResolutionMeters || 250;
+    const areaM2 = this.lote?.ubicacionAdministrativa?.superficieCalculadaM2;
+    const areaLabel = Number.isFinite(areaM2) ? `El lote tiene ${this.number(areaM2! / 10_000, 2)} ha y ` : 'El lote ';
+    return `${areaLabel}es menor que una celda nominal SoilGrids de ${resolution} × ${resolution} m. El valor hídrico representa el entorno regional y su confianza es baja.`;
+  }
+
+  public get intaLimitations(): string[] {
+    const seen = new Set<string>();
+    const limitations = (this.assessment?.soilUnits || [])
+      .flatMap((unit) => unit.limitations || [])
+      .map((value) => `${value}`.trim())
+      .filter((value) => {
+        const key = value.toLocaleLowerCase('es-AR');
+        if (!value || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    const drainage = this.assessment?.summary?.drainageClass;
+    if (drainage && !['well', 'unknown'].includes(drainage)) {
+      limitations.unshift(`Drenaje: ${this.drainageLabel(drainage)}`);
+    }
+    return limitations;
   }
 
   public get sourceLabel(): string {
@@ -218,6 +293,16 @@ export class CardSueloAmbienteComponent implements OnChanges, OnDestroy {
       minimumFractionDigits: 0,
       maximumFractionDigits: digits,
     });
+  }
+
+  private confidenceText(value?: TConfianzaInteligenciaSuelo, prefix = 'Confianza'): string {
+    const labels: Record<TConfianzaInteligenciaSuelo, string> = {
+      high: 'alta',
+      medium: 'media',
+      low: 'baja',
+      unavailable: 'no calculable',
+    };
+    return `${prefix} ${labels[value || 'unavailable']}`;
   }
 
   public width(value?: number): number {

@@ -135,6 +135,62 @@ describe('CardSueloAmbienteComponent request lifecycle', () => {
     expect(component.operationalSourceLabel).toBe('Dato legacy no confirmado');
     expect(component.operationalConflictTitle).toContain('alternativa legacy');
   });
+
+  it('separates hydraulic confidence, fallback depth and INTA limitations', () => {
+    component.lote = {
+      _id: 'lot-small',
+      ubicacionAdministrativa: {
+        loteId: 'lot-small',
+        estado: 'ready',
+        confianza: 'media',
+        superficieCalculadaM2: 29_600,
+      },
+    };
+    component.assessment = {
+      loteId: 'lot-small',
+      status: 'ready',
+      summary: {
+        depthFromCm: 0,
+        depthToCm: 30,
+        availableWaterMmPerMeter: 158,
+        profileAvailableWaterMm: 158,
+        drainageClass: 'imperfect',
+        effectiveDepthCm: 100,
+        effectiveDepthSource: 'operational_fallback',
+        effectiveDepthConfidence: 'low',
+        effectiveDepthIsFallback: true,
+      },
+      source: {
+        type: 'mixed',
+        confidence: 'medium',
+        confidenceFactors: ['El lote es menor que una celda SoilGrids de 250 m.'],
+      },
+      sources: [{ type: 'soilgrids', confidence: 'low', resolutionMeters: 250 }],
+      propertyProvenance: {
+        availableWaterMmPerMeter: {
+          value: 158,
+          unit: 'mm/m',
+          source: 'soilgrids',
+          observedOrEstimated: 'estimated',
+          confidence: 'medium',
+        },
+      },
+      soilUnits: [
+        {
+          source: 'inta_local',
+          limitations: ['Drenaje imperfecto', 'Salinidad', 'salinidad'],
+        },
+      ],
+    };
+
+    expect(component.confidenceLabel).toBe('Confianza media');
+    expect(component.hydraulicConfidence).toBe('low');
+    expect(component.hydraulicConfidenceLabel).toBe('Confianza hídrica baja');
+    expect(component.effectiveDepthDescription).toContain('fallback; no medido');
+    expect(component.isSmallerThanSoilGridsCell).toBeTrue();
+    expect(component.soilGridsScaleWarning).toContain('2,96 ha');
+    expect(component.intaLimitations).toEqual(['Drenaje: Imperfecto', 'Drenaje imperfecto', 'Salinidad']);
+  });
 });
 
 function lot(id: string, longitude: number): any {

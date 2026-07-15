@@ -11,6 +11,7 @@ import {
   TConfianzaInteligenciaSuelo,
   TFuentePropiedadSuelo,
   TMotivoInteligenciaSuelo,
+  TOrigenProfundidadEfectivaSuelo,
   TTexturaSuelo,
 } from 'modelos/src';
 import { Model } from 'mongoose';
@@ -37,7 +38,7 @@ import {
   SoilTextureClassifier,
 } from './texture-classifier.service';
 
-export const SOIL_INTELLIGENCE_ENGINE_VERSION = 'lot-soil-v1.1.0';
+export const SOIL_INTELLIGENCE_ENGINE_VERSION = 'lot-soil-v1.2.0';
 export const DOMINANT_SOIL_UNIT_THRESHOLD = 60;
 
 @Injectable()
@@ -295,6 +296,12 @@ export class LotSoilIntelligenceEngine {
       100,
     );
     const effectiveDepth = this.effectiveDepth(dominantUnit);
+    const profileAvailableWater = this.integratedMetric(
+      soilGridsResult.profile,
+      'availableWaterMmPerMeter',
+      0,
+      effectiveDepth.value,
+    );
     const summary: IResumenInteligenciaSuelo = {
       operationalTexture: operationalTexture || estimatedTexture,
       operationalTextureSource:
@@ -318,10 +325,12 @@ export class LotSoilIntelligenceEngine {
           (unit) => unit.drainageClass && unit.drainageClass !== 'unknown',
         )?.drainageClass || 'unknown',
       availableWaterMmPerMeter: availableWater,
-      rootZoneAvailableWaterMm: Number.isFinite(availableWater)
-        ? this.round(availableWater! * (effectiveDepth / 100))
-        : undefined,
-      effectiveDepthCm: effectiveDepth,
+      profileAvailableWaterMm: profileAvailableWater,
+      rootZoneAvailableWaterMm: profileAvailableWater,
+      effectiveDepthCm: effectiveDepth.value,
+      effectiveDepthSource: effectiveDepth.source,
+      effectiveDepthConfidence: effectiveDepth.confidence,
+      effectiveDepthIsFallback: effectiveDepth.isFallback,
       ph: this.weightedMetric(soilGridsResult.profile, 'phWater', 0, 30),
       organicCarbonGKg: this.weightedMetric(
         soilGridsResult.profile,
@@ -363,10 +372,30 @@ export class LotSoilIntelligenceEngine {
         confidence: 'unavailable',
       },
     };
+    const intaLimitations = [
+      ...new Set(
+        intaResult.units
+          .flatMap((unit) => unit.limitations || [])
+          .map((value) => `${value}`.trim())
+          .filter(Boolean),
+      ),
+    ];
     const warnings = [
       ...input.geometry.warnings,
       ...intaResult.warnings,
       ...soilGridsResult.warnings,
+      ...(effectiveDepth.isFallback
+        ? [
+            `Se usa ${effectiveDepth.value} cm como perfil operativo de referencia porque no hay una profundidad validada; no es una medición del lote.`,
+          ]
+        : [
+            `La profundidad de ${effectiveDepth.value} cm proviene de cartografía INTA; es una referencia espacial y no una medición del lote.`,
+          ]),
+      ...(intaLimitations.length
+        ? [
+            `INTA informa limitaciones cartográficas: ${intaLimitations.join('; ')}. No se descuentan de CC–PMP; sin CE, sodicidad y profundidad validadas no se calcula una reserva aprovechable efectiva.`,
+          ]
+        : []),
       ...(manualConflict
         ? [
             `La textura operativa ${operationalTexture} se conserva; la estimación automática es ${estimatedTexture}.`,
@@ -443,6 +472,7 @@ export class LotSoilIntelligenceEngine {
           summary,
           intaResult.units,
           soilGridsResult.profile,
+          soilGridsResult.confidence,
         ),
         coveragePercentage: Math.max(
           intaResult.coveragePercentage,
@@ -574,14 +604,30 @@ export class LotSoilIntelligenceEngine {
     return dominant < DOMINANT_SOIL_UNIT_THRESHOLD;
   }
 
-  private effectiveDepth(unit?: IUnidadSueloLote): number {
+  private effectiveDepth(unit?: IUnidadSueloLote): {
+    value: number;
+    source: TOrigenProfundidadEfectivaSuelo;
+    confidence: TConfianzaInteligenciaSuelo;
+    isFallback: boolean;
+  } {
     const raw = unit?.rawAttributes || {};
     const value = Number(
       raw['profund_s1'] || raw['profundidad'] || raw['depth_cm'],
     );
-    return Number.isFinite(value) && value > 0
-      ? Math.min(200, Math.max(20, value))
-      : 100;
+    if (Number.isFinite(value) && value > 0) {
+      return {
+        value: Math.min(200, Math.max(20, value)),
+        source: 'inta_cartographic',
+        confidence: 'medium',
+        isFallback: false,
+      };
+    }
+    return {
+      value: 100,
+      source: 'operational_fallback',
+      confidence: 'low',
+      isFallback: true,
+    };
   }
 
   private weightedMetric(
@@ -603,6 +649,48 @@ export class LotSoilIntelligenceEngine {
       depth += overlap;
     }
     return depth > 0 ? this.round(total / depth) : undefined;
+  }
+
+  private lowestConfidence(
+    left: TConfianzaInteligenciaSuelo,
+    right: TConfianzaInteligenciaSuelo,
+  ): TConfianzaInteligenciaSuelo {
+    const rank: Record<TConfianzaInteligenciaSuelo, number> = {
+      unavailable: 0,
+      low: 1,
+      medium: 2,
+      high: 3,
+    };
+    return rank[left] <= rank[right] ? left : right;
+  }
+
+  private integratedMetric(
+    profile: IPerfilProfundidadSuelo[],
+    key: keyof IPerfilProfundidadSuelo,
+    fromCm: number,
+    toCm: number,
+  ): number | undefined {
+    let totalMm = 0;
+    let cursorCm = fromCm;
+    const layers = [...profile].sort(
+      (left, right) =>
+        left.depthFromCm - right.depthFromCm ||
+        left.depthToCm - right.depthToCm,
+    );
+    for (const layer of layers) {
+      if (layer.depthToCm <= cursorCm) continue;
+      if (layer.depthFromCm > cursorCm) return undefined;
+      const valueMmPerMeter = Number(layer[key]);
+      if (!Number.isFinite(valueMmPerMeter)) return undefined;
+      const layerTopCm = Math.max(cursorCm, layer.depthFromCm, fromCm);
+      const layerBottomCm = Math.min(layer.depthToCm, toCm);
+      const overlapCm = Math.max(0, layerBottomCm - layerTopCm);
+      if (overlapCm <= 0) continue;
+      totalMm += valueMmPerMeter * (overlapCm / 100);
+      cursorCm = layerBottomCm;
+      if (cursorCm >= toCm) return this.round(totalMm);
+    }
+    return undefined;
   }
 
   private sources(
@@ -661,6 +749,7 @@ export class LotSoilIntelligenceEngine {
     summary: IResumenInteligenciaSuelo,
     units: IUnidadSueloLote[],
     profile: IPerfilProfundidadSuelo[],
+    soilGridsConfidence: TConfianzaInteligenciaSuelo = 'high',
   ): Record<string, IPropiedadSuelo<unknown>> {
     const textureSource = this.estimatedTextureSource(units);
     const drainageUnit = units.find(
@@ -681,11 +770,14 @@ export class LotSoilIntelligenceEngine {
         (layer) => layer.depthToCm > fromCm && layer.depthFromCm < toCm,
       );
       if (!relevant.length) return 'unavailable';
-      return relevant.reduce(
+      const profileConfidence = relevant.reduce(
         (lowest, layer) =>
           rank[layer.confidence] < rank[lowest] ? layer.confidence : lowest,
         relevant[0].confidence,
       );
+      return rank[soilGridsConfidence] < rank[profileConfidence]
+        ? soilGridsConfidence
+        : profileConfidence;
     };
     const estimated = (
       value: unknown,
@@ -796,25 +888,43 @@ export class LotSoilIntelligenceEngine {
         0,
         100,
       ),
+      profileAvailableWaterMm: estimated(
+        summary.profileAvailableWaterMm ?? summary.rootZoneAvailableWaterMm,
+        'mm',
+        'derived',
+        'capacidad potencial CC–PMP multiplicada por la profundidad de referencia; no descuenta salinidad, sodicidad ni drenaje',
+        0,
+        summary.effectiveDepthCm || 100,
+        this.lowestConfidence(
+          confidenceForDepth(0, Math.min(summary.effectiveDepthCm || 100, 200)),
+          summary.effectiveDepthConfidence || 'unavailable',
+        ),
+      ),
       rootZoneAvailableWaterMm: estimated(
         summary.rootZoneAvailableWaterMm,
         'mm',
         'derived',
-        'agua disponible por metro multiplicada por profundidad efectiva',
+        'capacidad potencial CC–PMP multiplicada por la profundidad de referencia; no descuenta salinidad, sodicidad ni drenaje',
         0,
         summary.effectiveDepthCm || 100,
-        confidenceForDepth(0, Math.min(summary.effectiveDepthCm || 100, 200)),
+        this.lowestConfidence(
+          confidenceForDepth(0, Math.min(summary.effectiveDepthCm || 100, 200)),
+          summary.effectiveDepthConfidence || 'unavailable',
+        ),
       ),
       effectiveDepthCm: estimated(
         summary.effectiveDepthCm,
         'cm',
-        dominantUnit ? dominantUnit.source : 'derived',
-        dominantUnit
-          ? 'profundidad efectiva informada por unidad cartográfica INTA'
-          : 'valor operativo de respaldo del motor',
+        summary.effectiveDepthSource === 'inta_cartographic'
+          ? dominantUnit?.source || 'inta_national'
+          : 'derived',
+        summary.effectiveDepthSource === 'inta_cartographic'
+          ? 'profundidad de referencia informada por unidad cartográfica INTA; no medida en el lote'
+          : 'perfil operativo de respaldo; no medido ni validado en el lote',
         0,
         summary.effectiveDepthCm || 100,
-        dominantUnit ? 'medium' : 'low',
+        summary.effectiveDepthConfidence || 'unavailable',
+        'reference',
       ),
       ph: estimated(summary.ph, 'pH', 'soilgrids', 'pH en agua', 0, 30),
       organicCarbonGKg: estimated(
