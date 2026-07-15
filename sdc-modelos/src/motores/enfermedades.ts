@@ -318,11 +318,7 @@ export interface IHoraRoyaAmarilla {
 }
 
 export type TNivelOportunidadRoyaAmarilla =
-  | "sin_datos"
-  | "sin_senal"
-  | "senal_temprana"
-  | "fuerte"
-  | "muy_fuerte";
+  "sin_datos" | "sin_senal" | "senal_temprana" | "fuerte" | "muy_fuerte";
 
 export interface IResultadoRoyaAmarillaElJarroudi {
   calculable: boolean;
@@ -751,6 +747,49 @@ export interface ICandidatoAlertaSanitaria {
 export const UMBRAL_ALERTA_SANITARIA = 15;
 export const VIGENCIA_ALERTA_SANITARIA_HORAS = 72;
 
+export type TNivelRiesgoSanitario = "bajo" | "medio" | "alto";
+
+export interface IUmbralesRiesgoSanitario {
+  medio: number;
+  alto: number;
+  escalaDirecta: boolean;
+}
+
+/**
+ * Escala canónica de lectura sanitaria usada por tarjetas, alertas e informes.
+ * Cebada conserva la escala directa histórica 35/60; el resto de los modelos
+ * operativos usa 15/20. Los screenings experimentales se visualizan en su
+ * escala ordinal 50/80, pero nunca se vuelven alertables por esta función.
+ */
+export function getUmbralesRiesgoSanitario(
+  cultivo?: string,
+  experimental = false,
+): IUmbralesRiesgoSanitario {
+  if (experimental) return { medio: 50, alto: 80, escalaDirecta: true };
+  const cultivoCanonico = `${cultivo || ""}`
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+  if (cultivoCanonico === "cebada") {
+    return { medio: 35, alto: 60, escalaDirecta: true };
+  }
+  return { medio: 15, alto: 20, escalaDirecta: false };
+}
+
+export function clasificarNivelRiesgoSanitario(
+  resultado: number,
+  cultivo?: string,
+  experimental = false,
+): TNivelRiesgoSanitario {
+  const valor = Number(resultado);
+  if (!Number.isFinite(valor)) return "bajo";
+  const umbrales = getUmbralesRiesgoSanitario(cultivo, experimental);
+  if (valor >= umbrales.alto) return "alto";
+  if (valor >= umbrales.medio) return "medio";
+  return "bajo";
+}
+
 export function esFechaPrediccionSanitariaReciente(
   fecha?: string,
   ahoraMs = Date.now(),
@@ -765,27 +804,44 @@ export function esFechaPrediccionSanitariaReciente(
 }
 
 /**
- * Una salida meteorológica puede alimentar una alerta sólo si pertenece a un
- * modelo operativo vigente y cuenta con datos varietales utilizables. Los
- * modelos experimentales siguen visibles para evaluación, pero no notifican.
+ * Determina si una lectura sanitaria puede tratarse como un resultado
+ * operativo, independientemente de su nivel de riesgo. Una lectura operativa
+ * baja sigue siendo información válida para informes e historiales, aunque no
+ * alcance el umbral necesario para generar una alerta.
+ *
+ * Los modelos experimentales o sin modelo, las salidas incompletas y las
+ * lecturas de trigo sin versión y trazabilidad vigentes permanecen visibles
+ * para auditoría, pero nunca se clasifican como operativas.
  */
-export function esPrediccionSanitariaAlertable(
+export function esLecturaSanitariaOperativa(
   prediccion: ICandidatoAlertaSanitaria,
 ): boolean {
   const variables = (prediccion.variables || {}) as {
-    PMoj?: number;
     resultadoCrudo?: number;
   };
   if (prediccion.estado !== "calculado") return false;
   if (!Number.isFinite(prediccion.resultado)) return false;
-  if (prediccion.resultado < UMBRAL_ALERTA_SANITARIA) return false;
+  if (prediccion.resultado < 0 || prediccion.resultado > 100) return false;
+  if (
+    prediccion.modelo?.validacion &&
+    prediccion.modelo.validacion !== "operativo"
+  ) {
+    return false;
+  }
   if (
     prediccion.calidadDatos?.nivel === "baja" ||
     prediccion.calidadDatos?.nivel === "sin_datos"
   ) {
     return false;
   }
-  if (prediccion.resistenciaUsada?.estado === "desconocida") return false;
+  const estadoResistencia = prediccion.resistenciaUsada?.estado;
+  if (
+    estadoResistencia !== "observada" &&
+    estadoResistencia !== "historica" &&
+    estadoResistencia !== "inferida"
+  ) {
+    return false;
+  }
   const definicion = getEnfermedadPorId(prediccion.idEnfermedad);
   if (!definicion || definicion.motor !== "operativo") return false;
   if (
@@ -816,6 +872,24 @@ export function esPrediccionSanitariaAlertable(
       return false;
     }
   }
+  return true;
+}
+
+/**
+ * Una lectura sanitaria puede alimentar una alerta sólo cuando, además de
+ * ser operativa, supera el umbral general y satisface las reglas específicas
+ * que evitan alertas basales sin evidencia ambiental suficiente.
+ */
+export function esPrediccionSanitariaAlertable(
+  prediccion: ICandidatoAlertaSanitaria,
+): boolean {
+  if (!esLecturaSanitariaOperativa(prediccion)) return false;
+  const definicion = getEnfermedadPorId(prediccion.idEnfermedad);
+  const umbral = getUmbralesRiesgoSanitario(definicion?.cultivo).medio;
+  if (prediccion.resultado < umbral) return false;
+  const variables = (prediccion.variables || {}) as {
+    PMoj?: number;
+  };
   // El intercepto del modelo de Fusarium supera por si solo el umbral general
   // de alerta. Sin al menos un periodo de mojado compatible no hay evidencia
   // ambiental suficiente para transformar esa salida basal en una alarma.

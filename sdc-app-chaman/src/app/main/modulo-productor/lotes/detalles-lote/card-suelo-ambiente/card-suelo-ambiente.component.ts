@@ -25,6 +25,7 @@ export class CardSueloAmbienteComponent implements OnChanges, OnDestroy {
   public assessment?: IInteligenciaSueloLote | null;
   public loading = false;
   public retrying = false;
+  public infoVisible = false;
   private pollTimer?: ReturnType<typeof setTimeout>;
   private pollCount = 0;
   private readonly maxPolls = 20;
@@ -33,6 +34,7 @@ export class CardSueloAmbienteComponent implements OnChanges, OnDestroy {
 
   ngOnChanges(changes: SimpleChanges): void {
     if (!changes['lote']) return;
+    this.infoVisible = false;
     const nextKey = this.currentAssessmentKey();
     if (!nextKey) {
       this.loadGeneration += 1;
@@ -156,6 +158,62 @@ export class CardSueloAmbienteComponent implements OnChanges, OnDestroy {
       limitations.unshift(`Drenaje: ${this.drainageLabel(drainage)}`);
     }
     return limitations;
+  }
+
+  public get informationWarnings(): string[] {
+    const seen = new Set<string>();
+    return (this.assessment?.warnings || [])
+      .map((warning) => `${warning}`.trim())
+      .filter((warning) => {
+        const key = this.warningKey(warning);
+        if (!key || this.isStructuredWarning(key) || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }
+
+  public get informationObservationCount(): number {
+    return (
+      (this.assessment?.manualConflict ? 1 : 0) +
+      (this.isSmallerThanSoilGridsCell ? 1 : 0) +
+      (this.intaLimitations.length ? 1 : 0) +
+      this.informationWarnings.length
+    );
+  }
+
+  public get hasInformationObservations(): boolean {
+    return this.informationObservationCount > 0;
+  }
+
+  public get informationAriaLabel(): string {
+    const count = this.informationObservationCount;
+    if (!count) return 'Abrir información de suelo, fuentes y metodología';
+    return `Abrir información de suelo; ${count} ${count === 1 ? 'observación' : 'observaciones'} técnica${
+      count === 1 ? '' : 's'
+    }`;
+  }
+
+  public get informationTooltip(): string {
+    return this.hasInformationObservations ? 'Información y observaciones' : 'Información y metodología';
+  }
+
+  private warningKey(value?: string): string {
+    return `${value || ''}`
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLocaleLowerCase('es-AR');
+  }
+
+  private isStructuredWarning(key: string): boolean {
+    if (this.assessment?.manualConflict && /textura operativa|estimacion automatica/.test(key)) return true;
+    if (this.isSmallerThanSoilGridsCell && /celda.*soilgrids|entorno regional/.test(key)) return true;
+    if (this.intaLimitations.length && /inta informa limitaciones|no se descuentan.*cc.*pmp/.test(key)) return true;
+    if (/perfil operativo de referencia|profundidad.*cartografia inta/.test(key)) return true;
+    if (/fosforo disponible.*no medido/.test(key)) return true;
+    if (/inta informo unidad.*no una textura directa/.test(key)) return true;
+    return false;
   }
 
   public get sourceLabel(): string {

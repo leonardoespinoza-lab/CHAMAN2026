@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
 import {
   IEstadoFenologiaArveja,
+  getUmbralesRiesgoSanitario,
   IPrediccionEnfermedad,
   ISiembra,
   resolverResistencia,
@@ -308,13 +309,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   private umbralesRiesgo(enfermedad?: TEnfermedad): { medio: number; alto: number; escalaDirecta: boolean } {
-    if (this.esScreeningExperimental) {
-      return { medio: 50, alto: 80, escalaDirecta: true };
-    }
-    if (this.siembra?.semilla?.cultivo === 'Cebada') {
-      return { medio: 35, alto: 60, escalaDirecta: true };
-    }
-    return { medio: 15, alto: 20, escalaDirecta: false };
+    return getUmbralesRiesgoSanitario(this.siembra?.semilla?.cultivo, this.esScreeningExperimental);
   }
 
   private llenadoRiesgo(resultado: number, tienePrediccion: boolean, enfermedad?: TEnfermedad): number {

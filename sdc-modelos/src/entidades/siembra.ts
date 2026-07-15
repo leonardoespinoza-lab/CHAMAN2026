@@ -28,13 +28,8 @@ export type TTipoLabranza =
   "Siembra Directa" | "Convencional" | "Labranza" | "Reducida";
 export type TCalidadHuellaHidrica = "alta" | "media" | "baja";
 export type TEstadoRecomendacionRiego =
-  | "calculada"
-  | "estimada"
-  | "no_disponible"
-  | "fallida";
-export type TFuenteRecomendacionRiego =
-  | "sensor_suelo"
-  | "balance_climatico";
+  "calculada" | "estimada" | "no_disponible" | "fallida";
+export type TFuenteRecomendacionRiego = "sensor_suelo" | "balance_climatico";
 
 export interface ICalidadHuellaHidrica {
   nivel: TCalidadHuellaHidrica;
@@ -85,6 +80,20 @@ export interface IHuellaHidrica {
   componentes?: IComponentesHuellaHidrica;
   calidad?: ICalidadHuellaHidrica;
   metodologia?: IMetodologiaHuellaHidrica;
+}
+
+/** Un objeto parcial o vacio no equivale a una huella calculada. */
+export function esHuellaHidricaConsolidada(huella?: IHuellaHidrica): boolean {
+  return [
+    huella?.total?.litrosKg,
+    huella?.total?.litrosKcal,
+    huella?.verde?.litrosKg,
+    huella?.azul?.litrosKg,
+    huella?.gris?.litrosKg,
+  ].some(
+    (value) =>
+      typeof value === "number" && Number.isFinite(value) && value >= 0,
+  );
 }
 
 export interface IRegistroFenologicoFrio {

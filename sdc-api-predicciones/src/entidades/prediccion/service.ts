@@ -7,12 +7,12 @@ import {
   esFechaPrediccionSanitariaReciente,
   esPrediccionSanitariaAlertable,
   getEnfermedadPorId,
+  getUmbralesRiesgoSanitario,
   IPrediccion,
   IPrediccionEnfermedad,
   ISiembra,
   IResultadoPrediccionMalezas,
   TRIGO_MOTOR_SANITARIO_VERSION,
-  UMBRAL_ALERTA_SANITARIA,
 } from 'modelos/src';
 import { AlertasService } from '../alerta/service';
 import { PrediccionMaizService } from './cultivos/maiz';
@@ -269,8 +269,7 @@ export class PrediccionsService {
     if (definicion && definicion.motor !== 'operativo') return true;
     if (
       definicion?.cultivo === 'Trigo' &&
-      Number(enfermedad.modelo?.version || 0) <
-        TRIGO_MOTOR_SANITARIO_VERSION
+      Number(enfermedad.modelo?.version || 0) < TRIGO_MOTOR_SANITARIO_VERSION
     ) {
       return true;
     }
@@ -297,7 +296,8 @@ export class PrediccionsService {
 
     return (
       Number.isFinite(Number(enfermedad.resultado)) &&
-      Number(enfermedad.resultado) < UMBRAL_ALERTA_SANITARIA
+      Number(enfermedad.resultado) <
+        getUmbralesRiesgoSanitario(definicion?.cultivo).medio
     );
   }
 

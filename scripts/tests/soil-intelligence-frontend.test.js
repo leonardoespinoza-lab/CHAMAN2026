@@ -121,6 +121,31 @@ test("expone escala, confianza hídrica, profundidad y limitaciones sin fingir m
   assert.match(cardTs, /no medida en el lote/);
 });
 
+test("simplifica la superficie y concentra explicaciones, fuentes y advertencias en un diálogo accesible", () => {
+  assert.match(card, /<p-dialog[\s\S]*?\[\(visible\)\]="infoVisible"/);
+  assert.match(card, /\[ariaLabel\]="informationAriaLabel"/);
+  assert.match(
+    card,
+    /styleClass="chaman-detail-dialog card-information-dialog"/,
+  );
+  assert.match(
+    card,
+    /@for \(limitation of intaLimitations; track limitation\)/,
+  );
+  assert.match(card, /@for \(warning of informationWarnings; track warning\)/);
+  assert.doesNotMatch(card, /warnings\?\.join/);
+  assert.doesNotMatch(card, /intaLimitations\.join/);
+  assert.match(cardTs, /informationObservationCount/);
+  assert.match(cardTs, /isStructuredWarning/);
+  assert.match(cardTs, /fosforo disponible\.\*no medido/);
+  assert.match(cardTs, /this\.infoVisible = false/);
+  assert.match(`${card}\n${cardCss}`, /44px/);
+  assert.match(cardCss, /background: #754a08/);
+  assert.ok(
+    card.indexOf("hydraulicConfidenceLabel") < card.indexOf("<p-dialog"),
+  );
+});
+
 test("renderiza composición por profundidad, estados, nulls y móvil sin botón Calcular", () => {
   assert.match(card, /Composición por profundidad/);
   assert.match(card, /fieldCapacityPercentage/);

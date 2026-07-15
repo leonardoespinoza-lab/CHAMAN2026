@@ -3,14 +3,29 @@
     <div>
       <span class="eyebrow">Contexto territorial oficial</span>
       <h2>Ubicación del lote</h2>
-      <small
-        >Se calcula una sola vez por geometría y versión del catálogo; no modifica tus coordenadas
-        meteorológicas.</small
-      >
     </div>
-    <div class="header-status" [attr.data-level]="ubicacion?.confianza || 'sin_calcular'">
-      <i class="pi" [class.pi-spin]="procesando" [class.pi-spinner]="procesando" [class.pi-verified]="listo"></i>
-      <span>{{ confianzaLabel }}</span>
+    <div class="header-actions">
+      <div class="header-status" [attr.data-level]="ubicacion?.confianza || 'sin_calcular'">
+        <i class="pi" [class.pi-spin]="procesando" [class.pi-spinner]="procesando" [class.pi-verified]="listo"></i>
+        <span>{{ confianzaLabel }}</span>
+      </div>
+      <div class="information-control" [class.has-observations]="hasInformationObservations">
+        <p-button
+          icon="pi pi-info-circle"
+          [rounded]="true"
+          [text]="true"
+          severity="secondary"
+          styleClass="card-info-button"
+          [style]="{ width: '44px', height: '44px' }"
+          [ariaLabel]="informationAriaLabel"
+          [pTooltip]="informationTooltip"
+          tooltipPosition="left"
+          (onClick)="infoVisible = true"
+        />
+        @if (hasInformationObservations) {
+          <span class="observation-count" aria-hidden="true">{{ informationObservationCount }}</span>
+        }
+      </div>
     </div>
   </header>
 
@@ -69,19 +84,6 @@
         }
       </div>
     }
-
-    @if (ubicacion?.conflictoManual?.existe) {
-      <div class="notice conflict">
-        <i class="pi pi-exclamation-triangle"></i>
-        <span>{{ ubicacion?.conflictoManual?.detalle }}</span>
-      </div>
-    }
-    @if (ubicacion?.advertencias?.length) {
-      <div class="notice">
-        <i class="pi pi-info-circle"></i>
-        <span>{{ ubicacion?.advertencias?.join(' ') }}</span>
-      </div>
-    }
   } @else {
     <div class="empty-state">
       <i class="pi pi-map"></i>
@@ -100,12 +102,75 @@
       }
     </div>
   }
-
-  <footer>
-    <span>{{ fuenteLabel }}</span>
-    <span>{{ ubicacion?.metodo || 'Intersección del polígono completo' }}</span>
-    @if (ubicacion?.fechaResolucion) {
-      <span>Actualizado {{ ubicacion?.fechaResolucion | date: 'short' }}</span>
-    }
-  </footer>
 </section>
+
+<p-dialog
+  [(visible)]="infoVisible"
+  [modal]="true"
+  [dismissableMask]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(760px, 94vw)' }"
+  [breakpoints]="{ '720px': '96vw' }"
+  header="Información territorial"
+  styleClass="chaman-detail-dialog card-information-dialog"
+>
+  <section class="information-dialog">
+    <div class="information-intro">
+      <i class="pi pi-map-marker"></i>
+      <div>
+        <strong>Cómo se obtiene esta ubicación</strong>
+        <p>
+          Se calcula una sola vez por geometría y versión del catálogo oficial. La clasificación administrativa no
+          modifica el polígono ni las coordenadas usadas por los servicios meteorológicos.
+        </p>
+      </div>
+    </div>
+
+    @if (ubicacion?.conflictoManual?.existe) {
+      <div class="dialog-notice conflict">
+        <i class="pi pi-exclamation-triangle"></i>
+        <div>
+          <strong>Referencia manual conservada</strong>
+          <p>{{ ubicacion?.conflictoManual?.detalle }}</p>
+          <small>El valor operativo anterior se informa como referencia y nunca se sobrescribe automáticamente.</small>
+        </div>
+      </div>
+    }
+
+    @if (informationWarnings.length) {
+      <div class="dialog-notice">
+        <i class="pi pi-info-circle"></i>
+        <div>
+          <strong>Observaciones de la clasificación</strong>
+          <ul>
+            @for (warning of informationWarnings; track warning) {
+              <li>{{ warning }}</li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    <div class="method-grid">
+      <article>
+        <span>Método</span>
+        <strong>{{ ubicacion?.metodo || 'Intersección del polígono completo y distancia desde el límite' }}</strong>
+      </article>
+      <article>
+        <span>Fuente oficial</span>
+        <strong>{{ fuenteLabel }}</strong>
+      </article>
+      <article>
+        <span>Confianza</span>
+        <strong>{{ confianzaLabel }}</strong>
+      </article>
+      <article>
+        <span>Actualización</span>
+        <strong>
+          {{ ubicacion?.fechaResolucion ? (ubicacion?.fechaResolucion | date: 'short') : 'Pendiente de resolución' }}
+        </strong>
+      </article>
+    </div>
+  </section>
+</p-dialog>
