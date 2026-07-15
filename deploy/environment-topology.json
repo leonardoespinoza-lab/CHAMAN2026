@@ -70,6 +70,14 @@
       "stateful": false
     },
     {
+      "role": "websocket",
+      "selector": "sdc-websocket",
+      "port": 5006,
+      "production": "chaman-websocket",
+      "testing": "testing-websocket",
+      "stateful": false
+    },
+    {
       "role": "ftp",
       "selector": "sdc-ftp",
       "port": 2121,

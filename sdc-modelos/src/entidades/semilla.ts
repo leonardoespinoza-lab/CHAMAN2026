@@ -9,6 +9,7 @@ export type TEnfermedad =
   | "Roya de la Hoja"
   | "Roya del Tallo"
   | "Roya Anaranjada"
+  | "Roya Amarilla/Estriada"
   // Cebada
   | "Mancha en Red"
   | "Escaldadura de la Cebada"

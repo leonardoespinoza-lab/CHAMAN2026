@@ -90,4 +90,46 @@ describe('GeorefCatalogSyncService', () => {
     await expect(lockedService.sync()).rejects.toThrow('fuente no disponible');
     expect(repository.releaseSyncLock).toHaveBeenCalledTimes(1);
   });
+
+  it('conserva el ultimo snapshot valido si la fuente remota falla', async () => {
+    const repository = {
+      getActiveSnapshot: jest.fn(async () => ({
+        snapshotId: 'snapshot-validado',
+        sourceVersion: 'fuente-estable',
+        resources: [
+          { resource: 'provincias', count: 24 },
+          { resource: 'departamentos', count: 529 },
+        ],
+      })),
+    } as any;
+    const fallbackService = new GeorefCatalogSyncService(repository);
+    jest
+      .spyOn(fallbackService as any, 'download')
+      .mockRejectedValue(new Error('unable to verify the first certificate'));
+
+    await expect((fallbackService as any).execute(false)).resolves.toEqual({
+      activated: false,
+      snapshotId: 'snapshot-validado',
+      sourceVersion: 'fuente-estable',
+      counts: { provincias: 24, departamentos: 529 },
+    });
+  });
+
+  it('no oculta el fallo remoto durante una sincronizacion forzada', async () => {
+    const repository = {
+      getActiveSnapshot: jest.fn(async () => ({
+        snapshotId: 'snapshot-validado',
+        sourceVersion: 'fuente-estable',
+        resources: [{ resource: 'provincias', count: 24 }],
+      })),
+    } as any;
+    const forcedService = new GeorefCatalogSyncService(repository);
+    jest
+      .spyOn(forcedService as any, 'download')
+      .mockRejectedValue(new Error('fuente no disponible'));
+
+    await expect((forcedService as any).execute(true)).rejects.toThrow(
+      'fuente no disponible',
+    );
+  });
 });

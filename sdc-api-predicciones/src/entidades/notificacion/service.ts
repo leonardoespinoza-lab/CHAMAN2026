@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  esFechaPrediccionSanitariaReciente,
+  esPrediccionSanitariaAlertable,
   ICreateNotificacion,
   INotificacion,
   IPrediccion,
@@ -24,7 +26,15 @@ interface EventoNotificacion {
   idProductor?: string;
   eventKey: string;
   data: Record<string, string | number | undefined>;
+  sanitaria?: {
+    dedupeKey: string;
+    resultado: number;
+  };
 }
+
+const HORA_MS = 60 * 60 * 1000;
+const DIA_MS = 24 * HORA_MS;
+const RECORDATORIO_SANITARIO_MS = 7 * DIA_MS;
 
 @Injectable()
 export class NotificacionsService {
@@ -41,25 +51,20 @@ export class NotificacionsService {
   }
 
   async enviarNotificaciones(predicciones: IPrediccion[], siembra: ISiembra) {
-    const enfermedadesConAlerta = new Set([
-      'Fusarium de la Espiga',
-      'Mancha Amarilla',
-      'Mancha de la Hoja',
-      'Roya de la Hoja',
-      'Roya Anaranjada',
-      'Fin de Ciclo',
-      'Roya del Maiz',
-    ]);
-
     if (!predicciones?.length) {
       return;
     }
 
-    for (const prediccion of predicciones) {
-      for (const e of prediccion.enfermedades || []) {
-        if (enfermedadesConAlerta.has(e.enfermedad) && e.resultado >= 15) {
-          await this.enviarNotificacion(prediccion, e, siembra);
-        }
+    for (const {
+      prediccion,
+      enfermedad,
+    } of this.ultimasPrediccionesPorEnfermedad(predicciones)) {
+      if (
+        esFechaPrediccionSanitariaReciente(prediccion.fecha) &&
+        enfermedad.modelo?.validacion !== 'experimental' &&
+        esPrediccionSanitariaAlertable(enfermedad)
+      ) {
+        await this.enviarNotificacion(prediccion, enfermedad, siembra);
       }
     }
   }
@@ -106,13 +111,17 @@ export class NotificacionsService {
   ) {
     const idProductor = prediccion.idProductor || siembra.idProductor;
     const idSiembra = prediccion.idSiembra || siembra._id;
+    const fecha = prediccion.fecha;
+    const versionMotor = this.versionMotor(enfermedad);
+    const slugEnfermedad = this.slug(enfermedad.enfermedad);
+    const dedupeKey = `${idSiembra}:sanitaria:enfermedad:${slugEnfermedad}`;
     const eventKey = `enfermedad:${idSiembra}:${this.slug(
       enfermedad.enfermedad,
-    )}:${this.dateKey()}`;
-    const titulo = 'Alerta de enfermedad';
+    )}:${versionMotor}:${this.dateKeyPrediccion(fecha)}`;
+    const titulo = 'Predicción sanitaria';
     const mensaje = `Siembra de ${siembra.semilla?.cultivo || 'cultivo'} en ${
       siembra.lote?.nombre || 'lote'
-    } con riesgo de ${enfermedad.enfermedad} al ${enfermedad.resultado}%`;
+    }: predicción meteorológica de severidad/incidencia para ${enfermedad.enfermedad} de ${Number(enfermedad.resultado).toFixed(1)}%. No confirma enfermedad; requiere validación a campo.`;
 
     await this.enviarEvento({
       modulo: 'Enfermedades',
@@ -121,14 +130,82 @@ export class NotificacionsService {
       siembra,
       idProductor,
       eventKey,
+      sanitaria: {
+        dedupeKey,
+        resultado: Number(enfermedad.resultado),
+      },
       data: {
         tipo: 'enfermedad',
         idSiembra,
         enfermedad: enfermedad.enfermedad,
         resultado: enfermedad.resultado,
+        versionModelo: enfermedad.modelo?.version,
+        fechaPrediccion: fecha,
+        dedupeKey,
         eventKey,
       },
     });
+  }
+
+  /**
+   * Los recalculos pueden incluir una serie completa. Una notificacion solo
+   * puede representar la ultima salida cronologica de cada enfermedad.
+   */
+  private ultimasPrediccionesPorEnfermedad(predicciones: IPrediccion[]): Array<{
+    prediccion: IPrediccion;
+    enfermedad: IPrediccionEnfermedad;
+  }> {
+    const ultimas = new Map<
+      string,
+      {
+        prediccion: IPrediccion;
+        enfermedad: IPrediccionEnfermedad;
+        fechaMs: number;
+        orden: number;
+      }
+    >();
+    let orden = 0;
+
+    for (const prediccion of predicciones || []) {
+      const fechaMs = this.fechaMs(prediccion.fecha);
+      for (const enfermedad of prediccion.enfermedades || []) {
+        const clave =
+          enfermedad.idEnfermedad || this.slug(enfermedad.enfermedad);
+        const actual = ultimas.get(clave);
+        const candidata = { prediccion, enfermedad, fechaMs, orden: orden++ };
+        if (
+          !actual ||
+          candidata.fechaMs > actual.fechaMs ||
+          (candidata.fechaMs === actual.fechaMs &&
+            candidata.orden > actual.orden)
+        ) {
+          ultimas.set(clave, candidata);
+        }
+      }
+    }
+
+    return [...ultimas.values()].map(({ prediccion, enfermedad }) => ({
+      prediccion,
+      enfermedad,
+    }));
+  }
+
+  private fechaMs(fecha?: string): number {
+    if (!fecha) return Number.NEGATIVE_INFINITY;
+    const value = new Date(fecha).getTime();
+    return Number.isNaN(value) ? Number.NEGATIVE_INFINITY : value;
+  }
+
+  private versionMotor(enfermedad: IPrediccionEnfermedad): string {
+    const version = Number(enfermedad.modelo?.version);
+    return Number.isFinite(version) ? `v${version}` : 'sin-version';
+  }
+
+  private dateKeyPrediccion(fecha: string): string {
+    // Las series agronomicas representan un dia civil en UTC (00:00Z). Usar
+    // timezone local aqui las desplazaria artificialmente al dia anterior.
+    const fechaCivil = fecha?.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+    return fechaCivil || this.dateKey(fecha);
   }
 
   private async enviarNotificacionMaleza(
@@ -198,6 +275,16 @@ export class NotificacionsService {
         evento.eventKey,
       );
       if (existe) {
+        continue;
+      }
+      if (
+        evento.sanitaria &&
+        !(await this.debeEnviarNotificacionSanitaria(
+          usuario._id,
+          evento.sanitaria.dedupeKey,
+          evento.sanitaria.resultado,
+        ))
+      ) {
         continue;
       }
       usuariosPendientes.push(usuario);
@@ -294,6 +381,92 @@ export class NotificacionsService {
       );
       return false;
     }
+  }
+
+  /**
+   * Evita una notificacion diaria estable por usuario y enfermedad. El
+   * eventKey se valida antes para conservar la deduplicacion exacta; esta
+   * segunda barrera compara la evolucion contra la ultima notificacion del
+   * mismo episodio sanitario.
+   */
+  private async debeEnviarNotificacionSanitaria(
+    idUsuario: string,
+    dedupeKey: string,
+    resultadoActual: number,
+  ): Promise<boolean> {
+    const consulta = await this.ultimaNotificacionSanitaria(
+      idUsuario,
+      dedupeKey,
+    );
+    if (!consulta.ok) {
+      // Sin historial confiable no se puede garantizar la politica anti-spam.
+      return false;
+    }
+
+    const ultima = consulta.notificacion;
+    if (!ultima) {
+      return true;
+    }
+
+    const fechaUltima = new Date(ultima.fechaCreacion).getTime();
+    if (!Number.isFinite(fechaUltima)) {
+      this.logger.warn(
+        `Notificacion sanitaria sin fecha valida para ${idUsuario} ${dedupeKey}`,
+      );
+      return false;
+    }
+
+    const transcurrido = Date.now() - fechaUltima;
+    if (transcurrido < DIA_MS) {
+      return false;
+    }
+    if (transcurrido >= RECORDATORIO_SANITARIO_MS) {
+      return true;
+    }
+
+    const resultadoAnterior = Number(ultima.data?.resultado);
+    if (!Number.isFinite(resultadoAnterior)) {
+      this.logger.warn(
+        `Notificacion sanitaria sin resultado valido para ${idUsuario} ${dedupeKey}`,
+      );
+      return false;
+    }
+
+    return (
+      this.bandaSanitaria(resultadoActual) >
+        this.bandaSanitaria(resultadoAnterior) ||
+      resultadoActual - resultadoAnterior >= 15
+    );
+  }
+
+  private async ultimaNotificacionSanitaria(
+    idUsuario: string,
+    dedupeKey: string,
+  ): Promise<{ ok: boolean; notificacion?: INotificacion }> {
+    const query: IQueryParam = {
+      filter: JSON.stringify({
+        'tenant.idUsuario': idUsuario,
+        'data.dedupeKey': dedupeKey,
+      }),
+      sort: JSON.stringify({ fechaCreacion: -1 }),
+      limit: 1,
+    };
+    try {
+      const res = await this.repository.getFiltered(query);
+      return { ok: true, notificacion: res.datos?.[0] };
+    } catch (error) {
+      this.logger.error(
+        `No se pudo consultar la ultima notificacion sanitaria: ${error}`,
+      );
+      return { ok: false };
+    }
+  }
+
+  private bandaSanitaria(resultado: number): number {
+    if (resultado < 15) return 0;
+    if (resultado < 45) return 1;
+    if (resultado < 75) return 2;
+    return 3;
   }
 
   private usuarioHabilitado(

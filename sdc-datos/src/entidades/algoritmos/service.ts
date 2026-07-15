@@ -31,19 +31,28 @@ import {
   calcularEscaldadura,
   calcularFinCicloSoja,
   calcularFusariumEspiga,
+  calcularFusariumEspigaCrudo,
   calcularManchaAmarilla,
+  calcularManchaAmarillaCrudo,
   calcularManchaHoja,
-  calcularRoyaAnaranjada,
+  calcularManchaHojaCrudo,
+  calcularRoyaAnaranjadaTrigo2026,
+  calcularRoyaAnaranjadaTrigo2026Crudo,
   calcularRoyaHoja,
+  calcularRoyaHojaTrigo2026,
+  calcularRoyaHojaTrigo2026Crudo,
   evaluarAscochytaArveja,
   evaluarMildiuArveja,
   evaluarOidioArveja,
+  gradosDiaBase0,
   gradosDiaRoya,
   gradosDiaRoyaAnaranjada,
   gradosDiaRoyaMaiz,
   getEnfermedadCanonica,
   resolverResistencia,
   tasaDiariaManchaRedHoraria,
+  TRIGO_FUSARIUM_GDD_BASE_0_MAX,
+  TRIGO_MOTOR_SANITARIO_VERSION,
 } from 'modelos/src';
 
 export interface AlgoritmoCatalogo {
@@ -101,10 +110,13 @@ interface ResistenciaSimulador {
   enfermedad?: string;
   multiplicador?: number;
   indiceResistencia?: number;
+  perfil?: string;
   estado?: string;
+  confianza?: string;
   campaniaFuente?: string;
   fechaFuente?: string;
   fuente?: string;
+  fuenteUrl?: string;
 }
 
 @Injectable()
@@ -136,7 +148,13 @@ export class AlgoritmosService {
           'Fertilizaciones: dosis y composicion N/P',
           'Fumigaciones: principio activo, concentracion y dosis',
         ],
-        outputs: ['litros/kg verde', 'litros/kg azul', 'litros/kg gris', 'litros/kg total', 'traza de calculo'],
+        outputs: [
+          'litros/kg verde',
+          'litros/kg azul',
+          'litros/kg gris',
+          'litros/kg total',
+          'traza de calculo',
+        ],
       },
       {
         id: 'enfermedades',
@@ -144,8 +162,19 @@ export class AlgoritmosService {
         estado: 'auditable',
         descripcion:
           'Cruza susceptibilidad varietal, etapa fenologica, zona/ciclo, humedad persistente, lluvia y temperatura por cultivo.',
-        inputs: ['Cultivo y variedad', 'Fenologia', 'Zona/ciclo', 'Humedad relativa', 'Lluvia', 'Temperatura'],
-        outputs: ['riesgo por enfermedad', 'periodo critico', 'prescripcion orientativa'],
+        inputs: [
+          'Cultivo y variedad',
+          'Fenologia',
+          'Zona/ciclo',
+          'Humedad relativa',
+          'Lluvia',
+          'Temperatura',
+        ],
+        outputs: [
+          'riesgo por enfermedad',
+          'periodo critico',
+          'prescripcion orientativa',
+        ],
       },
       {
         id: 'riego',
@@ -161,7 +190,14 @@ export class AlgoritmosService {
           'ET0, Kc, lluvia y probabilidad de lluvia',
           'Capacidad diaria de riego, bulbo y metros lineales por hectarea',
         ],
-        outputs: ['agua util mm/%', 'deficit mm', 'demanda 72 h', 'lluvia efectiva', 'recomendacion mm', 'traza auditable'],
+        outputs: [
+          'agua util mm/%',
+          'deficit mm',
+          'demanda 72 h',
+          'lluvia efectiva',
+          'recomendacion mm',
+          'traza auditable',
+        ],
       },
       {
         id: 'malezas',
@@ -169,8 +205,17 @@ export class AlgoritmosService {
         estado: 'auditable',
         descripcion:
           'Evalua emergencia de malezas para trigo, soja y maiz usando acumulacion termica/hidrica y parametros Gompertz.',
-        inputs: ['Cultivo', 'Temperatura', 'Humedad/lluvia', 'Parametros por especie'],
-        outputs: ['probabilidad de emergencia', 'ventana de control', 'curva estimada'],
+        inputs: [
+          'Cultivo',
+          'Temperatura',
+          'Humedad/lluvia',
+          'Parametros por especie',
+        ],
+        outputs: [
+          'probabilidad de emergencia',
+          'ventana de control',
+          'curva estimada',
+        ],
       },
     ];
   }
@@ -181,7 +226,9 @@ export class AlgoritmosService {
 
   async getReadinessCatalogos() {
     const cultivos = ['Trigo', 'Cebada', 'Soja', 'Maiz', 'Arveja'];
-    const resultados = await Promise.all(cultivos.map((cultivo) => this.getReadinessCultivo(cultivo)));
+    const resultados = await Promise.all(
+      cultivos.map((cultivo) => this.getReadinessCultivo(cultivo)),
+    );
     return {
       ok: resultados.every((item) => item.ok),
       fecha: new Date().toISOString(),
@@ -199,29 +246,32 @@ export class AlgoritmosService {
     return calcularHuellaHidrica(params);
   }
 
-  private async getReadinessCultivo(cultivo: string): Promise<ReadinessCultivoCatalogo> {
-    const [
-      catalogoSemillas,
-      enfermedades,
-      cronos,
-      malezas,
-    ] = await Promise.all([
-      this.semillasService.getFilter({
-        filter: JSON.stringify({ cultivo }),
-        limit: 0,
-        page: 0,
-        select: '_id ciclo resistencia',
-      }),
-      this.countByFilter(this.enfermedadsService, { cultivo }),
-      this.countByFilter(this.cronosService, { cultivo }),
-      this.countByFilter(this.malezasService, { cultivosObjetivo: cultivo }),
-    ]);
+  private async getReadinessCultivo(
+    cultivo: string,
+  ): Promise<ReadinessCultivoCatalogo> {
+    const [catalogoSemillas, enfermedades, cronos, malezas] = await Promise.all(
+      [
+        this.semillasService.getFilter({
+          filter: JSON.stringify({ cultivo }),
+          limit: 0,
+          page: 0,
+          select: '_id ciclo resistencia',
+        }),
+        this.countByFilter(this.enfermedadsService, { cultivo }),
+        this.countByFilter(this.cronosService, { cultivo }),
+        this.countByFilter(this.malezasService, { cultivosObjetivo: cultivo }),
+      ],
+    );
     const filasSemillas = Array.isArray(catalogoSemillas?.datos)
       ? (catalogoSemillas.datos as any[])
       : [];
-    const semillas = Number(catalogoSemillas?.totalCount || filasSemillas.length);
+    const semillas = Number(
+      catalogoSemillas?.totalCount || filasSemillas.length,
+    );
     const esEvidenciaSanitariaEspecifica = (resistencia: any) =>
-      ['observada', 'historica'].includes(String(resistencia?.estado || '').toLowerCase()) ||
+      ['observada', 'historica'].includes(
+        String(resistencia?.estado || '').toLowerCase(),
+      ) ||
       (!resistencia?.estado &&
         resistencia?.multiplicador != null &&
         Number.isFinite(Number(resistencia.multiplicador)));
@@ -229,7 +279,9 @@ export class AlgoritmosService {
       (semilla?.resistencia || []).some(esEvidenciaSanitariaEspecifica),
     ).length;
     const semillasConCrono = filasSemillas.filter((semilla) => {
-      const ciclo = String(semilla?.ciclo || '').trim().toUpperCase();
+      const ciclo = String(semilla?.ciclo || '')
+        .trim()
+        .toUpperCase();
       return ciclo && ciclo !== 'SIN DEFINIR';
     }).length;
     const enfermedadesMotor = this.getEnfermedadesCultivo(cultivo).length;
@@ -295,8 +347,14 @@ export class AlgoritmosService {
         );
       }
     }
-    if (semillas && semillasConResistencia < semillas && requiereMatrizResistencia) {
-      observaciones.push(`${semillas - semillasConResistencia} variedad(es) sin resistencia sanitaria especifica`);
+    if (
+      semillas &&
+      semillasConResistencia < semillas &&
+      requiereMatrizResistencia
+    ) {
+      observaciones.push(
+        `${semillas - semillasConResistencia} variedad(es) sin resistencia sanitaria especifica`,
+      );
     }
     if (this.norm(cultivo) === 'ARVEJA') {
       observaciones.push(
@@ -304,10 +362,14 @@ export class AlgoritmosService {
       );
     }
     if (semillas && semillasConCrono < semillas) {
-      observaciones.push(`${semillas - semillasConCrono} variedad(es) sin ciclo/crono robusto`);
+      observaciones.push(
+        `${semillas - semillasConCrono} variedad(es) sin ciclo/crono robusto`,
+      );
     }
     if (!enfermedades && enfermedadesMotor) {
-      observaciones.push('Enfermedades provistas por motor interno; falta espejo completo en coleccion de enfermedades');
+      observaciones.push(
+        'Enfermedades provistas por motor interno; falta espejo completo en coleccion de enfermedades',
+      );
     }
     const calidadCatalogo =
       faltantes.length > 0
@@ -325,13 +387,14 @@ export class AlgoritmosService {
       coberturaResistenciaEnfermedades,
       enfermedades,
       enfermedadesMotor,
-      fuenteEnfermedades: this.norm(cultivo) === 'ARVEJA'
-        ? 'motor-experimental'
-        : enfermedades
-        ? 'base-datos'
-        : enfermedadesMotor
-          ? 'motor-formulas'
-          : 'sin-base',
+      fuenteEnfermedades:
+        this.norm(cultivo) === 'ARVEJA'
+          ? 'motor-experimental'
+          : enfermedades
+            ? 'base-datos'
+            : enfermedadesMotor
+              ? 'motor-formulas'
+              : 'sin-base',
       cronos,
       malezas,
       calidadCatalogo,
@@ -340,7 +403,10 @@ export class AlgoritmosService {
     };
   }
 
-  private async countByFilter(service: { getFilter: (query: any) => Promise<{ totalCount?: number }> }, filter: any) {
+  private async countByFilter(
+    service: { getFilter: (query: any) => Promise<{ totalCount?: number }> },
+    filter: any,
+  ) {
     const resultado = await service.getFilter({
       filter: JSON.stringify(filter),
       limit: 0,
@@ -439,45 +505,69 @@ export class AlgoritmosService {
       });
     }
 
-    const enfermedades = this.getEnfermedadesCultivo(cultivo).map((enfermedad) => {
-      const etapaActiva = enfermedad.etapas.some((item) => item.toLowerCase() === String(etapa).toLowerCase());
-      const humedadScore = this.clamp((humedad - enfermedad.humedadBase) / 18, 0, 1);
-      const mojadoScore = this.clamp(horasMojado / enfermedad.horasMojadoCriticas, 0, 1);
-      const lluviaScore = this.clamp(lluvia48 / enfermedad.lluviaCritica, 0, 1);
-      const tempScore = this.clamp(1 - Math.abs(temperatura - enfermedad.tempOptima) / 14, 0, 1);
-      const etapaScore = etapaActiva ? 1 : 0.42;
-      const susceptibilidadEnfermedad = this.getSusceptibilidadVarietal(
-        enfermedad.nombre,
-        susceptibilidad,
-        resistenciasVarietales,
-      );
-      const riesgo = this.round(
-        100 *
-          (0.25 * humedadScore +
-            0.22 * mojadoScore +
-            0.16 * lluviaScore +
-            0.17 * tempScore +
-            0.12 * susceptibilidadEnfermedad +
-            0.08 * etapaScore),
-        1,
-      );
+    const enfermedades = this.getEnfermedadesCultivo(cultivo).map(
+      (enfermedad) => {
+        const etapaActiva = enfermedad.etapas.some(
+          (item) => item.toLowerCase() === String(etapa).toLowerCase(),
+        );
+        const humedadScore = this.clamp(
+          (humedad - enfermedad.humedadBase) / 18,
+          0,
+          1,
+        );
+        const mojadoScore = this.clamp(
+          horasMojado / enfermedad.horasMojadoCriticas,
+          0,
+          1,
+        );
+        const lluviaScore = this.clamp(
+          lluvia48 / enfermedad.lluviaCritica,
+          0,
+          1,
+        );
+        const tempScore = this.clamp(
+          1 - Math.abs(temperatura - enfermedad.tempOptima) / 14,
+          0,
+          1,
+        );
+        const etapaScore = etapaActiva ? 1 : 0.42;
+        const susceptibilidadEnfermedad = this.getSusceptibilidadVarietal(
+          enfermedad.nombre,
+          susceptibilidad,
+          resistenciasVarietales,
+        );
+        const riesgo = this.round(
+          100 *
+            (0.25 * humedadScore +
+              0.22 * mojadoScore +
+              0.16 * lluviaScore +
+              0.17 * tempScore +
+              0.12 * susceptibilidadEnfermedad +
+              0.08 * etapaScore),
+          1,
+        );
 
-      return {
-        nombre: enfermedad.nombre,
-        periodo: enfermedad.periodo,
-        riesgo,
-        nivel: this.nivelRiesgo(riesgo),
-        prescripcion: enfermedad.prescripcion,
-        etapaActiva,
-        susceptibilidad: this.round(susceptibilidadEnfermedad, 2),
-      };
-    });
+        return {
+          nombre: enfermedad.nombre,
+          periodo: enfermedad.periodo,
+          riesgo,
+          nivel: this.nivelRiesgo(riesgo),
+          prescripcion: enfermedad.prescripcion,
+          etapaActiva,
+          susceptibilidad: this.round(susceptibilidadEnfermedad, 2),
+        };
+      },
+    );
 
     const maxRiesgo = Math.max(...enfermedades.map((item) => item.riesgo), 0);
     const serie = Array.from({ length: 10 }).map((_, index) => {
       const humedadDia = humedad + Math.sin(index / 1.5) * 5;
       const mojadoDia = Math.max(0, horasMojado - 6 + index * 1.2);
-      const riesgo = this.clamp(maxRiesgo * 0.55 + humedadDia * 0.18 + mojadoDia * 1.2 - index * 1.4, 0, 100);
+      const riesgo = this.clamp(
+        maxRiesgo * 0.55 + humedadDia * 0.18 + mojadoDia * 1.2 - index * 1.4,
+        0,
+        100,
+      );
       return { label: `Dia ${index + 1}`, value: this.round(riesgo, 1) };
     });
 
@@ -493,7 +583,9 @@ export class AlgoritmosService {
         horasMojado,
         lluvia48h: lluvia48,
         temperatura,
-        fuenteVarietal: resistenciasVarietales.length ? 'semilla.resistencia' : 'sensibilidad base manual',
+        fuenteVarietal: resistenciasVarietales.length
+          ? 'semilla.resistencia'
+          : 'sensibilidad base manual',
       },
       enfermedades,
       serie,
@@ -521,23 +613,36 @@ export class AlgoritmosService {
     resistenciasVarietales: ResistenciaSimulador[];
     diasSimulados: number;
   }) {
-    const dias = Math.max(1, Math.min(90, Math.round(params.diasSimulados || 10)));
+    const dias = Math.max(
+      1,
+      Math.min(90, Math.round(params.diasSimulados || 10)),
+    );
     const lluviaDiaria = Math.max(0, params.lluvia48 / 2);
     const tmin = params.temperatura - 4;
     const tmax = params.temperatura + 5;
     const enfermedadesBase = this.getEnfermedadesCultivo('Trigo');
-    const seriePorEnfermedad: Record<string, Array<{ label: string; value: number }>> = {};
+    const seriePorEnfermedad: Record<
+      string,
+      Array<{ label: string; value: number }>
+    > = {};
 
     const enfermedades = enfermedadesBase.map((enfermedad) => {
-      const etapaActiva = enfermedad.etapas.some((item) => this.norm(item) === this.norm(params.etapa));
+      const etapaActiva = enfermedad.etapas.some(
+        (item) => this.norm(item) === this.norm(params.etapa),
+      );
       const perfilVarietal = this.getPerfilVarietal(
         enfermedad.nombre,
         params.susceptibilidad,
         params.resistenciasVarietales,
       );
       const kVar = perfilVarietal.multiplicador;
-      const ir = perfilVarietal.indiceResistencia;
+      const esRoyaAmarillaExperimental =
+        enfermedad.nombre === 'Roya Anaranjada';
+      const validacion = esRoyaAmarillaExperimental
+        ? 'experimental'
+        : 'operativo_provisional';
       let riesgo = 0;
+      let resultadoCrudo = 0;
       let DPr = 0;
       let DPrHRT = 0;
       let DHR = 0;
@@ -546,6 +651,9 @@ export class AlgoritmosService {
       let PMoj = 0;
       let GDN = 0;
       let GDAcum = 0;
+      let fusariumFueraVentana = false;
+      let resultadoContractualCrudo = 0;
+      let resultadoContractualLimitado = 0;
 
       const serie = Array.from({ length: dias }).map((_, index) => {
         const label = `Dia ${index + 1}`;
@@ -554,30 +662,62 @@ export class AlgoritmosService {
         }
 
         if (enfermedad.nombre === 'Mancha Amarilla') {
-          DPr += lluviaDiaria >= 2 ? 1 : 0;
-          DPrHRT += lluviaDiaria >= 1 && params.humedad >= 80 && tmax <= 32 && tmin >= 8 ? 1 : 0;
+          DPr += lluviaDiaria > 2 ? 1 : 0;
+          DPrHRT +=
+            lluviaDiaria > 1 && params.humedad >= 80 && tmax <= 32 && tmin >= 8
+              ? 1
+              : 0;
+          resultadoCrudo = calcularManchaAmarillaCrudo(DPrHRT, DPr, kVar);
           riesgo = calcularManchaAmarilla(DPrHRT, DPr, kVar);
         } else if (enfermedad.nombre === 'Mancha de la Hoja') {
-          DPr += lluviaDiaria >= 10 ? 1 : 0;
+          DPr += lluviaDiaria > 10 ? 1 : 0;
           DHR += params.humedad >= 80 ? 1 : 0;
+          resultadoCrudo = calcularManchaHojaCrudo(DHR, DPr, kVar);
           riesgo = calcularManchaHoja(DHR, DPr, kVar);
         } else if (enfermedad.nombre === 'Roya de la Hoja') {
           GD += gradosDiaRoya(params.humedad, params.temperatura);
-          DHR += lluviaDiaria <= 0.2 && params.humedad >= 70 ? 1 : 0;
-          riesgo = calcularRoyaHoja(GD, DHR, ir);
+          DHR += lluviaDiaria <= 0.2 && params.humedad > 70 ? 1 : 0;
+          resultadoCrudo = calcularRoyaHojaTrigo2026Crudo(GD, DHR, kVar);
+          riesgo = calcularRoyaHojaTrigo2026(GD, DHR, kVar);
         } else if (enfermedad.nombre === 'Roya Anaranjada') {
-          GD += gradosDiaRoyaAnaranjada(
-            params.humedad,
-            params.temperatura,
-          );
+          GD += gradosDiaRoyaAnaranjada(params.humedad, params.temperatura);
           DHR += params.humedad > 75 && lluviaDiaria <= 5 ? 1 : 0;
           DL += lluviaDiaria >= 0.1 && lluviaDiaria <= 2 ? 1 : 0;
-          riesgo = calcularRoyaAnaranjada(GD, DHR, DL, ir);
+          resultadoContractualCrudo = calcularRoyaAnaranjadaTrigo2026Crudo(
+            GD,
+            DHR,
+            DL,
+            kVar,
+          );
+          resultadoContractualLimitado = calcularRoyaAnaranjadaTrigo2026(
+            GD,
+            DHR,
+            DL,
+            kVar,
+          );
+          // El banco manual es diario y no puede fabricar las 240 horas que
+          // exige el modelo publicado. El contrato queda trazado en sombra,
+          // pero la salida ambiental permanece sin calculo.
+          resultadoCrudo = 0;
+          riesgo = 0;
         } else if (enfermedad.nombre === 'Fusarium de la Espiga') {
-          GDAcum += params.temperatura;
-          PMoj += lluviaDiaria >= 0.2 && params.humedad >= 78 ? 1 : 0;
-          GDN += Math.max(tmax - 26, 0) + Math.max(9 - tmin, 0);
-          riesgo = calcularFusariumEspiga(PMoj, GDN, kVar, GDAcum < 530);
+          if (GDAcum < TRIGO_FUSARIUM_GDD_BASE_0_MAX) {
+            GDAcum = Math.min(
+              TRIGO_FUSARIUM_GDD_BASE_0_MAX,
+              GDAcum + gradosDiaBase0(params.temperatura),
+            );
+            const diaAnteriorConLluviaYHr =
+              lluviaDiaria >= 0.2 && params.humedad > 81;
+            const diaActualConHr = params.humedad >= 78;
+            PMoj +=
+              index > 0 && diaAnteriorConLluviaYHr && diaActualConHr ? 1 : 0;
+            GDN += Math.max(tmax - 26, 0) + Math.max(9 - tmin, 0);
+            resultadoCrudo = calcularFusariumEspigaCrudo(PMoj, GDN, kVar);
+            riesgo = calcularFusariumEspiga(PMoj, GDN, kVar, true);
+          } else {
+            fusariumFueraVentana = true;
+            riesgo = 0;
+          }
         }
 
         return { label, value: this.round(riesgo, 1) };
@@ -585,21 +725,79 @@ export class AlgoritmosService {
 
       seriePorEnfermedad[enfermedad.nombre] = serie;
       const ultimo = serie[serie.length - 1]?.value || 0;
+      const estadoCalculo = esRoyaAmarillaExperimental
+        ? etapaActiva
+          ? 'sin_datos'
+          : 'fuera_ventana'
+        : etapaActiva && !fusariumFueraVentana
+          ? 'calculado'
+          : 'fuera_ventana';
+      const resistenciaUsada = {
+        multiplicador: this.round(kVar, 2),
+        perfil: perfilVarietal.perfil,
+        estado: perfilVarietal.estado,
+        confianza: perfilVarietal.confianza,
+        fuente: perfilVarietal.fuente,
+        fuenteUrl: perfilVarietal.fuenteUrl,
+        campaniaFuente: perfilVarietal.campaniaFuente,
+        coherente: perfilVarietal.coherente,
+        escenarioManual: perfilVarietal.escenarioManual,
+        alertable: false,
+        limitaciones: perfilVarietal.limitaciones,
+      };
 
       return {
         nombre: enfermedad.nombre,
         periodo: enfermedad.periodo,
+        estado: estadoCalculo,
         riesgo: this.round(ultimo, 1),
-        nivel: etapaActiva ? this.nivelRiesgo(ultimo) : 'fuera de ventana',
-        prescripcion: enfermedad.prescripcion,
+        nivel: esRoyaAmarillaExperimental
+          ? etapaActiva
+            ? 'requiere 10 dias de datos horarios'
+            : 'fuera de ventana'
+          : estadoCalculo === 'calculado'
+            ? this.nivelRiesgo(ultimo)
+            : 'fuera de ventana',
+        prescripcion: esRoyaAmarillaExperimental
+          ? undefined
+          : enfermedad.prescripcion,
+        prescripcionAutomatica: false,
         etapaActiva,
         susceptibilidad: this.round(kVar, 2),
-        indiceResistencia: this.norm(enfermedad.nombre).includes('ROYA') ? this.round(ir, 2) : undefined,
+        factorSusceptibilidad: this.round(kVar, 2),
         resistenciaEstado: perfilVarietal.estado,
+        resistenciaPerfil: perfilVarietal.perfil,
+        resistenciaConfianza: perfilVarietal.confianza,
         resistenciaFuente: perfilVarietal.fuente,
         resistenciaCampania: perfilVarietal.campaniaFuente,
-        calidadInput: 'media',
-        fuenteFormula: enfermedad.formulaFuente || 'Enfermedades en TRIGO -V2.xlsx',
+        resistenciaCoherente: perfilVarietal.coherente,
+        resistenciaLimitaciones: perfilVarietal.limitaciones,
+        resistenciaEscenarioManual: perfilVarietal.escenarioManual,
+        resistenciaAlertable: false,
+        resistenciaUsada,
+        calidadInput: esRoyaAmarillaExperimental
+          ? 'sin_datos: el escenario manual diario no reemplaza 240 horas reales'
+          : 'media',
+        validacion,
+        salidaOperativa: !esRoyaAmarillaExperimental,
+        incluirEnRanking: !esRoyaAmarillaExperimental,
+        visible: true,
+        simulable: true,
+        alertable: false,
+        nombreVisible: esRoyaAmarillaExperimental
+          ? 'Roya Amarilla/Estriada (registro legado; experimental)'
+          : enfermedad.nombre,
+        fuenteFormula: enfermedad.formulaFuente,
+        resolucion: esRoyaAmarillaExperimental ? 'horaria' : 'diaria',
+        coberturaHoraria10d: esRoyaAmarillaExperimental ? 0 : undefined,
+        limitaciones: esRoyaAmarillaExperimental
+          ? [
+              'El simulador manual diario no calcula la oportunidad ambiental horaria.',
+              'Se requieren al menos 216 de 240 horas validas (90% de cobertura).',
+              'La ventana movil de 10 dias requiere validacion regional argentina.',
+              'La formula contractual se reproduce solo como contraste en sombra; no es una formula publicada ni una salida de enfermedad.',
+            ]
+          : perfilVarietal.limitaciones,
         variables: {
           DPr: this.round(DPr, 2),
           DPrHRT: this.round(DPrHRT, 2),
@@ -609,16 +807,37 @@ export class AlgoritmosService {
           PMoj: this.round(PMoj, 2),
           GDN: this.round(GDN, 2),
           GDAcum: this.round(GDAcum, 2),
+          resultadoCrudo: this.round(resultadoCrudo, 4),
+          resultadoContractualCrudo: esRoyaAmarillaExperimental
+            ? this.round(resultadoContractualCrudo, 4)
+            : undefined,
+          resultadoContractualLimitado: esRoyaAmarillaExperimental
+            ? this.round(resultadoContractualLimitado, 2)
+            : undefined,
+          horasEsperadas10d: esRoyaAmarillaExperimental ? 240 : undefined,
+          horasValidas10d: esRoyaAmarillaExperimental ? 0 : undefined,
+          frecuenciaAmbientalPct: esRoyaAmarillaExperimental ? 0 : undefined,
+          prioridadInterna: esRoyaAmarillaExperimental ? 0 : undefined,
+          factorSusceptibilidad: this.round(kVar, 2),
+          formulaVersion: TRIGO_MOTOR_SANITARIO_VERSION,
         },
       };
     });
 
-    const maxRiesgo = Math.max(...enfermedades.map((item) => item.riesgo), 0);
-    const mayor = enfermedades.find((item) => item.riesgo === maxRiesgo);
+    const enfermedadesOperativas = enfermedades.filter(
+      (item) => item.incluirEnRanking,
+    );
+    const maxRiesgo = Math.max(
+      ...enfermedadesOperativas.map((item) => item.riesgo),
+      0,
+    );
+    const mayor = enfermedadesOperativas.find(
+      (item) => item.riesgo === maxRiesgo,
+    );
     const serie = mayor ? seriePorEnfermedad[mayor.nombre] || [] : [];
 
     return {
-      motor: 'enfermedades-trigo-v2',
+      motor: `enfermedades-trigo-v${TRIGO_MOTOR_SANITARIO_VERSION}`,
       resumen: `${params.cultivo} ${params.variedad}: ${this.nivelRiesgo(maxRiesgo)} (${this.round(maxRiesgo, 1)}%)`,
       metricas: {
         cultivo: params.cultivo,
@@ -631,21 +850,31 @@ export class AlgoritmosService {
         lluviaDiariaUsada: this.round(lluviaDiaria, 1),
         temperatura: params.temperatura,
         diasSimulados: dias,
-        calidadInput: 'media: banco manual/diario; en produccion toma clima historico de estacion cercana con fallback',
-        fuenteVarietal: params.resistenciasVarietales.length ? 'semilla.resistencia' : 'sensibilidad base manual',
+        calidadInput:
+          'media: banco manual/diario; en produccion toma clima historico de estacion cercana con fallback',
+        fuenteVarietal: params.resistenciasVarietales.length
+          ? 'semilla.resistencia'
+          : 'sensibilidad base manual',
+        validacion: 'operativo_provisional',
+        alertable: false,
+        enfermedadPrioritaria: mayor?.nombre,
       },
       enfermedades,
       serie,
       trazas: [
-        'Trigo V2 toma formulas de Enfermedades en TRIGO -V2.xlsx.',
+        `Trigo v${TRIGO_MOTOR_SANITARIO_VERSION}: contrato funcional sanitario vigente; no mezcla acumuladores de versiones anteriores.`,
+        'Ventana foliar: comenzar a contar entre 800 y 850 GDD base 0 C desde siembra (fin de macollaje); en el simulador la etapa seleccionada se considera observada.',
         'Mancha Amarilla: CInf=-2.25+1.62*DPrHRT+1.30*DPr, ponderado por susceptibilidad varietal.',
         'Mancha de la Hoja: CInf=-6.41+0.59*DHR+2.79*DPr, ponderado por susceptibilidad varietal.',
-        'Roya de la Hoja: Sev%=4.42+0.61*GD+0.57*DHR-30.01*IR. IR es resistencia: resistente=1, susceptible=0.',
-        'Roya Anaranjada: Sev%=5.15+0.72*GD+0.48*DHR+0.35*DL-35.2*IR. IR es resistencia.',
-        'Fusarium de la Espiga: I%=20.37+8.63*PMoj-0.49*GDN, ponderado por perfil varietal.',
+        'Roya de la Hoja: Sev%=4.42+0.61*GD+0.57*DHR-30.01*(1-factorSusceptibilidad). Factor S=1, MS=0.75, MR=0.5, R=0.05.',
+        'Roya Amarilla/Estriada (ID legado Roya Anaranjada): El Jarroudi 2017 (DOI 10.1094/PDIS-12-16-1766-RE), rachas >=4 h con 4<T<16 C, HR>92% y lluvia<=0.1 mm; ventana movil 10 dias y umbrales ambientales 5/15/20%. Requiere 90% de cobertura horaria; no es diagnostico ni genera alerta.',
+        'Contraste contractual en sombra: 5.15+0.72*GD+0.48*DHR+0.35*DL-35.2*(1-factorSusceptibilidad). Se reproduce exactamente, pero no se presenta como formula publicada, riesgo o porcentaje de enfermedad.',
+        `Fusarium de la Espiga: I%=20.37+8.63*PMoj-0.49*GDN estima incidencia meteorologica; el ajuste varietal de Chaman no se publica como severidad. Contar desde Antesis/primeras espigas con anteras hasta ${TRIGO_FUSARIUM_GDD_BASE_0_MAX} GDD base 0 C; al alcanzar el tope se conserva el ultimo calculo y el dia siguiente queda fuera de ventana.`,
+        'resultadoCrudo conserva la salida algebraica para auditoria; riesgo es la salida visible limitada al rango 0-100.',
+        'Gobernanza v4: los modelos no experimentales son operativo_provisional y simulables, pero no alertables ni prescriptivos automaticamente; la Roya Amarilla/Estriada experimental queda fuera del ranking y sin prescripcion.',
         params.resistenciasVarietales.length
           ? `Perfil varietal tomado de semilla.resistencia (${params.resistenciasVarietales.length} registro(s)).`
-          : 'Sin resistencia varietal especifica: el banco usa sensibilidad manual y marca calidad varietal media.',
+          : 'Sin resistencia varietal especifica: el escenario manual queda identificado como no alertable y no equivale a un dato observado.',
       ],
     };
   }
@@ -663,14 +892,22 @@ export class AlgoritmosService {
     resistenciasVarietales: ResistenciaSimulador[];
     diasSimulados: number;
   }) {
-    const dias = Math.max(1, Math.min(60, Math.round(params.diasSimulados || 10)));
+    const dias = Math.max(
+      1,
+      Math.min(60, Math.round(params.diasSimulados || 10)),
+    );
     const lluviaDiaria = Math.max(0, params.lluvia48 / 2);
     const tmin = params.temperatura - 4;
     const tmax = params.temperatura + 5;
     const enfermedadesBase = this.getEnfermedadesCultivo('Cebada');
-    const seriePorEnfermedad: Record<string, Array<{ label: string; value: number }>> = {};
+    const seriePorEnfermedad: Record<
+      string,
+      Array<{ label: string; value: number }>
+    > = {};
     const enfermedades = enfermedadesBase.map((enfermedad) => {
-      const etapaActiva = enfermedad.etapas.some((item) => item.toLowerCase() === String(params.etapa).toLowerCase());
+      const etapaActiva = enfermedad.etapas.some(
+        (item) => item.toLowerCase() === String(params.etapa).toLowerCase(),
+      );
       const perfilVarietal = this.getPerfilVarietal(
         enfermedad.nombre,
         params.susceptibilidad,
@@ -707,11 +944,7 @@ export class AlgoritmosService {
         } else if (enfermedad.nombre === 'Roya de la Hoja de Cebada') {
           GD += gradosDiaRoya(params.humedad, params.temperatura);
           DHR += lluviaDiaria <= 0.2 && params.humedad >= 70 ? 1 : 0;
-          riesgo = calcularRoyaHoja(
-            GD,
-            DHR,
-            perfilVarietal.indiceResistencia,
-          );
+          riesgo = calcularRoyaHoja(GD, DHR, perfilVarietal.indiceResistencia);
         } else if (enfermedad.nombre === 'Fusariosis de la Espiga de Cebada') {
           GDAcum += params.temperatura;
           PMoj += lluviaDiaria >= 0.2 && params.humedad >= 78 ? 1 : 0;
@@ -734,7 +967,8 @@ export class AlgoritmosService {
         resistenciaFuente: perfilVarietal.fuente,
         resistenciaCampania: perfilVarietal.campaniaFuente,
         calidadInput: 'media',
-        fuenteFormula: enfermedad.formulaFuente || 'ENFERMEDADES EN CEBADA.xlsx',
+        fuenteFormula:
+          enfermedad.formulaFuente || 'ENFERMEDADES EN CEBADA.xlsx',
       };
     });
     const maxRiesgo = Math.max(...enfermedades.map((item) => item.riesgo), 0);
@@ -755,8 +989,11 @@ export class AlgoritmosService {
         lluviaDiariaUsada: this.round(lluviaDiaria, 1),
         temperatura: params.temperatura,
         diasSimulados: dias,
-        calidadInput: 'media: sin sensor horario de canopeo, usa proxy diario/manual',
-        fuenteVarietal: params.resistenciasVarietales.length ? 'semilla.resistencia' : 'sensibilidad base manual',
+        calidadInput:
+          'media: sin sensor horario de canopeo, usa proxy diario/manual',
+        fuenteVarietal: params.resistenciasVarietales.length
+          ? 'semilla.resistencia'
+          : 'sensibilidad base manual',
       },
       enfermedades,
       serie,
@@ -785,7 +1022,10 @@ export class AlgoritmosService {
     resistenciasVarietales: ResistenciaSimulador[];
     diasSimulados: number;
   }) {
-    const dias = Math.max(1, Math.min(90, Math.round(params.diasSimulados || 10)));
+    const dias = Math.max(
+      1,
+      Math.min(90, Math.round(params.diasSimulados || 10)),
+    );
     const lluviaDiaria = Math.max(0, params.lluvia48 / 2);
     const perfilVarietal = this.getPerfilVarietal(
       'Roya del Maiz',
@@ -844,7 +1084,8 @@ export class AlgoritmosService {
           riesgo: 0,
           nivel: 'sin modelo científico validado',
           etapaActiva: false,
-          fuenteFormula: 'BASE CARGA MAIZ.xlsx aporta resistencia, no fórmula epidemiológica',
+          fuenteFormula:
+            'BASE CARGA MAIZ.xlsx aporta resistencia, no fórmula epidemiológica',
         },
       ],
       serie,
@@ -865,7 +1106,10 @@ export class AlgoritmosService {
     resistenciasVarietales: ResistenciaSimulador[];
     diasSimulados: number;
   }) {
-    const dias = Math.max(1, Math.min(90, Math.round(params.diasSimulados || 10)));
+    const dias = Math.max(
+      1,
+      Math.min(90, Math.round(params.diasSimulados || 10)),
+    );
     const lluviaDiaria = Math.max(0, params.lluvia48 / 2);
     const perfilVarietal = this.getPerfilVarietal(
       'Fin de Ciclo',
@@ -873,9 +1117,12 @@ export class AlgoritmosService {
       params.resistenciasVarietales,
     );
     const kVar = perfilVarietal.multiplicador;
-    const etapaActiva = ['R3', 'R5', 'FRUCTIFICACION', 'INICIO DE LLENADO'].includes(
-      this.norm(params.etapa),
-    );
+    const etapaActiva = [
+      'R3',
+      'R5',
+      'FRUCTIFICACION',
+      'INICIO DE LLENADO',
+    ].includes(this.norm(params.etapa));
     let PtAc7 = 0;
     let DPr7 = 0;
     let Lt7 = 0;
@@ -887,9 +1134,7 @@ export class AlgoritmosService {
       }
       return {
         label: `Dia ${index + 1}`,
-        value: etapaActiva
-          ? this.round(calcularFinCicloSoja(Lt7, kVar), 1)
-          : 0,
+        value: etapaActiva ? this.round(calcularFinCicloSoja(Lt7, kVar), 1) : 0,
       };
     });
     const riesgo = serie[serie.length - 1]?.value || 0;
@@ -944,15 +1189,24 @@ export class AlgoritmosService {
     const umbralAguaUtil = Number(body?.umbralAguaUtilPct ?? 45);
     const raicesActivas = body?.raicesActivas !== false;
 
-    const factorAreaMojada = this.clamp((anchoBulboM * metrosLinealesHa) / 10000, 0.05, 1.5);
+    const factorAreaMojada = this.clamp(
+      (anchoBulboM * metrosLinealesHa) / 10000,
+      0.05,
+      1.5,
+    );
     const rangoUtilPct = Math.max(capacidadCampo - puntoMarchitez, 1);
-    const aguaTotalDisponibleMm = (rangoUtilPct / 100) * profundidadCm * 10 * factorAreaMojada;
+    const aguaTotalDisponibleMm =
+      (rangoUtilPct / 100) * profundidadCm * 10 * factorAreaMojada;
     const aguaUtilActualMm =
       (this.clamp(humedadActual - puntoMarchitez, 0, rangoUtilPct) / 100) *
       profundidadCm *
       10 *
       factorAreaMojada;
-    const aguaUtilPct = this.clamp((aguaUtilActualMm / Math.max(aguaTotalDisponibleMm, 1)) * 100, 0, 100);
+    const aguaUtilPct = this.clamp(
+      (aguaUtilActualMm / Math.max(aguaTotalDisponibleMm, 1)) * 100,
+      0,
+      100,
+    );
     const deficitMm =
       (this.clamp(capacidadCampo - humedadActual, 0, capacidadCampo) / 100) *
       profundidadCm *
@@ -965,7 +1219,13 @@ export class AlgoritmosService {
     const umbralMm = (aguaTotalDisponibleMm * umbralAguaUtil) / 100;
     const recomendacionMm =
       raicesActivas && saldo72h < umbralMm
-        ? this.round(Math.min(Math.max(deficitMm - lluviaEfectiva72h, 0), capacidadRiegoDia), 1)
+        ? this.round(
+            Math.min(
+              Math.max(deficitMm - lluviaEfectiva72h, 0),
+              capacidadRiegoDia,
+            ),
+            1,
+          )
         : 0;
     const decision = !raicesActivas
       ? 'No recomendar: falta confirmar raíces activas en la zona medida'
@@ -975,8 +1235,18 @@ export class AlgoritmosService {
     let humedad = humedadActual;
     const serie = Array.from({ length: 7 }).map((_, index) => {
       const lluviaDia = index < 3 ? lluviaEfectiva72h / 3 : 0;
-      humedad = this.clamp(humedad + lluviaDia / (profundidadCm * 10) * 100 - etcDia / (profundidadCm * 10) * 100, puntoMarchitez, capacidadCampo);
-      const aguaUtil = this.clamp(((humedad - puntoMarchitez) / rangoUtilPct) * 100, 0, 100);
+      humedad = this.clamp(
+        humedad +
+          (lluviaDia / (profundidadCm * 10)) * 100 -
+          (etcDia / (profundidadCm * 10)) * 100,
+        puntoMarchitez,
+        capacidadCampo,
+      );
+      const aguaUtil = this.clamp(
+        ((humedad - puntoMarchitez) / rangoUtilPct) * 100,
+        0,
+        100,
+      );
       return { label: `Dia ${index + 1}`, value: this.round(aguaUtil, 1) };
     });
 
@@ -1025,11 +1295,20 @@ export class AlgoritmosService {
     const cultivosPermitidos = ['Trigo', 'Soja', 'Maiz'];
     const habilitado = cultivosPermitidos.includes(cultivo);
     let gradosDia = 0;
-    const humedadFactor = this.clamp((humedadSuelo + lluvia7d) / 100, 0.25, 1.25);
+    const humedadFactor = this.clamp(
+      (humedadSuelo + lluvia7d) / 100,
+      0.25,
+      1.25,
+    );
     const serie = Array.from({ length: dias }).map((_, index) => {
       gradosDia += Math.max(temperaturaMedia - baseTermica, 0) * humedadFactor;
-      const emergencia = habilitado ? amplitud * Math.exp(-Math.exp(-k * (gradosDia - x0))) : 0;
-      return { label: `Dia ${index + 1}`, value: this.round(this.clamp(emergencia, 0, 100), 1) };
+      const emergencia = habilitado
+        ? amplitud * Math.exp(-Math.exp(-k * (gradosDia - x0)))
+        : 0;
+      return {
+        label: `Dia ${index + 1}`,
+        value: this.round(this.clamp(emergencia, 0, 100), 1),
+      };
     });
     const ultimo = serie[serie.length - 1]?.value || 0;
 
@@ -1051,23 +1330,36 @@ export class AlgoritmosService {
       trazas: [
         'Curva Gompertz: emergencia = A x exp(-exp(-k x (grados dia - x0))).',
         'Los grados dia se ajustan por humedad de suelo y lluvia reciente.',
-        habilitado ? 'Motor habilitado para trigo, soja y maiz.' : `Cultivo ${cultivo} fuera del alcance operativo del motor de malezas.`,
+        habilitado
+          ? 'Motor habilitado para trigo, soja y maiz.'
+          : `Cultivo ${cultivo} fuera del alcance operativo del motor de malezas.`,
       ],
     };
   }
 
-  async calcularHuellaHidricaReal(params: Omit<HuellaHidricaParams, 'clima'>): Promise<HuellaHidricaResultado> {
+  async calcularHuellaHidricaReal(
+    params: Omit<HuellaHidricaParams, 'clima'>,
+  ): Promise<HuellaHidricaResultado> {
     const lote = params.lote;
     const siembra = params.siembra;
     const lat = lote.ubicacion?.centro?.lat;
     const lng = lote.ubicacion?.centro?.lng;
     if (lat == null || lng == null) {
-      throw new BadRequestException('No se puede calcular huella hidrica: el lote no tiene centro geografico.');
+      throw new BadRequestException(
+        'No se puede calcular huella hidrica: el lote no tiene centro geografico.',
+      );
     }
     if (!siembra.fechaSiembra || !siembra.fechaCosecha) {
-      throw new BadRequestException('No se puede calcular huella hidrica: faltan fechas de siembra o cosecha.');
+      throw new BadRequestException(
+        'No se puede calcular huella hidrica: faltan fechas de siembra o cosecha.',
+      );
     }
-    const clima = await this.getClimaOpenMeteo(lat, lng, siembra.fechaSiembra, siembra.fechaCosecha);
+    const clima = await this.getClimaOpenMeteo(
+      lat,
+      lng,
+      siembra.fechaSiembra,
+      siembra.fechaCosecha,
+    );
     return calcularHuellaHidrica({ ...params, clima });
   }
 
@@ -1087,13 +1379,18 @@ export class AlgoritmosService {
 
     const desde = this.toDateKey(siembra.fechaSiembra);
     const hoy = this.toDateKey(new Date().toISOString());
-    const hasta = siembra.fechaCosecha ? this.toDateKey(siembra.fechaCosecha) : hoy;
+    const hasta = siembra.fechaCosecha
+      ? this.toDateKey(siembra.fechaCosecha)
+      : hoy;
     const fechaHasta = desde > hasta ? desde : hasta;
     const clima = await this.getClimaOpenMeteo(lat, lng, desde, fechaHasta);
     return calcularSeguimientoHuellaHidrica({ ...params, clima });
   }
 
-  async calcularPrediccionMalezas(params: { siembra: ISiembra; lote: ILote }): Promise<IResultadoPrediccionMalezas> {
+  async calcularPrediccionMalezas(params: {
+    siembra: ISiembra;
+    lote: ILote;
+  }): Promise<IResultadoPrediccionMalezas> {
     const siembra = params.siembra;
     const lote = params.lote;
     const cultivo = siembra.semilla?.cultivo;
@@ -1127,7 +1424,9 @@ export class AlgoritmosService {
         estado: 'sin_modelos',
         resumen: `${cultivo}: no hay modelos de malezas cargados.`,
         calidadDatos: 'baja',
-        trazas: ['No se encontraron documentos en la coleccion malezas para el cultivo.'],
+        trazas: [
+          'No se encontraron documentos en la coleccion malezas para el cultivo.',
+        ],
       };
     }
 
@@ -1138,21 +1437,32 @@ export class AlgoritmosService {
         estado: 'sin_clima',
         resumen: `${cultivo}: falta centro geografico del lote para consultar clima.`,
         calidadDatos: 'baja',
-        trazas: ['No se pudo resolver lat/lng desde lote.ubicacion.centro ni siembra.coordenadas.'],
+        trazas: [
+          'No se pudo resolver lat/lng desde lote.ubicacion.centro ni siembra.coordenadas.',
+        ],
       };
     }
 
     const hoy = this.toDateKey(new Date().toISOString());
     const ayer = this.shiftDateKey(hoy, -1);
-    const hastaPronostico = this.shiftDateKey(hoy, this.diasPronosticoMalezas - 1);
+    const hastaPronostico = this.shiftDateKey(
+      hoy,
+      this.diasPronosticoMalezas - 1,
+    );
     const fechaSiembra = this.toDateKey(siembra.fechaSiembra || hoy);
     const desdeMaximo = this.shiftDateKey(hoy, -this.maxDiasHistoricoMalezas);
     const desde = fechaSiembra > desdeMaximo ? fechaSiembra : desdeMaximo;
-    const recorteDias = fechaSiembra < desde ? this.diffDias(fechaSiembra, desde) : 0;
+    const recorteDias =
+      fechaSiembra < desde ? this.diffDias(fechaSiembra, desde) : 0;
 
     let clima: DiaClimaMalezas[] = [];
     try {
-      clima = await this.getClimaMalezasOpenMeteo(centro.lat, centro.lng, desde, hastaPronostico);
+      clima = await this.getClimaMalezasOpenMeteo(
+        centro.lat,
+        centro.lng,
+        desde,
+        hastaPronostico,
+      );
     } catch (error) {
       this.logger.error(`Error al calcular malezas ${siembra._id}: ${error}`);
       return {
@@ -1160,7 +1470,9 @@ export class AlgoritmosService {
         estado: 'sin_clima',
         resumen: `${cultivo}: no se pudo obtener clima historico/proyectado.`,
         calidadDatos: 'baja',
-        trazas: ['Open-Meteo no respondio para la ventana de malezas. No se actualizo la prediccion persistida.'],
+        trazas: [
+          'Open-Meteo no respondio para la ventana de malezas. No se actualizo la prediccion persistida.',
+        ],
       };
     }
 
@@ -1184,11 +1496,23 @@ export class AlgoritmosService {
     }
 
     const sensor = this.getSensorSueloReferencia(lote);
-    const especies = modelos.map((maleza) => this.evaluarMaleza(maleza, clima, sensor));
-    const mayor = [...especies].sort((a, b) => Number(b.avancePct || 0) - Number(a.avancePct || 0))[0];
-    const diasHistorico = clima.filter((dia) => dia.tipo === 'historico').length;
-    const diasPronostico = clima.filter((dia) => dia.tipo === 'pronostico').length;
-    const calidadDatos = this.calidadPrediccionMalezas(sensor, diasHistorico, diasPronostico);
+    const especies = modelos.map((maleza) =>
+      this.evaluarMaleza(maleza, clima, sensor),
+    );
+    const mayor = [...especies].sort(
+      (a, b) => Number(b.avancePct || 0) - Number(a.avancePct || 0),
+    )[0];
+    const diasHistorico = clima.filter(
+      (dia) => dia.tipo === 'historico',
+    ).length;
+    const diasPronostico = clima.filter(
+      (dia) => dia.tipo === 'pronostico',
+    ).length;
+    const calidadDatos = this.calidadPrediccionMalezas(
+      sensor,
+      diasHistorico,
+      diasPronostico,
+    );
 
     return {
       ...baseResultado,
@@ -1221,7 +1545,10 @@ export class AlgoritmosService {
     };
   }
 
-  calcularHumedadSeca(rendimientoKgHa?: number, humedadCosecha?: number): number {
+  calcularHumedadSeca(
+    rendimientoKgHa?: number,
+    humedadCosecha?: number,
+  ): number {
     const rendimiento = Number(rendimientoKgHa || 0);
     const humedad = Number(humedadCosecha || 0);
     if (rendimiento <= 0) return 0;
@@ -1255,12 +1582,14 @@ export class AlgoritmosService {
 
     const serie: IPrediccionMalezaDia[] = clima.map((dia) => {
       const usarSensor = dia.tipo === 'pronostico';
-      const temperatura = usarSensor && sensor.temperatura !== undefined
-        ? sensor.temperatura
-        : this.toNumber(dia.temperaturaMedia) ?? 0;
-      const humedad = usarSensor && sensor.humedad !== undefined
-        ? sensor.humedad
-        : this.humedadProxyMalezas(dia);
+      const temperatura =
+        usarSensor && sensor.temperatura !== undefined
+          ? sensor.temperatura
+          : (this.toNumber(dia.temperaturaMedia) ?? 0);
+      const humedad =
+        usarSensor && sensor.humedad !== undefined
+          ? sensor.humedad
+          : this.humedadProxyMalezas(dia);
       const factorTermico = Math.max(0, temperatura - base);
       const factorHidrico = 1 / (1 + Math.exp((theta50 - humedad) / escala));
       const httDia = factorTermico * factorHidrico * deltaHoras;
@@ -1283,9 +1612,11 @@ export class AlgoritmosService {
         httDia: this.round(httDia, 1),
         httAcumulado: this.round(httAcumulado, 1),
         emergenciaPct: this.gompertz(httAcumulado, k, beta, mu),
-        fuente: usarSensor && (sensor.temperatura !== undefined || sensor.humedad !== undefined)
-          ? 'Open-Meteo + sensor'
-          : 'Open-Meteo',
+        fuente:
+          usarSensor &&
+          (sensor.temperatura !== undefined || sensor.humedad !== undefined)
+            ? 'Open-Meteo + sensor'
+            : 'Open-Meteo',
       };
     });
 
@@ -1293,8 +1624,13 @@ export class AlgoritmosService {
     const emergenciaProyectada7dPct = this.gompertz(httAcumulado, k, beta, mu);
     const umbrales = this.analizarUmbralesMaleza(maleza, serie, httAcumulado);
     const progresoE10 = umbrales[0]?.progreso || 0;
-    const avancePct = this.porcentaje(Math.max(emergenciaProyectada7dPct, progresoE10));
-    const severidad = this.severidadMalezas(avancePct, emergenciaProyectada7dPct);
+    const avancePct = this.porcentaje(
+      Math.max(emergenciaProyectada7dPct, progresoE10),
+    );
+    const severidad = this.severidadMalezas(
+      avancePct,
+      emergenciaProyectada7dPct,
+    );
     const calidadDatos = this.calidadPrediccionMalezas(
       sensor,
       clima.filter((dia) => dia.tipo === 'historico').length,
@@ -1317,13 +1653,29 @@ export class AlgoritmosService {
       temperaturaReferencia: sensor.temperatura,
       humedadReferencia: sensor.humedad,
       severidad,
-      estado: severidad === 'alta' ? 'Ventana de control' : severidad === 'media' ? 'Monitoreo cercano' : 'Baja emergencia',
-      estadoCorto: severidad === 'alta' ? 'Avance alto' : severidad === 'media' ? 'Avance medio' : 'Avance bajo',
-      lecturaCorta: this.lecturaCortaMalezas(severidad, emergenciaActualPct, emergenciaProyectada7dPct, progresoE10),
+      estado:
+        severidad === 'alta'
+          ? 'Ventana de control'
+          : severidad === 'media'
+            ? 'Monitoreo cercano'
+            : 'Baja emergencia',
+      estadoCorto:
+        severidad === 'alta'
+          ? 'Avance alto'
+          : severidad === 'media'
+            ? 'Avance medio'
+            : 'Avance bajo',
+      lecturaCorta: this.lecturaCortaMalezas(
+        severidad,
+        emergenciaActualPct,
+        emergenciaProyectada7dPct,
+        progresoE10,
+      ),
       recomendacion: this.recomendacionMaleza(severidad, maleza),
-      fuenteDatos: sensor.temperatura !== undefined || sensor.humedad !== undefined
-        ? 'Open-Meteo + sensor de suelo'
-        : 'Open-Meteo historico/proyectado',
+      fuenteDatos:
+        sensor.temperatura !== undefined || sensor.humedad !== undefined
+          ? 'Open-Meteo + sensor de suelo'
+          : 'Open-Meteo historico/proyectado',
       detalleFuente: this.detalleFuenteMalezas(sensor, clima.length),
       formula: `Emergencia = K x exp(-exp(-beta x (HTT - mu))). K=${k || '-'}, beta=${beta || '-'}, mu=${mu || '-'} HTT.`,
       calidadDatos,
@@ -1345,8 +1697,12 @@ export class AlgoritmosService {
       .sort((a, b) => Number(a.porcentaje || 0) - Number(b.porcentaje || 0))
       .map((umbral) => {
         const horasTermicas = Number(umbral.horasTermicas || 0);
-        const progreso = horasTermicas ? this.porcentaje((httTotal / horasTermicas) * 100) : 0;
-        const alcanzado = serie.find((dia) => Number(dia.httAcumulado || 0) >= horasTermicas);
+        const progreso = horasTermicas
+          ? this.porcentaje((httTotal / horasTermicas) * 100)
+          : 0;
+        const alcanzado = serie.find(
+          (dia) => Number(dia.httAcumulado || 0) >= horasTermicas,
+        );
         const estimacion = alcanzado
           ? { fechaEstimada: alcanzado.fecha, diasEstimados: 0 }
           : this.estimarFechaUmbral(serie, horasTermicas, httTotal);
@@ -1355,7 +1711,12 @@ export class AlgoritmosService {
           porcentaje: umbral.porcentaje,
           horasTermicas,
           progreso: this.round(progreso, 0),
-          estado: progreso >= 100 ? 'alcanzado' : progreso >= 65 ? 'cercano' : 'en seguimiento',
+          estado:
+            progreso >= 100
+              ? 'alcanzado'
+              : progreso >= 65
+                ? 'cercano'
+                : 'en seguimiento',
           ...estimacion,
         };
       });
@@ -1367,14 +1728,21 @@ export class AlgoritmosService {
     httTotal: number,
   ): { fechaEstimada?: string; diasEstimados?: number } {
     if (!horasTermicas || httTotal >= horasTermicas || !serie.length) return {};
-    const ultimos = serie.slice(-7).map((dia) => Number(dia.httDia || 0)).filter((value) => value > 0);
-    const promedio = ultimos.length ? ultimos.reduce((sum, value) => sum + value, 0) / ultimos.length : 0;
+    const ultimos = serie
+      .slice(-7)
+      .map((dia) => Number(dia.httDia || 0))
+      .filter((value) => value > 0);
+    const promedio = ultimos.length
+      ? ultimos.reduce((sum, value) => sum + value, 0) / ultimos.length
+      : 0;
     if (promedio <= 0) return {};
     const diasEstimados = Math.ceil((horasTermicas - httTotal) / promedio);
     const ultimaFecha = serie[serie.length - 1]?.fecha;
     return {
       diasEstimados,
-      fechaEstimada: ultimaFecha ? this.shiftDateKey(ultimaFecha, diasEstimados) : undefined,
+      fechaEstimada: ultimaFecha
+        ? this.shiftDateKey(ultimaFecha, diasEstimados)
+        : undefined,
     };
   }
 
@@ -1402,11 +1770,14 @@ export class AlgoritmosService {
     return `Emergencia baja: ${this.round(emergenciaProyectadaPct, 1)}% proyectado.`;
   }
 
-  private recomendacionMaleza(severidad: TSeveridadPrediccionMaleza, maleza: IMaleza): string {
+  private recomendacionMaleza(
+    severidad: TSeveridadPrediccionMaleza,
+    maleza: IMaleza,
+  ): string {
     if (severidad === 'alta') {
       return (
-        maleza.recomendaciones?.find((item) => item.momento?.includes('E10'))?.accion ||
-        'Revisar lote y definir control temprano.'
+        maleza.recomendaciones?.find((item) => item.momento?.includes('E10'))
+          ?.accion || 'Revisar lote y definir control temprano.'
       );
     }
     if (severidad === 'media') {
@@ -1415,13 +1786,18 @@ export class AlgoritmosService {
     return 'Mantener seguimiento; usar recorrida para validar nacimientos y ajustar residualidad.';
   }
 
-  private detalleFuenteMalezas(sensor: SensorSueloReferencia, dias: number): string {
-    const temp = sensor.temperatura !== undefined
-      ? `${this.round(sensor.temperatura, 1)} C de suelo como referencia de arranque`
-      : 'temperatura media diaria de Open-Meteo';
-    const humedad = sensor.humedad !== undefined
-      ? `${this.round(sensor.humedad * 100, 0)}% de humedad de suelo como referencia de arranque`
-      : 'proxy hidrico diario por lluvia y ET0';
+  private detalleFuenteMalezas(
+    sensor: SensorSueloReferencia,
+    dias: number,
+  ): string {
+    const temp =
+      sensor.temperatura !== undefined
+        ? `${this.round(sensor.temperatura, 1)} C de suelo como referencia de arranque`
+        : 'temperatura media diaria de Open-Meteo';
+    const humedad =
+      sensor.humedad !== undefined
+        ? `${this.round(sensor.humedad * 100, 0)}% de humedad de suelo como referencia de arranque`
+        : 'proxy hidrico diario por lluvia y ET0';
     return `Acumula ${dias} dias con ${temp} y ${humedad}.`;
   }
 
@@ -1430,51 +1806,84 @@ export class AlgoritmosService {
     diasHistorico: number,
     diasPronostico: number,
   ): TCalidadPrediccionMalezas {
-    const tieneSensorCompleto = sensor.temperatura !== undefined && sensor.humedad !== undefined;
-    if (tieneSensorCompleto && diasHistorico >= 14 && diasPronostico >= 3) return 'alta';
+    const tieneSensorCompleto =
+      sensor.temperatura !== undefined && sensor.humedad !== undefined;
+    if (tieneSensorCompleto && diasHistorico >= 14 && diasPronostico >= 3)
+      return 'alta';
     if (diasHistorico >= 7 && diasPronostico >= 3) return 'media';
     return 'baja';
   }
 
   private getSensorSueloReferencia(lote: ILote): SensorSueloReferencia {
-    const dispositivo = lote.dispositivos?.find((item) => item.tipo === 'Sensor de Humedad de Suelo');
+    const dispositivo = lote.dispositivos?.find(
+      (item) => item.tipo === 'Sensor de Humedad de Suelo',
+    );
     return {
       temperatura: this.promedioValoresSensor(dispositivo, 'Temperatura Suelo'),
       humedad: this.humedadSueloReferencia(dispositivo),
     };
   }
 
-  private promedioValoresSensor(dispositivo: IDispositivo | undefined, sensor: string): number | undefined {
-    const valores = (dispositivo?.ultimoReporte?.datos?.valores as any)?.[sensor];
+  private promedioValoresSensor(
+    dispositivo: IDispositivo | undefined,
+    sensor: string,
+  ): number | undefined {
+    const valores = (dispositivo?.ultimoReporte?.datos?.valores as any)?.[
+      sensor
+    ];
     if (!Array.isArray(valores)) return undefined;
     const numeros = valores
       .slice(0, 3)
-      .map((item) => this.toNumber(item?.valores?.actual ?? item?.valores?.promedio))
+      .map((item) =>
+        this.toNumber(item?.valores?.actual ?? item?.valores?.promedio),
+      )
       .filter((valor): valor is number => valor !== undefined);
     if (!numeros.length) return undefined;
     return numeros.reduce((sum, value) => sum + value, 0) / numeros.length;
   }
 
-  private humedadSueloReferencia(dispositivo: IDispositivo | undefined): number | undefined {
+  private humedadSueloReferencia(
+    dispositivo: IDispositivo | undefined,
+  ): number | undefined {
     const valores =
-      (dispositivo?.ultimoReporte?.datos?.valores as any)?.['Humedad Suelo Profundidad'] ||
-      (dispositivo?.ultimoReporte?.datos?.valores as any)?.['Humedad Suelo Superficial'];
+      (dispositivo?.ultimoReporte?.datos?.valores as any)?.[
+        'Humedad Suelo Profundidad'
+      ] ||
+      (dispositivo?.ultimoReporte?.datos?.valores as any)?.[
+        'Humedad Suelo Superficial'
+      ];
     if (!Array.isArray(valores)) return undefined;
     const numeros = valores
       .slice(0, 3)
-      .map((item) => this.normalizarHumedadSensor(this.toNumber(item?.valores?.actual ?? item?.valores?.promedio), item?.unidad))
+      .map((item) =>
+        this.normalizarHumedadSensor(
+          this.toNumber(item?.valores?.actual ?? item?.valores?.promedio),
+          item?.unidad,
+        ),
+      )
       .filter((valor): valor is number => valor !== undefined);
     if (!numeros.length) return undefined;
-    const promedio = numeros.reduce((sum, value) => sum + value, 0) / numeros.length;
+    const promedio =
+      numeros.reduce((sum, value) => sum + value, 0) / numeros.length;
     return this.clamp(promedio / 100, 0, 1);
   }
 
-  private normalizarHumedadSensor(value: number | undefined, unidad?: string): number | undefined {
+  private normalizarHumedadSensor(
+    value: number | undefined,
+    unidad?: string,
+  ): number | undefined {
     if (value === undefined) return undefined;
-    const unidadNormalizada = String(unidad || '').toLowerCase().replace(/\s/g, '');
+    const unidadNormalizada = String(unidad || '')
+      .toLowerCase()
+      .replace(/\s/g, '');
     if (value > 100 && value <= 300) return (value / 300) * 100;
     if (unidadNormalizada.includes('%')) return this.clamp(value, 0, 100);
-    if ((unidadNormalizada.includes('m3/m3') || unidadNormalizada.includes('vwc')) && value >= 0 && value <= 1) {
+    if (
+      (unidadNormalizada.includes('m3/m3') ||
+        unidadNormalizada.includes('vwc')) &&
+      value >= 0 &&
+      value <= 1
+    ) {
       return value * 100;
     }
     if (value >= 0 && value <= 3) return (value / 3) * 100;
@@ -1493,7 +1902,10 @@ export class AlgoritmosService {
     return this.round(k * Math.exp(-Math.exp(-beta * (htt - mu))), 1);
   }
 
-  private getCentroLote(lote: ILote, siembra: ISiembra): { lat: number; lng: number } | undefined {
+  private getCentroLote(
+    lote: ILote,
+    siembra: ISiembra,
+  ): { lat: number; lng: number } | undefined {
     const centro = lote.ubicacion?.centro || siembra.coordenadas;
     const lat = this.toNumber((centro as any)?.lat);
     const lng = this.toNumber((centro as any)?.lng);
@@ -1571,8 +1983,11 @@ export class AlgoritmosService {
         idEnfermedad: 'arveja.ascochyta',
         nombre: 'Complejo Ascochyta de la Arveja',
         periodo: 'Emergencia a formacion de vainas',
-        etapaActiva: !['S', 'SIEMBRA', 'MF', 'MADUREZ FISIOLOGICA'].includes(etapaNormalizada),
-        fuente: 'Roger y Tivoli (1999); aptitud ambiental, no probabilidad de infeccion',
+        etapaActiva: !['S', 'SIEMBRA', 'MF', 'MADUREZ FISIOLOGICA'].includes(
+          etapaNormalizada,
+        ),
+        fuente:
+          'Roger y Tivoli (1999); aptitud ambiental, no probabilidad de infeccion',
         evaluacion: evaluarAscochytaArveja({
           temperatura: params.temperatura,
           horasMojado: params.horasMojado,
@@ -1583,7 +1998,9 @@ export class AlgoritmosService {
         idEnfermedad: 'arveja.mildiu',
         nombre: 'Mildiu de la Arveja',
         periodo: 'Emergencia a inicio de floracion',
-        etapaActiva: ['E', 'EMERGENCIA', 'R1', 'FLORACION'].includes(etapaNormalizada),
+        etapaActiva: ['E', 'EMERGENCIA', 'R1', 'FLORACION'].includes(
+          etapaNormalizada,
+        ),
         fuente: 'Pegg y Mence (1970); umbrales de infeccion y esporulacion',
         evaluacion: evaluarMildiuArveja({
           temperatura: params.temperatura,
@@ -1609,7 +2026,8 @@ export class AlgoritmosService {
       nivel: item.etapaActiva ? item.evaluacion.nivel : 'fuera de ventana',
       fundamentos: item.evaluacion.fundamentos,
       resistenciaEstado: 'desconocida',
-      resistenciaFuente: 'Sin dato varietal publicado para la variedad seleccionada',
+      resistenciaFuente:
+        'Sin dato varietal publicado para la variedad seleccionada',
       prescripcion: 'No habilitada en el piloto experimental',
     }));
     const activas = evaluaciones.filter((item) => item.etapaActiva);
@@ -1646,58 +2064,84 @@ export class AlgoritmosService {
       Trigo: [
         {
           nombre: 'Mancha Amarilla',
-          periodo: 'Emergencia a hoja bandera',
-          etapas: ['Emergencia', 'Macollaje', 'Hoja bandera'],
+          periodo:
+            'Desde 800-850 GDD base 0 C (fin de macollaje) hasta espigazon',
+          etapas: ['Primer Nudo', 'Hoja bandera', 'Hoja Bandera', 'Espigazon'],
           humedadBase: 82,
           horasMojadoCriticas: 16,
           lluviaCritica: 10,
           tempOptima: 20,
-          formulaFuente: 'Modelo Mancha Amarilla - Enfermedades en TRIGO -V2.xlsx',
-          prescripcion: 'Triazol + estrobilurina; proteger area foliar y hoja bandera.',
+          formulaFuente: 'Contrato sanitario trigo 2026 / Mancha Amarilla',
+          prescripcion:
+            'Triazol + estrobilurina; proteger area foliar y hoja bandera.',
         },
         {
           nombre: 'Mancha de la Hoja',
-          periodo: 'Emergencia a hoja bandera',
-          etapas: ['Emergencia', 'Macollaje', 'Hoja bandera', 'Hoja Bandera'],
+          periodo:
+            'Desde 800-850 GDD base 0 C (fin de macollaje) hasta espigazon',
+          etapas: ['Primer Nudo', 'Hoja bandera', 'Hoja Bandera', 'Espigazon'],
           humedadBase: 80,
           horasMojadoCriticas: 16,
           lluviaCritica: 10,
           tempOptima: 18,
-          formulaFuente: 'Modelo Mancha de la Hoja - Enfermedades en TRIGO -V2.xlsx',
-          prescripcion: 'Revisar septoriosis/mancha de hoja; priorizar hoja bandera y sanidad foliar.',
+          formulaFuente: 'Contrato sanitario trigo 2026 / Mancha de la Hoja',
+          prescripcion:
+            'Revisar septoriosis/mancha de hoja; priorizar hoja bandera y sanidad foliar.',
         },
         {
           nombre: 'Roya de la Hoja',
-          periodo: 'Hoja bandera a llenado de granos',
-          etapas: ['Hoja bandera', 'Espigazon', 'Antesis', 'Llenado de granos'],
+          periodo: 'Desde 800-850 GDD base 0 C hasta llenado de granos',
+          etapas: [
+            'Primer Nudo',
+            'Hoja bandera',
+            'Hoja Bandera',
+            'Espigazon',
+            'Antesis',
+            'Llenado de granos',
+          ],
           humedadBase: 78,
           horasMojadoCriticas: 10,
           lluviaCritica: 6,
           tempOptima: 18,
-          formulaFuente: 'Modelo Roya de la Hoja - Enfermedades en TRIGO -V2.xlsx',
-          prescripcion: 'Triazol o mezcla doble; priorizar cuando sube HR y temperatura templada.',
+          formulaFuente:
+            'Contrato sanitario trigo 2026; Moschini y Perez (1999), adaptacion varietal declarada',
+          prescripcion:
+            'Triazol o mezcla doble; priorizar cuando sube HR y temperatura templada.',
         },
         {
           nombre: 'Roya Anaranjada',
-          periodo: 'Macollaje a llenado de granos',
-          etapas: ['Macollaje', 'Primer Nudo', 'Hoja bandera', 'Hoja Bandera', 'Espigazon', 'Antesis', 'Llenado de granos'],
-          humedadBase: 75,
-          horasMojadoCriticas: 10,
-          lluviaCritica: 4,
-          tempOptima: 12,
-          formulaFuente: 'Modelo Roya Anaranjada - Enfermedades en TRIGO -V2.xlsx',
-          prescripcion: 'Controlar hojas funcionales y resistencia varietal; usar mezcla registrada si el riesgo sostiene.',
+          periodo:
+            'Roya amarilla/estriada experimental desde fin de macollaje/encañazon hasta grano pastoso',
+          etapas: [
+            'Primer Nudo',
+            'Hoja bandera',
+            'Hoja Bandera',
+            'Espigazon',
+            'Antesis',
+            'Llenado de granos',
+          ],
+          humedadBase: 92,
+          horasMojadoCriticas: 4,
+          lluviaCritica: 0.1,
+          tempOptima: 10,
+          formulaFuente:
+            'El Jarroudi et al. 2017, DOI 10.1094/PDIS-12-16-1766-RE; ventana movil 10 dias adaptada por Chaman. Contrato 5,15/0,72/0,48/0,35/35,2 solo en sombra',
+          prescripcion:
+            'No emitir diagnostico ni prescripcion automatica; confirmar identidad y sintomas a campo.',
         },
         {
           nombre: 'Fusarium de la Espiga',
-          periodo: 'Espigazon y antesis',
-          etapas: ['Espigazon', 'Antesis'],
+          periodo:
+            'Desde Antesis/primeras espigas con anteras hasta 530 GDD base 0 C',
+          etapas: ['Antesis'],
           humedadBase: 86,
           horasMojadoCriticas: 24,
           lluviaCritica: 15,
           tempOptima: 22,
-          formulaFuente: 'Modelo Fusarium de la Espiga - Enfermedades en TRIGO -V2.xlsx',
-          prescripcion: 'Metconazole/Prothioconazole/Tebuconazole en ventana de espiga.',
+          formulaFuente:
+            'Moschini y Fortugno (1996); adaptacion varietal del contrato sanitario trigo 2026',
+          prescripcion:
+            'Metconazole/Prothioconazole/Tebuconazole en ventana de espiga.',
         },
       ],
       Soja: [
@@ -1710,7 +2154,8 @@ export class AlgoritmosService {
           lluviaCritica: 7,
           tempOptima: 24,
           formulaFuente: 'Motor operativo Fin de Ciclo de Soja',
-          prescripcion: 'Monitorear enfermedades de fin de ciclo y validar a campo antes de intervenir.',
+          prescripcion:
+            'Monitorear enfermedades de fin de ciclo y validar a campo antes de intervenir.',
         },
       ],
       Maiz: [
@@ -1723,7 +2168,8 @@ export class AlgoritmosService {
           lluviaCritica: 0.2,
           tempOptima: 17,
           formulaFuente: 'Motor operativo Roya del Maiz',
-          prescripcion: 'Monitorear hibridos susceptibles y confirmar pustulas antes de intervenir.',
+          prescripcion:
+            'Monitorear hibridos susceptibles y confirmar pustulas antes de intervenir.',
         },
         {
           nombre: 'Tizon Foliar del Maiz',
@@ -1734,7 +2180,8 @@ export class AlgoritmosService {
           lluviaCritica: 10,
           tempOptima: 23,
           formulaFuente: 'Sin modelo epidemiologico validado',
-          prescripcion: 'No emitir porcentaje automático hasta validar un modelo epidemiológico.',
+          prescripcion:
+            'No emitir porcentaje automático hasta validar un modelo epidemiológico.',
         },
       ],
       Cebada: [
@@ -1747,7 +2194,8 @@ export class AlgoritmosService {
           lluviaCritica: 8,
           tempOptima: 17,
           formulaFuente: 'MANCHA EN RED - ENFERMEDADES EN CEBADA.xlsx',
-          prescripcion: 'DMI + QoI/SDHI registrado en cebada; validar destino cervecero y marbete.',
+          prescripcion:
+            'DMI + QoI/SDHI registrado en cebada; validar destino cervecero y marbete.',
         },
         {
           nombre: 'Escaldadura de la Cebada',
@@ -1758,18 +2206,26 @@ export class AlgoritmosService {
           lluviaCritica: 6,
           tempOptima: 13,
           formulaFuente: 'ESCALDADURA - ENFERMEDADES EN CEBADA.xlsx',
-          prescripcion: 'Triazol + estrobilurina/carboxamida registrada; integrar rastrojo y sintomas.',
+          prescripcion:
+            'Triazol + estrobilurina/carboxamida registrada; integrar rastrojo y sintomas.',
         },
         {
           nombre: 'Roya de la Hoja de Cebada',
           periodo: 'Primer nudo a llenado',
-          etapas: ['Primer Nudo', 'Hoja Bandera', 'Espigazon', 'Antesis', 'Llenado de Granos'],
+          etapas: [
+            'Primer Nudo',
+            'Hoja Bandera',
+            'Espigazon',
+            'Antesis',
+            'Llenado de Granos',
+          ],
           humedadBase: 70,
           horasMojadoCriticas: 8,
           lluviaCritica: 4,
           tempOptima: 18,
           formulaFuente: 'Hoja auxiliar - ENFERMEDADES EN CEBADA.xlsx',
-          prescripcion: 'Triazol o mezcla doble; proteger hojas funcionales con riesgo sostenido.',
+          prescripcion:
+            'Triazol o mezcla doble; proteger hojas funcionales con riesgo sostenido.',
         },
         {
           nombre: 'Fusariosis de la Espiga de Cebada',
@@ -1780,7 +2236,8 @@ export class AlgoritmosService {
           lluviaCritica: 5,
           tempOptima: 20,
           formulaFuente: 'Hoja auxiliar - ENFERMEDADES EN CEBADA.xlsx',
-          prescripcion: 'Triazol especifico de espiga; evitar estrobilurina sola y validar calidad/micotoxinas.',
+          prescripcion:
+            'Triazol especifico de espiga; evitar estrobilurina sola y validar calidad/micotoxinas.',
         },
       ],
       Arveja: [
@@ -1792,8 +2249,10 @@ export class AlgoritmosService {
           horasMojadoCriticas: 8,
           lluviaCritica: 0.1,
           tempOptima: 20,
-          formulaFuente: 'Roger y Tivoli (1999); screening ambiental experimental',
-          prescripcion: 'Sin prescripcion automatica; confirmar sintomas e inoculo a campo.',
+          formulaFuente:
+            'Roger y Tivoli (1999); screening ambiental experimental',
+          prescripcion:
+            'Sin prescripcion automatica; confirmar sintomas e inoculo a campo.',
         },
         {
           nombre: 'Mildiu de la Arveja',
@@ -1803,8 +2262,10 @@ export class AlgoritmosService {
           horasMojadoCriticas: 4,
           lluviaCritica: 0,
           tempOptima: 16,
-          formulaFuente: 'Pegg y Mence (1970); screening ambiental experimental',
-          prescripcion: 'Sin prescripcion automatica; confirmar sintomas a campo.',
+          formulaFuente:
+            'Pegg y Mence (1970); screening ambiental experimental',
+          prescripcion:
+            'Sin prescripcion automatica; confirmar sintomas a campo.',
         },
         {
           nombre: 'Oidio de la Arveja',
@@ -1815,12 +2276,15 @@ export class AlgoritmosService {
           lluviaCritica: 1,
           tempOptima: 24,
           formulaFuente: 'INTA Parana; screening de prioridad de monitoreo',
-          prescripcion: 'Sin prescripcion automatica; confirmar signos a campo.',
+          prescripcion:
+            'Sin prescripcion automatica; confirmar signos a campo.',
         },
       ],
     };
 
-    const key = Object.keys(base).find((item) => this.norm(item) === this.norm(cultivo));
+    const key = Object.keys(base).find(
+      (item) => this.norm(item) === this.norm(cultivo),
+    );
     return key ? base[key] : [];
   }
 
@@ -1829,7 +2293,9 @@ export class AlgoritmosService {
     base: number,
     resistencias: Array<{ enfermedad?: string; multiplicador?: number }>,
   ): number {
-    const match = resistencias.find((item) => this.enfermedadCoincide(item.enfermedad, enfermedad));
+    const match = resistencias.find((item) =>
+      this.enfermedadCoincide(item.enfermedad, enfermedad),
+    );
     const value = Number(match?.multiplicador ?? base);
     return this.clamp(Number.isFinite(value) ? value : base, 0.05, 1.2);
   }
@@ -1841,16 +2307,20 @@ export class AlgoritmosService {
   ) {
     const canonica = getEnfermedadCanonica(enfermedad);
     if (canonica && resistencias.length) {
-      const perfil = resolverResistencia(
-        resistencias as any,
-        canonica.id,
-      );
+      const perfil = resolverResistencia(resistencias as any, canonica.id);
       return {
         multiplicador: perfil.multiplicador,
         indiceResistencia: perfil.indiceResistencia,
         estado: perfil.estado,
+        perfil: perfil.resistencia?.perfil || 'DESCONOCIDA',
+        confianza: perfil.resistencia?.confianza || 'sin_datos',
         fuente: perfil.resistencia?.fuente,
-        campaniaFuente: perfil.resistencia?.campaniaFuente,
+        fuenteUrl: perfil.resistencia?.fuenteUrl,
+        campaniaFuente: perfil.resistencia?.campaniaFuente || null,
+        coherente: !perfil.desconocida,
+        limitaciones: perfil.limitaciones,
+        escenarioManual: false,
+        alertable: false,
       };
     }
 
@@ -1863,8 +2333,17 @@ export class AlgoritmosService {
       multiplicador,
       indiceResistencia: 1 - this.clamp(multiplicador, 0, 1),
       estado: 'escenario_manual',
+      perfil: 'DESCONOCIDA',
+      confianza: 'sin_datos',
       fuente: 'susceptibilidad manual del simulador',
-      campaniaFuente: undefined,
+      fuenteUrl: undefined,
+      campaniaFuente: null,
+      coherente: false,
+      limitaciones: [
+        'Escenario manual sin respaldo varietal trazable; no habilita alertas automaticas.',
+      ],
+      escenarioManual: true,
+      alertable: false,
     };
   }
 
@@ -1882,7 +2361,12 @@ export class AlgoritmosService {
     const grupos = [
       ['MANCHA AMARILLA', 'DRECHSLERA TRITICI', 'MA'],
       ['MANCHA DE LA HOJA', 'SEPTORIA', 'SEPTORIOSIS', 'MH'],
-      ['ROYA DE LA HOJA', 'ROYA ANARANJADA DE LA HOJA', 'PUCCINIA TRITICINA', 'RH'],
+      [
+        'ROYA DE LA HOJA',
+        'ROYA ANARANJADA DE LA HOJA',
+        'PUCCINIA TRITICINA',
+        'RH',
+      ],
       ['ROYA ANARANJADA', 'ROYA AMARILLA', 'PUCCINIA STRIIFORMIS', 'RA'],
       ['FUSARIUM DE LA ESPIGA', 'FUSARIUM', 'FUSARIOSIS', 'FE'],
       ['ROYA DEL MAIZ', 'ROYA MAIZ'],
@@ -1930,7 +2414,9 @@ export class AlgoritmosService {
     const desde = this.toDateKey(fechaDesde);
     const hasta = this.toDateKey(fechaHasta);
     if (desde > hasta) {
-      throw new BadRequestException('La fecha de cosecha no puede ser anterior a la fecha de siembra.');
+      throw new BadRequestException(
+        'La fecha de cosecha no puede ser anterior a la fecha de siembra.',
+      );
     }
 
     const hoy = this.toDateKey(new Date().toISOString());
@@ -1939,11 +2425,15 @@ export class AlgoritmosService {
 
     if (desde <= ayer) {
       const end = hasta < ayer ? hasta : ayer;
-      resultados.push(...(await this.fetchOpenMeteo('archive', lat, lng, desde, end)));
+      resultados.push(
+        ...(await this.fetchOpenMeteo('archive', lat, lng, desde, end)),
+      );
     }
     if (hasta >= hoy) {
       const start = desde > hoy ? desde : hoy;
-      resultados.push(...(await this.fetchOpenMeteo('forecast', lat, lng, start, hasta)));
+      resultados.push(
+        ...(await this.fetchOpenMeteo('forecast', lat, lng, start, hasta)),
+      );
     }
 
     return resultados.sort((a, b) => a.fecha.localeCompare(b.fecha));
@@ -1958,7 +2448,9 @@ export class AlgoritmosService {
     const desde = this.toDateKey(fechaDesde);
     const hasta = this.toDateKey(fechaHasta);
     if (desde > hasta) {
-      throw new BadRequestException('La fecha hasta no puede ser anterior a la fecha desde para malezas.');
+      throw new BadRequestException(
+        'La fecha hasta no puede ser anterior a la fecha desde para malezas.',
+      );
     }
 
     const hoy = this.toDateKey(new Date().toISOString());
@@ -1967,11 +2459,21 @@ export class AlgoritmosService {
 
     if (desde <= ayer) {
       const end = hasta < ayer ? hasta : ayer;
-      resultados.push(...(await this.fetchOpenMeteoMalezas('archive', lat, lng, desde, end)));
+      resultados.push(
+        ...(await this.fetchOpenMeteoMalezas('archive', lat, lng, desde, end)),
+      );
     }
     if (hasta >= hoy) {
       const start = desde > hoy ? desde : hoy;
-      resultados.push(...(await this.fetchOpenMeteoMalezas('forecast', lat, lng, start, hasta)));
+      resultados.push(
+        ...(await this.fetchOpenMeteoMalezas(
+          'forecast',
+          lat,
+          lng,
+          start,
+          hasta,
+        )),
+      );
     }
 
     const byDate = new Map<string, DiaClimaMalezas>();
@@ -1996,7 +2498,10 @@ export class AlgoritmosService {
     url.searchParams.set('longitude', String(lng));
     url.searchParams.set('start_date', desde);
     url.searchParams.set('end_date', hasta);
-    url.searchParams.set('daily', 'precipitation_sum,et0_fao_evapotranspiration');
+    url.searchParams.set(
+      'daily',
+      'precipitation_sum,et0_fao_evapotranspiration',
+    );
     url.searchParams.set('timezone', 'America/Argentina/Buenos_Aires');
 
     try {
@@ -2011,7 +2516,9 @@ export class AlgoritmosService {
       }));
     } catch (error) {
       this.logger.error(`Error Open-Meteo ${tipo} ${desde}/${hasta}: ${error}`);
-      throw new BadRequestException('No se pudo obtener clima Open-Meteo para calcular la huella hidrica.');
+      throw new BadRequestException(
+        'No se pudo obtener clima Open-Meteo para calcular la huella hidrica.',
+      );
     }
   }
 
@@ -2032,7 +2539,10 @@ export class AlgoritmosService {
     url.searchParams.set('longitude', String(lng));
     url.searchParams.set('start_date', desde);
     url.searchParams.set('end_date', hasta);
-    url.searchParams.set('daily', 'temperature_2m_mean,precipitation_sum,et0_fao_evapotranspiration');
+    url.searchParams.set(
+      'daily',
+      'temperature_2m_mean,precipitation_sum,et0_fao_evapotranspiration',
+    );
     url.searchParams.set('timezone', 'America/Argentina/Buenos_Aires');
 
     try {
@@ -2049,8 +2559,12 @@ export class AlgoritmosService {
         et0Mm: Number(et0[index] || 0),
       }));
     } catch (error) {
-      this.logger.error(`Error Open-Meteo malezas ${tipo} ${desde}/${hasta}: ${error}`);
-      throw new BadRequestException('No se pudo obtener clima Open-Meteo para calcular malezas.');
+      this.logger.error(
+        `Error Open-Meteo malezas ${tipo} ${desde}/${hasta}: ${error}`,
+      );
+      throw new BadRequestException(
+        'No se pudo obtener clima Open-Meteo para calcular malezas.',
+      );
     }
   }
 

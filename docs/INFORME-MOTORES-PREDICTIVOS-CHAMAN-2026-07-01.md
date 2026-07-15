@@ -3,6 +3,8 @@
 Fecha: 2026-07-01  
 Alcance: formulas, inputs, salidas y calidad de datos de los motores predictivos actualmente revisados en el repositorio `C:\CHAMAN2026`.
 
+> **Documento histórico.** La sección sanitaria de trigo quedó reemplazada por `AUDITORIA-MOTOR-SANITARIO-TRIGO-V4-2026-07-15.md`. No usar las fórmulas de royas ni las ventanas descriptas aquí para validar producción.
+
 Este documento es una auditoria tecnica interna. No esta pensado para mostrar formulas completas al cliente final. La recomendacion de producto es mostrar interpretacion, nivel de confianza, fuente de datos y trazabilidad resumida.
 
 ## 1. Criterio transversal de calidad del input

@@ -82,6 +82,7 @@ describe('polÃ­tica de fuente climÃ¡tica para enfermedades', () => {
     expect(fieldClimate.getEstacionMasCercanaEntreFechas).not.toHaveBeenCalled();
     expect(openMeteo).not.toHaveBeenCalled();
     expect(result[0].fuente).toBe('FieldClimate');
+    expect(result[0].calidadDatos?.fuente).toBe('estacion_asignada');
   });
 
   it('cae automaticamente a Open-Meteo si la asociacion antigua es invalida', async () => {
@@ -134,6 +135,10 @@ describe('polÃ­tica de fuente climÃ¡tica para enfermedades', () => {
     expect(result.map((item) => item.fuente)).toEqual([
       'FieldClimate',
       'OpenMeteo',
+    ]);
+    expect(result.map((item) => item.calidadDatos?.fuente)).toEqual([
+      'estacion_asignada',
+      'open_meteo',
     ]);
   });
 });

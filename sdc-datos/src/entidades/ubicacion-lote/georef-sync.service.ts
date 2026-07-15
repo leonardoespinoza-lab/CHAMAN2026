@@ -130,8 +130,30 @@ export class GeorefCatalogSyncService {
       checksum: string;
     }>;
 
-    for (const definition of RESOURCES) {
-      downloads.push(await this.download(definition));
+    try {
+      for (const definition of RESOURCES) {
+        downloads.push(await this.download(definition));
+      }
+    } catch (error) {
+      // La cartografia remota nunca debe reemplazar un snapshot valido si la
+      // descarga o su cadena TLS fallan. En una sincronizacion normal se sigue
+      // operando y se ejecuta el backfill con la ultima version auditada. Una
+      // sincronizacion forzada conserva el error para que el administrador sepa
+      // que la fuente no pudo actualizarse.
+      if (!force && active) {
+        this.logger.warn(
+          `GeoRef remoto no disponible (${error?.message || error}); se conserva el snapshot activo ${active.snapshotId}.`,
+        );
+        return {
+          activated: false,
+          snapshotId: active.snapshotId,
+          sourceVersion: active.sourceVersion,
+          counts: Object.fromEntries(
+            active.resources.map((item) => [item.resource, item.count]),
+          ),
+        };
+      }
+      throw error;
     }
 
     const sourceVersion = createHash('sha256')

@@ -12,6 +12,7 @@ const requiredRoles = [
   'clima',
   'predicciones',
   'externa',
+  'websocket',
   'ftp',
   'lora',
   'ndvi-worker',

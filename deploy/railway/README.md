@@ -27,10 +27,11 @@ npm run railway:start
 5. `chaman-api` con `CHAMAN_SERVICE=sdc-api-cliente`
 6. `chaman-externa` con `CHAMAN_SERVICE=sdc-api-externa`
 7. `chaman-lora` con `CHAMAN_SERVICE=sdc-api-lora`
-8. `chaman-web` con `CHAMAN_SERVICE=sdc-app-chaman`
-9. `chaman-ndvi-worker` con `CHAMAN_SERVICE=sdc-ndvi-worker`
-10. MongoDB
-11. Redis
+8. `chaman-websocket` con `CHAMAN_SERVICE=sdc-websocket`
+9. `chaman-web` con `CHAMAN_SERVICE=sdc-app-chaman`
+10. `chaman-ndvi-worker` con `CHAMAN_SERVICE=sdc-ndvi-worker`
+11. MongoDB
+12. Redis
 
 ## Orden de publicacion
 
@@ -42,12 +43,13 @@ npm run railway:start
 6. `sdc-api-cliente`.
 7. `sdc-api-externa`.
 8. `sdc-api-lora`.
-9. `sdc-app-chaman`.
-10. `sdc-ndvi-worker`.
+9. `sdc-websocket`.
+10. `sdc-app-chaman`.
+11. `sdc-ndvi-worker`.
 
 ## Conexion entre servicios
 
-Usar private networking para servicios internos y dominio publico solo para `chaman-api` y `chaman-web`.
+Usar private networking para servicios internos y dominio publico solo para `chaman-api`, `chaman-websocket` y `chaman-web`.
 
 - `chaman-datos`: privado, `PORT=5000`.
 - `chaman-auth`: privado, `API_DATOS=http://${{chaman-datos.RAILWAY_PRIVATE_DOMAIN}}:${{chaman-datos.PORT}}`.
@@ -56,7 +58,8 @@ Usar private networking para servicios internos y dominio publico solo para `cha
 - `chaman-api`: publico, comunica internamente con datos/auth/clima/predicciones y usa `AUTH_CLIENT_ID` / `AUTH_CLIENT_SECRET` para OAuth.
 - `chaman-externa`: privado, recibe callbacks internos como `/ndvi/crear-reporte` y guarda reportes en `sdc-datos`.
 - `chaman-lora`: privado, se conecta a EMQX/ChirpStack por MQTT y guarda uplinks en `sdc-datos`.
-- `chaman-web`: publico, lee `CHAMAN_WEB_API_URL` y `CHAMAN_WEB_TILES_URL` desde `/runtime-config.js`. En Railway debe apuntar al gateway publico con prefijo, por ejemplo `https://${{chaman-api.RAILWAY_PUBLIC_DOMAIN}}/sdc-quimica`.
+- `chaman-websocket`: publico para el navegador, autentica cada conexion y distribuye eventos por Redis o MQTT; sus dependencias `auth`, `datos` y Redis permanecen privadas.
+- `chaman-web`: publico, lee `CHAMAN_WEB_API_URL`, `CHAMAN_WEB_WS_URL` y `CHAMAN_WEB_TILES_URL` desde `/runtime-config.js`. En Railway debe apuntar al gateway publico con prefijo, por ejemplo `https://${{chaman-api.RAILWAY_PUBLIC_DOMAIN}}/sdc-quimica`, y al canal realtime mediante `wss://${{chaman-websocket.RAILWAY_PUBLIC_DOMAIN}}`.
 - `chaman-ndvi-worker`: privado, escucha la cola Redis `REDIS_NDVI_QUEUE` y notifica reportes NDVI a `API_EXTERNA_URL`.
 
 Los backends aceptan `HOST` por variable de entorno. En Railway usar `HOST=::` para compatibilidad con private networking dual-stack.
