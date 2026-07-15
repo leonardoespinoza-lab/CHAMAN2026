@@ -490,4 +490,65 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
     expect(html).toContain('Napa y agua subterranea');
     expect(html).toContain('Estado al momento de emision');
   });
+
+  it('limita una fuente complementaria lenta y conserva un fallback honesto', async () => {
+    jest.useFakeTimers();
+    try {
+      const pendiente = new Promise<string>(() => undefined);
+      const resultado = service.getFuenteCertificadoConLimite(
+        'clima de prueba',
+        () => pendiente,
+        'sin dato',
+        12_000,
+      );
+
+      jest.advanceTimersByTime(12_000);
+
+      await expect(resultado).resolves.toBe('sin dato');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('cancela listados internos lentos a los cinco segundos', async () => {
+    const axios = { GET: jest.fn().mockResolvedValue({ datos: [] }) };
+    const servicio = new LotesService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      axios as any,
+      {} as any,
+    ) as any;
+
+    await servicio.getListadoInterno(
+      'prediccions',
+      { idSiembra: 'siembra-1' },
+      {},
+      5_000,
+    );
+
+    expect(axios.GET).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ timeout: 5_000 }),
+    );
+  });
+
+  it('no impone el timeout del informe a la carga fitosanitaria operativa', async () => {
+    const axios = { GET: jest.fn().mockResolvedValue({ datos: [] }) };
+    const servicio = new LotesService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      axios as any,
+      {} as any,
+    ) as any;
+
+    await servicio.getListadoInterno('fumigacions', {
+      idSiembra: 'siembra-1',
+    });
+
+    expect(axios.GET.mock.calls[0][1]).not.toHaveProperty('timeout');
+  });
 });

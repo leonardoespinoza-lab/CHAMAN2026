@@ -129,7 +129,10 @@ interface CertificadoEtapaSatelital {
 }
 
 type CertificadoEstadoServicio =
-  'con_dato' | 'sin_dato' | 'no_aplica' | 'no_consolidado';
+  | 'con_dato'
+  | 'sin_dato'
+  | 'no_aplica'
+  | 'no_consolidado';
 
 interface CertificadoServicio {
   nombre: string;
@@ -137,6 +140,9 @@ interface CertificadoServicio {
   lectura: string;
   fuente: string;
 }
+
+const CERTIFICADO_TIMEOUT_DATOS_MS = 5_000;
+const CERTIFICADO_TIMEOUT_CLIMA_MS = 12_000;
 
 @Injectable()
 export class LotesService {
@@ -338,9 +344,24 @@ export class LotesService {
   }
 
   async generarCertificado(id: string, permiso: IPermiso): Promise<string> {
-    const lote = await this.resolveLotWithSoilInputs(
-      await this.getById(id, permiso),
-    );
+    const loteBase = await this.assertCanView(id, permiso);
+    const [ubicacionAdministrativa, loteConSuelo] = await Promise.all([
+      this.getFuenteCertificadoConLimite(
+        'ubicacion administrativa',
+        () => this.repository.getAdministrativeLocation(id),
+        undefined,
+        CERTIFICADO_TIMEOUT_DATOS_MS,
+      ),
+      this.getFuenteCertificadoConLimite(
+        'entradas agronomicas de suelo',
+        () => this.resolveLotWithSoilInputs(loteBase),
+        loteBase,
+        CERTIFICADO_TIMEOUT_DATOS_MS,
+      ),
+    ]);
+    const lote = ubicacionAdministrativa
+      ? ({ ...loteConSuelo, ubicacionAdministrativa } as ILote)
+      : loteConSuelo;
     const siembra = lote.siembra;
 
     const [
@@ -351,12 +372,55 @@ export class LotesService {
       clima,
       soilAssessment,
     ] = await Promise.all([
-      this.getReportesNdviCertificado(id, permiso),
-      this.getPrediccionesCertificado(siembra?._id),
-      this.getFertilizacionesCertificado(id, siembra),
-      this.getFumigacionesCertificado(siembra?._id),
-      this.getClimaCertificado(lote, siembra),
-      this.getSoilIntelligenceCertificado(id),
+      this.getFuenteCertificadoConLimite(
+        'seguimiento satelital',
+        () => this.getReportesNdviCertificado(id, permiso),
+        [],
+        CERTIFICADO_TIMEOUT_DATOS_MS,
+      ),
+      this.getFuenteCertificadoConLimite(
+        'predicciones sanitarias',
+        () =>
+          this.getPrediccionesCertificado(
+            siembra?._id,
+            CERTIFICADO_TIMEOUT_DATOS_MS,
+          ),
+        [],
+        CERTIFICADO_TIMEOUT_DATOS_MS,
+      ),
+      this.getFuenteCertificadoConLimite(
+        'fertilizaciones',
+        () =>
+          this.getFertilizacionesCertificado(
+            id,
+            siembra,
+            CERTIFICADO_TIMEOUT_DATOS_MS,
+          ),
+        [],
+        CERTIFICADO_TIMEOUT_DATOS_MS,
+      ),
+      this.getFuenteCertificadoConLimite(
+        'aplicaciones',
+        () =>
+          this.getFumigacionesCertificado(
+            siembra?._id,
+            CERTIFICADO_TIMEOUT_DATOS_MS,
+          ),
+        [],
+        CERTIFICADO_TIMEOUT_DATOS_MS,
+      ),
+      this.getFuenteCertificadoConLimite(
+        'clima historico',
+        () => this.getClimaCertificado(lote, siembra),
+        undefined,
+        CERTIFICADO_TIMEOUT_CLIMA_MS,
+      ),
+      this.getFuenteCertificadoConLimite(
+        'inteligencia de suelo',
+        () => this.getSoilIntelligenceCertificado(id),
+        null,
+        CERTIFICADO_TIMEOUT_DATOS_MS,
+      ),
     ]);
     const cargaFitosanitaria = this.calcularCargaFitosanitaria(
       lote,
@@ -1094,6 +1158,7 @@ export class LotesService {
 
   private async getPrediccionesCertificado(
     idSiembra?: string,
+    timeoutMs?: number,
   ): Promise<IPrediccion[]> {
     if (!idSiembra) {
       return [];
@@ -1105,12 +1170,14 @@ export class LotesService {
         limit: 5,
         sort: '-fechaPrediccion',
       },
+      timeoutMs,
     );
   }
 
   private async getFertilizacionesCertificado(
     idLote: string,
     siembra?: ISiembra,
+    timeoutMs?: number,
   ): Promise<IFertilizacion[]> {
     const ventana = this.getVentanaTemporalCultivo(siembra);
     const filter: Record<string, unknown> = { idLote };
@@ -1127,15 +1194,21 @@ export class LotesService {
         },
       ];
     }
-    return this.getListadoInterno<IFertilizacion>('fertilizacions', filter, {
-      limit: 20,
-      sort: '-fechaFertilizacion',
-      populate: JSON.stringify({ path: 'fertilizante' }),
-    });
+    return this.getListadoInterno<IFertilizacion>(
+      'fertilizacions',
+      filter,
+      {
+        limit: 20,
+        sort: '-fechaFertilizacion',
+        populate: JSON.stringify({ path: 'fertilizante' }),
+      },
+      timeoutMs,
+    );
   }
 
   private async getFumigacionesCertificado(
     idSiembra?: string,
+    timeoutMs?: number,
   ): Promise<IFumigacion[]> {
     if (!idSiembra) {
       return [];
@@ -1151,6 +1224,7 @@ export class LotesService {
           { path: 'principioActivo' },
         ]),
       },
+      timeoutMs,
     );
   }
 
@@ -1195,6 +1269,7 @@ export class LotesService {
     recurso: string,
     filter: Record<string, unknown>,
     extraParams: Partial<IQueryParam> = {},
+    timeoutMs?: number,
   ): Promise<T[]> {
     try {
       const response = await this.axios.GET<IListado<T>>(
@@ -1204,6 +1279,7 @@ export class LotesService {
             ...extraParams,
             filter: JSON.stringify(filter),
           },
+          ...(timeoutMs ? { timeout: timeoutMs } : {}),
         },
       );
       return response?.datos || [];
@@ -1212,6 +1288,36 @@ export class LotesService {
         `No se pudieron obtener datos de ${recurso} para certificado: ${error?.message || error}`,
       );
       return [];
+    }
+  }
+
+  private async getFuenteCertificadoConLimite<T>(
+    fuente: string,
+    obtener: () => Promise<T>,
+    fallback: T,
+    timeoutMs: number,
+  ): Promise<T> {
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<T>((resolve) => {
+      timeoutHandle = setTimeout(() => {
+        this.logger.warn(
+          `La fuente ${fuente} supero ${timeoutMs} ms para el certificado; se informa sin dato.`,
+        );
+        resolve(fallback);
+      }, timeoutMs);
+    });
+
+    try {
+      return await Promise.race([obtener(), timeout]);
+    } catch (error) {
+      this.logger.warn(
+        `La fuente ${fuente} fallo para el certificado; se informa sin dato: ${error?.message || error}`,
+      );
+      return fallback;
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
     }
   }
 
