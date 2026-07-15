@@ -250,7 +250,7 @@ describe('AgrometeorologicalEngineService', () => {
     expect(result.advertencias.join(' ')).toContain('estimado');
   });
 
-  it('conserva el lote legado cuando el assessment esta vencido', () => {
+  it('conserva el perfil uniforme confirmado cuando el assessment esta vencido', () => {
     const [result] = engine.calculateIndicators(
       {
         _id: '64b000000000000000000001',
@@ -264,6 +264,7 @@ describe('AgrometeorologicalEngineService', () => {
         idEstablecimiento: '64b000000000000000000003',
         capacidadDeCampo: 30,
         puntoMarchitez: 12,
+        sueloConfirmadoPorUsuario: true,
         sueloReferencia: { profundidadCm: 100 },
       } as any,
       { lat: -33, lng: -61.9 },
@@ -477,6 +478,40 @@ describe('AgrometeorologicalEngineService', () => {
     );
   });
 
+  it('admite un perfil uniforme solo con profundidad y valores confirmados', () => {
+    const [result] = engine.calculateIndicators(
+      {
+        _id: '64b000000000000000000001',
+        idLote: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        fechaSiembra: '2026-07-10',
+        semilla: {
+          cultivo: 'Soja',
+          parametrosAgrometeorologicos: {
+            version: 'confirmed-uniform-profile-test',
+            estado: 'validado',
+            profundidadRadicularCm: 60,
+          },
+        },
+      } as any,
+      {
+        _id: '64b000000000000000000002',
+        idEstablecimiento: '64b000000000000000000003',
+        capacidadDeCampo: 30,
+        puntoMarchitez: 10,
+        sueloConfirmadoPorUsuario: true,
+        sueloReferencia: { profundidadCm: 100, confianza: 'alta' },
+      } as any,
+      { lat: -33, lng: -61.9 },
+      [daily('2026-07-10', 8, 16, 24)],
+    );
+
+    expect(result.metricas.availableWaterCapacityMm).toBeCloseTo(120, 6);
+    expect(result.banderasCalidad).not.toContain(
+      'legacy_uniform_hydraulics_not_root_zone',
+    );
+  });
+
   it('ignora capas artificiales derivadas de sensores puntuales aunque figuren confirmadas', () => {
     const [result] = engine.calculateIndicators(
       {
@@ -496,6 +531,10 @@ describe('AgrometeorologicalEngineService', () => {
       {
         _id: '64b000000000000000000002',
         idEstablecimiento: '64b000000000000000000003',
+        capacidadDeCampo: 30,
+        puntoMarchitez: 10,
+        sueloConfirmadoPorUsuario: true,
+        sueloReferencia: { profundidadCm: 100 },
         suelos: [
           { profundidad: 20, numeroDeSensor: 1 },
           { profundidad: 80, numeroDeSensor: 2 },
@@ -535,6 +574,9 @@ describe('AgrometeorologicalEngineService', () => {
     expect(result.metricas.availableWaterCapacityMm).toBeUndefined();
     expect(result.banderasCalidad).toContain(
       'point_sensor_not_hydraulic_profile',
+    );
+    expect(result.banderasCalidad).toContain(
+      'legacy_uniform_hydraulics_not_root_zone',
     );
     expect(result.advertencias.join(' ')).toContain(
       'puntos de medicion y no limites de horizontes',

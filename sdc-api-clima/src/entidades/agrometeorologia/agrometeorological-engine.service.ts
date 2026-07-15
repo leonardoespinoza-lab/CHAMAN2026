@@ -99,6 +99,7 @@ interface ISoilProfile {
   hydraulicIsScreening?: boolean;
   pointSensorHydraulicsIgnored?: boolean;
   potentialProfileCapacityIgnored?: boolean;
+  legacyUniformHydraulicsIgnored?: boolean;
 }
 
 interface IRootDepthResolution {
@@ -358,6 +359,11 @@ export class AgrometeorologicalEngineService {
     if (profile.potentialProfileCapacityIgnored) {
       globalWarnings.push(
         'La capacidad potencial del perfil es descriptiva y no se convierte en agua disponible de la zona radicular sin capas hidraulicas continuas hasta la profundidad de raices.',
+      );
+    }
+    if (profile.legacyUniformHydraulicsIgnored) {
+      globalWarnings.push(
+        'Los valores escalares legacy de capacidad de campo y punto de marchitez no se integran como zona radicular sin una profundidad uniforme confirmada y sin sensores puntuales.',
       );
     }
     if (profile.hydraulicIsScreening) {
@@ -736,6 +742,9 @@ export class AgrometeorologicalEngineService {
               : []),
             ...(profile.potentialProfileCapacityIgnored
               ? ['potential_profile_capacity_not_root_zone']
+              : []),
+            ...(profile.legacyUniformHydraulicsIgnored
+              ? ['legacy_uniform_hydraulics_not_root_zone']
               : []),
             ...(incompleteRootZoneModelCoverage
               ? ['incomplete_root_zone_model_coverage']
@@ -1240,6 +1249,7 @@ export class AgrometeorologicalEngineService {
       | 'hydraulicIsScreening'
       | 'pointSensorHydraulicsIgnored'
       | 'potentialProfileCapacityIgnored'
+      | 'legacyUniformHydraulicsIgnored'
     > = {
       depthSource: rootDepth.source,
       depthConfidence: rootDepth.confidence,
@@ -1267,6 +1277,7 @@ export class AgrometeorologicalEngineService {
         (numeroFinito(soilInputs?.profileAvailableWaterMm) !== undefined ||
           numeroFinito(soilInputs?.rootZoneAvailableWaterMm) !== undefined ||
           numeroFinito(soilInputs?.availableWaterMmPerMeter) !== undefined),
+      legacyUniformHydraulicsIgnored: false,
     };
     if (layers.length) {
       let capacity = 0;
@@ -1339,19 +1350,41 @@ export class AgrometeorologicalEngineService {
         ...depthMetadata,
       };
     }
-    const legacyCapacity = calcularCapacidadAguaUtilMm(
-      lote.capacidadDeCampo,
-      lote.puntoMarchitez,
-      targetDepthCm,
+    const originalFieldCapacity = numeroFinito(
+      lotWithOriginalRootEvidence.capacidadDeCampo,
     );
+    const originalWiltingPoint = numeroFinito(
+      lotWithOriginalRootEvidence.puntoMarchitez,
+    );
+    const confirmedUniformDepth =
+      lotWithOriginalRootEvidence.sueloConfirmadoPorUsuario === true &&
+      !pointSensorLayout
+        ? this.validRootDepth(
+            lotWithOriginalRootEvidence.sueloReferencia?.profundidadCm,
+          )
+        : undefined;
+    const confirmedUniformProfile =
+      confirmedUniformDepth !== undefined &&
+      confirmedUniformDepth + ROOT_ZONE_COVERAGE_TOLERANCE_CM >= targetDepthCm;
+    depthMetadata.legacyUniformHydraulicsIgnored =
+      !confirmedUniformProfile &&
+      originalFieldCapacity !== undefined &&
+      originalWiltingPoint !== undefined;
+    const legacyCapacity = confirmedUniformProfile
+      ? calcularCapacidadAguaUtilMm(
+          originalFieldCapacity,
+          originalWiltingPoint,
+          targetDepthCm,
+        )
+      : undefined;
     if (legacyCapacity !== undefined) {
       return {
         capacityMm: legacyCapacity,
-        fieldCapacity: normalizarContenidoVolumetrico(lote.capacidadDeCampo),
-        wiltingPoint: normalizarContenidoVolumetrico(lote.puntoMarchitez),
+        fieldCapacity: normalizarContenidoVolumetrico(originalFieldCapacity),
+        wiltingPoint: normalizarContenidoVolumetrico(originalWiltingPoint),
         rootDepthCm: targetDepthCm,
-        estimated: rootDepth.estimated || !lote.sueloConfirmadoPorUsuario,
-        source: 'crop_reference',
+        estimated: rootDepth.estimated,
+        source: 'confirmed_lot',
         ...depthMetadata,
       };
     }
