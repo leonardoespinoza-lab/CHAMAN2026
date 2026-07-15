@@ -1,4 +1,7 @@
-import { IObservacionMeteorologicaNormalizada } from 'modelos/src';
+import {
+  AGROMET_ENGINE_VERSION,
+  IObservacionMeteorologicaNormalizada,
+} from 'modelos/src';
 import { AgrometeorologicalEngineService } from './agrometeorological-engine.service';
 
 describe('AgrometeorologicalEngineService', () => {
@@ -1258,6 +1261,10 @@ describe('AgrometeorologicalEngineService', () => {
       '2026-07-03',
     ]);
     expect(getIndicadores.mock.calls[0][0].sort).toBe('fecha');
+    expect(JSON.parse(getIndicadores.mock.calls[0][0].filter)).toMatchObject({
+      idSiembra: '64b000000000000000000001',
+      versionCalculo: AGROMET_ENGINE_VERSION,
+    });
     expect(response.summary.gddThroughDate).toBe('2026-07-03');
     expect(response.summary.gddBaseTemperatureC).toBe(0);
     expect(response.summary.gddUpperTemperatureC).toBe(26);
