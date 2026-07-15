@@ -95,6 +95,14 @@ test("un dato manual legacy nunca se rotula como confirmado", () => {
   assert.match(card, /operationalTextureDetail/);
 });
 
+test("distingue capacidad potencial del suelo de humedad actual", () => {
+  assert.match(card, /Capacidad potencial del suelo \(agua útil\)/);
+  assert.match(card, /Estimación CC–PMP/);
+  assert.match(card, /Perfil de referencia/);
+  assert.match(card, /No representa humedad actual/);
+  assert.doesNotMatch(card, /Zona radicular de referencia/);
+});
+
 test("renderiza composición por profundidad, estados, nulls y móvil sin botón Calcular", () => {
   assert.match(card, /Composición por profundidad/);
   assert.match(card, /fieldCapacityPercentage/);

@@ -66,9 +66,12 @@
         <small>No equivale al riesgo meteorológico actual de anegamiento</small>
       </article>
       <article>
-        <span>Agua útil estimada</span>
+        <span>Capacidad potencial del suelo (agua útil)</span>
         <strong>{{ number(assessment?.summary?.availableWaterMmPerMeter) }} mm/m</strong>
-        <small>Zona radicular de referencia: {{ number(assessment?.summary?.rootZoneAvailableWaterMm) }} mm</small>
+        <small>
+          Estimación CC–PMP · Perfil de referencia {{ number(assessment?.summary?.effectiveDepthCm) }} cm:
+          {{ number(assessment?.summary?.rootZoneAvailableWaterMm) }} mm · No representa humedad actual
+        </small>
       </article>
       <article>
         <span>Unidad / serie INTA</span>
