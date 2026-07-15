@@ -1,6 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { IDispositivo, ILote, ISiembra } from 'modelos/src';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
+import { evaluarRiegoFrontend } from '../../riego-evidence';
 
 type QualityLevel = 'alta' | 'media' | 'baja' | 'sin_datos';
 
@@ -73,7 +74,8 @@ export class DataQualityStripComponent {
     const calidad = clima?.calidadDatos;
     const fuente = clima?.fuente || this.lote?.establecimiento?.fuenteClimaPreferida || 'Open-Meteo';
     const score = this.scoreClima(fuente, calidad?.score);
-    const updated = calidad?.fechaActualizacion || clima?.fecha || climaActual?.fecha || climaActual?.estado?.ultimoSync;
+    const updated =
+      calidad?.fechaActualizacion || clima?.fecha || climaActual?.fecha || climaActual?.estado?.ultimoSync;
 
     return {
       label: 'Clima',
@@ -94,9 +96,7 @@ export class DataQualityStripComponent {
         reporte?.metadataImagen?.indicesStats?.ndvi?.validCoveragePct ??
         reporte?.metadata?.qualityMask?.validCoveragePct
     );
-    const score = reporte
-      ? Math.max(45, Math.min(92, Number.isFinite(coverage) ? Math.round(coverage) : 72))
-      : 35;
+    const score = reporte ? Math.max(45, Math.min(92, Number.isFinite(coverage) ? Math.round(coverage) : 72)) : 35;
 
     return {
       label: 'Satelite',
@@ -153,21 +153,57 @@ export class DataQualityStripComponent {
   }
 
   private riegoItem(): DataQualityItem {
-    const tieneSonda = !!this.lote?.sondaSuelo || !!this.lote?.idSondaSuelo;
-    const riego = this.siembra?.ultimaPrediccionRiego || [];
-    const tieneAguaUtil = this.siembra?.aguaUtilReal != null;
-    const score = tieneSonda ? 90 : riego.length || tieneAguaUtil ? 62 : 38;
+    const evaluacion = evaluarRiegoFrontend(this.siembra, this.lote);
+    const score = evaluacion.serieDisponible
+      ? evaluacion.esEstimada
+        ? evaluacion.tieneSensor
+          ? 75
+          : 62
+        : evaluacion.tieneSensor
+          ? 90
+          : 72
+      : evaluacion.estado === 'estimada'
+        ? 45
+        : evaluacion.tieneSensor
+          ? 52
+          : 38;
+    const value = evaluacion.serieDisponible
+      ? evaluacion.esEstimada
+        ? 'Modelo estimado'
+        : evaluacion.tieneSensor
+          ? 'Sensor + recomendacion'
+          : 'Calculo disponible'
+      : evaluacion.estado === 'estimada'
+        ? 'Estimacion pendiente'
+        : evaluacion.tieneSensor
+          ? 'Sensor sin recomendacion'
+          : 'Sin datos validos';
+    const source =
+      evaluacion.fuente === 'sensor_suelo'
+        ? 'Sensor de suelo'
+        : evaluacion.fuente === 'balance_climatico'
+          ? 'ET0 + cultivo + suelo'
+          : evaluacion.tieneSensor
+            ? 'Sensor asignado; estado invalido'
+            : 'Sin fuente valida';
+    const detail = evaluacion.serieDisponible
+      ? evaluacion.esEstimada
+        ? evaluacion.sinDemanda
+          ? 'Balance modelado con ceros validos: no proyecta aporte; validar a campo.'
+          : 'Balance modelado identificado como estimacion; validar a campo antes de decidir.'
+        : 'Recomendacion calculada con estado y fuente validos.'
+      : evaluacion.estado === 'estimada'
+        ? 'La estimacion no contiene cantidades validas; no equivale a ausencia de demanda.'
+        : 'Las filas previas no se consideran vigentes si la recomendacion figura no disponible, fallida o sin estado.';
 
     return {
       label: 'Riego',
-      value: tieneSonda ? 'Sensor asignado' : riego.length ? 'Modelo activo' : 'Estimado',
-      source: tieneSonda ? 'Sensor de suelo' : 'ET0 + cultivo + suelo',
+      value,
+      source,
       score,
       level: this.levelFromScore(score),
       updated: this.getUltimoReporteDispositivo(this.lote?.dispositivos),
-      detail: tieneSonda
-        ? 'La sonda asignada debe ser la fuente principal para decision de riego.'
-        : 'Sin sonda: recomendacion modelada con clima, suelo, cultivo y etapa.',
+      detail,
       icon: 'pi pi-droplet',
     };
   }
@@ -183,12 +219,19 @@ export class DataQualityStripComponent {
 
     return {
       label: 'Suelo',
-      value: ref?.confianza ? this.levelLabel(ref.confianza) : niveles.length ? `${niveles.length} nivel(es)` : 'Pendiente',
+      value: ref?.confianza
+        ? this.levelLabel(ref.confianza)
+        : niveles.length
+          ? `${niveles.length} nivel(es)`
+          : 'Pendiente',
       source: ref?.fuente || (niveles.length ? 'Carga del lote' : 'Sin perfil'),
       score,
       level: this.levelFromScore(score),
       updated: ref?.fechaConsulta,
-      detail: ref?.unidadCartografica || ref?.servicio || 'Completar textura, profundidad, capacidad de campo y PMP mejora riego/huella.',
+      detail:
+        ref?.unidadCartografica ||
+        ref?.servicio ||
+        'Completar textura, profundidad, capacidad de campo y PMP mejora riego/huella.',
       icon: 'pi pi-compass',
     };
   }
@@ -262,7 +305,9 @@ export class DataQualityStripComponent {
 
   private getUltimoReporteDispositivo(dispositivos?: IDispositivo[]): string | undefined {
     const fechas = (dispositivos || [])
-      .map((dispositivo: any) => dispositivo?.estado?.ultimoReporte || dispositivo?.ultimoReporte || dispositivo?.updatedAt)
+      .map(
+        (dispositivo: any) => dispositivo?.estado?.ultimoReporte || dispositivo?.ultimoReporte || dispositivo?.updatedAt
+      )
       .filter(Boolean);
     return this.ultimaFecha(fechas);
   }

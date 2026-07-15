@@ -24,6 +24,8 @@ import {
   TTipoLluviaPromedio,
   TTipoDosisP,
   TTipoLabranza,
+  TEstadoRecomendacionRiego,
+  TFuenteRecomendacionRiego,
   IResultadoPrediccionRiego,
   IResultadoPrediccionMalezas,
   IRegistroFenologico,
@@ -146,6 +148,15 @@ export class Siembra implements Exactly<ISiembra, Siembra> {
 
   @Prop()
   motivoCalculoAguaUtil?: string;
+
+  @Prop()
+  estadoRecomendacionRiego?: TEstadoRecomendacionRiego;
+
+  @Prop()
+  fuenteRecomendacionRiego?: TFuenteRecomendacionRiego | null;
+
+  @Prop()
+  motivoRecomendacionRiego?: string;
 
   // Populate
   quimica?: IQuimica;

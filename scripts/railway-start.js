@@ -101,6 +101,31 @@ if (
   }
 }
 
+// Persistencia del motor edafico: migracion aditiva, idempotente y opt-in.
+// Se ejecuta dentro de Railway para resolver la red privada de MongoDB. El
+// modo apply conserva lotes y perfiles legacy y exige confirmacion explicita.
+if (
+  service.name === 'sdc-datos' &&
+  process.env.CHAMAN_RUN_SOIL_INTELLIGENCE_MIGRATION_ON_START === 'true'
+) {
+  const mode =
+    process.env.CHAMAN_SOIL_INTELLIGENCE_MIGRATION_MODE || 'plan';
+  const migration = spawnSync(
+    process.execPath,
+    ['scripts/migrations/20260714-soil-intelligence.js', mode],
+    {
+      cwd: process.cwd(),
+      shell: false,
+      stdio: 'inherit',
+      env: process.env,
+    },
+  );
+
+  if (migration.status !== 0) {
+    process.exit(migration.status || 1);
+  }
+}
+
 const result = spawnSync(service.start, {
   cwd,
   shell: true,

@@ -27,6 +27,14 @@ export type TTipoLluviaPromedio =
 export type TTipoLabranza =
   "Siembra Directa" | "Convencional" | "Labranza" | "Reducida";
 export type TCalidadHuellaHidrica = "alta" | "media" | "baja";
+export type TEstadoRecomendacionRiego =
+  | "calculada"
+  | "estimada"
+  | "no_disponible"
+  | "fallida";
+export type TFuenteRecomendacionRiego =
+  | "sensor_suelo"
+  | "balance_climatico";
 
 export interface ICalidadHuellaHidrica {
   nivel: TCalidadHuellaHidrica;
@@ -136,6 +144,9 @@ export interface ISiembra {
   estadoCalculoAguaUtil?:
     "calculado" | "estimado" | "no_disponible" | "fallida";
   motivoCalculoAguaUtil?: string;
+  estadoRecomendacionRiego?: TEstadoRecomendacionRiego;
+  fuenteRecomendacionRiego?: TFuenteRecomendacionRiego | null;
+  motivoRecomendacionRiego?: string;
 
   // Datos para huella hídrica
   humedadCosecha?: number;

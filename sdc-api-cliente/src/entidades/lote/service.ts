@@ -1733,11 +1733,17 @@ export class LotesService {
         ? Math.min(82, 55 + lote.suelos.length * 7)
         : 30;
     const tieneSonda = !!lote.sondaSuelo || !!lote.idSondaSuelo;
-    const riegoScore = tieneSonda
-      ? 90
-      : siembra?.ultimaPrediccionRiego?.length || siembra?.aguaUtilReal != null
+    const estadoRiego = this.getEstadoRecomendacionRiego(siembra);
+    const riegoScore =
+      estadoRiego === 'estimada'
         ? 62
-        : 38;
+        : estadoRiego === 'calculada'
+          ? tieneSonda
+            ? 90
+            : 75
+          : this.tieneAguaUtilValida(siembra)
+            ? 65
+            : 38;
     const operaciones = fertilizaciones.length + fumigaciones.length;
     const manejoScore = operaciones ? Math.min(90, 55 + operaciones * 6) : 35;
     const huellaCalidad =
@@ -2127,11 +2133,14 @@ export class LotesService {
   }
 
   private getRiegoScore(siembra?: ISiembra): number {
-    const recomendacion = siembra?.ultimaPrediccionRiego?.[0] as any;
-    if (recomendacion?.recomendacion !== undefined) {
+    const estado = this.getEstadoRecomendacionRiego(siembra);
+    if (estado === 'calculada') {
       return 85;
     }
-    if (siembra?.aguaUtilReal !== undefined) {
+    if (estado === 'estimada') {
+      return 62;
+    }
+    if (this.tieneAguaUtilValida(siembra)) {
       return 65;
     }
     return 25;
@@ -3299,13 +3308,62 @@ export class LotesService {
 
   private getRiegoTexto(siembra?: ISiembra): string {
     const recomendacion = siembra?.ultimaPrediccionRiego?.[0] as any;
-    if (recomendacion?.recomendacion !== undefined) {
-      return `${this.formatNumber(recomendacion.recomendacion, 1)} mm`;
+    const estado = this.getEstadoRecomendacionRiego(siembra);
+    if (
+      (estado === 'calculada' || estado === 'estimada') &&
+      typeof recomendacion?.cantidad === 'number' &&
+      Number.isFinite(recomendacion.cantidad) &&
+      recomendacion.cantidad >= 0
+    ) {
+      return `${this.formatNumber(recomendacion.cantidad, 1)} mm${
+        estado === 'estimada' ? ' estimados' : ''
+      }`;
     }
-    if (siembra?.aguaUtilReal !== undefined) {
+    if (this.tieneAguaUtilValida(siembra)) {
       return `${this.formatNumber(siembra.aguaUtilReal, 1)} mm agua util`;
     }
     return 'Sin recomendacion';
+  }
+
+  private getEstadoRecomendacionRiego(
+    siembra?: ISiembra,
+  ): 'calculada' | 'estimada' | 'no_disponible' | 'fallida' {
+    const estado = siembra?.estadoRecomendacionRiego;
+    if (estado) return estado;
+
+    const tieneSerie = (siembra?.ultimaPrediccionRiego || []).some(
+      (item) =>
+        typeof item.cantidad === 'number' &&
+        Number.isFinite(item.cantidad) &&
+        item.cantidad >= 0,
+    );
+    if (!tieneSerie) {
+      return siembra?.estadoCalculoAguaUtil === 'fallida'
+        ? 'fallida'
+        : 'no_disponible';
+    }
+    if (siembra?.estadoCalculoAguaUtil === 'calculado') return 'calculada';
+    if (siembra?.estadoCalculoAguaUtil === 'estimado') return 'estimada';
+    if (
+      siembra?.estadoCalculoAguaUtil === 'no_disponible' &&
+      /recomendacion estimada por balance/i.test(
+        siembra.motivoCalculoAguaUtil || '',
+      )
+    ) {
+      return 'estimada';
+    }
+    return 'no_disponible';
+  }
+
+  private tieneAguaUtilValida(siembra?: ISiembra): boolean {
+    return !!(
+      siembra &&
+      (siembra.estadoCalculoAguaUtil === 'calculado' ||
+        siembra.estadoCalculoAguaUtil === 'estimado') &&
+      typeof siembra.aguaUtilReal === 'number' &&
+      Number.isFinite(siembra.aguaUtilReal) &&
+      siembra.aguaUtilReal >= 0
+    );
   }
 
   private getAguaUtilTexto(siembra?: ISiembra): string {

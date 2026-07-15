@@ -273,6 +273,48 @@ describe('AgrometeorologicalEngineService', () => {
     expect(result.metricas.availableWaterCapacityMm).toBe(180);
   });
 
+  it('no interpreta un cero sin estado valido como agua util medida', () => {
+    const baseSiembra = {
+      _id: '64b000000000000000000001',
+      idLote: '64b000000000000000000002',
+      idEstablecimiento: '64b000000000000000000003',
+      fechaSiembra: '2026-07-10',
+      semilla: { cultivo: 'Soja' },
+    } as any;
+    const lote = {
+      _id: '64b000000000000000000002',
+      idEstablecimiento: '64b000000000000000000003',
+      capacidadDeCampo: 30,
+      puntoMarchitez: 12,
+      sueloReferencia: { profundidadCm: 100 },
+    } as any;
+    const observations = [daily('2026-07-10', 8, 16, 24)];
+
+    const [sinLectura] = engine.calculateIndicators(
+      baseSiembra,
+      lote,
+      { lat: -33, lng: -61.9 },
+      observations,
+    );
+    const [ceroNoDisponible] = engine.calculateIndicators(
+      {
+        ...baseSiembra,
+        aguaUtilReal: 0,
+        estadoCalculoAguaUtil: 'no_disponible',
+      },
+      lote,
+      { lat: -33, lng: -61.9 },
+      observations,
+    );
+
+    expect(ceroNoDisponible.metricas.soilWaterStorageMm).toBe(
+      sinLectura.metricas.soilWaterStorageMm,
+    );
+    expect(ceroNoDisponible.advertencias.join(' ')).toContain(
+      'no se interpreta un cero sin sensor como medicion',
+    );
+  });
+
   it('calcula horas de frio y calor desde la serie horaria', () => {
     const hourly = [-2, 5, 20, 36].map((temperatureC, index) => ({
       idEstablecimiento: '64b000000000000000000003',

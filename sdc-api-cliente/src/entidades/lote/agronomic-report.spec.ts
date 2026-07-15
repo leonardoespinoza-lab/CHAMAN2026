@@ -96,4 +96,40 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
 
     expect(puntos).toEqual([]);
   });
+
+  it('no presenta un cero sin estado valido como agua util real', () => {
+    const sinDato = {
+      aguaUtilReal: 0,
+      estadoCalculoAguaUtil: 'no_disponible',
+    } as ISiembra;
+    const calculado = {
+      aguaUtilReal: 18.4,
+      estadoCalculoAguaUtil: 'calculado',
+    } as ISiembra;
+
+    expect(service.getRiegoTexto(sinDato)).toBe('Sin recomendacion');
+    expect(service.getRiegoScore(sinDato)).toBe(25);
+    expect(service.getRiegoTexto(calculado)).toContain('18,4 mm agua util');
+    expect(service.getRiegoScore(calculado)).toBe(65);
+  });
+
+  it('separa recomendacion estimada de lectura de agua util', () => {
+    const balance = {
+      aguaUtilReal: null,
+      estadoCalculoAguaUtil: 'no_disponible',
+      estadoRecomendacionRiego: 'estimada',
+      fuenteRecomendacionRiego: 'balance_climatico',
+      ultimaPrediccionRiego: [{ fecha: '2026-07-14', cantidad: 4 }],
+    } as any;
+    const fallida = {
+      estadoCalculoAguaUtil: 'fallida',
+      estadoRecomendacionRiego: 'fallida',
+      ultimaPrediccionRiego: [{ fecha: '2026-07-14', cantidad: 0 }],
+    } as any;
+
+    expect(service.getRiegoTexto(balance)).toContain('4 mm estimados');
+    expect(service.getRiegoScore(balance)).toBe(62);
+    expect(service.getRiegoTexto(fallida)).toBe('Sin recomendacion');
+    expect(service.getRiegoScore(fallida)).toBe(25);
+  });
 });

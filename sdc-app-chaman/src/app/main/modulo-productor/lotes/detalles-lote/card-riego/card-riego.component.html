@@ -10,21 +10,23 @@
   <div class="irrigation-main">
     <div class="today-box">
       <span>Hoy</span>
-      @if (tieneLanzaHumedad && recomendacionHoy) {
-        <strong>{{ recomendacionHoy.cantidad || 0 }} <small>mm</small></strong>
+      @if (cantidadRecomendacionHoy !== null) {
+        <strong>{{ cantidadRecomendacionHoy }} <small>mm</small></strong>
       } @else {
         <strong>N/A</strong>
       }
-      <em>Recomendacion</em>
+      <em>{{ etiquetaHoy }}</em>
     </div>
 
     <div class="irrigation-metrics">
       <article>
         <span>Agua util</span>
-        @if (siembra?.aguaUtilReal !== undefined && siembra?.aguaUtilReal !== null) {
-          <strong>{{ siembra?.aguaUtilReal | number: '1.1-2' }} <small>mm</small></strong>
+        @if (aguaUtilValor !== null) {
+          <strong>{{ aguaUtilValor | number: '1.1-2' }} <small>mm</small></strong>
+          <small class="metric-origin">{{ etiquetaAguaUtil }}</small>
         } @else {
           <strong>N/A</strong>
+          <small class="metric-origin">Sin medicion o estimacion valida</small>
         }
       </article>
 
@@ -39,15 +41,34 @@
     </div>
   </div>
 
-  @if (recomendaciones.length) {
+  @if (recomendacionesPositivas.length) {
+    @if (esCalculoEstimado) {
+      <p-message severity="info" text="Balance modelado: no reemplaza una lectura de humedad en el lote."></p-message>
+    }
     <div class="irrigation-days">
-      @for (item of recomendaciones; track item.fecha) {
-        <span [class.should-water]="(item.cantidad || 0) > 0">
+      @for (item of recomendacionesPositivas; track item.fecha) {
+        <span class="should-water">
           <small>{{ formatearFecha(item.fecha) }}</small>
-          <strong>{{ item.cantidad || 0 }} mm</strong>
+          <strong>{{ cantidadRiego(item) }} mm</strong>
         </span>
       }
     </div>
+  } @else if (sinDemandaRiego) {
+    <p-message
+      [severity]="esCalculoEstimado ? 'info' : 'success'"
+      [text]="
+        esCalculoEstimado
+          ? 'El balance modelado no sugiere aporte de riego en la ventana calculada.'
+          : 'No se recomienda regar en la ventana calculada.'
+      "
+    ></p-message>
+  } @else if (esCalculoEstimado) {
+    <p-message
+      severity="info"
+      text="El balance estimado aun no tiene una serie valida para inferir demanda."
+    ></p-message>
+  } @else if (estadoRecomendacionRiego === 'fallida') {
+    <p-message severity="error" text="El calculo de riego fallo y no hay una recomendacion vigente."></p-message>
   } @else if (!tieneLanzaHumedad) {
     <p-message severity="info">
       {{ 'Conecta una lanza de humedad para activar recomendacion real.' | translate }}
@@ -75,21 +96,25 @@
   styleClass="chaman-detail-dialog irrigation-detail-dialog"
 >
   <section class="irrigation-detail">
-    <div class="detail-hero" [class.disabled]="!tieneLanzaHumedad">
+    <div class="detail-hero" [class.disabled]="!puedeMostrarSerieRiego">
       <div>
-        <span>{{ tieneLanzaHumedad ? 'Motor activo' : 'Sin sensor de humedad' }}</span>
+        <span>{{
+          esCalculoEstimado ? 'Balance estimado' : tieneLanzaHumedad ? 'Motor activo' : 'Sin sensor de humedad'
+        }}</span>
         <strong>
-          @if (tieneLanzaHumedad && recomendacionHoy) {
-            {{ recomendacionHoy.cantidad || 0 }} mm hoy
+          @if (cantidadRecomendacionHoy !== null && cantidadRecomendacionHoy > 0) {
+            {{ cantidadRecomendacionHoy }} {{ esCalculoEstimado ? 'mm estimados hoy' : 'mm hoy' }}
+          } @else if (cantidadRecomendacionHoy === 0) {
+            {{ esCalculoEstimado ? 'Sin demanda estimada hoy' : 'No se recomienda regar hoy' }}
           } @else {
-            Sin riego recomendado
+            Sin recomendacion disponible
           }
         </strong>
         <p>{{ resumen }}</p>
       </div>
       <em>
-        @if (tieneLanzaHumedad && recomendacionHoy) {
-          {{ recomendacionHoy.cantidad || 0 }}
+        @if (cantidadRecomendacionHoy !== null) {
+          {{ cantidadRecomendacionHoy }}
         } @else {
           N/A
         }
@@ -100,12 +125,13 @@
       <article>
         <span>Agua util</span>
         <strong>
-          @if (siembra?.aguaUtilReal !== undefined && siembra?.aguaUtilReal !== null) {
-            {{ siembra?.aguaUtilReal | number: '1.1-2' }} mm
+          @if (aguaUtilValor !== null) {
+            {{ aguaUtilValor | number: '1.1-2' }} mm
           } @else {
             No disponible
           }
         </strong>
+        <small class="metric-origin">{{ etiquetaAguaUtil }}</small>
       </article>
       <article>
         <span>ET0 7 dias</span>
@@ -119,34 +145,55 @@
       </article>
       <article>
         <span>Calculo agua util</span>
-        <strong>{{ estadoAguaUtil }}</strong>
+        <strong>{{ etiquetaEstadoAguaUtil }}</strong>
       </article>
     </div>
 
     <article class="detail-panel">
       <span>Lectura operativa</span>
-      @if (tieneLanzaHumedad) {
+      @if (esCalculoEstimado) {
+        <p>Chaman presenta un balance modelado; es una estimacion y no reemplaza una lectura de sonda en el lote.</p>
+      } @else if (tieneLanzaHumedad) {
         <p>Chaman cruza humedad de suelo, lluvia y ET0 para generar una recomendacion por fecha.</p>
       } @else {
-        <p>Para activar recomendacion real hace falta una lanza o sensor de humedad asignado al lote.</p>
+        <p>No hay datos suficientes para una recomendacion real. Hace falta una lanza o sensor de humedad asignado.</p>
       }
       @if (motivoAguaUtil) {
         <small>{{ motivoAguaUtil }}</small>
       }
     </article>
 
-    @if (recomendaciones.length) {
+    @if (recomendacionesPositivas.length) {
+      <p-message
+        [severity]="esCalculoEstimado ? 'info' : 'success'"
+        [text]="
+          esCalculoEstimado ? 'Aportes sugeridos por balance modelado.' : 'Aportes recomendados con datos operativos.'
+        "
+      ></p-message>
       <section class="detail-days">
-        @for (item of recomendaciones; track item.fecha) {
-          <article [class.should-water]="(item.cantidad || 0) > 0">
+        @for (item of recomendacionesPositivas; track item.fecha) {
+          <article class="should-water">
             <span>{{ formatearFecha(item.fecha) }}</span>
-            <strong>{{ item.cantidad || 0 }} mm</strong>
+            <strong>{{ cantidadRiego(item) }} mm</strong>
           </article>
         }
       </section>
+    } @else if (sinDemandaRiego) {
+      <p-message
+        [severity]="esCalculoEstimado ? 'info' : 'success'"
+        [text]="
+          esCalculoEstimado
+            ? 'El balance modelado no proyecta aporte de riego.'
+            : 'No se recomienda regar en la ventana calculada.'
+        "
+      ></p-message>
+    } @else if (esCalculoEstimado) {
+      <p-message severity="info" text="La estimacion todavia no tiene una serie valida de recomendaciones."></p-message>
+    } @else if (estadoRecomendacionRiego === 'fallida') {
+      <p-message severity="error" text="El calculo fallo; no se muestran filas anteriores como vigentes."></p-message>
     }
 
-    @if (tieneLanzaHumedad) {
+    @if (tieneLanzaHumedad && puedeMostrarSerieRiego) {
       <p-button
         label="Ver curvas y profundidad"
         icon="pi pi-chart-line"
@@ -157,6 +204,6 @@
   </section>
 </p-dialog>
 
-@if (tieneLanzaHumedad) {
+@if (tieneLanzaHumedad && puedeMostrarSerieRiego) {
   <app-drawer-riego [siembra]="siembra" [lote]="lote" [(visible)]="verDrawerRiego"></app-drawer-riego>
 }

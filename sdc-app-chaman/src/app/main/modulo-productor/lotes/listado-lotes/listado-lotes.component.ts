@@ -9,6 +9,7 @@ import { HelperService } from '../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { ParamsService } from '../../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../../auxiliares/shared.module';
+import { evaluarRiegoFrontend } from '../riego-evidence';
 
 export interface ILoteTabla extends ILote {
   estacion?: IClimaEstacionMeteorologica;
@@ -259,26 +260,57 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
 
   private indicadorRiego(data: ILoteTabla): IndicadorLote {
     const predicciones = data.siembra?.ultimaPrediccionRiego || [];
-    const tieneSensor = (data.dispositivos || []).some((item) => item.tipo === 'Sensor de Humedad de Suelo');
-    if (predicciones.length) {
-      const primero = predicciones[0] as any;
-      const aguaUtil = Number(primero?.aguaUtilPct ?? primero?.aguaUtilReal ?? NaN);
+    const evaluacion = evaluarRiegoFrontend(data.siembra, data);
+    const primero = predicciones[0] as any;
+    const aguaUtilPct = evaluacion.serieDisponible ? Number(primero?.aguaUtilPct ?? Number.NaN) : Number.NaN;
+
+    if (evaluacion.serieDisponible) {
+      const value = Number.isFinite(aguaUtilPct)
+        ? `${this.entero.format(aguaUtilPct)}%`
+        : evaluacion.aguaUtilValor !== null
+          ? `${this.numero.format(evaluacion.aguaUtilValor)} mm`
+          : evaluacion.esEstimada
+            ? 'Estimado'
+            : 'Calculado';
       return {
         label: 'Riego',
-        value: Number.isFinite(aguaUtil) ? `${this.entero.format(aguaUtil)}%` : 'Calculado',
-        detail: 'Agua util',
-        tooltip: 'Prediccion de riego disponible para este lote.',
-        tone: Number.isFinite(aguaUtil) && aguaUtil < 35 ? 'warn' : 'ok',
+        value,
+        detail: evaluacion.esEstimada ? 'Balance modelado' : 'Agua util',
+        tooltip: evaluacion.esEstimada
+          ? evaluacion.origenEstado === 'legacy_v13'
+            ? 'Estimacion legacy V13 reconocida por balance explicito; validar con sensor antes de decidir.'
+            : 'Estimacion por clima, cultivo y suelo; validar con sensor antes de una decision critica.'
+          : 'Calculo de riego disponible con estado operativo valido.',
+        tone: Number.isFinite(aguaUtilPct) && aguaUtilPct < 35 ? 'warn' : evaluacion.esEstimada ? 'info' : 'ok',
+      };
+    }
+
+    const tieneDatoNoValidado = predicciones.length > 0 || data.siembra?.aguaUtilReal != null;
+    if (evaluacion.estado === 'estimada') {
+      return {
+        label: 'Riego',
+        value: 'Estimacion pendiente',
+        detail: 'Sin serie valida',
+        tooltip: 'El estado es estimado, pero no hay cantidades validas; no se interpreta como ausencia de demanda.',
+        tone: 'info',
       };
     }
     return {
       label: 'Riego',
-      value: tieneSensor ? 'Sensor' : 'Sin sensor',
-      detail: tieneSensor ? 'Asignado' : 'Pendiente',
-      tooltip: tieneSensor
-        ? 'El lote tiene sensor de humedad asignado, pero no hay prediccion reciente.'
-        : 'Asignar sensor o cargar datos de riego para mejorar el seguimiento.',
-      tone: tieneSensor ? 'info' : 'muted',
+      value: evaluacion.tieneSensor ? 'Sensor' : 'Sin sensor',
+      detail:
+        evaluacion.estado === 'fallida'
+          ? 'Calculo fallido'
+          : evaluacion.tieneSensor
+            ? 'Sin recomendacion'
+            : 'Pendiente',
+      tooltip:
+        evaluacion.estado === 'fallida' || evaluacion.estado === 'no_disponible' || tieneDatoNoValidado
+          ? 'La recomendacion figura no disponible o fallida; no se muestran filas previas como vigentes.'
+          : evaluacion.tieneSensor
+            ? 'El lote tiene sensor de humedad asignado, pero no hay una recomendacion con estado valido.'
+            : 'Asignar sensor o cargar un balance modelado valido para mejorar el seguimiento.',
+      tone: evaluacion.tieneSensor ? 'info' : 'muted',
     };
   }
 
@@ -321,7 +353,7 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
             : undefined;
     const score = Number(calidad?.score ?? scoreFuente);
     const nivelFuente = String(
-      calidad?.nivel || (Number.isFinite(score) ? (score >= 80 ? 'alta' : score >= 60 ? 'media' : 'baja') : ''),
+      calidad?.nivel || (Number.isFinite(score) ? (score >= 80 ? 'alta' : score >= 60 ? 'media' : 'baja') : '')
     ).toLowerCase();
     if (pronostico && ['alta', 'media', 'baja'].includes(nivelFuente)) {
       const etiqueta = nivelFuente.charAt(0).toUpperCase() + nivelFuente.slice(1);

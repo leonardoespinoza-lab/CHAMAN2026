@@ -43,13 +43,22 @@ const SERVICE_REQUIRED = {
     'API_CLIMA',
     'AUTH_CLIENT_ID',
     'AUTH_CLIENT_SECRET',
+    'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
   ],
   auth: ['API_DATOS', 'CLIENT_ID_INICIAL', 'CLIENT_SECRET_INICIAL'],
-  datos: ['MONGO_URI'],
-  predicciones: ['API_DATOS', 'API_CLIMA'],
-  clima: ['API_DATOS'],
+  datos: ['MONGO_URI', 'SOIL_INTELLIGENCE_INTERNAL_TOKEN'],
+  predicciones: [
+    'API_DATOS',
+    'API_CLIMA',
+    'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
+  ],
+  clima: ['API_DATOS', 'SOIL_INTELLIGENCE_INTERNAL_TOKEN'],
   lora: ['API_DATOS'],
-  externa: ['API_DATOS', 'NDVI_WORKER_TOKEN'],
+  externa: [
+    'API_DATOS',
+    'NDVI_WORKER_TOKEN',
+    'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
+  ],
   websocket: ['API_AUTH', 'API_DATOS', 'CORS_ORIGINS'],
   'ndvi-worker': ['REDIS_HOST', 'API_EXTERNA_URL', 'NDVI_WORKER_TOKEN'],
 };
@@ -58,6 +67,12 @@ const FORBIDDEN_VALUES = {
   AUTH_CLIENT_SECRET: new Set(['', '1', 'change-me', '<change-me>']),
   CLIENT_SECRET_INICIAL: new Set(['', '1', 'change-me', '<change-me>']),
   NDVI_WORKER_TOKEN: new Set(['', '1', 'change-me', '<change-me>']),
+  SOIL_INTELLIGENCE_INTERNAL_TOKEN: new Set([
+    '',
+    '1',
+    'change-me',
+    '<change-me>',
+  ]),
   TIMELAPSE_ADMIN_TOKEN: new Set(['1', 'change-me', '<change-me>']),
 };
 
@@ -121,6 +136,17 @@ function validate() {
     if (hasValue(name) && forbidden.has(getValue(name).toLowerCase())) {
       pushIssue(issues, 'error', `${name} tiene un valor placeholder o inseguro`);
     }
+  }
+
+  if (
+    hasValue('SOIL_INTELLIGENCE_INTERNAL_TOKEN') &&
+    getValue('SOIL_INTELLIGENCE_INTERNAL_TOKEN').length < 32
+  ) {
+    pushIssue(
+      issues,
+      'error',
+      'SOIL_INTELLIGENCE_INTERNAL_TOKEN debe tener al menos 32 caracteres',
+    );
   }
 
   if (BACKEND_SERVICES.has(service)) {

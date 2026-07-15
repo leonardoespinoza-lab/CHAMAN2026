@@ -291,6 +291,14 @@ export class AgrometeorologicalEngineService {
           : 'La capacidad de agua util usa una referencia del lote o cultivo y requiere validacion de perfil.',
       );
     }
+    if (
+      numeroFinito(siembra.aguaUtilReal) !== undefined &&
+      !this.hasValidAvailableWaterState(siembra)
+    ) {
+      globalWarnings.push(
+        'Se ignoro el agua util persistida porque su estado no representa un calculo valido; no se interpreta un cero sin sensor como medicion.',
+      );
+    }
     const irrigationByDate = this.resolveIrrigationEvents(siembra);
     if (!irrigationByDate.size) {
       globalWarnings.push(
@@ -1026,11 +1034,19 @@ export class AgrometeorologicalEngineService {
     capacity?: number,
   ): number | undefined {
     if (!capacity) return undefined;
+    if (!this.hasValidAvailableWaterState(siembra)) return capacity;
     const value = numeroFinito(siembra.aguaUtilReal);
     if (value === undefined) return capacity;
     if (value <= 1) return clamp(value * capacity, 0, capacity);
     if (value <= 100) return clamp((value / 100) * capacity, 0, capacity);
     return clamp(value, 0, capacity);
+  }
+
+  private hasValidAvailableWaterState(siembra: ISiembra): boolean {
+    return (
+      siembra.estadoCalculoAguaUtil === 'calculado' ||
+      siembra.estadoCalculoAguaUtil === 'estimado'
+    );
   }
 
   private resolveIrrigationEvents(siembra: ISiembra): Map<string, number> {

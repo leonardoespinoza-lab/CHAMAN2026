@@ -30,6 +30,11 @@ La seleccion se realiza por propiedad y profundidad. Los datos no seleccionados 
 - La textura, CC, PMP y agua disponible obtenidas de cartografia/modelos son estimaciones, no observaciones del lote.
 - La humedad real del suelo solo puede atribuirse a una sonda valida. Sin sensor se informa balance o estimacion, nunca lectura real.
 - `0` es un valor valido cuando fue medido/calculado. La ausencia se representa como `undefined`/sin dato, no como cero.
+- `aguaUtilReal` solo es consumible cuando `estadoCalculoAguaUtil` es `calculado` o `estimado`; con `no_disponible` o `fallida` se trata como ausencia aunque exista un cero historico.
+- El balance climatico sin sonda puede conservar una recomendacion modelada, pero nunca se presenta como lectura real de humedad o agua util del lote.
+- Agua util y recomendacion tienen estados independientes: `estadoCalculoAguaUtil` califica la reserva de suelo y `estadoRecomendacionRiego` (`calculada`, `estimada`, `no_disponible`, `fallida`) califica la serie de riego; `fuenteRecomendacionRiego` identifica sensor o balance climatico.
+- Una sonda meramente asignada no valida una recomendacion fallida, y una serie estimada vacia no se interpreta como demanda cero.
+- La migracion de persistencia se ejecuta dentro de Railway, solo en `sdc-datos`, con `CHAMAN_RUN_SOIL_INTELLIGENCE_MIGRATION_ON_START=true`, modo explicito y confirmacion versionada; nunca desde una PC contra el hostname privado de MongoDB.
 - CC/PMP automaticos se ponderan por espesor en 0-100 cm; las capas conservan su profundidad y procedencia.
 
 ## Consumidores normalizados

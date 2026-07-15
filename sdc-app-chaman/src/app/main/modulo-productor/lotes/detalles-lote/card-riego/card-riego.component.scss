@@ -127,6 +127,14 @@
   font-size: 0.78rem;
 }
 
+.metric-origin {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.76rem;
+  line-height: 1.25;
+  margin-top: 0.22rem;
+}
+
 .irrigation-days {
   display: grid;
   gap: 0.4rem;

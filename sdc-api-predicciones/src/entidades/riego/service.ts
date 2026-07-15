@@ -40,6 +40,7 @@ import {
   normalizarHumedadSueloPct,
 } from './riego-v12.engine';
 import { calcularRiegoV13Estimado } from './riego-v13-fallback.engine';
+import { resolverEstadoRecomendacionRiego } from './riego-recommendation-status';
 
 interface IRespuestaInicioDiaNoche {
   primerReporteNoche: IClimaEstacionMeteorologica;
@@ -388,6 +389,12 @@ export class RiegoService {
                 : 0,
         }),
       );
+      const estadoRecomendacion = resolverEstadoRecomendacionRiego({
+        pronosticosRiego,
+        estadoCalculoAguaUtil,
+        motivoCalculoAguaUtil,
+        calidadDatos,
+      });
 
       const create: ICreatePrediccionRiego = {
         idQuimica: siembra.idQuimica,
@@ -425,13 +432,22 @@ export class RiegoService {
             aguaUtilReal: aguaUtilFacilmenteDisponibleReal,
             estadoCalculoAguaUtil,
             motivoCalculoAguaUtil,
+            estadoRecomendacionRiego: estadoRecomendacion.estado,
+            fuenteRecomendacionRiego: estadoRecomendacion.fuente ?? null,
+            motivoRecomendacionRiego: estadoRecomendacion.motivo,
           }),
           persistenciaSensor,
         ]);
 
         // Log resumen de la predicción completada
+        const aguaUtilLog =
+          (estadoCalculoAguaUtil === 'calculado' ||
+            estadoCalculoAguaUtil === 'estimado') &&
+          Number.isFinite(aguaUtilFacilmenteDisponibleReal)
+            ? `${aguaUtilFacilmenteDisponibleReal}mm`
+            : 'N/A';
         Logger.log(
-          `Predicción de riego completada - Siembra: ${idSiembra}, Agua útil: ${aguaUtilFacilmenteDisponibleReal}mm (${estadoCalculoAguaUtil}), Fuente: ${idLanzaHumedad ? 'LoRaWAN' : 'FieldClimate'}`,
+          `Predicción de riego completada - Siembra: ${idSiembra}, Agua útil: ${aguaUtilLog} (${estadoCalculoAguaUtil}), Fuente: ${idLanzaHumedad ? 'LoRaWAN' : 'FieldClimate'}`,
         );
 
         await this.verificarIntegraciones(prediccion, siembra);
