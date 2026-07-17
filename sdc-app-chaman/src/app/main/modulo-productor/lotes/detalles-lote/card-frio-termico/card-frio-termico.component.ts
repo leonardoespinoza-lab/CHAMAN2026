@@ -27,6 +27,22 @@ interface MetricaFrio {
   tone?: 'ok' | 'warn' | 'info';
 }
 
+interface ObjetivoFrioVisual {
+  key: 'HF' | 'CP' | 'HFE';
+  label: string;
+  method: string;
+  accumulated?: number;
+  target?: number;
+  unit: 'HF' | 'CP' | 'HFE';
+  decimals: number;
+  progress?: number;
+  accumulatedSource: string;
+  targetSource: string;
+  targetStatus: 'validado' | 'referencia' | 'requiere_calibracion' | 'sin_objetivo';
+  fieldComparison?: string;
+  decisionReady: boolean;
+}
+
 @Component({
   selector: 'app-card-frio-termico',
   imports: [CommonModule, SharedModule, GraficoHistoricoAmbienteComponent, ChartComponent],
@@ -52,6 +68,7 @@ export class CardFrioTermicoComponent implements OnChanges {
   public loadingHistoricoSensor = false;
   public diasHistoricoSensor = 7;
   public metricas: MetricaFrio[] = [];
+  public objetivosFrio: ObjetivoFrioVisual[] = [];
   public chartFrioOptions?: Highcharts.Options;
 
   private ultimoKeyHistorico = '';
@@ -130,7 +147,8 @@ export class CardFrioTermicoComponent implements OnChanges {
       return `${cultivo}: la vernalización se informa como exposición térmica en la ventana varietal; no se confunde con horas de frío de frutales.`;
     }
     if (this.esDormanciaPerenne) {
-      return `${cultivo}: HF, Unidades Utah y Porciones de Frío son modelos independientes. El cumplimiento varietal sólo usa el modelo rector validado y requiere confirmación fenológica a campo.`;
+      const variedad = this.siembra?.semilla?.variedad;
+      return `${cultivo}${variedad ? ` ${variedad}` : ''}: avance del frío frente a la especificación cargada. Cada modelo conserva su propia unidad y fuente.`;
     }
     return `${cultivo}: seguimiento térmico visible, sin declarar cumplimiento biológico hasta contar con parámetros varietales documentados.`;
   }
@@ -191,10 +209,70 @@ export class CardFrioTermicoComponent implements OnChanges {
     );
   }
 
+  public get esDormanciaPerenne(): boolean {
+    return !!(
+      this.data?.summary.thermalProcess === 'dormancia_perenne' ||
+      esCultivoPerenne(this.siembra?.semilla?.cultivo) ||
+      this.siembra?.semilla?.parametrosAgrometeorologicos?.procesoTermico === 'dormancia_perenne'
+    );
+  }
+
+  public get perfilVarietalLabel(): string {
+    const semilla = this.siembra?.semilla;
+    return [semilla?.cultivo, semilla?.variedad, semilla?.portainjerto]
+      .filter(Boolean)
+      .join(' · ');
+  }
+
+  public get estadoEspecificacionLabel(): string {
+    const estado = this.siembra?.semilla?.requerimientoFrio?.estado;
+    if (estado === 'validado') return 'Especificación validada';
+    if (estado === 'referencia') return 'Referencia técnica';
+    return 'Especificación en revisión';
+  }
+
+  public get gddLabel(): string {
+    const resumen = this.data?.summary;
+    if (this.esNumero(resumen?.gddAccumulated)) {
+      return `${this.numero(resumen?.gddAccumulated, 1)} GDD`;
+    }
+    return this.gddPendienteBiofix ? '0 GDD' : 'Incompleto';
+  }
+
+  public get gddEstadoLabel(): string {
+    if (this.gddPendienteBiofix) return 'Aún no iniciados';
+    if (this.esNumero(this.data?.summary.gddAccumulated)) return 'En acumulación';
+    return 'Serie incompleta';
+  }
+
+  public get gddDetalle(): string {
+    const resumen = this.data?.summary;
+    if (this.gddPendienteBiofix) {
+      return `En peral el forzado se cuenta después de la salida de endodormancia. Chaman lo inicia con el biofix de inicio de forzado o brotación registrado a campo; Tb ${this.numero(resumen?.gddBaseTemperatureC, 1)} °C.`;
+    }
+    if (resumen?.gddAccumulationComplete === false) {
+      return 'Hay días térmicos faltantes desde el biofix; el total parcial no se presenta como completo.';
+    }
+    return `Base ${this.numero(resumen?.gddBaseTemperatureC, 1)} °C${resumen?.gddThroughDate ? ` · cerrado al ${this.fechaCorta(resumen.gddThroughDate)}` : ''}`;
+  }
+
+  public formatObjetivoValue(item: ObjetivoFrioVisual, value?: number): string {
+    return this.esNumero(value) ? `${this.numero(value, item.decimals)} ${item.unit}` : 'Sin dato';
+  }
+
+  public objetivoEstadoLabel(item: ObjetivoFrioVisual): string {
+    if (item.key === 'HFE') return 'Método histórico';
+    if (item.targetStatus === 'validado') return 'Objetivo validado';
+    if (item.targetStatus === 'referencia') return 'Objetivo de referencia';
+    if (item.targetStatus === 'requiere_calibracion') return 'Objetivo cargado · en revisión';
+    return 'Objetivo no documentado';
+  }
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['lote'] || changes['siembra']) {
       this.data = undefined;
       this.metricas = [];
+      this.objetivosFrio = [];
       this.chartFrioOptions = undefined;
       void this.cargar();
       setTimeout(() => void this.cargarHistoricoSensor(), 0);
@@ -249,6 +327,7 @@ export class CardFrioTermicoComponent implements OnChanges {
   }
 
   private prepararVista(): void {
+    this.objetivosFrio = this.crearObjetivosFrio();
     this.metricas = this.crearMetricas();
     this.chartFrioOptions = this.crearChartFrioOptions();
   }
@@ -257,19 +336,7 @@ export class CardFrioTermicoComponent implements OnChanges {
     const resumen = this.data?.summary;
     if (!resumen) return this.crearMetricasSensorPreview();
     const metricas: MetricaFrio[] = [];
-    const campo = resumen.fieldCold;
     const dormancia = this.esDormanciaPerenne;
-
-    if (dormancia) {
-      metricas.push(this.metricaRequisito(resumen));
-      if (campo) {
-        metricas.push(...this.crearMetricasFrioCampo(campo));
-      } else if (this.esNumero(this.frioSensor?.horasFrio)) {
-        metricas.push(...this.crearMetricasSensorPreview());
-      } else {
-        metricas.push(...this.crearMetricasFrioCanonico(resumen));
-      }
-    }
 
     if (resumen.thermalProcess === 'vernalizacion_anual') {
       metricas.push({
@@ -283,22 +350,93 @@ export class CardFrioTermicoComponent implements OnChanges {
       });
     }
 
-    if (campo) metricas.push(...this.crearMetricaHfeLegacy());
     metricas.push({
-      label: 'Grados día',
-      value: this.esNumero(resumen.gddAccumulated) ? `${this.numero(resumen.gddAccumulated, 1)} GDD` : 'Incompleto',
-      detail:
-        resumen.gddAccumulationComplete === false
-          ? 'Faltan días térmicos; no se publica un total parcial como completo'
-          : `Base ${this.numero(resumen.gddBaseTemperatureC, 1)} °C`,
+      label: dormancia ? 'GDD de forzado' : 'Grados día',
+      value: this.gddLabel,
+      detail: this.gddDetalle,
       source: 'Motor térmico canónico',
-      tone: resumen.gddAccumulationComplete === false ? 'warn' : 'info',
+      tone: this.gddPendienteBiofix || resumen.gddAccumulationComplete === false ? 'warn' : 'info',
     });
 
     return metricas.filter(
       (metrica, index, array) =>
         metrica.value !== '-' || array.findIndex((candidate) => candidate.label === metrica.label) === index
     );
+  }
+
+  private crearObjetivosFrio(): ObjetivoFrioVisual[] {
+    if (!this.esDormanciaPerenne) return [];
+    const resumen = this.data?.summary;
+    const requisito = this.siembra?.semilla?.requerimientoFrio;
+    const campo = resumen?.fieldCold;
+    const source = requisito?.fuente || this.siembra?.semilla?.fuenteBase || 'Ficha varietal sin fuente identificada';
+    const status = requisito?.estado || 'requiere_calibracion';
+    const canonicalSource = this.fuenteCanonicaLabel;
+    const fallbackSource = this.dispositivoFrio?.nombre || canonicalSource;
+    const fieldSource = campo?.sensorNames?.join(', ') || this.dispositivoFrio?.nombre || 'Sensor LoRa';
+    const coverage = this.esNumero(campo?.temperatureCoveragePercentage)
+      ? ` · cobertura ${this.numero(campo?.temperatureCoveragePercentage, 0)}%`
+      : '';
+    const definitions: Array<Omit<ObjetivoFrioVisual, 'progress' | 'decisionReady'>> = [
+      {
+        key: 'HF',
+        label: 'Horas de frío',
+        method: 'Horas entre 0 y 7,2 °C',
+        accumulated: this.esNumero(resumen?.chillingHoursAccumulated)
+          ? resumen?.chillingHoursAccumulated
+          : this.positiveNumber(this.frioSensor?.horasFrio),
+        target: this.positiveNumber(requisito?.horasFrio),
+        unit: 'HF',
+        decimals: 0,
+        accumulatedSource: this.esNumero(resumen?.chillingHoursAccumulated) ? canonicalSource : fallbackSource,
+        targetSource: source,
+        targetStatus: this.positiveNumber(requisito?.horasFrio) ? status : 'sin_objetivo',
+        fieldComparison: this.esNumero(campo?.chillingHoursAccumulated)
+          ? `${fieldSource}: ${this.numero(campo?.chillingHoursAccumulated, 0)} HF${coverage}`
+          : undefined,
+      },
+      {
+        key: 'CP',
+        label: 'Porciones de frío',
+        method: 'Dynamic Model horario',
+        accumulated: this.esNumero(resumen?.chillPortionsAccumulated)
+          ? resumen?.chillPortionsAccumulated
+          : this.positiveNumber(this.valorFrioLegacy('porcionesFrio')),
+        target: this.positiveNumber(requisito?.porcionesFrio),
+        unit: 'CP',
+        decimals: 1,
+        accumulatedSource: this.esNumero(resumen?.chillPortionsAccumulated) ? canonicalSource : fallbackSource,
+        targetSource: source,
+        targetStatus: this.positiveNumber(requisito?.porcionesFrio) ? status : 'sin_objetivo',
+        fieldComparison: this.esNumero(campo?.chillPortionsAccumulated)
+          ? `${fieldSource}: ${this.numero(campo?.chillPortionsAccumulated, 2)} CP${coverage}`
+          : undefined,
+      },
+      {
+        key: 'HFE',
+        label: 'Frío efectivo histórico',
+        method: 'HFE legacy Chaman; no equivale a CP',
+        accumulated: this.valorFrioLegacy('horasFrioEfectivas'),
+        target: this.positiveNumber(requisito?.horasFrioEfectivas),
+        unit: 'HFE',
+        decimals: 0,
+        accumulatedSource: this.dispositivoFrio?.nombre || 'Histórico Chaman',
+        targetSource: source,
+        targetStatus: this.positiveNumber(requisito?.horasFrioEfectivas) ? 'referencia' : 'sin_objetivo',
+        fieldComparison: undefined,
+      },
+    ];
+    return definitions.map((item) => {
+      const progress = this.progress(item.accumulated, item.target);
+      return {
+        ...item,
+        progress,
+        decisionReady:
+          item.key !== 'HFE' &&
+          item.targetStatus === 'validado' &&
+          (requisito?.modeloRector === item.key),
+      };
+    });
   }
 
   private crearMetricasFrioCanonico(resumen: IResumenAgrometeorologico): MetricaFrio[] {
@@ -454,12 +592,28 @@ export class CardFrioTermicoComponent implements OnChanges {
     ];
   }
 
-  private get esDormanciaPerenne(): boolean {
-    return !!(
-      this.data?.summary.thermalProcess === 'dormancia_perenne' ||
-      esCultivoPerenne(this.siembra?.semilla?.cultivo) ||
-      this.siembra?.semilla?.parametrosAgrometeorologicos?.procesoTermico === 'dormancia_perenne'
-    );
+  private get fuenteCanonicaLabel(): string {
+    const fuente = this.data?.dataSource;
+    if (!fuente) return 'Serie climática canónica';
+    if (fuente.type === 'station') return fuente.stationName || 'Central meteorológica asociada';
+    if (fuente.type === 'sensor') return fuente.sensorNames?.join(', ') || 'Sensor de campo calificado';
+    if (fuente.type === 'mixed') return 'Jerarquía campo/central/Open-Meteo';
+    if (fuente.type === 'open_meteo') return 'Open-Meteo';
+    return 'Serie climática canónica';
+  }
+
+  private get gddPendienteBiofix(): boolean {
+    if (!this.esDormanciaPerenne || this.esNumero(this.data?.summary.gddAccumulated)) return false;
+    return !this.tieneBiofixForzado;
+  }
+
+  private get tieneBiofixForzado(): boolean {
+    return ((this.siembra as any)?.registrosFenologicos || []).some((record: any) => {
+      if (record?.estadoRegistro === 'anulado' || record?.tipoEvento !== 'biofix') return false;
+      return (record?.objetivosBiofix || []).some((objective: string) =>
+        ['inicio_forzado', 'reinicio_gdd_forzado'].includes(String(objective))
+      );
+    });
   }
 
   private valorFrioLegacy(key: 'horasFrioEfectivas' | 'porcionesFrio' | 'factorEfectivoActual'): number | undefined {
@@ -492,6 +646,15 @@ export class CardFrioTermicoComponent implements OnChanges {
       source,
       tone,
     };
+  }
+
+  private progress(value?: number, target?: number): number | undefined {
+    if (!this.esNumero(value) || !this.esNumero(target) || target <= 0) return undefined;
+    return Math.max(0, Math.min(100, (value / target) * 100));
+  }
+
+  private positiveNumber(value: unknown): number | undefined {
+    return this.esNumero(value) && value > 0 ? value : undefined;
   }
 
   private detalleVernalizacion(resumen: IResumenAgrometeorologico): string {

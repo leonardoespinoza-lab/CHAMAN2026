@@ -24,37 +24,103 @@
       </div>
     } @else if (data || usaSensorFrio) {
       <div class="frio-summary">
-        <strong>{{ lecturaPrincipal }}</strong>
-        <small>{{ periodoFrioLabel }}</small>
-      </div>
-
-      <div class="frio-quality" [class.reference]="data?.summary?.fieldCold?.quality === 'reference'">
-        <i class="pi pi-shield"></i>
         <div>
-          <strong>{{ calidadFrioLabel }}</strong>
-          <span>{{ calidadFrioDetalle }}</span>
+          <strong>{{ perfilVarietalLabel || lecturaPrincipal }}</strong>
+          <span>{{ estadoEspecificacionLabel }}</span>
         </div>
+        <small>{{ periodoFrioLabel }}</small>
       </div>
 
       @if (error) {
         <p-message severity="warn">{{ error }}</p-message>
       }
 
-      <div class="frio-metrics">
-        @for (metric of metricas; track metric.label) {
-          <article [ngClass]="metric.tone">
-            <span>{{ metric.label }}</span>
-            <strong>{{ metric.value }}</strong>
-            <small>{{ metric.detail }}</small>
-            <em>{{ metric.source }}</em>
-            @if (metric.pct !== undefined) {
-              <div class="frio-meter" [attr.aria-label]="metric.pct + '% del requisito'">
-                <i [style.width.%]="metric.pct"></i>
-              </div>
+      @if (esDormanciaPerenne) {
+        <section class="frio-targets" aria-label="Avance frente a los requerimientos de frío de la variedad">
+          <header>
+            <div>
+              <strong>Avance frente a la especificación varietal</strong>
+              <span>Acumulado climático completo y contraste independiente con el sensor de campo</span>
+            </div>
+            <span class="frio-targets__status">{{ estadoEspecificacionLabel }}</span>
+          </header>
+
+          <div class="frio-targets__grid">
+            @for (item of objetivosFrio; track item.key) {
+              <article
+                class="frio-target"
+                [class.frio-target--ready]="item.decisionReady"
+                [class.frio-target--reference]="!item.decisionReady"
+              >
+                <header>
+                  <div>
+                    <span>{{ item.label }}</span>
+                    <small>{{ item.method }}</small>
+                  </div>
+                  <em>{{ objetivoEstadoLabel(item) }}</em>
+                </header>
+
+                <div class="frio-target__numbers">
+                  <div>
+                    <small>Acumulado</small>
+                    <strong>{{ formatObjetivoValue(item, item.accumulated) }}</strong>
+                    <span>{{ item.accumulatedSource }}</span>
+                  </div>
+                  <div>
+                    <small>Necesita</small>
+                    <strong>{{ item.target ? formatObjetivoValue(item, item.target) : 'Sin especificar' }}</strong>
+                    <span>{{ item.targetSource }}</span>
+                  </div>
+                </div>
+
+                <div
+                  class="frio-target__meter"
+                  [class.frio-target__meter--unknown]="item.progress === undefined"
+                  [attr.aria-label]="item.progress !== undefined ? item.progress + '% del objetivo cargado' : 'Objetivo no documentado'"
+                >
+                  @if (item.progress !== undefined) {
+                    <i [style.width.%]="item.progress"></i>
+                    <b>{{ item.progress | number: '1.0-0' }}%</b>
+                  } @else {
+                    <b>Falta objetivo varietal</b>
+                  }
+                </div>
+
+                @if (item.fieldComparison) {
+                  <p class="frio-target__field"><i class="pi pi-wifi"></i>{{ item.fieldComparison }}</p>
+                }
+              </article>
             }
-          </article>
-        }
-      </div>
+          </div>
+        </section>
+      }
+
+      @if (metricas.length) {
+        <div class="frio-metrics" [class.frio-metrics--forcing]="esDormanciaPerenne">
+          @for (metric of metricas; track metric.label) {
+            <article [ngClass]="metric.tone">
+              <div>
+                <span>{{ metric.label }}</span>
+                <strong>{{ metric.value }}</strong>
+                @if (esDormanciaPerenne && metric.label === 'GDD de forzado') {
+                  <b>{{ gddEstadoLabel }}</b>
+                }
+              </div>
+              <small>{{ metric.detail }}</small>
+              <em>{{ metric.source }}</em>
+            </article>
+          }
+        </div>
+      }
+
+      <details class="frio-quality" [class.reference]="data?.summary?.fieldCold?.quality === 'reference'">
+        <summary>
+          <i class="pi pi-shield"></i>
+          <strong>{{ calidadFrioLabel }}</strong>
+          <i class="pi pi-chevron-down"></i>
+        </summary>
+        <span>{{ calidadFrioDetalle }}</span>
+      </details>
 
       @if (usaSensorFrio) {
         <section class="frio-sensor-history">
@@ -89,7 +155,7 @@
       }
 
       @if (chartFrioOptions) {
-        <details class="frio-model-chart" [open]="!usaSensorFrio">
+        <details class="frio-model-chart" open>
           <summary>Evolución de los modelos de frío y tiempo térmico</summary>
           <div>
             <app-chart [options]="chartFrioOptions" [style]="'display:block;width:100%;height:320px'"></app-chart>

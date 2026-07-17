@@ -55,7 +55,7 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.mostrar).toBeFalse();
   });
 
-  it('separa los tres modelos de dormancia y explicita el requisito rector', async () => {
+  it('muestra acumulado, objetivo y avance de cada modelo sin convertir unidades', async () => {
     const component = create(
       response({
         summary: {
@@ -83,22 +83,35 @@ describe('CardFrioTermicoComponent', () => {
     );
     component.siembra = {
       _id: 'perenne-modelos',
-      semilla: { cultivo: 'Peral' },
+      semilla: {
+        cultivo: 'Peral',
+        variedad: 'Rocha',
+        requerimientoFrio: {
+          horasFrio: 750,
+          porcionesFrio: 45,
+          horasFrioEfectivas: 630,
+          modeloRector: 'HF',
+          estado: 'validado',
+          fuente: 'Ficha varietal',
+        },
+      },
     } as any;
 
     await component.cargar();
 
-    expect(component.metricas.map((metric) => metric.label)).toEqual(
-      jasmine.arrayContaining([
-        'Requisito varietal rector',
-        'Horas de frío (HF)',
-        'Unidades Utah',
-        'Porciones de frío',
-        'Grados día',
-      ])
+    expect(component.objetivosFrio.map((item) => item.label)).toEqual([
+      'Horas de frío',
+      'Porciones de frío',
+      'Frío efectivo histórico',
+    ]);
+    expect(component.objetivosFrio.find((item) => item.key === 'HF')).toEqual(
+      jasmine.objectContaining({ accumulated: 503.2, target: 750, decisionReady: true })
     );
-    expect(component.metricas.find((metric) => metric.label === 'Horas de frío (HF)')?.value).toBe('503,2 HF');
-    expect(component.metricas.find((metric) => metric.label === 'Porciones de frío')?.value).toBe('21,21 CP');
+    expect(component.objetivosFrio.find((item) => item.key === 'CP')).toEqual(
+      jasmine.objectContaining({ accumulated: 21.21, target: 45, decisionReady: false })
+    );
+    expect(component.metricas[0].label).toBe('GDD de forzado');
+    expect(component.gddLabel).toBe('3.394,3 GDD');
     expect(component.periodoFrioLabel).toContain('01-may');
     expect(component.periodoFrioLabel).not.toContain('30-abr');
   });
@@ -109,6 +122,7 @@ describe('CardFrioTermicoComponent', () => {
         summary: {
           thermalProcess: 'dormancia_perenne',
           chillingHoursAccumulated: 480,
+          chillPortionsAccumulated: 18.2,
           fieldCold: {
             quality: 'reference',
             sensorNames: ['CUADRO 7 Sensor 3'],
@@ -124,7 +138,17 @@ describe('CardFrioTermicoComponent', () => {
     );
     component.siembra = {
       _id: 'perenne-lora',
-      semilla: { cultivo: 'Peral' },
+      semilla: {
+        cultivo: 'Peral',
+        variedad: 'Rocha',
+        requerimientoFrio: {
+          horasFrio: 750,
+          porcionesFrio: 45,
+          horasFrioEfectivas: 630,
+          estado: 'requiere_calibracion',
+          fuente: 'Base técnica interna',
+        },
+      },
     } as any;
     component.lote = {
       dispositivos: [
@@ -146,14 +170,16 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.calidadFrioLabel).toContain('referencia');
     expect(component.calidadFrioDetalle).toContain('67%');
     expect(component.calidadFrioDetalle).toContain('no mueve GDD');
-    const horasLora = component.metricas.find((metric) => metric.label === 'Horas frío medidas por LoRa (HF)');
-    expect(horasLora?.value).toBe('503,2 HF');
-    expect(horasLora?.detail).toContain('67% de horas cubiertas');
-    expect(horasLora?.detail).toContain('acumulado parcial por brechas');
-    expect(component.metricas.find((metric) => metric.label === 'Utah sobre lecturas LoRa')).toBeDefined();
-    expect(component.metricas.find((metric) => metric.label === 'Frío efectivo (HFE ref.)')?.detail).toContain(
-      'no gobierna decisiones'
-    );
+    const horas = component.objetivosFrio.find((item) => item.key === 'HF');
+    expect(horas?.accumulated).toBe(480);
+    expect(horas?.target).toBe(750);
+    expect(horas?.fieldComparison).toContain('503 HF');
+    expect(horas?.fieldComparison).toContain('cobertura 67%');
+    const porciones = component.objetivosFrio.find((item) => item.key === 'CP');
+    expect(porciones?.accumulated).toBe(18.2);
+    expect(porciones?.fieldComparison).toContain('21,21 CP');
+    const hfe = component.objetivosFrio.find((item) => item.key === 'HFE');
+    expect(hfe).toEqual(jasmine.objectContaining({ accumulated: 593.82, target: 630, decisionReady: false }));
   });
 
   it('mantiene visibles las horas frío del dispositivo mientras el canónico se reprocesa', async () => {
@@ -187,11 +213,35 @@ describe('CardFrioTermicoComponent', () => {
 
     await component.cargar();
 
-    expect(component.lecturaPrincipal).toContain('modelos independientes');
+    expect(component.lecturaPrincipal).toContain('propia unidad');
     expect(component.calidadFrioLabel).toContain('pendiente de reproceso');
-    expect(component.metricas.find((metric) => metric.label.includes('vista previa'))?.value).toBe('503,21 HF');
-    expect(component.metricas.find((metric) => metric.label.includes('HFE hist.'))?.value).toBe('593,82 HFE');
-    expect(component.metricas.find((metric) => metric.label.includes('Porciones históricas'))?.value).toBe('21,21 CP');
+    expect(component.objetivosFrio.find((item) => item.key === 'HF')?.accumulated).toBe(503.21);
+    expect(component.objetivosFrio.find((item) => item.key === 'HFE')?.accumulated).toBe(593.82);
+    expect(component.objetivosFrio.find((item) => item.key === 'CP')?.accumulated).toBe(21.21);
+  });
+
+  it('explica que el GDD de un peral aún no comenzó cuando falta el biofix de forzado', async () => {
+    const component = create(
+      response({
+        summary: {
+          thermalProcess: 'dormancia_perenne',
+          gddAccumulationComplete: false,
+          gddBaseTemperatureC: 7,
+        },
+      })
+    );
+    component.siembra = {
+      _id: 'peral-sin-biofix',
+      semilla: { cultivo: 'Peral', variedad: 'Rocha' },
+      registrosFenologicos: [],
+    } as any;
+
+    await component.cargar();
+
+    expect(component.gddLabel).toBe('0 GDD');
+    expect(component.gddEstadoLabel).toBe('Aún no iniciados');
+    expect(component.gddDetalle).toContain('biofix');
+    expect(component.gddDetalle).toContain('Tb 7,0 °C');
   });
 
   it('reprocesa la serie al actualizar en lugar de releer una generación vieja', async () => {

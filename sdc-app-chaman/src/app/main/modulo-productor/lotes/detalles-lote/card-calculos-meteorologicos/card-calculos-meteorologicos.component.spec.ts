@@ -161,6 +161,32 @@ describe('CardCalculosMeteorologicosComponent', () => {
     expect(component.metricas.map((item) => item.label).join(' ')).not.toMatch(/frio|porciones|vernalizacion/i);
   });
 
+  it('no confunde un GDD perenne pendiente de biofix con una falla de datos', async () => {
+    const service = {
+      agrometeorologia: jasmine.createSpy().and.resolveTo(
+        response({
+          summary: {
+            thermalProcess: 'dormancia_perenne',
+            gddAccumulationComplete: false,
+            gddBaseTemperatureC: 7,
+          },
+        })
+      ),
+    };
+    const component = create(service);
+    component.siembra = {
+      _id: 'peral-sin-biofix',
+      semilla: { cultivo: 'Peral', variedad: 'Rocha' },
+      registrosFenologicos: [],
+    } as any;
+
+    await component.cargar();
+
+    expect(component.metricas[0].label).toBe('GDD de forzado');
+    expect(component.metricas[0].value).toBe('0 GDD');
+    expect(component.metricas[0].detail).toContain('biofix');
+  });
+
   it('tolera respuesta vacía y variables opcionales ausentes', async () => {
     const service = {
       agrometeorologia: jasmine.createSpy().and.resolveTo(response({ series: [], summary: {} })),

@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject, Input, OnChanges, SimpleChanges } from '@angular/core';
 import Highcharts from 'highcharts';
 import {
+  esCultivoPerenne,
   IRespuestaAgrometeorologiaSiembra,
   IResumenAgrometeorologico,
   ISerieAgrometeorologicaDia,
@@ -255,8 +256,8 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
       ? []
       : [
           {
-            label: 'Grados dia cerrados',
-            value: this.valor(r.gddAccumulated, 'GDD', 0),
+            label: this.gddPendienteBiofix(r) ? 'GDD de forzado' : 'Grados dia cerrados',
+            value: this.gddPendienteBiofix(r) ? '0 GDD' : this.valor(r.gddAccumulated, 'GDD', 0),
             detail: detalleGdd,
             tone: 'thermal',
           },
@@ -741,6 +742,9 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
   }
 
   private detalleGdd(resumen: IResumenAgrometeorologico): string {
+    if (this.gddPendienteBiofix(resumen)) {
+      return `Aun no iniciados: se cuentan desde el biofix de inicio de forzado o brotacion registrado a campo · Tb ${this.numero(resumen.gddBaseTemperatureC, 0)} C`;
+    }
     const partes = [
       resumen.gddThroughDate ? `Cerrado al ${this.fechaCorta(resumen.gddThroughDate)}` : 'Sin incluir el pronostico',
     ];
@@ -760,6 +764,18 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
       );
     }
     return partes.join(' · ');
+  }
+
+  private gddPendienteBiofix(resumen: IResumenAgrometeorologico): boolean {
+    if (!esCultivoPerenne(this.siembra?.semilla?.cultivo) || this.esNumero(resumen.gddAccumulated)) {
+      return false;
+    }
+    return !((this.siembra as any)?.registrosFenologicos || []).some((record: any) => {
+      if (record?.estadoRegistro === 'anulado' || record?.tipoEvento !== 'biofix') return false;
+      return (record?.objetivosBiofix || []).some((objective: string) =>
+        ['inicio_forzado', 'reinicio_gdd_forzado'].includes(String(objective))
+      );
+    });
   }
 
   private edadHoras(value?: string): number | undefined {
