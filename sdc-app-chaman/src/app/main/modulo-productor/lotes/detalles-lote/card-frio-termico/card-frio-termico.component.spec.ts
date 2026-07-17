@@ -99,6 +99,8 @@ describe('CardFrioTermicoComponent', () => {
     );
     expect(component.metricas.find((metric) => metric.label === 'Horas de frío (HF)')?.value).toBe('503,2 HF');
     expect(component.metricas.find((metric) => metric.label === 'Porciones de frío')?.value).toBe('21,21 CP');
+    expect(component.periodoFrioLabel).toContain('01-may');
+    expect(component.periodoFrioLabel).not.toContain('30-abr');
   });
 
   it('mantiene LoRa visible con calidad, cobertura y valores separados de la serie canónica', async () => {

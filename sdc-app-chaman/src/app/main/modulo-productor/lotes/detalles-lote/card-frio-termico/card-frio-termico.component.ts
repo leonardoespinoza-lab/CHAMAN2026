@@ -633,7 +633,12 @@ export class CardFrioTermicoComponent implements OnChanges {
 
   private fechaCorta(value?: string): string {
     if (!value) return '-';
-    const date = new Date(value);
+    // Las fechas agronomicas YYYY-MM-DD son dias locales, no instantes UTC.
+    // El mediodia evita que UTC-3 las desplace al dia calendario anterior.
+    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? `${value}T12:00:00`
+      : value;
+    const date = new Date(dateOnly);
     return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
   }
 
