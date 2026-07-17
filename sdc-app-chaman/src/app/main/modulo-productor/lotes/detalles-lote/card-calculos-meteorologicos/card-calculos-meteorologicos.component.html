@@ -1,8 +1,8 @@
 <section class="custom-card agromet-card">
   <header class="agromet-header">
     <div>
-      <p class="titulo-card">CÁLCULOS METEOROLÓGICOS</p>
-      <span>Lectura integrada del cultivo, el agua, la atmosfera y el suelo</span>
+      <p class="titulo-card">VARIABLES METEOROLÓGICAS</p>
+      <span>Temperatura, agua, atmósfera, radiación y suelo en una tarjeta independiente</span>
     </div>
     @if (data) {
       <div
@@ -60,43 +60,6 @@
         <i class="pi pi-info-circle"></i><span>{{ advertenciaFuente }}</span>
       </div>
     }
-    @if (requisitoFrioConDatosInsuficientes) {
-      <div class="source-warning">
-        <i class="pi pi-exclamation-triangle"></i>
-        <span>
-          <strong>Datos insuficientes para evaluar el requisito de frio.</strong>
-          {{ avisoDatosInsuficientesFrio }}
-        </span>
-      </div>
-    }
-    @if (frioCampo; as campo) {
-      <section
-        class="field-cold-panel"
-        [class.reference]="campo.quality === 'reference'"
-        aria-label="Frio medido por sensores del lote"
-      >
-        <header>
-          <div>
-            <span>LECTURA LORA DE CAMPO</span>
-            <strong>{{ frioCampoSensoresLabel }}</strong>
-          </div>
-          <em>{{ frioCampoEstadoLabel }}</em>
-        </header>
-        <div class="field-cold-grid">
-          @for (metrica of frioCampoMetricas; track metrica.label) {
-            <article>
-              <span>{{ metrica.label }}</span>
-              <strong>{{ metrica.value }}</strong>
-              <small>{{ metrica.detail }}</small>
-            </article>
-          }
-        </div>
-        <footer>
-          <span>{{ frioCampoCalidadDetalle }}</span>
-          <small>{{ frioCampoAclaracion }}</small>
-        </footer>
-      </section>
-    }
     <div class="metric-grid">
       @for (metrica of metricas; track metrica.label) {
         <article [attr.data-tone]="metrica.tone">
@@ -126,10 +89,7 @@
     <div class="chart-shell">
       <nav class="chart-tabs" aria-label="Variable meteorologica" role="tablist">
         @for (item of graficos; track item.value) {
-          @if (
-            (item.value !== 'suelo' || mostrarSuelo) &&
-            (item.value !== 'frio' || mostrarFrio)
-          ) {
+          @if (item.value !== 'suelo' || mostrarSuelo) {
             <button
               type="button"
               role="tab"
@@ -154,8 +114,8 @@
       <div>
         <i class="pi pi-shield"></i>
         <span>
-          {{ historialLabel }}: linea continua. Pronostico: linea punteada.
-          Las franjas identifican etapas fenologicas. Solo un sensor de campo calificado prevalece sobre central y Open-Meteo.
+          {{ historialLabel }}: linea continua. Pronostico: linea punteada. Las franjas identifican etapas fenologicas.
+          Solo un sensor de campo calificado prevalece sobre central y Open-Meteo.
         </span>
       </div>
       <span>Motor {{ data?.calculationVersion }} / parametros {{ data?.parametersVersion }}</span>

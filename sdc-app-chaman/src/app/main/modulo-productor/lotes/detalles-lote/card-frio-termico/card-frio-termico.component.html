@@ -1,11 +1,9 @@
 @if (mostrar) {
-  <div class="custom-card frio-card">
-    <div class="frio-header">
+  <section class="custom-card frio-card">
+    <header class="frio-header">
       <div>
-        <p class="titulo-card">FRIO Y ACUMULACION TERMICA</p>
-        <span>
-          {{ fuenteFrioLabel }} - HF, HFE, chill portions, grados dia y ventana sanitaria
-        </span>
+        <p class="titulo-card">FRÍO Y ACUMULACIÓN TÉRMICA</p>
+        <span>{{ fuenteFrioLabel }} · tarjeta independiente de las variables meteorológicas</span>
       </div>
       <p-button
         icon="pi pi-refresh"
@@ -16,14 +14,26 @@
         [loading]="loading"
         (onClick)="cargar(true)"
       />
-    </div>
+    </header>
 
-    @if (data || frioSensor) {
+    @if (loading && !data) {
+      <div class="frio-loading" aria-label="Cargando frío y acumulación térmica">
+        @for (item of [1, 2, 3, 4, 5, 6]; track item) {
+          <i></i>
+        }
+      </div>
+    } @else if (data || usaSensorFrio) {
       <div class="frio-summary">
         <strong>{{ lecturaPrincipal }}</strong>
-        <small>
-          {{ periodoFrioLabel }}
-        </small>
+        <small>{{ periodoFrioLabel }}</small>
+      </div>
+
+      <div class="frio-quality" [class.reference]="data?.summary?.fieldCold?.quality === 'reference'">
+        <i class="pi pi-shield"></i>
+        <div>
+          <strong>{{ calidadFrioLabel }}</strong>
+          <span>{{ calidadFrioDetalle }}</span>
+        </div>
       </div>
 
       <div class="frio-metrics">
@@ -32,8 +42,9 @@
             <span>{{ metric.label }}</span>
             <strong>{{ metric.value }}</strong>
             <small>{{ metric.detail }}</small>
+            <em>{{ metric.source }}</em>
             @if (metric.pct !== undefined) {
-              <div class="frio-meter">
+              <div class="frio-meter" [attr.aria-label]="metric.pct + '% del requisito'">
                 <i [style.width.%]="metric.pct"></i>
               </div>
             }
@@ -42,99 +53,60 @@
       </div>
 
       @if (usaSensorFrio) {
-        <div class="frio-body frio-body--sensor">
-          <section class="frio-sensor-history">
-            <header class="frio-sensor-toolbar">
-              <div>
-                <strong>Variables del sensor</strong>
-                <span>Historico real registrado para este lote</span>
-              </div>
+        <section class="frio-sensor-history">
+          <header class="frio-sensor-toolbar">
+            <div>
+              <strong>Variables del sensor LoRa</strong>
+              <span>Histórico real registrado para este lote; no se sustituye por datos modelados</span>
+            </div>
+            <p-selectButton
+              [options]="[
+                { label: '24 h', value: 1 },
+                { label: '7 días', value: 7 },
+                { label: '30 días', value: 30 },
+              ]"
+              [(ngModel)]="diasHistoricoSensor"
+              optionLabel="label"
+              optionValue="value"
+              (onChange)="cambiarPeriodoSensor($event.value)"
+            />
+          </header>
 
-              <p-selectButton
-                [options]="[
-                  { label: '24 h', value: 1 },
-                  { label: '7 dias', value: 7 },
-                  { label: '30 dias', value: 30 },
-                ]"
-                [(ngModel)]="diasHistoricoSensor"
-                optionLabel="label"
-                optionValue="value"
-                (onChange)="cambiarPeriodoSensor($event.value)"
-              />
-            </header>
-
-            @if (loadingHistoricoSensor) {
-              <p-message severity="info">Cargando historico del sensor...</p-message>
-            }
-
-            <app-grafico-historico-ambiente
-              [reportes]="reportesSensorFrio"
-              [titulo]="tituloHistoricoSensor"
-              [subtitulo]="subtituloHistoricoSensor"
-            ></app-grafico-historico-ambiente>
-          </section>
-
-          @if (data) {
-            <section class="frio-events">
-              <article>
-                <span>{{ tituloEventoBrotacion }}</span>
-                <strong>{{ data.eventos.brotacion.estado.replace('_', ' ') }}</strong>
-                <small>{{ data.eventos.brotacion.lectura }}</small>
-              </article>
-              <article>
-                <span>{{ tituloEventoFloracion }}</span>
-                <strong>{{ data.eventos.floracion.estado }}</strong>
-                <small>{{ data.eventos.floracion.lectura }}</small>
-              </article>
-              <article>
-                <span>{{ tituloEventoSanitario }}</span>
-                <strong>{{ data.eventos.ventanaSanitaria.estado }}</strong>
-                <small>{{ data.eventos.ventanaSanitaria.lectura }}</small>
-              </article>
-            </section>
+          @if (loadingHistoricoSensor) {
+            <p-message severity="info">Cargando histórico del sensor...</p-message>
           }
-        </div>
-      } @else if (data) {
-        <div class="frio-body">
-          <section class="frio-chart">
-            <header>
-              <strong>Temperatura y lluvia reciente</strong>
-              <span>Serie diaria historica + pronostico</span>
-            </header>
-            @if (chartFrioOptions) {
-              <app-chart [options]="chartFrioOptions" [style]="'display:block;width:100%;height:300px'"></app-chart>
-            } @else {
-              <p-message severity="info">Sin serie climatica suficiente para graficar temperatura y lluvia.</p-message>
-            }
-          </section>
 
-          <section class="frio-events">
-            <article>
-              <span>{{ tituloEventoBrotacion }}</span>
-              <strong>{{ data.eventos.brotacion.estado.replace('_', ' ') }}</strong>
-              <small>{{ data.eventos.brotacion.lectura }}</small>
-            </article>
-            <article>
-              <span>{{ tituloEventoFloracion }}</span>
-              <strong>{{ data.eventos.floracion.estado }}</strong>
-              <small>{{ data.eventos.floracion.lectura }}</small>
-            </article>
-            <article>
-              <span>{{ tituloEventoSanitario }}</span>
-              <strong>{{ data.eventos.ventanaSanitaria.estado }}</strong>
-              <small>{{ data.eventos.ventanaSanitaria.lectura }}</small>
-            </article>
-          </section>
-        </div>
-      } @else {
-        <p-message severity="info">
-          Mostrando acumulado real del sensor. Falta serie climatica por coordenadas para graficar pronostico y riesgo de helada.
-        </p-message>
+          <app-grafico-historico-ambiente
+            [reportes]="reportesSensorFrio"
+            [titulo]="tituloHistoricoSensor"
+            [subtitulo]="subtituloHistoricoSensor"
+          ></app-grafico-historico-ambiente>
+        </section>
+      }
+
+      @if (chartFrioOptions) {
+        <details class="frio-model-chart" [open]="!usaSensorFrio">
+          <summary>Evolución de los modelos de frío y tiempo térmico</summary>
+          <div>
+            <app-chart [options]="chartFrioOptions" [style]="'display:block;width:100%;height:320px'"></app-chart>
+          </div>
+        </details>
+      }
+
+      @if (advertenciasFrio.length) {
+        <details class="frio-warnings">
+          <summary>Calidad, cobertura y supuestos ({{ advertenciasFrio.length }})</summary>
+          <ul>
+            @for (warning of advertenciasFrio; track warning) {
+              <li>{{ warning }}</li>
+            }
+          </ul>
+        </details>
       }
     } @else if (error) {
       <p-message severity="warn">{{ error }}</p-message>
     } @else {
-      <p-message severity="info">Calculando frio y acumulacion termica...</p-message>
+      <p-message severity="info">Preparando la serie de frío y acumulación térmica.</p-message>
     }
-  </div>
+  </section>
 }

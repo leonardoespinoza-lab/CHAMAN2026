@@ -337,166 +337,174 @@ export class AgrometeorologicalEngineService {
     const generationId = randomUUID();
     await this.acquireGenerationLeaseWithRetry(idSiembra, generationId);
     try {
-    const siembra = await this.repository.getSiembra(idSiembra);
-    if (!siembra?._id || !siembra.fechaSiembra) {
-      throw new Error('La siembra no existe o no tiene fecha de implantacion.');
-    }
-    const lote =
-      siembra.lote ||
-      (siembra.idLote
-        ? await this.repository.getLote(siembra.idLote)
-        : undefined);
-    const establecimiento =
-      siembra.establecimiento ||
-      lote?.establecimiento ||
-      (siembra.idEstablecimiento
-        ? await this.repository.getEstablecimiento(siembra.idEstablecimiento)
-        : lote?.idEstablecimiento
-          ? await this.repository.getEstablecimiento(lote.idEstablecimiento)
+      const siembra = await this.repository.getSiembra(idSiembra);
+      if (!siembra?._id || !siembra.fechaSiembra) {
+        throw new Error(
+          'La siembra no existe o no tiene fecha de implantacion.',
+        );
+      }
+      const lote =
+        siembra.lote ||
+        (siembra.idLote
+          ? await this.repository.getLote(siembra.idLote)
           : undefined);
-    if (!lote?._id || !establecimiento?._id) {
-      throw new Error('La siembra no tiene lote o establecimiento resoluble.');
-    }
-    const cycleStart = this.resolveCycleStart(siembra);
-    const coordinates = this.resolveCoordinates(siembra, lote, establecimiento);
-    if (!coordinates) {
-      throw new Error(
-        'El lote o establecimiento no tiene coordenadas validas.',
-      );
-    }
-    const syncWarnings: string[] = [];
-    if (cycleStart !== String(siembra.fechaSiembra).slice(0, 10)) {
-      syncWarnings.push(
-        `Cultivo perenne: se conserva la implantacion ${String(siembra.fechaSiembra).slice(0, 10)} y la campaña meteorologica vigente comienza ${cycleStart}.`,
-      );
-    }
-    let expectedEndDate: string | undefined;
-    if (options.sincronizarClima !== false) {
-      const sync = await this.ingestion.sincronizar(
+      const establecimiento =
+        siembra.establecimiento ||
+        lote?.establecimiento ||
+        (siembra.idEstablecimiento
+          ? await this.repository.getEstablecimiento(siembra.idEstablecimiento)
+          : lote?.idEstablecimiento
+            ? await this.repository.getEstablecimiento(lote.idEstablecimiento)
+            : undefined);
+      if (!lote?._id || !establecimiento?._id) {
+        throw new Error(
+          'La siembra no tiene lote o establecimiento resoluble.',
+        );
+      }
+      const cycleStart = this.resolveCycleStart(siembra);
+      const coordinates = this.resolveCoordinates(
+        siembra,
+        lote,
         establecimiento,
-        coordinates,
+      );
+      if (!coordinates) {
+        throw new Error(
+          'El lote o establecimiento no tiene coordenadas validas.',
+        );
+      }
+      const syncWarnings: string[] = [];
+      if (cycleStart !== String(siembra.fechaSiembra).slice(0, 10)) {
+        syncWarnings.push(
+          `Cultivo perenne: se conserva la implantacion ${String(siembra.fechaSiembra).slice(0, 10)} y la campaña meteorologica vigente comienza ${cycleStart}.`,
+        );
+      }
+      let expectedEndDate: string | undefined;
+      if (options.sincronizarClima !== false) {
+        const sync = await this.ingestion.sincronizar(
+          establecimiento,
+          coordinates,
+          cycleStart,
+          options.forceBackfill,
+          String(lote._id),
+        );
+        syncWarnings.push(...sync.advertencias);
+        expectedEndDate = sync.hasta;
+      }
+      let observations = await this.loadObservations(
+        establecimiento._id,
         cycleStart,
-        options.forceBackfill,
         String(lote._id),
       );
-      syncWarnings.push(...sync.advertencias);
-      expectedEndDate = sync.hasta;
-    }
-    let observations = await this.loadObservations(
-      establecimiento._id,
-      cycleStart,
-      String(lote._id),
-    );
-    let fieldSourceContext: IFieldSourceContext | undefined;
-    try {
-      if (!this.sensorOverlay) {
-        throw new Error('Integrador de sensores no configurado.');
+      let fieldSourceContext: IFieldSourceContext | undefined;
+      try {
+        if (!this.sensorOverlay) {
+          throw new Error('Integrador de sensores no configurado.');
+        }
+        const field = await this.sensorOverlay.overlay(
+          lote,
+          String(establecimiento._id),
+          cycleStart,
+          observations,
+        );
+        observations = field.observations;
+        syncWarnings.push(...field.warnings);
+        fieldSourceContext = {
+          fieldObservations: field.fieldObservations,
+          fieldCoverageByDate: field.fieldCoverageByDate,
+          sensorNames: field.sensorNames,
+          fieldTemperatureSensorNames: field.fieldTemperatureSensorNames,
+          lastFieldObservationAt: field.lastFieldObservationAt,
+          fieldTemperatureDecisionReady: field.fieldTemperatureDecisionReady,
+          fieldTemperatureQuality: field.fieldTemperatureQuality,
+          unqualifiedTemperatureSensorNames:
+            field.unqualifiedTemperatureSensorNames,
+        };
+      } catch (error) {
+        syncWarnings.push(
+          'Los sensores de campo no pudieron integrarse en este reproceso; se mantuvo la jerarquia central/Open-Meteo.',
+        );
+        this.logger.warn(
+          `Overlay de sensores no disponible para lote ${lote._id}: ${error?.message || error}`,
+        );
       }
-      const field = await this.sensorOverlay.overlay(
+      let soilInputs: IEntradasAgronomicasSuelo | null = null;
+      try {
+        soilInputs = await this.repository.getSoilAgronomicInputs(lote._id);
+      } catch (error) {
+        syncWarnings.push(
+          `Motor de suelo no disponible temporalmente; se conserva la lógica hídrica previa.`,
+        );
+        this.logger.warn(
+          `Entradas edáficas no disponibles para lote ${lote._id}: ${error?.message || error}`,
+        );
+      }
+      const calculated = this.calculateIndicators(
+        siembra,
         lote,
-        String(establecimiento._id),
-        cycleStart,
+        coordinates,
         observations,
+        syncWarnings,
+        soilInputs || undefined,
+        fieldSourceContext,
+        expectedEndDate,
+      ).map((item) => ({
+        ...item,
+        generacionCalculo: generationId,
+      }));
+      if (!expectedEndDate) {
+        expectedEndDate = calculated
+          .map((item) => item.fecha)
+          .sort()
+          .reverse()[0];
+      }
+      if (!expectedEndDate) {
+        throw new Error(
+          'No hay una ventana meteorologica completa para activar el reproceso.',
+        );
+      }
+      const expectedDates = this.calendarDateSequence(
+        cycleStart,
+        expectedEndDate,
       );
-      observations = field.observations;
-      syncWarnings.push(...field.warnings);
-      fieldSourceContext = {
-        fieldObservations: field.fieldObservations,
-        fieldCoverageByDate: field.fieldCoverageByDate,
-        sensorNames: field.sensorNames,
-        fieldTemperatureSensorNames: field.fieldTemperatureSensorNames,
-        lastFieldObservationAt: field.lastFieldObservationAt,
-        fieldTemperatureDecisionReady: field.fieldTemperatureDecisionReady,
-        fieldTemperatureQuality: field.fieldTemperatureQuality,
-        unqualifiedTemperatureSensorNames:
-          field.unqualifiedTemperatureSensorNames,
+      const expectedInterval = {
+        desde: cycleStart,
+        hasta: expectedEndDate,
+        cantidad: expectedDates.length,
+        checksumFechas: this.generationDatesChecksum(
+          String(siembra._id),
+          AGROMET_ENGINE_VERSION,
+          expectedDates,
+        ),
       };
-    } catch (error) {
-      syncWarnings.push(
-        'Los sensores de campo no pudieron integrarse en este reproceso; se mantuvo la jerarquia central/Open-Meteo.',
+      const persistedGeneration =
+        await this.repository.replaceIndicadoresGeneration(
+          String(siembra._id),
+          AGROMET_ENGINE_VERSION,
+          generationId,
+          calculated,
+          expectedInterval,
+        );
+      if ((persistedGeneration as any)?.cleanupPending) {
+        this.logger.warn(
+          `La generacion ${generationId} quedo activa con mantenimiento pendiente ` +
+            `(cleanup=${Boolean((persistedGeneration as any)?.cleanupPending)}).`,
+        );
+      }
+      const warnings = [
+        ...new Set(calculated.flatMap((item) => item.advertencias)),
+      ];
+      this.logger.log(
+        JSON.stringify({
+          event: 'agromet_sowing_processed',
+          idSiembra,
+          generationId,
+          interval: expectedInterval,
+          indicators: calculated.length,
+          warnings: warnings.length,
+          engineVersion: AGROMET_ENGINE_VERSION,
+        }),
       );
-      this.logger.warn(
-        `Overlay de sensores no disponible para lote ${lote._id}: ${error?.message || error}`,
-      );
-    }
-    let soilInputs: IEntradasAgronomicasSuelo | null = null;
-    try {
-      soilInputs = await this.repository.getSoilAgronomicInputs(lote._id);
-    } catch (error) {
-      syncWarnings.push(
-        `Motor de suelo no disponible temporalmente; se conserva la lógica hídrica previa.`,
-      );
-      this.logger.warn(
-        `Entradas edáficas no disponibles para lote ${lote._id}: ${error?.message || error}`,
-      );
-    }
-    const calculated = this.calculateIndicators(
-      siembra,
-      lote,
-      coordinates,
-      observations,
-      syncWarnings,
-      soilInputs || undefined,
-      fieldSourceContext,
-      expectedEndDate,
-    ).map((item) => ({
-      ...item,
-      generacionCalculo: generationId,
-    }));
-    if (!expectedEndDate) {
-      expectedEndDate = calculated
-        .map((item) => item.fecha)
-        .sort()
-        .reverse()[0];
-    }
-    if (!expectedEndDate) {
-      throw new Error(
-        'No hay una ventana meteorologica completa para activar el reproceso.',
-      );
-    }
-    const expectedDates = this.calendarDateSequence(
-      cycleStart,
-      expectedEndDate,
-    );
-    const expectedInterval = {
-      desde: cycleStart,
-      hasta: expectedEndDate,
-      cantidad: expectedDates.length,
-      checksumFechas: this.generationDatesChecksum(
-        String(siembra._id),
-        AGROMET_ENGINE_VERSION,
-        expectedDates,
-      ),
-    };
-    const persistedGeneration =
-      await this.repository.replaceIndicadoresGeneration(
-        String(siembra._id),
-        AGROMET_ENGINE_VERSION,
-        generationId,
-        calculated,
-        expectedInterval,
-      );
-    if ((persistedGeneration as any)?.cleanupPending) {
-      this.logger.warn(
-        `La generacion ${generationId} quedo activa con mantenimiento pendiente ` +
-          `(cleanup=${Boolean((persistedGeneration as any)?.cleanupPending)}).`,
-      );
-    }
-    const warnings = [
-      ...new Set(calculated.flatMap((item) => item.advertencias)),
-    ];
-    this.logger.log(
-      JSON.stringify({
-        event: 'agromet_sowing_processed',
-        idSiembra,
-        generationId,
-        interval: expectedInterval,
-        indicators: calculated.length,
-        warnings: warnings.length,
-        engineVersion: AGROMET_ENGINE_VERSION,
-      }),
-    );
-    return { indicadores: calculated.length, advertencias: warnings };
+      return { indicadores: calculated.length, advertencias: warnings };
     } finally {
       await this.repository
         .releaseIndicadoresGenerationLease(
@@ -589,6 +597,37 @@ export class AgrometeorologicalEngineService {
     };
     let coldRequirement: IColdRequirementResolution | undefined;
     const globalWarnings = [...inheritedWarnings];
+    const receivedObservationCount = observations?.length || 0;
+    observations = (observations || [])
+      .map((observation) => this.resolveLotObservation(observation))
+      .filter(
+        (observation): observation is IObservacionMeteorologicaNormalizada =>
+          !!observation,
+      );
+    if (observations.length !== receivedObservationCount) {
+      globalWarnings.push(
+        `Se descartaron ${receivedObservationCount - observations.length} observaciones meteorologicas con sobre incompleto; no se imputaron temperatura, frio ni GDD.`,
+      );
+    }
+    if (fieldSourceContext?.fieldObservations) {
+      const receivedFieldCount = fieldSourceContext.fieldObservations.length;
+      fieldSourceContext = {
+        ...fieldSourceContext,
+        fieldObservations: fieldSourceContext.fieldObservations
+          .map((observation) => this.resolveLotObservation(observation))
+          .filter(
+            (
+              observation,
+            ): observation is IObservacionMeteorologicaNormalizada =>
+              !!observation,
+          ),
+      };
+      if (fieldSourceContext.fieldObservations.length !== receivedFieldCount) {
+        globalWarnings.push(
+          `Se descartaron ${receivedFieldCount - fieldSourceContext.fieldObservations.length} lecturas de campo incompletas; no se usaron para frio ni decisiones biologicas.`,
+        );
+      }
+    }
     if (!crop) globalWarnings.push('La siembra no tiene cultivo asociado.');
     if (!custom) {
       globalWarnings.push(
@@ -4270,17 +4309,74 @@ export class AgrometeorologicalEngineService {
     observation: IObservacionMeteorologicaNormalizada,
     idLote?: string,
   ): IObservacionMeteorologicaNormalizada | undefined {
-    if (!idLote) return observation;
-    const context =
-      observation.contextosLote?.[this.safeWeatherContextKey(idLote)];
-    if (context) {
-      return {
-        ...observation,
-        ...context,
-        contextosLote: observation.contextosLote,
-      };
+    if (!observation || typeof observation !== 'object') return undefined;
+    const base = observation as IObservacionMeteorologicaNormalizada;
+    let resolved: IObservacionMeteorologicaNormalizada = base;
+    if (idLote) {
+      const context = base.contextosLote?.[this.safeWeatherContextKey(idLote)];
+      if (context) {
+        resolved = {
+          ...base,
+          ...context,
+          valores: {
+            ...(base.valores || {}),
+            ...(context.valores || {}),
+          },
+          fuentePorVariable: {
+            ...(base.fuentePorVariable || {}),
+            ...(context.fuentePorVariable || {}),
+          },
+          estadoPorVariable: {
+            ...(base.estadoPorVariable || {}),
+            ...(context.estadoPorVariable || {}),
+          },
+          banderasCalidad: Array.from(
+            new Set([
+              ...(Array.isArray(base.banderasCalidad)
+                ? base.banderasCalidad
+                : []),
+              ...(Array.isArray(context.banderasCalidad)
+                ? context.banderasCalidad
+                : []),
+            ]),
+          ),
+          contextosLote: base.contextosLote,
+        };
+      } else if (base.idLote !== idLote) {
+        return undefined;
+      }
     }
-    return observation.idLote === idLote ? observation : undefined;
+
+    const timestamp = String(resolved.timestamp || '');
+    const fechaLocal = String(resolved.fechaLocal || '');
+    if (
+      !timestamp ||
+      Number.isNaN(new Date(timestamp).getTime()) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(fechaLocal) ||
+      !resolved.valores ||
+      typeof resolved.valores !== 'object' ||
+      (resolved.granularidad !== 'hourly' && resolved.granularidad !== 'daily')
+    ) {
+      return undefined;
+    }
+
+    return {
+      ...resolved,
+      valores: resolved.valores,
+      fuentePorVariable:
+        resolved.fuentePorVariable &&
+        typeof resolved.fuentePorVariable === 'object'
+          ? resolved.fuentePorVariable
+          : {},
+      estadoPorVariable:
+        resolved.estadoPorVariable &&
+        typeof resolved.estadoPorVariable === 'object'
+          ? resolved.estadoPorVariable
+          : {},
+      banderasCalidad: Array.isArray(resolved.banderasCalidad)
+        ? resolved.banderasCalidad
+        : [],
+    };
   }
 
   private safeWeatherContextKey(value: string): string {
@@ -4401,22 +4497,22 @@ export class AgrometeorologicalEngineService {
   private isDecisionTemperature(
     observation: IObservacionMeteorologicaNormalizada,
   ): boolean {
-    if (!Number.isFinite(observation.valores.temperatureC)) return false;
+    if (!Number.isFinite(observation.valores?.temperatureC)) return false;
     const source = String(
-      observation.fuentePorVariable.temperatureC || observation.fuente || '',
+      observation.fuentePorVariable?.temperatureC || observation.fuente || '',
     );
     const state =
       observation.estadoPorVariable?.temperatureC || observation.estado;
     if (state === 'invalid' || state === 'missing') return false;
     if (
       source.includes('sensor') &&
-      observation.banderasCalidad.includes(
+      (observation.banderasCalidad || []).includes(
         'temperature_sensor_quality:referencia',
       )
     ) {
       return false;
     }
-    return !observation.banderasCalidad.includes(
+    return !(observation.banderasCalidad || []).includes(
       'temperature_sensor_quality:rechazado',
     );
   }
@@ -4424,9 +4520,10 @@ export class AgrometeorologicalEngineService {
   private isDecisionHumidity(
     observation: IObservacionMeteorologicaNormalizada,
   ): boolean {
-    if (!Number.isFinite(observation.valores.relativeHumidityPct)) return false;
+    if (!Number.isFinite(observation.valores?.relativeHumidityPct))
+      return false;
     const source = String(
-      observation.fuentePorVariable.relativeHumidityPct ||
+      observation.fuentePorVariable?.relativeHumidityPct ||
         observation.fuente ||
         '',
     );
@@ -4435,11 +4532,13 @@ export class AgrometeorologicalEngineService {
     if (state === 'invalid' || state === 'missing') return false;
     if (
       source.includes('sensor') &&
-      observation.banderasCalidad.includes('humidity_sensor_quality:referencia')
+      (observation.banderasCalidad || []).includes(
+        'humidity_sensor_quality:referencia',
+      )
     ) {
       return false;
     }
-    return !observation.banderasCalidad.includes(
+    return !(observation.banderasCalidad || []).includes(
       'humidity_sensor_quality:rechazado',
     );
   }
@@ -4448,15 +4547,15 @@ export class AgrometeorologicalEngineService {
     observation: IObservacionMeteorologicaNormalizada,
     variable: 'dewPointC' | 'vpdKpa',
   ): boolean {
-    if (!Number.isFinite(observation.valores[variable])) return false;
+    if (!Number.isFinite(observation.valores?.[variable])) return false;
     const source = String(
-      observation.fuentePorVariable[variable] || observation.fuente || '',
+      observation.fuentePorVariable?.[variable] || observation.fuente || '',
     );
     const state =
       observation.estadoPorVariable?.[variable] || observation.estado;
     if (state === 'invalid' || state === 'missing') return false;
     if (!source.includes('sensor')) return true;
-    return !observation.banderasCalidad.some(
+    return !(observation.banderasCalidad || []).some(
       (flag) =>
         flag === 'humidity_sensor_quality:referencia' ||
         flag === 'humidity_sensor_quality:rechazado' ||
@@ -4479,13 +4578,13 @@ export class AgrometeorologicalEngineService {
   private isObservedFieldTemperature(
     observation: IObservacionMeteorologicaNormalizada,
   ): boolean {
-    if (!Number.isFinite(observation.valores.temperatureC)) return false;
+    if (!Number.isFinite(observation.valores?.temperatureC)) return false;
     const source = String(
-      observation.fuentePorVariable.temperatureC || observation.fuente || '',
+      observation.fuentePorVariable?.temperatureC || observation.fuente || '',
     );
     if (!source.includes('sensor')) return false;
     if (
-      observation.banderasCalidad.includes(
+      (observation.banderasCalidad || []).includes(
         'temperature_sensor_quality:rechazado',
       )
     ) {

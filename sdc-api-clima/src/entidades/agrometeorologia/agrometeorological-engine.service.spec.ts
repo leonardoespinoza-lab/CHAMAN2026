@@ -316,6 +316,33 @@ describe('AgrometeorologicalEngineService', () => {
     );
   });
 
+  it('descarta horas legacy sin valores y no fabrica frio, temperatura ni GDD', () => {
+    const date = '2026-07-10';
+    const malformed = {
+      idEstablecimiento: '64b000000000000000000003',
+      timestamp: `${date}T09:00:00.000Z`,
+      fechaLocal: date,
+      timezone: 'America/Argentina/Cordoba',
+      granularidad: 'hourly',
+      estado: 'observed',
+      esPronostico: false,
+      fuente: 'sensor',
+      completitudPct: 0,
+      obtenidoEn: `${date}T09:01:00.000Z`,
+    } as unknown as IObservacionMeteorologicaNormalizada;
+
+    const result = calculateTemperatureDay([daily(date, 8, 16, 24), malformed]);
+
+    expect(result.metricas.temperatureMinC).toBe(8);
+    expect(result.metricas.temperatureMeanC).toBe(16);
+    expect(result.metricas.temperatureMaxC).toBe(24);
+    expect(result.metricas.gddDaily).toBe(7);
+    expect(result.metricas.chillingHoursAccumulated).toBeUndefined();
+    expect(result.advertencias.join(' ')).toContain(
+      'no se imputaron temperatura, frio ni GDD',
+    );
+  });
+
   it('etiqueta humedad diaria parcial solo cuando supera la cobertura minima', () => {
     const date = '2026-07-10';
     const result = calculateTemperatureDay(
@@ -3322,11 +3349,9 @@ describe('AgrometeorologicalEngineService', () => {
       } as any;
 
       expect(
-        (engine as any).resolveObservedStage(
-          siembra,
-          '2026-07-02',
-          [['Emergencia', 0]],
-        ),
+        (engine as any).resolveObservedStage(siembra, '2026-07-02', [
+          ['Emergencia', 0],
+        ]),
       ).toBe('Emergencia');
       expect(
         (engine as any).biofixDateForObjective(

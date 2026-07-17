@@ -142,6 +142,7 @@
       (estadoFenologiaTermicaChange)="estadoFenologiaArveja = $event"
       (siembraActualizada)="actualizarSiembraFenologica($event)"
     ></app-card-etapas-fenologicas>
+    <app-card-frio-termico [lote]="lote" [siembra]="siembra"></app-card-frio-termico>
     <app-card-calculos-meteorologicos [siembra]="siembra"></app-card-calculos-meteorologicos>
   }
 

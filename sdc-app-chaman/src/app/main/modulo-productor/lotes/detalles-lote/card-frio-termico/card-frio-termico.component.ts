@@ -1,29 +1,28 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, inject, Input, OnChanges, SimpleChanges } from '@angular/core';
 import Highcharts from 'highcharts';
 import {
   esCultivoPerenne,
-  esPlantacionPerenneJoven,
-  getEdadPerenneAnios,
-  getFenologiaJuvenilPerenne,
   IDispositivo,
   IFrioAcumulado,
-  IFrioTermicoCultivo,
   IReporte,
-  ISerieFrioTermicoDia,
+  IRespuestaAgrometeorologiaSiembra,
+  IResumenAgrometeorologico,
+  ISerieAgrometeorologicaDia,
   ISiembra,
 } from 'modelos/src';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
-import { ClimaService } from '../../../../../auxiliares/http/clima.service';
 import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
+import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { GraficoHistoricoAmbienteComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-ambiente/grafico-historico-ambiente.component';
 import { IDetallesLote } from '../detalles-lote.component';
 
-interface MetricFrio {
+interface MetricaFrio {
   label: string;
   value: string;
   detail: string;
+  source: string;
   pct?: number;
   tone?: 'ok' | 'warn' | 'info';
 }
@@ -35,44 +34,60 @@ interface MetricFrio {
   styleUrl: './card-frio-termico.component.scss',
 })
 export class CardFrioTermicoComponent implements OnChanges {
-  private static readonly frioCache = new Map<string, IFrioTermicoCultivo>();
-  private static readonly frioPending = new Map<string, Promise<IFrioTermicoCultivo>>();
+  private static readonly agrometCache = new Map<string, IRespuestaAgrometeorologiaSiembra>();
+  private static readonly agrometPending = new Map<string, Promise<IRespuestaAgrometeorologiaSiembra>>();
   private static readonly historicoSensorCache = new Map<string, IReporte[]>();
   private static readonly historicoSensorPending = new Map<string, Promise<IReporte[]>>();
+
+  private readonly siembraService = inject(SiembraService);
+  private readonly reporteService = inject(ReporteService);
 
   @Input() public lote?: IDetallesLote;
   @Input() public siembra?: ISiembra;
 
   public loading = false;
-  public data?: IFrioTermicoCultivo;
+  public data?: IRespuestaAgrometeorologiaSiembra;
   public error?: string;
   public reportesSensorFrio: IReporte[] = [];
   public loadingHistoricoSensor = false;
   public diasHistoricoSensor = 7;
-  public metricas: MetricFrio[] = [];
-  public serieReciente: ISerieFrioTermicoDia[] = [];
+  public metricas: MetricaFrio[] = [];
   public chartFrioOptions?: Highcharts.Options;
 
-  private ultimoKeyFrio = '';
   private ultimoKeyHistorico = '';
 
-  constructor(
-    private climaService: ClimaService,
-    private reporteService: ReporteService
-  ) {}
-
   public get mostrar(): boolean {
-    return esCultivoPerenne(this.siembra?.semilla?.cultivo);
+    const semilla = this.siembra?.semilla;
+    const cultivo = this.normalizar(semilla?.cultivo);
+    const parametros = semilla?.parametrosAgrometeorologicos;
+    const requisito = semilla?.requerimientoFrio;
+    return !!(
+      esCultivoPerenne(semilla?.cultivo) ||
+      cultivo === 'trigo' ||
+      cultivo === 'cebada' ||
+      parametros?.procesoTermico === 'dormancia_perenne' ||
+      parametros?.procesoTermico === 'vernalizacion_anual' ||
+      requisito?.modeloRector === 'HF' ||
+      requisito?.modeloRector === 'CP' ||
+      this.esNumero(requisito?.horasFrio) ||
+      this.esNumero(requisito?.porcionesFrio) ||
+      this.data?.summary.thermalProcess === 'dormancia_perenne' ||
+      this.data?.summary.thermalProcess === 'vernalizacion_anual'
+    );
   }
 
   public get dispositivoFrio(): IDispositivo | undefined {
-    return (this.lote?.dispositivos || []).find((dispositivo) => {
-      const frio = dispositivo.frioAcumulado;
-      return (
-        !!frio &&
-        (this.esNumero(frio.horasFrio) || this.esNumero(frio.horasFrioEfectivas) || this.esNumero(frio.porcionesFrio))
+    const dispositivos = this.lote?.dispositivos || [];
+    const conTemperaturaAire = (dispositivo: IDispositivo): boolean =>
+      !!(
+        dispositivo.sensores?.includes('Temperatura') ||
+        dispositivo.ultimoReporte?.datos?.valores?.['Temperatura']?.length
       );
-    });
+    return (
+      dispositivos.find((dispositivo) => !!dispositivo.frioAcumulado && conTemperaturaAire(dispositivo)) ||
+      dispositivos.find((dispositivo) => !!dispositivo.frioAcumulado) ||
+      dispositivos.find(conTemperaturaAire)
+    );
   }
 
   public get frioSensor(): IFrioAcumulado | undefined {
@@ -80,355 +95,125 @@ export class CardFrioTermicoComponent implements OnChanges {
   }
 
   public get usaSensorFrio(): boolean {
-    return !!this.frioSensor;
-  }
-
-  public get plantacionJoven(): boolean {
-    if (this.data?.contextoCultivo?.plantacionJoven !== undefined) {
-      return !!this.data.contextoCultivo.plantacionJoven;
-    }
-    const cultivo = this.siembra?.semilla?.cultivo;
-    const edadProductiva = this.edadProductivaDesdeAnios;
-    return esPlantacionPerenneJoven(
-      cultivo,
-      this.siembra?.fechaSiembra,
-      new Date(),
-      edadProductiva,
-    );
-  }
-
-  public get edadPlantacionAnios(): number | undefined {
-    return this.data?.contextoCultivo?.edadPlantacionAnios ??
-      getEdadPerenneAnios(this.siembra?.fechaSiembra);
-  }
-
-  public get edadProductivaDesdeAnios(): number | undefined {
-    const desdeData = this.data?.contextoCultivo?.edadProductivaDesdeAnios;
-    if (this.esNumero(desdeData)) return Number(desdeData);
-    const desdeSemilla = Number(this.siembra?.semilla?.fenologiaReferencia?.edadProductivaDesdeAnios);
-    if (Number.isFinite(desdeSemilla)) return desdeSemilla;
-    return getFenologiaJuvenilPerenne(this.siembra?.semilla?.cultivo)?.edadProductivaDesdeAnios;
-  }
-
-  public get edadPlantacionLabel(): string {
-    const edad = this.edadPlantacionAnios;
-    if (!this.esNumero(edad)) return 'edad sin calcular';
-    return edad === 1 ? '1 año' : `${edad} años`;
-  }
-
-  public get fuenteFrioLabel(): string {
-    if (this.usaSensorFrio && this.data) return 'Sensor LoRa + Open-Meteo';
-    if (this.usaSensorFrio) return 'Sensor LoRa';
-    return this.data?.fuente || 'Open-Meteo';
+    return !!this.dispositivoFrio;
   }
 
   public get tituloHistoricoSensor(): string {
-    return `Historico ambiental - ${this.dispositivoFrio?.nombre || 'sensor asociado'}`;
+    return `Histórico ambiental - ${this.dispositivoFrio?.nombre || 'sensor LoRa asociado'}`;
   }
 
   public get subtituloHistoricoSensor(): string {
-    return 'Temperatura, humedad relativa y bateria medidas por el sensor asignado al lote';
+    return 'Temperatura, humedad relativa y batería medidas realmente en el lote';
+  }
+
+  public get fuenteFrioLabel(): string {
+    if (!this.data) return this.usaSensorFrio ? 'Sensor LoRa' : 'Sin serie consolidada';
+    const fuente = this.data.dataSource;
+    const respaldo =
+      fuente.type === 'station'
+        ? fuente.stationName || 'central meteorológica'
+        : fuente.type === 'open_meteo'
+          ? 'Open-Meteo'
+          : fuente.type === 'mixed'
+            ? 'fuentes integradas'
+            : fuente.type === 'sensor'
+              ? 'sensor de campo'
+              : 'sin respaldo';
+    return this.usaSensorFrio ? `Sensor LoRa + ${respaldo}` : respaldo;
   }
 
   public get lecturaPrincipal(): string {
-    if (this.plantacionJoven) {
-      const cultivo = this.siembra?.semilla?.cultivo || 'Plantacion';
-      const edad = this.edadPlantacionLabel;
-      const productiva = this.edadProductivaDesdeAnios
-        ? ` Entrada productiva estimada desde ${this.edadProductivaDesdeAnios} años.`
-        : '';
-      return `${cultivo} joven (${edad}): el frio acumulado sirve para dormancia y brotacion vegetativa; no estima floracion, llenado ni cosecha.${productiva}`;
+    const resumen = this.data?.summary;
+    const cultivo = this.siembra?.semilla?.cultivo || 'Cultivo';
+    if (resumen?.thermalProcess === 'vernalizacion_anual') {
+      return `${cultivo}: la vernalización se informa como exposición térmica en la ventana varietal; no se confunde con horas de frío de frutales.`;
     }
-    if (this.frioSensor) {
-      const cultivo = this.siembra?.semilla?.cultivo || 'Plantacion';
-      const dispositivo = this.dispositivoFrio?.nombre || this.dispositivoFrio?.deveui || 'sensor asociado';
-      return `${cultivo}: frio, HFE y CP acumulados por ${dispositivo}. Open-Meteo respalda pronostico, grados dia y riesgo sanitario.`;
+    if (resumen?.thermalProcess === 'dormancia_perenne') {
+      return `${cultivo}: HF, Unidades Utah y Porciones de Frío son modelos independientes. El cumplimiento varietal sólo usa el modelo rector validado y requiere confirmación fenológica a campo.`;
     }
-    return this.data?.lectura || 'Calculando frio y acumulacion termica.';
+    return `${cultivo}: seguimiento térmico visible, sin declarar cumplimiento biológico hasta contar con parámetros varietales documentados.`;
   }
 
   public get periodoFrioLabel(): string {
-    if (this.frioSensor) {
-      const desde = this.fechaCorta(this.frioSensor.fechaInicio);
-      const hasta = this.fechaCorta(this.frioSensor.fechaUltimoCalculo);
-      const termico = this.data?.periodoTermico?.desde ? ` Termico desde ${this.data.periodoTermico.desde}.` : '';
-      return `Frio sensor ${desde || 'inicio no definido'} a ${hasta || 'ultimo reporte no definido'}.${termico}`;
-    }
-    if (this.data) {
-      return `Frio ${this.data.periodoFrio.desde} a ${this.data.periodoFrio.hasta}. Termico desde ${this.data.periodoTermico.desde}.`;
-    }
-    return '';
+    const resumen = this.data?.summary;
+    if (!resumen) return '';
+    const frio = resumen.coldSeasonStart
+      ? `Temporada de frío desde ${this.fechaCorta(resumen.coldSeasonStart)}`
+      : 'Temporada de frío sin inicio consolidado';
+    const cierre = resumen.coldThroughDate ? ` hasta ${this.fechaCorta(resumen.coldThroughDate)}` : '';
+    const gdd = resumen.gddThroughDate ? ` · GDD cerrados al ${this.fechaCorta(resumen.gddThroughDate)}` : '';
+    return `${frio}${cierre}${gdd}`;
   }
 
-  public get tituloEventoBrotacion(): string {
-    return this.plantacionJoven ? 'Brotacion vegetativa' : 'Brotacion esperada';
+  public get calidadFrioLabel(): string {
+    const campo = this.data?.summary.fieldCold;
+    if (!campo) return 'Serie canónica sin lectura LoRa de frío consolidada';
+    if (campo.quality === 'reference') return 'LoRa visible como referencia no calibrada';
+    if (campo.interpretation === 'insufficient_data') {
+      return 'LoRa calificado, temporada incompleta';
+    }
+    return 'LoRa de campo calificado';
   }
 
-  public get tituloEventoFloracion(): string {
-    return this.plantacionJoven ? 'Entrada productiva' : 'Floracion esperada';
+  public get calidadFrioDetalle(): string {
+    const campo = this.data?.summary.fieldCold;
+    if (!campo) {
+      return 'La jerarquía automática usa sensor calificado, luego central válida y finalmente Open-Meteo.';
+    }
+    const partes = [
+      this.esNumero(campo.temperatureCoveragePercentage)
+        ? `${this.numero(campo.temperatureCoveragePercentage, 0)}% de cobertura horaria`
+        : 'cobertura sin consolidar',
+      this.esNumero(campo.maximumGapHours) ? `brecha máxima ${this.numero(campo.maximumGapHours, 0)} h` : '',
+      campo.lastObservationAt ? `última lectura ${this.fechaHora(campo.lastObservationAt)}` : '',
+    ].filter(Boolean);
+    const regla =
+      campo.quality === 'reference'
+        ? 'Se grafica y audita, pero no mueve GDD, fenología ni cumplimiento varietal.'
+        : 'Puede integrar el motor canónico; las brechas se completan con la siguiente fuente disponible.';
+    return `${partes.join(' · ')}. ${regla}`;
   }
 
-  public get tituloEventoSanitario(): string {
-    return this.plantacionJoven ? 'Helada en tejido joven' : 'Ventana sanitaria';
-  }
-
-  private crearMetricas(): MetricFrio[] {
-    const data = this.data;
-    const frio = this.frioSensor;
-    if (!data && !frio) return [];
-
-    const requerimientoSemilla = this.siembra?.semilla?.requerimientoFrio || {};
-    const requerimientos = data?.requerimientos || {};
-    const horasFrioObjetivo = requerimientos.horasFrioObjetivo ?? requerimientoSemilla.horasFrio;
-    const horasFrioEfectivasObjetivo =
-      requerimientos.horasFrioEfectivasObjetivo ?? requerimientoSemilla.horasFrioEfectivas;
-    const porcionesFrioObjetivo = requerimientos.porcionesFrioObjetivo ?? requerimientoSemilla.porcionesFrio;
-
-    const horasFrio = this.esNumero(frio?.horasFrio) ? Number(frio?.horasFrio) : data?.acumulados.horasFrio;
-    const horasFrioEfectivas = this.esNumero(frio?.horasFrioEfectivas)
-      ? Number(frio?.horasFrioEfectivas)
-      : data?.acumulados.horasFrioEfectivas;
-    const porcionesFrio = this.esNumero(frio?.porcionesFrio)
-      ? Number(frio?.porcionesFrio)
-      : this.esNumero(data?.acumulados.porcionesFrio)
-        ? data?.acumulados.porcionesFrio
-        : undefined;
-    const porcionesEstimadas =
-      !this.esNumero(frio?.porcionesFrio) &&
-      data?.calculo?.porcionesFrio !== 'dinamico_horario';
-    const factorActual = this.esNumero(frio?.factorEfectivoActual)
-      ? Number(frio?.factorEfectivoActual)
-      : this.esNumero(frio?.ultimaTemperatura)
-        ? this.hfeFactor(Number(frio?.ultimaTemperatura))
-        : undefined;
-
-    const metricas: MetricFrio[] = [];
-
-    if (this.esNumero(horasFrio) || this.esNumero(horasFrioObjetivo)) {
-      const pct = this.porcentaje(horasFrio, horasFrioObjetivo);
-      metricas.push({
-        label: 'Horas frio (HF)',
-        value: this.esNumero(horasFrio) ? `${this.numero(horasFrio, this.usaSensorFrio ? 2 : 1)} h` : '-',
-        detail: this.detalleObjetivo(horasFrio, horasFrioObjetivo, 'h', 0),
-        pct,
-        tone: pct !== undefined && pct >= 85 ? 'ok' : 'info',
-      });
-    }
-
-    if (this.esNumero(horasFrioEfectivas) || this.esNumero(horasFrioEfectivasObjetivo)) {
-      const pct = this.porcentaje(horasFrioEfectivas, horasFrioEfectivasObjetivo);
-      metricas.push({
-        label: 'Frio efectivo (HFE est.)',
-        value: this.esNumero(horasFrioEfectivas)
-          ? `${this.numero(horasFrioEfectivas, this.usaSensorFrio ? 2 : 1)} HFE`
-          : '-',
-        detail: this.detalleObjetivo(horasFrioEfectivas, horasFrioEfectivasObjetivo, 'HFE', 0),
-        pct,
-        tone: pct !== undefined && pct >= 85 ? 'ok' : 'info',
-      });
-    }
-
-    if (this.esNumero(porcionesFrio) || this.esNumero(porcionesFrioObjetivo)) {
-      const pct = this.porcentaje(porcionesFrio, porcionesFrioObjetivo);
-      metricas.push({
-        label: porcionesEstimadas ? 'CP estimado' : 'Chill portions (CP)',
-        value: this.esNumero(porcionesFrio) ? `${this.numero(porcionesFrio, 2)} CP` : '-',
-        detail: porcionesEstimadas
-          ? `${this.detalleObjetivo(porcionesFrio, porcionesFrioObjetivo, 'CP', 1)} - validar serie horaria`
-          : this.detalleObjetivo(porcionesFrio, porcionesFrioObjetivo, 'CP', 1),
-        pct,
-        tone: pct !== undefined && pct >= 85 ? 'ok' : 'info',
-      });
-    }
-
-    if (this.esNumero(factorActual)) {
-      metricas.push({
-        label: 'f(T) actual',
-        value: `${this.numero(factorActual, 3)}`,
-        detail: this.esNumero(frio?.ultimaTemperatura)
-          ? `Ultima temp. ${this.numero(Number(frio?.ultimaTemperatura), 1)} C`
-          : 'Factor horario efectivo',
-        tone: 'info',
-      });
-    }
-
-    if (data) {
-      metricas.push({
-        label: 'Grados dia',
-        value: `${data.acumulados.gradosDia} GD`,
-        detail: `Base ${data.requerimientos.temperaturaBaseGradosDia || 10} C`,
-        pct: data.progreso.brotacionPct,
-        tone: data.progreso.brotacionPct >= 80 ? 'warn' : 'info',
-      });
-
-      metricas.push({
-        label: 'Dano por helada',
-        value: data.riesgoHelada.nivel.toUpperCase(),
-        detail: data.riesgoHelada.fechaCritica
-          ? `${data.riesgoHelada.fechaCritica} / ${data.riesgoHelada.etapaFenologica || 'estadio estimado'} / ${data.riesgoHelada.temperaturaMinima} C`
-          : 'Sin alerta inmediata',
-        tone: data.riesgoHelada.nivel === 'bajo' ? 'ok' : 'warn',
-      });
-    }
-
-    return metricas;
-  }
-
-  private crearChartFrioOptions(): Highcharts.Options | undefined {
-    const serie = this.serieReciente;
-    const hayTemperatura =
-      serie.filter((dia) => this.esNumero(dia.temperaturaMin) || this.esNumero(dia.temperaturaMax)).length > 1;
-    const hayLluvia = serie.some((dia) => this.esNumero(dia.lluvia));
-
-    if (!hayTemperatura && !hayLluvia) {
-      return undefined;
-    }
-
-    const categorias = serie.map((dia) => this.labelDia(dia.fecha));
-    const tempMin = serie.map((dia) => (this.esNumero(dia.temperaturaMin) ? Number(dia.temperaturaMin) : null));
-    const tempMax = serie.map((dia) => (this.esNumero(dia.temperaturaMax) ? Number(dia.temperaturaMax) : null));
-    const lluvia = serie.map((dia) => (this.esNumero(dia.lluvia) ? Number(dia.lluvia) : 0));
-
-    return {
-      chart: {
-        backgroundColor: 'transparent',
-        height: 300,
-        spacingBottom: 18,
-        spacingLeft: 8,
-        spacingRight: 18,
-        spacingTop: 10,
-        type: 'spline',
-        zooming: { type: 'x' },
-        style: {
-          fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        },
-      },
-      title: { text: undefined },
-      xAxis: {
-        categories: categorias,
-        crosshair: {
-          color: 'rgba(34, 211, 200, 0.24)',
-          width: 1,
-        },
-        gridLineColor: 'rgba(119, 150, 180, 0.16)',
-        gridLineWidth: 1,
-        labels: {
-          style: { color: 'var(--p-text-color)', fontSize: '13px', fontWeight: '650' },
-        },
-      },
-      yAxis: [
-        {
-          title: {
-            text: 'Temperatura (C)',
-            style: { color: 'var(--p-text-color)', fontSize: '13px', fontWeight: '750' },
-          },
-          labels: {
-            style: { color: 'var(--p-text-color)', fontSize: '13px' },
-          },
-          gridLineColor: 'rgba(119, 150, 180, 0.18)',
-          gridLineWidth: 1,
-        },
-        {
-          min: 0,
-          opposite: true,
-          title: {
-            text: 'Lluvia (mm)',
-            style: { color: 'var(--p-text-muted-color)', fontSize: '13px', fontWeight: '750' },
-          },
-          labels: {
-            style: { color: 'var(--p-text-muted-color)', fontSize: '13px' },
-          },
-          gridLineWidth: 0,
-        },
-      ],
-      legend: {
-        align: 'center',
-        enabled: true,
-        itemDistance: 18,
-        itemStyle: {
-          color: 'var(--p-text-color)',
-          fontSize: '13px',
-          fontWeight: '750',
-        },
-        verticalAlign: 'bottom',
-      },
-      tooltip: {
-        backgroundColor: 'var(--p-content-background)',
-        borderColor: 'var(--p-surface-border)',
-        borderRadius: 8,
-        borderWidth: 1,
-        shared: true,
-        shadow: true,
-        style: { color: 'var(--p-text-color)', fontSize: '13px' },
-      },
-      plotOptions: {
-        column: {
-          borderRadius: 5,
-          borderWidth: 0,
-          color: '#9ee2c9',
-          groupPadding: 0.08,
-          pointPadding: 0.08,
-        },
-        spline: {
-          animation: { duration: 450 },
-          lineWidth: 1.9,
-          marker: {
-            enabled: serie.length <= 65,
-            radius: 2.7,
-            states: { hover: { radius: 4 } },
-          },
-          states: { hover: { lineWidth: 2.5 } },
-        },
-        series: {
-          connectNulls: false,
-          turboThreshold: 0,
-        },
-      },
-      series: [
-        {
-          name: 'Temp min (C)',
-          color: '#2d9bf0',
-          data: tempMin,
-          type: 'spline',
-          tooltip: { valueDecimals: 1, valueSuffix: ' C' },
-        },
-        {
-          name: 'Temp max (C)',
-          color: '#f0524a',
-          data: tempMax,
-          type: 'spline',
-          tooltip: { valueDecimals: 1, valueSuffix: ' C' },
-        },
-        {
-          name: 'Lluvia mm',
-          color: '#9ee2c9',
-          data: lluvia,
-          type: 'column',
-          yAxis: 1,
-          tooltip: { valueDecimals: 1, valueSuffix: ' mm' },
-        },
-      ],
-      credits: { enabled: false },
-      accessibility: { enabled: false },
-      responsive: {
-        rules: [
-          {
-            condition: { maxWidth: 760 },
-            chartOptions: {
-              chart: { height: 280 },
-              legend: { itemStyle: { fontSize: '12px' } },
-            },
-          },
-        ],
-      },
-    };
+  public get advertenciasFrio(): string[] {
+    return (this.data?.warnings || []).filter((warning) =>
+      /fr[ií]o|chill|vernal|LoRa|temperatura de campo|cobertura horaria|biofix/i.test(warning)
+    );
   }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['lote'] || changes['siembra']) {
-      this.prepararVista();
+      this.data = undefined;
+      this.metricas = [];
+      this.chartFrioOptions = undefined;
       void this.cargar();
       setTimeout(() => void this.cargarHistoricoSensor(), 0);
+    }
+  }
+
+  public async cargar(force = false): Promise<void> {
+    const id = this.siembra?._id;
+    if (!id || !this.mostrar) return;
+    this.loading = true;
+    this.error = undefined;
+    try {
+      const cached = CardFrioTermicoComponent.agrometCache.get(id);
+      if (!force && cached) {
+        this.data = cached;
+      } else {
+        let request = CardFrioTermicoComponent.agrometPending.get(id);
+        if (!request || force) {
+          request = this.siembraService.agrometeorologia(id);
+          CardFrioTermicoComponent.agrometPending.set(id, request);
+        }
+        this.data = await request;
+        CardFrioTermicoComponent.agrometCache.set(id, this.data);
+      }
+      this.prepararVista();
+    } catch (error: any) {
+      this.error = error?.error?.message || error?.message || 'No se pudo leer la acumulación térmica.';
+    } finally {
+      CardFrioTermicoComponent.agrometPending.delete(id);
+      this.loading = false;
     }
   }
 
@@ -437,88 +222,261 @@ export class CardFrioTermicoComponent implements OnChanges {
     await this.cargarHistoricoSensor(true);
   }
 
-  public async cargar(force = false): Promise<void> {
-    if (!this.mostrar) {
-      this.data = undefined;
-      this.prepararVista();
-      return;
-    }
-    const centro = this.lote?.ubicacion?.centro || this.lote?.establecimiento?.ubicacion?.[0]?.centro;
-    this.error = undefined;
-    if (!centro?.lat || !centro?.lng) {
-      if (!this.frioSensor) {
-        this.error = 'Sin coordenadas para calcular frio y grados dia.';
-      }
-      this.prepararVista();
-      return;
-    }
-
-    const key = this.frioRequestKey();
-    if (!force && key && key === this.ultimoKeyFrio && this.data) {
-      this.prepararVista();
-      return;
-    }
-
-    const cached = CardFrioTermicoComponent.frioCache.get(key);
-    if (!force && cached) {
-      this.data = cached;
-      this.ultimoKeyFrio = key;
-      this.prepararVista();
-      return;
-    }
-
-    const pending = CardFrioTermicoComponent.frioPending.get(key);
-    if (!force && pending) {
-      this.loading = !this.data && !this.frioSensor;
-      try {
-        this.data = await pending;
-        this.ultimoKeyFrio = key;
-      } catch (error: any) {
-        if (!this.frioSensor) {
-          this.error = error?.error?.message || error?.message || 'No se pudo calcular frio termico.';
-        }
-      } finally {
-        this.loading = false;
-        this.prepararVista();
-      }
-      return;
-    }
-
-    this.data = undefined;
-    this.prepararVista();
-    this.loading = true;
-    try {
-      const requerimientoFrio = this.siembra?.semilla?.requerimientoFrio || {};
-      const request = this.climaService.getFrioTermico(centro.lat, centro.lng, {
-        cultivo: this.siembra?.semilla?.cultivo,
-        variedad: this.siembra?.semilla?.variedad,
-        fechaSiembra: this.siembra?.fechaSiembra,
-        edadProductivaDesdeAnios: this.edadProductivaDesdeAnios,
-        ajusteHeladaC: this.siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
-        fuenteAjusteVarietal: this.siembra?.semilla?.sensibilidadHelada?.fuente,
-        horasFrioObjetivo: requerimientoFrio.horasFrio,
-        horasFrioEfectivasObjetivo: requerimientoFrio.horasFrioEfectivas,
-        porcionesFrioObjetivo: requerimientoFrio.porcionesFrio,
-      });
-      CardFrioTermicoComponent.frioPending.set(key, request);
-      this.data = await request;
-      this.ultimoKeyFrio = key;
-      CardFrioTermicoComponent.frioCache.set(key, this.data);
-    } catch (error: any) {
-      if (!this.frioSensor) {
-        this.error = error?.error?.message || error?.message || 'No se pudo calcular frio termico.';
-      }
-    } finally {
-      CardFrioTermicoComponent.frioPending.delete(key);
-      this.loading = false;
-      this.prepararVista();
-    }
-  }
-
   private prepararVista(): void {
     this.metricas = this.crearMetricas();
-    this.serieReciente = (this.data?.serie || []).slice(-60);
     this.chartFrioOptions = this.crearChartFrioOptions();
+  }
+
+  private crearMetricas(): MetricaFrio[] {
+    const resumen = this.data?.summary;
+    if (!resumen) return this.crearMetricaHfeLegacy();
+    const metricas: MetricaFrio[] = [];
+    const campo = resumen.fieldCold;
+    const dormancia = resumen.thermalProcess === 'dormancia_perenne';
+
+    if (dormancia) {
+      metricas.push(
+        this.metrica(
+          'Horas de frío (HF)',
+          resumen.chillingHoursAccumulated,
+          'HF',
+          'Modelo de horas 0 a 7,2 °C',
+          'Serie canónica',
+          1
+        ),
+        this.metrica(
+          'Unidades Utah',
+          resumen.utahChillUnitsAccumulated,
+          'UF',
+          'Modelo Utah; puede descontar calor',
+          'Serie canónica',
+          1
+        ),
+        this.metrica(
+          'Porciones de frío',
+          resumen.chillPortionsAccumulated,
+          'CP',
+          (resumen.chillingMaximumGapHours || 0) > 0
+            ? 'Dynamic Model; cota inferior por brechas'
+            : 'Dynamic Model horario',
+          'Serie canónica',
+          2
+        )
+      );
+      metricas.unshift(this.metricaRequisito(resumen));
+    }
+
+    if (resumen.thermalProcess === 'vernalizacion_anual') {
+      metricas.push({
+        label: 'Vernalización varietal',
+        value: this.esNumero(resumen.vernalizationAccumulated)
+          ? `${this.numero(resumen.vernalizationAccumulated, 2)} días eq.`
+          : 'Sin acumulado válido',
+        detail: this.detalleVernalizacion(resumen),
+        source: resumen.parametersSource || 'Perfil varietal',
+        tone: resumen.vernalizationInterpretation === 'datos_insuficientes' ? 'warn' : 'info',
+      });
+    }
+
+    if (campo) {
+      metricas.push(
+        this.metrica(
+          'HF medido en lote',
+          campo.chillingHoursAccumulated,
+          'HF',
+          'Temperatura de aire LoRa',
+          campo.sensorNames?.join(', ') || 'Sensor LoRa',
+          1,
+          campo.quality === 'qualified' ? 'ok' : 'warn'
+        ),
+        this.metrica(
+          'CP medido en lote',
+          campo.chillPortionsAccumulated,
+          'CP',
+          campo.interpretation === 'insufficient_data'
+            ? 'Parcial por cobertura o continuidad'
+            : 'Dynamic Model sobre la serie LoRa',
+          campo.sensorNames?.join(', ') || 'Sensor LoRa',
+          2,
+          campo.quality === 'qualified' ? 'ok' : 'warn'
+        )
+      );
+    }
+
+    metricas.push(...this.crearMetricaHfeLegacy());
+    metricas.push({
+      label: 'Grados día',
+      value: this.esNumero(resumen.gddAccumulated) ? `${this.numero(resumen.gddAccumulated, 1)} GDD` : 'Incompleto',
+      detail:
+        resumen.gddAccumulationComplete === false
+          ? 'Faltan días térmicos; no se publica un total parcial como completo'
+          : `Base ${this.numero(resumen.gddBaseTemperatureC, 1)} °C`,
+      source: 'Motor térmico canónico',
+      tone: resumen.gddAccumulationComplete === false ? 'warn' : 'info',
+    });
+
+    return metricas.filter(
+      (metrica, index, array) =>
+        metrica.value !== '-' || array.findIndex((candidate) => candidate.label === metrica.label) === index
+    );
+  }
+
+  private metricaRequisito(resumen: IResumenAgrometeorologico): MetricaFrio {
+    const requisito = resumen.coldRequirement;
+    const unit = requisito?.model === 'HF' || requisito?.model === 'CP' ? requisito.model : '';
+    const value = this.esNumero(requisito?.progressPercentage)
+      ? `${this.numero(requisito?.progressPercentage, 0)}%`
+      : requisito?.interpretation === 'datos_insuficientes'
+        ? 'Datos insuficientes'
+        : 'Sin calibrar';
+    const objective = this.esNumero(requisito?.target)
+      ? `Objetivo ${this.numero(requisito?.target, unit === 'CP' ? 2 : 0)} ${unit}`
+      : 'Sin objetivo varietal validado';
+    const interpretation = requisito?.compatible
+      ? 'clima compatible; confirmar etapa a campo'
+      : requisito?.interpretation === 'datos_insuficientes'
+        ? 'no se calcula avance biológico con cobertura incompleta'
+        : 'en acumulación';
+    return {
+      label: 'Requisito varietal rector',
+      value,
+      detail: `${objective} · ${interpretation}`,
+      source: requisito?.source || 'Pendiente de fuente varietal',
+      pct: requisito?.progressPercentage,
+      tone: requisito?.compatible ? 'ok' : 'warn',
+    };
+  }
+
+  private crearMetricaHfeLegacy(): MetricaFrio[] {
+    if (!this.esNumero(this.frioSensor?.horasFrioEfectivas)) return [];
+    return [
+      {
+        label: 'Frío efectivo (HFE ref.)',
+        value: `${this.numero(this.frioSensor?.horasFrioEfectivas, 2)} HFE`,
+        detail: 'Referencia histórica; no gobierna decisiones nuevas',
+        source: this.dispositivoFrio?.nombre || 'Sensor LoRa',
+        tone: 'warn',
+      },
+    ];
+  }
+
+  private metrica(
+    label: string,
+    value: number | undefined,
+    unit: string,
+    detail: string,
+    source: string,
+    decimals: number,
+    tone: MetricaFrio['tone'] = 'info'
+  ): MetricaFrio {
+    return {
+      label,
+      value: this.esNumero(value) ? `${this.numero(value, decimals)} ${unit}` : '-',
+      detail,
+      source,
+      tone,
+    };
+  }
+
+  private detalleVernalizacion(resumen: IResumenAgrometeorologico): string {
+    if (resumen.vernalizationInterpretation === 'no_requerida') {
+      return 'Hábito primaveral documentado: requisito 0';
+    }
+    if (resumen.vernalizationInterpretation === 'sin_biofix_inicio') {
+      return 'Falta registrar a campo el inicio de la ventana';
+    }
+    if (resumen.vernalizationInterpretation === 'datos_insuficientes') {
+      return `Cobertura ${this.numero(resumen.vernalizationTemperatureCoveragePct, 0)}% · los días incompletos no suman`;
+    }
+    const objetivo = this.esNumero(resumen.vernalizationRequirement)
+      ? `Objetivo ${this.numero(resumen.vernalizationRequirement, 2)} días eq.`
+      : 'Objetivo sin calibrar';
+    return `${objetivo} · hábito ${resumen.vernalizationHabit || 'sin confirmar'}`;
+  }
+
+  private crearChartFrioOptions(): Highcharts.Options | undefined {
+    const dias = this.data?.series || [];
+    const vernalizacion = this.data?.summary.thermalProcess === 'vernalizacion_anual';
+    const definiciones = vernalizacion
+      ? [
+          {
+            name: 'Vernalización',
+            color: '#547ec8',
+            values: dias.map((dia) => dia.metrics.vernalizationAccumulated ?? null),
+            suffix: ' días eq.',
+          },
+          {
+            name: 'GDD',
+            color: '#18a999',
+            values: dias.map((dia) => dia.metrics.gddAccumulated ?? null),
+            suffix: ' GDD',
+          },
+        ]
+      : [
+          {
+            name: 'Horas de frío',
+            color: '#168d82',
+            values: dias.map((dia) => dia.metrics.chillingHoursAccumulated ?? null),
+            suffix: ' HF',
+          },
+          {
+            name: 'Unidades Utah',
+            color: '#547ec8',
+            values: dias.map((dia) => dia.metrics.utahChillUnitsAccumulated ?? null),
+            suffix: ' UF',
+          },
+          {
+            name: 'Porciones de frío',
+            color: '#8d65b8',
+            values: dias.map((dia) => dia.metrics.chillPortionsAccumulated ?? null),
+            suffix: ' CP',
+          },
+        ];
+    const visibles = definiciones.filter((item) => item.values.some((value) => this.esNumero(value)));
+    if (!dias.length || !visibles.length) return undefined;
+    return {
+      chart: {
+        backgroundColor: 'transparent',
+        height: 320,
+        spacing: [12, 12, 18, 8],
+        type: 'spline',
+        zooming: { type: 'x' },
+      },
+      title: { text: undefined },
+      xAxis: {
+        categories: dias.map((dia) => this.fechaCorta(dia.date)),
+        labels: { step: Math.max(1, Math.ceil(dias.length / 12)) },
+        gridLineWidth: 1,
+        gridLineColor: 'rgba(119, 150, 180, 0.14)',
+      },
+      yAxis: visibles.map((item, index) => ({
+        title: { text: item.name },
+        opposite: index > 0,
+        visible: index < 2,
+        min: 0,
+        gridLineColor: 'rgba(119, 150, 180, 0.16)',
+      })),
+      tooltip: { shared: true },
+      legend: { enabled: true, align: 'center', verticalAlign: 'bottom' },
+      plotOptions: {
+        series: {
+          connectNulls: false,
+          marker: { enabled: dias.length <= 45, radius: 2.5 },
+          lineWidth: 2,
+          turboThreshold: 0,
+        },
+      },
+      series: visibles.map((item, index) => ({
+        name: item.name,
+        data: item.values,
+        color: item.color,
+        type: 'spline' as const,
+        yAxis: Math.min(index, 1),
+        tooltip: { valueSuffix: item.suffix, valueDecimals: index === 2 ? 2 : 1 },
+      })),
+      credits: { enabled: false },
+      accessibility: { enabled: false },
+    };
   }
 
   private async cargarHistoricoSensor(force = false): Promise<void> {
@@ -528,47 +486,32 @@ export class CardFrioTermicoComponent implements OnChanges {
       this.reportesSensorFrio = [];
       return;
     }
-
     const key = `${id}|${this.diasHistoricoSensor}`;
     if (!force && key === this.ultimoKeyHistorico && this.reportesSensorFrio.length) {
       return;
     }
-
     const cached = CardFrioTermicoComponent.historicoSensorCache.get(key);
     if (!force && cached) {
       this.reportesSensorFrio = cached;
       this.ultimoKeyHistorico = key;
       return;
     }
-
-    const pending = CardFrioTermicoComponent.historicoSensorPending.get(key);
-    if (!force && pending) {
-      this.loadingHistoricoSensor = !this.reportesSensorFrio.length;
-      try {
-        this.reportesSensorFrio = await pending;
-        this.ultimoKeyHistorico = key;
-      } catch (error) {
-        console.error('Error al cargar historico ambiental para frio', error);
-        this.reportesSensorFrio = dispositivo.ultimoReporte ? [dispositivo.ultimoReporte] : [];
-      } finally {
-        this.loadingHistoricoSensor = false;
-      }
-      return;
-    }
-
     this.loadingHistoricoSensor = true;
     try {
-      const request = this.reporteService
-        .historico(String(id), this.diasHistoricoSensor, this.limiteHistoricoSensor())
-        .then((response) =>
-          response.datos?.length ? response.datos : dispositivo.ultimoReporte ? [dispositivo.ultimoReporte] : []
-        );
-      CardFrioTermicoComponent.historicoSensorPending.set(key, request);
+      let request = CardFrioTermicoComponent.historicoSensorPending.get(key);
+      if (!request || force) {
+        request = this.reporteService
+          .historico(String(id), this.diasHistoricoSensor, this.limiteHistoricoSensor())
+          .then((response) =>
+            response.datos?.length ? response.datos : dispositivo.ultimoReporte ? [dispositivo.ultimoReporte] : []
+          );
+        CardFrioTermicoComponent.historicoSensorPending.set(key, request);
+      }
       this.reportesSensorFrio = await request;
       this.ultimoKeyHistorico = key;
       CardFrioTermicoComponent.historicoSensorCache.set(key, this.reportesSensorFrio);
     } catch (error) {
-      console.error('Error al cargar historico ambiental para frio', error);
+      console.error('Error al cargar histórico ambiental para frío', error);
       this.reportesSensorFrio = dispositivo.ultimoReporte ? [dispositivo.ultimoReporte] : [];
     } finally {
       CardFrioTermicoComponent.historicoSensorPending.delete(key);
@@ -582,112 +525,43 @@ export class CardFrioTermicoComponent implements OnChanges {
     return 2500;
   }
 
-  private frioRequestKey(): string {
-    const centro = this.lote?.ubicacion?.centro || this.lote?.establecimiento?.ubicacion?.[0]?.centro;
-    const requerimientoFrio = this.siembra?.semilla?.requerimientoFrio || {};
-    return [
-      centro?.lat,
-      centro?.lng,
-      this.siembra?.semilla?.cultivo,
-      this.siembra?.semilla?.variedad,
-      this.siembra?.fechaSiembra,
-      this.edadProductivaDesdeAnios,
-      this.siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
-      this.siembra?.semilla?.sensibilidadHelada?.fuente,
-      requerimientoFrio.horasFrio,
-      requerimientoFrio.horasFrioEfectivas,
-      requerimientoFrio.porcionesFrio,
-    ].join('|');
+  private numero(value: unknown, decimals = 1): string {
+    return this.esNumero(value)
+      ? Number(value).toLocaleString('es-AR', {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals,
+        })
+      : '-';
   }
 
-  private porcentaje(valor?: number, objetivo?: number): number | undefined {
-    if (!this.esNumero(valor) || !this.esNumero(objetivo) || Number(objetivo) <= 0) {
-      return undefined;
-    }
-    return Math.max(0, Math.min(100, (Number(valor) / Number(objetivo)) * 100));
+  private esNumero(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
   }
 
-  private detalleObjetivo(
-    valor: number | undefined,
-    objetivo: number | undefined,
-    unidad: string,
-    decimales = 1
-  ): string {
-    if (!this.esNumero(objetivo)) return 'Objetivo sin cargar';
-
-    const unidadLabel = unidad ? ` ${unidad}` : '';
-    const objetivoLabel = `${this.numero(Number(objetivo), decimales)}${unidadLabel}`;
-
-    if (!this.esNumero(valor)) return `Objetivo ${objetivoLabel}`;
-
-    const faltante = Math.max(0, Number(objetivo) - Number(valor));
-    if (this.plantacionJoven && ['h', 'HFE', 'CP'].includes(unidad)) {
-      const estado = faltante > 0
-        ? `faltan ${this.numero(faltante, decimales)}${unidadLabel}`
-        : 'referencia alcanzada';
-      return `Referencia dormancia ${objetivoLabel} - ${estado}; no implica cosecha`;
-    }
-    return `Objetivo ${objetivoLabel} - faltan ${this.numero(faltante, decimales)}${unidadLabel}`;
+  private fechaCorta(value?: string): string {
+    if (!value) return '-';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
   }
 
-  private numero(valor?: number, decimales = 1): string {
-    if (!this.esNumero(valor)) return '-';
-    return Number(valor).toLocaleString('es-AR', {
-      maximumFractionDigits: decimales,
-      minimumFractionDigits: decimales,
-    });
+  private fechaHora(value?: string): string {
+    if (!value) return '-';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? value
+      : date.toLocaleString('es-AR', {
+          day: '2-digit',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
   }
 
-  private esNumero(valor?: number): boolean {
-    return typeof valor === 'number' && Number.isFinite(valor);
-  }
-
-  private fechaCorta(fecha?: string): string {
-    if (!fecha) return '';
-    const date = new Date(fecha);
-    if (Number.isNaN(date.getTime())) return '';
-    return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-  }
-
-  private labelDia(fecha?: string): string {
-    if (!fecha) return '-';
-    const date = new Date(fecha);
-    if (Number.isNaN(date.getTime())) return fecha;
-    return date.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
-  }
-
-  private hfeFactor(temp: number): number {
-    const points = [
-      [-5, 0],
-      [0, 0.2],
-      [1, 0.45],
-      [2, 0.65],
-      [3, 0.799],
-      [4, 0.905],
-      [5, 0.975],
-      [6, 1],
-      [7, 0.975],
-      [8, 0.905],
-      [9, 0.799],
-      [10, 0.68],
-      [11, 0.54],
-      [12, 0.407],
-      [13, 0.29],
-      [14, 0.18],
-      [15, 0.08],
-      [16, 0],
-      [18, 0],
-    ];
-    if (temp <= points[0][0]) return points[0][1];
-    if (temp >= points[points.length - 1][0]) return 0;
-    for (let i = 0; i < points.length - 1; i++) {
-      const [x1, y1] = points[i];
-      const [x2, y2] = points[i + 1];
-      if (temp >= x1 && temp <= x2) {
-        const t = (temp - x1) / (x2 - x1);
-        return y1 + t * (y2 - y1);
-      }
-    }
-    return 0;
+  private normalizar(value: unknown): string {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toLowerCase();
   }
 }
