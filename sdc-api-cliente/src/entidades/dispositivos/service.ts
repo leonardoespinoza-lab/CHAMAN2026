@@ -1,4 +1,8 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  Optional,
+} from '@nestjs/common';
 import {
   IDispositivo,
   IListado,
@@ -11,10 +15,29 @@ import {
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { DispositivosRepository } from './repository';
+import {
+  DecisionPipelineQueueService,
+  DecisionTrigger,
+} from '../../auxiliares/decision-pipeline';
+
+const DEVICE_SCIENCE_FIELDS = [
+  'idLote',
+  'idEstablecimiento',
+  'fechaAsignacionLote',
+  'historialAsignacionesLote',
+  'tipo',
+  'sensores',
+  'calificacionMeteorologica',
+  'geojson',
+] as const;
 
 @Injectable()
 export class DispositivosService {
-  constructor(private repository: DispositivosRepository) {}
+  constructor(
+    private repository: DispositivosRepository,
+    @Optional()
+    private readonly decisionPipelineQueue?: DecisionPipelineQueueService,
+  ) {}
 
   async getById(
     id: string,
@@ -69,18 +92,85 @@ export class DispositivosService {
   }
 
   async create(data: ICreateDispositivo): Promise<IDispositivo> {
-    return await this.repository.create(data);
+    const created = await this.repository.create(data);
+    await this.enqueueDeviceScopes(
+      'dispositivo.created',
+      Object.keys(data || {}),
+      created,
+    );
+    return created;
   }
 
   async update(id: string, data: IUpdateDispositivo): Promise<IDispositivo> {
-    return await this.repository.update(id, data);
+    const changedFields = DEVICE_SCIENCE_FIELDS.filter((field) =>
+      Object.prototype.hasOwnProperty.call(data, field),
+    );
+    const previous = changedFields.length
+      ? await this.repository.getById(id)
+      : undefined;
+    const updated = await this.repository.update(id, data);
+    if (changedFields.length) {
+      await this.enqueueDeviceScopes(
+        'dispositivo.updated',
+        [...changedFields],
+        previous,
+        updated,
+      );
+    }
+    return updated;
   }
 
   async delete(id: string): Promise<IDispositivo> {
-    return await this.repository.delete(id);
+    const previous = await this.repository.getById(id);
+    const deleted = await this.repository.delete(id);
+    await this.enqueueDeviceScopes(
+      'dispositivo.deleted',
+      ['idLote', 'idEstablecimiento'],
+      previous,
+    );
+    return deleted;
   }
 
   // Private
+
+  private async enqueueDeviceScopes(
+    trigger: DecisionTrigger,
+    changedFields: string[],
+    ...devices: Array<IDispositivo | undefined>
+  ): Promise<void> {
+    if (!this.decisionPipelineQueue) return;
+    const scopes = new Map<'lote' | 'establecimiento', Set<string>>([
+      ['lote', new Set<string>()],
+      ['establecimiento', new Set<string>()],
+    ]);
+    for (const device of devices) {
+      const idLote = String(device?.idLote || '').trim();
+      const idEstablecimiento = String(
+        device?.idEstablecimiento || '',
+      ).trim();
+      if (idLote) scopes.get('lote')!.add(idLote);
+      else if (idEstablecimiento) {
+        scopes.get('establecimiento')!.add(idEstablecimiento);
+      }
+    }
+    for (const idLote of scopes.get('lote')!) {
+      await this.decisionPipelineQueue.enqueueForLot(idLote, {
+        trigger,
+        changedFields,
+        sincronizarClima: false,
+      });
+    }
+    for (const idEstablecimiento of scopes.get('establecimiento')!) {
+      await this.decisionPipelineQueue.enqueueForEstablishment(
+        idEstablecimiento,
+        {
+          trigger,
+          changedFields,
+          sincronizarClima: false,
+        },
+      );
+    }
+  }
 
   private async resolverDispositivo(identificador: string): Promise<IDispositivo | undefined> {
     if (!identificador) {

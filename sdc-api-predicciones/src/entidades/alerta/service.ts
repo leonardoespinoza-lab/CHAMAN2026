@@ -105,99 +105,27 @@ export class AlertasService {
     comentario: string,
     dedupeKey?: string,
   ): Promise<boolean> {
-    let alerta = await this.getByIdSiembraActiva(
+    const fecha = new Date().toISOString();
+    const resultado = await this.repository.finalizarEventoSiembra({
       idSiembra,
       descripcion,
+      comentario,
       dedupeKey,
-    );
-    if (!alerta && this.esClaveSanitaria(dedupeKey)) {
-      alerta = await this.getAlertaSanitariaLegadaActiva(
-        idSiembra,
-        this.tituloSanitarioDesdeDescripcion(descripcion),
-      );
-    }
-    if (!alerta?._id) return false;
-
-    const fecha = new Date().toISOString();
-    await this.update(alerta._id, {
-      activa: false,
-      estadoActual: 'Finalizada',
-      fechaVencimiento: fecha,
-      estados: [
-        ...(alerta.estados || []),
-        {
-          fecha,
-          estado: 'Finalizada',
-          comentario,
-        },
-      ],
+      tituloLegado: this.esClaveSanitaria(dedupeKey)
+        ? this.tituloSanitarioDesdeDescripcion(descripcion)
+        : undefined,
+      fecha,
     });
-    return true;
+    return resultado.finalizada;
   }
 
   async registrarEventoSiembra(
     evento: EventoSiembra,
   ): Promise<{ alerta?: IAlerta; creada: boolean; duplicada: boolean }> {
     const normalizado = this.normalizarEvento(evento);
-    let alerta = await this.getByIdSiembraActiva(
-      evento.idSiembra,
-      evento.descripcion,
-      normalizado.dedupeKey,
-    );
-
-    if (!alerta && normalizado.dedupeKey) {
-      alerta = await this.getByIdSiembraActiva(
-        evento.idSiembra,
-        evento.descripcion,
-      );
-    }
-
-    if (!alerta && this.esClaveSanitaria(normalizado.dedupeKey)) {
-      alerta = await this.getAlertaSanitariaLegadaActiva(
-        evento.idSiembra,
-        normalizado.titulo,
-      );
-    }
-
-    if (alerta) {
-      const reportes = alerta.reportes || [];
-      const duplicada = reportes.some((r) => r?.eventKey === evento.eventKey);
-      if (duplicada) {
-        return { alerta, creada: false, duplicada: true };
-      }
-      const update: IUpdateAlerta = {
-        reportes: [...reportes, normalizado.reporte],
-        descripcion: evento.descripcion,
-        titulo: normalizado.titulo,
-        tipo: normalizado.tipo,
-        categoria: normalizado.categoria,
-        // El reporte conserva el maximo historico. La cabecera debe representar
-        // el estado vigente para que una alerta pueda desescalar correctamente.
-        severidad: normalizado.severidad,
-        prioridad: normalizado.prioridad,
-        origen: normalizado.origen,
-        motor: normalizado.motor,
-        versionMotor: normalizado.versionMotor,
-        eventKey: normalizado.eventKey,
-        dedupeKey: alerta.dedupeKey || normalizado.dedupeKey,
-        lectura: normalizado.lectura,
-        recomendacion: normalizado.recomendacion,
-        accionSugerida: normalizado.accionSugerida,
-        calidadDatos: normalizado.calidadDatos,
-        canales: normalizado.canales,
-        fechaUltimoEvento: normalizado.fecha,
-      };
-      return {
-        alerta: await this.update(alerta._id, update),
-        creada: false,
-        duplicada: false,
-      };
-    }
-
-    const create: ICreateAlerta = {
+    const alerta: ICreateAlerta = {
       idSiembra: evento.idSiembra,
       activa: true,
-      reportes: [normalizado.reporte],
       estadoActual: 'Nueva',
       estados: [
         {
@@ -228,36 +156,11 @@ export class AlertasService {
       calidadDatos: normalizado.calidadDatos,
       canales: normalizado.canales,
     };
-    return {
-      alerta: await this.create(create),
-      creada: true,
-      duplicada: false,
-    };
-  }
-
-  /**
-   * Antes de v4 todas las patologias compartian la descripcion generica
-   * "Riesgo de Enfermedad" y no tenian dedupeKey por enfermedad. Esta busqueda
-   * acotada permite cerrar o migrar esas alertas sin dejar eventos legados
-   * activos ni mezclar enfermedades distintas.
-   */
-  private async getAlertaSanitariaLegadaActiva(
-    idSiembra: string,
-    titulo?: string,
-  ): Promise<IAlerta | undefined> {
-    if (!titulo) return undefined;
-    const query: IQueryParam = {
-      filter: JSON.stringify({
-        idSiembra,
-        activa: true,
-        descripcion: 'Riesgo de Enfermedad',
-        titulo,
-      }),
-      sort: '-fechaUltimoEvento,-fecha',
-      limit: 1,
-    };
-    const res = await this.repository.get(query);
-    return res.datos[0];
+    return await this.repository.registrarEventoSiembra({
+      alerta,
+      reporte: normalizado.reporte,
+      eventKey: normalizado.eventKey,
+    });
   }
 
   private esClaveSanitaria(dedupeKey?: string): boolean {

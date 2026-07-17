@@ -17,4 +17,53 @@ export class IndicadoresAgrometeorologicosService {
   deleteBySowing(idSiembra: string) {
     return this.repository.deleteBySowing(idSiembra);
   }
+
+  acquireGenerationLease(
+    idSiembra: string,
+    versionCalculo: string,
+    generacionCalculo: string,
+  ) {
+    return this.repository.acquireGenerationLease(
+      idSiembra,
+      versionCalculo,
+      generacionCalculo,
+    );
+  }
+
+  releaseGenerationLease(
+    idSiembra: string,
+    versionCalculo: string,
+    generacionCalculo: string,
+  ) {
+    return this.repository.releaseGenerationLease(
+      idSiembra,
+      versionCalculo,
+      generacionCalculo,
+    );
+  }
+
+  replaceGeneration(
+    idSiembra: string,
+    versionCalculo: string,
+    generacionCalculo: string,
+    data: ICreateIndicadorAgrometeorologico[],
+    intervaloEsperado: {
+      desde: string;
+      hasta: string;
+      cantidad: number;
+      checksumFechas: string;
+    },
+  ) {
+    return this.repository.replaceGeneration(
+      idSiembra,
+      versionCalculo,
+      generacionCalculo,
+      data,
+      intervaloEsperado,
+    );
+  }
+
+  getActiveGeneration(idSiembra: string, versionCalculo: string) {
+    return this.repository.getActiveGeneration(idSiembra, versionCalculo);
+  }
 }

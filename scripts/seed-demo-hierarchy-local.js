@@ -16,9 +16,15 @@ const bcrypt = require(path.join(
 ));
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/chaman';
-const PASSWORD = process.env.DEMO_PASSWORD || 'Chaman2026!';
+const PASSWORD = process.env.DEMO_PASSWORD;
 const PREFIX = 'Demo CHAMAN 2026';
 const TODAY = new Date('2026-06-10T12:00:00-03:00');
+
+if (!PASSWORD || PASSWORD.length < 12) {
+  throw new Error(
+    'DEMO_PASSWORD es obligatoria y debe tener al menos 12 caracteres.',
+  );
+}
 
 function isoDate(daysOffset = 0) {
   const date = new Date(TODAY);

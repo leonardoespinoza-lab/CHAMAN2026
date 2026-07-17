@@ -262,6 +262,7 @@ export class DispositivosRepository {
 
     return await this.model.findByIdAndUpdate(id, update, {
       new: true,
+      runValidators: true,
     });
   }
 

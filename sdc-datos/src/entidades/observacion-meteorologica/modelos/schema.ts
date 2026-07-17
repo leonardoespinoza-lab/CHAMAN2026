@@ -20,6 +20,9 @@ export class ObservacionMeteorologica implements IObservacionMeteorologicaNormal
   @Prop({ type: mongoose.Schema.Types.ObjectId, required: true })
   idEstablecimiento: string;
 
+  @Prop({ type: mongoose.Schema.Types.ObjectId })
+  idLote?: string;
+
   @Prop({ type: Date, required: true })
   timestamp: string;
 
@@ -48,9 +51,11 @@ export class ObservacionMeteorologica implements IObservacionMeteorologicaNormal
   @Prop({
     type: String,
     enum: [
+      'sensor',
       'station',
       'open_meteo',
       'mixed',
+      'derived_sensor',
       'derived_station',
       'derived_open_meteo',
       'gap_filled',
@@ -89,6 +94,9 @@ export class ObservacionMeteorologica implements IObservacionMeteorologicaNormal
 
   @Prop({ type: Date, required: true })
   obtenidoEn: string;
+
+  @Prop({ type: Object })
+  contextosLote?: IObservacionMeteorologicaNormalizada['contextosLote'];
 
   creadoEn?: string;
   actualizadoEn?: string;

@@ -2,12 +2,14 @@ import { Injectable } from '@nestjs/common';
 import {
   ICreateIndicadorAgrometeorologico,
   ICreateObservacionMeteorologica,
+  IDispositivo,
   IEstablecimiento,
   IIndicadorAgrometeorologicoDiario,
   IListado,
   ILote,
   IObservacionMeteorologicaNormalizada,
   IQueryParam,
+  IReporte,
   ISiembra,
   IEntradasAgronomicasSuelo,
 } from 'modelos/src';
@@ -40,6 +42,20 @@ export class AgrometeorologiaRepository {
 
   getLote(id: string): Promise<ILote> {
     return this.axios.GET<ILote>(`${API_DATOS}/lotes/${id}`);
+  }
+
+  getDispositivos(params: IQueryParam): Promise<IListado<IDispositivo>> {
+    return this.axios.GET<IListado<IDispositivo>>(
+      `${API_DATOS}/dispositivos`,
+      { params, headers: this.internalHeaders() },
+    );
+  }
+
+  getReportes(params: IQueryParam): Promise<IListado<IReporte>> {
+    return this.axios.GET<IListado<IReporte>>(`${API_DATOS}/reportes`, {
+      params,
+      headers: this.internalHeaders(),
+    });
   }
 
   getSoilAgronomicInputs(
@@ -89,9 +105,65 @@ export class AgrometeorologiaRepository {
     );
   }
 
-  deleteIndicadoresSiembra(idSiembra: string) {
-    return this.axios.DELETE(
-      `${API_DATOS}/indicadores-agrometeorologicos/siembra/${idSiembra}`,
+  replaceIndicadoresGeneration(
+    idSiembra: string,
+    versionCalculo: string,
+    generacionCalculo: string,
+    indicadores: ICreateIndicadorAgrometeorologico[],
+    intervaloEsperado: {
+      desde: string;
+      hasta: string;
+      cantidad: number;
+      checksumFechas: string;
+    },
+  ) {
+    return this.axios.POST(
+      `${API_DATOS}/indicadores-agrometeorologicos/generaciones/reemplazar`,
+      {
+        idSiembra,
+        versionCalculo,
+        generacionCalculo,
+        indicadores,
+        intervaloEsperado,
+      },
+      { headers: this.internalHeaders() },
+    );
+  }
+
+  acquireIndicadoresGenerationLease(
+    idSiembra: string,
+    versionCalculo: string,
+    generacionCalculo: string,
+  ): Promise<{ previousGeneration?: string; leaseUntil: string }> {
+    return this.axios.POST(
+      `${API_DATOS}/indicadores-agrometeorologicos/generaciones/lease/adquirir`,
+      { idSiembra, versionCalculo, generacionCalculo },
+      { headers: this.internalHeaders() },
+    );
+  }
+
+  releaseIndicadoresGenerationLease(
+    idSiembra: string,
+    versionCalculo: string,
+    generacionCalculo: string,
+  ): Promise<void> {
+    return this.axios.POST(
+      `${API_DATOS}/indicadores-agrometeorologicos/generaciones/lease/liberar`,
+      { idSiembra, versionCalculo, generacionCalculo },
+      { headers: this.internalHeaders() },
+    );
+  }
+
+  getActiveIndicadoresGeneration(
+    idSiembra: string,
+    versionCalculo: string,
+  ): Promise<{
+    generationId?: string;
+    activatedAt?: string;
+    data: IIndicadorAgrometeorologicoDiario[];
+  }> {
+    return this.axios.GET(
+      `${API_DATOS}/indicadores-agrometeorologicos/generaciones/activa/${idSiembra}/${encodeURIComponent(versionCalculo)}`,
       { headers: this.internalHeaders() },
     );
   }

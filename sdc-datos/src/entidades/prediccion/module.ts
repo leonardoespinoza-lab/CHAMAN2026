@@ -4,6 +4,11 @@ import { PrediccionsController } from './controller';
 import { PrediccionsRepository } from './repository';
 import { Prediccion, PrediccionSchema } from './modelos/schema';
 import { MongooseModule } from '@nestjs/mongoose';
+import {
+  PrediccionTombstone,
+  PrediccionTombstoneSchema,
+} from './modelos/tombstone.schema';
+import { Siembra, SiembraSchema } from '../siembra/modelos/schema';
 
 @Module({
   controllers: [PrediccionsController],
@@ -12,6 +17,11 @@ import { MongooseModule } from '@nestjs/mongoose';
   imports: [
     MongooseModule.forFeature([
       { name: Prediccion.name, schema: PrediccionSchema },
+      {
+        name: PrediccionTombstone.name,
+        schema: PrediccionTombstoneSchema,
+      },
+      { name: Siembra.name, schema: SiembraSchema },
     ]),
   ],
 })

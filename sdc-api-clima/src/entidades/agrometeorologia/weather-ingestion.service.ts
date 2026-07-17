@@ -13,8 +13,11 @@ import { ClimaService } from '../clima/service';
 import { AgrometeorologiaRepository } from './repository';
 import { WeatherSourceResolverService } from './weather-source-resolver.service';
 
+const DEFAULT_OPERATIONAL_TIMEZONE = 'America/Argentina/Buenos_Aires';
+
 export interface IWeatherIngestionResult {
   idEstablecimiento: string;
+  idLote?: string;
   desde: string;
   hasta: string;
   observaciones: number;
@@ -37,6 +40,7 @@ export class WeatherIngestionService {
     coordenadas: ICoordenadas,
     desdeSolicitado: string,
     forceBackfill = false,
+    idLote?: string,
   ): Promise<IWeatherIngestionResult> {
     if (!establecimiento?._id) {
       throw new Error('El establecimiento no tiene identificador.');
@@ -45,7 +49,11 @@ export class WeatherIngestionService {
     const advertencias: string[] = [];
     const desde = forceBackfill
       ? this.dateOnly(desdeSolicitado)
-      : await this.resolverDesdeIncremental(idEstablecimiento, desdeSolicitado);
+      : await this.resolverDesdeIncremental(
+          idEstablecimiento,
+          desdeSolicitado,
+          idLote,
+        );
     const hoy = this.dateOnly(new Date());
     const ayer = this.addDays(hoy, -1);
     const hastaPronostico = this.addDays(hoy, AGROMETEO_FORECAST_DAYS);
@@ -60,6 +68,7 @@ export class WeatherIngestionService {
           chunk.desde,
           chunk.hasta,
           false,
+          idLote,
         );
         total += result.observaciones;
         result.fuentes.forEach((source) => fuentes.add(source));
@@ -73,6 +82,7 @@ export class WeatherIngestionService {
       hoy,
       hastaPronostico,
       true,
+      idLote,
     );
     total += forecastResult.observaciones;
     forecastResult.fuentes.forEach((source) => fuentes.add(source));
@@ -88,6 +98,7 @@ export class WeatherIngestionService {
             : 'sin_datos';
     const result: IWeatherIngestionResult = {
       idEstablecimiento,
+      ...(idLote ? { idLote } : {}),
       desde,
       hasta: hastaPronostico,
       observaciones: total,
@@ -106,6 +117,7 @@ export class WeatherIngestionService {
     desde: string,
     hasta: string,
     forecast: boolean,
+    idLote?: string,
   ): Promise<{
     observaciones: number;
     fuentes: Set<string>;
@@ -113,8 +125,18 @@ export class WeatherIngestionService {
   }> {
     const idEstablecimiento = String(establecimiento._id);
     const stationId = establecimiento.idEstacionMeteorologica;
-    const fromIso = `${desde}T00:00:00.000Z`;
-    const toIso = `${hasta}T23:59:59.999Z`;
+    const stationRequestTimezone =
+      establecimiento.estacionMeteorologica?.position?.timezoneCode ||
+      DEFAULT_OPERATIONAL_TIMEZONE;
+    const fromIso = this.localDateBoundaryToUtc(desde, stationRequestTimezone);
+    const toIso = new Date(
+      new Date(
+        this.localDateBoundaryToUtc(
+          this.addDays(hasta, 1),
+          stationRequestTimezone,
+        ),
+      ).getTime() - 1,
+    ).toISOString();
     const [openData, stationHourlyResult, stationDailyResult] =
       await Promise.all([
         this.clima.getOpenMeteoAgrometeorologia(
@@ -163,13 +185,18 @@ export class WeatherIngestionService {
       stationHourlyResult.estacion?.name?.original ||
       stationDailyResult.estacion?.name?.custom ||
       stationDailyResult.estacion?.name?.original;
+    const stationTimezone =
+      stationHourlyResult.estacion?.position?.timezoneCode ||
+      stationDailyResult.estacion?.position?.timezoneCode ||
+      stationRequestTimezone ||
+      timezone;
     const stationHourly = this.resolver.normalizarEstacion(
       stationHourlyResult.datos,
       {
         idEstablecimiento,
         estacionId: stationId,
         estacionNombre: stationName,
-        timezone,
+        timezone: stationTimezone,
         granularidad: 'hourly',
         coordenadas,
       },
@@ -180,9 +207,13 @@ export class WeatherIngestionService {
         idEstablecimiento,
         estacionId: stationId,
         estacionNombre: stationName,
-        timezone,
+        timezone: stationTimezone,
         granularidad: 'daily',
         coordenadas,
+        coberturaAgregadosDiariosPorFecha:
+          this.resolver.calcularCoberturaAgregadosDiariosEstacion(
+            stationHourly,
+          ),
       },
     );
     const stationObservations = [...stationHourly, ...stationDaily];
@@ -190,6 +221,11 @@ export class WeatherIngestionService {
       stationObservations,
       openObservations,
     );
+    if (idLote) {
+      merged.forEach((item) => {
+        item.idLote = idLote;
+      });
+    }
     const freshnessWarning = this.stationFreshnessWarning(
       stationId,
       stationHourly,
@@ -266,12 +302,20 @@ export class WeatherIngestionService {
   private async resolverDesdeIncremental(
     idEstablecimiento: string,
     requestedFrom: string,
+    idLote?: string,
   ): Promise<string> {
-    const filter = {
+    const filter: Record<string, unknown> = {
       idEstablecimiento,
       granularidad: 'daily',
       esPronostico: false,
     };
+    if (idLote) {
+      const safeKey = this.safeContextKey(idLote);
+      filter.$or = [
+        { idLote },
+        { [`contextosLote.${safeKey}.idLote`]: idLote },
+      ];
+    }
     try {
       const [first, last] = await Promise.all([
         this.repository.getObservaciones({
@@ -286,13 +330,39 @@ export class WeatherIngestionService {
         }),
       ]);
       const requested = this.dateOnly(requestedFrom);
-      const firstDate = first.datos?.[0]?.fechaLocal;
-      const lastDate = last.datos?.[0]?.fechaLocal;
+      const firstDate = this.resolveLotContext(
+        first.datos?.[0],
+        idLote,
+      )?.fechaLocal;
+      const lastDate = this.resolveLotContext(
+        last.datos?.[0],
+        idLote,
+      )?.fechaLocal;
       if (!firstDate || !lastDate || requested < firstDate) return requested;
       return [requested, this.addDays(lastDate, -2)].sort().reverse()[0];
     } catch {
       return this.dateOnly(requestedFrom);
     }
+  }
+
+  private resolveLotContext(
+    observation: IObservacionMeteorologicaNormalizada | undefined,
+    idLote?: string,
+  ): IObservacionMeteorologicaNormalizada | undefined {
+    if (!observation || !idLote) return observation;
+    const context = observation.contextosLote?.[this.safeContextKey(idLote)];
+    if (!context) {
+      return observation.idLote === idLote ? observation : undefined;
+    }
+    return {
+      ...observation,
+      ...context,
+      contextosLote: observation.contextosLote,
+    };
+  }
+
+  private safeContextKey(value: string): string {
+    return String(value).replace(/[.$]/g, '_');
   }
 
   private chunks(
@@ -316,8 +386,58 @@ export class WeatherIngestionService {
     return date.toISOString().slice(0, 10);
   }
 
+  private localDateBoundaryToUtc(value: string, timezone: string): string {
+    const date = value.slice(0, 10);
+    const naiveUtc = new Date(`${date}T00:00:00.000Z`);
+    try {
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23',
+      });
+      let candidate = naiveUtc;
+      for (let pass = 0; pass < 2; pass += 1) {
+        const parts = formatter.formatToParts(candidate);
+        const read = (type: Intl.DateTimeFormatPartTypes) =>
+          Number(parts.find((part) => part.type === type)?.value || 0);
+        const representedAsUtc = Date.UTC(
+          read('year'),
+          read('month') - 1,
+          read('day'),
+          read('hour'),
+          read('minute'),
+          read('second'),
+        );
+        const offsetMs = representedAsUtc - candidate.getTime();
+        candidate = new Date(naiveUtc.getTime() - offsetMs);
+      }
+      return candidate.toISOString();
+    } catch {
+      if (timezone !== DEFAULT_OPERATIONAL_TIMEZONE) {
+        return this.localDateBoundaryToUtc(date, DEFAULT_OPERATIONAL_TIMEZONE);
+      }
+      return naiveUtc.toISOString();
+    }
+  }
+
   private dateOnly(value: string | Date): string {
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+      return value.slice(0, 10);
+    }
     const date = value instanceof Date ? value : new Date(value);
-    return date.toISOString().slice(0, 10);
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: DEFAULT_OPERATIONAL_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const read = (type: Intl.DateTimeFormatPartTypes) =>
+      parts.find((part) => part.type === type)?.value || '';
+    return `${read('year')}-${read('month')}-${read('day')}`;
   }
 }

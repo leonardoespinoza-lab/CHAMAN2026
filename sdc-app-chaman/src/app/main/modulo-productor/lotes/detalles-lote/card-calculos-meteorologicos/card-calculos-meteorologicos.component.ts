@@ -11,7 +11,7 @@ import { ChartComponent } from '../../../../../auxiliares/componentes/chart/char
 import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
 
 type Periodo = 7 | 30 | 90 | 'ciclo';
-type Grafico = 'termico' | 'agua' | 'atmosfera' | 'radiacion' | 'suelo';
+type Grafico = 'termico' | 'frio' | 'agua' | 'atmosfera' | 'radiacion' | 'suelo';
 
 interface MetricaResumen {
   label: string;
@@ -48,6 +48,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
 
   public readonly graficos: Array<{ label: string; value: Grafico; icon: string }> = [
     { label: 'Termico', value: 'termico', icon: 'pi pi-sun' },
+    { label: 'Frio / vernalizacion', value: 'frio', icon: 'pi pi-snowflake' },
     { label: 'Agua', value: 'agua', icon: 'pi pi-chart-bar' },
     { label: 'Atmosfera', value: 'atmosfera', icon: 'pi pi-cloud' },
     { label: 'Radiacion y ET', value: 'radiacion', icon: 'pi pi-bolt' },
@@ -65,16 +66,117 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     );
   }
 
+  public get mostrarFrio(): boolean {
+    return !!(
+      this.data?.summary.thermalProcess === 'dormancia_perenne' ||
+      this.data?.summary.fieldCold ||
+      this.data?.series.some(
+        (dia) =>
+          this.esNumero(dia.metrics.chillingHoursAccumulated) ||
+          this.esNumero(dia.metrics.chillPortionsAccumulated) ||
+          this.esNumero(dia.metrics.vernalizationAccumulated)
+      )
+    );
+  }
+
+  public get frioCampo(): IResumenAgrometeorologico['fieldCold'] {
+    return this.data?.summary.fieldCold;
+  }
+
+  public get frioCampoEstadoLabel(): string {
+    if (!this.frioCampo) return '';
+    if (this.frioCampo.quality === 'reference') {
+      return 'Referencia no calibrada';
+    }
+    return this.frioCampo.interpretation === 'insufficient_data'
+      ? 'Sensor calificado · datos incompletos'
+      : 'Sensor de campo calificado';
+  }
+
+  public get frioCampoSensoresLabel(): string {
+    return this.frioCampo?.sensorNames?.length
+      ? this.frioCampo.sensorNames.join(', ')
+      : 'Sensor LoRa del lote';
+  }
+
+  public get frioCampoMetricas(): MetricaResumen[] {
+    const field = this.frioCampo;
+    if (!field) return [];
+    return [
+      {
+        label: 'Horas de frio de campo',
+        value: this.valor(field.chillingHoursAccumulated, 'HF', 1),
+        detail: 'Medicion horaria 0 a 7,2 C',
+        tone: 'thermal',
+      },
+      {
+        label: 'Utah de campo',
+        value: this.valor(field.utahChillUnitsAccumulated, 'UF', 1),
+        detail: 'Modelo Utah independiente',
+        tone: 'thermal',
+      },
+      {
+        label: 'Porciones de campo',
+        value: this.valor(field.chillPortionsAccumulated, 'CP', 2),
+        detail:
+          (field.maximumGapHours || 0) > 0
+            ? 'Dynamic Model · cota inferior por brechas'
+            : 'Dynamic Model independiente',
+        tone: 'thermal',
+      },
+    ];
+  }
+
+  public get frioCampoCalidadDetalle(): string {
+    const field = this.frioCampo;
+    if (!field) return '';
+    const coverage = this.esNumero(field.temperatureCoveragePercentage)
+      ? `${this.numero(field.temperatureCoveragePercentage, 0)}% cobertura`
+      : 'cobertura no consolidada';
+    const gap = this.esNumero(field.maximumGapHours)
+      ? ` · brecha maxima ${this.numero(field.maximumGapHours, 0)} h`
+      : '';
+    const last = field.lastObservationAt
+      ? ` · ultima lectura ${this.fechaHora(field.lastObservationAt)}`
+      : '';
+    return `${coverage}${gap}${last}`;
+  }
+
+  public get frioCampoAclaracion(): string {
+    const field = this.frioCampo;
+    if (!field) return '';
+    if (field.quality === 'reference') {
+      return 'Esta lectura describe el microambiente del lote, pero no mueve GDD, fenologia ni el requisito varietal hasta documentar instalacion y calibracion.';
+    }
+    if (field.interpretation === 'insufficient_data') {
+      return 'El sensor esta calificado, pero la cobertura o continuidad de la temporada no alcanza para una interpretacion biologica completa.';
+    }
+    return 'Serie de campo calificada. El motor canonico conserva la jerarquia sensor calificado, central y Open-Meteo para completar faltantes.';
+  }
+
   public get graficoLabel(): string {
     return this.graficos.find((item) => item.value === this.grafico)?.label || 'Seguimiento meteorologico';
   }
 
   public get fuenteLabel(): string {
+    const sourceNames = (this.data?.dataSource.sources || []).map((source) => {
+      if (source === 'sensor') {
+        return this.data?.dataSource.sensorNames?.length
+          ? this.data.dataSource.sensorNames.join(', ')
+          : 'Sensor de campo';
+      }
+      if (source === 'station') return this.data?.dataSource.stationName || 'Central';
+      return 'Open-Meteo';
+    });
     switch (this.data?.dataSource.type) {
+      case 'sensor':
+        return sourceNames[0] || 'Sensor de campo';
       case 'station':
         return this.data.dataSource.stationName || 'Central meteorologica';
       case 'mixed':
-        return `${this.data.dataSource.stationName || 'Central'} + Open-Meteo`;
+        return sourceNames.length
+          ? sourceNames.join(' + ')
+          : `${this.data.dataSource.stationName || 'Central'} + Open-Meteo`;
       case 'open_meteo':
         return 'Open-Meteo';
       default:
@@ -86,15 +188,35 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     if (!this.data) return '';
     const completitud = this.numero(this.data.dataSource.completenessPercentage, 0);
     const actualizacion = this.fechaHora(this.data.dataSource.lastCalculatedAt);
-    return `${completitud}% de cobertura de variables${actualizacion ? ` - actualizado ${actualizacion}` : ''}`;
+    const campo = this.esNumero(this.data.dataSource.fieldCoveragePercentage)
+      ? ` - campo ${this.numero(this.data.dataSource.fieldCoveragePercentage, 0)}%`
+      : '';
+    const usaCampo =
+      this.data.dataSource.type === 'sensor' ||
+      this.data.dataSource.type === 'mixed' ||
+      this.data.dataSource.sources?.includes('sensor');
+    const ultimaCampo = usaCampo
+      ? this.fechaHora(this.data.dataSource.lastObservationAt)
+      : '';
+    const edadCampoHoras = this.edadHoras(
+      this.data.dataSource.lastObservationAt,
+    );
+    const estadoCampo = ultimaCampo
+      ? edadCampoHoras !== undefined && edadCampoHoras > 6
+        ? ` - ultima lectura de campo ${ultimaCampo}; respaldo automatico activo`
+        : ` - campo actualizado ${ultimaCampo}`
+      : '';
+    return `${completitud}% de cobertura de variables${campo}${estadoCampo}${actualizacion ? ` - calculado ${actualizacion}` : ''}`;
   }
 
   public get historialLabel(): string {
     switch (this.data?.dataSource.type) {
+      case 'sensor':
+        return 'Medido en el lote';
       case 'station':
         return 'Medido';
       case 'mixed':
-        return 'Historico mixto';
+        return 'Jerarquia integrada';
       case 'open_meteo':
         return 'Reanalisis modelado';
       default:
@@ -105,7 +227,10 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
   public get sueloTieneSensor(): boolean {
     return !!this.data?.series.some((dia) =>
       [dia.sourceByVariable.soilMoistureM3M3, dia.sourceByVariable.soilTemperatureC].some(
-        (source) => String(source || '').includes('station') || source === 'mixed'
+        (source) =>
+          String(source || '').includes('sensor') ||
+          String(source || '').includes('station') ||
+          source === 'mixed'
       )
     );
   }
@@ -133,16 +258,54 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     return !!this.data?.series.length;
   }
 
+  public get requisitoFrioConDatosInsuficientes(): boolean {
+    return (
+      this.data?.summary.coldRequirement?.interpretation ===
+      'datos_insuficientes'
+    );
+  }
+
+  public get avisoDatosInsuficientesFrio(): string {
+    const requirement = this.data?.summary.coldRequirement;
+    if (requirement?.interpretation !== 'datos_insuficientes') return '';
+    const coverage = this.esNumero(requirement.coveragePercentage)
+      ? `${this.numero(requirement.coveragePercentage, 0)}%`
+      : 'sin porcentaje consolidado';
+    const minimum = this.esNumero(requirement.minimumCoveragePercentage)
+      ? `${this.numero(requirement.minimumCoveragePercentage, 0)}%`
+      : 'el minimo requerido';
+    const gap =
+      requirement.continuitySufficient === false &&
+      this.esNumero(requirement.maximumGapHours)
+        ? ` La mayor brecha continua es de ${this.numero(
+            requirement.maximumGapHours,
+            0
+          )} h y el máximo admitido es ${this.numero(
+            requirement.maximumAllowedGapHours,
+            0
+          )} h.`
+        : '';
+    return `La temporada fria tiene ${coverage} de cobertura horaria y requiere ${minimum}.${gap} Los acumulados se muestran como datos parciales auditables, no como avance biologico.`;
+  }
+
   public get advertenciaFuente(): string | undefined {
     return this.data?.warnings.find((warning) =>
-      /central asociada|central meteorologica|Open-Meteo automaticamente/i.test(warning)
+      /central asociada|central meteorologica|Open-Meteo automaticamente|ultima lectura de campo|se considera desconectado|calificacion meteorologica/i.test(warning)
     );
   }
 
   public get estadosSerie(): string[] {
     const series = this.data?.series || [];
     const states: string[] = [];
-    if (series.some((dia) => !dia.isForecast && (String(dia.source).includes('station') || dia.source === 'mixed'))) {
+    if (
+      series.some(
+        (dia) =>
+          !dia.isForecast &&
+          (String(dia.source).includes('sensor') ||
+            String(dia.source).includes('station') ||
+            dia.source === 'mixed')
+      )
+    ) {
       states.push('Observado');
     }
     if (
@@ -174,6 +337,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
 
   public cambiarGrafico(grafico: Grafico): void {
     if (grafico === 'suelo' && !this.mostrarSuelo) return;
+    if (grafico === 'frio' && !this.mostrarFrio) return;
     this.grafico = grafico;
     this.chartOptions = this.crearGrafico();
   }
@@ -195,6 +359,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
       this.data = await this.siembraService.agrometeorologia(id, desde);
       this.requestKey = key;
       if (this.grafico === 'suelo' && !this.mostrarSuelo) this.grafico = 'termico';
+      if (this.grafico === 'frio' && !this.mostrarFrio) this.grafico = 'termico';
       this.prepararVista();
     } catch (error: any) {
       this.data = undefined;
@@ -207,7 +372,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
   private prepararVista(): void {
     const r = this.data?.summary;
     const detalleGdd = r ? this.detalleGdd(r) : '';
-    this.metricas = !r
+    const metricasBase: MetricaResumen[] = !r
       ? []
       : [
           {
@@ -247,6 +412,61 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
             tone: 'neutral',
           },
         ];
+    const metricaRequisitoFrio: MetricaResumen[] =
+      r?.thermalProcess === 'dormancia_perenne'
+        ? [
+            {
+              label: 'Requisito varietal',
+              value:
+                r.coldRequirement?.interpretation === 'datos_insuficientes'
+                  ? 'Datos insuficientes'
+                  : r.coldRequirement?.progressPercentage !== undefined
+                  ? `${this.numero(r.coldRequirement.progressPercentage, 0)}%`
+                  : 'Sin calibrar',
+              detail: this.detalleRequisitoFrio(r),
+              tone: 'thermal',
+            },
+          ]
+        : [];
+    const metricasFrio: MetricaResumen[] =
+      r?.thermalProcess === 'vernalizacion_anual'
+        ? [
+            {
+              label: 'Vernalizacion varietal',
+              value: this.esNumero(r.vernalizationAccumulated)
+                ? this.valor(r.vernalizationAccumulated, 'dias eq.', 2)
+                : 'Sin calibrar',
+              detail: this.detalleVernalizacion(r),
+              tone: 'thermal',
+            },
+          ]
+        : r && this.mostrarFrio
+          ? [
+            {
+              label: 'Horas de frio',
+              value: this.valor(r.chillingHoursAccumulated, 'HF', 1),
+              detail: 'Modelo 0 a 7,2 C',
+              tone: 'thermal',
+            },
+            {
+              label: 'Unidades Utah',
+              value: this.valor(r.utahChillUnitsAccumulated, 'UF', 1),
+              detail: 'Incluye aportes negativos por calor',
+              tone: 'thermal',
+            },
+            {
+              label: 'Porciones de frio',
+              value: this.valor(r.chillPortionsAccumulated, 'CP', 2),
+              detail: this.detalleFrio(r),
+              tone: 'thermal',
+            },
+            ]
+          : [];
+    this.metricas = [
+      ...metricaRequisitoFrio,
+      ...metricasFrio,
+      ...metricasBase,
+    ];
     this.chartOptions = this.crearGrafico();
   }
 
@@ -256,6 +476,8 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     switch (this.grafico) {
       case 'agua':
         return this.graficoAgua(serie);
+      case 'frio':
+        return this.graficoFrio(serie);
       case 'atmosfera':
         return this.graficoAtmosfera(serie);
       case 'radiacion':
@@ -293,6 +515,42 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
         ),
       ],
       [this.eje('Temperatura (C)'), this.eje('GDD acumulado', true, 0)]
+    );
+  }
+
+  private graficoFrio(dias: ISerieAgrometeorologicaDia[]): Highcharts.Options {
+    if (this.data?.summary.thermalProcess === 'vernalizacion_anual') {
+      return this.baseChart(
+        dias,
+        'Exposicion termica en ventana fenologica',
+        'Solo se calcula con habito, requerimiento y modelo varietal documentados',
+        [
+          this.linea(
+            'Dias equivalentes en rango',
+            dias,
+            (d) => d.metrics.vernalizationAccumulated,
+            '#5a7fd1',
+            0,
+            ' d eq.'
+          ),
+        ],
+        [this.eje('Exposicion termica (dias equivalentes)', false, 0)]
+      );
+    }
+    return this.baseChart(
+      dias,
+      'Dormancia y acumulacion de frio',
+      'Tres modelos independientes sobre la misma temperatura horaria; no se convierten entre si',
+      [
+        this.linea('Horas de frio', dias, (d) => d.metrics.chillingHoursAccumulated, '#268f83', 0, ' HF'),
+        this.linea('Unidades Utah', dias, (d) => d.metrics.utahChillUnitsAccumulated, '#5a7fd1', 1, ' UF'),
+        this.linea('Porciones de frio', dias, (d) => d.metrics.chillPortionsAccumulated, '#9b6dc6', 2, ' CP'),
+      ],
+      [
+        this.eje('Horas de frio (HF)', false),
+        this.eje('Unidades Utah (UF)', true),
+        this.eje('Porciones de frio (CP)', true, 0, undefined, false),
+      ]
     );
   }
 
@@ -661,7 +919,11 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     if (this.periodo === 'ciclo') return this.siembra?.fechaSiembra;
     const date = new Date();
     date.setDate(date.getDate() - Number(this.periodo) + 1);
-    return date.toISOString().slice(0, 10);
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-');
   }
 
   private valor(valor: number | undefined, unidad: string, decimales = 1): string {
@@ -703,7 +965,151 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     if (this.esNumero(resumen.gddUpperTemperatureC)) {
       partes.push(`techo ${this.numero(resumen.gddUpperTemperatureC, 0)} C`);
     }
+    if (resumen.parametersStatus) {
+      partes.push(
+        resumen.parametersStatus === 'validado'
+          ? 'parametros validados'
+          : resumen.parametersStatus === 'referencia'
+            ? 'parametros de referencia'
+            : 'requiere calibracion'
+      );
+    }
     return partes.join(' · ');
+  }
+
+  private detalleFrio(resumen: IResumenAgrometeorologico): string {
+    const partes = [
+      resumen.coldThroughDate
+        ? `Cerrado al ${this.fechaCorta(resumen.coldThroughDate)}`
+        : 'Sin lectura cerrada',
+    ];
+    if (this.esNumero(resumen.chillingTemperatureCoveragePct)) {
+      partes.push(`${this.numero(resumen.chillingTemperatureCoveragePct, 0)}% cobertura termica`);
+    }
+    if ((resumen.chillingMaximumGapHours || 0) > 0) {
+      partes.push('CP es cota inferior: precursor reiniciado en brechas');
+    }
+    return partes.join(' - ');
+  }
+
+  private detalleRequisitoFrio(
+    resumen: IResumenAgrometeorologico
+  ): string {
+    const requirement = resumen.coldRequirement;
+    if (requirement?.interpretation === 'datos_insuficientes') {
+      const unit =
+        requirement.model === 'HF' || requirement.model === 'CP'
+          ? requirement.model
+          : '';
+      const accumulated =
+        unit && this.esNumero(requirement.accumulated)
+          ? `Acumulado parcial ${this.numero(
+              requirement.accumulated,
+              unit === 'CP' ? 2 : 1
+            )} ${unit}`
+          : 'Acumulado parcial no consolidado';
+      const coverage = this.esNumero(requirement.coveragePercentage)
+        ? `cobertura horaria ${this.numero(
+            requirement.coveragePercentage,
+            0
+          )}%`
+        : 'cobertura horaria no consolidada';
+      const minimum = this.esNumero(requirement.minimumCoveragePercentage)
+        ? `minimo ${this.numero(requirement.minimumCoveragePercentage, 0)}%`
+        : 'minimo no informado';
+      const continuity =
+        requirement.continuitySufficient === false &&
+        this.esNumero(requirement.maximumGapHours)
+          ? ` Brecha continua maxima ${this.numero(
+              requirement.maximumGapHours,
+              0
+            )} h (admitida ${this.numero(
+              requirement.maximumAllowedGapHours,
+              0
+            )} h).`
+          : '';
+      return `${accumulated} - ${coverage} (${minimum}).${continuity} Datos insuficientes para calcular avance o compatibilidad biologica.`;
+    }
+    if (
+      !requirement ||
+      requirement.status !== 'validado' ||
+      requirement.model === 'sin_calibrar' ||
+      !this.esNumero(requirement.target)
+    ) {
+      return 'Acumulacion climatica disponible; no se declara cumplimiento biologico sin modelo y fuente varietal validados';
+    }
+    const unit = requirement.model;
+    const comparison =
+      this.esNumero(requirement.accumulated)
+        ? `${this.numero(requirement.accumulated, unit === 'CP' ? 2 : 1)} / ${this.numero(requirement.target, unit === 'CP' ? 2 : 0)} ${unit}`
+        : `Objetivo ${this.numero(requirement.target, unit === 'CP' ? 2 : 0)} ${unit}`;
+    return requirement.compatible
+      ? `${comparison} - clima compatible; confirmar inicio de etapa a campo`
+      : `${comparison} - en acumulacion; no anticipa por si solo la etapa`;
+  }
+
+  private detalleVernalizacion(
+    resumen: IResumenAgrometeorologico
+  ): string {
+    if (resumen.vernalizationInterpretation === 'no_requerida') {
+      return 'Habito primaveral documentado: requisito de vernalizacion 0; el avance depende de temperatura y, si corresponde, fotoperiodo';
+    }
+    if (resumen.vernalizationInterpretation === 'sin_biofix_inicio') {
+      return 'Falta registrar a campo el inicio de la ventana fenologica configurada';
+    }
+    if (resumen.vernalizationInterpretation === 'datos_insuficientes') {
+      const coverage = this.esNumero(
+        resumen.vernalizationTemperatureCoveragePct
+      )
+        ? `${this.numero(
+            resumen.vernalizationTemperatureCoveragePct,
+            0
+          )}% de cobertura`
+        : 'cobertura no consolidada';
+      const gap = this.esNumero(resumen.vernalizationMaximumGapHours)
+        ? `; brecha maxima ${this.numero(
+            resumen.vernalizationMaximumGapHours,
+            0
+          )} h`
+        : '';
+      return `${coverage}${gap}; los dias incompletos no suman exposicion`;
+    }
+    if (!this.esNumero(resumen.vernalizationAccumulated)) {
+      return resumen.vernalizationHabit === 'desconocido'
+        ? 'Habito primaveral, facultativo o invernal no confirmado'
+        : 'Faltan modelo o requerimiento varietal documentado';
+    }
+    const partes = [
+      resumen.vernalizationHabit
+        ? `Habito ${resumen.vernalizationHabit}`
+        : '',
+      resumen.vernalizationModel
+        ? 'exposicion termica en ventana calibrada'
+        : '',
+      this.esNumero(resumen.vernalizationRequirement)
+        ? `objetivo ${this.numero(resumen.vernalizationRequirement, 2)} dias eq.`
+        : '',
+      resumen.vernalizationWindowStart
+        ? `desde ${this.fechaCorta(resumen.vernalizationWindowStart)}`
+        : '',
+      resumen.vernalizationWindowEnd
+        ? `cerrada ${this.fechaCorta(resumen.vernalizationWindowEnd)}`
+        : '',
+      this.esNumero(resumen.vernalizationTemperatureCoveragePct)
+        ? `${this.numero(
+            resumen.vernalizationTemperatureCoveragePct,
+            0
+          )}% cobertura`
+        : '',
+    ].filter(Boolean);
+    return `${partes.join(' - ') || 'Seguimiento varietal calibrado'}; no mueve etapas sin confirmacion de campo`;
+  }
+
+  private edadHoras(value?: string): number | undefined {
+    if (!value) return undefined;
+    const timestamp = new Date(value).getTime();
+    if (!Number.isFinite(timestamp)) return undefined;
+    return Math.max(0, (Date.now() - timestamp) / 3600000);
   }
 
   private esNumero(valor: unknown): valor is number {

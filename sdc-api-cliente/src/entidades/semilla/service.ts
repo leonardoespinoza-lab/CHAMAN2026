@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
   ISemilla,
   IListado,
@@ -7,11 +7,30 @@ import {
   IUpdateSemilla,
 } from 'modelos/src';
 import { SemillasRepository } from './repository';
+import { DecisionPipelineQueueService } from '../../auxiliares/decision-pipeline';
+
+const SCIENTIFIC_SEED_FIELDS = [
+  'cultivo',
+  'variedad',
+  'ciclo',
+  'resistencia',
+  'campania',
+  'tipoCultivo',
+  'portainjerto',
+  'requerimientoFrio',
+  'fenologiaReferencia',
+  'sensibilidadHelada',
+  'parametrosAgrometeorologicos',
+] as const;
 
 @Injectable()
 export class SemillasService {
   private readonly logger = new Logger(SemillasService.name);
-  constructor(private repository: SemillasRepository) {}
+  constructor(
+    private repository: SemillasRepository,
+    @Optional()
+    private readonly decisionPipelineQueue?: DecisionPipelineQueueService,
+  ) {}
 
   async getById(id: string): Promise<ISemilla> {
     return await this.repository.getById(id);
@@ -31,21 +50,20 @@ export class SemillasService {
 
   async update(id: string, data: IUpdateSemilla): Promise<ISemilla> {
     const updated = await this.repository.update(id, data);
-    if (
-      Object.prototype.hasOwnProperty.call(
-        data,
-        'parametrosAgrometeorologicos',
-      ) ||
-      Object.prototype.hasOwnProperty.call(data, 'fenologiaReferencia') ||
-      Object.prototype.hasOwnProperty.call(data, 'cultivo')
-    ) {
-      this.repository
-        .reprocesarAgrometeorologia(id)
-        .catch((error) =>
-          this.logger.error(
-            `Error al reprocesar agrometeorologia de la semilla ${id}: ${error}`,
-          ),
-        );
+    const changedFields = SCIENTIFIC_SEED_FIELDS.filter((field) =>
+      Object.prototype.hasOwnProperty.call(data, field),
+    );
+    if (changedFields.length) {
+      if (this.decisionPipelineQueue) {
+        await this.decisionPipelineQueue.enqueueForSeed(id, {
+          trigger: 'semilla.science-updated',
+          changedFields: [...changedFields],
+          sincronizarClima: false,
+        });
+      } else {
+        // Compatibilidad de pruebas construidas fuera del contenedor Nest.
+        await this.repository.reprocesarAgrometeorologia(id);
+      }
     }
     return updated;
   }

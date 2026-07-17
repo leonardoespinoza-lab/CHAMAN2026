@@ -12,5 +12,9 @@ export class PushNotificationsService {
     this.logger.verbose(
       `Push externo omitido para ${tokens.length} token(s). La notificacion interna queda registrada. ${titulo}: ${mensaje}`,
     );
+    return {
+      status: 'skipped' as const,
+      reason: 'push-externo-deshabilitado',
+    };
   }
 }

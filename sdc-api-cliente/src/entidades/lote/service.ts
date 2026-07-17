@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import {
   ILote,
   IListado,
@@ -17,6 +22,9 @@ import {
   ISuelo,
   ISueloReferencia,
   IFrioTermicoCultivo,
+  IRespuestaAgrometeorologiaSiembra,
+  ISerieAgrometeorologicaDia,
+  IRiesgoAgroclimatico,
   TTexturaSuelo,
   TTipoDrenaje,
   TTipoErosionEscorrentiaPendiente,
@@ -35,16 +43,18 @@ import {
   getEtapasPerennesReferencia,
   IInteligenciaSueloLote,
   aplicarEntradasAgronomicasSuelo,
+  obtenerRegistroFenologicoDecisorioEnFecha,
 } from 'modelos/src';
 import { CHAMAN_REPORT_LOGO_DATA_URI } from './chaman-report-logo';
 import { HelperService } from '../../auxiliares/helper';
 import { LotesRepository } from './repository';
 import { EstablecimientosService } from '../establecimiento/service';
 import { ReporteNDVIsService } from '../reporte-ndvis/service';
-import { NdviQueueService } from './ndvi-queue.service';
+import { NdviKnownScene, NdviQueueService } from './ndvi-queue.service';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 import { API_DATOS, NDVI_SYNC_LIMIT } from '../../env';
 import { ClimaService } from '../clima/service';
+import { DecisionPipelineQueueService } from '../../auxiliares/decision-pipeline';
 
 interface IntaFeatureCollection {
   features?: {
@@ -76,7 +86,56 @@ interface CertificadoDatos {
   fumigaciones: IFumigacion[];
   cargaFitosanitaria: ICargaFitosanitaria;
   frio: CertificadoFrio;
-  clima?: IFrioTermicoCultivo;
+  clima?: CertificadoClima;
+}
+
+interface CertificadoClima {
+  origen: 'canonico' | 'legacy';
+  fuente: string;
+  fuentes: string[];
+  completitudPct: number;
+  coberturaCampoPct?: number;
+  sensores?: string[];
+  ultimaObservacion?: string;
+  versionCalculo?: string;
+  periodo?: { desde: string; hasta: string };
+  procesoTermico?: IRespuestaAgrometeorologiaSiembra['summary']['thermalProcess'];
+  estadoParametros?: IRespuestaAgrometeorologiaSiembra['summary']['parametersStatus'];
+  fuenteParametros?: string;
+  advertencias: string[];
+  requerimientoFrio?: IRespuestaAgrometeorologiaSiembra['summary']['coldRequirement'];
+  acumulados: {
+    lluvia?: number;
+    gradosDia?: number;
+    horasFrio?: number;
+    unidadesFrioUtah?: number;
+    porcionesFrio?: number;
+    vernalizacion?: number;
+  };
+  requerimientos: {
+    horasFrioObjetivo?: number;
+    porcionesFrioObjetivo?: number;
+    vernalizacionObjetivo?: number;
+    temperaturaBaseGradosDia?: number;
+  };
+  riesgoHelada?: {
+    nivel: 'bajo' | 'medio' | 'alto';
+    dias: number;
+    fechaCritica?: string;
+    temperaturaMinima?: number;
+    etapaFenologica?: string;
+    umbralDanoLeveC?: number;
+    umbralDanoSeveroC?: number;
+    lectura?: string;
+  };
+  serie: Array<{
+    fecha: string;
+    temperaturaMin?: number;
+    temperaturaMax?: number;
+    lluvia?: number;
+    esPronostico?: boolean;
+  }>;
+  lectura: string;
 }
 
 interface CertificadoFrio {
@@ -155,6 +214,8 @@ export class LotesService {
     private ndviQueue: NdviQueueService,
     private axios: AxiosService,
     private climaService: ClimaService,
+    @Optional()
+    private readonly decisionPipelineQueue?: DecisionPipelineQueueService,
   ) {}
 
   async getById(id: string, permiso: IPermiso): Promise<ILote> {
@@ -264,29 +325,42 @@ export class LotesService {
     }
 
     const updated = await this.repository.update(id, data);
-    if (current.idSiembra && this.cambiaDependenciaAgrometeorologica(data)) {
-      this.repository
-        .reprocesarAgrometeorologia(current.idSiembra)
-        .catch((error) =>
-          this.logger.error(
-            `Error al reprocesar agrometeorologia del lote ${id}: ${error}`,
+    const changedFields = this.dependenciasAgrometeorologicas(data);
+    if (changedFields.length) {
+      if (this.decisionPipelineQueue) {
+        await this.decisionPipelineQueue.enqueueForLot(id, {
+          trigger: 'lote.science-updated',
+          changedFields,
+          sincronizarClima: changedFields.some((field) =>
+            ['ubicacion', 'idEstablecimiento'].includes(field),
           ),
-        );
+        });
+      } else if (current.idSiembra) {
+        await this.repository.reprocesarAgrometeorologia(current.idSiembra);
+      }
     }
     return updated;
   }
 
-  private cambiaDependenciaAgrometeorologica(data: IUpdateLote): boolean {
+  private dependenciasAgrometeorologicas(data: IUpdateLote): string[] {
     const keys = [
       'ubicacion',
       'suelos',
       'capacidadDeCampo',
       'puntoMarchitez',
       'sueloReferencia',
+      'sueloProcedencia',
+      'sueloConfirmadoPorUsuario',
+      'sueloFechaConfirmacion',
       'aguaUtil',
       'idEstablecimiento',
+      'idSondaSuelo',
+      'idsDispositivo',
+      'capacidadDeRiego',
     ];
-    return keys.some((key) => Object.prototype.hasOwnProperty.call(data, key));
+    return keys.filter((key) =>
+      Object.prototype.hasOwnProperty.call(data, key),
+    );
   }
 
   private withoutAutomaticDepartment<T>(input: T): T {
@@ -326,7 +400,11 @@ export class LotesService {
       lote,
       ultimaFechaImagen,
       ultimoReporte?.coleccion || null,
-      reprocesarRender,
+      {
+        forceRender: reprocesarRender,
+        exactSceneDate: reprocesarRender,
+        knownScenes: ultimoReporte?.knownScenes || [],
+      },
     );
     return {
       encolado,
@@ -438,7 +516,7 @@ export class LotesService {
       fertilizaciones,
       fumigaciones,
       cargaFitosanitaria,
-      frio: this.getFrioCertificado(lote, siembra),
+      frio: this.getFrioCertificado(lote, siembra, clima),
       clima,
     });
   }
@@ -515,7 +593,12 @@ export class LotesService {
           lote,
           ultimoReporte?.fecha || null,
           ultimoReporte?.coleccion || null,
-          this.debeReprocesarRenderSatelital(ultimoReporte),
+          {
+            forceRender: this.debeReprocesarRenderSatelital(ultimoReporte),
+            exactSceneDate:
+              this.debeReprocesarRenderSatelital(ultimoReporte),
+            knownScenes: ultimoReporte?.knownScenes || [],
+          },
         );
         if (encolado) {
           encolados++;
@@ -562,6 +645,10 @@ export class LotesService {
     const reportes = await this.reportesNDVIsService.get(query, permisoSistema);
     const vistos = new Set<string>();
     const lotesUnicos = new Set<string>();
+    const ultimaFechaFixedPorLote = new Map<
+      string,
+      Promise<string | null>
+    >();
     let encolados = 0;
     let omitidos = 0;
 
@@ -583,12 +670,32 @@ export class LotesService {
         vistos.add(clave);
         lotesUnicos.add(idLote);
 
+        let ultimaFechaFixed = ultimaFechaFixedPorLote.get(idLote);
+        if (!ultimaFechaFixed) {
+          ultimaFechaFixed = this.getUltimaFechaNdviFixed(
+            idLote,
+            permisoSistema,
+          );
+          ultimaFechaFixedPorLote.set(idLote, ultimaFechaFixed);
+        }
+        const fechaFixed = await ultimaFechaFixed;
+        if (
+          fechaFixed &&
+          new Date(fechaFixed).getTime() >= new Date(fecha).getTime()
+        ) {
+          omitidos++;
+          continue;
+        }
+
         const lote = await this.repository.getById(idLote);
         const encolado = await this.ndviQueue.enqueueLote(
           lote,
           fecha,
           reporte.coleccion || null,
-          true,
+          {
+            forceRender: true,
+            exactSceneDate: true,
+          },
         );
         if (encolado) {
           encolados++;
@@ -1231,38 +1338,312 @@ export class LotesService {
   private async getClimaCertificado(
     lote: ILote,
     siembra?: ISiembra,
-  ): Promise<IFrioTermicoCultivo | undefined> {
+  ): Promise<CertificadoClima | undefined> {
     const centro = this.getCentroOperativo(lote);
-    if (!centro) {
-      return undefined;
+    const idEstacionMeteorologica =
+      lote.establecimiento?.idEstacionMeteorologica ||
+      (lote.establecimiento?.estacionMeteorologica as any)?._id;
+
+    const riesgoPromise = centro
+      ? this.climaService.getRiesgosAgroclimaticos(
+          centro.lat,
+          centro.lng,
+          siembra?.semilla?.cultivo,
+          {
+            variedad: siembra?.semilla?.variedad,
+            fechaSiembra: siembra?.fechaSiembra,
+            etapaFenologica: this.getEstadoFenologico(siembra, []),
+            edadProductivaDesdeAnios:
+              siembra?.semilla?.fenologiaReferencia
+                ?.edadProductivaDesdeAnios,
+            ajusteVarietalC:
+              siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
+            fuenteAjusteVarietal:
+              siembra?.semilla?.sensibilidadHelada?.fuente,
+            idEstacionMeteorologica,
+          },
+        )
+      : Promise.resolve(undefined);
+
+    if (siembra?._id) {
+      const [canonicalResult, riskResult] = await Promise.allSettled([
+        this.repository.getAgrometeorologia(siembra._id),
+        riesgoPromise,
+      ]);
+      const canonical =
+        canonicalResult.status === 'fulfilled'
+          ? canonicalResult.value
+          : undefined;
+      const riesgo =
+        riskResult.status === 'fulfilled'
+          ? riskResult.value?.helada
+          : undefined;
+
+      if (this.hasCanonicalClimateData(canonical)) {
+        return this.mapCanonicalClimate(canonical!, riesgo, siembra);
+      }
+      if (canonicalResult.status === 'rejected') {
+        this.logger.warn(
+          `No se pudo leer el motor agrometeorologico canonico para el certificado: ${canonicalResult.reason?.message || canonicalResult.reason}`,
+        );
+      }
     }
 
+    this.logger.warn(
+      `El certificado del lote ${String(lote._id || '')} no incluye clima: el motor canonico por siembra todavia no tiene una serie consolidada. El endpoint geografico legacy queda excluido porque no puede resolver sensores del lote ni calidad horaria.`,
+    );
+    return undefined;
+  }
+
+  private hasCanonicalClimateData(
+    data?: IRespuestaAgrometeorologiaSiembra,
+  ): boolean {
+    if (!data) return false;
+    const summary = data.summary || {};
+    return !!(
+      data.series?.length ||
+      [
+        summary.gddAccumulated,
+        summary.rainAccumulatedMm,
+        summary.chillingHoursAccumulated,
+        summary.chillPortionsAccumulated,
+        summary.vernalizationAccumulated,
+      ].some((value) => Number.isFinite(value))
+    );
+  }
+
+  private mapCanonicalClimate(
+    data: IRespuestaAgrometeorologiaSiembra,
+    riesgoHelada: IRiesgoAgroclimatico | undefined,
+    siembra?: ISiembra,
+  ): CertificadoClima {
+    const source = data.dataSource;
+    const sourceLabels = (source.sources || []).map((item) => {
+      if (item === 'sensor') {
+        return source.sensorNames?.length
+          ? `Sensor ${source.sensorNames.join(', ')}`
+          : 'Sensor de campo';
+      }
+      if (item === 'station') {
+        return source.stationName || 'Central meteorologica';
+      }
+      return 'Open-Meteo';
+    });
+    const fuente =
+      sourceLabels.join(' + ') ||
+      (source.type === 'sensor'
+        ? 'Sensor de campo'
+        : source.type === 'station'
+          ? source.stationName || 'Central meteorologica'
+          : source.type === 'open_meteo'
+            ? 'Open-Meteo'
+            : 'Motor agrometeorologico Chaman');
+    const requirement = data.summary.coldRequirement;
+    const requirementValid =
+      requirement?.status === 'validado' &&
+      requirement.model !== 'sin_calibrar';
+
+    return {
+      origen: 'canonico',
+      fuente,
+      fuentes: sourceLabels.length ? sourceLabels : [fuente],
+      completitudPct: this.limitarPorcentaje(
+        source.completenessPercentage || 0,
+      ),
+      coberturaCampoPct: Number.isFinite(source.fieldCoveragePercentage)
+        ? this.limitarPorcentaje(Number(source.fieldCoveragePercentage))
+        : undefined,
+      sensores: source.sensorNames,
+      ultimaObservacion:
+        source.lastObservationAt || source.lastCalculatedAt,
+      versionCalculo: data.calculationVersion,
+      periodo: data.series?.length
+        ? {
+            desde: data.series[0].date,
+            hasta: data.series[data.series.length - 1].date,
+          }
+        : undefined,
+      procesoTermico: data.summary.thermalProcess,
+      estadoParametros: data.summary.parametersStatus,
+      fuenteParametros: data.summary.parametersSource,
+      advertencias: [...new Set(data.warnings || [])],
+      requerimientoFrio: requirement,
+      acumulados: {
+        lluvia: data.summary.rainAccumulatedMm,
+        gradosDia: data.summary.gddAccumulated,
+        horasFrio: data.summary.chillingHoursAccumulated,
+        unidadesFrioUtah: data.summary.utahChillUnitsAccumulated,
+        porcionesFrio: data.summary.chillPortionsAccumulated,
+        vernalizacion: data.summary.vernalizationAccumulated,
+      },
+      requerimientos: {
+        horasFrioObjetivo:
+          requirementValid && requirement?.model === 'HF'
+            ? requirement.target
+            : undefined,
+        porcionesFrioObjetivo:
+          requirementValid && requirement?.model === 'CP'
+            ? requirement.target
+            : undefined,
+        vernalizacionObjetivo: data.summary.vernalizationRequirement,
+        temperaturaBaseGradosDia:
+          data.summary.gddBaseTemperatureC ??
+          siembra?.semilla?.fenologiaReferencia?.temperaturaBaseC,
+      },
+      riesgoHelada: this.mapRiskFrost(riesgoHelada),
+      serie: (data.series || []).map((item) =>
+        this.mapCanonicalClimateDay(item),
+      ),
+      lectura: this.compactar([
+        `Serie canonica ${data.calculationVersion}.`,
+        source.type === 'mixed'
+          ? 'Cada variable usa la mejor fuente disponible por intervalo.'
+          : '',
+        Number.isFinite(source.fieldCoveragePercentage)
+          ? `Cobertura de temperatura de campo ${this.formatNumber(Number(source.fieldCoveragePercentage), 1)}%.`
+          : '',
+        requirement?.interpretation === 'datos_insuficientes'
+          ? this.getLecturaRequisitoFrio(requirement)
+          : requirement?.interpretation ===
+              'compatible_requiere_confirmacion'
+            ? 'El clima es compatible con el requisito varietal; la etapa requiere confirmacion a campo.'
+          : requirement?.interpretation === 'sin_calibrar'
+            ? 'Sin requisito varietal rector validado; no se declara cumplimiento biologico.'
+            : '',
+      ]).join(' '),
+    };
+  }
+
+  private mapCanonicalClimateDay(
+    item: ISerieAgrometeorologicaDia,
+  ): CertificadoClima['serie'][number] {
+    return {
+      fecha: item.date,
+      temperaturaMin:
+        item.metrics.temperatureMinC ?? item.weather.temperatureMinC,
+      temperaturaMax:
+        item.metrics.temperatureMaxC ?? item.weather.temperatureMaxC,
+      lluvia:
+        item.metrics.precipitationMm ??
+        item.weather.precipitationMm ??
+        item.weather.rainMm,
+      esPronostico: item.isForecast,
+    };
+  }
+
+  private mapLegacyClimate(
+    data: IFrioTermicoCultivo,
+    riesgoHelada: IRiesgoAgroclimatico | undefined,
+    siembra?: ISiembra,
+  ): CertificadoClima {
     const req = siembra?.semilla?.requerimientoFrio;
-    try {
-      return await this.climaService.getFrioTermico(
-        centro.lat,
-        centro.lng,
-        siembra?.semilla?.cultivo,
-        {
-          horasFrioObjetivo: req?.horasFrio,
-          horasFrioEfectivasObjetivo: req?.horasFrioEfectivas,
-          porcionesFrioObjetivo: req?.porcionesFrio,
+    const validRequirement =
+      req?.estado === 'validado' &&
+      (req.modeloRector === 'HF' || req.modeloRector === 'CP') &&
+      !!String(req.fuente || '').trim();
+    const requirementTarget =
+      validRequirement && req?.modeloRector === 'HF'
+        ? this.toNumber(req.horasFrio)
+        : validRequirement && req?.modeloRector === 'CP'
+          ? this.toNumber(req.porcionesFrio)
+          : undefined;
+    const requirementAccumulated =
+      validRequirement && req?.modeloRector === 'HF'
+        ? this.toNumber(data.acumulados.horasFrio)
+        : validRequirement && req?.modeloRector === 'CP'
+          ? this.toNumber(data.acumulados.porcionesFrio)
+          : undefined;
+    return {
+      origen: 'legacy',
+      fuente: data.fuente,
+      fuentes: [data.fuente],
+      completitudPct: 45,
+      versionCalculo: 'legacy-frio-termico',
+      periodo: {
+        desde: data.periodoFrio.desde,
+        hasta: data.periodoFrio.hasta,
+      },
+      procesoTermico: esCultivoPerenne(siembra?.semilla?.cultivo)
+        ? 'dormancia_perenne'
+        : 'termico',
+      estadoParametros: 'requiere_calibracion',
+      fuenteParametros: 'Compatibilidad legacy; pendiente de serie canonica',
+      advertencias: [
+        'Informe generado con compatibilidad legacy porque el motor agrometeorologico canonico no tenia una serie disponible.',
+        ...(data.calculo?.observaciones || []),
+      ],
+      requerimientoFrio: esCultivoPerenne(siembra?.semilla?.cultivo)
+        ? {
+            model: validRequirement
+              ? (req?.modeloRector as 'HF' | 'CP')
+              : 'sin_calibrar',
+            status: validRequirement ? 'referencia' : 'requiere_calibracion',
+            source: validRequirement ? req?.fuente : undefined,
+            target: requirementTarget,
+            accumulated: requirementAccumulated,
+            coverageSufficient: false,
+            continuitySufficient: false,
+            interpretation: validRequirement
+              ? 'datos_insuficientes'
+              : 'sin_calibrar',
+          }
+        : undefined,
+      acumulados: {
+        lluvia: data.acumulados.lluvia,
+        gradosDia: data.acumulados.gradosDia,
+        horasFrio: esCultivoPerenne(siembra?.semilla?.cultivo)
+          ? data.acumulados.horasFrio
+          : undefined,
+        porcionesFrio: esCultivoPerenne(siembra?.semilla?.cultivo)
+          ? data.acumulados.porcionesFrio
+          : undefined,
+      },
+      requerimientos: {
+        horasFrioObjetivo:
+          validRequirement && req?.modeloRector === 'HF'
+            ? req.horasFrio
+            : undefined,
+        porcionesFrioObjetivo:
+          validRequirement && req?.modeloRector === 'CP'
+            ? req.porcionesFrio
+            : undefined,
+        temperaturaBaseGradosDia:
+          data.requerimientos.temperaturaBaseGradosDia,
+      },
+      riesgoHelada:
+        this.mapRiskFrost(riesgoHelada) || {
+          ...data.riesgoHelada,
+          lectura: 'Riesgo calculado por compatibilidad legacy.',
         },
-        {
-          variedad: siembra?.semilla?.variedad,
-          fechaSiembra: siembra?.fechaSiembra,
-          edadProductivaDesdeAnios:
-            siembra?.semilla?.fenologiaReferencia?.edadProductivaDesdeAnios,
-          ajusteVarietalC: siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
-          fuenteAjusteVarietal: siembra?.semilla?.sensibilidadHelada?.fuente,
-        },
-      );
-    } catch (error) {
-      this.logger.warn(
-        `No se pudo calcular clima/frio para certificado: ${error?.message || error}`,
-      );
-      return undefined;
-    }
+      serie: (data.serie || []).map((item) => ({
+        fecha: item.fecha,
+        temperaturaMin: item.temperaturaMin,
+        temperaturaMax: item.temperaturaMax,
+        lluvia: item.lluvia,
+        esPronostico: item.esPronostico,
+      })),
+      lectura:
+        'Compatibilidad legacy de respaldo. No certifica CP ni cumplimiento varietal sin serie horaria canonica y metadatos validados.',
+    };
+  }
+
+  private mapRiskFrost(
+    risk?: IRiesgoAgroclimatico,
+  ): CertificadoClima['riesgoHelada'] | undefined {
+    if (!risk?.aplica) return undefined;
+    const critical = risk.serie?.find(
+      (item) => item.fecha === risk.fechaCritica,
+    );
+    return {
+      nivel: risk.nivel,
+      dias: risk.diasRiesgo,
+      fechaCritica: risk.fechaCritica,
+      temperaturaMinima: critical?.temperaturaMin,
+      etapaFenologica: risk.etapaFenologica || critical?.etapaFenologica,
+      umbralDanoLeveC: risk.umbralDanoLeveC,
+      umbralDanoSeveroC: risk.umbralDanoSeveroC,
+      lectura: risk.lectura,
+    };
   }
 
   private async getListadoInterno<T>(
@@ -1354,7 +1735,7 @@ export class LotesService {
     } = datos;
     const semilla = siembra?.semilla;
     const cultivo = semilla?.cultivo || 'Cultivo sin definir';
-    const esPerenne = ['Vid', 'Peral', 'Pecan', 'Manzano'].includes(cultivo);
+    const esPerenne = esCultivoPerenne(cultivo);
     const fechaInforme = this.formatDateTime(new Date().toISOString());
     const estado = siembra?.fechaCosecha
       ? 'Cierre de cosecha'
@@ -1809,7 +2190,7 @@ export class LotesService {
         ${this.metricCard('Cultivo', cultivo, this.getVariedadTexto(siembra))}
         ${this.metricCard('Superficie', this.formatHectareas(lote.ubicacion?.superficie), 'Poligono Chaman')}
         ${this.metricCard('Suelo', this.getSueloTexto(lote, soilAssessment), this.getFuenteSuelo(lote, soilAssessment))}
-        ${this.metricCard('Lluvia operativa', lluviaAcumulada, clima?.periodoFrio ? `Periodo ${this.formatDate(clima.periodoFrio.desde)} a ${this.formatDate(clima.periodoFrio.hasta)}` : 'Open-Meteo / estacion')}
+        ${this.metricCard('Lluvia operativa', lluviaAcumulada, clima?.periodo ? `Periodo ${this.formatDate(clima.periodo.desde)} a ${this.formatDate(clima.periodo.hasta)}` : 'Sin periodo climatico consolidado')}
         ${this.metricCard('Riesgo sanitario', riesgo.titulo, riesgo.detalle)}
         ${this.metricCard('Riego', this.getRiegoTexto(siembra), this.getAguaUtilTexto(siembra))}
         ${this.metricCard('Huella hidrica', huella.total, huella.detalle)}
@@ -2001,11 +2382,9 @@ export class LotesService {
         nombre: 'Clima y agrometeorologia',
         estado: clima ? 'con_dato' : 'sin_dato',
         lectura: clima
-          ? `Lluvia ${this.formatNumber(clima.acumulados.lluvia, 1)} mm · GD ${this.formatNumber(clima.acumulados.gradosDia, 1)}`
+          ? `Lluvia ${this.formatMaybe(clima.acumulados.lluvia, 1)} mm · GD ${this.formatMaybe(clima.acumulados.gradosDia, 1)} · ${this.formatNumber(clima.completitudPct, 0)}% completitud`
           : 'Sin serie climatica consolidada en este corte',
-        fuente:
-          (lote.establecimiento as any)?.fuenteClimaPreferida ||
-          'Open-Meteo / estacion asociada',
+        fuente: clima?.fuente || 'Sensor / central / Open-Meteo',
       },
       {
         nombre: 'Suelo y ambiente',
@@ -2209,17 +2588,14 @@ export class LotesService {
     const climaActual = lote.establecimiento?.climaActual as any;
     const tieneClimaConsolidado = !!clima;
     const climaFuente = tieneClimaConsolidado
-      ? climaActual?.clima?.fuente ||
+      ? clima?.fuente ||
+        climaActual?.clima?.fuente ||
         climaActual?.fuente ||
         lote.establecimiento?.fuenteClimaPreferida ||
-        clima.fuente ||
         'Open-Meteo'
       : 'Sin fuente consolidada';
     const climaScore = tieneClimaConsolidado
-      ? this.getScoreFuenteClimatica(
-          climaFuente,
-          climaActual?.clima?.calidadDatos?.score,
-        )
+      ? this.getScoreFuenteClimatica(clima)
       : 0;
     const puntosNdvi = this.getPuntosNdviCertificado(reportesNdvi, siembra);
     const ultimoNdvi = puntosNdvi[puntosNdvi.length - 1];
@@ -2284,12 +2660,13 @@ export class LotesService {
         confianza: this.getConfianzaTexto(climaScore),
         score: climaScore,
         ultimaActualizacion: this.getActualizacionTexto(
-          climaActual?.clima?.calidadDatos?.fechaActualizacion ||
+          clima?.ultimaObservacion ||
+            climaActual?.clima?.calidadDatos?.fechaActualizacion ||
             climaActual?.clima?.fecha ||
             climaActual?.fecha,
         ),
         lectura: clima
-          ? 'Serie climatica aplicada en frio, heladas y balance operativo.'
+          ? `Serie ${clima.origen === 'canonico' ? 'canonica' : 'legacy de respaldo'}; ${this.formatNumber(clima.completitudPct, 0)}% completitud${Number.isFinite(clima.coberturaCampoPct) ? ` y ${this.formatNumber(Number(clima.coberturaCampoPct), 0)}% cobertura de temperatura de campo` : ''}.`
           : 'Sin clima consolidado para el informe; se recomienda validar fuente.',
       },
       {
@@ -2384,18 +2761,30 @@ export class LotesService {
     ];
   }
 
-  private getScoreFuenteClimatica(fuente?: string, score?: number): number {
-    if (Number.isFinite(Number(score))) {
-      return Math.round(Number(score));
-    }
-    const normalizada = this.normalizar(fuente);
-    if (normalizada.includes('fieldclimate') || normalizada.includes('sensor'))
-      return 92;
-    if (normalizada.includes('meteoblue')) return 85;
-    if (normalizada.includes('meteosource')) return 74;
-    if (normalizada.includes('open') && normalizada.includes('meteo'))
-      return 66;
-    return 48;
+  private getScoreFuenteClimatica(clima?: CertificadoClima): number {
+    if (!clima) return 0;
+    const normalizada = this.normalizar(clima.fuente);
+    const sourceScore = normalizada.includes('sensor')
+      ? 90
+      : normalizada.includes('central') ||
+          normalizada.includes('fieldclimate')
+        ? 84
+        : normalizada.includes('open') && normalizada.includes('meteo')
+          ? 68
+          : 55;
+    const completeness = this.limitarPorcentaje(clima.completitudPct || 0);
+    const fieldComponent = Number.isFinite(clima.coberturaCampoPct)
+      ? this.limitarPorcentaje(Number(clima.coberturaCampoPct))
+      : completeness;
+    const provenancePenalty = clima.origen === 'legacy' ? 18 : 0;
+    return this.limitarPorcentaje(
+      Math.round(
+        completeness * 0.5 +
+          sourceScore * 0.3 +
+          fieldComponent * 0.2 -
+          provenancePenalty,
+      ),
+    );
   }
 
   private getScoreConfianzaTexto(confianza?: string): number {
@@ -2456,7 +2845,7 @@ export class LotesService {
   private renderTableroEjecutivo(
     datos: CertificadoDatos,
     riesgo: { titulo: string; detalle: string; clase?: string },
-    clima?: IFrioTermicoCultivo,
+    clima?: CertificadoClima,
   ): string {
     const riesgoScore = this.getRiesgoSanitarioScore(
       datos.siembra,
@@ -2472,7 +2861,7 @@ export class LotesService {
       ? this.limitarPorcentaje(ndvi.coberturaValida)
       : 0;
     const climaDetalle = clima
-      ? `Lluvia ${this.formatNumber(clima.acumulados.lluvia, 1)} mm | GD ${this.formatNumber(clima.acumulados.gradosDia, 1)}`
+      ? `Lluvia ${this.formatMaybe(clima.acumulados.lluvia, 1)} mm | GD ${this.formatMaybe(clima.acumulados.gradosDia, 1)} | ${clima.fuente}`
       : 'Sin clima consolidado';
 
     return `<div class="executive-board">
@@ -2506,7 +2895,7 @@ export class LotesService {
     riesgo: { titulo: string; detalle: string },
     huella: { total: string },
     frio: CertificadoFrio,
-    clima?: IFrioTermicoCultivo,
+    clima?: CertificadoClima,
   ): string {
     const acciones = this.getPrioridadesEjecutivas(
       datos,
@@ -2526,7 +2915,7 @@ export class LotesService {
     riesgo: { titulo: string; detalle: string },
     huella: { total: string },
     frio: CertificadoFrio,
-    clima?: IFrioTermicoCultivo,
+    clima?: CertificadoClima,
   ): string[] {
     const acciones: string[] = [];
     const riesgoScore = this.getRiesgoSanitarioScore(
@@ -2959,19 +3348,21 @@ export class LotesService {
       };
     }
 
-    const registro = [...(siembra?.registrosFenologicos || [])]
-      .filter((item) => {
-        const time = new Date(item.fecha || '').getTime();
-        return !!item.etapa && Number.isFinite(time) && time <= fecha.getTime();
-      })
-      .sort(
-        (a, b) =>
-          new Date(b.fecha || '').getTime() - new Date(a.fecha || '').getTime(),
-      )[0];
+    const registro = obtenerRegistroFenologicoDecisorioEnFecha(
+      siembra,
+      fecha,
+    );
     if (registro?.etapa) {
+      const puntual =
+        registro.tipoEvento === 'observacion' ||
+        (registro.accion === 'observacion' && !registro.fechaInicioEtapa);
+      const cobertura =
+        registro.coberturaObservadaPct == null
+          ? ''
+          : `; ${this.formatNumber(registro.coberturaObservadaPct, 0)}% del lote`;
       return {
         nombre: registro.etapa,
-        fuente: 'Registro de campo',
+        fuente: `${puntual ? 'Observacion' : 'Inicio de etapa'} de campo · confianza ${registro.confianza || 'media'}${cobertura}`,
         confirmada: true,
       };
     }
@@ -3131,7 +3522,7 @@ export class LotesService {
     return Math.floor((hastaTime - desdeTime) / 86400000);
   }
 
-  private renderClimaSparkline(clima?: IFrioTermicoCultivo): string {
+  private renderClimaSparkline(clima?: CertificadoClima): string {
     const serie = (clima?.serie || [])
       .slice(-50)
       .filter(
@@ -3206,7 +3597,7 @@ export class LotesService {
   }
 
   private renderTablaClimaAgronomica(
-    clima: IFrioTermicoCultivo | undefined,
+    clima: CertificadoClima | undefined,
     frio: CertificadoFrio,
     esPerenne: boolean,
   ): string {
@@ -3214,44 +3605,50 @@ export class LotesService {
       return '<p>Sin clima consolidado para este informe. Chaman mantiene la trazabilidad con sensores y datos del lote disponibles.</p>';
     }
 
-    const items = esPerenne
+    const requirement = clima.requerimientoFrio;
+    const requirementReading = this.getLecturaRequisitoFrio(requirement);
+    const frostLevel = clima.riesgoHelada
+      ? this.capitalize(clima.riesgoHelada.nivel)
+      : 'Sin alerta consolidada';
+    const thermalBase = Number.isFinite(
+      clima.requerimientos.temperaturaBaseGradosDia,
+    )
+      ? `Base ${this.formatNumber(Number(clima.requerimientos.temperaturaBaseGradosDia), 0)} C`
+      : 'Temperatura base no calibrada';
+
+    const items: string[][] = esPerenne
       ? [
           [
             'Horas frio (HF)',
-            this.formatClimaMetric(clima.acumulados.horasFrio, 'h', 1),
-            this.formatObjetivo(clima.requerimientos.horasFrioObjetivo, 'h'),
+            this.formatClimaMetric(clima.acumulados.horasFrio, 'HF', 1),
+            'Modelo 0 a 7,2 C sobre la serie horaria canonica',
           ],
           [
-            'Frio efectivo (HFE)',
+            'Unidades Utah',
             this.formatClimaMetric(
-              clima.acumulados.horasFrioEfectivas,
-              'HFE',
+              clima.acumulados.unidadesFrioUtah,
+              'UF',
               1,
             ),
-            this.formatObjetivo(
-              clima.requerimientos.horasFrioEfectivasObjetivo,
-              'HFE',
-            ),
+            'Modelo Utah independiente; puede descontar calor',
           ],
           [
             'Chill portions (CP)',
             this.formatClimaMetric(clima.acumulados.porcionesFrio, 'CP', 2),
-            this.formatObjetivo(
-              clima.requerimientos.porcionesFrioObjetivo,
-              'CP',
-            ),
+            'Dynamic Model horario; nunca convertido desde HF o HFE',
           ],
+          ['Requisito varietal', requirementReading, requirement?.source || 'Pendiente de calibracion'],
           [
             'Grados dia',
             this.formatClimaMetric(clima.acumulados.gradosDia, 'GD', 1),
-            `Base ${this.formatNumber(clima.requerimientos.temperaturaBaseGradosDia || 10, 0)} C`,
+            thermalBase,
           ],
+          ['Riesgo helada', frostLevel, this.getDetalleHelada(clima)],
           [
-            'Riesgo helada',
-            this.capitalize(clima.riesgoHelada.nivel),
-            this.getDetalleHelada(clima),
+            'Fuente y calidad',
+            clima.fuente,
+            `${this.formatNumber(clima.completitudPct, 0)}% completitud${Number.isFinite(clima.coberturaCampoPct) ? `; ${this.formatNumber(Number(clima.coberturaCampoPct), 0)}% temperatura de campo` : ''}`,
           ],
-          ['Fuente', clima.fuente, frio.fuente],
         ]
       : [
           [
@@ -3262,27 +3659,31 @@ export class LotesService {
           [
             'Grados dia',
             this.formatClimaMetric(clima.acumulados.gradosDia, 'GD', 1),
-            `Base ${this.formatNumber(clima.requerimientos.temperaturaBaseGradosDia || 10, 0)} C`,
+            thermalBase,
           ],
+          ...(clima.procesoTermico === 'vernalizacion_anual'
+            ? [
+                [
+                  'Vernalizacion varietal',
+                  this.formatClimaMetric(
+                    clima.acumulados.vernalizacion,
+                    'UV',
+                    1,
+                  ),
+                  clima.estadoParametros === 'validado'
+                    ? this.formatObjetivo(
+                        clima.requerimientos.vernalizacionObjetivo,
+                        'UV',
+                      )
+                    : 'No calculada sin habito, modelo, requisito y fuente varietal',
+                ],
+              ]
+            : []),
+          ['Riesgo helada', frostLevel, this.getDetalleHelada(clima)],
           [
-            'Riesgo helada',
-            this.capitalize(clima.riesgoHelada.nivel),
-            this.getDetalleHelada(clima),
-          ],
-          [
-            'Ventana sanitaria',
-            this.capitalize(clima.eventos.ventanaSanitaria.estado),
-            clima.eventos.ventanaSanitaria.lectura,
-          ],
-          [
-            'Brotacion',
-            this.capitalize(clima.eventos.brotacion.estado.replace(/_/g, ' ')),
-            clima.eventos.brotacion.lectura,
-          ],
-          [
-            'Fuente',
+            'Fuente y calidad',
             clima.fuente,
-            'Open-Meteo / estacion asociada cuando exista',
+            `${this.formatNumber(clima.completitudPct, 0)}% completitud; motor ${clima.versionCalculo || 'sin version'}`,
           ],
         ];
 
@@ -3298,7 +3699,8 @@ export class LotesService {
       .join('');
 
     return `<table><thead><tr><th>Variable</th><th>Valor</th><th>Lectura</th></tr></thead><tbody>${rows}</tbody></table>
-      <div class="note"><strong>Lectura climatica:</strong> ${this.escapeHtml(clima.lectura)}</div>`;
+      <div class="note"><strong>Lectura climatica:</strong> ${this.escapeHtml(clima.lectura)}</div>
+      ${clima.advertencias.length ? `<div class="note warn"><strong>Calidad y supuestos:</strong> ${this.escapeHtml(clima.advertencias.slice(0, 4).join(' '))}</div>` : ''}`;
   }
 
   private renderTablaSatelital(
@@ -3645,26 +4047,114 @@ export class LotesService {
     };
   }
 
-  private getFrioCertificado(lote: ILote, siembra?: ISiembra): CertificadoFrio {
+  private getFrioCertificado(
+    lote: ILote,
+    siembra?: ISiembra,
+    clima?: CertificadoClima,
+  ): CertificadoFrio {
     const cultivo = siembra?.semilla?.cultivo || '';
-    const aplica = ['Vid', 'Peral', 'Pecan', 'Manzano'].includes(cultivo);
+    const aplica =
+      clima?.procesoTermico === 'dormancia_perenne' ||
+      esCultivoPerenne(cultivo);
     const req = siembra?.semilla?.requerimientoFrio;
     const dispositivo = this.getDispositivoFrio(lote);
     const acumulado = dispositivo?.frioAcumulado;
+    const requirement = clima?.requerimientoFrio;
+    const requirementValid =
+      requirement?.status === 'validado' &&
+      requirement.model !== 'sin_calibrar';
+    const datosInsuficientes =
+      requirement?.interpretation === 'datos_insuficientes';
     const objetivos = {
-      horasFrio: req?.horasFrio,
-      horasFrioEfectivas: req?.horasFrioEfectivas,
-      porcionesFrio: req?.porcionesFrio,
+      horasFrio:
+        requirementValid && requirement?.model === 'HF'
+          ? requirement.target
+          : req?.estado === 'validado' && req.modeloRector === 'HF'
+            ? req.horasFrio
+            : undefined,
+      horasFrioEfectivas: undefined,
+      porcionesFrio:
+        requirementValid && requirement?.model === 'CP'
+          ? requirement.target
+          : req?.estado === 'validado' && req.modeloRector === 'CP'
+            ? req.porcionesFrio
+            : undefined,
     };
 
-    if (!aplica && !req && !acumulado) {
+    if (!aplica) {
       return {
         aplica: false,
         fuente: 'No aplica',
         titulo: 'No aplica',
-        detalle: 'Cultivo sin requerimiento de frio configurado',
+        detalle:
+          clima?.procesoTermico === 'vernalizacion_anual'
+            ? 'Cultivo anual: la vernalizacion se informa por separado'
+            : 'Cultivo sin dormancia perenne',
         lectura:
-          'El cultivo no requiere seguimiento de horas frio en este informe.',
+          clima?.procesoTermico === 'vernalizacion_anual'
+            ? 'Trigo y cebada no usan los modelos de dormancia de frutales.'
+            : 'El cultivo no requiere seguimiento de dormancia perenne.',
+        objetivos,
+      };
+    }
+
+    if (clima?.origen === 'canonico') {
+      const piezas = this.compactar([
+        datosInsuficientes
+          ? this.formatAvanceFrio(
+              'HF parcial',
+              clima.acumulados.horasFrio,
+              undefined,
+              'HF',
+              1,
+            )
+          : this.formatAvanceFrio(
+              'HF',
+              clima.acumulados.horasFrio,
+              objetivos.horasFrio,
+              'HF',
+              1,
+            ),
+        Number.isFinite(clima.acumulados.unidadesFrioUtah)
+          ? `Utah ${this.formatNumber(Number(clima.acumulados.unidadesFrioUtah), 1)} UF`
+          : '',
+        datosInsuficientes
+          ? this.formatAvanceFrio(
+              'CP parcial',
+              clima.acumulados.porcionesFrio,
+              undefined,
+              'CP',
+              2,
+            )
+          : this.formatAvanceFrio(
+              'CP',
+              clima.acumulados.porcionesFrio,
+              objetivos.porcionesFrio,
+              'CP',
+              2,
+            ),
+      ]);
+      return {
+        aplica: true,
+        fuente: clima.fuente,
+        titulo: datosInsuficientes
+          ? 'Dormancia: datos insuficientes'
+          : requirementValid
+          ? `Requisito varietal ${requirement?.model}`
+          : 'Dormancia: requisito sin calibrar',
+        detalle: piezas.join(' | ') || 'Sin serie horaria suficiente',
+        lectura: datosInsuficientes
+          ? clima.lectura || this.getLecturaRequisitoFrio(requirement)
+          : this.compactar([
+              clima.lectura,
+              requirementValid
+                ? requirement?.compatible
+                  ? 'Compatibilidad climatica alcanzada; confirmar el inicio real de etapa a campo.'
+                  : 'Requisito varietal en acumulacion.'
+                : 'La acumulacion no se compara contra un objetivo hasta validar modelo rector, valor y fuente varietal.',
+            ]).join(' '),
+        acumulado,
+        dispositivo,
         objetivos,
       };
     }
@@ -3677,20 +4167,6 @@ export class LotesService {
         'h',
         0,
       ),
-      this.formatAvanceFrio(
-        'HFE',
-        acumulado?.horasFrioEfectivas,
-        objetivos.horasFrioEfectivas,
-        'HFE',
-        0,
-      ),
-      this.formatAvanceFrio(
-        'CP',
-        acumulado?.porcionesFrio,
-        objetivos.porcionesFrio,
-        'CP',
-        1,
-      ),
     ]);
 
     const fecha = this.formatDate(acumulado?.fechaUltimoCalculo);
@@ -3699,19 +4175,20 @@ export class LotesService {
       : '';
     const fuente = acumulado
       ? `Sensor LoRa ${dispositivo?.nombre || dispositivo?.deveui || ''}`.trim()
-      : 'Perfil varietal / clima de respaldo';
+      : clima?.fuente || 'Perfil varietal / clima de respaldo';
 
     return {
       aplica: true,
       fuente,
       titulo: acumulado
-        ? 'Frio acumulado real'
+        ? 'Vista previa HF del sensor'
         : req?.modelo || 'Frio varietal',
       detalle: piezas.join(' | ') || 'Perfil varietal editable',
       lectura: this.compactar([
         acumulado
-          ? `Acumulado con sensor asociado hasta ${fecha || 'ultimo reporte'}.`
-          : 'Sin sensor de frio consolidado; se informa requerimiento varietal.',
+          ? `HF preliminar con sensor asociado hasta ${fecha || 'ultimo reporte'}; Utah y CP se certifican en el motor horario canonico.`
+          : 'Sin serie canonica disponible; no se declara cumplimiento del requisito varietal.',
+        clima?.lectura,
         ultimaTemp,
       ]).join(' '),
       acumulado,
@@ -3725,9 +4202,8 @@ export class LotesService {
       const frio = dispositivo.frioAcumulado;
       return (
         !!frio &&
-        (Number.isFinite(frio.horasFrio) ||
-          Number.isFinite(frio.horasFrioEfectivas) ||
-          Number.isFinite(frio.porcionesFrio))
+        frio.versionModelo === 'hf-field-preview-1.0.0' &&
+        Number.isFinite(frio.horasFrio)
       );
     });
   }
@@ -3760,26 +4236,52 @@ export class LotesService {
   }
 
   private getResumenFrioTermico(
-    clima: IFrioTermicoCultivo | undefined,
+    clima: CertificadoClima | undefined,
     frio: CertificadoFrio,
   ): string {
     if (clima) {
-      return `${this.formatNumber(clima.acumulados.horasFrio, 0)} h / ${this.formatNumber(clima.acumulados.porcionesFrio, 1)} CP`;
+      const acumulados =
+        this.compactar([
+          Number.isFinite(clima.acumulados.horasFrio)
+            ? `${this.formatNumber(Number(clima.acumulados.horasFrio), 0)} HF`
+            : '',
+          Number.isFinite(clima.acumulados.unidadesFrioUtah)
+            ? `${this.formatNumber(Number(clima.acumulados.unidadesFrioUtah), 1)} UF`
+            : '',
+          Number.isFinite(clima.acumulados.porcionesFrio)
+            ? `${this.formatNumber(Number(clima.acumulados.porcionesFrio), 2)} CP`
+            : '',
+        ]).join(' / ') || 'Sin frio horario consolidado';
+      return clima.requerimientoFrio?.interpretation === 'datos_insuficientes'
+        ? `Datos insuficientes - ${acumulados} parciales`
+        : acumulados;
     }
     return frio.titulo;
   }
 
   private getDetalleFrioTermico(
-    clima: IFrioTermicoCultivo | undefined,
+    clima: CertificadoClima | undefined,
     frio: CertificadoFrio,
   ): string {
     if (!clima) {
       return frio.detalle;
     }
-    return `HFE ${this.formatNumber(clima.acumulados.horasFrioEfectivas, 0)} | GD ${this.formatNumber(clima.acumulados.gradosDia, 1)} | helada ${this.capitalize(clima.riesgoHelada.nivel)}`;
+    const requirement = clima.requerimientoFrio;
+    return this.compactar([
+      requirement?.interpretation === 'datos_insuficientes'
+        ? this.getLecturaRequisitoFrio(requirement)
+        : '',
+      Number.isFinite(clima.acumulados.gradosDia)
+        ? `GD ${this.formatNumber(Number(clima.acumulados.gradosDia), 1)}`
+        : '',
+      clima.riesgoHelada
+        ? `helada ${this.capitalize(clima.riesgoHelada.nivel)}`
+        : 'helada sin alerta consolidada',
+      clima.fuente,
+    ]).join(' | ');
   }
 
-  private getDetalleHelada(clima?: IFrioTermicoCultivo): string {
+  private getDetalleHelada(clima?: CertificadoClima): string {
     if (!clima?.riesgoHelada) {
       return 'Sin alerta consolidada';
     }
@@ -3794,7 +4296,7 @@ export class LotesService {
         ? `${clima.riesgoHelada.dias} dia(s) en ventana`
         : '',
     ]).join(' | ');
-    return detalle || 'Sin alerta inmediata';
+    return detalle || clima.riesgoHelada.lectura || 'Sin alerta inmediata';
   }
 
   private formatClimaMetric(
@@ -3815,28 +4317,98 @@ export class LotesService {
       : 'Objetivo editable';
   }
 
+  private getLecturaRequisitoFrio(
+    requirement?: IRespuestaAgrometeorologiaSiembra['summary']['coldRequirement'],
+  ): string {
+    if (requirement?.interpretation === 'datos_insuficientes') {
+      const coverage = this.toNumber(requirement.coveragePercentage);
+      const minimum = this.toNumber(requirement.minimumCoveragePercentage);
+      const accumulated = this.toNumber(requirement.accumulated);
+      const unit =
+        requirement.model === 'HF' || requirement.model === 'CP'
+          ? requirement.model
+          : '';
+      const partes = this.compactar([
+        'Datos insuficientes para evaluar el requisito de frio.',
+        Number.isFinite(coverage)
+          ? `Cobertura horaria ${this.formatNumber(coverage, 0)}%`
+          : 'Cobertura horaria no consolidada',
+        Number.isFinite(minimum)
+          ? `minimo requerido ${this.formatNumber(minimum, 0)}%`
+          : '',
+        requirement.continuitySufficient === false &&
+        Number.isFinite(this.toNumber(requirement.maximumGapHours)) &&
+        Number.isFinite(this.toNumber(requirement.maximumAllowedGapHours))
+          ? `Brecha continua maxima ${this.formatNumber(
+              this.toNumber(requirement.maximumGapHours),
+              0,
+            )} h; maximo admitido ${this.formatNumber(
+              this.toNumber(requirement.maximumAllowedGapHours),
+              0,
+            )} h`
+          : '',
+        Number.isFinite(accumulated) && unit
+          ? `Acumulado parcial auditable ${this.formatNumber(
+              accumulated,
+              unit === 'CP' ? 2 : 1,
+            )} ${unit}`
+          : '',
+        'No se calcula avance ni respuesta biologica con esta cobertura.',
+      ]);
+      return partes.join(' ');
+    }
+
+    if (
+      requirement?.status === 'validado' &&
+      requirement.model !== 'sin_calibrar'
+    ) {
+      return `${this.formatClimaMetric(
+        requirement.accumulated,
+        requirement.model,
+        requirement.model === 'CP' ? 2 : 1,
+      )} / ${this.formatObjetivo(
+        requirement.target,
+        requirement.model,
+      )}; ${
+        requirement.compatible
+          ? 'clima compatible, confirmar etapa a campo'
+          : 'en acumulacion'
+      }`;
+    }
+
+    return 'Sin modelo rector y fuente varietal validados; no se declara cumplimiento biologico';
+  }
+
   private getLecturaEjecutiva(
     datos: CertificadoDatos,
     riesgo: { titulo: string; detalle: string },
     huella: { total: string },
     frio: { detalle: string },
-    clima?: IFrioTermicoCultivo,
+    clima?: CertificadoClima,
   ): string {
     const cultivo = datos.siembra?.semilla?.cultivo || 'cultivo';
-    const esPerenne = ['Vid', 'Peral', 'Pecan', 'Manzano'].includes(cultivo);
+    const esPerenne = esCultivoPerenne(cultivo);
     const partes = [
       `${cultivo}: seguimiento generado con ${datos.predicciones.length} prediccion(es), ${datos.fertilizaciones.length} fertilizacion(es), ${datos.fumigaciones.length} fumigacion(es) y ${datos.reportesNdvi.length} escena(s) satelital(es) complementaria(s).`,
       clima
-        ? `Clima operativo: lluvia ${this.formatNumber(clima.acumulados.lluvia, 1)} mm, helada ${this.capitalize(clima.riesgoHelada.nivel)}.`
+        ? `Clima operativo: lluvia ${this.formatMaybe(clima.acumulados.lluvia, 1)} mm, helada ${clima.riesgoHelada ? this.capitalize(clima.riesgoHelada.nivel) : 'sin alerta consolidada'}, fuente ${clima.fuente}.`
         : 'Sin clima consolidado en el informe.',
       `Riesgo sanitario ${riesgo.titulo.toLowerCase()} (${riesgo.detalle}).`,
       `Carga fitosanitaria ${datos.cargaFitosanitaria.score}/100 (${this.capitalize(datos.cargaFitosanitaria.nivel.replace('_', ' '))}).`,
       `Huella hidrica ${huella.total}.`,
     ];
     if (esPerenne) {
+      const requirement = clima?.requerimientoFrio;
       partes.push(
         clima
-          ? `Frio y termica: HF ${this.formatNumber(clima.acumulados.horasFrio, 0)} h, HFE ${this.formatNumber(clima.acumulados.horasFrioEfectivas, 0)}, CP ${this.formatNumber(clima.acumulados.porcionesFrio, 1)}, GD ${this.formatNumber(clima.acumulados.gradosDia, 1)}.`
+          ? `Frio y termica: ${this.getResumenFrioTermico(clima, datos.frio)}; GD ${this.formatMaybe(clima.acumulados.gradosDia, 1)}. ${
+              requirement?.interpretation === 'datos_insuficientes'
+                ? this.getLecturaRequisitoFrio(requirement)
+                : requirement?.interpretation ===
+                    'compatible_requiere_confirmacion'
+                  ? 'Compatibilidad climatica; confirmar etapa a campo.'
+                  : 'No se declara cumplimiento biologico sin calibracion varietal.'
+            }`
           : `Frio y termica: ${frio.detalle}.`,
       );
     }
@@ -3847,7 +4419,7 @@ export class LotesService {
     lote: ILote,
     siembra?: ISiembra,
     predicciones: IPrediccion[] = [],
-    clima?: IFrioTermicoCultivo,
+    clima?: CertificadoClima,
     soilAssessment?: IInteligenciaSueloLote | null,
   ): string[] {
     const pendientes: string[] = [];
@@ -4504,14 +5076,31 @@ export class LotesService {
     fecha: string | null;
     coleccion: string | null;
     renderVersion: string | null;
+    knownScenes: NdviKnownScene[];
   } | null> {
     const query: IQueryParam = {
       filter: JSON.stringify({ idLote }),
-      limit: 1,
+      limit: 32,
       sort: '-fechaDeLaImagen',
     };
     const reportes = await this.reportesNDVIsService.get(query, permiso);
-    const ultimo = reportes?.datos?.[0];
+    const reportesOrdenados = [...(reportes?.datos || [])].sort((a, b) => {
+      const fechaA = new Date(
+        a.fechaDeLaImagen || a.fechaCreacion || 0,
+      ).getTime();
+      const fechaB = new Date(
+        b.fechaDeLaImagen || b.fechaCreacion || 0,
+      ).getTime();
+      if (fechaA !== fechaB) {
+        return fechaB - fechaA;
+      }
+      const fixedA =
+        a.metadataImagen?.renderVersion === 'fixed-index-v3' ? 1 : 0;
+      const fixedB =
+        b.metadataImagen?.renderVersion === 'fixed-index-v3' ? 1 : 0;
+      return fixedB - fixedA;
+    });
+    const ultimo = reportesOrdenados[0];
     if (!ultimo) {
       return null;
     }
@@ -4519,7 +5108,37 @@ export class LotesService {
       fecha: this.toIsoString(ultimo.fechaDeLaImagen || ultimo.fechaCreacion),
       coleccion: ultimo.coleccion || null,
       renderVersion: ultimo.metadataImagen?.renderVersion || null,
+      knownScenes: reportesOrdenados
+        .map((reporte) => ({
+          date: this.toIsoString(
+            reporte.fechaDeLaImagen || reporte.fechaCreacion,
+          ),
+          collection: reporte.coleccion || null,
+        }))
+        .filter(
+          (scene): scene is NdviKnownScene =>
+            typeof scene.date === 'string' && !!scene.date,
+        ),
     };
+  }
+
+  private async getUltimaFechaNdviFixed(
+    idLote: string,
+    permiso: IPermiso,
+  ): Promise<string | null> {
+    const query: IQueryParam = {
+      filter: JSON.stringify({
+        idLote,
+        'metadataImagen.renderVersion': 'fixed-index-v3',
+      }),
+      limit: 1,
+      sort: '-fechaDeLaImagen',
+    };
+    const reportes = await this.reportesNDVIsService.get(query, permiso);
+    const ultimo = reportes?.datos?.[0];
+    return ultimo
+      ? this.toIsoString(ultimo.fechaDeLaImagen || ultimo.fechaCreacion)
+      : null;
   }
 
   private debeReprocesarRenderSatelital(

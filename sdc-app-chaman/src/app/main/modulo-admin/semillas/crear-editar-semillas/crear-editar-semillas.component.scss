@@ -4,3 +4,104 @@
   padding: 1em;
   margin-bottom: 1em;
 }
+
+.thermal-classification,
+.thermal-model-section {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem;
+  border: 1px solid var(--p-surface-200);
+  border-radius: 12px;
+  background: var(--p-surface-50);
+}
+
+.thermal-classification span,
+.thermal-classification small,
+.thermal-model-section small {
+  color: var(--p-text-muted-color);
+}
+
+.thermal-model-section {
+  margin-bottom: 1rem;
+}
+
+.thermal-model-section__title {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.thermal-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.thermal-table-section {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--p-surface-200);
+  padding-top: 1rem;
+}
+
+.thermal-table-section > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.thermal-table-section > header > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.thermal-table-row {
+  display: grid;
+  grid-template-columns:
+    minmax(180px, 1.6fr)
+    minmax(90px, 0.55fr)
+    minmax(120px, 0.8fr)
+    minmax(120px, 0.8fr)
+    auto;
+  gap: 0.65rem;
+  align-items: center;
+  border: 1px solid var(--p-surface-200);
+  border-radius: 10px;
+  background: var(--p-content-background);
+  padding: 0.75rem;
+}
+
+.thermal-table-row.photoperiod {
+  grid-template-columns:
+    minmax(180px, 1.4fr)
+    minmax(150px, 1fr)
+    minmax(130px, 0.8fr)
+    auto;
+}
+
+.thermal-empty {
+  margin: 0;
+  border: 1px dashed var(--p-surface-300);
+  border-radius: 10px;
+  color: var(--p-text-muted-color);
+  padding: 0.9rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .thermal-range {
+    grid-template-columns: 1fr;
+  }
+
+  .thermal-table-section > header,
+  .thermal-table-row,
+  .thermal-table-row.photoperiod {
+    grid-template-columns: 1fr;
+  }
+
+  .thermal-table-section > header {
+    display: grid;
+  }
+}

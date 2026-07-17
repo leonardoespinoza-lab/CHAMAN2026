@@ -55,7 +55,48 @@ describe('continuidad diaria del orquestador sanitario trigo v4', () => {
     return datos;
   };
 
-  const crear = (anterior: IPrediccion, clima: any[]) => {
+  const respuestaCanonica = (clima: any[], etapa = 'Emergencia'): any => ({
+    summary: {},
+    dataSource: {
+      type: 'open_meteo',
+      sources: ['open_meteo'],
+      completenessPercentage: clima.length ? 100 : 0,
+    },
+    series: clima.map((item, index) => ({
+      date: item.fecha.slice(0, 10),
+      isForecast: false,
+      stage: etapa,
+      stageSource: 'gdd_validado',
+      stageConfidence: 'media',
+      weather: {
+        temperatureMinC: item.temperatura.min,
+        temperatureMeanC: item.temperatura.avg,
+        temperatureMaxC: item.temperatura.max,
+        relativeHumidityMeanPct: item.humedad.avg,
+        precipitationMm: item.lluvia.sum,
+        windSpeedMs: item.velocidadViento.avg,
+      },
+      metrics: {
+        temperatureMinC: item.temperatura.min,
+        temperatureMeanC: item.temperatura.avg,
+        temperatureMaxC: item.temperatura.max,
+        relativeHumidityMeanPct: item.humedad.avg,
+        precipitationMm: item.lluvia.sum,
+        gddBaseTemperatureC: 0,
+        gddAccumulated: 880 + index * 20,
+        gddAccumulationComplete: true,
+      },
+      source: 'open_meteo',
+      sourceByVariable: {},
+      qualityFlags: [],
+      warnings: [],
+    })),
+    warnings: [],
+    calculationVersion: 'test',
+    parametersVersion: 'test',
+  });
+
+  const crear = (anterior: IPrediccion, clima: any[], etapa = 'Emergencia') => {
     const repository = {
       get: jest.fn().mockResolvedValue({ datos: [anterior] }),
       create: jest.fn(async (item) => ({ ...item, _id: 'nueva' })),
@@ -71,7 +112,9 @@ describe('continuidad diaria del orquestador sanitario trigo v4', () => {
       siembras as any,
       { get: jest.fn().mockResolvedValue(crono) } as any,
       {
-        getEstacionMasCercanaEntreFechas: jest.fn().mockResolvedValue(clima),
+        getAgrometeorologiaSiembra: jest
+          .fn()
+          .mockResolvedValue(respuestaCanonica(clima, etapa)),
       } as any,
       { getByIdSiembra: jest.fn().mockResolvedValue({ datos: [] }) } as any,
       servicios as any,
@@ -169,8 +212,6 @@ describe('continuidad diaria del orquestador sanitario trigo v4', () => {
     jest
       .spyOn(service as any, 'getFechaHasta')
       .mockReturnValue(new Date('2026-05-05T03:00:00.000Z'));
-    jest.spyOn(service as any, 'getEtapaPorFecha').mockReturnValue(1);
-
     const creadas = await service.hacerPredicciones(siembra);
 
     expect(repository.create).toHaveBeenCalledTimes(1);
@@ -180,9 +221,9 @@ describe('continuidad diaria del orquestador sanitario trigo v4', () => {
     expect(creadas).toHaveLength(1);
     expect(creadas[0].enfermedades).toHaveLength(5);
     expect(creadas[0].estacion).toMatchObject({
-      idEstacion: 'open-meteo',
+      idEstacion: 'agrometeorologia:open_meteo',
       fuente: 'OpenMeteo',
-      distanciaMetros: 1200,
+      distanciaMetros: 0,
     });
     expect(
       creadas[0].enfermedades.every((item) => item.estado === 'fuera_ventana'),
@@ -215,12 +256,11 @@ describe('continuidad diaria del orquestador sanitario trigo v4', () => {
     const { service, repository, servicios } = crear(
       anterior,
       climaEntre('2026-05-05T03:00:00.000Z', '2026-05-07T03:00:00.000Z'),
+      'Madurez Fisiologica',
     );
     jest
       .spyOn(service as any, 'getFechaHasta')
       .mockReturnValue(new Date('2026-05-08T03:00:00.000Z'));
-    jest.spyOn(service as any, 'getEtapaPorFecha').mockReturnValue(7);
-
     await service.hacerPredicciones(siembra);
 
     expect(servicios.predecir).not.toHaveBeenCalled();
@@ -259,13 +299,12 @@ describe('continuidad diaria del orquestador sanitario trigo v4', () => {
     const { service, repository } = crear(
       anterior,
       climaEntre('2026-05-05T03:00:00.000Z', '2026-05-09T03:00:00.000Z'),
+      'Madurez Fisiologica',
     );
     repository.create.mockRejectedValueOnce(new Error('duplicado/transitorio'));
     jest
       .spyOn(service as any, 'getFechaHasta')
       .mockReturnValue(new Date('2026-05-10T03:00:00.000Z'));
-    jest.spyOn(service as any, 'getEtapaPorFecha').mockReturnValue(7);
-
     await expect(service.hacerPredicciones(siembra)).rejects.toThrow(
       'duplicado/transitorio',
     );
@@ -287,12 +326,11 @@ describe('continuidad diaria del orquestador sanitario trigo v4', () => {
     const { service, repository, siembras } = crear(
       legacy,
       climaEntre('2026-05-01T03:00:00.000Z', '2026-05-04T03:00:00.000Z'),
+      'Madurez Fisiologica',
     );
     jest
       .spyOn(service as any, 'getFechaHasta')
       .mockReturnValue(new Date('2026-05-05T03:00:00.000Z'));
-    jest.spyOn(service as any, 'getEtapaPorFecha').mockReturnValue(7);
-
     const salidas = await service.hacerPredicciones(siembra);
 
     expect(repository.create).not.toHaveBeenCalled();
@@ -311,7 +349,7 @@ describe('continuidad diaria del orquestador sanitario trigo v4', () => {
     );
   });
 
-  it('tambien cierra un ciclo legacy finalizado cuando ya no existe clima historico', async () => {
+  it('no infiere un cierre fenologico cuando la serie canonica no existe', async () => {
     const legacy = {
       fecha: '2026-05-20T03:00:00.000Z',
       enfermedades: [
@@ -327,15 +365,9 @@ describe('continuidad diaria del orquestador sanitario trigo v4', () => {
     jest
       .spyOn(service as any, 'getFechaHasta')
       .mockReturnValue(new Date('2026-05-05T03:00:00.000Z'));
-    jest.spyOn(service as any, 'getEtapaPorFecha').mockReturnValue(7);
-
     const salidas = await service.hacerPredicciones(siembra);
 
     expect(repository.create).not.toHaveBeenCalled();
-    expect(salidas).toHaveLength(1);
-    expect(salidas[0].enfermedades).toHaveLength(5);
-    expect(
-      salidas[0].enfermedades.every((item) => item.estado === 'fuera_ventana'),
-    ).toBe(true);
+    expect(salidas).toBeUndefined();
   });
 });

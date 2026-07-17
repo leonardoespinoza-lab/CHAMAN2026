@@ -74,7 +74,7 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
     expect(puntos[0].etapaConfirmada).toBe(false);
     expect(puntos[1]).toMatchObject({
       etapa: 'V3 - tercer nudo',
-      etapaFuente: 'Registro de campo',
+      etapaFuente: 'Inicio de etapa de campo · confianza media',
       etapaConfirmada: true,
     });
   });
@@ -550,5 +550,382 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
     });
 
     expect(axios.GET.mock.calls[0][1]).not.toHaveProperty('timeout');
+  });
+});
+
+describe('LotesService - clima canonico del informe agronomico', () => {
+  const loteConCentro = {
+    _id: 'lote-1',
+    ubicacion: { centro: { lat: -39.03, lng: -67.58 } },
+    establecimiento: {},
+  } as any;
+
+  const canonical = (
+    cultivo: string,
+    overrides: Record<string, any> = {},
+  ) => ({
+    summary: {
+      gddAccumulated: 428.5,
+      rainAccumulatedMm: 32.4,
+      thermalProcess:
+        cultivo === 'Trigo' || cultivo === 'Cebada'
+          ? 'vernalizacion_anual'
+          : cultivo === 'Manzano'
+            ? 'dormancia_perenne'
+            : 'termico_fotoperiodico',
+      parametersStatus: 'validado',
+      parametersSource: 'Parametros varietales de prueba',
+      gddBaseTemperatureC: 0,
+      vernalizationAccumulated:
+        cultivo === 'Trigo' || cultivo === 'Cebada' ? 18.5 : undefined,
+      vernalizationRequirement:
+        cultivo === 'Trigo' || cultivo === 'Cebada' ? 40 : undefined,
+      ...overrides.summary,
+    },
+    dataSource: {
+      type: 'open_meteo',
+      sources: ['open_meteo'],
+      completenessPercentage: 96,
+      lastCalculatedAt: '2026-07-16T10:00:00.000Z',
+      ...overrides.dataSource,
+    },
+    series: overrides.series || [],
+    warnings: overrides.warnings || [],
+    calculationVersion: 'agromet-test-1.0.0',
+    parametersVersion: 'params-test-1.0.0',
+  });
+
+  const legacy = () =>
+    ({
+      fuente: 'Open-Meteo legacy',
+      periodoFrio: {
+        desde: '2026-05-01',
+        hasta: '2026-07-16',
+      },
+      acumulados: {
+        lluvia: 21,
+        gradosDia: 310,
+        horasFrio: 180,
+        porcionesFrio: undefined,
+      },
+      requerimientos: {
+        temperaturaBaseGradosDia: 0,
+      },
+      riesgoHelada: {
+        nivel: 'bajo',
+        dias: 0,
+      },
+      serie: [],
+      calculo: {
+        observaciones: [],
+      },
+    }) as any;
+
+  const siembra = (cultivo: string) =>
+    ({
+      _id: `siembra-${cultivo.toLowerCase()}`,
+      fechaSiembra: '2026-05-05T00:00:00.000Z',
+      semilla: {
+        cultivo,
+        variedad: 'VARIEDAD PRUEBA',
+        fenologiaReferencia: { temperaturaBaseC: 0 },
+      },
+    }) as any;
+
+  const createService = ({
+    canonicalResponse,
+    legacyResponse = legacy(),
+  }: {
+    canonicalResponse: any;
+    legacyResponse?: any;
+  }) => {
+    const repository = {
+      getAgrometeorologia: jest.fn().mockResolvedValue(canonicalResponse),
+    };
+    const climaService = {
+      getRiesgosAgroclimaticos: jest
+        .fn()
+        .mockResolvedValue({ helada: undefined }),
+      getFrioTermico: jest.fn().mockResolvedValue(legacyResponse),
+    };
+    const instance = new LotesService(
+      repository as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      climaService as any,
+    ) as any;
+    return { instance, repository, climaService };
+  };
+
+  it('prioriza la fuente canonica y no invoca el calculo legacy', async () => {
+    const respuesta = canonical('Manzano');
+    const { instance, repository, climaService } = createService({
+      canonicalResponse: respuesta,
+    });
+
+    const clima = await instance.getClimaCertificado(
+      loteConCentro,
+      siembra('Manzano'),
+    );
+
+    expect(clima).toMatchObject({
+      origen: 'canonico',
+      versionCalculo: 'agromet-test-1.0.0',
+      completitudPct: 96,
+    });
+    expect(repository.getAgrometeorologia).toHaveBeenCalledTimes(1);
+    expect(climaService.getFrioTermico).not.toHaveBeenCalled();
+  });
+
+  it('omite clima y no invoca el endpoint legacy cuando la respuesta canonica esta vacia', async () => {
+    const vacia = canonical('Manzano', {
+      summary: {
+        gddAccumulated: undefined,
+        rainAccumulatedMm: undefined,
+      },
+      series: [],
+    });
+    delete vacia.summary.vernalizationAccumulated;
+    const { instance, climaService } = createService({
+      canonicalResponse: vacia,
+    });
+
+    const clima = await instance.getClimaCertificado(
+      loteConCentro,
+      siembra('Manzano'),
+    );
+
+    expect(clima).toBeUndefined();
+    expect(climaService.getFrioTermico).not.toHaveBeenCalled();
+  });
+
+  it('no calcula progreso ni compatibilidad biologica desde el motor legacy aunque exista objetivo varietal', () => {
+    const { instance } = createService({
+      canonicalResponse: undefined,
+    });
+    const cultivoSiembra = siembra('Manzano');
+    cultivoSiembra.semilla.requerimientoFrio = {
+      modeloRector: 'HF',
+      horasFrio: 500,
+      estado: 'validado',
+      fuente: 'Ensayo varietal documentado',
+    };
+    const clima = instance.mapLegacyClimate(
+      {
+        ...legacy(),
+        acumulados: {
+          ...legacy().acumulados,
+          horasFrio: 900,
+        },
+      },
+      undefined,
+      cultivoSiembra,
+    );
+
+    expect(clima.requerimientoFrio).toMatchObject({
+      model: 'HF',
+      status: 'referencia',
+      target: 500,
+      accumulated: 900,
+      coverageSufficient: false,
+      continuitySufficient: false,
+      interpretation: 'datos_insuficientes',
+    });
+    expect(clima.requerimientoFrio.progressPercentage).toBeUndefined();
+    expect(clima.requerimientoFrio.compatible).toBeUndefined();
+  });
+
+  it.each(['Trigo', 'Cebada'])(
+    '%s muestra vernalizacion y no presenta HF ni CP como dormancia',
+    (cultivo) => {
+      const { instance } = createService({
+        canonicalResponse: canonical(cultivo),
+      });
+      const cultivoSiembra = siembra(cultivo);
+      const clima = instance.mapCanonicalClimate(
+        canonical(cultivo, {
+          summary: {
+            chillingHoursAccumulated: 240,
+            chillPortionsAccumulated: 16,
+          },
+        }),
+        undefined,
+        cultivoSiembra,
+      );
+      const frio = instance.getFrioCertificado(
+        loteConCentro,
+        cultivoSiembra,
+        clima,
+      );
+      const html = instance.renderTablaClimaAgronomica(clima, frio, false);
+
+      expect(frio).toMatchObject({ aplica: false });
+      expect(html).toContain('Vernalizacion varietal');
+      expect(html).toContain('18,5 UV');
+      expect(html).not.toContain('Horas frio (HF)');
+      expect(html).not.toContain('Chill portions (CP)');
+    },
+  );
+
+  it('Arveja no recibe un modulo de frio de dormancia', () => {
+    const { instance } = createService({
+      canonicalResponse: canonical('Arveja'),
+    });
+    const cultivoSiembra = siembra('Arveja');
+    const clima = instance.mapCanonicalClimate(
+      canonical('Arveja'),
+      undefined,
+      cultivoSiembra,
+    );
+    const frio = instance.getFrioCertificado(
+      loteConCentro,
+      cultivoSiembra,
+      clima,
+    );
+    const html = instance.renderTablaClimaAgronomica(clima, frio, false);
+
+    expect(frio).toMatchObject({
+      aplica: false,
+      titulo: 'No aplica',
+      detalle: 'Cultivo sin dormancia perenne',
+    });
+    expect(html).not.toContain('Horas frio (HF)');
+    expect(html).not.toContain('Chill portions (CP)');
+    expect(html).not.toContain('Vernalizacion varietal');
+  });
+
+  it('presenta CP como Sin dato cuando el motor canonico no lo informa', () => {
+    const { instance } = createService({
+      canonicalResponse: canonical('Manzano'),
+    });
+    const cultivoSiembra = siembra('Manzano');
+    const clima = instance.mapCanonicalClimate(
+      canonical('Manzano', {
+        summary: {
+          chillingHoursAccumulated: 390,
+          utahChillUnitsAccumulated: 82,
+          chillPortionsAccumulated: undefined,
+        },
+      }),
+      undefined,
+      cultivoSiembra,
+    );
+    const frio = instance.getFrioCertificado(
+      loteConCentro,
+      cultivoSiembra,
+      clima,
+    );
+    const html = instance.renderTablaClimaAgronomica(clima, frio, true);
+
+    expect(html).toMatch(
+      /Chill portions \(CP\)<\/td>\s*<td>Sin dato<\/td>/,
+    );
+    expect(html).not.toContain('0 CP');
+  });
+
+  it('informa Datos insuficientes y descarta compatibilidad heredada en el informe del lote', () => {
+    const respuesta = canonical('Manzano', {
+      summary: {
+        coldRequirement: {
+          model: 'HF',
+          status: 'validado',
+          source: 'Ficha varietal validada',
+          target: 900,
+          accumulated: 940,
+          progressPercentage: 104.4,
+          compatible: true,
+          interpretation: 'datos_insuficientes',
+        },
+      },
+    });
+    const { instance } = createService({
+      canonicalResponse: respuesta,
+    });
+    const cultivoSiembra = siembra('Manzano');
+    const clima = instance.mapCanonicalClimate(
+      respuesta,
+      undefined,
+      cultivoSiembra,
+    );
+    const frio = instance.getFrioCertificado(
+      loteConCentro,
+      cultivoSiembra,
+      clima,
+    );
+    const tablaClima = instance.renderTablaClimaAgronomica(
+      clima,
+      frio,
+      true,
+    );
+    const informe = instance.renderCertificadoHtml({
+      lote: {
+        ...loteConCentro,
+        nombre: 'Lote prueba frio',
+        establecimiento: { nombre: 'Establecimiento prueba' },
+      },
+      siembra: cultivoSiembra,
+      clima,
+      frio,
+      reportesNdvi: [],
+      predicciones: [],
+      fertilizaciones: [],
+      fumigaciones: [],
+      cargaFitosanitaria: instance.calcularCargaFitosanitaria(
+        loteConCentro,
+        cultivoSiembra,
+        [],
+        [],
+      ),
+    });
+    const lectura = `${tablaClima} ${informe}`.toLowerCase();
+
+    expect(tablaClima).toContain('Datos insuficientes');
+    expect(informe).toContain('Datos insuficientes');
+    expect(lectura).not.toContain('clima compatible');
+    expect(lectura).not.toMatch(/\bcumplid[oa]s?\b/);
+  });
+
+  it('calcula la calidad climatica con completitud y cobertura de campo reales', () => {
+    const { instance } = createService({
+      canonicalResponse: canonical('Manzano'),
+    });
+    const clima = instance.mapCanonicalClimate(
+      canonical('Manzano', {
+        dataSource: {
+          type: 'mixed',
+          sources: ['sensor', 'open_meteo'],
+          sensorNames: ['Sonda Norte'],
+          completenessPercentage: 64,
+          fieldCoveragePercentage: 25,
+        },
+      }),
+      undefined,
+      siembra('Manzano'),
+    );
+    const calidad = instance
+      .getCalidadDatosCertificado({
+        lote: {},
+        siembra: siembra('Manzano'),
+        clima,
+        reportesNdvi: [],
+        predicciones: [],
+        fertilizaciones: [],
+        fumigaciones: [],
+      })
+      .find((item: any) => item.modulo === 'Clima');
+
+    // 64% completitud * 0,5 + fuente sensor 90 * 0,3
+    // + 25% cobertura de campo * 0,2 = 64/100.
+    expect(calidad).toMatchObject({
+      score: 64,
+      confianza: 'Media',
+      fuente: 'Sensor Sonda Norte + Open-Meteo',
+    });
+    expect(calidad.lectura).toContain('64% completitud');
+    expect(calidad.lectura).toContain(
+      '25% cobertura de temperatura de campo',
+    );
   });
 });

@@ -125,6 +125,25 @@ export type AlertaDocument = Alerta & Document;
 
 export const AlertaSchema = SchemaFactory.createForClass(Alerta);
 
+// Campos internos para idempotencia. Son deliberadamente select:false para no
+// filtrar detalles de coordinacion a los clientes ni convertirlos en contrato
+// publico. Al ser sparse, el indice puede crearse aun cuando haya documentos
+// historicos sin normalizar; esos documentos se adoptan al recibir el proximo
+// evento y sus duplicados activos se finalizan conservando el historial.
+AlertaSchema.add({
+  claveDedupeActiva: {
+    type: String,
+    required: false,
+    select: false,
+  },
+  eventKeys: {
+    type: [String],
+    required: false,
+    select: false,
+    default: undefined,
+  },
+} as any);
+
 AlertaSchema.set('toJSON', { virtuals: true, getters: true });
 
 AlertaSchema.virtual('quimica', {
@@ -163,6 +182,14 @@ AlertaSchema.virtual('siembra', {
 });
 
 AlertaSchema.index({ idSiembra: 1, activa: 1, dedupeKey: 1 });
+AlertaSchema.index(
+  { claveDedupeActiva: 1 },
+  {
+    unique: true,
+    sparse: true,
+    name: 'alerta_activa_dedupe_unica',
+  },
+);
 AlertaSchema.index({ idProductor: 1, activa: 1, fechaUltimoEvento: -1 });
 AlertaSchema.index({ idEstablecimiento: 1, activa: 1, fechaUltimoEvento: -1 });
 AlertaSchema.index({ idDistribuidor: 1, activa: 1, fechaUltimoEvento: -1 });

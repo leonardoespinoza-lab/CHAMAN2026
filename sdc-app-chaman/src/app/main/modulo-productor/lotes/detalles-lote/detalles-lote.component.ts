@@ -28,7 +28,6 @@ import { CardCentralMeteorologicaComponent } from './card-central-meteorologica/
 import { CardDispositivosComponent } from './card-dispositivos/card-dispositivos.component';
 import { CardEnfermedadesComponent } from './card-enfermedades/card-enfermedades.component';
 import { CardEtapasFenologicasComponent } from './card-etapas-fenologicas/card-etapas-fenologicas.component';
-import { CardFrioTermicoComponent } from './card-frio-termico/card-frio-termico.component';
 import { CardHuellaHidricaComponent } from './card-huella-hidrica/card-huella-hidrica.component';
 import { CardMalezasComponent } from './card-malezas/card-malezas.component';
 import { CardNapasComponent } from './card-napas/card-napas.component';
@@ -71,7 +70,6 @@ export interface IDetallesLote extends ILoteTabla {
     DrawerListadoSiembrasComponent,
     CardNDVIComponent,
     CardEtapasFenologicasComponent,
-    CardFrioTermicoComponent,
     CardMalezasComponent,
     CardNapasComponent,
     CardCamarasLoteComponent,
@@ -472,6 +470,10 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     if (siembra._id) {
       DetallesLoteComponent.siembraCache.set(siembra._id, JSON.parse(JSON.stringify(siembra)));
     }
+  }
+
+  public actualizarSiembraFenologica(siembra: ISiembra): void {
+    this.publicarSiembra(siembra as IDetalleSiembra);
   }
 
   private async cargarLoteEnSegundoPlano(idLote: string): Promise<void> {

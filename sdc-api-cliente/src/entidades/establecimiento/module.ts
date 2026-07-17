@@ -7,6 +7,7 @@ import { ProductorsModule } from '../productor/module';
 import { ClimaModule } from '../clima/module';
 import { EstablecimientosClimateSyncService } from './climate-sync.service';
 import { EstacionsModule } from '../estacion/module';
+import { DecisionPipelineModule } from '../../auxiliares/decision-pipeline';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { EstacionsModule } from '../estacion/module';
     ProductorsModule,
     EstacionsModule,
     forwardRef(() => ClimaModule),
+    DecisionPipelineModule,
   ],
   controllers: [EstablecimientosController],
   providers: [

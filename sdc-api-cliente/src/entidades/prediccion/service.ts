@@ -10,19 +10,19 @@ import {
 import { HelperService } from '../../auxiliares/helper';
 import { XlsxService } from '../../auxiliares/xlsx/xlsx.service';
 import { PrediccionsRepository } from './repository';
+import { LotesService } from '../lote/service';
 
 @Injectable()
 export class PrediccionsService {
   constructor(
     private repository: PrediccionsRepository,
     private xls: XlsxService,
+    private lotesService: LotesService,
   ) {}
 
   async getById(id: string, permiso: IPermiso): Promise<IPrediccion> {
     const data = await this.repository.getById(id);
-    if (!this.puedeVer(data, permiso)) {
-      throw new Error('No tiene permiso para ver esta prediccion');
-    }
+    await this.autorizarSiembra(data.idSiembra, permiso);
     return data;
   }
 
@@ -48,16 +48,10 @@ export class PrediccionsService {
   }
 
   async deleteByIdSiembra(idSiembra: string, permiso: IPermiso): Promise<void> {
-    const predicciones = await this.get(
-      {
-        filter: JSON.stringify({ idSiembra }),
-        limit: 1,
-      },
-      permiso,
-    );
-    if (!predicciones.datos.length) {
-      return;
-    }
+    // La autorizacion se resuelve contra la siembra/lote canonicos. Consultar
+    // primero predicciones por tenant dejaba documentos legacy invisibles y,
+    // por lo tanto, sin borrar antes de reconstruir el motor sanitario.
+    await this.autorizarSiembra(idSiembra, permiso);
     return await this.repository.deleteByIdSiembra(idSiembra);
   }
 
@@ -65,43 +59,97 @@ export class PrediccionsService {
     return await this.repository.prediccion(idSiembra);
   }
 
+  async reconstruir(
+    idSiembra: string,
+    permiso: IPermiso,
+  ): Promise<IPrediccion[]> {
+    await this.autorizarSiembra(idSiembra, permiso);
+    return await this.repository.reconstruir(idSiembra);
+  }
+
   async agroclima(
     idSiembra: string,
     permiso?: IPermiso,
   ): Promise<IResumenRiesgosAgroclimaticos> {
     if (permiso) {
-      const siembra = await this.repository.getSiembraById(idSiembra);
-      if (!this.puedeVer(siembra, permiso)) {
-        throw new Error('No tiene permiso para evaluar esta siembra');
-      }
+      await this.autorizarSiembra(idSiembra, permiso);
     }
     return await this.repository.agroclima(idSiembra);
   }
 
   // Private
 
-  private puedeVer(data: Partial<IPrediccion>, permiso: IPermiso): boolean {
+  private puedeVerSiembra(
+    data: Partial<IPrediccion>,
+    permiso: IPermiso,
+  ): boolean {
     if (permiso.nivel === 'Admin') {
       return true;
     }
     if (permiso.nivel === 'Quimica') {
-      return !data.idQuimica || data.idQuimica === permiso.idQuimica;
+      return Boolean(
+        data.idQuimica && data.idQuimica === permiso.idQuimica,
+      );
     }
     if (permiso.nivel === 'Distribuidor') {
-      return (
-        !data.idDistribuidor || data.idDistribuidor === permiso.idDistribuidor
+      return Boolean(
+        data.idDistribuidor &&
+          data.idDistribuidor === permiso.idDistribuidor,
       );
     }
     if (permiso.nivel === 'Productor') {
-      return !data.idProductor || data.idProductor === permiso.idProductor;
+      return Boolean(
+        data.idProductor && data.idProductor === permiso.idProductor,
+      );
     }
     if (permiso.nivel === 'Establecimiento') {
-      return (
-        !data.idEstablecimiento ||
-        data.idEstablecimiento === permiso.idEstablecimiento
+      return Boolean(
+        data.idEstablecimiento &&
+          data.idEstablecimiento === permiso.idEstablecimiento,
       );
     }
     return false;
+  }
+
+  private tieneAlcancePersistido(
+    data: Partial<IPrediccion>,
+    permiso: IPermiso,
+  ): boolean {
+    if (permiso.nivel === 'Quimica') return Boolean(data.idQuimica);
+    if (permiso.nivel === 'Distribuidor') {
+      return Boolean(data.idDistribuidor);
+    }
+    if (permiso.nivel === 'Productor') return Boolean(data.idProductor);
+    if (permiso.nivel === 'Establecimiento') {
+      return Boolean(data.idEstablecimiento);
+    }
+    return permiso.nivel === 'Admin';
+  }
+
+  private async autorizarSiembra(
+    idSiembra: string | undefined,
+    permiso: IPermiso,
+  ): Promise<void> {
+    if (permiso.nivel === 'Admin') return;
+    if (!idSiembra) {
+      throw new Error('La prediccion no tiene una siembra canonica asociada');
+    }
+    const siembra = await this.repository.getSiembraById(idSiembra);
+    if (this.puedeVerSiembra(siembra, permiso)) return;
+
+    if (
+      !this.tieneAlcancePersistido(siembra, permiso) &&
+      siembra.idLote
+    ) {
+      try {
+        await this.lotesService.getById(siembra.idLote, permiso);
+        return;
+      } catch {
+        // Solo un lote canonico autorizado habilita compatibilidad legacy.
+        // Un tenant persistido que no coincide nunca cae a esta ruta.
+      }
+    }
+    throw new Error('No tiene permiso para evaluar esta siembra');
   }
 
   private agregarFiltroPermiso(query: IQueryParam, permiso: IPermiso) {

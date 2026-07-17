@@ -818,6 +818,24 @@
   width: 100%;
 }
 
+.register-method-note {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--p-primary-50) 68%, var(--p-surface-0));
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 24%, var(--p-surface-border));
+  border-radius: 9px;
+  color: var(--p-text-muted-color);
+  display: flex;
+  font-size: 0.78rem;
+  gap: 0.5rem;
+  line-height: 1.35;
+  padding: 0.65rem 0.75rem;
+}
+
+.register-method-note i {
+  color: var(--p-primary-color);
+  margin-top: 0.08rem;
+}
+
 .register-snapshot {
   display: grid;
   gap: 0.6rem;

@@ -192,9 +192,7 @@ export class CardFrioTermicoComponent implements OnChanges {
       ? Number(frio?.porcionesFrio)
       : this.esNumero(data?.acumulados.porcionesFrio)
         ? data?.acumulados.porcionesFrio
-        : this.esNumero(horasFrioEfectivas)
-          ? this.calcularPorcionesFrio(Number(horasFrioEfectivas))
-          : undefined;
+        : undefined;
     const porcionesEstimadas =
       !this.esNumero(frio?.porcionesFrio) &&
       data?.calculo?.porcionesFrio !== 'dinamico_horario';
@@ -607,11 +605,6 @@ export class CardFrioTermicoComponent implements OnChanges {
       return undefined;
     }
     return Math.max(0, Math.min(100, (Number(valor) / Number(objetivo)) * 100));
-  }
-
-  private calcularPorcionesFrio(horasFrioEfectivas: number): number {
-    if (!this.esNumero(horasFrioEfectivas)) return 0;
-    return Number((Number(horasFrioEfectivas) / 28).toFixed(2));
   }
 
   private detalleObjetivo(

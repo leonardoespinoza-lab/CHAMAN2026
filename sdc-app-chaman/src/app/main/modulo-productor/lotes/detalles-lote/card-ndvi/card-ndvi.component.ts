@@ -36,22 +36,22 @@ import {
   IQueryParam,
   IReporteNDVI,
   ISiembra,
+  obtenerRegistroFenologicoDecisorioEnFecha,
 } from 'modelos/src';
 import { Subscription } from 'rxjs';
 import { LoteService } from '../../../../../auxiliares/http/lote.service';
-import { ReporteNDVIService } from '../../../../../auxiliares/http/reporte-ndvis.service';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { DialogHandlerService } from '../../../../../auxiliares/servicios/dialog-handler.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../../auxiliares/servicios/listados';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
-import { ENV } from '../../../../../environments/environment';
 import { NdviLegendComponent } from '../../ndvi-legend/ndvi-legend.component';
 import { colorForSatelliteIndex, legendForSatelliteIndex, SatelliteLegendItem } from './satellite-index-palettes';
 import {
   buildSatelliteIndexHistory,
   SatelliteIndexHistoryPoint,
   SatelliteStageAtDate,
+  satelliteIndexValue,
 } from './satellite-index-history';
 
 interface NdviAnalisis {
@@ -121,11 +121,9 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
 
   public reporte?: IReporteNDVI;
   public ndvis: IReporteNDVI[] = [];
-  public generandoMuestra = false;
   public generandoSatelital = false;
   public detalleCapasVisible = false;
   public graficoSatelitalVisible = false;
-  public readonly esLocal = ENV === 'Local';
   public capaSatelitalActiva: SatelliteIndicator['key'] = 'ndvi';
   public historialIndice: SatelliteIndexHistoryPoint[] = [];
   public historialIndiceOptions?: Highcharts.Options;
@@ -147,7 +145,6 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     public helper: HelperService,
     private listados: ListadosService,
     private dialogHandler: DialogHandlerService,
-    private reporteNDVIService: ReporteNDVIService,
     private loteService: LoteService
   ) {}
 
@@ -173,7 +170,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   }
 
   public get analisis(): NdviAnalisis {
-    const ndvi = this.reporte?.ndviPromedio;
+    const ndvi = this.valorIndice('ndvi');
     const lluvia72 = this.suma(this.pronosticos.slice(0, 3).map((p) => this.numero(p.lluvia)));
     const et072 = this.suma(this.pronosticos.slice(0, 3).map((p) => this.numero(p.et0)));
     const balance = this.redondear(lluvia72 - et072);
@@ -258,24 +255,24 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   }
 
   public get satelliteIndicators(): SatelliteIndicator[] {
-    const ndvi = this.reporte?.ndviPromedio;
-    const ndviValue = ndvi == null ? 'Pendiente' : this.formatear(ndvi);
-    const indices = this.reporte?.indices;
+    const ndvi = this.valorIndice('ndvi');
     const imagenes = this.reporte?.imagenes;
-    const indexValue = (key: keyof NonNullable<IReporteNDVI['indices']>) =>
-      indices?.[key] == null ? (this.reporte ? 'Pendiente' : 'Preparado') : this.formatear(indices[key]!);
+    const indexValue = (key: keyof NonNullable<IReporteNDVI['indices']>) => {
+      const value = this.valorIndice(key);
+      return value == null ? (this.reporte ? 'Pendiente' : 'Preparado') : this.formatear(value);
+    };
     const indexStatus = (...keys: (keyof NonNullable<IReporteNDVI['indices']>)[]) =>
-      keys.some((key) => indices?.[key] != null) ? 'activo' : 'preparado';
+      keys.some((key) => this.valorIndice(key) != null) ? 'activo' : 'preparado';
     return [
       {
         key: 'ndvi',
         label: 'NDVI',
-        value: indexValue('ndvi') === 'Preparado' ? ndviValue : indexValue('ndvi'),
+        value: indexValue('ndvi'),
         detail: this.detalleIndice('ndvi'),
         source: this.reporte?.coleccion || 'Sentinel-2 B08/B04',
         image: imagenes?.ndvi,
-        lectura: this.lecturaIndice('ndvi', indices?.ndvi ?? ndvi),
-        status: this.reporte ? 'activo' : 'preparado',
+        lectura: this.lecturaIndice('ndvi', ndvi),
+        status: ndvi != null ? 'activo' : 'preparado',
       },
       {
         key: 'ndmi',
@@ -284,7 +281,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
         detail: this.detalleIndice('ndmi'),
         source: 'Sentinel-2 B08/B11',
         image: imagenes?.ndmi,
-        lectura: this.lecturaIndice('ndmi', indices?.ndmi),
+        lectura: this.lecturaIndice('ndmi', this.valorIndice('ndmi')),
         status: indexStatus('ndmi'),
       },
       {
@@ -294,7 +291,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
         detail: this.detalleIndice('ndwi'),
         source: 'Sentinel-2 B03/B08',
         image: imagenes?.ndwi,
-        lectura: this.lecturaIndice('ndwi', indices?.ndwi),
+        lectura: this.lecturaIndice('ndwi', this.valorIndice('ndwi')),
         status: indexStatus('ndwi'),
       },
       {
@@ -304,7 +301,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
         detail: this.detalleIndice('ndre'),
         source: 'Sentinel-2 B08/B05',
         image: imagenes?.ndre,
-        lectura: this.lecturaIndice('ndre', indices?.ndre),
+        lectura: this.lecturaIndice('ndre', this.valorIndice('ndre')),
         status: indexStatus('ndre'),
       },
       {
@@ -314,7 +311,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
         detail: this.detalleIndice('savi'),
         source: 'Sentinel-2 multibanda',
         image: imagenes?.savi,
-        lectura: this.lecturaIndice('savi', indices?.savi),
+        lectura: this.lecturaIndice('savi', this.valorIndice('savi')),
         status: indexStatus('savi'),
       },
       {
@@ -324,7 +321,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
         detail: this.detalleIndice('evi'),
         source: 'Sentinel-2 multibanda',
         image: imagenes?.evi,
-        lectura: this.lecturaIndice('evi', indices?.evi),
+        lectura: this.lecturaIndice('evi', this.valorIndice('evi')),
         status: indexStatus('evi'),
       },
     ];
@@ -935,7 +932,10 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   }
 
   private valorIndice(key: SatelliteIndicator['key']): number | undefined {
-    return this.reporte?.indices?.[key] ?? (key === 'ndvi' ? this.reporte?.ndviPromedio : undefined);
+    if (!this.reporte) {
+      return undefined;
+    }
+    return satelliteIndexValue(this.reporte, key) ?? undefined;
   }
 
   private colorCapaActiva(opacity: number): string {
@@ -1068,13 +1068,17 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
       return { name: 'Sin etapa confirmada', source: 'Fecha de escena inválida', confirmed: false };
     }
 
-    const registro = [...(siembra?.registrosFenologicos || [])]
-      .filter((item) => item.etapa && item.fecha && new Date(item.fecha).getTime() <= fecha.getTime())
-      .sort((a, b) => new Date(b.fecha!).getTime() - new Date(a.fecha!).getTime())[0];
+    const registro = obtenerRegistroFenologicoDecisorioEnFecha(
+      siembra,
+      fecha,
+    );
     if (registro?.etapa) {
+      const puntual =
+        registro.tipoEvento === 'observacion' ||
+        (registro.accion === 'observacion' && !registro.fechaInicioEtapa);
       return {
         name: registro.etapa,
-        source: 'Registro de campo',
+        source: `${puntual ? 'Observación' : 'Inicio de etapa'} de campo · confianza ${registro.confianza || 'media'}`,
         confirmed: true,
       };
     }
@@ -1291,6 +1295,11 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   private inicioCampaniaPerenne(fecha = new Date()): Date {
     const year = fecha.getMonth() + 1 >= 7 ? fecha.getFullYear() : fecha.getFullYear() - 1;
     return new Date(year, 6, 1);
+  }
+
+  private inicioMonitoreoPerenne(fecha = new Date()): Date {
+    const year = fecha.getMonth() + 1 >= 5 ? fecha.getFullYear() : fecha.getFullYear() - 1;
+    return new Date(year, 4, 1);
   }
 
   private diasDesdeImplantacion(fecha = new Date()): number | undefined {
@@ -1575,16 +1584,16 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   }
 
   private tendenciaIndice(key: SatelliteIndicator['key']): string {
-    if (!this.reporte?.indices || this.ndvis.length < 2) {
+    if (!this.reporte || this.ndvis.length < 2) {
       return '';
     }
-    const actual = this.reporte.indices[key] ?? (key === 'ndvi' ? this.reporte.ndviPromedio : undefined);
+    const actual = satelliteIndexValue(this.reporte, key);
     if (actual == null) {
       return '';
     }
     const index = this.ndvis.findIndex((item) => item._id === this.reporte?._id);
     const previo = this.ndvis[index >= 0 ? index + 1 : 1];
-    const previoValue = previo?.indices?.[key] ?? (key === 'ndvi' ? previo?.ndviPromedio : undefined);
+    const previoValue = previo ? satelliteIndexValue(previo, key) : null;
     if (previoValue == null) {
       return '';
     }
@@ -1600,7 +1609,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   private calcularFechaMinima(): void {
     const cultivo = this.canonicalCultivo(this.siembra?.semilla?.cultivo);
     if (esCultivoPerenne(cultivo)) {
-      this.fechaMinima = this.inicioCampaniaPerenne(
+      this.fechaMinima = this.inicioMonitoreoPerenne(
         this.siembra?.fechaCosecha ? new Date(this.siembra.fechaCosecha) : this.hoy
       );
       return;
@@ -1697,34 +1706,6 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     });
   }
 
-  public async generarMuestraLocal(event?: Event): Promise<void> {
-    event?.stopPropagation();
-    if (!this.lote?._id || this.generandoMuestra) return;
-
-    this.generandoMuestra = true;
-    try {
-      const fecha = new Date().toISOString();
-      await this.reporteNDVIService.crear({
-        idLote: this.lote._id,
-        idEstablecimiento: this.lote.idEstablecimiento,
-        idProductor: this.lote.idProductor,
-        idDistribuidor: this.lote.idDistribuidor,
-        idQuimica: this.lote.idQuimica,
-        idDepartamento: this.lote.idDepartamento,
-        fechaCreacion: fecha,
-        fechaDelReporte: fecha,
-        fechaDeLaImagen: fecha,
-        ndviPromedio: 0.62,
-        coleccion: 'Muestra local CHAMAN2026',
-      });
-      await this.listarNDVIs();
-      this.helper.notifSuccess('Muestra NDVI local creada');
-    } catch (error) {
-      this.helper.notifError(error);
-    }
-    this.generandoMuestra = false;
-  }
-
   public async generarNdviSatelital(event?: Event): Promise<void> {
     event?.stopPropagation();
     if (!this.lote?._id || this.generandoSatelital) return;
@@ -1806,15 +1787,20 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   }
 
   private tendenciaNdvi(): string {
-    if (!this.reporte?.ndviPromedio || this.ndvis.length < 2) {
+    if (!this.reporte || this.ndvis.length < 2) {
+      return 'Sin comparativo previo';
+    }
+    const actual = satelliteIndexValue(this.reporte, 'ndvi');
+    if (actual == null) {
       return 'Sin comparativo previo';
     }
     const index = this.ndvis.findIndex((item) => item._id === this.reporte?._id);
     const previo = this.ndvis[index >= 0 ? index + 1 : 1];
-    if (!previo?.ndviPromedio) {
+    const previoValue = previo ? satelliteIndexValue(previo, 'ndvi') : null;
+    if (previoValue == null) {
       return 'Sin comparativo previo';
     }
-    const delta = this.redondear(this.reporte.ndviPromedio - previo.ndviPromedio);
+    const delta = this.redondear(actual - previoValue);
     if (Math.abs(delta) < 0.03) {
       return 'Estable respecto al reporte anterior';
     }

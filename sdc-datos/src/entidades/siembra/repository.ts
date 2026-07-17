@@ -5,6 +5,7 @@ import {
   IUpdateSiembra,
   IQueryParam,
   ICreateSiembra,
+  IRegistroFenologico,
 } from 'modelos/src';
 import { Model } from 'mongoose';
 import { dbQuery } from 'src/auxiliares/helper.service';
@@ -53,6 +54,37 @@ export class SiembrasRepository {
     return await this.model.findByIdAndUpdate(id, data, {
       new: true,
     });
+  }
+
+  async appendPhenologyRecord(
+    id: string,
+    record: IRegistroFenologico,
+  ): Promise<Siembra> {
+    const atomicConditions: Record<string, unknown>[] = [
+      { 'registrosFenologicos.id': { $ne: record.id } },
+    ];
+    if (record.reemplazaRegistroId) {
+      atomicConditions.push(
+        {
+          registrosFenologicos: {
+            $elemMatch: { id: record.reemplazaRegistroId },
+          },
+        },
+        {
+          'registrosFenologicos.reemplazaRegistroId': {
+            $ne: record.reemplazaRegistroId,
+          },
+        },
+      );
+    }
+    return await this.model.findOneAndUpdate(
+      {
+        _id: id,
+        $and: atomicConditions,
+      },
+      { $push: { registrosFenologicos: record } },
+      { new: true },
+    );
   }
 
   async delete(id: string): Promise<Siembra> {

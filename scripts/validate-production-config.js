@@ -44,15 +44,25 @@ const SERVICE_REQUIRED = {
     'AUTH_CLIENT_ID',
     'AUTH_CLIENT_SECRET',
     'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
+    'AGROMETEO_INTERNAL_TOKEN',
   ],
   auth: ['API_DATOS', 'CLIENT_ID_INICIAL', 'CLIENT_SECRET_INICIAL'],
-  datos: ['MONGO_URI', 'SOIL_INTELLIGENCE_INTERNAL_TOKEN'],
+  datos: [
+    'MONGO_URI',
+    'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
+    'AGROMETEO_INTERNAL_TOKEN',
+  ],
   predicciones: [
     'API_DATOS',
     'API_CLIMA',
     'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
+    'AGROMETEO_INTERNAL_TOKEN',
   ],
-  clima: ['API_DATOS', 'SOIL_INTELLIGENCE_INTERNAL_TOKEN'],
+  clima: [
+    'API_DATOS',
+    'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
+    'AGROMETEO_INTERNAL_TOKEN',
+  ],
   lora: ['API_DATOS'],
   externa: [
     'API_DATOS',
@@ -68,6 +78,12 @@ const FORBIDDEN_VALUES = {
   CLIENT_SECRET_INICIAL: new Set(['', '1', 'change-me', '<change-me>']),
   NDVI_WORKER_TOKEN: new Set(['', '1', 'change-me', '<change-me>']),
   SOIL_INTELLIGENCE_INTERNAL_TOKEN: new Set([
+    '',
+    '1',
+    'change-me',
+    '<change-me>',
+  ]),
+  AGROMETEO_INTERNAL_TOKEN: new Set([
     '',
     '1',
     'change-me',
@@ -138,15 +154,17 @@ function validate() {
     }
   }
 
-  if (
-    hasValue('SOIL_INTELLIGENCE_INTERNAL_TOKEN') &&
-    getValue('SOIL_INTELLIGENCE_INTERNAL_TOKEN').length < 32
-  ) {
-    pushIssue(
-      issues,
-      'error',
-      'SOIL_INTELLIGENCE_INTERNAL_TOKEN debe tener al menos 32 caracteres',
-    );
+  for (const name of [
+    'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
+    'AGROMETEO_INTERNAL_TOKEN',
+  ]) {
+    if (hasValue(name) && getValue(name).length < 32) {
+      pushIssue(
+        issues,
+        'error',
+        `${name} debe tener al menos 32 caracteres`,
+      );
+    }
   }
 
   if (BACKEND_SERVICES.has(service)) {

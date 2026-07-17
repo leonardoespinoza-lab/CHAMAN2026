@@ -41,4 +41,35 @@ export class PrediccionsService {
   async deleteByIdSiembra(idSiembra: string) {
     await this.repository.deleteByIdSiembra(idSiembra);
   }
+
+  async clearByIdSiembra(idSiembra: string) {
+    await this.repository.clearByIdSiembra(idSiembra);
+  }
+
+  async restoreByIdSiembra(
+    idSiembra: string,
+    predicciones: ICreatePrediccion[],
+  ): Promise<void> {
+    if (!Array.isArray(predicciones) || predicciones.length > 10000) {
+      throw new Error('El respaldo de predicciones no es valido');
+    }
+    const sanitized = predicciones.map((item: ICreatePrediccion & any) => {
+      if (String(item.idSiembra || '') !== String(idSiembra)) {
+        throw new Error(
+          'El respaldo contiene una prediccion de otra siembra',
+        );
+      }
+      const {
+        id,
+        siembra,
+        quimica,
+        distribuidor,
+        productor,
+        establecimiento,
+        ...persistible
+      } = item;
+      return persistible as ICreatePrediccion;
+    });
+    await this.repository.replaceByIdSiembra(idSiembra, sanitized);
+  }
 }

@@ -1,9 +1,19 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
 import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import {
+  ICalificacionSensorMeteorologico,
+  ICalificacionVariableMeteorologica,
   ICreateDispositivo,
+  IDispositivo,
+  IIntervaloCalibracionMeteorologica,
   ILorawanUplink,
   IQueryParam,
   IUpdateDispositivo,
+  VariableCalibracionMeteorologica,
 } from 'modelos/src';
 import { DispositivosRepository } from './repository';
 
@@ -24,7 +34,9 @@ export class DispositivosService {
   }
 
   async create(dato: ICreateDispositivo) {
-    return await this.repository.create(dato);
+    const normalized = this.prepararCalificacionMeteorologica(dato);
+    this.validarCalificacionMeteorologica(normalized);
+    return await this.repository.create(normalized);
   }
 
   async upsertFromLorawanUplink(uplink: ILorawanUplink) {
@@ -32,11 +44,231 @@ export class DispositivosService {
   }
 
   async update(id: string, dato: IUpdateDispositivo) {
-    const updated = await this.repository.update(id, dato);
+    const hasQualification = Object.prototype.hasOwnProperty.call(
+      dato,
+      'calificacionMeteorologica',
+    );
+    const current = hasQualification
+      ? await this.repository.getById(id)
+      : undefined;
+    if (hasQualification && !current) {
+      throw new NotFoundException('No encontrado');
+    }
+    const normalized = this.prepararCalificacionMeteorologica(dato, current);
+    this.validarCalificacionMeteorologica(normalized);
+    const updated = await this.repository.update(id, normalized);
     if (updated) {
       return updated;
     }
     throw new NotFoundException('No encontrado');
+  }
+
+  private prepararCalificacionMeteorologica<
+    T extends ICreateDispositivo | IUpdateDispositivo,
+  >(dato: T, current?: Partial<IDispositivo>): T {
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        dato,
+        'calificacionMeteorologica',
+      ) ||
+      !dato.calificacionMeteorologica
+    ) {
+      return dato;
+    }
+
+    const previous = current?.calificacionMeteorologica;
+    const incomingEditable = { ...dato.calificacionMeteorologica };
+    delete incomingEditable.historialCalibraciones;
+    const { humedadRelativa: incomingHumidity, ...incomingTemperature } =
+      incomingEditable;
+    const merged: ICalificacionSensorMeteorologico = {
+      ...(previous || {}),
+      ...incomingTemperature,
+      ...(incomingHumidity
+        ? {
+            humedadRelativa: {
+              ...(previous?.humedadRelativa || {}),
+              ...incomingHumidity,
+            },
+          }
+        : previous?.humedadRelativa
+          ? { humedadRelativa: { ...previous.humedadRelativa } }
+          : {}),
+      historialCalibraciones: this.construirHistorialCalibraciones(previous, {
+        ...(previous || {}),
+        ...incomingTemperature,
+        ...(incomingHumidity
+          ? {
+              humedadRelativa: {
+                ...(previous?.humedadRelativa || {}),
+                ...incomingHumidity,
+              },
+            }
+          : previous?.humedadRelativa
+            ? { humedadRelativa: { ...previous.humedadRelativa } }
+            : {}),
+      }),
+    };
+
+    return {
+      ...dato,
+      calificacionMeteorologica: merged,
+    };
+  }
+
+  private construirHistorialCalibraciones(
+    previous: ICalificacionSensorMeteorologico | undefined,
+    next: ICalificacionSensorMeteorologico,
+  ): IIntervaloCalibracionMeteorologica[] {
+    const history = (previous?.historialCalibraciones || []).map((item) => ({
+      ...item,
+    }));
+    const candidates = [
+      this.intervaloTemperatura(previous),
+      this.intervaloHumedad(previous?.humedadRelativa),
+      this.intervaloTemperatura(next),
+      this.intervaloHumedad(next.humedadRelativa),
+    ].filter(
+      (
+        item,
+      ): item is Omit<
+        IIntervaloCalibracionMeteorologica,
+        'id' | 'registradoEn'
+      > => !!item,
+    );
+
+    for (const candidate of candidates) {
+      const sameWindow = history.find(
+        (item) => this.claveIntervalo(item) === this.claveIntervalo(candidate),
+      );
+      if (sameWindow) {
+        if (
+          this.firmaIntervalo(sameWindow) !== this.firmaIntervalo(candidate)
+        ) {
+          throw new BadRequestException(
+            `El intervalo historico ${this.claveIntervalo(candidate)} ya fue registrado y no puede reescribirse. Registre una nueva calibracion con su propia fecha de inicio.`,
+          );
+        }
+        continue;
+      }
+      const signature = this.firmaIntervalo(candidate);
+      history.push({
+        ...candidate,
+        id: `cal-${createHash('sha256')
+          .update(signature)
+          .digest('hex')
+          .slice(0, 20)}`,
+        registradoEn: new Date().toISOString(),
+      });
+    }
+
+    return history.sort((left, right) => {
+      const variable = left.variable.localeCompare(right.variable);
+      return (
+        variable ||
+        String(left.fechaCalibracion).localeCompare(
+          String(right.fechaCalibracion),
+        )
+      );
+    });
+  }
+
+  private intervaloTemperatura(
+    qualification?: ICalificacionSensorMeteorologico,
+  ):
+    | Omit<IIntervaloCalibracionMeteorologica, 'id' | 'registradoEn'>
+    | undefined {
+    if (!qualification) return undefined;
+    return this.crearIntervalo('temperatura_aire', {
+      estado: qualification.estado,
+      rol: qualification.rolTemperatura,
+      alturaM: qualification.alturaM,
+      abrigoRadiacion: qualification.abrigoRadiacion,
+      exactitud: qualification.exactitudTemperaturaC,
+      fechaCalibracion: qualification.fechaCalibracion,
+      proximaCalibracion: qualification.proximaCalibracion,
+      offset: qualification.offsetTemperaturaC,
+      fuenteCalibracion: qualification.fuenteCalibracion,
+      observaciones: qualification.observaciones,
+    });
+  }
+
+  private intervaloHumedad(
+    qualification?: ICalificacionVariableMeteorologica,
+  ):
+    | Omit<IIntervaloCalibracionMeteorologica, 'id' | 'registradoEn'>
+    | undefined {
+    return qualification
+      ? this.crearIntervalo('humedad_relativa', qualification)
+      : undefined;
+  }
+
+  private crearIntervalo(
+    variable: VariableCalibracionMeteorologica,
+    qualification: ICalificacionVariableMeteorologica,
+  ):
+    | Omit<IIntervaloCalibracionMeteorologica, 'id' | 'registradoEn'>
+    | undefined {
+    const from = this.fechaValida(qualification.fechaCalibracion);
+    const to = this.fechaValida(qualification.proximaCalibracion, true);
+    if (!from || !to || to.getTime() < from.getTime()) return undefined;
+    return {
+      variable,
+      version: 'calificacion-variable-v1',
+      estado: qualification.estado,
+      rol: qualification.rol,
+      alturaM: this.numeroOpcional(qualification.alturaM),
+      abrigoRadiacion: qualification.abrigoRadiacion,
+      exactitud: this.numeroOpcional(qualification.exactitud),
+      fechaCalibracion: from.toISOString(),
+      proximaCalibracion: to.toISOString(),
+      offset: this.numeroOpcional(qualification.offset),
+      fuenteCalibracion:
+        String(qualification.fuenteCalibracion || '').trim() || undefined,
+      observaciones:
+        String(qualification.observaciones || '').trim() || undefined,
+    };
+  }
+
+  private claveIntervalo(
+    item: Pick<
+      IIntervaloCalibracionMeteorologica,
+      'variable' | 'fechaCalibracion' | 'proximaCalibracion'
+    >,
+  ): string {
+    return [
+      item.variable,
+      this.fechaValida(item.fechaCalibracion)?.toISOString() || '',
+      this.fechaValida(item.proximaCalibracion, true)?.toISOString() || '',
+    ].join('|');
+  }
+
+  private firmaIntervalo(
+    item: Omit<IIntervaloCalibracionMeteorologica, 'id' | 'registradoEn'>,
+  ): string {
+    return JSON.stringify({
+      variable: item.variable,
+      version: item.version,
+      estado: item.estado,
+      rol: item.rol,
+      alturaM: this.numeroOpcional(item.alturaM),
+      abrigoRadiacion: item.abrigoRadiacion,
+      exactitud: this.numeroOpcional(item.exactitud),
+      fechaCalibracion:
+        this.fechaValida(item.fechaCalibracion)?.toISOString() || null,
+      proximaCalibracion:
+        this.fechaValida(item.proximaCalibracion, true)?.toISOString() || null,
+      offset: this.numeroOpcional(item.offset),
+      fuenteCalibracion:
+        String(item.fuenteCalibracion || '').trim() || undefined,
+      observaciones: String(item.observaciones || '').trim() || undefined,
+    });
+  }
+
+  private numeroOpcional(value: unknown): number | undefined {
+    if (value === undefined || value === null || value === '') return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
   }
 
   async delete(id: string) {
@@ -45,5 +277,248 @@ export class DispositivosService {
       return deleted;
     }
     throw new NotFoundException('No encontrado');
+  }
+
+  private validarCalificacionMeteorologica(
+    dato: ICreateDispositivo | IUpdateDispositivo,
+  ): void {
+    const calificacion = dato.calificacionMeteorologica;
+    if (!calificacion) return;
+
+    const faltantes: string[] = [];
+    if (
+      !['calificado', 'referencia', 'rechazado'].includes(
+        String(calificacion.estado),
+      )
+    ) {
+      faltantes.push('estado de calidad válido');
+    }
+    const rolesValidos = ['aire_2m', 'aire_canopia', 'suelo', 'desconocido'];
+    if (
+      calificacion.rolTemperatura &&
+      !rolesValidos.includes(calificacion.rolTemperatura)
+    ) {
+      faltantes.push('rol de temperatura válido');
+    }
+    if (
+      calificacion.estado === 'calificado' &&
+      calificacion.rolTemperatura !== 'aire_2m' &&
+      calificacion.rolTemperatura !== 'aire_canopia'
+    ) {
+      faltantes.push('rol de temperatura de aire');
+    }
+    const alturaDeclarada =
+      calificacion.alturaM !== undefined && calificacion.alturaM !== null;
+    const altura = Number(calificacion.alturaM);
+    if (
+      (alturaDeclarada &&
+        (!Number.isFinite(altura) || altura <= 0 || altura > 10)) ||
+      (calificacion.estado === 'calificado' && !alturaDeclarada)
+    ) {
+      faltantes.push('altura de instalación entre 0 y 10 m');
+    }
+    if (
+      calificacion.abrigoRadiacion !== undefined &&
+      typeof calificacion.abrigoRadiacion !== 'boolean'
+    ) {
+      faltantes.push('estado válido del abrigo radiativo');
+    }
+    if (
+      calificacion.estado === 'calificado' &&
+      calificacion.abrigoRadiacion !== true
+    ) {
+      faltantes.push('abrigo radiativo confirmado');
+    }
+    const exactitudDeclarada =
+      calificacion.exactitudTemperaturaC !== undefined &&
+      calificacion.exactitudTemperaturaC !== null;
+    const exactitud = Number(calificacion.exactitudTemperaturaC);
+    if (
+      (exactitudDeclarada &&
+        (!Number.isFinite(exactitud) || exactitud <= 0 || exactitud > 2)) ||
+      (calificacion.estado === 'calificado' && !exactitudDeclarada)
+    ) {
+      faltantes.push('exactitud térmica entre 0 y 2 °C');
+    }
+    const fechaCalibracionDeclarada =
+      calificacion.fechaCalibracion !== undefined &&
+      calificacion.fechaCalibracion !== null &&
+      calificacion.fechaCalibracion !== '';
+    const proximaCalibracionDeclarada =
+      calificacion.proximaCalibracion !== undefined &&
+      calificacion.proximaCalibracion !== null &&
+      calificacion.proximaCalibracion !== '';
+    const calibracion = this.fechaValida(calificacion.fechaCalibracion);
+    const proxima = this.fechaValida(calificacion.proximaCalibracion, true);
+    if (fechaCalibracionDeclarada && !calibracion) {
+      faltantes.push('fecha de calibración válida');
+    }
+    if (proximaCalibracionDeclarada && !proxima) {
+      faltantes.push('próxima calibración válida');
+    }
+    if (calificacion.estado === 'calificado' && !calibracion) {
+      faltantes.push('fecha de calibración válida');
+    }
+    if (
+      calificacion.estado === 'calificado' &&
+      (!proxima || proxima.getTime() < Date.now())
+    ) {
+      faltantes.push('próxima calibración vigente');
+    }
+    if (
+      calificacion.estado === 'calificado' &&
+      calibracion &&
+      calibracion.getTime() > Date.now()
+    ) {
+      faltantes.push('fecha de calibración no futura');
+    }
+    if (calibracion && proxima && proxima.getTime() < calibracion.getTime()) {
+      faltantes.push('próxima calibración posterior a la calibración');
+    }
+    if (
+      calificacion.estado === 'calificado' &&
+      !String(calificacion.fuenteCalibracion || '').trim()
+    ) {
+      faltantes.push('fuente o certificado de calibración');
+    }
+    const offset = calificacion.offsetTemperaturaC;
+    if (
+      offset !== undefined &&
+      (!Number.isFinite(Number(offset)) || Math.abs(Number(offset)) > 10)
+    ) {
+      faltantes.push('offset térmico válido entre -10 y 10 °C');
+    }
+
+    this.validarCalificacionHumedad(calificacion.humedadRelativa, faltantes);
+
+    if (faltantes.length) {
+      throw new BadRequestException(
+        `La calificación meteorológica del sensor no es válida: ${[
+          ...new Set(faltantes),
+        ].join(', ')}.`,
+      );
+    }
+  }
+
+  private validarCalificacionHumedad(
+    qualification: ICalificacionVariableMeteorologica | undefined,
+    faltantes: string[],
+  ): void {
+    if (!qualification) return;
+    const prefix = 'humedad relativa: ';
+    if (
+      !['calificado', 'referencia', 'rechazado'].includes(
+        String(qualification.estado),
+      )
+    ) {
+      faltantes.push(`${prefix}estado de calidad valido`);
+    }
+    const rolesValidos = ['aire_2m', 'aire_canopia', 'suelo', 'desconocido'];
+    if (qualification.rol && !rolesValidos.includes(qualification.rol)) {
+      faltantes.push(`${prefix}rol de exposicion valido`);
+    }
+    if (
+      qualification.estado === 'calificado' &&
+      qualification.rol !== 'aire_2m' &&
+      qualification.rol !== 'aire_canopia'
+    ) {
+      faltantes.push(`${prefix}rol de aire`);
+    }
+
+    const alturaDeclarada =
+      qualification.alturaM !== undefined && qualification.alturaM !== null;
+    const altura = Number(qualification.alturaM);
+    if (
+      (alturaDeclarada &&
+        (!Number.isFinite(altura) || altura <= 0 || altura > 10)) ||
+      (qualification.estado === 'calificado' && !alturaDeclarada)
+    ) {
+      faltantes.push(`${prefix}altura entre 0 y 10 m`);
+    }
+    if (
+      qualification.abrigoRadiacion !== undefined &&
+      typeof qualification.abrigoRadiacion !== 'boolean'
+    ) {
+      faltantes.push(`${prefix}estado valido del abrigo`);
+    }
+    if (
+      qualification.estado === 'calificado' &&
+      qualification.abrigoRadiacion !== true
+    ) {
+      faltantes.push(`${prefix}abrigo confirmado`);
+    }
+
+    const exactitudDeclarada =
+      qualification.exactitud !== undefined && qualification.exactitud !== null;
+    const exactitud = Number(qualification.exactitud);
+    if (
+      (exactitudDeclarada &&
+        (!Number.isFinite(exactitud) || exactitud <= 0 || exactitud > 5)) ||
+      (qualification.estado === 'calificado' && !exactitudDeclarada)
+    ) {
+      faltantes.push(`${prefix}exactitud entre 0 y 5 puntos porcentuales`);
+    }
+
+    const fechaDeclarada =
+      qualification.fechaCalibracion !== undefined &&
+      qualification.fechaCalibracion !== null &&
+      qualification.fechaCalibracion !== '';
+    const proximaDeclarada =
+      qualification.proximaCalibracion !== undefined &&
+      qualification.proximaCalibracion !== null &&
+      qualification.proximaCalibracion !== '';
+    const from = this.fechaValida(qualification.fechaCalibracion);
+    const to = this.fechaValida(qualification.proximaCalibracion, true);
+    if (fechaDeclarada && !from) {
+      faltantes.push(`${prefix}fecha de calibracion valida`);
+    }
+    if (proximaDeclarada && !to) {
+      faltantes.push(`${prefix}vigencia valida`);
+    }
+    if (qualification.estado === 'calificado' && !from) {
+      faltantes.push(`${prefix}fecha de calibracion requerida`);
+    }
+    if (
+      qualification.estado === 'calificado' &&
+      (!to || to.getTime() < Date.now())
+    ) {
+      faltantes.push(`${prefix}calibracion vigente`);
+    }
+    if (
+      qualification.estado === 'calificado' &&
+      from &&
+      from.getTime() > Date.now()
+    ) {
+      faltantes.push(`${prefix}fecha de calibracion no futura`);
+    }
+    if (from && to && to.getTime() < from.getTime()) {
+      faltantes.push(`${prefix}vigencia posterior a la calibracion`);
+    }
+    if (
+      qualification.estado === 'calificado' &&
+      !String(qualification.fuenteCalibracion || '').trim()
+    ) {
+      faltantes.push(`${prefix}fuente o certificado`);
+    }
+    if (
+      qualification.offset !== undefined &&
+      (!Number.isFinite(Number(qualification.offset)) ||
+        Math.abs(Number(qualification.offset)) > 20)
+    ) {
+      faltantes.push(`${prefix}offset entre -20 y 20 puntos porcentuales`);
+    }
+  }
+
+  private fechaValida(value?: unknown, finDelDia = false): Date | undefined {
+    if (!value) return undefined;
+    const date = new Date(
+      finDelDia &&
+        typeof value === 'string' &&
+        /^\d{4}-\d{2}-\d{2}$/.test(value)
+        ? `${value}T23:59:59.999Z`
+        : (value as string | number | Date),
+    );
+    if (Number.isNaN(date.getTime())) return undefined;
+    return date;
   }
 }

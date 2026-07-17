@@ -496,10 +496,7 @@ export class ClimaService {
           ].join(','),
         );
 
-        const data = await this.fetchOpenMeteoJson(
-          url,
-          'historico horario',
-        );
+        const data = await this.fetchOpenMeteoJson(url, 'historico horario');
         return data
           ? this.parsearClimaHorarioOpenMeteo(data, ubicacion, dataGroup)
           : [];
@@ -521,9 +518,36 @@ export class ClimaService {
   ): Promise<any | null> {
     const startDate = this.getFechaOpenMeteo(minDate);
     const endDate = this.getFechaOpenMeteo(maxDate);
-    const baseUrl = forecast
-      ? `${API_OPEN_METEO}/forecast`
-      : `${API_OPEN_METEO_ARCHIVE}/archive`;
+    const rangos = forecast
+      ? [
+          {
+            baseUrl: `${API_OPEN_METEO}/forecast`,
+            startDate,
+            endDate,
+          },
+        ]
+      : this.getOpenMeteoRangos(startDate, this.addUtcDays(endDate, 1));
+    const payloads = await Promise.all(
+      rangos.map(({ baseUrl, startDate: rangeStart, endDate: rangeEnd }) =>
+        this.getOpenMeteoAgrometeorologiaRango(
+          ubicacion,
+          rangeStart,
+          rangeEnd,
+          baseUrl,
+          forecast,
+        ),
+      ),
+    );
+    return this.mergeOpenMeteoPayloads(payloads);
+  }
+
+  private async getOpenMeteoAgrometeorologiaRango(
+    ubicacion: ICoordenadas,
+    startDate: string,
+    endDate: string,
+    baseUrl: string,
+    forecast: boolean,
+  ): Promise<any | null> {
     const url = new URL(baseUrl);
     url.searchParams.set('latitude', `${ubicacion.lat}`);
     url.searchParams.set('longitude', `${ubicacion.lng}`);
@@ -586,6 +610,80 @@ export class ClimaService {
       url,
       forecast ? 'agrometeorologia pronostico' : 'agrometeorologia historica',
     );
+  }
+
+  private addUtcDays(value: string, days: number): string {
+    const date = new Date(`${value}T00:00:00Z`);
+    if (!Number.isFinite(date.getTime())) return value;
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  }
+
+  /**
+   * Recompone respuestas no solapadas de Archive y Forecast manteniendo cada
+   * arreglo alineado por timestamp. Open-Meteo puede omitir una variable en un
+   * tramo; en ese caso se conserva undefined en esa posicion y el normalizador
+   * aplica la validacion/fuente por variable.
+   */
+  private mergeOpenMeteoPayloads(payloads: Array<any | null>): any | null {
+    const valid = payloads.filter(
+      (payload) => payload && typeof payload === 'object',
+    );
+    if (!valid.length) return null;
+    if (valid.length === 1) return valid[0];
+
+    const first = valid[0];
+    return {
+      ...first,
+      generationtime_ms: valid.reduce(
+        (sum, payload) => sum + (Number(payload.generationtime_ms) || 0),
+        0,
+      ),
+      hourly_units: Object.assign(
+        {},
+        ...valid.map((payload) => payload.hourly_units || {}),
+      ),
+      daily_units: Object.assign(
+        {},
+        ...valid.map((payload) => payload.daily_units || {}),
+      ),
+      hourly: this.mergeOpenMeteoSection(valid, 'hourly'),
+      daily: this.mergeOpenMeteoSection(valid, 'daily'),
+    };
+  }
+
+  private mergeOpenMeteoSection(
+    payloads: any[],
+    section: 'hourly' | 'daily',
+  ): Record<string, unknown[]> {
+    const variables = new Set<string>();
+    const rows = new Map<string, Record<string, unknown>>();
+
+    for (const payload of payloads) {
+      const data = payload?.[section];
+      const times: unknown[] = Array.isArray(data?.time) ? data.time : [];
+      Object.keys(data || {}).forEach((key) => {
+        if (key !== 'time' && Array.isArray(data[key])) variables.add(key);
+      });
+      times.forEach((rawTime, index) => {
+        const time = String(rawTime || '');
+        if (!time) return;
+        const row = rows.get(time) || {};
+        variables.forEach((key) => {
+          if (Array.isArray(data?.[key]) && index < data[key].length) {
+            row[key] = data[key][index];
+          }
+        });
+        rows.set(time, row);
+      });
+    }
+
+    const times = [...rows.keys()].sort();
+    const result: Record<string, unknown[]> = { time: times };
+    variables.forEach((key) => {
+      result[key] = times.map((time) => rows.get(time)?.[key]);
+    });
+    return result;
   }
 
   /** Devuelve solo la central explicitamente asociada, sin fallback. */

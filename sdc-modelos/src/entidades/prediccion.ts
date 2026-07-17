@@ -191,7 +191,7 @@ export interface IPrediccion {
   fechaPrediccion?: string;
   etapa?: number;
   nombreEtapa?: string;
-  fuenteFenologia?: "observada" | "crono";
+  fuenteFenologia?: "observada" | "crono" | "agrometeorologia";
   registroFenologicoId?: string;
   calidadFenologia?: ICalidadDatoMotor;
   idSiembra?: string;

@@ -583,9 +583,15 @@ function seedFromRow(expectedCrop, row) {
       tipoCultivo === 'Perenne'
         ? {
             horasFrio: frio,
-            horasFrioEfectivas: frio ? Math.round(frio * 0.82) : undefined,
-            porcionesFrio: frio ? Math.round(frio / 15) : undefined,
-            modelo: 'HF + HFE + CP',
+            modelo: 'HF + Dynamic Model',
+            modeloRector: 'sin_calibrar',
+            estado: 'requiere_calibracion',
+            fuente: `${path.basename(WORKBOOKS[crop] || '')}: columna ciclo`,
+            confianza: 'estimada',
+            observaciones:
+              crop === 'Pecan'
+                ? 'El valor numerico original es atipico para HF de pecan y no se usa como requisito rector hasta validar su unidad y fuente varietal. CP solo se calcula con el Dynamic Model horario.'
+                : 'HF declarado en la base original. HFE no se deriva y CP solo se calcula con el Dynamic Model horario; validar fuente y unidad antes de usarlo como requisito rector.',
           }
         : undefined,
     fenologiaReferencia: template.fenologiaReferencia,

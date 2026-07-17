@@ -16,6 +16,7 @@ import { FumigacionsService } from 'src/entidades/fumigacion/service';
 import { RoyaDelMaizService } from '../enfermedades/roya_del_maiz';
 import {
   aplicarEtapaFenologicaObservada,
+  calidadFenologiaManual,
   resolverEtapaFenologicaObservada,
 } from '../fenologia-observada';
 
@@ -100,16 +101,20 @@ export class PrediccionMaizService {
           );
         }
 
-        const etapaCrono = this.getEtapaPorFecha(siembra, crono, fecha);
+        const etapaCrono = this.getEtapaCronoPorFecha(siembra, crono, fecha);
         const fenologiaObservada = resolverEtapaFenologicaObservada(
           siembra,
           fecha,
           'Maiz',
+          this.getCronologiaFenologica(crono),
         );
         const etapa = aplicarEtapaFenologicaObservada(
           etapaCrono,
           fenologiaObservada,
         );
+        const calidadFenologiaObservada = fenologiaObservada
+          ? calidadFenologiaManual(fenologiaObservada)
+          : undefined;
 
         const distancia = clima[0].distancia;
 
@@ -131,17 +136,15 @@ export class PrediccionMaizService {
           nombreEtapa: this.nombreEtapa(etapa),
           fuenteFenologia: fenologiaObservada ? 'observada' : 'crono',
           registroFenologicoId: fenologiaObservada?.registro.id,
-          calidadFenologia: {
-            nivel: fenologiaObservada ? 'alta' : 'media',
-            fuente: fenologiaObservada ? 'manual' : 'estimado',
+          calidadFenologia: calidadFenologiaObservada || {
+            nivel: 'media',
+            fuente: 'estimado',
             cobertura: 1,
-            fallback: !fenologiaObservada,
-            resumen: fenologiaObservada
-              ? 'Etapa observada a campo.'
-              : 'Etapa estimada desde fecha de siembra y crono.',
-            limitaciones: fenologiaObservada
-              ? []
-              : ['No hay observación fenológica de campo anterior a la fecha.'],
+            fallback: true,
+            resumen: 'Etapa estimada desde fecha de siembra y crono.',
+            limitaciones: [
+              'No hay observación fenológica de campo decisoria anterior a la fecha.',
+            ],
           },
           enfermedades: [],
           estacion: {
@@ -176,6 +179,7 @@ export class PrediccionMaizService {
             ultimaPrediccion = predAnterior;
           } catch (error) {
             Logger.error(error);
+            throw error;
           }
         }
       }
@@ -227,12 +231,19 @@ export class PrediccionMaizService {
    * @returns Etapa en la que esta la siembra en la fecha dada
    */
   private getEtapaPorFecha(siembra: ISiembra, crono: ICrono, fecha: Date) {
-    const observada = resolverEtapaFenologicaObservada(
-      siembra,
-      fecha,
-      'Maiz',
+    const etapaCrono = this.getEtapaCronoPorFecha(siembra, crono, fecha);
+    return aplicarEtapaFenologicaObservada(
+      etapaCrono,
+      resolverEtapaFenologicaObservada(
+        siembra,
+        fecha,
+        'Maiz',
+        this.getCronologiaFenologica(crono),
+      ),
     );
-    if (typeof observada?.etapa === 'number') return observada.etapa;
+  }
+
+  private getEtapaCronoPorFecha(siembra: ISiembra, crono: ICrono, fecha: Date) {
     const fechaSiembra = new Date(siembra.fechaSiembra);
     const fechaActual = fecha;
     const diferencia = fechaActual.getTime() - fechaSiembra.getTime();
@@ -253,6 +264,25 @@ export class PrediccionMaizService {
     } else {
       return 3;
     }
+  }
+
+  private getCronologiaFenologica(crono: ICrono) {
+    const etapas = crono.etapas as IEtapasMaiz;
+    return [
+      {
+        etapa: 0,
+        duracionDias: Number(etapas.siembra_emergencia) || 0,
+      },
+      {
+        etapa: 1,
+        duracionDias: Number(etapas.emergencia_floracion) || 0,
+      },
+      {
+        etapa: 2,
+        duracionDias: Number(etapas.floracion_madurez) || 0,
+      },
+      { etapa: 3 },
+    ];
   }
 
   /**

@@ -46,6 +46,10 @@
 .source-badge.station {
   border-color: color-mix(in srgb, var(--p-primary-color) 42%, var(--p-surface-border));
 }
+.source-badge.sensor {
+  border-color: color-mix(in srgb, #268f83 52%, var(--p-surface-border));
+  background: color-mix(in srgb, var(--p-primary-50) 82%, var(--p-content-background));
+}
 .source-badge.mixed {
   border-color: color-mix(in srgb, #7a64d1 40%, var(--p-surface-border));
 }
@@ -100,6 +104,114 @@
 }
 .source-warning i {
   color: #c98216;
+}
+
+.field-cold-panel {
+  margin: 0.8rem 1.1rem 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 38%, var(--p-surface-border));
+  border-radius: 12px;
+  background:
+    linear-gradient(115deg, color-mix(in srgb, var(--p-primary-50) 78%, transparent), transparent 62%),
+    var(--p-content-background);
+}
+
+.field-cold-panel.reference {
+  border-color: color-mix(in srgb, #d5912f 42%, var(--p-surface-border));
+  background:
+    linear-gradient(115deg, color-mix(in srgb, #fff4d8 52%, transparent), transparent 62%),
+    var(--p-content-background);
+}
+
+.field-cold-panel > header,
+.field-cold-panel > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.65rem 0.75rem;
+}
+
+.field-cold-panel > header {
+  border-bottom: 1px solid var(--p-surface-border);
+}
+
+.field-cold-panel > header > div {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.field-cold-panel > header span,
+.field-cold-grid article span {
+  color: var(--p-text-muted-color);
+  font-size: 0.64rem;
+  font-weight: 780;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.field-cold-panel > header strong {
+  color: var(--p-text-color);
+  font-size: 0.82rem;
+}
+
+.field-cold-panel > header em {
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--p-primary-100) 74%, var(--p-content-background));
+  color: var(--p-primary-700);
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 760;
+}
+
+.field-cold-panel.reference > header em {
+  background: color-mix(in srgb, #fff0c5 78%, var(--p-content-background));
+  color: #946016;
+}
+
+.field-cold-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.field-cold-grid article {
+  display: grid;
+  gap: 0.14rem;
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+}
+
+.field-cold-grid article + article {
+  border-left: 1px solid var(--p-surface-border);
+}
+
+.field-cold-grid article strong {
+  color: var(--p-text-color);
+  font-size: 1rem;
+}
+
+.field-cold-grid article small,
+.field-cold-panel > footer {
+  color: var(--p-text-muted-color);
+  font-size: 0.67rem;
+}
+
+.field-cold-panel > footer {
+  align-items: flex-start;
+  border-top: 1px solid var(--p-surface-border);
+}
+
+.field-cold-panel > footer > span {
+  flex: 0 0 auto;
+  color: var(--p-text-color);
+  font-weight: 700;
+}
+
+.field-cold-panel > footer > small {
+  max-width: 56rem;
+  line-height: 1.35;
+  text-align: right;
 }
 
 .metric-grid article {
@@ -205,7 +317,7 @@
 }
 .chart-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.3rem;
   padding: 0.45rem;
   border-bottom: 1px solid var(--p-surface-border);
@@ -352,6 +464,27 @@
 @media (max-width: 1080px) {
   .metric-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .field-cold-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .field-cold-grid article + article {
+    border-top: 1px solid var(--p-surface-border);
+    border-left: 0;
+  }
+
+  .field-cold-panel > header,
+  .field-cold-panel > footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .field-cold-panel > footer > small {
+    text-align: left;
   }
 }
 @media (max-width: 720px) {

@@ -204,12 +204,12 @@
           <span>Periodo calculado</span>
           <strong>
             {{
-              datosFenologiaTermica?.periodoTermico?.desde
-                ? (datosFenologiaTermica?.periodoTermico?.desde | date: 'd/M/yy')
+              snapshotAgromet?.series?.[0]?.date
+                ? (snapshotAgromet?.series?.[0]?.date | date: 'd/M/yy')
                 : 'Pendiente'
             }}
-            @if (datosFenologiaTermica?.periodoTermico?.dias) {
-              · {{ datosFenologiaTermica?.periodoTermico?.dias }} dias
+            @if (snapshotAgromet?.series?.length) {
+              · {{ snapshotAgromet?.series?.length }} dias
             }
           </strong>
         </article>
@@ -309,6 +309,16 @@
     <div class="register-dialog-body">
       <div class="register-form-grid">
         <label>
+          <span>Tipo de registro</span>
+          <p-select
+            [options]="tipoEventoOptions"
+            [(ngModel)]="registroForm.tipoEvento"
+            appendTo="body"
+            [style]="{ width: '100%' }"
+          ></p-select>
+        </label>
+
+        <label>
           <span>Etapa observada</span>
           <p-select
             [options]="etapaOptions"
@@ -319,7 +329,7 @@
         </label>
 
         <label>
-          <span>Fecha de inicio real</span>
+          <span>{{ fechaRegistroLabel }}</span>
           <p-datepicker
             [(ngModel)]="registroForm.fecha"
             dateFormat="dd/mm/yy"
@@ -328,6 +338,73 @@
             [style]="{ width: '100%' }"
           ></p-datepicker>
         </label>
+
+        @if (registroForm.tipoEvento === 'biofix') {
+          <label>
+            <span>Objetivo del biofix</span>
+            <p-select
+              [options]="objetivoBiofixOptions"
+              [(ngModel)]="registroForm.objetivoBiofix"
+              appendTo="body"
+              [style]="{ width: '100%' }"
+            ></p-select>
+          </label>
+        }
+
+        <label>
+          <span>Escala fenologica</span>
+          <input
+            pInputText
+            [(ngModel)]="registroForm.escalaEtapa"
+            placeholder="Ej: BBCH, Zadoks o escala interna"
+          />
+        </label>
+
+        <label>
+          <span>Codigo de etapa</span>
+          <input
+            pInputText
+            [(ngModel)]="registroForm.codigoEtapa"
+            placeholder="Ej: BBCH 53"
+          />
+        </label>
+
+        <label>
+          <span>Cobertura observada (%)</span>
+          <p-inputnumber
+            [(ngModel)]="registroForm.coberturaObservadaPct"
+            [min]="0"
+            [max]="100"
+            [minFractionDigits]="0"
+            [maxFractionDigits]="1"
+            suffix="%"
+            [style]="{ width: '100%' }"
+          ></p-inputnumber>
+        </label>
+
+        <label>
+          <span>Confianza de la observacion</span>
+          <p-select
+            [options]="confianzaFenologicaOptions"
+            [(ngModel)]="registroForm.confianza"
+            appendTo="body"
+            [style]="{ width: '100%' }"
+          ></p-select>
+        </label>
+
+        <label>
+          <span>Observador</span>
+          <input
+            pInputText
+            [(ngModel)]="registroForm.observador"
+            placeholder="Nombre del tecnico o responsable"
+          />
+        </label>
+      </div>
+
+      <div class="register-method-note">
+        <i class="pi pi-info-circle"></i>
+        <span>{{ explicacionTipoRegistro }}</span>
       </div>
 
       <label class="register-notes">
@@ -350,15 +427,41 @@
           <strong>{{ siembraActual?.semilla?.variedad || '-' }}</strong>
         </article>
         <article>
-          <span>Frio requerido</span>
+          <span>HF de referencia</span>
           <strong> {{ siembraActual?.semilla?.requerimientoFrio?.horasFrio || '-' }} HF </strong>
         </article>
         <article>
-          <span>CP requerido</span>
+          <span>CP de referencia</span>
           <strong>
             {{ siembraActual?.semilla?.requerimientoFrio?.porcionesFrio || '-' }}
           </strong>
         </article>
+        <article>
+          <span>Estado del objetivo</span>
+          <strong>
+            {{
+              siembraActual?.semilla?.requerimientoFrio?.estado === 'validado'
+                ? 'Validado'
+                : 'Requiere calibracion'
+            }}
+          </strong>
+        </article>
+        @if (snapshotAgromet?.summary?.chillingHoursAccumulated !== undefined) {
+          <article>
+            <span>Frio observado</span>
+            <strong>
+              {{ snapshotAgromet?.summary?.chillingHoursAccumulated | number: '1.0-1' }} HF
+            </strong>
+          </article>
+        }
+        @if (snapshotAgromet?.summary?.chillPortionsAccumulated !== undefined) {
+          <article>
+            <span>Dynamic Model</span>
+            <strong>
+              {{ snapshotAgromet?.summary?.chillPortionsAccumulated | number: '1.0-2' }} CP
+            </strong>
+          </article>
+        }
       </div>
     </div>
 

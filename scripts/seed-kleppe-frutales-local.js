@@ -166,7 +166,13 @@ function buildSemillaDoc(item) {
     portainjerto: item.portainjerto,
     requerimientoFrio: {
       ...item.requerimientoFrio,
-      modelo: 'HF + HFE + CP',
+      modelo: 'HF + Dynamic Model',
+      modeloRector: item.requerimientoFrio.porcionesFrio ? 'CP' : 'HF',
+      estado: 'requiere_calibracion',
+      fuente: 'Base Chaman Kleppe Alto Valle - perfil inicial editable',
+      confianza: 'estimada',
+      observaciones:
+        'Objetivos iniciales sujetos a validacion local. HFE se conserva solo como dato legacy; no gobierna decisiones ni se convierte a CP.',
     },
     fenologiaReferencia: {
       ...item.fenologia,

@@ -32,6 +32,55 @@ interface IOpenMeteoHourlyTemp {
   esPronostico: boolean;
 }
 
+type TRequisitoFrioClave =
+  | 'horasFrioObjetivo'
+  | 'horasFrioEfectivasObjetivo'
+  | 'porcionesFrioObjetivo';
+
+interface IRangoTipicoRequisitoFrio {
+  minimo: number;
+  maximo: number;
+  unidad: string;
+}
+
+const CONFIGURACION_FRIO_FALLBACK: IConfiguracionFrioCultivo = {
+  requiereFrio: true,
+  horasFrioObjetivo: 500,
+  horasFrioEfectivasObjetivo: 400,
+  porcionesFrioObjetivo: 35,
+  temperaturaBaseGradosDia: 10,
+  gradosDiaBrotacionObjetivo: 120,
+  gradosDiaFloracionObjetivo: 260,
+  umbralHelada: -1,
+};
+
+/**
+ * Rangos de control de calidad, no limites de validez biologica.
+ *
+ * Un requisito varietal fuera de estos rangos se conserva y se informa para
+ * revision. Solo se reemplazan valores ausentes, no finitos o imposibles.
+ */
+const RANGOS_TIPICOS_REQUISITOS_FRIO: Record<
+  TRequisitoFrioClave,
+  IRangoTipicoRequisitoFrio
+> = {
+  horasFrioObjetivo: {
+    minimo: 100,
+    maximo: 1200,
+    unidad: 'HF',
+  },
+  horasFrioEfectivasObjetivo: {
+    minimo: 80,
+    maximo: 1000,
+    unidad: 'HFE',
+  },
+  porcionesFrioObjetivo: {
+    minimo: 5,
+    maximo: 80,
+    unidad: 'CP',
+  },
+};
+
 @Injectable()
 export class ClimaService {
   private readonly logger = new Logger(ClimaService.name);
@@ -718,24 +767,11 @@ export class ClimaService {
     }
 
     const hoy = new Date();
-    const config = CONFIGURACION_FRIO_CULTIVOS[cultivo || ''] || {
-      requiereFrio: true,
-      horasFrioObjetivo: 500,
-      horasFrioEfectivasObjetivo: 400,
-      porcionesFrioObjetivo: 35,
-      temperaturaBaseGradosDia: 10,
-      gradosDiaBrotacionObjetivo: 120,
-      gradosDiaFloracionObjetivo: 260,
-      umbralHelada: -1,
-    };
+    const config = this.getConfiguracionFrioCultivo(cultivo);
     const requerimientosBase = {
-      horasFrioObjetivo:
-        overrides.horasFrioObjetivo ?? config.horasFrioObjetivo,
-      horasFrioEfectivasObjetivo:
-        overrides.horasFrioEfectivasObjetivo ??
-        config.horasFrioEfectivasObjetivo,
-      porcionesFrioObjetivo:
-        overrides.porcionesFrioObjetivo ?? config.porcionesFrioObjetivo,
+      horasFrioObjetivo: overrides.horasFrioObjetivo,
+      horasFrioEfectivasObjetivo: overrides.horasFrioEfectivasObjetivo,
+      porcionesFrioObjetivo: overrides.porcionesFrioObjetivo,
       temperaturaBaseGradosDia:
         overrides.temperaturaBaseGradosDia ??
         config.temperaturaBaseGradosDia ??
@@ -795,8 +831,7 @@ export class ClimaService {
       contextoHelada.idEstacionMeteorologica,
     );
     const forecast = await this.fetchOpenMeteoForecast(latNum, lngNum);
-    let calculoPorciones: 'dinamico_horario' | 'estimado_hfe' =
-      'dinamico_horario';
+    let porcionesFrioDisponibles = true;
     const observacionesCalculo: string[] = [
       ...validacionRequerimientos.observaciones,
     ];
@@ -828,9 +863,9 @@ export class ClimaService {
         throw new Error('Open-Meteo no devolvio temperaturas horarias utiles.');
       }
     } catch (error: any) {
-      calculoPorciones = 'estimado_hfe';
+      porcionesFrioDisponibles = false;
       observacionesCalculo.push(
-        'CP estimado desde HFE por falta de serie horaria completa.',
+        'CP no disponible por falta de serie horaria completa; no se aplico ninguna conversion aproximada desde HFE.',
       );
       this.logger.warn(
         `Frio termico sin CP dinamico horario (${latNum}, ${lngNum}): ${error?.message || error}`,
@@ -851,10 +886,9 @@ export class ClimaService {
         dia.temperaturaMax,
         baseTermica,
       );
-      const porcionesFrio =
-        calculoPorciones === 'dinamico_horario'
-          ? this.round(porcionesFrioPorDia.get(dia.fecha) || 0, 3)
-          : this.round(horasFrioEfectivas / 28, 3);
+      const porcionesFrio = porcionesFrioDisponibles
+        ? this.round(porcionesFrioPorDia.get(dia.fecha) || 0, 3)
+        : undefined;
       return {
         ...dia,
         horasFrio,
@@ -885,10 +919,15 @@ export class ClimaService {
       horasFrioEfectivas: this.round(
         frioSerie.reduce((acc, dia) => acc + (dia.horasFrioEfectivas || 0), 0),
       ),
-      porcionesFrio: this.round(
-        frioSerie.reduce((acc, dia) => acc + (dia.porcionesFrio || 0), 0),
-        2,
-      ),
+      porcionesFrio: porcionesFrioDisponibles
+        ? this.round(
+            frioSerie.reduce(
+              (acc, dia) => acc + (dia.porcionesFrio || 0),
+              0,
+            ),
+            2,
+          )
+        : undefined,
       gradosDia: this.round(
         termicoSerie
           .filter(
@@ -940,6 +979,7 @@ export class ClimaService {
       progreso,
       riesgoHelada,
       acumulados,
+      requerimientos,
       plantacionJoven,
     );
     const contextoCultivo: IFrioTermicoCultivo['contextoCultivo'] = {
@@ -980,7 +1020,9 @@ export class ClimaService {
       riesgoHelada,
       eventos,
       calculo: {
-        porcionesFrio: calculoPorciones,
+        porcionesFrio: porcionesFrioDisponibles
+          ? 'dinamico_horario'
+          : 'no_disponible',
         observaciones: observacionesCalculo,
       },
       contextoCultivo,
@@ -989,6 +1031,8 @@ export class ClimaService {
         cultivo,
         progreso,
         riesgoHelada,
+        requerimientos,
+        acumulados,
         plantacionJoven,
       ),
     };
@@ -1077,49 +1121,72 @@ export class ClimaService {
     requerimientos: IFrioTermicoCultivo['requerimientos'];
     observaciones: string[];
   } {
-    const normalizado = (cultivo || '')
+    const resultado = { ...requerimientos };
+    const observaciones: string[] = [];
+    const nombreCultivo = cultivo?.trim() || 'cultivo';
+
+    (
+      Object.keys(RANGOS_TIPICOS_REQUISITOS_FRIO) as TRequisitoFrioClave[]
+    ).forEach((clave) => {
+      const rango = RANGOS_TIPICOS_REQUISITOS_FRIO[clave];
+      const valor = resultado[clave];
+      const base = config[clave];
+      const motivoInvalido = this.getMotivoRequisitoFrioInvalido(valor);
+
+      if (motivoInvalido) {
+        if (this.esRequisitoFrioUtilizable(base)) {
+          resultado[clave] = base;
+          observaciones.push(
+            `${rango.unidad} objetivo ${motivoInvalido} para ${nombreCultivo}; se uso base operativa ${base}.`,
+          );
+        } else {
+          resultado[clave] = undefined;
+          observaciones.push(
+            `${rango.unidad} objetivo ${motivoInvalido} para ${nombreCultivo}; no hay una base operativa valida para reemplazarlo.`,
+          );
+        }
+        return;
+      }
+
+      if (this.fueraDeRango(valor, rango.minimo, rango.maximo)) {
+        observaciones.push(
+          `${rango.unidad} objetivo ${valor} fuera del rango tipico de control ${rango.minimo}-${rango.maximo} para ${nombreCultivo}; se conserva el valor varietal y se recomienda revisar unidad y fuente.`,
+        );
+      }
+    });
+
+    return { requerimientos: resultado, observaciones };
+  }
+
+  private getConfiguracionFrioCultivo(
+    cultivo?: string,
+  ): IConfiguracionFrioCultivo {
+    const normalizado = this.normalizarNombreCultivo(cultivo);
+    const configuracion = Object.entries(CONFIGURACION_FRIO_CULTIVOS).find(
+      ([nombre]) => this.normalizarNombreCultivo(nombre) === normalizado,
+    )?.[1];
+    return configuracion || CONFIGURACION_FRIO_FALLBACK;
+  }
+
+  private normalizarNombreCultivo(cultivo?: string): string {
+    return (cultivo || '')
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase()
       .trim();
-    const resultado = { ...requerimientos };
-    const observaciones: string[] = [];
+  }
 
-    if (normalizado !== 'pecan') {
-      return { requerimientos: resultado, observaciones };
-    }
+  private getMotivoRequisitoFrioInvalido(
+    valor: number | undefined,
+  ): string | undefined {
+    if (valor === undefined || valor === null) return 'ausente';
+    if (!Number.isFinite(valor)) return 'no finito';
+    if (Number(valor) <= 0) return `imposible (${valor})`;
+    return undefined;
+  }
 
-    if (
-      this.fueraDeRango(resultado.horasFrioObjetivo, 100, 1200) &&
-      Number.isFinite(config.horasFrioObjetivo)
-    ) {
-      observaciones.push(
-        `HF objetivo ${resultado.horasFrioObjetivo} fuera de rango para Pecan; se uso base ${config.horasFrioObjetivo}.`,
-      );
-      resultado.horasFrioObjetivo = config.horasFrioObjetivo;
-    }
-
-    if (
-      this.fueraDeRango(resultado.horasFrioEfectivasObjetivo, 80, 1000) &&
-      Number.isFinite(config.horasFrioEfectivasObjetivo)
-    ) {
-      observaciones.push(
-        `HFE objetivo ${resultado.horasFrioEfectivasObjetivo} fuera de rango para Pecan; se uso base ${config.horasFrioEfectivasObjetivo}.`,
-      );
-      resultado.horasFrioEfectivasObjetivo = config.horasFrioEfectivasObjetivo;
-    }
-
-    if (
-      this.fueraDeRango(resultado.porcionesFrioObjetivo, 5, 80) &&
-      Number.isFinite(config.porcionesFrioObjetivo)
-    ) {
-      observaciones.push(
-        `CP objetivo ${resultado.porcionesFrioObjetivo} fuera de rango para Pecan; se uso base ${config.porcionesFrioObjetivo}.`,
-      );
-      resultado.porcionesFrioObjetivo = config.porcionesFrioObjetivo;
-    }
-
-    return { requerimientos: resultado, observaciones };
+  private esRequisitoFrioUtilizable(valor: number | undefined): boolean {
+    return !this.getMotivoRequisitoFrioInvalido(valor);
   }
 
   private fueraDeRango(
@@ -1975,27 +2042,37 @@ export class ClimaService {
     progreso: IFrioTermicoCultivo['progreso'],
     riesgoHelada: IFrioTermicoCultivo['riesgoHelada'],
     acumulados: IFrioTermicoCultivo['acumulados'],
+    requerimientos: IFrioTermicoCultivo['requerimientos'],
     plantacionJoven = false,
   ): IFrioTermicoCultivo['eventos'] {
-    const frioCumplido =
-      progreso.horasFrioPct >= 85 ||
-      progreso.horasFrioEfectivasPct >= 85 ||
-      progreso.porcionesFrioPct >= 85;
-    const brotacionAlcanzada = frioCumplido && progreso.brotacionPct >= 100;
-    const floracionAlcanzada = progreso.floracionPct >= 100;
+    const modeloRector = this.getModeloFrioRector(
+      progreso,
+      requerimientos,
+      Number.isFinite(acumulados.porcionesFrio),
+    );
+    const frioCumplido = modeloRector.porcentaje >= 100;
+    const frioCercano = modeloRector.porcentaje >= 85;
+    const brotacionCompatible =
+      frioCumplido && progreso.brotacionPct >= 100;
+    const floracionCompatible =
+      frioCumplido && progreso.floracionPct >= 100;
     if (plantacionJoven) {
       return {
         brotacion: {
-          estado: brotacionAlcanzada
-            ? 'alcanzada'
-            : frioCumplido
+          estado: brotacionCompatible
+            ? 'probable'
+            : frioCercano
               ? progreso.brotacionPct >= 65
                 ? 'probable'
                 : 'acumulando_calor'
               : 'esperando_frio',
-          lectura: frioCumplido
-            ? `Frio de dormancia suficiente o cercano; ${acumulados.gradosDia} grados dia acumulados para brotacion vegetativa.`
-            : 'Seguir acumulacion de frio de dormancia antes de anticipar brotacion vegetativa.',
+          lectura: brotacionCompatible
+            ? `${modeloRector.nombre} y calor son compatibles con brotacion vegetativa; requiere confirmacion a campo.`
+            : frioCercano
+              ? `${modeloRector.nombre} cercano o cumplido; ${acumulados.gradosDia} grados dia acumulados como referencia, sin declarar estadio.`
+              : modeloRector.disponible
+                ? `Seguir ${modeloRector.nombre} antes de anticipar brotacion vegetativa.`
+                : 'No hay un requisito varietal rector validado; registrar el inicio real de etapa a campo.',
         },
         floracion: {
           estado: 'pendiente',
@@ -2018,26 +2095,30 @@ export class ClimaService {
     }
     return {
       brotacion: {
-        estado: brotacionAlcanzada
-          ? 'alcanzada'
-          : frioCumplido
+        estado: brotacionCompatible
+          ? 'probable'
+          : frioCercano
             ? progreso.brotacionPct >= 65
               ? 'probable'
               : 'acumulando_calor'
             : 'esperando_frio',
-        lectura: frioCumplido
-          ? `Frio suficiente o cercano; acumulados ${acumulados.gradosDia} grados dia.`
-          : 'Todavia conviene seguir acumulacion de frio antes de estimar brotacion.',
+        lectura: brotacionCompatible
+          ? `${modeloRector.nombre} y calor compatibles con brotacion; confirmar y registrar la etapa real a campo.`
+          : frioCercano
+            ? `${modeloRector.nombre} cercano o cumplido; ${acumulados.gradosDia} grados dia de referencia, sin declarar brotacion.`
+            : modeloRector.disponible
+              ? `Todavia conviene seguir ${modeloRector.nombre} antes de estimar brotacion.`
+              : 'Sin requisito varietal rector validado; la fenologia debe confirmarse a campo.',
       },
       floracion: {
-        estado: floracionAlcanzada
-          ? 'alcanzada'
-          : progreso.floracionPct >= 70
+        estado: floracionCompatible
+          ? 'probable'
+          : frioCumplido && progreso.floracionPct >= 70
             ? 'probable'
             : 'pendiente',
-        lectura: floracionAlcanzada
-          ? 'Floracion termicamente alcanzada para el umbral configurado.'
-          : 'Floracion pendiente; usar grados dia y recorrida para ajustar.',
+        lectura: floracionCompatible
+          ? 'Frio rector y calor compatibles con floracion; no se declara alcanzada sin observacion de campo.'
+          : 'Floracion pendiente; usar el modelo como referencia y registrar el estadio observado.',
       },
       ventanaSanitaria: {
         estado:
@@ -2058,19 +2139,26 @@ export class ClimaService {
     cultivo: string | undefined,
     progreso: IFrioTermicoCultivo['progreso'],
     riesgoHelada: IFrioTermicoCultivo['riesgoHelada'],
+    requerimientos: IFrioTermicoCultivo['requerimientos'],
+    acumulados: IFrioTermicoCultivo['acumulados'],
     plantacionJoven = false,
   ): string {
     const nombre = cultivo || 'plantacion';
+    const modeloRector = this.getModeloFrioRector(
+      progreso,
+      requerimientos,
+      Number.isFinite(acumulados.porcionesFrio),
+    );
     const frioDormanciaBajo =
-      progreso.horasFrioPct < 70 &&
-      progreso.horasFrioEfectivasPct < 70 &&
-      progreso.porcionesFrioPct < 70;
+      !modeloRector.disponible || modeloRector.porcentaje < 70;
     if (plantacionJoven) {
       if (riesgoHelada.nivel !== 'bajo') {
         return `${nombre} joven: riesgo de dano por helada en yemas o brotes vegetativos; validar estado real antes de activar defensa.`;
       }
       if (frioDormanciaBajo) {
-        return `${nombre} joven: acumulacion de frio de dormancia en seguimiento; no es una lectura de floracion ni cosecha.`;
+        return modeloRector.disponible
+          ? `${nombre} joven: ${modeloRector.nombre} en seguimiento; no es una lectura de floracion ni cosecha.`
+          : `${nombre} joven: sin requisito varietal rector validado; registrar fenologia a campo.`;
       }
       if (progreso.brotacionPct < 100) {
         return `${nombre} joven: frio de dormancia suficiente o cercano; seguir grados dia para brotacion vegetativa.`;
@@ -2081,12 +2169,51 @@ export class ClimaService {
       return `${nombre}: riesgo de dano por helada para ${riesgoHelada.etapaFenologica || 'el estadio estimado'}; validar a campo antes de activar defensa.`;
     }
     if (frioDormanciaBajo) {
-      return `${nombre}: etapa de acumulacion de frio, sin senal firme de salida de dormancia.`;
+      return modeloRector.disponible
+        ? `${nombre}: ${modeloRector.nombre} en acumulacion, sin declarar salida de dormancia.`
+        : `${nombre}: sin requisito varietal rector validado; el sistema no declara salida de dormancia.`;
     }
     if (progreso.brotacionPct < 100) {
       return `${nombre}: frio cercano a objetivo; seguir grados dia para anticipar brotacion.`;
     }
     return `${nombre}: acumulacion termica suficiente; validar fenologia a campo y ajustar ventana sanitaria.`;
+  }
+
+  private getModeloFrioRector(
+    progreso: IFrioTermicoCultivo['progreso'],
+    requerimientos: IFrioTermicoCultivo['requerimientos'],
+    porcionesFrioDisponibles: boolean,
+  ): {
+    disponible: boolean;
+    nombre: string;
+    porcentaje: number;
+  } {
+    if (
+      Number.isFinite(requerimientos.porcionesFrioObjetivo) &&
+      Number(requerimientos.porcionesFrioObjetivo) > 0 &&
+      porcionesFrioDisponibles
+    ) {
+      return {
+        disponible: true,
+        nombre: 'Chill Portions (Dynamic Model)',
+        porcentaje: Number(progreso.porcionesFrioPct || 0),
+      };
+    }
+    if (
+      Number.isFinite(requerimientos.horasFrioObjetivo) &&
+      Number(requerimientos.horasFrioObjetivo) > 0
+    ) {
+      return {
+        disponible: true,
+        nombre: 'horas de frio',
+        porcentaje: Number(progreso.horasFrioPct || 0),
+      };
+    }
+    return {
+      disponible: false,
+      nombre: 'frio de dormancia',
+      porcentaje: 0,
+    };
   }
 
   private entreFechas(fecha: string, desde: string, hasta: string): boolean {

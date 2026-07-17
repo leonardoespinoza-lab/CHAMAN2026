@@ -2,8 +2,11 @@ import { Injectable } from '@nestjs/common';
 import {
   IAlerta,
   ICreateAlerta,
+  IFinalizarEventoAlerta,
   IListado,
   IQueryParam,
+  IRegistrarEventoAlerta,
+  IResultadoRegistroEventoAlerta,
   IUpdateAlerta,
 } from 'modelos/src';
 import { API_DATOS } from '../../env';
@@ -48,5 +51,22 @@ export class AlertasRepository {
   async delete(id: string): Promise<IAlerta> {
     const url = `${API_DATOS}/alertas/${id}`;
     return await this.axios.DELETE<IAlerta>(url);
+  }
+
+  async registrarEventoSiembra(
+    data: IRegistrarEventoAlerta,
+  ): Promise<IResultadoRegistroEventoAlerta> {
+    const url = `${API_DATOS}/alertas/eventos/siembra`;
+    return await this.axios.POST<IResultadoRegistroEventoAlerta>(url, data);
+  }
+
+  async finalizarEventoSiembra(
+    data: IFinalizarEventoAlerta,
+  ): Promise<{ finalizada: boolean; modificadas: number }> {
+    const url = `${API_DATOS}/alertas/eventos/siembra/finalizar`;
+    return await this.axios.POST<{ finalizada: boolean; modificadas: number }>(
+      url,
+      data,
+    );
   }
 }

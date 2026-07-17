@@ -12,7 +12,12 @@ import {
 } from "./prediccion-riego";
 import { IProductor } from "./productor";
 import { IQuimica } from "./quimica";
-import { IFenologiaReferencia, IRequerimientoFrio, ISemilla } from "./semilla";
+import {
+  IFenologiaReferencia,
+  IRequerimientoFrio,
+  ISemilla,
+  TObjetivoBiofixFenologico,
+} from "./semilla";
 
 export type TTipoFijacionN = "0" | "> 0 < 30" | "> 30 < 60" | "> 60";
 export type TTipoDosisN = "Muy Baja" | "Baja" | "Alta" | "Muy Alta";
@@ -104,13 +109,20 @@ export interface IRegistroFenologicoFrio {
   porcionesFrio?: number;
   gradosDia?: number;
   fuente?: string;
+  coberturaPct?: number;
+  versionModelo?: string;
 }
 
 export interface IRegistroFenologico {
   id?: string;
   fecha?: string;
   accion?: "inicio" | "ajuste" | "observacion";
+  tipoEvento?: "observacion" | "inicio_etapa" | "biofix" | "correccion";
+  fechaObservacion?: string;
+  fechaInicioEtapa?: string;
   etapa?: string;
+  codigoEtapa?: string;
+  escalaEtapa?: string;
   cultivo?: string;
   variedad?: string;
   ciclo?: string;
@@ -125,6 +137,14 @@ export interface IRegistroFenologico {
   requerimientoFrio?: IRequerimientoFrio;
   fenologiaReferencia?: IFenologiaReferencia;
   frioAcumulado?: IRegistroFenologicoFrio;
+  coberturaObservadaPct?: number;
+  confianza?: "alta" | "media" | "baja";
+  observador?: string;
+  objetivosBiofix?: TObjetivoBiofixFenologico[];
+  versionModelo?: string;
+  versionParametros?: string;
+  reemplazaRegistroId?: string;
+  motivoCorreccion?: string;
   observaciones?: string;
   creadoEn?: string;
   actualizadoEn?: string;
@@ -193,7 +213,8 @@ type OmitirCreate =
   | "lote"
   | "departamento"
   | "semilla"
-  | "crono";
+  | "crono"
+  | "registrosFenologicos";
 export interface ICreateSiembra extends Omit<Partial<ISiembra>, OmitirCreate> {}
 
 type OmitirUpdate =
@@ -205,5 +226,6 @@ type OmitirUpdate =
   | "lote"
   | "departamento"
   | "semilla"
-  | "crono";
+  | "crono"
+  | "registrosFenologicos";
 export interface IUpdateSiembra extends Omit<Partial<ISiembra>, OmitirUpdate> {}

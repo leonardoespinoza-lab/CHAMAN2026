@@ -63,6 +63,7 @@ describe('PrediccionsService - alertas sanitarias', () => {
       {} as any,
       {} as any,
       alertas as any,
+      {} as any,
     );
     return { service, alertas };
   };

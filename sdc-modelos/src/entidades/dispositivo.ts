@@ -1,10 +1,10 @@
-import { IGeoJSONPoint } from '../compartidos';
-import { IDistribuidor } from './distribuidor';
-import { IProductor } from './productor';
-import { IQuimica } from './quimica';
-import { IReporte, SensoresV2 } from './reporte';
-import type { IEstablecimiento } from './establecimiento';
-import type { ILote } from './lote';
+import { IGeoJSONPoint } from "../compartidos";
+import { IDistribuidor } from "./distribuidor";
+import { IProductor } from "./productor";
+import { IQuimica } from "./quimica";
+import { IReporte, SensoresV2 } from "./reporte";
+import type { IEstablecimiento } from "./establecimiento";
+import type { ILote } from "./lote";
 
 export interface IMetaDataLora {
   ubicacionGW?: IGeoJSONPoint;
@@ -26,15 +26,23 @@ export interface IBateria {
 }
 
 export interface IFrioAcumulado {
+  temporadaInicio?: string;
   fechaInicio?: string;
   fechaUltimoCalculo?: string;
   ultimaTemperatura?: number;
   horasFrio?: number;
+  /** @deprecated Campo legacy ambiguo; no usar para decisiones nuevas. */
   horasFrioEfectivas?: number;
+  /** Solo valido cuando versionModelo identifica Dynamic Model horario. */
   porcionesFrio?: number;
+  /** @deprecated Factor legacy sin una unidad cientifica estable. */
   factorEfectivoActual?: number;
-  modelo?: 'HF <= 7C + HFE Utah simplificado' | 'HF <= 7C + HFE + CP simplificado';
-  fuente?: 'Sensor LoRa';
+  modelo?: string;
+  versionModelo?: string;
+  coberturaPct?: number;
+  estadoCalculo?: "preview" | "canonico" | "legacy";
+  fuente?: "Sensor LoRa";
+  observaciones?: string;
 }
 
 export interface IAsignacionDispositivoLote {
@@ -46,13 +54,79 @@ export interface IAsignacionDispositivoLote {
   activa?: boolean;
 }
 
+export type EstadoCalificacionMeteorologica =
+  "calificado" | "referencia" | "rechazado";
+
+export type RolVariableMeteorologica =
+  "aire_2m" | "aire_canopia" | "suelo" | "desconocido";
+
+export type VariableCalibracionMeteorologica =
+  "temperatura_aire" | "humedad_relativa";
+
+export interface ICalificacionVariableMeteorologica {
+  estado: EstadoCalificacionMeteorologica;
+  rol?: RolVariableMeteorologica;
+  alturaM?: number;
+  abrigoRadiacion?: boolean;
+  /**
+   * Exactitud en la unidad de la variable: grados C para temperatura y
+   * puntos porcentuales para humedad relativa.
+   */
+  exactitud?: number;
+  fechaCalibracion?: string;
+  proximaCalibracion?: string;
+  /**
+   * Correccion en la unidad de la variable. Solo se aplica dentro de un
+   * intervalo calificado para el timestamp de la lectura.
+   */
+  offset?: number;
+  fuenteCalibracion?: string;
+  observaciones?: string;
+}
+
+export interface IIntervaloCalibracionMeteorologica extends ICalificacionVariableMeteorologica {
+  id: string;
+  variable: VariableCalibracionMeteorologica;
+  version: "calificacion-variable-v1";
+  registradoEn: string;
+}
+
+export interface ICalificacionSensorMeteorologico {
+  /**
+   * "calificado" exige metadatos de instalación y calibración trazables.
+   * "referencia" puede priorizarse para describir el microambiente del lote,
+   * pero no habilita por sí solo una decisión biológica varietal.
+   * "rechazado" excluye la variable meteorológica del motor canónico.
+   */
+  estado: EstadoCalificacionMeteorologica;
+  rolTemperatura?: RolVariableMeteorologica;
+  alturaM?: number;
+  abrigoRadiacion?: boolean;
+  exactitudTemperaturaC?: number;
+  fechaCalibracion?: string;
+  proximaCalibracion?: string;
+  offsetTemperaturaC?: number;
+  fuenteCalibracion?: string;
+  observaciones?: string;
+  /**
+   * Calificacion independiente de humedad relativa. La calificacion termica
+   * legacy/current nunca certifica esta variable.
+   */
+  humedadRelativa?: ICalificacionVariableMeteorologica;
+  /**
+   * Snapshots inmutables administrados por backend para reproducir la
+   * calificacion que regia en la fecha de cada lectura.
+   */
+  historialCalibraciones?: IIntervaloCalibracionMeteorologica[];
+}
+
 export type TipoDispositivo =
-  | 'Estación Meteorológica'
-  | 'Estacion Meteorologica'
-  | 'Sensor de Humedad de Suelo'
-  | 'Pluviómetro'
-  | 'Pluviometro'
-  | 'Otro';
+  | "Estación Meteorológica"
+  | "Estacion Meteorologica"
+  | "Sensor de Humedad de Suelo"
+  | "Pluviómetro"
+  | "Pluviometro"
+  | "Otro";
 
 export interface IDispositivo {
   _id?: string;
@@ -73,6 +147,7 @@ export interface IDispositivo {
   bateria?: IBateria;
   ultimoReporte?: IReporte;
   frioAcumulado?: IFrioAcumulado;
+  calificacionMeteorologica?: ICalificacionSensorMeteorologico;
   fechaUltimaComunicacion?: string;
   quimica?: IQuimica;
   distribuidor?: IDistribuidor;
@@ -81,9 +156,13 @@ export interface IDispositivo {
   lote?: ILote;
 }
 
-type Omitir = '_id';
-export interface ICreateDispositivo
-  extends Omit<Partial<IDispositivo>, Omitir> {}
+type Omitir = "_id";
+export interface ICreateDispositivo extends Omit<
+  Partial<IDispositivo>,
+  Omitir
+> {}
 
-export interface IUpdateDispositivo
-  extends Omit<Partial<IDispositivo>, Omitir> {}
+export interface IUpdateDispositivo extends Omit<
+  Partial<IDispositivo>,
+  Omitir
+> {}

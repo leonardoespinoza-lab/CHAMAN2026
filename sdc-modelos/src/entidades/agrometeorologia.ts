@@ -1,9 +1,11 @@
 import { ICoordenadas } from "../compartidos";
 
 export type FuenteMeteorologicaNormalizada =
+  | "sensor"
   | "station"
   | "open_meteo"
   | "mixed"
+  | "derived_sensor"
   | "derived_station"
   | "derived_open_meteo"
   | "gap_filled";
@@ -81,6 +83,11 @@ export interface IValoresMeteorologicosNormalizados {
 export interface IObservacionMeteorologicaNormalizada {
   _id?: string;
   idEstablecimiento: string;
+  /**
+   * Contexto espacial exacto del lote. Las observaciones de una central
+   * pueden compartirse, pero Open-Meteo debe conservarse por lote.
+   */
+  idLote?: string;
   timestamp: string;
   fechaLocal: string;
   timezone: string;
@@ -104,18 +111,34 @@ export interface IObservacionMeteorologicaNormalizada {
   obtenidoEn: string;
   creadoEn?: string;
   actualizadoEn?: string;
+  contextosLote?: Record<string, IContextoMeteorologicoLote>;
 }
+
+export type IContextoMeteorologicoLote = Omit<
+  IObservacionMeteorologicaNormalizada,
+  "_id" | "contextosLote" | "creadoEn" | "actualizadoEn"
+>;
 
 export interface IParametrosAgrometeorologicos {
   version: string;
   estado?: "validado" | "referencia" | "requiere_calibracion";
   fuente?: string;
+  procesoTermico?:
+    | "dormancia_perenne"
+    | "vernalizacion_anual"
+    | "termico_fotoperiodico"
+    | "termico";
   temperaturaBaseC?: number;
   temperaturaSuperiorC?: number;
   metodoGdd?: "promedio_limitado";
+  /**
+   * Los rangos son acumulados desde el inicio térmico explícito. Los perfiles
+   * legacy sin esta semántica siguen siendo sólo referencias visuales.
+   */
+  semanticaGddPorEtapa?: "rangos_acumulados_desde_inicio_termico";
   gddPorEtapa?: Record<
     string,
-    { min?: number; max?: number; objetivo?: number }
+    { orden?: number; min?: number; max?: number; objetivo?: number }
   >;
   kcPorEtapa?: Record<string, number>;
   kcInicial?: number;
@@ -130,6 +153,35 @@ export interface IParametrosAgrometeorologicos {
   >;
   rangoVernalizacionC?: { min: number; max: number };
   requerimientoVernalizacion?: number;
+  /**
+   * El motor vigente implementa una ventana térmica calibrada. Los nombres
+   * APSIM no se ofrecen ni se aceptan como modelo porque sus ecuaciones no
+   * están implementadas en Chaman.
+   */
+  modeloVernalizacion?: "ventana_calibrada";
+  habitoVernalizacion?: "primaveral" | "facultativo" | "invernal" | "desconocido";
+  fuenteVernalizacion?: string;
+  estadoVernalizacion?:
+    | "validado"
+    | "referencia"
+    | "requiere_calibracion";
+  ventanaVernalizacion?: {
+    inicioEtapa: string;
+    finEtapa: string;
+    unidad: "dias_equivalentes";
+  };
+  fotoperiodoVarietal?: {
+    modelo: "umbral_por_etapa";
+    estado: "validado" | "referencia" | "requiere_calibracion";
+    fuente?: string;
+    porEtapa: Record<
+      string,
+      {
+        respuesta: "dia_corto" | "dia_largo" | "neutra";
+        umbralHoras?: number;
+      }
+    >;
+  };
   profundidadRadicularCm?: number;
   profundidadRadicularPorEtapa?: Record<string, number>;
   umbralDiaLluviaMm?: number;
@@ -148,6 +200,12 @@ export interface IMetricasAgrometeorologicasDiarias {
   thermalStressDay?: boolean;
   gddDaily?: number;
   gddAccumulated?: number;
+  /**
+   * Solo es verdadero cuando existe un día térmico utilizable por cada fecha
+   * desde el inicio de la acumulación. Evita presentar una suma parcial como
+   * acumulado fenológico completo.
+   */
+  gddAccumulationComplete?: boolean;
   gddBaseTemperatureC?: number;
   gddUpperTemperatureC?: number;
   gddFromEmergence?: number;
@@ -158,8 +216,34 @@ export interface IMetricasAgrometeorologicasDiarias {
   sunset?: string;
   chillingHours?: number;
   chillingHoursAccumulated?: number;
+  chillingTemperatureCoveragePct?: number;
+  chillingMaximumGapHours?: number;
+  chillingContinuitySufficient?: boolean;
+  utahChillUnits?: number;
+  utahChillUnitsAccumulated?: number;
+  chillPortions?: number;
+  chillPortionsAccumulated?: number;
+  /**
+   * Lectura paralela de la temperatura de aire medida por sensores del lote.
+   * Es auditable aun con calificación "referencia", pero nunca reemplaza las
+   * métricas canónicas ni habilita compatibilidad varietal en ese estado.
+   */
+  fieldChillingHours?: number;
+  fieldChillingHoursAccumulated?: number;
+  fieldUtahChillUnits?: number;
+  fieldUtahChillUnitsAccumulated?: number;
+  fieldChillPortions?: number;
+  fieldChillPortionsAccumulated?: number;
+  fieldChillingTemperatureCoveragePct?: number;
+  fieldChillingMaximumGapHours?: number;
+  fieldChillingContinuitySufficient?: boolean;
   vernalizationUnits?: number;
   vernalizationAccumulated?: number;
+  vernalizationTemperatureCoveragePct?: number;
+  vernalizationMaximumGapHours?: number;
+  vernalizationContinuitySufficient?: boolean;
+  vernalizationWindowActive?: boolean;
+  photoperiodCompatible?: boolean;
   relativeHumidityMinPct?: number;
   relativeHumidityMeanPct?: number;
   relativeHumidityMaxPct?: number;
@@ -186,6 +270,7 @@ export interface IMetricasAgrometeorologicasDiarias {
   availableWaterPercentage?: number;
   waterDeficitMm?: number;
   waterStressIndex?: number;
+  fieldTemperatureCoveragePct?: number;
   rainAccumulatedMm?: number;
   rain7dMm?: number;
   rain15dMm?: number;
@@ -204,6 +289,11 @@ export interface IMetricasAgrometeorologicasDiarias {
 
 export interface IIndicadorAgrometeorologicoDiario {
   _id?: string;
+  /**
+   * Identifica una corrida completa del motor. Solo la generación activada
+   * por siembra y versión puede exponerse a clientes.
+   */
+  generacionCalculo?: string;
   idSiembra: string;
   idLote: string;
   idEstablecimiento: string;
@@ -213,6 +303,15 @@ export interface IIndicadorAgrometeorologicoDiario {
   fecha: string;
   esPronostico: boolean;
   etapaFenologica?: string;
+  fuenteEtapaFenologica?:
+    | "campo"
+    | "proyeccion_anclada_campo"
+    | "gdd_validado"
+    | "cronograma_referencia"
+    | "rango_termico_referencia"
+    | "seguimiento";
+  confianzaEtapaFenologica?: "alta" | "media" | "referencia";
+  versionModeloFenologico?: string;
   metricas: IMetricasAgrometeorologicasDiarias;
   fuente: FuenteMeteorologicaNormalizada;
   fuentePorVariable: Partial<
@@ -221,6 +320,28 @@ export interface IIndicadorAgrometeorologicoDiario {
   banderasCalidad: string[];
   advertencias: string[];
   completitudPct: number;
+  coberturaCampoPct?: number;
+  ultimaObservacionCampo?: string;
+  calidadTemperaturaCampo?: "calificado" | "referencia";
+  nombresSensoresTemperaturaCampo?: string[];
+  procesoTermico?: IParametrosAgrometeorologicos["procesoTermico"];
+  estadoParametros?: IParametrosAgrometeorologicos["estado"];
+  fuenteParametros?: string;
+  modeloVernalizacion?: IParametrosAgrometeorologicos["modeloVernalizacion"];
+  habitoVernalizacion?: IParametrosAgrometeorologicos["habitoVernalizacion"];
+  requerimientoVernalizacion?: number;
+  estadoVernalizacion?: IParametrosAgrometeorologicos["estadoVernalizacion"];
+  inicioVentanaFrio?: string;
+  inicioVentanaVernalizacion?: string;
+  finVentanaVernalizacion?: string;
+  modeloFrioRector?: "HF" | "CP" | "sin_calibrar";
+  estadoRequerimientoFrio?:
+    | "validado"
+    | "referencia"
+    | "requiere_calibracion";
+  fuenteRequerimientoFrio?: string;
+  confianzaRequerimientoFrio?: "alta" | "media" | "estimada";
+  objetivoFrioRector?: number;
   versionCalculo: string;
   versionParametros: string;
   calculadoEn: string;
@@ -230,6 +351,7 @@ export interface IIndicadorAgrometeorologicoDiario {
 
 export interface IResumenAgrometeorologico {
   gddAccumulated?: number;
+  gddAccumulationComplete?: boolean;
   gddThroughDate?: string;
   gddBaseTemperatureC?: number;
   gddUpperTemperatureC?: number;
@@ -240,20 +362,98 @@ export interface IResumenAgrometeorologico {
   waterDeficitMm?: number;
   vpdMeanKpa?: number;
   currentPhotoperiodHours?: number;
+  thermalProcess?: IParametrosAgrometeorologicos["procesoTermico"];
+  parametersStatus?: IParametrosAgrometeorologicos["estado"];
+  parametersSource?: string;
+  vernalizationModel?: IParametrosAgrometeorologicos["modeloVernalizacion"];
+  vernalizationHabit?: IParametrosAgrometeorologicos["habitoVernalizacion"];
+  vernalizationRequirement?: number;
+  vernalizationStatus?: IParametrosAgrometeorologicos["estadoVernalizacion"];
+  vernalizationWindowStart?: string;
+  vernalizationWindowEnd?: string;
+  vernalizationTemperatureCoveragePct?: number;
+  vernalizationMaximumGapHours?: number;
+  vernalizationContinuitySufficient?: boolean;
+  vernalizationInterpretation?:
+    | "no_requerida"
+    | "sin_calibrar"
+    | "sin_biofix_inicio"
+    | "datos_insuficientes"
+    | "en_acumulacion"
+    | "ventana_cerrada";
+  coldSeasonStart?: string;
+  coldThroughDate?: string;
+  coldModelVersion?: string;
+  chillingTemperatureCoveragePct?: number;
+  chillingMaximumGapHours?: number;
+  chillingContinuitySufficient?: boolean;
+  chillingHoursAccumulated?: number;
+  utahChillUnitsAccumulated?: number;
+  chillPortionsAccumulated?: number;
+  fieldCold?: {
+    quality: "qualified" | "reference";
+    sensorNames?: string[];
+    throughDate?: string;
+    lastObservationAt?: string;
+    modelVersion?: string;
+    chillingHoursAccumulated?: number;
+    utahChillUnitsAccumulated?: number;
+    chillPortionsAccumulated?: number;
+    temperatureCoveragePercentage?: number;
+    maximumGapHours?: number;
+    continuitySufficient?: boolean;
+    interpretation:
+      | "qualified"
+      | "reference_not_calibrated"
+      | "insufficient_data";
+  };
+  vernalizationAccumulated?: number;
+  coldRequirement?: {
+    model: "HF" | "CP" | "sin_calibrar";
+    status: "validado" | "referencia" | "requiere_calibracion";
+    source?: string;
+    confidence?: "alta" | "media" | "estimada";
+    target?: number;
+    accumulated?: number;
+    progressPercentage?: number;
+    compatible?: boolean;
+    coveragePercentage?: number;
+    minimumCoveragePercentage?: number;
+    coverageSufficient?: boolean;
+    maximumGapHours?: number;
+    maximumAllowedGapHours?: number;
+    continuitySufficient?: boolean;
+    /**
+     * Compatibilidad climática, nunca confirmación fenológica. El inicio real
+     * de etapa se registra a campo mediante observación/biofix.
+     */
+    interpretation:
+      | "sin_calibrar"
+      | "datos_insuficientes"
+      | "en_acumulacion"
+      | "compatible_requiere_confirmacion";
+  };
 }
 
 export interface IFuenteAgrometeorologicaResumen {
-  type: "station" | "open_meteo" | "mixed" | "sin_datos";
+  type: "sensor" | "station" | "open_meteo" | "mixed" | "sin_datos";
+  sources?: Array<"sensor" | "station" | "open_meteo">;
   stationName?: string;
   lastObservationAt?: string;
   lastCalculatedAt?: string;
   completenessPercentage: number;
+  fieldCoveragePercentage?: number;
+  sensorNames?: string[];
+  fieldTemperatureQuality?: "qualified" | "reference";
 }
 
 export interface ISerieAgrometeorologicaDia {
   date: string;
   isForecast: boolean;
   stage?: string;
+  stageSource?: IIndicadorAgrometeorologicoDiario["fuenteEtapaFenologica"];
+  stageConfidence?: IIndicadorAgrometeorologicoDiario["confianzaEtapaFenologica"];
+  phenologyModelVersion?: string;
   weather: IValoresMeteorologicosNormalizados;
   metrics: IMetricasAgrometeorologicasDiarias;
   source: FuenteMeteorologicaNormalizada;

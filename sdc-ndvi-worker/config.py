@@ -5,6 +5,25 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 REDIS_QUEUE = os.getenv("REDIS_NDVI_QUEUE", os.getenv("REDIS_QUEUE", "tareas-ndvi"))
 REDIS_DB = int(os.getenv("REDIS_NDVI_DB", os.getenv("REDIS_DB", "0")))
+NDVI_QUEUE_MAX_ATTEMPTS = max(
+    1, int(os.getenv("NDVI_QUEUE_MAX_ATTEMPTS", "4"))
+)
+NDVI_QUEUE_RETRY_BASE_SECONDS = max(
+    0.0, float(os.getenv("NDVI_QUEUE_RETRY_BASE_SECONDS", "15"))
+)
+NDVI_QUEUE_RETRY_MAX_SECONDS = max(
+    NDVI_QUEUE_RETRY_BASE_SECONDS,
+    float(os.getenv("NDVI_QUEUE_RETRY_MAX_SECONDS", "300")),
+)
+NDVI_QUEUE_VISIBILITY_TIMEOUT_SECONDS = max(
+    5, int(os.getenv("NDVI_QUEUE_VISIBILITY_TIMEOUT_SECONDS", "1800"))
+)
+NDVI_QUEUE_POLL_SECONDS = max(
+    0.05, float(os.getenv("NDVI_QUEUE_POLL_SECONDS", "1"))
+)
+NDVI_QUEUE_COMPLETED_TTL_SECONDS = max(
+    60, int(os.getenv("NDVI_QUEUE_COMPLETED_TTL_SECONDS", "604800"))
+)
 
 DOWNLOAD_FOLDER = os.getenv("DOWNLOAD_FOLDER", "./.downloads")
 

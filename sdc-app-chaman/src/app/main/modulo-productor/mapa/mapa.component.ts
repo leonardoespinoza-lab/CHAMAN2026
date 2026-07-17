@@ -1624,21 +1624,19 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     progreso: number;
   } | null {
     const requerimiento = (lote.siembra?.semilla?.requerimientoFrio || {}) as any;
+    if (
+      requerimiento.estado !== 'validado' ||
+      !['HF', undefined].includes(requerimiento.modeloRector)
+    ) {
+      return null;
+    }
     const frio = (lote.dispositivos || []).map((dispositivo: any) => dispositivo?.frioAcumulado).find(Boolean) as any;
+    const contadorActual =
+      frio?.versionModelo === 'hf-field-preview-1.0.0' ? frio : undefined;
     const opciones = [
       {
-        metric: 'HFE',
-        actual: this.numero(frio?.horasFrioEfectivas ?? frio?.hfe ?? frio?.frioEfectivo),
-        objetivo: this.numero(requerimiento.horasFrioEfectivas ?? requerimiento.hfe),
-      },
-      {
-        metric: 'CP',
-        actual: this.numero(frio?.porcionesFrio ?? frio?.chillPortions ?? frio?.cp),
-        objetivo: this.numero(requerimiento.porcionesFrio ?? requerimiento.cp),
-      },
-      {
         metric: 'HF',
-        actual: this.numero(frio?.horasFrio ?? frio?.hf),
+        actual: this.numero(contadorActual?.horasFrio),
         objetivo: this.numero(requerimiento.horasFrio ?? requerimiento.hf),
       },
     ].filter((item) => item.actual !== null && item.objetivo !== null && item.objetivo > 0) as Array<{
@@ -2201,10 +2199,14 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     const requerimiento = lote.siembra?.semilla?.requerimientoFrio || {};
     const tieneRequerimiento = [
       requerimiento.horasFrio,
-      requerimiento.horasFrioEfectivas,
       requerimiento.porcionesFrio,
-    ].some((valor) => this.numero(valor) !== null);
-    const tieneSensor = (lote.dispositivos || []).some((dispositivo: any) => !!dispositivo?.frioAcumulado);
+    ].some((valor) => this.numero(valor) !== null) &&
+      requerimiento.estado === 'validado';
+    const tieneSensor = (lote.dispositivos || []).some(
+      (dispositivo: any) =>
+        dispositivo?.frioAcumulado?.versionModelo ===
+        'hf-field-preview-1.0.0'
+    );
     return tieneRequerimiento || tieneSensor;
   }
 

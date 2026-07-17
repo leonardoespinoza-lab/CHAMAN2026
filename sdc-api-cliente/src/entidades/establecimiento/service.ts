@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import {
   IEstablecimiento,
   IListado,
@@ -24,6 +29,7 @@ import {
   revealFieldClimateCredential,
 } from '../../auxiliares/fieldclimate-credentials';
 import { fieldClimateStatus } from '../../auxiliares/fieldclimate-status';
+import { DecisionPipelineQueueService } from '../../auxiliares/decision-pipeline';
 
 @Injectable()
 export class EstablecimientosService {
@@ -36,6 +42,8 @@ export class EstablecimientosService {
     private climaRepository: ClimaRepository,
     private productorsService: ProductorsService,
     private estacionsService: EstacionsService,
+    @Optional()
+    private readonly decisionPipelineQueue?: DecisionPipelineQueueService,
   ) {}
 
   async getById(id: string, permiso: IPermiso): Promise<IEstablecimiento> {
@@ -118,17 +126,21 @@ export class EstablecimientosService {
       );
     }
     const updated = await this.repository.update(id, data);
-    if (
-      Object.prototype.hasOwnProperty.call(data, 'idEstacionMeteorologica') ||
-      Object.prototype.hasOwnProperty.call(data, 'ubicacion')
-    ) {
-      this.repository
-        .reprocesarAgrometeorologia(id)
-        .catch((error) =>
-          this.logger.error(
-            `Error al reprocesar agrometeorologia del establecimiento ${id}: ${error}`,
-          ),
-        );
+    const changedFields = [
+      'idEstacionMeteorologica',
+      'ubicacion',
+      'fuenteClimaPreferida',
+    ].filter((field) => Object.prototype.hasOwnProperty.call(data, field));
+    if (changedFields.length) {
+      if (this.decisionPipelineQueue) {
+        await this.decisionPipelineQueue.enqueueForEstablishment(id, {
+          trigger: 'establecimiento.weather-source-updated',
+          changedFields,
+          sincronizarClima: true,
+        });
+      } else {
+        await this.repository.reprocesarAgrometeorologia(id);
+      }
     }
     return updated;
   }

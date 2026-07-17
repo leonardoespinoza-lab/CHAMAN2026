@@ -48,6 +48,14 @@ export class ReporteNDVIsController {
     return await this.service.getLastByIdDistribuidor(idDistribuidor);
   }
 
+  @Get('lastByScope/:scope/:id')
+  async getLastByScope(
+    @Param('scope') scope: string,
+    @Param('id') id: string,
+  ) {
+    return await this.service.getLastByScope(scope, id);
+  }
+
   @Get(':id')
   async getById(@Param('id') id: string) {
     return await this.service.getById(id);

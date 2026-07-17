@@ -12,6 +12,12 @@ import { Model, PipelineStage } from 'mongoose';
 import { dbQuery, stringToObjectId } from 'src/auxiliares/helper.service';
 import { ReporteNDVI, ReporteNDVIDocument } from './modelos/schema';
 
+export type TReporteNdviTenantScope =
+  | 'quimica'
+  | 'distribuidor'
+  | 'productor'
+  | 'establecimiento';
+
 @Injectable()
 export class ReporteNDVIsRepository {
   constructor(
@@ -66,6 +72,35 @@ export class ReporteNDVIsRepository {
       },
     ];
 
+    return await this.model.aggregate<IReporteNDVI>(pipeline).exec();
+  }
+
+  async getLastByScope(scope: TReporteNdviTenantScope, id: string) {
+    const fields: Record<TReporteNdviTenantScope, string> = {
+      quimica: 'idQuimica',
+      distribuidor: 'idDistribuidor',
+      productor: 'idProductor',
+      establecimiento: 'idEstablecimiento',
+    };
+    const field = fields[scope];
+    const pipeline: PipelineStage[] = [
+      {
+        $match: {
+          [field]: stringToObjectId(id),
+        },
+      },
+      {
+        $sort: {
+          fechaCreacion: 1,
+        },
+      },
+      {
+        $group: {
+          _id: '$idLote',
+          lastReporte: { $last: '$$ROOT' },
+        },
+      },
+    ];
     return await this.model.aggregate<IReporteNDVI>(pipeline).exec();
   }
 

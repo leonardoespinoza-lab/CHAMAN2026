@@ -2,7 +2,20 @@ import { CardNDVIComponent } from './card-ndvi.component';
 
 describe('CardNDVIComponent - historial satelital', () => {
   function createComponent(): CardNDVIComponent {
-    return new CardNDVIComponent({ notifWarn: () => undefined } as any, {} as any, {} as any, {} as any, {} as any);
+    return new CardNDVIComponent(
+      { notifWarn: () => undefined } as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+  }
+
+  function qualityMetadata(key: string, coverage = 80): any {
+    return {
+      renderVersion: 'fixed-index-v3',
+      qualityMask: { validCoveragePct: coverage },
+      renderQa: { [key]: { status: 'ok', validCoveragePct: coverage } },
+    };
   }
 
   it('asocia cada escena con la etapa de su propia fecha y prioriza el registro de campo', () => {
@@ -28,12 +41,14 @@ describe('CardNDVIComponent - historial satelital', () => {
         fechaDeLaImagen: '2026-07-10T00:00:00.000Z',
         indices: { ndvi: 0.42 },
         coleccion: 'Sentinel-2',
+        metadataImagen: qualityMetadata('ndvi'),
       },
       {
         _id: 'earlier',
         fechaDeLaImagen: '2026-07-03T00:00:00.000Z',
         indices: { ndvi: 0.21 },
         coleccion: 'Sentinel-2',
+        metadataImagen: qualityMetadata('ndvi'),
       },
     ];
     component.reporte = component.ndvis[1];
@@ -75,6 +90,22 @@ describe('CardNDVIComponent - historial satelital', () => {
     expect(component.historialIndice[0].stage.name).toContain('Etapa térmica sin confirmar');
     expect(component.historialIndice[0].stage.source).toContain('GDD histórico');
     expect(component.historialIndice[0].stage.confirmed).toBeFalse();
+  });
+
+  it('no genera interpretacion agronomica desde un promedio legado sin QA', () => {
+    const component = createComponent();
+    component.reporte = { ndviPromedio: 0.62 };
+
+    expect(component.analisis.estado).toBe('Sin imagen activa');
+    expect(component.satelliteIndicators[0].value).toBe('Pendiente');
+
+    component.reporte = {
+      ndviPromedio: 0.62,
+      metadataImagen: { qualityMask: { validCoveragePct: 72 } } as any,
+    };
+
+    expect(component.analisis.estado).not.toBe('Sin imagen activa');
+    expect(component.satelliteIndicators[0].value).toBe('0,62');
   });
 
   it('no repite la consulta inicial si ngOnChanges ya cargó el mismo lote', async () => {

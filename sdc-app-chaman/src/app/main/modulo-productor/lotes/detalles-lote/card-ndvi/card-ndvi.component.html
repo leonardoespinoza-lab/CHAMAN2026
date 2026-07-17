@@ -244,18 +244,6 @@
           (click)="generarNdviSatelital($event)"
         />
       }
-      @if (!helper.soloLectura() && esLocal) {
-        <p-button
-          icon="pi pi-plus"
-          label="Crear muestra local"
-          severity="secondary"
-          [outlined]="true"
-          [loading]="generandoMuestra"
-          [disabled]="generandoMuestra"
-          [fluid]="true"
-          (click)="generarMuestraLocal($event)"
-        />
-      }
       <section class="satellite-details-cta empty-module">
         <div>
           <span>Capas preparadas</span>

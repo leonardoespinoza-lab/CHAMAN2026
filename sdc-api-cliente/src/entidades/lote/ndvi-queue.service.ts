@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { ILote } from 'modelos/src';
 import Redis from 'ioredis';
 import {
@@ -22,6 +23,17 @@ export interface NdviQueueStatus {
   queueLength?: number;
   reason?: string;
   error?: string;
+}
+
+export interface NdviKnownScene {
+  date: string;
+  collection: string | null;
+}
+
+export interface NdviEnqueueOptions {
+  forceRender?: boolean;
+  exactSceneDate?: boolean;
+  knownScenes?: NdviKnownScene[];
 }
 
 @Injectable()
@@ -59,7 +71,7 @@ export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
     lote: ILote,
     sceneDatetime?: string | null,
     sceneCollection?: string | null,
-    forceRender = false,
+    options: NdviEnqueueOptions = {},
   ): Promise<boolean> {
     if (!this.enabled || !this.redis) {
       return false;
@@ -71,17 +83,32 @@ export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
       );
       return false;
     }
+    const forceRender = !!options.forceRender;
+    const exactSceneDate = !!options.exactSceneDate;
+    const knownScenes = (options.knownScenes || []).filter(
+      (scene) => !!scene?.date,
+    );
+    const dedupeKey = this.taskDedupeKey(
+      lote,
+      sceneDatetime,
+      forceRender,
+      exactSceneDate,
+    );
+    const dedupeToken = randomUUID();
     const task = {
       lote_id: lote._id,
       scene_datetime: sceneDatetime || null,
       scene_collection: sceneCollection || null,
       force_render: forceRender,
+      exact_scene_date: exactSceneDate,
+      known_scenes: knownScenes,
+      dedupe_key: dedupeKey,
+      dedupe_token: dedupeToken,
       polygon,
     };
-    const dedupeKey = this.taskDedupeKey(lote, sceneDatetime, forceRender);
     const reserved = await this.redis.set(
       dedupeKey,
-      '1',
+      dedupeToken,
       'EX',
       this.taskDedupTtlSeconds,
       'NX',
@@ -90,7 +117,12 @@ export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(`Tarea NDVI duplicada omitida para lote ${lote._id}`);
       return false;
     }
-    await this.redis.lpush(REDIS_NDVI_QUEUE, JSON.stringify(task));
+    try {
+      await this.redis.lpush(REDIS_NDVI_QUEUE, JSON.stringify(task));
+    } catch (error) {
+      await this.releaseReservation(dedupeKey, dedupeToken);
+      throw error;
+    }
     this.logger.log(`Tarea NDVI encolada para lote ${lote._id}`);
     return true;
   }
@@ -99,6 +131,7 @@ export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
     lote: ILote,
     sceneDatetime?: string | null,
     forceRender = false,
+    exactSceneDate = false,
   ): string {
     const parsedDate = sceneDatetime ? new Date(sceneDatetime) : undefined;
     const sceneKey =
@@ -109,8 +142,34 @@ export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
       'ndvi-task',
       lote._id || 'sin-lote',
       sceneKey,
-      forceRender ? 'force-v3' : 'normal',
+      exactSceneDate ? 'exact-v3' : forceRender ? 'force-v3' : 'normal',
     ].join(':');
+  }
+
+  private async releaseReservation(
+    dedupeKey: string,
+    dedupeToken: string,
+  ): Promise<void> {
+    if (!this.redis) {
+      return;
+    }
+    try {
+      await this.redis.eval(
+        [
+          "if redis.call('get', KEYS[1]) == ARGV[1] then",
+          "  return redis.call('del', KEYS[1])",
+          'end',
+          'return 0',
+        ].join('\n'),
+        1,
+        dedupeKey,
+        dedupeToken,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo liberar la reserva NDVI ${dedupeKey}: ${error?.message || error}`,
+      );
+    }
   }
 
   async getStatus(): Promise<NdviQueueStatus> {

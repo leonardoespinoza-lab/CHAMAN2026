@@ -32,6 +32,17 @@ export class PrediccionsController {
     return await this.service.create(data);
   }
 
+  @Post('/idSiembra/:idSiembra/restore')
+  async restoreByIdSiembra(
+    @Param('idSiembra') idSiembra: string,
+    @Body() body: { predicciones?: ICreatePrediccion[] },
+  ) {
+    return await this.service.restoreByIdSiembra(
+      idSiembra,
+      body?.predicciones || [],
+    );
+  }
+
   @Put(':id')
   async update(@Param('id') id: string, @Body() data: IUpdatePrediccion) {
     return await this.service.update(id, data);
@@ -45,5 +56,10 @@ export class PrediccionsController {
   @Delete('/idSiembra/:idSiembra')
   async deleteByIdSiembra(@Param('idSiembra') idSiembra: string) {
     return await this.service.deleteByIdSiembra(idSiembra);
+  }
+
+  @Delete('/idSiembra/:idSiembra/clear')
+  async clearByIdSiembra(@Param('idSiembra') idSiembra: string) {
+    return await this.service.clearByIdSiembra(idSiembra);
   }
 }

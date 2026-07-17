@@ -4,6 +4,7 @@ import {
   Inject,
   Injectable,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import {
   ISiembra,
@@ -27,6 +28,7 @@ import {
   IResultadoPrediccionMalezas,
   IRegistroFenologico,
   IRespuestaAgrometeorologiaSiembra,
+  TObjetivoBiofixFenologico,
   esCultivoPerenne,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
@@ -47,15 +49,32 @@ import {
 import { FertilizacionsService } from '../fertilizacion/service';
 import { FumigacionsService } from '../fumigacion/service';
 import { ClimaService } from '../clima/service';
+import {
+  DecisionEnqueueOptions,
+  DecisionPipelineQueueService,
+} from '../../auxiliares/decision-pipeline';
 
 interface Stage {
   name: string;
   kcProm: number;
   days: number;
 }
+
+const OBJETIVOS_BIOFIX_PERMITIDOS = new Set<TObjetivoBiofixFenologico>([
+  'anclaje_fenologico',
+  'inicio_acumulacion_frio',
+  'fin_acumulacion_frio',
+  'inicio_forzado',
+  'inicio_vernalizacion',
+  'fin_vernalizacion',
+  'reinicio_gdd_etapa',
+  'reinicio_gdd_forzado',
+]);
+
 @Injectable()
 export class SiembrasService {
   private logger = new Logger(SiembrasService.name);
+  private readonly pipelinesDecision = new Map<string, Promise<void>>();
 
   constructor(
     private repository: SiembrasRepository,
@@ -67,14 +86,29 @@ export class SiembrasService {
     private fertilizacionsService: FertilizacionsService,
     private fumigacionsService: FumigacionsService,
     private climaService: ClimaService,
+    @Optional()
+    private readonly decisionPipelineQueue?: DecisionPipelineQueueService,
   ) {}
 
   async getById(id: string, permiso: IPermiso): Promise<ISiembra> {
     const data = await this.repository.getById(id);
-    if (!this.puedeVer(data, permiso)) {
-      throw new Error('No tiene permiso para ver esta siembra');
+    if (this.puedeVer(data, permiso)) {
+      return data;
     }
-    return data;
+    if (
+      permiso.nivel !== 'Admin' &&
+      !this.tieneAlcancePersistido(data, permiso) &&
+      data.idLote
+    ) {
+      try {
+        await this.lotesService.getById(data.idLote, permiso);
+        return data;
+      } catch {
+        // El lote canonico es la unica via de compatibilidad para una siembra
+        // legacy sin tenant persistido. Un desacuerdo explicito nunca cae aqui.
+      }
+    }
+    throw new Error('No tiene permiso para ver esta siembra');
   }
 
   async seguimientoHuellaHidrica(id: string, permiso: IPermiso): Promise<any> {
@@ -106,57 +140,136 @@ export class SiembrasService {
     permiso: IPermiso,
   ): Promise<ISiembra> {
     const siembra = await this.getById(id, permiso);
-    const cultivo = this.canonicalCultivo(
-      registro.cultivo || siembra.semilla?.cultivo,
+    const cultivo = this.canonicalCultivo(siembra.semilla?.cultivo);
+    if (!cultivo) {
+      throw new BadRequestException(
+        'La siembra no tiene un cultivo valido para registrar fenologia.',
+      );
+    }
+    const fechaRegistro = this.validarFechaRegistroFenologico(
+      siembra,
+      registro,
+    );
+    const coberturaObservadaPct =
+      registro.coberturaObservadaPct === undefined
+        ? undefined
+        : Number(registro.coberturaObservadaPct);
+    if (
+      coberturaObservadaPct !== undefined &&
+      (!Number.isFinite(coberturaObservadaPct) ||
+        coberturaObservadaPct < 0 ||
+        coberturaObservadaPct > 100)
+    ) {
+      throw new BadRequestException(
+        'La cobertura fenologica observada debe estar entre 0 y 100%.',
+      );
+    }
+    if (
+      registro.confianza &&
+      !['alta', 'media', 'baja'].includes(registro.confianza)
+    ) {
+      throw new BadRequestException(
+        'La confianza del registro fenologico no es valida.',
+      );
+    }
+    const accion = registro.accion || 'inicio';
+    const tipoEvento =
+      registro.tipoEvento ||
+      (accion === 'observacion'
+        ? 'observacion'
+        : accion === 'ajuste'
+          ? 'correccion'
+          : 'inicio_etapa');
+    const objetivosBiofix = this.normalizarObjetivosBiofix(
+      tipoEvento,
+      registro.objetivosBiofix,
     );
 
-    if (!esCultivoPerenne(cultivo)) {
+    const now = new Date().toISOString();
+    const reemplazaRegistroId =
+      registro.reemplazaRegistroId ||
+      (registro.tipoEvento === 'correccion' ? registro.id : undefined);
+    const registros = [...(siembra.registrosFenologicos || [])];
+    if (
+      registro.id &&
+      !reemplazaRegistroId &&
+      registros.some((item) => item.id === registro.id)
+    ) {
       throw new BadRequestException(
-        'El registro manual de etapas fenologicas esta habilitado solo para cultivos perennes.',
+        'Los registros fenologicos son inmutables. Para corregir uno existente debe indicar reemplazaRegistroId.',
+      );
+    }
+    if (
+      reemplazaRegistroId &&
+      !registros.some((item) => item.id === reemplazaRegistroId)
+    ) {
+      throw new BadRequestException(
+        'El registro fenologico que se intenta corregir ya no existe.',
+      );
+    }
+    if (
+      reemplazaRegistroId &&
+      registros.some(
+        (item) => item.reemplazaRegistroId === reemplazaRegistroId,
+      )
+    ) {
+      throw new BadRequestException(
+        'El registro fenologico ya tiene una correccion posterior.',
       );
     }
 
-    const now = new Date().toISOString();
+    // El identificador se genera siempre en el servidor: una correccion agrega
+    // un nuevo evento que referencia al anterior y nunca reescribe el historial.
+    const idRegistro = this.crearIdRegistroFenologico();
     const registroCompleto: IRegistroFenologico = {
       ...registro,
-      id: registro.id || this.crearIdRegistroFenologico(),
+      id: idRegistro,
+      fecha: fechaRegistro,
+      fechaObservacion:
+        registro.fechaObservacion ||
+        (tipoEvento === 'observacion' ? fechaRegistro : now),
+      fechaInicioEtapa:
+        registro.fechaInicioEtapa ||
+        (tipoEvento === 'observacion' ? undefined : fechaRegistro),
+      accion,
+      tipoEvento,
       idSiembra: siembra._id,
       idLote: siembra.idLote,
       idSemilla: siembra.idSemilla,
-      cultivo: registro.cultivo || siembra.semilla?.cultivo,
-      variedad: registro.variedad || siembra.semilla?.variedad,
-      ciclo: registro.ciclo || siembra.semilla?.ciclo,
-      requerimientoFrio:
-        registro.requerimientoFrio || siembra.semilla?.requerimientoFrio,
-      fenologiaReferencia:
-        registro.fenologiaReferencia || siembra.semilla?.fenologiaReferencia,
+      cultivo,
+      variedad: siembra.semilla?.variedad,
+      ciclo: siembra.semilla?.ciclo,
+      campania: this.campaniaFenologica(siembra, fechaRegistro),
+      requerimientoFrio: siembra.semilla?.requerimientoFrio,
+      fenologiaReferencia: siembra.semilla?.fenologiaReferencia,
+      escalaEtapa: String(registro.escalaEtapa || '').trim() || undefined,
+      codigoEtapa: String(registro.codigoEtapa || '').trim() || undefined,
+      coberturaObservadaPct,
+      confianza: registro.confianza || 'media',
+      observador: String(registro.observador || '').trim() || undefined,
+      objetivosBiofix,
+      reemplazaRegistroId,
       actualizadoEn: now,
     };
 
-    const registros = [...(siembra.registrosFenologicos || [])];
-    const index = registros.findIndex((item) =>
-      registro.id
-        ? item.id === registro.id
-        : item.etapa === registroCompleto.etapa &&
-          item.campania === registroCompleto.campania &&
-          (item.accion || 'inicio') === (registroCompleto.accion || 'inicio'),
+    const registroPersistible: IRegistroFenologico = {
+      ...registroCompleto,
+      creadoEn: now,
+    };
+    registros.push(registroPersistible);
+
+    await this.repository.registrarEtapaFenologica(id, registroPersistible);
+    await this.encolarPipelineDecision(
+      id,
+      {
+        trigger: 'siembra.phenology-recorded',
+        changedFields: ['registrosFenologicos'],
+        sincronizarClima: false,
+        operationId: idRegistro,
+      },
+      permiso,
+      true,
     );
-
-    if (index >= 0) {
-      registros[index] = {
-        ...registros[index],
-        ...registroCompleto,
-        creadoEn: registros[index].creadoEn || now,
-      };
-    } else {
-      registros.push({
-        ...registroCompleto,
-        creadoEn: now,
-      });
-    }
-
-    await this.repository.registrarEtapaFenologica(id, registros);
-    this.reprocesarAgrometeorologia(id, false);
     return await this.getById(id, permiso);
   }
 
@@ -177,6 +290,7 @@ export class SiembrasService {
   }
 
   async create(data: ICreateSiembra, permiso: IPermiso): Promise<ISiembra> {
+    data = this.sinHistorialFenologicoGenerico(data);
     if (!data.idLote) {
       throw new BadRequestException('No se ingresó el lote');
     }
@@ -200,9 +314,16 @@ export class SiembrasService {
     if (!lote.siembra || lote.siembra.fechaSiembra < data.fechaSiembra) {
       this.updateIdSiembraEnLote(data.idLote, idSiembra, permiso);
     }
-    await this.crearPrediccion(idSiembra);
-    this.evaluarAgroclima(idSiembra);
-    this.reprocesarAgrometeorologia(idSiembra);
+    await this.encolarPipelineDecision(
+      idSiembra,
+      {
+        trigger: 'siembra.created',
+        changedFields: Object.keys(data || {}),
+        sincronizarClima: true,
+      },
+      permiso,
+      false,
+    );
     this.encolarNdvi(data.idLote, permiso);
     return await this.getById(created._id, permiso);
   }
@@ -212,6 +333,7 @@ export class SiembrasService {
     data: IUpdateSiembra,
     permiso: IPermiso,
   ): Promise<ISiembra> {
+    data = this.sinHistorialFenologicoGenerico(data);
     const siembra = await this.getById(id, permiso);
     // La autorizacion del lote se mantiene en la API publica, pero el calculo
     // y los efectos de cosecha se ejecutan una unica vez en sdc-datos.
@@ -224,7 +346,21 @@ export class SiembrasService {
     data: IUpdateSiembra,
     permiso: IPermiso,
   ): Promise<ISiembra> {
-    const lote = await this.lotesService.getById(data.idLote, permiso);
+    data = this.sinHistorialFenologicoGenerico(data);
+    const siembraActual = await this.getById(id, permiso);
+    const idLoteActual = String(siembraActual.idLote || '');
+    if (!idLoteActual) {
+      throw new BadRequestException(
+        'La siembra existente no tiene un lote valido asociado.',
+      );
+    }
+    if (data.idLote && String(data.idLote) !== idLoteActual) {
+      throw new BadRequestException(
+        'No se puede trasladar una siembra existente a otro lote.',
+      );
+    }
+    data.idLote = idLoteActual;
+    const lote = await this.lotesService.getById(idLoteActual, permiso);
     data.idDepartamento = lote?.idDepartamento;
     data.idEstablecimiento = lote?.idEstablecimiento;
     data.idProductor = lote?.idProductor;
@@ -239,18 +375,24 @@ export class SiembrasService {
     data.idCrono = crono?._id;
 
     await this.repository.update(id, data);
-    await this.actualizarPrediccion(id, permiso);
-    this.evaluarAgroclima(id);
-    this.reprocesarAgrometeorologia(id);
-    this.encolarNdvi(data.idLote, permiso);
+    await this.encolarPipelineDecision(
+      id,
+      {
+        trigger: 'siembra.updated',
+        changedFields: Object.keys(data || {}),
+        sincronizarClima: true,
+      },
+      permiso,
+      true,
+    );
+    this.encolarNdvi(idLoteActual, permiso);
     return await this.getById(id, permiso);
   }
 
   async delete(id: string, permiso: IPermiso): Promise<ISiembra> {
     const siembra = await this.getById(id, permiso);
     const deleted = await this.repository.delete(id);
-    this.prediccionsService.deleteByIdSiembra(id, permiso);
-    this.actualizarLoteAlEliminarSiembra(siembra, permiso);
+    await this.actualizarLoteAlEliminarSiembra(siembra, permiso);
     return deleted;
   }
 
@@ -331,14 +473,7 @@ export class SiembrasService {
   }
 
   private async crearPrediccion(idSiembra: string) {
-    try {
-      await this.prediccionsService.prediccion(idSiembra);
-    } catch (error) {
-      this.logger.error(
-        `Error al crear la predicción para la siembra ${idSiembra}`,
-      );
-      console.error(error);
-    }
+    await this.prediccionsService.prediccion(idSiembra);
   }
 
   private encolarNdvi(idLote: string, permiso: IPermiso) {
@@ -918,17 +1053,7 @@ export class SiembrasService {
   // Private
 
   private async actualizarPrediccion(idSiembra: string, permiso: IPermiso) {
-    try {
-      await this.prediccionsService.deleteByIdSiembra(idSiembra, permiso);
-    } catch (error) {
-      Logger.error(error);
-    }
-
-    try {
-      await this.prediccionsService.prediccion(idSiembra);
-    } catch (error) {
-      Logger.error(error);
-    }
+    await this.prediccionsService.reconstruir(idSiembra, permiso);
   }
 
   private puedeVer(data: ISiembra, permiso: IPermiso): boolean {
@@ -936,43 +1061,234 @@ export class SiembrasService {
       return true;
     }
     if (permiso.nivel === 'Quimica') {
-      return !data.idQuimica || data.idQuimica === permiso.idQuimica;
+      return Boolean(data.idQuimica && data.idQuimica === permiso.idQuimica);
     }
     if (permiso.nivel === 'Distribuidor') {
-      return (
-        !data.idDistribuidor || data.idDistribuidor === permiso.idDistribuidor
+      return Boolean(
+        data.idDistribuidor &&
+          data.idDistribuidor === permiso.idDistribuidor,
       );
     }
     if (permiso.nivel === 'Productor') {
-      return !data.idProductor || data.idProductor === permiso.idProductor;
+      return Boolean(
+        data.idProductor && data.idProductor === permiso.idProductor,
+      );
     }
     if (permiso.nivel === 'Establecimiento') {
-      return (
-        !data.idEstablecimiento ||
-        data.idEstablecimiento === permiso.idEstablecimiento
+      return Boolean(
+        data.idEstablecimiento &&
+          data.idEstablecimiento === permiso.idEstablecimiento,
       );
     }
     return false;
   }
 
-  private reprocesarAgrometeorologia(
+  private tieneAlcancePersistido(
+    data: ISiembra,
+    permiso: IPermiso,
+  ): boolean {
+    if (permiso.nivel === 'Quimica') return Boolean(data.idQuimica);
+    if (permiso.nivel === 'Distribuidor') return Boolean(data.idDistribuidor);
+    if (permiso.nivel === 'Productor') return Boolean(data.idProductor);
+    if (permiso.nivel === 'Establecimiento') {
+      return Boolean(data.idEstablecimiento);
+    }
+    return permiso.nivel === 'Admin';
+  }
+
+  private async ejecutarPipelineDecision(
     idSiembra: string,
-    sincronizarClima = true,
-  ) {
-    this.repository
-      .reprocesarAgrometeorologia(idSiembra, sincronizarClima)
+    permiso: IPermiso,
+    sincronizarClima: boolean,
+    reemplazarPrediccion: boolean,
+  ): Promise<void> {
+    const key = String(idSiembra);
+    const anterior = this.pipelinesDecision.get(key) || Promise.resolve();
+    let actual: Promise<void>;
+    actual = anterior
       .catch((error) => {
         this.logger.error(
-          `Error al reprocesar calculos meteorologicos para la siembra ${idSiembra}`,
+          `La ejecucion anterior del pipeline de decision fallo para ${key}: ${error?.message || error}`,
         );
-        console.error(error);
+      })
+      .then(async () => {
+        await this.repository.reprocesarAgrometeorologia(
+          key,
+          sincronizarClima,
+        );
+        if (reemplazarPrediccion) {
+          await this.actualizarPrediccion(key, permiso);
+        } else {
+          await this.crearPrediccion(key);
+        }
+        await this.prediccionsService.agroclima(key);
+      })
+      .finally(() => {
+        if (this.pipelinesDecision.get(key) === actual) {
+          this.pipelinesDecision.delete(key);
+        }
       });
+    this.pipelinesDecision.set(key, actual);
+    return await actual;
+  }
+
+  private async encolarPipelineDecision(
+    idSiembra: string,
+    options: DecisionEnqueueOptions,
+    permiso: IPermiso,
+    reemplazarPrediccion: boolean,
+  ): Promise<void> {
+    if (this.decisionPipelineQueue) {
+      await this.decisionPipelineQueue.enqueueForSowing(idSiembra, options);
+      return;
+    }
+
+    // Compatibilidad exclusiva para pruebas unitarias que construyen el
+    // servicio manualmente. En la aplicacion Nest el modulo durable siempre
+    // provee DecisionPipelineQueueService.
+    await this.ejecutarPipelineDecision(
+      idSiembra,
+      permiso,
+      options.sincronizarClima,
+      reemplazarPrediccion,
+    );
   }
 
   private crearIdRegistroFenologico(): string {
     return `fen-${Date.now().toString(36)}-${Math.random()
       .toString(36)
       .slice(2, 8)}`;
+  }
+
+  private sinHistorialFenologicoGenerico<
+    T extends ICreateSiembra | IUpdateSiembra,
+  >(data: T): T {
+    this.validarClavesPersistencia(data);
+    const sanitized = { ...(data || {}) } as T & {
+      registrosFenologicos?: unknown;
+    };
+    delete sanitized.registrosFenologicos;
+    return sanitized;
+  }
+
+  private validarClavesPersistencia(
+    value: unknown,
+    path = 'siembra',
+  ): void {
+    if (value === null || value === undefined || typeof value !== 'object') {
+      return;
+    }
+    if (value instanceof Date) {
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item, index) =>
+        this.validarClavesPersistencia(item, `${path}[${index}]`),
+      );
+      return;
+    }
+    for (const [key, nested] of Object.entries(value)) {
+      if (key.startsWith('$') || key.includes('.')) {
+        throw new BadRequestException(
+          `La clave ${path}.${key} no esta permitida en una escritura de siembra.`,
+        );
+      }
+      this.validarClavesPersistencia(nested, `${path}.${key}`);
+    }
+  }
+
+  private normalizarObjetivosBiofix(
+    tipoEvento: IRegistroFenologico['tipoEvento'],
+    objetivos: IRegistroFenologico['objetivosBiofix'],
+  ): TObjetivoBiofixFenologico[] | undefined {
+    if (tipoEvento !== 'biofix') {
+      return undefined;
+    }
+    if (!Array.isArray(objetivos) || objetivos.length === 0) {
+      throw new BadRequestException(
+        'Un biofix fenologico debe indicar al menos un objetivo biologico.',
+      );
+    }
+    const invalidos = objetivos.filter(
+      (objetivo) => !OBJETIVOS_BIOFIX_PERMITIDOS.has(objetivo),
+    );
+    if (invalidos.length) {
+      throw new BadRequestException(
+        `El biofix contiene objetivos no permitidos: ${[
+          ...new Set(invalidos.map(String)),
+        ].join(', ')}.`,
+      );
+    }
+    return [...new Set(objetivos)];
+  }
+
+  private validarFechaRegistroFenologico(
+    siembra: ISiembra,
+    registro: IRegistroFenologico,
+  ): string {
+    if (!String(registro.etapa || '').trim()) {
+      throw new BadRequestException(
+        'La etapa fenologica es obligatoria.',
+      );
+    }
+    const raw =
+      registro.fechaInicioEtapa ||
+      registro.fecha ||
+      registro.fechaObservacion;
+    const fecha = raw ? new Date(raw) : new Date();
+    if (Number.isNaN(fecha.getTime())) {
+      throw new BadRequestException(
+        'La fecha del registro fenologico no es valida.',
+      );
+    }
+    const finHoy = new Date();
+    finHoy.setHours(23, 59, 59, 999);
+    if (fecha > finHoy) {
+      throw new BadRequestException(
+        'No se puede registrar una etapa fenologica futura.',
+      );
+    }
+    const implantacion = siembra.fechaSiembra
+      ? new Date(siembra.fechaSiembra)
+      : undefined;
+    if (
+      implantacion &&
+      !Number.isNaN(implantacion.getTime()) &&
+      fecha < implantacion
+    ) {
+      throw new BadRequestException(
+        'La etapa fenologica no puede comenzar antes de la implantacion.',
+      );
+    }
+    const cosecha = siembra.fechaCosecha
+      ? new Date(siembra.fechaCosecha)
+      : undefined;
+    if (
+      cosecha &&
+      !Number.isNaN(cosecha.getTime()) &&
+      fecha > cosecha
+    ) {
+      throw new BadRequestException(
+        'La etapa fenologica no puede registrarse despues de la cosecha.',
+      );
+    }
+    return fecha.toISOString();
+  }
+
+  private campaniaFenologica(siembra: ISiembra, fechaIso: string): string {
+    const fecha = new Date(fechaIso);
+    if (esCultivoPerenne(siembra.semilla?.cultivo)) {
+      const year =
+        fecha.getUTCMonth() >= 6
+          ? fecha.getUTCFullYear()
+          : fecha.getUTCFullYear() - 1;
+      return `${year}/${year + 1}`;
+    }
+    const implantacion = new Date(siembra.fechaSiembra || fechaIso);
+    const year = Number.isNaN(implantacion.getTime())
+      ? fecha.getUTCFullYear()
+      : implantacion.getUTCFullYear();
+    return `${year}/${year + 1}`;
   }
 
   private canonicalCultivo(cultivo?: string): string {
@@ -986,6 +1302,8 @@ export class SiembrasService {
       trigo: 'Trigo',
       soja: 'Soja',
       maiz: 'Maiz',
+      cebada: 'Cebada',
+      arveja: 'Arveja',
       papa: 'Papa',
       vid: 'Vid',
       peral: 'Peral',

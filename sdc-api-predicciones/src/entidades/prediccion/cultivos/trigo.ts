@@ -28,19 +28,14 @@ import { ClimaService } from '../../clima/service';
 import { FumigacionsService } from 'src/entidades/fumigacion/service';
 import { RoyaAnaranjadaService } from '../enfermedades/roya_anaranjada';
 import {
-  aplicarEtapaFenologicaObservada,
-  resolverEtapaFenologicaObservada,
-} from '../fenologia-observada';
-import {
   camposClimaticosFaltantes,
   combinarCalidadDatos,
   crearPrediccionFueraVentana,
+  crearPrediccionSinDatos,
   esValorClimaticoValido,
 } from '../enfermedades/calidad';
-import {
-  agregarClimaHorarioPorDia,
-  ventanaHorariaRoyaAmarilla,
-} from './clima-horario-trigo';
+import { ventanaHorariaRoyaAmarilla } from './clima-horario-trigo';
+import { construirDiasSanitariosCanonicos } from './agrometeorologia-canonica';
 
 @Injectable()
 export class PrediccionTrigoService {
@@ -61,20 +56,7 @@ export class PrediccionTrigoService {
   public async hacerPredicciones(siembra: ISiembra) {
     const prediccionesCreadas: IPrediccion[] = [];
 
-    const res = await Promise.all([
-      this.cronosService.get(siembra),
-      this.getUltimaPrediccion(siembra._id),
-    ]);
-
-    const crono = res[0];
-    let predAnterior = res[1];
-
-    if (!crono) {
-      Logger.warn(
-        `Crono no encontrado para la siembra ${JSON.stringify(siembra)}`,
-      );
-      return;
-    }
+    let predAnterior = await this.getUltimaPrediccion(siembra._id);
 
     const fechaSiembra = new Date(siembra.fechaSiembra);
     fechaSiembra.setUTCHours(3, 0, 0, 0);
@@ -100,13 +82,11 @@ export class PrediccionTrigoService {
     // acumuladores sanitarios no comiencen artificialmente el dia del deploy.
     // Una vez persistido el contexto v4, los ciclos siguientes continuan desde
     // el ultimo dia calculado y no vuelven a recorrer toda la campania.
-    const dateDesde = this.getFechaDesdeMotorVigente(
-      siembra,
-      crono,
-      predAnterior,
-      Boolean(acumulacionPersistida),
-    );
-    const dateHasta = this.getFechaHasta(siembra, crono);
+    const dateDesde =
+      acumulacionPersistida && predAnterior?.fecha
+        ? this.diaSiguientePrediccion(predAnterior.fecha)
+        : new Date(fechaSiembra);
+    const dateHasta = this.getFechaHasta();
 
     // Fechas anteriores para traer datos de clima
     const dateAnteriorADesde1 = this.diaAnterior(dateDesde);
@@ -136,59 +116,46 @@ export class PrediccionTrigoService {
           dateHasta.getUTCMonth() + 1
         }/${dateHasta.getUTCFullYear()}`,
       );
-      const climaHorario =
-        await this.climaService.getEstacionMasCercanaEntreFechas(
-          siembra.coordenadas.lat,
-          siembra.coordenadas.lng,
+      const respuestaCanonica =
+        await this.climaService.getAgrometeorologiaSiembra(
+          siembra._id,
           dateClimaDesde.toISOString(),
           dateHasta.toISOString(),
-          'hourly',
-          siembra.establecimiento,
         );
-      if (!climaHorario.length) {
+      const diasCanonicos = construirDiasSanitariosCanonicos(
+        respuestaCanonica,
+        'Trigo',
+      );
+      if (!diasCanonicos.length) {
         Logger.warn(
-          `No hay una estacion con datos entre ${dateClimaDesde.toISOString()} y ${dateHasta.toISOString()} cercana a la siembra ${JSON.stringify(
+          `No hay serie agrometeorologica canonica entre ${dateClimaDesde.toISOString()} y ${dateHasta.toISOString()} para la siembra ${JSON.stringify(
             siembra,
           )}`,
         );
-        if (
-          !teniaMotorV4 &&
-          fechaCorteReconstruccion &&
-          predAnterior &&
-          this.getEtapaPorFecha(siembra, crono, this.diaActual()) >= 7
-        ) {
-          return [this.crearCierreSinteticoFinCiclo(siembra, predAnterior)];
-        }
         return;
       }
-      // Todos los modelos diarios consumen un agregado estadistico de las
-      // observaciones horarias. Esto evita que la primera hora del dia se use
-      // accidentalmente como media, minima, maxima o lluvia diaria.
-      const clima = agregarClimaHorarioPorDia(climaHorario);
-      if (!clima.length) {
-        Logger.warn(
-          `No se pudo construir ningun agregado diario desde la serie horaria para la siembra ${siembra._id}.`,
-        );
-        return;
-      }
+      const clima = diasCanonicos.map((dia) => dia.clima);
+      const diasCanonicosPorFecha = new Map(
+        diasCanonicos.map((dia) => [dia.fecha, dia]),
+      );
+      const etapaCanonicaActual = [...diasCanonicos]
+        .reverse()
+        .find((dia) => dia.etapaHabilitante)?.etapaNumero;
+      // La respuesta canónica expone agregados diarios y métricas de mojado,
+      // no observaciones horarias crudas. El modelo experimental de roya
+      // estriada queda explícitamente sin datos en vez de reconstruir horas.
+      const climaHorario: IClimaEstacionMeteorologica[] = [];
 
       const fumigaciones = await this.fumigacionsService.getByIdSiembra(
         siembra._id,
       );
       const fechasFumigadas = HelperService.fechasFumigadas(fumigaciones.datos);
 
-      const acumulacionInicial =
-        acumulacionPersistida ||
-        this.acumularGddBase0(clima, fechaSiembra, dateDesde);
-      let gddBase0DesdeSiembra = acumulacionInicial.gdd;
-      let diasGddEsperados = acumulacionInicial.diasEsperados;
-      let diasGddDisponibles = acumulacionInicial.diasDisponibles;
-      let calidadClimaAcumulada = combinarCalidadDatos(
-        this.getCalidadClimaPersistida(predAnterior),
-        acumulacionPersistida
-          ? undefined
-          : this.acumularCalidadClima(clima, fechaSiembra, dateDesde),
-      );
+      // GDD y cobertura se leen por fecha del motor canónico. No se
+      // reconstruyen desde medias diarias ni se mezclan con acumuladores de
+      // una ruta meteorológica previa.
+      let gddBase0DesdeSiembra = 0;
+      let calidadClimaAcumulada = this.getCalidadClimaPersistida(predAnterior);
 
       let ultimaPrediccion: IPrediccion;
       for (
@@ -209,23 +176,22 @@ export class PrediccionTrigoService {
           );
         }
 
-        const etapaCrono = this.getEtapaPorFecha(siembra, crono, fecha);
-        const fenologiaObservada = resolverEtapaFenologicaObservada(
-          siembra,
-          fecha,
-          'Trigo',
-        );
-        const etapa = aplicarEtapaFenologicaObservada(
-          etapaCrono,
-          fenologiaObservada,
-        );
+        const fechaKey = fecha.toISOString().slice(0, 10);
+        const diaCanonico = diasCanonicosPorFecha.get(fechaKey);
+        const etapa = diaCanonico?.etapaNumero ?? -1;
+        const fenologiaObservada =
+          diaCanonico?.serie.stageSource === 'campo' ||
+          diaCanonico?.serie.stageSource === 'proyeccion_anclada_campo';
+        const etapaHabilitante =
+          Boolean(diaCanonico?.etapaHabilitante) && etapa >= 0;
+        const climaHabilitante = Boolean(diaCanonico?.climaHabilitante);
 
-        const registroClima = this.getRegistroClimaPorFecha(clima, fecha);
+        const registroClima = diaCanonico?.clima;
         const distancia = registroClima?.distancia ?? clima[0].distancia;
-        if (registroClima) {
+        if (diaCanonico) {
           calidadClimaAcumulada = combinarCalidadDatos(
             calidadClimaAcumulada,
-            this.normalizarCalidadClima(registroClima, distancia),
+            diaCanonico.calidadClima,
           );
         }
 
@@ -236,20 +202,19 @@ export class PrediccionTrigoService {
         const precip = HelperService.getPrecip(clima, fecha.toISOString());
         const viento = HelperService.getViento(clima, fecha.toISOString());
 
-        diasGddEsperados += 1;
-        const temperaturaGddValida =
-          camposClimaticosFaltantes({ Tmin, Tavg, Tmax }, [
-            'Tmin',
-            'Tavg',
-            'Tmax',
-          ]).length === 0;
-        if (temperaturaGddValida) {
-          diasGddDisponibles += 1;
-          gddBase0DesdeSiembra += gradosDiaBase0(Number(Tavg));
-        }
-        const coberturaGdd = diasGddEsperados
-          ? diasGddDisponibles / diasGddEsperados
-          : 0;
+        const baseTermicaCanonica = Number(
+          diaCanonico?.serie.metrics?.gddBaseTemperatureC,
+        );
+        const gddCanonico = Number(diaCanonico?.serie.metrics?.gddAccumulated);
+        const gddCanonicoCompleto =
+          baseTermicaCanonica === 0 &&
+          Number.isFinite(gddCanonico) &&
+          diaCanonico?.serie.metrics?.gddAccumulationComplete === true &&
+          !diaCanonico?.serie.qualityFlags?.includes(
+            'incomplete_gdd_accumulation',
+          );
+        gddBase0DesdeSiembra = gddCanonicoCompleto ? gddCanonico : 0;
+        const coberturaGdd = gddCanonicoCompleto ? 1 : 0;
 
         const fechaAnt = new Date(fecha);
         fechaAnt.setUTCDate(fechaAnt.getUTCDate() - 1);
@@ -268,17 +233,24 @@ export class PrediccionTrigoService {
           fecha: fecha.toISOString(),
           fechaPrediccion: fecha.toISOString().split('T')[0],
           etapa,
-          fuenteFenologia: fenologiaObservada ? 'observada' : 'crono',
-          registroFenologicoId: fenologiaObservada?.registro.id,
+          nombreEtapa:
+            diaCanonico?.serie.stage || 'Etapa canonica no verificable',
+          fuenteFenologia: fenologiaObservada
+            ? 'observada'
+            : 'agrometeorologia',
           calidadFenologia: {
-            nivel: fenologiaObservada ? 'alta' : 'media',
+            nivel: etapaHabilitante
+              ? fenologiaObservada
+                ? 'alta'
+                : 'media'
+              : 'sin_datos',
             fuente: fenologiaObservada ? 'manual' : 'estimado',
-            cobertura: 1,
-            fallback: !fenologiaObservada,
-            resumen: fenologiaObservada
-              ? 'Etapa observada a campo.'
-              : 'Etapa estimada desde fecha de siembra y crono.',
-            limitaciones: fenologiaObservada
+            cobertura: etapaHabilitante ? 1 : 0,
+            fallback: !etapaHabilitante,
+            resumen: etapaHabilitante
+              ? `Etapa provista por el motor agrometeorologico canonico (${diaCanonico?.serie.stageSource}).`
+              : 'La etapa canonica no habilita decisiones sanitarias.',
+            limitaciones: etapaHabilitante
               ? []
               : ['No hay observación fenológica de campo anterior a la fecha.'],
           },
@@ -298,143 +270,155 @@ export class PrediccionTrigoService {
         // Hace las predicciones por enfermedad segun ventana fenologica.
         const predicciones: (IPrediccionEnfermedad | undefined)[] = [];
 
-        const ventanaFoliarBase: IContextoVentanaSanitariaTrigo = {
-          gddBase0DesdeSiembra,
-          coberturaGdd,
-          etapa,
-          fenologiaObservada: Boolean(fenologiaObservada),
-          calidadClima: calidadClimaAcumulada,
-        };
-        const ventanaFoliar =
-          resolverVentanaSanitariaFoliarTrigo(ventanaFoliarBase);
-        const contextoVentanaFoliar: IContextoVentanaSanitariaTrigo = {
-          ...ventanaFoliarBase,
-          fenologiaObservada: ventanaFoliar.inicioPorFenologiaObservada,
-        };
-        const trazasVentanaFoliar: Record<string, number> = {
-          GDDBase0Siembra: +gddBase0DesdeSiembra.toFixed(2),
-          coberturaGdd: +coberturaGdd.toFixed(4),
-          umbralInicioGdd: ventanaFoliar.umbralGddAplicado,
-          inicioPorFenologiaObservada: ventanaFoliar.inicioPorFenologiaObservada
-            ? 1
-            : 0,
-          formulaVersion: TRIGO_MOTOR_SANITARIO_VERSION,
-        };
-
-        if (this.estaEnVentanaManchas(etapa) && ventanaFoliar.activa) {
+        const decisionSanitariaHabilitada =
+          etapaHabilitante && climaHabilitante;
+        if (!decisionSanitariaHabilitada) {
           predicciones.push(
-            ...(await Promise.all([
-              this.manchaDeLaHojaService.predecir(
-                siembra.semilla,
-                { precip, hr },
-                predAnterior,
-                predecir,
-                contextoVentanaFoliar,
-              ),
-              this.manchaAmarillaService.predecir(
-                siembra.semilla,
-                { precip, hr, Tmin, Tmax },
-                predAnterior,
-                predecir,
-                contextoVentanaFoliar,
-              ),
-            ])),
+            ...this.crearMarcadoresSinDatosCanonicos(
+              diaCanonico?.motivosNoHabilitante || [
+                'No existe una fila agrometeorologica canonica para la fecha.',
+              ],
+              predAnterior,
+            ),
           );
         } else {
-          const motivo = this.motivoFueraVentanaFoliar(
-            'manchas foliares',
-            etapa,
-            2,
-            4,
-            ventanaFoliar.activa,
+          const ventanaFoliarBase: IContextoVentanaSanitariaTrigo = {
             gddBase0DesdeSiembra,
             coberturaGdd,
-          );
-          predicciones.push(
-            this.crearMarcadorFueraVentana(
-              'Mancha de la Hoja',
-              'trigo.mancha_hoja',
-              motivo,
-              predAnterior,
-              trazasVentanaFoliar,
-            ),
-            this.crearMarcadorFueraVentana(
-              'Mancha Amarilla',
-              'trigo.mancha_amarilla',
-              motivo,
-              predAnterior,
-              trazasVentanaFoliar,
-            ),
-          );
-        }
-
-        if (this.estaEnVentanaRoyas(etapa) && ventanaFoliar.activa) {
-          predicciones.push(
-            ...(await Promise.all([
-              this.royaDeLaHojaService.predecir(
-                siembra.semilla,
-                { precip, hr, Tavg },
-                predAnterior,
-                predecir,
-                contextoVentanaFoliar,
-              ),
-              this.royaAnaranjadaService.predecir(
-                siembra.semilla,
-                { precip, hr, Tmin, Tmax, Tavg },
-                ventanaHorariaRoyaAmarilla(climaHorario, fecha),
-                predAnterior,
-                predecir,
-                contextoVentanaFoliar,
-              ),
-            ])),
-          );
-        } else {
-          const motivo = this.motivoFueraVentanaFoliar(
-            'royas foliares',
             etapa,
-            2,
-            6,
-            ventanaFoliar.activa,
-            gddBase0DesdeSiembra,
-            coberturaGdd,
-          );
-          predicciones.push(
-            this.crearMarcadorFueraVentana(
-              'Roya de la Hoja',
-              'trigo.roya_hoja',
-              motivo,
-              predAnterior,
-              trazasVentanaFoliar,
-            ),
-            this.crearMarcadorFueraVentana(
-              'Roya Anaranjada',
-              'trigo.roya_anaranjada',
-              motivo,
-              predAnterior,
-              trazasVentanaFoliar,
-            ),
-          );
-        }
+            fenologiaObservada: Boolean(fenologiaObservada),
+            calidadClima: calidadClimaAcumulada,
+          };
+          const ventanaFoliar =
+            resolverVentanaSanitariaFoliarTrigo(ventanaFoliarBase);
+          const contextoVentanaFoliar: IContextoVentanaSanitariaTrigo = {
+            ...ventanaFoliarBase,
+            fenologiaObservada: ventanaFoliar.inicioPorFenologiaObservada,
+          };
+          const trazasVentanaFoliar: Record<string, number> = {
+            GDDBase0Siembra: +gddBase0DesdeSiembra.toFixed(2),
+            coberturaGdd: +coberturaGdd.toFixed(4),
+            umbralInicioGdd: ventanaFoliar.umbralGddAplicado,
+            inicioPorFenologiaObservada:
+              ventanaFoliar.inicioPorFenologiaObservada ? 1 : 0,
+            formulaVersion: TRIGO_MOTOR_SANITARIO_VERSION,
+          };
 
-        if (this.estaEnVentanaFusarium(etapa)) {
-          predicciones.push(
-            await this.fusariumDeLaEspigaService.predecir(
-              siembra.semilla,
-              { precip, precipAnterior, hr, hrAnterior, Tmin, Tmax, Tavg },
-              predAnterior,
-              predecir,
-              ventanaFoliarBase,
-            ),
-          );
-        } else {
-          predicciones.push(
-            this.crearMarcadorFueraVentana(
-              'Fusarium de la Espiga',
-              'trigo.fusarium_espiga',
-              `Fuera de la ventana fenologica de Fusarium (etapas 5 a 6; etapa actual ${etapa}).`,
-              predAnterior,
-            ),
-          );
+          if (this.estaEnVentanaManchas(etapa) && ventanaFoliar.activa) {
+            predicciones.push(
+              ...(await Promise.all([
+                this.manchaDeLaHojaService.predecir(
+                  siembra.semilla,
+                  { precip, hr },
+                  predAnterior,
+                  predecir,
+                  contextoVentanaFoliar,
+                ),
+                this.manchaAmarillaService.predecir(
+                  siembra.semilla,
+                  { precip, hr, Tmin, Tmax },
+                  predAnterior,
+                  predecir,
+                  contextoVentanaFoliar,
+                ),
+              ])),
+            );
+          } else {
+            const motivo = this.motivoFueraVentanaFoliar(
+              'manchas foliares',
+              etapa,
+              2,
+              4,
+              ventanaFoliar.activa,
+              gddBase0DesdeSiembra,
+              coberturaGdd,
+            );
+            predicciones.push(
+              this.crearMarcadorFueraVentana(
+                'Mancha de la Hoja',
+                'trigo.mancha_hoja',
+                motivo,
+                predAnterior,
+                trazasVentanaFoliar,
+              ),
+              this.crearMarcadorFueraVentana(
+                'Mancha Amarilla',
+                'trigo.mancha_amarilla',
+                motivo,
+                predAnterior,
+                trazasVentanaFoliar,
+              ),
+            );
+          }
+
+          if (this.estaEnVentanaRoyas(etapa) && ventanaFoliar.activa) {
+            predicciones.push(
+              ...(await Promise.all([
+                this.royaDeLaHojaService.predecir(
+                  siembra.semilla,
+                  { precip, hr, Tavg },
+                  predAnterior,
+                  predecir,
+                  contextoVentanaFoliar,
+                ),
+                this.royaAnaranjadaService.predecir(
+                  siembra.semilla,
+                  { precip, hr, Tmin, Tmax, Tavg },
+                  ventanaHorariaRoyaAmarilla(climaHorario, fecha),
+                  predAnterior,
+                  predecir,
+                  contextoVentanaFoliar,
+                ),
+              ])),
+            );
+          } else {
+            const motivo = this.motivoFueraVentanaFoliar(
+              'royas foliares',
+              etapa,
+              2,
+              6,
+              ventanaFoliar.activa,
+              gddBase0DesdeSiembra,
+              coberturaGdd,
+            );
+            predicciones.push(
+              this.crearMarcadorFueraVentana(
+                'Roya de la Hoja',
+                'trigo.roya_hoja',
+                motivo,
+                predAnterior,
+                trazasVentanaFoliar,
+              ),
+              this.crearMarcadorFueraVentana(
+                'Roya Anaranjada',
+                'trigo.roya_anaranjada',
+                motivo,
+                predAnterior,
+                trazasVentanaFoliar,
+              ),
+            );
+          }
+
+          if (this.estaEnVentanaFusarium(etapa)) {
+            predicciones.push(
+              await this.fusariumDeLaEspigaService.predecir(
+                siembra.semilla,
+                { precip, precipAnterior, hr, hrAnterior, Tmin, Tmax, Tavg },
+                predAnterior,
+                predecir,
+                ventanaFoliarBase,
+              ),
+            );
+          } else {
+            predicciones.push(
+              this.crearMarcadorFueraVentana(
+                'Fusarium de la Espiga',
+                'trigo.fusarium_espiga',
+                `Fuera de la ventana fenologica de Fusarium (etapas 5 a 6; etapa actual ${etapa}).`,
+                predAnterior,
+              ),
+            );
+          }
         }
 
         const prediccionesValidas = predicciones.filter(
@@ -487,7 +471,8 @@ export class PrediccionTrigoService {
         fechaCorteReconstruccion &&
         prediccionesCreadas.length === 0 &&
         predAnterior &&
-        this.getEtapaPorFecha(siembra, crono, this.diaActual()) >= 7
+        etapaCanonicaActual !== undefined &&
+        etapaCanonicaActual >= 7
       ) {
         // Excepcion deliberada: un ciclo legacy ya finalizado puede tener
         // ocupadas tambien las fechas de cierre. Se devuelve (sin persistir)
@@ -622,6 +607,65 @@ export class PrediccionTrigoService {
       variables,
       anterior,
     );
+  }
+
+  private crearMarcadoresSinDatosCanonicos(
+    motivos: string[],
+    prediccionAnterior?: IPrediccion,
+  ): IPrediccionEnfermedad[] {
+    const definiciones: Array<[TEnfermedad, TEnfermedadId, string]> = [
+      [
+        'Mancha de la Hoja',
+        'trigo.mancha_hoja',
+        'Contrato sanitario trigo 2026 / Mancha de la Hoja',
+      ],
+      [
+        'Mancha Amarilla',
+        'trigo.mancha_amarilla',
+        'Contrato sanitario trigo 2026 / Mancha Amarilla',
+      ],
+      [
+        'Roya de la Hoja',
+        'trigo.roya_hoja',
+        'Contrato sanitario trigo 2026; Moschini y Perez (1999)',
+      ],
+      [
+        'Roya Anaranjada',
+        'trigo.roya_anaranjada',
+        'El Jarroudi et al. (2017), modelo horario experimental',
+      ],
+      [
+        'Fusarium de la Espiga',
+        'trigo.fusarium_espiga',
+        'Moschini y Fortugno (1996) / contrato sanitario trigo 2026',
+      ],
+    ];
+    return definiciones.map(([enfermedad, idEnfermedad, fuente]) => {
+      const anterior = prediccionAnterior?.enfermedades.find(
+        (item) =>
+          item.idEnfermedad === idEnfermedad &&
+          item.modelo?.version === TRIGO_MOTOR_SANITARIO_VERSION,
+      );
+      const salida = crearPrediccionSinDatos(
+        enfermedad,
+        idEnfermedad,
+        ['serie_agrometeorologica_canonica'],
+        fuente,
+        TRIGO_MOTOR_SANITARIO_VERSION,
+        idEnfermedad === 'trigo.roya_anaranjada'
+          ? 'experimental'
+          : 'operativo_provisional',
+        anterior?.variables || {},
+      );
+      salida.calidadDatos = {
+        ...salida.calidadDatos,
+        fallback: true,
+        resumen:
+          'Salida sanitaria bloqueada: falta evidencia meteorologica o fenologica canonica apta para decision.',
+        limitaciones: [...new Set(motivos)],
+      };
+      return salida;
+    });
   }
 
   private motivoFueraVentanaFoliar(
@@ -831,47 +875,6 @@ export class PrediccionTrigoService {
 
   /**
    *
-   * @returns Etapa en la que esta la siembra en la fecha dada
-   */
-  private getEtapaPorFecha(siembra: ISiembra, crono: ICrono, fecha: Date) {
-    const observada = resolverEtapaFenologicaObservada(siembra, fecha, 'Trigo');
-    if (typeof observada?.etapa === 'number') return observada.etapa;
-    const fechaSiembra = new Date(siembra.fechaSiembra);
-    const fechaActual = fecha;
-    const diferencia = fechaActual.getTime() - fechaSiembra.getTime();
-    const diasTransucurridos = Math.floor(diferencia / (1000 * 60 * 60 * 24));
-
-    const etapasTrigo = crono.etapas as IEtapasTrigo;
-
-    const etapa1 = etapasTrigo.R0_R1;
-    const etapa2 = etapa1 + etapasTrigo.R1_R2;
-    const etapa3 = etapa2 + etapasTrigo.R2_R3;
-    const etapa4 = etapa3 + etapasTrigo.R3_R4;
-    const etapa5 = etapa4 + etapasTrigo.R4_R5;
-    const etapa6 = etapa5 + etapasTrigo.R5_R6;
-    const etapa7 = etapa6 + etapasTrigo.R6_R7;
-
-    if (diasTransucurridos < etapa1) {
-      return 0;
-    } else if (diasTransucurridos < etapa2) {
-      return 1;
-    } else if (diasTransucurridos < etapa3) {
-      return 2;
-    } else if (diasTransucurridos < etapa4) {
-      return 3;
-    } else if (diasTransucurridos < etapa5) {
-      return 4;
-    } else if (diasTransucurridos < etapa6) {
-      return 5;
-    } else if (diasTransucurridos < etapa7) {
-      return 6;
-    } else {
-      return 7;
-    }
-  }
-
-  /**
-   *
    * @returns Fecha en que inicia la etapa dada
    */
   private getFechaInicioEtapa(
@@ -942,19 +945,22 @@ export class PrediccionTrigoService {
   }
 
   /**
-   *
-   * @returns Fecha hasta que se debe hacer la prediccion,
-   * la fecha menor entre la fecha actual y la fecha en que inicia la etapa 7.
+   * Límite exclusivo independiente del crono. La etapa canónica es quien
+   * decide el cierre del ciclo, incluso si vernalización o fotoperíodo
+   * retrasaron el desarrollo respecto del calendario de referencia.
    */
-  private getFechaHasta(siembra: ISiembra, crono: ICrono) {
-    const fechaLimite = this.getFechaInicioEtapa(siembra, crono, 7);
-    // El limite es exclusivo. Se agrega un unico dia para persistir el
-    // marcador terminal de etapa 7 y cerrar explicitamente todas las ventanas.
-    fechaLimite.setUTCDate(fechaLimite.getUTCDate() + 1);
-    const fechaHoy = this.diaActual();
-    const fechaMenor = fechaHoy > fechaLimite ? fechaLimite : fechaHoy;
-    fechaMenor.setUTCHours(3, 0, 0, 0);
-    return fechaMenor;
+  private getFechaHasta() {
+    const fecha = this.diaActual();
+    fecha.setUTCDate(fecha.getUTCDate() + 1);
+    fecha.setUTCHours(3, 0, 0, 0);
+    return fecha;
+  }
+
+  private diaSiguientePrediccion(fechaIso: string): Date {
+    const fecha = new Date(fechaIso);
+    fecha.setUTCHours(3, 0, 0, 0);
+    fecha.setUTCDate(fecha.getUTCDate() + 1);
+    return fecha;
   }
 
   /**

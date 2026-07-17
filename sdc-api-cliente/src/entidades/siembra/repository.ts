@@ -83,9 +83,14 @@ export class SiembrasRepository {
 
   async registrarEtapaFenologica(
     id: string,
-    registrosFenologicos: IRegistroFenologico[],
+    registroFenologico: IRegistroFenologico,
   ): Promise<ISiembra> {
-    return await this.update(id, { registrosFenologicos });
+    const url = `${API_DATOS}/siembras/${id}/registros-fenologicos`;
+    return await this.axios.POST<ISiembra>(
+      url,
+      registroFenologico,
+      { headers: this.agrometeorologiaHeaders() },
+    );
   }
 
   async delete(id: string): Promise<ISiembra> {

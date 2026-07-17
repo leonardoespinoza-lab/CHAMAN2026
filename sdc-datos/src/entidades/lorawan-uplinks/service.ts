@@ -17,29 +17,7 @@ import {
   decodedUc511ToReporteValores,
 } from './uc511-sentek.decoder';
 
-const TEMP_FRIO = Number(process.env.TEMP_FRIO || 7);
-const HFE_POR_CHILL_PORTION = Number(process.env.HFE_POR_CHILL_PORTION || 28);
-const HFE_TABLE: [number, number][] = [
-  [-5, 0],
-  [0, 0.2],
-  [1, 0.45],
-  [2, 0.65],
-  [3, 0.799],
-  [4, 0.905],
-  [5, 0.975],
-  [6, 1],
-  [7, 0.975],
-  [8, 0.905],
-  [9, 0.799],
-  [10, 0.68],
-  [11, 0.54],
-  [12, 0.407],
-  [13, 0.29],
-  [14, 0.18],
-  [15, 0.08],
-  [16, 0],
-  [18, 0],
-];
+const HF_PREVIEW_VERSION = 'hf-field-preview-1.0.0';
 
 @Injectable()
 export class LorawanUplinksService {
@@ -642,11 +620,15 @@ export class LorawanUplinksService {
     if (!Number.isFinite(temperaturaActual)) return undefined;
 
     const previo = dispositivo.frioAcumulado || {};
-    let horasFrio = Number(previo.horasFrio || 0);
-    let horasFrioEfectivas = Number(previo.horasFrioEfectivas || 0);
-    const fechaPrevia =
-      previo.fechaUltimoCalculo || dispositivo.ultimoReporte?.fecha;
-    const temperaturaPrevia = Number.isFinite(previo.ultimaTemperatura)
+    const temporadaInicio = this.inicioTemporadaFrio(fecha);
+    const mismaTemporada =
+      previo.versionModelo === HF_PREVIEW_VERSION &&
+      previo.temporadaInicio === temporadaInicio;
+    let horasFrio = mismaTemporada ? Number(previo.horasFrio || 0) : 0;
+    const fechaPrevia = mismaTemporada
+      ? previo.fechaUltimoCalculo || dispositivo.ultimoReporte?.fecha
+      : undefined;
+    const temperaturaPrevia = mismaTemporada && Number.isFinite(previo.ultimaTemperatura)
       ? Number(previo.ultimaTemperatura)
       : this.extraerTemperaturaReferencia(dispositivo.ultimoReporte?.datos?.valores);
 
@@ -656,29 +638,33 @@ export class LorawanUplinksService {
         3600000;
 
       if (diffHours > 0 && diffHours < 24) {
-        if (Number(temperaturaPrevia) <= TEMP_FRIO) {
+        if (Number(temperaturaPrevia) >= 0 && Number(temperaturaPrevia) <= 7.2) {
           horasFrio += diffHours;
         }
-        horasFrioEfectivas += diffHours * this.hfeFactor(Number(temperaturaPrevia));
       }
     }
 
     return {
-      fechaInicio: previo.fechaInicio || fecha,
+      temporadaInicio,
+      fechaInicio: mismaTemporada ? previo.fechaInicio || fecha : fecha,
       fechaUltimoCalculo: fecha,
       ultimaTemperatura: Number(Number(temperaturaActual).toFixed(2)),
       horasFrio: Number(horasFrio.toFixed(2)),
-      horasFrioEfectivas: Number(horasFrioEfectivas.toFixed(2)),
-      porcionesFrio: Number(this.calcularPorcionesFrio(horasFrioEfectivas).toFixed(2)),
-      factorEfectivoActual: Number(this.hfeFactor(Number(temperaturaActual)).toFixed(3)),
-      modelo: 'HF <= 7C + HFE + CP simplificado',
+      modelo:
+        'Vista previa HF 0-7,2 C del sensor; Utah y Dynamic Model se calculan con la serie horaria canonica.',
+      versionModelo: HF_PREVIEW_VERSION,
+      estadoCalculo: 'preview',
       fuente: 'Sensor LoRa',
     };
   }
 
-  private calcularPorcionesFrio(horasFrioEfectivas: number): number {
-    if (!Number.isFinite(horasFrioEfectivas) || HFE_POR_CHILL_PORTION <= 0) return 0;
-    return horasFrioEfectivas / HFE_POR_CHILL_PORTION;
+  private inicioTemporadaFrio(fechaIso: string): string {
+    const fecha = new Date(fechaIso);
+    const year =
+      fecha.getUTCMonth() >= 4
+        ? fecha.getUTCFullYear()
+        : fecha.getUTCFullYear() - 1;
+    return `${year}-05-01`;
   }
 
   private extraerTemperaturaReferencia(
@@ -692,14 +678,8 @@ export class LorawanUplinksService {
       return this.promedio(temperaturasAire.map(Number));
     }
 
-    const temperaturasSuelo = valores?.['Temperatura Suelo']
-      ?.map((item) => item?.valores?.actual ?? item?.valores?.promedio)
-      .filter((valor) => Number.isFinite(valor));
-
-    if (temperaturasSuelo?.length) {
-      return this.promedio(temperaturasSuelo.slice(0, 3).map(Number));
-    }
-
+    // Los modelos de frio requieren temperatura de aire. Una sonda de suelo
+    // puede alimentar el modulo edafico, pero nunca sustituye esta variable.
     return undefined;
   }
 
@@ -707,21 +687,4 @@ export class LorawanUplinksService {
     return valores.reduce((suma, valor) => suma + valor, 0) / valores.length;
   }
 
-  private hfeFactor(temp: number): number {
-    if (!Number.isFinite(temp)) return 0;
-    if (temp <= HFE_TABLE[0][0]) return HFE_TABLE[0][1];
-    if (temp >= HFE_TABLE[HFE_TABLE.length - 1][0]) {
-      return HFE_TABLE[HFE_TABLE.length - 1][1];
-    }
-
-    for (let i = 0; i < HFE_TABLE.length - 1; i++) {
-      const [t1, f1] = HFE_TABLE[i];
-      const [t2, f2] = HFE_TABLE[i + 1];
-      if (temp >= t1 && temp <= t2) {
-        const ratio = (temp - t1) / (t2 - t1);
-        return f1 + ratio * (f2 - f1);
-      }
-    }
-    return 0;
-  }
 }

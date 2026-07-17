@@ -10,6 +10,7 @@ import { LotesModule } from '../lote/module';
 import { FertilizacionsModule } from '../fertilizacion/module';
 import { FumigacionsModule } from '../fumigacion/module';
 import { ClimaModule } from '../clima/module';
+import { DecisionPipelineModule } from '../../auxiliares/decision-pipeline';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { ClimaModule } from '../clima/module';
     forwardRef(() => FertilizacionsModule),
     FumigacionsModule,
     ClimaModule,
+    DecisionPipelineModule,
   ],
   controllers: [SiembrasController],
   providers: [SiembrasService, SiembrasRepository],

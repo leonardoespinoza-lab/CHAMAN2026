@@ -14,6 +14,7 @@ import { SiembrasService } from '../../siembra/service';
 import { FinCicloSojaService } from '../enfermedades/fin_ciclo_soja';
 import {
   aplicarEtapaFenologicaObservada,
+  calidadFenologiaManual,
   resolverEtapaFenologicaObservada,
 } from '../fenologia-observada';
 import { PrediccionsRepository } from '../repository';
@@ -103,16 +104,20 @@ export class PrediccionSojaService {
           );
         }
 
-        const etapaCrono = this.getEtapaPorFecha(siembra, crono, fecha);
+        const etapaCrono = this.getEtapaCronoPorFecha(siembra, crono, fecha);
         const fenologiaObservada = resolverEtapaFenologicaObservada(
           siembra,
           fecha,
           'Soja',
+          this.getCronologiaFenologica(crono),
         );
         const etapa = aplicarEtapaFenologicaObservada(
           etapaCrono,
           fenologiaObservada,
         );
+        const calidadFenologiaObservada = fenologiaObservada
+          ? calidadFenologiaManual(fenologiaObservada)
+          : undefined;
 
         const distancia = clima[0].distancia;
 
@@ -133,17 +138,15 @@ export class PrediccionSojaService {
           nombreEtapa: etapa,
           fuenteFenologia: fenologiaObservada ? 'observada' : 'crono',
           registroFenologicoId: fenologiaObservada?.registro.id,
-          calidadFenologia: {
-            nivel: fenologiaObservada ? 'alta' : 'media',
-            fuente: fenologiaObservada ? 'manual' : 'estimado',
+          calidadFenologia: calidadFenologiaObservada || {
+            nivel: 'media',
+            fuente: 'estimado',
             cobertura: 1,
-            fallback: !fenologiaObservada,
-            resumen: fenologiaObservada
-              ? 'Etapa observada a campo.'
-              : 'Etapa estimada desde fecha de siembra y crono.',
-            limitaciones: fenologiaObservada
-              ? []
-              : ['No hay observación fenológica de campo anterior a la fecha.'],
+            fallback: true,
+            resumen: 'Etapa estimada desde fecha de siembra y crono.',
+            limitaciones: [
+              'No hay observación fenológica de campo decisoria anterior a la fecha.',
+            ],
           },
           enfermedades: [],
           estacion: {
@@ -184,6 +187,7 @@ export class PrediccionSojaService {
             ultimaPrediccion = predAnterior;
           } catch (error) {
             Logger.error(error);
+            throw error;
           }
         }
       }
@@ -228,20 +232,23 @@ export class PrediccionSojaService {
     crono: ICrono,
     fecha: Date,
   ): 'Siembra' | 'Emergencia' | 'R1' | 'R3' | 'R5' | 'R7' {
-    const observada = resolverEtapaFenologicaObservada(
-      siembra,
-      fecha,
-      'Soja',
+    const etapaCrono = this.getEtapaCronoPorFecha(siembra, crono, fecha);
+    return aplicarEtapaFenologicaObservada(
+      etapaCrono,
+      resolverEtapaFenologicaObservada(
+        siembra,
+        fecha,
+        'Soja',
+        this.getCronologiaFenologica(crono),
+      ),
     );
-    if (typeof observada?.etapa === 'string') {
-      return observada.etapa as
-        | 'Siembra'
-        | 'Emergencia'
-        | 'R1'
-        | 'R3'
-        | 'R5'
-        | 'R7';
-    }
+  }
+
+  private getEtapaCronoPorFecha(
+    siembra: ISiembra,
+    crono: ICrono,
+    fecha: Date,
+  ): 'Siembra' | 'Emergencia' | 'R1' | 'R3' | 'R5' | 'R7' {
     const fechaSiembra = new Date(siembra.fechaSiembra);
     const fechaActual = fecha;
     const diferencia = fechaActual.getTime() - fechaSiembra.getTime();
@@ -268,6 +275,33 @@ export class PrediccionSojaService {
     } else {
       return 'R7';
     }
+  }
+
+  private getCronologiaFenologica(crono: ICrono) {
+    const etapas = crono.etapas as IEtapasSoja;
+    return [
+      {
+        etapa: 'Siembra' as const,
+        duracionDias: Number(etapas.siembra_emergencia) || 0,
+      },
+      {
+        etapa: 'Emergencia' as const,
+        duracionDias: Number(etapas.emergencia_R1) || 0,
+      },
+      {
+        etapa: 'R1' as const,
+        duracionDias: Number(etapas.R1_R3) || 0,
+      },
+      {
+        etapa: 'R3' as const,
+        duracionDias: Number(etapas.R3_R5) || 0,
+      },
+      {
+        etapa: 'R5' as const,
+        duracionDias: Number(etapas.R5_R7) || 0,
+      },
+      { etapa: 'R7' as const },
+    ];
   }
 
   /**

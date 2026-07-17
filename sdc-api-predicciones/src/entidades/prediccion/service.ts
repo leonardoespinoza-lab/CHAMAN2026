@@ -19,10 +19,12 @@ import { PrediccionMaizService } from './cultivos/maiz';
 import { PREDICCIONES_MALEZAS_LIMIT } from '../../env';
 import { PrediccionCebadaService } from './cultivos/cebada';
 import { PrediccionArvejaService } from './cultivos/arveja';
+import { PrediccionsRepository } from './repository';
 
 @Injectable()
 export class PrediccionsService {
   private logger = new Logger(PrediccionsService.name);
+  private readonly reconstrucciones = new Map<string, Promise<IPrediccion[]>>();
   constructor(
     private siembrasService: SiembrasService,
     private prediccionTrigoService: PrediccionTrigoService,
@@ -32,6 +34,7 @@ export class PrediccionsService {
     private prediccionArvejaService: PrediccionArvejaService,
     private notificacionesService: NotificacionsService,
     private alertasService: AlertasService,
+    private prediccionsRepository: PrediccionsRepository,
   ) {}
 
   async hacerPredicciones() {
@@ -114,7 +117,7 @@ export class PrediccionsService {
       }
 
       if (!predicciones?.length) {
-        return;
+        return [];
       }
 
       try {
@@ -136,7 +139,63 @@ export class PrediccionsService {
       this.logger.error(
         `Error en la prediccion de enfermedades de la siembra ${idSiembra}`,
       );
-      console.error(error);
+      // El consumidor elimina/reconstruye una serie completa. Devolver 200
+      // con undefined ocultaba fallos parciales y podia dejar al lote sin una
+      // serie sanitaria coherente. La falla debe llegar al orquestador para
+      // activar rollback/reintento y nunca presentarse como exito.
+      throw error;
+    }
+  }
+
+  async reconstruir(idSiembra: string): Promise<IPrediccion[]> {
+    const key = String(idSiembra);
+    const anterior = this.reconstrucciones.get(key);
+    if (anterior) return await anterior;
+
+    let actual: Promise<IPrediccion[]>;
+    actual = this.reconstruirSerie(key).finally(() => {
+      if (this.reconstrucciones.get(key) === actual) {
+        this.reconstrucciones.delete(key);
+      }
+    });
+    this.reconstrucciones.set(key, actual);
+    return await actual;
+  }
+
+  private async reconstruirSerie(
+    idSiembra: string,
+  ): Promise<IPrediccion[]> {
+    const snapshot = await this.prediccionsRepository.get({
+      filter: JSON.stringify({ idSiembra }),
+      sort: 'fecha',
+      limit: 0,
+    });
+    await this.prediccionsRepository.deleteByIdSiembra(idSiembra);
+    try {
+      const creadas = (await this.prediccion(idSiembra)) || [];
+      if (!creadas.length) {
+        await this.siembrasService.update(idSiembra, {
+          ultimaPrediccion: null,
+        } as any);
+      }
+      return creadas;
+    } catch (error) {
+      try {
+        await this.prediccionsRepository.restoreByIdSiembra(
+          idSiembra,
+          snapshot?.datos || [],
+        );
+      } catch (restoreError) {
+        this.logger.error(
+          `Fallo critico al restaurar el respaldo sanitario de ${idSiembra}: ${restoreError}`,
+        );
+        const fatal = new Error(
+          `Fallo la reconstruccion y el rollback sanitario de ${idSiembra}`,
+        ) as Error & { errors?: unknown[] };
+        fatal.errors = [error, restoreError];
+        throw fatal;
+      }
+      throw error;
     }
   }
 
@@ -162,7 +221,7 @@ export class PrediccionsService {
       this.logger.error(
         `Error en la prediccion de malezas de la siembra ${idSiembra}`,
       );
-      console.error(error);
+      throw error;
     }
   }
 

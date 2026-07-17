@@ -49,3 +49,42 @@ describe('SOIL_INTELLIGENCE_INTERNAL_TOKEN', () => {
     expect(loadToken()).toBe('agrometeo');
   });
 });
+
+describe('INTERNAL_HTTP_TIMEOUT_MS', () => {
+  const original = process.env.INTERNAL_HTTP_TIMEOUT_MS;
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.INTERNAL_HTTP_TIMEOUT_MS;
+    else process.env.INTERNAL_HTTP_TIMEOUT_MS = original;
+    jest.resetModules();
+  });
+
+  function loadTimeout(): number {
+    let timeout = 0;
+    jest.isolateModules(() => {
+      timeout = require('./env').INTERNAL_HTTP_TIMEOUT_MS;
+    });
+    return timeout;
+  }
+
+  it('usa 30 segundos cuando no hay configuracion', () => {
+    delete process.env.INTERNAL_HTTP_TIMEOUT_MS;
+
+    expect(loadTimeout()).toBe(30_000);
+  });
+
+  it('acepta un timeout explicito dentro del rango seguro', () => {
+    process.env.INTERNAL_HTTP_TIMEOUT_MS = '45000';
+
+    expect(loadTimeout()).toBe(45_000);
+  });
+
+  it.each(['0', '-1', '999', '120001', 'invalido', '30000.5'])(
+    'rechaza el valor inseguro o invalido %s',
+    (value) => {
+      process.env.INTERNAL_HTTP_TIMEOUT_MS = value;
+
+      expect(loadTimeout()).toBe(30_000);
+    },
+  );
+});

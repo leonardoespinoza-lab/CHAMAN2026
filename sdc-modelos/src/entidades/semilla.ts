@@ -123,13 +123,60 @@ export type TEstadoResistencia =
 
 export type TConfianzaResistencia = "alta" | "media" | "baja" | "sin_datos";
 
+export type TEstadoCalibracionTermica =
+  | "validado"
+  | "referencia"
+  | "requiere_calibracion";
+
+export type TObjetivoBiofixFenologico =
+  | "anclaje_fenologico"
+  | "inicio_acumulacion_frio"
+  | "fin_acumulacion_frio"
+  | "inicio_forzado"
+  | "inicio_vernalizacion"
+  | "fin_vernalizacion"
+  | "reinicio_gdd_etapa"
+  | "reinicio_gdd_forzado";
+
+export interface IProtocoloTemporadaFrio {
+  version: string;
+  inicio:
+    | { tipo: "fecha_calendario"; mesDia: string }
+    | { tipo: "biofix"; objetivo: "inicio_acumulacion_frio" };
+  fin:
+    | { tipo: "fecha_calendario"; mesDia: string }
+    | { tipo: "biofix"; objetivo: "fin_acumulacion_frio" };
+  estado: TEstadoCalibracionTermica;
+  fuente?: string;
+  region?: string;
+  observaciones?: string;
+}
+
 export interface IRequerimientoFrio {
   horasFrio?: number;
+  /**
+   * Campo legacy conservado para compatibilidad histórica. No debe usarse
+   * como modelo rector ni convertirse a Chill Portions.
+   */
   horasFrioEfectivas?: number;
   porcionesFrio?: number;
-  modelo?: "HF" | "HFE" | "CP" | "HF + HFE" | "HF + HFE + CP";
+  modelo?:
+    | "HF"
+    | "HFE"
+    | "CP"
+    | "HF + HFE"
+    | "HF + HFE + CP"
+    | "HF + Dynamic Model";
+  modeloRector?: "HF" | "CP" | "sin_calibrar";
+  estado?: TEstadoCalibracionTermica;
   fuente?: string;
   confianza?: "alta" | "media" | "estimada";
+  /**
+   * Define la ventana biológica o calendaria en la que el requisito varietal
+   * fue calibrado. Si falta, Chaman puede mostrar acumulación climática, pero
+   * no declara cumplimiento biológico.
+   */
+  protocoloTemporada?: IProtocoloTemporadaFrio;
   observaciones?: string;
 }
 
