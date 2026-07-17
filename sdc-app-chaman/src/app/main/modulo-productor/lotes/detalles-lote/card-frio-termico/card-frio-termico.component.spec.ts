@@ -197,7 +197,7 @@ describe('CardFrioTermicoComponent', () => {
 
     await component.cargar(true);
 
-    expect(service.reprocesarAgrometeorologia).toHaveBeenCalledOnceWith('perenne-refresh', false);
+    expect(service.reprocesarAgrometeorologia).toHaveBeenCalledOnceWith('perenne-refresh', true);
     expect(service.agrometeorologia).not.toHaveBeenCalled();
   });
 

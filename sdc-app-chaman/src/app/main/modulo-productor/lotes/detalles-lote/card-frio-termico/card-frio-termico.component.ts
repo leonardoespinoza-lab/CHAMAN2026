@@ -207,7 +207,7 @@ export class CardFrioTermicoComponent implements OnChanges {
     this.error = undefined;
     try {
       if (force) {
-        this.data = await this.siembraService.reprocesarAgrometeorologia(id, false);
+        this.data = await this.siembraService.reprocesarAgrometeorologia(id, true);
         CardFrioTermicoComponent.agrometCache.set(id, this.data);
       } else {
         const cached = CardFrioTermicoComponent.agrometCache.get(id);

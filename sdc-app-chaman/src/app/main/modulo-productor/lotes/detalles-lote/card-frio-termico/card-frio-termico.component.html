@@ -36,6 +36,10 @@
         </div>
       </div>
 
+      @if (error) {
+        <p-message severity="warn">{{ error }}</p-message>
+      }
+
       <div class="frio-metrics">
         @for (metric of metricas; track metric.label) {
           <article [ngClass]="metric.tone">
