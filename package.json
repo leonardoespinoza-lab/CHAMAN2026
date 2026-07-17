@@ -64,6 +64,7 @@
     "test:lot-location:frontend": "node --test scripts/tests/lot-location-frontend.test.js",
     "test:establishment-location:frontend": "node --test scripts/tests/establishment-location-frontend.test.js",
     "test:soil-intelligence:frontend": "node --test scripts/tests/soil-intelligence-frontend.test.js",
+    "test:varietal-profile:frontend": "node --test scripts/tests/varietal-profile-frontend.test.js",
     "railway:build": "node scripts/railway-build.js",
     "railway:start": "node scripts/railway-start.js"
   },

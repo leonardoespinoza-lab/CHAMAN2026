@@ -20,6 +20,7 @@ const SCIENTIFIC_SEED_FIELDS = [
   'requerimientoFrio',
   'fenologiaReferencia',
   'sensibilidadHelada',
+  'fichaVarietal',
   'parametrosAgrometeorologicos',
 ] as const;
 

@@ -205,6 +205,58 @@ export interface ISensibilidadHelada {
   observaciones?: string;
 }
 
+export type TEstadoFichaVarietal =
+  | "sin_fuentes"
+  | "en_relevamiento"
+  | "referencia_documental"
+  | "calibrada_localmente"
+  | "validada";
+
+export type TTipoDocumentoVarietal =
+  | "registro_oficial"
+  | "ficha_obtentor"
+  | "extension_oficial"
+  | "publicacion_cientifica"
+  | "validacion_local";
+
+export interface IDocumentoFichaVarietal {
+  id?: string;
+  titulo: string;
+  url: string;
+  organizacion: string;
+  tipo: TTipoDocumentoVarietal;
+  campania?: string;
+  anio?: number;
+  region?: string;
+  fechaConsulta?: string;
+  version?: string;
+  vigente?: boolean;
+  observaciones?: string;
+}
+
+export interface IFichaVarietalPersistida {
+  version: string;
+  estado: TEstadoFichaVarietal;
+  nombreOficial?: string;
+  nombreComercial?: string;
+  aliases?: string[];
+  obtentor?: string;
+  mantenedor?: string;
+  proveedor?: string;
+  paisOrigen?: string;
+  registro?: {
+    organismo: string;
+    codigo?: string;
+    url?: string;
+    fechaRegistro?: string;
+  };
+  regionRecomendada?: string[];
+  documentos?: IDocumentoFichaVarietal[];
+  revisadoAl?: string;
+  revisadoPor?: string;
+  observaciones?: string;
+}
+
 export interface ISemilla {
   _id?: string;
   codigoCarga?: string;
@@ -220,6 +272,7 @@ export interface ISemilla {
   requerimientoFrio?: IRequerimientoFrio;
   fenologiaReferencia?: IFenologiaReferencia;
   sensibilidadHelada?: ISensibilidadHelada;
+  fichaVarietal?: IFichaVarietalPersistida;
   parametrosAgrometeorologicos?: IParametrosAgrometeorologicos;
   observaciones?: string;
 }

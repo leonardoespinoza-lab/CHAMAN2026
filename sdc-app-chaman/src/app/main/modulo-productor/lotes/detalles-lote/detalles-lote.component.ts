@@ -8,8 +8,12 @@ import {
   IFertilizacion,
   IFumigacion,
   IEstadoFenologiaArveja,
+  IDocumentoFichaVarietal,
   IQueryParam,
+  IReferenciaTermicaVarietal,
+  IResumenFichaVarietal,
   ISiembra,
+  resolverFichaVarietal,
 } from 'modelos/src';
 import { ConfirmationService } from 'primeng/api';
 import { FenologiaService } from '../../../../auxiliares/http/fenologia.service';
@@ -98,6 +102,7 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   public esUltimaEtapa?: boolean;
   public verDrawerSiembras: boolean = false;
   public verCalidadDatos: boolean = false;
+  public verFichaVarietal: boolean = false;
   public estadoFenologiaArveja?: IEstadoFenologiaArveja;
   public cargandoPrimario: boolean = false;
   public refrescandoDetalle: boolean = false;
@@ -327,6 +332,48 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
 
   public get implantacionLabel(): string {
     return getNombreImplantacion(this.siembra?.semilla?.cultivo);
+  }
+
+  public get fichaVarietal(): IResumenFichaVarietal | undefined {
+    return resolverFichaVarietal(this.siembra?.semilla);
+  }
+
+  public get estadoFichaVarietalLabel(): string {
+    const labels: Record<string, string> = {
+      sin_fuentes: 'Sin fuentes oficiales',
+      en_relevamiento: 'En relevamiento',
+      referencia_documental: 'Referencia documental',
+      calibrada_localmente: 'Calibrada localmente',
+      validada: 'Validada',
+    };
+    return labels[this.fichaVarietal?.estado || 'sin_fuentes'];
+  }
+
+  public tipoDocumentoVarietalLabel(documento: IDocumentoFichaVarietal): string {
+    const labels: Record<string, string> = {
+      registro_oficial: 'Registro oficial',
+      ficha_obtentor: 'Ficha del obtentor',
+      extension_oficial: 'Extension oficial',
+      publicacion_cientifica: 'Publicacion cientifica',
+      validacion_local: 'Validacion local',
+    };
+    return labels[documento.tipo] || 'Documento tecnico';
+  }
+
+  public valorReferenciaTermica(referencia: IReferenciaTermicaVarietal): string {
+    if (Number.isFinite(referencia.objetivo)) {
+      return `${this.numeroAr.format(Number(referencia.objetivo))} ${referencia.unidad}`;
+    }
+    if (Number.isFinite(referencia.minimo) && Number.isFinite(referencia.maximo)) {
+      return `${this.numeroAr.format(Number(referencia.minimo))}-${this.numeroAr.format(Number(referencia.maximo))} ${referencia.unidad}`;
+    }
+    if (Number.isFinite(referencia.minimo)) {
+      return `Desde ${this.numeroAr.format(Number(referencia.minimo))} ${referencia.unidad}`;
+    }
+    if (Number.isFinite(referencia.maximo)) {
+      return `Hasta ${this.numeroAr.format(Number(referencia.maximo))} ${referencia.unidad}`;
+    }
+    return `Sin umbral numerico · ${referencia.unidad}`;
   }
 
   async ngOnInit(): Promise<void> {

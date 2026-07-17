@@ -114,6 +114,9 @@ export class Semilla implements Exactly<ISemilla, Semilla> {
   fenologiaReferencia?: ISemilla['fenologiaReferencia'];
 
   @Prop({ type: Object })
+  fichaVarietal?: ISemilla['fichaVarietal'];
+
+  @Prop({ type: Object })
   parametrosAgrometeorologicos?: ISemilla['parametrosAgrometeorologicos'];
 
   @Prop()
