@@ -5,15 +5,25 @@
         <p class="titulo-card">FRÍO Y ACUMULACIÓN TÉRMICA</p>
         <span>{{ fuenteFrioLabel }} · tarjeta independiente de las variables meteorológicas</span>
       </div>
-      <p-button
-        icon="pi pi-refresh"
-        label="Actualizar"
-        size="small"
-        severity="secondary"
-        [outlined]="true"
-        [loading]="loading"
-        (onClick)="cargar(true)"
-      />
+      <div class="frio-header__actions">
+        <p-button
+          icon="pi pi-info-circle"
+          label="Cómo se calcula"
+          size="small"
+          severity="secondary"
+          [outlined]="true"
+          (onClick)="abrirModelo()"
+        />
+        <p-button
+          icon="pi pi-refresh"
+          label="Actualizar"
+          size="small"
+          severity="secondary"
+          [outlined]="true"
+          [loading]="loading"
+          (onClick)="cargar(true)"
+        />
+      </div>
     </header>
 
     @if (loading && !data) {
@@ -76,7 +86,9 @@
                 <div
                   class="frio-target__meter"
                   [class.frio-target__meter--unknown]="item.progress === undefined"
-                  [attr.aria-label]="item.progress !== undefined ? item.progress + '% del objetivo cargado' : 'Objetivo no documentado'"
+                  [attr.aria-label]="
+                    item.progress !== undefined ? item.progress + '% del objetivo cargado' : 'Objetivo no documentado'
+                  "
                 >
                   @if (item.progress !== undefined) {
                     <i [style.width.%]="item.progress"></i>
@@ -179,4 +191,112 @@
       <p-message severity="info">Preparando la serie de frío y acumulación térmica.</p-message>
     }
   </section>
+
+  <p-dialog
+    [(visible)]="modeloVisible"
+    [modal]="true"
+    [dismissableMask]="true"
+    [draggable]="false"
+    [resizable]="false"
+    [style]="{ width: 'min(920px, 95vw)' }"
+    [breakpoints]="{ '720px': '97vw' }"
+    header="Cómo calcula Chaman el frío y el tiempo térmico"
+    styleClass="chaman-detail-dialog frio-model-dialog"
+  >
+    <section class="frio-model-info">
+      <div class="frio-model-info__hero">
+        <i class="pi pi-verified"></i>
+        <div>
+          <strong>{{ perfilVarietalLabel || 'Perfil agronómico' }}</strong>
+          <span>{{ estadoEspecificacionLabel }} · {{ estadoDatosLabel }}</span>
+        </div>
+      </div>
+
+      <div class="frio-model-info__audit">
+        <article>
+          <span>Inicio térmico</span>
+          <strong>{{ gddInicioLabel }}</strong>
+        </article>
+        <article>
+          <span>Cierre observado</span>
+          <strong>{{ gddCierreLabel }}</strong>
+        </article>
+        <article>
+          <span>Jornadas con GDD</span>
+          <strong>{{ diasGddComputados || 'Sin consolidar' }}</strong>
+        </article>
+        <article>
+          <span>Acumulado</span>
+          <strong>{{ gddLabel }}</strong>
+        </article>
+        <article>
+          <span>Promedio diario</span>
+          <strong>{{
+            gddPromedioDiario !== undefined ? (gddPromedioDiario | number: '1.1-1') + ' GDD/día' : 'Sin consolidar'
+          }}</strong>
+        </article>
+        <article>
+          <span>Fuente climática</span>
+          <strong>{{ fuenteFrioLabel }}</strong>
+        </article>
+      </div>
+
+      <article class="frio-model-info__formula">
+        <span>Fórmula diaria · promedio limitado</span>
+        <code>GDD = máx(0, (Tmin* + Tmax*) / 2 − Tb)</code>
+        <p>
+          Tmin* y Tmax* se limitan entre la temperatura base y el techo térmico. En esta corrida: Tb
+          {{ data?.summary?.gddBaseTemperatureC | number: '1.1-1' }} °C
+          @if (data?.summary?.gddUpperTemperatureC !== undefined) {
+            y techo {{ data?.summary?.gddUpperTemperatureC | number: '1.1-1' }} °C.
+          }
+          Los días sin temperatura utilizable no se completan silenciosamente ni se presentan como acumulado completo.
+        </p>
+      </article>
+
+      @if (esVernalizacionAnual && tienePerfilVernalizacion) {
+        <article class="frio-model-info__process">
+          <i class="pi pi-sun"></i>
+          <div>
+            <strong>Cereal anual: dos procesos independientes</strong>
+            <p>
+              Los GDD se acumulan desde la siembra. La vernalización usa una ventana térmica varietal en días
+              equivalentes; no son horas de frío de frutales y no se convierten a HF, HFE ni CP.
+            </p>
+          </div>
+        </article>
+      } @else if (esCerealAnual) {
+        <article class="frio-model-info__process">
+          <i class="pi pi-sun"></i>
+          <div>
+            <strong>Cereal anual: acumulación térmica auditada</strong>
+            <p>
+              Chaman acumula GDD desde la siembra. Esta variedad no tiene un requisito de vernalización documentado en
+              una fuente específica, por lo que no inventa un objetivo ni muestra HF, HFE o CP de frutales.
+            </p>
+          </div>
+        </article>
+      } @else if (esDormanciaPerenne) {
+        <article class="frio-model-info__process">
+          <i class="pi pi-chart-line"></i>
+          <div>
+            <strong>Frutal perenne: frío y forzado no se mezclan</strong>
+            <p>
+              HF cuenta horas entre 0 y 7,2 °C; CP aplica el Dynamic Model horario; HFE conserva únicamente el indicador
+              histórico de campo. Los GDD de forzado comienzan recién con un biofix observado.
+            </p>
+          </div>
+        </article>
+      }
+
+      <article class="frio-model-info__source">
+        <span>Parámetros agronómicos</span>
+        <strong>{{ fuenteParametrosLabel }}</strong>
+        <p>
+          El acumulado describe exposición térmica; por sí solo no confirma emergencia, espigazón, brotación ni
+          floración. Esas etapas se consolidan con la observación fenológica del lote.
+        </p>
+      </article>
+    </section>
+  </p-dialog>
 }

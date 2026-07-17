@@ -19,6 +19,14 @@
   margin: 0;
 }
 
+.frio-header__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: flex-end;
+}
+
 .frio-header span,
 .frio-summary small,
 .frio-metrics small,
@@ -544,10 +552,109 @@
   text-transform: capitalize;
 }
 
+.frio-model-info {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.frio-model-info__hero,
+.frio-model-info__process {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--p-primary-color), white 91%);
+  border: 1px solid color-mix(in srgb, var(--p-primary-color), white 58%);
+  border-radius: 10px;
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.85rem;
+}
+
+.frio-model-info__hero > i,
+.frio-model-info__process > i {
+  color: var(--p-primary-color);
+  font-size: 1.35rem;
+  margin-top: 0.08rem;
+}
+
+.frio-model-info__hero strong,
+.frio-model-info__hero span,
+.frio-model-info__process strong {
+  display: block;
+}
+
+.frio-model-info__hero strong,
+.frio-model-info__process strong {
+  color: var(--p-text-color);
+  font-size: 1.05rem;
+}
+
+.frio-model-info__hero span,
+.frio-model-info__process p,
+.frio-model-info__formula p,
+.frio-model-info__source p {
+  color: var(--p-text-muted-color);
+  line-height: 1.45;
+  margin: 0.25rem 0 0;
+}
+
+.frio-model-info__audit {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.frio-model-info__audit article,
+.frio-model-info__formula,
+.frio-model-info__source {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(86, 117, 150, 0.28);
+  border-radius: 9px;
+  padding: 0.78rem;
+}
+
+.frio-model-info__audit span,
+.frio-model-info__formula > span,
+.frio-model-info__source > span {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.frio-model-info__audit strong,
+.frio-model-info__source strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 0.98rem;
+  line-height: 1.25;
+  margin-top: 0.25rem;
+}
+
+.frio-model-info__formula code {
+  background: #132c32;
+  border-radius: 7px;
+  color: #d9fff5;
+  display: block;
+  font-size: 1rem;
+  margin-top: 0.55rem;
+  overflow-x: auto;
+  padding: 0.72rem;
+  white-space: nowrap;
+}
+
 @media (max-width: 900px) {
   .frio-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .frio-header__actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .frio-model-info__audit {
+    grid-template-columns: 1fr;
   }
 
   .frio-body {

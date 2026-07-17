@@ -70,6 +70,7 @@ export class CardFrioTermicoComponent implements OnChanges {
   public metricas: MetricaFrio[] = [];
   public objetivosFrio: ObjetivoFrioVisual[] = [];
   public chartFrioOptions?: Highcharts.Options;
+  public modeloVisible = false;
 
   private ultimoKeyHistorico = '';
   private requestSequence = 0;
@@ -143,8 +144,11 @@ export class CardFrioTermicoComponent implements OnChanges {
   public get lecturaPrincipal(): string {
     const resumen = this.data?.summary;
     const cultivo = this.siembra?.semilla?.cultivo || 'Cultivo';
-    if (resumen?.thermalProcess === 'vernalizacion_anual') {
+    if (resumen?.thermalProcess === 'vernalizacion_anual' && this.tienePerfilVernalizacion) {
       return `${cultivo}: la vernalización se informa como exposición térmica en la ventana varietal; no se confunde con horas de frío de frutales.`;
+    }
+    if (this.esCerealAnual) {
+      return `${cultivo}: GDD desde siembra; no se declara requisito de vernalización mientras la variedad no tenga una fuente específica.`;
     }
     if (this.esDormanciaPerenne) {
       const variedad = this.siembra?.semilla?.variedad;
@@ -156,6 +160,13 @@ export class CardFrioTermicoComponent implements OnChanges {
   public get periodoFrioLabel(): string {
     const resumen = this.data?.summary;
     if (!resumen) return '';
+    if (this.esVernalizacionAnual) {
+      const inicio = this.siembra?.fechaSiembra;
+      const desde = inicio ? `desde la siembra ${this.fechaCorta(inicio)}` : 'sin fecha de siembra consolidada';
+      const cierre = resumen.gddThroughDate ? ` hasta ${this.fechaCorta(resumen.gddThroughDate)}` : '';
+      const dias = this.diasGddComputados ? ` · ${this.diasGddComputados} jornadas computadas` : '';
+      return `Acumulación térmica ${desde}${cierre}${dias}`;
+    }
     const frio = resumen.coldSeasonStart
       ? `Temporada de frío desde ${this.fechaCorta(resumen.coldSeasonStart)}`
       : 'Temporada de frío sin inicio consolidado';
@@ -217,14 +228,49 @@ export class CardFrioTermicoComponent implements OnChanges {
     );
   }
 
+  public get esVernalizacionAnual(): boolean {
+    return !!(
+      this.data?.summary.thermalProcess === 'vernalizacion_anual' ||
+      this.siembra?.semilla?.parametrosAgrometeorologicos?.procesoTermico === 'vernalizacion_anual'
+    );
+  }
+
+  public get esCerealAnual(): boolean {
+    const cultivo = this.normalizar(this.siembra?.semilla?.cultivo);
+    return cultivo === 'trigo' || cultivo === 'cebada';
+  }
+
+  public get tienePerfilVernalizacion(): boolean {
+    const resumen = this.data?.summary;
+    const parametros = this.siembra?.semilla?.parametrosAgrometeorologicos;
+    return !!(
+      resumen?.vernalizationModel ||
+      (resumen?.vernalizationHabit && resumen.vernalizationHabit !== 'desconocido') ||
+      this.esNumero(resumen?.vernalizationRequirement) ||
+      this.esNumero(resumen?.vernalizationAccumulated) ||
+      parametros?.modeloVernalizacion ||
+      (parametros?.habitoVernalizacion && parametros.habitoVernalizacion !== 'desconocido') ||
+      this.esNumero(parametros?.requerimientoVernalizacion)
+    );
+  }
+
   public get perfilVarietalLabel(): string {
     const semilla = this.siembra?.semilla;
-    return [semilla?.cultivo, semilla?.variedad, semilla?.portainjerto]
-      .filter(Boolean)
-      .join(' · ');
+    return [semilla?.cultivo, semilla?.variedad, semilla?.portainjerto].filter(Boolean).join(' · ');
   }
 
   public get estadoEspecificacionLabel(): string {
+    if (this.esVernalizacionAnual) {
+      if (!this.tienePerfilVernalizacion) {
+        return 'Perfil térmico de cultivo · falta calibración varietal';
+      }
+      const estado =
+        this.data?.summary.vernalizationStatus ||
+        this.siembra?.semilla?.parametrosAgrometeorologicos?.estadoVernalizacion;
+      if (estado === 'validado') return 'Perfil varietal validado';
+      if (estado === 'referencia') return 'Referencia varietal';
+      return 'Vernalización varietal en calibración';
+    }
     const estado = this.siembra?.semilla?.requerimientoFrio?.estado;
     if (estado === 'validado') return 'Especificación validada';
     if (estado === 'referencia') return 'Referencia técnica';
@@ -251,9 +297,73 @@ export class CardFrioTermicoComponent implements OnChanges {
       return `En peral el forzado se cuenta después de la salida de endodormancia. Chaman lo inicia con el biofix de inicio de forzado o brotación registrado a campo; Tb ${this.numero(resumen?.gddBaseTemperatureC, 1)} °C.`;
     }
     if (resumen?.gddAccumulationComplete === false) {
+      if (this.esVernalizacionAnual) {
+        return 'Hay jornadas térmicas faltantes desde la siembra; el total parcial no se presenta como acumulado fenológico completo.';
+      }
       return 'Hay días térmicos faltantes desde el biofix; el total parcial no se presenta como completo.';
     }
-    return `Base ${this.numero(resumen?.gddBaseTemperatureC, 1)} °C${resumen?.gddThroughDate ? ` · cerrado al ${this.fechaCorta(resumen.gddThroughDate)}` : ''}`;
+    const techo = this.esNumero(resumen?.gddUpperTemperatureC)
+      ? ` · techo ${this.numero(resumen?.gddUpperTemperatureC, 1)} °C`
+      : '';
+    const dias = this.diasGddComputados ? ` · ${this.diasGddComputados} jornadas` : '';
+    const promedio = this.esNumero(this.gddPromedioDiario)
+      ? ` · media ${this.numero(this.gddPromedioDiario, 1)} GDD/día`
+      : '';
+    return `Base ${this.numero(resumen?.gddBaseTemperatureC, 1)} °C${techo}${dias}${promedio}${resumen?.gddThroughDate ? ` · cerrado al ${this.fechaCorta(resumen.gddThroughDate)}` : ''}`;
+  }
+
+  public get diasGddComputados(): number {
+    const inicio = this.fechaAgronomica(this.siembra?.fechaSiembra);
+    const cierre = this.fechaAgronomica(this.data?.summary.gddThroughDate);
+    return (this.data?.series || []).filter((dia) => {
+      if (dia.isForecast || !this.esNumero(dia.metrics.gddDaily)) return false;
+      const fecha = this.fechaAgronomica(dia.date);
+      if (!fecha) return false;
+      return (!inicio || fecha >= inicio) && (!cierre || fecha <= cierre);
+    }).length;
+  }
+
+  public get gddPromedioDiario(): number | undefined {
+    const acumulado = this.data?.summary.gddAccumulated;
+    const dias = this.diasGddComputados;
+    return this.esNumero(acumulado) && dias > 0 ? acumulado / dias : undefined;
+  }
+
+  public get completitudFuenteLabel(): string {
+    const porcentaje = this.data?.dataSource.completenessPercentage;
+    return this.esNumero(porcentaje) ? `${this.numero(porcentaje, 0)}%` : 'Sin consolidar';
+  }
+
+  public get gddInicioLabel(): string {
+    if (this.esVernalizacionAnual) {
+      return this.siembra?.fechaSiembra
+        ? `Siembra ${this.fechaCorta(this.siembra.fechaSiembra)}`
+        : 'Siembra no consolidada';
+    }
+    return this.gddPendienteBiofix ? 'Biofix pendiente' : 'Biofix de forzado registrado';
+  }
+
+  public get gddCierreLabel(): string {
+    return this.data?.summary.gddThroughDate
+      ? this.fechaCorta(this.data.summary.gddThroughDate)
+      : 'Sin cierre consolidado';
+  }
+
+  public get fuenteParametrosLabel(): string {
+    return (
+      this.data?.summary.parametersSource ||
+      this.siembra?.semilla?.parametrosAgrometeorologicos?.fuente ||
+      'Perfil de cultivo Chaman pendiente de validación varietal'
+    );
+  }
+
+  public get estadoDatosLabel(): string {
+    if (this.data?.summary.gddAccumulationComplete === false) return 'Serie incompleta: no usar como total fenológico';
+    return `Serie completa al cierre · cobertura general ${this.completitudFuenteLabel}`;
+  }
+
+  public abrirModelo(): void {
+    this.modeloVisible = true;
   }
 
   public formatObjetivoValue(item: ObjetivoFrioVisual, value?: number): string {
@@ -338,7 +448,7 @@ export class CardFrioTermicoComponent implements OnChanges {
     const metricas: MetricaFrio[] = [];
     const dormancia = this.esDormanciaPerenne;
 
-    if (resumen.thermalProcess === 'vernalizacion_anual') {
+    if (resumen.thermalProcess === 'vernalizacion_anual' && this.tienePerfilVernalizacion) {
       metricas.push({
         label: 'Vernalización varietal',
         value: this.esNumero(resumen.vernalizationAccumulated)
@@ -431,10 +541,7 @@ export class CardFrioTermicoComponent implements OnChanges {
       return {
         ...item,
         progress,
-        decisionReady:
-          item.key !== 'HFE' &&
-          item.targetStatus === 'validado' &&
-          (requisito?.modeloRector === item.key),
+        decisionReady: item.key !== 'HFE' && item.targetStatus === 'validado' && requisito?.modeloRector === item.key,
       };
     });
   }
@@ -477,9 +584,7 @@ export class CardFrioTermicoComponent implements OnChanges {
     const coverage = this.esNumero(campo.temperatureCoveragePercentage)
       ? `${this.numero(campo.temperatureCoveragePercentage, 0)}% de horas cubiertas`
       : 'cobertura horaria sin consolidar';
-    const completeness = campo.continuitySufficient
-      ? 'serie continua'
-      : 'acumulado parcial por brechas';
+    const completeness = campo.continuitySufficient ? 'serie continua' : 'acumulado parcial por brechas';
     return [
       this.metrica(
         'Horas frío medidas por LoRa (HF)',
@@ -821,11 +926,15 @@ export class CardFrioTermicoComponent implements OnChanges {
     if (!value) return '-';
     // Las fechas agronomicas YYYY-MM-DD son dias locales, no instantes UTC.
     // El mediodia evita que UTC-3 las desplace al dia calendario anterior.
-    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value)
-      ? `${value}T12:00:00`
-      : value;
+    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value;
     const date = new Date(dateOnly);
     return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
+  }
+
+  private fechaAgronomica(value?: string): string | undefined {
+    if (!value) return undefined;
+    const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+    return match?.[1];
   }
 
   private fechaHora(value?: string): string {

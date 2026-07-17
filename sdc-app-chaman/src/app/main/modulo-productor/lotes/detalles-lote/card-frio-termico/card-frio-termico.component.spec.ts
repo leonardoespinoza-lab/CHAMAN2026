@@ -267,12 +267,29 @@ describe('CardFrioTermicoComponent', () => {
           vernalizationAccumulated: 12.25,
           vernalizationTemperatureCoveragePct: 92,
           vernalizationInterpretation: 'en_acumulacion',
-          gddAccumulationComplete: false,
+          gddAccumulated: 21.6,
+          gddAccumulationComplete: true,
+          gddThroughDate: '2026-06-02',
+          gddBaseTemperatureC: 0,
+          gddUpperTemperatureC: 30,
         },
+        series: [
+          {
+            date: '2026-06-01',
+            isForecast: false,
+            metrics: { gddDaily: 10.5 },
+          },
+          {
+            date: '2026-06-02',
+            isForecast: false,
+            metrics: { gddDaily: 11.1 },
+          },
+        ] as any,
       })
     );
     component.siembra = {
       _id: 'trigo-vernal',
+      fechaSiembra: '2026-06-01',
       semilla: { cultivo: 'Trigo' },
     } as any;
 
@@ -282,6 +299,51 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.metricas[0].label).toBe('Vernalización varietal');
     expect(component.metricas[0].value).toBe('12,25 días eq.');
     expect(component.metricas.some((metric) => metric.label.includes('Horas de frío'))).toBeFalse();
+    expect(component.periodoFrioLabel).toContain('desde la siembra 01-jun');
+    expect(component.periodoFrioLabel).toContain('2 jornadas computadas');
+    expect(component.periodoFrioLabel).not.toContain('Temporada de frío');
+    expect(component.gddDetalle).toContain('media 10,8 GDD/día');
+    expect(component.estadoEspecificacionLabel).toBe('Vernalización varietal en calibración');
+  });
+
+  it('audita 496,8 GDD de cebada en 46 jornadas sin inventar vernalización varietal', async () => {
+    const series = Array.from({ length: 46 }, (_, index) => {
+      const date = new Date(Date.UTC(2026, 5, 1 + index)).toISOString().slice(0, 10);
+      return {
+        date,
+        isForecast: false,
+        metrics: { gddDaily: 10.8, gddAccumulated: (index + 1) * 10.8 },
+      };
+    }) as any;
+    const component = create(
+      response({
+        summary: {
+          thermalProcess: 'vernalizacion_anual',
+          parametersSource: 'Perfil de cultivo Cebada; calibrar por variedad',
+          gddAccumulated: 496.8,
+          gddAccumulationComplete: true,
+          gddThroughDate: '2026-07-16',
+          gddBaseTemperatureC: 0,
+          gddUpperTemperatureC: 30,
+        },
+        series,
+      })
+    );
+    component.siembra = {
+      _id: 'cebada-andreia-auditoria',
+      fechaSiembra: '2026-06-01',
+      semilla: { cultivo: 'Cebada', variedad: 'ANDREIA' },
+    } as any;
+
+    await component.cargar();
+
+    expect(component.gddLabel).toBe('496,8 GDD');
+    expect(component.diasGddComputados).toBe(46);
+    expect(component.gddPromedioDiario).toBeCloseTo(10.8, 6);
+    expect(component.periodoFrioLabel).toContain('46 jornadas computadas');
+    expect(component.estadoEspecificacionLabel).toContain('falta calibración varietal');
+    expect(component.lecturaPrincipal).toContain('no se declara requisito de vernalización');
+    expect(component.metricas.map((metric) => metric.label)).toEqual(['Grados día']);
   });
 
   it('reconoce un dispositivo ambiental aunque su acumulado legacy no esté embebido', () => {

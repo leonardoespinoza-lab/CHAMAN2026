@@ -175,7 +175,8 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
     version: AGROMET_DEFAULT_PARAMETERS_VERSION,
     estado: "referencia",
     procesoTermico: "vernalizacion_anual",
-    fuente: "FAO-56 y fenología térmica CHAMAN; calibrar por variedad",
+    fuente:
+      "Alzueta et al. (2014), cebada maltera Argentina: Tb 0 °C hasta espigazón; FAO-56 para balance hídrico. Calibrar fotoperíodo, variedad y Tb posespigazón",
     temperaturaBaseC: 0,
     temperaturaSuperiorC: 30,
     kcInicial: 0.3,

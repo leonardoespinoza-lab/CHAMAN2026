@@ -76,6 +76,13 @@ const FUENTE_CEBADA: IFuenteClasificacionTermica = {
   tipo: "estudio_primario",
 };
 
+const FUENTE_CEBADA_ARGENTINA: IFuenteClasificacionTermica = {
+  titulo:
+    "A simple model to predict phenology in malting barley based on cultivar thermo-photoperiodic response",
+  url: "https://ri.conicet.gov.ar/handle/11336/4181",
+  tipo: "estudio_primario",
+};
+
 const FUENTE_SOJA: IFuenteClasificacionTermica = {
   titulo:
     "Combining Simple Phenotyping and Photothermal Algorithm for the Prediction of Soybean Phenology",
@@ -271,7 +278,7 @@ export const MATRIZ_CLASIFICACION_TERMICA_CULTIVOS: Record<
     cultivo: "Cebada",
     procesoPrincipal: "vernalizacion_cereal",
     descripcion:
-      "La respuesta depende del hábito, la vernalización y el fotoperíodo del genotipo.",
+      "La fenología integra tiempo térmico y fotoperíodo. La vernalización solo se activa con evidencia varietal: cultivares malteros sudamericanos ensayados en Argentina no mostraron requisito, pero esa conclusión no se extrapola automáticamente a toda variedad.",
     unidadesValidas: [
       "VU",
       "dias_ventana_calibrada",
@@ -291,7 +298,7 @@ export const MATRIZ_CLASIFICACION_TERMICA_CULTIVOS: Record<
       "No inferir hábito desde el ciclo comercial.",
       "No etiquetar APSIM sin ecuación y validación propias.",
     ],
-    fuentes: [FUENTE_CEBADA],
+    fuentes: [FUENTE_CEBADA_ARGENTINA, FUENTE_CEBADA],
   },
   Soja: {
     cultivo: "Soja",
