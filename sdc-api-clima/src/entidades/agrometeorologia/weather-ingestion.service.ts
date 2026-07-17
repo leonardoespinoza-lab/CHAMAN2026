@@ -339,10 +339,56 @@ export class WeatherIngestionService {
         idLote,
       )?.fechaLocal;
       if (!firstDate || !lastDate || requested < firstDate) return requested;
-      return [requested, this.addDays(lastDate, -2)].sort().reverse()[0];
+      const incrementalStart = [requested, this.addDays(lastDate, -2)]
+        .sort()
+        .reverse()[0];
+
+      // Una fila existente no prueba que tenga cobertura termica. Antes de
+      // continuar incrementalmente se busca el primer dia historico parcial
+      // para que Open-Meteo lo repare desde Archive. Nunca se imputa frio/GDD.
+      try {
+        const coverage = await this.repository.getObservaciones({
+          filter: JSON.stringify(filter),
+          sort: 'timestamp',
+          limit: 5000,
+        });
+        const firstIncomplete = (coverage?.datos || [])
+          .map((item) => this.resolveLotContext(item, idLote))
+          .filter(
+            (
+              item,
+            ): item is IObservacionMeteorologicaNormalizada =>
+              !!item &&
+              item.fechaLocal >= requested &&
+              item.fechaLocal <= lastDate,
+          )
+          .find((item) => !this.hasCompleteDailyTemperature(item));
+        if (
+          firstIncomplete?.fechaLocal &&
+          firstIncomplete.fechaLocal < incrementalStart
+        ) {
+          return firstIncomplete.fechaLocal;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `No se pudo auditar la continuidad termica incremental; se conserva el solapamiento seguro: ${error?.message || error}`,
+        );
+      }
+      return incrementalStart;
     } catch {
       return this.dateOnly(requestedFrom);
     }
+  }
+
+  private hasCompleteDailyTemperature(
+    observation: IObservacionMeteorologicaNormalizada,
+  ): boolean {
+    const values = observation.valores || {};
+    return [
+      values.temperatureMinC,
+      values.temperatureMeanC,
+      values.temperatureMaxC,
+    ].every((value) => typeof value === 'number' && Number.isFinite(value));
   }
 
   private resolveLotContext(

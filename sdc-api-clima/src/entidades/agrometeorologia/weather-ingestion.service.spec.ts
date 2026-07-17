@@ -119,6 +119,42 @@ describe('WeatherIngestionService', () => {
     });
   });
 
+  it('retrocede al primer dia termico incompleto aunque la fila diaria exista', async () => {
+    const complete = (fechaLocal: string) => ({
+      fechaLocal,
+      valores: {
+        temperatureMinC: 4,
+        temperatureMeanC: 9,
+        temperatureMaxC: 15,
+      },
+    });
+    const repository = {
+      getObservaciones: jest
+        .fn()
+        .mockResolvedValueOnce({ datos: [complete('2026-05-01')] })
+        .mockResolvedValueOnce({ datos: [complete('2026-07-16')] })
+        .mockResolvedValueOnce({
+          datos: [
+            complete('2026-05-01'),
+            { fechaLocal: '2026-05-03', valores: { precipitationMm: 2 } },
+            complete('2026-07-16'),
+          ],
+        }),
+    };
+    const incremental = new WeatherIngestionService(
+      {} as any,
+      repository as any,
+      {} as any,
+    );
+
+    await expect(
+      (incremental as any).resolverDesdeIncremental(
+        'est-1',
+        '2026-05-01',
+      ),
+    ).resolves.toBe('2026-05-03');
+  });
+
   it('usa las horas de la central como evidencia antes de aceptar su agregado diario', async () => {
     const hourlyRows = Array.from({ length: 24 }, (_, hour) => ({
       fecha: new Date(Date.UTC(2026, 6, 13, hour + 3)).toISOString(),

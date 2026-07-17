@@ -35,6 +35,11 @@ import {
 } from 'modelos/src';
 import { OmixomService } from '../omixom/service';
 
+// ERA5/ERA5-Land se publican con hasta cinco dias de demora. Todo dia
+// anterior a esa ventana se consulta en Archive para evitar los huecos
+// parciales que puede devolver Forecast al pedir historicos extensos.
+const OPEN_METEO_ARCHIVE_DELAY_DAYS = 5;
+
 @Injectable()
 export class ClimaService {
   private logger = new LogService(ClimaService.name);
@@ -363,16 +368,16 @@ export class ClimaService {
       `${this.getFechaOpenMeteo(new Date().toISOString())}T00:00:00Z`,
     );
     const diasHaciaAtras = (hoy.getTime() - inicio.getTime()) / 86400000;
-    return diasHaciaAtras <= 92
+    return diasHaciaAtras < OPEN_METEO_ARCHIVE_DELAY_DAYS
       ? `${API_OPEN_METEO}/forecast`
       : `${API_OPEN_METEO_ARCHIVE}/archive`;
   }
 
   /**
-   * Open-Meteo expone los ultimos 92 dias en Forecast y el historico anterior
-   * en Archive. Un rango que cruza ese limite no puede enviarse completo a un
-   * solo endpoint: Archive puede no contener los dias recientes. Se divide sin
-   * solapar dias para conservar una serie continua y trazable.
+   * Archive ofrece una serie historica continua, pero ERA5/ERA5-Land pueden
+   * demorar cinco dias. Forecast queda reservado para esa ventana reciente.
+   * Un rango que cruza el corte se divide sin solapar dias para conservar una
+   * serie continua y trazable.
    */
   private getOpenMeteoRangos(
     minDate: string,
@@ -399,7 +404,9 @@ export class ClimaService {
       `${this.getFechaOpenMeteo(new Date().toISOString())}T00:00:00Z`,
     );
     const inicioForecast = new Date(hoy);
-    inicioForecast.setUTCDate(inicioForecast.getUTCDate() - 92);
+    inicioForecast.setUTCDate(
+      inicioForecast.getUTCDate() - (OPEN_METEO_ARCHIVE_DELAY_DAYS - 1),
+    );
     const fechaInicioForecast = inicioForecast.toISOString().slice(0, 10);
 
     if (startDate < fechaInicioForecast && endDate >= fechaInicioForecast) {
