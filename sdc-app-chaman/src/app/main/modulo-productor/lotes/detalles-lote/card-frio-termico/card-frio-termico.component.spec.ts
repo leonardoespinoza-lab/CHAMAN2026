@@ -267,6 +267,9 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.gddEstadoLabel).toBe('Aún no iniciados');
     expect(component.gddDetalle).toContain('biofix');
     expect(component.gddDetalle).toContain('Tb 7,0 °C');
+    expect(component.estadoDatosLabel).toContain('GDD pendientes de biofix');
+    expect(component.estadoDatosLabel).not.toContain('Serie incompleta');
+    expect(component.gddCierreLabel).toBe('GDD aún no iniciados');
   });
 
   it('reprocesa la serie al actualizar en lugar de releer una generación vieja', async () => {

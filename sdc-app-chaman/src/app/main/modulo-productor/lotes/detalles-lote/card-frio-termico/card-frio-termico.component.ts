@@ -383,6 +383,7 @@ export class CardFrioTermicoComponent implements OnChanges {
   }
 
   public get gddCierreLabel(): string {
+    if (this.gddPendienteBiofix) return 'GDD aún no iniciados';
     return this.data?.summary.gddThroughDate
       ? this.fechaCorta(this.data.summary.gddThroughDate)
       : 'Sin cierre consolidado';
@@ -397,6 +398,9 @@ export class CardFrioTermicoComponent implements OnChanges {
   }
 
   public get estadoDatosLabel(): string {
+    if (this.gddPendienteBiofix) {
+      return `Frío auditado al ${this.fechaCorta(this.data?.summary.coldThroughDate)} · GDD pendientes de biofix`;
+    }
     if (this.data?.summary.gddAccumulationComplete === false) return 'Serie incompleta: no usar como total fenológico';
     return `Serie completa al cierre · cobertura general ${this.completitudFuenteLabel}`;
   }
