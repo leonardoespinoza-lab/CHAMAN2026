@@ -22,9 +22,7 @@ export type TEstadoReferenciaTermica =
   | "sin_umbral_publicado";
 
 export type TCoincidenciaFichaTermica =
-  | "variedad_exacta"
-  | "alias_varietal"
-  | "referencia_cultivo";
+  "variedad_exacta" | "alias_varietal" | "referencia_cultivo";
 
 export interface IFuenteCatalogoTermico {
   id: string;
@@ -422,33 +420,31 @@ const FICHAS_VARIETALES: IFichaTermicaVarietal[] = [
   ...[
     ["Empire", 1079],
     ["Rome Beauty", 1163],
-  ].map(
-    ([variedad, hf]): IFichaTermicaVarietal => ({
-      id: `manzano-${normalizarTexto(String(variedad)).replace(/ /g, "-")}`,
-      cultivo: "Manzano",
-      variedad: String(variedad),
-      procesoPrincipal: "dormancia_perenne",
-      alcance: "variedad",
-      referencias: [
-        chillReference(
-          "HF",
-          Number(hf),
-          Number(hf),
-          ["apple_review_2023"],
-          "Estados Unidos",
-          "referencia_regional",
-          "Estimación experimental compilada; requiere validación regional.",
-        ),
-      ],
-      fenologia: {
-        observaciones: "Las etapas se consolidan mediante registros del lote.",
-      },
-      fuenteIds: ["apple_review_2023"],
-      estado: "referencia_regional",
-      permiteObjetivoAutomatico: false,
-      observaciones: ["Un único estudio no define un umbral universal."],
-    }),
-  ),
+  ].map(([variedad, hf]): IFichaTermicaVarietal => ({
+    id: `manzano-${normalizarTexto(String(variedad)).replace(/ /g, "-")}`,
+    cultivo: "Manzano",
+    variedad: String(variedad),
+    procesoPrincipal: "dormancia_perenne",
+    alcance: "variedad",
+    referencias: [
+      chillReference(
+        "HF",
+        Number(hf),
+        Number(hf),
+        ["apple_review_2023"],
+        "Estados Unidos",
+        "referencia_regional",
+        "Estimación experimental compilada; requiere validación regional.",
+      ),
+    ],
+    fenologia: {
+      observaciones: "Las etapas se consolidan mediante registros del lote.",
+    },
+    fuenteIds: ["apple_review_2023"],
+    estado: "referencia_regional",
+    permiteObjetivoAutomatico: false,
+    observaciones: ["Un único estudio no define un umbral universal."],
+  })),
   ...[
     "Rocha",
     "Williams",
@@ -458,40 +454,38 @@ const FICHAS_VARIETALES: IFichaTermicaVarietal[] = [
     "Packham's Triumph",
     "Packham/Local Clone",
     "Forelle",
-  ].map(
-    (variedad): IFichaTermicaVarietal => ({
-      id: `peral-${normalizarTexto(variedad).replace(/ /g, "-")}`,
-      cultivo: "Peral",
-      variedad,
-      aliases:
-        variedad === "Williams / Bartlett"
-          ? ["Bartlett", "Winter Bartlett"]
-          : undefined,
-      procesoPrincipal: "dormancia_perenne",
-      alcance: "variedad",
-      referencias: [
-        chillReference(
-          "HF",
-          700,
-          1200,
-          ["pear_acta_2011", "pear_embrapa"],
-          "Referencia técnica multi-regional para pera europea",
-          "referencia_regional",
-          "Rango general citado para cultivares europeos. El estudio varietal ensayó 0 a 1050 h a 3 ± 1 °C, pero no justifica adoptar un único umbral en Alto Valle.",
-        ),
-      ],
-      fenologia: {
-        observaciones:
-          "La salida de endodormancia, brotación y floración se confirman con biofix de campo; la fecha de cosecha depende de región y manejo.",
-      },
-      fuenteIds: ["pear_acta_2011", "pear_embrapa"],
-      estado: "referencia_regional",
-      permiteObjetivoAutomatico: false,
-      observaciones: [
-        "Rango informativo, no objetivo varietal validado para Alto Valle.",
-      ],
-    }),
-  ),
+  ].map((variedad): IFichaTermicaVarietal => ({
+    id: `peral-${normalizarTexto(variedad).replace(/ /g, "-")}`,
+    cultivo: "Peral",
+    variedad,
+    aliases:
+      variedad === "Williams / Bartlett"
+        ? ["Bartlett", "Winter Bartlett"]
+        : undefined,
+    procesoPrincipal: "dormancia_perenne",
+    alcance: "variedad",
+    referencias: [
+      chillReference(
+        "HF",
+        700,
+        1200,
+        ["pear_acta_2011", "pear_embrapa"],
+        "Referencia técnica multi-regional para pera europea",
+        "referencia_regional",
+        "Rango general citado para cultivares europeos. El estudio varietal ensayó 0 a 1050 h a 3 ± 1 °C, pero no justifica adoptar un único umbral en Alto Valle.",
+      ),
+    ],
+    fenologia: {
+      observaciones:
+        "La salida de endodormancia, brotación y floración se confirman con biofix de campo; la fecha de cosecha depende de región y manejo.",
+    },
+    fuenteIds: ["pear_acta_2011", "pear_embrapa"],
+    estado: "referencia_regional",
+    permiteObjetivoAutomatico: false,
+    observaciones: [
+      "Rango informativo, no objetivo varietal validado para Alto Valle.",
+    ],
+  })),
   ...[
     {
       variedad: "Desirable",
@@ -542,28 +536,39 @@ const FICHAS_VARIETALES: IFichaTermicaVarietal[] = [
       fuentes: ["pecan_ceres_2023"],
       estado: "evidencia_conflictiva" as const,
     },
-  ].map(
-    (item): IFichaTermicaVarietal => ({
-      id: `pecan-${normalizarTexto(item.variedad).replace(/ /g, "-")}`,
-      cultivo: "Pecan",
-      variedad: item.variedad,
-      procesoPrincipal: "dormancia_perenne",
-      alcance: "variedad",
-      referencias: [
-        chillReference(
-          "HF",
-          item.min,
-          item.max,
-          item.fuentes,
-          "Sudeste de Estados Unidos, Australia y/o sur de Brasil",
-          item.estado,
-          "El requerimiento cambia con las condiciones otoñales y con el criterio de brotación utilizado.",
-        ),
-        ...(item.variedad === "Kiowa"
+  ].map((item): IFichaTermicaVarietal => ({
+    id: `pecan-${normalizarTexto(item.variedad).replace(/ /g, "-")}`,
+    cultivo: "Pecan",
+    variedad: item.variedad,
+    procesoPrincipal: "dormancia_perenne",
+    alcance: "variedad",
+    referencias: [
+      chillReference(
+        "HF",
+        item.min,
+        item.max,
+        item.fuentes,
+        "Sudeste de Estados Unidos, Australia y/o sur de Brasil",
+        item.estado,
+        "El requerimiento cambia con las condiciones otoñales y con el criterio de brotación utilizado.",
+      ),
+      ...(item.variedad === "Kiowa"
+        ? [
+            chillReference(
+              "CP",
+              17,
+              29,
+              ["pecan_australia"],
+              "Australia",
+              "referencia_regional",
+              "Rango de extensión; no es conversión calculada por Chaman.",
+            ),
+          ]
+        : item.variedad === "Pawnee"
           ? [
               chillReference(
                 "CP",
-                17,
+                25,
                 29,
                 ["pecan_australia"],
                 "Australia",
@@ -571,90 +576,75 @@ const FICHAS_VARIETALES: IFichaTermicaVarietal[] = [
                 "Rango de extensión; no es conversión calculada por Chaman.",
               ),
             ]
-          : item.variedad === "Pawnee"
+          : item.variedad === "Stuart"
             ? [
                 chillReference(
                   "CP",
-                  25,
-                  29,
+                  50,
+                  83,
                   ["pecan_australia"],
                   "Australia",
                   "referencia_regional",
                   "Rango de extensión; no es conversión calculada por Chaman.",
                 ),
               ]
-            : item.variedad === "Stuart"
+            : item.variedad === "Desirable"
               ? [
                   chillReference(
                     "CP",
-                    50,
-                    83,
+                    33,
+                    42,
                     ["pecan_australia"],
                     "Australia",
                     "referencia_regional",
                     "Rango de extensión; no es conversión calculada por Chaman.",
                   ),
                 ]
-              : item.variedad === "Desirable"
-                ? [
-                    chillReference(
-                      "CP",
-                      33,
-                      42,
-                      ["pecan_australia"],
-                      "Australia",
-                      "referencia_regional",
-                      "Rango de extensión; no es conversión calculada por Chaman.",
-                    ),
-                  ]
-                : []),
-      ],
-      fenologia: {
-        observaciones:
-          "El frío interactúa con el calor primaveral. Brotación y floración deben confirmarse a campo.",
-      },
-      fuenteIds: [...new Set(item.fuentes)],
-      estado: item.estado,
-      permiteObjetivoAutomatico: false,
-      observaciones: [
-        "La evidencia publicada no autoriza una conversión fija entre HF y CP.",
-      ],
-    }),
-  ),
+              : []),
+    ],
+    fenologia: {
+      observaciones:
+        "El frío interactúa con el calor primaveral. Brotación y floración deben confirmarse a campo.",
+    },
+    fuenteIds: [...new Set(item.fuentes)],
+    estado: item.estado,
+    permiteObjetivoAutomatico: false,
+    observaciones: [
+      "La evidencia publicada no autoriza una conversión fija entre HF y CP.",
+    ],
+  })),
   ...[
     { variedad: "Chardonnay", chill: 136 },
     { variedad: "Merlot", chill: 298 },
     { variedad: "Cabernet Sauvignon", chill: 392 },
-  ].map(
-    (item): IFichaTermicaVarietal => ({
-      id: `vid-${normalizarTexto(item.variedad).replace(/ /g, "-")}`,
-      cultivo: "Vid",
-      variedad: item.variedad,
-      procesoPrincipal: "dormancia_perenne",
-      alcance: "variedad",
-      referencias: [
-        chillReference(
-          "CH_ESTUDIO",
-          item.chill,
-          item.chill,
-          ["grape_embrapa_2018"],
-          "Sur de Brasil, material experimental",
-          "referencia_regional",
-          "La unidad CH del estudio permanece separada: Chaman no la transforma automáticamente a HF ni CP.",
-        ),
-      ],
-      fenologia: {
-        observaciones:
-          "La brotación se registra a campo. La madurez y cosecha dependen del ambiente y del destino productivo.",
-      },
-      fuenteIds: ["grape_embrapa_2018"],
-      estado: "referencia_regional",
-      permiteObjetivoAutomatico: false,
-      observaciones: [
-        "Referencia experimental externa; requiere calibración regional.",
-      ],
-    }),
-  ),
+  ].map((item): IFichaTermicaVarietal => ({
+    id: `vid-${normalizarTexto(item.variedad).replace(/ /g, "-")}`,
+    cultivo: "Vid",
+    variedad: item.variedad,
+    procesoPrincipal: "dormancia_perenne",
+    alcance: "variedad",
+    referencias: [
+      chillReference(
+        "CH_ESTUDIO",
+        item.chill,
+        item.chill,
+        ["grape_embrapa_2018"],
+        "Sur de Brasil, material experimental",
+        "referencia_regional",
+        "La unidad CH del estudio permanece separada: Chaman no la transforma automáticamente a HF ni CP.",
+      ),
+    ],
+    fenologia: {
+      observaciones:
+        "La brotación se registra a campo. La madurez y cosecha dependen del ambiente y del destino productivo.",
+    },
+    fuenteIds: ["grape_embrapa_2018"],
+    estado: "referencia_regional",
+    permiteObjetivoAutomatico: false,
+    observaciones: [
+      "Referencia experimental externa; requiere calibración regional.",
+    ],
+  })),
 ];
 
 function cropFallback(cultivo: Cultivo): IFichaTermicaVarietal {
@@ -695,12 +685,11 @@ function normalizarTexto(valor?: string): string {
 }
 
 function sourceIdsFicha(ficha: IFichaTermicaVarietal): string[] {
-  return [
-    ...new Set([
-      ...ficha.fuenteIds,
-      ...ficha.referencias.flatMap((referencia) => referencia.fuenteIds),
-    ]),
-  ];
+  const idsReferencias = ficha.referencias.reduce<string[]>(
+    (ids, referencia) => ids.concat(referencia.fuenteIds),
+    [],
+  );
+  return [...new Set([...ficha.fuenteIds, ...idsReferencias])];
 }
 
 export function resolverFichaTermicaVarietal(
