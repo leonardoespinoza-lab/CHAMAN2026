@@ -17,6 +17,7 @@ describe('SiembrasService agrometeorologia', () => {
         idProductor: 'productor-owner',
       }),
       agrometeorologia: jest.fn().mockResolvedValue(response),
+      reprocesarAgrometeorologia: jest.fn().mockResolvedValue(undefined),
     };
     const service = new SiembrasService(
       repository as any,
@@ -58,5 +59,25 @@ describe('SiembrasService agrometeorologia', () => {
       }),
     ).rejects.toThrow('No tiene permiso');
     expect(repository.agrometeorologia).not.toHaveBeenCalled();
+  });
+
+  it('autoriza, reprocesa y devuelve la nueva generación agrometeorológica', async () => {
+    const { service, repository } = setup();
+    const result = await service.reprocesarAgrometeorologia(
+      'siembra-1',
+      false,
+      {
+        nivel: 'Productor',
+        rol: 'Admin',
+        idProductor: 'productor-owner',
+      },
+    );
+
+    expect(repository.reprocesarAgrometeorologia).toHaveBeenCalledWith(
+      'siembra-1',
+      false,
+    );
+    expect(repository.agrometeorologia).toHaveBeenCalledWith('siembra-1');
+    expect(result).toBe(response as any);
   });
 });

@@ -13,6 +13,7 @@ describe('CardFrioTermicoComponent', () => {
           provide: SiembraService,
           useValue: {
             agrometeorologia: jasmine.createSpy().and.resolveTo(agromet),
+            reprocesarAgrometeorologia: jasmine.createSpy().and.resolveTo(agromet),
           },
         },
         {
@@ -143,10 +144,61 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.calidadFrioLabel).toContain('referencia');
     expect(component.calidadFrioDetalle).toContain('67%');
     expect(component.calidadFrioDetalle).toContain('no mueve GDD');
-    expect(component.metricas.find((metric) => metric.label === 'HF medido en lote')?.value).toBe('503,2 HF');
+    expect(component.metricas.find((metric) => metric.label === 'Horas frío de campo (HF)')?.value).toBe('503,2 HF');
+    expect(component.metricas.find((metric) => metric.label === 'Utah de campo')).toBeDefined();
     expect(component.metricas.find((metric) => metric.label === 'Frío efectivo (HFE ref.)')?.detail).toContain(
       'no gobierna decisiones'
     );
+  });
+
+  it('mantiene visibles las horas frío del dispositivo mientras el canónico se reprocesa', async () => {
+    const component = create(response({ summary: {} }));
+    component.siembra = {
+      _id: 'perenne-preview-lora',
+      semilla: { cultivo: 'Peral' },
+    } as any;
+    component.lote = {
+      dispositivos: [
+        {
+          _id: 'sensor-preview',
+          nombre: 'CUADRO 7 Sensor 3',
+          sensores: ['Temperatura', 'Humedad'],
+          frioAcumulado: {
+            horasFrio: 503.21,
+            fechaInicio: '2026-01-01T00:00:00.000Z',
+            fechaUltimoCalculo: '2026-07-11T03:03:42.903Z',
+            legacy: {
+              frio: {
+                raw: {
+                  horasFrioEfectivas: 593.82,
+                  porcionesFrio: 21.21,
+                },
+              },
+            },
+          },
+        },
+      ],
+    } as any;
+
+    await component.cargar();
+
+    expect(component.lecturaPrincipal).toContain('modelos independientes');
+    expect(component.calidadFrioLabel).toContain('pendiente de reproceso');
+    expect(component.metricas.find((metric) => metric.label.includes('vista previa'))?.value).toBe('503,21 HF');
+    expect(component.metricas.find((metric) => metric.label.includes('HFE hist.'))?.value).toBe('593,82 HFE');
+    expect(component.metricas.find((metric) => metric.label.includes('Porciones históricas'))?.value).toBe('21,21 CP');
+  });
+
+  it('reprocesa la serie al actualizar en lugar de releer una generación vieja', async () => {
+    const agromet = response({ summary: { thermalProcess: 'dormancia_perenne' } });
+    const component = create(agromet);
+    const service = TestBed.inject(SiembraService) as any;
+    component.siembra = { _id: 'perenne-refresh', semilla: { cultivo: 'Peral' } } as any;
+
+    await component.cargar(true);
+
+    expect(service.reprocesarAgrometeorologia).toHaveBeenCalledOnceWith('perenne-refresh', false);
+    expect(service.agrometeorologia).not.toHaveBeenCalled();
   });
 
   it('presenta vernalización cereal sin llamarla horas de frío de frutales', async () => {

@@ -134,6 +134,16 @@ export class SiembrasService {
     return await this.repository.agrometeorologia(id, desde, hasta);
   }
 
+  async reprocesarAgrometeorologia(
+    id: string,
+    sincronizarClima: boolean,
+    permiso: IPermiso,
+  ): Promise<IRespuestaAgrometeorologiaSiembra> {
+    await this.getById(id, permiso);
+    await this.repository.reprocesarAgrometeorologia(id, sincronizarClima);
+    return await this.repository.agrometeorologia(id);
+  }
+
   async registrarEtapaFenologica(
     id: string,
     registro: IRegistroFenologico,

@@ -110,6 +110,12 @@ export class SiembraService {
     });
   }
 
+  public reprocesarAgrometeorologia(id: string, sincronizarClima = false): Promise<IRespuestaAgrometeorologiaSiembra> {
+    return this.http.post(`/siembras/${id}/agrometeorologia/reprocesar`, {
+      sincronizarClima,
+    });
+  }
+
   public registrarEtapaFenologica(id: string, dato: IRegistroFenologico): Promise<ISiembra> {
     return this.http.put(`/siembras/${id}/registro-fenologico`, dato);
   }

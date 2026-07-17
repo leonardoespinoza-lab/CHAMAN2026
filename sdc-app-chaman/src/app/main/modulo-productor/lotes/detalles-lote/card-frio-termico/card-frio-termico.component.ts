@@ -128,7 +128,7 @@ export class CardFrioTermicoComponent implements OnChanges {
     if (resumen?.thermalProcess === 'vernalizacion_anual') {
       return `${cultivo}: la vernalización se informa como exposición térmica en la ventana varietal; no se confunde con horas de frío de frutales.`;
     }
-    if (resumen?.thermalProcess === 'dormancia_perenne') {
+    if (this.esDormanciaPerenne) {
       return `${cultivo}: HF, Unidades Utah y Porciones de Frío son modelos independientes. El cumplimiento varietal sólo usa el modelo rector validado y requiere confirmación fenológica a campo.`;
     }
     return `${cultivo}: seguimiento térmico visible, sin declarar cumplimiento biológico hasta contar con parámetros varietales documentados.`;
@@ -147,6 +147,10 @@ export class CardFrioTermicoComponent implements OnChanges {
 
   public get calidadFrioLabel(): string {
     const campo = this.data?.summary.fieldCold;
+    if (!campo && this.usaSensorFrio && this.esNumero(this.frioSensor?.horasFrio)) {
+      return 'LoRa visible; acumulado canónico pendiente de reproceso';
+    }
+    if (!campo && this.usaSensorFrio) return 'LoRa visible como serie ambiental';
     if (!campo) return 'Serie canónica sin lectura LoRa de frío consolidada';
     if (campo.quality === 'reference') return 'LoRa visible como referencia no calibrada';
     if (campo.interpretation === 'insufficient_data') {
@@ -158,6 +162,12 @@ export class CardFrioTermicoComponent implements OnChanges {
   public get calidadFrioDetalle(): string {
     const campo = this.data?.summary.fieldCold;
     if (!campo) {
+      if (this.usaSensorFrio) {
+        const actualizado = this.frioSensor?.fechaUltimoCalculo
+          ? ` Vista previa del dispositivo actualizada ${this.fechaHora(this.frioSensor.fechaUltimoCalculo)}.`
+          : '';
+        return `El histórico real permanece visible. HF/Utah/CP sólo gobiernan decisiones cuando el motor canónico termina de auditar cobertura, brechas y calibración.${actualizado}`;
+      }
       return 'La jerarquía automática usa sensor calificado, luego central válida y finalmente Open-Meteo.';
     }
     const partes = [
@@ -196,17 +206,22 @@ export class CardFrioTermicoComponent implements OnChanges {
     this.loading = true;
     this.error = undefined;
     try {
-      const cached = CardFrioTermicoComponent.agrometCache.get(id);
-      if (!force && cached) {
-        this.data = cached;
-      } else {
-        let request = CardFrioTermicoComponent.agrometPending.get(id);
-        if (!request || force) {
-          request = this.siembraService.agrometeorologia(id);
-          CardFrioTermicoComponent.agrometPending.set(id, request);
-        }
-        this.data = await request;
+      if (force) {
+        this.data = await this.siembraService.reprocesarAgrometeorologia(id, false);
         CardFrioTermicoComponent.agrometCache.set(id, this.data);
+      } else {
+        const cached = CardFrioTermicoComponent.agrometCache.get(id);
+        if (cached) {
+          this.data = cached;
+        } else {
+          let request = CardFrioTermicoComponent.agrometPending.get(id);
+          if (!request) {
+            request = this.siembraService.agrometeorologia(id);
+            CardFrioTermicoComponent.agrometPending.set(id, request);
+          }
+          this.data = await request;
+          CardFrioTermicoComponent.agrometCache.set(id, this.data);
+        }
       }
       this.prepararVista();
     } catch (error: any) {
@@ -229,41 +244,20 @@ export class CardFrioTermicoComponent implements OnChanges {
 
   private crearMetricas(): MetricaFrio[] {
     const resumen = this.data?.summary;
-    if (!resumen) return this.crearMetricaHfeLegacy();
+    if (!resumen) return this.crearMetricasSensorPreview();
     const metricas: MetricaFrio[] = [];
     const campo = resumen.fieldCold;
-    const dormancia = resumen.thermalProcess === 'dormancia_perenne';
+    const dormancia = this.esDormanciaPerenne;
 
     if (dormancia) {
-      metricas.push(
-        this.metrica(
-          'Horas de frío (HF)',
-          resumen.chillingHoursAccumulated,
-          'HF',
-          'Modelo de horas 0 a 7,2 °C',
-          'Serie canónica',
-          1
-        ),
-        this.metrica(
-          'Unidades Utah',
-          resumen.utahChillUnitsAccumulated,
-          'UF',
-          'Modelo Utah; puede descontar calor',
-          'Serie canónica',
-          1
-        ),
-        this.metrica(
-          'Porciones de frío',
-          resumen.chillPortionsAccumulated,
-          'CP',
-          (resumen.chillingMaximumGapHours || 0) > 0
-            ? 'Dynamic Model; cota inferior por brechas'
-            : 'Dynamic Model horario',
-          'Serie canónica',
-          2
-        )
-      );
-      metricas.unshift(this.metricaRequisito(resumen));
+      metricas.push(this.metricaRequisito(resumen));
+      if (campo) {
+        metricas.push(...this.crearMetricasFrioCampo(campo));
+      } else if (this.esNumero(this.frioSensor?.horasFrio)) {
+        metricas.push(...this.crearMetricasSensorPreview());
+      } else {
+        metricas.push(...this.crearMetricasFrioCanonico(resumen));
+      }
     }
 
     if (resumen.thermalProcess === 'vernalizacion_anual') {
@@ -278,32 +272,7 @@ export class CardFrioTermicoComponent implements OnChanges {
       });
     }
 
-    if (campo) {
-      metricas.push(
-        this.metrica(
-          'HF medido en lote',
-          campo.chillingHoursAccumulated,
-          'HF',
-          'Temperatura de aire LoRa',
-          campo.sensorNames?.join(', ') || 'Sensor LoRa',
-          1,
-          campo.quality === 'qualified' ? 'ok' : 'warn'
-        ),
-        this.metrica(
-          'CP medido en lote',
-          campo.chillPortionsAccumulated,
-          'CP',
-          campo.interpretation === 'insufficient_data'
-            ? 'Parcial por cobertura o continuidad'
-            : 'Dynamic Model sobre la serie LoRa',
-          campo.sensorNames?.join(', ') || 'Sensor LoRa',
-          2,
-          campo.quality === 'qualified' ? 'ok' : 'warn'
-        )
-      );
-    }
-
-    metricas.push(...this.crearMetricaHfeLegacy());
+    if (campo) metricas.push(...this.crearMetricaHfeLegacy());
     metricas.push({
       label: 'Grados día',
       value: this.esNumero(resumen.gddAccumulated) ? `${this.numero(resumen.gddAccumulated, 1)} GDD` : 'Incompleto',
@@ -319,6 +288,107 @@ export class CardFrioTermicoComponent implements OnChanges {
       (metrica, index, array) =>
         metrica.value !== '-' || array.findIndex((candidate) => candidate.label === metrica.label) === index
     );
+  }
+
+  private crearMetricasFrioCanonico(resumen: IResumenAgrometeorologico): MetricaFrio[] {
+    return [
+      this.metrica(
+        'Horas de frío (HF)',
+        resumen.chillingHoursAccumulated,
+        'HF',
+        'Horas entre 0 y 7,2 °C',
+        'Serie canónica',
+        1
+      ),
+      this.metrica(
+        'Unidades Utah',
+        resumen.utahChillUnitsAccumulated,
+        'UF',
+        'Modelo Utah; puede descontar calor',
+        'Serie canónica',
+        1
+      ),
+      this.metrica(
+        'Porciones de frío',
+        resumen.chillPortionsAccumulated,
+        'CP',
+        (resumen.chillingMaximumGapHours || 0) > 0
+          ? 'Dynamic Model; cota inferior por brechas'
+          : 'Dynamic Model horario',
+        'Serie canónica',
+        2
+      ),
+    ];
+  }
+
+  private crearMetricasFrioCampo(campo: NonNullable<IResumenAgrometeorologico['fieldCold']>): MetricaFrio[] {
+    const source = campo.sensorNames?.join(', ') || 'Sensor LoRa';
+    const tone: MetricaFrio['tone'] = campo.quality === 'qualified' ? 'ok' : 'warn';
+    const quality = campo.quality === 'qualified' ? 'serie LoRa calificada' : 'referencia LoRa no calibrada';
+    return [
+      this.metrica(
+        'Horas frío de campo (HF)',
+        campo.chillingHoursAccumulated,
+        'HF',
+        `0 a 7,2 °C · ${quality}`,
+        source,
+        1,
+        tone
+      ),
+      this.metrica('Utah de campo', campo.utahChillUnitsAccumulated, 'UF', `Modelo Utah · ${quality}`, source, 1, tone),
+      this.metrica(
+        'Porciones de campo',
+        campo.chillPortionsAccumulated,
+        'CP',
+        campo.interpretation === 'insufficient_data'
+          ? 'Dynamic Model parcial por cobertura o continuidad'
+          : `Dynamic Model · ${quality}`,
+        source,
+        2,
+        tone
+      ),
+    ];
+  }
+
+  private crearMetricasSensorPreview(): MetricaFrio[] {
+    const frio = this.frioSensor;
+    if (!frio) return [];
+    const source = this.dispositivoFrio?.nombre || 'Sensor LoRa';
+    const metricas: MetricaFrio[] = [];
+    if (this.esNumero(frio.horasFrio)) {
+      metricas.push(
+        this.metrica(
+          'Horas frío del sensor (vista previa)',
+          frio.horasFrio,
+          'HF',
+          `Acumulado 0 a 7,2 °C${this.periodoPreviewSensor()}`,
+          source,
+          2,
+          'warn'
+        )
+      );
+    }
+    const hfe = this.valorFrioLegacy('horasFrioEfectivas');
+    if (this.esNumero(hfe)) {
+      metricas.push({
+        label: 'Frío efectivo (HFE hist.)',
+        value: `${this.numero(hfe, 2)} HFE`,
+        detail: 'Indicador histórico de referencia; no gobierna decisiones nuevas',
+        source,
+        tone: 'warn',
+      });
+    }
+    const cp = this.valorFrioLegacy('porcionesFrio');
+    if (this.esNumero(cp)) {
+      metricas.push({
+        label: 'Porciones históricas (ref.)',
+        value: `${this.numero(cp, 2)} CP`,
+        detail: 'Estimación legacy; esperar Dynamic Model canónico para decidir',
+        source,
+        tone: 'warn',
+      });
+    }
+    return metricas;
   }
 
   private metricaRequisito(resumen: IResumenAgrometeorologico): MetricaFrio {
@@ -348,16 +418,39 @@ export class CardFrioTermicoComponent implements OnChanges {
   }
 
   private crearMetricaHfeLegacy(): MetricaFrio[] {
-    if (!this.esNumero(this.frioSensor?.horasFrioEfectivas)) return [];
+    const hfe = this.valorFrioLegacy('horasFrioEfectivas');
+    if (!this.esNumero(hfe)) return [];
     return [
       {
         label: 'Frío efectivo (HFE ref.)',
-        value: `${this.numero(this.frioSensor?.horasFrioEfectivas, 2)} HFE`,
+        value: `${this.numero(hfe, 2)} HFE`,
         detail: 'Referencia histórica; no gobierna decisiones nuevas',
         source: this.dispositivoFrio?.nombre || 'Sensor LoRa',
         tone: 'warn',
       },
     ];
+  }
+
+  private get esDormanciaPerenne(): boolean {
+    return !!(
+      this.data?.summary.thermalProcess === 'dormancia_perenne' ||
+      esCultivoPerenne(this.siembra?.semilla?.cultivo) ||
+      this.siembra?.semilla?.parametrosAgrometeorologicos?.procesoTermico === 'dormancia_perenne'
+    );
+  }
+
+  private valorFrioLegacy(key: 'horasFrioEfectivas' | 'porcionesFrio' | 'factorEfectivoActual'): number | undefined {
+    const direct = this.frioSensor?.[key];
+    if (this.esNumero(direct)) return direct;
+    const raw = (this.frioSensor as any)?.legacy?.frio?.raw?.[key];
+    return this.esNumero(raw) ? raw : undefined;
+  }
+
+  private periodoPreviewSensor(): string {
+    const desde = this.frioSensor?.fechaInicio || this.frioSensor?.temporadaInicio;
+    const hasta = this.frioSensor?.fechaUltimoCalculo;
+    if (!desde && !hasta) return '';
+    return ` · ${this.fechaCorta(desde)} a ${this.fechaCorta(hasta)}`;
   }
 
   private metrica(
