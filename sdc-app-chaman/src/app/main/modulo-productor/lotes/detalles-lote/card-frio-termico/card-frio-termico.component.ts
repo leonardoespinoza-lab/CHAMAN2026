@@ -325,24 +325,36 @@ export class CardFrioTermicoComponent implements OnChanges {
     const source = campo.sensorNames?.join(', ') || 'Sensor LoRa';
     const tone: MetricaFrio['tone'] = campo.quality === 'qualified' ? 'ok' : 'warn';
     const quality = campo.quality === 'qualified' ? 'serie LoRa calificada' : 'referencia LoRa no calibrada';
+    const coverage = this.esNumero(campo.temperatureCoveragePercentage)
+      ? `${this.numero(campo.temperatureCoveragePercentage, 0)}% de horas cubiertas`
+      : 'cobertura horaria sin consolidar';
+    const completeness = campo.continuitySufficient
+      ? 'serie continua'
+      : 'acumulado parcial por brechas';
     return [
       this.metrica(
-        'Horas frío de campo (HF)',
+        'Horas frío medidas por LoRa (HF)',
         campo.chillingHoursAccumulated,
         'HF',
-        `0 a 7,2 °C · ${quality}`,
+        `0 a 7,2 °C · ${coverage} · ${completeness} · ${quality}`,
         source,
         1,
         tone
       ),
-      this.metrica('Utah de campo', campo.utahChillUnitsAccumulated, 'UF', `Modelo Utah · ${quality}`, source, 1, tone),
       this.metrica(
-        'Porciones de campo',
+        'Utah sobre lecturas LoRa',
+        campo.utahChillUnitsAccumulated,
+        'UF',
+        `Modelo Utah · ${coverage} · ${completeness}`,
+        source,
+        1,
+        tone
+      ),
+      this.metrica(
+        'Porciones sobre lecturas LoRa',
         campo.chillPortionsAccumulated,
         'CP',
-        campo.interpretation === 'insufficient_data'
-          ? 'Dynamic Model parcial por cobertura o continuidad'
-          : `Dynamic Model · ${quality}`,
+        `Dynamic Model · ${coverage} · ${completeness} · ${quality}`,
         source,
         2,
         tone

@@ -146,8 +146,11 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.calidadFrioLabel).toContain('referencia');
     expect(component.calidadFrioDetalle).toContain('67%');
     expect(component.calidadFrioDetalle).toContain('no mueve GDD');
-    expect(component.metricas.find((metric) => metric.label === 'Horas frío de campo (HF)')?.value).toBe('503,2 HF');
-    expect(component.metricas.find((metric) => metric.label === 'Utah de campo')).toBeDefined();
+    const horasLora = component.metricas.find((metric) => metric.label === 'Horas frío medidas por LoRa (HF)');
+    expect(horasLora?.value).toBe('503,2 HF');
+    expect(horasLora?.detail).toContain('67% de horas cubiertas');
+    expect(horasLora?.detail).toContain('acumulado parcial por brechas');
+    expect(component.metricas.find((metric) => metric.label === 'Utah sobre lecturas LoRa')).toBeDefined();
     expect(component.metricas.find((metric) => metric.label === 'Frío efectivo (HFE ref.)')?.detail).toContain(
       'no gobierna decisiones'
     );
