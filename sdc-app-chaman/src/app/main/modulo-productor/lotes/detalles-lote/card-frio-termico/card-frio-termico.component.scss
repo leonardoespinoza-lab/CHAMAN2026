@@ -642,6 +642,157 @@
   white-space: nowrap;
 }
 
+.frio-model-info__catalog {
+  background: color-mix(in srgb, var(--p-primary-color), white 96%);
+  border: 1px solid color-mix(in srgb, var(--p-primary-color), white 62%);
+  border-radius: 10px;
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem;
+}
+
+.frio-model-info__catalog > header {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.frio-model-info__catalog > header span,
+.frio-model-info__sources > span {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.frio-model-info__catalog > header strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 1.05rem;
+  margin-top: 0.18rem;
+}
+
+.frio-model-info__catalog > header > em {
+  color: var(--p-text-muted-color);
+  font-size: 0.72rem;
+  font-style: normal;
+  text-align: right;
+}
+
+.frio-model-info__references {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.frio-model-info__references article {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(86, 117, 150, 0.24);
+  border-radius: 9px;
+  padding: 0.75rem;
+}
+
+.frio-model-info__references article > div {
+  align-items: flex-start;
+  display: grid;
+  gap: 0.15rem 0.6rem;
+  grid-template-columns: 1fr auto;
+}
+
+.frio-model-info__references span,
+.frio-model-info__references em {
+  color: var(--p-text-muted-color);
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.frio-model-info__references strong {
+  color: var(--p-text-color);
+  font-size: 1.12rem;
+  grid-column: 1;
+}
+
+.frio-model-info__references em {
+  border: 1px solid color-mix(in srgb, var(--p-primary-color), white 55%);
+  border-radius: 999px;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  padding: 0.22rem 0.45rem;
+}
+
+.frio-model-info__references p,
+.frio-model-info__references small,
+.frio-model-info__phenology p {
+  color: var(--p-text-muted-color);
+  line-height: 1.4;
+  margin: 0.45rem 0 0;
+}
+
+.frio-model-info__references small {
+  display: block;
+}
+
+.frio-model-info__phenology {
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(86, 117, 150, 0.22);
+  border-radius: 9px;
+  display: flex;
+  gap: 0.65rem;
+  padding: 0.75rem;
+}
+
+.frio-model-info__phenology > i {
+  color: var(--p-primary-color);
+  font-size: 1.1rem;
+}
+
+.frio-model-info__phenology strong {
+  color: var(--p-text-color);
+}
+
+.frio-model-info__sources {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.frio-model-info__sources a {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(86, 117, 150, 0.24);
+  border-radius: 8px;
+  color: var(--p-text-color);
+  display: grid;
+  gap: 0.15rem 0.55rem;
+  grid-template-columns: auto 1fr;
+  padding: 0.62rem 0.72rem;
+  text-decoration: none;
+}
+
+.frio-model-info__sources a:hover {
+  border-color: var(--p-primary-color);
+}
+
+.frio-model-info__sources a i {
+  color: var(--p-primary-color);
+  grid-row: 1 / span 2;
+}
+
+.frio-model-info__sources a small {
+  color: var(--p-text-muted-color);
+}
+
+.frio-model-info__guardrails {
+  color: var(--p-text-muted-color);
+  line-height: 1.45;
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
 @media (max-width: 900px) {
   .frio-header {
     align-items: flex-start;
@@ -655,6 +806,18 @@
 
   .frio-model-info__audit {
     grid-template-columns: 1fr;
+  }
+
+  .frio-model-info__references {
+    grid-template-columns: 1fr;
+  }
+
+  .frio-model-info__catalog > header {
+    flex-direction: column;
+  }
+
+  .frio-model-info__catalog > header > em {
+    text-align: left;
   }
 
   .frio-body {

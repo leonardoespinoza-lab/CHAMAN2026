@@ -4,3 +4,4 @@ export * from "./agrometeorologia";
 export * from "./frio-termico";
 export * from "./clasificacion-termica-cultivos";
 export * from "./fenologia-registros";
+export * from "./catalogo-termico-varietal";

@@ -3,6 +3,8 @@ import { Component, inject, Input, OnChanges, SimpleChanges } from '@angular/cor
 import Highcharts from 'highcharts';
 import {
   esCultivoPerenne,
+  getReferenciaObjetivoTermico,
+  IReferenciaTermicaVarietal,
   IDispositivo,
   IFrioAcumulado,
   IReporte,
@@ -10,6 +12,8 @@ import {
   IResumenAgrometeorologico,
   ISerieAgrometeorologicaDia,
   ISiembra,
+  IResolucionFichaTermica,
+  resolverFichaTermicaVarietal,
 } from 'modelos/src';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
@@ -33,6 +37,9 @@ interface ObjetivoFrioVisual {
   method: string;
   accumulated?: number;
   target?: number;
+  targetMin?: number;
+  targetMax?: number;
+  targetLabel?: string;
   unit: 'HF' | 'CP' | 'HFE';
   decimals: number;
   progress?: number;
@@ -257,6 +264,38 @@ export class CardFrioTermicoComponent implements OnChanges {
   public get perfilVarietalLabel(): string {
     const semilla = this.siembra?.semilla;
     return [semilla?.cultivo, semilla?.variedad, semilla?.portainjerto].filter(Boolean).join(' · ');
+  }
+
+  public get fichaTermica(): IResolucionFichaTermica | undefined {
+    return resolverFichaTermicaVarietal(this.siembra?.semilla);
+  }
+
+  public get fichaTermicaCoincidenciaLabel(): string {
+    const coincidencia = this.fichaTermica?.coincidencia;
+    if (coincidencia === 'variedad_exacta') return 'Referencia publicada de la variedad';
+    if (coincidencia === 'alias_varietal') return 'Referencia por alias o grupo varietal';
+    return 'Referencia general del cultivo';
+  }
+
+  public get referenciasTermicasFicha(): IReferenciaTermicaVarietal[] {
+    return this.fichaTermica?.ficha.referencias || [];
+  }
+
+  public referenciaTermicaValor(referencia: IReferenciaTermicaVarietal): string {
+    const unidad = referencia.unidad === 'CH_ESTUDIO' ? 'CH (estudio)' : referencia.unidad;
+    if (this.esNumero(referencia.objetivo)) return `${this.numero(referencia.objetivo, 1)} ${unidad}`;
+    if (this.esNumero(referencia.minimo) && this.esNumero(referencia.maximo)) {
+      if (referencia.minimo === referencia.maximo) return `${this.numero(referencia.minimo, 1)} ${unidad}`;
+      return `${this.numero(referencia.minimo, 1)}–${this.numero(referencia.maximo, 1)} ${unidad}`;
+    }
+    return 'Sin umbral publicado';
+  }
+
+  public referenciaTermicaEstado(referencia: IReferenciaTermicaVarietal): string {
+    if (referencia.estado === 'publicada') return 'Publicada';
+    if (referencia.estado === 'referencia_regional') return 'Referencia regional';
+    if (referencia.estado === 'evidencia_conflictiva') return 'Evidencia variable';
+    return 'Sin umbral';
   }
 
   public get estadoEspecificacionLabel(): string {
@@ -487,6 +526,14 @@ export class CardFrioTermicoComponent implements OnChanges {
     const coverage = this.esNumero(campo?.temperatureCoveragePercentage)
       ? ` · cobertura ${this.numero(campo?.temperatureCoveragePercentage, 0)}%`
       : '';
+    const referenciaHf = getReferenciaObjetivoTermico(this.siembra?.semilla, 'HF');
+    const referenciaCp = getReferenciaObjetivoTermico(this.siembra?.semilla, 'CP');
+    const targetHfCargado = this.positiveNumber(requisito?.horasFrio);
+    const targetCpCargado = this.positiveNumber(requisito?.porcionesFrio);
+    const targetHfReferencia = this.extremoSuperiorReferencia(referenciaHf);
+    const targetCpReferencia = this.extremoSuperiorReferencia(referenciaCp);
+    const sourceHf = targetHfCargado ? source : this.fuenteReferenciaLabel(referenciaHf);
+    const sourceCp = targetCpCargado ? source : this.fuenteReferenciaLabel(referenciaCp);
     const definitions: Array<Omit<ObjetivoFrioVisual, 'progress' | 'decisionReady'>> = [
       {
         key: 'HF',
@@ -495,12 +542,15 @@ export class CardFrioTermicoComponent implements OnChanges {
         accumulated: this.esNumero(resumen?.chillingHoursAccumulated)
           ? resumen?.chillingHoursAccumulated
           : this.positiveNumber(this.frioSensor?.horasFrio),
-        target: this.positiveNumber(requisito?.horasFrio),
+        target: targetHfCargado || targetHfReferencia,
+        targetMin: targetHfCargado || referenciaHf?.minimo,
+        targetMax: targetHfCargado || referenciaHf?.maximo,
+        targetLabel: targetHfCargado ? undefined : this.rangoReferenciaLabel(referenciaHf),
         unit: 'HF',
         decimals: 0,
         accumulatedSource: this.esNumero(resumen?.chillingHoursAccumulated) ? canonicalSource : fallbackSource,
-        targetSource: source,
-        targetStatus: this.positiveNumber(requisito?.horasFrio) ? status : 'sin_objetivo',
+        targetSource: sourceHf,
+        targetStatus: targetHfCargado ? status : referenciaHf ? 'referencia' : 'sin_objetivo',
         fieldComparison: this.esNumero(campo?.chillingHoursAccumulated)
           ? `${fieldSource}: ${this.numero(campo?.chillingHoursAccumulated, 0)} HF${coverage}`
           : undefined,
@@ -512,12 +562,15 @@ export class CardFrioTermicoComponent implements OnChanges {
         accumulated: this.esNumero(resumen?.chillPortionsAccumulated)
           ? resumen?.chillPortionsAccumulated
           : this.positiveNumber(this.valorFrioLegacy('porcionesFrio')),
-        target: this.positiveNumber(requisito?.porcionesFrio),
+        target: targetCpCargado || targetCpReferencia,
+        targetMin: targetCpCargado || referenciaCp?.minimo,
+        targetMax: targetCpCargado || referenciaCp?.maximo,
+        targetLabel: targetCpCargado ? undefined : this.rangoReferenciaLabel(referenciaCp),
         unit: 'CP',
         decimals: 1,
         accumulatedSource: this.esNumero(resumen?.chillPortionsAccumulated) ? canonicalSource : fallbackSource,
-        targetSource: source,
-        targetStatus: this.positiveNumber(requisito?.porcionesFrio) ? status : 'sin_objetivo',
+        targetSource: sourceCp,
+        targetStatus: targetCpCargado ? status : referenciaCp ? 'referencia' : 'sin_objetivo',
         fieldComparison: this.esNumero(campo?.chillPortionsAccumulated)
           ? `${fieldSource}: ${this.numero(campo?.chillPortionsAccumulated, 2)} CP${coverage}`
           : undefined,
@@ -756,6 +809,34 @@ export class CardFrioTermicoComponent implements OnChanges {
   private progress(value?: number, target?: number): number | undefined {
     if (!this.esNumero(value) || !this.esNumero(target) || target <= 0) return undefined;
     return Math.max(0, Math.min(100, (value / target) * 100));
+  }
+
+  private extremoSuperiorReferencia(referencia?: IReferenciaTermicaVarietal): number | undefined {
+    return (
+      this.positiveNumber(referencia?.objetivo) ||
+      this.positiveNumber(referencia?.maximo) ||
+      this.positiveNumber(referencia?.minimo)
+    );
+  }
+
+  private rangoReferenciaLabel(referencia?: IReferenciaTermicaVarietal): string | undefined {
+    if (!referencia) return undefined;
+    const unidad = referencia.unidad;
+    const minimo = this.positiveNumber(referencia.minimo);
+    const maximo = this.positiveNumber(referencia.maximo);
+    const objetivo = this.positiveNumber(referencia.objetivo);
+    if (objetivo) return `${this.numero(objetivo, unidad === 'CP' ? 1 : 0)} ${unidad} (referencia)`;
+    if (minimo && maximo) {
+      if (minimo === maximo) return `${this.numero(minimo, unidad === 'CP' ? 1 : 0)} ${unidad} (referencia)`;
+      return `${this.numero(minimo, unidad === 'CP' ? 1 : 0)}–${this.numero(maximo, unidad === 'CP' ? 1 : 0)} ${unidad}`;
+    }
+    return undefined;
+  }
+
+  private fuenteReferenciaLabel(referencia?: IReferenciaTermicaVarietal): string {
+    if (!referencia) return 'Ficha varietal sin fuente identificada';
+    const fuente = this.fichaTermica?.fuentes.find((item) => referencia.fuenteIds.includes(item.id));
+    return `${fuente?.titulo || 'Catálogo científico Chaman'} · ${this.fichaTermicaCoincidenciaLabel}`;
   }
 
   private positiveNumber(value: unknown): number | undefined {

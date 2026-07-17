@@ -2,35 +2,19 @@ import {
   Cultivo,
   MATRIZ_CLASIFICACION_TERMICA_CULTIVOS,
   evaluarEvidenciaTermicaVarietal,
+  getReferenciaObjetivoTermico,
   getClasificacionTermicaCultivo,
+  resolverFichaTermicaVarietal,
 } from 'modelos/src';
 
 describe('Matriz de clasificación térmica de cultivos', () => {
-  const cultivos: Cultivo[] = [
-    'Soja',
-    'Trigo',
-    'Maiz',
-    'Papa',
-    'Cebada',
-    'Arveja',
-    'Vid',
-    'Peral',
-    'Pecan',
-    'Manzano',
-  ];
+  const cultivos: Cultivo[] = ['Soja', 'Trigo', 'Maiz', 'Papa', 'Cebada', 'Arveja', 'Vid', 'Peral', 'Pecan', 'Manzano'];
   const perennes: Cultivo[] = ['Vid', 'Peral', 'Pecan', 'Manzano'];
   const cerealesVernalizables: Cultivo[] = ['Trigo', 'Cebada'];
-  const anualesTermicoFotoperiodicos: Cultivo[] = [
-    'Soja',
-    'Maiz',
-    'Papa',
-    'Arveja',
-  ];
+  const anualesTermicoFotoperiodicos: Cultivo[] = ['Soja', 'Maiz', 'Papa', 'Arveja'];
 
   it('clasifica los diez cultivos soportados y documenta límites y fuentes', () => {
-    expect(Object.keys(MATRIZ_CLASIFICACION_TERMICA_CULTIVOS).sort()).toEqual(
-      [...cultivos].sort()
-    );
+    expect(Object.keys(MATRIZ_CLASIFICACION_TERMICA_CULTIVOS).sort()).toEqual([...cultivos].sort());
 
     for (const cultivo of cultivos) {
       const clasificacion = getClasificacionTermicaCultivo(cultivo);
@@ -49,6 +33,31 @@ describe('Matriz de clasificación térmica de cultivos', () => {
       expect(clasificacion?.unidadesValidas).toContain('CP');
       expect(clasificacion?.unidadesValidas).not.toContain('HFE');
     }
+  });
+
+  it('resuelve referencias varietales sin convertir unidades ni habilitarlas automáticamente', () => {
+    const cripps = resolverFichaTermicaVarietal({ cultivo: 'Manzano', variedad: 'Rosy Glow' });
+    const kiowa = resolverFichaTermicaVarietal({ cultivo: 'Pecan', variedad: 'Kiowa' });
+
+    expect(cripps?.coincidencia).toBe('alias_varietal');
+    expect(getReferenciaObjetivoTermico({ cultivo: 'Manzano', variedad: 'Rosy Glow' }, 'CP')).toEqual(
+      jasmine.objectContaining({ minimo: 52, maximo: 73.3, estado: 'evidencia_conflictiva' })
+    );
+    expect(cripps?.ficha.permiteObjetivoAutomatico).toBeFalse();
+    expect(kiowa?.ficha.referencias.map((item) => item.unidad)).toEqual(['HF', 'CP']);
+    expect(kiowa?.ficha.referencias[1]).toEqual(jasmine.objectContaining({ minimo: 17, maximo: 29 }));
+  });
+
+  it('cubre cualquier variedad sin inventar una ficha y mantiene cereales fuera de HF y CP', () => {
+    const cebada = resolverFichaTermicaVarietal({ cultivo: 'Cebada', variedad: 'ANDREIA', ciclo: 'CORTO' });
+    const pecanSinFuente = resolverFichaTermicaVarietal({ cultivo: 'Pecan', variedad: 'Apache', ciclo: '1650' });
+
+    expect(cebada?.coincidencia).toBe('referencia_cultivo');
+    expect(cebada?.ficha.referencias).toEqual([]);
+    expect(cebada?.ficha.fenologia.observaciones).toContain('vernalización');
+    expect(pecanSinFuente?.coincidencia).toBe('referencia_cultivo');
+    expect(pecanSinFuente?.ficha.referencias).toEqual([]);
+    expect(getReferenciaObjetivoTermico({ cultivo: 'Pecan', variedad: 'Apache', ciclo: '1650' }, 'HF')).toBeUndefined();
   });
 
   it('separa vernalización cereal de dormancia y del desarrollo térmico-fotoperiódico', () => {
@@ -118,8 +127,7 @@ describe('Matriz de clasificación térmica de cultivos', () => {
         temperaturaBaseC: 4.5,
         temperaturaSuperiorC: 30,
         metodoGdd: 'promedio_limitado',
-        semanticaGddPorEtapa:
-          'rangos_acumulados_desde_inicio_termico',
+        semanticaGddPorEtapa: 'rangos_acumulados_desde_inicio_termico',
         gddPorEtapa: {
           Brotacion: { orden: 1, min: 0, max: 139 },
           Floracion: { orden: 2, min: 140, max: 400 },
@@ -130,12 +138,8 @@ describe('Matriz de clasificación térmica de cultivos', () => {
     expect(evaluacion.perfilVarietalValidado).toBeTrue();
     expect(evaluacion.requiereBiofixCampo).toBeTrue();
     expect(evaluacion.aptoParaPrediccionAutomatica).toBeFalse();
-    expect(evaluacion.estado).toBe(
-      'perfil_varietal_validado_requiere_biofix'
-    );
-    expect(evaluacion.faltantes).toContain(
-      'biofix fenológico observado en el lote'
-    );
+    expect(evaluacion.estado).toBe('perfil_varietal_validado_requiere_biofix');
+    expect(evaluacion.faltantes).toContain('biofix fenológico observado en el lote');
   });
 
   it('separa el estado de vernalización y no declara completo un cereal sin fotoperíodo', () => {
@@ -171,8 +175,7 @@ describe('Matriz de clasificación térmica de cultivos', () => {
         temperaturaBaseC: 0,
         temperaturaSuperiorC: 30,
         metodoGdd: 'promedio_limitado',
-        semanticaGddPorEtapa:
-          'rangos_acumulados_desde_inicio_termico',
+        semanticaGddPorEtapa: 'rangos_acumulados_desde_inicio_termico',
         gddPorEtapa: {
           Emergencia: { orden: 1, min: 0, max: 149 },
           Espiguilla_Terminal: { orden: 2, min: 150, max: 699 },
@@ -186,12 +189,8 @@ describe('Matriz de clasificación térmica de cultivos', () => {
     expect(incompleta.faltantes.length).toBeGreaterThan(0);
     expect(completa.aptoParaPrediccionAutomatica).toBeFalse();
     expect(completa.estado).toBe('requiere_calibracion_varietal');
-    expect(completa.faltantes).toContain(
-      'modelo fotoperiódico varietal implementado'
-    );
-    expect(completa.faltantes).toContain(
-      'fuente fotoperiódica varietal'
-    );
+    expect(completa.faltantes).toContain('modelo fotoperiódico varietal implementado');
+    expect(completa.faltantes).toContain('fuente fotoperiódica varietal');
   });
 
   it('admite un cereal primaveral documentado con requisito explícito igual a cero', () => {
@@ -210,8 +209,7 @@ describe('Matriz de clasificación térmica de cultivos', () => {
         temperaturaBaseC: 0,
         temperaturaSuperiorC: 30,
         metodoGdd: 'promedio_limitado',
-        semanticaGddPorEtapa:
-          'rangos_acumulados_desde_inicio_termico',
+        semanticaGddPorEtapa: 'rangos_acumulados_desde_inicio_termico',
         gddPorEtapa: {
           Emergencia: { orden: 1, min: 0, max: 149 },
           Macollaje: { orden: 2, min: 150, max: 699 },
@@ -232,12 +230,8 @@ describe('Matriz de clasificación térmica de cultivos', () => {
 
     expect(evaluacion.perfilVarietalValidado).toBeTrue();
     expect(evaluacion.aptoParaPrediccionAutomatica).toBeTrue();
-    expect(evaluacion.faltantes).not.toContain(
-      'requisito positivo de ventana calibrada'
-    );
-    expect(evaluacion.faltantes).not.toContain(
-      'ventana fenológica explícita de vernalización'
-    );
+    expect(evaluacion.faltantes).not.toContain('requisito positivo de ventana calibrada');
+    expect(evaluacion.faltantes).not.toContain('ventana fenológica explícita de vernalización');
   });
 
   it('rechaza perfiles GDD desordenados o fotoperiodos sin umbral operativo', () => {
@@ -252,8 +246,7 @@ describe('Matriz de clasificación térmica de cultivos', () => {
         temperaturaBaseC: 8,
         temperaturaSuperiorC: 34,
         metodoGdd: 'promedio_limitado',
-        semanticaGddPorEtapa:
-          'rangos_acumulados_desde_inicio_termico',
+        semanticaGddPorEtapa: 'rangos_acumulados_desde_inicio_termico',
         gddPorEtapa: {
           Emergencia: { orden: 1, min: 100, max: 200 },
           Floracion: { orden: 2, min: 80, max: 700 },
@@ -272,12 +265,8 @@ describe('Matriz de clasificación térmica de cultivos', () => {
     });
 
     expect(evaluacion.aptoParaPrediccionAutomatica).toBeFalse();
-    expect(evaluacion.faltantes).toContain(
-      'secuencia GDD acumulada monotónica por etapa'
-    );
-    expect(evaluacion.faltantes).toContain(
-      'respuesta y umbral fotoperiódico válidos por etapa'
-    );
+    expect(evaluacion.faltantes).toContain('secuencia GDD acumulada monotónica por etapa');
+    expect(evaluacion.faltantes).toContain('respuesta y umbral fotoperiódico válidos por etapa');
   });
 
   it('no hereda el estado global para validar vernalización', () => {
@@ -300,9 +289,7 @@ describe('Matriz de clasificación térmica de cultivos', () => {
       },
     });
 
-    expect(evaluacion.faltantes).toContain(
-      'estado de vernalización validado'
-    );
+    expect(evaluacion.faltantes).toContain('estado de vernalización validado');
   });
 
   it('admite vernalización opcional de Arveja solo como calibración varietal propia', () => {
@@ -323,14 +310,10 @@ describe('Matriz de clasificación térmica de cultivos', () => {
     });
 
     expect(clasificacion?.respuestaVernalizacionOpcional).toBeTrue();
-    expect(clasificacion?.unidadesValidas).toContain(
-      'dias_ventana_calibrada'
-    );
+    expect(clasificacion?.unidadesValidas).toContain('dias_ventana_calibrada');
     expect(clasificacion?.unidadesValidas).not.toContain('HF');
     expect(clasificacion?.unidadesValidas).not.toContain('CP');
     expect(evaluacion.aptoParaPrediccionAutomatica).toBeFalse();
-    expect(evaluacion.faltantes).toContain(
-      'estado de vernalización validado'
-    );
+    expect(evaluacion.faltantes).toContain('estado de vernalización validado');
   });
 });

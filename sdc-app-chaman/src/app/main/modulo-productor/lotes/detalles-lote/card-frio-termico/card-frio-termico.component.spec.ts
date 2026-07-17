@@ -220,6 +220,31 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.objetivosFrio.find((item) => item.key === 'CP')?.accumulated).toBe(21.21);
   });
 
+  it('muestra rangos científicos como referencia visual sin volverlos decisión automática', async () => {
+    const component = create(
+      response({
+        summary: {
+          thermalProcess: 'dormancia_perenne',
+          chillingHoursAccumulated: 520,
+          chillPortionsAccumulated: 31,
+        },
+      })
+    );
+    component.siembra = {
+      _id: 'manzano-rosy-glow-catalogo',
+      semilla: { cultivo: 'Manzano', variedad: 'Rosy Glow', portainjerto: 'EM-04' },
+    } as any;
+
+    await component.cargar();
+
+    expect(component.fichaTermica?.coincidencia).toBe('alias_varietal');
+    const cp = component.objetivosFrio.find((item) => item.key === 'CP');
+    expect(cp).toEqual(
+      jasmine.objectContaining({ targetMin: 52, targetMax: 73.3, targetLabel: '52,0–73,3 CP', decisionReady: false })
+    );
+    expect(cp?.targetSource).toContain('Apple dormancy');
+  });
+
   it('explica que el GDD de un peral aún no comenzó cuando falta el biofix de forzado', async () => {
     const component = create(
       response({

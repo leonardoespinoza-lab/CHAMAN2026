@@ -8,7 +8,7 @@
       <div class="frio-header__actions">
         <p-button
           icon="pi pi-info-circle"
-          label="Cómo se calcula"
+          label="Información del modelo"
           size="small"
           severity="secondary"
           [outlined]="true"
@@ -78,7 +78,9 @@
                   </div>
                   <div>
                     <small>Necesita</small>
-                    <strong>{{ item.target ? formatObjetivoValue(item, item.target) : 'Sin especificar' }}</strong>
+                    <strong>{{
+                      item.targetLabel || (item.target ? formatObjetivoValue(item, item.target) : 'Sin especificar')
+                    }}</strong>
                     <span>{{ item.targetSource }}</span>
                   </div>
                 </div>
@@ -87,12 +89,18 @@
                   class="frio-target__meter"
                   [class.frio-target__meter--unknown]="item.progress === undefined"
                   [attr.aria-label]="
-                    item.progress !== undefined ? item.progress + '% del objetivo cargado' : 'Objetivo no documentado'
+                    item.progress !== undefined
+                      ? item.progress + '% respecto del extremo superior del objetivo o rango de referencia'
+                      : 'Objetivo no documentado'
                   "
                 >
                   @if (item.progress !== undefined) {
                     <i [style.width.%]="item.progress"></i>
-                    <b>{{ item.progress | number: '1.0-0' }}%</b>
+                    <b
+                      >{{ item.progress | number: '1.0-0' }}%{{
+                        item.targetMin !== item.targetMax ? ' del máximo' : ''
+                      }}</b
+                    >
                   } @else {
                     <b>Falta objetivo varietal</b>
                   }
@@ -200,7 +208,7 @@
     [resizable]="false"
     [style]="{ width: 'min(920px, 95vw)' }"
     [breakpoints]="{ '720px': '97vw' }"
-    header="Cómo calcula Chaman el frío y el tiempo térmico"
+    header="Información científica del modelo térmico"
     styleClass="chaman-detail-dialog frio-model-dialog"
   >
     <section class="frio-model-info">
@@ -297,6 +305,66 @@
           floración. Esas etapas se consolidan con la observación fenológica del lote.
         </p>
       </article>
+
+      @if (fichaTermica) {
+        <section class="frio-model-info__catalog">
+          <header>
+            <div>
+              <span>Ficha científica versionada</span>
+              <strong>{{ fichaTermicaCoincidenciaLabel }}</strong>
+            </div>
+            <em>{{ fichaTermica.versionCatalogo }} · {{ fichaTermica.actualizadoAl }}</em>
+          </header>
+
+          @if (referenciasTermicasFicha.length) {
+            <div class="frio-model-info__references">
+              @for (referencia of referenciasTermicasFicha; track referencia.unidad + referencia.region) {
+                <article>
+                  <div>
+                    <span>{{ referencia.proceso }} · {{ referencia.unidad }}</span>
+                    <strong>{{ referenciaTermicaValor(referencia) }}</strong>
+                    <em>{{ referenciaTermicaEstado(referencia) }}</em>
+                  </div>
+                  <p>{{ referencia.modelo }} · {{ referencia.region }}</p>
+                  <small>{{ referencia.observaciones }}</small>
+                </article>
+              }
+            </div>
+          } @else {
+            <p-message severity="warn">
+              Esta variedad todavía no tiene un umbral publicado suficientemente trazable. El acumulado climático se
+              conserva, pero Chaman no inventa un objetivo.
+            </p-message>
+          }
+
+          <article class="frio-model-info__phenology">
+            <i class="pi pi-map-marker"></i>
+            <div>
+              <strong>Fenología observada</strong>
+              <p>{{ fichaTermica.ficha.fenologia.observaciones }}</p>
+            </div>
+          </article>
+
+          @if (fichaTermica.fuentes.length) {
+            <div class="frio-model-info__sources">
+              <span>Bibliografía utilizada</span>
+              @for (fuente of fichaTermica.fuentes; track fuente.id) {
+                <a [href]="fuente.url" target="_blank" rel="noopener noreferrer">
+                  <i class="pi pi-external-link"></i>
+                  <strong>{{ fuente.titulo }}</strong>
+                  <small>{{ fuente.anio }} · {{ fuente.tipo }}</small>
+                </a>
+              }
+            </div>
+          }
+
+          <ul class="frio-model-info__guardrails">
+            @for (advertencia of fichaTermica.advertencias; track advertencia) {
+              <li>{{ advertencia }}</li>
+            }
+          </ul>
+        </section>
+      }
     </section>
   </p-dialog>
 }
