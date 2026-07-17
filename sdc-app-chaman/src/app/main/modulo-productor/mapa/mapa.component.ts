@@ -45,6 +45,7 @@ import { OpenLayersService } from '../../../auxiliares/servicios/openLayers.serv
 import { ParamsService } from '../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../auxiliares/shared.module';
 import { DrawerClimaComponent } from './drawer-clima/drawer-clima.component';
+import { EstadoRiegoMapa, evaluarRiegoMapa } from './mapa-riego-evidence';
 
 interface IServicio {
   label: () => string;
@@ -61,6 +62,7 @@ interface ILoteMapa extends ILote {
   severityRiego?: string;
   iconRiego?: string;
   sumaRiego?: number;
+  estadoRiegoMapa?: EstadoRiegoMapa;
   colorHuella?: string;
   severityHuella?: string;
   iconHuella?: string;
@@ -297,6 +299,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     haRojo: 0,
     haAmarillo: 0,
     haVerde: 0,
+    cantSinDatos: 0,
+    haSinDatos: 0,
   };
   // Datos para el panel de huella hidrica
   public huella = {
@@ -635,16 +639,18 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       haRojo: 0,
       haAmarillo: 0,
       haVerde: 0,
+      cantSinDatos: 0,
+      haSinDatos: 0,
     };
     let regarHoyTotal: boolean = false;
     let regarAlgunDiaTotal: boolean = false;
     this.lotes.forEach((lote) => {
       const has = Math.trunc(lote?.ubicacion?.superficie || 0);
-      const predicciones = lote.siembra?.ultimaPrediccionRiego || [];
-      const regarHoy = !!predicciones[0]?.cantidad;
-      const regarAlgunDia = predicciones.some((p) => p.cantidad && p.cantidad > 0);
-      const sumaRiego = predicciones.reduce((acc, p) => acc + (p.cantidad || 0), 0);
-      lote.sumaRiego = sumaRiego;
+      const evidencia = evaluarRiegoMapa(lote);
+      const regarHoy = evidencia.estado === 'hoy';
+      const regarAlgunDia = evidencia.estado === 'proximo';
+      lote.estadoRiegoMapa = evidencia.estado;
+      lote.sumaRiego = evidencia.suma ?? undefined;
       if (regarHoy) {
         this.riego.cantRojo++;
         this.riego.haRojo += has;
@@ -657,12 +663,18 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         lote.colorRiego = 'rgba(243, 216, 64, 0.6)';
         lote.severityRiego = 'warn';
         lote.iconRiego = 'pi pi-info-circle';
-      } else {
+      } else if (evidencia.estado === 'sin_aporte') {
         this.riego.cantVerde++;
         this.riego.haVerde += has;
         lote.colorRiego = 'rgba(34, 197, 94, 0.6)';
         lote.severityRiego = 'success';
         lote.iconRiego = 'pi pi-check';
+      } else {
+        this.riego.cantSinDatos++;
+        this.riego.haSinDatos += has;
+        lote.colorRiego = 'rgba(148, 163, 184, 0.45)';
+        lote.severityRiego = 'secondary';
+        lote.iconRiego = 'pi pi-question-circle';
       }
 
       regarHoyTotal = regarHoyTotal || regarHoy;
@@ -674,8 +686,10 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       this.servicios[1].backgroudColor = 'var(--p-danger-color)';
     } else if (regarAlgunDiaTotal) {
       this.servicios[1].backgroudColor = 'var(--p-warning-color)';
-    } else {
+    } else if (this.riego.cantVerde) {
       this.servicios[1].backgroudColor = 'var(--p-success-color)';
+    } else {
+      this.servicios[1].backgroudColor = 'var(--p-surface-400)';
     }
   }
   private calcularHuella() {
@@ -1075,6 +1089,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     if (seleccionado?.sumaRiego && seleccionado.sumaRiego > 0) {
       return `${this.formatNumber(seleccionado.sumaRiego, 1)} mm sugeridos`;
     }
+    if (seleccionado.estadoRiegoMapa === 'sin_datos') {
+      return 'Sin datos suficientes';
+    }
     return 'Sin riego recomendado';
   }
 
@@ -1289,16 +1306,27 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private resumenRiegoGerencial(lotes: ILoteMapa[]): IResumenGerencialMetric {
+    const lotesEvaluables = lotes.filter((lote) => lote.estadoRiegoMapa && lote.estadoRiegoMapa !== 'sin_datos');
     const lotesConRiego = lotes.filter((lote) => (this.numero(lote.sumaRiego) || 0) > 0);
     const mm = lotesConRiego.reduce((acc, lote) => acc + (this.numero(lote.sumaRiego) || 0), 0);
     if (!lotes.length) {
       return this.metric('Riego', 'Sin lotes', 'No hay superficie cargada para evaluar.', 'pi pi-tint', 'neutral', 0);
     }
+    if (!lotesEvaluables.length) {
+      return this.metric(
+        'Riego',
+        'Sin datos concluyentes',
+        'Falta cerrar el balance hidrico; no se declara necesidad ni ausencia de riego.',
+        'pi pi-tint',
+        'neutral',
+        0
+      );
+    }
     if (!lotesConRiego.length) {
       return this.metric(
         'Riego',
-        'Sin necesidad',
-        'No hay riego recomendado con los datos disponibles.',
+        'Sin aporte calculado',
+        `${lotesEvaluables.length} lote${lotesEvaluables.length > 1 ? 's' : ''} con balance valido sin aporte en la ventana.`,
         'pi pi-tint',
         'ok',
         5
@@ -1398,10 +1426,10 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!avances.length) {
       return this.metric(
         'Horas frio',
-        'Sin objetivos',
-        'Faltan objetivos de frio o sensor asociado en los lotes perennes.',
+        'Sin consolidar',
+        'El resumen del mapa no recibio acumulado y objetivo comparables; verificar la tarjeta termica de cada lote.',
         'pi pi-clock',
-        'warn',
+        'neutral',
         0
       );
     }

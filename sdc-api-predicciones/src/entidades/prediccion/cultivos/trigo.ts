@@ -178,12 +178,19 @@ export class PrediccionTrigoService {
 
         const fechaKey = fecha.toISOString().slice(0, 10);
         const diaCanonico = diasCanonicosPorFecha.get(fechaKey);
+        if (!diaCanonico) {
+          Logger.log(
+            `Se detiene la serie sanitaria de trigo en ${fechaKey}: aun no existe un dia meteorologico observado consolidado.`,
+          );
+          break;
+        }
         const etapa = diaCanonico?.etapaNumero ?? -1;
         const fenologiaObservada =
           diaCanonico?.serie.stageSource === 'campo' ||
           diaCanonico?.serie.stageSource === 'proyeccion_anclada_campo';
         const etapaHabilitante =
           Boolean(diaCanonico?.etapaHabilitante) && etapa >= 0;
+        const etapaReferencia = etapa >= 0;
         const climaHabilitante = Boolean(diaCanonico?.climaHabilitante);
 
         const registroClima = diaCanonico?.clima;
@@ -243,16 +250,26 @@ export class PrediccionTrigoService {
               ? fenologiaObservada
                 ? 'alta'
                 : 'media'
-              : 'sin_datos',
+              : etapaReferencia
+                ? 'baja'
+                : 'sin_datos',
             fuente: fenologiaObservada ? 'manual' : 'estimado',
-            cobertura: etapaHabilitante ? 1 : 0,
+            cobertura: etapaHabilitante ? 1 : etapaReferencia ? 0.5 : 0,
             fallback: !etapaHabilitante,
             resumen: etapaHabilitante
               ? `Etapa provista por el motor agrometeorologico canonico (${diaCanonico?.serie.stageSource}).`
-              : 'La etapa canonica no habilita decisiones sanitarias.',
+              : etapaReferencia
+                ? `Etapa fenologica de referencia (${diaCanonico?.serie.stageSource}); se usa para screening y no abre por si sola una alerta.`
+                : 'No hay una etapa fenologica reconocida para la fecha.',
             limitaciones: etapaHabilitante
               ? []
-              : ['No hay observación fenológica de campo anterior a la fecha.'],
+              : etapaReferencia
+                ? [
+                    'La etapa no fue confirmada a campo; las compuertas termicas usan el GDD canonico completo.',
+                  ]
+                : [
+                    'No hay observacion fenologica de campo anterior a la fecha.',
+                  ],
           },
           enfermedades: [],
           estacion: {
@@ -270,8 +287,7 @@ export class PrediccionTrigoService {
         // Hace las predicciones por enfermedad segun ventana fenologica.
         const predicciones: (IPrediccionEnfermedad | undefined)[] = [];
 
-        const decisionSanitariaHabilitada =
-          etapaHabilitante && climaHabilitante;
+        const decisionSanitariaHabilitada = climaHabilitante;
         if (!decisionSanitariaHabilitada) {
           predicciones.push(
             ...this.crearMarcadoresSinDatosCanonicos(
@@ -304,7 +320,10 @@ export class PrediccionTrigoService {
             formulaVersion: TRIGO_MOTOR_SANITARIO_VERSION,
           };
 
-          if (this.estaEnVentanaManchas(etapa) && ventanaFoliar.activa) {
+          if (
+            this.estaEnVentanaManchas(etapa, etapaHabilitante) &&
+            ventanaFoliar.activa
+          ) {
             predicciones.push(
               ...(await Promise.all([
                 this.manchaDeLaHojaService.predecir(
@@ -332,6 +351,7 @@ export class PrediccionTrigoService {
               ventanaFoliar.activa,
               gddBase0DesdeSiembra,
               coberturaGdd,
+              etapaHabilitante,
             );
             predicciones.push(
               this.crearMarcadorFueraVentana(
@@ -351,7 +371,10 @@ export class PrediccionTrigoService {
             );
           }
 
-          if (this.estaEnVentanaRoyas(etapa) && ventanaFoliar.activa) {
+          if (
+            this.estaEnVentanaRoyas(etapa, etapaHabilitante) &&
+            ventanaFoliar.activa
+          ) {
             predicciones.push(
               ...(await Promise.all([
                 this.royaDeLaHojaService.predecir(
@@ -380,6 +403,7 @@ export class PrediccionTrigoService {
               ventanaFoliar.activa,
               gddBase0DesdeSiembra,
               coberturaGdd,
+              etapaHabilitante,
             );
             predicciones.push(
               this.crearMarcadorFueraVentana(
@@ -661,7 +685,7 @@ export class PrediccionTrigoService {
         ...salida.calidadDatos,
         fallback: true,
         resumen:
-          'Salida sanitaria bloqueada: falta evidencia meteorologica o fenologica canonica apta para decision.',
+          'Salida sanitaria bloqueada: falta evidencia meteorologica canonica apta para calculo.',
         limitaciones: [...new Set(motivos)],
       };
       return salida;
@@ -676,8 +700,9 @@ export class PrediccionTrigoService {
     ventanaTermicaActiva: boolean,
     gddBase0: number,
     coberturaGdd: number,
+    etapaHabilitante: boolean,
   ): string {
-    if (etapa < etapaMinima || etapa > etapaMaxima) {
+    if (etapaHabilitante && (etapa < etapaMinima || etapa > etapaMaxima)) {
       return `Fuera de la ventana fenologica de ${grupo} (etapas ${etapaMinima} a ${etapaMaxima}; etapa actual ${etapa}).`;
     }
     if (!ventanaTermicaActiva) {
@@ -690,14 +715,17 @@ export class PrediccionTrigoService {
     return `Fuera de la ventana sanitaria de ${grupo}.`;
   }
 
-  private estaEnVentanaManchas(etapa: number): boolean {
+  private estaEnVentanaManchas(
+    etapa: number,
+    etapaHabilitante = true,
+  ): boolean {
     // Etapa 1 es Emergencia. El contrato abre en fin de macollaje,
     // representado por Espiguilla Terminal (etapa 2), nunca por Emergencia.
-    return etapa >= 2 && etapa <= 4;
+    return !etapaHabilitante || (etapa >= 2 && etapa <= 4);
   }
 
-  private estaEnVentanaRoyas(etapa: number): boolean {
-    return etapa >= 2 && etapa <= 6;
+  private estaEnVentanaRoyas(etapa: number, etapaHabilitante = true): boolean {
+    return !etapaHabilitante || (etapa >= 2 && etapa <= 6);
   }
 
   private estaEnVentanaFusarium(etapa: number): boolean {

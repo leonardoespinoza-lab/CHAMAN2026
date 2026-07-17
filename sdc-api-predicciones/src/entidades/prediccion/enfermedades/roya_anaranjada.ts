@@ -74,8 +74,9 @@ export class RoyaAnaranjadaService {
       formulaVersion: TRIGO_MOTOR_SANITARIO_VERSION,
     };
 
-    // La ecuacion recibida se conserva exactamente para comparacion y
-    // migracion, pero nunca alimenta el resultado publicado ni una alerta.
+    // La ecuacion contractual diaria se conserva exactamente. Cuando la serie
+    // horaria no esta disponible se publica como screening experimental de
+    // baja confianza; nunca alimenta alertas automaticas.
     const faltantesContrato = camposClimaticosFaltantes(climaDiario, [
       'precip',
       'hr',
@@ -141,24 +142,46 @@ export class RoyaAnaranjadaService {
       ambiente.frecuenciaAmbientalPct * resistencia.multiplicador
     ).toFixed(2);
 
+    const usaScreeningDiario =
+      !ambiente.calculable &&
+      !faltantesContrato.length &&
+      Number.isFinite(Number(variables.resultadoContractualLimitado));
+
     const metadata = metadataSanitariaTrigo(resistencia, contextoSeguro, true);
-    const calidadHoraria = {
-      nivel: ambiente.calculable ? ('media' as const) : ('sin_datos' as const),
+    const calidadModelo = {
+      nivel: ambiente.calculable
+        ? ('media' as const)
+        : usaScreeningDiario
+          ? ('baja' as const)
+          : ('sin_datos' as const),
       fuente:
         contextoSeguro.calidadClima?.fuente === 'mixto'
           ? ('mixto' as const)
           : contextoSeguro.calidadClima?.fuente || ('desconocida' as const),
-      cobertura: ambiente.cobertura,
+      cobertura: ambiente.calculable
+        ? ambiente.cobertura
+        : usaScreeningDiario
+          ? 1
+          : ambiente.cobertura,
       fallback: !ambiente.calculable,
       resumen: ambiente.calculable
         ? `Ventana movil de 10 dias con ${(ambiente.cobertura * 100).toFixed(0)}% de cobertura horaria; se informa oportunidad ambiental, no enfermedad.`
-        : `Cobertura horaria insuficiente (${(ambiente.cobertura * 100).toFixed(0)}%; minimo ${(
-            ROYA_AMARILLA_COBERTURA_HORARIA_MINIMA * 100
-          ).toFixed(0)}%). No se calcula oportunidad ambiental.`,
+        : usaScreeningDiario
+          ? 'Screening ambiental diario calculado con la ecuacion contractual; requiere validacion regional y confirmacion a campo.'
+          : `Cobertura horaria insuficiente (${(ambiente.cobertura * 100).toFixed(0)}%; minimo ${(
+              ROYA_AMARILLA_COBERTURA_HORARIA_MINIMA * 100
+            ).toFixed(0)}%). No se calcula oportunidad ambiental.`,
       limitaciones: [
         'La ventana movil de diez dias es una adaptacion Chaman del periodo de diez dias publicado y requiere validacion regional argentina.',
         'El clima no confirma inoculo, infeccion, sintomas, incidencia ni severidad a campo.',
-        `La ecuacion contractual se conserva solo en sombra (${FUENTE_CONTRATO_SOMBRA}).`,
+        ...(usaScreeningDiario
+          ? [
+              `Sin serie horaria consolidada: se usa como screening no alertable la ecuacion contractual diaria (${FUENTE_CONTRATO_SOMBRA}).`,
+              'INTA informa que la infeccion por roya amarilla requiere temperaturas frescas y mojado foliar prolongado; el resultado diario no reemplaza esa verificacion horaria.',
+            ]
+          : [
+              `La ecuacion contractual diaria queda disponible para contraste (${FUENTE_CONTRATO_SOMBRA}).`,
+            ]),
         ...(faltantesContrato.length
           ? [
               `El contraste contractual no pudo actualizarse por datos diarios faltantes: ${faltantesContrato.join(', ')}.`,
@@ -168,8 +191,8 @@ export class RoyaAnaranjadaService {
     };
 
     const calidadCombinada =
-      combinarCalidadDatos(metadata.calidadDatos, calidadHoraria) ||
-      calidadHoraria;
+      combinarCalidadDatos(metadata.calidadDatos, calidadModelo) ||
+      calidadModelo;
     // `calidadDatos` resume tambien catalogo y fenologia, pero la procedencia
     // meteorologica no debe perderse bajo la etiqueta generica "mixto" cuando
     // toda la ventana proviene de una unica fuente.
@@ -183,21 +206,29 @@ export class RoyaAnaranjadaService {
     return {
       enfermedad: 'Roya Anaranjada',
       idEnfermedad: 'trigo.roya_anaranjada',
-      // Frecuencia de horas ambientalmente favorables en 240 h. No es
-      // probabilidad, incidencia ni severidad de enfermedad.
-      resultado: ambiente.calculable ? ambiente.frecuenciaAmbientalPct : 0,
-      estado: ambiente.calculable ? 'calculado' : 'sin_datos',
+      // Con horas validas: frecuencia ambiental favorable en 240 h. Sin ellas:
+      // screening diario contractual. Ninguna salida equivale a diagnostico.
+      resultado: ambiente.calculable
+        ? ambiente.frecuenciaAmbientalPct
+        : usaScreeningDiario
+          ? Number(variables.resultadoContractualLimitado)
+          : 0,
+      estado:
+        ambiente.calculable || usaScreeningDiario ? 'calculado' : 'sin_datos',
       resistenciaUsada: metadata.resistenciaUsada,
       calidadClima: metadata.calidadClima,
       calidadDatos: calidadCombinada,
       modelo: {
         id: 'trigo.roya_anaranjada',
         version: TRIGO_MOTOR_SANITARIO_VERSION,
-        fuente: FUENTE_EL_JARROUDI,
-        resolucion: 'horaria',
+        fuente: ambiente.calculable
+          ? FUENTE_EL_JARROUDI
+          : `${FUENTE_CONTRATO_SOMBRA}; contraste epidemiologico INTA`,
+        resolucion: ambiente.calculable ? 'horaria' : 'diaria',
         validacion: 'experimental',
-        alcance:
-          'Oportunidad ambiental de infeccion de roya amarilla/estriada (Puccinia striiformis) en una ventana movil de 10 dias. Sin alerta, push, confirmacion automatica ni prescripcion.',
+        alcance: ambiente.calculable
+          ? 'Oportunidad ambiental de infeccion de roya amarilla/estriada (Puccinia striiformis) en una ventana movil de 10 dias. Sin alerta, push, confirmacion automatica ni prescripcion.'
+          : 'Screening ambiental diario de roya amarilla/estriada (Puccinia striiformis). Sin alerta, push, confirmacion automatica ni prescripcion.',
       },
       variables,
     };

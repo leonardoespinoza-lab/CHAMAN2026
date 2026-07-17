@@ -107,6 +107,9 @@ export class CardRiegoComponent implements OnInit, OnDestroy {
 
   public get resumen(): string {
     if (this.esCalculoEstimado) {
+      if (!this.estadoAguaUtilValido) {
+        return 'Sin recomendacion operativa: faltan datos validos para cerrar el balance hidrico.';
+      }
       if (this.proximoRiego) {
         return `Balance estimado: posible aporte el ${this.formatearFecha(this.proximoRiego.fecha)}; validar a campo.`;
       }
@@ -117,6 +120,8 @@ export class CardRiegoComponent implements OnInit, OnDestroy {
       if (this.estadoRecomendacionRiego === 'fallida')
         return 'El calculo de riego fallo; no hay recomendacion vigente.';
       if (!this.tieneLanzaHumedad) return 'Sin lanza de humedad: recomendacion real no disponible.';
+      if (!this.estadoAguaUtilValido)
+        return 'Sensor asignado, pero faltan datos validos para cerrar el balance hidrico.';
       return 'Sensor asignado, pero la recomendacion de riego no esta disponible.';
     }
     if (this.proximoRiego) {

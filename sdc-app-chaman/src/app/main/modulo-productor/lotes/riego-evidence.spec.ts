@@ -4,7 +4,8 @@ describe('evaluarRiegoFrontend', () => {
   it('infiere legacy V13 solo con cantidades validas y motivo explicito de recomendacion por balance', () => {
     const evaluacion = evaluarRiegoFrontend(
       {
-        estadoCalculoAguaUtil: 'no_disponible',
+        estadoCalculoAguaUtil: 'estimado',
+        aguaUtilReal: 0,
         motivoCalculoAguaUtil:
           'Sin lanza/sonda de humedad: recomendacion estimada por balance ET0, Kc, lluvia reciente y pronostico.',
         ultimaPrediccionRiego: [
@@ -76,6 +77,8 @@ describe('evaluarRiegoFrontend', () => {
       {
         estadoRecomendacionRiego: 'estimada',
         fuenteRecomendacionRiego: 'balance_climatico',
+        estadoCalculoAguaUtil: 'estimado',
+        aguaUtilReal: 18,
         ultimaPrediccionRiego: [
           { fecha: '2026-07-14', cantidad: 0 },
           { fecha: '2026-07-15', cantidad: 3 },
@@ -103,6 +106,7 @@ describe('evaluarRiegoFrontend', () => {
     const evaluacion = evaluarRiegoFrontend(
       {
         estadoCalculoAguaUtil: 'calculado',
+        aguaUtilReal: 22,
         ultimaPrediccionRiego: [{ fecha: '2026-07-14', cantidad: 5 }],
       } as any,
       { idSondaSuelo: 'sonda-legacy' } as any
@@ -113,6 +117,23 @@ describe('evaluarRiegoFrontend', () => {
     expect(evaluacion.fuente).toBe('sensor_suelo');
     expect(evaluacion.serieDisponible).toBeTrue();
     expect(evaluacion.cantidadHoy).toBe(5);
+  });
+
+  it('bloquea una serie aunque tenga cantidades si no existe una reserva hidrica valida', () => {
+    const evaluacion = evaluarRiegoFrontend(
+      {
+        estadoRecomendacionRiego: 'estimada',
+        fuenteRecomendacionRiego: 'balance_climatico',
+        estadoCalculoAguaUtil: 'no_disponible',
+        ultimaPrediccionRiego: [{ fecha: '2026-07-14', cantidad: 0 }],
+      } as any,
+      {} as any
+    );
+
+    expect(evaluacion.estado).toBe('estimada');
+    expect(evaluacion.serieDisponible).toBeFalse();
+    expect(evaluacion.cantidadHoy).toBeNull();
+    expect(evaluacion.sinDemanda).toBeFalse();
   });
 
   it('da prioridad a un estado terminal aunque haya quedado una fuente estimada previa', () => {

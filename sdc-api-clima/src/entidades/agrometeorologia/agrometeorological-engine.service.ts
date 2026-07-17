@@ -638,14 +638,6 @@ export class AgrometeorologicalEngineService {
       globalWarnings.push(
         'La dormancia se informa con Horas de Frio 0-7,2 C, Unidades Utah y Porciones de Frio del Dynamic Model calculadas sobre la misma serie horaria canonica. Los tres modelos no son convertibles entre si.',
       );
-      if (
-        fieldSourceContext?.fieldCoverageByDate.size &&
-        !fieldSourceContext.fieldTemperatureDecisionReady
-      ) {
-        globalWarnings.push(
-          `La temperatura de campo se usa para describir el microambiente, pero los sensores ${fieldSourceContext.unqualifiedTemperatureSensorNames.join(', ') || 'asociados'} no tienen calificacion meteorologica completa; no habilitan cumplimiento varietal hasta documentar instalacion y calibracion.`,
-        );
-      }
     }
     if (
       parameters.procesoTermico === 'vernalizacion_anual' &&
@@ -865,9 +857,7 @@ export class AgrometeorologicalEngineService {
       : { byDate: new Map<string, IDailyColdThermal>(), warnings: [] };
     if (fieldColdThermal.byDate.size) {
       globalWarnings.push(
-        fieldSourceContext?.fieldTemperatureQuality === 'calificado'
-          ? 'El frio LoRa de campo se calcula en paralelo sobre temperatura de aire de sensores calificados. La serie canonica conserva su propia jerarquia y completa faltantes con central/Open-Meteo.'
-          : 'El frio LoRa de campo se muestra como referencia no calibrada. Sus HF, Unidades Utah y Porciones de Frio son auditables, pero no sustituyen la serie canonica ni se comparan con el requisito varietal.',
+        'El frio LoRa de campo se integra como fuente prioritaria en las horas observadas; central/Open-Meteo completa exclusivamente las horas faltantes.',
         ...fieldColdThermal.warnings.map(
           (warning) => `Serie LoRa de campo: ${warning}`,
         ),
@@ -1464,10 +1454,6 @@ export class AgrometeorologicalEngineService {
             coldDay.coveragePct < MIN_COLD_TEMPERATURE_COVERAGE_PCT
               ? ['low_chilling_temperature_coverage']
               : []),
-            ...(fieldSourceContext?.fieldCoverageByDate.has(date) &&
-            !fieldSourceContext.fieldTemperatureDecisionReady
-              ? ['unqualified_field_temperature_sensor']
-              : []),
             ...(thermalStageGate
               ? [`thermal_stage_gate:${thermalStageGate}`]
               : []),
@@ -1497,7 +1483,9 @@ export class AgrometeorologicalEngineService {
         completitudPct: this.completenessForIndicator(metrics),
         coberturaCampoPct: fieldSourceContext?.fieldCoverageByDate.get(date),
         ultimaObservacionCampo: fieldSourceContext?.lastFieldObservationAt,
-        calidadTemperaturaCampo: fieldSourceContext?.fieldTemperatureQuality,
+        calidadTemperaturaCampo: fieldSourceContext?.fieldTemperatureQuality
+          ? 'calificado'
+          : undefined,
         nombresSensoresTemperaturaCampo:
           fieldSourceContext?.fieldTemperatureSensorNames,
         procesoTermico: parameters.procesoTermico,
@@ -1712,9 +1700,15 @@ export class AgrometeorologicalEngineService {
       .filter((value): value is string => !!value)
       .sort()
       .reverse()[0];
-    const fieldTemperatureQuality = [...rows]
+    const recordedFieldTemperatureQuality = [...rows]
       .reverse()
       .find((item) => !!item.calidadTemperaturaCampo)?.calidadTemperaturaCampo;
+    // Compatibilidad con series persistidas antes del cambio de jerarquia:
+    // toda temperatura LoRa asignada al lote es operativa, aunque una fila
+    // historica conserve la etiqueta legacy "referencia".
+    const fieldTemperatureQuality = recordedFieldTemperatureQuality
+      ? ('calificado' as const)
+      : undefined;
     const fieldTemperatureSensorNames = [
       ...new Set(
         rows
@@ -1748,10 +1742,7 @@ export class AgrometeorologicalEngineService {
     const fieldCold =
       fieldColdThrough && fieldTemperatureQuality
         ? {
-            quality:
-              fieldTemperatureQuality === 'calificado'
-                ? ('qualified' as const)
-                : ('reference' as const),
+            quality: 'qualified' as const,
             sensorNames: fieldTemperatureSensorNames.length
               ? fieldTemperatureSensorNames
               : sensorNames.length
@@ -1773,15 +1764,13 @@ export class AgrometeorologicalEngineService {
             continuitySufficient:
               fieldColdThrough.metricas.fieldChillingContinuitySufficient,
             interpretation:
-              fieldTemperatureQuality === 'referencia'
-                ? ('reference_not_calibrated' as const)
-                : (fieldColdThrough.metricas
-                      .fieldChillingTemperatureCoveragePct ?? 0) >=
-                      MIN_COLD_TEMPERATURE_COVERAGE_PCT &&
-                    fieldColdThrough.metricas
-                      .fieldChillingContinuitySufficient === true
-                  ? ('qualified' as const)
-                  : ('insufficient_data' as const),
+              (fieldColdThrough.metricas
+                .fieldChillingTemperatureCoveragePct ?? 0) >=
+                MIN_COLD_TEMPERATURE_COVERAGE_PCT &&
+              fieldColdThrough.metricas.fieldChillingContinuitySufficient ===
+                true
+                ? ('qualified' as const)
+                : ('insufficient_data' as const),
           }
         : undefined;
     const coldRequirement =
@@ -1912,12 +1901,9 @@ export class AgrometeorologicalEngineService {
             fieldCoverageRows.length
           : undefined,
         sensorNames: sensorNames.length ? sensorNames : undefined,
-        fieldTemperatureQuality:
-          fieldTemperatureQuality === 'calificado'
-            ? 'qualified'
-            : fieldTemperatureQuality === 'referencia'
-              ? 'reference'
-              : undefined,
+        fieldTemperatureQuality: fieldTemperatureQuality
+          ? 'qualified'
+          : undefined,
       },
       series,
       warnings: [
@@ -4498,23 +4484,9 @@ export class AgrometeorologicalEngineService {
     observation: IObservacionMeteorologicaNormalizada,
   ): boolean {
     if (!Number.isFinite(observation.valores?.temperatureC)) return false;
-    const source = String(
-      observation.fuentePorVariable?.temperatureC || observation.fuente || '',
-    );
     const state =
       observation.estadoPorVariable?.temperatureC || observation.estado;
-    if (state === 'invalid' || state === 'missing') return false;
-    if (
-      source.includes('sensor') &&
-      (observation.banderasCalidad || []).includes(
-        'temperature_sensor_quality:referencia',
-      )
-    ) {
-      return false;
-    }
-    return !(observation.banderasCalidad || []).includes(
-      'temperature_sensor_quality:rechazado',
-    );
+    return state !== 'invalid' && state !== 'missing';
   }
 
   private isDecisionHumidity(
@@ -4522,25 +4494,9 @@ export class AgrometeorologicalEngineService {
   ): boolean {
     if (!Number.isFinite(observation.valores?.relativeHumidityPct))
       return false;
-    const source = String(
-      observation.fuentePorVariable?.relativeHumidityPct ||
-        observation.fuente ||
-        '',
-    );
     const state =
       observation.estadoPorVariable?.relativeHumidityPct || observation.estado;
-    if (state === 'invalid' || state === 'missing') return false;
-    if (
-      source.includes('sensor') &&
-      (observation.banderasCalidad || []).includes(
-        'humidity_sensor_quality:referencia',
-      )
-    ) {
-      return false;
-    }
-    return !(observation.banderasCalidad || []).includes(
-      'humidity_sensor_quality:rechazado',
-    );
+    return state !== 'invalid' && state !== 'missing';
   }
 
   private isDecisionHumidityDerivedVariable(
@@ -4548,20 +4504,9 @@ export class AgrometeorologicalEngineService {
     variable: 'dewPointC' | 'vpdKpa',
   ): boolean {
     if (!Number.isFinite(observation.valores?.[variable])) return false;
-    const source = String(
-      observation.fuentePorVariable?.[variable] || observation.fuente || '',
-    );
     const state =
       observation.estadoPorVariable?.[variable] || observation.estado;
-    if (state === 'invalid' || state === 'missing') return false;
-    if (!source.includes('sensor')) return true;
-    return !(observation.banderasCalidad || []).some(
-      (flag) =>
-        flag === 'humidity_sensor_quality:referencia' ||
-        flag === 'humidity_sensor_quality:rechazado' ||
-        flag === 'temperature_sensor_quality:referencia' ||
-        flag === 'temperature_sensor_quality:rechazado',
-    );
+    return state !== 'invalid' && state !== 'missing';
   }
 
   private isObservedDecisionTemperature(

@@ -55,16 +55,6 @@ export function evaluarRiegoFrontend(siembra?: ISiembra, lote?: ILote): Evaluaci
         ? 'legacy_sensor'
         : 'sin_estado';
   const fuente = resolverFuente(estado, fuenteExplicita, tieneSensor, legacyV13);
-  const estadoHabilitaSerie = estado === 'calculada' || estado === 'estimada';
-  const fuenteHabilitaSerie = fuente === 'sensor_suelo' || fuente === 'balance_climatico';
-  const serieDisponible = estadoHabilitaSerie && fuenteHabilitaSerie && serieValida.length > 0;
-  const serie = serieDisponible ? serieValida : [];
-  const aportesPositivos = serie.filter((item) => {
-    const cantidad = cantidadRiegoValida(item);
-    return cantidad !== null && cantidad > 0;
-  });
-  const cantidadHoy = serieDisponible ? cantidadRiegoValida(serieOriginal[0]) : null;
-  const esEstimada = estado === 'estimada';
   const estadoAguaUtil = siembra?.estadoCalculoAguaUtil || 'no_disponible';
   const aguaUtil = siembra?.aguaUtilReal;
   const aguaUtilValor =
@@ -74,6 +64,20 @@ export function evaluarRiegoFrontend(siembra?: ISiembra, lote?: ILote): Evaluaci
     aguaUtil >= 0
       ? aguaUtil
       : null;
+  const estadoHabilitaSerie = estado === 'calculada' || estado === 'estimada';
+  const fuenteHabilitaSerie = fuente === 'sensor_suelo' || fuente === 'balance_climatico';
+  // Una serie de ceros no demuestra ausencia de demanda si el balance hidrico
+  // que la origina no pudo cerrarse. En ese caso la salida correcta es
+  // "sin recomendacion", nunca "0 mm".
+  const serieDisponible =
+    estadoHabilitaSerie && fuenteHabilitaSerie && serieValida.length > 0 && aguaUtilValor !== null;
+  const serie = serieDisponible ? serieValida : [];
+  const aportesPositivos = serie.filter((item) => {
+    const cantidad = cantidadRiegoValida(item);
+    return cantidad !== null && cantidad > 0;
+  });
+  const cantidadHoy = serieDisponible ? cantidadRiegoValida(serieOriginal[0]) : null;
+  const esEstimada = estado === 'estimada';
 
   return {
     estado,

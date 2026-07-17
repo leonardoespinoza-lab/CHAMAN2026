@@ -482,4 +482,16 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
     component.abrirRegistroEtapa(component.etapas[1]);
     expect(component.registroForm.objetivoBiofix).toBe('fin_vernalizacion');
   });
+
+  it('no presenta una etapa de calendario como observacion actual del lote', () => {
+    component.esPerenne = false;
+    component.fuenteEtapaActual = 'calendario';
+    component.etapas = [
+      { nombre: 'Emergencia', posicion: 0, estado: 'current' },
+    ];
+
+    expect(component.etiquetaEtapaActual).toBe('Etapa proyectada por cronograma');
+    expect(component.lecturaEtapaActual).toContain('proyeccion');
+    expect(component.lecturaEtapaActual).toContain('No confirma');
+  });
 });

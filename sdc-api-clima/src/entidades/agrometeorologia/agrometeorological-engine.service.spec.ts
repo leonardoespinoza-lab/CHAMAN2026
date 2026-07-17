@@ -1749,7 +1749,7 @@ describe('AgrometeorologicalEngineService', () => {
     expect(window.warnings.join(' ')).toContain('por biofix de campo');
   });
 
-  it('conserva el requisito validado y marca el sensor no calificado para usar la siguiente fuente canonica', () => {
+  it('conserva el requisito validado sin bloquear sensores asignados por metadatos de calibracion', () => {
     const siembra = {
       _id: '64b000000000000000000001',
       idLote: '64b000000000000000000002',
@@ -1816,11 +1816,11 @@ describe('AgrometeorologicalEngineService', () => {
       estadoRequerimientoFrio: 'validado',
       objetivoFrioRector: 900,
     });
-    expect(unqualified.banderasCalidad).toContain(
+    expect(unqualified.banderasCalidad).not.toContain(
       'unqualified_field_temperature_sensor',
     );
-    expect(unqualified.advertencias.join(' ')).toContain(
-      'no habilitan cumplimiento varietal',
+    expect(unqualified.advertencias.join(' ')).not.toMatch(
+      /calificaci[oó]n meteorol[oó]gica|no habilitan cumplimiento varietal/i,
     );
     expect(qualified).toMatchObject({
       modeloFrioRector: 'HF',
@@ -1832,7 +1832,7 @@ describe('AgrometeorologicalEngineService', () => {
     );
   });
 
-  it('informa frio LoRa no calibrado en paralelo sin mover el GDD ni el frio canonico', () => {
+  it('informa el frio LoRa de campo como fuente prioritaria y mantiene su auditoria paralela', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-11T03:30:00.000Z'));
     try {
       const canonical = localHourlyTemperatureDay(
@@ -1886,9 +1886,9 @@ describe('AgrometeorologicalEngineService', () => {
           sensorNames: ['K-01'],
           fieldTemperatureSensorNames: ['K-01'],
           lastFieldObservationAt: fieldReference[23].timestamp,
-          fieldTemperatureDecisionReady: false,
-          fieldTemperatureQuality: 'referencia',
-          unqualifiedTemperatureSensorNames: ['K-01'],
+          fieldTemperatureDecisionReady: true,
+          fieldTemperatureQuality: 'calificado',
+          unqualifiedTemperatureSensorNames: [],
         },
       );
 
@@ -1896,13 +1896,10 @@ describe('AgrometeorologicalEngineService', () => {
       expect(indicator.metricas.gddAccumulated).toBeUndefined();
       expect(indicator.metricas.chillingHoursAccumulated).toBe(0);
       expect(indicator.metricas.fieldChillingHoursAccumulated).toBe(24);
-      expect(indicator.calidadTemperaturaCampo).toBe('referencia');
+      expect(indicator.calidadTemperaturaCampo).toBe('calificado');
       expect(indicator.nombresSensoresTemperaturaCampo).toEqual(['K-01']);
       expect(indicator.advertencias.join(' ')).toContain(
-        'referencia no calibrada',
-      );
-      expect(indicator.advertencias.join(' ')).toContain(
-        'no sustituyen la serie canonica',
+        'se integra como fuente prioritaria',
       );
     } finally {
       jest.useRealTimers();
@@ -2068,7 +2065,7 @@ describe('AgrometeorologicalEngineService', () => {
     jest.useRealTimers();
   });
 
-  it('no deja que temperatura LoRa de referencia desplace GDD ni etapa', () => {
+  it('acepta temperatura LoRa asignada aunque conserve una bandera legacy de referencia', () => {
     const date = '2026-07-10';
     const referenceHours = Array.from({ length: 24 }, (_, hour) => ({
       ...hourlyTemperature(date, hour, 30, 'sensor'),
@@ -2088,13 +2085,13 @@ describe('AgrometeorologicalEngineService', () => {
       ...qualifiedHours,
     ]);
 
-    expect(reference.metricas.temperatureMeanC).toBe(16);
-    expect(reference.metricas.gddDaily).toBe(7);
+    expect(reference.metricas.temperatureMeanC).toBe(30);
+    expect(reference.metricas.gddDaily).toBe(20);
     expect(qualified.metricas.temperatureMeanC).toBe(30);
     expect(qualified.metricas.gddDaily).toBe(20);
   });
 
-  it('no deriva humedad, rocio, VPD ni mojado foliar desde sensores LoRa de referencia', () => {
+  it('usa humedad y variables derivadas LoRa aunque conserven banderas legacy de referencia', () => {
     const date = '2026-07-10';
     const referenceHours = Array.from({ length: 24 }, (_, hour) => ({
       ...hourlyWeather(date, hour, {
@@ -2130,16 +2127,16 @@ describe('AgrometeorologicalEngineService', () => {
 
     const result = calculateTemperatureDay(referenceHours);
 
-    expect(result.metricas.relativeHumidityMinPct).toBeUndefined();
-    expect(result.metricas.relativeHumidityMeanPct).toBeUndefined();
-    expect(result.metricas.relativeHumidityMaxPct).toBeUndefined();
-    expect(result.metricas.dewPointC).toBeUndefined();
-    expect(result.metricas.vpdMeanKpa).toBeUndefined();
-    expect(result.metricas.vpdMaxKpa).toBeUndefined();
-    expect(result.metricas.vpdStressHours).toBeUndefined();
-    expect(result.metricas.leafWetnessHours).toBeUndefined();
-    expect(result.metricas.maxContinuousLeafWetnessHours).toBeUndefined();
-    expect(result.metricas.meanTemperatureDuringLeafWetnessC).toBeUndefined();
+    expect(result.metricas.relativeHumidityMinPct).toBe(96);
+    expect(result.metricas.relativeHumidityMeanPct).toBe(96);
+    expect(result.metricas.relativeHumidityMaxPct).toBe(96);
+    expect(result.metricas.dewPointC).toBe(17.5);
+    expect(result.metricas.vpdMeanKpa).toBeCloseTo(2.8, 6);
+    expect(result.metricas.vpdMaxKpa).toBe(2.8);
+    expect(result.metricas.vpdStressHours).toBe(24);
+    expect(result.metricas.leafWetnessHours).toBe(24);
+    expect(result.metricas.maxContinuousLeafWetnessHours).toBe(24);
+    expect(result.metricas.meanTemperatureDuringLeafWetnessC).toBe(18);
   });
 
   it('incluye la brecha final hasta la ultima hora local cerrada', () => {
@@ -3185,7 +3182,7 @@ describe('AgrometeorologicalEngineService', () => {
     expect(results[1].metricas.temperatureMeanC).toBeUndefined();
   });
 
-  it('resume el frio LoRa de referencia por separado y conserva su trazabilidad', async () => {
+  it('normaliza como operativo el frio LoRa persistido con una etiqueta legacy de referencia', async () => {
     const service = new AgrometeorologicalEngineService(
       {
         getIndicadores: jest.fn().mockResolvedValue({
@@ -3228,7 +3225,7 @@ describe('AgrometeorologicalEngineService', () => {
 
     expect(response.summary.fieldCold).toEqual(
       expect.objectContaining({
-        quality: 'reference',
+        quality: 'qualified',
         sensorNames: ['K-01'],
         throughDate: '2026-07-10',
         lastObservationAt: '2026-07-10T22:00:00.000Z',
@@ -3236,10 +3233,10 @@ describe('AgrometeorologicalEngineService', () => {
         temperatureCoveragePercentage: 68,
         maximumGapHours: 96,
         continuitySufficient: false,
-        interpretation: 'reference_not_calibrated',
+        interpretation: 'insufficient_data',
       }),
     );
-    expect(response.dataSource.fieldTemperatureQuality).toBe('reference');
+    expect(response.dataSource.fieldTemperatureQuality).toBe('qualified');
   });
 
   it('persiste historiales largos en lotes acotados', async () => {

@@ -57,6 +57,42 @@ interface PanelClima {
   options: Highcharts.Options;
 }
 
+const ZONA_HORARIA_OPERATIVA = 'America/Argentina/Buenos_Aires';
+
+export function claveFechaClimatica(fecha: string | Date): string | null {
+  const date = fecha instanceof Date ? fecha : new Date(fecha);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: ZONA_HORARIA_OPERATIVA,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value;
+  const year = value('year');
+  const month = value('month');
+  const day = value('day');
+  return year && month && day ? `${year}-${month}-${day}` : null;
+}
+
+export function filtrarPronosticosVigentes(
+  pronosticos: IPronosticoEstacionMeteorologica[] | undefined,
+  ahora = new Date()
+): IPronosticoEstacionMeteorologica[] {
+  const hoy = claveFechaClimatica(ahora);
+  if (!hoy) return [];
+  const porDia = new Map<string, IPronosticoEstacionMeteorologica>();
+  for (const pronostico of pronosticos || []) {
+    const fecha = pronostico?.fecha ? claveFechaClimatica(pronostico.fecha) : null;
+    if (!fecha || fecha < hoy || porDia.has(fecha)) continue;
+    porDia.set(fecha, pronostico);
+  }
+  return [...porDia.entries()]
+    .sort(([fechaA], [fechaB]) => fechaA.localeCompare(fechaB))
+    .slice(0, 7)
+    .map(([, pronostico]) => pronostico);
+}
+
 @Component({
   selector: 'app-card-clima-lote',
   imports: [CommonModule, SharedModule, ChartComponent],
@@ -88,7 +124,9 @@ export class CardClimaLoteComponent implements OnChanges {
   }
 
   private prepararVista(): void {
-    this.pronosticos = this.lote?.establecimiento?.prediccionClimatica?.pronosticos?.slice(0, 7) || [];
+    this.pronosticos = filtrarPronosticosVigentes(
+      this.lote?.establecimiento?.prediccionClimatica?.pronosticos
+    );
     this.climaActual = this.lote?.establecimiento?.climaActual?.clima;
     this.fuente = this.pronosticos[0]?.fuente || this.climaActual?.fuente || 'Open-Meteo';
     this.calidadClima = this.crearCalidadClima();
@@ -248,7 +286,8 @@ export class CardClimaLoteComponent implements OnChanges {
   private crearDias(): DiaClima[] {
     const lluviaMax = Math.max(...this.lluvias, 1);
 
-    return this.pronosticos.map((p, index) => {
+    const hoy = claveFechaClimatica(new Date());
+    return this.pronosticos.map((p) => {
       const tempMax = this.numero(p.temperatura?.max);
       const tempMin = this.numero(p.temperatura?.min);
       const humedad = this.numero(p.humedad?.max ?? p.humedad?.avg) || 0;
@@ -262,7 +301,7 @@ export class CardClimaLoteComponent implements OnChanges {
 
       return {
         fecha: p.fecha,
-        label: index === 0 ? 'Hoy' : this.nombreDia(p.fecha),
+        label: p.fecha && claveFechaClimatica(p.fecha) === hoy ? 'Hoy' : this.nombreDia(p.fecha),
         estado: this.estadoDia(p, humedad, lluvia, probabilidad, riesgoGranizo),
         temp: `${this.valor(tempMin)} / ${this.valor(tempMax)} C`,
         humedad: this.formatear(humedad, '%'),

@@ -25,7 +25,7 @@ describe('NotificacionsService - predicciones sanitarias', () => {
       },
       modelo: {
         id: 'trigo.roya_hoja',
-        version: 4,
+        version: 5,
         fuente: 'formula funcional auditada',
         validacion: 'operativo',
       },
@@ -113,8 +113,7 @@ describe('NotificacionsService - predicciones sanitarias', () => {
                 (condition.eventKey !== undefined &&
                   notificacion.eventKey === condition.eventKey) ||
                 (condition['data.eventKey'] !== undefined &&
-                  notificacion.data?.eventKey ===
-                    condition['data.eventKey']),
+                  notificacion.data?.eventKey === condition['data.eventKey']),
             )
           ) {
             return false;
@@ -245,10 +244,10 @@ describe('NotificacionsService - predicciones sanitarias', () => {
     expect(notificacion.data).toEqual(
       expect.objectContaining({
         resultado: '24',
-        versionModelo: '4',
+        versionModelo: '5',
         fechaPrediccion: '2026-07-15T00:00:00.000Z',
         dedupeKey: 'siembra-1:sanitaria:enfermedad:roya-de-la-hoja',
-        eventKey: 'enfermedad:siembra-1:roya-de-la-hoja:v4:2026-07-15',
+        eventKey: 'enfermedad:siembra-1:roya-de-la-hoja:v5:2026-07-15',
       }),
     );
 
@@ -365,7 +364,7 @@ describe('NotificacionsService - predicciones sanitarias', () => {
       tenant: { idUsuario: 'usuario-1' },
       data: {
         dedupeKey,
-        eventKey: 'enfermedad:siembra-1:roya-de-la-hoja:v4:2026-07-14',
+        eventKey: 'enfermedad:siembra-1:roya-de-la-hoja:v5:2026-07-14',
         resultado: '30',
       },
     });

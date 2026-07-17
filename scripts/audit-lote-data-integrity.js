@@ -1,12 +1,18 @@
 const { MongoClient, ObjectId } = require('../sdc-datos/node_modules/mongodb');
 
 const DB_URL =
+  process.env.MONGO_PUBLIC_URL ||
   process.env.MONGO_URI ||
   process.env.MONGO_URL ||
   process.env.DATABASE_URL ||
   process.env.DB_URL ||
   '';
-const DB_NAME = process.env.DB_NAME || 'chaman';
+const DB_NAME =
+  process.env.DB_NAME ||
+  (String(process.env.RAILWAY_ENVIRONMENT_NAME || '').toLowerCase() ===
+  'testing'
+    ? 'chaman_testing'
+    : 'chaman');
 const LIMIT = Number(
   process.env.CHAMAN_AUDIT_LIMIT ||
     process.argv.find((arg) => arg.startsWith('--limit='))?.split('=')[1] ||

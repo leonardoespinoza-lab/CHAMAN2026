@@ -37,7 +37,7 @@
   @if (etapas.length > 0) {
     <div class="phenology-overview">
       <section class="stage-now-panel">
-        <span>Hoy en el lote</span>
+        <span>{{ etiquetaEtapaActual }}</span>
         <h3>{{ etapaActual || 'Sin etapa' }}</h3>
         <p>{{ lecturaEtapaActual }}</p>
 
@@ -80,7 +80,7 @@
         </div>
         <div class="growth-board-actions">
           <div class="current-stage-chip">
-            <span>Estadio actual</span>
+            <span>{{ etiquetaEtapaActual }}</span>
             <strong>{{ etapaActual || 'Sin etapa confirmada' }}</strong>
           </div>
           <button type="button" class="stages-detail-trigger" (click)="abrirDetalleEtapas()">

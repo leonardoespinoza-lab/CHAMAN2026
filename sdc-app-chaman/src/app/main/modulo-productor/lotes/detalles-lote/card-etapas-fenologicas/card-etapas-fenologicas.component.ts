@@ -237,8 +237,14 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   public etiquetaVisualEtapa(etapa: FenologiaStage, index: number): string {
-    const estado = etapa.estado === 'current' ? 'Estadio actual' : this.etapaEstadoTexto(etapa, index);
+    const estado = etapa.estado === 'current' ? this.etiquetaEtapaActual : this.etapaEstadoTexto(etapa, index);
     return `${estado}: ${etapa.nombre}. ${this.faseVisualTexto(etapa, index)}.`;
+  }
+
+  public get etiquetaEtapaActual(): string {
+    if (this.fuenteEtapaActual === 'campo') return 'Estadio confirmado en campo';
+    if (this.fuenteEtapaActual === 'termico') return 'Estadio termico estimado';
+    return 'Etapa proyectada por cronograma';
   }
 
   public get etapaAnteriorDetalle(): FenologiaStage | undefined {
@@ -513,6 +519,9 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       return `Etapa resuelta por el motor fenologico canonico${
         gdd === undefined ? '' : ` con ${gdd.toFixed(1)} GDD acumulados`
       }, Tb ${parametros?.temperaturaBaseC ?? '-'} C y fuente climatica ${this.fuenteFenologiaTermicaTexto}. La etapa ya incorpora las compuertas validadas de vernalizacion, fotoperiodo, cobertura y continuidad; el GDD bruto y el crono quedan solo como contraste.`;
+    }
+    if (!this.esPerenne && this.fuenteEtapaActual === 'calendario') {
+      return `La etapa ${actual.nombre} es una proyeccion del cronograma de referencia. No confirma el estado observado del cultivo; registrarla a campo antes de decisiones sanitarias.`;
     }
     if (this.fenologiaTermica && this.estadoFenologiaTermica) {
       if (this.estadoFenologiaTermica.fuente === 'campo') {

@@ -58,6 +58,18 @@ export interface IDetallesLote extends ILoteTabla {
   fertilizaciones?: IFertilizacion[];
 }
 
+export function resolverLoteInicialSeguro(
+  idLote: string | null,
+  loteCacheado?: IDetallesLote,
+  loteNavegacion?: IDetallesLote
+): IDetallesLote | undefined {
+  const coincideRuta = (lote?: IDetallesLote): lote is IDetallesLote =>
+    !!lote && (!idLote || lote._id === idLote);
+  if (coincideRuta(loteCacheado)) return loteCacheado;
+  if (coincideRuta(loteNavegacion)) return loteNavegacion;
+  return undefined;
+}
+
 @Component({
   selector: 'app-detalles-lote',
   imports: [
@@ -380,7 +392,10 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     const idLote = this.activatedRoute.snapshot.paramMap.get('id');
     const loteParam = this.paramsService.get('detallesLote') as IDetallesLote | undefined;
     const loteCacheado = idLote ? DetallesLoteComponent.loteCache.get(idLote) : undefined;
-    const loteInicial = loteCacheado || loteParam || undefined;
+    // Nunca renderizar un lote conservado por navegación si no coincide con
+    // el identificador canónico de la URL. Ante una demora o error de red es
+    // preferible mostrar carga/error antes que datos pertenecientes a otro lote.
+    const loteInicial = resolverLoteInicialSeguro(idLote, loteCacheado, loteParam);
 
     if (loteInicial) {
       this.aplicarLote(loteInicial);

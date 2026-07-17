@@ -41,7 +41,7 @@ describe('PrediccionsService - alertas sanitarias', () => {
       },
       modelo: {
         id: 'trigo.roya_hoja',
-        version: 4,
+        version: 5,
         fuente: 'formula funcional auditada',
         validacion: 'operativo',
       },
@@ -164,9 +164,9 @@ describe('PrediccionsService - alertas sanitarias', () => {
     expect(alertas.registrarEventoSiembra).toHaveBeenCalledWith(
       expect.objectContaining({
         fecha: '2026-07-15T00:00:00.000Z',
-        versionMotor: 'v4',
+        versionMotor: 'v5',
         dedupeKey: 'siembra-1:sanitaria:enfermedad:roya-de-la-hoja',
-        eventKey: 'enfermedad:siembra-1:roya-de-la-hoja:v4:2026-07-15',
+        eventKey: 'enfermedad:siembra-1:roya-de-la-hoja:v5:2026-07-15',
         lectura: expect.stringContaining(
           'predicción meteorológica de severidad/incidencia',
         ),
@@ -195,7 +195,7 @@ describe('PrediccionsService - alertas sanitarias', () => {
       {
         modelo: {
           id: 'trigo.roya_hoja',
-          version: 4,
+          version: 5,
           fuente: 'prueba',
           validacion: 'experimental',
         },

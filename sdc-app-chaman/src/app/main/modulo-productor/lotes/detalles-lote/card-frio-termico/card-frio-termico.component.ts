@@ -102,6 +102,18 @@ export class CardFrioTermicoComponent implements OnChanges {
     );
   }
 
+  public get tituloTarjeta(): string {
+    return this.esDormanciaPerenne
+      ? 'FRÍO Y ACUMULACIÓN TÉRMICA'
+      : 'ACUMULACIÓN TÉRMICA';
+  }
+
+  public get tituloEvolucion(): string {
+    return this.esDormanciaPerenne
+      ? 'Evolución de los modelos de frío y tiempo térmico'
+      : 'Evolución del tiempo térmico';
+  }
+
   public get dispositivoFrio(): IDispositivo | undefined {
     const dispositivos = this.lote?.dispositivos || [];
     const conTemperaturaAire = (dispositivo: IDispositivo): boolean =>
@@ -184,28 +196,40 @@ export class CardFrioTermicoComponent implements OnChanges {
 
   public get calidadFrioLabel(): string {
     const campo = this.data?.summary.fieldCold;
+    if (!this.esDormanciaPerenne) {
+      if (campo || this.usaSensorFrio) return 'Serie térmica con aporte LoRa de campo';
+      return `Serie térmica canónica · ${this.fuenteFrioLabel}`;
+    }
     if (!campo && this.usaSensorFrio && this.esNumero(this.frioSensor?.horasFrio)) {
       return 'LoRa visible; acumulado canónico pendiente de reproceso';
     }
-    if (!campo && this.usaSensorFrio) return 'LoRa visible como serie ambiental';
+    if (!campo && this.usaSensorFrio) return 'LoRa visible; acumulado pendiente de reproceso';
     if (!campo) return 'Serie canónica sin lectura LoRa de frío consolidada';
-    if (campo.quality === 'reference') return 'LoRa visible como referencia no calibrada';
     if (campo.interpretation === 'insufficient_data') {
-      return 'LoRa calificado, temporada incompleta';
+      return 'LoRa de campo con cobertura parcial';
     }
-    return 'LoRa de campo calificado';
+    return 'LoRa de campo prioritario';
   }
 
   public get calidadFrioDetalle(): string {
     const campo = this.data?.summary.fieldCold;
+    if (!this.esDormanciaPerenne) {
+      if (!campo) {
+        return 'Los grados-día se calculan con la serie térmica canónica. Este cultivo no usa HF, HFE ni Porciones de Frío de frutales.';
+      }
+      const cobertura = this.esNumero(campo.temperatureCoveragePercentage)
+        ? `${this.numero(campo.temperatureCoveragePercentage, 0)}% de cobertura horaria LoRa`
+        : 'cobertura LoRa sin consolidar';
+      return `${cobertura}. La temperatura del sensor asignado es prioritaria y la central/Open-Meteo completa las horas faltantes.`;
+    }
     if (!campo) {
       if (this.usaSensorFrio) {
         const actualizado = this.frioSensor?.fechaUltimoCalculo
           ? ` Vista previa del dispositivo actualizada ${this.fechaHora(this.frioSensor.fechaUltimoCalculo)}.`
           : '';
-        return `El histórico real permanece visible. HF/Utah/CP sólo gobiernan decisiones cuando el motor canónico termina de auditar cobertura, brechas y calibración.${actualizado}`;
+        return `El histórico real permanece visible. Al reprocesar, cada hora LoRa integra la serie canónica y central/Open-Meteo completa únicamente los huecos.${actualizado}`;
       }
-      return 'La jerarquía automática usa sensor calificado, luego central válida y finalmente Open-Meteo.';
+      return 'La jerarquía automática usa sensor LoRa asignado, luego central válida y finalmente Open-Meteo.';
     }
     const partes = [
       this.esNumero(campo.temperatureCoveragePercentage)
@@ -215,9 +239,7 @@ export class CardFrioTermicoComponent implements OnChanges {
       campo.lastObservationAt ? `última lectura ${this.fechaHora(campo.lastObservationAt)}` : '',
     ].filter(Boolean);
     const regla =
-      campo.quality === 'reference'
-        ? 'Se grafica y audita, pero no mueve GDD, fenología ni cumplimiento varietal.'
-        : 'Puede integrar el motor canónico; las brechas se completan con la siguiente fuente disponible.';
+      'Las horas con lectura LoRa integran el motor canónico; las brechas se completan con la siguiente fuente disponible.';
     return `${partes.join(' · ')}. ${regla}`;
   }
 
@@ -301,7 +323,7 @@ export class CardFrioTermicoComponent implements OnChanges {
   public get estadoEspecificacionLabel(): string {
     if (this.esVernalizacionAnual) {
       if (!this.tienePerfilVernalizacion) {
-        return 'Perfil térmico de cultivo · falta calibración varietal';
+        return 'GDD de referencia del cultivo · no interpreta etapa varietal';
       }
       const estado =
         this.data?.summary.vernalizationStatus ||
@@ -758,7 +780,7 @@ export class CardFrioTermicoComponent implements OnChanges {
     const fuente = this.data?.dataSource;
     if (!fuente) return 'Serie climática canónica';
     if (fuente.type === 'station') return fuente.stationName || 'Central meteorológica asociada';
-    if (fuente.type === 'sensor') return fuente.sensorNames?.join(', ') || 'Sensor de campo calificado';
+    if (fuente.type === 'sensor') return fuente.sensorNames?.join(', ') || 'Sensor LoRa asignado';
     if (fuente.type === 'mixed') return 'Jerarquía campo/central/Open-Meteo';
     if (fuente.type === 'open_meteo') return 'Open-Meteo';
     return 'Serie climática canónica';

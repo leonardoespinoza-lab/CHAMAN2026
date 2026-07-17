@@ -1,19 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
-  EstadoCalificacionMeteorologica,
   EstadoDatoMeteorologico,
   FuenteMeteorologicaNormalizada,
   IAsignacionDispositivoLote,
-  ICalificacionVariableMeteorologica,
   IDispositivo,
-  IIntervaloCalibracionMeteorologica,
   ILote,
   IObservacionMeteorologicaNormalizada,
   IReporte,
   IValoresMeteorologicosNormalizados,
   normalizarContenidoVolumetrico,
   RolVariableMeteorologica,
-  VariableCalibracionMeteorologica,
   VariableMeteorologicaNormalizada,
 } from 'modelos/src';
 import { AgrometeorologiaRepository } from './repository';
@@ -25,9 +21,8 @@ const SENSOR_STALE_HOURS = 6;
 export interface ISensorWeatherContext {
   observations: IObservacionMeteorologicaNormalizada[];
   /**
-   * Serie horaria pura de los sensores asignados al lote. Se conserva
-   * separada del overlay canónico para auditar frío de campo aun cuando la
-   * instalación todavía sea de referencia.
+   * Serie horaria pura de los sensores asignados al lote. Se conserva junto
+   * al overlay canónico para auditar el aporte LoRa y la cobertura de campo.
    */
   fieldObservations: IObservacionMeteorologicaNormalizada[];
   warnings: string[];
@@ -42,22 +37,12 @@ export interface ISensorWeatherContext {
 
 interface IHourlyBucket {
   timestamp: string;
-  qualifiedTemperatures: number[];
-  referenceTemperatures: number[];
-  qualifiedHumidities: number[];
-  referenceHumidities: number[];
+  temperatures: number[];
+  humidities: number[];
   soilTemperatures: Map<string, number[]>;
   soilMoistures: Map<string, number[]>;
   flags: string[];
   sensorNames: Set<string>;
-}
-
-interface ICalificacionEfectivaVariable {
-  estado: EstadoCalificacionMeteorologica;
-  rol?: RolVariableMeteorologica;
-  offset?: number;
-  intervaloId?: string;
-  fuente: 'historial' | 'actual' | 'sin_calificacion';
 }
 
 @Injectable()
@@ -85,32 +70,12 @@ export class SensorWeatherOverlayService {
     const buckets = new Map<string, IHourlyBucket>();
     const sensorNames = new Set<string>();
     const fieldTemperatureSensorNames = new Set<string>();
-    const unqualifiedTemperatureSensorNames = new Set<string>();
     const warnings: string[] = [];
     let lastFieldObservationAt: string | undefined;
 
     for (const device of assigned) {
       const reports = await this.loadReports(device, from, to.toISOString());
-      const declaredTemperatureQualification =
-        device.calificacionMeteorologica?.estado || 'referencia';
-      const declaredHumidityQualification =
-        device.calificacionMeteorologica?.humedadRelativa?.estado ||
-        'referencia';
-      const currentTemperatureQualification = this.effectiveQualification(
-        device,
-        to.toISOString(),
-        'temperatura_aire',
-      );
-      const currentHumidityQualification = this.effectiveQualification(
-        device,
-        to.toISOString(),
-        'humedad_relativa',
-      );
       let validAirReports = 0;
-      let qualifiedAirReports = 0;
-      let referenceAirReports = 0;
-      let qualifiedHumidityReports = 0;
-      let referenceHumidityReports = 0;
       let latestDeviceTemperatureReport: string | undefined;
 
       for (const report of reports) {
@@ -122,38 +87,29 @@ export class SensorWeatherOverlayService {
         ) {
           continue;
         }
-        const temperatureQualification = this.effectiveQualification(
-          device,
-          timestamp,
-          'temperatura_aire',
-        );
-        const humidityQualification = this.effectiveQualification(
-          device,
-          timestamp,
-          'humedad_relativa',
-        );
+        // La validacion de la instalacion se realiza a campo por Chaman. Si el
+        // dispositivo esta asignado al lote, su canal de temperatura de aire
+        // es la fuente prioritaria. Solo se excluye un rol explicitamente
+        // declarado como suelo para no confundir temperatura edafica con aire.
         const canUseTemperature =
-          temperatureQualification.estado !== 'rechazado' &&
-          temperatureQualification.rol !== 'suelo';
-        const canUseHumidity =
-          humidityQualification.estado !== 'rechazado' &&
-          humidityQualification.rol !== 'suelo';
+          device.calificacionMeteorologica?.rolTemperatura !== 'suelo';
+        const canUseHumidity = true;
         const airTemperature = canUseTemperature
           ? this.averageSensor(
               report,
               'Temperatura',
-              temperatureQualification.estado === 'calificado'
-                ? temperatureQualification.offset
-                : undefined,
+              this.finiteOffset(
+                device.calificacionMeteorologica?.offsetTemperaturaC,
+              ),
             )
           : undefined;
         const humidity = canUseHumidity
           ? this.averageSensor(
               report,
               'Humedad',
-              humidityQualification.estado === 'calificado'
-                ? humidityQualification.offset
-                : undefined,
+              this.finiteOffset(
+                device.calificacionMeteorologica?.humedadRelativa?.offset,
+              ),
             )
           : undefined;
         const soilTemperature = this.depthValues(
@@ -180,16 +136,7 @@ export class SensorWeatherOverlayService {
           buckets.get(hour) ||
           this.newBucket(hour, device.nombre || device.deveui || 'Sensor');
         if (airTemperature !== undefined) {
-          if (temperatureQualification.estado === 'calificado') {
-            bucket.qualifiedTemperatures.push(airTemperature);
-            qualifiedAirReports += 1;
-          } else {
-            bucket.referenceTemperatures.push(airTemperature);
-            referenceAirReports += 1;
-            unqualifiedTemperatureSensorNames.add(
-              device.nombre || device.deveui || 'Sensor',
-            );
-          }
+          bucket.temperatures.push(airTemperature);
           validAirReports += 1;
           fieldTemperatureSensorNames.add(
             device.nombre || device.deveui || 'Sensor',
@@ -205,13 +152,7 @@ export class SensorWeatherOverlayService {
               : lastFieldObservationAt;
         }
         if (humidity !== undefined) {
-          if (humidityQualification.estado === 'calificado') {
-            bucket.qualifiedHumidities.push(humidity);
-            qualifiedHumidityReports += 1;
-          } else {
-            bucket.referenceHumidities.push(humidity);
-            referenceHumidityReports += 1;
-          }
+          bucket.humidities.push(humidity);
         }
         this.appendDepthValues(bucket.soilTemperatures, soilTemperature);
         this.appendDepthValues(bucket.soilMoistures, soilMoisture);
@@ -221,44 +162,6 @@ export class SensorWeatherOverlayService {
 
       const name = device.nombre || device.deveui || 'Sensor de campo';
       sensorNames.add(name);
-      if (declaredTemperatureQualification === 'rechazado') {
-        warnings.push(
-          `${name}: la temperatura de aire esta rechazada y no ingresa al motor canonico.`,
-        );
-      } else if (referenceAirReports) {
-        warnings.push(
-          qualifiedAirReports
-            ? `${name}: algunas lecturas quedaron fuera de la ventana de calibracion vigente para su timestamp y se conservan como referencia comparativa, sin offset y sin sustituir la fuente canonica.`
-            : `${name}: la temperatura de campo se conserva como referencia comparativa, pero sin instalacion/calibracion meteorologica trazable y vigente para el timestamp no sustituye la fuente canonica ni habilita una decision biologica varietal.`,
-        );
-      }
-      if (
-        declaredTemperatureQualification === 'calificado' &&
-        currentTemperatureQualification.estado !== 'calificado'
-      ) {
-        warnings.push(
-          `${name}: la calificacion declarada no esta vigente hoy o no contiene rol, altura, abrigo, exactitud, fechas y fuente de calibracion completos. Esto no invalida retrospectivamente las lecturas tomadas dentro de una ventana historica valida.`,
-        );
-      }
-      if (declaredHumidityQualification === 'rechazado') {
-        warnings.push(
-          `${name}: la humedad relativa esta rechazada y no ingresa al motor canonico.`,
-        );
-      } else if (referenceHumidityReports) {
-        warnings.push(
-          qualifiedHumidityReports
-            ? `${name}: algunas lecturas de humedad quedaron fuera de sus intervalos de calibracion y se conservan solo como referencia.`
-            : `${name}: la humedad de campo no tiene una calificacion propia trazable para el timestamp; se conserva como referencia y no sustituye central/Open-Meteo.`,
-        );
-      }
-      if (
-        declaredHumidityQualification === 'calificado' &&
-        currentHumidityQualification.estado !== 'calificado'
-      ) {
-        warnings.push(
-          `${name}: la calificacion independiente de humedad no esta vigente hoy o esta incompleta; los intervalos historicos validos se conservan sin reclasificacion retroactiva.`,
-        );
-      }
       if (!validAirReports) {
         warnings.push(
           `${name}: no aporta temperatura de aire valida para el periodo; nunca se sustituye con temperatura de suelo.`,
@@ -287,14 +190,7 @@ export class SensorWeatherOverlayService {
     const fieldTemperatureDecisionReady =
       sensorObservations.some((item) =>
         Number.isFinite(item.valores.temperatureC),
-      ) &&
-      sensorObservations
-        .filter((item) => Number.isFinite(item.valores.temperatureC))
-        .every((item) =>
-          item.banderasCalidad.includes(
-            'temperature_sensor_quality:calificado',
-          ),
-        );
+      );
     if (sensorObservations.length) {
       const coverageValues = [...fieldCoverageByDate.values()];
       const meanCoverage = coverageValues.length
@@ -302,9 +198,7 @@ export class SensorWeatherOverlayService {
           coverageValues.length
         : 0;
       warnings.push(
-        fieldTemperatureDecisionReady
-          ? `Temperatura canonica del lote: sensor de campo calificado prioritario y central/Open-Meteo solo para completar horas faltantes. Cobertura horaria de campo media ${this.round(meanCoverage, 1)}%.`
-          : `Temperatura canonica del lote: las lecturas de campo no calificadas se conservan exclusivamente como referencia paralela; nunca completan horas canonicas ni habilitan decisiones biologicas. La estacion/Open-Meteo mantiene la variable de decision cuando esta disponible. Cobertura horaria de campo de referencia media ${this.round(meanCoverage, 1)}%.`,
+        `Temperatura canonica del lote: sensor LoRa asignado prioritario y central/Open-Meteo solo para completar horas faltantes. Cobertura horaria de campo media ${this.round(meanCoverage, 1)}%.`,
       );
     }
 
@@ -320,11 +214,11 @@ export class SensorWeatherOverlayService {
       fieldTemperatureQuality: sensorObservations.some((item) =>
         Number.isFinite(item.valores.temperatureC),
       )
-        ? fieldTemperatureDecisionReady
-          ? 'calificado'
-          : 'referencia'
+        ? 'calificado'
         : undefined,
-      unqualifiedTemperatureSensorNames: [...unqualifiedTemperatureSensorNames],
+      // Campo legacy conservado para compatibilidad del contrato. La
+      // validación de la instalación se realiza fuera del código.
+      unqualifiedTemperatureSensorNames: [],
     };
   }
 
@@ -482,169 +376,9 @@ export class SensorWeatherOverlayService {
     return this.validIso(report.fecha) || this.validIso(report.fechaCreacion);
   }
 
-  private effectiveQualification(
-    device: IDispositivo,
-    timestamp: string,
-    variable: VariableCalibracionMeteorologica,
-  ): ICalificacionEfectivaVariable {
-    const historical = this.historicalQualification(
-      device,
-      timestamp,
-      variable,
-    );
-    if (historical) {
-      return this.evaluateQualification(
-        historical,
-        timestamp,
-        variable,
-        'historial',
-        historical.id,
-      );
-    }
-
-    if (variable === 'humedad_relativa') {
-      const humidity = device.calificacionMeteorologica?.humedadRelativa;
-      return humidity
-        ? this.evaluateQualification(humidity, timestamp, variable, 'actual')
-        : {
-            estado: 'referencia',
-            fuente: 'sin_calificacion',
-          };
-    }
-
-    const temperature = device.calificacionMeteorologica;
-    if (!temperature) {
-      return {
-        estado: 'referencia',
-        fuente: 'sin_calificacion',
-      };
-    }
-    return this.evaluateQualification(
-      {
-        estado: temperature.estado,
-        rol: temperature.rolTemperatura,
-        alturaM: temperature.alturaM,
-        abrigoRadiacion: temperature.abrigoRadiacion,
-        exactitud: temperature.exactitudTemperaturaC,
-        fechaCalibracion: temperature.fechaCalibracion,
-        proximaCalibracion: temperature.proximaCalibracion,
-        offset: temperature.offsetTemperaturaC,
-        fuenteCalibracion: temperature.fuenteCalibracion,
-        observaciones: temperature.observaciones,
-      },
-      timestamp,
-      variable,
-      'actual',
-    );
-  }
-
-  private historicalQualification(
-    device: IDispositivo,
-    timestamp: string,
-    variable: VariableCalibracionMeteorologica,
-  ): IIntervaloCalibracionMeteorologica | undefined {
-    const evaluatedAt = this.validIso(timestamp);
-    if (!evaluatedAt) return undefined;
-    const evaluatedMs = new Date(evaluatedAt).getTime();
-    return (device.calificacionMeteorologica?.historialCalibraciones || [])
-      .filter((item) => item.variable === variable)
-      .filter((item) => {
-        const from = this.validIso(item.fechaCalibracion);
-        const to = this.validUntilIso(item.proximaCalibracion);
-        return (
-          !!from &&
-          !!to &&
-          evaluatedMs >= new Date(from).getTime() &&
-          evaluatedMs <= new Date(to).getTime()
-        );
-      })
-      .sort((left, right) => {
-        const leftStart =
-          this.validIso(left.fechaCalibracion) || '0000-00-00T00:00:00.000Z';
-        const rightStart =
-          this.validIso(right.fechaCalibracion) || '0000-00-00T00:00:00.000Z';
-        const byStart = rightStart.localeCompare(leftStart);
-        if (byStart) return byStart;
-        const leftRegistered =
-          this.validIso(left.registradoEn) || '9999-12-31T23:59:59.999Z';
-        const rightRegistered =
-          this.validIso(right.registradoEn) || '9999-12-31T23:59:59.999Z';
-        return (
-          leftRegistered.localeCompare(rightRegistered) ||
-          String(left.id).localeCompare(String(right.id))
-        );
-      })[0];
-  }
-
-  private evaluateQualification(
-    qualification: ICalificacionVariableMeteorologica,
-    timestamp: string,
-    variable: VariableCalibracionMeteorologica,
-    source: ICalificacionEfectivaVariable['fuente'],
-    intervaloId?: string,
-  ): ICalificacionEfectivaVariable {
-    const role = qualification.rol;
-    if (qualification.estado === 'rechazado') {
-      return {
-        estado: 'rechazado',
-        rol: role,
-        fuente: source,
-        intervaloId,
-      };
-    }
-    if (qualification.estado !== 'calificado') {
-      return {
-        estado: 'referencia',
-        rol: role,
-        fuente: source,
-        intervaloId,
-      };
-    }
-
-    const height = Number(qualification.alturaM);
-    const accuracy = Number(qualification.exactitud);
-    const calibratedAt = this.validIso(qualification.fechaCalibracion);
-    const nextCalibration = this.validUntilIso(
-      qualification.proximaCalibracion,
-    );
-    const evaluatedAt = this.validIso(timestamp);
-    const offset = qualification.offset;
-    const accuracyLimit = variable === 'temperatura_aire' ? 2 : 5;
-    const offsetLimit = variable === 'temperatura_aire' ? 10 : 20;
-    const validOffset =
-      offset === undefined ||
-      (Number.isFinite(Number(offset)) &&
-        Math.abs(Number(offset)) <= offsetLimit);
-    const calibrationSource = String(
-      qualification.fuenteCalibracion || '',
-    ).trim();
-    const valid =
-      (role === 'aire_2m' || role === 'aire_canopia') &&
-      Number.isFinite(height) &&
-      height > 0 &&
-      height <= 10 &&
-      qualification.abrigoRadiacion === true &&
-      Number.isFinite(accuracy) &&
-      accuracy > 0 &&
-      accuracy <= accuracyLimit &&
-      !!calibratedAt &&
-      !!nextCalibration &&
-      new Date(nextCalibration).getTime() >= new Date(calibratedAt).getTime() &&
-      !!evaluatedAt &&
-      new Date(evaluatedAt).getTime() >= new Date(calibratedAt).getTime() &&
-      new Date(evaluatedAt).getTime() <= new Date(nextCalibration).getTime() &&
-      validOffset &&
-      !!calibrationSource;
-    return {
-      estado: valid ? 'calificado' : 'referencia',
-      rol: role,
-      offset:
-        valid && offset !== undefined && Number.isFinite(Number(offset))
-          ? Number(offset)
-          : undefined,
-      fuente: source,
-      intervaloId,
-    };
+  private finiteOffset(value: unknown): number | undefined {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
   }
 
   private averageSensor(
@@ -700,10 +434,8 @@ export class SensorWeatherOverlayService {
   private newBucket(timestamp: string, name: string): IHourlyBucket {
     return {
       timestamp,
-      qualifiedTemperatures: [],
-      referenceTemperatures: [],
-      qualifiedHumidities: [],
-      referenceHumidities: [],
+      temperatures: [],
+      humidities: [],
       soilTemperatures: new Map(),
       soilMoistures: new Map(),
       flags: [],
@@ -724,18 +456,8 @@ export class SensorWeatherOverlayService {
     const states: Partial<
       Record<VariableMeteorologicaNormalizada, EstadoDatoMeteorologico>
     > = {};
-    const temperatureQualified = bucket.qualifiedTemperatures.length > 0;
-    const temperature = this.average(
-      temperatureQualified
-        ? bucket.qualifiedTemperatures
-        : bucket.referenceTemperatures,
-    );
-    const humidityQualified = bucket.qualifiedHumidities.length > 0;
-    const humidity = this.average(
-      humidityQualified
-        ? bucket.qualifiedHumidities
-        : bucket.referenceHumidities,
-    );
+    const temperature = this.average(bucket.temperatures);
+    const humidity = this.average(bucket.humidities);
     const soilTemperature = this.averageDepths(bucket.soilTemperatures);
     const soilMoisture = this.averageDepths(bucket.soilMoistures);
 
@@ -779,18 +501,10 @@ export class SensorWeatherOverlayService {
           bucket.flags.filter((flag) => !flag.startsWith('sensor_quality:')),
         ),
         ...(temperature !== undefined
-          ? [
-              `temperature_sensor_quality:${
-                temperatureQualified ? 'calificado' : 'referencia'
-              }`,
-            ]
+          ? ['temperature_sensor_quality:calificado']
           : []),
         ...(humidity !== undefined
-          ? [
-              `humidity_sensor_quality:${
-                humidityQualified ? 'calificado' : 'referencia'
-              }`,
-            ]
+          ? ['humidity_sensor_quality:calificado']
           : []),
         ...[...bucket.sensorNames].map((name) => `sensor:${name}`),
       ],
@@ -811,8 +525,7 @@ export class SensorWeatherOverlayService {
       const key = this.observationKey(sensor);
       const fallback = result.get(key);
       if (!fallback) {
-        const canonicalSensor = this.withoutReferenceAirVariables(sensor);
-        if (canonicalSensor) result.set(key, canonicalSensor);
+        result.set(key, sensor);
         continue;
       }
       const values: IValoresMeteorologicosNormalizados = {
@@ -824,8 +537,6 @@ export class SensorWeatherOverlayService {
       const states: Partial<
         Record<VariableMeteorologicaNormalizada, EstadoDatoMeteorologico>
       > = {};
-      const referenceFlags: string[] = [];
-
       for (const rawVariable of Object.keys(fallback.valores)) {
         const variable = rawVariable as VariableMeteorologicaNormalizada;
         if (!this.hasValue((fallback.valores as any)[variable])) continue;
@@ -837,11 +548,6 @@ export class SensorWeatherOverlayService {
         const variable = rawVariable as VariableMeteorologicaNormalizada;
         const sensorValue = (sensor.valores as any)[variable];
         if (!this.hasValue(sensorValue)) continue;
-
-        if (this.isReferenceAirVariable(sensor, variable)) {
-          referenceFlags.push(this.referenceValueFlag(variable, sensorValue));
-          continue;
-        }
 
         if (variable === 'soilTemperatureC') {
           const fallbackHasDepths = this.hasObjectValues(
@@ -923,9 +629,6 @@ export class SensorWeatherOverlayService {
             ...fallback.banderasCalidad,
             ...sensor.banderasCalidad,
             ...(hasSensor && hasFallback ? ['sensor_with_fallback'] : []),
-            ...(referenceFlags.length
-              ? ['sensor_reference_with_fallback', ...referenceFlags]
-              : []),
           ]),
         ],
         completitudPct: this.completeness(values),
@@ -935,87 +638,6 @@ export class SensorWeatherOverlayService {
     return [...result.values()].sort((a, b) =>
       a.timestamp.localeCompare(b.timestamp),
     );
-  }
-
-  /**
-   * Una lectura de aire de referencia permanece disponible en
-   * `fieldObservations`, pero no puede crear una hora canónica cuando falta
-   * estación/Open-Meteo. Se conservan variables independientes que sí sean
-   * aptas (por ejemplo, una sonda de suelo) y cualquier variable de aire
-   * proveniente de un sensor calificado.
-   */
-  private withoutReferenceAirVariables(
-    sensor: IObservacionMeteorologicaNormalizada,
-  ): IObservacionMeteorologicaNormalizada | undefined {
-    const values: IValoresMeteorologicosNormalizados = {};
-    const sources: Partial<
-      Record<VariableMeteorologicaNormalizada, FuenteMeteorologicaNormalizada>
-    > = {};
-    const states: Partial<
-      Record<VariableMeteorologicaNormalizada, EstadoDatoMeteorologico>
-    > = {};
-    const excludedReferenceFlags: string[] = [];
-
-    for (const rawVariable of Object.keys(sensor.valores)) {
-      const variable = rawVariable as VariableMeteorologicaNormalizada;
-      const value = (sensor.valores as any)[variable];
-      if (!this.hasValue(value)) continue;
-      if (this.isReferenceAirVariable(sensor, variable)) {
-        excludedReferenceFlags.push(this.referenceValueFlag(variable, value));
-        continue;
-      }
-      (values as any)[variable] = value;
-      sources[variable] = this.sourceForVariable(sensor, variable);
-      states[variable] = this.stateForVariable(sensor, variable);
-    }
-
-    if (!Object.keys(values).length) return undefined;
-
-    const canonicalStates = Object.keys(values)
-      .map(
-        (rawVariable) =>
-          states[rawVariable as VariableMeteorologicaNormalizada],
-      )
-      .filter((state): state is EstadoDatoMeteorologico => state !== undefined);
-
-    return {
-      ...sensor,
-      valores: values,
-      fuentePorVariable: sources,
-      estadoPorVariable: states,
-      estado: this.conservativeState(canonicalStates),
-      esPronostico: canonicalStates.includes('forecast'),
-      banderasCalidad: [
-        ...new Set([
-          ...sensor.banderasCalidad,
-          ...(excludedReferenceFlags.length
-            ? [
-                'sensor_reference_excluded_from_canonical',
-                ...excludedReferenceFlags,
-              ]
-            : []),
-        ]),
-      ],
-      completitudPct: this.completeness(values),
-      obtenidoEn: new Date().toISOString(),
-    };
-  }
-
-  private isReferenceAirVariable(
-    observation: IObservacionMeteorologicaNormalizada,
-    variable: VariableMeteorologicaNormalizada,
-  ): boolean {
-    if (variable === 'temperatureC') {
-      return observation.banderasCalidad.includes(
-        'temperature_sensor_quality:referencia',
-      );
-    }
-    if (variable === 'relativeHumidityPct') {
-      return observation.banderasCalidad.includes(
-        'humidity_sensor_quality:referencia',
-      );
-    }
-    return false;
   }
 
   private sourceForVariable(
@@ -1046,17 +668,6 @@ export class SensorWeatherOverlayService {
       'observed',
     ];
     return precedence.find((state) => states.includes(state)) || 'missing';
-  }
-
-  private referenceValueFlag(
-    variable: VariableMeteorologicaNormalizada,
-    value: unknown,
-  ): string {
-    const numeric = Number(value);
-    const serialized = Number.isFinite(numeric)
-      ? String(this.round(numeric, 2))
-      : String(value);
-    return `field_sensor_reference:${variable}:${serialized}`;
   }
 
   private hasValue(value: unknown): boolean {
@@ -1154,14 +765,6 @@ export class SensorWeatherOverlayService {
   private validIso(value?: string): string | undefined {
     if (!value) return undefined;
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
-  }
-
-  private validUntilIso(value?: string): string | undefined {
-    if (!value) return undefined;
-    const date = new Date(
-      /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T23:59:59.999Z` : value,
-    );
     return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
   }
 

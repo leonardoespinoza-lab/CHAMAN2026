@@ -26,7 +26,21 @@ export class PrediccionRiegosRepository {
   }
 
   async create(data: ICreatePrediccionRiego): Promise<PrediccionRiego> {
-    return await this.model.create(data);
+    // La fecha por siembra es la clave natural del calculo. Los procesos
+    // programados pueden reintentarse o solaparse; persistir con upsert evita
+    // que un reintento deje la siembra sin su actualizacion por E11000.
+    return await this.model.findOneAndUpdate(
+      {
+        idSiembra: data.idSiembra,
+        fechaPrediccion: data.fechaPrediccion,
+      },
+      { $set: data },
+      {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true,
+      },
+    );
   }
 
   async update(

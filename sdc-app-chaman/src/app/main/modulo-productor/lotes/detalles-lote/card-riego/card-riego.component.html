@@ -65,7 +65,11 @@
   } @else if (esCalculoEstimado) {
     <p-message
       severity="info"
-      text="El balance estimado aun no tiene una serie valida para inferir demanda."
+      [text]="
+        estadoAguaUtilValido
+          ? 'El balance estimado aun no tiene una serie valida para inferir demanda.'
+          : 'No hay recomendacion operativa: faltan datos validos para cerrar el balance hidrico.'
+      "
     ></p-message>
   } @else if (estadoRecomendacionRiego === 'fallida') {
     <p-message severity="error" text="El calculo de riego fallo y no hay una recomendacion vigente."></p-message>
@@ -188,7 +192,14 @@
         "
       ></p-message>
     } @else if (esCalculoEstimado) {
-      <p-message severity="info" text="La estimacion todavia no tiene una serie valida de recomendaciones."></p-message>
+      <p-message
+        severity="info"
+        [text]="
+          estadoAguaUtilValido
+            ? 'La estimacion todavia no tiene una serie valida de recomendaciones.'
+            : 'No hay recomendacion operativa: faltan datos validos para cerrar el balance hidrico.'
+        "
+      ></p-message>
     } @else if (estadoRecomendacionRiego === 'fallida') {
       <p-message severity="error" text="El calculo fallo; no se muestran filas anteriores como vigentes."></p-message>
     }

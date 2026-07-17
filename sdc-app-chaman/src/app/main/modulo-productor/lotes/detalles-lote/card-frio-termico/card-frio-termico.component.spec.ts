@@ -55,6 +55,38 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.mostrar).toBeFalse();
   });
 
+  it('presenta trigo como acumulacion termica sin mensajes de frio frutal ni calibracion ficticia', async () => {
+    const component = create(
+      response({
+        summary: {
+          thermalProcess: 'vernalizacion_anual',
+          gddAccumulated: 808,
+          gddBaseTemperatureC: 0,
+          gddUpperTemperatureC: 26,
+          gddThroughDate: '2026-07-16',
+        },
+      })
+    );
+    component.siembra = {
+      _id: 'trigo-aca-603',
+      fechaSiembra: '2026-05-05T03:00:00.000Z',
+      semilla: { cultivo: 'Trigo', variedad: 'ACA 603' },
+    } as any;
+
+    await component.cargar();
+
+    expect(component.tituloTarjeta).toBe('ACUMULACIÓN TÉRMICA');
+    expect(component.tituloEvolucion).toBe('Evolución del tiempo térmico');
+    expect(component.estadoEspecificacionLabel).toBe(
+      'GDD de referencia del cultivo · no interpreta etapa varietal'
+    );
+    expect(component.calidadFrioLabel).toContain('Serie térmica canónica');
+    expect(component.calidadFrioLabel).not.toContain('frío');
+    expect(component.calidadFrioDetalle).toContain(
+      'no usa HF, HFE ni Porciones de Frío de frutales'
+    );
+  });
+
   it('muestra acumulado, objetivo y avance de cada modelo sin convertir unidades', async () => {
     const component = create(
       response({
@@ -167,9 +199,9 @@ describe('CardFrioTermicoComponent', () => {
     await component.cargar();
 
     expect(component.usaSensorFrio).toBeTrue();
-    expect(component.calidadFrioLabel).toContain('referencia');
+    expect(component.calidadFrioLabel).toContain('prioritario');
     expect(component.calidadFrioDetalle).toContain('67%');
-    expect(component.calidadFrioDetalle).toContain('no mueve GDD');
+    expect(component.calidadFrioDetalle).toContain('integran el motor canónico');
     const horas = component.objetivosFrio.find((item) => item.key === 'HF');
     expect(horas?.accumulated).toBe(480);
     expect(horas?.target).toBe(750);
@@ -369,7 +401,7 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.diasGddComputados).toBe(46);
     expect(component.gddPromedioDiario).toBeCloseTo(10.8, 6);
     expect(component.periodoFrioLabel).toContain('46 jornadas computadas');
-    expect(component.estadoEspecificacionLabel).toContain('falta calibración varietal');
+    expect(component.estadoEspecificacionLabel).toContain('no interpreta etapa varietal');
     expect(component.lecturaPrincipal).toContain('no se declara requisito de vernalización');
     expect(component.metricas.map((metric) => metric.label)).toEqual(['Grados día']);
   });

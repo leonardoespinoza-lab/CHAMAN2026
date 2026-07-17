@@ -292,6 +292,22 @@
             <span style="font-size: 12px">ha</span>
           </span>
         </div>
+
+        <div
+          style="
+            display: flex;
+            flex-direction: column;
+            border-left: 8px solid var(--p-surface-400);
+            padding-left: 0.5em;
+            white-space: nowrap;
+          "
+        >
+          <span style="font-size: 12px; white-space: wrap">Sin datos concluyentes</span>
+          <span style="font-size: 24px; font-weight: bold">
+            {{ riego.haSinDatos }}
+            <span style="font-size: 12px">ha</span>
+          </span>
+        </div>
       </div>
 
       <p-divider />
@@ -310,9 +326,16 @@
       }
       <!-- Tag Verde -->
       @if (!riego.cantAmarillo && !riego.cantRojo) {
-        <p-message severity="success" icon="pi pi-check">
-          {{ riego.cantVerde + (' lotes sin necesidades' | translate) }}
-        </p-message>
+        @if (riego.cantVerde) {
+          <p-message severity="success" icon="pi pi-check">
+            {{ riego.cantVerde + (' lotes sin necesidades' | translate) }}
+          </p-message>
+        }
+        @if (riego.cantSinDatos) {
+          <p-message severity="secondary" icon="pi pi-question-circle">
+            {{ riego.cantSinDatos }} lotes sin balance hidrico concluyente
+          </p-message>
+        }
       }
     </div>
   </ng-template>

@@ -19,7 +19,7 @@ export interface IDefinicionEnfermedad {
  * La versión forma parte del dato: nunca deben continuarse acumuladores de una
  * versión anterior después de cambiar una fórmula o su ventana de cálculo.
  */
-export const TRIGO_MOTOR_SANITARIO_VERSION = 4;
+export const TRIGO_MOTOR_SANITARIO_VERSION = 5;
 export const TRIGO_GDD_BASE_0_INICIO_MIN = 800;
 export const TRIGO_GDD_BASE_0_INICIO_CONSERVADOR = 850;
 export const TRIGO_GDD_COBERTURA_MINIMA = 0.9;
