@@ -55,6 +55,7 @@ export class CardFrioTermicoComponent implements OnChanges {
   public chartFrioOptions?: Highcharts.Options;
 
   private ultimoKeyHistorico = '';
+  private requestSequence = 0;
 
   public get mostrar(): boolean {
     const semilla = this.siembra?.semilla;
@@ -201,14 +202,20 @@ export class CardFrioTermicoComponent implements OnChanges {
   }
 
   public async cargar(force = false): Promise<void> {
+    const sequence = ++this.requestSequence;
     const id = this.siembra?._id;
-    if (!id || !this.mostrar) return;
+    if (!id || !this.mostrar) {
+      this.loading = false;
+      return;
+    }
     this.loading = true;
     this.error = undefined;
     try {
       if (force) {
-        this.data = await this.siembraService.reprocesarAgrometeorologia(id, true);
-        CardFrioTermicoComponent.agrometCache.set(id, this.data);
+        const response = await this.siembraService.reprocesarAgrometeorologia(id, true);
+        if (sequence !== this.requestSequence) return;
+        this.data = response;
+        CardFrioTermicoComponent.agrometCache.set(id, response);
       } else {
         const cached = CardFrioTermicoComponent.agrometCache.get(id);
         if (cached) {
@@ -219,16 +226,20 @@ export class CardFrioTermicoComponent implements OnChanges {
             request = this.siembraService.agrometeorologia(id);
             CardFrioTermicoComponent.agrometPending.set(id, request);
           }
-          this.data = await request;
-          CardFrioTermicoComponent.agrometCache.set(id, this.data);
+          const response = await request;
+          if (sequence !== this.requestSequence) return;
+          this.data = response;
+          CardFrioTermicoComponent.agrometCache.set(id, response);
         }
       }
+      if (sequence !== this.requestSequence) return;
       this.prepararVista();
     } catch (error: any) {
+      if (sequence !== this.requestSequence) return;
       this.error = error?.error?.message || error?.message || 'No se pudo leer la acumulación térmica.';
     } finally {
       CardFrioTermicoComponent.agrometPending.delete(id);
-      this.loading = false;
+      if (sequence === this.requestSequence) this.loading = false;
     }
   }
 

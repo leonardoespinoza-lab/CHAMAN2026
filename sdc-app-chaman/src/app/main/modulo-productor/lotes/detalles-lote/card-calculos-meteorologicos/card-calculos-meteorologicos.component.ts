@@ -55,6 +55,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
   ];
 
   private requestKey = '';
+  private requestSequence = 0;
 
   public get mostrarSuelo(): boolean {
     return !!this.data?.series.some(
@@ -217,9 +218,11 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
   }
 
   public async cargar(force = false): Promise<void> {
+    const sequence = ++this.requestSequence;
     const id = this.siembra?._id;
     if (!id) {
       this.data = undefined;
+      this.loading = false;
       return;
     }
 
@@ -230,15 +233,18 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     this.loading = true;
     this.error = undefined;
     try {
-      this.data = await this.siembraService.agrometeorologia(id, desde);
+      const response = await this.siembraService.agrometeorologia(id, desde);
+      if (sequence !== this.requestSequence) return;
+      this.data = response;
       this.requestKey = key;
       if (this.grafico === 'suelo' && !this.mostrarSuelo) this.grafico = 'termico';
       this.prepararVista();
     } catch (error: any) {
+      if (sequence !== this.requestSequence) return;
       this.data = undefined;
       this.error = error?.error?.message || error?.message || 'No se pudieron leer los calculos meteorologicos.';
     } finally {
-      this.loading = false;
+      if (sequence === this.requestSequence) this.loading = false;
     }
   }
 

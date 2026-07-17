@@ -189,4 +189,37 @@ describe('CardCalculosMeteorologicosComponent', () => {
     expect(component.data).toBeUndefined();
     expect(component.error).toContain('temporalmente');
   });
+
+  it('ignora una respuesta tardia del lote anterior al cambiar de siembra', async () => {
+    let rejectOld!: (reason: unknown) => void;
+    let resolveCurrent!: (value: IRespuestaAgrometeorologiaSiembra) => void;
+    const oldRequest = new Promise<IRespuestaAgrometeorologiaSiembra>((_resolve, reject) => {
+      rejectOld = reject;
+    });
+    const currentResponse = response({
+      dataSource: { type: 'open_meteo', completenessPercentage: 99 },
+    });
+    const currentRequest = new Promise<IRespuestaAgrometeorologiaSiembra>((resolve) => {
+      resolveCurrent = resolve;
+    });
+    const service = {
+      agrometeorologia: jasmine.createSpy().and.callFake((id: string) =>
+        id === 'siembra-anterior' ? oldRequest : currentRequest
+      ),
+    };
+    const component = create(service);
+
+    component.siembra = { _id: 'siembra-anterior' } as any;
+    const staleLoad = component.cargar();
+    component.siembra = { _id: 'siembra-actual' } as any;
+    const currentLoad = component.cargar();
+    resolveCurrent(currentResponse);
+    await currentLoad;
+    rejectOld({ error: { message: 'No tiene permiso para ver esta siembra' } });
+    await staleLoad;
+
+    expect(component.data).toBe(currentResponse);
+    expect(component.error).toBeUndefined();
+    expect(component.fuenteDetail).toContain('99%');
+  });
 });
