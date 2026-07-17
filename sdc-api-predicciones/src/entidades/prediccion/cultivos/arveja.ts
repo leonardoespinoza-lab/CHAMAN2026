@@ -20,6 +20,7 @@ import { ClimaService } from '../../clima/service';
 import { SiembrasService } from '../../siembra/service';
 import {
   combinarCalidadDatos,
+  crearPrediccionFueraVentana,
   crearPrediccionSinDatos,
   esValorClimaticoValido,
 } from '../enfermedades/calidad';
@@ -114,7 +115,7 @@ export class PrediccionArvejaService {
       if (fecha < fechaDesde || fecha >= fechaHasta) continue;
       const codigo = dia.etapaArveja;
       const enfermedades =
-        !dia.etapaHabilitante || !dia.climaHabilitante || !codigo
+        !dia.climaHabilitante || !codigo
           ? this.enfermedades.map((config) =>
               crearPrediccionSinDatos(
                 config.nombre,
@@ -127,16 +128,40 @@ export class PrediccionArvejaService {
                 'experimental',
               ),
             )
-          : this.enfermedades
-              .filter((config) => config.etapas.includes(codigo))
-              .map((config) =>
-                this.evaluarEnfermedad(
-                  config,
-                  this.climaDiaCanonico(dia),
-                  codigo,
-                  dia.calidadClima,
-                ),
-              );
+          : this.enfermedades.map((config) =>
+              config.etapas.includes(codigo)
+                ? this.evaluarEnfermedad(
+                    config,
+                    this.climaDiaCanonico(dia),
+                    codigo,
+                    dia.calidadClima,
+                  )
+                : crearPrediccionFueraVentana(
+                    config.nombre,
+                    config.id,
+                    `Etapa ${codigo}: fuera de la ventana ${config.etapas.join('/')}.`,
+                    config.fuente,
+                    1,
+                    'experimental',
+                    { etapaScore: 0 },
+                  ),
+            );
+      if (!dia.etapaHabilitante && codigo) {
+        for (const enfermedad of enfermedades) {
+          enfermedad.calidadDatos = combinarCalidadDatos(
+            enfermedad.calidadDatos,
+            {
+              nivel: 'baja',
+              fuente: 'estimado',
+              cobertura: dia.calidadClima.cobertura,
+              fallback: true,
+              resumen:
+                'Screening ambiental experimental con etapa fenologica proyectada; no genera alertas automaticas.',
+              limitaciones: dia.motivosNoHabilitante,
+            },
+          );
+        }
+      }
       if (!enfermedades.length) continue;
 
       const fechaIso = new Date(`${dia.fecha}T03:00:00.000Z`).toISOString();
@@ -161,13 +186,17 @@ export class PrediccionArvejaService {
             ? fuenteCampo
               ? 'alta'
               : 'media'
-            : 'sin_datos',
+            : codigo
+              ? 'baja'
+              : 'sin_datos',
           fuente: fuenteCampo ? 'manual' : 'estimado',
-          cobertura: dia.etapaHabilitante ? 1 : 0,
+          cobertura: dia.etapaHabilitante ? 1 : codigo ? 0.5 : 0,
           fallback: !dia.etapaHabilitante,
           resumen: dia.etapaHabilitante
             ? `Etapa provista por el motor agrometeorologico canonico (${dia.serie.stageSource}).`
-            : 'La etapa canonica no habilita decisiones sanitarias.',
+            : codigo
+              ? 'Etapa proyectada apta para screening ambiental; requiere confirmacion a campo para alertas.'
+              : 'La etapa canonica no habilita decisiones sanitarias.',
           limitaciones: dia.motivosNoHabilitante,
         },
         enfermedades,

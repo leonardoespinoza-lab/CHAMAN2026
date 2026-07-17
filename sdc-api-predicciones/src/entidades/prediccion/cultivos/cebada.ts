@@ -25,11 +25,12 @@ import {
 import { HelperService } from '../../../auxiliares/helper';
 import { SiembrasService } from '../../siembra/service';
 import { ClimaService } from '../../clima/service';
-import { FumigacionsService } from 'src/entidades/fumigacion/service';
+import { FumigacionsService } from '../../fumigacion/service';
 import { PrediccionsRepository } from '../repository';
 import {
   camposClimaticosFaltantes,
   combinarCalidadDatos,
+  crearPrediccionFueraVentana,
   crearPrediccionSinDatos,
   metadataResistencia,
 } from '../enfermedades/calidad';
@@ -169,7 +170,7 @@ export class PrediccionCebadaService {
         diasPorFecha.get(fechaAnterior),
       );
       const enfermedades =
-        etapa === undefined || !dia.etapaHabilitante || !dia.climaHabilitante
+        !dia.climaHabilitante
           ? this.enfermedades.map((config) =>
               crearPrediccionSinDatos(
                 config.nombre,
@@ -180,23 +181,84 @@ export class PrediccionCebadaService {
                 'ENFERMEDADES EN CEBADA.xlsx',
               ),
             )
-          : this.enfermedades
-              .filter((config) => this.estaEnVentana(etapa, config))
-              .map((config) =>
-                this.predecirEnfermedad({
+          : this.enfermedades.map((config) => {
+              const anterior = predAnterior?.enfermedades?.find(
+                (item) => item.idEnfermedad === config.id,
+              );
+              if (etapa === undefined) {
+                if (config.formula === 'fusariosis') {
+                  return crearPrediccionFueraVentana(
+                    config.nombre,
+                    config.id,
+                    'Fusariosis requiere confirmar espigazon/antesis; el clima se conserva sin declarar una ventana reproductiva.',
+                    'ENFERMEDADES EN CEBADA.xlsx',
+                    3,
+                    'operativo_provisional',
+                    { etapaScore: 0 },
+                    anterior,
+                  );
+                }
+                return this.predecirEnfermedad({
                   config,
                   semilla: siembra.semilla,
-                  etapa,
+                  etapa: 1,
                   clima: climaDia,
                   prediccionAnterior: predAnterior,
                   predecir,
-                }),
-              );
+                });
+              }
+              if (!this.estaEnVentana(etapa, config)) {
+                return crearPrediccionFueraVentana(
+                  config.nombre,
+                  config.id,
+                  `Etapa ${etapa}: fuera de la ventana ${config.etapaMin}-${config.etapaMax}.`,
+                  'ENFERMEDADES EN CEBADA.xlsx',
+                  3,
+                  dia.etapaHabilitante
+                    ? 'operativo'
+                    : 'operativo_provisional',
+                  { etapaScore: 0 },
+                  anterior,
+                );
+              }
+              return this.predecirEnfermedad({
+                config,
+                semilla: siembra.semilla,
+                etapa,
+                clima: climaDia,
+                prediccionAnterior: predAnterior,
+                predecir,
+              });
+            });
       for (const enfermedad of enfermedades) {
         enfermedad.calidadDatos = combinarCalidadDatos(
           enfermedad.calidadDatos,
           dia.calidadClima,
         );
+        if (!dia.etapaHabilitante) {
+          enfermedad.modelo = {
+            ...enfermedad.modelo,
+            validacion: 'operativo_provisional',
+          };
+          enfermedad.calidadDatos = combinarCalidadDatos(
+            enfermedad.calidadDatos,
+            {
+              nivel: 'baja',
+              fuente: 'estimado',
+              cobertura: dia.calidadClima.cobertura,
+              fallback: true,
+              resumen:
+                'Screening ambiental calculado con etapa fenologica proyectada; no genera alertas automaticas.',
+              limitaciones: dia.motivosNoHabilitante,
+            },
+          );
+          if (etapa === undefined) {
+            enfermedad.variables = {
+              ...(enfermedad.variables || {}),
+              etapaScore: 0,
+            };
+          }
+        }
         enfermedad.calidadClima = dia.calidadClima;
       }
 
@@ -226,13 +288,17 @@ export class PrediccionCebadaService {
             ? fuenteCampo
               ? 'alta'
               : 'media'
-            : 'sin_datos',
+            : etapa !== undefined
+              ? 'baja'
+              : 'sin_datos',
           fuente: fuenteCampo ? 'manual' : 'estimado',
-          cobertura: dia.etapaHabilitante ? 1 : 0,
+          cobertura: dia.etapaHabilitante ? 1 : etapa !== undefined ? 0.5 : 0,
           fallback: !dia.etapaHabilitante,
           resumen: dia.etapaHabilitante
             ? `Etapa provista por el motor agrometeorologico canonico (${dia.serie.stageSource}).`
-            : 'La etapa canonica no habilita decisiones sanitarias.',
+            : etapa !== undefined
+              ? 'Etapa proyectada apta para screening ambiental; requiere confirmacion a campo para alertas.'
+              : 'La etapa canonica no habilita decisiones sanitarias.',
           limitaciones: dia.motivosNoHabilitante,
         },
         enfermedades,

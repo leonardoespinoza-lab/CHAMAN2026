@@ -715,7 +715,10 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return `Roya amarilla/estriada: ${frecuencia.toFixed(1)}% de horas favorables en rachas (cobertura ${cobertura.toFixed(0)}%). Es oportunidad ambiental experimental, no enfermedad declarada ni alerta.`;
     }
     if (this.esCalidadNoOperativa(prediccion)) {
-      return `${prediccion.calidadDatos?.resumen || estadoCalculo}. Requiere revisar datos y validar a campo.`;
+      const resumen = (prediccion.calidadDatos?.resumen || estadoCalculo)
+        .trim()
+        .replace(/[.\s]+$/, '');
+      return `${resumen}. Requiere revisar datos y validar a campo.`;
     }
     if (this.esSalidaProvisionalTrigo(prediccion)) {
       return `${estadoCalculo}. Es una salida para seguimiento y calibracion; no declara enfermedad.`;

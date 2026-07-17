@@ -1,4 +1,8 @@
-import { IReporteNDVI, ISiembra } from 'modelos/src';
+import {
+  IReporteNDVI,
+  ISiembra,
+  TRIGO_MOTOR_SANITARIO_VERSION,
+} from 'modelos/src';
 import { LotesService } from './service';
 
 describe('LotesService - seguimiento satelital del informe agronomico', () => {
@@ -317,7 +321,10 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
             confianza: 'media',
             campaniaFuente: '2025/2026',
           },
-          modelo: { version: 4, validacion: 'operativo' },
+          modelo: {
+            version: TRIGO_MOTOR_SANITARIO_VERSION,
+            validacion: 'operativo',
+          },
           variables: { resultadoCrudo: 8 },
         },
       ],
@@ -344,7 +351,10 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
             confianza: 'media',
             campaniaFuente: '2025/2026',
           },
-          modelo: { version: 4, validacion: 'operativo' },
+          modelo: {
+            version: TRIGO_MOTOR_SANITARIO_VERSION,
+            validacion: 'operativo',
+          },
           variables: { resultadoCrudo: 0 },
         },
       ],

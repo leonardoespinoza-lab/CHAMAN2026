@@ -29,6 +29,7 @@ import {
   IRegistroFenologico,
   IRespuestaAgrometeorologiaSiembra,
   TObjetivoBiofixFenologico,
+  TRIGO_MOTOR_SANITARIO_VERSION,
   esCultivoPerenne,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
@@ -219,9 +220,7 @@ export class SiembrasService {
     }
     if (
       reemplazaRegistroId &&
-      registros.some(
-        (item) => item.reemplazaRegistroId === reemplazaRegistroId,
-      )
+      registros.some((item) => item.reemplazaRegistroId === reemplazaRegistroId)
     ) {
       throw new BadRequestException(
         'El registro fenologico ya tiene una correccion posterior.',
@@ -295,8 +294,28 @@ export class SiembrasService {
     idSiembra: string,
     permiso: IPermiso,
   ): Promise<IPrediccion[]> {
-    await this.getById(idSiembra, permiso);
+    const siembra = await this.getById(idSiembra, permiso);
+    if (this.requiereReconstruccionSanitariaTrigo(siembra)) {
+      this.logger.log(
+        `Reconstruccion sanitaria automatica v${TRIGO_MOTOR_SANITARIO_VERSION} para trigo ${idSiembra}`,
+      );
+      return await this.prediccionsService.reconstruir(idSiembra, permiso);
+    }
     return await this.prediccionsService.prediccion(idSiembra);
+  }
+
+  private requiereReconstruccionSanitariaTrigo(siembra: ISiembra): boolean {
+    if (siembra.semilla?.cultivo !== 'Trigo' || !siembra.ultimaPrediccion) {
+      return false;
+    }
+    const enfermedades = siembra.ultimaPrediccion.enfermedades || [];
+    return (
+      enfermedades.length === 0 ||
+      enfermedades.some(
+        (enfermedad) =>
+          Number(enfermedad.modelo?.version) !== TRIGO_MOTOR_SANITARIO_VERSION,
+      )
+    );
   }
 
   async create(data: ICreateSiembra, permiso: IPermiso): Promise<ISiembra> {
@@ -1075,8 +1094,7 @@ export class SiembrasService {
     }
     if (permiso.nivel === 'Distribuidor') {
       return Boolean(
-        data.idDistribuidor &&
-          data.idDistribuidor === permiso.idDistribuidor,
+        data.idDistribuidor && data.idDistribuidor === permiso.idDistribuidor,
       );
     }
     if (permiso.nivel === 'Productor') {
@@ -1087,16 +1105,13 @@ export class SiembrasService {
     if (permiso.nivel === 'Establecimiento') {
       return Boolean(
         data.idEstablecimiento &&
-          data.idEstablecimiento === permiso.idEstablecimiento,
+        data.idEstablecimiento === permiso.idEstablecimiento,
       );
     }
     return false;
   }
 
-  private tieneAlcancePersistido(
-    data: ISiembra,
-    permiso: IPermiso,
-  ): boolean {
+  private tieneAlcancePersistido(data: ISiembra, permiso: IPermiso): boolean {
     if (permiso.nivel === 'Quimica') return Boolean(data.idQuimica);
     if (permiso.nivel === 'Distribuidor') return Boolean(data.idDistribuidor);
     if (permiso.nivel === 'Productor') return Boolean(data.idProductor);
@@ -1122,10 +1137,7 @@ export class SiembrasService {
         );
       })
       .then(async () => {
-        await this.repository.reprocesarAgrometeorologia(
-          key,
-          sincronizarClima,
-        );
+        await this.repository.reprocesarAgrometeorologia(key, sincronizarClima);
         if (reemplazarPrediccion) {
           await this.actualizarPrediccion(key, permiso);
         } else {
@@ -1181,10 +1193,7 @@ export class SiembrasService {
     return sanitized;
   }
 
-  private validarClavesPersistencia(
-    value: unknown,
-    path = 'siembra',
-  ): void {
+  private validarClavesPersistencia(value: unknown, path = 'siembra'): void {
     if (value === null || value === undefined || typeof value !== 'object') {
       return;
     }
@@ -1237,14 +1246,10 @@ export class SiembrasService {
     registro: IRegistroFenologico,
   ): string {
     if (!String(registro.etapa || '').trim()) {
-      throw new BadRequestException(
-        'La etapa fenologica es obligatoria.',
-      );
+      throw new BadRequestException('La etapa fenologica es obligatoria.');
     }
     const raw =
-      registro.fechaInicioEtapa ||
-      registro.fecha ||
-      registro.fechaObservacion;
+      registro.fechaInicioEtapa || registro.fecha || registro.fechaObservacion;
     const fecha = raw ? new Date(raw) : new Date();
     if (Number.isNaN(fecha.getTime())) {
       throw new BadRequestException(
@@ -1273,11 +1278,7 @@ export class SiembrasService {
     const cosecha = siembra.fechaCosecha
       ? new Date(siembra.fechaCosecha)
       : undefined;
-    if (
-      cosecha &&
-      !Number.isNaN(cosecha.getTime()) &&
-      fecha > cosecha
-    ) {
+    if (cosecha && !Number.isNaN(cosecha.getTime()) && fecha > cosecha) {
       throw new BadRequestException(
         'La etapa fenologica no puede registrarse despues de la cosecha.',
       );
