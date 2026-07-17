@@ -46,6 +46,7 @@ import { ParamsService } from '../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../auxiliares/shared.module';
 import { DrawerClimaComponent } from './drawer-clima/drawer-clima.component';
 import { EstadoRiegoMapa, evaluarRiegoMapa } from './mapa-riego-evidence';
+import { evaluarSanidadFrontend } from '../lotes/sanidad-evidence';
 
 interface IServicio {
   label: () => string;
@@ -287,9 +288,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     cantRojo: 0,
     cantAmarillo: 0,
     cantVerde: 0,
+    cantSinDatos: 0,
     haRojo: 0,
     haAmarillo: 0,
     haVerde: 0,
+    haSinDatos: 0,
   };
   // Datos para el panel de riego
   public riego = {
@@ -585,16 +588,24 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       cantRojo: 0,
       cantAmarillo: 0,
       cantVerde: 0,
+      cantSinDatos: 0,
       haRojo: 0,
       haAmarillo: 0,
       haVerde: 0,
+      haSinDatos: 0,
     };
     let maxRiesgoTotal = 0;
     this.lotes.forEach((lote) => {
       const has = Math.trunc(lote?.ubicacion?.superficie || 0);
-      const predicciones = lote.siembra?.ultimaPrediccion?.enfermedades || [];
+      const evidencia = evaluarSanidadFrontend(lote.siembra);
+      if (!evidencia.operativas.length) {
+        this.enfermedades.cantSinDatos++;
+        this.enfermedades.haSinDatos += has;
+        lote.colorEnfermedad = 'rgba(100, 116, 139, 0.45)';
+        return;
+      }
       let maxRiesgo = 0; // Riesgo bajo (verde)
-      predicciones.forEach((prediccion) => {
+      evidencia.operativas.forEach((prediccion) => {
         const nivel = this.nivelRiesgoEnfermedad(lote, prediccion.resultado || 0);
         if (nivel === 2) {
           maxRiesgo = Math.max(maxRiesgo, 2); // Riesgo alto (rojo)
@@ -627,6 +638,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       this.servicios[0].backgroudColor = 'var(--p-danger-color)';
     } else if (maxRiesgoTotal === 1) {
       this.servicios[0].backgroudColor = 'var(--p-warning-color)';
+    } else if (this.enfermedades.cantSinDatos && !this.enfermedades.cantVerde) {
+      this.servicios[0].backgroudColor = 'var(--p-surface-500)';
     } else {
       this.servicios[0].backgroudColor = 'var(--p-success-color)';
     }
@@ -940,6 +953,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.enfermedades.cantAmarillo) {
       return `${this.enfermedades.cantAmarillo} en observación`;
     }
+    if (this.enfermedades.cantSinDatos) {
+      return `${this.enfermedades.cantSinDatos} en seguimiento`;
+    }
     if (this.enfermedades.cantVerde) {
       return `${this.enfermedades.cantVerde} sin necesidades`;
     }
@@ -1055,20 +1071,25 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   public loteEnfermedadResumen(lote?: ILoteMapa): string {
-    const predicciones = (lote || this.loteSeleccionado)?.siembra?.ultimaPrediccion?.enfermedades || [];
-    if (!predicciones.length) {
+    const evidencia = evaluarSanidadFrontend((lote || this.loteSeleccionado)?.siembra);
+    if (evidencia.principal) {
+      return `${evidencia.principal.enfermedad}: ${this.formatNumber(evidencia.principal.resultado || 0, 0)}%`;
+    }
+    if (evidencia.noAgregables.length) {
+      return `${evidencia.noAgregables.length} lectura${evidencia.noAgregables.length === 1 ? '' : 's'} en revision; sin alerta automatica`;
+    }
+    if (!evidencia.todas.length) {
       return 'Sin prediccion reciente';
     }
-    const max = predicciones.reduce((prev, current) =>
-      (current.resultado || 0) > (prev.resultado || 0) ? current : prev
-    );
-    return `${max.enfermedad}: ${this.formatNumber(max.resultado || 0, 0)}%`;
+    return 'Prediccion no vigente; actualizar monitoreo';
   }
 
   public loteEnfermedadNivel(lote?: ILoteMapa): string {
     const seleccionado = lote || this.loteSeleccionado;
     const max = this.maxRiesgoEnfermedad(seleccionado);
-    if (max === null) return 'Pendiente';
+    if (max === null) {
+      return evaluarSanidadFrontend(seleccionado?.siembra).todas.length ? 'En seguimiento' : 'Pendiente';
+    }
     const nivel = this.nivelRiesgoEnfermedad(seleccionado, max);
     if (nivel === 2) return 'Riesgo alto';
     if (nivel === 1) return 'Riesgo medio';
@@ -1078,7 +1099,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   public loteEnfermedadPercent(lote?: ILoteMapa): number {
     const seleccionado = lote || this.loteSeleccionado;
     const max = this.maxRiesgoEnfermedad(seleccionado);
-    return max === null ? 8 : this.progresoRiesgoEnfermedad(seleccionado, max);
+    return max === null ? 0 : this.progresoRiesgoEnfermedad(seleccionado, max);
+  }
+
+  public loteEnfermedadesOperativas(lote?: ILoteMapa) {
+    return evaluarSanidadFrontend((lote || this.loteSeleccionado)?.siembra).operativas;
   }
 
   public loteRiegoResumen(lote?: ILoteMapa): string {
@@ -1782,9 +1807,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private maxRiesgoEnfermedad(lote?: ILoteMapa): number | null {
-    const predicciones = lote?.siembra?.ultimaPrediccion?.enfermedades || [];
-    if (!predicciones.length) return null;
-    return predicciones.reduce((max, item) => Math.max(max, item.resultado || 0), 0);
+    return evaluarSanidadFrontend(lote?.siembra).maximo ?? null;
   }
 
   private umbralesRiesgoEnfermedad(lote?: ILoteMapa): { medio: number; alto: number; escalaDirecta: boolean } {

@@ -209,6 +209,16 @@ async function latestBy(collection, match, key, dateField) {
           disease.modelo?.validacion === "operativo_provisional" ||
           disease.modelo?.validacion === "experimental",
       ).length;
+      const experimentalPrimaryLeaks = diseases.filter((disease) => {
+        if (disease.modelo?.validacion !== "experimental") return false;
+        const variables = disease.variables || {};
+        const coverage = Number(variables.coberturaHoraria10d);
+        return (
+          disease.idEnfermedad === "trigo.roya_anaranjada" &&
+          (!Number.isFinite(coverage) || coverage < 0.9) &&
+          Number(disease.resultado) > 0
+        );
+      }).length;
       const completeDiseaseMatrix =
         !expectedDiseases ||
         (diseaseIds.size === expectedDiseases.size &&
@@ -253,6 +263,7 @@ async function latestBy(collection, match, key, dateField) {
           lecturaInterpretable:
             diseases.length > 0 && !allDiseasesWithoutReading,
           cantidadProvisional: provisionalDiseases,
+          fugasResultadoExperimental: experimentalPrimaryLeaks,
           fecha: prediction?.fecha,
           antiguedadDias: daysSince(prediction?.fecha),
           versiones: versions,
@@ -338,7 +349,8 @@ async function latestBy(collection, match, key, dateField) {
           (!row.agromet.disponible ||
             !row.sanidad.fecha ||
             !row.sanidad.matrizCompleta ||
-            !row.sanidad.lecturaInterpretable),
+            !row.sanidad.lecturaInterpretable ||
+            row.sanidad.fugasResultadoExperimental > 0),
       ),
       medium: matrix.filter(
         (row) => row.sanidad.requiereV5 || !row.integridad.coordenadasValidas,

@@ -595,8 +595,8 @@
 
         <!-- Monitoreo de enfermedades -->
         @if (servicioSeleccionado === servicios[0]) {
-          @if (loteSeleccionado?.siembra?.ultimaPrediccion?.enfermedades?.length) {
-            @for (item of loteSeleccionado?.siembra?.ultimaPrediccion?.enfermedades; track $index) {
+          @if (loteEnfermedadesOperativas(loteSeleccionado).length) {
+            @for (item of loteEnfermedadesOperativas(loteSeleccionado); track item.idEnfermedad) {
               <div style="margin-bottom: 1em">
                 <p-message
                   [severity]="item.resultado > 20 ? 'error' : item.resultado > 15 ? 'warn' : 'success'"
@@ -614,7 +614,7 @@
             }
           } @else {
             <p-message severity="info">
-              {{ 'Aún no hay predicción de enfermedades' | translate }}
+              {{ loteEnfermedadResumen(loteSeleccionado) }}
             </p-message>
           }
         }

@@ -80,4 +80,29 @@ describe('ListadoLotesComponent', () => {
     expect(indicador.detail).toBe('62/100');
     expect(indicador.tone).toBe('warn');
   });
+
+  it('no convierte una formula experimental en riesgo sanitario del listado', () => {
+    const componente = crearComponente();
+    const indicador = (componente as any).indicadorEnfermedades({
+      siembra: {
+        ultimaPrediccion: {
+          fecha: new Date().toISOString(),
+          enfermedades: [
+            {
+              idEnfermedad: 'trigo.roya_anaranjada',
+              enfermedad: 'Roya Anaranjada',
+              resultado: 67.81,
+              estado: 'calculado',
+              modelo: { version: 5, validacion: 'experimental' },
+              calidadDatos: { nivel: 'baja' },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(indicador.value).toBe('Seguimiento');
+    expect(indicador.tone).toBe('info');
+    expect(indicador.tooltip).toContain('no generan riesgo');
+  });
 });

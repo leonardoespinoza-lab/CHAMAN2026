@@ -197,6 +197,8 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         prediccion?.estado === 'fuera_ventana' ? false : this.estaEnVentanaFenologica(enfermedad);
       const estadoCalculo = this.estadoCalculo(prediccion, enfermedad, prediccionVigente);
       const salidaOperativa = this.esPrediccionOperativa(prediccion) && !esExperimental;
+      const indiceVisible =
+        !!prediccion && prediccionVigente && prediccion.estado === 'calculado' && !esExperimental;
       return {
         enfermedad,
         nombreVisible: this.nombreVisibleEnfermedad(enfermedad),
@@ -204,8 +206,8 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         resultado,
         resultadoEtiqueta: this.resultadoEtiqueta(prediccion, resultado, enfermedad, prediccionVigente),
         enVentanaFenologica,
-        fill: salidaOperativa ? this.llenadoRiesgo(resultado, !!prediccion, enfermedad) : 0,
-        severity: salidaOperativa ? this.severidad(resultado, enfermedad) : 'low',
+        fill: indiceVisible ? this.llenadoRiesgo(resultado, true, enfermedad) : 0,
+        severity: indiceVisible ? this.severidad(resultado, enfermedad) : 'low',
         periodo: this.periodoSusceptible(enfermedad),
         sensibilidad: this.sensibilidadVarietal(enfermedad),
         variables: this.resumenVariables(prediccion, enfermedad),
@@ -338,6 +340,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return `Sin dato varietal publicado; no se asume susceptibilidad para ${variedad}.`;
     }
     const prediccion = this.prediccionPorEnfermedad(enfermedad);
+    if (this.sinResistenciaVarietal(prediccion)) {
+      return 'Resistencia varietal no cargada. El motor usa el factor conservador susceptible (S=1) para no subestimar el ambiente. Esto no confirma presencia ni ausencia: requiere recorrida y decision del responsable tecnico.';
+    }
     const resuelta = resolverResistencia(this.siembra?.semilla?.resistencia, prediccion?.idEnfermedad || enfermedad);
     const resistencia =
       prediccion?.resistenciaUsada?.multiplicador != null ? prediccion.resistenciaUsada : resuelta.resistencia;
@@ -623,11 +628,13 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     if (prediccion.estado === 'fuera_ventana') {
       return 'fuera de ventana sanitaria';
     }
+    if (enfermedad && this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
+      return this.coberturaHorariaRoya(prediccion) < 90
+        ? 'datos horarios insuficientes para evaluar'
+        : 'porcentaje de horas ambientalmente favorables; no confirma enfermedad';
+    }
     if (prediccion.estado === 'sin_datos') {
       return 'sin datos suficientes para calcular';
-    }
-    if (enfermedad && this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
-      return 'salida experimental; no confirma diagnostico ni genera alerta';
     }
     if (this.esCalidadNoOperativa(prediccion)) {
       return 'resultado de baja confianza; no genera alerta ni prescripcion';
@@ -662,11 +669,20 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     if (prediccion.estado === 'fuera_ventana') {
       return 'Fuera de ventana';
     }
+    if (this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
+      const cobertura = this.coberturaHorariaRoya(prediccion);
+      if (cobertura < 90) return 'Datos horarios insuficientes';
+      const nivel = Number((prediccion.variables as Record<string, number>)?.['nivelOportunidad'] || 0);
+      if (nivel >= 3) return 'Condiciones muy favorables';
+      if (nivel >= 2) return 'Condiciones favorables';
+      if (nivel >= 1) return 'Condiciones iniciales';
+      return 'Sin horas favorables';
+    }
     if (prediccion.estado === 'sin_datos') {
       return 'Sin datos';
     }
-    if (this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
-      return 'Experimental';
+    if (this.sinResistenciaVarietal(prediccion)) {
+      return 'Resistencia pendiente';
     }
     if (this.esCalidadNoOperativa(prediccion)) {
       return 'Baja confianza';
@@ -705,14 +721,22 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     if (prediccion.estado === 'fuera_ventana') {
       return 'El cultivo no se encuentra en la ventana habilitada para este modelo.';
     }
+    if (this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
+      const variables = (prediccion.variables || {}) as Record<string, number>;
+      const frecuencia = Number(variables['frecuenciaAmbientalPct'] || 0);
+      const cobertura = this.coberturaHorariaRoya(prediccion);
+      const validas = Number(variables['horasValidas10d'] || 0);
+      const esperadas = Number(variables['horasEsperadas10d'] || 240);
+      if (cobertura < 90) {
+        return `No se pudo evaluar la ventana: ${validas.toFixed(0)} de ${esperadas.toFixed(0)} horas disponibles (${cobertura.toFixed(0)}% de cobertura; minimo 90%). La formula diaria queda solo para auditoria y no genera riesgo del lote.`;
+      }
+      return `Horas ambientalmente favorables: ${frecuencia.toFixed(1)}% en la ventana de 10 dias (${cobertura.toFixed(0)}% de cobertura). No confirma enfermedad; requiere observacion a campo.`;
+    }
     if (prediccion.estado === 'sin_datos') {
       return prediccion.calidadDatos?.resumen || 'Faltan variables climaticas para calcular sin inventar datos.';
     }
-    if (this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
-      const variables = prediccion.variables as Record<string, number>;
-      const frecuencia = Number(variables['frecuenciaAmbientalPct'] || 0);
-      const cobertura = Number(variables['coberturaHoraria10d'] || 0) * 100;
-      return `Roya amarilla/estriada: ${frecuencia.toFixed(1)}% de horas favorables en rachas (cobertura ${cobertura.toFixed(0)}%). Es oportunidad ambiental experimental, no enfermedad declarada ni alerta.`;
+    if (this.sinResistenciaVarietal(prediccion)) {
+      return `Indice ambiental conservador: ${Number(prediccion.resultado || 0).toFixed(1)}%. La resistencia varietal no esta cargada y se asume S=1 para no reducir el resultado. No descarta presencia: recorrer el lote antes de definir manejo.`;
     }
     if (this.esCalidadNoOperativa(prediccion)) {
       const resumen = (prediccion.calidadDatos?.resumen || estadoCalculo)
@@ -830,14 +854,14 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   ): string {
     if (!prediccion) return '—';
     if (!prediccionVigente) return `Actualizar v${TRIGO_MOTOR_SANITARIO_VERSION}`;
-    if (prediccion.estado === 'fuera_ventana' || prediccion.estado === 'sin_datos') return '—';
+    if (prediccion.estado === 'fuera_ventana') return 'Fuera de ventana';
     if (enfermedad && this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
-      const nivel = Number((prediccion.variables as Record<string, number>)['nivelOportunidad'] || 0);
-      if (nivel >= 3) return 'Oportunidad muy fuerte';
-      if (nivel >= 2) return 'Oportunidad fuerte';
-      if (nivel >= 1) return 'Señal temprana';
-      return 'Sin señal ambiental';
+      const cobertura = this.coberturaHorariaRoya(prediccion);
+      if (cobertura < 90) return `${cobertura.toFixed(0)}% cobertura horaria`;
+      const frecuencia = Number((prediccion.variables as Record<string, number>)?.['frecuenciaAmbientalPct'] || 0);
+      return `${frecuencia.toFixed(1)}% horas favorables`;
     }
+    if (prediccion.estado === 'sin_datos') return '—';
     if (!this.esScreeningExperimental) return `${resultado.toFixed(1)}%`;
     if (resultado >= 80) return 'Alto';
     if (resultado >= 50) return 'Medio';
@@ -864,6 +888,18 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       !this.esSalidaProvisionalTrigo(prediccion) &&
       !this.esCalidadNoOperativa(prediccion)
     );
+  }
+
+  private sinResistenciaVarietal(prediccion?: IPrediccionEnfermedad): boolean {
+    const estado = String(prediccion?.resistenciaUsada?.estado || '').toLowerCase();
+    return estado === 'desconocida' || estado === 'sin_datos';
+  }
+
+  private coberturaHorariaRoya(prediccion?: IPrediccionEnfermedad): number {
+    const valor = Number(
+      ((prediccion?.variables || {}) as Record<string, number>)['coberturaHoraria10d'] || 0
+    );
+    return Math.max(0, Math.min(100, valor * 100));
   }
 
   private esSalidaProvisionalTrigo(prediccion?: IPrediccionEnfermedad): boolean {

@@ -333,7 +333,7 @@ export function metadataResistencia(resuelta: IResistenciaResuelta) {
         nivel === 'baja' ||
         nivel === 'sin_datos',
       resumen: resuelta.desconocida
-        ? 'Sin resistencia varietal específica utilizable; resultado no habilitado para alertas.'
+        ? 'Resistencia varietal no cargada: se usa el factor conservador susceptible para no subestimar el ambiente. No confirma presencia ni ausencia; requiere monitoreo a campo antes de definir manejo.'
         : `Resistencia varietal ${resistencia?.perfil || 'cargada'} de ${resistencia?.campaniaFuente || 'campaña no informada'}.`,
       limitaciones,
     },

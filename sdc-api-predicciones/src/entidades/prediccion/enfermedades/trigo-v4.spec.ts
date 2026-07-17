@@ -178,7 +178,7 @@ describe('servicios sanitarios de trigo v4', () => {
     expect(result.calidadDatos?.fuente).toBe('open_meteo');
   });
 
-  it('publica screening diario experimental cuando no hay serie horaria de roya amarilla', async () => {
+  it('conserva la ecuacion diaria solo en auditoria cuando no hay serie horaria de roya amarilla', async () => {
     const result = await new RoyaAnaranjadaService().predecir(
       semilla,
       { precip: 1, hr: 80, Tavg: 10, Tmin: 8, Tmax: 13 },
@@ -197,14 +197,18 @@ describe('servicios sanitarios de trigo v4', () => {
       },
     );
 
-    expect(result.estado).toBe('calculado');
-    expect(result.resultado).toBeCloseTo(13.18, 2);
+    expect(result.estado).toBe('sin_datos');
+    expect(result.resultado).toBe(0);
+    expect((result.variables as any).resultadoContractualLimitado).toBeCloseTo(
+      13.18,
+      2,
+    );
     expect(result.modelo).toMatchObject({
       validacion: 'experimental',
-      resolucion: 'diaria',
+      resolucion: 'proxy_diario',
     });
     expect(result.calidadDatos?.nivel).toBe('baja');
-    expect(result.calidadDatos?.resumen).toContain('Screening ambiental');
+    expect(result.calidadDatos?.resumen).toContain('Cobertura horaria insuficiente');
   });
 
   it('respeta fronteras estrictas de lluvia en las manchas', async () => {
