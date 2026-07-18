@@ -204,9 +204,7 @@
           <span>Periodo calculado</span>
           <strong>
             {{
-              snapshotAgromet?.series?.[0]?.date
-                ? (snapshotAgromet?.series?.[0]?.date | date: 'd/M/yy')
-                : 'Pendiente'
+              snapshotAgromet?.series?.[0]?.date ? (snapshotAgromet?.series?.[0]?.date | date: 'd/M/yy') : 'Pendiente'
             }}
             @if (snapshotAgromet?.series?.length) {
               · {{ snapshotAgromet?.series?.length }} dias
@@ -285,6 +283,50 @@
       }
     </div>
   </div>
+
+  @if (esPerenne) {
+    <section class="thermal-stage-log">
+      <header>
+        <div>
+          <span>Registro termico por etapa</span>
+          <strong>Historia observada de la variedad en este lote</strong>
+        </div>
+        <small>Sin objetivos prefijados</small>
+      </header>
+      @if (registrosTermicosFenologicos.length) {
+        <div class="thermal-stage-log__table">
+          @for (registro of registrosTermicosFenologicos; track registro.id || registro.fecha) {
+            <article>
+              <div class="thermal-stage-log__stage">
+                <strong>{{ registro.etapa || 'Etapa observada' }}</strong>
+                <span>{{ registro.fecha | date: 'd/M/yy' }} · {{ estadoRegistroTermico(registro) }}</span>
+                <small>{{ fuenteRegistroTermico(registro) }}</small>
+              </div>
+              <div>
+                <span>Horas de frio</span><strong>{{ valorRegistroTermico(registro, 'horasFrio') }}</strong>
+              </div>
+              <div>
+                <span>Frio efectivo</span><strong>{{ valorRegistroTermico(registro, 'unidadesFrioUtah') }}</strong
+                ><small>Modelo Utah</small>
+              </div>
+              <div>
+                <span>Porciones de frio</span><strong>{{ valorRegistroTermico(registro, 'porcionesFrio', 2) }}</strong
+                ><small>Dynamic Model</small>
+              </div>
+              <div>
+                <span>Grados dia</span><strong>{{ valorRegistroTermico(registro, 'gradosDia') }}</strong>
+              </div>
+            </article>
+          }
+        </div>
+      } @else {
+        <p>
+          Todavia no hay transiciones observadas con snapshot termico. Al registrar la proxima etapa, Chaman guardara
+          automaticamente HF, UF Utah, CP y GDD disponibles para esa fecha.
+        </p>
+      }
+    </section>
+  }
 </p-dialog>
 
 @if (puedeRegistrarFenologiaCampo) {
@@ -353,20 +395,12 @@
 
         <label>
           <span>Escala fenologica</span>
-          <input
-            pInputText
-            [(ngModel)]="registroForm.escalaEtapa"
-            placeholder="Ej: BBCH, Zadoks o escala interna"
-          />
+          <input pInputText [(ngModel)]="registroForm.escalaEtapa" placeholder="Ej: BBCH, Zadoks o escala interna" />
         </label>
 
         <label>
           <span>Codigo de etapa</span>
-          <input
-            pInputText
-            [(ngModel)]="registroForm.codigoEtapa"
-            placeholder="Ej: BBCH 53"
-          />
+          <input pInputText [(ngModel)]="registroForm.codigoEtapa" placeholder="Ej: BBCH 53" />
         </label>
 
         <label>
@@ -394,11 +428,7 @@
 
         <label>
           <span>Observador</span>
-          <input
-            pInputText
-            [(ngModel)]="registroForm.observador"
-            placeholder="Nombre del tecnico o responsable"
-          />
+          <input pInputText [(ngModel)]="registroForm.observador" placeholder="Nombre del tecnico o responsable" />
         </label>
       </div>
 
@@ -426,42 +456,40 @@
           <span>Variedad</span>
           <strong>{{ siembraActual?.semilla?.variedad || '-' }}</strong>
         </article>
-        <article>
-          <span>HF de referencia</span>
-          <strong> {{ siembraActual?.semilla?.requerimientoFrio?.horasFrio || '-' }} HF </strong>
-        </article>
-        <article>
-          <span>CP de referencia</span>
-          <strong>
-            {{ siembraActual?.semilla?.requerimientoFrio?.porcionesFrio || '-' }}
-          </strong>
-        </article>
-        <article>
-          <span>Estado del objetivo</span>
-          <strong>
-            {{
-              siembraActual?.semilla?.requerimientoFrio?.estado === 'validado'
-                ? 'Validado'
-                : 'Requiere calibracion'
-            }}
-          </strong>
-        </article>
+        @if (cargandoSnapshotAgromet) {
+          <article><span>Registro termico</span><strong>Consultando serie...</strong></article>
+        }
         @if (snapshotAgromet?.summary?.chillingHoursAccumulated !== undefined) {
           <article>
-            <span>Frio observado</span>
-            <strong>
-              {{ snapshotAgromet?.summary?.chillingHoursAccumulated | number: '1.0-1' }} HF
-            </strong>
+            <span>Horas de frio</span>
+            <strong> {{ snapshotAgromet?.summary?.chillingHoursAccumulated | number: '1.0-1' }} HF </strong>
+          </article>
+        }
+        @if (snapshotAgromet?.summary?.utahChillUnitsAccumulated !== undefined) {
+          <article>
+            <span>Frio efectivo Utah</span>
+            <strong>{{ snapshotAgromet?.summary?.utahChillUnitsAccumulated | number: '1.0-1' }} UF</strong>
           </article>
         }
         @if (snapshotAgromet?.summary?.chillPortionsAccumulated !== undefined) {
           <article>
-            <span>Dynamic Model</span>
-            <strong>
-              {{ snapshotAgromet?.summary?.chillPortionsAccumulated | number: '1.0-2' }} CP
-            </strong>
+            <span>Porciones de frio</span>
+            <strong> {{ snapshotAgromet?.summary?.chillPortionsAccumulated | number: '1.0-2' }} CP </strong>
           </article>
         }
+        @if (snapshotAgromet?.summary?.gddAccumulated !== undefined) {
+          <article>
+            <span>Grados dia</span>
+            <strong>{{ snapshotAgromet?.summary?.gddAccumulated | number: '1.0-1' }} GDD</strong>
+          </article>
+        }
+      </div>
+      <div class="register-method-note">
+        <i class="pi pi-shield"></i>
+        <span>
+          Esta es una vista previa. Al guardar, el backend toma la serie canónica cerrada a la fecha del registro y
+          adjunta el snapshot auditable; la pantalla no puede modificar los acumulados.
+        </span>
       </div>
     </div>
 

@@ -45,76 +45,6 @@
         <p-message severity="warn">{{ error }}</p-message>
       }
 
-      @if (esDormanciaPerenne) {
-        <section class="frio-targets" aria-label="Avance frente a los requerimientos de frío de la variedad">
-          <header>
-            <div>
-              <strong>Avance frente a la especificación varietal</strong>
-              <span>Acumulado climático completo y contraste independiente con el sensor de campo</span>
-            </div>
-            <span class="frio-targets__status">{{ estadoEspecificacionLabel }}</span>
-          </header>
-
-          <div class="frio-targets__grid">
-            @for (item of objetivosFrio; track item.key) {
-              <article
-                class="frio-target"
-                [class.frio-target--ready]="item.decisionReady"
-                [class.frio-target--reference]="!item.decisionReady"
-              >
-                <header>
-                  <div>
-                    <span>{{ item.label }}</span>
-                    <small>{{ item.method }}</small>
-                  </div>
-                  <em>{{ objetivoEstadoLabel(item) }}</em>
-                </header>
-
-                <div class="frio-target__numbers">
-                  <div>
-                    <small>Acumulado</small>
-                    <strong>{{ formatObjetivoValue(item, item.accumulated) }}</strong>
-                    <span>{{ item.accumulatedSource }}</span>
-                  </div>
-                  <div>
-                    <small>Necesita</small>
-                    <strong>{{
-                      item.targetLabel || (item.target ? formatObjetivoValue(item, item.target) : 'Sin especificar')
-                    }}</strong>
-                    <span>{{ item.targetSource }}</span>
-                  </div>
-                </div>
-
-                <div
-                  class="frio-target__meter"
-                  [class.frio-target__meter--unknown]="item.progress === undefined"
-                  [attr.aria-label]="
-                    item.progress !== undefined
-                      ? item.progress + '% respecto del extremo superior del objetivo o rango de referencia'
-                      : 'Objetivo no documentado'
-                  "
-                >
-                  @if (item.progress !== undefined) {
-                    <i [style.width.%]="item.progress"></i>
-                    <b
-                      >{{ item.progress | number: '1.0-0' }}%{{
-                        item.targetMin !== item.targetMax ? ' del máximo' : ''
-                      }}</b
-                    >
-                  } @else {
-                    <b>Falta objetivo varietal</b>
-                  }
-                </div>
-
-                @if (item.fieldComparison) {
-                  <p class="frio-target__field"><i class="pi pi-wifi"></i>{{ item.fieldComparison }}</p>
-                }
-              </article>
-            }
-          </div>
-        </section>
-      }
-
       @if (metricas.length) {
         <div class="frio-metrics" [class.frio-metrics--forcing]="esDormanciaPerenne">
           @for (metric of metricas; track metric.label) {
@@ -280,7 +210,7 @@
             <strong>Cereal anual: acumulación térmica auditada</strong>
             <p>
               Chaman acumula GDD desde la siembra. Esta variedad no tiene un requisito de vernalización documentado en
-              una fuente específica, por lo que no inventa un objetivo ni muestra HF, HFE o CP de frutales.
+              una fuente específica, por lo que no inventa un objetivo ni muestra modelos de frío de frutales.
             </p>
           </div>
         </article>
@@ -290,11 +220,29 @@
           <div>
             <strong>Frutal perenne: frío y forzado no se mezclan</strong>
             <p>
-              HF cuenta horas entre 0 y 7,2 °C; CP aplica el Dynamic Model horario; HFE conserva únicamente el indicador
-              histórico de campo. Los GDD de forzado comienzan recién con un biofix observado.
+              HF cuenta horas entre 0 y 7,2 °C; UF aplica el modelo Utah y CP el Dynamic Model horario. HFE se conserva
+              únicamente como indicador histórico legacy. Los GDD de forzado comienzan con un biofix observado.
             </p>
           </div>
         </article>
+        <div class="frio-model-info__audit" aria-label="Definiciones de los modelos de frío">
+          <article>
+            <span>Horas de frío (HF)</span>
+            <strong>1 HF por hora entre 0 y 7,2 °C</strong>
+          </article>
+          <article>
+            <span>Frío efectivo</span>
+            <strong>UF Utah ponderadas por temperatura</strong>
+          </article>
+          <article>
+            <span>Porciones de frío (CP)</span>
+            <strong>Dynamic Model horario de dos pasos</strong>
+          </article>
+          <article>
+            <span>Regla de faltantes</span>
+            <strong>Una hora sin temperatura no acumula</strong>
+          </article>
+        </div>
       }
 
       <article class="frio-model-info__source">

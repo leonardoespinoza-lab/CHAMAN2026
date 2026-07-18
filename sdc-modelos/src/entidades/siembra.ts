@@ -104,13 +104,24 @@ export function esHuellaHidricaConsolidada(huella?: IHuellaHidrica): boolean {
 export interface IRegistroFenologicoFrio {
   fechaDesde?: string;
   fechaHasta?: string;
+  fechaCaptura?: string;
   horasFrio?: number;
+  /** Frio ponderado por el modelo Utah. Se expresa en UF/CU, no en horas. */
+  unidadesFrioUtah?: number;
+  /** @deprecated Indicador historico ambiguo; se conserva sin recalcular. */
   horasFrioEfectivas?: number;
   porcionesFrio?: number;
   gradosDia?: number;
   fuente?: string;
+  fuenteTemperatura?: string;
+  serieCampoPrioritaria?: boolean;
   coberturaPct?: number;
+  continuidadSuficiente?: boolean;
+  brechaMaximaHoras?: number;
+  estado?: "completo" | "parcial" | "pendiente";
   versionModelo?: string;
+  versionCalculo?: string;
+  versionParametros?: string;
 }
 
 export interface IRegistroFenologico {

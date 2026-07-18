@@ -270,21 +270,59 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
   public get registrosFenologicosVigentes(): IRegistroFenologico[] {
     const reemplazados = new Set(
-      this.registrosFenologicos
-        .map((registro) => registro.reemplazaRegistroId)
-        .filter((id): id is string => !!id)
+      this.registrosFenologicos.map((registro) => registro.reemplazaRegistroId).filter((id): id is string => !!id)
     );
-    return this.registrosFenologicos.filter(
-      (registro) => !registro.id || !reemplazados.has(registro.id)
-    );
+    return this.registrosFenologicos.filter((registro) => !registro.id || !reemplazados.has(registro.id));
+  }
+
+  public get registrosTermicosFenologicos(): IRegistroFenologico[] {
+    return [...this.registrosFenologicosVigentes]
+      .filter((registro) => !!registro.frioAcumulado)
+      .sort((a, b) => String(b.fecha || '').localeCompare(String(a.fecha || '')));
+  }
+
+  public valorRegistroTermico(
+    registro: IRegistroFenologico,
+    metrica: 'horasFrio' | 'unidadesFrioUtah' | 'porcionesFrio' | 'gradosDia',
+    decimales = 1
+  ): string {
+    const valor = this.numeroSeguro(registro.frioAcumulado?.[metrica]);
+    if (valor === undefined) return '-';
+    const unidad =
+      metrica === 'horasFrio'
+        ? 'HF'
+        : metrica === 'unidadesFrioUtah'
+          ? 'UF'
+          : metrica === 'porcionesFrio'
+            ? 'CP'
+            : 'GDD';
+    return `${valor.toLocaleString('es-AR', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: decimales,
+    })} ${unidad}`;
+  }
+
+  public fuenteRegistroTermico(registro: IRegistroFenologico): string {
+    const snapshot = registro.frioAcumulado;
+    if (!snapshot) return 'Sin snapshot';
+    if (snapshot.serieCampoPrioritaria) return 'Sensor de campo prioritario';
+    const fuente = String(snapshot.fuenteTemperatura || snapshot.fuente || '')
+      .replace(/_/g, ' ')
+      .trim();
+    return fuente || 'Motor agrometeorologico';
+  }
+
+  public estadoRegistroTermico(registro: IRegistroFenologico): string {
+    const estado = registro.frioAcumulado?.estado;
+    if (estado === 'completo') return 'Serie completa';
+    if (estado === 'parcial') return 'Serie con brechas documentadas';
+    return 'Acumulado pendiente de consolidar';
   }
 
   public get ultimoRegistroFenologico(): IRegistroFenologico | undefined {
     const vigentes = this.registrosFenologicosVigentes.filter(
       (registro) =>
-        !this.campaniaTexto ||
-        !registro.campania ||
-        this.mismaCampania(registro.campania, this.campaniaTexto)
+        !this.campaniaTexto || !registro.campania || this.mismaCampania(registro.campania, this.campaniaTexto)
     );
     return vigentes[vigentes.length - 1];
   }
@@ -314,15 +352,8 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   public get permiteBiofixTermico(): boolean {
-    const cultivo = this.canonicalCultivo(
-      this.siembraActual?.semilla?.cultivo,
-    );
-    return (
-      this.esPerenne ||
-      cultivo === 'Trigo' ||
-      cultivo === 'Cebada' ||
-      cultivo === 'Arveja'
-    );
+    const cultivo = this.canonicalCultivo(this.siembraActual?.semilla?.cultivo);
+    return this.esPerenne || cultivo === 'Trigo' || cultivo === 'Cebada' || cultivo === 'Arveja';
   }
 
   public get objetivoBiofixOptions(): Array<{
@@ -480,21 +511,12 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     if (this.estadoFenologiaTermica) {
       return this.estadoFenologiaTermica.progresoEtapaPct;
     }
-    if (
-      this.fuenteEtapaActual === 'termico' &&
-      this.gradosDiaAcumuladosFenologia !== undefined
-    ) {
-      const etapas = this.getEtapasTermicasAnualesValidadas(
-        this.siembraActual?.semilla,
-      );
+    if (this.fuenteEtapaActual === 'termico' && this.gradosDiaAcumuladosFenologia !== undefined) {
+      const etapas = this.getEtapasTermicasAnualesValidadas(this.siembraActual?.semilla);
       const actual = etapas[this.indiceEtapaActual()];
       if (actual) {
         const amplitud = Math.max(1, actual.finGdd - actual.inicioGdd);
-        return this.limitar(
-          ((this.gradosDiaAcumuladosFenologia - actual.inicioGdd) /
-            amplitud) *
-            100,
-        );
+        return this.limitar(((this.gradosDiaAcumuladosFenologia - actual.inicioGdd) / amplitud) * 100);
       }
     }
     const duracion = this.duracionEtapaActual;
@@ -514,8 +536,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     }
     if (!this.esPerenne && this.fuenteEtapaActual === 'termico') {
       const gdd = this.gradosDiaAcumuladosFenologia;
-      const parametros =
-        this.siembraActual?.semilla?.parametrosAgrometeorologicos;
+      const parametros = this.siembraActual?.semilla?.parametrosAgrometeorologicos;
       return `Etapa resuelta por el motor fenologico canonico${
         gdd === undefined ? '' : ` con ${gdd.toFixed(1)} GDD acumulados`
       }, Tb ${parametros?.temperaturaBaseC ?? '-'} C y fuente climatica ${this.fuenteFenologiaTermicaTexto}. La etapa ya incorpora las compuertas validadas de vernalizacion, fotoperiodo, cobertura y continuidad; el GDD bruto y el crono quedan solo como contraste.`;
@@ -562,16 +583,16 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
         : !this.esPerenne && this.fuenteEtapaActual === 'termico'
           ? 'modelo termico canonico validado'
           : this.fenologiaTermica
-      ? this.estadoFenologiaTermica?.fuente === 'campo'
-        ? 'registro de campo prioritario'
-        : 'modelo termico auditable'
-      : this.esPerenne && this.etapaActualConfirmadaCampo
-        ? 'registro de campo prioritario'
-      : this.plantacionJoven
-        ? 'plantacion joven'
-        : this.esPerenne
-          ? 'campania perenne'
-          : this.fuenteTexto;
+            ? this.estadoFenologiaTermica?.fuente === 'campo'
+              ? 'registro de campo prioritario'
+              : 'modelo termico auditable'
+            : this.esPerenne && this.etapaActualConfirmadaCampo
+              ? 'registro de campo prioritario'
+              : this.plantacionJoven
+                ? 'plantacion joven'
+                : this.esPerenne
+                  ? 'campania perenne'
+                  : this.fuenteTexto;
     const campania = this.campaniaTexto ? ` ${this.campaniaTexto}` : '';
     return `${this.cultivo || 'Cultivo'} - ${this.etapas.length} etapas - ${fuente}${campania}`;
   }
@@ -590,11 +611,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   public get siguienteHitoTexto(): string {
     const proxima = this.proximaEtapaDetalle;
     if (!proxima) return 'Sin proximo hito';
-    if (
-      this.esPerenne &&
-      this.etapaActualConfirmadaCampo &&
-      !proxima.fecha
-    ) {
+    if (this.esPerenne && this.etapaActualConfirmadaCampo && !proxima.fecha) {
       return `${proxima.nombre}: confirmar en campo`;
     }
     if (proxima.requiereCampo) return `${proxima.codigo || 'R3'}: confirmar en campo`;
@@ -654,15 +671,15 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   private buscarRegistroEtapa(nombre: string): IRegistroFenologico | undefined {
-    return [...this.registrosFenologicosVigentes].reverse().find(
-      (registro) =>
-        (registro.etapa === nombre ||
-          (this.cultivo === 'Arveja' && this.codigoEtapaArveja(registro.etapa) === this.codigoEtapaArveja(nombre))) &&
-        (!this.campaniaTexto ||
-          !registro.campania ||
-          this.mismaCampania(registro.campania, this.campaniaTexto)) &&
-        (registro.accion || 'inicio') === 'inicio'
-    );
+    return [...this.registrosFenologicosVigentes]
+      .reverse()
+      .find(
+        (registro) =>
+          (registro.etapa === nombre ||
+            (this.cultivo === 'Arveja' && this.codigoEtapaArveja(registro.etapa) === this.codigoEtapaArveja(nombre))) &&
+          (!this.campaniaTexto || !registro.campania || this.mismaCampania(registro.campania, this.campaniaTexto)) &&
+          (registro.accion || 'inicio') === 'inicio'
+      );
   }
 
   public textoBotonRegistro(etapa: FenologiaStage): string {
@@ -686,25 +703,20 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     }
 
     const existente = this.buscarRegistroEtapa(nombreEtapa);
-    const etapaSeleccionada = this.etapas.find(
-      (item) => item.nombre === nombreEtapa,
-    );
+    const etapaSeleccionada = this.etapas.find((item) => item.nombre === nombreEtapa);
     this.registroEditandoId = existente?.id;
     this.registroForm = {
       fecha: existente?.fecha ? new Date(existente.fecha) : etapa?.fecha ? new Date(etapa.fecha) : new Date(),
       etapa: existente?.etapa || nombreEtapa,
       tipoEvento:
-        existente?.tipoEvento === 'observacion' ||
-        existente?.tipoEvento === 'biofix'
+        existente?.tipoEvento === 'observacion' || existente?.tipoEvento === 'biofix'
           ? existente.tipoEvento
           : 'inicio_etapa',
       objetivoBiofix:
-        existente?.objetivosBiofix?.find(
-          (objetivo) => objetivo !== 'anclaje_fenologico',
-        ) || this.inferirObjetivoBiofix(nombreEtapa),
+        existente?.objetivosBiofix?.find((objetivo) => objetivo !== 'anclaje_fenologico') ||
+        this.inferirObjetivoBiofix(nombreEtapa),
       escalaEtapa: existente?.escalaEtapa || '',
-      codigoEtapa:
-        existente?.codigoEtapa || etapaSeleccionada?.codigo || '',
+      codigoEtapa: existente?.codigoEtapa || etapaSeleccionada?.codigo || '',
       coberturaObservadaPct: existente?.coberturaObservadaPct,
       confianza: existente?.confianza || 'media',
       observador: existente?.observador || '',
@@ -732,25 +744,17 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
         this.registroForm.coberturaObservadaPct < 0 ||
         this.registroForm.coberturaObservadaPct > 100)
     ) {
-      this.helper.notifWarn(
-        'La cobertura observada debe estar entre 0 y 100%.',
-      );
+      this.helper.notifWarn('La cobertura observada debe estar entre 0 y 100%.');
       return;
     }
 
     const fechaRegistro = this.normalizarFechaRegistro(this.registroForm.fecha);
     const registro: IRegistroFenologico = {
       fecha: fechaRegistro.toISOString(),
-      accion:
-        this.registroForm.tipoEvento === 'observacion'
-          ? 'observacion'
-          : 'inicio',
+      accion: this.registroForm.tipoEvento === 'observacion' ? 'observacion' : 'inicio',
       tipoEvento: this.registroForm.tipoEvento,
       fechaObservacion: new Date().toISOString(),
-      fechaInicioEtapa:
-        this.registroForm.tipoEvento === 'observacion'
-          ? undefined
-          : fechaRegistro.toISOString(),
+      fechaInicioEtapa: this.registroForm.tipoEvento === 'observacion' ? undefined : fechaRegistro.toISOString(),
       etapa: this.registroForm.etapa,
       escalaEtapa: this.registroForm.escalaEtapa?.trim() || undefined,
       codigoEtapa: this.registroForm.codigoEtapa?.trim() || undefined,
@@ -771,16 +775,10 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       reemplazaRegistroId: this.registroEditandoId,
       objetivosBiofix:
         this.registroForm.tipoEvento === 'biofix'
-          ? [
-              ...new Set<TObjetivoBiofixFenologico>([
-                'anclaje_fenologico',
-                this.registroForm.objetivoBiofix,
-              ]),
-            ]
+          ? [...new Set<TObjetivoBiofixFenologico>(['anclaje_fenologico', this.registroForm.objetivoBiofix])]
           : undefined,
       requerimientoFrio: siembra.semilla?.requerimientoFrio,
       fenologiaReferencia: siembra.semilla?.fenologiaReferencia,
-      frioAcumulado: this.getFrioAcumuladoSnapshot(),
       observaciones: this.registroForm.observaciones?.trim() || undefined,
     };
 
@@ -975,27 +973,21 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     };
     const etapaCalendarioNumero = etapaActualNumero;
     const etapaCanonica = this.getEtapaCanonicaActual();
-    const etapasTermicas = this.getEtapasTermicasAnualesValidadas(
-      siembra.semilla,
-    );
+    const etapasTermicas = this.getEtapasTermicasAnualesValidadas(siembra.semilla);
     const gddAcumulado = this.gradosDiaAcumuladosFenologia;
     const indiceCanonicoCalendario = etapaCanonica?.stage
-      ? this.indiceEtapaPorNombre(
-          etapasCalendario.nombres,
-          etapaCanonica.stage,
-        )
+      ? this.indiceEtapaPorNombre(etapasCalendario.nombres, etapaCanonica.stage)
       : -1;
     const indiceCanonicoTermico = etapaCanonica?.stage
       ? this.indiceEtapaPorNombre(
           etapasTermicas.map((etapa) => etapa.nombre),
-          etapaCanonica.stage,
+          etapaCanonica.stage
         )
       : -1;
     let usandoEtapasTermicas =
       !!etapaCanonica &&
       indiceCanonicoTermico >= 0 &&
-      (etapaCanonica.stageSource === 'gdd_validado' ||
-        indiceCanonicoCalendario < 0);
+      (etapaCanonica.stageSource === 'gdd_validado' || indiceCanonicoCalendario < 0);
 
     if (usandoEtapasTermicas) {
       etapasConfig = {
@@ -1014,15 +1006,9 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     }
     this.aplicarFuenteEtapaCanonica(etapaCanonica);
 
-    let registroCampo = this.getRegistroAnualActual(
-      etapasConfig.nombres,
-      new Date(),
-    );
+    let registroCampo = this.getRegistroAnualActual(etapasConfig.nombres, new Date());
     if (!registroCampo && usandoEtapasTermicas) {
-      const registroCalendario = this.getRegistroAnualActual(
-        etapasCalendario.nombres,
-        new Date(),
-      );
+      const registroCalendario = this.getRegistroAnualActual(etapasCalendario.nombres, new Date());
       if (registroCalendario) {
         etapasConfig = etapasCalendario;
         etapaActualNumero = registroCalendario.indiceEtapa;
@@ -1035,8 +1021,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       etapaActualNumero = registroCampo.indiceEtapa;
       this.etapaActualConfirmadaCampo = true;
       this.fuenteEtapaActual = 'campo';
-      this.fuenteTexto =
-        'registro de campo prioritario; modelo termico y crono solo para contraste';
+      this.fuenteTexto = 'registro de campo prioritario; modelo termico y crono solo para contraste';
     } else if (!etapaCanonica) {
       etapaActualNumero = etapaCalendarioNumero;
       this.fuenteEtapaActual = 'calendario';
@@ -1047,49 +1032,29 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
         fechas.push(this.fechaEtapaTermicaAnual(etapa.inicioGdd));
       });
       const objetivoCiclo =
-        etapasTermicas[etapasTermicas.length - 1]?.finGdd ||
-        etapasTermicas[etapasTermicas.length - 1]?.inicioGdd;
+        etapasTermicas[etapasTermicas.length - 1]?.finGdd || etapasTermicas[etapasTermicas.length - 1]?.inicioGdd;
       this.progreso =
-        objetivoCiclo > 0 && gddAcumulado !== undefined
-          ? this.limitar((gddAcumulado / objetivoCiclo) * 100)
-          : 0;
+        objetivoCiclo > 0 && gddAcumulado !== undefined ? this.limitar((gddAcumulado / objetivoCiclo) * 100) : 0;
     } else {
       const cursor = new Date(fechaBase);
       etapasConfig.nombres.forEach((_, index) => {
-        const dias =
-          index > 0
-            ? this.getDuracionEtapa(
-                etapasDisponibles,
-                etapasConfig.claves[index],
-              )
-            : 0;
+        const dias = index > 0 ? this.getDuracionEtapa(etapasDisponibles, etapasConfig.claves[index]) : 0;
         cursor.setDate(cursor.getDate() + dias);
         fechas.push(new Date(cursor));
       });
       const fechaInicio = fechas[0]?.getTime();
       const fechaFin = fechas[fechas.length - 1]?.getTime();
       const duracionTotal =
-        fechaInicio !== undefined && fechaFin !== undefined
-          ? Math.max(fechaFin - fechaInicio, 1)
-          : 1;
-      this.progreso =
-        fechaInicio !== undefined
-          ? this.limitar(((Date.now() - fechaInicio) / duracionTotal) * 100)
-          : 0;
+        fechaInicio !== undefined && fechaFin !== undefined ? Math.max(fechaFin - fechaInicio, 1) : 1;
+      this.progreso = fechaInicio !== undefined ? this.limitar(((Date.now() - fechaInicio) / duracionTotal) * 100) : 0;
     }
     if (registroCampo) {
-      this.progreso = this.limitar(
-        (etapaActualNumero /
-          Math.max(1, etapasConfig.nombres.length - 1)) *
-          100,
-      );
+      this.progreso = this.limitar((etapaActualNumero / Math.max(1, etapasConfig.nombres.length - 1)) * 100);
     }
     this.etapaActual = registroCampo
       ? etapasConfig.nombres[etapaActualNumero]
       : etapaCanonica?.stage ||
-        (etapaActualNumero > -1
-          ? etapasConfig.nombres[etapaActualNumero]
-          : etapasConfig.nombres[0]);
+        (etapaActualNumero > -1 ? etapasConfig.nombres[etapaActualNumero] : etapasConfig.nombres[0]);
 
     this.etapas = etapasConfig.nombres.map((nombre, index) => {
       const posicion = this.posicionUniforme(index, etapasConfig.nombres.length);
@@ -1098,29 +1063,17 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       const fecha = registroEtapa?.fecha || fechas[index];
       const fechaAnterior =
         index > 0
-          ? this.getRegistroAnualDeEtapa(
-              etapasConfig.nombres[index - 1],
-              new Date(),
-            )?.fecha || fechas[index - 1]
+          ? this.getRegistroAnualDeEtapa(etapasConfig.nombres[index - 1], new Date())?.fecha || fechas[index - 1]
           : undefined;
       const periodoDias =
         index > 0 && fecha && fechaAnterior
-          ? Math.max(
-              1,
-              Math.round(
-                (fecha.getTime() - fechaAnterior.getTime()) / this.diaMs,
-              ),
-            )
+          ? Math.max(1, Math.round((fecha.getTime() - fechaAnterior.getTime()) / this.diaMs))
           : undefined;
 
       return {
         nombre,
         fecha,
-        fechaFuente: registroEtapa
-          ? 'campo'
-          : fecha
-            ? 'referencia'
-            : undefined,
+        fechaFuente: registroEtapa ? 'campo' : fecha ? 'referencia' : undefined,
         periodoDias,
         posicion,
         estado,
@@ -1132,17 +1085,10 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     const siembra = this.siembraActual;
     const cultivo = this.canonicalCultivo(siembra?.semilla?.cultivo);
     const referencia = siembra?.semilla?.fenologiaReferencia;
-    const arvejaTermicaLegacy =
-      cultivo === 'Arveja' &&
-      referencia?.unidadEtapas === 'grados_dia';
+    const arvejaTermicaLegacy = cultivo === 'Arveja' && referencia?.unidadEtapas === 'grados_dia';
     const perfilTermicoCanonico =
-      !esCultivoPerenne(cultivo) &&
-      this.getEtapasTermicasAnualesValidadas(siembra?.semilla).length > 0;
-    if (
-      (!arvejaTermicaLegacy && !perfilTermicoCanonico) ||
-      !siembra?.fechaSiembra ||
-      !siembra._id
-    ) {
+      !esCultivoPerenne(cultivo) && this.getEtapasTermicasAnualesValidadas(siembra?.semilla).length > 0;
+    if ((!arvejaTermicaLegacy && !perfilTermicoCanonico) || !siembra?.fechaSiembra || !siembra._id) {
       this.estadoFenologiaTermica = undefined;
       this.estadoFenologiaTermicaChange.emit(undefined);
       this.snapshotAgromet = undefined;
@@ -1160,11 +1106,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       siembra.semilla?.parametrosAgrometeorologicos?.version,
       siembra.semilla?.parametrosAgrometeorologicos?.fuente,
     ].join('|');
-    if (
-      key === this.ultimoKeyFenologiaTermica &&
-      (this.cargandoFenologiaTermica ||
-        !!this.snapshotAgromet)
-    ) {
+    if (key === this.ultimoKeyFenologiaTermica && (this.cargandoFenologiaTermica || !!this.snapshotAgromet)) {
       return;
     }
     this.ultimoKeyFenologiaTermica = key;
@@ -1220,12 +1162,9 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       gradosDiaAcumulados: this.gradosDiaAcumuladosFenologia,
       etapaCampo: ultimoCampo?.etapa,
     });
-    const etapaCanonica =
-      estado.fuente === 'campo' ? undefined : this.getEtapaCanonicaActual();
+    const etapaCanonica = estado.fuente === 'campo' ? undefined : this.getEtapaCanonicaActual();
     const codigoCanonico = this.codigoEtapaArveja(etapaCanonica?.stage);
-    const indiceCanonico = codigoCanonico
-      ? estado.hitos.findIndex((hito) => hito.codigo === codigoCanonico)
-      : -1;
+    const indiceCanonico = codigoCanonico ? estado.hitos.findIndex((hito) => hito.codigo === codigoCanonico) : -1;
     if (etapaCanonica && indiceCanonico >= 0) {
       const hitoCanonico = estado.hitos[indiceCanonico];
       estado = {
@@ -1239,10 +1178,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
             : etapaCanonica.stageSource === 'gdd_validado'
               ? 'termica'
               : 'implantacion',
-        progresoEtapaPct:
-          estado.indice === indiceCanonico
-            ? estado.progresoEtapaPct
-            : 0,
+        progresoEtapaPct: estado.indice === indiceCanonico ? estado.progresoEtapaPct : 0,
         advertencias:
           estado.indice === indiceCanonico
             ? estado.advertencias
@@ -1260,12 +1196,8 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     if (etapaCanonica) {
       this.aplicarFuenteEtapaCanonica(etapaCanonica);
     } else {
-      this.fuenteEtapaActual =
-        estado.fuente === 'campo' ? 'campo' : 'termico';
-      this.fuenteTexto =
-        estado.fuente === 'campo'
-          ? 'registro de campo prioritario'
-          : 'referencia termica auditable';
+      this.fuenteEtapaActual = estado.fuente === 'campo' ? 'campo' : 'termico';
+      this.fuenteTexto = estado.fuente === 'campo' ? 'registro de campo prioritario' : 'referencia termica auditable';
     }
 
     const madurez = estado.hitos.find((hito) => hito.codigo === 'MF');
@@ -1439,9 +1371,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     };
   }
 
-  private getEtapasTermicasAnualesValidadas(
-    semilla?: ISemilla,
-  ): EtapaTermicaAnual[] {
+  private getEtapasTermicasAnualesValidadas(semilla?: ISemilla): EtapaTermicaAnual[] {
     if (!semilla || esCultivoPerenne(semilla.cultivo)) return [];
     const parametros = semilla.parametrosAgrometeorologicos;
     const temperaturaBase = parametros?.temperaturaBaseC;
@@ -1449,8 +1379,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     if (
       parametros?.estado !== 'validado' ||
       parametros.metodoGdd !== 'promedio_limitado' ||
-      parametros.semanticaGddPorEtapa !==
-        'rangos_acumulados_desde_inicio_termico' ||
+      parametros.semanticaGddPorEtapa !== 'rangos_acumulados_desde_inicio_termico' ||
       !String(parametros.fuente || '').trim() ||
       typeof temperaturaBase !== 'number' ||
       !Number.isFinite(temperaturaBase) ||
@@ -1467,24 +1396,19 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
         const inicio =
           typeof rango?.min === 'number' && Number.isFinite(rango.min)
             ? rango.min
-            : typeof rango?.objetivo === 'number' &&
-                Number.isFinite(rango.objetivo)
+            : typeof rango?.objetivo === 'number' && Number.isFinite(rango.objetivo)
               ? rango.objetivo
               : Number.NaN;
         const fin =
           typeof rango?.max === 'number' && Number.isFinite(rango.max)
             ? rango.max
-            : typeof rango?.objetivo === 'number' &&
-                Number.isFinite(rango.objetivo)
+            : typeof rango?.objetivo === 'number' && Number.isFinite(rango.objetivo)
               ? rango.objetivo
               : inicio;
         return {
           clave,
           nombre: this.formatearNombreEtapa(clave),
-          orden:
-            typeof orden === 'number' && Number.isInteger(orden)
-              ? orden
-              : Number.NaN,
+          orden: typeof orden === 'number' && Number.isInteger(orden) ? orden : Number.NaN,
           inicioGdd: inicio,
           finGdd: fin,
         };
@@ -1495,20 +1419,17 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
           Number.isFinite(etapa.inicioGdd) &&
           Number.isFinite(etapa.finGdd) &&
           etapa.inicioGdd >= 0 &&
-          etapa.finGdd >= etapa.inicioGdd,
+          etapa.finGdd >= etapa.inicioGdd
       )
       .sort((a, b) => a.orden - b.orden);
 
     if (
       !etapas.length ||
-      etapas.length !==
-        Object.keys(parametros.gddPorEtapa || {}).length ||
+      etapas.length !== Object.keys(parametros.gddPorEtapa || {}).length ||
       new Set(etapas.map((etapa) => etapa.orden)).size !== etapas.length ||
       etapas.some(
         (etapa, index) =>
-          index > 0 &&
-          (etapa.inicioGdd <= etapas[index - 1].inicioGdd ||
-            etapa.finGdd < etapas[index - 1].finGdd),
+          index > 0 && (etapa.inicioGdd <= etapas[index - 1].inicioGdd || etapa.finGdd < etapas[index - 1].finGdd)
       )
     ) {
       return [];
@@ -1525,12 +1446,10 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     const candidatas = [...(this.snapshotAgromet?.series || [])]
       .filter(
         (
-          dia,
+          dia
         ): dia is IRespuestaAgrometeorologiaSiembra['series'][number] & {
           stage: string;
-        } =>
-          !!String(dia.stage || '').trim() &&
-          String(dia.date || '') <= hoy,
+        } => !!String(dia.stage || '').trim() && String(dia.date || '') <= hoy
       )
       .sort((a, b) => a.date.localeCompare(b.date));
     if (!candidatas.length) return undefined;
@@ -1544,9 +1463,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   private indiceEtapaPorNombre(etapas: string[], etapa?: string): number {
     const nombre = this.normalizarNombreEtapa(etapa);
     if (!nombre) return -1;
-    return etapas.findIndex(
-      (candidata) => this.normalizarNombreEtapa(candidata) === nombre,
-    );
+    return etapas.findIndex((candidata) => this.normalizarNombreEtapa(candidata) === nombre);
   }
 
   private aplicarFuenteEtapaCanonica(
@@ -1554,24 +1471,21 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       | (IRespuestaAgrometeorologiaSiembra['series'][number] & {
           stage: string;
         })
-      | undefined,
+      | undefined
   ): void {
-    this.modeloTermicoAnualActivo =
-      etapa?.stageSource === 'gdd_validado';
+    this.modeloTermicoAnualActivo = etapa?.stageSource === 'gdd_validado';
     if (!etapa) return;
 
     switch (etapa.stageSource) {
       case 'campo':
         this.etapaActualConfirmadaCampo = true;
         this.fuenteEtapaActual = 'campo';
-        this.fuenteTexto =
-          'registro de campo canonico; modelos solo para contraste';
+        this.fuenteTexto = 'registro de campo canonico; modelos solo para contraste';
         return;
       case 'gdd_validado':
         this.fuenteFenologia = 'semilla';
         this.fuenteEtapaActual = 'termico';
-        this.fuenteTexto =
-          'motor fenologico canonico con compuertas validadas';
+        this.fuenteTexto = 'motor fenologico canonico con compuertas validadas';
         return;
       case 'cronograma_referencia':
         this.fuenteFenologia = 'crono';
@@ -1590,17 +1504,14 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
         return;
       default:
         this.fuenteEtapaActual = 'calendario';
-        this.fuenteTexto =
-          'etapa informada por el motor canonico; procedencia no disponible';
+        this.fuenteTexto = 'etapa informada por el motor canonico; procedencia no disponible';
     }
   }
 
   private fechaEtapaTermicaAnual(umbralGdd: number): Date | undefined {
     const fila = [...(this.snapshotAgromet?.series || [])]
       .filter(
-        (dia) =>
-          Number.isFinite(Number(dia.metrics.gddAccumulated)) &&
-          Number(dia.metrics.gddAccumulated) >= umbralGdd,
+        (dia) => Number.isFinite(Number(dia.metrics.gddAccumulated)) && Number(dia.metrics.gddAccumulated) >= umbralGdd
       )
       .sort((a, b) => a.date.localeCompare(b.date))[0];
     return fila?.date ? new Date(`${fila.date}T12:00:00`) : undefined;
@@ -1608,7 +1519,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
   private getRegistroAnualActual(
     nombresEtapas: string[],
-    fecha: Date,
+    fecha: Date
   ):
     | {
         registro: IRegistroFenologico;
@@ -1618,25 +1529,19 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       }
     | undefined {
     const hasta = this.fechaClave(fecha);
-    const inicioCiclo = String(
-      this.siembraActual?.fechaSiembra || '',
-    ).slice(0, 10);
+    const inicioCiclo = String(this.siembraActual?.fechaSiembra || '').slice(0, 10);
     const candidatos = this.registrosFenologicosVigentes
       .map((registro) => {
         const fechaRegistro = this.fechaEfectivaRegistro(registro);
         const indiceEtapa = nombresEtapas.findIndex(
-          (etapa) =>
-            this.normalizarNombreEtapa(etapa) ===
-            this.normalizarNombreEtapa(registro.etapa),
+          (etapa) => this.normalizarNombreEtapa(etapa) === this.normalizarNombreEtapa(registro.etapa)
         );
         return {
           registro,
           fecha: fechaRegistro,
           fechaClave: fechaRegistro ? this.fechaClave(fechaRegistro) : '',
           indiceEtapa,
-          persistente:
-            registro.tipoEvento !== 'observacion' &&
-            registro.accion !== 'observacion',
+          persistente: registro.tipoEvento !== 'observacion' && registro.accion !== 'observacion',
         };
       })
       .filter(
@@ -1644,15 +1549,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
           !!item.fecha &&
           item.indiceEtapa >= 0 &&
           item.fechaClave <= hasta &&
-          (!inicioCiclo || item.fechaClave >= inicioCiclo),
+          (!inicioCiclo || item.fechaClave >= inicioCiclo)
       )
       .sort((a, b) => a.fechaClave.localeCompare(b.fechaClave));
-    const observacionHoy = [...candidatos]
-      .reverse()
-      .find((item) => !item.persistente && item.fechaClave === hasta);
-    const seleccionado =
-      observacionHoy ||
-      [...candidatos].reverse().find((item) => item.persistente);
+    const observacionHoy = [...candidatos].reverse().find((item) => !item.persistente && item.fechaClave === hasta);
+    const seleccionado = observacionHoy || [...candidatos].reverse().find((item) => item.persistente);
     if (!seleccionado?.fecha) return undefined;
     return {
       registro: seleccionado.registro,
@@ -1664,37 +1565,25 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
   private getRegistroAnualDeEtapa(
     etapa: string,
-    fecha: Date,
+    fecha: Date
   ): { registro: IRegistroFenologico; fecha: Date } | undefined {
     const hasta = this.fechaClave(fecha);
-    const inicioCiclo = String(
-      this.siembraActual?.fechaSiembra || '',
-    ).slice(0, 10);
-    const encontrado = [...this.registrosFenologicosVigentes]
-      .reverse()
-      .find((registro) => {
-        if (
-          registro.tipoEvento === 'observacion' ||
-          registro.accion === 'observacion' ||
-          this.normalizarNombreEtapa(registro.etapa) !==
-            this.normalizarNombreEtapa(etapa)
-        ) {
-          return false;
-        }
-        const fechaRegistro = this.fechaEfectivaRegistro(registro);
-        if (!fechaRegistro) return false;
-        const clave = this.fechaClave(fechaRegistro);
-        return (
-          clave <= hasta &&
-          (!inicioCiclo || clave >= inicioCiclo)
-        );
-      });
-    const fechaRegistro = encontrado
-      ? this.fechaEfectivaRegistro(encontrado)
-      : undefined;
-    return encontrado && fechaRegistro
-      ? { registro: encontrado, fecha: fechaRegistro }
-      : undefined;
+    const inicioCiclo = String(this.siembraActual?.fechaSiembra || '').slice(0, 10);
+    const encontrado = [...this.registrosFenologicosVigentes].reverse().find((registro) => {
+      if (
+        registro.tipoEvento === 'observacion' ||
+        registro.accion === 'observacion' ||
+        this.normalizarNombreEtapa(registro.etapa) !== this.normalizarNombreEtapa(etapa)
+      ) {
+        return false;
+      }
+      const fechaRegistro = this.fechaEfectivaRegistro(registro);
+      if (!fechaRegistro) return false;
+      const clave = this.fechaClave(fechaRegistro);
+      return clave <= hasta && (!inicioCiclo || clave >= inicioCiclo);
+    });
+    const fechaRegistro = encontrado ? this.fechaEfectivaRegistro(encontrado) : undefined;
+    return encontrado && fechaRegistro ? { registro: encontrado, fecha: fechaRegistro } : undefined;
   }
 
   private crearTimelinePerenne(cultivo: string, etapasDisponibles: Record<string, number>): void {
@@ -1719,24 +1608,17 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       });
     }
 
-    const etapaReferenciaNumero = this.getIndiceEtapaPerenne(
-      etapasCiclo,
-      diaCampania,
-    );
+    const etapaReferenciaNumero = this.getIndiceEtapaPerenne(etapasCiclo, diaCampania);
     this.campaniaTexto = `${inicioCampania.getFullYear()}/${inicioCampania.getFullYear() + 1}`;
     const registroCampo = this.getRegistroPerenneActual(etapasCiclo, hoy);
-    const etapaActualNumero =
-      registroCampo?.indiceEtapa ?? etapaReferenciaNumero;
+    const etapaActualNumero = registroCampo?.indiceEtapa ?? etapaReferenciaNumero;
     this.etapaActualConfirmadaCampo = !!registroCampo;
     this.progreso = registroCampo
-      ? this.limitar(
-          (etapaActualNumero / Math.max(1, etapasCiclo.length - 1)) * 100,
-        )
+      ? this.limitar((etapaActualNumero / Math.max(1, etapasCiclo.length - 1)) * 100)
       : this.limitar((diaCampania / 365) * 100);
     this.etapaActual = etapasCiclo[etapaActualNumero]?.nombre || etapasCiclo[0].nombre;
     if (registroCampo) {
-      this.fuenteTexto =
-        'registro de campo prioritario; referencia varietal solo para contraste';
+      this.fuenteTexto = 'registro de campo prioritario; referencia varietal solo para contraste';
     }
 
     this.etapas = etapasCiclo.map((etapa, index) => {
@@ -1744,13 +1626,8 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       const fechaReferencia = new Date(inicioCampania);
       fechaReferencia.setDate(fechaReferencia.getDate() + etapa.dia);
       const bloquearProyeccionFutura =
-        !!registroCampo &&
-        registroCampo.persistente &&
-        index > etapaActualNumero &&
-        !registroEtapa;
-      const fecha =
-        registroEtapa?.fecha ||
-        (bloquearProyeccionFutura ? undefined : fechaReferencia);
+        !!registroCampo && registroCampo.persistente && index > etapaActualNumero && !registroEtapa;
+      const fecha = registroEtapa?.fecha || (bloquearProyeccionFutura ? undefined : fechaReferencia);
       const anterior = etapasCiclo[index - 1];
       const periodoDias = index > 0 ? Math.max(1, etapa.dia - anterior.dia) : undefined;
 
@@ -1768,7 +1645,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
   private getRegistroPerenneActual(
     etapas: Array<{ nombre: string; dia: number }>,
-    fecha: Date,
+    fecha: Date
   ):
     | {
         registro: IRegistroFenologico;
@@ -1782,18 +1659,14 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       .map((registro) => {
         const fechaRegistro = this.fechaEfectivaRegistro(registro);
         const indiceEtapa = etapas.findIndex(
-          (etapa) =>
-            this.normalizarNombreEtapa(etapa.nombre) ===
-            this.normalizarNombreEtapa(registro.etapa),
+          (etapa) => this.normalizarNombreEtapa(etapa.nombre) === this.normalizarNombreEtapa(registro.etapa)
         );
         return {
           registro,
           fecha: fechaRegistro,
           fechaClave: fechaRegistro ? this.fechaClave(fechaRegistro) : '',
           indiceEtapa,
-          persistente:
-            registro.tipoEvento !== 'observacion' &&
-            registro.accion !== 'observacion',
+          persistente: registro.tipoEvento !== 'observacion' && registro.accion !== 'observacion',
         };
       })
       .filter(
@@ -1803,18 +1676,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
           item.fechaClave <= hasta &&
           (!this.campaniaTexto ||
             !item.registro.campania ||
-            this.mismaCampania(
-              item.registro.campania,
-              this.campaniaTexto,
-            )),
+            this.mismaCampania(item.registro.campania, this.campaniaTexto))
       )
       .sort((a, b) => a.fechaClave.localeCompare(b.fechaClave));
-    const observacionHoy = [...candidatos]
-      .reverse()
-      .find((item) => !item.persistente && item.fechaClave === hasta);
-    const seleccionado =
-      observacionHoy ||
-      [...candidatos].reverse().find((item) => item.persistente);
+    const observacionHoy = [...candidatos].reverse().find((item) => !item.persistente && item.fechaClave === hasta);
+    const seleccionado = observacionHoy || [...candidatos].reverse().find((item) => item.persistente);
     if (!seleccionado?.fecha) return undefined;
     return {
       registro: seleccionado.registro,
@@ -1826,48 +1692,29 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
   private getRegistroPerenneDeEtapa(
     etapa: string,
-    fecha: Date,
+    fecha: Date
   ): { registro: IRegistroFenologico; fecha: Date } | undefined {
     const hasta = this.fechaClave(fecha);
-    const encontrado = [...this.registrosFenologicosVigentes]
-      .reverse()
-      .find((registro) => {
-        if (
-          registro.tipoEvento === 'observacion' ||
-          registro.accion === 'observacion'
-        ) {
-          return false;
-        }
-        if (
-          this.normalizarNombreEtapa(registro.etapa) !==
-          this.normalizarNombreEtapa(etapa)
-        ) {
-          return false;
-        }
-        if (
-          this.campaniaTexto &&
-          registro.campania &&
-          !this.mismaCampania(registro.campania, this.campaniaTexto)
-        ) {
-          return false;
-        }
-        const fechaRegistro = this.fechaEfectivaRegistro(registro);
-        return !!fechaRegistro && this.fechaClave(fechaRegistro) <= hasta;
-      });
-    const fechaRegistro = encontrado
-      ? this.fechaEfectivaRegistro(encontrado)
-      : undefined;
-    return encontrado && fechaRegistro
-      ? { registro: encontrado, fecha: fechaRegistro }
-      : undefined;
+    const encontrado = [...this.registrosFenologicosVigentes].reverse().find((registro) => {
+      if (registro.tipoEvento === 'observacion' || registro.accion === 'observacion') {
+        return false;
+      }
+      if (this.normalizarNombreEtapa(registro.etapa) !== this.normalizarNombreEtapa(etapa)) {
+        return false;
+      }
+      if (this.campaniaTexto && registro.campania && !this.mismaCampania(registro.campania, this.campaniaTexto)) {
+        return false;
+      }
+      const fechaRegistro = this.fechaEfectivaRegistro(registro);
+      return !!fechaRegistro && this.fechaClave(fechaRegistro) <= hasta;
+    });
+    const fechaRegistro = encontrado ? this.fechaEfectivaRegistro(encontrado) : undefined;
+    return encontrado && fechaRegistro ? { registro: encontrado, fecha: fechaRegistro } : undefined;
   }
 
-  private fechaEfectivaRegistro(
-    registro: IRegistroFenologico,
-  ): Date | undefined {
+  private fechaEfectivaRegistro(registro: IRegistroFenologico): Date | undefined {
     const value =
-      registro.tipoEvento === 'observacion' ||
-      registro.accion === 'observacion'
+      registro.tipoEvento === 'observacion' || registro.accion === 'observacion'
         ? registro.fecha || registro.fechaObservacion
         : registro.fechaInicioEtapa || registro.fecha || registro.fechaObservacion;
     if (!value) return undefined;
@@ -1980,15 +1827,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     return Number.isFinite(duracion) ? duracion : 0;
   }
 
-  private inferirObjetivoBiofix(
-    etapa: string,
-  ): TObjetivoBiofixFenologico {
+  private inferirObjetivoBiofix(etapa: string): TObjetivoBiofixFenologico {
     const normalizada = this.normalizarNombreEtapa(etapa);
     const legible = normalizada.replace(/_/g, ' ');
     if (this.esPerenne) {
-      if (
-        /dormancia|reposo|caida de hoja|caida de hojas/.test(legible)
-      ) {
+      if (/dormancia|reposo|caida de hoja|caida de hojas/.test(legible)) {
         return 'inicio_acumulacion_frio';
       }
       if (/brotacion|yema hinchada|desborre/.test(legible)) {
@@ -2082,9 +1925,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   private get gradosDiaAcumuladosFenologia(): number | undefined {
-    return (
-      this.numeroSeguro(this.snapshotAgromet?.summary?.gddAccumulated)
-    );
+    return this.numeroSeguro(this.snapshotAgromet?.summary?.gddAccumulated);
   }
 
   private get serieGradosDiaFenologia(): Array<{
@@ -2098,28 +1939,6 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       }));
     }
     return [];
-  }
-
-  private getFrioAcumuladoSnapshot(): IRegistroFenologico['frioAcumulado'] | undefined {
-    const summary = this.snapshotAgromet?.summary;
-    if (
-      summary &&
-      (this.numeroSeguro(summary.chillingHoursAccumulated) !== undefined ||
-        this.numeroSeguro(summary.chillPortionsAccumulated) !== undefined)
-    ) {
-      return {
-        fechaDesde: summary.coldSeasonStart,
-        fechaHasta: summary.coldThroughDate,
-        horasFrio: this.numeroSeguro(summary.chillingHoursAccumulated),
-        porcionesFrio: this.numeroSeguro(summary.chillPortionsAccumulated),
-        fuente: this.snapshotAgromet
-          ? `${this.snapshotAgromet.dataSource.type} canonico`
-          : undefined,
-        coberturaPct: this.numeroSeguro(summary.chillingTemperatureCoveragePct),
-        versionModelo: summary.coldModelVersion,
-      };
-    }
-    return undefined;
   }
 
   private numeroSeguro(value: unknown): number | undefined {

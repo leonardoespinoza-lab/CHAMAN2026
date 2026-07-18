@@ -77,17 +77,13 @@ describe('CardFrioTermicoComponent', () => {
 
     expect(component.tituloTarjeta).toBe('ACUMULACIÓN TÉRMICA');
     expect(component.tituloEvolucion).toBe('Evolución del tiempo térmico');
-    expect(component.estadoEspecificacionLabel).toBe(
-      'GDD de referencia del cultivo · no interpreta etapa varietal'
-    );
+    expect(component.estadoEspecificacionLabel).toBe('GDD de referencia del cultivo · no interpreta etapa varietal');
     expect(component.calidadFrioLabel).toContain('Serie térmica canónica');
     expect(component.calidadFrioLabel).not.toContain('frío');
-    expect(component.calidadFrioDetalle).toContain(
-      'no usa HF, HFE ni Porciones de Frío de frutales'
-    );
+    expect(component.calidadFrioDetalle).toContain('no usa HF, HFE ni Porciones de Frío de frutales');
   });
 
-  it('muestra acumulado, objetivo y avance de cada modelo sin convertir unidades', async () => {
+  it('muestra los acumulados observados sin convertirlos en objetivos varietales', async () => {
     const component = create(
       response({
         summary: {
@@ -131,18 +127,16 @@ describe('CardFrioTermicoComponent', () => {
 
     await component.cargar();
 
-    expect(component.objetivosFrio.map((item) => item.label)).toEqual([
-      'Horas de frío',
+    expect(component.estadoEspecificacionLabel).toBe('Registro observado · sin objetivo prefijado');
+    expect(component.metricas.map((item) => item.label)).toEqual([
+      'Horas de frío (HF)',
+      'Unidades Utah',
       'Porciones de frío',
-      'Frío efectivo histórico',
+      'GDD de forzado',
     ]);
-    expect(component.objetivosFrio.find((item) => item.key === 'HF')).toEqual(
-      jasmine.objectContaining({ accumulated: 503.2, target: 750, decisionReady: true })
-    );
-    expect(component.objetivosFrio.find((item) => item.key === 'CP')).toEqual(
-      jasmine.objectContaining({ accumulated: 21.21, target: 45, decisionReady: false })
-    );
-    expect(component.metricas[0].label).toBe('GDD de forzado');
+    expect(component.metricas[0].value).toBe('503,2 HF');
+    expect(component.metricas[1].value).toBe('471,4 UF');
+    expect(component.metricas[2].value).toBe('21,21 CP');
     expect(component.gddLabel).toBe('3.394,3 GDD');
     expect(component.periodoFrioLabel).toContain('01-may');
     expect(component.periodoFrioLabel).not.toContain('30-abr');
@@ -202,16 +196,12 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.calidadFrioLabel).toContain('prioritario');
     expect(component.calidadFrioDetalle).toContain('67%');
     expect(component.calidadFrioDetalle).toContain('integran el motor canónico');
-    const horas = component.objetivosFrio.find((item) => item.key === 'HF');
-    expect(horas?.accumulated).toBe(480);
-    expect(horas?.target).toBe(750);
-    expect(horas?.fieldComparison).toContain('503 HF');
-    expect(horas?.fieldComparison).toContain('cobertura 67%');
-    const porciones = component.objetivosFrio.find((item) => item.key === 'CP');
-    expect(porciones?.accumulated).toBe(18.2);
-    expect(porciones?.fieldComparison).toContain('21,21 CP');
-    const hfe = component.objetivosFrio.find((item) => item.key === 'HFE');
-    expect(hfe).toEqual(jasmine.objectContaining({ accumulated: 593.82, target: 630, decisionReady: false }));
+    expect(component.metricas.find((item) => item.label === 'Horas de frío (HF)')?.value).toBe('480,0 HF');
+    expect(component.metricas.find((item) => item.label === 'Porciones de frío')?.value).toBe('18,20 CP');
+    expect(component.metricas.find((item) => item.label === 'Horas de frío (HF)')?.source).toContain(
+      'CUADRO 7 Sensor 3 prioritario'
+    );
+    expect(component.metricas.find((item) => item.label === 'HFE histórico (legacy)')?.value).toBe('593,8 HFE');
   });
 
   it('mantiene visibles las horas frío del dispositivo mientras el canónico se reprocesa', async () => {
@@ -245,11 +235,13 @@ describe('CardFrioTermicoComponent', () => {
 
     await component.cargar();
 
-    expect(component.lecturaPrincipal).toContain('propia unidad');
+    expect(component.lecturaPrincipal).toContain('unidad, fuente y cobertura');
     expect(component.calidadFrioLabel).toContain('pendiente de reproceso');
-    expect(component.objetivosFrio.find((item) => item.key === 'HF')?.accumulated).toBe(503.21);
-    expect(component.objetivosFrio.find((item) => item.key === 'HFE')?.accumulated).toBe(593.82);
-    expect(component.objetivosFrio.find((item) => item.key === 'CP')?.accumulated).toBe(21.21);
+    expect(component.metricas.find((item) => item.label === 'Horas frío del sensor (vista previa)')?.value).toBe(
+      '503,21 HF'
+    );
+    expect(component.metricas.find((item) => item.label === 'Frío efectivo (HFE hist.)')?.value).toBe('593,82 HFE');
+    expect(component.metricas.find((item) => item.label === 'Porciones históricas (ref.)')?.value).toBe('21,21 CP');
   });
 
   it('muestra rangos científicos como referencia visual sin volverlos decisión automática', async () => {
@@ -270,11 +262,9 @@ describe('CardFrioTermicoComponent', () => {
     await component.cargar();
 
     expect(component.fichaTermica?.coincidencia).toBe('alias_varietal');
-    const cp = component.objetivosFrio.find((item) => item.key === 'CP');
-    expect(cp).toEqual(
-      jasmine.objectContaining({ targetMin: 52, targetMax: 73.3, targetLabel: '52,0–73,3 CP', decisionReady: false })
-    );
-    expect(cp?.targetSource).toContain('Apple dormancy');
+    const cp = component.referenciasTermicasFicha.find((item) => item.unidad === 'CP');
+    expect(cp).toEqual(jasmine.objectContaining({ minimo: 52, maximo: 73.3 }));
+    expect(cp?.fuenteIds.some((id) => id.includes('apple'))).toBeTrue();
   });
 
   it('explica que el GDD de un peral aún no comenzó cuando falta el biofix de forzado', async () => {

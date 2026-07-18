@@ -16,22 +16,15 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
     jasmine.clock().install();
     jasmine.clock().mockDate(new Date(2026, 6, 16, 12, 0, 0));
     siembraService = {
-      agrometeorologia: jasmine
-        .createSpy('agrometeorologia')
-        .and.resolveTo(undefined),
-      registrarEtapaFenologica: jasmine.createSpy(
-        'registrarEtapaFenologica',
-      ),
+      agrometeorologia: jasmine.createSpy('agrometeorologia').and.resolveTo(undefined),
+      registrarEtapaFenologica: jasmine.createSpy('registrarEtapaFenologica'),
     };
     helper = {
       notifWarn: jasmine.createSpy('notifWarn'),
       notifSuccess: jasmine.createSpy('notifSuccess'),
       notifError: jasmine.createSpy('notifError'),
     };
-    component = new CardEtapasFenologicasComponent(
-      helper as any,
-      siembraService as any,
-    );
+    component = new CardEtapasFenologicasComponent(helper as any, siembraService as any);
   });
 
   afterEach(() => {
@@ -104,8 +97,7 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
             temperaturaBaseC: 0,
             temperaturaSuperiorC: 30,
             metodoGdd: 'promedio_limitado',
-            semanticaGddPorEtapa:
-              'rangos_acumulados_desde_inicio_termico',
+            semanticaGddPorEtapa: 'rangos_acumulados_desde_inicio_termico',
             gddPorEtapa: {
               Siembra: { orden: 0, min: 0, max: 99 },
               [etapaTermica]: { orden: 1, min: 100, max: 299 },
@@ -157,9 +149,7 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
 
       expect(component.etapaActual).toBe(etapaTermica);
       expect(component.fuenteEtapaActual).toBe('termico');
-      expect(component.fuenteTexto).toContain(
-        'motor fenologico canonico',
-      );
+      expect(component.fuenteTexto).toContain('motor fenologico canonico');
 
       (component.siembra as any).registrosFenologicos = [
         {
@@ -177,9 +167,7 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
       expect(component.etapaActual).toBe(etapaCampo);
       expect(component.etapaActualConfirmadaCampo).toBeTrue();
       expect(component.fuenteEtapaActual).toBe('campo');
-      expect(component.fuenteTexto).toContain(
-        'registro de campo prioritario',
-      );
+      expect(component.fuenteTexto).toContain('registro de campo prioritario');
     });
   });
 
@@ -197,8 +185,7 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
           temperaturaBaseC: 0,
           temperaturaSuperiorC: 30,
           metodoGdd: 'promedio_limitado',
-          semanticaGddPorEtapa:
-            'rangos_acumulados_desde_inicio_termico',
+          semanticaGddPorEtapa: 'rangos_acumulados_desde_inicio_termico',
           gddPorEtapa: {
             Siembra: { orden: 0, min: 0, max: 99 },
             Emergencia: { orden: 1, min: 100, max: 299 },
@@ -245,9 +232,7 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
           isForecast: false,
         },
       ],
-      warnings: [
-        'La etapa queda limitada por continuidad de vernalizacion.',
-      ],
+      warnings: ['La etapa queda limitada por continuidad de vernalizacion.'],
       calculationVersion: 'test',
       parametersVersion: 'trigo-gate-v1',
     } as any;
@@ -258,12 +243,8 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
     expect(component.etapaActual).not.toBe('Madurez');
     expect(component.fuenteEtapaActual).toBe('termico');
     expect(component.fuenteTexto).toContain('compuertas validadas');
-    expect(
-      component.etapas.find((etapa) => etapa.estado === 'current')?.nombre,
-    ).toBe('Emergencia');
-    expect(component.lecturaEtapaActual).toContain(
-      'compuertas validadas de vernalizacion',
-    );
+    expect(component.etapas.find((etapa) => etapa.estado === 'current')?.nombre).toBe('Emergencia');
+    expect(component.lecturaEtapaActual).toContain('compuertas validadas de vernalizacion');
   });
 
   it('usa el calendario solo como referencia cuando el backend no entrega una etapa', () => {
@@ -280,8 +261,7 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
           temperaturaBaseC: 0,
           temperaturaSuperiorC: 30,
           metodoGdd: 'promedio_limitado',
-          semanticaGddPorEtapa:
-            'rangos_acumulados_desde_inicio_termico',
+          semanticaGddPorEtapa: 'rangos_acumulados_desde_inicio_termico',
           gddPorEtapa: {
             Siembra: { orden: 0, min: 0, max: 99 },
             Emergencia: { orden: 1, min: 100, max: 299 },
@@ -364,12 +344,8 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
 
     expect(component.etapaActual).toBe('Brotacion');
     expect(component.etapaActualConfirmadaCampo).toBeTrue();
-    expect(
-      component.etapas.find((etapa) => etapa.nombre === 'Brotacion')?.estado,
-    ).toBe('current');
-    expect(
-      component.etapas.find((etapa) => etapa.nombre === 'Floracion')?.fecha,
-    ).toBeUndefined();
+    expect(component.etapas.find((etapa) => etapa.nombre === 'Brotacion')?.estado).toBe('current');
+    expect(component.etapas.find((etapa) => etapa.nombre === 'Floracion')?.fecha).toBeUndefined();
     expect(component.fuenteTexto).toContain('registro de campo prioritario');
   });
 
@@ -406,12 +382,10 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
         estado: 'pending',
       },
     ];
-    siembraService.registrarEtapaFenologica.and.callFake(
-      async (_id: string, registro: any) => ({
-        ...siembra,
-        registrosFenologicos: [registro],
-      }),
-    );
+    siembraService.registrarEtapaFenologica.and.callFake(async (_id: string, registro: any) => ({
+      ...siembra,
+      registrosFenologicos: [registro],
+    }));
 
     component.abrirRegistroEtapa(component.etapas[0]);
     component.registroForm.tipoEvento = 'biofix';
@@ -422,21 +396,16 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
     component.registroForm.confianza = 'alta';
     component.registroForm.observador = 'Tecnico Kleppe';
 
-    expect(component.registroForm.objetivoBiofix).toBe(
-      'inicio_acumulacion_frio',
-    );
+    expect(component.registroForm.objetivoBiofix).toBe('inicio_acumulacion_frio');
 
     await component.guardarRegistroFenologico();
 
-    const registro =
-      siembraService.registrarEtapaFenologica.calls.mostRecent().args[1];
-    expect(registro.objetivosBiofix).toEqual([
-      'anclaje_fenologico',
-      'inicio_acumulacion_frio',
-    ]);
+    const registro = siembraService.registrarEtapaFenologica.calls.mostRecent().args[1];
+    expect(registro.objetivosBiofix).toEqual(['anclaje_fenologico', 'inicio_acumulacion_frio']);
     expect(registro.objetivosBiofix).not.toContain('inicio_forzado');
     expect(registro.tipoEvento).toBe('biofix');
     expect(registro.fechaInicioEtapa).toContain('2026-05-01');
+    expect(registro.frioAcumulado).toBeUndefined();
     expect(registro).toEqual(
       jasmine.objectContaining({
         escalaEtapa: 'BBCH',
@@ -444,9 +413,40 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
         coberturaObservadaPct: 80,
         confianza: 'alta',
         observador: 'Tecnico Kleppe',
-      }),
+      })
     );
     expect(helper.notifSuccess).toHaveBeenCalled();
+  });
+
+  it('presenta el historial termico capturado por el backend en cada etapa perenne', () => {
+    component.siembra = {
+      _id: 'siembra-perenne-termica',
+      semilla: { cultivo: 'Peral', variedad: 'Rocha' },
+      registrosFenologicos: [
+        {
+          id: 'fen-brotacion',
+          etapa: 'Brotacion',
+          fecha: '2026-09-04T12:00:00.000Z',
+          frioAcumulado: {
+            horasFrio: 612.5,
+            unidadesFrioUtah: 488.25,
+            porcionesFrio: 42.125,
+            gradosDia: 84.2,
+            fuenteTemperatura: 'sensor',
+            serieCampoPrioritaria: true,
+            estado: 'completo',
+          },
+        },
+      ],
+    } as any;
+
+    const [registro] = component.registrosTermicosFenologicos;
+    expect(component.valorRegistroTermico(registro, 'horasFrio')).toBe('612,5 HF');
+    expect(component.valorRegistroTermico(registro, 'unidadesFrioUtah')).toBe('488,3 UF');
+    expect(component.valorRegistroTermico(registro, 'porcionesFrio', 2)).toBe('42,13 CP');
+    expect(component.valorRegistroTermico(registro, 'gradosDia')).toBe('84,2 GDD');
+    expect(component.fuenteRegistroTermico(registro)).toBe('Sensor de campo prioritario');
+    expect(component.estadoRegistroTermico(registro)).toBe('Serie completa');
   });
 
   it('distingue el inicio y el cierre de la ventana de vernalizacion anual', () => {
@@ -475,9 +475,7 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
     ];
 
     component.abrirRegistroEtapa(component.etapas[0]);
-    expect(component.registroForm.objetivoBiofix).toBe(
-      'inicio_vernalizacion',
-    );
+    expect(component.registroForm.objetivoBiofix).toBe('inicio_vernalizacion');
 
     component.abrirRegistroEtapa(component.etapas[1]);
     expect(component.registroForm.objetivoBiofix).toBe('fin_vernalizacion');
@@ -486,9 +484,7 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
   it('no presenta una etapa de calendario como observacion actual del lote', () => {
     component.esPerenne = false;
     component.fuenteEtapaActual = 'calendario';
-    component.etapas = [
-      { nombre: 'Emergencia', posicion: 0, estado: 'current' },
-    ];
+    component.etapas = [{ nombre: 'Emergencia', posicion: 0, estado: 'current' }];
 
     expect(component.etiquetaEtapaActual).toBe('Etapa proyectada por cronograma');
     expect(component.lecturaEtapaActual).toContain('proyeccion');

@@ -27,6 +27,7 @@ import {
   IPrediccion,
   IResultadoPrediccionMalezas,
   IRegistroFenologico,
+  IRegistroFenologicoFrio,
   IRespuestaAgrometeorologiaSiembra,
   TObjetivoBiofixFenologico,
   TRIGO_MOTOR_SANITARIO_VERSION,
@@ -230,6 +231,10 @@ export class SiembrasService {
     // El identificador se genera siempre en el servidor: una correccion agrega
     // un nuevo evento que referencia al anterior y nunca reescribe el historial.
     const idRegistro = this.crearIdRegistroFenologico();
+    const frioAcumulado = await this.construirSnapshotTermicoFenologico(
+      siembra,
+      fechaRegistro,
+    );
     const registroCompleto: IRegistroFenologico = {
       ...registro,
       id: idRegistro,
@@ -251,6 +256,9 @@ export class SiembrasService {
       campania: this.campaniaFenologica(siembra, fechaRegistro),
       requerimientoFrio: siembra.semilla?.requerimientoFrio,
       fenologiaReferencia: siembra.semilla?.fenologiaReferencia,
+      // La evidencia termica se obtiene en el servidor. Nunca se acepta un
+      // acumulado calculado o alterado por el navegador.
+      frioAcumulado,
       escalaEtapa: String(registro.escalaEtapa || '').trim() || undefined,
       codigoEtapa: String(registro.codigoEtapa || '').trim() || undefined,
       coberturaObservadaPct,
@@ -280,6 +288,97 @@ export class SiembrasService {
       true,
     );
     return await this.getById(id, permiso);
+  }
+
+  private async construirSnapshotTermicoFenologico(
+    siembra: ISiembra,
+    fechaRegistro: string,
+  ): Promise<IRegistroFenologicoFrio> {
+    const fechaObjetivo = fechaRegistro.slice(0, 10);
+    const perenne = esCultivoPerenne(siembra.semilla?.cultivo);
+    const pendiente: IRegistroFenologicoFrio = {
+      fechaHasta: fechaObjetivo,
+      fechaCaptura: new Date().toISOString(),
+      estado: 'pendiente',
+      fuente: 'motor agrometeorologico canonico',
+    };
+
+    try {
+      const respuesta = await this.repository.agrometeorologia(siembra._id!);
+      const dia = [...(respuesta.series || [])]
+        .filter(
+          (item) =>
+            !item.isForecast &&
+            String(item.date || '').slice(0, 10) <= fechaObjetivo,
+        )
+        .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+        .at(-1);
+      if (!dia) return pendiente;
+
+      const numero = (valor: unknown): number | undefined => {
+        const resultado = Number(valor);
+        return Number.isFinite(resultado) ? resultado : undefined;
+      };
+      const fuenteTemperatura =
+        dia.sourceByVariable?.temperatureMeanC ||
+        dia.sourceByVariable?.temperatureMinC ||
+        dia.sourceByVariable?.temperatureMaxC ||
+        dia.source;
+      const fuenteCampo = String(fuenteTemperatura || '').includes('sensor');
+      const tieneFrio =
+        perenne &&
+        [
+          dia.metrics.chillingHoursAccumulated,
+          dia.metrics.utahChillUnitsAccumulated,
+          dia.metrics.chillPortionsAccumulated,
+        ].some((valor) => numero(valor) !== undefined);
+      const tieneGdd = numero(dia.metrics.gddAccumulated) !== undefined;
+      const continuidad = perenne
+        ? respuesta.summary.chillingContinuitySufficient
+        : respuesta.summary.gddAccumulationComplete;
+
+      return {
+        fechaDesde: perenne
+          ? respuesta.summary.coldSeasonStart
+          : siembra.fechaSiembra,
+        fechaHasta: dia.date,
+        fechaCaptura: new Date().toISOString(),
+        horasFrio: perenne
+          ? numero(dia.metrics.chillingHoursAccumulated)
+          : undefined,
+        unidadesFrioUtah: perenne
+          ? numero(dia.metrics.utahChillUnitsAccumulated)
+          : undefined,
+        porcionesFrio: perenne
+          ? numero(dia.metrics.chillPortionsAccumulated)
+          : undefined,
+        gradosDia: numero(dia.metrics.gddAccumulated),
+        fuente: respuesta.dataSource.type,
+        fuenteTemperatura: String(fuenteTemperatura || dia.source),
+        serieCampoPrioritaria: fuenteCampo,
+        coberturaPct: perenne
+          ? numero(respuesta.summary.chillingTemperatureCoveragePct)
+          : numero(respuesta.dataSource.completenessPercentage),
+        continuidadSuficiente: continuidad,
+        brechaMaximaHoras: perenne
+          ? numero(respuesta.summary.chillingMaximumGapHours)
+          : undefined,
+        estado:
+          (tieneFrio || tieneGdd) && continuidad !== false
+            ? 'completo'
+            : tieneFrio || tieneGdd
+              ? 'parcial'
+              : 'pendiente',
+        versionModelo: perenne ? respuesta.summary.coldModelVersion : undefined,
+        versionCalculo: respuesta.calculationVersion,
+        versionParametros: respuesta.parametersVersion,
+      };
+    } catch (error: any) {
+      this.logger.warn(
+        `No se pudo adjuntar snapshot termico al registro fenologico ${siembra._id}: ${error?.message || error}`,
+      );
+      return pendiente;
+    }
   }
 
   async get(

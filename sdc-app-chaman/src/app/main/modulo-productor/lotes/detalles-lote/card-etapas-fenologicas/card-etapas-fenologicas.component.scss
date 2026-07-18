@@ -864,6 +864,76 @@
   justify-content: flex-end;
 }
 
+.thermal-stage-log {
+  background: color-mix(in srgb, var(--p-primary-50) 45%, var(--p-surface-0));
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 22%, var(--p-surface-border));
+  border-radius: 10px;
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 1rem;
+  padding: 0.9rem;
+}
+
+.thermal-stage-log > header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.thermal-stage-log > header div,
+.thermal-stage-log__stage {
+  display: grid;
+  gap: 0.16rem;
+}
+
+.thermal-stage-log > header span,
+.thermal-stage-log__table article > div:not(.thermal-stage-log__stage) span {
+  color: var(--p-text-muted-color);
+  font-size: 0.7rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.thermal-stage-log > header small {
+  background: var(--p-surface-0);
+  border-radius: 999px;
+  color: var(--p-primary-color);
+  font-weight: 800;
+  padding: 0.35rem 0.55rem;
+}
+
+.thermal-stage-log > p {
+  color: var(--p-text-muted-color);
+  margin: 0;
+}
+
+.thermal-stage-log__table {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.thermal-stage-log__table article {
+  align-items: center;
+  background: var(--p-surface-0);
+  border: 1px solid var(--p-surface-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: minmax(170px, 1.4fr) repeat(4, minmax(95px, 1fr));
+  padding: 0.75rem;
+}
+
+.thermal-stage-log__table article > div:not(.thermal-stage-log__stage) {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.thermal-stage-log__table small,
+.thermal-stage-log__stage span {
+  color: var(--p-text-muted-color);
+  font-size: 0.74rem;
+}
+
 .empty-state {
   align-items: center;
   display: flex;
@@ -1030,6 +1100,14 @@
   .register-form-grid,
   .register-snapshot {
     grid-template-columns: 1fr;
+  }
+
+  .thermal-stage-log__table article {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .thermal-stage-log__stage {
+    grid-column: 1 / -1;
   }
 
   .stage-now-panel h3 {

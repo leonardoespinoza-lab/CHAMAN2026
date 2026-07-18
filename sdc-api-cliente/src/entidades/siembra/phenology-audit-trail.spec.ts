@@ -35,6 +35,49 @@ describe('SiembrasService - trazabilidad fenologica append-only', () => {
         },
       ),
       reprocesarAgrometeorologia: jest.fn().mockResolvedValue(undefined),
+      agrometeorologia: jest.fn().mockResolvedValue({
+        summary: {
+          coldSeasonStart: '2026-05-01',
+          chillingTemperatureCoveragePct: 96,
+          chillingMaximumGapHours: 2,
+          chillingContinuitySufficient: true,
+          coldModelVersion: 'frio-termico-1.1.0',
+          gddAccumulationComplete: true,
+        },
+        dataSource: {
+          type: 'mixed',
+          completenessPercentage: 98,
+        },
+        series: [
+          {
+            date: '2026-07-09',
+            isForecast: false,
+            metrics: {
+              chillingHoursAccumulated: 412,
+              utahChillUnitsAccumulated: 386.5,
+              chillPortionsAccumulated: 28.75,
+              gddAccumulated: 164.2,
+            },
+            source: 'mixed',
+            sourceByVariable: { temperatureMeanC: 'sensor' },
+          },
+          {
+            date: '2026-07-11',
+            isForecast: true,
+            metrics: {
+              chillingHoursAccumulated: 430,
+              utahChillUnitsAccumulated: 401,
+              chillPortionsAccumulated: 30,
+              gddAccumulated: 180,
+            },
+            source: 'open_meteo',
+            sourceByVariable: { temperatureMeanC: 'open_meteo' },
+          },
+        ],
+        warnings: [],
+        calculationVersion: 'agromet-5.0.0',
+        parametersVersion: 'params-2026-07',
+      }),
     };
     const prediccionsService = {
       deleteByIdSiembra: jest.fn().mockResolvedValue(undefined),
@@ -92,14 +135,10 @@ describe('SiembrasService - trazabilidad fenologica append-only', () => {
 
     expect(
       repository.reprocesarAgrometeorologia.mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      prediccionsService.reconstruir.mock.invocationCallOrder[0],
-    );
+    ).toBeLessThan(prediccionsService.reconstruir.mock.invocationCallOrder[0]);
     expect(
       prediccionsService.reconstruir.mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      prediccionsService.agroclima.mock.invocationCallOrder[0],
-    );
+    ).toBeLessThan(prediccionsService.agroclima.mock.invocationCallOrder[0]);
   });
 
   it('corrige agregando un evento enlazado y conserva intacto el registro original', async () => {
@@ -219,6 +258,46 @@ describe('SiembrasService - trazabilidad fenologica append-only', () => {
       confianza: 'alta',
       observador: 'Ing. Agr. Campo',
     });
+  });
+
+  it('captura en el servidor HF, Utah, CP y GDD cerrados a la fecha observada', async () => {
+    const { service, getPersisted } = setup();
+
+    await service.registrarEtapaFenologica(
+      'siembra-1',
+      {
+        etapa: 'Brotacion',
+        fecha: '2026-07-10T12:00:00.000Z',
+        frioAcumulado: {
+          horasFrio: 99999,
+          porcionesFrio: 99999,
+          fuente: 'cliente',
+        },
+      },
+      permiso,
+    );
+
+    expect(
+      getPersisted().registrosFenologicos?.[0].frioAcumulado,
+    ).toMatchObject({
+      fechaDesde: '2026-05-01',
+      fechaHasta: '2026-07-09',
+      horasFrio: 412,
+      unidadesFrioUtah: 386.5,
+      porcionesFrio: 28.75,
+      gradosDia: 164.2,
+      fuenteTemperatura: 'sensor',
+      serieCampoPrioritaria: true,
+      coberturaPct: 96,
+      continuidadSuficiente: true,
+      estado: 'completo',
+      versionModelo: 'frio-termico-1.1.0',
+      versionCalculo: 'agromet-5.0.0',
+      versionParametros: 'params-2026-07',
+    });
+    expect(
+      getPersisted().registrosFenologicos?.[0].frioAcumulado?.horasFrio,
+    ).not.toBe(99999);
   });
 
   it('rechaza porcentajes de cobertura fenologica imposibles', async () => {
