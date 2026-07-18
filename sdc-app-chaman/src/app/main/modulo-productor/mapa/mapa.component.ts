@@ -595,7 +595,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       haSinDatos: 0,
     };
     let maxRiesgoTotal = 0;
-    this.lotes.forEach((lote) => {
+    this.lotesDeEstablecimientoActual().forEach((lote) => {
       const has = Math.trunc(lote?.ubicacion?.superficie || 0);
       const evidencia = evaluarSanidadFrontend(lote.siembra);
       if (!evidencia.operativas.length) {
@@ -884,6 +884,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         options.preserveSelection ? this.loteSeleccionado : undefined
       );
     }
+    this.calcularEnfermedades();
     this.selectEstablecimiento(establecimiento.nombre);
     this.centerMapOnEstablecimiento(establecimiento, markAsVisited);
     this.changeDetectorRef.detectChanges();
@@ -893,6 +894,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.loteSeleccionado = undefined;
     this.grupoAmbientesSeleccionado = undefined;
     this.establecimientoSeleccionado = undefined;
+    this.calcularEnfermedades();
     this.limpiarContextoMapa();
     this.centerMapOnBounds();
     this.isFirstVisit = false;
