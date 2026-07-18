@@ -38,6 +38,7 @@ import {
   numeroFinito,
   PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA,
   promedioPonderadoZonaRadicular,
+  resolverFenologiaTermicaArveja,
   resolverKc,
   VariableMeteorologicaNormalizada,
 } from 'modelos/src';
@@ -1764,9 +1765,8 @@ export class AgrometeorologicalEngineService {
             continuitySufficient:
               fieldColdThrough.metricas.fieldChillingContinuitySufficient,
             interpretation:
-              (fieldColdThrough.metricas
-                .fieldChillingTemperatureCoveragePct ?? 0) >=
-                MIN_COLD_TEMPERATURE_COVERAGE_PCT &&
+              (fieldColdThrough.metricas.fieldChillingTemperatureCoveragePct ??
+                0) >= MIN_COLD_TEMPERATURE_COVERAGE_PCT &&
               fieldColdThrough.metricas.fieldChillingContinuitySufficient ===
                 true
                 ? ('qualified' as const)
@@ -3525,6 +3525,16 @@ export class AgrometeorologicalEngineService {
     const observed = this.resolveObservedStage(siembra, date, entries);
     if (observed) return observed;
     if (
+      this.normalize(siembra.semilla?.cultivo) === 'arveja' &&
+      Number.isFinite(accumulatedGdd)
+    ) {
+      const peaStage = resolverFenologiaTermicaArveja({
+        referencia: siembra.semilla?.fenologiaReferencia,
+        gradosDiaAcumulados: accumulatedGdd,
+      });
+      if (peaStage.fuente === 'termica') return peaStage.nombre;
+    }
+    if (
       !esCultivoPerenne(siembra.semilla?.cultivo) &&
       this.hasValidatedVarietalThermalProfile(siembra)
     ) {
@@ -3677,6 +3687,21 @@ export class AgrometeorologicalEngineService {
         confidence: fieldStage.confidence,
         modelVersion: fieldStage.modelVersion,
       };
+    }
+    if (
+      this.normalize(siembra.semilla?.cultivo) === 'arveja' &&
+      Number.isFinite(accumulatedGdd)
+    ) {
+      const peaStage = resolverFenologiaTermicaArveja({
+        referencia: siembra.semilla?.fenologiaReferencia,
+        gradosDiaAcumulados: accumulatedGdd,
+      });
+      if (peaStage.fuente === 'termica') {
+        return {
+          source: 'rango_termico_referencia',
+          confidence: 'referencia',
+        };
+      }
     }
     if (
       !esCultivoPerenne(siembra.semilla?.cultivo) &&

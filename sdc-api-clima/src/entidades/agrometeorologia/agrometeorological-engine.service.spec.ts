@@ -2453,6 +2453,33 @@ describe('AgrometeorologicalEngineService', () => {
     ).toBe('Hoja Bandera');
   });
 
+  it('publica en Arveja la misma etapa termica de referencia que muestra la tarjeta fenologica', () => {
+    const siembra = {
+      fechaSiembra: '2026-07-01',
+      semilla: {
+        cultivo: 'Arveja',
+        fenologiaReferencia: {
+          rangosTermicos: {
+            'S-E': { min: 125, max: 140 },
+            'E-R1': { min: 685, max: 760 },
+            'R1-MF': { min: 585, max: 660 },
+            'S-MF': { min: 1395, max: 1560 },
+          },
+        },
+      },
+    } as any;
+
+    expect((engine as any).resolveStage(siembra, '2026-07-17', 145.5)).toBe(
+      'E - Emergencia y desarrollo vegetativo',
+    );
+    expect(
+      (engine as any).resolveStageProvenance(siembra, '2026-07-17', 145.5, {}),
+    ).toEqual({
+      source: 'rango_termico_referencia',
+      confidence: 'referencia',
+    });
+  });
+
   it('conserva el GDD crudo pero no deja que un cereal invernal cruce la fase sensible sin vernalizacion suficiente', () => {
     const parameters = {
       version: 'trigo-gate-conservador-v1',
