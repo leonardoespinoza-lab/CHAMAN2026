@@ -5,6 +5,15 @@ import {
 } from './card-clima-lote.component';
 
 describe('CardClimaLoteComponent', () => {
+  beforeEach(() => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-07-17T15:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    jasmine.clock().uninstall();
+  });
+
   it('muestra la senal convectiva con las mismas variables del motor de granizo', () => {
     const component = new CardClimaLoteComponent();
     component.lote = {

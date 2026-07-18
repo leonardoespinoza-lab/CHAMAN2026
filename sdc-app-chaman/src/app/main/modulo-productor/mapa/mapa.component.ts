@@ -601,7 +601,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!evidencia.operativas.length) {
         this.enfermedades.cantSinDatos++;
         this.enfermedades.haSinDatos += has;
-        lote.colorEnfermedad = 'rgba(100, 116, 139, 0.45)';
+        this.enfermedades.cantAmarillo++;
+        this.enfermedades.haAmarillo += has;
+        lote.colorEnfermedad = 'rgba(243, 216, 64, 0.68)';
         return;
       }
       let maxRiesgo = 0; // Riesgo bajo (verde)
@@ -638,8 +640,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       this.servicios[0].backgroudColor = 'var(--p-danger-color)';
     } else if (maxRiesgoTotal === 1) {
       this.servicios[0].backgroudColor = 'var(--p-warning-color)';
-    } else if (this.enfermedades.cantSinDatos && !this.enfermedades.cantVerde) {
-      this.servicios[0].backgroudColor = 'var(--p-surface-500)';
+    } else if (this.enfermedades.cantSinDatos) {
+      this.servicios[0].backgroudColor = 'var(--p-warning-color)';
     } else {
       this.servicios[0].backgroudColor = 'var(--p-success-color)';
     }
@@ -953,11 +955,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.enfermedades.cantAmarillo) {
       return `${this.enfermedades.cantAmarillo} en observación`;
     }
-    if (this.enfermedades.cantSinDatos) {
-      return `${this.enfermedades.cantSinDatos} en seguimiento`;
-    }
     if (this.enfermedades.cantVerde) {
-      return `${this.enfermedades.cantVerde} sin necesidades`;
+      return `${this.enfermedades.cantVerde} sin alerta`;
     }
     return 'Sin datos';
   }
@@ -1076,7 +1075,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       return `${evidencia.principal.enfermedad}: ${this.formatNumber(evidencia.principal.resultado || 0, 0)}%`;
     }
     if (evidencia.noAgregables.length) {
-      return `${evidencia.noAgregables.length} lectura${evidencia.noAgregables.length === 1 ? '' : 's'} en revision; sin alerta automatica`;
+      return `Precaucion: ${evidencia.noAgregables.length} modelo${evidencia.noAgregables.length === 1 ? '' : 's'} en seguimiento; sin alerta confirmada`;
     }
     if (!evidencia.todas.length) {
       return 'Sin prediccion reciente';
@@ -1088,7 +1087,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     const seleccionado = lote || this.loteSeleccionado;
     const max = this.maxRiesgoEnfermedad(seleccionado);
     if (max === null) {
-      return evaluarSanidadFrontend(seleccionado?.siembra).todas.length ? 'En seguimiento' : 'Pendiente';
+      return 'Precaucion';
     }
     const nivel = this.nivelRiesgoEnfermedad(seleccionado, max);
     if (nivel === 2) return 'Riesgo alto';
@@ -1099,7 +1098,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   public loteEnfermedadPercent(lote?: ILoteMapa): number {
     const seleccionado = lote || this.loteSeleccionado;
     const max = this.maxRiesgoEnfermedad(seleccionado);
-    return max === null ? 0 : this.progresoRiesgoEnfermedad(seleccionado, max);
+    return max === null ? 50 : this.progresoRiesgoEnfermedad(seleccionado, max);
   }
 
   public loteEnfermedadesOperativas(lote?: ILoteMapa) {

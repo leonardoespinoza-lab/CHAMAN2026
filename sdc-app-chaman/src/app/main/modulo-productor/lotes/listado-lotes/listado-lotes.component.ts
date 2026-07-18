@@ -220,18 +220,18 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
       if (evidencia.noAgregables.length) {
         return {
           label: 'Sanidad',
-          value: 'Seguimiento',
-          detail: `${evidencia.noAgregables.length} lectura${evidencia.noAgregables.length === 1 ? '' : 's'} en revision`,
-          tooltip: 'Las lecturas provisionales, experimentales o incompletas se ven dentro del lote, pero no generan riesgo ni alertas automaticas.',
-          tone: 'info',
+          value: 'Precaucion',
+          detail: `${evidencia.noAgregables.length} modelo${evidencia.noAgregables.length === 1 ? '' : 's'} en seguimiento`,
+          tooltip: 'Semaforo amarillo: existen lecturas provisionales, experimentales o incompletas. Se muestran dentro del lote, pero no constituyen una alerta confirmada.',
+          tone: 'warn',
         };
       }
       return {
         label: 'Sanidad',
-        value: 'Sin calculo',
+        value: 'Precaucion',
         detail: 'Enfermedades',
         tooltip: 'Abrir el lote para ejecutar o revisar prediccion de enfermedades.',
-        tone: 'muted',
+        tone: 'warn',
       };
     }
     const max = evidencia.maximo;

@@ -101,8 +101,8 @@ describe('ListadoLotesComponent', () => {
       },
     });
 
-    expect(indicador.value).toBe('Seguimiento');
-    expect(indicador.tone).toBe('info');
-    expect(indicador.tooltip).toContain('no generan riesgo');
+    expect(indicador.value).toBe('Precaucion');
+    expect(indicador.tone).toBe('warn');
+    expect(indicador.tooltip).toContain('no constituyen una alerta confirmada');
   });
 });

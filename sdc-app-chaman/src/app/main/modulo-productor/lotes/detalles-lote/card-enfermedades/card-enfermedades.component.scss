@@ -102,6 +102,15 @@
   line-height: 0.95;
 }
 
+.risk-caption {
+  color: var(--p-text-muted-color);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  margin-top: -0.34rem;
+  text-transform: uppercase;
+}
+
 .risk-track {
   background: var(--p-surface-100);
   border: 1px solid #d4deea;
@@ -129,6 +138,23 @@
   color: var(--p-text-muted-color);
   font-size: 0.82rem;
   line-height: 1.25;
+}
+
+.window-note {
+  align-items: center;
+  color: #8a6218;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 800;
+  gap: 0.28rem;
+}
+
+.window-note::before {
+  background: #f4b942;
+  border-radius: 999px;
+  content: '';
+  height: 0.42rem;
+  width: 0.42rem;
 }
 
 :host ::ng-deep .disease-detail-dialog .p-dialog-content {

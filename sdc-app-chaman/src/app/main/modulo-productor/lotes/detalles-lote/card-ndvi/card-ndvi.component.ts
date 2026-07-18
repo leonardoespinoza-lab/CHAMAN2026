@@ -577,15 +577,17 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     return {
       chart: {
         type: 'line',
-        height: 300,
-        marginTop: 38,
+        height: 220,
+        marginTop: 22,
+        marginRight: 12,
+        spacingBottom: 4,
         zooming: { type: 'x' },
       },
       title: { text: undefined },
       subtitle: { text: undefined },
       xAxis: {
         type: 'datetime',
-        title: { text: 'Fecha de la escena' },
+        title: { text: undefined },
         dateTimeLabelFormats: {
           day: '%e %b',
           week: '%e %b',
@@ -598,8 +600,8 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
         max,
         endOnTick: false,
         startOnTick: false,
-        tickAmount: 5,
-        title: { text: `${label} · valor normalizado` },
+        tickAmount: 4,
+        title: { text: undefined },
         plotLines: [
           {
             value: 0,

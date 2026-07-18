@@ -31,7 +31,11 @@
           <span class="status-pill">{{ item.estadoCorto }}</span>
           <strong>{{ item.nombreVisible }}</strong>
           <span class="risk-value">{{ item.resultadoEtiqueta }}</span>
+          <span class="risk-caption">Indice sanitario estimado</span>
           <span class="risk-track"><i></i></span>
+          @if (!item.enVentanaFenologica) {
+            <span class="window-note">Fuera de ventana sensible</span>
+          }
           <small>{{ item.lecturaCorta }}</small>
         </button>
       }

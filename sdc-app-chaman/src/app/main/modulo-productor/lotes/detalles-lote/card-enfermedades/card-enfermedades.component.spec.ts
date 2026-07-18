@@ -14,7 +14,7 @@ describe('CardEnfermedadesComponent - comunicacion sanitaria', () => {
     const prediccion = {
       idEnfermedad: 'trigo.roya_anaranjada',
       enfermedad: 'Roya Anaranjada',
-      resultado: 67.81,
+      resultado: 0,
       estado: 'sin_datos',
       modelo: { version: 5, validacion: 'experimental' },
       variables: {
@@ -26,20 +26,16 @@ describe('CardEnfermedadesComponent - comunicacion sanitaria', () => {
       },
     } as any;
 
-    expect((componente as any).resultadoEtiqueta(prediccion, 67.81, 'Roya Anaranjada', true)).toBe(
-      '0% cobertura horaria'
-    );
-    expect((componente as any).estadoCorto(prediccion, 'Roya Anaranjada', 67.81, true)).toBe(
-      'Datos horarios insuficientes'
-    );
+    expect((componente as any).resultadoEtiqueta(prediccion, 0, 'Roya Anaranjada', true)).toBe('0.0%');
+    expect((componente as any).estadoCorto(prediccion, 'Roya Anaranjada', 0, true)).toBe('Precaucion');
     const lectura = (componente as any).lecturaCorta(
       prediccion,
       'Roya Anaranjada',
       'datos horarios insuficientes para evaluar',
       true
     );
+    expect(lectura).toContain('0%');
     expect(lectura).toContain('0 de 240 horas');
-    expect(lectura).toContain('solo para auditoria');
     expect(lectura).not.toContain('67.81');
   });
 
@@ -58,7 +54,7 @@ describe('CardEnfermedadesComponent - comunicacion sanitaria', () => {
     } as any;
 
     expect((componente as any).resultadoEtiqueta(prediccion, 6.25, 'Roya Anaranjada', true)).toBe(
-      '6.3% horas favorables'
+      '6.3%'
     );
     expect((componente as any).estadoCorto(prediccion, 'Roya Anaranjada', 6.25, true)).toBe(
       'Condiciones iniciales'
@@ -77,14 +73,12 @@ describe('CardEnfermedadesComponent - comunicacion sanitaria', () => {
     } as any;
     (componente.siembra as any).ultimaPrediccion = { enfermedades: [prediccion] };
 
-    expect((componente as any).estadoCorto(prediccion, 'Mancha de la Hoja', 32, true)).toBe(
-      'Resistencia pendiente'
-    );
+    expect((componente as any).estadoCorto(prediccion, 'Mancha de la Hoja', 32, true)).toBe('Precaucion');
     expect((componente as any).sensibilidadVarietal('Mancha de la Hoja')).toContain(
       'factor conservador susceptible (S=1)'
     );
     expect(
       (componente as any).lecturaCorta(prediccion, 'Mancha de la Hoja', 'resultado de baja confianza', true)
-    ).toContain('No descarta presencia');
+    ).toContain('S=1');
   });
 });
