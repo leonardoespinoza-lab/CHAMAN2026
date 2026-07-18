@@ -127,6 +127,15 @@
     </div>
   </section>
 
+  @if (siembra && !siembra.fechaCosecha && helper.puedeVerModulo('EtapasFenologicas')) {
+    <app-card-etapas-fenologicas
+      [lote]="lote"
+      [siembra]="siembra"
+      (estadoFenologiaTermicaChange)="estadoFenologiaArveja = $event"
+      (siembraActualizada)="actualizarSiembraFenologica($event)"
+    ></app-card-etapas-fenologicas>
+  }
+
   <app-card-ubicacion-lote [lote]="lote"></app-card-ubicacion-lote>
   <app-card-suelo-ambiente [lote]="lote"></app-card-suelo-ambiente>
 
@@ -336,12 +345,6 @@
   </p-dialog>
 
   @if (siembra && !siembra.fechaCosecha && helper.puedeVerModulo('EtapasFenologicas')) {
-    <app-card-etapas-fenologicas
-      [lote]="lote"
-      [siembra]="siembra"
-      (estadoFenologiaTermicaChange)="estadoFenologiaArveja = $event"
-      (siembraActualizada)="actualizarSiembraFenologica($event)"
-    ></app-card-etapas-fenologicas>
     <app-card-frio-termico [lote]="lote" [siembra]="siembra"></app-card-frio-termico>
     <app-card-calculos-meteorologicos [siembra]="siembra"></app-card-calculos-meteorologicos>
   }
