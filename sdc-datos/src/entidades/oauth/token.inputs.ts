@@ -25,12 +25,21 @@ export class CreateToken implements Exactly<ICreateToken, CreateToken> {
   refreshTokenExpiresAt?: string;
 
   @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
   sessionStartedAt?: string;
 
   @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
   sessionLastActivityAt?: string;
 
   @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
   sessionAbsoluteExpiresAt?: string;
 
   @ApiProperty()
