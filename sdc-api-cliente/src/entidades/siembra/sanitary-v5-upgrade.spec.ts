@@ -18,6 +18,7 @@ describe('SiembrasService - actualizacion sanitaria de trigo', () => {
     } as any;
     const repository = {
       getById: jest.fn().mockResolvedValue(siembra),
+      reprocesarAgrometeorologia: jest.fn().mockResolvedValue(undefined),
     };
     const predicciones = {
       prediccion: jest.fn().mockResolvedValue([{ fuente: 'incremental' }]),
@@ -39,7 +40,7 @@ describe('SiembrasService - actualizacion sanitaria de trigo', () => {
       {} as any,
       {} as any,
     );
-    return { service, predicciones };
+    return { service, predicciones, repository };
   }
 
   const permiso = {
@@ -48,8 +49,8 @@ describe('SiembrasService - actualizacion sanitaria de trigo', () => {
     idProductor: 'productor-1',
   } as any;
 
-  it('reconstruye de forma transaccional cuando la lectura de trigo es anterior a v5', async () => {
-    const { service, predicciones } = setup({
+  it('sincroniza clima y reconstruye de forma transaccional cuando la lectura de trigo es anterior a v5', async () => {
+    const { service, predicciones, repository } = setup({
       enfermedades: [
         { modelo: { version: TRIGO_MOTOR_SANITARIO_VERSION - 1 } },
       ],
@@ -57,12 +58,16 @@ describe('SiembrasService - actualizacion sanitaria de trigo', () => {
 
     await service.generarPrediccionEnfermedades('siembra-1', permiso);
 
+    expect(repository.reprocesarAgrometeorologia).toHaveBeenCalledWith(
+      'siembra-1',
+      true,
+    );
     expect(predicciones.reconstruir).toHaveBeenCalledWith('siembra-1', permiso);
     expect(predicciones.prediccion).not.toHaveBeenCalled();
   });
 
-  it('continua incrementalmente cuando toda la lectura de trigo ya es v5', async () => {
-    const { service, predicciones } = setup({
+  it('reconstruye tambien una lectura v5 para no conservar el mismo dia con clima o fenologia obsoletos', async () => {
+    const { service, predicciones, repository } = setup({
       enfermedades: [
         { modelo: { version: TRIGO_MOTOR_SANITARIO_VERSION } },
         { modelo: { version: TRIGO_MOTOR_SANITARIO_VERSION } },
@@ -71,20 +76,28 @@ describe('SiembrasService - actualizacion sanitaria de trigo', () => {
 
     await service.generarPrediccionEnfermedades('siembra-1', permiso);
 
-    expect(predicciones.prediccion).toHaveBeenCalledWith('siembra-1');
-    expect(predicciones.reconstruir).not.toHaveBeenCalled();
+    expect(repository.reprocesarAgrometeorologia).toHaveBeenCalledWith(
+      'siembra-1',
+      true,
+    );
+    expect(predicciones.reconstruir).toHaveBeenCalledWith('siembra-1', permiso);
+    expect(predicciones.prediccion).not.toHaveBeenCalled();
   });
 
-  it('no aplica una migracion de trigo a los demas cultivos', async () => {
-    const { service, predicciones } = setup(
+  it('actualiza clima y reconstruye los demas cultivos sin aplicarles una version de trigo', async () => {
+    const { service, predicciones, repository } = setup(
       { enfermedades: [{ modelo: { version: 1 } }] },
       'Cebada',
     );
 
     await service.generarPrediccionEnfermedades('siembra-1', permiso);
 
-    expect(predicciones.prediccion).toHaveBeenCalledWith('siembra-1');
-    expect(predicciones.reconstruir).not.toHaveBeenCalled();
+    expect(repository.reprocesarAgrometeorologia).toHaveBeenCalledWith(
+      'siembra-1',
+      true,
+    );
+    expect(predicciones.reconstruir).toHaveBeenCalledWith('siembra-1', permiso);
+    expect(predicciones.prediccion).not.toHaveBeenCalled();
   });
 
   it('reconstruye Arveja cuando el screening materializado es anterior a v2', async () => {
@@ -103,8 +116,8 @@ describe('SiembrasService - actualizacion sanitaria de trigo', () => {
     expect(predicciones.prediccion).not.toHaveBeenCalled();
   });
 
-  it('mantiene incremental Arveja cuando el screening ya es v2', async () => {
-    const { service, predicciones } = setup(
+  it('reconstruye Arveja v2 luego de refrescar el clima canonico', async () => {
+    const { service, predicciones, repository } = setup(
       {
         enfermedades: [{ modelo: { version: ARVEJA_MOTOR_SANITARIO_VERSION } }],
       },
@@ -113,7 +126,30 @@ describe('SiembrasService - actualizacion sanitaria de trigo', () => {
 
     await service.generarPrediccionEnfermedades('siembra-1', permiso);
 
-    expect(predicciones.prediccion).toHaveBeenCalledWith('siembra-1');
+    expect(repository.reprocesarAgrometeorologia).toHaveBeenCalledWith(
+      'siembra-1',
+      true,
+    );
+    expect(predicciones.reconstruir).toHaveBeenCalledWith('siembra-1', permiso);
+    expect(predicciones.prediccion).not.toHaveBeenCalled();
+  });
+
+  it('no reconstruye si falla la sincronizacion climatica que debe precederla', async () => {
+    const { service, predicciones, repository } = setup(
+      {
+        enfermedades: [{ modelo: { version: ARVEJA_MOTOR_SANITARIO_VERSION } }],
+      },
+      'Arveja',
+    );
+    repository.reprocesarAgrometeorologia.mockRejectedValueOnce(
+      new Error('clima-no-disponible'),
+    );
+
+    await expect(
+      service.generarPrediccionEnfermedades('siembra-1', permiso),
+    ).rejects.toThrow('clima-no-disponible');
+
     expect(predicciones.reconstruir).not.toHaveBeenCalled();
+    expect(predicciones.prediccion).not.toHaveBeenCalled();
   });
 });

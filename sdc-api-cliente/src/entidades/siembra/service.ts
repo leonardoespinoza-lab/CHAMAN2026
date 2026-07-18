@@ -396,13 +396,11 @@ export class SiembrasService {
   ): Promise<IPrediccion[]> {
     const siembra = await this.getById(idSiembra, permiso);
     const versionObjetivo = this.versionSanitariaObjetivo(siembra);
-    if (this.requiereReconstruccionSanitaria(siembra, versionObjetivo)) {
-      this.logger.log(
-        `Reconstruccion sanitaria automatica v${versionObjetivo} para ${siembra.semilla?.cultivo} ${idSiembra}`,
-      );
-      return await this.prediccionsService.reconstruir(idSiembra, permiso);
-    }
-    return await this.prediccionsService.prediccion(idSiembra);
+    await this.repository.reprocesarAgrometeorologia(idSiembra, true);
+    this.logger.log(
+      `Reconstruccion sanitaria manual${versionObjetivo ? ` v${versionObjetivo}` : ''} para ${siembra.semilla?.cultivo} ${idSiembra} con clima canonico actualizado`,
+    );
+    return await this.prediccionsService.reconstruir(idSiembra, permiso);
   }
 
   private versionSanitariaObjetivo(siembra: ISiembra): number | undefined {
@@ -413,22 +411,6 @@ export class SiembrasService {
       return ARVEJA_MOTOR_SANITARIO_VERSION;
     }
     return undefined;
-  }
-
-  private requiereReconstruccionSanitaria(
-    siembra: ISiembra,
-    versionObjetivo?: number,
-  ): boolean {
-    if (!versionObjetivo || !siembra.ultimaPrediccion) {
-      return false;
-    }
-    const enfermedades = siembra.ultimaPrediccion.enfermedades || [];
-    return (
-      enfermedades.length === 0 ||
-      enfermedades.some(
-        (enfermedad) => Number(enfermedad.modelo?.version) !== versionObjetivo,
-      )
-    );
   }
 
   async create(data: ICreateSiembra, permiso: IPermiso): Promise<ISiembra> {
