@@ -22,6 +22,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 import { GetPermiso } from '../../auxiliares/authorization/get-permiso.decorator';
+import { PERMISOS_AUTENTICADOS } from '../../auxiliares/authorization/permisos-authenticados';
 
 @ApiTags('Establecimientos')
 @Controller('establecimientos')
@@ -30,6 +31,7 @@ export class EstablecimientosController {
   constructor(private service: EstablecimientosService) {}
 
   @Get()
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async get(
     @Query() query: IQueryParam,
     @GetPermiso() permiso: IPermiso,
@@ -38,6 +40,7 @@ export class EstablecimientosController {
   }
 
   @Get('/:id')
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async getById(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,

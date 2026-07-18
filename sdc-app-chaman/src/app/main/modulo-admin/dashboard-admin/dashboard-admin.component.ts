@@ -154,9 +154,11 @@ export class DashboardAdminComponent {
     this.router.navigateByUrl(route);
   }
 
-  public logout() {
-    this.loginService.resetPermisos();
-    this.helper.removeToken();
-    this.router.navigateByUrl('/auth');
+  public async logout() {
+    try {
+      await this.loginService.logout();
+    } finally {
+      await this.router.navigateByUrl('/auth');
+    }
   }
 }

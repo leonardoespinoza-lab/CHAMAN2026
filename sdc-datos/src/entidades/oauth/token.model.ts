@@ -26,6 +26,18 @@ export class Token implements Exactly<IToken, Token> {
   @Prop({ type: String })
   scope?: string | string[];
 
+  @ApiPropertyOptional()
+  @Prop({ type: Date })
+  sessionStartedAt?: string;
+
+  @ApiPropertyOptional()
+  @Prop({ type: Date })
+  sessionLastActivityAt?: string;
+
+  @ApiPropertyOptional()
+  @Prop({ type: Date })
+  sessionAbsoluteExpiresAt?: string;
+
   @ApiProperty()
   @Prop({ required: true })
   client: Client;
@@ -41,3 +53,5 @@ export const TokenSchema = SchemaFactory.createForClass(Token);
 
 TokenSchema.index({ accessToken: 1 });
 TokenSchema.index({ refreshToken: 1 });
+TokenSchema.index({ 'user._id': 1 });
+TokenSchema.index({ sessionAbsoluteExpiresAt: 1 });

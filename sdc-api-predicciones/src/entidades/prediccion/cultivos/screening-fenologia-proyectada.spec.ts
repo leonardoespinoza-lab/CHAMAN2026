@@ -216,4 +216,28 @@ describe('screening sanitario con fenologia proyectada', () => {
     ).toBe(true);
     expect(creadas[0].calidadFenologia.nivel).toBe('sin_datos');
   });
+
+  it('mantiene calculable Arveja con clima diario completo aunque falte mojado horario', async () => {
+    const data = respuesta('E - Emergencia y desarrollo vegetativo', 'rango_termico_referencia');
+    delete data.series[0].metrics.leafWetnessHours;
+    const creadas: any[] = [];
+    const service = new PrediccionArvejaService(
+      {
+        get: jest.fn().mockResolvedValue({ datos: [] }),
+        create: jest.fn(async (value) => (creadas.push(value), value)),
+      } as any,
+      { update: jest.fn() } as any,
+      { getAgrometeorologiaSiembra: jest.fn().mockResolvedValue(data) } as any,
+    );
+
+    await service.hacerPredicciones({
+      _id: 'siembra-arveja-diaria',
+      fechaSiembra: '2026-07-15T03:00:00.000Z',
+      coordenadas: { lat: -39, lng: -67 },
+      semilla: { cultivo: 'Arveja', variedad: 'KINGFISHER' },
+    } as any);
+
+    expect(creadas[0].enfermedades.some((item: any) => item.estado === 'sin_datos')).toBe(false);
+    expect(creadas[0].enfermedades[0].modelo.resolucion).toBe('proxy_diario');
+  });
 });

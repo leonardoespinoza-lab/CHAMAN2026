@@ -9,4 +9,8 @@ export class TokensService {
   async getByAccessToken(ac: string): Promise<IToken> {
     return await this.repository.getByAccessToken(ac);
   }
+
+  async revokeUserSessions(userId: string): Promise<void> {
+    await this.repository.revokeUserSessions(userId);
+  }
 }

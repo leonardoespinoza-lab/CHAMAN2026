@@ -21,4 +21,8 @@ export class TokenService {
   async revokeToken(token: IToken): Promise<boolean> {
     return await this.repository.revokeToken(token);
   }
+
+  async revokeUserSessions(idUsuario: string): Promise<number> {
+    return await this.repository.revokeUserSessions(idUsuario);
+  }
 }

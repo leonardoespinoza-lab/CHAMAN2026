@@ -11,4 +11,8 @@ export class TokensRepository {
     const url = `${API_DATOS}/oauth/token/${ac}`;
     return await this.axios.GET<IToken>(url);
   }
+
+  async revokeUserSessions(userId: string): Promise<void> {
+    await this.axios.PUT(`${API_DATOS}/oauth/token/usuario/${userId}`, {});
+  }
 }

@@ -42,6 +42,14 @@ export class OauthController {
     res.json(token);
   }
 
+  @Post('/logout')
+  async logout(
+    @Body('accessToken') accessToken?: string,
+    @Body('refreshToken') refreshToken?: string,
+  ) {
+    return { revoked: await this.service.logout(accessToken, refreshToken) };
+  }
+
   @Post('/validate_password')
   async validate_password(
     @Body('username') username: string,

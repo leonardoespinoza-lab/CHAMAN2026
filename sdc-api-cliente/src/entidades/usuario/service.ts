@@ -101,12 +101,18 @@ export class UsuariosService {
       this.validarPassword(data.password);
       data.hash = await this.hashClave(data.password);
     }
-    return await this.repository.update(id, data);
+    const result = await this.repository.update(id, data);
+    if (data.password || data.activo === false) {
+      await this.authenticationService.revokeUserSessions(id);
+    }
+    return result;
   }
 
   async delete(id: string, permiso: IPermiso): Promise<IUsuario> {
     await this.getById(id, permiso);
-    return await this.repository.delete(id);
+    const result = await this.repository.delete(id);
+    await this.authenticationService.revokeUserSessions(id);
+    return result;
   }
 
   async desactivar(id: string, permiso: IPermiso): Promise<IUsuario> {

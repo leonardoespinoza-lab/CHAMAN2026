@@ -230,16 +230,30 @@ export class PrediccionArvejaService {
   }
 
   private climaDiaCanonico(dia: IDiaSanitarioCanonico): ClimaDiaArveja {
+    const humedad = Number(dia.clima.humedad?.avg);
+    const lluvia = Number(dia.clima.lluvia?.sum);
+    const mojadoHorario = Number(dia.serie.metrics?.leafWetnessHours);
+    const tieneMojadoHorario = Number.isFinite(mojadoHorario);
     return {
-      hr: Number(dia.clima.humedad?.avg),
+      hr: humedad,
       tavg: Number(dia.clima.temperatura?.avg),
       tmin: Number(dia.clima.temperatura?.min),
       tmax: Number(dia.clima.temperatura?.max),
-      precip: Number(dia.clima.lluvia?.sum),
-      horasMojado: Number(dia.serie.metrics?.leafWetnessHours),
+      precip: lluvia,
+      horasMojado: tieneMojadoHorario
+        ? mojadoHorario
+        : this.estimarMojadoFoliarDiario(humedad, lluvia),
       coberturaHoraria: dia.calidadClima.cobertura || 0,
-      resolucion: 'proxy_diario',
+      resolucion: tieneMojadoHorario ? 'horaria' : 'proxy_diario',
     };
+  }
+
+  /** Proxy conservador de screening; no representa una medicion de campo. */
+  private estimarMojadoFoliarDiario(hr: number, lluviaMm: number): number {
+    if (!Number.isFinite(hr) || !Number.isFinite(lluviaMm)) return Number.NaN;
+    const porHumedad = hr >= 92 ? 12 : hr >= 88 ? 8 : hr >= 82 ? 4 : 0;
+    const porLluvia = lluviaMm >= 5 ? 8 : lluviaMm > 0 ? 4 : 0;
+    return Math.min(24, Math.max(porHumedad, porLluvia));
   }
 
   private evaluarEnfermedad(

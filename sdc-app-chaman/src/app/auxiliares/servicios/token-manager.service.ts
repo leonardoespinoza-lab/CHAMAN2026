@@ -22,7 +22,7 @@ export class TokenManagerService {
    */
   private startTokenMonitoring(): void {
     // Verificar cada minuto si el token necesita refresh
-    setInterval(() => {
+    this.refreshTimer = setInterval(() => {
       this.checkTokenExpiry();
     }, 60 * 1000); // 1 minuto
   }
@@ -31,6 +31,9 @@ export class TokenManagerService {
    * Verifica si el token necesita ser refrescado
    */
   private checkTokenExpiry(): void {
+    if (document.visibilityState !== 'visible') {
+      return;
+    }
     const token = this.helper.token;
     if (!token || !token.accessTokenExpiresAt) {
       return;
@@ -79,7 +82,6 @@ export class TokenManagerService {
     expiresAt: string | null;
     refreshExpiresAt: string | null;
     storageType: string;
-    rawToken: any;
   } {
     const token = this.helper.token;
     const storageType = localStorage.getItem('token')
@@ -97,7 +99,6 @@ export class TokenManagerService {
         expiresAt: null,
         refreshExpiresAt: null,
         storageType,
-        rawToken: null,
       };
     }
 
@@ -114,7 +115,6 @@ export class TokenManagerService {
       expiresAt: token.accessTokenExpiresAt || null,
       refreshExpiresAt: token.refreshTokenExpiresAt || null,
       storageType,
-      rawToken: token,
     };
   }
 
@@ -123,7 +123,7 @@ export class TokenManagerService {
    */
   public cleanup(): void {
     if (this.refreshTimer) {
-      clearTimeout(this.refreshTimer);
+      clearInterval(this.refreshTimer);
       this.refreshTimer = null;
     }
   }
