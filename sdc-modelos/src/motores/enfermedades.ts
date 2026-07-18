@@ -20,6 +20,12 @@ export interface IDefinicionEnfermedad {
  * versión anterior después de cambiar una fórmula o su ventana de cálculo.
  */
 export const TRIGO_MOTOR_SANITARIO_VERSION = 5;
+/**
+ * Version 2 incorpora el proxy diario conservador de mojado foliar cuando la
+ * fuente canonica no dispone de resolucion horaria. Sigue siendo un screening
+ * experimental y nunca habilita alertas automaticas.
+ */
+export const ARVEJA_MOTOR_SANITARIO_VERSION = 2;
 export const TRIGO_GDD_BASE_0_INICIO_MIN = 800;
 export const TRIGO_GDD_BASE_0_INICIO_CONSERVADOR = 850;
 export const TRIGO_GDD_COBERTURA_MINIMA = 0.9;

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  ARVEJA_MOTOR_SANITARIO_VERSION,
   CodigoEtapaArveja,
   evaluarAscochytaArveja,
   evaluarMildiuArveja,
@@ -124,7 +125,7 @@ export class PrediccionArvejaService {
                   ? dia.motivosNoHabilitante
                   : ['serie_agrometeorologica_canonica'],
                 config.fuente,
-                1,
+                ARVEJA_MOTOR_SANITARIO_VERSION,
                 'experimental',
               ),
             )
@@ -141,7 +142,7 @@ export class PrediccionArvejaService {
                     config.id,
                     `Etapa ${codigo}: fuera de la ventana ${config.etapas.join('/')}.`,
                     config.fuente,
-                    1,
+                    ARVEJA_MOTOR_SANITARIO_VERSION,
                     'experimental',
                     { etapaScore: 0 },
                   ),
@@ -280,7 +281,7 @@ export class PrediccionArvejaService {
         config.id,
         faltantes,
         config.fuente,
-        1,
+        ARVEJA_MOTOR_SANITARIO_VERSION,
         'experimental',
       );
       sinDatos.calidadDatos = combinarCalidadDatos(
@@ -327,13 +328,13 @@ export class PrediccionArvejaService {
       }),
       modelo: {
         id: config.id,
-        version: 1,
+        version: ARVEJA_MOTOR_SANITARIO_VERSION,
         fuente: config.fuente,
         resolucion: clima.resolucion,
         validacion: 'experimental',
       },
       variables: {
-        formulaVersion: 1,
+        formulaVersion: ARVEJA_MOTOR_SANITARIO_VERSION,
         temperaturaMedia: this.round(clima.tavg, 1),
         humedadRelativa: this.round(clima.hr, 1),
         horasMojado: this.round(clima.horasMojado, 1),

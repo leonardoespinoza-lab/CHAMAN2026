@@ -1,4 +1,7 @@
-import { TRIGO_MOTOR_SANITARIO_VERSION } from 'modelos/src';
+import {
+  ARVEJA_MOTOR_SANITARIO_VERSION,
+  TRIGO_MOTOR_SANITARIO_VERSION,
+} from 'modelos/src';
 import { SiembrasService } from './service';
 
 describe('SiembrasService - actualizacion sanitaria de trigo', () => {
@@ -76,6 +79,36 @@ describe('SiembrasService - actualizacion sanitaria de trigo', () => {
     const { service, predicciones } = setup(
       { enfermedades: [{ modelo: { version: 1 } }] },
       'Cebada',
+    );
+
+    await service.generarPrediccionEnfermedades('siembra-1', permiso);
+
+    expect(predicciones.prediccion).toHaveBeenCalledWith('siembra-1');
+    expect(predicciones.reconstruir).not.toHaveBeenCalled();
+  });
+
+  it('reconstruye Arveja cuando el screening materializado es anterior a v2', async () => {
+    const { service, predicciones } = setup(
+      {
+        enfermedades: [
+          { modelo: { version: ARVEJA_MOTOR_SANITARIO_VERSION - 1 } },
+        ],
+      },
+      'Arveja',
+    );
+
+    await service.generarPrediccionEnfermedades('siembra-1', permiso);
+
+    expect(predicciones.reconstruir).toHaveBeenCalledWith('siembra-1', permiso);
+    expect(predicciones.prediccion).not.toHaveBeenCalled();
+  });
+
+  it('mantiene incremental Arveja cuando el screening ya es v2', async () => {
+    const { service, predicciones } = setup(
+      {
+        enfermedades: [{ modelo: { version: ARVEJA_MOTOR_SANITARIO_VERSION } }],
+      },
+      'Arveja',
     );
 
     await service.generarPrediccionEnfermedades('siembra-1', permiso);

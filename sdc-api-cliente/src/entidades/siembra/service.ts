@@ -30,6 +30,7 @@ import {
   IRegistroFenologicoFrio,
   IRespuestaAgrometeorologiaSiembra,
   TObjetivoBiofixFenologico,
+  ARVEJA_MOTOR_SANITARIO_VERSION,
   TRIGO_MOTOR_SANITARIO_VERSION,
   esCultivoPerenne,
 } from 'modelos/src';
@@ -394,25 +395,38 @@ export class SiembrasService {
     permiso: IPermiso,
   ): Promise<IPrediccion[]> {
     const siembra = await this.getById(idSiembra, permiso);
-    if (this.requiereReconstruccionSanitariaTrigo(siembra)) {
+    const versionObjetivo = this.versionSanitariaObjetivo(siembra);
+    if (this.requiereReconstruccionSanitaria(siembra, versionObjetivo)) {
       this.logger.log(
-        `Reconstruccion sanitaria automatica v${TRIGO_MOTOR_SANITARIO_VERSION} para trigo ${idSiembra}`,
+        `Reconstruccion sanitaria automatica v${versionObjetivo} para ${siembra.semilla?.cultivo} ${idSiembra}`,
       );
       return await this.prediccionsService.reconstruir(idSiembra, permiso);
     }
     return await this.prediccionsService.prediccion(idSiembra);
   }
 
-  private requiereReconstruccionSanitariaTrigo(siembra: ISiembra): boolean {
-    if (siembra.semilla?.cultivo !== 'Trigo' || !siembra.ultimaPrediccion) {
+  private versionSanitariaObjetivo(siembra: ISiembra): number | undefined {
+    if (siembra.semilla?.cultivo === 'Trigo') {
+      return TRIGO_MOTOR_SANITARIO_VERSION;
+    }
+    if (siembra.semilla?.cultivo === 'Arveja') {
+      return ARVEJA_MOTOR_SANITARIO_VERSION;
+    }
+    return undefined;
+  }
+
+  private requiereReconstruccionSanitaria(
+    siembra: ISiembra,
+    versionObjetivo?: number,
+  ): boolean {
+    if (!versionObjetivo || !siembra.ultimaPrediccion) {
       return false;
     }
     const enfermedades = siembra.ultimaPrediccion.enfermedades || [];
     return (
       enfermedades.length === 0 ||
       enfermedades.some(
-        (enfermedad) =>
-          Number(enfermedad.modelo?.version) !== TRIGO_MOTOR_SANITARIO_VERSION,
+        (enfermedad) => Number(enfermedad.modelo?.version) !== versionObjetivo,
       )
     );
   }

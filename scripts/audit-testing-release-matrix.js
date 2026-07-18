@@ -6,6 +6,7 @@ const { MongoClient } = require("../sdc-datos/node_modules/mongodb");
 
 const DB_NAME = "chaman_testing";
 const CURRENT_WHEAT_VERSION = 5;
+const CURRENT_PEA_VERSION = 2;
 const CROPS_WITH_DISEASE_ENGINE = new Set([
   "Trigo",
   "Cebada",
@@ -27,11 +28,7 @@ const EXPECTED_DISEASE_IDS = {
     "cebada.roya_hoja",
     "cebada.fusariosis_espiga",
   ]),
-  Arveja: new Set([
-    "arveja.ascochyta",
-    "arveja.mildiu",
-    "arveja.oidio",
-  ]),
+  Arveja: new Set(["arveja.ascochyta", "arveja.mildiu", "arveja.oidio"]),
 };
 
 const asString = (value) => (value == null ? undefined : String(value));
@@ -92,39 +89,38 @@ async function latestBy(collection, match, key, dateField) {
       latestAgrometForecast,
       latestIrrigation,
       latestNdvi,
-    ] =
-      await Promise.all([
-        latestBy(
-          db.collection("prediccions"),
-          { idSiembra: { $in: sowingIds } },
-          "idSiembra",
-          "fecha",
-        ),
-        latestBy(
-          db.collection("indicadores_agrometeorologicos_generados"),
-          { idSiembra: { $in: sowingIds }, esPronostico: false },
-          "idSiembra",
-          "fecha",
-        ),
-        latestBy(
-          db.collection("indicadores_agrometeorologicos_generados"),
-          { idSiembra: { $in: sowingIds }, esPronostico: true },
-          "idSiembra",
-          "fecha",
-        ),
-        latestBy(
-          db.collection("prediccionriegos"),
-          { idSiembra: { $in: sowingIds } },
-          "idSiembra",
-          "fechaPrediccion",
-        ),
-        latestBy(
-          db.collection("reportendvis"),
-          { idLote: { $in: lotIds } },
-          "idLote",
-          "fechaDeLaImagen",
-        ),
-      ]);
+    ] = await Promise.all([
+      latestBy(
+        db.collection("prediccions"),
+        { idSiembra: { $in: sowingIds } },
+        "idSiembra",
+        "fecha",
+      ),
+      latestBy(
+        db.collection("indicadores_agrometeorologicos_generados"),
+        { idSiembra: { $in: sowingIds }, esPronostico: false },
+        "idSiembra",
+        "fecha",
+      ),
+      latestBy(
+        db.collection("indicadores_agrometeorologicos_generados"),
+        { idSiembra: { $in: sowingIds }, esPronostico: true },
+        "idSiembra",
+        "fecha",
+      ),
+      latestBy(
+        db.collection("prediccionriegos"),
+        { idSiembra: { $in: sowingIds } },
+        "idSiembra",
+        "fechaPrediccion",
+      ),
+      latestBy(
+        db.collection("reportendvis"),
+        { idLote: { $in: lotIds } },
+        "idLote",
+        "fechaDeLaImagen",
+      ),
+    ]);
 
     const soilAssessments = await db
       .collection("lot_soil_assessments")
@@ -163,10 +159,7 @@ async function latestBy(collection, match, key, dateField) {
       latestAgromet.map((item) => [asString(item._id), item.document]),
     );
     const agrometForecastBySowing = new Map(
-      latestAgrometForecast.map((item) => [
-        asString(item._id),
-        item.document,
-      ]),
+      latestAgrometForecast.map((item) => [asString(item._id), item.document]),
     );
     const irrigationBySowing = new Map(
       latestIrrigation.map((item) => [asString(item._id), item.document]),
@@ -231,6 +224,14 @@ async function latestBy(collection, match, key, dateField) {
             (disease) =>
               Number(disease.modelo?.version) !== CURRENT_WHEAT_VERSION,
           ));
+      const stalePea =
+        crop === "Arveja" &&
+        (!prediction ||
+          diseases.length === 0 ||
+          diseases.some(
+            (disease) =>
+              Number(disease.modelo?.version) !== CURRENT_PEA_VERSION,
+          ));
       const center = lot.ubicacion?.centro || sowing?.coordenadas;
       const tenantConsistent =
         !sowing ||
@@ -273,6 +274,7 @@ async function latestBy(collection, match, key, dateField) {
             return acc;
           }, {}),
           requiereV5: staleWheat,
+          requiereVersionActual: staleWheat || stalePea,
         },
         agromet: {
           disponible: Boolean(agromet),
@@ -353,7 +355,9 @@ async function latestBy(collection, match, key, dateField) {
             row.sanidad.fugasResultadoExperimental > 0),
       ),
       medium: matrix.filter(
-        (row) => row.sanidad.requiereV5 || !row.integridad.coordenadasValidas,
+        (row) =>
+          row.sanidad.requiereVersionActual ||
+          !row.integridad.coordenadasValidas,
       ),
     };
 
