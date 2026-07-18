@@ -297,7 +297,7 @@
           style="
             display: flex;
             flex-direction: column;
-            border-left: 8px solid var(--p-surface-400);
+            border-left: 8px solid var(--p-warning-color);
             padding-left: 0.5em;
             white-space: nowrap;
           "
@@ -332,7 +332,7 @@
           </p-message>
         }
         @if (riego.cantSinDatos) {
-          <p-message severity="secondary" icon="pi pi-question-circle">
+          <p-message severity="warn" icon="pi pi-info-circle">
             {{ riego.cantSinDatos }} lotes sin balance hidrico concluyente
           </p-message>
         }
