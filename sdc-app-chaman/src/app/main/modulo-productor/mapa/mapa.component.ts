@@ -601,9 +601,13 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       if (!evidencia.operativas.length) {
         this.enfermedades.cantSinDatos++;
         this.enfermedades.haSinDatos += has;
-        this.enfermedades.cantAmarillo++;
-        this.enfermedades.haAmarillo += has;
-        lote.colorEnfermedad = 'rgba(243, 216, 64, 0.68)';
+        // El semaforo representa riesgo sanitario, no calidad o cobertura.
+        // Los modelos experimentales/incompletos siguen visibles dentro del
+        // lote, pero un indice sanitario operativo inexistente equivale a 0%
+        // para el mapa y nunca debe fabricar una precaucion amarilla.
+        this.enfermedades.cantVerde++;
+        this.enfermedades.haVerde += has;
+        lote.colorEnfermedad = 'rgba(34, 197, 94, 0.6)';
         return;
       }
       let maxRiesgo = 0; // Riesgo bajo (verde)
@@ -639,8 +643,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     if (maxRiesgoTotal === 2) {
       this.servicios[0].backgroudColor = 'var(--p-danger-color)';
     } else if (maxRiesgoTotal === 1) {
-      this.servicios[0].backgroudColor = 'var(--p-warning-color)';
-    } else if (this.enfermedades.cantSinDatos) {
       this.servicios[0].backgroudColor = 'var(--p-warning-color)';
     } else {
       this.servicios[0].backgroudColor = 'var(--p-success-color)';
@@ -1077,19 +1079,19 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       return `${evidencia.principal.enfermedad}: ${this.formatNumber(evidencia.principal.resultado || 0, 0)}%`;
     }
     if (evidencia.noAgregables.length) {
-      return `Precaucion: ${evidencia.noAgregables.length} modelo${evidencia.noAgregables.length === 1 ? '' : 's'} en seguimiento; sin alerta confirmada`;
+      return `0% · Sin alerta sanitaria operativa; ${evidencia.noAgregables.length} modelo${evidencia.noAgregables.length === 1 ? '' : 's'} en seguimiento`;
     }
     if (!evidencia.todas.length) {
-      return 'Sin prediccion reciente';
+      return '0% · Sin alerta sanitaria calculada';
     }
-    return 'Prediccion no vigente; actualizar monitoreo';
+    return '0% · Prediccion no vigente; actualizar monitoreo';
   }
 
   public loteEnfermedadNivel(lote?: ILoteMapa): string {
     const seleccionado = lote || this.loteSeleccionado;
     const max = this.maxRiesgoEnfermedad(seleccionado);
     if (max === null) {
-      return 'Precaucion';
+      return 'Riesgo bajo';
     }
     const nivel = this.nivelRiesgoEnfermedad(seleccionado, max);
     if (nivel === 2) return 'Riesgo alto';
@@ -1100,7 +1102,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   public loteEnfermedadPercent(lote?: ILoteMapa): number {
     const seleccionado = lote || this.loteSeleccionado;
     const max = this.maxRiesgoEnfermedad(seleccionado);
-    return max === null ? 50 : this.progresoRiesgoEnfermedad(seleccionado, max);
+    return max === null ? 0 : this.progresoRiesgoEnfermedad(seleccionado, max);
   }
 
   public loteEnfermedadesOperativas(lote?: ILoteMapa) {

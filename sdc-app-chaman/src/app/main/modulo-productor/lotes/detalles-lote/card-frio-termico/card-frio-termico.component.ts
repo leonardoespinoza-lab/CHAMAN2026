@@ -355,7 +355,8 @@ export class CardFrioTermicoComponent implements OnChanges {
   public get gddDetalle(): string {
     const resumen = this.data?.summary;
     if (this.gddPendienteBiofix) {
-      return `En peral el forzado se cuenta después de la salida de endodormancia. Chaman lo inicia con el biofix de inicio de forzado o brotación registrado a campo; Tb ${this.numero(resumen?.gddBaseTemperatureC, 1)} °C.`;
+      const cultivo = this.siembra?.semilla?.cultivo || 'el cultivo perenne';
+      return `En ${cultivo} el forzado se cuenta después de la salida de endodormancia. Chaman lo inicia con el biofix de inicio de forzado o brotación registrado a campo; Tb ${this.numero(resumen?.gddBaseTemperatureC, 1)} °C.`;
     }
     if (resumen?.gddAccumulationComplete === false) {
       if (this.esVernalizacionAnual) {

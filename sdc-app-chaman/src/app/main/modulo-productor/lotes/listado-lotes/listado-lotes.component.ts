@@ -220,18 +220,18 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
       if (evidencia.noAgregables.length) {
         return {
           label: 'Sanidad',
-          value: 'Precaucion',
-          detail: `${evidencia.noAgregables.length} modelo${evidencia.noAgregables.length === 1 ? '' : 's'} en seguimiento`,
-          tooltip: 'Semaforo amarillo: existen lecturas provisionales, experimentales o incompletas. Se muestran dentro del lote, pero no constituyen una alerta confirmada.',
-          tone: 'warn',
+          value: '0%',
+          detail: 'Sin alerta sanitaria operativa',
+          tooltip: `${evidencia.noAgregables.length} modelo${evidencia.noAgregables.length === 1 ? '' : 's'} provisional${evidencia.noAgregables.length === 1 ? '' : 'es'}, experimental${evidencia.noAgregables.length === 1 ? '' : 'es'} o incompleto${evidencia.noAgregables.length === 1 ? '' : 's'} visible${evidencia.noAgregables.length === 1 ? '' : 's'} dentro del lote; no modifica${evidencia.noAgregables.length === 1 ? '' : 'n'} el semaforo sanitario.`,
+          tone: 'ok',
         };
       }
       return {
         label: 'Sanidad',
-        value: 'Precaucion',
-        detail: 'Enfermedades',
-        tooltip: 'Abrir el lote para ejecutar o revisar prediccion de enfermedades.',
-        tone: 'warn',
+        value: '0%',
+        detail: 'Sin alerta sanitaria calculada',
+        tooltip: 'Abrir el lote para ejecutar o revisar el monitoreo. La ausencia de una lectura operativa no genera por si sola una precaucion amarilla.',
+        tone: 'ok',
       };
     }
     const max = evidencia.maximo;

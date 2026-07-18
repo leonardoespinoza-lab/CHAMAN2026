@@ -101,8 +101,9 @@ describe('ListadoLotesComponent', () => {
       },
     });
 
-    expect(indicador.value).toBe('Precaucion');
-    expect(indicador.tone).toBe('warn');
-    expect(indicador.tooltip).toContain('no constituyen una alerta confirmada');
+    expect(indicador.value).toBe('0%');
+    expect(indicador.detail).toBe('Sin alerta sanitaria operativa');
+    expect(indicador.tone).toBe('ok');
+    expect(indicador.tooltip).toContain('no modifica');
   });
 });

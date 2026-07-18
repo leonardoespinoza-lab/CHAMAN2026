@@ -304,6 +304,28 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.gddCierreLabel).toBe('GDD aún no iniciados');
   });
 
+  it('nombra el cultivo perenne correcto al explicar el inicio del forzado', async () => {
+    const component = create(
+      response({
+        summary: {
+          thermalProcess: 'dormancia_perenne',
+          gddAccumulationComplete: false,
+          gddBaseTemperatureC: 7,
+        },
+      })
+    );
+    component.siembra = {
+      _id: 'manzano-sin-biofix',
+      semilla: { cultivo: 'Manzano', variedad: 'Cripps Pink' },
+      registrosFenologicos: [],
+    } as any;
+
+    await component.cargar();
+
+    expect(component.gddDetalle).toContain('En Manzano');
+    expect(component.gddDetalle).not.toContain('En peral');
+  });
+
   it('reprocesa la serie al actualizar en lugar de releer una generación vieja', async () => {
     const agromet = response({ summary: { thermalProcess: 'dormancia_perenne' } });
     const component = create(agromet);
