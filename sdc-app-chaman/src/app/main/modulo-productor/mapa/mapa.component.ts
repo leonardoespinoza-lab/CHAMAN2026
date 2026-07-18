@@ -46,6 +46,7 @@ import { ParamsService } from '../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../auxiliares/shared.module';
 import { DrawerClimaComponent } from './drawer-clima/drawer-clima.component';
 import { EstadoRiegoMapa, evaluarRiegoMapa } from './mapa-riego-evidence';
+import { COLOR_SEMAFORO_MAPA, estadoFrioSemaforo, estadoHeladaSemaforo, estadoRiegoSemaforo } from './mapa-semaforo';
 import { evaluarSanidadFrontend } from '../lotes/sanidad-evidence';
 
 interface IServicio {
@@ -689,9 +690,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       } else {
         this.riego.cantSinDatos++;
         this.riego.haSinDatos += has;
-        lote.colorRiego = 'rgba(148, 163, 184, 0.45)';
-        lote.severityRiego = 'secondary';
-        lote.iconRiego = 'pi pi-question-circle';
+        lote.colorRiego = COLOR_SEMAFORO_MAPA[estadoRiegoSemaforo(evidencia.estado)];
+        lote.severityRiego = 'warn';
+        lote.iconRiego = 'pi pi-info-circle';
       }
 
       regarHoyTotal = regarHoyTotal || regarHoy;
@@ -706,7 +707,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     } else if (this.riego.cantVerde) {
       this.servicios[1].backgroudColor = 'var(--p-success-color)';
     } else {
-      this.servicios[1].backgroudColor = 'var(--p-surface-400)';
+      this.servicios[1].backgroudColor = 'var(--p-warning-color)';
     }
   }
   private calcularHuella() {
@@ -1680,15 +1681,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     progreso: number;
   } | null {
     const requerimiento = (lote.siembra?.semilla?.requerimientoFrio || {}) as any;
-    if (
-      requerimiento.estado !== 'validado' ||
-      !['HF', undefined].includes(requerimiento.modeloRector)
-    ) {
+    if (requerimiento.estado !== 'validado' || !['HF', undefined].includes(requerimiento.modeloRector)) {
       return null;
     }
     const frio = (lote.dispositivos || []).map((dispositivo: any) => dispositivo?.frioAcumulado).find(Boolean) as any;
-    const contadorActual =
-      frio?.versionModelo === 'hf-field-preview-1.0.0' ? frio : undefined;
+    const contadorActual = frio?.versionModelo === 'hf-field-preview-1.0.0' ? frio : undefined;
     const opciones = [
       {
         metric: 'HF',
@@ -2197,7 +2194,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   // Polígonos Lotes
   private getColorLote(lote: ILoteMapa) {
-    let color = 'rgba(255, 255, 255, 0.6)';
+    // Un dato no concluyente siempre es precaucion amarilla. El mapa nunca
+    // usa gris/blanco como cuarto estado operativo.
+    let color = COLOR_SEMAFORO_MAPA.precaucion;
     switch (this.servicioSeleccionado?.label()) {
       case this.translate.instant('Monitoreo de enfermedades'):
         color = lote.colorEnfermedad || color;
@@ -2222,27 +2221,13 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private getColorFrioLote(lote: ILoteMapa): string {
-    if (!this.esLotePerenne(lote)) {
-      return 'rgba(255, 255, 255, 0.38)';
-    }
-    return this.loteTieneDatosFrio(lote) ? 'rgba(34, 197, 94, 0.64)' : 'rgba(243, 216, 64, 0.62)';
+    const estado = estadoFrioSemaforo(this.esLotePerenne(lote), this.loteTieneDatosFrio(lote));
+    return COLOR_SEMAFORO_MAPA[estado];
   }
 
   private getColorHeladaLote(lote: ILoteMapa): string {
-    if (!this.esLotePerenne(lote)) {
-      return 'rgba(255, 255, 255, 0.38)';
-    }
     const minima = this.minimaPronosticada(lote);
-    if (minima === null) {
-      return 'rgba(243, 216, 64, 0.56)';
-    }
-    if (minima <= 0) {
-      return 'rgba(244, 74, 74, 0.66)';
-    }
-    if (minima <= 2) {
-      return 'rgba(243, 216, 64, 0.64)';
-    }
-    return 'rgba(34, 197, 94, 0.62)';
+    return COLOR_SEMAFORO_MAPA[estadoHeladaSemaforo(minima)];
   }
 
   private esLotePerenne(lote?: ILoteMapa): boolean {
@@ -2251,15 +2236,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private loteTieneDatosFrio(lote: ILoteMapa): boolean {
     const requerimiento = lote.siembra?.semilla?.requerimientoFrio || {};
-    const tieneRequerimiento = [
-      requerimiento.horasFrio,
-      requerimiento.porcionesFrio,
-    ].some((valor) => this.numero(valor) !== null) &&
+    const tieneRequerimiento =
+      [requerimiento.horasFrio, requerimiento.porcionesFrio].some((valor) => this.numero(valor) !== null) &&
       requerimiento.estado === 'validado';
     const tieneSensor = (lote.dispositivos || []).some(
-      (dispositivo: any) =>
-        dispositivo?.frioAcumulado?.versionModelo ===
-        'hf-field-preview-1.0.0'
+      (dispositivo: any) => dispositivo?.frioAcumulado?.versionModelo === 'hf-field-preview-1.0.0'
     );
     return tieneRequerimiento || tieneSensor;
   }
