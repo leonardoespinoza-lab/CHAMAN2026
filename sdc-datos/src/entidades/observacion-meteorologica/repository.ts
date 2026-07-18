@@ -29,19 +29,31 @@ export class ObservacionesMeteorologicasRepository {
     if (!data.length)
       return { matchedCount: 0, modifiedCount: 0, upsertedCount: 0 };
     return await this.model.bulkWrite(
-      data.map((item) => ({
-        updateOne: {
-          filter: {
-            idEstablecimiento: item.idEstablecimiento,
-            timestamp: new Date(item.timestamp),
-            granularidad: item.granularidad,
+      data.map((item) => {
+        const { contextosLote: _ignoredContexts, ...payload } = item;
+        const update: Record<string, unknown> = { ...payload };
+        if (item.idLote) {
+          update[`contextosLote.${this.safeContextKey(item.idLote)}`] =
+            payload;
+        }
+        return {
+          updateOne: {
+            filter: {
+              idEstablecimiento: item.idEstablecimiento,
+              timestamp: new Date(item.timestamp),
+              granularidad: item.granularidad,
+            },
+            update: { $set: update },
+            upsert: true,
           },
-          update: { $set: item },
-          upsert: true,
-        },
-      })),
+        };
+      }),
       { ordered: false },
     );
+  }
+
+  private safeContextKey(value: string): string {
+    return String(value).replace(/[.$]/g, '_');
   }
 
   async deleteRange(idEstablecimiento: string, desde: string, hasta: string) {

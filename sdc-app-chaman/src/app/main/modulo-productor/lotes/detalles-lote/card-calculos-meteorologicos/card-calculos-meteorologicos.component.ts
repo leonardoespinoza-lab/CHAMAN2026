@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, inject, Input, OnChanges, SimpleChanges } from '@angular/core';
 import Highcharts from 'highcharts';
 import {
+  esCultivoPerenne,
   IRespuestaAgrometeorologiaSiembra,
   IResumenAgrometeorologico,
   ISerieAgrometeorologicaDia,
@@ -55,6 +56,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
   ];
 
   private requestKey = '';
+  private requestSequence = 0;
 
   public get mostrarSuelo(): boolean {
     return !!this.data?.series.some(
@@ -70,11 +72,24 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
   }
 
   public get fuenteLabel(): string {
+    const sourceNames = (this.data?.dataSource.sources || []).map((source) => {
+      if (source === 'sensor') {
+        return this.data?.dataSource.sensorNames?.length
+          ? this.data.dataSource.sensorNames.join(', ')
+          : 'Sensor de campo';
+      }
+      if (source === 'station') return this.data?.dataSource.stationName || 'Central';
+      return 'Open-Meteo';
+    });
     switch (this.data?.dataSource.type) {
+      case 'sensor':
+        return sourceNames[0] || 'Sensor de campo';
       case 'station':
         return this.data.dataSource.stationName || 'Central meteorologica';
       case 'mixed':
-        return `${this.data.dataSource.stationName || 'Central'} + Open-Meteo`;
+        return sourceNames.length
+          ? sourceNames.join(' + ')
+          : `${this.data.dataSource.stationName || 'Central'} + Open-Meteo`;
       case 'open_meteo':
         return 'Open-Meteo';
       default:
@@ -86,15 +101,31 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     if (!this.data) return '';
     const completitud = this.numero(this.data.dataSource.completenessPercentage, 0);
     const actualizacion = this.fechaHora(this.data.dataSource.lastCalculatedAt);
-    return `${completitud}% de cobertura de variables${actualizacion ? ` - actualizado ${actualizacion}` : ''}`;
+    const campo = this.esNumero(this.data.dataSource.fieldCoveragePercentage)
+      ? ` - campo ${this.numero(this.data.dataSource.fieldCoveragePercentage, 0)}%`
+      : '';
+    const usaCampo =
+      this.data.dataSource.type === 'sensor' ||
+      this.data.dataSource.type === 'mixed' ||
+      this.data.dataSource.sources?.includes('sensor');
+    const ultimaCampo = usaCampo ? this.fechaHora(this.data.dataSource.lastObservationAt) : '';
+    const edadCampoHoras = this.edadHoras(this.data.dataSource.lastObservationAt);
+    const estadoCampo = ultimaCampo
+      ? edadCampoHoras !== undefined && edadCampoHoras > 6
+        ? ` - ultima lectura de campo ${ultimaCampo}; respaldo automatico activo`
+        : ` - campo actualizado ${ultimaCampo}`
+      : '';
+    return `${completitud}% de cobertura de variables${campo}${estadoCampo}${actualizacion ? ` - calculado ${actualizacion}` : ''}`;
   }
 
   public get historialLabel(): string {
     switch (this.data?.dataSource.type) {
+      case 'sensor':
+        return 'Medido en el lote';
       case 'station':
         return 'Medido';
       case 'mixed':
-        return 'Historico mixto';
+        return 'Jerarquia integrada';
       case 'open_meteo':
         return 'Reanalisis modelado';
       default:
@@ -105,7 +136,8 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
   public get sueloTieneSensor(): boolean {
     return !!this.data?.series.some((dia) =>
       [dia.sourceByVariable.soilMoistureM3M3, dia.sourceByVariable.soilTemperatureC].some(
-        (source) => String(source || '').includes('station') || source === 'mixed'
+        (source) =>
+          String(source || '').includes('sensor') || String(source || '').includes('station') || source === 'mixed'
       )
     );
   }
@@ -135,14 +167,22 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
 
   public get advertenciaFuente(): string | undefined {
     return this.data?.warnings.find((warning) =>
-      /central asociada|central meteorologica|Open-Meteo automaticamente/i.test(warning)
+      /central asociada|central meteorologica|Open-Meteo automaticamente|ultima lectura de campo|se considera desconectado|calificacion meteorologica/i.test(
+        warning
+      )
     );
   }
 
   public get estadosSerie(): string[] {
     const series = this.data?.series || [];
     const states: string[] = [];
-    if (series.some((dia) => !dia.isForecast && (String(dia.source).includes('station') || dia.source === 'mixed'))) {
+    if (
+      series.some(
+        (dia) =>
+          !dia.isForecast &&
+          (String(dia.source).includes('sensor') || String(dia.source).includes('station') || dia.source === 'mixed')
+      )
+    ) {
       states.push('Observado');
     }
     if (
@@ -179,9 +219,11 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
   }
 
   public async cargar(force = false): Promise<void> {
+    const sequence = ++this.requestSequence;
     const id = this.siembra?._id;
     if (!id) {
       this.data = undefined;
+      this.loading = false;
       return;
     }
 
@@ -192,27 +234,30 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     this.loading = true;
     this.error = undefined;
     try {
-      this.data = await this.siembraService.agrometeorologia(id, desde);
+      const response = await this.siembraService.agrometeorologia(id, desde);
+      if (sequence !== this.requestSequence) return;
+      this.data = response;
       this.requestKey = key;
       if (this.grafico === 'suelo' && !this.mostrarSuelo) this.grafico = 'termico';
       this.prepararVista();
     } catch (error: any) {
+      if (sequence !== this.requestSequence) return;
       this.data = undefined;
       this.error = error?.error?.message || error?.message || 'No se pudieron leer los calculos meteorologicos.';
     } finally {
-      this.loading = false;
+      if (sequence === this.requestSequence) this.loading = false;
     }
   }
 
   private prepararVista(): void {
     const r = this.data?.summary;
     const detalleGdd = r ? this.detalleGdd(r) : '';
-    this.metricas = !r
+    const metricasBase: MetricaResumen[] = !r
       ? []
       : [
           {
-            label: 'Grados dia cerrados',
-            value: this.valor(r.gddAccumulated, 'GDD', 0),
+            label: this.gddPendienteBiofix(r) ? 'GDD de forzado' : 'Grados dia cerrados',
+            value: this.gddPendienteBiofix(r) ? '0 GDD' : this.valor(r.gddAccumulated, 'GDD', 0),
             detail: detalleGdd,
             tone: 'thermal',
           },
@@ -247,6 +292,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
             tone: 'neutral',
           },
         ];
+    this.metricas = metricasBase;
     this.chartOptions = this.crearGrafico();
   }
 
@@ -661,7 +707,11 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     if (this.periodo === 'ciclo') return this.siembra?.fechaSiembra;
     const date = new Date();
     date.setDate(date.getDate() - Number(this.periodo) + 1);
-    return date.toISOString().slice(0, 10);
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-');
   }
 
   private valor(valor: number | undefined, unidad: string, decimales = 1): string {
@@ -692,10 +742,11 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
   }
 
   private detalleGdd(resumen: IResumenAgrometeorologico): string {
+    if (this.gddPendienteBiofix(resumen)) {
+      return `Aun no iniciados: se cuentan desde el biofix de inicio de forzado o brotacion registrado a campo · Tb ${this.numero(resumen.gddBaseTemperatureC, 0)} C`;
+    }
     const partes = [
-      resumen.gddThroughDate
-        ? `Cerrado al ${this.fechaCorta(resumen.gddThroughDate)}`
-        : 'Sin incluir el pronostico',
+      resumen.gddThroughDate ? `Cerrado al ${this.fechaCorta(resumen.gddThroughDate)}` : 'Sin incluir el pronostico',
     ];
     if (this.esNumero(resumen.gddBaseTemperatureC)) {
       partes.push(`Tb ${this.numero(resumen.gddBaseTemperatureC, 0)} C`);
@@ -703,7 +754,35 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     if (this.esNumero(resumen.gddUpperTemperatureC)) {
       partes.push(`techo ${this.numero(resumen.gddUpperTemperatureC, 0)} C`);
     }
+    if (resumen.parametersStatus) {
+      partes.push(
+        resumen.parametersStatus === 'validado'
+          ? 'parametros validados'
+          : resumen.parametersStatus === 'referencia'
+            ? 'parametros de referencia'
+            : 'requiere calibracion'
+      );
+    }
     return partes.join(' · ');
+  }
+
+  private gddPendienteBiofix(resumen: IResumenAgrometeorologico): boolean {
+    if (!esCultivoPerenne(this.siembra?.semilla?.cultivo) || this.esNumero(resumen.gddAccumulated)) {
+      return false;
+    }
+    return !((this.siembra as any)?.registrosFenologicos || []).some((record: any) => {
+      if (record?.estadoRegistro === 'anulado' || record?.tipoEvento !== 'biofix') return false;
+      return (record?.objetivosBiofix || []).some((objective: string) =>
+        ['inicio_forzado', 'reinicio_gdd_forzado'].includes(String(objective))
+      );
+    });
+  }
+
+  private edadHoras(value?: string): number | undefined {
+    if (!value) return undefined;
+    const timestamp = new Date(value).getTime();
+    if (!Number.isFinite(timestamp)) return undefined;
+    return Math.max(0, (Date.now() - timestamp) / 3600000);
   }
 
   private esNumero(valor: unknown): valor is number {

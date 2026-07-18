@@ -41,7 +41,7 @@ describe('PrediccionsService - alertas sanitarias', () => {
       },
       modelo: {
         id: 'trigo.roya_hoja',
-        version: 4,
+        version: 5,
         fuente: 'formula funcional auditada',
         validacion: 'operativo',
       },
@@ -63,6 +63,7 @@ describe('PrediccionsService - alertas sanitarias', () => {
       {} as any,
       {} as any,
       alertas as any,
+      {} as any,
     );
     return { service, alertas };
   };
@@ -94,6 +95,53 @@ describe('PrediccionsService - alertas sanitarias', () => {
     );
   });
 
+  it('usa el umbral 35 de cebada tanto para abrir como para cerrar alertas', async () => {
+    const cebada = {
+      ...siembra,
+      semilla: { cultivo: 'Cebada' },
+    } as any;
+    const lecturaCebada = (resultado: number) =>
+      enfermedad(resultado, {
+        enfermedad: 'Mancha en Red',
+        idEnfermedad: 'cebada.mancha_red',
+        modelo: {
+          id: 'cebada.mancha_red',
+          version: 1,
+          fuente: 'motor canonico',
+          validacion: 'operativo',
+        },
+        variables: {},
+      });
+
+    const bajo = crearServicio();
+    await (bajo.service as any).enviarAlertas(
+      [
+        {
+          fecha: '2026-07-15T00:00:00.000Z',
+          idSiembra: 'siembra-1',
+          enfermedades: [lecturaCebada(20)],
+        },
+      ],
+      cebada,
+    );
+    expect(bajo.alertas.registrarEventoSiembra).not.toHaveBeenCalled();
+    expect(bajo.alertas.finalizarEventoSiembra).toHaveBeenCalledTimes(1);
+
+    const medio = crearServicio();
+    await (medio.service as any).enviarAlertas(
+      [
+        {
+          fecha: '2026-07-15T00:00:00.000Z',
+          idSiembra: 'siembra-1',
+          enfermedades: [lecturaCebada(35)],
+        },
+      ],
+      cebada,
+    );
+    expect(medio.alertas.registrarEventoSiembra).toHaveBeenCalledTimes(1);
+    expect(medio.alertas.finalizarEventoSiembra).not.toHaveBeenCalled();
+  });
+
   it('registra solo la ultima salida con fecha, version y deduplicacion trazables', async () => {
     const { service, alertas } = crearServicio();
     const predicciones = [
@@ -116,9 +164,9 @@ describe('PrediccionsService - alertas sanitarias', () => {
     expect(alertas.registrarEventoSiembra).toHaveBeenCalledWith(
       expect.objectContaining({
         fecha: '2026-07-15T00:00:00.000Z',
-        versionMotor: 'v4',
+        versionMotor: 'v5',
         dedupeKey: 'siembra-1:sanitaria:enfermedad:roya-de-la-hoja',
-        eventKey: 'enfermedad:siembra-1:roya-de-la-hoja:v4:2026-07-15',
+        eventKey: 'enfermedad:siembra-1:roya-de-la-hoja:v5:2026-07-15',
         lectura: expect.stringContaining(
           'predicción meteorológica de severidad/incidencia',
         ),
@@ -147,7 +195,7 @@ describe('PrediccionsService - alertas sanitarias', () => {
       {
         modelo: {
           id: 'trigo.roya_hoja',
-          version: 4,
+          version: 5,
           fuente: 'prueba',
           validacion: 'experimental',
         },
@@ -177,14 +225,8 @@ describe('PrediccionsService - alertas sanitarias', () => {
       'resistencia desconocida',
       { resistenciaUsada: { estado: 'desconocida' } },
     ],
-    [
-      'resultado fuera del dominio',
-      { variables: { resultadoCrudo: 120 } },
-    ],
-    [
-      'calidad baja',
-      { calidadDatos: { nivel: 'baja' } },
-    ],
+    ['resultado fuera del dominio', { variables: { resultadoCrudo: 120 } }],
+    ['calidad baja', { calidadDatos: { nivel: 'baja' } }],
   ])(
     'no alerta pero tampoco declara resuelto el episodio cuando hay %s',
     async (_caso, overrides) => {

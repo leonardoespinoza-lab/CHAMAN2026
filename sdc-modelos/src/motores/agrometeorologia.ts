@@ -5,8 +5,8 @@ import {
   VariableMeteorologicaNormalizada,
 } from "../entidades";
 
-export const AGROMET_ENGINE_VERSION = "agromet-1.1.1";
-export const AGROMET_DEFAULT_PARAMETERS_VERSION = "agromet-reference-2026.07.2";
+export const AGROMET_ENGINE_VERSION = "agromet-1.5.0";
+export const AGROMET_DEFAULT_PARAMETERS_VERSION = "agromet-reference-2026.07.5";
 
 export interface ICalculoGddParams {
   temperatureMinC?: number;
@@ -110,6 +110,7 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
   Maiz: {
     version: AGROMET_DEFAULT_PARAMETERS_VERSION,
     estado: "referencia",
+    procesoTermico: "termico",
     fuente:
       "FAO-56 y parámetros térmicos operativos CHAMAN; calibrar por híbrido",
     temperaturaBaseC: 10,
@@ -131,6 +132,7 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
   Soja: {
     version: AGROMET_DEFAULT_PARAMETERS_VERSION,
     estado: "referencia",
+    procesoTermico: "termico_fotoperiodico",
     fuente:
       "FAO-56 y parámetros térmicos operativos CHAMAN; calibrar por grupo de madurez",
     temperaturaBaseC: 10,
@@ -150,6 +152,7 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
   Trigo: {
     version: AGROMET_DEFAULT_PARAMETERS_VERSION,
     estado: "referencia",
+    procesoTermico: "vernalizacion_anual",
     fuente:
       "FAO AquaCrop y fenología térmica CHAMAN; calibrar por variedad",
     temperaturaBaseC: 0,
@@ -161,6 +164,7 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
     umbralCalorC: 30,
     umbralVpdKpa: 1.6,
     rangoVernalizacionC: { min: 0, max: 10 },
+    habitoVernalizacion: "desconocido",
     profundidadRadicularCm: 100,
     umbralDiaLluviaMm: 0.2,
     coeficientePrecipitacionEfectiva: 0.82,
@@ -170,7 +174,9 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
   Cebada: {
     version: AGROMET_DEFAULT_PARAMETERS_VERSION,
     estado: "referencia",
-    fuente: "FAO-56 y fenología térmica CHAMAN; calibrar por variedad",
+    procesoTermico: "vernalizacion_anual",
+    fuente:
+      "Alzueta et al. (2014), cebada maltera Argentina: Tb 0 °C hasta espigazón; FAO-56 para balance hídrico. Calibrar fotoperíodo, variedad y Tb posespigazón",
     temperaturaBaseC: 0,
     temperaturaSuperiorC: 30,
     kcInicial: 0.3,
@@ -180,6 +186,7 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
     umbralCalorC: 30,
     umbralVpdKpa: 1.6,
     rangoVernalizacionC: { min: 0, max: 10 },
+    habitoVernalizacion: "desconocido",
     profundidadRadicularCm: 100,
     umbralDiaLluviaMm: 0.2,
     coeficientePrecipitacionEfectiva: 0.82,
@@ -189,6 +196,7 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
   Arveja: {
     version: AGROMET_DEFAULT_PARAMETERS_VERSION,
     estado: "referencia",
+    procesoTermico: "termico_fotoperiodico",
     fuente:
       "Fenología térmica de arveja CHAMAN; Kc de referencia sujeto a calibración local",
     temperaturaBaseC: 0,
@@ -208,6 +216,7 @@ export const PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA: Partial<
   Papa: {
     version: AGROMET_DEFAULT_PARAMETERS_VERSION,
     estado: "referencia",
+    procesoTermico: "termico",
     fuente: "FAO-56; calibrar por variedad y manejo",
     temperaturaBaseC: 7,
     temperaturaSuperiorC: 30,
@@ -240,6 +249,7 @@ function perennialReference(
   return {
     version: AGROMET_DEFAULT_PARAMETERS_VERSION,
     estado: "referencia",
+    procesoTermico: "dormancia_perenne",
     fuente:
       "FAO-56 y configuración térmica CHAMAN; calibrar por monte, edad y cobertura",
     temperaturaBaseC: base,

@@ -34,12 +34,14 @@ describe('CardSueloAmbienteComponent request lifecycle', () => {
     component.ngOnChanges({ lote: new SimpleChange(undefined, first, true) });
     await flushPromises();
 
+    component.infoVisible = true;
     const refreshedReference = { ...first, nombre: 'Lote actualizado' };
     component.lote = refreshedReference;
     component.ngOnChanges({ lote: new SimpleChange(first, refreshedReference, false) });
     await flushPromises();
 
     expect(loteService.sueloAmbiente).toHaveBeenCalledTimes(1);
+    expect(component.infoVisible).toBeFalse();
   });
 
   it('ignores a response from a lot that is no longer active', async () => {
@@ -190,6 +192,48 @@ describe('CardSueloAmbienteComponent request lifecycle', () => {
     expect(component.isSmallerThanSoilGridsCell).toBeTrue();
     expect(component.soilGridsScaleWarning).toContain('2,96 ha');
     expect(component.intaLimitations).toEqual(['Drenaje: Imperfecto', 'Drenaje imperfecto', 'Salinidad']);
+    expect(component.informationObservationCount).toBe(2);
+    expect(component.hasInformationObservations).toBeTrue();
+    expect(component.informationAriaLabel).toContain('2 observaciones técnicas');
+  });
+
+  it('does not duplicate structured soil explanations in other warnings', () => {
+    component.lote = {
+      _id: 'lot-small',
+      ubicacionAdministrativa: {
+        loteId: 'lot-small',
+        estado: 'ready',
+        confianza: 'media',
+        superficieCalculadaM2: 29_600,
+      },
+    };
+    component.assessment = {
+      loteId: 'lot-small',
+      status: 'ready',
+      manualConflict: true,
+      summary: {
+        depthFromCm: 0,
+        depthToCm: 30,
+        effectiveDepthCm: 100,
+        effectiveDepthSource: 'operational_fallback',
+        effectiveDepthConfidence: 'low',
+        effectiveDepthIsFallback: true,
+      },
+      source: { type: 'mixed', confidence: 'low' },
+      sources: [{ type: 'soilgrids', confidence: 'low', resolutionMeters: 250 }],
+      soilUnits: [{ source: 'inta_local', limitations: ['Salinidad'] }],
+      warnings: [
+        'La textura operativa Franco se conserva; la estimacion automatica es Arcilloso.',
+        'El lote es menor que una celda SoilGrids de 250 m.',
+        'INTA informa limitaciones cartograficas: Salinidad. No se descuentan de CC-PMP.',
+        'Se usa 100 cm como perfil operativo de referencia porque no hay una profundidad validada.',
+        'Fosforo disponible: no medido.',
+        'Cobertura parcial de una capa secundaria.',
+      ],
+    } as any;
+
+    expect(component.informationWarnings).toEqual(['Cobertura parcial de una capa secundaria.']);
+    expect(component.informationObservationCount).toBe(4);
   });
 });
 

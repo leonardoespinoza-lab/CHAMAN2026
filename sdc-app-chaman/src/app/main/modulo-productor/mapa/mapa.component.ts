@@ -45,6 +45,8 @@ import { OpenLayersService } from '../../../auxiliares/servicios/openLayers.serv
 import { ParamsService } from '../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../auxiliares/shared.module';
 import { DrawerClimaComponent } from './drawer-clima/drawer-clima.component';
+import { EstadoRiegoMapa, evaluarRiegoMapa } from './mapa-riego-evidence';
+import { evaluarSanidadFrontend } from '../lotes/sanidad-evidence';
 
 interface IServicio {
   label: () => string;
@@ -61,6 +63,7 @@ interface ILoteMapa extends ILote {
   severityRiego?: string;
   iconRiego?: string;
   sumaRiego?: number;
+  estadoRiegoMapa?: EstadoRiegoMapa;
   colorHuella?: string;
   severityHuella?: string;
   iconHuella?: string;
@@ -285,9 +288,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     cantRojo: 0,
     cantAmarillo: 0,
     cantVerde: 0,
+    cantSinDatos: 0,
     haRojo: 0,
     haAmarillo: 0,
     haVerde: 0,
+    haSinDatos: 0,
   };
   // Datos para el panel de riego
   public riego = {
@@ -297,6 +302,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     haRojo: 0,
     haAmarillo: 0,
     haVerde: 0,
+    cantSinDatos: 0,
+    haSinDatos: 0,
   };
   // Datos para el panel de huella hidrica
   public huella = {
@@ -581,16 +588,30 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       cantRojo: 0,
       cantAmarillo: 0,
       cantVerde: 0,
+      cantSinDatos: 0,
       haRojo: 0,
       haAmarillo: 0,
       haVerde: 0,
+      haSinDatos: 0,
     };
     let maxRiesgoTotal = 0;
-    this.lotes.forEach((lote) => {
+    this.lotesDeEstablecimientoActual().forEach((lote) => {
       const has = Math.trunc(lote?.ubicacion?.superficie || 0);
-      const predicciones = lote.siembra?.ultimaPrediccion?.enfermedades || [];
+      const evidencia = evaluarSanidadFrontend(lote.siembra);
+      if (!evidencia.operativas.length) {
+        this.enfermedades.cantSinDatos++;
+        this.enfermedades.haSinDatos += has;
+        // El semaforo representa riesgo sanitario, no calidad o cobertura.
+        // Los modelos experimentales/incompletos siguen visibles dentro del
+        // lote, pero un indice sanitario operativo inexistente equivale a 0%
+        // para el mapa y nunca debe fabricar una precaucion amarilla.
+        this.enfermedades.cantVerde++;
+        this.enfermedades.haVerde += has;
+        lote.colorEnfermedad = 'rgba(34, 197, 94, 0.6)';
+        return;
+      }
       let maxRiesgo = 0; // Riesgo bajo (verde)
-      predicciones.forEach((prediccion) => {
+      evidencia.operativas.forEach((prediccion) => {
         const nivel = this.nivelRiesgoEnfermedad(lote, prediccion.resultado || 0);
         if (nivel === 2) {
           maxRiesgo = Math.max(maxRiesgo, 2); // Riesgo alto (rojo)
@@ -635,16 +656,18 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       haRojo: 0,
       haAmarillo: 0,
       haVerde: 0,
+      cantSinDatos: 0,
+      haSinDatos: 0,
     };
     let regarHoyTotal: boolean = false;
     let regarAlgunDiaTotal: boolean = false;
     this.lotes.forEach((lote) => {
       const has = Math.trunc(lote?.ubicacion?.superficie || 0);
-      const predicciones = lote.siembra?.ultimaPrediccionRiego || [];
-      const regarHoy = !!predicciones[0]?.cantidad;
-      const regarAlgunDia = predicciones.some((p) => p.cantidad && p.cantidad > 0);
-      const sumaRiego = predicciones.reduce((acc, p) => acc + (p.cantidad || 0), 0);
-      lote.sumaRiego = sumaRiego;
+      const evidencia = evaluarRiegoMapa(lote);
+      const regarHoy = evidencia.estado === 'hoy';
+      const regarAlgunDia = evidencia.estado === 'proximo';
+      lote.estadoRiegoMapa = evidencia.estado;
+      lote.sumaRiego = evidencia.suma ?? undefined;
       if (regarHoy) {
         this.riego.cantRojo++;
         this.riego.haRojo += has;
@@ -657,12 +680,18 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         lote.colorRiego = 'rgba(243, 216, 64, 0.6)';
         lote.severityRiego = 'warn';
         lote.iconRiego = 'pi pi-info-circle';
-      } else {
+      } else if (evidencia.estado === 'sin_aporte') {
         this.riego.cantVerde++;
         this.riego.haVerde += has;
         lote.colorRiego = 'rgba(34, 197, 94, 0.6)';
         lote.severityRiego = 'success';
         lote.iconRiego = 'pi pi-check';
+      } else {
+        this.riego.cantSinDatos++;
+        this.riego.haSinDatos += has;
+        lote.colorRiego = 'rgba(148, 163, 184, 0.45)';
+        lote.severityRiego = 'secondary';
+        lote.iconRiego = 'pi pi-question-circle';
       }
 
       regarHoyTotal = regarHoyTotal || regarHoy;
@@ -674,8 +703,10 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       this.servicios[1].backgroudColor = 'var(--p-danger-color)';
     } else if (regarAlgunDiaTotal) {
       this.servicios[1].backgroudColor = 'var(--p-warning-color)';
-    } else {
+    } else if (this.riego.cantVerde) {
       this.servicios[1].backgroudColor = 'var(--p-success-color)';
+    } else {
+      this.servicios[1].backgroudColor = 'var(--p-surface-400)';
     }
   }
   private calcularHuella() {
@@ -855,6 +886,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         options.preserveSelection ? this.loteSeleccionado : undefined
       );
     }
+    this.calcularEnfermedades();
     this.selectEstablecimiento(establecimiento.nombre);
     this.centerMapOnEstablecimiento(establecimiento, markAsVisited);
     this.changeDetectorRef.detectChanges();
@@ -864,6 +896,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     this.loteSeleccionado = undefined;
     this.grupoAmbientesSeleccionado = undefined;
     this.establecimientoSeleccionado = undefined;
+    this.calcularEnfermedades();
     this.limpiarContextoMapa();
     this.centerMapOnBounds();
     this.isFirstVisit = false;
@@ -927,7 +960,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       return `${this.enfermedades.cantAmarillo} en observación`;
     }
     if (this.enfermedades.cantVerde) {
-      return `${this.enfermedades.cantVerde} sin necesidades`;
+      return `${this.enfermedades.cantVerde} sin alerta`;
     }
     return 'Sin datos';
   }
@@ -1041,20 +1074,25 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   public loteEnfermedadResumen(lote?: ILoteMapa): string {
-    const predicciones = (lote || this.loteSeleccionado)?.siembra?.ultimaPrediccion?.enfermedades || [];
-    if (!predicciones.length) {
-      return 'Sin prediccion reciente';
+    const evidencia = evaluarSanidadFrontend((lote || this.loteSeleccionado)?.siembra);
+    if (evidencia.principal) {
+      return `${evidencia.principal.enfermedad}: ${this.formatNumber(evidencia.principal.resultado || 0, 0)}%`;
     }
-    const max = predicciones.reduce((prev, current) =>
-      (current.resultado || 0) > (prev.resultado || 0) ? current : prev
-    );
-    return `${max.enfermedad}: ${this.formatNumber(max.resultado || 0, 0)}%`;
+    if (evidencia.noAgregables.length) {
+      return `0% · Sin alerta sanitaria operativa; ${evidencia.noAgregables.length} modelo${evidencia.noAgregables.length === 1 ? '' : 's'} en seguimiento`;
+    }
+    if (!evidencia.todas.length) {
+      return '0% · Sin alerta sanitaria calculada';
+    }
+    return '0% · Prediccion no vigente; actualizar monitoreo';
   }
 
   public loteEnfermedadNivel(lote?: ILoteMapa): string {
     const seleccionado = lote || this.loteSeleccionado;
     const max = this.maxRiesgoEnfermedad(seleccionado);
-    if (max === null) return 'Pendiente';
+    if (max === null) {
+      return 'Riesgo bajo';
+    }
     const nivel = this.nivelRiesgoEnfermedad(seleccionado, max);
     if (nivel === 2) return 'Riesgo alto';
     if (nivel === 1) return 'Riesgo medio';
@@ -1064,7 +1102,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   public loteEnfermedadPercent(lote?: ILoteMapa): number {
     const seleccionado = lote || this.loteSeleccionado;
     const max = this.maxRiesgoEnfermedad(seleccionado);
-    return max === null ? 8 : this.progresoRiesgoEnfermedad(seleccionado, max);
+    return max === null ? 0 : this.progresoRiesgoEnfermedad(seleccionado, max);
+  }
+
+  public loteEnfermedadesOperativas(lote?: ILoteMapa) {
+    return evaluarSanidadFrontend((lote || this.loteSeleccionado)?.siembra).operativas;
   }
 
   public loteRiegoResumen(lote?: ILoteMapa): string {
@@ -1074,6 +1116,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     if (seleccionado?.sumaRiego && seleccionado.sumaRiego > 0) {
       return `${this.formatNumber(seleccionado.sumaRiego, 1)} mm sugeridos`;
+    }
+    if (seleccionado.estadoRiegoMapa === 'sin_datos') {
+      return 'Sin datos suficientes';
     }
     return 'Sin riego recomendado';
   }
@@ -1289,16 +1334,27 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private resumenRiegoGerencial(lotes: ILoteMapa[]): IResumenGerencialMetric {
+    const lotesEvaluables = lotes.filter((lote) => lote.estadoRiegoMapa && lote.estadoRiegoMapa !== 'sin_datos');
     const lotesConRiego = lotes.filter((lote) => (this.numero(lote.sumaRiego) || 0) > 0);
     const mm = lotesConRiego.reduce((acc, lote) => acc + (this.numero(lote.sumaRiego) || 0), 0);
     if (!lotes.length) {
       return this.metric('Riego', 'Sin lotes', 'No hay superficie cargada para evaluar.', 'pi pi-tint', 'neutral', 0);
     }
+    if (!lotesEvaluables.length) {
+      return this.metric(
+        'Riego',
+        'Sin datos concluyentes',
+        'Falta cerrar el balance hidrico; no se declara necesidad ni ausencia de riego.',
+        'pi pi-tint',
+        'neutral',
+        0
+      );
+    }
     if (!lotesConRiego.length) {
       return this.metric(
         'Riego',
-        'Sin necesidad',
-        'No hay riego recomendado con los datos disponibles.',
+        'Sin aporte calculado',
+        `${lotesEvaluables.length} lote${lotesEvaluables.length > 1 ? 's' : ''} con balance valido sin aporte en la ventana.`,
         'pi pi-tint',
         'ok',
         5
@@ -1398,10 +1454,10 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     if (!avances.length) {
       return this.metric(
         'Horas frio',
-        'Sin objetivos',
-        'Faltan objetivos de frio o sensor asociado en los lotes perennes.',
+        'Sin consolidar',
+        'El resumen del mapa no recibio acumulado y objetivo comparables; verificar la tarjeta termica de cada lote.',
         'pi pi-clock',
-        'warn',
+        'neutral',
         0
       );
     }
@@ -1624,21 +1680,19 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     progreso: number;
   } | null {
     const requerimiento = (lote.siembra?.semilla?.requerimientoFrio || {}) as any;
+    if (
+      requerimiento.estado !== 'validado' ||
+      !['HF', undefined].includes(requerimiento.modeloRector)
+    ) {
+      return null;
+    }
     const frio = (lote.dispositivos || []).map((dispositivo: any) => dispositivo?.frioAcumulado).find(Boolean) as any;
+    const contadorActual =
+      frio?.versionModelo === 'hf-field-preview-1.0.0' ? frio : undefined;
     const opciones = [
       {
-        metric: 'HFE',
-        actual: this.numero(frio?.horasFrioEfectivas ?? frio?.hfe ?? frio?.frioEfectivo),
-        objetivo: this.numero(requerimiento.horasFrioEfectivas ?? requerimiento.hfe),
-      },
-      {
-        metric: 'CP',
-        actual: this.numero(frio?.porcionesFrio ?? frio?.chillPortions ?? frio?.cp),
-        objetivo: this.numero(requerimiento.porcionesFrio ?? requerimiento.cp),
-      },
-      {
         metric: 'HF',
-        actual: this.numero(frio?.horasFrio ?? frio?.hf),
+        actual: this.numero(contadorActual?.horasFrio),
         objetivo: this.numero(requerimiento.horasFrio ?? requerimiento.hf),
       },
     ].filter((item) => item.actual !== null && item.objetivo !== null && item.objetivo > 0) as Array<{
@@ -1756,9 +1810,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private maxRiesgoEnfermedad(lote?: ILoteMapa): number | null {
-    const predicciones = lote?.siembra?.ultimaPrediccion?.enfermedades || [];
-    if (!predicciones.length) return null;
-    return predicciones.reduce((max, item) => Math.max(max, item.resultado || 0), 0);
+    return evaluarSanidadFrontend(lote?.siembra).maximo ?? null;
   }
 
   private umbralesRiesgoEnfermedad(lote?: ILoteMapa): { medio: number; alto: number; escalaDirecta: boolean } {
@@ -2201,10 +2253,14 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     const requerimiento = lote.siembra?.semilla?.requerimientoFrio || {};
     const tieneRequerimiento = [
       requerimiento.horasFrio,
-      requerimiento.horasFrioEfectivas,
       requerimiento.porcionesFrio,
-    ].some((valor) => this.numero(valor) !== null);
-    const tieneSensor = (lote.dispositivos || []).some((dispositivo: any) => !!dispositivo?.frioAcumulado);
+    ].some((valor) => this.numero(valor) !== null) &&
+      requerimiento.estado === 'validado';
+    const tieneSensor = (lote.dispositivos || []).some(
+      (dispositivo: any) =>
+        dispositivo?.frioAcumulado?.versionModelo ===
+        'hf-field-preview-1.0.0'
+    );
     return tieneRequerimiento || tieneSensor;
   }
 

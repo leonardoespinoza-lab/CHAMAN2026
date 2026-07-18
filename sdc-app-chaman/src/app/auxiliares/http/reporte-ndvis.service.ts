@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { ICreateReporteNDVI, IListado, IQueryParam, IReporteNDVI, IUpdateReporteNDVI } from 'modelos/src';
+import { IListado, IQueryParam, IReporteNDVI } from 'modelos/src';
 import { HttpService } from './http.service';
 
 export interface IUltimoReporteNDVI {
@@ -18,10 +18,6 @@ export class ReporteNDVIService {
     return this.http.get(`/reportendvis`, { params });
   }
 
-  public crear(dato: ICreateReporteNDVI): Promise<IReporteNDVI> {
-    return this.http.post(`/reportendvis`, dato);
-  }
-
   public listarPorId(id: string): Promise<IReporteNDVI> {
     return this.http.get(`/reportendvis/${id}`);
   }
@@ -32,10 +28,6 @@ export class ReporteNDVIService {
 
   public ultimoPorLotePorDistribuidor(): Promise<IUltimoReporteNDVI[]> {
     return this.http.get(`/reportendvis/lastByLoteByDistribuidor`);
-  }
-
-  public editar(id: string, dato: IUpdateReporteNDVI): Promise<IReporteNDVI> {
-    return this.http.put(`/reportendvis/${id}`, dato);
   }
 
   public eliminar(id: string): Promise<void> {

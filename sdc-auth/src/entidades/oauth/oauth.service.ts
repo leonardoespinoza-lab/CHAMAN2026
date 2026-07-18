@@ -1,6 +1,6 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { OauthModel } from './oauth.model';
-import OAuth2Server, { OAuthError } from 'oauth2-server';
+import OAuth2Server, { OAuthError } from '@node-oauth/oauth2-server';
 import { ILogin } from './login.dto';
 import { Request, Response } from 'express';
 import { OAuth2Client, VerifyIdTokenOptions } from 'google-auth-library';
@@ -8,7 +8,7 @@ import {
   APPLE_CLIENT_ID,
   GOOGLE_CLIENT_ID,
   PASSWORD_DEFAULT_GOOGLE,
-} from 'src/env';
+} from '../../env';
 import { ICreateProductor, ICreateToken, ICreateUsuario } from 'modelos/src';
 import { TokenService } from '../token/token.service';
 import { UsuariosService } from '../usuario/service';
@@ -19,6 +19,13 @@ import * as bcrypt from 'bcrypt';
 export class OauthService {
   private logger = new Logger(OauthService.name);
   private oauth: OAuth2Server;
+  private readonly accessTokenTTL = Number(process.env.ACCESS_TOKEN_TTL_SECONDS || 3600);
+  private readonly refreshTokenTTL = Number(process.env.REFRESH_TOKEN_TTL_SECONDS || 604800);
+  private readonly sessionAbsoluteMs = Number(process.env.SESSION_ABSOLUTE_SECONDS || 2592000) * 1000;
+  private readonly loginAttempts = new Map<string, { count: number; windowStartedAt: number; lockedUntil?: number }>();
+  private readonly loginMaxAttempts = Number(process.env.LOGIN_MAX_ATTEMPTS || 5);
+  private readonly loginWindowMs = Number(process.env.LOGIN_WINDOW_SECONDS || 900) * 1000;
+  private readonly loginLockMs = Number(process.env.LOGIN_LOCK_SECONDS || 900) * 1000;
 
   // Cliente base sin TTL hardcodeado
   private baseClient = {
@@ -41,23 +48,24 @@ export class OauthService {
   ) {
     this.oauth = new OAuth2Server({
       model: this.oauthModel.getModel(),
-      accessTokenLifetime: 60 * 60 * 24 * 365 * 10, // 10  Años
-      allowBearerTokensInQueryString: true,
-      requireClientAuthentication: false,
+      accessTokenLifetime: this.accessTokenTTL,
+      refreshTokenLifetime: this.refreshTokenTTL,
+      allowBearerTokensInQueryString: false,
+      requireClientAuthentication: {
+        password: false,
+        refresh_token: false,
+      },
     });
   }
 
   /**
    * Genera cliente OAuth con TTL dinámico
    */
-  private getClientWithTTL(remember = false) {
-    const accessTokenTTL = remember ? 30 * 24 * 60 * 60 : 24 * 60 * 60; // 30 días vs 24 horas (en segundos)
-    const refreshTokenTTL = remember ? 60 * 24 * 60 * 60 : 7 * 24 * 60 * 60; // 60 días vs 7 días (en segundos)
-
+  private getClientWithTTL(_remember = false) {
     return {
       ...this.baseClient,
-      accessTokenLifetime: accessTokenTTL,
-      refreshTokenLifetime: refreshTokenTTL,
+      accessTokenLifetime: this.accessTokenTTL,
+      refreshTokenLifetime: this.refreshTokenTTL,
     };
   }
 
@@ -105,12 +113,8 @@ export class OauthService {
 
     // TTL dinámico basado en remember
     const now = new Date();
-    const accessTokenTTL = remember
-      ? 30 * 24 * 60 * 60 * 1000
-      : 24 * 60 * 60 * 1000; // 30 días vs 24 horas
-    const refreshTokenTTL = remember
-      ? 60 * 24 * 60 * 60 * 1000
-      : 7 * 24 * 60 * 60 * 1000; // 60 días vs 7 días
+    const accessTokenTTL = this.accessTokenTTL * 1000;
+    const refreshTokenTTL = this.refreshTokenTTL * 1000;
 
     const token: ICreateToken = {
       accessToken: idToken,
@@ -120,6 +124,9 @@ export class OauthService {
       refreshTokenExpiresAt: new Date(
         now.getTime() + refreshTokenTTL,
       ).toISOString(),
+      sessionStartedAt: now.toISOString(),
+      sessionLastActivityAt: now.toISOString(),
+      sessionAbsoluteExpiresAt: new Date(now.getTime() + this.sessionAbsoluteMs).toISOString(),
       user: existe,
       client: this.getClientWithTTL(remember),
     };
@@ -171,12 +178,8 @@ export class OauthService {
 
     // TTL dinámico basado en remember
     const now = new Date();
-    const accessTokenTTL = remember
-      ? 30 * 24 * 60 * 60 * 1000
-      : 24 * 60 * 60 * 1000; // 30 días vs 24 horas
-    const refreshTokenTTL = remember
-      ? 60 * 24 * 60 * 60 * 1000
-      : 7 * 24 * 60 * 60 * 1000; // 60 días vs 7 días
+    const accessTokenTTL = this.accessTokenTTL * 1000;
+    const refreshTokenTTL = this.refreshTokenTTL * 1000;
 
     const token: ICreateToken = {
       accessToken: idToken,
@@ -186,6 +189,9 @@ export class OauthService {
       refreshTokenExpiresAt: new Date(
         now.getTime() + refreshTokenTTL,
       ).toISOString(),
+      sessionStartedAt: now.toISOString(),
+      sessionLastActivityAt: now.toISOString(),
+      sessionAbsoluteExpiresAt: new Date(now.getTime() + this.sessionAbsoluteMs).toISOString(),
       user: existe,
       client: this.getClientWithTTL(remember),
     };
@@ -224,14 +230,15 @@ export class OauthService {
   }
 
   async login(req: Request, res: Response, body: ILogin) {
+    const accountKey = String(body?.username || '').trim().toLowerCase();
     try {
-      const { grant_type, username, refresh_token, remember = false } = body;
+      const { grant_type, username, refresh_token } = body;
+      if (grant_type === 'password' && accountKey) {
+        this.assertLoginAllowed(accountKey);
+      }
 
       // Configurar TTL dinámicos en el modelo
-      const accessTokenTTL = remember ? 30 * 24 * 60 * 60 : 24 * 60 * 60; // 30 días vs 24 horas (en segundos)
-      const refreshTokenTTL = remember ? 60 * 24 * 60 * 60 : 7 * 24 * 60 * 60; // 60 días vs 7 días (en segundos)
-
-      this.oauthModel.setDynamicTTL(accessTokenTTL, refreshTokenTTL);
+      this.oauthModel.setDynamicTTL(this.accessTokenTTL, this.refreshTokenTTL);
 
       const request = new OAuth2Server.Request(req);
       const response = new OAuth2Server.Response(res);
@@ -241,6 +248,9 @@ export class OauthService {
         (grant_type === 'refresh_token' && refresh_token)
       ) {
         const result = await this.oauth.token(request, response);
+        if (grant_type === 'password' && accountKey) {
+          this.loginAttempts.delete(accountKey);
+        }
 
         // Limpiar TTL dinámicos después del uso
         this.oauthModel.clearDynamicTTL();
@@ -253,7 +263,9 @@ export class OauthService {
         );
       }
     } catch (err) {
-      console.error(err);
+      if (body?.grant_type === 'password' && accountKey && err instanceof OAuthError && err.name === 'invalid_grant') {
+        this.recordFailedLogin(accountKey);
+      }
       // Limpiar TTL dinámico en caso de error
       this.oauthModel.clearDynamicTTL();
       if (err instanceof OAuthError) {
@@ -265,7 +277,21 @@ export class OauthService {
         }
       }
       throw err;
+    } finally {
+      this.oauthModel.clearDynamicTTL();
     }
+  }
+
+  async logout(accessToken?: string, refreshToken?: string): Promise<boolean> {
+    const token = accessToken
+      ? await this.tokens.getToken(accessToken)
+      : refreshToken
+        ? await this.tokens.getRefreshToken(refreshToken)
+        : undefined;
+    if (token) {
+      await this.tokens.revokeToken(token);
+    }
+    return true;
   }
 
   async authenticate(req: Request, res: Response) {
@@ -284,8 +310,30 @@ export class OauthService {
       return await bcrypt.compare(password, user.hash);
     } catch (err) {
       this.logger.error('Error al validar la contraseña');
-      console.error(err);
       throw err;
     }
+  }
+
+  private assertLoginAllowed(accountKey: string): void {
+    const attempt = this.loginAttempts.get(accountKey);
+    if (attempt?.lockedUntil && attempt.lockedUntil > Date.now()) {
+      throw new HttpException(
+        'Demasiados intentos. Espere unos minutos antes de volver a intentar.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
+  private recordFailedLogin(accountKey: string): void {
+    const now = Date.now();
+    const current = this.loginAttempts.get(accountKey);
+    const active = current && now - current.windowStartedAt <= this.loginWindowMs
+      ? current
+      : { count: 0, windowStartedAt: now };
+    active.count += 1;
+    if (active.count >= this.loginMaxAttempts) {
+      active.lockedUntil = now + this.loginLockMs;
+    }
+    this.loginAttempts.set(accountKey, active);
   }
 }

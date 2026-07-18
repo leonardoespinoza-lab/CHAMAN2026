@@ -96,18 +96,14 @@ describe('migracion del motor sanitario de trigo v4', () => {
     expect(fecha.toISOString()).toBe('2026-07-15T03:00:00.000Z');
   });
 
-  it('extiende el limite exclusivo para incluir el marcador de inicio de etapa 7', () => {
+  it('usa un limite diario independiente del crono y de la etapa calendario', () => {
     const service = crearService() as any;
     jest
       .spyOn(service, 'diaActual')
       .mockReturnValue(new Date('2027-01-01T00:00:00.000Z'));
-    const inicioEtapa7 = service.getFechaInicioEtapa(siembra, crono, 7);
-    const esperado = new Date(inicioEtapa7);
-    esperado.setUTCDate(esperado.getUTCDate() + 1);
-    esperado.setUTCHours(3, 0, 0, 0);
 
     expect(service.getFechaHasta(siembra, crono).toISOString()).toBe(
-      esperado.toISOString(),
+      '2027-01-02T03:00:00.000Z',
     );
   });
 });

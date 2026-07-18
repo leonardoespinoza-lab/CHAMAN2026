@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Body,
+  Headers,
   Logger,
   UseInterceptors,
   NotFoundException,
@@ -63,5 +64,15 @@ export class AuthenticationController {
     @Body('access_token') access_token: string,
   ): Promise<IToken> {
     return await this.service.accessToken(access_token);
+  }
+
+  @Post('/logout')
+  public async logout(
+    @Headers('authorization') authorization?: string,
+    @Body('refresh_token') refreshToken?: string,
+  ): Promise<{ revoked: true }> {
+    const accessToken = authorization?.replace(/^Bearer\s+/i, '');
+    await this.service.logout(accessToken, refreshToken);
+    return { revoked: true };
   }
 }

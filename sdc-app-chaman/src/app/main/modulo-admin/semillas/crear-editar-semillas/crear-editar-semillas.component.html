@@ -19,6 +19,7 @@
                 <p-tablist>
                   <p-tab [value]="0">{{ 'Básico' | translate }}</p-tab>
                   <p-tab [value]="1">{{ 'Resistencia' | translate }}</p-tab>
+                  <p-tab [value]="2">{{ 'Modelo térmico' | translate }}</p-tab>
                 </p-tablist>
                 <p-tabpanels>
 
@@ -74,6 +75,18 @@
                       <label>{{ 'Portainjerto / pie' | translate }}</label>
                     </p-floatlabel>
 
+                    @if (clasificacionTermicaSeleccionada; as clasificacion) {
+                      <div class="thermal-classification mb-4">
+                        <strong>{{ clasificacion.procesoPrincipal }}</strong>
+                        <span>{{ clasificacion.descripcion }}</span>
+                        <small>
+                          {{ 'Unidades admitidas' | translate }}:
+                          {{ clasificacion.unidadesValidas.join(', ') }}
+                        </small>
+                      </div>
+                    }
+
+                    @if (esCultivoPerenneSeleccionado) {
                     <div formGroupName="requerimientoFrio">
                       <p-floatlabel variant="in" class="mb-4">
                         <input pInputText type="number" formControlName="horasFrio" [fluid]="true" />
@@ -82,14 +95,310 @@
 
                       <p-floatlabel variant="in" class="mb-4">
                         <input pInputText type="number" formControlName="horasFrioEfectivas" [fluid]="true" />
-                        <label>{{ 'Horas de frio efectivas requeridas' | translate }}</label>
+                        <label>{{ 'HFE legacy - no usar para decisiones' | translate }}</label>
                       </p-floatlabel>
 
                       <p-floatlabel variant="in" class="mb-4">
                         <input pInputText type="number" formControlName="porcionesFrio" [fluid]="true" />
                         <label>{{ 'Porciones de frio requeridas' | translate }}</label>
                       </p-floatlabel>
+
+                      <p-floatlabel variant="in" class="mb-4">
+                        <p-select
+                          [options]="modelosFrio"
+                          formControlName="modelo"
+                          [fluid]="true"
+                          [appendTo]="'body'"
+                        ></p-select>
+                        <label>{{ 'Modelos informados' | translate }}</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in" class="mb-4">
+                        <p-select
+                          [options]="modelosRectoresFrio"
+                          formControlName="modeloRector"
+                          [fluid]="true"
+                          [appendTo]="'body'"
+                        ></p-select>
+                        <label>{{ 'Modelo rector validado' | translate }}</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in" class="mb-4">
+                        <p-select
+                          [options]="estadosRequerimientoFrio"
+                          formControlName="estado"
+                          [fluid]="true"
+                          [appendTo]="'body'"
+                        ></p-select>
+                        <label>{{ 'Estado de calibracion' | translate }}</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in" class="mb-4">
+                        <p-select
+                          [options]="confianzasRequerimientoFrio"
+                          formControlName="confianza"
+                          [fluid]="true"
+                          [appendTo]="'body'"
+                        ></p-select>
+                        <label>{{ 'Confianza del requisito' | translate }}</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input pInputText formControlName="fuente" [fluid]="true" />
+                        <label>{{ 'Fuente del requisito de frio' | translate }}</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in" class="mb-4">
+                        <textarea
+                          pTextarea
+                          class="w-full"
+                          rows="3"
+                          formControlName="observaciones"
+                        ></textarea>
+                        <label>{{ 'Observaciones de calibracion' | translate }}</label>
+                      </p-floatlabel>
+
+                      <div
+                        formGroupName="protocoloTemporada"
+                        class="thermal-model-section"
+                      >
+                        <div class="thermal-model-section__title">
+                          <strong>{{ 'Protocolo estacional de frio' | translate }}</strong>
+                          <small>
+                            {{
+                              'Sin una ventana, region y fuente validadas se muestran HF, Utah y CP, pero no se declara cumplimiento biologico.'
+                                | translate
+                            }}
+                          </small>
+                        </div>
+
+                        <p-floatlabel variant="in" class="mb-4">
+                          <input pInputText formControlName="version" [fluid]="true" />
+                          <label>{{ 'Version del protocolo' | translate }}</label>
+                        </p-floatlabel>
+
+                        <p-floatlabel variant="in" class="mb-4">
+                          <p-select
+                            [options]="estadosProtocoloFrio"
+                            formControlName="estado"
+                            [fluid]="true"
+                            [appendTo]="'body'"
+                          ></p-select>
+                          <label>{{ 'Estado del protocolo' | translate }}</label>
+                        </p-floatlabel>
+
+                        <p-floatlabel variant="in" class="mb-4">
+                          <input pInputText formControlName="fuente" [fluid]="true" />
+                          <label>{{ 'Fuente del protocolo' | translate }}</label>
+                        </p-floatlabel>
+
+                        <p-floatlabel variant="in" class="mb-4">
+                          <input pInputText formControlName="region" [fluid]="true" />
+                          <label>{{ 'Region de calibracion' | translate }}</label>
+                        </p-floatlabel>
+
+                        <div class="thermal-range">
+                          <div>
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-select
+                                [options]="tiposInicioProtocoloFrio"
+                                optionLabel="label"
+                                optionValue="value"
+                                formControlName="inicioTipo"
+                                [fluid]="true"
+                                [appendTo]="'body'"
+                              ></p-select>
+                              <label>{{ 'Inicio de ventana' | translate }}</label>
+                            </p-floatlabel>
+                            @if (
+                              form.get(
+                                'requerimientoFrio.protocoloTemporada.inicioTipo'
+                              )?.value === 'fecha_calendario'
+                            ) {
+                              <p-floatlabel variant="in" class="mb-4">
+                                <input
+                                  pInputText
+                                  formControlName="inicioMesDia"
+                                  placeholder="05-01"
+                                  [fluid]="true"
+                                />
+                                <label>{{ 'Mes-dia de inicio (MM-DD)' | translate }}</label>
+                              </p-floatlabel>
+                            }
+                          </div>
+
+                          <div>
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-select
+                                [options]="tiposFinProtocoloFrio"
+                                optionLabel="label"
+                                optionValue="value"
+                                formControlName="finTipo"
+                                [fluid]="true"
+                                [appendTo]="'body'"
+                              ></p-select>
+                              <label>{{ 'Fin de ventana' | translate }}</label>
+                            </p-floatlabel>
+                            @if (
+                              form.get(
+                                'requerimientoFrio.protocoloTemporada.finTipo'
+                              )?.value === 'fecha_calendario'
+                            ) {
+                              <p-floatlabel variant="in" class="mb-4">
+                                <input
+                                  pInputText
+                                  formControlName="finMesDia"
+                                  placeholder="09-01"
+                                  [fluid]="true"
+                                />
+                                <label>{{ 'Mes-dia de fin (MM-DD)' | translate }}</label>
+                              </p-floatlabel>
+                            }
+                          </div>
+                        </div>
+
+                        <p-floatlabel variant="in" class="mb-4">
+                          <textarea
+                            pTextarea
+                            class="w-full"
+                            rows="3"
+                            formControlName="observaciones"
+                          ></textarea>
+                          <label>{{ 'Observaciones del protocolo' | translate }}</label>
+                        </p-floatlabel>
+                      </div>
                     </div>
+                    }
+
+                    @if (permiteVernalizacionSeleccionada) {
+                      <div formGroupName="requerimientoVernalizacion">
+                        @if (cultivoSeleccionado === 'Arveja') {
+                          <p-floatlabel variant="in" class="mb-4">
+                            <p-select
+                              [options]="opcionesVernalizacionArveja"
+                              optionLabel="label"
+                              optionValue="value"
+                              formControlName="activada"
+                              [fluid]="true"
+                              [appendTo]="'body'"
+                            ></p-select>
+                            <label>
+                              {{ 'Respuesta varietal a vernalizacion' | translate }}
+                            </label>
+                          </p-floatlabel>
+                        }
+
+                        @if (usaVernalizacionSeleccionada) {
+                          <div class="thermal-model-section">
+                            <div class="thermal-model-section__title">
+                              <strong>{{ 'Vernalizacion varietal' | translate }}</strong>
+                              <small>
+                                {{
+                                  'Solo se habilita una ventana termica calibrada para esta variedad. No se reutilizan horas de frio de frutales ni parametros de otro cultivo.'
+                                    | translate
+                                }}
+                              </small>
+                            </div>
+
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-select
+                                [options]="habitosVernalizacion"
+                                formControlName="habito"
+                                [fluid]="true"
+                                [appendTo]="'body'"
+                              ></p-select>
+                              <label>{{ 'Habito varietal' | translate }}</label>
+                            </p-floatlabel>
+
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-select
+                                [options]="modelosVernalizacion"
+                                formControlName="modelo"
+                                [fluid]="true"
+                                [appendTo]="'body'"
+                              ></p-select>
+                              <label>{{ 'Modelo de vernalizacion' | translate }}</label>
+                            </p-floatlabel>
+
+                            <p-floatlabel variant="in" class="mb-4">
+                              <input
+                                pInputText
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                formControlName="requisito"
+                                [fluid]="true"
+                              />
+                              <label>
+                                {{
+                                  'Requisito de ventana (dias equivalentes)'
+                                    | translate
+                                }}
+                              </label>
+                            </p-floatlabel>
+
+                            <div class="thermal-range">
+                              <p-floatlabel variant="in" class="mb-4">
+                                <input
+                                  pInputText
+                                  type="number"
+                                  step="0.1"
+                                  formControlName="temperaturaMinC"
+                                  [fluid]="true"
+                                />
+                                <label>{{ 'Temperatura minima del modelo (C)' | translate }}</label>
+                              </p-floatlabel>
+
+                              <p-floatlabel variant="in" class="mb-4">
+                                <input
+                                  pInputText
+                                  type="number"
+                                  step="0.1"
+                                  formControlName="temperaturaMaxC"
+                                  [fluid]="true"
+                                />
+                                <label>{{ 'Temperatura maxima del modelo (C)' | translate }}</label>
+                              </p-floatlabel>
+                            </div>
+
+                            <p-floatlabel variant="in" class="mb-4">
+                              <input pInputText formControlName="fuente" [fluid]="true" />
+                              <label>{{ 'Fuente varietal de vernalizacion' | translate }}</label>
+                            </p-floatlabel>
+
+                            <div class="thermal-range">
+                              <p-floatlabel variant="in" class="mb-4">
+                                <input
+                                  pInputText
+                                  formControlName="inicioEtapa"
+                                  [fluid]="true"
+                                />
+                                <label>{{ 'Etapa de inicio observada' | translate }}</label>
+                              </p-floatlabel>
+
+                              <p-floatlabel variant="in" class="mb-4">
+                                <input
+                                  pInputText
+                                  formControlName="finEtapa"
+                                  [fluid]="true"
+                                />
+                                <label>{{ 'Etapa de cierre observada' | translate }}</label>
+                              </p-floatlabel>
+                            </div>
+
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-select
+                                [options]="estadosVernalizacion"
+                                formControlName="estado"
+                                [fluid]="true"
+                                [appendTo]="'body'"
+                              ></p-select>
+                              <label>{{ 'Estado de validacion' | translate }}</label>
+                            </p-floatlabel>
+                          </div>
+                        }
+                      </div>
+                    }
 
                     <div formGroupName="fenologiaReferencia">
                       <p-floatlabel variant="in" class="mb-4">
@@ -112,6 +421,320 @@
                       <textarea pInputText formControlName="observaciones" [fluid]="true"></textarea>
                       <label>{{ 'Observaciones agronomicas' | translate }}</label>
                     </p-floatlabel>
+                  </p-tabpanel>
+
+                  <p-tabpanel [value]="2">
+                    <div
+                      formGroupName="parametrosTermicos"
+                      class="thermal-model-section"
+                    >
+                      <div class="thermal-model-section__title">
+                        <strong>
+                          {{ 'Perfil térmico y fotoperiódico varietal' | translate }}
+                        </strong>
+                        <small>
+                          {{
+                            'Esta ficha representa la base de laboratorio o bibliográfica de la variedad. Los registros del lote continúan siendo la autoridad para confirmar el inicio real de una etapa.'
+                              | translate
+                          }}
+                        </small>
+                      </div>
+
+                      <div class="thermal-classification mb-4">
+                        <strong>
+                          {{
+                            clasificacionTermicaSeleccionada?.procesoPrincipal ||
+                              'sin clasificar'
+                          }}
+                        </strong>
+                        <span>
+                          Método GDD: promedio limitado · semántica:
+                          acumulado desde el inicio térmico explícito.
+                        </span>
+                      </div>
+
+                      <div class="thermal-range">
+                        <p-floatlabel variant="in" class="mb-4">
+                          <input
+                            pInputText
+                            formControlName="version"
+                            [fluid]="true"
+                          />
+                          <label>{{ 'Versión del perfil' | translate }}</label>
+                        </p-floatlabel>
+
+                        <p-floatlabel variant="in" class="mb-4">
+                          <p-select
+                            [options]="estadosParametrosTermicos"
+                            formControlName="estado"
+                            [fluid]="true"
+                            [appendTo]="'body'"
+                          ></p-select>
+                          <label>{{ 'Estado científico' | translate }}</label>
+                        </p-floatlabel>
+                      </div>
+
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input
+                          pInputText
+                          formControlName="fuente"
+                          [fluid]="true"
+                        />
+                        <label>
+                          {{ 'Fuente del perfil térmico por fases' | translate }}
+                        </label>
+                      </p-floatlabel>
+
+                      <div class="thermal-range">
+                        <p-floatlabel variant="in" class="mb-4">
+                          <input
+                            pInputText
+                            type="number"
+                            step="0.1"
+                            formControlName="temperaturaBaseC"
+                            [fluid]="true"
+                          />
+                          <label>{{ 'Temperatura base (°C)' | translate }}</label>
+                        </p-floatlabel>
+
+                        <p-floatlabel variant="in" class="mb-4">
+                          <input
+                            pInputText
+                            type="number"
+                            step="0.1"
+                            formControlName="temperaturaSuperiorC"
+                            [fluid]="true"
+                          />
+                          <label>
+                            {{ 'Temperatura superior / techo (°C)' | translate }}
+                          </label>
+                        </p-floatlabel>
+                      </div>
+
+                      <p-floatlabel variant="in" class="mb-4">
+                        <input
+                          pInputText
+                          type="number"
+                          min="1"
+                          step="1"
+                          formControlName="profundidadRadicularCm"
+                          [fluid]="true"
+                        />
+                        <label>
+                          {{ 'Profundidad radicular varietal (cm)' | translate }}
+                        </label>
+                      </p-floatlabel>
+
+                      <section class="thermal-table-section">
+                        <header>
+                          <div>
+                            <strong>{{ 'Etapas por GDD acumulado' | translate }}</strong>
+                            <small>
+                              {{
+                                'Los rangos deben crecer según el orden. No se aceptan conversiones ni umbrales sin fuente.'
+                                  | translate
+                              }}
+                            </small>
+                          </div>
+                          <p-button
+                            type="button"
+                            icon="pi pi-plus"
+                            label="Agregar etapa"
+                            [outlined]="true"
+                            (onClick)="agregarEtapaGdd()"
+                          />
+                        </header>
+
+                        <ng-container formArrayName="gddEtapas">
+                          @for (
+                            etapa of gddEtapas.controls;
+                            track etapa;
+                            let i = $index
+                          ) {
+                            <div class="thermal-table-row" [formGroupName]="i">
+                              <p-floatlabel variant="in">
+                                <input
+                                  pInputText
+                                  formControlName="etapa"
+                                  [fluid]="true"
+                                />
+                                <label>{{ 'Etapa' | translate }}</label>
+                              </p-floatlabel>
+
+                              <p-floatlabel variant="in">
+                                <input
+                                  pInputText
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  formControlName="orden"
+                                  [fluid]="true"
+                                />
+                                <label>{{ 'Orden' | translate }}</label>
+                              </p-floatlabel>
+
+                              <p-floatlabel variant="in">
+                                <input
+                                  pInputText
+                                  type="number"
+                                  min="0"
+                                  step="0.1"
+                                  formControlName="min"
+                                  [fluid]="true"
+                                />
+                                <label>{{ 'GDD mínimo' | translate }}</label>
+                              </p-floatlabel>
+
+                              <p-floatlabel variant="in">
+                                <input
+                                  pInputText
+                                  type="number"
+                                  min="0"
+                                  step="0.1"
+                                  formControlName="max"
+                                  [fluid]="true"
+                                />
+                                <label>{{ 'GDD máximo' | translate }}</label>
+                              </p-floatlabel>
+
+                              <p-button
+                                type="button"
+                                icon="pi pi-trash"
+                                severity="danger"
+                                [text]="true"
+                                ariaLabel="Eliminar etapa GDD"
+                                (onClick)="borrarEtapaGdd(i)"
+                              />
+                            </div>
+                          } @empty {
+                            <p class="thermal-empty">
+                              {{
+                                'Sin etapas GDD cargadas. El motor puede mostrar clima, pero no moverá la fenología por una referencia varietal.'
+                                  | translate
+                              }}
+                            </p>
+                          }
+                        </ng-container>
+                      </section>
+
+                      @if (!esCultivoPerenneSeleccionado) {
+                        <section
+                          class="thermal-table-section"
+                          formGroupName="fotoperiodo"
+                        >
+                          <header>
+                            <div>
+                              <strong>
+                                {{ 'Respuesta fotoperiódica por etapa' | translate }}
+                              </strong>
+                              <small>
+                                {{
+                                  'Un perfil validado requiere fuente y umbral por etapa, salvo que la respuesta sea neutra.'
+                                    | translate
+                                }}
+                              </small>
+                            </div>
+                            <p-button
+                              type="button"
+                              icon="pi pi-plus"
+                              label="Agregar etapa"
+                              [outlined]="true"
+                              (onClick)="agregarEtapaFotoperiodo()"
+                            />
+                          </header>
+
+                          <div class="thermal-range">
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-select
+                                [options]="estadosFotoperiodo"
+                                formControlName="estado"
+                                [fluid]="true"
+                                [appendTo]="'body'"
+                              ></p-select>
+                              <label>
+                                {{ 'Estado fotoperiódico' | translate }}
+                              </label>
+                            </p-floatlabel>
+
+                            <p-floatlabel variant="in" class="mb-4">
+                              <input
+                                pInputText
+                                formControlName="fuente"
+                                [fluid]="true"
+                              />
+                              <label>
+                                {{ 'Fuente fotoperiódica varietal' | translate }}
+                              </label>
+                            </p-floatlabel>
+                          </div>
+
+                          <ng-container formArrayName="etapas">
+                            @for (
+                              etapa of fotoperiodoEtapas.controls;
+                              track etapa;
+                              let i = $index
+                            ) {
+                              <div
+                                class="thermal-table-row photoperiod"
+                                [formGroupName]="i"
+                              >
+                                <p-floatlabel variant="in">
+                                  <input
+                                    pInputText
+                                    formControlName="etapa"
+                                    [fluid]="true"
+                                  />
+                                  <label>{{ 'Etapa' | translate }}</label>
+                                </p-floatlabel>
+
+                                <p-floatlabel variant="in">
+                                  <p-select
+                                    [options]="respuestasFotoperiodo"
+                                    optionLabel="label"
+                                    optionValue="value"
+                                    formControlName="respuesta"
+                                    [fluid]="true"
+                                    [appendTo]="'body'"
+                                  ></p-select>
+                                  <label>{{ 'Respuesta' | translate }}</label>
+                                </p-floatlabel>
+
+                                <p-floatlabel variant="in">
+                                  <input
+                                    pInputText
+                                    type="number"
+                                    min="0.01"
+                                    max="24"
+                                    step="0.1"
+                                    formControlName="umbralHoras"
+                                    [fluid]="true"
+                                  />
+                                  <label>
+                                    {{ 'Umbral (h de luz)' | translate }}
+                                  </label>
+                                </p-floatlabel>
+
+                                <p-button
+                                  type="button"
+                                  icon="pi pi-trash"
+                                  severity="danger"
+                                  [text]="true"
+                                  ariaLabel="Eliminar etapa fotoperiodica"
+                                  (onClick)="borrarEtapaFotoperiodo(i)"
+                                />
+                              </div>
+                            } @empty {
+                              <p class="thermal-empty">
+                                {{
+                                  'Sin respuesta fotoperiódica documentada; la compatibilidad quedará en calibración.'
+                                    | translate
+                                }}
+                              </p>
+                            }
+                          </ng-container>
+                        </section>
+                      }
+                    </div>
                   </p-tabpanel>
 
                   <!-- Resistencia -->

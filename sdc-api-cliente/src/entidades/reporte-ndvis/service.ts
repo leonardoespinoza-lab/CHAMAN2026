@@ -3,8 +3,6 @@ import {
   IReporteNDVI,
   IListado,
   IQueryParam,
-  ICreateReporteNDVI,
-  IUpdateReporteNDVI,
   DeleteResult,
   IPermiso,
   IFilter,
@@ -27,17 +25,13 @@ export class ReporteNDVIsService {
   }
 
   async getLastByLote(permiso: IPermiso): Promise<IReporteNDVI[]> {
-    const idProductor = permiso.idProductor;
-    return await this.repository.getLastByLote(idProductor);
+    return await this.getLastForPermission(permiso);
   }
 
   async getLastByLoteByIdDistribuidor(
     permiso: IPermiso,
   ): Promise<IReporteNDVI[]> {
-    console.log('getLastByLoteByIdDistribuidor', permiso);
-
-    const idDistribuidor = permiso.idDistribuidor;
-    return await this.repository.getLastByLoteByIdDistribuidor(idDistribuidor);
+    return await this.getLastForPermission(permiso);
   }
 
   async get(
@@ -46,14 +40,6 @@ export class ReporteNDVIsService {
   ): Promise<IListado<IReporteNDVI>> {
     this.agregarFiltroPermiso(filtro, permiso);
     return await this.repository.get(filtro);
-  }
-
-  async create(data: ICreateReporteNDVI): Promise<IReporteNDVI> {
-    return await this.repository.create(data);
-  }
-
-  async update(id: string, data: IUpdateReporteNDVI): Promise<IReporteNDVI> {
-    return await this.repository.update(id, data);
   }
 
   async delete(id: string, permiso: IPermiso): Promise<IReporteNDVI> {
@@ -78,20 +64,25 @@ export class ReporteNDVIsService {
       return true;
     }
     if (permiso.nivel === 'Quimica') {
-      return !data.idQuimica || data.idQuimica === permiso.idQuimica;
+      return Boolean(
+        data.idQuimica && data.idQuimica === permiso.idQuimica,
+      );
     }
     if (permiso.nivel === 'Distribuidor') {
-      return (
-        !data.idDistribuidor || data.idDistribuidor === permiso.idDistribuidor
+      return Boolean(
+        data.idDistribuidor &&
+          data.idDistribuidor === permiso.idDistribuidor,
       );
     }
     if (permiso.nivel === 'Productor') {
-      return !data.idProductor || data.idProductor === permiso.idProductor;
+      return Boolean(
+        data.idProductor && data.idProductor === permiso.idProductor,
+      );
     }
     if (permiso.nivel === 'Establecimiento') {
-      return (
-        !data.idEstablecimiento ||
-        data.idEstablecimiento === permiso.idEstablecimiento
+      return Boolean(
+        data.idEstablecimiento &&
+          data.idEstablecimiento === permiso.idEstablecimiento,
       );
     }
     return false;
@@ -120,5 +111,26 @@ export class ReporteNDVIsService {
       filtro.$and = $and;
       query.filter = JSON.stringify(filtro);
     }
+  }
+
+  private async getLastForPermission(
+    permiso: IPermiso,
+  ): Promise<IReporteNDVI[]> {
+    if (permiso.nivel === 'Admin') {
+      return await this.repository.getLastGlobal();
+    }
+    const scopes = {
+      Quimica: ['quimica', permiso.idQuimica],
+      Distribuidor: ['distribuidor', permiso.idDistribuidor],
+      Productor: ['productor', permiso.idProductor],
+      Establecimiento: ['establecimiento', permiso.idEstablecimiento],
+    } as const;
+    const resolved = scopes[permiso.nivel as keyof typeof scopes];
+    if (!resolved?.[1]) {
+      throw new NotFoundException(
+        'El permiso no tiene un alcance valido para consultar NDVI',
+      );
+    }
+    return await this.repository.getLastByScope(resolved[0], resolved[1]);
   }
 }

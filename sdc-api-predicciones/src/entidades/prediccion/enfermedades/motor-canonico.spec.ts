@@ -7,12 +7,15 @@ import {
   calcularRoyaAnaranjadaTrigo2026,
   calcularRoyaHoja,
   calcularRoyaHojaTrigo2026,
+  clasificarNivelRiesgoSanitario,
   esFechaPrediccionSanitariaReciente,
+  esLecturaSanitariaOperativa,
   esPrediccionSanitariaAlertable,
   evaluarAscochytaArveja,
   evaluarMildiuArveja,
   evaluarOidioArveja,
   getEnfermedadCanonica,
+  getUmbralesRiesgoSanitario,
   gradosDiaBase0,
   gradosDiaRoya,
   gradosDiaRoyaMaiz,
@@ -264,6 +267,235 @@ describe('motor canonico de enfermedades', () => {
     expect(calcularManchaAmarilla(3, 2, 0.75)).toBeCloseTo(3.9075, 4);
     expect(calcularManchaHoja(10, 3, 0.5)).toBeCloseTo(3.93, 3);
     expect(calcularFusariumEspiga(2, 5, 0.75)).toBeCloseTo(26.385, 3);
+  });
+
+  it('usa una unica escala de severidad en tarjetas e informes', () => {
+    expect(getUmbralesRiesgoSanitario('Trigo')).toEqual({
+      medio: 15,
+      alto: 20,
+      escalaDirecta: false,
+    });
+    expect(getUmbralesRiesgoSanitario('Cebada')).toEqual({
+      medio: 35,
+      alto: 60,
+      escalaDirecta: true,
+    });
+    expect(clasificarNivelRiesgoSanitario(20, 'Trigo')).toBe('alto');
+    expect(clasificarNivelRiesgoSanitario(20, 'Cebada')).toBe('bajo');
+    expect(clasificarNivelRiesgoSanitario(35, 'Cebada')).toBe('medio');
+    expect(clasificarNivelRiesgoSanitario(60, 'Cebada')).toBe('alto');
+  });
+
+  it('separa una lectura operativa baja de una alerta sanitaria', () => {
+    const anioActual = new Date().getUTCFullYear();
+    const lecturaBaja = {
+      idEnfermedad: 'trigo.roya_hoja' as const,
+      resultado: 8,
+      estado: 'calculado' as const,
+      modelo: {
+        version: TRIGO_MOTOR_SANITARIO_VERSION,
+        validacion: 'operativo' as const,
+      },
+      calidadDatos: { nivel: 'media' as const },
+      resistenciaUsada: {
+        estado: 'observada' as const,
+        confianza: 'alta' as const,
+        campaniaFuente: `${anioActual - 1}-${anioActual}`,
+      },
+      variables: { resultadoCrudo: 8 },
+    };
+
+    expect(esLecturaSanitariaOperativa(lecturaBaja)).toBe(true);
+    expect(esPrediccionSanitariaAlertable(lecturaBaja)).toBe(false);
+  });
+
+  it('aplica el umbral de cebada tambien al decidir alertas', () => {
+    const lecturaCebada = {
+      idEnfermedad: 'cebada.mancha_red' as const,
+      resultado: 20,
+      estado: 'calculado' as const,
+      modelo: { version: 1, validacion: 'operativo' as const },
+      calidadDatos: { nivel: 'media' as const },
+      resistenciaUsada: {
+        estado: 'observada' as const,
+        confianza: 'alta' as const,
+      },
+      variables: {},
+    };
+
+    expect(esLecturaSanitariaOperativa(lecturaCebada)).toBe(true);
+    expect(clasificarNivelRiesgoSanitario(20, 'Cebada')).toBe('bajo');
+    expect(esPrediccionSanitariaAlertable(lecturaCebada)).toBe(false);
+    expect(
+      esPrediccionSanitariaAlertable({
+        ...lecturaCebada,
+        resultado: 35,
+      }),
+    ).toBe(true);
+    expect(
+      esLecturaSanitariaOperativa({
+        ...lecturaCebada,
+        modelo: { version: 1, validacion: 'experimental' },
+      }),
+    ).toBe(false);
+    expect(
+      esLecturaSanitariaOperativa({
+        ...lecturaCebada,
+        resultado: 101,
+      }),
+    ).toBe(false);
+  });
+
+  it('rechaza como operativas las lecturas experimentales, provisionales o sin trazabilidad vigente', () => {
+    const anioActual = new Date().getUTCFullYear();
+    const candidato = {
+      idEnfermedad: 'trigo.roya_hoja' as const,
+      resultado: 20,
+      estado: 'calculado' as const,
+      modelo: {
+        version: TRIGO_MOTOR_SANITARIO_VERSION,
+        validacion: 'operativo' as const,
+      },
+      calidadDatos: { nivel: 'media' as const },
+      resistenciaUsada: {
+        estado: 'observada' as const,
+        confianza: 'alta' as const,
+        campaniaFuente: `${anioActual - 1}-${anioActual}`,
+      },
+      variables: { resultadoCrudo: 20 },
+    };
+
+    const noOperativos = [
+      {
+        nombre: 'estado sin datos',
+        valor: {
+          ...candidato,
+          estado: 'sin_datos' as const,
+        },
+      },
+      {
+        nombre: 'resultado no finito',
+        valor: {
+          ...candidato,
+          resultado: Number.NaN,
+        },
+      },
+      {
+        nombre: 'enfermedad experimental',
+        valor: {
+          ...candidato,
+          idEnfermedad: 'trigo.roya_anaranjada' as const,
+        },
+      },
+      {
+        nombre: 'validacion provisional',
+        valor: {
+          ...candidato,
+          modelo: {
+            version: TRIGO_MOTOR_SANITARIO_VERSION,
+            validacion: 'operativo_provisional' as const,
+          },
+        },
+      },
+      {
+        nombre: 'validacion experimental',
+        valor: {
+          ...candidato,
+          modelo: {
+            version: TRIGO_MOTOR_SANITARIO_VERSION,
+            validacion: 'experimental' as const,
+          },
+        },
+      },
+      {
+        nombre: 'version anterior',
+        valor: {
+          ...candidato,
+          modelo: {
+            version: TRIGO_MOTOR_SANITARIO_VERSION - 1,
+            validacion: 'operativo' as const,
+          },
+        },
+      },
+      {
+        nombre: 'campania sanitaria vencida',
+        valor: {
+          ...candidato,
+          resistenciaUsada: {
+            estado: 'historica' as const,
+            confianza: 'media' as const,
+            campaniaFuente: `${anioActual - 4}-${anioActual - 3}`,
+          },
+        },
+      },
+      {
+        nombre: 'calidad baja',
+        valor: {
+          ...candidato,
+          calidadDatos: { nivel: 'baja' as const },
+        },
+      },
+      {
+        nombre: 'calidad sin datos',
+        valor: {
+          ...candidato,
+          calidadDatos: { nivel: 'sin_datos' as const },
+        },
+      },
+      {
+        nombre: 'resistencia desconocida',
+        valor: {
+          ...candidato,
+          resistenciaUsada: {
+            estado: 'desconocida' as const,
+            confianza: 'sin_datos' as const,
+          },
+        },
+      },
+      {
+        nombre: 'resistencia sin estado trazable',
+        valor: {
+          ...candidato,
+          resistenciaUsada: {
+            confianza: 'alta' as const,
+            campaniaFuente: `${anioActual - 1}-${anioActual}`,
+          },
+        },
+      },
+    ];
+
+    for (const caso of noOperativos) {
+      expect({
+        nombre: caso.nombre,
+        operativa: esLecturaSanitariaOperativa(caso.valor),
+      }).toEqual({ nombre: caso.nombre, operativa: false });
+      expect(esPrediccionSanitariaAlertable(caso.valor)).toBe(false);
+    }
+  });
+
+  it('mantiene alertable una formula operativa valida por encima del umbral', () => {
+    const anioActual = new Date().getUTCFullYear();
+    const candidato = {
+      idEnfermedad: 'trigo.roya_hoja' as const,
+      resultado: calcularRoyaHojaTrigo2026(50, 5, 1),
+      estado: 'calculado' as const,
+      modelo: {
+        version: TRIGO_MOTOR_SANITARIO_VERSION,
+        validacion: 'operativo' as const,
+      },
+      calidadDatos: { nivel: 'alta' as const },
+      resistenciaUsada: {
+        estado: 'observada' as const,
+        confianza: 'alta' as const,
+        campaniaFuente: `${anioActual - 1}-${anioActual}`,
+      },
+      variables: {
+        resultadoCrudo: calcularRoyaHojaTrigo2026(50, 5, 1),
+      },
+    };
+
+    expect(esLecturaSanitariaOperativa(candidato)).toBe(true);
+    expect(esPrediccionSanitariaAlertable(candidato)).toBe(true);
   });
 
   it('solo habilita alertas sanitarias operativas, vigentes y trazables', () => {

@@ -83,12 +83,14 @@ export class NavComponent implements OnInit, OnDestroy {
         acceptButtonProps: {
           label: this.translate.instant('Aceptar'),
         },
-        accept: () => {
-          this.loginService.resetPermisos();
-          this.helper.removeToken();
-          this.listados.borrarCache();
-          this.webSocketService.closeWS();
-          this.router.navigateByUrl('auth');
+        accept: async () => {
+          try {
+            await this.loginService.logout();
+          } finally {
+            this.listados.borrarCache();
+            this.webSocketService.closeWS();
+            await this.router.navigateByUrl('auth');
+          }
         },
       });
     } catch (e) {

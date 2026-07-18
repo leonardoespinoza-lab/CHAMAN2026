@@ -17,7 +17,7 @@ export class PermisoGuard implements CanActivate {
     }
 
     if (!permisosValidos) {
-      return process.env.RBAC_DENY_UNDECORATED === 'true' ? false : true;
+      return false;
     }
 
     // Si se especifica un nivel de permiso, se verifica que el usuario tenga

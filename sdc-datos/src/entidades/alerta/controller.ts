@@ -9,7 +9,13 @@ import {
   Put,
 } from '@nestjs/common';
 import { AlertasService } from './service';
-import { ICreateAlerta, IQueryParam, IUpdateAlerta } from 'modelos/src';
+import {
+  ICreateAlerta,
+  IFinalizarEventoAlerta,
+  IQueryParam,
+  IRegistrarEventoAlerta,
+  IUpdateAlerta,
+} from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Alertas')
@@ -35,6 +41,16 @@ export class AlertasController {
   @Post('bulk')
   async bulk(@Body() data: ICreateAlerta[]) {
     return await this.service.bulk(data);
+  }
+
+  @Post('eventos/siembra')
+  async registrarEventoSiembra(@Body() data: IRegistrarEventoAlerta) {
+    return await this.service.registrarEventoSiembra(data);
+  }
+
+  @Post('eventos/siembra/finalizar')
+  async finalizarEventoSiembra(@Body() data: IFinalizarEventoAlerta) {
+    return await this.service.finalizarEventoSiembra(data);
   }
 
   @Put(':id')

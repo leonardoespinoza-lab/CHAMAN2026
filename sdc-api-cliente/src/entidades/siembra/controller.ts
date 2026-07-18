@@ -77,6 +77,25 @@ export class SiembrasController {
     return await this.service.agrometeorologia(id, desde, hasta, permiso);
   }
 
+  @Post('/:id/agrometeorologia/reprocesar')
+  @Permisos(
+    { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+  )
+  public async reprocesarAgrometeorologia(
+    @Param('id') id: string,
+    @Body() body: { sincronizarClima?: boolean } | undefined,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<IRespuestaAgrometeorologiaSiembra> {
+    return await this.service.reprocesarAgrometeorologia(
+      id,
+      body?.sincronizarClima === true,
+      permiso,
+    );
+  }
+
   @Get('/:id')
   @Permisos(
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },

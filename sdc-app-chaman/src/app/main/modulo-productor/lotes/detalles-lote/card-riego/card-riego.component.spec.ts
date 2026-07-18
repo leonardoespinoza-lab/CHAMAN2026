@@ -70,6 +70,16 @@ describe('CardRiegoComponent', () => {
     expect(component.resumen).not.toContain('sin demanda');
   });
 
+  it('no interpreta una serie de ceros como ausencia de demanda si el balance hidrico es invalido', () => {
+    configure(false, 'estimado', Number.NaN, [0, 0]);
+
+    expect(component.estadoAguaUtilValido).toBeFalse();
+    expect(component.puedeMostrarSerieRiego).toBeFalse();
+    expect(component.cantidadRecomendacionHoy).toBeNull();
+    expect(component.sinDemandaRiego).toBeFalse();
+    expect(component.resumen).toContain('Sin recomendacion operativa');
+  });
+
   it('descarta cantidades ausentes, negativas o no finitas', () => {
     component.lote = { dispositivos: [{ tipo: 'Sensor de Humedad de Suelo' }] } as any;
     component.siembra = {

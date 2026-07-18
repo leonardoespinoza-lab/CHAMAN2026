@@ -21,18 +21,19 @@ export const authInterceptor: HttpInterceptorFn = (
 
   // Agregar token a la request si existe
   const authRequest = addToken(req, helper);
+  const authLifecycleRequest = /\/auth\/(login|refresh_token|logout)$/.test(req.url.split('?')[0]);
 
   return next(authRequest).pipe(
     catchError((error: HttpErrorResponse) => {
       // 401: token vencido o invalido. 403: sesion valida sin permiso para una accion puntual.
       // No se debe cerrar la sesion ante un 403 porque un usuario de lectura puede disparar
       // consultas opcionales sin permisos de escritura y aun asi seguir navegando.
-      if (error.status === 401 && helper.refreshToken) {
+      if (error.status === 401 && helper.refreshToken && !authLifecycleRequest) {
         return handle401Error(authRequest, next, helper, loginService, router);
       }
 
       // Si es 401 y NO tenemos refresh token, redirigir a login
-      if (error.status === 401 && !helper.refreshToken) {
+      if (error.status === 401 && (!helper.refreshToken || authLifecycleRequest)) {
         helper.removeToken();
         router.navigate(['/auth']);
       }

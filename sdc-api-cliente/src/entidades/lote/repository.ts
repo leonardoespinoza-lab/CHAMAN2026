@@ -8,6 +8,7 @@ import {
   ISueloInta,
   IInteligenciaSueloLote,
   IEntradasAgronomicasSuelo,
+  IRespuestaAgrometeorologiaSiembra,
 } from 'modelos/src';
 import {
   AGROMETEO_INTERNAL_TOKEN,
@@ -74,6 +75,17 @@ export class LotesRepository {
           : {},
       },
     );
+  }
+
+  async getAgrometeorologia(
+    idSiembra: string,
+  ): Promise<IRespuestaAgrometeorologiaSiembra> {
+    const url = `${API_CLIMA}/agrometeorologia/siembras/${idSiembra}`;
+    return await this.axios.GET<IRespuestaAgrometeorologiaSiembra>(url, {
+      headers: AGROMETEO_INTERNAL_TOKEN
+        ? { 'x-chaman-internal-token': AGROMETEO_INTERNAL_TOKEN }
+        : {},
+    });
   }
 
   async getAdministrativeLocation(idLote: string) {

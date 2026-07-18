@@ -59,6 +59,11 @@ export class AuthenticationRepository {
     return await this.axios.POST<IToken>(url, {}, { headers });
   }
 
+  async logout(accessToken?: string, refreshToken?: string): Promise<void> {
+    await this.axios.POST(`${API_AUTH}/oauth/logout`, { accessToken, refreshToken });
+  }
+
+
   async googleLogin(body: {
     credential: string;
     remember?: boolean;

@@ -33,8 +33,44 @@ const REQUIRED_DAILY: VariableMeteorologicaNormalizada[] = [
   'et0Mm',
 ];
 
+const COMPLETE_STATION_DAY_COVERAGE_PCT = 100;
+
+export type ICoberturaAgregadoDiarioEstacion = Partial<
+  Record<VariableMeteorologicaNormalizada, number>
+>;
+
+export type ICoberturaAgregadosDiariosEstacionPorFecha = Record<
+  string,
+  ICoberturaAgregadoDiarioEstacion
+>;
+
+const DAILY_HOURLY_DEPENDENCIES: Partial<
+  Record<VariableMeteorologicaNormalizada, VariableMeteorologicaNormalizada[]>
+> = {
+  temperatureMinC: ['temperatureC'],
+  temperatureMeanC: ['temperatureC'],
+  temperatureMaxC: ['temperatureC'],
+  relativeHumidityMinPct: ['relativeHumidityPct'],
+  relativeHumidityMeanPct: ['relativeHumidityPct'],
+  relativeHumidityMaxPct: ['relativeHumidityPct'],
+  dewPointC: ['temperatureC', 'relativeHumidityPct'],
+  precipitationMm: ['precipitationMm'],
+  rainMm: ['precipitationMm'],
+  windSpeedMs: ['windSpeedMs'],
+  windSpeedMaxMs: ['windSpeedMs'],
+  windDirectionDeg: ['windDirectionDeg'],
+  windGustMs: ['windGustMs'],
+  shortwaveRadiationMjM2: ['shortwaveRadiationWm2'],
+  vpdMeanKpa: ['temperatureC', 'relativeHumidityPct'],
+  et0Mm: ['et0Mm'],
+  soilTemperatureC: ['soilTemperatureC'],
+  soilMoistureM3M3: ['soilMoistureM3M3'],
+};
+
 @Injectable()
 export class WeatherSourceResolverService {
+  private readonly dateFormatters = new Map<string, Intl.DateTimeFormat>();
+
   normalizarOpenMeteo(
     data: any,
     idEstablecimiento: string,
@@ -75,6 +111,7 @@ export class WeatherSourceResolverService {
       timezone: string;
       granularidad: 'hourly' | 'daily';
       coordenadas: ICoordenadas;
+      coberturaAgregadosDiariosPorFecha?: ICoberturaAgregadosDiariosEstacionPorFecha;
     },
   ): IObservacionMeteorologicaNormalizada[] {
     const obtenidoEn = new Date().toISOString();
@@ -341,18 +378,35 @@ export class WeatherSourceResolverService {
           sourceByVariable.soilMoistureM3M3 = 'station';
 
         const timestamp = new Date(item.fecha as string).toISOString();
-        const fechaLocal = this.formatDateInTimezone(
-          timestamp,
-          options.timezone,
-        );
+        // FieldClimate codifica los agregados diarios a las 00:00Z, pero esa
+        // marca representa la fecha civil de la central, no un instante que
+        // deba correrse al dia anterior al aplicar UTC-3.
+        const fechaLocal = isDaily
+          ? String(item.fecha).slice(0, 10)
+          : this.formatDateInTimezone(timestamp, options.timezone);
+        if (isDaily) {
+          this.aplicarCalidadAgregadoDiarioEstacion(
+            item,
+            fechaLocal,
+            values,
+            stateByVariable,
+            flags,
+            options.coberturaAgregadosDiariosPorFecha?.[fechaLocal],
+          );
+        }
         const required = isDaily ? REQUIRED_DAILY : REQUIRED_HOURLY;
+        const estados = Object.values(stateByVariable || {});
+        const estado =
+          isDaily && estados.some((value) => value !== 'observed')
+            ? 'estimated'
+            : 'observed';
         return {
           idEstablecimiento: options.idEstablecimiento,
           timestamp,
           fechaLocal,
           timezone: options.timezone,
           granularidad: options.granularidad,
-          estado: 'observed',
+          estado,
           esPronostico: false,
           valores: values,
           fuente: 'station',
@@ -366,6 +420,73 @@ export class WeatherSourceResolverService {
           obtenidoEn,
         };
       });
+  }
+
+  /**
+   * Reconstruye evidencia temporal por variable a partir de horas unicas de la
+   * propia central. Un agregado diario solo se considera observado cuando las
+   * horas esperadas de su dia civil local contienen la variable que lo
+   * sustenta (23, 24 o 25 segun zona IANA y horario estacional).
+   */
+  calcularCoberturaAgregadosDiariosEstacion(
+    hourly: IObservacionMeteorologicaNormalizada[],
+  ): ICoberturaAgregadosDiariosEstacionPorFecha {
+    const horasPorFechaYVariable = new Map<
+      string,
+      Map<VariableMeteorologicaNormalizada, Set<string>>
+    >();
+    const zonaHorariaPorFecha = new Map<string, string>();
+    for (const observation of hourly || []) {
+      if (observation.granularidad !== 'hourly' || observation.esPronostico)
+        continue;
+      const fechaLocal = observation.fechaLocal;
+      if (!fechaLocal) continue;
+      if (observation.timezone && !zonaHorariaPorFecha.has(fechaLocal)) {
+        zonaHorariaPorFecha.set(fechaLocal, observation.timezone);
+      }
+      const porVariable =
+        horasPorFechaYVariable.get(fechaLocal) ||
+        new Map<VariableMeteorologicaNormalizada, Set<string>>();
+      const hora = observation.timestamp.slice(0, 13);
+      for (const key of Object.keys(
+        observation.valores || {},
+      ) as VariableMeteorologicaNormalizada[]) {
+        if (!this.usableValue(observation.valores[key])) continue;
+        const horas = porVariable.get(key) || new Set<string>();
+        horas.add(hora);
+        porVariable.set(key, horas);
+      }
+      horasPorFechaYVariable.set(fechaLocal, porVariable);
+    }
+
+    const result: ICoberturaAgregadosDiariosEstacionPorFecha = {};
+    for (const [fechaLocal, porVariable] of horasPorFechaYVariable) {
+      const coverage: ICoberturaAgregadoDiarioEstacion = {};
+      const horasEsperadas = this.expectedHourlySlots(
+        fechaLocal,
+        zonaHorariaPorFecha.get(fechaLocal) || 'UTC',
+      );
+      for (const [dailyVariable, dependencies] of Object.entries(
+        DAILY_HOURLY_DEPENDENCIES,
+      ) as Array<
+        [VariableMeteorologicaNormalizada, VariableMeteorologicaNormalizada[]]
+      >) {
+        const coveredHours = dependencies.reduce<Set<string> | undefined>(
+          (intersection, dependency) => {
+            const hours = porVariable.get(dependency) || new Set<string>();
+            if (!intersection) return new Set(hours);
+            return new Set([...intersection].filter((hour) => hours.has(hour)));
+          },
+          undefined,
+        );
+        coverage[dailyVariable] = Math.min(
+          100,
+          ((coveredHours?.size || 0) / horasEsperadas) * 100,
+        );
+      }
+      result[fechaLocal] = coverage;
+    }
+    return result;
   }
 
   fusionar(
@@ -592,6 +713,13 @@ export class WeatherSourceResolverService {
         continue;
       if (typeof stationValue === 'object' && !Object.keys(stationValue).length)
         continue;
+      if (
+        station.granularidad === 'daily' &&
+        station.estadoPorVariable?.[key as VariableMeteorologicaNormalizada] !==
+          'observed'
+      ) {
+        continue;
+      }
       (values as any)[key] =
         typeof stationValue === 'object' &&
         typeof (open.valores as any)[key] === 'object'
@@ -614,25 +742,143 @@ export class WeatherSourceResolverService {
       used.has('gap_filled');
     const required =
       station.granularidad === 'daily' ? REQUIRED_DAILY : REQUIRED_HOURLY;
+    const usedStates = Object.keys(values)
+      .map((key) => (states as any)[key] as EstadoDatoMeteorologico | undefined)
+      .filter((state): state is EstadoDatoMeteorologico => !!state);
+    const overallState = this.resolveOverallState(usedStates, open.estado);
+    const hasMixedStates = new Set(usedStates).size > 1;
     return {
       ...open,
       timestamp:
         station.granularidad === 'hourly' ? station.timestamp : open.timestamp,
       fechaLocal: open.fechaLocal || station.fechaLocal,
-      estado: hasStation ? 'observed' : open.estado,
+      estado: overallState,
+      esPronostico: usedStates.includes('forecast'),
       valores: values,
       fuente:
         hasStation && hasOpen ? 'mixed' : hasStation ? 'station' : 'open_meteo',
       fuentePorVariable: sources,
       estadoPorVariable: states,
       banderasCalidad: [
-        ...new Set([...station.banderasCalidad, ...open.banderasCalidad]),
+        ...new Set([
+          ...station.banderasCalidad,
+          ...open.banderasCalidad,
+          ...(station.granularidad === 'daily' &&
+          station.banderasCalidad.includes(
+            'station_daily_not_suitable_for_decision',
+          )
+            ? ['station_daily_rejected_unverified_coverage']
+            : []),
+          ...(hasMixedStates ? ['mixed_variable_states'] : []),
+        ]),
       ],
       completitudPct: calcularCompletitud(values, required),
       estacionId: station.estacionId,
       estacionNombre: station.estacionNombre,
       obtenidoEn: new Date().toISOString(),
     };
+  }
+
+  private aplicarCalidadAgregadoDiarioEstacion(
+    item: IClimaEstacionMeteorologica,
+    fechaLocal: string,
+    values: IValoresMeteorologicosNormalizados,
+    states: IObservacionMeteorologicaNormalizada['estadoPorVariable'],
+    flags: string[],
+    hourlyCoverage?: ICoberturaAgregadoDiarioEstacion,
+  ): void {
+    const explicitCoverage = this.normalizarCoberturaExplicita(
+      item.calidadDatos?.cobertura,
+    );
+    const explicitComplete =
+      item.calidadDatos?.fallback !== true &&
+      item.calidadDatos?.nivel !== 'baja' &&
+      item.calidadDatos?.nivel !== 'sin_datos' &&
+      explicitCoverage === COMPLETE_STATION_DAY_COVERAGE_PCT;
+    let rejected = false;
+    let hourlyVerified = false;
+
+    for (const key of Object.keys(
+      values,
+    ) as VariableMeteorologicaNormalizada[]) {
+      const hourlyCoveragePct = hourlyCoverage?.[key];
+      const verified =
+        explicitComplete ||
+        (hourlyCoveragePct !== undefined &&
+          hourlyCoveragePct >= COMPLETE_STATION_DAY_COVERAGE_PCT);
+      if (verified) {
+        if (states) states[key] = 'observed';
+        if (!explicitComplete) hourlyVerified = true;
+        continue;
+      }
+      rejected = true;
+      if (states) states[key] = 'estimated';
+      flags.push(`station_daily_unverified_coverage_${key}`);
+    }
+
+    if (explicitComplete) {
+      flags.push('station_daily_coverage_verified_explicitly');
+    } else if (hourlyVerified) {
+      flags.push('station_daily_coverage_verified_from_hourly');
+    }
+    if (rejected) {
+      flags.push(
+        'station_daily_aggregate_coverage_unverified',
+        'station_daily_not_suitable_for_decision',
+      );
+      const hasCountWithoutExpectedSamples = this.hasDailyCount(item);
+      if (hasCountWithoutExpectedSamples) {
+        flags.push('station_daily_count_without_expected_samples');
+      }
+    }
+    if (!hourlyCoverage && !explicitComplete) {
+      flags.push(`station_daily_no_traceable_coverage_${fechaLocal}`);
+    }
+  }
+
+  private normalizarCoberturaExplicita(
+    raw: number | undefined,
+  ): number | undefined {
+    const value = this.number(raw);
+    if (value === undefined || value < 0) return undefined;
+    return Math.min(100, value <= 1 ? value * 100 : value);
+  }
+
+  private hasDailyCount(item: IClimaEstacionMeteorologica): boolean {
+    return [
+      item.temperatura?.count,
+      item.humedad?.count,
+      item.lluvia?.count,
+      item.velocidadViento?.count,
+      item.direccionViento?.count,
+      item.radiacionSolar?.count,
+      item.et0?.count,
+    ].some((value) => this.number(value) !== undefined);
+  }
+
+  private usableValue(value: unknown): boolean {
+    if (typeof value === 'number') return Number.isFinite(value);
+    if (!value || typeof value !== 'object') return false;
+    return Object.values(value).some(
+      (nested) => typeof nested === 'number' && Number.isFinite(nested),
+    );
+  }
+
+  /**
+   * El estado global es conservador: si una sola variable usada es pronostico,
+   * el intervalo no puede publicarse como observado. El detalle exacto queda
+   * siempre disponible en estadoPorVariable.
+   */
+  private resolveOverallState(
+    states: EstadoDatoMeteorologico[],
+    fallback: EstadoDatoMeteorologico,
+  ): EstadoDatoMeteorologico {
+    if (states.includes('invalid')) return 'invalid';
+    if (states.includes('forecast')) return 'forecast';
+    if (states.includes('estimated')) return 'estimated';
+    if (states.includes('missing')) return 'missing';
+    if (states.includes('observed')) return 'observed';
+    return fallback;
   }
 
   private assignScalar(
@@ -737,12 +983,17 @@ export class WeatherSourceResolverService {
 
   private formatDateInTimezone(timestamp: string, timezone: string): string {
     try {
-      const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: timezone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }).formatToParts(new Date(timestamp));
+      let formatter = this.dateFormatters.get(timezone);
+      if (!formatter) {
+        formatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: timezone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        });
+        this.dateFormatters.set(timezone, formatter);
+      }
+      const parts = formatter.formatToParts(new Date(timestamp));
       const map = Object.fromEntries(
         parts.map((part) => [part.type, part.value]),
       );
@@ -752,11 +1003,28 @@ export class WeatherSourceResolverService {
     }
   }
 
+  private expectedHourlySlots(date: string, timezone: string): number {
+    const anchor = new Date(`${date}T12:00:00.000Z`).getTime();
+    if (!Number.isFinite(anchor)) return 24;
+    let slots = 0;
+    try {
+      for (let offset = -36; offset <= 36; offset += 1) {
+        const instant = new Date(anchor + offset * 3600000);
+        if (this.formatDateInTimezone(instant.toISOString(), timezone) === date) {
+          slots += 1;
+        }
+      }
+    } catch {
+      return 24;
+    }
+    return slots || 24;
+  }
+
   private intervalKey(
     observation: IObservacionMeteorologicaNormalizada,
   ): string {
     return observation.granularidad === 'daily'
       ? `daily|${observation.fechaLocal}`
-      : `hourly|${observation.timestamp}|${observation.esPronostico}`;
+      : `hourly|${observation.timestamp}`;
   }
 }

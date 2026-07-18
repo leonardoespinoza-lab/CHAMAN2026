@@ -57,6 +57,33 @@ const dailyPayloadRange = (inicio: string, fin: string) => {
 
 const dailyPayload = (fecha = '2026-07-10') => dailyPayloadRange(fecha, fecha);
 
+const agrometPayloadRange = (inicio: string, fin: string) => {
+  const fechas = diasInclusivos(inicio, fin);
+  const horas = fechas.flatMap((fecha) => times(24, fecha));
+  return {
+    timezone: 'America/Argentina/Buenos_Aires',
+    utc_offset_seconds: -10800,
+    elevation: 250,
+    hourly: {
+      time: horas,
+      temperature_2m: horas.map(() => 12),
+      relative_humidity_2m: horas.map(() => 80),
+      precipitation: horas.map(() => 0),
+      shortwave_radiation: horas.map(() => 100),
+      et0_fao_evapotranspiration: horas.map(() => 0.05),
+    },
+    daily: {
+      time: fechas,
+      temperature_2m_min: fechas.map(() => 5),
+      temperature_2m_mean: fechas.map(() => 12),
+      temperature_2m_max: fechas.map(() => 19),
+      precipitation_sum: fechas.map(() => 0),
+      shortwave_radiation_sum: fechas.map(() => 9),
+      et0_fao_evapotranspiration: fechas.map(() => 2),
+    },
+  };
+};
+
 describe('fallback horario Open-Meteo', () => {
   const service = new ClimaService({} as any, {} as any, {} as any, {} as any);
   const ubicacion = { lat: -39.03, lng: -67.58 };
@@ -181,8 +208,8 @@ describe('fallback horario Open-Meteo', () => {
 
     const result = await (service as any).getOpenMeteoEntreFechas(
       ubicacion,
-      '2026-04-10',
-      '2026-04-20',
+      '2026-07-09',
+      '2026-07-13',
       'daily',
     );
 
@@ -190,12 +217,12 @@ describe('fallback horario Open-Meteo', () => {
     const urls = fetch.mock.calls.map(([url]) => url as URL);
     const archive = urls.find((url) => url.hostname.includes('archive-api'));
     const forecast = urls.find((url) => !url.hostname.includes('archive-api'));
-    expect(archive?.searchParams.get('start_date')).toBe('2026-04-10');
-    expect(archive?.searchParams.get('end_date')).toBe('2026-04-13');
-    expect(forecast?.searchParams.get('start_date')).toBe('2026-04-14');
-    expect(forecast?.searchParams.get('end_date')).toBe('2026-04-19');
+    expect(archive?.searchParams.get('start_date')).toBe('2026-07-09');
+    expect(archive?.searchParams.get('end_date')).toBe('2026-07-10');
+    expect(forecast?.searchParams.get('start_date')).toBe('2026-07-11');
+    expect(forecast?.searchParams.get('end_date')).toBe('2026-07-12');
     expect(result.map((item: any) => item.fecha.slice(0, 10))).toEqual(
-      diasInclusivos('2026-04-10', '2026-04-19'),
+      diasInclusivos('2026-07-09', '2026-07-12'),
     );
   });
 
@@ -206,27 +233,102 @@ describe('fallback horario Open-Meteo', () => {
       .mockImplementation(async (url: URL) =>
         hourlyPayload(
           24,
-          url.hostname.includes('archive-api') ? '2026-04-13' : '2026-04-14',
+          url.hostname.includes('archive-api') ? '2026-07-10' : '2026-07-11',
         ),
       );
 
     const result = await (service as any).getOpenMeteoHorarioEntreFechas(
       ubicacion,
-      '2026-04-13',
-      '2026-04-15',
+      '2026-07-10',
+      '2026-07-12',
       'hourly',
     );
 
     const urls = fetch.mock.calls.map(([url]) => url as URL);
     const archive = urls.find((url) => url.hostname.includes('archive-api'));
     const forecast = urls.find((url) => !url.hostname.includes('archive-api'));
-    expect(archive?.searchParams.get('start_date')).toBe('2026-04-13');
-    expect(archive?.searchParams.get('end_date')).toBe('2026-04-13');
-    expect(forecast?.searchParams.get('start_date')).toBe('2026-04-14');
-    expect(forecast?.searchParams.get('end_date')).toBe('2026-04-14');
+    expect(archive?.searchParams.get('start_date')).toBe('2026-07-10');
+    expect(archive?.searchParams.get('end_date')).toBe('2026-07-10');
+    expect(forecast?.searchParams.get('start_date')).toBe('2026-07-11');
+    expect(forecast?.searchParams.get('end_date')).toBe('2026-07-11');
     expect(result).toHaveLength(48);
     expect(new Set(result.map((item: any) => item.fecha.slice(0, 10)))).toEqual(
-      new Set(['2026-04-13', '2026-04-14']),
+      new Set(['2026-07-10', '2026-07-11']),
+    );
+  });
+
+  it('usa Forecast solo para la ventana reciente aun no consolidada en Archive', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-15T12:00:00Z'));
+    const fetch = jest
+      .spyOn(service as any, 'fetchOpenMeteoJson')
+      .mockImplementation(async (url: URL) =>
+        agrometPayloadRange(
+          String(url.searchParams.get('start_date')),
+          String(url.searchParams.get('end_date')),
+        ),
+      );
+
+    const result = await service.getOpenMeteoAgrometeorologia(
+      ubicacion,
+      '2026-07-11',
+      '2026-07-13',
+      false,
+    );
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const url = fetch.mock.calls[0][0] as URL;
+    expect(url.hostname).not.toContain('archive-api');
+    expect(url.searchParams.get('start_date')).toBe('2026-07-11');
+    expect(url.searchParams.get('end_date')).toBe('2026-07-13');
+    expect(result.hourly.time).toHaveLength(72);
+    expect(result.daily.time).toEqual([
+      '2026-07-11',
+      '2026-07-12',
+      '2026-07-13',
+    ]);
+  });
+
+  it('recompone Archive y Forecast sin perder dias ni alinear mal variables agrometeorologicas', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-07-15T12:00:00Z'));
+    const fetch = jest
+      .spyOn(service as any, 'fetchOpenMeteoJson')
+      .mockImplementation(async (url: URL) => {
+        const payload = agrometPayloadRange(
+          String(url.searchParams.get('start_date')),
+          String(url.searchParams.get('end_date')),
+        );
+        if (url.hostname.includes('archive-api')) {
+          delete (payload.hourly as any).et0_fao_evapotranspiration;
+        }
+        return payload;
+      });
+
+    const result = await service.getOpenMeteoAgrometeorologia(
+      ubicacion,
+      '2026-07-09',
+      '2026-07-13',
+      false,
+    );
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const urls = fetch.mock.calls.map(([url]) => url as URL);
+    const archive = urls.find((url) => url.hostname.includes('archive-api'));
+    const forecast = urls.find((url) => !url.hostname.includes('archive-api'));
+    expect(archive?.searchParams.get('start_date')).toBe('2026-07-09');
+    expect(archive?.searchParams.get('end_date')).toBe('2026-07-10');
+    expect(forecast?.searchParams.get('start_date')).toBe('2026-07-11');
+    expect(forecast?.searchParams.get('end_date')).toBe('2026-07-13');
+    expect(result.daily.time).toEqual(
+      diasInclusivos('2026-07-09', '2026-07-13'),
+    );
+    expect(result.hourly.time).toHaveLength(120);
+    expect(result.hourly.temperature_2m).toHaveLength(120);
+    expect(result.hourly.et0_fao_evapotranspiration).toHaveLength(120);
+    expect(result.hourly.et0_fao_evapotranspiration.slice(0, 48)).toEqual(
+      Array(48).fill(undefined),
+    );
+    expect(result.hourly.et0_fao_evapotranspiration.slice(48)).toEqual(
+      Array(72).fill(0.05),
     );
   });
 

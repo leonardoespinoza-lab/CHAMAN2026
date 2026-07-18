@@ -64,6 +64,9 @@ describe('SiembrasService canonical soil integration', () => {
         provenance: {},
       }),
     };
+    const alertas = {
+      finalizarTodasPorSiembra: jest.fn().mockResolvedValue(2),
+    };
     const service = new SiembrasService(
       repository as any,
       lotes as any,
@@ -71,6 +74,9 @@ describe('SiembrasService canonical soil integration', () => {
       fumigaciones as any,
       algoritmos as any,
       soilInputs as any,
+      { deleteBySowing: jest.fn() } as any,
+      { deleteByIdSiembra: jest.fn() } as any,
+      alertas as any,
     );
 
     await service.cosechar('sowing-1', {
@@ -101,6 +107,42 @@ describe('SiembrasService canonical soil integration', () => {
           }),
         ],
       }),
+    );
+    expect(alertas.finalizarTodasPorSiembra).toHaveBeenCalledWith(
+      'sowing-1',
+      expect.stringContaining('cerrado por cosecha'),
+      '2026-11-10T00:00:00.000Z',
+    );
+  });
+
+  it('marca y limpia los indicadores aun cuando la siembra ya no existe', async () => {
+    const repository = {
+      delete: jest.fn().mockResolvedValue(null),
+    };
+    const indicadores = {
+      deleteBySowing: jest.fn().mockResolvedValue({
+        legacyDeleted: 0,
+        generatedDeleted: 0,
+        generationManifestsDeleted: 0,
+      }),
+    };
+    const service = new SiembrasService(
+      repository as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      indicadores as any,
+      { deleteByIdSiembra: jest.fn().mockResolvedValue(undefined) } as any,
+      { finalizarTodasPorSiembra: jest.fn() } as any,
+    );
+
+    await expect(service.delete('64b000000000000000000001')).rejects.toThrow(
+      'No encontrado',
+    );
+    expect(indicadores.deleteBySowing).toHaveBeenCalledWith(
+      '64b000000000000000000001',
     );
   });
 });

@@ -90,9 +90,7 @@ export function crearPrediccionSinDatos(
   fuenteModelo: string,
   versionModelo = 3,
   validacion:
-    | 'operativo'
-    | 'operativo_provisional'
-    | 'experimental' = 'operativo',
+    'operativo' | 'operativo_provisional' | 'experimental' = 'operativo',
   variablesAcumuladas: IPrediccionEnfermedad['variables'] = {},
 ): IPrediccionEnfermedad {
   return {
@@ -135,9 +133,7 @@ export function crearPrediccionFueraVentana(
   fuenteModelo: string,
   versionModelo = 3,
   validacion:
-    | 'operativo'
-    | 'operativo_provisional'
-    | 'experimental' = 'operativo',
+    'operativo' | 'operativo_provisional' | 'experimental' = 'operativo',
   variables: IPrediccionEnfermedad['variables'] = {},
   anterior?: IPrediccionEnfermedad,
 ): IPrediccionEnfermedad {
@@ -233,6 +229,7 @@ export function metadataSanitariaFusarium(
   resuelta: IResistenciaResuelta,
   coberturaVariables: number,
   calidadClima?: ICalidadDatoMotor,
+  fenologiaObservada = true,
 ) {
   const base = metadataResistencia(resuelta);
   const cobertura = Math.min(1, Math.max(0, coberturaVariables || 0));
@@ -246,17 +243,30 @@ export function metadataSanitariaFusarium(
             cobertura * 100
           ).toFixed(0)}%; minimo 90%).`,
         ]),
+    ...(!fenologiaObservada
+      ? [
+          'La antesis proviene de una proyeccion fenologica: se informa screening ambiental, sin alerta automatica hasta confirmar anteras visibles a campo.',
+        ]
+      : []),
   ];
   const calidadModelo: ICalidadDatoMotor = {
     ...base.calidadDatos,
-    nivel: coberturaSuficiente ? base.calidadDatos.nivel : 'baja',
+    nivel:
+      coberturaSuficiente && fenologiaObservada
+        ? base.calidadDatos.nivel
+        : 'baja',
     fuente: 'mixto',
     cobertura: Math.min(base.calidadDatos.cobertura, cobertura),
-    fallback: base.calidadDatos.fallback || !coberturaSuficiente,
+    fallback:
+      base.calidadDatos.fallback || !coberturaSuficiente || !fenologiaObservada,
     resumen: `${base.calidadDatos.resumen} ${
       coberturaSuficiente
         ? 'Cobertura meteorologica especifica de Fusarium suficiente.'
         : 'Cobertura meteorologica especifica de Fusarium incompleta.'
+    } ${
+      fenologiaObservada
+        ? 'Antesis confirmada a campo.'
+        : 'Antesis proyectada; resultado de screening no alertable.'
     }`,
     limitaciones,
   };
@@ -323,7 +333,7 @@ export function metadataResistencia(resuelta: IResistenciaResuelta) {
         nivel === 'baja' ||
         nivel === 'sin_datos',
       resumen: resuelta.desconocida
-        ? 'Sin resistencia varietal específica utilizable; resultado no habilitado para alertas.'
+        ? 'Resistencia varietal no cargada: se usa el factor conservador susceptible para no subestimar el ambiente. No confirma presencia ni ausencia; requiere monitoreo a campo antes de definir manejo.'
         : `Resistencia varietal ${resistencia?.perfil || 'cargada'} de ${resistencia?.campaniaFuente || 'campaña no informada'}.`,
       limitaciones,
     },

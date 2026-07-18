@@ -105,3 +105,29 @@ type OmitirUpdate =
   | "establecimiento"
   | "siembra";
 export interface IUpdateAlerta extends Omit<Partial<IAlerta>, OmitirUpdate> {}
+
+/**
+ * Comando interno entre los motores y sdc-datos. La consolidacion se ejecuta
+ * en MongoDB; no debe implementarse como un GET seguido de POST/PUT porque dos
+ * replicas podrian abrir la misma alerta activa.
+ */
+export interface IRegistrarEventoAlerta {
+  alerta: ICreateAlerta;
+  reporte: Record<string, any>;
+  eventKey: string;
+}
+
+export interface IResultadoRegistroEventoAlerta {
+  alerta?: IAlerta;
+  creada: boolean;
+  duplicada: boolean;
+}
+
+export interface IFinalizarEventoAlerta {
+  idSiembra: string;
+  descripcion: string;
+  comentario: string;
+  dedupeKey?: string;
+  tituloLegado?: string;
+  fecha: string;
+}

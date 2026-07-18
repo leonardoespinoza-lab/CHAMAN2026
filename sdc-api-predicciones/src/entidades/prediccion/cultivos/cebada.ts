@@ -1,9 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   ICreatePrediccion,
-  IClimaEstacionMeteorologica,
-  ICrono,
-  IEtapasCebada,
   IPrediccion,
   IPrediccionEnfermedad,
   IQueryParam,
@@ -26,20 +23,21 @@ import {
   tasaDiariaManchaRedHoraria,
 } from 'modelos/src';
 import { HelperService } from '../../../auxiliares/helper';
-import { CronosService } from '../../crono/service';
 import { SiembrasService } from '../../siembra/service';
 import { ClimaService } from '../../clima/service';
-import { FumigacionsService } from 'src/entidades/fumigacion/service';
+import { FumigacionsService } from '../../fumigacion/service';
 import { PrediccionsRepository } from '../repository';
 import {
-  aplicarEtapaFenologicaObservada,
-  resolverEtapaFenologicaObservada,
-} from '../fenologia-observada';
-import {
   camposClimaticosFaltantes,
+  combinarCalidadDatos,
+  crearPrediccionFueraVentana,
   crearPrediccionSinDatos,
   metadataResistencia,
 } from '../enfermedades/calidad';
+import {
+  construirDiasSanitariosCanonicos,
+  IDiaSanitarioCanonico,
+} from './agrometeorologia-canonica';
 
 type EnfermedadCebada = Extract<
   TEnfermedad,
@@ -107,32 +105,25 @@ export class PrediccionCebadaService {
   constructor(
     private prediccionsRepository: PrediccionsRepository,
     private siembrasService: SiembrasService,
-    private cronosService: CronosService,
     private climaService: ClimaService,
     private fumigacionsService: FumigacionsService,
   ) {}
 
   public async hacerPredicciones(siembra: ISiembra) {
     const prediccionesCreadas: IPrediccion[] = [];
-    const [crono, ultimaPrediccion] = await Promise.all([
-      this.cronosService.get(siembra),
-      this.getUltimaPrediccion(siembra._id),
-    ]);
-
+    const ultimaPrediccion = await this.getUltimaPrediccion(siembra._id);
     let predAnterior = ultimaPrediccion;
-
-    if (!crono) {
-      Logger.warn(
-        `Crono de Cebada no encontrado para la siembra ${JSON.stringify(
-          siembra,
-        )}`,
-      );
-      return prediccionesCreadas;
+    const inicioSiembra = new Date(siembra.fechaSiembra);
+    inicioSiembra.setUTCHours(0, 0, 0, 0);
+    const dateDesde = predAnterior?.fecha
+      ? new Date(predAnterior.fecha)
+      : new Date(inicioSiembra);
+    if (predAnterior?.fecha) {
+      dateDesde.setUTCHours(0, 0, 0, 0);
+      dateDesde.setUTCDate(dateDesde.getUTCDate() + 1);
     }
-
-    const dateDesde = this.getFechaDesde(siembra, crono, predAnterior);
-    const dateHasta = this.getFechaHasta(siembra, crono);
-    const dateAnteriorADesde = this.diaAnterior(dateDesde);
+    const dateHasta = this.diaActual();
+    dateHasta.setUTCDate(dateHasta.getUTCDate() + 1);
 
     if (!dateDesde || dateDesde >= dateHasta) {
       return prediccionesCreadas;
@@ -142,21 +133,24 @@ export class PrediccionCebadaService {
       `Creando predicciones Cebada desde ${dateDesde.toISOString()} hasta ${dateHasta.toISOString()}`,
     );
 
-    const clima = await this.climaService.getEstacionMasCercanaEntreFechas(
-      siembra.coordenadas.lat,
-      siembra.coordenadas.lng,
-      dateAnteriorADesde.toISOString(),
-      dateHasta.toISOString(),
-      'hourly',
-      siembra.establecimiento,
+    const respuestaCanonica =
+      await this.climaService.getAgrometeorologiaSiembra(
+        siembra._id,
+        inicioSiembra.toISOString(),
+        dateHasta.toISOString(),
+      );
+    const diasCanonicos = construirDiasSanitariosCanonicos(
+      respuestaCanonica,
+      'Cebada',
     );
 
-    if (!clima.length) {
+    if (!diasCanonicos.length) {
       Logger.warn(
-        `No hay estacion con datos para Cebada entre ${dateAnteriorADesde.toISOString()} y ${dateHasta.toISOString()}`,
+        `No hay serie agrometeorologica canonica para Cebada entre ${inicioSiembra.toISOString()} y ${dateHasta.toISOString()}`,
       );
       return prediccionesCreadas;
     }
+    const diasPorFecha = new Map(diasCanonicos.map((dia) => [dia.fecha, dia]));
 
     const fumigaciones = await this.fumigacionsService.getByIdSiembra(
       siembra._id,
@@ -164,47 +158,116 @@ export class PrediccionCebadaService {
     const fechasFumigadas = HelperService.fechasFumigadas(fumigaciones.datos);
     let ultimaCreada: IPrediccion | undefined;
 
-    for (
-      let fecha = new Date(dateDesde);
-      fecha < dateHasta;
-      fecha.setUTCDate(fecha.getUTCDate() + 1)
-    ) {
+    for (const dia of diasCanonicos) {
+      const fecha = new Date(`${dia.fecha}T03:00:00.000Z`);
+      if (fecha < dateDesde || fecha >= dateHasta) continue;
       const fechaIso = fecha.toISOString();
-      const fechaAnteriorIso = this.diaAnterior(fecha).toISOString();
       const predecir = !fechasFumigadas.includes(fechaIso);
-      const etapaCrono = this.getEtapaPorFecha(siembra, crono, fecha);
-      const fenologiaObservada = resolverEtapaFenologicaObservada(
-        siembra,
-        fecha,
-        'Cebada',
+      const etapa = dia.etapaNumero;
+      const fechaAnterior = this.diaAnterior(fecha).toISOString().slice(0, 10);
+      const climaDia = this.climaDiaCanonico(
+        dia,
+        diasPorFecha.get(fechaAnterior),
       );
-      const etapa = aplicarEtapaFenologicaObservada(
-        etapaCrono,
-        fenologiaObservada,
-      );
-      const climaHoy = this.getClimaDia(clima, fechaIso);
-      const climaAnterior = this.getClimaDia(clima, fechaAnteriorIso);
-      const climaDia: ClimaDiaCebada = {
-        ...climaHoy,
-        hrAnterior: climaAnterior.hr,
-        precipAnterior: climaAnterior.precip,
-      };
-      const enfermedades = this.enfermedades
-        .filter((config) => this.estaEnVentana(etapa, config))
-        .map((config) =>
-          this.predecirEnfermedad({
-            config,
-            semilla: siembra.semilla,
-            etapa,
-            clima: climaDia,
-            prediccionAnterior: predAnterior,
-            predecir,
-          }),
+      const enfermedades =
+        !dia.climaHabilitante
+          ? this.enfermedades.map((config) =>
+              crearPrediccionSinDatos(
+                config.nombre,
+                config.id,
+                dia.motivosNoHabilitante.length
+                  ? dia.motivosNoHabilitante
+                  : ['serie_agrometeorologica_canonica'],
+                'ENFERMEDADES EN CEBADA.xlsx',
+              ),
+            )
+          : this.enfermedades.map((config) => {
+              const anterior = predAnterior?.enfermedades?.find(
+                (item) => item.idEnfermedad === config.id,
+              );
+              if (etapa === undefined) {
+                if (config.formula === 'fusariosis') {
+                  return crearPrediccionFueraVentana(
+                    config.nombre,
+                    config.id,
+                    'Fusariosis requiere confirmar espigazon/antesis; el clima se conserva sin declarar una ventana reproductiva.',
+                    'ENFERMEDADES EN CEBADA.xlsx',
+                    3,
+                    'operativo_provisional',
+                    { etapaScore: 0 },
+                    anterior,
+                  );
+                }
+                return this.predecirEnfermedad({
+                  config,
+                  semilla: siembra.semilla,
+                  etapa: 1,
+                  clima: climaDia,
+                  prediccionAnterior: predAnterior,
+                  predecir,
+                });
+              }
+              if (!this.estaEnVentana(etapa, config)) {
+                return crearPrediccionFueraVentana(
+                  config.nombre,
+                  config.id,
+                  `Etapa ${etapa}: fuera de la ventana ${config.etapaMin}-${config.etapaMax}.`,
+                  'ENFERMEDADES EN CEBADA.xlsx',
+                  3,
+                  dia.etapaHabilitante
+                    ? 'operativo'
+                    : 'operativo_provisional',
+                  { etapaScore: 0 },
+                  anterior,
+                );
+              }
+              return this.predecirEnfermedad({
+                config,
+                semilla: siembra.semilla,
+                etapa,
+                clima: climaDia,
+                prediccionAnterior: predAnterior,
+                predecir,
+              });
+            });
+      for (const enfermedad of enfermedades) {
+        enfermedad.calidadDatos = combinarCalidadDatos(
+          enfermedad.calidadDatos,
+          dia.calidadClima,
         );
+        if (!dia.etapaHabilitante) {
+          enfermedad.modelo = {
+            ...enfermedad.modelo,
+            validacion: 'operativo_provisional',
+          };
+          enfermedad.calidadDatos = combinarCalidadDatos(
+            enfermedad.calidadDatos,
+            {
+              nivel: 'baja',
+              fuente: 'estimado',
+              cobertura: dia.calidadClima.cobertura,
+              fallback: true,
+              resumen:
+                'Screening ambiental calculado con etapa fenologica proyectada; no genera alertas automaticas.',
+              limitaciones: dia.motivosNoHabilitante,
+            },
+          );
+          if (etapa === undefined) {
+            enfermedad.variables = {
+              ...(enfermedad.variables || {}),
+              etapaScore: 0,
+            };
+          }
+        }
+        enfermedad.calidadClima = dia.calidadClima;
+      }
 
       if (!enfermedades.length) {
         continue;
       }
+      const fuenteCampo =
+        dia.serie.stageSource === 'campo' ||
+        dia.serie.stageSource === 'proyeccion_anclada_campo';
 
       const prediccion: ICreatePrediccion = {
         idSiembra: siembra._id,
@@ -213,27 +276,36 @@ export class PrediccionCebadaService {
         idProductor: siembra.idProductor,
         idEstablecimiento: siembra.idEstablecimiento,
         fecha: fechaIso,
-        fechaPrediccion: fechaIso.split('T')[0],
+        fechaPrediccion: dia.fecha,
         etapa,
-        nombreEtapa: this.getNombreEtapa(etapa),
-        fuenteFenologia: fenologiaObservada ? 'observada' : 'crono',
-        registroFenologicoId: fenologiaObservada?.registro.id,
+        nombreEtapa:
+          etapa === undefined
+            ? dia.serie.stage || 'Etapa no verificable'
+            : this.getNombreEtapa(etapa),
+        fuenteFenologia: fuenteCampo ? 'observada' : 'agrometeorologia',
         calidadFenologia: {
-          nivel: fenologiaObservada ? 'alta' : 'media',
-          fuente: fenologiaObservada ? 'manual' : 'estimado',
-          cobertura: 1,
-          fallback: !fenologiaObservada,
-          resumen: fenologiaObservada
-            ? 'Etapa observada a campo.'
-            : 'Etapa estimada desde fecha de siembra y crono.',
-          limitaciones: fenologiaObservada
-            ? []
-            : ['No hay observación fenológica de campo anterior a la fecha.'],
+          nivel: dia.etapaHabilitante
+            ? fuenteCampo
+              ? 'alta'
+              : 'media'
+            : etapa !== undefined
+              ? 'baja'
+              : 'sin_datos',
+          fuente: fuenteCampo ? 'manual' : 'estimado',
+          cobertura: dia.etapaHabilitante ? 1 : etapa !== undefined ? 0.5 : 0,
+          fallback: !dia.etapaHabilitante,
+          resumen: dia.etapaHabilitante
+            ? `Etapa provista por el motor agrometeorologico canonico (${dia.serie.stageSource}).`
+            : etapa !== undefined
+              ? 'Etapa proyectada apta para screening ambiental; requiere confirmacion a campo para alertas.'
+              : 'La etapa canonica no habilita decisiones sanitarias.',
+          limitaciones: dia.motivosNoHabilitante,
         },
         enfermedades,
         estacion: {
-          idEstacion: clima[0].estacion,
-          distanciaMetros: clima[0].distancia,
+          idEstacion: dia.clima.estacion,
+          fuente: dia.clima.fuente,
+          distanciaMetros: dia.clima.distancia,
           humedadRelativa: climaDia.hr,
           precipitaciones: climaDia.precip,
           temperaturaMaxima: climaDia.tmax,
@@ -250,6 +322,7 @@ export class PrediccionCebadaService {
         ultimaCreada = predAnterior;
       } catch (error) {
         Logger.error(error);
+        throw error;
       }
     }
 
@@ -262,60 +335,22 @@ export class PrediccionCebadaService {
     return prediccionesCreadas;
   }
 
-  private getClimaDia(
-    clima: IClimaEstacionMeteorologica[],
-    fechaIso: string,
-  ): Omit<ClimaDiaCebada, 'hrAnterior' | 'precipAnterior'> {
-    const fecha = fechaIso.split('T')[0];
-    const filas = clima.filter((item) => item.fecha?.includes(fecha));
-    const horas = filas
-      .map((item) => ({
-        temperatura: Number(item.temperatura?.avg ?? item.temperatura?.last),
-        humedadRelativa: Number(item.humedad?.avg ?? item.humedad?.last),
-      }))
-      .filter(
-        (item) =>
-          Number.isFinite(item.temperatura) &&
-          Number.isFinite(item.humedadRelativa),
-      );
-    const tieneResolucionHoraria = filas.length >= 18 && horas.length >= 18;
-    const promedio = (values: number[]): number =>
-      values.length
-        ? values.reduce((sum, value) => sum + value, 0) / values.length
-        : Number.NaN;
-    const temperatures = horas.map((item) => item.temperatura);
-    const humidities = horas.map((item) => item.humedadRelativa);
-
-    if (tieneResolucionHoraria) {
-      const precipitaciones = filas
-        .map((item) => Number(item.lluvia?.sum ?? item.lluvia?.last ?? 0))
-        .filter(Number.isFinite);
-      return {
-        hr: promedio(humidities),
-        tavg: promedio(temperatures),
-        tmin: Math.min(...temperatures),
-        tmax: Math.max(...temperatures),
-        precip: precipitaciones.reduce((sum, value) => sum + value, 0),
-        horas,
-        horasMojado:
-          horas.filter((item) => item.humedadRelativa >= 90).length *
-          (24 / horas.length),
-        coberturaHoraria: Math.min(horas.length / 24, 1),
-        resolucion: 'horaria',
-      };
-    }
-
-    const hr = Number(HelperService.getHR(clima, fechaIso));
+  private climaDiaCanonico(
+    dia: IDiaSanitarioCanonico,
+    anterior?: IDiaSanitarioCanonico,
+  ): ClimaDiaCebada {
     return {
-      hr,
-      tavg: Number(HelperService.getTAvg(clima, fechaIso)),
-      tmin: Number(HelperService.getTMin(clima, fechaIso)),
-      tmax: Number(HelperService.getTMax(clima, fechaIso)),
-      precip: Number(HelperService.getPrecip(clima, fechaIso)),
+      hr: Number(dia.clima.humedad?.avg),
+      tavg: Number(dia.clima.temperatura?.avg),
+      tmin: Number(dia.clima.temperatura?.min),
+      tmax: Number(dia.clima.temperatura?.max),
+      precip: Number(dia.clima.lluvia?.sum),
       horas: [],
-      horasMojado: Number.isFinite(hr) ? this.horasMojadoProxy(hr) : Number.NaN,
-      coberturaHoraria: 0,
+      horasMojado: Number(dia.serie.metrics?.leafWetnessHours),
+      coberturaHoraria: dia.calidadClima.cobertura || 0,
       resolucion: 'proxy_diario',
+      hrAnterior: Number(anterior?.clima.humedad?.avg),
+      precipAnterior: Number(anterior?.clima.lluvia?.sum),
     };
   }
 
@@ -344,7 +379,10 @@ export class PrediccionCebadaService {
         variables: { formulaVersion: 3, etapaScore: 0 },
       };
     }
-    const camposPorFormula: Record<ConfigEnfermedadCebada['formula'], string[]> = {
+    const camposPorFormula: Record<
+      ConfigEnfermedadCebada['formula'],
+      string[]
+    > = {
       mancha_red: ['hr', 'tavg'],
       escaldadura: ['tavg', 'horasMojado', 'precip'],
       roya_hoja: ['hr', 'tavg', 'precip'],
@@ -375,20 +413,36 @@ export class PrediccionCebadaService {
     );
     const variablesAnterioresRaw =
       (anterior?.variables as IVariablesEnfermedadCebada) || {};
-    const variablesAnteriores =
-      [2, 3].includes(variablesAnterioresRaw.formulaVersion)
-        ? variablesAnterioresRaw
-        : {};
+    const variablesAnteriores = [2, 3].includes(
+      variablesAnterioresRaw.formulaVersion,
+    )
+      ? variablesAnterioresRaw
+      : {};
 
     switch (config.formula) {
       case 'mancha_red':
-        return this.predecirManchaEnRed(config, semilla, clima, variablesAnteriores);
+        return this.predecirManchaEnRed(
+          config,
+          semilla,
+          clima,
+          variablesAnteriores,
+        );
       case 'escaldadura':
         return this.predecirEscaldadura(config, semilla, etapa, clima);
       case 'roya_hoja':
-        return this.predecirRoyaHoja(config, semilla, clima, variablesAnteriores);
+        return this.predecirRoyaHoja(
+          config,
+          semilla,
+          clima,
+          variablesAnteriores,
+        );
       case 'fusariosis':
-        return this.predecirFusariosis(config, semilla, clima, variablesAnteriores);
+        return this.predecirFusariosis(
+          config,
+          semilla,
+          clima,
+          variablesAnteriores,
+        );
     }
   }
 
@@ -398,18 +452,12 @@ export class PrediccionCebadaService {
     clima: ClimaDiaCebada,
     anteriores: IVariablesEnfermedadCebada,
   ): IPrediccionEnfermedad {
-    const resistencia = resolverResistencia(
-      semilla?.resistencia,
-      config.id,
-    );
+    const resistencia = resolverResistencia(semilla?.resistencia, config.id);
     const fTemp = factorTemperaturaManchaRed(clima.tavg);
     const factorHumedad = factorHumedadManchaRed(clima.hr);
     const tasaDiaria =
       clima.resolucion === 'horaria'
-        ? tasaDiariaManchaRedHoraria(
-            clima.horas,
-            resistencia.multiplicador,
-          )
+        ? tasaDiariaManchaRedHoraria(clima.horas, resistencia.multiplicador)
         : fTemp * factorHumedad * resistencia.multiplicador;
     const previa = this.toNumber(
       anteriores.severidadAcumulada ?? anteriores.indiceAcumulado,
@@ -454,10 +502,7 @@ export class PrediccionCebadaService {
     const horasMojado = clima.horasMojado;
     const fHMF = this.factorHMF(horasMojado);
     const fPP = this.factorPPEscaldadura(clima.precip);
-    const resistencia = resolverResistencia(
-      semilla?.resistencia,
-      config.id,
-    );
+    const resistencia = resolverResistencia(semilla?.resistencia, config.id);
     const ri = fTemp * fHMF * fPP * resistencia.multiplicador;
     const resultado = this.round(
       calcularEscaldadura(
@@ -508,10 +553,7 @@ export class PrediccionCebadaService {
     const dhrDia = clima.precip <= 0.2 && clima.hr >= 70 ? 1 : 0;
     const GD = this.round(this.toNumber(anteriores.GD) + gdDia, 2);
     const DHR = this.round(this.toNumber(anteriores.DHR) + dhrDia, 0);
-    const resistencia = resolverResistencia(
-      semilla?.resistencia,
-      config.id,
-    );
+    const resistencia = resolverResistencia(semilla?.resistencia, config.id);
     const resultado = this.round(
       calcularRoyaHoja(GD, DHR, resistencia.indiceResistencia),
       2,
@@ -562,18 +604,10 @@ export class PrediccionCebadaService {
     if (clima.tmax > 26) residual += clima.tmax - 26;
     if (clima.tmin < 9) residual += 9 - clima.tmin;
     const GDN = this.round(this.toNumber(anteriores.GDN) + residual, 2);
-    const resistencia = resolverResistencia(
-      semilla?.resistencia,
-      config.id,
-    );
+    const resistencia = resolverResistencia(semilla?.resistencia, config.id);
     const activo = GDAcum < 530;
     const resultado = this.round(
-      calcularFusariumEspiga(
-        PMoj,
-        GDN,
-        resistencia.multiplicador,
-        activo,
-      ),
+      calcularFusariumEspiga(PMoj, GDN, resistencia.multiplicador, activo),
       2,
     );
 
@@ -645,83 +679,6 @@ export class PrediccionCebadaService {
     };
     const predicciones = await this.prediccionsRepository.get(param);
     return predicciones.datos[0];
-  }
-
-  private getEtapaPorFecha(siembra: ISiembra, crono: ICrono, fecha: Date) {
-    const observada = resolverEtapaFenologicaObservada(
-      siembra,
-      fecha,
-      'Cebada',
-    );
-    if (typeof observada?.etapa === 'number') return observada.etapa;
-    const fechaSiembra = new Date(siembra.fechaSiembra);
-    const diferencia = fecha.getTime() - fechaSiembra.getTime();
-    const diasTranscurridos = Math.floor(diferencia / (1000 * 60 * 60 * 24));
-    const acumuladas = this.getEtapasAcumuladas(crono);
-
-    if (diasTranscurridos < acumuladas[1]) return 0;
-    if (diasTranscurridos < acumuladas[2]) return 1;
-    if (diasTranscurridos < acumuladas[3]) return 2;
-    if (diasTranscurridos < acumuladas[4]) return 3;
-    if (diasTranscurridos < acumuladas[5]) return 4;
-    if (diasTranscurridos < acumuladas[6]) return 5;
-    if (diasTranscurridos < acumuladas[7]) return 6;
-    return 7;
-  }
-
-  private getFechaInicioEtapa(
-    siembra: ISiembra,
-    crono: ICrono,
-    etapa: 1 | 2 | 3 | 4 | 5 | 6 | 7,
-  ) {
-    const acumuladas = this.getEtapasAcumuladas(crono);
-    const fecha = new Date(siembra.fechaSiembra);
-    fecha.setUTCHours(0, 0, 0, 0);
-    fecha.setUTCDate(fecha.getUTCDate() + acumuladas[etapa]);
-    return fecha;
-  }
-
-  private getEtapasAcumuladas(crono: ICrono): number[] {
-    const etapas = crono.etapas as IEtapasCebada;
-    const acumuladas = [0];
-    acumuladas[1] = etapas.siembra_emergencia || 0;
-    acumuladas[2] =
-      acumuladas[1] + (etapas.emergencia_primer_nudo || 0);
-    acumuladas[3] =
-      acumuladas[2] + (etapas.primer_nudo_hoja_bandera || 0);
-    acumuladas[4] =
-      acumuladas[3] + (etapas.hoja_bandera_espigazon || 0);
-    acumuladas[5] = acumuladas[4] + (etapas.espigazon_antesis || 0);
-    acumuladas[6] =
-      acumuladas[5] + (etapas.antesis_llenado_granos || 0);
-    acumuladas[7] =
-      acumuladas[6] + (etapas.llenado_granos_madurez_fisiologica || 0);
-    return acumuladas;
-  }
-
-  private getFechaDesde(
-    siembra: ISiembra,
-    crono: ICrono,
-    prediccionAnterior?: IPrediccion,
-  ) {
-    if (prediccionAnterior) {
-      const fecha = new Date(prediccionAnterior.fecha);
-      fecha.setUTCHours(3, 0, 0, 0);
-      fecha.setUTCDate(fecha.getUTCDate() + 1);
-      return fecha;
-    }
-
-    const fecha = this.getFechaInicioEtapa(siembra, crono, 1);
-    fecha.setUTCHours(3, 0, 0, 0);
-    return fecha;
-  }
-
-  private getFechaHasta(siembra: ISiembra, crono: ICrono) {
-    const fechaLimite = this.getFechaInicioEtapa(siembra, crono, 7);
-    const fechaHoy = this.diaActual();
-    const fechaMenor = fechaHoy > fechaLimite ? fechaLimite : fechaHoy;
-    fechaMenor.setUTCHours(3, 0, 0, 0);
-    return fechaMenor;
   }
 
   private getNombreEtapa(etapa: number): string {

@@ -1,6 +1,7 @@
 import { IReporteNDVI } from 'modelos/src';
 
 export type SatelliteIndexKey = keyof NonNullable<IReporteNDVI['indices']>;
+export const MIN_SATELLITE_VALID_COVERAGE_PCT = 3;
 
 export interface SatelliteStageAtDate {
   name: string;
@@ -16,18 +17,22 @@ export interface SatelliteIndexHistoryPoint {
   stage: SatelliteStageAtDate;
   collection: string;
   qualityCoveragePct?: number;
-  invalidReason?: 'missing' | 'out_of_range';
+  invalidReason?: 'missing' | 'out_of_range' | 'quality';
 }
 
 export function satelliteIndexValue(report: IReporteNDVI, key: SatelliteIndexKey): number | null {
-  const raw = report.indices?.[key] ?? (key === 'ndvi' ? report.ndviPromedio : undefined);
+  const raw = rawSatelliteIndexValue(report, key);
   const value = Number(raw);
 
   if (raw == null || !Number.isFinite(value)) {
     return null;
   }
 
-  return value >= -1 && value <= 1 ? value : null;
+  if (value < -1 || value > 1 || !satelliteIndexHasSufficientQuality(report, key)) {
+    return null;
+  }
+
+  return value;
 }
 
 export function buildSatelliteIndexHistory(
@@ -42,7 +47,8 @@ export function buildSatelliteIndexHistory(
         return undefined;
       }
 
-      const raw = report.indices?.[key] ?? (key === 'ndvi' ? report.ndviPromedio : undefined);
+      const raw = rawSatelliteIndexValue(report, key);
+      const numericRaw = Number(raw);
       const value = satelliteIndexValue(report, key);
       return {
         report,
@@ -51,18 +57,53 @@ export function buildSatelliteIndexHistory(
         value,
         stage: stageAtDate(new Date(timestamp)),
         collection: report.coleccion || 'Satélite',
-        qualityCoveragePct: qualityCoverage(report),
-        invalidReason: value == null ? (raw == null ? 'missing' : 'out_of_range') : undefined,
+        qualityCoveragePct: qualityCoverage(report, key),
+        invalidReason:
+          value != null
+            ? undefined
+            : raw == null
+              ? 'missing'
+              : !Number.isFinite(numericRaw) || numericRaw < -1 || numericRaw > 1
+                ? 'out_of_range'
+                : 'quality',
       };
     })
     .filter((point): point is SatelliteIndexHistoryPoint => !!point)
     .sort((a, b) => a.timestamp - b.timestamp);
 }
 
-function qualityCoverage(report: IReporteNDVI): number | undefined {
-  const value = Number(report.metadataImagen?.qualityMask?.validCoveragePct);
-  if (!Number.isFinite(value)) {
-    return undefined;
+function rawSatelliteIndexValue(report: IReporteNDVI, key: SatelliteIndexKey): unknown {
+  return report.indices?.[key] ?? (key === 'ndvi' ? report.ndviPromedio : undefined);
+}
+
+function satelliteIndexHasSufficientQuality(report: IReporteNDVI, key: SatelliteIndexKey): boolean {
+  const metadata = report.metadataImagen;
+  const renderStatus = metadata?.renderQa?.[key]?.status;
+  const coverage = qualityCoverage(report, key);
+
+  if (coverage == null || coverage < MIN_SATELLITE_VALID_COVERAGE_PCT) {
+    return false;
   }
-  return Math.max(0, Math.min(100, value));
+  if (renderStatus != null && renderStatus !== 'ok') {
+    return false;
+  }
+  if (metadata?.renderVersion === 'fixed-index-v3' && renderStatus !== 'ok') {
+    return false;
+  }
+  return true;
+}
+
+function qualityCoverage(report: IReporteNDVI, key: SatelliteIndexKey): number | undefined {
+  const candidates = [
+    report.metadataImagen?.renderQa?.[key]?.validCoveragePct,
+    report.metadataImagen?.indicesStats?.[key]?.validCoveragePct,
+    report.metadataImagen?.qualityMask?.validCoveragePct,
+  ];
+  for (const candidate of candidates) {
+    const value = Number(candidate);
+    if (candidate != null && Number.isFinite(value)) {
+      return Math.max(0, Math.min(100, value));
+    }
+  }
+  return undefined;
 }

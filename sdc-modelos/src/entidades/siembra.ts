@@ -12,7 +12,12 @@ import {
 } from "./prediccion-riego";
 import { IProductor } from "./productor";
 import { IQuimica } from "./quimica";
-import { IFenologiaReferencia, IRequerimientoFrio, ISemilla } from "./semilla";
+import {
+  IFenologiaReferencia,
+  IRequerimientoFrio,
+  ISemilla,
+  TObjetivoBiofixFenologico,
+} from "./semilla";
 
 export type TTipoFijacionN = "0" | "> 0 < 30" | "> 30 < 60" | "> 60";
 export type TTipoDosisN = "Muy Baja" | "Baja" | "Alta" | "Muy Alta";
@@ -28,13 +33,8 @@ export type TTipoLabranza =
   "Siembra Directa" | "Convencional" | "Labranza" | "Reducida";
 export type TCalidadHuellaHidrica = "alta" | "media" | "baja";
 export type TEstadoRecomendacionRiego =
-  | "calculada"
-  | "estimada"
-  | "no_disponible"
-  | "fallida";
-export type TFuenteRecomendacionRiego =
-  | "sensor_suelo"
-  | "balance_climatico";
+  "calculada" | "estimada" | "no_disponible" | "fallida";
+export type TFuenteRecomendacionRiego = "sensor_suelo" | "balance_climatico";
 
 export interface ICalidadHuellaHidrica {
   nivel: TCalidadHuellaHidrica;
@@ -87,21 +87,53 @@ export interface IHuellaHidrica {
   metodologia?: IMetodologiaHuellaHidrica;
 }
 
+/** Un objeto parcial o vacio no equivale a una huella calculada. */
+export function esHuellaHidricaConsolidada(huella?: IHuellaHidrica): boolean {
+  return [
+    huella?.total?.litrosKg,
+    huella?.total?.litrosKcal,
+    huella?.verde?.litrosKg,
+    huella?.azul?.litrosKg,
+    huella?.gris?.litrosKg,
+  ].some(
+    (value) =>
+      typeof value === "number" && Number.isFinite(value) && value >= 0,
+  );
+}
+
 export interface IRegistroFenologicoFrio {
   fechaDesde?: string;
   fechaHasta?: string;
+  fechaCaptura?: string;
   horasFrio?: number;
+  /** Frio ponderado por el modelo Utah. Se expresa en UF/CU, no en horas. */
+  unidadesFrioUtah?: number;
+  /** @deprecated Indicador historico ambiguo; se conserva sin recalcular. */
   horasFrioEfectivas?: number;
   porcionesFrio?: number;
   gradosDia?: number;
   fuente?: string;
+  fuenteTemperatura?: string;
+  serieCampoPrioritaria?: boolean;
+  coberturaPct?: number;
+  continuidadSuficiente?: boolean;
+  brechaMaximaHoras?: number;
+  estado?: "completo" | "parcial" | "pendiente";
+  versionModelo?: string;
+  versionCalculo?: string;
+  versionParametros?: string;
 }
 
 export interface IRegistroFenologico {
   id?: string;
   fecha?: string;
   accion?: "inicio" | "ajuste" | "observacion";
+  tipoEvento?: "observacion" | "inicio_etapa" | "biofix" | "correccion";
+  fechaObservacion?: string;
+  fechaInicioEtapa?: string;
   etapa?: string;
+  codigoEtapa?: string;
+  escalaEtapa?: string;
   cultivo?: string;
   variedad?: string;
   ciclo?: string;
@@ -116,6 +148,14 @@ export interface IRegistroFenologico {
   requerimientoFrio?: IRequerimientoFrio;
   fenologiaReferencia?: IFenologiaReferencia;
   frioAcumulado?: IRegistroFenologicoFrio;
+  coberturaObservadaPct?: number;
+  confianza?: "alta" | "media" | "baja";
+  observador?: string;
+  objetivosBiofix?: TObjetivoBiofixFenologico[];
+  versionModelo?: string;
+  versionParametros?: string;
+  reemplazaRegistroId?: string;
+  motivoCorreccion?: string;
   observaciones?: string;
   creadoEn?: string;
   actualizadoEn?: string;
@@ -184,7 +224,8 @@ type OmitirCreate =
   | "lote"
   | "departamento"
   | "semilla"
-  | "crono";
+  | "crono"
+  | "registrosFenologicos";
 export interface ICreateSiembra extends Omit<Partial<ISiembra>, OmitirCreate> {}
 
 type OmitirUpdate =
@@ -196,5 +237,6 @@ type OmitirUpdate =
   | "lote"
   | "departamento"
   | "semilla"
-  | "crono";
+  | "crono"
+  | "registrosFenologicos";
 export interface IUpdateSiembra extends Omit<Partial<ISiembra>, OmitirUpdate> {}

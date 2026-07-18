@@ -33,6 +33,11 @@ export class PrediccionsRepository {
     return await this.axios.GET(url);
   }
 
+  async reconstruir(idSiembra: string): Promise<IPrediccion[]> {
+    const url = `${API_PREDICCIONES}/prediccions/${idSiembra}/reconstruir`;
+    return await this.axios.POST<IPrediccion[]>(url, {});
+  }
+
   async agroclima(idSiembra: string): Promise<IResumenRiesgosAgroclimaticos> {
     const url = `${API_PREDICCIONES}/prediccions/${idSiembra}/agroclima`;
     return await this.axios.GET(url);

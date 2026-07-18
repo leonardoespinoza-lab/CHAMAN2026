@@ -8,7 +8,7 @@ import {
   Token,
   User,
   Falsey,
-} from 'oauth2-server';
+} from '@node-oauth/oauth2-server';
 import { ClientsService } from '../client/client.service';
 import { TokenService } from '../token/token.service';
 import { UsuariosService } from '../usuario/service';
@@ -21,6 +21,10 @@ export class OauthModel {
     accessTokenLifetime?: number;
     refreshTokenLifetime?: number;
   } | null = null;
+  private readonly sessionIdleMs =
+    Number(process.env.SESSION_IDLE_SECONDS || 24 * 60 * 60) * 1000;
+  private readonly sessionAbsoluteMs =
+    Number(process.env.SESSION_ABSOLUTE_SECONDS || 30 * 24 * 60 * 60) * 1000;
 
   constructor(
     private usuariosService: UsuariosService,
@@ -94,7 +98,7 @@ export class OauthModel {
         accessTokenExpiresAt: new Date(token.accessTokenExpiresAt),
         refreshToken: token.refreshToken,
         refreshTokenExpiresAt: new Date(token.refreshTokenExpiresAt),
-        scope: token.scope,
+        scope: this.publicScope(token.scope),
       };
       return returnToken;
     }
@@ -108,13 +112,19 @@ export class OauthModel {
   ): Promise<Token | Falsey> {
     token.client = client;
     token.user = user;
+    const now = new Date();
+    const session = this.sessionMetadata(token.scope, now);
     const tokenToSave: ICreateToken = {
       accessToken: token.accessToken,
       accessTokenExpiresAt: token.accessTokenExpiresAt.toISOString(),
       client: client as any,
       user: user as any,
       refreshToken: token.refreshToken,
-      refreshTokenExpiresAt: token.refreshTokenExpiresAt.toISOString(),
+      refreshTokenExpiresAt: token.refreshTokenExpiresAt?.toISOString(),
+      scope: this.publicScope(token.scope),
+      sessionStartedAt: session.startedAt.toISOString(),
+      sessionLastActivityAt: now.toISOString(),
+      sessionAbsoluteExpiresAt: session.absoluteExpiresAt.toISOString(),
     };
     const savedToken = await this.tokenService.createToken(tokenToSave);
     if (savedToken) {
@@ -138,6 +148,20 @@ export class OauthModel {
   ): Promise<RefreshToken | Falsey> {
     const token = await this.tokenService.getRefreshToken(refreshToken);
     if (token) {
+      const now = Date.now();
+      const startedAt = this.validDate(token.sessionStartedAt) || new Date(now);
+      const lastActivityAt =
+        this.validDate(token.sessionLastActivityAt) || startedAt;
+      const absoluteExpiresAt =
+        this.validDate(token.sessionAbsoluteExpiresAt) ||
+        new Date(startedAt.getTime() + this.sessionAbsoluteMs);
+      if (
+        absoluteExpiresAt.getTime() <= now ||
+        now - lastActivityAt.getTime() > this.sessionIdleMs
+      ) {
+        await this.tokenService.revokeToken(token);
+        return false;
+      }
       const returnToken: RefreshToken = {
         accessToken: token.accessToken,
         client: token.client as any,
@@ -145,7 +169,7 @@ export class OauthModel {
         accessTokenExpiresAt: new Date(token.accessTokenExpiresAt),
         refreshToken: token.refreshToken,
         refreshTokenExpiresAt: new Date(token.refreshTokenExpiresAt),
-        scope: token.scope,
+        scope: this.sessionScope(token.scope, startedAt, absoluteExpiresAt),
       };
       return returnToken;
     }
@@ -158,6 +182,56 @@ export class OauthModel {
       return true;
     }
     this.logger.verbose('Token not deleted');
+  }
+
+  private validDate(value?: string): Date | undefined {
+    const date = value ? new Date(value) : undefined;
+    return date && Number.isFinite(date.getTime()) ? date : undefined;
+  }
+
+  private publicScope(scope?: string | string[]): string[] | undefined {
+    const values = Array.isArray(scope)
+      ? scope
+      : String(scope || '')
+          .split(' ')
+          .filter(Boolean);
+    const publicValues = values.filter(
+      (value) => !value.startsWith('chaman_session_'),
+    );
+    return publicValues.length ? publicValues : undefined;
+  }
+
+  private sessionScope(
+    scope: string | string[] | undefined,
+    startedAt: Date,
+    absoluteExpiresAt: Date,
+  ): string[] {
+    return [
+      ...(this.publicScope(scope) || []),
+      `chaman_session_started_${startedAt.getTime()}`,
+      `chaman_session_absolute_${absoluteExpiresAt.getTime()}`,
+    ];
+  }
+
+  private sessionMetadata(scope: string | string[] | undefined, now: Date) {
+    const values = Array.isArray(scope)
+      ? scope
+      : String(scope || '')
+          .split(' ')
+          .filter(Boolean);
+    const startedRaw = values
+      .find((value) => value.startsWith('chaman_session_started_'))
+      ?.replace('chaman_session_started_', '');
+    const absoluteRaw = values
+      .find((value) => value.startsWith('chaman_session_absolute_'))
+      ?.replace('chaman_session_absolute_', '');
+    const startedAt = Number.isFinite(Number(startedRaw))
+      ? new Date(Number(startedRaw))
+      : now;
+    const absoluteExpiresAt = Number.isFinite(Number(absoluteRaw))
+      ? new Date(Number(absoluteRaw))
+      : new Date(startedAt.getTime() + this.sessionAbsoluteMs);
+    return { startedAt, absoluteExpiresAt };
   }
 
   //

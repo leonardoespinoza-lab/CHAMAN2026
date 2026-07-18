@@ -95,6 +95,14 @@ export class AuthenticationService {
     return await this.repository.validate_password(usernname, password);
   }
 
+  async logout(accessToken?: string, refreshToken?: string): Promise<void> {
+    await this.repository.logout(accessToken, refreshToken);
+  }
+
+  async revokeUserSessions(userId: string): Promise<void> {
+    await this.tokenService.revokeUserSessions(userId);
+  }
+
   private errorMessage(error: any): string {
     const response = error?.response;
     const message =

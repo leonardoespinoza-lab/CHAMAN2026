@@ -1,14 +1,36 @@
 import { Injectable } from '@nestjs/common';
-import { API_CLIMA } from '../../env';
+import { AGROMETEO_INTERNAL_TOKEN, API_CLIMA } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 import {
   IClimaEstacionMeteorologica,
   IPronosticoEstacionMeteorologica,
+  IRespuestaAgrometeorologiaSiembra,
 } from 'modelos/src';
 
 @Injectable()
 export class ClimaRepository {
   constructor(private axios: AxiosService) {}
+
+  async getAgrometeorologiaSiembra(
+    idSiembra: string,
+    from?: string,
+    to?: string,
+  ): Promise<IRespuestaAgrometeorologiaSiembra> {
+    const url = `${API_CLIMA}/agrometeorologia/siembras/${encodeURIComponent(
+      idSiembra,
+    )}`;
+    return await this.axios.GET<IRespuestaAgrometeorologiaSiembra>(url, {
+      params: {
+        ...(from ? { from } : {}),
+        ...(to ? { to } : {}),
+      },
+      headers: AGROMETEO_INTERNAL_TOKEN
+        ? {
+            'x-chaman-internal-token': AGROMETEO_INTERNAL_TOKEN,
+          }
+        : undefined,
+    });
+  }
 
   async getEstacionMasCercanaEntreFechas(
     lat: number,

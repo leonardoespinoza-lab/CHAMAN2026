@@ -1,7 +1,5 @@
 .frio-card {
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(243, 252, 250, 0.7)),
-    var(--p-surface-0);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(243, 252, 250, 0.7)), var(--p-surface-0);
   backdrop-filter: blur(14px);
   border: 1px solid rgba(91, 124, 156, 0.3);
   box-shadow: 0 18px 42px rgba(28, 45, 68, 0.08);
@@ -21,6 +19,14 @@
   margin: 0;
 }
 
+.frio-header__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  justify-content: flex-end;
+}
+
 .frio-header span,
 .frio-summary small,
 .frio-metrics small,
@@ -32,10 +38,28 @@
   line-height: 1.35;
 }
 
+.frio-loading {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.frio-loading i {
+  animation: frio-pulse 1.2s ease-in-out infinite alternate;
+  background: linear-gradient(90deg, var(--p-surface-100), var(--p-surface-0), var(--p-surface-100));
+  border-radius: 8px;
+  display: block;
+  height: 108px;
+}
+
 .frio-summary {
+  align-items: center;
   background: color-mix(in srgb, var(--p-primary-color), white 90%);
   border: 1.5px solid color-mix(in srgb, var(--p-primary-color), white 55%);
   border-radius: 8px;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
   margin-bottom: 0.85rem;
   padding: 0.75rem 0.85rem;
 }
@@ -48,11 +72,90 @@
   margin-bottom: 0.25rem;
 }
 
+.frio-summary div > span {
+  color: var(--p-primary-color);
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.frio-summary > small {
+  text-align: right;
+}
+
+.frio-quality {
+  background: color-mix(in srgb, var(--p-primary-color), white 94%);
+  border: 1px solid color-mix(in srgb, var(--p-primary-color), white 64%);
+  border-radius: 8px;
+  margin-bottom: 0.85rem;
+  overflow: hidden;
+}
+
+.frio-quality.reference {
+  background: #fff8e8;
+  border-color: #e7c46d;
+}
+
+.frio-quality summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 0.65rem;
+  list-style: none;
+  padding: 0.72rem 0.85rem;
+}
+
+.frio-quality summary::-webkit-details-marker {
+  display: none;
+}
+
+.frio-quality summary i {
+  color: var(--p-primary-color);
+  font-size: 1.1rem;
+}
+
+.frio-quality summary i:last-child {
+  font-size: 0.82rem;
+  margin-left: auto;
+  transition: transform 0.2s ease;
+}
+
+.frio-quality[open] summary i:last-child {
+  transform: rotate(180deg);
+}
+
+.frio-quality > span {
+  border-top: 1px solid rgba(86, 117, 150, 0.2);
+  color: var(--p-text-muted-color);
+  display: block;
+  line-height: 1.4;
+  padding: 0.72rem 0.85rem;
+}
+
 .frio-metrics {
   display: grid;
   gap: 0.7rem;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   margin-bottom: 0.9rem;
+}
+
+.frio-metrics--forcing {
+  grid-template-columns: 1fr;
+}
+
+.frio-metrics--forcing article {
+  align-items: center;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: minmax(180px, 0.55fr) minmax(280px, 1.45fr) auto;
+}
+
+.frio-metrics--forcing article > div b {
+  color: #98610f;
+  display: block;
+  font-size: 0.78rem;
+  margin-top: 0.22rem;
 }
 
 .frio-metrics article,
@@ -86,6 +189,15 @@
   font-size: 1.35rem;
   line-height: 1.1;
   margin: 0.25rem 0;
+}
+
+.frio-metrics em {
+  color: var(--p-primary-color);
+  display: block;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 750;
+  margin-top: 0.45rem;
 }
 
 .frio-metrics article.ok {
@@ -181,6 +293,45 @@
   width: 100%;
 }
 
+.frio-model-chart,
+.frio-warnings {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(86, 117, 150, 0.3);
+  border-radius: 8px;
+  margin-top: 0.85rem;
+  overflow: hidden;
+}
+
+.frio-model-chart summary,
+.frio-warnings summary {
+  color: var(--p-text-color);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0.8rem 0.95rem;
+}
+
+.frio-model-chart > div {
+  border-top: 1px solid rgba(86, 117, 150, 0.2);
+  padding: 0.4rem 0.75rem 0.75rem;
+}
+
+.frio-warnings ul {
+  border-top: 1px solid rgba(86, 117, 150, 0.2);
+  color: var(--p-text-muted-color);
+  line-height: 1.45;
+  margin: 0;
+  padding: 0.75rem 1rem 0.9rem 2rem;
+}
+
+@keyframes frio-pulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .frio-events {
   display: grid;
   gap: 0.7rem;
@@ -199,10 +350,272 @@
   text-transform: capitalize;
 }
 
+.frio-model-info {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.frio-model-info__hero,
+.frio-model-info__process {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--p-primary-color), white 91%);
+  border: 1px solid color-mix(in srgb, var(--p-primary-color), white 58%);
+  border-radius: 10px;
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.85rem;
+}
+
+.frio-model-info__hero > i,
+.frio-model-info__process > i {
+  color: var(--p-primary-color);
+  font-size: 1.35rem;
+  margin-top: 0.08rem;
+}
+
+.frio-model-info__hero strong,
+.frio-model-info__hero span,
+.frio-model-info__process strong {
+  display: block;
+}
+
+.frio-model-info__hero strong,
+.frio-model-info__process strong {
+  color: var(--p-text-color);
+  font-size: 1.05rem;
+}
+
+.frio-model-info__hero span,
+.frio-model-info__process p,
+.frio-model-info__formula p,
+.frio-model-info__source p {
+  color: var(--p-text-muted-color);
+  line-height: 1.45;
+  margin: 0.25rem 0 0;
+}
+
+.frio-model-info__audit {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.frio-model-info__audit article,
+.frio-model-info__formula,
+.frio-model-info__source {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(86, 117, 150, 0.28);
+  border-radius: 9px;
+  padding: 0.78rem;
+}
+
+.frio-model-info__audit span,
+.frio-model-info__formula > span,
+.frio-model-info__source > span {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.frio-model-info__audit strong,
+.frio-model-info__source strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 0.98rem;
+  line-height: 1.25;
+  margin-top: 0.25rem;
+}
+
+.frio-model-info__formula code {
+  background: #132c32;
+  border-radius: 7px;
+  color: #d9fff5;
+  display: block;
+  font-size: 1rem;
+  margin-top: 0.55rem;
+  overflow-x: auto;
+  padding: 0.72rem;
+  white-space: nowrap;
+}
+
+.frio-model-info__catalog {
+  background: color-mix(in srgb, var(--p-primary-color), white 96%);
+  border: 1px solid color-mix(in srgb, var(--p-primary-color), white 62%);
+  border-radius: 10px;
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem;
+}
+
+.frio-model-info__catalog > header {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.frio-model-info__catalog > header span,
+.frio-model-info__sources > span {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.frio-model-info__catalog > header strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 1.05rem;
+  margin-top: 0.18rem;
+}
+
+.frio-model-info__catalog > header > em {
+  color: var(--p-text-muted-color);
+  font-size: 0.72rem;
+  font-style: normal;
+  text-align: right;
+}
+
+.frio-model-info__references {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.frio-model-info__references article {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(86, 117, 150, 0.24);
+  border-radius: 9px;
+  padding: 0.75rem;
+}
+
+.frio-model-info__references article > div {
+  align-items: flex-start;
+  display: grid;
+  gap: 0.15rem 0.6rem;
+  grid-template-columns: 1fr auto;
+}
+
+.frio-model-info__references span,
+.frio-model-info__references em {
+  color: var(--p-text-muted-color);
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.frio-model-info__references strong {
+  color: var(--p-text-color);
+  font-size: 1.12rem;
+  grid-column: 1;
+}
+
+.frio-model-info__references em {
+  border: 1px solid color-mix(in srgb, var(--p-primary-color), white 55%);
+  border-radius: 999px;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  padding: 0.22rem 0.45rem;
+}
+
+.frio-model-info__references p,
+.frio-model-info__references small,
+.frio-model-info__phenology p {
+  color: var(--p-text-muted-color);
+  line-height: 1.4;
+  margin: 0.45rem 0 0;
+}
+
+.frio-model-info__references small {
+  display: block;
+}
+
+.frio-model-info__phenology {
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(86, 117, 150, 0.22);
+  border-radius: 9px;
+  display: flex;
+  gap: 0.65rem;
+  padding: 0.75rem;
+}
+
+.frio-model-info__phenology > i {
+  color: var(--p-primary-color);
+  font-size: 1.1rem;
+}
+
+.frio-model-info__phenology strong {
+  color: var(--p-text-color);
+}
+
+.frio-model-info__sources {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.frio-model-info__sources a {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(86, 117, 150, 0.24);
+  border-radius: 8px;
+  color: var(--p-text-color);
+  display: grid;
+  gap: 0.15rem 0.55rem;
+  grid-template-columns: auto 1fr;
+  padding: 0.62rem 0.72rem;
+  text-decoration: none;
+}
+
+.frio-model-info__sources a:hover {
+  border-color: var(--p-primary-color);
+}
+
+.frio-model-info__sources a i {
+  color: var(--p-primary-color);
+  grid-row: 1 / span 2;
+}
+
+.frio-model-info__sources a small {
+  color: var(--p-text-muted-color);
+}
+
+.frio-model-info__guardrails {
+  color: var(--p-text-muted-color);
+  line-height: 1.45;
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
 @media (max-width: 900px) {
   .frio-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .frio-header__actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .frio-model-info__audit {
+    grid-template-columns: 1fr;
+  }
+
+  .frio-model-info__references {
+    grid-template-columns: 1fr;
+  }
+
+  .frio-model-info__catalog > header {
+    flex-direction: column;
+  }
+
+  .frio-model-info__catalog > header > em {
+    text-align: left;
   }
 
   .frio-body {
@@ -215,6 +628,19 @@
   }
 
   .frio-body--sensor .frio-events {
+    grid-template-columns: 1fr;
+  }
+
+  .frio-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .frio-summary > small {
+    text-align: left;
+  }
+
+  .frio-metrics--forcing article {
     grid-template-columns: 1fr;
   }
 }

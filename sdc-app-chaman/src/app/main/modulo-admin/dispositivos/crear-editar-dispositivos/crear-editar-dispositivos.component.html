@@ -18,6 +18,7 @@
             <p-tab [value]="0">Basico</p-tab>
             <p-tab [value]="1">Asignacion</p-tab>
             <p-tab [value]="2">LoRaWAN</p-tab>
+            <p-tab [value]="3">Calidad meteorologica</p-tab>
           </p-tablist>
           <p-tabpanels>
             <p-tabpanel [value]="0">
@@ -113,8 +114,8 @@
               </div>
 
               <p class="assignment-note">
-                Esta fecha inicia el tramo operativo del sensor en el lote actual. Chaman conserva el historial
-                completo por DevEUI y registra los tramos de instalacion anteriores para auditoria tecnica.
+                Esta fecha inicia el tramo operativo del sensor en el lote actual. Chaman conserva el historial completo
+                por DevEUI y registra los tramos de instalacion anteriores para auditoria tecnica.
               </p>
             </p-tabpanel>
 
@@ -126,16 +127,310 @@
                 </article>
                 <article>
                   <span>Aplicacion</span>
-                  <strong>{{ lorawanSource?.metadata?.applicationName || lorawanSource?.metadata?.applicationID || '-' }}</strong>
+                  <strong>{{
+                    lorawanSource?.metadata?.applicationName || lorawanSource?.metadata?.applicationID || '-'
+                  }}</strong>
                 </article>
                 <article>
                   <span>RSSI / SNR</span>
-                  <strong>{{ lorawanSource?.metadata?.rssi ?? '--' }} dBm / {{ lorawanSource?.metadata?.snr ?? '--' }} dB</strong>
+                  <strong
+                    >{{ lorawanSource?.metadata?.rssi ?? '--' }} dBm /
+                    {{ lorawanSource?.metadata?.snr ?? '--' }} dB</strong
+                  >
                 </article>
                 <article>
                   <span>Contador</span>
                   <strong>{{ lorawanSource?.metadata?.fCnt ?? '-' }}</strong>
                 </article>
+              </div>
+            </p-tabpanel>
+
+            <p-tabpanel [value]="3">
+              <div class="qualification-panel" formGroupName="calificacionMeteorologica">
+                <div class="qualification-note">
+                  <strong>Calificacion independiente por variable</strong>
+                  <span>
+                    Temperatura y humedad relativa tienen trazabilidad propia. Calificar temperatura nunca certifica
+                    automaticamente la humedad; cada variable solo reemplaza central u Open-Meteo cuando su instalacion
+                    y calibracion estan documentadas y vigentes para la fecha de la lectura.
+                  </span>
+                </div>
+
+                <section class="qualification-section">
+                  <header class="qualification-section-header">
+                    <div>
+                      <span class="section-kicker">Variable de aire</span>
+                      <h2>Temperatura</h2>
+                    </div>
+                    <span class="variable-unit">Exactitud y offset en °C</span>
+                  </header>
+
+                  <div class="form-grid">
+                    <p-floatlabel variant="in">
+                      <p-select
+                        formControlName="estado"
+                        [options]="estadosCalificacion"
+                        optionLabel="label"
+                        optionValue="value"
+                        [style]="{ width: '100%' }"
+                      />
+                      <label>Estado de calidad</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <p-select
+                        formControlName="rolTemperatura"
+                        [options]="rolesTemperatura"
+                        optionLabel="label"
+                        optionValue="value"
+                        [style]="{ width: '100%' }"
+                      />
+                      <label>Rol del sensor de temperatura</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <p-inputnumber
+                        formControlName="alturaM"
+                        [min]="0.01"
+                        [max]="10"
+                        [minFractionDigits]="1"
+                        [maxFractionDigits]="2"
+                        suffix=" m"
+                        [fluid]="true"
+                      />
+                      <label>Altura de instalacion</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <p-inputnumber
+                        formControlName="exactitudTemperaturaC"
+                        [min]="0.01"
+                        [max]="2"
+                        [minFractionDigits]="1"
+                        [maxFractionDigits]="2"
+                        suffix=" °C"
+                        [fluid]="true"
+                      />
+                      <label>Exactitud declarada</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <input pInputText type="date" formControlName="fechaCalibracion" [fluid]="true" />
+                      <label>Ultima calibracion</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <input pInputText type="date" formControlName="proximaCalibracion" [fluid]="true" />
+                      <label>Calibracion valida hasta</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <p-inputnumber
+                        formControlName="offsetTemperaturaC"
+                        [min]="-10"
+                        [max]="10"
+                        [minFractionDigits]="1"
+                        [maxFractionDigits]="2"
+                        suffix=" °C"
+                        [fluid]="true"
+                      />
+                      <label>Correccion / offset</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <input pInputText formControlName="fuenteCalibracion" [fluid]="true" />
+                      <label>Certificado, patron o fuente</label>
+                    </p-floatlabel>
+
+                    <label class="checkbox-field">
+                      <p-checkbox formControlName="abrigoRadiacion" [binary]="true" inputId="abrigoRadiacion" />
+                      <span>
+                        <strong>Abrigo radiativo confirmado</strong>
+                        <small> Evita que la radiacion solar caliente artificialmente el sensor. </small>
+                      </span>
+                    </label>
+
+                    <p-floatlabel variant="in" class="field-wide">
+                      <textarea pTextarea rows="3" formControlName="observaciones"></textarea>
+                      <label>Observaciones de instalacion y mantenimiento</label>
+                    </p-floatlabel>
+                  </div>
+
+                  @if (estadoCalificacion === 'calificado') {
+                    <p class="assignment-note">
+                      Para guardar como calificado se exige temperatura de aire, altura, abrigo radiativo, exactitud,
+                      fecha de calibracion, vigencia y fuente trazable. Si vence la calibracion, el motor la conserva
+                      historicamente y degrada solo las lecturas posteriores.
+                    </p>
+                    @if (form.get('calificacionMeteorologica')?.hasError('calificacionMeteorologicaIncompleta')) {
+                      <p class="assignment-note qualification-error">
+                        La calificacion termica aun esta incompleta o fuera de vigencia. El formulario no permitira
+                        guardarla como apta para decisiones biologicas.
+                      </p>
+                    }
+                  }
+                </section>
+
+                <section class="qualification-section" formGroupName="humedadRelativa">
+                  <header class="qualification-section-header">
+                    <div>
+                      <span class="section-kicker">Variable de aire independiente</span>
+                      <h2>Humedad relativa</h2>
+                    </div>
+                    <span class="variable-unit">Exactitud y offset en puntos porcentuales</span>
+                  </header>
+
+                  <div class="form-grid">
+                    <p-floatlabel variant="in">
+                      <p-select
+                        formControlName="estado"
+                        [options]="estadosCalificacion"
+                        optionLabel="label"
+                        optionValue="value"
+                        [style]="{ width: '100%' }"
+                      />
+                      <label>Estado de calidad de humedad</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <p-select
+                        formControlName="rol"
+                        [options]="rolesTemperatura"
+                        optionLabel="label"
+                        optionValue="value"
+                        [style]="{ width: '100%' }"
+                      />
+                      <label>Exposicion del sensor de humedad</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <p-inputnumber
+                        formControlName="alturaM"
+                        [min]="0.01"
+                        [max]="10"
+                        [minFractionDigits]="1"
+                        [maxFractionDigits]="2"
+                        suffix=" m"
+                        [fluid]="true"
+                      />
+                      <label>Altura de instalacion</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <p-inputnumber
+                        formControlName="exactitud"
+                        [min]="0.01"
+                        [max]="5"
+                        [minFractionDigits]="1"
+                        [maxFractionDigits]="2"
+                        suffix=" p.p."
+                        [fluid]="true"
+                      />
+                      <label>Exactitud declarada</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <input pInputText type="date" formControlName="fechaCalibracion" [fluid]="true" />
+                      <label>Ultima calibracion</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <input pInputText type="date" formControlName="proximaCalibracion" [fluid]="true" />
+                      <label>Calibracion valida hasta</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <p-inputnumber
+                        formControlName="offset"
+                        [min]="-20"
+                        [max]="20"
+                        [minFractionDigits]="1"
+                        [maxFractionDigits]="2"
+                        suffix=" p.p."
+                        [fluid]="true"
+                      />
+                      <label>Correccion / offset</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <input pInputText formControlName="fuenteCalibracion" [fluid]="true" />
+                      <label>Certificado, patron o fuente</label>
+                    </p-floatlabel>
+
+                    <label class="checkbox-field">
+                      <p-checkbox formControlName="abrigoRadiacion" [binary]="true" inputId="abrigoRadiacionHumedad" />
+                      <span>
+                        <strong>Abrigo y exposicion confirmados</strong>
+                        <small>La humedad requiere su propia comprobacion de instalacion y calibracion.</small>
+                      </span>
+                    </label>
+
+                    <p-floatlabel variant="in" class="field-wide">
+                      <textarea pTextarea rows="3" formControlName="observaciones"></textarea>
+                      <label>Observaciones de instalacion y mantenimiento</label>
+                    </p-floatlabel>
+                  </div>
+
+                  @if (estadoCalificacionHumedad === 'calificado') {
+                    <p class="assignment-note">
+                      La humedad calificada exige rol de aire, altura, abrigo, exactitud de hasta 5 puntos porcentuales,
+                      fechas vigentes y fuente trazable.
+                    </p>
+                    @if (
+                      form.get('calificacionMeteorologica.humedadRelativa')?.hasError('calificacionHumedadIncompleta')
+                    ) {
+                      <p class="assignment-note qualification-error">
+                        La calificacion de humedad esta incompleta o fuera de vigencia. No sustituira central u
+                        Open-Meteo.
+                      </p>
+                    }
+                  }
+                </section>
+
+                @if (historialCalibraciones.length) {
+                  <section class="qualification-history" aria-label="Historial inmutable de calibraciones">
+                    <header class="qualification-section-header">
+                      <div>
+                        <span class="section-kicker">Auditoria</span>
+                        <h2>Intervalos historicos registrados</h2>
+                      </div>
+                      <span class="variable-unit">{{ historialCalibraciones.length }} intervalo(s)</span>
+                    </header>
+                    <p>
+                      Estos registros son administrados por el backend y no se editan: permiten reprocesar cada lectura
+                      con la calificacion y el offset que regian en su fecha original.
+                    </p>
+                    <div class="history-grid">
+                      @for (item of historialCalibraciones; track item.id) {
+                        <article>
+                          <div class="history-title">
+                            <strong>{{
+                              item.variable === 'temperatura_aire' ? 'Temperatura de aire' : 'Humedad relativa'
+                            }}</strong>
+                            <span [attr.data-state]="item.estado">{{ item.estado }}</span>
+                          </div>
+                          <dl>
+                            <div>
+                              <dt>Vigencia</dt>
+                              <dd>
+                                {{ item.fechaCalibracion | date: 'dd/MM/yyyy' }} a
+                                {{ item.proximaCalibracion | date: 'dd/MM/yyyy' }}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Fuente</dt>
+                              <dd>{{ item.fuenteCalibracion || 'Sin detalle' }}</dd>
+                            </div>
+                            <div>
+                              <dt>ID trazable</dt>
+                              <dd>{{ item.id }}</dd>
+                            </div>
+                          </dl>
+                        </article>
+                      }
+                    </div>
+                  </section>
+                }
               </div>
             </p-tabpanel>
           </p-tabpanels>

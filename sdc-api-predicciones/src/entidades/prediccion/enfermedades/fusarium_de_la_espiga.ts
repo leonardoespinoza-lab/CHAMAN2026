@@ -82,6 +82,7 @@ export class FusariumDeLaEspigaService {
           resistencia,
           variables.coberturaClima,
           contexto?.calidadClima,
+          contexto?.fenologiaObservada ?? true,
         ),
         modelo: {
           ...fueraVentana.modelo,
@@ -178,6 +179,7 @@ export class FusariumDeLaEspigaService {
           resistencia,
           variables.coberturaClima,
           contexto?.calidadClima,
+          contexto?.fenologiaObservada ?? true,
         ),
         modelo: {
           id: 'trigo.fusarium_espiga',

@@ -59,4 +59,22 @@ describe('LotesRepository internal tokens', () => {
       },
     );
   });
+
+  it('consulta el clima canonico por siembra con el token interno', async () => {
+    const axios = {
+      GET: jest.fn().mockResolvedValue({ summary: {}, series: [] }),
+    };
+    const repository = new LotesRepository(axios as any);
+
+    await repository.getAgrometeorologia('siembra-1');
+
+    expect(axios.GET).toHaveBeenCalledWith(
+      'http://clima/agrometeorologia/siembras/siembra-1',
+      {
+        headers: {
+          'x-chaman-internal-token': 'agrometeo-token',
+        },
+      },
+    );
+  });
 });

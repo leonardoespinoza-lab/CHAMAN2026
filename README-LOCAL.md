@@ -16,7 +16,7 @@ Esta carpeta es la base de trabajo nueva. No depende del codigo que esta corrien
 
 - URL: `http://127.0.0.1:4200/auth`
 - Usuario admin: `admin@chaman.local`
-- Clave: `Chaman2026!`
+- Clave: definir `ADMIN_PASSWORD` localmente antes de ejecutar el seed.
 
 Para recrear el admin local y el cliente OAuth:
 

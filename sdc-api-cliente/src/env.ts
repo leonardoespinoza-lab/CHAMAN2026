@@ -22,6 +22,13 @@ export const API_FTP =
   process.env.API_FTP || 'https://chaman-ftp-production.up.railway.app';
 export const API_WEED_AI = process.env.API_WEED_AI || 'http://127.0.0.1:8080';
 export const WEED_AI_TIMEOUT_MS = +process.env.WEED_AI_TIMEOUT_MS || 30000;
+const internalHttpTimeout = Number(process.env.INTERNAL_HTTP_TIMEOUT_MS);
+export const INTERNAL_HTTP_TIMEOUT_MS =
+  Number.isInteger(internalHttpTimeout) &&
+  internalHttpTimeout >= 1000 &&
+  internalHttpTimeout <= 120000
+    ? internalHttpTimeout
+    : 30000;
 export const WEED_AI_STORAGE_DIR =
   process.env.WEED_AI_STORAGE_DIR || 'storage/ia-malezas';
 export const WEED_AI_DISABLE_FALLBACK =
@@ -58,6 +65,26 @@ export const REDIS_NDVI_DB = +(
 );
 export const REDIS_NDVI_QUEUE =
   process.env.REDIS_NDVI_QUEUE || process.env.REDIS_QUEUE || 'tareas-ndvi';
+export const REDIS_DECISION_QUEUE =
+  process.env.REDIS_DECISION_QUEUE || 'chaman-decision-v1';
+const decisionPipelineTimeout = Number(
+  process.env.DECISION_PIPELINE_JOB_TIMEOUT_MS,
+);
+export const DECISION_PIPELINE_JOB_TIMEOUT_MS =
+  Number.isInteger(decisionPipelineTimeout) &&
+  decisionPipelineTimeout >= 60_000 &&
+  decisionPipelineTimeout <= 15 * 60_000
+    ? decisionPipelineTimeout
+    : 5 * 60_000;
+const decisionPipelineConcurrency = Number(
+  process.env.DECISION_PIPELINE_CONCURRENCY,
+);
+export const DECISION_PIPELINE_CONCURRENCY =
+  Number.isInteger(decisionPipelineConcurrency) &&
+  decisionPipelineConcurrency >= 1 &&
+  decisionPipelineConcurrency <= 16
+    ? decisionPipelineConcurrency
+    : 4;
 export const REDIS_KEY_PREFIX = process.env.REDIS_KEY_PREFIX || 'sdc-cliente';
 export const REDIS_CONNECT_TIMEOUT =
   +process.env.REDIS_CONNECT_TIMEOUT || 10000;

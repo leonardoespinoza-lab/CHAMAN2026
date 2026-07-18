@@ -39,6 +39,15 @@
         <small>{{ contextoOperativoResumen }}</small>
       </div>
       <div class="lot-primary-actions">
+        @if (fichaVarietal) {
+          <p-button
+            label="Ficha de la variedad"
+            icon="pi pi-book"
+            severity="primary"
+            [outlined]="true"
+            (onClick)="verFichaVarietal = true"
+          />
+        }
         @if (helper.puedeVerModulo('Certificados')) {
           <p-button
             label="Informe agronomico"
@@ -118,6 +127,15 @@
     </div>
   </section>
 
+  @if (siembra && !siembra.fechaCosecha && helper.puedeVerModulo('EtapasFenologicas')) {
+    <app-card-etapas-fenologicas
+      [lote]="lote"
+      [siembra]="siembra"
+      (estadoFenologiaTermicaChange)="estadoFenologiaArveja = $event"
+      (siembraActualizada)="actualizarSiembraFenologica($event)"
+    ></app-card-etapas-fenologicas>
+  }
+
   <app-card-ubicacion-lote [lote]="lote"></app-card-ubicacion-lote>
   <app-card-suelo-ambiente [lote]="lote"></app-card-suelo-ambiente>
 
@@ -135,12 +153,199 @@
     <app-data-quality-strip [lote]="lote" [siembra]="siembra"></app-data-quality-strip>
   </p-dialog>
 
+  <p-dialog
+    [(visible)]="verFichaVarietal"
+    [modal]="true"
+    [dismissableMask]="true"
+    [draggable]="false"
+    [resizable]="false"
+    [style]="{ width: 'min(1180px, 94vw)' }"
+    [breakpoints]="{ '720px': '96vw' }"
+    header="Ficha de la variedad"
+    styleClass="chaman-detail-dialog variety-sheet-dialog"
+  >
+    @if (fichaVarietal; as ficha) {
+      <div class="variety-sheet">
+        <header class="variety-sheet__hero">
+          <div class="variety-sheet__identity">
+            <span class="variety-sheet__eyebrow">{{ ficha.cultivo }} · {{ ficha.version }}</span>
+            <h2>{{ ficha.nombreOficial }}</h2>
+            <p>
+              @if (ficha.nombreOficialVerificado) {
+                Denominacion oficial documentada
+              } @else {
+                Denominacion cargada en Chaman; identidad oficial pendiente de verificacion
+              }
+            </p>
+          </div>
+          <div class="variety-sheet__status" [attr.data-status]="ficha.estado">
+            <span>{{ estadoFichaVarietalLabel }}</span>
+            <strong>{{ ficha.coberturaPorcentaje }}%</strong>
+            <small>cobertura documental</small>
+          </div>
+        </header>
+
+        <section class="variety-sheet__facts" aria-label="Identidad y clasificacion de la variedad">
+          <article>
+            <span>Denominacion cargada</span>
+            <strong>{{ ficha.denominacionCargada }}</strong>
+            <small>{{ ficha.aliases.length ? 'Alias: ' + ficha.aliases.join(', ') : 'Sin alias documentados' }}</small>
+          </article>
+          <article>
+            <span>Obtentor / proveedor</span>
+            <strong>{{ ficha.obtentor || ficha.proveedor || 'Pendiente' }}</strong>
+            <small>{{ ficha.mantenedor ? 'Mantenedor: ' + ficha.mantenedor : ficha.semilleroCargado || 'Sin dato cargado' }}</small>
+          </article>
+          <article>
+            <span>Origen y campaña</span>
+            <strong>{{ ficha.paisOrigen || 'Origen pendiente' }}</strong>
+            <small>{{ ficha.campania || 'Campaña no informada' }}</small>
+          </article>
+          <article>
+            <span>Ciclo / material</span>
+            <strong>{{ ficha.ciclo || 'Sin clasificar' }}</strong>
+            <small>{{ ficha.portainjerto ? 'Portainjerto: ' + ficha.portainjerto : 'Sin portainjerto informado' }}</small>
+          </article>
+        </section>
+
+        <section class="variety-sheet__coverage">
+          <div class="variety-sheet__section-heading">
+            <div>
+              <span>Control documental</span>
+              <h3>Que sabemos y que falta validar</h3>
+            </div>
+            <div class="variety-sheet__progress" aria-label="Cobertura de la ficha varietal">
+              <span [style.width.%]="ficha.coberturaPorcentaje"></span>
+            </div>
+          </div>
+          <div class="variety-sheet__coverage-grid">
+            @for (item of ficha.cobertura; track item.id) {
+              <article [class.complete]="item.completa">
+                <i class="pi" [class.pi-check-circle]="item.completa" [class.pi-clock]="!item.completa"></i>
+                <div>
+                  <strong>{{ item.etiqueta }}</strong>
+                  <small>{{ item.detalle }}</small>
+                </div>
+              </article>
+            }
+          </div>
+        </section>
+
+        <div class="variety-sheet__columns">
+          <section class="variety-sheet__panel">
+            <div class="variety-sheet__section-heading">
+              <div>
+                <span>Desarrollo</span>
+                <h3>Fenologia y modelo termico</h3>
+              </div>
+            </div>
+
+            @if (ficha.fenologia.length) {
+              <div class="variety-sheet__milestones">
+                @for (hito of ficha.fenologia; track hito.etiqueta) {
+                  <article>
+                    <span>{{ hito.etiqueta }}</span>
+                    <strong>{{ hito.valor }}</strong>
+                  </article>
+                }
+              </div>
+            } @else {
+              <p class="variety-sheet__empty">No hay hitos fenologicos varietales documentados.</p>
+            }
+
+            @if (ficha.referenciasTermicas.length) {
+              <div class="variety-sheet__thermal-list">
+                @for (referencia of ficha.referenciasTermicas; track referencia.proceso + referencia.unidad) {
+                  <article>
+                    <div>
+                      <span>{{ referencia.proceso }} · {{ referencia.modelo }}</span>
+                      <strong>{{ valorReferenciaTermica(referencia) }}</strong>
+                    </div>
+                    <small>{{ referencia.region }} · {{ referencia.estado }}</small>
+                    <p>{{ referencia.observaciones }}</p>
+                  </article>
+                }
+              </div>
+            } @else {
+              <p class="variety-sheet__empty">Sin umbral termico varietal publicado y trazable.</p>
+            }
+          </section>
+
+          <section class="variety-sheet__panel">
+            <div class="variety-sheet__section-heading">
+              <div>
+                <span>Sanidad</span>
+                <h3>Perfil de resistencia</h3>
+              </div>
+            </div>
+            @if (ficha.sanidad.length) {
+              <div class="variety-sheet__health-list">
+                @for (item of ficha.sanidad; track item.enfermedad) {
+                  <article>
+                    <div>
+                      <strong>{{ item.enfermedad }}</strong>
+                      <span>{{ item.perfil }}</span>
+                    </div>
+                    <small>{{ item.estado }} · confianza {{ item.confianza }}</small>
+                    @if (item.fuente) {
+                      <p>{{ item.fuente }}</p>
+                    }
+                  </article>
+                }
+              </div>
+            } @else {
+              <p class="variety-sheet__empty">
+                No se asume susceptibilidad: falta una fuente varietal sanitaria identificada.
+              </p>
+            }
+          </section>
+        </div>
+
+        <section class="variety-sheet__sources">
+          <div class="variety-sheet__section-heading">
+            <div>
+              <span>Trazabilidad</span>
+              <h3>Documentos y bibliografia</h3>
+            </div>
+            <small>{{ ficha.documentos.length }} fuente{{ ficha.documentos.length === 1 ? '' : 's' }}</small>
+          </div>
+          @if (ficha.documentos.length) {
+            <div class="variety-sheet__source-list">
+              @for (documento of ficha.documentos; track documento.url) {
+                <a [href]="documento.url" target="_blank" rel="noopener noreferrer">
+                  <i class="pi pi-external-link"></i>
+                  <div>
+                    <strong>{{ documento.titulo }}</strong>
+                    <span>{{ documento.organizacion }} · {{ tipoDocumentoVarietalLabel(documento) }}</span>
+                  </div>
+                  <small>{{ documento.anio || documento.campania || 'Sin fecha' }}</small>
+                </a>
+              }
+            </div>
+          } @else {
+            <p class="variety-sheet__empty">
+              La ficha oficial del obtentor o el registro varietal aun no fue adjuntado.
+            </p>
+          }
+        </section>
+
+        @if (ficha.advertencias.length) {
+          <section class="variety-sheet__guardrail">
+            <i class="pi pi-shield"></i>
+            <div>
+              <strong>Uso responsable del dato</strong>
+              @for (advertencia of ficha.advertencias; track advertencia) {
+                <p>{{ advertencia }}</p>
+              }
+            </div>
+          </section>
+        }
+      </div>
+    }
+  </p-dialog>
+
   @if (siembra && !siembra.fechaCosecha && helper.puedeVerModulo('EtapasFenologicas')) {
-    <app-card-etapas-fenologicas
-      [lote]="lote"
-      [siembra]="siembra"
-      (estadoFenologiaTermicaChange)="estadoFenologiaArveja = $event"
-    ></app-card-etapas-fenologicas>
+    <app-card-frio-termico [lote]="lote" [siembra]="siembra"></app-card-frio-termico>
     <app-card-calculos-meteorologicos [siembra]="siembra"></app-card-calculos-meteorologicos>
   }
 
@@ -168,9 +373,6 @@
     <div class="services-stack">
       @if (siembra?.fechaCosecha) {
         <app-card-rendimiento class="service-panel" [siembra]="siembra"></app-card-rendimiento>
-      }
-      @if (esPlantacion && helper.puedeVerModulo('FrioTermica')) {
-        <app-card-frio-termico class="service-panel" [siembra]="siembra" [lote]="lote"></app-card-frio-termico>
       }
       @if (
         helper.puedeVerModulo('Clima') ||

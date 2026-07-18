@@ -18,12 +18,14 @@ export class CardUbicacionLoteComponent implements OnChanges, OnDestroy {
   public ubicacion?: IUbicacionAdministrativaLote | null;
   public cargando = false;
   public reintentando = false;
+  public infoVisible = false;
   private pollTimer?: ReturnType<typeof setTimeout>;
   private pollCount = 0;
   private readonly maxPolls = 10;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (!changes['lote']) return;
+    this.infoVisible = false;
     this.clearPolling();
     this.ubicacion = this.lote?.ubicacionAdministrativa;
     if (this.lote?._id) void this.cargar(false);
@@ -61,6 +63,48 @@ export class CardUbicacionLoteComponent implements OnChanges, OnDestroy {
     const source = this.ubicacion?.fuente || 'GeoRef Argentina';
     const version = this.ubicacion?.sourceVersion?.slice(0, 10);
     return version ? `${source} · versión ${version}` : source;
+  }
+
+  public get informationWarnings(): string[] {
+    const seen = new Set<string>();
+    const conflictKey = this.warningKey(this.ubicacion?.conflictoManual?.detalle);
+    return (this.ubicacion?.advertencias || [])
+      .map((warning) => `${warning}`.trim())
+      .filter((warning) => {
+        const key = this.warningKey(warning);
+        if (!key || key === conflictKey || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  }
+
+  public get informationObservationCount(): number {
+    return (this.ubicacion?.conflictoManual?.existe ? 1 : 0) + this.informationWarnings.length;
+  }
+
+  public get hasInformationObservations(): boolean {
+    return this.informationObservationCount > 0;
+  }
+
+  public get informationAriaLabel(): string {
+    const count = this.informationObservationCount;
+    if (!count) return 'Abrir información territorial y metodología';
+    return `Abrir información territorial; ${count} ${count === 1 ? 'observación' : 'observaciones'} técnica${
+      count === 1 ? '' : 's'
+    }`;
+  }
+
+  public get informationTooltip(): string {
+    return this.hasInformationObservations ? 'Información y observaciones' : 'Información y metodología';
+  }
+
+  private warningKey(value?: string): string {
+    return `${value || ''}`
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLocaleLowerCase('es-AR');
   }
 
   public distancia(value?: number): string {

@@ -7,6 +7,9 @@ export interface IToken {
   refreshToken?: string;
   refreshTokenExpiresAt?: string;
   scope?: string | string[];
+  sessionStartedAt?: string;
+  sessionLastActivityAt?: string;
+  sessionAbsoluteExpiresAt?: string;
   client: IClient;
   user: IUsuario;
 }

@@ -122,48 +122,6 @@ function numberOrUndefined(value) {
   return Number.isFinite(n) ? n : undefined;
 }
 
-function chillPortionsFromHfe(value) {
-  const hfe = numberOrUndefined(value);
-  return hfe !== undefined ? Number((hfe / 28).toFixed(2)) : undefined;
-}
-
-function hfeFactor(temp) {
-  const value = Number(temp);
-  if (!Number.isFinite(value)) return undefined;
-  const points = [
-    [-5, 0],
-    [0, 0.2],
-    [1, 0.45],
-    [2, 0.65],
-    [3, 0.799],
-    [4, 0.905],
-    [5, 0.975],
-    [6, 1],
-    [7, 0.975],
-    [8, 0.905],
-    [9, 0.799],
-    [10, 0.68],
-    [11, 0.54],
-    [12, 0.407],
-    [13, 0.29],
-    [14, 0.18],
-    [15, 0.08],
-    [16, 0],
-    [18, 0],
-  ];
-  if (value <= points[0][0]) return points[0][1];
-  if (value >= points[points.length - 1][0]) return 0;
-  for (let i = 0; i < points.length - 1; i += 1) {
-    const [x1, y1] = points[i];
-    const [x2, y2] = points[i + 1];
-    if (value >= x1 && value <= x2) {
-      const t = (value - x1) / (x2 - x1);
-      return y1 + t * (y2 - y1);
-    }
-  }
-  return 0;
-}
-
 function formatDate(value) {
   return value ? new Date(value).toISOString() : undefined;
 }
@@ -192,7 +150,17 @@ function buildSemillaDoc(variedad) {
       horasFrio: numberOrUndefined(variedad.hf_requeridas),
       horasFrioEfectivas: numberOrUndefined(variedad.hfe_requeridas),
       porcionesFrio: numberOrUndefined(variedad.cp_requeridas),
-      modelo: 'HF + HFE + CP',
+      modelo: 'HF + Dynamic Model',
+      modeloRector: numberOrUndefined(variedad.cp_requeridas)
+        ? 'CP'
+        : numberOrUndefined(variedad.hf_requeridas)
+          ? 'HF'
+          : 'sin_calibrar',
+      estado: 'requiere_calibracion',
+      fuente: 'App legacy horas frio Neuquen',
+      confianza: 'estimada',
+      observaciones:
+        'HF/CP se conservan solo si fueron declarados en origen. HFE es legacy, no es modelo rector y nunca se convierte a CP.',
     },
     fenologiaReferencia: {
       brotacion: cleanText(variedad.brotacion) || 'Registrar fecha real por lote',
@@ -317,8 +285,6 @@ function buildDeviceDoc({ oldSensor, mapping, lote, establecimiento, chillState,
   const latestObject = latestReport?.object_json || {};
   const battery = numberOrUndefined(latestObject.battery);
   const temperature = numberOrUndefined(chillState?.last_temp);
-  const horasFrioEfectivas = numberOrUndefined(chillState?.hfe_hours);
-  const porcionesFrio = chillPortionsFromHfe(horasFrioEfectivas);
   const lastTime = chillState?.last_time || latestReport?.time;
   const idLote = lote?._id;
   const idEstablecimiento = establecimiento?._id;
@@ -343,11 +309,11 @@ function buildDeviceDoc({ oldSensor, mapping, lote, establecimiento, chillState,
       fechaUltimoCalculo: formatDate(lastTime),
       ultimaTemperatura: temperature,
       horasFrio: numberOrUndefined(chillState?.chill_hours),
-      horasFrioEfectivas,
-      porcionesFrio,
-      factorEfectivoActual: hfeFactor(temperature),
-      modelo: 'HF <= 7C + HFE + CP simplificado',
+      modelo: 'HF 0-7,2 C: vista previa del dispositivo',
+      versionModelo: 'hf-field-preview-1.0.0',
       fuente: 'Sensor LoRa',
+      observaciones:
+        'Utah y Chill Portions se recalculan en el motor horario canonico; no se derivan desde HFE legacy.',
     },
     fechaUltimaComunicacion: lastTime ? new Date(lastTime) : undefined,
     metadata: {
@@ -683,7 +649,9 @@ async function main() {
         ultimoReporte: formatDate(item.uplinksSummary?.last_time),
         horasFrio: numberOrUndefined(item.chillState?.chill_hours),
         horasFrioEfectivas: numberOrUndefined(item.chillState?.hfe_hours),
-        porcionesFrio: chillPortionsFromHfe(item.chillState?.hfe_hours),
+        porcionesFrio: undefined,
+        advertencia:
+          'CP no se deriva desde HFE; se recalcula con la serie horaria canonica.',
       })),
     };
 

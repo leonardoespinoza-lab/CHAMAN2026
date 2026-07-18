@@ -46,6 +46,10 @@
 .source-badge.station {
   border-color: color-mix(in srgb, var(--p-primary-color) 42%, var(--p-surface-border));
 }
+.source-badge.sensor {
+  border-color: color-mix(in srgb, #268f83 52%, var(--p-surface-border));
+  background: color-mix(in srgb, var(--p-primary-50) 82%, var(--p-content-background));
+}
 .source-badge.mixed {
   border-color: color-mix(in srgb, #7a64d1 40%, var(--p-surface-border));
 }
@@ -205,7 +209,7 @@
 }
 .chart-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.3rem;
   padding: 0.45rem;
   border-bottom: 1px solid var(--p-surface-border);
@@ -354,6 +358,7 @@
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
 @media (max-width: 720px) {
   :host {
     margin-top: 0.7rem;

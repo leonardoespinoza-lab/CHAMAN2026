@@ -1,7 +1,13 @@
 import { HttpService } from '@nestjs/axios';
-import { HttpException, Injectable, Logger } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { AxiosRequestConfig } from 'axios';
 import { firstValueFrom } from 'rxjs';
+import { INTERNAL_HTTP_TIMEOUT_MS } from '../../env';
 
 @Injectable()
 export class AxiosService {
@@ -17,24 +23,7 @@ export class AxiosService {
       );
       return response?.data;
     } catch (error) {
-      // Respuesta de error de la API
-      if (error?.response?.data?.message) {
-        const msgApi = error?.response?.data?.message;
-        const status = error?.response?.status;
-        const err = error.toJSON();
-        const msg = `Error ${status} en request ${err?.config?.method} ${err?.config?.url} | ${msgApi}`;
-        Logger.error(msg, 'AXIOS');
-        throw new HttpException(
-          error?.response?.data?.message,
-          error?.response?.status,
-        );
-      } else {
-        // No hubo respusta de la API
-        const err = error.toJSON();
-        const msg = `Error ${err?.status} en request ${err?.config?.method} ${err?.config?.url} | ${err?.message}`;
-        Logger.error(msg, 'AXIOS');
-        throw new HttpException(error?.message, err?.status || 500);
-      }
+      this.handleError(error);
     }
   }
 
@@ -49,24 +38,7 @@ export class AxiosService {
       );
       return response?.data;
     } catch (error) {
-      // Respuesta de error de la API
-      if (error?.response?.data?.message) {
-        const msgApi = error?.response?.data?.message;
-        const status = error?.response?.status;
-        const err = error.toJSON();
-        const msg = `Error ${status} en request ${err?.config?.method} ${err?.config?.url} | ${msgApi}`;
-        Logger.error(msg, 'AXIOS');
-        throw new HttpException(
-          error?.response?.data?.message,
-          error?.response?.status,
-        );
-      } else {
-        // No hubo respusta de la API
-        const err = error.toJSON();
-        const msg = `Error ${err?.status} en request ${err?.config?.method} ${err?.config?.url} | ${err?.message}`;
-        Logger.error(msg, 'AXIOS');
-        throw new HttpException(error?.message, err?.status || 500);
-      }
+      this.handleError(error);
     }
   }
 
@@ -81,24 +53,7 @@ export class AxiosService {
       );
       return response?.data;
     } catch (error) {
-      // Respuesta de error de la API
-      if (error?.response?.data?.message) {
-        const msgApi = error?.response?.data?.message;
-        const status = error?.response?.status;
-        const err = error.toJSON();
-        const msg = `Error ${status} en request ${err?.config?.method} ${err?.config?.url} | ${msgApi}`;
-        Logger.error(msg, 'AXIOS');
-        throw new HttpException(
-          error?.response?.data?.message,
-          error?.response?.status,
-        );
-      } else {
-        // No hubo respusta de la API
-        const err = error.toJSON();
-        const msg = `Error ${err?.status} en request ${err?.config?.method} ${err?.config?.url} | ${err?.message}`;
-        Logger.error(msg, 'AXIOS');
-        throw new HttpException(error?.message, err?.status || 500);
-      }
+      this.handleError(error);
     }
   }
 
@@ -112,24 +67,48 @@ export class AxiosService {
       );
       return response?.data;
     } catch (error) {
-      // Respuesta de error de la API
-      if (error?.response?.data?.message) {
-        const msgApi = error?.response?.data?.message;
-        const status = error?.response?.status;
-        const err = error.toJSON();
-        const msg = `Error ${status} en request ${err?.config?.method} ${err?.config?.url} | ${msgApi}`;
-        Logger.error(msg, 'AXIOS');
-        throw new HttpException(
-          error?.response?.data?.message,
-          error?.response?.status,
-        );
-      } else {
-        // No hubo respusta de la API
-        const err = error.toJSON();
-        const msg = `Error ${err?.status} en request ${err?.config?.method} ${err?.config?.url} | ${err?.message}`;
-        Logger.error(msg, 'AXIOS');
-        throw new HttpException(error?.message, err?.status || 500);
-      }
+      this.handleError(error);
     }
+  }
+
+  private handleError(error: any): never {
+    const config = error?.config || error?.toJSON?.()?.config || {};
+    const method = String(config?.method || 'request').toUpperCase();
+    const url = String(config?.url || 'servicio interno');
+    const timeout = Number(config?.timeout) || INTERNAL_HTTP_TIMEOUT_MS;
+
+    if (error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT') {
+      const publicMessage =
+        `El servicio interno no respondió dentro del tiempo máximo ` +
+        `configurado (${timeout} ms).`;
+      Logger.error(
+        `Timeout en request ${method} ${url} después de ${timeout} ms`,
+        'AXIOS',
+      );
+      throw new HttpException(publicMessage, HttpStatus.GATEWAY_TIMEOUT);
+    }
+
+    const apiMessage = error?.response?.data?.message;
+    const responseStatus = Number(error?.response?.status);
+    if (apiMessage && Number.isInteger(responseStatus)) {
+      Logger.error(
+        `Error ${responseStatus} en request ${method} ${url} | ${apiMessage}`,
+        'AXIOS',
+      );
+      throw new HttpException(apiMessage, responseStatus);
+    }
+
+    const status = Number(error?.status);
+    const message = String(error?.message || 'Falló la comunicación interna.');
+    Logger.error(
+      `Error ${Number.isInteger(status) ? status : 'sin estado'} en request ${method} ${url} | ${message}`,
+      'AXIOS',
+    );
+    throw new HttpException(
+      message,
+      Number.isInteger(status) && status >= 400 && status <= 599
+        ? status
+        : HttpStatus.INTERNAL_SERVER_ERROR,
+    );
   }
 }

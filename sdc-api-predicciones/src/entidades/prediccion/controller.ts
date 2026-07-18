@@ -1,4 +1,4 @@
-import { Controller, Get, Logger, Param } from '@nestjs/common';
+import { Controller, Get, Logger, Param, Post } from '@nestjs/common';
 import { PrediccionsService } from './service';
 import { ApiTags } from '@nestjs/swagger';
 import { AgroclimaService } from '../agroclima/service';
@@ -26,6 +26,14 @@ export class PrediccionsController {
     this.logger.verbose(`prediccion: ${idSiembra}`);
     const res = await this.service.prediccion(idSiembra);
     this.logger.verbose(`prediccion: ${idSiembra} finalizada`);
+    return res;
+  }
+
+  @Post(':idSiembra/reconstruir')
+  public async reconstruir(@Param('idSiembra') idSiembra: string) {
+    this.logger.verbose(`reconstruir prediccion: ${idSiembra}`);
+    const res = await this.service.reconstruir(idSiembra);
+    this.logger.verbose(`reconstruir prediccion: ${idSiembra} finalizada`);
     return res;
   }
 

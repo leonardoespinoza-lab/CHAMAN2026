@@ -3,8 +3,6 @@ import {
   IReporteNDVI,
   IListado,
   IQueryParam,
-  ICreateReporteNDVI,
-  IUpdateReporteNDVI,
   DeleteResult,
 } from 'modelos/src';
 import { API_DATOS } from '../../env';
@@ -29,19 +27,23 @@ export class ReporteNDVIsRepository {
     return await this.axios.GET<IReporteNDVI[]>(url);
   }
 
+  async getLastByScope(
+    scope: 'quimica' | 'distribuidor' | 'productor' | 'establecimiento',
+    id: string,
+  ): Promise<IReporteNDVI[]> {
+    const url = `${API_DATOS}/reportendvis/lastByScope/${scope}/${id}`;
+    return await this.axios.GET<IReporteNDVI[]>(url);
+  }
+
+  async getLastGlobal(): Promise<IReporteNDVI[]> {
+    const url = `${API_DATOS}/reportendvis/lastByLote`;
+    const response = await this.axios.GET<IListado<IReporteNDVI>>(url);
+    return response.datos || [];
+  }
+
   async get(params: IQueryParam): Promise<IListado<IReporteNDVI>> {
     const url = `${API_DATOS}/reportendvis`;
     return await this.axios.GET<IListado<IReporteNDVI>>(url, { params });
-  }
-
-  async create(data: ICreateReporteNDVI): Promise<IReporteNDVI> {
-    const url = `${API_DATOS}/reportendvis`;
-    return await this.axios.POST<IReporteNDVI>(url, data);
-  }
-
-  async update(id: string, data: IUpdateReporteNDVI): Promise<IReporteNDVI> {
-    const url = `${API_DATOS}/reportendvis/${id}`;
-    return await this.axios.PUT<IReporteNDVI>(url, data);
   }
 
   async delete(id: string): Promise<IReporteNDVI> {

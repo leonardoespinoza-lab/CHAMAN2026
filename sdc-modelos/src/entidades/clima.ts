@@ -462,7 +462,7 @@ export interface IFrioTermicoCultivo {
   acumulados: {
     horasFrio: number;
     horasFrioEfectivas: number;
-    porcionesFrio: number;
+    porcionesFrio?: number;
     gradosDia: number;
     lluvia: number;
   };
@@ -497,7 +497,7 @@ export interface IFrioTermicoCultivo {
     };
   };
   calculo?: {
-    porcionesFrio: "dinamico_horario" | "estimado_hfe";
+    porcionesFrio: "dinamico_horario" | "no_disponible";
     observaciones?: string[];
   };
   contextoCultivo?: {

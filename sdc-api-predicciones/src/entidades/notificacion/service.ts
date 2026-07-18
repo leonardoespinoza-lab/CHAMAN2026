@@ -32,6 +32,11 @@ interface EventoNotificacion {
   };
 }
 
+interface ClaimUsuarioNotificacion {
+  usuario: IUsuario;
+  notificacion: INotificacion;
+}
+
 const HORA_MS = 60 * 60 * 1000;
 const DIA_MS = 24 * HORA_MS;
 const RECORDATORIO_SANITARIO_MS = 7 * DIA_MS;
@@ -45,10 +50,6 @@ export class NotificacionsService {
     private tokenPushsService: TokenPushsService,
     private pushNotificationsService: PushNotificationsService,
   ) {}
-
-  private async create(data: ICreateNotificacion): Promise<INotificacion> {
-    return await this.repository.create(data);
-  }
 
   async enviarNotificaciones(predicciones: IPrediccion[], siembra: ISiembra) {
     if (!predicciones?.length) {
@@ -265,19 +266,20 @@ export class NotificacionsService {
       return;
     }
 
-    const usuariosPendientes: IUsuario[] = [];
+    const claims: ClaimUsuarioNotificacion[] = [];
     for (const usuario of usuariosHabilitados) {
       if (!usuario._id) {
         continue;
       }
-      const existe = await this.existeNotificacion(
+      const consultaEvento = await this.notificacionPorEvento(
         usuario._id,
         evento.eventKey,
       );
-      if (existe) {
+      if (!consultaEvento.ok) {
         continue;
       }
       if (
+        !consultaEvento.notificacion &&
         evento.sanitaria &&
         !(await this.debeEnviarNotificacionSanitaria(
           usuario._id,
@@ -287,19 +289,10 @@ export class NotificacionsService {
       ) {
         continue;
       }
-      usuariosPendientes.push(usuario);
-    }
-
-    if (!usuariosPendientes.length) {
-      return;
-    }
-
-    await this.enviarPushSiCorresponde(usuariosPendientes, evento);
-
-    for (const usuario of usuariosPendientes) {
       const createNotif: ICreateNotificacion = {
         mensaje: evento.mensaje,
         titulo: evento.titulo,
+        eventKey: evento.eventKey,
         tenant: {
           idProductor,
           idDistribuidor: evento.siembra.idDistribuidor,
@@ -309,15 +302,42 @@ export class NotificacionsService {
         },
         data: this.toNotificationData(evento.data),
       };
-      await this.create(createNotif);
+      try {
+        const resultado = await this.repository.claimPush(createNotif);
+        const notificacion = resultado.notificacion;
+        if (
+          resultado.reclamada &&
+          notificacion?._id &&
+          notificacion.entregaPush?.claimId
+        ) {
+          claims.push({ usuario, notificacion });
+        } else if (resultado.reclamada) {
+          this.logger.error(
+            `Claim push incompleto para ${usuario._id} ${evento.eventKey}`,
+          );
+        }
+      } catch (error) {
+        // Falla cerrada: sin outbox persistido nunca se ejecuta el push.
+        this.logger.error(
+          `No se pudo reclamar notificacion ${evento.eventKey} para ${usuario._id}: ${error}`,
+        );
+      }
     }
+
+    if (!claims.length) {
+      return;
+    }
+
+    await this.enviarPushSiCorresponde(claims, evento);
   }
 
   private async enviarPushSiCorresponde(
-    usuarios: IUsuario[],
+    claims: ClaimUsuarioNotificacion[],
     evento: EventoNotificacion,
   ) {
-    const ids = usuarios.map((usuario) => usuario._id).filter(Boolean);
+    const ids = claims
+      .map(({ usuario }) => usuario._id)
+      .filter(Boolean);
     if (!ids.length) {
       return;
     }
@@ -327,16 +347,45 @@ export class NotificacionsService {
       tokensUsuarios = await this.tokenPushsService.getPorIdsUsuarios(ids);
     } catch (error) {
       this.logger.error(`No se pudieron consultar tokens push: ${error}`);
+      await this.finalizarClaims(
+        claims,
+        'fallida',
+        'consulta-de-tokens-no-disponible',
+      );
       return;
     }
 
-    const idsUsuarios = new Set(ids);
+    const tokensPorUsuario = new Map<string, string[]>();
+    for (const token of tokensUsuarios) {
+      if (!ids.includes(token.idUsuario) || !token.tokenPush) {
+        continue;
+      }
+      const actuales = tokensPorUsuario.get(token.idUsuario) || [];
+      actuales.push(token.tokenPush);
+      tokensPorUsuario.set(token.idUsuario, actuales);
+    }
+
+    const sinTokens = claims.filter(
+      ({ usuario }) =>
+        !usuario._id || !tokensPorUsuario.get(usuario._id)?.length,
+    );
+    if (sinTokens.length) {
+      await this.finalizarClaims(
+        sinTokens,
+        'omitida',
+        'usuario-sin-token-push',
+      );
+    }
+
+    const enviables = claims.filter(
+      ({ usuario }) =>
+        !!usuario._id && !!tokensPorUsuario.get(usuario._id)?.length,
+    );
     const tokens = [
       ...new Set(
-        tokensUsuarios
-          .filter((token) => idsUsuarios.has(token.idUsuario))
-          .map((token) => token.tokenPush)
-          .filter(Boolean),
+        enviables.flatMap(({ usuario }) =>
+          tokensPorUsuario.get(usuario._id) || [],
+        ),
       ),
     ];
 
@@ -351,36 +400,72 @@ export class NotificacionsService {
       `Enviando push a ${tokens.length} dispositivos. ${evento.mensaje}`,
     );
     try {
-      await this.pushNotificationsService.sendNotifications(
+      const resultado = await this.pushNotificationsService.sendNotifications(
         tokens,
         evento.titulo,
         evento.mensaje,
       );
+      const omitida = (resultado as any)?.status === 'skipped';
+      await this.finalizarClaims(
+        enviables,
+        omitida ? 'omitida' : 'enviada',
+        omitida
+          ? String((resultado as any)?.reason || 'push-externo-omitido')
+          : undefined,
+      );
     } catch (error) {
       this.logger.error(`No se pudo enviar push: ${error}`);
+      await this.finalizarClaims(
+        enviables,
+        'fallida',
+        'proveedor-push-no-disponible',
+      );
     }
   }
 
-  private async existeNotificacion(
+  private async notificacionPorEvento(
     idUsuario: string,
     eventKey: string,
-  ): Promise<boolean> {
+  ): Promise<{ ok: boolean; notificacion?: INotificacion }> {
     const query: IQueryParam = {
       filter: JSON.stringify({
         'tenant.idUsuario': idUsuario,
-        'data.eventKey': eventKey,
+        $or: [{ eventKey }, { 'data.eventKey': eventKey }],
       }),
       limit: 1,
     };
+    (query as any).includeHidden = 'true';
     try {
       const res = await this.repository.getFiltered(query);
-      return !!res.datos?.length;
+      return { ok: true, notificacion: res.datos?.[0] };
     } catch (error) {
       this.logger.error(
         `No se pudo verificar notificacion duplicada: ${error}`,
       );
-      return false;
+      return { ok: false };
     }
+  }
+
+  private async finalizarClaims(
+    claims: ClaimUsuarioNotificacion[],
+    resultado: 'enviada' | 'fallida' | 'omitida',
+    detalle?: string,
+  ): Promise<void> {
+    const operaciones = claims.map(({ notificacion }) =>
+      this.repository.finalizarEntregaPush(notificacion._id, {
+        claimId: notificacion.entregaPush.claimId,
+        resultado,
+        detalle,
+      }),
+    );
+    const resultados = await Promise.allSettled(operaciones);
+    resultados.forEach((res, index) => {
+      if (res.status === 'rejected') {
+        this.logger.error(
+          `No se pudo cerrar outbox ${claims[index]?.notificacion?._id}: ${res.reason}`,
+        );
+      }
+    });
   }
 
   /**
@@ -451,6 +536,7 @@ export class NotificacionsService {
       sort: JSON.stringify({ fechaCreacion: -1 }),
       limit: 1,
     };
+    (query as any).includeHidden = 'true';
     try {
       const res = await this.repository.getFiltered(query);
       return { ok: true, notificacion: res.datos?.[0] };

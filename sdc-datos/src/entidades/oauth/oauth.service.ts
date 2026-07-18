@@ -45,11 +45,25 @@ export class OauthService {
   // Token
 
   async getAccessToken(accessToken: string): Promise<TokenDocument> {
-    return await this.tokenModel.findOne({ accessToken });
+    return await this.tokenModel.findOne({
+      accessToken,
+      accessTokenExpiresAt: { $gt: new Date() },
+      $or: [
+        { sessionAbsoluteExpiresAt: { $exists: false } },
+        { sessionAbsoluteExpiresAt: { $gt: new Date() } },
+      ],
+    });
   }
 
   async getRefreshToken(refreshToken: string): Promise<TokenDocument> {
-    return await this.tokenModel.findOne({ refreshToken });
+    return await this.tokenModel.findOne({
+      refreshToken,
+      refreshTokenExpiresAt: { $gt: new Date() },
+      $or: [
+        { sessionAbsoluteExpiresAt: { $exists: false } },
+        { sessionAbsoluteExpiresAt: { $gt: new Date() } },
+      ],
+    });
   }
 
   async saveToken(dato: CreateToken): Promise<TokenDocument> {
@@ -58,11 +72,19 @@ export class OauthService {
   }
 
   async revokeToken(token: CreateToken): Promise<boolean> {
-    const deleted = await this.tokenModel.findOneAndDelete({
-      accessToken: token.accessToken,
+    const clauses = [];
+    if (token.accessToken) clauses.push({ accessToken: token.accessToken });
+    if (token.refreshToken) clauses.push({ refreshToken: token.refreshToken });
+    if (!clauses.length) return false;
+    const deleted = await this.tokenModel.deleteMany({ $or: clauses });
+    return deleted.deletedCount > 0;
+  }
+
+  async revokeUserSessions(idUsuario: string): Promise<number> {
+    if (!idUsuario) return 0;
+    const deleted = await this.tokenModel.deleteMany({
+      'user._id': idUsuario,
     });
-    if (deleted) {
-      return true;
-    }
+    return deleted.deletedCount;
   }
 }

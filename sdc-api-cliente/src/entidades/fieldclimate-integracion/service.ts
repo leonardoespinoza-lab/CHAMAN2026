@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  Optional,
+} from '@nestjs/common';
 import {
   ICreateEstacion,
   IEstablecimiento,
@@ -19,6 +24,7 @@ import {
   revealFieldClimateCredential,
 } from '../../auxiliares/fieldclimate-credentials';
 import { fieldClimateStatus } from '../../auxiliares/fieldclimate-status';
+import { DecisionPipelineQueueService } from '../../auxiliares/decision-pipeline';
 
 type DescubrirCentralesBody = FieldClimateCredentials;
 
@@ -35,7 +41,11 @@ interface AsignarCentralBody {
 export class FieldClimateIntegracionService {
   private readonly logger = new Logger(FieldClimateIntegracionService.name);
 
-  constructor(private repository: FieldClimateIntegracionRepository) {}
+  constructor(
+    private repository: FieldClimateIntegracionRepository,
+    @Optional()
+    private readonly decisionPipelineQueue?: DecisionPipelineQueueService,
+  ) {}
 
   async descubrir(body: DescubrirCentralesBody): Promise<any[]> {
     this.validarCredenciales(body);
@@ -191,17 +201,49 @@ export class FieldClimateIntegracionService {
         ultimoSync: fecha,
       },
     });
+    const idEstablecimientoAnterior = String(
+      existente?.idEstablecimiento || '',
+    ).trim();
+    if (
+      idEstablecimientoAnterior &&
+      idEstablecimientoAnterior !== body.idEstablecimiento
+    ) {
+      await this.repository.actualizarEstablecimiento(
+        idEstablecimientoAnterior,
+        {
+          idEstacionMeteorologica: null,
+          fuenteClimaPreferida: 'Open-Meteo',
+        },
+      );
+    }
     await this.repository.actualizarEstablecimiento(body.idEstablecimiento, {
       idEstacionMeteorologica: idCentral,
       fuenteClimaPreferida: 'FieldClimate',
     });
-    this.repository
-      .reprocesarAgrometeorologia(body.idEstablecimiento)
-      .catch((error) =>
-        this.logger.error(
-          `No se pudo reprocesar agrometeorologia al asociar la central: ${error}`,
-        ),
-      );
+    const affectedEstablishments = new Set(
+      [idEstablecimientoAnterior, body.idEstablecimiento]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean),
+    );
+    if (this.decisionPipelineQueue) {
+      for (const idEstablecimiento of affectedEstablishments) {
+        await this.decisionPipelineQueue.enqueueForEstablishment(
+          idEstablecimiento,
+          {
+            trigger: 'fieldclimate.assigned',
+            changedFields: [
+              'idEstacionMeteorologica',
+              'fuenteClimaPreferida',
+            ],
+            sincronizarClima: true,
+          },
+        );
+      }
+    } else {
+      for (const idEstablecimiento of affectedEstablishments) {
+        await this.repository.reprocesarAgrometeorologia(idEstablecimiento);
+      }
+    }
     return this.sanitizeEstacion(central);
   }
 

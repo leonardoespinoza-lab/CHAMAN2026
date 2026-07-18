@@ -2,9 +2,7 @@ import {
   Controller,
   Delete,
   Get,
-  Body,
   Param,
-  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -14,7 +12,6 @@ import {
   IListado,
   IQueryParam,
   IPermiso,
-  ICreateReporteNDVI,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
@@ -80,30 +77,6 @@ export class ReporteNDVIsController {
   ): Promise<IReporteNDVI> {
     return await this.service.getById(id, permiso);
   }
-
-  @Post()
-  @Permisos(
-    { nivel: 'Admin', roles: ['Admin'] },
-    { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
-    { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
-    { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
-  )
-  public async create(@Body() body: ICreateReporteNDVI): Promise<IReporteNDVI> {
-    return await this.service.create(body);
-  }
-
-  // @Put('/:id')
-  // @Permisos(
-  //   { nivel: 'Quimica', roles: ['Admin'] },
-  //   { nivel: 'Distribuidor', roles: ['Admin'] },
-  //   { nivel: 'Productor', roles: ['Admin'] },
-  // )
-  // public async update(
-  //   @Param('id') id: string,
-  //   @Body() body: IUpdateReporteNDVI,
-  // ): Promise<IReporteNDVI> {
-  //   return await this.service.update(id, body);
-  // }
 
   @Delete('/:id')
   @Permisos(

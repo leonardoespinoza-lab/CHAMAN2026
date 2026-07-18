@@ -8,7 +8,6 @@
     <div>
       <span class="eyebrow">Perfil edáfico del lote</span>
       <h2>Suelo y ambiente</h2>
-      <small>Caracterización automática por polígono; los datos confirmados nunca se sobrescriben.</small>
     </div>
     <div class="status-cluster">
       @if (hasResult) {
@@ -19,6 +18,23 @@
       } @else if (processing) {
         <span class="confidence-badge processing"><i class="pi pi-spin pi-spinner"></i> Procesando</span>
       }
+      <div class="information-control" [class.has-observations]="hasInformationObservations">
+        <p-button
+          icon="pi pi-info-circle"
+          [rounded]="true"
+          [text]="true"
+          severity="secondary"
+          styleClass="card-info-button"
+          [style]="{ width: '44px', height: '44px' }"
+          [ariaLabel]="informationAriaLabel"
+          [pTooltip]="informationTooltip"
+          tooltipPosition="left"
+          (onClick)="infoVisible = true"
+        />
+        @if (hasInformationObservations) {
+          <span class="observation-count" aria-hidden="true">{{ informationObservationCount }}</span>
+        }
+      </div>
     </div>
   </header>
 
@@ -40,16 +56,13 @@
       <article class="texture-main">
         <span>{{ primaryTextureTitle }}</span>
         <strong>{{ canonicalTextureLabel }}</strong>
-        <small>
-          Referencia principal del motor edáfico · Clase USDA SoilGrids:
-          {{ assessment?.summary?.usdaTexture || 'no disponible' }} · {{ depthLabel }}
-        </small>
+        <small> Clase USDA {{ assessment?.summary?.usdaTexture || 'no disponible' }} · {{ depthLabel }} </small>
       </article>
       @if (hasOperationalOverride) {
         <article class="texture-override">
           <span>{{ operationalTextureTitle }}</span>
           <strong>{{ operationalTextureLabel }}</strong>
-          <small>{{ operationalSourceLabel }} · {{ operationalTextureDetail }}</small>
+          <small>{{ operationalSourceLabel }}</small>
         </article>
       }
       <article>
@@ -58,23 +71,16 @@
           {{ number(assessment?.summary?.sandPercentage) }}% arena · {{ number(assessment?.summary?.siltPercentage) }}%
           limo · {{ number(assessment?.summary?.clayPercentage) }}% arcilla
         </strong>
-        <small>Cálculo ponderado por espesor</small>
       </article>
       <article>
         <span>Drenaje edáfico</span>
         <strong>{{ drainageLabel(assessment?.summary?.drainageClass) }}</strong>
-        <small>No equivale al riesgo meteorológico actual de anegamiento</small>
       </article>
       <article class="water-capacity" [attr.data-hydraulic-confidence]="hydraulicConfidence">
         <span>Capacidad potencial del suelo (agua útil)</span>
         <strong>{{ number(assessment?.summary?.availableWaterMmPerMeter) }} mm/m</strong>
         <small>{{ hydraulicConfidenceLabel }} · SoilGrids {{ soilGridsResolutionMeters || 250 }} m</small>
         <small>{{ effectiveDepthDescription }} · {{ effectiveDepthConfidenceLabel }}</small>
-        <small>
-          Potencial CC–PMP para ese perfil:
-          {{ number(assessment?.summary?.profileAvailableWaterMm ?? assessment?.summary?.rootZoneAvailableWaterMm) }}
-          mm. No representa humedad actual ni reserva aprovechable efectiva.
-        </small>
       </article>
       <article>
         <span>Unidad / serie INTA</span>
@@ -84,43 +90,9 @@
       <article>
         <span>Fósforo disponible</span>
         <strong>No medido</strong>
-        <small>Requiere laboratorio, método, profundidad y fecha identificados</small>
+        <small>Requiere laboratorio</small>
       </article>
     </div>
-
-    @if (assessment?.manualConflict) {
-      <div class="notice conflict">
-        <i class="pi pi-exclamation-triangle"></i>
-        <div>
-          <strong>{{ operationalConflictTitle }}</strong>
-          <span>{{ operationalConflictDetail }}</span>
-        </div>
-      </div>
-    }
-
-    @if (isSmallerThanSoilGridsCell) {
-      <div class="notice caution">
-        <i class="pi pi-info-circle"></i>
-        <div>
-          <strong>Escala regional del valor hídrico</strong>
-          <span>{{ soilGridsScaleWarning }}</span>
-        </div>
-      </div>
-    }
-
-    @if (intaLimitations.length) {
-      <div class="notice caution">
-        <i class="pi pi-exclamation-triangle"></i>
-        <div>
-          <strong>Limitaciones cartográficas INTA</strong>
-          <span>{{ intaLimitations.join(' · ') }}</span>
-          <span>
-            No se descuentan automáticamente de CC–PMP. Sin CE, sodicidad y profundidad validadas no se calcula una
-            reserva aprovechable efectiva.
-          </span>
-        </div>
-      </div>
-    }
 
     @if (profile.length) {
       <section class="profile-panel">
@@ -186,7 +158,6 @@
             <span>Reserva potencial</span>
             <h3>Agua disponible por profundidad</h3>
           </div>
-          <small>Estimación SoilGrids: 33 kPa menos 1500 kPa</small>
         </div>
         <div class="water-grid">
           @for (layer of profile; track 'water-' + layer.depthFromCm) {
@@ -207,13 +178,6 @@
         </div>
       </section>
     }
-
-    @if (assessment?.warnings?.length) {
-      <div class="notice">
-        <i class="pi pi-info-circle"></i>
-        <span>{{ assessment?.warnings?.join(' ') }}</span>
-      </div>
-    }
   } @else {
     <div class="empty-state">
       <i class="pi pi-map"></i>
@@ -226,17 +190,134 @@
       }
     </div>
   }
-
-  <footer>
-    <span>{{ assessment?.source?.provider || 'Motor edáfico Chaman' }}</span>
-    @if (hasCoverage) {
-      <span>Cobertura {{ number(assessment?.source?.coveragePercentage) }}%</span>
-    }
-    @if (hasResolution) {
-      <span>Resolución {{ assessment?.source?.resolutionMeters }} m</span>
-    }
-    @if (assessment?.calculatedAt) {
-      <span>Actualizado {{ assessment?.calculatedAt | date: 'short' }}</span>
-    }
-  </footer>
 </section>
+
+<p-dialog
+  [(visible)]="infoVisible"
+  [modal]="true"
+  [dismissableMask]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(840px, 94vw)' }"
+  [breakpoints]="{ '720px': '96vw' }"
+  header="Información de suelo y ambiente"
+  styleClass="chaman-detail-dialog card-information-dialog"
+>
+  <section class="information-dialog">
+    <div class="information-intro">
+      <i class="pi pi-chart-bar"></i>
+      <div>
+        <strong>Alcance de la caracterización</strong>
+        <p>
+          La cartografía se calcula automáticamente sobre el polígono del lote. Los análisis de laboratorio, sensores y
+          datos confirmados por el usuario se conservan y se identifican por separado.
+        </p>
+      </div>
+    </div>
+
+    @if (assessment?.manualConflict) {
+      <div class="dialog-notice conflict">
+        <i class="pi pi-exclamation-triangle"></i>
+        <div>
+          <strong>{{ operationalConflictTitle }}</strong>
+          <p>{{ operationalConflictDetail }}</p>
+        </div>
+      </div>
+    }
+
+    @if (isSmallerThanSoilGridsCell) {
+      <div class="dialog-notice caution">
+        <i class="pi pi-info-circle"></i>
+        <div>
+          <strong>Escala regional del valor hídrico</strong>
+          <p>{{ soilGridsScaleWarning }}</p>
+        </div>
+      </div>
+    }
+
+    @if (intaLimitations.length) {
+      <div class="dialog-notice caution">
+        <i class="pi pi-exclamation-triangle"></i>
+        <div>
+          <strong>Limitaciones cartográficas INTA</strong>
+          <ul>
+            @for (limitation of intaLimitations; track limitation) {
+              <li>{{ limitation }}</li>
+            }
+          </ul>
+          <p>
+            No se descuentan automáticamente de CC–PMP. Sin CE, sodicidad y profundidad validadas no se calcula una
+            reserva aprovechable efectiva.
+          </p>
+        </div>
+      </div>
+    }
+
+    @if (informationWarnings.length) {
+      <div class="dialog-notice">
+        <i class="pi pi-info-circle"></i>
+        <div>
+          <strong>Otras observaciones</strong>
+          <ul>
+            @for (warning of informationWarnings; track warning) {
+              <li>{{ warning }}</li>
+            }
+          </ul>
+        </div>
+      </div>
+    }
+
+    <div class="methodology-grid">
+      @if (hasOperationalOverride) {
+        <article>
+          <span>{{ operationalTextureTitle }}</span>
+          <strong>{{ operationalTextureLabel }} · {{ operationalSourceLabel }}</strong>
+          <p>{{ operationalTextureDetail }}</p>
+        </article>
+      }
+      <article>
+        <span>Textura y composición</span>
+        <strong>Mediana cartográfica ponderada por espesor</strong>
+        <p>
+          La textura canónica y la composición arena–limo–arcilla provienen del perfil regional. Una alternativa
+          operativa solo tiene prioridad cuando su origen y confirmación están identificados.
+        </p>
+      </article>
+      <article>
+        <span>Capacidad potencial</span>
+        <strong>CC–PMP: 33 kPa menos 1500 kPa</strong>
+        <p>
+          Potencial CC–PMP para ese perfil:
+          {{ number(assessment?.summary?.profileAvailableWaterMm ?? assessment?.summary?.rootZoneAvailableWaterMm) }}
+          mm. Es capacidad potencial del suelo. No representa humedad actual ni reserva aprovechable efectiva.
+        </p>
+      </article>
+      <article>
+        <span>Profundidad efectiva</span>
+        <strong>{{ effectiveDepthDescription }}</strong>
+        <p>{{ effectiveDepthConfidenceLabel }}. Un fallback operativo no equivale a una medición del lote.</p>
+      </article>
+      <article>
+        <span>Drenaje y nutrientes</span>
+        <strong>Lecturas con alcance diferente</strong>
+        <p>
+          El drenaje edáfico no equivale al riesgo meteorológico actual de anegamiento. El fósforo disponible solo se
+          informa con laboratorio, método, profundidad y fecha identificados.
+        </p>
+      </article>
+    </div>
+
+    <div class="source-strip">
+      <span>{{ assessment?.source?.provider || 'Motor edáfico Chaman' }}</span>
+      @if (hasCoverage) {
+        <span>Cobertura {{ number(assessment?.source?.coveragePercentage) }}%</span>
+      }
+      @if (hasResolution) {
+        <span>Resolución {{ assessment?.source?.resolutionMeters }} m</span>
+      }
+      @if (assessment?.calculatedAt) {
+        <span>Actualizado {{ assessment?.calculatedAt | date: 'short' }}</span>
+      }
+    </div>
+  </section>
+</p-dialog>

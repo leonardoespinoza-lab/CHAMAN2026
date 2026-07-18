@@ -40,26 +40,10 @@
   <p class="satellite-sync-note">{{ notaEscenaSatelital }}</p>
 
   @if (ndvis.length > 0) {
-    <section class="satellite-timeline">
-      <div class="satellite-title">
-        <span>Evolucion por escenas limpias</span>
-        <strong>Historial satelital procesado</strong>
-      </div>
-      <div class="timeline-strip">
-        @for (r of ndvis; track r._id || $index) {
-          <button type="button" class="timeline-item" [class.active]="reporte === r" (click)="onSelect(r)">
-            <span>{{ r.fechaDeLaImagen | date: 'd MMM' }}</span>
-            <strong>NDVI {{ r.ndviPromedio | number: '1.0-3' }}</strong>
-            <small>{{ r.coleccion || 'satelite' }}</small>
-          </button>
-        }
-      </div>
-    </section>
-
     <section class="satellite-index-controls" aria-label="Índice satelital visualizado">
       <div class="satellite-title compact">
-        <span>Índice visualizado</span>
-        <strong>Mapa, curva e interpretación sincronizados</strong>
+        <span>Indice activo</span>
+        <strong>Elegir capa</strong>
       </div>
       <div class="layer-tabs" role="list">
         @for (indicator of satelliteIndicators; track indicator.key) {
@@ -78,23 +62,36 @@
       </div>
     </section>
 
+    <section class="satellite-timeline compact-timeline" aria-label="Escenas satelitales disponibles">
+      <div class="satellite-title compact">
+        <span>Escenas</span>
+        <strong>{{ historialIndiceResumen }}</strong>
+      </div>
+      <div class="timeline-strip">
+        @for (r of ndvis; track r._id || $index) {
+          <button type="button" class="timeline-item" [class.active]="reporte === r" (click)="onSelect(r)">
+            <span>{{ r.fechaDeLaImagen | date: 'd MMM' }}</span>
+            <strong>{{ r.ndviPromedio | number: '1.0-3' }}</strong>
+          </button>
+        }
+      </div>
+    </section>
+
+    <div class="satellite-workspace">
     <section class="satellite-history-chart">
       <div class="history-chart-header">
         <div>
-          <span>Serie temporal por escenas limpias</span>
-          <strong>Evolución de {{ capaActiva.label }}</strong>
+          <span>Evolucion por escenas</span>
+          <strong>{{ capaActiva.label }}</strong>
           <small>{{ historialIndiceResumen }}</small>
         </div>
         <div class="history-header-actions">
-          <div class="history-scale-note">
-            <span>Rango del índice</span>
-            <b>−1 a 1</b>
-          </div>
           <p-button
             icon="pi pi-window-maximize"
-            label="Ampliar curva"
+            ariaLabel="Ampliar curva"
             severity="secondary"
-            [outlined]="true"
+            [text]="true"
+            [rounded]="true"
             [disabled]="!historialIndiceOptions"
             (onClick)="abrirGraficoSatelital()"
           />
@@ -105,40 +102,31 @@
         <app-chart
           class="satellite-history-chart-compact"
           [options]="historialIndiceOptions"
-          [style]="'display:block;width:100%;height:190px'"
+          [style]="'display:block;width:100%;height:220px'"
         ></app-chart>
       } @else {
         <div class="history-empty">
           <i class="pi pi-chart-line"></i>
-          <span>No hay lecturas válidas suficientes de {{ capaActiva.label }} para graficar.</span>
+          <span>Sin lecturas validas de {{ capaActiva.label }}.</span>
         </div>
       }
 
       @if (puntoHistorialSeleccionado; as point) {
-        <div class="history-selected-scene">
+        <div class="history-selected-scene compact-scene">
           <span>
-            <small>Escena seleccionada</small>
+            <small>Fecha</small>
             <strong>{{ point.timestamp | date: 'd MMM y' }}</strong>
           </span>
           <span>
-            <small>{{ capaActiva.label }}</small>
+            <small>Valor</small>
             <strong>{{ point.value == null ? 'Sin lectura' : (point.value | number: '1.0-3') }}</strong>
           </span>
           <span class="history-stage">
-            <small>Etapa fenológica</small>
+            <small>Etapa</small>
             <strong>{{ point.stage.name }}</strong>
-            <em [class.confirmed]="point.stage.confirmed">{{ point.stage.source }}</em>
-          </span>
-          <span>
-            <small>Fuente satelital</small>
-            <strong>{{ point.collection }}</strong>
           </span>
         </div>
       }
-      <p class="history-method-note">
-        <i class="pi pi-info-circle"></i>
-        {{ mensajeHistorialIndice }} La etapa de campo tiene prioridad sobre las referencias calculadas.
-      </p>
     </section>
 
     <div class="ndvi-content">
@@ -201,21 +189,20 @@
             <small>{{ expectativaCapaActiva.comparacion }}</small>
           </article>
         </div>
-        <p class="context">{{ analisis.contexto }}</p>
-        <p class="expected-note">{{ expectativaCapaActiva.nota }}</p>
         <p class="recommendation">{{ analisis.recomendacion }}</p>
       </section>
+    </div>
     </div>
 
     <section class="satellite-details-cta">
       <div>
-        <span>Interpretación avanzada</span>
-        <strong>{{ satelliteIndicators.length }} índices disponibles</strong>
-        <small>Definiciones, lectura agronómica, valor actual y fuente de cada capa.</small>
+        <span>Detalle agronomico</span>
+        <strong>{{ analisis.estado }} · {{ capaActiva.value }}</strong>
+        <small>{{ expectativaCapaActiva.comparacion }}</small>
       </div>
       <p-button
         icon="pi pi-info-circle"
-        label="Ver capas e interpretación"
+        label="Mas informacion"
         severity="secondary"
         [outlined]="true"
         (onClick)="abrirDetalleCapas()"
@@ -242,18 +229,6 @@
           [disabled]="generandoSatelital"
           [fluid]="true"
           (click)="generarNdviSatelital($event)"
-        />
-      }
-      @if (!helper.soloLectura() && esLocal) {
-        <p-button
-          icon="pi pi-plus"
-          label="Crear muestra local"
-          severity="secondary"
-          [outlined]="true"
-          [loading]="generandoMuestra"
-          [disabled]="generandoMuestra"
-          [fluid]="true"
-          (click)="generarMuestraLocal($event)"
         />
       }
       <section class="satellite-details-cta empty-module">

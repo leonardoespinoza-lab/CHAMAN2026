@@ -77,4 +77,10 @@ export class OauthController {
   async revokeToken(@Body() body: CreateToken) {
     return await this.oauthService.revokeToken(body);
   }
+
+  @Put('token/usuario/:idUsuario')
+  @ApiOperation({ summary: 'Revoca todas las sesiones de un usuario' })
+  async revokeUserSessions(@Param('idUsuario') idUsuario: string) {
+    return await this.oauthService.revokeUserSessions(idUsuario);
+  }
 }

@@ -10,6 +10,7 @@ import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { ParamsService } from '../../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../../auxiliares/shared.module';
 import { evaluarRiegoFrontend } from '../riego-evidence';
+import { evaluarSanidadFrontend } from '../sanidad-evidence';
 
 export interface ILoteTabla extends ILote {
   estacion?: IClimaEstacionMeteorologica;
@@ -214,21 +215,30 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
   }
 
   private indicadorEnfermedades(data: ILoteTabla): IndicadorLote {
-    const enfermedades = data.siembra?.ultimaPrediccion?.enfermedades || [];
-    const max = enfermedades.length ? Math.max(...enfermedades.map((item) => Number(item.resultado || 0))) : undefined;
-    if (max === undefined) {
+    const evidencia = evaluarSanidadFrontend(data.siembra);
+    if (evidencia.maximo === undefined) {
+      if (evidencia.noAgregables.length) {
+        return {
+          label: 'Sanidad',
+          value: '0%',
+          detail: 'Sin alerta sanitaria operativa',
+          tooltip: `${evidencia.noAgregables.length} modelo${evidencia.noAgregables.length === 1 ? '' : 's'} provisional${evidencia.noAgregables.length === 1 ? '' : 'es'}, experimental${evidencia.noAgregables.length === 1 ? '' : 'es'} o incompleto${evidencia.noAgregables.length === 1 ? '' : 's'} visible${evidencia.noAgregables.length === 1 ? '' : 's'} dentro del lote; no modifica${evidencia.noAgregables.length === 1 ? '' : 'n'} el semaforo sanitario.`,
+          tone: 'ok',
+        };
+      }
       return {
         label: 'Sanidad',
-        value: 'Sin calculo',
-        detail: 'Enfermedades',
-        tooltip: 'Abrir el lote para ejecutar o revisar prediccion de enfermedades.',
-        tone: 'muted',
+        value: '0%',
+        detail: 'Sin alerta sanitaria calculada',
+        tooltip: 'Abrir el lote para ejecutar o revisar el monitoreo. La ausencia de una lectura operativa no genera por si sola una precaucion amarilla.',
+        tone: 'ok',
       };
     }
+    const max = evidencia.maximo;
     return {
       label: 'Sanidad',
       value: `${this.entero.format(max)}%`,
-      detail: `${enfermedades.length} enfermedades`,
+      detail: `${evidencia.operativas.length} enfermedad${evidencia.operativas.length === 1 ? '' : 'es'} operativa${evidencia.operativas.length === 1 ? '' : 's'}`,
       tooltip: `Mayor riesgo sanitario calculado: ${this.entero.format(max)}%.`,
       tone: max >= 70 ? 'danger' : max >= 40 ? 'warn' : 'ok',
     };

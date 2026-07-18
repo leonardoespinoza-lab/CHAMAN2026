@@ -1,18 +1,20 @@
 <section class="custom-card agromet-card">
   <header class="agromet-header">
     <div>
-      <p class="titulo-card">CÁLCULOS METEOROLÓGICOS</p>
-      <span>Lectura integrada del cultivo, el agua, la atmosfera y el suelo</span>
+      <p class="titulo-card">VARIABLES METEOROLÓGICAS</p>
+      <span>Temperatura, agua, atmósfera, radiación y suelo en una tarjeta independiente</span>
     </div>
     @if (data) {
       <div
         class="source-badge"
+        [class.sensor]="data.dataSource.type === 'sensor'"
         [class.station]="data.dataSource.type === 'station'"
         [class.mixed]="data.dataSource.type === 'mixed'"
       >
         <i
           class="pi"
           [class.pi-cloud]="data.dataSource.type === 'open_meteo'"
+          [class.pi-wifi]="data.dataSource.type === 'sensor'"
           [class.pi-building]="data.dataSource.type === 'station'"
           [class.pi-sync]="data.dataSource.type === 'mixed'"
         ></i>
@@ -111,7 +113,10 @@
     <footer class="agromet-footer">
       <div>
         <i class="pi pi-shield"></i>
-        <span>{{ historialLabel }}: linea continua. Pronostico: linea punteada. Las franjas identifican etapas fenologicas.</span>
+        <span>
+          {{ historialLabel }}: linea continua. Pronostico: linea punteada. Las franjas identifican etapas fenologicas.
+          El sensor LoRa asignado al lote prevalece; la central y Open-Meteo completan las horas faltantes.
+        </span>
       </div>
       <span>Motor {{ data?.calculationVersion }} / parametros {{ data?.parametersVersion }}</span>
     </footer>

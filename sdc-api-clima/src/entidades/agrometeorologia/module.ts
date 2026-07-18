@@ -9,6 +9,7 @@ import { AgrometeorologicalEngineService } from './agrometeorological-engine.ser
 import { AgrometeorologiaBatchService } from './batch.service';
 import { AgrometeorologiaCronService } from './cron.service';
 import { AgrometeorologiaInternalServiceGuard } from './internal-service.guard';
+import { SensorWeatherOverlayService } from './sensor-weather-overlay.service';
 
 @Module({
   imports: [AxiosModule, ClimaModule],
@@ -21,6 +22,7 @@ import { AgrometeorologiaInternalServiceGuard } from './internal-service.guard';
     AgrometeorologiaBatchService,
     AgrometeorologiaCronService,
     AgrometeorologiaInternalServiceGuard,
+    SensorWeatherOverlayService,
   ],
   exports: [AgrometeorologicalEngineService, AgrometeorologiaBatchService],
 })

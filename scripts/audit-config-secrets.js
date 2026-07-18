@@ -24,6 +24,17 @@ const EXCLUDED_DIRS = new Set([
 const patterns = [
   { name: 'Google API key', regex: /AIza[0-9A-Za-z_-]{20,}/g },
   { name: 'Likely password default', regex: /(PASSWORD|PASS|SECRET|PRIVATE_KEY|CLIENT_SECRET|MQTT_PASS)\s*=\s*['"][^'"]{8,}['"]/gi },
+  {
+    name: 'Likely environment password fallback',
+    regex:
+      /(PASSWORD|PASS|SECRET|PRIVATE_KEY|CLIENT_SECRET|MQTT_PASS)\s*=\s*process\.env\.[A-Z0-9_]+\s*\|\|\s*['"][^'"]{8,}['"]/gi,
+  },
+  {
+    name: 'Likely documented password literal',
+    extensions: new Set(['.md']),
+    regex:
+      /^[ \t]*(?:[-*][ \t]*)?(?:Clave|Password|Contraseña)[ \t]*:[ \t]*(?!<|\$|\{|\[|process\.env|defin)[^\s`'"]{8,}[ \t]*$/gim,
+  },
   { name: 'Mongo URI with credentials', regex: /mongodb(\+srv)?:\/\/[^/\s:]+:[^@\s]+@/gi },
   { name: 'Bearer token literal', regex: /Bearer\s+[A-Za-z0-9._-]{20,}/g },
   { name: 'PEM private key', regex: /-----BEGIN [A-Z ]*PRIVATE KEY-----/g },
@@ -67,6 +78,9 @@ for (const filePath of walk(ROOT)) {
   if (isAllowed(relativePath)) continue;
   const text = fs.readFileSync(filePath, 'utf8');
   for (const pattern of patterns) {
+    if (pattern.extensions && !pattern.extensions.has(path.extname(filePath))) {
+      continue;
+    }
     const matches = [...text.matchAll(pattern.regex)];
     for (const match of matches) {
       const before = text.slice(0, match.index);

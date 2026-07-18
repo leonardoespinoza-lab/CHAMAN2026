@@ -26,24 +26,34 @@ const cardTs = fs.readFileSync(
   "utf8",
 );
 
-test("la tarjeta meteorologica esta inmediatamente debajo de fenologia", () => {
+test("fenologia, frio y variables meteorologicas conservan el orden agronomico", () => {
   const phenologyEnd = detail.indexOf("</app-card-etapas-fenologicas>");
+  const coldStart = detail.indexOf("<app-card-frio-termico");
+  const coldEnd = detail.indexOf("</app-card-frio-termico>");
   const agrometStart = detail.indexOf("<app-card-calculos-meteorologicos");
   assert.ok(phenologyEnd >= 0);
-  assert.ok(agrometStart > phenologyEnd);
+  assert.ok(coldStart > phenologyEnd);
+  assert.ok(coldEnd > coldStart);
+  assert.ok(agrometStart > coldEnd);
   assert.equal(
     detail
       .slice(
         phenologyEnd + "</app-card-etapas-fenologicas>".length,
-        agrometStart,
+        coldStart,
       )
+      .trim(),
+    "",
+  );
+  assert.equal(
+    detail
+      .slice(coldEnd + "</app-card-frio-termico>".length, agrometStart)
       .trim(),
     "",
   );
 });
 
 test("la vista es de solo lectura y contempla carga, vacio y error", () => {
-  assert.match(cardHtml, /CÁLCULOS METEOROLÓGICOS/);
+  assert.match(cardHtml, /VARIABLES METEOROLÓGICAS/);
   assert.doesNotMatch(cardHtml, />\s*Calcular\s*</i);
   assert.match(cardHtml, /skeleton-grid/);
   assert.match(cardHtml, /Preparando la primera serie meteorologica/);

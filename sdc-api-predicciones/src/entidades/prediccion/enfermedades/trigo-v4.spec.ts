@@ -178,6 +178,39 @@ describe('servicios sanitarios de trigo v4', () => {
     expect(result.calidadDatos?.fuente).toBe('open_meteo');
   });
 
+  it('conserva la ecuacion diaria solo en auditoria cuando no hay serie horaria de roya amarilla', async () => {
+    const result = await new RoyaAnaranjadaService().predecir(
+      semilla,
+      { precip: 1, hr: 80, Tavg: 10, Tmin: 8, Tmax: 13 },
+      [],
+      undefined,
+      true,
+      {
+        ...contexto,
+        calidadClima: {
+          nivel: 'media',
+          fuente: 'open_meteo',
+          cobertura: 1,
+          resumen: 'Agregado diario completo.',
+          limitaciones: [],
+        },
+      },
+    );
+
+    expect(result.estado).toBe('sin_datos');
+    expect(result.resultado).toBe(0);
+    expect((result.variables as any).resultadoContractualLimitado).toBeCloseTo(
+      13.18,
+      2,
+    );
+    expect(result.modelo).toMatchObject({
+      validacion: 'experimental',
+      resolucion: 'proxy_diario',
+    });
+    expect(result.calidadDatos?.nivel).toBe('baja');
+    expect(result.calidadDatos?.resumen).toContain('Cobertura horaria insuficiente');
+  });
+
   it('respeta fronteras estrictas de lluvia en las manchas', async () => {
     const amarilla = await new ManchaAmarillaService().predecir(
       semilla,
@@ -248,6 +281,42 @@ describe('servicios sanitarios de trigo v4', () => {
     expect((result.variables as any).GDAcum).toBe(100);
     expect(result.resultado).toBeCloseTo(14.77, 2);
     expect(result.modelo?.alcance).toContain('Incidencia');
+  });
+
+  it('calcula Fusarium como screening no alertable si la antesis es proyectada', async () => {
+    const result = await new FusariumDeLaEspigaService().predecir(
+      semilla,
+      {
+        precip: 0,
+        precipAnterior: 0.4,
+        hr: 80,
+        hrAnterior: 85,
+        Tavg: 15,
+        Tmin: 10,
+        Tmax: 22,
+      },
+      undefined,
+      true,
+      {
+        ...contexto,
+        etapa: 5,
+        fenologiaObservada: false,
+        calidadClima: {
+          nivel: 'media',
+          fuente: 'open_meteo',
+          cobertura: 1,
+          resumen: 'Agregado diario completo.',
+          limitaciones: [],
+        },
+      },
+    );
+
+    expect(result.estado).toBe('calculado');
+    expect(result.calidadDatos?.nivel).toBe('baja');
+    expect(result.calidadDatos?.resumen).toContain('Antesis proyectada');
+    expect(result.calidadDatos?.limitaciones?.join(' ')).toContain(
+      'sin alerta automatica',
+    );
   });
 
   it('cierra el calculo de Fusarium al alcanzar 530 GDD', async () => {

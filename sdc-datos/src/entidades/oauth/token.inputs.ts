@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsDate, IsNotEmpty, IsOptional } from 'class-validator';
 import { Exactly, ICreateClient, ICreateToken, IUsuario } from 'modelos/src';
@@ -23,6 +23,24 @@ export class CreateToken implements Exactly<ICreateToken, CreateToken> {
   @Type(() => Date)
   @IsDate()
   refreshTokenExpiresAt?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  sessionStartedAt?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  sessionLastActivityAt?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  sessionAbsoluteExpiresAt?: string;
 
   @ApiProperty()
   @IsOptional()

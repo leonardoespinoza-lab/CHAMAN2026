@@ -1,9 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ICoordenadas, IEstablecimiento, ISiembra } from 'modelos/src';
+import {
+  esCultivoPerenne,
+  ICoordenadas,
+  IEstablecimiento,
+  ISiembra,
+} from 'modelos/src';
 import { AGROMETEO_BATCH_SIZE } from '../../env';
 import { AgrometeorologiaRepository } from './repository';
 import { WeatherIngestionService } from './weather-ingestion.service';
 import { AgrometeorologicalEngineService } from './agrometeorological-engine.service';
+
+interface IWeatherContextGroup {
+  idEstablecimiento: string;
+  idLote?: string;
+  siembras: ISiembra[];
+}
 
 @Injectable()
 export class AgrometeorologiaBatchService {
@@ -51,7 +62,6 @@ export class AgrometeorologiaBatchService {
         filter: JSON.stringify({
           ...extraFilter,
           activa: { $ne: false },
-          $or: [{ fechaCosecha: { $exists: false } }, { fechaCosecha: null }],
         }),
         populate: 'lote establecimiento semilla crono',
         limit: 0,
@@ -60,21 +70,36 @@ export class AgrometeorologiaBatchService {
         (item) =>
           item._id &&
           item.fechaSiembra &&
+          (!item.fechaCosecha ||
+            esCultivoPerenne(item.semilla?.cultivo)) &&
           (item.idEstablecimiento || item.lote?.idEstablecimiento),
       );
-      const groups = this.groupByEstablishment(sowings);
+      const groups = this.groupByWeatherContext(sowings);
+      const establishmentIds = new Set(
+        [...groups.values()].map((group) => group.idEstablecimiento),
+      );
+      const establishmentCache = new Map<string, IEstablecimiento>();
       let processed = 0;
       let failed = 0;
-      for (const [idEstablecimiento, group] of groups) {
+      for (const group of groups.values()) {
+        const { idEstablecimiento, idLote, siembras: contextSowings } = group;
         try {
           const establishment =
-            group.find((item) => item.establecimiento)?.establecimiento ||
+            establishmentCache.get(idEstablecimiento) ||
+            contextSowings.find((item) => item.establecimiento)
+              ?.establecimiento ||
             (await this.repository.getEstablecimiento(idEstablecimiento));
-          const coordinates = this.resolveCoordinates(group, establishment);
+          if (establishment?._id) {
+            establishmentCache.set(idEstablecimiento, establishment);
+          }
+          const coordinates = this.resolveCoordinates(
+            contextSowings,
+            establishment,
+          );
           if (!coordinates || !establishment?._id) {
             throw new Error('Establecimiento sin coordenadas validas.');
           }
-          const earliest = group
+          const earliest = contextSowings
             .map((item) => this.engine.resolveCycleStart(item))
             .sort()[0];
           await this.ingestion.sincronizar(
@@ -82,13 +107,17 @@ export class AgrometeorologiaBatchService {
             coordinates,
             earliest,
             false,
+            idLote,
           );
           for (
             let index = 0;
-            index < group.length;
+            index < contextSowings.length;
             index += AGROMETEO_BATCH_SIZE
           ) {
-            const slice = group.slice(index, index + AGROMETEO_BATCH_SIZE);
+            const slice = contextSowings.slice(
+              index,
+              index + AGROMETEO_BATCH_SIZE,
+            );
             const settled = await Promise.allSettled(
               slice.map((item) =>
                 this.engine.procesarSiembra(String(item._id), {
@@ -107,9 +136,9 @@ export class AgrometeorologiaBatchService {
             });
           }
         } catch (error) {
-          failed += group.length;
+          failed += contextSowings.length;
           this.logger.error(
-            `Fallo establecimiento ${idEstablecimiento}: ${error}`,
+            `Fallo contexto meteorologico ${idEstablecimiento}/${idLote || 'sin-lote'}: ${error}`,
           );
         }
       }
@@ -117,7 +146,7 @@ export class AgrometeorologiaBatchService {
         siembras: sowings.length,
         procesadas: processed,
         fallidas: failed,
-        establecimientos: groups.size,
+        establecimientos: establishmentIds.size,
       };
       this.logger.log(
         JSON.stringify({ event: 'agromet_batch_complete', ...result }),
@@ -128,14 +157,29 @@ export class AgrometeorologiaBatchService {
     }
   }
 
-  private groupByEstablishment(sowings: ISiembra[]): Map<string, ISiembra[]> {
-    const groups = new Map<string, ISiembra[]>();
+  private groupByWeatherContext(
+    sowings: ISiembra[],
+  ): Map<string, IWeatherContextGroup> {
+    const groups = new Map<string, IWeatherContextGroup>();
     for (const sowing of sowings) {
-      const id = String(
+      const idEstablecimiento = String(
         sowing.idEstablecimiento || sowing.lote?.idEstablecimiento || '',
       );
-      if (!id) continue;
-      groups.set(id, [...(groups.get(id) || []), sowing]);
+      if (!idEstablecimiento) continue;
+      const idLote = String(sowing.idLote || sowing.lote?._id || '') || undefined;
+      const coordinates = this.resolveSowingCoordinates(sowing);
+      const spatialKey =
+        idLote ||
+        (coordinates
+          ? `${coordinates.lat.toFixed(6)},${coordinates.lng.toFixed(6)}`
+          : 'establecimiento');
+      const key = `${idEstablecimiento}|${spatialKey}`;
+      const current = groups.get(key);
+      groups.set(key, {
+        idEstablecimiento,
+        ...(idLote ? { idLote } : {}),
+        siembras: [...(current?.siembras || []), sowing],
+      });
     }
     return groups;
   }
@@ -145,14 +189,30 @@ export class AgrometeorologiaBatchService {
     establishment: IEstablecimiento,
   ): ICoordenadas | undefined {
     for (const sowing of group) {
-      const value =
-        sowing.lote?.ubicacion?.centro ||
-        sowing.coordenadas ||
-        establishment.ubicacion?.find((item) => item?.centro)?.centro;
+      const value = this.resolveSowingCoordinates(sowing);
       if (value && Number.isFinite(+value.lat) && Number.isFinite(+value.lng)) {
         return { lat: +value.lat, lng: +value.lng };
       }
     }
-    return undefined;
+    const establishmentCoordinates = establishment.ubicacion?.find(
+      (item) => item?.centro,
+    )?.centro;
+    return establishmentCoordinates &&
+      Number.isFinite(+establishmentCoordinates.lat) &&
+      Number.isFinite(+establishmentCoordinates.lng)
+      ? {
+          lat: +establishmentCoordinates.lat,
+          lng: +establishmentCoordinates.lng,
+        }
+      : undefined;
+  }
+
+  private resolveSowingCoordinates(
+    sowing: ISiembra,
+  ): ICoordenadas | undefined {
+    const value = sowing.lote?.ubicacion?.centro || sowing.coordenadas;
+    return value && Number.isFinite(+value.lat) && Number.isFinite(+value.lng)
+      ? { lat: +value.lat, lng: +value.lng }
+      : undefined;
   }
 }

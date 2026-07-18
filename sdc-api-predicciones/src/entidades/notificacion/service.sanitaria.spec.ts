@@ -25,7 +25,7 @@ describe('NotificacionsService - predicciones sanitarias', () => {
       },
       modelo: {
         id: 'trigo.roya_hoja',
-        version: 4,
+        version: 5,
         fuente: 'formula funcional auditada',
         validacion: 'operativo',
       },
@@ -34,16 +34,62 @@ describe('NotificacionsService - predicciones sanitarias', () => {
 
   const crearServicio = (notificacionesIniciales: INotificacion[] = []) => {
     const almacen: INotificacion[] = [...notificacionesIniciales];
+    let secuencia = 0;
+    const create = jest
+      .fn()
+      .mockImplementation(async (data: ICreateNotificacion) => {
+        const guardada = {
+          ...data,
+          _id: `notificacion-${++secuencia}`,
+          fechaCreacion: new Date(Date.now()),
+        } as INotificacion;
+        almacen.push(guardada);
+        return guardada;
+      });
     const repository = {
-      create: jest
+      create,
+      claimPush: jest
         .fn()
         .mockImplementation(async (data: ICreateNotificacion) => {
-          const guardada = {
+          const existente = almacen.find(
+            (notificacion) =>
+              notificacion.tenant?.idUsuario === data.tenant?.idUsuario &&
+              (notificacion.eventKey === data.eventKey ||
+                notificacion.data?.eventKey === data.eventKey),
+          );
+          if (existente) {
+            return {
+              reclamada: false,
+              motivo: 'duplicada',
+              notificacion: existente,
+            };
+          }
+          const claimId = `claim-${secuencia + 1}`;
+          const guardada = await create({
             ...data,
-            fechaCreacion: new Date(Date.now()),
-          } as INotificacion;
-          almacen.push(guardada);
-          return guardada;
+            entregaPush: {
+              estado: 'reclamada',
+              claimId,
+              intentos: 1,
+            },
+          });
+          return {
+            reclamada: true,
+            motivo: 'creada',
+            notificacion: guardada,
+          };
+        }),
+      finalizarEntregaPush: jest
+        .fn()
+        .mockImplementation(async (id: string, data: any) => {
+          const notificacion = almacen.find((item) => item._id === id);
+          if (!notificacion) throw new Error('notificacion inexistente');
+          notificacion.entregaPush = {
+            ...notificacion.entregaPush,
+            estado: data.resultado,
+            detalle: data.detalle,
+          };
+          return notificacion;
         }),
       getFiltered: jest.fn().mockImplementation(async (query: IQueryParam) => {
         const filter = JSON.parse(query.filter || '{}');
@@ -57,6 +103,18 @@ describe('NotificacionsService - predicciones sanitarias', () => {
           if (
             filter['data.eventKey'] !== undefined &&
             notificacion.data?.eventKey !== filter['data.eventKey']
+          ) {
+            return false;
+          }
+          if (
+            Array.isArray(filter.$or) &&
+            !filter.$or.some(
+              (condition) =>
+                (condition.eventKey !== undefined &&
+                  notificacion.eventKey === condition.eventKey) ||
+                (condition['data.eventKey'] !== undefined &&
+                  notificacion.data?.eventKey === condition['data.eventKey']),
+            )
           ) {
             return false;
           }
@@ -186,10 +244,10 @@ describe('NotificacionsService - predicciones sanitarias', () => {
     expect(notificacion.data).toEqual(
       expect.objectContaining({
         resultado: '24',
-        versionModelo: '4',
+        versionModelo: '5',
         fechaPrediccion: '2026-07-15T00:00:00.000Z',
         dedupeKey: 'siembra-1:sanitaria:enfermedad:roya-de-la-hoja',
-        eventKey: 'enfermedad:siembra-1:roya-de-la-hoja:v4:2026-07-15',
+        eventKey: 'enfermedad:siembra-1:roya-de-la-hoja:v5:2026-07-15',
       }),
     );
 
@@ -203,6 +261,7 @@ describe('NotificacionsService - predicciones sanitarias', () => {
       }),
       sort: JSON.stringify({ fechaCreacion: -1 }),
       limit: 1,
+      includeHidden: 'true',
     });
   });
 
@@ -305,7 +364,7 @@ describe('NotificacionsService - predicciones sanitarias', () => {
       tenant: { idUsuario: 'usuario-1' },
       data: {
         dedupeKey,
-        eventKey: 'enfermedad:siembra-1:roya-de-la-hoja:v4:2026-07-14',
+        eventKey: 'enfermedad:siembra-1:roya-de-la-hoja:v5:2026-07-14',
         resultado: '30',
       },
     });
@@ -335,6 +394,65 @@ describe('NotificacionsService - predicciones sanitarias', () => {
     expect(repository.create).toHaveBeenCalledTimes(1);
     expect(repository.create.mock.calls[0][0].tenant.idUsuario).toBe(
       'usuario-2',
+    );
+  });
+
+  it('persiste el outbox antes de invocar al proveedor push', async () => {
+    const { service, repository, push } = crearServicio();
+
+    await enviar(service, 60, '2026-07-15T00:00:00.000Z');
+
+    expect(repository.claimPush).toHaveBeenCalledTimes(1);
+    expect(push.sendNotifications).toHaveBeenCalledTimes(1);
+    expect(repository.claimPush.mock.invocationCallOrder[0]).toBeLessThan(
+      push.sendNotifications.mock.invocationCallOrder[0],
+    );
+    expect(repository.finalizarEntregaPush).toHaveBeenCalledWith(
+      'notificacion-1',
+      expect.objectContaining({
+        claimId: 'claim-1',
+        resultado: 'enviada',
+      }),
+    );
+  });
+
+  it('falla cerrado y no envia push cuando no puede persistir el claim', async () => {
+    const { service, repository, push } = crearServicio();
+    repository.claimPush.mockRejectedValueOnce(new Error('datos caido'));
+
+    await expect(
+      enviar(service, 60, '2026-07-15T00:00:00.000Z'),
+    ).resolves.toBeUndefined();
+
+    expect(push.sendNotifications).not.toHaveBeenCalled();
+    expect(repository.finalizarEntregaPush).not.toHaveBeenCalled();
+  });
+
+  it('dos recalculos concurrentes del mismo evento producen un solo push', async () => {
+    const { service, repository, push } = crearServicio();
+
+    await Promise.all([
+      enviar(service, 60, '2026-07-15T00:00:00.000Z'),
+      enviar(service, 60, '2026-07-15T00:00:00.000Z'),
+    ]);
+
+    expect(repository.create).toHaveBeenCalledTimes(1);
+    expect(push.sendNotifications).toHaveBeenCalledTimes(1);
+  });
+
+  it('registra una entrega fallida para permitir reintento posterior', async () => {
+    const { service, repository, push } = crearServicio();
+    push.sendNotifications.mockRejectedValueOnce(new Error('FCM caido'));
+
+    await enviar(service, 60, '2026-07-15T00:00:00.000Z');
+
+    expect(repository.finalizarEntregaPush).toHaveBeenCalledWith(
+      'notificacion-1',
+      expect.objectContaining({
+        claimId: 'claim-1',
+        resultado: 'fallida',
+        detalle: 'proveedor-push-no-disponible',
+      }),
     );
   });
 });

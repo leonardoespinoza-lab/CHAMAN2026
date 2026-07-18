@@ -58,6 +58,11 @@ export class ClimaController {
   }
 
   @Get('frio-termico/:lat/:lng')
+  @ApiOperation({
+    deprecated: true,
+    summary:
+      'Preview geografico legacy. No usar para decisiones: el motor canonico se consulta por siembra.',
+  })
   @UseGuards(PermisoGuard)
   @Permisos(
     { nivel: 'Admin', roles: ['Admin'] },

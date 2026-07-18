@@ -9,6 +9,7 @@ import { HelperService } from '../servicios/helper';
   providedIn: 'root',
 })
 export class LoginService {
+  private refreshPromise?: Promise<IToken>;
   public esAdmin = false;
   public esQuimica = false;
   public esDistribuidor = false;
@@ -56,6 +57,18 @@ export class LoginService {
   }
 
   public async refreshToken(): Promise<IToken> {
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+    this.refreshPromise = this.performRefresh();
+    try {
+      return await this.refreshPromise;
+    } finally {
+      this.refreshPromise = undefined;
+    }
+  }
+
+  private async performRefresh(): Promise<IToken> {
     const refresh_token = this.helper.refreshToken;
     if (!refresh_token) {
       throw 'No hay refresh token';
@@ -68,6 +81,18 @@ export class LoginService {
     this.helper.setToken(token, wasRemembered);
     return token!;
     // "Invalid grant: refresh token is invalid"
+  }
+
+  public async logout(): Promise<void> {
+    const refresh_token = this.helper.refreshToken;
+    try {
+      await firstValueFrom(
+        this.http.post(`${API}/auth/logout`, { refresh_token })
+      );
+    } finally {
+      this.resetPermisos();
+      this.helper.removeToken();
+    }
   }
 
   // ACCESS TOKEN

@@ -19,9 +19,14 @@ const MONGO_URI =
   process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/chaman';
 const ADMIN_USERNAME =
   (process.env.ADMIN_USERNAME || 'admin@chaman.local').toLowerCase();
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Chaman2026!';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 async function main() {
+  if (!ADMIN_PASSWORD || ADMIN_PASSWORD.length < 12) {
+    throw new Error(
+      'ADMIN_PASSWORD es obligatoria y debe tener al menos 12 caracteres.',
+    );
+  }
   await mongoose.connect(MONGO_URI);
 
   const db = mongoose.connection.db;
@@ -68,7 +73,7 @@ async function main() {
   console.log('Admin local listo');
   console.log('Cliente OAuth local listo');
   console.log(`Usuario: ${ADMIN_USERNAME}`);
-  console.log(`Clave: ${ADMIN_PASSWORD}`);
+  console.log('Clave: configurada mediante ADMIN_PASSWORD (no se imprime).');
 
   await mongoose.disconnect();
 }

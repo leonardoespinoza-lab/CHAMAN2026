@@ -28,17 +28,20 @@ function puntajeCompletitud(item: IClimaEstacionMeteorologica): number {
 function deduplicarPorInstante(
   filas: IClimaEstacionMeteorologica[],
 ): IClimaEstacionMeteorologica[] {
-  const unicas = new Map<number, IClimaEstacionMeteorologica>();
+  const unicas = new Map<string, IClimaEstacionMeteorologica>();
   for (const fila of filas || []) {
-    const instante = new Date(String(fila?.fecha || '')).getTime();
-    if (!Number.isFinite(instante)) continue;
-    const previa = unicas.get(instante);
+    const instante = new Date(String(fila?.fecha || ''));
+    if (!Number.isFinite(instante.getTime())) continue;
+    // La cobertura es por hora civil única, no por cantidad de paquetes. Dos
+    // lecturas dentro de la misma hora nunca equivalen a dos horas cubiertas.
+    const hora = instante.toISOString().slice(0, 13);
+    const previa = unicas.get(hora);
     if (!previa || puntajeCompletitud(fila) > puntajeCompletitud(previa)) {
-      unicas.set(instante, fila);
+      unicas.set(hora, fila);
     }
   }
   return [...unicas.entries()]
-    .sort(([a], [b]) => a - b)
+    .sort(([a], [b]) => a.localeCompare(b))
     .map(([, fila]) => fila);
 }
 
@@ -118,7 +121,7 @@ export function agregarClimaHorarioPorDia(
           numero(item.humedad?.avg ?? item.humedad?.last) !== undefined &&
           numero(item.lluvia?.sum ?? item.lluvia?.last) !== undefined,
       ).length;
-      const esSerieHoraria = registros.length >= 18;
+      const esSerieHoraria = registros.length > 1;
       const cobertura = esSerieHoraria
         ? Math.min(1, registrosHorariosValidos / 24)
         : Math.min(
@@ -129,7 +132,7 @@ export function agregarClimaHorarioPorDia(
         registros.map((item) => item.calidadDatos?.nivel),
       );
       const nivel: ICalidadDatoMotor['nivel'] =
-        esSerieHoraria && registrosHorariosValidos < 18
+        esSerieHoraria && registrosHorariosValidos < 24
           ? 'baja'
           : nivelDeclarado;
       const primera = registros[0];
@@ -203,7 +206,7 @@ export function ventanaHorariaRoyaAmarilla(
   }
 
   return [...porDia.entries()]
-    .filter(([, registros]) => registros.length >= 18)
+    .filter(([, registros]) => registros.length >= 22)
     .flatMap(([, registros]) => registros)
     .map((item) => ({
       fecha: String(item.fecha || ''),

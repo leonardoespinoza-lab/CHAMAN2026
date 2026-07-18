@@ -1,6 +1,6 @@
-import { Cultivo } from './crono';
+import { Cultivo } from "./crono";
 
-export type TModeloMaleza = 'Gompertz HTT';
+export type TModeloMaleza = "Gompertz HTT";
 
 export interface IParametrosGompertzMaleza {
   kMaxPorcentaje?: number;
@@ -26,18 +26,15 @@ export interface IRecomendacionMaleza {
 }
 
 export type TEstadoPrediccionMalezas =
-  | 'operativo'
-  | 'sin_modelos'
-  | 'no_aplica'
-  | 'sin_clima';
+  "operativo" | "sin_modelos" | "no_aplica" | "sin_clima";
 
-export type TSeveridadPrediccionMaleza = 'baja' | 'media' | 'alta';
+export type TSeveridadPrediccionMaleza = "baja" | "media" | "alta";
 
-export type TCalidadPrediccionMalezas = 'alta' | 'media' | 'baja';
+export type TCalidadPrediccionMalezas = "alta" | "media" | "baja";
 
 export interface IPrediccionMalezaDia {
   fecha?: string;
-  tipo?: 'historico' | 'pronostico';
+  tipo?: "historico" | "pronostico";
   temperaturaMedia?: number;
   lluviaMm?: number;
   et0Mm?: number;
@@ -53,7 +50,7 @@ export interface IPrediccionMalezaUmbral {
   porcentaje?: number;
   horasTermicas?: number;
   progreso?: number;
-  estado?: 'alcanzado' | 'cercano' | 'en seguimiento';
+  estado?: "alcanzado" | "cercano" | "en seguimiento";
   fechaEstimada?: string;
   diasEstimados?: number;
 }
@@ -112,6 +109,22 @@ export interface IResultadoPrediccionMalezas {
   trazas?: string[];
 }
 
+/**
+ * Una respuesta del motor solo representa cobertura operativa cuando el
+ * calculo finalizo y contiene al menos una especie evaluada. Los estados de
+ * diagnostico (sin clima, sin modelos o no aplica) siguen siendo trazables,
+ * pero no deben presentarse como una prediccion disponible.
+ */
+export function esPrediccionMalezasOperativa(
+  resultado?: IResultadoPrediccionMalezas,
+): boolean {
+  return (
+    resultado?.estado === "operativo" &&
+    Array.isArray(resultado.especies) &&
+    resultado.especies.length > 0
+  );
+}
+
 export interface IMaleza {
   _id?: string;
   codigoCarga?: string;
@@ -126,8 +139,8 @@ export interface IMaleza {
   observaciones?: string;
 }
 
-type OmitirCreate = '_id';
+type OmitirCreate = "_id";
 export interface ICreateMaleza extends Omit<Partial<IMaleza>, OmitirCreate> {}
 
-type OmitirUpdate = '_id';
+type OmitirUpdate = "_id";
 export interface IUpdateMaleza extends Omit<Partial<IMaleza>, OmitirUpdate> {}

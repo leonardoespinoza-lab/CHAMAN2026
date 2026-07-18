@@ -23,6 +23,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 import { GetPermiso } from '../../auxiliares/authorization/get-permiso.decorator';
+import { PERMISOS_AUTENTICADOS } from '../../auxiliares/authorization/permisos-authenticados';
 
 @ApiTags('Usuarios')
 @Controller('usuarios')
@@ -46,6 +47,7 @@ export class UsuariosController {
   }
 
   @Get('/propio')
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async getUsuarioPropio(
     @GetUser() user: IUsuario,
     @GetPermiso() permiso: IPermiso,
@@ -105,6 +107,7 @@ export class UsuariosController {
   }
 
   @Put('/password')
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async cambiarPasswordPropio(
     @Body('oldPassword') oldPassword: string,
     @Body('newPassword') newPassword: string,

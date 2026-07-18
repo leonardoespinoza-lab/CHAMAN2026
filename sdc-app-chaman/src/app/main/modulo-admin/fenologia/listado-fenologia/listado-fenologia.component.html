@@ -1,4 +1,4 @@
-<input #fileInput type="file" accept=".xlsx,.xls" style="display: none" (change)="onFileSelected($event)" />
+<input #fileInput type="file" accept=".xlsx" style="display: none" (change)="onFileSelected($event)" />
 
 <div class="list-view-container">
   <p-table
@@ -15,8 +15,7 @@
     [globalFilterFields]="['semillero', 'variedad', 'cultivo', 'ciclo']"
     stripedRows
     stateStorage="session"
-    [stateKey]="name"    
-  
+    [stateKey]="name"
   >
     <!-- Caption -->
     <ng-template #caption>
@@ -75,7 +74,7 @@
             <p-sortIcon field="departamentoNombre" />
             <p-columnFilter type="text" field="departamentoNombre" display="menu" />
           </div>
-        </th>      
+        </th>
         <th pSortableColumn="ciclo">
           <div class="flex items-center gap-2">
             {{ 'Ciclo' | translate }}
@@ -96,7 +95,7 @@
             <p-sortIcon field="mesSiembra" />
             <p-columnFilter type="text" field="mesSiembra" display="menu" />
           </div>
-        </th>       
+        </th>
         <th>{{ 'Acciones' | translate }}</th>
       </tr>
     </ng-template>
@@ -104,11 +103,11 @@
     <!-- Body -->
     <ng-template #body let-row>
       <tr>
-        <td>{{ row.cultivo }}</td>             
+        <td>{{ row.cultivo }}</td>
         <td>{{ row.departamento.nombre }}</td>
         <td>{{ row.ciclo }}</td>
         <td>{{ row.diaSiembra }}</td>
-        <td>{{ row.mesSiembra }}</td>        
+        <td>{{ row.mesSiembra }}</td>
         <td>
           <div style="display: flex; flex-direction: row; gap: 0.5rem">
             <p-button
@@ -143,19 +142,18 @@
 
     <!-- Footer con botón crear -->
     <ng-template #summary>
-    @if (!helper.soloLectura()) {
-      <div class="flex justify-center p-3 border-t border-surface-200">
-        <p-button
-          [label]="'Crear nueva fenología' | translate"
-          icon="pi pi-plus"
-          severity="primary"
-          [fluid]="true"
-          [outlined]="true"
-          (click)="create()"
-        ></p-button>
-      </div>
-    }
-  </ng-template>
-
+      @if (!helper.soloLectura()) {
+        <div class="flex justify-center p-3 border-t border-surface-200">
+          <p-button
+            [label]="'Crear nueva fenología' | translate"
+            icon="pi pi-plus"
+            severity="primary"
+            [fluid]="true"
+            [outlined]="true"
+            (click)="create()"
+          ></p-button>
+        </div>
+      }
+    </ng-template>
   </p-table>
 </div>

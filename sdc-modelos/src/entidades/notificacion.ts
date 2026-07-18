@@ -3,6 +3,8 @@ export interface INotificacion {
   fechaCreacion?: Date;
   leido?: boolean;
   fechaLeido?: string;
+  oculta?: boolean;
+  fechaEliminacion?: Date;
 
   tenant?: {
     idQuimica?: string;
@@ -15,6 +17,57 @@ export interface INotificacion {
   titulo?: string;
   mensaje?: string;
   data?: { [key: string]: string };
+
+  /**
+   * Identificador estable del hecho que origina la notificacion. Se duplica
+   * fuera de `data` para poder imponer unicidad atomica por usuario sin
+   * romper la lectura de documentos historicos.
+   */
+  eventKey?: string;
+
+  /** Estado persistido del outbox de push. */
+  entregaPush?: IEntregaPushNotificacion;
+}
+
+export type EstadoEntregaPush =
+  | "reclamada"
+  | "enviada"
+  | "fallida"
+  | "omitida";
+
+export interface IEntregaPushNotificacion {
+  estado: EstadoEntregaPush;
+  claimId?: string;
+  reclamadaEn?: Date;
+  leaseHasta?: Date;
+  enviadaEn?: Date;
+  fallidaEn?: Date;
+  omitidaEn?: Date;
+  proximoIntentoEn?: Date;
+  intentos?: number;
+  detalle?: string;
+}
+
+export type MotivoClaimNotificacion =
+  | "creada"
+  | "reintento"
+  | "duplicada"
+  | "en-curso"
+  | "espera-reintento"
+  | "legacy";
+
+export interface IResultadoClaimNotificacion {
+  reclamada: boolean;
+  motivo: MotivoClaimNotificacion;
+  notificacion?: INotificacion;
+}
+
+export type ResultadoEntregaPush = "enviada" | "fallida" | "omitida";
+
+export interface IFinalizarEntregaPushNotificacion {
+  claimId: string;
+  resultado: ResultadoEntregaPush;
+  detalle?: string;
 }
 
 type OmitirCreate = "_id";

@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ClimaRepository } from './repository';
 import {
   IClimaEstacionMeteorologica,
   IEstablecimiento,
+  IRespuestaAgrometeorologiaSiembra,
 } from 'modelos/src';
 
 export type TCiclo = 'Corto' | 'Intermedio' | 'Largo';
@@ -10,6 +11,32 @@ export type TCiclo = 'Corto' | 'Intermedio' | 'Largo';
 @Injectable()
 export class ClimaService {
   constructor(private repository: ClimaRepository) {}
+
+  /**
+   * Fuente única para decisiones sanitarias. Si el motor canónico no está
+   * disponible, el llamador debe persistir una salida no alertable; nunca debe
+   * reconstruir silenciosamente clima o fenología por una ruta paralela.
+   */
+  async getAgrometeorologiaSiembra(
+    idSiembra: string,
+    from?: string,
+    to?: string,
+  ): Promise<IRespuestaAgrometeorologiaSiembra | undefined> {
+    try {
+      return await this.repository.getAgrometeorologiaSiembra(
+        idSiembra,
+        from,
+        to,
+      );
+    } catch (error) {
+      Logger.warn(
+        `Motor agrometeorologico canonico no disponible para la siembra ${idSiembra}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return undefined;
+    }
+  }
 
   async getEstacionMasCercanaEntreFechas(
     lat: number,

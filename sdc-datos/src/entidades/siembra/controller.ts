@@ -7,10 +7,17 @@ import {
   Delete,
   Query,
   Put,
+  UseGuards,
 } from '@nestjs/common';
 import { SiembrasService } from './service';
-import { ICreateSiembra, IQueryParam, IUpdateSiembra } from 'modelos/src';
+import {
+  ICreateSiembra,
+  IQueryParam,
+  IRegistroFenologico,
+  IUpdateSiembra,
+} from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
+import { AgrometeorologiaStorageGuard } from '../../auxiliares/agrometeorologia-storage.guard';
 
 @ApiTags('Siembras')
 @Controller('siembras')
@@ -40,6 +47,15 @@ export class SiembrasController {
   @Post()
   async create(@Body() data: ICreateSiembra) {
     return await this.service.create(data);
+  }
+
+  @Post(':id/registros-fenologicos')
+  @UseGuards(AgrometeorologiaStorageGuard)
+  async appendPhenologyRecord(
+    @Param('id') id: string,
+    @Body() data: IRegistroFenologico,
+  ) {
+    return await this.service.appendPhenologyRecord(id, data);
   }
 
   @Put('cosechar/:id')

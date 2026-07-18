@@ -1,4 +1,4 @@
-<input #fileInput type="file" accept=".xlsx,.xls" style="display: none" (change)="onFileSelected($event)" />
+<input #fileInput type="file" accept=".xlsx" style="display: none" (change)="onFileSelected($event)" />
 
 <div class="list-view-container">
   <p-table
@@ -15,8 +15,7 @@
     [globalFilterFields]="['semillero', 'variedad', 'cultivo', 'ciclo']"
     stripedRows
     stateStorage="session"
-    [stateKey]="name"    
-  
+    [stateKey]="name"
   >
     <!-- Caption -->
     <ng-template #caption>
@@ -134,19 +133,18 @@
 
     <!-- Footer con botón crear -->
     <ng-template #summary>
-    @if (!helper.soloLectura()) {
-      <div class="flex justify-center p-3 border-t border-surface-200">
-        <p-button
-          [label]="'Crear nueva semilla' | translate"
-          icon="pi pi-plus"
-          severity="primary"
-          [fluid]="true"
-          [outlined]="true"
-          (click)="create()"
-        ></p-button>
-      </div>
-    }
-  </ng-template>
-
+      @if (!helper.soloLectura()) {
+        <div class="flex justify-center p-3 border-t border-surface-200">
+          <p-button
+            [label]="'Crear nueva semilla' | translate"
+            icon="pi pi-plus"
+            severity="primary"
+            [fluid]="true"
+            [outlined]="true"
+            (click)="create()"
+          ></p-button>
+        </div>
+      }
+    </ng-template>
   </p-table>
 </div>

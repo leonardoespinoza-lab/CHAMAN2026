@@ -11,6 +11,7 @@ import {
 import { NotificacionsService } from './service';
 import {
   ICreateNotificacion,
+  IFinalizarEntregaPushNotificacion,
   IQueryParam,
   IUpdateNotificacion,
 } from 'modelos/src';
@@ -39,6 +40,19 @@ export class NotificacionController {
   @Post('bulk')
   async bulk(@Body() data: ICreateNotificacion[]) {
     return await this.service.bulk(data);
+  }
+
+  @Post('claim-push')
+  async claimPush(@Body() data: ICreateNotificacion) {
+    return await this.service.claimPush(data);
+  }
+
+  @Put(':id/entrega-push')
+  async finalizarEntregaPush(
+    @Param('id') id: string,
+    @Body() data: IFinalizarEntregaPushNotificacion,
+  ) {
+    return await this.service.finalizarEntregaPush(id, data);
   }
 
   @Put(':id')
