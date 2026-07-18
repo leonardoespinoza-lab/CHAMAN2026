@@ -69,6 +69,11 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.8.3"
   },
+  "overrides": {
+    "bull": {
+      "uuid": "11.1.1"
+    }
+  },
   "jest": {
     "moduleFileExtensions": [
       "ts",
