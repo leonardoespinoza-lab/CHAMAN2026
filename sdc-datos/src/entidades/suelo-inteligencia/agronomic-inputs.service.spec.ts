@@ -413,6 +413,30 @@ describe('aplicarEntradasAgronomicasSuelo', () => {
     expect(lot.suelos[0]).toEqual({ profundidad: 20, hayRaices: true });
   });
 
+  it('proyecta el drenaje cartografico solo cuando el lote no tiene un valor operativo', () => {
+    const automatic = aplicarEntradasAgronomicasSuelo(
+      { _id: 'lot-1' },
+      inputs({ drainageClass: 'well' }),
+    );
+    const preserved = aplicarEntradasAgronomicasSuelo(
+      {
+        _id: 'lot-1',
+        drenajeNaturalLixiviacion: 'Mal Drenado',
+        drenajeNaturalEscorrentia: 'Mal Drenado',
+      },
+      inputs({ drainageClass: 'well' }),
+    );
+
+    expect(automatic).toMatchObject({
+      drenajeNaturalLixiviacion: 'Bien Drenado',
+      drenajeNaturalEscorrentia: 'Bien Drenado',
+    });
+    expect(preserved).toMatchObject({
+      drenajeNaturalLixiviacion: 'Mal Drenado',
+      drenajeNaturalEscorrentia: 'Mal Drenado',
+    });
+  });
+
   it('preserva capas y sensores operativos y busca el horizonte canonico por profundidad', () => {
     const lot = {
       _id: 'lot-1',

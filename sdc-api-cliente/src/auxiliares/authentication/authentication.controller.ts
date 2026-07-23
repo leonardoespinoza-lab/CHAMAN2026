@@ -6,11 +6,24 @@ import {
   Logger,
   UseInterceptors,
   NotFoundException,
+  BadRequestException,
+  Req,
+  Res,
 } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { AuthenticationService } from './authentication.service';
 import { IToken } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { LoginCacheWarmingInterceptor } from '../cache-warming/login-cache-warming.interceptor';
+import {
+  assertCookieCsrf,
+  clearBrowserSession,
+  issueBrowserSession,
+  refreshCookie,
+  rememberCookie,
+  wantsCookieSession,
+} from './session-cookie';
+import { normalizedLoginOrigin } from './login-origin';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -44,19 +57,43 @@ export class AuthenticationController {
   @Post('/login')
   @UseInterceptors(LoginCacheWarmingInterceptor)
   public async login(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
     @Body('username') username: string,
     @Body('password') password: string,
     @Body('remember') remember?: boolean,
   ): Promise<IToken> {
-    return await this.service.login(username, password, remember);
+    const token = await this.service.login(
+      username,
+      password,
+      remember,
+      normalizedLoginOrigin(req),
+    );
+    return wantsCookieSession(req)
+      ? issueBrowserSession(res, token, !!remember)
+      : token;
   }
 
   @Post('/refresh_token')
-  @UseInterceptors(LoginCacheWarmingInterceptor)
   public async refreshToken(
-    @Body('refresh_token') refresh_token: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Body('refresh_token') bodyRefreshToken?: string,
   ): Promise<IToken> {
-    return await this.service.refreshToken(refresh_token);
+    const cookieToken = wantsCookieSession(req)
+      ? refreshCookie(req)
+      : undefined;
+    const refreshToken = cookieToken || bodyRefreshToken;
+    if (!refreshToken) {
+      throw new BadRequestException('No se encontro una sesion renovable');
+    }
+    if (cookieToken) {
+      assertCookieCsrf(req, cookieToken);
+    }
+    const token = await this.service.refreshToken(refreshToken);
+    return cookieToken
+      ? issueBrowserSession(res, token, rememberCookie(req))
+      : token;
   }
 
   @Post('/access_token')
@@ -68,11 +105,22 @@ export class AuthenticationController {
 
   @Post('/logout')
   public async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
     @Headers('authorization') authorization?: string,
     @Body('refresh_token') refreshToken?: string,
   ): Promise<{ revoked: true }> {
     const accessToken = authorization?.replace(/^Bearer\s+/i, '');
-    await this.service.logout(accessToken, refreshToken);
+    const cookieToken = wantsCookieSession(req)
+      ? refreshCookie(req)
+      : undefined;
+    if (cookieToken) {
+      assertCookieCsrf(req, cookieToken);
+    }
+    await this.service.logout(accessToken, cookieToken || refreshToken);
+    if (cookieToken) {
+      clearBrowserSession(res);
+    }
     return { revoked: true };
   }
 }

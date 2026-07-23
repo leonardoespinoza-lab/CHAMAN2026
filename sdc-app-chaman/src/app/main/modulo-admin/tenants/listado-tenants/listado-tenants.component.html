@@ -1,0 +1,71 @@
+<section class="tenant-list">
+  <header class="tenant-list__header">
+    <div>
+      <span class="eyebrow">Plataforma multi-tenant</span>
+      <h1>Tenants</h1>
+      <p>Marcas, administradores, funciones habilitadas y limites comerciales.</p>
+    </div>
+    <p-button label="Crear tenant" icon="pi pi-plus" (onClick)="create()" />
+  </header>
+
+  <div class="tenant-notice">
+    <i class="pi pi-shield"></i>
+    <div>
+      <strong>Piloto controlado</strong>
+      <span>Los tenants nuevos quedan separados de los datos productivos hasta completar la migracion de alcance.</span>
+    </div>
+  </div>
+
+  @if (loading) {
+    <div class="tenant-empty"><i class="pi pi-spin pi-spinner"></i> Cargando tenants...</div>
+  } @else {
+    <div class="tenant-grid">
+      @for (tenant of tenants; track tenant._id) {
+        <article class="tenant-card" [style.--tenant-accent]="tenant.branding?.colorPrimario || '#0f8f83'">
+          <div class="tenant-card__identity">
+            @if (tenant.branding?.logo) {
+              <img [src]="tenant.branding?.logo" alt="" />
+            } @else {
+              <span class="tenant-initial">{{ (tenant.nombre || 'T').charAt(0) }}</span>
+            }
+            <div>
+              <span class="tenant-status" [class.active]="tenant.estado === 'activo'">{{ tenant.estado }}</span>
+              <h2>{{ tenant.nombre }}</h2>
+              <p>{{ tenant.slug }}.chamanagro.ar</p>
+            </div>
+          </div>
+
+          <div class="tenant-card__facts">
+            <span><small>Administrador</small><strong>{{ tenant.provisionado ? 'Provisionado' : 'Pendiente' }}</strong></span>
+            <span><small>Entidad raiz</small><strong>{{ tenant.entidadRaiz?.tipo || 'Sin vincular' }}</strong></span>
+            <span><small>Usuarios</small><strong>{{ tenant.limites?.usuarios || 'Sin limite' }}</strong></span>
+            <span><small>Lotes</small><strong>{{ tenant.limites?.lotes || 'Sin limite' }}</strong></span>
+          </div>
+
+          <div class="tenant-modules">
+            @for (module of activeModules(tenant); track module) {
+              <span>{{ module }}</span>
+            } @empty {
+              <span class="muted">Sin modulos habilitados</span>
+            }
+          </div>
+
+          @if (tenant.ultimoErrorProvisionamiento) {
+            <p-message severity="warn">{{ tenant.ultimoErrorProvisionamiento }}</p-message>
+          }
+
+          <footer>
+            <p-button label="Editar" icon="pi pi-pencil" outlined="true" (onClick)="edit(tenant)" />
+            <p-button icon="pi pi-archive" severity="danger" text="true" pTooltip="Archivar" (onClick)="archive(tenant)" />
+          </footer>
+        </article>
+      } @empty {
+        <div class="tenant-empty">
+          <i class="pi pi-building"></i>
+          <strong>Todavia no hay tenants</strong>
+          <span>Crea el primero para probar marca, modulos y administrador aislado.</span>
+        </div>
+      }
+    </div>
+  }
+</section>

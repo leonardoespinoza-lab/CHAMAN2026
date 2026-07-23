@@ -233,6 +233,28 @@ h1 {
   line-height: 1.45;
 }
 
+.advisor-card-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.advisor-card-metrics small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: var(--p-text-muted-color);
+  background: color-mix(in srgb, var(--p-primary-color) 8%, var(--p-content-background));
+}
+
+.advisor-card-metrics strong {
+  color: var(--p-primary-color);
+  font-size: inherit;
+}
+
 .card-arrow {
   color: var(--p-text-muted-color);
   margin-top: 4px;

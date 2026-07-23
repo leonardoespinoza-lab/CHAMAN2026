@@ -5,6 +5,7 @@ import {
   IQueryParam,
   ICreateEstablecimiento,
   IUpdateEstablecimiento,
+  ISolicitudArchivado,
 } from 'modelos/src';
 import { AGROMETEO_INTERNAL_TOKEN, API_CLIMA, API_DATOS } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
@@ -36,9 +37,12 @@ export class EstablecimientosRepository {
     return await this.axios.PUT<IEstablecimiento>(url, data);
   }
 
-  async delete(id: string): Promise<IEstablecimiento> {
+  async delete(
+    id: string,
+    audit: ISolicitudArchivado = {},
+  ): Promise<IEstablecimiento> {
     const url = `${API_DATOS}/establecimientos/${id}`;
-    return await this.axios.DELETE<IEstablecimiento>(url);
+    return await this.axios.DELETE<IEstablecimiento>(url, { params: audit });
   }
 
   async reprocesarAgrometeorologia(id: string): Promise<void> {

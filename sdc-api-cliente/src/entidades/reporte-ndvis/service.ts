@@ -8,6 +8,7 @@ import {
   IFilter,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
+import { establecimientosDelPermiso } from '../../auxiliares/authorization/alcance-permiso';
 import { ReporteNDVIsRepository } from './repository';
 
 @Injectable()
@@ -64,14 +65,11 @@ export class ReporteNDVIsService {
       return true;
     }
     if (permiso.nivel === 'Quimica') {
-      return Boolean(
-        data.idQuimica && data.idQuimica === permiso.idQuimica,
-      );
+      return Boolean(data.idQuimica && data.idQuimica === permiso.idQuimica);
     }
     if (permiso.nivel === 'Distribuidor') {
       return Boolean(
-        data.idDistribuidor &&
-          data.idDistribuidor === permiso.idDistribuidor,
+        data.idDistribuidor && data.idDistribuidor === permiso.idDistribuidor,
       );
     }
     if (permiso.nivel === 'Productor') {
@@ -82,7 +80,17 @@ export class ReporteNDVIsService {
     if (permiso.nivel === 'Establecimiento') {
       return Boolean(
         data.idEstablecimiento &&
-          data.idEstablecimiento === permiso.idEstablecimiento,
+        data.idEstablecimiento === permiso.idEstablecimiento,
+      );
+    }
+    if (permiso.nivel === 'Asesor') {
+      return Boolean(
+        data.idEstablecimiento &&
+        establecimientosDelPermiso(permiso).includes(
+          String(data.idEstablecimiento),
+        ) &&
+        (!permiso.idLotes?.length ||
+          permiso.idLotes.includes(String(data.idLote))),
       );
     }
     return false;
@@ -106,6 +114,13 @@ export class ReporteNDVIsService {
     if (permiso.nivel === 'Establecimiento') {
       $and.push({ idEstablecimiento: permiso.idEstablecimiento });
     }
+    if (permiso.nivel === 'Asesor') {
+      $and.push({
+        idEstablecimiento: { $in: establecimientosDelPermiso(permiso) },
+      });
+    }
+    if (permiso.idLotes?.length)
+      $and.push({ idLote: { $in: permiso.idLotes } });
 
     if ($and.length > 0) {
       filtro.$and = $and;
@@ -118,6 +133,20 @@ export class ReporteNDVIsService {
   ): Promise<IReporteNDVI[]> {
     if (permiso.nivel === 'Admin') {
       return await this.repository.getLastGlobal();
+    }
+    if (permiso.nivel === 'Asesor') {
+      const porEstablecimiento = await Promise.all(
+        establecimientosDelPermiso(permiso).map((id) =>
+          this.repository.getLastByScope('establecimiento', id),
+        ),
+      );
+      const permitidos = new Set(permiso.idLotes || []);
+      return porEstablecimiento
+        .flat()
+        .filter(
+          (reporte) =>
+            !permitidos.size || permitidos.has(String(reporte.idLote)),
+        );
     }
     const scopes = {
       Quimica: ['quimica', permiso.idQuimica],

@@ -1,0 +1,198 @@
+<section class="advisor-audit">
+  <header class="audit-header">
+    <div class="header-copy">
+      <div>
+        <p class="eyebrow">Auditoría administrativa</p>
+        <h1>Perfil y alcance del asesor</h1>
+        <p>Vista consolidada de la identidad profesional y de todos los recursos que administra.</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <p-button label="Actualizar" icon="pi pi-refresh" outlined="true" [loading]="loading" (onClick)="cargar()" />
+      <p-button label="Editar asesor" icon="pi pi-pencil" [disabled]="detalle?.asesor?.archivado" (onClick)="editar()" />
+      <p-button label="Archivar asesor" icon="pi pi-archive" severity="danger" outlined="true" [disabled]="detalle?.asesor?.archivado" (onClick)="archivar()" />
+    </div>
+  </header>
+
+  @if (loading && !detalle) {
+    <div class="loading-state">
+      <i class="pi pi-spin pi-spinner"></i>
+      <span>Consolidando perfil y alcance real...</span>
+    </div>
+  } @else if (detalle) {
+    <article class="profile-card">
+      <div class="profile-main">
+        @if (detalle.asesor.foto) {
+          <img class="profile-photo" [src]="detalle.asesor.foto" [alt]="'Foto de ' + detalle.asesor.nombre" />
+        } @else {
+          <span class="profile-avatar">{{ iniciales() }}</span>
+        }
+        <div>
+          <div class="profile-title-row">
+            <h2>{{ detalle.asesor.nombre }}</h2>
+            <span class="status-pill" [class.inactive]="!detalle.asesor.activo || detalle.asesor.archivado">
+              {{ detalle.asesor.archivado ? 'Archivado' : (detalle.asesor.activo ? 'Activo' : 'Inactivo') }}
+            </span>
+          </div>
+          <strong>{{ detalle.asesor.profesion || 'Profesión pendiente' }}</strong>
+          <p>{{ detalle.asesor.especialidad || 'Especialidad no informada' }}</p>
+          <small>
+            Usuario {{ detalle.asesor.username || 'pendiente' }} · Alta
+            {{ detalle.asesor.fechaCreacion ? (detalle.asesor.fechaCreacion | date: 'dd/MM/yyyy') : 'sin fecha' }}
+          </small>
+          @if (detalle.asesor.archivado) {
+            <small>Archivado {{ detalle.asesor.fechaArchivado | date: 'dd/MM/yyyy HH:mm' }} por {{ detalle.asesor.archivadoPor || 'sistema' }}</small>
+          }
+        </div>
+      </div>
+      <span class="profile-quality" [class.complete]="detalle.asesor.perfilCompleto">
+        <i [class]="detalle.asesor.perfilCompleto ? 'pi pi-verified' : 'pi pi-exclamation-circle'"></i>
+        {{ detalle.asesor.perfilCompleto ? 'Perfil profesional completo' : 'Perfil profesional a completar' }}
+      </span>
+    </article>
+
+    <div class="metrics-grid">
+      <article><span>Productores</span><strong>{{ detalle.asesor.metricas.productores }}</strong></article>
+      <article><span>Establecimientos</span><strong>{{ detalle.asesor.metricas.establecimientos }}</strong></article>
+      <article><span>Lotes</span><strong>{{ detalle.asesor.metricas.lotes }}</strong></article>
+      <article><span>Superficie</span><strong>{{ detalle.asesor.metricas.hectareas | number: '1.0-2' }} ha</strong></article>
+      <article><span>Usuarios gestionados</span><strong>{{ detalle.asesor.metricas.usuariosGestionados }}</strong></article>
+    </div>
+
+    <article class="audit-section">
+      <div class="section-heading">
+        <div><p class="eyebrow">Cartera comercial</p><h2>Productores gestionados</h2></div>
+        <span>{{ detalle.productores.length }} en alcance</span>
+      </div>
+      @if (detalle.productores.length) {
+        <div class="establishment-grid">
+          @for (productor of detalle.productores; track productor.id) {
+            <article class="establishment-card">
+              <div><span class="origin-pill">Productor</span><h3>{{ productor.nombre }}</h3></div>
+              <dl>
+                <div><dt>Establecimientos</dt><dd>{{ productor.establecimientos }}</dd></div>
+                <div><dt>Lotes</dt><dd>{{ productor.lotes }}</dd></div>
+                <div><dt>Superficie</dt><dd>{{ productor.hectareas | number: '1.0-2' }} ha</dd></div>
+                <div><dt>Usuarios</dt><dd>{{ productor.usuariosGestionados }}</dd></div>
+              </dl>
+            </article>
+          }
+        </div>
+      } @else {
+        <p class="empty-inline">El asesor todavía no gestiona productores.</p>
+      }
+    </article>
+
+    <div class="profile-grid">
+      <article class="information-card">
+        <div class="section-title"><i class="pi pi-id-card"></i><h3>Datos profesionales</h3></div>
+        <dl>
+          <div><dt>Matrícula</dt><dd>{{ detalle.asesor.matricula || 'No informada' }}</dd></div>
+          <div><dt>Consejo profesional</dt><dd>{{ detalle.asesor.consejoProfesional || 'No informado' }}</dd></div>
+          <div><dt>Email</dt><dd>{{ detalle.asesor.email || 'No informado' }}</dd></div>
+          <div><dt>Teléfono</dt><dd>{{ detalle.asesor.telefono || 'No informado' }}</dd></div>
+        </dl>
+      </article>
+      <article class="information-card">
+        <div class="section-title"><i class="pi pi-map-marker"></i><h3>Zona profesional</h3></div>
+        <dl>
+          <div><dt>Dirección</dt><dd>{{ detalle.asesor.direccion || 'No informada' }}</dd></div>
+          <div><dt>Coordenadas</dt><dd>{{ coordenadas() }}</dd></div>
+          <div><dt>Radio de influencia</dt><dd>{{ detalle.asesor.radioInfluenciaKm ? detalle.asesor.radioInfluenciaKm + ' km' : 'No informado' }}</dd></div>
+          <div><dt>Última consolidación</dt><dd>{{ detalle.actualizadoEn | date: 'dd/MM/yyyy HH:mm' }}</dd></div>
+        </dl>
+      </article>
+    </div>
+
+    <article class="audit-section">
+      <div class="section-heading">
+        <div><p class="eyebrow">Cartera operativa</p><h2>Establecimientos administrados</h2></div>
+        <span>{{ detalle.establecimientos.length }} en alcance</span>
+      </div>
+      @if (detalle.establecimientos.length) {
+        <div class="establishment-grid">
+          @for (establecimiento of detalle.establecimientos; track establecimiento.id) {
+            <article class="establishment-card">
+              <div>
+                <span class="origin-pill" [class.assigned]="establecimiento.origen === 'Asignado'">{{ establecimiento.origen }}</span>
+                <h3>{{ establecimiento.nombre }}</h3>
+                <p>{{ establecimiento.productor || 'Espacio independiente del asesor' }}</p>
+              </div>
+              <dl>
+                <div><dt>Lotes</dt><dd>{{ establecimiento.lotes }}</dd></div>
+                <div><dt>Superficie</dt><dd>{{ establecimiento.hectareas | number: '1.0-2' }} ha</dd></div>
+                <div><dt>Usuarios</dt><dd>{{ establecimiento.usuariosGestionados }}</dd></div>
+              </dl>
+            </article>
+          }
+        </div>
+      } @else {
+        <p class="empty-inline">El asesor todavía no administra establecimientos.</p>
+      }
+    </article>
+
+    <div class="tables-grid">
+      <article class="audit-section">
+        <div class="section-heading compact">
+          <div><p class="eyebrow">Cobertura territorial</p><h2>Lotes</h2></div>
+          <span>{{ detalle.lotes.length }}</span>
+        </div>
+        @if (detalle.lotes.length) {
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Lote</th><th>Establecimiento</th><th class="numeric">Hectáreas</th><th>Acciones</th></tr></thead>
+              <tbody>
+                @for (lote of detalle.lotes; track lote.id) {
+                  <tr>
+                    <td><strong>{{ lote.nombre }}</strong></td>
+                    <td>{{ lote.establecimiento }}</td>
+                    <td class="numeric">{{ lote.hectareas | number: '1.0-2' }}</td>
+                    <td>
+                      <p-button
+                        label="Archivar"
+                        icon="pi pi-archive"
+                        severity="danger"
+                        outlined="true"
+                        size="small"
+                        [disabled]="detalle.asesor.archivado || loading"
+                        (onClick)="archivarLote(lote)"
+                      />
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="empty-inline">Sin lotes administrados.</p>
+        }
+      </article>
+
+      <article class="audit-section">
+        <div class="section-heading compact">
+          <div><p class="eyebrow">Accesos delegados</p><h2>Usuarios</h2></div>
+          <span>{{ detalle.usuarios.length }}</span>
+        </div>
+        @if (detalle.usuarios.length) {
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Usuario</th><th>Productor / alcance</th><th>Rol</th><th>Estado</th></tr></thead>
+              <tbody>
+                @for (usuario of detalle.usuarios; track usuario.id + (usuario.idProductor || usuario.idEstablecimiento)) {
+                  <tr>
+                    <td><strong>{{ usuario.nombre }}</strong><small>{{ usuario.username }} · {{ usuario.email || 'Email pendiente' }}</small></td>
+                    <td>{{ usuario.productor || usuario.establecimiento }}</td>
+                    <td>{{ usuario.rol }}</td>
+                    <td><span class="status-dot" [class.inactive]="!usuario.activo"></span>{{ usuario.activo ? 'Activo' : 'Inactivo' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p class="empty-inline">El asesor todavía no delegó accesos.</p>
+        }
+      </article>
+    </div>
+  }
+</section>

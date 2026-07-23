@@ -7,12 +7,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ReporteNDVIsService } from './service';
-import {
-  IReporteNDVI,
-  IListado,
-  IQueryParam,
-  IPermiso,
-} from 'modelos/src';
+import { IReporteNDVI, IListado, IQueryParam, IPermiso } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
@@ -30,6 +25,7 @@ export class ReporteNDVIsController {
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   public async get(
     @Query() query: IQueryParam,
@@ -44,6 +40,7 @@ export class ReporteNDVIsController {
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   public async getLastByLote(
     @GetPermiso() permiso: IPermiso,
@@ -57,6 +54,7 @@ export class ReporteNDVIsController {
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   public async getLastByLoteByDistribuidor(
     @GetPermiso() permiso: IPermiso,
@@ -70,6 +68,7 @@ export class ReporteNDVIsController {
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   public async getById(
     @Param('id') id: string,

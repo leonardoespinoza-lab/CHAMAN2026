@@ -33,6 +33,7 @@ export class FertilizacionsController {
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Lectura'] },
   )
@@ -47,6 +48,7 @@ export class FertilizacionsController {
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Lectura'] },
   )
@@ -61,6 +63,7 @@ export class FertilizacionsController {
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Lectura'] },
   )
@@ -75,6 +78,7 @@ export class FertilizacionsController {
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async create(
     @Body() body: ICreateFertilizacion,
@@ -87,6 +91,7 @@ export class FertilizacionsController {
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async update(
     @Param('id') id: string,
@@ -100,6 +105,7 @@ export class FertilizacionsController {
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async delete(
     @Param('id') id: string,

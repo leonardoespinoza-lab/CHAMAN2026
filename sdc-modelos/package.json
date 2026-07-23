@@ -1,10 +1,29 @@
 {
   "name": "modelos",
   "packageManager": "yarn@4.6.0",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Modelos para Chamán",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./src": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build"
+  },
   "author": "GPE Sistemas",
   "license": "Private",
-  "repository": "https://github.com/CHAMAN-AGRO/sdc-modelos"
+  "repository": "https://github.com/CHAMAN-AGRO/sdc-modelos",
+  "devDependencies": {
+    "typescript": "~5.8.3"
+  }
 }

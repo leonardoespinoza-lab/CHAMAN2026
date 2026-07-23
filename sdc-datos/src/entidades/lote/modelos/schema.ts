@@ -38,6 +38,24 @@ import { Dispositivo } from 'src/entidades/dispositivos/modelos/schema';
 export class Lote implements Exactly<ILote, Lote> {
   _id: string;
 
+  @Prop({ type: mongoose.Schema.Types.ObjectId, index: true })
+  idTenant?: string;
+
+  @Prop({ type: Boolean, default: false, index: true })
+  archivado?: boolean;
+
+  @Prop({ type: Date })
+  fechaArchivado?: string;
+
+  @Prop({ type: String })
+  archivadoPor?: string;
+
+  @Prop({ type: String })
+  motivoArchivado?: string;
+
+  @Prop({ type: mongoose.Schema.Types.ObjectId })
+  idAsesorPropietario?: string;
+
   @Prop()
   nombre: string;
 
@@ -149,11 +167,20 @@ export type LoteDocument = Lote & Document;
 
 export const LoteSchema = SchemaFactory.createForClass(Lote);
 
+LoteSchema.index({ idAsesorPropietario: 1, idEstablecimiento: 1 });
+
 LoteSchema.set('toJSON', { virtuals: true, getters: true });
 
 LoteSchema.index({ 'ubicacion.geojson': '2dsphere' });
 
-LoteSchema.index({ nombre: 1, idEstablecimiento: 1 }, { unique: true });
+LoteSchema.index(
+  { nombre: 1, idEstablecimiento: 1 },
+  {
+    name: 'uniq_lote_establecimiento_nombre_activo_v2',
+    unique: true,
+    partialFilterExpression: { archivado: false },
+  },
+);
 
 LoteSchema.virtual('quimica', {
   foreignField: '_id',

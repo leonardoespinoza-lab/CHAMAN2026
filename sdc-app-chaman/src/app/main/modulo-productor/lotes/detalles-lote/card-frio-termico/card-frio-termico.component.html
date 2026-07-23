@@ -45,32 +45,86 @@
         <p-message severity="warn">{{ error }}</p-message>
       }
 
-      @if (metricas.length) {
-        <div class="frio-metrics" [class.frio-metrics--forcing]="esDormanciaPerenne">
-          @for (metric of metricas; track metric.label) {
-            <article [ngClass]="metric.tone">
-              <div>
-                <span>{{ metric.label }}</span>
-                <strong>{{ metric.value }}</strong>
-                @if (esDormanciaPerenne && metric.label === 'GDD de forzado') {
-                  <b>{{ gddEstadoLabel }}</b>
-                }
-              </div>
-              <small>{{ metric.detail }}</small>
-              <em>{{ metric.source }}</em>
-            </article>
+      <div class="frio-overview" [class.frio-overview--summary-only]="!chartFrioOptions">
+        <section class="frio-overview__summary" aria-label="Totales de la temporada térmica">
+          @if (metricas.length) {
+            <div class="frio-metrics" [class.frio-metrics--forcing]="esDormanciaPerenne">
+              @for (metric of metricas; track metric.label) {
+                <article [ngClass]="metric.tone">
+                  <div>
+                    <span>{{ metric.label }}</span>
+                    <strong>{{ metric.value }}</strong>
+                    @if (esDormanciaPerenne && metric.label === 'GDD de forzado') {
+                      <b>{{ gddEstadoLabel }}</b>
+                    }
+                  </div>
+                  <small>{{ metric.detail }}</small>
+                  <em>{{ metric.source }}</em>
+                </article>
+              }
+            </div>
           }
-        </div>
-      }
+        </section>
 
-      <details class="frio-quality" [class.reference]="data?.summary?.fieldCold?.quality === 'reference'">
-        <summary>
-          <i class="pi pi-shield"></i>
-          <strong>{{ calidadFrioLabel }}</strong>
-          <i class="pi pi-chevron-down"></i>
-        </summary>
-        <span>{{ calidadFrioDetalle }}</span>
-      </details>
+        @if (chartFrioOptions) {
+          <details class="frio-model-chart frio-model-chart--overview" open>
+            <summary>{{ tituloEvolucion }}</summary>
+            <div>
+              @if (esDormanciaPerenne) {
+                <div class="frio-chart-toolbar" aria-label="Vista del gráfico de frío">
+                  <div>
+                    <strong>{{
+                      modoGraficoFrio === 'acumulado' ? 'Evolución acumulada' : 'Aporte térmico diario'
+                    }}</strong>
+                    <span>
+                      @if (modoGraficoFrio === 'diario') {
+                        Temperaturas mínima y máxima alineadas por fecha; Utah se calcula hora a hora y descuenta calor
+                        por encima de 15,9 °C.
+                      } @else {
+                        La temperatura da contexto a los acumulados; cada modelo conserva su unidad y escala independiente.
+                      }
+                    </span>
+                  </div>
+                  <div class="frio-chart-toggle" role="group" aria-label="Modo de evolución">
+                    <button
+                      type="button"
+                      class="chaman-interactive-surface"
+                      [class.active]="modoGraficoFrio === 'acumulado'"
+                      [attr.aria-pressed]="modoGraficoFrio === 'acumulado'"
+                      (click)="cambiarModoGraficoFrio('acumulado')"
+                    >
+                      Acumulado
+                    </button>
+                    <button
+                      type="button"
+                      class="chaman-interactive-surface"
+                      [class.active]="modoGraficoFrio === 'diario'"
+                      [attr.aria-pressed]="modoGraficoFrio === 'diario'"
+                      (click)="cambiarModoGraficoFrio('diario')"
+                    >
+                      Aporte diario
+                    </button>
+                  </div>
+                </div>
+              }
+              <app-chart
+                class="chaman-chart-shell"
+                [options]="chartFrioOptions"
+                [style]="'display:block;width:100%;height:100%'"
+              ></app-chart>
+            </div>
+          </details>
+        }
+
+        <details class="frio-quality" [class.reference]="data?.summary?.fieldCold?.quality === 'reference'">
+          <summary>
+            <i class="pi pi-shield"></i>
+            <strong>{{ calidadFrioLabel }}</strong>
+            <i class="pi pi-chevron-down"></i>
+          </summary>
+          <span>{{ calidadFrioDetalle }}</span>
+        </details>
+      </div>
 
       @if (usaSensorFrio) {
         <section class="frio-sensor-history">
@@ -102,15 +156,6 @@
             [subtitulo]="subtituloHistoricoSensor"
           ></app-grafico-historico-ambiente>
         </section>
-      }
-
-      @if (chartFrioOptions) {
-        <details class="frio-model-chart" open>
-          <summary>{{ tituloEvolucion }}</summary>
-          <div>
-            <app-chart [options]="chartFrioOptions" [style]="'display:block;width:100%;height:320px'"></app-chart>
-          </div>
-        </details>
       }
 
       @if (advertenciasFrio.length) {
@@ -220,8 +265,9 @@
           <div>
             <strong>Frutal perenne: frío y forzado no se mezclan</strong>
             <p>
-              HF cuenta horas entre 0 y 7,2 °C; UF aplica el modelo Utah y CP el Dynamic Model horario. HFE se conserva
-              únicamente como indicador histórico legacy. Los GDD de forzado comienzan con un biofix observado.
+              HF cuenta horas entre 0 y 7,2 °C; UF aplica el modelo Utah y CP el Dynamic Model horario. La serie legacy
+              permanece preservada para auditoría, pero no se muestra como indicador operativo. Los GDD de forzado
+              comienzan con un biofix observado.
             </p>
           </div>
         </article>

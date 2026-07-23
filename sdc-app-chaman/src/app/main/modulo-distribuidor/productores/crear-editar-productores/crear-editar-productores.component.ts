@@ -6,6 +6,7 @@ import {
   ICreateLicencia,
   ICreateProductor,
   IDistribuidor,
+  IEstadoLicenciaEntidad,
   IFilter,
   ILicencia,
   IListado,
@@ -15,7 +16,12 @@ import {
 } from 'modelos/src';
 import { SelectChangeEvent } from 'primeng/select';
 import { Subscription } from 'rxjs';
+import {
+  AutocompleteDireccionComponent,
+  DireccionSeleccionada,
+} from '../../../../auxiliares/componentes/autocomplete-direccion/autocomplete-direccion.component';
 import { LoginService } from '../../../../auxiliares/http/login.service';
+import { LicenciaPorEntidadService } from '../../../../auxiliares/http/licencia-por-entidad.service';
 import { ProductorsService } from '../../../../auxiliares/http/productor.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../auxiliares/servicios/listados';
@@ -24,7 +30,7 @@ import { SharedModule } from '../../../../auxiliares/shared.module';
 
 @Component({
   selector: 'app-crear-editar-productores',
-  imports: [SharedModule],
+  imports: [SharedModule, AutocompleteDireccionComponent],
   templateUrl: './crear-editar-productores.component.html',
   styleUrl: './crear-editar-productores.component.scss',
 })
@@ -40,10 +46,10 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
   public editarLicencia = false;
   public formLicencia?: FormGroup;
   public licencias: ILicencia[] = [];
-  private licenciaExtra: ILicencia = {
-    nombre: 'Crear Licencia Nueva',
-  };
   public licencia?: ILicencia;
+  public estadoLicencia?: IEstadoLicenciaEntidad;
+  private licenciaInicialId?: string;
+  private expiracionInicial?: string;
   public licencias$?: Subscription;
   public hoy = new Date();
   public fechaDeExpiracion = new Date(this.hoy.getFullYear(), this.hoy.getMonth() + 1, this.hoy.getDate());
@@ -58,6 +64,7 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
   public quimicas: IQuimica[] = [];
   private distribuidores$?: Subscription;
   private quimicas$?: Subscription;
+  public direccionSeleccionada?: DireccionSeleccionada;
 
   constructor(
     private paramsService: ParamsService,
@@ -67,15 +74,28 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
     private listados: ListadosService,
     public loginService: LoginService,
     private router: Router,
+    private licenciaPorEntidadService: LicenciaPorEntidadService,
   ) {}
 
   private createForm(): void {
     this.form = new FormGroup({
       nombre: new FormControl(this.productor?.nombre, Validators.required),
+      razonSocial: new FormControl(this.productor?.razonSocial),
+      cuit: new FormControl(this.productor?.cuit, [Validators.pattern(/^\d{11}$/)]),
+      condicionIva: new FormControl(this.productor?.condicionIva),
+      emailFiscal: new FormControl(this.productor?.emailFiscal, Validators.email),
+      telefonoFiscal: new FormControl(this.productor?.telefonoFiscal),
+      direccionFiscal: new FormControl(this.productor?.direccionFiscal),
       logo: new FormControl(this.productor?.logo),
       gratis: new FormControl(this.productor?.gratis || true),
       idQuimica: new FormControl(this.productor?.idQuimica),
       idDistribuidor: new FormControl(this.productor?.idDistribuidor),
+      direccion: new FormControl(this.productor?.direccion),
+      geojson: new FormControl(this.productor?.geojson),
+      radioInfluenciaKm: new FormControl(this.productor?.radioInfluenciaKm || 50, [
+        Validators.min(1),
+        Validators.max(1000),
+      ]),
     });
   }
 
@@ -108,11 +128,7 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
 
     this.licencias$?.unsubscribe();
     this.licencias$ = this.listados.subscribe<IListado<ILicencia>>('licencias', queryParams).subscribe(async (data) => {
-      this.licencias = data.datos;
-      if (!this.licencias.some((lic) => lic.nombre === 'Crear Licencia Nueva')) {
-        this.licencias.push(this.licenciaExtra);
-      }
-      console.log(`listado de licencias`, data);
+      this.licencias = data.datos.filter((licencia) => licencia.estado !== 'archivado');
     });
     await this.listados.getLastValue('licencias', queryParams);
   }
@@ -120,78 +136,80 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
   public async onMostrarLicenciaChange(event: boolean): Promise<void> {
     this.mostrarLicencia = event;
     if (this.mostrarLicencia === true) {
-      // Tengo que listar las licencias
-      await this.listarLicencias();
-      // Tengo que crear el formulario de licencia
       this.createFormLicencia();
+      if (this.productor?._id) {
+        this.estadoLicencia = await this.licenciaPorEntidadService.getEstadoEntidad('Productor', this.productor._id);
+        if (this.estadoLicencia.asignacion?.fechaExpiracion) {
+          this.fechaDeExpiracion = new Date(this.estadoLicencia.asignacion.fechaExpiracion);
+        }
+      }
+      await this.listarLicencias();
+      this.licencia = this.licencias.find((item) => item._id === this.estadoLicencia?.licencia?._id);
+      if (this.licencia) await this.onLicenciaChange(this.licencia);
+      this.licenciaInicialId = this.licencia?._id;
+      this.expiracionInicial = this.fechaKey(this.fechaDeExpiracion);
     } else {
       // Si no se muestra la licencia, reinicio el formulario de licencia
       this.formLicencia = undefined;
       this.licencias = [];
       this.licencia = undefined;
       this.editarLicencia = false;
+      this.estadoLicencia = undefined;
+      this.licenciaInicialId = undefined;
+      this.expiracionInicial = undefined;
       this.fechaDeExpiracion = new Date(this.hoy.getFullYear(), this.hoy.getMonth() + 1, this.hoy.getDate());
     }
     this.checkDisabled();
   }
 
   public async onLicenciaChange(event: ILicencia): Promise<void> {
-    if (event.nombre === 'Crear Licencia Nueva') {
-      this.editarLicencia = true;
-      this.licencia = undefined;
-      // Patcheo el default
-      this.formLicencia?.patchValue({
-        nombre: '',
-        maxUsuarios: 2,
-        maxdDistribuidores: 1,
-        maxProductores: 1,
-        maxEstablecimientos: 1,
-        maxLotes: 1,
-        maxdHectareas: 10000,
-        modulos: {
-          Enfermedades: true,
-          Riego: false,
-          'Huella Hídrica': false,
-          NDVI: true,
-          Clima: true,
-          'Etapas Fenológicas': true,
-        },
-      });
-      this.fechaDeExpiracion = new Date(this.hoy.getFullYear(), this.hoy.getMonth() + 1, this.hoy.getDate());
-    } else {
-      // Patch the form with the selected license
-      this.editarLicencia = false;
-      this.licencia = event;
+    this.editarLicencia = false;
+    this.licencia = event;
+    if (event) {
       this.formLicencia?.patchValue({
         nombre: this.licencia.nombre,
-        maxUsuarios: this.licencia.maxUsuarios || 2,
-        maxdDistribuidores: this.licencia.maxdDistribuidores || 1,
-        maxProductores: this.licencia.maxProductores || 1,
-        maxEstablecimientos: this.licencia.maxEstablecimientos || 1,
-        maxLotes: this.licencia.maxLotes || 1,
-        maxdHectareas: this.licencia.maxdHectareas || 10000,
+        maxUsuarios: this.licencia.maxUsuarios ?? 2,
+        maxdDistribuidores: this.licencia.maxdDistribuidores ?? 1,
+        maxProductores: this.licencia.maxProductores ?? 1,
+        maxEstablecimientos: this.licencia.maxEstablecimientos ?? 1,
+        maxLotes: this.licencia.maxLotes ?? 1,
+        maxdHectareas: this.licencia.maxdHectareas ?? 10000,
         modulos: {
-          Enfermedades: this.licencia.modulos?.Enfermedades || true,
-          Riego: this.licencia.modulos?.Riego || false,
-          'Huella Hídrica': this.licencia.modulos?.['Huella Hídrica'] || false,
-          NDVI: this.licencia.modulos?.NDVI || true,
-          Clima: this.licencia.modulos?.Clima || true,
-          'Etapas Fenológicas': this.licencia.modulos?.['Etapas Fenológicas'] || true,
+          Enfermedades: this.licencia.modulos?.Enfermedades ?? true,
+          Riego: this.licencia.modulos?.Riego ?? false,
+          'Huella Hídrica': this.licencia.modulos?.['Huella Hídrica'] ?? false,
+          NDVI: this.licencia.modulos?.NDVI ?? true,
+          Clima: this.licencia.modulos?.Clima ?? true,
+          'Etapas Fenológicas': this.licencia.modulos?.['Etapas Fenológicas'] ?? true,
         },
       });
-      this.fechaDeExpiracion = new Date(this.hoy.getFullYear(), this.hoy.getMonth() + 1, this.hoy.getDate());
     }
     this.checkDisabled();
   }
 
   // ACCIONES
   private getData() {
-    const data: ICreateProductor = this.form?.value;
-    if (this.loginService.esAdmin && !data.licencia && data.gratis) {
-      data.licencia = this.getDataLicencia();
-      data.expiracion = this.helper.dateToDias(this.fechaDeExpiracion);
-    }
+    const data: ICreateProductor = {
+      ...this.form?.value,
+      cuit: this.normalizarCuit(this.form?.value?.cuit),
+    };
     return data;
+  }
+
+  public onCuitInput(): void {
+    const control = this.form?.get('cuit');
+    if (!control) return;
+    const normalizado = String(control.value || '').replace(/\D/g, '').slice(0, 11);
+    if (normalizado !== control.value) {
+      control.setValue(normalizado, { emitEvent: false });
+    }
+    control.updateValueAndValidity({ emitEvent: false });
+    this.checkDisabled();
+  }
+
+  private normalizarCuit(cuit?: string): string | undefined {
+    const limpio = String(cuit || '').replace(/\D/g, '');
+    return limpio || undefined;
   }
 
   private getDataLicencia() {
@@ -205,7 +223,7 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
       const data = this.getData();      
       let productorCreado: IProductor | undefined;
 
-      if (this.editarLicencia === true || this.mostrarLicencia === true) {
+      if (this.debeGuardarLicencia()) {
         const dataLicencia = this.getDataLicencia();
         data.licencia = dataLicencia;
         data.expiracion = this.helper.dateToDias(this.fechaDeExpiracion);
@@ -253,6 +271,10 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
   public volver() {
     if (this.loginService.esAdmin) {
       this.router.navigateByUrl('/dashboard-admin');
+      return;
+    }
+    if (this.loginService.esTenant) {
+      this.router.navigateByUrl('/dashboard-tenant');
       return;
     }
     window.history.back();
@@ -336,6 +358,12 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
       : () => this.translate.instant('Crear productor');
     await Promise.all([this.loginService.esAdmin ? this.listarQuimicas() : null]);
     this.createForm();
+    if (this.productor?.geojson) {
+      this.direccionSeleccionada = {
+        direccion: this.productor.direccion || '',
+        geojson: this.productor.geojson,
+      };
+    }
     if (this.loginService.esAdmin) {
       this.createFormLicencia();
     }
@@ -344,9 +372,38 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
     this.loading = false;
   }
 
+  private debeGuardarLicencia(): boolean {
+    if (!this.mostrarLicencia || !this.licencia?._id) return false;
+    if (!this.productor?._id) return true;
+    return (
+      this.licencia._id !== this.licenciaInicialId ||
+      this.fechaKey(this.fechaDeExpiracion) !== this.expiracionInicial
+    );
+  }
+
+  private fechaKey(fecha?: Date): string | undefined {
+    if (!fecha || Number.isNaN(fecha.getTime())) return undefined;
+    return `${fecha.getFullYear()}-${fecha.getMonth() + 1}-${fecha.getDate()}`;
+  }
+
   ngOnDestroy(): void {
     this.distribuidores$?.unsubscribe();
     this.quimicas$?.unsubscribe();
     this.licencias$?.unsubscribe();
+  }
+
+  public onDireccionChange(direccion: DireccionSeleccionada): void {
+    this.direccionSeleccionada = direccion;
+    this.form?.patchValue({
+      direccion: direccion.direccion,
+      geojson: direccion.geojson,
+    });
+    this.checkDisabled();
+  }
+
+  public onDireccionClear(): void {
+    this.direccionSeleccionada = undefined;
+    this.form?.patchValue({ direccion: null, geojson: null });
+    this.checkDisabled();
   }
 }

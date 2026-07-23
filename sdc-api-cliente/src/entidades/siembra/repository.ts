@@ -86,11 +86,9 @@ export class SiembrasRepository {
     registroFenologico: IRegistroFenologico,
   ): Promise<ISiembra> {
     const url = `${API_DATOS}/siembras/${id}/registros-fenologicos`;
-    return await this.axios.POST<ISiembra>(
-      url,
-      registroFenologico,
-      { headers: this.agrometeorologiaHeaders() },
-    );
+    return await this.axios.POST<ISiembra>(url, registroFenologico, {
+      headers: this.agrometeorologiaHeaders(),
+    });
   }
 
   async delete(id: string): Promise<ISiembra> {

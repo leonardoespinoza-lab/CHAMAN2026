@@ -23,6 +23,7 @@
 .risk-strip,
 .summary-action,
 .establishment-rail,
+.network-rail,
 .lot-bottom-sheet {
   color: #243149;
   background:
@@ -54,6 +55,7 @@
 .risk-strip::before,
 .summary-action::before,
 .establishment-rail::before,
+.network-rail::before,
 .lot-bottom-sheet::before {
   content: '';
   position: absolute;
@@ -69,6 +71,7 @@
 .risk-strip > *,
 .summary-action > *,
 .establishment-rail > *,
+.network-rail > *,
 .lot-bottom-sheet > * {
   position: relative;
   z-index: 1;
@@ -213,6 +216,79 @@
   overflow-x: auto;
   scrollbar-width: thin;
   pointer-events: auto;
+}
+
+.network-rail {
+  align-self: flex-start;
+  min-height: 2.65rem;
+  max-width: min(100%, 940px);
+  display: flex;
+  align-items: center;
+  gap: .42rem;
+  padding: .34rem .42rem;
+  border-radius: 16px;
+  overflow-x: auto;
+  pointer-events: auto;
+}
+
+.network-rail > span:first-child {
+  flex: 0 0 auto;
+  padding: 0 .4rem 0 .2rem;
+  color: var(--p-primary-color);
+  font-size: .68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.network-chip,
+.network-static {
+  min-height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .38rem;
+  flex: 0 0 auto;
+  padding: .3rem .55rem;
+  border: 1px solid rgba(121, 150, 185, .28);
+  border-radius: 11px;
+  background: rgba(248, 250, 252, .68);
+  color: #1e293b;
+  font: inherit;
+}
+
+.network-chip { cursor: pointer; }
+.network-chip i { color: #007bff; }
+.network-chip.producer i { color: #7357c8; }
+.network-chip strong, .network-static strong { font-size: .86rem; }
+.network-chip small { color: #64748b; font-size: .7rem; }
+.network-chip.inactive { opacity: .45; filter: grayscale(1); }
+.network-static { color: #475569; font-size: .72rem; }
+.network-hint { color: #64748b !important; font-size: .68rem !important; text-transform: none !important; white-space: nowrap; }
+
+:host ::ng-deep .network-popup {
+  min-width: 235px;
+  display: grid;
+  gap: 6px;
+}
+
+:host ::ng-deep .network-popup-kind {
+  color: var(--p-primary-color);
+  font-size: .68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+:host ::ng-deep .network-popup > strong { font-size: 1rem; }
+:host ::ng-deep .network-popup p { margin: 0; color: #64748b; font-size: .78rem; }
+:host ::ng-deep .network-popup small { color: #475569; }
+:host ::ng-deep .network-popup button {
+  margin-top: 4px;
+  padding: 7px 10px;
+  border: 1px solid var(--p-primary-color);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--p-primary-color) 10%, white);
+  color: var(--p-primary-color);
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .establishment-rail > span {

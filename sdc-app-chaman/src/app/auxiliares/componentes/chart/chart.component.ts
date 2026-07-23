@@ -1,15 +1,9 @@
-import { Component, EventEmitter, Input, OnChanges, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnDestroy, Output } from '@angular/core';
 import Highcharts from 'highcharts';
-import More from 'highcharts/highcharts-more';
 import { HighchartsChartModule } from 'highcharts-angular';
-import TimelineModule from 'highcharts/modules/timeline';
-import XRangeModule from 'highcharts/modules/xrange';
 
 import { applyChamanHighchartsDefaults, withChamanChartTheme } from './chaman-chart-theme';
 
-More(Highcharts);
-TimelineModule(Highcharts);
-XRangeModule(Highcharts);
 applyChamanHighchartsDefaults(Highcharts);
 
 @Component({
@@ -18,7 +12,7 @@ applyChamanHighchartsDefaults(Highcharts);
   styleUrls: ['./chart.component.scss'],
   imports: [HighchartsChartModule],
 })
-export class ChartComponent implements OnInit, OnChanges {
+export class ChartComponent implements OnChanges, OnDestroy {
   public Highcharts: typeof Highcharts = Highcharts;
 
   @Input() options?: Highcharts.Options;
@@ -29,14 +23,17 @@ export class ChartComponent implements OnInit, OnChanges {
 
   @Output() optionsChange = new EventEmitter<Highcharts.Options>();
   @Output() chartPrint = new EventEmitter<void>();
+  private chartPrintTimer?: ReturnType<typeof setTimeout>;
 
-  public chartInstance(chart: Highcharts.Chart) {
-    this.chart = chart;
-    this.setDefaults();
+  public chartInstance(chart: Highcharts.Chart | null) {
+    this.chart = chart || undefined;
   }
 
   public chartCallback: Highcharts.ChartCallbackFunction = () => {
-    setTimeout(() => {
+    if (this.chartPrintTimer) {
+      clearTimeout(this.chartPrintTimer);
+    }
+    this.chartPrintTimer = setTimeout(() => {
       this.chartPrint.emit();
     }, 100);
   };
@@ -47,11 +44,7 @@ export class ChartComponent implements OnInit, OnChanges {
     }
 
     this.options = this.prepareOptions(this.options);
-    this.update = true;
-
-    if (this.chart) {
-      this.chart.update(this.options, true, true);
-    }
+    this.update = Boolean(this.chart);
   }
 
   private prepareOptions(options: Highcharts.Options): Highcharts.Options {
@@ -91,7 +84,13 @@ export class ChartComponent implements OnInit, OnChanges {
     this.setDefaults();
   }
 
-  ngOnInit(): void {
-    this.setDefaults();
+  ngOnDestroy(): void {
+    if (this.chartPrintTimer) {
+      clearTimeout(this.chartPrintTimer);
+      this.chartPrintTimer = undefined;
+    }
+    // highcharts-angular destruye la instancia hija. Soltamos solamente la
+    // referencia local para no ejecutar Chart.destroy() dos veces.
+    this.chart = undefined;
   }
 }

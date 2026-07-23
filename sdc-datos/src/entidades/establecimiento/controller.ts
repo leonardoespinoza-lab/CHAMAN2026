@@ -13,6 +13,7 @@ import {
   ICreateEstablecimiento,
   IQueryParam,
   IUpdateEstablecimiento,
+  ISolicitudArchivado,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 
@@ -42,7 +43,7 @@ export class EstablecimientosController {
   }
 
   @Delete(':id')
-  async delete(@Param('id') id: string) {
-    return await this.service.delete(id);
+  async delete(@Param('id') id: string, @Query() audit: ISolicitudArchivado) {
+    return await this.service.delete(id, audit);
   }
 }

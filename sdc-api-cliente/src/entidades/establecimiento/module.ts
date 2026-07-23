@@ -8,6 +8,7 @@ import { ClimaModule } from '../clima/module';
 import { EstablecimientosClimateSyncService } from './climate-sync.service';
 import { EstacionsModule } from '../estacion/module';
 import { DecisionPipelineModule } from '../../auxiliares/decision-pipeline';
+import { LotesRepository } from '../lote/repository';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { DecisionPipelineModule } from '../../auxiliares/decision-pipeline';
     EstablecimientosService,
     EstablecimientosRepository,
     EstablecimientosClimateSyncService,
+    LotesRepository,
   ],
   exports: [EstablecimientosService],
 })

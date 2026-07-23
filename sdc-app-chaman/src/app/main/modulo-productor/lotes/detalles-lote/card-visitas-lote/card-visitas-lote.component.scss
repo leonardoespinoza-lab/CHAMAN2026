@@ -1,0 +1,56 @@
+:host { display:block; min-width:0; }
+.visits-card { height:100%; padding:1rem; border:1px solid #c7dde0; border-radius:14px; background:rgba(255,255,255,.88); }
+.field-card-header { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
+.field-card-header > div { display:grid; gap:.12rem; }
+.field-card-header span { color:var(--p-primary-color); font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+.field-card-header strong { color:#122436; font-size:1.15rem; }
+.field-card-header small { color:#64748b; }
+.calendar-toolbar { display:flex; justify-content:space-between; align-items:center; margin-top:.65rem; min-height:34px; }
+.calendar-toolbar strong { color:#1a3442; font-size:.9rem; }
+.calendar-weekdays,.mini-calendar { display:grid; grid-template-columns:repeat(7,1fr); }
+.calendar-weekdays span { padding:.15rem; text-align:center; color:#6b7d8d; font-size:.65rem; font-weight:800; }
+.mini-calendar { gap:2px; transition:opacity .2s; }
+.mini-calendar.loading { opacity:.45; }
+.mini-calendar button { position:relative; min-height:34px; border:0; border-radius:8px; background:#f7faf9; color:#2b4552; cursor:pointer; }
+.mini-calendar button:hover { background:color-mix(in srgb,var(--p-primary-color),white 88%); }
+.mini-calendar button.outside { opacity:.32; }
+.mini-calendar button.today { box-shadow:inset 0 0 0 1px var(--p-primary-color); font-weight:850; }
+.mini-calendar button.has-visit { background:color-mix(in srgb,var(--p-primary-color),white 86%); color:var(--p-primary-color); font-weight:850; }
+.mini-calendar button.has-visit[data-status='programada'] { background:#fff2d5; color:#8a5a00; }
+.mini-calendar button.has-visit[data-status='cancelada'] { background:#f1f3f5; color:#7a8793; }
+.mini-calendar button i { position:absolute; bottom:3px; left:50%; width:4px; height:4px; transform:translateX(-50%); border-radius:50%; background:currentColor; }
+.visits-summary { display:grid; grid-template-columns:1fr 1fr; gap:.55rem; margin-top:.65rem; }
+.visits-summary article { display:grid; gap:.08rem; padding:.55rem .65rem; border:1px solid #d8e5e7; border-radius:9px; background:#fbfdfd; }
+.visits-summary span { color:#718194; font-size:.63rem; font-weight:800; text-transform:uppercase; }
+.visits-summary strong { color:#172c3c; font-size:.84rem; }
+.visits-summary small { color:#627488; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.visit-form { display:grid; gap:1rem; }
+.visit-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
+.visit-form-grid label { display:grid; gap:.35rem; }
+.visit-form-grid label > span,.activities-block > span { color:#516679; font-size:.72rem; font-weight:800; text-transform:uppercase; }
+.visit-form-grid .wide { grid-column:1/-1; }
+.visit-form-grid input,.visit-form-grid textarea,.visit-form-grid select { width:100%; border:1px solid #c8d9df; border-radius:9px; padding:.65rem .7rem; font:inherit; color:#152738; background:#fff; }
+.time-pair { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; }
+.activities-block { display:grid; gap:.5rem; }
+.activity-chips { display:flex; flex-wrap:wrap; gap:.4rem; }
+.activity-chips button { padding:.45rem .62rem; border:1px solid #cadadd; border-radius:999px; background:#fff; color:#4d6171; font-weight:700; cursor:pointer; }
+.activity-chips button.active { border-color:var(--p-primary-color); background:color-mix(in srgb,var(--p-primary-color),white 86%); color:var(--p-primary-color); }
+.activity-chips i { margin-right:.35rem; }
+.visit-form.readonly .activity-chips button { cursor:default; }
+.visit-location { display:flex; align-items:center; gap:.6rem; padding:.65rem; border:1px solid #d5e3e6; border-radius:10px; background:#f8fbfb; }
+.visit-location.has-location { border-color:#62d2b6; background:#effbf6; }
+.visit-location > div { display:grid; gap:.08rem; flex:1; }
+.visit-location small { color:#65768a; }
+.visit-audit { display:flex; gap:.5rem; align-items:center; padding:.65rem; border-radius:9px; background:#f0f7f7; color:#5e7281; font-size:.78rem; }
+.visit-audit i { color:#0aa99d; }
+.dialog-footer-spacer { flex:1; }
+:host ::ng-deep .field-visit-dialog .p-dialog-footer { display:flex; align-items:center; }
+@media (max-width:720px) {
+  .field-card-header { align-items:center; }
+  .visits-summary { grid-template-columns:1fr; }
+  .visit-form-grid { grid-template-columns:1fr; }
+  .visit-form-grid .wide { grid-column:auto; }
+  .time-pair { grid-template-columns:1fr 1fr; }
+  .visit-location { align-items:flex-start; flex-wrap:wrap; }
+  .visit-location .p-button { width:100%; }
+}

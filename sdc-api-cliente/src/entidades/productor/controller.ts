@@ -18,12 +18,14 @@ import {
   IUpdateProductor,
   IPermiso,
   ILicencia,
+  IUsuario,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 import { GetPermiso } from '../../auxiliares/authorization/get-permiso.decorator';
-import { GetLicencia } from 'src/auxiliares/authorization/get-licencia.decorator';
+import { GetLicencia } from '../../auxiliares/authorization/get-licencia.decorator';
+import { GetUser } from '../../auxiliares/authorization/get-token.decorator';
 
 @ApiTags('Productors')
 @Controller('productors')
@@ -33,8 +35,10 @@ export class ProductorsController {
 
   @Get()
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Admin', roles: ['Admin'] },
   )
@@ -47,8 +51,10 @@ export class ProductorsController {
 
   @Get('/:id')
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Admin', roles: ['Admin'] },
   )
@@ -61,8 +67,10 @@ export class ProductorsController {
 
   @Post()
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Admin', roles: ['Admin'] },
   )
   public async create(
@@ -75,8 +83,10 @@ export class ProductorsController {
 
   @Put('/:id')
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Admin', roles: ['Admin'] },
   )
   public async update(
@@ -89,14 +99,17 @@ export class ProductorsController {
 
   @Delete('/:id')
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Admin', roles: ['Admin'] },
   )
   public async delete(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,
+    @GetUser() user: IUsuario,
   ): Promise<IProductor> {
-    return await this.service.delete(id, permiso);
+    return await this.service.delete(id, permiso, user);
   }
 }

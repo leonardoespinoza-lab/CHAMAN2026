@@ -7,6 +7,7 @@ import {
   ICreateReporteNDVI,
   IReporteNDVI,
   DeleteResult,
+  SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT,
 } from 'modelos/src';
 import { Model, PipelineStage } from 'mongoose';
 import { dbQuery, stringToObjectId } from 'src/auxiliares/helper.service';
@@ -34,10 +35,12 @@ export class ReporteNDVIsRepository {
       {
         $match: {
           idProductor: stringToObjectId(idProductor),
+          ...this.operationalNdviMatch(),
         },
       },
       {
         $sort: {
+          fechaDeLaImagen: 1,
           fechaCreacion: 1,
         },
       },
@@ -57,10 +60,12 @@ export class ReporteNDVIsRepository {
       {
         $match: {
           idDistribuidor: stringToObjectId(idDistribuidor),
+          ...this.operationalNdviMatch(),
         },
       },
       {
         $sort: {
+          fechaDeLaImagen: 1,
           fechaCreacion: 1,
         },
       },
@@ -87,10 +92,12 @@ export class ReporteNDVIsRepository {
       {
         $match: {
           [field]: stringToObjectId(id),
+          ...this.operationalNdviMatch(),
         },
       },
       {
         $sort: {
+          fechaDeLaImagen: 1,
           fechaCreacion: 1,
         },
       },
@@ -110,12 +117,14 @@ export class ReporteNDVIsRepository {
       {
         $match: {
           idLote: stringToObjectId(idLote),
+          ...this.operationalNdviMatch(),
         },
       },
       // 2. Ordenarlos por fecha para saber cuál es el último
       {
         $sort: {
-          fechaCreacion: 1, // 1 para ascendente, -1 para descendente
+          fechaDeLaImagen: 1,
+          fechaCreacion: 1, // desempate entre reprocesamientos de una escena
         },
       },
       // 3. Agrupar y obtener el último documento completo
@@ -166,9 +175,31 @@ export class ReporteNDVIsRepository {
     };
   }
 
+  private operationalNdviMatch(): Record<string, unknown> {
+    return {
+      'metadataImagen.renderVersion': 'fixed-index-v3',
+      'metadataImagen.renderQa.ndvi.status': 'ok',
+      $or: [
+        {
+          'metadataImagen.renderQa.ndvi.validCoveragePct': {
+            $gte: SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT,
+          },
+        },
+        {
+          'metadataImagen.qualityMask.validCoveragePct': {
+            $gte: SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT,
+          },
+        },
+      ],
+    };
+  }
+
   async getLast(): Promise<IListado<IReporteNDVI>> {
     // Magia de GEMINI
     const pipeline: PipelineStage[] = [
+      {
+        $match: this.operationalNdviMatch(),
+      },
       // 1. Ordenar TODOS los reportes por fecha de creación, del más nuevo al más viejo.
       // Es crucial hacerlo primero para que el $group funcione correctamente.
       {

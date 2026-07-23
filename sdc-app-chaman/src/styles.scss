@@ -228,6 +228,34 @@ html {
   display: none;
 }
 
+.chaman-chart-shell {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: clamp(20rem, 38vw, 26.875rem);
+}
+
+.chaman-chart-shell--compact {
+  height: clamp(18rem, 34vw, 24.375rem);
+}
+
+.chaman-chart-shell > highcharts-chart,
+.chaman-chart-shell .highcharts-container,
+.chaman-chart-shell .highcharts-root {
+  width: 100% !important;
+  max-width: 100%;
+}
+
+@media (max-width: 720px) {
+  .chaman-chart-shell {
+    height: clamp(18rem, 92vw, 23rem);
+  }
+
+  .chaman-chart-shell--compact {
+    height: clamp(17rem, 82vw, 21rem);
+  }
+}
+
 .custom-card {
   background-color: var(--p-surface-50);
   border: 1px solid #cbd5e1;

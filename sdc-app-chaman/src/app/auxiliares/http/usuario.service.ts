@@ -1,5 +1,14 @@
 import { Injectable } from '@angular/core';
-import { ICreateUsuario, IListado, IQueryParam, IUpdateUsuario, IUsuario } from 'modelos/src';
+import {
+  ICreateUsuario,
+  IDetalleAuditoriaAsesor,
+  IListado,
+  IQueryParam,
+  IResumenRedAsesores,
+  IResumenRedComercial,
+  IUpdateUsuario,
+  IUsuario,
+} from 'modelos/src';
 import { HttpService } from './http.service';
 
 @Injectable({
@@ -23,6 +32,18 @@ export class UsuarioService {
 
   public listarPropio(): Promise<IUsuario> {
     return this.http.get(`/usuarios/propio`);
+  }
+
+  public resumenRedAsesores(): Promise<IResumenRedAsesores> {
+    return this.http.get(`/usuarios/asesores/resumen`);
+  }
+
+  public detalleAuditoriaAsesor(id: string): Promise<IDetalleAuditoriaAsesor> {
+    return this.http.get(`/usuarios/asesores/${id}/auditoria`);
+  }
+
+  public resumenRedComercial(): Promise<IResumenRedComercial> {
+    return this.http.get(`/usuarios/red/comercial`);
   }
 
   public editar(id: string, dato: IUpdateUsuario): Promise<IUsuario> {

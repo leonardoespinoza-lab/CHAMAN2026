@@ -36,6 +36,7 @@ import {
   IQueryParam,
   IReporteNDVI,
   ISiembra,
+  SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT,
   obtenerRegistroFenologicoDecisorioEnFecha,
 } from 'modelos/src';
 import { Subscription } from 'rxjs';
@@ -49,8 +50,11 @@ import { NdviLegendComponent } from '../../ndvi-legend/ndvi-legend.component';
 import { colorForSatelliteIndex, legendForSatelliteIndex, SatelliteLegendItem } from './satellite-index-palettes';
 import {
   buildSatelliteIndexHistory,
+  operationalSatelliteIndexKeys,
   SatelliteIndexHistoryPoint,
   SatelliteStageAtDate,
+  parseSatelliteCalendarDate,
+  satelliteReportIsOperational,
   satelliteIndexValue,
 } from './satellite-index-history';
 
@@ -155,9 +159,22 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     }
     this.seleccionManual = true;
     this.reporte = reporte;
-    this.fecha = reporte.fechaDeLaImagen ? new Date(reporte.fechaDeLaImagen) : this.hoy;
+    this.asegurarCapaOperativa(reporte);
+    this.fecha = reporte.fechaDeLaImagen
+      ? parseSatelliteCalendarDate(reporte.fechaDeLaImagen)
+      : this.hoy;
     this.actualizarHistorialIndice();
     this.programarRenderMapaSatelital();
+  }
+
+  public fechaEscena(reporte: IReporteNDVI): Date {
+    return parseSatelliteCalendarDate(
+      reporte.fechaDeLaImagen || reporte.fechaCreacion,
+    );
+  }
+
+  public valorNdviEscena(reporte: IReporteNDVI): number | null {
+    return satelliteIndexValue(reporte, 'ndvi');
   }
 
   public abrirDetalleCapas(): void {
@@ -210,7 +227,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     if (!this.reporte?.fechaDeLaImagen) {
       return 'Sin imagen satelital activa';
     }
-    const fechaImagen = new Date(this.reporte.fechaDeLaImagen);
+    const fechaImagen = parseSatelliteCalendarDate(this.reporte.fechaDeLaImagen);
     const fecha = fechaImagen.toLocaleDateString('es-AR', {
       day: 'numeric',
       month: 'short',
@@ -222,7 +239,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     if (!this.reporte?.fechaDeLaImagen) {
       return 'Linea de tiempo e indices satelitales del lote';
     }
-    const dias = this.diasDesde(new Date(this.reporte.fechaDeLaImagen));
+    const dias = this.diasDesde(parseSatelliteCalendarDate(this.reporte.fechaDeLaImagen));
     const sufijo = dias > 0 ? `, hace ${dias} dias` : ', procesada hoy';
     return `Analisis por escena limpia - ${this.fechaImagenResumen}${sufijo}`;
   }
@@ -236,7 +253,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
 
   public get notaEscenaSatelital(): string {
     if (!this.reporte?.fechaDeLaImagen) {
-      return 'El worker satelital guarda una escena cuando encuentra imagen util para el poligono del lote.';
+      return 'El modulo se habilita automaticamente cuando encuentra una imagen limpia y util para el lote.';
     }
     if (this.imagenAtrasada) {
       return 'La base mantiene la ultima escena limpia. Al actualizar se vuelve a consultar STAC y se guarda una nueva solo si cubre el lote con calidad suficiente.';
@@ -251,7 +268,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     if (!this.reporte?.fechaDeLaImagen) {
       return false;
     }
-    return this.diasDesde(new Date(this.reporte.fechaDeLaImagen)) > 10;
+    return this.diasDesde(parseSatelliteCalendarDate(this.reporte.fechaDeLaImagen)) > 10;
   }
 
   public get satelliteIndicators(): SatelliteIndicator[] {
@@ -437,7 +454,11 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     const metadata = this.reporte?.metadataImagen as any;
     const qa = this.qaCapaActiva;
     const coverage = Number(qa?.validCoveragePct ?? metadata?.qualityMask?.validCoveragePct ?? 0);
-    return metadata?.renderVersion === 'fixed-index-v3' && qa?.status === 'ok' && coverage >= 3;
+    return (
+      metadata?.renderVersion === 'fixed-index-v3' &&
+      qa?.status === 'ok' &&
+      coverage >= SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT
+    );
   }
 
   public get satelliteRasterWarningTitle(): string {
@@ -445,6 +466,16 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   }
 
   public get satelliteRasterWarningMessage(): string {
+    const coverage = Number(
+      this.qaCapaActiva?.validCoveragePct ??
+        (this.reporte?.metadataImagen as any)?.qualityMask?.validCoveragePct,
+    );
+    if (
+      Number.isFinite(coverage) &&
+      coverage < SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT
+    ) {
+      return `Escena archivada para auditoria: solo ${this.formatear(coverage)}% del lote tiene pixeles validos. No se usa para interpretar el cultivo.`;
+    }
     return (
       this.satelliteRasterBlockedReason ||
       'Esta capa necesita una escena satelital procesada pixel a pixel para este lote.'
@@ -867,8 +898,15 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     }
 
     if (!this.renderSatelitalConfiable) {
+      const coverage = Number(
+        this.qaCapaActiva?.validCoveragePct ??
+          (this.reporte?.metadataImagen as any)?.qualityMask?.validCoveragePct,
+      );
       this.satelliteRasterBlockedReason =
-        'La escena no tiene auditoria visual y QA completo. Se bloquea para evitar lecturas cruzadas.';
+        Number.isFinite(coverage) &&
+        coverage < SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT
+          ? `Cobertura valida insuficiente (${this.formatear(coverage)}%). La escena queda archivada, pero no se usa para interpretar el lote.`
+          : 'La escena no tiene auditoria visual y QA completo. Se bloquea para evitar lecturas cruzadas.';
       return false;
     }
 
@@ -1628,9 +1666,13 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
 
   private reportePreferido(reportes: IReporteNDVI[]): IReporteNDVI {
     const ordenados = [...reportes].sort((a, b) => this.fechaReporteMs(b) - this.fechaReporteMs(a));
-    const masNuevo = ordenados[0];
+    const operativos = ordenados.filter((reporte) =>
+      satelliteIndexValue(reporte, 'ndvi') != null,
+    );
+    const base = operativos.length ? operativos : ordenados;
+    const masNuevo = base[0];
     const limite = this.fechaReporteMs(masNuevo) - this.ventanaPreferenciaSentinelDias * 24 * 60 * 60 * 1000;
-    const candidatos = ordenados.filter((reporte) => this.fechaReporteMs(reporte) >= limite);
+    const candidatos = base.filter((reporte) => this.fechaReporteMs(reporte) >= limite);
     return (
       candidatos.sort((a, b) => {
         const prioridad = this.prioridadColeccion(a) - this.prioridadColeccion(b);
@@ -1647,7 +1689,9 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   }
 
   private fechaReporteMs(reporte: IReporteNDVI): number {
-    const fecha = new Date(reporte.fechaDeLaImagen || reporte.fechaCreacion || 0).getTime();
+    const fecha = parseSatelliteCalendarDate(
+      reporte.fechaDeLaImagen || reporte.fechaCreacion,
+    ).getTime();
     return Number.isFinite(fecha) ? fecha : 0;
   }
 
@@ -1679,16 +1723,21 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
     this.ndvi$ = this.listados.subscribe<IListado<IReporteNDVI>>('reportendvis', query).subscribe((data) => {
       this.ndvis = (data.datos || [])
         .filter((reporte) => this.reporteValidoParaLote(reporte, idLote))
+        .filter((reporte) => satelliteReportIsOperational(reporte))
         .sort((a, b) => this.fechaReporteMs(b) - this.fechaReporteMs(a));
       if (this.ndvis.length > 0) {
         const estaEnLista = this.reporte && this.ndvis.some((n) => n._id === this.reporte!._id);
         const preferido = this.reportePreferido(this.ndvis);
         if (!estaEnLista || !this.seleccionManual) {
           this.reporte = preferido;
-          this.fecha = new Date(preferido.fechaDeLaImagen || preferido.fechaCreacion || Date.now());
+          this.fecha = parseSatelliteCalendarDate(
+            preferido.fechaDeLaImagen || preferido.fechaCreacion || new Date(),
+          );
         }
+        this.asegurarCapaOperativa(this.reporte);
       } else {
         this.reporte = undefined;
+        this.seleccionManual = false;
       }
       this.actualizarHistorialIndice();
       this.programarRenderMapaSatelital();
@@ -1696,6 +1745,14 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
 
     this.ultimoLoteListado = String(idLote);
     await this.listados.getLastValue('reportendvis', query);
+  }
+
+  private asegurarCapaOperativa(reporte?: IReporteNDVI): void {
+    if (!reporte) return;
+    const disponibles = operationalSatelliteIndexKeys(reporte);
+    if (!disponibles.includes(this.capaSatelitalActiva)) {
+      this.capaSatelitalActiva = disponibles[0] || 'ndvi';
+    }
   }
 
   public mostrarLeyenda(): void {

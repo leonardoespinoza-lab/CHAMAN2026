@@ -1,4 +1,14 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { DepartamentosService } from './service';
 import {
   IDepartamento,
@@ -34,7 +44,9 @@ export class DepartamentosController {
 
   @Post()
   @Permisos({ nivel: 'Admin', roles: ['Admin'] })
-  public async create(@Body() body: ICreateDepartamento): Promise<IDepartamento> {
+  public async create(
+    @Body() body: ICreateDepartamento,
+  ): Promise<IDepartamento> {
     return await this.service.create(body);
   }
 
@@ -46,7 +58,10 @@ export class DepartamentosController {
 
   @Put('/:id')
   @Permisos({ nivel: 'Admin', roles: ['Admin'] })
-  public async update(@Param('id') id: string, @Body() body: IUpdateDepartamento): Promise<IDepartamento> {
+  public async update(
+    @Param('id') id: string,
+    @Body() body: IUpdateDepartamento,
+  ): Promise<IDepartamento> {
     return await this.service.update(id, body);
   }
 

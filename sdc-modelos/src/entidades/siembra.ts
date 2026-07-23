@@ -64,6 +64,13 @@ export interface IComponentesHuellaHidrica {
 }
 
 export interface IHuellaHidrica {
+  /** Una huella incompleta nunca debe presentarse como resultado consolidado. */
+  estado?: "consolidada" | "incompleta";
+  faltantes?: Array<{
+    campo: string;
+    accion: string;
+    bloque: "siembra" | "lote" | "clima" | "rendimiento";
+  }>;
   gris?: {
     litrosKgFertilizante?: number;
     litrosKgAgroquimico?: number;
@@ -89,6 +96,7 @@ export interface IHuellaHidrica {
 
 /** Un objeto parcial o vacio no equivale a una huella calculada. */
 export function esHuellaHidricaConsolidada(huella?: IHuellaHidrica): boolean {
+  if (huella?.estado === "incompleta") return false;
   return [
     huella?.total?.litrosKg,
     huella?.total?.litrosKcal,

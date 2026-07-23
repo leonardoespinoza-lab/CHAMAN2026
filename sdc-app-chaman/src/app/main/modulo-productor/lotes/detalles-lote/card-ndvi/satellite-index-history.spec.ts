@@ -1,5 +1,11 @@
 import { IReporteNDVI } from 'modelos/src';
-import { buildSatelliteIndexHistory, satelliteIndexValue } from './satellite-index-history';
+import {
+  buildSatelliteIndexHistory,
+  operationalSatelliteIndexKeys,
+  parseSatelliteCalendarDate,
+  satelliteReportIsOperational,
+  satelliteIndexValue,
+} from './satellite-index-history';
 
 describe('satellite-index-history', () => {
   const qualityMetadata = (key: string, coverage = 80, status: 'ok' | 'warning' | 'error' = 'ok') =>
@@ -52,7 +58,7 @@ describe('satellite-index-history', () => {
   it('bloquea cobertura insuficiente y exige QA ok para render v3', () => {
     expect(
       satelliteIndexValue(
-        { indices: { ndvi: 0.48 }, metadataImagen: qualityMetadata('ndvi', 2.99) },
+        { indices: { ndvi: 0.48 }, metadataImagen: qualityMetadata('ndvi', 49.99) },
         'ndvi'
       )
     ).toBeNull();
@@ -74,6 +80,44 @@ describe('satellite-index-history', () => {
         'ndvi'
       )
     ).toBeNull();
+  });
+
+  it('oculta del historial comercial escenas archivadas o sin raster', () => {
+    const poorQuality = {
+      indices: { ndvi: 0.48 },
+      imagenes: { ndvi: 'https://example.test/ndvi.png' },
+      metadataImagen: qualityMetadata('ndvi', 45.91),
+    } as IReporteNDVI;
+    const withoutRaster = {
+      indices: { ndvi: 0.48 },
+      metadataImagen: qualityMetadata('ndvi', 85),
+    } as IReporteNDVI;
+    const operational = {
+      indices: { ndvi: 0.48, ndmi: -0.1 },
+      imagenes: {
+        ndvi: 'https://example.test/ndvi.png',
+        ndmi: 'https://example.test/ndmi.png',
+      },
+      metadataImagen: {
+        ...qualityMetadata('ndvi', 85),
+        renderQa: {
+          ndvi: { status: 'ok', validCoveragePct: 85 },
+          ndmi: { status: 'ok', validCoveragePct: 85 },
+        },
+      },
+    } as IReporteNDVI;
+
+    expect(satelliteReportIsOperational(poorQuality)).toBeFalse();
+    expect(satelliteReportIsOperational(withoutRaster)).toBeFalse();
+    expect(satelliteReportIsOperational(operational)).toBeTrue();
+    expect(operationalSatelliteIndexKeys(operational)).toEqual(['ndvi', 'ndmi']);
+  });
+
+  it('conserva el dia calendario de Sentinel en la zona horaria argentina', () => {
+    const date = parseSatelliteCalendarDate('2026-07-17T00:00:00.000Z');
+    expect(date.getFullYear()).toBe(2026);
+    expect(date.getMonth()).toBe(6);
+    expect(date.getDate()).toBe(17);
   });
 
   it('marca lecturas faltantes o fuera del rango normalizado sin inventar valores', () => {

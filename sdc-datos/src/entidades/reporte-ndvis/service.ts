@@ -8,13 +8,14 @@ import {
   IQueryParam,
   IReporteNDVI,
   IUpdateReporteNDVI,
+  SATELLITE_INGESTION_MIN_VALID_COVERAGE_PCT,
 } from 'modelos/src';
 import {
   ReporteNDVIsRepository,
   TReporteNdviTenantScope,
 } from './repository';
 
-const MIN_VALID_COVERAGE_PCT = 3;
+const MIN_VALID_COVERAGE_PCT = SATELLITE_INGESTION_MIN_VALID_COVERAGE_PCT;
 const NDVI_MATCH_TOLERANCE = 1e-6;
 
 type UnknownRecord = Record<string, unknown>;

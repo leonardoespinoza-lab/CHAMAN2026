@@ -1,4 +1,14 @@
-<div class="custom-card irrigation-card clickable" (click)="abrirDetalleRiego()">
+<div
+  class="custom-card chaman-surface chaman-interactive-surface irrigation-card clickable"
+  role="button"
+  tabindex="0"
+  aria-label="Abrir recomendacion de riego"
+  aria-haspopup="dialog"
+  [attr.aria-expanded]="verDetalleRiego"
+  (click)="abrirDetalleRiego()"
+  (keydown.enter)="abrirDetalleRiego()"
+  (keydown.space)="$event.preventDefault(); abrirDetalleRiego()"
+>
   <div class="irrigation-header">
     <div>
       <p class="titulo-card">{{ 'Riego' | translate | uppercase }}</p>

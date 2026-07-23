@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { DireccionV2, ICoordenadas, IGeoJSONPoint, IZonaGeografica } from 'modelos/src';
+import {
+  DireccionV2,
+  ICoordenadas,
+  IGeoJSONPoint,
+  IZonaGeografica,
+} from 'modelos/src';
 import { NodeGeocodeService } from './node-geocoder/node-geocoder.service';
 
 @Injectable()
@@ -23,8 +28,13 @@ export class GeocodesService {
     return await this.nodeGeoCode.geocode(direccion);
   }
 
-  async zonas(text: string, provincia?: string): Promise<{ resultados: IZonaGeografica[] }> {
-    return { resultados: await this.nodeGeoCode.buscarZonasArgentina(text, provincia) };
+  async zonas(
+    text: string,
+    provincia?: string,
+  ): Promise<{ resultados: IZonaGeografica[] }> {
+    return {
+      resultados: await this.nodeGeoCode.buscarZonasArgentina(text, provincia),
+    };
   }
 
   async provincias(): Promise<{ resultados: IZonaGeografica[] }> {

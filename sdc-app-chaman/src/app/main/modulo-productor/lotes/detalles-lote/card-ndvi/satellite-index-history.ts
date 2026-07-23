@@ -1,7 +1,30 @@
-import { IReporteNDVI } from 'modelos/src';
+import {
+  IReporteNDVI,
+  SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT,
+} from 'modelos/src';
 
 export type SatelliteIndexKey = keyof NonNullable<IReporteNDVI['indices']>;
-export const MIN_SATELLITE_VALID_COVERAGE_PCT = 3;
+export const SATELLITE_INDEX_KEYS: SatelliteIndexKey[] = [
+  'ndvi',
+  'ndmi',
+  'ndwi',
+  'ndre',
+  'savi',
+  'evi',
+];
+export const MIN_SATELLITE_VALID_COVERAGE_PCT =
+  SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT;
+
+/** Conserva el dia calendario de una escena aunque el navegador use UTC-3. */
+export function parseSatelliteCalendarDate(value?: string | Date | null): Date {
+  if (value instanceof Date) return new Date(value.getTime());
+  const raw = String(value || '');
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12);
+  }
+  return new Date(raw);
+}
 
 export interface SatelliteStageAtDate {
   name: string;
@@ -35,6 +58,18 @@ export function satelliteIndexValue(report: IReporteNDVI, key: SatelliteIndexKey
   return value;
 }
 
+/** Solo expone al cliente capas con valor validado e imagen raster lista. */
+export function operationalSatelliteIndexKeys(report: IReporteNDVI): SatelliteIndexKey[] {
+  return SATELLITE_INDEX_KEYS.filter(
+    (key) => satelliteIndexValue(report, key) != null && !!report.imagenes?.[key],
+  );
+}
+
+/** Los reportes rechazados por QA siguen archivados, pero no aparecen en la tarjeta. */
+export function satelliteReportIsOperational(report: IReporteNDVI): boolean {
+  return operationalSatelliteIndexKeys(report).length > 0;
+}
+
 export function buildSatelliteIndexHistory(
   reports: IReporteNDVI[],
   key: SatelliteIndexKey,
@@ -42,7 +77,9 @@ export function buildSatelliteIndexHistory(
 ): SatelliteIndexHistoryPoint[] {
   return reports
     .map((report): SatelliteIndexHistoryPoint | undefined => {
-      const timestamp = new Date(report.fechaDeLaImagen || report.fechaCreacion || '').getTime();
+      const timestamp = parseSatelliteCalendarDate(
+        report.fechaDeLaImagen || report.fechaCreacion,
+      ).getTime();
       if (!Number.isFinite(timestamp)) {
         return undefined;
       }

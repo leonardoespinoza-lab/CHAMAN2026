@@ -9,7 +9,7 @@ import {
   Put,
 } from '@nestjs/common';
 import { UsuariosService } from './service';
-import { ICreateUsuario, IQueryParam, IUpdateUsuario } from 'modelos/src';
+import { ICreateUsuario, IQueryParam, ISolicitudArchivado, IUpdateUsuario } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Usuarios')
@@ -53,7 +53,7 @@ export class UsuariosController {
   }
 
   @Delete(':id')
-  async delete(@Param('id') id: string) {
-    return await this.service.delete(id);
+  async delete(@Param('id') id: string, @Query() audit: ISolicitudArchivado) {
+    return await this.service.delete(id, audit);
   }
 }

@@ -5,6 +5,7 @@ import {
   IUpdateUsuario,
   IQueryParam,
   ICreateUsuario,
+  ISolicitudArchivado,
 } from 'modelos/src';
 import { Model } from 'mongoose';
 import { dbQuery } from 'src/auxiliares/helper.service';
@@ -35,7 +36,7 @@ export class UsuariosRepository {
         },
         {
           path: 'permisos.distribuidor',
-          select: 'nombre logo direccion geojson',
+          select: 'nombre logo direccion geojson radioInfluenciaKm',
         },
         {
           path: 'permisos.quimica',
@@ -59,7 +60,36 @@ export class UsuariosRepository {
         },
         {
           path: 'permisos.distribuidor',
+          select: 'nombre logo direccion geojson radioInfluenciaKm',
+        },
+        {
+          path: 'permisos.quimica',
           select: 'nombre logo',
+        },
+      ])
+      .lean();
+  }
+
+  async getByUsernameForLogin(username: string): Promise<Usuario> {
+    return await this.model
+      .findOne({
+        username,
+        archivado: { $ne: true },
+        activo: { $ne: false },
+      })
+      .select('+hash')
+      .populate([
+        {
+          path: 'permisos.establecimiento',
+          select: 'nombre',
+        },
+        {
+          path: 'permisos.productor',
+          select: 'nombre logo',
+        },
+        {
+          path: 'permisos.distribuidor',
+          select: 'nombre logo direccion geojson radioInfluenciaKm',
         },
         {
           path: 'permisos.quimica',
@@ -83,7 +113,7 @@ export class UsuariosRepository {
         },
         {
           path: 'permisos.distribuidor',
-          select: 'nombre logo',
+          select: 'nombre logo direccion geojson radioInfluenciaKm',
         },
         {
           path: 'permisos.quimica',
@@ -94,16 +124,30 @@ export class UsuariosRepository {
   }
 
   async create(data: ICreateUsuario): Promise<Usuario> {
-    return await this.model.create(data);
+    const created = await this.model.create(data);
+    const result = created.toObject() as Usuario;
+    delete result.hash;
+    return result;
   }
 
   async update(id: string, data: IUpdateUsuario): Promise<Usuario> {
-    return await this.model.findByIdAndUpdate(id, data, {
-      new: true,
-    });
+    return await this.model
+      .findByIdAndUpdate(id, data, { new: true })
+      .select('-hash')
+      .lean();
   }
 
-  async delete(id: string): Promise<Usuario> {
-    return await this.model.findByIdAndDelete(id);
+  async delete(id: string, audit: ISolicitudArchivado = {}): Promise<Usuario> {
+    return await this.model.findByIdAndUpdate(
+      id,
+      {
+        activo: false,
+        archivado: true,
+        fechaArchivado: new Date(),
+        archivadoPor: audit.archivadoPor || 'sistema',
+        motivoArchivado: audit.motivoArchivado || 'Archivado desde Chaman',
+      },
+      { new: true },
+    ).select('-hash').lean();
   }
 }

@@ -5,6 +5,7 @@ interface ISocketInfo {
   failedPings?: number;
   usuario?: IUsuario;
   authTimer?: NodeJS.Timeout;
+  sessionExpiryTimer?: NodeJS.Timeout;
 }
 
 export type ISocket = WebSocket & ISocketInfo;

@@ -5,6 +5,7 @@ import {
   IUpdateDistribuidor,
   IQueryParam,
   ICreateDistribuidor,
+  ISolicitudArchivado,
 } from 'modelos/src';
 import { Model } from 'mongoose';
 import { dbQuery } from 'src/auxiliares/helper.service';
@@ -35,7 +36,16 @@ export class DistribuidorsRepository {
     });
   }
 
-  async delete(id: string): Promise<Distribuidor> {
-    return await this.model.findByIdAndDelete(id);
+  async delete(id: string, audit: ISolicitudArchivado = {}): Promise<Distribuidor> {
+    return await this.model.findByIdAndUpdate(
+      id,
+      {
+        archivado: true,
+        fechaArchivado: new Date(),
+        archivadoPor: audit.archivadoPor || 'sistema',
+        motivoArchivado: audit.motivoArchivado || 'Archivado desde Chaman',
+      },
+      { new: true },
+    ).lean();
   }
 }

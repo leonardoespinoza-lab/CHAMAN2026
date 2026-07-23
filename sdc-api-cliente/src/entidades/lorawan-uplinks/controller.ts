@@ -18,7 +18,12 @@ export class LorawanUplinksController {
     @Query('gatewayID') gatewayID?: string,
     @Query('limit') limit?: string,
   ) {
-    return await this.service.latest({ devEUI, applicationID, gatewayID, limit });
+    return await this.service.latest({
+      devEUI,
+      applicationID,
+      gatewayID,
+      limit,
+    });
   }
 
   @Post('reprocess')
@@ -27,7 +32,12 @@ export class LorawanUplinksController {
     @Query('devEUI') devEUI?: string,
     @Query('limit') limit?: string,
     @Query('replace') replace?: string,
-    @Body() body?: { devEUI?: string; limit?: string | number; replace?: string | boolean },
+    @Body()
+    body?: {
+      devEUI?: string;
+      limit?: string | number;
+      replace?: string | boolean;
+    },
   ) {
     return await this.service.reprocess({
       devEUI: devEUI || body?.devEUI,

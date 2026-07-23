@@ -1,8 +1,11 @@
 export interface ISocketMessageScope {
+  idTenant?: string;
+  idAsesorPropietario?: string;
   idQuimica?: string;
   idDistribuidor?: string;
   idProductor?: string;
   idEstablecimiento?: string;
+  idLote?: string;
 }
 
 export interface ISocketMessage {

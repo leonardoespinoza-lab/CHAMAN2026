@@ -17,12 +17,14 @@ import {
   ICreateDistribuidor,
   IUpdateDistribuidor,
   IPermiso,
+  IUsuario,
   ILicencia,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 import { GetPermiso } from '../../auxiliares/authorization/get-permiso.decorator';
+import { GetUser } from '../../auxiliares/authorization/get-token.decorator';
 import { GetLicencia } from 'src/auxiliares/authorization/get-licencia.decorator';
 
 @ApiTags('Distribuidors')
@@ -91,7 +93,8 @@ export class DistribuidorsController {
   public async delete(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,
+    @GetUser() user: IUsuario,
   ): Promise<IDistribuidor> {
-    return await this.service.delete(id, permiso);
+    return await this.service.delete(id, permiso, user);
   }
 }

@@ -51,6 +51,12 @@ export class CardCargaFitosanitariaComponent implements OnChanges {
     }
   }
 
+  public activarTarjeta(event: KeyboardEvent): void {
+    if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    this.abrirDetalle();
+  }
+
   public get subtitulo(): string {
     if (this.cargando && !this.carga) {
       return 'Calculando trazabilidad por lote';

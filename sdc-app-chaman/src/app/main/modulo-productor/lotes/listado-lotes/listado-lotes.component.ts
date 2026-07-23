@@ -64,6 +64,20 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
     this.router.navigate(['lotes', 'crear']);
   }
 
+  /**
+   * Asesores y distribuidores supervisan la operacion aguas abajo, pero no
+   * modifican ni archivan activos del productor. La misma regla vive en el
+   * backend; aplicarla aqui evita ofrecer acciones que terminarian en 403.
+   */
+  public puedeGestionarLotes(): boolean {
+    const permiso = this.helper.permiso;
+    return Boolean(
+      permiso &&
+        ['Admin', 'Productor', 'Establecimiento'].includes(permiso.nivel) &&
+        ['Admin', 'Escritura'].includes(permiso.rol),
+    );
+  }
+
   public async edit(data: ILoteTabla) {
     this.params.set('editLote', data);
     this.router.navigate(['lotes', 'editar', data._id]);
@@ -73,7 +87,7 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
     this.confirmationService.confirm({
       // target: event.target as EventTarget,
       header: this.translate.instant('Por favor, confirme la acción'),
-      message: this.translate.instant('¿Desea eliminar el lote?'),
+      message: this.translate.instant('¿Desea archivar el lote? Sus siembras, reportes e históricos quedarán preservados.'),
       closable: true,
       closeOnEscape: true,
       icon: 'pi pi-exclamation-triangle',
@@ -93,7 +107,7 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
           // Solo elimina el item en cache
           this.listado.deleteEntityItem('lotes', dato._id!);
 
-          this.helper.notifSuccess(this.translate.instant('Eliminado correctamente'));
+          this.helper.notifSuccess(this.translate.instant('Lote archivado correctamente'));
         } catch (error) {
           this.helper.notifError(error);
         }

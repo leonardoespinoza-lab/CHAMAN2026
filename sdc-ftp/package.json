@@ -6,7 +6,7 @@
     "postinstall": "node scripts/patch-ftp-srv-active.js",
     "dev": "ts-node src/app.ts",
     "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test -r ts-node/register src/field-photo-security.test.ts",
     "start": "node dist/app.js",
     "start:prod": "node dist/app.js",
     "modelos": "npm install ../sdc-modelos --force"

@@ -10,6 +10,7 @@ import {
   IPermiso,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
+import { establecimientosDelPermiso } from '../../auxiliares/authorization/alcance-permiso';
 import { FertilizacionsRepository } from './repository';
 import { LotesService } from '../lote/service';
 
@@ -126,6 +127,16 @@ export class FertilizacionsService {
         data.idEstablecimiento === permiso.idEstablecimiento
       );
     }
+    if (permiso.nivel === 'Asesor') {
+      return (
+        !!data.idEstablecimiento &&
+        establecimientosDelPermiso(permiso).includes(
+          String(data.idEstablecimiento),
+        ) &&
+        (!permiso.idLotes?.length ||
+          permiso.idLotes.includes(String(data.idLote)))
+      );
+    }
     return false;
   }
 
@@ -147,6 +158,13 @@ export class FertilizacionsService {
     if (permiso.nivel === 'Establecimiento') {
       $and.push({ idEstablecimiento: permiso.idEstablecimiento });
     }
+    if (permiso.nivel === 'Asesor') {
+      $and.push({
+        idEstablecimiento: { $in: establecimientosDelPermiso(permiso) },
+      });
+    }
+    if (permiso.idLotes?.length)
+      $and.push({ idLote: { $in: permiso.idLotes } });
 
     if ($and.length > 0) {
       filtro.$and = $and;

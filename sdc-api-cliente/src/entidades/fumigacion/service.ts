@@ -19,6 +19,7 @@ import {
   IPermiso,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
+import { establecimientosDelPermiso } from '../../auxiliares/authorization/alcance-permiso';
 import { FumigacionsRepository } from './repository';
 import { AlertasService } from '../alerta/service';
 import { SiembrasService } from '../siembra/service';
@@ -37,6 +38,9 @@ export class FumigacionsService {
     if (!this.puedeVer(data, permiso)) {
       throw new Error('No tiene permiso para ver esta fumigacion');
     }
+    if (permiso.idLotes?.length) {
+      await this.siembrasService.getById(data.idSiembra, permiso);
+    }
     return data;
   }
 
@@ -52,7 +56,7 @@ export class FumigacionsService {
       filter: JSON.stringify(filter),
       populate: JSON.stringify(populate),
     };
-    this.agregarFiltroPermiso(query, permiso);
+    await this.agregarFiltroPermiso(query, permiso);
     return await this.repository.get(query);
   }
 
@@ -60,7 +64,7 @@ export class FumigacionsService {
     query: IQueryParam,
     permiso: IPermiso,
   ): Promise<IListado<IFumigacion>> {
-    this.agregarFiltroPermiso(query, permiso);
+    await this.agregarFiltroPermiso(query, permiso);
     return await this.repository.get(query);
   }
 
@@ -70,6 +74,7 @@ export class FumigacionsService {
     permiso: IPermiso,
   ): Promise<IFumigacion> {
     const siembra = await this.siembrasService.getById(data.idSiembra, permiso);
+    data.idLote = siembra.idLote;
     data.idEstablecimiento = siembra.idEstablecimiento;
     data.idProductor = siembra.idProductor;
     data.idDistribuidor = siembra.idDistribuidor;
@@ -91,11 +96,6 @@ export class FumigacionsService {
     permiso: IPermiso,
   ): Promise<IFumigacion> {
     await this.getById(id, permiso);
-    if (!this.puedeVer(data, permiso)) {
-      throw new NotFoundException(
-        'No tiene permiso para actualizar esta fumigacion',
-      );
-    }
     return await this.repository.update(id, data);
   }
 
@@ -181,10 +181,21 @@ export class FumigacionsService {
         data.idEstablecimiento === permiso.idEstablecimiento
       );
     }
+    if (permiso.nivel === 'Asesor') {
+      return (
+        !!data.idEstablecimiento &&
+        establecimientosDelPermiso(permiso).includes(
+          String(data.idEstablecimiento),
+        )
+      );
+    }
     return false;
   }
 
-  private agregarFiltroPermiso(query: IQueryParam, permiso: IPermiso) {
+  private async agregarFiltroPermiso(
+    query: IQueryParam,
+    permiso: IPermiso,
+  ): Promise<void> {
     const filtro: IFilter<IFumigacion> = HelperService.filtroToObject(
       query.filter,
     );
@@ -201,6 +212,26 @@ export class FumigacionsService {
     }
     if (permiso.nivel === 'Establecimiento') {
       $and.push({ idEstablecimiento: permiso.idEstablecimiento });
+    }
+    if (permiso.nivel === 'Asesor') {
+      $and.push({
+        idEstablecimiento: { $in: establecimientosDelPermiso(permiso) },
+      });
+    }
+    if (permiso.idLotes?.length) {
+      const siembras = await this.siembrasService.get(
+        {
+          filter: JSON.stringify({ idLote: { $in: permiso.idLotes } }),
+          select: '_id',
+          limit: 0,
+        },
+        permiso,
+      );
+      $and.push({
+        idSiembra: {
+          $in: (siembras.datos || []).map((item) => String(item._id)),
+        },
+      });
     }
 
     if ($and.length > 0) {

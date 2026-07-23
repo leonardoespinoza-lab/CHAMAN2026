@@ -246,6 +246,12 @@ export class AlgoritmosService {
     return calcularHuellaHidrica(params);
   }
 
+  simularSeguimientoHuellaHidrica(
+    params: HuellaHidricaParams,
+  ): HuellaHidricaSeguimientoResultado {
+    return calcularSeguimientoHuellaHidrica(params);
+  }
+
   private async getReadinessCultivo(
     cultivo: string,
   ): Promise<ReadinessCultivoCatalogo> {
@@ -1383,8 +1389,15 @@ export class AlgoritmosService {
       ? this.toDateKey(siembra.fechaCosecha)
       : hoy;
     const fechaHasta = desde > hasta ? desde : hasta;
-    const clima = await this.getClimaOpenMeteo(lat, lng, desde, fechaHasta);
-    return calcularSeguimientoHuellaHidrica({ ...params, clima });
+    try {
+      const clima = await this.getClimaOpenMeteo(lat, lng, desde, fechaHasta);
+      return calcularSeguimientoHuellaHidrica({ ...params, clima });
+    } catch (error) {
+      this.logger.warn(
+        `Open-Meteo no disponible para seguimiento de huella; se entrega calculo parcial: ${error?.message || error}`,
+      );
+      return calcularSeguimientoHuellaHidrica({ ...params, clima: [] });
+    }
   }
 
   async calcularPrediccionMalezas(params: {

@@ -1,0 +1,24 @@
+.tenant-list { padding: 1.25rem; min-height: 100%; }
+.tenant-list__header { display:flex; justify-content:space-between; gap:1rem; align-items:center; padding:1.4rem; border:1px solid #cfe4e2; border-radius:20px; background:rgba(255,255,255,.88); }
+.tenant-list__header h1 { margin:.2rem 0; font-size:2.2rem; }
+.tenant-list__header p { margin:0; color:#64748b; }
+.eyebrow { color:#0f8f83; text-transform:uppercase; font-size:.72rem; font-weight:800; letter-spacing:.05em; }
+.tenant-notice { margin:1rem 0; display:flex; gap:.8rem; padding:1rem 1.2rem; border-radius:14px; color:#0f5e58; background:#e6f8f6; border:1px solid #9fe1db; }
+.tenant-notice div { display:flex; flex-direction:column; gap:.2rem; }
+.tenant-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:1rem; }
+.tenant-card { --tenant-accent:#0f8f83; background:rgba(255,255,255,.92); border:1px solid #d7e3e8; border-top:4px solid var(--tenant-accent); border-radius:18px; padding:1.1rem; box-shadow:0 10px 30px rgba(15,23,42,.06); }
+.tenant-card__identity { display:flex; gap:.9rem; align-items:center; }
+.tenant-card__identity img,.tenant-initial { width:58px; height:58px; border-radius:14px; object-fit:contain; background:#f1f8f7; display:grid; place-items:center; font-size:1.45rem; font-weight:800; color:var(--tenant-accent); }
+.tenant-card__identity h2 { margin:.15rem 0; font-size:1.2rem; }
+.tenant-card__identity p { margin:0; color:#64748b; font-size:.85rem; }
+.tenant-status { font-size:.66rem; text-transform:uppercase; font-weight:800; color:#9a6700; }
+.tenant-status.active { color:#087f5b; }
+.tenant-card__facts { display:grid; grid-template-columns:repeat(2,1fr); gap:.65rem; margin:1rem 0; }
+.tenant-card__facts span { padding:.7rem; border-radius:10px; background:#f7fafc; display:flex; flex-direction:column; }
+.tenant-card__facts small { color:#718096; text-transform:uppercase; font-size:.63rem; font-weight:700; }
+.tenant-modules { min-height:38px; display:flex; flex-wrap:wrap; gap:.35rem; }
+.tenant-modules span { padding:.25rem .5rem; border-radius:999px; background:#e9f7f5; color:#0f6f67; font-size:.72rem; font-weight:700; }
+.tenant-modules .muted { background:#f1f5f9; color:#64748b; }
+.tenant-card footer { display:flex; justify-content:flex-end; gap:.4rem; margin-top:1rem; padding-top:.85rem; border-top:1px solid #e2e8f0; }
+.tenant-empty { grid-column:1/-1; min-height:220px; border:1px dashed #b8d7d4; border-radius:18px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.45rem; color:#64748b; }
+@media(max-width:700px){.tenant-list{padding:.65rem}.tenant-list__header{align-items:flex-start;flex-direction:column}.tenant-grid{grid-template-columns:1fr}}

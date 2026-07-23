@@ -328,6 +328,7 @@ export interface IEntradasAgronomicasSuelo {
   coarseFragmentsPercentage?: number;
   ph?: number;
   organicCarbonGKg?: number;
+  organicMatterEstimatedPercentage?: number;
   source?: TFuenteResumenSuelo;
   confidence?: TConfianzaInteligenciaSuelo;
   warnings?: string[];
@@ -377,6 +378,23 @@ export function aplicarEntradasAgronomicasSuelo<T extends ILote>(
   if (inputs.operationalTexture) {
     cloned.texturaLixiviacion = inputs.operationalTexture;
     cloned.texturaEscorrentia = inputs.operationalTexture;
+  }
+  if (!cloned.drenajeNaturalLixiviacion && inputs.drainageClass) {
+    const drainageMap: Partial<Record<TClaseDrenajeSuelo, ILote["drenajeNaturalLixiviacion"]>> = {
+      excessive: "Excesivamente Drenado",
+      somewhat_excessive: "Excesivamente Drenado",
+      well: "Bien Drenado",
+      moderately_well: "Moderadamente Drenado",
+      imperfect: "Mal Drenado",
+      poor: "Mal Drenado",
+      very_poor: "Mal Drenado",
+    };
+    const drainage = drainageMap[inputs.drainageClass];
+    if (drainage) {
+      cloned.drenajeNaturalLixiviacion = drainage;
+      cloned.drenajeNaturalEscorrentia =
+        cloned.drenajeNaturalEscorrentia || drainage;
+    }
   }
   const fieldCapacity =
     capacidadCampoCanonica(inputs.fieldCapacityPercentage) ??

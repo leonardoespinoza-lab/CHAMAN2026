@@ -80,18 +80,18 @@ describe('AxiosService', () => {
 
   it('maneja errores no Axios sin lanzar un TypeError secundario', async () => {
     const httpService = {
-      delete: jest.fn().mockReturnValue(
-        throwError(() => new Error('Conexion interrumpida')),
-      ),
+      delete: jest
+        .fn()
+        .mockReturnValue(throwError(() => new Error('Conexion interrumpida'))),
     };
     jest.spyOn(Logger, 'error').mockImplementation();
     const service = new AxiosService(httpService as any);
 
-    await expect(service.DELETE('http://datos/recurso/1')).rejects.toMatchObject(
-      {
-        status: HttpStatus.INTERNAL_SERVER_ERROR,
-        response: 'Conexion interrumpida',
-      },
-    );
+    await expect(
+      service.DELETE('http://datos/recurso/1'),
+    ).rejects.toMatchObject({
+      status: HttpStatus.INTERNAL_SERVER_ERROR,
+      response: 'Conexion interrumpida',
+    });
   });
 });

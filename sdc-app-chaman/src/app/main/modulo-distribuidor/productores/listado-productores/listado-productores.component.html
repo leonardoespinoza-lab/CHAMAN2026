@@ -95,6 +95,14 @@
         </td>
         <td>
           <div style="display: flex; flex-direction: row; gap: 0.5rem">
+            <p-button
+              [rounded]="true"
+              pTooltip="Ver estructura asociada"
+              icon="pi pi-eye"
+              severity="secondary"
+              [outlined]="true"
+              (click)="ver(row)"
+            ></p-button>
             <!-- Editar -->
             <p-button
               [rounded]="true"
@@ -106,8 +114,8 @@
             <!-- Eliminar -->
             <p-button
               [rounded]="true"
-              pTooltip="Eliminar"
-              icon="pi pi-trash"
+              pTooltip="Archivar"
+              icon="pi pi-archive"
               severity="danger"
               (click)="delete(row)"
               [disabled]="user?._id === row._id"

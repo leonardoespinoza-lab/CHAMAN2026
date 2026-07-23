@@ -82,9 +82,7 @@ export class DecisionPipelineRepository {
     );
   }
 
-  async rebuildSanitaryPredictions(
-    idSiembra: string,
-  ): Promise<IPrediccion[]> {
+  async rebuildSanitaryPredictions(idSiembra: string): Promise<IPrediccion[]> {
     return await this.axios.POST<IPrediccion[]>(
       `${API_PREDICCIONES}/prediccions/${idSiembra}/reconstruir`,
       {},
@@ -105,9 +103,7 @@ export class DecisionPipelineRepository {
     if (!sowing?._id || !sowing.fechaSiembra || sowing.activa === false) {
       return false;
     }
-    return (
-      !sowing.fechaCosecha || esCultivoPerenne(sowing.semilla?.cultivo)
-    );
+    return !sowing.fechaCosecha || esCultivoPerenne(sowing.semilla?.cultivo);
   }
 
   private async scopeFilter(
@@ -129,10 +125,7 @@ export class DecisionPipelineRepository {
       .filter(Boolean);
     return lotIds.length
       ? {
-          $or: [
-            { idEstablecimiento: scopeId },
-            { idLote: { $in: lotIds } },
-          ],
+          $or: [{ idEstablecimiento: scopeId }, { idLote: { $in: lotIds } }],
         }
       : { idEstablecimiento: scopeId };
   }

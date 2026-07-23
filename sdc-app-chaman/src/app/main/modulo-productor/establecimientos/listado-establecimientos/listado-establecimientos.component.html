@@ -143,10 +143,10 @@
             }
             @if (!helper.soloLectura()) {
               <p-button
-                icon="pi pi-trash"
+                icon="pi pi-archive"
                 severity="danger"
                 [rounded]="true"
-                pTooltip="Eliminar establecimiento"
+                pTooltip="Archivar establecimiento"
                 (onClick)="delete(row)"
               ></p-button>
             }

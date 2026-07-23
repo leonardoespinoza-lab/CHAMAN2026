@@ -1,5 +1,16 @@
-<div class="custom-card application-card">
-  <div class="application-header pointer" (click)="siembra ? (verDrawerFumigaciones = true) : null">
+<div class="custom-card chaman-surface application-card">
+  <div
+    class="application-header"
+    [class.chaman-interactive-surface]="!!siembra"
+    [attr.role]="siembra ? 'button' : null"
+    [attr.tabindex]="siembra ? 0 : null"
+    [attr.aria-label]="siembra ? 'Abrir historial de fumigaciones' : null"
+    [attr.aria-haspopup]="siembra ? 'dialog' : null"
+    [attr.aria-expanded]="siembra ? verDrawerFumigaciones : null"
+    (click)="siembra ? (verDrawerFumigaciones = true) : null"
+    (keydown.enter)="siembra ? (verDrawerFumigaciones = true) : null"
+    (keydown.space)="$event.preventDefault(); siembra ? (verDrawerFumigaciones = true) : null"
+  >
     <div>
       <p class="titulo-card">{{ 'Ultima fumigacion' | translate | uppercase }}</p>
       <span>{{ resumenFumigacion }}</span>

@@ -1,10 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  IReporteNDVI,
-  IListado,
-  IQueryParam,
-  DeleteResult,
-} from 'modelos/src';
+import { IReporteNDVI, IListado, IQueryParam, DeleteResult } from 'modelos/src';
 import { API_DATOS } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 

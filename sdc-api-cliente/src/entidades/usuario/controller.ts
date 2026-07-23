@@ -17,6 +17,9 @@ import {
   ICreateUsuario,
   IUpdateUsuario,
   IPermiso,
+  IDetalleAuditoriaAsesor,
+  IResumenRedAsesores,
+  IResumenRedComercial,
 } from 'modelos/src';
 import { GetUser } from '../../auxiliares/authorization/get-token.decorator';
 import { ApiTags } from '@nestjs/swagger';
@@ -33,8 +36,10 @@ export class UsuariosController {
 
   @Get()
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin'] },
     { nivel: 'Quimica', roles: ['Admin'] },
     { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Asesor', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
     { nivel: 'Admin', roles: ['Admin'] },
@@ -52,13 +57,42 @@ export class UsuariosController {
     @GetUser() user: IUsuario,
     @GetPermiso() permiso: IPermiso,
   ): Promise<IUsuario> {
-    return await this.service.getById(user._id, permiso);
+    return await this.service.getPropio(user._id);
+  }
+
+  @Get('/asesores/resumen')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  public async getResumenRedAsesores(): Promise<IResumenRedAsesores> {
+    return await this.service.getResumenRedAsesores();
+  }
+
+  @Get('/asesores/:id/auditoria')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  public async getDetalleAuditoriaAsesor(
+    @Param('id') id: string,
+  ): Promise<IDetalleAuditoriaAsesor> {
+    return await this.service.getDetalleAuditoriaAsesor(id);
+  }
+
+  @Get('/red/comercial')
+  @Permisos(
+    { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Admin', roles: ['Admin'] },
+  )
+  public async getResumenRedComercial(
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<IResumenRedComercial> {
+    return await this.service.getResumenRedComercial(permiso);
   }
 
   @Get('/:id')
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin'] },
     { nivel: 'Quimica', roles: ['Admin'] },
     { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Asesor', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
     { nivel: 'Admin', roles: ['Admin'] },
@@ -72,8 +106,10 @@ export class UsuariosController {
 
   @Get('/usuario/:usuario')
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin'] },
     { nivel: 'Quimica', roles: ['Admin'] },
     { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Asesor', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
     { nivel: 'Admin', roles: ['Admin'] },
@@ -87,8 +123,10 @@ export class UsuariosController {
 
   @Post()
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin'] },
     { nivel: 'Quimica', roles: ['Admin'] },
     { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Asesor', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
     { nivel: 'Admin', roles: ['Admin'] },
@@ -96,8 +134,9 @@ export class UsuariosController {
   public async create(
     @Body() body: ICreateUsuario,
     @GetPermiso() permiso: IPermiso,
+    @GetUser() user: IUsuario,
   ): Promise<IUsuario> {
-    return await this.service.create(body, permiso);
+    return await this.service.create(body, permiso, user);
   }
 
   @Post('autogestion/crear')
@@ -124,8 +163,10 @@ export class UsuariosController {
 
   @Put('/:id')
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin'] },
     { nivel: 'Quimica', roles: ['Admin'] },
     { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Asesor', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
     { nivel: 'Admin', roles: ['Admin'] },
@@ -134,14 +175,17 @@ export class UsuariosController {
     @Param('id') id: string,
     @Body() body: IUpdateUsuario,
     @GetPermiso() permiso: IPermiso,
+    @GetUser() user: IUsuario,
   ): Promise<IUsuario> {
-    return await this.service.update(id, body, permiso);
+    return await this.service.update(id, body, permiso, user);
   }
 
   @Delete('/:id')
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin'] },
     { nivel: 'Quimica', roles: ['Admin'] },
     { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Asesor', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
     { nivel: 'Admin', roles: ['Admin'] },
@@ -149,14 +193,17 @@ export class UsuariosController {
   public async delete(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,
+    @GetUser() user: IUsuario,
   ): Promise<IUsuario> {
-    return await this.service.delete(id, permiso);
+    return await this.service.delete(id, permiso, user);
   }
 
   @Put('/desactivar/:id')
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin'] },
     { nivel: 'Quimica', roles: ['Admin'] },
     { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Asesor', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
     { nivel: 'Admin', roles: ['Admin'] },
@@ -170,8 +217,10 @@ export class UsuariosController {
 
   @Put('/activar/:id')
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin'] },
     { nivel: 'Quimica', roles: ['Admin'] },
     { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Asesor', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
     { nivel: 'Admin', roles: ['Admin'] },
@@ -185,8 +234,10 @@ export class UsuariosController {
 
   @Put('/password/:id')
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin'] },
     { nivel: 'Quimica', roles: ['Admin'] },
     { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Asesor', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
     { nivel: 'Admin', roles: ['Admin'] },

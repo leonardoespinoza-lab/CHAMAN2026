@@ -27,6 +27,12 @@ import {
 } from "./enviroments/environment";
 import { HikConnectClient } from "./hik-connect";
 import { ICamara, IFoto, IListado, ILote } from "modelos";
+import {
+  assertValidFieldPhoto,
+  buildFieldPhotoStoragePlan,
+  hasOperationalAccess,
+  privateFieldPhotoAccess,
+} from "./field-photo-security";
 
 const FtpFileSystem: any = require("ftp-srv/src/fs");
 
@@ -133,6 +139,38 @@ function extensionFromContentType(contentType: string) {
   return "jpg";
 }
 
+function ingestFieldPhoto(
+  idLote: string,
+  originalName: string,
+  contentType: string,
+  bytes: Buffer,
+) {
+  assertValidFieldPhoto(bytes, contentType);
+  const fechaCaptura = new Date().toISOString();
+  const storage = buildFieldPhotoStoragePlan({
+    baseDir: FTP_DATA_DIR,
+    idLote,
+    originalName,
+    contentType,
+    capturedAt: new Date(fechaCaptura),
+    nonce: `${Date.now()}`,
+  });
+  ensureDir(storage.targetDir);
+  fs.writeFileSync(storage.targetPath, bytes);
+
+  return {
+    idLote,
+    originalName,
+    storedName: storage.storedName,
+    relativePath: storage.relativePath,
+    publicUrl: publicUrlFor(storage.relativePath),
+    size: bytes.length,
+    contentType,
+    fechaCaptura,
+    fuente: 'campo' as const,
+  };
+}
+
 function tokenExpiresAtIso(expireTime?: number) {
   if (!expireTime) return null;
   const ms = expireTime > 10_000_000_000 ? expireTime : expireTime * 1000;
@@ -141,14 +179,22 @@ function tokenExpiresAtIso(expireTime?: number) {
 
 function requireAdminToken(req: Request, res: Response, next: () => void) {
   if (!TIMELAPSE_ADMIN_TOKEN) {
-    next();
+    res.status(503).json({
+      ok: false,
+      message: "Servicio operativo no configurado.",
+    });
     return;
   }
 
-  const header = req.get("authorization") || "";
-  const bearer = header.replace(/^Bearer\s+/i, "").trim();
-  const explicit = req.get("x-timelapse-token") || "";
-  if (bearer === TIMELAPSE_ADMIN_TOKEN || explicit === TIMELAPSE_ADMIN_TOKEN) {
+  if (
+    hasOperationalAccess(
+      {
+        authorization: req.get("authorization") || "",
+        explicitToken: req.get("x-timelapse-token") || "",
+      },
+      TIMELAPSE_ADMIN_TOKEN,
+    )
+  ) {
     next();
     return;
   }
@@ -590,10 +636,40 @@ function startHttp() {
     }
   });
 
-  app.use("/imagenes", express.static(FTP_DATA_DIR, {
-    immutable: true,
-    maxAge: "30d",
-  }));
+  app.post(
+    '/field-photos/upload/:idLote',
+    requireAdminToken,
+    express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: '12mb' }),
+    (req: Request, res: Response) => {
+      try {
+        const originalName = decodeURIComponent(
+          String(req.get('x-original-name') || 'foto-campo.jpg'),
+        );
+        const contentType = String(req.get('content-type') || 'image/jpeg').split(';')[0];
+        const record = ingestFieldPhoto(
+          req.params.idLote,
+          originalName,
+          contentType,
+          req.body as Buffer,
+        );
+        res.status(201).json(record);
+      } catch (err: any) {
+        const message = err?.type === 'entity.too.large'
+          ? 'La imagen supera el limite de 12 MB.'
+          : err?.message || String(err);
+        res.status(400).json({ ok: false, message });
+      }
+    },
+  );
+
+  app.use(
+    "/imagenes",
+    privateFieldPhotoAccess(TIMELAPSE_ADMIN_TOKEN),
+    express.static(FTP_DATA_DIR, {
+      immutable: true,
+      maxAge: "30d",
+    }),
+  );
 
   const httpPorts = Array.from(new Set([HTTP_PORT, HTTP_PUBLIC_PORT].filter(Boolean)));
   httpPorts.forEach((port) => {

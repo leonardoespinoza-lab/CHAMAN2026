@@ -1,30 +1,35 @@
-# Stage 1: Build
+# Stage 1: reproducible build from the monorepo root.
+#
+# Usage:
+#   docker build -f sdc-app-chaman/Dockerfile .
+#
+# Railway uses RAILPACK with scripts/railway-build.js. This Docker path is
+# retained as an independently reproducible recovery and validation path.
 FROM node:20-alpine AS builder
 
-WORKDIR /app
-
-# Instalar git (necesario para sdc-modelos)
+WORKDIR /workspace
 RUN apk add --no-cache git
 
-# Copiar package.json y package-lock.json
-COPY package*.json ./
+# Build the versioned shared package first. Local generated tarballs are not
+# part of the source of truth; package-lock links it via file:../sdc-modelos.
+COPY sdc-modelos/package.json sdc-modelos/package-lock.json sdc-modelos/tsconfig.json ./sdc-modelos/
+COPY sdc-modelos/src ./sdc-modelos/src
+RUN npm --prefix sdc-modelos ci \
+    && npm --prefix sdc-modelos run build
 
-# Instalar dependencias
-RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+# Install exactly the frontend lockfile and then add the application sources.
+COPY sdc-app-chaman/package.json sdc-app-chaman/package-lock.json ./sdc-app-chaman/
+RUN npm --prefix sdc-app-chaman ci --legacy-peer-deps
+COPY sdc-app-chaman ./sdc-app-chaman
 
-# Copiar código fuente
-COPY . .
+# A production build is mandatory. A testing build must never mask a failure.
+RUN npm --prefix sdc-app-chaman run build
 
-# Build de producción
-RUN npm run build 2>&1 || npm run build-test 2>&1
-
-# Stage 2: Serve con Nginx
+# Stage 2: serve with Nginx.
 FROM nginx:alpine
 
-# Copiar archivos desde donde estén
-COPY --from=builder /app/dist /tmp/dist
+COPY --from=builder /workspace/sdc-app-chaman/dist /tmp/dist
 
-# Script para mover archivos al lugar correcto
 RUN if [ -d "/tmp/dist/browser" ]; then \
       cp -r /tmp/dist/browser/* /usr/share/nginx/html/; \
     elif [ -d "/tmp/dist" ]; then \
@@ -32,10 +37,10 @@ RUN if [ -d "/tmp/dist/browser" ]; then \
     fi && \
     rm -rf /tmp/dist
 
-# Copiar configuración de nginx
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY sdc-app-chaman/nginx.conf /etc/nginx/conf.d/default.conf
+COPY sdc-app-chaman/docker-entrypoint.d/40-chaman-runtime-config.sh /docker-entrypoint.d/40-chaman-runtime-config.sh
+RUN chmod +x /docker-entrypoint.d/40-chaman-runtime-config.sh
 
-# Exponer puerto
-EXPOSE 80
+EXPOSE 8080
 
 CMD ["nginx", "-g", "daemon off;"]

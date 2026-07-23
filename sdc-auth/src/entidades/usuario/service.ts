@@ -7,7 +7,7 @@ import {
   IUpdateUsuario,
 } from 'modelos/src';
 import * as bcrypt from 'bcrypt';
-import { UsuariosRepository } from './repository';
+import { SessionEligibility, UsuariosRepository } from './repository';
 import { ProductorsService } from '../productor/service';
 
 @Injectable()
@@ -23,8 +23,14 @@ export class UsuariosService {
     return data;
   }
 
-  async getByUsername(nombre: string): Promise<IUsuario> {
-    return await this.repository.getByUsername(nombre);
+  async getByUsername(nombre: string): Promise<IUsuario | undefined> {
+    try {
+      return await this.repository.getByUsername(nombre);
+    } catch (error) {
+      const status = error?.getStatus?.() || error?.status;
+      if (status === 404) return undefined;
+      throw error;
+    }
   }
 
   async getByEmail(email: string): Promise<IUsuario> {
@@ -34,6 +40,12 @@ export class UsuariosService {
       Logger.error('Error al obtener el usuario por email');
       Logger.error(error);
     }
+  }
+
+  async getSessionEligibility(
+    idUsuario: string,
+  ): Promise<SessionEligibility> {
+    return await this.repository.getSessionEligibility(idUsuario);
   }
 
   async get(params: IQueryParam): Promise<IListado<IUsuario>> {

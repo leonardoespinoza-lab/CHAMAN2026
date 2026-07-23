@@ -52,10 +52,15 @@ export class OauthController {
 
   @Post('/validate_password')
   async validate_password(
+    @Req() req: Request,
     @Body('username') username: string,
     @Body('password') password: string,
   ) {
-    const valid = await this.service.validate_password(username, password);
+    const valid = await this.service.validate_password(
+      username,
+      password,
+      req,
+    );
     return { valid };
   }
 }

@@ -58,13 +58,14 @@
   --p-danger-color: #e05246 !important;
   --p-text-color: var(--chaman-ink) !important;
   --p-text-muted-color: var(--chaman-muted) !important;
+  --chaman-page-background:
+    radial-gradient(circle at 12% -12%, rgba(34, 207, 199, 0.13), transparent 34%),
+    radial-gradient(circle at 96% 0%, rgba(134, 197, 239, 0.16), transparent 38%),
+    linear-gradient(135deg, #f8fbfc 0%, #f2f6f8 48%, #eef4f7 100%) !important;
 }
 
 html {
-  background:
-    radial-gradient(circle at 12% -12%, rgba(34, 207, 199, 0.13), transparent 34%),
-    radial-gradient(circle at 96% 0%, rgba(134, 197, 239, 0.16), transparent 38%),
-    linear-gradient(135deg, #f8fbfc 0%, #f2f6f8 48%, #eef4f7 100%);
+  background: var(--chaman-page-background);
 }
 
 body {
@@ -117,17 +118,62 @@ body {
   border-radius: 8px !important;
 }
 
-html body .custom-card:hover,
-html body .p-card:hover,
-html body .p-panel:hover,
-html body .chaman-action-card:hover,
-html body .stage-step:hover,
-html body .frio-metrics article:hover,
-html body .irrigation-metrics article:hover,
-html body .wind-metrics article:hover,
-html body .wind-forecast article:hover {
+html body .custom-card.chaman-interactive-surface:hover,
+html body .p-card.chaman-interactive-surface:hover,
+html body .p-panel.chaman-interactive-surface:hover,
+html body .chaman-action-card:hover {
   border-color: var(--chaman-card-border-hover) !important;
   box-shadow: var(--chaman-card-shadow-hover) !important;
+}
+
+/*
+ * Superficies compartidas por Chaman y tenants.
+ *
+ * `chaman-surface` normaliza tarjetas sin acoplarlas a un color de marca fijo.
+ * `chaman-interactive-surface` se aplica solamente cuando toda la superficie
+ * ejecuta una accion; de esta manera una tarjeta informativa no promete una
+ * interaccion inexistente.
+ */
+.chaman-surface {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.64), rgba(248, 251, 253, 0.42)),
+    var(--chaman-card-bg) !important;
+  border: 1px solid var(--chaman-card-border) !important;
+  border-inline-start-width: 1px !important;
+  box-shadow: var(--chaman-card-shadow) !important;
+}
+
+.chaman-interactive-surface {
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.chaman-interactive-surface:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--p-primary-color), transparent 58%);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chaman-interactive-surface:hover {
+    box-shadow:
+      0 12px 28px color-mix(in srgb, var(--p-primary-color), transparent 86%),
+      var(--chaman-glass-inner);
+    transform: translateY(-1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chaman-interactive-surface {
+    transition: none;
+  }
+
+  .chaman-interactive-surface:hover {
+    transform: none;
+  }
 }
 
 .p-dialog {
@@ -170,15 +216,23 @@ html body .wind-forecast article:hover {
     background 0.18s ease;
 }
 
-.p-button:not(.p-button-text):not(.p-button-outlined) {
-  background: linear-gradient(135deg, #2ddbd2, #8ee8d3) !important;
-  border-color: rgba(11, 118, 110, 0.24) !important;
-  color: #062527 !important;
-  box-shadow: 0 14px 30px rgba(34, 207, 199, 0.17), var(--chaman-glass-inner);
+.p-button:not(.p-button-text):not(.p-button-outlined):not(.p-button-danger):not(.p-button-warn):not(
+    .p-button-success
+  ):not(.p-button-info):not(.p-button-secondary):not(.p-button-contrast) {
+  background: linear-gradient(135deg, var(--p-primary-color), var(--p-accent-color)) !important;
+  border-color: color-mix(in srgb, var(--p-primary-color), #071827 20%) !important;
+  color: var(--p-primary-contrast-color) !important;
+  box-shadow:
+    0 14px 30px color-mix(in srgb, var(--p-primary-color), transparent 82%),
+    var(--chaman-glass-inner);
 }
 
-.p-button:not(.p-button-text):not(.p-button-outlined):hover {
-  box-shadow: 0 18px 40px rgba(34, 207, 199, 0.24), var(--chaman-glass-inner);
+.p-button:not(.p-button-text):not(.p-button-outlined):not(.p-button-danger):not(.p-button-warn):not(
+    .p-button-success
+  ):not(.p-button-info):not(.p-button-secondary):not(.p-button-contrast):hover {
+  box-shadow:
+    0 18px 40px color-mix(in srgb, var(--p-primary-color), transparent 76%),
+    var(--chaman-glass-inner);
   transform: translateY(-1px);
 }
 

@@ -308,9 +308,6 @@ function validar(siembra: ISiembra, lote: ILote, clima?: DiaClimaHuella[]) {
     ['rendimientoObtenidoKgHaSeco', 'rendimiento seco'],
     ['lluviasPromedio', 'lluvias promedio'],
     ['fijacionN', 'fijacion N'],
-    ['dosisN', 'dosis N'],
-    ['dosisP', 'dosis P'],
-    ['rendimiento', 'rango de rendimiento'],
     ['manejoAgronomico', 'manejo agronomico'],
     ['intensidadLluvias', 'intensidad de lluvias'],
     ['materiaOrganica', 'materia organica'],
@@ -570,16 +567,6 @@ function getFaltantesSeguimiento(
     );
   if (!siembra.fijacionN)
     add('fijacionN', 'Configurar fijacion de nitrogeno esperada.', 'siembra');
-  if (!siembra.dosisN)
-    add('dosisN', 'Configurar rango de dosis de nitrogeno.', 'siembra');
-  if (!siembra.dosisP)
-    add('dosisP', 'Configurar rango de dosis de fosforo.', 'siembra');
-  if (!siembra.rendimiento)
-    add(
-      'rendimiento',
-      'Configurar rango de rendimiento esperado.',
-      'rendimiento',
-    );
   if (!siembra.manejoAgronomico)
     add(
       'manejoAgronomico',

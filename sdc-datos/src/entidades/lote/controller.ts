@@ -9,7 +9,7 @@ import {
   Put,
 } from '@nestjs/common';
 import { LotesService } from './service';
-import { ICreateLote, IQueryParam, IUpdateLote } from 'modelos/src';
+import { ICreateLote, IQueryParam, ISolicitudArchivado, IUpdateLote } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Lotes')
@@ -38,8 +38,8 @@ export class LotesController {
   }
 
   @Delete(':id')
-  async delete(@Param('id') id: string) {
-    return await this.service.delete(id);
+  async delete(@Param('id') id: string, @Query() audit: ISolicitudArchivado) {
+    return await this.service.delete(id, audit);
   }
 
   @Delete()

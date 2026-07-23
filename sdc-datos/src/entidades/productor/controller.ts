@@ -9,7 +9,7 @@ import {
   Put,
 } from '@nestjs/common';
 import { ProductorsService } from './service';
-import { ICreateProductor, IQueryParam, IUpdateProductor } from 'modelos/src';
+import { ICreateProductor, IQueryParam, ISolicitudArchivado, IUpdateProductor } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Productors')
@@ -38,7 +38,7 @@ export class ProductorsController {
   }
 
   @Delete(':id')
-  async delete(@Param('id') id: string) {
-    return await this.service.delete(id);
+  async delete(@Param('id') id: string, @Query() audit: ISolicitudArchivado) {
+    return await this.service.delete(id, audit);
   }
 }

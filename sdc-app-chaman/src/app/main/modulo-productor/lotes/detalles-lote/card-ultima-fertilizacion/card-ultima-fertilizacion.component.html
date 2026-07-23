@@ -1,5 +1,16 @@
-<div class="custom-card application-card">
-  <div class="application-header pointer" (click)="lote ? (verDrawerFertilizaciones = true) : null">
+<div class="custom-card chaman-surface application-card">
+  <div
+    class="application-header"
+    [class.chaman-interactive-surface]="!!lote"
+    [attr.role]="lote ? 'button' : null"
+    [attr.tabindex]="lote ? 0 : null"
+    [attr.aria-label]="lote ? 'Abrir historial de fertilizaciones' : null"
+    [attr.aria-haspopup]="lote ? 'dialog' : null"
+    [attr.aria-expanded]="lote ? verDrawerFertilizaciones : null"
+    (click)="lote ? (verDrawerFertilizaciones = true) : null"
+    (keydown.enter)="lote ? (verDrawerFertilizaciones = true) : null"
+    (keydown.space)="$event.preventDefault(); lote ? (verDrawerFertilizaciones = true) : null"
+  >
     <div>
       <p class="titulo-card">{{ 'Ultima fertilizacion' | translate | uppercase }}</p>
       <span>{{ resumenFertilizacion }}</span>

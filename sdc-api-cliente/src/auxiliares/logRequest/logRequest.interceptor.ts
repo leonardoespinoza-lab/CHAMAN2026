@@ -74,17 +74,20 @@ function sanitizeLogData(value: any): any {
   if (Array.isArray(value)) return value.map((item) => sanitizeLogData(item));
   if (!value || typeof value !== 'object') return value;
 
-  return Object.entries(value).reduce((result, [key, item]) => {
-    const normalizedKey = key.toLowerCase().replace(/[\s_-]/g, '');
-    result[key] =
-      SENSITIVE_KEYS.has(normalizedKey) ||
-      normalizedKey.includes('password') ||
-      normalizedKey.includes('secret') ||
-      normalizedKey.includes('token')
-        ? REDACTED
-        : sanitizeLogData(item);
-    return result;
-  }, {} as Record<string, any>);
+  return Object.entries(value).reduce(
+    (result, [key, item]) => {
+      const normalizedKey = key.toLowerCase().replace(/[\s_-]/g, '');
+      result[key] =
+        SENSITIVE_KEYS.has(normalizedKey) ||
+        normalizedKey.includes('password') ||
+        normalizedKey.includes('secret') ||
+        normalizedKey.includes('token')
+          ? REDACTED
+          : sanitizeLogData(item);
+      return result;
+    },
+    {} as Record<string, any>,
+  );
 }
 
 @Injectable()

@@ -26,7 +26,23 @@ describe('SiembrasService - limite de escritura fenologica', () => {
     };
     const algoritmosService = {
       calcularHumedadSeca: jest.fn(() => 9000),
-      calcularHuellaHidricaReal: jest.fn(async () => ({ huella: {} })),
+      simularHuellaHidrica: jest.fn(() => ({ huella: {} })),
+      simularSeguimientoHuellaHidrica: jest.fn(() => ({
+        estado: 'seguimiento',
+        periodo: { diasClima: 0, diasDesdeSiembra: 0, diasCiclo: 1, avanceCiclo: 0 },
+        progreso: {
+          verde: { mm: 0, litrosHa: 0, porcentaje: 0, detalle: '' },
+          azul: { mm: 0, litrosHa: 0, porcentaje: 0, detalle: '' },
+          gris: { litrosHa: 0, aplicaciones: 0, porcentaje: 0, detalle: '' },
+          total: { litrosHa: 0, porcentaje: 0, detalle: '' },
+        },
+        inputs: { fertilizaciones: 0, fumigaciones: 0, climaDisponible: false },
+        parciales: {},
+        calidad: { nivel: 'baja', score: 0, observaciones: [] },
+        metodologia: { version: 'test', enfoque: 'seguimiento' },
+        faltantes: [],
+        trazas: [],
+      })),
       calcularSeguimientoHuellaHidrica: jest.fn(),
       calcularPrediccionMalezas: jest.fn(),
     };
@@ -35,6 +51,7 @@ describe('SiembrasService - limite de escritura fenologica', () => {
     };
     const indicatorsService = {
       deleteBySowing: jest.fn(),
+      getActiveGeneration: jest.fn(async () => ({ data: [] })),
     };
     return {
       service: new SiembrasService(

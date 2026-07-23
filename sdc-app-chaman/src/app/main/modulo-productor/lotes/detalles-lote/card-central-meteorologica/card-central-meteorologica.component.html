@@ -1,5 +1,5 @@
 @if (visible) {
-  <article class="central-card">
+  <article class="central-card chaman-surface">
     <header class="central-header">
       <div class="central-title">
         <span class="central-icon">
@@ -34,7 +34,14 @@
         <article
           [class.empty]="!variable.disponible"
           [class.clickable]="variable.historial.length"
+          [class.chaman-interactive-surface]="!!variable.historial.length"
+          [attr.role]="variable.historial.length ? 'button' : null"
+          [attr.tabindex]="variable.historial.length ? 0 : null"
+          [attr.aria-label]="variable.historial.length ? 'Abrir curva de ' + variable.label : null"
+          [attr.aria-haspopup]="variable.historial.length ? 'dialog' : null"
           (click)="abrirGrafico(variable)"
+          (keydown.enter)="variable.historial.length ? abrirGrafico(variable) : null"
+          (keydown.space)="$event.preventDefault(); variable.historial.length ? abrirGrafico(variable) : null"
         >
           <i [class]="variable.icon"></i>
           <span>{{ variable.label }}</span>
@@ -58,7 +65,14 @@
             <article
               [class.empty]="!variable.disponible"
               [class.clickable]="variable.historial.length"
+              [class.chaman-interactive-surface]="!!variable.historial.length"
+              [attr.role]="variable.historial.length ? 'button' : null"
+              [attr.tabindex]="variable.historial.length ? 0 : null"
+              [attr.aria-label]="variable.historial.length ? 'Abrir curva de ' + variable.label : null"
+              [attr.aria-haspopup]="variable.historial.length ? 'dialog' : null"
               (click)="abrirGrafico(variable)"
+              (keydown.enter)="variable.historial.length ? abrirGrafico(variable) : null"
+              (keydown.space)="$event.preventDefault(); variable.historial.length ? abrirGrafico(variable) : null"
             >
               <i [class]="variable.icon"></i>
               <div>

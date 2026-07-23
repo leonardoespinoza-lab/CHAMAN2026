@@ -11,26 +11,42 @@ export class AlgoritmosRepository {
   }
 
   async getReadinessCatalogos(): Promise<any> {
-    return await this.axios.GET<any>(`${API_DATOS}/algoritmos/catalogos/readiness`);
+    return await this.axios.GET<any>(
+      `${API_DATOS}/algoritmos/catalogos/readiness`,
+    );
   }
 
   async getParametrosHuellaHidrica(): Promise<any> {
-    return await this.axios.GET<any>(`${API_DATOS}/algoritmos/huella-hidrica/parametros`);
+    return await this.axios.GET<any>(
+      `${API_DATOS}/algoritmos/huella-hidrica/parametros`,
+    );
   }
 
   async simularHuellaHidrica(body: any): Promise<any> {
-    return await this.axios.POST<any>(`${API_DATOS}/algoritmos/huella-hidrica/simular`, body);
+    return await this.axios.POST<any>(
+      `${API_DATOS}/algoritmos/huella-hidrica/simular`,
+      body,
+    );
   }
 
   async simularEnfermedades(body: any): Promise<any> {
-    return await this.axios.POST<any>(`${API_DATOS}/algoritmos/enfermedades/simular`, body);
+    return await this.axios.POST<any>(
+      `${API_DATOS}/algoritmos/enfermedades/simular`,
+      body,
+    );
   }
 
   async simularRiego(body: any): Promise<any> {
-    return await this.axios.POST<any>(`${API_DATOS}/algoritmos/riego/simular`, body);
+    return await this.axios.POST<any>(
+      `${API_DATOS}/algoritmos/riego/simular`,
+      body,
+    );
   }
 
   async simularMalezas(body: any): Promise<any> {
-    return await this.axios.POST<any>(`${API_DATOS}/algoritmos/malezas/simular`, body);
+    return await this.axios.POST<any>(
+      `${API_DATOS}/algoritmos/malezas/simular`,
+      body,
+    );
   }
 }

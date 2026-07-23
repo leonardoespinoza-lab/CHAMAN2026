@@ -68,8 +68,9 @@
         <td>
           <div class="license-name">{{ row.nombre }}</div>
           <div class="license-subtitle">
-            {{ row.motivoCreacion || 'Sin motivo registrado' }}
+            {{ row.codigo || 'legacy-sin-codigo' }} · v{{ row.version || 1 }} · {{ row.estado || 'activo legacy' }} · {{ row.modeloFacturacion || 'sin clasificar' }}
           </div>
+          <div class="license-subtitle">{{ row.motivoCreacion || 'Sin motivo registrado' }}</div>
         </td>
         <td>
           <span [class]="getOrigenClass(row)">

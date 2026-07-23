@@ -1,8 +1,4 @@
-import {
-  ForbiddenException,
-  Injectable,
-  Optional,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable, Optional } from '@nestjs/common';
 import {
   IDispositivo,
   IListado,
@@ -14,6 +10,7 @@ import {
   IPermiso,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
+import { establecimientosDelPermiso } from '../../auxiliares/authorization/alcance-permiso';
 import { DispositivosRepository } from './repository';
 import {
   DecisionPipelineQueueService,
@@ -46,7 +43,9 @@ export class DispositivosService {
   ): Promise<IDispositivo> {
     const dispositivo = await this.repository.getById(id);
     if (user && !this.puedeVer(dispositivo, user, modulo)) {
-      throw new ForbiddenException('No tiene permiso para ver este dispositivo');
+      throw new ForbiddenException(
+        'No tiene permiso para ver este dispositivo',
+      );
     }
     return dispositivo;
   }
@@ -66,7 +65,9 @@ export class DispositivosService {
   ): Promise<IDispositivo | undefined> {
     const dispositivo = await this.resolverDispositivo(identificador);
     if (user && !this.puedeVer(dispositivo, user, modulo)) {
-      throw new ForbiddenException('No tiene permiso para ver este dispositivo');
+      throw new ForbiddenException(
+        'No tiene permiso para ver este dispositivo',
+      );
     }
     return dispositivo;
   }
@@ -76,9 +77,15 @@ export class DispositivosService {
     user: IUsuario,
     modulo?: ModuloPermiso,
   ): Promise<IDispositivo> {
-    const dispositivo = await this.getByIdentificador(identificador, user, modulo);
+    const dispositivo = await this.getByIdentificador(
+      identificador,
+      user,
+      modulo,
+    );
     if (!dispositivo) {
-      throw new ForbiddenException('No tiene permiso para ver este dispositivo');
+      throw new ForbiddenException(
+        'No tiene permiso para ver este dispositivo',
+      );
     }
     return dispositivo;
   }
@@ -145,9 +152,7 @@ export class DispositivosService {
     ]);
     for (const device of devices) {
       const idLote = String(device?.idLote || '').trim();
-      const idEstablecimiento = String(
-        device?.idEstablecimiento || '',
-      ).trim();
+      const idEstablecimiento = String(device?.idEstablecimiento || '').trim();
       if (idLote) scopes.get('lote')!.add(idLote);
       else if (idEstablecimiento) {
         scopes.get('establecimiento')!.add(idEstablecimiento);
@@ -172,7 +177,9 @@ export class DispositivosService {
     }
   }
 
-  private async resolverDispositivo(identificador: string): Promise<IDispositivo | undefined> {
+  private async resolverDispositivo(
+    identificador: string,
+  ): Promise<IDispositivo | undefined> {
     if (!identificador) {
       return undefined;
     }
@@ -185,11 +192,15 @@ export class DispositivosService {
       }
     }
 
-    const variantesDevEui = Array.from(new Set([
-      identificador,
-      identificador.toUpperCase(),
-      identificador.toLowerCase(),
-    ].filter(Boolean)));
+    const variantesDevEui = Array.from(
+      new Set(
+        [
+          identificador,
+          identificador.toUpperCase(),
+          identificador.toLowerCase(),
+        ].filter(Boolean),
+      ),
+    );
 
     const response = await this.repository.get({
       filter: JSON.stringify({
@@ -222,25 +233,42 @@ export class DispositivosService {
         return true;
       }
       if (permiso.nivel === 'Quimica') {
-        return !!permiso.idQuimica && permiso.idQuimica === dispositivo.idQuimica;
+        return (
+          !!permiso.idQuimica && permiso.idQuimica === dispositivo.idQuimica
+        );
       }
       if (permiso.nivel === 'Distribuidor') {
-        return !!permiso.idDistribuidor && permiso.idDistribuidor === dispositivo.idDistribuidor;
+        return (
+          !!permiso.idDistribuidor &&
+          permiso.idDistribuidor === dispositivo.idDistribuidor
+        );
       }
       if (permiso.nivel === 'Productor') {
-        return !!permiso.idProductor && permiso.idProductor === dispositivo.idProductor;
+        return (
+          !!permiso.idProductor &&
+          permiso.idProductor === dispositivo.idProductor
+        );
       }
       if (permiso.nivel === 'Establecimiento') {
-        return !!permiso.idEstablecimiento && permiso.idEstablecimiento === dispositivo.idEstablecimiento;
+        return (
+          !!permiso.idEstablecimiento &&
+          permiso.idEstablecimiento === dispositivo.idEstablecimiento
+        );
+      }
+      if (permiso.nivel === 'Asesor') {
+        return (
+          establecimientosDelPermiso(permiso).includes(
+            String(dispositivo.idEstablecimiento),
+          ) &&
+          (!permiso.idLotes?.length ||
+            permiso.idLotes.includes(String(dispositivo.idLote)))
+        );
       }
       return false;
     });
   }
 
-  private puedeVerModulo(
-    permiso: IPermiso,
-    modulo?: ModuloPermiso,
-  ): boolean {
+  private puedeVerModulo(permiso: IPermiso, modulo?: ModuloPermiso): boolean {
     if (!modulo || !permiso.modulos) {
       return true;
     }
@@ -268,6 +296,7 @@ export class DispositivosService {
     const establecimientosUsuario = user.permisos
       .filter((p) => p.nivel === 'Establecimiento' && p.idEstablecimiento)
       .map((p) => p.idEstablecimiento);
+    const asesoresUsuario = user.permisos.filter((p) => p.nivel === 'Asesor');
 
     if (quimicasUsuario.length > 0) {
       $or.push({ idQuimica: { $in: quimicasUsuario } });
@@ -280,6 +309,13 @@ export class DispositivosService {
     }
     if (establecimientosUsuario.length > 0) {
       $or.push({ idEstablecimiento: { $in: establecimientosUsuario } });
+    }
+    for (const asesor of asesoresUsuario) {
+      const alcance: any = {
+        idEstablecimiento: { $in: establecimientosDelPermiso(asesor) },
+      };
+      if (asesor.idLotes?.length) alcance.idLote = { $in: asesor.idLotes };
+      $or.push(alcance);
     }
     if ($or.length > 0) {
       $and.push({ $or });

@@ -921,10 +921,7 @@ export class ClimaService {
       ),
       porcionesFrio: porcionesFrioDisponibles
         ? this.round(
-            frioSerie.reduce(
-              (acc, dia) => acc + (dia.porcionesFrio || 0),
-              0,
-            ),
+            frioSerie.reduce((acc, dia) => acc + (dia.porcionesFrio || 0), 0),
             2,
           )
         : undefined,
@@ -991,12 +988,15 @@ export class ClimaService {
         : undefined,
     };
 
-    const fuentesHistoricas = new Set(historico.map((dia) => dia.fuente).filter(Boolean));
-    const fuenteResultado: IFrioTermicoCultivo['fuente'] = fuentesHistoricas.has('FieldClimate')
-      ? fuentesHistoricas.has('OpenMeteo')
-        ? 'FieldClimate + OpenMeteo'
-        : 'FieldClimate'
-      : 'OpenMeteo';
+    const fuentesHistoricas = new Set(
+      historico.map((dia) => dia.fuente).filter(Boolean),
+    );
+    const fuenteResultado: IFrioTermicoCultivo['fuente'] =
+      fuentesHistoricas.has('FieldClimate')
+        ? fuentesHistoricas.has('OpenMeteo')
+          ? 'FieldClimate + OpenMeteo'
+          : 'FieldClimate'
+        : 'OpenMeteo';
     const resultado: IFrioTermicoCultivo = {
       fuente: fuenteResultado,
       lat: latNum,
@@ -1377,36 +1377,46 @@ export class ClimaService {
     if (from > to) return [];
     const url = `${API_CLIMA}/clima/estacion/cerca/${lat}/${lng}/${from}/${to}`;
     try {
-      const rows = await this.axiosService.GET<IClimaEstacionMeteorologica[]>(url, {
-        params: {
-          dataGroup: 'daily',
-          soloEstacionAsociada: 'true',
-          ...(idEstacionMeteorologica ? { idEstacionMeteorologica } : {}),
+      const rows = await this.axiosService.GET<IClimaEstacionMeteorologica[]>(
+        url,
+        {
+          params: {
+            dataGroup: 'daily',
+            soloEstacionAsociada: 'true',
+            ...(idEstacionMeteorologica ? { idEstacionMeteorologica } : {}),
+          },
         },
-      });
+      );
       const serie = (rows || [])
         .map((row): ISerieFrioTermicoDia | undefined => {
           const fecha = String(row.fecha || '').slice(0, 10);
           if (!fecha) return undefined;
-          const media = this.numeroFinito(row.temperatura?.avg ?? row.temperatura?.last);
+          const media = this.numeroFinito(
+            row.temperatura?.avg ?? row.temperatura?.last,
+          );
           const min = this.numeroFinito(row.temperatura?.min ?? media);
           const max = this.numeroFinito(row.temperatura?.max ?? media);
           if (min === undefined || max === undefined) return undefined;
           return {
             fecha,
-            fuente: row.fuente === 'FieldClimate' ? 'FieldClimate' : 'OpenMeteo',
+            fuente:
+              row.fuente === 'FieldClimate' ? 'FieldClimate' : 'OpenMeteo',
             calidadDatos: row.calidadDatos,
             temperaturaMin: min,
             temperaturaMax: max,
             temperaturaMedia: media ?? this.round((min + max) / 2),
             lluvia:
-              this.numeroFinito(row.lluvia?.sum ?? row.lluvia?.avg ?? row.lluvia?.last) ?? 0,
+              this.numeroFinito(
+                row.lluvia?.sum ?? row.lluvia?.avg ?? row.lluvia?.last,
+              ) ?? 0,
             esPronostico: false,
           };
         })
         .filter((row): row is ISerieFrioTermicoDia => !!row);
       if (serie.length) return this.mergeSeries([], serie);
-      throw new Error('La fuente climatica automatica no devolvio dias utiles.');
+      throw new Error(
+        'La fuente climatica automatica no devolvio dias utiles.',
+      );
     } catch (error: any) {
       this.logger.warn(
         `Clima historico automatico sin respuesta; se usa Open-Meteo directo (${lat}, ${lng}): ${error?.message || error}`,
@@ -2052,10 +2062,8 @@ export class ClimaService {
     );
     const frioCumplido = modeloRector.porcentaje >= 100;
     const frioCercano = modeloRector.porcentaje >= 85;
-    const brotacionCompatible =
-      frioCumplido && progreso.brotacionPct >= 100;
-    const floracionCompatible =
-      frioCumplido && progreso.floracionPct >= 100;
+    const brotacionCompatible = frioCumplido && progreso.brotacionPct >= 100;
+    const floracionCompatible = frioCumplido && progreso.floracionPct >= 100;
     if (plantacionJoven) {
       return {
         brotacion: {

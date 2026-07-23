@@ -9,6 +9,16 @@ import {
 import { API_DATOS } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 
+export interface SessionEligibility {
+  eligible: boolean;
+  user?: IUsuario;
+  reason?:
+    | 'user_not_found'
+    | 'user_inactive'
+    | 'permissions_missing'
+    | 'tenant_inactive';
+}
+
 @Injectable()
 export class UsuariosRepository {
   constructor(private axios: AxiosService) {}
@@ -26,6 +36,15 @@ export class UsuariosRepository {
   async getByEmail(email: string): Promise<IUsuario> {
     const url = `${API_DATOS}/usuarios/email/${email}`;
     return await this.axios.GET<IUsuario>(url);
+  }
+
+  async getSessionEligibility(
+    idUsuario: string,
+  ): Promise<SessionEligibility> {
+    const url = `${API_DATOS}/oauth/session-eligibility/${encodeURIComponent(
+      idUsuario,
+    )}`;
+    return await this.axios.GET<SessionEligibility>(url);
   }
 
   async get(filtro: IQueryParam): Promise<IListado<IUsuario>> {

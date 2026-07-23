@@ -43,8 +43,21 @@ export async function dbQuery<Type>(
   const limit = query?.limit || query?.limit === 0 ? +query?.limit : 0;
   const page = +query?.page || 0;
   const skip = limit * page;
-  const sort = query?.sort || '_id';
-  const filter = getFilters(query.filter);
+  // Los clientes pueden enviar ordenes Mongo como JSON (por ejemplo, la
+  // serie meteorologica pide fecha descendente). Pasar ese JSON como string a
+  // Mongoose no garantiza el orden y puede dejar fuera las lecturas nuevas al
+  // paginar. Se normaliza una sola vez en el limite de persistencia.
+  const sort = getSort(query?.sort) || '_id';
+  const filter = getFilters(query?.filter);
+  const includeArchived = String(query?.includeArchived || '').toLowerCase() === 'true';
+  const onlyArchived = String(query?.onlyArchived || '').toLowerCase() === 'true';
+  if (!Object.prototype.hasOwnProperty.call(filter, 'archivado')) {
+    if (onlyArchived) {
+      filter.archivado = true;
+    } else if (!includeArchived) {
+      filter.archivado = { $ne: true };
+    }
+  }
   const populate = getPopulate(query?.populate);
   const select = query?.select || '';
   const [totalCount, datos] = await Promise.all([

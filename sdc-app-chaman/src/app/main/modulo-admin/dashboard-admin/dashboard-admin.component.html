@@ -65,6 +65,19 @@
           </span>
           <strong>{{ card.title }}</strong>
           <span>{{ card.description }}</span>
+          @if (card.route === '/asesores') {
+            <span class="advisor-card-metrics">
+              @if (cargandoAsesores) {
+                <small><i class="pi pi-spin pi-spinner"></i> Consolidando red</small>
+              } @else if (resumenAsesores) {
+                <small><strong>{{ resumenAsesores.totales.asesores }}</strong> asesores</small>
+                <small><strong>{{ resumenAsesores.totales.hectareas | number: '1.0-1' }}</strong> ha</small>
+                <small><strong>{{ resumenAsesores.totales.usuariosGestionados }}</strong> usuarios</small>
+              } @else {
+                <small>Resumen disponible al ingresar</small>
+              }
+            </span>
+          }
         </span>
         <i class="pi pi-arrow-right card-arrow"></i>
       </button>

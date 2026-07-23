@@ -208,10 +208,111 @@ textarea[pInputText] {
   margin-bottom: 1em;
 }
 
+.license-assignment-panel {
+  display: grid;
+  gap: 1rem;
+  max-width: 980px;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 28%, var(--p-surface-border));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--p-primary-50) 30%, var(--p-surface-0));
+}
+
+.license-assignment-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+
+  h3,
+  p {
+    margin: 0;
+  }
+
+  p {
+    margin-top: 0.25rem;
+    color: var(--p-text-muted-color);
+  }
+}
+
+.license-source {
+  align-self: flex-start;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: var(--p-primary-100);
+  color: var(--p-primary-800);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.license-plan-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.license-plan-summary > div {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.7rem;
+  border: 1px solid var(--p-surface-border);
+  border-radius: 10px;
+  background: var(--p-surface-0);
+}
+
+.license-plan-summary span {
+  color: var(--p-text-muted-color);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.license-date-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.license-date-field label {
+  font-weight: 750;
+}
+
+.license-usage-heading {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.license-usage-heading small {
+  color: var(--p-text-muted-color);
+}
+
+.license-usage-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.license-usage-summary > div {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.65rem;
+  border-left: 3px solid var(--p-primary-color);
+  border-radius: 8px;
+  background: var(--p-surface-0);
+}
+
+.license-usage-summary span {
+  color: var(--p-text-muted-color);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 @media (max-width: 900px) {
   .company-edit-header,
   .basic-layout,
-  .form-grid {
+  .form-grid,
+  .license-plan-summary,
+  .license-usage-summary {
     grid-template-columns: 1fr;
   }
 

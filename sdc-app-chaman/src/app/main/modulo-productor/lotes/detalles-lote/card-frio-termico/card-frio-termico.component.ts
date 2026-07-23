@@ -56,6 +56,7 @@ export class CardFrioTermicoComponent implements OnChanges {
   public diasHistoricoSensor = 7;
   public metricas: MetricaFrio[] = [];
   public chartFrioOptions?: Highcharts.Options;
+  public modoGraficoFrio: 'acumulado' | 'diario' = 'acumulado';
   public modeloVisible = false;
 
   private ultimoKeyHistorico = '';
@@ -348,6 +349,14 @@ export class CardFrioTermicoComponent implements OnChanges {
     return `Base ${this.numero(resumen?.gddBaseTemperatureC, 1)} °C${techo}${dias}${promedio}${resumen?.gddThroughDate ? ` · cerrado al ${this.fechaCorta(resumen.gddThroughDate)}` : ''}`;
   }
 
+  public get gddDetalleResumen(): string {
+    if (!this.gddPendienteBiofix) return this.gddDetalle;
+    return `Comienza con el biofix de brotación observado · Tb ${this.numero(
+      this.data?.summary.gddBaseTemperatureC,
+      1
+    )} °C`;
+  }
+
   public get diasGddComputados(): number {
     const inicio = this.fechaAgronomica(this.siembra?.fechaSiembra);
     const cierre = this.fechaAgronomica(this.data?.summary.gddThroughDate);
@@ -463,6 +472,12 @@ export class CardFrioTermicoComponent implements OnChanges {
     await this.cargarHistoricoSensor(true);
   }
 
+  public cambiarModoGraficoFrio(modo: 'acumulado' | 'diario'): void {
+    if (this.modoGraficoFrio === modo) return;
+    this.modoGraficoFrio = modo;
+    this.chartFrioOptions = this.crearChartFrioOptions();
+  }
+
   private prepararVista(): void {
     this.metricas = this.crearMetricas();
     this.chartFrioOptions = this.crearChartFrioOptions();
@@ -482,16 +497,6 @@ export class CardFrioTermicoComponent implements OnChanges {
       ].some((valor) => this.esNumero(valor));
       if (tieneFrioCanonico) {
         metricas.push(...this.crearMetricasFrioCanonico(resumen));
-        const hfeLegacy = this.valorFrioLegacy('horasFrioEfectivas');
-        if (this.esNumero(hfeLegacy)) {
-          metricas.push({
-            label: 'HFE histórico (legacy)',
-            value: `${this.numero(hfeLegacy, 1)} HFE`,
-            detail: 'Indicador histórico preservado; no equivale a UF Utah ni a CP y no se recalcula.',
-            source: this.dispositivoFrio?.nombre || 'Histórico Chaman',
-            tone: 'warn',
-          });
-        }
       } else {
         metricas.push(...this.crearMetricasSensorPreview());
       }
@@ -512,7 +517,7 @@ export class CardFrioTermicoComponent implements OnChanges {
     metricas.push({
       label: dormancia ? 'GDD de forzado' : 'Grados día',
       value: this.gddLabel,
-      detail: this.gddDetalle,
+      detail: this.gddDetalleResumen,
       source: 'Motor térmico canónico',
       tone: this.gddPendienteBiofix || resumen.gddAccumulationComplete === false ? 'warn' : 'info',
     });
@@ -568,26 +573,6 @@ export class CardFrioTermicoComponent implements OnChanges {
           'warn'
         )
       );
-    }
-    const hfe = this.valorFrioLegacy('horasFrioEfectivas');
-    if (this.esNumero(hfe)) {
-      metricas.push({
-        label: 'Frío efectivo (HFE hist.)',
-        value: `${this.numero(hfe, 2)} HFE`,
-        detail: 'Indicador histórico de referencia; no gobierna decisiones nuevas',
-        source,
-        tone: 'warn',
-      });
-    }
-    const cp = this.valorFrioLegacy('porcionesFrio');
-    if (this.esNumero(cp)) {
-      metricas.push({
-        label: 'Porciones históricas (ref.)',
-        value: `${this.numero(cp, 2)} CP`,
-        detail: 'Estimación legacy; esperar Dynamic Model canónico para decidir',
-        source,
-        tone: 'warn',
-      });
     }
     return metricas;
   }
@@ -665,8 +650,21 @@ export class CardFrioTermicoComponent implements OnChanges {
   }
 
   private crearChartFrioOptions(): Highcharts.Options | undefined {
-    const dias = this.data?.series || [];
     const vernalizacion = this.data?.summary.thermalProcess === 'vernalizacion_anual';
+    const dias = (this.data?.series || []).filter((dia) => {
+      if (dia.isForecast) return false;
+      return vernalizacion
+        ? [dia.metrics.vernalizationAccumulated, dia.metrics.gddAccumulated].some((value) => this.esNumero(value))
+        : [
+            dia.metrics.chillingHours,
+            dia.metrics.chillingHoursAccumulated,
+            dia.metrics.utahChillUnits,
+            dia.metrics.utahChillUnitsAccumulated,
+            dia.metrics.chillPortions,
+            dia.metrics.chillPortionsAccumulated,
+          ].some((value) => this.esNumero(value));
+    });
+    const aporteDiario = this.esDormanciaPerenne && this.modoGraficoFrio === 'diario';
     const definiciones = vernalizacion
       ? [
           {
@@ -686,67 +684,270 @@ export class CardFrioTermicoComponent implements OnChanges {
           {
             name: 'Horas de frío',
             color: '#168d82',
-            values: dias.map((dia) => dia.metrics.chillingHoursAccumulated ?? null),
+            values: dias.map(
+              (dia) => (aporteDiario ? dia.metrics.chillingHours : dia.metrics.chillingHoursAccumulated) ?? null
+            ),
             suffix: ' HF',
           },
           {
             name: 'Unidades Utah',
             color: '#547ec8',
-            values: dias.map((dia) => dia.metrics.utahChillUnitsAccumulated ?? null),
+            values: dias.map(
+              (dia) => (aporteDiario ? dia.metrics.utahChillUnits : dia.metrics.utahChillUnitsAccumulated) ?? null
+            ),
             suffix: ' UF',
           },
           {
             name: 'Porciones de frío',
             color: '#8d65b8',
-            values: dias.map((dia) => dia.metrics.chillPortionsAccumulated ?? null),
+            values: dias.map(
+              (dia) => (aporteDiario ? dia.metrics.chillPortions : dia.metrics.chillPortionsAccumulated) ?? null
+            ),
             suffix: ' CP',
           },
         ];
     const visibles = definiciones.filter((item) => item.values.some((value) => this.esNumero(value)));
     if (!dias.length || !visibles.length) return undefined;
+    const posicionesFechas = this.posicionesFechasGrafico(dias.length);
+    const panelesIndependientes = !vernalizacion && this.esDormanciaPerenne;
+    const temperaturaMinima = dias.map((dia) => dia.metrics.temperatureMinC ?? null);
+    const temperaturaMaxima = dias.map((dia) => dia.metrics.temperatureMaxC ?? null);
+    const mostrarTemperatura =
+      panelesIndependientes &&
+      [temperaturaMinima, temperaturaMaxima].some((serie) => serie.some((value) => this.esNumero(value)));
+    const cantidadPaneles = visibles.length + (mostrarTemperatura ? 1 : 0);
+    const altoPanel = panelesIndependientes
+      ? cantidadPaneles === 1
+        ? 100
+        : cantidadPaneles === 2
+          ? 43
+          : cantidadPaneles === 3
+            ? 25
+            : 18
+      : 100;
+    const separacionPanel = panelesIndependientes
+      ? cantidadPaneles === 1
+        ? 0
+        : cantidadPaneles === 2
+          ? 53
+          : cantidadPaneles === 3
+            ? 34
+            : 25
+      : 0;
+    const rangoTemperatura = this.rangoTemperaturaGrafico(temperaturaMinima, temperaturaMaxima);
+    const ejeTemperatura: Highcharts.YAxisOptions = {
+      title: {
+        text: 'Temperatura °C',
+        style: { color: '#60708c', fontSize: '10px', fontWeight: '700' },
+      },
+      labels: { style: { color: '#60708c', fontSize: '10px' } },
+      top: '0%',
+      height: `${altoPanel}%`,
+      offset: 0,
+      min: rangoTemperatura.min,
+      max: rangoTemperatura.max,
+      tickAmount: 3,
+      startOnTick: false,
+      endOnTick: false,
+      gridLineColor: 'rgba(119, 150, 180, 0.16)',
+      plotBands: [
+        rangoTemperatura.max > 15.9
+          ? {
+              from: Math.max(15.9, rangoTemperatura.min),
+              to: Math.min(18, rangoTemperatura.max),
+              color: 'rgba(215, 131, 61, 0.07)',
+            }
+          : undefined,
+        rangoTemperatura.max > 18
+          ? {
+              from: Math.max(18, rangoTemperatura.min),
+              to: rangoTemperatura.max,
+              color: 'rgba(215, 131, 61, 0.13)',
+            }
+          : undefined,
+      ].filter(Boolean) as Highcharts.YAxisPlotBandsOptions[],
+      plotLines:
+        rangoTemperatura.min <= 15.9 && rangoTemperatura.max >= 15.9
+          ? [{ value: 15.9, width: 1, color: 'rgba(215, 131, 61, 0.7)', dashStyle: 'ShortDash' }]
+          : undefined,
+    };
+    const ejeDeModelo = (item: (typeof visibles)[number], index: number): Highcharts.YAxisOptions => {
+      const esUtah = item.name === 'Unidades Utah';
+      const rango = this.rangoGrafico(item.values, esUtah);
+      const unidad = item.name === 'Horas de frío' ? 'HF' : esUtah ? 'UF Utah' : 'CP';
+      return {
+        title: {
+          text: aporteDiario ? `${unidad}/día` : unidad,
+          style: { color: item.color, fontSize: '10px', fontWeight: '700' },
+        },
+        labels: { style: { color: '#60708c', fontSize: '10px' } },
+        top: `${(index + (mostrarTemperatura ? 1 : 0)) * separacionPanel}%`,
+        height: `${altoPanel}%`,
+        offset: 0,
+        min: rango.min,
+        max: rango.max,
+        tickAmount: 3,
+        startOnTick: false,
+        endOnTick: false,
+        gridLineColor: 'rgba(119, 150, 180, 0.16)',
+        plotLines: esUtah
+          ? [{ value: 0, width: 1.5, color: 'rgba(31, 48, 71, 0.55)', zIndex: 4 }]
+          : undefined,
+      };
+    };
     return {
       chart: {
         backgroundColor: 'transparent',
-        height: 320,
-        spacing: [12, 12, 18, 8],
-        type: 'spline',
+        height: panelesIndependientes ? (mostrarTemperatura ? 430 : 372) : 320,
+        spacing: [10, 12, 24, 12],
+        type: aporteDiario ? 'column' : 'spline',
         zooming: { type: 'x' },
       },
       title: { text: undefined },
       xAxis: {
         categories: dias.map((dia) => this.fechaCorta(dia.date)),
-        labels: { step: Math.max(1, Math.ceil(dias.length / 12)) },
-        gridLineWidth: 1,
-        gridLineColor: 'rgba(119, 150, 180, 0.14)',
+        tickPositions: posicionesFechas,
+        labels: {
+          autoRotation: [],
+          rotation: 0,
+          style: { color: '#60708c', fontSize: '10px' },
+        },
+        tickLength: 4,
+        tickColor: 'rgba(96, 112, 140, 0.45)',
+        lineColor: 'rgba(96, 112, 140, 0.45)',
+        gridLineWidth: 0,
       },
-      yAxis: visibles.map((item, index) => ({
-        title: { text: item.name },
-        opposite: index > 0,
-        visible: index < 2,
-        min: 0,
-        gridLineColor: 'rgba(119, 150, 180, 0.16)',
-      })),
-      tooltip: { shared: true },
+      yAxis: panelesIndependientes
+        ? [...(mostrarTemperatura ? [ejeTemperatura] : []), ...visibles.map(ejeDeModelo)]
+        : vernalizacion
+        ? visibles.map((item, index) => ({
+            title: { text: item.name },
+            opposite: index > 0,
+            min: 0,
+            gridLineColor: 'rgba(119, 150, 180, 0.16)',
+          }))
+        : [
+            {
+              title: { text: aporteDiario ? 'HF / UF diarias' : 'HF / UF acumuladas' },
+              min: aporteDiario ? undefined : 0,
+              gridLineColor: 'rgba(119, 150, 180, 0.16)',
+              plotLines: aporteDiario
+                ? [{ value: 0, width: 1.5, color: 'rgba(31, 48, 71, 0.5)', zIndex: 4 }]
+                : undefined,
+            },
+            {
+              title: { text: aporteDiario ? 'CP diarias' : 'CP acumuladas' },
+              opposite: true,
+              min: 0,
+              gridLineWidth: 0,
+            },
+          ],
+      tooltip: {
+        shared: true,
+        headerFormat: `<b>${aporteDiario ? 'Aporte diario' : 'Acumulado'} · {point.key}</b><br/>`,
+      },
       legend: { enabled: true, align: 'center', verticalAlign: 'bottom' },
       plotOptions: {
         series: {
           connectNulls: false,
-          marker: { enabled: dias.length <= 45, radius: 2.5 },
+          marker: { enabled: !panelesIndependientes && dias.length <= 45, radius: 2.5 },
           lineWidth: 2,
           turboThreshold: 0,
+          animation: false,
+        },
+        column: {
+          borderWidth: 0,
+          borderRadius: 2,
+          groupPadding: 0.12,
+          pointPadding: 0.04,
         },
       },
-      series: visibles.map((item, index) => ({
-        name: item.name,
-        data: item.values,
-        color: item.color,
-        type: 'spline' as const,
-        yAxis: Math.min(index, 1),
-        tooltip: { valueSuffix: item.suffix, valueDecimals: index === 2 ? 2 : 1 },
-      })),
+      series: [
+        ...(mostrarTemperatura
+          ? [
+              {
+                name: 'Temp. mínima',
+                data: temperaturaMinima,
+                color: '#60708c',
+                dashStyle: 'ShortDash' as const,
+                type: 'spline' as const,
+                yAxis: 0,
+                lineWidth: 1.7,
+                marker: { enabled: false },
+                tooltip: { valueSuffix: ' °C', valueDecimals: 1 },
+                zIndex: 5,
+              },
+              {
+                name: 'Temp. máxima',
+                data: temperaturaMaxima,
+                color: '#d7833d',
+                type: 'spline' as const,
+                yAxis: 0,
+                lineWidth: 1.9,
+                marker: { enabled: false },
+                tooltip: { valueSuffix: ' °C', valueDecimals: 1 },
+                zIndex: 5,
+              },
+            ]
+          : []),
+        ...visibles.map((item, index) => ({
+          name: item.name,
+          data: item.values,
+          color: item.color,
+          negativeColor: aporteDiario && item.name === 'Unidades Utah' ? '#d7833d' : item.color,
+          type: (aporteDiario ? 'column' : 'spline') as 'spline' | 'column',
+          yAxis: panelesIndependientes
+            ? index + (mostrarTemperatura ? 1 : 0)
+            : vernalizacion
+              ? Math.min(index, 1)
+              : index === 2
+                ? 1
+                : 0,
+          tooltip: { valueSuffix: item.suffix, valueDecimals: item.name === 'Porciones de frío' ? 2 : 1 },
+        })),
+      ],
       credits: { enabled: false },
       accessibility: { enabled: false },
     };
+  }
+
+  private posicionesFechasGrafico(cantidad: number): number[] {
+    if (cantidad <= 1) return [0];
+    const marcas = Math.min(6, cantidad);
+    return Array.from(
+      new Set(Array.from({ length: marcas }, (_, index) => Math.round((index * (cantidad - 1)) / (marcas - 1))))
+    );
+  }
+
+  private rangoGrafico(values: Array<number | null | undefined>, incluirCero: boolean): { min: number; max: number } {
+    const numeros = values.filter((value): value is number => this.esNumero(value));
+    if (!numeros.length) return { min: 0, max: 1 };
+    const minimoBase = incluirCero ? Math.min(0, ...numeros) : Math.min(...numeros, 0);
+    const maximoBase = Math.max(0, ...numeros);
+    const amplitud = maximoBase - minimoBase;
+    if (amplitud === 0) {
+      return minimoBase === 0 ? { min: 0, max: 1 } : { min: minimoBase * 1.08, max: 0 };
+    }
+    const margen = amplitud * 0.08;
+    return {
+      min: minimoBase < 0 ? minimoBase - margen : 0,
+      max: maximoBase > 0 ? maximoBase + margen : 0,
+    };
+  }
+
+  private rangoTemperaturaGrafico(
+    minimas: Array<number | null | undefined>,
+    maximas: Array<number | null | undefined>
+  ): { min: number; max: number } {
+    const valores = [...minimas, ...maximas].filter((value): value is number => this.esNumero(value));
+    if (!valores.length) return { min: 0, max: 20 };
+    const minimo = Math.min(...valores);
+    const maximo = Math.max(...valores);
+    const amplitud = maximo - minimo;
+    const margen = Math.max(1, amplitud * 0.08);
+    return amplitud === 0
+      ? { min: minimo - 1, max: maximo + 1 }
+      : { min: minimo - margen, max: maximo + margen };
   }
 
   private async cargarHistoricoSensor(force = false): Promise<void> {

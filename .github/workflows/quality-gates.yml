@@ -25,6 +25,12 @@ jobs:
       - run: node scripts/audit-config-secrets.js
       - run: node scripts/audit-sensitive-logs.js
       - run: node scripts/test-soja-recso-matrix.js
+      - run: npm run test:agromet:frontend
+      - run: npm run test:lot-location:frontend
+      - run: npm run test:establishment-location:frontend
+      - run: npm run test:soil-intelligence:frontend
+      - run: npm run test:varietal-profile:frontend
+      - run: npm run test:load-runner
 
   core-tests:
     name: test-${{ matrix.service }}
@@ -32,20 +38,87 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [sdc-datos, sdc-api-clima, sdc-api-predicciones, sdc-websocket]
+        service:
+          - sdc-datos
+          - sdc-api-cliente
+          - sdc-auth
+          - sdc-api-clima
+          - sdc-api-predicciones
+          - sdc-api-lora
+          - sdc-api-externa
+          - sdc-websocket
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: ${{ matrix.service }}/package-lock.json
+          cache-dependency-path: |
+            sdc-modelos/package-lock.json
+            ${{ matrix.service }}/package-lock.json
+      - working-directory: sdc-modelos
+        run: npm ci
+      - working-directory: sdc-modelos
+        run: npm run build
       - working-directory: ${{ matrix.service }}
         run: npm ci
       - working-directory: ${{ matrix.service }}
         run: npm test -- --runInBand
       - working-directory: ${{ matrix.service }}
         run: npm run build
+      - if: matrix.service == 'sdc-datos'
+        run: npm run test:active-indexes-migration
+      - if: matrix.service == 'sdc-datos'
+        run: npm run test:cold-metadata-migration
+      - if: matrix.service == 'sdc-datos'
+        run: npm run test:notification-outbox-migration
+
+  build-only-services:
+    name: build-${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - sdc-cron
+          - sdc-ftp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            sdc-modelos/package-lock.json
+            ${{ matrix.service }}/package-lock.json
+      - working-directory: sdc-modelos
+        run: npm ci
+      - working-directory: sdc-modelos
+        run: npm run build
+      - working-directory: ${{ matrix.service }}
+        run: npm ci
+      - if: matrix.service == 'sdc-ftp'
+        working-directory: ${{ matrix.service }}
+        run: npm test
+      - working-directory: ${{ matrix.service }}
+        run: npm run build
+
+  docker-recovery-builds:
+    name: docker-${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            dockerfile: sdc-api-cliente/Dockerfile
+          - name: web
+            dockerfile: sdc-app-chaman/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag "chaman-recovery-${{ matrix.name }}" --file "${{ matrix.dockerfile }}" .
+      - if: matrix.name == 'api'
+        run: docker run --rm --entrypoint node chaman-recovery-api -e "require('modelos/src'); console.log('modelos runtime OK')"
 
   frontend:
     name: frontend-production-build
@@ -56,9 +129,17 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: sdc-app-chaman/package-lock.json
+          cache-dependency-path: |
+            sdc-modelos/package-lock.json
+            sdc-app-chaman/package-lock.json
+      - working-directory: sdc-modelos
+        run: npm ci
+      - working-directory: sdc-modelos
+        run: npm run build
       - working-directory: sdc-app-chaman
         run: npm ci --legacy-peer-deps
+      - working-directory: sdc-app-chaman
+        run: npm test -- --watch=false --karma-config=karma.ci.conf.js --browsers=ChromeHeadlessCI
       - working-directory: sdc-app-chaman
         run: npm run build
 
@@ -76,3 +157,5 @@ jobs:
         run: pip install -r requirements.txt
       - working-directory: sdc-ndvi-worker
         run: python -m py_compile worker.py calcular_ndvi.py recorte.py storage.py config.py geo.py health.py cleaner.py
+      - working-directory: sdc-ndvi-worker
+        run: python -m unittest -v test_reliable_queue.py test_worker_regressions.py

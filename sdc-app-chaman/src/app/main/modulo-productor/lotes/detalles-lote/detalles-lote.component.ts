@@ -47,6 +47,8 @@ import { DataQualityStripComponent } from './data-quality-strip/data-quality-str
 import { CardUbicacionLoteComponent } from './card-ubicacion-lote/card-ubicacion-lote.component';
 import { CardSueloAmbienteComponent } from './card-suelo-ambiente/card-suelo-ambiente.component';
 import { DrawerListadoSiembrasComponent } from './drawer-listado-siembras/drawer-listado-siembras.component';
+import { CardRegistroFotograficoComponent } from './card-registro-fotografico/card-registro-fotografico.component';
+import { CardVisitasLoteComponent } from './card-visitas-lote/card-visitas-lote.component';
 
 const CULTIVOS_CON_PREDICCION_MALEZAS = ['Soja', 'Trigo', 'Maiz'];
 
@@ -63,8 +65,7 @@ export function resolverLoteInicialSeguro(
   loteCacheado?: IDetallesLote,
   loteNavegacion?: IDetallesLote
 ): IDetallesLote | undefined {
-  const coincideRuta = (lote?: IDetallesLote): lote is IDetallesLote =>
-    !!lote && (!idLote || lote._id === idLote);
+  const coincideRuta = (lote?: IDetallesLote): lote is IDetallesLote => !!lote && (!idLote || lote._id === idLote);
   if (coincideRuta(loteCacheado)) return loteCacheado;
   if (coincideRuta(loteNavegacion)) return loteNavegacion;
   return undefined;
@@ -97,6 +98,8 @@ export function resolverLoteInicialSeguro(
     DataQualityStripComponent,
     CardUbicacionLoteComponent,
     CardSueloAmbienteComponent,
+    CardRegistroFotograficoComponent,
+    CardVisitasLoteComponent,
   ],
   templateUrl: './detalles-lote.component.html',
   styleUrl: './detalles-lote.component.scss',
@@ -194,7 +197,7 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     try {
       const fecha = new Date().toISOString().slice(0, 10);
       const nombreLote = this.slugArchivo(this.lote.nombre || 'lote');
-      await this.loteService.certificado(this.lote._id, `certificado-chaman-${nombreLote}-${fecha}.html`);
+      await this.loteService.certificado(this.lote._id, `informe-agronomico-chaman-${nombreLote}-${fecha}.pdf`);
     } catch (error) {
       this.helper.notifError(error);
     }
@@ -206,7 +209,7 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
 
     this.confirmationService.confirm({
       header: this.translate.instant('Por favor, confirme la accion'),
-      message: this.translate.instant('Desea eliminar el lote y sus reportes asociados?'),
+      message: this.translate.instant('¿Desea archivar el lote? Sus reportes e históricos quedarán preservados para auditoría.'),
       closable: true,
       closeOnEscape: true,
       icon: 'pi pi-exclamation-triangle',

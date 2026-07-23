@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import {
   IQuimica,
   IListado,
@@ -8,12 +8,16 @@ import {
   IPermiso,
   IFilter,
   ICreateLicenciaPorEntidad,
-  IUpdateLicencia,
+  IUsuario,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { QuimicasRepository } from './repository';
 import { LicenciasService } from '../licencia/service';
 import { LicenciaPorEntidadsService } from '../licenciaPorEntidad/service';
+import { DistribuidorsRepository } from '../distribuidor/repository';
+import { ProductorsRepository } from '../productor/repository';
+import { EstablecimientosRepository } from '../establecimiento/repository';
+import { LotesRepository } from '../lote/repository';
 
 @Injectable()
 export class QuimicasService {
@@ -21,6 +25,10 @@ export class QuimicasService {
     private repository: QuimicasRepository,
     private licencias: LicenciasService,
     private licenciasPorEntidad: LicenciaPorEntidadsService,
+    @Optional() private distribuidoresRepository?: DistribuidorsRepository,
+    @Optional() private productoresRepository?: ProductorsRepository,
+    @Optional() private establecimientosRepository?: EstablecimientosRepository,
+    @Optional() private lotesRepository?: LotesRepository,
   ) {}
 
   async getById(id: string, permiso: IPermiso): Promise<IQuimica> {
@@ -40,27 +48,32 @@ export class QuimicasService {
   }
 
   async create(data: ICreateQuimica): Promise<IQuimica> {
-    // Solo crea admin
-    if (!data.licencia) {
-      data.licencia = this.getLicenciaGratis();
-      data.expiracion = data.expiracion || 30;
-    }
-    
-    let licencia;
-    if ((data.licencia as any)?._id) {
-      licencia = data.licencia
-    } else {
-      licencia = await this.licencias.create(data.licencia);
-    }
+    const idLicencia = (data.licencia as any)?._id as string | undefined;
+    const licencia = idLicencia
+      ? await this.licencias.getById(idLicencia)
+      : await this.licenciasPorEntidad.getLicenciaDefaultPlan();
+    if (!licencia._id)
+      throw new BadRequestException(
+        'Configure un plan por defecto persistido antes de crear la compania',
+      );
 
     const quimica = await this.repository.create(data);
     const fechaExpiracion = new Date();
-    fechaExpiracion.setDate(new Date().getDate() + data.expiracion || 30);
+    fechaExpiracion.setDate(
+      fechaExpiracion.getDate() + (data.expiracion || 30),
+    );
     // Creo la licencia por entidad
     const createLicenciaPorEntidad: ICreateLicenciaPorEntidad = {
       idEntidad: quimica._id,
       idLicencia: licencia._id,
       fechaExpiracion: fechaExpiracion.toISOString(),
+      fechaInicio: new Date().toISOString(),
+      tipoEntidad: 'Quimica',
+      estado: 'activa',
+      origen: 'sistema',
+      motivoCambio: idLicencia
+        ? 'Plan seleccionado en el alta'
+        : 'Plan por defecto del sistema',
     };
     await this.licenciasPorEntidad.create(createLicenciaPorEntidad);
     return quimica;
@@ -99,43 +112,88 @@ export class QuimicasService {
       // En update no es obligatorio enviar la licencia, ya que podés updatear la entidad sin cambiar la licencia.
       return await this.repository.update(id, data);
     } else {
-      // Si envía la licencia, actualiza la licencia y la licencia por entidad
-      // Traigo la licencia que tiene actualmente la química
-      let licencia =
-        await this.licenciasPorEntidad.getLicenciaValidaByIdEntidad(id);
-      if (licencia.default) {
-        // No se puede actualizar la licencia por defecto
-        // Creo una nueva licencia con lo que mandó el admin
-        licencia = await this.licencias.create(data.licencia);
-      } else {
-        // Si no es la licencia por defecto, actualizo la licencia existente
-        // Actualizo solo lo que viene en data.licencia
-        const updateLicencia: IUpdateLicencia = {
-          ...licencia,
-          ...data.licencia,
-        };
-        // Actualizo la licencia
-        await this.licencias.update(licencia._id, updateLicencia);
+      const idLicencia = (data.licencia as any)?._id as string | undefined;
+      if (!idLicencia) {
+        throw new BadRequestException(
+          'Seleccione un plan existente; los planes se crean desde Gestion de licencias',
+        );
       }
-
-      if (data.expiracion) {
-        // Si envía expiración, actualizo la fecha de expiración de la licencia por entidad
-        const fechaExpiracion = new Date();
-        fechaExpiracion.setDate(new Date().getDate() + data.expiracion || 30);
-        const createLicenciaPorEntidad: ICreateLicenciaPorEntidad = {
-          idEntidad: id,
-          idLicencia: licencia._id,
-          fechaExpiracion: fechaExpiracion.toISOString(),
-        };
-        await this.licenciasPorEntidad.update(id, createLicenciaPorEntidad);
-      }
+      const fechaExpiracion = new Date();
+      fechaExpiracion.setDate(
+        fechaExpiracion.getDate() + (data.expiracion || 30),
+      );
+      await this.licenciasPorEntidad.asignar(id, {
+        idLicencia,
+        tipoEntidad: 'Quimica',
+        fechaInicio: new Date().toISOString(),
+        fechaExpiracion: fechaExpiracion.toISOString(),
+        motivoCambio: 'Cambio desde la administracion de la compania',
+      });
+      delete data.licencia;
+      delete data.expiracion;
       return await this.repository.update(id, data);
     }
   }
 
-  async delete(id: string, permiso: IPermiso): Promise<IQuimica> {
+  async delete(
+    id: string,
+    permiso: IPermiso,
+    actor?: IUsuario,
+  ): Promise<IQuimica> {
     await this.getById(id, permiso);
-    return await this.repository.delete(id);
+    const audit = {
+      archivadoPor: actor?.username || actor?._id || 'sistema',
+      motivoArchivado: 'Compania archivada desde Chaman',
+    };
+    const filtro = JSON.stringify({ idQuimica: id });
+    const [distribuidores, productores, establecimientos, lotes] =
+      await Promise.all([
+        this.distribuidoresRepository?.get({
+          page: 0,
+          limit: 0,
+          filter: filtro,
+          select: '_id',
+        }),
+        this.productoresRepository?.get({
+          page: 0,
+          limit: 0,
+          filter: filtro,
+          select: '_id',
+        }),
+        this.establecimientosRepository?.get({
+          page: 0,
+          limit: 0,
+          filter: filtro,
+          select: '_id',
+        }),
+        this.lotesRepository?.get({
+          page: 0,
+          limit: 0,
+          filter: filtro,
+          select: '_id',
+        }),
+      ]);
+    await Promise.all(
+      (lotes?.datos || []).map((item) =>
+        this.lotesRepository!.delete(String(item._id), audit),
+      ),
+    );
+    await Promise.all(
+      (establecimientos?.datos || []).map((item) =>
+        this.establecimientosRepository!.delete(String(item._id), audit),
+      ),
+    );
+    await Promise.all(
+      (productores?.datos || []).map((item) =>
+        this.productoresRepository!.delete(String(item._id), audit),
+      ),
+    );
+    await Promise.all(
+      (distribuidores?.datos || []).map((item) =>
+        this.distribuidoresRepository!.delete(String(item._id), audit),
+      ),
+    );
+    return await this.repository.delete(id, audit);
   }
 
   // Private

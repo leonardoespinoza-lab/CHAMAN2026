@@ -4,7 +4,7 @@ import { ICreateClient } from 'modelos/src';
 import { Usuario } from '../usuario/modelos/schema';
 import { Client } from './client.model';
 import { OauthService } from './oauth.service';
-import { CreateToken } from './token.inputs';
+import { CreateToken, RevokeToken } from './token.inputs';
 import { Token } from './token.model';
 
 @ApiTags('Oauth')
@@ -40,6 +40,15 @@ export class OauthController {
     return await this.oauthService.getUsuario(username);
   }
 
+  @Get('/session-eligibility/:idUsuario')
+  @ApiOperation({
+    summary:
+      'Valida contra datos vivos si el usuario y sus tenants pueden usar una sesion',
+  })
+  async getSessionEligibility(@Param('idUsuario') idUsuario: string) {
+    return await this.oauthService.getSessionEligibility(idUsuario);
+  }
+
   // Token
 
   @Get('/token/:accessToken')
@@ -73,8 +82,8 @@ export class OauthController {
   @Put('token')
   @ApiOperation({ summary: 'Ruta para revocar un token' })
   @ApiResponse({ status: 200, type: Boolean })
-  @ApiBody({ type: CreateToken })
-  async revokeToken(@Body() body: CreateToken) {
+  @ApiBody({ type: RevokeToken })
+  async revokeToken(@Body() body: RevokeToken) {
     return await this.oauthService.revokeToken(body);
   }
 

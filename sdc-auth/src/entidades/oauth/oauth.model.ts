@@ -22,9 +22,9 @@ export class OauthModel {
     refreshTokenLifetime?: number;
   } | null = null;
   private readonly sessionIdleMs =
-    Number(process.env.SESSION_IDLE_SECONDS || 24 * 60 * 60) * 1000;
+    Number(process.env.SESSION_IDLE_SECONDS || 30 * 60) * 1000;
   private readonly sessionAbsoluteMs =
-    Number(process.env.SESSION_ABSOLUTE_SECONDS || 30 * 24 * 60 * 60) * 1000;
+    Number(process.env.SESSION_ABSOLUTE_SECONDS || 8 * 60 * 60) * 1000;
 
   constructor(
     private usuariosService: UsuariosService,
@@ -79,8 +79,8 @@ export class OauthModel {
     if (usuario && password) {
       const claveCoincide = await bcrypt.compare(password, usuario.hash);
       if (claveCoincide) {
-        delete usuario.hash;
-        return usuario;
+        const liveUser = await this.getLiveEligibleUser(usuario);
+        if (liveUser) return liveUser;
       }
     }
     this.logger.verbose(`Usuario ${username} con clave invalida`);
@@ -91,10 +91,12 @@ export class OauthModel {
   private async getAccessToken(accessToken: string): Promise<Token | Falsey> {
     const token = await this.tokenService.getToken(accessToken);
     if (token) {
+      const liveUser = await this.getLiveEligibleUser(token.user, token);
+      if (!liveUser) return false;
       const returnToken: Token = {
         accessToken: token.accessToken,
         client: token.client as any,
-        user: token.user as any,
+        user: liveUser,
         accessTokenExpiresAt: new Date(token.accessTokenExpiresAt),
         refreshToken: token.refreshToken,
         refreshTokenExpiresAt: new Date(token.refreshTokenExpiresAt),
@@ -162,10 +164,12 @@ export class OauthModel {
         await this.tokenService.revokeToken(token);
         return false;
       }
+      const liveUser = await this.getLiveEligibleUser(token.user, token);
+      if (!liveUser) return false;
       const returnToken: RefreshToken = {
         accessToken: token.accessToken,
         client: token.client as any,
-        user: token.user as any,
+        user: liveUser,
         accessTokenExpiresAt: new Date(token.accessTokenExpiresAt),
         refreshToken: token.refreshToken,
         refreshTokenExpiresAt: new Date(token.refreshTokenExpiresAt),
@@ -182,6 +186,35 @@ export class OauthModel {
       return true;
     }
     this.logger.verbose('Token not deleted');
+  }
+
+  private async getLiveEligibleUser(
+    snapshot: User | any,
+    token?: ICreateToken | any,
+  ): Promise<User | Falsey> {
+    const userId = String(snapshot?._id || '').trim();
+    if (!userId) {
+      if (token) await this.revokeInvalidSession(token);
+      return false;
+    }
+
+    const eligibility =
+      await this.usuariosService.getSessionEligibility(userId);
+    if (!eligibility?.eligible || !eligibility.user) {
+      if (token) await this.revokeInvalidSession(token);
+      return false;
+    }
+    return eligibility.user as any;
+  }
+
+  private async revokeInvalidSession(token: ICreateToken | any): Promise<void> {
+    try {
+      await this.tokenService.revokeToken(token);
+    } catch {
+      // Authentication still fails closed. A later tenant/user archival retry
+      // performs the idempotent bulk cleanup if this individual delete failed.
+      this.logger.warn('No se pudo completar la revocacion de una sesion invalida');
+    }
   }
 
   private validDate(value?: string): Date | undefined {

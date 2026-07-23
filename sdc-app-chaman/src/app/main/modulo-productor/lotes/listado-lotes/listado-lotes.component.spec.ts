@@ -81,6 +81,29 @@ describe('ListadoLotesComponent', () => {
     expect(indicador.tone).toBe('warn');
   });
 
+  it('mantiene al asesor en modo supervision sin acciones de lote', () => {
+    const componente = crearComponente();
+    (componente as any).helper = {
+      permiso: { nivel: 'Asesor', rol: 'Admin' },
+    };
+
+    expect(componente.puedeGestionarLotes()).toBeFalse();
+  });
+
+  it('permite gestionar lotes al administrador y al propietario operativo', () => {
+    const componente = crearComponente();
+    (componente as any).helper = {
+      permiso: { nivel: 'Admin', rol: 'Admin' },
+    };
+    expect(componente.puedeGestionarLotes()).toBeTrue();
+
+    (componente as any).helper.permiso = {
+      nivel: 'Productor',
+      rol: 'Escritura',
+    };
+    expect(componente.puedeGestionarLotes()).toBeTrue();
+  });
+
   it('no convierte una formula experimental en riesgo sanitario del listado', () => {
     const componente = crearComponente();
     const indicador = (componente as any).indicadorEnfermedades({

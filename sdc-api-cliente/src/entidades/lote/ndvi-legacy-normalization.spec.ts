@@ -1,11 +1,7 @@
 import { LotesService } from './service';
 
 describe('LotesService normalizacion satelital legacy', () => {
-  const legacy = (
-    id: string,
-    date: string,
-    collection = 'sentinel-2-l2a',
-  ) => ({
+  const legacy = (id: string, date: string, collection = 'sentinel-2-l2a') => ({
     _id: id,
     idLote: 'lote-1',
     fechaDeLaImagen: date,

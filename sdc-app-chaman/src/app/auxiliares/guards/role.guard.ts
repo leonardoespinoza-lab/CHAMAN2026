@@ -1,52 +1,27 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
-import { IPermiso, NivelPermiso } from 'modelos/src';
+import { NivelPermiso, Rol } from 'modelos/src';
 import { HelperService } from '../servicios/helper';
-
-const samePermiso = (a?: IPermiso | null, b?: IPermiso | null): boolean =>
-  !!a &&
-  !!b &&
-  a.nivel === b.nivel &&
-  a.rol === b.rol &&
-  a.idQuimica === b.idQuimica &&
-  a.idDistribuidor === b.idDistribuidor &&
-  a.idProductor === b.idProductor &&
-  a.idEstablecimiento === b.idEstablecimiento;
-
-const redirectForNivel = (nivel?: NivelPermiso): string => {
-  if (nivel === 'Admin') return '/dashboard-admin';
-  if (nivel === 'Quimica') return '/dashboard-quimica';
-  if (nivel === 'Distribuidor') return '/dashboard-distribuidor';
-  if (nivel === 'Productor' || nivel === 'Establecimiento') return '/mapa';
-  return '/auth';
-};
-
-const getActivePermiso = (helper: HelperService): { permiso: IPermiso | null; index: number } => {
-  const permisos = helper.user?.permisos || [];
-  if (!permisos.length) return { permiso: null, index: -1 };
-
-  const permisoGuardado = helper.permiso;
-  const indiceGuardado = permisos.findIndex((permiso) => samePermiso(permiso, permisoGuardado));
-  if (indiceGuardado >= 0) return { permiso: permisos[indiceGuardado], index: indiceGuardado };
-
-  const numeroPermiso = helper.numeroPermiso;
-  if (numeroPermiso !== null && permisos[numeroPermiso]) {
-    return { permiso: permisos[numeroPermiso], index: numeroPermiso };
-  }
-
-  return { permiso: permisos[0], index: 0 };
-};
+import {
+  resolverPermisoActivo,
+  rutaInicioPermiso,
+} from '../seguridad/access-policy';
 
 export const roleGuard: CanActivateFn = (route) => {
   const helper = inject(HelperService);
   const router = inject(Router);
   const nivelesPermitidos = route.data?.['niveles'] as NivelPermiso[] | undefined;
+  const rolesPermitidos = route.data?.['roles'] as Rol[] | undefined;
 
   if (!nivelesPermitidos?.length) {
     return true;
   }
 
-  const { permiso, index } = getActivePermiso(helper);
+  const { permiso, index } = resolverPermisoActivo(
+    helper.user?.permisos || [],
+    helper.permiso,
+    helper.numeroPermiso
+  );
   if (!permiso) {
     return router.createUrlTree(['/auth']);
   }
@@ -54,9 +29,12 @@ export const roleGuard: CanActivateFn = (route) => {
   helper.setPermiso(permiso);
   helper.setNumeroPermiso(index);
 
-  if (nivelesPermitidos.includes(permiso.nivel)) {
+  if (
+    nivelesPermitidos.includes(permiso.nivel) &&
+    (!rolesPermitidos?.length || rolesPermitidos.includes(permiso.rol))
+  ) {
     return true;
   }
 
-  return router.createUrlTree([redirectForNivel(permiso.nivel)]);
+  return router.createUrlTree([rutaInicioPermiso(permiso)]);
 };

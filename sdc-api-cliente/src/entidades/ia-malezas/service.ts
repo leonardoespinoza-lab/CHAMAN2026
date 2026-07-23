@@ -163,7 +163,9 @@ export class IaMalezasService {
       fecha: body.fecha || this.fechaDesdeFoto(foto.fechaCreacion),
       tipoAnalisis: body.tipoAnalisis || 'deteccion_malezas',
       estado: 'pendiente',
-      originalFilename: foto.nombreOriginal || `${foto.serialCamara || 'camara'}-${foto._id}.jpg`,
+      originalFilename:
+        foto.nombreOriginal ||
+        `${foto.serialCamara || 'camara'}-${foto._id}.jpg`,
       mimeType: this.mimeDesdeUrl(foto.url),
       sizeBytes: imageBuffer.byteLength,
       sourceType: 'chaman_camera',
@@ -173,7 +175,10 @@ export class IaMalezasService {
       experimental: true,
     });
 
-    const originalPath = join(this.storageDir, `${created._id}-original${this.extensionDesdeUrl(foto.url)}`);
+    const originalPath = join(
+      this.storageDir,
+      `${created._id}-original${this.extensionDesdeUrl(foto.url)}`,
+    );
     await fs.writeFile(originalPath, imageBuffer);
     return await this.repository.update(created._id, {
       originalImagePath: originalPath,
@@ -191,7 +196,9 @@ export class IaMalezasService {
     await this.repository.update(id, { estado: 'procesando', error: '' });
 
     try {
-      const imageBuffer = await fs.readFile(this.resolveInsideStorage(record.originalImagePath));
+      const imageBuffer = await fs.readFile(
+        this.resolveInsideStorage(record.originalImagePath),
+      );
       const response = await this.callWeedAi(record, imageBuffer);
       const enriched = this.enrichResponse(record, response);
       const processedPath = await this.saveProcessedImage(id, enriched);
@@ -376,7 +383,9 @@ export class IaMalezasService {
         severity: knowledge.severity,
       };
     });
-    const classesDetected = Array.from(new Set(detections.map((item) => item.class)));
+    const classesDetected = Array.from(
+      new Set(detections.map((item) => item.class)),
+    );
     const species = classesDetected
       .filter((value) => !['cultivo', 'suelo'].includes(value))
       .map((value) => CLASS_KNOWLEDGE[value]?.label || value);
@@ -443,7 +452,9 @@ export class IaMalezasService {
   private async fetchImageBuffer(url: string): Promise<Buffer> {
     const response = await fetch(url);
     if (!response.ok) {
-      throw new BadRequestException(`No se pudo leer la imagen de camara (${response.status})`);
+      throw new BadRequestException(
+        `No se pudo leer la imagen de camara (${response.status})`,
+      );
     }
     return Buffer.from(await response.arrayBuffer());
   }

@@ -9,7 +9,7 @@ import {
   Put,
 } from '@nestjs/common';
 import { QuimicasService } from './service';
-import { ICreateQuimica, IQueryParam, IUpdateQuimica } from 'modelos/src';
+import { ICreateQuimica, IQueryParam, ISolicitudArchivado, IUpdateQuimica } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Quimicas')
@@ -38,7 +38,7 @@ export class QuimicasController {
   }
 
   @Delete(':id')
-  async delete(@Param('id') id: string) {
-    return await this.service.delete(id);
+  async delete(@Param('id') id: string, @Query() audit: ISolicitudArchivado) {
+    return await this.service.delete(id, audit);
   }
 }

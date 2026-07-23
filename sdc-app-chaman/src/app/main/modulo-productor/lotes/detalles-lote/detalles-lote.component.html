@@ -89,8 +89,8 @@
             />
           }
           <p-button
-            label="Borrar"
-            icon="pi pi-trash"
+            label="Archivar"
+            icon="pi pi-archive"
             severity="danger"
             [outlined]="true"
             (onClick)="eliminarLote($event)"
@@ -487,6 +487,27 @@
               (actualizar)="refrescarDetalle()"
             ></app-card-clima-lote>
           }
+        </section>
+      }
+      @if (helper.puedeVerModulo('RegistroFotografico') || helper.puedeVerModulo('Visitas')) {
+        <section class="service-group field-records-section">
+          <div class="service-group-header">
+            <div>
+              <span>Registro de campo</span>
+              <strong>Fotos y visitas</strong>
+            </div>
+          </div>
+          <div
+            class="field-records-row service-panel"
+            [class.single]="!helper.puedeVerModulo('RegistroFotografico') || !helper.puedeVerModulo('Visitas')"
+          >
+            @if (helper.puedeVerModulo('RegistroFotografico')) {
+              <app-card-registro-fotografico [lote]="lote"></app-card-registro-fotografico>
+            }
+            @if (helper.puedeVerModulo('Visitas')) {
+              <app-card-visitas-lote [lote]="lote"></app-card-visitas-lote>
+            }
+          </div>
         </section>
       }
       @if (

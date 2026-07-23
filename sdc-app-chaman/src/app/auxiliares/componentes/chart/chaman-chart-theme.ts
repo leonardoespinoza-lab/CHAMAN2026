@@ -10,29 +10,68 @@ export const CHAMAN_CHART_COLORS = [
   '#8b9bb0',
 ];
 
+export interface ChamanChartThemeTokens {
+  colors: string[];
+  primary: string;
+  secondary: string;
+  tertiary: string;
+  text: string;
+  mutedText: string;
+  grid: string;
+  gridSoft: string;
+  axis: string;
+  crosshair: string;
+  tooltipBackground: string;
+  tooltipBorder: string;
+}
+
 const CHAMAN_FONT =
   '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
-const axisBase = (kind: 'x' | 'y') => ({
+export function resolveChamanChartThemeTokens(): ChamanChartThemeTokens {
+  const primary = cssVariable('--chaman-chart-primary', cssVariable('--tenant-primary', CHAMAN_CHART_COLORS[0]));
+  const secondary = cssVariable(
+    '--chaman-chart-secondary',
+    cssVariable('--tenant-secondary', CHAMAN_CHART_COLORS[1]),
+  );
+  const tertiary = cssVariable('--chaman-chart-tertiary', CHAMAN_CHART_COLORS[2]);
+
+  return {
+    colors: [primary, secondary, tertiary, ...CHAMAN_CHART_COLORS.slice(3)],
+    primary,
+    secondary,
+    tertiary,
+    text: cssVariable('--chaman-chart-text', '#071827'),
+    mutedText: cssVariable('--chaman-chart-muted', '#64748b'),
+    grid: cssVariable('--chaman-chart-grid', 'rgba(100, 116, 139, 0.14)'),
+    gridSoft: cssVariable('--chaman-chart-grid-soft', 'rgba(100, 116, 139, 0.08)'),
+    axis: cssVariable('--chaman-chart-axis', 'rgba(100, 116, 139, 0.22)'),
+    crosshair: cssVariable('--chaman-chart-crosshair', 'rgba(34, 207, 199, 0.2)'),
+    tooltipBackground: cssVariable('--chaman-chart-tooltip-bg', 'rgba(255, 255, 255, 0.97)'),
+    tooltipBorder: cssVariable('--chaman-chart-tooltip-border', 'rgba(34, 207, 199, 0.32)'),
+  };
+}
+
+const axisBase = (kind: 'x' | 'y', tokens: ChamanChartThemeTokens) => ({
   crosshair: {
-    color: 'rgba(34, 207, 199, 0.2)',
+    color: tokens.crosshair,
     dashStyle: 'Solid' as const,
     width: 1,
   },
-  gridLineColor: kind === 'y' ? 'rgba(100, 116, 139, 0.14)' : 'rgba(100, 116, 139, 0.08)',
+  gridLineColor: kind === 'y' ? tokens.grid : tokens.gridSoft,
   gridLineWidth: kind === 'y' ? 1 : 0,
-  lineColor: 'rgba(100, 116, 139, 0.22)',
-  tickColor: 'rgba(100, 116, 139, 0.18)',
+  lineColor: tokens.axis,
+  tickColor: tokens.axis,
   labels: {
     style: {
-      color: '#64748b',
+      color: tokens.mutedText,
       fontSize: '12px',
       fontWeight: '600',
     },
   },
   title: {
     style: {
-      color: '#243149',
+      color: tokens.text,
       fontSize: '13px',
       fontWeight: '700',
     },
@@ -65,11 +104,11 @@ const lineBase = {
   },
 };
 
-const columnBase = {
+const columnBase = (tokens: ChamanChartThemeTokens) => ({
   animation: { duration: 520 },
   borderRadius: 4,
   borderWidth: 0,
-  color: 'rgba(34, 207, 199, 0.82)',
+  color: tokens.primary,
   groupPadding: 0.08,
   maxPointWidth: 24,
   pointPadding: 0.08,
@@ -81,9 +120,10 @@ const columnBase = {
       opacity: 0.6,
     },
   },
-};
+});
 
 export function applyChamanHighchartsDefaults(highcharts: typeof Highcharts = Highcharts): void {
+  const tokens = resolveChamanChartThemeTokens();
   highcharts.setOptions({
     lang: {
       months: [
@@ -104,7 +144,7 @@ export function applyChamanHighchartsDefaults(highcharts: typeof Highcharts = Hi
       shortMonths: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'],
       shortWeekdays: ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'],
     },
-    colors: CHAMAN_CHART_COLORS,
+    colors: tokens.colors,
     chart: {
       backgroundColor: 'transparent',
       borderRadius: 10,
@@ -119,27 +159,27 @@ export function applyChamanHighchartsDefaults(highcharts: typeof Highcharts = Hi
     credits: { enabled: false },
     title: {
       style: {
-        color: '#071827',
+        color: tokens.text,
         fontSize: '16px',
         fontWeight: '700',
       },
     },
     subtitle: {
       style: {
-        color: '#64748b',
+        color: tokens.mutedText,
         fontSize: '13px',
       },
     },
-    xAxis: axisBase('x') as any,
-    yAxis: axisBase('y') as any,
+    xAxis: axisBase('x', tokens) as any,
+    yAxis: axisBase('y', tokens) as any,
     legend: {
       align: 'center',
       itemDistance: 18,
       itemHoverStyle: {
-        color: '#0f1f33',
+        color: tokens.text,
       },
       itemStyle: {
-        color: '#35445a',
+        color: tokens.mutedText,
         fontSize: '13px',
         fontWeight: '650',
       },
@@ -148,8 +188,8 @@ export function applyChamanHighchartsDefaults(highcharts: typeof Highcharts = Hi
       symbolWidth: 20,
     },
     tooltip: {
-      backgroundColor: 'rgba(255, 255, 255, 0.97)',
-      borderColor: 'rgba(34, 207, 199, 0.32)',
+      backgroundColor: tokens.tooltipBackground,
+      borderColor: tokens.tooltipBorder,
       borderRadius: 10,
       borderWidth: 1,
       shadow: {
@@ -160,7 +200,7 @@ export function applyChamanHighchartsDefaults(highcharts: typeof Highcharts = Hi
         width: 14,
       },
       style: {
-        color: '#071827',
+        color: tokens.text,
         fontSize: '13px',
       },
     },
@@ -169,8 +209,8 @@ export function applyChamanHighchartsDefaults(highcharts: typeof Highcharts = Hi
       areaspline: lineBase,
       line: lineBase,
       spline: lineBase,
-      bar: columnBase,
-      column: columnBase,
+      bar: columnBase(tokens),
+      column: columnBase(tokens),
       series: {
         animation: { duration: 520 },
         connectNulls: false,
@@ -182,6 +222,7 @@ export function applyChamanHighchartsDefaults(highcharts: typeof Highcharts = Hi
 }
 
 export function withChamanChartTheme(options: Highcharts.Options): Highcharts.Options {
+  const tokens = resolveChamanChartThemeTokens();
   const chart = options.chart || {};
   const plotOptions = options.plotOptions || {};
   const legend = options.legend || {};
@@ -189,7 +230,7 @@ export function withChamanChartTheme(options: Highcharts.Options): Highcharts.Op
 
   return {
     ...options,
-    colors: options.colors || CHAMAN_CHART_COLORS,
+    colors: options.colors || tokens.colors,
     chart: {
       ...chart,
       backgroundColor: 'transparent',
@@ -210,7 +251,7 @@ export function withChamanChartTheme(options: Highcharts.Options): Highcharts.Op
     title: {
       ...options.title,
       style: {
-        color: '#071827',
+        color: tokens.text,
         fontSize: '16px',
         fontWeight: '700',
         ...(options.title?.style || {}),
@@ -219,23 +260,23 @@ export function withChamanChartTheme(options: Highcharts.Options): Highcharts.Op
     subtitle: {
       ...options.subtitle,
       style: {
-        color: '#64748b',
+        color: tokens.mutedText,
         fontSize: '13px',
         ...(options.subtitle?.style || {}),
       } as any,
     },
-    xAxis: themeAxis(options.xAxis, 'x'),
-    yAxis: themeAxis(options.yAxis, 'y'),
+    xAxis: themeAxis(options.xAxis, 'x', tokens),
+    yAxis: themeAxis(options.yAxis, 'y', tokens),
     legend: {
       ...legend,
       align: legend.align || 'center',
       itemDistance: legend.itemDistance || 18,
       itemHoverStyle: {
-        color: '#0f1f33',
+        color: tokens.text,
         ...(legend.itemHoverStyle || {}),
       },
       itemStyle: {
-        color: '#35445a',
+        color: tokens.mutedText,
         fontSize: '13px',
         fontWeight: '650',
         ...(legend.itemStyle || {}),
@@ -246,8 +287,8 @@ export function withChamanChartTheme(options: Highcharts.Options): Highcharts.Op
     },
     tooltip: {
       ...tooltip,
-      backgroundColor: 'rgba(255, 255, 255, 0.97)',
-      borderColor: 'rgba(34, 207, 199, 0.32)',
+      backgroundColor: tokens.tooltipBackground,
+      borderColor: tokens.tooltipBorder,
       borderRadius: 10,
       borderWidth: 1,
       shadow: {
@@ -258,7 +299,7 @@ export function withChamanChartTheme(options: Highcharts.Options): Highcharts.Op
         width: 14,
       },
       style: {
-        color: '#071827',
+        color: tokens.text,
         fontSize: '13px',
         ...(tooltip.style || {}),
       },
@@ -282,11 +323,11 @@ export function withChamanChartTheme(options: Highcharts.Options): Highcharts.Op
         ...(plotOptions.spline || {}),
       },
       bar: {
-        ...columnBase,
+        ...columnBase(tokens),
         ...(plotOptions.bar || {}),
       },
       column: {
-        ...columnBase,
+        ...columnBase(tokens),
         ...(plotOptions.column || {}),
       },
       series: {
@@ -300,16 +341,16 @@ export function withChamanChartTheme(options: Highcharts.Options): Highcharts.Op
   };
 }
 
-function themeAxis(axis: any, kind: 'x' | 'y'): any {
+function themeAxis(axis: any, kind: 'x' | 'y', tokens: ChamanChartThemeTokens): any {
   if (Array.isArray(axis)) {
-    return axis.map((item) => themeAxisItem(item || {}, kind));
+    return axis.map((item) => themeAxisItem(item || {}, kind, tokens));
   }
 
-  return themeAxisItem(axis || {}, kind);
+  return themeAxisItem(axis || {}, kind, tokens);
 }
 
-function themeAxisItem(axis: any, kind: 'x' | 'y'): any {
-  const base = axisBase(kind);
+function themeAxisItem(axis: any, kind: 'x' | 'y', tokens: ChamanChartThemeTokens): any {
+  const base = axisBase(kind, tokens);
   return {
     ...base,
     ...axis,
@@ -332,4 +373,13 @@ function themeAxisItem(axis: any, kind: 'x' | 'y'): any {
       },
     },
   };
+}
+
+function cssVariable(property: string, fallback: string): string {
+  if (typeof document === 'undefined' || typeof window === 'undefined') {
+    return fallback;
+  }
+
+  const value = window.getComputedStyle(document.documentElement).getPropertyValue(property).trim();
+  return value || fallback;
 }

@@ -1,18 +1,25 @@
 import {
   Controller,
   Delete,
+  Body,
   Get,
   Param,
+  Post,
+  Put,
   Query,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { FotosService } from './service';
-import { IListado, IQueryParam, IPermiso, IFoto } from 'modelos/src';
+import { IListado, IQueryParam, IPermiso, IFoto, IUpdateFoto, IUsuario } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 import { GetPermiso } from '../../auxiliares/authorization/get-permiso.decorator';
 import { PERMISOS_AUTENTICADOS } from '../../auxiliares/authorization/permisos-authenticados';
+import { GetUser } from '../../auxiliares/authorization/get-token.decorator';
 
 @ApiTags('Fotos')
 @Controller('fotos')
@@ -22,8 +29,11 @@ export class FotosController {
 
   @Get('imagen')
   @Permisos(...PERMISOS_AUTENTICADOS)
-  async getImage(@Query('url') url: string): Promise<any> {
-    return await this.service.getImagen(url);
+  async getImage(
+    @Query('id') id: string,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<any> {
+    return await this.service.getImagen(id, permiso);
   }
 
   @Get()
@@ -37,10 +47,12 @@ export class FotosController {
 
   @Get('lote/:id')
   @Permisos(
+    { nivel: 'Tenant', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Admin', roles: ['Admin'] },
   )
   public async getByLoteId(
@@ -51,7 +63,7 @@ export class FotosController {
   }
 
   @Get('/:id')
-  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  @Permisos(...PERMISOS_AUTENTICADOS)
   public async getById(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,
@@ -59,8 +71,58 @@ export class FotosController {
     return await this.service.getById(id, permiso);
   }
 
+  @Post('campo/upload')
+  @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Tenant', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
+  )
+  @UseInterceptors(
+    FilesInterceptor('images', 8, {
+      limits: { fileSize: 12 * 1024 * 1024, files: 8 },
+    }),
+  )
+  public async uploadCampo(
+    @UploadedFiles() files: any[],
+    @Body() body: Record<string, any>,
+    @GetPermiso() permiso: IPermiso,
+    @GetUser() user: IUsuario,
+  ): Promise<IFoto[]> {
+    return await this.service.uploadCampo(files, body, permiso, user);
+  }
+
+  @Put('/:id')
+  @Permisos(
+    { nivel: 'Tenant', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Admin', roles: ['Admin'] },
+  )
+  public async update(
+    @Param('id') id: string,
+    @Body() body: IUpdateFoto,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<IFoto> {
+    return await this.service.update(id, body, permiso);
+  }
+
   @Delete('/:id')
-  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  @Permisos(
+    { nivel: 'Tenant', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Admin', roles: ['Admin'] },
+  )
   public async delete(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,

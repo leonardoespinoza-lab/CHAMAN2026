@@ -68,6 +68,7 @@ export class ClimaController {
     { nivel: 'Admin', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
@@ -167,6 +168,7 @@ export class ClimaController {
     { nivel: 'Admin', roles: ['Admin'] }, // Solo admin para debug/soporte
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   @ApiOperation({
     summary: 'Obtener tiles climáticos (solo Productores)',
@@ -259,6 +261,7 @@ export class ClimaController {
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   @ApiOperation({
     summary: 'Obtener tile climático individual (solo Productores)',
@@ -340,6 +343,7 @@ export class ClimaController {
     { nivel: 'Admin', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   @ApiOperation({
     summary: 'Obtener tiles climáticos para viewport específico',

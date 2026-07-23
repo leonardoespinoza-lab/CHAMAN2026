@@ -90,7 +90,9 @@ export class MqttService implements OnModuleDestroy {
       const detail = error instanceof Error ? error.message : String(error);
       this.logger.error(`No se pudo publicar evento realtime: ${detail}`);
       if (ENV === 'production') {
-        this.logger.warn('La operacion HTTP continuo; realtime reintentara en el proximo evento.');
+        this.logger.warn(
+          'La operacion HTTP continuo; realtime reintentara en el proximo evento.',
+        );
       }
     }
   }

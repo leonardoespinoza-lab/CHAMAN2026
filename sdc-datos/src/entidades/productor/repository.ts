@@ -5,6 +5,7 @@ import {
   IUpdateProductor,
   IQueryParam,
   ICreateProductor,
+  ISolicitudArchivado,
 } from 'modelos/src';
 import { Model } from 'mongoose';
 import { dbQuery } from 'src/auxiliares/helper.service';
@@ -35,7 +36,16 @@ export class ProductorsRepository {
     });
   }
 
-  async delete(id: string): Promise<Productor> {
-    return await this.model.findByIdAndDelete(id);
+  async delete(id: string, audit: ISolicitudArchivado = {}): Promise<Productor> {
+    return await this.model.findByIdAndUpdate(
+      id,
+      {
+        archivado: true,
+        fechaArchivado: new Date(),
+        archivadoPor: audit.archivadoPor || 'sistema',
+        motivoArchivado: audit.motivoArchivado || 'Archivado desde Chaman',
+      },
+      { new: true },
+    ).lean();
   }
 }

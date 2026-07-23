@@ -1,0 +1,76 @@
+<section class="tenant-dashboard" [class.loading]="loading">
+  @if (loading) {
+    <div class="state"><i class="pi pi-spin pi-spinner"></i> Preparando espacio...</div>
+  } @else if (tenant) {
+    <header class="hero">
+      <div class="brand">
+        @if (tenant.branding?.logo) {
+          <img [src]="tenant.branding?.logo" alt="" />
+        } @else {
+          <span>{{ (tenant.nombre || 'T').charAt(0) }}</span>
+        }
+        <div>
+          <small>ESPACIO EMPRESARIAL</small>
+          <h1>{{ tenant.branding?.nombreAplicacion || tenant.nombre }}</h1>
+          <p>{{ tenant.razonSocial || tenant.entidadRaiz?.nombre || 'Administracion central de la organizacion' }}</p>
+        </div>
+      </div>
+      <span class="status" [class.active]="tenant.estado === 'activo'">{{ tenant.estado }}</span>
+    </header>
+
+    <div class="pilot-notice">
+      <i class="pi pi-shield"></i>
+      <div>
+        <strong>Piloto multiempresa aislado</strong>
+        <span>Este panel administra identidad, marca y funciones. No toma ni reasigna datos productivos de otros espacios.</span>
+      </div>
+    </div>
+
+    <div class="summary">
+      <article><small>ENTIDAD RAIZ</small><strong>{{ tenant.entidadRaiz?.tipo || 'Sin vincular' }}</strong><span>{{ tenant.entidadRaiz?.nombre || 'Pendiente' }}</span></article>
+      <article><small>USUARIOS</small><strong>{{ tenant.limites?.usuarios || 'Sin limite' }}</strong><span>Limite comercial</span></article>
+      <article><small>LOTES</small><strong>{{ tenant.limites?.lotes || 'Sin limite' }}</strong><span>Capacidad habilitada</span></article>
+      <article><small>HECTAREAS</small><strong>{{ tenant.limites?.hectareas || 'Sin limite' }}</strong><span>Capacidad habilitada</span></article>
+    </div>
+
+    <div class="content-grid">
+      <article class="panel">
+        <div class="panel-title"><div><small>CONTROL DE ACCESO</small><h2>Administracion</h2></div><i class="pi pi-users"></i></div>
+        <p>Los asesores y productores creados aqui quedan vinculados exclusivamente a este tenant.</p>
+        @if (puedeAdministrarTenant()) {
+          <div class="tenant-actions">
+            @if (tenant.capacidades?.administrarAsesores) {
+              <p-button label="Crear asesor" icon="pi pi-user-plus" (onClick)="go('/usuarios/crear/asesor')" />
+            }
+            @if (tenant.capacidades?.administrarProductores) {
+              <p-button label="Crear productor" icon="pi pi-plus" severity="secondary" (onClick)="go('/productores/crear')" />
+            }
+            <p-button label="Gestionar usuarios" icon="pi pi-arrow-right" severity="secondary" outlined="true" (onClick)="go('/usuarios')" />
+          </div>
+        } @else {
+          <div class="tenant-readonly-notice">
+            <i class="pi pi-eye"></i>
+            <span>Vista de consulta: la administración de usuarios requiere rol Admin.</span>
+          </div>
+        }
+      </article>
+
+      <article class="panel">
+        <div class="panel-title"><div><small>FUNCIONES</small><h2>Modulos habilitados</h2></div><i class="pi pi-th-large"></i></div>
+        <div class="chips">
+          @for (module of activeModules(); track module) { <span>{{ module }}</span> }
+          @empty { <span class="disabled">Sin modulos</span> }
+        </div>
+      </article>
+
+      <article class="panel wide">
+        <div class="panel-title"><div><small>GOBIERNO</small><h2>Jerarquia permitida</h2></div><i class="pi pi-sitemap"></i></div>
+        <div class="capacities">
+          @for (item of capacities(); track item.label) {
+            <span [class.enabled]="item.enabled"><i [class]="item.enabled ? 'pi pi-check-circle' : 'pi pi-lock'"></i>{{ item.label }}</span>
+          }
+        </div>
+      </article>
+    </div>
+  }
+</section>

@@ -41,8 +41,10 @@
             icon="pi pi-filter-slash"
             (onClick)="table.clear(); search.value = ''"
           />
-          @if (!helper.soloLectura()) {
+          @if (puedeGestionarLotes()) {
             <p-button [label]="'Nuevo lote' | translate" icon="pi pi-plus" severity="primary" (onClick)="create()" />
+          } @else {
+            <span class="state-pill pending">Vista de supervisión · gestiona el productor</span>
           }
         </div>
       </div>
@@ -120,7 +122,7 @@
               pTooltip="Abrir tablero del lote"
               (onClick)="detalles(row)"
             ></p-button>
-            @if (!this.helper.soloLectura()) {
+            @if (puedeGestionarLotes()) {
               <p-button
                 icon="pi pi-pencil"
                 severity="warn"
@@ -129,12 +131,12 @@
                 (onClick)="edit(row)"
               ></p-button>
             }
-            @if (!this.helper.soloLectura()) {
+            @if (puedeGestionarLotes()) {
               <p-button
-                icon="pi pi-trash"
+                icon="pi pi-archive"
                 severity="danger"
                 [rounded]="true"
-                pTooltip="Eliminar lote"
+                pTooltip="Archivar lote"
                 (onClick)="delete(row)"
               ></p-button>
             }
@@ -146,6 +148,7 @@
     <ng-template #expandedrow let-row>
       <tr>
         <td colspan="2">
+          @if (puedeGestionarLotes()) {
           <div class="expanded-actions">
             <p-button [rounded]="true" pTooltip="Fertilizar" severity="primary" icon="pi" (onClick)="fertilizar(row)">
               <svg [style.fill]="'var(--p-button-primary-color)'" [attr.width]="'24px'" [attr.height]="'24px'">
@@ -168,6 +171,7 @@
               </svg>
             </p-button>
           </div>
+          }
         </td>
       </tr>
     </ng-template>
@@ -185,7 +189,7 @@
     <ng-template #summary>
       <div class="table-summary">
         <span>{{ dataSource.length }} visibles</span>
-        @if (!helper.soloLectura()) {
+        @if (puedeGestionarLotes()) {
           <p-button
             [label]="'Crear nuevo lote' | translate"
             icon="pi pi-plus"

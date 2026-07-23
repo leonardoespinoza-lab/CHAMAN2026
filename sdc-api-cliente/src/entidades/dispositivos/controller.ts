@@ -35,6 +35,7 @@ export class DispositivosController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Productor', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura', 'Lectura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Admin', roles: ['Admin'] },
   )
   public async get(
@@ -50,6 +51,7 @@ export class DispositivosController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Productor', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura', 'Lectura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Admin', roles: ['Admin'] },
   )
   public async getById(

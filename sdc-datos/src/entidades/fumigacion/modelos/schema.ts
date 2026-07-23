@@ -37,6 +37,9 @@ export class Fumigacion implements Exactly<IFumigacion, Fumigacion> {
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idEstablecimiento?: string;
 
+  @Prop({ type: String, index: true })
+  idLote?: string;
+
   // // Datos Autogenerados
   @Prop({ type: Date, default: Date.now })
   fechaCreacion?: string;

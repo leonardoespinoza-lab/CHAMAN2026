@@ -24,6 +24,15 @@ const {
   writeRows,
 } = require("../migrations/20260716-cold-metadata-normalization");
 
+function cleanupBackupDir(backupDir) {
+  fs.rmSync(backupDir, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 50,
+  });
+}
+
 test("el modo por defecto es plan y no admite flags destructivos fuera de contexto", () => {
   assert.deepEqual(parseArgs([]), {
     mode: "plan",
@@ -32,8 +41,14 @@ test("el modo por defecto es plan y no admite flags destructivos fuera de contex
     forceConflicts: false,
   });
   assert.equal(parseArgs(["apply", "--backup-dir=./safe"]).mode, "apply");
-  assert.throws(() => parseArgs(["plan", "--force-conflicts"]), /solo se admite/);
-  assert.throws(() => parseArgs(["apply", "--backup=x.json"]), /solo se admite/);
+  assert.throws(
+    () => parseArgs(["plan", "--force-conflicts"]),
+    /solo se admite/,
+  );
+  assert.throws(
+    () => parseArgs(["apply", "--backup=x.json"]),
+    /solo se admite/,
+  );
 });
 
 test("apply y rollback exigen una confirmacion ligada a la migracion", () => {
@@ -127,7 +142,10 @@ test("retira las conversiones mecanicas HF x 0,82 y HF / 15 sin perder el crudo"
   assert.equal(result.replacementValue.modelo, "HF + Dynamic Model");
   assert.equal(result.replacementValue.modeloRector, "sin_calibrar");
   assert.equal(result.replacementValue.estado, "requiere_calibracion");
-  assert.deepEqual(result.replacementValue.legacy.frio.raw, result.originalValue);
+  assert.deepEqual(
+    result.replacementValue.legacy.frio.raw,
+    result.originalValue,
+  );
   assert.ok(
     result.reasons.includes("mechanical_hfe_equals_round_hf_times_0_82"),
   );
@@ -382,7 +400,7 @@ test("compare-and-set no pisa una edicion concurrente y apply nunca queda marcad
     );
     assert.equal(db.state.backups.length, 1);
   } finally {
-    fs.rmSync(backupDir, { recursive: true, force: true });
+    cleanupBackupDir(backupDir);
   }
 });
 
@@ -432,7 +450,7 @@ test("apply reanuda de forma segura despues de una falla a mitad de las filas", 
       ),
     );
   } finally {
-    fs.rmSync(backupDir, { recursive: true, force: true });
+    cleanupBackupDir(backupDir);
   }
 });
 
@@ -485,7 +503,7 @@ test("rollback revierte de forma segura un apply parcialmente restaurado", async
       ),
     );
   } finally {
-    fs.rmSync(backupDir, { recursive: true, force: true });
+    cleanupBackupDir(backupDir);
   }
 });
 
@@ -529,7 +547,7 @@ test("apply puede reparar hacia adelante un rollback que quedo parcial", async (
       ),
     );
   } finally {
-    fs.rmSync(backupDir, { recursive: true, force: true });
+    cleanupBackupDir(backupDir);
   }
 });
 

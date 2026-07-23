@@ -6,6 +6,7 @@ import {
   IQueryParam,
   ICreateLote,
   DeleteResult,
+  ISolicitudArchivado,
 } from 'modelos/src';
 import { Model } from 'mongoose';
 import { dbQuery } from 'src/auxiliares/helper.service';
@@ -52,12 +53,32 @@ export class LotesRepository {
     });
   }
 
-  async delete(id: string): Promise<Lote> {
-    return await this.model.findByIdAndDelete(id);
+  async delete(id: string, audit: ISolicitudArchivado = {}): Promise<Lote> {
+    return await this.model.findByIdAndUpdate(
+      id,
+      {
+        archivado: true,
+        fechaArchivado: new Date(),
+        archivadoPor: audit.archivadoPor || 'sistema',
+        motivoArchivado: audit.motivoArchivado || 'Archivado desde Chaman',
+      },
+      { new: true },
+    ).lean();
   }
 
   async deleteMany(query: IQueryParam): Promise<DeleteResult> {
     const filter = JSON.parse(query.filter);
-    return await this.model.deleteMany(filter);
+    const result = await this.model.updateMany(filter, {
+      $set: {
+        archivado: true,
+        fechaArchivado: new Date(),
+        archivadoPor: query.archivadoPor || 'sistema',
+        motivoArchivado: query.motivoArchivado || 'Archivado masivo desde Chaman',
+      },
+    });
+    return {
+      acknowledged: result.acknowledged,
+      deletedCount: result.modifiedCount,
+    };
   }
 }

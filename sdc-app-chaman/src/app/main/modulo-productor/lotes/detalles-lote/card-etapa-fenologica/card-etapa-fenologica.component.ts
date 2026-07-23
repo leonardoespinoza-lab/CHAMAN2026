@@ -1,9 +1,15 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
+import Highcharts from 'highcharts';
+import TimelineModule from 'highcharts/modules/timeline';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
+
+// Esta visualización legacy es la única que usa timeline. Mantener el módulo
+// junto a su consumidor evita cargarlo en cada gráfico de la aplicación.
+TimelineModule(Highcharts);
 
 @Component({
   selector: 'app-card-etapa-fenologica',

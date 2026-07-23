@@ -4,10 +4,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import {
-  CLIMA_SYNC_ENABLED,
-  CLIMA_SYNC_INTERVAL_MS,
-} from '../../env';
+import { CLIMA_SYNC_ENABLED, CLIMA_SYNC_INTERVAL_MS } from '../../env';
 import { EstablecimientosService } from './service';
 
 @Injectable()

@@ -12,9 +12,14 @@ import {
   IUbicacionAdministrativaEstablecimiento,
   IUbicacionAdministrativaLegadaEstablecimiento,
 } from "./ubicacion-lote";
+import { IArchivado } from "../compartidos/archivado";
 
-export interface IEstablecimiento {
+export interface IEstablecimiento extends IArchivado {
   _id?: string;
+  /** Tenant heredado del productor; no puede ser elegido por el cliente. */
+  idTenant?: string;
+  /** Propietario inmutable cuando el establecimiento fue creado por un asesor. */
+  idAsesorPropietario?: string;
   idQuimica?: string;
   idDistribuidor?: string;
   idProductor?: string;
@@ -44,6 +49,8 @@ export interface IEstablecimiento {
 
 type OmitirCreate =
   | "_id"
+  | "idTenant"
+  | "idAsesorPropietario"
   | "fechaCreacion"
   | "ubicacionAdministrativa"
   | "ubicacionAdministrativaLegada"
@@ -53,6 +60,8 @@ export interface ICreateEstablecimiento
 
 type OmitirUpdate =
   | "_id"
+  | "idTenant"
+  | "idAsesorPropietario"
   | "fechaCreacion"
   | "ubicacionAdministrativa"
   | "ubicacionAdministrativaLegada"

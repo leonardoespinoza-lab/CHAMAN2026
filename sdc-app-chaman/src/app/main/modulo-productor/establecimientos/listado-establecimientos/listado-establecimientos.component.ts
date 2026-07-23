@@ -68,7 +68,7 @@ export class ListadoEstablecimientosComponent implements OnInit, OnDestroy {
   public async delete(dato: IEstablecimiento): Promise<void> {
     this.confirmationService.confirm({
       header: this.translate.instant('Por favor, confirme la accion'),
-      message: this.translate.instant('Desea eliminar el establecimiento?'),
+      message: this.translate.instant('¿Desea archivar el establecimiento? Se conservará toda su trazabilidad.'),
       closable: true,
       closeOnEscape: true,
       icon: 'pi pi-exclamation-triangle',
@@ -87,7 +87,7 @@ export class ListadoEstablecimientosComponent implements OnInit, OnDestroy {
 
           this.listado.deleteEntityItem('establecimientos', dato._id!);
 
-          this.helper.notifSuccess(this.translate.instant('Eliminado correctamente'));
+          this.helper.notifSuccess(this.translate.instant('Establecimiento archivado correctamente'));
         } catch (error) {
           this.helper.notifError(error);
         }

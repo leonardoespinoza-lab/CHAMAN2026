@@ -25,6 +25,41 @@ export class LicenciaPorEntidad
   @Prop({ type: Date })
   fechaExpiracion?: string; // Fecha de expiración de la licencia
 
+  @Prop({ type: Date, default: Date.now })
+  fechaInicio?: string;
+
+  @Prop({ type: Date, default: Date.now })
+  fechaActualizacion?: string;
+
+  @Prop({ type: String, enum: ['Quimica', 'Distribuidor', 'Productor', 'Establecimiento', 'Asesor'] })
+  tipoEntidad?: 'Quimica' | 'Distribuidor' | 'Productor' | 'Establecimiento' | 'Asesor';
+
+  @Prop({
+    type: String,
+    enum: ['programada', 'activa', 'gracia', 'suspendida', 'cancelada', 'vencida', 'reemplazada'],
+    default: 'activa',
+  })
+  estado?: 'programada' | 'activa' | 'gracia' | 'suspendida' | 'cancelada' | 'vencida' | 'reemplazada';
+
+  @Prop({ type: String, enum: ['manual', 'heredada', 'facturacion', 'sistema'], default: 'manual' })
+  origen?: 'manual' | 'heredada' | 'facturacion' | 'sistema';
+
+  @Prop({ type: String, trim: true })
+  motivoCambio?: string;
+
+  @Prop({ type: mongoose.Schema.Types.ObjectId })
+  creadoPorUsuario?: string;
+
+  @Prop({ type: mongoose.Schema.Types.ObjectId })
+  idAsignacionAnterior?: string;
+
+  @Prop({ type: Object })
+  referenciaFacturacion?: {
+    proveedor?: string;
+    idClienteExterno?: string;
+    idSuscripcionExterna?: string;
+  };
+
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idLicencia?: string; // ID de la licencia
 
@@ -41,6 +76,9 @@ export type LicenciaPorEntidadDocument = LicenciaPorEntidad & Document;
 
 export const LicenciaPorEntidadSchema =
   SchemaFactory.createForClass(LicenciaPorEntidad);
+
+LicenciaPorEntidadSchema.index({ idEntidad: 1, fechaInicio: -1, fechaCreacion: -1 });
+LicenciaPorEntidadSchema.index({ estado: 1, fechaExpiracion: 1 });
 
 LicenciaPorEntidadSchema.set('toJSON', { virtuals: true, getters: true });
 

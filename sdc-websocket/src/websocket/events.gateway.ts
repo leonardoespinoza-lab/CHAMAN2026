@@ -75,7 +75,7 @@ export class EventsGateway
   }
 
   async handleDisconnect(@ConnectedSocket() socket: ISocket) {
-    if (socket.authTimer) clearTimeout(socket.authTimer);
+    this.service.clearSocketTimers(socket);
     this.logger.verbose(
       `Usuario ${socket.usuario?.username} desconectado, Conexiones totales: ${this.server.clients.size}`,
     );

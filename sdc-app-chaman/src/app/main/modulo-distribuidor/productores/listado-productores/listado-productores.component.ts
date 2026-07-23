@@ -49,11 +49,15 @@ export class ListadoProductoresComponent implements OnInit, OnDestroy {
     this.router.navigate(['productores', 'editar', data._id]);
   }
 
+  public ver(data: IProductor): void {
+    void this.router.navigate(['productores', 'ver', data._id]);
+  }
+
   public async delete(dato: IProductor): Promise<void> {
     this.confirmationService.confirm({
       // target: event.target as EventTarget,
       header: this.translate.instant('Por favor, confirme la acción'),
-      message: this.translate.instant('¿Desea eliminar el productor?'),
+      message: this.translate.instant('¿Desea archivar el productor? La información quedará preservada para auditoría.'),
       closable: true,
       closeOnEscape: true,
       icon: 'pi pi-exclamation-triangle',
@@ -73,7 +77,7 @@ export class ListadoProductoresComponent implements OnInit, OnDestroy {
           // Solo elimina el item en cache
           this.listado.deleteEntityItem('productors', dato._id!);
 
-          this.helper.notifSuccess(this.translate.instant('Eliminado correctamente'));
+          this.helper.notifSuccess(this.translate.instant('Productor archivado correctamente'));
         } catch (error) {
           this.helper.notifError(error);
         }

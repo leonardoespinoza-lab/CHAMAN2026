@@ -3,18 +3,25 @@
   <div class="p-field">
     <p-autocomplete
       [(ngModel)]="direccionInput"
+      [ngModelOptions]="{ standalone: true }"
       [suggestions]="direccionesSugeridas"
       [disabled]="disabled"
       [placeholder]="placeholder"
       [fluid]="true"
       (completeMethod)="onSearch($event)"
       (onSelect)="onDireccionSelectEvent($event)"
-      (onClear)="direccionInput = ''"
+      (onClear)="onClear()"
+      [showClear]="true"
+      appendTo="body"
       forceSelection="false"
       inputId="direccion-input"
       >
     </p-autocomplete>
   </div>
+
+  <small class="location-guidance" [class.location-guidance--warning]="searchMessage">
+    {{ searchMessage || 'Busca una direccion o hace clic en el mapa para fijar la ubicacion exacta.' }}
+  </small>
 
   <!-- Mapa -->
   <div class="map-container" #mapContainer>

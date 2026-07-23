@@ -51,7 +51,10 @@ import { CamarasModule } from './entidades/camara/module';
 import { FieldClimateIntegracionModule } from './entidades/fieldclimate-integracion/module';
 import { NapasModule } from './entidades/napas/module';
 import { IaMalezasModule } from './entidades/ia-malezas/module';
+import { VisitasLoteModule } from './entidades/visita-lote/module';
 import { REDIS_HOST, REDIS_PORT, REDIS_PASSWORD } from './env';
+import { AdvisorScopeModule } from './auxiliares/authorization/advisor-scope.module';
+import { TenantsModule } from './entidades/tenant/module';
 
 @Module({
   imports: [
@@ -67,6 +70,10 @@ import { REDIS_HOST, REDIS_PORT, REDIS_PASSWORD } from './env';
     // Módulos del sistema
     HealthModule,
     MqttModule,
+    // El middleware global se resuelve en el contexto de AppModule. Importar
+    // el alcance del asesor aqui evita que una compilacion valida falle recien
+    // durante el arranque de Nest por una dependencia no disponible.
+    AdvisorScopeModule,
     AuthenticationModule,
     ApiCheckModule,
     CacheWarmingModule,
@@ -108,6 +115,8 @@ import { REDIS_HOST, REDIS_PORT, REDIS_PASSWORD } from './env';
     FieldClimateIntegracionModule,
     NapasModule,
     IaMalezasModule,
+    VisitasLoteModule,
+    TenantsModule,
   ],
   controllers: [],
   providers: [{ provide: APP_INTERCEPTOR, useClass: MqttInterceptor }],

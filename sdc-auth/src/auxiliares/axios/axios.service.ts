@@ -1,5 +1,10 @@
 import { HttpService } from '@nestjs/axios';
-import { HttpException, Injectable, Logger } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { AxiosRequestConfig } from 'axios';
 import { firstValueFrom } from 'rxjs';
 
@@ -17,6 +22,7 @@ export class AxiosService {
       );
       return response?.data;
     } catch (error) {
+      this.rethrowTimeout(error, url);
       // Respuesta de error de la API
       if (error?.response?.data?.message) {
         const msgApi = error?.response?.data?.message;
@@ -49,6 +55,7 @@ export class AxiosService {
       );
       return response?.data;
     } catch (error) {
+      this.rethrowTimeout(error, url);
       // Respuesta de error de la API
       if (error?.response?.data?.message) {
         const msgApi = error?.response?.data?.message;
@@ -81,6 +88,7 @@ export class AxiosService {
       );
       return response?.data;
     } catch (error) {
+      this.rethrowTimeout(error, url);
       // Respuesta de error de la API
       if (error?.response?.data?.message) {
         const msgApi = error?.response?.data?.message;
@@ -112,6 +120,7 @@ export class AxiosService {
       );
       return response?.data;
     } catch (error) {
+      this.rethrowTimeout(error, url);
       // Respuesta de error de la API
       if (error?.response?.data?.message) {
         const msgApi = error?.response?.data?.message;
@@ -131,5 +140,23 @@ export class AxiosService {
         throw new HttpException(error?.message, err?.status || 500);
       }
     }
+  }
+
+  private rethrowTimeout(error: any, url: string): void {
+    if (
+      error?.code !== 'ECONNABORTED' &&
+      error?.code !== 'ETIMEDOUT'
+    ) {
+      return;
+    }
+
+    Logger.error(
+      `Timeout consultando API Datos en ${url}`,
+      'AXIOS',
+    );
+    throw new HttpException(
+      'El servicio de datos no respondio dentro del tiempo esperado',
+      HttpStatus.SERVICE_UNAVAILABLE,
+    );
   }
 }

@@ -19,26 +19,30 @@
                   <p-tab [value]="0">{{ 'Básico' | translate }}</p-tab>
                   <p-tab [value]="1">{{ 'Permisos' | translate }}</p-tab>
                   <p-tab [value]="2">{{ 'Datos Personales' | translate }}</p-tab>
+                  @if (esPerfilAsesor) {
+                    <p-tab [value]="3">Perfil profesional</p-tab>
+                  }
                 </p-tablist>
                 <p-tabpanels>
                   <!-- Basico -->
                   <p-tabpanel [value]="0">
                     <!-- Username -->
                     <p-floatlabel variant="in" class="mb-4">
-                      <input pInputText formControlName="username" [fluid]="true" autocomplete="new-username" />
-                      <label>{{ 'Usuario' | translate }}</label>
+                      <input id="usuario-username" pInputText formControlName="username" [fluid]="true" autocomplete="new-username" />
+                      <label for="usuario-username">{{ 'Usuario' | translate }}</label>
                     </p-floatlabel>
 
                     <!-- Password -->
                     <p-floatlabel variant="in">
                       <p-password
+                        inputId="usuario-password"
                         formControlName="password"
                         [feedback]="true"
                         [toggleMask]="true"
                         [fluid]="true"
                         autocomplete="new-password"
                       />
-                      <label>{{ 'Contraseña' | translate }}</label>
+                      <label for="usuario-password">{{ 'Contraseña' | translate }}</label>
                     </p-floatlabel>
                     <small class="password-policy">{{ passwordPolicyText }}</small>
                     @if (form.get('password')?.errors?.['required'] && form.get('password')?.touched) {
@@ -64,10 +68,11 @@
                           <!-- Rol -->
                           <p-floatlabel variant="in" class="mb-4">
                             <p-select
+                              [ariaLabel]="'Rol del permiso ' + (i + 1)"
                               [loading]="loading"
-                              [options]="roles"
+                              [options]="rolesParaNivel(nivel(i))"
                               formControlName="rol"
-                              [showClear]="true"
+                              [showClear]="nivel(i) !== 'Admin'"
                               [fluid]="true"
                               [appendTo]="'body'"
                             >
@@ -78,6 +83,7 @@
                           <!-- Nivel -->
                           <p-floatlabel variant="in" class="mb-4">
                             <p-select
+                              [ariaLabel]="'Nivel del permiso ' + (i + 1)"
                               [loading]="loading"
                               [options]="niveles"
                               formControlName="nivel"
@@ -92,6 +98,43 @@
                             <label>{{ 'Nivel' | translate }}</label>
                           </p-floatlabel>
 
+                          @if (nivel(i) === 'Asesor') {
+                            <div class="advisor-scope">
+                              <div class="advisor-scope-heading">
+                                <strong>Cartera inicial del asesor</strong>
+                                <span>Puede comenzar sin establecimientos y crear su propia cartera al iniciar sesion.</span>
+                              </div>
+                              <p-floatlabel variant="in" class="mb-4">
+                                <p-select
+                                  [loading]="loading"
+                                  [options]="distribuidores"
+                                  formControlName="idDistribuidor"
+                                  [fluid]="true"
+                                  [appendTo]="'body'"
+                                  optionValue="_id"
+                                  optionLabel="nombre"
+                                  (onChange)="cambioDistribuidorAsesor(i)"
+                                />
+                                <label>Distribuidor de referencia (opcional)</label>
+                              </p-floatlabel>
+                              <p-floatlabel variant="in" class="mb-4">
+                                <p-multiselect
+                                  [loading]="loading"
+                                  [options]="establecimientos"
+                                  formControlName="idEstablecimientos"
+                                  [fluid]="true"
+                                  [appendTo]="'body'"
+                                  optionValue="_id"
+                                  optionLabel="nombre"
+                                  display="chip"
+                                  (onChange)="cambioEstablecimientosAsesor(i)"
+                                />
+                                <label>Establecimientos iniciales (opcional)</label>
+                              </p-floatlabel>
+                              <small>El distribuidor identifica un patrocinador comercial opcional. El asesor crea y administra productores; visualiza los establecimientos, lotes y servicios que esos productores generen.</small>
+                            </div>
+                          }
+
                           <!-- Establecimiento -->
                           @if (nivel(i) === 'Establecimiento' && establecimientos.length > 1) {
                             <p-floatlabel variant="in" class="mb-4">
@@ -104,6 +147,7 @@
                                 [appendTo]="'body'"
                                 optionValue="_id"
                                 optionLabel="nombre"
+                                (onChange)="cambioEstablecimientoUsuario(i)"
                               >
                               </p-select>
                               <label>{{ 'Establecimiento' | translate }}</label>
@@ -130,6 +174,22 @@
                               >
                               </p-select>
                               <label>{{ 'Productores' | translate }}</label>
+                            </p-floatlabel>
+                          }
+                          @if (nivel(i) === 'Establecimiento' && establecimientos.length > 0) {
+                            <p-floatlabel variant="in" class="mb-4">
+                              <p-multiselect
+                                [loading]="loading"
+                                [options]="lotesPorPermiso(i)"
+                                formControlName="idLotes"
+                                [fluid]="true"
+                                [appendTo]="'body'"
+                                optionValue="_id"
+                                optionLabel="nombre"
+                                display="chip"
+                                [showClear]="true"
+                              />
+                              <label>Restringir a lotes (opcional)</label>
                             </p-floatlabel>
                           }
                           @if (nivel(i) === 'Productor' && productores.length === 0) {
@@ -190,7 +250,7 @@
                               <span>Activan u ocultan modulos para este alcance.</span>
                             </div>
                             <div class="modulos-permiso-grid">
-                              @for (modulo of modulosPermiso; track modulo.key) {
+                              @for (modulo of modulosPermisoVisibles; track modulo.key) {
                                 <label class="modulo-chip" [for]="'modulo-' + i + '-' + modulo.key">
                                   <p-checkbox
                                     [formControlName]="modulo.key"
@@ -207,6 +267,7 @@
                           <div class="mb-4" style="display: flex; justify-content: center">
                             <p-button
                               icon="pi pi-trash"
+                              [ariaLabel]="'Eliminar permiso ' + (i + 1)"
                               severity="danger"
                               [rounded]="true"
                               (click)="borrarPermiso(i)"
@@ -233,22 +294,92 @@
                   <p-tabpanel [value]="2" formGroupName="datosPersonales">
                     <!-- nombre -->
                     <p-floatlabel variant="in" class="mb-4">
-                      <input pInputText formControlName="nombre" [fluid]="true" />
-                      <label>{{ 'Nombre' | translate }}</label>
+                      <input id="usuario-nombre" pInputText formControlName="nombre" [fluid]="true" />
+                      <label for="usuario-nombre">{{ 'Nombre' | translate }}</label>
                     </p-floatlabel>
 
                     <!-- Telefono -->
                     <p-floatlabel variant="in" class="mb-4">
-                      <input pInputText formControlName="telefono" [fluid]="true" type="tel" />
-                      <label>{{ 'Teléfono' | translate }}</label>
+                      <input id="usuario-telefono" pInputText formControlName="telefono" [fluid]="true" type="tel" />
+                      <label for="usuario-telefono">{{ 'Teléfono' | translate }}</label>
                     </p-floatlabel>
 
                     <!-- Email -->
                     <p-floatlabel variant="in" class="mb-4">
-                      <input pInputText formControlName="email" [fluid]="true" type="email" />
-                      <label>{{ 'Email' | translate }}</label>
+                      <input id="usuario-email" pInputText formControlName="email" [fluid]="true" type="email" />
+                      <label for="usuario-email">{{ 'Email' | translate }}</label>
                     </p-floatlabel>
                   </p-tabpanel>
+
+                  @if (esPerfilAsesor) {
+                  <p-tabpanel [value]="3">
+                    <div class="professional-grid">
+                      <section class="professional-photo" formGroupName="datosProfesionales">
+                        <div class="professional-photo-preview">
+                          @if (fotoProfesional()) {
+                            <img [src]="fotoProfesional()" alt="Foto profesional" />
+                          } @else {
+                            <i class="pi pi-user"></i>
+                          }
+                        </div>
+                        <input
+                          id="professionalPhoto"
+                          class="photo-file-input"
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          (change)="onFotoSeleccionada($event)"
+                        />
+                        <label class="photo-upload" for="professionalPhoto">
+                          <i class="pi pi-upload"></i> Cargar foto
+                        </label>
+                        <button type="button" class="photo-remove" (click)="quitarFoto()" [disabled]="!fotoProfesional()">
+                          Quitar foto
+                        </button>
+                        <small>Se normaliza a JPG, maximo 640 px y 1 MB. Se mostrara en informes emitidos por este usuario.</small>
+                      </section>
+
+                      <section class="professional-fields">
+                        <div formGroupName="datosProfesionales">
+                          <p-floatlabel variant="in" class="mb-4">
+                            <input pInputText formControlName="profesion" [fluid]="true" />
+                            <label>Profesion (ej. Ingeniero agronomo)</label>
+                          </p-floatlabel>
+                          <p-floatlabel variant="in" class="mb-4">
+                            <input pInputText formControlName="especialidad" [fluid]="true" />
+                            <label>Especialidad</label>
+                          </p-floatlabel>
+                          <div class="professional-two-columns">
+                            <p-floatlabel variant="in" class="mb-4">
+                              <input pInputText formControlName="matricula" [fluid]="true" />
+                              <label>Numero de matricula</label>
+                            </p-floatlabel>
+                            <p-floatlabel variant="in" class="mb-4">
+                              <input pInputText formControlName="consejoProfesional" [fluid]="true" />
+                              <label>Colegio o consejo profesional</label>
+                            </p-floatlabel>
+                          </div>
+                        </div>
+                        <div formGroupName="ubicacionProfesional" class="professional-location">
+                          <app-autocomplete-direccion
+                            placeholder="Buscar domicilio profesional..."
+                            [disabled]="loading"
+                            [useDeviceLocation]="true"
+                            [initialValue]="direccionProfesional"
+                            (direccionChange)="onDireccionProfesionalChange($event)"
+                            (direccionClear)="onDireccionProfesionalClear()"
+                          />
+                          <p-floatlabel variant="in" class="mt-4">
+                            <input pInputText type="number" formControlName="radioInfluenciaKm" [fluid]="true" />
+                            <label>Radio de influencia (km)</label>
+                          </p-floatlabel>
+                          <small class="location-help">
+                            La ubicación mejora el mapa de cobertura, pero no bloquea el alta. Podés completarla o corregirla después.
+                          </small>
+                        </div>
+                      </section>
+                    </div>
+                  </p-tabpanel>
+                  }
                 </p-tabpanels>
               </p-tabs>
             </form>
@@ -273,7 +404,7 @@
             styleClass="w-full"
             [loading]="loading"
             (onClick)="guardar()"
-            [disabled]="!form?.valid"
+            [disabled]="loading"
           />
         </div>
       </div>

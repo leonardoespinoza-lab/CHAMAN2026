@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ICreateProductor, IQueryParam, IUpdateProductor } from 'modelos/src';
+import { ICreateProductor, IQueryParam, ISolicitudArchivado, IUpdateProductor } from 'modelos/src';
 import { ProductorsRepository } from './repository';
 
 @Injectable()
@@ -30,8 +30,8 @@ export class ProductorsService {
     throw new NotFoundException('No encontrado');
   }
 
-  async delete(id: string) {
-    const deleted = await this.repository.delete(id);
+  async delete(id: string, audit: ISolicitudArchivado = {}) {
+    const deleted = await this.repository.delete(id, audit);
     if (deleted) {
       return deleted;
     }

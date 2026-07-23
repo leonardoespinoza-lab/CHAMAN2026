@@ -49,6 +49,8 @@ function configureCors(app: INestApplication, logger: Logger, env?: string) {
       'appversion',
       'ngrok-skip-browser-warning',
       'X-Permiso',
+      'X-Chaman-Session',
+      'X-CSRF-Token',
     ],
     origin: (origin: string | undefined, callback: CorsCallback) => {
       if (origins === true || !origin || origins.includes(origin)) {
@@ -72,11 +74,17 @@ function configureSecurityHeaders(app: INestApplication, env?: string) {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
+    res.setHeader(
+      'Permissions-Policy',
+      'camera=(), microphone=(), geolocation=(self)',
+    );
     res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
 
     if (isProduction(env)) {
-      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+      res.setHeader(
+        'Strict-Transport-Security',
+        'max-age=31536000; includeSubDomains',
+      );
     }
 
     next();
@@ -100,7 +108,11 @@ function configureBasicRateLimit(app: INestApplication, env?: string) {
     }
 
     const forwarded = String(req.headers?.['x-forwarded-for'] || '');
-    const ip = forwarded.split(',')[0].trim() || req.ip || req.socket?.remoteAddress || 'unknown';
+    const ip =
+      forwarded.split(',')[0].trim() ||
+      req.ip ||
+      req.socket?.remoteAddress ||
+      'unknown';
     const now = Date.now();
     const bucket = buckets.get(ip);
 
@@ -113,7 +125,10 @@ function configureBasicRateLimit(app: INestApplication, env?: string) {
     bucket.count += 1;
     if (bucket.count > maxRequests) {
       res.statusCode = 429;
-      res.setHeader('Retry-After', Math.ceil((bucket.resetAt - now) / 1000).toString());
+      res.setHeader(
+        'Retry-After',
+        Math.ceil((bucket.resetAt - now) / 1000).toString(),
+      );
       res.end('Too many requests');
       return;
     }
