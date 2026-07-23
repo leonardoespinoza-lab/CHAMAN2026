@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { IToken } from 'modelos/src';
 import { AxiosService } from '../axios/axios.service';
 import { API_AUTH, AUTH_CLIENT_ID, AUTH_CLIENT_SECRET } from '../../env';
+import { LOGIN_ORIGIN_HEADER } from './login-origin';
 
 @Injectable()
 export class AuthenticationRepository {
@@ -22,9 +23,15 @@ export class AuthenticationRepository {
     username: string,
     password: string,
     remember?: boolean,
+    loginOrigin?: string,
   ): Promise<IToken> {
     const url = `${API_AUTH}/oauth/login`;
-    const headers = this.getFormHeaders();
+    const headers = {
+      ...this.getFormHeaders(),
+      ...(loginOrigin
+        ? { [LOGIN_ORIGIN_HEADER]: loginOrigin.slice(0, 128) }
+        : {}),
+    };
     const body = new URLSearchParams({
       username,
       password,
@@ -60,9 +67,11 @@ export class AuthenticationRepository {
   }
 
   async logout(accessToken?: string, refreshToken?: string): Promise<void> {
-    await this.axios.POST(`${API_AUTH}/oauth/logout`, { accessToken, refreshToken });
+    await this.axios.POST(`${API_AUTH}/oauth/logout`, {
+      accessToken,
+      refreshToken,
+    });
   }
-
 
   async googleLogin(body: {
     credential: string;

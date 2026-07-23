@@ -1,10 +1,86 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router, Routes } from '@angular/router';
+import { NivelPermiso, Rol } from 'modelos/src';
 import { loginGuard } from './auxiliares/guards/login.guard';
 import { roleGuard } from './auxiliares/guards/role.guard';
+import {
+  NIVELES_PERMISO,
+  resolverPermisoActivo,
+  ROLES_ADMINISTRACION,
+  ROLES_ESCRITURA,
+  ROLES_LECTURA,
+  rutaInicioPermiso,
+} from './auxiliares/seguridad/access-policy';
+import { HelperService } from './auxiliares/servicios/helper';
 
-const adminOnly = { canActivate: [roleGuard], data: { niveles: ['Admin'] } };
-const quimicaScope = { canActivate: [roleGuard], data: { niveles: ['Admin', 'Quimica'] } };
-const distribuidorScope = { canActivate: [roleGuard], data: { niveles: ['Admin', 'Quimica', 'Distribuidor'] } };
+const scope = (
+  niveles: readonly NivelPermiso[],
+  roles: readonly Rol[]
+) => ({
+  canActivate: [roleGuard],
+  data: { niveles: [...niveles], roles: [...roles] },
+});
+
+const adminOnly = scope(['Admin'], ROLES_ADMINISTRACION);
+const lecturaOperativaScope = scope(NIVELES_PERMISO, ROLES_LECTURA);
+const escrituraEstablecimientoScope = scope(
+  ['Admin', 'Productor'],
+  ROLES_ESCRITURA
+);
+const escrituraLoteScope = scope(
+  ['Productor', 'Establecimiento'],
+  ROLES_ESCRITURA
+);
+const tenantScope = scope(['Tenant'], ROLES_LECTURA);
+const tenantAdminScope = scope(
+  ['Admin', 'Tenant'],
+  ROLES_ADMINISTRACION
+);
+const tenantAsesorAdminScope = scope(
+  ['Tenant'],
+  ROLES_ADMINISTRACION
+);
+const quimicaLecturaScope = scope(
+  ['Admin', 'Quimica'],
+  ROLES_LECTURA
+);
+const quimicaAdminScope = scope(
+  ['Admin', 'Quimica'],
+  ROLES_ADMINISTRACION
+);
+const distribuidorLecturaScope = scope(
+  ['Admin', 'Quimica', 'Distribuidor'],
+  ROLES_LECTURA
+);
+const redComercialLecturaScope = scope(
+  ['Admin', 'Tenant', 'Quimica', 'Distribuidor', 'Asesor'],
+  ROLES_LECTURA
+);
+const redComercialAdminScope = scope(
+  ['Admin', 'Tenant', 'Quimica', 'Distribuidor', 'Asesor'],
+  ROLES_ADMINISTRACION
+);
+const gestorUsuariosScope = scope(
+  NIVELES_PERMISO,
+  ROLES_ADMINISTRACION
+);
+
+const redirectInicio = () => {
+  const helper = inject(HelperService);
+  const router = inject(Router);
+  const { permiso, index } = resolverPermisoActivo(
+    helper.user?.permisos || [],
+    helper.permiso,
+    helper.numeroPermiso
+  );
+
+  if (permiso && index >= 0) {
+    helper.setPermiso(permiso);
+    helper.setNumeroPermiso(index);
+  }
+
+  return router.parseUrl(rutaInicioPermiso(permiso));
+};
 
 const loadLogin = () => import('./login/login/login.component').then((m) => m.LoginComponent);
 const loadNav = () => import('./main/nav/nav.component').then((m) => m.NavComponent);
@@ -67,6 +143,30 @@ const loadCrearEditarDistribuidores = () =>
   );
 const loadDashboardAdmin = () =>
   import('./main/modulo-admin/dashboard-admin/dashboard-admin.component').then((m) => m.DashboardAdminComponent);
+const loadDashboardTenant = () =>
+  import('./main/modulo-tenant/dashboard-tenant/dashboard-tenant.component').then(
+    (m) => m.DashboardTenantComponent
+  );
+const loadListadoTenants = () =>
+  import('./main/modulo-admin/tenants/listado-tenants/listado-tenants.component').then(
+    (m) => m.ListadoTenantsComponent
+  );
+const loadCrearEditarTenant = () =>
+  import('./main/modulo-admin/tenants/crear-editar-tenant/crear-editar-tenant.component').then(
+    (m) => m.CrearEditarTenantComponent
+  );
+const loadListadoAsesores = () =>
+  import('./main/modulo-admin/asesores/listado-asesores/listado-asesores.component').then(
+    (m) => m.ListadoAsesoresComponent
+  );
+const loadDetalleRedComercial = () =>
+  import('./main/red-comercial/detalle-red-comercial/detalle-red-comercial.component').then(
+    (m) => m.DetalleRedComercialComponent
+  );
+const loadDetalleAsesor = () =>
+  import('./main/modulo-admin/asesores/detalle-asesor/detalle-asesor.component').then(
+    (m) => m.DetalleAsesorComponent
+  );
 const loadListadoTimeLapse = () =>
   import('./main/modulo-admin/time-lapse/listado-time-lapse/listado-time-lapse.component').then(
     (m) => m.ListadoTimeLapseComponent
@@ -156,43 +256,82 @@ export const routes: Routes = [
     children: [
       // *** Prductor *** //
       // Mapa
-      { path: '', redirectTo: 'mapa', pathMatch: 'full' },
-      { path: 'mapa', loadComponent: loadMapa },
+      { path: '', redirectTo: redirectInicio, pathMatch: 'full' },
+      {
+        path: 'mapa',
+        loadComponent: loadMapa,
+        ...lecturaOperativaScope,
+      },
       // Lotes
-      { path: 'lotes', loadComponent: loadListadoLotes },
-      { path: 'lotes/detalles/:id', loadComponent: loadDetallesLote },
-      { path: 'lotes/editar/:id', loadComponent: loadCrearEditarLote },
-      { path: 'lotes/crear', loadComponent: loadCrearEditarLote },
-      { path: 'lotes/fertilizar/:id', loadComponent: loadCrearEditarFertilizacion },
-      { path: 'lotes/fumigar/:id', loadComponent: loadCrearEditarFumigacion },
-      { path: 'lotes/cosechar/:id', loadComponent: loadCrearEditarCosecha },
-      { path: 'lotes/sembrar/:id', loadComponent: loadCrearEditarSiembra },
+      {
+        path: 'lotes',
+        loadComponent: loadListadoLotes,
+        ...lecturaOperativaScope,
+      },
+      {
+        path: 'lotes/detalles/:id',
+        loadComponent: loadDetallesLote,
+        ...lecturaOperativaScope,
+      },
+      { path: 'lotes/editar/:id', loadComponent: loadCrearEditarLote, ...escrituraLoteScope },
+      { path: 'lotes/crear', loadComponent: loadCrearEditarLote, ...escrituraLoteScope },
+      { path: 'lotes/fertilizar/:id', loadComponent: loadCrearEditarFertilizacion, ...escrituraLoteScope },
+      { path: 'lotes/fumigar/:id', loadComponent: loadCrearEditarFumigacion, ...escrituraLoteScope },
+      { path: 'lotes/cosechar/:id', loadComponent: loadCrearEditarCosecha, ...escrituraLoteScope },
+      { path: 'lotes/sembrar/:id', loadComponent: loadCrearEditarSiembra, ...escrituraLoteScope },
       // Alertas
-      { path: 'alertas', loadComponent: loadListadoAlertas },
+      {
+        path: 'alertas',
+        loadComponent: loadListadoAlertas,
+        ...lecturaOperativaScope,
+      },
       // Establecimietos
-      { path: 'establecimientos', loadComponent: loadListadoEstablecimientos },
-      { path: 'establecimientos/editar/:id', loadComponent: loadCrearEditarEstablecimientos },
-      { path: 'establecimientos/crear', loadComponent: loadCrearEditarEstablecimientos },
+      {
+        path: 'establecimientos',
+        loadComponent: loadListadoEstablecimientos,
+        ...lecturaOperativaScope,
+      },
+      { path: 'establecimientos/editar/:id', loadComponent: loadCrearEditarEstablecimientos, ...escrituraEstablecimientoScope },
+      { path: 'establecimientos/crear', loadComponent: loadCrearEditarEstablecimientos, ...escrituraEstablecimientoScope },
       // *** Prductor *** //
 
       // *** Distribuidor *** //
       // Productores
-      { path: 'dashboard-distribuidor', loadComponent: loadDashboardDistribuidor, ...distribuidorScope },
-      { path: 'productores', loadComponent: loadListadoProductores, ...distribuidorScope },
-      { path: 'productores/editar/:id', loadComponent: loadCrearEditarProductores, ...distribuidorScope },
-      { path: 'productores/crear', loadComponent: loadCrearEditarProductores, ...distribuidorScope },
+      { path: 'dashboard-distribuidor', loadComponent: loadDashboardDistribuidor, ...redComercialLecturaScope },
+      { path: 'productores', loadComponent: loadListadoProductores, ...redComercialLecturaScope },
+      { path: 'productores/ver/:id', loadComponent: loadDetalleRedComercial, ...redComercialLecturaScope, data: { ...redComercialLecturaScope.data, tipo: 'productor' } },
+      { path: 'productores/editar/:id', loadComponent: loadCrearEditarProductores, ...redComercialAdminScope },
+      { path: 'productores/crear', loadComponent: loadCrearEditarProductores, ...redComercialAdminScope },
       // *** Distribuidor *** //
 
       // *** Química *** //
       // Distribuidores
-      { path: 'dashboard-quimica', loadComponent: loadDashboardQuimica, ...quimicaScope },
-      { path: 'distribuidores', loadComponent: loadListadoDistribuidores, ...quimicaScope },
-      { path: 'distribuidores/editar/:id', loadComponent: loadCrearEditarDistribuidores, ...quimicaScope },
-      { path: 'distribuidores/crear', loadComponent: loadCrearEditarDistribuidores, ...quimicaScope },
+      { path: 'dashboard-quimica', loadComponent: loadDashboardQuimica, ...quimicaLecturaScope },
+      { path: 'distribuidores', loadComponent: loadListadoDistribuidores, ...quimicaLecturaScope },
+      { path: 'distribuidores/ver/:id', loadComponent: loadDetalleRedComercial, ...distribuidorLecturaScope, data: { ...distribuidorLecturaScope.data, tipo: 'distribuidor' } },
+      { path: 'distribuidores/editar/:id', loadComponent: loadCrearEditarDistribuidores, ...quimicaAdminScope },
+      { path: 'distribuidores/crear', loadComponent: loadCrearEditarDistribuidores, ...quimicaAdminScope },
       // *** Química *** //
 
       // *** Admin *** //
       { path: 'dashboard-admin', loadComponent: loadDashboardAdmin, ...adminOnly },
+      { path: 'tenants', loadComponent: loadListadoTenants, ...adminOnly },
+      { path: 'tenants/crear', loadComponent: loadCrearEditarTenant, ...adminOnly },
+      { path: 'tenants/editar/:id', loadComponent: loadCrearEditarTenant, ...tenantAdminScope },
+      { path: 'asesores', loadComponent: loadListadoAsesores, ...adminOnly },
+      { path: 'asesores/ver/:id', loadComponent: loadDetalleAsesor, ...adminOnly },
+      {
+        path: 'asesores/editar/:id',
+        loadComponent: loadCrearEditarUsuarios,
+        canActivate: [roleGuard],
+        data: { niveles: ['Admin'], roles: ['Admin'], nivelInicial: 'Asesor', retorno: '/asesores' },
+      },
+      {
+        path: 'asesores/crear',
+        loadComponent: loadCrearEditarUsuarios,
+        canActivate: [roleGuard],
+        data: { niveles: ['Admin'], roles: ['Admin'], nivelInicial: 'Asesor', retorno: '/asesores' },
+      },
       // Camaras / Time-lapse
       { path: 'camaras', loadComponent: loadListadoTimeLapse, ...adminOnly },
       { path: 'camaras/fotos/:id', loadComponent: loadListadoImagenesLote, ...adminOnly },
@@ -229,15 +368,37 @@ export const routes: Routes = [
 
       // *** Admin *** //
 
+      // *** Tenant *** //
+      { path: 'dashboard-tenant', loadComponent: loadDashboardTenant, ...tenantScope },
+      // *** Tenant *** //
+
       // *** Compartidos *** //
       // Usuarios
-      { path: 'usuarios', loadComponent: loadListadoUsuarios },
-      { path: 'usuarios/editar/:id', loadComponent: loadCrearEditarUsuarios },
-      { path: 'usuarios/crear', loadComponent: loadCrearEditarUsuarios },
+      { path: 'usuarios', loadComponent: loadListadoUsuarios, ...gestorUsuariosScope },
+      { path: 'usuarios/editar/:id', loadComponent: loadCrearEditarUsuarios, ...gestorUsuariosScope },
+      {
+        path: 'usuarios/crear/asesor',
+        loadComponent: loadCrearEditarUsuarios,
+        ...tenantAsesorAdminScope,
+        data: {
+          ...tenantAsesorAdminScope.data,
+          nivelInicial: 'Asesor',
+          retorno: '/dashboard-tenant',
+        },
+      },
+      { path: 'usuarios/crear', loadComponent: loadCrearEditarUsuarios, ...gestorUsuariosScope },
       // Aplicación
-      { path: 'aplicacion', loadComponent: loadAplicacion },
+      {
+        path: 'aplicacion',
+        loadComponent: loadAplicacion,
+        ...lecturaOperativaScope,
+      },
       // KMZ
-      { path: 'kmz', loadComponent: loadKmz },
+      {
+        path: 'kmz',
+        loadComponent: loadKmz,
+        ...lecturaOperativaScope,
+      },
       // *** Compartidos *** //
     ],
   },

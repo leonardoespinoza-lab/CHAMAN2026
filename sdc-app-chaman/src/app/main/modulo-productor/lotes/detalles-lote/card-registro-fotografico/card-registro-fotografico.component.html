@@ -1,0 +1,226 @@
+<section class="custom-card chaman-surface field-photo-card">
+  <header class="field-card-header">
+    <div>
+      <span>Registro fotografico</span>
+      <strong>Evidencia de campo</strong>
+      <small>{{ fotos.length ? fotos.length + ' foto' + (fotos.length === 1 ? '' : 's') + ' documentada' + (fotos.length === 1 ? '' : 's') : 'Sin fotos de recorrida' }}</small>
+    </div>
+    @if (!helper.soloLectura()) {
+      <p-button label="Tomar foto" icon="pi pi-camera" [rounded]="true" (onClick)="abrirRegistro()" />
+    }
+  </header>
+
+  @if (cargando) {
+    <div class="field-card-loading"><i class="pi pi-spin pi-spinner"></i> Cargando registro...</div>
+  } @else if (fotos.length) {
+    <div class="photo-strip">
+      @for (foto of fotos.slice(0, 4); track foto._id) {
+        <button
+          type="button"
+          class="photo-tile chaman-interactive-surface"
+          aria-haspopup="dialog"
+          (click)="verFoto(foto)"
+        >
+          @if (imagenDe(foto); as imagenUrl) {
+            <img [src]="imagenUrl" [alt]="foto.titulo || 'Foto de campo del lote'" loading="lazy" />
+          } @else {
+            <span class="photo-image-placeholder" aria-label="Cargando imagen">
+              <i class="pi pi-spin pi-spinner"></i>
+            </span>
+          }
+          <span class="photo-tile-date">{{ etiquetaFecha(foto.fechaCaptura || foto.fechaCreacion) }}</span>
+        </button>
+      }
+    </div>
+    <button
+      type="button"
+      class="field-card-link chaman-interactive-surface"
+      aria-haspopup="dialog"
+      (click)="verFoto(fotos[0])"
+    >
+      Ver galeria y trazabilidad <i class="pi pi-arrow-right"></i>
+    </button>
+  } @else {
+    <div class="field-empty-state">
+      <i class="pi pi-images"></i>
+      <div>
+        <strong>Documente el estado real del cultivo</strong>
+        <small>Las fotos quedan fechadas y listas para el futuro motor de analisis por IA.</small>
+      </div>
+    </div>
+  }
+</section>
+
+<p-dialog
+  [(visible)]="dialogoRegistro"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="true"
+  [style]="{ width: 'min(760px, 96vw)' }"
+  header="Nuevo registro fotografico"
+  styleClass="field-record-dialog"
+>
+  <div class="photo-capture-panel">
+    <div class="capture-actions">
+      <label
+        class="capture-button capture-primary chaman-interactive-surface"
+        role="button"
+        tabindex="0"
+        aria-label="Abrir camara para registrar fotos del lote"
+        (keydown.enter)="cameraInput.click()"
+        (keydown.space)="$event.preventDefault(); cameraInput.click()"
+      >
+        <i class="pi pi-camera"></i>
+        <span>Abrir camara</span>
+        <input
+          #cameraInput
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          capture="environment"
+          multiple
+          (change)="seleccionarArchivos($event)"
+        />
+      </label>
+      <label
+        class="capture-button chaman-interactive-surface"
+        role="button"
+        tabindex="0"
+        aria-label="Elegir fotos de la galeria"
+        (keydown.enter)="galleryInput.click()"
+        (keydown.space)="$event.preventDefault(); galleryInput.click()"
+      >
+        <i class="pi pi-images"></i>
+        <span>Elegir de galeria</span>
+        <input
+          #galleryInput
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          (change)="seleccionarArchivos($event)"
+        />
+      </label>
+    </div>
+
+    @if (archivos.length) {
+      <div class="capture-previews">
+        @for (archivo of archivos; track archivo.preview; let index = $index) {
+          <article>
+            <img [src]="archivo.preview" alt="Vista previa" />
+            <button
+              type="button"
+              class="chaman-interactive-surface"
+              (click)="quitarArchivo(index)"
+              aria-label="Quitar foto"
+            >
+              <i class="pi pi-times"></i>
+            </button>
+          </article>
+        }
+      </div>
+    }
+
+    <div class="field-form-grid">
+      <label>
+        <span>Fecha</span>
+        <input pInputText type="date" [(ngModel)]="fechaCaptura" />
+      </label>
+      <label>
+        <span>Vincular a visita (opcional)</span>
+        <select [(ngModel)]="idVisita">
+          <option value="">Registro independiente</option>
+          @for (visita of visitas; track visita._id) {
+            <option [value]="visita._id">{{ etiquetaFecha(visita.fechaVisita) }} · {{ visita.titulo }}</option>
+          }
+        </select>
+      </label>
+      <label class="wide">
+        <span>Titulo breve</span>
+        <input pInputText maxlength="120" [(ngModel)]="titulo" placeholder="Ej. Mancha observada en borde norte" />
+      </label>
+      <label class="wide">
+        <span>Descripcion de campo</span>
+        <textarea pTextarea rows="3" maxlength="3000" [(ngModel)]="descripcion" placeholder="Que se observa, sector, intensidad y contexto de la recorrida"></textarea>
+      </label>
+      <label class="wide">
+        <span>Etiquetas</span>
+        <input pInputText [(ngModel)]="etiquetas" placeholder="enfermedad, borde, hoja bandera (separadas por coma)" />
+      </label>
+    </div>
+
+    <div class="location-row" [class.has-location]="latitud !== undefined">
+      <i class="pi pi-map-marker"></i>
+      <div>
+        <strong>{{ latitud !== undefined ? 'Ubicacion registrada' : 'Ubicacion opcional' }}</strong>
+        <small>
+          {{ latitud !== undefined ? (latitud | number:'1.5-5') + ', ' + (longitud | number:'1.5-5') + ' · precision ' + (precisionMetros | number:'1.0-0') + ' m' : 'Permite localizar la observacion dentro del lote.' }}
+        </small>
+      </div>
+      @if (latitud === undefined) {
+        <p-button label="Agregar" icon="pi pi-crosshairs" [loading]="buscandoUbicacion" [outlined]="true" (onClick)="capturarUbicacion()" />
+      } @else {
+        <p-button icon="pi pi-times" [text]="true" [rounded]="true" (onClick)="quitarUbicacion()" />
+      }
+    </div>
+  </div>
+  <ng-template #footer>
+    <p-button label="Cancelar" severity="secondary" [text]="true" (onClick)="dialogoRegistro = false" />
+    <p-button label="Guardar registro" icon="pi pi-check" [disabled]="!archivos.length" [loading]="subiendo" (onClick)="guardar()" />
+  </ng-template>
+</p-dialog>
+
+<p-dialog
+  [(visible)]="dialogoGaleria"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(980px, 96vw)' }"
+  header="Galeria de campo"
+  styleClass="field-gallery-dialog"
+>
+  <div class="field-gallery">
+    <aside>
+      @for (foto of fotos; track foto._id) {
+        <button
+          type="button"
+          class="chaman-interactive-surface"
+          [class.active]="fotoSeleccionada?._id === foto._id"
+          [attr.aria-pressed]="fotoSeleccionada?._id === foto._id"
+          (click)="fotoSeleccionada = foto"
+        >
+          @if (imagenDe(foto); as imagenUrl) {
+            <img [src]="imagenUrl" alt="Miniatura de campo" loading="lazy" />
+          } @else {
+            <span class="photo-image-placeholder" aria-label="Cargando imagen">
+              <i class="pi pi-spin pi-spinner"></i>
+            </span>
+          }
+          <span class="gallery-thumb-date">{{ etiquetaFecha(foto.fechaCaptura || foto.fechaCreacion) }}</span>
+        </button>
+      }
+    </aside>
+    @if (fotoSeleccionada; as foto) {
+      <main>
+        @if (imagenDe(foto); as imagenUrl) {
+          <img [src]="imagenUrl" [alt]="foto.titulo || 'Evidencia fotografica de campo'" />
+        } @else {
+          <span class="photo-image-placeholder photo-image-placeholder--large">
+            <i class="pi pi-image"></i>
+            Imagen no disponible
+          </span>
+        }
+        <div class="gallery-metadata">
+          <span>{{ etiquetaFecha(foto.fechaCaptura || foto.fechaCreacion) }}</span>
+          <h3>{{ foto.titulo || 'Registro fotografico de campo' }}</h3>
+          @if (foto.descripcion) { <p>{{ foto.descripcion }}</p> }
+          <small>Registrada por {{ foto.creadaPorNombre || 'usuario Chaman' }}</small>
+          @if (foto.idVisita) { <small>Visita: {{ etiquetaVisita(foto.idVisita) }}</small> }
+          @if (foto.latitud !== undefined) { <small><i class="pi pi-map-marker"></i> Con ubicacion de campo</small> }
+          @if (!helper.soloLectura()) {
+            <p-button label="Archivar" icon="pi pi-archive" severity="danger" [outlined]="true" size="small" (onClick)="archivarFoto(foto)" />
+          }
+        </div>
+      </main>
+    }
+  </div>
+</p-dialog>

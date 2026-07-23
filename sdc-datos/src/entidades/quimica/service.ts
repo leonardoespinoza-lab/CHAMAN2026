@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ICreateQuimica, IQueryParam, IUpdateQuimica } from 'modelos/src';
+import { ICreateQuimica, IQueryParam, ISolicitudArchivado, IUpdateQuimica } from 'modelos/src';
 import { QuimicasRepository } from './repository';
 
 @Injectable()
@@ -30,8 +30,8 @@ export class QuimicasService {
     throw new NotFoundException('No encontrado');
   }
 
-  async delete(id: string) {
-    const deleted = await this.repository.delete(id);
+  async delete(id: string, audit: ISolicitudArchivado = {}) {
+    const deleted = await this.repository.delete(id, audit);
     if (deleted) {
       return deleted;
     }

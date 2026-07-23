@@ -33,15 +33,18 @@ export class AutocompleteDireccionComponent implements OnInit, AfterViewInit {
   @Input() initialValue?: DireccionSeleccionada;
   @Input() useDeviceLocation: boolean = true; // Nueva propiedad para controlar el uso de geolocalización
   @Output() direccionChange = new EventEmitter<DireccionSeleccionada>();
+  @Output() direccionClear = new EventEmitter<void>();
 
   public direccionInput: string = '';
   public direccionesSugeridas: string[] = [];
   public loading: boolean = false;
+  public searchMessage?: string;
   public map?: Map;
   public vectorLayer?: VectorLayer<VectorSource>;
   public markerFeature?: Feature<Point>;
   public translateInteraction?: Translate;
   public draggableFeatures?: Collection<Feature>;
+  private searchCoordinatesPromise?: Promise<{ lat: number; lng: number }>;
 
   @ViewChild('mapContainer', { static: false }) mapContainer?: ElementRef;
 
@@ -91,7 +94,7 @@ export class AutocompleteDireccionComponent implements OnInit, AfterViewInit {
 
     if (this.useDeviceLocation) {
       try {
-        const deviceCoords = await this.helper.getSearchCoordinates(true);
+        const deviceCoords = await this.getSearchCoordinates();
         mapCenter = fromLonLat([deviceCoords.lng, deviceCoords.lat]);
         mapZoom = 10; // Zoom más cercano si tenemos ubicación del dispositivo
         console.log('Centrando mapa en ubicación del dispositivo:', deviceCoords);
@@ -118,6 +121,13 @@ export class AutocompleteDireccionComponent implements OnInit, AfterViewInit {
 
     this.map.addInteraction(this.translateInteraction);
 
+    // Un punto en el mapa permite ubicar domicilios rurales aunque el
+    // proveedor de direcciones no tenga esa calle o altura.
+    this.map.on('singleclick', (event) => {
+      this.showMarkerAtCoordinate(toLonLat(event.coordinate));
+      void this.onMarkerDragEnd(event.coordinate);
+    });
+
     // Evento cuando termina de arrastrar el marcador
     this.translateInteraction.on('translateend', (event) => {
       if (this.markerFeature && event.features.getArray().includes(this.markerFeature)) {
@@ -141,20 +151,26 @@ export class AutocompleteDireccionComponent implements OnInit, AfterViewInit {
     }
 
     this.loading = true;
+    this.searchMessage = undefined;
     try {
       // Obtener coordenadas del dispositivo para mejorar la búsqueda
-      const searchCoords = await this.helper.getSearchCoordinates(this.useDeviceLocation);
+      const searchCoords = await this.getSearchCoordinates();
 
       const response = await this.geonode.direcciones({
         text: event.query,
         coordenadas: searchCoords,
       });
 
-      console.log('Sugerencias de direcciones:', response.resultados);
       this.direccionesSugeridas = response.resultados || [];
+      if (!this.direccionesSugeridas.length) {
+        this.searchMessage =
+          'No encontramos esa direccion. Agrega localidad y provincia o marca el punto directamente en el mapa.';
+      }
     } catch (error) {
       console.error('Error al buscar direcciones:', error);
       this.direccionesSugeridas = [];
+      this.searchMessage =
+        'La busqueda de direcciones no esta disponible. Podes marcar el punto directamente en el mapa.';
     } finally {
       this.loading = false;
     }
@@ -174,6 +190,8 @@ export class AutocompleteDireccionComponent implements OnInit, AfterViewInit {
       this.showMarkerAtCoordinate([coordenadas.lng, coordenadas.lat]);
       this.emitDireccionChange(direccion, geojson);
     } catch (error) {
+      this.searchMessage =
+        'No pudimos ubicar esa direccion con precision. Marca el punto directamente en el mapa.';
       console.error('Error al geocodificar dirección:', error);
     } finally {
       this.loading = false;
@@ -183,6 +201,17 @@ export class AutocompleteDireccionComponent implements OnInit, AfterViewInit {
   public onDireccionSelectEvent(event: AutoCompleteSelectEvent) {
     const direccion = event.value as string;
     this.onDireccionSelect(direccion);
+  }
+
+  public onClear(): void {
+    this.direccionInput = '';
+    this.searchMessage = undefined;
+    if (this.markerFeature) {
+      this.vectorLayer?.getSource()?.removeFeature(this.markerFeature);
+      this.draggableFeatures?.remove(this.markerFeature);
+      this.markerFeature = undefined;
+    }
+    this.direccionClear.emit();
   }
 
   private async onMarkerDragEnd(coordinate: Coordinate) {
@@ -266,5 +295,10 @@ export class AutocompleteDireccionComponent implements OnInit, AfterViewInit {
       geojson,
     };
     this.direccionChange.emit(resultado);
+  }
+
+  private getSearchCoordinates(): Promise<{ lat: number; lng: number }> {
+    this.searchCoordinatesPromise ||= this.helper.getSearchCoordinates(this.useDeviceLocation);
+    return this.searchCoordinatesPromise;
   }
 }

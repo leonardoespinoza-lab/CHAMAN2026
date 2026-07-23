@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDate, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsDate, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { Exactly, ICreateClient, ICreateToken, IUsuario } from 'modelos/src';
 
 export class CreateToken implements Exactly<ICreateToken, CreateToken> {
@@ -53,4 +53,16 @@ export class CreateToken implements Exactly<ICreateToken, CreateToken> {
   @ApiProperty()
   @IsNotEmpty()
   user: IUsuario;
+}
+
+export class RevokeToken {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  accessToken?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  refreshToken?: string;
 }

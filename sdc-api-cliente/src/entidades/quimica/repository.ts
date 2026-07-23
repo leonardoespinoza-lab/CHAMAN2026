@@ -5,6 +5,7 @@ import {
   IQueryParam,
   ICreateQuimica,
   IUpdateQuimica,
+  ISolicitudArchivado,
 } from 'modelos/src';
 import { API_DATOS } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
@@ -33,8 +34,8 @@ export class QuimicasRepository {
     return await this.axios.PUT<IQuimica>(url, data);
   }
 
-  async delete(id: string): Promise<IQuimica> {
+  async delete(id: string, audit: ISolicitudArchivado = {}): Promise<IQuimica> {
     const url = `${API_DATOS}/quimicas/${id}`;
-    return await this.axios.DELETE<IQuimica>(url);
+    return await this.axios.DELETE<IQuimica>(url, { params: audit });
   }
 }

@@ -66,7 +66,7 @@ export class ListadoQuimicasComponent implements OnInit {
     this.confirmationService.confirm({
       // target: event.target as EventTarget,
       header: this.translate.instant('Por favor, confirme la acción'),
-      message: this.translate.instant('¿Desea eliminar la compañía?'),
+      message: this.translate.instant('¿Desea archivar la compañía? La información quedará preservada para auditoría.'),
       closable: true,
       closeOnEscape: true,
       icon: 'pi pi-exclamation-triangle',
@@ -85,7 +85,7 @@ export class ListadoQuimicasComponent implements OnInit {
           this.datos = this.datos.filter((item) => item._id !== dato._id);
           this.totalCount = Math.max(0, this.totalCount - 1);
 
-          this.helper.notifSuccess(this.translate.instant('Eliminado correctamente'));          
+          this.helper.notifSuccess(this.translate.instant('Compañía archivada correctamente'));
         } catch (error) {
           this.helper.notifError(error);
         }

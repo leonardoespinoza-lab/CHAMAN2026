@@ -1,4 +1,8 @@
-export type IaMalezaEstado = 'pendiente' | 'procesando' | 'completado' | 'error';
+export type IaMalezaEstado =
+  | 'pendiente'
+  | 'procesando'
+  | 'completado'
+  | 'error';
 
 export interface IaMalezaDetection {
   class: string;

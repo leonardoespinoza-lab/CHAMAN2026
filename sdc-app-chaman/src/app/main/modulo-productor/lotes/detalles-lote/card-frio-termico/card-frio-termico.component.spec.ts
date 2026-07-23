@@ -201,7 +201,7 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.metricas.find((item) => item.label === 'Horas de frío (HF)')?.source).toContain(
       'CUADRO 7 Sensor 3 prioritario'
     );
-    expect(component.metricas.find((item) => item.label === 'HFE histórico (legacy)')?.value).toBe('593,8 HFE');
+    expect(component.metricas.some((item) => item.label.toLowerCase().includes('legacy'))).toBeFalse();
   });
 
   it('mantiene visibles las horas frío del dispositivo mientras el canónico se reprocesa', async () => {
@@ -240,8 +240,118 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.metricas.find((item) => item.label === 'Horas frío del sensor (vista previa)')?.value).toBe(
       '503,21 HF'
     );
-    expect(component.metricas.find((item) => item.label === 'Frío efectivo (HFE hist.)')?.value).toBe('593,82 HFE');
-    expect(component.metricas.find((item) => item.label === 'Porciones históricas (ref.)')?.value).toBe('21,21 CP');
+    expect(component.metricas.map((item) => item.label)).toEqual([
+      'Horas frío del sensor (vista previa)',
+      'GDD de forzado',
+    ]);
+  });
+
+  it('permite leer la evolución acumulada y los aportes diarios, incluidos descuentos Utah', async () => {
+    const dias = [
+      {
+        date: '2026-05-01',
+        metrics: {
+          temperatureMinC: 3,
+          temperatureMaxC: 14,
+          chillingHours: 6,
+          chillingHoursAccumulated: 6,
+          utahChillUnits: 5,
+          utahChillUnitsAccumulated: 5,
+          chillPortions: 0.3,
+          chillPortionsAccumulated: 0.3,
+        },
+      },
+      {
+        date: '2026-05-02',
+        metrics: {
+          temperatureMinC: 5,
+          temperatureMaxC: 21,
+          chillingHours: 2,
+          chillingHoursAccumulated: 8,
+          utahChillUnits: -7,
+          utahChillUnitsAccumulated: -2,
+          chillPortions: 0.15,
+          chillPortionsAccumulated: 0.45,
+        },
+      },
+    ].map((item) => ({
+      ...item,
+      isForecast: false,
+      weather: {},
+      source: 'open_meteo',
+      sourceByVariable: {},
+      qualityFlags: [],
+      warnings: [],
+    })) as any;
+    const component = create(
+      response({
+        summary: {
+          thermalProcess: 'dormancia_perenne',
+          chillingHoursAccumulated: 8,
+          utahChillUnitsAccumulated: -2,
+          chillPortionsAccumulated: 0.45,
+        },
+        series: dias,
+      })
+    );
+    component.siembra = { _id: 'peral-graficos', semilla: { cultivo: 'Peral', variedad: 'Rocha' } } as any;
+
+    await component.cargar();
+
+    expect(component.modoGraficoFrio).toBe('acumulado');
+    expect((component.chartFrioOptions?.series?.[0] as any).data).toEqual([3, 5]);
+    expect((component.chartFrioOptions?.series?.[1] as any).data).toEqual([14, 21]);
+    expect((component.chartFrioOptions?.series?.[3] as any).data).toEqual([5, -2]);
+    expect((component.chartFrioOptions?.series?.[0] as any).yAxis).toBe(0);
+    expect((component.chartFrioOptions?.series?.[2] as any).yAxis).toBe(1);
+    expect((component.chartFrioOptions?.series?.[3] as any).yAxis).toBe(2);
+    expect((component.chartFrioOptions?.series?.[4] as any).yAxis).toBe(3);
+    expect((component.chartFrioOptions?.yAxis as any[])[0].plotLines[0].value).toBe(15.9);
+    expect((component.chartFrioOptions?.yAxis as any[])[0].plotBands).toHaveSize(2);
+    expect((component.chartFrioOptions?.yAxis as any[])[2].min).toBeLessThan(-2);
+    expect((component.chartFrioOptions?.yAxis as any[])[2].max).toBeGreaterThan(5);
+    expect((component.chartFrioOptions?.yAxis as any[])[2].plotLines[0].value).toBe(0);
+
+    component.cambiarModoGraficoFrio('diario');
+
+    expect((component.chartFrioOptions?.series?.[2] as any).data).toEqual([6, 2]);
+    expect((component.chartFrioOptions?.series?.[3] as any).data).toEqual([5, -7]);
+    expect((component.chartFrioOptions?.series?.[3] as any).negativeColor).toBe('#d7833d');
+    expect((component.chartFrioOptions?.series?.[0] as any).type).toBe('spline');
+    expect((component.chartFrioOptions?.series?.[1] as any).type).toBe('spline');
+    expect((component.chartFrioOptions?.series?.[2] as any).type).toBe('column');
+    expect((component.chartFrioOptions?.series?.[4] as any).type).toBe('column');
+    expect((component.chartFrioOptions?.series?.[0] as any).yAxis).toBe(0);
+    expect((component.chartFrioOptions?.series?.[2] as any).yAxis).toBe(1);
+    expect((component.chartFrioOptions?.series?.[3] as any).yAxis).toBe(2);
+    expect((component.chartFrioOptions?.series?.[4] as any).yAxis).toBe(3);
+  });
+
+  it('limita el eje temporal a seis fechas legibles en temporadas largas', async () => {
+    const series = Array.from({ length: 81 }, (_, index) => ({
+      date: new Date(Date.UTC(2026, 4, 1 + index)).toISOString().slice(0, 10),
+      isForecast: index >= 76,
+      weather: {},
+      metrics: {
+        chillingHours: 4,
+        chillingHoursAccumulated: (index + 1) * 4,
+        utahChillUnits: index % 3 === 0 ? -2 : 3,
+        utahChillUnitsAccumulated: index - 20,
+        chillPortions: 0.2,
+        chillPortionsAccumulated: (index + 1) * 0.2,
+      },
+      source: 'open_meteo',
+      sourceByVariable: {},
+      qualityFlags: [],
+      warnings: [],
+    })) as any;
+    const component = create(response({ summary: { thermalProcess: 'dormancia_perenne' }, series }));
+    component.siembra = { _id: 'pecan-eje-fechas', semilla: { cultivo: 'Pecan', variedad: 'Stuart' } } as any;
+
+    await component.cargar();
+
+    expect((component.chartFrioOptions?.xAxis as any).tickPositions).toEqual([0, 15, 30, 45, 60, 75]);
+    expect((component.chartFrioOptions?.series?.[0] as any).data).toHaveSize(76);
   });
 
   it('muestra rangos científicos como referencia visual sin volverlos decisión automática', async () => {

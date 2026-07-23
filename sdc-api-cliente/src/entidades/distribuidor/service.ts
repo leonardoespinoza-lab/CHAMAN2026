@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import {
   IDistribuidor,
   IListado,
@@ -9,12 +9,15 @@ import {
   IFilter,
   ICreateLicenciaPorEntidad,
   ILicencia,
-  IUpdateLicencia,
+  IUsuario,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { DistribuidorsRepository } from './repository';
 import { LicenciasService } from '../licencia/service';
 import { LicenciaPorEntidadsService } from '../licenciaPorEntidad/service';
+import { ProductorsRepository } from '../productor/repository';
+import { EstablecimientosRepository } from '../establecimiento/repository';
+import { LotesRepository } from '../lote/repository';
 
 @Injectable()
 export class DistribuidorsService {
@@ -22,6 +25,9 @@ export class DistribuidorsService {
     private repository: DistribuidorsRepository,
     private licencias: LicenciasService,
     private licenciasPorEntidad: LicenciaPorEntidadsService,
+    @Optional() private productoresRepository?: ProductorsRepository,
+    @Optional() private establecimientosRepository?: EstablecimientosRepository,
+    @Optional() private lotesRepository?: LotesRepository,
   ) {}
 
   async getById(id: string, permiso: IPermiso): Promise<IDistribuidor> {
@@ -65,41 +71,38 @@ export class DistribuidorsService {
           'La química debe tener una licencia para poder crear un productor',
         );
       }
-      const distribuidor = await this.repository.create(data);
-      const fechaExpiracion = new Date();
-      fechaExpiracion.setDate(new Date().getDate() + data.expiracion || 30);
-      const createLicenciaPorEntidad: ICreateLicenciaPorEntidad = {
-        idEntidad: distribuidor._id,
-        idLicencia: licencia._id,
-        fechaExpiracion: fechaExpiracion.toISOString(),
-      };
-      await this.licenciasPorEntidad.create(createLicenciaPorEntidad);
-      return distribuidor;
+      // Hereda el plan de la compania. No se duplica una asignacion que pueda
+      // divergir silenciosamente del contrato superior.
+      return await this.repository.create(data);
     }
   }
 
   private async createAdmin(data: ICreateDistribuidor): Promise<IDistribuidor> {
-    // Si lo crea el admin tiene que mandar todo en el create
-    if (!data.licencia) {
-      data.licencia = this.getLicenciaGratis();
-      data.expiracion = data.expiracion || 30;
-    }
-    
-    let licencia;
-    if ((data.licencia as any)?._id) {
-      licencia = data.licencia
-    } else {
-      licencia = await this.licencias.create(data.licencia);
-    }
+    const idLicencia = (data.licencia as any)?._id as string | undefined;
+    const licencia = idLicencia
+      ? await this.licencias.getById(idLicencia)
+      : await this.licenciasPorEntidad.getLicenciaDefaultPlan();
+    if (!licencia._id)
+      throw new BadRequestException(
+        'Configure un plan por defecto persistido antes de crear el distribuidor',
+      );
 
     const distribuidor = await this.repository.create(data);
     const fechaExpiracion = new Date();
-    fechaExpiracion.setDate(new Date().getDate() + data.expiracion || 30);
-    // Creo la licencia por entidad
+    fechaExpiracion.setDate(
+      fechaExpiracion.getDate() + (data.expiracion || 30),
+    );
     const createLicenciaPorEntidad: ICreateLicenciaPorEntidad = {
       idEntidad: distribuidor._id,
       idLicencia: licencia._id,
       fechaExpiracion: fechaExpiracion.toISOString(),
+      fechaInicio: new Date().toISOString(),
+      tipoEntidad: 'Distribuidor',
+      estado: 'activa',
+      origen: 'sistema',
+      motivoCambio: idLicencia
+        ? 'Plan seleccionado en el alta'
+        : 'Plan por defecto del sistema',
     };
     await this.licenciasPorEntidad.create(createLicenciaPorEntidad);
     return distribuidor;
@@ -140,6 +143,8 @@ export class DistribuidorsService {
       // Si lo updatea el admin, puede enviar la licencia
       return await this.updateAdmin(id, data);
     }
+    delete data.licencia;
+    delete data.expiracion;
     return await this.repository.update(id, data);
   }
 
@@ -148,41 +153,75 @@ export class DistribuidorsService {
       // En update no es obligatorio enviar la licencia, ya que podés updatear la entidad sin cambiar la licencia.
       return await this.repository.update(id, data);
     }
-    // Si envía la licencia, actualiza la licencia y la licencia por entidad
-    // Traigo la licencia que tiene actualmente el distribuidor
-    let licencia =
-      await this.licenciasPorEntidad.getLicenciaValidaByIdEntidad(id);
-    if (licencia.default) {
-      // No se puede actualizar la licencia por defecto
-      // Creo una nueva licencia con lo que mandó el admin
-      licencia = await this.licencias.create(data.licencia);
-    } else {
-      // Actualizo la licencia
-      // Actualizo solo lo que viene en data.licencia
-      const updateLicencia: IUpdateLicencia = {
-        ...licencia,
-        ...data.licencia,
-      };
-      await this.licencias.update(licencia._id, updateLicencia);
+    const idLicencia = (data.licencia as any)?._id as string | undefined;
+    if (!idLicencia) {
+      throw new BadRequestException(
+        'Seleccione un plan existente; los planes se crean desde Gestion de licencias',
+      );
     }
-
-    if (data.expiracion) {
-      // Si vine con update la licencia, actualizo la fecha de expiración
-      const fechaExpiracion = new Date();
-      fechaExpiracion.setDate(new Date().getDate() + data.expiracion || 30);
-      const createLicenciaPorEntidad: ICreateLicenciaPorEntidad = {
-        idEntidad: id,
-        idLicencia: licencia._id,
-        fechaExpiracion: fechaExpiracion.toISOString(),
-      };
-      await this.licenciasPorEntidad.create(createLicenciaPorEntidad);
-    }
+    const fechaExpiracion = new Date();
+    fechaExpiracion.setDate(
+      fechaExpiracion.getDate() + (data.expiracion || 30),
+    );
+    await this.licenciasPorEntidad.asignar(id, {
+      idLicencia,
+      tipoEntidad: 'Distribuidor',
+      fechaInicio: new Date().toISOString(),
+      fechaExpiracion: fechaExpiracion.toISOString(),
+      motivoCambio: 'Cambio desde la administracion del distribuidor',
+    });
+    delete data.licencia;
+    delete data.expiracion;
     return await this.repository.update(id, data);
   }
 
-  async delete(id: string, permiso: IPermiso): Promise<IDistribuidor> {
+  async delete(
+    id: string,
+    permiso: IPermiso,
+    actor?: IUsuario,
+  ): Promise<IDistribuidor> {
     await this.getById(id, permiso);
-    return await this.repository.delete(id);
+    const audit = {
+      archivadoPor: actor?.username || actor?._id || 'sistema',
+      motivoArchivado: 'Distribuidor archivado desde Chaman',
+    };
+    const filtro = JSON.stringify({ idDistribuidor: id });
+    const [productores, establecimientos, lotes] = await Promise.all([
+      this.productoresRepository?.get({
+        page: 0,
+        limit: 0,
+        filter: filtro,
+        select: '_id',
+      }),
+      this.establecimientosRepository?.get({
+        page: 0,
+        limit: 0,
+        filter: filtro,
+        select: '_id',
+      }),
+      this.lotesRepository?.get({
+        page: 0,
+        limit: 0,
+        filter: filtro,
+        select: '_id',
+      }),
+    ]);
+    await Promise.all(
+      (lotes?.datos || []).map((item) =>
+        this.lotesRepository!.delete(String(item._id), audit),
+      ),
+    );
+    await Promise.all(
+      (establecimientos?.datos || []).map((item) =>
+        this.establecimientosRepository!.delete(String(item._id), audit),
+      ),
+    );
+    await Promise.all(
+      (productores?.datos || []).map((item) =>
+        this.productoresRepository!.delete(String(item._id), audit),
+      ),
+    );
+    return await this.repository.delete(id, audit);
   }
 
   // Private

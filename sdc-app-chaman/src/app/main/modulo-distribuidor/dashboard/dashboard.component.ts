@@ -30,7 +30,13 @@ import { Subscription } from 'rxjs';
 import { HelperService } from '../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../auxiliares/servicios/listados';
 import { OpenLayersService } from '../../../auxiliares/servicios/openLayers.service';
+import { LoginService } from '../../../auxiliares/http/login.service';
 import { SharedModule } from '../../../auxiliares/shared.module';
+import {
+  BORDE_SEMAFORO_MAPA,
+  COLOR_SEMAFORO_MAPA,
+  estadoSanidadSemaforo,
+} from '../../modulo-productor/mapa/mapa-semaforo';
 
 type NivelRiesgoSanitario = 'sin-prediccion' | 'bajo' | 'medio' | 'alto';
 
@@ -149,10 +155,22 @@ export class DashboardDistribuidorComponent implements OnInit, AfterViewInit, On
   constructor(
     private listadosService: ListadosService,
     private helper: HelperService,
+    public loginService: LoginService,
     private router: Router,
     private activatedRoute: ActivatedRoute
   ) {
     this.resetRiesgoCards();
+  }
+
+  public nombreGestor(): string {
+    if (this.loginService.esAsesor) {
+      return (
+        this.helper.user?.datosPersonales?.nombre ||
+        this.helper.user?.username ||
+        'Asesor'
+      );
+    }
+    return this.distribuidorActual?.nombre || 'Distribuidor';
   }
 
   public formatHa(value: number, digits = 1): string {
@@ -214,7 +232,7 @@ export class DashboardDistribuidorComponent implements OnInit, AfterViewInit, On
       dateStyle: 'long',
       timeStyle: 'short',
     });
-    const nombreDistribuidor = this.distribuidorActual?.nombre || 'Distribuidor';
+    const nombreDistribuidor = this.nombreGestor();
     const logoChaman = this.safeImageUrl(new URL('/images/logo-light.png', document.baseURI).href);
     const logoDistribuidor = this.safeImageUrl(this.distribuidorActual?.logo);
     const coberturaServicios = this.construirCoberturaServicios();
@@ -492,9 +510,9 @@ export class DashboardDistribuidorComponent implements OnInit, AfterViewInit, On
       },
       {
         nivel: 'sin-prediccion',
-        titulo: 'Sin prediccion',
-        descripcion: 'Falta motor sanitario',
-        clase: 'muted',
+        titulo: 'Datos pendientes',
+        descripcion: 'Precaucion: falta una lectura sanitaria vigente',
+        clase: 'warn',
         hectareas: 0,
         lotes: 0,
         porcentaje: 0,
@@ -716,7 +734,7 @@ export class DashboardDistribuidorComponent implements OnInit, AfterViewInit, On
     if (this.riegosEnfermedadPorHectarea.bajo > 0) {
       return 'Estable';
     }
-    return 'Sin prediccion';
+    return 'Informacion pendiente';
   }
 
   private estadoSanitarioClaseResumen(): string {
@@ -729,7 +747,7 @@ export class DashboardDistribuidorComponent implements OnInit, AfterViewInit, On
     if (this.riegosEnfermedadPorHectarea.bajo > 0) {
       return 'ok';
     }
-    return 'muted';
+    return 'warn';
   }
 
   private coordenadasDistribuidor(): [number, number] | null {
@@ -810,16 +828,11 @@ export class DashboardDistribuidorComponent implements OnInit, AfterViewInit, On
   }
 
   private colorNivel(nivel: NivelRiesgoSanitario): { fill: string; stroke: string } {
-    if (nivel === 'alto') {
-      return { fill: 'rgba(239, 83, 80, 0.48)', stroke: '#ef5350' };
-    }
-    if (nivel === 'medio') {
-      return { fill: 'rgba(241, 171, 45, 0.5)', stroke: '#f1ab2d' };
-    }
-    if (nivel === 'bajo') {
-      return { fill: 'rgba(96, 194, 79, 0.42)', stroke: '#60c24f' };
-    }
-    return { fill: 'rgba(148, 163, 184, 0.38)', stroke: '#64748b' };
+    const estado = estadoSanidadSemaforo(nivel);
+    return {
+      fill: COLOR_SEMAFORO_MAPA[estado],
+      stroke: BORDE_SEMAFORO_MAPA[estado],
+    };
   }
 
   private redibujarMapa(): void {

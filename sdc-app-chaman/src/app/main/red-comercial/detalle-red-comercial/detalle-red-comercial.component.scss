@@ -1,0 +1,27 @@
+.network-audit { width: min(1500px, calc(100% - 40px)); margin: 0 auto; padding: 24px 0 48px; color: var(--p-text-color); }
+.audit-header, .header-copy, .header-actions, .identity-card, .section-heading { display: flex; align-items: center; }
+.audit-header { align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+.header-copy { align-items: flex-start; gap: 14px; }
+.header-actions { gap: 10px; flex-wrap: wrap; }
+.back-button { width: 42px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--p-content-border-color); border-radius: 50%; background: var(--p-content-background); color: var(--p-primary-color); cursor: pointer; }
+.eyebrow { margin: 0 0 5px; color: var(--p-primary-color); font-size: .72rem; font-weight: 800; text-transform: uppercase; }
+h1, h2, p { margin-top: 0; } h1 { margin-bottom: 8px; font-size: clamp(1.7rem, 3vw, 2.35rem); } .header-copy p:last-child { margin-bottom: 0; color: var(--p-text-muted-color); }
+.identity-card, .metrics-grid article, .audit-section { border: 1px solid var(--p-content-border-color); background: var(--p-content-background); }
+.identity-card { justify-content: space-between; gap: 20px; padding: 20px; border-radius: 16px; }
+.identity-card h2 { margin: 9px 0 5px; font-size: 1.55rem; } .identity-card p { margin-bottom: 0; color: var(--p-text-muted-color); }
+.entity-kind, .location-status { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 999px; background: color-mix(in srgb, var(--p-primary-color) 12%, var(--p-content-background)); color: var(--p-primary-color); font-size: .74rem; font-weight: 800; text-transform: capitalize; }
+.location-summary { display: grid; justify-items: end; gap: 7px; text-align: right; }
+.location-status.derived { background: #fff4df; color: #986000; } .location-status.pending { background: #f3f4f6; color: #667085; }
+.metrics-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+.metrics-grid article { padding: 15px; border-radius: 12px; } .metrics-grid span, .metrics-grid strong { display: block; } .metrics-grid span, dt { color: var(--p-text-muted-color); font-size: .72rem; font-weight: 800; text-transform: uppercase; } .metrics-grid strong { margin-top: 5px; font-size: 1.35rem; }
+.audit-section { margin-top: 14px; padding: 18px; border-radius: 14px; } .section-heading { justify-content: space-between; gap: 20px; margin-bottom: 14px; } .section-heading h2 { margin-bottom: 0; font-size: 1.25rem; } .section-heading > span { color: var(--p-text-muted-color); font-weight: 700; }
+.cards-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.association-card { position: relative; display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 15px; border: 1px solid var(--p-content-border-color); border-radius: 12px; background: var(--p-content-background); color: inherit; text-align: left; cursor: pointer; }
+.association-card:hover { border-color: var(--p-primary-color); box-shadow: 0 8px 22px color-mix(in srgb, var(--p-primary-color) 10%, transparent); } .association-card small { display: block; margin-top: 4px; color: var(--p-text-muted-color); }
+.association-card dl { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 0; } dd { margin: 2px 0 0; font-weight: 800; }
+.table-scroll { overflow-x: auto; } table { width: 100%; border-collapse: collapse; } th, td { padding: 11px 9px; border-bottom: 1px solid var(--p-content-border-color); text-align: left; } th { color: var(--p-text-muted-color); font-size: .7rem; text-transform: uppercase; } .numeric { text-align: right; }
+.empty-inline, .loading-state { color: var(--p-text-muted-color); } .empty-inline { margin-bottom: 0; padding: 18px; border: 1px dashed var(--p-content-border-color); border-radius: 10px; text-align: center; }
+.loading-state { min-height: 320px; display: grid; place-items: center; align-content: center; gap: 10px; } .loading-state i { color: var(--p-primary-color); font-size: 1.8rem; }
+@media (max-width: 1050px) { .metrics-grid { grid-template-columns: repeat(3, 1fr); } .cards-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 720px) { .network-audit { width: calc(100% - 20px); } .audit-header, .identity-card { display: grid; } .location-summary { justify-items: start; text-align: left; } .metrics-grid, .cards-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 480px) { .metrics-grid, .cards-grid { grid-template-columns: 1fr; } }

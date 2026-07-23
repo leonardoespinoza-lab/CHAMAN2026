@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { IQueryParam, IUpdateNotificacion, IUsuario } from 'modelos/src';
 import { NotificacionesService } from './service';

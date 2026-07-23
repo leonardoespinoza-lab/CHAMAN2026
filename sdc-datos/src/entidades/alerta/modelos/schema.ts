@@ -39,6 +39,9 @@ export class Alerta implements Exactly<IAlerta, Alerta> {
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idEstablecimiento?: string;
 
+  @Prop({ type: mongoose.Schema.Types.ObjectId, index: true })
+  idLote?: string;
+
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idSiembra?: string;
 

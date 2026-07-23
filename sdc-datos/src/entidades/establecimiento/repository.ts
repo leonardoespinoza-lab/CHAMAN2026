@@ -5,6 +5,7 @@ import {
   IUpdateEstablecimiento,
   IQueryParam,
   ICreateEstablecimiento,
+  ISolicitudArchivado,
 } from 'modelos/src';
 import { Model } from 'mongoose';
 import { dbQuery } from 'src/auxiliares/helper.service';
@@ -38,7 +39,16 @@ export class EstablecimientosRepository {
     });
   }
 
-  async delete(id: string): Promise<Establecimiento> {
-    return await this.model.findByIdAndDelete(id);
+  async delete(id: string, audit: ISolicitudArchivado = {}): Promise<Establecimiento> {
+    return await this.model.findByIdAndUpdate(
+      id,
+      {
+        archivado: true,
+        fechaArchivado: new Date(),
+        archivadoPor: audit.archivadoPor || 'sistema',
+        motivoArchivado: audit.motivoArchivado || 'Archivado desde Chaman',
+      },
+      { new: true },
+    ).lean();
   }
 }

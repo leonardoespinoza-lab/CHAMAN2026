@@ -1,8 +1,9 @@
 import { IGeoJSONPoint, IIntegracion, IUbicacion } from '../compartidos';
 import { ICreateLicencia } from './licencia';
 import { IQuimica } from './quimica';
+import { IArchivado } from '../compartidos/archivado';
 
-export interface IDistribuidor {
+export interface IDistribuidor extends IArchivado {
   _id?: string;
   idQuimica?: string;
   nombre?: string;
@@ -11,6 +12,7 @@ export interface IDistribuidor {
   integraciones?: IIntegracion[];
   geojson?: IGeoJSONPoint;
   direccion?: string;
+  radioInfluenciaKm?: number;
   // Populate
   quimica?: IQuimica;
 }

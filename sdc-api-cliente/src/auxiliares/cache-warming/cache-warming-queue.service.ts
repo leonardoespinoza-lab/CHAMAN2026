@@ -16,6 +16,14 @@ export interface ICacheWarmingJob {
 @Injectable()
 export class CacheWarmingQueueService {
   private readonly logger = new Logger(CacheWarmingQueueService.name);
+  private readonly loginDedupeWindowMs = (() => {
+    const seconds = Number(process.env.CACHE_WARM_LOGIN_DEDUPE_SECONDS);
+    return Number.isInteger(seconds) && seconds >= 30 && seconds <= 3600
+      ? seconds * 1000
+      : 300_000;
+  })();
+  private readonly scheduledLoginWarmings = new Map<string, number>();
+  private readonly maxScheduledLoginWarmings = 5000;
 
   constructor(@InjectQueue('cache-warming') private cacheWarmingQueue: Queue) {
     this.logger.log('🔧 CacheWarmingQueueService initialized');
@@ -30,6 +38,13 @@ export class CacheWarmingQueueService {
     source: 'user-login' | 'refresh-token' | 'google-login' = 'user-login',
   ): Promise<void> {
     try {
+      if (source === 'refresh-token') {
+        this.logger.debug(
+          `Cache warming omitido para refresh token: ${userId}`,
+        );
+        return;
+      }
+
       if (ENV === 'local') {
         this.logger.log(
           `Cache warming omitido en entorno local para usuario: ${userId}`,
@@ -51,12 +66,31 @@ export class CacheWarmingQueueService {
       // Zoom levels comunes que usa el frontend
       const commonZoomLevels = [8, 12, 14];
 
+      const now = Date.now();
+      const dedupeWindow = Math.floor(now / this.loginDedupeWindowMs);
+      const safeUserId = String(userId)
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .slice(0, 80);
+      const jobId = `cache-warm-login-${safeUserId}-${dedupeWindow}`;
+      this.pruneScheduledLoginWarmings(now);
+      if (this.scheduledLoginWarmings.has(jobId)) {
+        this.logger.debug(
+          `Cache warming ya programado en esta ventana: ${userId}`,
+        );
+        return;
+      }
+      this.makeRoomForScheduledLoginWarming();
+      this.scheduledLoginWarmings.set(
+        jobId,
+        (dedupeWindow + 1) * this.loginDedupeWindowMs,
+      );
+
       const jobData: ICacheWarmingJob = {
         userId,
         permisos,
         variables: criticalVariables,
         zoomLevels: commonZoomLevels, // Array de zoom levels
-        loginTime: new Date().toISOString(),
+        loginTime: new Date(now).toISOString(),
         source,
       };
 
@@ -72,14 +106,22 @@ export class CacheWarmingQueueService {
         removeOnFail: 5, // Mantener últimos 5 jobs fallidos
       };
 
-      const jobId = `cache-warm-login-${userId}-${Date.now()}`;
-
       this.logger.log(`📋 Intentando agregar job a cola: ${jobId}`);
 
-      const job = await this.cacheWarmingQueue.add('warm-user-login', jobData, {
-        ...jobOptions,
-        jobId,
-      });
+      let job;
+      try {
+        job = await this.cacheWarmingQueue.add(
+          'warm-user-login',
+          jobData,
+          {
+            ...jobOptions,
+            jobId,
+          },
+        );
+      } catch (error) {
+        this.scheduledLoginWarmings.delete(jobId);
+        throw error;
+      }
 
       this.logger.log(`✅ Job agregado exitosamente: ${job.id}`);
       this.logger.log(
@@ -94,9 +136,30 @@ export class CacheWarmingQueueService {
     }
   }
 
-  /**
-   * Obtener estadísticas de la cola
-   */
+  private pruneScheduledLoginWarmings(now: number): void {
+    for (const [key, expiresAt] of this.scheduledLoginWarmings) {
+      if (expiresAt <= now) {
+        this.scheduledLoginWarmings.delete(key);
+      }
+    }
+  }
+
+  private makeRoomForScheduledLoginWarming(): void {
+    while (
+      this.scheduledLoginWarmings.size >=
+      this.maxScheduledLoginWarmings
+    ) {
+      const oldestKey = this.scheduledLoginWarmings.keys().next().value as
+        | string
+        | undefined;
+      if (!oldestKey) {
+        break;
+      }
+      this.scheduledLoginWarmings.delete(oldestKey);
+    }
+  }
+
+  /** Obtiene estadisticas operativas de la cola. */
   async getQueueStats() {
     const waiting = await this.cacheWarmingQueue.getWaiting();
     const active = await this.cacheWarmingQueue.getActive();

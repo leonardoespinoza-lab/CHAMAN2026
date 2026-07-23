@@ -37,6 +37,7 @@ export class AlertasController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   public async get(
     @Query() query: IQueryParam,
@@ -51,6 +52,7 @@ export class AlertasController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   public async getById(
     @Param('id') id: string,
@@ -65,6 +67,7 @@ export class AlertasController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   public async getByIdSiembra(
     @Param('id') id: string,
@@ -78,8 +81,11 @@ export class AlertasController {
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
   )
-  public async create(@Body() body: ICreateAlerta): Promise<IAlerta> {
-    return await this.service.create(body);
+  public async create(
+    @Body() body: ICreateAlerta,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<IAlerta> {
+    return await this.service.create(body, permiso);
   }
 
   @Put('/:id')
@@ -101,6 +107,7 @@ export class AlertasController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async cambiarEstado(
     @Param('id') id: string,

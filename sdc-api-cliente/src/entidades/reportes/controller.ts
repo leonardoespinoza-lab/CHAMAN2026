@@ -19,6 +19,7 @@ export class ReportesController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Productor', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura', 'Lectura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura', 'Lectura'] },
   )
   public async get(
     @Query() query: IQueryParam,
@@ -34,6 +35,7 @@ export class ReportesController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Productor', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura', 'Lectura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura', 'Lectura'] },
   )
   public async historico(
     @Param('idDispositivo') idDispositivo: string,
@@ -51,6 +53,7 @@ export class ReportesController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Productor', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura', 'Lectura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura', 'Lectura'] },
   )
   public async diario(
     @Param('idDispositivo') idDispositivo: string,
@@ -67,6 +70,7 @@ export class ReportesController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Productor', roles: ['Admin', 'Escritura', 'Lectura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura', 'Lectura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura', 'Lectura'] },
   )
   public async getById(
     @Param('id') id: string,

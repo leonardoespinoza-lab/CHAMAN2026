@@ -1,9 +1,12 @@
 import { Component, HostListener, OnDestroy } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
-import { IPermiso } from 'modelos/src';
 import { Subscription } from 'rxjs';
 import { LoginService } from '../../auxiliares/http/login.service';
+import {
+  permisoPrincipal,
+  rutaInicioPermiso,
+} from '../../auxiliares/seguridad/access-policy';
 import { HelperService } from '../../auxiliares/servicios/helper';
 import { SharedModule } from '../../auxiliares/shared.module';
 import { VERSION } from '../../environments/environment';
@@ -78,7 +81,7 @@ export class LoginComponent implements OnDestroy {
 
   private getRutaInicial(): string {
     const permisos = this.helper.user?.permisos || [];
-    const permiso = this.getPermisoPrincipal(permisos);
+    const permiso = permisoPrincipal(permisos);
     const indice = permiso ? permisos.indexOf(permiso) : -1;
 
     if (permiso) {
@@ -86,21 +89,7 @@ export class LoginComponent implements OnDestroy {
       this.helper.setNumeroPermiso(Math.max(indice, 0));
     }
 
-    if (permiso?.nivel === 'Admin') return '/dashboard-admin';
-    if (permiso?.nivel === 'Quimica') return '/dashboard-quimica';
-    if (permiso?.nivel === 'Distribuidor') return '/dashboard-distribuidor';
-    return '/mapa';
-  }
-
-  private getPermisoPrincipal(permisos: IPermiso[]): IPermiso | undefined {
-    const prioridad: Record<string, number> = {
-      Admin: 5,
-      Quimica: 4,
-      Distribuidor: 3,
-      Productor: 2,
-      Establecimiento: 1,
-    };
-    return [...permisos].sort((a, b) => (prioridad[b.nivel] || 0) - (prioridad[a.nivel] || 0))[0];
+    return rutaInicioPermiso(permiso);
   }
 
   async ngOnDestroy() {

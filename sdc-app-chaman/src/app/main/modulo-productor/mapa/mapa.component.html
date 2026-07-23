@@ -6,7 +6,16 @@
 
 <section class="map-topbar">
   <div class="map-topbar-main">
-    <div class="weather-strip pointer" (click)="abrirDrawerClima()">
+    <div
+      class="weather-strip chaman-interactive-surface"
+      role="button"
+      tabindex="0"
+      aria-label="Abrir detalle meteorologico"
+      aria-haspopup="dialog"
+      (click)="abrirDrawerClima()"
+      (keydown.enter)="abrirDrawerClima()"
+      (keydown.space)="$event.preventDefault(); abrirDrawerClima()"
+    >
       <div class="weather-title">
         <span class="weather-eyebrow">Clima de zona</span>
         <strong>{{ climaZonaNombre() }}</strong>
@@ -65,6 +74,21 @@
       }
     </div>
   </div>
+
+  @if (mostrarRedTerritorial && redComercial && (redComercial.distribuidores.length || redComercial.productores.length)) {
+    <div class="network-rail" aria-label="Capas de la red territorial">
+      <span>Red territorial</span>
+      <button type="button" class="network-chip distributor" [class.inactive]="!mostrarDistribuidores" (click)="toggleDistribuidores()">
+        <i class="pi pi-building"></i><strong>{{ redComercial.distribuidores.length }}</strong><small>Distribuidores</small>
+      </button>
+      <button type="button" class="network-chip producer" [class.inactive]="!mostrarProductores" (click)="toggleProductores()">
+        <i class="pi pi-users"></i><strong>{{ redComercial.productores.length }}</strong><small>Productores</small>
+      </button>
+      <span class="network-static"><i class="pi pi-map"></i><strong>{{ redComercial.establecimientos.length }}</strong> establecimientos</span>
+      <span class="network-static"><i class="pi pi-th-large"></i><strong>{{ redComercial.totales.lotes }}</strong> lotes</span>
+      <span class="network-hint">Seleccione un punto para ver su estructura asociada.</span>
+    </div>
+  }
 
   @if (establecimientos.length > 1) {
     <div class="establishment-rail" aria-label="Accesos a establecimientos">

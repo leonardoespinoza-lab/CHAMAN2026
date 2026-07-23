@@ -53,6 +53,10 @@ export class ListadoDistribuidoresComponent implements OnInit, OnDestroy {
     this.router.navigate(['distribuidores', 'editar', data._id]);
   }
 
+  public ver(data: IDistribuidor): void {
+    void this.router.navigate(['distribuidores', 'ver', data._id]);
+  }
+
   public coordenadas(dato: IDistribuidor): [number, number] | null {
     const coordinates = dato.geojson?.coordinates;
     if (!Array.isArray(coordinates) || coordinates.length < 2) {
@@ -116,7 +120,7 @@ export class ListadoDistribuidoresComponent implements OnInit, OnDestroy {
     this.confirmationService.confirm({
       // target: event.target as EventTarget,
       header: this.translate.instant('Por favor, confirme la acción'),
-      message: this.translate.instant('¿Desea eliminar el distribuidor?'),
+      message: this.translate.instant('¿Desea archivar el distribuidor? La red histórica quedará preservada.'),
       closable: true,
       closeOnEscape: true,
       icon: 'pi pi-exclamation-triangle',
@@ -135,7 +139,7 @@ export class ListadoDistribuidoresComponent implements OnInit, OnDestroy {
 
           this.listado.deleteEntityItem('distribuidors', dato._id!);
 
-          this.helper.notifSuccess(this.translate.instant('Eliminado correctamente'));
+          this.helper.notifSuccess(this.translate.instant('Distribuidor archivado correctamente'));
         } catch (error) {
           this.helper.notifError(error);
         }

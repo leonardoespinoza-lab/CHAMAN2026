@@ -80,10 +80,6 @@ export class CrearEditarCosechaComponent {
     this.loading = true;
     this.lote = this.paramsService.get('cosecharLote');
     this.siembra = this.paramsService.get('editCosecha');
-    console.log('cosecha del lote', this.lote);
-    if (this.siembra) {
-      console.log('editar cosecha', this.siembra);
-    }
 
     this.titulo = this.siembra
       ? () => this.translate.instant(`Editar cosecha`)

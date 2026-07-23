@@ -183,7 +183,17 @@
     <ng-template #body let-row>
       <tr class="alarm-card-row">
         <td>
-          <article class="alarm-card" [ngClass]="[severidad(row), estadoClase(row)]" (click)="abrirDetalle(row)">
+          <article
+            class="alarm-card chaman-interactive-surface"
+            [ngClass]="[severidad(row), estadoClase(row)]"
+            role="button"
+            tabindex="0"
+            aria-label="Abrir detalle de la alerta"
+            aria-haspopup="dialog"
+            (click)="abrirDetalle(row)"
+            (keydown.enter)="abrirDetalle(row)"
+            (keydown.space)="$event.preventDefault(); abrirDetalle(row)"
+          >
             <div class="alarm-marker">
               <i class="pi" [ngClass]="categoriaIcono(row)"></i>
             </div>

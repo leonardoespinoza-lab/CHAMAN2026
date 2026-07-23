@@ -22,7 +22,7 @@
                 inputId="mostrarLicencia"
                 (ngModelChange)="onMostrarLicenciaChange($event)"
               />
-              <label for="mostrarLicencia" class="ml-2">Editar Licencia</label>
+              <label for="mostrarLicencia" class="ml-2">Administrar licencia</label>
             </div>
           }
         </div>
@@ -85,20 +85,80 @@
                       [useDeviceLocation]="true"
                       [initialValue]="direccionSeleccionada"
                       (direccionChange)="onDireccionChange($event)"
+                      (direccionClear)="onDireccionClear()"
                     ></app-autocomplete-direccion>
+                    <p-floatlabel variant="in" class="mt-4">
+                      <input pInputText type="number" formControlName="radioInfluenciaKm" [fluid]="true" />
+                      <label>Radio de influencia comercial (km)</label>
+                    </p-floatlabel>
+                    <small class="location-help">La direccion y este radio se muestran en el mapa como referencia de cobertura, no como limite contractual.</small>
                   </p-tabpanel>
                   @if (loginService.esAdmin && mostrarLicencia && formLicencia) {
                     <!-- Basico -->
                     <p-tabpanel [value]="1">
-                      <p-select
-                        [options]="licencias"
-                        [(ngModel)]="licencia"
-                        optionLabel="nombre"
-                        placeholder="Licencia"
-                        class="w-full md:w-56"
-                        [ngModelOptions]="{ standalone: true }"
-                        (onChange)="onLicenciaChange($event.value)"
-                      />
+                      <section class="license-assignment-panel">
+                        <div class="license-assignment-heading">
+                          <div>
+                            <span class="eyebrow">Asignacion comercial</span>
+                            <h3>Plan del distribuidor</h3>
+                            <p>Elegir un plan no modifica su catalogo ni afecta a otras entidades.</p>
+                          </div>
+                          @if (estadoLicencia) {
+                            <span class="license-source">{{ estadoLicencia.origenEfectivo }}</span>
+                          }
+                        </div>
+
+                        <p-select
+                          [options]="licencias"
+                          [(ngModel)]="licencia"
+                          optionLabel="nombre"
+                          placeholder="Seleccionar un plan existente"
+                          class="w-full"
+                          [fluid]="true"
+                          appendTo="body"
+                          [ngModelOptions]="{ standalone: true }"
+                          (onChange)="onLicenciaChange($event.value)"
+                        />
+
+                        @if (licencia) {
+                          <div class="license-plan-summary">
+                            <div><span>Usuarios</span><strong>{{ licencia.maxUsuarios ?? 'Sin limite' }}</strong></div>
+                            <div><span>Productores</span><strong>{{ licencia.maxProductores ?? 'Sin limite' }}</strong></div>
+                            <div><span>Establecimientos</span><strong>{{ licencia.maxEstablecimientos ?? 'Sin limite' }}</strong></div>
+                            <div><span>Lotes</span><strong>{{ licencia.maxLotes ?? 'Sin limite' }}</strong></div>
+                            <div><span>Hectareas</span><strong>{{ licencia.maxdHectareas ?? 'Sin limite' }}</strong></div>
+                            <div><span>Control</span><strong>{{ licencia.modoLimite || 'informativo' }}</strong></div>
+                          </div>
+                        }
+
+                        @if (estadoLicencia?.uso; as uso) {
+                          <div class="license-usage-heading">
+                            <strong>Consumo actual de la red</strong>
+                            <small>Medicion administrativa; no modifica permisos ni factura consumos.</small>
+                          </div>
+                          <div class="license-usage-summary">
+                            <div><span>Usuarios</span><strong>{{ uso.usuarios.actual }} / {{ uso.usuarios.limite ?? 'Sin limite' }}</strong></div>
+                            <div><span>Productores</span><strong>{{ uso.productores.actual }} / {{ uso.productores.limite ?? 'Sin limite' }}</strong></div>
+                            <div><span>Establecimientos</span><strong>{{ uso.establecimientos.actual }} / {{ uso.establecimientos.limite ?? 'Sin limite' }}</strong></div>
+                            <div><span>Lotes</span><strong>{{ uso.lotes.actual }} / {{ uso.lotes.limite ?? 'Sin limite' }}</strong></div>
+                            <div><span>Hectareas</span><strong>{{ uso.hectareas.actual }} / {{ uso.hectareas.limite ?? 'Sin limite' }}</strong></div>
+                          </div>
+                        }
+
+                        <div class="license-date-field">
+                          <label for="licenseExpiration">Vigencia hasta</label>
+                          <p-datepicker
+                            inputId="licenseExpiration"
+                            [(ngModel)]="fechaDeExpiracion"
+                            [minDate]="hoy"
+                            [showIcon]="true"
+                            [fluid]="true"
+                            appendTo="body"
+                            [ngModelOptions]="{ standalone: true }"
+                          />
+                          <small>El cambio crea una nueva asignacion auditable; no edita el plan compartido.</small>
+                        </div>
+                      </section>
                     </p-tabpanel>
                     <!-- Basico -->
                     <p-tabpanel [value]="2" [formGroup]="formLicencia">

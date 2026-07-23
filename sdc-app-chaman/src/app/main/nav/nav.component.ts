@@ -1,7 +1,15 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { IAlerta, IListado, IPermiso, IQueryParam, IUsuario } from 'modelos/src';
+import {
+  IAlerta,
+  IListado,
+  IPermiso,
+  IQueryParam,
+  ITenant,
+  IUsuario,
+  NivelPermiso,
+} from 'modelos/src';
 import { ConfirmationService } from 'primeng/api';
 import { PrimeNG } from 'primeng/config';
 import { DialogService, DynamicDialogRef } from 'primeng/dynamicdialog';
@@ -12,10 +20,20 @@ import { PRIMENG_EN } from '../../../../public/i18n/primeng-en';
 import { PRIMENG_ES } from '../../../../public/i18n/primeng-es';
 import { AlertaService } from '../../auxiliares/http/alerta.service';
 import { LoginService } from '../../auxiliares/http/login.service';
+import { TenantService } from '../../auxiliares/http/tenant.service';
+import {
+  esNivelPermiso,
+  etiquetaNivel,
+  indicePermiso,
+  permisoPrincipal,
+  puedeAdministrar,
+  rutaInicioPermiso,
+} from '../../auxiliares/seguridad/access-policy';
 import { HelperService } from '../../auxiliares/servicios/helper';
 import { ListadosService } from '../../auxiliares/servicios/listados';
 import { PushNotificationsService } from '../../auxiliares/servicios/push-notifications';
 import { WebSocketService } from '../../auxiliares/servicios/websocket';
+import { TenantThemeService } from '../../auxiliares/servicios/tenant-theme.service';
 import { SharedModule } from '../../auxiliares/shared.module';
 import { ENV, VERSION } from '../../environments/environment';
 import { CambiarPasswordComponent } from '../usuarios/cambiar-password/cambiar-password.component';
@@ -35,6 +53,7 @@ export class NavComponent implements OnInit, OnDestroy {
   public user$?: Subscription;
   public permisos: IPermiso[] = [];
   public permisoSeleccionado?: IPermiso;
+  public tenant?: ITenant;
   public rutaActual = '';
   public routerEvents$?: Subscription;
   public alertasActivasCount = 0;
@@ -62,6 +81,8 @@ export class NavComponent implements OnInit, OnDestroy {
     private webSocketService: WebSocketService,
     public pushNotificationsService: PushNotificationsService,
     public loginService: LoginService,
+    private tenantService: TenantService,
+    private tenantTheme: TenantThemeService,
     public route: ActivatedRoute,
     private dialogService: DialogService
   ) {}
@@ -114,117 +135,65 @@ export class NavComponent implements OnInit, OnDestroy {
       this.user = data;
       this.permisos = this.user?.permisos || [];
       if (!this.helper.permiso) {
-        const permisoPrincipal = this.getPermisoPrincipal(this.permisos);
-        if (permisoPrincipal) {
-          this.helper.setPermiso(permisoPrincipal);
+        const principal = permisoPrincipal(this.permisos);
+        if (principal) {
+          this.helper.setPermiso(principal);
         }
       }
-      this.permisoSeleccionado = this.helper.permiso || this.getPermisoPrincipal(this.permisos);
-      let indice = this.permisoSeleccionado ? this.encontrarIndicePermiso(this.permisos, this.permisoSeleccionado) : -1;
+      this.permisoSeleccionado =
+        this.helper.permiso || permisoPrincipal(this.permisos);
+      let indice = indicePermiso(this.permisos, this.permisoSeleccionado);
       if (indice < 0) {
-        this.permisoSeleccionado = this.getPermisoPrincipal(this.permisos);
+        this.permisoSeleccionado = permisoPrincipal(this.permisos);
         if (this.permisoSeleccionado) {
           this.helper.setPermiso(this.permisoSeleccionado);
-          indice = this.encontrarIndicePermiso(this.permisos, this.permisoSeleccionado);
+          indice = indicePermiso(this.permisos, this.permisoSeleccionado);
         }
       }
       this.helper.setNumeroPermiso(Math.max(indice, 0));
       this.checkPermisos();
+      await this.actualizarTenantContexto();
       this.actualizarIndicadorAlertas();
     });
     await this.listados.getLastValue('usuarioPropio', {});
-  }
-
-  private getPermisoPrincipal(permisos: IPermiso[]): IPermiso | undefined {
-    const prioridad: Record<string, number> = {
-      Admin: 5,
-      Quimica: 4,
-      Distribuidor: 3,
-      Productor: 2,
-      Establecimiento: 1,
-    };
-    return [...permisos].sort((a, b) => (prioridad[b.nivel] || 0) - (prioridad[a.nivel] || 0))[0];
-  }
-
-  private encontrarIndicePermiso(permisos: IPermiso[], permisoABuscar: Partial<IPermiso>): number {
-    return permisos.findIndex((permiso) => {
-      // Comparar las propiedades relevantes
-      return (
-        permiso.nivel === permisoABuscar.nivel &&
-        permiso.rol === permisoABuscar.rol &&
-        permiso.idQuimica === permisoABuscar.idQuimica &&
-        permiso.idDistribuidor === permisoABuscar.idDistribuidor &&
-        permiso.idProductor === permisoABuscar.idProductor &&
-        permiso.idEstablecimiento === permisoABuscar.idEstablecimiento
-      );
-    });
   }
 
   private checkPermisos() {
     this.loginService.resetPermisos();
     const permiso = this.helper.permiso;
     if (!permiso) return;
-    const esEstablecimiento = permiso?.nivel === 'Establecimiento';
-    const esProductor = permiso?.nivel === 'Productor';
-    const esDistribuidor = permiso?.nivel === 'Distribuidor';
-    const esQuimica = permiso?.nivel === 'Quimica';
-    const esAdmin = permiso?.nivel === 'Admin';
-    this.loginService.esEstablecimiento = esEstablecimiento || false;
-    this.loginService.esProductor = esProductor || false;
-    this.loginService.esDistribuidor = esDistribuidor || false;
-    this.loginService.esQuimica = esQuimica || false;
-    this.loginService.esAdmin = esAdmin || false;
-    // console.log('Permiso:', this.permisoSeleccionado);
-    // console.log('Permisos:', this.permisos);
-    // console.log('Permiso STORAGE:', this.helper.permiso);
-    // console.log('Permiso NUMERO STORAGE:', this.helper.numeroPermiso);
-    // console.log('Es Productor:', this.loginService.esProductor);
-    // console.log('Es Distribuidor:', this.loginService.esDistribuidor);
-    // console.log('Es Quimica:', this.loginService.esQuimica);
-    // console.log('Es Admin:', this.loginService.esAdmin);
+    this.loginService.esEstablecimiento = esNivelPermiso(
+      permiso,
+      'Establecimiento'
+    );
+    this.loginService.esTenant = esNivelPermiso(permiso, 'Tenant');
+    this.loginService.esProductor = esNivelPermiso(permiso, 'Productor');
+    this.loginService.esDistribuidor = esNivelPermiso(permiso, 'Distribuidor');
+    this.loginService.esAsesor = esNivelPermiso(permiso, 'Asesor');
+    this.loginService.esQuimica = esNivelPermiso(permiso, 'Quimica');
+    this.loginService.esAdmin = esNivelPermiso(permiso, 'Admin');
   }
 
   private redirect() {
-    // Si está en la ruta /
     if (this.router.url === '/') {
-      if (this.loginService.esAdmin) {
-        this.router.navigateByUrl('/dashboard-admin');
-      } else if (this.loginService.esQuimica) {
-        this.router.navigateByUrl('/dashboard-quimica');
-      } else if (this.loginService.esDistribuidor) {
-        this.router.navigateByUrl('/dashboard-distribuidor');
-      } else if (this.loginService.esProductor) {
-        this.router.navigateByUrl('/mapa');
-      } else if (this.loginService.esEstablecimiento) {
-        this.router.navigateByUrl('/mapa');
-      } else {
-        this.router.navigateByUrl('/usuarios');
-      }
+      this.router.navigateByUrl(rutaInicioPermiso(this.permisoActivo()));
     }
   }
 
   private forcedRedirect() {
-    if (this.loginService.esAdmin) {
-      this.router.navigateByUrl(`/dashboard-admin?permiso=${this.helper.numeroPermiso}`);
-    } else if (this.loginService.esQuimica) {
-      this.router.navigateByUrl(`/dashboard-quimica?permiso=${this.helper.numeroPermiso}`);
-    } else if (this.loginService.esDistribuidor) {
-      this.router.navigateByUrl(`/dashboard-distribuidor?permiso=${this.helper.numeroPermiso}`);
-    } else if (this.loginService.esProductor) {
-      this.router.navigateByUrl(`/mapa?permiso=${this.helper.numeroPermiso}`);
-    } else if (this.loginService.esEstablecimiento) {
-      this.router.navigateByUrl(`/mapa?permiso=${this.helper.numeroPermiso}`);
-    } else {
-      this.router.navigateByUrl(`/usuarios?permiso=${this.helper.numeroPermiso}`);
-    }
+    const inicio = rutaInicioPermiso(this.permisoActivo());
+    this.router.navigateByUrl(
+      `${inicio}?permiso=${this.helper.numeroPermiso ?? 0}`
+    );
   }
 
-  public onCambioPermiso(permiso: IPermiso) {
+  public async onCambioPermiso(permiso: IPermiso): Promise<void> {
     this.permisoSeleccionado = permiso;
     this.helper.setPermiso(permiso);
-    const indice = this.encontrarIndicePermiso(this.permisos, this.permisoSeleccionado);
+    const indice = indicePermiso(this.permisos, this.permisoSeleccionado);
     this.helper.setNumeroPermiso(indice);
     this.checkPermisos();
+    await this.actualizarTenantContexto();
     this.reload();
     this.actualizarIndicadorAlertas();
     this.forcedRedirect();
@@ -236,7 +205,15 @@ export class NavComponent implements OnInit, OnDestroy {
   }
 
   public puedeGestionarUsuarios(): boolean {
-    return this.loginService.esAdmin || this.loginService.esQuimica || this.loginService.esDistribuidor;
+    return puedeAdministrar(this.permisoActivo());
+  }
+
+  public esNivel(...niveles: NivelPermiso[]): boolean {
+    return esNivelPermiso(this.permisoActivo(), ...niveles);
+  }
+
+  public permisoActivo(): IPermiso | null {
+    return this.permisoSeleccionado || this.helper.permiso;
   }
 
   public mostrarMenuFlotante(): boolean {
@@ -276,6 +253,9 @@ export class NavComponent implements OnInit, OnDestroy {
   }
 
   public logoAlcance(): string | undefined {
+    if (this.tenant?.branding?.logo) {
+      return this.tenant?.branding?.logo;
+    }
     if (this.permisoSeleccionado?.nivel === 'Quimica') {
       return this.permisoSeleccionado.quimica?.logo;
     }
@@ -292,23 +272,65 @@ export class NavComponent implements OnInit, OnDestroy {
   }
 
   public nombreAlcance(): string {
-    if (this.permisoSeleccionado?.nivel === 'Quimica') {
-      return this.permisoSeleccionado.quimica?.nombre || 'Compañía';
+    if (this.esNivel('Tenant')) {
+      return this.tenant?.branding?.nombreAplicacion || this.tenant?.nombre || 'Tenant';
+    }
+    if (this.esNivel('Quimica')) {
+      return this.permisoActivo()?.quimica?.nombre || 'Compañía';
     }
 
-    if (this.permisoSeleccionado?.nivel === 'Distribuidor') {
-      return this.permisoSeleccionado.distribuidor?.nombre || 'Distribuidor';
+    if (this.esNivel('Distribuidor')) {
+      return this.permisoActivo()?.distribuidor?.nombre || 'Distribuidor';
     }
 
-    if (this.permisoSeleccionado?.nivel === 'Productor') {
-      return this.permisoSeleccionado.productor?.nombre || 'Productor';
+    if (this.esNivel('Asesor')) {
+      return this.helper.user?.datosPersonales?.nombre || 'Asesor';
     }
 
-    if (this.permisoSeleccionado?.nivel === 'Establecimiento') {
-      return this.permisoSeleccionado.establecimiento?.nombre || 'Establecimiento';
+    if (this.esNivel('Productor')) {
+      return this.permisoActivo()?.productor?.nombre || 'Productor';
     }
 
-    return this.permisoSeleccionado?.nivel || 'Admin';
+    if (this.esNivel('Establecimiento')) {
+      return (
+        this.permisoActivo()?.establecimiento?.nombre || 'Establecimiento'
+      );
+    }
+
+    return etiquetaNivel(this.permisoActivo()?.nivel || 'Admin');
+  }
+
+  public nombrePermiso(permiso?: IPermiso): string {
+    if (!permiso) return 'Sin alcance';
+    if (permiso.nivel === 'Tenant') {
+      return (
+        this.tenant?.branding?.nombreAplicacion ||
+        this.tenant?.nombre ||
+        'Tenant'
+      );
+      }
+      if (permiso.nivel === 'Asesor') {
+        return (
+          this.user?.datosPersonales?.nombre ||
+          this.user?.username ||
+          this.helper.user?.datosPersonales?.nombre ||
+          this.helper.user?.username ||
+          'Asesor'
+        );
+      }
+    if (permiso.nivel === 'Quimica') {
+      return permiso.quimica?.nombre || 'Compañía';
+    }
+    if (permiso.nivel === 'Distribuidor') {
+      return permiso.distribuidor?.nombre || 'Distribuidor';
+    }
+    if (permiso.nivel === 'Productor') {
+      return permiso.productor?.nombre || 'Productor';
+    }
+    if (permiso.nivel === 'Establecimiento') {
+      return permiso.establecimiento?.nombre || 'Establecimiento';
+    }
+    return 'Administración Chaman';
   }
 
   public descripcionAlcance(): string {
@@ -334,20 +356,12 @@ export class NavComponent implements OnInit, OnDestroy {
   }
 
   public irInicio(): void {
-    if (this.loginService.esAdmin) {
-      this.router.navigateByUrl('/dashboard-admin');
-    } else if (this.loginService.esQuimica) {
-      this.router.navigateByUrl('/dashboard-quimica');
-    } else if (this.loginService.esDistribuidor) {
-      this.router.navigateByUrl('/dashboard-distribuidor');
-    } else {
-      this.router.navigateByUrl('/mapa');
-    }
+    this.router.navigateByUrl(rutaInicioPermiso(this.permisoActivo()));
   }
 
   public mostrarVolver(): boolean {
     const ruta = this.getRutaLimpia();
-    return !['/', '/mapa', '/dashboard-admin', '/dashboard-quimica', '/dashboard-distribuidor'].includes(ruta);
+    return !['/', '/mapa', '/dashboard-admin', '/dashboard-tenant', '/dashboard-quimica', '/dashboard-distribuidor'].includes(ruta);
   }
 
   private getRutaLimpia(): string {
@@ -417,12 +431,30 @@ export class NavComponent implements OnInit, OnDestroy {
   }
 
   private puedeVerAlertas(): boolean {
-    return (
-      this.loginService.esQuimica ||
-      this.loginService.esDistribuidor ||
-      this.loginService.esProductor ||
-      this.loginService.esEstablecimiento
+    return this.esNivel(
+      'Quimica',
+      'Distribuidor',
+      'Asesor',
+      'Productor',
+      'Establecimiento'
     );
+  }
+
+  private async actualizarTenantContexto(): Promise<void> {
+    const idTenant = this.helper.permiso?.idTenant || this.permisoSeleccionado?.idTenant;
+    if (!idTenant) {
+      this.tenant = undefined;
+      this.tenantTheme.clear();
+      return;
+    }
+    try {
+      this.tenant = await this.tenantService.getCurrent();
+      this.tenantTheme.apply(this.tenant);
+    } catch (error) {
+      this.tenant = undefined;
+      this.tenantTheme.clear();
+      console.warn('No se pudo cargar la identidad del tenant', error);
+    }
   }
 
   private totalListado(listado?: IListado<IAlerta>): number {
@@ -458,5 +490,6 @@ export class NavComponent implements OnInit, OnDestroy {
     this.user$?.unsubscribe();
     this.routerEvents$?.unsubscribe();
     this.alertasWs$?.unsubscribe();
+    this.tenantTheme.clear();
   }
 }

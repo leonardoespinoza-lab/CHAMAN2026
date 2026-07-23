@@ -96,5 +96,8 @@ export class DrawerListadoSiembrasComponent implements OnInit, OnDestroy {
     await this.listarSiembras();
   }
 
-  ngOnDestroy(): void {}
+  ngOnDestroy(): void {
+    this.siembras$?.unsubscribe();
+    this.siembras$ = undefined;
+  }
 }

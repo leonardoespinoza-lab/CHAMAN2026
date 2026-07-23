@@ -1,8 +1,8 @@
 <section class="distributor-dashboard">
   <header class="hero-panel">
     <div>
-      <p class="eyebrow">{{ 'Gestion del distribuidor' | translate }}</p>
-      <h1>{{ distribuidorActual?.nombre || ('Resumen operativo' | translate) }}</h1>
+      <p class="eyebrow">{{ (loginService.esAsesor ? 'Gestion del asesor' : 'Gestion del distribuidor') | translate }}</p>
+      <h1>{{ nombreGestor() || ('Resumen operativo' | translate) }}</h1>
       <p class="hero-copy">
         {{ distribuidorActual?.direccion || ('Productores, lotes, hectareas monitoreadas y estado sanitario consolidado.' | translate) }}
       </p>
@@ -31,7 +31,7 @@
       <div class="section-title">
         <div>
           <p class="eyebrow">{{ 'Mapa operativo' | translate }}</p>
-          <h2>{{ 'Distribuidor, productores y lotes' | translate }}</h2>
+          <h2>{{ (loginService.esAsesor ? 'Asesor, productores y lotes' : 'Distribuidor, productores y lotes') | translate }}</h2>
         </div>
         <span class="meta-pill">{{ lotesGeorreferenciados }}/{{ totalLotes }} {{ 'lotes en mapa' | translate }}</span>
       </div>
@@ -40,9 +40,8 @@
 
       <div class="map-legend">
         <span><i class="legend-dot danger"></i>{{ 'Rojo: prioridad alta' | translate }}</span>
-        <span><i class="legend-dot warn"></i>{{ 'Amarillo: atencion' | translate }}</span>
+        <span><i class="legend-dot warn"></i>{{ 'Amarillo: precaucion o datos pendientes' | translate }}</span>
         <span><i class="legend-dot ok"></i>{{ 'Verde: estable' | translate }}</span>
-        <span><i class="legend-dot muted"></i>{{ 'Gris: sin prediccion' | translate }}</span>
       </div>
     </article>
 
@@ -144,7 +143,7 @@
     <article class="kpi-card">
       <span>{{ 'Productores' | translate }}</span>
       <strong>{{ productores.length | number: '1.0-0' }}</strong>
-      <small>{{ 'asociados al distribuidor' | translate }}</small>
+      <small>{{ (loginService.esAsesor ? 'gestionados por el asesor' : 'asociados al distribuidor') | translate }}</small>
     </article>
 
     <article class="kpi-card">
@@ -262,7 +261,16 @@
 
     <div class="priority-list">
       @for (alerta of alertasSanitarias; track trackByAlerta($index, alerta)) {
-        <article class="priority-row" [ngClass]="alerta.nivel" (click)="abrirLote({ id: alerta.idLote, nombre: alerta.lote, productor: alerta.productor, cultivo: alerta.cultivo, hectareas: alerta.hectareas, nivel: alerta.nivel, enfermedad: alerta.enfermedad, resultado: alerta.resultado })">
+        <article
+          class="priority-row chaman-interactive-surface"
+          [ngClass]="alerta.nivel"
+          role="button"
+          tabindex="0"
+          [attr.aria-label]="'Abrir lote prioritario ' + alerta.lote"
+          (click)="abrirLote({ id: alerta.idLote, nombre: alerta.lote, productor: alerta.productor, cultivo: alerta.cultivo, hectareas: alerta.hectareas, nivel: alerta.nivel, enfermedad: alerta.enfermedad, resultado: alerta.resultado })"
+          (keydown.enter)="abrirLote({ id: alerta.idLote, nombre: alerta.lote, productor: alerta.productor, cultivo: alerta.cultivo, hectareas: alerta.hectareas, nivel: alerta.nivel, enfermedad: alerta.enfermedad, resultado: alerta.resultado })"
+          (keydown.space)="$event.preventDefault(); abrirLote({ id: alerta.idLote, nombre: alerta.lote, productor: alerta.productor, cultivo: alerta.cultivo, hectareas: alerta.hectareas, nivel: alerta.nivel, enfermedad: alerta.enfermedad, resultado: alerta.resultado })"
+        >
           <div>
             <strong>{{ alerta.lote }}</strong>
             <span>{{ alerta.productor }} - {{ alerta.cultivo }} - {{ alerta.enfermedad }}</span>

@@ -34,21 +34,16 @@ describe('NdviQueueService', () => {
     const { service, redis } = createSubject();
 
     await expect(
-      service.enqueueLote(
-        lote,
-        '2026-07-05T10:00:00.000Z',
-        'sentinel-2-l2a',
-        {
-          forceRender: true,
-          exactSceneDate: true,
-          knownScenes: [
-            {
-              date: '2026-07-05T10:00:00.000Z',
-              collection: 'sentinel-2-l2a',
-            },
-          ],
-        },
-      ),
+      service.enqueueLote(lote, '2026-07-05T10:00:00.000Z', 'sentinel-2-l2a', {
+        forceRender: true,
+        exactSceneDate: true,
+        knownScenes: [
+          {
+            date: '2026-07-05T10:00:00.000Z',
+            collection: 'sentinel-2-l2a',
+          },
+        ],
+      }),
     ).resolves.toBe(true);
 
     const [dedupeKey, dedupeToken] = redis.set.mock.calls[0];

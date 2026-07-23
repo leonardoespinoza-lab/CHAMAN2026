@@ -1,10 +1,6 @@
 <div class="device-detail-page">
   <header class="device-detail-header">
-    <div class="device-title" (click)="helper.volver()">
-      <svg [style.fill]="'var(--p-primary-color)'" [attr.width]="'40px'" [attr.height]="'40px'">
-        <use [attr.xlink:href]="'icons/icons.svg#back'"></use>
-      </svg>
-
+    <div class="device-title">
       <div>
         <div class="device-title-row">
           <h1>{{ dispositivo?.nombre }}</h1>

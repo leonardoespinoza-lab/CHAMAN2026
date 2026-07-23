@@ -9,6 +9,7 @@ import {
   IInteligenciaSueloLote,
   IEntradasAgronomicasSuelo,
   IRespuestaAgrometeorologiaSiembra,
+  ISolicitudArchivado,
 } from 'modelos/src';
 import {
   AGROMETEO_INTERNAL_TOKEN,
@@ -44,9 +45,9 @@ export class LotesRepository {
     return await this.axios.PUT<ILote>(url, data);
   }
 
-  async delete(id: string): Promise<ILote> {
+  async delete(id: string, audit: ISolicitudArchivado = {}): Promise<ILote> {
     const url = `${API_DATOS}/lotes/${id}`;
-    return await this.axios.DELETE<ILote>(url);
+    return await this.axios.DELETE<ILote>(url, { params: audit });
   }
 
   async calcularCapacidadCampo(idSonda: string, fecha: string) {

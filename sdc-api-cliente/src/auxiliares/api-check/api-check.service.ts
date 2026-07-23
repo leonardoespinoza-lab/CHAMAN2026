@@ -12,7 +12,9 @@ export class ApiCheckService {
     try {
       const parsed = new URL(base);
       if (parsed.pathname && parsed.pathname !== '/') {
-        return Array.from(new Set([`${parsed.origin}/health`, `${base}/health`]));
+        return Array.from(
+          new Set([`${parsed.origin}/health`, `${base}/health`]),
+        );
       }
     } catch (error) {
       this.logger.warn(`No se pudo normalizar health check para ${apiBase}`);

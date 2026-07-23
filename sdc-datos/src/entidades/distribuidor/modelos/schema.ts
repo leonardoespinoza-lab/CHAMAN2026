@@ -36,6 +36,21 @@ export class Distribuidor implements Exactly<IDistribuidor, Distribuidor> {
   @Prop({ type: String })
   direccion?: string;
 
+  @Prop({ type: Number, min: 1, max: 1000 })
+  radioInfluenciaKm?: number;
+
+  @Prop({ type: Boolean, default: false, index: true })
+  archivado?: boolean;
+
+  @Prop({ type: Date })
+  fechaArchivado?: string;
+
+  @Prop({ type: String })
+  archivadoPor?: string;
+
+  @Prop({ type: String })
+  motivoArchivado?: string;
+
   // Populate
   quimica?: IQuimica;
 }
@@ -46,7 +61,14 @@ export const DistribuidorSchema = SchemaFactory.createForClass(Distribuidor);
 
 DistribuidorSchema.set('toJSON', { virtuals: true, getters: true });
 
-DistribuidorSchema.index({ nombre: 1, idQuimica: 1 }, { unique: true });
+DistribuidorSchema.index(
+  { nombre: 1, idQuimica: 1 },
+  {
+    name: 'uniq_distribuidor_quimica_nombre_activo_v2',
+    unique: true,
+    partialFilterExpression: { archivado: false },
+  },
+);
 
 DistribuidorSchema.index({ geojson: '2dsphere' });
 

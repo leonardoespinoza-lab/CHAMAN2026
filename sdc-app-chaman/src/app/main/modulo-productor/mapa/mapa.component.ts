@@ -10,9 +10,14 @@ import {
   IListado,
   ILote,
   IPermiso,
+  NivelPermiso,
   IPopulate,
   IQueryParam,
   IReporteNDVI,
+  IDistribuidorRedComercial,
+  IProductorRedComercial,
+  IResumenRedComercial,
+  SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT,
   esCultivoPerenne,
 } from 'modelos/src';
 import { Feature, Map, MapBrowserEvent, Overlay, View } from 'ol';
@@ -20,7 +25,7 @@ import { click } from 'ol/events/condition';
 import { Extent } from 'ol/extent';
 import { FeatureLike } from 'ol/Feature';
 import TileWMS from 'ol/source/TileWMS';
-import { Point, Polygon } from 'ol/geom';
+import { Circle as CircleGeom, Point, Polygon } from 'ol/geom';
 import { Select } from 'ol/interaction';
 import LayerGroup from 'ol/layer/Group';
 import ImageLayer from 'ol/layer/Image';
@@ -30,6 +35,7 @@ import { fromLonLat, toLonLat, transformExtent } from 'ol/proj';
 import { OSM, Vector, XYZ } from 'ol/source';
 import Static from 'ol/source/ImageStatic';
 import Fill from 'ol/style/Fill';
+import CircleStyle from 'ol/style/Circle';
 import Stroke from 'ol/style/Stroke';
 import Style from 'ol/style/Style';
 import Text from 'ol/style/Text';
@@ -43,6 +49,7 @@ import { HelperService } from '../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../auxiliares/servicios/listados';
 import { OpenLayersService } from '../../../auxiliares/servicios/openLayers.service';
 import { ParamsService } from '../../../auxiliares/servicios/params.service';
+import { UsuarioService } from '../../../auxiliares/http/usuario.service';
 import { SharedModule } from '../../../auxiliares/shared.module';
 import { DrawerClimaComponent } from './drawer-clima/drawer-clima.component';
 import { EstadoRiegoMapa, evaluarRiegoMapa } from './mapa-riego-evidence';
@@ -110,6 +117,9 @@ interface IMapaContexto {
   loteNombre?: string;
   updatedAt?: string;
 }
+
+export const puedeVerRedTerritorial = (nivel?: NivelPermiso): boolean =>
+  !!nivel && ['Admin', 'Quimica', 'Distribuidor', 'Asesor'].includes(nivel);
 
 @Component({
   selector: 'app-mapa',
@@ -204,6 +214,40 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   // Dist
   private permiso?: IPermiso | null;
   private distribuidorLayer = OpenLayersService.distribuidorVectorLayer();
+  private productorLayer = new VectorLayer({
+    source: new Vector(),
+    zIndex: 9,
+    style: (feature) =>
+      new Style({
+        image: new CircleStyle({
+          radius: 10,
+          fill: new Fill({ color: '#7357c8' }),
+          stroke: new Stroke({ color: '#fff', width: 3 }),
+        }),
+        text: new Text({
+          text: feature.get('name') || '',
+          font: 'bold 12px sans-serif',
+          fill: new Fill({ color: '#1f2937' }),
+          stroke: new Stroke({ color: '#fff', width: 3 }),
+          offsetY: -22,
+        }),
+      }),
+  });
+  public redComercial?: IResumenRedComercial;
+  public mostrarDistribuidores = true;
+  public mostrarProductores = true;
+
+  public get mostrarRedTerritorial(): boolean {
+    return puedeVerRedTerritorial(this.permiso?.nivel);
+  }
+  private influenciaLayer = new VectorLayer({
+    source: new Vector(),
+    zIndex: 7,
+    style: new Style({
+      fill: new Fill({ color: 'rgba(19, 178, 166, 0.10)' }),
+      stroke: new Stroke({ color: 'rgba(10, 128, 121, 0.85)', width: 2, lineDash: [8, 6] }),
+    }),
+  });
 
   private selectInteractionLotes?: Select;
   private selectInteractionEstablecimientos?: Select;
@@ -389,7 +433,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     private activatedRoute: ActivatedRoute,
     public loginService: LoginService,
     private climaTraduccionService: ClimaTraduccionService,
-    private climaService: ClimaService
+    private climaService: ClimaService,
+    private usuarioService: UsuarioService
   ) {}
 
   private getMapaContextoKey(): string {
@@ -1875,7 +1920,6 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     setTimeout(() => {
       const mapElement = document.getElementById('mapa');
       if (!mapElement) {
-        console.error('Elemento del mapa no encontrado');
         return;
       }
 
@@ -1925,6 +1969,8 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
           this.establecimientosLayer,
           this.lotesLayer,
           this.ndviLayerGroup,
+          this.influenciaLayer,
+          this.productorLayer,
           this.distribuidorLayer,
           this.suelosLayer,
         ],
@@ -1967,8 +2013,10 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       // ✨ PASO 3: TUS LISTENERS EXISTENTES
       // ✨ =======================================================
       this.map.on('click', (evt: MapBrowserEvent<any>) => {
-        // Primero, manejamos el click en los suelos
-        this.handleSuelosClick(evt);
+        // La red comercial tiene prioridad sobre las capas de referencia.
+        if (!this.handleRedComercialClick(evt)) {
+          this.handleSuelosClick(evt);
+        }
         // Luego, el click para deseleccionar lotes (si es necesario)
         this.handleMapClick();
       });
@@ -2544,7 +2592,11 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     const metadata = reporte?.metadataImagen as any;
     const qa = metadata?.renderQa?.ndvi;
     const coverage = Number(qa?.validCoveragePct ?? metadata?.qualityMask?.validCoveragePct ?? 0);
-    return metadata?.renderVersion === 'fixed-index-v3' && qa?.status === 'ok' && coverage >= 3;
+    return (
+      metadata?.renderVersion === 'fixed-index-v3' &&
+      qa?.status === 'ok' &&
+      coverage >= SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT
+    );
   }
 
   private addNdviImage(reporte: IReporteNDVI) {
@@ -2647,7 +2699,21 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private addDistribuidor() {
     if (!this.permiso?.distribuidor?.geojson) return;
-    const ubicacion = this.permiso?.distribuidor?.geojson;
+    const distribuidor = this.permiso.distribuidor;
+    this.addDistribuidorRed({
+      id: String(distribuidor._id || distribuidor.nombre || 'distribuidor'),
+      nombre: distribuidor.nombre || 'Distribuidor',
+      direccion: distribuidor.direccion,
+      geojson: distribuidor.geojson,
+      radioInfluenciaKm: distribuidor.radioInfluenciaKm,
+      fuenteUbicacion: 'Cargada',
+      metricas: { productores: 0, establecimientos: 0, lotes: 0, hectareas: 0, usuarios: 0 },
+    });
+  }
+
+  private addDistribuidorRed(distribuidor: IDistribuidorRedComercial): void {
+    if (!distribuidor.geojson?.coordinates) return;
+    const ubicacion = distribuidor.geojson;
     if (!ubicacion.coordinates) return;
     const geojson = ubicacion.coordinates;
     const source = this.distribuidorLayer.getSource();
@@ -2656,11 +2722,141 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     const feature = new Feature(point);
 
     // Estilo del punto
-    feature.setId(this.permiso?.distribuidor?.nombre);
-    feature.set('distribuidor', this.permiso?.distribuidor);
-    feature.set('nombre', this.permiso?.distribuidor?.nombre);
-    feature.set('name', this.permiso?.distribuidor?.nombre); // Para el estilo de texto
+    feature.setId(`distribuidor-${distribuidor.id}`);
+    feature.set('distribuidor', distribuidor);
+    feature.set('redComercial', distribuidor);
+    feature.set('tipoRed', 'distribuidor');
+    feature.set('nombre', distribuidor.nombre);
+    feature.set('name', distribuidor.nombre);
     source?.addFeature(feature);
+    this.addZonaInfluencia(
+      geojson,
+      Number(distribuidor.radioInfluenciaKm || 0),
+      `Zona ${distribuidor.nombre}`,
+    );
+  }
+
+  private addProductorRed(productor: IProductorRedComercial): void {
+    const coordinates = productor.geojson?.coordinates;
+    if (!coordinates) return;
+    const point = new Point(coordinates);
+    point.transform('EPSG:4326', 'EPSG:3857');
+    const feature = new Feature(point);
+    feature.setId(`productor-${productor.id}`);
+    feature.set('productor', productor);
+    feature.set('redComercial', productor);
+    feature.set('tipoRed', 'productor');
+    feature.set('nombre', productor.nombre);
+    feature.set('name', productor.nombre);
+    this.productorLayer.getSource()?.addFeature(feature);
+  }
+
+  private async cargarRedComercial(): Promise<void> {
+    if (!this.mostrarRedTerritorial) {
+      this.redComercial = undefined;
+      return;
+    }
+    try {
+      this.redComercial = await this.usuarioService.resumenRedComercial();
+    } catch (error) {
+      console.warn('No se pudo cargar la red territorial; se conserva el mapa operativo.', error);
+      this.redComercial = undefined;
+    }
+  }
+
+  private redibujarRedComercial(): void {
+    this.distribuidorLayer.getSource()?.clear();
+    this.productorLayer.getSource()?.clear();
+    this.influenciaLayer.getSource()?.clear();
+    if (this.redComercial) {
+      this.redComercial.distribuidores.forEach((item) => this.addDistribuidorRed(item));
+      this.redComercial.productores.forEach((item) => this.addProductorRed(item));
+    } else {
+      this.addDistribuidor();
+    }
+    this.addZonaProfesional();
+    this.distribuidorLayer.setVisible(this.mostrarDistribuidores);
+    this.influenciaLayer.setVisible(this.mostrarDistribuidores);
+    this.productorLayer.setVisible(this.mostrarProductores);
+  }
+
+  public toggleDistribuidores(): void {
+    this.mostrarDistribuidores = !this.mostrarDistribuidores;
+    this.distribuidorLayer.setVisible(this.mostrarDistribuidores);
+    this.influenciaLayer.setVisible(this.mostrarDistribuidores);
+  }
+
+  public toggleProductores(): void {
+    this.mostrarProductores = !this.mostrarProductores;
+    this.productorLayer.setVisible(this.mostrarProductores);
+  }
+
+  private addZonaProfesional(): void {
+    const ubicacion = this.helper.user?.ubicacionProfesional;
+    if (this.permiso?.nivel !== 'Asesor' || !ubicacion?.geojson?.coordinates) return;
+    const coordinates = ubicacion.geojson.coordinates;
+    const source = this.distribuidorLayer.getSource();
+    const point = new Point(coordinates);
+    point.transform('EPSG:4326', 'EPSG:3857');
+    const feature = new Feature(point);
+    const nombre = this.helper.user?.datosPersonales?.nombre || 'Asesor';
+    feature.setId(`asesor-${this.helper.user?._id || nombre}`);
+    feature.set('nombre', nombre);
+    feature.set('name', nombre);
+    feature.set('asesor', this.helper.user);
+    source?.addFeature(feature);
+    this.addZonaInfluencia(coordinates, Number(ubicacion.radioInfluenciaKm || 0), `Zona ${nombre}`);
+  }
+
+  private addZonaInfluencia(coordinates: number[], radioKm: number, nombre: string): void {
+    if (!Number.isFinite(radioKm) || radioKm <= 0) return;
+    const center = fromLonLat(coordinates);
+    const feature = new Feature(new CircleGeom(center, Math.min(radioKm, 1000) * 1000));
+    feature.set('name', nombre);
+    this.influenciaLayer.getSource()?.addFeature(feature);
+  }
+
+  private handleRedComercialClick(evt: MapBrowserEvent<any>): boolean {
+    const hit = this.map?.forEachFeatureAtPixel(evt.pixel, (feature, layer) => {
+      if (layer === this.distribuidorLayer || layer === this.productorLayer) {
+        return feature;
+      }
+      return undefined;
+    });
+    const entidad = hit?.get('redComercial') as
+      | IDistribuidorRedComercial
+      | IProductorRedComercial
+      | undefined;
+    const tipo = hit?.get('tipoRed') as 'distribuidor' | 'productor' | undefined;
+    if (!entidad || !tipo || !this.popupContentElement) return false;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'network-popup';
+    const eyebrow = document.createElement('span');
+    eyebrow.className = 'network-popup-kind';
+    eyebrow.textContent = tipo === 'distribuidor' ? 'Distribuidor' : 'Productor';
+    const title = document.createElement('strong');
+    title.textContent = entidad.nombre;
+    const address = document.createElement('p');
+    address.textContent = entidad.direccion ||
+      (entidad.fuenteUbicacion === 'Derivada'
+        ? 'Ubicación derivada de sus establecimientos'
+        : 'Dirección pendiente');
+    const metrics = document.createElement('small');
+    metrics.textContent = `${entidad.metricas.establecimientos} establecimientos · ${entidad.metricas.lotes} lotes · ${entidad.metricas.hectareas.toLocaleString('es-AR')} ha`;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'Ver estructura asociada';
+    button.onclick = () => this.verEntidadRed(tipo, entidad.id);
+    wrapper.append(eyebrow, title, address, metrics, button);
+    this.popupContentElement.replaceChildren(wrapper);
+    this.popupOverlay.setPosition(evt.coordinate);
+    return true;
+  }
+
+  private verEntidadRed(tipo: 'distribuidor' | 'productor', id: string): void {
+    this.popupOverlay.setPosition(undefined);
+    void this.router.navigate([tipo === 'distribuidor' ? '/distribuidores/ver' : '/productores/ver', id]);
   }
 
   // Suelos
@@ -2807,7 +3003,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private async ultimoReportePorLote(): Promise<void> {
     try {
-      if (this.loginService.esProductor || this.loginService.esEstablecimiento) {
+      if (this.loginService.esProductor || this.loginService.esEstablecimiento || this.loginService.esAsesor) {
         this.reportesNDVI = await this.service.ultimoPorLote();
       } else if (this.loginService.esDistribuidor) {
         this.reportesNDVI = await this.service.ultimoPorLotePorDistribuidor();
@@ -2882,15 +3078,15 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   public async cargaInicial() {
-    await Promise.all([this.listarLotes(), this.listarEstablecimientos()]);
+    await Promise.all([this.listarLotes(), this.listarEstablecimientos(), this.cargarRedComercial()]);
     this.initialDataLoaded = true;
     this.centerMapOnFirstVisit();
     // Va después porque completo los lotes, fer.
     await this.ultimoReportePorLote();
     // Suscripción reactiva para refrescar imágenes NDVI cuando lleguen nuevos reportes
     this.suscribirReportesNDVI();
-    // Agregar el distribuidor al mapa
-    this.addDistribuidor();
+    // Dibujar la jerarquia territorial completa con una unica fuente consolidada.
+    this.redibujarRedComercial();
   }
 
   // Método público para volver a la ubicación actual del usuario

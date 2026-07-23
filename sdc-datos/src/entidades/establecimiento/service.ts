@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   ICreateEstablecimiento,
   IQueryParam,
+  ISolicitudArchivado,
   IUpdateEstablecimiento,
 } from 'modelos/src';
 import { EstablecimientosRepository } from './repository';
@@ -63,8 +64,8 @@ export class EstablecimientosService {
     throw new NotFoundException('No encontrado');
   }
 
-  async delete(id: string) {
-    const deleted = await this.repository.delete(id);
+  async delete(id: string, audit: ISolicitudArchivado = {}) {
+    const deleted = await this.repository.delete(id, audit);
     if (deleted) {
       return deleted;
     }

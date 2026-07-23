@@ -35,6 +35,7 @@ import {
   esCultivoPerenne,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
+import { establecimientosDelPermiso } from '../../auxiliares/authorization/alcance-permiso';
 import { CronosService } from '../crono/service';
 import { PrediccionsService } from '../prediccion/service';
 import { SemillasService } from '../semilla/service';
@@ -414,6 +415,7 @@ export class SiembrasService {
   }
 
   async create(data: ICreateSiembra, permiso: IPermiso): Promise<ISiembra> {
+    this.assertAdvisorReadOnly(permiso);
     data = this.sinHistorialFenologicoGenerico(data);
     if (!data.idLote) {
       throw new BadRequestException('No se ingresó el lote');
@@ -457,6 +459,7 @@ export class SiembrasService {
     data: IUpdateSiembra,
     permiso: IPermiso,
   ): Promise<ISiembra> {
+    this.assertAdvisorReadOnly(permiso);
     data = this.sinHistorialFenologicoGenerico(data);
     const siembra = await this.getById(id, permiso);
     // La autorizacion del lote se mantiene en la API publica, pero el calculo
@@ -470,6 +473,7 @@ export class SiembrasService {
     data: IUpdateSiembra,
     permiso: IPermiso,
   ): Promise<ISiembra> {
+    this.assertAdvisorReadOnly(permiso);
     data = this.sinHistorialFenologicoGenerico(data);
     const siembraActual = await this.getById(id, permiso);
     const idLoteActual = String(siembraActual.idLote || '');
@@ -514,6 +518,7 @@ export class SiembrasService {
   }
 
   async delete(id: string, permiso: IPermiso): Promise<ISiembra> {
+    this.assertAdvisorReadOnly(permiso);
     const siembra = await this.getById(id, permiso);
     const deleted = await this.repository.delete(id);
     await this.actualizarLoteAlEliminarSiembra(siembra, permiso);
@@ -1176,6 +1181,14 @@ export class SiembrasService {
 
   // Private
 
+  private assertAdvisorReadOnly(permiso: IPermiso): void {
+    if (permiso.nivel === 'Asesor') {
+      throw new BadRequestException(
+        'El asesor supervisa la red; la gestion de campana corresponde al usuario productor',
+      );
+    }
+  }
+
   private async actualizarPrediccion(idSiembra: string, permiso: IPermiso) {
     await this.prediccionsService.reconstruir(idSiembra, permiso);
   }
@@ -1203,6 +1216,15 @@ export class SiembrasService {
         data.idEstablecimiento === permiso.idEstablecimiento,
       );
     }
+    if (permiso.nivel === 'Asesor') {
+      const establecimientos = establecimientosDelPermiso(permiso);
+      return Boolean(
+        data.idEstablecimiento &&
+        establecimientos.includes(String(data.idEstablecimiento)) &&
+        (!permiso.idLotes?.length ||
+          permiso.idLotes.includes(String(data.idLote))),
+      );
+    }
     return false;
   }
 
@@ -1212,6 +1234,9 @@ export class SiembrasService {
     if (permiso.nivel === 'Productor') return Boolean(data.idProductor);
     if (permiso.nivel === 'Establecimiento') {
       return Boolean(data.idEstablecimiento);
+    }
+    if (permiso.nivel === 'Asesor') {
+      return Boolean(data.idEstablecimiento && data.idLote);
     }
     return permiso.nivel === 'Admin';
   }
@@ -1224,8 +1249,7 @@ export class SiembrasService {
   ): Promise<void> {
     const key = String(idSiembra);
     const anterior = this.pipelinesDecision.get(key) || Promise.resolve();
-    let actual: Promise<void>;
-    actual = anterior
+    const actual: Promise<void> = anterior
       .catch((error) => {
         this.logger.error(
           `La ejecucion anterior del pipeline de decision fallo para ${key}: ${error?.message || error}`,
@@ -1437,6 +1461,14 @@ export class SiembrasService {
     }
     if (permiso.nivel === 'Establecimiento') {
       $and.push({ idEstablecimiento: permiso.idEstablecimiento });
+    }
+    if (permiso.nivel === 'Asesor') {
+      $and.push({
+        idEstablecimiento: { $in: establecimientosDelPermiso(permiso) },
+      });
+    }
+    if (permiso.idLotes?.length) {
+      $and.push({ idLote: { $in: permiso.idLotes } });
     }
 
     if ($and.length > 0) {

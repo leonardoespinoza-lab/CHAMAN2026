@@ -24,11 +24,13 @@ import { FilterMetadata, MessageService } from 'primeng/api';
 import { TableLazyLoadEvent } from 'primeng/table';
 import { Observable, map, shareReplay } from 'rxjs';
 import { ILoteTabla } from '../../main/modulo-productor/lotes/listado-lotes/listado-lotes.component';
+import { COOKIE_AUTH } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root',
 })
 export class HelperService {
+  private volatileAccessToken?: string;
   public isHandset$: Observable<boolean>;
   public isWide$: Observable<boolean>;
   public isDesktop$: Observable<boolean>;
@@ -238,12 +240,21 @@ export class HelperService {
   // AUTH
   // *************************************** //
   get accessToken() {
+    if (COOKIE_AUTH) {
+      return this.volatileAccessToken;
+    }
     const token = this.token;
     return token?.accessToken;
   }
   get refreshToken() {
+    if (COOKIE_AUTH) {
+      return undefined;
+    }
     const token = this.token;
     return token?.refreshToken;
+  }
+  get csrfToken(): string | undefined {
+    return (this.token as (IToken & { csrfToken?: string }) | null)?.csrfToken;
   }
   get user() {
     const token = this.token;
@@ -269,13 +280,20 @@ export class HelperService {
   public setToken(token: IToken, remember = false) {
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
+    const storedToken = COOKIE_AUTH
+      ? { ...token, accessToken: '', refreshToken: undefined }
+      : token;
+    if (COOKIE_AUTH) {
+      this.volatileAccessToken = token.accessToken;
+    }
     if (remember) {
-      localStorage.setItem('token', JSON.stringify(token));
+      localStorage.setItem('token', JSON.stringify(storedToken));
     } else {
-      sessionStorage.setItem('token', JSON.stringify(token));
+      sessionStorage.setItem('token', JSON.stringify(storedToken));
     }
   }
   public removeToken() {
+    this.volatileAccessToken = undefined;
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
     localStorage.removeItem('permiso');
@@ -1475,16 +1493,13 @@ export class HelperService {
   // Permisos
   // *************************************** //
   public soloLectura(): boolean {
-    if (this.user) {
-      const res = this.user.permisos?.find((permiso) => permiso.rol === 'Admin' || permiso.rol === 'Escritura');
-      if (res) {
-        return false;
-      } else {
-        return true;
-      }
-    } else {
-      return true;
+    const permisoActivo = this.permiso;
+    if (permisoActivo) {
+      return permisoActivo.rol === 'Lectura';
     }
+    return !this.user?.permisos?.some(
+      (permiso) => permiso.rol === 'Admin' || permiso.rol === 'Escritura'
+    );
   }
 
   public truncateString(str: string | null | undefined, length: number): string {

@@ -5,6 +5,7 @@ import {
   IQueryParam,
   ICreateUsuario,
   IUpdateUsuario,
+  ISolicitudArchivado,
 } from 'modelos/src';
 import { API_DATOS } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
@@ -38,8 +39,8 @@ export class UsuariosRepository {
     return await this.axios.PUT<IUsuario>(url, data);
   }
 
-  async delete(id: string): Promise<IUsuario> {
+  async delete(id: string, audit: ISolicitudArchivado = {}): Promise<IUsuario> {
     const url = `${API_DATOS}/usuarios/${id}`;
-    return await this.axios.DELETE<IUsuario>(url);
+    return await this.axios.DELETE<IUsuario>(url, { params: audit });
   }
 }

@@ -1,5 +1,15 @@
-<div class="custom-card water-footprint-card">
-  <div class="water-header" (click)="verDrawerHuellaHidrica = true">
+<div class="custom-card chaman-surface water-footprint-card">
+  <div
+    class="water-header chaman-interactive-surface"
+    role="button"
+    tabindex="0"
+    aria-label="Abrir detalle de huella hidrica"
+    aria-haspopup="dialog"
+    [attr.aria-expanded]="verDrawerHuellaHidrica"
+    (click)="verDrawerHuellaHidrica = true"
+    (keydown.enter)="verDrawerHuellaHidrica = true"
+    (keydown.space)="$event.preventDefault(); verDrawerHuellaHidrica = true"
+  >
     <svg class="water-footprint-icon" viewBox="0 0 64 64" aria-hidden="true">
       <ellipse cx="17" cy="14" rx="5" ry="7"></ellipse>
       <ellipse cx="29" cy="10" rx="5" ry="8"></ellipse>

@@ -35,9 +35,7 @@ describe('SiembrasService - autorización de edición', () => {
     jest
       .spyOn(service as any, 'getCrono')
       .mockResolvedValue({ _id: 'crono-1' });
-    jest
-      .spyOn(service as any, 'evaluarAgroclima')
-      .mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'evaluarAgroclima').mockResolvedValue(undefined);
     return { service, repository, lotesService, prediccionsService };
   }
 

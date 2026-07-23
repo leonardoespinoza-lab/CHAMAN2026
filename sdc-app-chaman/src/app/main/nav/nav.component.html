@@ -15,7 +15,9 @@
         <div class="chaman-nav-title">
           <span class="chaman-nav-brand inline-flex items-center gap-2">
             <!-- Logo -->
-            @if (helper.darkTheme) {
+            @if (tenant && logoAlcance()) {
+              <img [src]="logoAlcance()" [alt]="nombreAlcance()" />
+            } @else if (helper.darkTheme) {
               <img src="images/logo-dark.png" alt="" />
             } @else {
               <img src="images/logo-light.png" alt="" />
@@ -57,16 +59,8 @@
                 @if (selectedOption) {
                   <div class="flex items-center gap-2">
                     <div>
-                      @if (selectedOption.nivel === 'Quimica') {
-                        {{ selectedOption?.quimica?.nombre }}
-                      } @else if (selectedOption.nivel === 'Distribuidor') {
-                        {{ selectedOption?.distribuidor?.nombre }}
-                      } @else if (selectedOption.nivel === 'Productor') {
-                        {{ selectedOption?.productor?.nombre }}
-                      } @else if (selectedOption.nivel === 'Establecimiento') {
-                        {{ selectedOption?.establecimiento?.nombre }}
-                      }
-                      - {{ selectedOption.nivel }} - {{ selectedOption.rol }}
+                      {{ nombrePermiso(selectedOption) }} -
+                      {{ selectedOption.nivel }} - {{ selectedOption.rol }}
                     </div>
                   </div>
                 }
@@ -75,16 +69,8 @@
               <ng-template let-permiso #item>
                 <div class="flex items-center gap-2">
                   <div>
-                    {{ permiso.nivel }} - {{ permiso.rol }} -
-                    @if (permiso.nivel === 'Quimica') {
-                      {{ permiso?.quimica?.nombre }}
-                    } @else if (permiso.nivel === 'Distribuidor') {
-                      {{ permiso?.distribuidor?.nombre }}
-                    } @else if (permiso.nivel === 'Productor') {
-                      {{ permiso?.productor?.nombre }}
-                    } @else if (permiso.nivel === 'Establecimiento') {
-                      {{ permiso?.establecimiento?.nombre }}
-                    }
+                    {{ nombrePermiso(permiso) }} - {{ permiso.nivel }} -
+                    {{ permiso.rol }}
                   </div>
                 </div>
               </ng-template>
@@ -105,8 +91,23 @@
         <ul class="list-none m-0">
           <li>
             <ul class="list-none p-0 m-0 overflow-hidden">
+              <!-- Menu Tenant -->
+              @if (esNivel('Tenant')) {
+                <li>
+                  <a
+                    pRipple
+                    class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                    [routerLink]="['/dashboard-tenant']"
+                    [routerLinkActive]="['active']"
+                    (click)="cerrarMenu($event)"
+                  >
+                    <i class="pi pi-th-large mr-2" style="font-size: 24px; color: var(--p-primary-color)"></i>
+                    <span class="font-medium">Inicio</span>
+                  </a>
+                </li>
+              }
               <!-- Menu Quimica -->
-              @if (loginService.esQuimica) {
+              @if (esNivel('Quimica')) {
                 <!-- Mapa -->
                 <li>
                   <a
@@ -152,7 +153,7 @@
                 </li>
               }
               <!-- Menu Distribuidor -->
-              @if (loginService.esDistribuidor) {
+              @if (esNivel('Distribuidor', 'Asesor')) {
                 <!-- Mapa -->
                 <li>
                   <a
@@ -219,7 +220,7 @@
                 </li>
               }
               <!-- Menu productor -->
-              @if (loginService.esProductor) {
+              @if (esNivel('Productor')) {
                 <!-- Mapa -->
                 <li>
                   <a
@@ -306,7 +307,7 @@
                 </li>
               }
               <!-- Menu establecimiento -->
-              @if (loginService.esEstablecimiento) {
+              @if (esNivel('Establecimiento')) {
                 <!-- Mapa -->
                 <li>
                   <a
@@ -374,7 +375,7 @@
               }
             </ul>
             <!-- Semillas (Admin) -->
-            @if (loginService.esAdmin) {
+            @if (esNivel('Admin') && puedeGestionarUsuarios()) {
               <ul class="list-none p-0 m-0 overflow-hidden">
                 <li>
                   <a
@@ -386,6 +387,30 @@
                   >
                     <i class="pi pi-th-large mr-2" style="font-size: 24px; color: var(--p-primary-color)"></i>
                     <span class="font-medium">{{ 'Inicio' | translate }}</span>
+                  </a>
+                </li>
+                <li>
+                  <a
+                    pRipple
+                    class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                    [routerLink]="['/asesores']"
+                    [routerLinkActive]="['active']"
+                    (click)="cerrarMenu($event)"
+                  >
+                    <i class="pi pi-briefcase mr-2" style="font-size: 24px; color: var(--p-primary-color)"></i>
+                    <span class="font-medium">{{ 'Asesores' | translate }}</span>
+                  </a>
+                </li>
+                <li>
+                  <a
+                    pRipple
+                    class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                    [routerLink]="['/tenants']"
+                    [routerLinkActive]="['active']"
+                    (click)="cerrarMenu($event)"
+                  >
+                    <i class="pi pi-palette mr-2" style="font-size: 24px; color: var(--p-primary-color)"></i>
+                    <span class="font-medium">Tenants</span>
                   </a>
                 </li>
                 <li>
@@ -411,7 +436,7 @@
             }
             @if (!helper.soloLectura()) {
               <ul class="list-none p-0 m-0 overflow-hidden">
-                @if (loginService.esDistribuidor || loginService.esQuimica || loginService.esAdmin) {
+                @if (esNivel('Distribuidor', 'Asesor', 'Quimica', 'Admin')) {
                   <li>
                     <a
                       pRipple
@@ -432,7 +457,7 @@
                     </a>
                   </li>
                 }
-                @if (loginService.esQuimica || loginService.esAdmin) {
+                @if (esNivel('Quimica', 'Admin')) {
                   <li>
                     <a
                       pRipple
@@ -453,7 +478,7 @@
                     </a>
                   </li>
                 }
-                @if (loginService.esAdmin) {
+                @if (esNivel('Admin')) {
                   <li>
                     <a
                       pRipple
@@ -495,7 +520,7 @@
                     </a>
                   </li>
                 }
-                @if (loginService.esAdmin) {
+                @if (esNivel('Admin')) {
                   <li>
                     <a
                       pRipple
@@ -549,7 +574,7 @@
                     class="list-none py-0 pl-4 pr-0 m-0 overflow-y-hidden transition-all duration-[400ms] ease-in-out"
                   >
                     <!-- Establecimientos -->
-                    @if (loginService.esProductor) {
+                    @if (esNivel('Productor')) {
                       <li>
                         <a
                           pRipple
@@ -572,7 +597,7 @@
                     }
 
                     <!-- Productores -->
-                    @if (loginService.esDistribuidor || loginService.esQuimica || loginService.esAdmin) {
+                    @if (esNivel('Distribuidor', 'Asesor', 'Quimica', 'Admin')) {
                       <li>
                         <a
                           pRipple
@@ -595,7 +620,7 @@
                     }
 
                     <!-- Distribuidores -->
-                    @if (loginService.esQuimica || loginService.esAdmin) {
+                    @if (esNivel('Quimica', 'Admin')) {
                       <li>
                         <a
                           pRipple
@@ -618,7 +643,7 @@
                     }
 
                     <!-- Químicas -->
-                    @if (loginService.esAdmin) {
+                    @if (esNivel('Admin')) {
                       <li>
                         <a
                           pRipple
@@ -641,7 +666,7 @@
                     }
 
                     <!-- Licencias -->
-                    @if (loginService.esAdmin) {
+                    @if (esNivel('Admin')) {
                       <li>
                         <a
                           pRipple
@@ -664,7 +689,7 @@
                     }
 
                     <!-- Dispositivos -->
-                    @if (loginService.esAdmin) {
+                    @if (esNivel('Admin')) {
                       <li>
                         <a
                           pRipple
@@ -687,7 +712,7 @@
                     }
 
                     <!-- Camaras -->
-                    @if (loginService.esAdmin) {
+                    @if (esNivel('Admin')) {
                       <li>
                         <a
                           pRipple
@@ -785,7 +810,7 @@
                 [image]="logoAlcance() || user?.datosPersonales?.['foto'] || 'images/avatar.png'"
                 shape="circle"
               />
-              @if (loginService.esProductor) {
+              @if (esNivel('Productor')) {
                 <svg
                   [style.fill]="'var(--p-primary-color)'"
                   [attr.width]="'24px'"
@@ -795,7 +820,13 @@
                 >
                   <use [attr.xlink:href]="'icons/icons.svg#productor'"></use>
                 </svg>
-              } @else if (loginService.esDistribuidor) {
+              } @else if (esNivel('Asesor')) {
+                <i
+                  class="pi pi-briefcase mr-2"
+                  style="font-size: 24px; color: var(--p-primary-color)"
+                  pTooltip="Asesor"
+                ></i>
+              } @else if (esNivel('Distribuidor')) {
                 <svg
                   [style.fill]="'var(--p-primary-color)'"
                   [attr.width]="'24px'"
@@ -805,7 +836,7 @@
                 >
                   <use [attr.xlink:href]="'icons/icons.svg#distribuidor'"></use>
                 </svg>
-              } @else if (loginService.esQuimica) {
+              } @else if (esNivel('Quimica')) {
                 <svg
                   [style.fill]="'var(--p-primary-color)'"
                   [attr.width]="'24px'"
@@ -814,6 +845,22 @@
                   [pTooltip]="'Compañía'"
                 >
                   <use [attr.xlink:href]="'icons/icons.svg#quimica'"></use>
+                </svg>
+              } @else if (esNivel('Tenant')) {
+                <i
+                  class="pi pi-palette mr-2"
+                  style="font-size: 24px; color: var(--p-primary-color)"
+                  pTooltip="Tenant"
+                ></i>
+              } @else if (esNivel('Establecimiento')) {
+                <svg
+                  [style.fill]="'var(--p-primary-color)'"
+                  [attr.width]="'24px'"
+                  [attr.height]="'24px'"
+                  class="mr-2"
+                  pTooltip="Establecimiento"
+                >
+                  <use [attr.xlink:href]="'icons/icons.svg#house-siding'"></use>
                 </svg>
               } @else {
                 <svg
@@ -837,6 +884,7 @@
                 type="button"
                 (click)="cambiarPassword()"
                 icon="pi pi-user-edit"
+                ariaLabel="Editar perfil"
                 rounded="true"
                 outlined="true"
                 styleClass="h-8 w-8"
@@ -846,7 +894,8 @@
               <p-button
                 type="button"
                 (click)="logout($event)"
-                icon="pi i-salir"
+                icon="pi pi-sign-out"
+                ariaLabel="Cerrar sesión"
                 rounded="true"
                 outlined="true"
                 styleClass="h-8 w-8"

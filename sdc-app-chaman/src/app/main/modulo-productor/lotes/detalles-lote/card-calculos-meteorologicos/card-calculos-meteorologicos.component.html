@@ -105,7 +105,11 @@
       </nav>
       <div id="agromet-chart-panel" class="chart-canvas" role="tabpanel" [attr.aria-label]="graficoLabel">
         @if (chartOptions) {
-          <app-chart [options]="chartOptions" [style]="'display:block;width:100%;height:390px'"></app-chart>
+          <app-chart
+            class="chaman-chart-shell chaman-chart-shell--compact"
+            [options]="chartOptions"
+            [style]="'display:block;width:100%;height:100%'"
+          ></app-chart>
         }
       </div>
     </div>

@@ -26,7 +26,7 @@
               inputId="mostrarLicencia"
               (ngModelChange)="onMostrarLicenciaChange($event)"
             />
-            <label for="mostrarLicencia" class="ml-2">Editar Licencia</label>
+            <label for="mostrarLicencia" class="ml-2">Administrar licencia</label>
           </div>
         </header>
 
@@ -130,15 +130,69 @@
                   @if (mostrarLicencia && formLicencia) {
                     <!-- Basico -->
                     <p-tabpanel [value]="1">
-                      <p-select
-                        [options]="licencias"
-                        [(ngModel)]="licencia"
-                        optionLabel="nombre"
-                        placeholder="Licencia"
-                        class="w-full md:w-56"
-                        [ngModelOptions]="{ standalone: true }"
-                        (onChange)="onLicenciaChange($event.value)"
-                      />
+                      <section class="license-assignment-panel">
+                        <div class="license-assignment-heading">
+                          <div>
+                            <span class="eyebrow">Asignacion comercial</span>
+                            <h3>Plan de la compañía</h3>
+                            <p>La asignación conserva historial y no modifica el plan compartido.</p>
+                          </div>
+                          @if (estadoLicencia) {
+                            <span class="license-source">{{ estadoLicencia.origenEfectivo }}</span>
+                          }
+                        </div>
+
+                        <p-select
+                          [options]="licencias"
+                          [(ngModel)]="licencia"
+                          optionLabel="nombre"
+                          placeholder="Seleccionar un plan existente"
+                          class="w-full"
+                          [fluid]="true"
+                          appendTo="body"
+                          [ngModelOptions]="{ standalone: true }"
+                          (onChange)="onLicenciaChange($event.value)"
+                        />
+
+                        @if (licencia) {
+                          <div class="license-plan-summary">
+                            <div><span>Usuarios</span><strong>{{ licencia.maxUsuarios ?? 'Sin limite' }}</strong></div>
+                            <div><span>Distribuidores</span><strong>{{ licencia.maxdDistribuidores ?? 'Sin limite' }}</strong></div>
+                            <div><span>Productores</span><strong>{{ licencia.maxProductores ?? 'Sin limite' }}</strong></div>
+                            <div><span>Establecimientos</span><strong>{{ licencia.maxEstablecimientos ?? 'Sin limite' }}</strong></div>
+                            <div><span>Lotes</span><strong>{{ licencia.maxLotes ?? 'Sin limite' }}</strong></div>
+                            <div><span>Hectareas</span><strong>{{ licencia.maxdHectareas ?? 'Sin limite' }}</strong></div>
+                          </div>
+                        }
+
+                        @if (estadoLicencia?.uso; as uso) {
+                          <div class="license-usage-heading">
+                            <strong>Consumo actual de la compania</strong>
+                            <small>Medicion administrativa; no modifica permisos ni factura consumos.</small>
+                          </div>
+                          <div class="license-usage-summary">
+                            <div><span>Usuarios</span><strong>{{ uso.usuarios.actual }} / {{ uso.usuarios.limite ?? 'Sin limite' }}</strong></div>
+                            <div><span>Distribuidores</span><strong>{{ uso.distribuidores.actual }} / {{ uso.distribuidores.limite ?? 'Sin limite' }}</strong></div>
+                            <div><span>Productores</span><strong>{{ uso.productores.actual }} / {{ uso.productores.limite ?? 'Sin limite' }}</strong></div>
+                            <div><span>Establecimientos</span><strong>{{ uso.establecimientos.actual }} / {{ uso.establecimientos.limite ?? 'Sin limite' }}</strong></div>
+                            <div><span>Lotes</span><strong>{{ uso.lotes.actual }} / {{ uso.lotes.limite ?? 'Sin limite' }}</strong></div>
+                            <div><span>Hectareas</span><strong>{{ uso.hectareas.actual }} / {{ uso.hectareas.limite ?? 'Sin limite' }}</strong></div>
+                          </div>
+                        }
+
+                        <div class="license-date-field">
+                          <label for="companyLicenseExpiration">Vigencia hasta</label>
+                          <p-datepicker
+                            inputId="companyLicenseExpiration"
+                            [(ngModel)]="fechaDeExpiracion"
+                            [minDate]="hoy"
+                            [showIcon]="true"
+                            [fluid]="true"
+                            appendTo="body"
+                            [ngModelOptions]="{ standalone: true }"
+                          />
+                        </div>
+                      </section>
                     </p-tabpanel>
                     <!-- Basico -->
                     <p-tabpanel [value]="2" [formGroup]="formLicencia">

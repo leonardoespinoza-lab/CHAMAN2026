@@ -1,0 +1,160 @@
+<section class="custom-card chaman-surface visits-card">
+  <header class="field-card-header">
+    <div>
+      <span>Visitas al lote</span>
+      <strong>Calendario de recorridas</strong>
+      <small>{{ visitas.length ? visitas.length + ' visita' + (visitas.length === 1 ? '' : 's') + ' registrada' + (visitas.length === 1 ? '' : 's') : 'Sin recorridas documentadas' }}</small>
+    </div>
+    @if (!helper.soloLectura()) {
+      <p-button label="Registrar" icon="pi pi-plus" [rounded]="true" (onClick)="abrirNueva()" />
+    }
+  </header>
+
+  <div class="calendar-toolbar">
+    <p-button icon="pi pi-chevron-left" [rounded]="true" [text]="true" (onClick)="cambiarMes(-1)" />
+    <strong>{{ mesLabel }}</strong>
+    <p-button icon="pi pi-chevron-right" [rounded]="true" [text]="true" (onClick)="cambiarMes(1)" />
+  </div>
+  <div class="calendar-weekdays"><span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span></div>
+  <div class="mini-calendar" [class.loading]="cargando">
+    @for (dia of diasCalendario; track dia.key) {
+      <button
+        type="button"
+        class="chaman-interactive-surface"
+        [class.outside]="!dia.actual"
+        [class.today]="dia.hoy"
+        [class.has-visit]="dia.visitas.length"
+        [attr.data-status]="dia.visitas[0]?.estado"
+        [attr.aria-label]="'Abrir ' + dia.key + (dia.visitas.length ? ', con visita registrada' : '')"
+        aria-haspopup="dialog"
+        (click)="seleccionarDia(dia)"
+      >
+        <span>{{ dia.numero }}</span>
+        @if (dia.visitas.length) { <i></i> }
+      </button>
+    }
+  </div>
+
+  <div class="visits-summary">
+    <article>
+      <span>Ultima recorrida</span>
+      <strong>{{ ultimaVisita ? fechaLabel(ultimaVisita.fechaVisita) : 'Sin registro' }}</strong>
+      <small>{{ ultimaVisita?.titulo || 'Documente la primera visita' }}</small>
+    </article>
+    <article>
+      <span>Proxima visita</span>
+      <strong>{{ proximaVisitaResumen ? fechaLabel(proximaVisitaResumen.fechaVisita) : 'Sin programar' }}</strong>
+      <small>{{ proximaVisitaResumen?.titulo || 'Puede agendarla desde el calendario' }}</small>
+    </article>
+  </div>
+</section>
+
+<p-dialog
+  [(visible)]="dialogo"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="true"
+  [style]="{ width: 'min(840px, 96vw)' }"
+  [header]="editando ? 'Detalle de la visita' : 'Registrar visita al lote'"
+  styleClass="field-visit-dialog"
+>
+  <div class="visit-form" [class.readonly]="helper.soloLectura()">
+    <div class="visit-form-grid">
+      <label class="wide">
+        <span>Titulo de la visita</span>
+        <input pInputText [(ngModel)]="titulo" maxlength="120" [disabled]="helper.soloLectura()" placeholder="Ej. Monitoreo sanitario semanal" />
+      </label>
+      <label>
+        <span>Fecha</span>
+        <input pInputText type="date" [(ngModel)]="fechaVisita" [disabled]="helper.soloLectura()" />
+      </label>
+      <label>
+        <span>Estado</span>
+        <select [(ngModel)]="estado" [disabled]="helper.soloLectura()">
+          <option value="realizada">Realizada</option>
+          <option value="programada">Programada</option>
+          <option value="cancelada">Cancelada</option>
+        </select>
+      </label>
+      <label>
+        <span>Tipo</span>
+        <select [(ngModel)]="tipo" [disabled]="helper.soloLectura()">
+          @for (item of tipos; track item.value) { <option [value]="item.value">{{ item.label }}</option> }
+        </select>
+      </label>
+      <div class="time-pair">
+        <label><span>Desde</span><input pInputText type="time" [(ngModel)]="horaInicio" [disabled]="helper.soloLectura()" /></label>
+        <label><span>Hasta</span><input pInputText type="time" [(ngModel)]="horaFin" [disabled]="helper.soloLectura()" /></label>
+      </div>
+    </div>
+
+    <div class="activities-block">
+      <span>Que se reviso o realizo</span>
+      <div class="activity-chips">
+        @for (item of actividadesDisponibles; track item.value) {
+          <button
+            type="button"
+            [class.chaman-interactive-surface]="!helper.soloLectura()"
+            [class.active]="actividades.includes(item.value)"
+            [attr.aria-pressed]="actividades.includes(item.value)"
+            [disabled]="helper.soloLectura()"
+            (click)="toggleActividad(item.value)"
+          >
+            <i class="pi {{ item.icon }}"></i>{{ item.label }}
+          </button>
+        }
+      </div>
+    </div>
+
+    <div class="visit-form-grid narrative">
+      <label class="wide">
+        <span>Participantes</span>
+        <input pInputText [(ngModel)]="participantes" [disabled]="helper.soloLectura()" placeholder="Nombres separados por coma" />
+      </label>
+      <label class="wide">
+        <span>Trabajo realizado y observaciones</span>
+        <textarea pTextarea rows="3" [(ngModel)]="observaciones" [disabled]="helper.soloLectura()" maxlength="5000" placeholder="Recorrido, sectores inspeccionados, mediciones y tareas realizadas"></textarea>
+      </label>
+      <label>
+        <span>Hallazgos</span>
+        <textarea pTextarea rows="4" [(ngModel)]="hallazgos" [disabled]="helper.soloLectura()" maxlength="5000" placeholder="Que se encontro en el lote"></textarea>
+      </label>
+      <label>
+        <span>Recomendaciones y seguimiento</span>
+        <textarea pTextarea rows="4" [(ngModel)]="recomendaciones" [disabled]="helper.soloLectura()" maxlength="5000" placeholder="Acciones sugeridas, responsables y plazos"></textarea>
+      </label>
+      <label>
+        <span>Proxima visita (opcional)</span>
+        <input pInputText type="date" [(ngModel)]="proximaVisita" [disabled]="helper.soloLectura()" />
+      </label>
+      <div class="visit-location" [class.has-location]="latitud !== undefined">
+        <i class="pi pi-map-marker"></i>
+        <div>
+          <strong>{{ latitud !== undefined ? 'Ubicacion de visita registrada' : 'Ubicacion opcional' }}</strong>
+          <small>{{ latitud !== undefined ? (latitud | number:'1.5-5') + ', ' + (longitud | number:'1.5-5') : 'Confirma que la recorrida se documento en campo.' }}</small>
+        </div>
+        @if (!helper.soloLectura() && latitud === undefined) {
+          <p-button label="Agregar" icon="pi pi-crosshairs" [loading]="buscandoUbicacion" [outlined]="true" (onClick)="capturarUbicacion()" />
+        }
+      </div>
+    </div>
+
+    @if (editando) {
+      <div class="visit-audit">
+        <i class="pi pi-shield"></i>
+        <span>Registrada por {{ editando.creadaPorNombre || 'usuario Chaman' }} · {{ fechaLabel(editando.fechaCreacion) }}</span>
+      </div>
+    }
+  </div>
+  <ng-template #footer>
+    @if (editando && !helper.soloLectura()) {
+      <p-button label="Archivar" icon="pi pi-archive" severity="danger" [text]="true" (onClick)="archivar()" />
+    }
+    <span class="dialog-footer-spacer"></span>
+    <p-button label="Cerrar" severity="secondary" [text]="true" (onClick)="dialogo = false" />
+    @if (!helper.soloLectura()) {
+      <p-button [label]="editando ? 'Guardar cambios' : 'Registrar visita'" icon="pi pi-check" [disabled]="!titulo.trim() || !fechaVisita" [loading]="guardando" (onClick)="guardar()" />
+    }
+  </ng-template>
+</p-dialog>

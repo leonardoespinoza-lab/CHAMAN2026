@@ -87,7 +87,7 @@ export class CardCamarasLoteComponent implements OnChanges {
     try {
       const response = await this.fotoService.listarPorLote(this.lote._id);
       this.fotos = (response.datos || [])
-        .filter((foto) => foto.url)
+        .filter((foto) => foto.url && foto.fuente !== 'campo')
         .sort(
           (a, b) =>
             new Date(b.fechaCreacion || 0).getTime() - new Date(a.fechaCreacion || 0).getTime()

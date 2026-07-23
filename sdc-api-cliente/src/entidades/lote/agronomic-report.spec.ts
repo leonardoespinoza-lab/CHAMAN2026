@@ -175,14 +175,49 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
       service.calcularCargaFitosanitaria({}, siembra, [prediccion], []),
     ).toMatchObject({ presionEnfermedades: 0, enfermedadesMonitoreadas: 0 });
     expect(service.renderTablaEnfermedades(siembra, [prediccion])).toContain(
-      'No agregable: modelo experimental',
+      'Experimental',
     );
     expect(service.renderTablaEnfermedades(siembra, [prediccion])).toContain(
-      '<td>Roya Amarilla/Estriada</td>',
+      '<strong>Roya Amarilla/Estriada</strong>',
     );
     expect(
       service.renderTablaEnfermedades(siembra, [prediccion]),
-    ).not.toContain('<td>Roya Anaranjada</td>');
+    ).not.toContain('<strong>Roya Anaranjada</strong>');
+  });
+
+  it('explica la ventana sanitaria sin confundirla con una lanza de humedad de suelo', () => {
+    const prediccion = {
+      fechaPrediccion: new Date().toISOString(),
+      enfermedades: [
+        {
+          enfermedad: 'Mancha de la Hoja',
+          idEnfermedad: 'trigo.mancha_hoja',
+          resultado: 0,
+          estado: 'fuera_ventana',
+          modelo: { version: 5, validacion: 'operativo' },
+          variables: {
+            GDDBase0Siembra: 471.4,
+            UmbralInicioGdd: 850,
+            FormulaVersion: 5,
+          },
+        },
+      ],
+    } as any;
+
+    const html = service.renderTablaEnfermedades(siembra, [prediccion]);
+
+    expect(html).toContain('Fuera de ventana');
+    expect(html).toContain('471,4 de 850 GDD base 0 C');
+    expect(html).toContain('55% del umbral');
+    expect(html).toContain(
+      'La humedad de suelo no sustituye humedad foliar ni integra por si sola este riesgo.',
+    );
+    expect(html).not.toContain('Separacion de lecturas');
+    expect(html).not.toContain('Formula Version');
+    expect(service.getResumenRiesgo(siembra, [prediccion])).toMatchObject({
+      titulo: 'Fuera de ventana sensible',
+      detalle: '1 modelo(s) en seguimiento; no integran el riesgo actual',
+    });
   });
 
   it('usa solo escenas de la campana que superan el QA satelital canonico', () => {
@@ -361,7 +396,7 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
     } as any;
 
     const html = service.renderTablaEnfermedades(siembra, [prediccion]);
-    expect(html).toContain('<td>Bajo</td>');
+    expect(html).toContain('<td>0% - Bajo</td>');
     expect(html).not.toContain('Sin riesgo calculado');
   });
 
@@ -570,10 +605,7 @@ describe('LotesService - clima canonico del informe agronomico', () => {
     establecimiento: {},
   } as any;
 
-  const canonical = (
-    cultivo: string,
-    overrides: Record<string, any> = {},
-  ) => ({
+  const canonical = (cultivo: string, overrides: Record<string, any> = {}) => ({
     summary: {
       gddAccumulated: 428.5,
       rainAccumulatedMm: 32.4,
@@ -829,10 +861,79 @@ describe('LotesService - clima canonico del informe agronomico', () => {
     );
     const html = instance.renderTablaClimaAgronomica(clima, frio, true);
 
-    expect(html).toMatch(
-      /Chill portions \(CP\)<\/td>\s*<td>Sin dato<\/td>/,
-    );
+    expect(html).toMatch(/Chill portions \(CP\)<\/td>\s*<td>Sin dato<\/td>/);
     expect(html).not.toContain('0 CP');
+  });
+
+  it('incluye en el informe la evolucion acumulada y el aporte diario con descuentos Utah', () => {
+    const serie = [
+      {
+        date: '2026-05-01',
+        isForecast: false,
+        weather: {},
+        metrics: {
+          temperatureMinC: 3,
+          temperatureMaxC: 14,
+          chillingHours: 6,
+          chillingHoursAccumulated: 6,
+          utahChillUnits: 5,
+          utahChillUnitsAccumulated: 5,
+          chillPortions: 0.3,
+          chillPortionsAccumulated: 0.3,
+        },
+        source: 'open_meteo',
+        sourceByVariable: {},
+        qualityFlags: [],
+        warnings: [],
+      },
+      {
+        date: '2026-05-02',
+        isForecast: false,
+        weather: {},
+        metrics: {
+          temperatureMinC: 5,
+          temperatureMaxC: 21,
+          chillingHours: 2,
+          chillingHoursAccumulated: 8,
+          utahChillUnits: -2,
+          utahChillUnitsAccumulated: 3,
+          chillPortions: 0.15,
+          chillPortionsAccumulated: 0.45,
+        },
+        source: 'open_meteo',
+        sourceByVariable: {},
+        qualityFlags: [],
+        warnings: [],
+      },
+    ];
+    const { instance } = createService({
+      canonicalResponse: canonical('Manzano', { series: serie }),
+    });
+    const clima = instance.mapCanonicalClimate(
+      canonical('Manzano', {
+        summary: {
+          chillingHoursAccumulated: 8,
+          utahChillUnitsAccumulated: 3,
+          chillPortionsAccumulated: 0.45,
+        },
+        series: serie,
+      }),
+      undefined,
+      siembra('Manzano'),
+    );
+
+    const html = instance.renderGraficosFrio(clima);
+
+    expect(html).toContain('Evolucion acumulada');
+    expect(html).toContain('Aporte diario');
+    expect(html).toContain('data-panel="temperature-min"');
+    expect(html).toContain('data-panel="temperature-max"');
+    expect(html).toContain('data-panel="utah"');
+    expect(html).toContain('data-panel="cp-daily"');
+    expect(html).toContain('15,9 C');
+    expect(html).toContain('#d7833d');
+    expect(html).not.toContain('<polyline fill="none" stroke="#8d65b8"');
+    expect(html).not.toContain('HFE');
   });
 
   it('informa Datos insuficientes y descarta compatibilidad heredada en el informe del lote', () => {
@@ -864,11 +965,7 @@ describe('LotesService - clima canonico del informe agronomico', () => {
       cultivoSiembra,
       clima,
     );
-    const tablaClima = instance.renderTablaClimaAgronomica(
-      clima,
-      frio,
-      true,
-    );
+    const tablaClima = instance.renderTablaClimaAgronomica(clima, frio, true);
     const informe = instance.renderCertificadoHtml({
       lote: {
         ...loteConCentro,
@@ -934,8 +1031,6 @@ describe('LotesService - clima canonico del informe agronomico', () => {
       fuente: 'Sensor Sonda Norte + Open-Meteo',
     });
     expect(calidad.lectura).toContain('64% completitud');
-    expect(calidad.lectura).toContain(
-      '25% cobertura de temperatura de campo',
-    );
+    expect(calidad.lectura).toContain('25% cobertura de temperatura de campo');
   });
 });

@@ -231,10 +231,7 @@ export class FieldClimateIntegracionService {
           idEstablecimiento,
           {
             trigger: 'fieldclimate.assigned',
-            changedFields: [
-              'idEstacionMeteorologica',
-              'fuenteClimaPreferida',
-            ],
+            changedFields: ['idEstacionMeteorologica', 'fuenteClimaPreferida'],
             sincronizarClima: true,
           },
         );

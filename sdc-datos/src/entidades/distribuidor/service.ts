@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   ICreateDistribuidor,
   IQueryParam,
+  ISolicitudArchivado,
   IUpdateDistribuidor,
 } from 'modelos/src';
 import { DistribuidorsRepository } from './repository';
@@ -34,8 +35,8 @@ export class DistribuidorsService {
     throw new NotFoundException('No encontrado');
   }
 
-  async delete(id: string) {
-    const deleted = await this.repository.delete(id);
+  async delete(id: string, audit: ISolicitudArchivado = {}) {
+    const deleted = await this.repository.delete(id, audit);
     if (deleted) {
       return deleted;
     }

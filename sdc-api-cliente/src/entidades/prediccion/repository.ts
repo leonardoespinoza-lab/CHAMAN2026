@@ -47,4 +47,17 @@ export class PrediccionsRepository {
     const url = `${API_DATOS}/siembras/${idSiembra}`;
     return await this.axios.GET<ISiembra>(url);
   }
+
+  async getSiembrasByLoteIds(idLotes: string[]): Promise<ISiembra[]> {
+    if (!idLotes?.length) return [];
+    const url = `${API_DATOS}/siembras`;
+    const listado = await this.axios.GET<IListado<ISiembra>>(url, {
+      params: {
+        filter: JSON.stringify({ idLote: { $in: idLotes } }),
+        select: '_id idLote idEstablecimiento',
+        limit: 0,
+      },
+    });
+    return listado.datos || [];
+  }
 }

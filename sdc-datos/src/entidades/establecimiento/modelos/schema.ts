@@ -27,6 +27,12 @@ export class Establecimiento implements Exactly<
 > {
   _id: string;
 
+  @Prop({ type: mongoose.Schema.Types.ObjectId, index: true })
+  idTenant?: string;
+
+  @Prop({ type: mongoose.Schema.Types.ObjectId })
+  idAsesorPropietario?: string;
+
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idQuimica?: string;
 
@@ -60,6 +66,18 @@ export class Establecimiento implements Exactly<
   @Prop({ type: Date, default: Date.now })
   fechaCreacion: string;
 
+  @Prop({ type: Boolean, default: false, index: true })
+  archivado?: boolean;
+
+  @Prop({ type: Date })
+  fechaArchivado?: string;
+
+  @Prop({ type: String })
+  archivadoPor?: string;
+
+  @Prop({ type: String })
+  motivoArchivado?: string;
+
   @Prop({ type: Object })
   prediccionClimatica?: {
     fecha?: string;
@@ -89,7 +107,15 @@ export const EstablecimientoSchema =
 
 EstablecimientoSchema.set('toJSON', { virtuals: true, getters: true });
 
-EstablecimientoSchema.index({ nombre: 1, idProductor: 1 }, { unique: true });
+EstablecimientoSchema.index(
+  { nombre: 1, idProductor: 1 },
+  {
+    name: 'uniq_establecimiento_productor_nombre_activo_v2',
+    unique: true,
+    partialFilterExpression: { archivado: false },
+  },
+);
+EstablecimientoSchema.index({ idAsesorPropietario: 1 });
 
 EstablecimientoSchema.virtual('quimica', {
   foreignField: '_id',

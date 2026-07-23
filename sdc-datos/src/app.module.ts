@@ -40,10 +40,12 @@ import { LorawanUplinksModule } from './entidades/lorawan-uplinks/module';
 import { AlgoritmosModule } from './entidades/algoritmos/module';
 import { SuelosIntaModule } from './entidades/suelo-inta/module';
 import { IaMalezasModule } from './entidades/ia-malezas/module';
+import { VisitasLoteModule } from './entidades/visita-lote/module';
 import { ObservacionesMeteorologicasModule } from './entidades/observacion-meteorologica/module';
 import { IndicadoresAgrometeorologicosModule } from './entidades/indicador-agrometeorologico/module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SoilIntelligenceModule } from './entidades/suelo-inteligencia/module';
+import { TenantsModule } from './entidades/tenant/module';
 
 @Module({
   imports: [
@@ -87,9 +89,11 @@ import { SoilIntelligenceModule } from './entidades/suelo-inteligencia/module';
     AlgoritmosModule,
     SuelosIntaModule,
     IaMalezasModule,
+    VisitasLoteModule,
     ObservacionesMeteorologicasModule,
     IndicadoresAgrometeorologicosModule,
     SoilIntelligenceModule,
+    TenantsModule,
   ],
   controllers: [HealthController],
   providers: [],

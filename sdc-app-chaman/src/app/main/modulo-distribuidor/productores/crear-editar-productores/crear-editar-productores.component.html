@@ -6,8 +6,7 @@
       <p>Alta del productor. Luego se puede crear el usuario y asociarlo a este productor.</p>
     </div>
     <div class="header-actions">
-      <p-button label="Volver" icon="pi pi-arrow-left" severity="secondary" outlined="true" (onClick)="volver()" />
-      @if (loginService.esAdmin && !productor) {
+      @if ((loginService.esAdmin || loginService.esTenant || loginService.esDistribuidor || loginService.esAsesor) && !productor) {
         <p-button
           label="Guardar y crear usuario"
           icon="pi pi-user-plus"
@@ -78,6 +77,78 @@
         </div>
       </div>
 
+      <div class="form-section">
+        <div class="section-heading">
+          <h2>Información fiscal</h2>
+          <span>Opcional. Identifica correctamente a la persona o empresa productora; no corresponde al perfil profesional del asesor.</span>
+        </div>
+
+        <div class="field-grid">
+          <p-floatlabel variant="in">
+            <input pInputText formControlName="razonSocial" [fluid]="true" autocomplete="organization" />
+            <label>Razón social</label>
+          </p-floatlabel>
+
+          <div class="field-with-help">
+            <p-floatlabel variant="in">
+              <input
+                pInputText
+                formControlName="cuit"
+                [fluid]="true"
+                inputmode="numeric"
+                maxlength="11"
+                autocomplete="off"
+                (input)="onCuitInput()"
+              />
+              <label>CUIT (11 dígitos)</label>
+            </p-floatlabel>
+            @if (form.get('cuit')?.invalid && form.get('cuit')?.touched) {
+              <small class="p-error">Ingresá los 11 dígitos del CUIT.</small>
+            }
+          </div>
+
+          <p-floatlabel variant="in">
+            <input pInputText formControlName="condicionIva" [fluid]="true" autocomplete="off" />
+            <label>Condición frente al IVA</label>
+          </p-floatlabel>
+
+          <p-floatlabel variant="in">
+            <input pInputText formControlName="emailFiscal" [fluid]="true" type="email" autocomplete="email" />
+            <label>Email fiscal</label>
+          </p-floatlabel>
+
+          <p-floatlabel variant="in">
+            <input pInputText formControlName="telefonoFiscal" [fluid]="true" type="tel" autocomplete="tel" />
+            <label>Teléfono fiscal</label>
+          </p-floatlabel>
+
+          <p-floatlabel variant="in">
+            <input pInputText formControlName="direccionFiscal" [fluid]="true" autocomplete="street-address" />
+            <label>Domicilio fiscal</label>
+          </p-floatlabel>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="section-heading">
+          <h2>Ubicación operativa</h2>
+          <span>Permite identificar al productor en el mapa de la red y auditar su cobertura territorial.</span>
+        </div>
+        <app-autocomplete-direccion
+          [placeholder]="'Buscar dirección del productor...' | translate"
+          [disabled]="loading"
+          [useDeviceLocation]="true"
+          [initialValue]="direccionSeleccionada"
+          (direccionChange)="onDireccionChange($event)"
+          (direccionClear)="onDireccionClear()"
+        ></app-autocomplete-direccion>
+        <p-floatlabel variant="in" class="mt-4">
+          <input pInputText type="number" formControlName="radioInfluenciaKm" [fluid]="true" />
+          <label>Radio operativo de referencia (km)</label>
+        </p-floatlabel>
+        <p class="hint">Si no se carga una dirección, el mapa usa el centro de sus establecimientos y lo identifica como ubicación derivada.</p>
+      </div>
+
       @if (loginService.esAdmin) {
         <div class="form-section compact">
           <div class="toggle-row">
@@ -88,36 +159,63 @@
               inputId="mostrarLicencia"
               (ngModelChange)="onMostrarLicenciaChange($event)"
             />
-            <label for="mostrarLicencia">Configurar licencia manualmente</label>
+            <label for="mostrarLicencia">Administrar licencia</label>
           </div>
-          <p class="hint">Si no se configura, se crea una licencia gratis básica automáticamente.</p>
+          <p class="hint">Si no se configura, el productor hereda el plan de su distribuidor o compañía.</p>
         </div>
       }
 
       @if (loginService.esAdmin && mostrarLicencia && formLicencia) {
-        <div class="form-section" [formGroup]="formLicencia">
+        <div class="form-section license-assignment-panel" [formGroup]="formLicencia">
           <div class="section-heading">
-            <h2>Licencia</h2>
-            <span>Configura límites y módulos del productor.</span>
+            <h2>Plan del productor</h2>
+            <span>La asignación es auditable y no modifica el catálogo compartido.</span>
           </div>
 
-          <div class="field-grid">
-            <p-floatlabel variant="in">
-              <input pInputText formControlName="nombre" [fluid]="true" autocomplete="off" />
-              <label>Nombre de licencia</label>
-            </p-floatlabel>
-            <p-floatlabel variant="in">
-              <input pInputText type="number" formControlName="maxUsuarios" [fluid]="true" />
-              <label>Usuarios</label>
-            </p-floatlabel>
-            <p-floatlabel variant="in">
-              <input pInputText type="number" formControlName="maxEstablecimientos" [fluid]="true" />
-              <label>Establecimientos</label>
-            </p-floatlabel>
-            <p-floatlabel variant="in">
-              <input pInputText type="number" formControlName="maxLotes" [fluid]="true" />
-              <label>Lotes</label>
-            </p-floatlabel>
+          <p-select
+            [options]="licencias"
+            [(ngModel)]="licencia"
+            optionLabel="nombre"
+            placeholder="Seleccionar un plan existente"
+            [fluid]="true"
+            appendTo="body"
+            [ngModelOptions]="{ standalone: true }"
+            (onChange)="onLicenciaChange($event.value)"
+          />
+
+          @if (licencia) {
+            <div class="license-plan-summary">
+              <div><span>Usuarios</span><strong>{{ licencia.maxUsuarios ?? 'Sin limite' }}</strong></div>
+              <div><span>Establecimientos</span><strong>{{ licencia.maxEstablecimientos ?? 'Sin limite' }}</strong></div>
+              <div><span>Lotes</span><strong>{{ licencia.maxLotes ?? 'Sin limite' }}</strong></div>
+              <div><span>Hectareas</span><strong>{{ licencia.maxdHectareas ?? 'Sin limite' }}</strong></div>
+            </div>
+          }
+
+          @if (estadoLicencia?.uso; as uso) {
+            <div class="license-usage-heading">
+              <strong>Consumo actual del productor</strong>
+              <small>Medicion administrativa; no modifica permisos ni factura consumos.</small>
+            </div>
+            <div class="license-usage-summary">
+              <div><span>Usuarios</span><strong>{{ uso.usuarios.actual }} / {{ uso.usuarios.limite ?? 'Sin limite' }}</strong></div>
+              <div><span>Establecimientos</span><strong>{{ uso.establecimientos.actual }} / {{ uso.establecimientos.limite ?? 'Sin limite' }}</strong></div>
+              <div><span>Lotes</span><strong>{{ uso.lotes.actual }} / {{ uso.lotes.limite ?? 'Sin limite' }}</strong></div>
+              <div><span>Hectareas</span><strong>{{ uso.hectareas.actual }} / {{ uso.hectareas.limite ?? 'Sin limite' }}</strong></div>
+            </div>
+          }
+
+          <div class="license-date-field">
+            <label for="producerLicenseExpiration">Vigencia hasta</label>
+            <p-datepicker
+              inputId="producerLicenseExpiration"
+              [(ngModel)]="fechaDeExpiracion"
+              [minDate]="hoy"
+              [showIcon]="true"
+              [fluid]="true"
+              appendTo="body"
+              [ngModelOptions]="{ standalone: true }"
+            />
           </div>
         </div>
       }

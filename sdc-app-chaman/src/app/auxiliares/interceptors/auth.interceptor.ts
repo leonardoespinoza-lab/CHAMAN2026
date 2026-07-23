@@ -6,6 +6,7 @@ import { BehaviorSubject, from, Observable, throwError } from 'rxjs';
 import { catchError, filter, switchMap, take } from 'rxjs/operators';
 import { LoginService } from '../http/login.service';
 import { HelperService } from '../servicios/helper';
+import { COOKIE_AUTH } from '../../environments/environment';
 
 // Estado global para el refresh
 let isRefreshing = false;
@@ -18,6 +19,7 @@ export const authInterceptor: HttpInterceptorFn = (
   const helper = inject(HelperService);
   const loginService = inject(LoginService);
   const router = inject(Router);
+  const requestEpoch = loginService.sessionEpoch;
 
   // Agregar token a la request si existe
   const authRequest = addToken(req, helper);
@@ -25,15 +27,33 @@ export const authInterceptor: HttpInterceptorFn = (
 
   return next(authRequest).pipe(
     catchError((error: HttpErrorResponse) => {
+      // Una respuesta de la identidad anterior no puede refrescar, limpiar ni
+      // redirigir la sesión que acaba de iniciar otro usuario.
+      if (error.status === 401 && requestEpoch !== loginService.sessionEpoch) {
+        return throwError(() => error);
+      }
+
       // 401: token vencido o invalido. 403: sesion valida sin permiso para una accion puntual.
       // No se debe cerrar la sesion ante un 403 porque un usuario de lectura puede disparar
       // consultas opcionales sin permisos de escritura y aun asi seguir navegando.
-      if (error.status === 401 && helper.refreshToken && !authLifecycleRequest) {
+      const hasRenewableSession = COOKIE_AUTH
+        ? !!helper.token
+        : !!helper.refreshToken;
+      if (
+        error.status === 401 &&
+        hasRenewableSession &&
+        !loginService.isChangingIdentity &&
+        !authLifecycleRequest
+      ) {
         return handle401Error(authRequest, next, helper, loginService, router);
       }
 
       // Si es 401 y NO tenemos refresh token, redirigir a login
-      if (error.status === 401 && (!helper.refreshToken || authLifecycleRequest)) {
+      if (
+        error.status === 401 &&
+        (!hasRenewableSession || authLifecycleRequest) &&
+        !loginService.isChangingIdentity
+      ) {
         helper.removeToken();
         router.navigate(['/auth']);
       }
@@ -49,11 +69,20 @@ function addToken(request: HttpRequest<any>, helper: HelperService): HttpRequest
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  if (COOKIE_AUTH) {
+    headers['X-Chaman-Session'] = 'cookie-v1';
+    if (helper.csrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
+      headers['X-CSRF-Token'] = helper.csrfToken;
+    }
+  }
   const permiso = helper.numeroPermiso;
   if (permiso !== null && permiso !== undefined) {
     headers['X-Permiso'] = `${permiso}`;
   }
-  return request.clone({ setHeaders: headers });
+  return request.clone({
+    setHeaders: headers,
+    withCredentials: COOKIE_AUTH || request.withCredentials,
+  });
 }
 
 function handle401Error(

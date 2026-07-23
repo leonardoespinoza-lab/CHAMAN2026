@@ -17,8 +17,14 @@ export class LoginCacheWarmingInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     return next.handle().pipe(
-      tap(async (response) => {
+      tap((response) => {
         try {
+          const request = context.switchToHttp().getRequest();
+          const loginSource = this.determineLoginSource(request);
+          if (loginSource === 'refresh-token') {
+            return;
+          }
+
           // Solo procesar si la respuesta contiene datos de usuario
           let usuario = null;
 
@@ -45,10 +51,6 @@ export class LoginCacheWarmingInterceptor implements NestInterceptor {
                 );
                 return;
               }
-
-              // Determinar fuente del login desde el contexto de la request
-              const request = context.switchToHttp().getRequest();
-              const loginSource = this.determineLoginSource(request);
 
               this.logger.log(
                 `🔥 Activando cache warming para usuario: ${usuario._id} (${loginSource})`,
@@ -90,7 +92,7 @@ export class LoginCacheWarmingInterceptor implements NestInterceptor {
   private determineLoginSource(
     request: any,
   ): 'user-login' | 'refresh-token' | 'google-login' {
-    const url = request.url || '';
+    const url = String(request.url || '').replace(/_/g, '-');
 
     if (url.includes('google-login')) {
       return 'google-login';

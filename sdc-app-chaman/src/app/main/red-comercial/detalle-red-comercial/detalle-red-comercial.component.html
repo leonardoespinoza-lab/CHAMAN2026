@@ -1,0 +1,75 @@
+<section class="network-audit">
+  <header class="audit-header">
+    <div class="header-copy">
+      <div>
+        <p class="eyebrow">Red territorial</p>
+        <h1>{{ tipo === 'distribuidor' ? 'Distribuidor y red asociada' : 'Productor y estructura operativa' }}</h1>
+        <p>Vista consolidada desde una única jerarquía: ubicación, establecimientos, lotes, superficie y usuarios.</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <p-button label="Actualizar" icon="pi pi-refresh" outlined="true" [loading]="loading" (onClick)="cargar()" />
+      <p-button label="Editar" icon="pi pi-pencil" (onClick)="editar()" />
+    </div>
+  </header>
+
+  @if (loading && !entidad) {
+    <div class="loading-state"><i class="pi pi-spin pi-spinner"></i><span>Consolidando la red asociada...</span></div>
+  } @else if (entidad) {
+    <article class="identity-card">
+      <div>
+        <span class="entity-kind"><i [class]="tipo === 'distribuidor' ? 'pi pi-building' : 'pi pi-users'"></i>{{ tipo }}</span>
+        <h2>{{ entidad.nombre }}</h2>
+        <p>{{ entidad.direccion || 'Dirección operativa pendiente' }}</p>
+      </div>
+      <div class="location-summary">
+        <span class="location-status" [class.derived]="entidad.fuenteUbicacion === 'Derivada'" [class.pending]="entidad.fuenteUbicacion === 'Pendiente'">
+          {{ entidad.fuenteUbicacion === 'Cargada' ? 'Ubicación cargada' : entidad.fuenteUbicacion === 'Derivada' ? 'Centro derivado de establecimientos' : 'Ubicación pendiente' }}
+        </span>
+        <strong>{{ coordenadas() }}</strong>
+        <p-button label="Abrir mapa" icon="pi pi-map-marker" size="small" outlined="true" [disabled]="!entidad.geojson" (onClick)="abrirMapa()" />
+      </div>
+    </article>
+
+    <div class="metrics-grid">
+      @if (distribuidor) { <article><span>Productores</span><strong>{{ distribuidor.metricas.productores || 0 }}</strong></article> }
+      <article><span>Establecimientos</span><strong>{{ entidad.metricas.establecimientos }}</strong></article>
+      <article><span>Lotes</span><strong>{{ entidad.metricas.lotes }}</strong></article>
+      <article><span>Superficie</span><strong>{{ entidad.metricas.hectareas | number: '1.0-2' }} ha</strong></article>
+      <article><span>Usuarios asociados</span><strong>{{ entidad.metricas.usuarios }}</strong></article>
+    </div>
+
+    @if (distribuidor) {
+      <article class="audit-section">
+        <div class="section-heading"><div><p class="eyebrow">Primer nivel</p><h2>Productores asociados</h2></div><span>{{ productoresAsociados.length }}</span></div>
+        @if (productoresAsociados.length) {
+          <div class="cards-grid">
+            @for (item of productoresAsociados; track item.id) {
+              <button class="association-card" type="button" (click)="verProductor(item.id)">
+                <div><strong>{{ item.nombre }}</strong><small>{{ item.direccion || (item.fuenteUbicacion === 'Derivada' ? 'Ubicación derivada de su operación' : 'Dirección pendiente') }}</small></div>
+                <dl><div><dt>Est.</dt><dd>{{ item.metricas.establecimientos }}</dd></div><div><dt>Lotes</dt><dd>{{ item.metricas.lotes }}</dd></div><div><dt>Ha</dt><dd>{{ item.metricas.hectareas | number: '1.0-1' }}</dd></div></dl>
+                <i class="pi pi-arrow-right"></i>
+              </button>
+            }
+          </div>
+        } @else { <p class="empty-inline">No hay productores asociados.</p> }
+      </article>
+    }
+
+    <article class="audit-section">
+      <div class="section-heading"><div><p class="eyebrow">Operación</p><h2>Establecimientos y lotes</h2></div><span>{{ establecimientosAsociados.length }}</span></div>
+      @if (establecimientosAsociados.length) {
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Establecimiento</th><th>Productor</th><th class="numeric">Lotes</th><th class="numeric">Superficie</th><th class="numeric">Usuarios</th></tr></thead>
+            <tbody>
+              @for (item of establecimientosAsociados; track item.id) {
+                <tr><td><strong>{{ item.nombre }}</strong></td><td>{{ item.productor || 'Sin productor identificado' }}</td><td class="numeric">{{ item.lotes }}</td><td class="numeric">{{ item.hectareas | number: '1.0-2' }} ha</td><td class="numeric">{{ item.usuarios }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else { <p class="empty-inline">No hay establecimientos asociados.</p> }
+    </article>
+  }
+</section>

@@ -20,12 +20,14 @@ import {
   IPermiso,
   ICargaFitosanitaria,
   IInteligenciaSueloLote,
+  IUsuario,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 import { GetPermiso } from '../../auxiliares/authorization/get-permiso.decorator';
 import { Response } from 'express';
+import { GetUser } from '../../auxiliares/authorization/get-token.decorator';
 
 @ApiTags('Lotes')
 @Controller('lotes')
@@ -35,7 +37,10 @@ export class LotesController {
 
   @Get()
   @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Tenant', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
@@ -49,7 +54,10 @@ export class LotesController {
 
   @Get('suelo-inta')
   @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Tenant', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
@@ -81,7 +89,9 @@ export class LotesController {
   @Get('/:id/certificado')
   @Permisos(
     { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Tenant', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
@@ -89,21 +99,25 @@ export class LotesController {
   public async generarCertificado(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<string> {
-    const html = await this.service.generarCertificado(id, permiso);
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    @GetUser() user: IUsuario,
+    @Res() res: Response,
+  ): Promise<void> {
+    const pdf = await this.service.generarCertificadoPdf(id, permiso, user);
+    res.setHeader('Content-Type', 'application/pdf');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="certificado-chaman-${id}.html"`,
+      `attachment; filename="informe-agronomico-chaman-${id}.pdf"`,
     );
-    return html;
+    res.setHeader('Content-Length', String(pdf.length));
+    res.end(pdf);
   }
 
   @Get('/:id/carga-fitosanitaria')
   @Permisos(
     { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Tenant', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
@@ -118,7 +132,9 @@ export class LotesController {
   @Get('/:id/ubicacion')
   @Permisos(
     { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Tenant', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
@@ -151,7 +167,9 @@ export class LotesController {
   @Get('/:id/suelo-ambiente')
   @Permisos(
     { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Tenant', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
@@ -178,7 +196,10 @@ export class LotesController {
 
   @Get('/:id')
   @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Tenant', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
@@ -207,6 +228,7 @@ export class LotesController {
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
   )
   public async generarNdvi(
@@ -247,13 +269,15 @@ export class LotesController {
 
   @Delete('/:id')
   @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
   )
   public async delete(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,
+    @GetUser() user: IUsuario,
   ): Promise<ILote> {
-    return await this.service.delete(id, permiso);
+    return await this.service.delete(id, permiso, user);
   }
 }

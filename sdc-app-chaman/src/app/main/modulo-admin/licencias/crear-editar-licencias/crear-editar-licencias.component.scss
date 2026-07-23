@@ -4,3 +4,29 @@
   border-radius: 10px;
   margin-bottom: 1em;
 }
+
+.license-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.span-2 {
+  grid-column: 1 / -1;
+}
+
+:host ::ng-deep .license-architecture-note {
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 720px) {
+  .license-catalog-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .span-2 {
+    grid-column: auto;
+  }
+}

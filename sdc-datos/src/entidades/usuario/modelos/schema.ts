@@ -1,5 +1,12 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Exactly, IDatosPersonales, IPermiso, IUsuario } from 'modelos/src';
+import {
+  Exactly,
+  IDatosPersonales,
+  IDatosProfesionales,
+  IPermiso,
+  IUbicacionProfesional,
+  IUsuario,
+} from 'modelos/src';
 import { Document } from 'mongoose';
 import { Distribuidor } from '../../distribuidor/modelos/schema';
 import { Establecimiento } from '../../establecimiento/modelos/schema';
@@ -16,10 +23,10 @@ export class Usuario implements Exactly<IUsuario, Usuario> {
   @Prop({ type: Date, default: Date.now })
   fechaCreacion: string;
 
-  @Prop({ required: true, unique: true, lowercase: true })
+  @Prop({ required: true, lowercase: true })
   username: string;
 
-  @Prop({ required: true })
+  @Prop({ required: true, select: false })
   hash?: string;
 
   @Prop({ type: [Object] })
@@ -30,6 +37,27 @@ export class Usuario implements Exactly<IUsuario, Usuario> {
 
   @Prop({ type: Object })
   datosPersonales?: IDatosPersonales;
+
+  @Prop({ type: Object })
+  datosProfesionales?: IDatosProfesionales;
+
+  @Prop({ type: Object })
+  ubicacionProfesional?: IUbicacionProfesional;
+
+  @Prop({ type: String })
+  creadoPorUsuario?: string;
+
+  @Prop({ type: Boolean, default: false, index: true })
+  archivado?: boolean;
+
+  @Prop({ type: Date })
+  fechaArchivado?: string;
+
+  @Prop({ type: String })
+  archivadoPor?: string;
+
+  @Prop({ type: String })
+  motivoArchivado?: string;
 }
 
 export type UsuarioDocument = Usuario & Document;
@@ -37,6 +65,16 @@ export type UsuarioDocument = Usuario & Document;
 export const UsuarioSchema = SchemaFactory.createForClass(Usuario);
 
 UsuarioSchema.set('toJSON', { virtuals: true, getters: true });
+
+UsuarioSchema.index({ 'ubicacionProfesional.geojson': '2dsphere' });
+UsuarioSchema.index(
+  { username: 1 },
+  {
+    name: 'uniq_usuario_username_activo_v2',
+    unique: true,
+    partialFilterExpression: { archivado: false },
+  },
+);
 
 UsuarioSchema.virtual('permisos.establecimiento', {
   foreignField: '_id',

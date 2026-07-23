@@ -19,7 +19,12 @@ import { DecisionPipelineModule } from '../../auxiliares/decision-pipeline';
     DecisionPipelineModule,
   ],
   controllers: [LotesController],
-  providers: [LotesService, LotesRepository, NdviQueueService, SatelliteSyncService],
+  providers: [
+    LotesService,
+    LotesRepository,
+    NdviQueueService,
+    SatelliteSyncService,
+  ],
   exports: [LotesService],
 })
 export class LotesModule {}

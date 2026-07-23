@@ -1,7 +1,12 @@
 import { Body, Controller, Logger, Post, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { GeocodesService } from './geocode-api.service';
-import { DireccionV2, ICoordenadas, IGeoJSONPoint, IZonaGeografica } from 'modelos/src';
+import {
+  DireccionV2,
+  ICoordenadas,
+  IGeoJSONPoint,
+  IZonaGeografica,
+} from 'modelos/src';
 import { PermisoGuard } from '../authorization/permiso.guard';
 import { Permisos } from '../authorization/permiso.decorator';
 
@@ -17,10 +22,10 @@ export class GeocodesController {
   @Permisos(
     { nivel: 'Quimica', roles: ['Admin'] },
     { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Asesor', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
-    { nivel: 'Establecimiento', roles: ['Admin'] }    
+    { nivel: 'Establecimiento', roles: ['Admin'] },
   )
-  
   public async direcciones(
     @Body() body: { text: string; pais?: string; coordenadas?: ICoordenadas },
   ): Promise<{ resultados: string[] }> {
@@ -35,10 +40,13 @@ export class GeocodesController {
   @Permisos(
     { nivel: 'Quimica', roles: ['Admin'] },
     { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Asesor', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
   )
-  public async zonas(@Body() body: { text: string; provincia?: string }): Promise<{ resultados: IZonaGeografica[] }> {
+  public async zonas(
+    @Body() body: { text: string; provincia?: string },
+  ): Promise<{ resultados: IZonaGeografica[] }> {
     return await this.service.zonas(body.text, body.provincia);
   }
 
@@ -46,6 +54,7 @@ export class GeocodesController {
   @Permisos(
     { nivel: 'Quimica', roles: ['Admin'] },
     { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Asesor', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
   )
@@ -57,6 +66,7 @@ export class GeocodesController {
   @Permisos(
     { nivel: 'Quimica', roles: ['Admin'] },
     { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Asesor', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
   )
@@ -68,6 +78,7 @@ export class GeocodesController {
   @Permisos(
     { nivel: 'Quimica', roles: ['Admin'] },
     { nivel: 'Distribuidor', roles: ['Admin'] },
+    { nivel: 'Asesor', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin'] },
     { nivel: 'Establecimiento', roles: ['Admin'] },
   )

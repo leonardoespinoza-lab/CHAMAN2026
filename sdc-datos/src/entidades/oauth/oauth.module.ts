@@ -5,6 +5,7 @@ import { Token, TokenSchema } from './token.model';
 import { Client, ClientSchema } from './client.model';
 import { OauthController } from './oauth.controller';
 import { UsuariosModule } from '../usuario/module';
+import { TenantsModule } from '../tenant/module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { UsuariosModule } from '../usuario/module';
       { name: Client.name, schema: ClientSchema },
     ]),
     UsuariosModule,
+    TenantsModule,
   ],
   providers: [OauthService],
   controllers: [OauthController],

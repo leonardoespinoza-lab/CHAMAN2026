@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ICreateLote, IQueryParam, IUpdateLote } from 'modelos/src';
+import { ICreateLote, IQueryParam, ISolicitudArchivado, IUpdateLote } from 'modelos/src';
 import { LotesRepository } from './repository';
 import { LotLocationService } from '../ubicacion-lote/service';
 import { LotSoilIntelligenceEngine } from '../suelo-inteligencia/engine.service';
@@ -70,8 +70,8 @@ export class LotesService {
     throw new NotFoundException('No encontrado');
   }
 
-  async delete(id: string) {
-    const deleted = await this.repository.delete(id);
+  async delete(id: string, audit: ISolicitudArchivado = {}) {
+    const deleted = await this.repository.delete(id, audit);
     if (deleted) {
       return deleted;
     }

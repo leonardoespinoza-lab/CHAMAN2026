@@ -36,16 +36,56 @@ npm run railway:start
 ## Orden de publicacion
 
 1. MongoDB y Redis.
-2. `sdc-datos`.
-3. `sdc-auth`.
-4. `sdc-api-clima`.
-5. `sdc-api-predicciones`.
-6. `sdc-api-cliente`.
-7. `sdc-api-externa`.
-8. `sdc-api-lora`.
-9. `sdc-websocket`.
-10. `sdc-app-chaman`.
-11. `sdc-ndvi-worker`.
+2. Ejecutar y revisar el plan de migraciones requerido por el release.
+3. `sdc-datos`.
+4. `sdc-auth`.
+5. `sdc-api-clima`.
+6. `sdc-api-predicciones`.
+7. `sdc-api-cliente`.
+8. `sdc-api-externa`.
+9. `sdc-api-lora`.
+10. `sdc-websocket`.
+11. `sdc-app-chaman`.
+12. `sdc-ndvi-worker`.
+
+### Migracion de indices activos (release 2026-07-23)
+
+El archivado logico necesita indices unicos parciales. Esta migracion nunca
+elimina documentos y no se ejecuta automaticamente en un reinicio normal.
+
+Primero desplegar `sdc-datos` en testing con:
+
+```bash
+DB_AUTO_INDEX_ENABLED=false
+CHAMAN_RUN_ACTIVE_INDEX_MIGRATION_ON_START=true
+CHAMAN_ACTIVE_INDEX_MIGRATION_MODE=plan
+```
+
+El plan es de solo lectura y puede ejecutarse durante el arranque. Revisar que
+todas las colecciones informen `duplicateGroups: 0` y que `safeToApply` sea
+`true`.
+
+`apply` y `rollback` **no se ejecutan mediante `railway:start`**. Railway puede
+arrancar mas de una replica y una migracion de indices no debe quedar asociada
+al ciclo de vida de la aplicacion. Crear un job one-off conectado a las mismas
+variables y red privada de `sdc-datos`, con una sola replica/proceso, y ejecutar:
+
+```bash
+CHAMAN_MIGRATION_CONFIRM=20260723-active-unique-indexes-v1:apply npm run migrate:active-indexes:apply
+```
+
+El script usa un lease atomico con owner, heartbeat y vencimiento, y un indice
+unico parcial sobre `migrationId`: un segundo runner se bloquea y un proceso
+interrumpido puede retomarse al vencer el lease. Es una defensa adicional, no
+un reemplazo del job singleton.
+
+Una vez que el log indique `status: applied`, volver
+`CHAMAN_RUN_ACTIVE_INDEX_MIGRATION_ON_START=false` y redeployar el mismo commit.
+Para rollback usar otro job singleton con
+`CHAMAN_MIGRATION_CONFIRM=20260723-active-unique-indexes-v1:rollback npm run migrate:active-indexes:rollback`.
+Repetir exactamente el procedimiento en produccion solo despues de validar ese
+commit en testing. Nunca configurar `apply` o `rollback` como Start Command ni
+dejarlos vinculados a reinicios, escalado o redeploys.
 
 ## Conexion entre servicios
 

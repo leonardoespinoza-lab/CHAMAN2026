@@ -30,13 +30,7 @@ export class LicenciasController {
   constructor(private service: LicenciasService) {}
 
   @Get()
-  @Permisos(
-    { nivel: 'Quimica', roles: ['Admin'] },
-    { nivel: 'Distribuidor', roles: ['Admin'] },
-    { nivel: 'Productor', roles: ['Admin'] },
-    { nivel: 'Establecimiento', roles: ['Admin'] },
-    { nivel: 'Admin', roles: ['Admin'] },
-  )
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
   public async get(
     @Query() query: IQueryParam,
     @GetUser() user: IUsuario,
@@ -45,13 +39,7 @@ export class LicenciasController {
   }
 
   @Get('/:id')
-  @Permisos(
-    { nivel: 'Quimica', roles: ['Admin'] },
-    { nivel: 'Distribuidor', roles: ['Admin'] },
-    { nivel: 'Productor', roles: ['Admin'] },
-    { nivel: 'Establecimiento', roles: ['Admin'] },
-    { nivel: 'Admin', roles: ['Admin'] },
-  )
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
   public async getById(@Param('id') id: string): Promise<ILicencia> {
     return await this.service.getById(id);
   }

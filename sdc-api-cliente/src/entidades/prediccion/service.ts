@@ -8,6 +8,7 @@ import {
   IResumenRiesgosAgroclimaticos,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
+import { establecimientosDelPermiso } from '../../auxiliares/authorization/alcance-permiso';
 import { XlsxService } from '../../auxiliares/xlsx/xlsx.service';
 import { PrediccionsRepository } from './repository';
 import { LotesService } from '../lote/service';
@@ -30,7 +31,7 @@ export class PrediccionsService {
     filtro: IQueryParam,
     permiso: IPermiso,
   ): Promise<IListado<IPrediccion>> {
-    this.agregarFiltroPermiso(filtro, permiso);
+    await this.agregarFiltroPermiso(filtro, permiso);
     return await this.repository.get(filtro);
   }
 
@@ -80,21 +81,24 @@ export class PrediccionsService {
   // Private
 
   private puedeVerSiembra(
-    data: Partial<IPrediccion>,
+    data: Partial<IPrediccion> & { idLote?: string },
     permiso: IPermiso,
   ): boolean {
+    if (
+      permiso.idLotes?.length &&
+      (!data.idLote || !permiso.idLotes.includes(String(data.idLote)))
+    ) {
+      return false;
+    }
     if (permiso.nivel === 'Admin') {
       return true;
     }
     if (permiso.nivel === 'Quimica') {
-      return Boolean(
-        data.idQuimica && data.idQuimica === permiso.idQuimica,
-      );
+      return Boolean(data.idQuimica && data.idQuimica === permiso.idQuimica);
     }
     if (permiso.nivel === 'Distribuidor') {
       return Boolean(
-        data.idDistribuidor &&
-          data.idDistribuidor === permiso.idDistribuidor,
+        data.idDistribuidor && data.idDistribuidor === permiso.idDistribuidor,
       );
     }
     if (permiso.nivel === 'Productor') {
@@ -105,7 +109,15 @@ export class PrediccionsService {
     if (permiso.nivel === 'Establecimiento') {
       return Boolean(
         data.idEstablecimiento &&
-          data.idEstablecimiento === permiso.idEstablecimiento,
+        data.idEstablecimiento === permiso.idEstablecimiento,
+      );
+    }
+    if (permiso.nivel === 'Asesor') {
+      return Boolean(
+        data.idEstablecimiento &&
+        establecimientosDelPermiso(permiso).includes(
+          String(data.idEstablecimiento),
+        ),
       );
     }
     return false;
@@ -123,6 +135,7 @@ export class PrediccionsService {
     if (permiso.nivel === 'Establecimiento') {
       return Boolean(data.idEstablecimiento);
     }
+    if (permiso.nivel === 'Asesor') return Boolean(data.idEstablecimiento);
     return permiso.nivel === 'Admin';
   }
 
@@ -137,10 +150,7 @@ export class PrediccionsService {
     const siembra = await this.repository.getSiembraById(idSiembra);
     if (this.puedeVerSiembra(siembra, permiso)) return;
 
-    if (
-      !this.tieneAlcancePersistido(siembra, permiso) &&
-      siembra.idLote
-    ) {
+    if (!this.tieneAlcancePersistido(siembra, permiso) && siembra.idLote) {
       try {
         await this.lotesService.getById(siembra.idLote, permiso);
         return;
@@ -152,7 +162,10 @@ export class PrediccionsService {
     throw new Error('No tiene permiso para evaluar esta siembra');
   }
 
-  private agregarFiltroPermiso(query: IQueryParam, permiso: IPermiso) {
+  private async agregarFiltroPermiso(
+    query: IQueryParam,
+    permiso: IPermiso,
+  ): Promise<void> {
     const filtro: IFilter<IPrediccion> = HelperService.filtroToObject(
       query.filter,
     );
@@ -169,6 +182,19 @@ export class PrediccionsService {
     }
     if (permiso.nivel === 'Establecimiento') {
       $and.push({ idEstablecimiento: permiso.idEstablecimiento });
+    }
+    if (permiso.nivel === 'Asesor') {
+      $and.push({
+        idEstablecimiento: { $in: establecimientosDelPermiso(permiso) },
+      });
+    }
+    if (permiso.idLotes?.length) {
+      const siembras = await this.repository.getSiembrasByLoteIds(
+        permiso.idLotes,
+      );
+      $and.push({
+        idSiembra: { $in: siembras.map((siembra) => String(siembra._id)) },
+      });
     }
 
     if ($and.length > 0) {

@@ -23,11 +23,10 @@ describe('LotesService - decision pipeline', () => {
       idSiembra: 'siembra-actual',
     } as any);
 
-    await service.update(
-      'lote-1',
-      { capacidadDeCampo: 31 } as any,
-      { nivel: 'Admin', rol: 'Admin' },
-    );
+    await service.update('lote-1', { capacidadDeCampo: 31 } as any, {
+      nivel: 'Admin',
+      rol: 'Admin',
+    });
 
     expect(queue.enqueueForLot).toHaveBeenCalledWith('lote-1', {
       trigger: 'lote.science-updated',
@@ -55,11 +54,10 @@ describe('LotesService - decision pipeline', () => {
     );
     jest.spyOn(service, 'getById').mockResolvedValue({ _id: 'lote-1' } as any);
 
-    await service.update(
-      'lote-1',
-      { ubicacion: { poligono: [] } } as any,
-      { nivel: 'Admin', rol: 'Admin' },
-    );
+    await service.update('lote-1', { ubicacion: { poligono: [] } } as any, {
+      nivel: 'Admin',
+      rol: 'Admin',
+    });
 
     expect(queue.enqueueForLot).toHaveBeenCalledWith(
       'lote-1',

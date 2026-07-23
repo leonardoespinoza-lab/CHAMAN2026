@@ -15,6 +15,15 @@ export const PREFIX_PATH =
 // APIS
 export const API_DATOS =
   process.env.API_DATOS || 'http://127.0.0.1:5000';
+export function resolveAuthDatosTimeoutMs(value?: string): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 1000 && parsed <= 30000
+    ? parsed
+    : 8000;
+}
+export const AUTH_DATOS_TIMEOUT_MS = resolveAuthDatosTimeoutMs(
+  process.env.AUTH_DATOS_TIMEOUT_MS,
+);
 // DATOS INICIALES
 export const CLIENT_ID_INICIAL =
   process.env.CLIENT_ID_INICIAL || (ENV === 'production' ? '' : '1');

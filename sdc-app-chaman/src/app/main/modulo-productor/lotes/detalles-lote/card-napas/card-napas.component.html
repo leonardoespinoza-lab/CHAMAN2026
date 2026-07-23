@@ -1,4 +1,13 @@
-<div class="custom-card napas-card" (click)="abrirDetalle()">
+<div
+  class="custom-card chaman-surface chaman-interactive-surface napas-card"
+  role="button"
+  tabindex="0"
+  aria-label="Abrir seguimiento de napas"
+  aria-haspopup="dialog"
+  [attr.aria-expanded]="verDetalle"
+  (click)="abrirDetalle()"
+  (keydown)="activarTarjeta($event)"
+>
   <div class="napas-header">
     <i class="pi pi-database"></i>
     <div>

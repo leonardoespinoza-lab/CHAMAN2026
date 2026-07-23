@@ -1,14 +1,35 @@
-# Usamos Alpine para reducir el tamaño de la imagen
-FROM node:20-alpine
-# Instalamos git para poder clonar el repositorio
-RUN apk add --no-cache git
-# Creamos el directorio de trabajo
+# Reproducible fallback build from the CHAMAN2026 monorepo root.
+#
+# Usage:
+#   docker build -f sdc-api-cliente/Dockerfile .
+#
+# Railway uses RAILPACK through scripts/railway-build.js. This image is kept as
+# an independently verifiable recovery path.
+FROM node:20-bookworm-slim AS builder
+
+WORKDIR /workspace
+
+COPY sdc-modelos/package.json sdc-modelos/package-lock.json sdc-modelos/tsconfig.json ./sdc-modelos/
+COPY sdc-modelos/src ./sdc-modelos/src
+RUN npm --prefix sdc-modelos ci \
+    && npm --prefix sdc-modelos run build
+
+COPY sdc-api-cliente/package.json sdc-api-cliente/package-lock.json ./sdc-api-cliente/
+RUN npm --prefix sdc-api-cliente ci --install-links
+
+COPY sdc-api-cliente ./sdc-api-cliente
+RUN npm --prefix sdc-api-cliente run build \
+    && npm --prefix sdc-api-cliente prune --omit=dev --install-links
+
+FROM node:20-bookworm-slim AS runtime
+
+ENV NODE_ENV=production
 WORKDIR /app
-# Clonamos el repositorio
-COPY . /app
-# Instalamos las dependencias
-RUN npm install && npm run lint && npm run build
-# Exponemos el puerto 5000
+
+COPY --from=builder /workspace/sdc-api-cliente/package.json ./package.json
+COPY --from=builder /workspace/sdc-api-cliente/node_modules ./node_modules
+COPY --from=builder /workspace/sdc-api-cliente/dist ./dist
+
 EXPOSE 5000
-# Comando para ejecutar la aplicación
-CMD ["npm", "run","start:prod"]
+
+CMD ["node", "dist/main.js"]

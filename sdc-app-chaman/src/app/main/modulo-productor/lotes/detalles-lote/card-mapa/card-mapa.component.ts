@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { AfterViewInit, Component, Input, OnDestroy, OnInit } from '@angular/core';
+import { AfterViewInit, Component, ElementRef, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { IGeoJSONPolygon } from 'modelos/src';
 import { Feature, Map, View } from 'ol';
 import { Polygon } from 'ol/geom';
@@ -20,14 +20,15 @@ import { IDetallesLote } from '../detalles-lote.component';
 })
 export class CardMapaComponent implements OnInit, OnDestroy, AfterViewInit {
   @Input() public lote?: IDetallesLote;
+  @ViewChild('mapContainer', { static: true }) private mapContainer?: ElementRef<HTMLElement>;
   public map?: Map;
 
   constructor(public helper: HelperService) {}
 
   private initMap() {
-    if (this.lote?.ubicacion?.centro) {
+    if (this.lote?.ubicacion?.centro && this.mapContainer?.nativeElement) {
       this.map = new Map({
-        target: 'mapa-detalles',
+        target: this.mapContainer.nativeElement,
         controls: [],
         interactions: [],
         view: new View({
@@ -99,5 +100,10 @@ export class CardMapaComponent implements OnInit, OnDestroy, AfterViewInit {
     this.setBounds();
   }
 
-  ngOnDestroy(): void {}
+  ngOnDestroy(): void {
+    if (!this.map) return;
+    this.map.setTarget(undefined);
+    this.map.dispose();
+    this.map = undefined;
+  }
 }

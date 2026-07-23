@@ -53,13 +53,22 @@ export class NapasService {
     const conDistancia = pozos
       .map((pozo) => ({
         ...pozo,
-        distanciaKm: this.round(this.distanciaKm(lat, lng, pozo.lat, pozo.lng), 2),
+        distanciaKm: this.round(
+          this.distanciaKm(lat, lng, pozo.lat, pozo.lng),
+          2,
+        ),
       }))
       .sort((a, b) => a.distanciaKm - b.distanciaKm);
 
-    const dentroRadio = conDistancia.filter((pozo) => pozo.distanciaKm <= radio);
-    const muestra = (dentroRadio.length ? dentroRadio : conDistancia.slice(0, 18)).slice(0, 18);
-    const conNivel = muestra.filter((pozo) => Number.isFinite(pozo.nivelEstaticoM));
+    const dentroRadio = conDistancia.filter(
+      (pozo) => pozo.distanciaKm <= radio,
+    );
+    const muestra = (
+      dentroRadio.length ? dentroRadio : conDistancia.slice(0, 18)
+    ).slice(0, 18);
+    const conNivel = muestra.filter((pozo) =>
+      Number.isFinite(pozo.nivelEstaticoM),
+    );
     const estadisticas = this.estadisticas(conNivel);
     const calidad = this.calidadReferencia(muestra, conNivel, estadisticas);
     const cobertura = {
@@ -154,7 +163,9 @@ export class NapasService {
     };
   }
 
-  private estadisticas(pozos: INapaPozoReferencia[]): INapaReferenciaLote['estadisticas'] {
+  private estadisticas(
+    pozos: INapaPozoReferencia[],
+  ): INapaReferenciaLote['estadisticas'] {
     const niveles = pozos
       .map((pozo) => pozo.nivelEstaticoM)
       .filter((value): value is number => Number.isFinite(value))
@@ -216,7 +227,9 @@ export class NapasService {
         ? `Profundidad al agua de referencia ${mediana} m bajo la superficie del terreno`
         : 'Red con niveles estaticos disponibles';
     const cercania =
-      distancia !== undefined ? `; pozo con nivel mas cercano a ${distancia} km` : '';
+      distancia !== undefined
+        ? `; pozo con nivel mas cercano a ${distancia} km`
+        : '';
     if (calidad === 'alta') {
       return `${base}${cercania}. Buena cobertura territorial para seguimiento regional.`;
     }
@@ -245,7 +258,12 @@ export class NapasService {
     return Number.isFinite(numberValue) ? numberValue : undefined;
   }
 
-  private distanciaKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  private distanciaKm(
+    lat1: number,
+    lng1: number,
+    lat2: number,
+    lng2: number,
+  ): number {
     const earthKm = 6371;
     const dLat = this.toRad(lat2 - lat1);
     const dLng = this.toRad(lng2 - lng1);

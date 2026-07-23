@@ -1,0 +1,64 @@
+:host { display: block; min-width: 0; }
+.field-photo-card { height: 100%; padding: 1rem; border: 1px solid #c7dde0; border-radius: 14px; background: rgba(255,255,255,.88); }
+.field-card-header { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
+.field-card-header > div { display:grid; gap:.12rem; }
+.field-card-header span { color:var(--p-primary-color); font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
+.field-card-header strong { color:#122436; font-size:1.15rem; }
+.field-card-header small { color:#64748b; }
+.field-card-loading { min-height:132px; display:grid; place-content:center; color:#64748b; gap:.5rem; }
+.photo-strip { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.5rem; margin-top:.9rem; }
+.photo-tile { position:relative; min-height:118px; padding:0; border:0; border-radius:11px; overflow:hidden; cursor:pointer; background:#e9f4f3; }
+.photo-tile img { width:100%; height:100%; min-height:118px; object-fit:cover; display:block; transition:transform .2s ease; }
+.photo-tile:hover img { transform:scale(1.035); }
+.photo-tile .photo-tile-date { position:absolute; left:.4rem; bottom:.4rem; padding:.22rem .45rem; border-radius:999px; background:rgba(8,30,38,.78); color:#fff; font-size:.68rem; font-weight:700; }
+.field-card-link { margin-top:.65rem; padding:.25rem 0; border:0; background:none; color:var(--p-primary-color); font-weight:750; cursor:pointer; }
+.field-card-link i { margin-left:.25rem; }
+.field-empty-state { min-height:132px; display:flex; align-items:center; gap:.8rem; margin-top:.7rem; padding:1rem; border:1px dashed #b7d5d6; border-radius:12px; background:#f6fbfa; color:#526678; }
+.field-empty-state > i { width:42px; height:42px; display:grid; place-items:center; border-radius:12px; background:color-mix(in srgb,var(--p-primary-color),white 84%); color:var(--p-primary-color); font-size:1.2rem; }
+.field-empty-state div { display:grid; gap:.2rem; }
+.field-empty-state strong { color:#183242; }
+.capture-actions { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; }
+.capture-button { min-height:86px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.4rem; border:1px solid #b9d6d8; border-radius:13px; color:var(--p-primary-color); font-weight:800; cursor:pointer; background:#f7fbfb; }
+.capture-button.capture-primary { color:var(--p-primary-contrast-color,#fff); background:linear-gradient(135deg,var(--p-primary-color),var(--p-accent-color)); border-color:var(--p-primary-color); }
+.capture-button i { font-size:1.35rem; }
+.capture-button input { display:none; }
+.capture-previews { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.5rem; margin-top:.8rem; }
+.capture-previews article { position:relative; aspect-ratio:4/3; border-radius:10px; overflow:hidden; }
+.capture-previews img { width:100%; height:100%; object-fit:cover; }
+.capture-previews button { position:absolute; top:.3rem; right:.3rem; width:28px; height:28px; border:0; border-radius:50%; background:rgba(11,27,37,.78); color:#fff; }
+.field-form-grid { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; margin-top:1rem; }
+.field-form-grid label { display:grid; gap:.35rem; }
+.field-form-grid label > span { color:#516679; font-size:.76rem; font-weight:800; text-transform:uppercase; }
+.field-form-grid .wide { grid-column:1/-1; }
+.field-form-grid input,.field-form-grid textarea,.field-form-grid select { width:100%; border:1px solid #c8d9df; border-radius:9px; padding:.65rem .7rem; font:inherit; color:#152738; background:#fff; }
+.location-row { display:flex; align-items:center; gap:.65rem; margin-top:.85rem; padding:.7rem; border:1px solid #d5e3e6; border-radius:11px; background:#f8fbfb; }
+.location-row.has-location { border-color:#62d2b6; background:#effbf6; }
+.location-row > div { display:grid; gap:.1rem; flex:1; }
+.location-row small { color:#65768a; }
+.field-gallery { display:grid; grid-template-columns:140px minmax(0,1fr); min-height:460px; gap:.8rem; }
+.field-gallery aside { display:flex; flex-direction:column; gap:.45rem; max-height:65vh; overflow:auto; }
+.field-gallery aside button { padding:.28rem; border:1px solid #d3e0e3; border-radius:9px; background:#fff; text-align:left; cursor:pointer; }
+.field-gallery aside button.active { border-color:var(--p-primary-color); box-shadow:0 0 0 2px color-mix(in srgb,var(--p-primary-color),transparent 82%); }
+.field-gallery aside img { width:100%; height:72px; object-fit:cover; border-radius:6px; display:block; }
+.field-gallery aside .gallery-thumb-date { display:block; padding:.3rem .1rem .05rem; font-size:.68rem; color:#5d7184; }
+.field-gallery main { display:grid; grid-template-rows:minmax(300px,1fr) auto; border-radius:12px; overflow:hidden; background:#eff5f5; }
+.field-gallery main > img { width:100%; height:100%; max-height:58vh; object-fit:contain; background:#102126; }
+.photo-image-placeholder { width:100%; min-height:72px; display:grid; place-content:center; gap:.45rem; color:#68808d; background:#e9f4f3; }
+.photo-tile .photo-image-placeholder { min-height:118px; }
+.photo-image-placeholder--large { min-height:300px; text-align:center; background:#102126; color:#d7e3e5; }
+.gallery-metadata { display:grid; gap:.25rem; padding:.8rem 1rem; background:#fff; }
+.gallery-metadata > span { color:var(--p-primary-color); font-size:.73rem; font-weight:800; text-transform:uppercase; }
+.gallery-metadata h3,.gallery-metadata p { margin:0; }
+.gallery-metadata small { color:#64748b; }
+.gallery-metadata .p-button { justify-self:start; margin-top:.4rem; }
+@media (max-width:720px) {
+  .field-card-header { align-items:center; }
+  .photo-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .capture-actions,.field-form-grid { grid-template-columns:1fr; }
+  .capture-previews { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .field-form-grid .wide { grid-column:auto; }
+  .field-gallery { grid-template-columns:1fr; }
+  .field-gallery aside { flex-direction:row; max-height:none; overflow-x:auto; }
+  .field-gallery aside button { min-width:105px; }
+  .field-gallery main { grid-template-rows:minmax(240px,44vh) auto; }
+}

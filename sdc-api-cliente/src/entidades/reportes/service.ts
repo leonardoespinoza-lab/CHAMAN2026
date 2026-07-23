@@ -1,5 +1,11 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { IReporte, IListado, IQueryParam, IFilter, IUsuario } from 'modelos/src';
+import {
+  IReporte,
+  IListado,
+  IQueryParam,
+  IFilter,
+  IUsuario,
+} from 'modelos/src';
 import { ReportesRepository } from './repository';
 import { DispositivosService } from '../dispositivos/service';
 import { HelperService } from '../../auxiliares/helper';
@@ -52,11 +58,12 @@ export class ReportesService {
     const identificadores = new Set<string>([idDispositivo].filter(Boolean));
 
     if (user) {
-      const dispositivo = await this.dispositivosService.assertPuedeVerPorIdentificador(
-        idDispositivo,
-        user,
-        'Sensores',
-      );
+      const dispositivo =
+        await this.dispositivosService.assertPuedeVerPorIdentificador(
+          idDispositivo,
+          user,
+          'Sensores',
+        );
       if (dispositivo?._id) {
         identificadores.add(dispositivo._id);
       }
@@ -177,23 +184,26 @@ export class ReportesService {
 
     for (const historico of historicos) {
       for (const reporte of historico.datos || []) {
-        const key = reporte._id || [
-          reporte.idDispositivo || reporte.deveui || '',
-          reporte.fecha || reporte.fechaCreacion || '',
-        ].join('|');
+        const key =
+          reporte._id ||
+          [
+            reporte.idDispositivo || reporte.deveui || '',
+            reporte.fecha || reporte.fechaCreacion || '',
+          ].join('|');
         if (!porClave.has(key)) {
           porClave.set(key, reporte);
         }
       }
     }
 
-    const datos = Array.from(porClave.values()).sort((a, b) =>
-      this.fechaReporte(a).getTime() - this.fechaReporte(b).getTime(),
+    const datos = Array.from(porClave.values()).sort(
+      (a, b) => this.fechaReporte(a).getTime() - this.fechaReporte(b).getTime(),
     );
 
-    const recortados = limit > 0 && datos.length > limit
-      ? datos.slice(datos.length - limit)
-      : datos;
+    const recortados =
+      limit > 0 && datos.length > limit
+        ? datos.slice(datos.length - limit)
+        : datos;
 
     return {
       datos: recortados,

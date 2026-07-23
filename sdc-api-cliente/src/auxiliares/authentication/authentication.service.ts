@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { IToken } from 'modelos/src';
 import { AuthenticationRepository } from './authentication.repository';
-import { TokensService } from 'src/entidades/token/service';
+import { TokensService } from '../../entidades/token/service';
 
 @Injectable()
 export class AuthenticationService {
@@ -18,9 +18,15 @@ export class AuthenticationService {
     username: string,
     password: string,
     remember?: boolean,
+    loginOrigin?: string,
   ): Promise<IToken> {
     try {
-      const token = await this.repository.login(username, password, remember);
+      const token = await this.repository.login(
+        username,
+        password,
+        remember,
+        loginOrigin,
+      );
       if (!token.user?.activo) {
         throw new UnauthorizedException('Usuario deshabilitado');
       }
@@ -66,7 +72,9 @@ export class AuthenticationService {
   }
 
   async accessToken(accessToken: string): Promise<IToken> {
-    const token = await this.tokenService.getByAccessToken(accessToken);
+    const token = await this.repository.authorization(
+      `Bearer ${accessToken}`,
+    );
     if (!token.user.activo) {
       throw new UnauthorizedException('Usuario deshabilitado');
     }

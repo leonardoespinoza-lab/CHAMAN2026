@@ -1,8 +1,9 @@
 import { IIntegracion } from '../compartidos';
 import { IEmpresa } from './empresa';
 import { ICreateLicencia } from './licencia';
+import { IArchivado } from '../compartidos/archivado';
 
-export interface IQuimica {
+export interface IQuimica extends IArchivado {
   _id?: string;
   nombre?: string;
   razonSocial?: string;

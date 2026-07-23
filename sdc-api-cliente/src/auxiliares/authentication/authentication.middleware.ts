@@ -6,13 +6,14 @@ import {
 import { Request, Response } from 'express';
 import { AuthenticationService } from './authentication.service';
 import { LicenciaPorEntidadsService } from 'src/entidades/licenciaPorEntidad/service';
-import { IPermiso } from 'modelos/src';
+import { AdvisorScopeService } from '../authorization/advisor-scope.service';
 
 @Injectable()
 export class AuthenticationMiddleware implements NestMiddleware {
   constructor(
     private service: AuthenticationService,
     private licenciasPorEntidadService: LicenciaPorEntidadsService,
+    private advisorScope: AdvisorScopeService,
   ) {}
 
   async use(req: Request, res: Response, next: () => void) {
@@ -26,14 +27,13 @@ export class AuthenticationMiddleware implements NestMiddleware {
     if (authorization) {
       const token = await this.service.authorization(authorization);
       const permiso = token.user?.permisos?.[nroPermiso];
-      const idEntidad = this.getIdEntidad(permiso);
+      await this.advisorScope.enrichPermission(permiso, token.user?._id);
       res.locals.token = token;
       res.locals.permiso = permiso;
-      res.locals.licencia = idEntidad
-        ? await this.licenciasPorEntidadService.getLicenciaValidaByIdEntidad(
-            idEntidad,
-          )
-        : null; // Null es admin.
+      res.locals.licencia =
+        await this.licenciasPorEntidadService.getLicenciaEfectivaPorPermiso(
+          permiso,
+        );
 
       if (!res.locals.permiso) {
         throw new UnauthorizedException({
@@ -46,18 +46,5 @@ export class AuthenticationMiddleware implements NestMiddleware {
         message: 'No se ha encontrado el token de autenticacion',
       });
     }
-  }
-
-  private getIdEntidad(permiso: IPermiso): string {
-    if (permiso?.nivel === 'Quimica') {
-      return permiso.idQuimica;
-    } else if (permiso?.nivel === 'Distribuidor') {
-      return permiso.idDistribuidor;
-    } else if (permiso?.nivel === 'Productor') {
-      return permiso.idProductor;
-    } else if (permiso?.nivel === 'Establecimiento') {
-      return permiso.idProductor;
-    }
-    return null;
   }
 }

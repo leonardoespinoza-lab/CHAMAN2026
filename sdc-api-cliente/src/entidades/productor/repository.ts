@@ -5,6 +5,7 @@ import {
   IQueryParam,
   ICreateProductor,
   IUpdateProductor,
+  ISolicitudArchivado,
 } from 'modelos/src';
 import { API_DATOS } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
@@ -33,8 +34,11 @@ export class ProductorsRepository {
     return await this.axios.PUT<IProductor>(url, data);
   }
 
-  async delete(id: string): Promise<IProductor> {
+  async delete(
+    id: string,
+    audit: ISolicitudArchivado = {},
+  ): Promise<IProductor> {
     const url = `${API_DATOS}/productors/${id}`;
-    return await this.axios.DELETE<IProductor>(url);
+    return await this.axios.DELETE<IProductor>(url, { params: audit });
   }
 }

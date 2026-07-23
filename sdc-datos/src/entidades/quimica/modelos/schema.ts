@@ -6,7 +6,7 @@ import { Document } from 'mongoose';
 export class Quimica implements Exactly<IQuimica, Quimica> {
   _id: string;
 
-  @Prop({ required: true, unique: true })
+  @Prop({ required: true })
   nombre: string;
 
   @Prop()
@@ -38,6 +38,18 @@ export class Quimica implements Exactly<IQuimica, Quimica> {
 
   @Prop({ type: Object })
   integraciones?: IIntegracion[];
+
+  @Prop({ type: Boolean, default: false, index: true })
+  archivado?: boolean;
+
+  @Prop({ type: Date })
+  fechaArchivado?: string;
+
+  @Prop({ type: String })
+  archivadoPor?: string;
+
+  @Prop({ type: String })
+  motivoArchivado?: string;
 }
 
 export type QuimicaDocument = Quimica & Document;
@@ -45,3 +57,11 @@ export type QuimicaDocument = Quimica & Document;
 export const QuimicaSchema = SchemaFactory.createForClass(Quimica);
 
 QuimicaSchema.set('toJSON', { virtuals: true, getters: true });
+QuimicaSchema.index(
+  { nombre: 1 },
+  {
+    name: 'uniq_quimica_nombre_activo_v2',
+    unique: true,
+    partialFilterExpression: { archivado: false },
+  },
+);

@@ -1,6 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
+import { IResumenRedAsesores } from 'modelos/src';
 import { LoginService } from '../../../auxiliares/http/login.service';
+import { UsuarioService } from '../../../auxiliares/http/usuario.service';
 import { HelperService } from '../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../auxiliares/shared.module';
 
@@ -19,9 +21,14 @@ interface AdminServiceCard {
   templateUrl: './dashboard-admin.component.html',
   styleUrl: './dashboard-admin.component.scss',
 })
-export class DashboardAdminComponent {
+export class DashboardAdminComponent implements OnInit {
+  public resumenAsesores?: IResumenRedAsesores;
+  public cargandoAsesores = false;
+
   public readonly quickActions = [
+    { label: 'Tenant', icon: 'pi pi-palette', route: '/tenants/crear' },
     { label: 'Usuario', icon: 'pi pi-user-plus', route: '/usuarios/crear' },
+    { label: 'Asesor', icon: 'pi pi-briefcase', route: '/asesores/crear' },
     { label: 'Productor', icon: 'pi pi-id-card', route: '/productores/crear' },
     { label: 'Compañía', icon: 'pi pi-building', route: '/quimicas/crear' },
     { label: 'LoRaWAN', icon: 'pi pi-microchip', route: '/dispositivos/crear' },
@@ -31,6 +38,14 @@ export class DashboardAdminComponent {
   ];
 
   public readonly cards: AdminServiceCard[] = [
+    {
+      title: 'Tenants',
+      description: 'Espacios empresariales aislados con marca, administrador, modulos y limites propios.',
+      icon: 'pi pi-palette',
+      route: '/tenants',
+      group: 'Plataforma',
+      status: 'Configurable',
+    },
     {
       title: 'Usuarios y permisos',
       description: 'Alta de administradores, compañías, distribuidores, productores y roles de acceso.',
@@ -60,6 +75,14 @@ export class DashboardAdminComponent {
       description: 'Usuarios finales que cargan establecimientos, lotes y siembras.',
       icon: 'pi pi-id-card',
       route: '/productores',
+      group: 'Estructura',
+      status: 'Operativo',
+    },
+    {
+      title: 'Asesores',
+      description: 'Alta profesional, cartera administrada, usuarios, establecimientos, lotes y hectareas por asesor.',
+      icon: 'pi pi-briefcase',
+      route: '/asesores',
       group: 'Estructura',
       status: 'Operativo',
     },
@@ -147,8 +170,20 @@ export class DashboardAdminComponent {
   constructor(
     private router: Router,
     public helper: HelperService,
-    private loginService: LoginService
+    private loginService: LoginService,
+    private usuarioService: UsuarioService
   ) {}
+
+  public async ngOnInit(): Promise<void> {
+    this.cargandoAsesores = true;
+    try {
+      this.resumenAsesores = await this.usuarioService.resumenRedAsesores();
+    } catch (error) {
+      console.warn('No se pudo cargar el resumen de asesores', error);
+    } finally {
+      this.cargandoAsesores = false;
+    }
+  }
 
   public go(route: string) {
     this.router.navigateByUrl(route);

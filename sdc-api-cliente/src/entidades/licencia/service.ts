@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   ILicencia,
   IListado,
@@ -7,65 +7,105 @@ import {
   IUpdateLicencia,
   IUsuario,
 } from 'modelos/src';
-import { HelperService } from '../../auxiliares/helper';
 import { LicenciasRepository } from './repository';
+import { LicenciaPorEntidadsRepository } from '../licenciaPorEntidad/repository';
 
 @Injectable()
 export class LicenciasService {
-  constructor(private repository: LicenciasRepository) {}
+  constructor(
+    private repository: LicenciasRepository,
+    private asignaciones: LicenciaPorEntidadsRepository,
+  ) {}
 
   async getById(id: string): Promise<ILicencia> {
-    return await this.repository.getById(id);
+    return this.normalizar(await this.repository.getById(id));
   }
 
   async get(filtro: IQueryParam, user: IUsuario): Promise<IListado<ILicencia>> {
-    this.agregarFiltroPermisos(filtro, user);
-    return await this.repository.get(filtro);
+    void user;
+    return this.normalizarListado(await this.repository.get(filtro));
   }
 
   async getInternal(filtro: IQueryParam): Promise<IListado<ILicencia>> {
-    return await this.repository.get(filtro);
+    return this.normalizarListado(await this.repository.get(filtro));
   }
 
   async create(data: ICreateLicencia): Promise<ILicencia> {
+    if (!data.nombre?.trim())
+      throw new BadRequestException('El nombre del plan es obligatorio');
     data.origen = data.origen || 'manual';
     data.fechaCreacion = data.fechaCreacion || new Date().toISOString();
-    return await this.repository.create(data);
+    data.codigo = this.normalizarCodigo(data.codigo || data.nombre);
+    data.version = data.version || 1;
+    data.estado = data.estado || 'activo';
+    data.modeloFacturacion = data.modeloFacturacion || 'sin_cargo';
+    data.modoLimite = data.modoLimite || 'informativo';
+    if (data.default) {
+      const existente = await this.repository.get({
+        page: 0,
+        limit: 1,
+        filter: JSON.stringify({ default: true }),
+      });
+      if (existente.totalCount > 0) {
+        throw new BadRequestException(
+          'Ya existe un plan por defecto; desmarquelo antes de crear otro',
+        );
+      }
+    }
+    this.normalizarLimites(data);
+    return this.normalizar(await this.repository.create(data));
   }
 
   async update(id: string, data: IUpdateLicencia): Promise<ILicencia> {
-    return await this.repository.update(id, data);
+    this.normalizarLimites(data);
+    return this.normalizar(await this.repository.update(id, data));
   }
 
   async delete(id: string): Promise<ILicencia> {
+    const asignadas = await this.asignaciones.get({
+      page: 0,
+      limit: 1,
+      filter: JSON.stringify({ idLicencia: id }),
+    });
+    if (asignadas.totalCount > 0) {
+      throw new BadRequestException(
+        'El plan tiene asignaciones historicas y no puede eliminarse; archivelo para conservar la trazabilidad',
+      );
+    }
     return await this.repository.delete(id);
   }
 
-  // Private
+  private normalizarCodigo(valor: string): string {
+    return valor
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 60);
+  }
 
-  private agregarFiltroPermisos(params: IQueryParam, user: IUsuario) {
-    const filtro = HelperService.filtroToObject(params.filter);
-    const $and = filtro.$and || [];
-    const $or = [];
-    const productoresUsusario = user.permisos
-      .filter((p) => p.nivel === 'Productor')
-      .map((p) => p.idProductor);
-    const licenciaesUsuario = user.permisos
-      .filter((p) => p.nivel === 'Establecimiento')
-      .map((p) => p.idEstablecimiento);
+  private normalizarLimites(data: Partial<ILicencia>): void {
+    data.maxDistribuidores = data.maxDistribuidores ?? data.maxdDistribuidores;
+    data.maxHectareas = data.maxHectareas ?? data.maxdHectareas;
+    // Se conservan los alias durante la transicion porque existen clientes
+    // desplegados que aun leen los nombres historicos.
+    data.maxdDistribuidores = data.maxDistribuidores;
+    data.maxdHectareas = data.maxHectareas;
+  }
 
-    if (productoresUsusario.length > 0) {
-      $or.push({ idProductor: { $in: productoresUsusario } });
-    }
-    if (licenciaesUsuario.length > 0) {
-      $or.push({ _id: { $in: licenciaesUsuario } });
-    }
-    if ($or.length > 0) {
-      $and.push({ $or });
-    }
-    if ($and.length > 0) {
-      filtro.$and = $and;
-      params.filter = JSON.stringify(filtro);
-    }
+  private normalizar(licencia: ILicencia): ILicencia {
+    if (!licencia) return licencia;
+    this.normalizarLimites(licencia);
+    return licencia;
+  }
+
+  private normalizarListado(listado: IListado<ILicencia>): IListado<ILicencia> {
+    return {
+      ...listado,
+      datos: (listado?.datos || []).map((licencia) =>
+        this.normalizar(licencia),
+      ),
+    };
   }
 }

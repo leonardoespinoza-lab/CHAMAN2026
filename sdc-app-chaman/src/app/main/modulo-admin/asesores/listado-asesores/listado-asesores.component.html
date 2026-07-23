@@ -1,0 +1,175 @@
+<section class="advisor-network">
+  <header class="network-header">
+    <div class="header-copy">
+      <div>
+        <p class="eyebrow">Administración · estructura profesional</p>
+        <h1>Red de asesores independientes</h1>
+        <p>
+          Cada asesor es también su usuario de acceso. La red consolida su cartera propia y asignada sin duplicar
+          productores ni establecimientos.
+        </p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <p-button label="Actualizar" icon="pi pi-refresh" severity="secondary" outlined="true" (onClick)="cargar()" />
+      <p-button label="Crear asesor y usuario" icon="pi pi-user-plus" (onClick)="crear()" />
+    </div>
+  </header>
+
+  @if (resumen) {
+    <div class="metrics-grid" aria-label="Resumen administrativo de asesores">
+      <article>
+        <span>Asesores</span>
+        <strong>{{ resumen.totales.asesores | number: '1.0-0' }}</strong>
+        <small>{{ resumen.totales.activos }} activos · {{ resumen.totales.archivados || 0 }} archivados</small>
+      </article>
+      <article>
+        <span>Productores</span>
+        <strong>{{ resumen.totales.productores | number: '1.0-0' }}</strong>
+        <small>cartera de asesores</small>
+      </article>
+      <article>
+        <span>Establecimientos</span>
+        <strong>{{ resumen.totales.establecimientos | number: '1.0-0' }}</strong>
+        <small>cartera consolidada</small>
+      </article>
+      <article>
+        <span>Lotes</span>
+        <strong>{{ resumen.totales.lotes | number: '1.0-0' }}</strong>
+        <small>bajo gestión</small>
+      </article>
+      <article class="primary-metric">
+        <span>Hectáreas</span>
+        <strong>{{ resumen.totales.hectareas | number: '1.0-1' }}</strong>
+        <small>superficie de lotes</small>
+      </article>
+      <article>
+        <span>Usuarios de la red</span>
+        <strong>{{ resumen.totales.usuariosGestionados | number: '1.0-0' }}</strong>
+        <small>usuarios productores</small>
+      </article>
+      <article>
+        <span>Perfiles completos</span>
+        <strong>{{ resumen.totales.perfilesCompletos }}/{{ resumen.totales.asesores }}</strong>
+        <small>matrícula y ubicación</small>
+      </article>
+      <article>
+        <span>Geolocalizados</span>
+        <strong>{{ resumen.totales.geolocalizados }}/{{ resumen.totales.asesores }}</strong>
+        <small>zona profesional declarada</small>
+      </article>
+    </div>
+  }
+
+  <div class="network-toolbar">
+    <label class="search-box">
+      <i class="pi pi-search"></i>
+      <input
+        pInputText
+        type="search"
+        [(ngModel)]="filtro"
+        placeholder="Buscar por asesor, matrícula, profesión, email o zona"
+      />
+    </label>
+    <div class="state-filter" role="group" aria-label="Filtrar por estado">
+      <button type="button" [class.active]="estado === 'todos'" (click)="estado = 'todos'">Todos</button>
+      <button type="button" [class.active]="estado === 'activos'" (click)="estado = 'activos'">Activos</button>
+      <button type="button" [class.active]="estado === 'inactivos'" (click)="estado = 'inactivos'">Inactivos</button>
+      <button type="button" [class.active]="estado === 'archivados'" (click)="estado = 'archivados'">Archivados</button>
+    </div>
+  </div>
+
+  <div class="network-table" [class.loading]="loading">
+    @if (loading && !resumen) {
+      <div class="loading-state"><i class="pi pi-spin pi-spinner"></i> Consolidando la red de asesores...</div>
+    } @else if (asesoresVisibles.length) {
+      <p-table [value]="asesoresVisibles" dataKey="id" [paginator]="true" [rows]="15" [rowsPerPageOptions]="[15, 30, 50]">
+        <ng-template #header>
+          <tr>
+            <th>Asesor y acceso</th>
+            <th>Perfil profesional</th>
+            <th>Zona de influencia</th>
+            <th class="number-column">Productores</th>
+            <th class="number-column">Establecimientos</th>
+            <th class="number-column">Lotes</th>
+            <th class="number-column">Hectáreas</th>
+            <th class="number-column">Usuarios</th>
+            <th>Estado</th>
+            <th aria-label="Acciones"></th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-asesor>
+          <tr>
+            <td>
+              <div class="advisor-identity">
+                <span class="advisor-avatar">{{ iniciales(asesor) }}</span>
+                <span>
+                  <strong>{{ asesor.nombre }}</strong>
+                  <small>&#64;{{ asesor.username || 'sin usuario' }}</small>
+                  <small>{{ asesor.email || 'Email pendiente' }}</small>
+                </span>
+              </div>
+            </td>
+            <td>
+              <div class="professional-cell">
+                <strong>{{ perfilProfesional(asesor) }}</strong>
+                <small>
+                  @if (asesor.matricula) {
+                    Matrícula {{ asesor.matricula }}
+                    @if (asesor.consejoProfesional) { · {{ asesor.consejoProfesional }} }
+                  } @else {
+                    Matrícula pendiente
+                  }
+                </small>
+              </div>
+            </td>
+            <td>
+              <div class="zone-cell">
+                <strong>{{ asesor.direccion || 'Ubicación pendiente' }}</strong>
+                <small>
+                  @if (asesor.geojson) {
+                    Radio {{ asesor.radioInfluenciaKm || 50 }} km
+                  } @else {
+                    Sin coordenadas profesionales
+                  }
+                </small>
+              </div>
+            </td>
+            <td class="number-column"><strong>{{ asesor.metricas.productores }}</strong></td>
+            <td class="number-column"><strong>{{ asesor.metricas.establecimientos }}</strong></td>
+            <td class="number-column"><strong>{{ asesor.metricas.lotes }}</strong></td>
+            <td class="number-column"><strong>{{ asesor.metricas.hectareas | number: '1.0-1' }}</strong></td>
+            <td class="number-column"><strong>{{ asesor.metricas.usuariosGestionados }}</strong></td>
+            <td>
+              <span class="status-pill" [class.inactive]="!asesor.activo || asesor.archivado">
+                {{ asesor.archivado ? 'Archivado' : (asesor.activo ? 'Activo' : 'Inactivo') }}
+              </span>
+              @if (asesor.archivado && asesor.fechaArchivado) {
+                <small class="profile-state">{{ asesor.fechaArchivado | date: 'dd/MM/yyyy HH:mm' }}</small>
+              }
+              <small class="profile-state" [class.complete]="asesor.perfilCompleto">
+                {{ asesor.perfilCompleto ? 'Perfil completo' : 'Perfil a completar' }}
+              </small>
+            </td>
+            <td>
+              <p-button
+                label="Ver"
+                icon="pi pi-eye"
+                outlined="true"
+                pTooltip="Ver perfil y alcance"
+                (onClick)="ver(asesor)"
+              />
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    } @else {
+      <div class="empty-state">
+        <i class="pi pi-briefcase"></i>
+        <strong>No hay asesores para este filtro</strong>
+        <span>Creá el primer asesor independiente con su usuario de acceso y perfil profesional.</span>
+        <p-button label="Crear asesor" icon="pi pi-user-plus" (onClick)="crear()" />
+      </div>
+    }
+  </div>
+</section>

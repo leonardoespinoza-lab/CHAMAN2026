@@ -5,6 +5,7 @@ import {
   ICreateDistribuidor,
   ICreateLicencia,
   IDistribuidor,
+  IEstadoLicenciaEntidad,
   ILicencia,
   IListado,
   IQueryParam,
@@ -17,6 +18,7 @@ import {
 } from '../../../../auxiliares/componentes/autocomplete-direccion/autocomplete-direccion.component';
 import { DistribuidorService } from '../../../../auxiliares/http/distribuidor.service';
 import { LoginService } from '../../../../auxiliares/http/login.service';
+import { LicenciaPorEntidadService } from '../../../../auxiliares/http/licencia-por-entidad.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { ParamsService } from '../../../../auxiliares/servicios/params.service';
@@ -41,10 +43,10 @@ export class CrearEditarDistribuidoresComponent implements OnInit, OnDestroy {
   public editarLicencia = false;
   public formLicencia?: FormGroup;
   public licencias: ILicencia[] = [];
-  private licenciaExtra: ILicencia = {
-    nombre: 'Crear Licencia Nueva',
-  };
   public licencia?: ILicencia;
+  public estadoLicencia?: IEstadoLicenciaEntidad;
+  private licenciaInicialId?: string;
+  private expiracionInicial?: string;
   public licencias$?: Subscription;
   public hoy = new Date();
   public fechaDeExpiracion = new Date(this.hoy.getFullYear(), this.hoy.getMonth() + 1, this.hoy.getDate());
@@ -67,7 +69,8 @@ export class CrearEditarDistribuidoresComponent implements OnInit, OnDestroy {
     private service: DistribuidorService,
     public helper: HelperService,
     private listados: ListadosService,
-    public loginService: LoginService
+    public loginService: LoginService,
+    private licenciaPorEntidadService: LicenciaPorEntidadService,
   ) {}
 
   private createForm(): void {
@@ -77,6 +80,10 @@ export class CrearEditarDistribuidoresComponent implements OnInit, OnDestroy {
       idQuimica: new FormControl(this.distribuidor?.idQuimica),
       direccion: new FormControl(this.distribuidor?.direccion),
       geojson: new FormControl(this.distribuidor?.geojson),
+      radioInfluenciaKm: new FormControl(this.distribuidor?.radioInfluenciaKm || 100, [
+        Validators.min(1),
+        Validators.max(1000),
+      ]),
     });
   }
 
@@ -121,11 +128,11 @@ export class CrearEditarDistribuidoresComponent implements OnInit, OnDestroy {
 
     this.licencias$?.unsubscribe();
     this.licencias$ = this.listados.subscribe<IListado<ILicencia>>('licencias', queryParams).subscribe(async (data) => {
-      this.licencias = data.datos;
-      if (!this.licencias.some((lic) => lic.nombre === 'Crear Licencia Nueva')) {
-        this.licencias.push(this.licenciaExtra);
+      this.licencias = data.datos.filter((licencia) => licencia.estado !== 'archivado');
+      if (this.estadoLicencia?.licencia?._id) {
+        this.licencia = this.licencias.find((item) => item._id === this.estadoLicencia?.licencia?._id);
+        if (this.licencia) await this.onLicenciaChange(this.licencia);
       }
-      console.log(`listado de licencias`, data);
     });
     await this.listados.getLastValue('licencias', queryParams);
   }
@@ -133,66 +140,54 @@ export class CrearEditarDistribuidoresComponent implements OnInit, OnDestroy {
   public async onMostrarLicenciaChange(event: boolean): Promise<void> {
     this.mostrarLicencia = event;
     if (this.mostrarLicencia === true) {
-      // Tengo que listar las licencias
-      await this.listarLicencias();
-      // Tengo que crear el formulario de licencia
       this.createFormLicencia();
+      if (this.distribuidor?._id) {
+        this.estadoLicencia = await this.licenciaPorEntidadService.getEstadoEntidad(
+          'Distribuidor',
+          this.distribuidor._id,
+        );
+        if (this.estadoLicencia.asignacion?.fechaExpiracion) {
+          this.fechaDeExpiracion = new Date(this.estadoLicencia.asignacion.fechaExpiracion);
+        }
+      }
+      await this.listarLicencias();
+      this.licenciaInicialId = this.licencia?._id;
+      this.expiracionInicial = this.fechaKey(this.fechaDeExpiracion);
     } else {
       // Si no se muestra la licencia, reinicio el formulario de licencia
       this.formLicencia = undefined;
       this.licencias = [];
       this.licencia = undefined;
       this.editarLicencia = false;
+      this.estadoLicencia = undefined;
+      this.licenciaInicialId = undefined;
+      this.expiracionInicial = undefined;
       this.fechaDeExpiracion = new Date(this.hoy.getFullYear(), this.hoy.getMonth() + 1, this.hoy.getDate());
     }
     this.checkDisabled();
   }
 
   public async onLicenciaChange(event: ILicencia): Promise<void> {
-    if (event.nombre === 'Crear Licencia Nueva') {
-      this.editarLicencia = true;
-      this.licencia = undefined;
-      // Patcheo el default
-      this.formLicencia?.patchValue({
-        nombre: '',
-        maxUsuarios: 2,
-        maxdDistribuidores: 1,
-        maxProductores: 1,
-        maxEstablecimientos: 1,
-        maxLotes: 1,
-        maxdHectareas: 10000,
-        modulos: {
-          Enfermedades: true,
-          Riego: false,
-          'Huella Hídrica': false,
-          NDVI: true,
-          Clima: true,
-          'Etapas Fenológicas': true,
-        },
-      });
-      this.fechaDeExpiracion = new Date(this.hoy.getFullYear(), this.hoy.getMonth() + 1, this.hoy.getDate());
-    } else {
-      // Patch the form with the selected license
-      this.editarLicencia = false;
-      this.licencia = event;
+    this.editarLicencia = false;
+    this.licencia = event;
+    if (event) {
       this.formLicencia?.patchValue({
         nombre: this.licencia.nombre,
-        maxUsuarios: this.licencia.maxUsuarios || 2,
-        maxdDistribuidores: this.licencia.maxdDistribuidores || 1,
-        maxProductores: this.licencia.maxProductores || 1,
-        maxEstablecimientos: this.licencia.maxEstablecimientos || 1,
-        maxLotes: this.licencia.maxLotes || 1,
-        maxdHectareas: this.licencia.maxdHectareas || 10000,
+        maxUsuarios: this.licencia.maxUsuarios ?? 2,
+        maxdDistribuidores: this.licencia.maxdDistribuidores ?? 1,
+        maxProductores: this.licencia.maxProductores ?? 1,
+        maxEstablecimientos: this.licencia.maxEstablecimientos ?? 1,
+        maxLotes: this.licencia.maxLotes ?? 1,
+        maxdHectareas: this.licencia.maxdHectareas ?? 10000,
         modulos: {
-          Enfermedades: this.licencia.modulos?.Enfermedades || true,
-          Riego: this.licencia.modulos?.Riego || false,
-          'Huella Hídrica': this.licencia.modulos?.['Huella Hídrica'] || false,
-          NDVI: this.licencia.modulos?.NDVI || true,
-          Clima: this.licencia.modulos?.Clima || true,
-          'Etapas Fenológicas': this.licencia.modulos?.['Etapas Fenológicas'] || true,
+          Enfermedades: this.licencia.modulos?.Enfermedades ?? true,
+          Riego: this.licencia.modulos?.Riego ?? false,
+          'Huella Hídrica': this.licencia.modulos?.['Huella Hídrica'] ?? false,
+          NDVI: this.licencia.modulos?.NDVI ?? true,
+          Clima: this.licencia.modulos?.Clima ?? true,
+          'Etapas Fenológicas': this.licencia.modulos?.['Etapas Fenológicas'] ?? true,
         },
       });
-      this.fechaDeExpiracion = new Date(this.hoy.getFullYear(), this.hoy.getMonth() + 1, this.hoy.getDate());
     }
     this.checkDisabled();
   }
@@ -201,7 +196,7 @@ export class CrearEditarDistribuidoresComponent implements OnInit, OnDestroy {
     this.loading = true;
     try {
       const data = this.getData();
-      if (this.editarLicencia === true || this.mostrarLicencia === true) {
+      if (this.debeGuardarLicencia()) {
         const dataLicencia = this.getDataLicencia();
         data.licencia = dataLicencia;
         data.expiracion = this.helper.dateToDias(this.fechaDeExpiracion);
@@ -326,6 +321,26 @@ export class CrearEditarDistribuidoresComponent implements OnInit, OnDestroy {
       geojson: direccion.geojson,
     });
     // Forzar validación del formulario
+    this.checkDisabled();
+  }
+
+  private debeGuardarLicencia(): boolean {
+    if (!this.mostrarLicencia || !this.licencia?._id) return false;
+    if (!this.distribuidor?._id) return true;
+    return (
+      this.licencia._id !== this.licenciaInicialId ||
+      this.fechaKey(this.fechaDeExpiracion) !== this.expiracionInicial
+    );
+  }
+
+  private fechaKey(fecha?: Date): string | undefined {
+    if (!fecha || Number.isNaN(fecha.getTime())) return undefined;
+    return `${fecha.getFullYear()}-${fecha.getMonth() + 1}-${fecha.getDate()}`;
+  }
+
+  public onDireccionClear(): void {
+    this.direccionSeleccionada = undefined;
+    this.form?.patchValue({ direccion: null, geojson: null });
     this.checkDisabled();
   }
 }

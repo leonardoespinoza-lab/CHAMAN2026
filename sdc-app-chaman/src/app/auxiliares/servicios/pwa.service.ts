@@ -9,8 +9,10 @@ import { ConfirmationService } from 'primeng/api';
 })
 export class PwaService {
   public promptEvent: any;
-  private timer?: NodeJS.Timeout;
+  private timer?: ReturnType<typeof setInterval>;
   private interval = 1 * (1000 * 60); // 1 minuto
+  private checkingVersion = false;
+  private updatePromptOpen = false;
 
   constructor(
     private swUpdate: SwUpdate,
@@ -36,18 +38,30 @@ export class PwaService {
   }
 
   private async checkVersion() {
-    const newVersion = await this.swUpdate.checkForUpdate();
-    if (newVersion) {
-      console.log('SW - Nueva versión de app detectada');
-      clearInterval(this.timer!);
-      this.timer = undefined;
-      await this.promptReaload();
-    } else {
-      console.log('SW - No hay nueva versión');
+    if (this.checkingVersion || this.updatePromptOpen) {
+      return;
+    }
+    this.checkingVersion = true;
+    try {
+      const newVersion = await this.swUpdate.checkForUpdate();
+      if (newVersion) {
+        console.log('SW - Nueva versión de app detectada');
+        await this.promptReload();
+      } else {
+        console.log('SW - No hay nueva versión');
+      }
+    } catch (error) {
+      console.warn('SW - No se pudo comprobar la versión', error);
+    } finally {
+      this.checkingVersion = false;
     }
   }
 
-  private async promptReaload() {
+  private async promptReload() {
+    if (this.updatePromptOpen) {
+      return;
+    }
+    this.updatePromptOpen = true;
     this.confirmationService.confirm({
       // target: event.target as EventTarget,
       header: this.translate.instant('Nueva versión disponible'),
@@ -64,7 +78,17 @@ export class PwaService {
         label: this.translate.instant('Aceptar'),
       },
       accept: async () => {
-        window.location.reload();
+        try {
+          await this.swUpdate.activateUpdate();
+          window.location.reload();
+        } finally {
+          this.updatePromptOpen = false;
+        }
+      },
+      reject: () => {
+        // El intervalo sigue activo. Si el usuario pospone la actualización,
+        // la app vuelve a ofrecerla en el siguiente control.
+        this.updatePromptOpen = false;
       },
     });
   }

@@ -1,10 +1,5 @@
 import { HttpService } from '@nestjs/axios';
-import {
-  HttpException,
-  HttpStatus,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AxiosRequestConfig } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { INTERNAL_HTTP_TIMEOUT_MS } from '../../env';
@@ -29,7 +24,7 @@ export class AxiosService {
 
   public async POST<T>(
     url: string,
-    data: Record<string, any>,
+    data: any,
     options?: AxiosRequestConfig<any>,
   ): Promise<T> {
     try {

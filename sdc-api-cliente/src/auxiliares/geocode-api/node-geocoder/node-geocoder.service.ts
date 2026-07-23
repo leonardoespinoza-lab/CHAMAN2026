@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ICoordenadas, DireccionV2, IZonaGeografica } from 'modelos/src';
 import NodeGeocoder, { Options } from 'node-geocoder';
-import { AxiosService } from 'src/auxiliares/axios/axios.service';
-import { MAPS_KEY } from 'src/env';
+import { AxiosService } from '../../axios/axios.service';
+import { MAPS_KEY } from '../../../env';
 
 const options: Options = {
   provider: 'google',
@@ -12,9 +12,14 @@ const options: Options = {
 
 @Injectable()
 export class NodeGeocodeService {
+  private googlePlacesDisponible = Boolean(MAPS_KEY);
+
   constructor(private axios: AxiosService) {}
 
-  public async buscarZonasArgentina(text: string, provincia?: string): Promise<IZonaGeografica[]> {
+  public async buscarZonasArgentina(
+    text: string,
+    provincia?: string,
+  ): Promise<IZonaGeografica[]> {
     const query = this.limpiarBusqueda(text);
     if (query.length < 2) return [];
 
@@ -43,7 +48,11 @@ export class NodeGeocodeService {
     });
 
     return (response.provincias || [])
-      .filter((item) => Number.isFinite(item.centroide?.lat) && Number.isFinite(item.centroide?.lon))
+      .filter(
+        (item) =>
+          Number.isFinite(item.centroide?.lat) &&
+          Number.isFinite(item.centroide?.lon),
+      )
       .map((item) => ({
         id: item.id,
         tipo: 'provincia' as const,
@@ -78,20 +87,38 @@ export class NodeGeocodeService {
       };
       return direccion;
     } catch (error) {
-      Logger.error(error, 'NodeGeocodeService');
-      return undefined;
+      Logger.warn(
+        'Google no pudo resolver las coordenadas; se usa GeoRef Argentina.',
+        'NodeGeocodeService',
+      );
+      return await this.reverseGeoref(coordenadas);
     }
   }
 
   public async geocode(direccion: string): Promise<ICoordenadas> {
-    try {
-      const geoCoder = NodeGeocoder(options);
-      const response = await geoCoder.geocode(direccion);
-      return { lat: response[0].latitude, lng: response[0].longitude };
-    } catch (error) {
-      Logger.error(error, 'NodeGeocodeService');
-      return { lat: 0, lng: 0 };
+    if (this.googlePlacesDisponible) {
+      try {
+        const geoCoder = NodeGeocoder(options);
+        const response = await geoCoder.geocode(direccion);
+        const lat = Number(response?.[0]?.latitude);
+        const lng = Number(response?.[0]?.longitude);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          return { lat, lng };
+        }
+      } catch (error) {
+        this.googlePlacesDisponible = false;
+        Logger.warn(
+          'Google Geocoding no esta disponible; se usa GeoRef Argentina.',
+          'NodeGeocodeService',
+        );
+      }
     }
+
+    const [resultado] = await this.buscarDireccionesGeoref(direccion);
+    if (!resultado) {
+      throw new Error('No se pudo georreferenciar la direccion indicada');
+    }
+    return resultado.coordenadas;
   }
 
   public async getPredictions(
@@ -130,34 +157,177 @@ export class NodeGeocodeService {
       };
     }
 
-    try {
-      const result = await this.axios.POST<{
-        places: Array<{
-          formattedAddress: string;
-          displayName?: {
-            text: string;
-          };
-        }>;
-      }>('https://places.googleapis.com/v1/places:searchText', requestBody, {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': MAPS_KEY,
-          'X-Goog-FieldMask': 'places.formattedAddress,places.displayName',
-        },
-      });
+    if (this.googlePlacesDisponible) {
+      try {
+        const result = await this.axios.POST<{
+          places: Array<{
+            formattedAddress: string;
+            displayName?: {
+              text: string;
+            };
+          }>;
+        }>('https://places.googleapis.com/v1/places:searchText', requestBody, {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': MAPS_KEY,
+            'X-Goog-FieldMask': 'places.formattedAddress,places.displayName',
+          },
+        });
 
-      const resp: string[] = [];
-      for (const place of result.places || []) {
-        resp.push(place.formattedAddress);
+        const resp: string[] = [];
+        for (const place of result.places || []) {
+          resp.push(place.formattedAddress);
+        }
+        if (resp.length) {
+          return resp;
+        }
+      } catch (error) {
+        // Google Places puede estar deshabilitado o restringido por facturacion.
+        // Se abre el circuito para no repetir un 403 en cada tecla y se continua
+        // con la fuente publica oficial de Argentina.
+        this.googlePlacesDisponible = false;
+        Logger.warn(
+          'Google Places no esta disponible; se usa GeoRef Argentina.',
+          'NodeGeocodeService',
+        );
       }
-      return resp;
+    }
+
+    const georef = await this.buscarDireccionesGeoref(text, coordenadas);
+    return georef.map((item) => item.direccion);
+  }
+
+  public async buscarDireccionesGeoref(
+    text: string,
+    coordenadas?: ICoordenadas,
+  ): Promise<Array<{ direccion: string; coordenadas: ICoordenadas }>> {
+    const query = this.limpiarBusqueda(text);
+    if (query.length < 3) return [];
+
+    try {
+      const params = new URLSearchParams({
+        direccion: query,
+        max: '15',
+      });
+      const response = await this.axios.GET<{
+        direcciones?: Array<{
+          nomenclatura?: string;
+          ubicacion?: { lat?: number; lon?: number };
+          calle?: { nombre?: string };
+          altura?: { valor?: number | string };
+          localidad_censal?: { nombre?: string };
+          departamento?: { nombre?: string };
+          provincia?: { nombre?: string };
+        }>;
+      }>(
+        `https://apis.datos.gob.ar/georef/api/direcciones?${params.toString()}`,
+        {
+          timeout: 8000,
+        },
+      );
+
+      const resultados = (response.direcciones || [])
+        .map((item) => {
+          const lat = Number(item.ubicacion?.lat);
+          const lng = Number(item.ubicacion?.lon);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+          const direccion =
+            item.nomenclatura ||
+            [
+              [item.calle?.nombre, item.altura?.valor]
+                .filter(Boolean)
+                .join(' '),
+              item.localidad_censal?.nombre,
+              item.departamento?.nombre,
+              item.provincia?.nombre,
+            ]
+              .filter(Boolean)
+              .join(', ');
+          return direccion ? { direccion, coordenadas: { lat, lng } } : null;
+        })
+        .filter(Boolean) as Array<{
+        direccion: string;
+        coordenadas: ICoordenadas;
+      }>;
+
+      if (coordenadas) {
+        resultados.sort(
+          (a, b) =>
+            this.distanciaCuadrada(a.coordenadas, coordenadas) -
+            this.distanciaCuadrada(b.coordenadas, coordenadas),
+        );
+      }
+
+      const unicos = new Map<
+        string,
+        { direccion: string; coordenadas: ICoordenadas }
+      >();
+      for (const resultado of resultados) {
+        const key = this.normalizarTexto(resultado.direccion);
+        if (!unicos.has(key)) unicos.set(key, resultado);
+      }
+      return [...unicos.values()].slice(0, 10);
     } catch (error) {
-      Logger.error('Error en getPredictions:', error, 'NodeGeocodeService');
+      Logger.warn(
+        'GeoRef Argentina no pudo responder la busqueda de direcciones.',
+        'NodeGeocodeService',
+      );
       return [];
     }
   }
 
-  private async buscarLocalidadesGeoref(query: string, provincia?: string): Promise<IZonaGeografica[]> {
+  private async reverseGeoref(coordenadas: ICoordenadas): Promise<DireccionV2> {
+    try {
+      const params = new URLSearchParams({
+        lat: String(coordenadas.lat),
+        lon: String(coordenadas.lng),
+      });
+      const response = await this.axios.GET<{
+        ubicacion?: {
+          provincia?: { nombre?: string };
+          departamento?: { nombre?: string };
+          municipio?: { nombre?: string };
+        };
+      }>(
+        `https://apis.datos.gob.ar/georef/api/ubicacion?${params.toString()}`,
+        {
+          timeout: 8000,
+        },
+      );
+      const ubicacion = response.ubicacion;
+      const localidad = ubicacion?.municipio?.nombre;
+      const partido = ubicacion?.departamento?.nombre;
+      const provincia = ubicacion?.provincia?.nombre;
+      return {
+        localidad,
+        partido,
+        provincia,
+        direccion:
+          [localidad, partido !== localidad ? partido : undefined, provincia]
+            .filter(Boolean)
+            .join(', ') ||
+          `${coordenadas.lat.toFixed(6)}, ${coordenadas.lng.toFixed(6)}`,
+        coordenadas,
+      };
+    } catch (error) {
+      return {
+        direccion: `${coordenadas.lat.toFixed(6)}, ${coordenadas.lng.toFixed(6)}`,
+        coordenadas,
+      };
+    }
+  }
+
+  private distanciaCuadrada(a: ICoordenadas, b: ICoordenadas): number {
+    const latMedia = ((a.lat + b.lat) / 2) * (Math.PI / 180);
+    const deltaLat = a.lat - b.lat;
+    const deltaLng = (a.lng - b.lng) * Math.cos(latMedia);
+    return deltaLat * deltaLat + deltaLng * deltaLng;
+  }
+
+  private async buscarLocalidadesGeoref(
+    query: string,
+    provincia?: string,
+  ): Promise<IZonaGeografica[]> {
     const url = this.crearGeorefUrl('localidades', query, provincia);
     const response = await this.axios.GET<{
       localidades?: Array<{
@@ -172,11 +342,19 @@ export class NodeGeocodeService {
     }>(url, { timeout: 8000 });
 
     return (response.localidades || [])
-      .filter((item) => Number.isFinite(item.centroide?.lat) && Number.isFinite(item.centroide?.lon))
+      .filter(
+        (item) =>
+          Number.isFinite(item.centroide?.lat) &&
+          Number.isFinite(item.centroide?.lon),
+      )
       .map((item) => ({
         id: item.id,
         tipo: 'localidad',
-        label: this.formatearLabel(item.nombre, item.departamento?.nombre, item.provincia?.nombre),
+        label: this.formatearLabel(
+          item.nombre,
+          item.departamento?.nombre,
+          item.provincia?.nombre,
+        ),
         localidad: item.nombre,
         departamento: item.departamento?.nombre,
         provincia: item.provincia?.nombre,
@@ -189,7 +367,10 @@ export class NodeGeocodeService {
       }));
   }
 
-  private async buscarDepartamentosGeoref(query: string, provincia?: string): Promise<IZonaGeografica[]> {
+  private async buscarDepartamentosGeoref(
+    query: string,
+    provincia?: string,
+  ): Promise<IZonaGeografica[]> {
     const url = this.crearGeorefUrl('departamentos', query, provincia);
     const response = await this.axios.GET<{
       departamentos?: Array<{
@@ -201,11 +382,19 @@ export class NodeGeocodeService {
     }>(url, { timeout: 8000 });
 
     return (response.departamentos || [])
-      .filter((item) => Number.isFinite(item.centroide?.lat) && Number.isFinite(item.centroide?.lon))
+      .filter(
+        (item) =>
+          Number.isFinite(item.centroide?.lat) &&
+          Number.isFinite(item.centroide?.lon),
+      )
       .map((item) => ({
         id: item.id,
         tipo: 'departamento',
-        label: this.formatearLabel(item.nombre, undefined, item.provincia?.nombre),
+        label: this.formatearLabel(
+          item.nombre,
+          undefined,
+          item.provincia?.nombre,
+        ),
         departamento: item.nombre,
         provincia: item.provincia?.nombre,
         coordenadas: {
@@ -216,7 +405,9 @@ export class NodeGeocodeService {
       }));
   }
 
-  private async buscarProvinciasGeoref(query: string): Promise<IZonaGeografica[]> {
+  private async buscarProvinciasGeoref(
+    query: string,
+  ): Promise<IZonaGeografica[]> {
     const url = this.crearGeorefUrl('provincias', query);
     const response = await this.axios.GET<{
       provincias?: Array<{
@@ -227,7 +418,11 @@ export class NodeGeocodeService {
     }>(url, { timeout: 8000 });
 
     return (response.provincias || [])
-      .filter((item) => Number.isFinite(item.centroide?.lat) && Number.isFinite(item.centroide?.lon))
+      .filter(
+        (item) =>
+          Number.isFinite(item.centroide?.lat) &&
+          Number.isFinite(item.centroide?.lon),
+      )
       .map((item) => ({
         id: item.id,
         tipo: 'provincia',
@@ -244,7 +439,11 @@ export class NodeGeocodeService {
   private deduplicarZonas(zonas: IZonaGeografica[]): IZonaGeografica[] {
     const output = new Map<string, IZonaGeografica>();
     for (const zona of zonas) {
-      const key = this.normalizarTexto([zona.tipo, zona.localidad, zona.departamento, zona.provincia].join('|'));
+      const key = this.normalizarTexto(
+        [zona.tipo, zona.localidad, zona.departamento, zona.provincia].join(
+          '|',
+        ),
+      );
       if (!output.has(key)) {
         output.set(key, zona);
       }
@@ -256,7 +455,11 @@ export class NodeGeocodeService {
     return `${text || ''}`.trim().replace(/\s+/g, ' ');
   }
 
-  private formatearLabel(nombre?: string, departamento?: string, provincia?: string): string {
+  private formatearLabel(
+    nombre?: string,
+    departamento?: string,
+    provincia?: string,
+  ): string {
     return [nombre, departamento, provincia].filter(Boolean).join(', ');
   }
 

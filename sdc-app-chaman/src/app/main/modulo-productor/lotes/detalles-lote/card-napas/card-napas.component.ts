@@ -55,6 +55,12 @@ export class CardNapasComponent implements OnChanges {
     }
   }
 
+  public activarTarjeta(event: KeyboardEvent): void {
+    if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    this.abrirDetalle();
+  }
+
   public get coordenadas(): { lat: number; lng: number } | undefined {
     const centro = this.lote?.ubicacion?.centro;
     if (!centro?.lat || !centro?.lng) return undefined;

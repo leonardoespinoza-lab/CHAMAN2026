@@ -31,6 +31,43 @@
                       <label>{{ 'Nombre' | translate }}</label>
                     </p-floatlabel>
 
+                    <div class="license-catalog-grid">
+                      <p-floatlabel variant="in">
+                        <input pInputText formControlName="codigo" [fluid]="true" autocomplete="off" />
+                        <label>Codigo comercial estable</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in">
+                        <input pInputText type="number" formControlName="version" [fluid]="true" />
+                        <label>Version</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in">
+                        <p-select [options]="estadosPlan" optionLabel="label" optionValue="value" formControlName="estado" [fluid]="true" appendTo="body" />
+                        <label>Estado del plan</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in">
+                        <p-select [options]="modelosFacturacion" optionLabel="label" optionValue="value" formControlName="modeloFacturacion" [fluid]="true" appendTo="body" />
+                        <label>Modelo de facturacion</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in" class="span-2">
+                        <p-select [options]="modosLimite" optionLabel="label" optionValue="value" formControlName="modoLimite" [fluid]="true" appendTo="body" />
+                        <label>Comportamiento de limites</label>
+                      </p-floatlabel>
+                    </div>
+
+                    <p-message severity="info" styleClass="license-architecture-note">
+                      El plan define prestaciones. La asignacion, el consumo y la facturacion se administran por separado.
+                    </p-message>
+                    @if (licencia) {
+                      <p-message severity="warn" styleClass="license-architecture-note">
+                        Este es un plan compartido. Un cambio aqui afecta a todas sus asignaciones vigentes; para una
+                        condicion comercial nueva, cree otra version y reasignela desde la entidad correspondiente.
+                      </p-message>
+                    }
+
                     <!-- Cantidad de Usuarios -->
                     <p-floatlabel variant="in" class="mb-4">
                       <input

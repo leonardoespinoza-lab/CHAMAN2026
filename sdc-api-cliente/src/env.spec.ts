@@ -20,7 +20,10 @@ describe('SOIL_INTELLIGENCE_INTERNAL_TOKEN', () => {
   function loadToken(): string {
     let token = '';
     jest.isolateModules(() => {
-      token = require('./env').SOIL_INTELLIGENCE_INTERNAL_TOKEN;
+      token =
+        jest.requireActual<typeof import('./env')>(
+          './env',
+        ).SOIL_INTELLIGENCE_INTERNAL_TOKEN;
     });
     return token;
   }
@@ -62,7 +65,10 @@ describe('INTERNAL_HTTP_TIMEOUT_MS', () => {
   function loadTimeout(): number {
     let timeout = 0;
     jest.isolateModules(() => {
-      timeout = require('./env').INTERNAL_HTTP_TIMEOUT_MS;
+      timeout =
+        jest.requireActual<typeof import('./env')>(
+          './env',
+        ).INTERNAL_HTTP_TIMEOUT_MS;
     });
     return timeout;
   }

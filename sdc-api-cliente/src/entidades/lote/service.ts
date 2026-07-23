@@ -42,8 +42,10 @@ import {
   getEnfermedadPorId,
   getEtapasPerennesReferencia,
   IInteligenciaSueloLote,
+  IUsuario,
   aplicarEntradasAgronomicasSuelo,
   obtenerRegistroFenologicoDecisorioEnFecha,
+  SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT,
 } from 'modelos/src';
 import { CHAMAN_REPORT_LOGO_DATA_URI } from './chaman-report-logo';
 import { HelperService } from '../../auxiliares/helper';
@@ -55,6 +57,11 @@ import { AxiosService } from '../../auxiliares/axios/axios.service';
 import { API_DATOS, NDVI_SYNC_LIMIT } from '../../env';
 import { ClimaService } from '../clima/service';
 import { DecisionPipelineQueueService } from '../../auxiliares/decision-pipeline';
+import {
+  establecimientosDelPermiso,
+  permisoPuedeVerLote,
+} from '../../auxiliares/authorization/alcance-permiso';
+import { renderHtmlToPdf } from './pdf-renderer';
 
 interface IntaFeatureCollection {
   features?: {
@@ -87,6 +94,7 @@ interface CertificadoDatos {
   cargaFitosanitaria: ICargaFitosanitaria;
   frio: CertificadoFrio;
   clima?: CertificadoClima;
+  emisor?: IUsuario;
 }
 
 interface CertificadoClima {
@@ -133,6 +141,14 @@ interface CertificadoClima {
     temperaturaMin?: number;
     temperaturaMax?: number;
     lluvia?: number;
+    horasFrio?: number;
+    horasFrioAcumuladas?: number;
+    unidadesUtah?: number;
+    unidadesUtahAcumuladas?: number;
+    porcionesFrio?: number;
+    porcionesFrioAcumuladas?: number;
+    gradosDia?: number;
+    gradosDiaAcumulados?: number;
     esPronostico?: boolean;
   }>;
   lectura: string;
@@ -266,7 +282,12 @@ export class LotesService {
     return await this.repository.get(filtro);
   }
 
-  async create(data: ICreateLote, permiso): Promise<ILote> {
+  async create(data: ICreateLote, permiso: IPermiso): Promise<ILote> {
+    if (permiso.nivel === 'Asesor') {
+      throw new BadRequestException(
+        'El asesor gestiona productores; los lotes los crea el usuario productor',
+      );
+    }
     data = this.withoutAutomaticDepartment(data);
     if (data.ubicacion?.poligono?.length) {
       data.ubicacion.geojson = {
@@ -284,10 +305,13 @@ export class LotesService {
     data.idProductor = establecimiento.idProductor;
     data.idDistribuidor = establecimiento.idDistribuidor;
     data.idQuimica = establecimiento.idQuimica;
+    (data as ICreateLote & { idTenant?: string }).idTenant =
+      establecimiento.idTenant;
+    (
+      data as ICreateLote & { idAsesorPropietario?: string }
+    ).idAsesorPropietario = establecimiento.idAsesorPropietario;
     if (!this.puedeVer(data, permiso)) {
-      throw new BadRequestException(
-        'No tiene permiso para crear este establecimiento',
-      );
+      throw new BadRequestException('No tiene permiso para crear este lote');
     }
 
     const lote = await this.repository.create(data);
@@ -305,6 +329,11 @@ export class LotesService {
     data: IUpdateLote,
     permiso: IPermiso,
   ): Promise<ILote> {
+    if (permiso.nivel === 'Asesor') {
+      throw new BadRequestException(
+        'El asesor tiene acceso de supervision; la edicion corresponde al usuario productor',
+      );
+    }
     data = this.withoutAutomaticDepartment(data);
     const current = await this.getById(id, permiso);
     if (data.ubicacion?.poligono?.length) {
@@ -322,6 +351,12 @@ export class LotesService {
       data.idProductor = establecimiento.idProductor;
       data.idDistribuidor = establecimiento.idDistribuidor;
       data.idQuimica = establecimiento.idQuimica;
+      (data as IUpdateLote & { idTenant?: string }).idTenant =
+        establecimiento.idTenant;
+      (
+        data as IUpdateLote & { idAsesorPropietario?: string | null }
+      ).idAsesorPropietario =
+        String(establecimiento.idAsesorPropietario || '').trim() || null;
     }
 
     const updated = await this.repository.update(id, data);
@@ -367,21 +402,27 @@ export class LotesService {
     const data = { ...input } as T & Record<string, unknown>;
     delete data.idDepartamento;
     delete data.ubicacionDepartamentoLegado;
+    delete data.idAsesorPropietario;
+    delete data.idTenant;
     return data;
   }
 
-  async delete(idLote: string, permiso: IPermiso): Promise<ILote> {
+  async delete(
+    idLote: string,
+    permiso: IPermiso,
+    actor?: IUsuario,
+  ): Promise<ILote> {
+    if (permiso.nivel === 'Asesor') {
+      throw new BadRequestException(
+        'El asesor tiene acceso de supervision; la eliminacion corresponde al usuario productor',
+      );
+    }
     await this.getById(idLote, permiso);
-    // Borro los reportes asociados al lote
-    const filter: IFilter<IReporteNDVI> = {
-      idLote,
-    };
-    const query: IQueryParam = {
-      filter: JSON.stringify(filter),
-    };
-    await this.reportesNDVIsService.deleteMany(query, permiso);
-    // Borro el lote
-    return await this.repository.delete(idLote);
+    // El lote y sus series historicas se conservan para auditoria.
+    return await this.repository.delete(idLote, {
+      archivadoPor: actor?.username || actor?._id || 'sistema',
+      motivoArchivado: 'Lote archivado desde Chaman',
+    });
   }
 
   async calcularCapacidadCampo(idSonda: string, fecha: string) {
@@ -421,7 +462,11 @@ export class LotesService {
     return await this.ndviQueue.getStatus();
   }
 
-  async generarCertificado(id: string, permiso: IPermiso): Promise<string> {
+  async generarCertificado(
+    id: string,
+    permiso: IPermiso,
+    emisor?: IUsuario,
+  ): Promise<string> {
     const loteBase = await this.assertCanView(id, permiso);
     const [ubicacionAdministrativa, loteConSuelo] = await Promise.all([
       this.getFuenteCertificadoConLimite(
@@ -518,6 +563,7 @@ export class LotesService {
       cargaFitosanitaria,
       frio: this.getFrioCertificado(lote, siembra, clima),
       clima,
+      emisor,
     });
   }
 
@@ -595,8 +641,7 @@ export class LotesService {
           ultimoReporte?.coleccion || null,
           {
             forceRender: this.debeReprocesarRenderSatelital(ultimoReporte),
-            exactSceneDate:
-              this.debeReprocesarRenderSatelital(ultimoReporte),
+            exactSceneDate: this.debeReprocesarRenderSatelital(ultimoReporte),
             knownScenes: ultimoReporte?.knownScenes || [],
           },
         );
@@ -645,10 +690,7 @@ export class LotesService {
     const reportes = await this.reportesNDVIsService.get(query, permisoSistema);
     const vistos = new Set<string>();
     const lotesUnicos = new Set<string>();
-    const ultimaFechaFixedPorLote = new Map<
-      string,
-      Promise<string | null>
-    >();
+    const ultimaFechaFixedPorLote = new Map<string, Promise<string | null>>();
     let encolados = 0;
     let omitidos = 0;
 
@@ -1354,12 +1396,10 @@ export class LotesService {
             fechaSiembra: siembra?.fechaSiembra,
             etapaFenologica: this.getEstadoFenologico(siembra, []),
             edadProductivaDesdeAnios:
-              siembra?.semilla?.fenologiaReferencia
-                ?.edadProductivaDesdeAnios,
+              siembra?.semilla?.fenologiaReferencia?.edadProductivaDesdeAnios,
             ajusteVarietalC:
               siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
-            fuenteAjusteVarietal:
-              siembra?.semilla?.sensibilidadHelada?.fuente,
+            fuenteAjusteVarietal: siembra?.semilla?.sensibilidadHelada?.fuente,
             idEstacionMeteorologica,
           },
         )
@@ -1454,8 +1494,7 @@ export class LotesService {
         ? this.limitarPorcentaje(Number(source.fieldCoveragePercentage))
         : undefined,
       sensores: source.sensorNames,
-      ultimaObservacion:
-        source.lastObservationAt || source.lastCalculatedAt,
+      ultimaObservacion: source.lastObservationAt || source.lastCalculatedAt,
       versionCalculo: data.calculationVersion,
       periodo: data.series?.length
         ? {
@@ -1504,12 +1543,11 @@ export class LotesService {
           : '',
         requirement?.interpretation === 'datos_insuficientes'
           ? this.getLecturaRequisitoFrio(requirement)
-          : requirement?.interpretation ===
-              'compatible_requiere_confirmacion'
+          : requirement?.interpretation === 'compatible_requiere_confirmacion'
             ? 'El clima es compatible con el requisito varietal; la etapa requiere confirmacion a campo.'
-          : requirement?.interpretation === 'sin_calibrar'
-            ? 'Sin requisito varietal rector validado; no se declara cumplimiento biologico.'
-            : '',
+            : requirement?.interpretation === 'sin_calibrar'
+              ? 'Sin requisito varietal rector validado; no se declara cumplimiento biologico.'
+              : '',
       ]).join(' '),
     };
   }
@@ -1527,6 +1565,14 @@ export class LotesService {
         item.metrics.precipitationMm ??
         item.weather.precipitationMm ??
         item.weather.rainMm,
+      horasFrio: item.metrics.chillingHours,
+      horasFrioAcumuladas: item.metrics.chillingHoursAccumulated,
+      unidadesUtah: item.metrics.utahChillUnits,
+      unidadesUtahAcumuladas: item.metrics.utahChillUnitsAccumulated,
+      porcionesFrio: item.metrics.chillPortions,
+      porcionesFrioAcumuladas: item.metrics.chillPortionsAccumulated,
+      gradosDia: item.metrics.gddDaily,
+      gradosDiaAcumulados: item.metrics.gddAccumulated,
       esPronostico: item.isForecast,
     };
   }
@@ -1607,14 +1653,12 @@ export class LotesService {
           validRequirement && req?.modeloRector === 'CP'
             ? req.porcionesFrio
             : undefined,
-        temperaturaBaseGradosDia:
-          data.requerimientos.temperaturaBaseGradosDia,
+        temperaturaBaseGradosDia: data.requerimientos.temperaturaBaseGradosDia,
       },
-      riesgoHelada:
-        this.mapRiskFrost(riesgoHelada) || {
-          ...data.riesgoHelada,
-          lectura: 'Riesgo calculado por compatibilidad legacy.',
-        },
+      riesgoHelada: this.mapRiskFrost(riesgoHelada) || {
+        ...data.riesgoHelada,
+        lectura: 'Riesgo calculado por compatibilidad legacy.',
+      },
       serie: (data.serie || []).map((item) => ({
         fecha: item.fecha,
         temperaturaMin: item.temperaturaMin,
@@ -1732,6 +1776,7 @@ export class LotesService {
       cargaFitosanitaria,
       clima,
       soilAssessment,
+      emisor,
     } = datos;
     const semilla = siembra?.semilla;
     const cultivo = semilla?.cultivo || 'Cultivo sin definir';
@@ -1767,7 +1812,7 @@ export class LotesService {
   <meta charset="utf-8" />
   <title>Informe ejecutivo Chaman - ${this.escapeHtml(lote.nombre || 'lote')}</title>
   <style>
-    @page { size: A4; margin: 12mm; }
+    @page { size: A4; margin: 9mm; }
     :root {
       --ink: #1f3047;
       --muted: #60708c;
@@ -1785,8 +1830,8 @@ export class LotesService {
       background: #edf4f8;
       color: var(--ink);
       font-family: Arial, Helvetica, sans-serif;
-      font-size: 14px;
-      line-height: 1.45;
+      font-size: 12px;
+      line-height: 1.34;
       print-color-adjust: exact;
       -webkit-print-color-adjust: exact;
     }
@@ -1802,8 +1847,8 @@ export class LotesService {
     .hero {
       display: grid;
       grid-template-columns: 1.2fr 0.8fr;
-      gap: 28px;
-      padding: 34px 38px;
+      gap: 20px;
+      padding: 22px 26px;
       background:
         radial-gradient(circle at 15% 20%, rgba(46, 212, 202, 0.18), transparent 28%),
         linear-gradient(135deg, #ffffff 0%, #f6fbfd 45%, #e9f8f5 100%);
@@ -1813,109 +1858,128 @@ export class LotesService {
     .brand-logo {
       display: block;
       height: auto;
-      margin: 0 0 18px;
-      max-width: 260px;
+      margin: 0 0 10px;
+      max-width: 210px;
       object-fit: contain;
-      width: 68mm;
+      width: 54mm;
     }
     h1 {
       margin: 0;
-      font-size: 34px;
+      font-size: 27px;
       line-height: 1.05;
       font-weight: 800;
     }
     h2 {
       color: var(--cyan);
-      font-size: 18px;
-      margin: 0 0 10px;
+      font-size: 15px;
+      margin: 0 0 6px;
       text-transform: uppercase;
     }
     h3 {
-      margin: 0 0 10px;
-      font-size: 16px;
+      margin: 0 0 6px;
+      font-size: 14px;
     }
     .hero-meta {
       display: grid;
-      gap: 10px;
+      gap: 7px;
       align-content: center;
     }
     .pill {
       display: inline-flex;
       width: max-content;
-      padding: 8px 14px;
+      padding: 5px 10px;
       border-radius: 999px;
       border: 1px solid var(--line);
       background: rgba(255,255,255,0.75);
       font-weight: 700;
     }
+    .issuer {
+      display: grid;
+      grid-template-columns: 54px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 24px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfefd;
+    }
+    .issuer-photo {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--cyan);
+    }
+    .issuer strong, .issuer span, .issuer small { display: block; }
+    .issuer span, .issuer small { color: var(--muted); }
+    .issuer-license { text-align: right; }
     .section {
-      padding: 24px 32px;
+      padding: 16px 24px;
       border-bottom: 1px solid var(--line);
     }
     .grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
+      gap: 8px;
     }
     .grid.three { grid-template-columns: repeat(3, 1fr); }
     .card {
       border: 1px solid var(--line);
       border-radius: 12px;
-      padding: 14px;
+      padding: 10px;
       background: linear-gradient(135deg, #fff, #f8fbfe);
-      min-height: 92px;
+      min-height: 68px;
     }
     .card span {
       display: block;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 10px;
       text-transform: uppercase;
       font-weight: 700;
       margin-bottom: 5px;
     }
     .card strong {
       display: block;
-      font-size: 20px;
+      font-size: 16px;
       line-height: 1.15;
     }
     .card small { color: var(--muted); }
     .executive-board {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
-      gap: 12px;
-      margin-top: 14px;
+      gap: 8px;
+      margin-top: 10px;
     }
     .score-card {
       border: 1px solid var(--line);
       border-radius: 12px;
-      padding: 14px;
+      padding: 10px;
       background: #fff;
-      min-height: 112px;
+      min-height: 86px;
     }
     .score-card span {
       display: block;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 10px;
       text-transform: uppercase;
       font-weight: 800;
       margin-bottom: 6px;
     }
     .score-card strong {
       display: block;
-      font-size: 24px;
+      font-size: 18px;
       line-height: 1.1;
     }
     .score-card small {
       display: block;
       color: var(--muted);
-      margin-top: 6px;
+      margin-top: 4px;
     }
     .score-meter {
       height: 9px;
       border-radius: 999px;
       background: #e9f1f8;
       overflow: hidden;
-      margin-top: 10px;
+      margin-top: 7px;
     }
     .score-meter i {
       display: block;
@@ -1931,27 +1995,27 @@ export class LotesService {
     .action-panel {
       border: 1px solid rgba(46, 212, 202, 0.45);
       border-radius: 14px;
-      padding: 16px 18px;
+      padding: 10px 12px;
       background: linear-gradient(135deg, #f2fffd, #ffffff);
-      margin-top: 16px;
+      margin-top: 10px;
     }
     .action-panel ol {
       margin: 10px 0 0;
       padding-left: 20px;
     }
-    .action-panel li { margin: 7px 0; }
+    .action-panel li { margin: 3px 0; }
     .summary-chart {
       border: 1px solid var(--line);
       border-radius: 14px;
-      padding: 16px;
+      padding: 10px;
       background: #fff;
     }
     .score-row {
       display: grid;
       grid-template-columns: 170px 1fr 70px;
-      gap: 12px;
+      gap: 8px;
       align-items: center;
-      padding: 9px 0;
+      padding: 6px 0;
       border-bottom: 1px solid #e7eff6;
     }
     .score-row:last-child { border-bottom: none; }
@@ -1993,7 +2057,7 @@ export class LotesService {
       background: #f8fbfe;
     }
     .ndvi-summary div {
-      padding: 12px 14px;
+      padding: 8px 10px;
       border-right: 1px solid var(--line);
     }
     .ndvi-summary div:last-child { border-right: 0; }
@@ -2015,10 +2079,37 @@ export class LotesService {
     }
     .chart-caption {
       margin: 0;
-      padding: 10px 14px 12px;
+      padding: 7px 10px 8px;
       color: var(--muted);
       font-size: 12px;
       border-top: 1px solid #e7eff6;
+    }
+    .thermal-charts {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .thermal-chart {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      overflow: hidden;
+      break-inside: avoid;
+    }
+    .thermal-chart header {
+      padding: 9px 11px 7px;
+      border-bottom: 1px solid #e7eff6;
+    }
+    .thermal-chart header strong,
+    .thermal-chart header small { display: block; }
+    .thermal-chart header strong { font-size: 15px; }
+    .thermal-chart header small { color: var(--muted); margin-top: 3px; }
+    .thermal-chart svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      min-height: 220px;
     }
     .tracking-table td:nth-child(4),
     .tracking-table td:nth-child(5) {
@@ -2048,7 +2139,7 @@ export class LotesService {
       border-radius: 12px;
     }
     th, td {
-      padding: 10px 12px;
+      padding: 6px 8px;
       text-align: left;
       border-bottom: 1px solid var(--line);
       vertical-align: top;
@@ -2056,7 +2147,7 @@ export class LotesService {
     th {
       color: var(--muted);
       text-transform: uppercase;
-      font-size: 12px;
+      font-size: 10px;
       background: #f3f8fb;
     }
     thead { display: table-header-group; }
@@ -2078,40 +2169,40 @@ export class LotesService {
       border-left: 4px solid var(--cyan);
       background: #eafdfb;
       border-radius: 10px;
-      padding: 12px 14px;
-      margin-top: 12px;
+      padding: 8px 10px;
+      margin-top: 8px;
     }
     .warn { border-left-color: var(--amber); background: #fff8e8; }
     .danger { border-left-color: var(--danger); background: #fff0ef; }
     .two-col {
       display: grid;
       grid-template-columns: 0.95fr 1.05fr;
-      gap: 16px;
+      gap: 10px;
       align-items: start;
     }
     .source-list {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
+      gap: 6px;
     }
     .source-list div {
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 10px;
+      padding: 7px;
       background: #f8fbfe;
     }
     .quality-board {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      margin: 14px 0 18px;
+      gap: 7px;
+      margin: 10px 0 12px;
     }
     .quality-item {
       border: 1px solid var(--line);
       border-radius: 12px;
-      padding: 12px;
+      padding: 8px;
       background: linear-gradient(135deg, #ffffff, #f8fbfe);
-      min-height: 132px;
+      min-height: 92px;
     }
     .quality-item span {
       display: block;
@@ -2123,7 +2214,7 @@ export class LotesService {
     }
     .quality-item strong {
       display: block;
-      font-size: 18px;
+      font-size: 14px;
       line-height: 1.15;
     }
     .quality-item small,
@@ -2135,14 +2226,75 @@ export class LotesService {
       margin-top: 5px;
     }
     .quality-item .score-meter {
-      margin: 9px 0 7px;
+      margin: 6px 0 5px;
     }
+    .sanitary-summary {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px;
+      align-items: baseline;
+      border: 1px solid #bfe5df;
+      border-radius: 9px;
+      background: #f3fcfa;
+      padding: 8px 10px;
+      margin: 0 0 8px;
+    }
+    .sanitary-summary.warn {
+      border-color: #f2d39a;
+      background: #fff9ed;
+    }
+    .sanitary-summary span { color: var(--muted); }
+    .sanitary-source {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 10.5px;
+    }
+    .sanitary-table { table-layout: fixed; font-size: 11px; }
+    .sanitary-table th:nth-child(1) { width: 24%; }
+    .sanitary-table th:nth-child(2) { width: 19%; }
+    .sanitary-table th:nth-child(3) { width: 18%; }
+    .sanitary-table th:nth-child(4) { width: 39%; }
+    .sanitary-table td { overflow-wrap: anywhere; }
+    .sanitary-state {
+      display: inline-flex;
+      border-radius: 999px;
+      background: #eef4f8;
+      color: #476077;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 7px;
+    }
+    .sanitary-state.operativo { background: #e8f8ef; color: #257347; }
+    .sanitary-state.pendiente { background: #fff4de; color: #8b6113; }
+    .sanitary-management {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 7px;
+      margin: 10px 0 8px;
+    }
+    .sanitary-management > div {
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 7px 9px;
+      background: #fbfdfe;
+      min-width: 0;
+    }
+    .sanitary-management span {
+      display: block;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .sanitary-management strong { display: block; margin-top: 2px; font-size: 14px; }
+    .sanitary-recommendation { margin-top: 7px; }
     footer {
       padding: 18px 32px 28px;
       color: var(--muted);
       font-size: 12px;
     }
-    @media (max-width: 900px) {
+    @media screen and (max-width: 900px) {
       .page { width: auto; margin: 0; border-radius: 0; }
       .hero, .two-col { grid-template-columns: 1fr; }
       .grid, .grid.three, .executive-board, .quality-board { grid-template-columns: 1fr; }
@@ -2152,6 +2304,7 @@ export class LotesService {
       .ndvi-summary div:nth-child(2) { border-right: 0; }
       .ndvi-summary div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
       .tracking-table { font-size: 12px; }
+      .thermal-charts { grid-template-columns: 1fr; }
     }
     @media print {
       body { background: white; }
@@ -2162,6 +2315,8 @@ export class LotesService {
       thead { display: table-header-group; }
       tr { break-inside: avoid; page-break-inside: avoid; }
       .ndvi-chart { min-height: 0; }
+      .thermal-section { break-before: page; page-break-before: always; }
+      .sanitary-section { break-before: page; page-break-before: always; }
     }
   </style>
 </head>
@@ -2179,6 +2334,8 @@ export class LotesService {
         <div class="card"><span>Etapa fenologica</span><strong>${this.escapeHtml(etapa)}</strong><small>${this.getDiasCultivoTexto(siembra)}</small></div>
       </div>
     </section>
+
+    ${this.renderEmisorInforme(emisor)}
 
     <section class="section">
       <h2>Executive Summary · Resumen ejecutivo</h2>
@@ -2221,18 +2378,25 @@ export class LotesService {
       </div>
     </section>
 
+    ${
+      esPerenne
+        ? `<section class="section thermal-section">
+      <h2>Evolucion del frio y del forzado</h2>
+      <p class="section-copy">La vista acumulada documenta la trayectoria de HF, Unidades Utah y Porciones de Frio. La vista diaria permite auditar cuanto suma cada jornada y cuando el modelo Utah descuenta por efecto del calor. El documento utiliza exclusivamente las series canonicas vigentes.</p>
+      ${this.renderGraficosFrio(clima)}
+    </section>`
+        : ''
+    }
+
     <section class="section">
       <h2>Fenologia y ciclo</h2>
       ${this.renderTablaFenologia(fenologia, siembra)}
     </section>
 
-    <section class="section">
+    <section class="section sanitary-section">
       <h2>Monitoreo sanitario</h2>
       ${this.renderTablaEnfermedades(siembra, predicciones)}
-    </section>
-
-    <section class="section">
-      <h2>Carga fitosanitaria</h2>
+      <h3 style="margin-top:12px;">Manejo fitosanitario registrado</h3>
       ${this.renderCargaFitosanitaria(cargaFitosanitaria)}
     </section>
 
@@ -2291,6 +2455,32 @@ export class LotesService {
 </html>`;
   }
 
+  private renderEmisorInforme(emisor?: IUsuario): string {
+    if (!emisor) return '';
+    const nombre =
+      emisor.datosPersonales?.nombre || emisor.username || 'Usuario autorizado';
+    const profesional = emisor.datosProfesionales;
+    const foto = this.fotoProfesionalSegura(profesional?.foto);
+    const profesion = [profesional?.profesion, profesional?.especialidad]
+      .filter(Boolean)
+      .join(' · ');
+    const matricula = profesional?.matricula
+      ? `Matricula ${profesional.matricula}`
+      : 'Matricula no informada';
+    return `<section class="issuer">
+      ${foto ? `<img class="issuer-photo" src="${foto}" alt="Profesional responsable" />` : '<div></div>'}
+      <div><small>Informe emitido por</small><strong>${this.escapeHtml(nombre)}</strong><span>${this.escapeHtml(profesion || 'Usuario autorizado de Chaman')}</span></div>
+      <div class="issuer-license"><strong>${this.escapeHtml(matricula)}</strong><small>${this.escapeHtml(profesional?.consejoProfesional || '')}</small></div>
+    </section>`;
+  }
+
+  private fotoProfesionalSegura(foto?: string): string | undefined {
+    if (!foto || foto.length > 1_500_000) return undefined;
+    return /^data:image\/(?:png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(foto)
+      ? foto
+      : undefined;
+  }
+
   private renderCoberturaServicios(datos: CertificadoDatos): string {
     const rows = this.getCoberturaServicios(datos)
       .map(
@@ -2320,6 +2510,9 @@ export class LotesService {
       0,
       (prediccion?.enfermedades || []).length - lecturasOperativas.length,
     );
+    const fueraVentana = (prediccion?.enfermedades || []).filter(
+      (item) => item.estado === 'fuera_ventana',
+    ).length;
     const tieneSuelo = this.tieneSueloConsolidado(lote, soilAssessment);
     const estadoRiego = this.getEstadoRecomendacionRiego(siembra);
     const tieneRecomendacionRiego =
@@ -2409,10 +2602,12 @@ export class LotesService {
             ? 'no_consolidado'
             : 'sin_dato',
         lectura: lecturasOperativas.length
-          ? `${lecturasOperativas.length} lectura(s) operativa(s) reciente(s)${noAgregables ? `; ${noAgregables} lectura(s) no agregable(s)` : ''}`
-          : noAgregables
-            ? `${noAgregables} lectura(s) no agregable(s), sin alerta operativa`
-            : 'Sin lectura sanitaria operativa reciente',
+          ? `${lecturasOperativas.length} modelo(s) operativo(s) reciente(s)${fueraVentana ? `; ${fueraVentana} fuera de ventana sensible` : ''}`
+          : fueraVentana === noAgregables && fueraVentana > 0
+            ? `${fueraVentana} modelo(s) fuera de ventana sensible; permanecen en seguimiento`
+            : noAgregables
+              ? `${noAgregables} evaluacion(es) pendiente(s) de validacion; sin alerta operativa`
+              : 'Sin lectura sanitaria operativa reciente',
         fuente: 'Motor sanitario Chaman + clima + fenologia + resistencia',
       },
       {
@@ -2609,6 +2804,9 @@ export class LotesService {
     const enfermedades = this.getLecturasSanitariasOperativas(ultimaPrediccion);
     const noAgregables =
       (ultimaPrediccion?.enfermedades || []).length - enfermedades.length;
+    const fueraVentana = (ultimaPrediccion?.enfermedades || []).filter(
+      (item) => item.estado === 'fuera_ventana',
+    ).length;
     const sueloScore = Number.isFinite(soilAssessment?.source?.confidenceScore)
       ? Number(soilAssessment?.source?.confidenceScore)
       : soilAssessment?.source?.confidence
@@ -2688,10 +2886,12 @@ export class LotesService {
           ultimaPrediccion?.fechaPrediccion || ultimaPrediccion?.fecha,
         ),
         lectura: enfermedades.length
-          ? `${enfermedades.length} lectura(s) operativa(s) vigente(s).${noAgregables > 0 ? ` ${noAgregables} lectura(s) no agregable(s) se informan por separado y no elevan riesgo.` : ''}`
-          : noAgregables > 0
-            ? `${noAgregables} lectura(s) no agregable(s), sin lectura operativa vigente.`
-            : 'Sin prediccion sanitaria operativa vigente para esta siembra.',
+          ? `${enfermedades.length} modelo(s) operativo(s) vigente(s).${fueraVentana > 0 ? ` ${fueraVentana} modelo(s) fuera de ventana se mantienen en seguimiento.` : ''}`
+          : fueraVentana === noAgregables && fueraVentana > 0
+            ? `${fueraVentana} modelo(s) fuera de ventana sensible; sin alerta operativa vigente.`
+            : noAgregables > 0
+              ? `${noAgregables} evaluacion(es) pendiente(s) de validacion; sin alerta operativa vigente.`
+              : 'Sin prediccion sanitaria operativa vigente para esta siembra.',
       },
       {
         modulo: 'Riego',
@@ -2766,8 +2966,7 @@ export class LotesService {
     const normalizada = this.normalizar(clima.fuente);
     const sourceScore = normalizada.includes('sensor')
       ? 90
-      : normalizada.includes('central') ||
-          normalizada.includes('fieldclimate')
+      : normalizada.includes('central') || normalizada.includes('fieldclimate')
         ? 84
         : normalizada.includes('open') && normalizada.includes('meteo')
           ? 68
@@ -3251,7 +3450,7 @@ export class LotesService {
           reporte.metadataImagen?.renderVersion !== 'fixed-index-v3' ||
           qaNdvi?.status !== 'ok' ||
           !Number.isFinite(coberturaValida) ||
-          coberturaValida < 3 ||
+          coberturaValida < SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT ||
           (ventana && (time < ventana.desde || time > ventana.hasta))
         ) {
           return undefined;
@@ -3348,10 +3547,7 @@ export class LotesService {
       };
     }
 
-    const registro = obtenerRegistroFenologicoDecisorioEnFecha(
-      siembra,
-      fecha,
-    );
+    const registro = obtenerRegistroFenologicoDecisorioEnFecha(siembra, fecha);
     if (registro?.etapa) {
       const puntual =
         registro.tipoEvento === 'observacion' ||
@@ -3596,6 +3792,211 @@ export class LotesService {
     </svg>`;
   }
 
+  async generarCertificadoPdf(
+    id: string,
+    permiso: IPermiso,
+    emisor?: IUsuario,
+  ): Promise<Buffer> {
+    const html = await this.generarCertificado(id, permiso, emisor);
+    return await renderHtmlToPdf(html);
+  }
+
+  private renderGraficosFrio(clima?: CertificadoClima): string {
+    const serie = (clima?.serie || []).filter(
+      (dia) =>
+        !dia.esPronostico &&
+        [
+          dia.horasFrio,
+          dia.horasFrioAcumuladas,
+          dia.unidadesUtah,
+          dia.unidadesUtahAcumuladas,
+          dia.porcionesFrio,
+          dia.porcionesFrioAcumuladas,
+        ].some((valor) => Number.isFinite(valor)),
+    );
+    if (!serie.length) {
+      return '<div class="note warn"><strong>Serie termica pendiente:</strong> el informe conserva los acumulados disponibles, pero aun no dispone de puntos diarios suficientes para graficar.</div>';
+    }
+
+    const width = 520;
+    const height = 336;
+    const left = 54;
+    const right = 20;
+    const plotWidth = width - left - right;
+    const panelHeight = 44;
+    const panelTops = [24, 92, 160, 228];
+    const x = (index: number) =>
+      left + (index * plotWidth) / Math.max(serie.length - 1, 1);
+    const numberValues = (key: keyof CertificadoClima['serie'][number]) =>
+      serie
+        .map((dia) => Number(dia[key]))
+        .filter((valor) => Number.isFinite(valor));
+    const points = (
+      key: keyof CertificadoClima['serie'][number],
+      y: (value: number) => number,
+    ) =>
+      serie
+        .map((dia, index) => {
+          const value = Number(dia[key]);
+          return Number.isFinite(value)
+            ? `${x(index).toFixed(1)},${y(value).toFixed(1)}`
+            : '';
+        })
+        .filter(Boolean)
+        .join(' ');
+    const dateLabels = () => {
+      const indices = [
+        ...new Set([0, Math.floor((serie.length - 1) / 2), serie.length - 1]),
+      ];
+      return indices
+        .map((index) => {
+          const anchor =
+            index === 0
+              ? 'start'
+              : index === serie.length - 1
+                ? 'end'
+                : 'middle';
+          return `<text x="${x(index).toFixed(1)}" y="326" text-anchor="${anchor}" fill="#60708c" font-size="10">${this.escapeHtml(this.formatDate(serie[index].fecha) || '')}</text>`;
+        })
+        .join('');
+    };
+    const range = (values: number[]) => {
+      const minBase = Math.min(0, ...values);
+      const maxBase = Math.max(0, ...values);
+      const span = maxBase - minBase;
+      if (!span) return { min: 0, max: 1 };
+      const padding = span * 0.08;
+      return {
+        min: minBase < 0 ? minBase - padding : 0,
+        max: maxBase > 0 ? maxBase + padding : 0,
+      };
+    };
+    const temperatureRange = (values: number[]) => {
+      if (!values.length) return { min: 0, max: 20 };
+      const minBase = Math.min(...values);
+      const maxBase = Math.max(...values);
+      const span = maxBase - minBase;
+      const padding = Math.max(1, span * 0.08);
+      return span
+        ? { min: minBase - padding, max: maxBase + padding }
+        : { min: minBase - 1, max: maxBase + 1 };
+    };
+    const panelY = (
+      value: number,
+      top: number,
+      limits: { min: number; max: number },
+    ) =>
+      top +
+      ((limits.max - value) / Math.max(limits.max - limits.min, 1)) *
+        panelHeight;
+    const panelGrid = (top: number, limits: { min: number; max: number }) =>
+      [0, 0.5, 1]
+        .map((ratio) => {
+          const y = top + ratio * panelHeight;
+          return `<line x1="${left}" x2="${width - right}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#dce7f0" stroke-width="1" />`;
+        })
+        .concat(
+          limits.min < 0 && limits.max > 0
+            ? [
+                `<line x1="${left}" x2="${width - right}" y1="${panelY(0, top, limits).toFixed(1)}" y2="${panelY(0, top, limits).toFixed(1)}" stroke="#60708c" stroke-width="1.4" />`,
+              ]
+            : [],
+        )
+        .join('');
+    const panelLabel = (
+      name: string,
+      unit: string,
+      color: string,
+      top: number,
+      limits: { min: number; max: number },
+    ) => `<text x="${left - 8}" y="${top + panelHeight / 2 + 3}" text-anchor="end" fill="${color}" font-size="10" font-weight="700">${name}</text>
+      <text x="${left}" y="${top - 5}" fill="#60708c" font-size="9">${this.escapeHtml(this.formatNumber(limits.min, unit === 'CP' ? 2 : 1))} a ${this.escapeHtml(this.formatNumber(limits.max, unit === 'CP' ? 2 : 1))} ${unit}</text>`;
+
+    const temperatureLimits = temperatureRange([
+      ...numberValues('temperaturaMin'),
+      ...numberValues('temperaturaMax'),
+    ]);
+    const temperatureBand = (from: number, to: number, color: string) => {
+      const start = Math.max(from, temperatureLimits.min);
+      const end = Math.min(to, temperatureLimits.max);
+      if (end <= start) return '';
+      const yTop = panelY(end, panelTops[0], temperatureLimits);
+      const yBottom = panelY(start, panelTops[0], temperatureLimits);
+      return `<rect x="${left}" y="${yTop.toFixed(1)}" width="${plotWidth}" height="${Math.max(0, yBottom - yTop).toFixed(1)}" fill="${color}" />`;
+    };
+    const temperatureContext = `
+      ${temperatureBand(15.9, 18, 'rgba(215,131,61,0.08)')}
+      ${temperatureBand(18, temperatureLimits.max, 'rgba(215,131,61,0.14)')}
+      ${temperatureLimits.min <= 15.9 && temperatureLimits.max >= 15.9 ? `<line x1="${left}" x2="${width - right}" y1="${panelY(15.9, panelTops[0], temperatureLimits).toFixed(1)}" y2="${panelY(15.9, panelTops[0], temperatureLimits).toFixed(1)}" stroke="#d7833d" stroke-width="1" stroke-dasharray="4 3" />` : ''}
+      <polyline data-panel="temperature-min" fill="none" stroke="#60708c" stroke-width="1.5" stroke-dasharray="4 3" stroke-linejoin="round" points="${points('temperaturaMin', (value) => panelY(value, panelTops[0], temperatureLimits))}" />
+      <polyline data-panel="temperature-max" fill="none" stroke="#d7833d" stroke-width="1.8" stroke-linejoin="round" points="${points('temperaturaMax', (value) => panelY(value, panelTops[0], temperatureLimits))}" />`;
+
+    const accumulatedRanges = [
+      range(numberValues('horasFrioAcumuladas')),
+      range(numberValues('unidadesUtahAcumuladas')),
+      range(numberValues('porcionesFrioAcumuladas')),
+    ];
+    const accumulatedSvg = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Temperatura y evolucion acumulada de horas de frio, unidades Utah y porciones de frio">
+      ${panelGrid(panelTops[0], temperatureLimits)}
+      ${panelGrid(panelTops[1], accumulatedRanges[0])}
+      ${panelGrid(panelTops[2], accumulatedRanges[1])}
+      ${panelGrid(panelTops[3], accumulatedRanges[2])}
+      ${panelLabel('Temp', 'C', '#60708c', panelTops[0], temperatureLimits)}
+      ${panelLabel('HF', 'HF', '#168d82', panelTops[1], accumulatedRanges[0])}
+      ${panelLabel('Utah', 'UF', '#547ec8', panelTops[2], accumulatedRanges[1])}
+      ${panelLabel('CP', 'CP', '#8d65b8', panelTops[3], accumulatedRanges[2])}
+      ${temperatureContext}
+      <polyline data-panel="hf" fill="none" stroke="#168d82" stroke-width="2.6" stroke-linejoin="round" points="${points('horasFrioAcumuladas', (value) => panelY(value, panelTops[1], accumulatedRanges[0]))}" />
+      <polyline data-panel="utah" fill="none" stroke="#547ec8" stroke-width="2.6" stroke-linejoin="round" points="${points('unidadesUtahAcumuladas', (value) => panelY(value, panelTops[2], accumulatedRanges[1]))}" />
+      <polyline data-panel="cp" fill="none" stroke="#8d65b8" stroke-width="2.4" stroke-linejoin="round" points="${points('porcionesFrioAcumuladas', (value) => panelY(value, panelTops[3], accumulatedRanges[2]))}" />
+      ${dateLabels()}
+    </svg>`;
+
+    const dailyRanges = [
+      range(numberValues('horasFrio')),
+      range(numberValues('unidadesUtah')),
+      range(numberValues('porcionesFrio')),
+    ];
+    const spacing = plotWidth / Math.max(serie.length, 1);
+    const barWidth = Math.max(0.9, Math.min(5, spacing * 0.68));
+    const dailyBars = (
+      key: keyof CertificadoClima['serie'][number],
+      top: number,
+      limits: { min: number; max: number },
+      color: string,
+      negativeColor = color,
+    ) =>
+      serie
+        .map((dia, index) => {
+          const value = Number(dia[key]);
+          if (!Number.isFinite(value)) return '';
+          const zeroY = panelY(0, top, limits);
+          const valueY = panelY(value, top, limits);
+          return `<rect x="${(x(index) - barWidth / 2).toFixed(1)}" y="${Math.min(zeroY, valueY).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${Math.max(0.8, Math.abs(zeroY - valueY)).toFixed(1)}" fill="${value < 0 ? negativeColor : color}" opacity="0.86" />`;
+        })
+        .join('');
+    const dailySvg = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Temperatura y aportes diarios de horas de frio, unidades Utah y porciones de frio">
+      ${panelGrid(panelTops[0], temperatureLimits)}
+      ${panelGrid(panelTops[1], dailyRanges[0])}
+      ${panelGrid(panelTops[2], dailyRanges[1])}
+      ${panelGrid(panelTops[3], dailyRanges[2])}
+      ${panelLabel('Temp', 'C', '#60708c', panelTops[0], temperatureLimits)}
+      ${panelLabel('HF', 'HF', '#168d82', panelTops[1], dailyRanges[0])}
+      ${panelLabel('Utah', 'UF', '#547ec8', panelTops[2], dailyRanges[1])}
+      ${panelLabel('CP', 'CP', '#8d65b8', panelTops[3], dailyRanges[2])}
+      ${temperatureContext}
+      <g data-panel="hf-daily">${dailyBars('horasFrio', panelTops[1], dailyRanges[0], '#168d82')}</g>
+      <g data-panel="utah-daily">${dailyBars('unidadesUtah', panelTops[2], dailyRanges[1], '#547ec8', '#d7833d')}</g>
+      <g data-panel="cp-daily">${dailyBars('porcionesFrio', panelTops[3], dailyRanges[2], '#8d65b8')}</g>
+      ${dateLabels()}
+    </svg>`;
+
+    return `<div class="thermal-charts">
+      <article class="thermal-chart"><header><strong>Evolucion acumulada</strong><small>Temperaturas minima y maxima dan contexto; HF, Utah y CP conservan escalas independientes.</small></header>${accumulatedSvg}</article>
+      <article class="thermal-chart"><header><strong>Aporte diario</strong><small>Utah se calcula hora a hora; temperaturas mayores a 15,9 C pueden descontar unidades.</small></header>${dailySvg}</article>
+    </div>`;
+  }
+
   private renderTablaClimaAgronomica(
     clima: CertificadoClima | undefined,
     frio: CertificadoFrio,
@@ -3625,11 +4026,7 @@ export class LotesService {
           ],
           [
             'Unidades Utah',
-            this.formatClimaMetric(
-              clima.acumulados.unidadesFrioUtah,
-              'UF',
-              1,
-            ),
+            this.formatClimaMetric(clima.acumulados.unidadesFrioUtah, 'UF', 1),
             'Modelo Utah independiente; puede descontar calor',
           ],
           [
@@ -3637,7 +4034,11 @@ export class LotesService {
             this.formatClimaMetric(clima.acumulados.porcionesFrio, 'CP', 2),
             'Dynamic Model horario; nunca convertido desde HF o HFE',
           ],
-          ['Requisito varietal', requirementReading, requirement?.source || 'Pendiente de calibracion'],
+          [
+            'Requisito varietal',
+            requirementReading,
+            requirement?.source || 'Pendiente de calibracion',
+          ],
           [
             'Grados dia',
             this.formatClimaMetric(clima.acumulados.gradosDia, 'GD', 1),
@@ -3795,26 +4196,96 @@ export class LotesService {
     const operativas = enfermedades.filter((item) =>
       esLecturaSanitariaOperativa(item),
     ).length;
+    const fueraDeVentana = enfermedades.filter(
+      (item) => item.estado === 'fuera_ventana',
+    ).length;
     const rows = enfermedades
       .map((item) => {
         const operativa = esLecturaSanitariaOperativa(item);
         const nombreCanonico =
           getEnfermedadPorId(item.idEnfermedad)?.nombre || item.enfermedad;
+        const estado = this.getEstadoSanitarioInforme(item);
+        const estadoClase = operativa ? 'operativo' : 'pendiente';
+        const lectura = operativa
+          ? `${this.formatMaybe(item.resultado, 1)}% - ${this.getNivelRiesgoTexto(item.resultado, siembra?.semilla?.cultivo)}`
+          : item.estado === 'fuera_ventana'
+            ? '0% operativo'
+            : 'Sin porcentaje operativo';
         return `
       <tr>
-        <td>${this.escapeHtml(nombreCanonico)}</td>
-        <td>${this.escapeHtml(this.formatMaybe(item.resultado, 2))}</td>
-        <td>${this.escapeHtml(operativa ? this.getNivelRiesgoTexto(item.resultado, siembra?.semilla?.cultivo) : 'No integra el riesgo')}</td>
-        <td>${this.escapeHtml(this.getEstadoLecturaSanitaria(item))}</td>
-        <td>${this.escapeHtml(this.formatVariables(item.variables))}</td>
+        <td><strong>${this.escapeHtml(nombreCanonico)}</strong></td>
+        <td><span class="sanitary-state ${estadoClase}">${this.escapeHtml(estado)}</span></td>
+        <td>${this.escapeHtml(lectura)}</td>
+        <td>${this.escapeHtml(this.getEvidenciaSanitariaInforme(item))}</td>
       </tr>`;
       })
       .join('');
-    const aviso =
-      operativas < enfermedades.length
-        ? `<div class="note warn"><strong>Separacion de lecturas:</strong> ${enfermedades.length - operativas} lectura(s) no agregable(s) se muestran para trazabilidad con su causa, pero no integran el riesgo ejecutivo ni la carga fitosanitaria.</div>`
-        : '';
-    return `${aviso}<table><thead><tr><th>Enfermedad</th><th>Valor</th><th>Lectura</th><th>Estado del modelo</th><th>Variables usadas</th></tr></thead><tbody>${rows}</tbody></table>`;
+    const pendientes = enfermedades.length - operativas;
+    const resumen =
+      fueraDeVentana === enfermedades.length
+        ? `<div class="sanitary-summary"><strong>Sin riesgo sanitario activo en este corte</strong><span>Los ${fueraDeVentana} modelos estan fuera de su ventana sensible y permanecen en seguimiento.</span></div>`
+        : pendientes
+          ? `<div class="sanitary-summary warn"><strong>${operativas} modelo(s) operativo(s)</strong><span>${pendientes} evaluacion(es) permanecen pendientes o fuera de ventana y no elevan alertas.</span></div>`
+          : `<div class="sanitary-summary"><strong>${operativas} modelo(s) operativo(s)</strong><span>Todos se encuentran dentro de su ventana de evaluacion.</span></div>`;
+    return `${resumen}<table class="sanitary-table"><thead><tr><th>Enfermedad</th><th>Estado</th><th>Riesgo actual</th><th>Evidencia principal</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="sanitary-source"><strong>Fuente sanitaria:</strong> temperatura, humedad relativa del aire, lluvia, acumulacion termica, fenologia y resistencia varietal. La humedad de suelo no sustituye humedad foliar ni integra por si sola este riesgo.</p>`;
+  }
+
+  private getEstadoSanitarioInforme(
+    item: NonNullable<IPrediccion['enfermedades']>[number],
+  ): string {
+    if (esLecturaSanitariaOperativa(item)) return 'En ventana';
+    if (item.estado === 'fuera_ventana') return 'Fuera de ventana';
+    if (item.modelo?.validacion === 'experimental') return 'Experimental';
+    if (['baja', 'sin_datos'].includes(item.calidadDatos?.nivel || '')) {
+      return 'Datos insuficientes';
+    }
+    if (
+      !item.resistenciaUsada?.estado ||
+      item.resistenciaUsada.estado === 'desconocida'
+    ) {
+      return 'Resistencia pendiente';
+    }
+    return 'Pendiente';
+  }
+
+  private getEvidenciaSanitariaInforme(
+    item: NonNullable<IPrediccion['enfermedades']>[number],
+  ): string {
+    const variables = (item.variables || {}) as Record<string, unknown>;
+    const gddSiembra = this.toNumber(variables.GDDBase0Siembra);
+    const umbralGdd = this.toNumber(variables.UmbralInicioGdd);
+    if (
+      Number.isFinite(gddSiembra) &&
+      Number.isFinite(umbralGdd) &&
+      umbralGdd > 0
+    ) {
+      const avance = this.limitarPorcentaje((gddSiembra / umbralGdd) * 100);
+      return `Seguimiento termico: ${this.formatNumber(gddSiembra, 1)} de ${this.formatNumber(umbralGdd, 0)} GDD base 0 C (${this.formatNumber(avance, 0)}% del umbral).`;
+    }
+    if (item.estado === 'fuera_ventana') {
+      return /fusarium/i.test(item.enfermedad || '')
+        ? 'El modelo se habilita desde espigazon/antesis observada.'
+        : 'La etapa fenologica sensible aun no fue alcanzada.';
+    }
+    const etiquetas: Record<string, string> = {
+      DPrHRT: 'dias con lluvia, HR y temperatura favorables',
+      DPr: 'dias con precipitacion favorable',
+      DHR: 'dias con humedad relativa favorable',
+      GD: 'grados-dia dentro de la ventana',
+      GDN: 'grados-dia desde antesis',
+      PMoj: 'periodos de mojado',
+      DL: 'dias sin lluvia',
+    };
+    const evidencia = Object.entries(etiquetas)
+      .filter(([key]) => Number.isFinite(this.toNumber(variables[key])))
+      .slice(0, 3)
+      .map(
+        ([key, label]) => `${label}: ${this.formatMaybe(variables[key], 1)}`,
+      );
+    return evidencia.length
+      ? evidencia.join('; ')
+      : 'Seguimiento por clima, fenologia y perfil varietal.';
   }
 
   private renderCargaFitosanitaria(carga: ICargaFitosanitaria): string {
@@ -3829,39 +4300,23 @@ export class LotesService {
       </tr>`,
       )
       .join('');
-    const aplicaciones = carga.aplicaciones
-      .slice(0, 8)
-      .map(
-        (item) => `
-      <tr>
-        <td>${this.escapeHtml(this.formatDate(item.fecha) || '-')}</td>
-        <td>${this.escapeHtml(item.producto || '-')}</td>
-        <td>${this.escapeHtml(item.principioActivo || '-')}</td>
-        <td>${this.escapeHtml(this.formatMaybe(item.dosisLtHa, 2))} l/ha</td>
-        <td>${this.escapeHtml(`${item.aporte}/100`)}</td>
-      </tr>`,
-      )
-      .join('');
     const advertencias = carga.advertencias.length
       ? `<div class="note warn"><strong>Calidad de datos:</strong><ul>${carga.advertencias.map((item) => `<li>${this.escapeHtml(item)}</li>`).join('')}</ul></div>`
       : '';
 
     return `
-      <div class="grid three">
-        ${this.metricCard('Nivel', this.capitalize(carga.nivel.replace('_', ' ')), carga.lectura)}
-        ${this.metricCard('Presion sanitaria', `${carga.presionEnfermedades}/100`, `${carga.enfermedadesMonitoreadas} enfermedad(es) monitoreadas`)}
-        ${this.metricCard('Carga quimica', `${carga.cargaQuimica}/100`, `${carga.aplicacionesTotales} fumigacion(es), ${carga.aplicacionesUltimos30Dias} reciente(s)`)}
+      <div class="sanitary-management">
+        <div><span>Nivel</span><strong>${this.escapeHtml(this.capitalize(carga.nivel.replace('_', ' ')))}</strong></div>
+        <div><span>Presion sanitaria</span><strong>${this.escapeHtml(`${carga.presionEnfermedades}/100`)}</strong></div>
+        <div><span>Aplicaciones</span><strong>${this.escapeHtml(`${carga.aplicacionesTotales} totales / ${carga.aplicacionesUltimos30Dias} recientes`)}</strong></div>
       </div>
-      <div class="note">
+      <div class="note sanitary-recommendation">
         <strong>Recomendacion:</strong> ${this.escapeHtml(carga.recomendacion)}
       </div>
-      <h3 style="margin-top:16px;">Factores considerados</h3>
-      <table><thead><tr><th>Factor</th><th>Valor</th><th>Peso</th><th>Detalle</th></tr></thead><tbody>${factores}</tbody></table>
-      <h3 style="margin-top:16px;">Aplicaciones fitosanitarias recientes</h3>
       ${
-        aplicaciones
-          ? `<table><thead><tr><th>Fecha</th><th>Producto</th><th>Activo</th><th>Dosis</th><th>Aporte</th></tr></thead><tbody>${aplicaciones}</tbody></table>`
-          : '<p>Sin fumigaciones registradas para esta campana.</p>'
+        factores
+          ? `<h3 style="margin-top:12px;">Factores considerados</h3><table><thead><tr><th>Factor</th><th>Valor</th><th>Peso</th><th>Detalle</th></tr></thead><tbody>${factores}</tbody></table>`
+          : ''
       }
       ${advertencias}
     `;
@@ -3983,14 +4438,23 @@ export class LotesService {
     const todas = prediccion?.enfermedades || [];
     const enfermedades = this.getLecturasSanitariasOperativas(prediccion);
     if (!enfermedades.length) {
+      const fueraVentana = todas.filter(
+        (item) => item.estado === 'fuera_ventana',
+      ).length;
       return {
-        titulo: todas.length
-          ? 'Solo lecturas no agregables'
-          : 'Sin prediccion reciente',
-        detalle: todas.length
-          ? `${todas.length} modelo(s) visible(s), no agregable(s) como alerta`
-          : 'Actualizar riesgo para cruzar fenologia, humedad, lluvia y temperatura',
-        clase: 'warn',
+        titulo:
+          fueraVentana === todas.length && fueraVentana > 0
+            ? 'Fuera de ventana sensible'
+            : todas.length
+              ? 'Evaluacion pendiente'
+              : 'Sin prediccion reciente',
+        detalle:
+          fueraVentana === todas.length && fueraVentana > 0
+            ? `${fueraVentana} modelo(s) en seguimiento; no integran el riesgo actual`
+            : todas.length
+              ? `${todas.length} modelo(s) requieren validacion antes de emitir una alerta`
+              : 'Actualizar riesgo para cruzar fenologia, humedad del aire, lluvia y temperatura',
+        clase: fueraVentana === todas.length && fueraVentana > 0 ? '' : 'warn',
       };
     }
     const max = Math.max(
@@ -4140,8 +4604,8 @@ export class LotesService {
         titulo: datosInsuficientes
           ? 'Dormancia: datos insuficientes'
           : requirementValid
-          ? `Requisito varietal ${requirement?.model}`
-          : 'Dormancia: requisito sin calibrar',
+            ? `Requisito varietal ${requirement?.model}`
+            : 'Dormancia: requisito sin calibrar',
         detalle: piezas.join(' | ') || 'Sin serie horaria suficiente',
         lectura: datosInsuficientes
           ? clima.lectura || this.getLecturaRequisitoFrio(requirement)
@@ -4366,10 +4830,7 @@ export class LotesService {
         requirement.accumulated,
         requirement.model,
         requirement.model === 'CP' ? 2 : 1,
-      )} / ${this.formatObjetivo(
-        requirement.target,
-        requirement.model,
-      )}; ${
+      )} / ${this.formatObjetivo(requirement.target, requirement.model)}; ${
         requirement.compatible
           ? 'clima compatible, confirmar etapa a campo'
           : 'en acumulacion'
@@ -4453,11 +4914,17 @@ export class LotesService {
       predicciones,
     );
     if (!this.getLecturasSanitariasOperativas(prediccionSanitaria).length) {
-      pendientes.push(
-        prediccionSanitaria?.enfermedades?.length
-          ? 'Resolver la causa de las lecturas sanitarias no agregables antes de tratarlas como riesgo operativo.'
-          : 'Ejecutar monitoreo sanitario para dejar trazabilidad operativa reciente de enfermedades.',
-      );
+      const evaluaciones = prediccionSanitaria?.enfermedades || [];
+      const todasFueraVentana =
+        evaluaciones.length > 0 &&
+        evaluaciones.every((item) => item.estado === 'fuera_ventana');
+      if (!todasFueraVentana) {
+        pendientes.push(
+          evaluaciones.length
+            ? 'Validar las evaluaciones sanitarias pendientes antes de tratarlas como riesgo operativo.'
+            : 'Ejecutar monitoreo sanitario para dejar trazabilidad operativa reciente de enfermedades.',
+        );
+      }
     }
     if (
       !siembra?.rendimientoObtenidoKgHa &&
@@ -5162,21 +5629,28 @@ export class LotesService {
     if (permiso.nivel === 'Admin') {
       return true;
     }
+    if (permiso.nivel === 'Tenant') {
+      return this.relacionCoincide(data.idTenant, permiso.idTenant);
+    }
     if (permiso.nivel === 'Quimica') {
-      return !data.idQuimica || data.idQuimica === permiso.idQuimica;
+      return this.relacionCoincide(data.idQuimica, permiso.idQuimica);
     }
     if (permiso.nivel === 'Distribuidor') {
-      return (
-        !data.idDistribuidor || data.idDistribuidor === permiso.idDistribuidor
+      return this.relacionCoincide(
+        data.idDistribuidor,
+        permiso.idDistribuidor,
       );
     }
+    if (permiso.nivel === 'Asesor') {
+      return permisoPuedeVerLote(permiso, data);
+    }
     if (permiso.nivel === 'Productor') {
-      return !data.idProductor || data.idProductor === permiso.idProductor;
+      return this.relacionCoincide(data.idProductor, permiso.idProductor);
     }
     if (permiso.nivel === 'Establecimiento') {
-      return (
-        !data.idEstablecimiento ||
-        data.idEstablecimiento === permiso.idEstablecimiento
+      return this.relacionCoincide(
+        data.idEstablecimiento,
+        permiso.idEstablecimiento,
       );
     }
     return false;
@@ -5186,22 +5660,67 @@ export class LotesService {
     const filtro: IFilter<ILote> = HelperService.filtroToObject(query.filter);
     const $and = filtro.$and || [];
 
+    if (permiso.nivel === 'Tenant') {
+      this.agregarFiltroRelacion($and, 'idTenant', permiso.idTenant);
+    }
+
     if (permiso.nivel === 'Quimica') {
-      $and.push({ idQuimica: permiso.idQuimica });
+      this.agregarFiltroRelacion($and, 'idQuimica', permiso.idQuimica);
     }
     if (permiso.nivel === 'Distribuidor') {
-      $and.push({ idDistribuidor: permiso.idDistribuidor });
+      this.agregarFiltroRelacion(
+        $and,
+        'idDistribuidor',
+        permiso.idDistribuidor,
+      );
     }
     if (permiso.nivel === 'Productor') {
-      $and.push({ idProductor: permiso.idProductor });
+      this.agregarFiltroRelacion($and, 'idProductor', permiso.idProductor);
     }
     if (permiso.nivel === 'Establecimiento') {
-      $and.push({ idEstablecimiento: permiso.idEstablecimiento });
+      this.agregarFiltroRelacion(
+        $and,
+        'idEstablecimiento',
+        permiso.idEstablecimiento,
+      );
+    }
+    if (permiso.nivel === 'Asesor') {
+      $and.push({
+        idEstablecimiento: { $in: establecimientosDelPermiso(permiso) },
+      });
+    }
+    if (permiso.idLotes?.length) {
+      $and.push({ _id: { $in: permiso.idLotes } });
     }
 
     if ($and.length > 0) {
       filtro.$and = $and;
       query.filter = JSON.stringify(filtro);
     }
+  }
+
+  private relacionCoincide(
+    idEntidad?: string,
+    idPermiso?: string,
+  ): boolean {
+    return (
+      !!idEntidad &&
+      !!idPermiso &&
+      String(idEntidad) === String(idPermiso)
+    );
+  }
+
+  private agregarFiltroRelacion(
+    filtros: Array<Record<string, unknown>>,
+    campo: string,
+    id?: string,
+  ): void {
+    if (id) {
+      filtros.push({ [campo]: id });
+      return;
+    }
+    // Un permiso malformado nunca debe convertirse en `{}` al serializarse,
+    // porque eso ampliaria el listado a todos los lotes.
+    filtros.push({ _id: { $in: [] } });
   }
 }

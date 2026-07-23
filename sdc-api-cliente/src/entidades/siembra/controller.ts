@@ -39,6 +39,7 @@ export class SiembrasController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   public async get(
     @Query() query: IQueryParam,
@@ -53,6 +54,7 @@ export class SiembrasController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   public async seguimientoHuellaHidrica(
     @Param('id') id: string,
@@ -67,6 +69,7 @@ export class SiembrasController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   public async agrometeorologia(
     @Param('id') id: string,
@@ -83,6 +86,7 @@ export class SiembrasController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async reprocesarAgrometeorologia(
     @Param('id') id: string,
@@ -102,6 +106,7 @@ export class SiembrasController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
   )
   public async getById(
     @Param('id') id: string,
@@ -116,6 +121,7 @@ export class SiembrasController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async generarPrediccionEnfermedades(
     @Param('id') id: string,
@@ -130,6 +136,7 @@ export class SiembrasController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async prediccionMalezas(
     @Param('id') id: string,
@@ -144,6 +151,7 @@ export class SiembrasController {
     { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async registrarEtapaFenologica(
     @Param('id') id: string,

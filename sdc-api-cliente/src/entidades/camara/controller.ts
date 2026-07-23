@@ -36,7 +36,9 @@ export class CamarasController {
 
   @Post('sincronizar')
   @Permisos({ nivel: 'Admin', roles: ['Admin'] })
-  public async sincronizar(@Query() query: IQueryParam): Promise<IListado<ICamara>> {
+  public async sincronizar(
+    @Query() query: IQueryParam,
+  ): Promise<IListado<ICamara>> {
     return await this.service.sincronizar(query);
   }
 

@@ -1,5 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { ICreateUsuario, IQueryParam, IUpdateUsuario } from 'modelos/src';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { ICreateUsuario, IQueryParam, ISolicitudArchivado, IUpdateUsuario } from 'modelos/src';
 import { UsuariosRepository } from './repository';
 
 @Injectable()
@@ -42,7 +46,7 @@ export class UsuariosService {
   }
 
   async getByUsernameForLogin(username: string) {
-    const data = await this.repository.getByUsername(username);
+    const data = await this.repository.getByUsernameForLogin(username);
     if (data) {
       return data;
     }
@@ -50,7 +54,7 @@ export class UsuariosService {
   }
 
   async getForLogin(username: string) {
-    const data = await this.repository.getByUsername(username);
+    const data = await this.repository.getByUsernameForLogin(username);
     if (data) {
       return data;
     }
@@ -58,22 +62,48 @@ export class UsuariosService {
   }
 
   async create(dato: ICreateUsuario) {
-    return await this.repository.create(dato);
+    try {
+      return await this.repository.create(dato);
+    } catch (error) {
+      this.rethrowDuplicateUsername(error);
+    }
   }
 
   async update(id: string, dato: IUpdateUsuario) {
-    const updated = await this.repository.update(id, dato);
+    let updated;
+    try {
+      updated = await this.repository.update(id, dato);
+    } catch (error) {
+      this.rethrowDuplicateUsername(error);
+    }
     if (updated) {
       return updated;
     }
     throw new NotFoundException('No encontrado');
   }
 
-  async delete(id: string) {
-    const deleted = await this.repository.delete(id);
+  async delete(id: string, audit: ISolicitudArchivado = {}) {
+    const deleted = await this.repository.delete(id, audit);
     if (deleted) {
       return deleted;
     }
     throw new NotFoundException('No encontrado');
+  }
+
+  private rethrowDuplicateUsername(error: unknown): never {
+    const mongoError = error as {
+      code?: number;
+      keyPattern?: Record<string, number>;
+      keyValue?: Record<string, unknown>;
+    };
+    if (
+      mongoError?.code === 11000 &&
+      (mongoError.keyPattern?.['username'] || mongoError.keyValue?.['username'])
+    ) {
+      throw new ConflictException(
+        'Ese nombre de usuario ya existe. Elegí otro nombre de acceso.',
+      );
+    }
+    throw error;
   }
 }

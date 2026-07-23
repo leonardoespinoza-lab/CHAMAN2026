@@ -5,7 +5,12 @@ import {
   NestInterceptor,
 } from '@nestjs/common';
 import { Observable, tap } from 'rxjs';
-import { IPermiso, ISocketMessage, ISocketMessageScope, IUsuario } from 'modelos/src';
+import {
+  IPermiso,
+  ISocketMessage,
+  ISocketMessageScope,
+  IUsuario,
+} from 'modelos/src';
 import { MqttService } from './mqtt.service';
 import { MQTT_TOPIC_APIS } from '../../env';
 
@@ -52,10 +57,15 @@ export class MqttInterceptor implements NestInterceptor {
     const alcance: ISocketMessageScope = {};
 
     if (entidad && typeof entidad === 'object') {
+      alcance.idTenant = this.valorTexto(entidad.idTenant);
+      alcance.idAsesorPropietario = this.valorTexto(
+        entidad.idAsesorPropietario,
+      );
       alcance.idQuimica = this.valorTexto(entidad.idQuimica);
       alcance.idDistribuidor = this.valorTexto(entidad.idDistribuidor);
       alcance.idProductor = this.valorTexto(entidad.idProductor);
       alcance.idEstablecimiento = this.valorTexto(entidad.idEstablecimiento);
+      alcance.idLote = this.valorTexto(entidad.idLote);
 
       if (ruta === 'quimicas') {
         alcance.idQuimica ||= this.valorTexto(entidad._id);
@@ -69,8 +79,13 @@ export class MqttInterceptor implements NestInterceptor {
       if (ruta === 'establecimientos') {
         alcance.idEstablecimiento ||= this.valorTexto(entidad._id);
       }
+      if (ruta === 'lotes') {
+        alcance.idLote ||= this.valorTexto(entidad._id);
+      }
     }
 
+    alcance.idTenant ||= permiso?.idTenant;
+    alcance.idAsesorPropietario ||= permiso?.idAsesor;
     alcance.idQuimica ||= permiso?.idQuimica;
     alcance.idDistribuidor ||= permiso?.idDistribuidor;
     alcance.idProductor ||= permiso?.idProductor;

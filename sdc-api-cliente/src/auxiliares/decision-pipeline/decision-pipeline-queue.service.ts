@@ -172,9 +172,7 @@ export class DecisionPipelineQueueService {
       changedFields,
       sincronizarClima: Boolean(options.sincronizarClima),
     });
-    const idempotencyKey = createHash('sha256')
-      .update(canonical)
-      .digest('hex');
+    const idempotencyKey = createHash('sha256').update(canonical).digest('hex');
     return {
       schemaVersion: 1,
       eventId,

@@ -12,6 +12,19 @@
   z-index: 1001; // Asegurar que el autocomplete esté por encima del mapa
 }
 
+.location-guidance {
+  display: flex;
+  align-items: center;
+  min-height: 1.25rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.location-guidance--warning {
+  color: var(--p-orange-700, #a85b00);
+}
+
 .map-container {
   position: relative;
   width: 100%;

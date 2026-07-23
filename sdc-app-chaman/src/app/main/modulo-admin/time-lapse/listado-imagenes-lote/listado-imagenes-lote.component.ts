@@ -69,7 +69,10 @@ export class ListadoImagenesLoteComponent implements OnInit, OnDestroy {
     }
   }
 
-  async downloadImage(url: string, filename: string) {
+  async downloadImage(foto: IFoto) {
+    const url = foto.url || '';
+    const filename =
+      foto.fechaCreacion || foto.fechaCaptura || new Date().toISOString();
     if (Capacitor.getPlatform() === 'web') {
       // Navegador → descarga normal
       const link = document.createElement('a');
@@ -80,9 +83,15 @@ export class ListadoImagenesLoteComponent implements OnInit, OnDestroy {
       document.body.removeChild(link);
     } else {
       try {
-        const blob = await this.fotosService.getImagen(url);
+        if (!foto._id) {
+          throw new Error('La foto no tiene un identificador valido.');
+        }
+        const blob = await this.fotosService.getImagen(foto._id);
         // Convertir Blob → Base64 puro
-        const base64Data = this.bufferToBase64(blob.data);
+        const base64Data = this.bufferToBase64(
+          await blob.arrayBuffer(),
+          blob.type || foto.mimeType || 'image/jpeg',
+        );
         const timestamp = new Date(filename).getTime();
         const fileUri = await this.guardarImagen(base64Data, `${timestamp}.jpg`);
         this.messageService.add({

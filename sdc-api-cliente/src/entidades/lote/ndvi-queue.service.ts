@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { ILote } from 'modelos/src';
 import Redis from 'ioredis';
@@ -185,7 +190,8 @@ export class NdviQueueService implements OnModuleInit, OnModuleDestroy {
     if (!this.enabled || !this.redis) {
       return {
         ...base,
-        reason: ENV === 'local' ? 'disabled-local-env' : 'redis-not-initialized',
+        reason:
+          ENV === 'local' ? 'disabled-local-env' : 'redis-not-initialized',
       };
     }
 

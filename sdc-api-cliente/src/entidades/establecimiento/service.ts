@@ -17,6 +17,7 @@ import {
   IEstacionLecturaHistorica,
   IEstacionLecturaDetalle,
   IValores,
+  IUsuario,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { EstablecimientosRepository } from './repository';
@@ -30,6 +31,11 @@ import {
 } from '../../auxiliares/fieldclimate-credentials';
 import { fieldClimateStatus } from '../../auxiliares/fieldclimate-status';
 import { DecisionPipelineQueueService } from '../../auxiliares/decision-pipeline';
+import {
+  establecimientosDelPermiso,
+  permisoPuedeVerEstablecimiento,
+} from '../../auxiliares/authorization/alcance-permiso';
+import { LotesRepository } from '../lote/repository';
 
 @Injectable()
 export class EstablecimientosService {
@@ -44,6 +50,8 @@ export class EstablecimientosService {
     private estacionsService: EstacionsService,
     @Optional()
     private readonly decisionPipelineQueue?: DecisionPipelineQueueService,
+    @Optional()
+    private readonly lotesRepository?: LotesRepository,
   ) {}
 
   async getById(id: string, permiso: IPermiso): Promise<IEstablecimiento> {
@@ -75,6 +83,11 @@ export class EstablecimientosService {
     data: ICreateEstablecimiento,
     permiso: IPermiso,
   ): Promise<IEstablecimiento> {
+    if (permiso.nivel === 'Asesor') {
+      throw new BadRequestException(
+        'El asesor gestiona productores; los establecimientos los crea el usuario productor',
+      );
+    }
     data = this.withoutAutomaticLocation(data);
     if (data.ubicacion?.length) {
       for (const u of data.ubicacion) {
@@ -95,6 +108,11 @@ export class EstablecimientosService {
     );
     data.idDistribuidor = productor.idDistribuidor;
     data.idQuimica = productor.idQuimica;
+    (data as ICreateEstablecimiento & { idTenant?: string }).idTenant =
+      productor.idTenant;
+    (
+      data as ICreateEstablecimiento & { idAsesorPropietario?: string }
+    ).idAsesorPropietario = productor.idAsesorPropietario;
     if (!this.puedeVer(data, permiso)) {
       throw new BadRequestException(
         'No tiene permiso para crear este establecimiento',
@@ -108,6 +126,11 @@ export class EstablecimientosService {
     data: IUpdateEstablecimiento,
     permiso: IPermiso,
   ): Promise<IEstablecimiento> {
+    if (permiso.nivel === 'Asesor') {
+      throw new BadRequestException(
+        'El asesor tiene acceso de supervision; la edicion corresponde al usuario productor',
+      );
+    }
     data = this.withoutAutomaticLocation(data);
     await this.getById(id, permiso);
     if (data.ubicacion?.length) {
@@ -145,9 +168,33 @@ export class EstablecimientosService {
     return updated;
   }
 
-  async delete(id: string, permiso: IPermiso): Promise<IEstablecimiento> {
+  async delete(
+    id: string,
+    permiso: IPermiso,
+    actor?: IUsuario,
+  ): Promise<IEstablecimiento> {
+    if (permiso.nivel === 'Asesor') {
+      throw new BadRequestException(
+        'El asesor tiene acceso de supervision; la eliminacion corresponde al usuario productor',
+      );
+    }
     await this.getById(id, permiso);
-    return await this.repository.delete(id);
+    const audit = {
+      archivadoPor: actor?.username || actor?._id || 'sistema',
+      motivoArchivado: 'Establecimiento archivado desde Chaman',
+    };
+    const lotes = await this.lotesRepository?.get({
+      page: 0,
+      limit: 0,
+      filter: JSON.stringify({ idEstablecimiento: id }),
+      select: '_id',
+    });
+    await Promise.all(
+      (lotes?.datos || []).map((item) =>
+        this.lotesRepository!.delete(String(item._id), audit),
+      ),
+    );
+    return await this.repository.delete(id, audit);
   }
 
   async refreshClimaDeEstablecimientos(): Promise<{
@@ -719,12 +766,26 @@ export class EstablecimientosService {
     if (permiso.nivel === 'Admin') {
       return true;
     }
+    if (permiso.nivel === 'Tenant') {
+      return (
+        !!permiso.idTenant &&
+        String(data.idTenant || '') === String(permiso.idTenant)
+      );
+    }
     if (permiso.nivel === 'Quimica') {
       return !data.idQuimica || data.idQuimica === permiso.idQuimica;
     }
     if (permiso.nivel === 'Distribuidor') {
       return (
         !data.idDistribuidor || data.idDistribuidor === permiso.idDistribuidor
+      );
+    }
+    if (permiso.nivel === 'Asesor') {
+      return (
+        (!data._id && !data.idAsesorPropietario) ||
+        String(data.idAsesorPropietario || '') ===
+          String(permiso.idAsesor || '') ||
+        (!!data._id && permisoPuedeVerEstablecimiento(permiso, data._id))
       );
     }
     if (permiso.nivel === 'Productor') {
@@ -742,11 +803,18 @@ export class EstablecimientosService {
     );
     const $and = filtro.$and || [];
 
+    if (permiso.nivel === 'Tenant') {
+      $and.push({ idTenant: permiso.idTenant });
+    }
+
     if (permiso.nivel === 'Quimica') {
       $and.push({ idQuimica: permiso.idQuimica });
     }
     if (permiso.nivel === 'Distribuidor') {
       $and.push({ idDistribuidor: permiso.idDistribuidor });
+    }
+    if (permiso.nivel === 'Asesor') {
+      $and.push({ _id: { $in: establecimientosDelPermiso(permiso) } });
     }
     if (permiso.nivel === 'Productor') {
       $and.push({ idProductor: permiso.idProductor });
@@ -766,6 +834,8 @@ export class EstablecimientosService {
     delete data.ubicacionAdministrativa;
     delete data.ubicacionAdministrativaLegada;
     delete data.ubicacionOficial;
+    delete data.idAsesorPropietario;
+    delete data.idTenant;
     return data;
   }
 }

@@ -1,6 +1,22 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { CronosService } from './service';
-import { ICrono, ICreateCrono, IListado, IQueryParam, IUpdateCrono } from 'modelos/src';
+import {
+  ICrono,
+  ICreateCrono,
+  IListado,
+  IQueryParam,
+  IUpdateCrono,
+} from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
@@ -38,7 +54,10 @@ export class CronosController {
 
   @Put('/:id')
   @Permisos({ nivel: 'Admin', roles: ['Admin'] })
-  public async update(@Param('id') id: string, @Body() body: IUpdateCrono): Promise<ICrono> {
+  public async update(
+    @Param('id') id: string,
+    @Body() body: IUpdateCrono,
+  ): Promise<ICrono> {
     return await this.service.update(id, body);
   }
 

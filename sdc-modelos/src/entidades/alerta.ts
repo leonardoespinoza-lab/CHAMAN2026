@@ -53,6 +53,7 @@ export interface IAlerta {
   idDistribuidor?: string;
   idProductor?: string;
   idEstablecimiento?: string;
+  idLote?: string;
   idSiembra?: string;
   // Datos Autogenerados
   fecha?: string;

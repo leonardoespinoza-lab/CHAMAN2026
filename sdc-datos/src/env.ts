@@ -16,6 +16,8 @@ export const DB_USER = process.env.DB_USER || '';
 export const DB_PASS = process.env.DB_PASS || '';
 
 export const DB_URL = DB_FULL_URI || `mongodb://${DB_HOST}:${DB_PORT}`;
+export const DB_AUTO_INDEX_ENABLED =
+  process.env.DB_AUTO_INDEX_ENABLED === 'true';
 export const AGROMETEO_INTERNAL_TOKEN =
   process.env.AGROMETEO_INTERNAL_TOKEN || '';
 export const LOT_LOCATION_INTERNAL_TOKEN =
@@ -78,4 +80,7 @@ export const DB_OPTIONS: MongooseModuleOptions = {
   ...authOptions,
   ...(DB_FULL_URI && !process.env.DB_NAME ? {} : { dbName: DB_NAME }),
   directConnection: ENV === 'local' && !DB_FULL_URI ? true : false,
+  // Production indexes are promoted only through reviewed, reversible
+  // migrations. Schema synchronization must be an explicit local/test opt-in.
+  autoIndex: DB_AUTO_INDEX_ENABLED,
 };

@@ -6,6 +6,11 @@ import { ILote } from './lote';
 import { IProductor } from './productor';
 import { IQuimica } from './quimica';
 
+/** Cobertura minima para conservar una escena como evidencia auditable. */
+export const SATELLITE_INGESTION_MIN_VALID_COVERAGE_PCT = 3;
+/** Cobertura minima para usar una escena en lecturas y decisiones operativas. */
+export const SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT = 50;
+
 export interface IMetadata {
   geojson: IGeoJSONPolygon;
   width: number;

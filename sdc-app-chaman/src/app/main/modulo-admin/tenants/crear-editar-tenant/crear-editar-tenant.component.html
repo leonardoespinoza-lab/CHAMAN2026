@@ -1,0 +1,102 @@
+<section class="tenant-editor">
+  <header>
+    <div>
+      <span class="eyebrow">{{ id ? 'Configuracion' : 'Provisionamiento' }}</span>
+      <h1>{{ id ? 'Editar tenant' : 'Crear tenant' }}</h1>
+      <p>Identidad, administrador, modulos y limites desde una unica configuracion auditable.</p>
+    </div>
+  </header>
+
+  <form [formGroup]="form" class="tenant-editor__layout">
+    <div class="tenant-editor__fields">
+      <article class="editor-card">
+        <h2>1. Identidad y acceso</h2>
+        <div class="form-grid">
+          <p-floatlabel variant="in"><input pInputText formControlName="nombre" (input)="onNameChange()" fluid /><label>Nombre comercial *</label></p-floatlabel>
+          <p-floatlabel variant="in"><input pInputText formControlName="slug" fluid /><label>Slug *</label></p-floatlabel>
+          <p-floatlabel variant="in"><input pInputText formControlName="razonSocial" fluid /><label>Razon social</label></p-floatlabel>
+          <p-floatlabel variant="in"><input pInputText formControlName="cuit" fluid /><label>CUIT</label></p-floatlabel>
+          <p-floatlabel variant="in" class="wide"><input pInputText formControlName="dominio" fluid /><label>Dominio o subdominio</label></p-floatlabel>
+        </div>
+        <div formGroupName="entidadRaiz" class="form-grid root-row">
+          <div><label>Entidad raiz</label><p-select formControlName="tipo" [options]="rootTypes" optionLabel="label" optionValue="value" fluid /></div>
+          <p-floatlabel variant="in"><input pInputText formControlName="nombre" fluid /><label>Nombre de referencia</label></p-floatlabel>
+          <p-floatlabel variant="in"><input pInputText formControlName="idEntidad" fluid /><label>ID existente (opcional)</label></p-floatlabel>
+        </div>
+      </article>
+
+      @if (!id || (tenant && !tenant.provisionado)) {
+        <article class="editor-card" formGroupName="administrador">
+          <h2>2. {{ id ? 'Recuperar administrador' : 'Administrador inicial' }}</h2>
+          <p class="card-help">{{ id ? 'El aprovisionamiento anterior no finalizo. Indique un usuario disponible para reintentarlo.' : 'Se crea junto con el tenant y solo accede a esta organizacion.' }}</p>
+          <div class="form-grid">
+            <p-floatlabel variant="in"><input pInputText formControlName="nombre" fluid autocomplete="name" /><label>Nombre *</label></p-floatlabel>
+            <p-floatlabel variant="in"><input pInputText formControlName="email" fluid autocomplete="email" /><label>Email</label></p-floatlabel>
+            <p-floatlabel variant="in"><input pInputText formControlName="username" fluid autocomplete="off" /><label>Usuario *</label></p-floatlabel>
+            <p-floatlabel variant="in"><input pInputText type="password" formControlName="password" fluid autocomplete="new-password" /><label>Contrasena temporal *</label></p-floatlabel>
+          </div>
+          <p class="card-help">{{ passwordPolicyText }}</p>
+        </article>
+      }
+
+      <article class="editor-card" formGroupName="branding">
+        <h2>{{ id ? '2' : '3' }}. Marca blanca</h2>
+        <div class="form-grid">
+          <p-floatlabel variant="in" class="wide"><input pInputText formControlName="nombreAplicacion" fluid /><label>Nombre de la aplicacion</label></p-floatlabel>
+          <label class="file-field wide"><span>Logo (max. 500 KB)</span><input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" (change)="onLogo($event)" /></label>
+          <label class="color-field">Primario <input type="color" formControlName="colorPrimario" /></label>
+          <label class="color-field">Secundario <input type="color" formControlName="colorSecundario" /></label>
+          <label class="color-field">Fondo <input type="color" formControlName="colorFondo" /></label>
+          <label class="check-field"><p-checkbox formControlName="mostrarMarcaChaman" [binary]="true" /> Mostrar respaldo Chaman</label>
+        </div>
+      </article>
+
+      <article class="editor-card">
+        <h2>{{ id ? '3' : '4' }}. Servicios habilitados</h2>
+        <div class="check-grid" formGroupName="modulos">
+          @for (module of modules; track module.key) {
+            <label><p-checkbox [formControlName]="module.key" [binary]="true" /> {{ module.label }}</label>
+          }
+        </div>
+      </article>
+
+      <article class="editor-card">
+        <h2>{{ id ? '4' : '5' }}. Gobierno y capacidad</h2>
+        <div class="check-grid" formGroupName="capacidades">
+          <label><p-checkbox formControlName="administrarCompanias" [binary]="true" /> Administrar companias</label>
+          <label><p-checkbox formControlName="administrarDistribuidores" [binary]="true" /> Administrar distribuidores</label>
+          <label><p-checkbox formControlName="administrarAsesores" [binary]="true" /> Administrar asesores</label>
+          <label><p-checkbox formControlName="administrarProductores" [binary]="true" /> Administrar productores</label>
+        </div>
+        <div class="limit-grid" formGroupName="limites">
+          <p-floatlabel variant="in"><input pInputText type="number" formControlName="usuarios" fluid /><label>Usuarios</label></p-floatlabel>
+          <p-floatlabel variant="in"><input pInputText type="number" formControlName="companias" fluid /><label>Companias</label></p-floatlabel>
+          <p-floatlabel variant="in"><input pInputText type="number" formControlName="distribuidores" fluid /><label>Distribuidores</label></p-floatlabel>
+          <p-floatlabel variant="in"><input pInputText type="number" formControlName="asesores" fluid /><label>Asesores</label></p-floatlabel>
+          <p-floatlabel variant="in"><input pInputText type="number" formControlName="productores" fluid /><label>Productores</label></p-floatlabel>
+          <p-floatlabel variant="in"><input pInputText type="number" formControlName="establecimientos" fluid /><label>Establecimientos</label></p-floatlabel>
+          <p-floatlabel variant="in"><input pInputText type="number" formControlName="lotes" fluid /><label>Lotes</label></p-floatlabel>
+          <p-floatlabel variant="in"><input pInputText type="number" formControlName="hectareas" fluid /><label>Hectareas</label></p-floatlabel>
+        </div>
+      </article>
+    </div>
+
+    <aside class="tenant-preview" [ngStyle]="previewStyle()">
+      <span>Vista previa</span>
+      <div class="preview-shell">
+        <div class="preview-brand">
+          @if (form.controls.branding.controls.logo.value) { <img [src]="form.controls.branding.controls.logo.value" alt="" /> }
+          <strong>{{ form.controls.branding.controls.nombreAplicacion.value || form.controls.nombre.value || 'Nueva plataforma' }}</strong>
+        </div>
+        <div class="preview-hero"><small>Panel del tenant</small><h3>Gestion agronomica</h3><p>Marca, funciones y usuarios propios.</p></div>
+        <button type="button">Accion principal</button>
+      </div>
+      <p><i class="pi pi-shield"></i> El administrador no accede a otros tenants.</p>
+    </aside>
+  </form>
+
+  <footer class="editor-actions">
+    <p-button label="Cancelar" severity="secondary" outlined="true" (onClick)="back()" />
+    <p-button [label]="id && tenant?.provisionado ? 'Guardar cambios' : id ? 'Guardar y provisionar' : 'Crear tenant y administrador'" icon="pi pi-check" [loading]="loading" (onClick)="save()" />
+  </footer>
+</section>

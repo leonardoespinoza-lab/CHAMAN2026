@@ -1,4 +1,14 @@
-<div class="custom-card phytosanitary-card" [ngClass]="nivelClase" (click)="abrirDetalle()">
+<div
+  class="custom-card chaman-surface chaman-interactive-surface phytosanitary-card"
+  [ngClass]="nivelClase"
+  role="button"
+  tabindex="0"
+  aria-label="Abrir detalle de carga fitosanitaria"
+  aria-haspopup="dialog"
+  [attr.aria-expanded]="verDetalle"
+  (click)="abrirDetalle()"
+  (keydown)="activarTarjeta($event)"
+>
   <div class="phytosanitary-header">
     <div class="title-block">
       <span class="icon-wrap"><i class="pi pi-shield"></i></span>

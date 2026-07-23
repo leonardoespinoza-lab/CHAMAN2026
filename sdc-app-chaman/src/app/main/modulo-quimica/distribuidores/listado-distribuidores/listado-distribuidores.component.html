@@ -105,6 +105,14 @@
           <div class="row-actions">
             <p-button
               [rounded]="true"
+              pTooltip="Ver red asociada"
+              icon="pi pi-eye"
+              severity="secondary"
+              [outlined]="true"
+              (click)="ver(row)"
+            ></p-button>
+            <p-button
+              [rounded]="true"
               pTooltip="Ver en mapa"
               icon="pi pi-map-marker"
               severity="info"
@@ -121,8 +129,8 @@
             ></p-button>
             <p-button
               [rounded]="true"
-              pTooltip="Eliminar"
-              icon="pi pi-trash"
+              pTooltip="Archivar"
+              icon="pi pi-archive"
               severity="danger"
               (click)="delete(row)"
               [disabled]="user?._id === row._id"

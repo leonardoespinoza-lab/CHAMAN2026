@@ -19,7 +19,13 @@ describe('fenologia termica de arveja', () => {
   it('convierte rangos por fase en umbrales acumulados y no inventa R3', () => {
     const hitos = construirHitosFenologiaArveja(referencia);
 
-    expect(hitos.map((hito) => hito.codigo)).toEqual(['S', 'E', 'R1', 'R3', 'MF']);
+    expect(hitos.map((hito) => hito.codigo)).toEqual([
+      'S',
+      'E',
+      'R1',
+      'R3',
+      'MF',
+    ]);
     expect(hitos[1]).toMatchObject({ umbralMinGdd: 125, umbralMaxGdd: 140 });
     expect(hitos[2]).toMatchObject({ umbralMinGdd: 810, umbralMaxGdd: 900 });
     expect(hitos[3]).toMatchObject({ calculable: false });
@@ -78,7 +84,12 @@ describe('fenologia termica de arveja', () => {
           fuente: 'FieldClimate',
           temperatura: { min: 3, max: 15, avg: 9 },
           lluvia: { sum: 1.2 },
-          calidadDatos: { nivel: 'alta', fuente: 'estacion_asociada', cobertura: 1, fallback: false },
+          calidadDatos: {
+            nivel: 'alta',
+            fuente: 'estacion_asociada',
+            cobertura: 1,
+            fallback: false,
+          },
         },
       ]),
     };

@@ -1,4 +1,4 @@
-<div class="custom-card ndvi-card">
+<div class="custom-card chaman-surface ndvi-card">
   <div class="ndvi-header">
     <svg [style.fill]="'var(--p-text-color)'" [attr.width]="'38px'" [attr.height]="'38px'">
       <use [attr.xlink:href]="'icons/icons.svg#plantas'"></use>
@@ -24,17 +24,6 @@
       <strong class="ndvi-balance" [ngClass]="[analisis.tono, imagenAtrasada ? 'stale' : '']">
         {{ estadoEscenaSatelital }}
       </strong>
-      @if (!helper.soloLectura()) {
-        <p-button
-          icon="pi pi-satellite"
-          label="Buscar nueva escena"
-          [loading]="generandoSatelital"
-          [disabled]="generandoSatelital"
-          severity="secondary"
-          [outlined]="true"
-          (click)="generarNdviSatelital($event)"
-        />
-      }
     </div>
   </div>
   <p class="satellite-sync-note">{{ notaEscenaSatelital }}</p>
@@ -49,7 +38,7 @@
         @for (indicator of satelliteIndicators; track indicator.key) {
           <button
             type="button"
-            class="layer-tab"
+            class="layer-tab chaman-interactive-surface"
             [class.active]="capaActiva.key === indicator.key"
             [disabled]="indicator.status !== 'activo'"
             [attr.aria-pressed]="capaActiva.key === indicator.key"
@@ -69,9 +58,17 @@
       </div>
       <div class="timeline-strip">
         @for (r of ndvis; track r._id || $index) {
-          <button type="button" class="timeline-item" [class.active]="reporte === r" (click)="onSelect(r)">
-            <span>{{ r.fechaDeLaImagen | date: 'd MMM' }}</span>
-            <strong>{{ r.ndviPromedio | number: '1.0-3' }}</strong>
+          <button
+            type="button"
+            class="timeline-item chaman-interactive-surface"
+            [class.active]="reporte === r"
+            [attr.aria-pressed]="reporte === r"
+            (click)="onSelect(r)"
+          >
+            <span>{{ fechaEscena(r) | date: 'd MMM' }}</span>
+            @if (valorNdviEscena(r) !== null) {
+              <strong>{{ valorNdviEscena(r) | number: '1.0-3' }}</strong>
+            }
           </button>
         }
       </div>
@@ -145,12 +142,6 @@
               <small>{{ resumenQaCapaActiva }}</small>
             }
           </div>
-          @if (!satelliteRasterVisible) {
-            <div class="satellite-raster-warning">
-              <strong>{{ satelliteRasterWarningTitle }}</strong>
-              <span>{{ satelliteRasterWarningMessage }}</span>
-            </div>
-          }
           @if (satelliteRasterVisible && leyendaCapaActiva.length) {
             <div class="satellite-map-legend">
               @for (item of leyendaCapaActiva; track item.label) {
@@ -210,41 +201,24 @@
     </section>
   } @else {
     <div class="empty-ndvi">
-      <p-message severity="info">{{ 'No hay reportes de NDVI para este lote' | translate }}</p-message>
-      <small>
-        En produccion se genera con el worker satelital. En local podes crear una muestra para probar la tarjeta.
-      </small>
-      <section class="ndvi-analysis empty" [ngClass]="analisis.tono">
-        <div class="analysis-main">
-          <span>Lectura agronomica</span>
-          <strong>{{ analisis.estado }}</strong>
-          <p>{{ analisis.recomendacion }}</p>
+      <section class="satellite-availability-empty">
+        <i class="pi pi-cloud"></i>
+        <div>
+          <strong>Esperando una escena satelital limpia</strong>
+          <p>La tarjeta se habilitara automaticamente cuando haya una imagen con calidad suficiente para interpretar el lote.</p>
         </div>
       </section>
       @if (!helper.soloLectura()) {
         <p-button
           icon="pi pi-satellite"
-          label="Generar satelite"
+          label="Buscar nueva escena"
           [loading]="generandoSatelital"
           [disabled]="generandoSatelital"
-          [fluid]="true"
+          severity="secondary"
+          [outlined]="true"
           (click)="generarNdviSatelital($event)"
         />
       }
-      <section class="satellite-details-cta empty-module">
-        <div>
-          <span>Capas preparadas</span>
-          <strong>{{ satelliteIndicators.length }} índices listos para procesar</strong>
-          <small>Consultá qué aporta cada índice mientras se obtiene la primera escena limpia.</small>
-        </div>
-        <p-button
-          icon="pi pi-info-circle"
-          label="Conocer los índices"
-          severity="secondary"
-          [outlined]="true"
-          (onClick)="abrirDetalleCapas()"
-        />
-      </section>
     </div>
   }
 

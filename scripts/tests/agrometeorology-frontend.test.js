@@ -26,24 +26,28 @@ const cardTs = fs.readFileSync(
   "utf8",
 );
 
-test("fenologia, frio y variables meteorologicas conservan el orden agronomico", () => {
+test("fenologia queda junto al detalle operativo y frio precede las variables meteorologicas", () => {
+  const detailStart = detail.indexOf(
+    '<section class="custom-card lot-summary-card">',
+  );
+  const detailEnd = detail.indexOf("</section>", detailStart);
+  const phenologyStart = detail.indexOf("<app-card-etapas-fenologicas");
   const phenologyEnd = detail.indexOf("</app-card-etapas-fenologicas>");
   const coldStart = detail.indexOf("<app-card-frio-termico");
   const coldEnd = detail.indexOf("</app-card-frio-termico>");
   const agrometStart = detail.indexOf("<app-card-calculos-meteorologicos");
-  assert.ok(phenologyEnd >= 0);
+
+  assert.ok(detailStart >= 0);
+  assert.ok(detailEnd > detailStart);
+  assert.ok(phenologyStart > detailEnd);
+  assert.match(
+    detail.slice(detailEnd + "</section>".length, phenologyStart).trim(),
+    /^@if\s*\(\s*siembra\s*&&\s*!siembra\.fechaCosecha\s*&&\s*helper\.puedeVerModulo\('EtapasFenologicas'\)\s*\)\s*\{$/,
+  );
+  assert.ok(phenologyEnd > phenologyStart);
   assert.ok(coldStart > phenologyEnd);
   assert.ok(coldEnd > coldStart);
   assert.ok(agrometStart > coldEnd);
-  assert.equal(
-    detail
-      .slice(
-        phenologyEnd + "</app-card-etapas-fenologicas>".length,
-        coldStart,
-      )
-      .trim(),
-    "",
-  );
   assert.equal(
     detail
       .slice(coldEnd + "</app-card-frio-termico>".length, agrometStart)

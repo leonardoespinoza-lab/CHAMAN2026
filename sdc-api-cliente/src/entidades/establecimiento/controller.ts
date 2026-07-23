@@ -17,12 +17,14 @@ import {
   ICreateEstablecimiento,
   IUpdateEstablecimiento,
   IPermiso,
+  IUsuario,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 import { GetPermiso } from '../../auxiliares/authorization/get-permiso.decorator';
 import { PERMISOS_AUTENTICADOS } from '../../auxiliares/authorization/permisos-authenticados';
+import { GetUser } from '../../auxiliares/authorization/get-token.decorator';
 
 @ApiTags('Establecimientos')
 @Controller('establecimientos')
@@ -81,7 +83,8 @@ export class EstablecimientosController {
   public async delete(
     @Param('id') id: string,
     @GetPermiso() permiso: IPermiso,
+    @GetUser() user: IUsuario,
   ): Promise<IEstablecimiento> {
-    return await this.service.delete(id, permiso);
+    return await this.service.delete(id, permiso, user);
   }
 }

@@ -1,40 +1,42 @@
-const { spawnSync } = require('child_process');
-const { resolveService } = require('./railway-services');
-const { ensureSharedPackages } = require('./shared-packages');
+const { spawnSync } = require("child_process");
+const { resolveService } = require("./railway-services");
+const { ensureSharedPackages } = require("./shared-packages");
 
 const service = resolveService();
 
 console.log(`Starting CHAMAN service: ${service.name}`);
 
-const cwd = service.name === 'sdc-app-chaman' ? process.cwd() : service.path;
+const cwd = service.name === "sdc-app-chaman" ? process.cwd() : service.path;
 
 ensureSharedPackages({ compilerCwd: cwd });
 
-const runtimeEnv = String(process.env.ENV || process.env.NODE_ENV || '').toLowerCase();
+const runtimeEnv = String(
+  process.env.ENV || process.env.NODE_ENV || "",
+).toLowerCase();
 const validatedServices = new Set([
-  'sdc-app-chaman',
-  'sdc-api-cliente',
-  'sdc-auth',
-  'sdc-datos',
-  'sdc-api-predicciones',
-  'sdc-api-clima',
-  'sdc-api-lora',
-  'sdc-api-externa',
-  'sdc-websocket',
-  'sdc-ndvi-worker',
+  "sdc-app-chaman",
+  "sdc-api-cliente",
+  "sdc-auth",
+  "sdc-datos",
+  "sdc-api-predicciones",
+  "sdc-api-clima",
+  "sdc-api-lora",
+  "sdc-api-externa",
+  "sdc-websocket",
+  "sdc-ndvi-worker",
 ]);
 if (
-  runtimeEnv === 'production' &&
+  runtimeEnv === "production" &&
   validatedServices.has(service.name) &&
-  process.env.CHAMAN_SKIP_STARTUP_VALIDATION !== 'true'
+  process.env.CHAMAN_SKIP_STARTUP_VALIDATION !== "true"
 ) {
   const validation = spawnSync(
     process.execPath,
-    ['scripts/validate-production-config.js'],
+    ["scripts/validate-production-config.js"],
     {
       cwd: process.cwd(),
       shell: false,
-      stdio: 'inherit',
+      stdio: "inherit",
       env: process.env,
     },
   );
@@ -46,28 +48,32 @@ if (
 // Las migraciones de catalogo son una operacion de release explicita. Nunca se
 // ejecutan por el mero reinicio de una replica o por un redeploy sin opt-in.
 if (
-  service.name === 'sdc-datos' &&
-  process.env.CHAMAN_RUN_CATALOG_MIGRATION_ON_START === 'true'
+  service.name === "sdc-datos" &&
+  process.env.CHAMAN_RUN_CATALOG_MIGRATION_ON_START === "true"
 ) {
-  const bootstrap = spawnSync(process.execPath, ['scripts/bootstrap-agro-catalogs.js'], {
-    cwd: process.cwd(),
-    shell: false,
-    stdio: 'inherit',
-    env: process.env,
-  });
+  const bootstrap = spawnSync(
+    process.execPath,
+    ["scripts/bootstrap-agro-catalogs.js"],
+    {
+      cwd: process.cwd(),
+      shell: false,
+      stdio: "inherit",
+      env: process.env,
+    },
+  );
 
   if (bootstrap.status !== 0) {
     process.exit(bootstrap.status || 1);
   }
 
-  if (process.env.CHAMAN_TESTING_BOOTSTRAP === 'true') {
+  if (process.env.CHAMAN_TESTING_BOOTSTRAP === "true") {
     const bootstrapAdmin = spawnSync(
       process.execPath,
-      ['scripts/seed-testing-admin.js'],
+      ["scripts/seed-testing-admin.js"],
       {
         cwd: process.cwd(),
         shell: false,
-        stdio: 'inherit',
+        stdio: "inherit",
         env: process.env,
       },
     );
@@ -81,17 +87,17 @@ if (
 // Migracion sanitaria de soja: opt-in, reversible y separada del bootstrap.
 // El modo plan no escribe; apply/rollback exigen la confirmacion propia del script.
 if (
-  service.name === 'sdc-datos' &&
-  process.env.CHAMAN_RUN_SOJA_RECSO_MIGRATION_ON_START === 'true'
+  service.name === "sdc-datos" &&
+  process.env.CHAMAN_RUN_SOJA_RECSO_MIGRATION_ON_START === "true"
 ) {
-  const mode = process.env.CHAMAN_SOJA_RECSO_MIGRATION_MODE || 'plan';
+  const mode = process.env.CHAMAN_SOJA_RECSO_MIGRATION_MODE || "plan";
   const migration = spawnSync(
     process.execPath,
-    ['scripts/migrations/20260712-soja-recso-matrix-v2.js', mode],
+    ["scripts/migrations/20260712-soja-recso-matrix-v2.js", mode],
     {
       cwd: process.cwd(),
       shell: false,
-      stdio: 'inherit',
+      stdio: "inherit",
       env: process.env,
     },
   );
@@ -105,18 +111,48 @@ if (
 // Se ejecuta dentro de Railway para resolver la red privada de MongoDB. El
 // modo apply conserva lotes y perfiles legacy y exige confirmacion explicita.
 if (
-  service.name === 'sdc-datos' &&
-  process.env.CHAMAN_RUN_SOIL_INTELLIGENCE_MIGRATION_ON_START === 'true'
+  service.name === "sdc-datos" &&
+  process.env.CHAMAN_RUN_SOIL_INTELLIGENCE_MIGRATION_ON_START === "true"
 ) {
-  const mode =
-    process.env.CHAMAN_SOIL_INTELLIGENCE_MIGRATION_MODE || 'plan';
+  const mode = process.env.CHAMAN_SOIL_INTELLIGENCE_MIGRATION_MODE || "plan";
   const migration = spawnSync(
     process.execPath,
-    ['scripts/migrations/20260714-soil-intelligence.js', mode],
+    ["scripts/migrations/20260714-soil-intelligence.js", mode],
     {
       cwd: process.cwd(),
       shell: false,
-      stdio: 'inherit',
+      stdio: "inherit",
+      env: process.env,
+    },
+  );
+
+  if (migration.status !== 0) {
+    process.exit(migration.status || 1);
+  }
+}
+
+// Indices unicos compatibles con archivado logico: el arranque de una replica
+// solo puede ejecutar plan (lectura). Apply/rollback deben correr en un job
+// singleton separado: Railway puede iniciar varias replicas en paralelo y una
+// migracion destructiva nunca debe formar parte del startup de la aplicacion.
+if (
+  service.name === "sdc-datos" &&
+  process.env.CHAMAN_RUN_ACTIVE_INDEX_MIGRATION_ON_START === "true"
+) {
+  const mode = process.env.CHAMAN_ACTIVE_INDEX_MIGRATION_MODE || "plan";
+  if (mode !== "plan") {
+    console.error(
+      "CHAMAN_ACTIVE_INDEX_MIGRATION_MODE solo admite plan durante railway:start. Ejecute apply/rollback como job singleton separado.",
+    );
+    process.exit(1);
+  }
+  const migration = spawnSync(
+    process.execPath,
+    ["scripts/migrations/20260723-active-unique-indexes.js", mode],
+    {
+      cwd: process.cwd(),
+      shell: false,
+      stdio: "inherit",
       env: process.env,
     },
   );
@@ -129,7 +165,7 @@ if (
 const result = spawnSync(service.start, {
   cwd,
   shell: true,
-  stdio: 'inherit',
+  stdio: "inherit",
   env: process.env,
 });
 

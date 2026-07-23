@@ -14,6 +14,7 @@ import {
   IUbicacionAdministrativaLote,
 } from "./ubicacion-lote";
 import { TFuentePropiedadSuelo } from "./suelo-inteligencia";
+import { IArchivado } from "../compartidos/archivado";
 
 export type TTexturaSuelo =
   | "Arcilloso"
@@ -92,8 +93,12 @@ export interface ICalidadClima {
   nivel?: number; // Nivel general (el peor de los de arriba)
 }
 
-export interface ILote {
+export interface ILote extends IArchivado {
   _id?: string;
+  /** Tenant heredado del establecimiento; no puede ser elegido por el cliente. */
+  idTenant?: string;
+  /** Heredado del establecimiento; no puede ser elegido por el cliente. */
+  idAsesorPropietario?: string;
   nombre?: string;
   ubicacion?: IUbicacion;
   capacidadDeCampo?: number;
@@ -142,6 +147,8 @@ export interface ILote {
 
 type OmitirCreate =
   | "_id"
+  | "idTenant"
+  | "idAsesorPropietario"
   | "quimica"
   | "distribuidor"
   | "productor"
@@ -156,6 +163,8 @@ export interface ICreateLote extends Omit<Partial<ILote>, OmitirCreate> {}
 
 type OmitirUpdate =
   | "_id"
+  | "idTenant"
+  | "idAsesorPropietario"
   | "quimica"
   | "distribuidor"
   | "productor"

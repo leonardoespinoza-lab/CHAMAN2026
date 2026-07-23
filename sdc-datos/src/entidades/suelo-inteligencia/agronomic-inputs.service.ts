@@ -157,6 +157,8 @@ export class SoilAgronomicInputsService {
       coarseFragmentsPercentage: summary?.coarseFragmentsPercentage,
       ph: summary?.ph,
       organicCarbonGKg: summary?.organicCarbonGKg,
+      organicMatterEstimatedPercentage:
+        summary?.organicMatterEstimatedPercentage,
       source: this.summarySource(selected, assessment),
       confidence: selected?.confidence,
       warnings: assessment.warnings,

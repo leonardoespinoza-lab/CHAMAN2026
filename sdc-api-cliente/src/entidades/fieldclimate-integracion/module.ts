@@ -8,6 +8,9 @@ import { DecisionPipelineModule } from '../../auxiliares/decision-pipeline';
 @Module({
   imports: [AxiosModule, DecisionPipelineModule],
   controllers: [FieldClimateIntegracionController],
-  providers: [FieldClimateIntegracionService, FieldClimateIntegracionRepository],
+  providers: [
+    FieldClimateIntegracionService,
+    FieldClimateIntegracionRepository,
+  ],
 })
 export class FieldClimateIntegracionModule {}

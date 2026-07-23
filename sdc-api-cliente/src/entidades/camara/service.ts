@@ -122,7 +122,9 @@ export class CamarasService {
     const reemplazar = body?.reemplazar !== false;
 
     const actuales = await this.getLotesPorSeriales([serial]);
-    const actualesIds = new Set(actuales.map((lote) => lote._id).filter(Boolean));
+    const actualesIds = new Set(
+      actuales.map((lote) => lote._id).filter(Boolean),
+    );
     const nuevosIds = new Set(idsLote);
 
     if (reemplazar) {
@@ -138,7 +140,9 @@ export class CamarasService {
 
     const aVincular = idsLote.filter((id) => !actualesIds.has(id));
     await Promise.all(
-      aVincular.map((id) => this.repository.updateLote(id, { serialCamara: serial })),
+      aVincular.map((id) =>
+        this.repository.updateLote(id, { serialCamara: serial }),
+      ),
     );
 
     const lotes = await this.getLotesPorSeriales([serial]);
@@ -250,7 +254,9 @@ export class CamarasService {
   }
 
   private normalizarSerial(value: unknown): string {
-    return String(value || '').trim().toUpperCase();
+    return String(value || '')
+      .trim()
+      .toUpperCase();
   }
 
   private requerirSerial(value: unknown): string {

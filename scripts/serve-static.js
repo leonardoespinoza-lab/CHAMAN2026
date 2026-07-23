@@ -1,5 +1,6 @@
 const fs = require('fs');
 const http = require('http');
+const https = require('https');
 const path = require('path');
 const zlib = require('zlib');
 
@@ -54,9 +55,110 @@ function runtimeConfigScript() {
     API: process.env.CHAMAN_WEB_API_URL || process.env.API_URL || process.env.API || '',
     WS: process.env.CHAMAN_WEB_WS_URL || process.env.WS_URL || process.env.WS || '',
     TILES_URL: process.env.CHAMAN_WEB_TILES_URL || process.env.TILES_URL || '',
+    COOKIE_AUTH: process.env.CHAMAN_COOKIE_AUTH_ENABLED === 'true',
   };
 
   return `window.__CHAMAN_CONFIG__ = ${JSON.stringify(config)};`;
+}
+
+function apiBaseUrl() {
+  return process.env.CHAMAN_WEB_API_URL || process.env.API_URL || process.env.API || '';
+}
+
+function isLegacyApiRequest(req, pathname) {
+  if (pathname === '/health' || pathname.startsWith('/runtime-config.')) {
+    return false;
+  }
+
+  const method = String(req.method || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') {
+    return true;
+  }
+
+  const accept = String(req.headers.accept || '').toLowerCase();
+  return accept.includes('application/json') && !accept.includes('text/html');
+}
+
+function rewriteProxyCookies(cookies, upstreamAuthPath) {
+  if (!Array.isArray(cookies)) {
+    return cookies;
+  }
+
+  const escapedPath = upstreamAuthPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pathPattern = new RegExp(`Path=${escapedPath}(?=;|$)`, 'i');
+  return cookies.map((cookie) => cookie.replace(pathPattern, 'Path=/auth'));
+}
+
+function proxyApiRequest(req, res) {
+  const configuredBase = apiBaseUrl();
+  if (!configuredBase) {
+    res.writeHead(503, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(JSON.stringify({ message: 'API de Chaman no configurada' }));
+    return;
+  }
+
+  let target;
+  let upstreamAuthPath;
+  try {
+    const base = new URL(configuredBase);
+    const incoming = new URL(req.url || '/', 'http://chaman.local');
+    const basePath = base.pathname.replace(/\/$/, '');
+    base.pathname = `${basePath}${incoming.pathname.startsWith('/') ? incoming.pathname : `/${incoming.pathname}`}`;
+    base.search = incoming.search;
+    target = base;
+    upstreamAuthPath = `${basePath}/auth`;
+  } catch (error) {
+    res.writeHead(503, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    res.end(JSON.stringify({ message: 'API de Chaman mal configurada' }));
+    return;
+  }
+
+  const transport = target.protocol === 'https:' ? https : http;
+  const originalHost = String(req.headers.host || '');
+  const headers = {
+    ...req.headers,
+    host: target.host,
+    'x-forwarded-host': originalHost,
+    'x-forwarded-proto': String(req.headers['x-forwarded-proto'] || 'https'),
+  };
+
+  const upstream = transport.request(
+    target,
+    { method: req.method, headers },
+    (upstreamResponse) => {
+      const responseHeaders = { ...upstreamResponse.headers };
+      responseHeaders['cache-control'] = 'no-store';
+      if (responseHeaders['set-cookie']) {
+        responseHeaders['set-cookie'] = rewriteProxyCookies(
+          responseHeaders['set-cookie'],
+          upstreamAuthPath,
+        );
+      }
+      res.writeHead(upstreamResponse.statusCode || 502, responseHeaders);
+      upstreamResponse.pipe(res);
+    },
+  );
+
+  upstream.on('error', (error) => {
+    if (!res.headersSent) {
+      res.writeHead(502, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      });
+    }
+    res.end(JSON.stringify({ message: 'No se pudo contactar la API de Chaman' }));
+  });
+
+  req.pipe(upstream);
 }
 
 function safeResolve(urlPath) {
@@ -141,7 +243,9 @@ function sendFile(req, res, filePath) {
 }
 
 const server = http.createServer((req, res) => {
-  if ((req.url || '').split('?')[0] === '/health') {
+  const pathname = (req.url || '').split('?')[0];
+
+  if (pathname === '/health') {
     res.writeHead(200, {
       'Content-Type': 'text/plain; charset=utf-8',
       'Cache-Control': 'no-cache',
@@ -151,13 +255,21 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if ((req.url || '').split('?')[0] === '/runtime-config.js') {
+  if (pathname === '/runtime-config.js' || pathname === '/runtime-config.bootstrap') {
     res.writeHead(200, {
       'Content-Type': 'text/javascript; charset=utf-8',
       'Cache-Control': 'no-cache',
       'X-Content-Type-Options': 'nosniff',
     });
     res.end(runtimeConfigScript());
+    return;
+  }
+
+  // Compatibilidad para sesiones que conservaron un runtime-config.js viejo.
+  // En vez de entregar index.html a HttpClient, las solicitudes de API se
+  // encaminan al backend configurado para el ambiente actual.
+  if (isLegacyApiRequest(req, pathname)) {
+    proxyApiRequest(req, res);
     return;
   }
 

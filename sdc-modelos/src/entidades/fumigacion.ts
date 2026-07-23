@@ -13,6 +13,7 @@ export interface IFumigacion {
   idDistribuidor?: string;
   idProductor?: string;
   idEstablecimiento?: string;
+  idLote?: string;
   // Datos Autogenerados
   fechaCreacion?: string;
   // Info de Fumigación
