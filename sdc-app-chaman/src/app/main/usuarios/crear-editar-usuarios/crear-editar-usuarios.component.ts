@@ -112,7 +112,7 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
     private tenantService: TenantService,
     private helper: HelperService,
     private listado: ListadosService,
-    private loginService: LoginService,
+    public loginService: LoginService,
     private router: Router,
     private route: ActivatedRoute,
   ) {}
@@ -152,7 +152,13 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
       idEstablecimientos: new FormControl(p?.idEstablecimientos || []),
       idLotes: new FormControl(p?.idLotes || []),
       idDistribuidor: new FormControl(p?.idDistribuidor || this.productorPreseleccionado?.idDistribuidor),
-      idQuimica: new FormControl(p?.idQuimica || this.productorPreseleccionado?.idQuimica),
+      idQuimica: new FormControl(
+        p?.idQuimica ||
+          this.productorPreseleccionado?.idQuimica ||
+          (permisoActual?.nivel === 'Quimica'
+            ? permisoActual.idQuimica
+            : undefined),
+      ),
       modulos: this.crearModulosFormGroup(p?.modulos),
     });
   }
@@ -274,6 +280,16 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
       idQuimica?.setValidators(Validators.required);
       if (this.quimicas.length === 1) {
         idQuimica?.setValue(this.quimicas[0]._id);
+      }
+    } else if (nivel === 'Asesor') {
+      if (this.loginService.esQuimica) {
+        idQuimica?.setValue(this.helper.permiso?.idQuimica);
+        idDistribuidor?.setValue(null);
+      } else if (!this.loginService.esTenant) {
+        idQuimica?.setValidators(Validators.required);
+        if (!idQuimica?.value && this.quimicas.length === 1) {
+          idQuimica?.setValue(this.quimicas[0]._id);
+        }
       }
     }
     idProductor?.updateValueAndValidity();
@@ -727,7 +743,7 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
     } else if (this.loginService.esQuimica) {
       this.niveles = ['Quimica', 'Distribuidor', 'Asesor', 'Productor', 'Establecimiento'];
     } else if (this.loginService.esDistribuidor) {
-      this.niveles = ['Distribuidor', 'Asesor', 'Productor', 'Establecimiento'];
+      this.niveles = ['Distribuidor', 'Productor', 'Establecimiento'];
     } else if (this.loginService.esAsesor) {
       this.niveles = ['Productor'];
     } else if (this.loginService.esProductor) {
@@ -752,7 +768,7 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
         : null,
       !this.loginService.esTenant ? this.listarEstablecimientos() : null,
       !this.loginService.esTenant ? this.listarLotes() : null,
-      this.loginService.esDistribuidor || this.loginService.esQuimica || this.loginService.esAdmin
+      this.loginService.esDistribuidor || this.loginService.esAdmin
         ? this.listarDistribuidores()
         : null,
       this.loginService.esQuimica || this.loginService.esAdmin ? this.listarQuimicas() : null,

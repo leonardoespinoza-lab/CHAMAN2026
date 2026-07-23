@@ -1,5 +1,5 @@
 import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import {
   clasificarNivelRiesgoSanitario,
@@ -130,8 +130,13 @@ export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestr
     private quimicaService: QuimicaService,
     private translate: TranslateService,
     private activatedRoute: ActivatedRoute,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private router: Router
   ) {}
+
+  public crearAsesor(): void {
+    void this.router.navigate(['/usuarios/crear/asesor']);
+  }
 
   public seleccionarDistribuidor(resumen?: IResumenDistribuidor): void {
     this.distribuidorSeleccionado = resumen;

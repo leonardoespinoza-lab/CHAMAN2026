@@ -66,7 +66,7 @@ describe('UsuariosService - alcance y perfil del asesor', () => {
     };
   };
 
-  it('crea un asesor solo con establecimientos del distribuidor y ubicacion profesional', async () => {
+  it('la compania crea un asesor hermano con su alcance canonico y ubicacion profesional', async () => {
     const { service, repository } = crearServicio();
     await service.create(
       {
@@ -76,7 +76,8 @@ describe('UsuariosService - alcance y perfil del asesor', () => {
           {
             nivel: 'Asesor',
             rol: 'Admin',
-            idDistribuidor: 'dist-1',
+            idQuimica: 'quimica-manipulada',
+            idDistribuidor: 'dist-manipulado',
             idEstablecimientos: ['est-1', 'est-2'],
           },
         ],
@@ -86,7 +87,7 @@ describe('UsuariosService - alcance y perfil del asesor', () => {
           radioInfluenciaKm: 80,
         },
       } as any,
-      { nivel: 'Distribuidor', rol: 'Admin', idDistribuidor: 'dist-1' },
+      { nivel: 'Quimica', rol: 'Admin', idQuimica: 'quim-1' },
       { _id: 'actor-1' } as any,
     );
 
@@ -96,9 +97,9 @@ describe('UsuariosService - alcance y perfil del asesor', () => {
     expect(guardado.creadoPorUsuario).toBe('actor-1');
     expect(guardado.permisos[0]).toMatchObject({
       idQuimica: 'quim-1',
-      idDistribuidor: 'dist-1',
       idEstablecimientos: ['est-1', 'est-2'],
     });
+    expect(guardado.permisos[0].idDistribuidor).toBeUndefined();
   });
 
   it('permite un asesor independiente con establecimientos de distintas redes', async () => {

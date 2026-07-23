@@ -101,22 +101,23 @@
                           @if (nivel(i) === 'Asesor') {
                             <div class="advisor-scope">
                               <div class="advisor-scope-heading">
-                                <strong>Cartera inicial del asesor</strong>
-                                <span>Puede comenzar sin establecimientos y crear su propia cartera al iniciar sesion.</span>
+                                <strong>Red comercial del asesor</strong>
+                                <span>El asesor administra productores y supervisa su red con la misma logica operativa de un distribuidor.</span>
                               </div>
-                              <p-floatlabel variant="in" class="mb-4">
-                                <p-select
-                                  [loading]="loading"
-                                  [options]="distribuidores"
-                                  formControlName="idDistribuidor"
-                                  [fluid]="true"
-                                  [appendTo]="'body'"
-                                  optionValue="_id"
-                                  optionLabel="nombre"
-                                  (onChange)="cambioDistribuidorAsesor(i)"
-                                />
-                                <label>Distribuidor de referencia (opcional)</label>
-                              </p-floatlabel>
+                              @if (!loginService.esTenant && !loginService.esQuimica) {
+                                <p-floatlabel variant="in" class="mb-4">
+                                  <p-select
+                                    [loading]="loading"
+                                    [options]="quimicas"
+                                    formControlName="idQuimica"
+                                    [fluid]="true"
+                                    [appendTo]="'body'"
+                                    optionValue="_id"
+                                    optionLabel="nombre"
+                                  />
+                                  <label>Compania responsable</label>
+                                </p-floatlabel>
+                              }
                               <p-floatlabel variant="in" class="mb-4">
                                 <p-multiselect
                                   [loading]="loading"
@@ -131,7 +132,7 @@
                                 />
                                 <label>Establecimientos iniciales (opcional)</label>
                               </p-floatlabel>
-                              <small>El distribuidor identifica un patrocinador comercial opcional. El asesor crea y administra productores; visualiza los establecimientos, lotes y servicios que esos productores generen.</small>
+                              <small>La compania se asigna desde la sesion de forma segura. El asesor crea y administra productores; visualiza los establecimientos, lotes y servicios que esos productores generen.</small>
                             </div>
                           }
 

@@ -56,7 +56,9 @@ describe('app route access matrix', () => {
 
   it('reserva la creación directa de Asesor al Tenant Admin', () => {
     expect(route('usuarios/crear/asesor').data?.['niveles']).toEqual([
+      'Admin',
       'Tenant',
+      'Quimica',
     ]);
     expect(route('usuarios/crear/asesor').data?.['roles']).toEqual(['Admin']);
   });
