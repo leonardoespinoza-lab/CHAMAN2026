@@ -7,11 +7,13 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { Response } from 'express';
 import { FotosService } from './service';
 import { IListado, IQueryParam, IPermiso, IFoto, IUpdateFoto, IUsuario } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
@@ -32,8 +34,16 @@ export class FotosController {
   async getImage(
     @Query('id') id: string,
     @GetPermiso() permiso: IPermiso,
-  ): Promise<any> {
-    return await this.service.getImagen(id, permiso);
+    @Res() res: Response,
+  ): Promise<void> {
+    const image = await this.service.getImagen(id, permiso);
+    res.setHeader('Content-Type', imageContentType(image));
+    res.setHeader('Content-Length', String(image.length));
+    res.setHeader(
+      'Cache-Control',
+      'private, max-age=300, stale-while-revalidate=60',
+    );
+    res.send(image);
   }
 
   @Get()
@@ -129,4 +139,31 @@ export class FotosController {
   ): Promise<IFoto> {
     return await this.service.delete(id, permiso);
   }
+}
+
+export function imageContentType(image: Buffer): string {
+  if (
+    image.length >= 8 &&
+    image
+      .subarray(0, 8)
+      .equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  ) {
+    return 'image/png';
+  }
+  if (
+    image.length >= 12 &&
+    image.toString('ascii', 0, 4) === 'RIFF' &&
+    image.toString('ascii', 8, 12) === 'WEBP'
+  ) {
+    return 'image/webp';
+  }
+  if (
+    image.length >= 3 &&
+    image[0] === 0xff &&
+    image[1] === 0xd8 &&
+    image[2] === 0xff
+  ) {
+    return 'image/jpeg';
+  }
+  return 'application/octet-stream';
 }

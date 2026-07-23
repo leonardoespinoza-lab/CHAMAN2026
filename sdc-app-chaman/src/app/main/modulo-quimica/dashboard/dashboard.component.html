@@ -19,6 +19,14 @@
       <button
         pButton
         type="button"
+        icon="pi pi-user-plus"
+        [label]="'Crear asesor' | translate"
+        class="advisor-button"
+        (click)="crearAsesor()"
+      ></button>
+      <button
+        pButton
+        type="button"
         icon="pi pi-file-pdf"
         [label]="'Exportar PDF' | translate"
         class="export-button"

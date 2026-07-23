@@ -1324,6 +1324,15 @@ export class UsuariosService {
         // ya conoce y puede establecer de forma canonica.
         permiso.idTenant = String(tenant._id);
       }
+      if (
+        permisoActual.nivel === 'Quimica' &&
+        permiso.nivel === 'Asesor'
+      ) {
+        // Compañía y Asesor son ámbitos comerciales hermanos. La compañía
+        // propietaria se deriva siempre de la sesión y nunca del navegador.
+        permiso.idQuimica = permisoActual.idQuimica;
+        delete permiso.idDistribuidor;
+      }
       this.validarPermisoCompleto(permiso);
       await this.validarRelacionesPermiso(permiso, tenant);
       if (tenant) this.validarNivelOperativoTenant(permiso, tenant);
@@ -1447,7 +1456,7 @@ export class UsuariosService {
     if (permisoActual.nivel === 'Distribuidor') {
       return (
         permisoDestino.idDistribuidor === permisoActual.idDistribuidor &&
-        ['Distribuidor', 'Asesor', 'Productor', 'Establecimiento'].includes(
+        ['Distribuidor', 'Productor', 'Establecimiento'].includes(
           permisoDestino.nivel,
         )
       );
@@ -1569,6 +1578,9 @@ export class UsuariosService {
     }
 
     if (permiso.nivel === 'Asesor') {
+      const idQuimicaSolicitada = permiso.idQuimica
+        ? String(permiso.idQuimica)
+        : undefined;
       let distribuidor = null;
       if (permiso.idDistribuidor) {
         distribuidor = await this.distribuidoresRepository.getById(
@@ -1637,7 +1649,18 @@ export class UsuariosService {
       );
       permiso.idQuimica =
         distribuidor?.idQuimica ||
-        (quimicas.size === 1 ? Array.from(quimicas)[0] : undefined);
+        (quimicas.size === 1
+          ? Array.from(quimicas)[0]
+          : idQuimicaSolicitada);
+      if (
+        idQuimicaSolicitada &&
+        permiso.idQuimica &&
+        String(permiso.idQuimica) !== idQuimicaSolicitada
+      ) {
+        throw new BadRequestException(
+          'El alcance del asesor no pertenece a la compania seleccionada',
+        );
+      }
       // Un Asesor administra todos los lotes de sus establecimientos. La
       // seleccion por lote corresponde a los usuarios que el Asesor delegue.
       permiso.idLotes = [];

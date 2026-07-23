@@ -36,8 +36,8 @@ const tenantAdminScope = scope(
   ['Admin', 'Tenant'],
   ROLES_ADMINISTRACION
 );
-const tenantAsesorAdminScope = scope(
-  ['Tenant'],
+const asesorAdminScope = scope(
+  ['Admin', 'Tenant', 'Quimica'],
   ROLES_ADMINISTRACION
 );
 const quimicaLecturaScope = scope(
@@ -379,11 +379,11 @@ export const routes: Routes = [
       {
         path: 'usuarios/crear/asesor',
         loadComponent: loadCrearEditarUsuarios,
-        ...tenantAsesorAdminScope,
+        ...asesorAdminScope,
         data: {
-          ...tenantAsesorAdminScope.data,
+          ...asesorAdminScope.data,
           nivelInicial: 'Asesor',
-          retorno: '/dashboard-tenant',
+          retorno: '/usuarios',
         },
       },
       { path: 'usuarios/crear', loadComponent: loadCrearEditarUsuarios, ...gestorUsuariosScope },
