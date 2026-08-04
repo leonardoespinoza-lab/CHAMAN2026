@@ -36,6 +36,8 @@ require_certificate false
 EOF
 fi
 
+chown -R mosquitto:mosquitto /run/mosquitto /mosquitto/data
+
 unset MQTT_CHIRPSTACK_PASSWORD MQTT_CHAMAN_PASSWORD MQTT_GATEWAY_PASSWORD
 unset MQTT_TLS_CA_B64 MQTT_TLS_CERT_B64 MQTT_TLS_KEY_B64
 
