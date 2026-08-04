@@ -65,15 +65,33 @@ campo. El nuevo ChirpStack se conecta como fuente secundaria, sin duplicar el
 historico agronomico. Las mediciones se conservan en MongoDB; PostgreSQL y Redis
 guardan solamente el estado operativo de LoRaWAN.
 
+## Estado operativo de production (2026-08-04)
+
+- PostgreSQL y Redis tienen volumen persistente y una replica saludable.
+- ChirpStack, Mosquitto y `chaman-lora` tienen una replica saludable.
+- El listener publico MQTT/TLS valida certificado, autenticacion, ACL y
+  publicacion/suscripcion. El panel de administracion permanece privado.
+- `chaman-lora` conserva EMQX como fuente primaria y consume ChirpStack como
+  fuente secundaria por la red privada de Railway.
+- Los despliegues `testing-chirpstack-*` estan detenidos; sus volumenes y
+  configuracion se conservan para una eventual recuperacion.
+- El volumen de Mosquitto en production y los backups administrados estan
+  pendientes por el limite de volumenes/permisos del proyecto Railway. No se
+  debe eliminar ningun volumen de testing sin una autorizacion especifica.
+- La aceptacion con equipo real (OTAA, FCnt, codec, persistencia y downlink)
+  sigue pendiente y no puede reemplazarse por una prueba sintetica.
+
 ## Paso a produccion
 
 1. Crear los cuatro servicios `chirpstack-*` en el ambiente `production`.
-2. Montar volumenes en PostgreSQL, Redis y Mosquitto.
+2. Montar volumenes en PostgreSQL, Redis y Mosquitto antes del alta de campo.
 3. Configurar secretos independientes y referencias por red privada.
-4. Publicar solamente el panel HTTP y el listener MQTT/TLS.
-5. Crear un backup manual inicial y programar respaldo diario de PostgreSQL.
+4. Mantener privado el panel HTTP y publicar solamente el listener MQTT/TLS.
+5. Crear un backup manual inicial y programar respaldo diario de PostgreSQL y
+   Redis desde una cuenta Railway con permisos de backup.
 6. Conectar `chaman-lora` como consumidor secundario; conservar EMQX primario.
-7. Retirar el stack de testing cuando production este estable.
+7. Detener el stack de testing cuando production este estable; borrar sus
+   volumenes solo con autorizacion especifica y backup previo cuando corresponda.
 
 La prueba OTAA, uplink, downlink y persistencia con un equipo real es un
 requisito de aceptacion de campo y no se reemplaza por mensajes MQTT sinteticos.
