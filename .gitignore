@@ -38,6 +38,7 @@ __pycache__/
 !**/*.example.json
 .railway-admin-credential.txt
 .railway-ftp-camera-password.txt
+.railway-chirpstack-credentials.txt
 
 # Generated/static snapshots not intended for source review
 chamanagro-web-dist/

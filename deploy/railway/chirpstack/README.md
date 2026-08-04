@@ -1,0 +1,55 @@
+# ChirpStack v4 en Railway (testing)
+
+Infraestructura aislada para validar gateways Milesight SG50 antes de cualquier
+cambio en produccion.
+
+## Arquitectura
+
+- `testing-chirpstack-postgres`: PostgreSQL con `pg_trgm` y datos persistentes.
+- `testing-chirpstack-redis`: estado temporal persistente y autenticado.
+- `testing-chirpstack-mqtt`: Mosquitto privado para ChirpStack y Chaman, mas
+  un listener MQTT/TLS publico exclusivo para gateways.
+- `testing-chirpstack-ns`: ChirpStack 4.19.0, panel web y API.
+
+El SG50 se configura como **ChirpStack v4 MQTT Forwarder**. Railway no publica
+UDP, por lo que no se utiliza Semtech UDP. El plan regional inicial es AU915,
+sub-banda 1 (`channels 0-7 + 64`). Antes de incorporar un gateway se debe
+confirmar que su radio sea `-915M` y que use la misma sub-banda.
+
+## Jerarquia de fuentes
+
+```text
+SG50 -> MQTT/TLS -> Mosquitto -> ChirpStack
+                              -> testing-lora -> Chaman testing
+```
+
+Mosquitto no permite acceso anonimo. Los tres perfiles usan credenciales
+independientes y ACL diferentes:
+
+- `chirpstack`: backend de red e integracion de aplicaciones.
+- `chaman`: solo lectura de eventos `application/.../event/up`.
+- `sg50_testing`: solo trafico de gateway bajo `au915_0/gateway/...`.
+
+## Secretos requeridos
+
+Los secretos se cargan solamente como variables de Railway y nunca se guardan
+en Git:
+
+- PostgreSQL: `POSTGRES_PASSWORD`.
+- Redis: `REDIS_PASSWORD`.
+- MQTT: `MQTT_CHIRPSTACK_PASSWORD`, `MQTT_CHAMAN_PASSWORD`,
+  `MQTT_GATEWAY_PASSWORD`.
+- TLS MQTT: `MQTT_TLS_CA_B64`, `MQTT_TLS_CERT_B64`, `MQTT_TLS_KEY_B64`.
+- ChirpStack: `CHIRPSTACK_API_SECRET` y URLs privadas autenticadas.
+
+## Alta segura de un SG50
+
+1. Confirmar Gateway EUI, variante `-915M` y sub-banda AU915.
+2. Crear el gateway en ChirpStack con ese EUI exacto.
+3. Configurar en el SG50 el modo `ChirpStack v4` y MQTT/TLS.
+4. Cargar la CA privada del listener MQTT y la credencial de gateway.
+5. Verificar `Last seen`, estadisticas, uplink, join OTAA y downlink.
+6. Verificar que el mismo uplink llegue a `testing-lora` y a MongoDB testing.
+
+No se debe desactivar EMQX ni modificar `chaman-lora` de produccion durante
+estas pruebas.
