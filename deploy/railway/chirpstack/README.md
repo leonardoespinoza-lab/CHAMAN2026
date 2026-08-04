@@ -42,6 +42,11 @@ en Git:
 - TLS MQTT: `MQTT_TLS_CA_B64`, `MQTT_TLS_CERT_B64`, `MQTT_TLS_KEY_B64`.
 - ChirpStack: `CHIRPSTACK_API_SECRET` y URLs privadas autenticadas.
 
+Para la inicializacion controlada del administrador se puede definir
+temporalmente `CHIRPSTACK_ADMIN_PASSWORD`; el contenedor la consume mediante
+un archivo efimero, cambia la clave de `admin` y elimina el archivo antes de
+iniciar el servidor. La variable debe retirarse despues de verificar el login.
+
 ## Alta segura de un SG50
 
 1. Confirmar Gateway EUI, variante `-915M` y sub-banda AU915.
