@@ -13,8 +13,9 @@ cambio en produccion.
 
 El SG50 se configura como **ChirpStack v4 MQTT Forwarder**. Railway no publica
 UDP, por lo que no se utiliza Semtech UDP. El plan regional inicial es AU915,
-sub-banda 1 (`channels 0-7 + 64`). Antes de incorporar un gateway se debe
-confirmar que su radio sea `-915M` y que use la misma sub-banda.
+sub-banda 2 (`channels 8-15 + 65`), que coincide con el plan AU915 publicado
+por Milesight para el SG50. Antes de incorporar un gateway se debe confirmar
+que su radio LoRa sea `-915M` y que conserve ese mismo plan de canales.
 
 ## Jerarquia de fuentes
 
