@@ -895,7 +895,23 @@ export function esPrediccionSanitariaAlertable(
   if (prediccion.resultado < umbral) return false;
   const variables = (prediccion.variables || {}) as {
     PMoj?: number;
+    formulaVersion?: number;
+    coberturaVentana?: number;
+    eventosCompatibles?: number;
   };
+  // Mancha en Red V4 es anticipativa: una alerta exige evidencia horaria en
+  // la ventana móvil y presión de infección alta. Los valores medios quedan
+  // visibles para recorrida, pero no generan una alarma automática.
+  if (prediccion.idEnfermedad === "cebada.mancha_red") {
+    return (
+      Number(variables.formulaVersion || 0) >=
+        CEBADA_MANCHA_RED_MOTOR_VERSION &&
+      Number(variables.coberturaVentana || 0) >=
+        CEBADA_MANCHA_RED_COBERTURA_MINIMA &&
+      Number(variables.eventosCompatibles || 0) >= 1 &&
+      prediccion.resultado >= 80
+    );
+  }
   // El intercepto del modelo de Fusarium supera por si solo el umbral general
   // de alerta. Sin al menos un periodo de mojado compatible no hay evidencia
   // ambiental suficiente para transformar esa salida basal en una alarma.
@@ -1120,6 +1136,100 @@ export function acumularSeveridadManchaRed(
   if (tasaDiaria <= 0) return previa;
   if (previa <= 0) return tasaDiaria > 0.2 ? 0.1 : 0;
   return limitar(previa + tasaDiaria * previa * (1 - previa / 100));
+}
+
+/**
+ * Motor predictivo de Mancha en Red de cebada.
+ *
+ * La versión 4 reemplaza la severidad acumulativa sin memoria finita por
+ * episodios de infección dentro de una ventana móvil. El anclaje biológico es
+ * la relación temperatura-tiempo de mojado descripta para Pyrenophora teres:
+ * alrededor del 40 % de las infecciones finalmente observadas se establece a
+ * las 100 °C-h después del mojado. La respuesta se combina con el perfil
+ * varietal y con el rango térmico regional informado para cebada.
+ *
+ * El resultado es un índice predictivo de presión de infección, condicionado
+ * a que exista inóculo. No es incidencia ni severidad observada en tejido.
+ *
+ * Fuentes:
+ * - Shaw MW (1986), Plant Pathology 35:294-309, DOI 10.1111/j.1365-3059.1986.tb02018.x
+ * - Petta & Lavilla (2023), Agronomía Mesoamericana 34(1), DOI 10.15517/am.v34i1.51028
+ */
+export const CEBADA_MANCHA_RED_MOTOR_VERSION = 4;
+export const CEBADA_MANCHA_RED_VENTANA_DIAS = 14;
+export const CEBADA_MANCHA_RED_COBERTURA_MINIMA = 0.75;
+
+export interface IEventoInfeccionManchaRed {
+  horasMojadoContinuo: number;
+  temperaturaMojado: number;
+  multiplicadorVarietal: number;
+}
+
+export interface IResultadoEventoInfeccionManchaRed {
+  riesgo: number;
+  gradosHora: number;
+  factorTermico: number;
+  eventoCompatible: boolean;
+}
+
+export function calcularEventoInfeccionManchaRed(
+  entrada: IEventoInfeccionManchaRed,
+): IResultadoEventoInfeccionManchaRed {
+  const horasMojadoContinuo = limitar(
+    Number(entrada.horasMojadoContinuo) || 0,
+    0,
+    24,
+  );
+  const temperaturaMojado = Number(entrada.temperaturaMojado);
+  const multiplicadorVarietal = limitar(
+    Number(entrada.multiplicadorVarietal) || 0,
+    0.05,
+    1.2,
+  );
+
+  if (
+    !Number.isFinite(temperaturaMojado) ||
+    horasMojadoContinuo < 3 ||
+    temperaturaMojado <= 2 ||
+    temperaturaMojado >= 30
+  ) {
+    return {
+      riesgo: 0,
+      gradosHora: 0,
+      factorTermico: 0,
+      eventoCompatible: false,
+    };
+  }
+
+  const gradosHora = horasMojadoContinuo * (temperaturaMojado - 2);
+  // F(100 °C-h) = 0,40. La exponencial evita saltos artificiales y conserva
+  // el significado biológico de la relación temperatura-tiempo de mojado.
+  const fraccionEstablecida = 1 - Math.exp((Math.log(0.6) * gradosHora) / 100);
+  // Petta & Lavilla sitúan el rango más favorable entre 15 y 25 °C. Por
+  // encima de 25 °C se reduce linealmente hasta anularse a 30 °C.
+  const factorTermico =
+    temperaturaMojado <= 25 ? 1 : limitar((30 - temperaturaMojado) / 5, 0, 1);
+  const riesgo = limitar(
+    fraccionEstablecida * factorTermico * multiplicadorVarietal * 100,
+  );
+
+  return {
+    riesgo,
+    gradosHora,
+    factorTermico,
+    eventoCompatible: riesgo > 0,
+  };
+}
+
+/** Combina episodios independientes sin sumar porcentajes ni exceder 100. */
+export function combinarEventosInfeccionManchaRed(
+  riesgos: number[],
+): number {
+  const probabilidadSinEvento = riesgos.reduce(
+    (acumulada, riesgo) => acumulada * (1 - limitar(riesgo) / 100),
+    1,
+  );
+  return limitar((1 - probabilidadSinEvento) * 100);
 }
 
 export function factorTemperaturaEscaldadura(temperatura: number): number {

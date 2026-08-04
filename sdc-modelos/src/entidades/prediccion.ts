@@ -120,6 +120,15 @@ export interface IVariablesEnfermedadCebada {
   PMoj?: number;
   GDN?: number;
   GDAcum?: number;
+  horasMojadoContinuo?: number;
+  temperaturaMojado?: number;
+  gradosHoraInfeccion?: number;
+  riesgoEvento?: number;
+  riesgoVentana?: number;
+  eventosCompatibles?: number;
+  diasVentana?: number;
+  diasHorariosValidos?: number;
+  coberturaVentana?: number;
 }
 
 export interface IVariablesFinDeCiclo {

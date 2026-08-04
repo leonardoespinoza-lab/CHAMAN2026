@@ -31,6 +31,8 @@ function respuesta(stage: string, stageSource: string) {
           relativeHumidityMeanPct: 86,
           precipitationMm: 2,
           leafWetnessHours: 14,
+          maxContinuousLeafWetnessHours: 12,
+          meanTemperatureDuringLeafWetnessC: 15,
           gddBaseTemperatureC: 0,
           gddAccumulated: 700,
           gddAccumulationComplete: true,
@@ -115,6 +117,78 @@ describe('screening sanitario con fenologia proyectada', () => {
       ),
     ).toBe(true);
     expect(creadas[0].calidadFenologia.nivel).toBe('baja');
+    const manchaRed = creadas[0].enfermedades.find(
+      (item: any) => item.idEnfermedad === 'cebada.mancha_red',
+    );
+    expect(manchaRed.modelo.version).toBe(4);
+    expect(manchaRed.modelo.resolucion).toBe('horaria');
+    expect(manchaRed.variables.diasVentana).toBe(1);
+    expect(manchaRed.variables.eventosCompatibles).toBe(1);
+    expect(manchaRed.resultado).toBeGreaterThan(0);
+    expect(manchaRed.modelo.validacion).toBe('operativo_provisional');
+  });
+
+  it('retira de Mancha en Red los episodios que salen de la ventana movil de 14 dias', async () => {
+    const base = respuesta('Primer Nudo', 'gdd_validado');
+    base.series = Array.from({ length: 15 }, (_, index) => {
+      const date = new Date('2026-07-02T00:00:00.000Z');
+      date.setUTCDate(date.getUTCDate() + index);
+      const wet = index === 0;
+      return {
+        ...base.series[0],
+        date: date.toISOString().slice(0, 10),
+        stageConfidence: 'alta',
+        metrics: {
+          ...base.series[0].metrics,
+          leafWetnessHours: wet ? 14 : 0,
+          maxContinuousLeafWetnessHours: wet ? 12 : 0,
+          meanTemperatureDuringLeafWetnessC: wet ? 20 : undefined,
+        },
+      };
+    }) as any;
+    const creadas: any[] = [];
+    const service = new PrediccionCebadaService(
+      {
+        get: jest.fn().mockResolvedValue({ datos: [] }),
+        create: jest.fn(async (value) => (creadas.push(value), value)),
+      } as any,
+      { update: jest.fn() } as any,
+      { getAgrometeorologiaSiembra: jest.fn().mockResolvedValue(base) } as any,
+      { getByIdSiembra: jest.fn().mockResolvedValue({ datos: [] }) } as any,
+    );
+
+    await service.hacerPredicciones({
+      _id: 'siembra-cebada-ventana',
+      fechaSiembra: '2026-07-02T03:00:00.000Z',
+      coordenadas: { lat: -33.245, lng: -61.384 },
+      semilla: {
+        cultivo: 'Cebada',
+        variedad: 'ANDREIA',
+        resistencia: [
+          {
+            idEnfermedad: 'cebada.mancha_red',
+            enfermedad: 'Mancha en Red',
+            multiplicador: 0.625,
+            perfil: 'I',
+            estado: 'observada',
+            confianza: 'alta',
+          },
+        ],
+      },
+    } as any);
+
+    const primera = creadas[0].enfermedades.find(
+      (item: any) => item.idEnfermedad === 'cebada.mancha_red',
+    );
+    const ultima = creadas[creadas.length - 1].enfermedades.find(
+      (item: any) => item.idEnfermedad === 'cebada.mancha_red',
+    );
+    expect(primera.resultado).toBeGreaterThan(0);
+    expect(ultima.resultado).toBe(0);
+    expect(ultima.variables.diasVentana).toBe(14);
+    expect(ultima.variables.diasHorariosValidos).toBe(14);
+    expect(ultima.variables.eventosCompatibles).toBe(0);
+    expect(ultima.modelo.validacion).toBe('operativo');
   });
 
   it('muestra screening experimental de Arveja con etapa térmica de referencia', async () => {

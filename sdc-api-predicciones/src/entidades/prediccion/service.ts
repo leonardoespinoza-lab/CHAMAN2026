@@ -270,7 +270,11 @@ export class PrediccionsService {
         categoria: 'sanitaria',
         motor: 'prediccion-enfermedades',
         versionMotor,
-        lectura: `${e.enfermedad}: predicción meteorológica de severidad/incidencia ${Number(e.resultado).toFixed(1)}%. No confirma enfermedad.`,
+        lectura:
+          e.idEnfermedad === 'cebada.mancha_red' &&
+          Number(e.modelo?.version || 0) >= 4
+            ? `${e.enfermedad}: indice predictivo de presion de infeccion ${Number(e.resultado).toFixed(1)}%. Requiere recorrida; no confirma sintomas ni severidad a campo.`
+            : `${e.enfermedad}: predicción meteorológica de severidad/incidencia ${Number(e.resultado).toFixed(1)}%. No confirma enfermedad.`,
         recomendacion:
           'Validar a campo, revisar estadio fenologico, humedad y manejo antes de definir una intervencion.',
         calidadDatos: {
@@ -353,10 +357,14 @@ export class PrediccionsService {
       if (!Number.isFinite(crudo) || crudo < 0 || crudo > 100) return false;
     }
 
+    const umbralCierre =
+      enfermedad.idEnfermedad === 'cebada.mancha_red' &&
+      Number(enfermedad.modelo?.version || 0) >= 4
+        ? 80
+        : getUmbralesRiesgoSanitario(definicion?.cultivo).medio;
     return (
       Number.isFinite(Number(enfermedad.resultado)) &&
-      Number(enfermedad.resultado) <
-        getUmbralesRiesgoSanitario(definicion?.cultivo).medio
+      Number(enfermedad.resultado) < umbralCierre
     );
   }
 
