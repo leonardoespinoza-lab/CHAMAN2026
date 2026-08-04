@@ -5,5 +5,5 @@ topic readwrite application/#
 user chaman
 topic read application/+/device/+/event/up
 
-user sg50_testing
+user __MQTT_GATEWAY_USERNAME__
 topic readwrite au915_0/gateway/#

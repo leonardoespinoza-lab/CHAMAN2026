@@ -1,15 +1,15 @@
-# ChirpStack v4 en Railway (testing)
+# ChirpStack v4 en Railway
 
-Infraestructura aislada para validar gateways Milesight SG50 antes de cualquier
-cambio en produccion.
+Infraestructura canónica para gateways Milesight SG50. Se valida primero en
+testing y se despliega una única instancia operativa en production.
 
 ## Arquitectura
 
-- `testing-chirpstack-postgres`: PostgreSQL con `pg_trgm` y datos persistentes.
-- `testing-chirpstack-redis`: estado temporal persistente y autenticado.
-- `testing-chirpstack-mqtt`: Mosquitto privado para ChirpStack y Chaman, mas
+- `chirpstack-postgres`: PostgreSQL con `pg_trgm` y datos persistentes.
+- `chirpstack-redis`: estado temporal persistente y autenticado.
+- `chirpstack-mqtt`: Mosquitto privado para ChirpStack y Chaman, mas
   un listener MQTT/TLS publico exclusivo para gateways.
-- `testing-chirpstack-ns`: ChirpStack 4.19.0, panel web y API.
+- `chirpstack-ns`: ChirpStack 4.19.0, panel web y API.
 
 El SG50 se configura como **ChirpStack v4 MQTT Forwarder**. Railway no publica
 UDP, por lo que no se utiliza Semtech UDP. El plan regional inicial es AU915,
@@ -21,7 +21,7 @@ que su radio LoRa sea `-915M` y que conserve ese mismo plan de canales.
 
 ```text
 SG50 -> MQTT/TLS -> Mosquitto -> ChirpStack
-                              -> testing-lora -> Chaman testing
+                              -> chaman-lora -> MongoDB production
 ```
 
 Mosquitto no permite acceso anonimo. Los tres perfiles usan credenciales
@@ -29,7 +29,9 @@ independientes y ACL diferentes:
 
 - `chirpstack`: backend de red e integracion de aplicaciones.
 - `chaman`: solo lectura de eventos `application/.../event/up`.
-- `sg50_testing`: solo trafico de gateway bajo `au915_0/gateway/...`.
+- `MQTT_GATEWAY_USERNAME`: usuario de alta controlada, solo con trafico bajo
+  `au915_0/gateway/...`. Su valor por defecto es `sg50_gateway` y debe
+  reemplazarse por una identidad especifica cuando se conozca el Gateway EUI.
 
 ## Secretos requeridos
 
@@ -39,7 +41,7 @@ en Git:
 - PostgreSQL: `POSTGRES_PASSWORD`.
 - Redis: `REDIS_PASSWORD`.
 - MQTT: `MQTT_CHIRPSTACK_PASSWORD`, `MQTT_CHAMAN_PASSWORD`,
-  `MQTT_GATEWAY_PASSWORD`.
+  `MQTT_GATEWAY_USERNAME`, `MQTT_GATEWAY_PASSWORD`.
 - TLS MQTT: `MQTT_TLS_CA_B64`, `MQTT_TLS_CERT_B64`, `MQTT_TLS_KEY_B64`.
 - ChirpStack: `CHIRPSTACK_API_SECRET` y URLs privadas autenticadas.
 
@@ -55,7 +57,23 @@ iniciar el servidor. La variable debe retirarse despues de verificar el login.
 3. Configurar en el SG50 el modo `ChirpStack v4` y MQTT/TLS.
 4. Cargar la CA privada del listener MQTT y la credencial de gateway.
 5. Verificar `Last seen`, estadisticas, uplink, join OTAA y downlink.
-6. Verificar que el mismo uplink llegue a `testing-lora` y a MongoDB testing.
+6. Verificar que el mismo uplink llegue a `chaman-lora` y a MongoDB production.
+7. Verificar que el contador de trama avance y que no se persistan duplicados.
 
-No se debe desactivar EMQX ni modificar `chaman-lora` de produccion durante
-estas pruebas.
+EMQX permanece configurado como fuente primaria hasta completar esta prueba de
+campo. El nuevo ChirpStack se conecta como fuente secundaria, sin duplicar el
+historico agronomico. Las mediciones se conservan en MongoDB; PostgreSQL y Redis
+guardan solamente el estado operativo de LoRaWAN.
+
+## Paso a produccion
+
+1. Crear los cuatro servicios `chirpstack-*` en el ambiente `production`.
+2. Montar volumenes en PostgreSQL, Redis y Mosquitto.
+3. Configurar secretos independientes y referencias por red privada.
+4. Publicar solamente el panel HTTP y el listener MQTT/TLS.
+5. Crear un backup manual inicial y programar respaldo diario de PostgreSQL.
+6. Conectar `chaman-lora` como consumidor secundario; conservar EMQX primario.
+7. Retirar el stack de testing cuando production este estable.
+
+La prueba OTAA, uplink, downlink y persistencia con un equipo real es un
+requisito de aceptacion de campo y no se reemplaza por mensajes MQTT sinteticos.
