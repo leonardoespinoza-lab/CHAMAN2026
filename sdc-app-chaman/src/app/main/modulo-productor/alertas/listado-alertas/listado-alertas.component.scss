@@ -103,7 +103,7 @@
 .export-action,
 .secondary-action {
   display: inline-flex;
-  min-height: 2.75rem;
+  min-height: 3.15rem;
   gap: 0.45rem;
   align-items: center;
   padding: 0 1rem;
@@ -404,6 +404,16 @@
   width: min(260px, 28vw);
 }
 
+:host ::ng-deep .queue-filters input,
+:host ::ng-deep .queue-filters .p-button {
+  min-height: 3.15rem;
+}
+
+:host ::ng-deep .state-filter .p-column-filter-menu-button {
+  width: 3.15rem;
+  height: 3.15rem;
+}
+
 .visually-hidden {
   position: absolute !important;
   width: 1px !important;
@@ -568,8 +578,8 @@
 .icon-action,
 .dialog-close {
   display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 3.15rem;
+  height: 3.15rem;
   place-items: center;
   border-radius: 50%;
 }
