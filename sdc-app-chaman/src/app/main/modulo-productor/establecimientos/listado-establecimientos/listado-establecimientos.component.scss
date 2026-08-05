@@ -180,32 +180,14 @@
 .metrics-strip article {
   background: var(--p-surface-0);
   border: 1px solid var(--row-border);
-  border-left: 4px solid var(--p-text-muted-color);
   border-radius: 8px;
   box-shadow: 0 8px 18px var(--row-shadow);
   min-height: 70px;
   padding: 0.55rem 0.6rem;
 }
 
-.metrics-strip article.ok {
-  border-left-color: #6fb845;
-}
-
-.metrics-strip article.warn {
-  border-left-color: #f0b43d;
-}
-
-.metrics-strip article.danger {
-  border-left-color: #ef4b4b;
-}
-
-.metrics-strip article.info {
-  border-left-color: #3e91d6;
-}
-
 .metrics-strip article.muted {
   background: var(--p-surface-50);
-  border-left-color: #98a2ad;
 }
 
 .metrics-strip span,

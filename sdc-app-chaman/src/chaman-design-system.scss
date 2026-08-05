@@ -56,8 +56,12 @@
 :where(
     .service-strip article,
     .metric-card,
+    .metrics-strip article,
+    .command-card,
+    .category-chip,
     .alarm-card,
     .hero-status,
+    .detail-hero,
     .device-card,
     .mqtt-device-card,
     .camera-card,
@@ -84,6 +88,7 @@
     .main-weed,
     .time-lapse-card,
     .establishment-service,
+    .central-grid article,
     .license-summary
   ) {
   --ch-state-color: var(--ch-state-muted);
@@ -96,23 +101,23 @@
   box-shadow: var(--ch-surface-shadow) !important;
 }
 
-:where(.service-strip article.ok, .metric-card.ok, .alarm-card.baja, .device-card.device-online, .mqtt-device-card.mqtt-assigned, .wind-forecast article.tone-ok, .footprint-list article.green, .executive-tab.ok, .executive-status.ok, .executive-climate-metric.ok, .executive-metric.ok, .health-badge.ok, .watch-row.ok, .priority-row.ok) {
+:where(.service-strip article.ok, .metric-card.ok, .metrics-strip article.ok, .command-card.primary, .category-chip.baja, .alarm-card.baja, .hero-status:not(.media, .alta, .critica), .napas-detail .detail-hero.alta, .device-card.device-online, .mqtt-device-card.mqtt-assigned, .wind-forecast article.tone-ok, .footprint-list article.green, .executive-tab.ok, .executive-status.ok, .executive-climate-metric.ok, .executive-metric.ok, .health-badge.ok, .watch-row.ok, .priority-row.ok) {
   --ch-state-color: var(--ch-state-ok);
 }
 
-:where(.service-strip article.warn, .metric-card.warning, .alarm-card.media, .hero-status.media, .camera-card.offline, .device-card:not(.device-online), .mqtt-device-card, .weather-metrics article.warn, .wind-forecast article.tone-warn, .wind-forecast article.tone-risk, .executive-tab.warn, .executive-status.warn, .executive-climate-metric.warn, .executive-metric.warn, .health-badge.warn, .watch-row.warn, .priority-row.warn, .thermal-warning) {
+:where(.service-strip article.warn, .metric-card.warning, .metric-card.alert, .metrics-strip article.warn, .category-chip.media, .alarm-card.media, .hero-status.media, .napas-detail .detail-hero.media, .disease-detail .detail-hero.medium, .weed-detail .detail-hero.medium, .risk-detail .detail-hero.medium, .camera-card.offline, .device-card:not(.device-online), .mqtt-device-card, .weather-metrics article.warn, .wind-forecast article.tone-warn, .wind-forecast article.tone-risk, .executive-tab.warn, .executive-status.warn, .executive-climate-metric.warn, .executive-metric.warn, .health-badge.warn, .watch-row.warn, .priority-row.warn, .thermal-warning) {
   --ch-state-color: var(--ch-state-warn);
 }
 
-:where(.service-strip article.danger, .alarm-card.alta, .alarm-card.critica, .hero-status.alta, .wind-forecast article.tone-danger, .ndvi-analysis.risk, .executive-tab.risk, .executive-status.risk, .executive-climate-metric.risk, .executive-metric.risk, .health-badge.risk, .watch-row.risk, .priority-row.risk) {
+:where(.service-strip article.danger, .metrics-strip article.danger, .command-card.high, .category-chip.alta, .category-chip.critica, .alarm-card.alta, .alarm-card.critica, .hero-status.alta, .hero-status.critica, .alarm-detail .detail-hero.alta, .alarm-detail .detail-hero.critica, .napas-detail .detail-hero.baja, .napas-detail .detail-hero.sin_datos, .disease-detail .detail-hero.high, .weed-detail .detail-hero.high, .risk-detail .detail-hero.high, .phytosanitary-detail .detail-hero.alto, .phytosanitary-detail .detail-hero.critico, .wind-forecast article.tone-danger, .ndvi-analysis.risk, .executive-tab.risk, .executive-status.risk, .executive-climate-metric.risk, .executive-metric.risk, .health-badge.risk, .watch-row.risk, .priority-row.risk) {
   --ch-state-color: var(--ch-state-danger);
 }
 
-:where(.service-strip article.info, .weather-metrics article.info, .footprint-list article.blue, .ndvi-analysis) {
+:where(.service-strip article.info, .metric-card:not(.warning, .alert), .metrics-strip article.info, .command-card:not(.primary, .high), .weather-metrics article.info, .footprint-list article.blue, .ndvi-analysis, .central-grid article:not(.empty)) {
   --ch-state-color: var(--ch-state-info);
 }
 
-:where(.service-strip article.muted, .footprint-list article.gray) {
+:where(.service-strip article.muted, .metrics-strip article.muted, .footprint-list article.gray, .central-grid article.empty) {
   --ch-state-color: var(--ch-state-muted);
 }
 

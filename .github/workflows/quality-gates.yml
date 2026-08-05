@@ -30,6 +30,7 @@ jobs:
       - run: npm run test:establishment-location:frontend
       - run: npm run test:soil-intelligence:frontend
       - run: npm run test:varietal-profile:frontend
+      - run: npm run test:visual-language
       - run: npm run test:load-runner
 
   core-tests:

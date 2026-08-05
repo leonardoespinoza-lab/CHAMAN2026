@@ -894,12 +894,10 @@ export function esLecturaSanitariaOperativa(
   if (prediccion.estado !== "calculado") return false;
   if (!Number.isFinite(prediccion.resultado)) return false;
   if (prediccion.resultado < 0 || prediccion.resultado > 100) return false;
-  if (
-    prediccion.modelo?.validacion &&
-    prediccion.modelo.validacion !== "operativo"
-  ) {
-    return false;
-  }
+  // La ausencia de validacion no es compatibilidad retroactiva. Un registro
+  // legado, provisional o incompleto puede permanecer visible para auditoria,
+  // pero solo una declaracion positiva y explicita habilita uso operativo.
+  if (prediccion.modelo?.validacion !== "operativo") return false;
   if (
     prediccion.calidadDatos?.nivel === "baja" ||
     prediccion.calidadDatos?.nivel === "sin_datos"
@@ -926,7 +924,6 @@ export function esLecturaSanitariaOperativa(
     // Las ecuaciones contractuales se muestran y auditan, pero una salida
     // provisional no se transforma en alarma hasta completar validacion de
     // fuente, ventana, region y desempeño contra observaciones de campo.
-    if (prediccion.modelo?.validacion !== "operativo") return false;
     const confianza = prediccion.resistenciaUsada?.confianza;
     if (confianza !== "alta" && confianza !== "media") return false;
     const ordenCampania = campaniaAOrden(

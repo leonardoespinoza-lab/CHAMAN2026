@@ -323,13 +323,10 @@ export class PrediccionsService {
     if (enfermedad.estado === 'fuera_ventana') return true;
 
     const definicion = getEnfermedadPorId(enfermedad.idEnfermedad);
-    if (
-      definicion?.cultivo === 'Trigo' &&
-      enfermedad.modelo?.validacion !== 'operativo'
-    ) {
-      return true;
-    }
-    if (enfermedad.modelo?.validacion === 'experimental') return true;
+    // Un modelo sin validacion explicita pertenece al dominio de auditoria,
+    // no al operativo. Esto cierra lecturas legacy que no declaraban el campo
+    // y evita conservar alertas generadas por contratos incompletos.
+    if (enfermedad.modelo?.validacion !== 'operativo') return true;
     if (definicion && definicion.motor !== 'operativo') return true;
     if (
       definicion?.cultivo === 'Trigo' &&

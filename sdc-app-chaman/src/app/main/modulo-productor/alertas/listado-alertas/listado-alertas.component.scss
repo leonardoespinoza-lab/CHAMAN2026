@@ -86,21 +86,12 @@
   align-content: center;
   gap: 0.25rem;
   padding: 1rem 1.1rem;
-  border-left: 4px solid #78c646;
 }
 
 .hero-status strong {
   color: #10223a;
   font-size: 1.55rem;
   line-height: 1.05;
-}
-
-.alarm-hero.media .hero-status {
-  border-left-color: #f5b640;
-}
-
-.alarm-hero.alta .hero-status {
-  border-left-color: #f25555;
 }
 
 .alarm-toolbar {
@@ -152,7 +143,6 @@
 .command-card {
   min-height: 116px;
   padding: 1rem;
-  border-bottom: 4px solid rgba(35, 211, 200, 0.72);
 }
 
 .command-card strong {
@@ -161,14 +151,6 @@
   color: #10223a;
   font-size: clamp(2rem, 3.2vw, 3rem);
   line-height: 0.95;
-}
-
-.command-card.high {
-  border-bottom-color: #f25555;
-}
-
-.command-card.primary {
-  border-bottom-color: #78c646;
 }
 
 .insight-grid {
@@ -309,15 +291,6 @@
   font-weight: 900;
 }
 
-.category-chip.media {
-  border-color: rgba(245, 182, 64, 0.5);
-}
-
-.category-chip.alta,
-.category-chip.critica {
-  border-color: rgba(242, 85, 85, 0.5);
-}
-
 :host ::ng-deep .alarm-board-table .p-datatable-header {
   border: 0;
   background: transparent;
@@ -370,16 +343,10 @@
   min-height: 128px;
   padding: 1rem;
   cursor: pointer;
-  border-left: 5px solid #78c646;
-}
-
-.alarm-card.media {
-  border-left-color: #f5b640;
 }
 
 .alarm-card.alta,
 .alarm-card.critica {
-  border-left-color: #f25555;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(255, 246, 241, 0.74)), rgba(255, 255, 255, 0.72);
 }
 

@@ -31,8 +31,9 @@ La auditoría de solo lectura encontró:
 | Claves duplicadas de predicción | 0 |
 | Salidas sanitarias que cumplen el contrato canónico completo de alerta | 0 |
 | Cebadas con Mancha en Red v3 saturada | 3 |
+| Lecturas legacy sin validación explícita detectadas en el corte del 5/8 | 1 (`soja.fin_ciclo` v3) |
 
-Las tres lecturas saturadas de Mancha en Red estaban entre 99,86 y 100, eran **v3, provisionales y no alertables**. El problema visible era su presentación/agregación, no evidencia de enfermedad confirmada.
+Las tres lecturas saturadas de Mancha en Red del corte inicial estaban entre 99,86 y 100, eran **v3, provisionales y no alertables**. En el nuevo corte ya no aparecen índices sanitarios saturados. El registro legacy de soja tampoco es una evidencia de enfermedad: el candidato exige ahora `validacion: operativo` de manera positiva y explícita para cualquier cultivo.
 
 ## Jerarquía de datos meteorológicos
 
@@ -42,14 +43,16 @@ La regla implementada y probada es por variable y por intervalo:
 2. central meteorológica asociada;
 3. Open-Meteo como respaldo.
 
-No se reemplaza una serie diaria completa por una lectura aislada. Tampoco se descarta el sensor porque otras variables del mismo día provengan de Open-Meteo. En los cuatro lotes Kleppe auditados, temperatura mínima/media/máxima y VPD aparecen como fuente `mixed`, con **100% de cobertura de temperatura de campo**; humedad, lluvia, viento, radiación y ET0 se completan con Open-Meteo. Por eso el rótulo general del agregado puede indicar Open-Meteo aunque la temperatura sí incorpore LoRa.
+No se reemplaza una serie diaria completa por una lectura aislada. Tampoco se descarta el sensor porque otras variables del mismo día provengan de Open-Meteo. El nuevo corte productivo del 5 de agosto conserva cuatro dispositivos Kleppe asignados y registra cobertura histórica de campo, pero la fila diaria actual declara `open_meteo` para temperatura y las demás variables. Por lo tanto, **la lectura vigente no debe rotularse como LoRa ni `mixed`**: la cobertura histórica del sensor no prueba que haya aportado al día actual. Esta diferencia queda como evidencia operativa a monitorear, no como falla de la jerarquía.
 
 ## Matriz de motores sanitarios
 
+El inventario detallado enfermedad por enfermedad quedó separado en [disease-engine-matrix-2026-08-05.md](./disease-engine-matrix-2026-08-05.md). La expresión anterior “motor operativo” significaba que existía una implementación; no significaba que toda salida estuviera científicamente validada ni habilitada para alertar. El corte actualizado distingue 10 patologías con cálculo implementado, 4 screenings experimentales y 20 sin modelo; actualmente sólo Mancha en Red v4 puede atravesar la compuerta de alerta, y únicamente con evidencia horaria suficiente.
+
 | Cultivo | Estado actual | Decisión segura |
 |---|---|---|
-| Trigo | 4 modelos operativos, 1 experimental y 1 patología sin modelo | Las fórmulas aprobadas conservan salida científica; el experimental nunca alerta |
-| Cebada | Mancha en Red v4 con evidencia; 3 modelos heredados sin validación regional suficiente | Solo v4 puede llegar a alerta; los heredados quedan como screening `/100` |
+| Trigo | 4 fórmulas v5 provisionales, 1 experimental y 1 patología sin modelo | Las fórmulas recibidas son reproducibles, pero no alertan hasta validación regional |
+| Cebada | Mancha en Red v4 condicional; 3 modelos heredados sin validación regional suficiente | Solo v4 con evidencia horaria puede llegar a alerta; los heredados quedan como screening `/100` |
 | Soja | 1 fórmula heredada, 4 patologías sin modelo | Fórmula visible pero provisional; sin alertas automáticas |
 | Maíz | 1 fórmula heredada y 1 patología sin modelo | La roya heredaba una ecuación de trigo: queda provisional hasta validación específica de maíz |
 | Arveja | 3 screenings experimentales | Seguimiento ambiental y recorrida; no diagnóstico ni alerta |
@@ -138,11 +141,11 @@ Se incorporó una capa global `Chaman Product Language` para Chaman y tenants:
 - tarjetas de lotes reordenadas para lectura y toque en pantallas pequeñas;
 - la identidad del tenant continúa aplicándose mediante sus variables de marca, mientras estructura y accesibilidad permanecen consistentes.
 
-No se eliminaron mecánicamente todos los `border-left`: algunos son divisores de layout legítimos. La normalización se aplicó a las clases semánticas de tarjetas y estados para evitar romper tablas, timelines y gráficos.
+La primera normalización no cubrió las clases locales `command-card`, `category-chip` y `metrics-strip` usadas por Alarmas y Establecimientos. Las capturas de testing del 5 de agosto demostraron esa omisión. El candidato actualizado elimina esas franjas locales, incorpora las superficies al sistema compartido y agrega una prueba de regresión visual estática en CI. No se eliminaron mecánicamente todos los `border-left`: algunos son divisores de layout legítimos. La normalización se limita a clases semánticas de tarjetas y estados para no romper tablas, timelines y gráficos.
 
 ## Verificación automatizada
 
-El candidato acumuló más de **980 comprobaciones** sin fallos en las suites de modelos, predicciones, clima, cliente/API, autenticación, datos, LoRa, WebSocket, API externa y FTP. Además:
+El candidato acumuló más de **980 comprobaciones** sin fallos en las suites de modelos, predicciones, clima, cliente/API, autenticación, datos, LoRa, WebSocket, API externa y FTP. En el corte adicional del 5 de agosto se ejecutaron **212 pruebas de predicciones** y **273 pruebas frontend**, todas aprobadas. Además:
 
 - compilación de modelos: aprobada;
 - compilación de predicciones y cliente: aprobada;
@@ -150,6 +153,9 @@ El candidato acumuló más de **980 comprobaciones** sin fallos en las suites de
 - pruebas focales de semáforo sanitario: aprobadas;
 - pruebas focales de cebada heredada, soja y maíz provisional: aprobadas;
 - pruebas conservadoras de granizo: aprobadas;
+- inventario automatizado de los 34 identificadores sanitarios: aprobado;
+- rechazo de lecturas legacy sin validación explícita: aprobado;
+- contrato visual de Alarmas y Establecimientos sin franjas locales: aprobado;
 - revisión `git diff --check`: sin errores de whitespace.
 
 La validación visual y por rol en Railway testing sigue siendo una compuerta obligatoria antes de cualquier promoción.

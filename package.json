@@ -69,6 +69,7 @@
     "test:establishment-location:frontend": "node --test scripts/tests/establishment-location-frontend.test.js",
     "test:soil-intelligence:frontend": "node --test scripts/tests/soil-intelligence-frontend.test.js",
     "test:varietal-profile:frontend": "node --test scripts/tests/varietal-profile-frontend.test.js",
+    "test:visual-language": "node --test scripts/tests/chaman-visual-language.test.mjs",
     "test:load-runner": "node --test scripts/tests/testing-load-smoke.test.mjs",
     "load:testing": "node scripts/tests/testing-load-smoke.mjs --confirm-testing",
     "railway:build": "node scripts/railway-build.js",
