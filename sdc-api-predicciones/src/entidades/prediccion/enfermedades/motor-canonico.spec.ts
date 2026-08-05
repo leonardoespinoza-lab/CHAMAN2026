@@ -1,6 +1,8 @@
 import {
   acumularSeveridadManchaRed,
   calcularFusariumEspiga,
+  calcularEventoInfeccionManchaRed,
+  calcularPresionCicloManchaRed,
   calcularManchaAmarilla,
   calcularManchaHoja,
   calcularRoyaAnaranjada,
@@ -8,6 +10,8 @@ import {
   calcularRoyaHoja,
   calcularRoyaHojaTrigo2026,
   clasificarNivelRiesgoSanitario,
+  CEBADA_MANCHA_RED_UMBRAL_ALERTA,
+  CEBADA_MANCHA_RED_MOTOR_VERSION,
   esFechaPrediccionSanitariaReciente,
   esLecturaSanitariaOperativa,
   esPrediccionSanitariaAlertable,
@@ -309,18 +313,25 @@ describe('motor canonico de enfermedades', () => {
     expect(esPrediccionSanitariaAlertable(lecturaBaja)).toBe(false);
   });
 
-  it('aplica el umbral de cebada tambien al decidir alertas', () => {
+  it('exige evidencia horaria y presion alta para alertar Mancha en Red v4', () => {
     const lecturaCebada = {
       idEnfermedad: 'cebada.mancha_red' as const,
       resultado: 20,
       estado: 'calculado' as const,
-      modelo: { version: 1, validacion: 'operativo' as const },
+      modelo: {
+        version: CEBADA_MANCHA_RED_MOTOR_VERSION,
+        validacion: 'operativo' as const,
+      },
       calidadDatos: { nivel: 'media' as const },
       resistenciaUsada: {
         estado: 'observada' as const,
         confianza: 'alta' as const,
       },
-      variables: {},
+      variables: {
+        formulaVersion: CEBADA_MANCHA_RED_MOTOR_VERSION,
+        coberturaVentana: 1,
+        diasFavorablesVentana: 1,
+      },
     };
 
     expect(esLecturaSanitariaOperativa(lecturaCebada)).toBe(true);
@@ -329,9 +340,26 @@ describe('motor canonico de enfermedades', () => {
     expect(
       esPrediccionSanitariaAlertable({
         ...lecturaCebada,
-        resultado: 35,
+        resultado: CEBADA_MANCHA_RED_UMBRAL_ALERTA - 0.1,
+      }),
+    ).toBe(false);
+    expect(
+      esPrediccionSanitariaAlertable({
+        ...lecturaCebada,
+        resultado: CEBADA_MANCHA_RED_UMBRAL_ALERTA,
       }),
     ).toBe(true);
+    expect(
+      esPrediccionSanitariaAlertable({
+        ...lecturaCebada,
+        resultado: 100,
+        variables: {
+          formulaVersion: CEBADA_MANCHA_RED_MOTOR_VERSION,
+          coberturaVentana: 0.5,
+          diasFavorablesVentana: 3,
+        },
+      }),
+    ).toBe(false);
     expect(
       esLecturaSanitariaOperativa({
         ...lecturaCebada,
@@ -617,6 +645,42 @@ describe('motor canonico de enfermedades', () => {
     const tasa = tasaDiariaManchaRedHoraria(horas, 1.2);
     expect(tasa).toBeCloseTo(0.419, 3);
     expect(acumularSeveridadManchaRed(0, tasa)).toBe(0.1);
+  });
+
+  it('modela episodios de infeccion de Mancha en Red sin confundirlos con severidad observada', () => {
+    const seco = calcularEventoInfeccionManchaRed({
+      horasMojadoContinuo: 2,
+      temperaturaMojado: 20,
+      multiplicadorVarietal: 1,
+    });
+    const referencia100GradosHora = calcularEventoInfeccionManchaRed({
+      horasMojadoContinuo: 100 / 18,
+      temperaturaMojado: 20,
+      multiplicadorVarietal: 1,
+    });
+    const susceptible = calcularEventoInfeccionManchaRed({
+      horasMojadoContinuo: 12,
+      temperaturaMojado: 20,
+      multiplicadorVarietal: 1,
+    });
+    const resistente = calcularEventoInfeccionManchaRed({
+      horasMojadoContinuo: 12,
+      temperaturaMojado: 20,
+      multiplicadorVarietal: 0.3,
+    });
+
+    expect(seco.riesgo).toBe(0);
+    expect(referencia100GradosHora.gradosHora).toBeCloseTo(100, 4);
+    expect(referencia100GradosHora.riesgo).toBeCloseTo(40, 4);
+    expect(susceptible.riesgo).toBeGreaterThan(resistente.riesgo);
+    const cicloHumedo = calcularPresionCicloManchaRed(
+      Array.from({ length: 14 }, () => susceptible),
+      1,
+    );
+    expect(cicloHumedo.indice).toBeGreaterThan(susceptible.riesgo);
+    expect(cicloHumedo.indice).toBeLessThan(90);
+    expect(cicloHumedo.diasFavorables).toBe(14);
+    expect(calcularPresionCicloManchaRed([], 1).indice).toBe(0);
   });
 
   it('clasifica mildiu de arveja con los umbrales experimentales publicados', () => {

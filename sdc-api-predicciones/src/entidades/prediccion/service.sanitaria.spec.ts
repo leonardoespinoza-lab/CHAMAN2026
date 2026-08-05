@@ -5,6 +5,7 @@ jest.mock(
 );
 
 import { PrediccionsService } from './service';
+import { CEBADA_MANCHA_RED_UMBRAL_ALERTA } from 'modelos/src';
 
 describe('PrediccionsService - alertas sanitarias', () => {
   beforeAll(() => {
@@ -95,7 +96,7 @@ describe('PrediccionsService - alertas sanitarias', () => {
     );
   });
 
-  it('usa el umbral 35 de cebada tanto para abrir como para cerrar alertas', async () => {
+  it('muestra precaucion desde 35 pero solo alerta Mancha en Red v4 con evidencia horaria desde el umbral alto', async () => {
     const cebada = {
       ...siembra,
       semilla: { cultivo: 'Cebada' },
@@ -106,11 +107,15 @@ describe('PrediccionsService - alertas sanitarias', () => {
         idEnfermedad: 'cebada.mancha_red',
         modelo: {
           id: 'cebada.mancha_red',
-          version: 1,
+          version: 4,
           fuente: 'motor canonico',
           validacion: 'operativo',
         },
-        variables: {},
+        variables: {
+          formulaVersion: 4,
+          coberturaVentana: 1,
+          diasFavorablesVentana: 1,
+        },
       });
 
     const bajo = crearServicio();
@@ -127,8 +132,8 @@ describe('PrediccionsService - alertas sanitarias', () => {
     expect(bajo.alertas.registrarEventoSiembra).not.toHaveBeenCalled();
     expect(bajo.alertas.finalizarEventoSiembra).toHaveBeenCalledTimes(1);
 
-    const medio = crearServicio();
-    await (medio.service as any).enviarAlertas(
+    const medioSinAlerta = crearServicio();
+    await (medioSinAlerta.service as any).enviarAlertas(
       [
         {
           fecha: '2026-07-15T00:00:00.000Z',
@@ -138,8 +143,26 @@ describe('PrediccionsService - alertas sanitarias', () => {
       ],
       cebada,
     );
-    expect(medio.alertas.registrarEventoSiembra).toHaveBeenCalledTimes(1);
-    expect(medio.alertas.finalizarEventoSiembra).not.toHaveBeenCalled();
+    expect(
+      medioSinAlerta.alertas.registrarEventoSiembra,
+    ).not.toHaveBeenCalled();
+    expect(
+      medioSinAlerta.alertas.finalizarEventoSiembra,
+    ).toHaveBeenCalledTimes(1);
+
+    const alto = crearServicio();
+    await (alto.service as any).enviarAlertas(
+      [
+        {
+          fecha: '2026-07-15T00:00:00.000Z',
+          idSiembra: 'siembra-1',
+          enfermedades: [lecturaCebada(CEBADA_MANCHA_RED_UMBRAL_ALERTA)],
+        },
+      ],
+      cebada,
+    );
+    expect(alto.alertas.registrarEventoSiembra).toHaveBeenCalledTimes(1);
+    expect(alto.alertas.finalizarEventoSiembra).not.toHaveBeenCalled();
   });
 
   it('registra solo la ultima salida con fecha, version y deduplicacion trazables', async () => {

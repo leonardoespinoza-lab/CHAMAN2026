@@ -895,7 +895,26 @@ export function esPrediccionSanitariaAlertable(
   if (prediccion.resultado < umbral) return false;
   const variables = (prediccion.variables || {}) as {
     PMoj?: number;
+    formulaVersion?: number;
+    coberturaVentana?: number;
+    eventosCompatibles?: number;
+    diasFavorablesVentana?: number;
   };
+  // Mancha en Red V4 es anticipativa: una alerta exige evidencia horaria en
+  // la ventana móvil y presión de infección alta. Los valores medios quedan
+  // visibles para recorrida, pero no generan una alarma automática.
+  if (prediccion.idEnfermedad === "cebada.mancha_red") {
+    return (
+      Number(variables.formulaVersion || 0) >=
+        CEBADA_MANCHA_RED_MOTOR_VERSION &&
+      Number(variables.coberturaVentana || 0) >=
+        CEBADA_MANCHA_RED_COBERTURA_MINIMA &&
+      Number(
+        variables.diasFavorablesVentana ?? variables.eventosCompatibles ?? 0,
+      ) >= 1 &&
+      prediccion.resultado >= CEBADA_MANCHA_RED_UMBRAL_ALERTA
+    );
+  }
   // El intercepto del modelo de Fusarium supera por si solo el umbral general
   // de alerta. Sin al menos un periodo de mojado compatible no hay evidencia
   // ambiental suficiente para transformar esa salida basal en una alarma.
@@ -1120,6 +1139,170 @@ export function acumularSeveridadManchaRed(
   if (tasaDiaria <= 0) return previa;
   if (previa <= 0) return tasaDiaria > 0.2 ? 0.1 : 0;
   return limitar(previa + tasaDiaria * previa * (1 - previa / 100));
+}
+
+/**
+ * Motor predictivo de Mancha en Red de cebada.
+ *
+ * La versión 4 reemplaza la severidad acumulativa sin memoria finita por
+ * episodios de infección dentro de una ventana móvil. El anclaje biológico es
+ * la relación temperatura-tiempo de mojado descripta para Pyrenophora teres:
+ * alrededor del 40 % de las infecciones finalmente observadas se establece a
+ * las 100 °C-h después del mojado. La respuesta se combina con el perfil
+ * varietal y con el rango térmico regional informado para cebada.
+ *
+ * El resultado es un índice predictivo de presión de infección, condicionado
+ * a que exista inóculo. No es incidencia ni severidad observada en tejido.
+ *
+ * Fuentes:
+ * - Shaw MW (1986), Plant Pathology 35:294-309, DOI 10.1111/j.1365-3059.1986.tb02018.x
+ * - Petta & Lavilla (2023), Agronomía Mesoamericana 34(1), DOI 10.15517/am.v34i1.51028
+ */
+export const CEBADA_MANCHA_RED_MOTOR_VERSION = 4;
+export const CEBADA_MANCHA_RED_AGREGACION_VERSION = 2;
+export const CEBADA_MANCHA_RED_VENTANA_DIAS = 14;
+export const CEBADA_MANCHA_RED_COBERTURA_MINIMA = 0.75;
+export const CEBADA_MANCHA_RED_UMBRAL_ALERTA = 70;
+
+export interface IEventoInfeccionManchaRed {
+  horasMojadoContinuo: number;
+  temperaturaMojado: number;
+  multiplicadorVarietal: number;
+}
+
+export interface IResultadoEventoInfeccionManchaRed {
+  riesgo: number;
+  gradosHora: number;
+  factorTermico: number;
+  eventoCompatible: boolean;
+}
+
+export interface IResultadoCicloManchaRed {
+  indice: number;
+  intensidadPico: number;
+  intensidadMedia: number;
+  persistencia: number;
+  diasFavorables: number;
+  diasDesdeUltimoEvento: number | null;
+}
+
+export function calcularEventoInfeccionManchaRed(
+  entrada: IEventoInfeccionManchaRed,
+): IResultadoEventoInfeccionManchaRed {
+  const horasMojadoContinuo = limitar(
+    Number(entrada.horasMojadoContinuo) || 0,
+    0,
+    24,
+  );
+  const temperaturaMojado = Number(entrada.temperaturaMojado);
+  const multiplicadorVarietal = limitar(
+    Number(entrada.multiplicadorVarietal) || 0,
+    0.05,
+    1.2,
+  );
+
+  if (
+    !Number.isFinite(temperaturaMojado) ||
+    horasMojadoContinuo < 3 ||
+    temperaturaMojado <= 2 ||
+    temperaturaMojado >= 30
+  ) {
+    return {
+      riesgo: 0,
+      gradosHora: 0,
+      factorTermico: 0,
+      eventoCompatible: false,
+    };
+  }
+
+  const gradosHora = horasMojadoContinuo * (temperaturaMojado - 2);
+  // F(100 °C-h) = 0,40. La exponencial evita saltos artificiales y conserva
+  // el significado biológico de la relación temperatura-tiempo de mojado.
+  const fraccionEstablecida = 1 - Math.exp((Math.log(0.6) * gradosHora) / 100);
+  // Petta & Lavilla sitúan el rango más favorable entre 15 y 25 °C. Por
+  // encima de 25 °C se reduce linealmente hasta anularse a 30 °C.
+  const factorTermico =
+    temperaturaMojado <= 25 ? 1 : limitar((30 - temperaturaMojado) / 5, 0, 1);
+  const riesgo = limitar(
+    fraccionEstablecida * factorTermico * multiplicadorVarietal * 100,
+  );
+
+  return {
+    riesgo,
+    gradosHora,
+    factorTermico,
+    eventoCompatible: riesgo > 0,
+  };
+}
+
+/**
+ * Resume una ventana que representa un unico ciclo epidemiologico potencial.
+ *
+ * Los dias humedos consecutivos no son ensayos Bernoulli independientes: si
+ * se multiplicaran sus probabilidades, el indice saturaria cerca de 100 por
+ * la sola repeticion del rocio nocturno. La agregacion conserva cuatro
+ * dimensiones auditables de la ventana: pico, intensidad media, persistencia
+ * y recencia. Es un indice ambiental sobre 100, no una probabilidad de que el
+ * cultivo este enfermo.
+ */
+export function calcularPresionCicloManchaRed(
+  eventos: IResultadoEventoInfeccionManchaRed[],
+  multiplicadorVarietal: number,
+): IResultadoCicloManchaRed {
+  if (!eventos.length) {
+    return {
+      indice: 0,
+      intensidadPico: 0,
+      intensidadMedia: 0,
+      persistencia: 0,
+      diasFavorables: 0,
+      diasDesdeUltimoEvento: null,
+    };
+  }
+
+  const favorables = eventos
+    .map((evento, indice) => ({ evento, indice }))
+    .filter(({ evento }) => evento.eventoCompatible && evento.riesgo > 0);
+  if (!favorables.length) {
+    return {
+      indice: 0,
+      intensidadPico: 0,
+      intensidadMedia: 0,
+      persistencia: 0,
+      diasFavorables: 0,
+      diasDesdeUltimoEvento: null,
+    };
+  }
+
+  const riesgos = favorables.map(({ evento }) => limitar(evento.riesgo));
+  const intensidadPico = Math.max(...riesgos);
+  const intensidadMedia =
+    riesgos.reduce((total, riesgo) => total + riesgo, 0) / riesgos.length;
+  const persistencia = favorables.length / eventos.length;
+  const ultimoIndice = favorables[favorables.length - 1].indice;
+  const diasDesdeUltimoEvento = eventos.length - 1 - ultimoIndice;
+  const recencia = 1 - limitar(diasDesdeUltimoEvento / 7, 0, 1);
+  const kVar = limitar(Number(multiplicadorVarietal) || 0, 0.05, 1.2);
+
+  // Ponderacion operacional explicita y versionada. El componente diario ya
+  // incluye susceptibilidad; persistencia y recencia se escalan por el mismo
+  // perfil para que una variedad resistente no se vuelva de alto riesgo solo
+  // por acumular noches humedas.
+  const indice = limitar(
+    0.55 * intensidadPico +
+      0.25 * intensidadMedia +
+      0.15 * (persistencia * 100 * kVar) +
+      0.05 * (recencia * 100 * kVar),
+  );
+
+  return {
+    indice,
+    intensidadPico,
+    intensidadMedia,
+    persistencia,
+    diasFavorables: favorables.length,
+    diasDesdeUltimoEvento,
+  };
 }
 
 export function factorTemperaturaEscaldadura(temperatura: number): number {

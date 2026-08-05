@@ -220,6 +220,48 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
     });
   });
 
+  it('documenta Mancha en Red v4 como indice predictivo y no como severidad observada', () => {
+    const siembraCebada = {
+      ...siembra,
+      semilla: { cultivo: 'Cebada', variedad: 'ANDREIA' },
+    } as any;
+    const prediccion = {
+      fechaPrediccion: new Date().toISOString(),
+      enfermedades: [
+        {
+          enfermedad: 'Mancha en Red',
+          idEnfermedad: 'cebada.mancha_red',
+          resultado: 86.4,
+          estado: 'calculado',
+          calidadDatos: { nivel: 'media' },
+          resistenciaUsada: {
+            estado: 'observada',
+            confianza: 'alta',
+          },
+          modelo: { version: 4, validacion: 'operativo' },
+          variables: {
+            formulaVersion: 4,
+            agregacionVersion: 2,
+            diasFavorablesVentana: 3,
+            intensidadPico: 42.7,
+            diasVentana: 14,
+            coberturaVentana: 0.93,
+            horasMojadoContinuo: 12,
+            temperaturaMojado: 18.5,
+          },
+        },
+      ],
+    } as any;
+
+    const html = service.renderTablaEnfermedades(siembraCebada, [prediccion]);
+    expect(html).toContain('86,4/100 - indice ambiental de infeccion');
+    expect(html).toContain('3 dia(s) favorable(s) dentro de un ciclo de 14 dias');
+    expect(html).toContain('intensidad maxima 42,7/100');
+    expect(html).toContain('cobertura horaria 93%');
+    expect(html).toContain('requiere recorrida para confirmar sintomas');
+    expect(html).not.toContain('86,4% -');
+  });
+
   it('usa solo escenas de la campana que superan el QA satelital canonico', () => {
     const puntos = service.getPuntosNdviCertificado(
       [

@@ -11,16 +11,18 @@ import {
   TEnfermedadId,
 } from 'modelos/src';
 import {
-  acumularSeveridadManchaRed,
+  calcularEventoInfeccionManchaRed,
+  calcularPresionCicloManchaRed,
   calcularEscaldadura,
   calcularFusariumEspiga,
   calcularRoyaHoja,
-  factorHumedadManchaRed,
-  factorTemperaturaManchaRed,
+  CEBADA_MANCHA_RED_AGREGACION_VERSION,
+  CEBADA_MANCHA_RED_COBERTURA_MINIMA,
+  CEBADA_MANCHA_RED_MOTOR_VERSION,
+  CEBADA_MANCHA_RED_VENTANA_DIAS,
   gradosDiaRoya,
   IHoraClimaEnfermedad,
   resolverResistencia,
-  tasaDiariaManchaRedHoraria,
 } from 'modelos/src';
 import { HelperService } from '../../../auxiliares/helper';
 import { SiembrasService } from '../../siembra/service';
@@ -65,6 +67,8 @@ interface ClimaDiaCebada {
   precipAnterior: number;
   horas: IHoraClimaEnfermedad[];
   horasMojado: number;
+  horasMojadoContinuo: number;
+  temperaturaMojado: number;
   coberturaHoraria: number;
   resolucion: 'horaria' | 'proxy_diario';
 }
@@ -158,7 +162,7 @@ export class PrediccionCebadaService {
     const fechasFumigadas = HelperService.fechasFumigadas(fumigaciones.datos);
     let ultimaCreada: IPrediccion | undefined;
 
-    for (const dia of diasCanonicos) {
+    for (const [indiceDia, dia] of diasCanonicos.entries()) {
       const fecha = new Date(`${dia.fecha}T03:00:00.000Z`);
       if (fecha < dateDesde || fecha >= dateHasta) continue;
       const fechaIso = fecha.toISOString();
@@ -169,6 +173,25 @@ export class PrediccionCebadaService {
         dia,
         diasPorFecha.get(fechaAnterior),
       );
+      const ventanaManchaRed = diasCanonicos
+        .slice(
+          Math.max(0, indiceDia - CEBADA_MANCHA_RED_VENTANA_DIAS + 1),
+          indiceDia + 1,
+        )
+        .map((diaVentana, indiceVentana, ventana) =>
+          this.climaDiaCanonico(
+            diaVentana,
+            indiceVentana > 0
+              ? ventana[indiceVentana - 1]
+              : diasPorFecha.get(
+                  this.diaAnterior(
+                    new Date(`${diaVentana.fecha}T03:00:00.000Z`),
+                  )
+                    .toISOString()
+                    .slice(0, 10),
+                ),
+          ),
+        );
       const enfermedades =
         !dia.climaHabilitante
           ? this.enfermedades.map((config) =>
@@ -203,6 +226,7 @@ export class PrediccionCebadaService {
                   semilla: siembra.semilla,
                   etapa: 1,
                   clima: climaDia,
+                  ventanaManchaRed,
                   prediccionAnterior: predAnterior,
                   predecir,
                 });
@@ -226,6 +250,7 @@ export class PrediccionCebadaService {
                 semilla: siembra.semilla,
                 etapa,
                 clima: climaDia,
+                ventanaManchaRed,
                 prediccionAnterior: predAnterior,
                 predecir,
               });
@@ -347,8 +372,24 @@ export class PrediccionCebadaService {
       precip: Number(dia.clima.lluvia?.sum),
       horas: [],
       horasMojado: Number(dia.serie.metrics?.leafWetnessHours),
+      horasMojadoContinuo: Number(
+        dia.serie.metrics?.maxContinuousLeafWetnessHours,
+      ),
+      temperaturaMojado: Number(
+        dia.serie.metrics?.meanTemperatureDuringLeafWetnessC,
+      ),
       coberturaHoraria: dia.calidadClima.cobertura || 0,
-      resolucion: 'proxy_diario',
+      resolucion:
+        Number.isFinite(Number(dia.serie.metrics?.leafWetnessHours)) &&
+        Number.isFinite(
+          Number(dia.serie.metrics?.maxContinuousLeafWetnessHours),
+        ) &&
+        (Number(dia.serie.metrics?.maxContinuousLeafWetnessHours) === 0 ||
+          Number.isFinite(
+            Number(dia.serie.metrics?.meanTemperatureDuringLeafWetnessC),
+          ))
+          ? 'horaria'
+          : 'proxy_diario',
       hrAnterior: Number(anterior?.clima.humedad?.avg),
       precipAnterior: Number(anterior?.clima.lluvia?.sum),
     };
@@ -359,11 +400,19 @@ export class PrediccionCebadaService {
     semilla?: ISemilla;
     etapa: number;
     clima: ClimaDiaCebada;
+    ventanaManchaRed?: ClimaDiaCebada[];
     prediccionAnterior?: IPrediccion;
     predecir: boolean;
   }): IPrediccionEnfermedad {
-    const { config, semilla, etapa, clima, prediccionAnterior, predecir } =
-      params;
+    const {
+      config,
+      semilla,
+      etapa,
+      clima,
+      ventanaManchaRed,
+      prediccionAnterior,
+      predecir,
+    } = params;
     if (!predecir) {
       return {
         enfermedad: config.nombre,
@@ -425,7 +474,7 @@ export class PrediccionCebadaService {
           config,
           semilla,
           clima,
-          variablesAnteriores,
+          ventanaManchaRed || [clima],
         );
       case 'escaldadura':
         return this.predecirEscaldadura(config, semilla, etapa, clima);
@@ -450,20 +499,45 @@ export class PrediccionCebadaService {
     config: ConfigEnfermedadCebada,
     semilla: ISemilla | undefined,
     clima: ClimaDiaCebada,
-    anteriores: IVariablesEnfermedadCebada,
+    ventana: ClimaDiaCebada[],
   ): IPrediccionEnfermedad {
     const resistencia = resolverResistencia(semilla?.resistencia, config.id);
-    const fTemp = factorTemperaturaManchaRed(clima.tavg);
-    const factorHumedad = factorHumedadManchaRed(clima.hr);
-    const tasaDiaria =
-      clima.resolucion === 'horaria'
-        ? tasaDiariaManchaRedHoraria(clima.horas, resistencia.multiplicador)
-        : fTemp * factorHumedad * resistencia.multiplicador;
-    const previa = this.toNumber(
-      anteriores.severidadAcumulada ?? anteriores.indiceAcumulado,
+    const diasHorarios = ventana.filter(
+      (dia) =>
+        dia.resolucion === 'horaria' &&
+        Number.isFinite(dia.horasMojadoContinuo) &&
+        (dia.horasMojadoContinuo === 0 ||
+          Number.isFinite(dia.temperaturaMojado)),
     );
-    const severidadAcumulada = acumularSeveridadManchaRed(previa, tasaDiaria);
-    const resultado = this.round(this.clamp(severidadAcumulada, 0, 100), 2);
+    const coberturaVentana = ventana.length
+      ? diasHorarios.length / ventana.length
+      : 0;
+    const eventos = ventana.map((dia) =>
+      calcularEventoInfeccionManchaRed({
+        horasMojadoContinuo:
+          dia.resolucion === 'horaria'
+            ? dia.horasMojadoContinuo
+            : dia.horasMojado,
+        temperaturaMojado:
+          dia.resolucion === 'horaria' ? dia.temperaturaMojado : dia.tavg,
+        multiplicadorVarietal: resistencia.multiplicador,
+      }),
+    );
+    const eventoActual = eventos[eventos.length - 1];
+    const presionCiclo = calcularPresionCicloManchaRed(
+      eventos,
+      resistencia.multiplicador,
+    );
+    // Una ventana incompleta sigue siendo visible para recorrida, pero se
+    // limita y queda provisional: nunca puede convertirse en alerta.
+    const evidenciaHorariaSuficiente =
+      coberturaVentana >= CEBADA_MANCHA_RED_COBERTURA_MINIMA;
+    const resultado = this.round(
+      evidenciaHorariaSuficiente
+        ? presionCiclo.indice
+        : Math.min(presionCiclo.indice, 49.9),
+      2,
+    );
 
     return {
       enfermedad: config.nombre,
@@ -473,19 +547,49 @@ export class PrediccionCebadaService {
       ...metadataResistencia(resistencia),
       modelo: {
         id: config.id,
-        version: 3,
-        fuente: 'ENFERMEDADES EN CEBADA.xlsx / MANCHA EN RED',
-        resolucion: clima.resolucion,
+        version: CEBADA_MANCHA_RED_MOTOR_VERSION,
+        fuente:
+          'Shaw 1986 (10.1111/j.1365-3059.1986.tb02018.x) / Petta y Lavilla 2023 (10.15517/am.v34i1.51028) / perfil varietal INTA',
+        resolucion: evidenciaHorariaSuficiente ? 'horaria' : 'proxy_diario',
+        validacion: evidenciaHorariaSuficiente
+          ? 'operativo'
+          : 'operativo_provisional',
+        alcance:
+          'Indice predictivo de presion de infeccion condicionado a inoculo; no equivale a incidencia, severidad observada ni diagnostico de tejido.',
       },
       variables: {
-        formulaVersion: 3,
-        fTemp: this.round(fTemp, 3),
-        factorHumedad: this.round(factorHumedad, 3),
+        formulaVersion: CEBADA_MANCHA_RED_MOTOR_VERSION,
+        agregacionVersion: CEBADA_MANCHA_RED_AGREGACION_VERSION,
         kVar: this.round(resistencia.multiplicador, 2),
-        tasaDiaria: this.round(tasaDiaria, 3),
-        severidadAcumulada: resultado,
-        humedadScore: this.round(factorHumedad, 3),
-        temperaturaScore: this.round(fTemp, 3),
+        horasMojadoContinuo: this.round(
+          Number.isFinite(clima.horasMojadoContinuo)
+            ? clima.horasMojadoContinuo
+            : clima.horasMojado,
+          1,
+        ),
+        temperaturaMojado: this.round(
+          Number.isFinite(clima.temperaturaMojado)
+            ? clima.temperaturaMojado
+            : clima.tavg,
+          1,
+        ),
+        gradosHoraInfeccion: this.round(eventoActual?.gradosHora || 0, 1),
+        riesgoEvento: this.round(eventoActual?.riesgo || 0, 1),
+        riesgoVentana: resultado,
+        diasFavorablesVentana: presionCiclo.diasFavorables,
+        // Alias transitorio para que clientes v4 anteriores puedan leer las
+        // salidas nuevas sin interpretar los dias como eventos independientes.
+        eventosCompatibles: presionCiclo.diasFavorables,
+        intensidadPico: this.round(presionCiclo.intensidadPico, 1),
+        intensidadMedia: this.round(presionCiclo.intensidadMedia, 1),
+        persistenciaVentana: this.round(presionCiclo.persistencia, 3),
+        diasDesdeUltimoEvento:
+          presionCiclo.diasDesdeUltimoEvento === null
+            ? undefined
+            : presionCiclo.diasDesdeUltimoEvento,
+        diasVentana: ventana.length,
+        diasHorariosValidos: diasHorarios.length,
+        coberturaVentana: this.round(coberturaVentana, 3),
         lluviaScore: this.round(this.clamp(clima.precip / 5, 0, 1), 3),
         etapaScore: 1,
       },

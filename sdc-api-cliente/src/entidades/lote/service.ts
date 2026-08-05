@@ -4206,8 +4206,13 @@ export class LotesService {
           getEnfermedadPorId(item.idEnfermedad)?.nombre || item.enfermedad;
         const estado = this.getEstadoSanitarioInforme(item);
         const estadoClase = operativa ? 'operativo' : 'pendiente';
+        const manchaRedV4 =
+          item.idEnfermedad === 'cebada.mancha_red' &&
+          Number(item.modelo?.version || 0) >= 4;
         const lectura = operativa
-          ? `${this.formatMaybe(item.resultado, 1)}% - ${this.getNivelRiesgoTexto(item.resultado, siembra?.semilla?.cultivo)}`
+          ? manchaRedV4
+            ? `${this.formatMaybe(item.resultado, 1)}/100 - indice ambiental de infeccion`
+            : `${this.formatMaybe(item.resultado, 1)}% - ${this.getNivelRiesgoTexto(item.resultado, siembra?.semilla?.cultivo)}`
           : item.estado === 'fuera_ventana'
             ? '0% operativo'
             : 'Sin porcentaje operativo';
@@ -4227,7 +4232,7 @@ export class LotesService {
         : pendientes
           ? `<div class="sanitary-summary warn"><strong>${operativas} modelo(s) operativo(s)</strong><span>${pendientes} evaluacion(es) permanecen pendientes o fuera de ventana y no elevan alertas.</span></div>`
           : `<div class="sanitary-summary"><strong>${operativas} modelo(s) operativo(s)</strong><span>Todos se encuentran dentro de su ventana de evaluacion.</span></div>`;
-    return `${resumen}<table class="sanitary-table"><thead><tr><th>Enfermedad</th><th>Estado</th><th>Riesgo actual</th><th>Evidencia principal</th></tr></thead><tbody>${rows}</tbody></table>
+    return `${resumen}<table class="sanitary-table"><thead><tr><th>Enfermedad</th><th>Estado</th><th>Lectura actual</th><th>Evidencia principal</th></tr></thead><tbody>${rows}</tbody></table>
       <p class="sanitary-source"><strong>Fuente sanitaria:</strong> temperatura, humedad relativa del aire, lluvia, acumulacion termica, fenologia y resistencia varietal. La humedad de suelo no sustituye humedad foliar ni integra por si sola este riesgo.</p>`;
   }
 
@@ -4253,6 +4258,20 @@ export class LotesService {
     item: NonNullable<IPrediccion['enfermedades']>[number],
   ): string {
     const variables = (item.variables || {}) as Record<string, unknown>;
+    if (
+      item.idEnfermedad === 'cebada.mancha_red' &&
+      Number(item.modelo?.version || 0) >= 4
+    ) {
+      const favorables = this.toNumber(
+        variables.diasFavorablesVentana ?? variables.eventosCompatibles,
+      );
+      const dias = this.toNumber(variables.diasVentana);
+      const cobertura = this.toNumber(variables.coberturaVentana) * 100;
+      const mojado = this.toNumber(variables.horasMojadoContinuo);
+      const temperatura = this.toNumber(variables.temperaturaMojado);
+      const pico = this.toNumber(variables.intensidadPico);
+      return `${this.formatNumber(favorables, 0)} dia(s) favorable(s) dentro de un ciclo de ${this.formatNumber(dias, 0)} dias; intensidad maxima ${this.formatNumber(pico, 1)}/100; cobertura horaria ${this.formatNumber(cobertura, 0)}%; ultimo mojado continuo ${this.formatNumber(mojado, 1)} h a ${this.formatNumber(temperatura, 1)} C. Es presion ambiental condicionada a inoculo y requiere recorrida para confirmar sintomas.`;
+    }
     const gddSiembra = this.toNumber(variables.GDDBase0Siembra);
     const umbralGdd = this.toNumber(variables.UmbralInicioGdd);
     if (

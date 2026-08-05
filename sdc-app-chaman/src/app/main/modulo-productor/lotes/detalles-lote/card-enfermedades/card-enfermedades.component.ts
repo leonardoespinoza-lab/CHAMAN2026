@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
 import {
+  CEBADA_MANCHA_RED_UMBRAL_ALERTA,
   IEstadoFenologiaArveja,
   getUmbralesRiesgoSanitario,
   IPrediccionEnfermedad,
@@ -46,6 +47,7 @@ interface DiseaseInsight {
   prediccion?: IPrediccionEnfermedad;
   resultado: number;
   resultadoEtiqueta: string;
+  etiquetaMetrica: string;
   enVentanaFenologica: boolean;
   fill: number;
   severity: 'low' | 'medium' | 'high';
@@ -205,6 +207,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         prediccion,
         resultado,
         resultadoEtiqueta: this.resultadoEtiqueta(prediccion, resultado, enfermedad, prediccionVigente),
+        etiquetaMetrica: this.etiquetaMetrica(enfermedad, prediccion),
         enVentanaFenologica,
         fill: indiceVisible ? this.llenadoRiesgo(resultado, true, enfermedad) : 0,
         severity: requierePrecaucion ? 'medium' : this.severidad(resultado, enfermedad),
@@ -311,6 +314,16 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   private umbralesRiesgo(enfermedad?: TEnfermedad): { medio: number; alto: number; escalaDirecta: boolean } {
+    if (
+      enfermedad === 'Mancha en Red' &&
+      this.esManchaRedV4(enfermedad, this.prediccionPorEnfermedad(enfermedad))
+    ) {
+      return {
+        medio: 35,
+        alto: CEBADA_MANCHA_RED_UMBRAL_ALERTA,
+        escalaDirecta: true,
+      };
+    }
     return getUmbralesRiesgoSanitario(this.siembra?.semilla?.cultivo, this.esScreeningExperimental);
   }
 
@@ -464,7 +477,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       'Roya Anaranjada':
         'Oportunidad ambiental horaria para roya amarilla/estriada (P. striiformis). No confirma inoculo, infeccion, sintomas, incidencia ni severidad.',
       'Mancha en Red':
-        'Enfermedad foliar de cebada favorecida por rastrojo infectado, humedad, lluvias y temperaturas templadas.',
+        'Enfermedad foliar de cebada. Chaman anticipa episodios de infeccion compatibles a partir del mojado foliar continuo, la temperatura durante el mojado, la fenologia y el perfil varietal.',
       'Escaldadura de la Cebada':
         'Enfermedad foliar de cebada asociada a clima fresco-humedo, salpicado de lluvia y canopeo persistente.',
       'Roya de la Hoja de Cebada':
@@ -492,7 +505,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       'Roya Anaranjada':
         'El Jarroudi 2017: cuenta rachas de al menos 4 h con 4<T<16 C, HR>92% y lluvia<=0,1 mm en una ventana movil de 10 dias. 5% es señal temprana, 15% oportunidad fuerte y 20% muy fuerte. La formula contractual 5,15 + 0,72 GD + 0,48 DHR + 0,35 DL - 35,2 (1-I) queda solo en sombra, sin alertas.',
       'Mancha en Red':
-        'Cebada V2: respuesta horaria de temperatura y humedad, tasa diaria por perfil varietal y avance acumulado.',
+        'Cebada V4: calcula grados-hora desde el inicio del mojado, estima el riesgo de cada episodio y combina los episodios de los ultimos 14 dias. Usa Shaw 1986, Petta y Lavilla 2023 y el perfil varietal INTA. El indice expresa presion predictiva condicionada a inoculo; no es severidad observada.',
       'Escaldadura de la Cebada':
         'Cebada V2: riesgo de infeccion por temperatura fresca, mojado foliar, lluvia/salpicado y perfil varietal.',
       'Roya de la Hoja de Cebada':
@@ -598,6 +611,21 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       kVar: 'perfil varietal',
       ri: 'RI',
       horasMojado: 'horas mojado',
+      horasMojadoContinuo: 'mojado continuo (h)',
+      temperaturaMojado: 'temperatura durante mojado',
+      gradosHoraInfeccion: 'grados-hora de infeccion',
+      riesgoEvento: 'indice del episodio',
+      riesgoVentana: 'indice del ciclo',
+      eventosCompatibles: 'dias favorables (compatibilidad)',
+      diasFavorablesVentana: 'dias favorables',
+      intensidadPico: 'intensidad maxima',
+      intensidadMedia: 'intensidad media',
+      persistenciaVentana: 'persistencia del ciclo',
+      diasDesdeUltimoEvento: 'dias desde la ultima condicion favorable',
+      agregacionVersion: 'version de agregacion',
+      diasVentana: 'dias de ventana',
+      diasHorariosValidos: 'dias horarios validos',
+      coberturaVentana: 'cobertura de ventana',
       lluviaDiaria: 'lluvia diaria',
       factorHumedad: 'factor HR',
       tasaDiaria: 'tasa diaria',
@@ -690,6 +718,16 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     if (this.esSalidaProvisionalTrigo(prediccion)) {
       return 'Seguimiento';
     }
+    if (prediccion.modelo?.validacion === 'operativo_provisional') {
+      return 'Seguimiento';
+    }
+    if (this.esManchaRedV4(enfermedad, prediccion)) {
+      if (resultado >= CEBADA_MANCHA_RED_UMBRAL_ALERTA) {
+        return 'Presion ambiental alta';
+      }
+      if (resultado >= 35) return 'Condiciones favorables';
+      return 'Presion baja';
+    }
     const umbrales = this.umbralesRiesgo(enfermedad);
     if (resultado >= umbrales.alto) {
       return this.esScreeningExperimental ? 'Ambiente alto' : 'Riesgo alto';
@@ -734,6 +772,18 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     }
     if (prediccion.estado === 'sin_datos') {
       return prediccion.calidadDatos?.resumen || 'Faltan variables climaticas para calcular sin inventar datos.';
+    }
+    if (this.esManchaRedV4(enfermedad, prediccion)) {
+      const variables = (prediccion.variables || {}) as Record<string, number>;
+      const favorables = Number(
+        variables['diasFavorablesVentana'] ??
+          variables['eventosCompatibles'] ??
+          0
+      );
+      const dias = Number(variables['diasVentana'] || 0);
+      const cobertura = Number(variables['coberturaVentana'] || 0) * 100;
+      const pico = Number(variables['intensidadPico'] || 0);
+      return `${favorables} dia(s) favorable(s) dentro de un ciclo de ${dias} dias; intensidad maxima ${pico.toFixed(1)}/100 y cobertura horaria ${cobertura.toFixed(0)}%. Es presion ambiental condicionada a inoculo; requiere recorrida para confirmar sintomas.`;
     }
     if (this.sinResistenciaVarietal(prediccion)) {
       return 'Resistencia varietal pendiente; el indice usa S=1 y requiere recorrida antes de definir manejo.';
@@ -862,10 +912,29 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return `${frecuencia.toFixed(1)}%`;
     }
     if (prediccion.estado === 'sin_datos') return `${resultado.toFixed(1)}%`;
+    if (enfermedad && this.esManchaRedV4(enfermedad, prediccion)) {
+      return `${resultado.toFixed(1)}/100`;
+    }
     if (!this.esScreeningExperimental) return `${resultado.toFixed(1)}%`;
     if (resultado >= 80) return 'Alto';
     if (resultado >= 50) return 'Medio';
     return 'Bajo';
+  }
+
+  private etiquetaMetrica(
+    enfermedad: TEnfermedad,
+    prediccion?: IPrediccionEnfermedad
+  ): string {
+    return this.esManchaRedV4(enfermedad, prediccion)
+      ? 'Indice ambiental de infeccion'
+      : 'Indice sanitario estimado';
+  }
+
+  private esManchaRedV4(
+    enfermedad: TEnfermedad,
+    prediccion?: IPrediccionEnfermedad
+  ): boolean {
+    return enfermedad === 'Mancha en Red' && Number(prediccion?.modelo?.version || 0) >= 4;
   }
 
   private esPrediccionVigente(prediccion?: IPrediccionEnfermedad): boolean {
@@ -885,6 +954,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       this.esPrediccionVigente(prediccion) &&
       prediccion.estado === 'calculado' &&
       prediccion.modelo?.validacion !== 'experimental' &&
+      prediccion.modelo?.validacion !== 'operativo_provisional' &&
       !this.esSalidaProvisionalTrigo(prediccion) &&
       !this.esCalidadNoOperativa(prediccion)
     );
