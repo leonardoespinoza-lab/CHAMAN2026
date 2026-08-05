@@ -70,6 +70,19 @@ function isLegacyApiRequest(req, pathname) {
     return false;
   }
 
+  // Angular solicita archivos JSON estaticos (por ejemplo /i18n/es.json) con
+  // Accept: application/json. Esos activos deben resolverse antes de aplicar
+  // la compatibilidad del proxy; de lo contrario terminan en la API y reciben
+  // un 401 como si fueran endpoints protegidos.
+  try {
+    const staticPath = safeResolve(pathname);
+    if (staticPath && fs.existsSync(staticPath) && fs.statSync(staticPath).isFile()) {
+      return false;
+    }
+  } catch (_error) {
+    // Una ruta malformada no se considera un activo estatico valido.
+  }
+
   const method = String(req.method || 'GET').toUpperCase();
   if (method !== 'GET' && method !== 'HEAD') {
     return true;
