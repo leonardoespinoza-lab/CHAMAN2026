@@ -4,6 +4,7 @@
 **/.env
 **/.env.*
 .railway-admin-credential.txt
+.railway-chirpstack-credentials.txt
 .railway-ftp-camera-password.txt
 **/google-credentials.json
 **/*credentials*.json
@@ -66,3 +67,4 @@ sdc-api-admin/
 **/.vscode/
 .DS_Store
 Thumbs.db
+{console.error(e)
