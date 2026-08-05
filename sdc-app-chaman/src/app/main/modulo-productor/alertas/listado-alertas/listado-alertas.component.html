@@ -14,6 +14,7 @@
       <button
         type="button"
         class="export-action"
+        data-chaman-action="secondary"
         aria-label="Exportar informe de la pagina visible"
         (click)="exportarInforme()"
       >
@@ -241,6 +242,7 @@
               <button
                 type="button"
                 class="icon-action"
+                data-chaman-action="info"
                 title="Ver detalle"
                 [attr.aria-label]="'Ver detalle de ' + titulo(row)"
                 (click)="abrirDetalle(row)"
@@ -250,6 +252,7 @@
               <button
                 type="button"
                 class="icon-action"
+                data-chaman-action="secondary"
                 title="Entrar al lote"
                 [attr.aria-label]="'Entrar al lote ' + lote(row)"
                 (click)="abrirLote(row)"
@@ -292,6 +295,7 @@
       <button
         type="button"
         class="dialog-close"
+        data-chaman-action="secondary"
         aria-label="Cerrar detalle de la alarma"
         (click)="detalleVisible = false"
       >
@@ -409,7 +413,12 @@
       </div>
 
       <div class="state-actions">
-        <button type="button" class="secondary-action" (click)="abrirLote(alerta)">
+        <button
+          type="button"
+          class="secondary-action"
+          data-chaman-action="secondary"
+          (click)="abrirLote(alerta)"
+        >
           <i class="pi pi-arrow-right"></i>
           Entrar al lote
         </button>

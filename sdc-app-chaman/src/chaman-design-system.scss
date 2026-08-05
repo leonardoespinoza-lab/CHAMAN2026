@@ -48,6 +48,100 @@
     border-color 160ms ease;
 }
 
+/*
+ * Accesos secundarios e informativos. El fondo blanco no toma el tinte del
+ * tenant; el borde, texto y foco sí heredan su marca. Los CTA primarios y las
+ * severidades operativas quedan deliberadamente fuera del selector.
+ */
+.p-button.p-button-secondary,
+.p-button.p-button-outlined:not(.p-button-primary):not(.p-button-danger):not(.p-button-warn):not(
+    .p-button-success
+  ):not(.p-button-help):not(.p-button-contrast),
+.chaman-secondary-action,
+.chaman-info-action,
+[data-chaman-action="secondary"],
+[data-chaman-action="info"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 44px !important;
+  min-inline-size: 44px !important;
+  padding: 0.65rem 1rem;
+  background: var(--chaman-secondary-action-bg) !important;
+  border: 1px solid var(--chaman-secondary-action-border) !important;
+  border-radius: 999px !important;
+  color: var(--chaman-secondary-action-text) !important;
+  box-shadow: var(--chaman-secondary-action-shadow) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.p-button.p-button-secondary:focus-visible,
+.p-button.p-button-outlined:not(.p-button-primary):not(.p-button-danger):not(.p-button-warn):not(
+    .p-button-success
+  ):not(.p-button-help):not(.p-button-contrast):focus-visible,
+.chaman-secondary-action:focus-visible,
+.chaman-info-action:focus-visible,
+[data-chaman-action="secondary"]:focus-visible,
+[data-chaman-action="info"]:focus-visible {
+  border-color: var(--chaman-secondary-action-border-hover) !important;
+  box-shadow: var(--chaman-action-focus-ring), var(--chaman-secondary-action-shadow) !important;
+  outline: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .p-button.p-button-secondary:not(:disabled):hover,
+  .p-button.p-button-outlined:not(.p-button-primary):not(.p-button-danger):not(.p-button-warn):not(
+      .p-button-success
+    ):not(.p-button-help):not(.p-button-contrast):not(:disabled):hover,
+  .chaman-secondary-action:not([aria-disabled="true"]):hover,
+  .chaman-info-action:not([aria-disabled="true"]):hover,
+  [data-chaman-action="secondary"]:not([aria-disabled="true"]):hover,
+  [data-chaman-action="info"]:not([aria-disabled="true"]):hover {
+    background: var(--chaman-secondary-action-bg) !important;
+    border-color: var(--chaman-secondary-action-border-hover) !important;
+    box-shadow: var(--chaman-secondary-action-shadow-hover) !important;
+    transform: translateY(-1px);
+  }
+}
+
+.p-button.p-button-secondary:not(:disabled):active,
+.p-button.p-button-outlined:not(.p-button-primary):not(.p-button-danger):not(.p-button-warn):not(
+    .p-button-success
+  ):not(.p-button-help):not(.p-button-contrast):not(:disabled):active,
+.chaman-secondary-action:not([aria-disabled="true"]):active,
+.chaman-info-action:not([aria-disabled="true"]):active,
+[data-chaman-action="secondary"]:not([aria-disabled="true"]):active,
+[data-chaman-action="info"]:not([aria-disabled="true"]):active {
+  box-shadow: var(--chaman-secondary-action-shadow) !important;
+  transform: translateY(0);
+}
+
+.p-button.p-button-secondary:disabled,
+.p-button.p-button-outlined:disabled,
+.chaman-secondary-action[aria-disabled="true"],
+.chaman-info-action[aria-disabled="true"],
+[data-chaman-action="secondary"][aria-disabled="true"],
+[data-chaman-action="info"][aria-disabled="true"] {
+  box-shadow: none !important;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* Una observacion pendiente conserva su señal ámbar dentro del mismo sistema. */
+.information-control.has-observations .p-button.chaman-action-warning {
+  background: #fff8e8 !important;
+  border-color: #e6c983 !important;
+  color: #7c590d !important;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .p-button:not(:disabled):hover {
     filter: saturate(1.04);

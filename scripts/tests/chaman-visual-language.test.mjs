@@ -6,6 +6,7 @@ import { test } from 'node:test';
 
 const paths = {
   system: new URL('../../sdc-app-chaman/src/chaman-design-system.scss', import.meta.url),
+  organic: new URL('../../sdc-app-chaman/src/organic-intelligence.scss', import.meta.url),
   alarms: new URL(
     '../../sdc-app-chaman/src/app/main/modulo-productor/alertas/listado-alertas/listado-alertas.component.scss',
     import.meta.url,
@@ -276,6 +277,34 @@ test('el sistema visual cubre las superficies operativas compartidas', async () 
 
   assert.match(css, /border-inline-start-width:\s*1px\s*!important/);
   assert.match(css, /border:\s*1px solid var\(--ch-surface-border\)\s*!important/);
+});
+
+test('los accesos secundarios usan una superficie blanca, opaca y tenant-aware', async () => {
+  const css = await read(paths.organic);
+
+  assert.match(css, /--chaman-secondary-action-bg:\s*#ffffff\s*!important/);
+  assert.match(
+    css,
+    /--chaman-secondary-action-border:\s*color-mix\(in srgb, var\(--chaman-muted\)/,
+  );
+  assert.match(
+    css,
+    /--chaman-secondary-action-text:\s*color-mix\(in srgb, var\(--p-primary-color\)/,
+  );
+});
+
+test('el contrato de acciones no borra la jerarquia primaria ni los estados operativos', async () => {
+  const css = await read(paths.system);
+
+  assert.match(css, /\[data-chaman-action="info"\][\s\S]{0,700}min-block-size:\s*44px\s*!important/);
+  assert.ok(css.includes('.p-button.p-button-secondary'));
+  assert.ok(css.includes('[data-chaman-action="secondary"]'));
+  assert.ok(css.includes('[data-chaman-action="info"]'));
+  assert.doesNotMatch(css, /\.p-button\.p-button-text:not\(/);
+  ['primary', 'danger', 'warn', 'success', 'help', 'contrast'].forEach((severity) => {
+    assert.match(css, new RegExp(`:not\\(\\s*\\.p-button-${severity}\\s*\\)`), `Falta excluir ${severity}`);
+  });
+  assert.ok(!css.includes(':not(.p-button-info)'), 'Los accesos info outlined deben quedar incluidos');
 });
 
 test('Alarmas no reintroduce franjas cromaticas locales', async () => {

@@ -43,7 +43,7 @@
           <p-button
             label="Ficha de la variedad"
             icon="pi pi-book"
-            severity="primary"
+            severity="secondary"
             [outlined]="true"
             (onClick)="verFichaVarietal = true"
           />
@@ -52,7 +52,7 @@
           <p-button
             label="Informe agronomico"
             icon="pi pi-file-export"
-            severity="primary"
+            severity="secondary"
             [outlined]="true"
             (onClick)="descargarCertificado()"
           />
@@ -558,7 +558,12 @@
         <span>Servicios del lote</span>
         <strong>Preparando indicadores y recomendaciones</strong>
         <small>Se cargan al llegar a esta seccion para priorizar la informacion operativa principal.</small>
-        <button #loadServicesTrigger type="button" class="services-deferred-placeholder__action">
+        <button
+          #loadServicesTrigger
+          type="button"
+          class="services-deferred-placeholder__action"
+          data-chaman-action="secondary"
+        >
           Cargar servicios ahora
         </button>
       </div>

@@ -23,7 +23,12 @@
             <option [ngValue]="option.value">{{ option.label }}</option>
           }
         </select>
-        <button class="soil-history-export" type="button" (click)="exportarCsv()">
+        <button
+          class="soil-history-export"
+          data-chaman-action="secondary"
+          type="button"
+          (click)="exportarCsv()"
+        >
           Exportar CSV
         </button>
       </div>

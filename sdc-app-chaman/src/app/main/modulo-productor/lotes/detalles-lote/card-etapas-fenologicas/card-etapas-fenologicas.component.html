@@ -83,7 +83,12 @@
             <span>{{ etiquetaEtapaActual }}</span>
             <strong>{{ etapaActual || 'Sin etapa confirmada' }}</strong>
           </div>
-          <button type="button" class="stages-detail-trigger" (click)="abrirDetalleEtapas()">
+          <button
+            type="button"
+            class="stages-detail-trigger"
+            data-chaman-action="info"
+            (click)="abrirDetalleEtapas()"
+          >
             <i class="pi pi-list"></i>
             Ver etapas y registros
           </button>

@@ -49,6 +49,15 @@
   --chaman-card-shadow: 0 14px 32px rgba(15, 23, 42, 0.055), var(--chaman-glass-inner) !important;
   --chaman-card-shadow-hover: 0 18px 44px rgba(15, 23, 42, 0.09), var(--chaman-glass-inner) !important;
 
+  /* Material opaco para accesos secundarios, compartido por Chaman y tenants. */
+  --chaman-secondary-action-bg: #ffffff !important;
+  --chaman-secondary-action-border: color-mix(in srgb, var(--chaman-muted) 32%, #ffffff) !important;
+  --chaman-secondary-action-border-hover: color-mix(in srgb, var(--p-primary-color) 72%, #cbd9e2) !important;
+  --chaman-secondary-action-text: color-mix(in srgb, var(--p-primary-color) 45%, #0f3040) !important;
+  --chaman-secondary-action-shadow: 0 3px 10px rgba(15, 23, 42, 0.045) !important;
+  --chaman-secondary-action-shadow-hover: 0 9px 22px rgba(15, 23, 42, 0.085) !important;
+  --chaman-action-focus-ring: 0 0 0 3px color-mix(in srgb, var(--p-primary-color) 20%, transparent) !important;
+
   --p-primary-color: var(--chaman-aqua) !important;
   --p-primary-contrast-color: #052427 !important;
   --p-accent-color: var(--chaman-sky) !important;
@@ -234,12 +243,6 @@ html body .chaman-action-card:hover {
     0 18px 40px color-mix(in srgb, var(--p-primary-color), transparent 76%),
     var(--chaman-glass-inner);
   transform: translateY(-1px);
-}
-
-.p-button.p-button-outlined,
-.p-button.p-button-text {
-  color: var(--chaman-aqua-deep) !important;
-  border-color: rgba(139, 163, 184, 0.36) !important;
 }
 
 html body .p-inputtext,

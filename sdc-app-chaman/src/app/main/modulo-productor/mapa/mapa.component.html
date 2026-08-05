@@ -63,7 +63,12 @@
     </div>
 
     <div class="summary-action" aria-label="Resumen ejecutivo del mapa">
-      <button type="button" class="summary-button" (click)="abrirResumenGerencial()">
+      <button
+        type="button"
+        class="summary-button"
+        data-chaman-action="info"
+        (click)="abrirResumenGerencial()"
+      >
         <span class="summary-button-icon">
           <i class="pi pi-chart-bar"></i>
         </span>

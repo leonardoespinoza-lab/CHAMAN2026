@@ -23,7 +23,14 @@
           <div class="photo-date-title">
             <span>Ultimas capturas</span>
             @if (fotos.length > fotosVisibles.length) {
-              <button type="button" class="repository-link" (click)="abrirRepositorio()">Repositorio</button>
+              <button
+                type="button"
+                class="repository-link"
+                data-chaman-action="info"
+                (click)="abrirRepositorio()"
+              >
+                Repositorio
+              </button>
             }
           </div>
           @for (foto of fotosVisibles; track foto._id || foto.url) {
