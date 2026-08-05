@@ -89,7 +89,7 @@ h2 {
   min-width: 220px;
   gap: 3px;
   padding: 14px 16px;
-  border-left: 4px solid #95a3b8;
+  border: 1px solid rgba(130, 164, 202, 0.28);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.72);
 
@@ -283,7 +283,6 @@ h2 {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid rgba(130, 164, 202, 0.3);
-  border-left: 4px solid #95a3b8;
   border-radius: 8px;
   color: var(--ink);
   background: rgba(255, 255, 255, 0.74);
@@ -319,15 +318,15 @@ h2 {
   }
 
   &.alto {
-    border-left-color: #ef5350;
+    background: color-mix(in srgb, #ef5350 5%, rgba(255, 255, 255, 0.74));
   }
 
   &.medio {
-    border-left-color: #f1ab2d;
+    background: color-mix(in srgb, #f1ab2d 5%, rgba(255, 255, 255, 0.74));
   }
 
   &.bajo {
-    border-left-color: #60c24f;
+    background: color-mix(in srgb, #60c24f 5%, rgba(255, 255, 255, 0.74));
   }
 
   &:hover {
@@ -559,7 +558,6 @@ h2 {
   align-items: center;
   padding: 12px 14px;
   border: 1px solid rgba(130, 164, 202, 0.28);
-  border-left: 4px solid #95a3b8;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.75);
 
@@ -590,11 +588,11 @@ h2 {
   }
 
   &.alto {
-    border-left-color: #ef5350;
+    background: color-mix(in srgb, #ef5350 5%, rgba(255, 255, 255, 0.75));
   }
 
   &.medio {
-    border-left-color: #f1ab2d;
+    background: color-mix(in srgb, #f1ab2d 5%, rgba(255, 255, 255, 0.75));
   }
 }
 

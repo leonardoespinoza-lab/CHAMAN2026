@@ -550,7 +550,7 @@
   padding: 1rem;
   background: var(--p-surface-50);
   border-radius: 8px;
-  border-left: 4px solid var(--p-primary-color);
+  border: 1px solid var(--p-surface-border);
 
   .forecast-summary-item {
     display: flex;
@@ -727,7 +727,7 @@
   
   .forecast-summary {
     background: var(--p-surface-700);
-    border-left-color: var(--p-primary-400);
+    border-color: var(--p-surface-600);
   }
 }
 

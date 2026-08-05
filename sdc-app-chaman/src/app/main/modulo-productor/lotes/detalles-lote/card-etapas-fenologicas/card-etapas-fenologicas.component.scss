@@ -462,7 +462,6 @@
   background: linear-gradient(to bottom, rgba(24, 154, 141, 0.14), rgba(24, 154, 141, 0.025) 76%);
   border: 1px solid rgba(24, 137, 126, 0.28);
   border-radius: 12px;
-  border-top: 3px solid var(--p-primary-color);
   bottom: 0.8rem;
   content: "";
   left: 0.6rem;
@@ -670,7 +669,6 @@
   align-content: start;
   background: var(--p-surface-50);
   border: 1px solid rgba(91, 124, 156, 0.22);
-  border-top: 3px solid #98a2ad;
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -681,13 +679,11 @@
 
 .stage-step.done {
   background: color-mix(in srgb, #6fb845, white 90%);
-  border-top-color: #6fb845;
 }
 
 .stage-step.current {
   background: color-mix(in srgb, var(--p-primary-color), white 87%);
-  border-color: color-mix(in srgb, var(--p-primary-color), white 56%);
-  border-top-color: var(--p-primary-color);
+  border-color: rgba(91, 124, 156, 0.22);
 }
 
 .stage-step.pending {
@@ -987,7 +983,7 @@
 
 .thermal-reference > p.thermal-warning {
   background: color-mix(in srgb, #f59e0b, white 88%);
-  border-left: 3px solid #f59e0b;
+  border: 1px solid color-mix(in srgb, #f59e0b, white 62%);
   color: #7a4a00;
   padding: 0.55rem 0.7rem;
 }

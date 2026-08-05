@@ -242,7 +242,8 @@
 }
 
 .agro-grid article {
-  box-shadow: inset 4px 0 0 var(--p-primary-color);
+  border: 1px solid var(--p-surface-border);
+  background: color-mix(in srgb, var(--p-primary-color) 4%, var(--p-content-background));
 }
 
 .agro-grid strong,

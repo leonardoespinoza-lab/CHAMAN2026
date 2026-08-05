@@ -204,15 +204,15 @@
 }
 
 .frio-metrics article.ok {
-  box-shadow: inset 4px 0 0 #6fb845;
+  background: color-mix(in srgb, #6fb845 5%, var(--p-content-background));
 }
 
 .frio-metrics article.warn {
-  box-shadow: inset 4px 0 0 #f4a340;
+  background: color-mix(in srgb, #f4a340 5%, var(--p-content-background));
 }
 
 .frio-metrics article.info {
-  box-shadow: inset 4px 0 0 var(--p-primary-color);
+  background: color-mix(in srgb, var(--p-primary-color) 5%, var(--p-content-background));
 }
 
 .frio-meter {

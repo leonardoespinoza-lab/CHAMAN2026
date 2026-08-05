@@ -118,21 +118,17 @@
   background: color-mix(in srgb, var(--p-content-background) 92%, var(--p-primary-50));
 }
 
-.metric-grid article::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  content: "";
-  background: var(--metric-color, var(--p-primary-color));
-}
 .metric-grid article[data-tone="thermal"] {
   --metric-color: #ef8d3b;
+  background: color-mix(in srgb, #ef8d3b 4%, var(--p-content-background));
 }
 .metric-grid article[data-tone="water"] {
   --metric-color: #3aa9d8;
+  background: color-mix(in srgb, #3aa9d8 4%, var(--p-content-background));
 }
 .metric-grid article[data-tone="atmosphere"] {
   --metric-color: #7a64d1;
+  background: color-mix(in srgb, #7a64d1 4%, var(--p-content-background));
 }
 .metric-grid article span {
   color: var(--p-text-muted-color);

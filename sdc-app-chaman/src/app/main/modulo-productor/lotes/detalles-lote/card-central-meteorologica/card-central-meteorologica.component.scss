@@ -133,7 +133,6 @@
 .central-grid article {
   background: rgba(255, 255, 255, 0.72);
   border: 1px solid #c7d4e2;
-  border-left: 3px solid var(--p-primary-color);
   border-radius: 8px;
   min-height: 88px;
   padding: 0.7rem 0.75rem;
@@ -141,7 +140,7 @@
 }
 
 .central-grid article.empty {
-  border-left-color: #a9b6c7;
+  background: color-mix(in srgb, #a9b6c7 5%, var(--p-content-background));
   opacity: 0.72;
 }
 

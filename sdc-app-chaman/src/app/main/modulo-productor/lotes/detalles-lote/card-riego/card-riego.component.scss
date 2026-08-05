@@ -256,8 +256,8 @@
 }
 
 .detail-days article.should-water {
-  border-color: var(--p-primary-color);
-  box-shadow: inset 3px 0 0 var(--p-primary-color);
+  border-color: var(--p-surface-border);
+  background: color-mix(in srgb, var(--p-primary-color) 5%, var(--p-content-background));
 }
 
 @media (max-width: 520px) {

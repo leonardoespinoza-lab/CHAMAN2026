@@ -6,7 +6,7 @@
 .tenant-notice { margin:1rem 0; display:flex; gap:.8rem; padding:1rem 1.2rem; border-radius:14px; color:#0f5e58; background:#e6f8f6; border:1px solid #9fe1db; }
 .tenant-notice div { display:flex; flex-direction:column; gap:.2rem; }
 .tenant-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:1rem; }
-.tenant-card { --tenant-accent:#0f8f83; background:rgba(255,255,255,.92); border:1px solid #d7e3e8; border-top:4px solid var(--tenant-accent); border-radius:18px; padding:1.1rem; box-shadow:0 10px 30px rgba(15,23,42,.06); }
+.tenant-card { --tenant-accent:#0f8f83; background:color-mix(in srgb,var(--tenant-accent) 4%,rgba(255,255,255,.92)); border:1px solid #d7e3e8; border-radius:18px; padding:1.1rem; box-shadow:0 10px 30px rgba(15,23,42,.06); }
 .tenant-card__identity { display:flex; gap:.9rem; align-items:center; }
 .tenant-card__identity img,.tenant-initial { width:58px; height:58px; border-radius:14px; object-fit:contain; background:#f1f8f7; display:grid; place-items:center; font-size:1.45rem; font-weight:800; color:var(--tenant-accent); }
 .tenant-card__identity h2 { margin:.15rem 0; font-size:1.2rem; }

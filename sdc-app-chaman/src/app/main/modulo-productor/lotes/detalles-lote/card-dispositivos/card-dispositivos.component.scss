@@ -56,7 +56,6 @@
 
 .device-card {
   border: 1px solid var(--p-content-border-color);
-  border-left: 4px solid #f59e0b;
   border-radius: 8px;
   display: grid;
   gap: 14px;
@@ -64,7 +63,7 @@
 }
 
 .device-card.device-online {
-  border-left-color: #22c55e;
+  background: color-mix(in srgb, #22c55e 5%, var(--p-content-background));
 }
 
 .device-card-header {

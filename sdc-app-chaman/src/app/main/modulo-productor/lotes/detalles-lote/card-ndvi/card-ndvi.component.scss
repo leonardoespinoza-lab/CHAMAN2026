@@ -140,7 +140,7 @@
 
 .timeline-item.active {
   border-color: var(--p-primary-color);
-  box-shadow: inset 4px 0 0 var(--p-primary-color);
+  background: color-mix(in srgb, var(--p-primary-color) 7%, var(--p-content-background));
 }
 
 .timeline-item span,
@@ -197,7 +197,7 @@
 
 .layer-tab.active {
   border-color: var(--p-primary-color);
-  box-shadow: inset 0 -3px 0 var(--p-primary-color);
+  background: color-mix(in srgb, var(--p-primary-color) 7%, var(--p-content-background));
 }
 
 .layer-tab:disabled {
@@ -354,12 +354,12 @@
 }
 
 .history-selected-scene .history-stage {
-  border-left: 2px solid #aebdcd;
+  border-left: 1px solid var(--p-surface-border);
   padding-left: 0.55rem;
 }
 
 .history-selected-scene .history-stage:has(em.confirmed) {
-  border-left-color: var(--p-primary-color);
+  background: color-mix(in srgb, var(--p-primary-color) 4%, transparent);
 }
 
 .history-selected-scene em.confirmed {
@@ -521,7 +521,6 @@
 .ndvi-analysis {
   background: rgba(255, 255, 255, 0.62);
   border: 1px solid #c7d4e2;
-  border-left: 3px solid var(--p-primary-color);
   border-radius: 8px;
   display: grid;
   gap: 0.38rem;
@@ -536,11 +535,11 @@
 }
 
 .ndvi-analysis.warn {
-  border-left-color: #e8a33a;
+  background: color-mix(in srgb, #e8a33a 5%, rgba(255, 255, 255, 0.62));
 }
 
 .ndvi-analysis.risk {
-  border-left-color: #e05d4f;
+  background: color-mix(in srgb, #e05d4f 5%, rgba(255, 255, 255, 0.62));
 }
 
 .analysis-main span,
@@ -607,18 +606,18 @@
 }
 
 .analysis-grid .expected-card.ok {
-  border-color: color-mix(in srgb, #61b84f, transparent 38%);
-  box-shadow: inset 3px 0 0 #61b84f;
+  border-color: var(--p-surface-border);
+  background: color-mix(in srgb, #61b84f 5%, var(--p-content-background));
 }
 
 .analysis-grid .expected-card.warn {
-  border-color: color-mix(in srgb, #e8a33a, transparent 30%);
-  box-shadow: inset 3px 0 0 #e8a33a;
+  border-color: var(--p-surface-border);
+  background: color-mix(in srgb, #e8a33a 5%, var(--p-content-background));
 }
 
 .analysis-grid .expected-card.risk {
-  border-color: color-mix(in srgb, #e05d4f, transparent 30%);
-  box-shadow: inset 3px 0 0 #e05d4f;
+  border-color: var(--p-surface-border);
+  background: color-mix(in srgb, #e05d4f 5%, var(--p-content-background));
 }
 
 .analysis-grid .expected-card small {
@@ -631,8 +630,9 @@
 }
 
 .expected-note {
-  border-left: 3px solid color-mix(in srgb, var(--p-primary-color), transparent 35%);
-  padding-left: 0.58rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--p-primary-color) 4%, transparent);
+  padding: 0.45rem 0.58rem;
 }
 
 .recommendation {
@@ -774,16 +774,16 @@
 }
 
 .satellite-grid article.activo {
-  border-color: color-mix(in srgb, var(--p-primary-color), transparent 28%);
-  box-shadow: inset 3px 0 0 var(--p-primary-color);
+  border-color: var(--p-surface-border);
+  background: color-mix(in srgb, var(--p-primary-color) 6%, var(--p-content-background));
 }
 
 .satellite-grid article.preparado {
-  box-shadow: inset 3px 0 0 #8bb0c9;
+  background: color-mix(in srgb, #8bb0c9 5%, var(--p-content-background));
 }
 
 .satellite-grid article.contexto {
-  box-shadow: inset 3px 0 0 #e8a33a;
+  background: color-mix(in srgb, #e8a33a 5%, var(--p-content-background));
 }
 
 .satellite-grid article div {
@@ -975,7 +975,7 @@
 
   .history-selected-scene .history-stage {
     border-left: 0;
-    border-top: 2px solid #aebdcd;
+    border-top: 1px solid var(--p-surface-border);
     grid-column: 1 / -1;
     padding-left: 0;
     padding-top: 0.48rem;

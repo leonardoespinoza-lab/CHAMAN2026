@@ -571,7 +571,7 @@ pre {
 
 .disease-output-grid article {
   border: 1px solid #bdd0e4;
-  border-left: 4px solid #23d2cc;
+  background: color-mix(in srgb, #23d2cc 4%, var(--p-content-background));
   border-radius: 8px;
   display: grid;
   gap: 10px;

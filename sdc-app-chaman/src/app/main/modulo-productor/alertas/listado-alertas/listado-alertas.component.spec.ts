@@ -47,4 +47,23 @@ describe('ListadoAlertasComponent', () => {
     expect(component.resumen().activas).toBe(2);
     expect(component.resumen().alta).toBe(1);
   });
+
+  it('no presenta un evento cerrado como atencion prioritaria', () => {
+    component.data = [
+      { activa: false, severidad: 'critica', estadoActual: 'Finalizada', prioridad: 98 },
+      { activa: false, severidad: 'alta', estadoActual: 'Tratada', prioridad: 72 },
+    ] as any;
+
+    expect(component.alertaPrincipal()).toBeUndefined();
+  });
+
+  it('elige como atencion prioritaria solo el evento activo de mayor severidad', () => {
+    component.data = [
+      { _id: 'cerrada', activa: false, severidad: 'critica', estadoActual: 'Finalizada', prioridad: 99 },
+      { _id: 'media', activa: true, severidad: 'media', estadoActual: 'Nueva', prioridad: 52 },
+      { _id: 'alta', activa: true, severidad: 'alta', estadoActual: 'Nueva', prioridad: 74 },
+    ] as any;
+
+    expect(component.alertaPrincipal()?._id).toBe('alta');
+  });
 });

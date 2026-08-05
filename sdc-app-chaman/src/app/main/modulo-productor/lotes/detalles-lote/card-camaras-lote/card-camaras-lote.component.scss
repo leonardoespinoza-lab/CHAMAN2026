@@ -147,7 +147,7 @@
 
 .photo-date-strip button.active {
   border-color: var(--p-primary-color);
-  box-shadow: inset 3px 0 0 var(--p-primary-color);
+  background: color-mix(in srgb, var(--p-primary-color) 7%, var(--p-content-background));
 }
 
 .photo-date-strip strong {

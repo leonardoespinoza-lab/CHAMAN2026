@@ -169,7 +169,7 @@
 }
 
 .wind-decision {
-  border-left: 4px solid var(--wind-color, #22c55e);
+  border: 1px solid var(--p-surface-border);
   padding: 0.85rem;
 }
 
@@ -230,23 +230,23 @@
 }
 
 .wind-forecast article {
-  border-left: 4px solid #94a3b8;
+  border: 1px solid var(--p-surface-border);
 }
 
 .wind-forecast article.tone-ok {
-  border-left-color: #22c55e;
+  background: color-mix(in srgb, #22c55e 5%, var(--p-content-background));
 }
 
 .wind-forecast article.tone-warn {
-  border-left-color: #f59e0b;
+  background: color-mix(in srgb, #f59e0b 5%, var(--p-content-background));
 }
 
 .wind-forecast article.tone-risk {
-  border-left-color: #f97316;
+  background: color-mix(in srgb, #f97316 5%, var(--p-content-background));
 }
 
 .wind-forecast article.tone-danger {
-  border-left-color: #ef4444;
+  background: color-mix(in srgb, #ef4444 5%, var(--p-content-background));
 }
 
 .tone-ok {

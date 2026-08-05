@@ -105,7 +105,9 @@
 }
 
 .napas-kpis article {
-  border-left: 3px solid color-mix(in srgb, #3e91d6, white 30%);
+  border: 1px solid var(--p-surface-border);
+  border-radius: 8px;
+  background: var(--p-content-background);
   padding-left: 0.55rem;
 }
 
@@ -134,7 +136,6 @@
   align-items: center;
   background: linear-gradient(135deg, color-mix(in srgb, #3e91d6, white 82%), rgba(255, 255, 255, 0.88));
   border: 1.5px solid rgba(86, 117, 150, 0.28);
-  border-left: 5px solid #3e91d6;
   border-radius: 8px;
   display: flex;
   gap: 1rem;
@@ -143,16 +144,16 @@
 }
 
 .detail-hero.alta {
-  border-left-color: #6fb845;
+  background: color-mix(in srgb, #6fb845 5%, var(--p-content-background));
 }
 
 .detail-hero.media {
-  border-left-color: #f1b84a;
+  background: color-mix(in srgb, #f1b84a 5%, var(--p-content-background));
 }
 
 .detail-hero.baja,
 .detail-hero.sin_datos {
-  border-left-color: #ef6f6c;
+  background: color-mix(in srgb, #ef6f6c 5%, var(--p-content-background));
 }
 
 .detail-hero span,

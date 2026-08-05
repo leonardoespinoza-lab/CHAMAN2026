@@ -343,7 +343,7 @@ select {
 }
 
 .main-weed {
-  border-left: 5px solid var(--p-primary-color) !important;
+  background: color-mix(in srgb, var(--p-primary-color) 5%, var(--p-content-background));
 }
 
 .main-weed strong {

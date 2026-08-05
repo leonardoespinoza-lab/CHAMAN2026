@@ -215,9 +215,7 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
     return {
       nuevas: this.data.filter((a) => a.estadoActual === 'Nueva').length,
       activas: this.data.filter((a) => a.activa !== false).length,
-      alta: this.data.filter(
-        (a) => a.activa !== false && ['alta', 'critica'].includes(this.severidad(a)),
-      ).length,
+      alta: this.data.filter((a) => a.activa !== false && ['alta', 'critica'].includes(this.severidad(a))).length,
       finalizadas: this.data.filter((a) => a.estadoActual === 'Finalizada' || a.activa === false).length,
       total,
       riesgoPromedio: total ? riesgoTotal / total : 0,
@@ -256,7 +254,7 @@ export class ListadoAlertasComponent implements OnInit, OnDestroy {
   }
 
   public alertaPrincipal(): IAlerta | undefined {
-    return this.alertasOrdenadas().find((alerta) => alerta.activa !== false) || this.alertasOrdenadas()[0];
+    return this.alertasOrdenadas().find((alerta) => alerta.activa !== false);
   }
 
   public estadoOperativo(): string {

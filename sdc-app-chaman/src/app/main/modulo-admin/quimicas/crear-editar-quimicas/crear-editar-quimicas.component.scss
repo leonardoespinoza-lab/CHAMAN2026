@@ -295,7 +295,7 @@ textarea[pInputText] {
   display: grid;
   gap: 0.15rem;
   padding: 0.65rem;
-  border-left: 3px solid var(--p-primary-color);
+  border: 1px solid var(--p-surface-border);
   border-radius: 8px;
   background: var(--p-surface-0);
 }

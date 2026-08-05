@@ -72,11 +72,11 @@ h1 {
   display: grid;
   gap: 4px;
   padding: 16px;
-  border-left: 4px solid var(--p-primary-color);
+  border: 1px solid var(--p-content-border-color);
 }
 
 .metric-card.warning {
-  border-left-color: #f59e0b;
+  background: color-mix(in srgb, #f59e0b 5%, var(--p-content-background));
 }
 
 .metric-label {
@@ -133,18 +133,18 @@ h1 {
 }
 
 .mqtt-device-card {
-  border-left: 4px solid #f59e0b;
+  border: 1px solid var(--p-content-border-color);
   display: grid;
   gap: 12px;
   padding: 14px;
 }
 
 .mqtt-device-card.mqtt-assigned {
-  border-left-color: #22c55e;
+  background: color-mix(in srgb, #22c55e 5%, var(--p-content-background));
 }
 
 .mqtt-device-card.mqtt-new {
-  border-left-color: var(--p-primary-color);
+  background: color-mix(in srgb, var(--p-primary-color) 5%, var(--p-content-background));
 }
 
 .mqtt-device-header {

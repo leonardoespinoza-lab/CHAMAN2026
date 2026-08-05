@@ -23,8 +23,11 @@
   --ch-state-muted: #8795a8;
   --ch-focus-ring: 0 0 0 3px color-mix(in srgb, var(--p-primary-color), transparent 68%);
   --ch-surface-border: color-mix(in srgb, var(--chaman-muted), transparent 76%);
+  --ch-surface-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.76), rgba(248, 251, 253, 0.54));
   --ch-surface-shadow: 0 12px 32px rgba(15, 35, 55, 0.06), var(--chaman-glass-inner);
   --ch-surface-shadow-hover: 0 18px 42px rgba(15, 35, 55, 0.1), var(--chaman-glass-inner);
+  --ch-selection-bg: color-mix(in srgb, var(--p-primary-color), transparent 91%);
+  --ch-selection-border: color-mix(in srgb, var(--p-primary-color), transparent 54%);
 }
 
 :where(button, .p-button, [role="button"], a[href]) {
@@ -52,11 +55,16 @@
   }
 }
 
-/* Superficies de estado que historicamente usaban una franja de color. */
+/*
+ * Superficie Chaman.
+ * El estado nunca se dibuja como una franja pegada a un lateral: se expresa
+ * mediante badge, texto, icono o barra de progreso dentro de la tarjeta.
+ */
 :where(
     .service-strip article,
     .metric-card,
     .metrics-strip article,
+    .metric-grid article,
     .command-card,
     .category-chip,
     .alarm-card,
@@ -66,11 +74,22 @@
     .mqtt-device-card,
     .camera-card,
     .weather-metrics article,
+    .daily-strip article,
     .wind-decision,
     .wind-forecast article,
     .footprint-list article,
+    .water-bars article,
     .ndvi-analysis,
+    .analysis-grid article,
+    .satellite-grid article,
     .disease-output-grid article,
+    .disease-action-card,
+    .weed-action-card,
+    .risk-action-card,
+    .decision-panel,
+    .day-grid article,
+    .frio-metrics article,
+    .detail-days article,
     .executive-tab,
     .executive-status,
     .executive-climate-metric,
@@ -89,16 +108,62 @@
     .time-lapse-card,
     .establishment-service,
     .central-grid article,
-    .license-summary
+    .license-summary,
+    .license-usage-summary > div,
+    .agro-grid article,
+    .soil-depth-card,
+    .tenant-card,
+    .preview-hero,
+    .risk-mini
   ) {
   --ch-state-color: var(--ch-state-muted);
-  background:
-    radial-gradient(circle at calc(100% - 1rem) 1rem, color-mix(in srgb, var(--ch-state-color), transparent 88%) 0 0.28rem, transparent 0.3rem),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.74), rgba(248, 251, 253, 0.48)) !important;
+  background: var(--ch-surface-bg) !important;
   border: 1px solid var(--ch-surface-border) !important;
   border-inline-start-width: 1px !important;
+  border-inline-end-width: 1px !important;
+  border-block-start-width: 1px !important;
+  border-block-end-width: 1px !important;
   border-radius: var(--ch-radius-sm) !important;
   box-shadow: var(--ch-surface-shadow) !important;
+}
+
+/* Pseudo-elementos legacy que dibujaban rieles cromaticos a altura completa. */
+:where(.metric-grid article, .risk-mini, .growth-stage.current)::before {
+  display: none !important;
+}
+
+/* Controles seleccionables: una seleccion clara sin subrayados gruesos. */
+:where(
+    .layer-tab,
+    .timeline-item,
+    .photo-date-strip button,
+    .photo-date-button,
+    .period-toolbar button,
+    .chart-tabs button
+  ) {
+  border: 1px solid var(--ch-surface-border) !important;
+  box-shadow: none !important;
+}
+
+:where(
+    .layer-tab.active,
+    .timeline-item.active,
+    .photo-date-strip button.active,
+    .photo-date-button.active,
+    .period-toolbar button.active,
+    .chart-tabs button.active
+  ) {
+  background: var(--ch-selection-bg) !important;
+  border-color: var(--ch-selection-border) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--p-primary-color), transparent 88%) !important;
+  color: var(--p-text-color) !important;
+}
+
+/* Los separadores de contenido son neutros incluso cuando el estado es confirmado. */
+.history-selected-scene .history-stage,
+.history-selected-scene .history-stage:has(em.confirmed),
+.expected-note {
+  border-inline-start: 1px solid var(--ch-surface-border) !important;
 }
 
 :where(.service-strip article.ok, .metric-card.ok, .metrics-strip article.ok, .command-card.primary, .category-chip.baja, .alarm-card.baja, .hero-status:not(.media, .alta, .critica), .napas-detail .detail-hero.alta, .device-card.device-online, .mqtt-device-card.mqtt-assigned, .wind-forecast article.tone-ok, .footprint-list article.green, .executive-tab.ok, .executive-status.ok, .executive-climate-metric.ok, .executive-metric.ok, .health-badge.ok, .watch-row.ok, .priority-row.ok) {

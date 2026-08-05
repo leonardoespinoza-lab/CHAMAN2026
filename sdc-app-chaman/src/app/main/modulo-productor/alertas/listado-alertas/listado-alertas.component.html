@@ -1,4 +1,117 @@
 <div class="alarm-center">
+  <header class="alarm-page-header">
+    <div class="header-copy">
+      <span>Centro operativo</span>
+      <h1>Alarmas</h1>
+      <p>Eventos generados por sanidad, malezas, agroclima, sensores y motores de Chaman.</p>
+    </div>
+
+    <div class="header-actions">
+      <span class="network-status">
+        <small>Estado de la pagina visible</small>
+        <strong>{{ estadoOperativo() }}</strong>
+      </span>
+      <button
+        type="button"
+        class="export-action"
+        aria-label="Exportar informe de la pagina visible"
+        (click)="exportarInforme()"
+      >
+        <i class="pi pi-file-pdf" aria-hidden="true"></i>
+        Exportar informe
+      </button>
+    </div>
+  </header>
+
+  <section class="alarm-overview" aria-labelledby="visible-page-summary">
+    <div class="overview-heading">
+      <span id="visible-page-summary">Resumen de la pagina visible</span>
+      <small>{{ resumen().total }} de {{ totalCount || resumen().total }} eventos cargados</small>
+    </div>
+
+    <div class="overview-grid">
+      <article class="overview-card">
+        <span>Activas</span>
+        <strong>{{ resumen().activas }}</strong>
+        <small>{{ resumen().nuevas }} nuevas · {{ resumen().tratadas }} tratadas</small>
+      </article>
+
+      <article class="overview-card">
+        <span>Alta prioridad</span>
+        <strong>{{ resumen().alta }}</strong>
+        <small>Activas altas o criticas en esta pagina</small>
+      </article>
+
+      <article class="overview-card">
+        <span>Indice medio</span>
+        <strong>{{ formatNumber(resumen().riesgoPromedio, 0) }}</strong>
+        <small>Promedio de los eventos de esta pagina</small>
+      </article>
+
+      <article class="overview-card">
+        <span>Calidad del dato</span>
+        <strong>{{ formatNumber(resumen().calidadPromedio, 0) }}%</strong>
+        <small>Promedio informado en esta pagina</small>
+      </article>
+    </div>
+  </section>
+
+  <section class="insight-grid" [class.without-priority]="!alertaPrincipal()">
+    @if (alertaPrincipal(); as principal) {
+      <article class="priority-panel">
+        <div class="section-heading">
+          <span>Atencion prioritaria</span>
+          <strong>Evento activo</strong>
+        </div>
+
+        <button
+          type="button"
+          class="leader-card"
+          [ngClass]="severidad(principal)"
+          [attr.aria-label]="'Ver detalle de ' + titulo(principal)"
+          (click)="abrirDetalle(principal)"
+        >
+          <span class="leader-icon"><i class="pi" [ngClass]="categoriaIcono(principal)" aria-hidden="true"></i></span>
+          <span class="leader-main">
+            <small>{{ categoriaLabel(principal) }} · {{ severidadLabel(principal) }}</small>
+            <strong>{{ titulo(principal) }}</strong>
+            <em>{{ lote(principal) }} · {{ productor(principal) }}</em>
+          </span>
+          <span class="leader-score">
+            <strong>{{ formatNumber(valorRiesgo(principal), 0) }}</strong>
+            <small>/100</small>
+          </span>
+        </button>
+      </article>
+    }
+
+    <article class="category-panel">
+      <div class="section-heading">
+        <span>Pagina visible</span>
+        <strong>Eventos por servicio</strong>
+      </div>
+
+      <div class="service-grid">
+        @for (categoria of categoriasResumen(); track categoria.nombre) {
+          <div class="service-chip">
+            <i class="pi" [ngClass]="categoria.icono" aria-hidden="true"></i>
+            <span>
+              <strong>{{ categoria.nombre }}</strong>
+              <small>{{ categoria.cantidad }} evento(s)</small>
+            </span>
+            <em>{{ formatNumber(categoria.riesgo, 0) }}</em>
+          </div>
+        } @empty {
+          <div class="empty-state compact">
+            <i class="pi pi-filter" aria-hidden="true"></i>
+            <strong>Sin categorias</strong>
+            <span>No hay eventos en la pagina visible.</span>
+          </div>
+        }
+      </div>
+    </article>
+  </section>
+
   <p-table
     #table
     [value]="alertasOrdenadas()"
@@ -9,8 +122,6 @@
     (onPage)="helper.setPageSize(name, $event.rows)"
     [totalRecords]="totalCount"
     [loading]="loading"
-    [scrollable]="true"
-    scrollHeight="calc(100vh - 360px)"
     (onLazyLoad)="loadData($event)"
     [filterDelay]="500"
     [globalFilterFields]="['titulo', 'descripcion', 'estadoActual', 'categoria', 'severidad', 'tipo']"
@@ -20,33 +131,44 @@
     styleClass="alarm-board-table"
   >
     <ng-template #caption>
-      <section class="alarm-hero menu-offset" [ngClass]="estadoOperativoClase()">
-        <div class="hero-copy">
-          <span>Centro operativo</span>
-          <h1>Alarmas</h1>
-          <p>Eventos generados por sanidad, malezas, agroclima, sensores y motores de Chaman.</p>
+      <section class="queue-toolbar" aria-label="Filtros de la cola operativa">
+        <div class="queue-title">
+          <span>Cola operativa</span>
+          <small>Ordenada por severidad e indice dentro de la pagina visible</small>
         </div>
 
-        <div class="hero-status">
-          <span>Estado de red</span>
-          <strong>{{ estadoOperativo() }}</strong>
-          <small>{{ resumen().activas }} activa(s) de {{ totalCount || resumen().total }} evento(s)</small>
-        </div>
-
-        <div class="alarm-toolbar">
-          <button type="button" class="export-action" (click)="exportarInforme()">
-            <i class="pi pi-file-pdf"></i>
-            Exportar informe
-          </button>
+        <div class="queue-filters">
+          <div class="state-filter">
+            <span>Estado</span>
+            <p-columnFilter
+              field="estadoActual"
+              matchMode="in"
+              display="menu"
+              [showMatchModes]="false"
+              [showOperator]="false"
+              [showAddButton]="false"
+            >
+              <ng-template #filter let-filter="filterCallback">
+                <p-multiselect
+                  [filter]="false"
+                  [(ngModel)]="estadosSeleccionados"
+                  [options]="estados"
+                  placeholder="Todos"
+                  (onChange)="filter($event.value)"
+                />
+              </ng-template>
+            </p-columnFilter>
+          </div>
 
           <p-iconfield iconPosition="left">
             <p-inputicon>
-              <i class="pi pi-search"></i>
+              <i class="pi pi-search" aria-hidden="true"></i>
             </p-inputicon>
             <input
               #search
               pInputText
               type="text"
+              aria-label="Buscar alarmas en la pagina visible"
               (input)="table.filterGlobal($any($event.target).value, 'contains')"
               [placeholder]="'Buscar' | translate"
             />
@@ -56,146 +178,25 @@
             [label]="'Limpiar' | translate"
             [outlined]="true"
             icon="pi pi-filter-slash"
+            ariaLabel="Limpiar filtros de la pagina visible"
             (click)="table.clear(); search.value = ''"
           />
         </div>
       </section>
-
-      <section class="alarm-command-grid">
-        <article class="command-card primary">
-          <span>Activas</span>
-          <strong>{{ resumen().activas }}</strong>
-          <small>{{ resumen().nuevas }} nuevas - {{ resumen().tratadas }} tratadas</small>
-        </article>
-
-        <article class="command-card high">
-          <span>Alta prioridad</span>
-          <strong>{{ resumen().alta }}</strong>
-          <small>Criticas y altas para revisar primero</small>
-        </article>
-
-        <article class="command-card">
-          <span>Indice medio</span>
-          <strong>{{ formatNumber(resumen().riesgoPromedio, 0) }}</strong>
-          <small>Promedio del indice de riesgo visible</small>
-        </article>
-
-        <article class="command-card">
-          <span>Calidad de dato</span>
-          <strong>{{ formatNumber(resumen().calidadPromedio, 0) }}%</strong>
-          <small>Fuente y cobertura informadas por motor</small>
-        </article>
-      </section>
-
-      <section class="insight-grid">
-        <article class="priority-panel">
-          <div class="section-heading">
-            <span>Mayor atencion</span>
-            <strong>Evento lider</strong>
-          </div>
-
-          @if (alertaPrincipal(); as principal) {
-            <button
-              type="button"
-              class="leader-card"
-              [ngClass]="severidad(principal)"
-              (click)="abrirDetalle(principal)"
-            >
-              <span class="leader-icon"><i class="pi" [ngClass]="categoriaIcono(principal)"></i></span>
-              <span class="leader-main">
-                <small>{{ categoriaLabel(principal) }} - {{ severidadLabel(principal) }}</small>
-                <strong>{{ titulo(principal) }}</strong>
-                <em>{{ lote(principal) }} - {{ productor(principal) }}</em>
-              </span>
-              <span class="leader-score">
-                <strong>{{ formatNumber(valorRiesgo(principal), 0) }}</strong>
-                <small>/100 indice</small>
-              </span>
-            </button>
-          } @else {
-            <div class="empty-state compact">
-              <i class="pi pi-check-circle"></i>
-              <strong>Sin eventos activos</strong>
-              <span>Los motores no reportan alarmas para el alcance seleccionado.</span>
-            </div>
-          }
-        </article>
-
-        <article class="category-panel">
-          <div class="section-heading">
-            <span>Clasificacion</span>
-            <strong>Eventos por servicio</strong>
-          </div>
-
-          <div class="category-grid">
-            @for (categoria of categoriasResumen(); track categoria.nombre) {
-              <div class="category-chip" [ngClass]="categoria.severidad">
-                <i class="pi" [ngClass]="categoria.icono"></i>
-                <span>
-                  <strong>{{ categoria.nombre }}</strong>
-                  <small>{{ categoria.cantidad }} evento(s)</small>
-                </span>
-                <em>{{ formatNumber(categoria.riesgo, 0) }}</em>
-              </div>
-            } @empty {
-              <div class="empty-state compact">
-                <i class="pi pi-filter"></i>
-                <strong>Sin categorias</strong>
-                <span>No hay eventos para clasificar.</span>
-              </div>
-            }
-          </div>
-        </article>
-      </section>
     </ng-template>
 
     <ng-template #header>
-      <tr class="board-header-row">
-        <th>
-          <div class="board-header">
-            <span>Cola operativa</span>
-            <div class="state-filter">
-              <span>Estado</span>
-              <p-columnFilter
-                field="estadoActual"
-                matchMode="in"
-                display="menu"
-                [showMatchModes]="false"
-                [showOperator]="false"
-                [showAddButton]="false"
-              >
-                <ng-template #filter let-filter="filterCallback">
-                  <p-multiselect
-                    [filter]="false"
-                    [(ngModel)]="estadosSeleccionados"
-                    [options]="estados"
-                    placeholder="Todos"
-                    (onChange)="filter($event.value)"
-                  />
-                </ng-template>
-              </p-columnFilter>
-            </div>
-          </div>
-        </th>
+      <tr class="visually-hidden">
+        <th scope="col">Eventos de la cola operativa</th>
       </tr>
     </ng-template>
 
     <ng-template #body let-row>
       <tr class="alarm-card-row">
         <td>
-          <article
-            class="alarm-card chaman-interactive-surface"
-            [ngClass]="[severidad(row), estadoClase(row)]"
-            role="button"
-            tabindex="0"
-            aria-label="Abrir detalle de la alerta"
-            aria-haspopup="dialog"
-            (click)="abrirDetalle(row)"
-            (keydown.enter)="abrirDetalle(row)"
-            (keydown.space)="$event.preventDefault(); abrirDetalle(row)"
-          >
+          <article class="alarm-list-item" [ngClass]="[severidad(row), estadoClase(row)]">
             <div class="alarm-marker">
-              <i class="pi" [ngClass]="categoriaIcono(row)"></i>
+              <i class="pi" [ngClass]="categoriaIcono(row)" aria-hidden="true"></i>
             </div>
 
             <div class="alarm-main">
@@ -208,7 +209,16 @@
                 }
               </div>
 
-              <h2>{{ titulo(row) }}</h2>
+              <h2>
+                <button
+                  type="button"
+                  class="alarm-title-action"
+                  [attr.aria-label]="'Ver detalle de ' + titulo(row)"
+                  (click)="abrirDetalle(row)"
+                >
+                  {{ titulo(row) }}
+                </button>
+              </h2>
               <p>{{ lectura(row) }}</p>
 
               <div class="alarm-context">
@@ -227,12 +237,24 @@
               </div>
             </div>
 
-            <div class="alarm-actions" (click)="$event.stopPropagation()">
-              <button type="button" class="icon-action" title="Ver detalle" (click)="abrirDetalle(row)">
-                <i class="pi pi-eye"></i>
+            <div class="alarm-actions">
+              <button
+                type="button"
+                class="icon-action"
+                title="Ver detalle"
+                [attr.aria-label]="'Ver detalle de ' + titulo(row)"
+                (click)="abrirDetalle(row)"
+              >
+                <i class="pi pi-eye" aria-hidden="true"></i>
               </button>
-              <button type="button" class="icon-action" title="Entrar al lote" (click)="abrirLote(row)">
-                <i class="pi pi-arrow-right"></i>
+              <button
+                type="button"
+                class="icon-action"
+                title="Entrar al lote"
+                [attr.aria-label]="'Entrar al lote ' + lote(row)"
+                (click)="abrirLote(row)"
+              >
+                <i class="pi pi-arrow-right" aria-hidden="true"></i>
               </button>
             </div>
           </article>
@@ -267,11 +289,16 @@
 >
   @if (alertaSeleccionada; as alerta) {
     <section class="alarm-detail">
-      <button type="button" class="dialog-close" (click)="detalleVisible = false">
-        <i class="pi pi-times"></i>
+      <button
+        type="button"
+        class="dialog-close"
+        aria-label="Cerrar detalle de la alarma"
+        (click)="detalleVisible = false"
+      >
+        <i class="pi pi-times" aria-hidden="true"></i>
       </button>
 
-      <div class="detail-hero" [ngClass]="severidad(alerta)">
+      <div class="alarm-detail-hero" [ngClass]="severidad(alerta)">
         <div class="detail-title">
           <span>{{ categoriaLabel(alerta) }} - {{ severidadLabel(alerta) }}</span>
           <h2>{{ titulo(alerta) }}</h2>

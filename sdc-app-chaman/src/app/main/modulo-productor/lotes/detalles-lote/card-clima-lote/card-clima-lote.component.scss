@@ -88,18 +88,17 @@
 .weather-metrics article {
   background: var(--p-surface-50);
   border: 1px solid var(--p-surface-200);
-  border-left: 3px solid var(--p-primary-color);
   border-radius: 7px;
   min-height: 70px;
   padding: 0.55rem 0.65rem;
 }
 
 .weather-metrics article.warn {
-  border-left-color: #e8a33a;
+  background: color-mix(in srgb, #e8a33a 5%, var(--p-surface-50));
 }
 
 .weather-metrics article.info {
-  border-left-color: #5c7cfa;
+  background: color-mix(in srgb, #5c7cfa 5%, var(--p-surface-50));
 }
 
 .weather-metrics span,
@@ -162,13 +161,13 @@
 }
 
 .daily-strip article.convective-watch {
-  border-color: rgba(232, 163, 58, 0.72);
-  box-shadow: inset 0 3px 0 rgba(232, 163, 58, 0.82);
+  border-color: var(--p-surface-200);
+  background: color-mix(in srgb, #e8a33a 5%, var(--p-surface-50));
 }
 
 .daily-strip article.convective-alert {
-  border-color: rgba(224, 76, 76, 0.72);
-  box-shadow: inset 0 3px 0 rgba(224, 76, 76, 0.88);
+  border-color: var(--p-surface-200);
+  background: color-mix(in srgb, #e04c4c 5%, var(--p-surface-50));
 }
 
 .daily-strip article.convective-watch header span {
