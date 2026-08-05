@@ -126,6 +126,12 @@ export interface IVariablesEnfermedadCebada {
   riesgoEvento?: number;
   riesgoVentana?: number;
   eventosCompatibles?: number;
+  diasFavorablesVentana?: number;
+  intensidadPico?: number;
+  intensidadMedia?: number;
+  persistenciaVentana?: number;
+  diasDesdeUltimoEvento?: number;
+  agregacionVersion?: number;
   diasVentana?: number;
   diasHorariosValidos?: number;
   coberturaVentana?: number;

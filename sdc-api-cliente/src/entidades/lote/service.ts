@@ -4211,7 +4211,7 @@ export class LotesService {
           Number(item.modelo?.version || 0) >= 4;
         const lectura = operativa
           ? manchaRedV4
-            ? `${this.formatMaybe(item.resultado, 1)}/100 - indice predictivo de infeccion`
+            ? `${this.formatMaybe(item.resultado, 1)}/100 - indice ambiental de infeccion`
             : `${this.formatMaybe(item.resultado, 1)}% - ${this.getNivelRiesgoTexto(item.resultado, siembra?.semilla?.cultivo)}`
           : item.estado === 'fuera_ventana'
             ? '0% operativo'
@@ -4262,12 +4262,15 @@ export class LotesService {
       item.idEnfermedad === 'cebada.mancha_red' &&
       Number(item.modelo?.version || 0) >= 4
     ) {
-      const eventos = this.toNumber(variables.eventosCompatibles);
+      const favorables = this.toNumber(
+        variables.diasFavorablesVentana ?? variables.eventosCompatibles,
+      );
       const dias = this.toNumber(variables.diasVentana);
       const cobertura = this.toNumber(variables.coberturaVentana) * 100;
       const mojado = this.toNumber(variables.horasMojadoContinuo);
       const temperatura = this.toNumber(variables.temperaturaMojado);
-      return `${this.formatNumber(eventos, 0)} episodio(s) compatible(s) en ${this.formatNumber(dias, 0)} dias; cobertura horaria ${this.formatNumber(cobertura, 0)}%; ultimo mojado continuo ${this.formatNumber(mojado, 1)} h a ${this.formatNumber(temperatura, 1)} C. Requiere recorrida para confirmar sintomas.`;
+      const pico = this.toNumber(variables.intensidadPico);
+      return `${this.formatNumber(favorables, 0)} dia(s) favorable(s) dentro de un ciclo de ${this.formatNumber(dias, 0)} dias; intensidad maxima ${this.formatNumber(pico, 1)}/100; cobertura horaria ${this.formatNumber(cobertura, 0)}%; ultimo mojado continuo ${this.formatNumber(mojado, 1)} h a ${this.formatNumber(temperatura, 1)} C. Es presion ambiental condicionada a inoculo y requiere recorrida para confirmar sintomas.`;
     }
     const gddSiembra = this.toNumber(variables.GDDBase0Siembra);
     const umbralGdd = this.toNumber(variables.UmbralInicioGdd);

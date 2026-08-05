@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
 import {
+  CEBADA_MANCHA_RED_UMBRAL_ALERTA,
   IEstadoFenologiaArveja,
   getUmbralesRiesgoSanitario,
   IPrediccionEnfermedad,
@@ -317,7 +318,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       enfermedad === 'Mancha en Red' &&
       this.esManchaRedV4(enfermedad, this.prediccionPorEnfermedad(enfermedad))
     ) {
-      return { medio: 35, alto: 80, escalaDirecta: true };
+      return {
+        medio: 35,
+        alto: CEBADA_MANCHA_RED_UMBRAL_ALERTA,
+        escalaDirecta: true,
+      };
     }
     return getUmbralesRiesgoSanitario(this.siembra?.semilla?.cultivo, this.esScreeningExperimental);
   }
@@ -610,8 +615,14 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       temperaturaMojado: 'temperatura durante mojado',
       gradosHoraInfeccion: 'grados-hora de infeccion',
       riesgoEvento: 'indice del episodio',
-      riesgoVentana: 'indice de la ventana',
-      eventosCompatibles: 'episodios compatibles',
+      riesgoVentana: 'indice del ciclo',
+      eventosCompatibles: 'dias favorables (compatibilidad)',
+      diasFavorablesVentana: 'dias favorables',
+      intensidadPico: 'intensidad maxima',
+      intensidadMedia: 'intensidad media',
+      persistenciaVentana: 'persistencia del ciclo',
+      diasDesdeUltimoEvento: 'dias desde la ultima condicion favorable',
+      agregacionVersion: 'version de agregacion',
       diasVentana: 'dias de ventana',
       diasHorariosValidos: 'dias horarios validos',
       coberturaVentana: 'cobertura de ventana',
@@ -711,7 +722,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return 'Seguimiento';
     }
     if (this.esManchaRedV4(enfermedad, prediccion)) {
-      if (resultado >= 80) return 'Infeccion muy probable';
+      if (resultado >= CEBADA_MANCHA_RED_UMBRAL_ALERTA) {
+        return 'Presion ambiental alta';
+      }
       if (resultado >= 35) return 'Condiciones favorables';
       return 'Presion baja';
     }
@@ -762,10 +775,15 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     }
     if (this.esManchaRedV4(enfermedad, prediccion)) {
       const variables = (prediccion.variables || {}) as Record<string, number>;
-      const eventos = Number(variables['eventosCompatibles'] || 0);
+      const favorables = Number(
+        variables['diasFavorablesVentana'] ??
+          variables['eventosCompatibles'] ??
+          0
+      );
       const dias = Number(variables['diasVentana'] || 0);
       const cobertura = Number(variables['coberturaVentana'] || 0) * 100;
-      return `${eventos} episodio(s) compatible(s) en ${dias} dias; cobertura horaria ${cobertura.toFixed(0)}%. Es una prediccion de infeccion y requiere recorrida para confirmar sintomas.`;
+      const pico = Number(variables['intensidadPico'] || 0);
+      return `${favorables} dia(s) favorable(s) dentro de un ciclo de ${dias} dias; intensidad maxima ${pico.toFixed(1)}/100 y cobertura horaria ${cobertura.toFixed(0)}%. Es presion ambiental condicionada a inoculo; requiere recorrida para confirmar sintomas.`;
     }
     if (this.sinResistenciaVarietal(prediccion)) {
       return 'Resistencia varietal pendiente; el indice usa S=1 y requiere recorrida antes de definir manejo.';
@@ -894,6 +912,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return `${frecuencia.toFixed(1)}%`;
     }
     if (prediccion.estado === 'sin_datos') return `${resultado.toFixed(1)}%`;
+    if (enfermedad && this.esManchaRedV4(enfermedad, prediccion)) {
+      return `${resultado.toFixed(1)}/100`;
+    }
     if (!this.esScreeningExperimental) return `${resultado.toFixed(1)}%`;
     if (resultado >= 80) return 'Alto';
     if (resultado >= 50) return 'Medio';
@@ -905,7 +926,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     prediccion?: IPrediccionEnfermedad
   ): string {
     return this.esManchaRedV4(enfermedad, prediccion)
-      ? 'Indice predictivo de infeccion'
+      ? 'Indice ambiental de infeccion'
       : 'Indice sanitario estimado';
   }
 

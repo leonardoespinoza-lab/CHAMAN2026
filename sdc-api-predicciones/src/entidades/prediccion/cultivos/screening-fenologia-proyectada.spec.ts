@@ -123,7 +123,8 @@ describe('screening sanitario con fenologia proyectada', () => {
     expect(manchaRed.modelo.version).toBe(4);
     expect(manchaRed.modelo.resolucion).toBe('horaria');
     expect(manchaRed.variables.diasVentana).toBe(1);
-    expect(manchaRed.variables.eventosCompatibles).toBe(1);
+    expect(manchaRed.variables.diasFavorablesVentana).toBe(1);
+    expect(manchaRed.variables.agregacionVersion).toBe(2);
     expect(manchaRed.resultado).toBeGreaterThan(0);
     expect(manchaRed.modelo.validacion).toBe('operativo_provisional');
   });
@@ -187,8 +188,65 @@ describe('screening sanitario con fenologia proyectada', () => {
     expect(ultima.resultado).toBe(0);
     expect(ultima.variables.diasVentana).toBe(14);
     expect(ultima.variables.diasHorariosValidos).toBe(14);
-    expect(ultima.variables.eventosCompatibles).toBe(0);
+    expect(ultima.variables.diasFavorablesVentana).toBe(0);
     expect(ultima.modelo.validacion).toBe('operativo');
+  });
+
+  it('no satura Mancha en Red por repetir rocio nocturno dentro de un mismo ciclo', async () => {
+    const base = respuesta('Primer Nudo', 'gdd_validado');
+    base.series = Array.from({ length: 14 }, (_, index) => {
+      const date = new Date('2026-07-02T00:00:00.000Z');
+      date.setUTCDate(date.getUTCDate() + index);
+      return {
+        ...base.series[0],
+        date: date.toISOString().slice(0, 10),
+        stageConfidence: 'alta',
+        metrics: {
+          ...base.series[0].metrics,
+          leafWetnessHours: 14,
+          maxContinuousLeafWetnessHours: 12,
+          meanTemperatureDuringLeafWetnessC: 20,
+        },
+      };
+    }) as any;
+    const creadas: any[] = [];
+    const service = new PrediccionCebadaService(
+      {
+        get: jest.fn().mockResolvedValue({ datos: [] }),
+        create: jest.fn(async (value) => (creadas.push(value), value)),
+      } as any,
+      { update: jest.fn() } as any,
+      { getAgrometeorologiaSiembra: jest.fn().mockResolvedValue(base) } as any,
+      { getByIdSiembra: jest.fn().mockResolvedValue({ datos: [] }) } as any,
+    );
+
+    await service.hacerPredicciones({
+      _id: 'siembra-cebada-ciclo-humedo',
+      fechaSiembra: '2026-07-02T03:00:00.000Z',
+      coordenadas: { lat: -33.245, lng: -61.384 },
+      semilla: {
+        cultivo: 'Cebada',
+        variedad: 'ANDREIA',
+        resistencia: [
+          {
+            idEnfermedad: 'cebada.mancha_red',
+            enfermedad: 'Mancha en Red',
+            multiplicador: 0.625,
+            perfil: 'I',
+            estado: 'observada',
+            confianza: 'alta',
+          },
+        ],
+      },
+    } as any);
+
+    const ultima = creadas[creadas.length - 1].enfermedades.find(
+      (item: any) => item.idEnfermedad === 'cebada.mancha_red',
+    );
+    expect(ultima.variables.diasFavorablesVentana).toBe(14);
+    expect(ultima.variables.persistenciaVentana).toBe(1);
+    expect(ultima.resultado).toBeGreaterThan(35);
+    expect(ultima.resultado).toBeLessThan(60);
   });
 
   it('muestra screening experimental de Arveja con etapa térmica de referencia', async () => {

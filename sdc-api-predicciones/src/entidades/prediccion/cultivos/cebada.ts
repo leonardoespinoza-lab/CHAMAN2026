@@ -12,13 +12,14 @@ import {
 } from 'modelos/src';
 import {
   calcularEventoInfeccionManchaRed,
+  calcularPresionCicloManchaRed,
   calcularEscaldadura,
   calcularFusariumEspiga,
   calcularRoyaHoja,
+  CEBADA_MANCHA_RED_AGREGACION_VERSION,
   CEBADA_MANCHA_RED_COBERTURA_MINIMA,
   CEBADA_MANCHA_RED_MOTOR_VERSION,
   CEBADA_MANCHA_RED_VENTANA_DIAS,
-  combinarEventosInfeccionManchaRed,
   gradosDiaRoya,
   IHoraClimaEnfermedad,
   resolverResistencia,
@@ -523,15 +524,18 @@ export class PrediccionCebadaService {
       }),
     );
     const eventoActual = eventos[eventos.length - 1];
-    const riesgoVentana = combinarEventosInfeccionManchaRed(
-      eventos.map((evento) => evento.riesgo),
+    const presionCiclo = calcularPresionCicloManchaRed(
+      eventos,
+      resistencia.multiplicador,
     );
     // Una ventana incompleta sigue siendo visible para recorrida, pero se
     // limita y queda provisional: nunca puede convertirse en alerta.
     const evidenciaHorariaSuficiente =
       coberturaVentana >= CEBADA_MANCHA_RED_COBERTURA_MINIMA;
     const resultado = this.round(
-      evidenciaHorariaSuficiente ? riesgoVentana : Math.min(riesgoVentana, 49.9),
+      evidenciaHorariaSuficiente
+        ? presionCiclo.indice
+        : Math.min(presionCiclo.indice, 49.9),
       2,
     );
 
@@ -555,6 +559,7 @@ export class PrediccionCebadaService {
       },
       variables: {
         formulaVersion: CEBADA_MANCHA_RED_MOTOR_VERSION,
+        agregacionVersion: CEBADA_MANCHA_RED_AGREGACION_VERSION,
         kVar: this.round(resistencia.multiplicador, 2),
         horasMojadoContinuo: this.round(
           Number.isFinite(clima.horasMojadoContinuo)
@@ -571,8 +576,17 @@ export class PrediccionCebadaService {
         gradosHoraInfeccion: this.round(eventoActual?.gradosHora || 0, 1),
         riesgoEvento: this.round(eventoActual?.riesgo || 0, 1),
         riesgoVentana: resultado,
-        eventosCompatibles: eventos.filter((evento) => evento.eventoCompatible)
-          .length,
+        diasFavorablesVentana: presionCiclo.diasFavorables,
+        // Alias transitorio para que clientes v4 anteriores puedan leer las
+        // salidas nuevas sin interpretar los dias como eventos independientes.
+        eventosCompatibles: presionCiclo.diasFavorables,
+        intensidadPico: this.round(presionCiclo.intensidadPico, 1),
+        intensidadMedia: this.round(presionCiclo.intensidadMedia, 1),
+        persistenciaVentana: this.round(presionCiclo.persistencia, 3),
+        diasDesdeUltimoEvento:
+          presionCiclo.diasDesdeUltimoEvento === null
+            ? undefined
+            : presionCiclo.diasDesdeUltimoEvento,
         diasVentana: ventana.length,
         diasHorariosValidos: diasHorarios.length,
         coberturaVentana: this.round(coberturaVentana, 3),

@@ -898,6 +898,7 @@ export function esPrediccionSanitariaAlertable(
     formulaVersion?: number;
     coberturaVentana?: number;
     eventosCompatibles?: number;
+    diasFavorablesVentana?: number;
   };
   // Mancha en Red V4 es anticipativa: una alerta exige evidencia horaria en
   // la ventana móvil y presión de infección alta. Los valores medios quedan
@@ -908,8 +909,10 @@ export function esPrediccionSanitariaAlertable(
         CEBADA_MANCHA_RED_MOTOR_VERSION &&
       Number(variables.coberturaVentana || 0) >=
         CEBADA_MANCHA_RED_COBERTURA_MINIMA &&
-      Number(variables.eventosCompatibles || 0) >= 1 &&
-      prediccion.resultado >= 80
+      Number(
+        variables.diasFavorablesVentana ?? variables.eventosCompatibles ?? 0,
+      ) >= 1 &&
+      prediccion.resultado >= CEBADA_MANCHA_RED_UMBRAL_ALERTA
     );
   }
   // El intercepto del modelo de Fusarium supera por si solo el umbral general
@@ -1156,8 +1159,10 @@ export function acumularSeveridadManchaRed(
  * - Petta & Lavilla (2023), Agronomía Mesoamericana 34(1), DOI 10.15517/am.v34i1.51028
  */
 export const CEBADA_MANCHA_RED_MOTOR_VERSION = 4;
+export const CEBADA_MANCHA_RED_AGREGACION_VERSION = 2;
 export const CEBADA_MANCHA_RED_VENTANA_DIAS = 14;
 export const CEBADA_MANCHA_RED_COBERTURA_MINIMA = 0.75;
+export const CEBADA_MANCHA_RED_UMBRAL_ALERTA = 70;
 
 export interface IEventoInfeccionManchaRed {
   horasMojadoContinuo: number;
@@ -1170,6 +1175,15 @@ export interface IResultadoEventoInfeccionManchaRed {
   gradosHora: number;
   factorTermico: number;
   eventoCompatible: boolean;
+}
+
+export interface IResultadoCicloManchaRed {
+  indice: number;
+  intensidadPico: number;
+  intensidadMedia: number;
+  persistencia: number;
+  diasFavorables: number;
+  diasDesdeUltimoEvento: number | null;
 }
 
 export function calcularEventoInfeccionManchaRed(
@@ -1221,15 +1235,74 @@ export function calcularEventoInfeccionManchaRed(
   };
 }
 
-/** Combina episodios independientes sin sumar porcentajes ni exceder 100. */
-export function combinarEventosInfeccionManchaRed(
-  riesgos: number[],
-): number {
-  const probabilidadSinEvento = riesgos.reduce(
-    (acumulada, riesgo) => acumulada * (1 - limitar(riesgo) / 100),
-    1,
+/**
+ * Resume una ventana que representa un unico ciclo epidemiologico potencial.
+ *
+ * Los dias humedos consecutivos no son ensayos Bernoulli independientes: si
+ * se multiplicaran sus probabilidades, el indice saturaria cerca de 100 por
+ * la sola repeticion del rocio nocturno. La agregacion conserva cuatro
+ * dimensiones auditables de la ventana: pico, intensidad media, persistencia
+ * y recencia. Es un indice ambiental sobre 100, no una probabilidad de que el
+ * cultivo este enfermo.
+ */
+export function calcularPresionCicloManchaRed(
+  eventos: IResultadoEventoInfeccionManchaRed[],
+  multiplicadorVarietal: number,
+): IResultadoCicloManchaRed {
+  if (!eventos.length) {
+    return {
+      indice: 0,
+      intensidadPico: 0,
+      intensidadMedia: 0,
+      persistencia: 0,
+      diasFavorables: 0,
+      diasDesdeUltimoEvento: null,
+    };
+  }
+
+  const favorables = eventos
+    .map((evento, indice) => ({ evento, indice }))
+    .filter(({ evento }) => evento.eventoCompatible && evento.riesgo > 0);
+  if (!favorables.length) {
+    return {
+      indice: 0,
+      intensidadPico: 0,
+      intensidadMedia: 0,
+      persistencia: 0,
+      diasFavorables: 0,
+      diasDesdeUltimoEvento: null,
+    };
+  }
+
+  const riesgos = favorables.map(({ evento }) => limitar(evento.riesgo));
+  const intensidadPico = Math.max(...riesgos);
+  const intensidadMedia =
+    riesgos.reduce((total, riesgo) => total + riesgo, 0) / riesgos.length;
+  const persistencia = favorables.length / eventos.length;
+  const ultimoIndice = favorables[favorables.length - 1].indice;
+  const diasDesdeUltimoEvento = eventos.length - 1 - ultimoIndice;
+  const recencia = 1 - limitar(diasDesdeUltimoEvento / 7, 0, 1);
+  const kVar = limitar(Number(multiplicadorVarietal) || 0, 0.05, 1.2);
+
+  // Ponderacion operacional explicita y versionada. El componente diario ya
+  // incluye susceptibilidad; persistencia y recencia se escalan por el mismo
+  // perfil para que una variedad resistente no se vuelva de alto riesgo solo
+  // por acumular noches humedas.
+  const indice = limitar(
+    0.55 * intensidadPico +
+      0.25 * intensidadMedia +
+      0.15 * (persistencia * 100 * kVar) +
+      0.05 * (recencia * 100 * kVar),
   );
-  return limitar((1 - probabilidadSinEvento) * 100);
+
+  return {
+    indice,
+    intensidadPico,
+    intensidadMedia,
+    persistencia,
+    diasFavorables: favorables.length,
+    diasDesdeUltimoEvento,
+  };
 }
 
 export function factorTemperaturaEscaldadura(temperatura: number): number {

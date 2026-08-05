@@ -5,6 +5,7 @@ jest.mock(
 );
 
 import { PrediccionsService } from './service';
+import { CEBADA_MANCHA_RED_UMBRAL_ALERTA } from 'modelos/src';
 
 describe('PrediccionsService - alertas sanitarias', () => {
   beforeAll(() => {
@@ -95,7 +96,7 @@ describe('PrediccionsService - alertas sanitarias', () => {
     );
   });
 
-  it('muestra precaucion desde 35 pero solo alerta Mancha en Red v4 con evidencia horaria desde 80', async () => {
+  it('muestra precaucion desde 35 pero solo alerta Mancha en Red v4 con evidencia horaria desde el umbral alto', async () => {
     const cebada = {
       ...siembra,
       semilla: { cultivo: 'Cebada' },
@@ -113,7 +114,7 @@ describe('PrediccionsService - alertas sanitarias', () => {
         variables: {
           formulaVersion: 4,
           coberturaVentana: 1,
-          eventosCompatibles: 1,
+          diasFavorablesVentana: 1,
         },
       });
 
@@ -155,7 +156,7 @@ describe('PrediccionsService - alertas sanitarias', () => {
         {
           fecha: '2026-07-15T00:00:00.000Z',
           idSiembra: 'siembra-1',
-          enfermedades: [lecturaCebada(80)],
+          enfermedades: [lecturaCebada(CEBADA_MANCHA_RED_UMBRAL_ALERTA)],
         },
       ],
       cebada,

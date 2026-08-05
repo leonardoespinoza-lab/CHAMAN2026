@@ -241,7 +241,9 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
           modelo: { version: 4, validacion: 'operativo' },
           variables: {
             formulaVersion: 4,
-            eventosCompatibles: 3,
+            agregacionVersion: 2,
+            diasFavorablesVentana: 3,
+            intensidadPico: 42.7,
             diasVentana: 14,
             coberturaVentana: 0.93,
             horasMojadoContinuo: 12,
@@ -252,10 +254,11 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
     } as any;
 
     const html = service.renderTablaEnfermedades(siembraCebada, [prediccion]);
-    expect(html).toContain('86,4/100 - indice predictivo de infeccion');
-    expect(html).toContain('3 episodio(s) compatible(s) en 14 dias');
+    expect(html).toContain('86,4/100 - indice ambiental de infeccion');
+    expect(html).toContain('3 dia(s) favorable(s) dentro de un ciclo de 14 dias');
+    expect(html).toContain('intensidad maxima 42,7/100');
     expect(html).toContain('cobertura horaria 93%');
-    expect(html).toContain('Requiere recorrida para confirmar sintomas');
+    expect(html).toContain('requiere recorrida para confirmar sintomas');
     expect(html).not.toContain('86,4% -');
   });
 

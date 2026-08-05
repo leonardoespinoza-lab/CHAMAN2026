@@ -2,6 +2,7 @@ import {
   acumularSeveridadManchaRed,
   calcularFusariumEspiga,
   calcularEventoInfeccionManchaRed,
+  calcularPresionCicloManchaRed,
   calcularManchaAmarilla,
   calcularManchaHoja,
   calcularRoyaAnaranjada,
@@ -9,7 +10,7 @@ import {
   calcularRoyaHoja,
   calcularRoyaHojaTrigo2026,
   clasificarNivelRiesgoSanitario,
-  combinarEventosInfeccionManchaRed,
+  CEBADA_MANCHA_RED_UMBRAL_ALERTA,
   CEBADA_MANCHA_RED_MOTOR_VERSION,
   esFechaPrediccionSanitariaReciente,
   esLecturaSanitariaOperativa,
@@ -329,7 +330,7 @@ describe('motor canonico de enfermedades', () => {
       variables: {
         formulaVersion: CEBADA_MANCHA_RED_MOTOR_VERSION,
         coberturaVentana: 1,
-        eventosCompatibles: 1,
+        diasFavorablesVentana: 1,
       },
     };
 
@@ -339,13 +340,13 @@ describe('motor canonico de enfermedades', () => {
     expect(
       esPrediccionSanitariaAlertable({
         ...lecturaCebada,
-        resultado: 79.9,
+        resultado: CEBADA_MANCHA_RED_UMBRAL_ALERTA - 0.1,
       }),
     ).toBe(false);
     expect(
       esPrediccionSanitariaAlertable({
         ...lecturaCebada,
-        resultado: 80,
+        resultado: CEBADA_MANCHA_RED_UMBRAL_ALERTA,
       }),
     ).toBe(true);
     expect(
@@ -355,7 +356,7 @@ describe('motor canonico de enfermedades', () => {
         variables: {
           formulaVersion: CEBADA_MANCHA_RED_MOTOR_VERSION,
           coberturaVentana: 0.5,
-          eventosCompatibles: 3,
+          diasFavorablesVentana: 3,
         },
       }),
     ).toBe(false);
@@ -672,13 +673,14 @@ describe('motor canonico de enfermedades', () => {
     expect(referencia100GradosHora.gradosHora).toBeCloseTo(100, 4);
     expect(referencia100GradosHora.riesgo).toBeCloseTo(40, 4);
     expect(susceptible.riesgo).toBeGreaterThan(resistente.riesgo);
-    expect(
-      combinarEventosInfeccionManchaRed([
-        susceptible.riesgo,
-        susceptible.riesgo,
-      ]),
-    ).toBeGreaterThan(susceptible.riesgo);
-    expect(combinarEventosInfeccionManchaRed([])).toBe(0);
+    const cicloHumedo = calcularPresionCicloManchaRed(
+      Array.from({ length: 14 }, () => susceptible),
+      1,
+    );
+    expect(cicloHumedo.indice).toBeGreaterThan(susceptible.riesgo);
+    expect(cicloHumedo.indice).toBeLessThan(90);
+    expect(cicloHumedo.diasFavorables).toBe(14);
+    expect(calcularPresionCicloManchaRed([], 1).indice).toBe(0);
   });
 
   it('clasifica mildiu de arveja con los umbrales experimentales publicados', () => {

@@ -9,11 +9,16 @@ El valor anterior podia llegar a 100 porque acumulaba indefinidamente una
 tasa diaria y nunca retiraba clima viejo. Ese numero no diferenciaba entre
 presion ambiental reciente, infeccion probable y severidad observada.
 
-La version 4 calcula **presion predictiva de infeccion** por episodios recientes.
-Un valor 100 significa que el modelo encontro una combinacion practicamente
-maxima de episodios compatibles dentro de su ventana, condicionada a la
-existencia de inoculo. No constituye por si solo un diagnostico de enfermedad,
-incidencia ni severidad de tejido. La confirmacion requiere recorrida y sintomas.
+La version 4 calcula **presion ambiental predictiva de infeccion** dentro de un
+ciclo epidemiologico reciente. Un valor 100 representa el extremo de la escala
+ambiental y varietal del modelo; no significa 100% de probabilidad de enfermedad
+ni 100% de incidencia o severidad. La infeccion depende ademas de inoculo y la
+confirmacion exige recorrida y sintomas.
+
+La validacion con el lote real ANDREIA detecto y corrigio una segunda fuente de
+inflacion: las noches humedas consecutivas no pueden tratarse como ensayos
+independientes y multiplicarse hasta saturar cerca de 100. La agregacion v2
+resume los 14 dias como un solo ciclo potencial.
 
 ## Evidencia utilizada
 
@@ -28,6 +33,11 @@ incidencia ni severidad de tejido. La confirmacion requiere recorrida y sintomas
   prolongados.
 - INTA Marcos Juarez 2024 para el perfil sanitario varietal de ANDREIA y otras
   variedades. [Evaluacion sanitaria de cebada](https://www.argentina.gob.ar/sites/default/files/2025/03/inta_crcordoba_eeamarcosjuarez_donaire_g_evaluacion_cebc.pdf).
+- AHDB, ciclo y manejo de Mancha en Red: el ciclo puede completarse en unos 14
+  dias bajo condiciones favorables y el riesgo depende tambien de residuos,
+  semilla, variedad y manejo. [Net blotch symptoms and management](https://ahdb.org.uk/knowledge-library/net-blotch-symptoms-and-management-in-barley).
+- INTA Pergamino recomienda diagnostico e incidencia observada a campo antes de
+  decidir manejo. [Trigo y cebada: enfermedades foliares](https://intainforma.inta.gob.ar/trigo-y-cebada-que-hacer-frente-a-las-enfermedades-foliares/).
 
 ## Entradas canonicas
 
@@ -64,8 +74,12 @@ Reglas:
 - de 2 a 25 C la temperatura queda representada en grados-hora;
 - de 25 a 30 C se aplica una penalizacion lineal hasta cero;
 - el perfil varietal se limita al intervalo 0,05-1,20;
-- los episodios de los ultimos 14 dias se combinan como
-  `100 * (1 - producto(1 - riesgoEvento/100))`, sin sumar porcentajes.
+- la ventana de 14 dias se interpreta como un solo ciclo epidemiologico
+  potencial; los dias no se multiplican como probabilidades independientes;
+- la agregacion v2 pondera intensidad maxima (55%), intensidad media (25%),
+  persistencia de dias favorables (15%) y recencia (5%);
+- intensidad, persistencia y recencia conservan el multiplicador varietal;
+- cada componente y la version de agregacion quedan guardados para auditoria.
 
 La ventana de 14 dias es un supuesto operacional versionado para representar
 presion reciente dentro del rango de latencia publicado. Debe recalibrarse con
@@ -80,16 +94,18 @@ registros de campo argentinos si la validacion demuestra otra persistencia.
   49,9 y no puede emitir alertas automaticas.
 - La fenologia proyectada permite screening, pero deja la salida provisional.
 - La tarjeta muestra seguimiento desde 35/100.
-- La alerta automatica exige 80/100, cobertura horaria minima y al menos un
-  episodio compatible.
-- Una alerta viva se cierra por debajo de 80 con datos suficientes o al cerrar
+- La alerta automatica exige 70/100, cobertura horaria minima, al menos un dia
+  favorable, fenologia operativa y calidad suficiente.
+- Una alerta viva se cierra por debajo de 70 con datos suficientes o al cerrar
   la ventana fenologica.
 
 ## Presentacion y auditoria
 
-- Tarjeta: `Indice predictivo de infeccion`, no `severidad`.
-- Detalle: episodios compatibles, dias de ventana, cobertura, horas continuas,
-  temperatura durante mojado, grados-hora y perfil varietal.
+- Tarjeta: `Indice ambiental de infeccion`, no probabilidad, incidencia ni
+  `severidad`.
+- Detalle: dias favorables dentro del ciclo, intensidad maxima y media,
+  persistencia, recencia, cobertura, horas continuas, temperatura durante
+  mojado, grados-hora y perfil varietal.
 - Informe PDF: conserva la escala sobre 100, documenta la evidencia y exige
   recorrida para confirmar sintomas.
 - Las funciones del motor v3 permanecen disponibles para reproducibilidad de
@@ -101,6 +117,8 @@ registros de campo argentinos si la validacion demuestra otra persistencia.
 - monotonicidad: un perfil resistente no supera a uno susceptible;
 - un episodio fuera de la ventana de 14 dias deja de contribuir;
 - dias secos horarios no degradan artificialmente la cobertura;
-- 79,9 no alerta; 80 alerta solo con cobertura y evento validos;
+- 14 noches favorables no saturan el indice por repeticion matematica;
+- 69,9 no alerta; 70 alerta solo con cobertura, calidad, fenologia y evidencia
+  validas;
 - salida provisional o cobertura insuficiente nunca alerta;
 - tarjeta, backend e informe compilan con el contrato nuevo.
