@@ -97,6 +97,9 @@ export class RoyaDelMaizService {
         version: 3,
         fuente: 'Enfermedades en TRIGO -V2.xlsx / Roya de la Hoja',
         resolucion: 'diaria',
+        validacion: 'operativo_provisional',
+        alcance:
+          'Screening heredado pendiente de una ecuacion especifica y validada para roya comun del maiz; no habilita alertas automaticas.',
       },
       variables,
     };

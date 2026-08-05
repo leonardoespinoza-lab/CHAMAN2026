@@ -587,13 +587,9 @@ export class AgroclimaService {
       Number(dia.showers || 0),
     );
     const codigoGranizo = code === 96 || code === 99;
-    const convergenciaExcepcional =
-      code === 95 &&
-      Number(dia.cape || 0) >= 2500 &&
-      intensidad >= 10 &&
-      Number(dia.probabilidadLluvia || 0) >= 60 &&
-      Number(dia.rafagaViento || 0) >= 60;
-    return codigoGranizo || convergenciaExcepcional;
+    // El codigo 95 informa tormenta, no granizo. Sin radar ni observacion
+    // local no se transforma una convergencia de proxies en alarma roja.
+    return codigoGranizo && intensidad >= 0.5;
   }
 
   private weatherCodeTormenta(code: number): boolean {

@@ -24,6 +24,7 @@ describe('evidencia sanitaria compartida por mapas y listados', () => {
     expect(evidencia.estado).toBe('seguimiento');
     expect(evidencia.operativas.length).toBe(0);
     expect(evidencia.maximo).toBeUndefined();
+    expect(evidencia.semaforo).toBe('verde');
   });
 
   it('agrega solamente lecturas operativas, recientes y trazables', () => {
@@ -61,5 +62,42 @@ describe('evidencia sanitaria compartida por mapas y listados', () => {
     expect(evidencia.operativas.length).toBe(1);
     expect(evidencia.principal?.enfermedad).toBe('Mancha en Red');
     expect(evidencia.maximo).toBe(42);
+    expect(evidencia.semaforo).toBe('amarillo');
+  });
+
+  it('solo pinta rojo cuando la lectura satisface el contrato de alerta de Mancha en Red v4', () => {
+    const base = {
+      idEnfermedad: 'cebada.mancha_red',
+      enfermedad: 'Mancha en Red',
+      estado: 'calculado',
+      modelo: { version: 4, validacion: 'operativo' },
+      calidadDatos: { nivel: 'alta' },
+      resistenciaUsada: {
+        estado: 'observada',
+        confianza: 'alta',
+        campaniaFuente: '2025-2026',
+      },
+    };
+    const evaluar = (resultado: number) =>
+      evaluarSanidadFrontend({
+        semilla: { cultivo: 'Cebada' },
+        ultimaPrediccion: {
+          fecha: fechaVigente,
+          enfermedades: [
+            {
+              ...base,
+              resultado,
+              variables: {
+                formulaVersion: 4,
+                coberturaVentana: 0.9,
+                diasFavorablesVentana: 2,
+              },
+            },
+          ],
+        },
+      } as any);
+
+    expect(evaluar(60).semaforo).toBe('amarillo');
+    expect(evaluar(70).semaforo).toBe('rojo');
   });
 });

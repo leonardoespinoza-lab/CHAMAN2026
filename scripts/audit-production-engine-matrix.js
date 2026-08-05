@@ -6,28 +6,32 @@
  */
 
 const { MongoClient } = require('../sdc-datos/node_modules/mongodb');
+const {
+  ENFERMEDADES_CANONICAS,
+  evaluarSanidadAgregada,
+} = require('../sdc-modelos/dist');
 
 const DB_NAME = 'chaman';
 const AGROMET_VERSION = 'agromet-1.5.0';
 const WHEAT_VERSION = 5;
 const PEA_VERSION = 2;
 const PERENNIAL_CROPS = new Set(['Pecan', 'Manzano', 'Peral', 'Vid']);
-const EXPECTED_DISEASES = {
-  Trigo: new Set([
-    'trigo.mancha_amarilla',
-    'trigo.roya_hoja',
-    'trigo.roya_anaranjada',
-    'trigo.mancha_hoja',
-    'trigo.fusarium_espiga',
+const DEFINITIONS_BY_CROP = ENFERMEDADES_CANONICAS.reduce((acc, item) => {
+  (acc[item.cultivo] ||= []).push(item);
+  return acc;
+}, {});
+// Una matriz ejecutable incluye formulas operativas y screenings
+// experimentales. Las enfermedades catalogadas sin modelo se informan como
+// brecha cientifica, pero no se exigen como predicciones inventadas.
+const EXPECTED_DISEASES = Object.fromEntries(
+  Object.entries(DEFINITIONS_BY_CROP).map(([crop, items]) => [
+    crop,
+    new Set(items.filter((item) => item.motor !== 'sin_modelo').map((item) => item.id)),
   ]),
-  Cebada: new Set([
-    'cebada.mancha_red',
-    'cebada.escaldadura',
-    'cebada.roya_hoja',
-    'cebada.fusariosis_espiga',
-  ]),
-  Arveja: new Set(['arveja.ascochyta', 'arveja.mildiu', 'arveja.oidio']),
-};
+);
+const DEFINITION_BY_ID = new Map(
+  ENFERMEDADES_CANONICAS.map((item) => [item.id, item]),
+);
 
 const id = (value) => (value == null ? '' : String(value));
 const finite = (value) => {
@@ -35,6 +39,10 @@ const finite = (value) => {
   return Number.isFinite(number) ? number : undefined;
 };
 const day = (value) => (value ? String(value).slice(0, 10) : undefined);
+const iso = (value) => {
+  const date = value ? new Date(value) : undefined;
+  return date && Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
+};
 const daysOld = (value) => {
   const time = new Date(value).getTime();
   return Number.isFinite(time)
@@ -237,6 +245,7 @@ async function main() {
       const producer = producerById.get(id(lot.idProductor));
       const establishment = establishmentById.get(id(lot.idEstablecimiento));
       const expected = EXPECTED_DISEASES[crop];
+      const definitions = DEFINITIONS_BY_CROP[crop] || [];
       const diseaseIds = new Set(diseases.map((item) => item.idEnfermedad).filter(Boolean));
       const versions = Array.from(
         new Set(diseases.map((item) => Number(item.modelo?.version)).filter(Number.isFinite)),
@@ -247,6 +256,20 @@ async function main() {
       });
       const irrigation = irrigationBySowing.get(id(sowing?._id));
       const ndvi = ndviByLot.get(id(lot._id));
+      const sanitaryEvaluation = evaluarSanidadAgregada(
+        diseases,
+        crop,
+        iso(prediction?.fecha),
+      );
+      const saturated = diseases
+        .filter((item) => finite(item.resultado) !== undefined && finite(item.resultado) >= 99.5)
+        .map((item) => ({
+          id: item.idEnfermedad,
+          resultado: finite(item.resultado),
+          version: finite(item.modelo?.version),
+          validacion: item.modelo?.validacion,
+          estado: item.estado,
+        }));
       return {
         idLote: id(lot._id),
         lote: lot.nombre || 'Lote sin nombre',
@@ -268,15 +291,40 @@ async function main() {
           ),
         },
         sanidad: {
-          aplica: Boolean(expected),
+          aplica: Boolean(expected?.size),
           cantidad: diseases.length,
           matrizCompleta:
-            !expected ||
-            (diseaseIds.size === expected.size &&
-              [...expected].every((diseaseId) => diseaseIds.has(diseaseId))),
+            !expected?.size ||
+            [...expected].every((diseaseId) => diseaseIds.has(diseaseId)),
+          esperadasEjecutables: expected?.size || 0,
+          catalogo: {
+            total: definitions.length,
+            operativas: definitions.filter((item) => item.motor === 'operativo').length,
+            experimentales: definitions.filter((item) => item.motor === 'experimental').length,
+            sinModelo: definitions.filter((item) => item.motor === 'sin_modelo').length,
+          },
           versiones: versions,
           fecha: day(prediction?.fecha),
           rangoResultadosValido: diseaseRangeOk,
+          semaforoCanonico: sanitaryEvaluation.semaforo,
+          lecturasOperativas: sanitaryEvaluation.operativas.length,
+          alertables: sanitaryEvaluation.alertables.length,
+          alertableIds: sanitaryEvaluation.alertables.map((item) => item.idEnfermedad),
+          maximoOperativo: sanitaryEvaluation.maximo,
+          saturadas: saturated,
+          validaciones: diseases.reduce((acc, item) => {
+            const key = item.modelo?.validacion || 'sin_validacion';
+            acc[key] = (acc[key] || 0) + 1;
+            return acc;
+          }, {}),
+          modelos: diseases.map((item) => ({
+            id: item.idEnfermedad,
+            resultado: finite(item.resultado),
+            estado: item.estado,
+            version: finite(item.modelo?.version),
+            validacion: item.modelo?.validacion,
+            motorCatalogo: DEFINITION_BY_ID.get(item.idEnfermedad)?.motor,
+          })),
           estados: diseases.reduce((acc, item) => {
             const key = item.estado || 'sin_estado';
             acc[key] = (acc[key] || 0) + 1;
@@ -293,6 +341,7 @@ async function main() {
           ultimaPronosticada: day(latestForecast?.fecha),
           version: latestObserved?.versionCalculo,
           fuente: latestObserved?.fuente,
+          fuentePorVariable: latestObserved?.fuentePorVariable,
           completitudPct: finite(latestObserved?.completitudPct),
           gdd: finite(latestObserved?.metricas?.gddAccumulated),
           gddMonotono: isMonotonic(observed, (item) => item.metricas?.gddAccumulated),
@@ -393,6 +442,35 @@ async function main() {
           });
         }
       }
+      for (const model of row.sanidad.modelos) {
+        if (model.estado === 'calculado' && !model.validacion) {
+          severityPush(findings, 'high', 'modelo_sanitario_sin_validacion_explicita', row, {
+            enfermedad: model.id,
+            version: model.version,
+          });
+        }
+        if (model.motorCatalogo === 'sin_modelo' && model.estado === 'calculado') {
+          severityPush(findings, 'critical', 'calculo_sanitario_sin_modelo_canonico', row, {
+            enfermedad: model.id,
+            version: model.version,
+          });
+        }
+      }
+      for (const saturated of row.sanidad.saturadas) {
+        const alertable = row.sanidad.alertableIds.includes(saturated.id);
+        severityPush(
+          findings,
+          alertable ? 'high' : 'medium',
+          alertable
+            ? 'indice_sanitario_operativo_saturado'
+            : 'screening_sanitario_saturado_no_alertable',
+          row,
+          { enfermedad: saturated.id, ...saturated },
+        );
+      }
+      if (row.sanidad.semaforoCanonico === 'rojo' && row.sanidad.alertables === 0) {
+        severityPush(findings, 'critical', 'semaforo_rojo_sin_contrato_alertable', row);
+      }
       if (row.frio.aplica) {
         if (row.frio.hf === undefined || row.frio.cp === undefined || !row.frio.inicioTemporada) {
           severityPush(findings, 'critical', 'frio_perenne_incompleto', row, {
@@ -432,13 +510,23 @@ async function main() {
       const crop = (byCrop[row.cultivo] ||= {
         lotes: 0,
         sanidadCompleta: 0,
+        sanidadOperativa: 0,
+        alertasCanonicas: 0,
+        screeningsProvisionales: 0,
+        indicesSaturados: 0,
         agrometActual: 0,
         frioCompleto: 0,
         riegoDisponible: 0,
         sateliteDisponible: 0,
+        fuentesAgromet: {},
       });
       crop.lotes += 1;
       if (!row.sanidad.aplica || row.sanidad.matrizCompleta) crop.sanidadCompleta += 1;
+      if (row.sanidad.lecturasOperativas > 0) crop.sanidadOperativa += 1;
+      crop.alertasCanonicas += row.sanidad.alertables;
+      crop.screeningsProvisionales +=
+        row.sanidad.validaciones.operativo_provisional || 0;
+      crop.indicesSaturados += row.sanidad.saturadas.length;
       if ((row.agromet.antiguedadDias ?? 99) <= 2 && row.agromet.version === AGROMET_VERSION) {
         crop.agrometActual += 1;
       }
@@ -447,6 +535,9 @@ async function main() {
       }
       if (row.riego.disponible) crop.riegoDisponible += 1;
       if (row.satelite.disponible) crop.sateliteDisponible += 1;
+      const weatherSource = row.agromet.fuente || 'sin_fuente';
+      crop.fuentesAgromet[weatherSource] =
+        (crop.fuentesAgromet[weatherSource] || 0) + 1;
     }
 
     const severityCounts = findings.reduce((acc, item) => {
@@ -468,6 +559,35 @@ async function main() {
       },
       byClient,
       byCrop,
+      sanitaryCatalog: Object.fromEntries(
+        Object.entries(DEFINITIONS_BY_CROP).map(([crop, items]) => [
+          crop,
+          {
+            total: items.length,
+            operativos: items.filter((item) => item.motor === 'operativo').length,
+            experimentales: items.filter((item) => item.motor === 'experimental').length,
+            sinModelo: items.filter((item) => item.motor === 'sin_modelo').length,
+          },
+        ]),
+      ),
+      fieldSensorCoverage: rows
+        .filter(
+          (row) =>
+            row.frio.dispositivos.length ||
+            (row.frio.coberturaCampoMaxPct || 0) > 0 ||
+            row.frio.sensoresCampo.length,
+        )
+        .map((row) => ({
+          idLote: row.idLote,
+          lote: row.lote,
+          cliente: row.cliente,
+          cultivo: row.cultivo,
+          dispositivos: row.frio.dispositivos,
+          coberturaCampoMaxPct: row.frio.coberturaCampoMaxPct,
+          sensoresCampo: row.frio.sensoresCampo,
+          fuenteDiariaActual: row.agromet.fuente,
+          fuentePorVariableActual: row.agromet.fuentePorVariable,
+        })),
       findings,
       ...(!summaryOnly ? { rows } : {}),
     };

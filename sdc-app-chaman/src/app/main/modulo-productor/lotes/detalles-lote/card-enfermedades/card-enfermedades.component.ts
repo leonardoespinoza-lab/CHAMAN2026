@@ -902,8 +902,15 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     enfermedad?: TEnfermedad,
     prediccionVigente = true
   ): string {
-    if (!prediccion) return '0.0%';
+    if (!prediccion) return 'Sin lectura';
     if (!prediccionVigente) return `Actualizar v${TRIGO_MOTOR_SANITARIO_VERSION}`;
+    if (
+      prediccion.estado === 'fuera_ventana' &&
+      prediccion.modelo?.validacion &&
+      prediccion.modelo.validacion !== 'operativo'
+    ) {
+      return `${resultado.toFixed(1)}/100`;
+    }
     if (prediccion.estado === 'fuera_ventana') return `${resultado.toFixed(1)}%`;
     if (enfermedad && this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
       const cobertura = this.coberturaHorariaRoya(prediccion);
@@ -911,8 +918,18 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       const frecuencia = Number((prediccion.variables as Record<string, number>)?.['frecuenciaAmbientalPct'] || 0);
       return `${frecuencia.toFixed(1)}%`;
     }
+    if (
+      prediccion.estado === 'sin_datos' &&
+      prediccion.modelo?.validacion &&
+      prediccion.modelo.validacion !== 'operativo'
+    ) {
+      return `${resultado.toFixed(1)}/100`;
+    }
     if (prediccion.estado === 'sin_datos') return `${resultado.toFixed(1)}%`;
     if (enfermedad && this.esManchaRedV4(enfermedad, prediccion)) {
+      return `${resultado.toFixed(1)}/100`;
+    }
+    if (prediccion.modelo?.validacion && prediccion.modelo.validacion !== 'operativo') {
       return `${resultado.toFixed(1)}/100`;
     }
     if (!this.esScreeningExperimental) return `${resultado.toFixed(1)}%`;
@@ -925,9 +942,13 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     enfermedad: TEnfermedad,
     prediccion?: IPrediccionEnfermedad
   ): string {
-    return this.esManchaRedV4(enfermedad, prediccion)
-      ? 'Indice ambiental de infeccion'
-      : 'Indice sanitario estimado';
+    if (this.esManchaRedV4(enfermedad, prediccion)) {
+      return 'Indice ambiental de infeccion';
+    }
+    if (prediccion?.modelo?.validacion && prediccion.modelo.validacion !== 'operativo') {
+      return 'Indice ambiental para seguimiento';
+    }
+    return 'Indice sanitario estimado';
   }
 
   private esManchaRedV4(

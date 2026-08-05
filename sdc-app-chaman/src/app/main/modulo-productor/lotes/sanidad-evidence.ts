@@ -1,8 +1,8 @@
 import {
   IPrediccionEnfermedad,
   ISiembra,
-  esFechaPrediccionSanitariaReciente,
-  esLecturaSanitariaOperativa,
+  TSemaforoSanitario,
+  evaluarSanidadAgregada,
 } from 'modelos/src';
 
 export type TEstadoSanidadFrontend = 'sin_datos' | 'seguimiento' | 'operativo';
@@ -11,9 +11,11 @@ export interface IEvidenciaSanidadFrontend {
   estado: TEstadoSanidadFrontend;
   todas: IPrediccionEnfermedad[];
   operativas: IPrediccionEnfermedad[];
+  alertables: IPrediccionEnfermedad[];
   noAgregables: IPrediccionEnfermedad[];
   principal?: IPrediccionEnfermedad;
   maximo?: number;
+  semaforo: TSemaforoSanitario;
 }
 
 /**
@@ -24,21 +26,21 @@ export interface IEvidenciaSanidadFrontend {
 export function evaluarSanidadFrontend(siembra?: ISiembra): IEvidenciaSanidadFrontend {
   const todas = (siembra?.ultimaPrediccion?.enfermedades || []).filter(Boolean);
   const fecha = siembra?.ultimaPrediccion?.fechaPrediccion || siembra?.ultimaPrediccion?.fecha;
-  const reciente = esFechaPrediccionSanitariaReciente(fecha);
-  const operativas = reciente ? todas.filter((item) => esLecturaSanitariaOperativa(item)) : [];
+  const evaluacion = evaluarSanidadAgregada(todas, siembra?.semilla?.cultivo, fecha);
+  const operativas = evaluacion.operativas as IPrediccionEnfermedad[];
+  const alertables = evaluacion.alertables as IPrediccionEnfermedad[];
   const operativasSet = new Set(operativas);
   const noAgregables = todas.filter((item) => !operativasSet.has(item));
-  const principal = operativas.reduce<IPrediccionEnfermedad | undefined>(
-    (max, item) => (!max || Number(item.resultado) > Number(max.resultado) ? item : max),
-    undefined
-  );
+  const principal = evaluacion.principal as IPrediccionEnfermedad | undefined;
 
   return {
     estado: operativas.length ? 'operativo' : todas.length ? 'seguimiento' : 'sin_datos',
     todas,
     operativas,
+    alertables,
     noAgregables,
     principal,
-    maximo: principal ? Number(principal.resultado) : undefined,
+    maximo: evaluacion.maximo,
+    semaforo: evaluacion.semaforo,
   };
 }

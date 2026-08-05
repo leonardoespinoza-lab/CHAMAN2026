@@ -2,10 +2,8 @@ import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, OnDestroy, OnI
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import {
-  clasificarNivelRiesgoSanitario,
   esCultivoPerenne,
-  esFechaPrediccionSanitariaReciente,
-  esLecturaSanitariaOperativa,
+  evaluarSanidadAgregada,
   esPrediccionMalezasOperativa,
   esHuellaHidricaConsolidada,
   IDistribuidor,
@@ -288,8 +286,8 @@ export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestr
           .date strong, .date small { display: block; margin-top: 4px; }
           .date small { color: #64748b; font-size: 9px; }
           .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0; }
-          .metric { border: 1px solid #c8d7e7; border-left: 4px solid #2dd4bf; border-radius: 8px; padding: 11px; min-height: 78px; }
-          .metric.warn { border-left-color: #f59e0b; }
+          .metric { border: 1px solid #c8d7e7; border-radius: 12px; padding: 11px; min-height: 78px; background: #f8fbfc; }
+          .metric.warn { background: #fff8e8; border-color: #ead39c; }
           .metric span { display: block; color: #5b708c; font-size: 10px; text-transform: uppercase; }
           .metric strong { display: block; margin-top: 8px; font-size: 22px; }
           .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
@@ -513,12 +511,15 @@ export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   private enfermedadesOperativas(siembra?: ISiembra) {
+    return this.evaluacionSanitaria(siembra).operativas;
+  }
+
+  private evaluacionSanitaria(siembra?: ISiembra) {
     const fecha = siembra?.ultimaPrediccion?.fechaPrediccion || siembra?.ultimaPrediccion?.fecha;
-    if (!esFechaPrediccionSanitariaReciente(fecha)) {
-      return [];
-    }
-    return (siembra?.ultimaPrediccion?.enfermedades || []).filter((enfermedad) =>
-      esLecturaSanitariaOperativa(enfermedad)
+    return evaluarSanidadAgregada(
+      siembra?.ultimaPrediccion?.enfermedades || [],
+      siembra?.semilla?.cultivo,
+      fecha
     );
   }
 
@@ -760,12 +761,13 @@ export class DashboardQuimicaComponent implements OnInit, AfterViewInit, OnDestr
       return 'sin-prediccion';
     }
 
-    const enfermedades = this.enfermedadesOperativas(siembra);
-    if (!enfermedades.length) {
+    const evaluacion = this.evaluacionSanitaria(siembra);
+    if (!evaluacion.operativas.length) {
       return 'sin-prediccion';
     }
-    const maximo = enfermedades.reduce((max, enfermedad) => Math.max(max, enfermedad.resultado || 0), 0);
-    return clasificarNivelRiesgoSanitario(maximo, siembra.semilla?.cultivo);
+    if (evaluacion.semaforo === 'rojo') return 'alto';
+    if (evaluacion.semaforo === 'amarillo') return 'medio';
+    return 'bajo';
   }
 
   private agregarCultivo(resumenes: Map<string, IResumenCultivo>, cultivo: string, hectareas: number): void {

@@ -732,6 +732,7 @@ export function resolverResistencia(
 
 export interface ICandidatoAlertaSanitaria {
   idEnfermedad?: TEnfermedadId;
+  enfermedad?: TEnfermedad;
   resultado: number;
   estado?: "calculado" | "sin_datos" | "fuera_ventana";
   modelo?: {
@@ -754,6 +755,26 @@ export const UMBRAL_ALERTA_SANITARIA = 15;
 export const VIGENCIA_ALERTA_SANITARIA_HORAS = 72;
 
 export type TNivelRiesgoSanitario = "bajo" | "medio" | "alto";
+
+/**
+ * Estado ejecutivo unico para mapas, listados, dashboards e informes.
+ *
+ * `rojo` significa que al menos una lectura satisface el contrato completo de
+ * alerta del motor (ventana, calidad, resistencia, version y evidencia
+ * ambiental). `amarillo` es seguimiento de una lectura operativa que aun no
+ * satisface ese contrato. La ausencia de una lectura operativa nunca fabrica
+ * una alarma: se informa por separado mediante `sinDatosOperativos`.
+ */
+export type TSemaforoSanitario = "verde" | "amarillo" | "rojo";
+
+export interface IEvaluacionSanitariaAgregada {
+  semaforo: TSemaforoSanitario;
+  operativas: ICandidatoAlertaSanitaria[];
+  alertables: ICandidatoAlertaSanitaria[];
+  principal?: ICandidatoAlertaSanitaria;
+  maximo?: number;
+  sinDatosOperativos: boolean;
+}
 
 export interface IUmbralesRiesgoSanitario {
   medio: number;
@@ -794,6 +815,51 @@ export function clasificarNivelRiesgoSanitario(
   if (valor >= umbrales.alto) return "alto";
   if (valor >= umbrales.medio) return "medio";
   return "bajo";
+}
+
+export function evaluarSanidadAgregada(
+  predicciones: ICandidatoAlertaSanitaria[] = [],
+  cultivo?: string,
+  fechaPrediccion?: string,
+  ahoraMs = Date.now(),
+): IEvaluacionSanitariaAgregada {
+  const vigentes =
+    fechaPrediccion &&
+    !esFechaPrediccionSanitariaReciente(fechaPrediccion, ahoraMs)
+      ? []
+      : predicciones.filter(Boolean);
+  const operativas = vigentes.filter((item) =>
+    esLecturaSanitariaOperativa(item),
+  );
+  const alertables = operativas.filter((item) =>
+    esPrediccionSanitariaAlertable(item),
+  );
+  const candidatasPrincipales = alertables.length ? alertables : operativas;
+  const principal = candidatasPrincipales.reduce<
+    ICandidatoAlertaSanitaria | undefined
+  >(
+    (max, item) =>
+      !max || Number(item.resultado) > Number(max.resultado) ? item : max,
+    undefined,
+  );
+  const maximo = principal ? Number(principal.resultado) : undefined;
+  const umbralSeguimiento = getUmbralesRiesgoSanitario(cultivo).medio;
+  const requiereSeguimiento = operativas.some(
+    (item) => Number(item.resultado) >= umbralSeguimiento,
+  );
+
+  return {
+    semaforo: alertables.length
+      ? "rojo"
+      : requiereSeguimiento
+        ? "amarillo"
+        : "verde",
+    operativas,
+    alertables,
+    principal,
+    maximo,
+    sinDatosOperativos: operativas.length === 0,
+  };
 }
 
 export function esFechaPrediccionSanitariaReciente(

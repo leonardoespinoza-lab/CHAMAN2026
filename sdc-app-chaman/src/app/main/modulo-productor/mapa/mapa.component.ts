@@ -656,15 +656,10 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
         lote.colorEnfermedad = 'rgba(34, 197, 94, 0.6)';
         return;
       }
-      let maxRiesgo = 0; // Riesgo bajo (verde)
-      evidencia.operativas.forEach((prediccion) => {
-        const nivel = this.nivelRiesgoEnfermedad(lote, prediccion.resultado || 0);
-        if (nivel === 2) {
-          maxRiesgo = Math.max(maxRiesgo, 2); // Riesgo alto (rojo)
-        } else if (nivel === 1) {
-          maxRiesgo = Math.max(maxRiesgo, 1); // Riesgo medio (amarillo)
-        }
-      });
+      // El color no se deriva del numero bruto. Rojo exige que el mismo
+      // contrato canonico que crea alertas haya sido satisfecho; amarillo es
+      // seguimiento operativo sin alerta y verde es ausencia de alerta.
+      const maxRiesgo = evidencia.semaforo === 'rojo' ? 2 : evidencia.semaforo === 'amarillo' ? 1 : 0;
       maxRiesgoTotal = Math.max(maxRiesgoTotal, maxRiesgo);
       switch (maxRiesgo) {
         case 2:
@@ -1122,7 +1117,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   public loteEnfermedadResumen(lote?: ILoteMapa): string {
     const evidencia = evaluarSanidadFrontend((lote || this.loteSeleccionado)?.siembra);
     if (evidencia.principal) {
-      return `${evidencia.principal.enfermedad}: ${this.formatNumber(evidencia.principal.resultado || 0, 0)}%`;
+      return `${evidencia.principal.enfermedad}: indice ${this.formatNumber(evidencia.principal.resultado || 0, 0)}/100`;
     }
     if (evidencia.noAgregables.length) {
       return `0% · Sin alerta sanitaria operativa; ${evidencia.noAgregables.length} modelo${evidencia.noAgregables.length === 1 ? '' : 's'} en seguimiento`;
@@ -1863,9 +1858,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private nivelRiesgoEnfermedad(lote: ILoteMapa | undefined, resultado: number): 0 | 1 | 2 {
-    const umbrales = this.umbralesRiesgoEnfermedad(lote);
-    if (resultado >= umbrales.alto) return 2;
-    if (resultado >= umbrales.medio) return 1;
+    const semaforo = evaluarSanidadFrontend(lote?.siembra).semaforo;
+    if (semaforo === 'rojo') return 2;
+    if (semaforo === 'amarillo') return 1;
     return 0;
   }
 

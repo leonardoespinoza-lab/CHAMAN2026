@@ -190,6 +190,11 @@ describe('screening sanitario con fenologia proyectada', () => {
     expect(ultima.variables.diasHorariosValidos).toBe(14);
     expect(ultima.variables.diasFavorablesVentana).toBe(0);
     expect(ultima.modelo.validacion).toBe('operativo');
+    expect(
+      creadas[creadas.length - 1].enfermedades
+        .filter((item: any) => item.idEnfermedad !== 'cebada.mancha_red')
+        .every((item: any) => item.modelo.validacion === 'operativo_provisional'),
+    ).toBe(true);
   });
 
   it('no satura Mancha en Red por repetir rocio nocturno dentro de un mismo ciclo', async () => {

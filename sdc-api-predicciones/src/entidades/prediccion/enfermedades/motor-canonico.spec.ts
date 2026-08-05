@@ -15,6 +15,7 @@ import {
   esFechaPrediccionSanitariaReciente,
   esLecturaSanitariaOperativa,
   esPrediccionSanitariaAlertable,
+  evaluarSanidadAgregada,
   evaluarAscochytaArveja,
   evaluarMildiuArveja,
   evaluarOidioArveja,
@@ -737,5 +738,45 @@ describe('motor canonico de enfermedades', () => {
         etapaReproductiva: false,
       }).nivel,
     ).toBe('bajo');
+  });
+
+  it('usa un unico semaforo ejecutivo y reserva rojo para una alerta realmente habilitada', () => {
+    const base = {
+      idEnfermedad: 'cebada.mancha_red' as const,
+      estado: 'calculado' as const,
+      modelo: { version: 4, validacion: 'operativo' as const },
+      calidadDatos: { nivel: 'alta' as const },
+      resistenciaUsada: {
+        estado: 'observada' as const,
+        confianza: 'alta' as const,
+        campaniaFuente: '2025-2026',
+      },
+      variables: {
+        formulaVersion: 4,
+        coberturaVentana: 0.9,
+        diasFavorablesVentana: 2,
+      },
+    };
+
+    expect(
+      evaluarSanidadAgregada([{ ...base, resultado: 60 }], 'Cebada')
+        .semaforo,
+    ).toBe('amarillo');
+    expect(
+      evaluarSanidadAgregada([{ ...base, resultado: 70 }], 'Cebada')
+        .semaforo,
+    ).toBe('rojo');
+    expect(
+      evaluarSanidadAgregada(
+        [
+          {
+            ...base,
+            resultado: 100,
+            modelo: { version: 4, validacion: 'operativo_provisional' },
+          },
+        ],
+        'Cebada',
+      ).semaforo,
+    ).toBe('verde');
   });
 });

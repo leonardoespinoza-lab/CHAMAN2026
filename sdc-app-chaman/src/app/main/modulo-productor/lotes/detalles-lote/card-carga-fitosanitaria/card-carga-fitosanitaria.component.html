@@ -76,7 +76,7 @@
       <div class="event-preview">
         @for (enfermedad of enfermedadesPrincipales; track enfermedad.enfermedad) {
           <span class="event-chip disease">
-            {{ enfermedad.enfermedad }} {{ enfermedad.resultado | number: '1.0-1' }}%
+            {{ enfermedad.enfermedad }} · indice {{ enfermedad.resultado | number: '1.0-1' }}/100
           </span>
         }
         @for (aplicacion of aplicacionesPrincipales; track $index) {
@@ -152,7 +152,7 @@
                   <strong>{{ enfermedad.enfermedad }}</strong>
                   <span>{{ enfermedad.nivel | titlecase }}</span>
                 </div>
-                <em>{{ enfermedad.resultado | number: '1.0-1' }}%</em>
+                <em>{{ enfermedad.resultado | number: '1.0-1' }}/100</em>
               </article>
             }
           } @else {

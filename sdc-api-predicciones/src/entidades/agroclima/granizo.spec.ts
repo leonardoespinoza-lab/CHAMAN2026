@@ -86,7 +86,7 @@ describe('evaluarRiesgoGranizoAgroclimatico', () => {
     expect(lluviaYChaparron.posibilidadPct).toBeLessThan(70);
   });
 
-  it('permite senal fuerte sin codigo explicito solo ante convergencia excepcional', () => {
+  it('limita a vigilancia una convergencia excepcional sin codigo explicito de granizo', () => {
     const resultado = evaluarRiesgoGranizoAgroclimatico({
       weatherCode: 95,
       cape: 2600,
@@ -97,9 +97,9 @@ describe('evaluarRiesgoGranizoAgroclimatico', () => {
       temperaturaMax: 27,
     });
 
-    expect(resultado.posibilidadPct).toBe(70);
+    expect(resultado.posibilidadPct).toBe(69);
     expect(resultado.evidencia).toContain(
-      'Convergencia severa excepcional sin codigo explicito de granizo.',
+      'Convergencia severa sin codigo explicito de granizo: se mantiene como vigilancia, no como alerta automatica.',
     );
   });
 });

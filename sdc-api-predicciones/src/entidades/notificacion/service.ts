@@ -120,9 +120,14 @@ export class NotificacionsService {
       enfermedad.enfermedad,
     )}:${versionMotor}:${this.dateKeyPrediccion(fecha)}`;
     const titulo = 'Predicción sanitaria';
+    const lectura =
+      enfermedad.idEnfermedad === 'cebada.mancha_red' &&
+      Number(enfermedad.modelo?.version || 0) >= 4
+        ? `índice predictivo de presión ambiental ${Number(enfermedad.resultado).toFixed(1)}/100`
+        : `predicción meteorológica de severidad/incidencia ${Number(enfermedad.resultado).toFixed(1)}%`;
     const mensaje = `Siembra de ${siembra.semilla?.cultivo || 'cultivo'} en ${
       siembra.lote?.nombre || 'lote'
-    }: predicción meteorológica de severidad/incidencia para ${enfermedad.enfermedad} de ${Number(enfermedad.resultado).toFixed(1)}%. No confirma enfermedad; requiere validación a campo.`;
+    }: ${enfermedad.enfermedad}, ${lectura}. No confirma enfermedad; requiere validación a campo.`;
 
     await this.enviarEvento({
       modulo: 'Enfermedades',

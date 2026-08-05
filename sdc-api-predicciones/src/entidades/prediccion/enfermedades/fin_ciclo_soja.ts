@@ -91,6 +91,9 @@ export class FinCicloSojaService {
         version: 3,
         fuente: 'Modelo Fin de Ciclo de Soja',
         resolucion: 'diaria',
+        validacion: 'operativo_provisional',
+        alcance:
+          'Screening pluviometrico acumulativo para recorrida; no equivale a probabilidad, incidencia ni diagnostico.',
       },
       variables,
     };

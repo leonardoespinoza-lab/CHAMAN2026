@@ -249,12 +249,14 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
       };
     }
     const max = evidencia.maximo;
+    const esAlerta = evidencia.semaforo === 'rojo';
+    const esSeguimiento = evidencia.semaforo === 'amarillo';
     return {
       label: 'Sanidad',
-      value: `${this.entero.format(max)}%`,
-      detail: `${evidencia.operativas.length} enfermedad${evidencia.operativas.length === 1 ? '' : 'es'} operativa${evidencia.operativas.length === 1 ? '' : 's'}`,
-      tooltip: `Mayor riesgo sanitario calculado: ${this.entero.format(max)}%.`,
-      tone: max >= 70 ? 'danger' : max >= 40 ? 'warn' : 'ok',
+      value: esAlerta ? 'Alerta' : esSeguimiento ? 'Seguimiento' : 'Estable',
+      detail: `${this.entero.format(max)}/100 · ${evidencia.operativas.length} modelo${evidencia.operativas.length === 1 ? '' : 's'} operativo${evidencia.operativas.length === 1 ? '' : 's'}`,
+      tooltip: `Indice sanitario principal: ${this.entero.format(max)}/100. El semaforo aplica ventana, calidad, resistencia, version y evidencia ambiental; no expresa probabilidad de enfermedad observada.`,
+      tone: esAlerta ? 'danger' : esSeguimiento ? 'warn' : 'ok',
     };
   }
 

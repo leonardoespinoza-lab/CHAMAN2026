@@ -238,9 +238,7 @@ export class PrediccionCebadaService {
                   `Etapa ${etapa}: fuera de la ventana ${config.etapaMin}-${config.etapaMax}.`,
                   'ENFERMEDADES EN CEBADA.xlsx',
                   3,
-                  dia.etapaHabilitante
-                    ? 'operativo'
-                    : 'operativo_provisional',
+                  'operativo_provisional',
                   { etapaScore: 0 },
                   anterior,
                 );
@@ -424,6 +422,9 @@ export class PrediccionCebadaService {
           version: 3,
           fuente: 'ENFERMEDADES EN CEBADA.xlsx',
           resolucion: clima.resolucion,
+          validacion: 'operativo_provisional',
+          alcance:
+            'Lectura fuera de la ventana fenologica del modelo; se conserva para trazabilidad y nunca habilita alertas automaticas.',
         },
         variables: { formulaVersion: 3, etapaScore: 0 },
       };
@@ -627,8 +628,12 @@ export class PrediccionCebadaService {
       modelo: {
         id: config.id,
         version: 3,
-        fuente: 'ENFERMEDADES EN CEBADA.xlsx / ESCALDADURA',
+        fuente:
+          'ENFERMEDADES EN CEBADA.xlsx / Ryan y Clare 1975 (10.1016/0048-4059(75)90108-3)',
         resolucion: clima.resolucion,
+        validacion: 'operativo_provisional',
+        alcance:
+          'Screening ambiental de escaldadura; requiere calibracion regional y observacion a campo antes de habilitar alertas automaticas.',
       },
       variables: {
         formulaVersion: 3,
@@ -674,6 +679,9 @@ export class PrediccionCebadaService {
         version: 3,
         fuente: 'ENFERMEDADES EN CEBADA.xlsx / Hoja1',
         resolucion: clima.resolucion,
+        validacion: 'operativo_provisional',
+        alcance:
+          'Screening acumulativo heredado; no equivale a probabilidad ni diagnostico y no habilita alertas hasta su validacion regional.',
       },
       variables: {
         formulaVersion: 3,
@@ -726,6 +734,9 @@ export class PrediccionCebadaService {
         version: 3,
         fuente: 'ENFERMEDADES EN CEBADA.xlsx / modelo Fusarium',
         resolucion: clima.resolucion,
+        validacion: 'operativo_provisional',
+        alcance:
+          'Screening meteorologico dentro de la ventana reproductiva; requiere calibracion local y confirmacion a campo.',
       },
       variables: {
         formulaVersion: 3,

@@ -291,9 +291,14 @@ export function evaluarRiesgoGranizoAgroclimatico(
   if (escenarioExcepcionalSinCodigoGranizo) {
     score += 8;
     evidencia.push(
-      "Convergencia severa excepcional sin codigo explicito de granizo.",
+      "Convergencia severa sin codigo explicito de granizo: se mantiene como vigilancia, no como alerta automatica.",
     );
-  } else if (!codeHail) {
+  }
+
+  // Los codigos WMO 96 y 99 son los unicos que explicitan granizo. CAPE,
+  // lluvia, rafagas y el codigo 95 describen conveccion severa, pero no
+  // confirman el hidrometeoro. Sin 96/99 el indice queda bajo el umbral rojo.
+  if (!codeHail) {
     score = Math.min(score, 69);
   }
 

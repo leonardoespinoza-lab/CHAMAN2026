@@ -76,7 +76,7 @@
 
         <div class="selected-score">
           <span>{{ 'Valor sanitario' | translate }}</span>
-          <strong>{{ formatNumber(selected.resultado, 1) }}%</strong>
+          <strong>{{ formatNumber(selected.resultado, 1) }}/100</strong>
         </div>
 
         <button
@@ -127,7 +127,7 @@
               <strong>{{ lote.nombre }}</strong>
               <small>{{ lote.productor }} - {{ lote.cultivo }}</small>
             </span>
-            <em>{{ formatNumber(lote.resultado, 0) }}%</em>
+            <em>{{ formatNumber(lote.resultado, 0) }}/100</em>
           </button>
         } @empty {
           <div class="empty-state compact">
@@ -275,7 +275,7 @@
             <strong>{{ alerta.lote }}</strong>
             <span>{{ alerta.productor }} - {{ alerta.cultivo }} - {{ alerta.enfermedad }}</span>
           </div>
-          <em>{{ formatNumber(alerta.resultado, 1) }}%</em>
+          <em>{{ formatNumber(alerta.resultado, 1) }}/100</em>
           <small>{{ formatHa(alerta.hectareas) }}</small>
         </article>
       } @empty {

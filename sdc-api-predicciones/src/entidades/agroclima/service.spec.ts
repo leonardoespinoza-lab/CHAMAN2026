@@ -75,7 +75,7 @@ describe('AgroclimaService - alerta conservadora de granizo', () => {
     ).toBe(false);
   });
 
-  it('acepta una convergencia excepcional sin codigo explicito de granizo', () => {
+  it('no alarma una convergencia excepcional sin codigo explicito de granizo', () => {
     const excepcional = riesgo('2026-07-15');
     excepcional.serie[0].weatherCode = 95;
     excepcional.serie[0].cape = 2600;
@@ -85,6 +85,6 @@ describe('AgroclimaService - alerta conservadora de granizo', () => {
         excepcional,
         '2026-07-13T15:00:00.000Z',
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 });
