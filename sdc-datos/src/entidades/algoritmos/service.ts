@@ -1,5 +1,4 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import axios from 'axios';
 import {
   IDispositivo,
   IHuellaHidrica,
@@ -17,6 +16,11 @@ import { CronosService } from '../crono/service';
 import { EnfermedadsService } from '../enfermedad/service';
 import { MalezasService } from '../maleza/service';
 import { SemillasService } from '../semilla/service';
+import {
+  OPEN_METEO_ARCHIVE_BASE_URL,
+  OPEN_METEO_FORECAST_BASE_URL,
+} from '../../env';
+import { OpenMeteoClientService } from '../../auxiliares/open-meteo/open-meteo-client.service';
 import {
   calcularHuellaHidrica,
   calcularSeguimientoHuellaHidrica,
@@ -131,6 +135,7 @@ export class AlgoritmosService {
     private readonly enfermedadsService: EnfermedadsService,
     private readonly malezasService: MalezasService,
     private readonly semillasService: SemillasService,
+    private readonly openMeteoClient: OpenMeteoClientService,
   ) {}
 
   getCatalogo(): AlgoritmoCatalogo[] {
@@ -2502,37 +2507,28 @@ export class AlgoritmosService {
     hasta: string,
   ): Promise<DiaClimaHuella[]> {
     if (desde > hasta) return [];
-    const base =
-      tipo === 'archive'
-        ? 'https://archive-api.open-meteo.com/v1/archive'
-        : 'https://api.open-meteo.com/v1/forecast';
-    const url = new URL(base);
-    url.searchParams.set('latitude', String(lat));
-    url.searchParams.set('longitude', String(lng));
-    url.searchParams.set('start_date', desde);
-    url.searchParams.set('end_date', hasta);
-    url.searchParams.set(
-      'daily',
+    const data = await this.fetchOpenMeteoDaily(
+      tipo,
+      lat,
+      lng,
+      desde,
+      hasta,
       'precipitation_sum,et0_fao_evapotranspiration',
+      'huella hidrica',
     );
-    url.searchParams.set('timezone', 'America/Argentina/Buenos_Aires');
-
-    try {
-      const { data } = await axios.get(url.toString(), { timeout: 15000 });
-      const fechas: string[] = data?.daily?.time || [];
-      const lluvias: number[] = data?.daily?.precipitation_sum || [];
-      const et0: number[] = data?.daily?.et0_fao_evapotranspiration || [];
-      return fechas.map((fecha, index) => ({
-        fecha,
-        lluviaMm: Number(lluvias[index] || 0),
-        et0Mm: Number(et0[index] || 0),
-      }));
-    } catch (error) {
-      this.logger.error(`Error Open-Meteo ${tipo} ${desde}/${hasta}: ${error}`);
+    if (!data) {
       throw new BadRequestException(
         'No se pudo obtener clima Open-Meteo para calcular la huella hidrica.',
       );
     }
+    const fechas: string[] = data?.daily?.time || [];
+    const lluvias: number[] = data?.daily?.precipitation_sum || [];
+    const et0: number[] = data?.daily?.et0_fao_evapotranspiration || [];
+    return fechas.map((fecha, index) => ({
+      fecha,
+      lluviaMm: Number(lluvias[index] || 0),
+      et0Mm: Number(et0[index] || 0),
+    }));
   }
 
   private async fetchOpenMeteoMalezas(
@@ -2543,42 +2539,57 @@ export class AlgoritmosService {
     hasta: string,
   ): Promise<DiaClimaMalezas[]> {
     if (desde > hasta) return [];
+    const data = await this.fetchOpenMeteoDaily(
+      tipo,
+      lat,
+      lng,
+      desde,
+      hasta,
+      'temperature_2m_mean,precipitation_sum,et0_fao_evapotranspiration',
+      'malezas',
+    );
+    if (!data) {
+      throw new BadRequestException(
+        'No se pudo obtener clima Open-Meteo para calcular malezas.',
+      );
+    }
+    const fechas: string[] = data?.daily?.time || [];
+    const temperaturas: number[] = data?.daily?.temperature_2m_mean || [];
+    const lluvias: number[] = data?.daily?.precipitation_sum || [];
+    const et0: number[] = data?.daily?.et0_fao_evapotranspiration || [];
+    return fechas.map((fecha, index) => ({
+      fecha,
+      tipo: tipo === 'archive' ? 'historico' : 'pronostico',
+      temperaturaMedia: this.toNumber(temperaturas[index]),
+      lluviaMm: Number(lluvias[index] || 0),
+      et0Mm: Number(et0[index] || 0),
+    }));
+  }
+
+  private async fetchOpenMeteoDaily(
+    tipo: 'archive' | 'forecast',
+    lat: number,
+    lng: number,
+    desde: string,
+    hasta: string,
+    daily: string,
+    contexto: string,
+  ): Promise<any | null> {
     const base =
       tipo === 'archive'
-        ? 'https://archive-api.open-meteo.com/v1/archive'
-        : 'https://api.open-meteo.com/v1/forecast';
+        ? `${OPEN_METEO_ARCHIVE_BASE_URL}/archive`
+        : `${OPEN_METEO_FORECAST_BASE_URL}/forecast`;
     const url = new URL(base);
     url.searchParams.set('latitude', String(lat));
     url.searchParams.set('longitude', String(lng));
     url.searchParams.set('start_date', desde);
     url.searchParams.set('end_date', hasta);
-    url.searchParams.set(
-      'daily',
-      'temperature_2m_mean,precipitation_sum,et0_fao_evapotranspiration',
-    );
+    url.searchParams.set('daily', daily);
     url.searchParams.set('timezone', 'America/Argentina/Buenos_Aires');
-
-    try {
-      const { data } = await axios.get(url.toString(), { timeout: 15000 });
-      const fechas: string[] = data?.daily?.time || [];
-      const temperaturas: number[] = data?.daily?.temperature_2m_mean || [];
-      const lluvias: number[] = data?.daily?.precipitation_sum || [];
-      const et0: number[] = data?.daily?.et0_fao_evapotranspiration || [];
-      return fechas.map((fecha, index) => ({
-        fecha,
-        tipo: tipo === 'archive' ? 'historico' : 'pronostico',
-        temperaturaMedia: this.toNumber(temperaturas[index]),
-        lluviaMm: Number(lluvias[index] || 0),
-        et0Mm: Number(et0[index] || 0),
-      }));
-    } catch (error) {
-      this.logger.error(
-        `Error Open-Meteo malezas ${tipo} ${desde}/${hasta}: ${error}`,
-      );
-      throw new BadRequestException(
-        'No se pudo obtener clima Open-Meteo para calcular malezas.',
-      );
-    }
+    return this.openMeteoClient.getJson<any>(
+      url,
+      `${contexto} ${tipo} ${desde}/${hasta}`,
+    );
   }
 
   private toDateKey(fecha: string): string {

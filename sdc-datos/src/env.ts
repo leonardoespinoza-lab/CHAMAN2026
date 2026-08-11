@@ -26,6 +26,138 @@ export const SOIL_INTELLIGENCE_INTERNAL_TOKEN =
   process.env.SOIL_INTELLIGENCE_INTERNAL_TOKEN ||
   LOT_LOCATION_INTERNAL_TOKEN ||
   AGROMETEO_INTERNAL_TOKEN;
+
+// Open-Meteo comercial. Las credenciales nunca forman parte de la URL base:
+// el cliente las agrega exclusivamente al request en memoria y solo para el
+// hostname customer oficial que corresponde a forecast o archive.
+export const OPEN_METEO_API_KEY = (process.env.OPEN_METEO_API_KEY || '').trim();
+export const OPEN_METEO_ARCHIVE_API_KEY = (
+  process.env.OPEN_METEO_ARCHIVE_API_KEY || ''
+).trim();
+const openMeteoRuntimeEnvironment = String(
+  process.env.RAILWAY_ENVIRONMENT_NAME ||
+    process.env.ENV ||
+    process.env.NODE_ENV ||
+    '',
+)
+  .trim()
+  .toLowerCase();
+const openMeteoStrictProduction = openMeteoRuntimeEnvironment === 'production';
+if (
+  openMeteoStrictProduction &&
+  (!OPEN_METEO_API_KEY || !OPEN_METEO_ARCHIVE_API_KEY)
+) {
+  throw new Error(
+    'sdc-datos production exige claves comerciales separadas de Open-Meteo para forecast y archive',
+  );
+}
+
+export function resolveOpenMeteoBaseUrl(
+  value: string,
+  kind: 'forecast' | 'archive',
+  hasApiKey: boolean,
+  variableName: string,
+): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${variableName} debe ser una URL valida de Open-Meteo`);
+  }
+  if (
+    url.protocol !== 'https:' ||
+    url.username ||
+    url.password ||
+    url.port ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error(
+      `${variableName} debe usar HTTPS sin credenciales, puerto, query ni fragmento`,
+    );
+  }
+  const expectedPublicHost =
+    kind === 'forecast' ? 'api.open-meteo.com' : 'archive-api.open-meteo.com';
+  const expectedCustomerHost =
+    kind === 'forecast'
+      ? 'customer-api.open-meteo.com'
+      : 'customer-archive-api.open-meteo.com';
+  const host = url.hostname.toLowerCase();
+  if (host !== expectedPublicHost && host !== expectedCustomerHost) {
+    throw new Error(
+      `${variableName} debe apuntar al host oficial de Open-Meteo para ${kind}`,
+    );
+  }
+  if (hasApiKey !== (host === expectedCustomerHost)) {
+    throw new Error(
+      `${variableName} no coincide con la configuracion de API key de Open-Meteo`,
+    );
+  }
+  return url.toString().replace(/\/$/, '');
+}
+
+const openMeteoForecastCandidate =
+  process.env.OPEN_METEO_FORECAST_BASE_URL ||
+  (OPEN_METEO_API_KEY
+    ? 'https://customer-api.open-meteo.com/v1'
+    : process.env.API_OPEN_METEO || 'https://api.open-meteo.com/v1');
+const openMeteoArchiveCandidate =
+  process.env.OPEN_METEO_ARCHIVE_BASE_URL ||
+  (OPEN_METEO_ARCHIVE_API_KEY
+    ? 'https://customer-archive-api.open-meteo.com/v1'
+    : 'https://archive-api.open-meteo.com/v1');
+export const OPEN_METEO_FORECAST_BASE_URL = resolveOpenMeteoBaseUrl(
+  openMeteoForecastCandidate,
+  'forecast',
+  !!OPEN_METEO_API_KEY,
+  'OPEN_METEO_FORECAST_BASE_URL',
+);
+export const OPEN_METEO_ARCHIVE_BASE_URL = resolveOpenMeteoBaseUrl(
+  openMeteoArchiveCandidate,
+  'archive',
+  !!OPEN_METEO_ARCHIVE_API_KEY,
+  'OPEN_METEO_ARCHIVE_BASE_URL',
+);
+
+const openMeteoNumber = (
+  value: string | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+  integer = false,
+): number => {
+  const parsed =
+    value === undefined || value.trim() === '' ? NaN : Number(value);
+  const resolved = Number.isFinite(parsed) ? parsed : fallback;
+  const bounded = Math.min(max, Math.max(min, resolved));
+  return integer ? Math.trunc(bounded) : bounded;
+};
+export const OPEN_METEO_MAX_CONCURRENCY = openMeteoNumber(
+  process.env.OPEN_METEO_MAX_CONCURRENCY,
+  2,
+  1,
+  8,
+  true,
+);
+export const OPEN_METEO_MIN_INTERVAL_MS = openMeteoNumber(
+  process.env.OPEN_METEO_MIN_INTERVAL_MS,
+  300,
+  0,
+  60_000,
+);
+export const OPEN_METEO_TIMEOUT_MS = openMeteoNumber(
+  process.env.OPEN_METEO_TIMEOUT_MS,
+  12_000,
+  1000,
+  120_000,
+);
+export const OPEN_METEO_MAX_RETRIES = openMeteoNumber(
+  process.env.OPEN_METEO_MAX_RETRIES,
+  1,
+  0,
+  2,
+  true,
+);
 export const GEOREF_SYNC_ENABLED =
   process.env.GEOREF_SYNC_ENABLED !== 'false' &&
   process.env.NODE_ENV !== 'test';

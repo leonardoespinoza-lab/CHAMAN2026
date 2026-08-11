@@ -25,9 +25,20 @@ export const AGROMETEO_INTERNAL_TOKEN =
 export const API_CLIMA = process.env.API_CLIMA || 'http://127.0.0.1:5008/local';
 // Open-Meteo comercial: la clave vive solo en variables de entorno y se
 // adjunta al request en memoria. Si hay clave, el host customer es el default.
-export const OPEN_METEO_API_KEY = (
-  process.env.OPEN_METEO_API_KEY || ''
-).trim();
+export const OPEN_METEO_API_KEY = (process.env.OPEN_METEO_API_KEY || '').trim();
+const openMeteoRuntimeEnvironment = String(
+  process.env.RAILWAY_ENVIRONMENT_NAME ||
+    process.env.ENV ||
+    process.env.NODE_ENV ||
+    '',
+)
+  .trim()
+  .toLowerCase();
+if (openMeteoRuntimeEnvironment === 'production' && !OPEN_METEO_API_KEY) {
+  throw new Error(
+    'sdc-api-predicciones production exige una clave comercial de Open-Meteo forecast',
+  );
+}
 
 export function resolveOpenMeteoBaseUrl(
   value: string,
@@ -54,9 +65,7 @@ export function resolveOpenMeteoBaseUrl(
     );
   }
   const expectedPublicHost =
-    kind === 'forecast'
-      ? 'api.open-meteo.com'
-      : 'archive-api.open-meteo.com';
+    kind === 'forecast' ? 'api.open-meteo.com' : 'archive-api.open-meteo.com';
   const expectedCustomerHost =
     kind === 'forecast'
       ? 'customer-api.open-meteo.com'

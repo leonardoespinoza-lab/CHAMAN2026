@@ -18,12 +18,26 @@ export const API_AUTH = process.env.API_AUTH || 'http://127.0.0.1:5001';
 export const API_PREDICCIONES =
   process.env.API_PREDICCIONES || 'http://127.0.0.1:5007';
 export const API_CLIMA = process.env.API_CLIMA || 'http://127.0.0.1:5008/local';
-export const OPEN_METEO_API_KEY = (
-  process.env.OPEN_METEO_API_KEY || ''
-).trim();
+export const OPEN_METEO_API_KEY = (process.env.OPEN_METEO_API_KEY || '').trim();
 export const OPEN_METEO_ARCHIVE_API_KEY = (
   process.env.OPEN_METEO_ARCHIVE_API_KEY || ''
 ).trim();
+const openMeteoRuntimeEnvironment = String(
+  process.env.RAILWAY_ENVIRONMENT_NAME ||
+    process.env.ENV ||
+    process.env.NODE_ENV ||
+    '',
+)
+  .trim()
+  .toLowerCase();
+if (
+  openMeteoRuntimeEnvironment === 'production' &&
+  (!OPEN_METEO_API_KEY || !OPEN_METEO_ARCHIVE_API_KEY)
+) {
+  throw new Error(
+    'sdc-api-cliente production exige claves comerciales separadas de Open-Meteo para forecast y archive',
+  );
+}
 
 export function resolveOpenMeteoBaseUrl(
   value: string,
@@ -50,9 +64,7 @@ export function resolveOpenMeteoBaseUrl(
     );
   }
   const expectedPublicHost =
-    kind === 'forecast'
-      ? 'api.open-meteo.com'
-      : 'archive-api.open-meteo.com';
+    kind === 'forecast' ? 'api.open-meteo.com' : 'archive-api.open-meteo.com';
   const expectedCustomerHost =
     kind === 'forecast'
       ? 'customer-api.open-meteo.com'

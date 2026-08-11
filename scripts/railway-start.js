@@ -1,6 +1,10 @@
 const { spawnSync } = require("child_process");
 const { resolveService } = require("./railway-services");
 const { ensureSharedPackages } = require("./shared-packages");
+const {
+  productionValidationArgs,
+  resolveRuntimeEnvironment,
+} = require("./runtime-environment");
 
 const service = resolveService();
 
@@ -10,9 +14,7 @@ const cwd = service.name === "sdc-app-chaman" ? process.cwd() : service.path;
 
 ensureSharedPackages({ compilerCwd: cwd });
 
-const runtimeEnv = String(
-  process.env.ENV || process.env.NODE_ENV || "",
-).toLowerCase();
+const runtimeEnv = resolveRuntimeEnvironment();
 const validatedServices = new Set([
   "sdc-app-chaman",
   "sdc-api-cliente",
@@ -32,7 +34,7 @@ if (
 ) {
   const validation = spawnSync(
     process.execPath,
-    ["scripts/validate-production-config.js"],
+    productionValidationArgs(service.name),
     {
       cwd: process.cwd(),
       shell: false,

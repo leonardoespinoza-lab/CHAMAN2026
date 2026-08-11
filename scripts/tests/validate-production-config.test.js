@@ -14,8 +14,9 @@ function validClimaEnv(overrides = {}) {
     SOIL_INTELLIGENCE_INTERNAL_TOKEN: 's'.repeat(32),
     AGROMETEO_INTERNAL_TOKEN: 'a'.repeat(32),
     OPEN_METEO_API_KEY: 'open-meteo-test-key-valid',
-    OPEN_METEO_ARCHIVE_API_KEY: '',
-    OPEN_METEO_ARCHIVE_BASE_URL: 'https://archive-api.open-meteo.com/v1',
+    OPEN_METEO_ARCHIVE_API_KEY: 'open-meteo-archive-test-key-valid',
+    OPEN_METEO_ARCHIVE_BASE_URL:
+      'https://customer-archive-api.open-meteo.com/v1',
     SWAGGER_ENABLED: 'false',
     CORS_ORIGINS: 'https://app.chamanagro.ar',
     GOOGLE_LOGIN_ENABLED: 'false',
@@ -69,6 +70,45 @@ test('rechaza archive customer sin una clave Professional separada', () => {
 
   assert.equal(result.status, 1);
   assert.match(result.output, /no coincide con la API key configurada/);
+});
+
+test('datos exige forecast y archive comerciales en produccion', () => {
+  const result = runValidator({
+    CHAMAN_SERVICE: 'sdc-datos',
+    MONGO_URI: 'mongodb://mongo.railway.internal:27017/chaman',
+    OPEN_METEO_API_KEY: '',
+    OPEN_METEO_ARCHIVE_API_KEY: '',
+    OPEN_METEO_FORECAST_BASE_URL: 'https://api.open-meteo.com/v1',
+    OPEN_METEO_ARCHIVE_BASE_URL: 'https://archive-api.open-meteo.com/v1',
+  });
+
+  assert.equal(result.status, 1);
+  assert.match(result.output, /Falta variable requerida: OPEN_METEO_API_KEY/);
+  assert.match(
+    result.output,
+    /Falta variable requerida: OPEN_METEO_ARCHIVE_API_KEY/,
+  );
+});
+
+test('datos acepta forecast y archive customer con claves separadas', () => {
+  const result = runValidator({
+    CHAMAN_SERVICE: 'sdc-datos',
+    MONGO_URI: 'mongodb://mongo.railway.internal:27017/chaman',
+  });
+
+  assert.equal(result.status, 0, result.output);
+});
+
+test('datos rechaza un host forecast falsificado', () => {
+  const result = runValidator({
+    CHAMAN_SERVICE: 'sdc-datos',
+    MONGO_URI: 'mongodb://mongo.railway.internal:27017/chaman',
+    OPEN_METEO_FORECAST_BASE_URL:
+      'https://customer-api.open-meteo.com.attacker.example/v1',
+  });
+
+  assert.equal(result.status, 1);
+  assert.match(result.output, /host oficial de Open-Meteo/);
 });
 
 test('rechaza Open-Meteo por HTTP aunque el hostname sea oficial', () => {

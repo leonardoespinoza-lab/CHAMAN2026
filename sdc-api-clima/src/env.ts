@@ -43,12 +43,26 @@ export const OPEN_WEATHER_KEY = process.env.OPEN_WEATHER_KEY || '';
 // Open-Meteo comercial usa los mismos paths que la API publica, pero en los
 // hosts customer y con `apikey` como query param. La clave se lee unicamente
 // desde el entorno; nunca forma parte de una URL persistida ni de los logs.
-export const OPEN_METEO_API_KEY = (
-  process.env.OPEN_METEO_API_KEY || ''
-).trim();
+export const OPEN_METEO_API_KEY = (process.env.OPEN_METEO_API_KEY || '').trim();
 export const OPEN_METEO_ARCHIVE_API_KEY = (
   process.env.OPEN_METEO_ARCHIVE_API_KEY || ''
 ).trim();
+const openMeteoRuntimeEnvironment = String(
+  process.env.RAILWAY_ENVIRONMENT_NAME ||
+    process.env.ENV ||
+    process.env.NODE_ENV ||
+    '',
+)
+  .trim()
+  .toLowerCase();
+if (
+  openMeteoRuntimeEnvironment === 'production' &&
+  (!OPEN_METEO_API_KEY || !OPEN_METEO_ARCHIVE_API_KEY)
+) {
+  throw new Error(
+    'sdc-api-clima production exige claves comerciales separadas de Open-Meteo para forecast y archive',
+  );
+}
 
 export function resolveOpenMeteoBaseUrl(
   value: string,
@@ -75,9 +89,7 @@ export function resolveOpenMeteoBaseUrl(
     );
   }
   const expectedPublicHost =
-    kind === 'forecast'
-      ? 'api.open-meteo.com'
-      : 'archive-api.open-meteo.com';
+    kind === 'forecast' ? 'api.open-meteo.com' : 'archive-api.open-meteo.com';
   const expectedCustomerHost =
     kind === 'forecast'
       ? 'customer-api.open-meteo.com'

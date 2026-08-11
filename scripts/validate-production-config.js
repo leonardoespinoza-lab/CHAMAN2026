@@ -46,12 +46,15 @@ const SERVICE_REQUIRED = {
     'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
     'AGROMETEO_INTERNAL_TOKEN',
     'OPEN_METEO_API_KEY',
+    'OPEN_METEO_ARCHIVE_API_KEY',
   ],
   auth: ['API_DATOS', 'CLIENT_ID_INICIAL', 'CLIENT_SECRET_INICIAL'],
   datos: [
     'MONGO_URI',
     'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
     'AGROMETEO_INTERNAL_TOKEN',
+    'OPEN_METEO_API_KEY',
+    'OPEN_METEO_ARCHIVE_API_KEY',
   ],
   predicciones: [
     'API_DATOS',
@@ -65,6 +68,7 @@ const SERVICE_REQUIRED = {
     'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
     'AGROMETEO_INTERNAL_TOKEN',
     'OPEN_METEO_API_KEY',
+    'OPEN_METEO_ARCHIVE_API_KEY',
   ],
   lora: ['API_DATOS'],
   externa: [
@@ -288,7 +292,7 @@ function validate() {
     );
   }
 
-  if (['api', 'clima', 'predicciones'].includes(service)) {
+  if (['api', 'clima', 'datos', 'predicciones'].includes(service)) {
     const forecastHasKey = hasValue('OPEN_METEO_API_KEY');
     const forecastBase =
       getValue('OPEN_METEO_FORECAST_BASE_URL') ||
@@ -303,7 +307,7 @@ function validate() {
       forecastHasKey,
     );
 
-    if (['api', 'clima'].includes(service)) {
+    if (['api', 'clima', 'datos'].includes(service)) {
       const archiveHasKey = hasValue('OPEN_METEO_ARCHIVE_API_KEY');
       const archiveBase =
         getValue('OPEN_METEO_ARCHIVE_BASE_URL') ||

@@ -18,6 +18,7 @@ describe('simulador admin y motor canonico de enfermedades', () => {
     undefined as any,
     undefined as any,
     undefined as any,
+    undefined as any,
   );
 
   it('usa la resistencia de la campania mas reciente y la misma formula de roya de maiz', () => {
@@ -617,6 +618,7 @@ describe('simulador admin y motor canonico de enfermedades', () => {
       contadorVacio as any,
       contadorVacio as any,
       semillasService as any,
+      undefined as any,
     );
 
     const readiness = await servicio.getReadinessCatalogos();
