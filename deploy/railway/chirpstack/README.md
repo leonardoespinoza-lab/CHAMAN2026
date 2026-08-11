@@ -8,7 +8,7 @@ testing y se despliega una única instancia operativa en production.
 - `chirpstack-postgres`: PostgreSQL con `pg_trgm` y datos persistentes.
 - `chirpstack-redis`: estado temporal persistente y autenticado.
 - `chirpstack-mqtt`: Mosquitto privado para ChirpStack y Chaman, mas
-  un listener MQTT/TLS publico exclusivo para gateways.
+  un listener MQTT/mTLS publico exclusivo para gateways.
 - `chirpstack-ns`: ChirpStack 4.19.0, panel web y API.
 
 El SG50 se configura como **ChirpStack v4 MQTT Forwarder**. Railway no publica
@@ -29,9 +29,9 @@ independientes y ACL diferentes:
 
 - `chirpstack`: backend de red e integracion de aplicaciones.
 - `chaman`: solo lectura de eventos `application/.../event/up`.
-- `MQTT_GATEWAY_USERNAME`: usuario de alta controlada, solo con trafico bajo
-  `au915_0/gateway/...`. Su valor por defecto es `sg50_gateway` y debe
-  reemplazarse por una identidad especifica cuando se conozca el Gateway EUI.
+- El listener interno conserva usuario y clave. El listener externo usa como
+  identidad el Common Name del certificado cliente, que ChirpStack fija al
+  Gateway EUI. La ACL restringe cada certificado a su propio topic.
 
 ## Secretos requeridos
 
@@ -43,6 +43,10 @@ en Git:
 - MQTT: `MQTT_CHIRPSTACK_PASSWORD`, `MQTT_CHAMAN_PASSWORD`,
   `MQTT_GATEWAY_USERNAME`, `MQTT_GATEWAY_PASSWORD`.
 - TLS MQTT: `MQTT_TLS_CA_B64`, `MQTT_TLS_CERT_B64`, `MQTT_TLS_KEY_B64`.
+- Autenticacion externa: `MQTT_TLS_CLIENT_AUTH=certificate`.
+- Emision por gateway en ChirpStack: `CHIRPSTACK_GATEWAY_CA_B64` y
+  `CHIRPSTACK_GATEWAY_CA_KEY_B64`. La clave de CA es un secreto critico y debe
+  tener un backup cifrado fuera del repositorio.
 - ChirpStack: `CHIRPSTACK_API_SECRET` y URLs privadas autenticadas.
 
 Para la inicializacion controlada del administrador se puede definir
@@ -54,8 +58,12 @@ iniciar el servidor. La variable debe retirarse despues de verificar el login.
 
 1. Confirmar Gateway EUI, variante `-915M` y sub-banda AU915.
 2. Crear el gateway en ChirpStack con ese EUI exacto.
-3. Configurar en el SG50 el modo `ChirpStack v4` y MQTT/TLS.
-4. Cargar la CA privada del listener MQTT y la credencial de gateway.
+3. En la ficha del gateway generar el certificado TLS. ChirpStack entrega una
+   CA publica, un certificado cliente y una clave cliente diferentes para ese
+   EUI. Nunca se reutiliza la clave de otro gateway.
+4. Configurar el SG50 como `ChirpStack v4`, habilitar TLS en modo
+   `Self signed certificates` y cargar CA (`.trust`), certificado (`.crt`) y
+   clave (`.key`). No cargar la clave de CA ni la clave del servidor.
 5. Verificar `Last seen`, estadisticas, uplink, join OTAA y downlink.
 6. Verificar que el mismo uplink llegue a `chaman-lora` y a MongoDB production.
 7. Verificar que el contador de trama avance y que no se persistan duplicados.
@@ -95,3 +103,11 @@ guardan solamente el estado operativo de LoRaWAN.
 
 La prueba OTAA, uplink, downlink y persistencia con un equipo real es un
 requisito de aceptacion de campo y no se reemplaza por mensajes MQTT sinteticos.
+
+## Incorporar gateways adicionales
+
+La CA y el certificado del listener son comunes a la plataforma. Para cada
+Gateway EUI nuevo se repiten solamente los pasos de alta y generacion de su
+certificado desde ChirpStack. No se reinicia Mosquitto, no se cambia la CA y no
+se comparte una clave cliente entre equipos. Los certificados vencen a los
+12 meses y deben renovarse desde la misma ficha antes de su expiracion.
