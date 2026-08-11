@@ -1,4 +1,5 @@
 import { INestApplication, Logger } from '@nestjs/common';
+import { timingSafeEqual } from 'crypto';
 
 type CorsCallback = (err: Error | null, allow?: boolean) => void;
 
@@ -99,6 +100,19 @@ function configureBasicRateLimit(app: INestApplication, env?: string) {
       return;
     }
 
+    // Las llamadas privadas del pipeline comparten una misma IP dentro de
+    // Railway. Aplicarles el bucket publico provoca 429 en cascada aunque el
+    // emisor presente el secreto interno correcto.
+    if (
+      internalTokenMatches(
+        req.headers?.['x-chaman-internal-token'],
+        process.env.AGROMETEO_INTERNAL_TOKEN,
+      )
+    ) {
+      next();
+      return;
+    }
+
     const forwarded = String(req.headers?.['x-forwarded-for'] || '');
     const ip = forwarded.split(',')[0].trim() || req.ip || req.socket?.remoteAddress || 'unknown';
     const now = Date.now();
@@ -129,6 +143,19 @@ function configureBasicRateLimit(app: INestApplication, env?: string) {
       }
     }
   }, windowMs).unref?.();
+}
+
+export function internalTokenMatches(
+  received: unknown,
+  configured: string | undefined,
+): boolean {
+  if (!configured || typeof received !== 'string') return false;
+  const expectedBuffer = Buffer.from(configured);
+  const receivedBuffer = Buffer.from(received);
+  return (
+    expectedBuffer.length === receivedBuffer.length &&
+    timingSafeEqual(expectedBuffer, receivedBuffer)
+  );
 }
 
 export function shouldExposeSwagger(env?: string): boolean {

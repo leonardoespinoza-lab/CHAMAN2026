@@ -7,6 +7,7 @@ import { ClimaRepository } from './repository';
 import { EstablecimientosModule } from '../establecimiento/module';
 import { TileCacheModule } from '../../auxiliares/tile-cache/tile-cache.module';
 import { TileCalculationModule } from '../../auxiliares/tile-calculation/tile-calculation.module';
+import { OpenMeteoModule } from '../../auxiliares/open-meteo/open-meteo.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { TileCalculationModule } from '../../auxiliares/tile-calculation/tile-ca
     HttpModule,
     TileCacheModule,
     TileCalculationModule,
+    OpenMeteoModule,
     forwardRef(() => EstablecimientosModule),
   ],
   controllers: [ClimaController],

@@ -18,6 +18,8 @@ import {
   ISemilla,
   ISiembra,
   TObjetivoBiofixFenologico,
+  campaniaFenologicaParaFecha,
+  registroFenologicoPerteneceCampania,
   construirHitosFenologiaArveja,
   resolverFenologiaTermicaArveja,
 } from 'modelos/src';
@@ -321,8 +323,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
 
   public get ultimoRegistroFenologico(): IRegistroFenologico | undefined {
     const vigentes = this.registrosFenologicosVigentes.filter(
-      (registro) =>
-        !this.campaniaTexto || !registro.campania || this.mismaCampania(registro.campania, this.campaniaTexto)
+      (registro) => this.registroEnCampaniaActual(registro)
     );
     return vigentes[vigentes.length - 1];
   }
@@ -677,7 +678,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
         (registro) =>
           (registro.etapa === nombre ||
             (this.cultivo === 'Arveja' && this.codigoEtapaArveja(registro.etapa) === this.codigoEtapaArveja(nombre))) &&
-          (!this.campaniaTexto || !registro.campania || this.mismaCampania(registro.campania, this.campaniaTexto)) &&
+          this.registroEnCampaniaActual(registro) &&
           (registro.accion || 'inicio') === 'inicio'
       );
   }
@@ -1609,7 +1610,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     }
 
     const etapaReferenciaNumero = this.getIndiceEtapaPerenne(etapasCiclo, diaCampania);
-    this.campaniaTexto = `${inicioCampania.getFullYear()}/${inicioCampania.getFullYear() + 1}`;
+    // La identidad operativa de la campania incluye la temporada de frio de
+    // mayo-junio. El 1-jul se conserva solo como ancla del cronograma visual.
+    this.campaniaTexto = this.siembraActual
+      ? campaniaFenologicaParaFecha(this.siembraActual, hoy)
+      : `${inicioCampania.getFullYear()}/${inicioCampania.getFullYear() + 1}`;
     const registroCampo = this.getRegistroPerenneActual(etapasCiclo, hoy);
     const etapaActualNumero = registroCampo?.indiceEtapa ?? etapaReferenciaNumero;
     this.etapaActualConfirmadaCampo = !!registroCampo;
@@ -1674,9 +1679,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
           !!item.fecha &&
           item.indiceEtapa >= 0 &&
           item.fechaClave <= hasta &&
-          (!this.campaniaTexto ||
-            !item.registro.campania ||
-            this.mismaCampania(item.registro.campania, this.campaniaTexto))
+          this.registroEnCampaniaActual(item.registro, fecha)
       )
       .sort((a, b) => a.fechaClave.localeCompare(b.fechaClave));
     const observacionHoy = [...candidatos].reverse().find((item) => !item.persistente && item.fechaClave === hasta);
@@ -1702,7 +1705,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       if (this.normalizarNombreEtapa(registro.etapa) !== this.normalizarNombreEtapa(etapa)) {
         return false;
       }
-      if (this.campaniaTexto && registro.campania && !this.mismaCampania(registro.campania, this.campaniaTexto)) {
+      if (!this.registroEnCampaniaActual(registro, fecha)) {
         return false;
       }
       const fechaRegistro = this.fechaEfectivaRegistro(registro);
@@ -1894,13 +1897,15 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     return Math.max(0, Math.floor((fecha.getTime() - inicio.getTime()) / this.diaMs));
   }
 
-  private mismaCampania(left?: string, right?: string): boolean {
-    const normalizar = (value?: string) =>
-      String(value || '')
-        .trim()
-        .replace(/[-_]/g, '/')
-        .replace(/\s+/g, '');
-    return normalizar(left) === normalizar(right);
+  private registroEnCampaniaActual(
+    registro: IRegistroFenologico,
+    fecha: Date = new Date()
+  ): boolean {
+    if (!this.campaniaTexto) return true;
+    const siembra = this.siembraActual;
+    return siembra
+      ? registroFenologicoPerteneceCampania(siembra, registro, fecha)
+      : false;
   }
 
   private async cargarSnapshotAgromet(): Promise<void> {

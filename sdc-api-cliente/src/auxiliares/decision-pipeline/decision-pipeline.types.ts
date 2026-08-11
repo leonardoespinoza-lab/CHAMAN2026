@@ -53,4 +53,9 @@ export interface DecisionScopeJobData {
 export interface DecisionSowingJobData {
   event: DecisionEventV1;
   idSiembra: string;
+  completedStages?: {
+    clima?: string;
+    sanidad?: string;
+    agroclima?: string;
+  };
 }

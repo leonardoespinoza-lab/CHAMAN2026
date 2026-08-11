@@ -142,6 +142,63 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.periodoFrioLabel).not.toContain('30-abr');
   });
 
+  it('ancla Pecan Kiowa en Dormancia del 1-may sin validar objetivos legacy', async () => {
+    const component = create(
+      response({
+        summary: {
+          thermalProcess: 'dormancia_perenne',
+          coldSeasonStart: '2026-05-01',
+          coldThroughDate: '2026-08-10',
+          chillingHoursAccumulated: 303,
+          utahChillUnitsAccumulated: -46.5,
+          chillPortionsAccumulated: 17.28,
+          gddAccumulationComplete: false,
+          gddBaseTemperatureC: 10,
+        },
+      })
+    );
+    component.siembra = {
+      _id: 'pecan-kiowa-campania-2026',
+      fechaSiembra: '2020-08-15T12:00:00.000Z',
+      semilla: {
+        cultivo: 'Pecan',
+        variedad: 'Kiowa',
+        requerimientoFrio: {
+          horasFrio: 1750,
+          horasFrioEfectivas: 1435,
+          porcionesFrio: 117,
+          estado: 'requiere_calibracion',
+          fuente: 'Legacy Chaman',
+        },
+      },
+      registrosFenologicos: [
+        {
+          id: 'inicio-dormancia-kiowa',
+          etapa: 'Dormancia',
+          tipoEvento: 'inicio_etapa',
+          accion: 'inicio',
+          fecha: '2026-05-01T12:00:00.000Z',
+          fechaInicioEtapa: '2026-05-01T12:00:00.000Z',
+          campania: '2025/2026',
+          confianza: 'alta',
+        },
+      ],
+    } as any;
+
+    await component.cargar();
+
+    expect(component.periodoFrioLabel).toContain('Temporada de frío observada desde 01-may');
+    expect(component.estadoEspecificacionLabel).toBe('Registro observado · sin objetivo prefijado');
+    expect(component.metricas.map((item) => item.value)).toContain('303,0 HF');
+    expect(component.metricas.map((item) => item.value)).toContain('-46,5 UF');
+    expect(component.metricas.map((item) => item.value)).toContain('17,28 CP');
+    expect(component.metricas.map((item) => item.value).join(' ')).not.toContain('1.750');
+    expect(component.metricas.map((item) => item.value).join(' ')).not.toContain('1.435');
+    expect(component.metricas.map((item) => item.value).join(' ')).not.toContain('117');
+    expect(component.fichaTermica?.ficha.permiteObjetivoAutomatico).toBeFalse();
+    expect(component.referenciasTermicasFicha.every((referencia) => referencia.estado !== 'publicada')).toBeTrue();
+  });
+
   it('mantiene LoRa visible con calidad, cobertura y valores separados de la serie canónica', async () => {
     const component = create(
       response({

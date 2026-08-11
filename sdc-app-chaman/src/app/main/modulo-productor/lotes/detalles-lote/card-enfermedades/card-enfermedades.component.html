@@ -5,7 +5,7 @@
       <span>{{ resumenGeneral }}</span>
     </div>
 
-    @if (siembra?._id) {
+    @if (siembra?._id && tieneMotorSanitario) {
       <p-button
         icon="pi pi-refresh"
         [label]="etiquetaBotonActualizacion"
@@ -18,7 +18,16 @@
     }
   </div>
 
-  @if (enfermedadInsights.length) {
+  @if (!tieneMotorSanitario && siembra?.semilla?.cultivo) {
+    <section class="disease-model-empty" role="status" aria-live="polite">
+      <i class="pi pi-shield"></i>
+      <div>
+        <strong>Sin modelo sanitario validado</strong>
+        <p>{{ mensajeSinModeloSanitario }}</p>
+        <small>Continuar con recorridas y registros de campo bajo criterio del responsable tecnico.</small>
+      </div>
+    </section>
+  } @else if (enfermedadInsights.length) {
     <div class="disease-action-grid">
       @for (item of enfermedadInsights; track item.enfermedad) {
         <button

@@ -393,9 +393,16 @@
 }
 
 .satellite-ol-map {
+  background: #e9eef2;
   inset: 0;
   position: absolute;
   z-index: 0;
+}
+
+.satellite-ol-map.basemap-unavailable {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.58), rgba(226, 234, 240, 0.74)),
+    #e9eef2;
 }
 
 .img-container::before {
@@ -491,6 +498,29 @@
   display: inline-block;
   height: 0.7rem;
   width: 0.7rem;
+}
+
+.satellite-basemap-note {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(104, 132, 163, 0.42);
+  border-radius: 8px;
+  bottom: 0.85rem;
+  color: #42526a;
+  display: flex;
+  font-size: 0.82rem;
+  font-weight: 700;
+  gap: 0.4rem;
+  line-height: 1.25;
+  max-width: min(360px, calc(100% - 2rem));
+  padding: 0.45rem 0.6rem;
+  position: absolute;
+  right: 0.85rem;
+  z-index: 7;
+}
+
+.satellite-basemap-note i {
+  color: var(--p-primary-color);
 }
 
 .satellite-raster-warning {

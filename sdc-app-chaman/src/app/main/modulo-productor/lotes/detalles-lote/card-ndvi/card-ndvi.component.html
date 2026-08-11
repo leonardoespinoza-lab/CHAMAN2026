@@ -129,7 +129,11 @@
     <div class="ndvi-content">
       <div class="satellite-viewer">
         <div class="img-container">
-          <div #satelliteMapTarget class="satellite-ol-map"></div>
+          <div
+            #satelliteMapTarget
+            class="satellite-ol-map"
+            [class.basemap-unavailable]="satelliteBasemapUnavailable"
+          ></div>
           @if (valorCapaActiva == null) {
             <p-message severity="warn">Capa pendiente de procesamiento</p-message>
           }
@@ -150,6 +154,12 @@
                   {{ item.label }}
                 </span>
               }
+            </div>
+          }
+          @if (satelliteBasemapUnavailable) {
+            <div class="satellite-basemap-note" role="status">
+              <i class="pi pi-map"></i>
+              <span>Fondo cartografico temporalmente no disponible. La capa procesada y el limite del lote se mantienen visibles.</span>
             </div>
           }
         </div>

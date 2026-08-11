@@ -260,6 +260,29 @@ describe('SiembrasService - trazabilidad fenologica append-only', () => {
     });
   });
 
+  it('asigna el inicio persistente del 1-may a la campania perenne siguiente', async () => {
+    const { service, getPersisted } = setup();
+
+    await service.registrarEtapaFenologica(
+      'siembra-1',
+      {
+        etapa: 'Dormancia',
+        fecha: '2026-05-01T12:00:00.000Z',
+        tipoEvento: 'inicio_etapa',
+        accion: 'inicio',
+        confianza: 'alta',
+      },
+      permiso,
+    );
+
+    expect(getPersisted().registrosFenologicos?.[0]).toMatchObject({
+      etapa: 'Dormancia',
+      fechaInicioEtapa: '2026-05-01T12:00:00.000Z',
+      campania: '2026/2027',
+      tipoEvento: 'inicio_etapa',
+    });
+  });
+
   it('captura en el servidor HF, Utah, CP y GDD cerrados a la fecha observada', async () => {
     const { service, getPersisted } = setup();
 

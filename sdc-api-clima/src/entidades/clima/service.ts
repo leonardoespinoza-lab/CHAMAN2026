@@ -34,6 +34,7 @@ import {
   calidadNivel,
 } from 'modelos/src';
 import { OmixomService } from '../omixom/service';
+import { OpenMeteoClientService } from '../../auxiliares/open-meteo/open-meteo-client.service';
 
 // ERA5/ERA5-Land se publican con hasta cinco dias de demora. Todo dia
 // anterior a esa ventana se consulta en Archive para evitar los huecos
@@ -43,17 +44,6 @@ const OPEN_METEO_ARCHIVE_DELAY_DAYS = 5;
 @Injectable()
 export class ClimaService {
   private logger = new LogService(ClimaService.name);
-  private readonly openMeteoCache = new Map<
-    string,
-    { expiresAt: number; data: any }
-  >();
-  private readonly openMeteoPendiente = new Map<string, Promise<any | null>>();
-  private readonly openMeteoCacheMs = 10 * 60 * 1000;
-  private readonly openMeteoStaleMs = 24 * 60 * 60 * 1000;
-  private readonly openMeteoTimeoutMs = 12_000;
-  private readonly openMeteoReintentosMs = [1500, 3000];
-  private openMeteoFallosConsecutivos = 0;
-  private openMeteoCircuitoHasta = 0;
   // En lugar de mandar vacío, mando esto
   private prediccionDefault: nivelPrediccion[] = [
     //DEFAUL (TODO EN 3)
@@ -121,6 +111,7 @@ export class ClimaService {
     private meteoSourceService: MeteoSourceService,
     private omixomService: OmixomService,
     private estacionsService: EstacionsService,
+    private openMeteoClient: OpenMeteoClientService,
   ) {
     // this.testSemaforo();
   }
@@ -147,141 +138,7 @@ export class ClimaService {
     url: URL,
     contexto: string,
   ): Promise<any | null> {
-    const key = url.toString();
-    const cacheado = this.openMeteoCache.get(key);
-    if (cacheado && cacheado.expiresAt > Date.now()) {
-      return cacheado.data;
-    }
-
-    if (this.openMeteoCircuitoHasta > Date.now()) {
-      return this.getOpenMeteoStale(cacheado, contexto, 'circuito abierto');
-    }
-
-    const pendiente = this.openMeteoPendiente.get(key);
-    if (pendiente) {
-      return pendiente;
-    }
-
-    const promesa = this.fetchOpenMeteoJsonSinCache(key, contexto)
-      .then(
-        (data) =>
-          data ??
-          this.getOpenMeteoStale(cacheado, contexto, 'fuente no disponible'),
-      )
-      .finally(() => this.openMeteoPendiente.delete(key));
-    this.openMeteoPendiente.set(key, promesa);
-    return promesa;
-  }
-
-  private async fetchOpenMeteoJsonSinCache(
-    url: string,
-    contexto: string,
-  ): Promise<any | null> {
-    for (
-      let intento = 0;
-      intento <= this.openMeteoReintentosMs.length;
-      intento++
-    ) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(
-          () => controller.abort(),
-          this.openMeteoTimeoutMs,
-        );
-        const response = await fetch(url, {
-          signal: controller.signal,
-        }).finally(() => clearTimeout(timeout));
-        if (response.ok) {
-          const data = await response.json();
-          if (!data || typeof data !== 'object' || data.error) {
-            throw new Error('respuesta JSON invalida');
-          }
-          this.openMeteoCache.set(url, {
-            expiresAt: Date.now() + this.openMeteoCacheMs,
-            data,
-          });
-          this.openMeteoFallosConsecutivos = 0;
-          this.openMeteoCircuitoHasta = 0;
-          return data;
-        }
-
-        if (
-          response.status === 429 &&
-          intento < this.openMeteoReintentosMs.length
-        ) {
-          const espera = this.getOpenMeteoRetryMs(response, intento);
-          this.logger.warn(
-            `Open-Meteo ${contexto} respondio 429; reintento en ${espera} ms`,
-          );
-          await this.wait(espera);
-          continue;
-        }
-
-        this.logger.error(
-          `Open-Meteo ${contexto} respondio ${response.status}.`,
-        );
-        this.registrarFalloOpenMeteo();
-        return null;
-      } catch (error) {
-        if (intento < this.openMeteoReintentosMs.length) {
-          const espera = this.withJitter(this.openMeteoReintentosMs[intento]);
-          this.logger.warn(
-            `Error Open-Meteo ${contexto}; reintento en ${espera} ms: ${error}`,
-          );
-          await this.wait(espera);
-          continue;
-        }
-
-        this.logger.error(`Error al obtener Open-Meteo ${contexto}: ${error}`);
-        this.registrarFalloOpenMeteo();
-        return null;
-      }
-    }
-
-    return null;
-  }
-
-  private getOpenMeteoRetryMs(response: any, intento: number): number {
-    const retryAfter = response?.headers?.get?.('retry-after');
-    if (retryAfter) {
-      const segundos = Number(retryAfter);
-      if (Number.isFinite(segundos) && segundos >= 0) {
-        return Math.max(1000, segundos * 1000);
-      }
-
-      const fecha = Date.parse(retryAfter);
-      if (Number.isFinite(fecha)) {
-        return Math.max(1000, fecha - Date.now());
-      }
-    }
-
-    return this.withJitter(this.openMeteoReintentosMs[intento] || 3000);
-  }
-
-  private withJitter(ms: number): number {
-    return Math.round(ms * (0.8 + Math.random() * 0.4));
-  }
-
-  private registrarFalloOpenMeteo(): void {
-    this.openMeteoFallosConsecutivos += 1;
-    if (this.openMeteoFallosConsecutivos >= 5) {
-      this.openMeteoCircuitoHasta = Date.now() + 60_000;
-      this.logger.warn('Circuito Open-Meteo abierto por 60 segundos.');
-    }
-  }
-
-  private getOpenMeteoStale(
-    cacheado: { expiresAt: number; data: any } | undefined,
-    contexto: string,
-    motivo: string,
-  ): any | null {
-    if (!cacheado || cacheado.expiresAt + this.openMeteoStaleMs <= Date.now()) {
-      return null;
-    }
-    this.logger.warn(
-      `Open-Meteo ${contexto}: usando cache de emergencia (${motivo}).`,
-    );
-    return cacheado.data;
+    return this.openMeteoClient.getJson(url, contexto);
   }
 
   private esDiaONoche(fecha: Date, latitud: number, longitud: number) {

@@ -40,10 +40,126 @@ export const API_OPEN_WEATHER =
   process.env.API_WEATHER_BIT || 'https://api.openweathermap.org/data/2.5';
 export const OPEN_WEATHER_KEY = process.env.OPEN_WEATHER_KEY || '';
 
-export const API_OPEN_METEO =
-  process.env.API_OPEN_METEO || 'https://api.open-meteo.com/v1';
-export const API_OPEN_METEO_ARCHIVE =
-  process.env.API_OPEN_METEO_ARCHIVE || 'https://archive-api.open-meteo.com/v1';
+// Open-Meteo comercial usa los mismos paths que la API publica, pero en los
+// hosts customer y con `apikey` como query param. La clave se lee unicamente
+// desde el entorno; nunca forma parte de una URL persistida ni de los logs.
+export const OPEN_METEO_API_KEY = (
+  process.env.OPEN_METEO_API_KEY || ''
+).trim();
+export const OPEN_METEO_ARCHIVE_API_KEY = (
+  process.env.OPEN_METEO_ARCHIVE_API_KEY || ''
+).trim();
+
+export function resolveOpenMeteoBaseUrl(
+  value: string,
+  kind: 'forecast' | 'archive',
+  hasApiKey: boolean,
+  variableName: string,
+): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${variableName} debe ser una URL valida de Open-Meteo`);
+  }
+  if (
+    url.protocol !== 'https:' ||
+    url.username ||
+    url.password ||
+    url.port ||
+    url.search ||
+    url.hash
+  ) {
+    throw new Error(
+      `${variableName} debe usar HTTPS sin credenciales, puerto, query ni fragmento`,
+    );
+  }
+  const expectedPublicHost =
+    kind === 'forecast'
+      ? 'api.open-meteo.com'
+      : 'archive-api.open-meteo.com';
+  const expectedCustomerHost =
+    kind === 'forecast'
+      ? 'customer-api.open-meteo.com'
+      : 'customer-archive-api.open-meteo.com';
+  const host = url.hostname.toLowerCase();
+  if (host !== expectedPublicHost && host !== expectedCustomerHost) {
+    throw new Error(
+      `${variableName} debe apuntar al host oficial de Open-Meteo para ${kind}`,
+    );
+  }
+  if (hasApiKey !== (host === expectedCustomerHost)) {
+    throw new Error(
+      `${variableName} no coincide con la configuracion de API key de Open-Meteo`,
+    );
+  }
+  return url.toString().replace(/\/$/, '');
+}
+
+const openMeteoForecastCandidate =
+  process.env.OPEN_METEO_FORECAST_BASE_URL ||
+  (OPEN_METEO_API_KEY
+    ? 'https://customer-api.open-meteo.com/v1'
+    : process.env.API_OPEN_METEO || 'https://api.open-meteo.com/v1');
+const openMeteoArchiveCandidate =
+  process.env.OPEN_METEO_ARCHIVE_BASE_URL ||
+  (OPEN_METEO_ARCHIVE_API_KEY
+    ? 'https://customer-archive-api.open-meteo.com/v1'
+    : 'https://archive-api.open-meteo.com/v1');
+export const OPEN_METEO_FORECAST_BASE_URL = resolveOpenMeteoBaseUrl(
+  openMeteoForecastCandidate,
+  'forecast',
+  !!OPEN_METEO_API_KEY,
+  'OPEN_METEO_FORECAST_BASE_URL',
+);
+export const OPEN_METEO_ARCHIVE_BASE_URL = resolveOpenMeteoBaseUrl(
+  openMeteoArchiveCandidate,
+  'archive',
+  !!OPEN_METEO_ARCHIVE_API_KEY,
+  'OPEN_METEO_ARCHIVE_BASE_URL',
+);
+// Alias retrocompatibles para los consumidores existentes.
+export const API_OPEN_METEO = OPEN_METEO_FORECAST_BASE_URL;
+export const API_OPEN_METEO_ARCHIVE = OPEN_METEO_ARCHIVE_BASE_URL;
+const openMeteoNumber = (
+  value: string | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+  integer = false,
+): number => {
+  const parsed =
+    value === undefined || value.trim() === '' ? NaN : Number(value);
+  const resolved = Number.isFinite(parsed) ? parsed : fallback;
+  const bounded = Math.min(max, Math.max(min, resolved));
+  return integer ? Math.trunc(bounded) : bounded;
+};
+export const OPEN_METEO_MAX_CONCURRENCY = openMeteoNumber(
+  process.env.OPEN_METEO_MAX_CONCURRENCY,
+  2,
+  1,
+  8,
+  true,
+);
+export const OPEN_METEO_MIN_INTERVAL_MS = openMeteoNumber(
+  process.env.OPEN_METEO_MIN_INTERVAL_MS,
+  300,
+  0,
+  60_000,
+);
+export const OPEN_METEO_TIMEOUT_MS = openMeteoNumber(
+  process.env.OPEN_METEO_TIMEOUT_MS,
+  12_000,
+  1000,
+  120_000,
+);
+export const OPEN_METEO_MAX_RETRIES = openMeteoNumber(
+  process.env.OPEN_METEO_MAX_RETRIES,
+  1,
+  0,
+  2,
+  true,
+);
 
 export const API_METEO_SOURCE =
   process.env.API_METEO_SOURCE || 'https://www.meteosource.com/api/v1';
@@ -105,8 +221,3 @@ export const AGROMETEO_FORECAST_MAX_AGE_HOURS = Math.max(
   1,
   +process.env.AGROMETEO_FORECAST_MAX_AGE_HOURS || 8,
 );
-
-// vuz3mvthpubz0aophqk762tkggo22tke1c12wy9m
-
-// https://www.meteosource.com/api/v1/free/point?lat=-35.56881685355293&lon=-58.01234247508361&sections=all&timezone=UTC&language=en&units=metric&key=vuz3mvthpubz0aophqk762tkggo22tke1c12wy9m
-// https://new.omixom.com/api/v2/stations

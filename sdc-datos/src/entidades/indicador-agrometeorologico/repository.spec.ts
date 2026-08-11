@@ -145,6 +145,40 @@ describe('IndicadoresAgrometeorologicosRepository - generaciones', () => {
     expect(generationModel.updateOne).toHaveBeenCalledTimes(1);
   });
 
+  it('no reemplaza una serie activa por otra con horizonte mas corto', async () => {
+    const generatedModel = {
+      bulkWrite: jest.fn(),
+      countDocuments: jest.fn(),
+      deleteMany: jest.fn(),
+    };
+    const generationModel = {
+      findOneAndUpdate: jest.fn().mockResolvedValue({
+        generacionEnProceso: 'generation-new',
+        generacionActiva: 'generation-old',
+        intervaloHasta: '2026-07-23',
+      }),
+      updateOne: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+    };
+    const repository = new IndicadoresAgrometeorologicosRepository(
+      {} as any,
+      generatedModel as any,
+      generationModel as any,
+    );
+
+    await expect(
+      repository.replaceGeneration(
+        row().idSiembra,
+        row().versionCalculo,
+        'generation-new',
+        [row()],
+        expectedInterval(),
+      ),
+    ).rejects.toThrow('no puede degradar la serie activa');
+
+    expect(generatedModel.bulkWrite).not.toHaveBeenCalled();
+    expect(generationModel.updateOne).toHaveBeenCalledTimes(1);
+  });
+
   it('rechaza una corrida concurrente cuando no puede adquirir el lease', async () => {
     const generatedModel = {
       bulkWrite: jest.fn(),
@@ -299,6 +333,39 @@ describe('IndicadoresAgrometeorologicosRepository - generaciones', () => {
       ),
     ).rejects.toThrow('cobertura termica diaria completa');
   });
+
+  it.each([
+    ['nulo', null],
+    ['cadena vacia', ''],
+    ['NaN', Number.NaN],
+    ['infinito', Number.POSITIVE_INFINITY],
+  ])(
+    'rechaza una temperatura media %s como cobertura termica valida',
+    async (_caseName, invalidValue) => {
+      const repository = new IndicadoresAgrometeorologicosRepository(
+        {} as any,
+        {} as any,
+        {} as any,
+      );
+      const invalidTemperature = {
+        ...row(),
+        metricas: {
+          ...row().metricas,
+          temperatureMeanC: invalidValue,
+        },
+      };
+
+      await expect(
+        repository.replaceGeneration(
+          row().idSiembra,
+          row().versionCalculo,
+          'generation-new',
+          [invalidTemperature],
+          expectedInterval(),
+        ),
+      ).rejects.toThrow('cobertura termica diaria completa');
+    },
+  );
 
   it('reintenta la lectura si el puntero cambia entre manifiesto y filas', async () => {
     const generationModel = {

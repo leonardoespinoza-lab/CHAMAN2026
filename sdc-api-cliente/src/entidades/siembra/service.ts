@@ -33,6 +33,7 @@ import {
   ARVEJA_MOTOR_SANITARIO_VERSION,
   TRIGO_MOTOR_SANITARIO_VERSION,
   esCultivoPerenne,
+  campaniaFenologicaParaFecha,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { establecimientosDelPermiso } from '../../auxiliares/authorization/alcance-permiso';
@@ -255,7 +256,7 @@ export class SiembrasService {
       cultivo,
       variedad: siembra.semilla?.variedad,
       ciclo: siembra.semilla?.ciclo,
-      campania: this.campaniaFenologica(siembra, fechaRegistro),
+      campania: campaniaFenologicaParaFecha(siembra, new Date(fechaRegistro)),
       requerimientoFrio: siembra.semilla?.requerimientoFrio,
       fenologiaReferencia: siembra.semilla?.fenologiaReferencia,
       // La evidencia termica se obtiene en el servidor. Nunca se acepta un
@@ -1403,22 +1404,6 @@ export class SiembrasService {
       );
     }
     return fecha.toISOString();
-  }
-
-  private campaniaFenologica(siembra: ISiembra, fechaIso: string): string {
-    const fecha = new Date(fechaIso);
-    if (esCultivoPerenne(siembra.semilla?.cultivo)) {
-      const year =
-        fecha.getUTCMonth() >= 6
-          ? fecha.getUTCFullYear()
-          : fecha.getUTCFullYear() - 1;
-      return `${year}/${year + 1}`;
-    }
-    const implantacion = new Date(siembra.fechaSiembra || fechaIso);
-    const year = Number.isNaN(implantacion.getTime())
-      ? fecha.getUTCFullYear()
-      : implantacion.getUTCFullYear();
-    return `${year}/${year + 1}`;
   }
 
   private canonicalCultivo(cultivo?: string): string {

@@ -42,6 +42,38 @@
   font-size: 0.9rem;
 }
 
+.climate-data-notice {
+  align-items: flex-start;
+  background: var(--p-surface-0);
+  border: 1px solid #d4deea;
+  border-radius: 9px;
+  display: flex;
+  gap: 0.7rem;
+  margin-bottom: 0.7rem;
+  padding: 0.78rem;
+}
+
+.climate-data-notice > i {
+  color: var(--p-primary-color);
+  font-size: 1.15rem;
+  margin-top: 0.08rem;
+}
+
+.climate-data-notice div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.climate-data-notice strong {
+  color: var(--p-text-color);
+}
+
+.climate-data-notice span,
+.climate-data-notice small {
+  color: var(--p-text-muted-color);
+  line-height: 1.3;
+}
+
 .risk-action-grid {
   display: grid;
   gap: 0.65rem;

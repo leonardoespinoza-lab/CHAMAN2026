@@ -87,4 +87,59 @@ describe('AgroclimaService - alerta conservadora de granizo', () => {
       ),
     ).toBe(false);
   });
+
+  it('no abre ni cierra alertas si el proveedor falla y solo queda cache stale', async () => {
+    const staleForecast = {
+      daily: {
+        time: ['2026-08-10'],
+        temperature_2m_min: [-4],
+        temperature_2m_max: [12],
+        weather_code: [99],
+        precipitation_sum: [20],
+      },
+    };
+    const openMeteoClient = {
+      getJson: jest.fn(
+        async (_url: URL, _context: string, options?: { allowStale?: boolean }) =>
+          options?.allowStale === false ? null : staleForecast,
+      ),
+    };
+    const siembra = {
+      _id: 'siembra-stale',
+      fechaSiembra: '2026-05-01',
+      lote: {
+        nombre: 'Lote sin forecast fresco',
+        ubicacion: { centro: { lat: -33.2, lng: -61.3 } },
+      },
+      semilla: { cultivo: 'Pecan', variedad: 'Kiowa' },
+    };
+    const alertasService = {
+      registrarEventoSiembra: jest.fn(),
+      finalizarEventoSiembra: jest.fn(),
+    };
+    const notificacionesService = {
+      enviarEventoAgroclimatico: jest.fn(),
+    };
+    const strictService = new AgroclimaService(
+      openMeteoClient as any,
+      { getById: jest.fn().mockResolvedValue(siembra) } as any,
+      alertasService as any,
+      notificacionesService as any,
+    );
+
+    await expect(
+      strictService.evaluarYRegistrar(siembra._id),
+    ).rejects.toThrow('Open-Meteo no disponible');
+
+    expect(openMeteoClient.getJson).toHaveBeenCalledWith(
+      expect.any(URL),
+      'riesgos agroclimaticos',
+      { allowStale: false },
+    );
+    expect(alertasService.registrarEventoSiembra).not.toHaveBeenCalled();
+    expect(alertasService.finalizarEventoSiembra).not.toHaveBeenCalled();
+    expect(
+      notificacionesService.enviarEventoAgroclimatico,
+    ).not.toHaveBeenCalled();
+  });
 });

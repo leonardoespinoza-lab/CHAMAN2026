@@ -124,7 +124,11 @@ export class IndicadoresAgrometeorologicosRepository {
     idSiembra: string,
     versionCalculo: string,
     generacionCalculo: string,
-  ): Promise<{ previousGeneration?: string; leaseUntil: string }> {
+  ): Promise<{
+    previousGeneration?: string;
+    previousIntervalEnd?: string;
+    leaseUntil: string;
+  }> {
     if (!idSiembra || !versionCalculo || !generacionCalculo) {
       throw new BadRequestException(
         'El lease agrometeorologico requiere siembra, version y generacion.',
@@ -181,6 +185,9 @@ export class IndicadoresAgrometeorologicosRepository {
       ...(lease?.generacionActiva &&
       lease.generacionActiva !== 'legacy'
         ? { previousGeneration: String(lease.generacionActiva) }
+        : {}),
+      ...(lease?.intervaloHasta
+        ? { previousIntervalEnd: String(lease.intervaloHasta).slice(0, 10) }
         : {}),
       leaseUntil: leaseUntil.toISOString(),
     };
@@ -244,9 +251,13 @@ export class IndicadoresAgrometeorologicosRepository {
     if (
       rows.some(
         (item) =>
-          !Number.isFinite(Number(item.metricas?.temperatureMinC)) ||
-          !Number.isFinite(Number(item.metricas?.temperatureMeanC)) ||
-          !Number.isFinite(Number(item.metricas?.temperatureMaxC)),
+          ![
+            item.metricas?.temperatureMinC,
+            item.metricas?.temperatureMeanC,
+            item.metricas?.temperatureMaxC,
+          ].every(
+            (value) => typeof value === 'number' && Number.isFinite(value),
+          ),
       )
     ) {
       throw new BadRequestException(
@@ -254,11 +265,26 @@ export class IndicadoresAgrometeorologicosRepository {
       );
     }
 
-    const { previousGeneration } = await this.acquireGenerationLease(
-      idSiembra,
-      versionCalculo,
-      generacionCalculo,
-    );
+    const { previousGeneration, previousIntervalEnd } =
+      await this.acquireGenerationLease(
+        idSiembra,
+        versionCalculo,
+        generacionCalculo,
+      );
+    if (
+      previousGeneration &&
+      previousIntervalEnd &&
+      String(intervaloEsperado.hasta).slice(0, 10) < previousIntervalEnd
+    ) {
+      await this.releaseGenerationLease(
+        idSiembra,
+        versionCalculo,
+        generacionCalculo,
+      );
+      throw new BadRequestException(
+        `La nueva generacion finaliza ${intervaloEsperado.hasta} y no puede degradar la serie activa que llega hasta ${previousIntervalEnd}.`,
+      );
+    }
 
     let writeResult: any;
     try {
@@ -313,6 +339,9 @@ export class IndicadoresAgrometeorologicosRepository {
           generacionActiva: generacionCalculo,
           cantidadIndicadores: rows.length,
           activadaEn: activatedAt,
+          intervaloDesde: intervaloEsperado.desde,
+          intervaloHasta: intervaloEsperado.hasta,
+          checksumFechas: intervaloEsperado.checksumFechas,
         },
       },
       { new: true, runValidators: true },

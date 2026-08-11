@@ -102,13 +102,18 @@ export class AgrometeorologiaBatchService {
           const earliest = contextSowings
             .map((item) => this.engine.resolveCycleStart(item))
             .sort()[0];
-          await this.ingestion.sincronizar(
+          const sync = await this.ingestion.sincronizar(
             establishment,
             coordinates,
             earliest,
             false,
             idLote,
           );
+          if (!sync?.hasta) {
+            throw new Error(
+              'La sincronizacion meteorologica no informo un horizonte completo.',
+            );
+          }
           for (
             let index = 0;
             index < contextSowings.length;
@@ -122,6 +127,7 @@ export class AgrometeorologiaBatchService {
               slice.map((item) =>
                 this.engine.procesarSiembra(String(item._id), {
                   sincronizarClima: false,
+                  expectedEndDate: sync.hasta,
                 }),
               ),
             );

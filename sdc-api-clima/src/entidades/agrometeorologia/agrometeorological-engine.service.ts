@@ -36,10 +36,12 @@ import {
   IEntradasAgronomicasSuelo,
   normalizarContenidoVolumetrico,
   numeroFinito,
+  obtenerInicioTemporadaFrioObservado,
   PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA,
   promedioPonderadoZonaRadicular,
   resolverFenologiaTermicaArveja,
   resolverKc,
+  registroFenologicoPerteneceCampania,
   VariableMeteorologicaNormalizada,
 } from 'modelos/src';
 import { AgrometeorologiaRepository } from './repository';
@@ -309,7 +311,11 @@ export class AgrometeorologicalEngineService {
 
   async procesarSiembra(
     idSiembra: string,
-    options: { sincronizarClima?: boolean; forceBackfill?: boolean } = {},
+    options: {
+      sincronizarClima?: boolean;
+      forceBackfill?: boolean;
+      expectedEndDate?: string;
+    } = {},
   ): Promise<{ indicadores: number; advertencias: string[] }> {
     const key = String(idSiembra);
     const anterior =
@@ -333,7 +339,11 @@ export class AgrometeorologicalEngineService {
 
   private async procesarSiembraConLease(
     idSiembra: string,
-    options: { sincronizarClima?: boolean; forceBackfill?: boolean } = {},
+    options: {
+      sincronizarClima?: boolean;
+      forceBackfill?: boolean;
+      expectedEndDate?: string;
+    } = {},
   ): Promise<{ indicadores: number; advertencias: string[] }> {
     const generationId = randomUUID();
     await this.acquireGenerationLeaseWithRetry(idSiembra, generationId);
@@ -380,6 +390,15 @@ export class AgrometeorologicalEngineService {
         );
       }
       let expectedEndDate: string | undefined;
+      if (options.expectedEndDate) {
+        const requestedEndDate = String(options.expectedEndDate).slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedEndDate)) {
+          throw new Error(
+            'El horizonte meteorologico esperado no tiene una fecha valida.',
+          );
+        }
+        expectedEndDate = requestedEndDate;
+      }
       if (options.sincronizarClima !== false) {
         const sync = await this.ingestion.sincronizar(
           establecimiento,
@@ -389,7 +408,10 @@ export class AgrometeorologicalEngineService {
           String(lote._id),
         );
         syncWarnings.push(...sync.advertencias);
-        expectedEndDate = sync.hasta;
+        expectedEndDate = [expectedEndDate, sync.hasta]
+          .filter((value): value is string => Boolean(value))
+          .sort()
+          .reverse()[0];
       }
       let observations = await this.loadObservations(
         establecimiento._id,
@@ -1945,12 +1967,24 @@ export class AgrometeorologicalEngineService {
       seasonalBiofixSearchStart,
       referenceDate,
     );
+    const observedColdStartRecord = obtenerInicioTemporadaFrioObservado(
+      siembra,
+      new Date(`${referenceDate}T12:00:00.000Z`),
+    );
+    const observedColdStart = observedColdStartRecord
+      ? String(
+          observedColdStartRecord.fechaInicioEtapa ||
+            observedColdStartRecord.fechaObservacion ||
+            observedColdStartRecord.fecha ||
+            '',
+        ).slice(0, 10)
+      : undefined;
     const protocolStart =
       protocol?.inicio?.tipo === 'fecha_calendario' &&
       protocol.estado !== 'requiere_calibracion'
         ? this.calendarStartForReference(protocol.inicio.mesDia, referenceDate)
         : undefined;
-    let start = startBiofix || protocolStart || fallback;
+    let start = startBiofix || observedColdStart || protocolStart || fallback;
     if (implantationDate && implantationDate > start) {
       start = implantationDate;
     }
@@ -1985,11 +2019,15 @@ export class AgrometeorologicalEngineService {
       protocol.fin
     );
     const comparisonReady = protocolMetadataReady && protocolStartReady;
-    const usedFallback = !startBiofix && !protocolStart;
+    const usedFallback = !startBiofix && !observedColdStart && !protocolStart;
 
     if (startBiofix) {
       warnings.push(
         `La ventana de frio comienza ${start} por biofix de campo.`,
+      );
+    } else if (observedColdStart) {
+      warnings.push(
+        `La ventana de frio comienza ${start} por inicio de dormancia registrado a campo.`,
       );
     } else if (protocolStart) {
       warnings.push(
@@ -3955,7 +3993,7 @@ export class AgrometeorologicalEngineService {
     date: string,
     entries: Array<[string, number]>,
   ): IFieldStageResolution | undefined {
-    const campaign = this.phenologyCampaign(siembra, date);
+    const targetDate = new Date(`${date}T12:00:00.000Z`);
     const cycleStart = esCultivoPerenne(siembra.semilla?.cultivo)
       ? this.perennialCampaignStart(date)
       : String(siembra.fechaSiembra || '').slice(0, 10);
@@ -3968,9 +4006,11 @@ export class AgrometeorologicalEngineService {
         ).slice(0, 10);
         if (!recordDate || recordDate > date || !item.etapa) return false;
         if (
-          item.campania &&
-          this.normalizePhenologyCampaign(item.campania) !==
-            this.normalizePhenologyCampaign(campaign)
+          !registroFenologicoPerteneceCampania(
+            siembra,
+            item,
+            targetDate,
+          )
         ) {
           return false;
         }
@@ -4094,22 +4134,6 @@ export class AgrometeorologicalEngineService {
     };
   }
 
-  private phenologyCampaign(siembra: ISiembra, date: string): string {
-    const parsed = new Date(`${date}T12:00:00.000Z`);
-    if (esCultivoPerenne(siembra.semilla?.cultivo)) {
-      const year =
-        parsed.getUTCMonth() >= 6
-          ? parsed.getUTCFullYear()
-          : parsed.getUTCFullYear() - 1;
-      return `${year}/${year + 1}`;
-    }
-    const implantation = new Date(siembra.fechaSiembra || parsed);
-    const year = Number.isNaN(implantation.getTime())
-      ? parsed.getUTCFullYear()
-      : implantation.getUTCFullYear();
-    return `${year}/${year + 1}`;
-  }
-
   private resolveThermalStart(
     siembra: ISiembra,
     referenceDate: string,
@@ -4117,8 +4141,8 @@ export class AgrometeorologicalEngineService {
     if (!esCultivoPerenne(siembra.semilla?.cultivo)) {
       return String(siembra.fechaSiembra || '').slice(0, 10);
     }
-    const campaign = this.phenologyCampaign(siembra, referenceDate);
     const seasonalSearchStart = this.perennialCampaignStart(referenceDate);
+    const targetDate = new Date(`${referenceDate}T12:00:00.000Z`);
     const biofix = this.activePhenologyRecords(siembra.registrosFenologicos)
       .filter((record) => {
         if (record.tipoEvento !== 'biofix') return false;
@@ -4134,9 +4158,11 @@ export class AgrometeorologicalEngineService {
           return false;
         }
         if (
-          record.campania &&
-          this.normalizePhenologyCampaign(record.campania) !==
-            this.normalizePhenologyCampaign(campaign)
+          !registroFenologicoPerteneceCampania(
+            siembra,
+            record,
+            targetDate,
+          )
         ) {
           return false;
         }
@@ -4178,12 +4204,6 @@ export class AgrometeorologicalEngineService {
             '',
         ).slice(0, 10) === thermalStart,
     );
-  }
-
-  private normalizePhenologyCampaign(value?: string): string {
-    const years = String(value || '').match(/\d{4}/g);
-    if (years?.length >= 2) return `${years[0]}/${years[1]}`;
-    return this.normalize(value);
   }
 
   private resolveThresholds(
@@ -4951,10 +4971,10 @@ export class AgrometeorologicalEngineService {
   private perennialCampaignStart(date: string): string {
     const parsed = new Date(`${date}T12:00:00Z`);
     const year =
-      parsed.getUTCMonth() >= 6
+      parsed.getUTCMonth() >= 4
         ? parsed.getUTCFullYear()
         : parsed.getUTCFullYear() - 1;
-    return `${year}-07-01`;
+    return `${year}-05-01`;
   }
 
   private perennialColdSeasonStart(date: string): string {

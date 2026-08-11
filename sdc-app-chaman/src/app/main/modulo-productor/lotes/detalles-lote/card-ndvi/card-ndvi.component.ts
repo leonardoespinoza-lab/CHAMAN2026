@@ -135,12 +135,15 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
   private ndvi$?: Subscription;
   private refreshTimeout?: ReturnType<typeof setTimeout>;
   private satelliteMap?: Map;
+  private satelliteBasemapLayer?: TileLayer<XYZ>;
   private satelliteLoteLayer?: VectorLayer<VectorSource>;
   private satelliteRasterLayer?: ImageLayer<Static>;
   private satelliteClipGeometry?: Polygon | MultiPolygon;
   private satelliteClipActive = false;
   public satelliteRasterVisible = false;
   public satelliteRasterBlockedReason = '';
+  public satelliteBasemapUnavailable = false;
+  private satelliteBasemapFailureCount = 0;
   private readonly ventanaPreferenciaSentinelDias = 6;
   private seleccionManual = false;
   private ultimoLoteListado?: string;
@@ -801,6 +804,18 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
 
     if (!this.satelliteMap) {
       this.satelliteLoteLayer = new VectorLayer({ source, zIndex: 20 });
+      const basemapSource = new XYZ({
+        url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attributions: '',
+        crossOrigin: 'anonymous',
+        maxZoom: 17,
+      });
+      basemapSource.on('tileloaderror', () => this.registrarFalloBasemap());
+      basemapSource.on('tileloadend', () => this.registrarCargaBasemap());
+      this.satelliteBasemapLayer = new TileLayer({
+        source: basemapSource,
+        zIndex: 0,
+      });
       this.satelliteMap = new Map({
         target,
         controls: defaultControls({ attribution: false, rotate: false, zoom: false }),
@@ -812,19 +827,10 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
           pinchRotate: false,
           pinchZoom: false,
         }),
-        layers: [
-          new TileLayer({
-            source: new XYZ({
-              url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-              attributions: '',
-              maxZoom: 19,
-            }),
-            zIndex: 0,
-          }),
-          this.satelliteLoteLayer,
-        ],
+        layers: [this.satelliteBasemapLayer, this.satelliteLoteLayer],
         view: new View({
           center: [(polygonExtent[0] + polygonExtent[2]) / 2, (polygonExtent[1] + polygonExtent[3]) / 2],
+          maxZoom: 17,
           zoom: 14,
         }),
       });
@@ -839,10 +845,29 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
       this.satelliteMap?.updateSize();
       this.satelliteMap?.getView().fit(polygon.getExtent(), {
         padding: [10, 10, 10, 10],
-        maxZoom: 18,
+        maxZoom: 17,
         duration: 0,
       });
     });
+  }
+
+  private registrarFalloBasemap(): void {
+    this.satelliteBasemapFailureCount += 1;
+    if (this.satelliteBasemapFailureCount < 3 || this.satelliteBasemapUnavailable) return;
+    this.satelliteBasemapUnavailable = true;
+    this.satelliteBasemapLayer?.setVisible(false);
+  }
+
+  private registrarCargaBasemap(): void {
+    if (!this.satelliteBasemapUnavailable) {
+      this.satelliteBasemapFailureCount = 0;
+    }
+  }
+
+  private reiniciarBasemap(): void {
+    this.satelliteBasemapFailureCount = 0;
+    this.satelliteBasemapUnavailable = false;
+    this.satelliteBasemapLayer?.setVisible(true);
   }
 
   private actualizarRasterSatelital(extent?: Extent): void {
@@ -1926,6 +1951,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
       this.reporte = undefined;
       this.ndvis = [];
       this.satelliteRasterVisible = false;
+      this.reiniciarBasemap();
     }
     this.calcularFechaMinima();
     this.actualizarHistorialIndice();

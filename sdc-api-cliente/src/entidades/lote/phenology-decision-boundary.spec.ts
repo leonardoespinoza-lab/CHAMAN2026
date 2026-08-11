@@ -1,5 +1,7 @@
 import {
   ISiembra,
+  campaniaFenologicaParaFecha,
+  obtenerInicioTemporadaFrioObservado,
   obtenerRegistroFenologicoDecisorioEnFecha,
 } from 'modelos/src';
 
@@ -49,7 +51,7 @@ describe('limite fenologico compartido para informes y satelite', () => {
           reemplazaRegistroId: 'original',
           etapa: 'Emergencia',
           fechaInicioEtapa: '2026-06-02T00:00:00.000Z',
-          campania: '2025/2026',
+          campania: '2024/2025',
           confianza: 'alta',
         },
       ]),
@@ -126,6 +128,104 @@ describe('limite fenologico compartido para informes y satelite', () => {
         data,
         new Date('2026-07-20T00:00:00.000Z'),
       ),
+    ).toBeUndefined();
+  });
+
+  it('mantiene Dormancia del 1-may como inicio vigente al cruzar el 1-jul en Pecan Kiowa', () => {
+    const data = {
+      _id: 'pecan-kiowa-2020',
+      idLote: 'lote-kiowa',
+      fechaSiembra: '2020-08-15T00:00:00.000Z',
+      semilla: { cultivo: 'Pecan', variedad: 'Kiowa' },
+      registrosFenologicos: [
+        {
+          id: 'dormancia-1-may',
+          tipoEvento: 'inicio_etapa',
+          accion: 'inicio',
+          etapa: 'Dormancia',
+          fecha: '2026-05-01T12:00:00.000Z',
+          fechaInicioEtapa: '2026-05-01T12:00:00.000Z',
+          // Compatibilidad con el valor ya persistido por la frontera antigua
+          // del 1-jul; no se requiere reescribir la base productiva.
+          campania: '2025/2026',
+          confianza: 'alta',
+          frioAcumulado: {
+            horasFrio: 0,
+            unidadesFrioUtah: 0,
+            porcionesFrio: 0,
+            gradosDia: 0,
+          },
+        },
+      ],
+    } as ISiembra;
+    const agosto = new Date('2026-08-10T12:00:00.000Z');
+
+    expect(campaniaFenologicaParaFecha(data, new Date('2026-05-01T12:00:00.000Z'))).toBe(
+      '2026/2027',
+    );
+    expect(campaniaFenologicaParaFecha(data, agosto)).toBe('2026/2027');
+    expect(obtenerRegistroFenologicoDecisorioEnFecha(data, agosto)?.id).toBe(
+      'dormancia-1-may',
+    );
+    expect(obtenerInicioTemporadaFrioObservado(data, agosto)?.id).toBe(
+      'dormancia-1-may',
+    );
+    expect(
+      obtenerRegistroFenologicoDecisorioEnFecha(
+        data,
+        new Date('2027-08-10T12:00:00.000Z'),
+      ),
+    ).toBeUndefined();
+  });
+
+  it('no convierte una observacion puntual de Dormancia en inicio persistente', () => {
+    const data = {
+      _id: 'pecan-observacion',
+      idLote: 'lote-kiowa',
+      fechaSiembra: '2020-08-15T00:00:00.000Z',
+      semilla: { cultivo: 'Pecan', variedad: 'Kiowa' },
+      registrosFenologicos: [
+        {
+          id: 'observacion-dormancia',
+          tipoEvento: 'observacion',
+          accion: 'observacion',
+          etapa: 'Dormancia',
+          fecha: '2026-05-01T12:00:00.000Z',
+          campania: '2025/2026',
+          confianza: 'alta',
+        },
+      ],
+    } as ISiembra;
+    const agosto = new Date('2026-08-10T12:00:00.000Z');
+
+    expect(obtenerRegistroFenologicoDecisorioEnFecha(data, agosto)).toBeUndefined();
+    expect(obtenerInicioTemporadaFrioObservado(data, agosto)).toBeUndefined();
+  });
+
+  it('no deja que una Dormancia perenne antigua sin campania gobierne otro ciclo', () => {
+    const data = {
+      _id: 'pecan-kiowa-sin-campania',
+      idLote: 'lote-kiowa',
+      fechaSiembra: '2020-08-15T00:00:00.000Z',
+      semilla: { cultivo: 'Pecan', variedad: 'Kiowa' },
+      registrosFenologicos: [
+        {
+          id: 'dormancia-2024-sin-campania',
+          tipoEvento: 'inicio_etapa',
+          accion: 'inicio',
+          etapa: 'Dormancia',
+          fechaInicioEtapa: '2024-05-01T12:00:00.000Z',
+          confianza: 'alta',
+        },
+      ],
+    } as ISiembra;
+    const agosto2026 = new Date('2026-08-10T12:00:00.000Z');
+
+    expect(
+      obtenerRegistroFenologicoDecisorioEnFecha(data, agosto2026),
+    ).toBeUndefined();
+    expect(
+      obtenerInicioTemporadaFrioObservado(data, agosto2026),
     ).toBeUndefined();
   });
 });

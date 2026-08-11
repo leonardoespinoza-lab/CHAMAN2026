@@ -19,6 +19,7 @@ describe('polÃ­tica de fuente climÃ¡tica para enfermedades', () => {
     {} as any,
     {} as any,
     estaciones as any,
+    { getJson: jest.fn() } as any,
   );
 
   beforeEach(() => {
@@ -39,7 +40,9 @@ describe('polÃ­tica de fuente climÃ¡tica para enfermedades', () => {
       true,
     );
 
-    expect(fieldClimate.getEstacionMasCercanaEntreFechas).not.toHaveBeenCalled();
+    expect(
+      fieldClimate.getEstacionMasCercanaEntreFechas,
+    ).not.toHaveBeenCalled();
     expect(fieldClimate.getDataBetweenDates).not.toHaveBeenCalled();
     expect(result[0].fuente).toBe('OpenMeteo');
     expect(result[0].calidadDatos?.fallback).toBe(true);
@@ -79,7 +82,9 @@ describe('polÃ­tica de fuente climÃ¡tica para enfermedades', () => {
       'user',
       'pass',
     );
-    expect(fieldClimate.getEstacionMasCercanaEntreFechas).not.toHaveBeenCalled();
+    expect(
+      fieldClimate.getEstacionMasCercanaEntreFechas,
+    ).not.toHaveBeenCalled();
     expect(openMeteo).not.toHaveBeenCalled();
     expect(result[0].fuente).toBe('FieldClimate');
     expect(result[0].calidadDatos?.fuente).toBe('estacion_asignada');
@@ -100,7 +105,9 @@ describe('polÃ­tica de fuente climÃ¡tica para enfermedades', () => {
       true,
     );
 
-    expect(fieldClimate.getEstacionMasCercanaEntreFechas).not.toHaveBeenCalled();
+    expect(
+      fieldClimate.getEstacionMasCercanaEntreFechas,
+    ).not.toHaveBeenCalled();
     expect(result).toHaveLength(1);
     expect(result[0].fuente).toBe('OpenMeteo');
   });

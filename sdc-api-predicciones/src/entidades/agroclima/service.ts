@@ -9,23 +9,21 @@ import {
   NivelRiesgoAgroclimatico,
   resolverContextoHeladaFenologico,
 } from 'modelos/src';
-import { AxiosService } from '../../auxiliares/axios/axios.service';
-import { PREDICCIONES_AGROCLIMA_LIMIT } from '../../env';
+import {
+  OPEN_METEO_FORECAST_BASE_URL,
+  PREDICCIONES_AGROCLIMA_LIMIT,
+} from '../../env';
 import { AlertasService } from '../alerta/service';
 import { NotificacionsService } from '../notificacion/service';
 import { SiembrasService } from '../siembra/service';
+import { OpenMeteoClientService } from '../../auxiliares/open-meteo/open-meteo-client.service';
 
 @Injectable()
 export class AgroclimaService {
   private readonly logger = new Logger(AgroclimaService.name);
   private readonly timezone = 'America/Argentina/Buenos_Aires';
-  private readonly forecastCache = new Map<
-    string,
-    { expiresAt: number; value: ISerieFrioTermicoDia[] }
-  >();
-
   constructor(
-    private readonly axios: AxiosService,
+    private readonly openMeteoClient: OpenMeteoClientService,
     private readonly siembrasService: SiembrasService,
     private readonly alertasService: AlertasService,
     private readonly notificacionesService: NotificacionsService,
@@ -191,31 +189,31 @@ export class AgroclimaService {
     lat: number,
     lng: number,
   ): Promise<ISerieFrioTermicoDia[]> {
-    const cacheKey = `${this.round(lat, 4)}|${this.round(lng, 4)}|${this.dateKey()}`;
-    const cached = this.forecastCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.value;
+    const url = new URL(`${OPEN_METEO_FORECAST_BASE_URL}/forecast`);
+    url.searchParams.set('latitude', `${this.round(lat, 4)}`);
+    url.searchParams.set('longitude', `${this.round(lng, 4)}`);
+    url.searchParams.set('forecast_days', '7');
+    url.searchParams.set(
+      'daily',
+      'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,precipitation_probability_max,showers_sum,weather_code,wind_gusts_10m_max',
+    );
+    url.searchParams.set(
+      'hourly',
+      'cape,showers,precipitation_probability,weather_code,wind_gusts_10m',
+    );
+    url.searchParams.set('timezone', this.timezone);
+    const data = await this.openMeteoClient.getJson<any>(
+      url,
+      'riesgos agroclimaticos',
+      { allowStale: false },
+    );
+    if (!data) {
+      throw new Error('Open-Meteo no disponible para riesgos agroclimaticos');
     }
-
-    const url = 'https://api.open-meteo.com/v1/forecast';
-    const data = await this.axios.GET<any>(url, {
-      params: {
-        latitude: lat,
-        longitude: lng,
-        forecast_days: 7,
-        daily:
-          'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,precipitation_probability_max,showers_sum,weather_code,wind_gusts_10m_max',
-        hourly:
-          'cape,showers,precipitation_probability,weather_code,wind_gusts_10m',
-        timezone: this.timezone,
-      },
-      timeout: 12000,
-    });
     const serie = this.normalizarOpenMeteoAgroForecast(data);
-    this.forecastCache.set(cacheKey, {
-      expiresAt: Date.now() + 20 * 60 * 1000,
-      value: serie,
-    });
+    if (!serie.length) {
+      throw new Error('Open-Meteo devolvio una serie agroclimatica vacia');
+    }
     return serie;
   }
 

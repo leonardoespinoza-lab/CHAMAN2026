@@ -81,4 +81,17 @@ describe('CardEnfermedadesComponent - comunicacion sanitaria', () => {
       (componente as any).lecturaCorta(prediccion, 'Mancha de la Hoja', 'resultado de baja confianza', true)
     ).toContain('S=1');
   });
+
+  it('declara explicitamente que Pecan no tiene modelo sanitario validado', () => {
+    const componente = crear();
+    componente.siembra = {
+      semilla: { cultivo: 'Pecan', variedad: 'Kiowa' },
+    } as any;
+
+    expect(componente.tieneMotorSanitario).toBeFalse();
+    expect(componente.resumenGeneral).toContain('sin modelo sanitario validado');
+    expect(componente.mensajeSinModeloSanitario).toContain('No se calcula un porcentaje');
+    expect(componente.etiquetaBotonActualizacion).toBe('Sin modelo sanitario validado');
+    expect(componente.enfermedadInsights).toEqual([]);
+  });
 });

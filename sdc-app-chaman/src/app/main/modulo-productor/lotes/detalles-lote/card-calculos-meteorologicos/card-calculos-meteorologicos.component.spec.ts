@@ -190,6 +190,9 @@ describe('CardCalculosMeteorologicosComponent', () => {
   it('tolera respuesta vacía y variables opcionales ausentes', async () => {
     const service = {
       agrometeorologia: jasmine.createSpy().and.resolveTo(response({ series: [], summary: {} })),
+      reprocesarAgrometeorologia: jasmine
+        .createSpy()
+        .and.resolveTo(response({ series: [], summary: {} })),
     };
     const component = create(service);
     component.siembra = { _id: 'siembra-vacia' } as any;
@@ -199,6 +202,33 @@ describe('CardCalculosMeteorologicosComponent', () => {
     expect(component.hayDatos).toBeFalse();
     expect(component.mostrarSuelo).toBeFalse();
     expect(component.chartOptions).toBeUndefined();
+    expect(service.reprocesarAgrometeorologia).toHaveBeenCalledWith(
+      'siembra-vacia',
+      true
+    );
+  });
+
+  it('autogenera la primera serie y vuelve a consultar el periodo seleccionado', async () => {
+    const empty = response({ series: [], summary: {} });
+    const generated = response();
+    const service = {
+      agrometeorologia: jasmine
+        .createSpy()
+        .and.returnValues(Promise.resolve(empty), Promise.resolve(generated)),
+      reprocesarAgrometeorologia: jasmine.createSpy().and.resolveTo(generated),
+    };
+    const component = create(service);
+    component.siembra = { _id: 'siembra-autogenerada' } as any;
+
+    await component.cargar();
+
+    expect(service.reprocesarAgrometeorologia).toHaveBeenCalledWith(
+      'siembra-autogenerada',
+      true
+    );
+    expect(service.agrometeorologia).toHaveBeenCalledTimes(2);
+    expect(component.hayDatos).toBeTrue();
+    expect(component.error).toBeUndefined();
   });
 
   it('expone un error recuperable sin conservar una serie anterior', async () => {
@@ -213,7 +243,7 @@ describe('CardCalculosMeteorologicosComponent', () => {
     await component.cargar();
 
     expect(component.data).toBeUndefined();
-    expect(component.error).toContain('temporalmente');
+    expect(component.error).toContain('se esta generando');
   });
 
   it('ignora una respuesta tardia del lote anterior al cambiar de siembra', async () => {

@@ -45,6 +45,7 @@ const SERVICE_REQUIRED = {
     'AUTH_CLIENT_SECRET',
     'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
     'AGROMETEO_INTERNAL_TOKEN',
+    'OPEN_METEO_API_KEY',
   ],
   auth: ['API_DATOS', 'CLIENT_ID_INICIAL', 'CLIENT_SECRET_INICIAL'],
   datos: [
@@ -57,11 +58,13 @@ const SERVICE_REQUIRED = {
     'API_CLIMA',
     'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
     'AGROMETEO_INTERNAL_TOKEN',
+    'OPEN_METEO_API_KEY',
   ],
   clima: [
     'API_DATOS',
     'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
     'AGROMETEO_INTERNAL_TOKEN',
+    'OPEN_METEO_API_KEY',
   ],
   lora: ['API_DATOS'],
   externa: [
@@ -89,6 +92,8 @@ const FORBIDDEN_VALUES = {
     'change-me',
     '<change-me>',
   ]),
+  OPEN_METEO_API_KEY: new Set(['', '1', 'change-me', '<change-me>']),
+  OPEN_METEO_ARCHIVE_API_KEY: new Set(['1', 'change-me', '<change-me>']),
   TIMELAPSE_ADMIN_TOKEN: new Set(['1', 'change-me', '<change-me>']),
 };
 
@@ -108,12 +113,71 @@ function getValue(name) {
   return String(process.env[name] || '').trim();
 }
 
+function isAngularPlaceholder(value) {
+  return /^<[^<>]+>$/.test(String(value || '').trim());
+}
+
 function isPublicRailwayUrl(value) {
   return /https?:\/\/[^/\s]*\.up\.railway\.app/i.test(value);
 }
 
 function pushIssue(list, level, message) {
   list.push({ level, message });
+}
+
+function validateOpenMeteoEndpoint(
+  issues,
+  variableName,
+  value,
+  kind,
+  hasApiKey,
+) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    pushIssue(issues, 'error', `${variableName} debe ser una URL valida de Open-Meteo`);
+    return;
+  }
+  if (
+    url.protocol !== 'https:' ||
+    url.username ||
+    url.password ||
+    url.port ||
+    url.search ||
+    url.hash
+  ) {
+    pushIssue(
+      issues,
+      'error',
+      `${variableName} debe usar HTTPS sin credenciales, puerto, query ni fragmento`,
+    );
+    return;
+  }
+  const publicHost =
+    kind === 'forecast'
+      ? 'api.open-meteo.com'
+      : 'archive-api.open-meteo.com';
+  const customerHost =
+    kind === 'forecast'
+      ? 'customer-api.open-meteo.com'
+      : 'customer-archive-api.open-meteo.com';
+  const host = url.hostname.toLowerCase();
+  if (host !== publicHost && host !== customerHost) {
+    pushIssue(
+      issues,
+      'error',
+      `${variableName} debe apuntar al host oficial de Open-Meteo para ${kind}`,
+    );
+    return;
+  }
+  if (hasApiKey !== (host === customerHost)) {
+    pushIssue(
+      issues,
+      'error',
+      `${variableName} no coincide con la API key configurada; public no lleva key y customer la exige`,
+    );
+  }
 }
 
 function validate() {
@@ -145,6 +209,20 @@ function validate() {
     }
     if (!hasValue(name)) {
       pushIssue(issues, 'error', `Falta variable requerida: ${name}`);
+    }
+  }
+
+  const placeholderCandidates = new Set([
+    ...SERVICE_REQUIRED[service],
+    ...Object.keys(FORBIDDEN_VALUES),
+  ]);
+  for (const name of placeholderCandidates) {
+    if (hasValue(name) && isAngularPlaceholder(getValue(name))) {
+      pushIssue(
+        issues,
+        'error',
+        `${name} tiene un valor placeholder angular; reemplazarlo por una configuracion real`,
+      );
     }
   }
 
@@ -208,6 +286,38 @@ function validate() {
       'warn',
       'METEOBLUE_API_KEY no esta configurada. La comparacion profesional Meteoblue queda desactivada y Open-Meteo opera sin contraste.',
     );
+  }
+
+  if (['api', 'clima', 'predicciones'].includes(service)) {
+    const forecastHasKey = hasValue('OPEN_METEO_API_KEY');
+    const forecastBase =
+      getValue('OPEN_METEO_FORECAST_BASE_URL') ||
+      (forecastHasKey
+        ? 'https://customer-api.open-meteo.com/v1'
+        : getValue('API_OPEN_METEO') || 'https://api.open-meteo.com/v1');
+    validateOpenMeteoEndpoint(
+      issues,
+      'OPEN_METEO_FORECAST_BASE_URL',
+      forecastBase,
+      'forecast',
+      forecastHasKey,
+    );
+
+    if (['api', 'clima'].includes(service)) {
+      const archiveHasKey = hasValue('OPEN_METEO_ARCHIVE_API_KEY');
+      const archiveBase =
+        getValue('OPEN_METEO_ARCHIVE_BASE_URL') ||
+        (archiveHasKey
+          ? 'https://customer-archive-api.open-meteo.com/v1'
+          : 'https://archive-api.open-meteo.com/v1');
+      validateOpenMeteoEndpoint(
+        issues,
+        'OPEN_METEO_ARCHIVE_BASE_URL',
+        archiveBase,
+        'archive',
+        archiveHasKey,
+      );
+    }
   }
 
   if (getValue('REALTIME_TRANSPORT') === 'redis' && !hasValue('REDIS_HOST')) {

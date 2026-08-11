@@ -55,6 +55,7 @@ export class DecisionPipelineProcessor {
   })
   async recomputeSowing(job: Job<DecisionSowingJobData>) {
     const { event, idSiembra } = job.data;
+    const completedStages = { ...(job.data.completedStages || {}) };
     const lockKey = `${REDIS_KEY_PREFIX}:decision-lock:${idSiembra}`;
     const token = randomUUID();
     const acquired = await this.queue.client.set(
@@ -85,15 +86,27 @@ export class DecisionPipelineProcessor {
         return { skipped: true, reason: 'inactive-or-missing' };
       }
 
-      await job.progress(10);
-      await this.repository.reprocessClimate(
-        idSiembra,
-        event.impact.sincronizarClima,
-      );
+      await job.progress(completedStages.clima ? 45 : 10);
+      if (!completedStages.clima) {
+        await this.repository.reprocessClimate(
+          idSiembra,
+          event.impact.sincronizarClima,
+        );
+        completedStages.clima = new Date().toISOString();
+        await job.update({ ...job.data, completedStages });
+      }
       await job.progress(45);
-      await this.repository.rebuildSanitaryPredictions(idSiembra);
+      if (!completedStages.sanidad) {
+        await this.repository.rebuildSanitaryPredictions(idSiembra);
+        completedStages.sanidad = new Date().toISOString();
+        await job.update({ ...job.data, completedStages });
+      }
       await job.progress(80);
-      await this.repository.evaluateAgroclimate(idSiembra);
+      if (!completedStages.agroclima) {
+        await this.repository.evaluateAgroclimate(idSiembra);
+        completedStages.agroclima = new Date().toISOString();
+        await job.update({ ...job.data, completedStages });
+      }
       await job.progress(100);
 
       const result = {

@@ -349,6 +349,129 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
     expect(component.fuenteTexto).toContain('registro de campo prioritario');
   });
 
+  it('mantiene Dormancia observada el 1-may al cruzar el 1-jul en Pecan Kiowa', () => {
+    jasmine.clock().mockDate(new Date(2026, 7, 10, 12, 0, 0));
+    component.siembra = {
+      _id: 'siembra-pecan-kiowa',
+      idLote: 'lote-kiowa',
+      fechaSiembra: '2020-08-15T12:00:00.000Z',
+      semilla: {
+        cultivo: 'Pecan',
+        variedad: 'Kiowa',
+        fenologiaReferencia: {
+          etapas: {
+            Dormancia: 0,
+            Brotacion: 80,
+            Floracion: 120,
+          },
+          estadoModelo: 'referencia',
+        },
+      },
+      registrosFenologicos: [
+        {
+          id: 'inicio-dormancia-1-may',
+          tipoEvento: 'inicio_etapa',
+          accion: 'inicio',
+          etapa: 'Dormancia',
+          fecha: '2026-05-01T12:00:00.000Z',
+          fechaInicioEtapa: '2026-05-01T12:00:00.000Z',
+          campania: '2025/2026',
+          confianza: 'alta',
+          frioAcumulado: {
+            horasFrio: 12.5,
+            unidadesFrioUtah: 8.25,
+            porcionesFrio: 1.125,
+            gradosDia: 0,
+            estado: 'completo',
+          },
+        },
+      ],
+    } as any;
+
+    (component as any).crearTimeline();
+
+    const dormancia = component.etapas.find((etapa) => etapa.nombre === 'Dormancia');
+    expect(component.campaniaTexto).toBe('2026/2027');
+    expect(component.etapaActual).toBe('Dormancia');
+    expect(component.etapaActualConfirmadaCampo).toBeTrue();
+    expect(dormancia?.fechaFuente).toBe('campo');
+    expect(dormancia?.fecha?.toISOString()).toContain('2026-05-01');
+    expect(component.registrosTermicosFenologicos[0].frioAcumulado).toEqual(
+      jasmine.objectContaining({
+        horasFrio: 12.5,
+        unidadesFrioUtah: 8.25,
+        porcionesFrio: 1.125,
+        gradosDia: 0,
+      })
+    );
+  });
+
+  it('no vuelve persistente una observacion puntual de Dormancia del 1-may', () => {
+    jasmine.clock().mockDate(new Date(2026, 7, 10, 12, 0, 0));
+    component.siembra = {
+      _id: 'siembra-pecan-observacion',
+      fechaSiembra: '2020-08-15T12:00:00.000Z',
+      semilla: {
+        cultivo: 'Pecan',
+        variedad: 'Kiowa',
+        fenologiaReferencia: {
+          etapas: { Dormancia: 0, Brotacion: 80 },
+          estadoModelo: 'referencia',
+        },
+      },
+      registrosFenologicos: [
+        {
+          id: 'observacion-dormancia-1-may',
+          tipoEvento: 'observacion',
+          accion: 'observacion',
+          etapa: 'Dormancia',
+          fecha: '2026-05-01T12:00:00.000Z',
+          campania: '2025/2026',
+          confianza: 'alta',
+        },
+      ],
+    } as any;
+
+    (component as any).crearTimeline();
+
+    const dormancia = component.etapas.find((etapa) => etapa.nombre === 'Dormancia');
+    expect(component.campaniaTexto).toBe('2026/2027');
+    expect(component.etapaActualConfirmadaCampo).toBeFalse();
+    expect(dormancia?.fechaFuente).toBe('referencia');
+    expect(dormancia?.fecha?.toISOString()).toContain('2026-07-01');
+  });
+
+  it('ignora una Dormancia 2024 sin campania al mostrar la campania 2026/2027', () => {
+    jasmine.clock().mockDate(new Date(2026, 7, 10, 12, 0, 0));
+    component.siembra = {
+      _id: 'siembra-pecan-registro-antiguo',
+      fechaSiembra: '2020-08-15T12:00:00.000Z',
+      semilla: {
+        cultivo: 'Pecan',
+        variedad: 'Kiowa',
+        fenologiaReferencia: {
+          etapas: { Dormancia: 0, Brotacion: 80 },
+          estadoModelo: 'referencia',
+        },
+      },
+      registrosFenologicos: [
+        {
+          id: 'dormancia-2024-sin-campania',
+          tipoEvento: 'inicio_etapa',
+          accion: 'inicio',
+          etapa: 'Dormancia',
+          fechaInicioEtapa: '2024-05-01T12:00:00.000Z',
+          confianza: 'alta',
+        },
+      ],
+    } as any;
+
+    (component as any).crearTimeline();
+
+    expect(component.campaniaTexto).toBe('2026/2027');
+    expect(component.etapaActualConfirmadaCampo).toBeFalse();
+  });
+
   it('registra un biofix de reposo como inicio de frio sin reiniciar el forzado', async () => {
     const siembra = {
       _id: 'siembra-manzano-1',

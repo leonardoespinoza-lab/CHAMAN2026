@@ -85,7 +85,13 @@ const agrometPayloadRange = (inicio: string, fin: string) => {
 };
 
 describe('fallback horario Open-Meteo', () => {
-  const service = new ClimaService({} as any, {} as any, {} as any, {} as any);
+  const service = new ClimaService(
+    {} as any,
+    {} as any,
+    {} as any,
+    {} as any,
+    { getJson: jest.fn() } as any,
+  );
   const ubicacion = { lat: -39.03, lng: -67.58 };
 
   afterEach(() => {

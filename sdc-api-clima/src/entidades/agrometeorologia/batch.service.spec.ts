@@ -34,7 +34,9 @@ describe('AgrometeorologiaBatchService', () => {
       }),
       getEstablecimiento: jest.fn(),
     };
-    const ingestion = { sincronizar: jest.fn().mockResolvedValue({}) };
+    const ingestion = {
+      sincronizar: jest.fn().mockResolvedValue({ hasta: '2026-07-23' }),
+    };
     const engine = {
       resolveCycleStart: jest.fn((item) => item.fechaSiembra),
       procesarSiembra: jest
@@ -61,6 +63,7 @@ describe('AgrometeorologiaBatchService', () => {
     expect(engine.procesarSiembra).toHaveBeenCalledTimes(2);
     expect(engine.procesarSiembra).toHaveBeenCalledWith(expect.any(String), {
       sincronizarClima: false,
+      expectedEndDate: '2026-07-23',
     });
   });
 
@@ -100,7 +103,9 @@ describe('AgrometeorologiaBatchService', () => {
       }),
       getEstablecimiento: jest.fn(),
     };
-    const ingestion = { sincronizar: jest.fn().mockResolvedValue({}) };
+    const ingestion = {
+      sincronizar: jest.fn().mockResolvedValue({ hasta: '2026-07-23' }),
+    };
     const engine = {
       resolveCycleStart: jest.fn().mockReturnValue('2026-07-01'),
       procesarSiembra: jest
@@ -169,7 +174,9 @@ describe('AgrometeorologiaBatchService', () => {
       }),
       getEstablecimiento: jest.fn(),
     };
-    const ingestion = { sincronizar: jest.fn().mockResolvedValue({}) };
+    const ingestion = {
+      sincronizar: jest.fn().mockResolvedValue({ hasta: '2026-07-23' }),
+    };
     const engine = {
       resolveCycleStart: jest.fn((item) => item.fechaSiembra),
       procesarSiembra: jest
@@ -205,5 +212,40 @@ describe('AgrometeorologiaBatchService', () => {
       false,
       lotB._id,
     );
+  });
+
+  it('conserva la serie activa si la sincronizacion no informa horizonte', async () => {
+    const establishment = {
+      _id: '64b000000000000000000003',
+      ubicacion: [{ centro: { lat: -33, lng: -61.9 } }],
+    };
+    const repository = {
+      getSiembras: jest.fn().mockResolvedValue({
+        datos: [
+          {
+            _id: '64b000000000000000000001',
+            idEstablecimiento: establishment._id,
+            fechaSiembra: '2026-05-10',
+            establecimiento: establishment,
+          },
+        ],
+      }),
+      getEstablecimiento: jest.fn(),
+    };
+    const ingestion = { sincronizar: jest.fn().mockResolvedValue({}) };
+    const engine = {
+      resolveCycleStart: jest.fn().mockReturnValue('2026-05-10'),
+      procesarSiembra: jest.fn(),
+    };
+    const batch = new AgrometeorologiaBatchService(
+      repository as any,
+      ingestion as any,
+      engine as any,
+    );
+
+    const result = await batch.procesarActivas();
+
+    expect(result).toMatchObject({ procesadas: 0, fallidas: 1 });
+    expect(engine.procesarSiembra).not.toHaveBeenCalled();
   });
 });

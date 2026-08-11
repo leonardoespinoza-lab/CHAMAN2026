@@ -79,7 +79,19 @@ describe('requisitos varietales de frio', () => {
     );
   });
 
-  it('no convierte HFE a Chill Portions si falta la serie horaria', async () => {
+  it('no transforma valores vacios de temperatura en cero observado', () => {
+    const service = crearServicio();
+
+    expect(service.numeroFinito(null)).toBeUndefined();
+    expect(service.numeroFinito(undefined)).toBeUndefined();
+    expect(service.numeroFinito('')).toBeUndefined();
+    expect(service.numeroFinito('   ')).toBeUndefined();
+    expect(service.numeroFinito(false)).toBeUndefined();
+    expect(service.numeroFinito('0')).toBe(0);
+    expect(service.numeroFinito('-3.5')).toBe(-3.5);
+  });
+
+  it('no convierte ausencia horaria en HF, HFE ni Chill Portions cero', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-16T12:00:00.000Z'));
     const service = crearServicio();
     service.FRIO_TERMICO_CACHE_TTL_MS = 15 * 60 * 1000;
@@ -110,16 +122,198 @@ describe('requisitos varietales de frio', () => {
     try {
       const resultado = await service.getFrioTermico(-39.03, -67.58, 'Pecan');
 
-      expect(resultado.serie[0].horasFrioEfectivas).toBeGreaterThan(0);
+      expect(resultado.serie[0].horasFrio).toBeUndefined();
+      expect(resultado.serie[0].horasFrioEfectivas).toBeUndefined();
       expect(resultado.serie[0].porcionesFrio).toBeUndefined();
+      expect(resultado.acumulados.horasFrio).toBeUndefined();
+      expect(resultado.acumulados.horasFrioEfectivas).toBeUndefined();
       expect(resultado.acumulados.porcionesFrio).toBeUndefined();
       expect(resultado.calculo?.porcionesFrio).toBe('no_disponible');
       expect(resultado.calculo?.observaciones).toEqual(
         expect.arrayContaining([
           expect.stringContaining(
-            'no se aplico ninguna conversion aproximada desde HFE',
+            'las horas ausentes no se convierten en cero',
           ),
         ]),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('corta Archive en hoy-5 y deriva la cola reciente a Forecast', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-10T15:00:00.000Z'));
+    const service = crearServicio();
+    service.logger = { warn: jest.fn() };
+    service.fetchOpenMeteoJson = jest.fn().mockResolvedValue({
+      hourly: { time: [], temperature_2m: [] },
+    });
+
+    try {
+      await service.fetchOpenMeteoHourlyArchive(
+        -39.03,
+        -67.58,
+        '2026-05-01',
+        '2026-08-09',
+      );
+
+      expect(service.fetchOpenMeteoJson).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('archive'),
+        'archive',
+        expect.objectContaining({
+          start_date: '2026-05-01',
+          end_date: '2026-08-05',
+          hourly: 'temperature_2m',
+        }),
+        expect.stringContaining('consolidado'),
+      );
+      expect(service.fetchOpenMeteoJson).toHaveBeenNthCalledWith(
+        2,
+        expect.any(String),
+        'forecast',
+        expect.objectContaining({
+          start_date: '2026-08-06',
+          end_date: '2026-08-09',
+          hourly: 'temperature_2m',
+        }),
+        expect.stringContaining('reciente'),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('solicita cinco dias pasados al Forecast horario', async () => {
+    const service = crearServicio();
+    service.fetchOpenMeteoJson = jest.fn().mockResolvedValue({
+      hourly: { time: [], temperature_2m: [] },
+    });
+
+    await service.fetchOpenMeteoHourlyForecast(-39.03, -67.58);
+
+    expect(service.fetchOpenMeteoJson).toHaveBeenCalledWith(
+      expect.any(String),
+      'forecast',
+      expect.objectContaining({
+        past_days: 5,
+        forecast_days: 16,
+        hourly: 'temperature_2m',
+      }),
+      expect.stringContaining('pronostico horario'),
+    );
+  });
+
+  it('no permite que Forecast reemplace una lectura historica de mayor jerarquia', () => {
+    const service = crearServicio();
+    const diario = service.mergeSeries(
+      [
+        {
+          fecha: '2026-08-05',
+          fuente: 'FieldClimate',
+          temperaturaMedia: 4,
+          esPronostico: false,
+        },
+      ],
+      [
+        {
+          fecha: '2026-08-05',
+          fuente: 'OpenMeteo',
+          temperaturaMedia: 10,
+          esPronostico: true,
+        },
+      ],
+    );
+    const horario = service.mergeHourlySeries(
+      [
+        {
+          time: '2026-08-05T06:00',
+          temperatura: 3,
+          esPronostico: false,
+        },
+      ],
+      [
+        {
+          time: '2026-08-05T06:00',
+          temperatura: 11,
+          esPronostico: true,
+        },
+      ],
+    );
+
+    expect(diario[0]).toMatchObject({
+      fuente: 'FieldClimate',
+      temperaturaMedia: 4,
+      esPronostico: false,
+    });
+    expect(horario[0]).toMatchObject({
+      temperatura: 3,
+      esPronostico: false,
+    });
+  });
+
+  it('deja faltante un dia reciente sin hourly y no subestima CP con un cero', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-03T15:00:00.000Z'));
+    const service = crearServicio();
+    service.FRIO_TERMICO_CACHE_TTL_MS = 15 * 60 * 1000;
+    service.FRIO_TERMICO_CACHE_MAX = 500;
+    service.frioTermicoCache = new Map();
+    service.logger = {
+      warn: jest.fn(),
+      error: jest.fn(),
+      log: jest.fn(),
+      debug: jest.fn(),
+    };
+    service.fetchHistoricoClimaticoAutomatico = jest.fn().mockResolvedValue([
+      {
+        fecha: '2026-05-01',
+        fuente: 'FieldClimate',
+        temperaturaMin: 2,
+        temperaturaMax: 8,
+        temperaturaMedia: 5,
+        lluvia: 0,
+        esPronostico: false,
+      },
+      {
+        fecha: '2026-05-02',
+        fuente: 'OpenMeteo',
+        temperaturaMin: 3,
+        temperaturaMax: 9,
+        temperaturaMedia: 6,
+        lluvia: 0,
+        esPronostico: false,
+      },
+    ]);
+    service.fetchOpenMeteoForecast = jest.fn().mockResolvedValue([]);
+    service.fetchHistoricoHorarioAutomatico = jest.fn().mockResolvedValue(
+      Array.from({ length: 24 }, (_, hour) => ({
+        time: `2026-05-01T${String(hour).padStart(2, '0')}:00`,
+        temperatura: 5,
+        esPronostico: false,
+      })),
+    );
+    service.fetchOpenMeteoHourlyForecast = jest.fn().mockResolvedValue([]);
+
+    try {
+      const resultado = await service.getFrioTermico(
+        -39.03,
+        -67.58,
+        'Pecan',
+      );
+      const recienteSinHoras = resultado.serie.find(
+        (dia) => dia.fecha === '2026-05-02',
+      );
+
+      expect(recienteSinHoras).toMatchObject({ fecha: '2026-05-02' });
+      expect(recienteSinHoras?.horasFrio).toBeUndefined();
+      expect(recienteSinHoras?.horasFrioEfectivas).toBeUndefined();
+      expect(recienteSinHoras?.porcionesFrio).toBeUndefined();
+      expect(resultado.acumulados.horasFrio).toBeUndefined();
+      expect(resultado.acumulados.horasFrioEfectivas).toBeUndefined();
+      expect(resultado.acumulados.porcionesFrio).toBeUndefined();
+      expect(resultado.calculo?.porcionesFrio).toBe('no_disponible');
+      expect(resultado.calculo?.observaciones?.join(' ')).toContain(
+        'no se suman como cero',
       );
     } finally {
       jest.useRealTimers();

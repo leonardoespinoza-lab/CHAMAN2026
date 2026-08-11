@@ -465,8 +465,8 @@ export interface IFrioTermicoCultivo {
     gradosDiaFloracionObjetivo?: number;
   };
   acumulados: {
-    horasFrio: number;
-    horasFrioEfectivas: number;
+    horasFrio?: number;
+    horasFrioEfectivas?: number;
     porcionesFrio?: number;
     gradosDia: number;
     lluvia: number;

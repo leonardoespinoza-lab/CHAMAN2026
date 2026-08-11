@@ -24,13 +24,35 @@ import { EstablecimientosService } from '../establecimiento/service';
 import { TileCacheService } from '../../auxiliares/tile-cache/tile-cache.service';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 import { TileCalculationService } from '../../auxiliares/tile-calculation/tile-calculation.service';
-import { API_CLIMA } from '../../env';
+import {
+  API_CLIMA,
+  OPEN_METEO_ARCHIVE_BASE_URL,
+  OPEN_METEO_FORECAST_BASE_URL,
+} from '../../env';
+import { OpenMeteoClientService } from '../../auxiliares/open-meteo/open-meteo-client.service';
 
 interface IOpenMeteoHourlyTemp {
   time: string;
   temperatura?: number;
   esPronostico: boolean;
 }
+
+interface IMetricasFrioHorariasDia {
+  horasValidas: number;
+  coberturaPct: number;
+  horasFrio: number;
+  horasFrioEfectivas: number;
+}
+
+interface IOpenMeteoHistoryWindow {
+  baseUrl: string;
+  endpoint: 'forecast' | 'archive';
+  desde: string;
+  hasta: string;
+}
+
+const OPEN_METEO_ARCHIVE_DELAY_DAYS = 5;
+const MIN_COLD_HOURLY_COVERAGE_HOURS = 18;
 
 type TRequisitoFrioClave =
   | 'horasFrioObjetivo'
@@ -98,6 +120,7 @@ export class ClimaService {
     private readonly axiosService: AxiosService,
     private readonly httpService: HttpService,
     private readonly tileCalculationService: TileCalculationService,
+    private readonly openMeteoClient: OpenMeteoClientService,
   ) {}
 
   /**
@@ -766,7 +789,7 @@ export class ClimaService {
       throw new Error('Coordenadas invalidas para calcular frio termico.');
     }
 
-    const hoy = new Date();
+    const hoy = new Date(`${this.currentDateKey()}T12:00:00.000Z`);
     const config = this.getConfiguracionFrioCultivo(cultivo);
     const requerimientosBase = {
       horasFrioObjetivo: overrides.horasFrioObjetivo,
@@ -831,17 +854,25 @@ export class ClimaService {
       contextoHelada.idEstacionMeteorologica,
     );
     const forecast = await this.fetchOpenMeteoForecast(latNum, lngNum);
-    let porcionesFrioDisponibles = true;
+    let continuidadHorariaFrio = false;
     const observacionesCalculo: string[] = [
       ...validacionRequerimientos.observaciones,
     ];
+    let metricasFrioPorDia = new Map<string, IMetricasFrioHorariasDia>();
     let porcionesFrioPorDia = new Map<string, number>();
+    const fechaFrioDesde = this.toDateKey(frioDesde);
+    const fechaHistoricoHasta = this.toDateKey(historicoHasta);
+    const diasFrioEsperados = this.dateKeysBetween(
+      fechaFrioDesde,
+      fechaHistoricoHasta,
+    );
     try {
-      const hourlyHistorico = await this.fetchOpenMeteoHourlyArchive(
+      const hourlyHistorico = await this.fetchHistoricoHorarioAutomatico(
         latNum,
         lngNum,
-        this.toDateKey(frioDesde),
-        this.toDateKey(historicoHasta),
+        fechaFrioDesde,
+        fechaHistoricoHasta,
+        contextoHelada.idEstacionMeteorologica,
       );
       const hourlyForecast = await this.fetchOpenMeteoHourlyForecast(
         latNum,
@@ -853,41 +884,71 @@ export class ClimaService {
       ).filter((hora) =>
         this.entreFechas(
           hora.time.slice(0, 10),
-          this.toDateKey(frioDesde),
-          this.toDateKey(hoy),
+          fechaFrioDesde,
+          fechaHistoricoHasta,
         ),
       );
-      porcionesFrioPorDia =
+      metricasFrioPorDia = this.calcularMetricasFrioHorariasPorDia(hourlyFrio);
+      const porcionesCalculadas =
         this.calcularPorcionesFrioDinamicoPorDia(hourlyFrio);
-      if (!porcionesFrioPorDia.size) {
-        throw new Error('Open-Meteo no devolvio temperaturas horarias utiles.');
+      const diasSinCobertura = diasFrioEsperados.filter((fecha) => {
+        const metrica = metricasFrioPorDia.get(fecha);
+        return (
+          !metrica ||
+          metrica.horasValidas < MIN_COLD_HOURLY_COVERAGE_HOURS
+        );
+      });
+      continuidadHorariaFrio =
+        diasFrioEsperados.length > 0 && diasSinCobertura.length === 0;
+
+      for (const fecha of diasFrioEsperados) {
+        const metrica = metricasFrioPorDia.get(fecha);
+        if (
+          metrica &&
+          metrica.horasValidas >= MIN_COLD_HOURLY_COVERAGE_HOURS
+        ) {
+          // Cero es un aporte fisicamente posible. Solo se completa cuando
+          // el dia tiene cobertura horaria suficiente; un dia ausente queda
+          // deliberadamente sin valor.
+          porcionesFrioPorDia.set(fecha, porcionesCalculadas.get(fecha) ?? 0);
+        }
+      }
+
+      if (!continuidadHorariaFrio) {
+        const muestra = diasSinCobertura.slice(0, 5).join(', ');
+        observacionesCalculo.push(
+          `Serie horaria de frio incompleta: ${diasFrioEsperados.length - diasSinCobertura.length} de ${diasFrioEsperados.length} dias cerrados tienen al menos ${MIN_COLD_HOURLY_COVERAGE_HOURS} horas. Los dias sin cobertura${muestra ? ` (${muestra}${diasSinCobertura.length > 5 ? ', ...' : ''})` : ''} quedan sin HF, HFE ni CP y no se suman como cero.`,
+        );
       }
     } catch (error: any) {
-      porcionesFrioDisponibles = false;
+      continuidadHorariaFrio = false;
       observacionesCalculo.push(
-        'CP no disponible por falta de serie horaria completa; no se aplico ninguna conversion aproximada desde HFE.',
+        'HF, HFE y CP no disponibles por falta de serie horaria consolidada; las horas ausentes no se convierten en cero ni se aproximan desde datos diarios.',
       );
       this.logger.warn(
-        `Frio termico sin CP dinamico horario (${latNum}, ${lngNum}): ${error?.message || error}`,
+        `Frio termico sin continuidad horaria (${latNum}, ${lngNum}): ${error?.message || error}`,
       );
     }
     const serieBase = this.mergeSeries(historico, forecast);
     const baseTermica = requerimientos.temperaturaBaseGradosDia ?? 10;
     const serie = serieBase.map((dia) => {
-      const horasFrio = this.estimarHorasFrio(
-        dia.temperaturaMin,
-        dia.temperaturaMax,
-      );
-      const horasFrioEfectivas = this.estimarHorasFrioEfectivas(
-        dia.temperaturaMedia,
-      );
+      const metricaHoraria = metricasFrioPorDia.get(dia.fecha);
+      const tieneCoberturaHoraria =
+        !!metricaHoraria &&
+        metricaHoraria.horasValidas >= MIN_COLD_HOURLY_COVERAGE_HOURS;
+      const horasFrio = tieneCoberturaHoraria
+        ? metricaHoraria.horasFrio
+        : undefined;
+      const horasFrioEfectivas = tieneCoberturaHoraria
+        ? metricaHoraria.horasFrioEfectivas
+        : undefined;
       const gradosDia = this.estimarGradosDia(
         dia.temperaturaMin,
         dia.temperaturaMax,
         baseTermica,
       );
-      const porcionesFrio = porcionesFrioDisponibles
-        ? this.round(porcionesFrioPorDia.get(dia.fecha) || 0, 3)
+      const porcionesFrio = porcionesFrioPorDia.has(dia.fecha)
+        ? this.round(porcionesFrioPorDia.get(dia.fecha), 3)
         : undefined;
       return {
         ...dia,
@@ -898,13 +959,6 @@ export class ClimaService {
       };
     });
 
-    const frioSerie = serie.filter((dia) =>
-      this.entreFechas(
-        dia.fecha,
-        this.toDateKey(frioDesde),
-        this.toDateKey(hoy),
-      ),
-    );
     const termicoSerie = serie.filter((dia) =>
       this.entreFechas(
         dia.fecha,
@@ -913,15 +967,34 @@ export class ClimaService {
       ),
     );
     const acumulados = {
-      horasFrio: this.round(
-        frioSerie.reduce((acc, dia) => acc + (dia.horasFrio || 0), 0),
-      ),
-      horasFrioEfectivas: this.round(
-        frioSerie.reduce((acc, dia) => acc + (dia.horasFrioEfectivas || 0), 0),
-      ),
-      porcionesFrio: porcionesFrioDisponibles
+      horasFrio: continuidadHorariaFrio
         ? this.round(
-            frioSerie.reduce((acc, dia) => acc + (dia.porcionesFrio || 0), 0),
+            diasFrioEsperados.reduce(
+              (acc, fecha) =>
+                acc + Number(metricasFrioPorDia.get(fecha)?.horasFrio || 0),
+              0,
+            ),
+          )
+        : undefined,
+      horasFrioEfectivas: continuidadHorariaFrio
+        ? this.round(
+            diasFrioEsperados.reduce(
+              (acc, fecha) =>
+                acc +
+                Number(
+                  metricasFrioPorDia.get(fecha)?.horasFrioEfectivas || 0,
+                ),
+              0,
+            ),
+          )
+        : undefined,
+      porcionesFrio: continuidadHorariaFrio
+        ? this.round(
+            diasFrioEsperados.reduce(
+              (acc, fecha) =>
+                acc + Number(porcionesFrioPorDia.get(fecha) || 0),
+              0,
+            ),
             2,
           )
         : undefined,
@@ -1004,9 +1077,9 @@ export class ClimaService {
       cultivo,
       generadoEn: new Date().toISOString(),
       periodoFrio: {
-        desde: this.toDateKey(frioDesde),
-        hasta: this.toDateKey(hoy),
-        dias: frioSerie.length,
+        desde: fechaFrioDesde,
+        hasta: fechaHistoricoHasta,
+        dias: diasFrioEsperados.length,
       },
       periodoTermico: {
         desde: this.toDateKey(termicoDesde),
@@ -1020,7 +1093,7 @@ export class ClimaService {
       riesgoHelada,
       eventos,
       calculo: {
-        porcionesFrio: porcionesFrioDisponibles
+        porcionesFrio: continuidadHorariaFrio
           ? 'dinamico_horario'
           : 'no_disponible',
         observaciones: observacionesCalculo,
@@ -1375,7 +1448,11 @@ export class ClimaService {
     idEstacionMeteorologica?: string,
   ): Promise<ISerieFrioTermicoDia[]> {
     if (from > to) return [];
-    const url = `${API_CLIMA}/clima/estacion/cerca/${lat}/${lng}/${from}/${to}`;
+    // API_CLIMA usa un limite superior exclusivo. Se consulta hasta el inicio
+    // del dia siguiente para incluir por completo `to` sin pedir Archive por
+    // una fecha que aun no esta consolidada.
+    const hastaExclusivo = this.addDateKeyDays(to, 1);
+    const url = `${API_CLIMA}/clima/estacion/cerca/${lat}/${lng}/${from}/${hastaExclusivo}`;
     try {
       const rows = await this.axiosService.GET<IClimaEstacionMeteorologica[]>(
         url,
@@ -1414,9 +1491,10 @@ export class ClimaService {
         })
         .filter((row): row is ISerieFrioTermicoDia => !!row);
       if (serie.length) return this.mergeSeries([], serie);
-      throw new Error(
-        'La fuente climatica automatica no devolvio dias utiles.',
+      this.logger.warn(
+        `Clima historico automatico sin dias utiles (${lat}, ${lng}); no se repite la misma consulta directa a Open-Meteo.`,
       );
+      return [];
     } catch (error: any) {
       this.logger.warn(
         `Clima historico automatico sin respuesta; se usa Open-Meteo directo (${lat}, ${lng}): ${error?.message || error}`,
@@ -1425,7 +1503,63 @@ export class ClimaService {
     }
   }
 
+  private async fetchHistoricoHorarioAutomatico(
+    lat: number,
+    lng: number,
+    from: string,
+    to: string,
+    idEstacionMeteorologica?: string,
+  ): Promise<IOpenMeteoHourlyTemp[]> {
+    if (from > to) return [];
+    const hastaExclusivo = this.addDateKeyDays(to, 1);
+    const url = `${API_CLIMA}/clima/estacion/cerca/${lat}/${lng}/${from}/${hastaExclusivo}`;
+    try {
+      const rows = await this.axiosService.GET<IClimaEstacionMeteorologica[]>(
+        url,
+        {
+          params: {
+            dataGroup: 'hourly',
+            soloEstacionAsociada: 'true',
+            ...(idEstacionMeteorologica ? { idEstacionMeteorologica } : {}),
+          },
+        },
+      );
+      const serie = (rows || [])
+        .map((row): IOpenMeteoHourlyTemp | undefined => {
+          const time = String(row.fecha || '');
+          const temperatura = this.numeroFinito(
+            row.temperatura?.avg ?? row.temperatura?.last,
+          );
+          if (!time || temperatura === undefined) return undefined;
+          return {
+            time,
+            temperatura,
+            esPronostico: false,
+          };
+        })
+        .filter((row): row is IOpenMeteoHourlyTemp => !!row);
+      if (serie.length) return this.mergeHourlySeries([], serie);
+      this.logger.warn(
+        `Clima horario automatico sin horas utiles (${lat}, ${lng}); la ausencia queda documentada y no se completa como cero.`,
+      );
+      return [];
+    } catch (error: any) {
+      this.logger.warn(
+        `Clima horario automatico sin respuesta; se usa Open-Meteo directo por tramos (${lat}, ${lng}): ${error?.message || error}`,
+      );
+      return this.fetchOpenMeteoHourlyArchive(lat, lng, from, to);
+    }
+  }
+
   private numeroFinito(value: unknown): number | undefined {
+    if (
+      value === null ||
+      value === undefined ||
+      typeof value === 'boolean' ||
+      (typeof value === 'string' && value.trim() === '')
+    ) {
+      return undefined;
+    }
     const numero = Number(value);
     return Number.isFinite(numero) ? numero : undefined;
   }
@@ -1438,43 +1572,62 @@ export class ClimaService {
     esPronostico: boolean,
   ): Promise<ISerieFrioTermicoDia[]> {
     if (from > to) return [];
-    const url = 'https://archive-api.open-meteo.com/v1/archive';
-    const response = await firstValueFrom(
-      this.httpService.get(url, {
-        params: {
-          latitude: lat,
-          longitude: lng,
-          start_date: from,
-          end_date: to,
-          daily:
-            'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum',
-          timezone: this.timezone,
-        },
-        timeout: 12000,
-      }),
-    );
-    return this.normalizarOpenMeteoDaily(response.data, esPronostico);
+    const resultados: ISerieFrioTermicoDia[] = [];
+    for (const rango of this.getOpenMeteoHistoryWindows(from, to)) {
+      try {
+        const data = await this.fetchOpenMeteoJson(
+          rango.baseUrl,
+          rango.endpoint,
+          {
+            latitude: lat,
+            longitude: lng,
+            start_date: rango.desde,
+            end_date: rango.hasta,
+            daily:
+              'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum',
+            timezone: this.timezone,
+          },
+          rango.endpoint === 'archive'
+            ? 'historico diario de respaldo consolidado'
+            : 'historico diario reciente de respaldo',
+        );
+        resultados.push(
+          ...this.normalizarOpenMeteoDaily(data, esPronostico),
+        );
+      } catch (error: any) {
+        this.logger.warn(
+          `Open-Meteo sin tramo diario ${rango.desde}/${rango.hasta}; queda como faltante: ${error?.message || error}`,
+        );
+      }
+    }
+    return this.mergeSeries([], resultados);
   }
 
   private async fetchOpenMeteoForecast(
     lat: number,
     lng: number,
   ): Promise<ISerieFrioTermicoDia[]> {
-    const url = 'https://api.open-meteo.com/v1/forecast';
-    const response = await firstValueFrom(
-      this.httpService.get(url, {
-        params: {
-          latitude: lat,
-          longitude: lng,
-          forecast_days: 16,
-          daily:
-            'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum',
-          timezone: this.timezone,
-        },
-        timeout: 12000,
-      }),
+    const data = await this.fetchOpenMeteoJson(
+      OPEN_METEO_FORECAST_BASE_URL,
+      'forecast',
+      {
+        latitude: lat,
+        longitude: lng,
+        past_days: OPEN_METEO_ARCHIVE_DELAY_DAYS,
+        forecast_days: 16,
+        daily:
+          'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum',
+        timezone: this.timezone,
+      },
+      'pronostico termico diario',
     );
-    return this.normalizarOpenMeteoDaily(response.data, true);
+    const hoy = this.currentDateKey();
+    return this.normalizarOpenMeteoDaily(data, true).map((dia) => ({
+      ...dia,
+      // Los dias pasados entregados por Forecast completan el retraso de
+      // Archive; solo hoy y las fechas futuras conservan marca pronostica.
+      esPronostico: dia.fecha >= hoy,
+    }));
   }
 
   private async fetchOpenMeteoHourlyArchive(
@@ -1484,64 +1637,136 @@ export class ClimaService {
     to: string,
   ): Promise<IOpenMeteoHourlyTemp[]> {
     if (from > to) return [];
-    const url = 'https://archive-api.open-meteo.com/v1/archive';
-    const response = await firstValueFrom(
-      this.httpService.get(url, {
-        params: {
-          latitude: lat,
-          longitude: lng,
-          start_date: from,
-          end_date: to,
-          hourly: 'temperature_2m',
-          timezone: this.timezone,
-        },
-        timeout: 16000,
-      }),
-    );
-    return this.normalizarOpenMeteoHourlyTemperature(response.data, false);
+    const resultados: IOpenMeteoHourlyTemp[] = [];
+    for (const rango of this.getOpenMeteoHistoryWindows(from, to)) {
+      try {
+        const data = await this.fetchOpenMeteoJson(
+          rango.baseUrl,
+          rango.endpoint,
+          {
+            latitude: lat,
+            longitude: lng,
+            start_date: rango.desde,
+            end_date: rango.hasta,
+            hourly: 'temperature_2m',
+            timezone: this.timezone,
+          },
+          rango.endpoint === 'archive'
+            ? 'historico horario de frio consolidado'
+            : 'historico horario de frio reciente',
+        );
+        resultados.push(
+          ...this.normalizarOpenMeteoHourlyTemperature(data, false),
+        );
+      } catch (error: any) {
+        this.logger.warn(
+          `Open-Meteo sin tramo horario ${rango.desde}/${rango.hasta}; queda como faltante: ${error?.message || error}`,
+        );
+      }
+    }
+    return this.mergeHourlySeries([], resultados);
   }
 
   private async fetchOpenMeteoHourlyForecast(
     lat: number,
     lng: number,
   ): Promise<IOpenMeteoHourlyTemp[]> {
-    const url = 'https://api.open-meteo.com/v1/forecast';
-    const response = await firstValueFrom(
-      this.httpService.get(url, {
-        params: {
-          latitude: lat,
-          longitude: lng,
-          forecast_days: 16,
-          hourly: 'temperature_2m',
-          timezone: this.timezone,
-        },
-        timeout: 12000,
+    const data = await this.fetchOpenMeteoJson(
+      OPEN_METEO_FORECAST_BASE_URL,
+      'forecast',
+      {
+        latitude: lat,
+        longitude: lng,
+        past_days: OPEN_METEO_ARCHIVE_DELAY_DAYS,
+        forecast_days: 16,
+        hourly: 'temperature_2m',
+        timezone: this.timezone,
+      },
+      'pronostico horario de frio',
+    );
+    const hoy = this.currentDateKey();
+    return this.normalizarOpenMeteoHourlyTemperature(data, true).map(
+      (hora) => ({
+        ...hora,
+        esPronostico: hora.time.slice(0, 10) >= hoy,
       }),
     );
-    return this.normalizarOpenMeteoHourlyTemperature(response.data, true);
   }
 
   private async fetchOpenMeteoAgroForecast(
     lat: number,
     lng: number,
   ): Promise<ISerieFrioTermicoDia[]> {
-    const url = 'https://api.open-meteo.com/v1/forecast';
-    const response = await firstValueFrom(
-      this.httpService.get(url, {
-        params: {
-          latitude: lat,
-          longitude: lng,
-          forecast_days: 7,
-          daily:
-            'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,precipitation_probability_max,showers_sum,weather_code,wind_gusts_10m_max',
-          hourly:
-            'cape,showers,precipitation_probability,weather_code,wind_gusts_10m',
-          timezone: this.timezone,
-        },
-        timeout: 12000,
-      }),
+    const data = await this.fetchOpenMeteoJson(
+      OPEN_METEO_FORECAST_BASE_URL,
+      'forecast',
+      {
+        latitude: lat,
+        longitude: lng,
+        forecast_days: 7,
+        daily:
+          'temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum,precipitation_probability_max,showers_sum,weather_code,wind_gusts_10m_max',
+        hourly:
+          'cape,showers,precipitation_probability,weather_code,wind_gusts_10m',
+        timezone: this.timezone,
+      },
+      'riesgos agroclimaticos',
     );
-    return this.normalizarOpenMeteoAgroForecast(response.data);
+    return this.normalizarOpenMeteoAgroForecast(data);
+  }
+
+  private async fetchOpenMeteoJson(
+    baseUrl: string,
+    endpoint: 'forecast' | 'archive',
+    params: Record<string, string | number>,
+    context: string,
+  ): Promise<any> {
+    const url = new URL(`${baseUrl}/${endpoint}`);
+    Object.entries(params).forEach(([key, value]) =>
+      url.searchParams.set(key, `${value}`),
+    );
+    const data = await this.openMeteoClient.getJson<any>(url, context);
+    if (!data) {
+      throw new Error(`Open-Meteo no disponible para ${context}`);
+    }
+    return data;
+  }
+
+  /**
+   * Archive no publica los ultimos dias de manera inmediata. El corte evita
+   * enviarle fechas que todavia no puede servir y deriva exclusivamente esa
+   * cola reciente al endpoint Forecast (que se consulta con past_days).
+   */
+  private getOpenMeteoHistoryWindows(
+    from: string,
+    to: string,
+  ): IOpenMeteoHistoryWindow[] {
+    if (from > to) return [];
+    const hoy = this.currentDateKey();
+    const archiveHasta = this.addDateKeyDays(
+      hoy,
+      -OPEN_METEO_ARCHIVE_DELAY_DAYS,
+    );
+    const recienteDesde = this.addDateKeyDays(archiveHasta, 1);
+    const rangos: IOpenMeteoHistoryWindow[] = [];
+
+    if (from <= archiveHasta) {
+      rangos.push({
+        baseUrl: OPEN_METEO_ARCHIVE_BASE_URL,
+        endpoint: 'archive',
+        desde: from,
+        hasta: to < archiveHasta ? to : archiveHasta,
+      });
+    }
+    if (to >= recienteDesde) {
+      rangos.push({
+        baseUrl: OPEN_METEO_FORECAST_BASE_URL,
+        endpoint: 'forecast',
+        desde: from > recienteDesde ? from : recienteDesde,
+        hasta: to,
+      });
+    }
+    return rangos.filter((rango) => rango.desde <= rango.hasta);
   }
 
   private normalizarOpenMeteoAgroForecast(data: any): ISerieFrioTermicoDia[] {
@@ -1641,9 +1866,47 @@ export class ClimaService {
     forecast: IOpenMeteoHourlyTemp[],
   ): IOpenMeteoHourlyTemp[] {
     const byTime = new Map<string, IOpenMeteoHourlyTemp>();
-    historico.forEach((hora) => byTime.set(hora.time, hora));
+    // El respaldo modelado se carga primero. Una central o serie historica
+    // consolidada gana siempre para la misma hora.
     forecast.forEach((hora) => byTime.set(hora.time, hora));
+    historico.forEach((hora) => byTime.set(hora.time, hora));
     return [...byTime.values()].sort((a, b) => a.time.localeCompare(b.time));
+  }
+
+  private calcularMetricasFrioHorariasPorDia(
+    serieHoraria: IOpenMeteoHourlyTemp[],
+  ): Map<string, IMetricasFrioHorariasDia> {
+    const horasPorDia = new Map<string, Map<string, number>>();
+    for (const hora of serieHoraria) {
+      if (!hora.time || !Number.isFinite(hora.temperatura)) continue;
+      const fecha = hora.time.slice(0, 10);
+      const horas = horasPorDia.get(fecha) || new Map<string, number>();
+      horas.set(hora.time, Number(hora.temperatura));
+      horasPorDia.set(fecha, horas);
+    }
+
+    const resultado = new Map<string, IMetricasFrioHorariasDia>();
+    for (const [fecha, horas] of horasPorDia.entries()) {
+      const temperaturas = [...horas.values()];
+      const horasValidas = temperaturas.length;
+      resultado.set(fecha, {
+        horasValidas,
+        coberturaPct: this.round(Math.min(100, (horasValidas / 24) * 100), 1),
+        horasFrio: this.round(
+          temperaturas.filter(
+            (temperatura) => temperatura >= 0 && temperatura <= 7.2,
+          ).length,
+        ),
+        horasFrioEfectivas: this.round(
+          temperaturas.reduce(
+            (acc, temperatura) =>
+              acc + this.estimarAporteHoraFrioEfectiva(temperatura),
+            0,
+          ),
+        ),
+      });
+    }
+    return resultado;
   }
 
   private calcularPorcionesFrioDinamicoPorDia(
@@ -1934,8 +2197,10 @@ export class ClimaService {
     forecast: ISerieFrioTermicoDia[],
   ): ISerieFrioTermicoDia[] {
     const byDate = new Map<string, ISerieFrioTermicoDia>();
-    historico.forEach((dia) => byDate.set(dia.fecha, dia));
+    // Sensor/central/historico observado conserva prioridad. Open-Meteo
+    // Forecast solo rellena fechas que la jerarquia superior no cubrio.
     forecast.forEach((dia) => byDate.set(dia.fecha, dia));
+    historico.forEach((dia) => byDate.set(dia.fecha, dia));
     return [...byDate.values()].sort((a, b) => a.fecha.localeCompare(b.fecha));
   }
 
@@ -1982,6 +2247,14 @@ export class ClimaService {
     if (tempMedia > 9.1 && tempMedia <= 12.4) return 12;
     if (tempMedia > 12.4 && tempMedia <= 15.9) return 6;
     if (tempMedia > 18) return -6;
+    return 0;
+  }
+
+  private estimarAporteHoraFrioEfectiva(temperatura: number): number {
+    if (temperatura >= 2.5 && temperatura <= 9.1) return 1;
+    if (temperatura > 9.1 && temperatura <= 12.4) return 0.5;
+    if (temperatura > 12.4 && temperatura <= 15.9) return 0.25;
+    if (temperatura > 18) return -0.25;
     return 0;
   }
 
@@ -2059,6 +2332,7 @@ export class ClimaService {
       progreso,
       requerimientos,
       Number.isFinite(acumulados.porcionesFrio),
+      Number.isFinite(acumulados.horasFrio),
     );
     const frioCumplido = modeloRector.porcentaje >= 100;
     const frioCercano = modeloRector.porcentaje >= 85;
@@ -2156,6 +2430,7 @@ export class ClimaService {
       progreso,
       requerimientos,
       Number.isFinite(acumulados.porcionesFrio),
+      Number.isFinite(acumulados.horasFrio),
     );
     const frioDormanciaBajo =
       !modeloRector.disponible || modeloRector.porcentaje < 70;
@@ -2191,6 +2466,7 @@ export class ClimaService {
     progreso: IFrioTermicoCultivo['progreso'],
     requerimientos: IFrioTermicoCultivo['requerimientos'],
     porcionesFrioDisponibles: boolean,
+    horasFrioDisponibles = true,
   ): {
     disponible: boolean;
     nombre: string;
@@ -2209,7 +2485,8 @@ export class ClimaService {
     }
     if (
       Number.isFinite(requerimientos.horasFrioObjetivo) &&
-      Number(requerimientos.horasFrioObjetivo) > 0
+      Number(requerimientos.horasFrioObjetivo) > 0 &&
+      horasFrioDisponibles
     ) {
       return {
         disponible: true,
@@ -2230,7 +2507,7 @@ export class ClimaService {
 
   private startOfDay(date: Date): Date {
     return new Date(
-      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()),
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
     );
   }
 
@@ -2238,6 +2515,35 @@ export class ClimaService {
     const next = new Date(date);
     next.setUTCDate(next.getUTCDate() + dias);
     return next;
+  }
+
+  private addDateKeyDays(fecha: string, dias: number): string {
+    const date = new Date(`${fecha.slice(0, 10)}T00:00:00.000Z`);
+    if (!Number.isFinite(date.getTime())) return fecha;
+    date.setUTCDate(date.getUTCDate() + dias);
+    return date.toISOString().slice(0, 10);
+  }
+
+  private dateKeysBetween(desde: string, hasta: string): string[] {
+    if (desde > hasta) return [];
+    const fechas: string[] = [];
+    let cursor = desde;
+    while (cursor <= hasta && fechas.length < 800) {
+      fechas.push(cursor);
+      cursor = this.addDateKeyDays(cursor, 1);
+    }
+    return fechas;
+  }
+
+  private currentDateKey(): string {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: this.timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return `${value.year}-${value.month}-${value.day}`;
   }
 
   private toDateKey(date: Date): string {

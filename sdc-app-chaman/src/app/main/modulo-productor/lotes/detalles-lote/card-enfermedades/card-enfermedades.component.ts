@@ -106,7 +106,12 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
 
   public get etiquetaBotonActualizacion(): string {
     if (this.esScreeningExperimental) return 'Actualizar screening';
-    return this.tieneMotorSanitario ? 'Actualizar riesgo' : 'Motor en calibracion';
+    return this.tieneMotorSanitario ? 'Actualizar riesgo' : 'Sin modelo sanitario validado';
+  }
+
+  public get mensajeSinModeloSanitario(): string {
+    const cultivo = this.siembra?.semilla?.cultivo || 'este cultivo';
+    return `Chaman todavia no dispone de un modelo sanitario validado para ${cultivo}. No se calcula un porcentaje ni se emite una recomendacion de tratamiento.`;
   }
 
   public get fechaUltimaPrediccion(): Date | undefined {
@@ -190,6 +195,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   public get enfermedadInsights(): DiseaseInsight[] {
+    if (!this.tieneMotorSanitario) return [];
     return this.enfermedadesEsperadas().map((enfermedad) => {
       const prediccion = this.prediccionPorEnfermedad(enfermedad);
       const prediccionVigente = this.esPrediccionVigente(prediccion);
@@ -234,7 +240,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return `${variedad}: screening ambiental experimental para Arveja; requiere confirmacion a campo.`;
     }
     if (!this.tieneMotorSanitario) {
-      return `${variedad}: motor sanitario en calibracion para ${cultivo}.`;
+      return `${variedad}: sin modelo sanitario validado para ${cultivo}.`;
     }
     if (!this.tienePredicciones) {
       const tieneVentanaActiva = this.enfermedadesEsperadas().some((enfermedad) =>

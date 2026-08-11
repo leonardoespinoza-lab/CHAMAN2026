@@ -43,9 +43,26 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
   }
 
   public get resumen(): string {
-    if (!this.items.length) return 'Pronostico operativo por lote.';
+    if (!this.items.length) {
+      return this.error
+        ? 'Actualizacion climatica temporalmente demorada.'
+        : 'Pronostico operativo por lote.';
+    }
     const mayor = [...this.items].sort((a, b) => b.posibilidadPct - a.posibilidadPct)[0];
     return `${mayor.titulo}: ${this.nivelLabel(mayor.nivel, mayor.tipo)} (${this.valorLabel(mayor)}).`;
+  }
+
+  public get fechaUltimaSerieValida(): Date | undefined {
+    const fecha = this.riesgos?.generadoEn;
+    if (!fecha) return undefined;
+    const value = new Date(fecha);
+    return Number.isNaN(value.getTime()) ? undefined : value;
+  }
+
+  public get mensajeDisponibilidadClimatica(): string {
+    return this.riesgos
+      ? 'No se pudo renovar el pronostico. Se conserva la ultima serie climatica valida.'
+      : 'El pronostico climatico se esta actualizando. No hay una serie valida disponible en este momento; intente nuevamente en unos minutos.';
   }
 
   public abrirDetalle(riesgo: IRiesgoAgroclimatico): void {
@@ -71,6 +88,7 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
     if (!force && cached) {
       this.riesgos = cached;
       this.ultimoKey = key;
+      this.error = undefined;
       return;
     }
 
@@ -80,8 +98,9 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
       try {
         this.riesgos = await pending;
         this.ultimoKey = key;
+        this.error = undefined;
       } catch (error: any) {
-        this.error = error?.error?.message || error?.message || 'No se pudo calcular riesgos agroclimaticos.';
+        this.error = this.normalizarErrorClimatico(error);
       } finally {
         this.loading = false;
       }
@@ -106,7 +125,7 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
       this.ultimoKey = key;
       CardRiesgosAgroclimaticosComponent.cache.set(key, this.riesgos);
     } catch (error: any) {
-      this.error = error?.error?.message || error?.message || 'No se pudo calcular riesgos agroclimaticos.';
+      this.error = this.normalizarErrorClimatico(error);
     } finally {
       CardRiesgosAgroclimaticosComponent.pending.delete(key);
       this.loading = false;
@@ -184,5 +203,9 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
       this.siembra?.semilla?.sensibilidadHelada?.fuente,
       new Date().toISOString().slice(0, 10),
     ].join('|');
+  }
+
+  private normalizarErrorClimatico(_error: unknown): string {
+    return this.mensajeDisponibilidadClimatica;
   }
 }

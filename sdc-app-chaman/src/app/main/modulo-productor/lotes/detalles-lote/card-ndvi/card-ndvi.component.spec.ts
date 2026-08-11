@@ -118,4 +118,19 @@ describe('CardNDVIComponent - historial satelital', () => {
 
     expect(listar).not.toHaveBeenCalled();
   });
+
+  it('oculta un fondo cartografico fallido sin retirar el raster procesado', () => {
+    const component = createComponent();
+    const basemap = { setVisible: jasmine.createSpy('setVisible') };
+    (component as any).satelliteBasemapLayer = basemap;
+    component.satelliteRasterVisible = true;
+
+    (component as any).registrarFalloBasemap();
+    (component as any).registrarFalloBasemap();
+    (component as any).registrarFalloBasemap();
+
+    expect(component.satelliteBasemapUnavailable).toBeTrue();
+    expect(basemap.setVisible).toHaveBeenCalledWith(false);
+    expect(component.satelliteRasterVisible).toBeTrue();
+  });
 });

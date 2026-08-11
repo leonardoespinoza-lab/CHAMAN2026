@@ -29,6 +29,7 @@ interface MetricaResumen {
 })
 export class CardCalculosMeteorologicosComponent implements OnChanges {
   private readonly siembraService = inject(SiembraService);
+  private static readonly bootstrapIntentado = new Set<string>();
 
   @Input() siembra?: ISiembra;
 
@@ -234,7 +235,16 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     this.loading = true;
     this.error = undefined;
     try {
-      const response = await this.siembraService.agrometeorologia(id, desde);
+      let response = await this.siembraService.agrometeorologia(id, desde);
+      const necesitaInicializacion = !response?.series?.length;
+      const inicializarAutomaticamente =
+        necesitaInicializacion &&
+        !CardCalculosMeteorologicosComponent.bootstrapIntentado.has(id);
+      if (force || inicializarAutomaticamente) {
+        CardCalculosMeteorologicosComponent.bootstrapIntentado.add(id);
+        await this.siembraService.reprocesarAgrometeorologia(id, true);
+        response = await this.siembraService.agrometeorologia(id, desde);
+      }
       if (sequence !== this.requestSequence) return;
       this.data = response;
       this.requestKey = key;
@@ -242,11 +252,19 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
       this.prepararVista();
     } catch (error: any) {
       if (sequence !== this.requestSequence) return;
-      this.data = undefined;
-      this.error = error?.error?.message || error?.message || 'No se pudieron leer los calculos meteorologicos.';
+      const conservaSerieActual =
+        this.requestKey.startsWith(`${id}|`) && !!this.data?.series?.length;
+      if (!conservaSerieActual) this.data = undefined;
+      this.error = this.normalizarErrorMeteorologico(conservaSerieActual);
     } finally {
       if (sequence === this.requestSequence) this.loading = false;
     }
+  }
+
+  private normalizarErrorMeteorologico(conservaSerieActual: boolean): string {
+    return conservaSerieActual
+      ? 'No se pudo renovar la serie. Chaman conserva la ultima lectura valida y reintentara con la fuente disponible.'
+      : 'La primera serie meteorologica se esta generando con la fuente disponible. Reintente en unos minutos.';
   }
 
   private prepararVista(): void {

@@ -58,10 +58,6 @@ export function obtenerRegistroFenologicoDecisorioEnFecha(
     return undefined;
   }
   const objetivoKey = fechaObjetivo.toISOString().slice(0, 10);
-  const campaniaEsperada = campaniaFenologicaParaFecha(
-    siembra,
-    fechaObjetivo,
-  );
   const cultivoSiembra = normalizar(siembra.semilla?.cultivo);
   const implantacion = fechaValida(siembra.fechaSiembra)?.getTime();
   const cosecha = fechaValida(siembra.fechaCosecha)?.getTime();
@@ -119,9 +115,11 @@ export function obtenerRegistroFenologicoDecisorioEnFecha(
         return false;
       }
       if (
-        registro.campania &&
-        normalizarCampania(registro.campania) !==
-          normalizarCampania(campaniaEsperada)
+        !registroFenologicoPerteneceCampania(
+          siembra,
+          registro,
+          fechaObjetivo,
+        )
       ) {
         return false;
       }
@@ -147,8 +145,11 @@ export function campaniaFenologicaParaFecha(
   fechaObjetivo: Date,
 ): string {
   if (esCultivoPerenne(siembra.semilla?.cultivo)) {
+    // La campania operativa perenne comienza con la temporada de frio. Mayo y
+    // junio pertenecen al ciclo productivo que continuara luego del 1 de julio;
+    // el 1-jul sigue siendo solamente el ancla del cronograma de referencia.
     const year =
-      fechaObjetivo.getUTCMonth() >= 6
+      fechaObjetivo.getUTCMonth() >= 4
         ? fechaObjetivo.getUTCFullYear()
         : fechaObjetivo.getUTCFullYear() - 1;
     return `${year}/${year + 1}`;
@@ -157,6 +158,143 @@ export function campaniaFenologicaParaFecha(
     fechaValida(siembra.fechaSiembra) || fechaObjetivo;
   const year = implantacion.getUTCFullYear();
   return `${year}/${year + 1}`;
+}
+
+/**
+ * Compara un registro con la campania operativa canonica. Tambien admite los
+ * inicios de mayo-junio ya guardados con la antigua frontera del 1-jul, para
+ * conservar su trazabilidad sin una migracion destructiva de datos.
+ */
+export function registroFenologicoPerteneceCampania(
+  siembra: ISiembra,
+  registro: IRegistroFenologico,
+  fechaObjetivo: Date,
+): boolean {
+  if (!registro.campania) {
+    if (!esCultivoPerenne(siembra.semilla?.cultivo)) return true;
+    const fechaRegistro = fechaValida(
+      fechaEfectivaRegistroFenologico(registro),
+    );
+    return !!(
+      fechaRegistro &&
+      normalizarCampania(
+        campaniaFenologicaParaFecha(siembra, fechaRegistro),
+      ) ===
+        normalizarCampania(
+          campaniaFenologicaParaFecha(siembra, fechaObjetivo),
+        )
+    );
+  }
+  const campaniaRegistro = normalizarCampania(registro.campania);
+  if (
+    campaniaRegistro ===
+    normalizarCampania(campaniaFenologicaParaFecha(siembra, fechaObjetivo))
+  ) {
+    return true;
+  }
+  if (!esCultivoPerenne(siembra.semilla?.cultivo)) return false;
+
+  const fechaRegistro = fechaValida(fechaEfectivaRegistroFenologico(registro));
+  if (!fechaRegistro || ![4, 5].includes(fechaRegistro.getUTCMonth())) {
+    return false;
+  }
+  if (
+    normalizarCampania(
+      campaniaFenologicaParaFecha(siembra, fechaRegistro),
+    ) !==
+    normalizarCampania(campaniaFenologicaParaFecha(siembra, fechaObjetivo))
+  ) {
+    return false;
+  }
+  const year = fechaRegistro.getUTCFullYear() - 1;
+  return campaniaRegistro === `${year}/${year + 1}`;
+}
+
+/**
+ * Devuelve el registro de campo que ancla el inicio de la temporada de frio
+ * de la campania perenne vigente. Una observacion puntual nunca se transforma
+ * en un inicio persistente. No exige que exista un objetivo varietal.
+ */
+export function obtenerInicioTemporadaFrioObservado(
+  siembra: ISiembra | undefined,
+  fechaObjetivo: Date,
+): IRegistroFenologico | undefined {
+  if (
+    !siembra ||
+    !esCultivoPerenne(siembra.semilla?.cultivo) ||
+    Number.isNaN(fechaObjetivo.getTime())
+  ) {
+    return undefined;
+  }
+  const cultivoSiembra = normalizar(siembra.semilla?.cultivo);
+  const objetivo = fechaObjetivo.getTime();
+
+  return registrosFenologicosVigentes(siembra.registrosFenologicos || [])
+    .map((registro) => ({
+      registro,
+      fechaIso: fechaEfectivaRegistroFenologico(registro),
+      biofixExplicito: (registro.objetivosBiofix || []).includes(
+        'inicio_acumulacion_frio',
+      ),
+    }))
+    .filter(({ registro, fechaIso }) => {
+      const observacionPuntual =
+        registro.tipoEvento === 'observacion' ||
+        (registro.accion === 'observacion' && !registro.fechaInicioEtapa);
+      if (
+        observacionPuntual ||
+        !fechaIso ||
+        !registroFenologicoPuedeGobernarDecision(registro)
+      ) {
+        return false;
+      }
+      const fecha = new Date(fechaIso).getTime();
+      if (!Number.isFinite(fecha) || fecha > objetivo) return false;
+      if (
+        !registroFenologicoPerteneceCampania(
+          siembra,
+          registro,
+          fechaObjetivo,
+        )
+      ) {
+        return false;
+      }
+      if (
+        registro.idSiembra &&
+        siembra._id &&
+        String(registro.idSiembra) !== String(siembra._id)
+      ) {
+        return false;
+      }
+      if (
+        registro.idLote &&
+        siembra.idLote &&
+        String(registro.idLote) !== String(siembra.idLote)
+      ) {
+        return false;
+      }
+      const cultivoRegistro = normalizar(registro.cultivo);
+      if (
+        cultivoRegistro &&
+        cultivoSiembra &&
+        cultivoRegistro !== cultivoSiembra
+      ) {
+        return false;
+      }
+      const etapa = normalizar(registro.etapa).replace(/[^A-Z0-9]+/g, '_');
+      return (
+        (registro.objetivosBiofix || []).includes('inicio_acumulacion_frio') ||
+        ['DORMANCIA', 'REPOSO', 'REPOSO_INVERNAL'].includes(etapa)
+      );
+    })
+    .sort(
+      (a, b) =>
+        Number(b.biofixExplicito) - Number(a.biofixExplicito) ||
+        new Date(a.fechaIso as string).getTime() -
+          new Date(b.fechaIso as string).getTime() ||
+        (fechaValida(b.registro.actualizadoEn)?.getTime() || 0) -
+          (fechaValida(a.registro.actualizadoEn)?.getTime() || 0),
+    )[0]?.registro;
 }
 
 function fechaValida(value?: string | Date): Date | undefined {

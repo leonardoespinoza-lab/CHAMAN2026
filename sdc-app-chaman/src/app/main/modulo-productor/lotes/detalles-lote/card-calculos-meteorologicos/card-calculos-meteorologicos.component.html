@@ -31,14 +31,14 @@
     }
   </header>
 
-  @if (loading) {
+  @if (loading && !hayDatos) {
     <div class="skeleton-grid" aria-label="Cargando calculos meteorologicos">
       @for (item of [1, 2, 3, 4, 5, 6]; track item) {
         <i></i>
       }
     </div>
     <div class="skeleton-chart"></div>
-  } @else if (error) {
+  } @else if (error && !hayDatos) {
     <div class="agromet-state warn">
       <i class="pi pi-exclamation-triangle"></i>
       <div>
@@ -55,6 +55,11 @@
       </div>
     </div>
   } @else {
+    @if (error) {
+      <div class="source-warning" role="status">
+        <i class="pi pi-info-circle"></i><span>{{ error }}</span>
+      </div>
+    }
     @if (advertenciaFuente) {
       <div class="source-warning">
         <i class="pi pi-info-circle"></i><span>{{ advertenciaFuente }}</span>

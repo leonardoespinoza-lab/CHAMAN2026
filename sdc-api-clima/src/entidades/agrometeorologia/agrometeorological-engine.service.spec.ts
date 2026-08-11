@@ -1749,6 +1749,91 @@ describe('AgrometeorologicalEngineService', () => {
     expect(window.warnings.join(' ')).toContain('por biofix de campo');
   });
 
+  it('usa el inicio observado de Dormancia sin exigir un objetivo varietal', () => {
+    const window = (engine as any).resolveColdSeasonWindow(
+      {
+        _id: 'siembra-kiowa',
+        idLote: 'lote-kiowa',
+        fechaSiembra: '2020-01-01',
+        semilla: { cultivo: 'Pecan', variedad: 'Kiowa' },
+        registrosFenologicos: [
+          {
+            id: 'dormancia-observada',
+            idSiembra: 'siembra-kiowa',
+            idLote: 'lote-kiowa',
+            cultivo: 'Pecan',
+            tipoEvento: 'inicio_etapa',
+            accion: 'inicio_etapa',
+            etapa: 'Dormancia',
+            fechaInicioEtapa: '2026-05-01',
+            fechaObservacion: '2026-05-01',
+            campania: '2026/2027',
+          },
+        ],
+      },
+      '2026-08-10',
+    );
+
+    expect(window).toMatchObject({
+      start: '2026-05-01',
+      comparisonReady: false,
+      usedFallback: false,
+    });
+    expect(window.warnings.join(' ')).toContain(
+      'inicio de dormancia registrado a campo',
+    );
+  });
+
+  it('mantiene Dormancia del 1-may gobernando etapa y modelos Kc al cruzar el 1-jul', () => {
+    const siembra = {
+      _id: 'siembra-kiowa-etapa',
+      idLote: 'lote-kiowa',
+      fechaSiembra: '2020-01-01',
+      semilla: { cultivo: 'Pecan', variedad: 'Kiowa' },
+      registrosFenologicos: [
+        {
+          id: 'dormancia-observada',
+          idSiembra: 'siembra-kiowa-etapa',
+          idLote: 'lote-kiowa',
+          cultivo: 'Pecan',
+          tipoEvento: 'inicio_etapa',
+          accion: 'inicio_etapa',
+          etapa: 'Dormancia',
+          fechaInicioEtapa: '2026-05-01',
+          // Registro ya persistido con la frontera legacy del 1-jul.
+          campania: '2025/2026',
+          confianza: 'alta',
+        },
+      ],
+    } as any;
+    const etapas: Array<[string, number]> = [
+      ['Dormancia', 0],
+      ['Brotacion', 90],
+    ];
+
+    expect(
+      (engine as any).resolveObservedStage(
+        siembra,
+        '2026-08-10',
+        etapas,
+      ),
+    ).toBe('Dormancia');
+    const provenance = (engine as any).resolveStageProvenance(
+      siembra,
+      '2026-08-10',
+      0,
+      {},
+      {},
+    );
+    expect(provenance).toMatchObject({
+      source: 'proyeccion_anclada_campo',
+      confidence: 'media',
+    });
+    expect(
+      (engine as any).stageCanDriveDecisionModels(siembra, provenance),
+    ).toBe(true);
+  });
+
   it('conserva el requisito validado sin bloquear sensores asignados por metadatos de calibracion', () => {
     const siembra = {
       _id: '64b000000000000000000001',

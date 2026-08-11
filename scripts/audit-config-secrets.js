@@ -26,6 +26,7 @@ const EXCLUDED_DIRS = new Set([
   ".angular",
   ".cache",
   "logs",
+  "tmp",
   "chamanagro-web-dist",
   "demo-repository",
   "Testing",
@@ -37,6 +38,16 @@ const EXCLUDED_DIRS = new Set([
 
 const patterns = [
   { name: "Google API key", regex: /AIza[0-9A-Za-z_-]{20,}/g },
+  {
+    name: "Likely API key or token literal",
+    allowSyntheticTestLiteral: true,
+    regex:
+      /\b[A-Z][A-Z0-9_]*(?:API_?KEY|APIKEY|TOKEN)[A-Z0-9_]*\s*[:=]\s*(['"`])([A-Za-z0-9._~+/=-]{16,})\1/g,
+  },
+  {
+    name: "Likely API key in URL",
+    regex: /[?&](?:api_?key|apikey|key)=[A-Za-z0-9_-]{20,}/gi,
+  },
   {
     name: "Likely password default",
     regex:
@@ -115,6 +126,20 @@ for (const filePath of walk(ROOT)) {
     }
     const matches = [...text.matchAll(pattern.regex)];
     for (const match of matches) {
+      const normalizedPath = relativePath.replace(/\\/g, "/");
+      const isTestFile =
+        /(?:^|\/)scripts\/tests\//.test(normalizedPath) ||
+        /\.(?:spec|test)\.[^.]+$/.test(normalizedPath);
+      const literal = String(match[2] || "");
+      if (
+        pattern.allowSyntheticTestLiteral &&
+        isTestFile &&
+        /(?:test|testing|mock|fake|example|placeholder|token|secret)/i.test(
+          literal,
+        )
+      ) {
+        continue;
+      }
       const before = text.slice(0, match.index);
       const line = before.split(/\r?\n/).length;
       findings.push({ file: relativePath, line, type: pattern.name });

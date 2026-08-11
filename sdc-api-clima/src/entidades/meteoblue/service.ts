@@ -8,11 +8,9 @@ import {
   crearCalidadDatoMotor,
 } from 'modelos/src';
 import { API_OPEN_METEO } from '../../env';
-import {
-  IMeteoblueDailyResponse,
-  MeteoblueRepository,
-} from './repository';
+import { IMeteoblueDailyResponse, MeteoblueRepository } from './repository';
 import { RateLimiterService } from '../../auxiliares/rate-limiter/rate-limiter.service';
+import { OpenMeteoClientService } from '../../auxiliares/open-meteo/open-meteo-client.service';
 
 type DailySource = 'openMeteo' | 'meteoblue';
 
@@ -23,6 +21,7 @@ export class MeteoblueService {
   constructor(
     private repository: MeteoblueRepository,
     private rateLimiter: RateLimiterService,
+    private openMeteoClient: OpenMeteoClientService,
   ) {}
 
   public isConfigured(): boolean {
@@ -135,7 +134,10 @@ export class MeteoblueService {
           ]),
         },
         velocidadViento: {
-          avg: this.valor(dataDay, index, ['windspeed_mean', 'wind_speed_mean']),
+          avg: this.valor(dataDay, index, [
+            'windspeed_mean',
+            'wind_speed_mean',
+          ]),
           max: this.valor(dataDay, index, ['windspeed_max', 'wind_speed_max']),
         },
         direccionViento: this.valor(dataDay, index, [
@@ -200,13 +202,13 @@ export class MeteoblueService {
       ].join(','),
     );
 
-    const response = await fetch(url);
-    if (!response.ok) {
-      this.logger.warn(`Open-Meteo comparacion respondio ${response.status}`);
+    const data = await this.openMeteoClient.getJson<any>(
+      url,
+      'comparacion Meteoblue',
+    );
+    if (!data) {
       return [];
     }
-
-    const data = await response.json();
     const daily = data?.daily || {};
     const fechas: string[] = daily.time || [];
 
@@ -259,13 +261,69 @@ export class MeteoblueService {
     for (const diaOpen of openMeteo) {
       const dia = this.fechaDia(diaOpen.fecha);
       const diaMeteoblue = meteobluePorFecha.get(dia);
-      this.pushComparacion(out, dia, 'temperaturaMedia', 'C', diaOpen.temperatura?.avg, diaMeteoblue?.temperatura?.avg, 3);
-      this.pushComparacion(out, dia, 'temperaturaMin', 'C', diaOpen.temperatura?.min, diaMeteoblue?.temperatura?.min, 3);
-      this.pushComparacion(out, dia, 'temperaturaMax', 'C', diaOpen.temperatura?.max, diaMeteoblue?.temperatura?.max, 3);
-      this.pushComparacion(out, dia, 'lluvia', 'mm', diaOpen.lluvia, diaMeteoblue?.lluvia, 8);
-      this.pushComparacion(out, dia, 'probabilidadLluvia', '%', diaOpen.probabilidadLluvia, diaMeteoblue?.probabilidadLluvia, 25);
-      this.pushComparacion(out, dia, 'et0', 'mm', diaOpen.et0, diaMeteoblue?.et0, 2);
-      this.pushComparacion(out, dia, 'viento', 'km/h', diaOpen.velocidadViento?.avg, diaMeteoblue?.velocidadViento?.avg, 12);
+      this.pushComparacion(
+        out,
+        dia,
+        'temperaturaMedia',
+        'C',
+        diaOpen.temperatura?.avg,
+        diaMeteoblue?.temperatura?.avg,
+        3,
+      );
+      this.pushComparacion(
+        out,
+        dia,
+        'temperaturaMin',
+        'C',
+        diaOpen.temperatura?.min,
+        diaMeteoblue?.temperatura?.min,
+        3,
+      );
+      this.pushComparacion(
+        out,
+        dia,
+        'temperaturaMax',
+        'C',
+        diaOpen.temperatura?.max,
+        diaMeteoblue?.temperatura?.max,
+        3,
+      );
+      this.pushComparacion(
+        out,
+        dia,
+        'lluvia',
+        'mm',
+        diaOpen.lluvia,
+        diaMeteoblue?.lluvia,
+        8,
+      );
+      this.pushComparacion(
+        out,
+        dia,
+        'probabilidadLluvia',
+        '%',
+        diaOpen.probabilidadLluvia,
+        diaMeteoblue?.probabilidadLluvia,
+        25,
+      );
+      this.pushComparacion(
+        out,
+        dia,
+        'et0',
+        'mm',
+        diaOpen.et0,
+        diaMeteoblue?.et0,
+        2,
+      );
+      this.pushComparacion(
+        out,
+        dia,
+        'viento',
+        'km/h',
+        diaOpen.velocidadViento?.avg,
+        diaMeteoblue?.velocidadViento?.avg,
+        12,
+      );
     }
 
     return out;
@@ -332,7 +390,9 @@ export class MeteoblueService {
       });
     }
 
-    const conDatos = comparaciones.filter((item) => item.estado !== 'sin_datos');
+    const conDatos = comparaciones.filter(
+      (item) => item.estado !== 'sin_datos',
+    );
     const desvio = conDatos.filter((item) => item.estado === 'desvio');
     const desvioPct = conDatos.length ? desvio.length / conDatos.length : 0;
     const score = Math.max(55, Math.round(88 - desvioPct * 30));
@@ -342,7 +402,9 @@ export class MeteoblueService {
       nivel,
       fuente: 'mixto',
       score,
-      cobertura: Math.round((conDatos.length / Math.max(comparaciones.length, 1)) * 100),
+      cobertura: Math.round(
+        (conDatos.length / Math.max(comparaciones.length, 1)) * 100,
+      ),
       fechaActualizacion: new Date().toISOString(),
       resumen:
         desvio.length === 0
@@ -382,7 +444,9 @@ export class MeteoblueService {
   }
 
   private redondear(value?: number): number | undefined {
-    return this.esNumero(value) ? Math.round(Number(value) * 100) / 100 : undefined;
+    return this.esNumero(value)
+      ? Math.round(Number(value) * 100) / 100
+      : undefined;
   }
 
   private toFechaIso(value: string): string {

@@ -62,6 +62,7 @@ describe('DecisionPipelineProcessor', () => {
       attemptsMade: 0,
       data: { event, idSiembra: 'siembra-1' } as DecisionSowingJobData,
       progress: jest.fn().mockResolvedValue(undefined),
+      update: jest.fn().mockResolvedValue(undefined),
     };
   }
 
@@ -88,6 +89,21 @@ describe('DecisionPipelineProcessor', () => {
     expect(repository.rebuildSanitaryPredictions).not.toHaveBeenCalled();
     expect(repository.evaluateAgroclimate).not.toHaveBeenCalled();
     expect(queue.client.eval).toHaveBeenCalledTimes(1);
+  });
+
+  it('retoma desde la etapa pendiente y no repite clima en un reintento', async () => {
+    const { processor, repository, order } = setup();
+    const job = sowingJob();
+    job.attemptsMade = 1;
+    job.data.completedStages = {
+      clima: '2026-08-10T12:00:00.000Z',
+    };
+
+    await processor.recomputeSowing(job);
+
+    expect(repository.reprocessClimate).not.toHaveBeenCalled();
+    expect(order).toEqual(['sanidad', 'agroclima']);
+    expect(job.update).toHaveBeenCalledTimes(2);
   });
 
   it('no procesa dos decisiones simultaneas de la misma siembra', async () => {

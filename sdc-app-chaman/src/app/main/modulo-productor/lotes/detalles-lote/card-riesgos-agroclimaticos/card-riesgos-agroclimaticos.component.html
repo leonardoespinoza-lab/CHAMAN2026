@@ -5,7 +5,7 @@
         <p class="titulo-card">RIESGOS AGROCLIMATICOS</p>
         <span>{{ resumen }}</span>
         @if (riesgos?.generadoEn) {
-          <small>Actualizado {{ riesgos?.generadoEn | date: 'dd/MM/yy, HH:mm' }} - Open-Meteo</small>
+          <small>{{ error ? 'Ultima serie valida' : 'Actualizado' }} {{ riesgos?.generadoEn | date: 'dd/MM/yy, HH:mm' }} - Open-Meteo</small>
         }
       </div>
       <p-button
@@ -18,10 +18,21 @@
       />
     </div>
 
+    @if (error) {
+      <section class="climate-data-notice" role="status" aria-live="polite">
+        <i class="pi pi-cloud"></i>
+        <div>
+          <strong>Actualizacion climatica pendiente</strong>
+          <span>{{ error }}</span>
+          @if (fechaUltimaSerieValida) {
+            <small>Ultima serie valida: {{ fechaUltimaSerieValida | date: 'dd/MM/yy, HH:mm' }}</small>
+          }
+        </div>
+      </section>
+    }
+
     @if (loading && !riesgos) {
       <p-message severity="info" text="Calculando dano por helada y granizo..."></p-message>
-    } @else if (error) {
-      <p-message severity="warn" [text]="error"></p-message>
     } @else if (items.length) {
       <div class="risk-action-grid">
         @for (riesgo of items; track riesgo.tipo) {
@@ -45,8 +56,8 @@
           </button>
         }
       </div>
-    } @else {
-      <p-message severity="info" text="Sin riesgos agroclimaticos disponibles para este lote."></p-message>
+    } @else if (!error) {
+      <p-message severity="info" text="Todavia no hay una serie climatica valida para evaluar este lote."></p-message>
     }
   </div>
 }

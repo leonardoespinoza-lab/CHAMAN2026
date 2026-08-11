@@ -6,6 +6,7 @@ import { FieldClimateModule } from '../fieldClimate/module';
 import { EstacionsModule } from '../estacion/module';
 import { MeteoSourceModule } from '../meteoSource/module';
 import { OmixomModule } from '../omixom/module';
+import { OpenMeteoModule } from '../../auxiliares/open-meteo/open-meteo.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { OmixomModule } from '../omixom/module';
     EstacionsModule,
     MeteoSourceModule,
     OmixomModule,
+    OpenMeteoModule,
   ],
   controllers: [ClimaController],
   providers: [ClimaService],

@@ -11,23 +11,44 @@ export class AxiosService {
   constructor(private httpService: HttpService) {}
 
   private handleError(error: any, url: string, method: string) {
+    const safeUrl = this.sanitizeUrl(url);
     if (error?.response) {
       // Respuesta de error de la API
+      const status = Number(error?.response?.status) || 502;
+      const remoteMessage =
+        error?.response?.data?.message || error?.response?.data?.error;
       throw new HttpException(
-        error?.response?.data?.message ||
-          error?.response?.data?.error ||
-          error?.response?.data,
-        error?.response?.status,
+        typeof remoteMessage === 'string'
+          ? remoteMessage
+          : 'El proveedor meteorologico no pudo completar la solicitud.',
+        status,
       );
     } else if (error?.request) {
       // No hubo respuesta de la API
-      this.logger.error(`No hubo respuesta de la API en ${method} ${url}`);
-      throw new HttpException(error?.request?.data, error?.request?.status);
+      this.logger.error(`No hubo respuesta de la API en ${method} ${safeUrl}`);
+      throw new HttpException(
+        'El proveedor meteorologico no respondio dentro del tiempo esperado.',
+        503,
+      );
     } else {
       // Error desconocido
-      this.logger.error(`Unhandled Error en ${method} ${url}`);
-      console.error(error);
-      throw new HttpException(error, 500);
+      this.logger.error(`Error interno de integracion en ${method} ${safeUrl}`);
+      throw new HttpException(
+        'No se pudo completar la consulta meteorologica.',
+        502,
+      );
+    }
+  }
+
+  private sanitizeUrl(value: string): string {
+    try {
+      const parsed = new URL(value);
+      if (parsed.searchParams.has('apikey')) {
+        parsed.searchParams.set('apikey', '[REDACTED]');
+      }
+      return parsed.toString();
+    } catch {
+      return value.replace(/([?&]apikey=)[^&\s]+/gi, '$1[REDACTED]');
     }
   }
 

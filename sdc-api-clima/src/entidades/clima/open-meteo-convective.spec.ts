@@ -7,6 +7,7 @@ describe('ClimaService Open-Meteo convectivo', () => {
       {} as any,
       {} as any,
       {} as any,
+      { getJson: jest.fn() } as any,
     );
     const fetchSpy = jest
       .spyOn(service as any, 'fetchOpenMeteoJson')

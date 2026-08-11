@@ -12,6 +12,8 @@ import {
   ISerieAgrometeorologicaDia,
   ISiembra,
   IResolucionFichaTermica,
+  fechaEfectivaRegistroFenologico,
+  obtenerInicioTemporadaFrioObservado,
   resolverFichaTermicaVarietal,
 } from 'modelos/src';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
@@ -164,12 +166,31 @@ export class CardFrioTermicoComponent implements OnChanges {
       const dias = this.diasGddComputados ? ` · ${this.diasGddComputados} jornadas computadas` : '';
       return `Acumulación térmica ${desde}${cierre}${dias}`;
     }
-    const frio = resumen.coldSeasonStart
-      ? `Temporada de frío desde ${this.fechaCorta(resumen.coldSeasonStart)}`
-      : 'Temporada de frío sin inicio consolidado';
+    const cierreFrio = this.fechaAgronomica(resumen.coldThroughDate);
+    const fechaObjetivo = cierreFrio
+      ? new Date(`${cierreFrio}T12:00:00.000Z`)
+      : new Date();
+    const registroInicio = obtenerInicioTemporadaFrioObservado(
+      this.siembra,
+      fechaObjetivo,
+    );
+    const inicioObservado = registroInicio
+      ? fechaEfectivaRegistroFenologico(registroInicio)
+      : undefined;
+    const frio = inicioObservado
+      ? `Temporada de frío observada desde ${this.fechaCorta(inicioObservado)}`
+      : resumen.coldSeasonStart
+        ? `Temporada de frío desde ${this.fechaCorta(resumen.coldSeasonStart)}`
+        : 'Temporada de frío sin inicio consolidado';
+    const inicioSerie =
+      inicioObservado &&
+      resumen.coldSeasonStart &&
+      String(inicioObservado).slice(0, 10) !== String(resumen.coldSeasonStart).slice(0, 10)
+        ? ` · serie térmica desde ${this.fechaCorta(resumen.coldSeasonStart)}`
+        : '';
     const cierre = resumen.coldThroughDate ? ` hasta ${this.fechaCorta(resumen.coldThroughDate)}` : '';
     const gdd = resumen.gddThroughDate ? ` · GDD cerrados al ${this.fechaCorta(resumen.gddThroughDate)}` : '';
-    return `${frio}${cierre}${gdd}`;
+    return `${frio}${inicioSerie}${cierre}${gdd}`;
   }
 
   public get calidadFrioLabel(): string {
