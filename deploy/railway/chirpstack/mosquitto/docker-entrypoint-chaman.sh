@@ -57,6 +57,7 @@ if [ -n "${MQTT_TLS_CA_B64:-}" ] || [ -n "${MQTT_TLS_CERT_B64:-}" ] || [ -n "${M
 listener 8883 0.0.0.0
 protocol mqtt
 allow_anonymous false
+allow_zero_length_clientid false
 cafile /run/mosquitto/ca.crt
 certfile /run/mosquitto/server.crt
 keyfile /run/mosquitto/server.key
@@ -82,5 +83,15 @@ chown -R mosquitto:mosquitto /run/mosquitto /mosquitto/data
 
 unset MQTT_CHIRPSTACK_PASSWORD MQTT_CHAMAN_PASSWORD MQTT_GATEWAY_PASSWORD MQTT_GATEWAY_USERNAME
 unset MQTT_TLS_CA_B64 MQTT_TLS_CERT_B64 MQTT_TLS_KEY_B64 MQTT_TLS_CLIENT_AUTH
+
+if [ "${MQTT_DIAGNOSTIC_LOGGING:-false}" = "true" ]; then
+  echo "Mosquitto listener diagnostics (no secrets):" >&2
+  awk '/^(listener|protocol|per_listener_settings|require_certificate|use_identity_as_username)[[:space:]]/ { print }' \
+    /run/mosquitto/mosquitto.conf >&2
+  if command -v netstat >/dev/null 2>&1; then
+    netstat -lnt >&2 || true
+  fi
+  exec mosquitto -v -c /run/mosquitto/mosquitto.conf
+fi
 
 exec mosquitto -c /run/mosquitto/mosquitto.conf

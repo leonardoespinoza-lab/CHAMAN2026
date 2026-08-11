@@ -18,8 +18,15 @@ test('Mosquitto isolates internal password auth from external certificate auth',
   const acl = read('deploy', 'railway', 'chirpstack', 'mosquitto', 'gateway-acl');
 
   assert.match(config, /per_listener_settings true/);
+  assert.doesNotMatch(
+    config.split('listener 1883 0.0.0.0')[0],
+    /allow_zero_length_clientid/,
+    'security settings before the first explicit listener create a duplicate default listener',
+  );
   assert.match(config, /listener 1883 0\.0\.0\.0[\s\S]*password_file/);
+  assert.match(config, /listener 1883 0\.0\.0\.0[\s\S]*allow_zero_length_clientid false/);
   assert.match(entrypoint, /MQTT_TLS_CLIENT_AUTH:=password/);
+  assert.match(entrypoint, /listener 8883 0\.0\.0\.0[\s\S]*allow_zero_length_clientid false/);
   assert.match(entrypoint, /require_certificate true/);
   assert.match(entrypoint, /use_identity_as_username true/);
   assert.match(entrypoint, /acl_file \/run\/mosquitto\/gateway-acl/);
