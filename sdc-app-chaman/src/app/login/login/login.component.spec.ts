@@ -44,6 +44,28 @@ describe('LoginComponent', () => {
     expect(helper.setNumeroPermiso).toHaveBeenCalledWith(1);
   });
 
+  it('abre el mapa con el perfil Productor cuando el usuario tambien es Admin global', () => {
+    const { component, helper } = crearComponente([
+      { nivel: 'Admin', rol: 'Admin' },
+      { nivel: 'Productor', rol: 'Admin', idProductor: 'p-1' },
+    ]);
+
+    expect((component as any).getRutaInicial()).toBe('/mapa');
+    expect(helper.setPermiso).toHaveBeenCalledWith(
+      jasmine.objectContaining({ nivel: 'Productor', idProductor: 'p-1' })
+    );
+    expect(helper.setNumeroPermiso).toHaveBeenCalledWith(1);
+  });
+
+  it('mantiene el dashboard administrativo para un usuario exclusivamente Admin', () => {
+    const { component, helper } = crearComponente([
+      { nivel: 'Admin', rol: 'Admin' },
+    ]);
+
+    expect((component as any).getRutaInicial()).toBe('/dashboard-admin');
+    expect(helper.setNumeroPermiso).toHaveBeenCalledWith(0);
+  });
+
   it('mantiene fuera del dashboard-admin a un Admin de lectura', () => {
     const { component } = crearComponente([
       { nivel: 'Admin', rol: 'Lectura' },

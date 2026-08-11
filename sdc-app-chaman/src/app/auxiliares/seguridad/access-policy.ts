@@ -52,8 +52,16 @@ export const indicePermiso = (
 
 export const permisoPrincipal = (
   permisos: IPermiso[]
-): IPermiso | undefined =>
-  permisos
+): IPermiso | undefined => {
+  // El acceso automatico comienza con un alcance operativo cuando el usuario
+  // tambien posee administracion global. Admin permanece disponible en el
+  // selector y resolverPermisoActivo conserva una seleccion explicita.
+  const permisosOperativos = permisos.filter(
+    (permiso) => permiso.nivel !== 'Admin'
+  );
+  const candidatos = permisosOperativos.length ? permisosOperativos : permisos;
+
+  return candidatos
     .map((permiso, index) => ({ permiso, index }))
     .sort(
       (a, b) =>
@@ -61,6 +69,7 @@ export const permisoPrincipal = (
           PRIORIDAD_NIVEL[a.permiso.nivel] ||
         a.index - b.index
     )[0]?.permiso;
+};
 
 export interface PermisoActivo {
   permiso: IPermiso | null;

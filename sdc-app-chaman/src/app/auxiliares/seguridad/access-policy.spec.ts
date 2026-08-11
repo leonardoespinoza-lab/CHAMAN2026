@@ -44,6 +44,33 @@ describe('access-policy', () => {
     expect(permisoPrincipal(permisos)).toBe(permisos[2]);
   });
 
+  it('inicia en el alcance operativo cuando tambien existe Admin global', () => {
+    const permisos: IPermiso[] = [
+      { nivel: 'Admin', rol: 'Admin' },
+      { nivel: 'Productor', rol: 'Admin', idProductor: 'p-1' },
+    ];
+
+    expect(permisoPrincipal(permisos)).toBe(permisos[1]);
+  });
+
+  it('mantiene Admin como inicio cuando no existe un alcance operativo', () => {
+    const admin: IPermiso = { nivel: 'Admin', rol: 'Admin' };
+
+    expect(permisoPrincipal([admin])).toBe(admin);
+  });
+
+  it('conserva una seleccion explicita de Admin aunque haya un alcance operativo', () => {
+    const permisos: IPermiso[] = [
+      { nivel: 'Admin', rol: 'Admin' },
+      { nivel: 'Productor', rol: 'Admin', idProductor: 'p-1' },
+    ];
+
+    expect(resolverPermisoActivo(permisos, permisos[0], 1)).toEqual({
+      permiso: permisos[0],
+      index: 0,
+    });
+  });
+
   it('distingue permisos idénticos de tenants diferentes', () => {
     const tenantA: IPermiso = {
       nivel: 'Asesor',
