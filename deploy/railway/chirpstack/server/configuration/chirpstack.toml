@@ -14,7 +14,7 @@ cluster=false
 
 [network]
 net_id="000000"
-enabled_regions=["au915_0"]
+enabled_regions=["au915_0", "au915_1"]
 
 [api]
 bind="0.0.0.0:8080"

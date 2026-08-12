@@ -50,6 +50,49 @@ test('ChirpStack receives the CA and signs one certificate per gateway', () => {
   assert.match(entrypoint, /ca_key="\/run\/chirpstack\/certs\/ca-key\.pem"/);
 });
 
+test('ChirpStack accepts both AU915 topic identifiers used by the SG50 fleet', () => {
+  const config = read(
+    'deploy',
+    'railway',
+    'chirpstack',
+    'server',
+    'configuration',
+    'chirpstack.toml',
+  );
+  const region0 = read(
+    'deploy',
+    'railway',
+    'chirpstack',
+    'server',
+    'configuration',
+    'region_au915_0.toml',
+  );
+  const region1 = read(
+    'deploy',
+    'railway',
+    'chirpstack',
+    'server',
+    'configuration',
+    'region_au915_1.toml',
+  );
+
+  assert.match(config, /enabled_regions=\["au915_0", "au915_1"\]/);
+  assert.match(region0, /id="au915_0"/);
+  assert.match(region0, /topic_prefix="au915_0"/);
+  assert.match(region1, /id="au915_1"/);
+  assert.match(region1, /topic_prefix="au915_1"/);
+  assert.match(region1, /client_id="chirpstack-au915-1"/);
+
+  const expectedChannels = [
+    916800000, 917000000, 917200000, 917400000, 917600000,
+    917800000, 918000000, 918200000, 917500000,
+  ];
+  for (const frequency of expectedChannels) {
+    assert.match(region0, new RegExp(`frequency=${frequency}`));
+    assert.match(region1, new RegExp(`frequency=${frequency}`));
+  }
+});
+
 test('PKI generator never creates a shared gateway client key', () => {
   const generator = read('scripts', 'generate-chirpstack-mtls-pki.py');
   assert.match(generator, /ChirpStack creates a different client certificate and key/);
