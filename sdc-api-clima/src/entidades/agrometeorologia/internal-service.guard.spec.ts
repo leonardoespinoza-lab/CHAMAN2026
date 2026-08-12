@@ -22,6 +22,12 @@ describe('AgrometeorologiaInternalServiceGuard', () => {
         ...originalEnv,
         ENV: 'production',
         AGROMETEO_INTERNAL_TOKEN: 'testing-secret-123',
+        OPEN_METEO_API_KEY: 'forecast-test-key',
+        OPEN_METEO_ARCHIVE_API_KEY: 'archive-test-key',
+        OPEN_METEO_FORECAST_BASE_URL:
+          'https://customer-api.open-meteo.com/v1',
+        OPEN_METEO_ARCHIVE_BASE_URL:
+          'https://customer-archive-api.open-meteo.com/v1',
       };
       const { AgrometeorologiaInternalServiceGuard } = jest.requireActual<
         typeof import('./internal-service.guard')
@@ -40,6 +46,12 @@ describe('AgrometeorologiaInternalServiceGuard', () => {
         ...originalEnv,
         ENV: 'production',
         AGROMETEO_INTERNAL_TOKEN: '',
+        OPEN_METEO_API_KEY: 'forecast-test-key',
+        OPEN_METEO_ARCHIVE_API_KEY: 'archive-test-key',
+        OPEN_METEO_FORECAST_BASE_URL:
+          'https://customer-api.open-meteo.com/v1',
+        OPEN_METEO_ARCHIVE_BASE_URL:
+          'https://customer-archive-api.open-meteo.com/v1',
       };
       const { AgrometeorologiaInternalServiceGuard } = jest.requireActual<
         typeof import('./internal-service.guard')
