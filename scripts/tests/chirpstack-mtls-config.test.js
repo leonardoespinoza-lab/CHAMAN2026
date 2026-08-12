@@ -93,6 +93,15 @@ test('ChirpStack accepts both AU915 topic identifiers used by the SG50 fleet', (
   }
 });
 
+test('Mosquitto authorizes ChirpStack and password gateways for both AU915 topics', () => {
+  const acl = read('deploy', 'railway', 'chirpstack', 'mosquitto', 'acl');
+
+  assert.match(acl, /user chirpstack[\s\S]*topic readwrite au915_0\/#/);
+  assert.match(acl, /user chirpstack[\s\S]*topic readwrite au915_1\/#/);
+  assert.match(acl, /user __MQTT_GATEWAY_USERNAME__[\s\S]*topic readwrite au915_0\/gateway\/#/);
+  assert.match(acl, /user __MQTT_GATEWAY_USERNAME__[\s\S]*topic readwrite au915_1\/gateway\/#/);
+});
+
 test('PKI generator never creates a shared gateway client key', () => {
   const generator = read('scripts', 'generate-chirpstack-mtls-pki.py');
   assert.match(generator, /ChirpStack creates a different client certificate and key/);
