@@ -154,6 +154,9 @@ export class Dispositivo implements Exactly<IDispositivo, Dispositivo> {
    */
   @Prop({ type: [String] })
   sensores?: SensoresV2[]; // ["temperatura", "humedad", "viento", "radiacion"]
+
+  @Prop({ type: Object })
+  configuracionLecturas?: IDispositivo['configuracionLecturas'];
   // Datos de Carga
   @Prop({ type: Object })
   geojson?: IGeoJSONPoint;

@@ -19,6 +19,7 @@
             <p-tab [value]="1">Asignacion</p-tab>
             <p-tab [value]="2">LoRaWAN</p-tab>
             <p-tab [value]="3">Calidad meteorologica</p-tab>
+            <p-tab [value]="4">Sensores conectados</p-tab>
           </p-tablist>
           <p-tabpanels>
             <p-tabpanel [value]="0">
@@ -431,6 +432,112 @@
                     </div>
                   </section>
                 }
+              </div>
+            </p-tabpanel>
+
+            <p-tabpanel [value]="4">
+              <div class="connected-sensors" formGroupName="configuracionLecturas">
+                <section class="sensor-component" formGroupName="perfilSuelo">
+                  <header>
+                    <div>
+                      <span class="section-kicker">Sensor fisico 1 · SDI-12</span>
+                      <h2>Sonda Sentek de perfil de 1,2 m</h2>
+                    </div>
+                    <span class="sensor-state">12 niveles</span>
+                  </header>
+                  <p>
+                    Perfil independiente con humedad volumetrica (VWC), temperatura y salinidad relativa (VIC) a 5, 15,
+                    25, 35, 45, 55, 65, 75, 85, 95, 105 y 115 cm.
+                  </p>
+                  <div class="sensor-facts">
+                    <span>Protocolo <strong>SDI-12</strong></span>
+                    <span>Humedad <strong>% VWC</strong></span>
+                    <span>Salinidad <strong>VIC</strong></span>
+                    <span>Temperatura <strong>°C</strong></span>
+                  </div>
+                </section>
+
+                <section class="sensor-component analog-component" formGroupName="entradaAnalogica">
+                  <header>
+                    <div>
+                      <span class="section-kicker">Sensor fisico 2 · AI1</span>
+                      <h2>Transductor analogico independiente</h2>
+                    </div>
+                    <span class="sensor-state" [attr.data-pending]="variableEntradaAnalogica === 'sin_definir'">
+                      {{ variableEntradaAnalogica === 'sin_definir' ? 'Pendiente de calibracion' : 'Configurado' }}
+                    </span>
+                  </header>
+                  <p>
+                    Chaman siempre conserva la corriente 4-20 mA. Solo la convierte a presion o nivel de napa cuando se
+                    carga la escala tecnica del sensor; nunca completa ni modifica la sonda Sentek.
+                  </p>
+
+                  <div class="form-grid">
+                    <p-floatlabel variant="in">
+                      <p-select
+                        formControlName="variable"
+                        [options]="variablesEntradaAnalogica"
+                        optionLabel="label"
+                        optionValue="value"
+                        [style]="{ width: '100%' }"
+                      />
+                      <label>Variable fisica medida</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <p-select formControlName="canal" [options]="[1, 2]" [style]="{ width: '100%' }" />
+                      <label>Entrada analogica</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <p-inputnumber formControlName="entradaMinMa" suffix=" mA" [fluid]="true" />
+                      <label>Corriente minima</label>
+                    </p-floatlabel>
+
+                    <p-floatlabel variant="in">
+                      <p-inputnumber formControlName="entradaMaxMa" suffix=" mA" [fluid]="true" />
+                      <label>Corriente maxima</label>
+                    </p-floatlabel>
+
+                    @if (variableEntradaAnalogica !== 'sin_definir') {
+                      <p-floatlabel variant="in">
+                        <p-inputnumber formControlName="salidaMin" [fluid]="true" />
+                        <label>Valor fisico a 4 mA</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in">
+                        <p-inputnumber formControlName="salidaMax" [fluid]="true" />
+                        <label>Valor fisico a 20 mA</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in">
+                        <input pInputText formControlName="unidadSalida" [fluid]="true" />
+                        <label>Unidad de salida (bar, mca, m)</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in">
+                        <input pInputText formControlName="fuenteCalibracion" [fluid]="true" />
+                        <label>Modelo, datasheet o certificado</label>
+                      </p-floatlabel>
+                    }
+
+                    @if (
+                      form.get('configuracionLecturas.entradaAnalogica')?.touched &&
+                      form
+                        .get('configuracionLecturas.entradaAnalogica')
+                        ?.hasError('calibracionEntradaAnalogicaIncompleta')
+                    ) {
+                      <p class="field-wide form-error">
+                        Complete los valores de entrada y salida, la unidad y la fuente tecnica de calibracion.
+                      </p>
+                    }
+
+                    <p-floatlabel variant="in" class="field-wide">
+                      <textarea pTextarea rows="3" formControlName="observaciones"></textarea>
+                      <label>Instalacion y observaciones</label>
+                    </p-floatlabel>
+                  </div>
+                </section>
               </div>
             </p-tabpanel>
           </p-tabpanels>

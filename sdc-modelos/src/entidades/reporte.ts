@@ -14,6 +14,7 @@ export type SensoresV2 =
   | 'Evapotranspiración'
   | 'Radiación Solar'
   | 'Napa' // Freatimetro
+  | 'Entrada Analógica' // Lectura cruda 4-20 mA antes de calibrar
   | 'Batería'
   | 'Otro'; // Sensores que no sé que son
 

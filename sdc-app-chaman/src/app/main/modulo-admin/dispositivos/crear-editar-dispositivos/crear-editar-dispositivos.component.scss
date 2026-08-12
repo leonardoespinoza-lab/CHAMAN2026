@@ -235,6 +235,74 @@ h1 {
   grid-column: 1 / -1;
 }
 
+.connected-sensors {
+  display: grid;
+  gap: 16px;
+  padding-top: 12px;
+}
+
+.sensor-component {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 16px;
+  background: var(--p-content-background);
+  padding: 18px;
+}
+
+.sensor-component header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sensor-component h2,
+.sensor-component p {
+  margin: 0;
+}
+
+.sensor-component p {
+  color: var(--p-text-muted-color);
+  line-height: 1.5;
+}
+
+.sensor-state {
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 32%, var(--p-content-border-color));
+  border-radius: 999px;
+  color: var(--p-primary-color);
+  padding: 7px 10px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.sensor-state[data-pending="true"] {
+  border-color: color-mix(in srgb, var(--p-orange-500) 45%, var(--p-content-border-color));
+  color: var(--p-orange-600);
+}
+
+.sensor-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.sensor-facts span {
+  display: grid;
+  gap: 3px;
+  border-top: 1px solid var(--p-content-border-color);
+  color: var(--p-text-muted-color);
+  padding-top: 10px;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--p-red-600);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .lorawan-readonly {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -282,11 +350,16 @@ h1 {
 
   .form-grid,
   .lorawan-readonly,
-  .history-grid {
+  .history-grid,
+  .sensor-facts {
     grid-template-columns: 1fr;
   }
 
   .qualification-section-header {
+    display: grid;
+  }
+
+  .sensor-component header {
     display: grid;
   }
 

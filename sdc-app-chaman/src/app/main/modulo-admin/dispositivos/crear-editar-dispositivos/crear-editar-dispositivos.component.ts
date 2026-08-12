@@ -65,6 +65,7 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     'Evapotranspiración',
     'Radiación Solar',
     'Napa',
+    'Entrada Analógica',
     'Batería',
     'Otro',
   ];
@@ -139,6 +140,36 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
       idEstablecimiento: new FormControl(source?.idEstablecimiento),
       idLote: new FormControl(source?.idLote),
       fechaAsignacionLote: new FormControl(this.toDateTimeLocal(source?.fechaAsignacionLote)),
+      configuracionLecturas: new FormGroup({
+        perfilSuelo: new FormGroup({
+          tipo: new FormControl(source?.configuracionLecturas?.perfilSuelo?.tipo || 'sonda_sentek_120cm'),
+          protocolo: new FormControl(source?.configuracionLecturas?.perfilSuelo?.protocolo || 'SDI-12'),
+          niveles: new FormControl(source?.configuracionLecturas?.perfilSuelo?.niveles || 12),
+          profundidadesCm: new FormControl(
+            source?.configuracionLecturas?.perfilSuelo?.profundidadesCm || [
+              5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115,
+            ]
+          ),
+          variables: new FormControl(
+            source?.configuracionLecturas?.perfilSuelo?.variables || ['humedad_vwc', 'salinidad_vic', 'temperatura']
+          ),
+        }),
+        entradaAnalogica: new FormGroup(
+          {
+            canal: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.canal || 1),
+            tipoSenal: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.tipoSenal || '4-20mA'),
+            variable: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.variable || 'sin_definir'),
+            entradaMinMa: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.entradaMinMa ?? 4),
+            entradaMaxMa: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.entradaMaxMa ?? 20),
+            salidaMin: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.salidaMin),
+            salidaMax: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.salidaMax),
+            unidadSalida: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.unidadSalida),
+            fuenteCalibracion: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.fuenteCalibracion),
+            observaciones: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.observaciones),
+          },
+          { validators: [this.entradaAnalogicaValidator] }
+        ),
+      }),
       calificacionMeteorologica: new FormGroup(
         {
           estado: new FormControl(source?.calificacionMeteorologica?.estado || 'referencia', Validators.required),
@@ -204,6 +235,23 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     if (data.fechaAsignacionLote) {
       data.fechaAsignacionLote = new Date(data.fechaAsignacionLote).toISOString();
     }
+    const analog = data.configuracionLecturas?.entradaAnalogica;
+    if (analog) {
+      data.configuracionLecturas = {
+        ...data.configuracionLecturas,
+        entradaAnalogica: {
+          ...analog,
+          canal: Number(analog.canal) === 2 ? 2 : 1,
+          entradaMinMa: this.numberOrUndefined(analog.entradaMinMa) ?? 4,
+          entradaMaxMa: this.numberOrUndefined(analog.entradaMaxMa) ?? 20,
+          salidaMin: this.numberOrUndefined(analog.salidaMin),
+          salidaMax: this.numberOrUndefined(analog.salidaMax),
+          unidadSalida: analog.unidadSalida?.trim() || undefined,
+          fuenteCalibracion: analog.fuenteCalibracion?.trim() || undefined,
+          observaciones: analog.observaciones?.trim() || undefined,
+        },
+      };
+    }
     const qualification = data.calificacionMeteorologica;
     if (qualification) {
       const humidity = qualification.humedadRelativa;
@@ -244,6 +292,16 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
   public get historialCalibraciones() {
     return this.dispositivo?.calificacionMeteorologica?.historialCalibraciones || [];
   }
+
+  public get variableEntradaAnalogica(): string {
+    return this.form?.get('configuracionLecturas.entradaAnalogica.variable')?.value || 'sin_definir';
+  }
+
+  public readonly variablesEntradaAnalogica = [
+    { label: 'Sin definir: conservar solo corriente cruda', value: 'sin_definir' },
+    { label: 'Presión de agua', value: 'presion_agua' },
+    { label: 'Nivel de napa', value: 'nivel_napa' },
+  ];
 
   public onProductorChange(): void {
     this.form?.get('idEstablecimiento')?.setValue(null);
@@ -437,6 +495,29 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
       !!source;
 
     return complete ? null : { calificacionMeteorologicaIncompleta: true };
+  };
+
+  private readonly entradaAnalogicaValidator = (control: AbstractControl): ValidationErrors | null => {
+    if (control.get('variable')?.value === 'sin_definir') return null;
+
+    const entradaMin = this.numberOrUndefined(control.get('entradaMinMa')?.value);
+    const entradaMax = this.numberOrUndefined(control.get('entradaMaxMa')?.value);
+    const salidaMin = this.numberOrUndefined(control.get('salidaMin')?.value);
+    const salidaMax = this.numberOrUndefined(control.get('salidaMax')?.value);
+    const unidad = String(control.get('unidadSalida')?.value || '').trim();
+    const fuente = String(control.get('fuenteCalibracion')?.value || '').trim();
+
+    const complete =
+      entradaMin !== undefined &&
+      entradaMax !== undefined &&
+      entradaMax > entradaMin &&
+      salidaMin !== undefined &&
+      salidaMax !== undefined &&
+      salidaMax !== salidaMin &&
+      !!unidad &&
+      !!fuente;
+
+    return complete ? null : { calibracionEntradaAnalogicaIncompleta: true };
   };
 
   private readonly calificacionHumedadValidator = (control: AbstractControl): ValidationErrors | null => {

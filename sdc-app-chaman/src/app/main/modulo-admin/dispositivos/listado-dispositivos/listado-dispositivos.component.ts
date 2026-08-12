@@ -178,7 +178,7 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
     const devEUI = this.normalizeDevEui(uplink.devEUI);
     const nombre =
       uplink.deviceName ||
-      (this.isUc511SentekUplink(uplink) ? `Lanza Sentek / Napa ${devEUI}` : '') ||
+      (this.isUc511SentekUplink(uplink) ? `Controlador Sentek + entrada analogica ${devEUI}` : '') ||
       uplink.applicationName ||
       uplink.devEUI ||
       'Dispositivo MQTT';
@@ -188,6 +188,24 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
       deveui: devEUI,
       tipo: this.inferType(uplink),
       sensores: this.inferSensors(uplink),
+      configuracionLecturas: this.isUc511SentekUplink(uplink)
+        ? {
+            perfilSuelo: {
+              tipo: 'sonda_sentek_120cm',
+              protocolo: 'SDI-12',
+              niveles: 12,
+              profundidadesCm: [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115],
+              variables: ['humedad_vwc', 'salinidad_vic', 'temperatura'],
+            },
+            entradaAnalogica: {
+              canal: 1,
+              tipoSenal: '4-20mA',
+              variable: 'sin_definir',
+              entradaMinMa: 4,
+              entradaMaxMa: 20,
+            },
+          }
+        : undefined,
       metadata: {
         applicationID: uplink.applicationID,
         applicationName: uplink.applicationName,
@@ -367,7 +385,7 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
   private inferSensors(uplink: ILorawanUplink): IDispositivo['sensores'] {
     const type = this.inferType(uplink);
     if (type === 'Sensor de Humedad de Suelo') {
-      return ['Humedad Suelo Profundidad', 'Temperatura Suelo', 'Salinidad Suelo', 'Napa', 'Batería'];
+      return ['Humedad Suelo Profundidad', 'Temperatura Suelo', 'Salinidad Suelo', 'Entrada Analógica', 'Batería'];
     }
     if (type === 'Pluviometro') {
       return ['Pluviometro'];

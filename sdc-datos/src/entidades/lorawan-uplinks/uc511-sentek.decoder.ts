@@ -1,18 +1,22 @@
-import { IValoresV2 } from 'modelos/src';
+import {
+  IConfiguracionEntradaAnalogica,
+  IValoresV2,
+  SensoresV2,
+} from 'modelos/src';
 
 type DepthKey =
-  | '10cm'
-  | '20cm'
-  | '30cm'
-  | '40cm'
-  | '50cm'
-  | '60cm'
-  | '70cm'
-  | '80cm'
-  | '90cm'
-  | '100cm'
-  | '110cm'
-  | '120cm';
+  | '5cm'
+  | '15cm'
+  | '25cm'
+  | '35cm'
+  | '45cm'
+  | '55cm'
+  | '65cm'
+  | '75cm'
+  | '85cm'
+  | '95cm'
+  | '105cm'
+  | '115cm';
 
 type SoilMetric = 'moisture' | 'salinity' | 'temperature';
 
@@ -24,9 +28,11 @@ interface Sdi12Block {
 
 export interface DecodedUc511SentekPayload {
   analog: {
+    channel: 1 | 2 | null;
     rawMa: number | null;
-    waterTableDepthM: number | null;
-    scale: '4-20mA=0-10m';
+    minMa: number | null;
+    maxMa: number | null;
+    averageMa: number | null;
   };
   soil: {
     moisture: Partial<Record<DepthKey, number>>;
@@ -39,21 +45,21 @@ export interface DecodedUc511SentekPayload {
 }
 
 const DEPTH_KEYS: DepthKey[] = [
-  '10cm',
-  '20cm',
-  '30cm',
-  '40cm',
-  '50cm',
-  '60cm',
-  '70cm',
-  '80cm',
-  '90cm',
-  '100cm',
-  '110cm',
-  '120cm',
+  '5cm',
+  '15cm',
+  '25cm',
+  '35cm',
+  '45cm',
+  '55cm',
+  '65cm',
+  '75cm',
+  '85cm',
+  '95cm',
+  '105cm',
+  '115cm',
 ];
 
-const DEPTHS_CM = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+const DEPTHS_CM = [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115];
 
 export function decodeUc511SentekPayload(
   hexPayload?: string,
@@ -74,10 +80,9 @@ export function decodeUc511SentekPayload(
   }
 
   const decoded = emptyDecoded();
-  const analogMa = decodeAnalogMa(bytes);
-  if (analogMa !== null) {
-    decoded.analog.rawMa = round(analogMa, 3);
-    decoded.analog.waterTableDepthM = round(((analogMa - 4) / 16) * 10, 2);
+  const analog = decodeAnalogInput(bytes);
+  if (analog) {
+    decoded.analog = analog;
   }
 
   decoded.raw.blocks = extractSdi12Blocks(bytes);
@@ -90,6 +95,7 @@ export function decodeUc511SentekPayload(
 
 export function decodedUc511ToReporteValores(
   decoded: DecodedUc511SentekPayload,
+  analogConfig?: IConfiguracionEntradaAnalogica,
 ): IValoresV2['valores'] {
   const valores: IValoresV2['valores'] = {};
 
@@ -103,7 +109,8 @@ export function decodedUc511ToReporteValores(
 
   valores['Salinidad Suelo'] = DEPTH_KEYS.map((depth, index) => ({
     profundidad: DEPTHS_CM[index],
-    unidad: 'mS/m',
+    // VIC es un indice de tendencia ionica; no equivale automaticamente a EC.
+    unidad: 'VIC',
     valores: {
       actual: decoded.soil.salinity[depth] ?? null,
     },
@@ -117,21 +124,30 @@ export function decodedUc511ToReporteValores(
     },
   }));
 
-  if (decoded.analog.rawMa !== null || decoded.analog.waterTableDepthM !== null) {
-    valores.Napa = [
-      {
-        unidad: 'm',
-        valores: {
-          actual: decoded.analog.waterTableDepthM,
-        },
-      },
+  if (decoded.analog.rawMa !== null) {
+    valores['Entrada Analógica'] = [
       {
         unidad: 'mA',
         valores: {
           actual: decoded.analog.rawMa,
+          min: decoded.analog.minMa ?? undefined,
+          max: decoded.analog.maxMa ?? undefined,
+          promedio: decoded.analog.averageMa ?? undefined,
         },
       },
     ];
+
+    const calibrated = calibrateAnalogInput(decoded.analog.rawMa, analogConfig);
+    if (calibrated) {
+      const sensor: SensoresV2 =
+        analogConfig?.variable === 'nivel_napa' ? 'Napa' : 'Presión';
+      valores[sensor] = [
+        {
+          unidad: calibrated.unit,
+          valores: { actual: calibrated.value },
+        },
+      ];
+    }
   }
 
   return valores;
@@ -140,9 +156,11 @@ export function decodedUc511ToReporteValores(
 function emptyDecoded(): DecodedUc511SentekPayload {
   return {
     analog: {
+      channel: null,
       rawMa: null,
-      waterTableDepthM: null,
-      scale: '4-20mA=0-10m',
+      minMa: null,
+      maxMa: null,
+      averageMa: null,
     },
     soil: {
       moisture: {},
@@ -176,22 +194,74 @@ function hexToBytes(hex: string): number[] {
   return bytes;
 }
 
-function decodeAnalogMa(bytes: number[]): number | null {
+function decodeAnalogInput(
+  bytes: number[],
+): DecodedUc511SentekPayload['analog'] | null {
   for (let i = 0; i <= bytes.length - 10; i += 1) {
-    if (
-      bytes[i] === 0x03 &&
-      bytes[i + 1] === 0x00 &&
-      bytes[i + 2] === 0x00 &&
-      bytes[i + 3] === 0x04 &&
-      bytes[i + 4] === 0x00 &&
-      bytes[i + 5] === 0x00
-    ) {
-      const value = float16ToNumberLE(bytes[i + 8], bytes[i + 9]);
-      return Number.isFinite(value) ? value : null;
+    const channel = bytes[i];
+    const type = bytes[i + 1];
+    if ((channel !== 0x05 && channel !== 0x06) || (type !== 0xe2 && type !== 0x02)) {
+      continue;
     }
+
+    const decode = type === 0xe2
+      ? (offset: number) => float16ToNumberLE(bytes[offset], bytes[offset + 1])
+      : (offset: number) => int16LE(bytes[offset], bytes[offset + 1]) / 1000;
+    const readings = [
+      decode(i + 2),
+      decode(i + 4),
+      decode(i + 6),
+      decode(i + 8),
+    ];
+    if (!readings.every(Number.isFinite)) {
+      continue;
+    }
+
+    return {
+      channel: channel === 0x05 ? 1 : 2,
+      rawMa: round(readings[0], 3),
+      minMa: round(readings[1], 3),
+      maxMa: round(readings[2], 3),
+      averageMa: round(readings[3], 3),
+    };
   }
 
   return null;
+}
+
+export function calibrateAnalogInput(
+  currentMa: number,
+  config?: IConfiguracionEntradaAnalogica,
+): { value: number; unit: string } | null {
+  if (
+    !config ||
+    config.variable === 'sin_definir' ||
+    !Number.isFinite(config.entradaMinMa) ||
+    !Number.isFinite(config.entradaMaxMa) ||
+    !Number.isFinite(config.salidaMin) ||
+    !Number.isFinite(config.salidaMax) ||
+    config.entradaMaxMa <= config.entradaMinMa ||
+    !config.unidadSalida?.trim()
+  ) {
+    return null;
+  }
+
+  const ratio =
+    (currentMa - config.entradaMinMa) /
+    (config.entradaMaxMa - config.entradaMinMa);
+  return {
+    value: round(
+      Number(config.salidaMin) +
+        ratio * (Number(config.salidaMax) - Number(config.salidaMin)),
+      3,
+    ),
+    unit: config.unidadSalida.trim(),
+  };
+}
+
+function int16LE(byte0: number, byte1: number): number {
+  const value = byte0 | (byte1 << 8);
+  return value & 0x8000 ? value - 0x10000 : value;
 }
 
 function extractSdi12Blocks(bytes: number[]): Sdi12Block[] {

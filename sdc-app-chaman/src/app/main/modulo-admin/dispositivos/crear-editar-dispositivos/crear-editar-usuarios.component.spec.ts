@@ -164,4 +164,49 @@ describe('CrearEditarDispositivosComponent', () => {
       jasmine.clock().uninstall();
     }
   });
+
+  it('mantiene independientes la sonda Sentek y la entrada analogica sin calibrar', () => {
+    const component = createComponent();
+    const analog = component.form?.get('configuracionLecturas.entradaAnalogica');
+
+    expect(component.form?.get('configuracionLecturas.perfilSuelo.variables')?.value).toEqual([
+      'humedad_vwc',
+      'salinidad_vic',
+      'temperatura',
+    ]);
+    expect(analog?.value.variable).toBe('sin_definir');
+    expect(analog?.valid).toBeTrue();
+
+    const data = (component as any).getData();
+    expect(data.configuracionLecturas.perfilSuelo.niveles).toBe(12);
+    expect(data.configuracionLecturas.entradaAnalogica.variable).toBe('sin_definir');
+  });
+
+  it('no permite atribuir presion o napa sin una calibracion fisica completa', () => {
+    const component = createComponent();
+    const analog = component.form?.get('configuracionLecturas.entradaAnalogica');
+    analog?.patchValue({ variable: 'nivel_napa' });
+
+    expect(analog?.hasError('calibracionEntradaAnalogicaIncompleta')).toBeTrue();
+
+    analog?.patchValue({
+      salidaMin: 0,
+      salidaMax: 10,
+      unidadSalida: 'm',
+      fuenteCalibracion: 'Datasheet del transductor',
+    });
+
+    expect(analog?.valid).toBeTrue();
+    const data = (component as any).getData();
+    expect(data.configuracionLecturas.entradaAnalogica).toEqual(
+      jasmine.objectContaining({
+        variable: 'nivel_napa',
+        entradaMinMa: 4,
+        entradaMaxMa: 20,
+        salidaMin: 0,
+        salidaMax: 10,
+        unidadSalida: 'm',
+      })
+    );
+  });
 });

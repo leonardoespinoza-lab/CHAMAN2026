@@ -37,12 +37,55 @@ export class DetallesDispositivoComponent implements OnInit {
   public diasHistorico = 7;
   public reportesHistoricos: IReporte[] = [];
 
+  public get esControladorSentek(): boolean {
+    return !!this.dispositivo?.configuracionLecturas?.perfilSuelo || this.esLanzaDeSuelo;
+  }
+
+  public get entradaAnalogicaConfigurada() {
+    return this.dispositivo?.configuracionLecturas?.entradaAnalogica;
+  }
+
+  public get entradaAnalogicaCruda(): { valor?: number; unidad: string } | undefined {
+    const row = this.valorReporte('Entrada Analógica');
+    if (!row) return undefined;
+    return {
+      valor: this.numeroSeguro(row?.valores?.actual),
+      unidad: row?.unidad || 'mA',
+    };
+  }
+
+  public get lecturaAnalogicaCalibrada(): { nombre: string; valor?: number; unidad?: string } | undefined {
+    const variable = this.entradaAnalogicaConfigurada?.variable;
+    if (variable === 'nivel_napa') {
+      const row = this.valorReporte('Napa');
+      return row
+        ? { nombre: 'Nivel de napa', valor: this.numeroSeguro(row?.valores?.actual), unidad: row?.unidad }
+        : undefined;
+    }
+    if (variable === 'presion_agua') {
+      const row = this.valorReporte('Presión');
+      return row
+        ? { nombre: 'Presión de agua', valor: this.numeroSeguro(row?.valores?.actual), unidad: row?.unidad }
+        : undefined;
+    }
+    return undefined;
+  }
+
+  public get estadoEntradaAnalogica(): string {
+    if (!this.entradaAnalogicaConfigurada || this.entradaAnalogicaConfigurada.variable === 'sin_definir') {
+      return 'Corriente cruda; falta ficha tecnica y escala del transductor';
+    }
+    return this.lecturaAnalogicaCalibrada
+      ? 'Escala fisica configurada'
+      : 'Configurado; esperando una nueva lectura analogica';
+  }
+
   constructor(
     public helper: HelperService,
     private params: ParamsService,
     private route: ActivatedRoute,
     private service: DispositivoService,
-    private reportesService: ReporteService,
+    private reportesService: ReporteService
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -104,9 +147,31 @@ export class DetallesDispositivoComponent implements OnInit {
     const sensores = dispositivo?.sensores || [];
     const valores = (dispositivo?.ultimoReporte?.datos?.valores || {}) as unknown as Record<string, any>;
     return (
-      sensores.some((sensor) => ['Temperatura', 'Humedad', 'Batería', 'Bateria', 'BaterÃ­a'].includes(sensor as string)) ||
+      sensores.some((sensor) =>
+        ['Temperatura', 'Humedad', 'Batería', 'Bateria', 'BaterÃ­a'].includes(sensor as string)
+      ) ||
       !!valores['Temperatura'] ||
       !!valores['Humedad']
     );
+  }
+
+  private valorReporte(sensor: string): any | undefined {
+    const candidatos = [this.ultimoReporte, ...[...this.reportesHistoricos].reverse()].filter(
+      (reporte, index, reportes) =>
+        !!reporte && reportes.findIndex((candidate) => candidate?._id === reporte?._id) === index
+    );
+
+    for (const reporte of candidatos) {
+      const valores = (reporte?.datos?.valores || {}) as unknown as Record<string, any>;
+      const rows = valores[sensor];
+      const row = Array.isArray(rows) ? rows[0] : rows;
+      if (row) return row;
+    }
+
+    return undefined;
+  }
+
+  private numeroSeguro(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
   }
 }

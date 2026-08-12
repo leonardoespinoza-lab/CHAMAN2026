@@ -122,7 +122,7 @@ export class LorawanUplinksService {
     }
 
     const decoded =
-      this.decodeUc511SentekUplink(uplink) ||
+      this.decodeUc511SentekUplink(uplink, dispositivo) ||
       decodeSentekUc501Payload(uplink.data);
     if (!decoded) {
       return false;
@@ -135,9 +135,8 @@ export class LorawanUplinksService {
       reportDate,
       2,
     );
-    const previous =
-      existing ||
-      (await this.reportes.getRecentPartialByDeveui(devEUI, reportDate, 20));
+    const recent = await this.reportes.getRecentByDeveui(devEUI, reportDate, 360);
+    const previous = existing || this.reporteCompatibleConCiclo(recent, decoded.canales);
     const valores = previous?.datos?.valores
       ? this.mergeSentekValues(previous.datos.valores, decoded.valores)
       : decoded.valores;
@@ -235,6 +234,7 @@ export class LorawanUplinksService {
 
   private decodeUc511SentekUplink(
     uplink: ICreateLorawanUplink,
+    dispositivo?: IDispositivo,
   ): { valores: IValoresV2['valores']; canales: number[] } | null {
     const raw = (uplink.rawPayload || {}) as Record<string, any>;
     const payloadHex =
@@ -262,7 +262,10 @@ export class LorawanUplinksService {
     }
 
     return {
-      valores: decodedUc511ToReporteValores(decoded),
+      valores: decodedUc511ToReporteValores(
+        decoded,
+        dispositivo?.configuracionLecturas?.entradaAnalogica,
+      ),
       canales: decoded.raw.blocks.map((block) => block.channel),
     };
   }
@@ -555,12 +558,8 @@ export class LorawanUplinksService {
       );
       const hasAnalogBlock = buffer.some(
         (byte, index) =>
-          byte === 0x03 &&
-          buffer[index + 1] === 0x00 &&
-          buffer[index + 2] === 0x00 &&
-          buffer[index + 3] === 0x04 &&
-          buffer[index + 4] === 0x00 &&
-          buffer[index + 5] === 0x00,
+          (byte === 0x05 || byte === 0x06) &&
+          (buffer[index + 1] === 0xe2 || buffer[index + 1] === 0x02),
       );
 
       return hasSdi12Block || hasAnalogBlock
@@ -598,6 +597,46 @@ export class LorawanUplinksService {
     return result;
   }
 
+  private reporteCompatibleConCiclo(
+    reporte: IReporte | null,
+    incomingChannels: number[],
+  ): IReporte | null {
+    if (!reporte) {
+      return null;
+    }
+
+    // La entrada 4-20 mA es otro sensor fisico del mismo controlador.
+    // Puede completar el reporte reciente sin participar del ciclo de 12 canales SDI-12.
+    if (!incomingChannels.length) return reporte;
+
+    const previousChannels = this.sentekChannelsInReport(reporte);
+    const repeatedChannel = incomingChannels.some((channel) => previousChannels.has(channel));
+    return repeatedChannel ? null : reporte;
+  }
+
+  private sentekChannelsInReport(reporte: IReporte): Set<number> {
+    const channels = new Set<number>();
+    const valores = reporte.datos?.valores || {};
+    const groups: Array<{ sensor: keyof IValoresV2['valores']; offset: number }> = [
+      { sensor: 'Humedad Suelo Profundidad', offset: 0 },
+      { sensor: 'Salinidad Suelo', offset: 4 },
+      { sensor: 'Temperatura Suelo', offset: 8 },
+    ];
+
+    groups.forEach(({ sensor, offset }) => {
+      const rows = valores[sensor] || [];
+      for (let group = 0; group < 4; group += 1) {
+        const start = group * 3;
+        const hasValue = rows
+          .slice(start, start + 3)
+          .some((row) => row?.valores?.actual !== null && row?.valores?.actual !== undefined);
+        if (hasValue) channels.add(offset + group);
+      }
+    });
+
+    return channels;
+  }
+
   private isSentekReportComplete(valores: IValoresV2['valores']): boolean {
     const countValid = (sensor: keyof IValoresV2['valores']) =>
       (valores[sensor] || []).filter(
@@ -606,8 +645,8 @@ export class LorawanUplinksService {
 
     return (
       countValid('Temperatura Suelo') >= 12 &&
-      countValid('Salinidad Suelo') >= 10 &&
-      countValid('Humedad Suelo Profundidad') >= 9
+      countValid('Salinidad Suelo') >= 12 &&
+      countValid('Humedad Suelo Profundidad') >= 12
     );
   }
 

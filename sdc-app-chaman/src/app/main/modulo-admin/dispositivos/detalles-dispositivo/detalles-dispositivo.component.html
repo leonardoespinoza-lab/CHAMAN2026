@@ -42,6 +42,49 @@
     }
   </header>
 
+  @if (esControladorSentek) {
+    <section class="physical-sensors" aria-label="Sensores fisicos conectados al controlador">
+      <article class="physical-sensor">
+        <div class="physical-sensor-index">1</div>
+        <div>
+          <span class="physical-sensor-kicker">Sensor fisico · SDI-12</span>
+          <h2>Sonda Sentek de perfil 1,2 m</h2>
+          <p>Humedad VWC, salinidad VIC y temperatura en 12 niveles: 5 a 115 cm.</p>
+        </div>
+        <span class="physical-sensor-status ready">Perfil activo</span>
+      </article>
+
+      <article class="physical-sensor">
+        <div class="physical-sensor-index">2</div>
+        <div>
+          <span class="physical-sensor-kicker">
+            Sensor fisico independiente · AI{{ entradaAnalogicaConfigurada?.canal || 1 }}
+          </span>
+          <h2>
+            @if (lecturaAnalogicaCalibrada) {
+              {{ lecturaAnalogicaCalibrada.nombre }}
+            } @else {
+              Transductor 4-20 mA
+            }
+          </h2>
+          <p>{{ estadoEntradaAnalogica }}</p>
+        </div>
+        <div class="physical-sensor-reading">
+          @if (lecturaAnalogicaCalibrada?.valor !== undefined) {
+            <strong>{{ lecturaAnalogicaCalibrada?.valor | number: '1.0-3' }}</strong>
+            <span>{{ lecturaAnalogicaCalibrada?.unidad }}</span>
+          } @else if (entradaAnalogicaCruda?.valor !== undefined) {
+            <strong>{{ entradaAnalogicaCruda?.valor | number: '1.0-3' }}</strong>
+            <span>{{ entradaAnalogicaCruda?.unidad }}</span>
+          } @else {
+            <strong>--</strong>
+            <span>sin lectura</span>
+          }
+        </div>
+      </article>
+    </section>
+  }
+
   @if (esLanzaDeSuelo) {
     @if (vistaActiva === 'tarjetas') {
       <div class="contenedor-tarjetas">

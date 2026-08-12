@@ -50,6 +50,7 @@ export class DispositivosRepository {
   private inferDeviceFromLorawanUplink(uplink: ILorawanUplink): {
     tipo: TipoDispositivo;
     sensores: SensoresV2[];
+    configuracionLecturas?: IUpdateDispositivo['configuracionLecturas'];
   } {
     const text = `${uplink.deviceName || ''} ${uplink.applicationName || ''}`.toLowerCase();
 
@@ -70,9 +71,25 @@ export class DispositivosRepository {
           'Humedad Suelo Profundidad',
           'Temperatura Suelo',
           'Salinidad Suelo',
-          'Napa',
+          'Entrada Analógica',
           'Batería',
         ],
+        configuracionLecturas: {
+          perfilSuelo: {
+            tipo: 'sonda_sentek_120cm',
+            protocolo: 'SDI-12',
+            niveles: 12,
+            profundidadesCm: [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115],
+            variables: ['humedad_vwc', 'salinidad_vic', 'temperatura'],
+          },
+          entradaAnalogica: {
+            canal: 1,
+            tipoSenal: '4-20mA',
+            variable: 'sin_definir',
+            entradaMinMa: 4,
+            entradaMaxMa: 20,
+          },
+        },
       };
     }
 
@@ -156,7 +173,7 @@ export class DispositivosRepository {
     const inferred = this.inferDeviceFromLorawanUplink(uplink);
     const inferredName =
       inferred.tipo === 'Sensor de Humedad de Suelo' && this.isUc511SentekUplink(uplink)
-        ? `Lanza Sentek / Napa ${devEUI}`
+        ? `Controlador Sentek + entrada analógica ${devEUI}`
         : devEUI;
     const existing = await this.model.findOne({ deveui: devEUI }).lean();
     const update: IUpdateDispositivo = {
@@ -164,6 +181,7 @@ export class DispositivosRepository {
       nombre: uplink.deviceName || inferredName,
       tipo: inferred.tipo,
       sensores: inferred.sensores,
+      configuracionLecturas: inferred.configuracionLecturas,
       fechaUltimaComunicacion: timestamp,
       metadata: {
         applicationID: uplink.applicationID,
@@ -192,12 +210,20 @@ export class DispositivosRepository {
     }
 
     if (existing) {
+      // Nunca se eliminan etiquetas o configuraciones históricas en una ingesta.
+      // La inferencia nueva deja de crear Napa/Presión, pero una depuración legacy
+      // requiere una acción administrativa explícita y auditable.
       const existingSensors = existing.sensores || [];
       const mergedSensors = [
         ...new Set([...existingSensors, ...(update.sensores || [])]),
       ];
-      if (mergedSensors.length !== existingSensors.length) {
+      if (
+        JSON.stringify(mergedSensors) !== JSON.stringify(existing.sensores || [])
+      ) {
         $set.sensores = mergedSensors;
+      }
+      if (!existing.configuracionLecturas && update.configuracionLecturas) {
+        $set.configuracionLecturas = update.configuracionLecturas;
       }
     }
 

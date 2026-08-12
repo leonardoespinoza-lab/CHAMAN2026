@@ -54,6 +54,41 @@ export interface IAsignacionDispositivoLote {
   activa?: boolean;
 }
 
+export type VariableEntradaAnalogica =
+  | "sin_definir"
+  | "presion_agua"
+  | "nivel_napa";
+
+export interface IConfiguracionPerfilSuelo {
+  tipo: "sonda_sentek_120cm";
+  protocolo: "SDI-12";
+  niveles: 12;
+  profundidadesCm: number[];
+  variables: ("humedad_vwc" | "salinidad_vic" | "temperatura")[];
+}
+
+export interface IConfiguracionEntradaAnalogica {
+  canal: 1 | 2;
+  tipoSenal: "4-20mA";
+  variable: VariableEntradaAnalogica;
+  entradaMinMa: number;
+  entradaMaxMa: number;
+  salidaMin?: number;
+  salidaMax?: number;
+  unidadSalida?: string;
+  fuenteCalibracion?: string;
+  observaciones?: string;
+}
+
+/**
+ * Describe los sensores fisicos conectados al controlador. La sonda de perfil
+ * y el transductor analogico son fuentes independientes aunque compartan DevEUI.
+ */
+export interface IConfiguracionLecturasDispositivo {
+  perfilSuelo?: IConfiguracionPerfilSuelo;
+  entradaAnalogica?: IConfiguracionEntradaAnalogica;
+}
+
 export type EstadoCalificacionMeteorologica =
   "calificado" | "referencia" | "rechazado";
 
@@ -142,6 +177,7 @@ export interface IDispositivo {
   tipo?: TipoDispositivo;
   metadata?: IMetaDataLora;
   sensores?: SensoresV2[];
+  configuracionLecturas?: IConfiguracionLecturasDispositivo;
   geojson?: IGeoJSONPoint;
   nombre?: string;
   bateria?: IBateria;

@@ -95,6 +95,23 @@ export class ReportesRepository {
       .lean();
   }
 
+  async getRecentByDeveui(
+    deveui: string,
+    referenceDate: Date,
+    windowMinutes = 20,
+  ): Promise<Reporte | null> {
+    const minDate = new Date(referenceDate.getTime() - windowMinutes * 60 * 1000);
+    const maxDate = new Date(referenceDate.getTime() + windowMinutes * 60 * 1000);
+
+    return await this.model
+      .findOne({
+        deveui,
+        fecha: { $gte: minDate, $lte: maxDate },
+      })
+      .sort({ fecha: -1, fechaCreacion: -1 })
+      .lean();
+  }
+
   async getByDeveuiAndFecha(
     deveui: string,
     referenceDate: Date,

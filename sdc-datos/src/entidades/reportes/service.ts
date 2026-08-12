@@ -48,6 +48,18 @@ export class ReportesService {
     );
   }
 
+  async getRecentByDeveui(
+    deveui: string,
+    referenceDate: Date,
+    windowMinutes = 20,
+  ) {
+    return await this.repository.getRecentByDeveui(
+      deveui,
+      referenceDate,
+      windowMinutes,
+    );
+  }
+
   async getByDeveuiAndFecha(
     deveui: string,
     referenceDate: Date,

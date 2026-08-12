@@ -59,6 +59,86 @@
   width: 100%;
 }
 
+.physical-sensors {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.physical-sensor {
+  align-items: center;
+  background: var(--p-surface-0, #fff);
+  border: 1px solid var(--p-surface-200, #dce5e9);
+  border-radius: 1rem;
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 112px;
+  padding: 1rem;
+}
+
+.physical-sensor-index {
+  align-items: center;
+  background: color-mix(in srgb, var(--p-primary-color) 12%, white);
+  border-radius: 999px;
+  color: var(--p-primary-color);
+  display: flex;
+  font-size: 0.9rem;
+  font-weight: 800;
+  height: 2.35rem;
+  justify-content: center;
+  width: 2.35rem;
+}
+
+.physical-sensor-kicker {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.physical-sensor h2 {
+  font-size: 1.05rem;
+  margin: 0.2rem 0;
+}
+
+.physical-sensor p {
+  color: var(--p-text-muted-color);
+  line-height: 1.35;
+  margin: 0;
+}
+
+.physical-sensor-status {
+  background: var(--p-surface-100, #f4f7f8);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 750;
+  padding: 0.4rem 0.65rem;
+  white-space: nowrap;
+}
+
+.physical-sensor-status.ready {
+  color: var(--p-primary-700, #08766e);
+}
+
+.physical-sensor-reading {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  min-width: 78px;
+}
+
+.physical-sensor-reading strong {
+  font-size: 1.35rem;
+}
+
+.physical-sensor-reading span {
+  color: var(--p-text-muted-color);
+  font-size: 0.8rem;
+}
+
 @media (max-width: 760px) {
   .device-detail-header {
     align-items: stretch;
@@ -71,6 +151,10 @@
 
   .device-view-actions {
     justify-content: flex-start;
+  }
+
+  .physical-sensors {
+    grid-template-columns: 1fr;
   }
 }
 
