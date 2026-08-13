@@ -87,4 +87,20 @@ export class LorawanUplinksRepository {
       .limit(Math.max(1, Math.min(Number(limit) || 5000, 20000)))
       .lean();
   }
+
+  async recentByDevEUI(
+    devEUI: string,
+    limit = 5000,
+  ): Promise<ILorawanUplink[]> {
+    const upper = devEUI.toUpperCase();
+    const lower = devEUI.toLowerCase();
+    const safeLimit = Math.max(1, Math.min(Number(limit) || 5000, 20000));
+    const rows = await this.model
+      .find({ devEUI: { $in: [upper, lower, devEUI] } })
+      .sort({ timestamp: -1, fechaCreacion: -1 })
+      .limit(safeLimit)
+      .lean();
+
+    return rows.reverse();
+  }
 }

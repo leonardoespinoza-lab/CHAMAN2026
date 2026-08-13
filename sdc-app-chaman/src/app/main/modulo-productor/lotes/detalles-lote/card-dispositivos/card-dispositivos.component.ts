@@ -70,14 +70,19 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
     const sensores = dispositivo.sensores || [];
     const valores = (dispositivo.ultimoReporte?.datos?.valores || {}) as unknown as Record<string, any>;
     return (
-      sensores.some((sensor) => ['Temperatura', 'Humedad', 'Batería', 'Bateria', 'BaterÃ­a'].includes(sensor as string)) ||
+      sensores.some((sensor) =>
+        ['Temperatura', 'Humedad', 'Batería', 'Bateria', 'BaterÃ­a'].includes(sensor as string)
+      ) ||
       !!valores['Temperatura'] ||
       !!valores['Humedad']
     );
   }
 
   public estaOnline(dispositivo: IDispositivo): boolean {
-    const fecha = dispositivo.fechaUltimaComunicacion || dispositivo.ultimoReporte?.fecha || dispositivo.ultimoReporte?.fechaCreacion;
+    const fecha =
+      dispositivo.fechaUltimaComunicacion ||
+      dispositivo.ultimoReporte?.fecha ||
+      dispositivo.ultimoReporte?.fechaCreacion;
     if (!fecha) return false;
     const timestamp = new Date(fecha).getTime();
     return Number.isFinite(timestamp) && Date.now() - timestamp <= 30 * 60 * 1000;
@@ -100,7 +105,11 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   public ultimaComunicacion(dispositivo: IDispositivo): string | undefined {
-    return dispositivo.fechaUltimaComunicacion || dispositivo.ultimoReporte?.fecha || dispositivo.ultimoReporte?.fechaCreacion;
+    return (
+      dispositivo.fechaUltimaComunicacion ||
+      dispositivo.ultimoReporte?.fecha ||
+      dispositivo.ultimoReporte?.fechaCreacion
+    );
   }
 
   public estadoLabel(dispositivo: IDispositivo): string {
@@ -124,9 +133,10 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
       return 'Perfil pendiente: el ultimo reporte no trae variables de profundidad validas.';
     }
 
-    const prefijo = dispositivo.ultimoReporte?.estado === 'parcial'
-      ? 'Perfil parcial por profundidad'
-      : 'Perfil disponible por profundidad';
+    const prefijo =
+      dispositivo.ultimoReporte?.estado === 'parcial'
+        ? 'Perfil parcial por profundidad'
+        : 'Perfil disponible por profundidad';
     return `${prefijo}: ${variables.join(', ')}.`;
   }
 
@@ -161,9 +171,7 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
     this.resumenesAmbiente.clear();
 
     for (const dispositivo of this.dispositivos) {
-      const perfil = this.tieneVariableSuelo(dispositivo)
-        ? buildSentekProfile(dispositivo.ultimoReporte)
-        : [];
+      const perfil = this.tieneVariableSuelo(dispositivo) ? buildSentekProfile(dispositivo.ultimoReporte) : [];
       const key = this.getDeviceKey(dispositivo);
       this.perfiles.set(key, perfil);
       this.resumenes.set(key, this.calcularResumen(perfil));
@@ -198,23 +206,10 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private calcularResumen(perfil: MedicionProfundidad[]): DispositivoResumen {
-    const conHumedad = perfil.filter((dato) => dato.humedad);
-    const conSalinidad = perfil.filter((dato) => dato.salinidad);
-    const conTemperatura = perfil.filter((dato) => dato.temperatura);
-
     return {
-      humedad: this.promedio(conHumedad.map((dato) => dato.humedad!)),
-      salinidad: this.promedio(conSalinidad.map((dato) => dato.salinidad!)),
-      temperatura: this.promedio(conTemperatura.map((dato) => dato.temperatura!)),
-    };
-  }
-
-  private promedio(datos: MedicionSensorProfundidad[]): MedicionSensorProfundidad | undefined {
-    if (!datos.length) return undefined;
-    const actual = datos.reduce((sum, dato) => sum + dato.actual, 0) / datos.length;
-    return {
-      actual,
-      unidad: datos[0].unidad,
+      humedad: perfil.find((dato) => dato.humedad)?.humedad,
+      salinidad: perfil.find((dato) => dato.salinidad)?.salinidad,
+      temperatura: perfil.find((dato) => dato.temperatura)?.temperatura,
     };
   }
 

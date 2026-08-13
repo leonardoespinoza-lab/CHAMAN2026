@@ -3,6 +3,8 @@ import {
   ICreateLorawanUplink,
   IDispositivo,
   IFrioAcumulado,
+  ILorawanRawFrame,
+  ILorawanRawReading,
   IReporte,
   IQueryParam,
   IUpdateDispositivo,
@@ -15,6 +17,7 @@ import { decodeSentekUc501Payload } from './sentek-uc501.decoder';
 import {
   decodeUc511SentekPayload,
   decodedUc511ToReporteValores,
+  extractUc511PayloadHex,
 } from './uc511-sentek.decoder';
 
 const HF_PREVIEW_VERSION = 'hf-field-preview-1.0.0';
@@ -59,6 +62,31 @@ export class LorawanUplinksService {
     return await this.repository.latestByDevice(
       Math.min(Number(limit) || 1000, 5000),
     );
+  }
+
+  async rawHistory(query: {
+    devEUI?: string;
+    days?: string | number;
+    limit?: string | number;
+  }): Promise<ILorawanRawFrame[]> {
+    const devEUI = query.devEUI?.trim().toUpperCase();
+    if (!devEUI) return [];
+    const days = Math.max(1, Math.min(Number(query.days) || 7, 365));
+    const limit = Math.max(1, Math.min(Number(query.limit) || 5000, 20000));
+    const since = Date.now() - days * 86_400_000;
+    const uplinks = await this.repository.recentByDevEUI(devEUI, limit);
+    const dispositivo = await this.dispositivos
+      .getFilter({ filter: JSON.stringify({ deveui: devEUI }), limit: 1 })
+      .then((result: any) => result?.datos?.[0] as IDispositivo | undefined)
+      .catch(() => undefined);
+
+    return uplinks
+      .filter(
+        (uplink) =>
+          this.safeDate(uplink.timestamp || uplink.fechaCreacion).getTime() >=
+          since,
+      )
+      .map((uplink) => this.toRawFrame(uplink, dispositivo));
   }
 
   async reprocess(query: {
@@ -254,25 +282,7 @@ export class LorawanUplinksService {
     uplink: ICreateLorawanUplink,
     dispositivo?: IDispositivo,
   ): { valores: IValoresV2['valores']; canales: number[] } | null {
-    const raw = (uplink.rawPayload || {}) as Record<string, any>;
-    const payloadHex =
-      this.getFirstString(
-        raw.FRMPayload,
-        raw.frmPayload,
-        raw.frmpayload,
-        raw.payloadHex,
-        raw.hexPayload,
-        raw.dataHex,
-        raw.decoded?.FRMPayload,
-        raw.decoded?.frmPayload,
-        raw.MACPayload?.FRMPayload,
-        raw.macPayload?.frmPayload,
-        raw.macPayload?.FRMPayload,
-        raw.uplink?.FRMPayload,
-        raw.uplink?.frmPayload,
-      ) ||
-      (this.isLikelyHexPayload(uplink.data) ? uplink.data : undefined) ||
-      this.base64PayloadToHex(uplink.data);
+    const payloadHex = extractUc511PayloadHex(uplink);
 
     const decoded = decodeUc511SentekPayload(payloadHex);
     if (!decoded) {
@@ -285,6 +295,80 @@ export class LorawanUplinksService {
         dispositivo?.configuracionLecturas?.entradaAnalogica,
       ),
       canales: decoded.raw.blocks.map((block) => block.channel),
+    };
+  }
+
+  private toRawFrame(
+    uplink: ICreateLorawanUplink & { _id?: string; fechaCreacion?: string },
+    dispositivo?: IDispositivo,
+  ): ILorawanRawFrame {
+    const payloadHex = extractUc511PayloadHex(uplink);
+    const decoded = decodeUc511SentekPayload(payloadHex);
+    const readings: ILorawanRawReading[] = [];
+    const pushSoil = (
+      variable: 'humedad_suelo' | 'salinidad_suelo' | 'temperatura_suelo',
+      unit: string,
+      values: Record<string, number | undefined>,
+    ) => {
+      Object.entries(values).forEach(([depth, value]) => {
+        if (typeof value !== 'number' || !Number.isFinite(value)) return;
+        readings.push({
+          serviceId: 'perfil-suelo-sentek',
+          variable,
+          value,
+          unit,
+          depthCm: Number(depth.replace('cm', '')),
+        });
+      });
+    };
+    if (decoded) {
+      pushSoil('humedad_suelo', '%', decoded.soil.moisture);
+      pushSoil('salinidad_suelo', 'VIC', decoded.soil.salinity);
+      pushSoil('temperatura_suelo', 'C', decoded.soil.temperature);
+      if (decoded.analog.rawMa !== null) {
+        readings.push({
+          serviceId: 'nivel-napa',
+          variable: 'corriente_analogica',
+          value: decoded.analog.rawMa,
+          unit: 'mA',
+          channel: decoded.analog.channel || undefined,
+        });
+        const config = dispositivo?.configuracionLecturas?.entradaAnalogica;
+        const valores = decodedUc511ToReporteValores(decoded, config) as any;
+        const key = config?.variable === 'nivel_napa' ? 'Napa' : 'PresiÃ³n';
+        const calibrated = valores?.[key]?.[0];
+        const value = calibrated?.valores?.actual;
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          readings.push({
+            serviceId: 'nivel-napa',
+            variable:
+              config?.variable === 'nivel_napa' ? 'nivel_napa' : 'presion_agua',
+            value,
+            unit: calibrated.unidad || config?.unidadSalida || '',
+            channel: decoded.analog.channel || undefined,
+            rawValue: decoded.analog.rawMa,
+            rawUnit: 'mA',
+          });
+        }
+      }
+    }
+    return {
+      id: (uplink as any)._id?.toString?.() || (uplink as any)._id,
+      devEUI: String(uplink.devEUI || '').toUpperCase(),
+      timestamp: this.safeDate(
+        uplink.timestamp || (uplink as any).fechaCreacion,
+      ).toISOString(),
+      fCnt: uplink.fCnt,
+      fPort: uplink.fPort,
+      gatewayID: uplink.gatewayID,
+      rssi: uplink.rssi,
+      snr: uplink.snr,
+      frequency: uplink.frequency,
+      dr: uplink.dr,
+      payloadHex,
+      payloadBase64: uplink.data,
+      decodeStatus: readings.length ? 'decoded' : 'unrecognized',
+      readings,
     };
   }
 

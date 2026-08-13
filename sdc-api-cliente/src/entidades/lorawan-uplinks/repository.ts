@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ILorawanUplink } from 'modelos/src';
+import { ILorawanRawFrame, ILorawanUplink } from 'modelos/src';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 import { API_DATOS } from '../../env';
 
@@ -22,6 +22,17 @@ export class LorawanUplinksRepository {
     return await this.axios.GET<ILorawanUplink[]>(url, {
       params: { limit },
     });
+  }
+
+  async rawHistory(params: {
+    devEUI: string;
+    days?: string | number;
+    limit?: string | number;
+  }): Promise<ILorawanRawFrame[]> {
+    return await this.axios.GET<ILorawanRawFrame[]>(
+      `${API_DATOS}/lorawan/uplinks/raw-history`,
+      { params },
+    );
   }
 
   async reprocess(params: {

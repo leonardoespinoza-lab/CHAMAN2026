@@ -93,6 +93,57 @@ export function decodeUc511SentekPayload(
   return hasDecodedData(decoded) ? decoded : null;
 }
 
+export function extractUc511PayloadHex(uplink?: {
+  data?: string;
+  rawPayload?: Record<string, any>;
+}): string | undefined {
+  if (!uplink) return undefined;
+  const raw = uplink.rawPayload || {};
+  const candidates = [
+    raw.FRMPayload,
+    raw.frmPayload,
+    raw.frmpayload,
+    raw.payloadHex,
+    raw.hexPayload,
+    raw.dataHex,
+    raw.decoded?.FRMPayload,
+    raw.decoded?.frmPayload,
+    raw.MACPayload?.FRMPayload,
+    raw.macPayload?.frmPayload,
+    raw.macPayload?.FRMPayload,
+    raw.uplink?.FRMPayload,
+    raw.uplink?.frmPayload,
+  ];
+  const explicit = candidates.find(
+    (value) => typeof value === 'string' && value.trim().length > 0,
+  );
+  if (explicit) return normalizePayloadHex(explicit);
+  if (isHexPayload(uplink.data)) return normalizePayloadHex(uplink.data!);
+  if (!uplink.data) return undefined;
+  try {
+    return Buffer.from(uplink.data, 'base64').toString('hex') || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizePayloadHex(value: string): string | undefined {
+  const cleaned = value.replace(/0x/gi, '').replace(/[^a-fA-F0-9]/g, '');
+  return cleaned.length >= 2 && cleaned.length % 2 === 0
+    ? cleaned.toLowerCase()
+    : undefined;
+}
+
+function isHexPayload(value?: string): boolean {
+  if (!value) return false;
+  const cleaned = value.replace(/0x/gi, '').replace(/\s/g, '');
+  return (
+    cleaned.length >= 2 &&
+    cleaned.length % 2 === 0 &&
+    /^[a-fA-F0-9]+$/.test(cleaned)
+  );
+}
+
 export function decodedUc511ToReporteValores(
   decoded: DecodedUc511SentekPayload,
   analogConfig?: IConfiguracionEntradaAnalogica,

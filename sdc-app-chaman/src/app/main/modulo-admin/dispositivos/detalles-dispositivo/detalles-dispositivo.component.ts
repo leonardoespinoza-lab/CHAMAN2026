@@ -1,8 +1,9 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { IDispositivo, IReporte } from 'modelos/src';
+import { IDispositivo, ILorawanRawFrame, IReporte } from 'modelos/src';
 import { DispositivoService } from '../../../../auxiliares/http/dispositivos.service';
 import { ReporteService } from '../../../../auxiliares/http/reporte.service';
+import { LorawanUplinksService } from '../../../../auxiliares/http/lorawan-uplinks.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
 import { ParamsService } from '../../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../../auxiliares/shared.module';
@@ -36,6 +37,7 @@ export class DetallesDispositivoComponent implements OnInit {
   public loadingHistorico = false;
   public diasHistorico = 7;
   public reportesHistoricos: IReporte[] = [];
+  public rawFrames: ILorawanRawFrame[] = [];
 
   public get esControladorSentek(): boolean {
     return !!this.dispositivo?.configuracionLecturas?.perfilSuelo || this.esLanzaDeSuelo;
@@ -99,7 +101,8 @@ export class DetallesDispositivoComponent implements OnInit {
     private params: ParamsService,
     private route: ActivatedRoute,
     private service: DispositivoService,
-    private reportesService: ReporteService
+    private reportesService: ReporteService,
+    private lorawanUplinks: LorawanUplinksService
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -143,7 +146,13 @@ export class DetallesDispositivoComponent implements OnInit {
     if ((!this.esLanzaDeSuelo && !this.esSensorAmbiente) || !id) return;
     this.loadingHistorico = true;
     try {
-      const response = await this.reportesService.historico(id, this.diasHistorico, 2500);
+      const [response, rawFrames] = await Promise.all([
+        this.reportesService.historico(id, this.diasHistorico, 2500),
+        this.dispositivo?.deveui
+          ? this.lorawanUplinks.rawHistory(this.dispositivo.deveui, this.diasHistorico, 5000)
+          : Promise.resolve([]),
+      ]);
+      this.rawFrames = rawFrames;
       this.reportesHistoricos = response.datos?.length
         ? response.datos
         : this.ultimoReporte
@@ -152,6 +161,7 @@ export class DetallesDispositivoComponent implements OnInit {
     } catch (error) {
       console.error('Error al cargar historico de reportes del dispositivo', error);
       this.reportesHistoricos = this.ultimoReporte ? [this.ultimoReporte] : [];
+      this.rawFrames = [];
     } finally {
       this.loadingHistorico = false;
     }

@@ -2,6 +2,7 @@ import {
   calibrateAnalogInput,
   decodeUc511SentekPayload,
   decodedUc511ToReporteValores,
+  extractUc511PayloadHex,
 } from './uc511-sentek.decoder';
 
 describe('decodeUc511SentekPayload', () => {
@@ -45,6 +46,15 @@ describe('decodeUc511SentekPayload', () => {
     expect(decoded?.soil.moisture['35cm']).toBeCloseTo(38.81273, 5);
     expect(decoded?.soil.salinity['5cm']).toBeCloseTo(1487.012, 3);
     expect(decoded?.soil.temperature['5cm']).toBeUndefined();
+  });
+
+  it('extracts a UC511 payload from the broker base64 without altering the evidence', () => {
+    const base64 = Buffer.from('05e29c489c489c489c48', 'hex').toString(
+      'base64',
+    );
+    expect(extractUc511PayloadHex({ data: base64 })).toBe(
+      '05e29c489c489c489c48',
+    );
   });
 
   it('does not declare napa until the independent analog sensor is calibrated', () => {

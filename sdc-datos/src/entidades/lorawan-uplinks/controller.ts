@@ -33,6 +33,15 @@ export class LorawanUplinksController {
     return await this.service.latestByDevice(limit);
   }
 
+  @Get('raw-history')
+  async rawHistory(
+    @Query('devEUI') devEUI?: string,
+    @Query('days') days?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return await this.service.rawHistory({ devEUI, days, limit });
+  }
+
   @Post('reprocess')
   async reprocess(
     @Body()

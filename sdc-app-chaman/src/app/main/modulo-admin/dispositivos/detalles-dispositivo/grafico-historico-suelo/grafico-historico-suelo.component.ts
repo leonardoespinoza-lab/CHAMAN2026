@@ -1,5 +1,5 @@
 import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
-import { IReporte } from 'modelos/src';
+import { ILorawanRawFrame, ILorawanRawReading, IReporte } from 'modelos/src';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { buildSentekProfile } from '../sentek-profile';
@@ -47,6 +47,7 @@ interface ProfileRow {
 })
 export class GraficoHistoricoSueloComponent implements OnChanges {
   @Input() reportes: IReporte[] = [];
+  @Input() rawFrames: ILorawanRawFrame[] = [];
   @Input() titulo?: string;
   @Input() subtitulo?: string;
   @Input() fechaDesde?: string;
@@ -82,7 +83,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   ];
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['reportes'] || changes['fechaDesde']) {
+    if (changes['reportes'] || changes['rawFrames'] || changes['fechaDesde']) {
       this.prepareOptions();
     }
   }
@@ -115,6 +116,14 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     URL.revokeObjectURL(url);
   }
 
+  public get rawEvidenceFrames(): ILorawanRawFrame[] {
+    return this.filteredRawFrames().slice(-20).reverse();
+  }
+
+  public rawReadingCount(frame: ILorawanRawFrame): number {
+    return (frame.readings || []).filter((reading) => reading.variable !== 'corriente_analogica').length;
+  }
+
   private prepareOptions(): void {
     this.assignmentNotice = this.buildAssignmentNotice();
     const available = this.definitions.filter((definition) => this.hasMetric(definition.key));
@@ -144,7 +153,21 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   private buildHistoricalSeries(definition: SoilMetricDefinition): any[] {
     const byDepth = new Map<number, HistoricalPoint[]>();
 
-    for (const reporte of this.filteredReports()) {
+    for (const frame of this.filteredRawFrames()) {
+      for (const reading of this.rawReadingsForMetric(frame, definition.key)) {
+        if (reading.depthCm === undefined) continue;
+        if (!byDepth.has(reading.depthCm)) byDepth.set(reading.depthCm, []);
+        byDepth.get(reading.depthCm)!.push({
+          x: new Date(frame.timestamp).getTime(),
+          y: reading.value,
+          depth: reading.depthCm,
+          raw: reading.rawValue,
+          rawUnit: reading.rawUnit,
+        });
+      }
+    }
+
+    for (const reporte of this.rawFrames.length ? [] : this.filteredReports()) {
       const timestamp = this.getReporteTimestamp(reporte);
       if (!timestamp) continue;
 
@@ -186,7 +209,20 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   private buildLatestDepthPoints(definition: SoilMetricDefinition): HistoricalPoint[] {
     const latestByDepth = new Map<number, HistoricalPoint>();
 
-    for (const reporte of [...this.filteredReports()].reverse()) {
+    for (const frame of [...this.filteredRawFrames()].reverse()) {
+      for (const reading of this.rawReadingsForMetric(frame, definition.key)) {
+        if (reading.depthCm === undefined || latestByDepth.has(reading.depthCm)) continue;
+        latestByDepth.set(reading.depthCm, {
+          x: new Date(frame.timestamp).getTime(),
+          y: reading.value,
+          depth: reading.depthCm,
+          raw: reading.rawValue,
+          rawUnit: reading.rawUnit,
+        });
+      }
+    }
+
+    for (const reporte of this.rawFrames.length ? [] : [...this.filteredReports()].reverse()) {
       const timestamp = this.getReporteTimestamp(reporte) || Date.now();
       const profile = buildSentekProfile(reporte);
 
@@ -533,7 +569,17 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   private buildNapaPoints(): NapaPoint[] {
     const points: NapaPoint[] = [];
 
-    for (const reporte of this.filteredReports()) {
+    for (const frame of this.filteredRawFrames()) {
+      for (const reading of frame.readings.filter((item) => item.variable === 'nivel_napa')) {
+        points.push({
+          x: new Date(frame.timestamp).getTime(),
+          y: this.normalizarNapa(reading.value, reading.unit),
+          unit: 'm',
+        });
+      }
+    }
+
+    for (const reporte of this.rawFrames.length ? [] : this.filteredReports()) {
       const timestamp = this.getReporteTimestamp(reporte);
       if (!timestamp) continue;
 
@@ -581,18 +627,34 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   private buildResumen(definition: SoilMetricDefinition, series: any[], latestPoints: HistoricalPoint[]): string {
     const pointCount = series.reduce((sum, item) => sum + (item.data?.length || 0), 0);
     if (!pointCount) return 'Sin lecturas historicas para esta variable';
-
-    const average = latestPoints.length
-      ? latestPoints.reduce((sum, point) => sum + point.y, 0) / latestPoints.length
-      : undefined;
-    const averageText =
-      average === undefined ? '' : ` - promedio actual ${average.toFixed(definition.decimals)} ${definition.unit}`;
-
-    return `${series.length} profundidades - ${pointCount} lecturas${averageText}`;
+    const latest = latestPoints.length ? ` - ultimo perfil ${latestPoints.length}/${series.length} profundidades` : '';
+    return `${series.length} profundidades - ${pointCount} datos crudos${latest}`;
   }
 
   private hasMetric(key: SoilMetricKey): boolean {
+    if (this.rawFrames.length) {
+      return this.filteredRawFrames().some((frame) => this.rawReadingsForMetric(frame, key).length > 0);
+    }
     return this.filteredReports().some((reporte) => buildSentekProfile(reporte).some((row) => !!row[key]));
+  }
+
+  private rawReadingsForMetric(frame: ILorawanRawFrame, key: SoilMetricKey): ILorawanRawReading[] {
+    const variable = {
+      humedad: 'humedad_suelo',
+      salinidad: 'salinidad_suelo',
+      temperatura: 'temperatura_suelo',
+    }[key];
+    return (frame.readings || []).filter((reading) => reading.variable === variable);
+  }
+
+  private filteredRawFrames(): ILorawanRawFrame[] {
+    const desde = this.getFechaDesdeMs();
+    return [...(this.rawFrames || [])]
+      .filter((frame) => {
+        const timestamp = new Date(frame.timestamp).getTime();
+        return Number.isFinite(timestamp) && (!desde || timestamp >= desde);
+      })
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }
 
   private getDefinition(key: SoilMetricKey): SoilMetricDefinition {
@@ -637,6 +699,23 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
   private getCsvRows(): unknown[][] {
     const rows: unknown[][] = [];
+
+    if (this.rawFrames.length) {
+      for (const frame of this.filteredRawFrames()) {
+        for (const reading of frame.readings || []) {
+          rows.push([
+            frame.timestamp,
+            reading.depthCm ?? '',
+            reading.variable === 'humedad_suelo' ? reading.value : '',
+            reading.variable === 'salinidad_suelo' ? reading.value : '',
+            reading.variable === 'temperatura_suelo' ? reading.value : '',
+            reading.rawValue ?? reading.value,
+            reading.rawUnit ?? reading.unit,
+          ]);
+        }
+      }
+      return rows;
+    }
 
     for (const reporte of this.filteredReports()) {
       const timestamp = this.getReporteTimestamp(reporte);

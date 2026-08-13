@@ -1,17 +1,9 @@
 import { CommonModule } from '@angular/common';
-import {
-  Component,
-  EventEmitter,
-  Input,
-  OnChanges,
-  OnDestroy,
-  OnInit,
-  Output,
-  SimpleChanges,
-} from '@angular/core';
-import { IDispositivo, IReporte } from 'modelos/src';
+import { Component, EventEmitter, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges } from '@angular/core';
+import { IDispositivo, ILorawanRawFrame, IReporte } from 'modelos/src';
 import { UbicarComponent } from '../../../../../auxiliares/componentes/ubicar/ubicar.component';
 import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
+import { LorawanUplinksService } from '../../../../../auxiliares/http/lorawan-uplinks.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { GraficoHistoricoAmbienteComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-ambiente/grafico-historico-ambiente.component';
@@ -48,10 +40,12 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
   public reportesHistoricos: IReporte[] = [];
   public diasHistorico = 7;
   public loadingHistorico = false;
+  public rawFrames: ILorawanRawFrame[] = [];
 
   constructor(
     public helper: HelperService,
     private reportesService: ReporteService,
+    private lorawanUplinks: LorawanUplinksService
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -100,9 +94,7 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
     this.esLanzaDeSuelo = this.tieneVariableSuelo(this.dispositivo);
     this.esSensorAmbiente = this.tieneVariableAmbiental(this.dispositivo);
     this.ultimoReporte = this.dispositivo?.ultimoReporte;
-    this.datosLanza = this.esLanzaDeSuelo
-      ? buildSentekProfile(this.ultimoReporte)
-      : [];
+    this.datosLanza = this.esLanzaDeSuelo ? buildSentekProfile(this.ultimoReporte) : [];
     this.reportesHistoricos = this.ultimoReporte ? [this.ultimoReporte] : [];
     this.loading = false;
     this.cargarHistorico();
@@ -113,7 +105,13 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
     if ((!this.esLanzaDeSuelo && !this.esSensorAmbiente) || !id) return;
     this.loadingHistorico = true;
     try {
-      const response = await this.reportesService.historico(id, this.diasHistorico, 2500);
+      const [response, rawFrames] = await Promise.all([
+        this.reportesService.historico(id, this.diasHistorico, 2500),
+        this.dispositivo?.deveui
+          ? this.lorawanUplinks.rawHistory(this.dispositivo.deveui, this.diasHistorico, 5000)
+          : Promise.resolve([]),
+      ]);
+      this.rawFrames = rawFrames;
       this.reportesHistoricos = response.datos?.length
         ? response.datos
         : this.ultimoReporte
@@ -122,6 +120,7 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
     } catch (error) {
       console.error('Error al cargar historico de reportes del dispositivo', error);
       this.reportesHistoricos = this.ultimoReporte ? [this.ultimoReporte] : [];
+      this.rawFrames = [];
     } finally {
       this.loadingHistorico = false;
     }
@@ -131,7 +130,9 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
     const sensores = dispositivo?.sensores || [];
     const valores = (dispositivo?.ultimoReporte?.datos?.valores || {}) as unknown as Record<string, any>;
     return (
-      sensores.some((sensor) => ['Temperatura', 'Humedad', 'Batería', 'Bateria', 'BaterÃ­a'].includes(sensor as string)) ||
+      sensores.some((sensor) =>
+        ['Temperatura', 'Humedad', 'Batería', 'Bateria', 'BaterÃ­a'].includes(sensor as string)
+      ) ||
       !!valores['Temperatura'] ||
       !!valores['Humedad']
     );

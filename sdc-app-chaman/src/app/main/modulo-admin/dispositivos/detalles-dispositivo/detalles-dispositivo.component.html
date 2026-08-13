@@ -12,7 +12,7 @@
       </div>
     </div>
 
-    @if ((esLanzaDeSuelo && datosLanza.length > 0) || esSensorAmbiente) {
+    @if ((esLanzaDeSuelo && (datosLanza.length > 0 || rawFrames.length > 0)) || esSensorAmbiente) {
       <div class="device-view-actions">
         @if (vistaActiva === 'grafico') {
           <p-selectButton
@@ -105,8 +105,9 @@
       }
       <app-grafico-historico-suelo
         [reportes]="reportesHistoricos"
+        [rawFrames]="rawFrames"
         [titulo]="'Historico Sentek - ' + dispositivo?.nombre"
-        [subtitulo]="'Cada linea representa una profundidad de medicion'"
+        [subtitulo]="'Datos crudos: cada punto es una lectura LoRaWAN recibida en esa profundidad'"
       ></app-grafico-historico-suelo>
     }
   } @else if (esSensorAmbiente) {

@@ -36,7 +36,9 @@
           </article>
           <article>
             <span>Ultimo reporte</span>
-            <strong>{{ ultimaComunicacion(dispositivo) ? (ultimaComunicacion(dispositivo) | date: 'short') : '-' }}</strong>
+            <strong>{{
+              ultimaComunicacion(dispositivo) ? (ultimaComunicacion(dispositivo) | date: 'short') : '-'
+            }}</strong>
           </article>
           <article>
             <span>Gateway</span>
@@ -51,15 +53,15 @@
         @if (perfil(dispositivo).length) {
           <div class="device-summary-grid">
             <article>
-              <span>Humedad prom.</span>
+              <span>Humedad · primer nivel</span>
               <strong>{{ formatearValor(resumen(dispositivo).humedad) }}</strong>
             </article>
             <article>
-              <span>Salinidad prom.</span>
+              <span>Salinidad · primer nivel</span>
               <strong>{{ formatearValor(resumen(dispositivo).salinidad) }}</strong>
             </article>
             <article>
-              <span>Temp. prom.</span>
+              <span>Temperatura · primer nivel</span>
               <strong>{{ formatearValor(resumen(dispositivo).temperatura) }}</strong>
             </article>
           </div>

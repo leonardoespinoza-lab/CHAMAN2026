@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import { IUsuario } from 'modelos/src';
+import { DispositivosService } from '../dispositivos/service';
 import { LorawanUplinksRepository } from './repository';
 
 @Injectable()
 export class LorawanUplinksService {
-  constructor(private readonly repository: LorawanUplinksRepository) {}
+  constructor(
+    private readonly repository: LorawanUplinksRepository,
+    private readonly dispositivos: DispositivosService,
+  ) {}
 
   async latest(query: {
     devEUI?: string;
@@ -23,6 +28,24 @@ export class LorawanUplinksService {
     return await this.repository.latestByDevice(
       Math.min(Number(limit) || 1000, 5000),
     );
+  }
+
+  async rawHistory(
+    devEUI: string,
+    days: string | number | undefined,
+    limit: string | number | undefined,
+    user: IUsuario,
+  ) {
+    const dispositivo = await this.dispositivos.assertPuedeVerPorIdentificador(
+      devEUI,
+      user,
+      'Sensores',
+    );
+    return await this.repository.rawHistory({
+      devEUI: dispositivo.deveui || devEUI,
+      days: Math.max(1, Math.min(Number(days) || 7, 365)),
+      limit: Math.max(1, Math.min(Number(limit) || 5000, 20000)),
+    });
   }
 
   async reprocess(query: {

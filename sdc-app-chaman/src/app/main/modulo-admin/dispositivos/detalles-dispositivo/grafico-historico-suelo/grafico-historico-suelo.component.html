@@ -4,6 +4,9 @@
       <div>
         <span>{{ titulo || 'Historico Sentek' }}</span>
         <strong>{{ resumen }}</strong>
+        @if (rawFrames.length) {
+          <small class="raw-evidence-badge">Sin promedios · un punto por lectura LoRaWAN recibida</small>
+        }
         @if (subtitulo) {
           <small>{{ subtitulo }}</small>
         }
@@ -23,12 +26,7 @@
             <option [ngValue]="option.value">{{ option.label }}</option>
           }
         </select>
-        <button
-          class="soil-history-export"
-          data-chaman-action="secondary"
-          type="button"
-          (click)="exportarCsv()"
-        >
+        <button class="soil-history-export" data-chaman-action="secondary" type="button" (click)="exportarCsv()">
           Exportar CSV
         </button>
       </div>
@@ -63,6 +61,32 @@
         <app-chart [options]="napaChartOptions"></app-chart>
       </section>
     }
+
+    @if (rawEvidenceFrames.length) {
+      <section class="raw-evidence" aria-label="Evidencia de uplinks LoRaWAN">
+        <header>
+          <div>
+            <span>Evidencia LoRaWAN</span>
+            <strong>Ultimas {{ rawEvidenceFrames.length }} tramas conservadas sin agregacion</strong>
+            <small>Fecha, contador, gateway y calidad de radio corresponden al paquete recibido.</small>
+          </div>
+        </header>
+        <div class="raw-evidence-table">
+          <div class="raw-evidence-row raw-evidence-head">
+            <span>Fecha</span><span>FCnt / puerto</span><span>Gateway</span><span>Señal</span><span>Lecturas</span>
+          </div>
+          @for (frame of rawEvidenceFrames; track frame.id || frame.timestamp + '-' + frame.fCnt) {
+            <div class="raw-evidence-row">
+              <strong>{{ frame.timestamp | date: 'short' }}</strong>
+              <span>{{ frame.fCnt ?? '—' }} / {{ frame.fPort ?? '—' }}</span>
+              <span>{{ frame.gatewayID || '—' }}</span>
+              <span>{{ frame.rssi ?? '—' }} dBm · {{ frame.snr ?? '—' }} dB</span>
+              <span>{{ rawReadingCount(frame) }} dato{{ rawReadingCount(frame) === 1 ? '' : 's' }}</span>
+            </div>
+          }
+        </div>
+      </section>
+    }
   </article>
 } @else {
   @if (napaChartOptions) {
@@ -77,11 +101,57 @@
         </header>
 
         <app-chart [options]="napaChartOptions"></app-chart>
+
+        @if (rawEvidenceFrames.length) {
+          <div class="raw-evidence-table compact">
+            @for (frame of rawEvidenceFrames; track frame.id || frame.timestamp + '-' + frame.fCnt) {
+              <div class="raw-evidence-row">
+                <strong>{{ frame.timestamp | date: 'short' }}</strong>
+                <span>FCnt {{ frame.fCnt ?? '—' }}</span>
+                <span>{{ frame.rssi ?? '—' }} dBm · {{ frame.snr ?? '—' }} dB</span>
+                <span>{{ rawReadingCount(frame) }} dato{{ rawReadingCount(frame) === 1 ? '' : 's' }}</span>
+              </div>
+            }
+          </div>
+        }
       </section>
     </article>
   } @else {
     <div class="sin-datos">
-      <p-message severity="info" text="No hay historico suficiente para graficar la lanza de suelo"></p-message>
+      <p-message
+        severity="info"
+        [text]="
+          rawFrames.length
+            ? 'Hay tramas LoRaWAN recibidas, pero el perfil todavía no contiene lecturas decodificables.'
+            : 'No hay histórico suficiente para graficar los sensores del controlador.'
+        "
+      ></p-message>
     </div>
+
+    @if (rawEvidenceFrames.length) {
+      <section class="raw-evidence raw-evidence-standalone" aria-label="Evidencia de uplinks LoRaWAN">
+        <header>
+          <div>
+            <span>Evidencia LoRaWAN</span>
+            <strong>{{ rawEvidenceFrames.length }} tramas recibidas sin agregación</strong>
+            <small>La comunicación está activa; falta interpretar el contenido del perfil del dispositivo.</small>
+          </div>
+        </header>
+        <div class="raw-evidence-table">
+          <div class="raw-evidence-row raw-evidence-head">
+            <span>Fecha</span><span>FCnt / puerto</span><span>Gateway</span><span>Señal</span><span>Lecturas</span>
+          </div>
+          @for (frame of rawEvidenceFrames; track frame.id || frame.timestamp + '-' + frame.fCnt) {
+            <div class="raw-evidence-row">
+              <strong>{{ frame.timestamp | date: 'short' }}</strong>
+              <span>{{ frame.fCnt ?? '—' }} / {{ frame.fPort ?? '—' }}</span>
+              <span>{{ frame.gatewayID || '—' }}</span>
+              <span>{{ frame.rssi ?? '—' }} dBm · {{ frame.snr ?? '—' }} dB</span>
+              <span>{{ rawReadingCount(frame) }} dato{{ rawReadingCount(frame) === 1 ? '' : 's' }}</span>
+            </div>
+          }
+        </div>
+      </section>
+    }
   }
 }

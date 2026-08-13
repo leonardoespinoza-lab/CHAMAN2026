@@ -18,9 +18,51 @@ export interface ILorawanUplink {
   rawPayload?: Record<string, any>;
 }
 
-type Omitir = '_id';
-export interface ICreateLorawanUplink
-  extends Omit<Partial<ILorawanUplink>, Omitir> {}
+export type LorawanRawVariable =
+  | "humedad_suelo"
+  | "salinidad_suelo"
+  | "temperatura_suelo"
+  | "corriente_analogica"
+  | "nivel_napa"
+  | "presion_agua";
 
-export interface IUpdateLorawanUplink
-  extends Omit<Partial<ILorawanUplink>, Omitir> {}
+/** Una medicion tal como fue recibida en una trama, sin promedios de Chaman. */
+export interface ILorawanRawReading {
+  serviceId: "perfil-suelo-sentek" | "nivel-napa";
+  variable: LorawanRawVariable;
+  value: number;
+  unit: string;
+  depthCm?: number;
+  channel?: number;
+  rawValue?: number;
+  rawUnit?: string;
+}
+
+/** Evidencia auditable de un uplink fisico y sus lecturas decodificadas. */
+export interface ILorawanRawFrame {
+  id?: string;
+  devEUI: string;
+  timestamp: string;
+  fCnt?: number;
+  fPort?: number;
+  gatewayID?: string;
+  rssi?: number;
+  snr?: number;
+  frequency?: number;
+  dr?: number;
+  payloadHex?: string;
+  payloadBase64?: string;
+  decodeStatus: "decoded" | "unrecognized";
+  readings: ILorawanRawReading[];
+}
+
+type Omitir = "_id";
+export interface ICreateLorawanUplink extends Omit<
+  Partial<ILorawanUplink>,
+  Omitir
+> {}
+
+export interface IUpdateLorawanUplink extends Omit<
+  Partial<ILorawanUplink>,
+  Omitir
+> {}
