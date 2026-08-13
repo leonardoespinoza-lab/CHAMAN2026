@@ -14,7 +14,7 @@ describe('DispositivosRepository - inventario ChirpStack', () => {
     const result = await repository.syncFromLorawanCatalog([
       {
         devEUI: 'aabbccddeeff0011',
-        name: 'Controlador Arturo',
+        name: 'Controlador Arturo UC511',
         applicationID: 'app-1',
         applicationName: 'Campo Arturo',
         deviceProfileID: 'profile-1',
@@ -25,7 +25,12 @@ describe('DispositivosRepository - inventario ChirpStack', () => {
     expect(model.create).toHaveBeenCalledWith(
       expect.objectContaining({
         deveui: 'AABBCCDDEEFF0011',
-        nombre: 'Controlador Arturo',
+        nombre: 'Controlador Arturo UC511',
+        tipo: 'Sensor de Humedad de Suelo',
+        servicios: expect.arrayContaining([
+          expect.objectContaining({ id: 'perfil-suelo-sentek' }),
+          expect.objectContaining({ id: 'nivel-napa' }),
+        ]),
         metadata: expect.objectContaining({
           origenInventario: 'ChirpStack',
           chirpstackApplicationID: 'app-1',

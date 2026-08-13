@@ -241,6 +241,74 @@ h1 {
   padding-top: 12px;
 }
 
+.service-assignment-intro {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.service-assignment-intro h2,
+.service-assignment-intro p,
+.service-assignment-card h3 {
+  margin: 0;
+}
+
+.service-assignment-intro p {
+  max-width: 78ch;
+  color: var(--p-text-muted-color);
+  line-height: 1.5;
+}
+
+.service-assignment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.service-assignment-card {
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 16px;
+  background: var(--p-content-background);
+  padding: 18px;
+}
+
+.service-assignment-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.service-sensors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.service-sensors span {
+  border-radius: 999px;
+  background: var(--p-surface-100, #eef3f3);
+  color: var(--p-text-muted-color);
+  padding: 5px 9px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.legacy-assignment {
+  margin-top: 18px;
+  border-top: 1px solid var(--p-content-border-color);
+  padding-top: 14px;
+}
+
+.legacy-assignment summary {
+  margin-bottom: 14px;
+  color: var(--p-text-muted-color);
+  cursor: pointer;
+  font-weight: 700;
+}
+
 .sensor-component {
   display: grid;
   gap: 14px;
@@ -359,6 +427,7 @@ h1 {
   }
 
   .form-grid,
+  .service-assignment-grid,
   .lorawan-readonly,
   .history-grid,
   .sensor-facts {

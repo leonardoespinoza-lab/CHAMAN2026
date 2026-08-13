@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { DispositivoSchema } from './schema';
+import { serviciosDispositivoNormalizados } from 'modelos/src';
 
 describe('DispositivoSchema - calificacion meteorologica', () => {
   const modelName = 'DispositivoCalificacionMeteorologicaSpec';
@@ -147,5 +148,72 @@ describe('DispositivoSchema - calificacion meteorologica', () => {
         'calificacionMeteorologica.historialCalibraciones.0.offset',
       ]),
     );
+  });
+
+  it('normaliza un UC511 como un controlador con dos servicios independientes', () => {
+    const servicios = serviciosDispositivoNormalizados({
+      deveui: '24E124454E358347',
+      idLote: 'lote-heredado',
+      configuracionLecturas: {
+        perfilSuelo: {
+          tipo: 'sonda_sentek_120cm',
+          protocolo: 'SDI-12',
+          niveles: 12,
+          profundidadesCm: [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115],
+          variables: ['humedad_vwc', 'salinidad_vic', 'temperatura'],
+        },
+        entradaAnalogica: {
+          canal: 1,
+          tipoSenal: '4-20mA',
+          variable: 'nivel_napa',
+          entradaMinMa: 4,
+          entradaMaxMa: 20,
+          salidaMin: 0,
+          salidaMax: 10,
+          unidadSalida: 'm',
+          profundidadInstalacionM: 6,
+        },
+      },
+    });
+
+    expect(servicios.map((servicio) => servicio.id)).toEqual([
+      'perfil-suelo-sentek',
+      'nivel-napa',
+    ]);
+    expect(servicios[0].sensores).toEqual(
+      expect.arrayContaining([
+        'Humedad Suelo Profundidad',
+        'Temperatura Suelo',
+        'Salinidad Suelo',
+      ]),
+    );
+    expect(servicios[1].sensores).toEqual(
+      expect.arrayContaining(['Entrada Analógica', 'Presión', 'Napa']),
+    );
+  });
+
+  it('respeta servicios explicitamente deshabilitados y no los vuelve a inferir', () => {
+    expect(
+      serviciosDispositivoNormalizados({
+        configuracionLecturas: {
+          entradaAnalogica: {
+            canal: 1,
+            tipoSenal: '4-20mA',
+            variable: 'nivel_napa',
+            entradaMinMa: 4,
+            entradaMaxMa: 20,
+          },
+        },
+        servicios: [
+          {
+            id: 'nivel-napa',
+            tipo: 'nivel_napa',
+            nombre: 'Napa',
+            sensores: ['Napa'],
+            habilitado: false,
+          },
+        ],
+      }),
+    ).toEqual([]);
   });
 });

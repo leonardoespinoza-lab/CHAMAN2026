@@ -1,7 +1,15 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { IDispositivo, IListado, ILorawanUplink, IPopulate, IQueryParam } from 'modelos/src';
+import {
+  IDispositivo,
+  IListado,
+  ILorawanUplink,
+  IPopulate,
+  IQueryParam,
+  IServicioDispositivo,
+  serviciosDispositivoNormalizados,
+} from 'modelos/src';
 import { ConfirmationService } from 'primeng/api';
 import { Subscription } from 'rxjs';
 import { UbicarComponent } from '../../../../auxiliares/componentes/ubicar/ubicar.component';
@@ -231,6 +239,13 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
     if (!device) {
       return 'Nuevo: pendiente de agregar a Chaman';
     }
+    const servicios = this.logicalServices(device);
+    if (device.servicios?.length) {
+      const asignados = servicios.filter((servicio) => servicio.idLote).length;
+      return `${servicios.length} servicios · ${asignados} asignado${asignados === 1 ? '' : 's'} · ${
+        servicios.length - asignados
+      } pendiente${servicios.length - asignados === 1 ? '' : 's'}`;
+    }
     if (device.lote?.nombre || device.idLote) {
       return `Asignado a lote: ${device.lote?.nombre || device.idLote}`;
     }
@@ -248,7 +263,11 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
     if (!device) {
       return 'mqtt-new';
     }
-    if (device.idLote || device.idEstablecimiento || device.idProductor) {
+    if (
+      this.logicalServices(device).some(
+        (servicio) => servicio.idLote || servicio.idEstablecimiento || servicio.idProductor
+      )
+    ) {
       return 'mqtt-assigned';
     }
     return 'mqtt-unassigned';
@@ -300,7 +319,25 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
   }
 
   public get unassignedDevices(): number {
-    return this.datos.filter((dato) => !dato.idProductor && !dato.idEstablecimiento && !dato.idLote).length;
+    return this.datos.reduce(
+      (total, dato) =>
+        total +
+        this.logicalServices(dato).filter(
+          (servicio) => !servicio.idProductor && !servicio.idEstablecimiento && !servicio.idLote
+        ).length,
+      0
+    );
+  }
+
+  public logicalServices(device: IDispositivo): IServicioDispositivo[] {
+    return serviciosDispositivoNormalizados(device);
+  }
+
+  public serviceAssignmentLabel(servicio: IServicioDispositivo): string {
+    if (servicio.idLote) return `Lote ${servicio.idLote}`;
+    if (servicio.idEstablecimiento) return `Establecimiento ${servicio.idEstablecimiento}`;
+    if (servicio.idProductor) return `Productor ${servicio.idProductor}`;
+    return 'Pendiente de asignar';
   }
 
   public get detectedDevices(): number {

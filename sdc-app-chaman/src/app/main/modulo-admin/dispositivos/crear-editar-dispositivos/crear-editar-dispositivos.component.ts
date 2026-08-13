@@ -1,5 +1,5 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { AbstractControl, FormControl, FormGroup, ValidationErrors, Validators } from '@angular/forms';
+import { AbstractControl, FormArray, FormControl, FormGroup, ValidationErrors, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import {
@@ -13,6 +13,8 @@ import {
   IQueryParam,
   SensoresV2,
   TipoDispositivo,
+  IServicioDispositivo,
+  serviciosDispositivoNormalizados,
 } from 'modelos/src';
 import { Subscription } from 'rxjs';
 import { DispositivoService } from '../../../../auxiliares/http/dispositivos.service';
@@ -128,8 +130,71 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     });
   }
 
+  public get serviciosForm(): FormArray {
+    return this.form?.get('servicios') as FormArray;
+  }
+
+  public establecimientosServicio(index: number): IEstablecimiento[] {
+    const idProductor = this.serviciosForm.at(index).get('idProductor')?.value;
+    return idProductor
+      ? this.establecimientos.filter((item) => item.idProductor === idProductor)
+      : this.establecimientos;
+  }
+
+  public lotesServicio(index: number): ILote[] {
+    const grupo = this.serviciosForm.at(index);
+    const idProductor = grupo.get('idProductor')?.value;
+    const idEstablecimiento = grupo.get('idEstablecimiento')?.value;
+    return this.lotes.filter((lote) =>
+      idEstablecimiento
+        ? lote.idEstablecimiento === idEstablecimiento
+        : idProductor
+          ? lote.idProductor === idProductor
+          : true
+    );
+  }
+
+  public onServicioProductorChange(index: number): void {
+    const grupo = this.serviciosForm.at(index);
+    grupo.get('idEstablecimiento')?.setValue(null);
+    grupo.get('idLote')?.setValue(null);
+    grupo.get('fechaAsignacionLote')?.setValue(null);
+  }
+
+  public onServicioEstablecimientoChange(index: number): void {
+    const grupo = this.serviciosForm.at(index);
+    grupo.get('idLote')?.setValue(null);
+    grupo.get('fechaAsignacionLote')?.setValue(null);
+  }
+
+  public onServicioLoteChange(index: number): void {
+    const grupo = this.serviciosForm.at(index);
+    if (!grupo.get('idLote')?.value) {
+      grupo.get('fechaAsignacionLote')?.setValue(null);
+      return;
+    }
+    grupo.get('fechaAsignacionLote')?.setValue(this.toDateTimeLocal(new Date().toISOString()));
+  }
+
+  private crearGrupoServicio(servicio: IServicioDispositivo): FormGroup {
+    return new FormGroup({
+      id: new FormControl(servicio.id, Validators.required),
+      tipo: new FormControl(servicio.tipo, Validators.required),
+      nombre: new FormControl(servicio.nombre, Validators.required),
+      sensores: new FormControl(servicio.sensores || []),
+      habilitado: new FormControl(servicio.habilitado !== false),
+      idProductor: new FormControl(servicio.idProductor),
+      idEstablecimiento: new FormControl(servicio.idEstablecimiento),
+      idLote: new FormControl(servicio.idLote),
+      fechaAsignacionLote: new FormControl(this.toDateTimeLocal(servicio.fechaAsignacionLote)),
+      historialAsignacionesLote: new FormControl(servicio.historialAsignacionesLote || []),
+      fuente: new FormControl(servicio.fuente || 'administrador'),
+    });
+  }
+
   private createForm(): void {
     const source = this.dispositivo || this.prefillLorawan;
+    const servicios = serviciosDispositivoNormalizados(source);
     this.loteInicial = source?.idLote || '';
     this.form = new FormGroup({
       nombre: new FormControl(source?.nombre),
@@ -140,6 +205,7 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
       idEstablecimiento: new FormControl(source?.idEstablecimiento),
       idLote: new FormControl(source?.idLote),
       fechaAsignacionLote: new FormControl(this.toDateTimeLocal(source?.fechaAsignacionLote)),
+      servicios: new FormArray(servicios.map((servicio) => this.crearGrupoServicio(servicio))),
       configuracionLecturas: new FormGroup({
         perfilSuelo: new FormGroup({
           tipo: new FormControl(source?.configuracionLecturas?.perfilSuelo?.tipo || 'sonda_sentek_120cm'),
@@ -239,6 +305,14 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     if (data.fechaAsignacionLote) {
       data.fechaAsignacionLote = new Date(data.fechaAsignacionLote).toISOString();
     }
+    data.servicios = (data.servicios || []).map((servicio) => ({
+      ...servicio,
+      nombre: servicio.nombre?.trim() || servicio.id,
+      fechaAsignacionLote: servicio.fechaAsignacionLote
+        ? new Date(servicio.fechaAsignacionLote).toISOString()
+        : undefined,
+      fuente: 'administrador',
+    }));
     const analog = data.configuracionLecturas?.entradaAnalogica;
     if (analog) {
       data.configuracionLecturas = {

@@ -11,6 +11,8 @@ import {
   ILorawanUplink,
   SensoresV2,
   TipoDispositivo,
+  serviciosDispositivoNormalizados,
+  IServicioDispositivo,
 } from 'modelos/src';
 import { Model } from 'mongoose';
 import { dbQuery } from 'src/auxiliares/helper.service';
@@ -44,10 +46,14 @@ export class DispositivosRepository {
         ? [this.crearSegmentoAsignacion(data, fechaAsignacionLote)]
         : []);
 
+    const servicios = serviciosDispositivoNormalizados(data).map((servicio) =>
+      this.normalizarServicio(servicio),
+    );
     return await this.model.create({
       ...data,
       fechaAsignacionLote,
       historialAsignacionesLote,
+      ...(servicios.length ? { servicios } : {}),
     });
   }
 
@@ -208,6 +214,9 @@ export class DispositivosRepository {
         dr: uplink.dr,
       },
     };
+    const inferredServices = serviciosDispositivoNormalizados(update).map(
+      (servicio) => this.normalizarServicio(servicio),
+    );
 
     const $set: IUpdateDispositivo = {
       fechaUltimaComunicacion: update.fechaUltimaComunicacion,
@@ -243,6 +252,9 @@ export class DispositivosRepository {
       if (!existing.configuracionLecturas && update.configuracionLecturas) {
         $set.configuracionLecturas = update.configuracionLecturas;
       }
+      if (!existing.servicios?.length && inferredServices.length) {
+        $set.servicios = inferredServices;
+      }
     }
 
     if (existing) {
@@ -251,7 +263,10 @@ export class DispositivosRepository {
         .lean();
     }
 
-    return await this.model.create(update);
+    return await this.model.create({
+      ...update,
+      ...(inferredServices.length ? { servicios: inferredServices } : {}),
+    });
   }
 
   async syncFromLorawanCatalog(
@@ -272,6 +287,22 @@ export class DispositivosRepository {
       if (!/^[0-9A-F]{16}$/.test(devEUI)) continue;
       result.total += 1;
       const existing = await this.model.findOne({ deveui: devEUI }).lean();
+      const catalogIdentity = [
+        item.name,
+        item.description,
+        item.deviceProfileName,
+        item.applicationName,
+      ]
+        .filter(Boolean)
+        .join(' ');
+      const inferred = this.inferDeviceFromLorawanUplink({
+        devEUI,
+        deviceName: catalogIdentity,
+        applicationName: item.applicationName,
+      } as ILorawanUplink);
+      const inferredServices = serviciosDispositivoNormalizados(inferred).map(
+        (servicio) => this.normalizarServicio(servicio),
+      );
       const metadata = {
         ...(existing?.metadata || {}),
         origenInventario: 'ChirpStack' as const,
@@ -289,8 +320,10 @@ export class DispositivosRepository {
         await this.model.create({
           deveui: devEUI,
           nombre: item.name?.trim() || devEUI,
-          tipo: 'Otro',
-          sensores: ['Otro'],
+          tipo: inferred.tipo,
+          sensores: inferred.sensores,
+          configuracionLecturas: inferred.configuracionLecturas,
+          ...(inferredServices.length ? { servicios: inferredServices } : {}),
           metadata,
         });
         result.created += 1;
@@ -305,6 +338,21 @@ export class DispositivosRepository {
       ) {
         $set.nombre = item.name.trim();
       }
+      if (
+        (!existing.tipo || existing.tipo === 'Otro') &&
+        inferred.tipo !== 'Otro'
+      ) {
+        $set.tipo = inferred.tipo;
+        $set.sensores = [
+          ...new Set([...(existing.sensores || []), ...inferred.sensores]),
+        ];
+      }
+      if (!existing.configuracionLecturas && inferred.configuracionLecturas) {
+        $set.configuracionLecturas = inferred.configuracionLecturas;
+      }
+      if (!existing.servicios?.length && inferredServices.length) {
+        $set.servicios = inferredServices;
+      }
       const metadataComparable = {
         ...(existing.metadata || {}),
         ...metadata,
@@ -313,11 +361,17 @@ export class DispositivosRepository {
       const existingMetadataComparable = { ...(existing.metadata || {}) };
       delete existingMetadataComparable.chirpstackSincronizadoEn;
       const nameChanged = !!$set.nombre && $set.nombre !== existing.nombre;
+      const classificationChanged = Boolean(
+        $set.tipo ||
+        $set.sensores ||
+        $set.configuracionLecturas ||
+        $set.servicios,
+      );
       const metadataChanged =
         JSON.stringify(metadataComparable) !==
         JSON.stringify(existingMetadataComparable);
 
-      if (nameChanged || metadataChanged) {
+      if (nameChanged || metadataChanged || classificationChanged) {
         await this.model.updateOne({ _id: existing._id }, { $set });
         result.updated += 1;
       } else {
@@ -335,6 +389,14 @@ export class DispositivosRepository {
       data,
       'fechaAsignacionLote',
     );
+
+    if (Object.prototype.hasOwnProperty.call(data, 'servicios')) {
+      const actual = await this.model.findById(id).select('servicios').lean();
+      updateData.servicios = this.reconciliarServicios(
+        actual?.servicios || [],
+        data.servicios || [],
+      );
+    }
 
     if (cambiaLote || cambiaFechaAsignacion) {
       const actual = await this.model
@@ -404,6 +466,69 @@ export class DispositivosRepository {
 
   async delete(id: string): Promise<Dispositivo> {
     return await this.model.findByIdAndDelete(id);
+  }
+
+  private reconciliarServicios(
+    anteriores: IServicioDispositivo[],
+    siguientes: IServicioDispositivo[],
+  ): IServicioDispositivo[] {
+    const ids = new Set<string>();
+    return siguientes.map((servicio) => {
+      const normalizado = this.normalizarServicio(servicio);
+      if (ids.has(normalizado.id)) {
+        throw new Error(
+          `Servicio duplicado en el controlador: ${normalizado.id}`,
+        );
+      }
+      ids.add(normalizado.id);
+      const anterior = anteriores.find((item) => item.id === normalizado.id);
+      const loteAnterior = String(anterior?.idLote || '');
+      const loteNuevo = String(normalizado.idLote || '');
+      const fecha = this.normalizarFecha(
+        normalizado.fechaAsignacionLote ||
+          anterior?.fechaAsignacionLote ||
+          new Date().toISOString(),
+      );
+      const historial = this.clonarHistorial(
+        anterior?.historialAsignacionesLote,
+      );
+
+      if (loteAnterior !== loteNuevo) {
+        historial.forEach((segmento) => {
+          if (segmento.activa || !segmento.fechaHasta) {
+            segmento.activa = false;
+            segmento.fechaHasta ||= fecha;
+          }
+        });
+        if (loteNuevo) {
+          historial.push(this.crearSegmentoAsignacion(normalizado, fecha));
+        }
+      }
+
+      return {
+        ...normalizado,
+        fechaAsignacionLote: loteNuevo ? fecha : undefined,
+        historialAsignacionesLote: historial,
+        fuente: 'administrador',
+      };
+    });
+  }
+
+  private normalizarServicio(
+    servicio: IServicioDispositivo,
+  ): IServicioDispositivo {
+    return {
+      ...servicio,
+      id: String(servicio.id || '')
+        .trim()
+        .toLowerCase(),
+      nombre: String(servicio.nombre || '').trim(),
+      sensores: [...new Set(servicio.sensores || [])],
+      habilitado: servicio.habilitado !== false,
+      idProductor: servicio.idProductor || undefined,
+      idEstablecimiento: servicio.idEstablecimiento || undefined,
+      idLote: servicio.idLote || undefined,
+    };
   }
 
   private actualizarHistorialPorCambioDeLote(
@@ -491,7 +616,10 @@ export class DispositivosRepository {
   }
 
   private crearSegmentoAsignacion(
-    data: Partial<IUpdateDispositivo>,
+    data: Pick<
+      Partial<IUpdateDispositivo>,
+      'idLote' | 'idProductor' | 'idEstablecimiento'
+    >,
     fechaDesde: string,
   ): IAsignacionDispositivoLote {
     return {

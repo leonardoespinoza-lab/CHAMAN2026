@@ -123,6 +123,84 @@ export interface IConfiguracionLecturasDispositivo {
   entradaAnalogica?: IConfiguracionEntradaAnalogica;
 }
 
+export type TipoServicioDispositivo =
+  "perfil_suelo" | "nivel_napa" | "meteorologia" | "pluviometria" | "otro";
+
+/**
+ * Servicio agronomico expuesto por un controlador fisico. Un mismo DevEUI
+ * puede transportar varios sensores independientes sin duplicar inventario
+ * ni historial de comunicaciones.
+ */
+export interface IServicioDispositivo {
+  id: string;
+  tipo: TipoServicioDispositivo;
+  nombre: string;
+  sensores: SensoresV2[];
+  habilitado?: boolean;
+  idProductor?: string;
+  idEstablecimiento?: string;
+  idLote?: string;
+  fechaAsignacionLote?: string;
+  historialAsignacionesLote?: IAsignacionDispositivoLote[];
+  fuente?: "inferido" | "administrador";
+}
+
+const PERFIL_SUELO_SENSORES: SensoresV2[] = [
+  "Humedad Suelo Profundidad",
+  "Temperatura Suelo",
+  "Salinidad Suelo",
+];
+const NAPA_SENSORES: SensoresV2[] = ["Entrada Analógica", "Presión", "Napa"];
+
+export function serviciosDispositivoNormalizados(
+  dispositivo?: Partial<IDispositivo>,
+): IServicioDispositivo[] {
+  if (!dispositivo) return [];
+  if (Array.isArray(dispositivo.servicios)) {
+    return dispositivo.servicios
+      .filter((servicio) => servicio && servicio.habilitado !== false)
+      .map((servicio) => ({ ...servicio }));
+  }
+
+  const sensores = new Set(dispositivo.sensores || []);
+  const asignacion = {
+    idProductor: dispositivo.idProductor,
+    idEstablecimiento: dispositivo.idEstablecimiento,
+    idLote: dispositivo.idLote,
+    fechaAsignacionLote: dispositivo.fechaAsignacionLote,
+    fuente: "inferido" as const,
+  };
+  const servicios: IServicioDispositivo[] = [];
+  const tienePerfil =
+    !!dispositivo.configuracionLecturas?.perfilSuelo ||
+    PERFIL_SUELO_SENSORES.some((sensor) => sensores.has(sensor));
+  const tieneAnalogico =
+    !!dispositivo.configuracionLecturas?.entradaAnalogica ||
+    NAPA_SENSORES.some((sensor) => sensores.has(sensor));
+
+  if (tienePerfil) {
+    servicios.push({
+      id: "perfil-suelo-sentek",
+      tipo: "perfil_suelo",
+      nombre: "Perfil de suelo Sentek 1,2 m",
+      sensores: PERFIL_SUELO_SENSORES,
+      habilitado: true,
+      ...asignacion,
+    });
+  }
+  if (tieneAnalogico) {
+    servicios.push({
+      id: "nivel-napa",
+      tipo: "nivel_napa",
+      nombre: "Napa / freatímetro",
+      sensores: NAPA_SENSORES,
+      habilitado: true,
+      ...asignacion,
+    });
+  }
+  return servicios;
+}
+
 export type EstadoCalificacionMeteorologica =
   "calificado" | "referencia" | "rechazado";
 
@@ -212,6 +290,7 @@ export interface IDispositivo {
   metadata?: IMetaDataLora;
   sensores?: SensoresV2[];
   configuracionLecturas?: IConfiguracionLecturasDispositivo;
+  servicios?: IServicioDispositivo[];
   geojson?: IGeoJSONPoint;
   nombre?: string;
   bateria?: IBateria;

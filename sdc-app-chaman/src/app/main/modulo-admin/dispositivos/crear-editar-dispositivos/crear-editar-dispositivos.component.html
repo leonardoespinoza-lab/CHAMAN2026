@@ -53,71 +53,164 @@
             </p-tabpanel>
 
             <p-tabpanel [value]="1">
-              <div class="form-grid">
-                <p-floatlabel variant="in">
-                  <p-select
-                    [options]="productores"
-                    formControlName="idProductor"
-                    [checkmark]="true"
-                    [filter]="true"
-                    [showClear]="true"
-                    filterBy="nombre"
-                    optionLabel="nombre"
-                    optionValue="_id"
-                    [style]="{ width: '100%' }"
-                    appendTo="body"
-                    (onChange)="onProductorChange()"
-                    (onClear)="onProductorChange()"
-                  />
-                  <label>Productor</label>
-                </p-floatlabel>
+              @if (serviciosForm.length) {
+                <div class="service-assignment-intro">
+                  <span class="section-kicker">Controlador fisico · {{ lorawanSource?.deveui }}</span>
+                  <h2>Servicios agronomicos asignables</h2>
+                  <p>
+                    Cada servicio puede vincularse a un lote diferente. Chaman conserva un solo DevEUI y un unico
+                    historial de comunicaciones, pero separa las variables entregadas a cada cliente.
+                  </p>
+                </div>
+                <div formArrayName="servicios" class="service-assignment-grid">
+                  @for (servicio of serviciosForm.controls; track servicio.get('id')?.value; let i = $index) {
+                    <section class="service-assignment-card" [formGroupName]="i">
+                      <header>
+                        <div>
+                          <span class="section-kicker">Servicio {{ i + 1 }}</span>
+                          <h3>{{ servicio.get('nombre')?.value }}</h3>
+                        </div>
+                        <span class="sensor-state">
+                          {{ servicio.get('tipo')?.value === 'perfil_suelo' ? 'Sentek SDI-12' : 'Entrada 4-20 mA' }}
+                        </span>
+                      </header>
+                      <div class="service-sensors">
+                        @for (sensor of servicio.get('sensores')?.value || []; track sensor) {
+                          <span>{{ sensor }}</span>
+                        }
+                      </div>
+                      <div class="form-grid">
+                        <p-floatlabel variant="in">
+                          <p-select
+                            [options]="productores"
+                            formControlName="idProductor"
+                            [filter]="true"
+                            [showClear]="true"
+                            filterBy="nombre"
+                            optionLabel="nombre"
+                            optionValue="_id"
+                            [style]="{ width: '100%' }"
+                            appendTo="body"
+                            (onChange)="onServicioProductorChange(i)"
+                            (onClear)="onServicioProductorChange(i)"
+                          />
+                          <label>Productor</label>
+                        </p-floatlabel>
+                        <p-floatlabel variant="in">
+                          <p-select
+                            [options]="establecimientosServicio(i)"
+                            formControlName="idEstablecimiento"
+                            [filter]="true"
+                            [showClear]="true"
+                            filterBy="nombre"
+                            optionLabel="nombre"
+                            optionValue="_id"
+                            [style]="{ width: '100%' }"
+                            appendTo="body"
+                            (onChange)="onServicioEstablecimientoChange(i)"
+                            (onClear)="onServicioEstablecimientoChange(i)"
+                          />
+                          <label>Establecimiento</label>
+                        </p-floatlabel>
+                        <p-floatlabel variant="in">
+                          <p-select
+                            [options]="lotesServicio(i)"
+                            formControlName="idLote"
+                            [filter]="true"
+                            [showClear]="true"
+                            filterBy="nombre"
+                            optionLabel="nombre"
+                            optionValue="_id"
+                            [style]="{ width: '100%' }"
+                            appendTo="body"
+                            (onChange)="onServicioLoteChange(i)"
+                            (onClear)="onServicioLoteChange(i)"
+                          />
+                          <label>Lote</label>
+                        </p-floatlabel>
+                        <p-floatlabel variant="in">
+                          <input
+                            pInputText
+                            type="datetime-local"
+                            formControlName="fechaAsignacionLote"
+                            [fluid]="true"
+                          />
+                          <label>Asignado desde</label>
+                        </p-floatlabel>
+                      </div>
+                    </section>
+                  }
+                </div>
+              }
 
-                <p-floatlabel variant="in">
-                  <p-select
-                    [options]="establecimientosFiltrados"
-                    formControlName="idEstablecimiento"
-                    [checkmark]="true"
-                    [filter]="true"
-                    [showClear]="true"
-                    filterBy="nombre"
-                    optionLabel="nombre"
-                    optionValue="_id"
-                    [style]="{ width: '100%' }"
-                    appendTo="body"
-                    (onChange)="onEstablecimientoChange()"
-                    (onClear)="onEstablecimientoChange()"
-                  />
-                  <label>Establecimiento / campo</label>
-                </p-floatlabel>
+              <details class="legacy-assignment">
+                <summary>Asignacion heredada del controlador</summary>
+                <div class="form-grid">
+                  <p-floatlabel variant="in">
+                    <p-select
+                      [options]="productores"
+                      formControlName="idProductor"
+                      [checkmark]="true"
+                      [filter]="true"
+                      [showClear]="true"
+                      filterBy="nombre"
+                      optionLabel="nombre"
+                      optionValue="_id"
+                      [style]="{ width: '100%' }"
+                      appendTo="body"
+                      (onChange)="onProductorChange()"
+                      (onClear)="onProductorChange()"
+                    />
+                    <label>Productor</label>
+                  </p-floatlabel>
 
-                <p-floatlabel variant="in">
-                  <p-select
-                    [options]="lotesFiltrados"
-                    formControlName="idLote"
-                    [checkmark]="true"
-                    [filter]="true"
-                    [showClear]="true"
-                    filterBy="nombre"
-                    optionLabel="nombre"
-                    optionValue="_id"
-                    [style]="{ width: '100%' }"
-                    appendTo="body"
-                    (onChange)="onLoteChange()"
-                    (onClear)="onLoteChange()"
-                  />
-                  <label>Lote</label>
-                </p-floatlabel>
+                  <p-floatlabel variant="in">
+                    <p-select
+                      [options]="establecimientosFiltrados"
+                      formControlName="idEstablecimiento"
+                      [checkmark]="true"
+                      [filter]="true"
+                      [showClear]="true"
+                      filterBy="nombre"
+                      optionLabel="nombre"
+                      optionValue="_id"
+                      [style]="{ width: '100%' }"
+                      appendTo="body"
+                      (onChange)="onEstablecimientoChange()"
+                      (onClear)="onEstablecimientoChange()"
+                    />
+                    <label>Establecimiento / campo</label>
+                  </p-floatlabel>
 
-                <p-floatlabel variant="in">
-                  <input pInputText type="datetime-local" formControlName="fechaAsignacionLote" [fluid]="true" />
-                  <label>Instalado en lote desde</label>
-                </p-floatlabel>
-              </div>
+                  <p-floatlabel variant="in">
+                    <p-select
+                      [options]="lotesFiltrados"
+                      formControlName="idLote"
+                      [checkmark]="true"
+                      [filter]="true"
+                      [showClear]="true"
+                      filterBy="nombre"
+                      optionLabel="nombre"
+                      optionValue="_id"
+                      [style]="{ width: '100%' }"
+                      appendTo="body"
+                      (onChange)="onLoteChange()"
+                      (onClear)="onLoteChange()"
+                    />
+                    <label>Lote</label>
+                  </p-floatlabel>
 
-              <p class="assignment-note">
-                Esta fecha inicia el tramo operativo del sensor en el lote actual. Chaman conserva el historial completo
-                por DevEUI y registra los tramos de instalacion anteriores para auditoria tecnica.
-              </p>
+                  <p-floatlabel variant="in">
+                    <input pInputText type="datetime-local" formControlName="fechaAsignacionLote" [fluid]="true" />
+                    <label>Instalado en lote desde</label>
+                  </p-floatlabel>
+                </div>
+
+                <p class="assignment-note">
+                  Esta fecha inicia el tramo operativo del sensor en el lote actual. Chaman conserva el historial
+                  completo por DevEUI y registra los tramos de instalacion anteriores para auditoria tecnica.
+                </p>
+              </details>
             </p-tabpanel>
 
             <p-tabpanel [value]="2">
