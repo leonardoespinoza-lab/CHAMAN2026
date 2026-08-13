@@ -2,9 +2,11 @@
   <section class="lorawan-console">
     <div class="console-header">
       <div>
-        <p class="eyebrow">LoRaWAN / EMQX</p>
+        <p class="eyebrow">LoRaWAN · ChirpStack + EMQX legado</p>
         <h1>Gestion de dispositivos</h1>
-        <p class="subtitle">Sensores detectados por MQTT, gateways, senal y asignacion a productores, campos y lotes.</p>
+        <p class="subtitle">
+          Sensores detectados por MQTT, gateways, senal y asignacion a productores, campos y lotes.
+        </p>
       </div>
       <div class="console-actions">
         <p-button
@@ -46,7 +48,7 @@
     <div class="gateway-panel">
       <div class="panel-title">
         <h2>Gateways detectados</h2>
-        <span>{{ gateways.length || 0 }} gateways con trafico reciente</span>
+        <span>{{ gateways.length || 0 }} gateways identificados por sus dispositivos</span>
       </div>
       <div class="gateway-grid">
         @for (gateway of gateways; track gateway.gatewayID) {
@@ -67,8 +69,8 @@
     <div class="mqtt-queue-panel">
       <div class="panel-title">
         <div>
-          <h2>Cola MQTT detectada</h2>
-          <span>Uplinks recibidos desde EMQX listos para agregar o asignar.</span>
+          <h2>Dispositivos LoRaWAN detectados</h2>
+          <span>Ultimo uplink de cada DevEUI recibido desde ChirpStack y EMQX legado.</span>
         </div>
         <span>{{ detectedUplinks.length || 0 }} DevEUI detectado{{ detectedUplinks.length === 1 ? '' : 's' }}</span>
       </div>
@@ -226,7 +228,9 @@
         </td>
         <td>
           <div class="assignment-cell">
-            <strong>{{ row.lote?.nombre || row.establecimiento?.nombre || row.productor?.nombre || 'Sin asignar' }}</strong>
+            <strong>{{
+              row.lote?.nombre || row.establecimiento?.nombre || row.productor?.nombre || 'Sin asignar'
+            }}</strong>
             <span>
               @if (row.lote?.nombre) {
                 Lote
@@ -245,7 +249,7 @@
         <td>
           @if (uplinkFor(row)?.timestamp || row.fechaUltimaComunicacion) {
             <div class="row-center">
-              {{ (uplinkFor(row)?.timestamp || row.fechaUltimaComunicacion) | date: 'short' }}
+              {{ uplinkFor(row)?.timestamp || row.fechaUltimaComunicacion | date: 'short' }}
             </div>
           } @else {
             <span class="no-info">Sin reportar</span>
@@ -253,11 +257,23 @@
         </td>
         <td>
           <div class="actions-cell">
-            <p-button [rounded]="true" pTooltip="Detalles" icon="pi pi-search" severity="success" (click)="detalles(row)" />
+            <p-button
+              [rounded]="true"
+              pTooltip="Detalles"
+              icon="pi pi-search"
+              severity="success"
+              (click)="detalles(row)"
+            />
             @if (row.idProductor) {
               <app-ubicar [dispositivo]="row"></app-ubicar>
             }
-            <p-button [rounded]="true" pTooltip="Editar asignacion" icon="pi pi-pencil" severity="warn" (click)="edit(row)" />
+            <p-button
+              [rounded]="true"
+              pTooltip="Editar asignacion"
+              icon="pi pi-pencil"
+              severity="warn"
+              (click)="edit(row)"
+            />
             <p-button
               [rounded]="true"
               pTooltip="Eliminar"

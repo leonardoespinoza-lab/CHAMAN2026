@@ -144,7 +144,11 @@ export function decodedUc511ToReporteValores(
       valores[sensor] = [
         {
           unidad: calibrated.unit,
-          valores: { actual: calibrated.value },
+          valores: {
+            actual: calibrated.value,
+            columnaAgua: calibrated.waterColumn,
+            profundidadInstalacion: calibrated.installationDepth,
+          },
         },
       ];
     }
@@ -200,13 +204,18 @@ function decodeAnalogInput(
   for (let i = 0; i <= bytes.length - 10; i += 1) {
     const channel = bytes[i];
     const type = bytes[i + 1];
-    if ((channel !== 0x05 && channel !== 0x06) || (type !== 0xe2 && type !== 0x02)) {
+    if (
+      (channel !== 0x05 && channel !== 0x06) ||
+      (type !== 0xe2 && type !== 0x02)
+    ) {
       continue;
     }
 
-    const decode = type === 0xe2
-      ? (offset: number) => float16ToNumberLE(bytes[offset], bytes[offset + 1])
-      : (offset: number) => int16LE(bytes[offset], bytes[offset + 1]) / 1000;
+    const decode =
+      type === 0xe2
+        ? (offset: number) =>
+            float16ToNumberLE(bytes[offset], bytes[offset + 1])
+        : (offset: number) => int16LE(bytes[offset], bytes[offset + 1]) / 1000;
     const readings = [
       decode(i + 2),
       decode(i + 4),
@@ -232,10 +241,16 @@ function decodeAnalogInput(
 export function calibrateAnalogInput(
   currentMa: number,
   config?: IConfiguracionEntradaAnalogica,
-): { value: number; unit: string } | null {
+): {
+  value: number;
+  unit: string;
+  waterColumn?: number;
+  installationDepth?: number;
+} | null {
   if (
     !config ||
     config.variable === 'sin_definir' ||
+    !Number.isFinite(currentMa) ||
     !Number.isFinite(config.entradaMinMa) ||
     !Number.isFinite(config.entradaMaxMa) ||
     !Number.isFinite(config.salidaMin) ||
@@ -249,12 +264,31 @@ export function calibrateAnalogInput(
   const ratio =
     (currentMa - config.entradaMinMa) /
     (config.entradaMaxMa - config.entradaMinMa);
+  const calibratedValue =
+    Number(config.salidaMin) +
+    ratio * (Number(config.salidaMax) - Number(config.salidaMin));
+
+  if (config.variable === 'nivel_napa') {
+    const installationDepth = Number(config.profundidadInstalacionM);
+    if (
+      !Number.isFinite(installationDepth) ||
+      installationDepth <= 0 ||
+      calibratedValue < 0 ||
+      calibratedValue > installationDepth
+    ) {
+      return null;
+    }
+
+    return {
+      value: round(installationDepth - calibratedValue, 3),
+      unit: 'm',
+      waterColumn: round(calibratedValue, 3),
+      installationDepth: round(installationDepth, 3),
+    };
+  }
+
   return {
-    value: round(
-      Number(config.salidaMin) +
-        ratio * (Number(config.salidaMax) - Number(config.salidaMin)),
-      3,
-    ),
+    value: round(calibratedValue, 3),
     unit: config.unidadSalida.trim(),
   };
 }

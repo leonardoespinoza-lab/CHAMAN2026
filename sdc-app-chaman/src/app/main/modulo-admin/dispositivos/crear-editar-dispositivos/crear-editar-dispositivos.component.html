@@ -469,7 +469,8 @@
                   </header>
                   <p>
                     Chaman siempre conserva la corriente 4-20 mA. Solo la convierte a presion o nivel de napa cuando se
-                    carga la escala tecnica del sensor; nunca completa ni modifica la sonda Sentek.
+                    carga la escala tecnica del sensor; nunca completa ni modifica la sonda Sentek. Para napa, informa
+                    la distancia vertical desde el terreno hasta la superficie del agua.
                   </p>
 
                   <div class="form-grid">
@@ -512,12 +513,34 @@
 
                       <p-floatlabel variant="in">
                         <input pInputText formControlName="unidadSalida" [fluid]="true" />
-                        <label>Unidad de salida (bar, mca, m)</label>
+                        <label>
+                          {{
+                            variableEntradaAnalogica === 'nivel_napa'
+                              ? 'Unidad de columna (m)'
+                              : 'Unidad de salida (bar, mca, m)'
+                          }}
+                        </label>
                       </p-floatlabel>
+
+                      @if (variableEntradaAnalogica === 'nivel_napa') {
+                        <p-floatlabel variant="in">
+                          <p-inputnumber
+                            formControlName="profundidadInstalacionM"
+                            suffix=" m"
+                            [minFractionDigits]="2"
+                            [maxFractionDigits]="3"
+                            [fluid]="true"
+                          />
+                          <label>Profundidad del sensor desde el terreno</label>
+                        </p-floatlabel>
+                        <p class="field-wide sensor-calculation-note">
+                          Chaman calcula: profundidad de napa = profundidad instalada - columna de agua medida.
+                        </p>
+                      }
 
                       <p-floatlabel variant="in">
                         <input pInputText formControlName="fuenteCalibracion" [fluid]="true" />
-                        <label>Modelo, datasheet o certificado</label>
+                        <label>Referencia de escala o verificacion de campo</label>
                       </p-floatlabel>
                     }
 
@@ -528,7 +551,8 @@
                         ?.hasError('calibracionEntradaAnalogicaIncompleta')
                     ) {
                       <p class="field-wide form-error">
-                        Complete los valores de entrada y salida, la unidad y la fuente tecnica de calibracion.
+                        Complete la escala 4-20 mA, la unidad, la referencia de campo y, para napa, la profundidad de
+                        instalacion desde el terreno.
                       </p>
                     }
 

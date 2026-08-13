@@ -303,6 +303,16 @@ h1 {
   font-weight: 700;
 }
 
+.sensor-calculation-note {
+  background: var(--p-surface-50, #f8fafb);
+  border-radius: 10px;
+  color: var(--p-text-muted-color);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin: 0;
+  padding: 10px 12px;
+}
+
 .lorawan-readonly {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

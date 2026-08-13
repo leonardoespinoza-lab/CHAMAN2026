@@ -68,6 +68,13 @@
             }
           </h2>
           <p>{{ estadoEntradaAnalogica }}</p>
+          @if (entradaAnalogicaConfigurada?.variable === 'nivel_napa' && lecturaAnalogicaCalibrada) {
+            <p class="napa-trace">
+              Sensor a {{ lecturaAnalogicaCalibrada.profundidadInstalacion | number: '1.2-2' }} m · columna de agua
+              {{ lecturaAnalogicaCalibrada.columnaAgua | number: '1.2-2' }} m · corriente
+              {{ entradaAnalogicaCruda?.valor | number: '1.2-2' }} mA
+            </p>
+          }
         </div>
         <div class="physical-sensor-reading">
           @if (lecturaAnalogicaCalibrada?.valor !== undefined) {

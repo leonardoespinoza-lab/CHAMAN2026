@@ -8,10 +8,7 @@ import {
 } from 'modelos/src';
 import { Model } from 'mongoose';
 import { dbQuery } from 'src/auxiliares/helper.service';
-import {
-  LorawanUplink,
-  LorawanUplinkDocument,
-} from './modelos/schema';
+import { LorawanUplink, LorawanUplinkDocument } from './modelos/schema';
 
 @Injectable()
 export class LorawanUplinksRepository {
@@ -51,6 +48,33 @@ export class LorawanUplinksRepository {
       .sort({ timestamp: -1, fechaCreacion: -1 })
       .limit(params.limit || 20)
       .lean();
+  }
+
+  /**
+   * Devuelve una sola lectura (la mas reciente) por dispositivo. A diferencia
+   * de `latest`, un controlador con muchos uplinks no desplaza del inventario
+   * a los demas dispositivos o gateways.
+   */
+  async latestByDevice(limit = 1000): Promise<ILorawanUplink[]> {
+    const safeLimit = Math.max(1, Math.min(Number(limit) || 1000, 5000));
+
+    return await this.model.aggregate<ILorawanUplink>([
+      {
+        $match: {
+          devEUI: { $exists: true, $nin: [null, ''] },
+        },
+      },
+      { $sort: { timestamp: -1, fechaCreacion: -1 } },
+      {
+        $group: {
+          _id: { $toUpper: '$devEUI' },
+          uplink: { $first: '$$ROOT' },
+        },
+      },
+      { $replaceRoot: { newRoot: '$uplink' } },
+      { $sort: { timestamp: -1, fechaCreacion: -1 } },
+      { $limit: safeLimit },
+    ]);
   }
 
   async byDevEUI(devEUI: string, limit = 5000): Promise<ILorawanUplink[]> {

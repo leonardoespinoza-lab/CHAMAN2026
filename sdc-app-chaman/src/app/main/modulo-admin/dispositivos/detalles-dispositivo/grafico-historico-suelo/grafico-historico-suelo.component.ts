@@ -105,9 +105,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       'Humedad cruda',
       'Unidad cruda humedad',
     ];
-    const csv = [headers, ...rows]
-      .map((row) => row.map((value) => this.csvCell(value)).join(';'))
-      .join('\n');
+    const csv = [headers, ...rows].map((row) => row.map((value) => this.csvCell(value)).join(';')).join('\n');
     const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -153,12 +151,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       const profile = buildSentekProfile(reporte);
       for (const row of profile) {
         const metric = row[definition.key];
-        if (
-          !metric ||
-          metric.actual === undefined ||
-          metric.actual === null ||
-          !Number.isFinite(metric.actual)
-        ) {
+        if (!metric || metric.actual === undefined || metric.actual === null || !Number.isFinite(metric.actual)) {
           continue;
         }
 
@@ -417,10 +410,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     return latestPoints.map((point) => ({
       profundidad: point.depth,
       formatted: `${Number(point.y).toFixed(definition.decimals)} ${definition.unit}`,
-      raw:
-        point.raw !== undefined && point.rawUnit
-          ? `${Number(point.raw).toFixed(3)} ${point.rawUnit}`
-          : undefined,
+      raw: point.raw !== undefined && point.rawUnit ? `${Number(point.raw).toFixed(3)} ${point.rawUnit}` : undefined,
     }));
   }
 
@@ -471,7 +461,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         max: 10,
         min: 0,
         title: {
-          text: `Altura de napa (${unit})`,
+          text: `Profundidad de napa desde el terreno (${unit})`,
           style: { color: '#0f766e', fontSize: '14px', fontWeight: '700' },
         },
         labels: {
@@ -531,7 +521,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         {
           color: '#14b8a6',
           data: points,
-          name: 'Napa',
+          name: 'Profundidad de napa',
           type: 'spline',
         },
       ],
@@ -553,12 +543,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       for (const row of napaRows) {
         const valores = row?.valores || row;
         const rawValue = this.toNumber(
-          valores?.actual ??
-            valores?.promedio ??
-            valores?.altura ??
-            valores?.nivel ??
-            valores?.value ??
-            valores?.valor,
+          valores?.actual ?? valores?.promedio ?? valores?.altura ?? valores?.nivel ?? valores?.value ?? valores?.valor
         );
         if (rawValue === undefined) continue;
         const normalized = this.normalizarNapa(rawValue, valores?.unidad || row?.unidad);
@@ -593,11 +578,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     return points.sort((a, b) => a.x - b.x);
   }
 
-  private buildResumen(
-    definition: SoilMetricDefinition,
-    series: any[],
-    latestPoints: HistoricalPoint[],
-  ): string {
+  private buildResumen(definition: SoilMetricDefinition, series: any[], latestPoints: HistoricalPoint[]): string {
     const pointCount = series.reduce((sum, item) => sum + (item.data?.length || 0), 0);
     if (!pointCount) return 'Sin lecturas historicas para esta variable';
 
@@ -611,9 +592,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   }
 
   private hasMetric(key: SoilMetricKey): boolean {
-    return this.filteredReports().some((reporte) =>
-      buildSentekProfile(reporte).some((row) => !!row[key])
-    );
+    return this.filteredReports().some((reporte) => buildSentekProfile(reporte).some((row) => !!row[key]));
   }
 
   private getDefinition(key: SoilMetricKey): SoilMetricDefinition {
@@ -681,13 +660,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
   private extractRainValue(reporte: IReporte): number | undefined {
     const valores = (reporte?.datos as any)?.valores || {};
-    const keys = [
-      'Pluviometro',
-      'Lluvia',
-      'Precipitacion',
-      'Rain',
-      'Rainfall',
-    ];
+    const keys = ['Pluviometro', 'Lluvia', 'Precipitacion', 'Rain', 'Rainfall'];
 
     for (const key of keys) {
       const value = this.extractRainValueFromRows(valores[key]);
@@ -725,7 +698,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           (rowValues as any)?.actual ??
           (rowValues as any)?.promedio ??
           (rowValues as any)?.value ??
-          (rowValues as any)?.valor,
+          (rowValues as any)?.valor
       );
       if (value !== undefined) {
         return value;
@@ -751,9 +724,6 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const normalizedUnit = String(unit || '').toLowerCase();
     if (normalizedUnit.includes('cm')) {
       return this.round(value / 100, 2);
-    }
-    if (normalizedUnit.includes('ma') || (value > 4 && value <= 20)) {
-      return this.round(Math.max(0, ((value - 4) / 16) * 10), 2);
     }
     return this.round(value, 2);
   }

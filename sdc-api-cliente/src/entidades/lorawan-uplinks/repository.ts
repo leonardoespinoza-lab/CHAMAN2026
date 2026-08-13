@@ -17,6 +17,13 @@ export class LorawanUplinksRepository {
     return await this.axios.GET<ILorawanUplink[]>(url, { params });
   }
 
+  async latestByDevice(limit?: string | number): Promise<ILorawanUplink[]> {
+    const url = `${API_DATOS}/lorawan/uplinks/latest-devices`;
+    return await this.axios.GET<ILorawanUplink[]>(url, {
+      params: { limit },
+    });
+  }
+
   async reprocess(params: {
     devEUI?: string;
     limit?: string | number;

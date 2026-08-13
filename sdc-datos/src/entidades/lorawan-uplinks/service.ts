@@ -55,6 +55,12 @@ export class LorawanUplinksService {
     });
   }
 
+  async latestByDevice(limit?: string | number) {
+    return await this.repository.latestByDevice(
+      Math.min(Number(limit) || 1000, 5000),
+    );
+  }
+
   async reprocess(query: {
     devEUI?: string;
     limit?: string | number;
@@ -86,14 +92,18 @@ export class LorawanUplinksService {
 
     for (const uplink of uplinks) {
       try {
-        const dispositivo = await this.dispositivos.upsertFromLorawanUplink(uplink);
+        const dispositivo =
+          await this.dispositivos.upsertFromLorawanUplink(uplink);
         const sentekSynced = await this.syncSentekReport(uplink, dispositivo);
         if (sentekSynced) {
           reportesSentek += 1;
           continue;
         }
 
-        const genericSynced = await this.syncGenericClimateReport(uplink, dispositivo);
+        const genericSynced = await this.syncGenericClimateReport(
+          uplink,
+          dispositivo,
+        );
         if (genericSynced) {
           reportesGenericos += 1;
         }
@@ -135,12 +145,19 @@ export class LorawanUplinksService {
       reportDate,
       2,
     );
-    const recent = await this.reportes.getRecentByDeveui(devEUI, reportDate, 360);
-    const previous = existing || this.reporteCompatibleConCiclo(recent, decoded.canales);
+    const recent = await this.reportes.getRecentByDeveui(
+      devEUI,
+      reportDate,
+      360,
+    );
+    const previous =
+      existing || this.reporteCompatibleConCiclo(recent, decoded.canales);
     const valores = previous?.datos?.valores
       ? this.mergeSentekValues(previous.datos.valores, decoded.valores)
       : decoded.valores;
-    const estado = this.isSentekReportComplete(valores) ? 'completo' : 'parcial';
+    const estado = this.isSentekReportComplete(valores)
+      ? 'completo'
+      : 'parcial';
     const metadataLora = {
       applicationID: uplink.applicationID,
       applicationName: uplink.applicationName,
@@ -218,7 +235,8 @@ export class LorawanUplinksService {
     const valores = reporte?.datos?.valores || {};
     const countValid = (sensor: keyof IValoresV2['valores']) =>
       (valores[sensor] || []).filter(
-        (item) => item?.valores?.actual !== null && item?.valores?.actual !== undefined,
+        (item) =>
+          item?.valores?.actual !== null && item?.valores?.actual !== undefined,
       ).length;
     const humedad = countValid('Humedad Suelo Profundidad');
     const salinidad = countValid('Salinidad Suelo');
@@ -574,13 +592,19 @@ export class LorawanUplinksService {
     previous: IValoresV2['valores'],
     current: IValoresV2['valores'],
   ): IValoresV2['valores'] {
-    const sensors = new Set([...Object.keys(previous), ...Object.keys(current)]);
+    const sensors = new Set([
+      ...Object.keys(previous),
+      ...Object.keys(current),
+    ]);
     const result: IValoresV2['valores'] = {};
 
     sensors.forEach((sensor) => {
       const oldValues = previous[sensor];
       const newValues = current[sensor];
-      const maxLength = Math.max(oldValues?.length || 0, newValues?.length || 0);
+      const maxLength = Math.max(
+        oldValues?.length || 0,
+        newValues?.length || 0,
+      );
       result[sensor] = Array.from({ length: maxLength }, (_, index) => {
         const incoming = newValues?.[index];
         const existing = oldValues?.[index];
@@ -610,14 +634,19 @@ export class LorawanUplinksService {
     if (!incomingChannels.length) return reporte;
 
     const previousChannels = this.sentekChannelsInReport(reporte);
-    const repeatedChannel = incomingChannels.some((channel) => previousChannels.has(channel));
+    const repeatedChannel = incomingChannels.some((channel) =>
+      previousChannels.has(channel),
+    );
     return repeatedChannel ? null : reporte;
   }
 
   private sentekChannelsInReport(reporte: IReporte): Set<number> {
     const channels = new Set<number>();
     const valores = reporte.datos?.valores || {};
-    const groups: Array<{ sensor: keyof IValoresV2['valores']; offset: number }> = [
+    const groups: Array<{
+      sensor: keyof IValoresV2['valores'];
+      offset: number;
+    }> = [
       { sensor: 'Humedad Suelo Profundidad', offset: 0 },
       { sensor: 'Salinidad Suelo', offset: 4 },
       { sensor: 'Temperatura Suelo', offset: 8 },
@@ -629,7 +658,11 @@ export class LorawanUplinksService {
         const start = group * 3;
         const hasValue = rows
           .slice(start, start + 3)
-          .some((row) => row?.valores?.actual !== null && row?.valores?.actual !== undefined);
+          .some(
+            (row) =>
+              row?.valores?.actual !== null &&
+              row?.valores?.actual !== undefined,
+          );
         if (hasValue) channels.add(offset + group);
       }
     });
@@ -640,7 +673,8 @@ export class LorawanUplinksService {
   private isSentekReportComplete(valores: IValoresV2['valores']): boolean {
     const countValid = (sensor: keyof IValoresV2['valores']) =>
       (valores[sensor] || []).filter(
-        (item) => item?.valores?.actual !== null && item?.valores?.actual !== undefined,
+        (item) =>
+          item?.valores?.actual !== null && item?.valores?.actual !== undefined,
       ).length;
 
     return (
@@ -667,17 +701,22 @@ export class LorawanUplinksService {
     const fechaPrevia = mismaTemporada
       ? previo.fechaUltimoCalculo || dispositivo.ultimoReporte?.fecha
       : undefined;
-    const temperaturaPrevia = mismaTemporada && Number.isFinite(previo.ultimaTemperatura)
-      ? Number(previo.ultimaTemperatura)
-      : this.extraerTemperaturaReferencia(dispositivo.ultimoReporte?.datos?.valores);
+    const temperaturaPrevia =
+      mismaTemporada && Number.isFinite(previo.ultimaTemperatura)
+        ? Number(previo.ultimaTemperatura)
+        : this.extraerTemperaturaReferencia(
+            dispositivo.ultimoReporte?.datos?.valores,
+          );
 
     if (fechaPrevia && Number.isFinite(temperaturaPrevia)) {
       const diffHours =
-        (new Date(fecha).getTime() - new Date(fechaPrevia).getTime()) /
-        3600000;
+        (new Date(fecha).getTime() - new Date(fechaPrevia).getTime()) / 3600000;
 
       if (diffHours > 0 && diffHours < 24) {
-        if (Number(temperaturaPrevia) >= 0 && Number(temperaturaPrevia) <= 7.2) {
+        if (
+          Number(temperaturaPrevia) >= 0 &&
+          Number(temperaturaPrevia) <= 7.2
+        ) {
           horasFrio += diffHours;
         }
       }
@@ -709,9 +748,9 @@ export class LorawanUplinksService {
   private extraerTemperaturaReferencia(
     valores?: IValoresV2['valores'],
   ): number | undefined {
-    const temperaturasAire = valores?.Temperatura
-      ?.map((item) => item?.valores?.actual ?? item?.valores?.promedio)
-      .filter((valor) => Number.isFinite(valor));
+    const temperaturasAire = valores?.Temperatura?.map(
+      (item) => item?.valores?.actual ?? item?.valores?.promedio,
+    ).filter((valor) => Number.isFinite(valor));
 
     if (temperaturasAire?.length) {
       return this.promedio(temperaturasAire.map(Number));
@@ -725,5 +764,4 @@ export class LorawanUplinksService {
   private promedio(valores: number[]): number {
     return valores.reduce((suma, valor) => suma + valor, 0) / valores.length;
   }
-
 }

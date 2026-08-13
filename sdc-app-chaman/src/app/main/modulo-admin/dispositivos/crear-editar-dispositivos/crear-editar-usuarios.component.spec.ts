@@ -193,6 +193,7 @@ describe('CrearEditarDispositivosComponent', () => {
       salidaMin: 0,
       salidaMax: 10,
       unidadSalida: 'm',
+      profundidadInstalacionM: 6,
       fuenteCalibracion: 'Datasheet del transductor',
     });
 
@@ -206,6 +207,7 @@ describe('CrearEditarDispositivosComponent', () => {
         salidaMin: 0,
         salidaMax: 10,
         unidadSalida: 'm',
+        profundidadInstalacionM: 6,
       })
     );
   });

@@ -19,6 +19,12 @@ export class LorawanUplinksService {
     });
   }
 
+  async latestByDevice(limit?: string | number) {
+    return await this.repository.latestByDevice(
+      Math.min(Number(limit) || 1000, 5000),
+    );
+  }
+
   async reprocess(query: {
     devEUI?: string;
     limit?: string | number;

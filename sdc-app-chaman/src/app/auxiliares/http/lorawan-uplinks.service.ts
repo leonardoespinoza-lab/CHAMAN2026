@@ -16,4 +16,10 @@ export class LorawanUplinksService {
   }): Promise<ILorawanUplink[]> {
     return this.http.get(`/lorawan/uplinks/latest`, { params });
   }
+
+  public latestByDevice(limit = 1000): Promise<ILorawanUplink[]> {
+    return this.http.get(`/lorawan/uplinks/latest-devices`, {
+      params: { limit },
+    });
+  }
 }

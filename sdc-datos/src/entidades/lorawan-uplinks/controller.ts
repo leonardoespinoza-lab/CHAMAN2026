@@ -1,9 +1,6 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import {
-  ICreateLorawanUplink,
-  IQueryParam,
-} from 'modelos/src';
+import { ICreateLorawanUplink, IQueryParam } from 'modelos/src';
 import { LorawanUplinksService } from './service';
 
 @ApiTags('Lorawan Uplinks')
@@ -23,12 +20,27 @@ export class LorawanUplinksController {
     @Query('gatewayID') gatewayID?: string,
     @Query('limit') limit?: string,
   ) {
-    return await this.service.latest({ devEUI, applicationID, gatewayID, limit });
+    return await this.service.latest({
+      devEUI,
+      applicationID,
+      gatewayID,
+      limit,
+    });
+  }
+
+  @Get('latest-devices')
+  async latestByDevice(@Query('limit') limit?: string) {
+    return await this.service.latestByDevice(limit);
   }
 
   @Post('reprocess')
   async reprocess(
-    @Body() body: { devEUI?: string; limit?: string | number; replace?: boolean | string },
+    @Body()
+    body: {
+      devEUI?: string;
+      limit?: string | number;
+      replace?: boolean | string;
+    },
     @Query('devEUI') devEUI?: string,
     @Query('limit') limit?: string,
     @Query('replace') replace?: string,

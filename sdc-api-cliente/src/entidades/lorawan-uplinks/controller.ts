@@ -26,6 +26,12 @@ export class LorawanUplinksController {
     });
   }
 
+  @Get('latest-devices')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  async latestByDevice(@Query('limit') limit?: string) {
+    return await this.service.latestByDevice(limit);
+  }
+
   @Post('reprocess')
   @Permisos({ nivel: 'Admin', roles: ['Admin'] })
   async reprocess(

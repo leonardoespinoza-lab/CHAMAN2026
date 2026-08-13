@@ -110,11 +110,7 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
   // Listados
 
   private async listar(): Promise<void> {
-    const populate: IPopulate[] = [
-      { path: 'productor' },
-      { path: 'establecimiento' },
-      { path: 'lote' },
-    ];
+    const populate: IPopulate[] = [{ path: 'productor' }, { path: 'establecimiento' }, { path: 'lote' }];
     const queryParams: IQueryParam = {
       page: 0,
       limit: 0,
@@ -146,7 +142,7 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
   }
 
   private async listarUplinks(): Promise<void> {
-    this.uplinks = await this.lorawan.latest({ limit: 300 });
+    this.uplinks = await this.lorawan.latestByDevice(1000);
     this.latestByDevEui = new Map<string, ILorawanUplink>();
 
     for (const uplink of this.uplinks) {

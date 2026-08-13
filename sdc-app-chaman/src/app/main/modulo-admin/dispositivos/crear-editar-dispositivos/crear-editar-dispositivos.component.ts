@@ -164,6 +164,10 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
             salidaMin: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.salidaMin),
             salidaMax: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.salidaMax),
             unidadSalida: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.unidadSalida),
+            profundidadInstalacionM: new FormControl(
+              source?.configuracionLecturas?.entradaAnalogica?.profundidadInstalacionM,
+              [Validators.min(0.01)]
+            ),
             fuenteCalibracion: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.fuenteCalibracion),
             observaciones: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.observaciones),
           },
@@ -247,6 +251,7 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
           salidaMin: this.numberOrUndefined(analog.salidaMin),
           salidaMax: this.numberOrUndefined(analog.salidaMax),
           unidadSalida: analog.unidadSalida?.trim() || undefined,
+          profundidadInstalacionM: this.numberOrUndefined(analog.profundidadInstalacionM),
           fuenteCalibracion: analog.fuenteCalibracion?.trim() || undefined,
           observaciones: analog.observaciones?.trim() || undefined,
         },
@@ -506,6 +511,8 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     const salidaMax = this.numberOrUndefined(control.get('salidaMax')?.value);
     const unidad = String(control.get('unidadSalida')?.value || '').trim();
     const fuente = String(control.get('fuenteCalibracion')?.value || '').trim();
+    const profundidadInstalacion = this.numberOrUndefined(control.get('profundidadInstalacionM')?.value);
+    const esNapa = control.get('variable')?.value === 'nivel_napa';
 
     const complete =
       entradaMin !== undefined &&
@@ -515,7 +522,8 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
       salidaMax !== undefined &&
       salidaMax !== salidaMin &&
       !!unidad &&
-      !!fuente;
+      !!fuente &&
+      (!esNapa || (profundidadInstalacion !== undefined && profundidadInstalacion > 0));
 
     return complete ? null : { calibracionEntradaAnalogicaIncompleta: true };
   };

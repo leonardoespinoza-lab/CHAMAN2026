@@ -54,12 +54,26 @@ export class DetallesDispositivoComponent implements OnInit {
     };
   }
 
-  public get lecturaAnalogicaCalibrada(): { nombre: string; valor?: number; unidad?: string } | undefined {
+  public get lecturaAnalogicaCalibrada():
+    | {
+        nombre: string;
+        valor?: number;
+        unidad?: string;
+        columnaAgua?: number;
+        profundidadInstalacion?: number;
+      }
+    | undefined {
     const variable = this.entradaAnalogicaConfigurada?.variable;
     if (variable === 'nivel_napa') {
       const row = this.valorReporte('Napa');
       return row
-        ? { nombre: 'Nivel de napa', valor: this.numeroSeguro(row?.valores?.actual), unidad: row?.unidad }
+        ? {
+            nombre: 'Profundidad de napa desde el terreno',
+            valor: this.numeroSeguro(row?.valores?.actual),
+            unidad: row?.unidad,
+            columnaAgua: this.numeroSeguro(row?.valores?.columnaAgua),
+            profundidadInstalacion: this.numeroSeguro(row?.valores?.profundidadInstalacion),
+          }
         : undefined;
     }
     if (variable === 'presion_agua') {

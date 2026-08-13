@@ -55,9 +55,7 @@ export interface IAsignacionDispositivoLote {
 }
 
 export type VariableEntradaAnalogica =
-  | "sin_definir"
-  | "presion_agua"
-  | "nivel_napa";
+  "sin_definir" | "presion_agua" | "nivel_napa";
 
 export interface IConfiguracionPerfilSuelo {
   tipo: "sonda_sentek_120cm";
@@ -76,6 +74,13 @@ export interface IConfiguracionEntradaAnalogica {
   salidaMin?: number;
   salidaMax?: number;
   unidadSalida?: string;
+  /**
+   * Distancia vertical entre el nivel del terreno y el transductor.
+   * Solo se usa para nivel_napa: la salida calibrada 4-20 mA representa
+   * la columna de agua sobre el sensor y Chaman informa
+   * profundidadInstalacionM - columnaAgua.
+   */
+  profundidadInstalacionM?: number;
   fuenteCalibracion?: string;
   observaciones?: string;
 }

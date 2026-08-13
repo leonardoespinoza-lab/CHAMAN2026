@@ -1,22 +1,22 @@
-import { IDispositivo, IMetaDataLora } from './dispositivo';
+import { IDispositivo, IMetaDataLora } from "./dispositivo";
 
 export type SensoresV2 =
-  | 'Temperatura'
-  | 'Temperatura Suelo'
-  | 'Humedad'
-  | 'Humedad Suelo Superficial' // SHS Pinche ahí nomás
-  | 'Humedad Suelo Profundidad' // LANZA Muchos valores
-  | 'Salinidad Suelo'
-  | 'Viento Velocidad'
-  | 'Viento Dirección'
-  | 'Pluviometro' // Lluvia en general
-  | 'Presión'
-  | 'Evapotranspiración'
-  | 'Radiación Solar'
-  | 'Napa' // Freatimetro
-  | 'Entrada Analógica' // Lectura cruda 4-20 mA antes de calibrar
-  | 'Batería'
-  | 'Otro'; // Sensores que no sé que son
+  | "Temperatura"
+  | "Temperatura Suelo"
+  | "Humedad"
+  | "Humedad Suelo Superficial" // SHS Pinche ahí nomás
+  | "Humedad Suelo Profundidad" // LANZA Muchos valores
+  | "Salinidad Suelo"
+  | "Viento Velocidad"
+  | "Viento Dirección"
+  | "Pluviometro" // Lluvia en general
+  | "Presión"
+  | "Evapotranspiración"
+  | "Radiación Solar"
+  | "Napa" // Freatimetro
+  | "Entrada Analógica" // Lectura cruda 4-20 mA antes de calibrar
+  | "Batería"
+  | "Otro"; // Sensores que no sé que son
 
 export interface IValoresV2 {
   valores: {
@@ -31,6 +31,10 @@ export interface IValoresV2 {
         cantidad?: number;
         actual?: number;
         acumulado?: number;
+        /** Columna de agua calculada por el transductor sumergido. */
+        columnaAgua?: number;
+        /** Profundidad vertical del transductor desde el terreno. */
+        profundidadInstalacion?: number;
       };
     }[];
   };
@@ -42,7 +46,7 @@ export interface IReporte {
   deveui?: string;
   fechaCreacion?: string; // Cuando me llega
   fecha?: string; // Fecha del reporte
-  estado?: 'parcial' | 'completo'; // Para los partidos como la lanza de 12
+  estado?: "parcial" | "completo"; // Para los partidos como la lanza de 12
   datos?: IValoresV2;
   metadataLora?: IMetaDataLora;
 
@@ -50,6 +54,6 @@ export interface IReporte {
   dispositivo?: IDispositivo;
 }
 
-type Omitir = '_id';
+type Omitir = "_id";
 export interface ICreateReporte extends Omit<Partial<IReporte>, Omitir> {}
 export interface IUpdateReporte extends Omit<Partial<IReporte>, Omitir> {}

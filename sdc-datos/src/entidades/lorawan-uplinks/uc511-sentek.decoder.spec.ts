@@ -1,4 +1,5 @@
 import {
+  calibrateAnalogInput,
   decodeUc511SentekPayload,
   decodedUc511ToReporteValores,
 } from './uc511-sentek.decoder';
@@ -64,8 +65,45 @@ describe('decodeUc511SentekPayload', () => {
       salidaMin: 0,
       salidaMax: 10,
       unidadSalida: 'm',
+      profundidadInstalacionM: 6,
     });
-    expect(calibrated.Napa?.[0].valores?.actual).toBeCloseTo(3.262, 3);
+    expect(calibrated.Napa?.[0].valores?.actual).toBeCloseTo(2.738, 3);
+    expect(calibrated.Napa?.[0].valores?.columnaAgua).toBeCloseTo(3.262, 3);
+    expect(calibrated.Napa?.[0].valores?.profundidadInstalacion).toBe(6);
+  });
+
+  it('reports depth to water from terrain for the verified 9.24 mA field reading', () => {
+    const calibrated = calibrateAnalogInput(9.24, {
+      canal: 1,
+      tipoSenal: '4-20mA',
+      variable: 'nivel_napa',
+      entradaMinMa: 4,
+      entradaMaxMa: 20,
+      salidaMin: 0,
+      salidaMax: 10,
+      unidadSalida: 'm',
+      profundidadInstalacionM: 6,
+    });
+
+    expect(calibrated?.waterColumn).toBeCloseTo(3.275, 3);
+    expect(calibrated?.value).toBeCloseTo(2.725, 3);
+    expect(calibrated?.installationDepth).toBe(6);
+  });
+
+  it('does not publish a derived value when the raw current is invalid', () => {
+    const calibrated = calibrateAnalogInput(Number.NaN, {
+      canal: 1,
+      tipoSenal: '4-20mA',
+      variable: 'nivel_napa',
+      entradaMinMa: 4,
+      entradaMaxMa: 20,
+      salidaMin: 0,
+      salidaMax: 10,
+      unidadSalida: 'm',
+      profundidadInstalacionM: 6,
+    });
+
+    expect(calibrated).toBeNull();
   });
 
   it('decodes the v2 signed int16 analog payload in amperes', () => {
