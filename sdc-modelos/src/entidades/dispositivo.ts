@@ -17,6 +17,35 @@ export interface IMetaDataLora {
   snr?: number;
   rssi?: number;
   dr?: number;
+  origenInventario?: "ChirpStack";
+  chirpstackSincronizadoEn?: string;
+  chirpstackTenantID?: string;
+  chirpstackApplicationID?: string;
+  chirpstackApplicationName?: string;
+  chirpstackDeviceProfileID?: string;
+  chirpstackDeviceProfileName?: string;
+  chirpstackDescription?: string;
+  chirpstackLastSeenAt?: string;
+}
+
+/** Inventario tecnico seguro; nunca contiene claves OTAA ni de sesion. */
+export interface ILorawanDeviceCatalogItem {
+  devEUI: string;
+  name?: string;
+  description?: string;
+  tenantID?: string;
+  applicationID?: string;
+  applicationName?: string;
+  deviceProfileID?: string;
+  deviceProfileName?: string;
+  lastSeenAt?: string;
+}
+
+export interface ILorawanDeviceCatalogSyncResult {
+  total: number;
+  created: number;
+  updated: number;
+  unchanged: number;
 }
 
 export interface IBateria {

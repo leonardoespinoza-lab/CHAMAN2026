@@ -27,6 +27,8 @@
     "@nestjs/core": "^11.1.0",
     "@nestjs/platform-express": "^11.1.0",
     "@nestjs/swagger": "^11.2.0",
+    "@chirpstack/chirpstack-api": "4.19.0",
+    "@grpc/grpc-js": "1.14.4",
     "@types/bcryptjs": "^3.0.0",
     "async-mqtt": "^2.6.3",
     "axios": "^1.9.0",

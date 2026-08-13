@@ -8,6 +8,7 @@ import {
 import {
   API_OPEN_METEO,
   API_OPEN_METEO_ARCHIVE,
+  OPEN_METEO_ARCHIVE_ENABLED,
   METEO_SOURCE_KEY,
 } from '../../env';
 import { LogService } from '../../auxiliares/logsService/service';
@@ -40,6 +41,7 @@ import { OpenMeteoClientService } from '../../auxiliares/open-meteo/open-meteo-c
 // anterior a esa ventana se consulta en Archive para evitar los huecos
 // parciales que puede devolver Forecast al pedir historicos extensos.
 const OPEN_METEO_ARCHIVE_DELAY_DAYS = 5;
+const OPEN_METEO_STANDARD_PAST_DAYS = 92;
 
 @Injectable()
 export class ClimaService {
@@ -220,6 +222,9 @@ export class ClimaService {
   }
 
   private getOpenMeteoBaseUrl(startDate: string): string {
+    if (!OPEN_METEO_ARCHIVE_ENABLED) {
+      return `${API_OPEN_METEO}/forecast`;
+    }
     const inicio = new Date(`${startDate}T00:00:00Z`);
     const hoy = new Date(
       `${this.getFechaOpenMeteo(new Date().toISOString())}T00:00:00Z`,
@@ -260,6 +265,24 @@ export class ClimaService {
     const hoy = new Date(
       `${this.getFechaOpenMeteo(new Date().toISOString())}T00:00:00Z`,
     );
+    if (!OPEN_METEO_ARCHIVE_ENABLED) {
+      const limiteStandard = new Date(hoy);
+      limiteStandard.setUTCDate(
+        limiteStandard.getUTCDate() - (OPEN_METEO_STANDARD_PAST_DAYS - 1),
+      );
+      const fechaLimiteStandard = limiteStandard.toISOString().slice(0, 10);
+      const fechaInicio =
+        startDate > fechaLimiteStandard ? startDate : fechaLimiteStandard;
+      return fechaInicio <= endDate
+        ? [
+            {
+              baseUrl: `${API_OPEN_METEO}/forecast`,
+              startDate: fechaInicio,
+              endDate,
+            },
+          ]
+        : [];
+    }
     const inicioForecast = new Date(hoy);
     inicioForecast.setUTCDate(
       inicioForecast.getUTCDate() - (OPEN_METEO_ARCHIVE_DELAY_DAYS - 1),
@@ -2355,13 +2378,7 @@ export class ClimaService {
   private getNivel(
     estaciones: IEstacionCercana[],
     variedad:
-      | 'Soja'
-      | 'Maiz'
-      | 'Trigo'
-      | 'Trigo1'
-      | 'Trigo2'
-      | 'Trigo3'
-      | 'Trigo4',
+      'Soja' | 'Maiz' | 'Trigo' | 'Trigo1' | 'Trigo2' | 'Trigo3' | 'Trigo4',
     tipo?: 'temperatura' | 'humedadRelativa' | 'velocidadViento' | 'lluvias',
   ) {
     if (variedad === 'Soja') {

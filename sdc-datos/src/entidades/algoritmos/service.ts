@@ -17,6 +17,7 @@ import { EnfermedadsService } from '../enfermedad/service';
 import { MalezasService } from '../maleza/service';
 import { SemillasService } from '../semilla/service';
 import {
+  OPEN_METEO_ARCHIVE_ENABLED,
   OPEN_METEO_ARCHIVE_BASE_URL,
   OPEN_METEO_FORECAST_BASE_URL,
 } from '../../env';
@@ -1468,7 +1469,10 @@ export class AlgoritmosService {
       this.diasPronosticoMalezas - 1,
     );
     const fechaSiembra = this.toDateKey(siembra.fechaSiembra || hoy);
-    const desdeMaximo = this.shiftDateKey(hoy, -this.maxDiasHistoricoMalezas);
+    const maxDiasClima = OPEN_METEO_ARCHIVE_ENABLED
+      ? this.maxDiasHistoricoMalezas
+      : Math.min(this.maxDiasHistoricoMalezas, 91);
+    const desdeMaximo = this.shiftDateKey(hoy, -maxDiasClima);
     const desde = fechaSiembra > desdeMaximo ? fechaSiembra : desdeMaximo;
     const recorteDias =
       fechaSiembra < desde ? this.diffDias(fechaSiembra, desde) : 0;
@@ -2439,12 +2443,29 @@ export class AlgoritmosService {
 
     const hoy = this.toDateKey(new Date().toISOString());
     const ayer = this.shiftDateKey(hoy, -1);
+    const limiteStandard = this.shiftDateKey(hoy, -91);
+    if (!OPEN_METEO_ARCHIVE_ENABLED && desde < limiteStandard) {
+      throw new BadRequestException(
+        `La cobertura historica comercial disponible comienza el ${limiteStandard}. El periodo solicitado desde ${desde} queda incompleto y no se utilizara para calcular huella hidrica.`,
+      );
+    }
     const resultados: DiaClimaHuella[] = [];
 
     if (desde <= ayer) {
       const end = hasta < ayer ? hasta : ayer;
+      const start = OPEN_METEO_ARCHIVE_ENABLED
+        ? desde
+        : desde > limiteStandard
+          ? desde
+          : limiteStandard;
       resultados.push(
-        ...(await this.fetchOpenMeteo('archive', lat, lng, desde, end)),
+        ...(await this.fetchOpenMeteo(
+          OPEN_METEO_ARCHIVE_ENABLED ? 'archive' : 'forecast',
+          lat,
+          lng,
+          start,
+          end,
+        )),
       );
     }
     if (hasta >= hoy) {
@@ -2473,12 +2494,24 @@ export class AlgoritmosService {
 
     const hoy = this.toDateKey(new Date().toISOString());
     const ayer = this.shiftDateKey(hoy, -1);
+    const limiteStandard = this.shiftDateKey(hoy, -91);
     const resultados: DiaClimaMalezas[] = [];
 
     if (desde <= ayer) {
       const end = hasta < ayer ? hasta : ayer;
+      const start = OPEN_METEO_ARCHIVE_ENABLED
+        ? desde
+        : desde > limiteStandard
+          ? desde
+          : limiteStandard;
       resultados.push(
-        ...(await this.fetchOpenMeteoMalezas('archive', lat, lng, desde, end)),
+        ...(await this.fetchOpenMeteoMalezas(
+          OPEN_METEO_ARCHIVE_ENABLED ? 'archive' : 'forecast',
+          lat,
+          lng,
+          start,
+          end,
+        )),
       );
     }
     if (hasta >= hoy) {

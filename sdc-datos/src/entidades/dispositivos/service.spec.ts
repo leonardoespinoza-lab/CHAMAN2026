@@ -19,6 +19,7 @@ describe('DispositivosService - calificacion meteorologica', () => {
     create: jest.Mock;
     getById: jest.Mock;
     update: jest.Mock;
+    syncFromLorawanCatalog: jest.Mock;
   };
   let service: DispositivosService;
 
@@ -28,8 +29,36 @@ describe('DispositivosService - calificacion meteorologica', () => {
       create: jest.fn().mockImplementation(async (value) => value),
       getById: jest.fn().mockResolvedValue({}),
       update: jest.fn().mockImplementation(async (_id, value) => value),
+      syncFromLorawanCatalog: jest.fn().mockResolvedValue({
+        total: 1,
+        created: 1,
+        updated: 0,
+        unchanged: 0,
+      }),
     };
     service = new DispositivosService(repository as any);
+  });
+
+  it('sincroniza el inventario ChirpStack sin aceptar lotes ilimitados', async () => {
+    const items = [
+      {
+        devEUI: 'AABBCCDDEEFF0011',
+        name: 'Controlador de campo',
+        applicationID: 'app-1',
+      },
+    ];
+
+    await expect(service.syncFromLorawanCatalog(items)).resolves.toEqual({
+      total: 1,
+      created: 1,
+      updated: 0,
+      unchanged: 0,
+    });
+    expect(repository.syncFromLorawanCatalog).toHaveBeenCalledWith(items);
+
+    await expect(
+      service.syncFromLorawanCatalog(new Array(5001).fill(items[0])),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   afterEach(() => {

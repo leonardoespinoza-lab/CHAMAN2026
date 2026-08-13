@@ -72,7 +72,7 @@ test('rechaza archive customer sin una clave Professional separada', () => {
   assert.match(result.output, /no coincide con la API key configurada/);
 });
 
-test('datos exige forecast y archive comerciales en produccion', () => {
+test('datos exige forecast comercial en produccion', () => {
   const result = runValidator({
     CHAMAN_SERVICE: 'sdc-datos',
     MONGO_URI: 'mongodb://mongo.railway.internal:27017/chaman',
@@ -84,10 +84,16 @@ test('datos exige forecast y archive comerciales en produccion', () => {
 
   assert.equal(result.status, 1);
   assert.match(result.output, /Falta variable requerida: OPEN_METEO_API_KEY/);
-  assert.match(
-    result.output,
-    /Falta variable requerida: OPEN_METEO_ARCHIVE_API_KEY/,
-  );
+});
+
+test('acepta Standard sin archive y deja trazada la cobertura de 92 dias', () => {
+  const result = runValidator({
+    OPEN_METEO_ARCHIVE_API_KEY: '',
+    OPEN_METEO_ARCHIVE_BASE_URL: '',
+  });
+
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /hasta 92 dias de pasado/);
 });
 
 test('datos acepta forecast y archive customer con claves separadas', () => {
@@ -113,8 +119,7 @@ test('datos rechaza un host forecast falsificado', () => {
 
 test('rechaza Open-Meteo por HTTP aunque el hostname sea oficial', () => {
   const result = runValidator({
-    OPEN_METEO_FORECAST_BASE_URL:
-      'http://customer-api.open-meteo.com/v1',
+    OPEN_METEO_FORECAST_BASE_URL: 'http://customer-api.open-meteo.com/v1',
   });
 
   assert.equal(result.status, 1);
@@ -149,4 +154,33 @@ test('rechaza mezclar el host archive en el endpoint forecast', () => {
 
   assert.equal(result.status, 1);
   assert.match(result.output, /host oficial de Open-Meteo para forecast/);
+});
+
+test('lora exige token y direccion si activa el inventario ChirpStack', () => {
+  const result = runValidator({
+    CHAMAN_SERVICE: 'sdc-api-lora',
+    API_DATOS: 'http://chaman-datos.railway.internal:5003',
+    LORAWAN_MQTT_ENABLED: 'false',
+    CHIRPSTACK_DEVICE_SYNC_ENABLED: 'true',
+    CHIRPSTACK_GRPC_ADDRESS: '',
+    CHIRPSTACK_API_TOKEN: '',
+  });
+
+  assert.equal(result.status, 1);
+  assert.match(result.output, /falta CHIRPSTACK_GRPC_ADDRESS/);
+  assert.match(result.output, /falta CHIRPSTACK_API_TOKEN/);
+});
+
+test('lora acepta inventario ChirpStack interno con token', () => {
+  const result = runValidator({
+    CHAMAN_SERVICE: 'sdc-api-lora',
+    API_DATOS: 'http://chaman-datos.railway.internal:5003',
+    LORAWAN_MQTT_ENABLED: 'false',
+    CHIRPSTACK_DEVICE_SYNC_ENABLED: 'true',
+    CHIRPSTACK_GRPC_ADDRESS: 'chirpstack-ns.railway.internal:8080',
+    CHIRPSTACK_API_TOKEN: 'chirpstack-api-token-test',
+    LORAWAN_CATALOG_INTERNAL_TOKEN: 'catalog-token-test',
+  });
+
+  assert.equal(result.status, 0, result.output);
 });

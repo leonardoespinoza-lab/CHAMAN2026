@@ -70,7 +70,7 @@ describe('configuracion Open-Meteo de sdc-datos', () => {
     expect(() => require('./env')).toThrow(/host oficial de Open-Meteo/);
   });
 
-  it('impide arrancar production sin ambas claves comerciales', () => {
+  it('permite Standard en production con forecast comercial', () => {
     process.env.ENV = 'production';
     process.env.NODE_ENV = 'production';
     process.env.OPEN_METEO_API_KEY = 'forecast-test-key';
@@ -79,7 +79,11 @@ describe('configuracion Open-Meteo de sdc-datos', () => {
     delete process.env.OPEN_METEO_ARCHIVE_BASE_URL;
     jest.resetModules();
 
-    expect(() => require('./env')).toThrow(/claves comerciales separadas/);
+    const env = require('./env');
+    expect(env.OPEN_METEO_ARCHIVE_ENABLED).toBe(false);
+    expect(env.OPEN_METEO_FORECAST_BASE_URL).toContain(
+      'customer-api.open-meteo.com',
+    );
   });
 
   it('Railway testing prevalece sobre ENV y NODE_ENV production', () => {
@@ -106,6 +110,6 @@ describe('configuracion Open-Meteo de sdc-datos', () => {
     delete process.env.OPEN_METEO_ARCHIVE_BASE_URL;
     jest.resetModules();
 
-    expect(() => require('./env')).toThrow(/claves comerciales separadas/);
+    expect(() => require('./env')).toThrow(/clave comercial.*Forecast/);
   });
 });

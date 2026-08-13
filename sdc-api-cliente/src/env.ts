@@ -30,14 +30,12 @@ const openMeteoRuntimeEnvironment = String(
 )
   .trim()
   .toLowerCase();
-if (
-  openMeteoRuntimeEnvironment === 'production' &&
-  (!OPEN_METEO_API_KEY || !OPEN_METEO_ARCHIVE_API_KEY)
-) {
+if (openMeteoRuntimeEnvironment === 'production' && !OPEN_METEO_API_KEY) {
   throw new Error(
-    'sdc-api-cliente production exige claves comerciales separadas de Open-Meteo para forecast y archive',
+    'sdc-api-cliente production exige la clave comercial de Open-Meteo Forecast',
   );
 }
+export const OPEN_METEO_ARCHIVE_ENABLED = !!OPEN_METEO_ARCHIVE_API_KEY;
 
 export function resolveOpenMeteoBaseUrl(
   value: string,

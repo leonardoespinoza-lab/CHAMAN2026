@@ -6,6 +6,8 @@ import {
   IQueryParam,
   ICreateDispositivo,
   IAsignacionDispositivoLote,
+  ILorawanDeviceCatalogItem,
+  ILorawanDeviceCatalogSyncResult,
   ILorawanUplink,
   SensoresV2,
   TipoDispositivo,
@@ -33,7 +35,9 @@ export class DispositivosRepository {
   }
 
   async create(data: ICreateDispositivo): Promise<Dispositivo> {
-    const fechaAsignacionLote = data.fechaAsignacionLote || (data.idLote ? new Date().toISOString() : undefined);
+    const fechaAsignacionLote =
+      data.fechaAsignacionLote ||
+      (data.idLote ? new Date().toISOString() : undefined);
     const historialAsignacionesLote =
       data.historialAsignacionesLote ||
       (data.idLote && fechaAsignacionLote
@@ -52,7 +56,8 @@ export class DispositivosRepository {
     sensores: SensoresV2[];
     configuracionLecturas?: IUpdateDispositivo['configuracionLecturas'];
   } {
-    const text = `${uplink.deviceName || ''} ${uplink.applicationName || ''}`.toLowerCase();
+    const text =
+      `${uplink.deviceName || ''} ${uplink.applicationName || ''}`.toLowerCase();
 
     if (
       this.isUc511SentekUplink(uplink) ||
@@ -93,7 +98,11 @@ export class DispositivosRepository {
       };
     }
 
-    if (text.includes('pluvio') || text.includes('lluvia') || text.includes('rain')) {
+    if (
+      text.includes('pluvio') ||
+      text.includes('lluvia') ||
+      text.includes('rain')
+    ) {
       return {
         tipo: 'Pluviometro',
         sensores: ['Pluviometro'],
@@ -158,7 +167,9 @@ export class DispositivosRepository {
       rawPayload.object?.frmPayload,
     ];
 
-    return candidates.find((value) => typeof value === 'string' && value.trim());
+    return candidates.find(
+      (value) => typeof value === 'string' && value.trim(),
+    );
   }
 
   async upsertFromLorawanUplink(
@@ -172,7 +183,8 @@ export class DispositivosRepository {
     const timestamp = uplink.timestamp || new Date().toISOString();
     const inferred = this.inferDeviceFromLorawanUplink(uplink);
     const inferredName =
-      inferred.tipo === 'Sensor de Humedad de Suelo' && this.isUc511SentekUplink(uplink)
+      inferred.tipo === 'Sensor de Humedad de Suelo' &&
+      this.isUc511SentekUplink(uplink)
         ? `Controlador Sentek + entrada analógica ${devEUI}`
         : devEUI;
     const existing = await this.model.findOne({ deveui: devEUI }).lean();
@@ -184,6 +196,7 @@ export class DispositivosRepository {
       configuracionLecturas: inferred.configuracionLecturas,
       fechaUltimaComunicacion: timestamp,
       metadata: {
+        ...(existing?.metadata || {}),
         applicationID: uplink.applicationID,
         applicationName: uplink.applicationName,
         gatewayID: uplink.gatewayID,
@@ -205,7 +218,11 @@ export class DispositivosRepository {
       $set.nombre = update.nombre;
     }
 
-    if (existing && (!existing.tipo || existing.tipo === 'Otro') && update.tipo !== 'Otro') {
+    if (
+      existing &&
+      (!existing.tipo || existing.tipo === 'Otro') &&
+      update.tipo !== 'Otro'
+    ) {
       $set.tipo = update.tipo;
     }
 
@@ -218,7 +235,8 @@ export class DispositivosRepository {
         ...new Set([...existingSensors, ...(update.sensores || [])]),
       ];
       if (
-        JSON.stringify(mergedSensors) !== JSON.stringify(existing.sensores || [])
+        JSON.stringify(mergedSensors) !==
+        JSON.stringify(existing.sensores || [])
       ) {
         $set.sensores = mergedSensors;
       }
@@ -236,49 +254,141 @@ export class DispositivosRepository {
     return await this.model.create(update);
   }
 
+  async syncFromLorawanCatalog(
+    items: ILorawanDeviceCatalogItem[],
+  ): Promise<ILorawanDeviceCatalogSyncResult> {
+    const result: ILorawanDeviceCatalogSyncResult = {
+      total: 0,
+      created: 0,
+      updated: 0,
+      unchanged: 0,
+    };
+    const syncedAt = new Date().toISOString();
+
+    for (const item of items) {
+      const devEUI = String(item.devEUI || '')
+        .trim()
+        .toUpperCase();
+      if (!/^[0-9A-F]{16}$/.test(devEUI)) continue;
+      result.total += 1;
+      const existing = await this.model.findOne({ deveui: devEUI }).lean();
+      const metadata = {
+        ...(existing?.metadata || {}),
+        origenInventario: 'ChirpStack' as const,
+        chirpstackSincronizadoEn: syncedAt,
+        chirpstackTenantID: item.tenantID,
+        chirpstackApplicationID: item.applicationID,
+        chirpstackApplicationName: item.applicationName,
+        chirpstackDeviceProfileID: item.deviceProfileID,
+        chirpstackDeviceProfileName: item.deviceProfileName,
+        chirpstackDescription: item.description,
+        chirpstackLastSeenAt: item.lastSeenAt,
+      };
+
+      if (!existing) {
+        await this.model.create({
+          deveui: devEUI,
+          nombre: item.name?.trim() || devEUI,
+          tipo: 'Otro',
+          sensores: ['Otro'],
+          metadata,
+        });
+        result.created += 1;
+        continue;
+      }
+
+      const $set: IUpdateDispositivo = { metadata };
+      const currentName = String(existing.nombre || '').trim();
+      if (
+        (!currentName || currentName.toUpperCase() === devEUI) &&
+        item.name?.trim()
+      ) {
+        $set.nombre = item.name.trim();
+      }
+      const metadataComparable = {
+        ...(existing.metadata || {}),
+        ...metadata,
+      };
+      delete metadataComparable.chirpstackSincronizadoEn;
+      const existingMetadataComparable = { ...(existing.metadata || {}) };
+      delete existingMetadataComparable.chirpstackSincronizadoEn;
+      const nameChanged = !!$set.nombre && $set.nombre !== existing.nombre;
+      const metadataChanged =
+        JSON.stringify(metadataComparable) !==
+        JSON.stringify(existingMetadataComparable);
+
+      if (nameChanged || metadataChanged) {
+        await this.model.updateOne({ _id: existing._id }, { $set });
+        result.updated += 1;
+      } else {
+        result.unchanged += 1;
+      }
+    }
+    return result;
+  }
+
   async update(id: string, data: IUpdateDispositivo): Promise<Dispositivo> {
     const updateData: IUpdateDispositivo = { ...data };
     const unsetData: Record<string, 1> = {};
     const cambiaLote = Object.prototype.hasOwnProperty.call(data, 'idLote');
-    const cambiaFechaAsignacion = Object.prototype.hasOwnProperty.call(data, 'fechaAsignacionLote');
+    const cambiaFechaAsignacion = Object.prototype.hasOwnProperty.call(
+      data,
+      'fechaAsignacionLote',
+    );
 
     if (cambiaLote || cambiaFechaAsignacion) {
       const actual = await this.model
         .findById(id)
-        .select('idLote idProductor idEstablecimiento fechaAsignacionLote historialAsignacionesLote')
+        .select(
+          'idLote idProductor idEstablecimiento fechaAsignacionLote historialAsignacionesLote',
+        )
         .lean();
       const loteAnterior = actual?.idLote ? String(actual.idLote) : '';
-      const loteNuevo = cambiaLote ? (data.idLote ? String(data.idLote) : '') : loteAnterior;
-      const fechaAsignacion = data.fechaAsignacionLote || actual?.fechaAsignacionLote || new Date().toISOString();
+      const loteNuevo = cambiaLote
+        ? data.idLote
+          ? String(data.idLote)
+          : ''
+        : loteAnterior;
+      const fechaAsignacion =
+        data.fechaAsignacionLote ||
+        actual?.fechaAsignacionLote ||
+        new Date().toISOString();
 
       if (loteAnterior !== loteNuevo) {
         if (loteNuevo) {
           updateData.fechaAsignacionLote = fechaAsignacion;
-          updateData.historialAsignacionesLote = this.actualizarHistorialPorCambioDeLote(
-            actual,
-            data,
-            fechaAsignacion,
-            loteAnterior,
-            loteNuevo,
-          );
+          updateData.historialAsignacionesLote =
+            this.actualizarHistorialPorCambioDeLote(
+              actual,
+              data,
+              fechaAsignacion,
+              loteAnterior,
+              loteNuevo,
+            );
         } else {
           delete updateData.fechaAsignacionLote;
           unsetData.fechaAsignacionLote = 1;
-          updateData.historialAsignacionesLote = this.actualizarHistorialPorCambioDeLote(
+          updateData.historialAsignacionesLote =
+            this.actualizarHistorialPorCambioDeLote(
+              actual,
+              data,
+              fechaAsignacion,
+              loteAnterior,
+              loteNuevo,
+            );
+        }
+      } else if (
+        cambiaFechaAsignacion &&
+        loteNuevo &&
+        data.fechaAsignacionLote
+      ) {
+        updateData.historialAsignacionesLote =
+          this.actualizarFechaSegmentoActivo(
             actual,
             data,
-            fechaAsignacion,
-            loteAnterior,
+            data.fechaAsignacionLote,
             loteNuevo,
           );
-        }
-      } else if (cambiaFechaAsignacion && loteNuevo && data.fechaAsignacionLote) {
-        updateData.historialAsignacionesLote = this.actualizarFechaSegmentoActivo(
-          actual,
-          data,
-          data.fechaAsignacionLote,
-          loteNuevo,
-        );
       }
     }
 
@@ -309,7 +419,10 @@ export class DispositivosRepository {
     for (const segmento of historial) {
       const idLoteSegmento = segmento.idLote ? String(segmento.idLote) : '';
       const esSegmentoActual =
-        segmento.activa || (!!loteAnterior && idLoteSegmento === loteAnterior && !segmento.fechaHasta);
+        segmento.activa ||
+        (!!loteAnterior &&
+          idLoteSegmento === loteAnterior &&
+          !segmento.fechaHasta);
 
       if (esSegmentoActual) {
         segmento.activa = false;
@@ -346,7 +459,10 @@ export class DispositivosRepository {
     for (let i = historial.length - 1; i >= 0; i--) {
       const segmento = historial[i];
       const idLoteSegmento = segmento.idLote ? String(segmento.idLote) : '';
-      if (idLoteSegmento === loteActual && (segmento.activa || !segmento.fechaHasta)) {
+      if (
+        idLoteSegmento === loteActual &&
+        (segmento.activa || !segmento.fechaHasta)
+      ) {
         index = i;
         break;
       }
@@ -381,18 +497,26 @@ export class DispositivosRepository {
     return {
       idLote: data.idLote ? String(data.idLote) : undefined,
       idProductor: data.idProductor ? String(data.idProductor) : undefined,
-      idEstablecimiento: data.idEstablecimiento ? String(data.idEstablecimiento) : undefined,
+      idEstablecimiento: data.idEstablecimiento
+        ? String(data.idEstablecimiento)
+        : undefined,
       fechaDesde: this.normalizarFecha(fechaDesde),
       activa: true,
     };
   }
 
-  private clonarHistorial(historial?: IAsignacionDispositivoLote[]): IAsignacionDispositivoLote[] {
-    return Array.isArray(historial) ? historial.map((segmento) => ({ ...segmento })) : [];
+  private clonarHistorial(
+    historial?: IAsignacionDispositivoLote[],
+  ): IAsignacionDispositivoLote[] {
+    return Array.isArray(historial)
+      ? historial.map((segmento) => ({ ...segmento }))
+      : [];
   }
 
   private normalizarFecha(fecha?: string): string {
     const parsed = fecha ? new Date(fecha) : new Date();
-    return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+    return Number.isNaN(parsed.getTime())
+      ? new Date().toISOString()
+      : parsed.toISOString();
   }
 }

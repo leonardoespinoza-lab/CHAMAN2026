@@ -121,7 +121,7 @@ describe('Open-Meteo environment parsing', () => {
     );
   });
 
-  it('Railway production exige forecast y archive aunque ENV y NODE_ENV sean test', async () => {
+  it('Railway production exige forecast aunque ENV y NODE_ENV sean test', async () => {
     process.env.ENV = 'test';
     process.env.RAILWAY_ENVIRONMENT_NAME = 'production';
     process.env.NODE_ENV = 'test';
@@ -132,8 +132,21 @@ describe('Open-Meteo environment parsing', () => {
     delete process.env.OPEN_METEO_ARCHIVE_BASE_URL;
     jest.resetModules();
 
-    await expect(import('./env')).rejects.toThrow(
-      /claves comerciales separadas/,
+    await expect(import('./env')).rejects.toThrow(/clave comercial.*Forecast/);
+  });
+
+  it('acepta Standard en production sin archive y lo deja deshabilitado', async () => {
+    process.env.RAILWAY_ENVIRONMENT_NAME = 'production';
+    process.env.OPEN_METEO_API_KEY = 'forecast-test-key';
+    delete process.env.OPEN_METEO_ARCHIVE_API_KEY;
+    delete process.env.OPEN_METEO_FORECAST_BASE_URL;
+    delete process.env.OPEN_METEO_ARCHIVE_BASE_URL;
+    jest.resetModules();
+
+    const env = await import('./env');
+    expect(env.OPEN_METEO_ARCHIVE_ENABLED).toBe(false);
+    expect(env.OPEN_METEO_FORECAST_BASE_URL).toContain(
+      'customer-api.open-meteo.com',
     );
   });
 

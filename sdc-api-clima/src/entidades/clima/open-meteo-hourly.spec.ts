@@ -23,6 +23,24 @@ const hourlyPayload = (count = 24, fecha = '2026-07-10') => ({
   },
 });
 
+const hourlyPayloadRange = (inicio: string, fin: string) => {
+  const horas = diasInclusivos(inicio, fin).flatMap((fecha) =>
+    times(24, fecha),
+  );
+  return {
+    utc_offset_seconds: -10800,
+    timezone: 'America/Argentina/Buenos_Aires',
+    hourly: {
+      time: horas,
+      temperature_2m: horas.map(() => 12),
+      relative_humidity_2m: horas.map(() => 80),
+      precipitation: horas.map(() => 0),
+      rain: horas.map(() => 0),
+      wind_speed_10m: horas.map(() => 12),
+    },
+  };
+};
+
 const diasInclusivos = (inicio: string, fin: string): string[] => {
   const actual = new Date(`${inicio}T00:00:00Z`);
   const limite = new Date(`${fin}T00:00:00Z`);
@@ -201,7 +219,7 @@ describe('fallback horario Open-Meteo', () => {
     });
   });
 
-  it('divide Archive y Forecast cuando el rango cruza el limite historico', async () => {
+  it('usa Forecast pago para todo el rango cuando Archive Professional no esta habilitado', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-15T12:00:00Z'));
     const fetch = jest
       .spyOn(service as any, 'fetchOpenMeteoJson')
@@ -219,28 +237,22 @@ describe('fallback horario Open-Meteo', () => {
       'daily',
     );
 
-    expect(fetch).toHaveBeenCalledTimes(2);
-    const urls = fetch.mock.calls.map(([url]) => url as URL);
-    const archive = urls.find((url) => url.hostname.includes('archive-api'));
-    const forecast = urls.find((url) => !url.hostname.includes('archive-api'));
-    expect(archive?.searchParams.get('start_date')).toBe('2026-07-09');
-    expect(archive?.searchParams.get('end_date')).toBe('2026-07-10');
-    expect(forecast?.searchParams.get('start_date')).toBe('2026-07-11');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const forecast = fetch.mock.calls[0][0] as URL;
+    expect(forecast.hostname).not.toContain('archive-api');
+    expect(forecast.searchParams.get('start_date')).toBe('2026-07-09');
     expect(forecast?.searchParams.get('end_date')).toBe('2026-07-12');
     expect(result.map((item: any) => item.fecha.slice(0, 10))).toEqual(
       diasInclusivos('2026-07-09', '2026-07-12'),
     );
   });
 
-  it('mantiene continuidad horaria a ambos lados del corte', async () => {
+  it('mantiene continuidad horaria reciente usando Forecast pago', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-15T12:00:00Z'));
     const fetch = jest
       .spyOn(service as any, 'fetchOpenMeteoJson')
-      .mockImplementation(async (url: URL) =>
-        hourlyPayload(
-          24,
-          url.hostname.includes('archive-api') ? '2026-07-10' : '2026-07-11',
-        ),
+      .mockImplementation(async () =>
+        hourlyPayloadRange('2026-07-10', '2026-07-11'),
       );
 
     const result = await (service as any).getOpenMeteoHorarioEntreFechas(
@@ -250,12 +262,10 @@ describe('fallback horario Open-Meteo', () => {
       'hourly',
     );
 
-    const urls = fetch.mock.calls.map(([url]) => url as URL);
-    const archive = urls.find((url) => url.hostname.includes('archive-api'));
-    const forecast = urls.find((url) => !url.hostname.includes('archive-api'));
-    expect(archive?.searchParams.get('start_date')).toBe('2026-07-10');
-    expect(archive?.searchParams.get('end_date')).toBe('2026-07-10');
-    expect(forecast?.searchParams.get('start_date')).toBe('2026-07-11');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const forecast = fetch.mock.calls[0][0] as URL;
+    expect(forecast.hostname).not.toContain('archive-api');
+    expect(forecast.searchParams.get('start_date')).toBe('2026-07-10');
     expect(forecast?.searchParams.get('end_date')).toBe('2026-07-11');
     expect(result).toHaveLength(48);
     expect(new Set(result.map((item: any) => item.fecha.slice(0, 10)))).toEqual(
@@ -294,7 +304,7 @@ describe('fallback horario Open-Meteo', () => {
     ]);
   });
 
-  it('recompone Archive y Forecast sin perder dias ni alinear mal variables agrometeorologicas', async () => {
+  it('alinea todas las variables agrometeorologicas en la ventana Forecast Standard', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-07-15T12:00:00Z'));
     const fetch = jest
       .spyOn(service as any, 'fetchOpenMeteoJson')
@@ -303,9 +313,6 @@ describe('fallback horario Open-Meteo', () => {
           String(url.searchParams.get('start_date')),
           String(url.searchParams.get('end_date')),
         );
-        if (url.hostname.includes('archive-api')) {
-          delete (payload.hourly as any).et0_fao_evapotranspiration;
-        }
         return payload;
       });
 
@@ -316,13 +323,10 @@ describe('fallback horario Open-Meteo', () => {
       false,
     );
 
-    expect(fetch).toHaveBeenCalledTimes(2);
-    const urls = fetch.mock.calls.map(([url]) => url as URL);
-    const archive = urls.find((url) => url.hostname.includes('archive-api'));
-    const forecast = urls.find((url) => !url.hostname.includes('archive-api'));
-    expect(archive?.searchParams.get('start_date')).toBe('2026-07-09');
-    expect(archive?.searchParams.get('end_date')).toBe('2026-07-10');
-    expect(forecast?.searchParams.get('start_date')).toBe('2026-07-11');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const forecast = fetch.mock.calls[0][0] as URL;
+    expect(forecast.hostname).not.toContain('archive-api');
+    expect(forecast.searchParams.get('start_date')).toBe('2026-07-09');
     expect(forecast?.searchParams.get('end_date')).toBe('2026-07-13');
     expect(result.daily.time).toEqual(
       diasInclusivos('2026-07-09', '2026-07-13'),
@@ -330,11 +334,8 @@ describe('fallback horario Open-Meteo', () => {
     expect(result.hourly.time).toHaveLength(120);
     expect(result.hourly.temperature_2m).toHaveLength(120);
     expect(result.hourly.et0_fao_evapotranspiration).toHaveLength(120);
-    expect(result.hourly.et0_fao_evapotranspiration.slice(0, 48)).toEqual(
-      Array(48).fill(undefined),
-    );
-    expect(result.hourly.et0_fao_evapotranspiration.slice(48)).toEqual(
-      Array(72).fill(0.05),
+    expect(result.hourly.et0_fao_evapotranspiration).toEqual(
+      Array(120).fill(0.05),
     );
   });
 

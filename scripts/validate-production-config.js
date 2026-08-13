@@ -46,7 +46,6 @@ const SERVICE_REQUIRED = {
     'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
     'AGROMETEO_INTERNAL_TOKEN',
     'OPEN_METEO_API_KEY',
-    'OPEN_METEO_ARCHIVE_API_KEY',
   ],
   auth: ['API_DATOS', 'CLIENT_ID_INICIAL', 'CLIENT_SECRET_INICIAL'],
   datos: [
@@ -54,7 +53,6 @@ const SERVICE_REQUIRED = {
     'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
     'AGROMETEO_INTERNAL_TOKEN',
     'OPEN_METEO_API_KEY',
-    'OPEN_METEO_ARCHIVE_API_KEY',
   ],
   predicciones: [
     'API_DATOS',
@@ -68,7 +66,6 @@ const SERVICE_REQUIRED = {
     'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
     'AGROMETEO_INTERNAL_TOKEN',
     'OPEN_METEO_API_KEY',
-    'OPEN_METEO_ARCHIVE_API_KEY',
   ],
   lora: ['API_DATOS'],
   externa: [
@@ -90,19 +87,15 @@ const FORBIDDEN_VALUES = {
     'change-me',
     '<change-me>',
   ]),
-  AGROMETEO_INTERNAL_TOKEN: new Set([
-    '',
-    '1',
-    'change-me',
-    '<change-me>',
-  ]),
+  AGROMETEO_INTERNAL_TOKEN: new Set(['', '1', 'change-me', '<change-me>']),
   OPEN_METEO_API_KEY: new Set(['', '1', 'change-me', '<change-me>']),
   OPEN_METEO_ARCHIVE_API_KEY: new Set(['1', 'change-me', '<change-me>']),
   TIMELAPSE_ADMIN_TOKEN: new Set(['1', 'change-me', '<change-me>']),
 };
 
 function getService() {
-  const raw = process.env.CHAMAN_SERVICE || process.env.SERVICE || process.argv[2] || '';
+  const raw =
+    process.env.CHAMAN_SERVICE || process.env.SERVICE || process.argv[2] || '';
   const normalized = raw.trim();
   if (!normalized) return '';
   return SERVICE_ALIASES[normalized] || normalized;
@@ -140,7 +133,11 @@ function validateOpenMeteoEndpoint(
   try {
     url = new URL(value);
   } catch {
-    pushIssue(issues, 'error', `${variableName} debe ser una URL valida de Open-Meteo`);
+    pushIssue(
+      issues,
+      'error',
+      `${variableName} debe ser una URL valida de Open-Meteo`,
+    );
     return;
   }
   if (
@@ -159,9 +156,7 @@ function validateOpenMeteoEndpoint(
     return;
   }
   const publicHost =
-    kind === 'forecast'
-      ? 'api.open-meteo.com'
-      : 'archive-api.open-meteo.com';
+    kind === 'forecast' ? 'api.open-meteo.com' : 'archive-api.open-meteo.com';
   const customerHost =
     kind === 'forecast'
       ? 'customer-api.open-meteo.com'
@@ -186,7 +181,9 @@ function validateOpenMeteoEndpoint(
 
 function validate() {
   const service = getService();
-  const env = String(process.env.ENV || process.env.NODE_ENV || '').toLowerCase();
+  const env = String(
+    process.env.ENV || process.env.NODE_ENV || '',
+  ).toLowerCase();
   const force = process.argv.includes('--force');
   const issues = [];
 
@@ -208,7 +205,12 @@ function validate() {
   }
 
   for (const name of SERVICE_REQUIRED[service]) {
-    if (name === 'MONGO_URI' && (hasValue('MONGO_URI') || hasValue('MONGO_URL') || hasValue('DATABASE_URL'))) {
+    if (
+      name === 'MONGO_URI' &&
+      (hasValue('MONGO_URI') ||
+        hasValue('MONGO_URL') ||
+        hasValue('DATABASE_URL'))
+    ) {
       continue;
     }
     if (!hasValue(name)) {
@@ -232,7 +234,11 @@ function validate() {
 
   for (const [name, forbidden] of Object.entries(FORBIDDEN_VALUES)) {
     if (hasValue(name) && forbidden.has(getValue(name).toLowerCase())) {
-      pushIssue(issues, 'error', `${name} tiene un valor placeholder o inseguro`);
+      pushIssue(
+        issues,
+        'error',
+        `${name} tiene un valor placeholder o inseguro`,
+      );
     }
   }
 
@@ -241,32 +247,46 @@ function validate() {
     'AGROMETEO_INTERNAL_TOKEN',
   ]) {
     if (hasValue(name) && getValue(name).length < 32) {
-      pushIssue(
-        issues,
-        'error',
-        `${name} debe tener al menos 32 caracteres`,
-      );
+      pushIssue(issues, 'error', `${name} debe tener al menos 32 caracteres`);
     }
   }
 
   if (BACKEND_SERVICES.has(service)) {
     if (getValue('SWAGGER_ENABLED') !== 'false') {
-      pushIssue(issues, 'error', 'SWAGGER_ENABLED debe ser false en produccion');
+      pushIssue(
+        issues,
+        'error',
+        'SWAGGER_ENABLED debe ser false en produccion',
+      );
     }
 
     const cors = getValue('CORS_ORIGINS');
     if (!cors) {
-      pushIssue(issues, 'error', 'CORS_ORIGINS debe estar definido explicitamente en produccion');
+      pushIssue(
+        issues,
+        'error',
+        'CORS_ORIGINS debe estar definido explicitamente en produccion',
+      );
     } else if (cors.includes('*')) {
       pushIssue(issues, 'error', 'CORS_ORIGINS no debe usar comodines');
     }
 
     if (getValue('GOOGLE_LOGIN_ENABLED') === 'true') {
-      pushIssue(issues, 'warn', 'GOOGLE_LOGIN_ENABLED=true. Confirmar aprobacion antes de publicar');
+      pushIssue(
+        issues,
+        'warn',
+        'GOOGLE_LOGIN_ENABLED=true. Confirmar aprobacion antes de publicar',
+      );
     }
   }
 
-  for (const name of ['API_DATOS', 'API_AUTH', 'API_CLIMA', 'API_PREDICCIONES', 'API_EXTERNA_URL']) {
+  for (const name of [
+    'API_DATOS',
+    'API_AUTH',
+    'API_CLIMA',
+    'API_PREDICCIONES',
+    'API_EXTERNA_URL',
+  ]) {
     if (hasValue(name) && isPublicRailwayUrl(getValue(name))) {
       pushIssue(
         issues,
@@ -277,9 +297,32 @@ function validate() {
   }
 
   if (service === 'lora' && getValue('LORAWAN_MQTT_ENABLED') === 'true') {
-    for (const name of ['LORAWAN_MQTT_URL', 'LORAWAN_MQTT_USERNAME', 'LORAWAN_MQTT_PASSWORD']) {
+    for (const name of [
+      'LORAWAN_MQTT_URL',
+      'LORAWAN_MQTT_USERNAME',
+      'LORAWAN_MQTT_PASSWORD',
+    ]) {
       if (!hasValue(name)) {
         pushIssue(issues, 'error', `LoRaWAN activo pero falta ${name}`);
+      }
+    }
+  }
+
+  if (
+    service === 'lora' &&
+    getValue('CHIRPSTACK_DEVICE_SYNC_ENABLED') === 'true'
+  ) {
+    for (const name of [
+      'CHIRPSTACK_GRPC_ADDRESS',
+      'CHIRPSTACK_API_TOKEN',
+      'LORAWAN_CATALOG_INTERNAL_TOKEN',
+    ]) {
+      if (!hasValue(name)) {
+        pushIssue(
+          issues,
+          'error',
+          `Inventario ChirpStack activo pero falta ${name}`,
+        );
       }
     }
   }
@@ -309,26 +352,40 @@ function validate() {
 
     if (['api', 'clima', 'datos'].includes(service)) {
       const archiveHasKey = hasValue('OPEN_METEO_ARCHIVE_API_KEY');
-      const archiveBase =
-        getValue('OPEN_METEO_ARCHIVE_BASE_URL') ||
-        (archiveHasKey
-          ? 'https://customer-archive-api.open-meteo.com/v1'
-          : 'https://archive-api.open-meteo.com/v1');
-      validateOpenMeteoEndpoint(
-        issues,
-        'OPEN_METEO_ARCHIVE_BASE_URL',
-        archiveBase,
-        'archive',
-        archiveHasKey,
-      );
+      const explicitArchiveBase = getValue('OPEN_METEO_ARCHIVE_BASE_URL');
+      if (archiveHasKey || explicitArchiveBase) {
+        const archiveBase =
+          explicitArchiveBase ||
+          'https://customer-archive-api.open-meteo.com/v1';
+        validateOpenMeteoEndpoint(
+          issues,
+          'OPEN_METEO_ARCHIVE_BASE_URL',
+          archiveBase,
+          'archive',
+          archiveHasKey,
+        );
+      } else {
+        pushIssue(
+          issues,
+          'warn',
+          'Open-Meteo Historical Weather no esta habilitado. Se usara exclusivamente Forecast comercial con hasta 92 dias de pasado; los periodos sin cobertura canonica quedaran incompletos.',
+        );
+      }
     }
   }
 
   if (getValue('REALTIME_TRANSPORT') === 'redis' && !hasValue('REDIS_HOST')) {
-    pushIssue(issues, 'error', 'REALTIME_TRANSPORT=redis pero falta REDIS_HOST');
+    pushIssue(
+      issues,
+      'error',
+      'REALTIME_TRANSPORT=redis pero falta REDIS_HOST',
+    );
   }
 
-  if (service === 'websocket' && !['redis', 'mqtt'].includes(getValue('REALTIME_TRANSPORT'))) {
+  if (
+    service === 'websocket' &&
+    !['redis', 'mqtt'].includes(getValue('REALTIME_TRANSPORT'))
+  ) {
     pushIssue(
       issues,
       'error',

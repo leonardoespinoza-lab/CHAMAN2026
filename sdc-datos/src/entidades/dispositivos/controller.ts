@@ -7,14 +7,17 @@ import {
   Delete,
   Query,
   Put,
+  UseGuards,
 } from '@nestjs/common';
 import { DispositivosService } from './service';
 import {
   ICreateDispositivo,
+  ILorawanDeviceCatalogItem,
   IQueryParam,
   IUpdateDispositivo,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
+import { LorawanCatalogInternalGuard } from './lorawan-catalog-internal.guard';
 
 @ApiTags('Dispositivos')
 @Controller('dispositivos')
@@ -24,6 +27,14 @@ export class DispositivosController {
   @Get()
   async getFilter(@Query() query: IQueryParam) {
     return await this.service.getFilter(query);
+  }
+
+  @Post('lorawan-catalog/sync')
+  @UseGuards(LorawanCatalogInternalGuard)
+  async syncLorawanCatalog(
+    @Body() data: { items?: ILorawanDeviceCatalogItem[] },
+  ) {
+    return await this.service.syncFromLorawanCatalog(data?.items || []);
   }
 
   @Get(':id')

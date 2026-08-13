@@ -4,10 +4,15 @@ import { DispositivosController } from './controller';
 import { DispositivosRepository } from './repository';
 import { Dispositivo, DispositivoSchema } from './modelos/schema';
 import { MongooseModule } from '@nestjs/mongoose';
+import { LorawanCatalogInternalGuard } from './lorawan-catalog-internal.guard';
 
 @Module({
   controllers: [DispositivosController],
-  providers: [DispositivosService, DispositivosRepository],
+  providers: [
+    DispositivosService,
+    DispositivosRepository,
+    LorawanCatalogInternalGuard,
+  ],
   exports: [DispositivosService],
   imports: [
     MongooseModule.forFeature([

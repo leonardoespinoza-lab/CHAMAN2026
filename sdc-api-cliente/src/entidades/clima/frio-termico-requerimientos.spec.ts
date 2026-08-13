@@ -141,7 +141,7 @@ describe('requisitos varietales de frio', () => {
     }
   });
 
-  it('corta Archive en hoy-5 y deriva la cola reciente a Forecast', async () => {
+  it('limita Standard a 92 dias de Forecast pago sin inventar el tramo anterior', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-08-10T15:00:00.000Z'));
     const service = crearServicio();
     service.logger = { warn: jest.fn() };
@@ -157,23 +157,12 @@ describe('requisitos varietales de frio', () => {
         '2026-08-09',
       );
 
-      expect(service.fetchOpenMeteoJson).toHaveBeenNthCalledWith(
-        1,
-        expect.stringContaining('archive'),
-        'archive',
-        expect.objectContaining({
-          start_date: '2026-05-01',
-          end_date: '2026-08-05',
-          hourly: 'temperature_2m',
-        }),
-        expect.stringContaining('consolidado'),
-      );
-      expect(service.fetchOpenMeteoJson).toHaveBeenNthCalledWith(
-        2,
-        expect.any(String),
+      expect(service.fetchOpenMeteoJson).toHaveBeenCalledTimes(1);
+      expect(service.fetchOpenMeteoJson).toHaveBeenCalledWith(
+        expect.not.stringContaining('archive'),
         'forecast',
         expect.objectContaining({
-          start_date: '2026-08-06',
+          start_date: '2026-05-11',
           end_date: '2026-08-09',
           hourly: 'temperature_2m',
         }),
@@ -295,11 +284,7 @@ describe('requisitos varietales de frio', () => {
     service.fetchOpenMeteoHourlyForecast = jest.fn().mockResolvedValue([]);
 
     try {
-      const resultado = await service.getFrioTermico(
-        -39.03,
-        -67.58,
-        'Pecan',
-      );
+      const resultado = await service.getFrioTermico(-39.03, -67.58, 'Pecan');
       const recienteSinHoras = resultado.serie.find(
         (dia) => dia.fecha === '2026-05-02',
       );

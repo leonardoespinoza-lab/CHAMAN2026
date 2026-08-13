@@ -11,6 +11,7 @@ import { ReportesModule } from './entidades/reportes/module';
 import { AuthenticationMiddleware } from './auxiliares/authentication/middleware';
 import { LorawanUplinksModule } from './entidades/lorawan-uplinks/module';
 import { LorawanMqttConsumerModule } from './auxiliares/lorawan-mqtt-consumer/module';
+import { ChirpstackDeviceSyncModule } from './auxiliares/chirpstack-device-sync/module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { LorawanMqttConsumerModule } from './auxiliares/lorawan-mqtt-consumer/mo
     ReportesModule,
     LorawanUplinksModule,
     LorawanMqttConsumerModule,
+    ChirpstackDeviceSyncModule,
   ],
   controllers: [],
 })

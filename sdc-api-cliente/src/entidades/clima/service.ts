@@ -26,6 +26,7 @@ import { AxiosService } from '../../auxiliares/axios/axios.service';
 import { TileCalculationService } from '../../auxiliares/tile-calculation/tile-calculation.service';
 import {
   API_CLIMA,
+  OPEN_METEO_ARCHIVE_ENABLED,
   OPEN_METEO_ARCHIVE_BASE_URL,
   OPEN_METEO_FORECAST_BASE_URL,
 } from '../../env';
@@ -52,12 +53,11 @@ interface IOpenMeteoHistoryWindow {
 }
 
 const OPEN_METEO_ARCHIVE_DELAY_DAYS = 5;
+const OPEN_METEO_STANDARD_PAST_DAYS = 92;
 const MIN_COLD_HOURLY_COVERAGE_HOURS = 18;
 
 type TRequisitoFrioClave =
-  | 'horasFrioObjetivo'
-  | 'horasFrioEfectivasObjetivo'
-  | 'porcionesFrioObjetivo';
+  'horasFrioObjetivo' | 'horasFrioEfectivasObjetivo' | 'porcionesFrioObjetivo';
 
 interface IRangoTipicoRequisitoFrio {
   minimo: number;
@@ -894,8 +894,7 @@ export class ClimaService {
       const diasSinCobertura = diasFrioEsperados.filter((fecha) => {
         const metrica = metricasFrioPorDia.get(fecha);
         return (
-          !metrica ||
-          metrica.horasValidas < MIN_COLD_HOURLY_COVERAGE_HOURS
+          !metrica || metrica.horasValidas < MIN_COLD_HOURLY_COVERAGE_HOURS
         );
       });
       continuidadHorariaFrio =
@@ -903,10 +902,7 @@ export class ClimaService {
 
       for (const fecha of diasFrioEsperados) {
         const metrica = metricasFrioPorDia.get(fecha);
-        if (
-          metrica &&
-          metrica.horasValidas >= MIN_COLD_HOURLY_COVERAGE_HOURS
-        ) {
+        if (metrica && metrica.horasValidas >= MIN_COLD_HOURLY_COVERAGE_HOURS) {
           // Cero es un aporte fisicamente posible. Solo se completa cuando
           // el dia tiene cobertura horaria suficiente; un dia ausente queda
           // deliberadamente sin valor.
@@ -981,9 +977,7 @@ export class ClimaService {
             diasFrioEsperados.reduce(
               (acc, fecha) =>
                 acc +
-                Number(
-                  metricasFrioPorDia.get(fecha)?.horasFrioEfectivas || 0,
-                ),
+                Number(metricasFrioPorDia.get(fecha)?.horasFrioEfectivas || 0),
               0,
             ),
           )
@@ -991,8 +985,7 @@ export class ClimaService {
       porcionesFrio: continuidadHorariaFrio
         ? this.round(
             diasFrioEsperados.reduce(
-              (acc, fecha) =>
-                acc + Number(porcionesFrioPorDia.get(fecha) || 0),
+              (acc, fecha) => acc + Number(porcionesFrioPorDia.get(fecha) || 0),
               0,
             ),
             2,
@@ -1591,9 +1584,7 @@ export class ClimaService {
             ? 'historico diario de respaldo consolidado'
             : 'historico diario reciente de respaldo',
         );
-        resultados.push(
-          ...this.normalizarOpenMeteoDaily(data, esPronostico),
-        );
+        resultados.push(...this.normalizarOpenMeteoDaily(data, esPronostico));
       } catch (error: any) {
         this.logger.warn(
           `Open-Meteo sin tramo diario ${rango.desde}/${rango.hasta}; queda como faltante: ${error?.message || error}`,
@@ -1743,6 +1734,23 @@ export class ClimaService {
   ): IOpenMeteoHistoryWindow[] {
     if (from > to) return [];
     const hoy = this.currentDateKey();
+    if (!OPEN_METEO_ARCHIVE_ENABLED) {
+      const limiteStandard = this.addDateKeyDays(
+        hoy,
+        -(OPEN_METEO_STANDARD_PAST_DAYS - 1),
+      );
+      const desde = from > limiteStandard ? from : limiteStandard;
+      return desde <= to
+        ? [
+            {
+              baseUrl: OPEN_METEO_FORECAST_BASE_URL,
+              endpoint: 'forecast',
+              desde,
+              hasta: to,
+            },
+          ]
+        : [];
+    }
     const archiveHasta = this.addDateKeyDays(
       hoy,
       -OPEN_METEO_ARCHIVE_DELAY_DAYS,
@@ -2542,7 +2550,9 @@ export class ClimaService {
       month: '2-digit',
       day: '2-digit',
     }).formatToParts(new Date());
-    const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    const value = Object.fromEntries(
+      parts.map((part) => [part.type, part.value]),
+    );
     return `${value.year}-${value.month}-${value.day}`;
   }
 

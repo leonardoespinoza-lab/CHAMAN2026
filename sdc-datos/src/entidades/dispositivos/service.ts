@@ -11,6 +11,7 @@ import {
   IDispositivo,
   IIntervaloCalibracionMeteorologica,
   ILorawanUplink,
+  ILorawanDeviceCatalogItem,
   IQueryParam,
   IUpdateDispositivo,
   VariableCalibracionMeteorologica,
@@ -41,6 +42,13 @@ export class DispositivosService {
 
   async upsertFromLorawanUplink(uplink: ILorawanUplink) {
     return await this.repository.upsertFromLorawanUplink(uplink);
+  }
+
+  async syncFromLorawanCatalog(items: ILorawanDeviceCatalogItem[]) {
+    if (!Array.isArray(items) || items.length > 5000) {
+      throw new BadRequestException('El inventario ChirpStack no es valido.');
+    }
+    return await this.repository.syncFromLorawanCatalog(items);
   }
 
   async update(id: string, dato: IUpdateDispositivo) {
