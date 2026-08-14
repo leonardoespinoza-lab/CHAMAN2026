@@ -1,4 +1,5 @@
 import { ChartComponent } from './chart.component';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 
 describe('ChartComponent', () => {
   afterEach(() => {
@@ -73,4 +74,51 @@ describe('ChartComponent', () => {
     component.ngOnDestroy();
     jasmine.clock().uninstall();
   });
+
+  it('reemplaza una serie identificada al cambiar de variable', fakeAsync(() => {
+    TestBed.configureTestingModule({ imports: [ChartComponent] });
+    const fixture = TestBed.createComponent(ChartComponent);
+    const component = fixture.componentInstance;
+    component.style = 'width: 800px; height: 400px; display: block';
+    component.options = {
+      accessibility: { enabled: false },
+      chart: { animation: false, type: 'spline' },
+      series: [
+        {
+          data: [
+            [1, 12],
+            [2, 13],
+          ],
+          id: 'sentek-temperatura-100',
+          type: 'spline',
+        },
+      ],
+    };
+
+    fixture.detectChanges();
+    tick(110);
+    expect(component.chart?.series.map((series) => series.options.id)).toEqual(['sentek-temperatura-100']);
+
+    component.options = {
+      accessibility: { enabled: false },
+      chart: { animation: false, type: 'spline' },
+      series: [
+        {
+          data: [
+            [10, 1400],
+            [11, 1410],
+          ],
+          id: 'sentek-salinidad-100',
+          type: 'spline',
+        },
+      ],
+    };
+    component.ngOnChanges();
+    fixture.detectChanges();
+    tick(110);
+
+    expect(component.chart?.series.map((series) => series.options.id)).toEqual(['sentek-salinidad-100']);
+    expect(component.chart?.series[0].points.map((point) => point.y)).toEqual([1400, 1410]);
+    fixture.destroy();
+  }));
 });

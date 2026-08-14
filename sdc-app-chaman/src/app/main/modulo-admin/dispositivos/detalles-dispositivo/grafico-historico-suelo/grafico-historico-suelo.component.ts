@@ -49,6 +49,12 @@ interface ProfileRow {
   raw?: string;
 }
 
+interface ProfileRecentWindow {
+  latestPoints: HistoricalPoint[];
+  missingDepths: number[];
+  start: number;
+}
+
 @Component({
   selector: 'app-grafico-historico-suelo',
   imports: [SharedModule, ChartComponent],
@@ -79,6 +85,10 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   public analogActual?: number;
   public analogActualFecha?: number;
   public profileCoverageNotice = '';
+  public profileFreshnessNotice = '';
+  public profileRecentMissingDepths: number[] = [];
+  public profileRecentWindowAvailable = false;
+  public showFullProfilePeriod = false;
   public controllerCoverageNotice = '';
   public controllerCoverageComplete = false;
   public napaActual?: number;
@@ -109,6 +119,11 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     '#06b6d4',
   ];
 
+  private readonly expectedSentekDepthsCm = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+  private readonly sentekSweepToleranceMs = 6 * 60 * 1000;
+  private readonly sentekContinuousProfileGapMs = 60 * 60 * 1000;
+  private readonly sentekChartLeadMs = 60 * 1000;
+
   ngOnChanges(changes: SimpleChanges): void {
     if (
       changes['reportes'] ||
@@ -124,6 +139,13 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
   public onMetricChange(metric: SoilMetricKey): void {
     this.selectedMetric = metric;
+    this.showFullProfilePeriod = false;
+    this.prepareOptions();
+  }
+
+  public toggleProfilePeriod(): void {
+    if (!this.profileRecentWindowAvailable) return;
+    this.showFullProfilePeriod = !this.showFullProfilePeriod;
     this.prepareOptions();
   }
 
@@ -185,6 +207,10 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       this.profileRows = [];
       this.resumen = '';
       this.profileCoverageNotice = '';
+      this.profileFreshnessNotice = '';
+      this.profileRecentMissingDepths = [];
+      this.profileRecentWindowAvailable = false;
+      this.showFullProfilePeriod = false;
       this.napaChartOptions = this.mostrarNapa ? this.buildNapaChartOptions() : undefined;
       this.analogChartOptions = this.mostrarEntradaAnalogica ? this.buildAnalogChartOptions() : undefined;
       return;
@@ -192,11 +218,12 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
     const definition = this.getDefinition(this.selectedMetric);
     const series = this.buildHistoricalSeries(definition);
-    const latestPoints = this.buildLatestDepthPoints(definition);
+    const recentWindow = this.buildRecentProfileWindow(series);
+    const latestPoints = recentWindow?.latestPoints || [];
     this.profileRows = this.buildProfileRows(definition, latestPoints);
     this.resumen = this.buildResumen(definition, series, latestPoints);
     this.profileCoverageNotice = this.buildProfileCoverageNotice(latestPoints);
-    this.chartOptions = this.buildStackedTimeSeriesChartOptions(definition, series);
+    this.chartOptions = this.buildStackedTimeSeriesChartOptions(definition, series, recentWindow);
     this.napaChartOptions = this.mostrarNapa ? this.buildNapaChartOptions() : undefined;
     this.analogChartOptions = this.mostrarEntradaAnalogica ? this.buildAnalogChartOptions() : undefined;
   }
@@ -256,60 +283,36 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         name: `${depth} cm`,
         type: 'spline',
         turboThreshold: 0,
-        custom: { decimals: definition.decimals, unit: definition.unit },
+        custom: { decimals: definition.decimals, depthCm: depth, unit: definition.unit },
       }));
   }
 
-  private buildLatestDepthPoints(definition: SoilMetricDefinition): HistoricalPoint[] {
-    const latestByDepth = new Map<number, HistoricalPoint>();
-
-    for (const frame of [...this.filteredRawFrames()].reverse()) {
-      for (const reading of this.rawReadingsForMetric(frame, definition.key)) {
-        if (reading.depthCm === undefined) continue;
-        const depth = reading.depthCm;
-        if (latestByDepth.has(depth)) continue;
-        latestByDepth.set(depth, {
-          x: new Date(frame.timestamp).getTime(),
-          y: reading.value,
-          depth,
-          raw: reading.rawValue,
-          rawUnit: reading.rawUnit,
-        });
-      }
-    }
-
-    for (const reporte of this.rawFrames.length ? [] : [...this.filteredReports()].reverse()) {
-      const timestamp = this.getReporteTimestamp(reporte) || Date.now();
-      const profile = buildSentekProfile(reporte);
-
-      for (const row of profile) {
-        const metric = row[definition.key];
-        if (
-          !metric ||
-          metric.actual === undefined ||
-          metric.actual === null ||
-          !Number.isFinite(metric.actual) ||
-          latestByDepth.has(row.profundidad)
-        ) {
-          continue;
-        }
-
-        latestByDepth.set(row.profundidad, {
-          x: timestamp,
-          y: metric.actual,
-          depth: row.profundidad,
-          raw: metric.crudo,
-          rawUnit: metric.unidadCruda,
-        });
-      }
-    }
-
-    return [...latestByDepth.values()].sort((a, b) => a.depth - b.depth);
-  }
-
-  private buildStackedTimeSeriesChartOptions(definition: SoilMetricDefinition, series: any[]): any {
+  private buildStackedTimeSeriesChartOptions(
+    definition: SoilMetricDefinition,
+    series: any[],
+    recentWindow?: ProfileRecentWindow
+  ): any {
     const rainPoints = definition.key === 'humedad' ? this.buildRainPoints() : [];
     const hasRain = rainPoints.some((point) => point.y > 0);
+    const recentProfileStart = recentWindow?.start;
+    this.profileRecentMissingDepths = recentWindow?.missingDepths || [];
+    this.profileFreshnessNotice = this.buildProfileFreshnessNotice(this.profileRecentMissingDepths);
+    let fullDomainStart = Number.POSITIVE_INFINITY;
+    for (const item of series) {
+      for (const point of (item.data || []) as HistoricalPoint[]) {
+        fullDomainStart = Math.min(fullDomainStart, point.x);
+      }
+    }
+    for (const point of rainPoints) {
+      fullDomainStart = Math.min(fullDomainStart, point.x);
+    }
+    this.profileRecentWindowAvailable =
+      recentProfileStart !== undefined && Number.isFinite(fullDomainStart) && recentProfileStart > fullDomainStart;
+    if (!this.profileRecentWindowAvailable) {
+      this.showFullProfilePeriod = false;
+    }
+    const visibleProfileStart =
+      this.profileRecentWindowAvailable && !this.showFullProfilePeriod ? recentProfileStart : undefined;
     const depthCount = Math.max(series.length, 1);
     const chartHeight = Math.min(900, Math.max(500, depthCount * 70 + 110));
     const soilAvailable = 88;
@@ -318,12 +321,15 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const rainMax = Math.max(1, ...rainPoints.map((point) => point.y));
     const soilAxes: any[] = [];
     const rainAxes: any[] = [];
+    const soilAxisIds = series.map((item, index) => `sentek-${definition.key}-depth-${item.custom?.depthCm ?? index}`);
+    const rainAxisIds = series.map((_item, index) => `sentek-rain-depth-${index}`);
 
     series.forEach((item, index) => {
       const top = index * (soilHeight + soilGap);
       soilAxes.push({
-        max: definition.key === 'humedad' ? 100 : undefined,
-        min: definition.key === 'humedad' ? 0 : undefined,
+        id: soilAxisIds[index],
+        max: definition.key === 'humedad' ? 100 : null,
+        min: definition.key === 'humedad' ? 0 : null,
         title: {
           text: item.name,
           align: 'middle',
@@ -342,6 +348,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
       if (hasRain) {
         rainAxes.push({
+          id: rainAxisIds[index],
           max: rainMax * 1.08,
           min: 0,
           title: {
@@ -372,24 +379,27 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           color: 'rgba(47, 159, 232, 0.24)',
           custom: { decimals: 1, isRain: true, unit: 'mm' },
           data: rainPoints,
+          id: `sentek-rain-${index}`,
           name: 'Lluvia (mm)',
           pointRange: 24 * 60 * 60 * 1000,
           showInLegend: index === 0,
           type: 'column',
-          yAxis: depthCount + index,
+          yAxis: rainAxisIds[index],
           zIndex: 0,
         }))
       : [];
     const soilSeries = series.map((item, index) => ({
       ...item,
+      id: `sentek-${definition.key}-${item.custom?.depthCm ?? index}`,
       showInLegend: false,
-      yAxis: index,
+      yAxis: soilAxisIds[index],
       zIndex: 2,
     }));
     const plottedSeries = [...rainSeries, ...soilSeries];
 
     return {
       chart: {
+        animation: false,
         backgroundColor: 'transparent',
         height: chartHeight,
         spacingBottom: 22,
@@ -405,6 +415,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       title: { text: undefined },
       xAxis: {
         type: 'datetime',
+        min: visibleProfileStart ?? null,
+        startOnTick: false,
         crosshair: {
           color: 'rgba(34, 211, 200, 0.24)',
           width: 2,
@@ -461,13 +473,14 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       },
       plotOptions: {
         column: {
+          animation: false,
           borderWidth: 0,
           groupPadding: 0,
           grouping: false,
           pointPadding: 0.04,
         },
         spline: {
-          animation: { duration: 500 },
+          animation: false,
           enableMouseTracking: true,
           lineWidth: 2.4,
           marker: {
@@ -485,6 +498,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           },
         },
         series: {
+          animation: false,
           connectNulls: false,
           turboThreshold: 0,
         },
@@ -507,6 +521,77 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         ],
       },
     };
+  }
+
+  /**
+   * Un barrido Sentek llega repartido en varias tramas. Cada grupo dura como
+   * maximo la misma tolerancia del agregador; no se encadena por proximidad.
+   * La vista reciente parte del ultimo tramo 12/12 o, si todavia es parcial,
+   * del ultimo grupo real y deja visibles como ausentes los niveles faltantes.
+   */
+  private buildRecentProfileWindow(series: any[]): ProfileRecentWindow | undefined {
+    const points = series
+      .flatMap((item) => (Array.isArray(item?.data) ? (item.data as HistoricalPoint[]) : []))
+      .filter(
+        (point) =>
+          Number.isFinite(point?.x) &&
+          Number.isFinite(point?.depth) &&
+          this.expectedSentekDepthsCm.includes(point.depth)
+      )
+      .sort((a, b) => a.x - b.x);
+    if (!points.length) return undefined;
+
+    const groups: Array<{ start: number; end: number; latestByDepth: Map<number, HistoricalPoint> }> = [];
+    for (const point of points) {
+      let group = groups[groups.length - 1];
+      if (!group || point.x - group.start > this.sentekSweepToleranceMs) {
+        group = { start: point.x, end: point.x, latestByDepth: new Map<number, HistoricalPoint>() };
+        groups.push(group);
+      }
+      group.end = Math.max(group.end, point.x);
+      group.latestByDepth.set(point.depth, point);
+    }
+
+    const isComplete = (group: { latestByDepth: Map<number, HistoricalPoint> }): boolean =>
+      this.expectedSentekDepthsCm.every((depth) => group.latestByDepth.has(depth));
+    const latestGroup = groups[groups.length - 1];
+    let latestCompleteIndex = -1;
+    for (let index = groups.length - 1; index >= 0; index -= 1) {
+      if (isComplete(groups[index])) {
+        latestCompleteIndex = index;
+        break;
+      }
+    }
+    let streakStart = latestGroup.start;
+    if (
+      latestCompleteIndex >= 0 &&
+      latestGroup.end - groups[latestCompleteIndex].end <= this.sentekContinuousProfileGapMs
+    ) {
+      streakStart = groups[latestCompleteIndex].start;
+      for (let index = latestCompleteIndex - 1; index >= 0; index -= 1) {
+        const current = groups[index];
+        const next = groups[index + 1];
+        if (!isComplete(current) || next.start - current.start > this.sentekContinuousProfileGapMs) break;
+        streakStart = current.start;
+      }
+    }
+
+    const missingDepths = this.expectedSentekDepthsCm.filter((depth) => !latestGroup.latestByDepth.has(depth));
+    return {
+      latestPoints: [...latestGroup.latestByDepth.values()].sort((a, b) => a.depth - b.depth),
+      missingDepths,
+      start: Math.max(this.getFechaDesdeMs(), streakStart - this.sentekChartLeadMs),
+    };
+  }
+
+  private buildProfileFreshnessNotice(missingDepths: number[]): string {
+    if (!missingDepths.length) return '';
+    if (missingDepths.length > 4) {
+      return `${missingDepths.length} niveles sin datos en el ultimo barrido.`;
+    }
+    const labels = missingDepths.map(String);
+    const depths = labels.length > 1 ? `${labels.slice(0, -1).join(', ')} y ${labels[labels.length - 1]}` : labels[0];
+    return `Sin datos recientes: ${depths} cm.`;
   }
 
   private buildProfileRows(definition: SoilMetricDefinition, latestPoints: HistoricalPoint[]): ProfileRow[] {

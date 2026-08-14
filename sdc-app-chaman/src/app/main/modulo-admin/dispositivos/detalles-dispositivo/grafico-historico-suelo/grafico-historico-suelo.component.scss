@@ -111,6 +111,7 @@
 }
 
 .soil-history-filter,
+.soil-history-period-toggle,
 .soil-history-export {
   background: rgba(255, 255, 255, 0.78);
   border: 1px solid var(--p-surface-border);
@@ -126,9 +127,32 @@
   cursor: pointer;
 }
 
-.soil-history-export:hover {
+.soil-history-period-toggle {
+  cursor: pointer;
+}
+
+.soil-history-export:hover,
+.soil-history-period-toggle:hover {
   border-color: var(--p-primary-color);
   color: var(--p-primary-color);
+}
+
+.profile-freshness-alert {
+  align-items: center;
+  background: color-mix(in srgb, #f59e0b 8%, transparent);
+  border: 1px solid color-mix(in srgb, #f59e0b 28%, var(--p-surface-border));
+  border-radius: 8px;
+  color: var(--p-text-color);
+  display: flex;
+  font-size: 0.82rem;
+  font-weight: 700;
+  gap: 0.4rem;
+  margin: 0 0 0.55rem;
+  padding: 0.45rem 0.65rem;
+}
+
+.profile-freshness-alert i {
+  color: #d97706;
 }
 
 .soil-history-card app-chart {
@@ -477,6 +501,7 @@
   }
 
   .soil-history-filter,
+  .soil-history-period-toggle,
   .soil-history-export {
     flex: 1 1 100%;
     width: 100%;
