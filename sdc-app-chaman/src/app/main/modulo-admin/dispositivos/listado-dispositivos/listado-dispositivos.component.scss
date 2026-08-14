@@ -361,3 +361,39 @@ h1 {
     font-size: 1.55rem;
   }
 }
+.logical-service-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  border-top: 1px solid var(--p-content-border-color);
+  padding-top: 12px;
+}
+
+.logical-service-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.logical-service-list article > div {
+  display: grid;
+  gap: 3px;
+}
+
+.logical-service-list small {
+  color: var(--p-text-muted-color);
+}
+
+.logical-service-list span {
+  border-radius: 999px;
+  background: var(--p-surface-100, #eef3f3);
+  padding: 5px 9px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.logical-service-list span.pending {
+  color: var(--p-orange-700, #9a5a00);
+}

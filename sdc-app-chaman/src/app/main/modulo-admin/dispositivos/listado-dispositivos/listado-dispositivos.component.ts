@@ -1,7 +1,15 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { IDispositivo, IListado, ILorawanUplink, IPopulate, IQueryParam } from 'modelos/src';
+import {
+  IDispositivo,
+  IListado,
+  ILorawanUplink,
+  IPopulate,
+  IQueryParam,
+  IServicioDispositivo,
+  serviciosDispositivoNormalizados,
+} from 'modelos/src';
 import { ConfirmationService } from 'primeng/api';
 import { Subscription } from 'rxjs';
 import { UbicarComponent } from '../../../../auxiliares/componentes/ubicar/ubicar.component';
@@ -20,6 +28,11 @@ interface GatewaySummary {
   snr?: number;
   dispositivos: number;
   online: boolean;
+}
+
+interface MilesightPayloadCapabilities {
+  soilProfile: boolean;
+  analogInput: boolean;
 }
 
 @Component({
@@ -172,9 +185,16 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
     }
 
     const devEUI = this.normalizeDevEui(uplink.devEUI);
+    const capabilities = this.inferredReadoutCapabilities(uplink);
     const nombre =
       uplink.deviceName ||
-      (this.isUc511SentekUplink(uplink) ? `Controlador Sentek + entrada analogica ${devEUI}` : '') ||
+      (capabilities.soilProfile && capabilities.analogInput
+        ? `Controlador Milesight con Sentek y entrada analógica ${devEUI}`
+        : capabilities.soilProfile
+          ? `Controlador Milesight con Sentek ${devEUI}`
+          : capabilities.analogInput
+            ? `Controlador Milesight con entrada analógica ${devEUI}`
+            : '') ||
       uplink.applicationName ||
       uplink.devEUI ||
       'Dispositivo MQTT';
@@ -184,24 +204,33 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
       deveui: devEUI,
       tipo: this.inferType(uplink),
       sensores: this.inferSensors(uplink),
-      configuracionLecturas: this.isUc511SentekUplink(uplink)
-        ? {
-            perfilSuelo: {
-              tipo: 'sonda_sentek_120cm',
-              protocolo: 'SDI-12',
-              niveles: 12,
-              profundidadesCm: [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115],
-              variables: ['humedad_vwc', 'salinidad_vic', 'temperatura'],
-            },
-            entradaAnalogica: {
-              canal: 1,
-              tipoSenal: '4-20mA',
-              variable: 'sin_definir',
-              entradaMinMa: 4,
-              entradaMaxMa: 20,
-            },
-          }
-        : undefined,
+      configuracionLecturas:
+        capabilities.soilProfile || capabilities.analogInput
+          ? {
+              ...(capabilities.soilProfile
+                ? {
+                    perfilSuelo: {
+                      tipo: 'sonda_sentek_120cm' as const,
+                      protocolo: 'SDI-12' as const,
+                      niveles: 12 as const,
+                      profundidadesCm: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120],
+                      variables: ['humedad_vwc' as const, 'salinidad_vic' as const, 'temperatura' as const],
+                    },
+                  }
+                : {}),
+              ...(capabilities.analogInput
+                ? {
+                    entradaAnalogica: {
+                      canal: 1 as const,
+                      tipoSenal: '4-20mA' as const,
+                      variable: 'sin_definir' as const,
+                      entradaMinMa: 4,
+                      entradaMaxMa: 20,
+                    },
+                  }
+                : {}),
+            }
+          : undefined,
       metadata: {
         applicationID: uplink.applicationID,
         applicationName: uplink.applicationName,
@@ -231,6 +260,13 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
     if (!device) {
       return 'Nuevo: pendiente de agregar a Chaman';
     }
+    const servicios = this.logicalServices(device);
+    if (device.servicios?.length) {
+      const asignados = servicios.filter((servicio) => servicio.idLote).length;
+      return `${servicios.length} servicios · ${asignados} asignado${asignados === 1 ? '' : 's'} · ${
+        servicios.length - asignados
+      } pendiente${servicios.length - asignados === 1 ? '' : 's'}`;
+    }
     if (device.lote?.nombre || device.idLote) {
       return `Asignado a lote: ${device.lote?.nombre || device.idLote}`;
     }
@@ -248,7 +284,11 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
     if (!device) {
       return 'mqtt-new';
     }
-    if (device.idLote || device.idEstablecimiento || device.idProductor) {
+    if (
+      this.logicalServices(device).some(
+        (servicio) => servicio.idLote || servicio.idEstablecimiento || servicio.idProductor
+      )
+    ) {
       return 'mqtt-assigned';
     }
     return 'mqtt-unassigned';
@@ -300,7 +340,25 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
   }
 
   public get unassignedDevices(): number {
-    return this.datos.filter((dato) => !dato.idProductor && !dato.idEstablecimiento && !dato.idLote).length;
+    return this.datos.reduce(
+      (total, dato) =>
+        total +
+        this.logicalServices(dato).filter(
+          (servicio) => !servicio.idProductor && !servicio.idEstablecimiento && !servicio.idLote
+        ).length,
+      0
+    );
+  }
+
+  public logicalServices(device: IDispositivo): IServicioDispositivo[] {
+    return serviciosDispositivoNormalizados(device);
+  }
+
+  public serviceAssignmentLabel(servicio: IServicioDispositivo): string {
+    if (servicio.idLote) return `Lote ${servicio.idLote}`;
+    if (servicio.idEstablecimiento) return `Establecimiento ${servicio.idEstablecimiento}`;
+    if (servicio.idProductor) return `Productor ${servicio.idProductor}`;
+    return 'Pendiente de asignar';
   }
 
   public get detectedDevices(): number {
@@ -356,17 +414,7 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
 
   private inferType(uplink: ILorawanUplink): IDispositivo['tipo'] {
     const text = `${uplink.deviceName || ''} ${uplink.applicationName || ''}`.toLowerCase();
-    if (
-      this.isUc511SentekUplink(uplink) ||
-      text.includes('sentek') ||
-      text.includes('lanza') ||
-      text.includes('humedad de suelo') ||
-      text.includes('soil moisture') ||
-      text.includes('uc501') ||
-      text.includes('uc511') ||
-      text.includes('milesight') ||
-      text.includes('napa')
-    ) {
+    if (this.inferredReadoutCapabilities(uplink).soilProfile) {
       return 'Sensor de Humedad de Suelo';
     }
     if (text.includes('pluvio') || text.includes('lluvia') || text.includes('rain')) {
@@ -380,8 +428,14 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
 
   private inferSensors(uplink: ILorawanUplink): IDispositivo['sensores'] {
     const type = this.inferType(uplink);
-    if (type === 'Sensor de Humedad de Suelo') {
-      return ['Humedad Suelo Profundidad', 'Temperatura Suelo', 'Salinidad Suelo', 'Entrada Analógica', 'Batería'];
+    const capabilities = this.inferredReadoutCapabilities(uplink);
+    if (type === 'Sensor de Humedad de Suelo' || capabilities.analogInput) {
+      const sensors: IDispositivo['sensores'] = [];
+      if (type === 'Sensor de Humedad de Suelo') {
+        sensors.push('Humedad Suelo Profundidad', 'Temperatura Suelo', 'Salinidad Suelo');
+      }
+      if (capabilities.analogInput) sensors.push('Entrada Analógica');
+      return sensors;
     }
     if (type === 'Pluviometro') {
       return ['Pluviometro'];
@@ -392,37 +446,85 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
     return ['Otro'];
   }
 
-  private isUc511SentekUplink(uplink: ILorawanUplink): boolean {
-    if (uplink.fPort !== 85) {
-      return false;
-    }
-
-    const payload = this.getUplinkPayloadText(uplink);
-    if (!payload) {
-      return false;
-    }
-
-    const hex = payload.replace(/[^a-fA-F0-9]/g, '').toLowerCase();
-    return hex.length >= 24 && (hex.includes('08db') || hex.includes('9c48') || hex.length >= 70);
+  private inferredReadoutCapabilities(uplink: ILorawanUplink): MilesightPayloadCapabilities {
+    const decoded = this.milesightPayloadCapabilities(uplink);
+    const identity = `${uplink.deviceName || ''} ${uplink.applicationName || ''}`.toLowerCase();
+    return {
+      soilProfile:
+        decoded.soilProfile ||
+        identity.includes('sentek') ||
+        identity.includes('lanza') ||
+        identity.includes('humedad de suelo') ||
+        identity.includes('soil moisture'),
+      analogInput:
+        decoded.analogInput ||
+        identity.includes('napa') ||
+        identity.includes('freat') ||
+        identity.includes('4-20') ||
+        identity.includes('analog'),
+    };
   }
 
-  private getUplinkPayloadText(uplink: ILorawanUplink): string | undefined {
+  private milesightPayloadCapabilities(uplink: ILorawanUplink): MilesightPayloadCapabilities {
+    const hex = this.getUplinkPayloadHex(uplink);
+    if (!hex) return { soilProfile: false, analogInput: false };
+
+    const bytes = hex.match(/.{2}/g)?.map((value) => Number.parseInt(value, 16)) || [];
+    let soilProfile = false;
+    let analogInput = false;
+    for (let index = 0; index < bytes.length - 2; index += 1) {
+      if (bytes[index] === 0x08 && bytes[index + 1] === 0xdb && bytes[index + 2] <= 0x0b) {
+        soilProfile = true;
+      }
+      if (
+        index <= bytes.length - 10 &&
+        (bytes[index] === 0x05 || bytes[index] === 0x06) &&
+        (bytes[index + 1] === 0xe2 || bytes[index + 1] === 0x02)
+      ) {
+        analogInput = true;
+      }
+    }
+    return { soilProfile, analogInput };
+  }
+
+  private getUplinkPayloadHex(uplink: ILorawanUplink): string | undefined {
     const rawPayload = (uplink as any).rawPayload || {};
+    const explicitHex = [rawPayload.payloadHex, rawPayload.hexPayload, rawPayload.dataHex].find(
+      (value) => typeof value === 'string' && value.trim()
+    );
+    const normalizedExplicitHex = this.normalizeHex(explicitHex);
+    if (normalizedExplicitHex) return normalizedExplicitHex;
+
     const candidates = [
       uplink.data,
       rawPayload.FRMPayload,
       rawPayload.frmPayload,
       rawPayload.frmpayload,
-      rawPayload.payloadHex,
-      rawPayload.hexPayload,
-      rawPayload.dataHex,
       rawPayload.MACPayload?.FRMPayload,
       rawPayload.macPayload?.FRMPayload,
       rawPayload.uplink?.frmPayload,
       rawPayload.object?.frmPayload,
     ];
+    for (const candidate of candidates) {
+      if (typeof candidate !== 'string' || !candidate.trim()) continue;
+      const normalizedHex = this.normalizeHex(candidate);
+      if (normalizedHex) return normalizedHex;
+      try {
+        const binary = atob(candidate.trim());
+        return Array.from(binary, (character) => character.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+      } catch {
+        // El payload no es HEX ni base64 valido: no se infieren sensores.
+      }
+    }
+    return undefined;
+  }
 
-    return candidates.find((value) => typeof value === 'string' && value.trim());
+  private normalizeHex(value?: string): string | undefined {
+    if (!value) return undefined;
+    const cleaned = value.replace(/0x/gi, '').replace(/\s/g, '');
+    return cleaned.length >= 2 && cleaned.length % 2 === 0 && /^[a-fA-F0-9]+$/.test(cleaned)
+      ? cleaned.toLowerCase()
+      : undefined;
   }
 
   private isOnline(fecha?: string, minutes = 30): boolean {

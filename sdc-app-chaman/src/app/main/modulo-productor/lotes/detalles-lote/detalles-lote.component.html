@@ -454,7 +454,12 @@
           </div>
         </section>
       }
-      @if (lote?.ubicacion?.centro || helper.puedeVerModulo('HuellaHidrica') || helper.puedeVerModulo('Clima')) {
+      @if (
+        lote?.ubicacion?.centro ||
+        helper.puedeVerModulo('HuellaHidrica') ||
+        helper.puedeVerModulo('Clima') ||
+        (helper.checkArray(lote?.dispositivos) && helper.puedeVerModulo('Sensores'))
+      ) {
         <section class="service-group environment-section">
           <div class="service-group-header">
             <div>
@@ -487,6 +492,9 @@
               (actualizar)="refrescarDetalle()"
             ></app-card-clima-lote>
           }
+          @if (helper.checkArray(lote?.dispositivos) && helper.puedeVerModulo('Sensores')) {
+            <app-card-dispositivos class="service-panel" [lote]="lote"></app-card-dispositivos>
+          }
         </section>
       }
       @if (helper.puedeVerModulo('RegistroFotografico') || helper.puedeVerModulo('Visitas')) {
@@ -513,8 +521,7 @@
       @if (
         helper.puedeVerModulo('Fertilizacion') ||
         helper.puedeVerModulo('Fumigacion') ||
-        helper.puedeVerModulo('Enfermedades') ||
-        (helper.checkArray(lote?.dispositivos) && helper.puedeVerModulo('Sensores'))
+        helper.puedeVerModulo('Enfermedades')
       ) {
         <section class="service-group management-section">
           <div class="service-group-header">
@@ -542,9 +549,6 @@
               [siembra]="siembra"
               [lote]="lote"
             ></app-card-carga-fitosanitaria>
-          }
-          @if (helper.checkArray(lote?.dispositivos) && helper.puedeVerModulo('Sensores')) {
-            <app-card-dispositivos class="service-panel" [lote]="lote"></app-card-dispositivos>
           }
         </section>
       }

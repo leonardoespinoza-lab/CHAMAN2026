@@ -16,6 +16,7 @@ import {
   IFrioAcumulado,
   IAsignacionDispositivoLote,
   ICalificacionSensorMeteorologico,
+  IServicioDispositivo,
 } from 'modelos/src';
 import mongoose, { Document } from 'mongoose';
 import { Distribuidor } from 'src/entidades/distribuidor/modelos/schema';
@@ -157,6 +158,9 @@ export class Dispositivo implements Exactly<IDispositivo, Dispositivo> {
 
   @Prop({ type: Object })
   configuracionLecturas?: IDispositivo['configuracionLecturas'];
+
+  @Prop({ type: [Object], default: undefined })
+  servicios?: IServicioDispositivo[];
   // Datos de Carga
   @Prop({ type: Object })
   geojson?: IGeoJSONPoint;
@@ -194,6 +198,9 @@ export const DispositivoSchema = SchemaFactory.createForClass(Dispositivo);
 DispositivoSchema.set('toJSON', { virtuals: true, getters: true });
 
 DispositivoSchema.index({ geojson: '2dsphere' });
+DispositivoSchema.index({ 'servicios.idLote': 1 });
+DispositivoSchema.index({ 'servicios.idEstablecimiento': 1 });
+DispositivoSchema.index({ 'servicios.idProductor': 1 });
 
 DispositivoSchema.virtual('quimica', {
   foreignField: '_id',

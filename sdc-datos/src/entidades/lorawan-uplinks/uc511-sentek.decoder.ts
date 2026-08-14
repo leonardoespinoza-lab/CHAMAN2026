@@ -5,18 +5,18 @@ import {
 } from 'modelos/src';
 
 type DepthKey =
-  | '5cm'
-  | '15cm'
-  | '25cm'
-  | '35cm'
-  | '45cm'
-  | '55cm'
-  | '65cm'
-  | '75cm'
-  | '85cm'
-  | '95cm'
-  | '105cm'
-  | '115cm';
+  | '10cm'
+  | '20cm'
+  | '30cm'
+  | '40cm'
+  | '50cm'
+  | '60cm'
+  | '70cm'
+  | '80cm'
+  | '90cm'
+  | '100cm'
+  | '110cm'
+  | '120cm';
 
 type SoilMetric = 'moisture' | 'salinity' | 'temperature';
 
@@ -45,21 +45,21 @@ export interface DecodedUc511SentekPayload {
 }
 
 const DEPTH_KEYS: DepthKey[] = [
-  '5cm',
-  '15cm',
-  '25cm',
-  '35cm',
-  '45cm',
-  '55cm',
-  '65cm',
-  '75cm',
-  '85cm',
-  '95cm',
-  '105cm',
-  '115cm',
+  '10cm',
+  '20cm',
+  '30cm',
+  '40cm',
+  '50cm',
+  '60cm',
+  '70cm',
+  '80cm',
+  '90cm',
+  '100cm',
+  '110cm',
+  '120cm',
 ];
 
-const DEPTHS_CM = [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115];
+const DEPTHS_CM = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 
 export function decodeUc511SentekPayload(
   hexPayload?: string,
@@ -93,36 +93,89 @@ export function decodeUc511SentekPayload(
   return hasDecodedData(decoded) ? decoded : null;
 }
 
+export function extractUc511PayloadHex(uplink?: {
+  data?: string;
+  rawPayload?: Record<string, any>;
+}): string | undefined {
+  if (!uplink) return undefined;
+  const raw = uplink.rawPayload || {};
+  const candidates = [
+    raw.FRMPayload,
+    raw.frmPayload,
+    raw.frmpayload,
+    raw.payloadHex,
+    raw.hexPayload,
+    raw.dataHex,
+    raw.decoded?.FRMPayload,
+    raw.decoded?.frmPayload,
+    raw.MACPayload?.FRMPayload,
+    raw.macPayload?.frmPayload,
+    raw.macPayload?.FRMPayload,
+    raw.uplink?.FRMPayload,
+    raw.uplink?.frmPayload,
+  ];
+  const explicit = candidates.find(
+    (value) => typeof value === 'string' && value.trim().length > 0,
+  );
+  if (explicit) return normalizePayloadHex(explicit);
+  if (isHexPayload(uplink.data)) return normalizePayloadHex(uplink.data!);
+  if (!uplink.data) return undefined;
+  try {
+    return Buffer.from(uplink.data, 'base64').toString('hex') || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizePayloadHex(value: string): string | undefined {
+  const cleaned = value.replace(/0x/gi, '').replace(/[^a-fA-F0-9]/g, '');
+  return cleaned.length >= 2 && cleaned.length % 2 === 0
+    ? cleaned.toLowerCase()
+    : undefined;
+}
+
+function isHexPayload(value?: string): boolean {
+  if (!value) return false;
+  const cleaned = value.replace(/0x/gi, '').replace(/\s/g, '');
+  return (
+    cleaned.length >= 2 &&
+    cleaned.length % 2 === 0 &&
+    /^[a-fA-F0-9]+$/.test(cleaned)
+  );
+}
+
 export function decodedUc511ToReporteValores(
   decoded: DecodedUc511SentekPayload,
   analogConfig?: IConfiguracionEntradaAnalogica,
 ): IValoresV2['valores'] {
   const valores: IValoresV2['valores'] = {};
 
-  valores['Humedad Suelo Profundidad'] = DEPTH_KEYS.map((depth, index) => ({
-    profundidad: DEPTHS_CM[index],
-    unidad: '%',
-    valores: {
-      actual: decoded.soil.moisture[depth] ?? null,
-    },
-  }));
+  if (decoded.raw.blocks.length) {
+    valores['Humedad Suelo Profundidad'] = DEPTH_KEYS.map((depth, index) => ({
+      profundidad: DEPTHS_CM[index],
+      unidad: '%',
+      valores: {
+        actual: decoded.soil.moisture[depth] ?? null,
+      },
+    }));
 
-  valores['Salinidad Suelo'] = DEPTH_KEYS.map((depth, index) => ({
-    profundidad: DEPTHS_CM[index],
-    // VIC es un indice de tendencia ionica; no equivale automaticamente a EC.
-    unidad: 'VIC',
-    valores: {
-      actual: decoded.soil.salinity[depth] ?? null,
-    },
-  }));
+    valores['Salinidad Suelo'] = DEPTH_KEYS.map((depth, index) => ({
+      profundidad: DEPTHS_CM[index],
+      // VIC es un indice de tendencia ionica; no equivale automaticamente a EC.
+      unidad: 'VIC',
+      valores: {
+        actual: decoded.soil.salinity[depth] ?? null,
+      },
+    }));
 
-  valores['Temperatura Suelo'] = DEPTH_KEYS.map((depth, index) => ({
-    profundidad: DEPTHS_CM[index],
-    unidad: 'C',
-    valores: {
-      actual: decoded.soil.temperature[depth] ?? null,
-    },
-  }));
+    valores['Temperatura Suelo'] = DEPTH_KEYS.map((depth, index) => ({
+      profundidad: DEPTHS_CM[index],
+      unidad: 'C',
+      valores: {
+        actual: decoded.soil.temperature[depth] ?? null,
+      },
+    }));
+  }
 
   if (decoded.analog.rawMa !== null) {
     valores['Entrada Analógica'] = [
@@ -246,6 +299,8 @@ export function calibrateAnalogInput(
   unit: string;
   waterColumn?: number;
   installationDepth?: number;
+  reference?: 'nivel_terreno';
+  conversionModel?: 'lineal-4-20ma-v1';
 } | null {
   if (
     !config ||
@@ -256,6 +311,8 @@ export function calibrateAnalogInput(
     !Number.isFinite(config.salidaMin) ||
     !Number.isFinite(config.salidaMax) ||
     config.entradaMaxMa <= config.entradaMinMa ||
+    currentMa < config.entradaMinMa ||
+    currentMa > config.entradaMaxMa ||
     !config.unidadSalida?.trim()
   ) {
     return null;
@@ -284,6 +341,8 @@ export function calibrateAnalogInput(
       unit: 'm',
       waterColumn: round(calibratedValue, 3),
       installationDepth: round(installationDepth, 3),
+      reference: 'nivel_terreno',
+      conversionModel: 'lineal-4-20ma-v1',
     };
   }
 
@@ -310,19 +369,27 @@ function extractSdi12Blocks(bytes: number[]): Sdi12Block[] {
     const start = i + 3;
     let end = start;
 
-    while (end < bytes.length - 1) {
-      if (bytes[end] === 0x0d && bytes[end + 1] === 0x0a) break;
-      if (bytes[end] === 0x08 && bytes[end + 1] === 0xdb) break;
+    while (end < bytes.length) {
+      if (
+        end + 1 < bytes.length &&
+        bytes[end] === 0x0d &&
+        bytes[end + 1] === 0x0a
+      )
+        break;
+      if (
+        end + 1 < bytes.length &&
+        bytes[end] === 0x08 &&
+        bytes[end + 1] === 0xdb
+      )
+        break;
       end += 1;
     }
 
     const asciiBytes = bytes.slice(start, end).filter((byte) => byte !== 0x00);
     const ascii = String.fromCharCode(...asciiBytes).trim();
-    const values = ascii
-      .split('+')
-      .slice(1)
-      .map((value) => Number(value))
-      .filter((value) => Number.isFinite(value));
+    const values = (ascii.match(/[+-]\d+(?:\.\d+)?/g) || [])
+      .map(Number)
+      .filter(Number.isFinite);
 
     blocks.push({ channel, ascii, values });
     i = end;

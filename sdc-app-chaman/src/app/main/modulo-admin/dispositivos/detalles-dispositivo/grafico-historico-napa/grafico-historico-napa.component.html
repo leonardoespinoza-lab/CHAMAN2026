@@ -1,0 +1,133 @@
+<article class="napa-card">
+  <header class="napa-header">
+    <div>
+      <span class="napa-kicker">{{ titulo }}</span>
+      <h3>
+        @if (napaActualM !== undefined) {
+          {{ napaActualM | number: '1.2-2' }} m bajo el terreno
+        } @else {
+          Sin nivel de napa calibrado
+        }
+      </h3>
+      <p>{{ subtitulo }}</p>
+    </div>
+    <div class="napa-trend" [attr.data-direction]="direccion">
+      <i
+        class="pi"
+        [class.pi-arrow-up]="direccion === 'sube'"
+        [class.pi-arrow-down]="direccion === 'baja'"
+        [class.pi-minus]="direccion === 'estable'"
+        [class.pi-clock]="direccion === 'sin-datos'"
+      ></i>
+      <span>{{ tendenciaLabel }}</span>
+    </div>
+  </header>
+
+  @if (napaActualM !== undefined) {
+    <div class="napa-summary">
+      <article>
+        <span>Nivel actual</span>
+        <strong>{{ napaActualM | number: '1.2-2' }} m</strong>
+        <small>profundidad bajo rasante</small>
+      </article>
+      <article>
+        <span>Columna de agua</span>
+        <strong>{{ columnaAguaActualM !== undefined ? (columnaAguaActualM | number: '1.2-2') : '—' }} m</strong>
+        <small>sobre el transductor</small>
+      </article>
+      <article>
+        <span>Ultima lectura</span>
+        <strong>{{ napaActualFecha | date: 'dd/MM/yy HH:mm' }}</strong>
+        <small>{{ puntos.length }} fecha{{ puntos.length === 1 ? '' : 's' }} en la curva</small>
+      </article>
+    </div>
+
+    <div class="napa-content-grid">
+      <section class="ground-scene" aria-label="Corte del terreno con la profundidad actual de la napa">
+        <div class="scene-sky">
+          <span class="scene-label sky-label">Cable exterior {{ tramoCableExteriorM ?? '—' }} m</span>
+        </div>
+        <div class="scene-ground"><span>Terreno · cota 0 m</span></div>
+        <div class="soil-layer soil-layer-one"></div>
+        <div class="soil-layer soil-layer-two"></div>
+        <div class="soil-layer soil-layer-three"></div>
+        <div class="well-pipe"></div>
+        <div class="cable-line"></div>
+        <div class="sensor-head">
+          <i class="pi pi-circle-fill"></i>
+          <span>Sensor {{ profundidadSensorEfectivaM | number: '1.1-2' }} m</span>
+        </div>
+        <div class="water-zone" [style.top.%]="posicionAguaPct">
+          <div class="water-surface">
+            <span>Napa · {{ napaActualM | number: '1.2-2' }} m</span>
+          </div>
+        </div>
+        <div class="depth-arrow" [style.height.%]="alturaFlechaPct">
+          <span>{{ napaActualM | number: '1.2-2' }} m</span>
+        </div>
+        <div class="scene-ruler" aria-hidden="true">
+          <span style="top: 0%">0</span>
+          <span style="top: 25%">{{ profundidadEscala(0.25) }}</span>
+          <span style="top: 50%">{{ profundidadEscala(0.5) }}</span>
+          <span style="top: 75%">{{ profundidadEscala(0.75) }}</span>
+          <span style="top: 100%">{{ profundidadSensorEfectivaM | number: '1.1-1' }} m</span>
+        </div>
+      </section>
+
+      <section class="napa-installation">
+        <div>
+          <span>Geometria instalada</span>
+          <strong>
+            {{ longitudCableM ?? '—' }} m de cable · {{ tramoCableExteriorM ?? '—' }} m afuera ·
+            {{ profundidadSensorEfectivaM ?? '—' }} m enterrados
+          </strong>
+        </div>
+        @if (formulaDisponible) {
+          <div class="napa-formula">
+            <span>Calculo trazable</span>
+            <strong>
+              {{ profundidadSensorEfectivaM | number: '1.2-2' }} m − {{ columnaAguaActualM | number: '1.2-2' }} m =
+              {{ napaActualM | number: '1.2-2' }} m
+            </strong>
+            <small>Profundidad del sensor − columna de agua = profundidad de napa bajo el terreno.</small>
+          </div>
+        } @else {
+          <p-message severity="warn">
+            Falta la profundidad instalada o la columna de agua para auditar la formula completa.
+          </p-message>
+        }
+        <p class="scale-warning">
+          El largo del cable describe la instalacion. La escala 4–20 mA del transductor se configura por separado.
+        </p>
+      </section>
+    </div>
+
+    <section class="napa-curve">
+      <header>
+        <div>
+          <span>Evolucion temporal</span>
+          <strong>Si la curva sube, el agua se acerca al terreno; si baja, se profundiza.</strong>
+        </div>
+      </header>
+      <app-chart [options]="chartOptions"></app-chart>
+    </section>
+
+    <section class="napa-readings" aria-label="Ultimas mediciones de napa">
+      <header><span>Fecha</span><span>Profundidad</span><span>Columna de agua</span></header>
+      @for (point of puntosRecientes; track point.x + '-' + point.y) {
+        <div>
+          <strong>{{ point.x | date: 'dd/MM/yy HH:mm' }}</strong>
+          <span>{{ point.y | number: '1.2-2' }} m bajo terreno</span>
+          <span>{{ point.waterColumnM !== undefined ? (point.waterColumnM | number: '1.2-2') : '—' }} m</span>
+        </div>
+      }
+    </section>
+  } @else if (senalSinCalibrar) {
+    <p-message severity="warn">
+      El controlador recibe corriente analogica, pero todavia no hay una conversion calibrada a nivel de napa. Chaman
+      conserva la señal cruda y no inventa metros sin la escala tecnica del transductor.
+    </p-message>
+  } @else {
+    <p-message severity="info">No hay mediciones validas de napa en el periodo seleccionado.</p-message>
+  }
+</article>

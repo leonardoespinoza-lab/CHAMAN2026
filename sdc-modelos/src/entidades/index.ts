@@ -36,6 +36,7 @@ export * from "./foto";
 export * from "./visita-lote";
 export * from "./maleza";
 export * from "./lorawan-uplink";
+export * from "./sentek-reading-quality";
 export * from "./suelo-inta";
 export * from "./napa";
 export * from "./agrometeorologia";

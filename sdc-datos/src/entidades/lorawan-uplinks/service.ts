@@ -3,6 +3,7 @@ import {
   ICreateLorawanUplink,
   IDispositivo,
   IFrioAcumulado,
+  ILorawanRawFrame,
   IReporte,
   IQueryParam,
   IUpdateDispositivo,
@@ -11,11 +12,7 @@ import {
 import { DispositivosService } from '../dispositivos/service';
 import { ReportesService } from '../reportes/service';
 import { LorawanUplinksRepository } from './repository';
-import { decodeSentekUc501Payload } from './sentek-uc501.decoder';
-import {
-  decodeUc511SentekPayload,
-  decodedUc511ToReporteValores,
-} from './uc511-sentek.decoder';
+import { decodeControllerUplink } from './controller-decoder.registry';
 
 const HF_PREVIEW_VERSION = 'hf-field-preview-1.0.0';
 
@@ -59,6 +56,31 @@ export class LorawanUplinksService {
     return await this.repository.latestByDevice(
       Math.min(Number(limit) || 1000, 5000),
     );
+  }
+
+  async rawHistory(query: {
+    devEUI?: string;
+    days?: string | number;
+    limit?: string | number;
+  }): Promise<ILorawanRawFrame[]> {
+    const devEUI = query.devEUI?.trim().toUpperCase();
+    if (!devEUI) return [];
+    const days = Math.max(1, Math.min(Number(query.days) || 7, 365));
+    const limit = Math.max(1, Math.min(Number(query.limit) || 5000, 20000));
+    const since = Date.now() - days * 86_400_000;
+    const uplinks = await this.repository.recentByDevEUI(devEUI, limit);
+    const dispositivo = await this.dispositivos
+      .getFilter({ filter: JSON.stringify({ deveui: devEUI }), limit: 1 })
+      .then((result: any) => result?.datos?.[0] as IDispositivo | undefined)
+      .catch(() => undefined);
+
+    return uplinks
+      .filter(
+        (uplink) =>
+          this.safeDate(uplink.timestamp || uplink.fechaCreacion).getTime() >=
+          since,
+      )
+      .map((uplink) => this.toRawFrame(uplink, dispositivo));
   }
 
   async reprocess(query: {
@@ -131,9 +153,7 @@ export class LorawanUplinksService {
       return false;
     }
 
-    const decoded =
-      this.decodeUc511SentekUplink(uplink, dispositivo) ||
-      decodeSentekUc501Payload(uplink.data);
+    const decoded = decodeControllerUplink(uplink, dispositivo);
     if (!decoded) {
       return false;
     }
@@ -151,7 +171,7 @@ export class LorawanUplinksService {
       360,
     );
     const previous =
-      existing || this.reporteCompatibleConCiclo(recent, decoded.canales);
+      existing || this.reporteCompatibleConCiclo(recent, decoded.cycleChannels);
     const valores = previous?.datos?.valores
       ? this.mergeSentekValues(previous.datos.valores, decoded.valores)
       : decoded.valores;
@@ -168,6 +188,10 @@ export class LorawanUplinksService {
       rssi: uplink.rssi,
       snr: uplink.snr,
       dr: uplink.dr,
+      payloadDecoderId: decoded.decoderId,
+      payloadDecoderVersion: decoded.decoderVersion,
+      controllerManufacturer: decoded.manufacturer,
+      controllerModel: decoded.model,
     };
 
     let reporte: IReporte;
@@ -250,41 +274,33 @@ export class LorawanUplinksService {
     };
   }
 
-  private decodeUc511SentekUplink(
-    uplink: ICreateLorawanUplink,
+  private toRawFrame(
+    uplink: ICreateLorawanUplink & { _id?: string; fechaCreacion?: string },
     dispositivo?: IDispositivo,
-  ): { valores: IValoresV2['valores']; canales: number[] } | null {
-    const raw = (uplink.rawPayload || {}) as Record<string, any>;
-    const payloadHex =
-      this.getFirstString(
-        raw.FRMPayload,
-        raw.frmPayload,
-        raw.frmpayload,
-        raw.payloadHex,
-        raw.hexPayload,
-        raw.dataHex,
-        raw.decoded?.FRMPayload,
-        raw.decoded?.frmPayload,
-        raw.MACPayload?.FRMPayload,
-        raw.macPayload?.frmPayload,
-        raw.macPayload?.FRMPayload,
-        raw.uplink?.FRMPayload,
-        raw.uplink?.frmPayload,
-      ) ||
-      (this.isLikelyHexPayload(uplink.data) ? uplink.data : undefined) ||
-      this.base64PayloadToHex(uplink.data);
-
-    const decoded = decodeUc511SentekPayload(payloadHex);
-    if (!decoded) {
-      return null;
-    }
-
+  ): ILorawanRawFrame {
+    const decoded = decodeControllerUplink(uplink, dispositivo);
+    const readings = decoded?.readings || [];
     return {
-      valores: decodedUc511ToReporteValores(
-        decoded,
-        dispositivo?.configuracionLecturas?.entradaAnalogica,
-      ),
-      canales: decoded.raw.blocks.map((block) => block.channel),
+      id: (uplink as any)._id?.toString?.() || (uplink as any)._id,
+      devEUI: String(uplink.devEUI || '').toUpperCase(),
+      timestamp: this.safeDate(
+        uplink.timestamp || (uplink as any).fechaCreacion,
+      ).toISOString(),
+      fCnt: uplink.fCnt,
+      fPort: uplink.fPort,
+      gatewayID: uplink.gatewayID,
+      rssi: uplink.rssi,
+      snr: uplink.snr,
+      frequency: uplink.frequency,
+      dr: uplink.dr,
+      payloadHex: decoded?.payloadHex,
+      payloadBase64: uplink.data,
+      decoderId: decoded?.decoderId,
+      decoderVersion: decoded?.decoderVersion,
+      controllerManufacturer: decoded?.manufacturer,
+      controllerModel: decoded?.model,
+      decodeStatus: readings.length ? 'decoded' : 'unrecognized',
+      readings,
     };
   }
 

@@ -26,6 +26,11 @@ export interface IMetaDataLora {
   chirpstackDeviceProfileName?: string;
   chirpstackDescription?: string;
   chirpstackLastSeenAt?: string;
+  /** Decoder que demostró poder interpretar al menos un payload del equipo. */
+  payloadDecoderId?: string;
+  payloadDecoderVersion?: string;
+  controllerManufacturer?: string;
+  controllerModel?: string;
 }
 
 /** Inventario tecnico seguro; nunca contiene claves OTAA ni de sesion. */
@@ -84,7 +89,9 @@ export interface IAsignacionDispositivoLote {
 }
 
 export type VariableEntradaAnalogica =
-  "sin_definir" | "presion_agua" | "nivel_napa";
+  | "sin_definir"
+  | "presion_agua"
+  | "nivel_napa";
 
 export interface IConfiguracionPerfilSuelo {
   tipo: "sonda_sentek_120cm";
@@ -110,6 +117,20 @@ export interface IConfiguracionEntradaAnalogica {
    * profundidadInstalacionM - columnaAgua.
    */
   profundidadInstalacionM?: number;
+  /** Longitud fisica total del cable instalado; no define la escala del transductor. */
+  longitudCableM?: number;
+  /** Tramo del cable que queda entre el terreno y el controlador. */
+  tramoCableExteriorM?: number;
+  /** Modelo matematico aplicado a la senal electrica. */
+  versionConversion?: "lineal-4-20ma-v1";
+  /**
+   * Significado fisico de salidaMin/salidaMax. Para nivel_napa siempre es
+   * columna de agua sobre el diafragma del transductor, nunca profundidad
+   * directa desde el terreno.
+   */
+  magnitudSalida?: "columna_agua_sobre_sensor" | "presion_agua";
+  /** Datum de la profundidad informada al productor. */
+  referenciaProfundidad?: "nivel_terreno";
   fuenteCalibracion?: string;
   observaciones?: string;
 }
@@ -123,14 +144,123 @@ export interface IConfiguracionLecturasDispositivo {
   entradaAnalogica?: IConfiguracionEntradaAnalogica;
 }
 
+export type TipoServicioDispositivo =
+  | "perfil_suelo"
+  | "nivel_napa"
+  | "meteorologia"
+  | "pluviometria"
+  | "otro";
+
+/**
+ * Servicio agronomico expuesto por un controlador fisico. Un mismo DevEUI
+ * puede transportar varios sensores independientes sin duplicar inventario
+ * ni historial de comunicaciones.
+ */
+export interface IServicioDispositivo {
+  id: string;
+  tipo: TipoServicioDispositivo;
+  nombre: string;
+  sensores: SensoresV2[];
+  habilitado?: boolean;
+  idProductor?: string;
+  idEstablecimiento?: string;
+  idLote?: string;
+  fechaAsignacionLote?: string;
+  historialAsignacionesLote?: IAsignacionDispositivoLote[];
+  fuente?: "inferido" | "administrador";
+}
+
+const PERFIL_SUELO_SENSORES: SensoresV2[] = [
+  "Humedad Suelo Profundidad",
+  "Temperatura Suelo",
+  "Salinidad Suelo",
+];
+const NAPA_SENSORES: SensoresV2[] = ["Entrada Analógica", "Presión", "Napa"];
+
+export function serviciosDispositivoNormalizados(
+  dispositivo?: Partial<IDispositivo>,
+): IServicioDispositivo[] {
+  if (!dispositivo) return [];
+  if (Array.isArray(dispositivo.servicios) && dispositivo.servicios.length) {
+    return dispositivo.servicios
+      .filter((servicio) => servicio && servicio.habilitado !== false)
+      .map((servicio) => ({ ...servicio }));
+  }
+
+  const sensores = new Set(dispositivo.sensores || []);
+  const asignacion = {
+    idProductor: dispositivo.idProductor,
+    idEstablecimiento: dispositivo.idEstablecimiento,
+    idLote: dispositivo.idLote,
+    fechaAsignacionLote: dispositivo.fechaAsignacionLote,
+    fuente: "inferido" as const,
+  };
+  const servicios: IServicioDispositivo[] = [];
+  const tienePerfil =
+    !!dispositivo.configuracionLecturas?.perfilSuelo ||
+    PERFIL_SUELO_SENSORES.some((sensor) => sensores.has(sensor));
+  const tieneAnalogico =
+    !!dispositivo.configuracionLecturas?.entradaAnalogica ||
+    NAPA_SENSORES.some((sensor) => sensores.has(sensor));
+
+  if (tienePerfil) {
+    servicios.push({
+      id: "perfil-suelo-sentek",
+      tipo: "perfil_suelo",
+      nombre: "Perfil de suelo Sentek 1,2 m",
+      sensores: PERFIL_SUELO_SENSORES,
+      habilitado: true,
+      ...asignacion,
+    });
+  }
+  if (tieneAnalogico) {
+    const variableAnalogica =
+      dispositivo.configuracionLecturas?.entradaAnalogica?.variable ||
+      (sensores.has("Napa")
+        ? "nivel_napa"
+        : sensores.has("Presión")
+          ? "presion_agua"
+          : "sin_definir");
+    const esNapa = variableAnalogica === "nivel_napa";
+    const esPresion = variableAnalogica === "presion_agua";
+    servicios.push({
+      id: esNapa
+        ? "nivel-napa"
+        : esPresion
+          ? "presion-agua"
+          : "entrada-analogica",
+      tipo: esNapa ? "nivel_napa" : "otro",
+      nombre: esNapa
+        ? "Napa / freatímetro"
+        : esPresion
+          ? "Presión de agua"
+          : "Entrada analógica 4-20 mA sin calibrar",
+      sensores: esNapa
+        ? ["Entrada Analógica", "Napa"]
+        : esPresion
+          ? ["Entrada Analógica", "Presión"]
+          : ["Entrada Analógica"],
+      habilitado: true,
+      ...asignacion,
+    });
+  }
+  return servicios;
+}
+
 export type EstadoCalificacionMeteorologica =
-  "calificado" | "referencia" | "rechazado";
+  | "calificado"
+  | "referencia"
+  | "rechazado";
 
 export type RolVariableMeteorologica =
-  "aire_2m" | "aire_canopia" | "suelo" | "desconocido";
+  | "aire_2m"
+  | "aire_canopia"
+  | "suelo"
+  | "desconocido";
 
 export type VariableCalibracionMeteorologica =
-  "temperatura_aire" | "humedad_relativa";
+  | "temperatura_aire"
+  | "humedad_relativa";
 
 export interface ICalificacionVariableMeteorologica {
   estado: EstadoCalificacionMeteorologica;
@@ -212,6 +342,7 @@ export interface IDispositivo {
   metadata?: IMetaDataLora;
   sensores?: SensoresV2[];
   configuracionLecturas?: IConfiguracionLecturasDispositivo;
+  servicios?: IServicioDispositivo[];
   geojson?: IGeoJSONPoint;
   nombre?: string;
   bateria?: IBateria;

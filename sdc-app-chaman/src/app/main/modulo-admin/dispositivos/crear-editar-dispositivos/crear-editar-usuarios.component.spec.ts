@@ -211,4 +211,82 @@ describe('CrearEditarDispositivosComponent', () => {
       })
     );
   });
+
+  it('deriva 6 m enterrados desde 10 m de cable y 4 m exteriores', () => {
+    const component = createComponent();
+    const analog = component.form?.get('configuracionLecturas.entradaAnalogica');
+    analog?.patchValue({
+      variable: 'nivel_napa',
+      salidaMin: 0,
+      salidaMax: 10,
+      unidadSalida: 'm',
+      profundidadInstalacionM: null,
+      longitudCableM: 10,
+      tramoCableExteriorM: 4,
+      fuenteCalibracion: 'Ficha del transductor',
+    });
+
+    expect(analog?.valid).toBeTrue();
+    expect(component.profundidadNapaCalculadaM).toBe(6);
+    expect((component as any).getData().configuracionLecturas.entradaAnalogica).toEqual(
+      jasmine.objectContaining({
+        profundidadInstalacionM: 6,
+        longitudCableM: 10,
+        tramoCableExteriorM: 4,
+      })
+    );
+
+    analog?.patchValue({ profundidadInstalacionM: 5 });
+    expect(analog?.hasError('calibracionEntradaAnalogicaIncompleta')).toBeTrue();
+  });
+
+  it('asigna Sentek y napa por separado conservando un solo DevEUI', () => {
+    const component = createComponent();
+    (component as any).prefillLorawan = {
+      deveui: '24E124454E358347',
+      configuracionLecturas: {
+        perfilSuelo: {
+          tipo: 'sonda_sentek_120cm',
+          protocolo: 'SDI-12',
+          niveles: 12,
+          profundidadesCm: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120],
+          variables: ['humedad_vwc', 'salinidad_vic', 'temperatura'],
+        },
+        entradaAnalogica: {
+          canal: 1,
+          tipoSenal: '4-20mA',
+          variable: 'nivel_napa',
+          entradaMinMa: 4,
+          entradaMaxMa: 20,
+          salidaMin: 0,
+          salidaMax: 10,
+          unidadSalida: 'm',
+          profundidadInstalacionM: 6,
+        },
+      },
+    };
+    (component as any).createForm();
+
+    expect(component.serviciosForm.length).toBe(2);
+    component.serviciosForm.at(0).patchValue({
+      idProductor: 'productor-sentek',
+      idEstablecimiento: 'campo-sentek',
+      idLote: 'lote-sentek',
+    });
+    component.serviciosForm.at(1).patchValue({
+      idProductor: 'productor-napa',
+      idEstablecimiento: 'campo-napa',
+      idLote: 'lote-napa',
+    });
+
+    const data = (component as any).getData();
+    expect(data.deveui).toBe('24E124454E358347');
+    expect(data.servicios).toEqual([
+      jasmine.objectContaining({
+        id: 'perfil-suelo-sentek',
+        idLote: 'lote-sentek',
+      }),
+      jasmine.objectContaining({ id: 'nivel-napa', idLote: 'lote-napa' }),
+    ]);
+  });
 });

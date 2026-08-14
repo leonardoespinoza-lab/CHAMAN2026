@@ -8,6 +8,9 @@ import {
   IUsuario,
   ModuloPermiso,
   IPermiso,
+  serviciosDispositivoNormalizados,
+  IServicioDispositivo,
+  SensoresV2,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { establecimientosDelPermiso } from '../../auxiliares/authorization/alcance-permiso';
@@ -26,6 +29,7 @@ const DEVICE_SCIENCE_FIELDS = [
   'sensores',
   'calificacionMeteorologica',
   'geojson',
+  'servicios',
 ] as const;
 
 @Injectable()
@@ -47,7 +51,9 @@ export class DispositivosService {
         'No tiene permiso para ver este dispositivo',
       );
     }
-    return dispositivo;
+    return user
+      ? this.filtrarParaUsuario(dispositivo, user, modulo)
+      : dispositivo;
   }
 
   async assertPuedeVer(
@@ -69,7 +75,9 @@ export class DispositivosService {
         'No tiene permiso para ver este dispositivo',
       );
     }
-    return dispositivo;
+    return user && dispositivo
+      ? this.filtrarParaUsuario(dispositivo, user, modulo)
+      : dispositivo;
   }
 
   async assertPuedeVerPorIdentificador(
@@ -95,7 +103,13 @@ export class DispositivosService {
     user: IUsuario,
   ): Promise<IListado<IDispositivo>> {
     this.agregarFiltroPermisos(filtro, user);
-    return await this.repository.get(filtro);
+    const listado = await this.repository.get(filtro);
+    return {
+      ...listado,
+      datos: listado.datos.map((dispositivo) =>
+        this.filtrarParaUsuario(dispositivo, user),
+      ),
+    };
   }
 
   async create(data: ICreateDispositivo): Promise<IDispositivo> {
@@ -156,6 +170,16 @@ export class DispositivosService {
       if (idLote) scopes.get('lote')!.add(idLote);
       else if (idEstablecimiento) {
         scopes.get('establecimiento')!.add(idEstablecimiento);
+      }
+      for (const servicio of serviciosDispositivoNormalizados(device)) {
+        const loteServicio = String(servicio.idLote || '').trim();
+        const establecimientoServicio = String(
+          servicio.idEstablecimiento || '',
+        ).trim();
+        if (loteServicio) scopes.get('lote')!.add(loteServicio);
+        else if (establecimientoServicio) {
+          scopes.get('establecimiento')!.add(establecimientoServicio);
+        }
       }
     }
     for (const idLote of scopes.get('lote')!) {
@@ -232,6 +256,9 @@ export class DispositivosService {
       if (permiso.nivel === 'Admin') {
         return true;
       }
+      if (this.serviciosVisibles(dispositivo, permiso).length) {
+        return true;
+      }
       if (permiso.nivel === 'Quimica') {
         return (
           !!permiso.idQuimica && permiso.idQuimica === dispositivo.idQuimica
@@ -266,6 +293,113 @@ export class DispositivosService {
       }
       return false;
     });
+  }
+
+  private serviciosVisibles(
+    dispositivo: IDispositivo,
+    permiso: IPermiso,
+  ): IServicioDispositivo[] {
+    return serviciosDispositivoNormalizados(dispositivo).filter((servicio) => {
+      if (permiso.nivel === 'Admin') return true;
+      if (permiso.nivel === 'Quimica') {
+        return (
+          !!permiso.idQuimica && permiso.idQuimica === dispositivo.idQuimica
+        );
+      }
+      if (permiso.nivel === 'Distribuidor') {
+        return (
+          !!permiso.idDistribuidor &&
+          permiso.idDistribuidor === dispositivo.idDistribuidor
+        );
+      }
+      if (permiso.nivel === 'Productor') {
+        return (
+          !!permiso.idProductor && permiso.idProductor === servicio.idProductor
+        );
+      }
+      if (permiso.nivel === 'Establecimiento') {
+        return (
+          !!permiso.idEstablecimiento &&
+          permiso.idEstablecimiento === servicio.idEstablecimiento
+        );
+      }
+      if (permiso.nivel === 'Asesor') {
+        return (
+          establecimientosDelPermiso(permiso).includes(
+            String(servicio.idEstablecimiento),
+          ) &&
+          (!permiso.idLotes?.length ||
+            permiso.idLotes.includes(String(servicio.idLote)))
+        );
+      }
+      return false;
+    });
+  }
+
+  private filtrarParaUsuario(
+    dispositivo: IDispositivo,
+    user: IUsuario,
+    modulo?: ModuloPermiso,
+  ): IDispositivo {
+    if (user.permisos?.some((permiso) => permiso.nivel === 'Admin')) {
+      return dispositivo;
+    }
+    const servicios = new Map<string, IServicioDispositivo>();
+    user.permisos
+      .filter((permiso) => this.puedeVerModulo(permiso, modulo))
+      .flatMap((permiso) => this.serviciosVisibles(dispositivo, permiso))
+      .forEach((servicio) => servicios.set(servicio.id, servicio));
+    const visibles = [...servicios.values()];
+    const tieneServiciosExplicitos = Array.isArray(dispositivo.servicios);
+    const sensoresPermitidos = new Set<SensoresV2>(['Batería']);
+    visibles.forEach((servicio) =>
+      servicio.sensores.forEach((sensor) => sensoresPermitidos.add(sensor)),
+    );
+    const valores = dispositivo.ultimoReporte?.datos?.valores || {};
+    const tiposVisibles = new Set(visibles.map((servicio) => servicio.tipo));
+    const configuracionLecturas = dispositivo.configuracionLecturas
+      ? {
+          perfilSuelo: tiposVisibles.has('perfil_suelo')
+            ? dispositivo.configuracionLecturas.perfilSuelo
+            : undefined,
+          entradaAnalogica: tiposVisibles.has('nivel_napa')
+            ? dispositivo.configuracionLecturas.entradaAnalogica
+            : undefined,
+        }
+      : undefined;
+    return {
+      ...dispositivo,
+      // Un controlador puede alimentar lotes o clientes distintos. Cuando ya
+      // tiene servicios explícitos, las relaciones globales legacy no deben
+      // revelar el otro destino al consumidor del servicio filtrado.
+      ...(tieneServiciosExplicitos
+        ? {
+            idProductor: undefined,
+            idEstablecimiento: undefined,
+            idLote: undefined,
+            productor: undefined,
+            establecimiento: undefined,
+            lote: undefined,
+          }
+        : {}),
+      servicios: visibles,
+      sensores: (dispositivo.sensores || []).filter((sensor) =>
+        sensoresPermitidos.has(sensor),
+      ),
+      configuracionLecturas,
+      ultimoReporte: dispositivo.ultimoReporte
+        ? {
+            ...dispositivo.ultimoReporte,
+            datos: {
+              valores: Object.fromEntries(
+                Object.entries(valores).filter(([sensor]) =>
+                  sensoresPermitidos.has(sensor as SensoresV2),
+                ),
+              ),
+            },
+          }
+        : undefined,
+    };
   }
 
   private puedeVerModulo(permiso: IPermiso, modulo?: ModuloPermiso): boolean {
@@ -305,10 +439,16 @@ export class DispositivosService {
       $or.push({ idDistribuidor: { $in: distribuidoresUsuario } });
     }
     if (productoresUsuario.length > 0) {
-      $or.push({ idProductor: { $in: productoresUsuario } });
+      $or.push(
+        { idProductor: { $in: productoresUsuario } },
+        { 'servicios.idProductor': { $in: productoresUsuario } },
+      );
     }
     if (establecimientosUsuario.length > 0) {
-      $or.push({ idEstablecimiento: { $in: establecimientosUsuario } });
+      $or.push(
+        { idEstablecimiento: { $in: establecimientosUsuario } },
+        { 'servicios.idEstablecimiento': { $in: establecimientosUsuario } },
+      );
     }
     for (const asesor of asesoresUsuario) {
       const alcance: any = {
@@ -316,6 +456,15 @@ export class DispositivosService {
       };
       if (asesor.idLotes?.length) alcance.idLote = { $in: asesor.idLotes };
       $or.push(alcance);
+      const alcanceServicio: any = {
+        'servicios.idEstablecimiento': {
+          $in: establecimientosDelPermiso(asesor),
+        },
+      };
+      if (asesor.idLotes?.length) {
+        alcanceServicio['servicios.idLote'] = { $in: asesor.idLotes };
+      }
+      $or.push(alcanceServicio);
     }
     if ($or.length > 0) {
       $and.push({ $or });

@@ -49,4 +49,27 @@ describe('LorawanUplinksRepository inventory', () => {
     await repository.latestByDevice(0);
     expect(aggregate.mock.calls[1][0].at(-1)).toEqual({ $limit: 1000 });
   });
+
+  it('reads the newest raw uplinks and restores chronological order for curves', async () => {
+    const rows = [
+      { fCnt: 12, timestamp: '2026-08-13T12:02:00.000Z' },
+      { fCnt: 11, timestamp: '2026-08-13T12:01:00.000Z' },
+    ];
+    const lean = jest.fn().mockResolvedValue(rows);
+    const limit = jest.fn().mockReturnValue({ lean });
+    const sort = jest.fn().mockReturnValue({ limit });
+    const find = jest.fn().mockReturnValue({ sort });
+    const repository = new LorawanUplinksRepository({ find } as any);
+
+    const result = await repository.recentByDevEUI('24e124454e358347', 5000);
+
+    expect(find).toHaveBeenCalledWith({
+      devEUI: {
+        $in: ['24E124454E358347', '24e124454e358347', '24e124454e358347'],
+      },
+    });
+    expect(sort).toHaveBeenCalledWith({ timestamp: -1, fechaCreacion: -1 });
+    expect(limit).toHaveBeenCalledWith(5000);
+    expect(result.map((row) => row.fCnt)).toEqual([11, 12]);
+  });
 });

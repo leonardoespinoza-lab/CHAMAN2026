@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { DispositivoSchema } from './schema';
+import { serviciosDispositivoNormalizados } from 'modelos/src';
 
 describe('DispositivoSchema - calificacion meteorologica', () => {
   const modelName = 'DispositivoCalificacionMeteorologicaSpec';
@@ -147,5 +148,93 @@ describe('DispositivoSchema - calificacion meteorologica', () => {
         'calificacionMeteorologica.historialCalibraciones.0.offset',
       ]),
     );
+  });
+
+  it('normaliza un UC511 como un controlador con dos servicios independientes', () => {
+    const servicios = serviciosDispositivoNormalizados({
+      deveui: '24E124454E358347',
+      idLote: 'lote-heredado',
+      configuracionLecturas: {
+        perfilSuelo: {
+          tipo: 'sonda_sentek_120cm',
+          protocolo: 'SDI-12',
+          niveles: 12,
+          profundidadesCm: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120],
+          variables: ['humedad_vwc', 'salinidad_vic', 'temperatura'],
+        },
+        entradaAnalogica: {
+          canal: 1,
+          tipoSenal: '4-20mA',
+          variable: 'nivel_napa',
+          entradaMinMa: 4,
+          entradaMaxMa: 20,
+          salidaMin: 0,
+          salidaMax: 10,
+          unidadSalida: 'm',
+          profundidadInstalacionM: 6,
+        },
+      },
+    });
+
+    expect(servicios.map((servicio) => servicio.id)).toEqual([
+      'perfil-suelo-sentek',
+      'nivel-napa',
+    ]);
+    expect(servicios[0].sensores).toEqual(
+      expect.arrayContaining([
+        'Humedad Suelo Profundidad',
+        'Temperatura Suelo',
+        'Salinidad Suelo',
+      ]),
+    );
+    expect(servicios[1].sensores).toEqual(['Entrada Analógica', 'Napa']);
+  });
+
+  it('no llama napa a una entrada 4-20 mA todavia sin calibrar', () => {
+    const servicios = serviciosDispositivoNormalizados({
+      configuracionLecturas: {
+        entradaAnalogica: {
+          canal: 1,
+          tipoSenal: '4-20mA',
+          variable: 'sin_definir',
+          entradaMinMa: 4,
+          entradaMaxMa: 20,
+        },
+      },
+    });
+
+    expect(servicios).toEqual([
+      expect.objectContaining({
+        id: 'entrada-analogica',
+        tipo: 'otro',
+        nombre: 'Entrada analógica 4-20 mA sin calibrar',
+        sensores: ['Entrada Analógica'],
+      }),
+    ]);
+  });
+
+  it('respeta servicios explicitamente deshabilitados y no los vuelve a inferir', () => {
+    expect(
+      serviciosDispositivoNormalizados({
+        configuracionLecturas: {
+          entradaAnalogica: {
+            canal: 1,
+            tipoSenal: '4-20mA',
+            variable: 'nivel_napa',
+            entradaMinMa: 4,
+            entradaMaxMa: 20,
+          },
+        },
+        servicios: [
+          {
+            id: 'nivel-napa',
+            tipo: 'nivel_napa',
+            nombre: 'Napa',
+            sensores: ['Napa'],
+            habilitado: false,
+          },
+        ],
+      }),
+    ).toEqual([]);
   });
 });

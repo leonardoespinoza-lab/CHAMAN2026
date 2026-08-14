@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { ILorawanUplink } from 'modelos/src';
+import { ILorawanRawFrame, ILorawanUplink } from 'modelos/src';
 import { HttpService } from './http.service';
 
 @Injectable({
@@ -20,6 +20,12 @@ export class LorawanUplinksService {
   public latestByDevice(limit = 1000): Promise<ILorawanUplink[]> {
     return this.http.get(`/lorawan/uplinks/latest-devices`, {
       params: { limit },
+    });
+  }
+
+  public rawHistory(devEUI: string, days = 7, limit = 5000): Promise<ILorawanRawFrame[]> {
+    return this.http.get(`/lorawan/uplinks/raw-history/${encodeURIComponent(devEUI)}`, {
+      params: { days, limit },
     });
   }
 }

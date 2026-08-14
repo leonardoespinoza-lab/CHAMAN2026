@@ -11,10 +11,13 @@ import {
   ILorawanUplink,
   SensoresV2,
   TipoDispositivo,
+  serviciosDispositivoNormalizados,
+  IServicioDispositivo,
 } from 'modelos/src';
 import { Model } from 'mongoose';
 import { dbQuery } from 'src/auxiliares/helper.service';
 import { Dispositivo, DispositivoDocument } from './modelos/schema';
+import { decodeControllerUplink } from '../lorawan-uplinks/controller-decoder.registry';
 
 @Injectable()
 export class DispositivosRepository {
@@ -44,10 +47,14 @@ export class DispositivosRepository {
         ? [this.crearSegmentoAsignacion(data, fechaAsignacionLote)]
         : []);
 
+    const servicios = serviciosDispositivoNormalizados(data).map((servicio) =>
+      this.normalizarServicio(servicio),
+    );
     return await this.model.create({
       ...data,
       fechaAsignacionLote,
       historialAsignacionesLote,
+      ...(servicios.length ? { servicios } : {}),
     });
   }
 
@@ -55,46 +62,87 @@ export class DispositivosRepository {
     tipo: TipoDispositivo;
     sensores: SensoresV2[];
     configuracionLecturas?: IUpdateDispositivo['configuracionLecturas'];
+    decoder?: {
+      id: string;
+      version: string;
+      manufacturer: string;
+      model: string;
+    };
   } {
     const text =
       `${uplink.deviceName || ''} ${uplink.applicationName || ''}`.toLowerCase();
-
-    if (
-      this.isUc511SentekUplink(uplink) ||
+    const decoded = decodeControllerUplink(uplink);
+    const hasDecodedSoil = decoded?.capabilities.soilProfile === true;
+    const hasDecodedAnalog = decoded?.capabilities.analogInput === true;
+    const hasExplicitSoilIdentity =
       text.includes('sentek') ||
       text.includes('lanza') ||
       text.includes('humedad de suelo') ||
-      text.includes('soil moisture') ||
-      text.includes('uc501') ||
-      text.includes('uc511') ||
-      text.includes('milesight') ||
-      text.includes('napa')
+      text.includes('soil moisture');
+    const hasExplicitAnalogIdentity =
+      text.includes('napa') ||
+      text.includes('freat') ||
+      text.includes('4-20') ||
+      text.includes('analog');
+
+    if (
+      hasDecodedSoil ||
+      hasDecodedAnalog ||
+      hasExplicitSoilIdentity ||
+      hasExplicitAnalogIdentity
     ) {
-      return {
-        tipo: 'Sensor de Humedad de Suelo',
-        sensores: [
+      const hasSoil = hasDecodedSoil || hasExplicitSoilIdentity;
+      const hasAnalog = hasDecodedAnalog || hasExplicitAnalogIdentity;
+      const sensores: SensoresV2[] = [];
+      if (hasSoil) {
+        sensores.push(
           'Humedad Suelo Profundidad',
           'Temperatura Suelo',
           'Salinidad Suelo',
-          'Entrada Analógica',
-          'Batería',
-        ],
+        );
+      }
+      if (hasAnalog) sensores.push('Entrada Analógica');
+      return {
+        tipo: hasSoil ? 'Sensor de Humedad de Suelo' : 'Otro',
+        sensores,
         configuracionLecturas: {
-          perfilSuelo: {
-            tipo: 'sonda_sentek_120cm',
-            protocolo: 'SDI-12',
-            niveles: 12,
-            profundidadesCm: [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115],
-            variables: ['humedad_vwc', 'salinidad_vic', 'temperatura'],
-          },
-          entradaAnalogica: {
-            canal: 1,
-            tipoSenal: '4-20mA',
-            variable: 'sin_definir',
-            entradaMinMa: 4,
-            entradaMaxMa: 20,
-          },
+          ...(hasSoil
+            ? {
+                perfilSuelo: {
+                  tipo: 'sonda_sentek_120cm' as const,
+                  protocolo: 'SDI-12' as const,
+                  niveles: 12 as const,
+                  profundidadesCm: [
+                    10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120,
+                  ],
+                  variables: [
+                    'humedad_vwc' as const,
+                    'salinidad_vic' as const,
+                    'temperatura' as const,
+                  ],
+                },
+              }
+            : {}),
+          ...(hasAnalog
+            ? {
+                entradaAnalogica: {
+                  canal: 1 as const,
+                  tipoSenal: '4-20mA' as const,
+                  variable: 'sin_definir' as const,
+                  entradaMinMa: 4,
+                  entradaMaxMa: 20,
+                },
+              }
+            : {}),
         },
+        decoder: decoded
+          ? {
+              id: decoded.decoderId,
+              version: decoded.decoderVersion,
+              manufacturer: decoded.manufacturer,
+              model: decoded.model,
+            }
+          : undefined,
       };
     }
 
@@ -131,47 +179,6 @@ export class DispositivosRepository {
     };
   }
 
-  private isUc511SentekUplink(uplink: ILorawanUplink): boolean {
-    if (uplink.fPort !== 85) {
-      return false;
-    }
-
-    const payload = this.getUplinkPayloadText(uplink);
-    if (!payload) {
-      return false;
-    }
-
-    const hex = payload.replace(/[^a-fA-F0-9]/g, '').toLowerCase();
-    if (hex.length < 24) {
-      return false;
-    }
-
-    // UC501/UC511 + Sentek llega por fPort 85 con bloques SDI-12 y/o analogicos.
-    // Este patron evita clasificar otros LoRaWAN genericos como lanza.
-    return hex.includes('08db') || hex.includes('9c48') || hex.length >= 70;
-  }
-
-  private getUplinkPayloadText(uplink: ILorawanUplink): string | undefined {
-    const rawPayload = (uplink as any).rawPayload || {};
-    const candidates = [
-      uplink.data,
-      rawPayload.FRMPayload,
-      rawPayload.frmPayload,
-      rawPayload.frmpayload,
-      rawPayload.payloadHex,
-      rawPayload.hexPayload,
-      rawPayload.dataHex,
-      rawPayload.MACPayload?.FRMPayload,
-      rawPayload.macPayload?.FRMPayload,
-      rawPayload.uplink?.frmPayload,
-      rawPayload.object?.frmPayload,
-    ];
-
-    return candidates.find(
-      (value) => typeof value === 'string' && value.trim(),
-    );
-  }
-
   async upsertFromLorawanUplink(
     uplink: ILorawanUplink,
   ): Promise<Dispositivo | null> {
@@ -182,11 +189,16 @@ export class DispositivosRepository {
     const devEUI = uplink.devEUI.toUpperCase();
     const timestamp = uplink.timestamp || new Date().toISOString();
     const inferred = this.inferDeviceFromLorawanUplink(uplink);
+    const hasSoilProfile = !!inferred.configuracionLecturas?.perfilSuelo;
+    const hasAnalogInput = !!inferred.configuracionLecturas?.entradaAnalogica;
     const inferredName =
-      inferred.tipo === 'Sensor de Humedad de Suelo' &&
-      this.isUc511SentekUplink(uplink)
-        ? `Controlador Sentek + entrada analógica ${devEUI}`
-        : devEUI;
+      hasSoilProfile && hasAnalogInput
+        ? `Controlador Milesight con Sentek y entrada analógica ${devEUI}`
+        : hasSoilProfile
+          ? `Controlador Milesight con Sentek ${devEUI}`
+          : hasAnalogInput
+            ? `Controlador Milesight con entrada analógica ${devEUI}`
+            : devEUI;
     const existing = await this.model.findOne({ deveui: devEUI }).lean();
     const update: IUpdateDispositivo = {
       deveui: devEUI,
@@ -206,8 +218,19 @@ export class DispositivosRepository {
         rssi: uplink.rssi,
         snr: uplink.snr,
         dr: uplink.dr,
+        ...(inferred.decoder
+          ? {
+              payloadDecoderId: inferred.decoder.id,
+              payloadDecoderVersion: inferred.decoder.version,
+              controllerManufacturer: inferred.decoder.manufacturer,
+              controllerModel: inferred.decoder.model,
+            }
+          : {}),
       },
     };
+    const inferredServices = serviciosDispositivoNormalizados(update).map(
+      (servicio) => this.normalizarServicio(servicio),
+    );
 
     const $set: IUpdateDispositivo = {
       fechaUltimaComunicacion: update.fechaUltimaComunicacion,
@@ -240,8 +263,38 @@ export class DispositivosRepository {
       ) {
         $set.sensores = mergedSensors;
       }
-      if (!existing.configuracionLecturas && update.configuracionLecturas) {
-        $set.configuracionLecturas = update.configuracionLecturas;
+      if (update.configuracionLecturas) {
+        const mergedConfiguration = {
+          ...(existing.configuracionLecturas || {}),
+          ...(!existing.configuracionLecturas?.perfilSuelo &&
+          update.configuracionLecturas.perfilSuelo
+            ? { perfilSuelo: update.configuracionLecturas.perfilSuelo }
+            : {}),
+          ...(!existing.configuracionLecturas?.entradaAnalogica &&
+          update.configuracionLecturas.entradaAnalogica
+            ? {
+                entradaAnalogica: update.configuracionLecturas.entradaAnalogica,
+              }
+            : {}),
+        };
+        if (
+          JSON.stringify(mergedConfiguration) !==
+          JSON.stringify(existing.configuracionLecturas || {})
+        ) {
+          $set.configuracionLecturas = mergedConfiguration as any;
+        }
+      }
+      if (inferredServices.length) {
+        const existingServices = existing.servicios || [];
+        const missingServices = inferredServices.filter(
+          (inferredService) =>
+            !existingServices.some(
+              (existingService) => existingService.id === inferredService.id,
+            ),
+        );
+        if (missingServices.length) {
+          $set.servicios = [...existingServices, ...missingServices];
+        }
       }
     }
 
@@ -251,7 +304,10 @@ export class DispositivosRepository {
         .lean();
     }
 
-    return await this.model.create(update);
+    return await this.model.create({
+      ...update,
+      ...(inferredServices.length ? { servicios: inferredServices } : {}),
+    });
   }
 
   async syncFromLorawanCatalog(
@@ -272,6 +328,22 @@ export class DispositivosRepository {
       if (!/^[0-9A-F]{16}$/.test(devEUI)) continue;
       result.total += 1;
       const existing = await this.model.findOne({ deveui: devEUI }).lean();
+      const catalogIdentity = [
+        item.name,
+        item.description,
+        item.deviceProfileName,
+        item.applicationName,
+      ]
+        .filter(Boolean)
+        .join(' ');
+      const inferred = this.inferDeviceFromLorawanUplink({
+        devEUI,
+        deviceName: catalogIdentity,
+        applicationName: item.applicationName,
+      } as ILorawanUplink);
+      const inferredServices = serviciosDispositivoNormalizados(inferred).map(
+        (servicio) => this.normalizarServicio(servicio),
+      );
       const metadata = {
         ...(existing?.metadata || {}),
         origenInventario: 'ChirpStack' as const,
@@ -289,8 +361,10 @@ export class DispositivosRepository {
         await this.model.create({
           deveui: devEUI,
           nombre: item.name?.trim() || devEUI,
-          tipo: 'Otro',
-          sensores: ['Otro'],
+          tipo: inferred.tipo,
+          sensores: inferred.sensores,
+          configuracionLecturas: inferred.configuracionLecturas,
+          ...(inferredServices.length ? { servicios: inferredServices } : {}),
           metadata,
         });
         result.created += 1;
@@ -305,6 +379,21 @@ export class DispositivosRepository {
       ) {
         $set.nombre = item.name.trim();
       }
+      if (
+        (!existing.tipo || existing.tipo === 'Otro') &&
+        inferred.tipo !== 'Otro'
+      ) {
+        $set.tipo = inferred.tipo;
+        $set.sensores = [
+          ...new Set([...(existing.sensores || []), ...inferred.sensores]),
+        ];
+      }
+      if (!existing.configuracionLecturas && inferred.configuracionLecturas) {
+        $set.configuracionLecturas = inferred.configuracionLecturas;
+      }
+      if (!existing.servicios?.length && inferredServices.length) {
+        $set.servicios = inferredServices;
+      }
       const metadataComparable = {
         ...(existing.metadata || {}),
         ...metadata,
@@ -313,11 +402,17 @@ export class DispositivosRepository {
       const existingMetadataComparable = { ...(existing.metadata || {}) };
       delete existingMetadataComparable.chirpstackSincronizadoEn;
       const nameChanged = !!$set.nombre && $set.nombre !== existing.nombre;
+      const classificationChanged = Boolean(
+        $set.tipo ||
+        $set.sensores ||
+        $set.configuracionLecturas ||
+        $set.servicios,
+      );
       const metadataChanged =
         JSON.stringify(metadataComparable) !==
         JSON.stringify(existingMetadataComparable);
 
-      if (nameChanged || metadataChanged) {
+      if (nameChanged || metadataChanged || classificationChanged) {
         await this.model.updateOne({ _id: existing._id }, { $set });
         result.updated += 1;
       } else {
@@ -335,6 +430,14 @@ export class DispositivosRepository {
       data,
       'fechaAsignacionLote',
     );
+
+    if (Object.prototype.hasOwnProperty.call(data, 'servicios')) {
+      const actual = await this.model.findById(id).select('servicios').lean();
+      updateData.servicios = this.reconciliarServicios(
+        actual?.servicios || [],
+        data.servicios || [],
+      );
+    }
 
     if (cambiaLote || cambiaFechaAsignacion) {
       const actual = await this.model
@@ -404,6 +507,69 @@ export class DispositivosRepository {
 
   async delete(id: string): Promise<Dispositivo> {
     return await this.model.findByIdAndDelete(id);
+  }
+
+  private reconciliarServicios(
+    anteriores: IServicioDispositivo[],
+    siguientes: IServicioDispositivo[],
+  ): IServicioDispositivo[] {
+    const ids = new Set<string>();
+    return siguientes.map((servicio) => {
+      const normalizado = this.normalizarServicio(servicio);
+      if (ids.has(normalizado.id)) {
+        throw new Error(
+          `Servicio duplicado en el controlador: ${normalizado.id}`,
+        );
+      }
+      ids.add(normalizado.id);
+      const anterior = anteriores.find((item) => item.id === normalizado.id);
+      const loteAnterior = String(anterior?.idLote || '');
+      const loteNuevo = String(normalizado.idLote || '');
+      const fecha = this.normalizarFecha(
+        normalizado.fechaAsignacionLote ||
+          anterior?.fechaAsignacionLote ||
+          new Date().toISOString(),
+      );
+      const historial = this.clonarHistorial(
+        anterior?.historialAsignacionesLote,
+      );
+
+      if (loteAnterior !== loteNuevo) {
+        historial.forEach((segmento) => {
+          if (segmento.activa || !segmento.fechaHasta) {
+            segmento.activa = false;
+            segmento.fechaHasta ||= fecha;
+          }
+        });
+        if (loteNuevo) {
+          historial.push(this.crearSegmentoAsignacion(normalizado, fecha));
+        }
+      }
+
+      return {
+        ...normalizado,
+        fechaAsignacionLote: loteNuevo ? fecha : undefined,
+        historialAsignacionesLote: historial,
+        fuente: 'administrador',
+      };
+    });
+  }
+
+  private normalizarServicio(
+    servicio: IServicioDispositivo,
+  ): IServicioDispositivo {
+    return {
+      ...servicio,
+      id: String(servicio.id || '')
+        .trim()
+        .toLowerCase(),
+      nombre: String(servicio.nombre || '').trim(),
+      sensores: [...new Set(servicio.sensores || [])],
+      habilitado: servicio.habilitado !== false,
+      idProductor: servicio.idProductor || undefined,
+      idEstablecimiento: servicio.idEstablecimiento || undefined,
+      idLote: servicio.idLote || undefined,
+    };
   }
 
   private actualizarHistorialPorCambioDeLote(
@@ -491,7 +657,10 @@ export class DispositivosRepository {
   }
 
   private crearSegmentoAsignacion(
-    data: Partial<IUpdateDispositivo>,
+    data: Pick<
+      Partial<IUpdateDispositivo>,
+      'idLote' | 'idProductor' | 'idEstablecimiento'
+    >,
     fechaDesde: string,
   ): IAsignacionDispositivoLote {
     return {

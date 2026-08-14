@@ -2,6 +2,7 @@ import {
   calibrateAnalogInput,
   decodeUc511SentekPayload,
   decodedUc511ToReporteValores,
+  extractUc511PayloadHex,
 } from './uc511-sentek.decoder';
 
 describe('decodeUc511SentekPayload', () => {
@@ -15,9 +16,9 @@ describe('decodeUc511SentekPayload', () => {
     expect(decoded).not.toBeNull();
     expect(decoded?.analog.rawMa).toBeCloseTo(9.219, 3);
     expect(decoded?.analog.channel).toBe(1);
-    expect(decoded?.soil.moisture['5cm']).toBeCloseTo(34.40216, 5);
-    expect(decoded?.soil.moisture['15cm']).toBeCloseTo(39.34078, 5);
-    expect(decoded?.soil.moisture['25cm']).toBeCloseTo(39.9998, 5);
+    expect(decoded?.soil.moisture['10cm']).toBeCloseTo(34.40216, 5);
+    expect(decoded?.soil.moisture['20cm']).toBeCloseTo(39.34078, 5);
+    expect(decoded?.soil.moisture['30cm']).toBeCloseTo(39.9998, 5);
   });
 
   it('accepts compact hex and ignores missing blocks', () => {
@@ -26,10 +27,10 @@ describe('decodeUc511SentekPayload', () => {
     );
 
     expect(decoded).not.toBeNull();
-    expect(decoded?.soil.temperature['5cm']).toBe(12.5);
-    expect(decoded?.soil.temperature['15cm']).toBe(13.5);
-    expect(decoded?.soil.temperature['25cm']).toBe(14.5);
-    expect(decoded?.soil.moisture['5cm']).toBeUndefined();
+    expect(decoded?.soil.temperature['10cm']).toBe(12.5);
+    expect(decoded?.soil.temperature['20cm']).toBe(13.5);
+    expect(decoded?.soil.temperature['30cm']).toBe(14.5);
+    expect(decoded?.soil.moisture['10cm']).toBeUndefined();
   });
 
   it('decodes stored base64 broker payloads after converting them to hex', () => {
@@ -41,10 +42,58 @@ describe('decodeUc511SentekPayload', () => {
 
     expect(decoded).not.toBeNull();
     expect(decoded?.analog.rawMa).toBeCloseTo(9.18, 3);
-    expect(decoded?.soil.moisture['5cm']).toBeCloseTo(34.32874, 5);
-    expect(decoded?.soil.moisture['35cm']).toBeCloseTo(38.81273, 5);
-    expect(decoded?.soil.salinity['5cm']).toBeCloseTo(1487.012, 3);
-    expect(decoded?.soil.temperature['5cm']).toBeUndefined();
+    expect(decoded?.soil.moisture['10cm']).toBeCloseTo(34.32874, 5);
+    expect(decoded?.soil.moisture['40cm']).toBeCloseTo(38.81273, 5);
+    expect(decoded?.soil.salinity['10cm']).toBeCloseTo(1487.012, 3);
+    expect(decoded?.soil.temperature['10cm']).toBeUndefined();
+  });
+
+  it('decodes the complete 12-depth Sentek profile at 10 cm intervals', () => {
+    const block = (channel: number, values: number[]) =>
+      Buffer.concat([
+        Buffer.from([0x08, 0xdb, channel]),
+        Buffer.from(
+          `0${values.map((value) => `+${value}`).join('')}\r\n`,
+          'ascii',
+        ),
+      ]);
+    const payload = Buffer.concat([
+      block(0, [1, 2, 3]),
+      block(1, [4, 5, 6]),
+      block(2, [7, 8, 9]),
+      block(3, [10, 11, 12]),
+      block(4, [101, 102, 103]),
+      block(5, [104, 105, 106]),
+      block(6, [107, 108, 109]),
+      block(7, [110, 111, 112]),
+      block(8, [11, 12, 13]),
+      block(9, [14, 15, 16]),
+      block(10, [17, 18, 19]),
+      block(11, [20, 21, 22]),
+    ]).toString('hex');
+
+    const decoded = decodeUc511SentekPayload(payload);
+    const report = decodedUc511ToReporteValores(decoded!);
+
+    expect(Object.keys(decoded!.soil.moisture)).toHaveLength(12);
+    expect(Object.keys(decoded!.soil.salinity)).toHaveLength(12);
+    expect(Object.keys(decoded!.soil.temperature)).toHaveLength(12);
+    expect(decoded?.soil.moisture['10cm']).toBe(1);
+    expect(decoded?.soil.moisture['120cm']).toBe(12);
+    expect(decoded?.soil.salinity['120cm']).toBe(112);
+    expect(decoded?.soil.temperature['120cm']).toBe(22);
+    expect(
+      report['Humedad Suelo Profundidad']?.map((row) => row.profundidad),
+    ).toEqual([10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]);
+  });
+
+  it('extracts a UC511 payload from the broker base64 without altering the evidence', () => {
+    const base64 = Buffer.from('05e29c489c489c489c48', 'hex').toString(
+      'base64',
+    );
+    expect(extractUc511PayloadHex({ data: base64 })).toBe(
+      '05e29c489c489c489c48',
+    );
   });
 
   it('does not declare napa until the independent analog sensor is calibrated', () => {
@@ -52,6 +101,9 @@ describe('decodeUc511SentekPayload', () => {
     expect(decoded).not.toBeNull();
 
     const raw = decodedUc511ToReporteValores(decoded!);
+    expect(raw['Humedad Suelo Profundidad']).toBeUndefined();
+    expect(raw['Salinidad Suelo']).toBeUndefined();
+    expect(raw['Temperatura Suelo']).toBeUndefined();
     expect(raw['Entrada Analógica']?.[0].unidad).toBe('mA');
     expect(raw.Napa).toBeUndefined();
     expect(raw['Presión']).toBeUndefined();
@@ -106,11 +158,65 @@ describe('decodeUc511SentekPayload', () => {
     expect(calibrated).toBeNull();
   });
 
+  it('preserves raw evidence but does not extrapolate outside 4-20 mA', () => {
+    const config = {
+      canal: 1 as const,
+      tipoSenal: '4-20mA' as const,
+      variable: 'nivel_napa' as const,
+      entradaMinMa: 4,
+      entradaMaxMa: 20,
+      salidaMin: 0,
+      salidaMax: 10,
+      unidadSalida: 'm',
+      profundidadInstalacionM: 6,
+    };
+
+    expect(calibrateAnalogInput(3.99, config)).toBeNull();
+    expect(calibrateAnalogInput(20.01, config)).toBeNull();
+  });
+
+  it('labels napa as depth to water referenced to terrain', () => {
+    const calibrated = calibrateAnalogInput(9.24, {
+      canal: 1,
+      tipoSenal: '4-20mA',
+      variable: 'nivel_napa',
+      entradaMinMa: 4,
+      entradaMaxMa: 20,
+      salidaMin: 0,
+      salidaMax: 10,
+      unidadSalida: 'm',
+      profundidadInstalacionM: 6,
+    });
+
+    expect(calibrated).toMatchObject({
+      value: 2.725,
+      waterColumn: 3.275,
+      installationDepth: 6,
+      reference: 'nivel_terreno',
+      conversionModel: 'lineal-4-20ma-v1',
+    });
+  });
+
   it('decodes the v2 signed int16 analog payload in amperes', () => {
     const decoded = decodeUc511SentekPayload(
       '0502e02ee02ee02ee02e', // 12.000 mA current/min/max/average
     );
     expect(decoded?.analog.rawMa).toBe(12);
     expect(decoded?.analog.averageMa).toBe(12);
+  });
+
+  it('parses signed SDI-12 values even without a trailing CRLF', () => {
+    const decoded = decodeUc511SentekPayload(
+      Buffer.concat([
+        Buffer.from([0x08, 0xdb, 0x08]),
+        Buffer.from('A-1.5+2.5-3.5', 'ascii'),
+      ]).toString('hex'),
+    );
+
+    expect(decoded?.soil.temperature).toEqual({
+      '10cm': -1.5,
+      '20cm': 2.5,
+      '30cm': -3.5,
+    });
   });
 });

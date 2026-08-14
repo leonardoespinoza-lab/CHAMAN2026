@@ -4,6 +4,14 @@
       <div>
         <span>{{ titulo || 'Historico Sentek' }}</span>
         <strong>{{ resumen }}</strong>
+        @if (rawFrames.length) {
+          <small class="raw-evidence-badge">Sin promedios · un punto por lectura LoRaWAN recibida</small>
+        }
+        @if (profileCoverageNotice) {
+          <small class="profile-coverage" [class.incomplete]="profileRows.length < 12">
+            {{ profileCoverageNotice }}
+          </small>
+        }
         @if (subtitulo) {
           <small>{{ subtitulo }}</small>
         }
@@ -23,12 +31,7 @@
             <option [ngValue]="option.value">{{ option.label }}</option>
           }
         </select>
-        <button
-          class="soil-history-export"
-          data-chaman-action="secondary"
-          type="button"
-          (click)="exportarCsv()"
-        >
+        <button class="soil-history-export" data-chaman-action="secondary" type="button" (click)="exportarCsv()">
           Exportar CSV
         </button>
       </div>
@@ -54,34 +57,205 @@
       <section class="napa-history-card">
         <header>
           <div>
-            <span>Napa</span>
-            <strong>{{ napaResumen }}</strong>
-            <small>Historico del sensor de nivel asociado al controlador</small>
+            <span>Altura de napa</span>
+            <strong>{{ napaActual | number: '1.2-2' }} m desde el terreno hasta el agua</strong>
+            <small>{{ napaResumen }} · cada punto corresponde a un reporte del controlador</small>
           </div>
         </header>
+
+        <div class="napa-visual" aria-label="Representacion de la profundidad actual de la napa">
+          <div class="napa-ground"><span>Terreno · 0 m</span></div>
+          <div class="napa-depth-line" [style.height.%]="napaLineaVisual">
+            <span>{{ napaActual | number: '1.2-2' }} m</span>
+          </div>
+          <div class="napa-water" [style.top.%]="napaPosicionVisual">
+            <span>Borde superior del agua</span>
+          </div>
+          @if (napaActualFecha) {
+            <small>Ultima medicion: {{ napaActualFecha | date: 'short' }}</small>
+          }
+        </div>
 
         <app-chart [options]="napaChartOptions"></app-chart>
       </section>
     }
-  </article>
-} @else {
-  @if (napaChartOptions) {
-    <article class="soil-history-card">
-      <section class="napa-history-card only">
+
+    @if (analogChartOptions) {
+      <section class="analog-history-card">
         <header>
           <div>
-            <span>Napa</span>
-            <strong>{{ napaResumen }}</strong>
-            <small>Historico del sensor de nivel asociado al controlador</small>
+            <span>Entrada analógica · señal cruda</span>
+            <strong>{{ analogActual | number: '1.3-3' }} mA</strong>
+            <small>{{ analogResumen }}</small>
+            @if (!napaChartOptions) {
+              <small class="analog-calibration-warning">
+                Calibración pendiente: la corriente se conserva, pero no se convierte hasta cargar escala, unidad y
+                referencia del transductor.
+              </small>
+            } @else {
+              <small>Trazabilidad de la señal 4–20 mA que origina el nivel de napa.</small>
+            }
           </div>
         </header>
-
-        <app-chart [options]="napaChartOptions"></app-chart>
+        <app-chart [options]="analogChartOptions"></app-chart>
       </section>
+    }
+
+    @if (rawEvidenceFrames.length) {
+      <section class="raw-evidence" aria-label="Evidencia de uplinks LoRaWAN">
+        <header>
+          <div>
+            <span>Evidencia LoRaWAN</span>
+            <strong>Ultimas {{ rawEvidenceFrames.length }} tramas conservadas sin agregacion</strong>
+            <small>Fecha, contador, gateway y calidad de radio corresponden al paquete recibido.</small>
+          </div>
+        </header>
+        <div class="raw-evidence-table">
+          <div class="raw-evidence-row raw-evidence-head">
+            <span>Fecha</span><span>FCnt / puerto</span><span>Gateway</span><span>Señal</span><span>Lecturas</span>
+          </div>
+          @for (frame of rawEvidenceFrames; track frame.id || frame.timestamp + '-' + frame.fCnt) {
+            <div class="raw-evidence-row">
+              <strong>{{ frame.timestamp | date: 'short' }}</strong>
+              <span>{{ frame.fCnt ?? '—' }} / {{ frame.fPort ?? '—' }}</span>
+              <span>
+                {{ frame.gatewayID || '—' }}
+                @if (frame.decoderId) {
+                  <small>{{ frame.decoderId }} v{{ frame.decoderVersion }}</small>
+                }
+              </span>
+              <span>{{ frame.rssi ?? '—' }} dBm · {{ frame.snr ?? '—' }} dB</span>
+              <span>
+                {{ rawReadingCount(frame) }} dato{{ rawReadingCount(frame) === 1 ? '' : 's' }}
+                @if (rawInvalidReadingCount(frame)) {
+                  <small class="raw-invalid">{{ rawInvalidReadingCount(frame) }} fuera de rango</small>
+                }
+                @if (rawUnverifiedReadingCount(frame)) {
+                  <small class="raw-unverified">{{ rawUnverifiedReadingCount(frame) }} VIC sin calibración</small>
+                }
+              </span>
+            </div>
+          }
+        </div>
+      </section>
+    }
+  </article>
+} @else {
+  @if (napaChartOptions || analogChartOptions) {
+    <article class="soil-history-card">
+      @if (napaChartOptions) {
+        <section class="napa-history-card only">
+          <header>
+            <div>
+              <span>Altura de napa</span>
+              <strong>{{ napaActual | number: '1.2-2' }} m desde el terreno hasta el agua</strong>
+              <small>{{ napaResumen }} · cada punto corresponde a un reporte del controlador</small>
+            </div>
+          </header>
+
+          <div class="napa-visual" aria-label="Representacion de la profundidad actual de la napa">
+            <div class="napa-ground"><span>Terreno · 0 m</span></div>
+            <div class="napa-depth-line" [style.height.%]="napaLineaVisual">
+              <span>{{ napaActual | number: '1.2-2' }} m</span>
+            </div>
+            <div class="napa-water" [style.top.%]="napaPosicionVisual">
+              <span>Borde superior del agua</span>
+            </div>
+            @if (napaActualFecha) {
+              <small>Ultima medicion: {{ napaActualFecha | date: 'short' }}</small>
+            }
+          </div>
+
+          <app-chart [options]="napaChartOptions"></app-chart>
+
+          @if (rawEvidenceFrames.length) {
+            <div class="raw-evidence-table compact">
+              @for (frame of rawEvidenceFrames; track frame.id || frame.timestamp + '-' + frame.fCnt) {
+                <div class="raw-evidence-row">
+                  <strong>{{ frame.timestamp | date: 'short' }}</strong>
+                  <span>FCnt {{ frame.fCnt ?? '—' }}</span>
+                  <span>{{ frame.rssi ?? '—' }} dBm · {{ frame.snr ?? '—' }} dB</span>
+                  <span>
+                    {{ rawReadingCount(frame) }} dato{{ rawReadingCount(frame) === 1 ? '' : 's' }}
+                    @if (rawInvalidReadingCount(frame)) {
+                      <small class="raw-invalid">{{ rawInvalidReadingCount(frame) }} fuera de rango</small>
+                    }
+                    @if (rawUnverifiedReadingCount(frame)) {
+                      <small class="raw-unverified">{{ rawUnverifiedReadingCount(frame) }} VIC sin calibración</small>
+                    }
+                  </span>
+                </div>
+              }
+            </div>
+          }
+        </section>
+      }
+
+      @if (analogChartOptions) {
+        <section class="analog-history-card" [class.only]="!napaChartOptions">
+          <header>
+            <div>
+              <span>Entrada analógica · señal cruda</span>
+              <strong>{{ analogActual | number: '1.3-3' }} mA</strong>
+              <small>{{ analogResumen }}</small>
+              @if (!napaChartOptions) {
+                <small class="analog-calibration-warning">
+                  Calibración pendiente: la corriente se conserva, pero no se convierte hasta cargar escala, unidad y
+                  referencia del transductor.
+                </small>
+              } @else {
+                <small>Trazabilidad de la señal 4–20 mA que origina el nivel de napa.</small>
+              }
+            </div>
+          </header>
+          <app-chart [options]="analogChartOptions"></app-chart>
+        </section>
+      }
     </article>
   } @else {
     <div class="sin-datos">
-      <p-message severity="info" text="No hay historico suficiente para graficar la lanza de suelo"></p-message>
+      <p-message
+        severity="info"
+        [text]="
+          rawFrames.length
+            ? 'Hay tramas LoRaWAN recibidas, pero el perfil todavía no contiene lecturas decodificables.'
+            : 'No hay histórico suficiente para graficar los sensores del controlador.'
+        "
+      ></p-message>
     </div>
+
+    @if (rawEvidenceFrames.length) {
+      <section class="raw-evidence raw-evidence-standalone" aria-label="Evidencia de uplinks LoRaWAN">
+        <header>
+          <div>
+            <span>Evidencia LoRaWAN</span>
+            <strong>{{ rawEvidenceFrames.length }} tramas recibidas sin agregación</strong>
+            <small>La comunicación está activa; falta interpretar el contenido del perfil del dispositivo.</small>
+          </div>
+        </header>
+        <div class="raw-evidence-table">
+          <div class="raw-evidence-row raw-evidence-head">
+            <span>Fecha</span><span>FCnt / puerto</span><span>Gateway</span><span>Señal</span><span>Lecturas</span>
+          </div>
+          @for (frame of rawEvidenceFrames; track frame.id || frame.timestamp + '-' + frame.fCnt) {
+            <div class="raw-evidence-row">
+              <strong>{{ frame.timestamp | date: 'short' }}</strong>
+              <span>{{ frame.fCnt ?? '—' }} / {{ frame.fPort ?? '—' }}</span>
+              <span>{{ frame.gatewayID || '—' }}</span>
+              <span>{{ frame.rssi ?? '—' }} dBm · {{ frame.snr ?? '—' }} dB</span>
+              <span>
+                {{ rawReadingCount(frame) }} dato{{ rawReadingCount(frame) === 1 ? '' : 's' }}
+                @if (rawInvalidReadingCount(frame)) {
+                  <small class="raw-invalid">{{ rawInvalidReadingCount(frame) }} fuera de rango</small>
+                }
+                @if (rawUnverifiedReadingCount(frame)) {
+                  <small class="raw-unverified">{{ rawUnverifiedReadingCount(frame) }} VIC sin calibración</small>
+                }
+              </span>
+            </div>
+          }
+        </div>
+      </section>
+    }
   }
 }

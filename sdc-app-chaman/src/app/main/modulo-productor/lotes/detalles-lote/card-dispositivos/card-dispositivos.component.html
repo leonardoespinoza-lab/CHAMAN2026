@@ -1,15 +1,22 @@
 <section class="custom-card devices-card">
   <header class="devices-header">
     <div class="devices-title">
-      <svg class="devices-icon">
-        <use xlink:href="icons/icons.svg#device"></use>
-      </svg>
+      <svg class="devices-icon"><use xlink:href="icons/icons.svg#device"></use></svg>
       <div>
         <span>{{ 'Dispositivos' | translate | uppercase }}</span>
         <strong>Sensores asignados al lote</strong>
       </div>
     </div>
-    <span class="devices-count">{{ dispositivos.length }} activo{{ dispositivos.length === 1 ? '' : 's' }}</span>
+    <div class="devices-toolbar">
+      <div class="history-period" role="group" aria-label="Periodo de las curvas de sensores">
+        @for (dias of [1, 7, 30, 90]; track dias) {
+          <button type="button" [class.active]="diasHistorico === dias" (click)="cambiarPeriodo(dias)">
+            {{ dias === 1 ? '24 h' : dias + ' dias' }}
+          </button>
+        }
+      </div>
+      <span class="devices-count">{{ dispositivos.length }} servicio{{ dispositivos.length === 1 ? '' : 's' }}</span>
+    </div>
   </header>
 
   <div class="devices-grid">
@@ -17,10 +24,7 @@
       <article class="device-card" [class.device-online]="estaOnline(dispositivo)">
         <div class="device-card-header">
           <div>
-            <span class="device-status">
-              <i class="pi pi-circle-fill"></i>
-              {{ estadoLabel(dispositivo) }}
-            </span>
+            <span class="device-status"><i class="pi pi-circle-fill"></i>{{ estadoLabel(dispositivo) }}</span>
             <h3>{{ dispositivo.nombre || 'Dispositivo sin nombre' }}</h3>
             <p>{{ dispositivo.tipo || 'Tipo sin definir' }}</p>
           </div>
@@ -31,16 +35,16 @@
 
         <div class="device-meta-grid">
           <article>
-            <span>DevEUI</span>
-            <strong>{{ dispositivo.deveui || '-' }}</strong>
+            <span>DevEUI</span><strong>{{ dispositivo.deveui || '-' }}</strong>
           </article>
           <article>
             <span>Ultimo reporte</span>
-            <strong>{{ ultimaComunicacion(dispositivo) ? (ultimaComunicacion(dispositivo) | date: 'short') : '-' }}</strong>
+            <strong>{{
+              ultimaComunicacion(dispositivo) ? (ultimaComunicacion(dispositivo) | date: 'short') : '-'
+            }}</strong>
           </article>
           <article>
-            <span>Gateway</span>
-            <strong>{{ dispositivo.metadata?.gatewayID || '-' }}</strong>
+            <span>Gateway</span><strong>{{ dispositivo.metadata?.gatewayID || '-' }}</strong>
           </article>
           <article>
             <span>Senal</span>
@@ -48,63 +52,108 @@
           </article>
         </div>
 
-        @if (perfil(dispositivo).length) {
-          <div class="device-summary-grid">
+        @if (esLanzaDeSuelo(dispositivo)) {
+          @if (perfil(dispositivo).length) {
+            <div class="device-summary-grid">
+              <article>
+                <span>Humedad · primer nivel</span><strong>{{ formatearValor(resumen(dispositivo).humedad) }}</strong>
+              </article>
+              <article>
+                <span>Salinidad · primer nivel</span
+                ><strong>{{ formatearValor(resumen(dispositivo).salinidad) }}</strong>
+              </article>
+              <article>
+                <span>Temperatura · primer nivel</span
+                ><strong>{{ formatearValor(resumen(dispositivo).temperatura) }}</strong>
+              </article>
+            </div>
+          }
+          <div class="device-profile-note">
+            <i class="pi pi-chart-line"></i><span>{{ perfilLabel(dispositivo) }}</span>
+          </div>
+        } @else if (esMedidorNapa(dispositivo)) {
+          <div class="device-summary-grid napa-installation-summary">
             <article>
-              <span>Humedad prom.</span>
-              <strong>{{ formatearValor(resumen(dispositivo).humedad) }}</strong>
+              <span>Cable total</span><strong>{{ configuracionNapa(dispositivo)?.longitudCableM ?? '—' }} m</strong>
             </article>
             <article>
-              <span>Salinidad prom.</span>
-              <strong>{{ formatearValor(resumen(dispositivo).salinidad) }}</strong>
+              <span>Tramo exterior</span
+              ><strong>{{ configuracionNapa(dispositivo)?.tramoCableExteriorM ?? '—' }} m</strong>
             </article>
             <article>
-              <span>Temp. prom.</span>
-              <strong>{{ formatearValor(resumen(dispositivo).temperatura) }}</strong>
+              <span>Sensor bajo terreno</span
+              ><strong>{{ configuracionNapa(dispositivo)?.profundidadInstalacionM ?? '—' }} m</strong>
             </article>
           </div>
-
-          <div class="device-profile-note">
-            <i class="pi pi-chart-line"></i>
-            <span>{{ perfilLabel(dispositivo) }}</span>
+          <div class="device-profile-note napa-note">
+            <i class="pi pi-compass"></i
+            ><span>La profundidad se informa desde la superficie del lote hasta el agua.</span>
           </div>
         } @else if (esSensorAmbiente(dispositivo)) {
           <div class="device-summary-grid">
             <article>
-              <span>Temperatura</span>
-              <strong>{{ formatearNumero(resumenAmbiente(dispositivo).temperatura, 'C') }}</strong>
+              <span>Temperatura</span
+              ><strong>{{ formatearNumero(resumenAmbiente(dispositivo).temperatura, 'C') }}</strong>
             </article>
             <article>
-              <span>Humedad relativa</span>
-              <strong>{{ formatearNumero(resumenAmbiente(dispositivo).humedad, '%') }}</strong>
+              <span>Humedad relativa</span
+              ><strong>{{ formatearNumero(resumenAmbiente(dispositivo).humedad, '%') }}</strong>
             </article>
             <article>
-              <span>Bateria</span>
-              <strong>{{ formatearNumero(resumenAmbiente(dispositivo).bateria, '%', 0) }}</strong>
+              <span>Bateria</span><strong>{{ formatearNumero(resumenAmbiente(dispositivo).bateria, '%', 0) }}</strong>
             </article>
           </div>
-
           <div class="device-profile-note">
-            <i class="pi pi-chart-line"></i>
-            <span>Historico ambiental disponible: temperatura y humedad en abrigo meteorologico.</span>
+            <i class="pi pi-chart-line"></i><span>Historico ambiental disponible: temperatura y humedad.</span>
           </div>
         } @else {
           <p-message severity="info">El dispositivo todavia no tiene variables graficables en el lote.</p-message>
         }
 
-        <div class="device-actions">
-          <p-button
-            label="Ver curvas"
-            icon="pi pi-chart-line"
-            [outlined]="true"
-            (onClick)="abrirDrawerDispositivo(dispositivo)"
-          />
-        </div>
+        @if (estaCargandoHistorico(dispositivo)) {
+          <div class="device-history-loading" aria-live="polite">
+            <i class="pi pi-spin pi-spinner"></i><span>Cargando lecturas del sensor...</span>
+          </div>
+        } @else if (esMedidorNapa(dispositivo)) {
+          <section class="device-inline-history" aria-label="Nivel y curva historica de la napa">
+            <app-grafico-historico-napa
+              [reportes]="historico(dispositivo)"
+              [rawFrames]="frames(dispositivo)"
+              [titulo]="dispositivo.nombre || 'Medidor de Napa'"
+              [fechaDesde]="dispositivo.fechaAsignacionLote"
+              [configuracion]="configuracionNapa(dispositivo)"
+            ></app-grafico-historico-napa>
+          </section>
+        } @else if (esLanzaDeSuelo(dispositivo)) {
+          <section class="device-inline-history" aria-label="Curvas del perfil Sentek">
+            <app-grafico-historico-suelo
+              [reportes]="historico(dispositivo)"
+              [rawFrames]="frames(dispositivo)"
+              [titulo]="'Perfil Sentek 1,2 m · ' + (dispositivo.nombre || 'sensor de suelo')"
+              [subtitulo]="'Humedad, salinidad y temperatura por profundidad; un punto por lectura recibida'"
+              [fechaDesde]="dispositivo.fechaAsignacionLote"
+              [mostrarNapa]="false"
+              [mostrarEntradaAnalogica]="false"
+            ></app-grafico-historico-suelo>
+          </section>
+        } @else if (esSensorAmbiente(dispositivo)) {
+          <section class="device-inline-history" aria-label="Curvas del sensor ambiental">
+            <app-grafico-historico-ambiente
+              [reportes]="historico(dispositivo)"
+              [titulo]="'Variables medidas · ' + (dispositivo.nombre || 'sensor ambiental')"
+              [subtitulo]="'Evolucion temporal de las lecturas registradas por el equipo'"
+            ></app-grafico-historico-ambiente>
+          </section>
+        }
+
+        @if (historicoConError(dispositivo)) {
+          <p-message severity="warn">
+            No se pudo recuperar todo el historico. Se conserva visible la ultima lectura disponible.
+          </p-message>
+        }
       </article>
     } @empty {
       <p-message severity="info">No hay dispositivos asignados al lote.</p-message>
     }
   </div>
 </section>
-
-<app-drawer-dispositivos [dispositivo]="dispositivo" [(visible)]="verDrawerDispositivos"></app-drawer-dispositivos>

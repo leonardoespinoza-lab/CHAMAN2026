@@ -41,7 +41,7 @@
       <article class="metric-card warning">
         <span class="metric-label">Sin asignar</span>
         <strong>{{ unassignedDevices }}</strong>
-        <span>faltan productor/campo/lote</span>
+        <span>servicios pendientes de asignación</span>
       </article>
     </div>
 
@@ -110,6 +110,19 @@
                 <strong>{{ uplink.timestamp ? (uplink.timestamp | date: 'short') : '-' }}</strong>
               </article>
             </div>
+            @if (deviceForUplink(uplink); as device) {
+              <div class="logical-service-list">
+                @for (servicio of logicalServices(device); track servicio.id) {
+                  <article>
+                    <div>
+                      <strong>{{ servicio.nombre }}</strong>
+                      <small>{{ servicio.sensores.join(' · ') }}</small>
+                    </div>
+                    <span [class.pending]="!servicio.idLote">{{ serviceAssignmentLabel(servicio) }}</span>
+                  </article>
+                }
+              </div>
+            }
           </article>
         } @empty {
           <p-message severity="info">Todavia no hay uplinks MQTT detectados.</p-message>

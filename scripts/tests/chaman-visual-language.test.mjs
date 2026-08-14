@@ -56,6 +56,30 @@ const decorativeRailAllowlist = [
     reason: 'Linea fisica del perfil de suelo en la ilustracion fenologica.',
   },
   {
+    file: 'app/main/modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-napa/grafico-historico-napa.component.scss',
+    selector: /^\.scene-ground$/,
+    rules: new Set(['thick-horizontal-border']),
+    reason: 'Linea fisica del terreno en la visualizacion de profundidad de napa.',
+  },
+  {
+    file: 'app/main/modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-napa/grafico-historico-napa.component.scss',
+    selector: /^\.water-surface$/,
+    rules: new Set(['thick-horizontal-border']),
+    reason: 'Superficie medida del agua en la visualizacion de profundidad de napa.',
+  },
+  {
+    file: 'app/main/modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-napa/grafico-historico-napa.component.scss',
+    selector: /^\.depth-arrow$/,
+    rules: new Set(['thick-side-border']),
+    reason: 'Guia vertical de profundidad en la visualizacion de napa.',
+  },
+  {
+    file: 'app/main/modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-suelo/grafico-historico-suelo.component.scss',
+    selector: /^\.napa-depth-line$/,
+    rules: new Set(['thick-side-border']),
+    reason: 'Indicador vertical de profundidad de napa dentro del perfil de suelo.',
+  },
+  {
     file: 'app/main/modulo-productor/lotes/detalles-lote/card-etapas-fenologicas/card-etapas-fenologicas.component.scss',
     selector: /^\.growth-stage\.current::before$/,
     rules: new Set(['thick-horizontal-border']),

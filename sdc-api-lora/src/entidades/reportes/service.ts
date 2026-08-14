@@ -9,6 +9,7 @@ import {
   IUpdateDispositivo,
   IValoresV2,
   IFrioAcumulado,
+  validateControllerReading,
 } from 'modelos/src';
 import { ReportesRepository } from './repository';
 import { Event, Uplink } from 'src/auxiliares/chirpstack/interfaces';
@@ -23,21 +24,23 @@ const HF_PREVIEW_VERSION = 'hf-field-preview-1.0.0';
 export interface LanzaParserConfig {
   profundidades: number[];
   humedadKeys: string[];
+  salinidadKeys?: string[];
   temperaturaKeys: string[];
 }
 
 // 2. Objeto de configuración para la lanza de 9 sensores.
 export const SENTEK_9_CONFIG: LanzaParserConfig = {
-  profundidades: [5, 15, 25, 35, 45, 55, 65, 75, 85],
+  profundidades: [10, 20, 30, 40, 50, 60, 70, 80, 90],
   humedadKeys: ['sdi12_1', 'sdi12_2', 'sdi12_3'],
   temperaturaKeys: ['sdi12_4', 'sdi12_5', 'sdi12_6'],
 };
 
 // 3. Objeto de configuración para la lanza de 12 sensores.
 export const SENTEK_12_CONFIG: LanzaParserConfig = {
-  profundidades: [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115],
+  profundidades: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120],
   humedadKeys: ['sdi12_1', 'sdi12_2', 'sdi12_3', 'sdi12_4'],
-  temperaturaKeys: ['sdi12_5', 'sdi12_6', 'sdi12_7', 'sdi12_8'],
+  salinidadKeys: ['sdi12_5', 'sdi12_6', 'sdi12_7', 'sdi12_8'],
+  temperaturaKeys: ['sdi12_9', 'sdi12_10', 'sdi12_11', 'sdi12_12'],
 };
 
 @Injectable()
@@ -364,11 +367,18 @@ export class ReportesService {
     if (!datosSuelo) return null;
 
     const parseValores = (str: string) =>
-      str ? str.split('+').slice(1).map(parseFloat) : [];
+      str
+        ? str
+            .split('+')
+            .slice(1)
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value))
+        : [];
 
     const totalSensores = config.profundidades.length;
     // Creamos arrays pre-llenados con null para asegurar que siempre tengan la longitud correcta.
     const humedades = Array(totalSensores).fill(null);
+    const salinidades = Array(totalSensores).fill(null);
     const temperaturas = Array(totalSensores).fill(null);
 
     // Procesamos las keys de humedad
@@ -379,7 +389,27 @@ export class ReportesService {
           // Calculamos el índice final en el array de 12 sensores.
           const finalIndex = keyIndex * 3 + valorIndex;
           if (finalIndex < totalSensores) {
-            humedades[finalIndex] = valor;
+            humedades[finalIndex] =
+              validateControllerReading('humedad_suelo', valor).quality ===
+              'invalid'
+                ? null
+                : valor;
+          }
+        });
+      }
+    });
+
+    config.salinidadKeys?.forEach((key, keyIndex) => {
+      if (datosSuelo[key]) {
+        const valoresParseados = parseValores(datosSuelo[key]);
+        valoresParseados.forEach((valor, valorIndex) => {
+          const finalIndex = keyIndex * 3 + valorIndex;
+          if (finalIndex < totalSensores) {
+            salinidades[finalIndex] =
+              validateControllerReading('salinidad_suelo', valor).quality ===
+              'invalid'
+                ? null
+                : valor;
           }
         });
       }
@@ -392,7 +422,11 @@ export class ReportesService {
         valoresParseados.forEach((valor, valorIndex) => {
           const finalIndex = keyIndex * 3 + valorIndex;
           if (finalIndex < totalSensores) {
-            temperaturas[finalIndex] = valor;
+            temperaturas[finalIndex] =
+              validateControllerReading('temperatura_suelo', valor).quality ===
+              'invalid'
+                ? null
+                : valor;
           }
         });
       }
@@ -401,13 +435,14 @@ export class ReportesService {
     // Si después de todo el proceso no se parseó ni un solo valor, retornamos null.
     if (
       humedades.every((v) => v === null) &&
+      salinidades.every((v) => v === null) &&
       temperaturas.every((v) => v === null)
     ) {
       return null;
     }
 
     // Finalmente, construimos el objeto de retorno con los arrays correctamente poblados.
-    return {
+    const result: IValoresV2['valores'] = {
       'Humedad Suelo Profundidad': config.profundidades.map((p, i) => ({
         profundidad: p,
         unidad: '%',
@@ -419,15 +454,24 @@ export class ReportesService {
         valores: { actual: temperaturas[i] },
       })),
     };
+    if (config.salinidadKeys?.length) {
+      result['Salinidad Suelo'] = config.profundidades.map((p, i) => ({
+        profundidad: p,
+        unidad: 'VIC',
+        valores: { actual: salinidades[i] },
+      }));
+    }
+    return result;
   }
 
   private combinarDatos(
     datosViejos: IValoresV2['valores'],
     datosNuevos: IValoresV2['valores'],
   ) {
-    // Función helper para combinar dos arrays de sensores por su índice
-    const combinarArrayDeSensores = (arrViejo, arrNuevo) => {
-      return arrViejo.map((datoViejo, index) => {
+    const combinarArrayDeSensores = (arrViejo = [], arrNuevo = []) => {
+      const maxLength = Math.max(arrViejo.length, arrNuevo.length);
+      return Array.from({ length: maxLength }, (_, index) => {
+        const datoViejo = arrViejo[index];
         const datoNuevo = arrNuevo[index];
         // Si el nuevo dato para este índice tiene un valor real, lo usamos.
         // Si no, conservamos el dato viejo que ya teníamos.
@@ -438,20 +482,18 @@ export class ReportesService {
       });
     };
 
-    const humedadCombinada = combinarArrayDeSensores(
-      datosViejos['Humedad Suelo Profundidad'],
-      datosNuevos['Humedad Suelo Profundidad'],
-    );
-
-    const temperaturaCombinada = combinarArrayDeSensores(
-      datosViejos['Temperatura Suelo'],
-      datosNuevos['Temperatura Suelo'],
-    );
-
-    return {
-      'Humedad Suelo Profundidad': humedadCombinada,
-      'Temperatura Suelo': temperaturaCombinada,
-    };
+    const sensors = new Set([
+      ...Object.keys(datosViejos || {}),
+      ...Object.keys(datosNuevos || {}),
+    ]);
+    const result: IValoresV2['valores'] = {};
+    sensors.forEach((sensor) => {
+      result[sensor] = combinarArrayDeSensores(
+        datosViejos?.[sensor],
+        datosNuevos?.[sensor],
+      );
+    });
+    return result;
   }
 
   private isReporteCompleto(
@@ -460,16 +502,17 @@ export class ReportesService {
   ) {
     // Un reporte está completo si todas las profundidades tienen un valor
     const totalProfundidades = config.profundidades.length;
-    const humedadesCompletas = datos['Humedad Suelo Profundidad'].filter(
-      (d) => d.valores.actual !== null,
-    ).length;
-    const temperaturasCompletas = datos['Temperatura Suelo'].filter(
-      (d) => d.valores.actual !== null,
-    ).length;
-
-    return (
-      humedadesCompletas === totalProfundidades &&
-      temperaturasCompletas === totalProfundidades
+    const sensoresRequeridos = [
+      'Humedad Suelo Profundidad',
+      ...(config.salinidadKeys?.length ? ['Salinidad Suelo'] : []),
+      'Temperatura Suelo',
+    ];
+    return sensoresRequeridos.every(
+      (sensor) =>
+        (datos[sensor] || []).filter(
+          (row) =>
+            row?.valores?.actual !== null && row?.valores?.actual !== undefined,
+        ).length === totalProfundidades,
     );
   }
 
@@ -628,14 +671,16 @@ export class ReportesService {
     const fechaPrevia = mismaTemporada
       ? previo.fechaUltimoCalculo || dispositivo.ultimoReporte?.fecha
       : undefined;
-    const temperaturaPrevia = mismaTemporada && Number.isFinite(previo.ultimaTemperatura)
-      ? Number(previo.ultimaTemperatura)
-      : this.extraerTemperaturaReferencia(dispositivo.ultimoReporte?.datos?.valores);
+    const temperaturaPrevia =
+      mismaTemporada && Number.isFinite(previo.ultimaTemperatura)
+        ? Number(previo.ultimaTemperatura)
+        : this.extraerTemperaturaReferencia(
+            dispositivo.ultimoReporte?.datos?.valores,
+          );
 
     if (fechaPrevia && Number.isFinite(temperaturaPrevia)) {
       const diffHours =
-        (new Date(fecha).getTime() - new Date(fechaPrevia).getTime()) /
-        3600000;
+        (new Date(fecha).getTime() - new Date(fechaPrevia).getTime()) / 3600000;
 
       if (diffHours > 0 && diffHours < 24) {
         if (temperaturaPrevia >= 0 && temperaturaPrevia <= 7.2) {
@@ -670,9 +715,9 @@ export class ReportesService {
   private extraerTemperaturaReferencia(
     valores?: IValoresV2['valores'],
   ): number | undefined {
-    const temperaturasAire = valores?.Temperatura
-      ?.map((item) => item?.valores?.actual ?? item?.valores?.promedio)
-      .filter((valor) => Number.isFinite(valor));
+    const temperaturasAire = valores?.Temperatura?.map(
+      (item) => item?.valores?.actual ?? item?.valores?.promedio,
+    ).filter((valor) => Number.isFinite(valor));
 
     if (temperaturasAire?.length) {
       return this.promedio(temperaturasAire);
@@ -684,7 +729,9 @@ export class ReportesService {
   }
 
   private promedio(valores: number[]): number {
-    return valores.reduce((suma, valor) => suma + Number(valor), 0) / valores.length;
+    return (
+      valores.reduce((suma, valor) => suma + Number(valor), 0) / valores.length
+    );
   }
 
   private async ultimoReportePorDeveuiYFecha(

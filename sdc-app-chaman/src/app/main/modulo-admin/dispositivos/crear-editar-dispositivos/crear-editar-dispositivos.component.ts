@@ -1,5 +1,5 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { AbstractControl, FormControl, FormGroup, ValidationErrors, Validators } from '@angular/forms';
+import { AbstractControl, FormArray, FormControl, FormGroup, ValidationErrors, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import {
@@ -13,6 +13,8 @@ import {
   IQueryParam,
   SensoresV2,
   TipoDispositivo,
+  IServicioDispositivo,
+  serviciosDispositivoNormalizados,
 } from 'modelos/src';
 import { Subscription } from 'rxjs';
 import { DispositivoService } from '../../../../auxiliares/http/dispositivos.service';
@@ -128,8 +130,71 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     });
   }
 
+  public get serviciosForm(): FormArray {
+    return this.form?.get('servicios') as FormArray;
+  }
+
+  public establecimientosServicio(index: number): IEstablecimiento[] {
+    const idProductor = this.serviciosForm.at(index).get('idProductor')?.value;
+    return idProductor
+      ? this.establecimientos.filter((item) => item.idProductor === idProductor)
+      : this.establecimientos;
+  }
+
+  public lotesServicio(index: number): ILote[] {
+    const grupo = this.serviciosForm.at(index);
+    const idProductor = grupo.get('idProductor')?.value;
+    const idEstablecimiento = grupo.get('idEstablecimiento')?.value;
+    return this.lotes.filter((lote) =>
+      idEstablecimiento
+        ? lote.idEstablecimiento === idEstablecimiento
+        : idProductor
+          ? lote.idProductor === idProductor
+          : true
+    );
+  }
+
+  public onServicioProductorChange(index: number): void {
+    const grupo = this.serviciosForm.at(index);
+    grupo.get('idEstablecimiento')?.setValue(null);
+    grupo.get('idLote')?.setValue(null);
+    grupo.get('fechaAsignacionLote')?.setValue(null);
+  }
+
+  public onServicioEstablecimientoChange(index: number): void {
+    const grupo = this.serviciosForm.at(index);
+    grupo.get('idLote')?.setValue(null);
+    grupo.get('fechaAsignacionLote')?.setValue(null);
+  }
+
+  public onServicioLoteChange(index: number): void {
+    const grupo = this.serviciosForm.at(index);
+    if (!grupo.get('idLote')?.value) {
+      grupo.get('fechaAsignacionLote')?.setValue(null);
+      return;
+    }
+    grupo.get('fechaAsignacionLote')?.setValue(this.toDateTimeLocal(new Date().toISOString()));
+  }
+
+  private crearGrupoServicio(servicio: IServicioDispositivo): FormGroup {
+    return new FormGroup({
+      id: new FormControl(servicio.id, Validators.required),
+      tipo: new FormControl(servicio.tipo, Validators.required),
+      nombre: new FormControl(servicio.nombre, Validators.required),
+      sensores: new FormControl(servicio.sensores || []),
+      habilitado: new FormControl(servicio.habilitado !== false),
+      idProductor: new FormControl(servicio.idProductor),
+      idEstablecimiento: new FormControl(servicio.idEstablecimiento),
+      idLote: new FormControl(servicio.idLote),
+      fechaAsignacionLote: new FormControl(this.toDateTimeLocal(servicio.fechaAsignacionLote)),
+      historialAsignacionesLote: new FormControl(servicio.historialAsignacionesLote || []),
+      fuente: new FormControl(servicio.fuente || 'administrador'),
+    });
+  }
+
   private createForm(): void {
     const source = this.dispositivo || this.prefillLorawan;
+    const servicios = serviciosDispositivoNormalizados(source);
     this.loteInicial = source?.idLote || '';
     this.form = new FormGroup({
       nombre: new FormControl(source?.nombre),
@@ -140,6 +205,7 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
       idEstablecimiento: new FormControl(source?.idEstablecimiento),
       idLote: new FormControl(source?.idLote),
       fechaAsignacionLote: new FormControl(this.toDateTimeLocal(source?.fechaAsignacionLote)),
+      servicios: new FormArray(servicios.map((servicio) => this.crearGrupoServicio(servicio))),
       configuracionLecturas: new FormGroup({
         perfilSuelo: new FormGroup({
           tipo: new FormControl(source?.configuracionLecturas?.perfilSuelo?.tipo || 'sonda_sentek_120cm'),
@@ -147,7 +213,7 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
           niveles: new FormControl(source?.configuracionLecturas?.perfilSuelo?.niveles || 12),
           profundidadesCm: new FormControl(
             source?.configuracionLecturas?.perfilSuelo?.profundidadesCm || [
-              5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115,
+              10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120,
             ]
           ),
           variables: new FormControl(
@@ -167,6 +233,13 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
             profundidadInstalacionM: new FormControl(
               source?.configuracionLecturas?.entradaAnalogica?.profundidadInstalacionM,
               [Validators.min(0.01)]
+            ),
+            longitudCableM: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.longitudCableM, [
+              Validators.min(0.01),
+            ]),
+            tramoCableExteriorM: new FormControl(
+              source?.configuracionLecturas?.entradaAnalogica?.tramoCableExteriorM,
+              [Validators.min(0)]
             ),
             fuenteCalibracion: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.fuenteCalibracion),
             observaciones: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.observaciones),
@@ -239,8 +312,25 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     if (data.fechaAsignacionLote) {
       data.fechaAsignacionLote = new Date(data.fechaAsignacionLote).toISOString();
     }
+    data.servicios = (data.servicios || []).map((servicio) => ({
+      ...servicio,
+      nombre: servicio.nombre?.trim() || servicio.id,
+      fechaAsignacionLote: servicio.fechaAsignacionLote
+        ? new Date(servicio.fechaAsignacionLote).toISOString()
+        : undefined,
+      fuente: 'administrador',
+    }));
     const analog = data.configuracionLecturas?.entradaAnalogica;
     if (analog) {
+      const longitudCableM = this.numberOrUndefined(analog.longitudCableM);
+      const tramoCableExteriorM = this.numberOrUndefined(analog.tramoCableExteriorM);
+      const profundidadDerivada =
+        analog.variable === 'nivel_napa' &&
+        longitudCableM !== undefined &&
+        tramoCableExteriorM !== undefined &&
+        longitudCableM > tramoCableExteriorM
+          ? this.round(longitudCableM - tramoCableExteriorM, 3)
+          : undefined;
       data.configuracionLecturas = {
         ...data.configuracionLecturas,
         entradaAnalogica: {
@@ -251,7 +341,10 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
           salidaMin: this.numberOrUndefined(analog.salidaMin),
           salidaMax: this.numberOrUndefined(analog.salidaMax),
           unidadSalida: analog.unidadSalida?.trim() || undefined,
-          profundidadInstalacionM: this.numberOrUndefined(analog.profundidadInstalacionM),
+          profundidadInstalacionM:
+            profundidadDerivada ?? this.numberOrUndefined(analog.profundidadInstalacionM),
+          longitudCableM,
+          tramoCableExteriorM,
           fuenteCalibracion: analog.fuenteCalibracion?.trim() || undefined,
           observaciones: analog.observaciones?.trim() || undefined,
         },
@@ -300,6 +393,18 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
 
   public get variableEntradaAnalogica(): string {
     return this.form?.get('configuracionLecturas.entradaAnalogica.variable')?.value || 'sin_definir';
+  }
+
+  public get profundidadNapaCalculadaM(): number | undefined {
+    const longitud = this.numberOrUndefined(
+      this.form?.get('configuracionLecturas.entradaAnalogica.longitudCableM')?.value
+    );
+    const exterior = this.numberOrUndefined(
+      this.form?.get('configuracionLecturas.entradaAnalogica.tramoCableExteriorM')?.value
+    );
+    return longitud !== undefined && exterior !== undefined && longitud > exterior
+      ? this.round(longitud - exterior, 3)
+      : undefined;
   }
 
   public readonly variablesEntradaAnalogica = [
@@ -512,7 +617,21 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     const unidad = String(control.get('unidadSalida')?.value || '').trim();
     const fuente = String(control.get('fuenteCalibracion')?.value || '').trim();
     const profundidadInstalacion = this.numberOrUndefined(control.get('profundidadInstalacionM')?.value);
+    const longitudCable = this.numberOrUndefined(control.get('longitudCableM')?.value);
+    const tramoExterior = this.numberOrUndefined(control.get('tramoCableExteriorM')?.value);
     const esNapa = control.get('variable')?.value === 'nivel_napa';
+    const cableIncompleto =
+      esNapa &&
+      ((longitudCable === undefined) !== (tramoExterior === undefined) ||
+        (longitudCable !== undefined && tramoExterior !== undefined && longitudCable <= tramoExterior));
+    const profundidadEfectiva =
+      longitudCable !== undefined && tramoExterior !== undefined && longitudCable > tramoExterior
+        ? longitudCable - tramoExterior
+        : profundidadInstalacion;
+    const geometriaConsistente =
+      profundidadInstalacion === undefined ||
+      profundidadEfectiva === undefined ||
+      Math.abs(profundidadInstalacion - profundidadEfectiva) <= 0.02;
 
     const complete =
       entradaMin !== undefined &&
@@ -523,10 +642,19 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
       salidaMax !== salidaMin &&
       !!unidad &&
       !!fuente &&
-      (!esNapa || (profundidadInstalacion !== undefined && profundidadInstalacion > 0));
+      (!esNapa ||
+        (!cableIncompleto &&
+          geometriaConsistente &&
+          profundidadEfectiva !== undefined &&
+          profundidadEfectiva > 0));
 
     return complete ? null : { calibracionEntradaAnalogicaIncompleta: true };
   };
+
+  private round(value: number, decimals: number): number {
+    const factor = Math.pow(10, decimals);
+    return Math.round(value * factor) / factor;
+  }
 
   private readonly calificacionHumedadValidator = (control: AbstractControl): ValidationErrors | null => {
     if (control.get('estado')?.value !== 'calificado') return null;

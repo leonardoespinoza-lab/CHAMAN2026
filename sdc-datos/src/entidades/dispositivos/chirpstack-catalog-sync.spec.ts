@@ -14,7 +14,7 @@ describe('DispositivosRepository - inventario ChirpStack', () => {
     const result = await repository.syncFromLorawanCatalog([
       {
         devEUI: 'aabbccddeeff0011',
-        name: 'Controlador Arturo',
+        name: 'Controlador Arturo UC511 Sentek',
         applicationID: 'app-1',
         applicationName: 'Campo Arturo',
         deviceProfileID: 'profile-1',
@@ -25,7 +25,11 @@ describe('DispositivosRepository - inventario ChirpStack', () => {
     expect(model.create).toHaveBeenCalledWith(
       expect.objectContaining({
         deveui: 'AABBCCDDEEFF0011',
-        nombre: 'Controlador Arturo',
+        nombre: 'Controlador Arturo UC511 Sentek',
+        tipo: 'Sensor de Humedad de Suelo',
+        servicios: expect.arrayContaining([
+          expect.objectContaining({ id: 'perfil-suelo-sentek' }),
+        ]),
         metadata: expect.objectContaining({
           origenInventario: 'ChirpStack',
           chirpstackApplicationID: 'app-1',
@@ -36,6 +40,37 @@ describe('DispositivosRepository - inventario ChirpStack', () => {
     expect(created.idLote).toBeUndefined();
     expect(created.idProductor).toBeUndefined();
     expect(JSON.stringify(created).toLowerCase()).not.toContain('appkey');
+    expect(created.servicios).toHaveLength(1);
+    expect(created.configuracionLecturas.entradaAnalogica).toBeUndefined();
+  });
+
+  it('no inventa una sonda ni una napa por reconocer solo el controlador UC511', async () => {
+    const model: any = {
+      findOne: jest
+        .fn()
+        .mockReturnValue({ lean: jest.fn().mockResolvedValue(null) }),
+      create: jest.fn().mockImplementation(async (value) => value),
+      updateOne: jest.fn(),
+    };
+    const repository = new DispositivosRepository(model);
+
+    await repository.syncFromLorawanCatalog([
+      {
+        devEUI: 'aabbccddeeff0022',
+        name: 'Controlador Milesight UC511',
+        deviceProfileName: 'Milesight UC511 AU915',
+      },
+    ]);
+
+    expect(model.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tipo: 'Otro',
+        sensores: ['Otro'],
+      }),
+    );
+    const created = model.create.mock.calls[0][0];
+    expect(created.configuracionLecturas).toBeUndefined();
+    expect(created.servicios).toBeUndefined();
   });
 
   it('preserva nombre y asignacion existentes al refrescar metadatos', async () => {

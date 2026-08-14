@@ -10,6 +10,49 @@
   justify-content: space-between;
 }
 
+.devices-toolbar,
+.history-period {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.devices-toolbar {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.history-period {
+  background: var(--p-content-background);
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 999px;
+  padding: 3px;
+}
+
+.history-period button {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--p-text-muted-color);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 800;
+  min-height: 38px;
+  padding: 0 13px;
+}
+
+.history-period button:hover,
+.history-period button:focus-visible {
+  color: var(--p-primary-color);
+  outline: none;
+}
+
+.history-period button.active {
+  background: var(--p-primary-color);
+  color: var(--p-primary-contrast-color, #062b2a);
+}
+
 .devices-title {
   align-items: center;
   display: flex;
@@ -51,7 +94,7 @@
 .devices-grid {
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .device-card {
@@ -174,9 +217,34 @@
   font-size: 1.2rem;
 }
 
-.device-actions {
+.device-inline-history {
+  min-width: 0;
+  width: 100%;
+}
+
+.device-history-loading {
+  align-items: center;
+  background: var(--p-content-background);
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  color: var(--p-text-muted-color);
   display: flex;
-  justify-content: flex-end;
+  font-size: 1rem;
+  font-weight: 700;
+  gap: 10px;
+  justify-content: center;
+  min-height: 260px;
+}
+
+.device-history-loading i {
+  color: var(--p-primary-color);
+  font-size: 1.4rem;
+}
+
+.device-inline-history ::ng-deep .soil-history-card,
+.device-inline-history ::ng-deep .ambient-history-card {
+  box-shadow: none;
+  min-width: 0;
 }
 
 @media (max-width: 760px) {
@@ -192,12 +260,21 @@
     grid-template-columns: 1fr;
   }
 
+  .devices-toolbar,
+  .history-period {
+    width: 100%;
+  }
+
+  .history-period button {
+    flex: 1 1 0;
+  }
+
   .devices-title strong,
   .device-card h3 {
     font-size: 1.18rem;
   }
 
-  .device-actions {
-    display: grid;
+  .device-card {
+    padding: 12px;
   }
 }

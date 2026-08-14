@@ -1,7 +1,5 @@
 .soil-history-card {
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(242, 252, 250, 0.7)),
-    var(--p-surface-0);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(242, 252, 250, 0.7)), var(--p-surface-0);
   backdrop-filter: blur(12px);
   border: 1px solid color-mix(in srgb, var(--p-primary-color) 32%, var(--p-surface-200));
   border-radius: 8px;
@@ -50,6 +48,27 @@
   display: inline-block !important;
   font-weight: 800;
   padding: 0.35rem 0.5rem;
+}
+
+.raw-evidence-badge {
+  color: var(--p-primary-color) !important;
+  font-weight: 850;
+}
+
+.profile-coverage {
+  background: color-mix(in srgb, var(--p-primary-color) 8%, var(--p-surface-0));
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 24%, var(--p-surface-border));
+  border-radius: 999px;
+  color: var(--p-text-color) !important;
+  display: inline-flex !important;
+  font-weight: 800;
+  margin-top: 0.45rem !important;
+  padding: 0.35rem 0.65rem;
+}
+
+.profile-coverage.incomplete {
+  background: color-mix(in srgb, #f59e0b 10%, var(--p-surface-0));
+  border-color: color-mix(in srgb, #f59e0b 34%, var(--p-surface-border));
 }
 
 .soil-history-actions {
@@ -136,10 +155,213 @@
   padding-top: 0;
 }
 
+.analog-history-card {
+  border-top: 1px solid var(--p-surface-border);
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.analog-history-card.only {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.analog-history-card app-chart {
+  display: block;
+  min-height: 320px;
+  width: 100%;
+}
+
+.analog-calibration-warning {
+  background: color-mix(in srgb, #f59e0b 10%, var(--p-surface-0));
+  border: 1px solid color-mix(in srgb, #f59e0b 34%, var(--p-surface-border));
+  border-radius: 8px;
+  color: var(--p-text-color) !important;
+  font-weight: 750;
+  margin-top: 0.45rem !important;
+  padding: 0.5rem 0.65rem;
+}
+
 .napa-history-card app-chart {
   display: block;
   min-height: 360px;
   width: 100%;
+}
+
+.napa-visual {
+  background: linear-gradient(180deg, #f7fbfc 0%, #f7fbfc 13%, #eee5d7 13%, #dfc9a9 100%);
+  border: 1px solid var(--p-surface-border);
+  border-radius: 8px;
+  height: 230px;
+  margin: 0.85rem 0 1rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.napa-ground {
+  background: linear-gradient(180deg, #88705a, #5c4430);
+  box-shadow: 0 3px 0 rgba(58, 38, 23, 0.16);
+  height: 30px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 22px;
+  z-index: 3;
+}
+
+.napa-ground span,
+.napa-water span,
+.napa-depth-line span {
+  background: var(--p-content-background);
+  border: 1px solid var(--p-surface-border);
+  border-radius: 999px;
+  color: var(--p-text-color);
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 850;
+  padding: 0.28rem 0.55rem;
+  text-transform: none;
+}
+
+.napa-ground span {
+  left: 16px;
+  position: absolute;
+  top: -14px;
+}
+
+.napa-water {
+  background: linear-gradient(180deg, rgba(38, 174, 219, 0.9), rgba(20, 126, 180, 0.94));
+  bottom: 0;
+  left: 0;
+  min-height: 24px;
+  position: absolute;
+  right: 0;
+  transition: top 220ms ease;
+}
+
+.napa-water::before {
+  background: repeating-radial-gradient(ellipse at center, rgba(255, 255, 255, 0.5) 0 2px, transparent 3px 10px);
+  content: "";
+  height: 8px;
+  left: 0;
+  opacity: 0.5;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.napa-water span {
+  position: absolute;
+  right: 16px;
+  top: -17px;
+}
+
+.napa-depth-line {
+  border-left: 2px dashed var(--p-primary-color);
+  left: 50%;
+  position: absolute;
+  top: 23%;
+  transition: height 220ms ease;
+  z-index: 4;
+}
+
+.napa-depth-line::after,
+.napa-depth-line::before {
+  background: var(--p-primary-color);
+  border-radius: 50%;
+  content: "";
+  height: 9px;
+  left: -5px;
+  position: absolute;
+  width: 9px;
+}
+
+.napa-depth-line::before {
+  top: 0;
+}
+
+.napa-depth-line::after {
+  bottom: 0;
+}
+
+.napa-depth-line span {
+  left: 10px;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.napa-visual > small {
+  bottom: 8px;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 750;
+  left: 12px;
+  position: absolute;
+  z-index: 4;
+}
+
+.raw-evidence {
+  border-top: 1px solid var(--p-surface-border);
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.raw-evidence-table {
+  border: 1px solid var(--p-surface-border);
+  border-radius: 12px;
+  margin-top: 0.75rem;
+  overflow: hidden;
+}
+
+.raw-evidence-row {
+  align-items: center;
+  background: var(--p-surface-0);
+  display: grid;
+  font-size: 0.82rem;
+  gap: 0.75rem;
+  grid-template-columns: 1.25fr 0.75fr 1.2fr 1fr 0.65fr;
+  padding: 0.65rem 0.8rem;
+}
+
+.raw-evidence-row + .raw-evidence-row {
+  border-top: 1px solid var(--p-surface-border);
+}
+
+.raw-evidence-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.raw-evidence-row span small {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.68rem;
+  margin-top: 0.15rem;
+}
+
+.raw-evidence-row span small.raw-invalid {
+  color: #dc2626;
+  font-weight: 800;
+}
+
+.raw-evidence-row span small.raw-unverified {
+  color: #b45309;
+  font-weight: 800;
+}
+
+.raw-evidence-head {
+  background: var(--p-surface-50);
+  color: var(--p-text-muted-color);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.raw-evidence-table.compact .raw-evidence-row {
+  grid-template-columns: 1.4fr 0.7fr 1fr 0.6fr;
 }
 
 .soil-history-card ::ng-deep {
@@ -169,6 +391,10 @@
   width: 100%;
 }
 
+.raw-evidence-standalone {
+  margin-top: 1rem;
+}
+
 @media (max-width: 768px) {
   .soil-history-card {
     min-height: 500px;
@@ -196,5 +422,28 @@
 
   .napa-history-card app-chart {
     min-height: 320px;
+  }
+
+  .analog-history-card app-chart {
+    min-height: 300px;
+  }
+
+  .napa-visual {
+    height: 200px;
+  }
+
+  .napa-ground span,
+  .napa-water span,
+  .napa-depth-line span {
+    font-size: 0.72rem;
+  }
+
+  .raw-evidence-head {
+    display: none;
+  }
+
+  .raw-evidence-row,
+  .raw-evidence-table.compact .raw-evidence-row {
+    grid-template-columns: 1fr 1fr;
   }
 }
