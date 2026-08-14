@@ -40,4 +40,12 @@ describe('ListadoDispositivosComponent', () => {
       analogInput: true,
     });
   });
+
+  it('does not infer an analog sensor from a Milesight configuration ACK', () => {
+    expect(
+      (component as any).inferredReadoutCapabilities({
+        data: 'fe0501ff00fe05020000fe05030000fe05040000fe05050000',
+      })
+    ).toEqual({ soilProfile: false, analogInput: false });
+  });
 });

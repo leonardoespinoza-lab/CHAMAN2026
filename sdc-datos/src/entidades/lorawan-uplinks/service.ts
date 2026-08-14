@@ -154,7 +154,7 @@ export class LorawanUplinksService {
     }
 
     const decoded = decodeControllerUplink(uplink, dispositivo);
-    if (!decoded) {
+    if (!decoded || !this.hasControllerMeasurement(decoded.valores)) {
       return false;
     }
 
@@ -170,14 +170,22 @@ export class LorawanUplinksService {
       reportDate,
       360,
     );
-    const previous =
-      existing || this.reporteCompatibleConCiclo(recent, decoded.cycleChannels);
+    const previous = this.reporteCompatibleConCiclo(
+      existing || recent,
+      decoded.cycleChannels,
+    );
     const valores = previous?.datos?.valores
       ? this.mergeSentekValues(previous.datos.valores, decoded.valores)
       : decoded.valores;
     const estado = this.isSentekReportComplete(valores)
       ? 'completo'
       : 'parcial';
+    const profileChannels = Array.from(
+      new Set([
+        ...(previous?.metadataLora?.profileChannels || []),
+        ...decoded.cycleChannels,
+      ]),
+    ).sort((left, right) => left - right);
     const metadataLora = {
       applicationID: uplink.applicationID,
       applicationName: uplink.applicationName,
@@ -192,6 +200,12 @@ export class LorawanUplinksService {
       payloadDecoderVersion: decoded.decoderVersion,
       controllerManufacturer: decoded.manufacturer,
       controllerModel: decoded.model,
+      profileChannels,
+      cycleFirstFCnt:
+        previous?.metadataLora?.cycleFirstFCnt ??
+        previous?.metadataLora?.fCnt ??
+        uplink.fCnt,
+      cycleLastFCnt: uplink.fCnt,
     };
 
     let reporte: IReporte;
@@ -299,6 +313,7 @@ export class LorawanUplinksService {
       decoderVersion: decoded?.decoderVersion,
       controllerManufacturer: decoded?.manufacturer,
       controllerModel: decoded?.model,
+      profileChannels: decoded?.cycleChannels,
       decodeStatus: readings.length ? 'decoded' : 'unrecognized',
       readings,
     };
@@ -657,6 +672,10 @@ export class LorawanUplinksService {
   }
 
   private sentekChannelsInReport(reporte: IReporte): Set<number> {
+    if (reporte.metadataLora?.profileChannels?.length) {
+      return new Set(reporte.metadataLora.profileChannels);
+    }
+
     const channels = new Set<number>();
     const valores = reporte.datos?.valores || {};
     const groups: Array<{
@@ -684,6 +703,16 @@ export class LorawanUplinksService {
     });
 
     return channels;
+  }
+
+  private hasControllerMeasurement(valores: IValoresV2['valores']): boolean {
+    return Object.values(valores).some((rows) =>
+      (rows || []).some(
+        (row) =>
+          typeof row?.valores?.actual === 'number' &&
+          Number.isFinite(row.valores.actual),
+      ),
+    );
   }
 
   private isSentekReportComplete(valores: IValoresV2['valores']): boolean {

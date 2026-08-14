@@ -1,4 +1,4 @@
-import { IReporte, SensoresV2 } from 'modelos/src';
+import { ILorawanRawFrame, IReporte, SensoresV2 } from 'modelos/src';
 
 export interface MedicionSensorProfundidad {
   actual: number;
@@ -13,6 +13,62 @@ export interface MedicionProfundidad {
   humedad?: MedicionSensorProfundidad;
   salinidad?: MedicionSensorProfundidad;
   temperatura?: MedicionSensorProfundidad;
+}
+
+export interface CoberturaCanalesSentek {
+  completa: boolean;
+  canalesRecibidos: number[];
+  canalesFaltantes: number[];
+  tramasAnalizadas: number;
+  mensaje: string;
+}
+
+/**
+ * Resume las tramas mas recientes del controlador. Los canales se muestran
+ * 1-based para coincidir con ToolBox, aunque Milesight los transporte 0-based.
+ */
+export function buildSentekChannelCoverage(
+  frames: ILorawanRawFrame[],
+  maxFrames = 20,
+): CoberturaCanalesSentek | undefined {
+  const profileFrames = [...(frames || [])]
+    .filter((frame) => Array.isArray(frame.profileChannels) && frame.profileChannels.length > 0)
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+    .slice(-maxFrames);
+
+  if (!profileFrames.length) return undefined;
+
+  const receivedZeroBased = [
+    ...new Set(
+      profileFrames.flatMap((frame) => frame.profileChannels || []).filter(
+        (channel) => Number.isInteger(channel) && channel >= 0 && channel <= 11,
+      ),
+    ),
+  ].sort((a, b) => a - b);
+  if (!receivedZeroBased.length) return undefined;
+
+  const missingZeroBased = Array.from({ length: 12 }, (_, index) => index).filter(
+    (channel) => !receivedZeroBased.includes(channel),
+  );
+  const received = receivedZeroBased.map((channel) => channel + 1);
+  const missing = missingZeroBased.map((channel) => channel + 1);
+  const completa = missing.length === 0;
+  const onlyLastTemperatureBlock =
+    receivedZeroBased.length === 1 && receivedZeroBased[0] === 11;
+
+  const mensaje = completa
+    ? `Controlador completo: 12/12 canales SDI-12 recibidos en las ultimas ${profileFrames.length} tramas.`
+    : onlyLastTemperatureBlock
+      ? `Telemetria incompleta: las ultimas ${profileFrames.length} tramas recibidas contienen solo el canal SDI-12 12 (temperatura de los niveles 10-12). No se recibieron los canales 1-4 de humedad ni los demas bloques del perfil.`
+      : `Telemetria incompleta: ${received.length}/12 canales SDI-12 observados en las ultimas ${profileFrames.length} tramas recibidas. No se observaron ${missing.join(', ')}.`;
+
+  return {
+    completa,
+    canalesRecibidos: received,
+    canalesFaltantes: missing,
+    tramasAnalizadas: profileFrames.length,
+    mensaje,
+  };
 }
 
 const SENSOR_KEY: Record<'humedad' | 'salinidad' | 'temperatura', SensoresV2> = {

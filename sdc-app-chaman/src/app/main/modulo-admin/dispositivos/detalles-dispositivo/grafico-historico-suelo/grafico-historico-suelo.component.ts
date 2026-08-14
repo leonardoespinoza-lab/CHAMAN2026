@@ -2,7 +2,11 @@ import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { ILorawanRawFrame, ILorawanRawReading, IReporte } from 'modelos/src';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
-import { buildSentekProfile, normalizarProfundidadSentek } from '../sentek-profile';
+import {
+  buildSentekChannelCoverage,
+  buildSentekProfile,
+  normalizarProfundidadSentek,
+} from '../sentek-profile';
 
 type SoilMetricKey = 'humedad' | 'salinidad' | 'temperatura';
 
@@ -73,6 +77,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   public analogActual?: number;
   public analogActualFecha?: number;
   public profileCoverageNotice = '';
+  public controllerCoverageNotice = '';
+  public controllerCoverageComplete = false;
   public napaActual?: number;
   public napaActualFecha?: number;
   public napaEscalaMaxima = 10;
@@ -161,6 +167,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
   private prepareOptions(): void {
     this.assignmentNotice = this.buildAssignmentNotice();
+    const controllerCoverage = buildSentekChannelCoverage(this.filteredRawFrames());
+    this.controllerCoverageNotice = controllerCoverage?.mensaje || '';
+    this.controllerCoverageComplete = controllerCoverage?.completa || false;
     const available = this.definitions.filter((definition) => this.hasMetric(definition.key));
     this.metricOptions = available.map((definition) => ({ label: definition.title, value: definition.key }));
 
@@ -195,7 +204,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     for (const frame of this.filteredRawFrames()) {
       for (const reading of this.rawReadingsForMetric(frame, definition.key)) {
         if (reading.depthCm === undefined) continue;
-        const depth = normalizarProfundidadSentek(reading.depthCm);
+        // El backend ya resolvio la profundidad desde la configuracion vigente
+        // del dispositivo. Solo los reportes legacy requieren normalizacion.
+        const depth = reading.depthCm;
         if (!byDepth.has(depth)) byDepth.set(depth, []);
         byDepth.get(depth)!.push({
           x: new Date(frame.timestamp).getTime(),
@@ -252,7 +263,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     for (const frame of [...this.filteredRawFrames()].reverse()) {
       for (const reading of this.rawReadingsForMetric(frame, definition.key)) {
         if (reading.depthCm === undefined) continue;
-        const depth = normalizarProfundidadSentek(reading.depthCm);
+        const depth = reading.depthCm;
         if (latestByDepth.has(depth)) continue;
         latestByDepth.set(depth, {
           x: new Date(frame.timestamp).getTime(),
@@ -809,7 +820,10 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   private buildProfileCoverageNotice(latestPoints: HistoricalPoint[]): string {
     const count = new Set(latestPoints.map((point) => point.depth)).size;
     if (!count) return '';
-    if (count >= 12) return 'Perfil completo: 12/12 niveles recibidos entre 10 y 120 cm.';
+    if (count >= 12) {
+      const depths = latestPoints.map((point) => point.depth).sort((a, b) => a - b);
+      return `Perfil completo: 12/12 niveles recibidos entre ${depths[0]} y ${depths[depths.length - 1]} cm.`;
+    }
     return `Cobertura recibida: ${count}/12 niveles. Chaman no completa ni promedia los ${12 - count} niveles faltantes.`;
   }
 
@@ -892,7 +906,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         for (const reading of frame.readings || []) {
           rows.push([
             frame.timestamp,
-            reading.depthCm === undefined ? '' : normalizarProfundidadSentek(reading.depthCm),
+            reading.depthCm === undefined ? '' : reading.depthCm,
             reading.variable === 'humedad_suelo' ? reading.value : '',
             reading.variable === 'salinidad_suelo' ? reading.value : '',
             reading.variable === 'temperatura_suelo' ? reading.value : '',

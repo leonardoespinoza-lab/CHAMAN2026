@@ -2,11 +2,17 @@ import { ILorawanRawFrame, ILorawanRawReading } from 'modelos/src';
 import { GraficoHistoricoSueloComponent } from './grafico-historico-suelo.component';
 
 describe('GraficoHistoricoSueloComponent', () => {
-  function frame(timestamp: string, readings: ILorawanRawReading[], fCnt = 1): ILorawanRawFrame {
+  function frame(
+    timestamp: string,
+    readings: ILorawanRawReading[],
+    fCnt = 1,
+    profileChannels?: number[],
+  ): ILorawanRawFrame {
     return {
       decodeStatus: 'decoded',
       devEUI: '24E124454E358347',
       fCnt,
+      profileChannels,
       readings,
       timestamp,
     };
@@ -70,6 +76,30 @@ describe('GraficoHistoricoSueloComponent', () => {
     expect(component.napaChartOptions).toBeUndefined();
     expect(component.napaActual).toBeUndefined();
     expect(component.napaResumen).toBe('');
+  });
+
+  it('muestra una alerta independiente de la curva cuando solo llega el canal 12', () => {
+    const component = prepare([
+      frame(
+        '2026-08-14T10:00:00.000Z',
+        [
+          {
+            depthCm: 100,
+            quality: 'valid',
+            serviceId: 'perfil-suelo-sentek',
+            unit: 'C',
+            value: 14.23,
+            variable: 'temperatura_suelo',
+          },
+        ],
+        27,
+        [11],
+      ),
+    ]);
+
+    expect(component.controllerCoverageComplete).toBeFalse();
+    expect(component.controllerCoverageNotice).toContain('solo el canal SDI-12 12');
+    expect(component.profileCoverageNotice).toContain('1/12 niveles');
   });
 
   it('separa lecturas invalidas de VIC pendiente de calibracion', () => {

@@ -38,6 +38,7 @@ export class GraficoHistoricoNapaComponent implements OnChanges {
   public posicionAguaPct = 60;
   public alturaFlechaPct = 36;
   public senalSinCalibrar = false;
+  public alertaEntradaAnalogica = '';
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['reportes'] || changes['rawFrames'] || changes['fechaDesde'] || changes['configuracion']) {
@@ -74,6 +75,7 @@ export class GraficoHistoricoNapaComponent implements OnChanges {
   }
 
   private preparar(): void {
+    this.alertaEntradaAnalogica = this.detectarFaltaEntradaAnalogica();
     this.puntos = this.construirPuntos();
     this.senalSinCalibrar =
       !this.puntos.length &&
@@ -275,6 +277,23 @@ export class GraficoHistoricoNapaComponent implements OnChanges {
       const timestamp = new Date(frame.timestamp).getTime();
       return Number.isFinite(timestamp) && (desde === undefined || timestamp >= desde);
     });
+  }
+
+  private detectarFaltaEntradaAnalogica(): string {
+    const recent = [...this.framesFiltrados()]
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+      .slice(-20);
+    if (!recent.length) return '';
+
+    const hasAnalog = recent.some((frame) =>
+      (frame.readings || []).some(
+        (reading) =>
+          reading.variable === 'corriente_analogica' || reading.variable === 'nivel_napa',
+      ),
+    );
+    if (hasAnalog) return '';
+
+    return `Alerta del controlador: las ultimas ${recent.length} tramas no incluyen la entrada analogica 4-20 mA. La curva conserva mediciones anteriores, pero la napa no se esta actualizando.`;
   }
 
   private reportesFiltrados(): IReporte[] {

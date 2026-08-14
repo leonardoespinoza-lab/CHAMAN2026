@@ -13,11 +13,12 @@ import {
   decodeUc511SentekPayload,
   decodedUc511ToReporteValores,
   extractUc511PayloadHex,
+  resolveSentekDepths,
 } from './uc511-sentek.decoder';
 import { validateControllerReading } from './sentek-reading-quality';
 
 export const MILESIGHT_UC50X_DECODER_ID = 'milesight-uc501-uc511';
-export const MILESIGHT_UC50X_DECODER_VERSION = '1.0.0';
+export const MILESIGHT_UC50X_DECODER_VERSION = '1.2.0';
 
 /**
  * Decoder del controlador Milesight UC501/UC511 usado por Chaman.
@@ -40,13 +41,17 @@ export class MilesightUc50xControllerDecoder implements IControllerPayloadDecode
     dispositivo?: IDispositivo,
   ): IControllerDecodeResult | null {
     const payloadHex = extractUc511PayloadHex(uplink);
-    const decoded = decodeUc511SentekPayload(payloadHex);
+    const decoded = decodeUc511SentekPayload(
+      payloadHex,
+      dispositivo?.configuracionLecturas?.perfilSuelo,
+    );
 
     if (decoded) {
       const valores = this.validatedValores(
         decodedUc511ToReporteValores(
           decoded,
           dispositivo?.configuracionLecturas?.entradaAnalogica,
+          dispositivo?.configuracionLecturas?.perfilSuelo,
         ),
       );
       const readings = this.rawReadings(decoded, valores, dispositivo);
@@ -92,6 +97,9 @@ export class MilesightUc50xControllerDecoder implements IControllerPayloadDecode
     dispositivo?: IDispositivo,
   ): ILorawanRawReading[] {
     const readings: ILorawanRawReading[] = [];
+    const depthsCm = resolveSentekDepths(
+      dispositivo?.configuracionLecturas?.perfilSuelo,
+    );
     const pushSoil = (
       variable: 'humedad_suelo' | 'salinidad_suelo' | 'temperatura_suelo',
       unit: string,
@@ -99,13 +107,16 @@ export class MilesightUc50xControllerDecoder implements IControllerPayloadDecode
     ) => {
       Object.entries(values).forEach(([depth, value]) => {
         if (typeof value !== 'number' || !Number.isFinite(value)) return;
+        const position = Number(depth.replace('cm', '')) / 10 - 1;
+        const configuredDepth = depthsCm[position];
+        if (!Number.isFinite(configuredDepth)) return;
         const quality = validateControllerReading(variable, value);
         readings.push({
           serviceId: 'perfil-suelo-sentek',
           variable,
           value,
           unit,
-          depthCm: Number(depth.replace('cm', '')),
+          depthCm: configuredDepth,
           quality: quality.quality,
           qualityReason: quality.reason,
           validationReference: quality.reference,

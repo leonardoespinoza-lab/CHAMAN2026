@@ -1,5 +1,19 @@
 @if (chartOptions && metricOptions.length > 0) {
   <article class="soil-history-card">
+    @if (controllerCoverageNotice) {
+      <div
+        class="controller-coverage-alert"
+        [class.complete]="controllerCoverageComplete"
+        role="status"
+      >
+        <i
+          class="pi"
+          [class.pi-check-circle]="controllerCoverageComplete"
+          [class.pi-exclamation-triangle]="!controllerCoverageComplete"
+        ></i>
+        <span>{{ controllerCoverageNotice }}</span>
+      </div>
+    }
     <header>
       <div>
         <span>{{ titulo || 'Historico Sentek' }}</span>
@@ -141,6 +155,20 @@
     }
   </article>
 } @else {
+  @if (controllerCoverageNotice) {
+    <div
+      class="controller-coverage-alert standalone"
+      [class.complete]="controllerCoverageComplete"
+      role="status"
+    >
+      <i
+        class="pi"
+        [class.pi-check-circle]="controllerCoverageComplete"
+        [class.pi-exclamation-triangle]="!controllerCoverageComplete"
+      ></i>
+      <span>{{ controllerCoverageNotice }}</span>
+    </div>
+  }
   @if (napaChartOptions || analogChartOptions) {
     <article class="soil-history-card">
       @if (napaChartOptions) {

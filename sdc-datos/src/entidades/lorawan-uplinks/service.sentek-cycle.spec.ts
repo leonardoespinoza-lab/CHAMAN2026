@@ -1,4 +1,5 @@
 import { IReporte } from 'modelos/src';
+import { MILESIGHT_UC50X_GOLDEN_FIXTURES } from './controller-decoder.golden-fixtures';
 import { LorawanUplinksService } from './service';
 
 describe('LorawanUplinksService Sentek aggregation cycle', () => {
@@ -43,6 +44,61 @@ describe('LorawanUplinksService Sentek aggregation cycle', () => {
     expect(compatible).toBe(reporteConTemperaturaFinal);
   });
 
+  it('uses recorded channel evidence instead of guessing a custom mapping from values', () => {
+    const report = {
+      ...reporteConTemperaturaFinal,
+      metadataLora: { profileChannels: [11] },
+      datos: {
+        valores: {
+          'Salinidad Suelo': Array.from({ length: 12 }, (_, index) => ({
+            profundidad: 10 + index * 10,
+            unidad: 'VIC',
+            valores: { actual: index < 3 ? 1200 + index : (null as any) },
+          })),
+        },
+      },
+    } as IReporte;
+
+    expect((service as any).reporteCompatibleConCiclo(report, [4])).toBe(
+      report,
+    );
+    expect((service as any).reporteCompatibleConCiclo(report, [11])).toBeNull();
+  });
+
+  it('never creates or updates a sensor report from a configuration ACK', async () => {
+    const reportes = {
+      getByDeveuiAndFecha: jest.fn(),
+      getRecentByDeveui: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    };
+    const dispositivos = { update: jest.fn() };
+    const isolated = new LorawanUplinksService(
+      {} as any,
+      dispositivos as any,
+      reportes as any,
+    );
+    const ack = MILESIGHT_UC50X_GOLDEN_FIXTURES.rollbackConfigurationAck;
+
+    const synced = await (isolated as any).syncSentekReport(
+      {
+        devEUI: '24E124454E358520',
+        timestamp: '2026-08-14T18:07:52.000Z',
+        fCnt: 164,
+        fPort: 85,
+        data: Buffer.from(ack.payloadHex, 'hex').toString('base64'),
+      },
+      { _id: 'gilardoni' },
+    );
+
+    expect(synced).toBe(false);
+    expect(reportes.getByDeveuiAndFecha).not.toHaveBeenCalled();
+    expect(reportes.getRecentByDeveui).not.toHaveBeenCalled();
+    expect(reportes.create).not.toHaveBeenCalled();
+    expect(reportes.update).not.toHaveBeenCalled();
+    expect(dispositivos.update).not.toHaveBeenCalled();
+  });
+
   it('emits every decoded depth and the analog sensor as raw readings without averaging', () => {
     const frame = (service as any).toRawFrame(
       {
@@ -77,8 +133,9 @@ describe('LorawanUplinksService Sentek aggregation cycle', () => {
     expect(frame.fCnt).toBe(42);
     expect(frame).toMatchObject({
       decoderId: 'milesight-uc501-uc511',
-      decoderVersion: '1.0.0',
+      decoderVersion: '1.2.0',
       controllerManufacturer: 'Milesight',
+      profileChannels: [0],
     });
     expect(
       frame.readings.filter((row: any) => row.variable === 'humedad_suelo'),

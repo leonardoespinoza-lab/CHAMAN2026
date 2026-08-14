@@ -1,5 +1,6 @@
 import {
   IConfiguracionEntradaAnalogica,
+  IConfiguracionPerfilSuelo,
   IValoresV2,
   SensoresV2,
 } from 'modelos/src';
@@ -24,6 +25,16 @@ interface Sdi12Block {
   channel: number;
   ascii: string;
   values: number[];
+}
+
+interface ParsedUc50xPayload {
+  analog: DecodedUc511SentekPayload['analog'] | null;
+  sdi12Blocks: Sdi12Block[];
+}
+
+interface ResolvedSdi12Channel {
+  metric: SoilMetric;
+  depthIndexes: number[];
 }
 
 export interface DecodedUc511SentekPayload {
@@ -59,10 +70,37 @@ const DEPTH_KEYS: DepthKey[] = [
   '120cm',
 ];
 
-const DEPTHS_CM = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+export const DEFAULT_SENTEK_DEPTHS_CM = [
+  10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120,
+] as const;
+
+/**
+ * La profundidad es una propiedad de instalacion/configuracion de la sonda,
+ * no del byte de canal Milesight. Sentek permite configurar esos rótulos.
+ */
+export function resolveSentekDepths(
+  config?: Pick<IConfiguracionPerfilSuelo, 'profundidadesCm' | 'niveles'>,
+): number[] {
+  const configured = config?.profundidadesCm;
+  if (
+    config?.niveles === 12 &&
+    Array.isArray(configured) &&
+    configured.length === 12 &&
+    configured.every(
+      (depth, index) =>
+        Number.isFinite(depth) &&
+        depth > 0 &&
+        (index === 0 || depth > configured[index - 1]),
+    )
+  ) {
+    return [...configured];
+  }
+  return [...DEFAULT_SENTEK_DEPTHS_CM];
+}
 
 export function decodeUc511SentekPayload(
   hexPayload?: string,
+  profileConfig?: Pick<IConfiguracionPerfilSuelo, 'mapeoCanalesSdi12'>,
 ): DecodedUc511SentekPayload | null {
   if (!hexPayload) {
     return null;
@@ -80,14 +118,14 @@ export function decodeUc511SentekPayload(
   }
 
   const decoded = emptyDecoded();
-  const analog = decodeAnalogInput(bytes);
-  if (analog) {
-    decoded.analog = analog;
+  const parsed = parseUc50xPayload(bytes);
+  if (parsed.analog) {
+    decoded.analog = parsed.analog;
   }
 
-  decoded.raw.blocks = extractSdi12Blocks(bytes);
+  decoded.raw.blocks = parsed.sdi12Blocks;
   decoded.raw.blocks.forEach((block) => {
-    assignSdi12Block(decoded, block.channel, block.values);
+    assignSdi12Block(decoded, block.channel, block.values, profileConfig);
   });
 
   return hasDecodedData(decoded) ? decoded : null;
@@ -147,12 +185,17 @@ function isHexPayload(value?: string): boolean {
 export function decodedUc511ToReporteValores(
   decoded: DecodedUc511SentekPayload,
   analogConfig?: IConfiguracionEntradaAnalogica,
+  profileConfig?: Pick<
+    IConfiguracionPerfilSuelo,
+    'profundidadesCm' | 'niveles'
+  >,
 ): IValoresV2['valores'] {
   const valores: IValoresV2['valores'] = {};
+  const depthsCm = resolveSentekDepths(profileConfig);
 
   if (decoded.raw.blocks.length) {
     valores['Humedad Suelo Profundidad'] = DEPTH_KEYS.map((depth, index) => ({
-      profundidad: DEPTHS_CM[index],
+      profundidad: depthsCm[index],
       unidad: '%',
       valores: {
         actual: decoded.soil.moisture[depth] ?? null,
@@ -160,7 +203,7 @@ export function decodedUc511ToReporteValores(
     }));
 
     valores['Salinidad Suelo'] = DEPTH_KEYS.map((depth, index) => ({
-      profundidad: DEPTHS_CM[index],
+      profundidad: depthsCm[index],
       // VIC es un indice de tendencia ionica; no equivale automaticamente a EC.
       unidad: 'VIC',
       valores: {
@@ -169,7 +212,7 @@ export function decodedUc511ToReporteValores(
     }));
 
     valores['Temperatura Suelo'] = DEPTH_KEYS.map((depth, index) => ({
-      profundidad: DEPTHS_CM[index],
+      profundidad: depthsCm[index],
       unidad: 'C',
       valores: {
         actual: decoded.soil.temperature[depth] ?? null,
@@ -251,44 +294,39 @@ function hexToBytes(hex: string): number[] {
   return bytes;
 }
 
-function decodeAnalogInput(
+function decodeAnalogBlock(
   bytes: number[],
+  offset: number,
 ): DecodedUc511SentekPayload['analog'] | null {
-  for (let i = 0; i <= bytes.length - 10; i += 1) {
-    const channel = bytes[i];
-    const type = bytes[i + 1];
-    if (
-      (channel !== 0x05 && channel !== 0x06) ||
-      (type !== 0xe2 && type !== 0x02)
-    ) {
-      continue;
-    }
-
-    const decode =
-      type === 0xe2
-        ? (offset: number) =>
-            float16ToNumberLE(bytes[offset], bytes[offset + 1])
-        : (offset: number) => int16LE(bytes[offset], bytes[offset + 1]) / 1000;
-    const readings = [
-      decode(i + 2),
-      decode(i + 4),
-      decode(i + 6),
-      decode(i + 8),
-    ];
-    if (!readings.every(Number.isFinite)) {
-      continue;
-    }
-
-    return {
-      channel: channel === 0x05 ? 1 : 2,
-      rawMa: round(readings[0], 3),
-      minMa: round(readings[1], 3),
-      maxMa: round(readings[2], 3),
-      averageMa: round(readings[3], 3),
-    };
+  const channelByte = bytes[offset];
+  const type = bytes[offset + 1];
+  const regularChannel = channelByte === 0x05 || channelByte === 0x06;
+  const alarmChannel = channelByte === 0x85 || channelByte === 0x86;
+  if ((!regularChannel && !alarmChannel) || (type !== 0xe2 && type !== 0x02)) {
+    return null;
   }
 
-  return null;
+  const decode =
+    type === 0xe2
+      ? (valueOffset: number) =>
+          float16ToNumberLE(bytes[valueOffset], bytes[valueOffset + 1])
+      : (valueOffset: number) =>
+          int16LE(bytes[valueOffset], bytes[valueOffset + 1]) / 1000;
+  const readings = [
+    decode(offset + 2),
+    decode(offset + 4),
+    decode(offset + 6),
+    decode(offset + 8),
+  ];
+  if (!readings.every(Number.isFinite)) return null;
+
+  return {
+    channel: channelByte === 0x05 || channelByte === 0x85 ? 1 : 2,
+    rawMa: round(readings[0], 3),
+    minMa: round(readings[1], 3),
+    maxMa: round(readings[2], 3),
+    averageMa: round(readings[3], 3),
+  };
 }
 
 export function calibrateAnalogInput(
@@ -357,78 +395,190 @@ function int16LE(byte0: number, byte1: number): number {
   return value & 0x8000 ? value - 0x10000 : value;
 }
 
-function extractSdi12Blocks(bytes: number[]): Sdi12Block[] {
-  const blocks: Sdi12Block[] = [];
+/**
+ * Recorre el envelope TLV del UC50x desde limites demostrables. Nunca busca
+ * `05 e2` o `05 02` dentro de bytes arbitrarios: esa busqueda confundia las
+ * respuestas de configuracion `fe 05 ...` con una entrada analogica.
+ */
+function parseUc50xPayload(bytes: number[]): ParsedUc50xPayload {
+  const parsed: ParsedUc50xPayload = { analog: null, sdi12Blocks: [] };
+  let offset = 0;
 
-  for (let i = 0; i < bytes.length - 3; i += 1) {
-    if (bytes[i] !== 0x08 || bytes[i + 1] !== 0xdb) {
+  while (offset + 1 < bytes.length) {
+    const channel = bytes[offset];
+    const type = bytes[offset + 1];
+
+    if (channel === 0x08 && type === 0xdb) {
+      const sdi12 = parseSdi12BlockAt(bytes, offset);
+      if (!sdi12) break;
+      parsed.sdi12Blocks.push(sdi12.block);
+      offset = sdi12.nextOffset;
       continue;
     }
 
-    const channel = bytes[i + 2];
-    const start = i + 3;
-    let end = start;
-
-    while (end < bytes.length) {
-      if (
-        end + 1 < bytes.length &&
-        bytes[end] === 0x0d &&
-        bytes[end + 1] === 0x0a
-      )
-        break;
-      if (
-        end + 1 < bytes.length &&
-        bytes[end] === 0x08 &&
-        bytes[end + 1] === 0xdb
-      )
-        break;
-      end += 1;
+    if (
+      (channel === 0x05 ||
+        channel === 0x06 ||
+        channel === 0x85 ||
+        channel === 0x86) &&
+      (type === 0xe2 || type === 0x02)
+    ) {
+      const blockLength = channel >= 0x80 ? 11 : 10;
+      if (offset + blockLength > bytes.length) break;
+      parsed.analog ||= decodeAnalogBlock(bytes, offset);
+      offset += blockLength;
+      continue;
     }
 
-    const asciiBytes = bytes.slice(start, end).filter((byte) => byte !== 0x00);
-    const ascii = String.fromCharCode(...asciiBytes).trim();
-    const values = (ascii.match(/[+-]\d+(?:\.\d+)?/g) || [])
-      .map(Number)
-      .filter(Number.isFinite);
-
-    blocks.push({ channel, ascii, values });
-    i = end;
+    const blockLength = knownUc50xBlockLength(channel, type);
+    if (!blockLength || offset + blockLength > bytes.length) {
+      // Payload de configuracion, firmware futuro o bloque truncado. Se
+      // conserva crudo, pero no se adivinan limites ni magnitudes.
+      break;
+    }
+    offset += blockLength;
   }
 
-  return blocks;
+  return parsed;
+}
+
+function knownUc50xBlockLength(channel: number, type: number): number | null {
+  if (channel === 0x01 && type === 0x75) return 3;
+  if (
+    (channel === 0x03 || channel === 0x04) &&
+    (type === 0x00 || type === 0x01)
+  ) {
+    return 3;
+  }
+  if ((channel === 0x03 || channel === 0x04) && type === 0xc8) return 6;
+  return null;
+}
+
+function parseSdi12BlockAt(
+  bytes: number[],
+  offset: number,
+): { block: Sdi12Block; nextOffset: number } | null {
+  if (offset + 3 > bytes.length) return null;
+
+  const dataStart = offset + 3;
+  const officialEnd = Math.min(offset + 39, bytes.length);
+  let textEnd = officialEnd;
+  let crlfEnd: number | null = null;
+  for (let cursor = dataStart; cursor + 1 < officialEnd; cursor += 1) {
+    if (bytes[cursor] === 0x0d && bytes[cursor + 1] === 0x0a) {
+      textEnd = cursor;
+      crlfEnd = cursor + 2;
+      break;
+    }
+  }
+
+  const asciiBytes = bytes
+    .slice(dataStart, textEnd)
+    .filter((byte) => byte !== 0x00);
+  const ascii = String.fromCharCode(...asciiBytes).trim();
+  const values = (ascii.match(/[+-]\d+(?:\.\d+)?/g) || [])
+    .map(Number)
+    .filter(Number.isFinite);
+
+  let nextOffset = officialEnd;
+  if (
+    crlfEnd !== null &&
+    crlfEnd + 1 < bytes.length &&
+    bytes[crlfEnd] === 0x08 &&
+    bytes[crlfEnd + 1] === 0xdb
+  ) {
+    // Fixture compacto o broker que quito el padding de cero.
+    nextOffset = crlfEnd;
+  }
+
+  return {
+    block: { channel: bytes[offset + 2], ascii, values },
+    nextOffset,
+  };
 }
 
 function assignSdi12Block(
   result: DecodedUc511SentekPayload,
   channel: number,
   values: number[],
+  profileConfig?: Pick<IConfiguracionPerfilSuelo, 'mapeoCanalesSdi12'>,
 ): void {
-  const metric = metricForChannel(channel);
-  if (!metric) {
+  const mapping = resolveSdi12Channel(channel, profileConfig);
+  if (!mapping) {
     return;
   }
 
-  const target = result.soil[metric];
-  const offset =
-    metric === 'moisture'
-      ? channel * 3
-      : metric === 'salinity'
-        ? (channel - 0x04) * 3
-        : (channel - 0x08) * 3;
+  const target = result.soil[mapping.metric];
 
-  values.slice(0, 3).forEach((value, index) => {
-    const depth = DEPTH_KEYS[offset + index];
+  values.slice(0, mapping.depthIndexes.length).forEach((value, index) => {
+    const depth = DEPTH_KEYS[mapping.depthIndexes[index]];
     if (depth) {
       target[depth] = value;
     }
   });
 }
 
-function metricForChannel(channel: number): SoilMetric | null {
-  if (channel >= 0x00 && channel <= 0x03) return 'moisture';
-  if (channel >= 0x04 && channel <= 0x07) return 'salinity';
-  if (channel >= 0x08 && channel <= 0x0b) return 'temperature';
+function resolveSdi12Channel(
+  channel: number,
+  profileConfig?: Pick<IConfiguracionPerfilSuelo, 'mapeoCanalesSdi12'>,
+): ResolvedSdi12Channel | null {
+  const configured = profileConfig?.mapeoCanalesSdi12;
+  if (Array.isArray(configured) && configured.length > 0) {
+    const entry = configured.find(
+      (candidate) => candidate.canalMilesight === channel + 1,
+    );
+    if (!entry) return null;
+
+    const metricByVariable: Record<(typeof entry)['variable'], SoilMetric> = {
+      humedad_vwc: 'moisture',
+      salinidad_vic: 'salinity',
+      temperatura: 'temperature',
+    };
+    const depthIndexes = entry.posicionesPerfil.map((position) => position - 1);
+    if (
+      !metricByVariable[entry.variable] ||
+      depthIndexes.length === 0 ||
+      new Set(depthIndexes).size !== depthIndexes.length ||
+      depthIndexes.some(
+        (depthIndex) =>
+          !Number.isInteger(depthIndex) ||
+          depthIndex < 0 ||
+          depthIndex >= DEPTH_KEYS.length,
+      )
+    ) {
+      return null;
+    }
+
+    return {
+      metric: metricByVariable[entry.variable],
+      depthIndexes,
+    };
+  }
+
+  if (channel >= 0x00 && channel <= 0x03) {
+    return {
+      metric: 'moisture',
+      depthIndexes: threeDepthIndexes(channel),
+    };
+  }
+  if (channel >= 0x04 && channel <= 0x07) {
+    return {
+      metric: 'salinity',
+      depthIndexes: threeDepthIndexes(channel - 0x04),
+    };
+  }
+  if (channel >= 0x08 && channel <= 0x0b) {
+    return {
+      metric: 'temperature',
+      depthIndexes: threeDepthIndexes(channel - 0x08),
+    };
+  }
   return null;
+}
+
+function threeDepthIndexes(group: number): number[] {
+  const first = group * 3;
+  return [first, first + 1, first + 2];
 }
 
 function float16ToNumberLE(byte0: number, byte1: number): number {
