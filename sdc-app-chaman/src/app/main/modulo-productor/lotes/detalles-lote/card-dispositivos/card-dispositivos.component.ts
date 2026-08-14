@@ -1,6 +1,8 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
-import { IDispositivo, ILote } from 'modelos/src';
+import { IDispositivo, ILorawanRawFrame, ILote, IReporte } from 'modelos/src';
+import { LorawanUplinksService } from '../../../../../auxiliares/http/lorawan-uplinks.service';
+import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { BateriaComponent } from '../../../../modulo-admin/dispositivos/bateria/bateria.component';
@@ -9,7 +11,8 @@ import {
   MedicionProfundidad,
   MedicionSensorProfundidad,
 } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/sentek-profile';
-import { DrawerDispositivosComponent } from '../drawer-dispositivos/drawer-dispositivos.component';
+import { GraficoHistoricoAmbienteComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-ambiente/grafico-historico-ambiente.component';
+import { GraficoHistoricoSueloComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-suelo/grafico-historico-suelo.component';
 
 interface DispositivoResumen {
   humedad?: MedicionSensorProfundidad;
@@ -25,26 +28,36 @@ interface DispositivoAmbienteResumen {
 
 @Component({
   selector: 'app-card-dispositivos',
-  imports: [CommonModule, SharedModule, DrawerDispositivosComponent, BateriaComponent],
+  imports: [
+    CommonModule,
+    SharedModule,
+    BateriaComponent,
+    GraficoHistoricoAmbienteComponent,
+    GraficoHistoricoSueloComponent,
+  ],
   templateUrl: './card-dispositivos.component.html',
   styleUrl: './card-dispositivos.component.scss',
 })
 export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   @Input() public lote?: ILote;
-  public verDrawerDispositivos = false;
 
   public dispositivos: IDispositivo[] = [];
-  public dispositivo?: IDispositivo;
   public perfiles = new Map<string, MedicionProfundidad[]>();
   public resumenes = new Map<string, DispositivoResumen>();
   public resumenesAmbiente = new Map<string, DispositivoAmbienteResumen>();
+  public reportesHistoricos = new Map<string, IReporte[]>();
+  public tramasCrudas = new Map<string, ILorawanRawFrame[]>();
+  public cargandoHistorico = new Set<string>();
+  public erroresHistorico = new Set<string>();
+  public diasHistorico = 30;
+  private initialized = false;
+  private loadVersion = 0;
 
-  constructor(public helper: HelperService) {}
-
-  public abrirDrawerDispositivo(dispositivo: IDispositivo): void {
-    this.dispositivo = dispositivo;
-    this.verDrawerDispositivos = true;
-  }
+  constructor(
+    public helper: HelperService,
+    private reportesService: ReporteService,
+    private lorawanUplinks: LorawanUplinksService
+  ) {}
 
   public getDeviceKey(dispositivo: IDispositivo): string {
     return dispositivo._id || dispositivo.deveui || dispositivo.nombre || 'sin-id';
@@ -60,6 +73,28 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
 
   public resumenAmbiente(dispositivo: IDispositivo): DispositivoAmbienteResumen {
     return this.resumenesAmbiente.get(this.getDeviceKey(dispositivo)) || {};
+  }
+
+  public historico(dispositivo: IDispositivo): IReporte[] {
+    return this.reportesHistoricos.get(this.getDeviceKey(dispositivo)) || [];
+  }
+
+  public frames(dispositivo: IDispositivo): ILorawanRawFrame[] {
+    return this.tramasCrudas.get(this.getDeviceKey(dispositivo)) || [];
+  }
+
+  public estaCargandoHistorico(dispositivo: IDispositivo): boolean {
+    return this.cargandoHistorico.has(this.getDeviceKey(dispositivo));
+  }
+
+  public historicoConError(dispositivo: IDispositivo): boolean {
+    return this.erroresHistorico.has(this.getDeviceKey(dispositivo));
+  }
+
+  public async cambiarPeriodo(dias: number): Promise<void> {
+    if (dias === this.diasHistorico) return;
+    this.diasHistorico = dias;
+    await this.cargarHistoricosInline();
   }
 
   public esLanzaDeSuelo(dispositivo: IDispositivo): boolean {
@@ -165,7 +200,7 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private setDispositivos(): void {
-    this.dispositivos = this.lote?.dispositivos || [];
+    this.dispositivos = this.dispositivosFisicosUnicos(this.lote?.dispositivos || []);
     this.perfiles.clear();
     this.resumenes.clear();
     this.resumenesAmbiente.clear();
@@ -177,6 +212,95 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
       this.resumenes.set(key, this.calcularResumen(perfil));
       this.resumenesAmbiente.set(key, this.calcularResumenAmbiente(dispositivo));
     }
+  }
+
+  private async cargarHistoricosInline(): Promise<void> {
+    const version = ++this.loadVersion;
+    const graficables = this.dispositivos.filter(
+      (dispositivo) => this.esLanzaDeSuelo(dispositivo) || this.esSensorAmbiente(dispositivo)
+    );
+
+    this.cargandoHistorico = new Set(graficables.map((dispositivo) => this.getDeviceKey(dispositivo)));
+    this.erroresHistorico.clear();
+
+    await Promise.all(
+      graficables.map(async (dispositivo) => {
+        const key = this.getDeviceKey(dispositivo);
+        const id = dispositivo._id || dispositivo.deveui;
+        if (!id) {
+          this.cargandoHistorico.delete(key);
+          return;
+        }
+
+        try {
+          const [response, frames] = await Promise.allSettled([
+            this.reportesService.historico(id, this.diasHistorico, 5000),
+            this.esLanzaDeSuelo(dispositivo) && dispositivo.deveui
+              ? this.lorawanUplinks.rawHistory(dispositivo.deveui, this.diasHistorico, 5000)
+              : Promise.resolve<ILorawanRawFrame[]>([]),
+          ]);
+
+          if (version !== this.loadVersion) return;
+          const fallback = dispositivo.ultimoReporte ? [dispositivo.ultimoReporte] : [];
+          const reportes = response.status === 'fulfilled' ? response.value.datos || [] : [];
+          const tramas = frames.status === 'fulfilled' ? frames.value : [];
+          this.reportesHistoricos.set(key, reportes.length ? reportes : fallback);
+          this.tramasCrudas.set(key, tramas);
+          if (response.status === 'rejected' || frames.status === 'rejected') {
+            this.erroresHistorico.add(key);
+          }
+        } catch (error) {
+          if (version !== this.loadVersion) return;
+          console.error('Error al cargar las curvas inline del dispositivo', error);
+          this.erroresHistorico.add(key);
+          this.reportesHistoricos.set(key, dispositivo.ultimoReporte ? [dispositivo.ultimoReporte] : []);
+          this.tramasCrudas.set(key, []);
+        } finally {
+          if (version === this.loadVersion) {
+            this.cargandoHistorico.delete(key);
+          }
+        }
+      })
+    );
+  }
+
+  /**
+   * El inventario canonico expone un controlador fisico por DevEUI. Esta
+   * defensa evita repetir sus curvas si una respuesta legacy materializa
+   * vistas logicas separadas para Sentek y napa.
+   */
+  private dispositivosFisicosUnicos(dispositivos: IDispositivo[]): IDispositivo[] {
+    const unicos = new Map<string, IDispositivo>();
+    dispositivos.forEach((dispositivo, index) => {
+      const devEUI = String(dispositivo.deveui || '')
+        .replace(/[^a-fA-F0-9]/g, '')
+        .toUpperCase();
+      const key = devEUI ? `eui:${devEUI}` : `id:${dispositivo._id || index}`;
+      const existente = unicos.get(key);
+      if (!existente) {
+        unicos.set(key, dispositivo);
+        return;
+      }
+
+      const servicios = new Map(
+        [...(existente.servicios || []), ...(dispositivo.servicios || [])].map((servicio) => [servicio.id, servicio])
+      );
+      unicos.set(key, {
+        ...existente,
+        ...dispositivo,
+        sensores: [...new Set([...(existente.sensores || []), ...(dispositivo.sensores || [])])],
+        servicios: [...servicios.values()],
+        ultimoReporte: this.reporteMasReciente(existente.ultimoReporte, dispositivo.ultimoReporte),
+      });
+    });
+    return [...unicos.values()];
+  }
+
+  private reporteMasReciente(a?: IReporte, b?: IReporte): IReporte | undefined {
+    if (!a) return b;
+    if (!b) return a;
+    const fecha = (reporte: IReporte): number => new Date(reporte.fecha || reporte.fechaCreacion || 0).getTime() || 0;
+    return fecha(b) >= fecha(a) ? b : a;
   }
 
   private edadUltimaComunicacionMs(dispositivo: IDispositivo): number | undefined {
@@ -216,12 +340,19 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['lote']) {
       this.setDispositivos();
+      if (this.initialized) {
+        void this.cargarHistoricosInline();
+      }
     }
   }
 
   async ngOnInit(): Promise<void> {
+    this.initialized = true;
     this.setDispositivos();
+    await this.cargarHistoricosInline();
   }
 
-  ngOnDestroy(): void {}
+  ngOnDestroy(): void {
+    this.loadVersion++;
+  }
 }

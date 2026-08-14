@@ -88,5 +88,52 @@ describe('LorawanUplinksService Sentek aggregation cycle', () => {
     expect(
       frame.readings.find((row: any) => row.variable === 'nivel_napa')?.value,
     ).toBeCloseTo(2.738, 3);
+    expect(
+      frame.readings.find((row: any) => row.variable === 'nivel_napa'),
+    ).toMatchObject({
+      reference: 'nivel_terreno',
+      installationDepthM: 6,
+      conversionModel: 'lineal-4-20ma-v1',
+    });
+  });
+
+  it('emits calibrated pressure without losing it to an encoding mismatch', () => {
+    const frame = (service as any).toRawFrame(
+      {
+        _id: 'uplink-pressure',
+        devEUI: '24E124454E358347',
+        timestamp: '2026-08-13T12:00:00.000Z',
+        fCnt: 43,
+        fPort: 85,
+        gatewayID: 'arturo',
+        data: Buffer.from(
+          '05e29c489c489c489c4808db00302b33342e34303231362b33392e33343037382b33392e39393938300d0a',
+          'hex',
+        ).toString('base64'),
+      },
+      {
+        configuracionLecturas: {
+          entradaAnalogica: {
+            canal: 1,
+            tipoSenal: '4-20mA',
+            variable: 'presion_agua',
+            entradaMinMa: 4,
+            entradaMaxMa: 20,
+            salidaMin: 0,
+            salidaMax: 10,
+            unidadSalida: 'bar',
+          },
+        },
+      },
+    );
+
+    expect(
+      frame.readings.find((row: any) => row.variable === 'presion_agua'),
+    ).toMatchObject({
+      value: 3.262,
+      unit: 'bar',
+      rawValue: 9.219,
+      rawUnit: 'mA',
+    });
   });
 });

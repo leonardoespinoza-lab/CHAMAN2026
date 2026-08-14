@@ -9,7 +9,16 @@
         <strong>Sensores asignados al lote</strong>
       </div>
     </div>
-    <span class="devices-count">{{ dispositivos.length }} activo{{ dispositivos.length === 1 ? '' : 's' }}</span>
+    <div class="devices-toolbar">
+      <div class="history-period" role="group" aria-label="Periodo de las curvas de sensores">
+        @for (dias of [7, 30, 90]; track dias) {
+          <button type="button" [class.active]="diasHistorico === dias" (click)="cambiarPeriodo(dias)">
+            {{ dias }} dias
+          </button>
+        }
+      </div>
+      <span class="devices-count">{{ dispositivos.length }} asignado{{ dispositivos.length === 1 ? '' : 's' }}</span>
+    </div>
   </header>
 
   <div class="devices-grid">
@@ -94,19 +103,41 @@
           <p-message severity="info">El dispositivo todavia no tiene variables graficables en el lote.</p-message>
         }
 
-        <div class="device-actions">
-          <p-button
-            label="Ver curvas"
-            icon="pi pi-chart-line"
-            [outlined]="true"
-            (onClick)="abrirDrawerDispositivo(dispositivo)"
-          />
-        </div>
+        @if (estaCargandoHistorico(dispositivo)) {
+          <div class="device-history-loading" aria-live="polite">
+            <i class="pi pi-spin pi-spinner"></i>
+            <span>Cargando lecturas crudas del sensor...</span>
+          </div>
+        } @else if (esLanzaDeSuelo(dispositivo)) {
+          <section class="device-inline-history" aria-label="Curvas de perfil Sentek y napa">
+            <app-grafico-historico-suelo
+              [reportes]="historico(dispositivo)"
+              [rawFrames]="frames(dispositivo)"
+              [titulo]="'Perfil Sentek 1,2 m · ' + (dispositivo.nombre || 'sensor de suelo')"
+              [subtitulo]="
+                'Humedad, salinidad y temperatura por profundidad; cada punto es una lectura recibida, sin promedios'
+              "
+              [fechaDesde]="dispositivo.fechaAsignacionLote"
+            ></app-grafico-historico-suelo>
+          </section>
+        } @else if (esSensorAmbiente(dispositivo)) {
+          <section class="device-inline-history" aria-label="Curvas del sensor ambiental">
+            <app-grafico-historico-ambiente
+              [reportes]="historico(dispositivo)"
+              [titulo]="'Variables medidas · ' + (dispositivo.nombre || 'sensor ambiental')"
+              [subtitulo]="'Evolucion temporal de las lecturas registradas por el equipo'"
+            ></app-grafico-historico-ambiente>
+          </section>
+        }
+
+        @if (historicoConError(dispositivo)) {
+          <p-message severity="warn">
+            No se pudo recuperar todo el historico. Se conserva visible la ultima lectura disponible.
+          </p-message>
+        }
       </article>
     } @empty {
       <p-message severity="info">No hay dispositivos asignados al lote.</p-message>
     }
   </div>
 </section>
-
-<app-drawer-dispositivos [dispositivo]="dispositivo" [(visible)]="verDrawerDispositivos"></app-drawer-dispositivos>

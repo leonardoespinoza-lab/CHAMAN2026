@@ -52,11 +52,24 @@
       <section class="napa-history-card">
         <header>
           <div>
-            <span>Napa</span>
-            <strong>{{ napaResumen }}</strong>
-            <small>Historico del sensor de nivel asociado al controlador</small>
+            <span>Altura de napa</span>
+            <strong>{{ napaActual | number: '1.2-2' }} m desde el terreno hasta el agua</strong>
+            <small>{{ napaResumen }} · cada punto corresponde a un reporte del controlador</small>
           </div>
         </header>
+
+        <div class="napa-visual" aria-label="Representacion de la profundidad actual de la napa">
+          <div class="napa-ground"><span>Terreno · 0 m</span></div>
+          <div class="napa-depth-line" [style.height.%]="napaLineaVisual">
+            <span>{{ napaActual | number: '1.2-2' }} m</span>
+          </div>
+          <div class="napa-water" [style.top.%]="napaPosicionVisual">
+            <span>Borde superior del agua</span>
+          </div>
+          @if (napaActualFecha) {
+            <small>Ultima medicion: {{ napaActualFecha | date: 'short' }}</small>
+          }
+        </div>
 
         <app-chart [options]="napaChartOptions"></app-chart>
       </section>
@@ -94,11 +107,24 @@
       <section class="napa-history-card only">
         <header>
           <div>
-            <span>Napa</span>
-            <strong>{{ napaResumen }}</strong>
-            <small>Historico del sensor de nivel asociado al controlador</small>
+            <span>Altura de napa</span>
+            <strong>{{ napaActual | number: '1.2-2' }} m desde el terreno hasta el agua</strong>
+            <small>{{ napaResumen }} · cada punto corresponde a un reporte del controlador</small>
           </div>
         </header>
+
+        <div class="napa-visual" aria-label="Representacion de la profundidad actual de la napa">
+          <div class="napa-ground"><span>Terreno · 0 m</span></div>
+          <div class="napa-depth-line" [style.height.%]="napaLineaVisual">
+            <span>{{ napaActual | number: '1.2-2' }} m</span>
+          </div>
+          <div class="napa-water" [style.top.%]="napaPosicionVisual">
+            <span>Borde superior del agua</span>
+          </div>
+          @if (napaActualFecha) {
+            <small>Ultima medicion: {{ napaActualFecha | date: 'short' }}</small>
+          }
+        </div>
 
         <app-chart [options]="napaChartOptions"></app-chart>
 

@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import {
   ICalificacionSensorMeteorologico,
   ICalificacionVariableMeteorologica,
+  IConfiguracionEntradaAnalogica,
   ICreateDispositivo,
   IDispositivo,
   IIntervaloCalibracionMeteorologica,
@@ -35,8 +36,11 @@ export class DispositivosService {
   }
 
   async create(dato: ICreateDispositivo) {
-    const normalized = this.prepararCalificacionMeteorologica(dato);
+    const normalized = this.prepararConfiguracionLecturas(
+      this.prepararCalificacionMeteorologica(dato),
+    );
     this.validarCalificacionMeteorologica(normalized);
+    this.validarConfiguracionLecturas(normalized);
     return await this.repository.create(normalized);
   }
 
@@ -56,14 +60,32 @@ export class DispositivosService {
       dato,
       'calificacionMeteorologica',
     );
-    const current = hasQualification
-      ? await this.repository.getById(id)
-      : undefined;
-    if (hasQualification && !current) {
+    const hasReadingConfiguration = Object.prototype.hasOwnProperty.call(
+      dato,
+      'configuracionLecturas',
+    );
+    const hasAnalogConfiguration = Boolean(
+      dato.configuracionLecturas &&
+      Object.prototype.hasOwnProperty.call(
+        dato.configuracionLecturas,
+        'entradaAnalogica',
+      ),
+    );
+    const current =
+      hasQualification || hasReadingConfiguration
+        ? await this.repository.getById(id)
+        : undefined;
+    if ((hasQualification || hasReadingConfiguration) && !current) {
       throw new NotFoundException('No encontrado');
     }
-    const normalized = this.prepararCalificacionMeteorologica(dato, current);
+    const normalized = this.prepararConfiguracionLecturas(
+      this.prepararCalificacionMeteorologica(dato, current),
+      current,
+    );
     this.validarCalificacionMeteorologica(normalized);
+    if (hasAnalogConfiguration) {
+      this.validarConfiguracionLecturas(normalized);
+    }
     const updated = await this.repository.update(id, normalized);
     if (updated) {
       return updated;
@@ -122,6 +144,141 @@ export class DispositivosService {
       ...dato,
       calificacionMeteorologica: merged,
     };
+  }
+
+  private prepararConfiguracionLecturas<
+    T extends ICreateDispositivo | IUpdateDispositivo,
+  >(dato: T, current?: Partial<IDispositivo>): T {
+    if (
+      !Object.prototype.hasOwnProperty.call(dato, 'configuracionLecturas') ||
+      !dato.configuracionLecturas
+    ) {
+      return dato;
+    }
+
+    const incoming = dato.configuracionLecturas;
+    const previous = current?.configuracionLecturas;
+    const analogIncoming = incoming.entradaAnalogica;
+    const analog = analogIncoming
+      ? this.normalizarEntradaAnalogica({
+          ...(previous?.entradaAnalogica || {}),
+          ...analogIncoming,
+        } as IConfiguracionEntradaAnalogica)
+      : previous?.entradaAnalogica;
+
+    return {
+      ...dato,
+      configuracionLecturas: {
+        perfilSuelo: incoming.perfilSuelo || previous?.perfilSuelo,
+        entradaAnalogica: analog,
+      },
+    };
+  }
+
+  private normalizarEntradaAnalogica(
+    config: IConfiguracionEntradaAnalogica,
+  ): IConfiguracionEntradaAnalogica {
+    const variable = config.variable || 'sin_definir';
+    const normalized: IConfiguracionEntradaAnalogica = {
+      ...config,
+      canal: Number(config.canal) === 2 ? 2 : 1,
+      tipoSenal: '4-20mA',
+      variable,
+      entradaMinMa: Number.isFinite(Number(config.entradaMinMa))
+        ? Number(config.entradaMinMa)
+        : 4,
+      entradaMaxMa: Number.isFinite(Number(config.entradaMaxMa))
+        ? Number(config.entradaMaxMa)
+        : 20,
+      salidaMin: this.numeroOpcional(config.salidaMin),
+      salidaMax: this.numeroOpcional(config.salidaMax),
+      unidadSalida: String(config.unidadSalida || '').trim() || undefined,
+      profundidadInstalacionM: this.numeroOpcional(
+        config.profundidadInstalacionM,
+      ),
+      fuenteCalibracion:
+        String(config.fuenteCalibracion || '').trim() || undefined,
+      observaciones: String(config.observaciones || '').trim() || undefined,
+    };
+
+    if (variable === 'nivel_napa') {
+      normalized.versionConversion = 'lineal-4-20ma-v1';
+      normalized.magnitudSalida = 'columna_agua_sobre_sensor';
+      normalized.referenciaProfundidad = 'nivel_terreno';
+    } else if (variable === 'presion_agua') {
+      normalized.versionConversion = 'lineal-4-20ma-v1';
+      normalized.magnitudSalida = 'presion_agua';
+      normalized.referenciaProfundidad = undefined;
+    } else {
+      normalized.versionConversion = undefined;
+      normalized.magnitudSalida = undefined;
+      normalized.referenciaProfundidad = undefined;
+    }
+
+    return normalized;
+  }
+
+  private validarConfiguracionLecturas(
+    dato: ICreateDispositivo | IUpdateDispositivo,
+  ): void {
+    const config = dato.configuracionLecturas?.entradaAnalogica;
+    if (!config || config.variable === 'sin_definir') return;
+
+    const faltantes: string[] = [];
+    if (config.tipoSenal !== '4-20mA') {
+      faltantes.push('tipo de senal 4-20 mA');
+    }
+    if (config.canal !== 1 && config.canal !== 2) {
+      faltantes.push('canal analogico 1 o 2');
+    }
+    if (
+      !Number.isFinite(config.entradaMinMa) ||
+      !Number.isFinite(config.entradaMaxMa) ||
+      config.entradaMaxMa <= config.entradaMinMa
+    ) {
+      faltantes.push('rango electrico creciente');
+    }
+    if (
+      !Number.isFinite(config.salidaMin) ||
+      !Number.isFinite(config.salidaMax) ||
+      Number(config.salidaMax) === Number(config.salidaMin)
+    ) {
+      faltantes.push('escala fisica creciente');
+    }
+    if (!String(config.unidadSalida || '').trim()) {
+      faltantes.push('unidad de salida');
+    }
+    if (!String(config.fuenteCalibracion || '').trim()) {
+      faltantes.push('fuente de la escala del transductor');
+    }
+
+    if (config.variable === 'nivel_napa') {
+      const profundidad = Number(config.profundidadInstalacionM);
+      if (!Number.isFinite(profundidad) || profundidad <= 0) {
+        faltantes.push('profundidad vertical del sensor desde el terreno');
+      }
+      if (Number(config.salidaMax) <= Number(config.salidaMin)) {
+        faltantes.push('escala de columna de agua creciente');
+      }
+      if (config.salidaMin! < 0) {
+        faltantes.push('columna de agua minima no negativa');
+      }
+      if (
+        String(config.unidadSalida || '')
+          .trim()
+          .toLowerCase() !== 'm'
+      ) {
+        faltantes.push('unidad de columna de agua en metros');
+      }
+    }
+
+    if (faltantes.length) {
+      throw new BadRequestException(
+        `La configuracion del sensor analogico no es valida: ${[
+          ...new Set(faltantes),
+        ].join(', ')}.`,
+      );
+    }
   }
 
   private construirHistorialCalibraciones(

@@ -145,6 +145,120 @@
   width: 100%;
 }
 
+.napa-visual {
+  background: linear-gradient(180deg, #f7fbfc 0%, #f7fbfc 13%, #eee5d7 13%, #dfc9a9 100%);
+  border: 1px solid var(--p-surface-border);
+  border-radius: 8px;
+  height: 230px;
+  margin: 0.85rem 0 1rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.napa-ground {
+  background: linear-gradient(180deg, #88705a, #5c4430);
+  box-shadow: 0 3px 0 rgba(58, 38, 23, 0.16);
+  height: 30px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 22px;
+  z-index: 3;
+}
+
+.napa-ground span,
+.napa-water span,
+.napa-depth-line span {
+  background: var(--p-content-background);
+  border: 1px solid var(--p-surface-border);
+  border-radius: 999px;
+  color: var(--p-text-color);
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 850;
+  padding: 0.28rem 0.55rem;
+  text-transform: none;
+}
+
+.napa-ground span {
+  left: 16px;
+  position: absolute;
+  top: -14px;
+}
+
+.napa-water {
+  background: linear-gradient(180deg, rgba(38, 174, 219, 0.9), rgba(20, 126, 180, 0.94));
+  bottom: 0;
+  left: 0;
+  min-height: 24px;
+  position: absolute;
+  right: 0;
+  transition: top 220ms ease;
+}
+
+.napa-water::before {
+  background: repeating-radial-gradient(ellipse at center, rgba(255, 255, 255, 0.5) 0 2px, transparent 3px 10px);
+  content: "";
+  height: 8px;
+  left: 0;
+  opacity: 0.5;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.napa-water span {
+  position: absolute;
+  right: 16px;
+  top: -17px;
+}
+
+.napa-depth-line {
+  border-left: 2px dashed var(--p-primary-color);
+  left: 50%;
+  position: absolute;
+  top: 23%;
+  transition: height 220ms ease;
+  z-index: 4;
+}
+
+.napa-depth-line::after,
+.napa-depth-line::before {
+  background: var(--p-primary-color);
+  border-radius: 50%;
+  content: "";
+  height: 9px;
+  left: -5px;
+  position: absolute;
+  width: 9px;
+}
+
+.napa-depth-line::before {
+  top: 0;
+}
+
+.napa-depth-line::after {
+  bottom: 0;
+}
+
+.napa-depth-line span {
+  left: 10px;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.napa-visual > small {
+  bottom: 8px;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 750;
+  left: 12px;
+  position: absolute;
+  z-index: 4;
+}
+
 .raw-evidence {
   border-top: 1px solid var(--p-surface-border);
   margin-top: 1rem;
@@ -247,6 +361,16 @@
 
   .napa-history-card app-chart {
     min-height: 320px;
+  }
+
+  .napa-visual {
+    height: 200px;
+  }
+
+  .napa-ground span,
+  .napa-water span,
+  .napa-depth-line span {
+    font-size: 0.72rem;
   }
 
   .raw-evidence-head {

@@ -61,6 +61,70 @@ describe('DispositivosService - calificacion meteorologica', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('normaliza la napa como profundidad al agua referida al terreno', async () => {
+    await service.create({
+      deveui: '24E124454E358347',
+      configuracionLecturas: {
+        entradaAnalogica: {
+          canal: 1,
+          tipoSenal: '4-20mA',
+          variable: 'nivel_napa',
+          entradaMinMa: 4,
+          entradaMaxMa: 20,
+          salidaMin: 0,
+          salidaMax: 10,
+          unidadSalida: 'm',
+          profundidadInstalacionM: 6,
+          fuenteCalibracion: 'Ficha 0-10 m y medicion vertical en campo',
+        },
+      },
+    });
+
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        configuracionLecturas: expect.objectContaining({
+          entradaAnalogica: expect.objectContaining({
+            versionConversion: 'lineal-4-20ma-v1',
+            magnitudSalida: 'columna_agua_sobre_sensor',
+            referenciaProfundidad: 'nivel_terreno',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('rechaza declarar napa sin escala, datum y profundidad fisica completos', async () => {
+    await expect(
+      service.create({
+        deveui: '24E124454E358347',
+        configuracionLecturas: {
+          entradaAnalogica: {
+            canal: 1,
+            tipoSenal: '4-20mA',
+            variable: 'nivel_napa',
+            entradaMinMa: 4,
+            entradaMaxMa: 20,
+            salidaMin: 0,
+            salidaMax: 10,
+            unidadSalida: 'mA',
+          },
+        },
+      }),
+    ).rejects.toThrow('configuracion del sensor analogico no es valida');
+    expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it('no bloquea una actualizacion ajena a la entrada analogica de un dispositivo historico', async () => {
+    await expect(
+      service.update('legacy-device', { nombre: 'Controlador historico' }),
+    ).resolves.toEqual({ nombre: 'Controlador historico' });
+
+    expect(repository.getById).not.toHaveBeenCalled();
+    expect(repository.update).toHaveBeenCalledWith('legacy-device', {
+      nombre: 'Controlador historico',
+    });
+  });
+
   afterEach(() => {
     jest.useRealTimers();
   });

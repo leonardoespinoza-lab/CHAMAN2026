@@ -116,6 +116,45 @@ describe('decodeUc511SentekPayload', () => {
     expect(calibrated).toBeNull();
   });
 
+  it('preserves raw evidence but does not extrapolate outside 4-20 mA', () => {
+    const config = {
+      canal: 1 as const,
+      tipoSenal: '4-20mA' as const,
+      variable: 'nivel_napa' as const,
+      entradaMinMa: 4,
+      entradaMaxMa: 20,
+      salidaMin: 0,
+      salidaMax: 10,
+      unidadSalida: 'm',
+      profundidadInstalacionM: 6,
+    };
+
+    expect(calibrateAnalogInput(3.99, config)).toBeNull();
+    expect(calibrateAnalogInput(20.01, config)).toBeNull();
+  });
+
+  it('labels napa as depth to water referenced to terrain', () => {
+    const calibrated = calibrateAnalogInput(9.24, {
+      canal: 1,
+      tipoSenal: '4-20mA',
+      variable: 'nivel_napa',
+      entradaMinMa: 4,
+      entradaMaxMa: 20,
+      salidaMin: 0,
+      salidaMax: 10,
+      unidadSalida: 'm',
+      profundidadInstalacionM: 6,
+    });
+
+    expect(calibrated).toMatchObject({
+      value: 2.725,
+      waterColumn: 3.275,
+      installationDepth: 6,
+      reference: 'nivel_terreno',
+      conversionModel: 'lineal-4-20ma-v1',
+    });
+  });
+
   it('decodes the v2 signed int16 analog payload in amperes', () => {
     const decoded = decodeUc511SentekPayload(
       '0502e02ee02ee02ee02e', // 12.000 mA current/min/max/average

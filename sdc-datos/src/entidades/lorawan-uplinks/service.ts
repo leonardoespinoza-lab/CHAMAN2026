@@ -335,7 +335,7 @@ export class LorawanUplinksService {
         });
         const config = dispositivo?.configuracionLecturas?.entradaAnalogica;
         const valores = decodedUc511ToReporteValores(decoded, config) as any;
-        const key = config?.variable === 'nivel_napa' ? 'Napa' : 'PresiÃ³n';
+        const key = config?.variable === 'nivel_napa' ? 'Napa' : 'Presión';
         const calibrated = valores?.[key]?.[0];
         const value = calibrated?.valores?.actual;
         if (typeof value === 'number' && Number.isFinite(value)) {
@@ -348,6 +348,14 @@ export class LorawanUplinksService {
             channel: decoded.analog.channel || undefined,
             rawValue: decoded.analog.rawMa,
             rawUnit: 'mA',
+            reference:
+              config?.variable === 'nivel_napa' ? 'nivel_terreno' : undefined,
+            waterColumnM: calibrated?.valores?.columnaAgua,
+            installationDepthM: calibrated?.valores?.profundidadInstalacion,
+            conversionModel:
+              config?.variable === 'nivel_napa'
+                ? 'lineal-4-20ma-v1'
+                : undefined,
           });
         }
       }

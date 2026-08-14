@@ -84,7 +84,9 @@ export interface IAsignacionDispositivoLote {
 }
 
 export type VariableEntradaAnalogica =
-  "sin_definir" | "presion_agua" | "nivel_napa";
+  | "sin_definir"
+  | "presion_agua"
+  | "nivel_napa";
 
 export interface IConfiguracionPerfilSuelo {
   tipo: "sonda_sentek_120cm";
@@ -110,6 +112,16 @@ export interface IConfiguracionEntradaAnalogica {
    * profundidadInstalacionM - columnaAgua.
    */
   profundidadInstalacionM?: number;
+  /** Modelo matematico aplicado a la senal electrica. */
+  versionConversion?: "lineal-4-20ma-v1";
+  /**
+   * Significado fisico de salidaMin/salidaMax. Para nivel_napa siempre es
+   * columna de agua sobre el diafragma del transductor, nunca profundidad
+   * directa desde el terreno.
+   */
+  magnitudSalida?: "columna_agua_sobre_sensor" | "presion_agua";
+  /** Datum de la profundidad informada al productor. */
+  referenciaProfundidad?: "nivel_terreno";
   fuenteCalibracion?: string;
   observaciones?: string;
 }
@@ -124,7 +136,11 @@ export interface IConfiguracionLecturasDispositivo {
 }
 
 export type TipoServicioDispositivo =
-  "perfil_suelo" | "nivel_napa" | "meteorologia" | "pluviometria" | "otro";
+  | "perfil_suelo"
+  | "nivel_napa"
+  | "meteorologia"
+  | "pluviometria"
+  | "otro";
 
 /**
  * Servicio agronomico expuesto por un controlador fisico. Un mismo DevEUI
@@ -202,13 +218,19 @@ export function serviciosDispositivoNormalizados(
 }
 
 export type EstadoCalificacionMeteorologica =
-  "calificado" | "referencia" | "rechazado";
+  | "calificado"
+  | "referencia"
+  | "rechazado";
 
 export type RolVariableMeteorologica =
-  "aire_2m" | "aire_canopia" | "suelo" | "desconocido";
+  | "aire_2m"
+  | "aire_canopia"
+  | "suelo"
+  | "desconocido";
 
 export type VariableCalibracionMeteorologica =
-  "temperatura_aire" | "humedad_relativa";
+  | "temperatura_aire"
+  | "humedad_relativa";
 
 export interface ICalificacionVariableMeteorologica {
   estado: EstadoCalificacionMeteorologica;

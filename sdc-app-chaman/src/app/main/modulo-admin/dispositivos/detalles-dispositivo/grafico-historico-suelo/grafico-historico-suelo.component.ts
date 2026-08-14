@@ -59,6 +59,11 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   public profileRows: ProfileRow[] = [];
   public resumen = '';
   public napaResumen = '';
+  public napaActual?: number;
+  public napaActualFecha?: number;
+  public napaEscalaMaxima = 10;
+  public napaPosicionVisual = 50;
+  public napaLineaVisual = 27;
   public assignmentNotice = '';
 
   private readonly definitions: SoilMetricDefinition[] = [
@@ -455,12 +460,21 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
     if (!points.length) {
       this.napaResumen = '';
+      this.napaActual = undefined;
+      this.napaActualFecha = undefined;
       return undefined;
     }
 
     const unit = points.find((point) => !!point.unit)?.unit || 'm';
     const latest = points[points.length - 1];
-    this.napaResumen = `${points.length} lecturas - ultima ${Number(latest.y).toFixed(2)} ${unit}`;
+    this.napaActual = Number(latest.y);
+    this.napaActualFecha = latest.x;
+    this.napaEscalaMaxima = Math.max(5, Math.ceil(Math.max(...points.map((point) => point.y), 0) + 1));
+    // Reserva la franja superior para representar el terreno y escala la
+    // distancia vertical hasta el agua dentro del perfil visible.
+    this.napaPosicionVisual = Math.min(88, Math.max(30, (this.napaActual / this.napaEscalaMaxima) * 58 + 30));
+    this.napaLineaVisual = Math.max(4, this.napaPosicionVisual - 23);
+    this.napaResumen = `${points.length} lecturas crudas - actual ${this.napaActual.toFixed(2)} ${unit} bajo el terreno`;
 
     return {
       chart: {
@@ -494,8 +508,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         gridLineWidth: 1,
       },
       yAxis: {
-        max: 10,
+        max: this.napaEscalaMaxima,
         min: 0,
+        reversed: true,
         title: {
           text: `Profundidad de napa desde el terreno (${unit})`,
           style: { color: '#0f766e', fontSize: '14px', fontWeight: '700' },
@@ -505,6 +520,22 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         },
         gridLineColor: 'var(--p-surface-border)',
         gridLineWidth: 1,
+        plotLines: [
+          {
+            color: '#6b4f35',
+            dashStyle: 'Solid',
+            label: {
+              align: 'left',
+              style: { color: '#6b4f35', fontSize: '12px', fontWeight: '800' },
+              text: 'Nivel del terreno · 0 m',
+              x: 8,
+              y: -6,
+            },
+            value: 0,
+            width: 2,
+            zIndex: 5,
+          },
+        ],
       },
       legend: {
         enabled: true,
@@ -537,10 +568,10 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           animation: { duration: 500 },
           dataLabels: { enabled: false },
           enableMouseTracking: true,
-          lineWidth: 2,
+          lineWidth: 3,
           marker: {
             enabled: points.length <= 80,
-            radius: 2,
+            radius: 3.5,
           },
           states: {
             hover: {
@@ -555,7 +586,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       },
       series: [
         {
-          color: '#14b8a6',
+          color: '#1297c4',
           data: points,
           name: 'Profundidad de napa',
           type: 'spline',
@@ -570,7 +601,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const points: NapaPoint[] = [];
 
     for (const frame of this.filteredRawFrames()) {
-      for (const reading of frame.readings.filter((item) => item.variable === 'nivel_napa')) {
+      for (const reading of frame.readings.filter(
+        (item) => item.variable === 'nivel_napa' && (!item.serviceId || item.serviceId === 'nivel-napa')
+      )) {
         points.push({
           x: new Date(frame.timestamp).getTime(),
           y: this.normalizarNapa(reading.value, reading.unit),
@@ -644,7 +677,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       salinidad: 'salinidad_suelo',
       temperatura: 'temperatura_suelo',
     }[key];
-    return (frame.readings || []).filter((reading) => reading.variable === variable);
+    return (frame.readings || []).filter(
+      (reading) => reading.variable === variable && (!reading.serviceId || reading.serviceId === 'perfil-suelo-sentek')
+    );
   }
 
   private filteredRawFrames(): ILorawanRawFrame[] {

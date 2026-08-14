@@ -36,6 +36,13 @@ export interface ILorawanRawReading {
   channel?: number;
   rawValue?: number;
   rawUnit?: string;
+  /** En nivel_napa, distancia vertical terreno-superficie del agua. */
+  reference?: "nivel_terreno";
+  /** Columna hidrostatica medida sobre el transductor. */
+  waterColumnM?: number;
+  /** Profundidad vertical del diafragma desde el terreno. */
+  installationDepthM?: number;
+  conversionModel?: "lineal-4-20ma-v1";
 }
 
 /** Evidencia auditable de un uplink fisico y sus lecturas decodificadas. */

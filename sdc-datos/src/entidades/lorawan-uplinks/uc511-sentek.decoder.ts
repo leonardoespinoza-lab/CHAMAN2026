@@ -297,6 +297,8 @@ export function calibrateAnalogInput(
   unit: string;
   waterColumn?: number;
   installationDepth?: number;
+  reference?: 'nivel_terreno';
+  conversionModel?: 'lineal-4-20ma-v1';
 } | null {
   if (
     !config ||
@@ -307,6 +309,8 @@ export function calibrateAnalogInput(
     !Number.isFinite(config.salidaMin) ||
     !Number.isFinite(config.salidaMax) ||
     config.entradaMaxMa <= config.entradaMinMa ||
+    currentMa < config.entradaMinMa ||
+    currentMa > config.entradaMaxMa ||
     !config.unidadSalida?.trim()
   ) {
     return null;
@@ -335,6 +339,8 @@ export function calibrateAnalogInput(
       unit: 'm',
       waterColumn: round(calibratedValue, 3),
       installationDepth: round(installationDepth, 3),
+      reference: 'nivel_terreno',
+      conversionModel: 'lineal-4-20ma-v1',
     };
   }
 
