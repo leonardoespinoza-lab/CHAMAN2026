@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ICreateLorawanUplink, IQueryParam } from 'modelos/src';
+import { controllerDecoderRegistry } from './controller-decoder.registry';
 import { LorawanUplinksService } from './service';
 
 @ApiTags('Lorawan Uplinks')
@@ -40,6 +41,12 @@ export class LorawanUplinksController {
     @Query('limit') limit?: string,
   ) {
     return await this.service.rawHistory({ devEUI, days, limit });
+  }
+
+  /** Inventario versionado para auditar qué controlador interpreta cada payload. */
+  @Get('decoders')
+  decoderCatalog() {
+    return controllerDecoderRegistry.catalog();
   }
 
   @Post('reprocess')

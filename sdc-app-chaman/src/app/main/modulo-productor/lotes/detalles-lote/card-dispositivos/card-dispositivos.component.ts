@@ -1,6 +1,14 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
-import { IDispositivo, ILorawanRawFrame, ILote, IReporte } from 'modelos/src';
+import {
+  IConfiguracionEntradaAnalogica,
+  IDispositivo,
+  ILorawanRawFrame,
+  ILote,
+  IReporte,
+  IServicioDispositivo,
+  serviciosDispositivoNormalizados,
+} from 'modelos/src';
 import { LorawanUplinksService } from '../../../../../auxiliares/http/lorawan-uplinks.service';
 import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
@@ -13,6 +21,7 @@ import {
 } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/sentek-profile';
 import { GraficoHistoricoAmbienteComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-ambiente/grafico-historico-ambiente.component';
 import { GraficoHistoricoSueloComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-suelo/grafico-historico-suelo.component';
+import { GraficoHistoricoNapaComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-napa/grafico-historico-napa.component';
 
 interface DispositivoResumen {
   humedad?: MedicionSensorProfundidad;
@@ -26,6 +35,10 @@ interface DispositivoAmbienteResumen {
   bateria?: number;
 }
 
+interface DispositivoLogico extends IDispositivo {
+  _servicioLogico?: IServicioDispositivo;
+}
+
 @Component({
   selector: 'app-card-dispositivos',
   imports: [
@@ -34,6 +47,7 @@ interface DispositivoAmbienteResumen {
     BateriaComponent,
     GraficoHistoricoAmbienteComponent,
     GraficoHistoricoSueloComponent,
+    GraficoHistoricoNapaComponent,
   ],
   templateUrl: './card-dispositivos.component.html',
   styleUrl: './card-dispositivos.component.scss',
@@ -41,7 +55,7 @@ interface DispositivoAmbienteResumen {
 export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   @Input() public lote?: ILote;
 
-  public dispositivos: IDispositivo[] = [];
+  public dispositivos: DispositivoLogico[] = [];
   public perfiles = new Map<string, MedicionProfundidad[]>();
   public resumenes = new Map<string, DispositivoResumen>();
   public resumenesAmbiente = new Map<string, DispositivoAmbienteResumen>();
@@ -59,8 +73,9 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
     private lorawanUplinks: LorawanUplinksService
   ) {}
 
-  public getDeviceKey(dispositivo: IDispositivo): string {
-    return dispositivo._id || dispositivo.deveui || dispositivo.nombre || 'sin-id';
+  public getDeviceKey(dispositivo: DispositivoLogico): string {
+    const physical = dispositivo._id || dispositivo.deveui || dispositivo.nombre || 'sin-id';
+    return `${physical}:${dispositivo._servicioLogico?.id || 'fisico'}`;
   }
 
   public perfil(dispositivo: IDispositivo): MedicionProfundidad[] {
@@ -99,6 +114,18 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
 
   public esLanzaDeSuelo(dispositivo: IDispositivo): boolean {
     return this.tieneVariableSuelo(dispositivo);
+  }
+
+  public esMedidorNapa(dispositivo: DispositivoLogico): boolean {
+    if (dispositivo._servicioLogico) {
+      return dispositivo._servicioLogico.tipo === 'nivel_napa';
+    }
+    return serviciosDispositivoNormalizados(dispositivo).some((servicio) => servicio.tipo === 'nivel_napa');
+  }
+
+  public configuracionNapa(dispositivo: IDispositivo): IConfiguracionEntradaAnalogica | undefined {
+    const config = dispositivo.configuracionLecturas?.entradaAnalogica;
+    return config?.variable === 'nivel_napa' ? config : undefined;
   }
 
   public esSensorAmbiente(dispositivo: IDispositivo): boolean {
@@ -176,19 +203,20 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private tieneVariableSuelo(dispositivo?: IDispositivo): boolean {
+    const logico = dispositivo as DispositivoLogico | undefined;
+    if (logico?._servicioLogico) {
+      return logico._servicioLogico.tipo === 'perfil_suelo';
+    }
     const sensores = (dispositivo?.sensores || []).map((sensor) => String(sensor));
     const valores = (dispositivo?.ultimoReporte?.datos?.valores || {}) as unknown as Record<string, any>;
-    const texto = `${dispositivo?.tipo || ''} ${dispositivo?.nombre || ''} ${dispositivo?.deveui || ''}`.toLowerCase();
-    const soilKeys = ['Humedad Suelo Profundidad', 'Temperatura Suelo', 'Salinidad Suelo', 'Napa'];
+    const texto = `${dispositivo?.tipo || ''} ${dispositivo?.nombre || ''}`.toLowerCase();
+    const soilKeys = ['Humedad Suelo Profundidad', 'Temperatura Suelo', 'Salinidad Suelo'];
 
     return (
       dispositivo?.tipo === 'Sensor de Humedad de Suelo' ||
       soilKeys.some((key) => sensores.includes(key) || Array.isArray(valores[key])) ||
       texto.includes('sentek') ||
-      texto.includes('lanza') ||
-      texto.includes('napa') ||
-      texto.includes('uc501') ||
-      texto.includes('uc511')
+      texto.includes('lanza')
     );
   }
 
@@ -200,7 +228,8 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private setDispositivos(): void {
-    this.dispositivos = this.dispositivosFisicosUnicos(this.lote?.dispositivos || []);
+    const fisicos = this.dispositivosFisicosUnicos(this.lote?.dispositivos || []);
+    this.dispositivos = fisicos.flatMap((dispositivo) => this.expandirServicios(dispositivo));
     this.perfiles.clear();
     this.resumenes.clear();
     this.resumenesAmbiente.clear();
@@ -217,11 +246,21 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   private async cargarHistoricosInline(): Promise<void> {
     const version = ++this.loadVersion;
     const graficables = this.dispositivos.filter(
-      (dispositivo) => this.esLanzaDeSuelo(dispositivo) || this.esSensorAmbiente(dispositivo)
+      (dispositivo) =>
+        this.esLanzaDeSuelo(dispositivo) || this.esMedidorNapa(dispositivo) || this.esSensorAmbiente(dispositivo)
     );
 
     this.cargandoHistorico = new Set(graficables.map((dispositivo) => this.getDeviceKey(dispositivo)));
     this.erroresHistorico.clear();
+    const requestCache = new Map<
+      string,
+      Promise<
+        [
+          PromiseSettledResult<Awaited<ReturnType<ReporteService['historico']>>>,
+          PromiseSettledResult<ILorawanRawFrame[]>,
+        ]
+      >
+    >();
 
     await Promise.all(
       graficables.map(async (dispositivo) => {
@@ -233,12 +272,21 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
         }
 
         try {
-          const [response, frames] = await Promise.allSettled([
-            this.reportesService.historico(id, this.diasHistorico, 5000),
-            this.esLanzaDeSuelo(dispositivo) && dispositivo.deveui
-              ? this.lorawanUplinks.rawHistory(dispositivo.deveui, this.diasHistorico, 5000)
-              : Promise.resolve<ILorawanRawFrame[]>([]),
-          ]);
+          const needsRaw =
+            (this.esLanzaDeSuelo(dispositivo) || this.esMedidorNapa(dispositivo)) && !!dispositivo.deveui;
+          const requestKey = `${id}:${needsRaw ? 'raw' : 'reports'}`;
+          if (!requestCache.has(requestKey)) {
+            requestCache.set(
+              requestKey,
+              Promise.allSettled([
+                this.reportesService.historico(id, this.diasHistorico, 5000),
+                needsRaw
+                  ? this.lorawanUplinks.rawHistory(dispositivo.deveui!, this.diasHistorico, 5000)
+                  : Promise.resolve<ILorawanRawFrame[]>([]),
+              ])
+            );
+          }
+          const [response, frames] = await requestCache.get(requestKey)!;
 
           if (version !== this.loadVersion) return;
           const fallback = dispositivo.ultimoReporte ? [dispositivo.ultimoReporte] : [];
@@ -294,6 +342,64 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
       });
     });
     return [...unicos.values()];
+  }
+
+  private expandirServicios(dispositivo: IDispositivo): DispositivoLogico[] {
+    const servicios = serviciosDispositivoNormalizados(dispositivo);
+    if (!servicios.length) return [dispositivo];
+
+    return servicios.map((servicio) => {
+      const esPerfil = servicio.tipo === 'perfil_suelo';
+      const esNapa = servicio.tipo === 'nivel_napa';
+      const nombre = esPerfil
+        ? 'Sonda de humedad de suelo Sentek'
+        : esNapa
+          ? 'Medidor de Napa'
+          : servicio.nombre || dispositivo.nombre;
+      const configuracionLecturas = esPerfil
+        ? { perfilSuelo: dispositivo.configuracionLecturas?.perfilSuelo }
+        : esNapa
+          ? { entradaAnalogica: dispositivo.configuracionLecturas?.entradaAnalogica }
+          : dispositivo.configuracionLecturas;
+
+      return {
+        ...dispositivo,
+        nombre,
+        tipo: esPerfil ? 'Sensor de Humedad de Suelo' : esNapa ? 'Otro' : dispositivo.tipo,
+        sensores: [...(servicio.sensores || [])],
+        servicios: [servicio],
+        configuracionLecturas,
+        idProductor: servicio.idProductor || dispositivo.idProductor,
+        idEstablecimiento: servicio.idEstablecimiento || dispositivo.idEstablecimiento,
+        idLote: servicio.idLote || dispositivo.idLote,
+        fechaAsignacionLote: servicio.fechaAsignacionLote || dispositivo.fechaAsignacionLote,
+        ultimoReporte: this.filtrarReportePorServicio(dispositivo.ultimoReporte, servicio),
+        _servicioLogico: servicio,
+      };
+    });
+  }
+
+  private filtrarReportePorServicio(
+    reporte: IReporte | undefined,
+    servicio: IServicioDispositivo
+  ): IReporte | undefined {
+    if (!reporte?.datos?.valores) return reporte;
+    const sensores = new Set((servicio.sensores || []).map((sensor) => this.normalizarTexto(String(sensor))));
+    const valores = Object.entries(reporte.datos.valores as unknown as Record<string, unknown>).filter(([key]) => {
+      const normalized = this.normalizarTexto(key);
+      return sensores.has(normalized) || normalized === 'bateria';
+    });
+    return {
+      ...reporte,
+      datos: { ...reporte.datos, valores: Object.fromEntries(valores) as any },
+    };
+  }
+
+  private normalizarTexto(value: string): string {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
   }
 
   private reporteMasReciente(a?: IReporte, b?: IReporte): IReporte | undefined {

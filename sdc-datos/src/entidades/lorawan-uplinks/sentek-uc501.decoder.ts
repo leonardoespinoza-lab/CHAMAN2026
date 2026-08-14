@@ -12,7 +12,7 @@ export interface SentekUc501Decoded {
   canales: number[];
 }
 
-const DEPTHS_CM = [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115];
+const DEPTHS_CM = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 
 const CHANNEL_MAP: Record<number, SentekChannel> = {
   0: { metric: 'humedad', firstDepthIndex: 0 },
@@ -117,11 +117,18 @@ export function decodeSentekUc501Payload(
     }
 
     let end = i + 3;
-    while (end < buffer.length && buffer[end] !== 0x0d && buffer[end] !== 0x0a) {
+    while (
+      end < buffer.length &&
+      buffer[end] !== 0x0d &&
+      buffer[end] !== 0x0a
+    ) {
       end += 1;
     }
 
-    const text = buffer.subarray(i + 3, end).toString('ascii').trim();
+    const text = buffer
+      .subarray(i + 3, end)
+      .toString('ascii')
+      .trim();
     const readings = parseBlockText(text);
     if (!readings.length) {
       continue;

@@ -55,6 +55,22 @@
   font-weight: 850;
 }
 
+.profile-coverage {
+  background: color-mix(in srgb, var(--p-primary-color) 8%, var(--p-surface-0));
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 24%, var(--p-surface-border));
+  border-radius: 999px;
+  color: var(--p-text-color) !important;
+  display: inline-flex !important;
+  font-weight: 800;
+  margin-top: 0.45rem !important;
+  padding: 0.35rem 0.65rem;
+}
+
+.profile-coverage.incomplete {
+  background: color-mix(in srgb, #f59e0b 10%, var(--p-surface-0));
+  border-color: color-mix(in srgb, #f59e0b 34%, var(--p-surface-border));
+}
+
 .soil-history-actions {
   align-items: center;
   display: flex;
@@ -137,6 +153,34 @@
   border-top: 0;
   margin-top: 0;
   padding-top: 0;
+}
+
+.analog-history-card {
+  border-top: 1px solid var(--p-surface-border);
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.analog-history-card.only {
+  border-top: 0;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.analog-history-card app-chart {
+  display: block;
+  min-height: 320px;
+  width: 100%;
+}
+
+.analog-calibration-warning {
+  background: color-mix(in srgb, #f59e0b 10%, var(--p-surface-0));
+  border: 1px solid color-mix(in srgb, #f59e0b 34%, var(--p-surface-border));
+  border-radius: 8px;
+  color: var(--p-text-color) !important;
+  font-weight: 750;
+  margin-top: 0.45rem !important;
+  padding: 0.5rem 0.65rem;
 }
 
 .napa-history-card app-chart {
@@ -291,6 +335,23 @@
   overflow-wrap: anywhere;
 }
 
+.raw-evidence-row span small {
+  color: var(--p-text-muted-color);
+  display: block;
+  font-size: 0.68rem;
+  margin-top: 0.15rem;
+}
+
+.raw-evidence-row span small.raw-invalid {
+  color: #dc2626;
+  font-weight: 800;
+}
+
+.raw-evidence-row span small.raw-unverified {
+  color: #b45309;
+  font-weight: 800;
+}
+
 .raw-evidence-head {
   background: var(--p-surface-50);
   color: var(--p-text-muted-color);
@@ -361,6 +422,10 @@
 
   .napa-history-card app-chart {
     min-height: 320px;
+  }
+
+  .analog-history-card app-chart {
+    min-height: 300px;
   }
 
   .napa-visual {

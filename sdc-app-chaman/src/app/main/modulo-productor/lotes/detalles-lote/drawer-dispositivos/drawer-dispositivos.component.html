@@ -14,11 +14,10 @@
       <div>
         <span class="device-kicker">Dispositivo</span>
         <strong>{{ dispositivo?.nombre || 'Sensor sin nombre' }}</strong>
-        <small>{{ dispositivo?.deveui || 'Sin devEUI' }}</small>
+        <small>{{ dispositivo?.deveui || 'Sin DevEUI' }}</small>
       </div>
-
       <div class="device-dialog-actions">
-        @if ((esLanzaDeSuelo && (datosLanza.length > 0 || rawFrames.length > 0)) || esSensorAmbiente) {
+        @if (esLanzaDeSuelo || esMedidorNapa || esSensorAmbiente) {
           @if (vistaActiva === 'grafico') {
             <p-selectButton
               [options]="[
@@ -49,12 +48,25 @@
     </div>
   </ng-template>
 
-  @if (esLanzaDeSuelo) {
+  @if (esMedidorNapa && !esLanzaDeSuelo) {
+    <section class="soil-device-content">
+      @if (loadingHistorico) {
+        <p-message severity="info">Cargando historico del medidor de napa...</p-message>
+      }
+      <app-grafico-historico-napa
+        [reportes]="reportesHistoricos"
+        [rawFrames]="rawFrames"
+        [titulo]="dispositivo?.nombre || 'Medidor de Napa'"
+        [fechaDesde]="dispositivo?.fechaAsignacionLote"
+        [configuracion]="configuracionNapa"
+      ></app-grafico-historico-napa>
+    </section>
+  } @else if (esLanzaDeSuelo) {
     @if (datosLanza.length > 0 || rawFrames.length > 0) {
       <section class="soil-device-content">
         @if (vistaActiva === 'grafico') {
           @if (loadingHistorico) {
-            <p-message severity="info">Cargando historico de la lanza...</p-message>
+            <p-message severity="info">Cargando historico de la sonda...</p-message>
           }
           <app-grafico-historico-suelo
             [reportes]="reportesHistoricos"
@@ -62,6 +74,8 @@
             [titulo]="'Historico Sentek - ' + dispositivo?.nombre"
             [subtitulo]="'Cada punto conserva la fecha y el valor recibido; no se promedian profundidades ni tramas'"
             [fechaDesde]="dispositivo?.fechaAsignacionLote"
+            [mostrarNapa]="false"
+            [mostrarEntradaAnalogica]="false"
           ></app-grafico-historico-suelo>
         } @else {
           <div class="sensor-table-wrap">
@@ -97,9 +111,7 @@
                       </td>
                     }
                     @if (tieneNotasNormalizacion) {
-                      <td>
-                        {{ dato.humedad?.nota || dato.salinidad?.nota || dato.temperatura?.nota || '-' }}
-                      </td>
+                      <td>{{ dato.humedad?.nota || dato.salinidad?.nota || dato.temperatura?.nota || '-' }}</td>
                     }
                   </tr>
                 }
@@ -109,7 +121,7 @@
         }
       </section>
     } @else {
-      <p-message severity="info">La lanza no tiene lecturas procesadas todavia.</p-message>
+      <p-message severity="info">La sonda no tiene lecturas procesadas todavia.</p-message>
     }
   } @else if (esSensorAmbiente) {
     <section class="soil-device-content">

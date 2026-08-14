@@ -74,7 +74,8 @@ describe('DispositivosService - calificacion meteorologica', () => {
           salidaMin: 0,
           salidaMax: 10,
           unidadSalida: 'm',
-          profundidadInstalacionM: 6,
+          longitudCableM: 10,
+          tramoCableExteriorM: 4,
           fuenteCalibracion: 'Ficha 0-10 m y medicion vertical en campo',
         },
       },
@@ -87,10 +88,37 @@ describe('DispositivosService - calificacion meteorologica', () => {
             versionConversion: 'lineal-4-20ma-v1',
             magnitudSalida: 'columna_agua_sobre_sensor',
             referenciaProfundidad: 'nivel_terreno',
+            profundidadInstalacionM: 6,
+            longitudCableM: 10,
+            tramoCableExteriorM: 4,
           }),
         }),
       }),
     );
+  });
+
+  it('rechaza una profundidad de napa incompatible con la geometria del cable', async () => {
+    await expect(
+      service.create({
+        deveui: '24E124454E358347',
+        configuracionLecturas: {
+          entradaAnalogica: {
+            canal: 1,
+            tipoSenal: '4-20mA',
+            variable: 'nivel_napa',
+            entradaMinMa: 4,
+            entradaMaxMa: 20,
+            salidaMin: 0,
+            salidaMax: 10,
+            unidadSalida: 'm',
+            profundidadInstalacionM: 5,
+            longitudCableM: 10,
+            tramoCableExteriorM: 4,
+            fuenteCalibracion: 'Ficha del transductor',
+          },
+        },
+      }),
+    ).rejects.toThrow('profundidad consistente con el tramo enterrado');
   });
 
   it('rechaza declarar napa sin escala, datum y profundidad fisica completos', async () => {

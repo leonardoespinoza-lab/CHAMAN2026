@@ -5,18 +5,18 @@ import {
 } from 'modelos/src';
 
 type DepthKey =
-  | '5cm'
-  | '15cm'
-  | '25cm'
-  | '35cm'
-  | '45cm'
-  | '55cm'
-  | '65cm'
-  | '75cm'
-  | '85cm'
-  | '95cm'
-  | '105cm'
-  | '115cm';
+  | '10cm'
+  | '20cm'
+  | '30cm'
+  | '40cm'
+  | '50cm'
+  | '60cm'
+  | '70cm'
+  | '80cm'
+  | '90cm'
+  | '100cm'
+  | '110cm'
+  | '120cm';
 
 type SoilMetric = 'moisture' | 'salinity' | 'temperature';
 
@@ -45,21 +45,21 @@ export interface DecodedUc511SentekPayload {
 }
 
 const DEPTH_KEYS: DepthKey[] = [
-  '5cm',
-  '15cm',
-  '25cm',
-  '35cm',
-  '45cm',
-  '55cm',
-  '65cm',
-  '75cm',
-  '85cm',
-  '95cm',
-  '105cm',
-  '115cm',
+  '10cm',
+  '20cm',
+  '30cm',
+  '40cm',
+  '50cm',
+  '60cm',
+  '70cm',
+  '80cm',
+  '90cm',
+  '100cm',
+  '110cm',
+  '120cm',
 ];
 
-const DEPTHS_CM = [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115];
+const DEPTHS_CM = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 
 export function decodeUc511SentekPayload(
   hexPayload?: string,
@@ -150,30 +150,32 @@ export function decodedUc511ToReporteValores(
 ): IValoresV2['valores'] {
   const valores: IValoresV2['valores'] = {};
 
-  valores['Humedad Suelo Profundidad'] = DEPTH_KEYS.map((depth, index) => ({
-    profundidad: DEPTHS_CM[index],
-    unidad: '%',
-    valores: {
-      actual: decoded.soil.moisture[depth] ?? null,
-    },
-  }));
+  if (decoded.raw.blocks.length) {
+    valores['Humedad Suelo Profundidad'] = DEPTH_KEYS.map((depth, index) => ({
+      profundidad: DEPTHS_CM[index],
+      unidad: '%',
+      valores: {
+        actual: decoded.soil.moisture[depth] ?? null,
+      },
+    }));
 
-  valores['Salinidad Suelo'] = DEPTH_KEYS.map((depth, index) => ({
-    profundidad: DEPTHS_CM[index],
-    // VIC es un indice de tendencia ionica; no equivale automaticamente a EC.
-    unidad: 'VIC',
-    valores: {
-      actual: decoded.soil.salinity[depth] ?? null,
-    },
-  }));
+    valores['Salinidad Suelo'] = DEPTH_KEYS.map((depth, index) => ({
+      profundidad: DEPTHS_CM[index],
+      // VIC es un indice de tendencia ionica; no equivale automaticamente a EC.
+      unidad: 'VIC',
+      valores: {
+        actual: decoded.soil.salinity[depth] ?? null,
+      },
+    }));
 
-  valores['Temperatura Suelo'] = DEPTH_KEYS.map((depth, index) => ({
-    profundidad: DEPTHS_CM[index],
-    unidad: 'C',
-    valores: {
-      actual: decoded.soil.temperature[depth] ?? null,
-    },
-  }));
+    valores['Temperatura Suelo'] = DEPTH_KEYS.map((depth, index) => ({
+      profundidad: DEPTHS_CM[index],
+      unidad: 'C',
+      valores: {
+        actual: decoded.soil.temperature[depth] ?? null,
+      },
+    }));
+  }
 
   if (decoded.analog.rawMa !== null) {
     valores['Entrada Analógica'] = [
@@ -367,19 +369,27 @@ function extractSdi12Blocks(bytes: number[]): Sdi12Block[] {
     const start = i + 3;
     let end = start;
 
-    while (end < bytes.length - 1) {
-      if (bytes[end] === 0x0d && bytes[end + 1] === 0x0a) break;
-      if (bytes[end] === 0x08 && bytes[end + 1] === 0xdb) break;
+    while (end < bytes.length) {
+      if (
+        end + 1 < bytes.length &&
+        bytes[end] === 0x0d &&
+        bytes[end + 1] === 0x0a
+      )
+        break;
+      if (
+        end + 1 < bytes.length &&
+        bytes[end] === 0x08 &&
+        bytes[end + 1] === 0xdb
+      )
+        break;
       end += 1;
     }
 
     const asciiBytes = bytes.slice(start, end).filter((byte) => byte !== 0x00);
     const ascii = String.fromCharCode(...asciiBytes).trim();
-    const values = ascii
-      .split('+')
-      .slice(1)
-      .map((value) => Number(value))
-      .filter((value) => Number.isFinite(value));
+    const values = (ascii.match(/[+-]\d+(?:\.\d+)?/g) || [])
+      .map(Number)
+      .filter(Number.isFinite);
 
     blocks.push({ channel, ascii, values });
     i = end;

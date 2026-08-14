@@ -213,7 +213,7 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
           niveles: new FormControl(source?.configuracionLecturas?.perfilSuelo?.niveles || 12),
           profundidadesCm: new FormControl(
             source?.configuracionLecturas?.perfilSuelo?.profundidadesCm || [
-              5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115,
+              10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120,
             ]
           ),
           variables: new FormControl(
@@ -233,6 +233,13 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
             profundidadInstalacionM: new FormControl(
               source?.configuracionLecturas?.entradaAnalogica?.profundidadInstalacionM,
               [Validators.min(0.01)]
+            ),
+            longitudCableM: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.longitudCableM, [
+              Validators.min(0.01),
+            ]),
+            tramoCableExteriorM: new FormControl(
+              source?.configuracionLecturas?.entradaAnalogica?.tramoCableExteriorM,
+              [Validators.min(0)]
             ),
             fuenteCalibracion: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.fuenteCalibracion),
             observaciones: new FormControl(source?.configuracionLecturas?.entradaAnalogica?.observaciones),
@@ -315,6 +322,15 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     }));
     const analog = data.configuracionLecturas?.entradaAnalogica;
     if (analog) {
+      const longitudCableM = this.numberOrUndefined(analog.longitudCableM);
+      const tramoCableExteriorM = this.numberOrUndefined(analog.tramoCableExteriorM);
+      const profundidadDerivada =
+        analog.variable === 'nivel_napa' &&
+        longitudCableM !== undefined &&
+        tramoCableExteriorM !== undefined &&
+        longitudCableM > tramoCableExteriorM
+          ? this.round(longitudCableM - tramoCableExteriorM, 3)
+          : undefined;
       data.configuracionLecturas = {
         ...data.configuracionLecturas,
         entradaAnalogica: {
@@ -325,7 +341,10 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
           salidaMin: this.numberOrUndefined(analog.salidaMin),
           salidaMax: this.numberOrUndefined(analog.salidaMax),
           unidadSalida: analog.unidadSalida?.trim() || undefined,
-          profundidadInstalacionM: this.numberOrUndefined(analog.profundidadInstalacionM),
+          profundidadInstalacionM:
+            profundidadDerivada ?? this.numberOrUndefined(analog.profundidadInstalacionM),
+          longitudCableM,
+          tramoCableExteriorM,
           fuenteCalibracion: analog.fuenteCalibracion?.trim() || undefined,
           observaciones: analog.observaciones?.trim() || undefined,
         },
@@ -374,6 +393,18 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
 
   public get variableEntradaAnalogica(): string {
     return this.form?.get('configuracionLecturas.entradaAnalogica.variable')?.value || 'sin_definir';
+  }
+
+  public get profundidadNapaCalculadaM(): number | undefined {
+    const longitud = this.numberOrUndefined(
+      this.form?.get('configuracionLecturas.entradaAnalogica.longitudCableM')?.value
+    );
+    const exterior = this.numberOrUndefined(
+      this.form?.get('configuracionLecturas.entradaAnalogica.tramoCableExteriorM')?.value
+    );
+    return longitud !== undefined && exterior !== undefined && longitud > exterior
+      ? this.round(longitud - exterior, 3)
+      : undefined;
   }
 
   public readonly variablesEntradaAnalogica = [
@@ -586,7 +617,21 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
     const unidad = String(control.get('unidadSalida')?.value || '').trim();
     const fuente = String(control.get('fuenteCalibracion')?.value || '').trim();
     const profundidadInstalacion = this.numberOrUndefined(control.get('profundidadInstalacionM')?.value);
+    const longitudCable = this.numberOrUndefined(control.get('longitudCableM')?.value);
+    const tramoExterior = this.numberOrUndefined(control.get('tramoCableExteriorM')?.value);
     const esNapa = control.get('variable')?.value === 'nivel_napa';
+    const cableIncompleto =
+      esNapa &&
+      ((longitudCable === undefined) !== (tramoExterior === undefined) ||
+        (longitudCable !== undefined && tramoExterior !== undefined && longitudCable <= tramoExterior));
+    const profundidadEfectiva =
+      longitudCable !== undefined && tramoExterior !== undefined && longitudCable > tramoExterior
+        ? longitudCable - tramoExterior
+        : profundidadInstalacion;
+    const geometriaConsistente =
+      profundidadInstalacion === undefined ||
+      profundidadEfectiva === undefined ||
+      Math.abs(profundidadInstalacion - profundidadEfectiva) <= 0.02;
 
     const complete =
       entradaMin !== undefined &&
@@ -597,10 +642,19 @@ export class CrearEditarDispositivosComponent implements OnInit, OnDestroy {
       salidaMax !== salidaMin &&
       !!unidad &&
       !!fuente &&
-      (!esNapa || (profundidadInstalacion !== undefined && profundidadInstalacion > 0));
+      (!esNapa ||
+        (!cableIncompleto &&
+          geometriaConsistente &&
+          profundidadEfectiva !== undefined &&
+          profundidadEfectiva > 0));
 
     return complete ? null : { calibracionEntradaAnalogicaIncompleta: true };
   };
+
+  private round(value: number, decimals: number): number {
+    const factor = Math.pow(10, decimals);
+    return Math.round(value * factor) / factor;
+  }
 
   private readonly calificacionHumedadValidator = (control: AbstractControl): ValidationErrors | null => {
     if (control.get('estado')?.value !== 'calificado') return null;

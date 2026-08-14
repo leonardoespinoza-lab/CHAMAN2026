@@ -4,7 +4,6 @@ import {
   IDispositivo,
   IFrioAcumulado,
   ILorawanRawFrame,
-  ILorawanRawReading,
   IReporte,
   IQueryParam,
   IUpdateDispositivo,
@@ -13,12 +12,7 @@ import {
 import { DispositivosService } from '../dispositivos/service';
 import { ReportesService } from '../reportes/service';
 import { LorawanUplinksRepository } from './repository';
-import { decodeSentekUc501Payload } from './sentek-uc501.decoder';
-import {
-  decodeUc511SentekPayload,
-  decodedUc511ToReporteValores,
-  extractUc511PayloadHex,
-} from './uc511-sentek.decoder';
+import { decodeControllerUplink } from './controller-decoder.registry';
 
 const HF_PREVIEW_VERSION = 'hf-field-preview-1.0.0';
 
@@ -159,9 +153,7 @@ export class LorawanUplinksService {
       return false;
     }
 
-    const decoded =
-      this.decodeUc511SentekUplink(uplink, dispositivo) ||
-      decodeSentekUc501Payload(uplink.data);
+    const decoded = decodeControllerUplink(uplink, dispositivo);
     if (!decoded) {
       return false;
     }
@@ -179,7 +171,7 @@ export class LorawanUplinksService {
       360,
     );
     const previous =
-      existing || this.reporteCompatibleConCiclo(recent, decoded.canales);
+      existing || this.reporteCompatibleConCiclo(recent, decoded.cycleChannels);
     const valores = previous?.datos?.valores
       ? this.mergeSentekValues(previous.datos.valores, decoded.valores)
       : decoded.valores;
@@ -196,6 +188,10 @@ export class LorawanUplinksService {
       rssi: uplink.rssi,
       snr: uplink.snr,
       dr: uplink.dr,
+      payloadDecoderId: decoded.decoderId,
+      payloadDecoderVersion: decoded.decoderVersion,
+      controllerManufacturer: decoded.manufacturer,
+      controllerModel: decoded.model,
     };
 
     let reporte: IReporte;
@@ -278,88 +274,12 @@ export class LorawanUplinksService {
     };
   }
 
-  private decodeUc511SentekUplink(
-    uplink: ICreateLorawanUplink,
-    dispositivo?: IDispositivo,
-  ): { valores: IValoresV2['valores']; canales: number[] } | null {
-    const payloadHex = extractUc511PayloadHex(uplink);
-
-    const decoded = decodeUc511SentekPayload(payloadHex);
-    if (!decoded) {
-      return null;
-    }
-
-    return {
-      valores: decodedUc511ToReporteValores(
-        decoded,
-        dispositivo?.configuracionLecturas?.entradaAnalogica,
-      ),
-      canales: decoded.raw.blocks.map((block) => block.channel),
-    };
-  }
-
   private toRawFrame(
     uplink: ICreateLorawanUplink & { _id?: string; fechaCreacion?: string },
     dispositivo?: IDispositivo,
   ): ILorawanRawFrame {
-    const payloadHex = extractUc511PayloadHex(uplink);
-    const decoded = decodeUc511SentekPayload(payloadHex);
-    const readings: ILorawanRawReading[] = [];
-    const pushSoil = (
-      variable: 'humedad_suelo' | 'salinidad_suelo' | 'temperatura_suelo',
-      unit: string,
-      values: Record<string, number | undefined>,
-    ) => {
-      Object.entries(values).forEach(([depth, value]) => {
-        if (typeof value !== 'number' || !Number.isFinite(value)) return;
-        readings.push({
-          serviceId: 'perfil-suelo-sentek',
-          variable,
-          value,
-          unit,
-          depthCm: Number(depth.replace('cm', '')),
-        });
-      });
-    };
-    if (decoded) {
-      pushSoil('humedad_suelo', '%', decoded.soil.moisture);
-      pushSoil('salinidad_suelo', 'VIC', decoded.soil.salinity);
-      pushSoil('temperatura_suelo', 'C', decoded.soil.temperature);
-      if (decoded.analog.rawMa !== null) {
-        readings.push({
-          serviceId: 'nivel-napa',
-          variable: 'corriente_analogica',
-          value: decoded.analog.rawMa,
-          unit: 'mA',
-          channel: decoded.analog.channel || undefined,
-        });
-        const config = dispositivo?.configuracionLecturas?.entradaAnalogica;
-        const valores = decodedUc511ToReporteValores(decoded, config) as any;
-        const key = config?.variable === 'nivel_napa' ? 'Napa' : 'Presión';
-        const calibrated = valores?.[key]?.[0];
-        const value = calibrated?.valores?.actual;
-        if (typeof value === 'number' && Number.isFinite(value)) {
-          readings.push({
-            serviceId: 'nivel-napa',
-            variable:
-              config?.variable === 'nivel_napa' ? 'nivel_napa' : 'presion_agua',
-            value,
-            unit: calibrated.unidad || config?.unidadSalida || '',
-            channel: decoded.analog.channel || undefined,
-            rawValue: decoded.analog.rawMa,
-            rawUnit: 'mA',
-            reference:
-              config?.variable === 'nivel_napa' ? 'nivel_terreno' : undefined,
-            waterColumnM: calibrated?.valores?.columnaAgua,
-            installationDepthM: calibrated?.valores?.profundidadInstalacion,
-            conversionModel:
-              config?.variable === 'nivel_napa'
-                ? 'lineal-4-20ma-v1'
-                : undefined,
-          });
-        }
-      }
-    }
+    const decoded = decodeControllerUplink(uplink, dispositivo);
+    const readings = decoded?.readings || [];
     return {
       id: (uplink as any)._id?.toString?.() || (uplink as any)._id,
       devEUI: String(uplink.devEUI || '').toUpperCase(),
@@ -373,8 +293,12 @@ export class LorawanUplinksService {
       snr: uplink.snr,
       frequency: uplink.frequency,
       dr: uplink.dr,
-      payloadHex,
+      payloadHex: decoded?.payloadHex,
       payloadBase64: uplink.data,
+      decoderId: decoded?.decoderId,
+      decoderVersion: decoded?.decoderVersion,
+      controllerManufacturer: decoded?.manufacturer,
+      controllerModel: decoded?.model,
       decodeStatus: readings.length ? 'decoded' : 'unrecognized',
       readings,
     };

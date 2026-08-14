@@ -47,6 +47,15 @@ export class DetallesDispositivoComponent implements OnInit {
     return this.dispositivo?.configuracionLecturas?.entradaAnalogica;
   }
 
+  public get esEntradaAnalogica(): boolean {
+    return (
+      !!this.entradaAnalogicaConfigurada ||
+      this.rawFrames.some((frame) =>
+        (frame.readings || []).some((reading) => reading.variable === 'corriente_analogica')
+      )
+    );
+  }
+
   public get entradaAnalogicaCruda(): { valor?: number; unidad: string } | undefined {
     const row = this.valorReporte('Entrada Analógica');
     if (!row) return undefined;
@@ -143,7 +152,7 @@ export class DetallesDispositivoComponent implements OnInit {
 
   private async cargarHistorico(): Promise<void> {
     const id = this.dispositivo?._id || this.dispositivo?.deveui;
-    if ((!this.esLanzaDeSuelo && !this.esSensorAmbiente) || !id) return;
+    if ((!this.esLanzaDeSuelo && !this.esSensorAmbiente && !this.esEntradaAnalogica) || !id) return;
     this.loadingHistorico = true;
     try {
       const [response, rawFrames] = await Promise.all([

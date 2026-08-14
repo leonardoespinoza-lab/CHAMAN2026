@@ -212,6 +212,34 @@ describe('CrearEditarDispositivosComponent', () => {
     );
   });
 
+  it('deriva 6 m enterrados desde 10 m de cable y 4 m exteriores', () => {
+    const component = createComponent();
+    const analog = component.form?.get('configuracionLecturas.entradaAnalogica');
+    analog?.patchValue({
+      variable: 'nivel_napa',
+      salidaMin: 0,
+      salidaMax: 10,
+      unidadSalida: 'm',
+      profundidadInstalacionM: null,
+      longitudCableM: 10,
+      tramoCableExteriorM: 4,
+      fuenteCalibracion: 'Ficha del transductor',
+    });
+
+    expect(analog?.valid).toBeTrue();
+    expect(component.profundidadNapaCalculadaM).toBe(6);
+    expect((component as any).getData().configuracionLecturas.entradaAnalogica).toEqual(
+      jasmine.objectContaining({
+        profundidadInstalacionM: 6,
+        longitudCableM: 10,
+        tramoCableExteriorM: 4,
+      })
+    );
+
+    analog?.patchValue({ profundidadInstalacionM: 5 });
+    expect(analog?.hasError('calibracionEntradaAnalogicaIncompleta')).toBeTrue();
+  });
+
   it('asigna Sentek y napa por separado conservando un solo DevEUI', () => {
     const component = createComponent();
     (component as any).prefillLorawan = {
@@ -221,7 +249,7 @@ describe('CrearEditarDispositivosComponent', () => {
           tipo: 'sonda_sentek_120cm',
           protocolo: 'SDI-12',
           niveles: 12,
-          profundidadesCm: [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115],
+          profundidadesCm: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120],
           variables: ['humedad_vwc', 'salinidad_vic', 'temperatura'],
         },
         entradaAnalogica: {

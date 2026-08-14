@@ -21,13 +21,23 @@ const SENSOR_KEY: Record<'humedad' | 'salinidad' | 'temperatura', SensoresV2> = 
   temperatura: 'Temperatura Suelo',
 };
 
-const SENTEK_RAW_HUMIDITY_MAX = 3;
-const SENTEK_SCALED_HUMIDITY_MAX = 300;
+/**
+ * Las primeras versiones de Chaman rotularon la sonda de 1,2 m como
+ * 5, 15, ..., 115 cm. El montaje real informado por campo es 10, 20,
+ * ..., 120 cm. Esta normalizacion mantiene legibles los reportes
+ * historicos sin reescribir la evidencia persistida.
+ */
+export function normalizarProfundidadSentek(profundidad: number): number {
+  if (Number.isInteger(profundidad) && profundidad >= 5 && profundidad <= 115 && (profundidad - 5) % 10 === 0) {
+    return profundidad + 5;
+  }
+  return profundidad;
+}
 
 function getMetricByDepth(
   reporte: IReporte | undefined,
   sensor: SensoresV2,
-  normalizer?: (value: number, unidad: string) => MedicionSensorProfundidad,
+  normalizer?: (value: number, unidad: string) => MedicionSensorProfundidad | undefined
 ): Map<number, MedicionSensorProfundidad> {
   const result = new Map<number, MedicionSensorProfundidad>();
   const rows = reporte?.datos?.valores?.[sensor];
@@ -43,15 +53,10 @@ function getMetricByDepth(
       return;
     }
 
-    result.set(
-      depth,
-      normalizer
-        ? normalizer(value, row.unidad)
-        : {
-            actual: value,
-            unidad: row.unidad,
-          },
-    );
+    const normalized = normalizer ? normalizer(value, row.unidad) : { actual: value, unidad: row.unidad };
+    if (normalized) {
+      result.set(normalizarProfundidadSentek(depth), normalized);
+    }
   });
 
   return result;
@@ -71,75 +76,51 @@ export function buildSentekProfile(reporte: IReporte | undefined): MedicionProfu
   }));
 }
 
-function normalizarHumedad(value: number, unidad: string): MedicionSensorProfundidad {
+function normalizarHumedad(value: number, unidad: string): MedicionSensorProfundidad | undefined {
   const unidadNormalizada = unidad.toLowerCase().replace(/\s/g, '');
   const esPorcentaje = unidadNormalizada.includes('%');
   const esVolumetrica = unidadNormalizada.includes('m3/m3') || unidadNormalizada.includes('vwc');
-  let actual = value;
-  let nota: string | undefined;
+  const esMilimetrosPorCapa = unidadNormalizada.includes('mm/10cm');
+  const actual = esVolumetrica && value >= 0 && value <= 1 ? value * 100 : value;
 
-  if (value > 100 && value <= SENTEK_SCALED_HUMIDITY_MAX) {
-    actual = (value / SENTEK_SCALED_HUMIDITY_MAX) * 100;
-    nota = 'Lectura Sentek normalizada con escala cruda 0-300.';
-  } else if (esPorcentaje) {
-    actual = value;
-  } else if (esVolumetrica && value >= 0 && value <= 1) {
-    actual = value * 100;
-  } else if (value >= 0 && value <= SENTEK_RAW_HUMIDITY_MAX) {
-    actual = (value / SENTEK_RAW_HUMIDITY_MAX) * 100;
-    nota = 'Lectura Sentek normalizada con escala cruda 0-3.';
-  } else if (value > SENTEK_SCALED_HUMIDITY_MAX && value <= 1000) {
-    actual = value / 10;
-    nota = 'Lectura Sentek normalizada desde valor x10.';
-  }
-
-  return {
-    actual: redondear(limitar(actual, 0, 100), 1),
-    unidad: '%',
-    crudo: value,
-    unidadCruda: unidad,
-    nota,
-  };
-}
-
-function normalizarTemperatura(value: number, unidad: string): MedicionSensorProfundidad {
-  let actual = value;
-  let nota: string | undefined;
-
-  if (Math.abs(value) > 80 && Math.abs(value) <= 800) {
-    actual = value / 10;
-    nota = 'Temperatura normalizada desde valor x10.';
+  // Sentek entrega una magnitud ya calibrada. No se adivinan escalas 0-3,
+  // 0-300 ni x10: si la unidad/rango no es demostrable, la UI no publica el
+  // punto y la trama cruda sigue disponible como evidencia.
+  if ((!esPorcentaje && !esVolumetrica && !esMilimetrosPorCapa) || actual < 0 || actual > 100) {
+    return undefined;
   }
 
   return {
     actual: redondear(actual, 1),
+    unidad: '%',
+    crudo: value,
+    unidadCruda: unidad,
+    nota: esMilimetrosPorCapa ? '1 mm/10 cm equivale numericamente a 1 % VWC.' : undefined,
+  };
+}
+
+function normalizarTemperatura(value: number, unidad: string): MedicionSensorProfundidad | undefined {
+  const unidadNormalizada = unidad.toLowerCase().replace(/\s|\u00b0/g, '');
+  if (!['c', 'celsius'].includes(unidadNormalizada) || value < -40 || value > 60) return undefined;
+
+  return {
+    actual: redondear(value, 1),
     unidad: 'C',
     crudo: value,
     unidadCruda: unidad,
-    nota,
   };
 }
 
-function normalizarSalinidad(value: number, unidad: string): MedicionSensorProfundidad {
-  let actual = value;
-  let nota: string | undefined;
-
-  if (value > 2000 && value <= 20000) {
-    actual = value / 10;
-    nota = 'Salinidad normalizada desde valor x10.';
-  }
+function normalizarSalinidad(value: number, unidad: string): MedicionSensorProfundidad | undefined {
+  if (value < 0 || !unidad.toLowerCase().includes('vic')) return undefined;
 
   return {
-    actual: redondear(Math.max(0, actual), 1),
-    unidad: unidad || 'mS/m',
+    actual: redondear(value, 1),
+    unidad: 'VIC',
     crudo: value,
     unidadCruda: unidad,
-    nota,
+    nota: 'Indice VIC de tendencia; no equivale a EC sin calibracion de suelo y humedad comparable.',
   };
-}
-
-function limitar(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
 }
 
 function redondear(value: number, decimals: number): number {

@@ -24,11 +24,13 @@ export type LorawanRawVariable =
   | "temperatura_suelo"
   | "corriente_analogica"
   | "nivel_napa"
-  | "presion_agua";
+  | "presion_agua"
+  | (string & {});
 
 /** Una medicion tal como fue recibida en una trama, sin promedios de Chaman. */
 export interface ILorawanRawReading {
-  serviceId: "perfil-suelo-sentek" | "nivel-napa";
+  /** Servicio logico producido por el decoder del controlador. */
+  serviceId: string;
   variable: LorawanRawVariable;
   value: number;
   unit: string;
@@ -43,6 +45,10 @@ export interface ILorawanRawReading {
   /** Profundidad vertical del diafragma desde el terreno. */
   installationDepthM?: number;
   conversionModel?: "lineal-4-20ma-v1";
+  /** Resultado de la validacion semantica propia de la magnitud. */
+  quality?: "valid" | "unverified" | "invalid";
+  qualityReason?: string;
+  validationReference?: string;
 }
 
 /** Evidencia auditable de un uplink fisico y sus lecturas decodificadas. */
@@ -59,6 +65,10 @@ export interface ILorawanRawFrame {
   dr?: number;
   payloadHex?: string;
   payloadBase64?: string;
+  decoderId?: string;
+  decoderVersion?: string;
+  controllerManufacturer?: string;
+  controllerModel?: string;
   decodeStatus: "decoded" | "unrecognized";
   readings: ILorawanRawReading[];
 }

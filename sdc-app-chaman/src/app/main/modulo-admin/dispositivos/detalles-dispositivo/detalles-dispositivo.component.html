@@ -12,7 +12,9 @@
       </div>
     </div>
 
-    @if ((esLanzaDeSuelo && (datosLanza.length > 0 || rawFrames.length > 0)) || esSensorAmbiente) {
+    @if (
+      (esLanzaDeSuelo && (datosLanza.length > 0 || rawFrames.length > 0)) || esEntradaAnalogica || esSensorAmbiente
+    ) {
       <div class="device-view-actions">
         @if (vistaActiva === 'grafico') {
           <p-selectButton
@@ -42,53 +44,57 @@
     }
   </header>
 
-  @if (esControladorSentek) {
+  @if (esControladorSentek || esEntradaAnalogica) {
     <section class="physical-sensors" aria-label="Sensores fisicos conectados al controlador">
-      <article class="physical-sensor">
-        <div class="physical-sensor-index">1</div>
-        <div>
-          <span class="physical-sensor-kicker">Sensor fisico · SDI-12</span>
-          <h2>Sonda Sentek de perfil 1,2 m</h2>
-          <p>Humedad VWC, salinidad VIC y temperatura en 12 niveles: 5 a 115 cm.</p>
-        </div>
-        <span class="physical-sensor-status ready">Perfil activo</span>
-      </article>
+      @if (esControladorSentek) {
+        <article class="physical-sensor">
+          <div class="physical-sensor-index">1</div>
+          <div>
+            <span class="physical-sensor-kicker">Sensor fisico · SDI-12</span>
+            <h2>Sonda Sentek de perfil 1,2 m</h2>
+            <p>Humedad VWC, salinidad VIC y temperatura en 12 niveles: 10 a 120 cm.</p>
+          </div>
+          <span class="physical-sensor-status ready">Perfil activo</span>
+        </article>
+      }
 
-      <article class="physical-sensor">
-        <div class="physical-sensor-index">2</div>
-        <div>
-          <span class="physical-sensor-kicker">
-            Sensor fisico independiente · AI{{ entradaAnalogicaConfigurada?.canal || 1 }}
-          </span>
-          <h2>
-            @if (lecturaAnalogicaCalibrada) {
-              {{ lecturaAnalogicaCalibrada.nombre }}
-            } @else {
-              Transductor 4-20 mA
+      @if (esEntradaAnalogica) {
+        <article class="physical-sensor">
+          <div class="physical-sensor-index">{{ esControladorSentek ? 2 : 1 }}</div>
+          <div>
+            <span class="physical-sensor-kicker">
+              Sensor fisico independiente · AI{{ entradaAnalogicaConfigurada?.canal || 1 }}
+            </span>
+            <h2>
+              @if (lecturaAnalogicaCalibrada) {
+                {{ lecturaAnalogicaCalibrada.nombre }}
+              } @else {
+                Entrada 4-20 mA sin calibrar
+              }
+            </h2>
+            <p>{{ estadoEntradaAnalogica }}</p>
+            @if (entradaAnalogicaConfigurada?.variable === 'nivel_napa' && lecturaAnalogicaCalibrada) {
+              <p class="napa-trace">
+                Sensor a {{ lecturaAnalogicaCalibrada.profundidadInstalacion | number: '1.2-2' }} m · columna de agua
+                {{ lecturaAnalogicaCalibrada.columnaAgua | number: '1.2-2' }} m · corriente
+                {{ entradaAnalogicaCruda?.valor | number: '1.2-2' }} mA
+              </p>
             }
-          </h2>
-          <p>{{ estadoEntradaAnalogica }}</p>
-          @if (entradaAnalogicaConfigurada?.variable === 'nivel_napa' && lecturaAnalogicaCalibrada) {
-            <p class="napa-trace">
-              Sensor a {{ lecturaAnalogicaCalibrada.profundidadInstalacion | number: '1.2-2' }} m · columna de agua
-              {{ lecturaAnalogicaCalibrada.columnaAgua | number: '1.2-2' }} m · corriente
-              {{ entradaAnalogicaCruda?.valor | number: '1.2-2' }} mA
-            </p>
-          }
-        </div>
-        <div class="physical-sensor-reading">
-          @if (lecturaAnalogicaCalibrada?.valor !== undefined) {
-            <strong>{{ lecturaAnalogicaCalibrada?.valor | number: '1.0-3' }}</strong>
-            <span>{{ lecturaAnalogicaCalibrada?.unidad }}</span>
-          } @else if (entradaAnalogicaCruda?.valor !== undefined) {
-            <strong>{{ entradaAnalogicaCruda?.valor | number: '1.0-3' }}</strong>
-            <span>{{ entradaAnalogicaCruda?.unidad }}</span>
-          } @else {
-            <strong>--</strong>
-            <span>sin lectura</span>
-          }
-        </div>
-      </article>
+          </div>
+          <div class="physical-sensor-reading">
+            @if (lecturaAnalogicaCalibrada?.valor !== undefined) {
+              <strong>{{ lecturaAnalogicaCalibrada?.valor | number: '1.0-3' }}</strong>
+              <span>{{ lecturaAnalogicaCalibrada?.unidad }}</span>
+            } @else if (entradaAnalogicaCruda?.valor !== undefined) {
+              <strong>{{ entradaAnalogicaCruda?.valor | number: '1.0-3' }}</strong>
+              <span>{{ entradaAnalogicaCruda?.unidad }}</span>
+            } @else {
+              <strong>--</strong>
+              <span>sin lectura</span>
+            }
+          </div>
+        </article>
+      }
     </section>
   }
 
@@ -110,6 +116,16 @@
         [subtitulo]="'Datos crudos: cada punto es una lectura LoRaWAN recibida en esa profundidad'"
       ></app-grafico-historico-suelo>
     }
+  } @else if (esEntradaAnalogica) {
+    @if (loadingHistorico) {
+      <p-message severity="info">Cargando historico de la entrada analogica...</p-message>
+    }
+    <app-grafico-historico-suelo
+      [reportes]="reportesHistoricos"
+      [rawFrames]="rawFrames"
+      [titulo]="'Historico del controlador - ' + dispositivo?.nombre"
+      [subtitulo]="'Datos crudos: cada punto es una lectura LoRaWAN recibida'"
+    ></app-grafico-historico-suelo>
   } @else if (esSensorAmbiente) {
     @if (loadingHistorico) {
       <p-message severity="info">Cargando historico del sensor ambiental...</p-message>

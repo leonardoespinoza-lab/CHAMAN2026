@@ -1,6 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges } from '@angular/core';
-import { IDispositivo, ILorawanRawFrame, IReporte } from 'modelos/src';
+import {
+  IConfiguracionEntradaAnalogica,
+  IDispositivo,
+  ILorawanRawFrame,
+  IReporte,
+  serviciosDispositivoNormalizados,
+} from 'modelos/src';
 import { UbicarComponent } from '../../../../../auxiliares/componentes/ubicar/ubicar.component';
 import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
 import { LorawanUplinksService } from '../../../../../auxiliares/http/lorawan-uplinks.service';
@@ -8,6 +14,7 @@ import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { GraficoHistoricoAmbienteComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-ambiente/grafico-historico-ambiente.component';
 import { GraficoHistoricoSueloComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-suelo/grafico-historico-suelo.component';
+import { GraficoHistoricoNapaComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-napa/grafico-historico-napa.component';
 import {
   buildSentekProfile,
   MedicionSensorProfundidad,
@@ -21,6 +28,7 @@ import {
     SharedModule,
     GraficoHistoricoAmbienteComponent,
     GraficoHistoricoSueloComponent,
+    GraficoHistoricoNapaComponent,
     UbicarComponent,
   ],
   templateUrl: './drawer-dispositivos.component.html',
@@ -35,6 +43,7 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
   private ultimoReporte?: IReporte;
   public datosLanza: MedicionProfundidad[] = [];
   public esLanzaDeSuelo = false;
+  public esMedidorNapa = false;
   public esSensorAmbiente = false;
   public vistaActiva: 'tabla' | 'grafico' = 'grafico';
   public reportesHistoricos: IReporte[] = [];
@@ -89,9 +98,15 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
     return this.datosLanza.some((dato) => !!dato.humedad?.nota || !!dato.salinidad?.nota || !!dato.temperatura?.nota);
   }
 
+  public get configuracionNapa(): IConfiguracionEntradaAnalogica | undefined {
+    const config = this.dispositivo?.configuracionLecturas?.entradaAnalogica;
+    return config?.variable === 'nivel_napa' ? config : undefined;
+  }
+
   private refreshFromDevice(): void {
     this.loading = true;
     this.esLanzaDeSuelo = this.tieneVariableSuelo(this.dispositivo);
+    this.esMedidorNapa = this.tieneVariableNapa(this.dispositivo);
     this.esSensorAmbiente = this.tieneVariableAmbiental(this.dispositivo);
     this.ultimoReporte = this.dispositivo?.ultimoReporte;
     this.datosLanza = this.esLanzaDeSuelo ? buildSentekProfile(this.ultimoReporte) : [];
@@ -102,7 +117,7 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
 
   private async cargarHistorico(): Promise<void> {
     const id = this.dispositivo?._id || this.dispositivo?.deveui;
-    if ((!this.esLanzaDeSuelo && !this.esSensorAmbiente) || !id) return;
+    if ((!this.esLanzaDeSuelo && !this.esMedidorNapa && !this.esSensorAmbiente) || !id) return;
     this.loadingHistorico = true;
     try {
       const [response, rawFrames] = await Promise.all([
@@ -139,19 +154,26 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
   }
 
   private tieneVariableSuelo(dispositivo?: IDispositivo): boolean {
+    const servicios = serviciosDispositivoNormalizados(dispositivo);
+    if (servicios.length === 1) return servicios[0].tipo === 'perfil_suelo';
     const sensores = (dispositivo?.sensores || []).map((sensor) => String(sensor));
     const valores = (dispositivo?.ultimoReporte?.datos?.valores || {}) as unknown as Record<string, any>;
-    const texto = `${dispositivo?.tipo || ''} ${dispositivo?.nombre || ''} ${dispositivo?.deveui || ''}`.toLowerCase();
-    const soilKeys = ['Humedad Suelo Profundidad', 'Temperatura Suelo', 'Salinidad Suelo', 'Napa'];
+    const texto = `${dispositivo?.tipo || ''} ${dispositivo?.nombre || ''}`.toLowerCase();
+    const soilKeys = ['Humedad Suelo Profundidad', 'Temperatura Suelo', 'Salinidad Suelo'];
 
     return (
       dispositivo?.tipo === 'Sensor de Humedad de Suelo' ||
       soilKeys.some((key) => sensores.includes(key) || Array.isArray(valores[key])) ||
       texto.includes('sentek') ||
-      texto.includes('lanza') ||
-      texto.includes('napa') ||
-      texto.includes('uc501') ||
-      texto.includes('uc511')
+      texto.includes('lanza')
     );
+  }
+
+  private tieneVariableNapa(dispositivo?: IDispositivo): boolean {
+    if (!dispositivo) return false;
+    const servicios = serviciosDispositivoNormalizados(dispositivo);
+    if (servicios.some((servicio) => servicio.tipo === 'nivel_napa')) return true;
+    const valores = (dispositivo.ultimoReporte?.datos?.valores || {}) as unknown as Record<string, unknown>;
+    return dispositivo.configuracionLecturas?.entradaAnalogica?.variable === 'nivel_napa' || !!valores['Napa'];
   }
 }

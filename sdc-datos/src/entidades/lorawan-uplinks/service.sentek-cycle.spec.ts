@@ -11,7 +11,7 @@ describe('LorawanUplinksService Sentek aggregation cycle', () => {
     datos: {
       valores: {
         'Temperatura Suelo': Array.from({ length: 12 }, (_, index) => ({
-          profundidad: 5 + index * 10,
+          profundidad: 10 + index * 10,
           unidad: 'C',
           valores: { actual: index >= 9 ? 14 + index / 100 : (null as any) },
         })),
@@ -75,11 +75,16 @@ describe('LorawanUplinksService Sentek aggregation cycle', () => {
     );
 
     expect(frame.fCnt).toBe(42);
+    expect(frame).toMatchObject({
+      decoderId: 'milesight-uc501-uc511',
+      decoderVersion: '1.0.0',
+      controllerManufacturer: 'Milesight',
+    });
     expect(
       frame.readings.filter((row: any) => row.variable === 'humedad_suelo'),
     ).toHaveLength(3);
     expect(
-      frame.readings.find((row: any) => row.depthCm === 5)?.value,
+      frame.readings.find((row: any) => row.depthCm === 10)?.value,
     ).toBeCloseTo(34.40216, 5);
     expect(
       frame.readings.find((row: any) => row.variable === 'corriente_analogica')
@@ -94,6 +99,7 @@ describe('LorawanUplinksService Sentek aggregation cycle', () => {
       reference: 'nivel_terreno',
       installationDepthM: 6,
       conversionModel: 'lineal-4-20ma-v1',
+      quality: 'valid',
     });
   });
 

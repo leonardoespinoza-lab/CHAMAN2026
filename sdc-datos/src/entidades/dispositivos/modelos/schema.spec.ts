@@ -159,7 +159,7 @@ describe('DispositivoSchema - calificacion meteorologica', () => {
           tipo: 'sonda_sentek_120cm',
           protocolo: 'SDI-12',
           niveles: 12,
-          profundidadesCm: [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115],
+          profundidadesCm: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120],
           variables: ['humedad_vwc', 'salinidad_vic', 'temperatura'],
         },
         entradaAnalogica: {
@@ -187,9 +187,30 @@ describe('DispositivoSchema - calificacion meteorologica', () => {
         'Salinidad Suelo',
       ]),
     );
-    expect(servicios[1].sensores).toEqual(
-      expect.arrayContaining(['Entrada Analógica', 'Presión', 'Napa']),
-    );
+    expect(servicios[1].sensores).toEqual(['Entrada Analógica', 'Napa']);
+  });
+
+  it('no llama napa a una entrada 4-20 mA todavia sin calibrar', () => {
+    const servicios = serviciosDispositivoNormalizados({
+      configuracionLecturas: {
+        entradaAnalogica: {
+          canal: 1,
+          tipoSenal: '4-20mA',
+          variable: 'sin_definir',
+          entradaMinMa: 4,
+          entradaMaxMa: 20,
+        },
+      },
+    });
+
+    expect(servicios).toEqual([
+      expect.objectContaining({
+        id: 'entrada-analogica',
+        tipo: 'otro',
+        nombre: 'Entrada analógica 4-20 mA sin calibrar',
+        sensores: ['Entrada Analógica'],
+      }),
+    ]);
   });
 
   it('respeta servicios explicitamente deshabilitados y no los vuelve a inferir', () => {

@@ -2,7 +2,7 @@ import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { ILorawanRawFrame, ILorawanRawReading, IReporte } from 'modelos/src';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
-import { buildSentekProfile } from '../sentek-profile';
+import { buildSentekProfile, normalizarProfundidadSentek } from '../sentek-profile';
 
 type SoilMetricKey = 'humedad' | 'salinidad' | 'temperatura';
 
@@ -28,6 +28,11 @@ interface NapaPoint {
   unit: string;
 }
 
+interface AnalogPoint {
+  x: number;
+  y: number;
+}
+
 interface RainPoint {
   x: number;
   y: number;
@@ -51,14 +56,23 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   @Input() titulo?: string;
   @Input() subtitulo?: string;
   @Input() fechaDesde?: string;
+  /** Permite usar este componente solo para el perfil Sentek. */
+  @Input() mostrarNapa = true;
+  /** La entrada analogica pertenece a otro dispositivo logico en el lote. */
+  @Input() mostrarEntradaAnalogica = true;
 
   public chartOptions?: any;
   public napaChartOptions?: any;
+  public analogChartOptions?: any;
   public selectedMetric: SoilMetricKey = 'humedad';
   public metricOptions: Array<{ label: string; value: SoilMetricKey }> = [];
   public profileRows: ProfileRow[] = [];
   public resumen = '';
   public napaResumen = '';
+  public analogResumen = '';
+  public analogActual?: number;
+  public analogActualFecha?: number;
+  public profileCoverageNotice = '';
   public napaActual?: number;
   public napaActualFecha?: number;
   public napaEscalaMaxima = 10;
@@ -68,7 +82,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
   private readonly definitions: SoilMetricDefinition[] = [
     { key: 'humedad', title: 'Humedad de suelo', unit: '%', color: '#2f9fe8', decimals: 1 },
-    { key: 'salinidad', title: 'Salinidad', unit: 'mS/m', color: '#8e44ad', decimals: 1 },
+    { key: 'salinidad', title: 'Salinidad relativa', unit: 'VIC', color: '#8e44ad', decimals: 1 },
     { key: 'temperatura', title: 'Temperatura', unit: 'C', color: '#e74c3c', decimals: 1 },
   ];
 
@@ -88,7 +102,13 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   ];
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['reportes'] || changes['rawFrames'] || changes['fechaDesde']) {
+    if (
+      changes['reportes'] ||
+      changes['rawFrames'] ||
+      changes['fechaDesde'] ||
+      changes['mostrarNapa'] ||
+      changes['mostrarEntradaAnalogica']
+    ) {
       this.prepareOptions();
     }
   }
@@ -106,10 +126,12 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       'Fecha',
       'Profundidad cm',
       'Humedad suelo %',
-      'Salinidad mS/m',
+      'Salinidad VIC',
       'Temperatura C',
-      'Humedad cruda',
-      'Unidad cruda humedad',
+      'Valor crudo',
+      'Unidad cruda',
+      'Calidad decoder',
+      'Motivo calidad',
     ];
     const csv = [headers, ...rows].map((row) => row.map((value) => this.csvCell(value)).join(';')).join('\n');
     const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
@@ -126,7 +148,15 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   }
 
   public rawReadingCount(frame: ILorawanRawFrame): number {
-    return (frame.readings || []).filter((reading) => reading.variable !== 'corriente_analogica').length;
+    return (frame.readings || []).length;
+  }
+
+  public rawInvalidReadingCount(frame: ILorawanRawFrame): number {
+    return (frame.readings || []).filter((reading) => reading.quality === 'invalid').length;
+  }
+
+  public rawUnverifiedReadingCount(frame: ILorawanRawFrame): number {
+    return (frame.readings || []).filter((reading) => reading.quality === 'unverified').length;
   }
 
   private prepareOptions(): void {
@@ -142,7 +172,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       this.chartOptions = undefined;
       this.profileRows = [];
       this.resumen = '';
-      this.napaChartOptions = this.buildNapaChartOptions();
+      this.profileCoverageNotice = '';
+      this.napaChartOptions = this.mostrarNapa ? this.buildNapaChartOptions() : undefined;
+      this.analogChartOptions = this.mostrarEntradaAnalogica ? this.buildAnalogChartOptions() : undefined;
       return;
     }
 
@@ -151,8 +183,10 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const latestPoints = this.buildLatestDepthPoints(definition);
     this.profileRows = this.buildProfileRows(definition, latestPoints);
     this.resumen = this.buildResumen(definition, series, latestPoints);
+    this.profileCoverageNotice = this.buildProfileCoverageNotice(latestPoints);
     this.chartOptions = this.buildStackedTimeSeriesChartOptions(definition, series);
-    this.napaChartOptions = this.buildNapaChartOptions();
+    this.napaChartOptions = this.mostrarNapa ? this.buildNapaChartOptions() : undefined;
+    this.analogChartOptions = this.mostrarEntradaAnalogica ? this.buildAnalogChartOptions() : undefined;
   }
 
   private buildHistoricalSeries(definition: SoilMetricDefinition): any[] {
@@ -161,11 +195,12 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     for (const frame of this.filteredRawFrames()) {
       for (const reading of this.rawReadingsForMetric(frame, definition.key)) {
         if (reading.depthCm === undefined) continue;
-        if (!byDepth.has(reading.depthCm)) byDepth.set(reading.depthCm, []);
-        byDepth.get(reading.depthCm)!.push({
+        const depth = normalizarProfundidadSentek(reading.depthCm);
+        if (!byDepth.has(depth)) byDepth.set(depth, []);
+        byDepth.get(depth)!.push({
           x: new Date(frame.timestamp).getTime(),
           y: reading.value,
-          depth: reading.depthCm,
+          depth,
           raw: reading.rawValue,
           rawUnit: reading.rawUnit,
         });
@@ -216,11 +251,13 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
     for (const frame of [...this.filteredRawFrames()].reverse()) {
       for (const reading of this.rawReadingsForMetric(frame, definition.key)) {
-        if (reading.depthCm === undefined || latestByDepth.has(reading.depthCm)) continue;
-        latestByDepth.set(reading.depthCm, {
+        if (reading.depthCm === undefined) continue;
+        const depth = normalizarProfundidadSentek(reading.depthCm);
+        if (latestByDepth.has(depth)) continue;
+        latestByDepth.set(depth, {
           x: new Date(frame.timestamp).getTime(),
           y: reading.value,
-          depth: reading.depthCm,
+          depth,
           raw: reading.rawValue,
           rawUnit: reading.rawUnit,
         });
@@ -622,7 +659,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       for (const row of napaRows) {
         const valores = row?.valores || row;
         const rawValue = this.toNumber(
-          valores?.actual ?? valores?.promedio ?? valores?.altura ?? valores?.nivel ?? valores?.value ?? valores?.valor
+          valores?.actual ?? valores?.altura ?? valores?.nivel ?? valores?.value ?? valores?.valor
         );
         if (rawValue === undefined) continue;
         const normalized = this.normalizarNapa(rawValue, valores?.unidad || row?.unidad);
@@ -632,6 +669,111 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           y: normalized,
           unit: 'm',
         });
+      }
+    }
+
+    return points.sort((a, b) => a.x - b.x);
+  }
+
+  private buildAnalogChartOptions(): any | undefined {
+    const points = this.buildAnalogPoints();
+    if (!points.length) {
+      this.analogResumen = '';
+      this.analogActual = undefined;
+      this.analogActualFecha = undefined;
+      return undefined;
+    }
+
+    const latest = points[points.length - 1];
+    this.analogActual = latest.y;
+    this.analogActualFecha = latest.x;
+    this.analogResumen = `${points.length} lecturas crudas - actual ${latest.y.toFixed(3)} mA`;
+
+    return {
+      chart: {
+        backgroundColor: 'transparent',
+        height: 320,
+        spacingBottom: 18,
+        spacingLeft: 8,
+        spacingRight: 18,
+        spacingTop: 10,
+        type: 'spline',
+        zooming: { type: 'x' },
+        style: {
+          fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        },
+      },
+      title: { text: undefined },
+      xAxis: {
+        type: 'datetime',
+        crosshair: { color: 'rgba(34, 211, 200, 0.24)', width: 2 },
+        title: {
+          text: 'Fecha y hora',
+          style: { color: 'var(--p-text-color)', fontSize: '14px', fontWeight: '700' },
+        },
+        labels: { style: { color: 'var(--p-text-color)', fontSize: '13px' } },
+        gridLineColor: 'var(--p-surface-border)',
+        gridLineWidth: 1,
+      },
+      yAxis: {
+        softMin: 4,
+        softMax: 20,
+        title: {
+          text: 'Corriente del transductor (mA)',
+          style: { color: '#7c3aed', fontSize: '14px', fontWeight: '700' },
+        },
+        labels: { style: { color: 'var(--p-text-color)', fontSize: '13px' } },
+        gridLineColor: 'var(--p-surface-border)',
+        gridLineWidth: 1,
+        plotLines: [
+          { color: '#94a3b8', dashStyle: 'ShortDash', value: 4, width: 1 },
+          { color: '#94a3b8', dashStyle: 'ShortDash', value: 20, width: 1 },
+        ],
+      },
+      legend: { enabled: false },
+      tooltip: {
+        backgroundColor: 'var(--p-content-background)',
+        borderColor: 'var(--p-surface-border)',
+        borderRadius: 8,
+        borderWidth: 1,
+        xDateFormat: '%d/%m/%Y %H:%M',
+        valueDecimals: 3,
+        valueSuffix: ' mA',
+        style: { color: 'var(--p-text-color)', fontSize: '14px' },
+      },
+      plotOptions: {
+        spline: {
+          lineWidth: 3,
+          marker: { enabled: points.length <= 80, radius: 3.5 },
+        },
+        series: { connectNulls: false, turboThreshold: 0 },
+      },
+      series: [{ color: '#7c3aed', data: points, name: 'Señal 4-20 mA', type: 'spline' }],
+      credits: { enabled: false },
+      accessibility: { enabled: false },
+    };
+  }
+
+  private buildAnalogPoints(): AnalogPoint[] {
+    const points: AnalogPoint[] = [];
+
+    for (const frame of this.filteredRawFrames()) {
+      for (const reading of frame.readings || []) {
+        if (reading.variable !== 'corriente_analogica' || reading.quality === 'invalid') continue;
+        if (!Number.isFinite(reading.value)) continue;
+        points.push({ x: new Date(frame.timestamp).getTime(), y: reading.value });
+      }
+    }
+
+    for (const reporte of this.rawFrames.length ? [] : this.filteredReports()) {
+      const timestamp = this.getReporteTimestamp(reporte);
+      if (!timestamp) continue;
+      const raw = (reporte?.datos as any)?.valores?.['Entrada Analógica'];
+      const rows = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      for (const row of rows) {
+        const valores = row?.valores || row;
+        const value = this.toNumber(valores?.actual ?? valores?.value ?? valores?.valor);
+        if (value !== undefined) points.push({ x: timestamp, y: value });
       }
     }
 
@@ -660,8 +802,15 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   private buildResumen(definition: SoilMetricDefinition, series: any[], latestPoints: HistoricalPoint[]): string {
     const pointCount = series.reduce((sum, item) => sum + (item.data?.length || 0), 0);
     if (!pointCount) return 'Sin lecturas historicas para esta variable';
-    const latest = latestPoints.length ? ` - ultimo perfil ${latestPoints.length}/${series.length} profundidades` : '';
-    return `${series.length} profundidades - ${pointCount} datos crudos${latest}`;
+    const latest = latestPoints.length ? ` - ultimo perfil ${latestPoints.length}/12 niveles` : '';
+    return `${series.length}/12 profundidades detectadas - ${pointCount} datos crudos${latest}`;
+  }
+
+  private buildProfileCoverageNotice(latestPoints: HistoricalPoint[]): string {
+    const count = new Set(latestPoints.map((point) => point.depth)).size;
+    if (!count) return '';
+    if (count >= 12) return 'Perfil completo: 12/12 niveles recibidos entre 10 y 120 cm.';
+    return `Cobertura recibida: ${count}/12 niveles. Chaman no completa ni promedia los ${12 - count} niveles faltantes.`;
   }
 
   private hasMetric(key: SoilMetricKey): boolean {
@@ -678,7 +827,10 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       temperatura: 'temperatura_suelo',
     }[key];
     return (frame.readings || []).filter(
-      (reading) => reading.variable === variable && (!reading.serviceId || reading.serviceId === 'perfil-suelo-sentek')
+      (reading) =>
+        reading.variable === variable &&
+        reading.quality !== 'invalid' &&
+        (!reading.serviceId || reading.serviceId === 'perfil-suelo-sentek')
     );
   }
 
@@ -740,12 +892,14 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         for (const reading of frame.readings || []) {
           rows.push([
             frame.timestamp,
-            reading.depthCm ?? '',
+            reading.depthCm === undefined ? '' : normalizarProfundidadSentek(reading.depthCm),
             reading.variable === 'humedad_suelo' ? reading.value : '',
             reading.variable === 'salinidad_suelo' ? reading.value : '',
             reading.variable === 'temperatura_suelo' ? reading.value : '',
             reading.rawValue ?? reading.value,
             reading.rawUnit ?? reading.unit,
+            reading.quality || 'legacy-sin-validacion',
+            reading.qualityReason || '',
           ]);
         }
       }
@@ -765,6 +919,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           row.temperatura?.actual ?? '',
           row.humedad?.crudo ?? '',
           row.humedad?.unidadCruda ?? '',
+          'legacy-validado-al-leer',
+          '',
         ]);
       }
     }

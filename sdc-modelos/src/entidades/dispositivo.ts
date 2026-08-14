@@ -26,6 +26,11 @@ export interface IMetaDataLora {
   chirpstackDeviceProfileName?: string;
   chirpstackDescription?: string;
   chirpstackLastSeenAt?: string;
+  /** Decoder que demostró poder interpretar al menos un payload del equipo. */
+  payloadDecoderId?: string;
+  payloadDecoderVersion?: string;
+  controllerManufacturer?: string;
+  controllerModel?: string;
 }
 
 /** Inventario tecnico seguro; nunca contiene claves OTAA ni de sesion. */
@@ -112,6 +117,10 @@ export interface IConfiguracionEntradaAnalogica {
    * profundidadInstalacionM - columnaAgua.
    */
   profundidadInstalacionM?: number;
+  /** Longitud fisica total del cable instalado; no define la escala del transductor. */
+  longitudCableM?: number;
+  /** Tramo del cable que queda entre el terreno y el controlador. */
+  tramoCableExteriorM?: number;
   /** Modelo matematico aplicado a la senal electrica. */
   versionConversion?: "lineal-4-20ma-v1";
   /**
@@ -172,7 +181,7 @@ export function serviciosDispositivoNormalizados(
   dispositivo?: Partial<IDispositivo>,
 ): IServicioDispositivo[] {
   if (!dispositivo) return [];
-  if (Array.isArray(dispositivo.servicios)) {
+  if (Array.isArray(dispositivo.servicios) && dispositivo.servicios.length) {
     return dispositivo.servicios
       .filter((servicio) => servicio && servicio.habilitado !== false)
       .map((servicio) => ({ ...servicio }));
@@ -205,11 +214,32 @@ export function serviciosDispositivoNormalizados(
     });
   }
   if (tieneAnalogico) {
+    const variableAnalogica =
+      dispositivo.configuracionLecturas?.entradaAnalogica?.variable ||
+      (sensores.has("Napa")
+        ? "nivel_napa"
+        : sensores.has("Presión")
+          ? "presion_agua"
+          : "sin_definir");
+    const esNapa = variableAnalogica === "nivel_napa";
+    const esPresion = variableAnalogica === "presion_agua";
     servicios.push({
-      id: "nivel-napa",
-      tipo: "nivel_napa",
-      nombre: "Napa / freatímetro",
-      sensores: NAPA_SENSORES,
+      id: esNapa
+        ? "nivel-napa"
+        : esPresion
+          ? "presion-agua"
+          : "entrada-analogica",
+      tipo: esNapa ? "nivel_napa" : "otro",
+      nombre: esNapa
+        ? "Napa / freatímetro"
+        : esPresion
+          ? "Presión de agua"
+          : "Entrada analógica 4-20 mA sin calibrar",
+      sensores: esNapa
+        ? ["Entrada Analógica", "Napa"]
+        : esPresion
+          ? ["Entrada Analógica", "Presión"]
+          : ["Entrada Analógica"],
       habilitado: true,
       ...asignacion,
     });

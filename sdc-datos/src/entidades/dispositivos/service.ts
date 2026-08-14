@@ -179,6 +179,18 @@ export class DispositivosService {
     config: IConfiguracionEntradaAnalogica,
   ): IConfiguracionEntradaAnalogica {
     const variable = config.variable || 'sin_definir';
+    const longitudCableM = this.numeroOpcional(config.longitudCableM);
+    const tramoCableExteriorM = this.numeroOpcional(config.tramoCableExteriorM);
+    const profundidadInformada = this.numeroOpcional(
+      config.profundidadInstalacionM,
+    );
+    const profundidadDerivada =
+      variable === 'nivel_napa' &&
+      longitudCableM !== undefined &&
+      tramoCableExteriorM !== undefined &&
+      longitudCableM > tramoCableExteriorM
+        ? Math.round((longitudCableM - tramoCableExteriorM) * 1000) / 1000
+        : undefined;
     const normalized: IConfiguracionEntradaAnalogica = {
       ...config,
       canal: Number(config.canal) === 2 ? 2 : 1,
@@ -193,9 +205,9 @@ export class DispositivosService {
       salidaMin: this.numeroOpcional(config.salidaMin),
       salidaMax: this.numeroOpcional(config.salidaMax),
       unidadSalida: String(config.unidadSalida || '').trim() || undefined,
-      profundidadInstalacionM: this.numeroOpcional(
-        config.profundidadInstalacionM,
-      ),
+      profundidadInstalacionM: profundidadInformada ?? profundidadDerivada,
+      longitudCableM,
+      tramoCableExteriorM,
       fuenteCalibracion:
         String(config.fuenteCalibracion || '').trim() || undefined,
       observaciones: String(config.observaciones || '').trim() || undefined,
@@ -254,6 +266,8 @@ export class DispositivosService {
 
     if (config.variable === 'nivel_napa') {
       const profundidad = Number(config.profundidadInstalacionM);
+      const longitudCable = this.numeroOpcional(config.longitudCableM);
+      const tramoExterior = this.numeroOpcional(config.tramoCableExteriorM);
       if (!Number.isFinite(profundidad) || profundidad <= 0) {
         faltantes.push('profundidad vertical del sensor desde el terreno');
       }
@@ -269,6 +283,24 @@ export class DispositivosService {
           .toLowerCase() !== 'm'
       ) {
         faltantes.push('unidad de columna de agua en metros');
+      }
+      if ((longitudCable === undefined) !== (tramoExterior === undefined)) {
+        faltantes.push('longitud total y tramo exterior del cable juntos');
+      }
+      if (
+        longitudCable !== undefined &&
+        tramoExterior !== undefined &&
+        (longitudCable <= 0 || tramoExterior < 0 || tramoExterior >= longitudCable)
+      ) {
+        faltantes.push('geometria valida del cable');
+      }
+      if (
+        longitudCable !== undefined &&
+        tramoExterior !== undefined &&
+        Number.isFinite(profundidad) &&
+        Math.abs(longitudCable - tramoExterior - profundidad) > 0.02
+      ) {
+        faltantes.push('profundidad consistente con el tramo enterrado');
       }
     }
 

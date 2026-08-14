@@ -17,6 +17,7 @@ import {
 import { Model } from 'mongoose';
 import { dbQuery } from 'src/auxiliares/helper.service';
 import { Dispositivo, DispositivoDocument } from './modelos/schema';
+import { decodeControllerUplink } from '../lorawan-uplinks/controller-decoder.registry';
 
 @Injectable()
 export class DispositivosRepository {
@@ -61,46 +62,87 @@ export class DispositivosRepository {
     tipo: TipoDispositivo;
     sensores: SensoresV2[];
     configuracionLecturas?: IUpdateDispositivo['configuracionLecturas'];
+    decoder?: {
+      id: string;
+      version: string;
+      manufacturer: string;
+      model: string;
+    };
   } {
     const text =
       `${uplink.deviceName || ''} ${uplink.applicationName || ''}`.toLowerCase();
-
-    if (
-      this.isUc511SentekUplink(uplink) ||
+    const decoded = decodeControllerUplink(uplink);
+    const hasDecodedSoil = decoded?.capabilities.soilProfile === true;
+    const hasDecodedAnalog = decoded?.capabilities.analogInput === true;
+    const hasExplicitSoilIdentity =
       text.includes('sentek') ||
       text.includes('lanza') ||
       text.includes('humedad de suelo') ||
-      text.includes('soil moisture') ||
-      text.includes('uc501') ||
-      text.includes('uc511') ||
-      text.includes('milesight') ||
-      text.includes('napa')
+      text.includes('soil moisture');
+    const hasExplicitAnalogIdentity =
+      text.includes('napa') ||
+      text.includes('freat') ||
+      text.includes('4-20') ||
+      text.includes('analog');
+
+    if (
+      hasDecodedSoil ||
+      hasDecodedAnalog ||
+      hasExplicitSoilIdentity ||
+      hasExplicitAnalogIdentity
     ) {
-      return {
-        tipo: 'Sensor de Humedad de Suelo',
-        sensores: [
+      const hasSoil = hasDecodedSoil || hasExplicitSoilIdentity;
+      const hasAnalog = hasDecodedAnalog || hasExplicitAnalogIdentity;
+      const sensores: SensoresV2[] = [];
+      if (hasSoil) {
+        sensores.push(
           'Humedad Suelo Profundidad',
           'Temperatura Suelo',
           'Salinidad Suelo',
-          'Entrada Analógica',
-          'Batería',
-        ],
+        );
+      }
+      if (hasAnalog) sensores.push('Entrada Analógica');
+      return {
+        tipo: hasSoil ? 'Sensor de Humedad de Suelo' : 'Otro',
+        sensores,
         configuracionLecturas: {
-          perfilSuelo: {
-            tipo: 'sonda_sentek_120cm',
-            protocolo: 'SDI-12',
-            niveles: 12,
-            profundidadesCm: [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115],
-            variables: ['humedad_vwc', 'salinidad_vic', 'temperatura'],
-          },
-          entradaAnalogica: {
-            canal: 1,
-            tipoSenal: '4-20mA',
-            variable: 'sin_definir',
-            entradaMinMa: 4,
-            entradaMaxMa: 20,
-          },
+          ...(hasSoil
+            ? {
+                perfilSuelo: {
+                  tipo: 'sonda_sentek_120cm' as const,
+                  protocolo: 'SDI-12' as const,
+                  niveles: 12 as const,
+                  profundidadesCm: [
+                    10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120,
+                  ],
+                  variables: [
+                    'humedad_vwc' as const,
+                    'salinidad_vic' as const,
+                    'temperatura' as const,
+                  ],
+                },
+              }
+            : {}),
+          ...(hasAnalog
+            ? {
+                entradaAnalogica: {
+                  canal: 1 as const,
+                  tipoSenal: '4-20mA' as const,
+                  variable: 'sin_definir' as const,
+                  entradaMinMa: 4,
+                  entradaMaxMa: 20,
+                },
+              }
+            : {}),
         },
+        decoder: decoded
+          ? {
+              id: decoded.decoderId,
+              version: decoded.decoderVersion,
+              manufacturer: decoded.manufacturer,
+              model: decoded.model,
+            }
+          : undefined,
       };
     }
 
@@ -137,47 +179,6 @@ export class DispositivosRepository {
     };
   }
 
-  private isUc511SentekUplink(uplink: ILorawanUplink): boolean {
-    if (uplink.fPort !== 85) {
-      return false;
-    }
-
-    const payload = this.getUplinkPayloadText(uplink);
-    if (!payload) {
-      return false;
-    }
-
-    const hex = payload.replace(/[^a-fA-F0-9]/g, '').toLowerCase();
-    if (hex.length < 24) {
-      return false;
-    }
-
-    // UC501/UC511 + Sentek llega por fPort 85 con bloques SDI-12 y/o analogicos.
-    // Este patron evita clasificar otros LoRaWAN genericos como lanza.
-    return hex.includes('08db') || hex.includes('9c48') || hex.length >= 70;
-  }
-
-  private getUplinkPayloadText(uplink: ILorawanUplink): string | undefined {
-    const rawPayload = (uplink as any).rawPayload || {};
-    const candidates = [
-      uplink.data,
-      rawPayload.FRMPayload,
-      rawPayload.frmPayload,
-      rawPayload.frmpayload,
-      rawPayload.payloadHex,
-      rawPayload.hexPayload,
-      rawPayload.dataHex,
-      rawPayload.MACPayload?.FRMPayload,
-      rawPayload.macPayload?.FRMPayload,
-      rawPayload.uplink?.frmPayload,
-      rawPayload.object?.frmPayload,
-    ];
-
-    return candidates.find(
-      (value) => typeof value === 'string' && value.trim(),
-    );
-  }
-
   async upsertFromLorawanUplink(
     uplink: ILorawanUplink,
   ): Promise<Dispositivo | null> {
@@ -188,11 +189,16 @@ export class DispositivosRepository {
     const devEUI = uplink.devEUI.toUpperCase();
     const timestamp = uplink.timestamp || new Date().toISOString();
     const inferred = this.inferDeviceFromLorawanUplink(uplink);
+    const hasSoilProfile = !!inferred.configuracionLecturas?.perfilSuelo;
+    const hasAnalogInput = !!inferred.configuracionLecturas?.entradaAnalogica;
     const inferredName =
-      inferred.tipo === 'Sensor de Humedad de Suelo' &&
-      this.isUc511SentekUplink(uplink)
-        ? `Controlador Sentek + entrada analógica ${devEUI}`
-        : devEUI;
+      hasSoilProfile && hasAnalogInput
+        ? `Controlador Milesight con Sentek y entrada analógica ${devEUI}`
+        : hasSoilProfile
+          ? `Controlador Milesight con Sentek ${devEUI}`
+          : hasAnalogInput
+            ? `Controlador Milesight con entrada analógica ${devEUI}`
+            : devEUI;
     const existing = await this.model.findOne({ deveui: devEUI }).lean();
     const update: IUpdateDispositivo = {
       deveui: devEUI,
@@ -212,6 +218,14 @@ export class DispositivosRepository {
         rssi: uplink.rssi,
         snr: uplink.snr,
         dr: uplink.dr,
+        ...(inferred.decoder
+          ? {
+              payloadDecoderId: inferred.decoder.id,
+              payloadDecoderVersion: inferred.decoder.version,
+              controllerManufacturer: inferred.decoder.manufacturer,
+              controllerModel: inferred.decoder.model,
+            }
+          : {}),
       },
     };
     const inferredServices = serviciosDispositivoNormalizados(update).map(
@@ -249,11 +263,38 @@ export class DispositivosRepository {
       ) {
         $set.sensores = mergedSensors;
       }
-      if (!existing.configuracionLecturas && update.configuracionLecturas) {
-        $set.configuracionLecturas = update.configuracionLecturas;
+      if (update.configuracionLecturas) {
+        const mergedConfiguration = {
+          ...(existing.configuracionLecturas || {}),
+          ...(!existing.configuracionLecturas?.perfilSuelo &&
+          update.configuracionLecturas.perfilSuelo
+            ? { perfilSuelo: update.configuracionLecturas.perfilSuelo }
+            : {}),
+          ...(!existing.configuracionLecturas?.entradaAnalogica &&
+          update.configuracionLecturas.entradaAnalogica
+            ? {
+                entradaAnalogica: update.configuracionLecturas.entradaAnalogica,
+              }
+            : {}),
+        };
+        if (
+          JSON.stringify(mergedConfiguration) !==
+          JSON.stringify(existing.configuracionLecturas || {})
+        ) {
+          $set.configuracionLecturas = mergedConfiguration as any;
+        }
       }
-      if (!existing.servicios?.length && inferredServices.length) {
-        $set.servicios = inferredServices;
+      if (inferredServices.length) {
+        const existingServices = existing.servicios || [];
+        const missingServices = inferredServices.filter(
+          (inferredService) =>
+            !existingServices.some(
+              (existingService) => existingService.id === inferredService.id,
+            ),
+        );
+        if (missingServices.length) {
+          $set.servicios = [...existingServices, ...missingServices];
+        }
       }
     }
 
