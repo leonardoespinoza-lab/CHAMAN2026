@@ -128,6 +128,12 @@
   color: var(--p-primary-700, #08766e);
 }
 
+.physical-sensor-status.incomplete {
+  background: color-mix(in srgb, #f59e0b 12%, var(--p-surface-0));
+  border-color: color-mix(in srgb, #f59e0b 38%, var(--p-surface-border));
+  color: #b45309;
+}
+
 .physical-sensor-reading {
   align-items: flex-end;
   display: flex;

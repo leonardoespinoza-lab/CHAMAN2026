@@ -31,6 +31,11 @@ export interface IMetaDataLora {
   payloadDecoderVersion?: string;
   controllerManufacturer?: string;
   controllerModel?: string;
+  /** Canales SDI-12 crudos (0-15) acumulados en el barrido del reporte. */
+  profileChannels?: number[];
+  /** Primer y ultimo contador LoRaWAN que componen el barrido. */
+  cycleFirstFCnt?: number;
+  cycleLastFCnt?: number;
 }
 
 /** Inventario tecnico seguro; nunca contiene claves OTAA ni de sesion. */
@@ -93,12 +98,35 @@ export type VariableEntradaAnalogica =
   | "presion_agua"
   | "nivel_napa";
 
+export type VariablePerfilSdi12 =
+  | "humedad_vwc"
+  | "salinidad_vic"
+  | "temperatura";
+
+/**
+ * Relacion explicita entre una consulta configurada en Milesight ToolBox y
+ * las posiciones fisicas del perfil Sentek. `canalMilesight` usa la
+ * numeracion visible 1-16; el byte transmitido por UC50x usa 0-15.
+ */
+export interface IConfiguracionCanalPerfilSdi12 {
+  canalMilesight: number;
+  variable: VariablePerfilSdi12;
+  /** Posiciones 1-12 del perfil, en el mismo orden que los valores SDI-12. */
+  posicionesPerfil: number[];
+}
+
 export interface IConfiguracionPerfilSuelo {
   tipo: "sonda_sentek_120cm";
   protocolo: "SDI-12";
   niveles: 12;
   profundidadesCm: number[];
-  variables: ("humedad_vwc" | "salinidad_vic" | "temperatura")[];
+  variables: VariablePerfilSdi12[];
+  /**
+   * Permite que futuros controladores cambien el orden de consultas sin
+   * cambiar codigo. Si falta, se usa el perfil validado hoy: canales 1-4
+   * humedad, 5-8 VIC y 9-12 temperatura, tres niveles por canal.
+   */
+  mapeoCanalesSdi12?: IConfiguracionCanalPerfilSdi12[];
 }
 
 export interface IConfiguracionEntradaAnalogica {

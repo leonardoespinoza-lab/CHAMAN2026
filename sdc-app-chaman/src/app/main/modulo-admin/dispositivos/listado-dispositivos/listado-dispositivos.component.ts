@@ -472,17 +472,52 @@ export class ListadoDispositivosComponent implements OnInit, OnDestroy {
     const bytes = hex.match(/.{2}/g)?.map((value) => Number.parseInt(value, 16)) || [];
     let soilProfile = false;
     let analogInput = false;
-    for (let index = 0; index < bytes.length - 2; index += 1) {
+    let index = 0;
+    while (index + 1 < bytes.length) {
+      const channel = bytes[index];
+      const type = bytes[index + 1];
       if (bytes[index] === 0x08 && bytes[index + 1] === 0xdb && bytes[index + 2] <= 0x0b) {
         soilProfile = true;
+        const officialEnd = Math.min(index + 39, bytes.length);
+        let nextIndex = officialEnd;
+        for (let cursor = index + 3; cursor + 3 < officialEnd; cursor += 1) {
+          if (
+            bytes[cursor] === 0x0d &&
+            bytes[cursor + 1] === 0x0a &&
+            (bytes[cursor + 2] === 0x08 ||
+              bytes[cursor + 2] === 0x05 ||
+              bytes[cursor + 2] === 0x06 ||
+              bytes[cursor + 2] === 0x85 ||
+              bytes[cursor + 2] === 0x86)
+          ) {
+            nextIndex = cursor + 2;
+            break;
+          }
+        }
+        index = nextIndex;
+        continue;
       }
       if (
-        index <= bytes.length - 10 &&
-        (bytes[index] === 0x05 || bytes[index] === 0x06) &&
-        (bytes[index + 1] === 0xe2 || bytes[index + 1] === 0x02)
+        (channel === 0x05 || channel === 0x06 || channel === 0x85 || channel === 0x86) &&
+        (type === 0xe2 || type === 0x02)
       ) {
+        const blockLength = channel >= 0x80 ? 11 : 10;
+        if (index + blockLength > bytes.length) break;
         analogInput = true;
+        index += blockLength;
+        continue;
       }
+
+      const knownLength =
+        channel === 0x01 && type === 0x75
+          ? 3
+          : (channel === 0x03 || channel === 0x04) && (type === 0x00 || type === 0x01)
+            ? 3
+            : (channel === 0x03 || channel === 0x04) && type === 0xc8
+              ? 6
+              : 0;
+      if (!knownLength || index + knownLength > bytes.length) break;
+      index += knownLength;
     }
     return { soilProfile, analogInput };
   }

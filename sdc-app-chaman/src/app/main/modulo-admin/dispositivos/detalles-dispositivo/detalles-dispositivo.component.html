@@ -52,9 +52,15 @@
           <div>
             <span class="physical-sensor-kicker">Sensor fisico · SDI-12</span>
             <h2>Sonda Sentek de perfil 1,2 m</h2>
-            <p>Humedad VWC, salinidad VIC y temperatura en 12 niveles: 10 a 120 cm.</p>
+            <p>Humedad VWC, salinidad VIC y temperatura en {{ descripcionProfundidadesSentek }}.</p>
           </div>
-          <span class="physical-sensor-status ready">Perfil activo</span>
+          <span
+            class="physical-sensor-status"
+            [class.ready]="coberturaPerfilSentek?.completa"
+            [class.incomplete]="coberturaPerfilSentek && !coberturaPerfilSentek.completa"
+          >
+            {{ estadoPerfilSentek }}
+          </span>
         </article>
       }
 

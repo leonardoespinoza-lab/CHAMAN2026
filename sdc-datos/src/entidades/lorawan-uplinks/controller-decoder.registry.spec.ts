@@ -18,7 +18,7 @@ describe('ControllerDecoderRegistry', () => {
 
     expect(result).toMatchObject({
       decoderId: MILESIGHT_UC50X_DECODER_ID,
-      decoderVersion: '1.0.0',
+      decoderVersion: '1.2.0',
       manufacturer: 'Milesight',
       model: 'UC511',
       capabilities: { soilProfile: true, analogInput: true },
@@ -99,6 +99,83 @@ describe('ControllerDecoderRegistry', () => {
         quality: 'valid',
       }),
     ]);
+  });
+
+  it.each([
+    MILESIGHT_UC50X_GOLDEN_FIXTURES.liveArturoChannel12,
+    MILESIGHT_UC50X_GOLDEN_FIXTURES.liveGilardoniChannel12,
+  ])(
+    'reproduce el uplink vivo $devEUI sin inventar humedad ni otros canales',
+    (fixture) => {
+      const result = controllerDecoderRegistry.decode(
+        {
+          data: Buffer.from(fixture.payloadHex, 'hex').toString('base64'),
+          devEUI: fixture.devEUI,
+          fPort: 85,
+        },
+        {
+          configuracionLecturas: {
+            perfilSuelo: {
+              tipo: 'sonda_sentek_120cm',
+              protocolo: 'SDI-12',
+              niveles: 12,
+              profundidadesCm: [
+                10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120,
+              ],
+              variables: ['humedad_vwc', 'salinidad_vic', 'temperatura'],
+            },
+          },
+        } as any,
+      );
+
+      expect(result?.cycleChannels).toEqual([11]);
+      expect(
+        result?.readings.filter((row) => row.variable === 'humedad_suelo'),
+      ).toHaveLength(0);
+      expect(
+        result?.readings
+          .filter((row) => row.variable === 'temperatura_suelo')
+          .map(({ depthCm, value, quality }) => ({ depthCm, value, quality })),
+      ).toEqual(
+        fixture.expectedTemperatures.map((value, index) => ({
+          depthCm: 100 + index * 10,
+          value,
+          quality: 'valid',
+        })),
+      );
+    },
+  );
+
+  it('usa las profundidades configuradas del dispositivo sin fijarlas en el decoder', () => {
+    const fixture = MILESIGHT_UC50X_GOLDEN_FIXTURES.liveArturoChannel12;
+    const result = controllerDecoderRegistry.decode(
+      {
+        data: Buffer.from(fixture.payloadHex, 'hex').toString('base64'),
+        fPort: 85,
+      },
+      {
+        configuracionLecturas: {
+          perfilSuelo: {
+            tipo: 'sonda_sentek_120cm',
+            protocolo: 'SDI-12',
+            niveles: 12,
+            profundidadesCm: [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115],
+            variables: ['humedad_vwc', 'salinidad_vic', 'temperatura'],
+          },
+        },
+      } as any,
+    );
+
+    expect(
+      result?.readings
+        .filter((row) => row.variable === 'temperatura_suelo')
+        .map((row) => row.depthCm),
+    ).toEqual([95, 105, 115]);
+    expect(
+      result?.valores['Temperatura Suelo']
+        ?.slice(9)
+        .map((row) => row.profundidad),
+    ).toEqual([95, 105, 115]);
   });
 
   it('conserva evidencia fuera de rango pero no la publica como dato valido', () => {

@@ -23,6 +23,10 @@
     </div>
   </header>
 
+  @if (alertaEntradaAnalogica) {
+    <p-message severity="warn" [text]="alertaEntradaAnalogica"></p-message>
+  }
+
   @if (napaActualM !== undefined) {
     <div class="napa-summary">
       <article>

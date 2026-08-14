@@ -69,6 +69,11 @@ export interface ILorawanRawFrame {
   decoderVersion?: string;
   controllerManufacturer?: string;
   controllerModel?: string;
+  /**
+   * Canales SDI-12 presentes en esta trama, usando la numeracion cruda
+   * Milesight (0-15). Permite auditar cobertura sin inferir datos ausentes.
+   */
+  profileChannels?: number[];
   decodeStatus: "decoded" | "unrecognized";
   readings: ILorawanRawReading[];
 }

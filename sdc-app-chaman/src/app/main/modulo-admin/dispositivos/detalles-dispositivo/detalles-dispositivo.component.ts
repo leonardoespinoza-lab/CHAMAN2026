@@ -11,7 +11,11 @@ import { BateriaComponent } from '../bateria/bateria.component';
 import { CardDetallesReporteLanzaComponent } from './card-detalles-reporte-lanza/card-detalles-reporte-lanza.component';
 import { GraficoHistoricoAmbienteComponent } from './grafico-historico-ambiente/grafico-historico-ambiente.component';
 import { GraficoHistoricoSueloComponent } from './grafico-historico-suelo/grafico-historico-suelo.component';
-import { buildSentekProfile, MedicionProfundidad } from './sentek-profile';
+import {
+  buildSentekChannelCoverage,
+  buildSentekProfile,
+  MedicionProfundidad,
+} from './sentek-profile';
 
 @Component({
   selector: 'app-detalles-dispositivo',
@@ -45,6 +49,24 @@ export class DetallesDispositivoComponent implements OnInit {
 
   public get entradaAnalogicaConfigurada() {
     return this.dispositivo?.configuracionLecturas?.entradaAnalogica;
+  }
+
+  public get coberturaPerfilSentek() {
+    return buildSentekChannelCoverage(this.rawFrames);
+  }
+
+  public get estadoPerfilSentek(): string {
+    const cobertura = this.coberturaPerfilSentek;
+    if (!cobertura) return 'Esperando diagnóstico';
+    return cobertura.completa
+      ? 'Perfil completo 12/12'
+      : `Perfil incompleto ${cobertura.canalesRecibidos.length}/12`;
+  }
+
+  public get descripcionProfundidadesSentek(): string {
+    const depths = this.dispositivo?.configuracionLecturas?.perfilSuelo?.profundidadesCm || [];
+    if (!depths.length) return '12 niveles de profundidad';
+    return `${depths.length} niveles configurados: ${depths[0]} a ${depths[depths.length - 1]} cm`;
   }
 
   public get esEntradaAnalogica(): boolean {

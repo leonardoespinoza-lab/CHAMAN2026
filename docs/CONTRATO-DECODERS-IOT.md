@@ -6,7 +6,7 @@ Chaman interpreta cada payload LoRaWAN mediante un decoder versionado por famili
 configurado en ChirpStack sirve como identidad, pero no demuestra que sensores estan conectados. Una capacidad se
 habilita cuando aparece su bloque en el payload o cuando existe una configuracion administrativa explicita.
 
-El registro actual expone `milesight-uc501-uc511` version `1.0.0` para Milesight UC501/UC511. El catalogo se consulta
+El registro actual expone `milesight-uc501-uc511` version `1.2.0` para Milesight UC501/UC511. El catalogo se consulta
 en `GET /lorawan/uplinks/decoders`.
 
 ## Salida obligatoria
@@ -52,6 +52,14 @@ Referencias primarias:
 5. Definir validaciones racionales por magnitud. Si no existe una referencia universal, marcar `unverified` en lugar de inventar un rango.
 6. Verificar que una identidad generica del controlador no cree sensores ni servicios.
 7. Reprocesar primero un dispositivo controlado y comparar curvas/CSV contra el caso exitoso antes de promover a produccion.
+
+Para el perfil actual, el byte de canal Milesight es zero-based: `0..3`
+transportan humedad, `4..7` VIC y `8..11` temperatura, con tres posiciones
+por bloque. Esta relacion no se debe suponer para un equipo futuro: puede
+declararse por dispositivo mediante `mapeoCanalesSdi12`, indicando el canal
+visible de ToolBox (`1..16`), la variable y las posiciones fisicas (`1..12`).
+El parser conserva el bloque crudo aunque no exista una relacion configurada,
+pero no publica una magnitud que no pueda identificar.
 
 ## Geometria del medidor de napa
 

@@ -87,4 +87,29 @@ describe('GraficoHistoricoNapaComponent', () => {
     expect(component.chartOptions).toBeUndefined();
     expect(component.senalSinCalibrar).toBeTrue();
   });
+
+  it('avisa si el controlador comunica pero las tramas recientes omiten 4-20 mA', () => {
+    const component = new GraficoHistoricoNapaComponent();
+    component.rawFrames = Array.from({ length: 6 }, (_, index) => ({
+      devEUI: '24E124454E358347',
+      timestamp: `2026-08-14T${String(10 + index).padStart(2, '0')}:00:00.000Z`,
+      decodeStatus: 'decoded' as const,
+      profileChannels: [11],
+      readings: [
+        {
+          depthCm: 100,
+          quality: 'valid' as const,
+          serviceId: 'perfil-suelo-sentek',
+          unit: 'C',
+          value: 14,
+          variable: 'temperatura_suelo',
+        },
+      ],
+    }));
+
+    component.ngOnChanges({ rawFrames: {} as any });
+
+    expect(component.alertaEntradaAnalogica).toContain('no incluyen la entrada analogica 4-20 mA');
+    expect(component.napaActualM).toBeUndefined();
+  });
 });

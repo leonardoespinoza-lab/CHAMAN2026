@@ -4,6 +4,7 @@ import {
   decodedUc511ToReporteValores,
   extractUc511PayloadHex,
 } from './uc511-sentek.decoder';
+import { MILESIGHT_UC50X_GOLDEN_FIXTURES } from './controller-decoder.golden-fixtures';
 
 describe('decodeUc511SentekPayload', () => {
   it('keeps the analog transducer separate from the Sentek profile', () => {
@@ -218,5 +219,79 @@ describe('decodeUc511SentekPayload', () => {
       '20cm': 2.5,
       '30cm': -3.5,
     });
+  });
+
+  it('does not confuse a Milesight configuration ACK with analog telemetry', () => {
+    const decoded = decodeUc511SentekPayload(
+      MILESIGHT_UC50X_GOLDEN_FIXTURES.rollbackConfigurationAck.payloadHex,
+    );
+
+    expect(decoded).toBeNull();
+  });
+
+  it('decodes the successful 12-level field sweep and the independent water sensor', () => {
+    const fixture = MILESIGHT_UC50X_GOLDEN_FIXTURES.successfulGilardoniSweep;
+    const decoded = decodeUc511SentekPayload(
+      fixture.frames.map((frame) => frame.payloadHex).join(''),
+    );
+    const report = decodedUc511ToReporteValores(
+      decoded!,
+      {
+        canal: 1,
+        tipoSenal: '4-20mA',
+        variable: 'nivel_napa',
+        entradaMinMa: 4,
+        entradaMaxMa: 20,
+        salidaMin: 0,
+        salidaMax: 10,
+        unidadSalida: 'm',
+        profundidadInstalacionM: 6,
+        longitudCableM: 10,
+        tramoCableExteriorM: 4,
+      },
+      {
+        niveles: 12,
+        profundidadesCm: [5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115],
+      },
+    );
+
+    expect(Object.values(decoded!.soil.moisture)).toEqual(
+      fixture.expectedMoisture,
+    );
+    expect(Object.values(decoded!.soil.salinity)).toEqual(fixture.expectedVic);
+    expect(Object.values(decoded!.soil.temperature)).toEqual(
+      fixture.expectedTemperatureC,
+    );
+    expect(decoded?.analog.rawMa).toBeCloseTo(fixture.expectedCurrentMa, 3);
+    expect(report.Napa?.[0].valores?.columnaAgua).toBeCloseTo(
+      fixture.expectedWaterColumnM,
+      3,
+    );
+    expect(report.Napa?.[0].valores?.actual).toBeCloseTo(
+      fixture.expectedDepthBelowTerrainM,
+      3,
+    );
+    expect(
+      report['Humedad Suelo Profundidad']?.map((row) => row.profundidad),
+    ).toEqual([5, 15, 25, 35, 45, 55, 65, 75, 85, 95, 105, 115]);
+  });
+
+  it('uses an explicit per-device channel map for future controller layouts', () => {
+    const decoded = decodeUc511SentekPayload('08db00302b31302b32302b33300d0a', {
+      mapeoCanalesSdi12: [
+        {
+          canalMilesight: 1,
+          variable: 'temperatura',
+          posicionesPerfil: [12, 6, 1],
+        },
+      ],
+    });
+
+    expect(decoded?.soil.temperature).toEqual({
+      '120cm': 10,
+      '60cm': 20,
+      '10cm': 30,
+    });
+    expect(decoded?.soil.moisture).toEqual({});
   });
 });

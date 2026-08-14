@@ -1,4 +1,8 @@
-import { buildSentekProfile, normalizarProfundidadSentek } from './sentek-profile';
+import {
+  buildSentekChannelCoverage,
+  buildSentekProfile,
+  normalizarProfundidadSentek,
+} from './sentek-profile';
 
 describe('normalizarProfundidadSentek', () => {
   it('mantiene la escala canonica de 10 a 120 cm', () => {
@@ -62,5 +66,38 @@ describe('normalizarProfundidadSentek', () => {
       })
     );
     expect(profile[0].salinidad?.nota).toContain('no equivale a EC');
+  });
+
+  it('detecta el patron real donde solo se reciben tramas del canal 12', () => {
+    const coverage = buildSentekChannelCoverage(
+      Array.from({ length: 8 }, (_, index) => ({
+        decodeStatus: 'decoded' as const,
+        devEUI: '24E124454E358347',
+        profileChannels: [11],
+        readings: [],
+        timestamp: `2026-08-14T${String(10 + index).padStart(2, '0')}:00:00.000Z`,
+      })),
+    );
+
+    expect(coverage?.completa).toBeFalse();
+    expect(coverage?.canalesRecibidos).toEqual([12]);
+    expect(coverage?.canalesFaltantes).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(coverage?.mensaje).toContain('solo el canal SDI-12 12');
+    expect(coverage?.mensaje).toContain('No se recibieron los canales 1-4 de humedad');
+  });
+
+  it('declara cobertura completa solo al observar los doce canales', () => {
+    const coverage = buildSentekChannelCoverage([
+      {
+        decodeStatus: 'decoded',
+        devEUI: 'AABBCCDD',
+        profileChannels: Array.from({ length: 12 }, (_, index) => index),
+        readings: [],
+        timestamp: '2026-08-14T10:00:00.000Z',
+      },
+    ]);
+
+    expect(coverage?.completa).toBeTrue();
+    expect(coverage?.canalesFaltantes).toEqual([]);
   });
 });
