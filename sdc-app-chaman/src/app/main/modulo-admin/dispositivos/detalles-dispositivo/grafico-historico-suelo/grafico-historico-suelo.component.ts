@@ -16,11 +16,13 @@ interface SoilMetricDefinition {
 
 interface HistoricalPoint {
   x: number;
-  y: number;
+  y: number | null;
   depth: number;
+  custom?: { isGap?: boolean };
   fCnt?: number;
   frameKey?: string;
   metric?: SoilMetricKey;
+  marker?: { enabled: boolean };
   profileChannels?: number[];
   raw?: number;
   rawUnit?: string;
@@ -54,8 +56,10 @@ interface ProfileRow {
 }
 
 interface ProfileRecentWindow {
+  allowedFrameKeys: Set<string>;
   dataEnd: number;
   dataStart: number;
+  gapTimestamps: number[];
   latestPoints: HistoricalPoint[];
   missingDepths: number[];
   visibleEnd: number;
@@ -463,6 +467,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         valueSuffix: ` ${definition.unit}`,
         pointFormatter: function (this: any) {
           const point = this as HistoricalPoint & { color?: string; series?: any };
+          if (point.custom?.isGap) return '';
           const custom = point.series?.userOptions?.custom || {};
           const decimals = custom.decimals ?? definition.decimals;
           const unit = custom.unit || definition.unit;
@@ -533,9 +538,10 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
    * Un barrido Sentek llega repartido en varias tramas. Cada grupo dura como
    * maximo la misma tolerancia del agregador; no se encadena por proximidad.
    * La unica vista parte del primer barrido fisico 36/36 (12 H + 12 S + 12 T)
-   * del tramo continuo actual o,
-   * si todavia no existe, del ultimo grupo real. Nunca mezcla la cola profunda
-   * antigua con el perfil operativo posterior a Basic Station.
+   * disponible desde fechaDesde. Solo grafica barridos completos posteriores;
+   * los grupos parciales se representan con un hueco explicito para que una
+   * linea nunca sugiera continuidad donde faltaron datos. Si todavia no existe
+   * un 36/36, conserva como evidencia el ultimo grupo real.
    */
   private buildRecentProfileWindow(
     seriesByMetric: Map<SoilMetricKey, any[]>,
@@ -588,6 +594,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       channels: Set<number>;
       end: number;
       fCnts: Set<number>;
+      frameKeys: Set<string>;
       latestByIdentity: Map<string, HistoricalPoint>;
       start: number;
     }> = [];
@@ -608,6 +615,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           channels: new Set<number>(),
           end: frame.timestamp,
           fCnts: new Set<number>(),
+          frameKeys: new Set<string>(),
           latestByIdentity: new Map<string, HistoricalPoint>(),
           start: frame.timestamp,
         };
@@ -615,6 +623,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       }
       group.end = Math.max(group.end, ...frame.points.map((point) => point.x));
       if (frame.fCnt !== undefined) group.fCnts.add(frame.fCnt);
+      frame.points.forEach((point) => group.frameKeys.add(point.frameKey || `point:${point.x}`));
       frame.channels.forEach((channel) => group.channels.add(channel));
       frame.points.forEach((point) => group.latestByIdentity.set(`${point.metric}:${point.depth}`, point));
     }
@@ -624,38 +633,46 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         this.expectedSentekDepthsCm.every((depth) => group.latestByIdentity.has(`${definition.key}:${depth}`))
       );
     const latestGroup = groups[groups.length - 1];
-    let latestCompleteIndex = -1;
-    for (let index = groups.length - 1; index >= 0; index -= 1) {
-      if (isComplete(groups[index])) {
-        latestCompleteIndex = index;
-        break;
+    const firstCompleteIndex = groups.findIndex(isComplete);
+    const hasCompleteProfile = firstCompleteIndex >= 0;
+    const relevantGroups = hasCompleteProfile ? groups.slice(firstCompleteIndex) : [latestGroup];
+    const completeGroups = relevantGroups.filter(isComplete);
+    const latestProfileGroup = completeGroups[completeGroups.length - 1] || latestGroup;
+    const allowedFrameKeys = new Set<string>();
+    const gapTimestamps: number[] = [];
+    let previousGroup: (typeof groups)[number] | undefined;
+
+    for (const group of relevantGroups) {
+      if (isComplete(group)) {
+        group.frameKeys.forEach((key) => allowedFrameKeys.add(key));
+        if (
+          previousGroup &&
+          isComplete(previousGroup) &&
+          group.start - previousGroup.start > this.sentekContinuousProfileGapMs
+        ) {
+          gapTimestamps.push(previousGroup.end + Math.floor((group.start - previousGroup.end) / 2));
+        }
+      } else if (hasCompleteProfile) {
+        gapTimestamps.push(group.start);
+      } else {
+        group.frameKeys.forEach((key) => allowedFrameKeys.add(key));
       }
-    }
-    let dataStart = latestGroup.start;
-    if (
-      latestCompleteIndex >= 0 &&
-      latestGroup.end - groups[latestCompleteIndex].end <= this.sentekContinuousProfileGapMs
-    ) {
-      dataStart = groups[latestCompleteIndex].start;
-      for (let index = latestCompleteIndex - 1; index >= 0; index -= 1) {
-        const current = groups[index];
-        const next = groups[index + 1];
-        if (!isComplete(current) || next.start - current.start > this.sentekContinuousProfileGapMs) break;
-        dataStart = current.start;
-      }
+      previousGroup = group;
     }
 
     const latestPoints = this.expectedSentekDepthsCm
-      .map((depth) => latestGroup.latestByIdentity.get(`${selectedMetric}:${depth}`))
+      .map((depth) => latestProfileGroup.latestByIdentity.get(`${selectedMetric}:${depth}`))
       .filter((point): point is HistoricalPoint => !!point);
     const missingDepths = this.expectedSentekDepthsCm.filter(
       (depth) => !latestGroup.latestByIdentity.has(`${selectedMetric}:${depth}`)
     );
-    dataStart = Math.max(this.getFechaDesdeMs(), dataStart);
+    const dataStart = Math.max(this.getFechaDesdeMs(), relevantGroups[0].start);
     const dataEnd = latestGroup.end;
     return {
+      allowedFrameKeys,
       dataEnd,
       dataStart,
+      gapTimestamps: [...new Set(gapTimestamps)].sort((a, b) => a - b),
       latestPoints,
       missingDepths,
       visibleEnd: dataEnd + this.sentekChartLeadMs,
@@ -667,15 +684,29 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     if (!recentWindow) return series;
 
     return series.map((item) => {
-      const data = ((item.data || []) as HistoricalPoint[]).filter(
-        (point) => point.x >= recentWindow.dataStart && point.x <= recentWindow.dataEnd
-      );
+      const values = ((item.data || []) as HistoricalPoint[]).filter((point) => {
+        const frameKey = point.frameKey || `point:${point.x}`;
+        return (
+          point.x >= recentWindow.dataStart &&
+          point.x <= recentWindow.dataEnd &&
+          recentWindow.allowedFrameKeys.has(frameKey)
+        );
+      });
+      const depth = item.custom?.depthCm;
+      const gaps: HistoricalPoint[] = recentWindow.gapTimestamps.map((x) => ({
+        x,
+        y: null,
+        depth,
+        custom: { isGap: true },
+        marker: { enabled: false },
+      }));
+      const data = [...values, ...gaps].sort((a, b) => a.x - b.x);
       return {
         ...item,
         data,
         marker: {
           ...(item.marker || {}),
-          enabled: data.length <= 36,
+          enabled: values.length <= 36,
         },
       };
     });
@@ -1027,7 +1058,10 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   }
 
   private buildResumen(definition: SoilMetricDefinition, series: any[], latestPoints: HistoricalPoint[]): string {
-    const pointCount = series.reduce((sum, item) => sum + (item.data?.length || 0), 0);
+    const pointCount = series.reduce(
+      (sum, item) => sum + (item.data || []).filter((point: HistoricalPoint) => point.y !== null).length,
+      0
+    );
     if (!pointCount) return 'Sin lecturas historicas para esta variable';
     const latest = latestPoints.length ? ` - ultimo perfil ${latestPoints.length}/12 niveles` : '';
     return `${series.length}/12 profundidades detectadas - ${pointCount} datos crudos${latest}`;

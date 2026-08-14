@@ -66,6 +66,56 @@ describe('GraficoHistoricoSueloComponent', () => {
     return frame(timestamp, perfilCompleto(depths, offset), fCnt, profileChannels);
   }
 
+  function cicloPerfil(timestamp: string, fCnt: number, offset = 0): ILorawanRawFrame[] {
+    const start = new Date(timestamp).getTime();
+    return [
+      bloquePerfil(new Date(start).toISOString(), [10, 20, 30, 40], fCnt, [0, 1, 2, 3], offset),
+      bloquePerfil(new Date(start + 15_000).toISOString(), [50, 60, 70, 80], fCnt + 1, [4, 5, 6, 7], offset),
+      bloquePerfil(new Date(start + 30_000).toISOString(), [90, 100, 110, 120], fCnt + 2, [8, 9, 10, 11], offset),
+    ];
+  }
+
+  function cicloArturo(
+    timestamp: string,
+    fCnt: number,
+    kind: 'complete' | 'missing-b' | 'missing-shallow-h',
+    finalTimestamp?: string
+  ): ILorawanRawFrame[] {
+    const start = new Date(timestamp).getTime();
+    const allDepths = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+    const frameA = frame(
+      new Date(start).toISOString(),
+      [
+        ...allDepths
+          .filter((depth) => kind !== 'missing-shallow-h' || depth >= 40)
+          .map((depth, index) => lectura('humedad_suelo', depth, 20 + index)),
+        ...[10, 20, 30].map((depth, index) => lectura('salinidad_suelo', depth, 1400 + index)),
+      ],
+      fCnt,
+      [0, 1, 2, 3, 4]
+    );
+    const frameB = frame(
+      new Date(start + 14_067).toISOString(),
+      [
+        ...[40, 50, 60, 70, 80, 90, 100, 110, 120].map((depth, index) =>
+          lectura('salinidad_suelo', depth, 1403 + index)
+        ),
+        ...[10, 20, 30, 40, 50, 60, 70, 80, 90].map((depth, index) =>
+          lectura('temperatura_suelo', depth, 12 + index / 10)
+        ),
+      ],
+      fCnt + 1,
+      [5, 6, 7, 8, 9, 10]
+    );
+    const frameC = frame(
+      finalTimestamp || new Date(start + 29_949).toISOString(),
+      [100, 110, 120].map((depth, index) => lectura('temperatura_suelo', depth, 12.9 + index / 10)),
+      fCnt + 2,
+      [11]
+    );
+    return kind === 'missing-b' ? [frameA, frameC] : [frameA, frameB, frameC];
+  }
+
   function prepare(rawFrames: ILorawanRawFrame[]): GraficoHistoricoSueloComponent {
     const component = new GraficoHistoricoSueloComponent();
     component.rawFrames = rawFrames;
@@ -449,12 +499,136 @@ describe('GraficoHistoricoSueloComponent', () => {
     const salinitySeries = component.chartOptions.series.filter((series: any) => !series.custom?.isRain);
     expect(salinitySeries).toHaveSize(12);
     expect(salinitySeries.every((series: any) => series.id.startsWith('sentek-salinidad-'))).toBeTrue();
-    expect(salinitySeries.every((series: any) => series.data.every((point: any) => point.y >= 1400))).toBeTrue();
+    expect(
+      salinitySeries.every((series: any) =>
+        series.data.filter((point: any) => point.y !== null).every((point: any) => point.y >= 1400)
+      )
+    ).toBeTrue();
     expect(
       salinitySeries.every((series: any) =>
         series.data.every((point: any) => point.x >= new Date('2026-08-14T20:49:15.933Z').getTime())
       )
     ).toBeTrue();
+  });
+
+  it('muestra seis ciclos 36/36 de nueve grupos Arturo y corta los tres parciales sin revivir el prefijo ch11', () => {
+    const component = new GraficoHistoricoSueloComponent();
+    const prefixTimestamp = '2026-08-14T19:50:00.000Z';
+    const cycleStarts = Array.from({ length: 9 }, (_, index) =>
+      new Date(new Date('2026-08-14T20:49:15.933Z').getTime() + index * 20 * 60 * 1000).toISOString()
+    );
+    const missingBIndexes = new Set([2, 6]);
+    component.fechaDesde = '2026-08-14T19:00:00.000Z';
+    component.rawFrames = [
+      frame(prefixTimestamp, perfilCompleto([120], 99), 60, [11]),
+      ...cycleStarts.flatMap((timestamp, index) => {
+        const kind = missingBIndexes.has(index)
+          ? 'missing-b'
+          : index === 3
+            ? 'missing-shallow-h'
+            : 'complete';
+        return cicloArturo(
+          timestamp,
+          61 + index * 3,
+          kind,
+          index === 8 ? '2026-08-14T23:29:46.816Z' : undefined
+        );
+      }),
+    ];
+    component.lluvias = [
+      { fecha: '2026-08-14T19:20:00.000Z', milimetros: 2 },
+      { fecha: '2026-08-14T21:20:00.000Z', milimetros: 7 },
+      { fecha: '2026-08-15T05:00:00.000Z', milimetros: 9 },
+    ];
+    component.ngOnChanges({ rawFrames: {} as any, lluvias: {} as any, fechaDesde: {} as any });
+
+    const expectedDomain = [
+      new Date('2026-08-14T20:48:15.933Z').getTime(),
+      new Date('2026-08-14T23:30:46.816Z').getTime(),
+    ];
+    const prefixMs = new Date(prefixTimestamp).getTime();
+    const assertMetric = (metric: 'humedad' | 'salinidad' | 'temperatura') => {
+      component.onMetricChange(metric);
+      const soilSeries = component.chartOptions.series.filter((series: any) => !series.custom?.isRain);
+      expect([component.chartOptions.xAxis.min, component.chartOptions.xAxis.max]).toEqual(expectedDomain);
+      expect(soilSeries).toHaveSize(12);
+      expect(
+        soilSeries.every(
+          (series: any) =>
+            series.data.filter((point: any) => point.y !== null).length === 6 &&
+            series.data.filter((point: any) => point.y === null).length === 3 &&
+            series.data
+              .filter((point: any) => point.y === null)
+              .every((point: any) => point.marker?.enabled === false && point.custom?.isGap === true)
+        )
+      ).toBeTrue();
+      expect(soilSeries.every((series: any) => series.data.every((point: any) => point.x !== prefixMs))).toBeTrue();
+      return soilSeries;
+    };
+
+    const humiditySeries = assertMetric('humedad');
+    const repeatedValues = humiditySeries
+      .find((series: any) => series.custom.depthCm === 10)
+      .data.filter((point: any) => point.y !== null);
+    expect(new Set(repeatedValues.map((point: any) => point.y)).size).toBe(1);
+    expect(new Set(repeatedValues.map((point: any) => point.fCnt)).size).toBe(6);
+    expect(component.resumen).toContain('72 datos crudos');
+    const rainSeries = component.chartOptions.series.filter((series: any) => series.custom?.isRain);
+    expect(rainSeries).toHaveSize(1);
+    expect(rainSeries[0].data.map((point: any) => point.y)).toEqual([2, 7, 9]);
+
+    const gap = humiditySeries[0].data.find((point: any) => point.y === null);
+    expect(component.chartOptions.tooltip.pointFormatter.call({ ...gap, series: { userOptions: {} } })).toBe('');
+    const csvRows = (component as any).getCsvRows() as unknown[][];
+    expect(csvRows.some((row) => row.includes(null))).toBeFalse();
+
+    const salinitySeries = assertMetric('salinidad');
+    const temperatureSeries = assertMetric('temperatura');
+    expect(component.profileRows).toHaveSize(12);
+    expect(component.profileRecentMissingDepths).toEqual([]);
+    expect(component.profileRows[0].formatted).toContain('12.0 C');
+    const latestFrameCounters = new Set<number>();
+    [humiditySeries, salinitySeries, temperatureSeries].flat().forEach((series: any) => {
+      const latest = [...series.data].reverse().find((point: any) => point.y !== null);
+      if (latest?.fCnt !== undefined) latestFrameCounters.add(latest.fCnt);
+    });
+    expect([...latestFrameCounters].sort((a, b) => a - b)).toEqual([85, 86, 87]);
+  });
+
+  it('conserva los quince ciclos completos Gil aunque reinicien canal dentro de seis minutos', () => {
+    const start = new Date('2026-08-14T20:00:00.000Z').getTime();
+    const component = prepare(
+      Array.from({ length: 15 }, (_, index) =>
+        cicloPerfil(new Date(start + index * 4 * 60 * 1000).toISOString(), 189 + index * 3, index)
+      ).flat()
+    );
+
+    const soilSeries = component.chartOptions.series.filter((series: any) => !series.custom?.isRain);
+    expect(soilSeries).toHaveSize(12);
+    expect(
+      soilSeries.every(
+        (series: any) =>
+          series.data.filter((point: any) => point.y !== null).length === 15 &&
+          series.data.filter((point: any) => point.y === null).length === 0
+      )
+    ).toBeTrue();
+  });
+
+  it('corta la curva cuando dos ciclos completos consecutivos estan separados por mas de una hora', () => {
+    const component = prepare([
+      ...cicloPerfil('2026-08-14T10:00:00.000Z', 1),
+      ...cicloPerfil('2026-08-14T12:00:00.000Z', 4, 10),
+    ]);
+
+    const soilSeries = component.chartOptions.series.filter((series: any) => !series.custom?.isRain);
+    expect(
+      soilSeries.every(
+        (series: any) =>
+          series.data.filter((point: any) => point.y !== null).length === 2 &&
+          series.data.filter((point: any) => point.y === null).length === 1
+      )
+    ).toBeTrue();
+    expect(component.resumen).toContain('24 datos crudos');
   });
 
   it('reemplaza por identidad todas las series al cambiar humedad, temperatura y salinidad', () => {
