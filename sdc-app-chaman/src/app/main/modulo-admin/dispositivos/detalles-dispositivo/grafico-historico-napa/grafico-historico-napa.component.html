@@ -32,12 +32,22 @@
     <p class="napa-updated">Actualizado {{ napaActualFecha | date: 'dd/MM/yy HH:mm' }}</p>
 
     <div class="napa-content-grid">
-      <section class="ground-scene" aria-label="Corte del terreno con la profundidad actual de la napa">
+      <section
+        class="ground-scene"
+        aria-label="Corte del terreno con la profundidad actual y la evolución temporal de la napa"
+        [style.--napa-profile-bottom]="perfilSueloBottomPct + '%'"
+        [style.--napa-profile-top]="perfilSueloTopPct + '%'"
+      >
         <div class="scene-sky"></div>
         <div class="scene-ground"><span>Terreno · 0 m</span></div>
         <div class="soil-layer soil-layer-one"></div>
         <div class="soil-layer soil-layer-two"></div>
         <div class="soil-layer soil-layer-three"></div>
+        <app-chart
+          class="napa-scene-chart"
+          [options]="chartOptions"
+          [style]="'width: 100%; height: 100%; display: block'"
+        ></app-chart>
         <div class="well-pipe"></div>
         <div class="cable-line" aria-hidden="true"></div>
         <div class="sensor-head" aria-hidden="true"><i class="pi pi-circle-fill"></i></div>
@@ -58,11 +68,6 @@
         </div>
       </section>
     </div>
-
-    <section class="napa-curve">
-      <header><span>Evolución temporal</span></header>
-      <app-chart [options]="chartOptions"></app-chart>
-    </section>
 
     <section class="napa-readings" aria-label="Últimas mediciones de napa">
       <header><span>Fecha</span><span>Profundidad</span><span>Columna de agua</span></header>

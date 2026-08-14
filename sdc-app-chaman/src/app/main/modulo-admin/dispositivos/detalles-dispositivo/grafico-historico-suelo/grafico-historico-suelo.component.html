@@ -20,23 +20,13 @@
             <option [ngValue]="option.value">{{ option.label }}</option>
           }
         </select>
-        @if (profileRecentWindowAvailable) {
-          <button
-            class="soil-history-period-toggle"
-            data-chaman-action="secondary"
-            type="button"
-            (click)="toggleProfilePeriod()"
-          >
-            {{ showFullProfilePeriod ? 'Ver perfil reciente' : 'Ver rango completo' }}
-          </button>
-        }
         <button class="soil-history-export" data-chaman-action="secondary" type="button" (click)="exportarCsv()">
           Exportar CSV
         </button>
       </div>
     </header>
 
-    @if (profileFreshnessNotice && !showFullProfilePeriod) {
+    @if (profileFreshnessNotice) {
       <div class="profile-freshness-alert" role="status">
         <i class="pi pi-clock"></i>
         <span>{{ profileFreshnessNotice }}</span>

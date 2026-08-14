@@ -111,7 +111,6 @@
 }
 
 .soil-history-filter,
-.soil-history-period-toggle,
 .soil-history-export {
   background: rgba(255, 255, 255, 0.78);
   border: 1px solid var(--p-surface-border);
@@ -127,12 +126,7 @@
   cursor: pointer;
 }
 
-.soil-history-period-toggle {
-  cursor: pointer;
-}
-
-.soil-history-export:hover,
-.soil-history-period-toggle:hover {
+.soil-history-export:hover {
   border-color: var(--p-primary-color);
   color: var(--p-primary-color);
 }
@@ -501,7 +495,6 @@
   }
 
   .soil-history-filter,
-  .soil-history-period-toggle,
   .soil-history-export {
     flex: 1 1 100%;
     width: 100%;

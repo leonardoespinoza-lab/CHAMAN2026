@@ -33,6 +33,9 @@ export class GraficoHistoricoNapaComponent implements OnChanges {
   public napaActualFecha?: number;
   public columnaAguaActualM?: number;
   public profundidadSensorEfectivaM?: number;
+  public napaEscalaMaximaM = 6;
+  public readonly perfilSueloTopPct = 24;
+  public readonly perfilSueloBottomPct = 8;
   public direccion: DireccionNapa = 'sin-datos';
   public variacionCm?: number;
   public posicionAguaPct = 60;
@@ -52,26 +55,12 @@ export class GraficoHistoricoNapaComponent implements OnChanges {
     return `${this.direccion === 'sube' ? 'Subio' : 'Bajo'} ${Math.abs(this.variacionCm).toFixed(0)} cm`;
   }
 
-  public get longitudCableM(): number | undefined {
-    return this.numeroPositivo(this.configuracion?.longitudCableM);
-  }
-
-  public get tramoCableExteriorM(): number | undefined {
-    return this.numeroNoNegativo(this.configuracion?.tramoCableExteriorM);
-  }
-
-  public get formulaDisponible(): boolean {
-    return this.profundidadSensorEfectivaM !== undefined && this.columnaAguaActualM !== undefined;
-  }
-
   public get puntosRecientes(): NapaPoint[] {
     return this.puntos.slice(-8).reverse();
   }
 
   public profundidadEscala(fraction: number): string {
-    return this.profundidadSensorEfectivaM === undefined
-      ? '—'
-      : `${this.redondear(this.profundidadSensorEfectivaM * fraction, 1).toFixed(1)} m`;
+    return `${this.redondear(this.napaEscalaMaximaM * fraction, 1).toFixed(1)} m`;
   }
 
   private preparar(): void {
@@ -90,6 +79,7 @@ export class GraficoHistoricoNapaComponent implements OnChanges {
       this.napaActualFecha = undefined;
       this.columnaAguaActualM = undefined;
       this.profundidadSensorEfectivaM = this.numeroPositivo(this.configuracion?.profundidadInstalacionM);
+      this.napaEscalaMaximaM = this.profundidadSensorEfectivaM ?? 6;
       this.direccion = 'sin-datos';
       this.variacionCm = undefined;
       this.chartOptions = undefined;
@@ -103,6 +93,7 @@ export class GraficoHistoricoNapaComponent implements OnChanges {
       this.numeroPositivo(this.configuracion?.profundidadInstalacionM) ||
       this.numeroPositivo(latest.installationDepthM) ||
       this.ultimaProfundidadInstalada();
+    this.napaEscalaMaximaM = this.profundidadSensorEfectivaM ?? 6;
     this.columnaAguaActualM =
       this.numeroNoNegativo(latest.waterColumnM) ??
       (this.profundidadSensorEfectivaM !== undefined
@@ -119,11 +110,11 @@ export class GraficoHistoricoNapaComponent implements OnChanges {
       this.direccion = Math.abs(deltaDepthCm) < 1 ? 'estable' : deltaDepthCm < 0 ? 'sube' : 'baja';
     }
 
-    const visualDepth = this.profundidadSensorEfectivaM || Math.max(1, Math.ceil(latest.y));
-    const relativeDepth = Math.min(1, Math.max(0, latest.y / visualDepth));
-    this.posicionAguaPct = this.redondear(24 + relativeDepth * 68, 1);
-    this.alturaFlechaPct = this.redondear(Math.max(2, this.posicionAguaPct - 24), 1);
-    this.chartOptions = this.construirGrafico(visualDepth);
+    const relativeDepth = Math.min(1, Math.max(0, latest.y / this.napaEscalaMaximaM));
+    const perfilSueloHeightPct = 100 - this.perfilSueloTopPct - this.perfilSueloBottomPct;
+    this.posicionAguaPct = this.redondear(this.perfilSueloTopPct + relativeDepth * perfilSueloHeightPct, 1);
+    this.alturaFlechaPct = this.redondear(Math.max(2, this.posicionAguaPct - this.perfilSueloTopPct), 1);
+    this.chartOptions = this.construirGrafico();
   }
 
   private construirPuntos(): NapaPoint[] {
@@ -195,64 +186,127 @@ export class GraficoHistoricoNapaComponent implements OnChanges {
     return points;
   }
 
-  private construirGrafico(maxDepth: number): any {
+  private construirGrafico(): any {
+    const installationDepth = this.numeroPositivo(this.profundidadSensorEfectivaM);
+    const data = this.puntos.map((point, index) => ({
+      ...point,
+      marker:
+        index === this.puntos.length - 1
+          ? {
+              enabled: true,
+              fillColor: '#ffffff',
+              lineColor: '#075985',
+              lineWidth: 2,
+              radius: 5,
+            }
+          : undefined,
+      waterColumnM:
+        this.numeroNoNegativo(point.waterColumnM) ??
+        (installationDepth !== undefined ? this.redondear(Math.max(0, installationDepth - point.y), 3) : undefined),
+    }));
+
     return {
       chart: {
+        animation: false,
         backgroundColor: 'transparent',
-        height: 370,
-        type: 'areaspline',
+        margin: [0, 0, 0, 0],
+        spacing: [0, 0, 0, 0],
+        type: 'spline',
         zooming: { type: 'x' },
       },
       title: { text: undefined },
       xAxis: {
         type: 'datetime',
-        title: { text: 'Fecha y hora' },
-        crosshair: { color: 'rgba(14, 165, 233, 0.28)', width: 2 },
+        crosshair: { color: 'rgba(255, 255, 255, 0.48)', dashStyle: 'ShortDash', width: 1 },
+        dateTimeLabelFormats: {
+          day: '%d/%m',
+          hour: '%H:%M',
+          minute: '%H:%M',
+          month: '%b',
+          week: '%d/%m',
+        },
+        gridLineWidth: 0,
+        labels: {
+          reserveSpace: false,
+          y: -8,
+          style: {
+            color: '#f8fafc',
+            fontSize: '10px',
+            fontWeight: '700',
+            textOutline: '2px rgba(30, 41, 59, 0.72)',
+          },
+        },
+        lineColor: 'rgba(255, 255, 255, 0.46)',
+        lineWidth: 1,
+        maxPadding: 0.02,
+        minPadding: 0.02,
+        tickLength: 0,
+        tickPixelInterval: 150,
+        title: { text: undefined },
       },
       yAxis: {
+        endOnTick: false,
+        gridLineColor: 'rgba(255, 255, 255, 0.16)',
+        gridLineDashStyle: 'ShortDash',
+        gridLineWidth: 1,
+        labels: { enabled: false },
+        lineWidth: 0,
         min: 0,
-        max: maxDepth,
+        max: this.napaEscalaMaximaM,
         reversed: true,
-        title: { text: 'Profundidad bajo el terreno (m)' },
-        plotLines: [
-          {
-            value: 0,
-            color: '#70543b',
-            width: 3,
-            zIndex: 5,
-            label: { text: 'Terreno · 0 m', align: 'left', x: 8, y: -7 },
-          },
-        ],
+        startOnTick: false,
+        tickPositions: [0, 0.25, 0.5, 0.75, 1].map((fraction) => this.redondear(this.napaEscalaMaximaM * fraction, 2)),
+        tickWidth: 0,
+        title: { text: undefined },
       },
       tooltip: {
+        outside: false,
+        positioner: function (this: any, labelWidth: number, labelHeight: number, point: any) {
+          const chart = this.chart;
+          const padding = 6;
+          const preferredX = point.plotX + chart.plotLeft + 12;
+          const preferredY = point.plotY + chart.plotTop - labelHeight - 12;
+          return {
+            x: Math.max(padding, Math.min(preferredX, chart.chartWidth - labelWidth - padding)),
+            y: Math.max(padding, Math.min(preferredY, chart.chartHeight - labelHeight - padding)),
+          };
+        },
+        useHTML: true,
         formatter: function (this: any) {
           const point = this.point as NapaPoint;
           const date = new Date(point.x).toLocaleString('es-AR');
-          return `${date}<br/><strong>${Number(point.y).toFixed(2)} m bajo el terreno</strong>`;
+          const waterColumn =
+            point.waterColumnM !== undefined
+              ? `<br/><span>Columna de agua: <strong>${Number(point.waterColumnM).toFixed(2)} m</strong></span>`
+              : '';
+          return `<span>${date}</span><br/><strong>${Number(point.y).toFixed(2)} m bajo el terreno</strong>${waterColumn}`;
         },
       },
       plotOptions: {
-        areaspline: {
-          lineWidth: 3,
-          marker: { enabled: this.puntos.length <= 90, radius: 3.5 },
-          fillColor: {
-            linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
-            stops: [
-              [0, 'rgba(14, 165, 233, 0.08)'],
-              [1, 'rgba(14, 165, 233, 0.48)'],
-            ],
+        spline: {
+          animation: false,
+          lineWidth: 3.5,
+          marker: {
+            enabled: this.puntos.length <= 60,
+            fillColor: '#e0f2fe',
+            lineColor: '#075985',
+            lineWidth: 1,
+            radius: 3,
           },
+          shadow: { color: 'rgba(3, 105, 161, 0.5)', offsetX: 0, offsetY: 1, opacity: 0.5, width: 5 },
         },
-        series: { turboThreshold: 0 },
+        series: { animation: false, connectNulls: false, turboThreshold: 0 },
       },
       series: [
         {
-          name: 'Nivel de napa',
-          type: 'areaspline',
-          color: '#0284c7',
-          data: this.puntos,
+          id: 'napa-historica-integrada',
+          name: 'Profundidad de napa',
+          type: 'spline',
+          color: '#e0f2fe',
+          data,
         },
       ],
+      legend: { enabled: false },
       credits: { enabled: false },
       accessibility: { enabled: false },
     };
@@ -287,9 +341,8 @@ export class GraficoHistoricoNapaComponent implements OnChanges {
 
     const hasAnalog = recent.some((frame) =>
       (frame.readings || []).some(
-        (reading) =>
-          reading.variable === 'corriente_analogica' || reading.variable === 'nivel_napa',
-      ),
+        (reading) => reading.variable === 'corriente_analogica' || reading.variable === 'nivel_napa'
+      )
     );
     if (hasAnalog) return '';
 
