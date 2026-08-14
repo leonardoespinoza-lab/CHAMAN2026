@@ -188,24 +188,44 @@ export class GraficoHistoricoNapaComponent implements OnChanges {
 
   private construirGrafico(): any {
     const installationDepth = this.numeroPositivo(this.profundidadSensorEfectivaM);
-    const data = this.puntos.map((point, index) => ({
-      ...point,
-      marker:
-        index === this.puntos.length - 1
-          ? {
-              enabled: true,
-              fillColor: '#ffffff',
-              lineColor: '#075985',
-              lineWidth: 2,
-              radius: 5,
-            }
-          : undefined,
-      waterColumnM:
+    const data = this.puntos.map((point, index) => {
+      const waterColumnM =
         this.numeroNoNegativo(point.waterColumnM) ??
-        (installationDepth !== undefined ? this.redondear(Math.max(0, installationDepth - point.y), 3) : undefined),
-    }));
+        (installationDepth !== undefined ? this.redondear(Math.max(0, installationDepth - point.y), 3) : undefined);
+      return {
+        ...point,
+        depthLabel: `${point.y.toFixed(2).replace('.', ',')} m`,
+        marker:
+          index === this.puntos.length - 1
+            ? {
+                enabled: true,
+                fillColor: '#ffffff',
+                lineColor: '#075985',
+                lineWidth: 2,
+                radius: 4,
+              }
+            : undefined,
+        waterColumnLabel: waterColumnM !== undefined ? `${waterColumnM.toFixed(2).replace('.', ',')} m` : '—',
+        waterColumnM,
+      };
+    });
+    const maxContinuityMs = 60 * 60 * 1000;
+    const seriesData: any[] = [];
+    data.forEach((point, index) => {
+      const previous = data[index - 1];
+      if (previous && point.x - previous.x > maxContinuityMs) {
+        seriesData.push({
+          custom: { isGap: true },
+          marker: { enabled: false },
+          x: previous.x + Math.floor((point.x - previous.x) / 2),
+          y: null,
+        });
+      }
+      seriesData.push(point);
+    });
 
     return {
+      time: { timezone: 'America/Argentina/Buenos_Aires' },
       chart: {
         animation: false,
         backgroundColor: 'transparent',
@@ -260,38 +280,35 @@ export class GraficoHistoricoNapaComponent implements OnChanges {
         title: { text: undefined },
       },
       tooltip: {
+        distance: 14,
+        followPointer: false,
+        headerFormat: '{point.key}<br/>',
         outside: false,
-        positioner: function (this: any, labelWidth: number, labelHeight: number, point: any) {
-          const chart = this.chart;
-          const padding = 6;
-          const preferredX = point.plotX + chart.plotLeft + 12;
-          const preferredY = point.plotY + chart.plotTop - labelHeight - 12;
-          return {
-            x: Math.max(padding, Math.min(preferredX, chart.chartWidth - labelWidth - padding)),
-            y: Math.max(padding, Math.min(preferredY, chart.chartHeight - labelHeight - padding)),
-          };
-        },
-        useHTML: true,
-        formatter: function (this: any) {
-          const point = this.point as NapaPoint;
-          const date = new Date(point.x).toLocaleString('es-AR');
-          const waterColumn =
-            point.waterColumnM !== undefined
-              ? `<br/><span>Columna de agua: <strong>${Number(point.waterColumnM).toFixed(2)} m</strong></span>`
-              : '';
-          return `<span>${date}</span><br/><strong>${Number(point.y).toFixed(2)} m bajo el terreno</strong>${waterColumn}`;
-        },
+        padding: 10,
+        pointFormat: '{point.depthLabel} bajo el terreno<br/>Columna de agua: {point.waterColumnLabel}',
+        split: false,
+        useHTML: false,
+        xDateFormat: '%d/%m/%Y %H:%M',
       },
       plotOptions: {
         spline: {
           animation: false,
           lineWidth: 3.5,
           marker: {
-            enabled: this.puntos.length <= 60,
+            enabled: false,
             fillColor: '#e0f2fe',
             lineColor: '#075985',
             lineWidth: 1,
             radius: 3,
+            states: {
+              hover: {
+                enabled: true,
+                fillColor: '#ffffff',
+                lineColor: '#075985',
+                lineWidth: 2,
+                radius: 4,
+              },
+            },
           },
           shadow: { color: 'rgba(3, 105, 161, 0.5)', offsetX: 0, offsetY: 1, opacity: 0.5, width: 5 },
         },
@@ -303,7 +320,7 @@ export class GraficoHistoricoNapaComponent implements OnChanges {
           name: 'Profundidad de napa',
           type: 'spline',
           color: '#e0f2fe',
-          data,
+          data: seriesData,
         },
       ],
       legend: { enabled: false },

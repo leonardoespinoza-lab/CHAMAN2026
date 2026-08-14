@@ -48,9 +48,8 @@
           [options]="chartOptions"
           [style]="'width: 100%; height: 100%; display: block'"
         ></app-chart>
-        <div class="well-pipe"></div>
-        <div class="cable-line" aria-hidden="true"></div>
-        <div class="sensor-head" aria-hidden="true"><i class="pi pi-circle-fill"></i></div>
+        <div class="well-pipe" aria-hidden="true"></div>
+        <div class="sensor-head" aria-hidden="true"><span class="sensor-transducer"></span></div>
         <div class="water-zone" [style.top.%]="posicionAguaPct">
           <div class="water-surface">
             <span>Napa · {{ napaActualM | number: '1.2-2' }} m</span>
