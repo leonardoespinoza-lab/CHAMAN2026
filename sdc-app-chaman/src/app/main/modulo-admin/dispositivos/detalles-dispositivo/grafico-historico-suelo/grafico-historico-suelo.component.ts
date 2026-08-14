@@ -2,11 +2,7 @@ import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { ILorawanRawFrame, ILorawanRawReading, IReporte } from 'modelos/src';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
-import {
-  buildSentekChannelCoverage,
-  buildSentekProfile,
-  normalizarProfundidadSentek,
-} from '../sentek-profile';
+import { buildSentekChannelCoverage, buildSentekProfile, normalizarProfundidadSentek } from '../sentek-profile';
 
 type SoilMetricKey = 'humedad' | 'salinidad' | 'temperatura';
 
@@ -42,6 +38,11 @@ interface RainPoint {
   y: number;
 }
 
+export interface SentekRainfallPoint {
+  fecha: string;
+  milimetros: number;
+}
+
 interface ProfileRow {
   profundidad: number;
   formatted: string;
@@ -57,6 +58,7 @@ interface ProfileRow {
 export class GraficoHistoricoSueloComponent implements OnChanges {
   @Input() reportes: IReporte[] = [];
   @Input() rawFrames: ILorawanRawFrame[] = [];
+  @Input() lluvias: SentekRainfallPoint[] = [];
   @Input() titulo?: string;
   @Input() subtitulo?: string;
   @Input() fechaDesde?: string;
@@ -111,6 +113,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     if (
       changes['reportes'] ||
       changes['rawFrames'] ||
+      changes['lluvias'] ||
       changes['fechaDesde'] ||
       changes['mostrarNapa'] ||
       changes['mostrarEntradaAnalogica']
@@ -305,49 +308,30 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   }
 
   private buildStackedTimeSeriesChartOptions(definition: SoilMetricDefinition, series: any[]): any {
-    const rainPoints = this.buildRainPoints();
-    const hasRain = rainPoints.length > 0;
+    const rainPoints = definition.key === 'humedad' ? this.buildRainPoints() : [];
+    const hasRain = rainPoints.some((point) => point.y > 0);
     const depthCount = Math.max(series.length, 1);
-    const chartHeight = Math.min(900, Math.max(540, depthCount * 98 + (hasRain ? 155 : 120)));
-    const topGap = 2.2;
-    const rainHeight = hasRain ? 14 : 0;
-    const soilStart = hasRain ? rainHeight + topGap : 0;
-    const soilAvailable = 88 - soilStart;
-    const soilGap = 1.4;
-    const soilHeight = Math.max(8, (soilAvailable - soilGap * Math.max(depthCount - 1, 0)) / depthCount);
-    const yAxis: any[] = [];
-
-    if (hasRain) {
-      yAxis.push({
-        title: {
-          text: 'Lluvia (mm)',
-          style: { color: '#1d72b8', fontSize: '13px', fontWeight: '800' },
-        },
-        labels: {
-          style: { color: 'var(--p-text-color)', fontSize: '12px', fontWeight: '700' },
-        },
-        min: 0,
-        top: '0%',
-        height: `${rainHeight}%`,
-        offset: 0,
-        gridLineColor: 'var(--p-surface-border)',
-        gridLineWidth: 1,
-      });
-    }
+    const chartHeight = Math.min(900, Math.max(500, depthCount * 70 + 110));
+    const soilAvailable = 88;
+    const soilGap = 1.1;
+    const soilHeight = Math.max(5.5, (soilAvailable - soilGap * Math.max(depthCount - 1, 0)) / depthCount);
+    const rainMax = Math.max(1, ...rainPoints.map((point) => point.y));
+    const soilAxes: any[] = [];
+    const rainAxes: any[] = [];
 
     series.forEach((item, index) => {
-      const top = soilStart + index * (soilHeight + soilGap);
-      yAxis.push({
+      const top = index * (soilHeight + soilGap);
+      soilAxes.push({
         max: definition.key === 'humedad' ? 100 : undefined,
         min: definition.key === 'humedad' ? 0 : undefined,
         title: {
           text: item.name,
-          margin: 8,
+          align: 'middle',
+          margin: 6,
+          rotation: 0,
           style: { color: item.color || definition.color, fontSize: '13px', fontWeight: '900' },
         },
-        labels: {
-          style: { color: 'var(--p-text-color)', fontSize: '12px', fontWeight: '700' },
-        },
+        labels: { enabled: false },
         endOnTick: true,
         gridLineColor: 'var(--p-surface-border)',
         gridLineWidth: 1,
@@ -355,35 +339,61 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         top: `${top}%`,
         offset: 0,
       });
+
+      if (hasRain) {
+        rainAxes.push({
+          max: rainMax * 1.08,
+          min: 0,
+          title: {
+            text: index === 0 ? 'mm' : undefined,
+            align: 'high',
+            rotation: 0,
+            style: { color: '#2f9fe8', fontSize: '11px', fontWeight: '800' },
+          },
+          labels: {
+            enabled: index === 0,
+            format: '{value:.0f}',
+            style: { color: '#2f9fe8', fontSize: '10px', fontWeight: '700' },
+          },
+          lineWidth: 0,
+          tickWidth: 0,
+          tickAmount: 3,
+          gridLineWidth: 0,
+          height: `${soilHeight}%`,
+          top: `${top}%`,
+          offset: 0,
+          opposite: true,
+        });
+      }
     });
 
-    const plottedSeries = [
-      ...(hasRain
-        ? [
-            {
-              color: '#1d72b8',
-              custom: { decimals: 1, unit: 'mm' },
-              data: rainPoints,
-              name: 'Lluvia',
-              pointPadding: 0.08,
-              tooltip: { valueSuffix: ' mm' },
-              type: 'column',
-              yAxis: 0,
-            },
-          ]
-        : []),
-      ...series.map((item, index) => ({
-        ...item,
-        yAxis: index + (hasRain ? 1 : 0),
-      })),
-    ];
+    const rainSeries = hasRain
+      ? series.map((_item, index) => ({
+          color: 'rgba(47, 159, 232, 0.24)',
+          custom: { decimals: 1, isRain: true, unit: 'mm' },
+          data: rainPoints,
+          name: 'Lluvia (mm)',
+          pointRange: 24 * 60 * 60 * 1000,
+          showInLegend: index === 0,
+          type: 'column',
+          yAxis: depthCount + index,
+          zIndex: 0,
+        }))
+      : [];
+    const soilSeries = series.map((item, index) => ({
+      ...item,
+      showInLegend: false,
+      yAxis: index,
+      zIndex: 2,
+    }));
+    const plottedSeries = [...rainSeries, ...soilSeries];
 
     return {
       chart: {
         backgroundColor: 'transparent',
         height: chartHeight,
         spacingBottom: 22,
-        spacingLeft: 8,
+        spacingLeft: 2,
         spacingRight: 20,
         spacingTop: 8,
         type: 'spline',
@@ -410,10 +420,10 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         gridLineColor: 'var(--p-surface-border)',
         gridLineWidth: 1,
       },
-      yAxis,
+      yAxis: [...soilAxes, ...rainAxes],
       legend: {
-        align: 'center',
-        enabled: true,
+        align: 'right',
+        enabled: hasRain,
         itemDistance: 16,
         itemStyle: {
           color: 'var(--p-text-color)',
@@ -421,14 +431,14 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           fontWeight: '700',
         },
         layout: 'horizontal',
-        verticalAlign: 'bottom',
+        verticalAlign: 'top',
       },
       tooltip: {
         backgroundColor: 'var(--p-content-background)',
         borderColor: 'var(--p-surface-border)',
         borderRadius: 8,
         borderWidth: 1,
-        shared: true,
+        shared: false,
         shadow: true,
         xDateFormat: '%d/%m/%Y %H:%M',
         valueDecimals: definition.decimals,
@@ -438,6 +448,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           const custom = point.series?.userOptions?.custom || {};
           const decimals = custom.decimals ?? definition.decimals;
           const unit = custom.unit || definition.unit;
+          if (custom.isRain) {
+            return `<br/><span style="color:#2f9fe8">&#9646;</span> Lluvia: <strong>${Number(point.y).toFixed(1)} mm</strong>`;
+          }
           const raw =
             point.raw !== undefined && point.rawUnit
               ? ` <span style="color:#60708a">(crudo ${Number(point.raw).toFixed(3)} ${point.rawUnit})</span>`
@@ -449,8 +462,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       plotOptions: {
         column: {
           borderWidth: 0,
-          pointPadding: 0.08,
-          groupPadding: 0.05,
+          groupPadding: 0,
+          grouping: false,
+          pointPadding: 0.04,
         },
         spline: {
           animation: { duration: 500 },
@@ -792,6 +806,20 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   }
 
   private buildRainPoints(): RainPoint[] {
+    const desde = this.getFechaDesdeMs();
+    const lluviaExterna = this.lluvias
+      .map((item) => ({
+        x: this.rainTimestamp(item.fecha),
+        y: Math.max(0, Number(item.milimetros)),
+      }))
+      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y) && (!desde || point.x >= desde));
+
+    if (lluviaExterna.length) {
+      const porDia = new Map<number, RainPoint>();
+      lluviaExterna.forEach((point) => porDia.set(point.x, point));
+      return [...porDia.values()].sort((a, b) => a.x - b.x);
+    }
+
     const points: RainPoint[] = [];
 
     for (const reporte of this.filteredReports()) {
@@ -808,6 +836,12 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     }
 
     return points.sort((a, b) => a.x - b.x);
+  }
+
+  private rainTimestamp(fecha: string): number {
+    const value = String(fecha || '').trim();
+    const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value;
+    return new Date(normalized).getTime();
   }
 
   private buildResumen(definition: SoilMetricDefinition, series: any[], latestPoints: HistoricalPoint[]): string {

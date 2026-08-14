@@ -11,6 +11,7 @@ import {
 } from 'modelos/src';
 import { LorawanUplinksService } from '../../../../../auxiliares/http/lorawan-uplinks.service';
 import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
+import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { BateriaComponent } from '../../../../modulo-admin/dispositivos/bateria/bateria.component';
@@ -20,7 +21,10 @@ import {
   MedicionSensorProfundidad,
 } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/sentek-profile';
 import { GraficoHistoricoAmbienteComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-ambiente/grafico-historico-ambiente.component';
-import { GraficoHistoricoSueloComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-suelo/grafico-historico-suelo.component';
+import {
+  GraficoHistoricoSueloComponent,
+  SentekRainfallPoint,
+} from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-suelo/grafico-historico-suelo.component';
 import { GraficoHistoricoNapaComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-napa/grafico-historico-napa.component';
 
 interface DispositivoResumen {
@@ -61,16 +65,19 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   public resumenesAmbiente = new Map<string, DispositivoAmbienteResumen>();
   public reportesHistoricos = new Map<string, IReporte[]>();
   public tramasCrudas = new Map<string, ILorawanRawFrame[]>();
+  public lluviasHistoricas: SentekRainfallPoint[] = [];
   public cargandoHistorico = new Set<string>();
   public erroresHistorico = new Set<string>();
   public diasHistorico = 30;
   private initialized = false;
   private loadVersion = 0;
+  private rainLoadVersion = 0;
 
   constructor(
     public helper: HelperService,
     private reportesService: ReporteService,
-    private lorawanUplinks: LorawanUplinksService
+    private lorawanUplinks: LorawanUplinksService,
+    private siembraService: SiembraService
   ) {}
 
   public getDeviceKey(dispositivo: DispositivoLogico): string {
@@ -109,7 +116,7 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   public async cambiarPeriodo(dias: number): Promise<void> {
     if (dias === this.diasHistorico) return;
     this.diasHistorico = dias;
-    await this.cargarHistoricosInline();
+    await Promise.all([this.cargarHistoricosInline(), this.cargarLluviasHistoricas()]);
   }
 
   public esLanzaDeSuelo(dispositivo: IDispositivo): boolean {
@@ -312,6 +319,39 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
     );
   }
 
+  private async cargarLluviasHistoricas(): Promise<void> {
+    const version = ++this.rainLoadVersion;
+    const idSiembra = this.lote?.idSiembra || this.lote?.siembra?._id;
+    if (!idSiembra) {
+      this.lluviasHistoricas = [];
+      return;
+    }
+
+    const desde = new Date();
+    desde.setHours(0, 0, 0, 0);
+    desde.setDate(desde.getDate() - Math.max(0, this.diasHistorico - 1));
+    const desdeKey = [
+      desde.getFullYear(),
+      String(desde.getMonth() + 1).padStart(2, '0'),
+      String(desde.getDate()).padStart(2, '0'),
+    ].join('-');
+
+    try {
+      const response = await this.siembraService.agrometeorologia(idSiembra, desdeKey);
+      if (version !== this.rainLoadVersion) return;
+      this.lluviasHistoricas = (response.series || [])
+        .filter((dia) => !dia.isForecast && Number.isFinite(Number(dia.metrics?.precipitationMm)))
+        .map((dia) => ({
+          fecha: dia.date,
+          milimetros: Math.max(0, Number(dia.metrics.precipitationMm)),
+        }));
+    } catch (error) {
+      if (version !== this.rainLoadVersion) return;
+      console.warn('No se pudo cargar la lluvia historica para el perfil Sentek', error);
+      this.lluviasHistoricas = [];
+    }
+  }
+
   /**
    * El inventario canonico expone un controlador fisico por DevEUI. Esta
    * defensa evita repetir sus curvas si una respuesta legacy materializa
@@ -447,7 +487,7 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
     if (changes['lote']) {
       this.setDispositivos();
       if (this.initialized) {
-        void this.cargarHistoricosInline();
+        void Promise.all([this.cargarHistoricosInline(), this.cargarLluviasHistoricas()]);
       }
     }
   }
@@ -455,10 +495,11 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   async ngOnInit(): Promise<void> {
     this.initialized = true;
     this.setDispositivos();
-    await this.cargarHistoricosInline();
+    await Promise.all([this.cargarHistoricosInline(), this.cargarLluviasHistoricas()]);
   }
 
   ngOnDestroy(): void {
     this.loadVersion++;
+    this.rainLoadVersion++;
   }
 }
