@@ -162,6 +162,42 @@
   gap: 10px;
 }
 
+.device-technical-details {
+  justify-self: start;
+}
+
+.device-technical-details > summary {
+  align-items: center;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 999px;
+  color: var(--p-text-muted-color);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.84rem;
+  font-weight: 800;
+  gap: 7px;
+  list-style: none;
+  min-height: 34px;
+  padding: 0 11px;
+}
+
+.device-technical-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.device-technical-details > summary:hover,
+.device-technical-details > summary:focus-visible,
+.device-technical-details[open] > summary {
+  border-color: var(--p-primary-color);
+  color: var(--p-primary-color);
+  outline: none;
+}
+
+.device-technical-details .device-meta-grid {
+  margin-top: 10px;
+  width: min(100%, 980px);
+}
+
 .device-meta-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -276,5 +312,10 @@
 
   .device-card {
     padding: 12px;
+  }
+
+  .device-technical-details,
+  .device-technical-details .device-meta-grid {
+    width: 100%;
   }
 }

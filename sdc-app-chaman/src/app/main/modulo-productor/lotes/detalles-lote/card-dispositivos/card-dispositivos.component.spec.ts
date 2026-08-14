@@ -3,7 +3,7 @@ import { CardDispositivosComponent } from './card-dispositivos.component';
 
 describe('CardDispositivosComponent', () => {
   it('expone Sentek y Napa como dos servicios aunque compartan DevEUI', () => {
-    const component = new CardDispositivosComponent({} as any, {} as any, {} as any);
+    const component = new CardDispositivosComponent({} as any, {} as any, {} as any, {} as any);
     const controller: IDispositivo = {
       _id: 'controller-1',
       deveui: '24E124136D000001',
@@ -64,7 +64,7 @@ describe('CardDispositivosComponent', () => {
   });
 
   it('no clasifica un Milesight generico como Sentek ni como Napa', () => {
-    const component = new CardDispositivosComponent({} as any, {} as any, {} as any);
+    const component = new CardDispositivosComponent({} as any, {} as any, {} as any, {} as any);
     component.lote = {
       dispositivos: [{ _id: 'controller-2', deveui: '24E124136D000002', nombre: 'Milesight UC511', tipo: 'Otro' }],
     } as ILote;
@@ -74,5 +74,25 @@ describe('CardDispositivosComponent', () => {
     expect(component.dispositivos.length).toBe(1);
     expect(component.esLanzaDeSuelo(component.dispositivos[0])).toBeFalse();
     expect(component.esMedidorNapa(component.dispositivos[0])).toBeFalse();
+  });
+
+  it('carga solo lluvia historica de la siembra para superponerla al perfil', async () => {
+    const agrometeorologia = jasmine.createSpy().and.resolveTo({
+      series: [
+        { date: '2026-08-12', isForecast: false, metrics: { precipitationMm: 14.6 } },
+        { date: '2026-08-13', isForecast: false, metrics: { precipitationMm: 0 } },
+        { date: '2026-08-15', isForecast: true, metrics: { precipitationMm: 22 } },
+      ],
+    });
+    const component = new CardDispositivosComponent({} as any, {} as any, {} as any, { agrometeorologia } as any);
+    component.lote = { idSiembra: 'siembra-1' } as ILote;
+
+    await (component as any).cargarLluviasHistoricas();
+
+    expect(agrometeorologia).toHaveBeenCalledWith('siembra-1', jasmine.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
+    expect(component.lluviasHistoricas).toEqual([
+      { fecha: '2026-08-12', milimetros: 14.6 },
+      { fecha: '2026-08-13', milimetros: 0 },
+    ]);
   });
 });

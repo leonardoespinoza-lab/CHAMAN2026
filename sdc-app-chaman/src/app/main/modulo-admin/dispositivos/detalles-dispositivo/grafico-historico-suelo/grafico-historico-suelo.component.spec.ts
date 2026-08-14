@@ -6,7 +6,7 @@ describe('GraficoHistoricoSueloComponent', () => {
     timestamp: string,
     readings: ILorawanRawReading[],
     fCnt = 1,
-    profileChannels?: number[],
+    profileChannels?: number[]
   ): ILorawanRawFrame {
     return {
       decodeStatus: 'decoded',
@@ -93,7 +93,7 @@ describe('GraficoHistoricoSueloComponent', () => {
           },
         ],
         27,
-        [11],
+        [11]
       ),
     ]);
 
@@ -151,5 +151,28 @@ describe('GraficoHistoricoSueloComponent', () => {
     expect(component.napaActual).toBe(2.72);
     expect(component.napaResumen).toContain('2.72 m bajo el terreno');
     expect(component.napaChartOptions.series[0].data).toEqual([jasmine.objectContaining({ y: 2.72, unit: 'm' })]);
+  });
+
+  it('superpone lluvia en milimetros detras de cada curva de humedad', () => {
+    const component = new GraficoHistoricoSueloComponent();
+    component.rawFrames = [frame('2026-08-14T10:00:00.000Z', [humedad(10, 28)], 1)];
+    component.lluvias = [
+      { fecha: '2026-08-13', milimetros: 12.4 },
+      { fecha: '2026-08-14', milimetros: 0 },
+    ];
+
+    component.ngOnChanges({ rawFrames: {} as any, lluvias: {} as any });
+
+    const rainSeries = (component.chartOptions?.series || []).filter((series: any) => series.custom?.isRain);
+    const soilSeries = (component.chartOptions?.series || []).filter((series: any) => !series.custom?.isRain);
+    expect(rainSeries).toHaveSize(1);
+    expect(rainSeries[0]).toEqual(
+      jasmine.objectContaining({ name: 'Lluvia (mm)', showInLegend: true, type: 'column', zIndex: 0 })
+    );
+    expect(rainSeries[0].data.map((point: any) => point.y)).toEqual([12.4, 0]);
+    expect(soilSeries[0]).toEqual(jasmine.objectContaining({ name: '10 cm', showInLegend: false, zIndex: 2 }));
+    expect(component.chartOptions.yAxis[0].labels.enabled).toBeFalse();
+    expect(component.chartOptions.yAxis[1].title.text).toBe('mm');
+    expect(component.chartOptions.yAxis[1].labels.enabled).toBeTrue();
   });
 });

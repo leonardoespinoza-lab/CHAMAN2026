@@ -16,6 +16,11 @@
   justify-content: space-between;
 }
 
+.napa-trend-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .napa-kicker,
 .napa-curve header span,
 .napa-installation span,
@@ -69,7 +74,7 @@
 .napa-summary {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .napa-summary article {
@@ -90,10 +95,16 @@
   color: var(--p-text-muted-color);
 }
 
+.napa-updated {
+  color: var(--p-text-muted-color);
+  font-size: 0.82rem;
+  margin: -8px 0 0;
+}
+
 .napa-content-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: minmax(340px, 0.9fr) minmax(300px, 1.1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .ground-scene {
@@ -229,7 +240,7 @@
   font-size: 0.78rem;
   font-weight: 900;
   gap: 7px;
-  left: calc(67% - 8px);
+  left: calc(67% - 6px);
   position: absolute;
   top: 89%;
   z-index: 12;
@@ -239,10 +250,6 @@
   color: #fb923c;
   font-size: 1rem;
 }
-.sensor-head span {
-  white-space: nowrap;
-}
-
 .water-zone {
   background: linear-gradient(180deg, rgba(36, 180, 235, 0.55), rgba(2, 91, 154, 0.78));
   bottom: 0;
