@@ -2,6 +2,7 @@ import { IDispositivo, ILote } from 'modelos/src';
 import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { LorawanUplinksService } from '../../../../../auxiliares/http/lorawan-uplinks.service';
+import { LoteService } from '../../../../../auxiliares/http/lote.service';
 import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
 import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
@@ -193,8 +194,8 @@ describe('CardDispositivosComponent', () => {
       ];
       graph.daylight = component.daylightHistorico;
       graph.ngOnChanges({ rawFrames: {} as any, daylight: {} as any });
-      expect(graph.chartOptions.xAxis.plotBands).toHaveSize(1);
-      expect(graph.chartOptions.xAxis.plotBands[0].id).toBe('sentek-day-2026-08-15');
+      expect(graph.chartOptions.xAxis.plotBands).toEqual([]);
+      expect(graph.chartOptions.series.some((series: any) => series.id === 'sentek-solar-day')).toBeTrue();
     } finally {
       jasmine.clock().uninstall();
     }
@@ -266,6 +267,276 @@ describe('CardDispositivosComponent', () => {
     expect((component as any).sentekCoordinates()).toEqual({ lat: -33, lng: -63 });
   });
 
+  it('carga CC/PMP solo del endpoint canonico y conserva procedencia especifica aunque la confianza global sea mayor', async () => {
+    const entradasAgronomicasSuelo = jasmine.createSpy().and.resolveTo({
+      confidence: 'medium',
+      depthLayers: [],
+      fieldCapacityPercentage: 33.46,
+      loteId: 'lote-canonico',
+      provenance: {
+        fieldCapacityPercentage: {
+          confidence: 'low',
+          depthFromCm: 0,
+          depthToCm: 100,
+          observedOrEstimated: 'estimated',
+          source: 'soilgrids',
+        },
+        wiltingPointPercentage: {
+          confidence: 'low',
+          depthFromCm: 0,
+          depthToCm: 100,
+          observedOrEstimated: 'estimated',
+          source: 'soilgrids',
+        },
+      },
+      selectionPolicyVersion: 'soil-agronomic-selection-v1.0.0',
+      selectionReason: 'automatic_assessment',
+      stale: false,
+      status: 'ready',
+      wiltingPointPercentage: 18.12,
+    });
+    const component = new CardDispositivosComponent(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { entradasAgronomicasSuelo } as any
+    );
+    component.lote = {
+      _id: 'lote-canonico',
+      capacidadDeCampo: 90,
+      puntoMarchitez: 2,
+    } as any;
+
+    await (component as any).cargarUmbralesAgronomicosSentek();
+
+    expect(entradasAgronomicasSuelo).toHaveBeenCalledOnceWith('lote-canonico');
+    expect(component.sentekAgronomicThresholds).toEqual({
+      capacidadCampoPct: 33.46,
+      confianza: 'low',
+      depthFromCm: 0,
+      depthToCm: 100,
+      fuente: 'soilgrids',
+      origen: 'estimated',
+      puntoMarchitezPct: 18.12,
+      recargaPct: 25.79,
+      stale: false,
+    });
+    expect(component.sentekAgronomicThresholdsUnavailable).toBeFalse();
+  });
+
+  it('marca la referencia vencida y no sustituye una respuesta invalida con valores legacy', async () => {
+    const entradasAgronomicasSuelo = jasmine.createSpy().and.resolveTo({
+      depthLayers: [],
+      fieldCapacityPercentage: 33.34,
+      loteId: 'lote-stale',
+      provenance: {
+        fieldCapacityPercentage: {
+          confidence: 'low',
+          observedOrEstimated: 'estimated',
+          source: 'soilgrids',
+        },
+        wiltingPointPercentage: {
+          confidence: 'low',
+          observedOrEstimated: 'estimated',
+          source: 'soilgrids',
+        },
+      },
+      selectionPolicyVersion: 'soil-agronomic-selection-v1.0.0',
+      selectionReason: 'automatic_assessment',
+      stale: true,
+      status: 'ready',
+      wiltingPointPercentage: 20.49,
+    });
+    const component = new CardDispositivosComponent(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { entradasAgronomicasSuelo } as any
+    );
+    component.lote = { _id: 'lote-stale', capacidadDeCampo: 30, puntoMarchitez: 14 } as any;
+
+    await (component as any).cargarUmbralesAgronomicosSentek();
+    expect(component.sentekAgronomicThresholds).toEqual(
+      jasmine.objectContaining({ capacidadCampoPct: 33.34, puntoMarchitezPct: 20.49, stale: true })
+    );
+    expect(component.sentekAgronomicThresholdsUnavailable).toBeFalse();
+
+    entradasAgronomicasSuelo.and.resolveTo({
+      fieldCapacityPercentage: 10,
+      selectionReason: 'automatic_assessment',
+      stale: false,
+      wiltingPointPercentage: 20,
+    });
+    await (component as any).cargarUmbralesAgronomicosSentek();
+    expect(component.sentekAgronomicThresholds).toBeUndefined();
+    expect(component.sentekAgronomicThresholdsUnavailable).toBeTrue();
+  });
+
+  it('rechaza lote cruzado, estado no terminal, legacy y error HTTP sin fabricar bandas', async () => {
+    const entradasAgronomicasSuelo = jasmine.createSpy();
+    const component = new CardDispositivosComponent(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { entradasAgronomicasSuelo } as any
+    );
+    component.lote = { _id: 'lote-seguro', capacidadDeCampo: 30, puntoMarchitez: 14 } as any;
+    const base = {
+      depthLayers: [],
+      fieldCapacityPercentage: 33.46,
+      loteId: 'lote-seguro',
+      provenance: {},
+      selectionPolicyVersion: 'soil-agronomic-selection-v1.0.0',
+      selectionReason: 'automatic_assessment',
+      stale: false,
+      status: 'ready',
+      wiltingPointPercentage: 18.12,
+    };
+
+    entradasAgronomicasSuelo.and.resolveTo({ ...base, loteId: 'otro-lote' });
+    await (component as any).cargarUmbralesAgronomicosSentek();
+    expect(component.sentekAgronomicThresholds).toBeUndefined();
+    expect(component.sentekAgronomicThresholdsUnavailable).toBeTrue();
+
+    entradasAgronomicasSuelo.and.resolveTo({ ...base, status: 'processing' });
+    await (component as any).cargarUmbralesAgronomicosSentek();
+    expect(component.sentekAgronomicThresholds).toBeUndefined();
+    expect(component.sentekAgronomicThresholdsUnavailable).toBeTrue();
+
+    entradasAgronomicasSuelo.and.resolveTo({ ...base, selectionReason: 'legacy_fallback' });
+    await (component as any).cargarUmbralesAgronomicosSentek();
+    expect(component.sentekAgronomicThresholds).toBeUndefined();
+    expect(component.sentekAgronomicThresholdsUnavailable).toBeTrue();
+
+    entradasAgronomicasSuelo.and.resolveTo({
+      ...base,
+      provenance: {
+        fieldCapacityPercentage: {
+          confidence: 'low',
+          observedOrEstimated: 'estimated',
+          source: 'soilgrids',
+        },
+      },
+    });
+    await (component as any).cargarUmbralesAgronomicosSentek();
+    expect(component.sentekAgronomicThresholds).toBeUndefined();
+    expect(component.sentekAgronomicThresholdsUnavailable).toBeTrue();
+
+    entradasAgronomicasSuelo.and.rejectWith(new Error('API no disponible'));
+    await (component as any).cargarUmbralesAgronomicosSentek();
+    expect(component.sentekAgronomicThresholds).toBeUndefined();
+    expect(component.sentekAgronomicThresholdsUnavailable).toBeTrue();
+  });
+
+  it('descarta una respuesta atrasada del lote anterior y redondea Gilardoni a 26.92', async () => {
+    let resolveAnterior!: (value: any) => void;
+    let resolveActual!: (value: any) => void;
+    const anterior = new Promise<any>((resolve) => (resolveAnterior = resolve));
+    const actual = new Promise<any>((resolve) => (resolveActual = resolve));
+    const entradasAgronomicasSuelo = jasmine.createSpy().and.returnValues(anterior, actual);
+    const component = new CardDispositivosComponent(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { entradasAgronomicasSuelo } as any
+    );
+    const response = (loteId: string, fieldCapacityPercentage: number, wiltingPointPercentage: number) => ({
+      depthLayers: [],
+      fieldCapacityPercentage,
+      loteId,
+      provenance: {
+        fieldCapacityPercentage: {
+          confidence: 'low',
+          observedOrEstimated: 'estimated',
+          source: 'soilgrids',
+        },
+        wiltingPointPercentage: {
+          confidence: 'low',
+          observedOrEstimated: 'estimated',
+          source: 'soilgrids',
+        },
+      },
+      selectionPolicyVersion: 'soil-agronomic-selection-v1.0.0',
+      selectionReason: 'automatic_assessment',
+      stale: false,
+      status: 'ready',
+      wiltingPointPercentage,
+    });
+
+    component.lote = { _id: 'lote-anterior' } as any;
+    const cargaAnterior = (component as any).cargarUmbralesAgronomicosSentek();
+    component.lote = { _id: 'lote-actual' } as any;
+    const cargaActual = (component as any).cargarUmbralesAgronomicosSentek();
+
+    resolveActual(response('lote-actual', 33.34, 20.49));
+    await cargaActual;
+    expect(component.sentekAgronomicThresholds).toEqual(
+      jasmine.objectContaining({
+        capacidadCampoPct: 33.34,
+        confianza: 'low',
+        puntoMarchitezPct: 20.49,
+        recargaPct: 26.92,
+      })
+    );
+
+    resolveAnterior(response('lote-anterior', 40, 10));
+    await cargaAnterior;
+    expect(component.sentekAgronomicThresholds).toEqual(
+      jasmine.objectContaining({ capacidadCampoPct: 33.34, puntoMarchitezPct: 20.49, recargaPct: 26.92 })
+    );
+  });
+
+  it('acepta laboratorio confirmado aun cuando SoilGrids termino sin cobertura', async () => {
+    const entradasAgronomicasSuelo = jasmine.createSpy().and.resolveTo({
+      depthLayers: [],
+      fieldCapacityPercentage: 31.2,
+      loteId: 'lote-laboratorio',
+      provenance: {
+        fieldCapacityPercentage: {
+          confidence: 'high',
+          observedOrEstimated: 'observed',
+          source: 'laboratory',
+        },
+        wiltingPointPercentage: {
+          confidence: 'high',
+          observedOrEstimated: 'observed',
+          source: 'laboratory',
+        },
+      },
+      selectionPolicyVersion: 'soil-agronomic-selection-v1.0.0',
+      selectionReason: 'confirmed_laboratory',
+      stale: false,
+      status: 'no_coverage',
+      wiltingPointPercentage: 15.4,
+    });
+    const component = new CardDispositivosComponent(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { entradasAgronomicasSuelo } as any
+    );
+    component.lote = { _id: 'lote-laboratorio' } as any;
+
+    await (component as any).cargarUmbralesAgronomicosSentek();
+
+    expect(component.sentekAgronomicThresholds).toEqual(
+      jasmine.objectContaining({
+        capacidadCampoPct: 31.2,
+        confianza: 'high',
+        fuente: 'laboratory',
+        origen: 'observed',
+        puntoMarchitezPct: 15.4,
+        recargaPct: 23.3,
+      })
+    );
+    expect(component.sentekAgronomicThresholdsUnavailable).toBeFalse();
+  });
+
   it('mantiene card, periodo, toolbar Sentek y SVG dentro del viewport', fakeAsync(() => {
     TestBed.configureTestingModule({
       imports: [CardDispositivosComponent],
@@ -274,6 +545,7 @@ describe('CardDispositivosComponent', () => {
         { provide: ReporteService, useValue: { historico: jasmine.createSpy().and.resolveTo({ datos: [] }) } },
         { provide: LorawanUplinksService, useValue: { rawHistory: jasmine.createSpy().and.resolveTo([]) } },
         { provide: SiembraService, useValue: { agrometeorologia: jasmine.createSpy().and.resolveTo({ series: [] }) } },
+        { provide: LoteService, useValue: { entradasAgronomicasSuelo: jasmine.createSpy().and.resolveTo(null) } },
       ],
     });
     const fixture = TestBed.createComponent(CardDispositivosComponent);
@@ -399,7 +671,7 @@ describe('CardDispositivosComponent', () => {
           .toBeGreaterThanOrEqual(minPlotRatio);
         expect(
           chart.series
-            .filter((series: any) => !series.options.custom?.['isRain'])
+            .filter((series: any) => series.options.custom?.['isSoil'])
             .flatMap((series: any) => series.points)
             .every((point: any) => point.plotX === undefined || (point.plotX >= 0 && point.plotX <= chart.plotWidth))
         ).toBeTrue();

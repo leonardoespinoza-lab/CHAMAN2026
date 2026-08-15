@@ -338,6 +338,72 @@
   text-transform: none;
 }
 
+.soil-agronomic-key {
+  align-items: center;
+  color: var(--p-text-muted-color);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.74rem;
+  font-weight: 750;
+  gap: 0.45rem 0.8rem;
+  margin: 0 0 0.35rem;
+}
+
+.soil-agronomic-key span,
+.soil-agronomic-key small {
+  align-items: center;
+  color: inherit;
+  display: inline-flex;
+  font-size: inherit;
+  font-weight: inherit;
+  gap: 0.3rem;
+  margin: 0;
+  text-transform: none;
+}
+
+.soil-agronomic-key small {
+  flex: 1 1 20rem;
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.soil-agronomic-key i {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 2px;
+  display: inline-block;
+  height: 0.62rem;
+  width: 1rem;
+}
+
+.soil-agronomic-key i.deficit {
+  background: rgba(239, 68, 68, 0.36);
+}
+
+.soil-agronomic-key i.target {
+  background: rgba(250, 204, 21, 0.42);
+}
+
+.soil-agronomic-key i.excess {
+  background: rgba(56, 169, 232, 0.34);
+}
+
+.soil-agronomic-unavailable {
+  align-items: center;
+  color: var(--p-text-muted-color);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 700;
+  gap: 0.35rem;
+  margin: 0 0 0.35rem;
+}
+
+.soil-agronomic-unavailable span {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  text-transform: none;
+}
+
 .soil-daylight-key {
   align-items: center;
   color: var(--p-text-muted-color);
@@ -360,8 +426,8 @@
 }
 
 .soil-daylight-key i {
-  background: rgba(250, 204, 21, 0.18);
-  border: 1px solid rgba(202, 138, 4, 0.2);
+  background: #facc15;
+  border: 1px solid rgba(161, 98, 7, 0.3);
   border-radius: 2px;
   display: inline-block;
   height: 0.58rem;
@@ -369,8 +435,13 @@
 }
 
 .soil-daylight-key i.night {
-  background: transparent;
-  border-color: var(--p-surface-border);
+  background: #111827;
+  border-color: #111827;
+}
+
+.soil-daylight-key i.rain {
+  background: rgba(47, 159, 232, 0.32);
+  border-color: rgba(47, 159, 232, 0.48);
 }
 
 .soil-history-card app-chart {
@@ -773,6 +844,12 @@
 }
 
 @container soil-history-shell (max-width: 480px) {
+  .soil-agronomic-key small {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
   .soil-history-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

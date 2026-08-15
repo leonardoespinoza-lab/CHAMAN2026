@@ -167,10 +167,12 @@ describe('GraficoHistoricoSueloComponent', () => {
     expect(component.resumen).toContain('12/12 profundidades detectadas');
     expect(component.resumen).toContain('12 datos crudos');
     expect(soilSeries.every((series: any) => series.type === 'spline')).toBeTrue();
-    expect(new Set(soilSeries.map((series: any) => series.color)).size).toBe(1);
-    const soilAxes = component.chartOptions.yAxis.slice(0, 12);
-    expect(new Set(soilAxes.map((axis: any) => axis.min)).size).toBe(1);
-    expect(new Set(soilAxes.map((axis: any) => axis.max)).size).toBe(1);
+    expect(new Set(soilSeries.map((series: any) => series.color)).size).toBe(12);
+    expect(soilSeries.every((series: any) => series.showInLegend && series.visible)).toBeTrue();
+    const soilAxes = component.chartOptions.yAxis.filter((axis: any) => axis.id === 'sentek-humedad-shared');
+    expect(soilAxes).toHaveSize(1);
+    expect(soilAxes[0]).toEqual(jasmine.objectContaining({ min: 0, max: 60 }));
+    expect(soilAxes[0].title.text).toBe('Humedad volumétrica (% VWC)');
     expect(component.rainfallAvailabilityNotice).toBe('Sin lluvia histórica disponible');
   });
 
@@ -281,25 +283,26 @@ describe('GraficoHistoricoSueloComponent', () => {
     component.ngOnChanges({ rawFrames: {} as any, lluvias: {} as any });
 
     const rainSeries = (component.chartOptions?.series || []).filter((series: any) => series.custom?.isRain);
-    const soilSeries = (component.chartOptions?.series || []).filter((series: any) => !series.custom?.isRain);
+    const soilSeries = (component.chartOptions?.series || []).filter((series: any) => series.custom?.isSoil);
     expect(rainSeries).toHaveSize(1);
     expect(rainSeries[0]).toEqual(
       jasmine.objectContaining({
         color: 'rgba(47, 159, 232, 0.22)',
         name: 'Lluvia (mm)',
-        showInLegend: true,
+        showInLegend: false,
         type: 'column',
         zIndex: 1,
       })
     );
     expect(rainSeries[0].data.map((point: any) => point.y)).toEqual([12.4, 0]);
-    expect(soilSeries[0]).toEqual(jasmine.objectContaining({ name: '10 cm', showInLegend: false, zIndex: 3 }));
-    expect(component.chartOptions.yAxis[0].labels.enabled).toBeFalse();
+    expect(soilSeries[0]).toEqual(jasmine.objectContaining({ name: '10 cm', showInLegend: true, zIndex: 3 }));
+    expect(component.chartOptions.yAxis[0].labels.enabled).toBeTrue();
     expect(component.chartOptions.yAxis[1].title.text).toBe('mm');
     expect(component.chartOptions.yAxis[1].labels.enabled).toBeTrue();
+    expect(component.chartOptions.yAxis[1].labels.format).toBe('{value:.1f}');
   });
 
-  it('mantiene la lluvia en la leyenda aunque el total observado sea cero', () => {
+  it('mantiene visible la lluvia aunque el total observado sea cero y reserva la leyenda para niveles', () => {
     const component = new GraficoHistoricoSueloComponent();
     component.rawFrames = [frame('2026-08-14T10:00:00.000Z', [humedad(10, 28)], 1)];
     component.lluvias = [
@@ -312,7 +315,7 @@ describe('GraficoHistoricoSueloComponent', () => {
     const rainSeries = component.chartOptions.series.filter((series: any) => series.custom?.isRain);
     expect(rainSeries).toHaveSize(1);
     expect(rainSeries[0].data.map((point: any) => point.y)).toEqual([0, 0]);
-    expect(rainSeries[0].showInLegend).toBeTrue();
+    expect(rainSeries[0].showInLegend).toBeFalse();
     expect(component.chartOptions.legend.enabled).toBeTrue();
     expect(component.rainfallAvailabilityNotice).toBe('');
   });
@@ -330,31 +333,33 @@ describe('GraficoHistoricoSueloComponent', () => {
     [20, 30, 40, 60, 70, 80, 90, 100, 110].forEach((depth) => component.onDepthVisibilityChange(depth, false));
 
     const visibleDepths = [10, 50, 120];
-    const soilSeries = component.chartOptions.series.filter((series: any) => !series.custom?.isRain);
+    const soilSeries = component.chartOptions.series.filter((series: any) => series.custom?.isSoil);
     const rainSeries = component.chartOptions.series.filter((series: any) => series.custom?.isRain);
-    const axes = component.chartOptions.yAxis.filter((axis: any) =>
-      String(axis.id).startsWith('sentek-humedad-depth-')
-    );
+    const axes = component.chartOptions.yAxis.filter((axis: any) => axis.id === 'sentek-humedad-shared');
     expect(component.selectedDepthsCm).toEqual(visibleDepths);
     expect(component.depthSelectionLabel).toBe('3 niveles');
-    expect(soilSeries.map((series: any) => series.custom.depthCm)).toEqual(visibleDepths);
-    expect(axes).toHaveSize(3);
-    expect(new Set(axes.map((axis: any) => `${axis.min}:${axis.max}`)).size).toBe(1);
+    expect(soilSeries.filter((series: any) => series.visible).map((series: any) => series.custom.depthCm)).toEqual(
+      visibleDepths
+    );
+    expect(soilSeries).toHaveSize(12);
+    expect(axes).toHaveSize(1);
     expect(rainSeries).toHaveSize(1);
-    expect(component.chartOptions.chart.height).toBe(300);
+    expect(component.chartOptions.chart.height).toBe(460);
     expect((component as any).getCsvRows().length).toBe(csvRowsBefore);
     expect(component.resumen).toContain('12/12 profundidades detectadas');
 
     component.onMetricChange('temperatura');
     expect(component.selectedDepthsCm).toEqual(visibleDepths);
-    expect(component.chartOptions.series.filter((series: any) => !series.custom?.isRain)).toHaveSize(3);
+    expect(
+      component.chartOptions.series.filter((series: any) => series.custom?.isSoil && series.visible)
+    ).toHaveSize(3);
 
     component.selectedDepthsCm = [10];
     component.onDepthVisibilityChange(10, false);
     expect(component.selectedDepthsCm).toEqual([10]);
     component.showAllDepths();
     expect(component.selectedDepthsCm).toEqual(component.depthOptionsCm);
-    expect(component.chartOptions.chart.height).toBe(540);
+    expect(component.chartOptions.chart.height).toBe(460);
   });
 
   it('expone un selector accesible con los doce niveles y evita dejar la vista vacia', fakeAsync(() => {
@@ -391,7 +396,7 @@ describe('GraficoHistoricoSueloComponent', () => {
     fixture.destroy();
   }));
 
-  it('usa amanecer y atardecer reales en Buenos Aires y deja la noche neutra', () => {
+  it('usa amanecer y atardecer reales en Buenos Aires en una franja inferior sin pintar fechas desconocidas', () => {
     const component = new GraficoHistoricoSueloComponent();
     component.rawFrames = [
       ...cicloPerfil('2026-08-14T08:00:00.000Z', 1),
@@ -408,31 +413,35 @@ describe('GraficoHistoricoSueloComponent', () => {
     ];
     component.ngOnChanges({ rawFrames: {} as any, lluvias: {} as any, daylight: {} as any });
 
-    const bands = component.chartOptions.xAxis.plotBands;
+    const daySeries = component.chartOptions.series.find((series: any) => series.custom?.solarState === 'day');
+    const nightSeries = component.chartOptions.series.find((series: any) => series.custom?.solarState === 'night');
     expect(component.chartOptions.time.timezone).toBe('America/Argentina/Buenos_Aires');
     expect(component.hasDaylightBands).toBeTrue();
-    expect(bands).toHaveSize(2);
-    expect(bands[0]).toEqual(
+    expect(component.chartOptions.xAxis.plotBands).toEqual([]);
+    expect(daySeries).toEqual(
       jasmine.objectContaining({
-        color: 'rgba(250, 204, 21, 0.09)',
-        from: new Date('2026-08-14T10:30:00.000Z').getTime(),
-        id: 'sentek-day-2026-08-14',
-        to: new Date('2026-08-14T21:30:00.000Z').getTime(),
-        zIndex: 0,
+        color: '#facc15',
+        id: 'sentek-solar-day',
+        lineWidth: 8,
+        showInLegend: false,
+        zIndex: 5,
       })
     );
-    expect(bands[1]).toEqual(
-      jasmine.objectContaining({
-        from: new Date('2026-08-15T10:29:00.000Z').getTime(),
-        to: new Date('2026-08-15T21:31:00.000Z').getTime(),
-      })
+    expect(nightSeries).toEqual(
+      jasmine.objectContaining({ color: '#111827', id: 'sentek-solar-night', lineWidth: 8, zIndex: 5 })
     );
-    expect(bands.every((band: any) => band.from >= component.chartOptions.xAxis.min)).toBeTrue();
-    expect(bands.every((band: any) => band.to <= component.chartOptions.xAxis.max)).toBeTrue();
+    expect(daySeries.data).toContain(jasmine.objectContaining({ x: new Date('2026-08-14T10:30:00.000Z').getTime() }));
+    expect(daySeries.data).toContain(jasmine.objectContaining({ x: new Date('2026-08-14T21:30:00.000Z').getTime() }));
+    expect(daySeries.data).toContain(jasmine.objectContaining({ x: new Date('2026-08-15T10:29:00.000Z').getTime() }));
+    expect(daySeries.data).toContain(jasmine.objectContaining({ x: new Date('2026-08-15T21:31:00.000Z').getTime() }));
+    expect(daySeries.data.filter((point: any) => point.y !== null).every((point: any) => point.x >= component.chartOptions.xAxis.min && point.x <= component.chartOptions.xAxis.max)).toBeTrue();
+    expect(nightSeries.data.filter((point: any) => point.y !== null).every((point: any) => point.x >= component.chartOptions.xAxis.min && point.x <= component.chartOptions.xAxis.max)).toBeTrue();
+    expect(daySeries.data.every((point: any, index: number, data: any[]) => index === 0 || point.x >= data[index - 1].x)).toBeTrue();
+    expect(nightSeries.data.every((point: any, index: number, data: any[]) => index === 0 || point.x >= data[index - 1].x)).toBeTrue();
     expect(component.chartOptions.series.find((series: any) => series.custom?.isRain).zIndex).toBe(1);
     expect(
       component.chartOptions.series
-        .filter((series: any) => !series.custom?.isRain)
+        .filter((series: any) => series.custom?.isSoil)
         .every((series: any) => series.zIndex === 3)
     ).toBeTrue();
 
@@ -443,10 +452,11 @@ describe('GraficoHistoricoSueloComponent', () => {
     component.daylight = [];
     component.ngOnChanges({ daylight: {} as any });
     expect(component.chartOptions.xAxis.plotBands).toEqual([]);
+    expect(component.chartOptions.series.some((series: any) => series.custom?.isTemporalContext)).toBeFalse();
     expect(component.hasDaylightBands).toBeFalse();
   });
 
-  it('renderiza la banda diurna y su clave minima en el SVG real', fakeAsync(() => {
+  it('renderiza las franjas de dia y noche y su clave minima en el SVG real', fakeAsync(() => {
     TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
     const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
     fixture.componentRef.setInput('rawFrames', [
@@ -460,12 +470,174 @@ describe('GraficoHistoricoSueloComponent', () => {
     tick(120);
 
     const host = fixture.nativeElement as HTMLElement;
-    const band = host.querySelector<SVGElement>('.sentek-day-band');
+    const chart = fixture.debugElement.query(By.directive(ChartComponent)).componentInstance.chart!;
+    const day = chart.get('sentek-solar-day') as any;
+    const night = chart.get('sentek-solar-night') as any;
     const key = host.querySelector<HTMLElement>('.soil-daylight-key');
-    expect(band).not.toBeNull();
-    expect(band!.getBoundingClientRect().width).toBeGreaterThan(0);
+    expect(day?.graph).toBeDefined();
+    expect(night?.graph).toBeDefined();
+    expect(day?.graph?.element?.getAttribute('d')).toContain('M');
+    expect(night?.graph?.element?.getAttribute('d')).toContain('M');
+    expect(day.graph.element.getBoundingClientRect().width).toBeGreaterThan(0);
+    expect(night.graph.element.getBoundingClientRect().width).toBeGreaterThan(0);
+    expect(day.yAxis.top).toBeGreaterThan(chart.plotTop + chart.plotHeight * 0.85);
+    expect(day.yAxis.height).toBeLessThanOrEqual(chart.plotHeight * 0.05);
+    expect(night.yAxis.top).toBe(day.yAxis.top);
     expect(key?.textContent).toContain('Día');
     expect(key?.textContent).toContain('Noche');
+    fixture.destroy();
+  }));
+
+  it('pinta bandas canonicas CC/PMP, calcula recarga inicial al 50% PAW y las limita a humedad', () => {
+    const component = prepare(cicloPerfil('2026-08-14T20:00:00.000Z', 1));
+    component.agronomicThresholds = {
+      capacidadCampoPct: 33.46,
+      confianza: 'low',
+      depthFromCm: 0,
+      depthToCm: 100,
+      fuente: 'soilgrids',
+      origen: 'estimated',
+      puntoMarchitezPct: 18.12,
+    };
+    component.ngOnChanges({ agronomicThresholds: {} as any });
+
+    const humidityAxis = component.chartOptions.yAxis.find((axis: any) => axis.id === 'sentek-humedad-shared');
+    expect(humidityAxis).toEqual(jasmine.objectContaining({ min: 0, max: 60 }));
+    expect(humidityAxis.title.text).toBe('Humedad volumétrica (% VWC)');
+    expect(humidityAxis.plotBands).toEqual([
+      jasmine.objectContaining({ from: 0, id: 'sentek-zone-deficit', to: 25.79 }),
+      jasmine.objectContaining({ from: 25.79, id: 'sentek-zone-target', to: 33.46 }),
+      jasmine.objectContaining({ from: 33.46, id: 'sentek-zone-excess', to: 60 }),
+    ]);
+    expect(humidityAxis.plotLines.map((line: any) => [line.id, line.value])).toEqual([
+      ['sentek-threshold-wilting', 18.12],
+      ['sentek-threshold-refill', 25.79],
+      ['sentek-threshold-field-capacity', 33.46],
+    ]);
+    expect(component.agronomicReference).toEqual(
+      jasmine.objectContaining({
+        capacidadCampoPct: 33.46,
+        confianza: 'low',
+        depthFromCm: 0,
+        depthToCm: 100,
+        recargaPct: 25.79,
+      })
+    );
+
+    component.onMetricChange('temperatura');
+    expect(component.chartOptions.yAxis.find((axis: any) => axis.id === 'sentek-temperatura-shared').plotBands).toEqual([]);
+    component.onMetricChange('salinidad');
+    expect(component.chartOptions.yAxis.find((axis: any) => axis.id === 'sentek-salinidad-shared').plotBands).toEqual([]);
+  });
+
+  it('oculta las bandas ante referencia invalida o desactualizada y lo informa en el DOM', fakeAsync(() => {
+    TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
+    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    fixture.componentRef.setInput('rawFrames', cicloPerfil('2026-08-14T20:00:00.000Z', 1));
+    fixture.componentRef.setInput('agronomicThresholds', {
+      capacidadCampoPct: 33.46,
+      puntoMarchitezPct: 18.12,
+      stale: true,
+    });
+    fixture.componentRef.setInput('mostrarNapa', false);
+    fixture.componentRef.setInput('mostrarEntradaAnalogica', false);
+    fixture.detectChanges();
+    tick(100);
+
+    const axis = fixture.componentInstance.chartOptions.yAxis.find((item: any) => item.id === 'sentek-humedad-shared');
+    const host = fixture.nativeElement as HTMLElement;
+    const note = host.querySelector<HTMLElement>('.soil-agronomic-unavailable');
+    expect(axis.plotBands).toEqual([]);
+    expect(axis.plotLines).toEqual([]);
+    expect(note?.textContent).toContain('Referencia agronómica desactualizada');
+    expect(host.textContent?.toLowerCase()).not.toContain('saturación');
+    fixture.destroy();
+  }));
+
+  it('renderiza bandas agronomicas SVG con superficie real y procedencia visible', fakeAsync(() => {
+    TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
+    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    fixture.componentRef.setInput('rawFrames', cicloPerfil('2026-08-14T20:00:00.000Z', 1));
+    fixture.componentRef.setInput('agronomicThresholds', {
+      capacidadCampoPct: 33.46,
+      confianza: 'low',
+      depthFromCm: 0,
+      depthToCm: 100,
+      fuente: 'soilgrids',
+      origen: 'estimated',
+      puntoMarchitezPct: 18.12,
+    });
+    fixture.componentRef.setInput('mostrarNapa', false);
+    fixture.componentRef.setInput('mostrarEntradaAnalogica', false);
+    fixture.detectChanges();
+    tick(120);
+
+    const host = fixture.nativeElement as HTMLElement;
+    ['.sentek-zone-deficit', '.sentek-zone-target', '.sentek-zone-excess'].forEach((selector) => {
+      const rect = host.querySelector<SVGElement>(selector)!.getBoundingClientRect();
+      expect(rect.width).withContext(selector).toBeGreaterThan(0);
+      expect(rect.height).withContext(selector).toBeGreaterThan(0);
+    });
+    const key = host.querySelector<HTMLElement>('.soil-agronomic-key')!;
+    const keyText = (key.textContent || '').replace(/\s+/g, ' ').trim();
+    expect(keyText).toContain('PMP 18.12%');
+    expect(keyText).toContain('Recarga inicial (50% PAW) 25.79%');
+    expect(keyText).toContain('CC 33.46%');
+    expect(keyText).toContain('SoilGrids');
+    expect(keyText).toContain('referencia de perfil estimado 0–100 cm');
+    expect(keyText).toContain('confianza baja');
+    expect(keyText.toLowerCase()).not.toContain('saturación');
+    fixture.destroy();
+  }));
+
+  it('sincroniza un click real de leyenda con el selector sin eliminar la serie ni permitir vista vacia', fakeAsync(() => {
+    TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
+    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    fixture.componentRef.setInput('rawFrames', cicloPerfil('2026-08-14T20:00:00.000Z', 1));
+    fixture.componentRef.setInput('mostrarNapa', false);
+    fixture.componentRef.setInput('mostrarEntradaAnalogica', false);
+    fixture.detectChanges();
+    tick(120);
+
+    let chart = fixture.debugElement.query(By.directive(ChartComponent)).componentInstance.chart!;
+    let series = chart.get('sentek-humedad-20') as any;
+    series.legendItem.group.element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+    tick(100);
+
+    expect(fixture.componentInstance.selectedDepthsCm).not.toContain(20);
+    const host = fixture.nativeElement as HTMLElement;
+    const checkbox20 = [...host.querySelectorAll<HTMLInputElement>('.soil-depth-options input')].find(
+      (input) => input.closest('label')?.textContent?.includes('20 cm')
+    )!;
+    expect(checkbox20.checked).toBeFalse();
+    chart = fixture.debugElement.query(By.directive(ChartComponent)).componentInstance.chart!;
+    series = chart.get('sentek-humedad-20') as any;
+    expect(series).toBeDefined();
+    expect(series.visible).toBeFalse();
+
+    series.legendItem.group.element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+    tick(100);
+    expect(fixture.componentInstance.selectedDepthsCm).toContain(20);
+
+    fixture.componentInstance.depthOptionsCm
+      .filter((depth) => depth !== 20)
+      .forEach((depth) => fixture.componentInstance.onDepthVisibilityChange(depth, false));
+    fixture.detectChanges();
+    tick(100);
+    chart = fixture.debugElement.query(By.directive(ChartComponent)).componentInstance.chart!;
+    series = chart.get('sentek-humedad-20') as any;
+    series.legendItem.group.element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+    tick(80);
+    expect(fixture.componentInstance.selectedDepthsCm).toEqual([20]);
+    expect((chart.get('sentek-humedad-20') as any).visible).toBeTrue();
+    const onlyCheckbox = [...host.querySelectorAll<HTMLInputElement>('.soil-depth-options input')].find(
+      (input) => input.closest('label')?.textContent?.includes('20 cm')
+    )!;
+    expect(onlyCheckbox.checked).toBeTrue();
+    expect(onlyCheckbox.disabled).toBeTrue();
     fixture.destroy();
   }));
 
@@ -555,7 +727,7 @@ describe('GraficoHistoricoSueloComponent', () => {
     const expectedMin = new Date(recentStart).getTime() - 60 * 1000;
     const expectedMax = new Date(recentEnd).getTime() + 60 * 1000;
     const rainSeries = (component.chartOptions?.series || []).filter((series: any) => series.custom?.isRain);
-    const soilSeries = (component.chartOptions?.series || []).filter((series: any) => !series.custom?.isRain);
+    const soilSeries = (component.chartOptions?.series || []).filter((series: any) => series.custom?.isSoil);
 
     expect(soilSeries).toHaveSize(12);
     expect(component.chartOptions.xAxis.min).toBe(expectedMin);
@@ -589,7 +761,7 @@ describe('GraficoHistoricoSueloComponent', () => {
     expect(component.profileRows.map((row) => row.profundidad)).toEqual([100]);
     expect(component.profileRecentMissingDepths).toHaveSize(11);
     expect(component.profileFreshnessNotice).toBe('11 niveles sin datos en el ultimo barrido.');
-    const soilSeries = (component.chartOptions.series || []).filter((series: any) => !series.custom?.isRain);
+    const soilSeries = (component.chartOptions.series || []).filter((series: any) => series.custom?.isSoil);
     expect(soilSeries[0].data).toEqual([
       jasmine.objectContaining({ x: new Date('2026-08-14T20:00:00.000Z').getTime() }),
     ]);
@@ -674,7 +846,7 @@ describe('GraficoHistoricoSueloComponent', () => {
       bloquePerfil('2026-08-14T20:04:30.000Z', deep, 194, [8, 9, 10, 11], 10),
     ]);
 
-    const soilSeries = component.chartOptions.series.filter((series: any) => !series.custom?.isRain);
+    const soilSeries = component.chartOptions.series.filter((series: any) => series.custom?.isSoil);
     expect(soilSeries).toHaveSize(12);
     expect(soilSeries.every((series: any) => series.data.length === 2)).toBeTrue();
     expect(component.profileRows).toHaveSize(12);
@@ -729,7 +901,7 @@ describe('GraficoHistoricoSueloComponent', () => {
     component.onMetricChange('salinidad');
     expect(domain()).toEqual(expectedDomain);
 
-    const salinitySeries = component.chartOptions.series.filter((series: any) => !series.custom?.isRain);
+    const salinitySeries = component.chartOptions.series.filter((series: any) => series.custom?.isSoil);
     expect(salinitySeries).toHaveSize(12);
     expect(salinitySeries.every((series: any) => series.id.startsWith('sentek-salinidad-'))).toBeTrue();
     expect(
@@ -766,7 +938,7 @@ describe('GraficoHistoricoSueloComponent', () => {
       expectedByDepth: (depth: number) => { gaps: number; values: number }
     ) => {
       component.onMetricChange(metric);
-      const soilSeries = component.chartOptions.series.filter((series: any) => !series.custom?.isRain);
+      const soilSeries = component.chartOptions.series.filter((series: any) => series.custom?.isSoil);
       expect([component.chartOptions.xAxis.min, component.chartOptions.xAxis.max]).toEqual(expectedDomain);
       expect(soilSeries).toHaveSize(12);
       expect(
@@ -973,6 +1145,10 @@ describe('GraficoHistoricoSueloComponent', () => {
       fixture.componentRef.setInput('rawFrames', secuenciaArturoProductiva());
       fixture.componentRef.setInput('lluvias', [{ fecha: '2026-08-14T21:20:00.000Z', milimetros: 7 }]);
       fixture.componentRef.setInput('daylight', [{ amanecer: '07:30', atardecer: '18:30', fecha: '2026-08-14' }]);
+      fixture.componentRef.setInput('agronomicThresholds', {
+        capacidadCampoPct: 33.46,
+        puntoMarchitezPct: 18.12,
+      });
       fixture.componentRef.setInput('mostrarNapa', false);
       fixture.componentRef.setInput('mostrarEntradaAnalogica', false);
       fixture.detectChanges();
@@ -1055,49 +1231,42 @@ describe('GraficoHistoricoSueloComponent', () => {
       }
 
       if (width === 1440 || width === 768 || width === 390) {
-        const expectedHeight = width <= 768 ? 480 : 540;
-        const minimumAxisHeight = width <= 768 ? 20 : 24;
-        const depthAxes = chart.yAxis
-          .filter((axis: any) => String(axis.options.id || '').startsWith('sentek-humedad-depth-'))
-          .sort((left: any, right: any) => left.top - right.top);
-        const titleRects = depthAxes.map((axis: any) => axis.axisTitle.element.getBoundingClientRect());
+        const expectedHeight = width <= 768 ? 410 : 460;
+        const soilAxis = chart.yAxis.find((axis: any) => axis.options.id === 'sentek-humedad-shared')!;
+        const soilSeries = chart.series.filter((series: any) => series.options.custom?.isSoil);
         const rainSeries = chart.series.find((series: any) => series.options.custom?.isRain);
+        const daySeries = chart.get('sentek-solar-day') as any;
+        const nightSeries = chart.get('sentek-solar-night') as any;
         const xLabelElements = [...host.querySelectorAll<SVGTextElement>('.highcharts-xaxis-labels text')].filter(
           (label) => label.getBoundingClientRect().width > 0
         );
         const chartRect = chartContainer.getBoundingClientRect();
-        const plotLeft = chartRect.left + chart.plotLeft;
-        const minimumLabelGap = width === 390 ? 6 : 10;
 
         expect(chart.chartHeight).withContext(`altura ${width}px`).toBe(expectedHeight);
-        expect(depthAxes).withContext(`12 ejes ${width}px`).toHaveSize(12);
-        const domains = depthAxes.map((axis: any) => {
-          const extremes = axis.getExtremes();
-          return `${extremes.min}:${extremes.max}`;
+        expect(soilAxis).withContext(`eje unico ${width}px`).toBeDefined();
+        expect(soilAxis.getExtremes().min).withContext(`VWC minimo ${width}px`).toBe(0);
+        expect(soilAxis.getExtremes().max).withContext(`VWC maximo ${width}px`).toBe(60);
+        expect(soilSeries).withContext(`12 curvas ${width}px`).toHaveSize(12);
+        expect(new Set(soilSeries.map((series: any) => series.color)).size)
+          .withContext(`12 colores ${width}px`)
+          .toBe(12);
+        expect(soilSeries.every((series: any) => series.options.showInLegend))
+          .withContext(`leyenda clickeable ${width}px`)
+          .toBeTrue();
+        expect(chart.legend.allItems).withContext(`12 items de leyenda ${width}px`).toHaveSize(12);
+        ['.sentek-zone-deficit', '.sentek-zone-target', '.sentek-zone-excess'].forEach((selector) => {
+          const rect = host.querySelector<SVGElement>(selector)!.getBoundingClientRect();
+          expect(rect.width).withContext(`${selector} ancho ${width}px`).toBeGreaterThan(0);
+          expect(rect.height).withContext(`${selector} alto ${width}px`).toBeGreaterThan(0);
+          expect(rect.left).withContext(`${selector} izquierda ${width}px`).toBeGreaterThanOrEqual(chartRect.left);
+          expect(rect.right).withContext(`${selector} derecha ${width}px`).toBeLessThanOrEqual(chartRect.right + 0.5);
         });
-        expect(new Set(domains).size).withContext(`dominio vertical global ${width}px`).toBe(1);
-        const soilColors = chart.series
-          .filter((series: any) => !series.options.custom?.isRain)
-          .map((series: any) => series.color);
-        expect(new Set(soilColors).size).withContext(`paleta unica ${width}px`).toBe(1);
-        expect(Math.min(...depthAxes.map((axis: any) => axis.height)))
-          .withContext(`alto util por nivel ${width}px`)
-          .toBeGreaterThanOrEqual(minimumAxisHeight);
-        expect(plotLeft - Math.max(...titleRects.map((rect: DOMRect) => rect.right)))
-          .withContext(`margen labels/curvas ${width}px`)
-          .toBeGreaterThanOrEqual(minimumLabelGap);
-        for (let index = 1; index < titleRects.length; index++) {
-          expect(titleRects[index - 1].bottom)
-            .withContext(`titulos ${index}/${index + 1} sin colision a ${width}px`)
-            .toBeLessThanOrEqual(titleRects[index].top + 0.5);
-        }
-        [100, 110, 120].forEach((depth) => {
-          const axis = depthAxes.find((candidate: any) => String(candidate.options.id).endsWith(`-${depth}`))!;
-          expect(axis.axisTitle.textStr).withContext(`${depth} cm completo`).toBe(`${depth} cm`);
-          expect(axis.axisTitle.element.querySelectorAll('tspan').length)
-            .withContext(`${depth} cm en una linea a ${width}px`)
-            .toBeLessThanOrEqual(1);
-        });
+        expect(daySeries?.graph?.element?.getBoundingClientRect().width)
+          .withContext(`franja dia ${width}px`)
+          .toBeGreaterThan(0);
+        expect(nightSeries?.graph?.element?.getBoundingClientRect().width)
+          .withContext(`franja noche ${width}px`)
+          .toBeGreaterThan(0);
         expect(rainSeries).withContext(`serie lluvia ${width}px`).toBeDefined();
         expect(rainSeries!.points.some((point: any) => point.y > 0 && !!point.graphic))
           .withContext(`barra lluvia visible ${width}px`)
@@ -1113,7 +1282,7 @@ describe('GraficoHistoricoSueloComponent', () => {
           .toBeTrue();
 
         const observedSeries = chart.series.find(
-          (series: any) => !series.options.custom?.isRain && series.points.some((point: any) => !point.isNull)
+          (series: any) => series.options.custom?.isSoil && series.points.some((point: any) => !point.isNull)
         )!;
         const observedPoints = observedSeries.points.filter((point: any) => !point.isNull);
         chart.tooltip.refresh(observedPoints[Math.floor(observedPoints.length / 2)]);
@@ -1148,7 +1317,7 @@ describe('GraficoHistoricoSueloComponent', () => {
       ).flat()
     );
 
-    const soilSeries = component.chartOptions.series.filter((series: any) => !series.custom?.isRain);
+    const soilSeries = component.chartOptions.series.filter((series: any) => series.custom?.isSoil);
     expect(soilSeries).toHaveSize(12);
     expect(
       soilSeries.every(
@@ -1178,7 +1347,7 @@ describe('GraficoHistoricoSueloComponent', () => {
     tick(240);
 
     const chart = fixture.debugElement.query(By.directive(ChartComponent)).componentInstance.chart!;
-    const soilSeries = chart.series.filter((series: any) => !series.options.custom?.isRain);
+    const soilSeries = chart.series.filter((series: any) => series.options.custom?.isSoil);
     const soil = soilSeries.find((series: any) => series.options.id === 'sentek-humedad-10')!;
     const path = soil.graph?.element?.getAttribute('d') || '';
     const staticMarkerCount = soilSeries
@@ -1210,7 +1379,7 @@ describe('GraficoHistoricoSueloComponent', () => {
       ...cicloPerfil('2026-08-14T12:00:00.000Z', 4, 10),
     ]);
 
-    const soilSeries = component.chartOptions.series.filter((series: any) => !series.custom?.isRain);
+    const soilSeries = component.chartOptions.series.filter((series: any) => series.custom?.isSoil);
     expect(
       soilSeries.every(
         (series: any) =>
@@ -1227,7 +1396,7 @@ describe('GraficoHistoricoSueloComponent', () => {
       ...cicloPerfil('2026-08-14T17:01:00.000Z', 4, 10),
     ]);
 
-    const soilSeries = component.chartOptions.series.filter((series: any) => !series.custom?.isRain);
+    const soilSeries = component.chartOptions.series.filter((series: any) => series.custom?.isSoil);
     expect(
       soilSeries.every(
         (series: any) =>
@@ -1287,7 +1456,7 @@ describe('GraficoHistoricoSueloComponent', () => {
 
     const ids = () =>
       (component.chartOptions.series || [])
-        .filter((series: any) => !series.custom?.isRain)
+        .filter((series: any) => series.custom?.isSoil)
         .map((series: any) => series.id);
     const humidityIds = ids();
 
@@ -1300,9 +1469,8 @@ describe('GraficoHistoricoSueloComponent', () => {
     expect(temperatureIds.every((id: string) => id.startsWith('sentek-temperatura-'))).toBeTrue();
     expect(salinityIds.every((id: string) => id.startsWith('sentek-salinidad-'))).toBeTrue();
     expect(new Set([...humidityIds, ...temperatureIds, ...salinityIds]).size).toBe(36);
-    expect(
-      component.chartOptions.yAxis.slice(0, 12).every((axis: any) => axis.id.startsWith('sentek-salinidad-'))
-    ).toBeTrue();
+    expect(component.chartOptions.yAxis.filter((axis: any) => axis.id === 'sentek-salinidad-shared')).toHaveSize(1);
+    expect(component.chartOptions.xAxis.plotBands).toEqual([]);
     expect(component.chartOptions.chart.animation).toBeFalse();
     expect(component.chartOptions.plotOptions.series.animation).toBeFalse();
     expect(component.chartOptions.plotOptions.spline.animation).toBeFalse();

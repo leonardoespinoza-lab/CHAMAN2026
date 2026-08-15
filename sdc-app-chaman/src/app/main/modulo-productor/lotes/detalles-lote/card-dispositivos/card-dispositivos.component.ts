@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
+import { Component, Input, OnChanges, OnDestroy, OnInit, Optional, SimpleChanges } from '@angular/core';
 import {
   IConfiguracionEntradaAnalogica,
   ICoordenadas,
@@ -12,6 +12,7 @@ import {
 } from 'modelos/src';
 import SunCalc from 'suncalc';
 import { LorawanUplinksService } from '../../../../../auxiliares/http/lorawan-uplinks.service';
+import { LoteService } from '../../../../../auxiliares/http/lote.service';
 import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
 import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
@@ -25,6 +26,7 @@ import {
 import { GraficoHistoricoAmbienteComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-ambiente/grafico-historico-ambiente.component';
 import {
   GraficoHistoricoSueloComponent,
+  SentekAgronomicThresholds,
   SentekDaylightPoint,
   SentekRainfallPoint,
 } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-suelo/grafico-historico-suelo.component';
@@ -70,18 +72,22 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   public tramasCrudas = new Map<string, ILorawanRawFrame[]>();
   public lluviasHistoricas: SentekRainfallPoint[] = [];
   public daylightHistorico: SentekDaylightPoint[] = [];
+  public sentekAgronomicThresholds?: SentekAgronomicThresholds;
+  public sentekAgronomicThresholdsUnavailable = false;
   public cargandoHistorico = new Set<string>();
   public erroresHistorico = new Set<string>();
   public diasHistorico = 30;
   private initialized = false;
   private loadVersion = 0;
   private rainLoadVersion = 0;
+  private soilThresholdLoadVersion = 0;
 
   constructor(
     public helper: HelperService,
     private reportesService: ReporteService,
     private lorawanUplinks: LorawanUplinksService,
-    private siembraService: SiembraService
+    private siembraService: SiembraService,
+    @Optional() private loteService?: LoteService
   ) {}
 
   public getDeviceKey(dispositivo: DispositivoLogico): string {
@@ -371,6 +377,106 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
+  private async cargarUmbralesAgronomicosSentek(): Promise<void> {
+    const version = ++this.soilThresholdLoadVersion;
+    const idLote = this.lote?._id;
+    this.sentekAgronomicThresholds = undefined;
+    this.sentekAgronomicThresholdsUnavailable = false;
+    if (!idLote) return;
+    if (!this.loteService) {
+      this.sentekAgronomicThresholdsUnavailable = true;
+      return;
+    }
+
+    try {
+      const inputs = await this.loteService.entradasAgronomicasSuelo(idLote);
+      if (version !== this.soilThresholdLoadVersion) return;
+      const capacidadCampoPct = Number(inputs?.fieldCapacityPercentage);
+      const puntoMarchitezPct = Number(inputs?.wiltingPointPercentage);
+      if (
+        !inputs ||
+        String(inputs.loteId) !== String(idLote) ||
+        !['ready', 'partial', 'no_coverage'].includes(inputs.status) ||
+        ['legacy_fallback', 'unavailable'].includes(inputs.selectionReason) ||
+        !Number.isFinite(capacidadCampoPct) ||
+        !Number.isFinite(puntoMarchitezPct) ||
+        puntoMarchitezPct < 0 ||
+        capacidadCampoPct > 100 ||
+        puntoMarchitezPct >= capacidadCampoPct
+      ) {
+        this.sentekAgronomicThresholdsUnavailable = true;
+        return;
+      }
+
+      const confianza = this.weakestSoilConfidence(
+        inputs.provenance?.['fieldCapacityPercentage']?.confidence,
+        inputs.provenance?.['wiltingPointPercentage']?.confidence
+      );
+      if (!confianza || confianza === 'unavailable') {
+        this.sentekAgronomicThresholdsUnavailable = true;
+        return;
+      }
+
+      const provenanceDepthFromCm = this.sharedSoilProvenanceNumber(
+        inputs.provenance?.['fieldCapacityPercentage']?.depthFromCm,
+        inputs.provenance?.['wiltingPointPercentage']?.depthFromCm
+      );
+      const provenanceDepthToCm = this.sharedSoilProvenanceNumber(
+        inputs.provenance?.['fieldCapacityPercentage']?.depthToCm,
+        inputs.provenance?.['wiltingPointPercentage']?.depthToCm
+      );
+      const hasCommonDepthProfile =
+        provenanceDepthFromCm !== undefined &&
+        provenanceDepthToCm !== undefined &&
+        provenanceDepthFromCm >= 0 &&
+        provenanceDepthToCm > provenanceDepthFromCm;
+
+      this.sentekAgronomicThresholds = {
+        capacidadCampoPct,
+        confianza,
+        fuente: this.sharedSoilProvenanceValue(
+          inputs.provenance?.['fieldCapacityPercentage']?.source,
+          inputs.provenance?.['wiltingPointPercentage']?.source
+        ),
+        origen: this.sharedSoilProvenanceValue(
+          inputs.provenance?.['fieldCapacityPercentage']?.observedOrEstimated,
+          inputs.provenance?.['wiltingPointPercentage']?.observedOrEstimated
+        ),
+        depthFromCm: hasCommonDepthProfile ? provenanceDepthFromCm : undefined,
+        depthToCm: hasCommonDepthProfile ? provenanceDepthToCm : undefined,
+        puntoMarchitezPct,
+        recargaPct: Math.round((puntoMarchitezPct + (capacidadCampoPct - puntoMarchitezPct) * 0.5) * 100) / 100,
+        stale: inputs.stale === true,
+      };
+    } catch {
+      if (version !== this.soilThresholdLoadVersion) return;
+      this.sentekAgronomicThresholdsUnavailable = true;
+    }
+  }
+
+  private weakestSoilConfidence(
+    left?: 'high' | 'medium' | 'low' | 'unavailable',
+    right?: 'high' | 'medium' | 'low' | 'unavailable'
+  ): 'high' | 'medium' | 'low' | 'unavailable' | undefined {
+    if (!left || !right) return undefined;
+    const values = [left, right];
+    const rank = { unavailable: 0, low: 1, medium: 2, high: 3 };
+    return values.sort((a, b) => rank[a] - rank[b])[0];
+  }
+
+  private sharedSoilProvenanceValue<T extends string>(left?: T, right?: T): T | undefined {
+    return left && left === right ? left : undefined;
+  }
+
+  private sharedSoilProvenanceNumber(left?: number, right?: number): number | undefined {
+    if (left === undefined || left === null || right === undefined || right === null) return undefined;
+    const leftNumber = Number(left);
+    const rightNumber = Number(right);
+    return Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && leftNumber === rightNumber
+      ? leftNumber
+      : undefined;
+  }
+
   private sentekHistoryDateKeys(): string[] {
     const formatter = new Intl.DateTimeFormat('en-US', {
       day: '2-digit',
@@ -574,7 +680,11 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
     if (changes['lote']) {
       this.setDispositivos();
       if (this.initialized) {
-        void Promise.all([this.cargarHistoricosInline(), this.cargarLluviasHistoricas()]);
+        void Promise.all([
+          this.cargarHistoricosInline(),
+          this.cargarLluviasHistoricas(),
+          this.cargarUmbralesAgronomicosSentek(),
+        ]);
       }
     }
   }
@@ -582,11 +692,16 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   async ngOnInit(): Promise<void> {
     this.initialized = true;
     this.setDispositivos();
-    await Promise.all([this.cargarHistoricosInline(), this.cargarLluviasHistoricas()]);
+    await Promise.all([
+      this.cargarHistoricosInline(),
+      this.cargarLluviasHistoricas(),
+      this.cargarUmbralesAgronomicosSentek(),
+    ]);
   }
 
   ngOnDestroy(): void {
     this.loadVersion++;
     this.rainLoadVersion++;
+    this.soilThresholdLoadVersion++;
   }
 }

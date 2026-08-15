@@ -19,6 +19,7 @@ import {
   IUpdateLote,
   IPermiso,
   ICargaFitosanitaria,
+  IEntradasAgronomicasSuelo,
   IInteligenciaSueloLote,
   IUsuario,
 } from 'modelos/src';
@@ -179,6 +180,23 @@ export class LotesController {
     @GetPermiso() permiso: IPermiso,
   ): Promise<IInteligenciaSueloLote | null> {
     return this.service.getSoilIntelligence(id, permiso);
+  }
+
+  @Get('/:id/entradas-agronomicas-suelo')
+  @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Tenant', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+  )
+  public async getSoilAgronomicInputs(
+    @Param('id') id: string,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<IEntradasAgronomicasSuelo | null> {
+    return this.service.getSoilAgronomicInputs(id, permiso);
   }
 
   @Post('/:id/suelo-ambiente/reprocesar')

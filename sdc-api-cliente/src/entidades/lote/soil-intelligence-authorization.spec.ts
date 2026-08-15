@@ -6,6 +6,7 @@ describe('LotesService - autorizacion de suelo y ambiente', () => {
     const repository = {
       getById: jest.fn(),
       getAdministrativeLocation: jest.fn(),
+      getSoilAgronomicInputs: jest.fn(),
       getSoilIntelligence: jest.fn(),
       reprocessSoilIntelligence: jest.fn(),
     };
@@ -42,6 +43,30 @@ describe('LotesService - autorizacion de suelo y ambiente', () => {
     expect(repository.getById).toHaveBeenCalledTimes(1);
     expect(repository.getAdministrativeLocation).not.toHaveBeenCalled();
     expect(repository.getSoilIntelligence).toHaveBeenCalledWith('lote-1');
+  });
+
+  it('consulta entradas agronomicas canonicas despues de autorizar el lote y sin enriquecer ubicacion', async () => {
+    const { repository, service } = createService();
+    const inputs = {
+      fieldCapacityPercentage: 33.46,
+      loteId: 'lote-1',
+      stale: false,
+      wiltingPointPercentage: 18.12,
+    };
+    repository.getById.mockResolvedValue({
+      _id: 'lote-1',
+      idProductor: 'productor-1',
+    });
+    repository.getSoilAgronomicInputs.mockResolvedValue(inputs);
+
+    await expect(
+      service.getSoilAgronomicInputs('lote-1', permisoProductor),
+    ).resolves.toBe(inputs);
+
+    expect(repository.getById).toHaveBeenCalledTimes(1);
+    expect(repository.getAdministrativeLocation).not.toHaveBeenCalled();
+    expect(repository.getSoilAgronomicInputs).toHaveBeenCalledTimes(1);
+    expect(repository.getSoilAgronomicInputs).toHaveBeenCalledWith('lote-1');
   });
 
   it('reprocesa suelo sin enriquecer la ubicacion administrativa', async () => {
@@ -90,9 +115,13 @@ describe('LotesService - autorizacion de suelo y ambiente', () => {
     await expect(
       service.reprocessSoilIntelligence('lote-1', permisoProductor),
     ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.getSoilAgronomicInputs('lote-1', permisoProductor),
+    ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(repository.getAdministrativeLocation).not.toHaveBeenCalled();
     expect(repository.getSoilIntelligence).not.toHaveBeenCalled();
+    expect(repository.getSoilAgronomicInputs).not.toHaveBeenCalled();
     expect(repository.reprocessSoilIntelligence).not.toHaveBeenCalled();
   });
 });

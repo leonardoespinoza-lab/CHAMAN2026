@@ -42,6 +42,7 @@ import {
   getEnfermedadPorId,
   getEtapasPerennesReferencia,
   IInteligenciaSueloLote,
+  IEntradasAgronomicasSuelo,
   IUsuario,
   aplicarEntradasAgronomicasSuelo,
   obtenerRegistroFenologicoDecisorioEnFecha,
@@ -267,6 +268,14 @@ export class LotesService {
   ): Promise<IInteligenciaSueloLote | null> {
     await this.assertCanView(id, permiso);
     return this.repository.getSoilIntelligence(id);
+  }
+
+  async getSoilAgronomicInputs(
+    id: string,
+    permiso: IPermiso,
+  ): Promise<IEntradasAgronomicasSuelo | null> {
+    await this.assertCanView(id, permiso);
+    return this.repository.getSoilAgronomicInputs(id);
   }
 
   async reprocessSoilIntelligence(

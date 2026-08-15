@@ -61,6 +61,34 @@ export interface SentekDaylightPoint {
   fecha: string;
 }
 
+export interface SentekAgronomicThresholds {
+  capacidadCampoPct: number;
+  confianza?: 'high' | 'medium' | 'low' | 'unavailable';
+  depthFromCm?: number;
+  depthToCm?: number;
+  fuente?: string;
+  origen?: 'observed' | 'estimated' | 'reference' | 'unknown';
+  puntoMarchitezPct: number;
+  recargaPct?: number;
+  stale?: boolean;
+}
+
+interface SentekAgronomicReference {
+  capacidadCampoPct: number;
+  confianza?: SentekAgronomicThresholds['confianza'];
+  depthFromCm?: number;
+  depthToCm?: number;
+  fuente?: string;
+  origen?: SentekAgronomicThresholds['origen'];
+  puntoMarchitezPct: number;
+  recargaPct: number;
+}
+
+interface SolarInterval {
+  from: number;
+  to: number;
+}
+
 interface ProfileRow {
   profundidad: number;
   formatted: string;
@@ -89,6 +117,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   @Input() rawFrames: ILorawanRawFrame[] = [];
   @Input() lluvias: SentekRainfallPoint[] = [];
   @Input() daylight: SentekDaylightPoint[] = [];
+  @Input() agronomicThresholds?: SentekAgronomicThresholds;
+  @Input() agronomicThresholdsUnavailable = false;
   @Input() timeZone = 'America/Argentina/Buenos_Aires';
   @Input() titulo?: string;
   @Input() subtitulo?: string;
@@ -113,6 +143,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   public profileFreshnessNotice = '';
   public rainfallAvailabilityNotice = '';
   public hasDaylightBands = false;
+  public hasRainfallSeries = false;
+  public agronomicReference?: SentekAgronomicReference;
   public readonly depthOptionsCm = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
   public selectedDepthsCm = [...this.depthOptionsCm];
   public profileRecentMissingDepths: number[] = [];
@@ -130,6 +162,21 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     { key: 'salinidad', title: 'Salinidad relativa', unit: 'VIC', color: '#8e44ad', decimals: 1 },
     { key: 'temperatura', title: 'Temperatura', unit: 'C', color: '#e74c3c', decimals: 1 },
   ];
+
+  private readonly depthColors = new Map<number, string>([
+    [10, '#22cfc7'],
+    [20, '#2f9fe8'],
+    [30, '#f59e0b'],
+    [40, '#ef4444'],
+    [50, '#8b5cf6'],
+    [60, '#10b981'],
+    [70, '#64748b'],
+    [80, '#ec4899'],
+    [90, '#14b8a6'],
+    [100, '#84cc16'],
+    [110, '#f97316'],
+    [120, '#06b6d4'],
+  ]);
 
   private readonly expectedSentekDepthsCm = this.depthOptionsCm;
   private readonly fallbackTimeZone = 'America/Argentina/Buenos_Aires';
@@ -150,6 +197,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       changes['rawFrames'] ||
       changes['lluvias'] ||
       changes['daylight'] ||
+      changes['agronomicThresholds'] ||
+      changes['agronomicThresholdsUnavailable'] ||
       changes['timeZone'] ||
       changes['fechaDesde'] ||
       changes['mostrarNapa'] ||
@@ -246,6 +295,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     if (!available.length) {
       this.chartOptions = undefined;
       this.hasDaylightBands = false;
+      this.hasRainfallSeries = false;
       this.profileRows = [];
       this.resumen = '';
       this.profileCoverageNotice = '';
@@ -263,12 +313,11 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const historicalSeries = historicalSeriesByMetric.get(definition.key) || [];
     const recentWindow = this.buildRecentProfileWindow(historicalSeriesByMetric, definition.key);
     const allSeries = this.cropSeriesToProfileWindow(historicalSeries, recentWindow);
-    const series = allSeries.filter((item) => this.isDepthVisible(Number(item.custom?.depthCm)));
     const latestPoints = recentWindow?.latestPoints || [];
     this.profileRows = this.buildProfileRows(definition, latestPoints);
     this.resumen = this.buildResumen(definition, allSeries, latestPoints);
     this.profileCoverageNotice = this.buildProfileCoverageNotice(latestPoints);
-    this.chartOptions = this.buildStackedTimeSeriesChartOptions(definition, series, recentWindow, allSeries);
+    this.chartOptions = this.buildUnifiedTimeSeriesChartOptions(definition, allSeries, recentWindow);
     this.napaChartOptions = this.mostrarNapa ? this.buildNapaChartOptions() : undefined;
     this.analogChartOptions = this.mostrarEntradaAnalogica ? this.buildAnalogChartOptions() : undefined;
   }
@@ -330,22 +379,27 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     return [...byDepth.entries()]
       .sort(([a], [b]) => a - b)
       .map(([depth, data]) => ({
-        color: definition.color,
+        color: this.depthColors.get(depth) || definition.color,
         data: data.sort((a, b) => a.x - b.x),
         lineWidth: 1.8,
         marker: this.buildSentekMarkerOptions(data.length),
         name: `${depth} cm`,
         type: 'spline',
         turboThreshold: 0,
-        custom: { decimals: definition.decimals, depthCm: depth, metric: definition.key, unit: definition.unit },
+        custom: {
+          decimals: definition.decimals,
+          depthCm: depth,
+          isSoil: true,
+          metric: definition.key,
+          unit: definition.unit,
+        },
       }));
   }
 
-  private buildStackedTimeSeriesChartOptions(
+  private buildUnifiedTimeSeriesChartOptions(
     definition: SoilMetricDefinition,
     series: any[],
-    recentWindow?: ProfileRecentWindow,
-    domainSeries: any[] = series
+    recentWindow?: ProfileRecentWindow
   ): any {
     const rainHalfDayMs = 12 * 60 * 60 * 1000;
     const rainPoints =
@@ -370,6 +424,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
             })
         : [];
     const showRain = rainPoints.length > 0;
+    this.hasRainfallSeries = showRain;
     this.rainfallAvailabilityNotice =
       definition.key === 'humedad' && !showRain
         ? this.lluvias.length
@@ -380,45 +435,49 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     this.profileFreshnessNotice = this.buildProfileFreshnessNotice(this.profileRecentMissingDepths);
     const visibleProfileStart = recentWindow?.visibleStart;
     const visibleProfileEnd = recentWindow?.visibleEnd;
-    const depthCount = Math.max(series.length, 1);
-    const chartHeight = Math.max(300, Math.min(540, 156 + depthCount * 32));
-    const soilAvailable = 88;
-    const soilGap = 0.8;
-    const soilHeight = Math.max(5.5, (soilAvailable - soilGap * Math.max(depthCount - 1, 0)) / depthCount);
     const rainMax = Math.max(1, ...rainPoints.map((point) => point.y));
-    const metricDomain = this.buildMetricDomain(definition, domainSeries);
-    const soilAxes: any[] = [];
-    const soilAxisIds = series.map((item, index) => `sentek-${definition.key}-depth-${item.custom?.depthCm ?? index}`);
+    const metricDomain =
+      definition.key === 'humedad'
+        ? this.buildHumidityDomain(series)
+        : this.buildMetricDomain(definition, series);
+    this.agronomicReference = definition.key === 'humedad' ? this.validAgronomicReference() : undefined;
+    const agronomicBands = this.buildAgronomicPlotBands(metricDomain.max);
+    const agronomicLines = this.buildAgronomicPlotLines();
+    const soilAxisId = `sentek-${definition.key}-shared`;
     const rainAxisId = 'sentek-rain-shared';
-
-    series.forEach((item, index) => {
-      const top = index * (soilHeight + soilGap);
-      soilAxes.push({
-        id: soilAxisIds[index],
-        max: metricDomain.max,
-        min: metricDomain.min,
-        title: {
-          text: item.name,
-          align: 'middle',
-          margin: 32,
-          rotation: 0,
-          style: {
-            color: definition.color,
-            fontSize: '12px',
-            fontWeight: '850',
-            textOverflow: 'clip',
-            whiteSpace: 'nowrap',
-          },
-        },
-        labels: { enabled: false },
-        endOnTick: false,
-        startOnTick: false,
-        gridLineWidth: 0,
-        height: `${soilHeight}%`,
-        top: `${top}%`,
-        offset: 0,
-      });
-    });
+    const solarAxisId = 'sentek-solar-strip';
+    const solarContext = this.buildSolarContextSeries(visibleProfileStart, visibleProfileEnd, solarAxisId);
+    this.hasDaylightBands = solarContext.series.length > 0;
+    const mainPaneHeight = this.hasDaylightBands ? '91%' : '97%';
+    const soilAxis = {
+      id: soilAxisId,
+      max: metricDomain.max,
+      min: metricDomain.min,
+      title: {
+        text:
+          definition.key === 'humedad'
+            ? 'Humedad volumétrica (% VWC)'
+            : definition.key === 'temperatura'
+              ? 'Temperatura (°C)'
+              : 'Salinidad relativa (VIC)',
+        margin: 12,
+        style: { color: 'var(--p-text-color)', fontSize: '12px', fontWeight: '750' },
+      },
+      labels: {
+        enabled: true,
+        format: definition.key === 'humedad' ? '{value:.0f}%' : `{value:.${definition.decimals}f}`,
+        style: { color: 'var(--p-text-muted-color)', fontSize: '11px', fontWeight: '650' },
+      },
+      endOnTick: false,
+      startOnTick: false,
+      gridLineWidth: 1,
+      height: mainPaneHeight,
+      top: '0%',
+      offset: 0,
+      plotBands: agronomicBands,
+      plotLines: agronomicLines,
+      ...(definition.key === 'humedad' ? { tickInterval: 10 } : {}),
+    };
 
     const rainAxis = showRain
       ? {
@@ -433,14 +492,14 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           },
           labels: {
             enabled: true,
-            format: '{value:.0f}',
+            format: '{value:.1f}',
             style: { color: '#2f9fe8', fontSize: '10px', fontWeight: '700' },
           },
           lineWidth: 0,
           tickWidth: 0,
           tickAmount: 3,
           gridLineWidth: 0,
-          height: `${soilAvailable}%`,
+          height: mainPaneHeight,
           top: '0%',
           offset: 0,
           opposite: true,
@@ -459,23 +518,34 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
             id: 'sentek-rain-shared',
             name: 'Lluvia (mm)',
             pointRange: rainPointRange,
-            showInLegend: true,
+            showInLegend: false,
             type: 'column',
             yAxis: rainAxisId,
             zIndex: 1,
           },
         ]
       : [];
-    const soilSeries = series.map((item, index) => ({
-      ...item,
-      id: `sentek-${definition.key}-${item.custom?.depthCm ?? index}`,
-      showInLegend: false,
-      yAxis: soilAxisIds[index],
-      zIndex: 3,
-    }));
-    const plottedSeries = [...rainSeries, ...soilSeries];
-    const daylightPlotBands = this.buildDaylightPlotBands(visibleProfileStart, visibleProfileEnd);
-    this.hasDaylightBands = daylightPlotBands.length > 0;
+    const soilSeries = series.map((item) => {
+      const depth = Number(item.custom?.depthCm);
+      return {
+        ...item,
+        events: {
+          legendItemClick: (event: any) => {
+            this.onDepthVisibilityChange(depth, !this.isDepthVisible(depth));
+            const visible = this.isDepthVisible(depth);
+            event?.target?.setVisible?.(visible, false);
+            event?.target?.chart?.redraw?.();
+            return false;
+          },
+        },
+        id: `sentek-${definition.key}-${depth}`,
+        showInLegend: true,
+        visible: this.isDepthVisible(depth),
+        yAxis: soilAxisId,
+        zIndex: 3,
+      };
+    });
+    const plottedSeries = [...rainSeries, ...soilSeries, ...solarContext.series];
     const chartTimeZone = this.resolvedTimeZone;
 
     const formatTooltipDateTime = (timestamp: number): string =>
@@ -493,11 +563,12 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       chart: {
         animation: false,
         backgroundColor: 'transparent',
-        height: chartHeight,
-        marginLeft: 88,
-        spacingBottom: 22,
-        spacingLeft: 2,
-        spacingRight: 20,
+        height: 460,
+        marginLeft: 70,
+        marginRight: showRain ? 56 : 20,
+        spacingBottom: 12,
+        spacingLeft: 4,
+        spacingRight: 8,
         spacingTop: 8,
         type: 'spline',
         zooming: { type: 'x' },
@@ -510,7 +581,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         type: 'datetime',
         min: visibleProfileStart ?? null,
         max: visibleProfileEnd ?? null,
-        plotBands: daylightPlotBands,
+        plotBands: [],
         endOnTick: false,
         startOnTick: false,
         crosshair: {
@@ -528,18 +599,50 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         gridLineColor: 'var(--p-surface-border)',
         gridLineWidth: 1,
       },
-      yAxis: [...soilAxes, ...(rainAxis ? [rainAxis] : [])],
+      yAxis: [
+        soilAxis,
+        ...(rainAxis ? [rainAxis] : []),
+        ...(this.hasDaylightBands
+          ? [
+              {
+                id: solarAxisId,
+                max: 1,
+                min: -1,
+                title: { text: undefined },
+                labels: { enabled: false },
+                gridLineWidth: 0,
+                height: '2%',
+                lineWidth: 0,
+                offset: 0,
+                endOnTick: false,
+                startOnTick: false,
+                tickLength: 0,
+                tickWidth: 0,
+                top: '94%',
+                visible: true,
+              },
+            ]
+          : []),
+      ],
       legend: {
-        align: 'right',
-        enabled: showRain,
-        itemDistance: 16,
+        align: 'center',
+        enabled: soilSeries.length > 0,
+        itemDistance: 8,
+        itemWidth: 82,
+        margin: 8,
+        maxHeight: 76,
+        navigation: {
+          activeColor: '#0f766e',
+          inactiveColor: '#94a3b8',
+        },
         itemStyle: {
           color: 'var(--p-text-color)',
-          fontSize: '14px',
-          fontWeight: '700',
+          fontSize: '12px',
+          fontWeight: '750',
         },
         layout: 'horizontal',
-        verticalAlign: 'top',
+        symbolWidth: 22,
+        verticalAlign: 'bottom',
       },
       tooltip: {
         backgroundColor: 'var(--p-content-background)',
@@ -602,6 +705,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         series: {
           animation: false,
           connectNulls: false,
+          states: { inactive: { opacity: 0.32 } },
           turboThreshold: 0,
         },
       },
@@ -616,8 +720,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           {
             condition: { maxWidth: 768 },
             chartOptions: {
-              chart: { height: Math.min(chartHeight, 480) },
-              legend: { itemStyle: { fontSize: '12px' } },
+              chart: { height: 410, marginLeft: 62, marginRight: showRain ? 48 : 12 },
+              legend: { itemStyle: { fontSize: '11px' }, itemWidth: 74, maxHeight: 84 },
             },
           },
         ],
@@ -854,6 +958,118 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     if (max <= min) max = min + 1;
 
     return { max, min };
+  }
+
+  private buildHumidityDomain(series: Array<{ data?: HistoricalPoint[] }>): { max: number; min: number } {
+    const observedMax = Math.max(
+      0,
+      ...series
+        .flatMap((item) => item.data || [])
+        .map((point) => point.y)
+        .filter((value): value is number => value !== null && Number.isFinite(value))
+    );
+    const referenceMax = this.validAgronomicReference()?.capacidadCampoPct || 0;
+    const max = Math.min(100, Math.max(60, Math.ceil(Math.max(observedMax, referenceMax) / 10) * 10));
+    return { max, min: 0 };
+  }
+
+  private validAgronomicReference(): SentekAgronomicReference | undefined {
+    const source = this.agronomicThresholds;
+    const capacidadCampoPct = Number(source?.capacidadCampoPct);
+    const puntoMarchitezPct = Number(source?.puntoMarchitezPct);
+    if (
+      !source ||
+      source.stale === true ||
+      source.confianza === 'unavailable' ||
+      !Number.isFinite(capacidadCampoPct) ||
+      !Number.isFinite(puntoMarchitezPct) ||
+      puntoMarchitezPct < 0 ||
+      capacidadCampoPct > 100 ||
+      puntoMarchitezPct >= capacidadCampoPct
+    ) {
+      return undefined;
+    }
+
+    const fallbackRecarga = puntoMarchitezPct + (capacidadCampoPct - puntoMarchitezPct) * 0.5;
+    const requestedRecarga = Number(source.recargaPct);
+    const recargaPct =
+      Number.isFinite(requestedRecarga) && requestedRecarga > puntoMarchitezPct && requestedRecarga < capacidadCampoPct
+        ? requestedRecarga
+        : fallbackRecarga;
+    return {
+      capacidadCampoPct,
+      confianza: source.confianza,
+      depthFromCm: source.depthFromCm,
+      depthToCm: source.depthToCm,
+      fuente: source.fuente,
+      origen: source.origen,
+      puntoMarchitezPct,
+      recargaPct,
+    };
+  }
+
+  private buildAgronomicPlotBands(axisMax: number): any[] {
+    const reference = this.agronomicReference;
+    if (!reference) return [];
+    return [
+      {
+        className: 'sentek-zone-deficit',
+        color: 'rgba(239, 68, 68, 0.16)',
+        from: 0,
+        id: 'sentek-zone-deficit',
+        to: Math.min(reference.recargaPct, axisMax),
+        zIndex: 0,
+      },
+      {
+        className: 'sentek-zone-target',
+        color: 'rgba(250, 204, 21, 0.18)',
+        from: Math.min(reference.recargaPct, axisMax),
+        id: 'sentek-zone-target',
+        to: Math.min(reference.capacidadCampoPct, axisMax),
+        zIndex: 0,
+      },
+      {
+        className: 'sentek-zone-excess',
+        color: 'rgba(56, 169, 232, 0.15)',
+        from: Math.min(reference.capacidadCampoPct, axisMax),
+        id: 'sentek-zone-excess',
+        to: axisMax,
+        zIndex: 0,
+      },
+    ].filter((band) => band.to > band.from);
+  }
+
+  private buildAgronomicPlotLines(): any[] {
+    const reference = this.agronomicReference;
+    if (!reference) return [];
+    return [
+      {
+        className: 'sentek-threshold-wilting',
+        color: 'rgba(153, 27, 27, 0.62)',
+        dashStyle: 'ShortDash',
+        id: 'sentek-threshold-wilting',
+        value: reference.puntoMarchitezPct,
+        width: 1,
+        zIndex: 2,
+      },
+      {
+        className: 'sentek-threshold-refill',
+        color: 'rgba(161, 98, 7, 0.68)',
+        dashStyle: 'ShortDash',
+        id: 'sentek-threshold-refill',
+        value: reference.recargaPct,
+        width: 1,
+        zIndex: 2,
+      },
+      {
+        className: 'sentek-threshold-field-capacity',
+        color: 'rgba(3, 105, 161, 0.7)',
+        id: 'sentek-threshold-field-capacity',
+        value: reference.capacidadCampoPct,
+        width: 1,
+        zIndex: 2,
+      },
+    ];
   }
 
   private buildProfileFreshnessNotice(missingDepths: number[]): string {
@@ -1163,38 +1379,98 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   }
 
   /**
-   * Las horas solares ya vienen calculadas por agrometeorologia para el lote.
-   * No se infieren horarios: un dia sin amanecer/atardecer valido queda con el
-   * fondo neutro. Los rangos se convierten expresamente a Buenos Aires y se
-   * recortan al dominio real de las lecturas Sentek.
+   * La franja solar usa solamente amanecer/atardecer observados o calculados
+   * para las coordenadas del lote. Cada fecha se recorta a su propio dia civil;
+   * una fecha sin contexto solar queda neutra y nunca se pinta como noche.
    */
-  private buildDaylightPlotBands(visibleStart?: number, visibleEnd?: number): any[] {
-    if (!Number.isFinite(visibleStart) || !Number.isFinite(visibleEnd) || visibleStart! >= visibleEnd!) return [];
+  private buildSolarContextSeries(
+    visibleStart: number | undefined,
+    visibleEnd: number | undefined,
+    solarAxisId: string
+  ): { dayIntervals: SolarInterval[]; nightIntervals: SolarInterval[]; series: any[] } {
+    if (!Number.isFinite(visibleStart) || !Number.isFinite(visibleEnd) || visibleStart! >= visibleEnd!) {
+      return { dayIntervals: [], nightIntervals: [], series: [] };
+    }
 
     const byDate = new Map<string, SentekDaylightPoint>();
     this.daylight.forEach((item) => {
       if (/^\d{4}-\d{2}-\d{2}$/.test(item.fecha)) byDate.set(item.fecha, item);
     });
 
-    const bands: any[] = [];
+    const dayIntervals: SolarInterval[] = [];
+    const nightIntervals: SolarInterval[] = [];
+    const addInterval = (target: SolarInterval[], from: number, to: number): void => {
+      const clippedFrom = Math.max(from, visibleStart!);
+      const clippedTo = Math.min(to, visibleEnd!);
+      if (clippedTo > clippedFrom) target.push({ from: clippedFrom, to: clippedTo });
+    };
     for (const [date, item] of [...byDate.entries()].sort(([left], [right]) => left.localeCompare(right))) {
       const sunrise = this.solarTimestamp(date, item.amanecer);
       const sunset = this.solarTimestamp(date, item.atardecer);
-      if (sunrise === undefined || sunset === undefined || sunset <= sunrise) continue;
+      const dayStart = this.zonedDateTimeTimestamp(date, '00:00');
+      const dayEnd = this.zonedDateTimeTimestamp(this.shiftDateKey(date, 1), '00:00');
+      if (
+        sunrise === undefined ||
+        sunset === undefined ||
+        dayStart === undefined ||
+        dayEnd === undefined ||
+        sunset <= sunrise ||
+        sunrise < dayStart ||
+        sunset > dayEnd
+      ) {
+        continue;
+      }
 
-      const from = Math.max(sunrise, visibleStart!);
-      const to = Math.min(sunset, visibleEnd!);
-      if (to <= from) continue;
-      bands.push({
-        className: 'sentek-day-band',
-        color: 'rgba(250, 204, 21, 0.09)',
-        from,
-        id: `sentek-day-${date}`,
-        to,
-        zIndex: 0,
-      });
+      addInterval(nightIntervals, dayStart, sunrise);
+      addInterval(dayIntervals, sunrise, sunset);
+      addInterval(nightIntervals, sunset, dayEnd);
     }
-    return bands;
+
+    const mergeAdjacentIntervals = (intervals: SolarInterval[]): SolarInterval[] =>
+      [...intervals]
+        .sort((left, right) => left.from - right.from)
+        .reduce<SolarInterval[]>((merged, interval) => {
+          const previous = merged[merged.length - 1];
+          if (previous && interval.from <= previous.to + 1) {
+            previous.to = Math.max(previous.to, interval.to);
+          } else {
+            merged.push({ ...interval });
+          }
+          return merged;
+        }, []);
+    const mergedDayIntervals = mergeAdjacentIntervals(dayIntervals);
+    const mergedNightIntervals = mergeAdjacentIntervals(nightIntervals);
+    const buildStripSeries = (id: string, name: string, color: string, intervals: SolarInterval[]): any | undefined => {
+      if (!intervals.length) return undefined;
+      return {
+        color,
+        connectNulls: false,
+        custom: { isTemporalContext: true, solarState: id },
+        data: intervals.flatMap((interval, index) => {
+          const points: Array<{ x: number; y: number | null }> = [
+            { x: interval.from, y: 0 },
+            { x: interval.to, y: 0 },
+          ];
+          const next = intervals[index + 1];
+          if (next && next.from > interval.to + 1) points.push({ x: interval.to + 1, y: null });
+          return points;
+        }),
+        enableMouseTracking: false,
+        id: `sentek-solar-${id}`,
+        lineWidth: 8,
+        marker: { enabled: false },
+        name,
+        showInLegend: false,
+        type: 'line',
+        yAxis: solarAxisId,
+        zIndex: 5,
+      };
+    };
+    const series = [
+      buildStripSeries('night', 'Noche', '#111827', mergedNightIntervals),
+      buildStripSeries('day', 'Día', '#facc15', mergedDayIntervals),
+    ].filter((item): item is any => !!item);
+    return { dayIntervals: mergedDayIntervals, nightIntervals: mergedNightIntervals, series };
   }
 
   private shiftDateKey(date: string, days: number): string {

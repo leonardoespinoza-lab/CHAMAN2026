@@ -68,10 +68,52 @@
       </div>
     }
 
-    @if (hasDaylightBands) {
-      <div class="soil-daylight-key" aria-label="Fondo temporal: amarillo para el día y neutro para la noche">
+    @if (selectedMetric === 'humedad' && agronomicReference) {
+      <div class="soil-agronomic-key" aria-label="Umbrales agronómicos de humedad volumétrica">
+        <span><i class="deficit" aria-hidden="true"></i>Déficit</span>
+        <span><i class="target" aria-hidden="true"></i>Zona objetivo</span>
+        <span><i class="excess" aria-hidden="true"></i>Sobre capacidad de campo</span>
+        <small>
+          PMP {{ agronomicReference.puntoMarchitezPct | number: '1.2-2' }}% · Recarga inicial (50% PAW)
+          {{ agronomicReference.recargaPct | number: '1.2-2' }}% · CC
+          {{ agronomicReference.capacidadCampoPct | number: '1.2-2' }}%
+          @if (agronomicReference.fuente === 'soilgrids') {
+            · SoilGrids
+          }
+          @if (agronomicReference.depthFromCm !== undefined && agronomicReference.depthToCm !== undefined) {
+            · referencia de perfil @if (agronomicReference.origen === 'estimated') { estimado } {{ agronomicReference.depthFromCm }}–{{ agronomicReference.depthToCm }} cm
+          } @else if (agronomicReference.origen === 'estimated') {
+            · estimado
+          }
+          @if (agronomicReference.confianza === 'low') {
+            · confianza baja
+          }
+        </small>
+      </div>
+    } @else if (selectedMetric === 'humedad' && agronomicThresholds?.stale) {
+      <div class="soil-agronomic-unavailable" role="status">
+        <i class="pi pi-exclamation-triangle" aria-hidden="true"></i>
+        <span>Referencia agronómica desactualizada; las bandas se mantienen ocultas.</span>
+      </div>
+    } @else if (
+      selectedMetric === 'humedad' &&
+      (agronomicThresholdsUnavailable || agronomicThresholds?.confianza === 'unavailable')
+    ) {
+      <div class="soil-agronomic-unavailable" role="status">
+        <i class="pi pi-info-circle" aria-hidden="true"></i>
+        <span>Umbrales agronómicos sin calibrar para este lote.</span>
+      </div>
+    }
+
+    @if (hasDaylightBands || hasRainfallSeries) {
+      <div class="soil-daylight-key" aria-label="Contexto temporal del gráfico">
+        @if (hasRainfallSeries) {
+          <span><i class="rain" aria-hidden="true"></i>Lluvia (mm)</span>
+        }
+        @if (hasDaylightBands) {
         <span><i class="day" aria-hidden="true"></i>Día</span>
         <span><i class="night" aria-hidden="true"></i>Noche</span>
+        }
       </div>
     }
 
