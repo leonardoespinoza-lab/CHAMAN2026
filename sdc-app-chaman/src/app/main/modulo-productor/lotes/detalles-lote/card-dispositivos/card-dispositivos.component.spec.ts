@@ -85,45 +85,55 @@ describe('CardDispositivosComponent', () => {
   });
 
   it('carga solo lluvia historica de la siembra para superponerla al perfil', async () => {
-    const agrometeorologia = jasmine.createSpy().and.resolveTo({
-      series: [
-        {
-          date: '2026-08-12',
-          isForecast: false,
-          metrics: { precipitationMm: 14.6, sunrise: '07:31', sunset: '18:28' },
-        },
-        {
-          date: '2026-08-13',
-          isForecast: false,
-          metrics: { precipitationMm: 0 },
-          weather: { sunrise: '07:30', sunset: '18:29' },
-        },
-        {
-          date: '2026-08-15',
-          isForecast: true,
-          metrics: { precipitationMm: 22, sunrise: '2026-08-15T10:28:00.000Z', sunset: '2026-08-15T21:30:00.000Z' },
-        },
-      ],
-    });
-    const component = new CardDispositivosComponent({} as any, {} as any, {} as any, { agrometeorologia } as any);
-    component.lote = { idSiembra: 'siembra-1' } as ILote;
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-08-15T15:00:00.000Z'));
+    try {
+      const agrometeorologia = jasmine.createSpy().and.resolveTo({
+        series: [
+          {
+            date: '2026-08-12',
+            isForecast: false,
+            metrics: { precipitationMm: 14.6, sunrise: '07:31', sunset: '18:28' },
+          },
+          {
+            date: '2026-08-13',
+            isForecast: false,
+            metrics: { precipitationMm: 0 },
+            weather: { sunrise: '07:30', sunset: '18:29' },
+          },
+          {
+            date: '2026-08-15',
+            isForecast: true,
+            metrics: {
+              precipitationMm: 22,
+              sunrise: '2026-08-15T10:28:00.000Z',
+              sunset: '2026-08-15T21:30:00.000Z',
+            },
+          },
+        ],
+      });
+      const component = new CardDispositivosComponent({} as any, {} as any, {} as any, { agrometeorologia } as any);
+      component.lote = { idSiembra: 'siembra-1' } as ILote;
 
-    await (component as any).cargarLluviasHistoricas();
+      await (component as any).cargarLluviasHistoricas();
 
-    expect(agrometeorologia).toHaveBeenCalledWith('siembra-1', jasmine.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
-    expect(component.lluviasHistoricas).toEqual([
-      { fecha: '2026-08-12', milimetros: 14.6 },
-      { fecha: '2026-08-13', milimetros: 0 },
-    ]);
-    expect(component.daylightHistorico).toEqual([
-      { amanecer: '07:31', atardecer: '18:28', fecha: '2026-08-12' },
-      { amanecer: '07:30', atardecer: '18:29', fecha: '2026-08-13' },
-      {
-        amanecer: '2026-08-15T10:28:00.000Z',
-        atardecer: '2026-08-15T21:30:00.000Z',
-        fecha: '2026-08-15',
-      },
-    ]);
+      expect(agrometeorologia).toHaveBeenCalledWith('siembra-1', '2026-07-17');
+      expect(component.lluviasHistoricas).toEqual([
+        { fecha: '2026-08-12', milimetros: 14.6 },
+        { fecha: '2026-08-13', milimetros: 0 },
+      ]);
+      expect(component.daylightHistorico).toEqual([
+        { amanecer: '07:31', atardecer: '18:28', fecha: '2026-08-12' },
+        { amanecer: '07:30', atardecer: '18:29', fecha: '2026-08-13' },
+        {
+          amanecer: '2026-08-15T10:28:00.000Z',
+          atardecer: '2026-08-15T21:30:00.000Z',
+          fecha: '2026-08-15',
+        },
+      ]);
+    } finally {
+      jasmine.clock().uninstall();
+    }
   });
 
   it('usa la zona horaria de la estacion del lote y conserva Buenos Aires como fallback', () => {
@@ -134,6 +144,126 @@ describe('CardDispositivosComponent', () => {
       establecimiento: { estacionMeteorologica: { position: { timezoneCode: 'America/Argentina/Cordoba' } } },
     } as ILote;
     expect(component.sentekTimeZone).toBe('America/Argentina/Cordoba');
+  });
+
+  it('sin idSiembra usa SunCalc con coordenadas y genera bandas para todo el periodo seleccionado', async () => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-08-15T15:00:00.000Z'));
+    try {
+      const agrometeorologia = jasmine.createSpy();
+      const component = new CardDispositivosComponent({} as any, {} as any, {} as any, { agrometeorologia } as any);
+      component.diasHistorico = 3;
+      component.lote = {
+        _id: '6a398ca8d1650b29166f7d5d',
+        ubicacion: { centro: { lat: -32.801292062802176, lng: -62.20157052916597 } },
+      } as ILote;
+
+      await (component as any).cargarLluviasHistoricas();
+
+      expect(agrometeorologia).not.toHaveBeenCalled();
+      expect(component.lluviasHistoricas).toEqual([]);
+      expect(component.daylightHistorico.map((item) => item.fecha)).toEqual(['2026-08-13', '2026-08-14', '2026-08-15']);
+      expect(
+        component.daylightHistorico.every(
+          (item) =>
+            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(item.amanecer) &&
+            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(item.atardecer) &&
+            new Date(item.amanecer).getTime() < new Date(item.atardecer).getTime()
+        )
+      ).toBeTrue();
+
+      const graph = new GraficoHistoricoSueloComponent();
+      graph.rawFrames = [
+        {
+          decodeStatus: 'decoded',
+          devEUI: '24E124454E358347',
+          fCnt: 1,
+          timestamp: '2026-08-15T15:00:00.000Z',
+          readings: [
+            {
+              depthCm: 10,
+              quality: 'valid',
+              serviceId: 'perfil-suelo-sentek',
+              unit: '%',
+              value: 24,
+              variable: 'humedad_suelo',
+            },
+          ],
+        },
+      ];
+      graph.daylight = component.daylightHistorico;
+      graph.ngOnChanges({ rawFrames: {} as any, daylight: {} as any });
+      expect(graph.chartOptions.xAxis.plotBands).toHaveSize(1);
+      expect(graph.chartOptions.xAxis.plotBands[0].id).toBe('sentek-day-2026-08-15');
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
+  it('sin coordenadas mantiene daylight vacio y no inventa lluvia', async () => {
+    const agrometeorologia = jasmine.createSpy();
+    const component = new CardDispositivosComponent({} as any, {} as any, {} as any, { agrometeorologia } as any);
+    component.diasHistorico = 2;
+    component.lote = {} as ILote;
+
+    await (component as any).cargarLluviasHistoricas();
+
+    expect(agrometeorologia).not.toHaveBeenCalled();
+    expect(component.daylightHistorico).toEqual([]);
+    expect(component.lluviasHistoricas).toEqual([]);
+  });
+
+  it('prefiere horarios solares de la API y completa solamente las fechas faltantes con SunCalc', async () => {
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date('2026-08-15T15:00:00.000Z'));
+    try {
+      const agrometeorologia = jasmine.createSpy().and.resolveTo({
+        series: [
+          {
+            date: '2026-08-14',
+            isForecast: false,
+            metrics: { precipitationMm: 5, sunrise: '06:11', sunset: '18:44' },
+          },
+          { date: '2026-08-15', isForecast: true, metrics: { precipitationMm: 9 } },
+        ],
+      });
+      const component = new CardDispositivosComponent({} as any, {} as any, {} as any, { agrometeorologia } as any);
+      component.diasHistorico = 2;
+      component.lote = {
+        idSiembra: 'siembra-solar',
+        siembra: { coordenadas: { lat: -33.67, lng: -59.66 } },
+      } as ILote;
+
+      await (component as any).cargarLluviasHistoricas();
+
+      expect(agrometeorologia).toHaveBeenCalledOnceWith('siembra-solar', '2026-08-14');
+      expect(component.daylightHistorico).toHaveSize(2);
+      expect(component.daylightHistorico[0]).toEqual({
+        amanecer: '06:11',
+        atardecer: '18:44',
+        fecha: '2026-08-14',
+      });
+      expect(component.daylightHistorico[1].fecha).toBe('2026-08-15');
+      expect(component.daylightHistorico[1].amanecer).toMatch(/Z$/);
+      expect(component.lluviasHistoricas).toEqual([{ fecha: '2026-08-14', milimetros: 5 }]);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
+  it('resuelve coordenadas en orden lote, siembra y establecimiento', () => {
+    const component = new CardDispositivosComponent({} as any, {} as any, {} as any, {} as any);
+    component.lote = {
+      ubicacion: { centro: { lat: -31, lng: -61 } },
+      siembra: { coordenadas: { lat: -32, lng: -62 } },
+      establecimiento: { ubicacion: [{ centro: { lat: -33, lng: -63 } }] },
+    } as ILote;
+    expect((component as any).sentekCoordinates()).toEqual({ lat: -31, lng: -61 });
+
+    component.lote.ubicacion = undefined;
+    expect((component as any).sentekCoordinates()).toEqual({ lat: -32, lng: -62 });
+    component.lote.siembra!.coordenadas = undefined;
+    expect((component as any).sentekCoordinates()).toEqual({ lat: -33, lng: -63 });
   });
 
   it('mantiene card, periodo, toolbar Sentek y SVG dentro del viewport', fakeAsync(() => {

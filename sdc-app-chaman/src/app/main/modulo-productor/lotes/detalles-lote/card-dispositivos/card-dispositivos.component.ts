@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
 import {
   IConfiguracionEntradaAnalogica,
+  ICoordenadas,
   IDispositivo,
   ILorawanRawFrame,
   ILote,
@@ -9,6 +10,7 @@ import {
   IServicioDispositivo,
   serviciosDispositivoNormalizados,
 } from 'modelos/src';
+import SunCalc from 'suncalc';
 import { LorawanUplinksService } from '../../../../../auxiliares/http/lorawan-uplinks.service';
 import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
 import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
@@ -116,9 +118,14 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   public get sentekTimeZone(): string {
-    return (
-      this.lote?.establecimiento?.estacionMeteorologica?.position?.timezoneCode || 'America/Argentina/Buenos_Aires'
-    );
+    const candidate =
+      this.lote?.establecimiento?.estacionMeteorologica?.position?.timezoneCode || 'America/Argentina/Buenos_Aires';
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: candidate }).format(0);
+      return candidate;
+    } catch {
+      return 'America/Argentina/Buenos_Aires';
+    }
   }
 
   public async cambiarPeriodo(dias: number): Promise<void> {
@@ -330,20 +337,14 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   private async cargarLluviasHistoricas(): Promise<void> {
     const version = ++this.rainLoadVersion;
     const idSiembra = this.lote?.idSiembra || this.lote?.siembra?._id;
+    const periodDates = this.sentekHistoryDateKeys();
+    this.lluviasHistoricas = [];
+    this.daylightHistorico = idSiembra ? [] : this.mergeDaylightWithSolarFallback([], periodDates);
     if (!idSiembra) {
-      this.lluviasHistoricas = [];
-      this.daylightHistorico = [];
       return;
     }
 
-    const desde = new Date();
-    desde.setHours(0, 0, 0, 0);
-    desde.setDate(desde.getDate() - Math.max(0, this.diasHistorico - 1));
-    const desdeKey = [
-      desde.getFullYear(),
-      String(desde.getMonth() + 1).padStart(2, '0'),
-      String(desde.getDate()).padStart(2, '0'),
-    ].join('-');
+    const desdeKey = periodDates[0];
 
     try {
       const response = await this.siembraService.agrometeorologia(idSiembra, desdeKey);
@@ -354,18 +355,88 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
           fecha: dia.date,
           milimetros: Math.max(0, Number(dia.metrics.precipitationMm)),
         }));
-      this.daylightHistorico = (response.series || []).flatMap((dia) => {
+      const periodDateSet = new Set(periodDates);
+      const apiDaylight = (response.series || []).flatMap((dia) => {
         const amanecer = String(dia.metrics?.sunrise || dia.weather?.sunrise || '').trim();
         const atardecer = String(dia.metrics?.sunset || dia.weather?.sunset || '').trim();
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dia.date || '')) || !amanecer || !atardecer) return [];
+        if (!periodDateSet.has(String(dia.date || '')) || !amanecer || !atardecer) return [];
         return [{ amanecer, atardecer, fecha: dia.date }];
       });
+      this.daylightHistorico = this.mergeDaylightWithSolarFallback(apiDaylight, periodDates);
     } catch (error) {
       if (version !== this.rainLoadVersion) return;
-      console.warn('No se pudo cargar la lluvia historica para el perfil Sentek', error);
+      console.warn('No se pudo cargar el contexto meteorologico para el perfil Sentek', error);
       this.lluviasHistoricas = [];
-      this.daylightHistorico = [];
+      this.daylightHistorico = this.mergeDaylightWithSolarFallback([], periodDates);
     }
+  }
+
+  private sentekHistoryDateKeys(): string[] {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      day: '2-digit',
+      month: '2-digit',
+      timeZone: this.sentekTimeZone,
+      year: 'numeric',
+    });
+    const parts = Object.fromEntries(
+      formatter
+        .formatToParts(new Date())
+        .filter((part) => part.type !== 'literal')
+        .map((part) => [part.type, Number(part.value)])
+    ) as Record<string, number>;
+    const days = Math.max(1, Math.floor(this.diasHistorico || 1));
+    const todayUtc = Date.UTC(parts['year'], parts['month'] - 1, parts['day']);
+    return Array.from({ length: days }, (_, index) => {
+      const timestamp = todayUtc - (days - 1 - index) * 24 * 60 * 60 * 1000;
+      return new Date(timestamp).toISOString().slice(0, 10);
+    });
+  }
+
+  private mergeDaylightWithSolarFallback(
+    apiDaylight: SentekDaylightPoint[],
+    periodDates: string[]
+  ): SentekDaylightPoint[] {
+    const apiByDate = new Map(apiDaylight.map((item) => [item.fecha, item]));
+    const missingDates = periodDates.filter((date) => !apiByDate.has(date));
+    const fallbackByDate = new Map(this.buildSolarDaylight(missingDates).map((item) => [item.fecha, item]));
+    return periodDates
+      .map((date) => apiByDate.get(date) || fallbackByDate.get(date))
+      .filter((item): item is SentekDaylightPoint => !!item);
+  }
+
+  private buildSolarDaylight(dates: string[]): SentekDaylightPoint[] {
+    const coordinates = this.sentekCoordinates();
+    if (!coordinates) return [];
+
+    return dates.flatMap((date) => {
+      const times = SunCalc.getTimes(new Date(`${date}T12:00:00Z`), coordinates.lat, coordinates.lng);
+      const sunrise = times.sunrise?.getTime();
+      const sunset = times.sunset?.getTime();
+      if (!Number.isFinite(sunrise) || !Number.isFinite(sunset) || sunrise! >= sunset!) return [];
+      return [
+        {
+          amanecer: times.sunrise.toISOString(),
+          atardecer: times.sunset.toISOString(),
+          fecha: date,
+        },
+      ];
+    });
+  }
+
+  private sentekCoordinates(): ICoordenadas | undefined {
+    const candidates = [
+      this.lote?.ubicacion?.centro,
+      this.lote?.siembra?.coordenadas,
+      ...(this.lote?.establecimiento?.ubicacion || []).map((ubicacion) => ubicacion.centro),
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate?.lat !== 'number' || typeof candidate.lng !== 'number') continue;
+      const { lat, lng } = candidate;
+      if (Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return { lat, lng };
+      }
+    }
+    return undefined;
   }
 
   /**
