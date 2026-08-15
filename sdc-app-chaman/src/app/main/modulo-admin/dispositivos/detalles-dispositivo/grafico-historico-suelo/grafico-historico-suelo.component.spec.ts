@@ -644,8 +644,12 @@ describe('GraficoHistoricoSueloComponent', () => {
     ): any => {
       const series = renderedSeries(metric, depth);
       expect(series).withContext(`${metric} ${depth} cm existe`).toBeDefined();
+      expect(series.type).withContext(`${metric} ${depth} cm usa segmentos rectos`).toBe('line');
       expect(series.options.connectNulls).withContext(`${metric} ${depth} cm no une ausencias`).toBeFalse();
       expect(pathMoveCount(series)).withContext(`${metric} ${depth} cm subpaths SVG`).toBe(moves);
+      expect(series.graph?.element?.getAttribute('d') || '')
+        .withContext(`${metric} ${depth} cm no contiene curvas Bezier`)
+        .not.toMatch(/[CQ]/);
       expect(visibleMarkerCount(series)).withContext(`${metric} ${depth} cm markers reales`).toBe(markers);
       expect(series.points.filter((point: any) => point.isNull).every((point: any) => !point.graphic))
         .withContext(`${metric} ${depth} cm null sin marker`)
@@ -668,6 +672,133 @@ describe('GraficoHistoricoSueloComponent', () => {
     expect(observedSpan).toBeGreaterThanOrEqual(0.9);
     fixture.destroy();
   }));
+
+  [1440, 1280, 1024, 768, 390].forEach((width) => {
+    it(`mantiene toolbar y grafico dentro del host a ${width}px`, fakeAsync(() => {
+      TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
+      const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+      const host = fixture.nativeElement as HTMLElement;
+      host.style.display = 'block';
+      host.style.maxWidth = 'none';
+      host.style.width = `${width}px`;
+      fixture.componentRef.setInput('fechaDesde', '2026-08-14T19:00:00.000Z');
+      fixture.componentRef.setInput('rawFrames', secuenciaArturoProductiva());
+      fixture.componentRef.setInput('lluvias', [{ fecha: '2026-08-14T21:20:00.000Z', milimetros: 7 }]);
+      fixture.componentRef.setInput('mostrarNapa', false);
+      fixture.componentRef.setInput('mostrarEntradaAnalogica', false);
+      fixture.detectChanges();
+      tick(120);
+
+      const card = host.querySelector<HTMLElement>('.soil-history-card')!;
+      const actions = host.querySelector<HTMLElement>('.soil-history-actions')!;
+      const select = host.querySelector<HTMLElement>('.soil-history-filter')!;
+      const exportButton = host.querySelector<HTMLElement>('.soil-history-export')!;
+      const chartHost = host.querySelector<HTMLElement>('app-chart')!;
+      const chartContainer = host.querySelector<HTMLElement>('.highcharts-container')!;
+      const chart = fixture.debugElement.query(By.directive(ChartComponent)).componentInstance.chart!;
+      chart.reflow();
+      tick(40);
+      const hostRect = host.getBoundingClientRect();
+      const withinHost = (element: HTMLElement): boolean => {
+        const rect = element.getBoundingClientRect();
+        return rect.left >= hostRect.left - 0.5 && rect.right <= hostRect.right + 0.5;
+      };
+      const measurements = {
+        actionsRight: Math.round(actions.getBoundingClientRect().right - hostRect.left),
+        buttonRight: Math.round(exportButton.getBoundingClientRect().right - hostRect.left),
+        cardWidth: Math.round(card.getBoundingClientRect().width),
+        chartRight: Math.round(chartContainer.getBoundingClientRect().right - hostRect.left),
+        clientWidth: host.clientWidth,
+        scrollWidth: host.scrollWidth,
+        selectRight: Math.round(select.getBoundingClientRect().right - hostRect.left),
+        width,
+      };
+
+      expect(host.scrollWidth)
+        .withContext(`overflow ${JSON.stringify(measurements)}`)
+        .toBeLessThanOrEqual(host.clientWidth);
+      expect(withinHost(actions))
+        .withContext(`acciones ${JSON.stringify(measurements)}`)
+        .toBeTrue();
+      expect(withinHost(select))
+        .withContext(`selector ${JSON.stringify(measurements)}`)
+        .toBeTrue();
+      expect(withinHost(exportButton))
+        .withContext(`exportar ${JSON.stringify(measurements)}`)
+        .toBeTrue();
+      expect(withinHost(chartHost))
+        .withContext(`chart host ${JSON.stringify(measurements)}`)
+        .toBeTrue();
+      expect(withinHost(chartContainer))
+        .withContext(`chart SVG ${JSON.stringify(measurements)}`)
+        .toBeTrue();
+      expect(select.offsetWidth).toBeGreaterThan(0);
+      expect(exportButton.offsetWidth).toBeGreaterThan(0);
+
+      if (width === 1440 || width === 390) {
+        const expectedHeight = width === 390 ? 560 : 758;
+        const minimumAxisHeight = width === 390 ? 27 : 40;
+        const depthAxes = chart.yAxis
+          .filter((axis: any) => String(axis.options.id || '').startsWith('sentek-humedad-depth-'))
+          .sort((left: any, right: any) => left.top - right.top);
+        const titleRects = depthAxes.map((axis: any) => axis.axisTitle.element.getBoundingClientRect());
+        const rainSeries = chart.series.find((series: any) => series.options.custom?.isRain);
+        const xLabelElements = [...host.querySelectorAll<SVGTextElement>('.highcharts-xaxis-labels text')].filter(
+          (label) => label.getBoundingClientRect().width > 0
+        );
+        const chartRect = chartContainer.getBoundingClientRect();
+
+        expect(chart.chartHeight).withContext(`altura ${width}px`).toBe(expectedHeight);
+        expect(depthAxes).withContext(`12 ejes ${width}px`).toHaveSize(12);
+        expect(Math.min(...depthAxes.map((axis: any) => axis.height)))
+          .withContext(`alto util por nivel ${width}px`)
+          .toBeGreaterThanOrEqual(minimumAxisHeight);
+        for (let index = 1; index < titleRects.length; index++) {
+          expect(titleRects[index - 1].bottom)
+            .withContext(`titulos ${index}/${index + 1} sin colision a ${width}px`)
+            .toBeLessThanOrEqual(titleRects[index].top + 0.5);
+        }
+        expect(rainSeries).withContext(`serie lluvia ${width}px`).toBeDefined();
+        expect(rainSeries!.points.some((point: any) => point.y > 0 && !!point.graphic))
+          .withContext(`barra lluvia visible ${width}px`)
+          .toBeTrue();
+        expect(xLabelElements.length).withContext(`etiquetas X ${width}px`).toBeGreaterThanOrEqual(2);
+        expect(
+          xLabelElements.every((label) => {
+            const rect = label.getBoundingClientRect();
+            return rect.left >= chartRect.left - 0.5 && rect.right <= chartRect.right + 0.5;
+          })
+        )
+          .withContext(`etiquetas X dentro del SVG ${width}px`)
+          .toBeTrue();
+
+        const observedSeries = chart.series.find(
+          (series: any) => !series.options.custom?.isRain && series.points.some((point: any) => !point.isNull)
+        )!;
+        const observedPoints = observedSeries.points.filter((point: any) => !point.isNull);
+        chart.tooltip.refresh(observedPoints[Math.floor(observedPoints.length / 2)]);
+        tick();
+        const tooltip = host.querySelector<SVGElement>('.highcharts-tooltip')!;
+        const tooltipRect = tooltip.getBoundingClientRect();
+        expect(tooltip.textContent?.trim().length || 0)
+          .withContext(`tooltip ${width}px`)
+          .toBeGreaterThan(0);
+        expect(tooltipRect.left)
+          .withContext(`tooltip izquierda ${width}px`)
+          .toBeGreaterThanOrEqual(chartRect.left - 0.5);
+        expect(tooltipRect.right)
+          .withContext(`tooltip derecha ${width}px`)
+          .toBeLessThanOrEqual(chartRect.right + 0.5);
+        expect(tooltipRect.top)
+          .withContext(`tooltip arriba ${width}px`)
+          .toBeGreaterThanOrEqual(chartRect.top - 0.5);
+        expect(tooltipRect.bottom)
+          .withContext(`tooltip abajo ${width}px`)
+          .toBeLessThanOrEqual(chartRect.bottom + 0.5);
+      }
+      fixture.destroy();
+    }));
+  });
 
   it('conserva los dieciseis ciclos completos Gil aunque reinicien canal dentro de seis minutos', () => {
     const start = new Date('2026-08-14T20:00:00.000Z').getTime();
@@ -746,6 +877,6 @@ describe('GraficoHistoricoSueloComponent', () => {
     ).toBeTrue();
     expect(component.chartOptions.chart.animation).toBeFalse();
     expect(component.chartOptions.plotOptions.series.animation).toBeFalse();
-    expect(component.chartOptions.plotOptions.spline.animation).toBeFalse();
+    expect(component.chartOptions.plotOptions.line.animation).toBeFalse();
   });
 });

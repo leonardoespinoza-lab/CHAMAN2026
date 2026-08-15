@@ -294,7 +294,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         lineWidth: 2,
         marker: { enabled: data.length <= 36, radius: 2 },
         name: `${depth} cm`,
-        type: 'spline',
+        type: 'line',
         turboThreshold: 0,
         custom: { decimals: definition.decimals, depthCm: depth, metric: definition.key, unit: definition.unit },
       }));
@@ -321,8 +321,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const visibleProfileStart = recentWindow?.visibleStart;
     const visibleProfileEnd = recentWindow?.visibleEnd;
     const depthCount = Math.max(series.length, 1);
-    const chartHeight = Math.min(900, Math.max(500, depthCount * 70 + 110));
-    const soilAvailable = 88;
+    const chartHeight = Math.min(760, Math.max(500, depthCount * 54 + 110));
+    const soilAvailable = 90;
     const soilGap = 1.1;
     const soilHeight = Math.max(5.5, (soilAvailable - soilGap * Math.max(depthCount - 1, 0)) / depthCount);
     const rainMax = Math.max(1, ...rainPoints.map((point) => point.y));
@@ -341,7 +341,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           align: 'middle',
           margin: 6,
           rotation: 0,
-          style: { color: item.color || definition.color, fontSize: '13px', fontWeight: '900' },
+          style: { color: item.color || definition.color, fontSize: '12px', fontWeight: '900' },
         },
         labels: { enabled: false },
         endOnTick: true,
@@ -413,7 +413,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         spacingLeft: 2,
         spacingRight: 20,
         spacingTop: 8,
-        type: 'spline',
+        type: 'line',
         zooming: { type: 'x' },
         style: {
           fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -489,7 +489,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           grouping: false,
           pointPadding: 0.04,
         },
-        spline: {
+        line: {
           animation: false,
           enableMouseTracking: true,
           lineWidth: 2.4,
