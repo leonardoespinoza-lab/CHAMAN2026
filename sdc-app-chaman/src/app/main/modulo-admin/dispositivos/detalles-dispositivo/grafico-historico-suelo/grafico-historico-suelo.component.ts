@@ -59,7 +59,7 @@ interface ProfileRecentWindow {
   allowedFrameKeys: Set<string>;
   dataEnd: number;
   dataStart: number;
-  gapTimestamps: number[];
+  gapTimestampsByIdentity: Map<string, number[]>;
   latestPoints: HistoricalPoint[];
   missingDepths: number[];
   visibleEnd: number;
@@ -296,7 +296,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         name: `${depth} cm`,
         type: 'spline',
         turboThreshold: 0,
-        custom: { decimals: definition.decimals, depthCm: depth, unit: definition.unit },
+        custom: { decimals: definition.decimals, depthCm: depth, metric: definition.key, unit: definition.unit },
       }));
   }
 
@@ -351,7 +351,6 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         top: `${top}%`,
         offset: 0,
       });
-
     });
 
     const rainAxis = hasRain
@@ -538,10 +537,10 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
    * Un barrido Sentek llega repartido en varias tramas. Cada grupo dura como
    * maximo la misma tolerancia del agregador; no se encadena por proximidad.
    * La unica vista parte del primer barrido fisico 36/36 (12 H + 12 S + 12 T)
-   * disponible desde fechaDesde. Solo grafica barridos completos posteriores;
-   * los grupos parciales se representan con un hueco explicito para que una
-   * linea nunca sugiera continuidad donde faltaron datos. Si todavia no existe
-   * un 36/36, conserva como evidencia el ultimo grupo real.
+   * disponible desde fechaDesde. Luego conserva cada lectura valida de los
+   * grupos posteriores y corta solamente la identidad metrica+profundidad que
+   * falto en un grupo; nunca descarta un grupo parcial completo. Si todavia no
+   * existe un 36/36, conserva como evidencia el ultimo grupo real.
    */
   private buildRecentProfileWindow(
     seriesByMetric: Map<SoilMetricKey, any[]>,
@@ -639,23 +638,26 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const completeGroups = relevantGroups.filter(isComplete);
     const latestProfileGroup = completeGroups[completeGroups.length - 1] || latestGroup;
     const allowedFrameKeys = new Set<string>();
-    const gapTimestamps: number[] = [];
+    const gapTimestampsByIdentity = new Map<string, number[]>();
+    const identities = this.definitions.flatMap((definition) =>
+      this.expectedSentekDepthsCm.map((depth) => `${definition.key}:${depth}`)
+    );
+    const addGap = (identity: string, timestamp: number): void => {
+      if (!gapTimestampsByIdentity.has(identity)) gapTimestampsByIdentity.set(identity, []);
+      gapTimestampsByIdentity.get(identity)!.push(timestamp);
+    };
     let previousGroup: (typeof groups)[number] | undefined;
 
     for (const group of relevantGroups) {
-      if (isComplete(group)) {
-        group.frameKeys.forEach((key) => allowedFrameKeys.add(key));
-        if (
-          previousGroup &&
-          isComplete(previousGroup) &&
-          group.start - previousGroup.start > this.sentekContinuousProfileGapMs
-        ) {
-          gapTimestamps.push(previousGroup.end + Math.floor((group.start - previousGroup.end) / 2));
-        }
-      } else if (hasCompleteProfile) {
-        gapTimestamps.push(group.start);
-      } else {
-        group.frameKeys.forEach((key) => allowedFrameKeys.add(key));
+      group.frameKeys.forEach((key) => allowedFrameKeys.add(key));
+      if (previousGroup && group.start - previousGroup.start > this.sentekContinuousProfileGapMs) {
+        const midpoint = previousGroup.end + Math.floor((group.start - previousGroup.end) / 2);
+        identities.forEach((identity) => addGap(identity, midpoint));
+      }
+      if (hasCompleteProfile && !isComplete(group)) {
+        identities
+          .filter((identity) => !group.latestByIdentity.has(identity))
+          .forEach((identity) => addGap(identity, group.start));
       }
       previousGroup = group;
     }
@@ -672,7 +674,12 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       allowedFrameKeys,
       dataEnd,
       dataStart,
-      gapTimestamps: [...new Set(gapTimestamps)].sort((a, b) => a - b),
+      gapTimestampsByIdentity: new Map(
+        [...gapTimestampsByIdentity.entries()].map(([identity, timestamps]) => [
+          identity,
+          [...new Set(timestamps)].sort((a, b) => a - b),
+        ])
+      ),
       latestPoints,
       missingDepths,
       visibleEnd: dataEnd + this.sentekChartLeadMs,
@@ -693,7 +700,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         );
       });
       const depth = item.custom?.depthCm;
-      const gaps: HistoricalPoint[] = recentWindow.gapTimestamps.map((x) => ({
+      const identity = `${item.custom?.metric}:${depth}`;
+      const gaps: HistoricalPoint[] = (recentWindow.gapTimestampsByIdentity.get(identity) || []).map((x) => ({
         x,
         y: null,
         depth,
