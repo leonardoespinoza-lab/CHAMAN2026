@@ -23,6 +23,7 @@ import {
 import { GraficoHistoricoAmbienteComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-ambiente/grafico-historico-ambiente.component';
 import {
   GraficoHistoricoSueloComponent,
+  SentekDaylightPoint,
   SentekRainfallPoint,
 } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-suelo/grafico-historico-suelo.component';
 import { GraficoHistoricoNapaComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-napa/grafico-historico-napa.component';
@@ -66,6 +67,7 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   public reportesHistoricos = new Map<string, IReporte[]>();
   public tramasCrudas = new Map<string, ILorawanRawFrame[]>();
   public lluviasHistoricas: SentekRainfallPoint[] = [];
+  public daylightHistorico: SentekDaylightPoint[] = [];
   public cargandoHistorico = new Set<string>();
   public erroresHistorico = new Set<string>();
   public diasHistorico = 30;
@@ -111,6 +113,12 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
 
   public historicoConError(dispositivo: IDispositivo): boolean {
     return this.erroresHistorico.has(this.getDeviceKey(dispositivo));
+  }
+
+  public get sentekTimeZone(): string {
+    return (
+      this.lote?.establecimiento?.estacionMeteorologica?.position?.timezoneCode || 'America/Argentina/Buenos_Aires'
+    );
   }
 
   public async cambiarPeriodo(dias: number): Promise<void> {
@@ -324,6 +332,7 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
     const idSiembra = this.lote?.idSiembra || this.lote?.siembra?._id;
     if (!idSiembra) {
       this.lluviasHistoricas = [];
+      this.daylightHistorico = [];
       return;
     }
 
@@ -345,10 +354,17 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
           fecha: dia.date,
           milimetros: Math.max(0, Number(dia.metrics.precipitationMm)),
         }));
+      this.daylightHistorico = (response.series || []).flatMap((dia) => {
+        const amanecer = String(dia.metrics?.sunrise || dia.weather?.sunrise || '').trim();
+        const atardecer = String(dia.metrics?.sunset || dia.weather?.sunset || '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dia.date || '')) || !amanecer || !atardecer) return [];
+        return [{ amanecer, atardecer, fecha: dia.date }];
+      });
     } catch (error) {
       if (version !== this.rainLoadVersion) return;
       console.warn('No se pudo cargar la lluvia historica para el perfil Sentek', error);
       this.lluviasHistoricas = [];
+      this.daylightHistorico = [];
     }
   }
 

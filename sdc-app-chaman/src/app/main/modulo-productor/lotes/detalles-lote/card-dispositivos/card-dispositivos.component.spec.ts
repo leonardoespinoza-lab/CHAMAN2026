@@ -6,6 +6,7 @@ import { ReporteService } from '../../../../../auxiliares/http/reporte.service';
 import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
+import { GraficoHistoricoSueloComponent } from '../../../../modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-suelo/grafico-historico-suelo.component';
 import { CardDispositivosComponent } from './card-dispositivos.component';
 
 describe('CardDispositivosComponent', () => {
@@ -86,9 +87,22 @@ describe('CardDispositivosComponent', () => {
   it('carga solo lluvia historica de la siembra para superponerla al perfil', async () => {
     const agrometeorologia = jasmine.createSpy().and.resolveTo({
       series: [
-        { date: '2026-08-12', isForecast: false, metrics: { precipitationMm: 14.6 } },
-        { date: '2026-08-13', isForecast: false, metrics: { precipitationMm: 0 } },
-        { date: '2026-08-15', isForecast: true, metrics: { precipitationMm: 22 } },
+        {
+          date: '2026-08-12',
+          isForecast: false,
+          metrics: { precipitationMm: 14.6, sunrise: '07:31', sunset: '18:28' },
+        },
+        {
+          date: '2026-08-13',
+          isForecast: false,
+          metrics: { precipitationMm: 0 },
+          weather: { sunrise: '07:30', sunset: '18:29' },
+        },
+        {
+          date: '2026-08-15',
+          isForecast: true,
+          metrics: { precipitationMm: 22, sunrise: '2026-08-15T10:28:00.000Z', sunset: '2026-08-15T21:30:00.000Z' },
+        },
       ],
     });
     const component = new CardDispositivosComponent({} as any, {} as any, {} as any, { agrometeorologia } as any);
@@ -101,6 +115,25 @@ describe('CardDispositivosComponent', () => {
       { fecha: '2026-08-12', milimetros: 14.6 },
       { fecha: '2026-08-13', milimetros: 0 },
     ]);
+    expect(component.daylightHistorico).toEqual([
+      { amanecer: '07:31', atardecer: '18:28', fecha: '2026-08-12' },
+      { amanecer: '07:30', atardecer: '18:29', fecha: '2026-08-13' },
+      {
+        amanecer: '2026-08-15T10:28:00.000Z',
+        atardecer: '2026-08-15T21:30:00.000Z',
+        fecha: '2026-08-15',
+      },
+    ]);
+  });
+
+  it('usa la zona horaria de la estacion del lote y conserva Buenos Aires como fallback', () => {
+    const component = new CardDispositivosComponent({} as any, {} as any, {} as any, {} as any);
+    expect(component.sentekTimeZone).toBe('America/Argentina/Buenos_Aires');
+
+    component.lote = {
+      establecimiento: { estacionMeteorologica: { position: { timezoneCode: 'America/Argentina/Cordoba' } } },
+    } as ILote;
+    expect(component.sentekTimeZone).toBe('America/Argentina/Cordoba');
   });
 
   it('mantiene card, periodo, toolbar Sentek y SVG dentro del viewport', fakeAsync(() => {
@@ -154,6 +187,7 @@ describe('CardDispositivosComponent', () => {
         })),
       },
     ]);
+    component.daylightHistorico = [{ amanecer: '07:30', atardecer: '18:30', fecha: '2026-08-14' }];
     fixture.detectChanges();
     tick(120);
 
@@ -176,6 +210,7 @@ describe('CardDispositivosComponent', () => {
         const soilHeader = root.querySelector<HTMLElement>('.soil-history-card > header')!;
         const soilActions = root.querySelector<HTMLElement>('.soil-history-actions')!;
         const select = root.querySelector<HTMLElement>('.soil-history-filter')!;
+        const depthSelector = root.querySelector<HTMLElement>('.soil-depth-selector')!;
         const exportButton = root.querySelector<HTMLElement>('.soil-history-export')!;
         const chartHost = root.querySelector<HTMLElement>('app-chart')!;
         const chartSvg = root.querySelector<SVGElement>('.highcharts-root')!;
@@ -215,6 +250,7 @@ describe('CardDispositivosComponent', () => {
           soilHeader,
           soilActions,
           select,
+          depthSelector,
           exportButton,
           chartHost,
           chartSvg,
@@ -237,6 +273,10 @@ describe('CardDispositivosComponent', () => {
             .flatMap((series: any) => series.points)
             .every((point: any) => point.plotX === undefined || (point.plotX >= 0 && point.plotX <= chart.plotWidth))
         ).toBeTrue();
+        const soilComponent = fixture.debugElement.query(By.directive(GraficoHistoricoSueloComponent))
+          .componentInstance as GraficoHistoricoSueloComponent;
+        expect(soilComponent.daylight).toEqual(component.daylightHistorico);
+        expect(soilComponent.timeZone).toBe('America/Argentina/Buenos_Aires');
         if (width <= 768) {
           expect(getComputedStyle(devicesHeader).display).toBe('grid');
           expect(devicesToolbar.getBoundingClientRect().top).toBeGreaterThanOrEqual(

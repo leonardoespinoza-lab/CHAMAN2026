@@ -55,6 +55,12 @@ export interface SentekRainfallPoint {
   milimetros: number;
 }
 
+export interface SentekDaylightPoint {
+  amanecer: string;
+  atardecer: string;
+  fecha: string;
+}
+
 interface ProfileRow {
   profundidad: number;
   formatted: string;
@@ -82,6 +88,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   @Input() reportes: IReporte[] = [];
   @Input() rawFrames: ILorawanRawFrame[] = [];
   @Input() lluvias: SentekRainfallPoint[] = [];
+  @Input() daylight: SentekDaylightPoint[] = [];
+  @Input() timeZone = 'America/Argentina/Buenos_Aires';
   @Input() titulo?: string;
   @Input() subtitulo?: string;
   @Input() fechaDesde?: string;
@@ -104,6 +112,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   public profileCoverageNotice = '';
   public profileFreshnessNotice = '';
   public rainfallAvailabilityNotice = '';
+  public hasDaylightBands = false;
+  public readonly depthOptionsCm = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+  public selectedDepthsCm = [...this.depthOptionsCm];
   public profileRecentMissingDepths: number[] = [];
   public controllerCoverageNotice = '';
   public controllerCoverageComplete = false;
@@ -120,7 +131,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     { key: 'temperatura', title: 'Temperatura', unit: 'C', color: '#e74c3c', decimals: 1 },
   ];
 
-  private readonly expectedSentekDepthsCm = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+  private readonly expectedSentekDepthsCm = this.depthOptionsCm;
+  private readonly fallbackTimeZone = 'America/Argentina/Buenos_Aires';
   private readonly sentekSweepToleranceMs = 6 * 60 * 1000;
   /**
    * Los barridos pueden llegar incompletos o con una cadencia irregular de
@@ -137,6 +149,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       changes['reportes'] ||
       changes['rawFrames'] ||
       changes['lluvias'] ||
+      changes['daylight'] ||
+      changes['timeZone'] ||
       changes['fechaDesde'] ||
       changes['mostrarNapa'] ||
       changes['mostrarEntradaAnalogica']
@@ -147,6 +161,32 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
   public onMetricChange(metric: SoilMetricKey): void {
     this.selectedMetric = metric;
+    this.prepareOptions();
+  }
+
+  public get depthSelectionLabel(): string {
+    if (this.selectedDepthsCm.length === this.depthOptionsCm.length) return 'Todos los niveles';
+    if (this.selectedDepthsCm.length === 1) return `${this.selectedDepthsCm[0]} cm`;
+    return `${this.selectedDepthsCm.length} niveles`;
+  }
+
+  public isDepthVisible(depth: number): boolean {
+    return this.selectedDepthsCm.includes(depth);
+  }
+
+  public onDepthVisibilityChange(depth: number, visible: boolean): void {
+    if (!this.depthOptionsCm.includes(depth)) return;
+    const next = visible
+      ? [...new Set([...this.selectedDepthsCm, depth])]
+      : this.selectedDepthsCm.filter((candidate) => candidate !== depth);
+    if (!next.length) return;
+    this.selectedDepthsCm = next.sort((left, right) => left - right);
+    this.prepareOptions();
+  }
+
+  public showAllDepths(): void {
+    if (this.selectedDepthsCm.length === this.depthOptionsCm.length) return;
+    this.selectedDepthsCm = [...this.depthOptionsCm];
     this.prepareOptions();
   }
 
@@ -205,6 +245,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
     if (!available.length) {
       this.chartOptions = undefined;
+      this.hasDaylightBands = false;
       this.profileRows = [];
       this.resumen = '';
       this.profileCoverageNotice = '';
@@ -221,12 +262,13 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     );
     const historicalSeries = historicalSeriesByMetric.get(definition.key) || [];
     const recentWindow = this.buildRecentProfileWindow(historicalSeriesByMetric, definition.key);
-    const series = this.cropSeriesToProfileWindow(historicalSeries, recentWindow);
+    const allSeries = this.cropSeriesToProfileWindow(historicalSeries, recentWindow);
+    const series = allSeries.filter((item) => this.isDepthVisible(Number(item.custom?.depthCm)));
     const latestPoints = recentWindow?.latestPoints || [];
     this.profileRows = this.buildProfileRows(definition, latestPoints);
-    this.resumen = this.buildResumen(definition, series, latestPoints);
+    this.resumen = this.buildResumen(definition, allSeries, latestPoints);
     this.profileCoverageNotice = this.buildProfileCoverageNotice(latestPoints);
-    this.chartOptions = this.buildStackedTimeSeriesChartOptions(definition, series, recentWindow);
+    this.chartOptions = this.buildStackedTimeSeriesChartOptions(definition, series, recentWindow, allSeries);
     this.napaChartOptions = this.mostrarNapa ? this.buildNapaChartOptions() : undefined;
     this.analogChartOptions = this.mostrarEntradaAnalogica ? this.buildAnalogChartOptions() : undefined;
   }
@@ -302,7 +344,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   private buildStackedTimeSeriesChartOptions(
     definition: SoilMetricDefinition,
     series: any[],
-    recentWindow?: ProfileRecentWindow
+    recentWindow?: ProfileRecentWindow,
+    domainSeries: any[] = series
   ): any {
     const rainHalfDayMs = 12 * 60 * 60 * 1000;
     const rainPoints =
@@ -338,12 +381,12 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const visibleProfileStart = recentWindow?.visibleStart;
     const visibleProfileEnd = recentWindow?.visibleEnd;
     const depthCount = Math.max(series.length, 1);
-    const chartHeight = 540;
+    const chartHeight = Math.max(300, Math.min(540, 156 + depthCount * 32));
     const soilAvailable = 88;
     const soilGap = 0.8;
     const soilHeight = Math.max(5.5, (soilAvailable - soilGap * Math.max(depthCount - 1, 0)) / depthCount);
     const rainMax = Math.max(1, ...rainPoints.map((point) => point.y));
-    const metricDomain = this.buildMetricDomain(definition, series);
+    const metricDomain = this.buildMetricDomain(definition, domainSeries);
     const soilAxes: any[] = [];
     const soilAxisIds = series.map((item, index) => `sentek-${definition.key}-depth-${item.custom?.depthCm ?? index}`);
     const rainAxisId = 'sentek-rain-shared';
@@ -357,7 +400,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         title: {
           text: item.name,
           align: 'middle',
-          margin: 6,
+          margin: 32,
           rotation: 0,
           style: {
             color: definition.color,
@@ -419,7 +462,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
             showInLegend: true,
             type: 'column',
             yAxis: rainAxisId,
-            zIndex: 0,
+            zIndex: 1,
           },
         ]
       : [];
@@ -428,9 +471,12 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       id: `sentek-${definition.key}-${item.custom?.depthCm ?? index}`,
       showInLegend: false,
       yAxis: soilAxisIds[index],
-      zIndex: 2,
+      zIndex: 3,
     }));
     const plottedSeries = [...rainSeries, ...soilSeries];
+    const daylightPlotBands = this.buildDaylightPlotBands(visibleProfileStart, visibleProfileEnd);
+    this.hasDaylightBands = daylightPlotBands.length > 0;
+    const chartTimeZone = this.resolvedTimeZone;
 
     const formatTooltipDateTime = (timestamp: number): string =>
       new Date(timestamp).toLocaleString('es-AR', {
@@ -439,6 +485,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         hour12: false,
         minute: '2-digit',
         month: '2-digit',
+        timeZone: chartTimeZone,
         year: 'numeric',
       });
 
@@ -447,6 +494,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         animation: false,
         backgroundColor: 'transparent',
         height: chartHeight,
+        marginLeft: 88,
         spacingBottom: 22,
         spacingLeft: 2,
         spacingRight: 20,
@@ -462,6 +510,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         type: 'datetime',
         min: visibleProfileStart ?? null,
         max: visibleProfileEnd ?? null,
+        plotBands: daylightPlotBands,
         endOnTick: false,
         startOnTick: false,
         crosshair: {
@@ -561,7 +610,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       accessibility: { enabled: false },
       lang: { noData: 'Sin lecturas historicas para esta variable.' },
       noData: { style: { color: '#60708a', fontWeight: '700' } },
-      time: { useUTC: false },
+      time: { timezone: chartTimeZone },
       responsive: {
         rules: [
           {
@@ -1113,6 +1162,113 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     return points.sort((a, b) => a.x - b.x);
   }
 
+  /**
+   * Las horas solares ya vienen calculadas por agrometeorologia para el lote.
+   * No se infieren horarios: un dia sin amanecer/atardecer valido queda con el
+   * fondo neutro. Los rangos se convierten expresamente a Buenos Aires y se
+   * recortan al dominio real de las lecturas Sentek.
+   */
+  private buildDaylightPlotBands(visibleStart?: number, visibleEnd?: number): any[] {
+    if (!Number.isFinite(visibleStart) || !Number.isFinite(visibleEnd) || visibleStart! >= visibleEnd!) return [];
+
+    const byDate = new Map<string, SentekDaylightPoint>();
+    this.daylight.forEach((item) => {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(item.fecha)) byDate.set(item.fecha, item);
+    });
+
+    const bands: any[] = [];
+    for (const [date, item] of [...byDate.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+      const sunrise = this.solarTimestamp(date, item.amanecer);
+      const sunset = this.solarTimestamp(date, item.atardecer);
+      if (sunrise === undefined || sunset === undefined || sunset <= sunrise) continue;
+
+      const from = Math.max(sunrise, visibleStart!);
+      const to = Math.min(sunset, visibleEnd!);
+      if (to <= from) continue;
+      bands.push({
+        className: 'sentek-day-band',
+        color: 'rgba(250, 204, 21, 0.09)',
+        from,
+        id: `sentek-day-${date}`,
+        to,
+        zIndex: 0,
+      });
+    }
+    return bands;
+  }
+
+  private shiftDateKey(date: string, days: number): string {
+    const [year, month, day] = date.split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+  }
+
+  private get resolvedTimeZone(): string {
+    const candidate = String(this.timeZone || '').trim() || this.fallbackTimeZone;
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: candidate }).format(0);
+      return candidate;
+    } catch {
+      return this.fallbackTimeZone;
+    }
+  }
+
+  private solarTimestamp(date: string, value: string): number | undefined {
+    const normalized = String(value || '').trim();
+    if (/^\d{1,2}:\d{2}$/.test(normalized)) return this.zonedDateTimeTimestamp(date, normalized);
+
+    const localDateTime = /^(\d{4}-\d{2}-\d{2})[T ](\d{1,2}:\d{2})(?::\d{2}(?:\.\d+)?)?$/.exec(normalized);
+    if (localDateTime) return this.zonedDateTimeTimestamp(localDateTime[1], localDateTime[2]);
+
+    const timestamp = new Date(normalized).getTime();
+    return Number.isFinite(timestamp) ? timestamp : undefined;
+  }
+
+  private zonedDateTimeTimestamp(date: string, time: string): number | undefined {
+    const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date || '').trim());
+    const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(String(time || '').trim());
+    if (!dateMatch || !timeMatch) return undefined;
+    const [, yearText, monthText, dayText] = dateMatch;
+    const [, hourText, minuteText] = timeMatch;
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const day = Number(dayText);
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+    if (hour > 23 || minute > 59) return undefined;
+
+    const expectedWallClock = Date.UTC(year, month - 1, day, hour, minute);
+    let timestamp = expectedWallClock;
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+      minute: '2-digit',
+      month: '2-digit',
+      timeZone: this.resolvedTimeZone,
+      year: 'numeric',
+    });
+
+    for (let iteration = 0; iteration < 3; iteration++) {
+      const parts = Object.fromEntries(
+        formatter
+          .formatToParts(new Date(timestamp))
+          .filter((part) => part.type !== 'literal')
+          .map((part) => [part.type, Number(part.value)])
+      ) as Record<string, number>;
+      const renderedWallClock = Date.UTC(
+        parts['year'],
+        parts['month'] - 1,
+        parts['day'],
+        parts['hour'],
+        parts['minute']
+      );
+      const correction = expectedWallClock - renderedWallClock;
+      timestamp += correction;
+      if (correction === 0) break;
+    }
+    return Number.isFinite(timestamp) ? timestamp : undefined;
+  }
+
   private buildRainPoints(): RainPoint[] {
     const desde = this.getFechaDesdeMs();
     const lluviaExterna = this.lluvias
@@ -1158,9 +1314,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const fecha = String(item.fecha || '').trim();
     const y = Math.max(0, Number(item.milimetros));
     if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-      const [year, month, day] = fecha.split('-').map(Number);
-      const dayStart = new Date(year, month - 1, day).getTime();
-      const dayEnd = new Date(year, month - 1, day + 1).getTime();
+      const dayStart = this.zonedDateTimeTimestamp(fecha, '00:00')!;
+      const dayEnd = this.zonedDateTimeTimestamp(this.shiftDateKey(fecha, 1), '00:00')!;
       return {
         custom: {
           originalDate: fecha,

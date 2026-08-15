@@ -20,6 +20,34 @@
             <option [ngValue]="option.value">{{ option.label }}</option>
           }
         </select>
+        <details class="soil-depth-selector">
+          <summary aria-label="Seleccionar profundidades visibles">
+            <i class="pi pi-sliders-h" aria-hidden="true"></i>
+            <span>{{ depthSelectionLabel }}</span>
+          </summary>
+          <fieldset class="soil-depth-menu">
+            <legend>Profundidades visibles</legend>
+            <div class="soil-depth-menu-heading">
+              <span>Niveles</span>
+              <button type="button" (click)="showAllDepths()" [disabled]="selectedDepthsCm.length === 12">
+                Mostrar todos
+              </button>
+            </div>
+            <div class="soil-depth-options">
+              @for (depth of depthOptionsCm; track depth) {
+                <label>
+                  <input
+                    type="checkbox"
+                    [checked]="isDepthVisible(depth)"
+                    [disabled]="selectedDepthsCm.length === 1 && isDepthVisible(depth)"
+                    (change)="onDepthVisibilityChange(depth, $any($event.target).checked)"
+                  />
+                  <span>{{ depth }} cm</span>
+                </label>
+              }
+            </div>
+          </fieldset>
+        </details>
         <button class="soil-history-export" data-chaman-action="secondary" type="button" (click)="exportarCsv()">
           Exportar CSV
         </button>
@@ -37,6 +65,13 @@
       <div class="rainfall-availability-note" role="status">
         <i class="pi pi-info-circle"></i>
         <span>{{ rainfallAvailabilityNotice }}</span>
+      </div>
+    }
+
+    @if (hasDaylightBands) {
+      <div class="soil-daylight-key" aria-label="Fondo temporal: amarillo para el día y neutro para la noche">
+        <span><i class="day" aria-hidden="true"></i>Día</span>
+        <span><i class="night" aria-hidden="true"></i>Noche</span>
       </div>
     }
 
