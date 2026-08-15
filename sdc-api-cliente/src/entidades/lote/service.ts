@@ -401,6 +401,7 @@ export class LotesService {
       'idSondaSuelo',
       'idsDispositivo',
       'capacidadDeRiego',
+      'eficienciaRiego',
     ];
     return keys.filter((key) =>
       Object.prototype.hasOwnProperty.call(data, key),

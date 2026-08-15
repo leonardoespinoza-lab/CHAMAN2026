@@ -64,4 +64,35 @@ describe('LotesService - decision pipeline', () => {
       expect.objectContaining({ sincronizarClima: true }),
     );
   });
+
+  it('recalcula decisiones cuando cambia la eficiencia de riego', async () => {
+    const repository = {
+      update: jest.fn().mockResolvedValue({ _id: 'lote-1' }),
+      reprocesarAgrometeorologia: jest.fn().mockResolvedValue(undefined),
+    };
+    const queue = {
+      enqueueForLot: jest.fn().mockResolvedValue({ id: 'job-riego' }),
+    };
+    const service = new LotesService(
+      repository as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      queue as any,
+    );
+    jest.spyOn(service, 'getById').mockResolvedValue({ _id: 'lote-1' } as any);
+
+    await service.update('lote-1', { eficienciaRiego: 85 } as any, {
+      nivel: 'Admin',
+      rol: 'Admin',
+    });
+
+    expect(queue.enqueueForLot).toHaveBeenCalledWith('lote-1', {
+      trigger: 'lote.science-updated',
+      changedFields: ['eficienciaRiego'],
+      sincronizarClima: false,
+    });
+  });
 });

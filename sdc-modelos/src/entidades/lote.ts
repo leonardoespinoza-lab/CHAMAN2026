@@ -109,6 +109,8 @@ export interface ILote extends IArchivado {
   sueloFechaConfirmacion?: string;
   suelos?: ISuelo[];
   capacidadDeRiego?: number;
+  /** Eficiencia de aplicacion configurada, expresada como porcentaje 10..100. */
+  eficienciaRiego?: number;
   puntoMarchitez?: number;
   anchoDeBulbo?: number;
   metrosLinealesHas?: number;

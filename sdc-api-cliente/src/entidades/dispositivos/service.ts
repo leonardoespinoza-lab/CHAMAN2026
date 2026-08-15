@@ -85,17 +85,34 @@ export class DispositivosService {
     user: IUsuario,
     modulo?: ModuloPermiso,
   ): Promise<IDispositivo> {
-    const dispositivo = await this.getByIdentificador(
+    const contexto = await this.contextoAutorizadoPorIdentificador(
       identificador,
       user,
       modulo,
     );
-    if (!dispositivo) {
+    return contexto.visible;
+  }
+
+  /**
+   * Contexto interno para proyectar evidencia historica de un controlador
+   * multi-servicio. `fisico` nunca debe serializarse al usuario: conserva el
+   * inventario completo solo para detectar servicios ocultos o ambiguos.
+   */
+  async contextoAutorizadoPorIdentificador(
+    identificador: string,
+    user: IUsuario,
+    modulo?: ModuloPermiso,
+  ): Promise<{ fisico: IDispositivo; visible: IDispositivo }> {
+    const fisico = await this.resolverDispositivo(identificador);
+    if (!fisico || !this.puedeVer(fisico, user, modulo)) {
       throw new ForbiddenException(
         'No tiene permiso para ver este dispositivo',
       );
     }
-    return dispositivo;
+    return {
+      fisico,
+      visible: this.filtrarParaUsuario(fisico, user, modulo),
+    };
   }
 
   async get(

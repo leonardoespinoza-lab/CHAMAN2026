@@ -1,7 +1,7 @@
 import { resolverEstadoRecomendacionRiego } from './riego-recommendation-status';
 
 describe('resolverEstadoRecomendacionRiego', () => {
-  it('separa una recomendacion climatica estimada del agua util no disponible', () => {
+  it('no publica una serie climatica si el agua util no esta disponible', () => {
     expect(
       resolverEstadoRecomendacionRiego({
         pronosticosRiego: [{ fecha: '2026-07-14', regar: true }] as any,
@@ -16,8 +16,7 @@ describe('resolverEstadoRecomendacionRiego', () => {
         },
       }),
     ).toEqual({
-      estado: 'estimada',
-      fuente: 'balance_climatico',
+      estado: 'no_disponible',
       motivo: 'Balance climatico sin sensor.',
     });
   });
@@ -49,5 +48,22 @@ describe('resolverEstadoRecomendacionRiego', () => {
         estadoCalculoAguaUtil: 'fallida',
       }).estado,
     ).toBe('fallida');
+  });
+
+  it('bloquea una serie con sensor si la cobertura no es completa', () => {
+    expect(
+      resolverEstadoRecomendacionRiego({
+        pronosticosRiego: [{ fecha: '2026-07-14', regar: false }] as any,
+        estadoCalculoAguaUtil: 'calculado',
+        calidadDatos: {
+          nivel: 'alta',
+          fuente: 'sensor_campo',
+          cobertura: 0.92,
+          fallback: false,
+          resumen: 'Perfil parcial.',
+          limitaciones: ['Falta una profundidad.'],
+        },
+      }).estado,
+    ).toBe('no_disponible');
   });
 });

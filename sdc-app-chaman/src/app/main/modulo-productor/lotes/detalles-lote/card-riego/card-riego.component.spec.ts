@@ -60,6 +60,64 @@ describe('CardRiegoComponent', () => {
     expect(component.resumen).toContain('fallo');
   });
 
+  it('no expone el drawer legacy que promedia curvas y profundidades', () => {
+    configure(true, 'calculado', 20, [3, 0]);
+
+    expect(component.puedeAbrirCurvasLegacy).toBeFalse();
+    expect((component as any).abrirDrawerRiego).toBeUndefined();
+  });
+
+  it('Arturo con sonda y sin siembra pide crear campania, sin publicar 0 mm', () => {
+    component.lote = {
+      dispositivos: [
+        {
+          tipo: 'Otro',
+          servicios: [
+            {
+              id: 'perfil-arturo',
+              tipo: 'perfil_suelo',
+              nombre: 'Sentek Arturo',
+              sensores: ['Humedad Suelo Profundidad'],
+            },
+          ],
+        },
+      ],
+    } as any;
+    component.siembra = undefined;
+
+    expect(component.tieneLanzaHumedad).toBeTrue();
+    expect(component.cantidadRecomendacionHoy).toBeNull();
+    expect(component.resumen).toBe(
+      'Sonda activa · falta crear/activar campaña y configurar cultivo.',
+    );
+  });
+
+  it('oculta una serie accionable vieja cuando la campania de la sonda ya no esta vigente', () => {
+    component.lote = {
+      dispositivos: [{ tipo: 'Sensor de Humedad de Suelo' }],
+    } as any;
+    component.siembra = {
+      fechaSiembra: '2024-05-07',
+      fechaCosecha: null,
+      activa: true,
+      semilla: { cultivo: 'Pecan' },
+      estadoCalculoAguaUtil: 'estimado',
+      estadoRecomendacionRiego: 'estimada',
+      fuenteRecomendacionRiego: 'balance_climatico',
+      aguaUtilReal: 55,
+      ultimaPrediccionRiego: [{ fecha: '2024-05-08', cantidad: 7 }],
+    } as any;
+
+    expect(component.campaniaRiegoVigente).toBeFalse();
+    expect(component.resumen).toContain('campaña desactualizada');
+    expect(component.cantidadRecomendacionHoy).toBeNull();
+    expect(component.recomendacionHoy).toBeUndefined();
+    expect(component.recomendaciones).toEqual([]);
+    expect(component.puedeMostrarSerieRiego).toBeFalse();
+    expect(component.esCalculoEstimado).toBeFalse();
+    expect(component.etiquetaMotorRiego).toBe('Recomendación no disponible');
+  });
+
   it('informa estimacion pendiente cuando la serie esta vacia', () => {
     configure(false, 'estimado', 20, []);
 
@@ -83,6 +141,10 @@ describe('CardRiegoComponent', () => {
   it('descarta cantidades ausentes, negativas o no finitas', () => {
     component.lote = { dispositivos: [{ tipo: 'Sensor de Humedad de Suelo' }] } as any;
     component.siembra = {
+      fechaSiembra: new Date().toISOString(),
+      fechaCosecha: null,
+      activa: true,
+      semilla: { cultivo: 'Trigo' },
       estadoCalculoAguaUtil: 'calculado',
       estadoRecomendacionRiego: 'calculada',
       fuenteRecomendacionRiego: 'sensor_suelo',
@@ -109,6 +171,10 @@ describe('CardRiegoComponent', () => {
       dispositivos: sensor ? [{ tipo: 'Sensor de Humedad de Suelo' }] : [],
     } as any;
     component.siembra = {
+      fechaSiembra: new Date().toISOString(),
+      fechaCosecha: null,
+      activa: true,
+      semilla: { cultivo: 'Trigo' },
       estadoCalculoAguaUtil: estado,
       estadoRecomendacionRiego: estado === 'calculado' ? 'calculada' : estado === 'estimado' ? 'estimada' : estado,
       fuenteRecomendacionRiego:

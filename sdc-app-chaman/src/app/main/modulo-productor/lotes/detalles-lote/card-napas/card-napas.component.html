@@ -1,174 +1,83 @@
-<div
-  class="custom-card chaman-surface chaman-interactive-surface napas-card"
-  role="button"
-  tabindex="0"
-  aria-label="Abrir seguimiento de napas"
-  aria-haspopup="dialog"
-  [attr.aria-expanded]="verDetalle"
-  (click)="abrirDetalle()"
-  (keydown)="activarTarjeta($event)"
->
-  <div class="napas-header">
-    <i class="pi pi-database"></i>
+<section class="custom-card chaman-surface napas-card" aria-labelledby="napas-title">
+  <header class="napas-header">
+    <i class="pi pi-chart-line" aria-hidden="true"></i>
     <div>
-      <p class="titulo-card">{{ 'Seguimiento de napas' | uppercase }}</p>
+      <p id="napas-title" class="titulo-card">{{ 'Seguimiento de napas' | uppercase }}</p>
       <span>{{ subtitulo }}</span>
     </div>
     <p-button
       icon="pi pi-refresh"
+      ariaLabel="Actualizar seguimiento de napas"
       severity="secondary"
       [outlined]="true"
       [rounded]="true"
       [loading]="cargando"
       (click)="refrescar($event)"
     />
-  </div>
+  </header>
 
   @if (cargando) {
-    <p-message severity="info" text="Consultando red nacional de aguas subterraneas..."></p-message>
+    <div class="napas-state" aria-live="polite">
+      <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+      <span>Buscando la mejor fuente disponible...</span>
+    </div>
   } @else if (error) {
     <p-message severity="warn" [text]="error"></p-message>
-  } @else if (referencia) {
-    <div class="napas-main">
+  } @else if (seguimiento) {
+    <div
+      class="napas-hero"
+      [class.sensor-directo]="seguimiento.tipo === 'sensor_lote'"
+      [class.referencia]="seguimiento.tipo !== 'sensor_lote'"
+    >
       <div>
-        <span>{{ calidadLabel }}</span>
+        <span class="source-label">{{ fuenteLabel }}</span>
         <strong>{{ nivelResumen }}</strong>
-        <small>Profundidad al agua desde la superficie del terreno</small>
+        <small>bajo el nivel del terreno</small>
       </div>
-      <div class="napas-meter" [style.--fill]="coberturaPct + '%'"><span></span></div>
+      <span
+        class="freshness-pill"
+        [class.territorial]="seguimiento.tipo === 'sias'"
+        [class.delayed]="seguimiento.tipo !== 'sias' && seguimiento.frescura === 'demorada'"
+      >
+        <i class="pi" [ngClass]="esSensor ? 'pi-wifi' : 'pi-map'" aria-hidden="true"></i>
+        {{ calidadLabel }}
+      </span>
     </div>
 
     <div class="napas-kpis">
       <article>
-        <span>Pozo con nivel</span>
-        <strong>{{ distanciaResumen }}</strong>
+        <span>Fecha</span>
+        <strong>{{ fechaLabel }}</strong>
       </article>
       <article>
-        <span>Datos utiles</span>
-        <strong>{{ referencia.cobertura.pozosConNivel }}/{{ referencia.cobertura.totalPozos }}</strong>
+        <span>Vigencia</span>
+        <strong>{{ frescuraLabel }}</strong>
       </article>
       <article>
-        <span>Fuente</span>
-        <strong>SIAS</strong>
+        <span>{{ esSensor ? 'Columna de agua' : 'Pozos con nivel' }}</span>
+        <strong>
+          @if (seguimiento.tipo === 'sias') {
+            {{ seguimiento.cobertura.pozosConNivel }}
+          } @else {
+            {{ columnaLabel }}
+          }
+        </strong>
+      </article>
+      <article>
+        <span>Origen</span>
+        <strong>{{ origenLabel }}</strong>
       </article>
     </div>
 
-    <p class="napas-reading">{{ nivelDetalle }} {{ referencia.cobertura.lectura }}</p>
+    <p class="napas-reading" [class.reference-warning]="seguimiento.tipo !== 'sensor_lote'">
+      <i
+        class="pi"
+        [ngClass]="seguimiento.tipo === 'sensor_lote' ? 'pi-check-circle' : 'pi-info-circle'"
+        aria-hidden="true"
+      ></i>
+      <span>{{ seguimiento.mensaje }}</span>
+    </p>
   } @else {
     <p-message severity="info" text="Referencia de napas pendiente de consulta."></p-message>
   }
-</div>
-
-<p-dialog
-  [(visible)]="verDetalle"
-  [modal]="true"
-  [dismissableMask]="true"
-  [draggable]="false"
-  [resizable]="false"
-  [style]="{ width: 'min(920px, 94vw)' }"
-  [breakpoints]="{ '720px': '96vw' }"
-  header="Analisis territorial de napas"
-  styleClass="chaman-detail-dialog napas-detail-dialog"
->
-  @if (referencia) {
-    <section class="napas-detail">
-      <div class="detail-hero" [ngClass]="referencia.cobertura.calidad">
-        <div>
-          <span>{{ calidadLabel }}</span>
-          <strong>{{ nivelResumen }}</strong>
-          <small>{{ nivelDetalle }} {{ referencia.cobertura.lectura }}</small>
-        </div>
-        <em>{{ referencia.cobertura.radioKm }} km</em>
-      </div>
-
-      <section class="map-panel">
-        <div class="map-panel-heading">
-          <div>
-            <span>Ubicacion geografica</span>
-            <strong>{{ mapaResumen }}</strong>
-          </div>
-          <small>La posicion es relativa al lote; no reemplaza un mapa catastral.</small>
-        </div>
-        <div class="napas-reference-map">
-          <span class="map-axis north">N</span>
-          <span class="map-axis west">O</span>
-          <span class="map-axis east">E</span>
-          @for (punto of puntosMapa; track punto.id) {
-            <span
-              class="map-point"
-              [class.lote]="punto.isLote"
-              [class.with-level]="punto.tieneNivel"
-              [style.left.%]="punto.left"
-              [style.top.%]="punto.top"
-              [title]="punto.tooltip"
-            >
-              @if (punto.isLote) {
-                L
-              }
-            </span>
-          }
-        </div>
-        <div class="map-legend">
-          <span><i class="lote-dot"></i>Lote</span>
-          <span><i class="well-dot"></i>Pozo con nivel</span>
-          <span><i class="empty-dot"></i>Pozo sin nivel</span>
-        </div>
-      </section>
-
-      <div class="detail-grid">
-        <article>
-          <span>Pozos cercanos</span>
-          <strong>{{ referencia.cobertura.totalPozos }}</strong>
-        </article>
-        <article>
-          <span>Con nivel estatico</span>
-          <strong>{{ referencia.cobertura.pozosConNivel }}</strong>
-        </article>
-        <article>
-          <span>Fecha mas reciente</span>
-          <strong>{{ referencia.estadisticas?.fechaMasReciente || 'Sin fecha' }}</strong>
-        </article>
-        <article>
-          <span>Rango observado</span>
-          <strong>
-            @if (referencia.estadisticas?.nivelEstaticoMinM !== undefined) {
-              {{ referencia.estadisticas?.nivelEstaticoMinM | number: '1.0-1' }} -
-              {{ referencia.estadisticas?.nivelEstaticoMaxM | number: '1.0-1' }} m
-            } @else {
-              Sin nivel
-            }
-          </strong>
-        </article>
-      </div>
-
-      <div class="well-chart">
-        @for (pozo of pozosPrincipales; track pozo.id + pozo.distanciaKm) {
-          <article>
-            <div>
-              <strong>{{ pozo.departamento || pozo.nombre || 'Pozo SIAS' }}</strong>
-              <small>
-                {{ pozo.provincia || 'Argentina' }} - {{ pozo.distanciaKm | number: '1.0-1' }} km -
-                {{ pozo.fuente || 'Fuente publica' }}
-              </small>
-              <small>{{ pozo.lat | number: '1.4-4' }}, {{ pozo.lng | number: '1.4-4' }}</small>
-            </div>
-            <span>
-              @if (pozo.nivelEstaticoM !== undefined) {
-                {{ pozo.nivelEstaticoM | number: '1.0-1' }} m b.s.
-              } @else {
-                ND
-              }
-            </span>
-            <div class="well-bar"><i [style.width.%]="nivelBar(pozo)"></i></div>
-          </article>
-        }
-      </div>
-
-      <div class="trace-panel">
-        @for (traza of referencia.trazas; track traza) {
-          <small>{{ traza }}</small>
-        }
-      </div>
-    </section>
-  }
-</p-dialog>
+</section>

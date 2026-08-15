@@ -14,9 +14,12 @@ import {
   ISuelo,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
+import {
+  normalizarHumedadSueloPct,
+  resolverEficienciaRiego,
+} from './riego-safety';
 
-const SENTEK_RAW_HUMIDITY_MAX = 3;
-const SENTEK_SCALED_HUMIDITY_MAX = 300;
+export { normalizarHumedadSueloPct } from './riego-safety';
 
 type EstadoCalculo = 'calculado' | 'estimado' | 'no_disponible' | 'fallida';
 type FuenteCapacidadCampo = 'auto' | 'manual' | 'textura';
@@ -42,6 +45,7 @@ interface VentanaDiaNoche {
 interface NivelDiagnostico {
   nivel: number;
   profundidad?: number;
+  espesorCm?: number;
   humedadActual?: number;
   capacidadCampo?: number;
   puntoMarchitez?: number;
@@ -91,10 +95,36 @@ export function calcularRiegoV12(params: {
   pronostico7Dias: IPronosticoEstacionMeteorologica[];
 }): ResultadoRiegoV12 {
   const trazas: string[] = [];
+  const capacidadDeRiego = Number(params.lote.capacidadDeRiego);
+  const eficienciaRiego = resolverEficienciaRiego(params.lote);
+  const anchoBulbo = Number(params.lote.anchoDeBulbo);
+  const metrosLinealesHa = Number(params.lote.metrosLinealesHas);
+  const factorAreaMojada = (anchoBulbo * metrosLinealesHa) / 10000;
+  if (!Number.isFinite(capacidadDeRiego) || capacidadDeRiego <= 0) {
+    return resultadoFallido('Falta la capacidad real del sistema de riego.');
+  }
+  if (eficienciaRiego == null) {
+    return resultadoFallido('Falta la eficiencia de aplicacion del riego.');
+  }
+  if (
+    !Number.isFinite(anchoBulbo) ||
+    anchoBulbo <= 0 ||
+    !Number.isFinite(metrosLinealesHa) ||
+    metrosLinealesHa <= 0 ||
+    !Number.isFinite(factorAreaMojada) ||
+    factorAreaMojada <= 0 ||
+    factorAreaMojada > 1
+  ) {
+    return resultadoFallido('Falta una configuracion valida del area mojada.');
+  }
   const humedadSuelo = ordenarPorFecha(params.humedadSuelo || []);
   const lluviaHistorica = ordenarPorFecha(params.lluviaHistorica || []);
   const pronostico7Dias = (params.pronostico7Dias || []).slice(0, 7);
-  const sueloBase = normalizarSuelos(params.suelo, humedadSuelo);
+  const sueloBase = normalizarSuelos(params.suelo, humedadSuelo).sort(
+    (a, b) =>
+      (a.profundidad || inferirProfundidadCm(a.numeroDeSensor || 0)) -
+      (b.profundidad || inferirProfundidadCm(b.numeroDeSensor || 0)),
+  );
 
   if (!humedadSuelo.length) {
     return resultadoFallido('No hay lecturas de lanza/sonda de humedad de suelo.');
@@ -112,9 +142,18 @@ export function calcularRiegoV12(params: {
   let nivelesConDatosDisponibles = 0;
   let nivelesConRaicesDetectadas = 0;
 
-  for (const suelo of sueloBase) {
+  const espesoresCm = calcularEspesoresCapasCm(
+    sueloBase.map(
+      (suelo) =>
+        suelo.profundidad ||
+        inferirProfundidadCm(suelo.numeroDeSensor || 0),
+    ),
+  );
+
+  for (const [index, suelo] of sueloBase.entries()) {
     const nivel = suelo.numeroDeSensor || suelo.profundidad || 0;
     const profundidad = suelo.profundidad || inferirProfundidadCm(nivel);
+    const espesorCm = espesoresCm[index];
     const humedadActual = leerHumedad(ultimo, suelo);
     const candidato = estimarCapacidadCampoPorNivel(
       humedadSuelo,
@@ -141,6 +180,7 @@ export function calcularRiegoV12(params: {
       calcularNivel(
         suelo,
         profundidad,
+        espesorCm,
         humedadActual,
         capacidadCampo,
         puntoMarchitez,
@@ -163,7 +203,15 @@ export function calcularRiegoV12(params: {
     2,
   );
   const capacidadRetencionTotal = redondear(
-    sumar(nivelesParaBalance.map((nivel) => calcularMm(nivel.capacidadCampo || 0, nivel.profundidad || 10, params.lote))),
+    sumar(
+      nivelesParaBalance.map((nivel) =>
+        calcularMm(
+          nivel.capacidadCampo || 0,
+          nivel.espesorCm || 0,
+          params.lote,
+        ),
+      ),
+    ),
     2,
   );
   const deficitMm = redondear(sumar(nivelesParaBalance.map((nivel) => nivel.deficitMm || 0)), 2);
@@ -178,7 +226,8 @@ export function calcularRiegoV12(params: {
     aguaUtilActualMm: aguaUtilFacilmenteDisponibleReal,
     aguaTotalDisponibleMm: Math.max(aguaTotalDisponible, aguaUtilFacilmenteDisponiblePotencial),
     deficitMm,
-    capacidadDeRiego: params.lote.capacidadDeRiego || 6,
+    capacidadDeRiego,
+    eficienciaRiego,
     umbralAguaUtilPct: Math.max(20, Math.min(65, umbralDeRiego * 100)),
   });
 
@@ -187,7 +236,14 @@ export function calcularRiegoV12(params: {
     capacidadCampo: redondear(nivel.capacidadCampo || 0, 2),
     aguaUtil: redondear(nivel.aguaTotalDisponibleMm || 0, 2),
     fraccionDeConsumo: redondear((nivel.aguaTotalDisponibleMm || 0) * umbralDeRiego, 2),
-    capacidadDeRetencion: redondear(calcularMm(nivel.capacidadCampo || 0, nivel.profundidad || 10, params.lote), 2),
+    capacidadDeRetencion: redondear(
+      calcularMm(
+        nivel.capacidadCampo || 0,
+        nivel.espesorCm || 0,
+        params.lote,
+      ),
+      2,
+    ),
     aguaUtilFacilmenteDisponible: redondear((nivel.aguaTotalDisponibleMm || 0) * umbralDeRiego, 2),
     humedadSueloLeida: nivel.humedadActual,
     puntoMarchitez: nivel.puntoMarchitez,
@@ -201,7 +257,14 @@ export function calcularRiegoV12(params: {
     profundidad: nivel.profundidad,
     aguaUtil: redondear(nivel.aguaUtilActualMm || 0, 2),
     fraccionDeConsumo: redondear((nivel.aguaTotalDisponibleMm || 0) * umbralDeRiego, 2),
-    capacidadDeRetencion: redondear(calcularMm(nivel.capacidadCampo || 0, nivel.profundidad || 10, params.lote), 2),
+    capacidadDeRetencion: redondear(
+      calcularMm(
+        nivel.capacidadCampo || 0,
+        nivel.espesorCm || 0,
+        params.lote,
+      ),
+      2,
+    ),
     aguaUtilFacilmenteDisponible: redondear(nivel.aguaUtilActualMm || 0, 2),
     humedadSueloLeida: nivel.humedadActual,
     capacidadCampo: nivel.capacidadCampo,
@@ -254,22 +317,6 @@ export function calcularRiegoV12(params: {
         ? 'Capacidad de campo estimada automaticamente con eventos validos.'
         : 'Usa capacidad de campo cargada o valor tecnico por textura hasta tener eventos validos.',
   };
-}
-
-export function normalizarHumedadSueloPct(value?: number | null): number | undefined {
-  const raw = Number(value);
-  if (!Number.isFinite(raw)) return undefined;
-  let actual = raw;
-  if (raw > 100 && raw <= SENTEK_SCALED_HUMIDITY_MAX) {
-    actual = (raw / SENTEK_SCALED_HUMIDITY_MAX) * 100;
-  } else if (raw >= 0 && raw <= SENTEK_RAW_HUMIDITY_MAX) {
-    actual = (raw / SENTEK_RAW_HUMIDITY_MAX) * 100;
-  } else if (raw > SENTEK_SCALED_HUMIDITY_MAX && raw <= 1000) {
-    actual = raw / 10;
-  } else if (raw >= 0 && raw <= 1) {
-    actual = raw * 100;
-  }
-  return redondear(clamp(actual, 0, 100), 2);
 }
 
 function resultadoFallido(motivo: string): ResultadoRiegoV12 {
@@ -333,7 +380,7 @@ function leerHumedad(registro: IClimaEstacionMeteorologica | undefined, suelo: I
 
   for (const key of keys) {
     const value = humedadPorNivel[key];
-    const humedad = normalizarHumedadSueloPct(value?.avg ?? value?.last ?? value?.result ?? value?.sum);
+    const humedad = normalizarHumedadSueloPct(value?.last ?? value?.result);
     if (humedad != null) return humedad;
   }
   return undefined;
@@ -519,6 +566,7 @@ function estimarCapacidadCampoPorNivel(
 function calcularNivel(
   suelo: ISuelo,
   profundidad: number,
+  espesorCm: number,
   humedadActual: number | undefined,
   capacidadCampo: number,
   puntoMarchitez: number,
@@ -527,15 +575,37 @@ function calcularNivel(
   lote: ILote,
 ): NivelDiagnostico {
   const hayRaices = raiz.hayRaices === true || suelo.hayRaices === true;
-  const aguaTotalDisponibleMm = calcularMm(Math.max(capacidadCampo - puntoMarchitez, 0), profundidad, lote);
+  const aguaTotalDisponibleMm = calcularMm(
+    Math.max(capacidadCampo - puntoMarchitez, 0),
+    espesorCm,
+    lote,
+  );
   const aguaUtilActualMm =
-    humedadActual == null ? 0 : calcularMm(clamp(humedadActual - puntoMarchitez, 0, capacidadCampo - puntoMarchitez), profundidad, lote);
-  const deficitMm = humedadActual == null ? 0 : calcularMm(clamp(capacidadCampo - humedadActual, 0, capacidadCampo), profundidad, lote);
+    humedadActual == null
+      ? 0
+      : calcularMm(
+          clamp(
+            humedadActual - puntoMarchitez,
+            0,
+            capacidadCampo - puntoMarchitez,
+          ),
+          espesorCm,
+          lote,
+        );
+  const deficitMm =
+    humedadActual == null
+      ? 0
+      : calcularMm(
+          clamp(capacidadCampo - humedadActual, 0, capacidadCampo),
+          espesorCm,
+          lote,
+        );
   const aguaUtilPct = aguaTotalDisponibleMm > 0 ? (aguaUtilActualMm / aguaTotalDisponibleMm) * 100 : 0;
 
   return {
     nivel: suelo.numeroDeSensor || profundidad,
     profundidad,
+    espesorCm,
     humedadActual,
     capacidadCampo,
     puntoMarchitez,
@@ -559,6 +629,7 @@ function calcularPronosticoRiegoV12(params: {
   aguaTotalDisponibleMm: number;
   deficitMm: number;
   capacidadDeRiego: number;
+  eficienciaRiego: number;
   umbralAguaUtilPct: number;
 }) {
   let saldo = params.aguaUtilActualMm;
@@ -591,12 +662,15 @@ function calcularPronosticoRiegoV12(params: {
     saldo = redondear(saldo - item.consumoAgua + item.lluvias, 2);
     const ccPorcentual = params.aguaTotalDisponibleMm > 0 ? redondear(saldo / params.aguaTotalDisponibleMm, 3) : 0;
     const necesitaRiego = saldo < umbralMm && previsionConsumo3Dias > Math.max(params.capacidadDeRiego * 0.7, 1);
-    const cantidad = necesitaRiego ? redondear(Math.min(params.deficitMm, params.capacidadDeRiego), 1) : 0;
+    const deficitBruto = params.deficitMm / params.eficienciaRiego;
+    const cantidad = necesitaRiego
+      ? redondear(Math.min(deficitBruto, params.capacidadDeRiego), 1)
+      : 0;
     if (i === 0) {
       recomendacionHoyMm = cantidad;
     }
     if (necesitaRiego) {
-      saldo = redondear(saldo + cantidad, 2);
+      saldo = redondear(saldo + cantidad * params.eficienciaRiego, 2);
     }
     pronosticosRiego.push({
       fecha: item.fecha,
@@ -620,11 +694,33 @@ function calcularPronosticoRiegoV12(params: {
   };
 }
 
-function calcularMm(pct: number, profundidadCm: number, lote: ILote): number {
-  const anchoBulbo = Number(lote.anchoDeBulbo || 1);
-  const metrosLinealesHa = Number(lote.metrosLinealesHas || 10000);
-  const factorAreaMojada = clamp((anchoBulbo * metrosLinealesHa) / 10000, 0.05, 1.5);
-  return redondear((pct / 100) * profundidadCm * 10 * factorAreaMojada, 2);
+function calcularMm(pct: number, espesorCm: number, lote: ILote): number {
+  const anchoBulbo = Number(lote.anchoDeBulbo);
+  const metrosLinealesHa = Number(lote.metrosLinealesHas);
+  const factorAreaMojada = clamp(
+    (anchoBulbo * metrosLinealesHa) / 10000,
+    0.05,
+    1,
+  );
+  return redondear((pct / 100) * espesorCm * 10 * factorAreaMojada, 2);
+}
+
+/**
+ * Cada sensor representa la capa comprendida entre la profundidad anterior y
+ * la propia. Para 10..120 cm devuelve doce espesores de 10 cm (120 cm total),
+ * nunca la suma incorrecta de profundidades absolutas (780 cm).
+ */
+export function calcularEspesoresCapasCm(
+  profundidadesCm: number[],
+): number[] {
+  const validas = profundidadesCm.map(Number);
+  let anterior = 0;
+  return validas.map((profundidad) => {
+    if (!Number.isFinite(profundidad) || profundidad <= anterior) return 0;
+    const espesor = profundidad - anterior;
+    anterior = profundidad;
+    return espesor;
+  });
 }
 
 function capacidadCampoPorTextura(textura?: string): number {

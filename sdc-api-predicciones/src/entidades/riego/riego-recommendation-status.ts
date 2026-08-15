@@ -25,10 +25,20 @@ export function resolverEstadoRecomendacionRiego(params: {
     ? params.pronosticosRiego.length > 0
     : false;
 
-  if (!tieneSerie) {
+  if (params.estadoCalculoAguaUtil !== 'calculado') {
     const fallida = params.estadoCalculoAguaUtil === 'fallida';
     return {
       estado: fallida ? 'fallida' : 'no_disponible',
+      motivo:
+        params.calidadDatos?.resumen ||
+        params.motivoCalculoAguaUtil ||
+        'El balance hidrico no fue validado con datos operativos.',
+    };
+  }
+
+  if (!tieneSerie) {
+    return {
+      estado: 'no_disponible',
       motivo:
         params.calidadDatos?.resumen ||
         params.motivoCalculoAguaUtil ||
@@ -36,15 +46,25 @@ export function resolverEstadoRecomendacionRiego(params: {
     };
   }
 
-  const estimada = params.calidadDatos?.fallback === true;
+  const calidadOperativa =
+    params.calidadDatos?.fallback === false &&
+    params.calidadDatos?.nivel === 'alta' &&
+    Number(params.calidadDatos?.cobertura) >= 1;
+  if (!calidadOperativa) {
+    return {
+      estado: 'no_disponible',
+      motivo:
+        params.calidadDatos?.resumen ||
+        'La cobertura o calidad de los datos no permite emitir una recomendacion operativa.',
+    };
+  }
+
   return {
-    estado: estimada ? 'estimada' : 'calculada',
-    fuente: estimada ? 'balance_climatico' : 'sensor_suelo',
+    estado: 'calculada',
+    fuente: 'sensor_suelo',
     motivo:
       params.calidadDatos?.resumen ||
       params.motivoCalculoAguaUtil ||
-      (estimada
-        ? 'Balance estimado con clima y cultivo; validar a campo.'
-        : 'Recomendacion calculada con datos operativos de suelo.'),
+      'Recomendacion calculada con datos operativos de suelo.',
   };
 }

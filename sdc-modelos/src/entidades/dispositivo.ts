@@ -36,6 +36,8 @@ export interface IMetaDataLora {
   /** Primer y ultimo contador LoRaWAN que componen el barrido. */
   cycleFirstFCnt?: number;
   cycleLastFCnt?: number;
+  /** Timestamp del primer uplink del barrido, que contiene la entrada analogica. */
+  cycleFirstTimestamp?: string;
 }
 
 /** Inventario tecnico seguro; nunca contiene claves OTAA ni de sesion. */

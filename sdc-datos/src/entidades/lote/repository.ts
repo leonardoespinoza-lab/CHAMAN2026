@@ -129,6 +129,7 @@ export class LotesRepository {
   async update(id: string, data: IUpdateLote): Promise<Lote> {
     return await this.model.findByIdAndUpdate(id, data, {
       new: true,
+      runValidators: true,
     });
   }
 

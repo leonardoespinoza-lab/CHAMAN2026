@@ -1,20 +1,9 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
-import { INapaPozoReferencia, INapaReferenciaLote } from 'modelos/src';
+import { Component, Input, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
+import { INapaSeguimientoLote } from 'modelos/src';
 import { NapasService } from '../../../../../auxiliares/http/napas.service';
-import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
-
-interface NapaMapPoint {
-  id: string;
-  label: string;
-  left: number;
-  top: number;
-  isLote: boolean;
-  tieneNivel: boolean;
-  tooltip: string;
-}
 
 @Component({
   selector: 'app-card-napas',
@@ -22,192 +11,153 @@ interface NapaMapPoint {
   templateUrl: './card-napas.component.html',
   styleUrl: './card-napas.component.scss',
 })
-export class CardNapasComponent implements OnChanges {
+export class CardNapasComponent implements OnChanges, OnDestroy {
   @Input() public lote?: IDetallesLote;
 
-  public referencia?: INapaReferenciaLote;
+  public seguimiento?: INapaSeguimientoLote;
   public cargando = false;
   public error?: string;
-  public verDetalle = false;
   private ultimoKey?: string;
-  private readonly numeroAr = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 });
+  private loadVersion = 0;
+  private readonly numeroAr = new Intl.NumberFormat('es-AR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 3,
+  });
+  private readonly fechaAr = new Intl.DateTimeFormat('es-AR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone: 'America/Argentina/Buenos_Aires',
+  });
 
-  constructor(
-    private napasService: NapasService,
-    public helper: HelperService
-  ) {}
+  constructor(private napasService: NapasService) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['lote']) {
-      void this.cargarReferencia();
+      void this.cargarSeguimiento();
     }
+  }
+
+  ngOnDestroy(): void {
+    this.loadVersion++;
   }
 
   public async refrescar(event?: Event): Promise<void> {
     event?.stopPropagation();
     this.ultimoKey = undefined;
-    await this.cargarReferencia();
-  }
-
-  public abrirDetalle(): void {
-    if (this.referencia) {
-      this.verDetalle = true;
-    }
-  }
-
-  public activarTarjeta(event: KeyboardEvent): void {
-    if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return;
-    event.preventDefault();
-    this.abrirDetalle();
-  }
-
-  public get coordenadas(): { lat: number; lng: number } | undefined {
-    const centro = this.lote?.ubicacion?.centro;
-    if (!centro?.lat || !centro?.lng) return undefined;
-    return { lat: centro.lat, lng: centro.lng };
+    await this.cargarSeguimiento();
   }
 
   public get subtitulo(): string {
-    if (this.cargando) return 'Buscando red SIAS cercana al lote';
-    if (this.error) return 'No se pudo consultar la red publica';
-    if (!this.referencia) return 'Referencia territorial pendiente';
-    return `${this.referencia.cobertura.totalPozos} pozos cercanos - ${this.referencia.cobertura.pozosConNivel} con nivel`;
-  }
-
-  public get calidadLabel(): string {
-    const calidad = this.referencia?.cobertura.calidad;
-    if (calidad === 'alta') return 'Cobertura alta';
-    if (calidad === 'media') return 'Cobertura media';
-    if (calidad === 'baja') return 'Referencia baja';
-    return 'Sin dato cercano';
-  }
-
-  public get coberturaPct(): number {
-    const calidad = this.referencia?.cobertura.calidad;
-    if (calidad === 'alta') return 88;
-    if (calidad === 'media') return 62;
-    if (calidad === 'baja') return 34;
-    return 10;
+    if (this.cargando) return 'Actualizando medicion';
+    if (this.error) return 'No se pudo actualizar';
+    if (!this.seguimiento) return 'Sin referencia disponible';
+    if (this.seguimiento.tipo === 'sensor_lote') return 'Sensor instalado en el lote';
+    if (this.seguimiento.tipo === 'sensor_cercano') return 'Referencia de un sensor cercano';
+    return 'Referencia territorial, no medicion del lote';
   }
 
   public get nivelResumen(): string {
-    const mediana = this.referencia?.estadisticas?.nivelEstaticoMedianaM;
-    if (mediana === undefined) return 'Sin nivel';
-    return `${this.numeroAr.format(mediana)} m bajo sup.`;
+    const nivel = this.seguimiento?.nivelM;
+    return nivel === undefined ? 'Sin nivel' : `${this.numeroAr.format(nivel)} m`;
   }
 
-  public get nivelDetalle(): string {
-    const mediana = this.referencia?.estadisticas?.nivelEstaticoMedianaM;
-    if (mediana === undefined) return 'Sin nivel estatico publicado cerca del lote.';
-    return `Profundidad de referencia al agua: ${this.numeroAr.format(mediana)} m bajo la superficie del terreno.`;
+  public get fuenteLabel(): string {
+    if (!this.seguimiento) return 'Sin fuente';
+    if (this.seguimiento.tipo === 'sensor_lote') return 'Medicion directa';
+    if (this.seguimiento.tipo === 'sensor_cercano') return 'Referencia cercana';
+    return 'SIAS territorial';
   }
 
-  public get distanciaResumen(): string {
-    const distancia = this.referencia?.cobertura.distanciaMasCercanaConNivelKm;
-    if (distancia === undefined) return 'Sin pozo con nivel';
-    return `${this.numeroAr.format(distancia)} km`;
+  public get origenLabel(): string {
+    const seguimiento = this.seguimiento;
+    if (!seguimiento) return 'Sin origen';
+    if (seguimiento.tipo === 'sias') return seguimiento.fuente;
+    if (seguimiento.tipo === 'sensor_cercano') {
+      return `${seguimiento.origen.lote} · ${this.formatearDistancia(seguimiento.distanciaKm)}`;
+    }
+    return seguimiento.origen.fuente;
   }
 
-  public get pozosPrincipales(): INapaPozoReferencia[] {
-    return (this.referencia?.pozos || []).slice(0, 6);
+  public get fechaLabel(): string {
+    const fecha = this.seguimiento?.fechaMedicion;
+    if (!fecha) return 'Sin fecha publicada';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      const [year, month, day] = fecha.split('-');
+      return `${day}/${month}/${year}`;
+    }
+    const timestamp = Date.parse(fecha);
+    return Number.isFinite(timestamp) ? this.fechaAr.format(timestamp) : 'Fecha no disponible';
   }
 
-  public get pozosMapa(): INapaPozoReferencia[] {
-    return (this.referencia?.pozos || []).slice(0, 12);
+  public get frescuraLabel(): string {
+    const seguimiento = this.seguimiento;
+    if (!seguimiento) return 'Sin dato';
+    if (seguimiento.tipo === 'sias') {
+      return seguimiento.frescura === 'territorial' ? 'Dato territorial historico' : 'Sin datos cercanos';
+    }
+    if (seguimiento.edadMinutos < 60) {
+      return `Hace ${Math.max(0, Math.round(seguimiento.edadMinutos))} min`;
+    }
+    return `Hace ${Math.max(1, Math.round(seguimiento.edadMinutos / 60))} h`;
   }
 
-  public get puntosMapa(): NapaMapPoint[] {
-    const coordenadas = this.coordenadas;
-    const pozos = this.pozosMapa;
-    if (!coordenadas || !pozos.length) return [];
-
-    const coords = [{ lat: coordenadas.lat, lng: coordenadas.lng }, ...pozos];
-    let minLat = Math.min(...coords.map((item) => item.lat));
-    let maxLat = Math.max(...coords.map((item) => item.lat));
-    let minLng = Math.min(...coords.map((item) => item.lng));
-    let maxLng = Math.max(...coords.map((item) => item.lng));
-    const latPad = Math.max((maxLat - minLat) * 0.16, 0.01);
-    const lngPad = Math.max((maxLng - minLng) * 0.16, 0.01);
-    minLat -= latPad;
-    maxLat += latPad;
-    minLng -= lngPad;
-    maxLng += lngPad;
-    const latSpan = Math.max(maxLat - minLat, 0.01);
-    const lngSpan = Math.max(maxLng - minLng, 0.01);
-    const toPoint = (lat: number, lng: number) => ({
-      left: this.clamp(((lng - minLng) / lngSpan) * 100),
-      top: this.clamp(((maxLat - lat) / latSpan) * 100),
-    });
-    const lotePoint = toPoint(coordenadas.lat, coordenadas.lng);
-    return [
-      {
-        id: 'lote',
-        label: this.lote?.nombre || 'Lote',
-        ...lotePoint,
-        isLote: true,
-        tieneNivel: true,
-        tooltip: `${this.lote?.nombre || 'Lote'}: ${coordenadas.lat.toFixed(4)}, ${coordenadas.lng.toFixed(4)}`,
-      },
-      ...pozos.map((pozo, index) => {
-        const point = toPoint(pozo.lat, pozo.lng);
-        const nivel =
-          pozo.nivelEstaticoM !== undefined
-            ? `${this.numeroAr.format(pozo.nivelEstaticoM)} m bajo superficie`
-            : 'nivel no declarado';
-        return {
-          id: `${pozo.id}-${index}`,
-          label: pozo.departamento || pozo.nombre || `Pozo ${index + 1}`,
-          ...point,
-          isLote: false,
-          tieneNivel: !!pozo.tieneNivel,
-          tooltip: `${pozo.nombre || 'Pozo SIAS'} - ${pozo.distanciaKm.toFixed(1)} km - ${nivel}`,
-        };
-      }),
-    ];
+  public get columnaLabel(): string {
+    const seguimiento = this.seguimiento;
+    if (!seguimiento || seguimiento.tipo === 'sias' || seguimiento.columnaAguaM === undefined) {
+      return 'No disponible';
+    }
+    return `${this.numeroAr.format(seguimiento.columnaAguaM)} m`;
   }
 
-  public get mapaResumen(): string {
-    if (!this.pozosMapa.length) return 'Sin pozos para ubicar en el mapa.';
-    return `${this.pozosMapa.length} pozos SIAS referenciados contra el centro del lote.`;
+  public get calidadLabel(): string {
+    const seguimiento = this.seguimiento;
+    if (!seguimiento) return 'Sin dato';
+    if (seguimiento.tipo !== 'sias') {
+      return seguimiento.frescura === 'demorada' ? 'Dato demorado' : 'Actual';
+    }
+    if (seguimiento.cobertura.calidad === 'alta') return 'Cobertura alta';
+    if (seguimiento.cobertura.calidad === 'media') return 'Cobertura media';
+    if (seguimiento.cobertura.calidad === 'baja') return 'Cobertura baja';
+    return 'Sin cobertura';
   }
 
-  public get maxNivel(): number {
-    const valores = this.pozosPrincipales
-      .map((pozo) => pozo.nivelEstaticoM)
-      .filter((value): value is number => Number.isFinite(value));
-    return Math.max(...valores, 1);
+  public get esSensor(): boolean {
+    return !!this.seguimiento && this.seguimiento.tipo !== 'sias';
   }
 
-  public nivelBar(pozo: INapaPozoReferencia): number {
-    if (!pozo.nivelEstaticoM) return 0;
-    return Math.max(6, Math.min(100, (pozo.nivelEstaticoM / this.maxNivel) * 100));
+  private formatearDistancia(value: number): string {
+    return `${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 }).format(value)} km`;
   }
 
-  private clamp(value: number): number {
-    return Math.max(4, Math.min(96, value));
-  }
-
-  private async cargarReferencia(): Promise<void> {
-    const coordenadas = this.coordenadas;
-    if (!coordenadas) {
-      this.referencia = undefined;
-      this.error = 'El lote no tiene coordenadas para consultar napas.';
+  private async cargarSeguimiento(): Promise<void> {
+    const idLote = this.lote?._id;
+    const version = ++this.loadVersion;
+    if (!idLote) {
+      this.seguimiento = undefined;
+      this.error = 'El lote no tiene un identificador valido.';
+      this.cargando = false;
       return;
     }
 
-    const key = `${coordenadas.lat.toFixed(5)}:${coordenadas.lng.toFixed(5)}`;
-    if (this.ultimoKey === key && this.referencia) return;
+    const key = String(idLote);
+    if (this.ultimoKey === key && this.seguimiento) return;
     this.ultimoKey = key;
     this.cargando = true;
     this.error = undefined;
 
     try {
-      this.referencia = await this.napasService.referenciaTerritorial(coordenadas.lat, coordenadas.lng, 80);
+      const response = await this.napasService.seguimientoLote(key);
+      if (version !== this.loadVersion || String(this.lote?._id || '') !== key) return;
+      this.seguimiento = response;
     } catch (error) {
-      console.error('Error al consultar napas', error);
-      this.error = 'No se pudo consultar SIAS/COHIFE.';
+      if (version !== this.loadVersion) return;
+      console.error('Error al consultar seguimiento de napas', error);
+      this.seguimiento = undefined;
+      this.error = 'No se pudo consultar la napa del lote.';
     } finally {
-      this.cargando = false;
+      if (version === this.loadVersion) {
+        this.cargando = false;
+      }
     }
   }
 }

@@ -3,9 +3,16 @@ import { Injectable, Logger } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 import {
   CalidadReferenciaNapas,
+  IDispositivo,
+  ILote,
   INapaPozoReferencia,
   INapaReferenciaLote,
+  INapaSeguimientoLote,
+  IPermiso,
+  IServicioDispositivo,
+  serviciosDispositivoNormalizados,
 } from 'modelos/src';
+import { LotesService } from '../lote/service';
 
 interface SiasPozoRaw {
   name?: string;
@@ -34,6 +41,44 @@ const SIAS_POZOS_URL =
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24;
 const DEFAULT_RADIUS_KM = 80;
 const MAX_RADIUS_KM = 180;
+const SENSOR_CURRENT_HOURS = (() => {
+  const configured = Number(process.env.NAPA_SENSOR_CURRENT_HOURS);
+  return Number.isFinite(configured) && configured > 0 ? configured : 2;
+})();
+const SENSOR_MAX_AGE_HOURS = (() => {
+  const configured = Number(process.env.NAPA_SENSOR_MAX_AGE_HOURS);
+  return Number.isFinite(configured) && configured > 0 ? configured : 24;
+})();
+const SENSOR_CURRENT_MS = SENSOR_CURRENT_HOURS * 60 * 60 * 1000;
+const SENSOR_MAX_AGE_MS = SENSOR_MAX_AGE_HOURS * 60 * 60 * 1000;
+const NEARBY_MAX_DISTANCE_KM = (() => {
+  const configured = Number(process.env.NAPA_NEARBY_MAX_DISTANCE_KM);
+  return Number.isFinite(configured) && configured > 0 ? configured : 10;
+})();
+const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
+const MAX_VISIBLE_LOTS = 1000;
+const MAX_NEARBY_LOTS_TO_FETCH = 12;
+
+interface SensorNapaObservation {
+  nivelM: number;
+  fechaMedicion: string;
+  fechaRecepcion?: string;
+  edadMinutos: number;
+  frescura: 'actual' | 'demorada' | 'vencida';
+  columnaAguaM?: number;
+  profundidadInstalacionM?: number;
+  origen: {
+    fuente: 'Milesight/LoRaWAN';
+    servicio: 'nivel-napa';
+    lote: string;
+    fabricante?: string;
+    modelo?: string;
+    fCnt?: number;
+    decoderId?: string;
+    decoderVersion?: string;
+    conversionModel?: 'lineal-4-20ma-v1';
+  };
+}
 
 @Injectable()
 export class NapasService {
@@ -41,7 +86,88 @@ export class NapasService {
   private cache?: NapaCache;
   private pending?: Promise<INapaPozoReferencia[]>;
 
-  constructor(private readonly http: HttpService) {}
+  constructor(
+    private readonly http: HttpService,
+    private readonly lotes: LotesService,
+  ) {}
+
+  /**
+   * Resuelve una unica fuente principal para la tarjeta. La consulta esta
+   * anclada a un lote autorizado y nunca retorna inventario fisico, DevEUI,
+   * payloads ni coordenadas del sensor de referencia.
+   */
+  public async seguimientoLote(
+    idLote: string,
+    permiso: IPermiso,
+  ): Promise<INapaSeguimientoLote> {
+    const lote = await this.lotes.getById(idLote, permiso);
+    const fechaConsulta = new Date().toISOString();
+    let motivoFallback = 'El lote no tiene una medicion de napa disponible.';
+
+    if (permiso?.modulos?.Sensores !== false) {
+      const propias = this.medicionesDeLote(lote, idLote);
+      const propiaVigente = propias
+        .filter((item) => item.frescura !== 'vencida')
+        .sort(
+          (left, right) =>
+            Date.parse(right.fechaMedicion) - Date.parse(left.fechaMedicion),
+        )[0];
+      if (propiaVigente) {
+        const demorada = propiaVigente.frescura === 'demorada';
+        return {
+          tipo: 'sensor_lote',
+          fechaConsulta,
+          mensaje: demorada
+            ? `Medicion directa del lote demorada; la ultima lectura tiene mas de ${SENSOR_CURRENT_HOURS} horas.`
+            : 'Medicion directa del sensor instalado en este lote.',
+          nivelM: propiaVigente.nivelM,
+          unidad: 'm',
+          referencia: 'nivel_terreno',
+          fechaMedicion: propiaVigente.fechaMedicion,
+          fechaRecepcion: propiaVigente.fechaRecepcion,
+          frescura: propiaVigente.frescura === 'actual' ? 'actual' : 'demorada',
+          edadMinutos: propiaVigente.edadMinutos,
+          columnaAguaM: propiaVigente.columnaAguaM,
+          profundidadInstalacionM: propiaVigente.profundidadInstalacionM,
+          distanciaKm: 0,
+          origen: propiaVigente.origen,
+        };
+      }
+
+      if (propias.length) {
+        motivoFallback = `La medicion propia tiene mas de ${SENSOR_MAX_AGE_HOURS} horas.`;
+      }
+
+      const cercana = await this.medicionCercana(lote, idLote, permiso);
+      if (cercana) {
+        return {
+          tipo: 'sensor_cercano',
+          fechaConsulta,
+          mensaje:
+            'Referencia de un sensor cercano del mismo productor y establecimiento; no es una medicion del lote.',
+          nivelM: cercana.observacion.nivelM,
+          unidad: 'm',
+          referencia: 'nivel_terreno',
+          fechaMedicion: cercana.observacion.fechaMedicion,
+          fechaRecepcion: cercana.observacion.fechaRecepcion,
+          frescura: 'actual',
+          edadMinutos: cercana.observacion.edadMinutos,
+          columnaAguaM: cercana.observacion.columnaAguaM,
+          profundidadInstalacionM: cercana.observacion.profundidadInstalacionM,
+          distanciaKm: cercana.distanciaKm,
+          origen: cercana.observacion.origen,
+        };
+      }
+    } else {
+      motivoFallback = 'El permiso activo no habilita datos de sensores.';
+    }
+
+    return await this.referenciaSiasParaTarjeta(
+      lote,
+      fechaConsulta,
+      motivoFallback,
+    );
+  }
 
   public async referenciaTerritorial(
     lat: number,
@@ -96,6 +222,345 @@ export class NapasService {
         'Nivel estatico expresado como profundidad aproximada al agua bajo la superficie del terreno, segun el dato publicado por el duenio del dato.',
       ],
     };
+  }
+
+  private medicionesDeLote(
+    lote: ILote,
+    idLote: string,
+  ): SensorNapaObservation[] {
+    const dispositivos = (lote.dispositivos || []) as IDispositivo[];
+    return dispositivos.flatMap((dispositivo) =>
+      serviciosDispositivoNormalizados(dispositivo)
+        .filter((servicio) =>
+          this.servicioPerteneceAlLote(servicio, dispositivo, lote, idLote),
+        )
+        .map((servicio) =>
+          this.extraerObservacionSensor(
+            dispositivo,
+            servicio,
+            lote.nombre || 'Este lote',
+          ),
+        )
+        .filter((item): item is SensorNapaObservation => item !== undefined),
+    );
+  }
+
+  private async medicionCercana(
+    lote: ILote,
+    idLote: string,
+    permiso: IPermiso,
+  ): Promise<
+    { observacion: SensorNapaObservation; distanciaKm: number } | undefined
+  > {
+    const productor = this.relacionId(lote.idProductor);
+    const establecimiento = this.relacionId(lote.idEstablecimiento);
+    const coordenadasObjetivo = this.coordenadasLote(lote);
+    if (!productor || !establecimiento || !coordenadasObjetivo) {
+      return undefined;
+    }
+
+    let lotesVisibles: ILote[] = [];
+    try {
+      const listado = await this.lotes.get(
+        {
+          filter: JSON.stringify({
+            idProductor: productor,
+            idEstablecimiento: establecimiento,
+            archivado: { $ne: true },
+          }),
+          limit: MAX_VISIBLE_LOTS,
+          sort: 'nombre',
+        },
+        permiso,
+      );
+      lotesVisibles = listado.datos || [];
+    } catch (error) {
+      this.logger.warn(
+        `No se pudieron resolver lotes visibles para napas: ${error?.message || error}`,
+      );
+      return undefined;
+    }
+
+    const candidatos = lotesVisibles
+      .map((candidato) => {
+        const id = this.relacionId(candidato._id);
+        const coordenadas = this.coordenadasLote(candidato);
+        if (
+          !id ||
+          id === this.relacionId(idLote) ||
+          !coordenadas ||
+          this.relacionId(candidato.idProductor) !== productor ||
+          this.relacionId(candidato.idEstablecimiento) !== establecimiento
+        ) {
+          return undefined;
+        }
+        const distanciaKm = this.round(
+          this.distanciaKm(
+            coordenadasObjetivo.lat,
+            coordenadasObjetivo.lng,
+            coordenadas.lat,
+            coordenadas.lng,
+          ),
+          2,
+        );
+        return distanciaKm <= NEARBY_MAX_DISTANCE_KM
+          ? { id, distanciaKm }
+          : undefined;
+      })
+      .filter(
+        (
+          item,
+        ): item is {
+          id: string;
+          distanciaKm: number;
+        } => item !== undefined,
+      )
+      .sort((left, right) => left.distanciaKm - right.distanciaKm)
+      .slice(0, MAX_NEARBY_LOTS_TO_FETCH);
+
+    for (const candidato of candidatos) {
+      let loteFuente: ILote;
+      try {
+        loteFuente = await this.lotes.getById(candidato.id, permiso);
+      } catch {
+        continue;
+      }
+      if (
+        this.relacionId(loteFuente.idProductor) !== productor ||
+        this.relacionId(loteFuente.idEstablecimiento) !== establecimiento
+      ) {
+        continue;
+      }
+      const observacion = this.medicionesDeLote(loteFuente, candidato.id)
+        .filter((item) => item.frescura === 'actual')
+        .sort(
+          (left, right) =>
+            Date.parse(right.fechaMedicion) - Date.parse(left.fechaMedicion),
+        )[0];
+      if (observacion) {
+        return {
+          observacion,
+          distanciaKm: candidato.distanciaKm,
+        };
+      }
+    }
+
+    return undefined;
+  }
+
+  private servicioPerteneceAlLote(
+    servicio: IServicioDispositivo,
+    dispositivo: IDispositivo,
+    lote: ILote,
+    idLote: string,
+  ): boolean {
+    const idServicioLote = this.relacionId(
+      servicio.idLote || dispositivo.idLote,
+    );
+    const productorServicio = this.relacionId(
+      servicio.idProductor || dispositivo.idProductor,
+    );
+    const establecimientoServicio = this.relacionId(
+      servicio.idEstablecimiento || dispositivo.idEstablecimiento,
+    );
+    const productorLote = this.relacionId(lote.idProductor);
+    const establecimientoLote = this.relacionId(lote.idEstablecimiento);
+
+    return (
+      servicio.tipo === 'nivel_napa' &&
+      idServicioLote === this.relacionId(idLote) &&
+      productorServicio === productorLote &&
+      establecimientoServicio === establecimientoLote
+    );
+  }
+
+  private extraerObservacionSensor(
+    dispositivo: IDispositivo,
+    servicio: IServicioDispositivo,
+    nombreLote: string,
+  ): SensorNapaObservation | undefined {
+    const reporte = dispositivo.ultimoReporte;
+    const rows = reporte?.datos?.valores?.Napa || [];
+    const row = rows.find(
+      (item) =>
+        typeof item?.valores?.actual === 'number' &&
+        Number.isFinite(item.valores.actual),
+    );
+    const nivelM = row?.valores?.actual;
+    const unidad = String(
+      row?.unidad ||
+        dispositivo.configuracionLecturas?.entradaAnalogica?.unidadSalida ||
+        '',
+    )
+      .trim()
+      .toLowerCase();
+    if (
+      !row ||
+      typeof nivelM !== 'number' ||
+      !Number.isFinite(nivelM) ||
+      nivelM < 0 ||
+      !['m', 'metro', 'metros'].includes(unidad)
+    ) {
+      return undefined;
+    }
+
+    const metadata = reporte?.metadataLora;
+    const fecha = metadata?.cycleFirstTimestamp || reporte?.fechaCreacion;
+    const timestamp = fecha ? Date.parse(fecha) : Number.NaN;
+    const now = Date.now();
+    if (!Number.isFinite(timestamp) || timestamp > now + MAX_FUTURE_SKEW_MS) {
+      return undefined;
+    }
+    const fechaAsignacion = servicio.fechaAsignacionLote
+      ? Date.parse(servicio.fechaAsignacionLote)
+      : Number.NaN;
+    const servicioExplicito = servicio.fuente !== 'inferido';
+    if (
+      (servicioExplicito && !Number.isFinite(fechaAsignacion)) ||
+      (Number.isFinite(fechaAsignacion) && timestamp < fechaAsignacion)
+    ) {
+      return undefined;
+    }
+
+    const profundidadInstalacionM = this.numeroPositivo(
+      row.valores?.profundidadInstalacion ??
+        dispositivo.configuracionLecturas?.entradaAnalogica
+          ?.profundidadInstalacionM,
+    );
+    if (
+      profundidadInstalacionM !== undefined &&
+      nivelM > profundidadInstalacionM + 0.05
+    ) {
+      return undefined;
+    }
+    const columnaPublicadaM = this.numeroNoNegativo(row.valores?.columnaAgua);
+    let columnaAguaM = columnaPublicadaM;
+    if (profundidadInstalacionM !== undefined) {
+      const columnaCalculadaM = this.round(
+        Math.max(0, profundidadInstalacionM - nivelM),
+        3,
+      );
+      if (
+        columnaPublicadaM !== undefined &&
+        Math.abs(columnaPublicadaM - columnaCalculadaM) > 0.05
+      ) {
+        return undefined;
+      }
+      columnaAguaM = columnaPublicadaM ?? columnaCalculadaM;
+    }
+    const edadMs = Math.max(0, now - timestamp);
+    const conversionModel =
+      dispositivo.configuracionLecturas?.entradaAnalogica?.versionConversion ===
+      'lineal-4-20ma-v1'
+        ? 'lineal-4-20ma-v1'
+        : undefined;
+
+    return {
+      nivelM,
+      fechaMedicion: new Date(timestamp).toISOString(),
+      fechaRecepcion: this.fechaIsoValida(reporte?.fechaCreacion),
+      edadMinutos: this.round(edadMs / 60_000, 1),
+      frescura:
+        edadMs <= SENSOR_CURRENT_MS
+          ? 'actual'
+          : edadMs <= SENSOR_MAX_AGE_MS
+            ? 'demorada'
+            : 'vencida',
+      columnaAguaM,
+      profundidadInstalacionM,
+      origen: {
+        fuente: 'Milesight/LoRaWAN',
+        servicio: 'nivel-napa',
+        lote: nombreLote,
+        fabricante: metadata?.controllerManufacturer || 'Milesight',
+        modelo: metadata?.controllerModel,
+        fCnt: metadata?.cycleFirstFCnt,
+        decoderId: metadata?.payloadDecoderId,
+        decoderVersion: metadata?.payloadDecoderVersion,
+        conversionModel,
+      },
+    };
+  }
+
+  private async referenciaSiasParaTarjeta(
+    lote: ILote,
+    fechaConsulta: string,
+    motivoFallback: string,
+  ): Promise<INapaSeguimientoLote> {
+    const coordenadas = this.coordenadasLote(lote);
+    let referencia: INapaReferenciaLote | undefined;
+    if (coordenadas) {
+      try {
+        referencia = await this.referenciaTerritorial(
+          coordenadas.lat,
+          coordenadas.lng,
+          DEFAULT_RADIUS_KM,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Referencia SIAS no disponible para lote: ${error?.message || error}`,
+        );
+      }
+    }
+
+    const cobertura = referencia?.cobertura || {
+      radioKm: DEFAULT_RADIUS_KM,
+      totalPozos: 0,
+      pozosConNivel: 0,
+      calidad: 'sin_datos' as const,
+      lectura:
+        'Sin referencia territorial disponible; se requiere una medicion local.',
+    };
+    const nivelM = referencia?.estadisticas?.nivelEstaticoMedianaM;
+    return {
+      tipo: 'sias',
+      fechaConsulta,
+      mensaje: `${motivoFallback} Se muestra SIAS solo como referencia territorial; no es una medicion del lote.`,
+      nivelM,
+      unidad: 'm',
+      referencia: 'nivel_terreno',
+      fechaMedicion: referencia?.estadisticas?.fechaMasReciente,
+      frescura: Number.isFinite(nivelM) ? 'territorial' : 'sin_datos',
+      fuente: 'SIAS/COHIFE',
+      cobertura,
+      estadisticas: referencia?.estadisticas,
+    };
+  }
+
+  private coordenadasLote(
+    lote: ILote,
+  ): { lat: number; lng: number } | undefined {
+    const lat = Number(lote?.ubicacion?.centro?.lat);
+    const lng = Number(lote?.ubicacion?.centro?.lng);
+    return Number.isFinite(lat) && Number.isFinite(lng)
+      ? { lat, lng }
+      : undefined;
+  }
+
+  private relacionId(value: unknown): string {
+    if (value && typeof value === 'object' && '_id' in (value as object)) {
+      return String((value as { _id?: unknown })._id || '');
+    }
+    return String(value || '');
+  }
+
+  private numeroPositivo(value: unknown): number | undefined {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  }
+
+  private numeroNoNegativo(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isFinite(value) && value >= 0
+      ? value
+      : undefined;
+  }
+
+  private fechaIsoValida(value?: string): string | undefined {
+    if (!value) return undefined;
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp)
+      ? new Date(timestamp).toISOString()
+      : undefined;
   }
 
   private async getPozos(): Promise<INapaPozoReferencia[]> {

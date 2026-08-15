@@ -19,8 +19,9 @@ export class ClimaV2Service {
     id: string,
     desde: string,
     hasta: string,
+    agrupacion: 'hourly' | 'daily' = 'daily',
   ): Promise<IClimaEstacionMeteorologica[]> {
-    return await this.repository.getSuelo(id, desde, hasta);
+    return await this.repository.getSuelo(id, desde, hasta, agrupacion);
   }
 
   async getLluviaMasCercanaEntreFechas(

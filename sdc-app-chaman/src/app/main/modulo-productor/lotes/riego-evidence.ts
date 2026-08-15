@@ -105,6 +105,11 @@ export function cantidadRiegoValida(item?: IResultadoPrediccionRiego): number | 
 export function tieneSensorHumedadSuelo(lote?: ILote): boolean {
   if (lote?.sondaSuelo || lote?.idSondaSuelo) return true;
   return !!lote?.dispositivos?.some((item: IDispositivo) => {
+    const servicioPerfil = item.servicios?.some(
+      (servicio) =>
+        servicio?.tipo === 'perfil_suelo' && servicio.habilitado !== false,
+    );
+    if (servicioPerfil) return true;
     const tipo = normalizarTexto(item.tipo);
     return tipo.includes('sensor') && tipo.includes('humedad') && tipo.includes('suelo');
   });

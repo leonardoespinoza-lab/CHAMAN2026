@@ -1,4 +1,4 @@
-import { IReporte } from 'modelos/src';
+import { IReporte, IValoresV2 } from 'modelos/src';
 import { MILESIGHT_UC50X_GOLDEN_FIXTURES } from './controller-decoder.golden-fixtures';
 import { LorawanUplinksService } from './service';
 
@@ -40,8 +40,171 @@ describe('LorawanUplinksService Sentek aggregation cycle', () => {
     const compatible = (service as any).reporteCompatibleConCiclo(
       reporteConTemperaturaFinal,
       [],
+      {
+        Napa: [
+          {
+            unidad: 'm',
+            valores: { actual: 2.5 },
+          },
+        ],
+      } satisfies IValoresV2['valores'],
     );
     expect(compatible).toBe(reporteConTemperaturaFinal);
+  });
+
+  it('preserves the Napa timestamp and FCnt from t0 when an SDI frame at t1 closes the same report', async () => {
+    const [blockA, blockB] =
+      MILESIGHT_UC50X_GOLDEN_FIXTURES.successfulGilardoniSweep.frames;
+    let stored: any;
+    const reportes = {
+      getByDeveuiAndFecha: jest.fn(async () => stored || null),
+      getRecentByDeveui: jest.fn(async () => stored || null),
+      create: jest.fn(async (data: any) => {
+        stored = {
+          _id: 'report-1',
+          fechaCreacion: '2026-08-15T12:00:01.000Z',
+          ...data,
+        };
+        return stored;
+      }),
+      update: jest.fn(async (_id: string, data: any) => {
+        stored = { ...stored, ...data };
+        return stored;
+      }),
+    };
+    const dispositivos = { update: jest.fn(async () => undefined) };
+    const isolated = new LorawanUplinksService(
+      {} as any,
+      dispositivos as any,
+      reportes as any,
+    );
+    const device = {
+      _id: 'gilardoni',
+      configuracionLecturas: {
+        entradaAnalogica: {
+          canal: 1,
+          tipoSenal: '4-20mA',
+          variable: 'nivel_napa',
+          entradaMinMa: 4,
+          entradaMaxMa: 20,
+          salidaMin: 0,
+          salidaMax: 10,
+          unidadSalida: 'm',
+          profundidadInstalacionM: 6,
+          versionConversion: 'lineal-4-20ma-v1',
+        },
+      },
+    };
+
+    await (isolated as any).syncSentekReport(
+      {
+        devEUI: '24E124454E358520',
+        timestamp: '2026-08-15T12:00:00.000Z',
+        fCnt: blockA.fCnt,
+        fPort: 85,
+        data: Buffer.from(blockA.payloadHex, 'hex').toString('base64'),
+      },
+      device,
+    );
+    const napaT0 = stored.datos.valores.Napa;
+
+    await (isolated as any).syncSentekReport(
+      {
+        devEUI: '24E124454E358520',
+        timestamp: '2026-08-15T12:00:15.000Z',
+        fCnt: blockB.fCnt,
+        fPort: 85,
+        data: Buffer.from(blockB.payloadHex, 'hex').toString('base64'),
+      },
+      device,
+    );
+
+    expect(stored.fecha).toBe('2026-08-15T12:00:15.000Z');
+    expect(stored.datos.valores.Napa).toEqual(napaT0);
+    expect(stored.metadataLora).toMatchObject({
+      cycleFirstFCnt: blockA.fCnt,
+      cycleLastFCnt: blockB.fCnt,
+      cycleFirstTimestamp: '2026-08-15T12:00:00.000Z',
+    });
+  });
+
+  it('starts a new snapshot for two consecutive Napa-only measurements', async () => {
+    const created: any[] = [];
+    const reportes = {
+      getByDeveuiAndFecha: jest.fn(async () => null),
+      getRecentByDeveui: jest.fn(
+        async () => created[created.length - 1] || null,
+      ),
+      create: jest.fn(async (data: any) => {
+        const report = {
+          _id: `report-${created.length + 1}`,
+          fechaCreacion: data.fecha,
+          ...data,
+        };
+        created.push(report);
+        return report;
+      }),
+      update: jest.fn(),
+    };
+    const dispositivos = { update: jest.fn(async () => undefined) };
+    const isolated = new LorawanUplinksService(
+      {} as any,
+      dispositivos as any,
+      reportes as any,
+    );
+    const device = {
+      _id: 'napa-only',
+      configuracionLecturas: {
+        entradaAnalogica: {
+          canal: 1,
+          tipoSenal: '4-20mA',
+          variable: 'nivel_napa',
+          entradaMinMa: 4,
+          entradaMaxMa: 20,
+          salidaMin: 0,
+          salidaMax: 10,
+          unidadSalida: 'm',
+          profundidadInstalacionM: 6,
+          versionConversion: 'lineal-4-20ma-v1',
+        },
+      },
+    };
+    const payload = MILESIGHT_UC50X_GOLDEN_FIXTURES.officialAnalog.payloadHex;
+
+    await (isolated as any).syncSentekReport(
+      {
+        devEUI: '24E124454E358520',
+        timestamp: '2026-08-15T12:00:00.000Z',
+        fCnt: 500,
+        fPort: 85,
+        data: Buffer.from(payload, 'hex').toString('base64'),
+      },
+      device,
+    );
+    await (isolated as any).syncSentekReport(
+      {
+        devEUI: '24E124454E358520',
+        timestamp: '2026-08-15T12:15:00.000Z',
+        fCnt: 501,
+        fPort: 85,
+        data: Buffer.from(payload, 'hex').toString('base64'),
+      },
+      device,
+    );
+
+    expect(reportes.create).toHaveBeenCalledTimes(2);
+    expect(reportes.update).not.toHaveBeenCalled();
+    expect(created).toHaveLength(2);
+    expect(created[0].metadataLora).toMatchObject({
+      cycleFirstFCnt: 500,
+      cycleLastFCnt: 500,
+      cycleFirstTimestamp: '2026-08-15T12:00:00.000Z',
+    });
+    expect(created[1].metadataLora).toMatchObject({
+      cycleFirstFCnt: 501,
+      cycleLastFCnt: 501,
+      cycleFirstTimestamp: '2026-08-15T12:15:00.000Z',
+    });
   });
 
   it('uses recorded channel evidence instead of guessing a custom mapping from values', () => {

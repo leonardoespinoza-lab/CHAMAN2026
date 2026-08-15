@@ -3,7 +3,10 @@ import { LotesService } from '../lote/service';
 import { calcularRiegoV12 } from './riego-v12.engine';
 
 describe('RiegoService - entradas agronomicas de suelo', () => {
-  const createRiegoService = (lotesService: any) =>
+  const createRiegoService = (
+    lotesService: any,
+    dispositivosService: any = {},
+  ) =>
     new RiegoService(
       {} as any,
       {} as any,
@@ -11,10 +14,40 @@ describe('RiegoService - entradas agronomicas de suelo', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
+      dispositivosService,
       {} as any,
       {} as any,
     ) as any;
+
+  it('resuelve el Sentek por el servicio logico perfil_suelo del lote', async () => {
+    const dispositivosService = {
+      get: jest.fn().mockResolvedValue({
+        datos: [{ _id: 'controlador-sentek' }],
+      }),
+    };
+    const service = createRiegoService({}, dispositivosService);
+
+    await expect(
+      service.resolverIdSensorPerfilSuelo({
+        _id: 'lote-1',
+        nombre: 'Lote Sentek',
+        idsDispositivo: [],
+      }),
+    ).resolves.toBe('controlador-sentek');
+
+    const query = dispositivosService.get.mock.calls[0][0];
+    const filter = JSON.parse(query.filter);
+    expect(filter.$or).toContainEqual({
+      servicios: {
+        $elemMatch: {
+          tipo: 'perfil_suelo',
+          idLote: 'lote-1',
+          habilitado: { $ne: false },
+        },
+      },
+    });
+    expect(query.sort).toBe('-fechaUltimaComunicacion');
+  });
 
   it('aplica el perfil canonico sobre una copia antes de ejecutar riego', async () => {
     const lotesService = {
@@ -188,6 +221,10 @@ describe('RiegoService - entradas agronomicas de suelo', () => {
       ...lotePersistido,
       capacidadDeCampo: 31,
       puntoMarchitez: 15,
+      capacidadDeRiego: 8,
+      eficienciaRiego: 85,
+      anchoDeBulbo: 1,
+      metrosLinealesHas: 10000,
       suelos: [
         {
           profundidad: 30,
@@ -216,9 +253,9 @@ describe('RiegoService - entradas agronomicas de suelo', () => {
         {
           fecha: '2026-07-14T00:00:00.000Z',
           humedadSuelo: {
-            1: { avg: 24 },
-            2: { avg: 26 },
-            3: { avg: 28 },
+            1: { last: 24 },
+            2: { last: 26 },
+            3: { last: 28 },
           },
         },
       ] as any,
