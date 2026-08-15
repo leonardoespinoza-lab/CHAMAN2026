@@ -12,6 +12,7 @@ interface SoilMetricDefinition {
   unit: string;
   color: string;
   decimals: number;
+  displayDecimals: number;
 }
 
 interface HistoricalPoint {
@@ -120,6 +121,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   @Input() agronomicThresholds?: SentekAgronomicThresholds;
   @Input() agronomicThresholdsUnavailable = false;
   @Input() timeZone = 'America/Argentina/Buenos_Aires';
+  @Input() periodDays = 30;
+  @Input() periodEnd?: string | number;
   @Input() titulo?: string;
   @Input() subtitulo?: string;
   @Input() fechaDesde?: string;
@@ -158,9 +161,30 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   public assignmentNotice = '';
 
   private readonly definitions: SoilMetricDefinition[] = [
-    { key: 'humedad', title: 'Humedad de suelo', unit: '%', color: '#2f9fe8', decimals: 1 },
-    { key: 'salinidad', title: 'Salinidad relativa', unit: 'VIC', color: '#8e44ad', decimals: 1 },
-    { key: 'temperatura', title: 'Temperatura', unit: 'C', color: '#e74c3c', decimals: 1 },
+    {
+      key: 'humedad',
+      title: 'Humedad de suelo',
+      unit: '%',
+      color: '#2f9fe8',
+      decimals: 1,
+      displayDecimals: 5,
+    },
+    {
+      key: 'salinidad',
+      title: 'Salinidad relativa',
+      unit: 'VIC',
+      color: '#8e44ad',
+      decimals: 1,
+      displayDecimals: 3,
+    },
+    {
+      key: 'temperatura',
+      title: 'Temperatura',
+      unit: 'C',
+      color: '#e74c3c',
+      decimals: 1,
+      displayDecimals: 5,
+    },
   ];
 
   private readonly depthColors = new Map<number, string>([
@@ -188,7 +212,6 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
    * observadas y no se agregan valores interpolados al dataset.
    */
   private readonly sentekContinuousProfileGapMs = 6 * 60 * 60 * 1000;
-  private readonly sentekChartLeadMs = 60 * 1000;
   private readonly sentekMarkerLimit = 80;
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -200,6 +223,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       changes['agronomicThresholds'] ||
       changes['agronomicThresholdsUnavailable'] ||
       changes['timeZone'] ||
+      changes['periodDays'] ||
+      changes['periodEnd'] ||
       changes['fechaDesde'] ||
       changes['mostrarNapa'] ||
       changes['mostrarEntradaAnalogica']
@@ -245,6 +270,10 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
     const headers = [
       'Fecha',
+      'DevEUI',
+      'ID trama',
+      'FCnt',
+      'Canales SDI-12',
       'Profundidad cm',
       'Humedad suelo %',
       'Salinidad VIC',
@@ -387,7 +416,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         type: 'spline',
         turboThreshold: 0,
         custom: {
-          decimals: definition.decimals,
+          decimals: definition.displayDecimals,
           depthCm: depth,
           isSoil: true,
           metric: definition.key,
@@ -437,9 +466,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const visibleProfileEnd = recentWindow?.visibleEnd;
     const rainMax = Math.max(1, ...rainPoints.map((point) => point.y));
     const metricDomain =
-      definition.key === 'humedad'
-        ? this.buildHumidityDomain(series)
-        : this.buildMetricDomain(definition, series);
+      definition.key === 'humedad' ? this.buildHumidityDomain(series) : this.buildMetricDomain(definition, series);
     this.agronomicReference = definition.key === 'humedad' ? this.validAgronomicReference() : undefined;
     const agronomicBands = this.buildAgronomicPlotBands(metricDomain.max);
     const agronomicLines = this.buildAgronomicPlotLines();
@@ -732,12 +759,11 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   /**
    * Un barrido Sentek llega repartido en varias tramas. Cada grupo dura como
    * maximo la misma tolerancia del agregador; no se encadena por proximidad.
-   * La unica vista parte del primer barrido fisico 36/36 (12 H + 12 S + 12 T)
-   * disponible desde fechaDesde. Luego conserva cada lectura valida de los
-   * grupos posteriores sin convertir las omisiones de un barrido parcial en
-   * huecos. Solo agrega un null cuando dos observaciones reales de la misma
-   * identidad quedan separadas por una interrupcion prolongada. Si todavia no
-   * existe un 36/36, conserva como evidencia el ultimo grupo real.
+   * El barrido 36/36 (12 H + 12 S + 12 T) se usa solamente para describir el
+   * ultimo perfil coherente. La curva conserva cada lectura valida observada
+   * dentro del periodo solicitado, aunque pertenezca a un barrido parcial. No
+   * completa ni promedia identidades ausentes. Solo agrega un null cuando dos
+   * observaciones reales quedan separadas por una interrupcion prolongada.
    */
   private buildRecentProfileWindow(
     seriesByMetric: Map<SoilMetricKey, any[]>,
@@ -829,9 +855,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         this.expectedSentekDepthsCm.every((depth) => group.latestByIdentity.has(`${definition.key}:${depth}`))
       );
     const latestGroup = groups[groups.length - 1];
-    const firstCompleteIndex = groups.findIndex(isComplete);
-    const hasCompleteProfile = firstCompleteIndex >= 0;
-    const relevantGroups = hasCompleteProfile ? groups.slice(firstCompleteIndex) : [latestGroup];
+    const relevantGroups = groups;
     const completeGroups = relevantGroups.filter(isComplete);
     const latestProfileGroup = completeGroups[completeGroups.length - 1] || latestGroup;
     const allowedFrameKeys = new Set<string>();
@@ -870,8 +894,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const missingDepths = this.expectedSentekDepthsCm.filter(
       (depth) => !latestGroup.latestByIdentity.has(`${selectedMetric}:${depth}`)
     );
-    const dataStart = Math.max(this.getFechaDesdeMs(), relevantGroups[0].start);
-    const dataEnd = latestGroup.end;
+    const period = this.getRequestedPeriodBounds();
+    const dataStart = period.start;
+    const dataEnd = period.end;
     return {
       allowedFrameKeys,
       dataEnd,
@@ -884,8 +909,8 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       ),
       latestPoints,
       missingDepths,
-      visibleEnd: dataEnd + this.sentekChartLeadMs,
-      visibleStart: Math.max(this.getFechaDesdeMs(), dataStart - this.sentekChartLeadMs),
+      visibleEnd: dataEnd,
+      visibleStart: dataStart,
     };
   }
 
@@ -1085,7 +1110,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   private buildProfileRows(definition: SoilMetricDefinition, latestPoints: HistoricalPoint[]): ProfileRow[] {
     return latestPoints.map((point) => ({
       profundidad: point.depth,
-      formatted: `${Number(point.y).toFixed(definition.decimals)} ${definition.unit}`,
+      formatted: `${Number(point.y).toFixed(definition.displayDecimals)} ${definition.unit}`,
       raw: point.raw !== undefined && point.rawUnit ? `${Number(point.raw).toFixed(3)} ${point.rawUnit}` : undefined,
     }));
   }
@@ -1620,7 +1645,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     );
     if (!pointCount) return 'Sin lecturas historicas para esta variable';
     const latest = latestPoints.length ? ` - ultimo perfil ${latestPoints.length}/12 niveles` : '';
-    return `${series.length}/12 profundidades detectadas - ${pointCount} datos crudos${latest}`;
+    const source = this.rawFrames.length ? 'lecturas crudas' : 'valores de reportes agregados';
+    const period = this.periodDays === 1 ? '24 h' : `${this.periodDays} dias`;
+    return `${series.length}/12 profundidades detectadas - ${pointCount} ${source} en ${period}${latest}`;
   }
 
   private buildProfileCoverageNotice(latestPoints: HistoricalPoint[]): string {
@@ -1655,11 +1682,11 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   }
 
   private filteredRawFrames(): ILorawanRawFrame[] {
-    const desde = this.getFechaDesdeMs();
+    const period = this.getRequestedPeriodBounds();
     return [...(this.rawFrames || [])]
       .filter((frame) => {
         const timestamp = new Date(frame.timestamp).getTime();
-        return Number.isFinite(timestamp) && (!desde || timestamp >= desde);
+        return Number.isFinite(timestamp) && timestamp >= period.start && timestamp <= period.end;
       })
       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   }
@@ -1673,11 +1700,22 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   }
 
   private filteredReports(): IReporte[] {
-    const desde = this.getFechaDesdeMs();
+    const period = this.getRequestedPeriodBounds();
     return this.sortedReports().filter((reporte) => {
       const timestamp = this.getReporteTimestamp(reporte);
-      return !desde || (!!timestamp && timestamp >= desde);
+      return !!timestamp && timestamp >= period.start && timestamp <= period.end;
     });
+  }
+
+  private getRequestedPeriodBounds(): { start: number; end: number } {
+    const configuredEnd =
+      typeof this.periodEnd === 'number' ? this.periodEnd : this.periodEnd ? new Date(this.periodEnd).getTime() : NaN;
+    const end = Number.isFinite(configuredEnd) ? configuredEnd : Date.now();
+    const days = Math.max(1, Math.min(Number(this.periodDays) || 30, 365));
+    return {
+      start: Math.max(this.getFechaDesdeMs(), end - days * 86_400_000),
+      end,
+    };
   }
 
   private getFechaDesdeMs(): number {
@@ -1712,6 +1750,10 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         for (const reading of frame.readings || []) {
           rows.push([
             frame.timestamp,
+            frame.devEUI,
+            frame.id || '',
+            frame.fCnt ?? '',
+            (frame.profileChannels || []).join(','),
             reading.depthCm === undefined ? '' : reading.depthCm,
             reading.variable === 'humedad_suelo' ? reading.value : '',
             reading.variable === 'salinidad_suelo' ? reading.value : '',
@@ -1733,6 +1775,10 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       for (const row of buildSentekProfile(reporte)) {
         rows.push([
           fecha,
+          '',
+          '',
+          '',
+          '',
           row.profundidad,
           row.humedad?.actual ?? '',
           row.salinidad?.actual ?? '',

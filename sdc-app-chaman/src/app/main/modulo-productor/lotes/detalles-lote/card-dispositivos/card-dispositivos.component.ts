@@ -77,6 +77,7 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   public cargandoHistorico = new Set<string>();
   public erroresHistorico = new Set<string>();
   public diasHistorico = 30;
+  public historicoHasta = new Date().toISOString();
   private initialized = false;
   private loadVersion = 0;
   private rainLoadVersion = 0;
@@ -137,7 +138,14 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
   public async cambiarPeriodo(dias: number): Promise<void> {
     if (dias === this.diasHistorico) return;
     this.diasHistorico = dias;
+    this.historicoHasta = new Date().toISOString();
     await Promise.all([this.cargarHistoricosInline(), this.cargarLluviasHistoricas()]);
+  }
+
+  private rawHistoryLimit(): number {
+    if (this.diasHistorico <= 1) return 1000;
+    if (this.diasHistorico <= 7) return 4000;
+    return 12000;
   }
 
   public esLanzaDeSuelo(dispositivo: IDispositivo): boolean {
@@ -309,7 +317,7 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
               Promise.allSettled([
                 this.reportesService.historico(id, this.diasHistorico, 5000),
                 needsRaw
-                  ? this.lorawanUplinks.rawHistory(dispositivo.deveui!, this.diasHistorico, 5000)
+                  ? this.lorawanUplinks.rawHistory(dispositivo.deveui!, this.diasHistorico, this.rawHistoryLimit())
                   : Promise.resolve<ILorawanRawFrame[]>([]),
               ])
             );
@@ -678,6 +686,7 @@ export class CardDispositivosComponent implements OnInit, OnDestroy, OnChanges {
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['lote']) {
+      this.historicoHasta = new Date().toISOString();
       this.setDispositivos();
       if (this.initialized) {
         void Promise.all([

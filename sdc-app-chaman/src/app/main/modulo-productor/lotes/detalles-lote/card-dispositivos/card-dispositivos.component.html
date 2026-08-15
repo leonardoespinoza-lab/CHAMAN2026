@@ -9,7 +9,7 @@
     </div>
     <div class="devices-toolbar">
       <div class="history-period" role="group" aria-label="Periodo de las curvas de sensores">
-        @for (dias of [1, 7, 30, 90]; track dias) {
+        @for (dias of [1, 7, 30]; track dias) {
           <button type="button" [class.active]="diasHistorico === dias" (click)="cambiarPeriodo(dias)">
             {{ dias === 1 ? '24 h' : dias + ' días' }}
           </button>
@@ -99,6 +99,8 @@
               [agronomicThresholds]="sentekAgronomicThresholds"
               [agronomicThresholdsUnavailable]="sentekAgronomicThresholdsUnavailable"
               [timeZone]="sentekTimeZone"
+              [periodDays]="diasHistorico"
+              [periodEnd]="historicoHasta"
               [titulo]="'Perfil de suelo'"
               [fechaDesde]="dispositivo.fechaAsignacionLote"
               [mostrarNapa]="false"

@@ -68,7 +68,11 @@ export class LorawanUplinksService {
     const days = Math.max(1, Math.min(Number(query.days) || 7, 365));
     const limit = Math.max(1, Math.min(Number(query.limit) || 5000, 20000));
     const since = Date.now() - days * 86_400_000;
-    const uplinks = await this.repository.recentByDevEUI(devEUI, limit);
+    const uplinks = await this.repository.recentByDevEUI(
+      devEUI,
+      limit,
+      new Date(since),
+    );
     const dispositivo = await this.dispositivos
       .getFilter({ filter: JSON.stringify({ deveui: devEUI }), limit: 1 })
       .then((result: any) => result?.datos?.[0] as IDispositivo | undefined)

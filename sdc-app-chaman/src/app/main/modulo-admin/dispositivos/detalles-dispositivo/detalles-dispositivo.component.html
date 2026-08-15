@@ -118,6 +118,8 @@
       <app-grafico-historico-suelo
         [reportes]="reportesHistoricos"
         [rawFrames]="rawFrames"
+        [periodDays]="diasHistorico"
+        [periodEnd]="historicoHasta"
         [titulo]="'Historico Sentek - ' + dispositivo?.nombre"
         [subtitulo]="'Datos crudos: cada punto es una lectura LoRaWAN recibida en esa profundidad'"
       ></app-grafico-historico-suelo>
@@ -129,6 +131,8 @@
     <app-grafico-historico-suelo
       [reportes]="reportesHistoricos"
       [rawFrames]="rawFrames"
+      [periodDays]="diasHistorico"
+      [periodEnd]="historicoHasta"
       [titulo]="'Historico del controlador - ' + dispositivo?.nombre"
       [subtitulo]="'Datos crudos: cada punto es una lectura LoRaWAN recibida'"
     ></app-grafico-historico-suelo>

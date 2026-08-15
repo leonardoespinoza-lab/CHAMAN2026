@@ -1,4 +1,5 @@
 import { LorawanUplinksRepository } from './repository';
+import { LorawanUplinksService } from './service';
 
 describe('LorawanUplinksRepository inventory', () => {
   it('returns one most recent uplink per normalized DevEUI', async () => {
@@ -71,5 +72,56 @@ describe('LorawanUplinksRepository inventory', () => {
     expect(sort).toHaveBeenCalledWith({ timestamp: -1, fechaCreacion: -1 });
     expect(limit).toHaveBeenCalledWith(5000);
     expect(result.map((row) => row.fCnt)).toEqual([11, 12]);
+  });
+
+  it('applies the requested date before limit so older rows cannot displace rows from the period', async () => {
+    const lean = jest.fn().mockResolvedValue([]);
+    const limit = jest.fn().mockReturnValue({ lean });
+    const sort = jest.fn().mockReturnValue({ limit });
+    const find = jest.fn().mockReturnValue({ sort });
+    const repository = new LorawanUplinksRepository({ find } as any);
+    const since = new Date('2026-08-08T12:00:00.000Z');
+
+    await repository.recentByDevEUI('24E124454E358347', 12_000, since);
+
+    expect(find).toHaveBeenCalledWith({
+      devEUI: {
+        $in: ['24E124454E358347', '24e124454e358347', '24E124454E358347'],
+      },
+      timestamp: { $gte: since },
+    });
+    expect(sort).toHaveBeenCalledWith({ timestamp: -1, fechaCreacion: -1 });
+    expect(limit).toHaveBeenCalledWith(12_000);
+  });
+});
+
+describe('LorawanUplinksService raw history boundary', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('passes the exact requested period start to the repository', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-08-15T18:00:00.000Z'));
+    const recentByDevEUI = jest.fn().mockResolvedValue([]);
+    const dispositivos = {
+      getFilter: jest.fn().mockResolvedValue({ datos: [] }),
+    };
+    const service = new LorawanUplinksService(
+      { recentByDevEUI } as any,
+      dispositivos as any,
+      {} as any,
+    );
+
+    await service.rawHistory({
+      devEUI: ' 24e124454e358347 ',
+      days: 7,
+      limit: 12_000,
+    });
+
+    expect(recentByDevEUI).toHaveBeenCalledWith(
+      '24E124454E358347',
+      12_000,
+      new Date('2026-08-08T18:00:00.000Z'),
+    );
   });
 });

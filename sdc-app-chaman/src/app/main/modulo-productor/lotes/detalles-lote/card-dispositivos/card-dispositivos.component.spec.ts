@@ -85,6 +85,43 @@ describe('CardDispositivosComponent', () => {
     expect(component.esMedidorNapa(component.dispositivos[0])).toBeFalse();
   });
 
+  it('solicita suficiente historia cruda para 24 horas, 7 dias y 30 dias sin promediar', async () => {
+    const historico = jasmine.createSpy().and.resolveTo({ datos: [] });
+    const rawHistory = jasmine.createSpy().and.resolveTo([]);
+    const component = new CardDispositivosComponent({} as any, { historico } as any, { rawHistory } as any, {} as any);
+    component.lote = {
+      dispositivos: [
+        {
+          _id: 'controller-raw',
+          deveui: '24E124454E358347',
+          nombre: 'Controlador Sentek',
+          sensores: ['Humedad Suelo Profundidad', 'Temperatura Suelo', 'Salinidad Suelo'],
+          configuracionLecturas: {
+            perfilSuelo: {
+              niveles: 12,
+              profundidadesCm: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120],
+              protocolo: 'SDI-12',
+              tipo: 'sonda_sentek_120cm',
+              variables: ['humedad_vwc', 'salinidad_vic', 'temperatura'],
+            },
+          },
+        },
+      ],
+    } as ILote;
+    component.ngOnChanges({ lote: {} as any });
+
+    for (const [days, limit] of [
+      [1, 1000],
+      [7, 4000],
+      [30, 12000],
+    ] as const) {
+      component.diasHistorico = days;
+      rawHistory.calls.reset();
+      await (component as any).cargarHistoricosInline();
+      expect(rawHistory).toHaveBeenCalledOnceWith('24E124454E358347', days, limit);
+    }
+  });
+
   it('carga solo lluvia historica de la siembra para superponerla al perfil', async () => {
     jasmine.clock().install();
     jasmine.clock().mockDate(new Date('2026-08-15T15:00:00.000Z'));
@@ -661,7 +698,7 @@ describe('CardDispositivosComponent', () => {
             .withContext(`fuera del card ${JSON.stringify(measurements)}`)
             .toBeTrue()
         );
-        expect(historyButtons).toHaveSize(4);
+        expect(historyButtons).toHaveSize(3);
         expect(historyButtons.every((button) => insideCard(button) && button.offsetWidth > 0)).toBeTrue();
         expect(chart.chartWidth)
           .withContext(`Highcharts excede host ${JSON.stringify(measurements)}`)

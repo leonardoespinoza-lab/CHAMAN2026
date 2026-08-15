@@ -91,12 +91,19 @@ export class LorawanUplinksRepository {
   async recentByDevEUI(
     devEUI: string,
     limit = 5000,
+    since?: Date,
   ): Promise<ILorawanUplink[]> {
     const upper = devEUI.toUpperCase();
     const lower = devEUI.toLowerCase();
     const safeLimit = Math.max(1, Math.min(Number(limit) || 5000, 20000));
+    const query: Record<string, unknown> = {
+      devEUI: { $in: [upper, lower, devEUI] },
+    };
+    if (since && Number.isFinite(since.getTime())) {
+      query.timestamp = { $gte: since };
+    }
     const rows = await this.model
-      .find({ devEUI: { $in: [upper, lower, devEUI] } })
+      .find(query)
       .sort({ timestamp: -1, fechaCreacion: -1 })
       .limit(safeLimit)
       .lean();
