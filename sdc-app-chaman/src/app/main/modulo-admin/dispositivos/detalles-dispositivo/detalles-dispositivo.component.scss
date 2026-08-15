@@ -167,6 +167,21 @@
   .physical-sensors {
     grid-template-columns: 1fr;
   }
+
+  .physical-sensor {
+    align-items: start;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .physical-sensor-status,
+  .physical-sensor-reading {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .physical-sensor-reading {
+    align-items: flex-start;
+  }
 }
 
 @media (max-width: 640px) {

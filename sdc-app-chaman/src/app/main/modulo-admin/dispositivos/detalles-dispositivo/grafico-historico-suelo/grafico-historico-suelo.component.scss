@@ -1,3 +1,9 @@
+:host {
+  display: block;
+  min-width: 0;
+  width: 100%;
+}
+
 .soil-history-card {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(242, 252, 250, 0.7)), var(--p-surface-0);
   backdrop-filter: blur(12px);
@@ -379,7 +385,7 @@
   border: 1px solid var(--p-surface-border);
   border-radius: 12px;
   margin-top: 0.75rem;
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 .raw-evidence-row {
@@ -390,6 +396,11 @@
   gap: 0.75rem;
   grid-template-columns: 1.25fr 0.75fr 1.2fr 1fr 0.65fr;
   padding: 0.65rem 0.8rem;
+}
+
+.raw-evidence-row > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .raw-evidence-row + .raw-evidence-row {
@@ -511,5 +522,6 @@
   .raw-evidence-row,
   .raw-evidence-table.compact .raw-evidence-row {
     grid-template-columns: 1fr 1fr;
+    min-width: 0;
   }
 }

@@ -1,3 +1,9 @@
+:host {
+  display: block;
+  min-width: 0;
+  width: 100%;
+}
+
 .napa-card {
   background: var(--p-content-background);
   border: 1px solid var(--p-content-border-color);
@@ -14,11 +20,6 @@
   display: flex;
   gap: 16px;
   justify-content: space-between;
-}
-
-.napa-trend-row {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .napa-kicker,
@@ -57,6 +58,11 @@
   gap: 8px;
   min-height: 42px;
   padding: 0 14px;
+}
+
+.napa-trend span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .napa-trend[data-direction="sube"] {
@@ -272,7 +278,7 @@
   color: #075985;
   font-size: 0.8rem;
   font-weight: 900;
-  left: 12px;
+  right: 12px;
   padding: 5px 9px;
   position: absolute;
   top: 7px;
@@ -433,6 +439,8 @@
   }
   .napa-trend {
     justify-self: start;
+    max-width: 100%;
+    white-space: normal;
   }
   .napa-summary {
     grid-template-columns: 1fr;

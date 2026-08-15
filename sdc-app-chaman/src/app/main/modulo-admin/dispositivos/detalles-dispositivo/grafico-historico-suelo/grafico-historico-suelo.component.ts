@@ -311,7 +311,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const rainPoints = definition.key === 'humedad' ? this.buildRainPoints() : [];
     const hasRain = rainPoints.some((point) => point.y > 0);
     const depthCount = Math.max(series.length, 1);
-    const chartHeight = Math.min(900, Math.max(500, depthCount * 70 + 110));
+    // Cada profundidad ocupa su propia franja. Mantener una altura real por
+    // franja evita que un perfil completo se comprima hasta quedar ilegible.
+    const chartHeight = Math.min(1180, Math.max(560, depthCount * 82 + 130));
     const soilAvailable = 88;
     const soilGap = 1.1;
     const soilHeight = Math.max(5.5, (soilAvailable - soilGap * Math.max(depthCount - 1, 0)) / depthCount);
@@ -500,7 +502,6 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           {
             condition: { maxWidth: 768 },
             chartOptions: {
-              chart: { height: Math.min(chartHeight, 560) },
               legend: { itemStyle: { fontSize: '12px' } },
             },
           },

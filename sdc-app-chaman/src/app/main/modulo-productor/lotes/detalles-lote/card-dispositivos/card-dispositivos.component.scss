@@ -163,7 +163,7 @@
 }
 
 .device-technical-details {
-  justify-self: start;
+  width: 100%;
 }
 
 .device-technical-details > summary {
@@ -303,6 +303,9 @@
 
   .history-period button {
     flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 6px;
+    white-space: nowrap;
   }
 
   .devices-title strong,

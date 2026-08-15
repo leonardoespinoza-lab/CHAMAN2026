@@ -175,4 +175,23 @@ describe('GraficoHistoricoSueloComponent', () => {
     expect(component.chartOptions.yAxis[1].title.text).toBe('mm');
     expect(component.chartOptions.yAxis[1].labels.enabled).toBeTrue();
   });
+
+  it('mantiene legibles las 12 franjas del perfil también en pantallas angostas', () => {
+    const component = new GraficoHistoricoSueloComponent();
+    component.rawFrames = [
+      frame(
+        '2026-08-14T10:00:00.000Z',
+        Array.from({ length: 12 }, (_, index) => humedad((index + 1) * 10, 20 + index)),
+        1
+      ),
+    ];
+    component.lluvias = [{ fecha: '2026-08-14', milimetros: 12.4 }];
+
+    component.ngOnChanges({ rawFrames: {} as any, lluvias: {} as any });
+
+    const rainSeries = (component.chartOptions?.series || []).filter((series: any) => series.custom?.isRain);
+    expect(rainSeries).toHaveSize(12);
+    expect(component.chartOptions.chart.height).toBeGreaterThanOrEqual(1000);
+    expect(component.chartOptions.responsive.rules[0].chartOptions.chart).toBeUndefined();
+  });
 });

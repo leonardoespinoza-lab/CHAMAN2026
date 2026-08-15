@@ -1,5 +1,12 @@
 <article class="napa-card">
-  <div class="napa-trend-row">
+  <header class="napa-header">
+    <div class="napa-heading">
+      <span class="napa-kicker">Nivel de napa</span>
+      <h3>{{ titulo || 'Medidor de Napa' }}</h3>
+      @if (subtitulo) {
+        <p>{{ subtitulo }}</p>
+      }
+    </div>
     <div class="napa-trend" [attr.data-direction]="direccion">
       <i
         class="pi"
@@ -10,7 +17,7 @@
       ></i>
       <span>{{ tendenciaLabel }}</span>
     </div>
-  </div>
+  </header>
 
   @if (alertaEntradaAnalogica) {
     <p-message severity="warn" [text]="alertaEntradaAnalogica"></p-message>
