@@ -1,6 +1,11 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { IDispositivo, ILorawanRawFrame, IReporte } from 'modelos/src';
+import {
+  IDispositivo,
+  ILorawanRawFrame,
+  IReporte,
+  serviciosDispositivoNormalizados,
+} from 'modelos/src';
 import { DispositivoService } from '../../../../auxiliares/http/dispositivos.service';
 import { ReporteService } from '../../../../auxiliares/http/reporte.service';
 import { LorawanUplinksService } from '../../../../auxiliares/http/lorawan-uplinks.service';
@@ -63,6 +68,13 @@ export class DetallesDispositivoComponent implements OnInit {
     const depths = this.dispositivo?.configuracionLecturas?.perfilSuelo?.profundidadesCm || [];
     if (!depths.length) return '12 niveles de profundidad';
     return `${depths.length} niveles configurados: ${depths[0]} a ${depths[depths.length - 1]} cm`;
+  }
+
+  public get fechaDesdePerfilSentek(): string | undefined {
+    const servicioPerfil = serviciosDispositivoNormalizados(this.dispositivo).find(
+      (servicio) => servicio.tipo === 'perfil_suelo'
+    );
+    return servicioPerfil?.fechaAsignacionLote || this.dispositivo?.fechaAsignacionLote;
   }
 
   public get esEntradaAnalogica(): boolean {

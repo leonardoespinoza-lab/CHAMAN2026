@@ -205,6 +205,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   private readonly expectedSentekDepthsCm = this.depthOptionsCm;
   private readonly fallbackTimeZone = 'America/Argentina/Buenos_Aires';
   private readonly sentekSweepToleranceMs = 6 * 60 * 1000;
+  private readonly sentekFreshnessToleranceMs = 2 * 60 * 60 * 1000;
+  private readonly sentekVisiblePaddingRatio = 0.04;
+  private readonly sentekVisibleMaxPaddingMs = 10 * 60 * 1000;
   /**
    * Los barridos pueden llegar incompletos o con una cadencia irregular de
    * varias horas. Un corte visual se reserva para una interrupcion realmente
@@ -891,12 +894,40 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const latestPoints = this.expectedSentekDepthsCm
       .map((depth) => latestProfileGroup.latestByIdentity.get(`${selectedMetric}:${depth}`))
       .filter((point): point is HistoricalPoint => !!point);
-    const missingDepths = this.expectedSentekDepthsCm.filter(
-      (depth) => !latestGroup.latestByIdentity.has(`${selectedMetric}:${depth}`)
-    );
     const period = this.getRequestedPeriodBounds();
     const dataStart = period.start;
     const dataEnd = period.end;
+    const selectedMetricPoints = points.filter(
+      (point) =>
+        point.metric === selectedMetric &&
+        Number.isFinite(point.y) &&
+        point.x >= dataStart &&
+        point.x <= dataEnd
+    );
+    if (!selectedMetricPoints.length) return undefined;
+    const latestMetricTimestamp = Math.max(...selectedMetricPoints.map((point) => point.x));
+    const latestTimestampByDepth = new Map<number, number>();
+    selectedMetricPoints.forEach((point) => {
+      latestTimestampByDepth.set(point.depth, Math.max(latestTimestampByDepth.get(point.depth) || 0, point.x));
+    });
+    const missingDepths = this.expectedSentekDepthsCm.filter((depth) => {
+      const latestDepthTimestamp = latestTimestampByDepth.get(depth);
+      return (
+        latestDepthTimestamp === undefined ||
+        latestMetricTimestamp - latestDepthTimestamp > this.sentekFreshnessToleranceMs
+      );
+    });
+    const observedStart = Math.min(...selectedMetricPoints.map((point) => point.x));
+    const observedEnd = latestMetricTimestamp;
+    const observedSpan = Math.max(0, observedEnd - observedStart);
+    const padding =
+      observedSpan > 0
+        ? Math.max(
+            1,
+            Math.min(this.sentekVisibleMaxPaddingMs, Math.floor(observedSpan * this.sentekVisiblePaddingRatio))
+          )
+        : Math.min(this.sentekVisibleMaxPaddingMs, Math.max(30_000, Math.floor((dataEnd - dataStart) * 0.005)));
+    const visibleStart = Math.max(dataStart, observedStart - padding);
     return {
       allowedFrameKeys,
       dataEnd,
@@ -910,7 +941,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       latestPoints,
       missingDepths,
       visibleEnd: dataEnd,
-      visibleStart: dataStart,
+      visibleStart,
     };
   }
 
@@ -1100,11 +1131,11 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   private buildProfileFreshnessNotice(missingDepths: number[]): string {
     if (!missingDepths.length) return '';
     if (missingDepths.length > 4) {
-      return `${missingDepths.length} niveles sin datos en el ultimo barrido.`;
+      return `${missingDepths.length} niveles sin lectura dentro de las 2 h previas al dato más reciente.`;
     }
     const labels = missingDepths.map(String);
     const depths = labels.length > 1 ? `${labels.slice(0, -1).join(', ')} y ${labels[labels.length - 1]}` : labels[0];
-    return `Sin datos recientes: ${depths} cm.`;
+    return `Sin lectura dentro de las 2 h previas al dato más reciente: ${depths} cm.`;
   }
 
   private buildProfileRows(definition: SoilMetricDefinition, latestPoints: HistoricalPoint[]): ProfileRow[] {

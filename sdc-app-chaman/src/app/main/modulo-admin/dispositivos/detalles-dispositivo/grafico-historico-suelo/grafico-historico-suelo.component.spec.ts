@@ -207,16 +207,18 @@ describe('GraficoHistoricoSueloComponent', () => {
 
     const oneDay = renderPeriod(1);
     expect(oneDay.filter((point) => point.y !== null).map((point) => point.y)).toEqual([33.33333]);
-    expect(component.chartOptions.xAxis.min).toBe(new Date(periodEnd).getTime() - 86_400_000);
+    expect(component.chartOptions.xAxis.min).toBeLessThan(oneDay[0].x);
+    expect(component.chartOptions.xAxis.max).toBe(new Date(periodEnd).getTime());
 
     const sevenDays = renderPeriod(7);
     expect(sevenDays.filter((point) => point.y !== null).map((point) => point.y)).toEqual([11.11111, 33.33333]);
     expect(sevenDays.some((point) => point.y === 22.22222)).toBeFalse();
-    expect(component.chartOptions.xAxis.min).toBe(new Date(periodEnd).getTime() - 7 * 86_400_000);
+    expect(component.chartOptions.xAxis.min).toBe(new Date('2026-08-12T11:50:00.000Z').getTime());
+    expect(component.chartOptions.xAxis.max).toBe(new Date(periodEnd).getTime());
 
     const thirtyDays = renderPeriod(30);
     expect(thirtyDays.filter((point) => point.y !== null).map((point) => point.y)).toEqual([11.11111, 33.33333]);
-    expect(component.chartOptions.xAxis.min).toBe(new Date(periodEnd).getTime() - 30 * 86_400_000);
+    expect(component.chartOptions.xAxis.min).toBe(new Date('2026-08-12T11:50:00.000Z').getTime());
     expect(component.chartOptions.xAxis.max).toBe(new Date(periodEnd).getTime());
 
     const exactPoint = thirtyDays.find((point) => point.fCnt === 202);
@@ -809,20 +811,23 @@ describe('GraficoHistoricoSueloComponent', () => {
 
     component.ngOnChanges({ rawFrames: {} as any, lluvias: {} as any, fechaDesde: {} as any });
 
-    const expectedMin = new Date('2026-07-15T00:00:00.000Z').getTime();
+    const expectedDataMin = new Date('2026-07-15T00:00:00.000Z').getTime();
+    const expectedVisibleMin = new Date('2026-07-15T09:50:00.000Z').getTime();
     const expectedMax = new Date(recentEnd).getTime();
     const rainSeries = (component.chartOptions?.series || []).filter((series: any) => series.custom?.isRain);
     const soilSeries = (component.chartOptions?.series || []).filter((series: any) => series.custom?.isSoil);
 
     expect(soilSeries).toHaveSize(12);
-    expect(component.chartOptions.xAxis.min).toBe(expectedMin);
+    expect(component.chartOptions.xAxis.min).toBe(expectedVisibleMin);
     expect(component.chartOptions.xAxis.max).toBe(expectedMax);
     expect(component.chartOptions.xAxis.startOnTick).toBeFalse();
     expect(rainSeries).toHaveSize(1);
     expect(rainSeries.every((series: any) => series.xAxis === undefined)).toBeTrue();
     expect(rainSeries.every((rain: any) => rain.data.map((point: any) => point.y).join(',') === '8,14')).toBeTrue();
     expect(
-      soilSeries.every((soil: any) => soil.data.every((point: any) => point.x >= expectedMin && point.x <= expectedMax))
+      soilSeries.every((soil: any) =>
+        soil.data.every((point: any) => point.x >= expectedDataMin && point.x <= expectedMax)
+      )
     ).toBeTrue();
     expect(
       soilSeries
@@ -831,9 +836,15 @@ describe('GraficoHistoricoSueloComponent', () => {
     ).toBeTrue();
 
     component.onMetricChange('temperatura');
-    expect([component.chartOptions.xAxis.min, component.chartOptions.xAxis.max]).toEqual([expectedMin, expectedMax]);
+    expect([component.chartOptions.xAxis.min, component.chartOptions.xAxis.max]).toEqual([
+      expectedVisibleMin,
+      expectedMax,
+    ]);
     component.onMetricChange('salinidad');
-    expect([component.chartOptions.xAxis.min, component.chartOptions.xAxis.max]).toEqual([expectedMin, expectedMax]);
+    expect([component.chartOptions.xAxis.min, component.chartOptions.xAxis.max]).toEqual([
+      expectedVisibleMin,
+      expectedMax,
+    ]);
   });
 
   it('en un perfil parcial conserva el historico crudo y marca los niveles faltantes del ultimo barrido', () => {
@@ -846,11 +857,13 @@ describe('GraficoHistoricoSueloComponent', () => {
       '2026-08-14T20:01:00.000Z'
     );
 
-    expect(component.chartOptions.xAxis.min).toBe(new Date('2026-07-14T20:01:00.000Z').getTime());
+    expect(component.chartOptions.xAxis.min).toBe(new Date('2026-07-16T09:50:00.000Z').getTime());
     expect(component.chartOptions.xAxis.max).toBe(new Date('2026-08-14T20:01:00.000Z').getTime());
     expect(component.profileRows.map((row) => row.profundidad)).toEqual([100]);
     expect(component.profileRecentMissingDepths).toHaveSize(11);
-    expect(component.profileFreshnessNotice).toBe('11 niveles sin datos en el ultimo barrido.');
+    expect(component.profileFreshnessNotice).toBe(
+      '11 niveles sin lectura dentro de las 2 h previas al dato más reciente.'
+    );
     const soilSeries = (component.chartOptions.series || []).filter((series: any) => series.custom?.isSoil);
     expect(soilSeries[0].data.filter((point: any) => point.y !== null)).toEqual([
       jasmine.objectContaining({ x: new Date('2026-07-16T10:00:00.000Z').getTime(), y: 30 }),
@@ -880,11 +893,13 @@ describe('GraficoHistoricoSueloComponent', () => {
     );
 
     expect(component.chartOptions.series).toHaveSize(12);
-    expect(component.chartOptions.xAxis.min).toBe(new Date('2026-07-14T20:01:00.000Z').getTime());
+    expect(component.chartOptions.xAxis.min).toBe(new Date('2026-07-16T09:50:00.000Z').getTime());
     expect(component.profileRows.map((row) => row.profundidad)).toEqual(recentDepths);
     expect(component.profileCoverageNotice).toContain('9/12 niveles');
     expect(component.profileRecentMissingDepths).toEqual(oldDepths);
-    expect(component.profileFreshnessNotice).toBe('Sin datos recientes: 100, 110 y 120 cm.');
+    expect(component.profileFreshnessNotice).toBe(
+      'Sin lectura dentro de las 2 h previas al dato más reciente: 100, 110 y 120 cm.'
+    );
     const deepSeries = component.chartOptions.series.filter((series: any) =>
       oldDepths.includes(series.custom?.depthCm)
     );
@@ -910,13 +925,15 @@ describe('GraficoHistoricoSueloComponent', () => {
       '2026-08-14T20:01:00.000Z'
     );
 
-    expect(component.chartOptions.xAxis.min).toBe(new Date('2026-07-14T20:01:00.000Z').getTime());
+    expect(component.chartOptions.xAxis.min).toBe(new Date('2026-07-16T09:50:00.000Z').getTime());
     expect(component.profileRows.map((row) => row.profundidad)).toEqual(allDepths.slice(0, 6));
     expect(component.profileRecentMissingDepths).toEqual(allDepths.slice(6));
-    expect(component.profileFreshnessNotice).toBe('6 niveles sin datos en el ultimo barrido.');
+    expect(component.profileFreshnessNotice).toBe(
+      '6 niveles sin lectura dentro de las 2 h previas al dato más reciente.'
+    );
   });
 
-  it('no fabrica un barrido completo encadenando bloques durante quince minutos', () => {
+  it('no fabrica un barrido completo y no declara atrasos cuando cada nivel se leyo en los ultimos quince minutos', () => {
     const allDepths = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
     const component = prepare(
       [0, 5, 10, 15].map((minutes, block) =>
@@ -929,8 +946,79 @@ describe('GraficoHistoricoSueloComponent', () => {
     );
 
     expect(component.profileRows.map((row) => row.profundidad)).toEqual([70, 80, 90, 100, 110, 120]);
-    expect(component.profileRecentMissingDepths).toEqual([10, 20, 30, 40, 50, 60]);
+    expect(component.profileRecentMissingDepths).toEqual([]);
+    expect(component.profileFreshnessNotice).toBe('');
     expect(component.profileCoverageNotice).toContain('6/12 niveles');
+  });
+
+  it('no alerta por 10, 20 y 30 cm cuando sus ultimas lecturas estan cuarenta minutos atras', () => {
+    const allDepths = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+    const component = prepare(
+      [
+        frame(
+          '2026-08-14T18:00:00.000Z',
+          allDepths.map((depth, index) => humedad(depth, 20 + index)),
+          1
+        ),
+        frame(
+          '2026-08-14T18:40:00.000Z',
+          allDepths.slice(3).map((depth, index) => humedad(depth, 24 + index)),
+          2
+        ),
+      ],
+      1,
+      '2026-08-14T18:41:00.000Z'
+    );
+
+    expect(component.profileRecentMissingDepths).toEqual([]);
+    expect(component.profileFreshnessNotice).toBe('');
+  });
+
+  it('alerta con precision por 10, 20 y 30 cm cuando quedaron mas de dos horas atras', () => {
+    const allDepths = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+    const component = prepare(
+      [
+        frame(
+          '2026-08-14T16:00:00.000Z',
+          allDepths.map((depth, index) => humedad(depth, 20 + index)),
+          1
+        ),
+        frame(
+          '2026-08-14T18:01:00.000Z',
+          allDepths.slice(3).map((depth, index) => humedad(depth, 24 + index)),
+          2
+        ),
+      ],
+      1,
+      '2026-08-14T18:02:00.000Z'
+    );
+
+    expect(component.profileRecentMissingDepths).toEqual([10, 20, 30]);
+    expect(component.profileFreshnessNotice).toBe(
+      'Sin lectura dentro de las 2 h previas al dato más reciente: 10, 20 y 30 cm.'
+    );
+  });
+
+  it('mantiene visible la cola vacia cuando el sensor dejo de reportar hace cinco horas', () => {
+    const depths = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+    const lastObserved = new Date('2026-08-14T13:00:00.000Z').getTime();
+    const periodEnd = new Date('2026-08-14T18:00:00.000Z').getTime();
+    const component = prepare(
+      [
+        frame(
+          new Date(lastObserved).toISOString(),
+          depths.map((depth, index) => humedad(depth, 20 + index)),
+          1
+        ),
+      ],
+      1,
+      periodEnd
+    );
+
+    expect(component.chartOptions.xAxis.min).toBeLessThan(lastObserved);
+    expect(component.chartOptions.xAxis.max).toBe(periodEnd);
+    expect(component.chartOptions.xAxis.max - lastObserved).toBe(5 * 60 * 60 * 1000);
+    expect(component.profileFreshnessNotice).toBe('');
   });
 
   it('separa los ciclos Gil 189-191 y 192-194 aunque lleguen con menos de seis minutos de diferencia', () => {
@@ -956,8 +1044,12 @@ describe('GraficoHistoricoSueloComponent', () => {
     expect(soilSeries.every((series: any) => series.data.length === 2)).toBeTrue();
     expect(component.profileRows).toHaveSize(12);
     expect(component.profileFreshnessNotice).toBe('');
-    expect(component.chartOptions.xAxis.min).toBe(new Date(periodEnd).getTime() - 86_400_000);
-    expect(component.chartOptions.xAxis.max).toBe(new Date(periodEnd).getTime());
+    const firstObserved = new Date('2026-08-14T20:00:00.000Z').getTime();
+    const lastObserved = new Date('2026-08-14T20:04:30.000Z').getTime();
+    expect(component.chartOptions.xAxis.min).toBeLessThan(firstObserved);
+    expect(component.chartOptions.xAxis.max).toBeGreaterThan(lastObserved);
+    expect(firstObserved - component.chartOptions.xAxis.min).toBeLessThan(60_000);
+    expect(component.chartOptions.xAxis.max - lastObserved).toBe(60_000);
   });
 
   it('mantiene un unico dominio Arturo 61-72 y no deja temperatura al seleccionar salinidad', () => {
@@ -996,17 +1088,23 @@ describe('GraficoHistoricoSueloComponent', () => {
     ];
     component.ngOnChanges({ rawFrames: {} as any });
 
-    const expectedDomain = [
-      new Date('2026-08-14T21:50:45.882Z').getTime() - 86_400_000,
-      new Date('2026-08-14T21:50:45.882Z').getTime(),
-    ];
     const domain = () => [component.chartOptions.xAxis.min, component.chartOptions.xAxis.max];
+    const assertTightDomain = (): void => {
+      const soilSeries = component.chartOptions.series.filter((series: any) => series.custom?.isSoil);
+      const realPoints = soilSeries.flatMap((series: any) => series.data.filter((point: any) => point.y !== null));
+      const firstObserved = Math.min(...realPoints.map((point: any) => point.x));
+      const lastObserved = Math.max(...realPoints.map((point: any) => point.x));
+      expect(domain()[0]).toBeLessThan(firstObserved);
+      expect(domain()[1]).toBeGreaterThanOrEqual(lastObserved);
+      expect(firstObserved - domain()[0]).toBeLessThanOrEqual(10 * 60 * 1000);
+      expect(domain()[1] - lastObserved).toBeLessThanOrEqual(10 * 60 * 1000);
+    };
 
-    expect(domain()).toEqual(expectedDomain);
+    assertTightDomain();
     component.onMetricChange('temperatura');
-    expect(domain()).toEqual(expectedDomain);
+    assertTightDomain();
     component.onMetricChange('salinidad');
-    expect(domain()).toEqual(expectedDomain);
+    assertTightDomain();
 
     const salinitySeries = component.chartOptions.series.filter((series: any) => series.custom?.isSoil);
     expect(salinitySeries).toHaveSize(12);
@@ -1037,7 +1135,7 @@ describe('GraficoHistoricoSueloComponent', () => {
     ];
     component.ngOnChanges({ rawFrames: {} as any, lluvias: {} as any, fechaDesde: {} as any });
 
-    const expectedDomain = [
+    const requestedDomain = [
       new Date('2026-08-14T19:00:00.000Z').getTime(),
       new Date('2026-08-14T23:50:47.150Z').getTime(),
     ];
@@ -1048,7 +1146,13 @@ describe('GraficoHistoricoSueloComponent', () => {
     ) => {
       component.onMetricChange(metric);
       const soilSeries = component.chartOptions.series.filter((series: any) => series.custom?.isSoil);
-      expect([component.chartOptions.xAxis.min, component.chartOptions.xAxis.max]).toEqual(expectedDomain);
+      const realPoints = soilSeries.flatMap((series: any) => series.data.filter((point: any) => point.y !== null));
+      const firstObserved = Math.min(...realPoints.map((point: any) => point.x));
+      const lastObserved = Math.max(...realPoints.map((point: any) => point.x));
+      expect(component.chartOptions.xAxis.min).toBeGreaterThanOrEqual(requestedDomain[0]);
+      expect(component.chartOptions.xAxis.min).toBeLessThan(firstObserved);
+      expect(component.chartOptions.xAxis.max).toBeGreaterThanOrEqual(lastObserved);
+      expect(component.chartOptions.xAxis.max).toBe(requestedDomain[1]);
       expect(soilSeries).toHaveSize(12);
       expect(
         soilSeries.every((series: any) => {
@@ -1181,12 +1285,50 @@ describe('GraficoHistoricoSueloComponent', () => {
     assertGeometry('temperatura', 10, 1, 8);
 
     expect(widthRatio).toBeGreaterThanOrEqual(0.78);
-    expect(humidityChart.xAxis[0].min).toBe(new Date('2026-08-14T19:00:00.000Z').getTime());
+    expect(humidityChart.xAxis[0].min).toBeGreaterThan(new Date('2026-08-14T19:00:00.000Z').getTime());
     expect(humidityChart.xAxis[0].max).toBe(new Date('2026-08-14T23:50:47.150Z').getTime());
-    expect(observedSpan).toBeGreaterThan(0.6);
-    expect(observedSpan).toBeLessThan(0.64);
+    expect(observedSpan).toBeGreaterThanOrEqual(0.88);
+    expect(observedSpan).toBeLessThanOrEqual(1);
     fixture.destroy();
   }));
+
+  [1664, 390].forEach((width) => {
+    it(`recorta el eje al dato observado sin perder puntos crudos a ${width}px`, fakeAsync(() => {
+      TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
+      const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+      const host = fixture.nativeElement as HTMLElement;
+      host.style.display = 'block';
+      host.style.maxWidth = 'none';
+      host.style.width = `${width}px`;
+      const periodEnd = new Date('2026-08-14T23:50:47.150Z').getTime();
+      const requestedStart = periodEnd - 24 * 60 * 60 * 1000;
+      fixture.componentRef.setInput('periodDays', 1);
+      fixture.componentRef.setInput('periodEnd', periodEnd);
+      fixture.componentRef.setInput('rawFrames', secuenciaArturoProductiva());
+      fixture.componentRef.setInput('mostrarNapa', false);
+      fixture.componentRef.setInput('mostrarEntradaAnalogica', false);
+      fixture.detectChanges();
+      tick(160);
+
+      const chart = fixture.debugElement.query(By.directive(ChartComponent)).componentInstance.chart!;
+      chart.reflow();
+      tick(40);
+      const soilSeries = chart.series.filter((series: any) => series.options.custom?.isSoil);
+      const humidity40 = soilSeries.find((series: any) => series.options.id === 'sentek-humedad-40')!;
+      const observedPoints = humidity40.points.filter((point: any) => !point.isNull);
+      const observedSpan = (observedPoints.at(-1).plotX - observedPoints[0].plotX) / chart.plotWidth;
+      const renderedRawCount = soilSeries.reduce(
+        (total: number, series: any) => total + series.points.filter((point: any) => !point.isNull).length,
+        0
+      );
+
+      expect(chart.xAxis[0].min).toBeGreaterThan(requestedStart);
+      expect(chart.xAxis[0].max).toBe(periodEnd);
+      expect(observedSpan).withContext(`ocupacion SVG ${width}px`).toBeGreaterThanOrEqual(0.88);
+      expect(renderedRawCount).toBe(117);
+      fixture.destroy();
+    }));
+  });
 
   it('dibuja curva spline y lluvia de fecha diaria dentro de un dominio intradia', fakeAsync(() => {
     TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });

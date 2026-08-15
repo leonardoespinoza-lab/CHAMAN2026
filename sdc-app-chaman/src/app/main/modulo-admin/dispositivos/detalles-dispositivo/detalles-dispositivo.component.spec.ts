@@ -85,4 +85,38 @@ describe('DetallesDispositivoComponent', () => {
     expect(component.rawFrames.map((frame) => frame.id)).toEqual(['periodo-actual']);
     expect(component.diasHistorico).toBe(30);
   });
+
+  it('pasa al grafico la fecha de asignacion del servicio logico de perfil con fallback al controlador', () => {
+    (component as any).setDispositivo({
+      _id: 'device-sentek',
+      deveui: '24E124454E358347',
+      fechaAsignacionLote: '2026-08-01T00:00:00.000Z',
+      tipo: 'Sensor de Humedad de Suelo',
+      servicios: [
+        {
+          fechaAsignacionLote: '2026-08-14T18:00:00.000Z',
+          habilitado: true,
+          id: 'perfil-suelo-sentek',
+          nombre: 'Perfil Sentek',
+          sensores: ['Humedad Suelo Profundidad'],
+          tipo: 'perfil_suelo',
+        },
+      ],
+    } as IDispositivo);
+    fixture.detectChanges();
+
+    const grafico = fixture.debugElement.query(By.directive(GraficoHistoricoSueloComponent))
+      .componentInstance as GraficoHistoricoSueloComponent;
+    expect(component.fechaDesdePerfilSentek).toBe('2026-08-14T18:00:00.000Z');
+    expect(grafico.fechaDesde).toBe('2026-08-14T18:00:00.000Z');
+
+    (component as any).setDispositivo({
+      _id: 'device-sentek-legacy',
+      fechaAsignacionLote: '2026-08-02T00:00:00.000Z',
+      tipo: 'Sensor de Humedad de Suelo',
+    } as IDispositivo);
+    fixture.detectChanges();
+    expect(component.fechaDesdePerfilSentek).toBe('2026-08-02T00:00:00.000Z');
+    expect(grafico.fechaDesde).toBe('2026-08-02T00:00:00.000Z');
+  });
 });
