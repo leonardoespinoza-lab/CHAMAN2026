@@ -33,6 +33,13 @@
       </div>
     }
 
+    @if (rainfallAvailabilityNotice) {
+      <div class="rainfall-availability-note" role="status">
+        <i class="pi pi-info-circle"></i>
+        <span>{{ rainfallAvailabilityNotice }}</span>
+      </div>
+    }
+
     <app-chart [options]="chartOptions"></app-chart>
 
     @if (napaChartOptions) {

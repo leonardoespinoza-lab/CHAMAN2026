@@ -40,6 +40,12 @@ interface AnalogPoint {
 }
 
 interface RainPoint {
+  custom?: {
+    originalDate?: string;
+    originalDateOnly?: boolean;
+  };
+  dayEnd?: number;
+  dayStart?: number;
   x: number;
   y: number;
 }
@@ -97,6 +103,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   public analogActualFecha?: number;
   public profileCoverageNotice = '';
   public profileFreshnessNotice = '';
+  public rainfallAvailabilityNotice = '';
   public profileRecentMissingDepths: number[] = [];
   public controllerCoverageNotice = '';
   public controllerCoverageComplete = false;
@@ -113,25 +120,17 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     { key: 'temperatura', title: 'Temperatura', unit: 'C', color: '#e74c3c', decimals: 1 },
   ];
 
-  private readonly depthColors = [
-    '#22d3c8',
-    '#2f9fe8',
-    '#f59e0b',
-    '#ef4444',
-    '#8b5cf6',
-    '#10b981',
-    '#64748b',
-    '#ec4899',
-    '#14b8a6',
-    '#84cc16',
-    '#f97316',
-    '#06b6d4',
-  ];
-
   private readonly expectedSentekDepthsCm = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
   private readonly sentekSweepToleranceMs = 6 * 60 * 1000;
-  private readonly sentekContinuousProfileGapMs = 60 * 60 * 1000;
+  /**
+   * Los barridos pueden llegar incompletos o con una cadencia irregular de
+   * varias horas. Un corte visual se reserva para una interrupcion realmente
+   * prolongada; los markers siguen identificando exclusivamente lecturas
+   * observadas y no se agregan valores interpolados al dataset.
+   */
+  private readonly sentekContinuousProfileGapMs = 6 * 60 * 60 * 1000;
   private readonly sentekChartLeadMs = 60 * 1000;
+  private readonly sentekMarkerLimit = 80;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (
@@ -288,13 +287,13 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
 
     return [...byDepth.entries()]
       .sort(([a], [b]) => a - b)
-      .map(([depth, data], index) => ({
-        color: this.depthColors[index % this.depthColors.length],
+      .map(([depth, data]) => ({
+        color: definition.color,
         data: data.sort((a, b) => a.x - b.x),
-        lineWidth: 2,
-        marker: { enabled: data.length <= 36, radius: 2 },
+        lineWidth: 1.8,
+        marker: this.buildSentekMarkerOptions(data.length),
         name: `${depth} cm`,
-        type: 'line',
+        type: 'spline',
         turboThreshold: 0,
         custom: { decimals: definition.decimals, depthCm: depth, metric: definition.key, unit: definition.unit },
       }));
@@ -308,24 +307,43 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const rainHalfDayMs = 12 * 60 * 60 * 1000;
     const rainPoints =
       definition.key === 'humedad'
-        ? this.buildRainPoints().filter(
-            (point) =>
-              !recentWindow ||
-              (point.x + rainHalfDayMs >= recentWindow.visibleStart &&
-                point.x - rainHalfDayMs <= recentWindow.visibleEnd)
-          )
+        ? this.buildRainPoints()
+            .filter(
+              (point) =>
+                !recentWindow ||
+                (point.dayStart !== undefined && point.dayEnd !== undefined
+                  ? point.dayEnd > recentWindow.visibleStart && point.dayStart < recentWindow.visibleEnd
+                  : point.x + rainHalfDayMs >= recentWindow.visibleStart &&
+                    point.x - rainHalfDayMs <= recentWindow.visibleEnd)
+            )
+            .map((point) => {
+              if (!recentWindow || point.dayStart === undefined || point.dayEnd === undefined) return point;
+              const intersectionStart = Math.max(point.dayStart, recentWindow.visibleStart);
+              const intersectionEnd = Math.min(point.dayEnd, recentWindow.visibleEnd);
+              return {
+                ...point,
+                x: intersectionStart + Math.max(1, Math.floor((intersectionEnd - intersectionStart) / 2)),
+              };
+            })
         : [];
-    const hasRain = rainPoints.some((point) => point.y > 0);
+    const showRain = rainPoints.length > 0;
+    this.rainfallAvailabilityNotice =
+      definition.key === 'humedad' && !showRain
+        ? this.lluvias.length
+          ? 'Sin lluvia registrada en el período'
+          : 'Sin lluvia histórica disponible'
+        : '';
     this.profileRecentMissingDepths = recentWindow?.missingDepths || [];
     this.profileFreshnessNotice = this.buildProfileFreshnessNotice(this.profileRecentMissingDepths);
     const visibleProfileStart = recentWindow?.visibleStart;
     const visibleProfileEnd = recentWindow?.visibleEnd;
     const depthCount = Math.max(series.length, 1);
-    const chartHeight = Math.min(760, Math.max(500, depthCount * 54 + 110));
-    const soilAvailable = 90;
-    const soilGap = 1.1;
+    const chartHeight = 540;
+    const soilAvailable = 88;
+    const soilGap = 0.8;
     const soilHeight = Math.max(5.5, (soilAvailable - soilGap * Math.max(depthCount - 1, 0)) / depthCount);
     const rainMax = Math.max(1, ...rainPoints.map((point) => point.y));
+    const metricDomain = this.buildMetricDomain(definition, series);
     const soilAxes: any[] = [];
     const soilAxisIds = series.map((item, index) => `sentek-${definition.key}-depth-${item.custom?.depthCm ?? index}`);
     const rainAxisId = 'sentek-rain-shared';
@@ -334,26 +352,32 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       const top = index * (soilHeight + soilGap);
       soilAxes.push({
         id: soilAxisIds[index],
-        max: definition.key === 'humedad' ? 100 : null,
-        min: definition.key === 'humedad' ? 0 : null,
+        max: metricDomain.max,
+        min: metricDomain.min,
         title: {
           text: item.name,
           align: 'middle',
           margin: 6,
           rotation: 0,
-          style: { color: item.color || definition.color, fontSize: '12px', fontWeight: '900' },
+          style: {
+            color: definition.color,
+            fontSize: '12px',
+            fontWeight: '850',
+            textOverflow: 'clip',
+            whiteSpace: 'nowrap',
+          },
         },
         labels: { enabled: false },
-        endOnTick: true,
-        gridLineColor: 'var(--p-surface-border)',
-        gridLineWidth: 1,
+        endOnTick: false,
+        startOnTick: false,
+        gridLineWidth: 0,
         height: `${soilHeight}%`,
         top: `${top}%`,
         offset: 0,
       });
     });
 
-    const rainAxis = hasRain
+    const rainAxis = showRain
       ? {
           id: rainAxisId,
           max: rainMax * 1.08,
@@ -379,15 +403,19 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           opposite: true,
         }
       : undefined;
-    const rainSeries = hasRain
+    const visibleSpan = Math.max(0, (visibleProfileEnd || 0) - (visibleProfileStart || 0));
+    const rainPointRange = visibleSpan
+      ? Math.min(24 * 60 * 60 * 1000, Math.max(15 * 60 * 1000, visibleSpan / 8))
+      : 24 * 60 * 60 * 1000;
+    const rainSeries = showRain
       ? [
           {
-            color: 'rgba(47, 159, 232, 0.12)',
+            color: 'rgba(47, 159, 232, 0.22)',
             custom: { decimals: 1, isRain: true, unit: 'mm' },
             data: rainPoints,
             id: 'sentek-rain-shared',
             name: 'Lluvia (mm)',
-            pointRange: 24 * 60 * 60 * 1000,
+            pointRange: rainPointRange,
             showInLegend: true,
             type: 'column',
             yAxis: rainAxisId,
@@ -404,6 +432,16 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     }));
     const plottedSeries = [...rainSeries, ...soilSeries];
 
+    const formatTooltipDateTime = (timestamp: number): string =>
+      new Date(timestamp).toLocaleString('es-AR', {
+        day: '2-digit',
+        hour: '2-digit',
+        hour12: false,
+        minute: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+
     return {
       chart: {
         animation: false,
@@ -413,7 +451,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         spacingLeft: 2,
         spacingRight: 20,
         spacingTop: 8,
-        type: 'line',
+        type: 'spline',
         zooming: { type: 'x' },
         style: {
           fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -444,7 +482,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       yAxis: [...soilAxes, ...(rainAxis ? [rainAxis] : [])],
       legend: {
         align: 'right',
-        enabled: hasRain,
+        enabled: showRain,
         itemDistance: 16,
         itemStyle: {
           color: 'var(--p-text-color)',
@@ -461,23 +499,25 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         borderWidth: 1,
         shared: false,
         shadow: true,
-        xDateFormat: '%d/%m/%Y %H:%M',
-        valueDecimals: definition.decimals,
-        valueSuffix: ` ${definition.unit}`,
-        pointFormatter: function (this: any) {
-          const point = this as HistoricalPoint & { color?: string; series?: any };
-          if (point.custom?.isGap) return '';
-          const custom = point.series?.userOptions?.custom || {};
-          const decimals = custom.decimals ?? definition.decimals;
-          const unit = custom.unit || definition.unit;
-          if (custom.isRain) {
-            return `<br/><span style="color:#2f9fe8">&#9646;</span> Lluvia: <strong>${Number(point.y).toFixed(1)} mm</strong>`;
+        formatter: function (this: any) {
+          const point = (this.point || this) as HistoricalPoint & {
+            color?: string;
+            options?: { custom?: RainPoint['custom'] };
+            series?: any;
+          };
+          if (point.custom?.isGap) return false;
+          const seriesCustom = point.series?.userOptions?.custom || {};
+          const pointCustom = point.options?.custom || {};
+          const decimals = seriesCustom.decimals ?? definition.decimals;
+          const unit = seriesCustom.unit || definition.unit;
+          if (seriesCustom.isRain) {
+            const dateLabel =
+              pointCustom.originalDateOnly && pointCustom.originalDate
+                ? pointCustom.originalDate
+                : formatTooltipDateTime(point.x);
+            return `<span style="font-size:12px">${dateLabel}</span><br/><span style="color:#2f9fe8">&#9646;</span> Lluvia: <strong>${Number(point.y).toFixed(1)} mm</strong>`;
           }
-          const raw =
-            point.raw !== undefined && point.rawUnit
-              ? ` <span style="color:#60708a">(crudo ${Number(point.raw).toFixed(3)} ${point.rawUnit})</span>`
-              : '';
-          return `<br/><span style="color:${point.color}">&bull;</span> ${point.series?.name || ''}: <strong>${Number(point.y).toFixed(decimals)} ${unit}</strong>${raw}`;
+          return `<span style="font-size:12px">${formatTooltipDateTime(point.x)}</span><br/><span style="color:${point.color}">&bull;</span> ${point.series?.name || ''}: <strong>${Number(point.y).toFixed(decimals)} ${unit}</strong>`;
         },
         style: { color: 'var(--p-text-color)', fontSize: '14px' },
       },
@@ -489,21 +529,24 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           grouping: false,
           pointPadding: 0.04,
         },
-        line: {
+        spline: {
           animation: false,
           enableMouseTracking: true,
-          lineWidth: 2.4,
+          lineWidth: 1.8,
           marker: {
-            lineWidth: 1,
+            enabled: true,
+            lineWidth: 0.8,
+            radius: 1.8,
             states: {
               hover: {
-                radius: 3.5,
+                enabled: true,
+                radius: 3.2,
               },
             },
           },
           states: {
             hover: {
-              lineWidth: 2.4,
+              lineWidth: 2.2,
             },
           },
         },
@@ -524,7 +567,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
           {
             condition: { maxWidth: 768 },
             chartOptions: {
-              chart: { height: Math.min(chartHeight, 560) },
+              chart: { height: Math.min(chartHeight, 480) },
               legend: { itemStyle: { fontSize: '12px' } },
             },
           },
@@ -538,8 +581,9 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
    * maximo la misma tolerancia del agregador; no se encadena por proximidad.
    * La unica vista parte del primer barrido fisico 36/36 (12 H + 12 S + 12 T)
    * disponible desde fechaDesde. Luego conserva cada lectura valida de los
-   * grupos posteriores y corta solamente la identidad metrica+profundidad que
-   * falto en un grupo; nunca descarta un grupo parcial completo. Si todavia no
+   * grupos posteriores sin convertir las omisiones de un barrido parcial en
+   * huecos. Solo agrega un null cuando dos observaciones reales de la misma
+   * identidad quedan separadas por una interrupcion prolongada. Si todavia no
    * existe un 36/36, conserva como evidencia el ultimo grupo real.
    */
   private buildRecentProfileWindow(
@@ -639,28 +683,33 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const latestProfileGroup = completeGroups[completeGroups.length - 1] || latestGroup;
     const allowedFrameKeys = new Set<string>();
     const gapTimestampsByIdentity = new Map<string, number[]>();
-    const identities = this.definitions.flatMap((definition) =>
-      this.expectedSentekDepthsCm.map((depth) => `${definition.key}:${depth}`)
-    );
     const addGap = (identity: string, timestamp: number): void => {
       if (!gapTimestampsByIdentity.has(identity)) gapTimestampsByIdentity.set(identity, []);
       gapTimestampsByIdentity.get(identity)!.push(timestamp);
     };
-    let previousGroup: (typeof groups)[number] | undefined;
 
     for (const group of relevantGroups) {
       group.frameKeys.forEach((key) => allowedFrameKeys.add(key));
-      if (previousGroup && group.start - previousGroup.start > this.sentekContinuousProfileGapMs) {
-        const midpoint = previousGroup.end + Math.floor((group.start - previousGroup.end) / 2);
-        identities.forEach((identity) => addGap(identity, midpoint));
-      }
-      if (hasCompleteProfile && !isComplete(group)) {
-        identities
-          .filter((identity) => !group.latestByIdentity.has(identity))
-          .forEach((identity) => addGap(identity, group.start));
-      }
-      previousGroup = group;
     }
+
+    const observedByIdentity = new Map<string, HistoricalPoint[]>();
+    points
+      .filter((point) => allowedFrameKeys.has(point.frameKey || `point:${point.x}`))
+      .forEach((point) => {
+        const identity = `${point.metric}:${point.depth}`;
+        if (!observedByIdentity.has(identity)) observedByIdentity.set(identity, []);
+        observedByIdentity.get(identity)!.push(point);
+      });
+    observedByIdentity.forEach((observed, identity) => {
+      const ordered = observed.sort((left, right) => left.x - right.x);
+      for (let index = 1; index < ordered.length; index++) {
+        const previous = ordered[index - 1];
+        const current = ordered[index];
+        if (current.x - previous.x > this.sentekContinuousProfileGapMs) {
+          addGap(identity, previous.x + Math.floor((current.x - previous.x) / 2));
+        }
+      }
+    });
 
     const latestPoints = this.expectedSentekDepthsCm
       .map((depth) => latestProfileGroup.latestByIdentity.get(`${selectedMetric}:${depth}`))
@@ -712,12 +761,50 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       return {
         ...item,
         data,
-        marker: {
-          ...(item.marker || {}),
-          enabled: values.length <= 36,
-        },
+        marker: this.buildSentekMarkerOptions(values.length),
       };
     });
+  }
+
+  private buildSentekMarkerOptions(realPointCount: number): any {
+    return {
+      enabled: realPointCount <= this.sentekMarkerLimit,
+      lineWidth: 0.8,
+      radius: 1.8,
+      states: {
+        hover: {
+          enabled: true,
+          radius: 3.2,
+        },
+      },
+    };
+  }
+
+  private buildMetricDomain(
+    definition: SoilMetricDefinition,
+    series: Array<{ data?: HistoricalPoint[] }>
+  ): { max: number; min: number } {
+    const values = series
+      .flatMap((item) => item.data || [])
+      .map((point) => point.y)
+      .filter((value): value is number => value !== null && Number.isFinite(value));
+    if (!values.length) {
+      return definition.key === 'humedad' ? { max: 100, min: 0 } : { max: 1, min: 0 };
+    }
+
+    const observedMin = Math.min(...values);
+    const observedMax = Math.max(...values);
+    const observedSpan = observedMax - observedMin;
+    const padding = observedSpan > 0 ? observedSpan * 0.12 : Math.max(Math.abs(observedMax) * 0.04, 1);
+    let min = observedMin - padding;
+    let max = observedMax + padding;
+    if (definition.key === 'humedad') {
+      min = Math.max(0, min);
+      max = Math.min(100, max);
+    }
+    if (max <= min) max = min + 1;
+
+    return { max, min };
   }
 
   private buildProfileFreshnessNotice(missingDepths: number[]): string {
@@ -1029,15 +1116,17 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
   private buildRainPoints(): RainPoint[] {
     const desde = this.getFechaDesdeMs();
     const lluviaExterna = this.lluvias
-      .map((item) => ({
-        x: this.rainTimestamp(item.fecha),
-        y: Math.max(0, Number(item.milimetros)),
-      }))
-      .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y) && (!desde || point.x >= desde));
+      .map((item) => this.externalRainPoint(item))
+      .filter(
+        (point) =>
+          Number.isFinite(point.x) &&
+          Number.isFinite(point.y) &&
+          (!desde || (point.dayEnd !== undefined ? point.dayEnd > desde : point.x >= desde))
+      );
 
     if (lluviaExterna.length) {
       const porDia = new Map<number, RainPoint>();
-      lluviaExterna.forEach((point) => porDia.set(point.x, point));
+      lluviaExterna.forEach((point) => porDia.set(point.dayStart ?? point.x, point));
       return [...porDia.values()].sort((a, b) => a.x - b.x);
     }
 
@@ -1063,6 +1152,34 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     const value = String(fecha || '').trim();
     const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value;
     return new Date(normalized).getTime();
+  }
+
+  private externalRainPoint(item: SentekRainfallPoint): RainPoint {
+    const fecha = String(item.fecha || '').trim();
+    const y = Math.max(0, Number(item.milimetros));
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      const [year, month, day] = fecha.split('-').map(Number);
+      const dayStart = new Date(year, month - 1, day).getTime();
+      const dayEnd = new Date(year, month - 1, day + 1).getTime();
+      return {
+        custom: {
+          originalDate: fecha,
+          originalDateOnly: true,
+        },
+        dayEnd,
+        dayStart,
+        x: dayStart + Math.floor((dayEnd - dayStart) / 2),
+        y,
+      };
+    }
+    return {
+      custom: {
+        originalDate: fecha,
+        originalDateOnly: false,
+      },
+      x: this.rainTimestamp(fecha),
+      y,
+    };
   }
 
   private buildResumen(definition: SoilMetricDefinition, series: any[], latestPoints: HistoricalPoint[]): string {
