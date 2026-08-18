@@ -111,8 +111,10 @@
           <section class="device-inline-history" aria-label="Curvas del sensor ambiental">
             <app-grafico-historico-ambiente
               [reportes]="historico(dispositivo)"
+              [periodDays]="diasHistorico"
+              [periodEnd]="historicoHasta"
               [titulo]="'Variables medidas · ' + (dispositivo.nombre || 'sensor ambiental')"
-              [subtitulo]="'Evolución temporal de las lecturas registradas por el equipo'"
+              [subtitulo]="'Cada punto conserva el valor recibido; los cortes de transmisión quedan visibles'"
             ></app-grafico-historico-ambiente>
           </section>
         }
