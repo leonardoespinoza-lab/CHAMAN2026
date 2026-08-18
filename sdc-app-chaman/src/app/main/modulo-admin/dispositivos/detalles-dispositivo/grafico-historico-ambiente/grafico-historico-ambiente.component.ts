@@ -17,7 +17,7 @@ interface AmbientMetricDefinition {
 
 interface AmbientPoint {
   x: number;
-  y: number;
+  y: number | null;
 }
 
 @Component({
@@ -30,16 +30,20 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
   @Input() reportes: IReporte[] = [];
   @Input() titulo?: string;
   @Input() subtitulo?: string;
+  @Input() periodDays?: number;
+  @Input() periodEnd?: string;
 
   public chartOptions?: any;
   public resumen = '';
+
+  private readonly maxContinuousGapMs = 2 * 60 * 60 * 1000;
 
   private readonly definitions: AmbientMetricDefinition[] = [
     {
       key: 'temperatura',
       labels: ['Temperatura'],
       title: 'Temperatura',
-      unit: 'C',
+      unit: '°C',
       color: '#ef5148',
       decimals: 1,
       yAxis: 0,
@@ -56,7 +60,7 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
     {
       key: 'bateria',
       labels: ['Bateria', 'Batería', 'BaterÃ­a'],
-      title: 'Bateria',
+      title: 'Batería',
       unit: '%',
       color: '#65b946',
       decimals: 0,
@@ -65,7 +69,7 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
   ];
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['reportes']) {
+    if (changes['reportes'] || changes['periodDays'] || changes['periodEnd']) {
       this.prepareOptions();
     }
   }
@@ -96,8 +100,9 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
   private buildSeries(): any[] {
     const reportes = this.sortedReports();
     return this.definitions
+      .filter((definition) => definition.key !== 'bateria')
       .map((definition) => {
-        const data = reportes
+        const rawData = reportes
           .map((reporte): AmbientPoint | undefined => {
             const timestamp = this.getReporteTimestamp(reporte);
             const value = this.getMetricValue(reporte, definition);
@@ -106,14 +111,15 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
           })
           .filter((point): point is AmbientPoint => !!point);
 
-        if (!data.length) return undefined;
+        if (!rawData.length) return undefined;
+        const data = this.withTransmissionGaps(rawData);
         return {
           name: `${definition.title} (${definition.unit})`,
           data,
-          type: 'spline',
+          type: 'line',
           color: definition.color,
           yAxis: definition.yAxis,
-          marker: { enabled: data.length <= 36, radius: 2 },
+          marker: { enabled: rawData.length <= 200, radius: 2 },
           tooltip: {
             valueDecimals: definition.decimals,
             valueSuffix: ` ${definition.unit}`,
@@ -124,15 +130,16 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
   }
 
   private buildChartOptions(series: any[]): any {
+    const domain = this.buildTimeDomain();
     return {
       chart: {
         backgroundColor: 'transparent',
-        height: 620,
+        height: 460,
         spacingBottom: 18,
         spacingLeft: 8,
         spacingRight: 18,
         spacingTop: 10,
-        type: 'spline',
+        type: 'line',
         zooming: { type: 'x' },
         style: {
           fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -140,6 +147,8 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
       },
       title: { text: undefined },
       xAxis: {
+        min: domain.min,
+        max: domain.max,
         crosshair: {
           color: 'rgba(34, 211, 200, 0.22)',
           width: 1,
@@ -158,7 +167,7 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
       yAxis: [
         {
           title: {
-            text: 'Temperatura (C)',
+            text: 'Temperatura (°C)',
             style: { color: '#ef5148', fontSize: '14px', fontWeight: '750' },
           },
           labels: {
@@ -172,7 +181,7 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
           max: 100,
           opposite: true,
           title: {
-            text: 'Humedad / bateria (%)',
+            text: 'Humedad relativa (%)',
             style: { color: '#2f9fe8', fontSize: '14px', fontWeight: '750' },
           },
           labels: {
@@ -204,7 +213,7 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
         xDateFormat: '%d/%m/%Y %H:%M',
       },
       plotOptions: {
-        spline: {
+        line: {
           animation: { duration: 450 },
           dataLabels: { enabled: false },
           enableMouseTracking: true,
@@ -236,7 +245,7 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
           {
             condition: { maxWidth: 768 },
             chartOptions: {
-              chart: { height: 430 },
+              chart: { height: 360 },
               legend: { itemStyle: { fontSize: '12px' } },
             },
           },
@@ -260,7 +269,7 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
       hour: '2-digit',
       minute: '2-digit',
     });
-    return `${reportes.length} lecturas - ${first} a ${last}`;
+    return `${reportes.length} lecturas · ${first} a ${last}`;
   }
 
   private getCsvRows(): unknown[][] {
@@ -290,6 +299,40 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
       }
     }
     return undefined;
+  }
+
+  private withTransmissionGaps(points: AmbientPoint[]): AmbientPoint[] {
+    if (points.length < 2) return points;
+
+    const result: AmbientPoint[] = [points[0]];
+    for (let index = 1; index < points.length; index += 1) {
+      const previous = points[index - 1];
+      const current = points[index];
+      if (current.x - previous.x > this.maxContinuousGapMs) {
+        result.push({ x: previous.x + 1, y: null });
+      }
+      result.push(current);
+    }
+    return result;
+  }
+
+  private buildTimeDomain(): { min?: number; max?: number } {
+    const reports = this.sortedReports();
+    const first = reports.length ? this.getReporteTimestamp(reports[0]) : undefined;
+    const last = reports.length ? this.getReporteTimestamp(reports[reports.length - 1]) : undefined;
+    const configuredEnd = new Date(this.periodEnd || '').getTime();
+    const end = Number.isFinite(configuredEnd) && configuredEnd > 0 ? configuredEnd : Date.now();
+    const days = Number(this.periodDays);
+    const requestedStart = Number.isFinite(days) && days > 0 ? end - days * 24 * 60 * 60 * 1000 : undefined;
+
+    return {
+      // No fabricamos un gran vacio inicial si el sensor se incorporo despues
+      // del comienzo del periodo solicitado.
+      min: first === undefined ? requestedStart : requestedStart === undefined ? first : Math.max(first, requestedStart),
+      // El extremo derecho se conserva para que una caida de transmision sea
+      // visible y no parezca que la ultima lectura acaba de llegar.
+      max: last === undefined ? end : Math.max(end, last),
+    };
   }
 
   private sortedReports(): IReporte[] {
