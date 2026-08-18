@@ -8,17 +8,19 @@
   padding: 18px;
 }
 
-.napa-header,
-.napa-curve header {
+.napa-header {
   align-items: flex-start;
   display: flex;
   gap: 16px;
   justify-content: space-between;
 }
 
+.napa-trend-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .napa-kicker,
-.napa-curve header span,
-.napa-installation span,
 .napa-summary span {
   color: #0284c7;
   display: block;
@@ -34,8 +36,7 @@
   margin: 5px 0;
 }
 
-.napa-header p,
-.scale-warning {
+.napa-header p {
   color: var(--p-text-muted-color);
   margin: 0;
 }
@@ -69,7 +70,7 @@
 .napa-summary {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .napa-summary article {
@@ -90,13 +91,23 @@
   color: var(--p-text-muted-color);
 }
 
+.napa-updated {
+  color: var(--p-text-muted-color);
+  font-size: 0.82rem;
+  margin: -8px 0 0;
+}
+
 .napa-content-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: minmax(340px, 0.9fr) minmax(300px, 1.1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .ground-scene {
+  --napa-chart-right: 112px;
+  --napa-profile-bottom: 8%;
+  --napa-profile-top: 24%;
+  --napa-well-right: 64px;
   background: #79583b;
   border: 1px solid color-mix(in srgb, #52341f 45%, var(--p-content-border-color));
   border-radius: 14px;
@@ -108,7 +119,7 @@
 
 .scene-sky {
   background: linear-gradient(180deg, #bfe9ff 0%, #eaf8ff 100%);
-  height: 24%;
+  height: var(--napa-profile-top);
   left: 0;
   position: absolute;
   right: 0;
@@ -153,7 +164,7 @@
   left: 0;
   position: absolute;
   right: 0;
-  top: calc(24% - 8px);
+  top: calc(var(--napa-profile-top) - 8px);
   z-index: 8;
 }
 
@@ -178,7 +189,7 @@
 .soil-layer-one {
   background: #9b6a3f;
   bottom: 52%;
-  top: 24%;
+  top: var(--napa-profile-top);
 }
 .soil-layer-two {
   background: #805435;
@@ -199,50 +210,100 @@
   position: absolute;
 }
 
-.well-pipe,
-.cable-line {
-  left: 67%;
+.napa-scene-chart {
+  bottom: var(--napa-profile-bottom);
+  display: block;
+  left: 7%;
+  min-width: 0;
   position: absolute;
-  transform: translateX(-50%);
+  right: var(--napa-chart-right);
+  top: var(--napa-profile-top);
+  z-index: 6;
+}
+
+.napa-scene-chart ::ng-deep highcharts-chart,
+.napa-scene-chart ::ng-deep .highcharts-container,
+.napa-scene-chart ::ng-deep .highcharts-root {
+  height: 100% !important;
+  width: 100% !important;
+}
+
+.well-pipe {
+  pointer-events: none;
+  position: absolute;
+  right: var(--napa-well-right);
   z-index: 7;
 }
 
 .well-pipe {
-  background: rgba(227, 235, 238, 0.5);
-  border: 2px solid rgba(234, 244, 247, 0.85);
-  bottom: 8%;
-  top: 24%;
-  width: 20px;
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.7), rgba(241, 245, 249, 0.72), rgba(100, 116, 139, 0.72));
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  bottom: var(--napa-profile-bottom);
+  box-shadow:
+    inset 0 0 4px rgba(30, 41, 59, 0.4),
+    0 0 0 1px rgba(30, 41, 59, 0.22);
+  top: var(--napa-profile-top);
+  width: 18px;
 }
 
-.cable-line {
-  background: #1e293b;
-  bottom: 9%;
-  top: 5%;
-  width: 4px;
+.well-pipe::before {
+  background: #cbd5e1;
+  border: 1px solid #64748b;
+  border-radius: 999px;
+  content: "";
+  height: 5px;
+  left: -4px;
+  position: absolute;
+  right: -4px;
+  top: -3px;
 }
 
 .sensor-head {
   align-items: center;
-  color: #f8fafc;
+  bottom: calc(var(--napa-profile-bottom) - 24px);
   display: flex;
-  font-size: 0.78rem;
-  font-weight: 900;
-  gap: 7px;
-  left: calc(67% - 8px);
+  height: 34px;
+  justify-content: center;
+  pointer-events: none;
   position: absolute;
-  top: 89%;
+  right: calc(var(--napa-well-right) + 1px);
+  width: 16px;
   z-index: 12;
 }
 
-.sensor-head i {
-  color: #fb923c;
-  font-size: 1rem;
-}
-.sensor-head span {
-  white-space: nowrap;
+.sensor-transducer {
+  background: linear-gradient(90deg, #64748b 0%, #e2e8f0 48%, #94a3b8 72%, #475569 100%);
+  border: 1px solid #334155;
+  border-radius: 6px 6px 8px 8px;
+  box-shadow:
+    0 2px 5px rgba(15, 23, 42, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+  height: 28px;
+  position: relative;
+  width: 13px;
 }
 
+.sensor-transducer::before {
+  background: #64748b;
+  border: 1px solid #334155;
+  content: "";
+  height: 6px;
+  left: 3px;
+  position: absolute;
+  top: -6px;
+  width: 5px;
+}
+
+.sensor-transducer::after {
+  background: #334155;
+  border-radius: 999px;
+  bottom: 3px;
+  content: "";
+  height: 3px;
+  left: 4px;
+  position: absolute;
+  width: 3px;
+}
 .water-zone {
   background: linear-gradient(180deg, rgba(36, 180, 235, 0.55), rgba(2, 91, 154, 0.78));
   bottom: 0;
@@ -275,7 +336,7 @@
   border-left: 2px dashed #fff;
   left: 25%;
   position: absolute;
-  top: 24%;
+  top: var(--napa-profile-top);
   z-index: 10;
 }
 
@@ -309,13 +370,13 @@
 }
 
 .scene-ruler {
-  bottom: 8%;
+  bottom: var(--napa-profile-bottom);
   color: rgba(255, 255, 255, 0.82);
   font-size: 0.68rem;
   font-weight: 800;
   position: absolute;
   right: 10px;
-  top: 24%;
+  top: var(--napa-profile-top);
   width: 36px;
   z-index: 11;
 }
@@ -331,51 +392,6 @@
   position: absolute;
   right: 6px;
   transform: translateY(-50%);
-}
-
-.napa-installation {
-  align-content: start;
-  display: grid;
-  gap: 12px;
-}
-
-.napa-installation > div,
-.napa-formula,
-.scale-warning {
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 10px;
-  display: grid;
-  gap: 6px;
-  padding: 14px;
-}
-
-.napa-installation strong,
-.napa-curve header strong {
-  color: var(--p-text-color);
-}
-
-.napa-formula {
-  background: color-mix(in srgb, #0ea5e9 8%, var(--p-content-background));
-  border-color: color-mix(in srgb, #0ea5e9 28%, var(--p-content-border-color));
-}
-
-.napa-formula strong {
-  color: #0369a1;
-  font-size: 1.2rem;
-}
-.napa-formula small {
-  color: var(--p-text-muted-color);
-}
-
-.scale-warning {
-  display: block;
-  line-height: 1.5;
-}
-
-.napa-curve {
-  border-top: 1px solid var(--p-content-border-color);
-  min-width: 0;
-  padding-top: 16px;
 }
 
 .napa-readings {
@@ -413,7 +429,13 @@
     grid-template-columns: 1fr;
   }
   .ground-scene {
+    --napa-chart-right: 96px;
+    --napa-well-right: 54px;
     height: 420px;
+  }
+
+  .napa-scene-chart {
+    left: 7%;
   }
 }
 
@@ -429,6 +451,18 @@
   }
   .napa-summary {
     grid-template-columns: 1fr;
+  }
+  .ground-scene {
+    --napa-chart-right: 80px;
+    --napa-well-right: 42px;
+    height: 380px;
+  }
+  .napa-scene-chart {
+    left: 5%;
+  }
+  .scene-ruler {
+    right: 4px;
+    width: 32px;
   }
   .napa-readings header,
   .napa-readings > div {

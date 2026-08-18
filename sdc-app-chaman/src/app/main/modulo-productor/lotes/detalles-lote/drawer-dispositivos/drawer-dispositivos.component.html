@@ -71,6 +71,8 @@
           <app-grafico-historico-suelo
             [reportes]="reportesHistoricos"
             [rawFrames]="rawFrames"
+            [periodDays]="diasHistorico"
+            [periodEnd]="historicoHasta"
             [titulo]="'Historico Sentek - ' + dispositivo?.nombre"
             [subtitulo]="'Cada punto conserva la fecha y el valor recibido; no se promedian profundidades ni tramas'"
             [fechaDesde]="dispositivo?.fechaAsignacionLote"

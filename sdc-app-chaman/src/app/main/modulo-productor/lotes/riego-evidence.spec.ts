@@ -1,6 +1,27 @@
 import { evaluarRiegoFrontend, tieneSensorHumedadSuelo } from './riego-evidence';
 
 describe('evaluarRiegoFrontend', () => {
+  it('reconoce un perfil de suelo logico dentro de un controlador multiproposito', () => {
+    const evaluacion = evaluarRiegoFrontend(undefined, {
+      dispositivos: [
+        {
+          tipo: 'Otro',
+          servicios: [
+            {
+              id: 'perfil-1',
+              tipo: 'perfil_suelo',
+              nombre: 'Sentek',
+              sensores: ['Humedad Suelo Profundidad'],
+              habilitado: true,
+            },
+          ],
+        },
+      ],
+    } as any);
+
+    expect(evaluacion.tieneSensor).toBe(true);
+  });
+
   it('infiere legacy V13 solo con cantidades validas y motivo explicito de recomendacion por balance', () => {
     const evaluacion = evaluarRiegoFrontend(
       {

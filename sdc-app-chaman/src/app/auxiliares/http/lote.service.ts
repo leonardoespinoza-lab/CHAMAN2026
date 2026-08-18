@@ -8,6 +8,7 @@ import {
   IUbicacionAdministrativaLote,
   IUpdateLote,
   IInteligenciaSueloLote,
+  IEntradasAgronomicasSuelo,
 } from 'modelos/src';
 import { HttpService } from './http.service';
 
@@ -81,6 +82,10 @@ export class LoteService {
     });
     this.soilAssessmentPending.set(id, request);
     return request;
+  }
+
+  public entradasAgronomicasSuelo(id: string): Promise<IEntradasAgronomicasSuelo | null> {
+    return this.http.get(`/lotes/${id}/entradas-agronomicas-suelo`);
   }
 
   public reprocesarSueloAmbiente(id: string): Promise<IInteligenciaSueloLote> {

@@ -168,6 +168,17 @@
                       </p-floatlabel>
 
                       <p-floatlabel variant="in">
+                        <p-inputnumber
+                          formControlName="eficienciaRiego"
+                          [min]="10"
+                          [max]="100"
+                          [fluid]="true"
+                          suffix="%"
+                        />
+                        <label>{{ 'Eficiencia de aplicación del riego' | translate }}</label>
+                      </p-floatlabel>
+
+                      <p-floatlabel variant="in">
                         <p-inputnumber formControlName="anchoDeBulbo" [min]="0" [fluid]="true" />
                         <label>{{ 'Ancho de bulbo' | translate }}</label>
                       </p-floatlabel>

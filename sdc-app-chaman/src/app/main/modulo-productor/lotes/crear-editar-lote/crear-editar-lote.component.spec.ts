@@ -112,6 +112,21 @@ describe('CrearEditarLoteComponent soil payload', () => {
       expect(Object.prototype.hasOwnProperty.call(layer, 'puntoMarchitez')).toBeFalse();
     }
   });
+
+  it('persiste una eficiencia de riego explicita y valida solo 10..100 por ciento', () => {
+    const component = createComponent({ eficienciaRiego: 85 });
+    const control = component.form?.get('eficienciaRiego');
+
+    expect(control?.value).toBe(85);
+    control?.setValue(9);
+    expect(control?.hasError('min')).toBeTrue();
+    control?.setValue(101);
+    expect(control?.hasError('max')).toBeTrue();
+    control?.setValue(85);
+
+    expect(control?.valid).toBeTrue();
+    expect(getData(component).eficienciaRiego).toBe(85);
+  });
 });
 
 const SOIL_FIELDS = [

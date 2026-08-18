@@ -63,6 +63,20 @@ describe('LoteService soil assessment requests', () => {
 
     expect(http.get).toHaveBeenCalledTimes(2);
   });
+
+  it('requests canonical agronomic inputs through the protected lot route', async () => {
+    const inputs = {
+      fieldCapacityPercentage: 33.46,
+      loteId: 'lot-1',
+      stale: false,
+      wiltingPointPercentage: 18.12,
+    } as any;
+    http.get.and.resolveTo(inputs);
+
+    await expectAsync(service.entradasAgronomicasSuelo('lot-1')).toBeResolvedTo(inputs);
+
+    expect(http.get).toHaveBeenCalledOnceWith('/lotes/lot-1/entradas-agronomicas-suelo');
+  });
 });
 
 function deferred<T>(): {

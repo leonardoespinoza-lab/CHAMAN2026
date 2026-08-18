@@ -48,8 +48,10 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
   public vistaActiva: 'tabla' | 'grafico' = 'grafico';
   public reportesHistoricos: IReporte[] = [];
   public diasHistorico = 7;
+  public historicoHasta = new Date().toISOString();
   public loadingHistorico = false;
   public rawFrames: ILorawanRawFrame[] = [];
+  private historicoLoadVersion = 0;
 
   constructor(
     public helper: HelperService,
@@ -61,7 +63,9 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
     this.refreshFromDevice();
   }
 
-  ngOnDestroy(): void {}
+  ngOnDestroy(): void {
+    this.historicoLoadVersion += 1;
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['visible'] && !changes['visible'].firstChange) {
@@ -80,7 +84,14 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
 
   public async cambiarPeriodoHistorico(dias: number): Promise<void> {
     this.diasHistorico = dias;
+    this.historicoHasta = new Date().toISOString();
     await this.cargarHistorico();
+  }
+
+  private rawHistoryLimit(): number {
+    if (this.diasHistorico <= 1) return 1000;
+    if (this.diasHistorico <= 7) return 4000;
+    return 12000;
   }
 
   public formatearMedicion(medicion?: MedicionSensorProfundidad): string {
@@ -104,6 +115,8 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
   }
 
   private refreshFromDevice(): void {
+    this.historicoLoadVersion += 1;
+    this.historicoHasta = new Date().toISOString();
     this.loading = true;
     this.esLanzaDeSuelo = this.tieneVariableSuelo(this.dispositivo);
     this.esMedidorNapa = this.tieneVariableNapa(this.dispositivo);
@@ -118,14 +131,16 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
   private async cargarHistorico(): Promise<void> {
     const id = this.dispositivo?._id || this.dispositivo?.deveui;
     if ((!this.esLanzaDeSuelo && !this.esMedidorNapa && !this.esSensorAmbiente) || !id) return;
+    const loadVersion = ++this.historicoLoadVersion;
     this.loadingHistorico = true;
     try {
       const [response, rawFrames] = await Promise.all([
         this.reportesService.historico(id, this.diasHistorico, 2500),
         this.dispositivo?.deveui
-          ? this.lorawanUplinks.rawHistory(this.dispositivo.deveui, this.diasHistorico, 5000)
+          ? this.lorawanUplinks.rawHistory(this.dispositivo.deveui, this.diasHistorico, this.rawHistoryLimit())
           : Promise.resolve([]),
       ]);
+      if (loadVersion !== this.historicoLoadVersion) return;
       this.rawFrames = rawFrames;
       this.reportesHistoricos = response.datos?.length
         ? response.datos
@@ -133,11 +148,12 @@ export class DrawerDispositivosComponent implements OnInit, OnDestroy, OnChanges
           ? [this.ultimoReporte]
           : [];
     } catch (error) {
+      if (loadVersion !== this.historicoLoadVersion) return;
       console.error('Error al cargar historico de reportes del dispositivo', error);
       this.reportesHistoricos = this.ultimoReporte ? [this.ultimoReporte] : [];
       this.rawFrames = [];
     } finally {
-      this.loadingHistorico = false;
+      if (loadVersion === this.historicoLoadVersion) this.loadingHistorico = false;
     }
   }
 

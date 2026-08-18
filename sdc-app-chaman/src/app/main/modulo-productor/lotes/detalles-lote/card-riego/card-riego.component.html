@@ -112,9 +112,7 @@
   <section class="irrigation-detail">
     <div class="detail-hero" [class.disabled]="!puedeMostrarSerieRiego">
       <div>
-        <span>{{
-          esCalculoEstimado ? 'Balance estimado' : tieneLanzaHumedad ? 'Motor activo' : 'Sin sensor de humedad'
-        }}</span>
+        <span>{{ etiquetaMotorRiego }}</span>
         <strong>
           @if (cantidadRecomendacionHoy !== null && cantidadRecomendacionHoy > 0) {
             {{ cantidadRecomendacionHoy }} {{ esCalculoEstimado ? 'mm estimados hoy' : 'mm hoy' }}
@@ -214,17 +212,10 @@
       <p-message severity="error" text="El calculo fallo; no se muestran filas anteriores como vigentes."></p-message>
     }
 
-    @if (tieneLanzaHumedad && puedeMostrarSerieRiego) {
-      <p-button
-        label="Ver curvas y profundidad"
-        icon="pi pi-chart-line"
-        [fluid]="true"
-        (onClick)="abrirDrawerRiego($event)"
-      />
+    @if (tieneLanzaHumedad) {
+      <p class="raw-profile-hint">
+        Las lecturas crudas por profundidad estan disponibles en Dispositivos del lote.
+      </p>
     }
   </section>
 </p-dialog>
-
-@if (tieneLanzaHumedad && puedeMostrarSerieRiego) {
-  <app-drawer-riego [siembra]="siembra" [lote]="lote" [(visible)]="verDrawerRiego"></app-drawer-riego>
-}

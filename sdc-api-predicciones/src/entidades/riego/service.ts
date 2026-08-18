@@ -37,10 +37,14 @@ import { API_CLIMA } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 import {
   calcularRiegoV12,
-  normalizarHumedadSueloPct,
 } from './riego-v12.engine';
 import { calcularRiegoV13Estimado } from './riego-v13-fallback.engine';
 import { resolverEstadoRecomendacionRiego } from './riego-recommendation-status';
+import {
+  adaptarPerfilSueloLoRaWAN,
+  evaluarSeguridadRecomendacionRiego,
+  seleccionarPerfilSentekSeguro,
+} from './riego-safety';
 
 interface IRespuestaInicioDiaNoche {
   primerReporteNoche: IClimaEstacionMeteorologica;
@@ -127,45 +131,9 @@ export class RiegoService {
         await this.resolverLoteConEntradasAgronomicas(lotePersistido);
       siembra = { ...siembra, lote };
       const idSondaSuelo = lote.idSondaSuelo;
-      // Para el riego necesito "Sensor de Humedad de Suelo" (Tienen que estar en idsDispositivo)
-      // También neeceisto pluviometro o estación con lluvia
-
-      const idsDispositivo = lote.idsDispositivo;
-      // HelperService.guardarJson('data/idsDispositivo.json', idsDispositivo);
-      let idLanzaHumedad: string;
-      if (HelperService.arrayValido(idsDispositivo)) {
-        try {
-          const filter: IFilter<IDispositivo> = {
-            _id: { $in: idsDispositivo },
-            tipo: 'Sensor de Humedad de Suelo',
-          };
-          const query: IQueryParam = {
-            filter: JSON.stringify(filter),
-            limit: 0,
-            sort: 'fechaUltimaComunicacion',
-          };
-          const dispositivos = (await this.dispositivosService.get(query))
-            .datos;
-          if (dispositivos?.length) {
-            const idsLanzaHumedad = dispositivos.map((d) => d._id);
-            if (idsLanzaHumedad.length > 0) {
-              this.logger.warn(
-                `Hay mas de un sensor de humedad de suelo en el lote ${lote.nombre}. Se usara el primero`,
-              );
-              idLanzaHumedad = idsLanzaHumedad[0];
-            } else {
-              this.logger.warn(
-                `No se encontro sensor de humedad de suelo en el lote ${lote.nombre}`,
-              );
-            }
-          }
-        } catch (error) {
-          this.logger.error(
-            `Error al obtener el sensor de humedad de suelo del lote ${lote.nombre}`,
-          );
-          console.error(error);
-        }
-      }
+      // Compatibilidad doble: relacion legacy lote.idsDispositivo y servicio
+      // logico perfil_suelo.idLote del controlador multiproposito.
+      const idLanzaHumedad = await this.resolverIdSensorPerfilSuelo(lote);
 
       if (!idSondaSuelo && !idLanzaHumedad) {
         this.logger.warn(
@@ -187,9 +155,12 @@ export class RiegoService {
       const ubicacion = lote.ubicacion.centro;
       const cultivo = siembra.semilla?.cultivo;
       if (!cultivo) {
-        this.logger.error(
-          `No se puede hacer la prediccion de riego para la siembra ${idSiembra} del lote ${siembra.lote?.nombre} del productor ${siembra.productor?.nombre} porque no tiene cultivo`,
+        const motivo =
+          'Recomendacion de riego no disponible: la campania no tiene cultivo configurado.';
+        this.logger.warn(
+          `${motivo} Siembra ${idSiembra}, lote ${siembra.lote?.nombre}.`,
         );
+        await this.marcarSiembraSinRecomendacion(idSiembra, motivo);
         return;
       }
       const crono = siembra.crono;
@@ -227,8 +198,7 @@ export class RiegoService {
       //     ),
       //     this.reportesService.getByIdEntreFechas(idLanzaHumedad, f.from, f.to),
       //   ]);
-      const [sondaSuelo, pluviometro, pronostico7Dias, reportesLanza] =
-        await Promise.all([
+      const resultadosFuentes = await Promise.allSettled([
           idSondaSuelo
             ? this.climaService.getSueloPorDispositivoEntreFechas(
                 idSondaSuelo,
@@ -245,15 +215,49 @@ export class RiegoService {
           ),
           this.obtenerPronosticoConET0(ubicacion.lat, ubicacion.lng),
           idLanzaHumedad
-            ? this.climaV2Service.getSuelo(idLanzaHumedad, f.from, f.to)
+            ? this.climaV2Service.getSuelo(
+                idLanzaHumedad,
+                f.from,
+                f.to,
+                'hourly',
+              )
             : null,
         ]);
+
+      const nombresFuentes = [
+        'sonda_legacy',
+        'lluvia_historica',
+        'pronostico_et0',
+        'perfil_sentek',
+      ];
+      const fuentesConError: string[] = [];
+      const valorFuente = <T>(
+        indice: number,
+        fallback: T,
+      ): T => {
+        const resultado = resultadosFuentes[indice] as PromiseSettledResult<T>;
+        if (resultado.status === 'fulfilled') return resultado.value ?? fallback;
+        const fuente = nombresFuentes[indice];
+        fuentesConError.push(fuente);
+        this.logger.error(
+          `Fuente de riego ${fuente} no disponible: ${
+            (resultado.reason as Error)?.message || resultado.reason
+          }`,
+        );
+        return fallback;
+      };
+      const sondaSuelo = valorFuente<IClimaEstacionMeteorologica[]>(0, []);
+      const pluviometro = valorFuente<IClimaEstacionMeteorologica[]>(1, []);
+      const pronostico7Dias = valorFuente<IPronosticoEstacionMeteorologica[]>(
+        2,
+        [],
+      );
+      const reportesLanza = valorFuente<IClimaEstacionMeteorologica[]>(3, []);
 
       if (!HelperService.arrayValido(pronostico7Dias)) {
         this.logger.warn(
           `No se puede hacer la prediccion de riego para la siembra ${idSiembra} del lote ${siembra.lote?.nombre} del productor ${siembra.productor?.nombre} porque no hay datos de pronostico`,
         );
-        return;
       }
       if (
         !HelperService.arrayValido(sondaSuelo) &&
@@ -274,16 +278,18 @@ export class RiegoService {
       // HelperService.guardarJson('data/pronostico7Dias.json', pronostico7Dias);
       // HelperService.guardarJson('data/reportesLanza.json', reportesLanza);
 
-      // Determinar qué fuente de datos de humedad usar (prioridad: lanza LoRaWAN > FieldClimate)
-      let datosHumedadAdaptados: IClimaEstacionMeteorologica[];
-
-      if (idLanzaHumedad && reportesLanza?.length > 0) {
-        // Convertir datos LoRaWAN al formato FieldClimate para mantener compatibilidad
-        datosHumedadAdaptados =
-          this.adaptarDatosLoRaWANAFieldClimate(reportesLanza);
-      } else {
-        datosHumedadAdaptados = sondaSuelo || [];
-      }
+      // Para Sentek se conservan las profundidades fisicas y se usan solamente
+      // ciclos horarios completos. Un ciclo parcial reciente no pisa al ultimo
+      // perfil 12/12 valido.
+      const datosSentekAdaptados = idLanzaHumedad
+        ? this.adaptarDatosLoRaWANAFieldClimate(reportesLanza)
+        : [];
+      const perfilSentek = idLanzaHumedad
+        ? seleccionarPerfilSentekSeguro(datosSentekAdaptados)
+        : undefined;
+      const datosHumedadAdaptados = idLanzaHumedad
+        ? perfilSentek?.reportesCompletos || []
+        : sondaSuelo || [];
 
       const sinHumedadSuelo = !HelperService.arrayValido(datosHumedadAdaptados);
       const resultadoRiego = sinHumedadSuelo
@@ -307,15 +313,61 @@ export class RiegoService {
           });
 
       resultadoRiego.calidadDatos ||= {
-        nivel: idLanzaHumedad ? 'alta' : 'media',
+        nivel:
+          idLanzaHumedad && perfilSentek?.completo && perfilSentek.fresco
+            ? 'alta'
+            : 'baja',
         fuente: idLanzaHumedad ? 'sensor_campo' : 'estacion_asignada',
-        cobertura: 1,
+        cobertura: idLanzaHumedad
+          ? perfilSentek?.coberturaUltimoReporte || 0
+          : datosHumedadAdaptados.length
+            ? 1
+            : 0,
+        fechaActualizacion: idLanzaHumedad
+          ? perfilSentek?.fechaUltimoReporte
+          : datosHumedadAdaptados[datosHumedadAdaptados.length - 1]?.fecha,
         fallback: false,
         resumen: idLanzaHumedad
-          ? 'Calculado con lanza/sonda de humedad de suelo asignada al lote.'
+          ? perfilSentek?.motivo ||
+            'Perfil Sentek 12/12 fresco asignado al lote.'
           : 'Calculado con sonda FieldClimate y pronostico climatico.',
         limitaciones: [],
       };
+
+      let seguridad = evaluarSeguridadRecomendacionRiego({
+        siembra,
+        lote,
+        cultivo,
+        tieneSentek: !!idLanzaHumedad,
+        perfilSentek,
+        humedadLegacy: sondaSuelo,
+        lluviaHistorica: pluviometro,
+        pronostico: pronostico7Dias,
+        fuentesConError,
+      });
+      if (
+        seguridad.accionable &&
+        resultadoRiego.estadoCalculoAguaUtil !== 'calculado'
+      ) {
+        seguridad = {
+          accionable: false,
+          motivo:
+            'Recomendacion de riego no disponible: no se valido la zona radicular activa con las lecturas actuales.',
+          limitaciones: ['zona radicular activa no validada'],
+        };
+      }
+      if (!seguridad.accionable) {
+        // Un calculo bloqueado no se guarda como prediccion ni como diagnostico
+        // accionable. Se invalida cualquier serie/agua util previa y se corta.
+        await this.marcarSiembraSinRecomendacion(
+          idSiembra,
+          seguridad.motivo,
+        );
+        this.logger.warn(
+          `Riego bloqueado para ${idSiembra}: ${seguridad.motivo}`,
+        );
+        return;
+      }
 
       const {
         calculoRaices,
@@ -385,7 +437,7 @@ export class RiegoService {
             index === 0
               ? recomendacionHoyMm
               : pronostico.regar
-                ? lote.capacidadDeRiego || 6
+                ? Number(lote.capacidadDeRiego)
                 : 0,
         }),
       );
@@ -414,7 +466,9 @@ export class RiegoService {
         const tieneCalibracionSensor = nivelesLecturaSensor.some(
           (nivel) => nivel.fuenteCapacidadCampo === 'auto',
         );
-        const persistenciaSensor = nivelesLecturaSensor.length
+        const persistenciaSensor =
+          nivelesLecturaSensor.length &&
+          estadoRecomendacion.estado === 'calculada'
           ? this.lotesService.update(lotePersistido._id, {
               suelos: suelosActualizados,
               ...(tieneCalibracionSensor
@@ -450,15 +504,40 @@ export class RiegoService {
           `Predicción de riego completada - Siembra: ${idSiembra}, Agua útil: ${aguaUtilLog} (${estadoCalculoAguaUtil}), Fuente: ${idLanzaHumedad ? 'LoRaWAN' : 'FieldClimate'}`,
         );
 
-        await this.verificarIntegraciones(prediccion, siembra);
+        if (
+          estadoRecomendacion.estado === 'calculada' &&
+          estadoRecomendacion.fuente === 'sensor_suelo'
+        ) {
+          await this.verificarIntegraciones(prediccion, siembra);
+        } else {
+          this.logger.warn(
+            `No se envia integracion de riego para ${idSiembra}: ${estadoRecomendacion.motivo}`,
+          );
+        }
       } catch (error) {
         this.logger.error(error);
+        const motivo = `Recomendacion de riego no disponible: fallo la persistencia del calculo (${(error as Error)?.message || error}).`;
+        try {
+          await this.marcarSiembraSinRecomendacion(idSiembra, motivo);
+        } catch (updateError) {
+          this.logger.error(
+            `No se pudo invalidar la recomendacion anterior de ${idSiembra} tras el fallo de persistencia: ${(updateError as Error)?.message || updateError}`,
+          );
+        }
       }
     } catch (error) {
+      const motivo = `Recomendacion de riego no disponible: fallo una dependencia del calculo (${(error as Error)?.message || error}).`;
       this.logger.error(
         `Error en la prediccion de riego de la siembra ${idSiembra} del lote ${siembra.lote?.nombre} del productor ${siembra.productor?.nombre}`,
       );
       console.error(error);
+      try {
+        await this.marcarSiembraSinRecomendacion(idSiembra, motivo);
+      } catch (updateError) {
+        this.logger.error(
+          `No se pudo invalidar la recomendacion anterior de ${idSiembra}: ${(updateError as Error)?.message || updateError}`,
+        );
+      }
     }
   }
 
@@ -549,6 +628,78 @@ export class RiegoService {
     }
 
     return niveles;
+  }
+
+  private async resolverIdSensorPerfilSuelo(
+    lote: ILote,
+  ): Promise<string | undefined> {
+    const condiciones: Record<string, unknown>[] = [];
+    if (HelperService.arrayValido(lote.idsDispositivo)) {
+      condiciones.push({
+        _id: { $in: lote.idsDispositivo },
+        tipo: 'Sensor de Humedad de Suelo',
+      });
+    }
+    if (lote._id) {
+      condiciones.push({
+        servicios: {
+          $elemMatch: {
+            tipo: 'perfil_suelo',
+            idLote: lote._id,
+            habilitado: { $ne: false },
+          },
+        },
+      });
+    }
+    if (!condiciones.length) return undefined;
+
+    try {
+      const filter = {
+        $or: condiciones,
+      } as unknown as IFilter<IDispositivo>;
+      const query: IQueryParam = {
+        filter: JSON.stringify(filter),
+        limit: 0,
+        sort: '-fechaUltimaComunicacion',
+      };
+      const dispositivos = (await this.dispositivosService.get(query)).datos;
+      const ids = (dispositivos || [])
+        .map((dispositivo) => dispositivo._id)
+        .filter((id): id is string => !!id);
+      if (ids.length > 1) {
+        this.logger.warn(
+          `Hay mas de un perfil de suelo en el lote ${lote.nombre}; se usa el de comunicacion mas reciente.`,
+        );
+      }
+      if (!ids.length) {
+        this.logger.warn(
+          `No se encontro perfil de suelo asignado al lote ${lote.nombre}.`,
+        );
+      }
+      return ids[0];
+    } catch (error) {
+      this.logger.error(
+        `Error al resolver el perfil de suelo del lote ${lote.nombre}: ${
+          (error as Error)?.message || error
+        }`,
+      );
+      return undefined;
+    }
+  }
+
+  private async marcarSiembraSinRecomendacion(
+    idSiembra: string,
+    motivo: string,
+  ): Promise<void> {
+    await this.siembrasService.update(idSiembra, {
+      ultimaPrediccionRiego: [],
+      aguaUtilReal: null,
+      estadoCalculoAguaUtil: 'no_disponible',
+      motivoCalculoAguaUtil: motivo,
+      estadoRecomendacionRiego: 'no_disponible',
+      fuenteRecomendacionRiego: null,
+      motivoRecomendacionRiego: motivo,
+    });
   }
 
   //
@@ -905,43 +1056,7 @@ export class RiegoService {
   private adaptarDatosLoRaWANAFieldClimate(
     reportesLanza: any[],
   ): IClimaEstacionMeteorologica[] {
-    return reportesLanza.map((reporte) => {
-      const adaptado: any = {
-        ...reporte, // Mantener toda la estructura original
-        humedadSuelo: {}, // Crear nueva estructura para FieldClimate
-      };
-
-      // Verificar si tiene datos de humedad en formato LoRaWAN (por profundidad)
-      if (reporte.humedadSuelo) {
-        const profundidades = Object.keys(reporte.humedadSuelo);
-
-        // Mapear profundidades a niveles secuenciales
-        profundidades.forEach((profundidad, index) => {
-          const nivel = index + 1; // Los niveles empiezan en 1
-          const datosHumedad = reporte.humedadSuelo[profundidad];
-          const avg =
-            normalizarHumedadSueloPct(
-              datosHumedad.avg || datosHumedad.last || datosHumedad.result,
-            ) || 0;
-          const min =
-            normalizarHumedadSueloPct(
-              datosHumedad.min || datosHumedad.avg || datosHumedad.last,
-            ) || avg;
-          const max =
-            normalizarHumedadSueloPct(
-              datosHumedad.max || datosHumedad.avg || datosHumedad.last,
-            ) || avg;
-
-          adaptado.humedadSuelo[nivel] = {
-            avg,
-            min,
-            max,
-          };
-        });
-      }
-
-      return adaptado as IClimaEstacionMeteorologica;
-    });
+    return adaptarPerfilSueloLoRaWAN(reportesLanza);
   }
 
   private actualizarSueloConRiegoV12(

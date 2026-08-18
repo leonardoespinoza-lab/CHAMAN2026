@@ -10,19 +10,19 @@ import {
   evaluarRiegoFrontend,
 } from '../../riego-evidence';
 import { IDetallesLote } from '../detalles-lote.component';
-import { DrawerRiegoComponent } from '../drawer-riego/drawer-riego.component';
 
 @Component({
   selector: 'app-card-riego',
-  imports: [CommonModule, SharedModule, DrawerRiegoComponent],
+  imports: [CommonModule, SharedModule],
   templateUrl: './card-riego.component.html',
   styleUrl: './card-riego.component.scss',
 })
 export class CardRiegoComponent implements OnInit, OnDestroy {
   @Input() public siembra?: ISiembra;
   @Input() public lote?: IDetallesLote;
-  public verDrawerRiego: boolean = false;
   public verDetalleRiego: boolean = false;
+  /** El drawer legacy promedia profundidades; no se expone como dato crudo. */
+  public readonly puedeAbrirCurvasLegacy = false;
 
   constructor(public helper: HelperService) {}
 
@@ -35,14 +35,17 @@ export class CardRiegoComponent implements OnInit, OnDestroy {
   }
 
   public get recomendacionHoy(): IResultadoPrediccionRiego | undefined {
+    if (!this.datosCampaniaRiegoValidos) return undefined;
     return this.siembra?.ultimaPrediccionRiego?.[0];
   }
 
   public get recomendaciones(): IResultadoPrediccionRiego[] {
+    if (!this.datosCampaniaRiegoValidos) return [];
     return this.evaluacionRiego.serie;
   }
 
   public get recomendacionesPositivas(): IResultadoPrediccionRiego[] {
+    if (!this.datosCampaniaRiegoValidos) return [];
     return this.evaluacionRiego.aportesPositivos;
   }
 
@@ -51,27 +54,59 @@ export class CardRiegoComponent implements OnInit, OnDestroy {
   }
 
   public get cantidadRecomendacionHoy(): number | null {
+    if (!this.datosCampaniaRiegoValidos) return null;
     return this.evaluacionRiego.cantidadHoy;
   }
 
   public get puedeMostrarSerieRiego(): boolean {
+    if (!this.datosCampaniaRiegoValidos) return false;
     return this.evaluacionRiego.serieDisponible;
   }
 
   public get esBalanceEstimado(): boolean {
-    return !this.tieneLanzaHumedad && this.evaluacionRiego.esEstimada;
+    return (
+      this.datosCampaniaRiegoValidos &&
+      !this.tieneLanzaHumedad &&
+      this.evaluacionRiego.esEstimada
+    );
   }
 
   public get esCalculoEstimado(): boolean {
-    return this.evaluacionRiego.esEstimada;
+    return this.datosCampaniaRiegoValidos && this.evaluacionRiego.esEstimada;
   }
 
   public get sinDemandaRiego(): boolean {
-    return this.evaluacionRiego.sinDemanda;
+    return this.datosCampaniaRiegoValidos && this.evaluacionRiego.sinDemanda;
   }
 
   public get estadoRecomendacionRiego(): EstadoRecomendacionRiego | undefined {
+    if (!this.datosCampaniaRiegoValidos) return undefined;
     return this.evaluacionRiego.estado;
+  }
+
+  public get campaniaRiegoVigente(): boolean {
+    if (!this.siembra || this.siembra.activa === false || !!this.siembra.fechaCosecha)
+      return false;
+    const fechaSiembra = new Date(this.siembra.fechaSiembra || '').getTime();
+    if (!Number.isFinite(fechaSiembra) || fechaSiembra > Date.now()) return false;
+    const limite = new Date();
+    limite.setMonth(limite.getMonth() - 6);
+    return fechaSiembra >= limite.getTime();
+  }
+
+  public get cultivoRiegoConfigurado(): boolean {
+    return !!this.siembra?.semilla?.cultivo;
+  }
+
+  public get etiquetaMotorRiego(): string {
+    if (!this.datosCampaniaRiegoValidos) return 'Recomendación no disponible';
+    if (this.esCalculoEstimado) return 'Balance estimado';
+    if (!this.tieneLanzaHumedad) return 'Sin sensor de humedad';
+    return this.puedeMostrarSerieRiego ? 'Motor activo' : 'Recomendación no disponible';
+  }
+
+  private get datosCampaniaRiegoValidos(): boolean {
+    return this.campaniaRiegoVigente && this.cultivoRiegoConfigurado;
   }
 
   public get aguaUtilValor(): number | null {
@@ -106,6 +141,15 @@ export class CardRiegoComponent implements OnInit, OnDestroy {
   }
 
   public get resumen(): string {
+    if (this.tieneLanzaHumedad && !this.siembra) {
+      return 'Sonda activa · falta crear/activar campaña y configurar cultivo.';
+    }
+    if (this.tieneLanzaHumedad && !this.campaniaRiegoVigente) {
+      return 'Sonda activa · campaña desactualizada; no hay recomendación de riego.';
+    }
+    if (this.tieneLanzaHumedad && !this.cultivoRiegoConfigurado) {
+      return 'Sonda activa · falta configurar el cultivo de la campaña.';
+    }
     if (this.esCalculoEstimado) {
       if (!this.estadoAguaUtilValido) {
         return 'Sin recomendacion operativa: faltan datos validos para cerrar el balance hidrico.';
@@ -162,13 +206,6 @@ export class CardRiegoComponent implements OnInit, OnDestroy {
 
   public abrirDetalleRiego(): void {
     this.verDetalleRiego = true;
-  }
-
-  public abrirDrawerRiego(event?: Event): void {
-    event?.stopPropagation();
-    if (!this.tieneLanzaHumedad || !this.puedeMostrarSerieRiego) return;
-    this.verDetalleRiego = false;
-    this.verDrawerRiego = true;
   }
 
   public formatearFecha(fecha?: string): string {

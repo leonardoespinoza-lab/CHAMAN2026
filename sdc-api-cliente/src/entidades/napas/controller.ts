@@ -2,11 +2,17 @@ import {
   BadRequestException,
   Controller,
   Get,
+  Param,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { INapaReferenciaLote } from 'modelos/src';
+import {
+  INapaReferenciaLote,
+  INapaSeguimientoLote,
+  IPermiso,
+} from 'modelos/src';
+import { GetPermiso } from '../../auxiliares/authorization/get-permiso.decorator';
 import { Permisos } from '../../auxiliares/authorization/permiso.decorator';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
 import { PERMISOS_AUTENTICADOS } from '../../auxiliares/authorization/permisos-authenticados';
@@ -17,6 +23,15 @@ import { NapasService } from './service';
 @UseGuards(PermisoGuard)
 export class NapasController {
   constructor(private service: NapasService) {}
+
+  @Get('lotes/:idLote')
+  @Permisos(...PERMISOS_AUTENTICADOS)
+  public async seguimientoLote(
+    @Param('idLote') idLote: string,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<INapaSeguimientoLote> {
+    return await this.service.seguimientoLote(idLote, permiso);
+  }
 
   @Get('referencia')
   @Permisos(...PERMISOS_AUTENTICADOS)

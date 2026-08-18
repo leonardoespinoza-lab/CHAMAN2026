@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { INapaReferenciaLote } from 'modelos/src';
+import { INapaReferenciaLote, INapaSeguimientoLote } from 'modelos/src';
 import { HttpService } from './http.service';
 
 @Injectable({
@@ -12,5 +12,9 @@ export class NapasService {
     return this.http.get('/napas/referencia', {
       params: { lat, lng, radioKm },
     });
+  }
+
+  public seguimientoLote(idLote: string): Promise<INapaSeguimientoLote> {
+    return this.http.get(`/napas/lotes/${encodeURIComponent(idLote)}`);
   }
 }

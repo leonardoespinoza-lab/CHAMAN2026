@@ -42,6 +42,7 @@ import {
   getEnfermedadPorId,
   getEtapasPerennesReferencia,
   IInteligenciaSueloLote,
+  IEntradasAgronomicasSuelo,
   IUsuario,
   aplicarEntradasAgronomicasSuelo,
   obtenerRegistroFenologicoDecisorioEnFecha,
@@ -269,6 +270,14 @@ export class LotesService {
     return this.repository.getSoilIntelligence(id);
   }
 
+  async getSoilAgronomicInputs(
+    id: string,
+    permiso: IPermiso,
+  ): Promise<IEntradasAgronomicasSuelo | null> {
+    await this.assertCanView(id, permiso);
+    return this.repository.getSoilAgronomicInputs(id);
+  }
+
   async reprocessSoilIntelligence(
     id: string,
     permiso: IPermiso,
@@ -392,6 +401,7 @@ export class LotesService {
       'idSondaSuelo',
       'idsDispositivo',
       'capacidadDeRiego',
+      'eficienciaRiego',
     ];
     return keys.filter((key) =>
       Object.prototype.hasOwnProperty.call(data, key),

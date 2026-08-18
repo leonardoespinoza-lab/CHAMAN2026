@@ -41,3 +41,40 @@ describe('SOIL_INTELLIGENCE_INTERNAL_TOKEN', () => {
     expect(loadToken()).toBe('soil');
   });
 });
+
+describe('RIEGO_CRON_ENABLED', () => {
+  const originalFlag = process.env.RIEGO_CRON_ENABLED;
+  const originalEnv = process.env.ENV;
+
+  afterEach(() => {
+    if (originalFlag === undefined) delete process.env.RIEGO_CRON_ENABLED;
+    else process.env.RIEGO_CRON_ENABLED = originalFlag;
+    if (originalEnv === undefined) delete process.env.ENV;
+    else process.env.ENV = originalEnv;
+    jest.resetModules();
+  });
+
+  function loadFlag(): boolean {
+    let enabled = false;
+    jest.isolateModules(() => {
+      enabled = require('./env').RIEGO_CRON_ENABLED;
+    });
+    return enabled;
+  }
+
+  it('queda apagado si la variable no existe', () => {
+    delete process.env.RIEGO_CRON_ENABLED;
+    process.env.ENV = 'local';
+    expect(loadFlag()).toBe(false);
+  });
+
+  it('es opt-in explicito y nunca corre en test', () => {
+    process.env.RIEGO_CRON_ENABLED = 'true';
+    process.env.ENV = 'test';
+    expect(loadFlag()).toBe(false);
+
+    jest.resetModules();
+    process.env.ENV = 'local';
+    expect(loadFlag()).toBe(true);
+  });
+});

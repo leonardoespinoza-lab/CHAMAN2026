@@ -9,9 +9,9 @@
     </div>
     <div class="devices-toolbar">
       <div class="history-period" role="group" aria-label="Periodo de las curvas de sensores">
-        @for (dias of [1, 7, 30, 90]; track dias) {
+        @for (dias of [1, 7, 30]; track dias) {
           <button type="button" [class.active]="diasHistorico === dias" (click)="cambiarPeriodo(dias)">
-            {{ dias === 1 ? '24 h' : dias + ' dias' }}
+            {{ dias === 1 ? '24 h' : dias + ' días' }}
           </button>
         }
       </div>
@@ -26,70 +26,38 @@
           <div>
             <span class="device-status"><i class="pi pi-circle-fill"></i>{{ estadoLabel(dispositivo) }}</span>
             <h3>{{ dispositivo.nombre || 'Dispositivo sin nombre' }}</h3>
-            <p>{{ dispositivo.tipo || 'Tipo sin definir' }}</p>
+            @if (!esLanzaDeSuelo(dispositivo) && !esMedidorNapa(dispositivo)) {
+              <p>{{ dispositivo.tipo || 'Tipo sin definir' }}</p>
+            }
           </div>
           @if (dispositivo.bateria?.valor !== null && dispositivo.bateria?.valor !== undefined) {
             <app-bateria [level]="dispositivo.bateria!.valor!" orientation="horizontal"></app-bateria>
           }
         </div>
 
-        <div class="device-meta-grid">
-          <article>
-            <span>DevEUI</span><strong>{{ dispositivo.deveui || '-' }}</strong>
-          </article>
-          <article>
-            <span>Ultimo reporte</span>
-            <strong>{{
-              ultimaComunicacion(dispositivo) ? (ultimaComunicacion(dispositivo) | date: 'short') : '-'
-            }}</strong>
-          </article>
-          <article>
-            <span>Gateway</span><strong>{{ dispositivo.metadata?.gatewayID || '-' }}</strong>
-          </article>
-          <article>
-            <span>Senal</span>
-            <strong>{{ dispositivo.metadata?.rssi ?? '--' }} dBm / {{ dispositivo.metadata?.snr ?? '--' }} dB</strong>
-          </article>
-        </div>
+        <details class="device-technical-details">
+          <summary><i class="pi pi-cog"></i> Datos del equipo</summary>
+          <div class="device-meta-grid">
+            <article>
+              <span>DevEUI</span><strong>{{ dispositivo.deveui || '-' }}</strong>
+            </article>
+            <article>
+              <span>Último reporte</span>
+              <strong>{{
+                ultimaComunicacion(dispositivo) ? (ultimaComunicacion(dispositivo) | date: 'short') : '-'
+              }}</strong>
+            </article>
+            <article>
+              <span>Gateway</span><strong>{{ dispositivo.metadata?.gatewayID || '-' }}</strong>
+            </article>
+            <article>
+              <span>Señal</span>
+              <strong>{{ dispositivo.metadata?.rssi ?? '--' }} dBm / {{ dispositivo.metadata?.snr ?? '--' }} dB</strong>
+            </article>
+          </div>
+        </details>
 
-        @if (esLanzaDeSuelo(dispositivo)) {
-          @if (perfil(dispositivo).length) {
-            <div class="device-summary-grid">
-              <article>
-                <span>Humedad · primer nivel</span><strong>{{ formatearValor(resumen(dispositivo).humedad) }}</strong>
-              </article>
-              <article>
-                <span>Salinidad · primer nivel</span
-                ><strong>{{ formatearValor(resumen(dispositivo).salinidad) }}</strong>
-              </article>
-              <article>
-                <span>Temperatura · primer nivel</span
-                ><strong>{{ formatearValor(resumen(dispositivo).temperatura) }}</strong>
-              </article>
-            </div>
-          }
-          <div class="device-profile-note">
-            <i class="pi pi-chart-line"></i><span>{{ perfilLabel(dispositivo) }}</span>
-          </div>
-        } @else if (esMedidorNapa(dispositivo)) {
-          <div class="device-summary-grid napa-installation-summary">
-            <article>
-              <span>Cable total</span><strong>{{ configuracionNapa(dispositivo)?.longitudCableM ?? '—' }} m</strong>
-            </article>
-            <article>
-              <span>Tramo exterior</span
-              ><strong>{{ configuracionNapa(dispositivo)?.tramoCableExteriorM ?? '—' }} m</strong>
-            </article>
-            <article>
-              <span>Sensor bajo terreno</span
-              ><strong>{{ configuracionNapa(dispositivo)?.profundidadInstalacionM ?? '—' }} m</strong>
-            </article>
-          </div>
-          <div class="device-profile-note napa-note">
-            <i class="pi pi-compass"></i
-            ><span>La profundidad se informa desde la superficie del lote hasta el agua.</span>
-          </div>
-        } @else if (esSensorAmbiente(dispositivo)) {
+        @if (!esLanzaDeSuelo(dispositivo) && !esMedidorNapa(dispositivo) && esSensorAmbiente(dispositivo)) {
           <div class="device-summary-grid">
             <article>
               <span>Temperatura</span
@@ -100,14 +68,11 @@
               ><strong>{{ formatearNumero(resumenAmbiente(dispositivo).humedad, '%') }}</strong>
             </article>
             <article>
-              <span>Bateria</span><strong>{{ formatearNumero(resumenAmbiente(dispositivo).bateria, '%', 0) }}</strong>
+              <span>Batería</span><strong>{{ formatearNumero(resumenAmbiente(dispositivo).bateria, '%', 0) }}</strong>
             </article>
           </div>
-          <div class="device-profile-note">
-            <i class="pi pi-chart-line"></i><span>Historico ambiental disponible: temperatura y humedad.</span>
-          </div>
-        } @else {
-          <p-message severity="info">El dispositivo todavia no tiene variables graficables en el lote.</p-message>
+        } @else if (!esLanzaDeSuelo(dispositivo) && !esMedidorNapa(dispositivo)) {
+          <p-message severity="info">El dispositivo todavía no tiene variables graficables en el lote.</p-message>
         }
 
         @if (estaCargandoHistorico(dispositivo)) {
@@ -115,7 +80,7 @@
             <i class="pi pi-spin pi-spinner"></i><span>Cargando lecturas del sensor...</span>
           </div>
         } @else if (esMedidorNapa(dispositivo)) {
-          <section class="device-inline-history" aria-label="Nivel y curva historica de la napa">
+          <section class="device-inline-history" aria-label="Nivel y curva histórica de la napa">
             <app-grafico-historico-napa
               [reportes]="historico(dispositivo)"
               [rawFrames]="frames(dispositivo)"
@@ -129,8 +94,14 @@
             <app-grafico-historico-suelo
               [reportes]="historico(dispositivo)"
               [rawFrames]="frames(dispositivo)"
-              [titulo]="'Perfil Sentek 1,2 m · ' + (dispositivo.nombre || 'sensor de suelo')"
-              [subtitulo]="'Humedad, salinidad y temperatura por profundidad; un punto por lectura recibida'"
+              [lluvias]="lluviasHistoricas"
+              [daylight]="daylightHistorico"
+              [agronomicThresholds]="sentekAgronomicThresholds"
+              [agronomicThresholdsUnavailable]="sentekAgronomicThresholdsUnavailable"
+              [timeZone]="sentekTimeZone"
+              [periodDays]="diasHistorico"
+              [periodEnd]="historicoHasta"
+              [titulo]="'Perfil de suelo'"
               [fechaDesde]="dispositivo.fechaAsignacionLote"
               [mostrarNapa]="false"
               [mostrarEntradaAnalogica]="false"
@@ -141,14 +112,14 @@
             <app-grafico-historico-ambiente
               [reportes]="historico(dispositivo)"
               [titulo]="'Variables medidas · ' + (dispositivo.nombre || 'sensor ambiental')"
-              [subtitulo]="'Evolucion temporal de las lecturas registradas por el equipo'"
+              [subtitulo]="'Evolución temporal de las lecturas registradas por el equipo'"
             ></app-grafico-historico-ambiente>
           </section>
         }
 
         @if (historicoConError(dispositivo)) {
           <p-message severity="warn">
-            No se pudo recuperar todo el historico. Se conserva visible la ultima lectura disponible.
+            No se pudo recuperar todo el histórico. Se conserva visible la última lectura disponible.
           </p-message>
         }
       </article>

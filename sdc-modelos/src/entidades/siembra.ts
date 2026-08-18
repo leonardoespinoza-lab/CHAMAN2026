@@ -187,7 +187,7 @@ export interface ISiembra {
   ultimaPrediccion?: IPrediccion;
   ultimaPrediccionRiego?: IResultadoPrediccionRiego[];
   ultimaPrediccionMalezas?: IResultadoPrediccionMalezas;
-  aguaUtilReal?: number;
+  aguaUtilReal?: number | null;
   // Información adicional sobre el cálculo de agua útil
   estadoCalculoAguaUtil?:
     "calculado" | "estimado" | "no_disponible" | "fallida";

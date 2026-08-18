@@ -86,6 +86,9 @@ export class Lote implements Exactly<ILote, Lote> {
   @Prop()
   capacidadDeRiego?: number;
 
+  @Prop({ min: 10, max: 100 })
+  eficienciaRiego?: number;
+
   @Prop()
   puntoMarchitez?: number;
 

@@ -6,6 +6,7 @@ import { RiegoService } from '../riego/service';
 import {
   PREDICCIONES_AGROCLIMA_CRON_ENABLED,
   PREDICCIONES_MALEZAS_CRON_ENABLED,
+  RIEGO_CRON_ENABLED,
 } from '../../env';
 import { AgroclimaService } from '../agroclima/service';
 
@@ -58,6 +59,10 @@ export class CronService {
   // Todos los dias a las 09:30
   @Cron('30 9 * * *', CRON_OPTIONS)
   async hacerPrediccionesRiego() {
+    if (!RIEGO_CRON_ENABLED) {
+      Logger.log('Predicciones de riego automaticas deshabilitadas');
+      return;
+    }
     const siembras =
       await this.siembrasService.listarSiembrasParaPredicciones();
     Logger.log(

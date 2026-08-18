@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { IUsuario } from 'modelos/src';
 import { DispositivosService } from '../dispositivos/service';
+import {
+  esUsuarioAdmin,
+  proyectarRawHistoryParaDispositivo,
+} from '../dispositivos/historical-projection';
 import { LorawanUplinksRepository } from './repository';
 
 @Injectable()
@@ -36,16 +40,24 @@ export class LorawanUplinksService {
     limit: string | number | undefined,
     user: IUsuario,
   ) {
-    const dispositivo = await this.dispositivos.assertPuedeVerPorIdentificador(
+    const contexto = await this.dispositivos.contextoAutorizadoPorIdentificador(
       devEUI,
       user,
       'Sensores',
     );
-    return await this.repository.rawHistory({
+    const dispositivo = contexto.visible;
+    const frames = await this.repository.rawHistory({
       devEUI: dispositivo.deveui || devEUI,
       days: Math.max(1, Math.min(Number(days) || 7, 365)),
       limit: Math.max(1, Math.min(Number(limit) || 5000, 20000)),
     });
+    return esUsuarioAdmin(user)
+      ? frames
+      : proyectarRawHistoryParaDispositivo(
+          frames,
+          dispositivo,
+          contexto.fisico,
+        );
   }
 
   async reprocess(query: {

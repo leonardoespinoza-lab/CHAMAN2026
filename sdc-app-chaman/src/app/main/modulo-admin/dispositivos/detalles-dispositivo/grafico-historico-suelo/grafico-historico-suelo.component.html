@@ -1,83 +1,132 @@
 @if (chartOptions && metricOptions.length > 0) {
   <article class="soil-history-card">
-    @if (controllerCoverageNotice) {
-      <div
-        class="controller-coverage-alert"
-        [class.complete]="controllerCoverageComplete"
-        role="status"
-      >
-        <i
-          class="pi"
-          [class.pi-check-circle]="controllerCoverageComplete"
-          [class.pi-exclamation-triangle]="!controllerCoverageComplete"
-        ></i>
+    @if (controllerCoverageNotice && !controllerCoverageComplete) {
+      <div class="controller-coverage-alert" role="status">
+        <i class="pi pi-exclamation-triangle"></i>
         <span>{{ controllerCoverageNotice }}</span>
       </div>
     }
-    <header>
-      <div>
-        <span>{{ titulo || 'Historico Sentek' }}</span>
-        <strong>{{ resumen }}</strong>
-        @if (rawFrames.length) {
-          <small class="raw-evidence-badge">Sin promedios · un punto por lectura LoRaWAN recibida</small>
-        }
-        @if (profileCoverageNotice) {
-          <small class="profile-coverage" [class.incomplete]="profileRows.length < 12">
-            {{ profileCoverageNotice }}
-          </small>
-        }
-        @if (subtitulo) {
-          <small>{{ subtitulo }}</small>
-        }
-        @if (assignmentNotice) {
-          <small class="soil-assignment-note">{{ assignmentNotice }}</small>
-        }
-      </div>
 
+    <header>
+      <span>{{ titulo || 'Perfil Sentek' }}</span>
       <div class="soil-history-actions">
         <select
           class="soil-history-filter"
           [ngModel]="selectedMetric"
           (ngModelChange)="onMetricChange($event)"
-          aria-label="Variable historica de suelo"
+          aria-label="Variable histórica de suelo"
         >
           @for (option of metricOptions; track option.value) {
             <option [ngValue]="option.value">{{ option.label }}</option>
           }
         </select>
+        <details class="soil-depth-selector">
+          <summary aria-label="Seleccionar profundidades visibles">
+            <i class="pi pi-sliders-h" aria-hidden="true"></i>
+            <span>{{ depthSelectionLabel }}</span>
+          </summary>
+          <fieldset class="soil-depth-menu">
+            <legend>Profundidades visibles</legend>
+            <div class="soil-depth-menu-heading">
+              <span>Niveles</span>
+              <button type="button" (click)="showAllDepths()" [disabled]="selectedDepthsCm.length === 12">
+                Mostrar todos
+              </button>
+            </div>
+            <div class="soil-depth-options">
+              @for (depth of depthOptionsCm; track depth) {
+                <label>
+                  <input
+                    type="checkbox"
+                    [checked]="isDepthVisible(depth)"
+                    [disabled]="selectedDepthsCm.length === 1 && isDepthVisible(depth)"
+                    (change)="onDepthVisibilityChange(depth, $any($event.target).checked)"
+                  />
+                  <span>{{ depth }} cm</span>
+                </label>
+              }
+            </div>
+          </fieldset>
+        </details>
         <button class="soil-history-export" data-chaman-action="secondary" type="button" (click)="exportarCsv()">
           Exportar CSV
         </button>
       </div>
     </header>
 
-    <app-chart [options]="chartOptions"></app-chart>
+    @if (profileFreshnessNotice) {
+      <div class="profile-freshness-alert" role="status">
+        <i class="pi pi-clock"></i>
+        <span>{{ profileFreshnessNotice }}</span>
+      </div>
+    }
 
-    @if (profileRows.length) {
-      <div class="soil-profile-values" aria-label="Detalle por sensor de profundidad">
-        @for (row of profileRows; track row.profundidad) {
-          <div class="soil-profile-value">
-            <span>{{ row.profundidad }} cm</span>
-            <strong>{{ row.formatted }}</strong>
-            @if (row.raw) {
-              <small>{{ row.raw }}</small>
-            }
-          </div>
+    @if (rainfallAvailabilityNotice) {
+      <div class="rainfall-availability-note" role="status">
+        <i class="pi pi-info-circle"></i>
+        <span>{{ rainfallAvailabilityNotice }}</span>
+      </div>
+    }
+
+    @if (selectedMetric === 'humedad' && agronomicReference) {
+      <div class="soil-agronomic-key" aria-label="Umbrales agronómicos de humedad volumétrica">
+        <span><i class="deficit" aria-hidden="true"></i>Déficit</span>
+        <span><i class="target" aria-hidden="true"></i>Zona objetivo</span>
+        <span><i class="excess" aria-hidden="true"></i>Sobre capacidad de campo</span>
+        <small>
+          PMP {{ agronomicReference.puntoMarchitezPct | number: '1.2-2' }}% · Recarga inicial (50% PAW)
+          {{ agronomicReference.recargaPct | number: '1.2-2' }}% · CC
+          {{ agronomicReference.capacidadCampoPct | number: '1.2-2' }}%
+          @if (agronomicReference.fuente === 'soilgrids') {
+            · SoilGrids
+          }
+          @if (agronomicReference.depthFromCm !== undefined && agronomicReference.depthToCm !== undefined) {
+            · referencia de perfil @if (agronomicReference.origen === 'estimated') { estimado } {{ agronomicReference.depthFromCm }}–{{ agronomicReference.depthToCm }} cm
+          } @else if (agronomicReference.origen === 'estimated') {
+            · estimado
+          }
+          @if (agronomicReference.confianza === 'low') {
+            · confianza baja
+          }
+        </small>
+      </div>
+    } @else if (selectedMetric === 'humedad' && agronomicThresholds?.stale) {
+      <div class="soil-agronomic-unavailable" role="status">
+        <i class="pi pi-exclamation-triangle" aria-hidden="true"></i>
+        <span>Referencia agronómica desactualizada; las bandas se mantienen ocultas.</span>
+      </div>
+    } @else if (
+      selectedMetric === 'humedad' &&
+      (agronomicThresholdsUnavailable || agronomicThresholds?.confianza === 'unavailable')
+    ) {
+      <div class="soil-agronomic-unavailable" role="status">
+        <i class="pi pi-info-circle" aria-hidden="true"></i>
+        <span>Umbrales agronómicos sin calibrar para este lote.</span>
+      </div>
+    }
+
+    @if (hasDaylightBands || hasRainfallSeries) {
+      <div class="soil-daylight-key" aria-label="Contexto temporal del gráfico">
+        @if (hasRainfallSeries) {
+          <span><i class="rain" aria-hidden="true"></i>Lluvia (mm)</span>
+        }
+        @if (hasDaylightBands) {
+        <span><i class="day" aria-hidden="true"></i>Día</span>
+        <span><i class="night" aria-hidden="true"></i>Noche</span>
         }
       </div>
     }
 
+    <app-chart [options]="chartOptions"></app-chart>
+
     @if (napaChartOptions) {
       <section class="napa-history-card">
         <header>
-          <div>
-            <span>Altura de napa</span>
-            <strong>{{ napaActual | number: '1.2-2' }} m desde el terreno hasta el agua</strong>
-            <small>{{ napaResumen }} · cada punto corresponde a un reporte del controlador</small>
-          </div>
+          <span>Altura de napa</span>
+          <strong>{{ napaActual | number: '1.2-2' }} m bajo el terreno</strong>
         </header>
 
-        <div class="napa-visual" aria-label="Representacion de la profundidad actual de la napa">
+        <div class="napa-visual" aria-label="Representación de la profundidad actual de la napa">
           <div class="napa-ground"><span>Terreno · 0 m</span></div>
           <div class="napa-depth-line" [style.height.%]="napaLineaVisual">
             <span>{{ napaActual | number: '1.2-2' }} m</span>
@@ -86,7 +135,7 @@
             <span>Borde superior del agua</span>
           </div>
           @if (napaActualFecha) {
-            <small>Ultima medicion: {{ napaActualFecha | date: 'short' }}</small>
+            <small>Última medición: {{ napaActualFecha | date: 'short' }}</small>
           }
         </div>
 
@@ -97,91 +146,36 @@
     @if (analogChartOptions) {
       <section class="analog-history-card">
         <header>
-          <div>
-            <span>Entrada analógica · señal cruda</span>
-            <strong>{{ analogActual | number: '1.3-3' }} mA</strong>
-            <small>{{ analogResumen }}</small>
-            @if (!napaChartOptions) {
-              <small class="analog-calibration-warning">
-                Calibración pendiente: la corriente se conserva, pero no se convierte hasta cargar escala, unidad y
-                referencia del transductor.
-              </small>
-            } @else {
-              <small>Trazabilidad de la señal 4–20 mA que origina el nivel de napa.</small>
-            }
-          </div>
+          <span>Entrada analógica</span>
+          <strong>{{ analogActual | number: '1.3-3' }} mA</strong>
         </header>
+        @if (!napaChartOptions) {
+          <small class="analog-calibration-warning">
+            Falta calibrar la conversión de la corriente a una variable física.
+          </small>
+        }
         <app-chart [options]="analogChartOptions"></app-chart>
-      </section>
-    }
-
-    @if (rawEvidenceFrames.length) {
-      <section class="raw-evidence" aria-label="Evidencia de uplinks LoRaWAN">
-        <header>
-          <div>
-            <span>Evidencia LoRaWAN</span>
-            <strong>Ultimas {{ rawEvidenceFrames.length }} tramas conservadas sin agregacion</strong>
-            <small>Fecha, contador, gateway y calidad de radio corresponden al paquete recibido.</small>
-          </div>
-        </header>
-        <div class="raw-evidence-table">
-          <div class="raw-evidence-row raw-evidence-head">
-            <span>Fecha</span><span>FCnt / puerto</span><span>Gateway</span><span>Señal</span><span>Lecturas</span>
-          </div>
-          @for (frame of rawEvidenceFrames; track frame.id || frame.timestamp + '-' + frame.fCnt) {
-            <div class="raw-evidence-row">
-              <strong>{{ frame.timestamp | date: 'short' }}</strong>
-              <span>{{ frame.fCnt ?? '—' }} / {{ frame.fPort ?? '—' }}</span>
-              <span>
-                {{ frame.gatewayID || '—' }}
-                @if (frame.decoderId) {
-                  <small>{{ frame.decoderId }} v{{ frame.decoderVersion }}</small>
-                }
-              </span>
-              <span>{{ frame.rssi ?? '—' }} dBm · {{ frame.snr ?? '—' }} dB</span>
-              <span>
-                {{ rawReadingCount(frame) }} dato{{ rawReadingCount(frame) === 1 ? '' : 's' }}
-                @if (rawInvalidReadingCount(frame)) {
-                  <small class="raw-invalid">{{ rawInvalidReadingCount(frame) }} fuera de rango</small>
-                }
-                @if (rawUnverifiedReadingCount(frame)) {
-                  <small class="raw-unverified">{{ rawUnverifiedReadingCount(frame) }} VIC sin calibración</small>
-                }
-              </span>
-            </div>
-          }
-        </div>
       </section>
     }
   </article>
 } @else {
-  @if (controllerCoverageNotice) {
-    <div
-      class="controller-coverage-alert standalone"
-      [class.complete]="controllerCoverageComplete"
-      role="status"
-    >
-      <i
-        class="pi"
-        [class.pi-check-circle]="controllerCoverageComplete"
-        [class.pi-exclamation-triangle]="!controllerCoverageComplete"
-      ></i>
+  @if (controllerCoverageNotice && !controllerCoverageComplete) {
+    <div class="controller-coverage-alert standalone" role="status">
+      <i class="pi pi-exclamation-triangle"></i>
       <span>{{ controllerCoverageNotice }}</span>
     </div>
   }
+
   @if (napaChartOptions || analogChartOptions) {
     <article class="soil-history-card">
       @if (napaChartOptions) {
         <section class="napa-history-card only">
           <header>
-            <div>
-              <span>Altura de napa</span>
-              <strong>{{ napaActual | number: '1.2-2' }} m desde el terreno hasta el agua</strong>
-              <small>{{ napaResumen }} · cada punto corresponde a un reporte del controlador</small>
-            </div>
+            <span>Altura de napa</span>
+            <strong>{{ napaActual | number: '1.2-2' }} m bajo el terreno</strong>
           </header>
 
-          <div class="napa-visual" aria-label="Representacion de la profundidad actual de la napa">
+          <div class="napa-visual" aria-label="Representación de la profundidad actual de la napa">
             <div class="napa-ground"><span>Terreno · 0 m</span></div>
             <div class="napa-depth-line" [style.height.%]="napaLineaVisual">
               <span>{{ napaActual | number: '1.2-2' }} m</span>
@@ -190,52 +184,25 @@
               <span>Borde superior del agua</span>
             </div>
             @if (napaActualFecha) {
-              <small>Ultima medicion: {{ napaActualFecha | date: 'short' }}</small>
+              <small>Última medición: {{ napaActualFecha | date: 'short' }}</small>
             }
           </div>
 
           <app-chart [options]="napaChartOptions"></app-chart>
-
-          @if (rawEvidenceFrames.length) {
-            <div class="raw-evidence-table compact">
-              @for (frame of rawEvidenceFrames; track frame.id || frame.timestamp + '-' + frame.fCnt) {
-                <div class="raw-evidence-row">
-                  <strong>{{ frame.timestamp | date: 'short' }}</strong>
-                  <span>FCnt {{ frame.fCnt ?? '—' }}</span>
-                  <span>{{ frame.rssi ?? '—' }} dBm · {{ frame.snr ?? '—' }} dB</span>
-                  <span>
-                    {{ rawReadingCount(frame) }} dato{{ rawReadingCount(frame) === 1 ? '' : 's' }}
-                    @if (rawInvalidReadingCount(frame)) {
-                      <small class="raw-invalid">{{ rawInvalidReadingCount(frame) }} fuera de rango</small>
-                    }
-                    @if (rawUnverifiedReadingCount(frame)) {
-                      <small class="raw-unverified">{{ rawUnverifiedReadingCount(frame) }} VIC sin calibración</small>
-                    }
-                  </span>
-                </div>
-              }
-            </div>
-          }
         </section>
       }
 
       @if (analogChartOptions) {
         <section class="analog-history-card" [class.only]="!napaChartOptions">
           <header>
-            <div>
-              <span>Entrada analógica · señal cruda</span>
-              <strong>{{ analogActual | number: '1.3-3' }} mA</strong>
-              <small>{{ analogResumen }}</small>
-              @if (!napaChartOptions) {
-                <small class="analog-calibration-warning">
-                  Calibración pendiente: la corriente se conserva, pero no se convierte hasta cargar escala, unidad y
-                  referencia del transductor.
-                </small>
-              } @else {
-                <small>Trazabilidad de la señal 4–20 mA que origina el nivel de napa.</small>
-              }
-            </div>
+            <span>Entrada analógica</span>
+            <strong>{{ analogActual | number: '1.3-3' }} mA</strong>
           </header>
+          @if (!napaChartOptions) {
+            <small class="analog-calibration-warning">
+              Falta calibrar la conversión de la corriente a una variable física.
+            </small>
+          }
           <app-chart [options]="analogChartOptions"></app-chart>
         </section>
       }
@@ -251,39 +218,40 @@
         "
       ></p-message>
     </div>
-
-    @if (rawEvidenceFrames.length) {
-      <section class="raw-evidence raw-evidence-standalone" aria-label="Evidencia de uplinks LoRaWAN">
-        <header>
-          <div>
-            <span>Evidencia LoRaWAN</span>
-            <strong>{{ rawEvidenceFrames.length }} tramas recibidas sin agregación</strong>
-            <small>La comunicación está activa; falta interpretar el contenido del perfil del dispositivo.</small>
-          </div>
-        </header>
-        <div class="raw-evidence-table">
-          <div class="raw-evidence-row raw-evidence-head">
-            <span>Fecha</span><span>FCnt / puerto</span><span>Gateway</span><span>Señal</span><span>Lecturas</span>
-          </div>
-          @for (frame of rawEvidenceFrames; track frame.id || frame.timestamp + '-' + frame.fCnt) {
-            <div class="raw-evidence-row">
-              <strong>{{ frame.timestamp | date: 'short' }}</strong>
-              <span>{{ frame.fCnt ?? '—' }} / {{ frame.fPort ?? '—' }}</span>
-              <span>{{ frame.gatewayID || '—' }}</span>
-              <span>{{ frame.rssi ?? '—' }} dBm · {{ frame.snr ?? '—' }} dB</span>
-              <span>
-                {{ rawReadingCount(frame) }} dato{{ rawReadingCount(frame) === 1 ? '' : 's' }}
-                @if (rawInvalidReadingCount(frame)) {
-                  <small class="raw-invalid">{{ rawInvalidReadingCount(frame) }} fuera de rango</small>
-                }
-                @if (rawUnverifiedReadingCount(frame)) {
-                  <small class="raw-unverified">{{ rawUnverifiedReadingCount(frame) }} VIC sin calibración</small>
-                }
-              </span>
-            </div>
-          }
-        </div>
-      </section>
-    }
   }
+}
+
+@if (rawEvidenceFrames.length) {
+  <details class="raw-evidence-disclosure">
+    <summary><i class="pi pi-list"></i> Ver tramas ({{ rawEvidenceFrames.length }})</summary>
+    <section class="raw-evidence" aria-label="Tramas LoRaWAN">
+      <div class="raw-evidence-table">
+        <div class="raw-evidence-row raw-evidence-head">
+          <span>Fecha</span><span>FCnt / puerto</span><span>Gateway</span><span>Señal</span><span>Lecturas</span>
+        </div>
+        @for (frame of rawEvidenceFrames; track frame.id || frame.timestamp + '-' + frame.fCnt) {
+          <div class="raw-evidence-row">
+            <strong>{{ frame.timestamp | date: 'short' }}</strong>
+            <span>{{ frame.fCnt ?? '—' }} / {{ frame.fPort ?? '—' }}</span>
+            <span>
+              {{ frame.gatewayID || '—' }}
+              @if (frame.decoderId) {
+                <small>{{ frame.decoderId }} v{{ frame.decoderVersion }}</small>
+              }
+            </span>
+            <span>{{ frame.rssi ?? '—' }} dBm · {{ frame.snr ?? '—' }} dB</span>
+            <span>
+              {{ rawReadingCount(frame) }} dato{{ rawReadingCount(frame) === 1 ? '' : 's' }}
+              @if (rawInvalidReadingCount(frame)) {
+                <small class="raw-invalid">{{ rawInvalidReadingCount(frame) }} fuera de rango</small>
+              }
+              @if (rawUnverifiedReadingCount(frame)) {
+                <small class="raw-unverified">{{ rawUnverifiedReadingCount(frame) }} VIC sin calibración</small>
+              }
+            </span>
+          </div>
+        }
+      </div>
+    </section>
+  </details>
 }

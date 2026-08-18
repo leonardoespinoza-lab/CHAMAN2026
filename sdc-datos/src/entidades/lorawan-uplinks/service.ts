@@ -68,7 +68,11 @@ export class LorawanUplinksService {
     const days = Math.max(1, Math.min(Number(query.days) || 7, 365));
     const limit = Math.max(1, Math.min(Number(query.limit) || 5000, 20000));
     const since = Date.now() - days * 86_400_000;
-    const uplinks = await this.repository.recentByDevEUI(devEUI, limit);
+    const uplinks = await this.repository.recentByDevEUI(
+      devEUI,
+      limit,
+      new Date(since),
+    );
     const dispositivo = await this.dispositivos
       .getFilter({ filter: JSON.stringify({ deveui: devEUI }), limit: 1 })
       .then((result: any) => result?.datos?.[0] as IDispositivo | undefined)
@@ -201,6 +205,7 @@ export class LorawanUplinksService {
     const previous = this.reporteCompatibleConCiclo(
       existing || recent,
       decoded.cycleChannels,
+      decoded.valores,
     );
     const valores = previous?.datos?.valores
       ? this.mergeSentekValues(previous.datos.valores, decoded.valores)
@@ -214,6 +219,16 @@ export class LorawanUplinksService {
         ...decoded.cycleChannels,
       ]),
     ).sort((left, right) => left - right);
+    const previousCycleTimestamp =
+      previous?.metadataLora?.cycleFirstTimestamp ||
+      previous?.fecha ||
+      previous?.fechaCreacion;
+    const parsedPreviousCycleTimestamp = previousCycleTimestamp
+      ? Date.parse(previousCycleTimestamp)
+      : Number.NaN;
+    const cycleFirstTimestamp = Number.isFinite(parsedPreviousCycleTimestamp)
+      ? new Date(parsedPreviousCycleTimestamp).toISOString()
+      : reportDate.toISOString();
     const metadataLora = {
       applicationID: uplink.applicationID,
       applicationName: uplink.applicationName,
@@ -234,6 +249,7 @@ export class LorawanUplinksService {
         previous?.metadataLora?.fCnt ??
         uplink.fCnt,
       cycleLastFCnt: uplink.fCnt,
+      cycleFirstTimestamp,
     };
 
     let reporte: IReporte;
@@ -687,20 +703,52 @@ export class LorawanUplinksService {
   private reporteCompatibleConCiclo(
     reporte: IReporte | null,
     incomingChannels: number[],
+    incomingValues: IValoresV2['valores'] = {},
   ): IReporte | null {
     if (!reporte) {
       return null;
     }
 
-    // La entrada 4-20 mA es otro sensor fisico del mismo controlador.
-    // Puede completar el reporte reciente sin participar del ciclo de 12 canales SDI-12.
-    if (!incomingChannels.length) return reporte;
+    // La entrada 4-20 mA puede completar un reporte que aun no la contiene.
+    // Si la misma magnitud analogica ya estaba presente, la trama sin canales
+    // SDI-12 es una nueva medicion y debe iniciar su propio snapshot.
+    if (!incomingChannels.length) {
+      const previousAnalog = this.analogVariablesInValues(
+        reporte.datos?.valores || {},
+      );
+      const incomingAnalog = this.analogVariablesInValues(incomingValues);
+      const repeatedAnalog = [...incomingAnalog].some((variable) =>
+        previousAnalog.has(variable),
+      );
+      return repeatedAnalog ? null : reporte;
+    }
 
     const previousChannels = this.sentekChannelsInReport(reporte);
     const repeatedChannel = incomingChannels.some((channel) =>
       previousChannels.has(channel),
     );
     return repeatedChannel ? null : reporte;
+  }
+
+  private analogVariablesInValues(
+    values: IValoresV2['valores'],
+  ): Set<'Napa' | 'Presión' | 'Entrada Analógica'> {
+    const result = new Set<'Napa' | 'Presión' | 'Entrada Analógica'>();
+    const hasFiniteValue = (sensor: keyof IValoresV2['valores']) =>
+      (values[sensor] || []).some(
+        (row) =>
+          typeof row?.valores?.actual === 'number' &&
+          Number.isFinite(row.valores.actual),
+      );
+
+    if (hasFiniteValue('Napa')) {
+      result.add('Napa');
+    } else if (hasFiniteValue('Presión')) {
+      result.add('Presión');
+    } else if (hasFiniteValue('Entrada Analógica')) {
+      result.add('Entrada Analógica');
+    }
+    return result;
   }
 
   private sentekChannelsInReport(reporte: IReporte): Set<number> {

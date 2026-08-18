@@ -201,6 +201,10 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
       capacidadDeCampo: new FormControl(this.lote?.capacidadDeCampo),
       puntoMarchitez: new FormControl(this.lote?.puntoMarchitez),
       capacidadDeRiego: new FormControl(this.lote?.capacidadDeRiego),
+      eficienciaRiego: new FormControl(this.lote?.eficienciaRiego, [
+        Validators.min(10),
+        Validators.max(100),
+      ]),
       anchoDeBulbo: new FormControl(this.lote?.anchoDeBulbo),
       metrosLinealesHas: new FormControl(this.lote?.metrosLinealesHas),
       ubicacion: new FormGroup({
@@ -769,6 +773,7 @@ export class CrearEditarLoteComponent implements OnInit, OnDestroy {
       capacidadDeCampo: this.form?.get('capacidadDeCampo')?.value,
       puntoMarchitez: this.form?.get('puntoMarchitez')?.value,
       capacidadDeRiego: this.form?.get('capacidadDeRiego')?.value,
+      eficienciaRiego: this.form?.get('eficienciaRiego')?.value,
       anchoDeBulbo: this.form?.get('anchoDeBulbo')?.value,
       metrosLinealesHas: this.form?.get('metrosLinealesHas')?.value,
       ubicacion: {

@@ -5,9 +5,14 @@ import {
   IQueryParam,
   IFilter,
   IUsuario,
+  IDispositivo,
 } from 'modelos/src';
 import { ReportesRepository } from './repository';
 import { DispositivosService } from '../dispositivos/service';
+import {
+  esUsuarioAdmin,
+  proyectarReporteParaDispositivo,
+} from '../dispositivos/historical-projection';
 import { HelperService } from '../../auxiliares/helper';
 
 @Injectable()
@@ -19,17 +24,32 @@ export class ReportesService {
 
   async getById(id: string, user?: IUsuario): Promise<IReporte> {
     const reporte = await this.repository.getById(id);
-    if (user && reporte?.idDispositivo) {
-      await this.dispositivosService.assertPuedeVer(
-        reporte.idDispositivo,
-        user,
-        'Sensores',
-      );
+    let dispositivo: IDispositivo | undefined;
+    let inventarioFisico: IDispositivo | undefined;
+    if (user) {
+      const identificador = reporte?.idDispositivo || reporte?.deveui;
+      if (!identificador) {
+        throw new ForbiddenException(
+          'El reporte no identifica un dispositivo asignado',
+        );
+      }
+      const contexto =
+        await this.dispositivosService.contextoAutorizadoPorIdentificador(
+          identificador,
+          user,
+          'Sensores',
+        );
+      dispositivo = contexto.visible;
+      inventarioFisico = contexto.fisico;
     }
-    return reporte;
+    return user && dispositivo && inventarioFisico && !esUsuarioAdmin(user)
+      ? proyectarReporteParaDispositivo(reporte, dispositivo, inventarioFisico)
+      : reporte;
   }
 
   async get(filtro: IQueryParam, user?: IUsuario): Promise<IListado<IReporte>> {
+    let dispositivo: IDispositivo | undefined;
+    let inventarioFisico: IDispositivo | undefined;
     if (user && !user.permisos?.some((permiso) => permiso.nivel === 'Admin')) {
       const filter = HelperService.filtroToObject(filtro.filter);
       const idDispositivo = this.extraerIdDispositivo(filter);
@@ -38,13 +58,19 @@ export class ReportesService {
           'Debe consultar reportes por un dispositivo asignado',
         );
       }
-      await this.dispositivosService.assertPuedeVer(
-        idDispositivo,
-        user,
-        'Sensores',
-      );
+      const contexto =
+        await this.dispositivosService.contextoAutorizadoPorIdentificador(
+          idDispositivo,
+          user,
+          'Sensores',
+        );
+      dispositivo = contexto.visible;
+      inventarioFisico = contexto.fisico;
     }
-    return await this.repository.get(filtro);
+    const response = await this.repository.get(filtro);
+    return user && dispositivo && inventarioFisico
+      ? this.proyectarListado(response, dispositivo, inventarioFisico)
+      : response;
   }
 
   async historico(
@@ -56,14 +82,18 @@ export class ReportesService {
     const diasNormalizados = Number(dias) || 7;
     const limitNormalizado = Number(limit) || 2000;
     const identificadores = new Set<string>([idDispositivo].filter(Boolean));
+    let dispositivo: IDispositivo | undefined;
+    let inventarioFisico: IDispositivo | undefined;
 
     if (user) {
-      const dispositivo =
-        await this.dispositivosService.assertPuedeVerPorIdentificador(
+      const contexto =
+        await this.dispositivosService.contextoAutorizadoPorIdentificador(
           idDispositivo,
           user,
           'Sensores',
         );
+      dispositivo = contexto.visible;
+      inventarioFisico = contexto.fisico;
       if (dispositivo?._id) {
         identificadores.add(dispositivo._id);
       }
@@ -81,7 +111,10 @@ export class ReportesService {
       ),
     );
 
-    return this.unirHistoricos(historicos, limitNormalizado);
+    const resultado = this.unirHistoricos(historicos, limitNormalizado);
+    return user && dispositivo && inventarioFisico && !esUsuarioAdmin(user)
+      ? this.proyectarListado(resultado, dispositivo, inventarioFisico)
+      : resultado;
   }
 
   async diario(
@@ -89,12 +122,17 @@ export class ReportesService {
     idDispositivo: string,
     user?: IUsuario,
   ): Promise<IListado<IReporte>> {
+    let dispositivo: IDispositivo | undefined;
+    let inventarioFisico: IDispositivo | undefined;
     if (user) {
-      await this.dispositivosService.assertPuedeVer(
-        idDispositivo,
-        user,
-        'Sensores',
-      );
+      const contexto =
+        await this.dispositivosService.contextoAutorizadoPorIdentificador(
+          idDispositivo,
+          user,
+          'Sensores',
+        );
+      dispositivo = contexto.visible;
+      inventarioFisico = contexto.fisico;
     }
     // Obtiene un reporte por día para el dispositivo, específicamente el más cercano a las 06:00 AM
     const filtro: IFilter<IReporte> = {
@@ -149,10 +187,48 @@ export class ReportesService {
         new Date(a.fechaCreacion).getTime(),
     );
 
-    return {
+    const resultado = {
       datos: reportesFinales,
       totalCount: reportesFinales.length,
     };
+    return user && dispositivo && inventarioFisico && !esUsuarioAdmin(user)
+      ? this.proyectarListado(resultado, dispositivo, inventarioFisico)
+      : resultado;
+  }
+
+  private proyectarListado(
+    listado: IListado<IReporte>,
+    dispositivo: IDispositivo,
+    inventarioFisico: IDispositivo,
+  ): IListado<IReporte> {
+    const reportesAutorizados = (listado.datos || []).filter((reporte) =>
+      this.reportePerteneceAlDispositivo(reporte, dispositivo),
+    );
+    return {
+      ...listado,
+      datos: reportesAutorizados.map((reporte) =>
+        proyectarReporteParaDispositivo(reporte, dispositivo, inventarioFisico),
+      ),
+      // Una consulta manipulada puede combinar identificadores en un `$or`.
+      // El conteo expuesto debe reflejar exclusivamente el dispositivo que ya
+      // fue autorizado, no el total devuelto por el repositorio interno.
+      totalCount: reportesAutorizados.length,
+    };
+  }
+
+  private reportePerteneceAlDispositivo(
+    reporte: IReporte,
+    dispositivo: IDispositivo,
+  ): boolean {
+    const permitidos = new Set(
+      [dispositivo._id, dispositivo.deveui]
+        .filter((value): value is string => !!value)
+        .map((value) => value.trim().toLowerCase()),
+    );
+    if (!permitidos.size) return false;
+    return [reporte.idDispositivo, reporte.deveui]
+      .filter((value): value is string => !!value)
+      .some((value) => permitidos.has(value.trim().toLowerCase()));
   }
 
   private extraerIdDispositivo(filter: any): string | undefined {

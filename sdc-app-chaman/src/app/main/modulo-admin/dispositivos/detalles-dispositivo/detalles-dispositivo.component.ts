@@ -1,6 +1,11 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { IDispositivo, ILorawanRawFrame, IReporte } from 'modelos/src';
+import {
+  IDispositivo,
+  ILorawanRawFrame,
+  IReporte,
+  serviciosDispositivoNormalizados,
+} from 'modelos/src';
 import { DispositivoService } from '../../../../auxiliares/http/dispositivos.service';
 import { ReporteService } from '../../../../auxiliares/http/reporte.service';
 import { LorawanUplinksService } from '../../../../auxiliares/http/lorawan-uplinks.service';
@@ -11,11 +16,7 @@ import { BateriaComponent } from '../bateria/bateria.component';
 import { CardDetallesReporteLanzaComponent } from './card-detalles-reporte-lanza/card-detalles-reporte-lanza.component';
 import { GraficoHistoricoAmbienteComponent } from './grafico-historico-ambiente/grafico-historico-ambiente.component';
 import { GraficoHistoricoSueloComponent } from './grafico-historico-suelo/grafico-historico-suelo.component';
-import {
-  buildSentekChannelCoverage,
-  buildSentekProfile,
-  MedicionProfundidad,
-} from './sentek-profile';
+import { buildSentekChannelCoverage, buildSentekProfile, MedicionProfundidad } from './sentek-profile';
 
 @Component({
   selector: 'app-detalles-dispositivo',
@@ -40,8 +41,10 @@ export class DetallesDispositivoComponent implements OnInit {
   public loading = false;
   public loadingHistorico = false;
   public diasHistorico = 7;
+  public historicoHasta = new Date().toISOString();
   public reportesHistoricos: IReporte[] = [];
   public rawFrames: ILorawanRawFrame[] = [];
+  private historicoLoadVersion = 0;
 
   public get esControladorSentek(): boolean {
     return !!this.dispositivo?.configuracionLecturas?.perfilSuelo || this.esLanzaDeSuelo;
@@ -58,15 +61,20 @@ export class DetallesDispositivoComponent implements OnInit {
   public get estadoPerfilSentek(): string {
     const cobertura = this.coberturaPerfilSentek;
     if (!cobertura) return 'Esperando diagnóstico';
-    return cobertura.completa
-      ? 'Perfil completo 12/12'
-      : `Perfil incompleto ${cobertura.canalesRecibidos.length}/12`;
+    return cobertura.completa ? 'Perfil completo 12/12' : `Perfil incompleto ${cobertura.canalesRecibidos.length}/12`;
   }
 
   public get descripcionProfundidadesSentek(): string {
     const depths = this.dispositivo?.configuracionLecturas?.perfilSuelo?.profundidadesCm || [];
     if (!depths.length) return '12 niveles de profundidad';
     return `${depths.length} niveles configurados: ${depths[0]} a ${depths[depths.length - 1]} cm`;
+  }
+
+  public get fechaDesdePerfilSentek(): string | undefined {
+    const servicioPerfil = serviciosDispositivoNormalizados(this.dispositivo).find(
+      (servicio) => servicio.tipo === 'perfil_suelo'
+    );
+    return servicioPerfil?.fechaAsignacionLote || this.dispositivo?.fechaAsignacionLote;
   }
 
   public get esEntradaAnalogica(): boolean {
@@ -160,10 +168,19 @@ export class DetallesDispositivoComponent implements OnInit {
 
   public async cambiarPeriodoHistorico(dias: number): Promise<void> {
     this.diasHistorico = dias;
+    this.historicoHasta = new Date().toISOString();
     await this.cargarHistorico();
   }
 
+  private rawHistoryLimit(): number {
+    if (this.diasHistorico <= 1) return 1000;
+    if (this.diasHistorico <= 7) return 4000;
+    return 12000;
+  }
+
   private setDispositivo(dispositivo?: IDispositivo): void {
+    this.historicoLoadVersion += 1;
+    this.historicoHasta = new Date().toISOString();
     this.dispositivo = dispositivo;
     this.esLanzaDeSuelo = this.dispositivo?.tipo === 'Sensor de Humedad de Suelo';
     this.esSensorAmbiente = this.tieneVariableAmbiental(this.dispositivo);
@@ -175,14 +192,16 @@ export class DetallesDispositivoComponent implements OnInit {
   private async cargarHistorico(): Promise<void> {
     const id = this.dispositivo?._id || this.dispositivo?.deveui;
     if ((!this.esLanzaDeSuelo && !this.esSensorAmbiente && !this.esEntradaAnalogica) || !id) return;
+    const loadVersion = ++this.historicoLoadVersion;
     this.loadingHistorico = true;
     try {
       const [response, rawFrames] = await Promise.all([
         this.reportesService.historico(id, this.diasHistorico, 2500),
         this.dispositivo?.deveui
-          ? this.lorawanUplinks.rawHistory(this.dispositivo.deveui, this.diasHistorico, 5000)
+          ? this.lorawanUplinks.rawHistory(this.dispositivo.deveui, this.diasHistorico, this.rawHistoryLimit())
           : Promise.resolve([]),
       ]);
+      if (loadVersion !== this.historicoLoadVersion) return;
       this.rawFrames = rawFrames;
       this.reportesHistoricos = response.datos?.length
         ? response.datos
@@ -190,11 +209,12 @@ export class DetallesDispositivoComponent implements OnInit {
           ? [this.ultimoReporte]
           : [];
     } catch (error) {
+      if (loadVersion !== this.historicoLoadVersion) return;
       console.error('Error al cargar historico de reportes del dispositivo', error);
       this.reportesHistoricos = this.ultimoReporte ? [this.ultimoReporte] : [];
       this.rawFrames = [];
     } finally {
-      this.loadingHistorico = false;
+      if (loadVersion === this.historicoLoadVersion) this.loadingHistorico = false;
     }
   }
 

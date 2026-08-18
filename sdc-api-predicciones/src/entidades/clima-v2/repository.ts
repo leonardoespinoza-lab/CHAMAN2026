@@ -52,9 +52,12 @@ export class ClimaV2Repository {
     id: string,
     desde: string,
     hasta: string,
+    agrupacion: 'hourly' | 'daily' = 'daily',
   ): Promise<IClimaEstacionMeteorologica[]> {
     const url = `${API_CLIMA}/climav2/suelo/${id}/${desde}/${hasta}`;
-    return await this.axios.GET<IClimaEstacionMeteorologica[]>(url, {});
+    return await this.axios.GET<IClimaEstacionMeteorologica[]>(url, {
+      params: { agrupacion },
+    });
   }
 
   async getPronostico(
