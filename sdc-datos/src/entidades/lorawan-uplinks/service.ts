@@ -91,6 +91,8 @@ export class LorawanUplinksService {
     devEUI?: string;
     limit?: string | number;
     replace?: string | boolean;
+    applicationID?: string;
+    from?: string;
   }) {
     const devEUI = query.devEUI?.trim().toUpperCase();
     if (!devEUI) {
@@ -104,11 +106,37 @@ export class LorawanUplinksService {
       };
     }
 
+    const applicationID = query.applicationID?.trim();
+    const from = query.from?.trim();
+    const fromDate = from ? new Date(from) : undefined;
+    const replace = query.replace === true || query.replace === 'true';
+    if (from && !Number.isFinite(fromDate?.getTime())) {
+      return {
+        devEUI,
+        procesados: 0,
+        reportesSentek: 0,
+        reportesGenericos: 0,
+        errores: 0,
+        mensaje: 'from debe ser una fecha ISO-8601 válida',
+      };
+    }
+    if (replace && (applicationID || fromDate)) {
+      return {
+        devEUI,
+        procesados: 0,
+        reportesSentek: 0,
+        reportesGenericos: 0,
+        errores: 0,
+        mensaje:
+          'replace no se permite en un reproceso acotado para proteger el historial previo',
+      };
+    }
+
     const uplinks = await this.repository.byDevEUI(
       devEUI,
       Math.min(Number(query.limit) || 5000, 20000),
+      { applicationID, from: fromDate },
     );
-    const replace = query.replace === true || query.replace === 'true';
     const reportesEliminados = replace
       ? await this.reportes.deleteByDeveui(devEUI)
       : 0;
@@ -348,6 +376,7 @@ export class LorawanUplinksService {
     const decodedObject = this.extractDecodedObject(uplink);
     const valores = this.parseGenericClimateValues(decodedObject);
     const battery = this.getFirstNumber(
+      decodedObject.battery_pct,
       decodedObject.battery,
       decodedObject.batteryLevel,
       decodedObject.bateria,
@@ -468,6 +497,7 @@ export class LorawanUplinksService {
     const valores: IValoresV2['valores'] = {};
 
     const temperatura = this.getFirstNumber(
+      object.temperature_c,
       object.temperature,
       object.temp,
       object.airTemperature,
@@ -479,6 +509,7 @@ export class LorawanUplinksService {
     }
 
     const humedad = this.getFirstNumber(
+      object.humidity_pct,
       object.humidity,
       object.hum,
       object.relativeHumidity,
@@ -550,6 +581,7 @@ export class LorawanUplinksService {
     }
 
     const bateria = this.getFirstNumber(
+      object.battery_pct,
       object.battery,
       object.batteryLevel,
       object.bateria,
