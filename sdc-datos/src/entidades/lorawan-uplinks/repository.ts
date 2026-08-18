@@ -77,12 +77,26 @@ export class LorawanUplinksRepository {
     ]);
   }
 
-  async byDevEUI(devEUI: string, limit = 5000): Promise<ILorawanUplink[]> {
+  async byDevEUI(
+    devEUI: string,
+    limit = 5000,
+    scope?: { applicationID?: string; from?: Date },
+  ): Promise<ILorawanUplink[]> {
     const upper = devEUI.toUpperCase();
     const lower = devEUI.toLowerCase();
+    const filter: Record<string, any> = {
+      devEUI: { $in: [upper, lower, devEUI] },
+    };
+
+    if (scope?.applicationID) {
+      filter.applicationID = scope.applicationID;
+    }
+    if (scope?.from) {
+      filter.timestamp = { $gte: scope.from };
+    }
 
     return await this.model
-      .find({ devEUI: { $in: [upper, lower, devEUI] } })
+      .find(filter)
       .sort({ timestamp: 1, fechaCreacion: 1 })
       .limit(Math.max(1, Math.min(Number(limit) || 5000, 20000)))
       .lean();

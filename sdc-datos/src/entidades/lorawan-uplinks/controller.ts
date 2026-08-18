@@ -56,15 +56,21 @@ export class LorawanUplinksController {
       devEUI?: string;
       limit?: string | number;
       replace?: boolean | string;
+      applicationID?: string;
+      from?: string;
     },
     @Query('devEUI') devEUI?: string,
     @Query('limit') limit?: string,
     @Query('replace') replace?: string,
+    @Query('applicationID') applicationID?: string,
+    @Query('from') from?: string,
   ) {
     return await this.service.reprocess({
       devEUI: devEUI || body?.devEUI,
       limit: limit || body?.limit,
       replace: replace || body?.replace,
+      applicationID: applicationID || body?.applicationID,
+      from: from || body?.from,
     });
   }
 
