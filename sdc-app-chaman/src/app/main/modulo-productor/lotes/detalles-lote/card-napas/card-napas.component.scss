@@ -179,7 +179,7 @@
 .napas-reading {
   align-items: flex-start;
   background: color-mix(in srgb, #16a385, white 93%);
-  border-left: 3px solid #16a385;
+  border: 1px solid color-mix(in srgb, #16a385, white 65%);
   border-radius: 8px;
   color: var(--p-text-color);
   display: flex;
@@ -193,7 +193,7 @@
 
 .napas-reading.reference-warning {
   background: color-mix(in srgb, #3e91d6, white 93%);
-  border-left-color: #3e91d6;
+  border: 1px solid color-mix(in srgb, #3e91d6, white 65%);
 }
 
 .napas-reading i {
