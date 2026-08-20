@@ -37,6 +37,8 @@ interface AsignarCentralBody {
   idEstablecimiento: string;
 }
 
+type ActualizarCredencialesBody = FieldClimateCredentials;
+
 @Injectable()
 export class FieldClimateIntegracionService {
   private readonly logger = new Logger(FieldClimateIntegracionService.name);
@@ -162,6 +164,49 @@ export class FieldClimateIntegracionService {
           : 'No se pudo sincronizar la central con FieldClimate',
       );
     }
+  }
+
+  async actualizarCredenciales(
+    idCentral: string,
+    body: ActualizarCredencialesBody,
+  ): Promise<IEstacion> {
+    this.validarCredenciales(body);
+    const central = await this.repository.obtenerCentralChaman(idCentral);
+    if (!central || central.origen !== 'FieldClimate' || !central.idExterno) {
+      throw new BadRequestException('Central FieldClimate no encontrada');
+    }
+
+    let station: any;
+    try {
+      station = await this.repository.obtenerCentral(central.idExterno, body);
+    } catch (error: any) {
+      const status = Number(error?.status || error?.response?.status || 0);
+      throw new BadRequestException(
+        status === 401 || status === 403
+          ? 'FieldClimate rechazo las nuevas credenciales'
+          : 'Las nuevas credenciales no permiten consultar esta central',
+      );
+    }
+
+    const idValidado = this.getStationExternalId(station).trim().toUpperCase();
+    if (idValidado !== central.idExterno.trim().toUpperCase()) {
+      throw new BadRequestException(
+        'Las credenciales no corresponden a la central seleccionada',
+      );
+    }
+
+    await this.repository.actualizarCentral(idCentral, {
+      user: protectFieldClimateCredential(body.username),
+      pass: protectFieldClimateCredential(body.password),
+      estado: {
+        ...central.estado,
+        activa: central.estado?.activa !== false,
+        ultimoSync: new Date().toISOString(),
+        ultimoError: null,
+      },
+    });
+
+    return await this.sincronizar(idCentral);
   }
 
   async listar(params: IQueryParam = {}): Promise<IListado<IEstacion>> {
