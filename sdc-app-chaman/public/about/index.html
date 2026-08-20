@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="es-AR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Acerca de Chamán Agro | Monitoreo agrícola</title>
+    <meta
+      name="description"
+      content="Información pública sobre Chamán Agro, plataforma B2B de monitoreo agrícola, estaciones meteorológicas, sensores y gestión agronómica."
+    />
+    <meta name="application-name" content="Chamán Agro" />
+    <meta name="theme-color" content="#073b38" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://app.chamanagro.ar/about/" />
+    <link rel="icon" type="image/x-icon" href="/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="es_AR" />
+    <meta property="og:site_name" content="Chamán Agro" />
+    <meta property="og:title" content="Acerca de Chamán Agro" />
+    <meta
+      property="og:description"
+      content="Plataforma B2B de monitoreo agrícola, estaciones meteorológicas, sensores y gestión agronómica."
+    />
+    <meta property="og:url" content="https://app.chamanagro.ar/about/" />
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #10252a;
+        --muted: #52686c;
+        --brand: #087a70;
+        --brand-dark: #073b38;
+        --accent: #b6f24a;
+        --surface: #ffffff;
+        --line: #d9e6e4;
+        --soft: #eef8f6;
+        --page: #f4f8f7;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 8% 0%, rgba(182, 242, 74, 0.17), transparent 25rem),
+          linear-gradient(180deg, #f9fcfb, var(--page));
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+        line-height: 1.6;
+      }
+
+      a {
+        color: var(--brand);
+        text-underline-offset: 0.18em;
+      }
+
+      a:focus-visible {
+        outline: 3px solid rgba(8, 122, 112, 0.35);
+        outline-offset: 4px;
+        border-radius: 4px;
+      }
+
+      .shell {
+        width: min(1120px, calc(100% - 2rem));
+        margin: 0 auto;
+      }
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        border-bottom: 1px solid rgba(217, 230, 228, 0.9);
+        background: rgba(249, 252, 251, 0.93);
+        backdrop-filter: blur(12px);
+      }
+
+      .topbar {
+        min-height: 72px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.7rem;
+        color: var(--brand-dark);
+        font-weight: 800;
+        font-size: 1.08rem;
+        text-decoration: none;
+      }
+
+      .brand-mark {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        border-radius: 12px;
+        color: #fff;
+        background: linear-gradient(145deg, var(--brand), var(--brand-dark));
+        box-shadow: 0 8px 20px rgba(7, 59, 56, 0.2);
+      }
+
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.5rem 1.1rem;
+        font-size: 0.91rem;
+      }
+
+      nav a {
+        color: #385054;
+        font-weight: 650;
+        text-decoration: none;
+      }
+
+      nav a:hover {
+        color: var(--brand);
+      }
+
+      .login-link {
+        padding: 0.55rem 0.9rem;
+        border-radius: 999px;
+        color: #fff;
+        background: var(--brand-dark);
+      }
+
+      nav .login-link:hover {
+        color: #fff;
+        background: var(--brand);
+      }
+
+      main {
+        padding-bottom: 4rem;
+      }
+
+      .hero {
+        padding: clamp(4.5rem, 10vw, 8.5rem) 0 4.25rem;
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+        align-items: center;
+        gap: clamp(2rem, 7vw, 6rem);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
+        margin: 0 0 1rem;
+        color: var(--brand-dark);
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        content: '';
+        width: 0.65rem;
+        height: 0.65rem;
+        border-radius: 999px;
+        background: var(--accent);
+        box-shadow: 0 0 0 5px rgba(182, 242, 74, 0.17);
+      }
+
+      h1,
+      h2,
+      h3 {
+        line-height: 1.15;
+        text-wrap: balance;
+      }
+
+      h1 {
+        max-width: 780px;
+        margin: 0;
+        font-size: clamp(2.45rem, 6vw, 5rem);
+        letter-spacing: -0.055em;
+      }
+
+      .lead {
+        max-width: 720px;
+        margin: 1.4rem 0 0;
+        color: var(--muted);
+        font-size: clamp(1.05rem, 2vw, 1.24rem);
+      }
+
+      .identity-card {
+        padding: 1.55rem;
+        border: 1px solid rgba(217, 230, 228, 0.95);
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.78);
+        box-shadow: 0 22px 60px rgba(20, 64, 61, 0.1);
+      }
+
+      .identity-card dl {
+        margin: 0;
+        display: grid;
+        gap: 1.1rem;
+      }
+
+      .identity-card div {
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .identity-card div:last-child {
+        padding-bottom: 0;
+        border-bottom: 0;
+      }
+
+      dt {
+        color: var(--muted);
+        font-size: 0.76rem;
+        font-weight: 750;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      dd {
+        margin: 0.2rem 0 0;
+        font-weight: 750;
+      }
+
+      section {
+        scroll-margin-top: 95px;
+        padding: 3.6rem 0;
+      }
+
+      .section-heading {
+        max-width: 720px;
+        margin-bottom: 2rem;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: clamp(1.8rem, 4vw, 2.65rem);
+        letter-spacing: -0.035em;
+      }
+
+      .section-heading p,
+      .copy p {
+        color: var(--muted);
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+      }
+
+      .card {
+        min-height: 220px;
+        padding: 1.6rem;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--surface);
+      }
+
+      .card-number {
+        color: var(--brand);
+        font-size: 0.8rem;
+        font-weight: 850;
+        letter-spacing: 0.09em;
+      }
+
+      h3 {
+        margin: 1.5rem 0 0.7rem;
+        font-size: 1.15rem;
+      }
+
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .panel {
+        padding: clamp(1.6rem, 4vw, 3.2rem);
+        border: 1px solid #cfe1de;
+        border-radius: 24px;
+        background: var(--soft);
+      }
+
+      .panel-grid {
+        display: grid;
+        grid-template-columns: 0.85fr 1.15fr;
+        gap: clamp(1.5rem, 6vw, 5rem);
+      }
+
+      .facts {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 0.9rem;
+      }
+
+      .facts li {
+        position: relative;
+        padding-left: 1.4rem;
+        color: #385054;
+      }
+
+      .facts li::before {
+        content: '';
+        position: absolute;
+        top: 0.64em;
+        left: 0;
+        width: 0.55rem;
+        height: 0.55rem;
+        border-radius: 50%;
+        background: var(--brand);
+      }
+
+      .contact {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+      }
+
+      .contact a {
+        display: inline-flex;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--brand);
+        border-radius: 999px;
+        font-weight: 750;
+        text-decoration: none;
+      }
+
+      footer {
+        padding: 2rem 0 2.5rem;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+
+      .footer-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 0.75rem 1.5rem;
+      }
+
+      @media (max-width: 780px) {
+        .topbar {
+          align-items: flex-start;
+          padding: 0.8rem 0;
+        }
+
+        nav a:not(.login-link) {
+          display: none;
+        }
+
+        .hero,
+        .panel-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .hero {
+          padding-top: 3.8rem;
+        }
+
+        .cards {
+          grid-template-columns: 1fr;
+        }
+
+        .card {
+          min-height: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="shell topbar">
+        <a class="brand" href="/about/" aria-label="Chamán Agro, información pública">
+          <span class="brand-mark" aria-hidden="true">Ch</span>
+          <span>Chamán Agro</span>
+        </a>
+        <nav aria-label="Navegación principal">
+          <a href="#plataforma">Plataforma</a>
+          <a href="#seguridad">Seguridad</a>
+          <a href="#privacidad">Privacidad</a>
+          <a class="login-link" href="/auth">Ingresar</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="hero" aria-labelledby="titulo-principal">
+        <div>
+          <p class="eyebrow">Tecnología para el agro</p>
+          <h1 id="titulo-principal">Monitoreo agrícola para decidir con datos.</h1>
+          <p class="lead">
+            Chamán Agro es una plataforma B2B que integra estaciones meteorológicas, sensores y herramientas de gestión
+            agronómica para acompañar decisiones productivas.
+          </p>
+        </div>
+
+        <aside class="identity-card" aria-label="Identidad del servicio">
+          <dl>
+            <div>
+              <dt>Operador</dt>
+              <dd>Chamán Agro</dd>
+            </div>
+            <div>
+              <dt>Tipo de servicio</dt>
+              <dd>Plataforma empresarial de monitoreo agrícola</dd>
+            </div>
+            <div>
+              <dt>Acceso</dt>
+              <dd>Privado, autenticado y protegido mediante HTTPS</dd>
+            </div>
+          </dl>
+        </aside>
+      </section>
+
+      <section id="plataforma" aria-labelledby="titulo-plataforma">
+        <div class="section-heading">
+          <p class="eyebrow">Qué hacemos</p>
+          <h2 id="titulo-plataforma">Una vista integrada de las variables del campo.</h2>
+          <p>
+            La plataforma reúne información técnica para facilitar el seguimiento remoto de cultivos, lotes e
+            infraestructura productiva.
+          </p>
+        </div>
+
+        <div class="cards">
+          <article class="card">
+            <span class="card-number">01</span>
+            <h3>Estaciones y sensores</h3>
+            <p>
+              Visualización de variables meteorológicas, humedad del suelo, napas y otros datos obtenidos desde
+              dispositivos desplegados a campo.
+            </p>
+          </article>
+          <article class="card">
+            <span class="card-number">02</span>
+            <h3>Gestión agronómica</h3>
+            <p>
+              Herramientas para interpretar el estado de los lotes, acompañar el riego y acceder a información relevante
+              para la operación.
+            </p>
+          </article>
+          <article class="card">
+            <span class="card-number">03</span>
+            <h3>Infraestructura conectada</h3>
+            <p>
+              Integración de dispositivos y servicios mediante tecnologías como LoRaWAN, LTE y APIs climáticas, según
+              cada implementación.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="seguridad" aria-labelledby="titulo-seguridad">
+        <div class="panel panel-grid">
+          <div>
+            <p class="eyebrow">Acceso y seguridad</p>
+            <h2 id="titulo-seguridad">Una aplicación de trabajo con acceso controlado.</h2>
+          </div>
+          <ul class="facts">
+            <li>El acceso a la plataforma operativa requiere una cuenta autorizada.</li>
+            <li>Las comunicaciones del sitio público y del inicio de sesión utilizan HTTPS.</li>
+            <li>La plataforma no funciona como alojamiento público ni como servicio anónimo de archivos.</li>
+            <li>
+              Los reportes de seguridad pueden enviarse a
+              <a href="mailto:info@chamanagro.ar">info@chamanagro.ar</a>.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="privacidad" aria-labelledby="titulo-privacidad">
+        <div class="panel panel-grid">
+          <div>
+            <p class="eyebrow">Privacidad</p>
+            <h2 id="titulo-privacidad">Información y consultas sobre datos personales.</h2>
+          </div>
+          <div class="copy">
+            <p>
+              Para conocer cómo Chamán Agro trata los datos personales, consultá la
+              <a href="https://chamanagro.ar/politica-privacidad/" target="_blank" rel="noopener noreferrer"
+                >Política de privacidad vigente</a
+              >
+              en el sitio institucional.
+            </p>
+            <p>
+              Para consultas de privacidad o soporte, escribí a
+              <a href="mailto:info@chamanagro.ar?subject=Consulta%20de%20privacidad"> info@chamanagro.ar</a>. No envíes
+              contraseñas ni claves de acceso por correo electrónico.
+            </p>
+            <p><small>Última actualización: 20 de agosto de 2026.</small></p>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="titulo-contacto">
+        <div class="contact">
+          <div>
+            <p class="eyebrow">Contacto</p>
+            <h2 id="titulo-contacto">¿Necesitás validar el servicio o pedir soporte?</h2>
+          </div>
+          <a href="mailto:info@chamanagro.ar">Contactar a Chamán Agro</a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="shell footer-row">
+        <span>© 2026 Chamán Agro</span>
+        <span>
+          <a href="https://chamanagro.ar/" rel="noopener noreferrer">Sitio institucional</a>
+          · <a href="/auth">Acceso a la plataforma</a>
+        </span>
+      </div>
+    </footer>
+  </body>
+</html>

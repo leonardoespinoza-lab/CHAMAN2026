@@ -1,12 +1,8 @@
 <div class="login-background">
   <div class="version-indicator">v{{ version }}</div>
 
-  <div
-    class="login-card"
-    [class.login-card--mobile]="helper.isHandset$ | async"
-  >
+  <div class="login-card" [class.login-card--mobile]="helper.isHandset$ | async">
     <div class="login-inner">
-
       <!-- Logo -->
       <div class="login-logo">
         @if (helper.darkTheme) {
@@ -67,6 +63,12 @@
         </div>
       </form>
 
+      <nav class="login-trust" aria-label="Información de Chamán Agro">
+        <a href="https://chamanagro.ar/" target="_blank" rel="noopener noreferrer"> Sitio institucional </a>
+        <a href="/about/">Quiénes somos</a>
+        <a href="https://chamanagro.ar/politica-privacidad/" target="_blank" rel="noopener noreferrer"> Privacidad </a>
+        <a href="mailto:info@chamanagro.ar">Soporte</a>
+      </nav>
     </div>
   </div>
 </div>
