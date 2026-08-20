@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /about/
+Allow: /.well-known/security.txt
+Allow: /favicon/
+Allow: /robots.txt
+Allow: /sitemap.xml
+Disallow: /
+
+Sitemap: https://app.chamanagro.ar/sitemap.xml
