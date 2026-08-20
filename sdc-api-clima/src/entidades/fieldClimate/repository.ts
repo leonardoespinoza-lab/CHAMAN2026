@@ -11,6 +11,7 @@ import { IStationSensor } from './modelos/stationSensor';
 import { IStationData } from './modelos/stationData';
 import { LogService } from '../../auxiliares/logsService/service';
 import { IForecast } from './modelos/forecast';
+import crypto from 'crypto';
 
 export interface Token {
   access_token: string;
@@ -21,10 +22,15 @@ export interface Token {
   expires_at: number;
 }
 
+interface CachedToken extends Token {
+  credentialsFingerprint: string;
+}
+
 @Injectable()
 export class FieldClimateRepository {
   private logger = new LogService(FieldClimateRepository.name);
-  private token: { [username: string]: Token } = {};
+  private token: { [username: string]: CachedToken } = {};
+  private readonly credentialsCacheSalt = crypto.randomBytes(32);
 
   constructor(private axios: AxiosService) {}
 
@@ -54,7 +60,10 @@ export class FieldClimateRepository {
 
       const token = await this.axios.POST<Token>(url, body, { headers });
       token.expires_at = Date.now() + token.expires_in * 1000;
-      this.token[username] = token;
+      this.token[username] = {
+        ...token,
+        credentialsFingerprint: this.credentialsFingerprint(username, password),
+      };
       return token;
     } catch (error) {
       this.logger.error('Fallo la autenticacion contra FieldClimate');
@@ -65,42 +74,55 @@ export class FieldClimateRepository {
   private async validarToken(
     username: string,
     password: string,
-  ): Promise<void> {
-    if (!this.token[username]) {
-      await this.login(username, password);
-    } else {
-      const now = new Date().getTime() + 1000 * 10;
-      if (now > this.token[username].expires_at) {
-        await this.login(username, password);
-      }
+  ): Promise<Token> {
+    const fingerprint = this.credentialsFingerprint(username, password);
+    if (
+      !this.token[username] ||
+      this.token[username].credentialsFingerprint !== fingerprint
+    ) {
+      return await this.login(username, password);
     }
+    const now = new Date().getTime() + 1000 * 10;
+    if (now > this.token[username].expires_at) {
+      return await this.login(username, password);
+    }
+    return this.token[username];
+  }
+
+  private credentialsFingerprint(username: string, password: string): string {
+    return crypto
+      .createHmac('sha256', this.credentialsCacheSalt)
+      .update(username, 'utf8')
+      .update('\0', 'utf8')
+      .update(password, 'utf8')
+      .digest('base64url');
   }
 
   // Endpoints
 
   async systemStatus(username: string, password: string): Promise<boolean> {
     const url = '/system/status';
-    await this.validarToken(username, password);
+    const token = await this.validarToken(username, password);
     const headers = HelperService.getFieldClimateHeadersLogin(
-      this.token[username].access_token,
+      token.access_token,
     );
     return await this.axios.GET(`${API_FIELD_CLIMATE}${url}`, { headers });
   }
 
   async getLicenses(username: string, password: string): Promise<any> {
     const url = '/user/licenses';
-    await this.validarToken(username, password);
+    const token = await this.validarToken(username, password);
     const headers = HelperService.getFieldClimateHeadersLogin(
-      this.token[username].access_token,
+      token.access_token,
     );
     return await this.axios.GET(`${API_FIELD_CLIMATE}${url}`, { headers });
   }
 
   async getStations(username: string, password: string): Promise<IStation[]> {
     const url = '/user/stations';
-    await this.validarToken(username, password);
+    const token = await this.validarToken(username, password);
     const headers = HelperService.getFieldClimateHeadersLogin(
-      this.token[username].access_token,
+      token.access_token,
     );
     const res = await this.axios.GET<IStation[]>(`${API_FIELD_CLIMATE}${url}`, {
       headers,
@@ -114,18 +136,18 @@ export class FieldClimateRepository {
     password: string,
   ): Promise<IStation> {
     const url = `/station/${id}`;
-    await this.validarToken(username, password);
+    const token = await this.validarToken(username, password);
     const headers = HelperService.getFieldClimateHeadersLogin(
-      this.token[username].access_token,
+      token.access_token,
     );
     return await this.axios.GET(`${API_FIELD_CLIMATE}${url}`, { headers });
   }
 
   async getSystemTypes(username: string, password: string): Promise<IStation> {
     const url = `/system/types`;
-    await this.validarToken(username, password);
+    const token = await this.validarToken(username, password);
     const headers = HelperService.getFieldClimateHeadersLogin(
-      this.token[username].access_token,
+      token.access_token,
     );
     return await this.axios.GET(`${API_FIELD_CLIMATE}${url}`, { headers });
   }
@@ -136,9 +158,9 @@ export class FieldClimateRepository {
     password: string,
   ): Promise<IStationSensor> {
     const url = `/station/${id}/sensors`;
-    await this.validarToken(username, password);
+    const token = await this.validarToken(username, password);
     const headers = HelperService.getFieldClimateHeadersLogin(
-      this.token[username].access_token,
+      token.access_token,
     );
     return await this.axios.GET(`${API_FIELD_CLIMATE}${url}`, { headers });
   }
@@ -149,9 +171,9 @@ export class FieldClimateRepository {
     password: string,
   ): Promise<any> {
     const url = `/data/${stationId}`;
-    await this.validarToken(username, password);
+    const token = await this.validarToken(username, password);
     const headers = HelperService.getFieldClimateHeadersLogin(
-      this.token[username].access_token,
+      token.access_token,
     );
     return await this.axios.GET(`${API_FIELD_CLIMATE}${url}`, { headers });
   }
@@ -167,9 +189,9 @@ export class FieldClimateRepository {
     const fromUnixTime = Math.trunc(startDate / 1000);
     const toUnixTime = Math.trunc(endDate / 1000);
     const url = `/data/${stationId}/${dataGroup}/from/${fromUnixTime}/to/${toUnixTime}`;
-    await this.validarToken(username, password);
+    const token = await this.validarToken(username, password);
     const headers = HelperService.getFieldClimateHeadersLogin(
-      this.token[username].access_token,
+      token.access_token,
     );
     return await this.axios.GET(`${API_FIELD_CLIMATE}${url}`, { headers });
   }
@@ -182,9 +204,9 @@ export class FieldClimateRepository {
     password: string,
   ): Promise<IStationData> {
     const url = `/data/${stationId}/${dataGroup}/last/${timePeriod}`;
-    await this.validarToken(username, password);
+    const token = await this.validarToken(username, password);
     const headers = HelperService.getFieldClimateHeadersLogin(
-      this.token[username].access_token,
+      token.access_token,
     );
     return await this.axios.GET(`${API_FIELD_CLIMATE}${url}`, { headers });
   }
@@ -195,9 +217,9 @@ export class FieldClimateRepository {
     password: string,
   ): Promise<IForecast> {
     const url = `/forecast/${stationId}/daily`;
-    await this.validarToken(username, password);
+    const token = await this.validarToken(username, password);
     const headers = HelperService.getFieldClimateHeadersLogin(
-      this.token[username].access_token,
+      token.access_token,
     );
     const body = {
       name: 'general7',

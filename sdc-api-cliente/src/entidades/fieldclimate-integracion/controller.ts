@@ -65,4 +65,13 @@ export class FieldClimateIntegracionController {
   async sincronizar(@Param('id') id: string): Promise<IEstacion> {
     return await this.service.sincronizar(id);
   }
+
+  @Put('centrales/:id/credenciales')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  async actualizarCredenciales(
+    @Param('id') id: string,
+    @Body() body: { username: string; password: string },
+  ): Promise<IEstacion> {
+    return await this.service.actualizarCredenciales(id, body);
+  }
 }
