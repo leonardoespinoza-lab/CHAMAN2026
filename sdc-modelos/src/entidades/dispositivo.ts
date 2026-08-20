@@ -206,6 +206,15 @@ const PERFIL_SUELO_SENSORES: SensoresV2[] = [
   "Salinidad Suelo",
 ];
 const NAPA_SENSORES: SensoresV2[] = ["Entrada Analógica", "Presión", "Napa"];
+const METEOROLOGIA_SENSORES = new Set<SensoresV2>([
+  "Temperatura",
+  "Humedad",
+  "Viento Velocidad",
+  "Viento Dirección",
+  "Presión",
+  "Evapotranspiración",
+  "Radiación Solar",
+]);
 
 export function serviciosDispositivoNormalizados(
   dispositivo?: Partial<IDispositivo>,
@@ -270,6 +279,43 @@ export function serviciosDispositivoNormalizados(
         : esPresion
           ? ["Entrada Analógica", "Presión"]
           : ["Entrada Analógica"],
+      habilitado: true,
+      ...asignacion,
+    });
+  }
+
+  // Los equipos legacy de un solo lote no siempre tienen `servicios`
+  // persistidos. Perfil y entrada analogica ya se infieren arriba; cualquier
+  // sensor restante necesita igualmente un servicio visible para que las
+  // proyecciones por tenant no descarten sus lecturas. Bateria se conserva
+  // como metadato comun y no define por si sola un servicio agronomico.
+  const sensoresAsignados = new Set<SensoresV2>();
+  for (const servicio of servicios) {
+    for (const sensor of servicio.sensores) sensoresAsignados.add(sensor);
+  }
+  const sensoresRestantes = [...sensores].filter(
+    (sensor) => sensor !== "Batería" && !sensoresAsignados.has(sensor),
+  );
+  const esMeteorologia = sensoresRestantes.some((sensor) =>
+    METEOROLOGIA_SENSORES.has(sensor),
+  );
+  const esSoloPluviometria =
+    !esMeteorologia && sensoresRestantes.includes("Pluviometro");
+  if (dispositivo.idLote && (esMeteorologia || esSoloPluviometria)) {
+    const tipo: TipoServicioDispositivo = esMeteorologia
+      ? "meteorologia"
+      : "pluviometria";
+    servicios.push({
+      id:
+        tipo === "meteorologia"
+          ? "meteorologia-lote"
+          : "pluviometria-lote",
+      tipo,
+      nombre:
+        tipo === "meteorologia"
+          ? "Meteorología del lote"
+          : "Pluviometría del lote",
+      sensores: sensoresRestantes,
       habilitado: true,
       ...asignacion,
     });

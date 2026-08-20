@@ -57,7 +57,10 @@ export class LotesRepository {
           { 'servicios.idLote': id },
           {
             idLote: id,
-            $or: [{ servicios: { $exists: false } }],
+            $or: [
+              { servicios: { $exists: false } },
+              { servicios: { $size: 0 } },
+            ],
           },
         ],
       })
@@ -79,7 +82,8 @@ export class LotesRepository {
             String(servicio.idLote || '') === String(idLote),
         )
       : [];
-    const tieneServiciosExplicitos = Array.isArray(dispositivo.servicios);
+    const tieneServiciosExplicitos =
+      Array.isArray(dispositivo.servicios) && dispositivo.servicios.length > 0;
     const servicios = tieneServiciosExplicitos
       ? explicitos
       : String(dispositivo.idLote || '') === String(idLote)

@@ -367,7 +367,8 @@ export class DispositivosService {
       .flatMap((permiso) => this.serviciosVisibles(dispositivo, permiso))
       .forEach((servicio) => servicios.set(servicio.id, servicio));
     const visibles = [...servicios.values()];
-    const tieneServiciosExplicitos = Array.isArray(dispositivo.servicios);
+    const tieneServiciosExplicitos =
+      Array.isArray(dispositivo.servicios) && dispositivo.servicios.length > 0;
     const sensoresPermitidos = new Set<SensoresV2>(['Batería']);
     visibles.forEach((servicio) =>
       servicio.sensores.forEach((sensor) => sensoresPermitidos.add(sensor)),
