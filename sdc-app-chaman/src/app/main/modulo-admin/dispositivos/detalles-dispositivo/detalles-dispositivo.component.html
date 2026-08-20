@@ -144,8 +144,10 @@
     }
     <app-grafico-historico-ambiente
       [reportes]="reportesHistoricos"
+      [periodDays]="diasHistorico"
+      [periodEnd]="historicoHasta"
       [titulo]="'Historico ambiental - ' + dispositivo?.nombre"
-      [subtitulo]="'Temperatura y humedad relativa medidas en abrigo meteorologico'"
+      [subtitulo]="'Cada punto conserva el valor recibido; los cortes de transmision quedan visibles'"
     ></app-grafico-historico-ambiente>
   } @else {
     <p-message severity="info">Este dispositivo no tiene variables graficables disponibles.</p-message>

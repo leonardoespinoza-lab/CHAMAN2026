@@ -182,6 +182,55 @@ describe('ReportesService - aislamiento por servicio lógico', () => {
     }
   });
 
+  it('conserva el histórico ambiental de una estación legacy asignada a un lote', async () => {
+    const device: any = {
+      _id: 'sensor-kleppe-1',
+      deveui: '24E124433F027440',
+      tipo: 'Estacion Meteorologica',
+      idProductor: 'productor-kleppe',
+      idEstablecimiento: 'establecimiento-kleppe',
+      idLote: 'cuadro-7-la-costa',
+      sensores: ['Temperatura', 'Humedad', 'Batería', 'Otro'],
+      servicios: [],
+    };
+    const report: any = {
+      _id: 'reporte-kleppe-1',
+      idDispositivo: device._id,
+      deveui: device.deveui,
+      fechaCreacion: '2026-08-20T10:57:48.010Z',
+      fecha: '2026-08-20T10:57:48.010Z',
+      estado: 'completo',
+      datos: {
+        valores: {
+          Temperatura: [{ unidad: 'C', valores: { actual: 4.5 } }],
+          Humedad: [{ unidad: '%', valores: { actual: 71 } }],
+          Batería: [{ unidad: '%', valores: { actual: 96 } }],
+        },
+      },
+      dispositivo: device,
+    };
+    const { service } = setup(device, report);
+
+    const historico: any = await service.historico(
+      device._id,
+      1,
+      100,
+      usuario('productor-kleppe'),
+    );
+
+    expect(nombresSensores(historico.datos[0])).toEqual([
+      'Temperatura',
+      'Humedad',
+      'Batería',
+    ]);
+    expect(
+      historico.datos[0].datos.valores.Temperatura[0].valores.actual,
+    ).toBe(4.5);
+    expect(historico.datos[0].datos.valores.Humedad[0].valores.actual).toBe(
+      71,
+    );
+  });
+
   it('no deja que un filtro OR incorpore reportes de otro dispositivo autorizado solo por tipo de sensor', async () => {
     const { service, repository } = setup();
     const reporteAjeno: any = {
