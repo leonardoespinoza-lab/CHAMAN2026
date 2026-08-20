@@ -100,7 +100,6 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
   private buildSeries(): any[] {
     const reportes = this.sortedReports();
     return this.definitions
-      .filter((definition) => definition.key !== 'bateria')
       .map((definition) => {
         const rawData = reportes
           .map((reporte): AmbientPoint | undefined => {
@@ -119,6 +118,8 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
           type: 'line',
           color: definition.color,
           yAxis: definition.yAxis,
+          dashStyle: definition.key === 'bateria' ? 'ShortDash' : 'Solid',
+          lineWidth: definition.key === 'bateria' ? 1.5 : 1.8,
           marker: { enabled: rawData.length <= 200, radius: 2 },
           tooltip: {
             valueDecimals: definition.decimals,
@@ -181,7 +182,7 @@ export class GraficoHistoricoAmbienteComponent implements OnChanges {
           max: 100,
           opposite: true,
           title: {
-            text: 'Humedad relativa (%)',
+            text: 'Humedad / batería (%)',
             style: { color: '#2f9fe8', fontSize: '14px', fontWeight: '750' },
           },
           labels: {
