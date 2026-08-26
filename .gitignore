@@ -38,6 +38,15 @@ __pycache__/
 !**/*.example.json
 .railway-admin-credential.txt
 .railway-ftp-camera-password.txt
+.railway-chirpstack-credentials.txt
+
+# ChirpStack PKI and generated runtime material must stay outside Git.
+**/chirpstack-pki/
+**/ca-key.pem
+**/*-key.pem
+**/server.key
+**/*.p12
+deploy/railway/chirpstack/**/runtime/
 
 # Generated/static snapshots not intended for source review
 chamanagro-web-dist/

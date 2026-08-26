@@ -1,0 +1,335 @@
+{
+  "manifestVersion": 1,
+  "environment": "production",
+  "verifiedAt": "2026-08-26",
+  "verificationMode": "Read-only Git, local-worktree and Railway latestDeployment audit",
+  "baseline": {
+    "applicationBranch": "codex/crop-catalog-flat-import",
+    "applicationCommit": "8e9d0f2df2fab89f6bd7b7fae5e6b519bffb0be6",
+    "githubMainAtVerification": "4bf3af39643406f91cd74d902a3f71770c7c01fc",
+    "preservationBranch": "codex/production-baseline-2026-08-26",
+    "applicationCommitChain": [
+      "18aafe7",
+      "ed14a78",
+      "9f9f6e4",
+      "8d78282",
+      "aed7410",
+      "9dc9c42",
+      "8e9d0f2"
+    ]
+  },
+  "confidenceDefinitions": {
+    "high": "Railway records the exact Git branch and commitHash.",
+    "medium": "Manual CLI deployment has a SHA label, but Railway does not cryptographically link the artifact to that commit.",
+    "low": "Manual deployment has no linked repository/image; provenance is based on its operational label plus separately verified static files."
+  },
+  "deploymentRisk": {
+    "githubConnectedServicesOnMain": 11,
+    "waitForCiBeforeDeploy": false,
+    "serviceWatchPatternsConfigured": false,
+    "warning": "Do not merge or push main until per-service deployment controls and a coordinated rollout are approved."
+  },
+  "chamanServices": [
+    {
+      "name": "CHAMAN2026",
+      "status": "SUCCESS",
+      "knownRef": "8e9d0f2",
+      "label": "8e9d0f2 crop catalog production - web",
+      "confidence": "medium",
+      "activeDeploymentMode": "manual-cli",
+      "configuredSource": "github-main"
+    },
+    {
+      "name": "chaman-api",
+      "status": "SUCCESS",
+      "knownRef": "8e9d0f2",
+      "label": "8e9d0f2 crop catalog production - api",
+      "confidence": "medium",
+      "activeDeploymentMode": "manual-cli",
+      "configuredSource": "github-main"
+    },
+    {
+      "name": "chaman-auth",
+      "status": "SUCCESS",
+      "knownRef": "4bf3af39643406f91cd74d902a3f71770c7c01fc",
+      "confidence": "high",
+      "activeDeploymentMode": "github-main",
+      "configuredSource": "github-main"
+    },
+    {
+      "name": "chaman-clima",
+      "status": "SUCCESS",
+      "knownRef": "8d78282",
+      "label": "8d78282 FieldClimate credential refresh - clima",
+      "confidence": "medium",
+      "activeDeploymentMode": "manual-cli",
+      "configuredSource": "github-main"
+    },
+    {
+      "name": "chaman-datos",
+      "status": "SUCCESS",
+      "knownRef": "8e9d0f2",
+      "label": "8e9d0f2 crop catalog production - datos",
+      "confidence": "medium",
+      "activeDeploymentMode": "manual-cli",
+      "configuredSource": "github-main"
+    },
+    {
+      "name": "chaman-externa",
+      "status": "SUCCESS",
+      "knownRef": "4bf3af39643406f91cd74d902a3f71770c7c01fc",
+      "confidence": "high",
+      "activeDeploymentMode": "github-main",
+      "configuredSource": "github-main"
+    },
+    {
+      "name": "chaman-ftp",
+      "status": "SUCCESS",
+      "knownRef": "4bf3af39643406f91cd74d902a3f71770c7c01fc",
+      "confidence": "high",
+      "activeDeploymentMode": "github-main",
+      "configuredSource": "github-main"
+    },
+    {
+      "name": "chaman-lora",
+      "status": "SUCCESS",
+      "knownRef": "4bf3af39643406f91cd74d902a3f71770c7c01fc",
+      "confidence": "high",
+      "activeDeploymentMode": "github-main",
+      "configuredSource": "github-main"
+    },
+    {
+      "name": "chaman-ndvi-worker",
+      "status": "SUCCESS",
+      "knownRef": "4bf3af39643406f91cd74d902a3f71770c7c01fc",
+      "confidence": "high",
+      "activeDeploymentMode": "github-main",
+      "configuredSource": "github-main"
+    },
+    {
+      "name": "chaman-predicciones",
+      "status": "SUCCESS",
+      "knownRef": "4bf3af39643406f91cd74d902a3f71770c7c01fc",
+      "confidence": "high",
+      "activeDeploymentMode": "github-main",
+      "configuredSource": "github-main"
+    },
+    {
+      "name": "chaman-websocket",
+      "status": "SUCCESS",
+      "knownRef": "4bf3af39643406f91cd74d902a3f71770c7c01fc",
+      "confidence": "high",
+      "activeDeploymentMode": "github-main",
+      "configuredSource": "github-main"
+    }
+  ],
+  "chirpstackServices": [
+    {
+      "name": "chirpstack-gateway-bridge-au915-1",
+      "status": "SUCCESS",
+      "knownRef": null,
+      "label": "Use complete Basic Station certificate chain",
+      "confidence": "low",
+      "activeDeploymentMode": "manual-cli",
+      "configuredSource": "none"
+    },
+    {
+      "name": "chirpstack-mqtt",
+      "status": "SUCCESS",
+      "knownRef": "50abdb5-label-only",
+      "label": "authorize au915_0 and au915_1 50abdb5",
+      "confidence": "low",
+      "activeDeploymentMode": "manual-cli",
+      "configuredSource": "none"
+    },
+    {
+      "name": "chirpstack-ns",
+      "status": "SUCCESS",
+      "knownRef": null,
+      "label": "Fix ChirpStack runtime directory; Kleppe AU915 0-7 plus 64",
+      "confidence": "low",
+      "activeDeploymentMode": "manual-cli",
+      "configuredSource": "none"
+    },
+    {
+      "name": "chirpstack-postgres",
+      "status": "SUCCESS",
+      "knownRef": "70308ab-label-only",
+      "label": "ChirpStack production postgres 70308ab",
+      "confidence": "low",
+      "activeDeploymentMode": "manual-cli",
+      "configuredSource": "none"
+    },
+    {
+      "name": "chirpstack-redis",
+      "status": "SUCCESS",
+      "knownRef": "70308ab-label-only",
+      "label": "ChirpStack production redis 70308ab",
+      "confidence": "low",
+      "activeDeploymentMode": "manual-cli",
+      "configuredSource": "none"
+    }
+  ],
+  "lorawanChannelPlan": {
+    "au915_0": {
+      "purpose": "Kleppe",
+      "uplinkChannels": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        64
+      ],
+      "frequenciesHz": [
+        915200000,
+        915400000,
+        915600000,
+        915800000,
+        916000000,
+        916200000,
+        916400000,
+        916600000,
+        915900000
+      ]
+    },
+    "au915_1": {
+      "purpose": "Existing Milesight and Basic Station fleet",
+      "uplinkChannels": [
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        65
+      ],
+      "frequenciesHz": [
+        916800000,
+        917000000,
+        917200000,
+        917400000,
+        917600000,
+        917800000,
+        918000000,
+        918200000,
+        917500000
+      ]
+    }
+  },
+  "staticSourceHashesSha256": {
+    "chirpstackNs": {
+      "Dockerfile": "682a4fa2312b78ab96def05d687d63c811a764dd3e41f5c06536f2759398d0a2",
+      "chirpstack.toml": "ddfcb4b01ac852de32f5b515a05a9243f2fa589df95b5066ca970a3a6740a214",
+      "region_au915_0.toml": "f0e030f131ec1b1b6c5ee017412717e2416ac2edab384782d08cd68c02cd71e8",
+      "region_au915_1.toml": "f4290ec052a64d4db1f3740d3026bc31828d969307020f380b5d3554f02bb82e",
+      "docker-entrypoint-chaman.sh": "752fdd1f114cd0acd4e1e3bedb956da932ea3d6911d2a1ce9acb551f214bc1e7",
+      "railway.json": "f641cee6eda33251ffe7c782dbe18caa52ab82b2ea7cb38c3cf139418a9422bc"
+    },
+    "gatewayBridgeBasicstation": {
+      "Dockerfile": "c7447da2c11249753d6e64ecfe95ca9dad8f987da987c92570f63a09378850ab",
+      "chirpstack-gateway-bridge.toml": "0759db33c0339ee440b78593e6d79bb8932a6dad89b88ce84b96149eddeb0fce",
+      "entrypoint.sh": "fb89fb48298120eb48f42ff4160fe57a8c8964392beb09c14a96f70dc6e6d419"
+    },
+    "mosquitto": {
+      "verifiedWindowsCheckoutCrlf": {
+        "Dockerfile": "76887efb1e87101424f35d272cd0feed352f413c58c37d2c4308aa643cff8c46",
+        "acl": "9c468c745226da536425b6eb93e63c6956c78492856ca192965456f2fc6c9058",
+        "docker-entrypoint-chaman.sh": "e085af8f2ac0358f9e183227cde1972a981dfee04da1241bf78befdb3ee23651",
+        "gateway-acl": "23503286c24342a81ab2af7cd8ac5bb234730197d5a2a5161b2738c2b596d64e",
+        "mosquitto.conf": "980caa23a66ecde6cef008abdf18b12bd81cba799e7a4df40fae9759cfe63fe9",
+        "railway.json": "0e54270e87ab703e9a5a1c717e963f3bdb323bf003e697a5e4c071737008a1bc"
+      },
+      "stagedGitBlobLf": {
+        "Dockerfile": "cfb981ac809cb805415581347f36bc81962e5f27d211f8c9a30558a91b90b99d",
+        "acl": "5ad0fa1ce85afd228cc661c6fcc09aff4b1f0336913d91e5e84f62b70b1da6d5",
+        "docker-entrypoint-chaman.sh": "e085af8f2ac0358f9e183227cde1972a981dfee04da1241bf78befdb3ee23651",
+        "gateway-acl": "23503286c24342a81ab2af7cd8ac5bb234730197d5a2a5161b2738c2b596d64e",
+        "mosquitto.conf": "c81955524306341f2c52a6ddd612c3f2a8e1658a3b347f1b462094a8944e72d2",
+        "railway.json": "eec7c70df4a259bc197d4dc68bc40a65c99e7d04834abb74946a442252cc3620"
+      }
+    }
+  },
+  "excludedLocalState": [
+    {
+      "category": "unverified-sentek-worktree",
+      "content": "Six-minute sweep work, diagnostics and local artifacts",
+      "action": "Preserve separately; do not merge or deploy from this baseline"
+    },
+    {
+      "category": "intermediate-sentek-deployment-preparation",
+      "content": "Unverified intermediate package",
+      "action": "Historical evidence only"
+    },
+    {
+      "category": "legacy-sentek-integration-worktree",
+      "content": "70/78 files equal to the baseline and 8/78 superseded by newer fixes",
+      "action": "Exclude completely"
+    },
+    {
+      "category": "local-chirpstack-credential-file",
+      "content": "Sensitive local credentials",
+      "action": "Never commit; keep only in an approved secret store and rotate if required"
+    }
+  ],
+  "dataBoundary": {
+    "cropCatalogRows": "Stored in MongoDB by design; protect with database export/backup, not source-control merging",
+    "runtimeCertificatesAndPasswords": "Stored in Railway variables/runtime only; never versioned"
+  },
+  "recoveryStatus": {
+    "snapshotOnly": true,
+    "deployable": false,
+    "blockers": [
+      "Basic Station MQTT credentials are empty while Mosquitto rejects anonymous clients.",
+      "Railway Root Directory and config-path settings are not yet captured per service.",
+      "Persistent volume mappings are not yet captured in a verified recovery runbook.",
+      "Gateway Bridge, Mosquitto, PostgreSQL and Redis images use mutable tags instead of verified digests.",
+      "CHIRPSTACK_ADMIN_PASSWORD causes a PostgreSQL password write on each Network Server start when present."
+    ]
+  },
+  "externalRecoveryRequirements": {
+    "rootDirectoryAndConfigPaths": "Not captured; must be verified before any deployment.",
+    "persistentMounts": {
+      "mosquitto": "/mosquitto/data",
+      "postgres": "/var/lib/postgresql/data",
+      "redis": "/data"
+    },
+    "expectedVariableNames": {
+      "chirpstackNs": [
+        "CHIRPSTACK_POSTGRES_DSN",
+        "CHIRPSTACK_REDIS_URL",
+        "CHIRPSTACK_API_SECRET",
+        "MQTT_BROKER_HOST",
+        "MQTT_CHIRPSTACK_PASSWORD",
+        "CHIRPSTACK_ADMIN_PASSWORD",
+        "CHIRPSTACK_ADMIN_EMAIL",
+        "CHIRPSTACK_GATEWAY_CA_B64",
+        "CHIRPSTACK_GATEWAY_CA_KEY_B64"
+      ],
+      "gatewayBridge": [
+        "BASIC_STATION_TLS_CERT_B64",
+        "BASIC_STATION_TLS_KEY_B64",
+        "BASIC_STATION_CA_CERT_B64"
+      ],
+      "mosquitto": [
+        "MQTT_CHIRPSTACK_PASSWORD",
+        "MQTT_CHAMAN_PASSWORD",
+        "MQTT_GATEWAY_USERNAME",
+        "MQTT_GATEWAY_PASSWORD",
+        "MQTT_TLS_CLIENT_AUTH",
+        "MQTT_TLS_CA_B64",
+        "MQTT_TLS_CERT_B64",
+        "MQTT_TLS_KEY_B64"
+      ],
+      "redis": [
+        "REDIS_PASSWORD"
+      ]
+    }
+  },
+  "publicMetadataNotice": "Railway deployment UUIDs and secret values are intentionally omitted because this repository is public."
+}

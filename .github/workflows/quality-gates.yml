@@ -121,6 +121,36 @@ jobs:
       - if: matrix.name == 'api'
         run: docker run --rm --entrypoint node chaman-recovery-api -e "require('modelos/src'); console.log('modelos runtime OK')"
 
+  chirpstack-config:
+    name: chirpstack-config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: node --test scripts/tests/chirpstack-production-baseline.test.js
+      - run: python -m py_compile scripts/generate-chirpstack-mtls-pki.py
+
+  chirpstack-container-builds:
+    name: chirpstack-${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - server
+          - gateway-bridge-basicstation
+          - mosquitto
+          - postgres
+          - redis
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --tag "chaman-chirpstack-${{ matrix.service }}" "deploy/railway/chirpstack/${{ matrix.service }}"
+
   frontend:
     name: frontend-production-build
     runs-on: ubuntu-latest

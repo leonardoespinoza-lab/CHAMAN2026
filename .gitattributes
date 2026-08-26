@@ -16,3 +16,8 @@
 *.pptx binary
 *.xlsx binary
 *.docx binary
+
+# Deployment contexts target Linux containers. Fixed LF avoids shell and
+# configuration drift between Windows worktrees and Railway images.
+deploy/railway/chirpstack/** text eol=lf
+scripts/generate-chirpstack-mtls-pki.py text eol=lf

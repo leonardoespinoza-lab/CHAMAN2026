@@ -1,0 +1,11 @@
+user chirpstack
+topic readwrite au915_0/#
+topic readwrite au915_1/#
+topic readwrite application/#
+
+user chaman
+topic read application/+/device/+/event/up
+
+user __MQTT_GATEWAY_USERNAME__
+topic readwrite au915_0/gateway/#
+topic readwrite au915_1/gateway/#

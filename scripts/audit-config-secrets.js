@@ -51,7 +51,9 @@ const patterns = [
   {
     name: "Likely password default",
     regex:
-      /(PASSWORD|PASS|SECRET|PRIVATE_KEY|CLIENT_SECRET|MQTT_PASS)\s*=\s*['"][^'"]{8,}['"]/gi,
+      /(PASSWORD|PASS|SECRET|PRIVATE_KEY|CLIENT_SECRET|MQTT_PASS)\s*=\s*['"]([^'"]{8,})['"]/gi,
+    allowMatch: (match) =>
+      /^\$(?:\{[A-Z][A-Z0-9_]*\}|[A-Z][A-Z0-9_]*)$/.test(match[2]),
   },
   {
     name: "Likely environment password fallback",
@@ -126,6 +128,7 @@ for (const filePath of walk(ROOT)) {
     }
     const matches = [...text.matchAll(pattern.regex)];
     for (const match of matches) {
+      if (pattern.allowMatch?.(match)) continue;
       const normalizedPath = relativePath.replace(/\\/g, "/");
       const isTestFile =
         /(?:^|\/)scripts\/tests\//.test(normalizedPath) ||
