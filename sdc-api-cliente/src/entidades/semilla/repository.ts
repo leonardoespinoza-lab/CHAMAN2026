@@ -5,6 +5,8 @@ import {
   IQueryParam,
   ICreateSemilla,
   IUpdateSemilla,
+  IImportacionCatalogoCultivosRequest,
+  IResultadoImportacionCatalogoCultivos,
 } from 'modelos/src';
 import { AGROMETEO_INTERNAL_TOKEN, API_CLIMA, API_DATOS } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
@@ -31,6 +33,16 @@ export class SemillasRepository {
   async bulk(data: ICreateSemilla[]): Promise<void> {
     const url = `${API_DATOS}/semillas/bulk`;
     return await this.axios.POST<void>(url, data);
+  }
+
+  async importar(
+    data: IImportacionCatalogoCultivosRequest,
+  ): Promise<IResultadoImportacionCatalogoCultivos> {
+    const url = `${API_DATOS}/semillas/importar`;
+    return await this.axios.POST<IResultadoImportacionCatalogoCultivos>(
+      url,
+      data,
+    );
   }
 
   async update(id: string, data: IUpdateSemilla): Promise<ISemilla> {
