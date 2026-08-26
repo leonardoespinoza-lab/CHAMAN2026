@@ -1,28 +1,41 @@
 import ExcelJS from 'exceljs';
 import { ListadoFenologiaComponent } from './fenologia/listado-fenologia/listado-fenologia.component';
-import { ListadoSemillasComponent } from './semillas/listado-semillas/listado-semillas.component';
+import {
+  crearLibroCatalogoCultivos,
+  leerFilasCatalogoCultivos,
+} from './semillas/catalogo-cultivos-excel';
 
 describe('Importacion administrativa XLSX segura', () => {
   function dependencias(): any[] {
     return Array.from({ length: 9 }, () => ({}));
   }
 
-  it('recupera encabezados y valores de una planilla de semillas', () => {
-    const component = new (ListadoSemillasComponent as any)(...dependencias());
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Semillas');
-    worksheet.addRow(['cultivo', 'variedad', 'resistencia']);
-    worksheet.addRow(['Trigo', 'ACA 603', '[{"enfermedad":"Roya"}]']);
+  it('recupera encabezados y valores del catálogo ancho de cultivos', () => {
+    const workbook = crearLibroCatalogoCultivos([]);
+    workbook.getWorksheet('Trigo')!.addRow({
+      semillero: 'ACA',
+      variedad: 'ACA 603',
+      ciclo: 'CORTO',
+      campania: '2026-2027',
+      'trigo.roya_hoja': 'R',
+      fuenteActualizacion: 'Catálogo oficial 2026',
+    });
 
-    const rows = component.filasExcel(worksheet);
+    const row = leerFilasCatalogoCultivos(workbook).find(
+      (item) => item.variedad === 'ACA 603'
+    );
 
-    expect(rows).toEqual([
-      {
-        cultivo: 'Trigo',
+    expect(row).toEqual(
+      jasmine.objectContaining({
+        hoja: 'Trigo',
+        semillero: 'ACA',
         variedad: 'ACA 603',
-        resistencia: '[{"enfermedad":"Roya"}]',
-      },
-    ]);
+        ciclo: 'CORTO',
+        campania: '2026-2027',
+        fuenteActualizacion: 'Catálogo oficial 2026',
+      })
+    );
+    expect(row?.perfiles['trigo.roya_hoja']).toBe('R');
   });
 
   it('recupera numeros y JSON de una planilla fenologica', () => {
