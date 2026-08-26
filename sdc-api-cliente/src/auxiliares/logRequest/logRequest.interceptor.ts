@@ -90,6 +90,22 @@ function sanitizeLogData(value: any): any {
   );
 }
 
+export function requestBodyForLog(path: string, body: any): any {
+  if (
+    String(path || '')
+      .split('?')[0]
+      .endsWith('/semillas/importar')
+  ) {
+    return {
+      formatoVersion: body?.formatoVersion,
+      modo: body?.modo,
+      planHash: body?.planHash ? '[present]' : undefined,
+      filas: Array.isArray(body?.filas) ? body.filas.length : 0,
+    };
+  }
+  return sanitizeLogData(body);
+}
+
 @Injectable()
 export class LogRequestInterceptor implements NestInterceptor {
   private logger = new Logger(LogRequestInterceptor.name);
@@ -130,7 +146,7 @@ export class LogRequestInterceptor implements NestInterceptor {
     let msg = `${ruta}`;
 
     if (body && Object.keys(body).length)
-      msg += ` [body: ${JSON.stringify(sanitizeLogData(body))}]`;
+      msg += ` [body: ${JSON.stringify(requestBodyForLog(path, body))}]`;
     if (query && Object.keys(query).length)
       msg += ` [query: ${JSON.stringify(sanitizeLogData(query))}]`;
     if (user) msg += magentaBright(` [${user.username}]`);

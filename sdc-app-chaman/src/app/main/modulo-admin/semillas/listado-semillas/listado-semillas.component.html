@@ -44,7 +44,7 @@
           severity="success"
           [outlined]="true"
           (click)="exportarExcel()"
-          pTooltip="Exportar a Excel"
+          pTooltip="Exportar catálogo completo: una hoja por cultivo"
         />
         <p-button
           [label]="'Importar' | translate"
@@ -53,7 +53,7 @@
           [outlined]="true"
           [loading]="importing"
           (click)="triggerImport()"
-          pTooltip="Importar desde Excel"
+          pTooltip="Previsualizar e importar un catálogo exportado por Chamán"
         />
       </div>
     </ng-template>

@@ -92,3 +92,102 @@ describe('SemillasRepository - actualizacion termica segura', () => {
     });
   });
 });
+
+describe('SemillasRepository - importacion de catalogo segura', () => {
+  it('usa compare-and-set y runValidators al reemplazar resistencia', async () => {
+    const expected = [
+      {
+        idEnfermedad: 'trigo.roya_hoja',
+        enfermedad: 'Roya de la Hoja',
+        perfil: 'S',
+        multiplicador: 1,
+      },
+    ];
+    const replacement = [
+      {
+        ...expected[0],
+        perfil: 'R',
+        multiplicador: 0.05,
+        indiceResistencia: 1,
+      },
+    ];
+    const model = {
+      findOneAndUpdate: jest.fn().mockResolvedValue({ _id: 'semilla-1' }),
+    };
+    const repository = new SemillasRepository(model as any);
+
+    await repository.replaceCatalogResistance(
+      'semilla-1',
+      {
+        cultivo: 'Trigo',
+        semillero: 'Semillero',
+        variedad: 'Variedad',
+        ciclo: 'CORTO',
+      },
+      expected as any,
+      replacement as any,
+    );
+
+    expect(model.findOneAndUpdate).toHaveBeenCalledWith(
+      {
+        _id: 'semilla-1',
+        resistencia: expected,
+        cultivo: 'Trigo',
+        semillero: 'Semillero',
+        variedad: 'Variedad',
+        ciclo: 'CORTO',
+        campania: { $exists: false },
+      },
+      { $set: { resistencia: replacement } },
+      { new: true, runValidators: true },
+    );
+  });
+
+  it('valida el documento efectivo antes de escribir', async () => {
+    const validate = jest.fn().mockResolvedValue(undefined);
+    const Model = jest.fn().mockImplementation(() => ({ validate }));
+    const repository = new SemillasRepository(Model as any);
+
+    await repository.validateCatalogDocument({
+      cultivo: 'Trigo',
+      semillero: 'Semillero',
+      variedad: 'Variedad',
+      ciclo: 'CORTO',
+      resistencia: [],
+    });
+
+    expect(Model).toHaveBeenCalledTimes(1);
+    expect(validate).toHaveBeenCalledTimes(1);
+  });
+
+  it('protege el rollback de altas con todos los campos conocidos', async () => {
+    const deleteOne = jest.fn().mockResolvedValue({ deletedCount: 1 });
+    const repository = new SemillasRepository({ deleteOne } as any);
+    const expected = {
+      _id: 'semilla-1',
+      __v: 0,
+      cultivo: 'Trigo',
+      semillero: 'Semillero',
+      variedad: 'Variedad',
+      ciclo: 'CORTO',
+      resistencia: [],
+    } as any;
+
+    await expect(
+      repository.deleteCreatedCatalogDocument('semilla-1', expected),
+    ).resolves.toBe(true);
+
+    const filter = deleteOne.mock.calls[0][0];
+    expect(filter).toMatchObject({
+      _id: 'semilla-1',
+      __v: 0,
+      cultivo: 'Trigo',
+      variedad: 'Variedad',
+      resistencia: [],
+      campania: { $exists: false },
+      sensibilidadHelada: { $exists: false },
+      fichaVarietal: { $exists: false },
+      parametrosAgrometeorologicos: { $exists: false },
+    });
+  });
+});

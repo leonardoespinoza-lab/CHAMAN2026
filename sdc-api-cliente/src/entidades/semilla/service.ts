@@ -5,6 +5,8 @@ import {
   IQueryParam,
   ICreateSemilla,
   IUpdateSemilla,
+  IImportacionCatalogoCultivosRequest,
+  IResultadoImportacionCatalogoCultivos,
 } from 'modelos/src';
 import { SemillasRepository } from './repository';
 import { DecisionPipelineQueueService } from '../../auxiliares/decision-pipeline';
@@ -47,6 +49,47 @@ export class SemillasService {
 
   async bulk(data: ICreateSemilla[]): Promise<void> {
     return await this.repository.bulk(data);
+  }
+
+  async importar(
+    data: IImportacionCatalogoCultivosRequest,
+  ): Promise<IResultadoImportacionCatalogoCultivos> {
+    const resultado = await this.repository.importar(data);
+    if (data.modo !== 'confirmar' || resultado.modo !== 'confirmar') {
+      return resultado;
+    }
+
+    const idsActualizados = [
+      ...new Set(
+        (resultado.idsActualizados || [])
+          .map((id) => String(id || '').trim())
+          .filter(Boolean),
+      ),
+    ];
+    if (!idsActualizados.length) return resultado;
+
+    const planHash = String(resultado.planHash || data.planHash || '').trim();
+    if (!planHash) {
+      throw new Error(
+        'La importacion confirmada no devolvio un planHash para identificar sus recalculos.',
+      );
+    }
+
+    for (const id of idsActualizados) {
+      if (this.decisionPipelineQueue) {
+        await this.decisionPipelineQueue.enqueueForSeed(id, {
+          trigger: 'semilla.science-updated',
+          changedFields: ['resistencia'],
+          sincronizarClima: false,
+          operationId: `${planHash}/${id}`,
+        });
+      } else {
+        // Compatibilidad de pruebas construidas fuera del contenedor Nest.
+        await this.repository.reprocesarAgrometeorologia(id);
+      }
+    }
+
+    return resultado;
   }
 
   async update(id: string, data: IUpdateSemilla): Promise<ISemilla> {

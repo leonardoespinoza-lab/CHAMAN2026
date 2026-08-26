@@ -3,7 +3,14 @@ import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
 import ExcelJS from 'exceljs';
 import saveAs from 'file-saver';
-import { ICreateSemilla, IListado, IQueryParam, ISemilla } from 'modelos/src';
+import {
+  CATALOGO_CULTIVOS_FORMATO_VERSION,
+  getEnfermedadPorId,
+  IListado,
+  IQueryParam,
+  IResultadoImportacionCatalogoCultivos,
+  ISemilla,
+} from 'modelos/src';
 import { ConfirmationService } from 'primeng/api';
 import { Subscription } from 'rxjs';
 import { SemillaService } from '../../../../auxiliares/http/semilla.service';
@@ -11,6 +18,7 @@ import { HelperService } from '../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../auxiliares/servicios/listados';
 import { ParamsService } from '../../../../auxiliares/servicios/params.service';
 import { SharedModule } from '../../../../auxiliares/shared.module';
+import { crearLibroCatalogoCultivos, leerFilasCatalogoCultivos } from '../catalogo-cultivos-excel';
 
 @Component({
   selector: 'app-listado-semillas',
@@ -81,39 +89,17 @@ export class ListadoSemillasComponent implements OnInit, OnDestroy {
     });
   }
 
-  // Excel export
   public async exportarExcel(): Promise<void> {
-    const filas = this.datos.map((s) => ({
-      cultivo: s.cultivo,
-      semillero: s.semillero,
-      variedad: s.variedad,
-      ciclo: s.ciclo,
-      campania: s.campania || '',
-      resistencia: JSON.stringify(s.resistencia || []),
-    }));
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Semillas');
-    worksheet.columns = [
-      { header: 'cultivo', key: 'cultivo', width: 20 },
-      { header: 'semillero', key: 'semillero', width: 24 },
-      { header: 'variedad', key: 'variedad', width: 28 },
-      { header: 'ciclo', key: 'ciclo', width: 20 },
-      { header: 'campania', key: 'campania', width: 14 },
-      { header: 'resistencia', key: 'resistencia', width: 50 },
-    ];
-    worksheet.addRows(filas);
-    worksheet.getRow(1).font = { bold: true };
-    worksheet.autoFilter = { from: 'A1', to: 'F1' };
+    const workbook = crearLibroCatalogoCultivos(this.datos);
     const buffer = await workbook.xlsx.writeBuffer();
     saveAs(
       new Blob([buffer as unknown as BlobPart], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       }),
-      'cultivo.xlsx'
+      'catalogo-cultivos-chaman.xlsx'
     );
   }
 
-  // Excel import
   public triggerImport(): void {
     this.fileInput.nativeElement.value = '';
     this.fileInput.nativeElement.click();
@@ -128,77 +114,92 @@ export class ListadoSemillasComponent implements OnInit, OnDestroy {
       const buffer = await file.arrayBuffer();
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(buffer);
-      const worksheet = workbook.worksheets[0];
-      if (!worksheet) throw new Error('El archivo no contiene hojas.');
-      const rows = this.filasExcel(worksheet);
-
-      let ok = 0;
-      let err = 0;
-      for (const row of rows) {
-        try {
-          let resistencia: any[] = [];
-          if (row['resistencia']) {
-            try {
-              resistencia = JSON.parse(String(row['resistencia']));
-            } catch {
-              resistencia = [];
-            }
-          }
-          const semilla: ICreateSemilla = {
-            cultivo: row['cultivo'],
-            semillero: row['semillero'],
-            variedad: row['variedad'],
-            ciclo: String(row['ciclo'] || '').toUpperCase(),
-            campania: row['campania'] || undefined,
-            resistencia,
-          };
-          const created = await this.service.crear(semilla);
-
-          // Solo actualiza el item en cache
-          this.listado.createEntityItem('semillas', created);
-
-          ok++;
-        } catch {
-          err++;
-        }
+      const filas = leerFilasCatalogoCultivos(workbook);
+      const preview = await this.service.importarCatalogo({
+        formatoVersion: CATALOGO_CULTIVOS_FORMATO_VERSION,
+        modo: 'previsualizar',
+        filas,
+      });
+      if (preview.errores.length) {
+        throw new Error(this.detalleErroresImportacion(preview));
       }
-      this.helper.notifSuccess(this.translate.instant(`Importadas: ${ok}`) + (err ? ` | Errores: ${err}` : ''));
+      if (!preview.altas && !preview.actualizaciones) {
+        this.helper.notifSuccess(
+          this.translate.instant('El archivo coincide con la base actual. No se realizó ninguna escritura.')
+        );
+        return;
+      }
+      const confirmar = await this.confirmarImportacion(preview);
+      if (!confirmar) return;
+      const result = await this.service.importarCatalogo({
+        formatoVersion: CATALOGO_CULTIVOS_FORMATO_VERSION,
+        modo: 'confirmar',
+        planHash: preview.planHash,
+        filas,
+      });
+      if (result.errores.length) {
+        throw new Error(this.detalleErroresImportacion(result));
+      }
+      this.listado.borrarCache();
+      await this.listar();
+      this.helper.notifSuccess(
+        this.translate.instant(
+          `Catálogo actualizado: ${result.altas} altas y ${result.actualizaciones} actualizaciones.`
+        )
+      );
     } catch (e) {
       this.helper.notifError(e);
+    } finally {
+      this.importing = false;
     }
-    this.importing = false;
   }
 
-  private filasExcel(worksheet: ExcelJS.Worksheet): Record<string, any>[] {
-    const encabezados = (worksheet.getRow(1).values as ExcelJS.CellValue[])
-      .slice(1)
-      .map((value) => String(this.valorCeldaExcel(value) || '').trim());
-    const filas: Record<string, any>[] = [];
-    worksheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return;
-      const fila: Record<string, any> = {};
-      encabezados.forEach((encabezado, index) => {
-        if (encabezado) {
-          fila[encabezado] = this.valorCeldaExcel(row.getCell(index + 1).value);
-        }
+  private detalleErroresImportacion(result: IResultadoImportacionCatalogoCultivos): string {
+    const detalle = result.errores
+      .slice(0, 10)
+      .map((item) => `${item.hoja}, fila ${item.fila}${item.campo ? `, ${item.campo}` : ''}: ${item.mensaje}`)
+      .join('\n');
+    const restantes = Math.max(0, result.errores.length - 10);
+    return `No se importó nada. Corrija ${result.errores.length} error(es):\n${detalle}${
+      restantes ? `\n...y ${restantes} error(es) más.` : ''
+    }`;
+  }
+
+  private confirmarImportacion(preview: IResultadoImportacionCatalogoCultivos): Promise<boolean> {
+    const detalle = preview.cambios
+      .slice(0, 6)
+      .map((cambio) => {
+        const enfermedades = cambio.enfermedades.map((id) => getEnfermedadPorId(id)?.nombre || id).join(', ');
+        return `${cambio.tipo === 'alta' ? 'ALTA' : 'ACTUALIZACIÓN'}: ${cambio.cultivo} · ${cambio.semillero} · ${
+          cambio.variedad
+        }${enfermedades ? ` (${enfermedades})` : ''}`;
+      })
+      .join(' | ');
+    const restantes = Math.max(0, preview.cambios.length - 6);
+    return new Promise((resolve) => {
+      this.confirmationService.confirm({
+        header: this.translate.instant('Confirmar actualización del catálogo'),
+        message: this.translate.instant(
+          `${preview.altas} altas, ${preview.actualizaciones} actualizaciones y ${preview.sinCambios} filas sin cambios. No se eliminarán variedades ni datos ausentes.${
+            detalle ? ` Detalle: ${detalle}${restantes ? ` | …y ${restantes} cambio(s) más.` : ''}` : ''
+          }`
+        ),
+        icon: 'pi pi-exclamation-triangle',
+        closable: true,
+        closeOnEscape: true,
+        rejectButtonProps: {
+          label: this.translate.instant('Cancelar'),
+          severity: 'secondary',
+          outlined: true,
+        },
+        acceptButtonProps: {
+          label: this.translate.instant('Aplicar cambios'),
+          severity: 'warn',
+        },
+        accept: () => resolve(true),
+        reject: () => resolve(false),
       });
-      if (Object.values(fila).some((value) => value !== '' && value != null)) {
-        filas.push(fila);
-      }
     });
-    return filas;
-  }
-
-  private valorCeldaExcel(value: ExcelJS.CellValue): unknown {
-    if (value == null) return '';
-    if (value instanceof Date || typeof value !== 'object') return value;
-    const structured = value as any;
-    if ('result' in structured) return structured.result ?? '';
-    if ('text' in structured) return structured.text ?? '';
-    if (Array.isArray(structured.richText)) {
-      return structured.richText.map((item: any) => item.text || '').join('');
-    }
-    return String(value);
   }
 
   private async listar(): Promise<void> {
