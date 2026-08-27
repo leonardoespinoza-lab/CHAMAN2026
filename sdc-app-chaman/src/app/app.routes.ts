@@ -231,6 +231,10 @@ const loadFieldClimate = () =>
   import('./main/modulo-admin/fieldclimate-integracion/fieldclimate-integracion.component').then(
     (m) => m.FieldClimateIntegracionComponent
   );
+const loadChamanMeteo = () =>
+  import('./main/modulo-admin/chaman-meteo/chaman-meteo.component').then(
+    (m) => m.ChamanMeteoComponent
+  );
 const loadListadoUsuarios = () =>
   import('./main/usuarios/listado-usuarios/listado-usuarios.component').then((m) => m.ListadoUsuariosComponent);
 const loadCrearEditarUsuarios = () =>
@@ -365,6 +369,8 @@ export const routes: Routes = [
       { path: 'motor-ia-malezas', loadComponent: loadMotorIaMalezas, ...adminOnly },
       // FieldClimate
       { path: 'fieldclimate', loadComponent: loadFieldClimate, ...adminOnly },
+      // Chamán-Meteo
+      { path: 'chaman-meteo', loadComponent: loadChamanMeteo, ...adminOnly },
 
       // *** Admin *** //
 

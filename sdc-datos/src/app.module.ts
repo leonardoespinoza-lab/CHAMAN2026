@@ -46,6 +46,7 @@ import { IndicadoresAgrometeorologicosModule } from './entidades/indicador-agrom
 import { ScheduleModule } from '@nestjs/schedule';
 import { SoilIntelligenceModule } from './entidades/suelo-inteligencia/module';
 import { TenantsModule } from './entidades/tenant/module';
+import { ChamanMeteoModule } from './entidades/chaman-meteo/module';
 
 @Module({
   imports: [
@@ -94,6 +95,7 @@ import { TenantsModule } from './entidades/tenant/module';
     IndicadoresAgrometeorologicosModule,
     SoilIntelligenceModule,
     TenantsModule,
+    ChamanMeteoModule,
   ],
   controllers: [HealthController],
   providers: [],

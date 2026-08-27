@@ -55,6 +55,7 @@ import { VisitasLoteModule } from './entidades/visita-lote/module';
 import { REDIS_HOST, REDIS_PORT, REDIS_PASSWORD } from './env';
 import { AdvisorScopeModule } from './auxiliares/authorization/advisor-scope.module';
 import { TenantsModule } from './entidades/tenant/module';
+import { ChamanMeteoModule } from './entidades/chaman-meteo/module';
 
 @Module({
   imports: [
@@ -117,6 +118,7 @@ import { TenantsModule } from './entidades/tenant/module';
     IaMalezasModule,
     VisitasLoteModule,
     TenantsModule,
+    ChamanMeteoModule,
   ],
   controllers: [],
   providers: [{ provide: APP_INTERCEPTOR, useClass: MqttInterceptor }],

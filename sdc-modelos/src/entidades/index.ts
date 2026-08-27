@@ -43,3 +43,4 @@ export * from "./agrometeorologia";
 export * from "./ubicacion-lote";
 export * from "./suelo-inteligencia";
 export * from "./tenant";
+export * from "./chaman-meteo";
