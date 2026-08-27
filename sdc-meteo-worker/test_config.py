@@ -2,6 +2,7 @@ import os
 import subprocess
 import sys
 import unittest
+from pathlib import Path
 
 
 class WorkerConfigTest(unittest.TestCase):
@@ -12,6 +13,7 @@ class WorkerConfigTest(unittest.TestCase):
             [sys.executable, "-c", "import config"],
             capture_output=True,
             check=False,
+            cwd=Path(__file__).parent,
             env=environment,
             text=True,
         )
