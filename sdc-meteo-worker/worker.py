@@ -217,7 +217,7 @@ class ChamanMeteoWorker:
             timeout=HTTP_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
-        return response.json()
+        return self._response_json(response)
 
     def _post(self, path: str, payload):
         response = self.session.post(
@@ -226,7 +226,7 @@ class ChamanMeteoWorker:
             timeout=HTTP_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
-        return response.json()
+        return self._response_json(response)
 
     def _put(self, path: str, payload):
         response = self.session.put(
@@ -235,7 +235,18 @@ class ChamanMeteoWorker:
             timeout=HTTP_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
-        return response.json()
+        return self._response_json(response)
+
+    def _response_json(self, response):
+        if not response.content or not response.text.strip():
+            return {}
+        try:
+            return response.json()
+        except requests.exceptions.JSONDecodeError as error:
+            content_type = response.headers.get("content-type", "desconocido")
+            raise RuntimeError(
+                f"Respuesta interna no JSON (status={response.status_code}, content-type={content_type})"
+            ) from error
 
     def _chunks(self, values: list, size: int):
         for index in range(0, len(values), size):
