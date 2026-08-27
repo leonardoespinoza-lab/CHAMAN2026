@@ -57,6 +57,10 @@ Crear un servicio privado con `CHAMAN_SERVICE=sdc-meteo-worker`, una sola
 réplica y acceso a Redis y `sdc-datos` por red privada. Cargar inicialmente uno
 o dos puntos mediante `CHAMAN_METEO_GRID_POINTS_JSON`.
 
+El servicio se construye desde `sdc-meteo-worker/` usando su Dockerfile propio;
+al desplegarlo manualmente desde el monorepo se debe usar ese directorio como
+raíz del upload.
+
 Primero desplegar con `CHAMAN_METEO_IMPORT_ENABLED=false` y comprobar `/health`
 y la tarjeta Admin. Luego habilitar el importador únicamente en Testing.
 
