@@ -157,7 +157,7 @@
                 <td>{{ number(row.values.relativeHumidityMeanPct) }} %</td>
                 <td>{{ number(row.values.precipitationMm, 2) }} mm</td>
                 <td>{{ number(row.values.et0Mm, 2) }} mm</td>
-                <td>{{ row.hoursAvailable }}/24</td>
+                <td>{{ row.hoursAvailable }}/{{ expectedHours(row) }}</td>
               </tr>
             } @empty {
               <tr>

@@ -44,6 +44,18 @@ BACKFILL_DAYS_PER_RUN = max(
 HTTP_TIMEOUT_SECONDS = max(
     5, min(300, int(os.getenv("CHAMAN_METEO_HTTP_TIMEOUT_SECONDS", "60")))
 )
+try:
+    NEGATIVE_PRECIPITATION_TOLERANCE_MM = float(
+        os.getenv("CHAMAN_METEO_NEGATIVE_PRECIPITATION_TOLERANCE_MM", "0.001")
+    )
+except ValueError as error:
+    raise RuntimeError(
+        "CHAMAN_METEO_NEGATIVE_PRECIPITATION_TOLERANCE_MM debe ser numerico"
+    ) from error
+if not 0 <= NEGATIVE_PRECIPITATION_TOLERANCE_MM <= 1:
+    raise RuntimeError(
+        "CHAMAN_METEO_NEGATIVE_PRECIPITATION_TOLERANCE_MM debe estar entre 0 y 1"
+    )
 RUN_ONCE = env_bool("CHAMAN_METEO_RUN_ONCE")
 PORT = int(os.getenv("PORT", "5000"))
 DOWNLOAD_DIR = os.getenv("CHAMAN_METEO_DOWNLOAD_DIR", "/tmp/chaman-meteo")

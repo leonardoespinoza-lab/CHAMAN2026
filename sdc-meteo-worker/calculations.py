@@ -1,6 +1,6 @@
 import math
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
@@ -46,7 +46,70 @@ def _kelvin_to_c(value):
     return value - 273.15 if value is not None and value > 150 else value
 
 
-def derive_hourly(raw_record: dict, calculation_version: str) -> dict:
+def normalise_precipitation_mm(
+    precipitation_m: float, negative_tolerance_mm: float
+) -> tuple[float | None, str | None]:
+    precipitation_mm = (
+        precipitation_m * 1000.0
+        if abs(precipitation_m) < 2
+        else precipitation_m
+    )
+    if precipitation_mm >= 0:
+        return precipitation_mm, None
+    if abs(precipitation_mm) <= negative_tolerance_mm:
+        return 0.0, "precipitation_negative_artifact_clamped_to_zero"
+    return None, "precipitation_negative_outside_tolerance_quarantined"
+
+
+def daily_utc_window(
+    hourly_records: list[dict], timezone_name: str
+) -> tuple[str, str] | None:
+    if not hourly_records:
+        return None
+    try:
+        local_timezone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        local_timezone = ZoneInfo("UTC")
+    local_dates = [
+        datetime.fromisoformat(record["timestamp"].replace("Z", "+00:00"))
+        .astimezone(local_timezone)
+        .date()
+        for record in hourly_records
+    ]
+    first_date = min(local_dates)
+    last_date = max(local_dates)
+    start = datetime.combine(first_date, time.min, tzinfo=local_timezone).astimezone(
+        timezone.utc
+    )
+    end = datetime.combine(
+        last_date + timedelta(days=1), time.min, tzinfo=local_timezone
+    ).astimezone(timezone.utc)
+    return (
+        start.isoformat().replace("+00:00", "Z"),
+        end.isoformat().replace("+00:00", "Z"),
+    )
+
+
+def expected_hours_for_local_date(date_text: str, timezone_name: str) -> int:
+    try:
+        local_timezone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        local_timezone = ZoneInfo("UTC")
+    local_date = date.fromisoformat(date_text)
+    start = datetime.combine(local_date, time.min, tzinfo=local_timezone).astimezone(
+        timezone.utc
+    )
+    end = datetime.combine(
+        local_date + timedelta(days=1), time.min, tzinfo=local_timezone
+    ).astimezone(timezone.utc)
+    return int((end - start).total_seconds() / 3600)
+
+
+def derive_hourly(
+    raw_record: dict,
+    calculation_version: str,
+    negative_precipitation_tolerance_mm: float = 0.001,
+) -> dict:
     raw = raw_record["values"]
     values = {}
     flags = []
@@ -85,7 +148,13 @@ def derive_hourly(raw_record: dict, calculation_version: str) -> dict:
         flags.append("wind_derived_from_uv_components")
     precipitation = raw.get("precipitationM")
     if precipitation is not None:
-        values["precipitationMm"] = precipitation * 1000.0 if abs(precipitation) < 2 else precipitation
+        precipitation_mm, precipitation_flag = normalise_precipitation_mm(
+            precipitation, negative_precipitation_tolerance_mm
+        )
+        if precipitation_mm is not None:
+            values["precipitationMm"] = precipitation_mm
+        if precipitation_flag:
+            flags.append(precipitation_flag)
     shortwave = raw.get("shortwaveRadiationJm2")
     thermal = raw.get("thermalRadiationJm2")
     if shortwave is not None:
@@ -151,6 +220,7 @@ def aggregate_daily(hourly_records: list[dict], timezone_name: str, calculation_
     for date, rows in sorted(grouped.items()):
         values = {}
         flags = [timezone_flag] if timezone_flag else []
+        hours_expected = expected_hours_for_local_date(date, timezone_name)
         temperatures = _numbers(rows, "temperatureC")
         humidities = _numbers(rows, "relativeHumidityPct")
         winds = _numbers(rows, "windSpeed2Ms")
@@ -174,16 +244,32 @@ def aggregate_daily(hourly_records: list[dict], timezone_name: str, calculation_
             )
         if vpds:
             values["vpdMeanKpa"] = sum(vpds) / len(vpds)
+        has_precipitation_outlier = any(
+            "precipitation_negative_outside_tolerance_quarantined"
+            in row.get("qualityFlags", [])
+            for row in rows
+        )
+        has_precipitation_correction = any(
+            "precipitation_negative_artifact_clamped_to_zero"
+            in row.get("qualityFlags", [])
+            for row in rows
+        )
+        precipitation = _numbers(rows, "precipitationMm")
+        if has_precipitation_outlier:
+            flags.append("daily_precipitation_unavailable_negative_outlier")
+        elif precipitation:
+            values["precipitationMm"] = sum(precipitation)
+        if has_precipitation_correction:
+            flags.append("daily_contains_precipitation_negative_correction")
         for key, target in (
-            ("precipitationMm", "precipitationMm"),
             ("shortwaveRadiationMjM2", "shortwaveRadiationMjM2"),
             ("et0Mm", "et0Mm"),
         ):
             numbers = _numbers(rows, key)
             if numbers:
                 values[target] = sum(numbers)
-        if len(rows) < 20:
-            flags.append("daily_incomplete_less_than_20_hours")
+        if len(rows) < hours_expected:
+            flags.append("daily_incomplete_less_than_expected_hours")
         output.append(
             {
                 "gridPointKey": rows[0]["gridPointKey"],
@@ -191,6 +277,7 @@ def aggregate_daily(hourly_records: list[dict], timezone_name: str, calculation_
                 "timezone": timezone_name,
                 "calculationVersion": calculation_version,
                 "hoursAvailable": len(rows),
+                "hoursExpected": hours_expected,
                 "values": values,
                 "qualityFlags": flags,
                 "calculatedAt": datetime.now(timezone.utc)

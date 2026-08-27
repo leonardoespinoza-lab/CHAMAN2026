@@ -109,12 +109,23 @@ export class ChamanMeteoRepository {
 
   hourlyPage(
     gridPointKey: string | undefined,
+    from: Date | undefined,
+    toExclusive: Date | undefined,
+    calculationVersion: string | undefined,
     limit: number,
     offset: number,
   ): Promise<IChamanMeteoPage<IChamanMeteoHourlyDerived>> {
+    const filter: Record<string, any> = {};
+    if (gridPointKey) filter.gridPointKey = gridPointKey;
+    if (calculationVersion) filter.calculationVersion = calculationVersion;
+    if (from || toExclusive) {
+      filter.timestamp = {};
+      if (from) filter.timestamp.$gte = from;
+      if (toExclusive) filter.timestamp.$lt = toExclusive;
+    }
     return this.page(
       this.hourlyDerived,
-      gridPointKey ? { gridPointKey } : {},
+      filter,
       { timestamp: -1 },
       limit,
       offset,
@@ -123,16 +134,14 @@ export class ChamanMeteoRepository {
 
   dailyPage(
     gridPointKey: string | undefined,
+    calculationVersion: string | undefined,
     limit: number,
     offset: number,
   ): Promise<IChamanMeteoPage<IChamanMeteoDaily>> {
-    return this.page(
-      this.daily,
-      gridPointKey ? { gridPointKey } : {},
-      { date: -1 },
-      limit,
-      offset,
-    );
+    const filter: Record<string, any> = {};
+    if (gridPointKey) filter.gridPointKey = gridPointKey;
+    if (calculationVersion) filter.calculationVersion = calculationVersion;
+    return this.page(this.daily, filter, { date: -1 }, limit, offset);
   }
 
   async coverageByGridPoint(

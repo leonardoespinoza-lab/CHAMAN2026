@@ -113,6 +113,11 @@ export class ChamanMeteoComponent implements OnInit {
     return Number.isFinite(value) ? Number(value).toFixed(decimals) : '-';
   }
 
+  public expectedHours(row: IChamanMeteoDaily): number {
+    const expected = Number((row as IChamanMeteoDaily & { hoursExpected?: number }).hoursExpected);
+    return Number.isFinite(expected) && expected >= 23 && expected <= 25 ? expected : 24;
+  }
+
   public date(value?: string): string {
     if (!value) return '-';
     const parsed = new Date(value);

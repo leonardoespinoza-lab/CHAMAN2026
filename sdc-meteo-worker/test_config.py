@@ -28,6 +28,13 @@ class WorkerConfigTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("formato YYYY-MM-DD", result.stderr)
 
+    def test_rejects_invalid_negative_precipitation_tolerance(self):
+        result = self.import_config(
+            CHAMAN_METEO_NEGATIVE_PRECIPITATION_TOLERANCE_MM="-1"
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("debe estar entre 0 y 1", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
