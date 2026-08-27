@@ -85,6 +85,29 @@ small {
   color: #991b1b;
   background: #fef2f2;
 }
+.notice.warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #f59e0b;
+  color: #854d0e;
+  background: #fffbeb;
+}
+.notice.warning div {
+  display: grid;
+  gap: 5px;
+}
+.notice.warning span {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.notice.warning a {
+  flex: 0 0 auto;
+  color: #92400e;
+  font-weight: 800;
+  text-decoration: underline;
+}
 
 .status-grid,
 .metrics-grid {
@@ -295,6 +318,10 @@ th {
   }
   .selector-panel label {
     min-width: 0;
+  }
+  .notice.warning {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

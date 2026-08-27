@@ -104,6 +104,11 @@ export class ChamanMeteoComponent implements OnInit {
     return String(this.status?.state || 'DISABLED').toLowerCase();
   }
 
+  public licenseRequired(): boolean {
+    const message = String(this.status?.latestJob?.lastError || '').toLowerCase();
+    return message.includes('licence') || message.includes('licencia');
+  }
+
   public number(value?: number, decimals = 1): string {
     return Number.isFinite(value) ? Number(value).toFixed(decimals) : '-';
   }
