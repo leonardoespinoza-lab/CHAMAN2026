@@ -26,6 +26,23 @@
     <div class="notice error">{{ error }}</div>
   }
 
+  @if (status?.state === 'ERROR' && status?.latestJob?.lastError) {
+    <section class="notice warning" role="alert">
+      <div>
+        <strong>El último intento no pudo completarse</strong>
+        <span>{{ status?.latestJob?.lastError }}</span>
+      </div>
+      @if (licenseRequired()) {
+        <a
+          href="https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land-timeseries?tab=download#manage-licences"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Revisar licencia en Copernicus</a
+        >
+      }
+    </section>
+  }
+
   @if (status) {
     <section class="status-grid">
       <article class="status-card emphasis">
