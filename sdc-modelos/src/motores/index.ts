@@ -7,3 +7,4 @@ export * from "./fenologia-registros";
 export * from "./catalogo-termico-varietal";
 export * from "./ficha-varietal";
 export * from "./catalogo-cultivos";
+export * from "./chaman-meteo";

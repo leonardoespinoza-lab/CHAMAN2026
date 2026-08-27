@@ -33,6 +33,7 @@ export class DashboardAdminComponent implements OnInit {
     { label: 'Compañía', icon: 'pi pi-building', route: '/quimicas/crear' },
     { label: 'LoRaWAN', icon: 'pi pi-microchip', route: '/dispositivos/crear' },
     { label: 'FieldClimate', icon: 'pi pi-cloud', route: '/fieldclimate' },
+    { label: 'Chamán-Meteo', icon: 'pi pi-sun', route: '/chaman-meteo' },
     { label: 'Algoritmos', icon: 'pi pi-sliders-h', route: '/algoritmos' },
     { label: 'IA Malezas', icon: 'pi pi-image', route: '/motor-ia-malezas' },
   ];
@@ -103,6 +104,15 @@ export class DashboardAdminComponent implements OnInit {
       status: 'Configurable',
     },
     {
+      title: 'Chamán-Meteo',
+      description:
+        'Estado, cobertura y valores horarios y diarios de la fuente meteorológica propia basada en ERA5-Land.',
+      icon: 'pi pi-sun',
+      route: '/chaman-meteo',
+      group: 'Integraciones',
+      status: 'Monitoreo',
+    },
+    {
       title: 'Fenologia',
       description: 'Base fenologica por cultivo, ciclo y departamento para disparar servicios por siembra.',
       icon: 'pi pi-calendar-clock',
@@ -159,7 +169,7 @@ export class DashboardAdminComponent implements OnInit {
     },
     {
       title: 'Integraciones',
-      items: ['Open-Meteo', 'FieldClimate', 'EMQX / ChirpStack LoRaWAN', 'NDVI y satelite'],
+      items: ['Open-Meteo', 'Chamán-Meteo', 'FieldClimate', 'EMQX / ChirpStack LoRaWAN', 'NDVI y satelite'],
     },
     {
       title: 'Datos',

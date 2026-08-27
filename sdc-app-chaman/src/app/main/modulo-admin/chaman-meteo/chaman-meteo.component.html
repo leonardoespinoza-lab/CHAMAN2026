@@ -1,0 +1,193 @@
+<main class="chaman-meteo-page">
+  <header class="page-header">
+    <button type="button" class="back-button" aria-label="Volver" (click)="volver()">
+      <i class="pi pi-arrow-left"></i>
+    </button>
+    <div>
+      <p class="eyebrow">SERVICIOS METEOROLÓGICOS</p>
+      <h1>Chamán-Meteo</h1>
+      <p>Histórico horario propio basado en ERA5-Land, auditable y separado de las fuentes operativas.</p>
+    </div>
+    <p-button label="Actualizar estado" icon="pi pi-refresh" [loading]="loading" (onClick)="refresh()" />
+  </header>
+
+  <section class="safety-note">
+    <i class="pi pi-shield"></i>
+    <div>
+      <strong>Despliegue seguro</strong>
+      <span
+        >Open-Meteo, FieldClimate y sensores continúan sin cambios. Chamán-Meteo no reemplaza ninguna fuente mientras
+        esté en validación.</span
+      >
+    </div>
+  </section>
+
+  @if (error) {
+    <div class="notice error">{{ error }}</div>
+  }
+
+  @if (status) {
+    <section class="status-grid">
+      <article class="status-card emphasis">
+        <span>Estado</span>
+        <strong class="state-pill" [ngClass]="stateClass()">{{ stateLabel() }}</strong>
+        <small>Controlado {{ date(status.checkedAt) }}</small>
+      </article>
+      <article class="status-card">
+        <span>Credencial CDS</span>
+        <strong>{{ status.credentialConfigured ? 'Configurada' : 'Pendiente' }}</strong>
+        <small>La clave nunca se muestra en esta pantalla.</small>
+      </article>
+      <article class="status-card">
+        <span>Puntos de grilla</span>
+        <strong>{{ status.gridPoints }}</strong>
+        <small>{{ status.activeBindings }} ubicaciones vinculadas</small>
+      </article>
+      <article class="status-card">
+        <span>Registros horarios</span>
+        <strong>{{ status.hourlyDerivedRecords }}</strong>
+        <small>{{ status.hourlyRawRecords }} registros fuente conservados</small>
+      </article>
+      <article class="status-card">
+        <span>Días procesados</span>
+        <strong>{{ status.dailyRecords }}</strong>
+        <small>Desde {{ status.historicalStart }}</small>
+      </article>
+      <article class="status-card">
+        <span>Proveedor</span>
+        <strong>{{ status.provider }}</strong>
+        <small>{{ status.dataset }}</small>
+      </article>
+    </section>
+  }
+
+  <section class="panel selector-panel">
+    <div>
+      <p class="eyebrow">VALORES</p>
+      <h2>Últimas métricas procesadas</h2>
+    </div>
+    <label>
+      Punto de grilla
+      <select [(ngModel)]="selectedGridPoint" (change)="changeGridPoint()">
+        <option value="">Todos</option>
+        @for (point of gridPoints; track point.key) {
+          <option [value]="point.key">
+            {{ point.key }} · {{ number(point.latitude, 3) }}, {{ number(point.longitude, 3) }}
+          </option>
+        }
+      </select>
+    </label>
+  </section>
+
+  @if (latestHourly) {
+    <section class="metrics-grid">
+      <article>
+        <span>Temperatura</span><strong>{{ number(latestHourly.values.temperatureC) }} °C</strong>
+      </article>
+      <article>
+        <span>Humedad ambiente</span><strong>{{ number(latestHourly.values.relativeHumidityPct) }} %</strong>
+      </article>
+      <article>
+        <span>Lluvia</span><strong>{{ number(latestHourly.values.precipitationMm, 2) }} mm</strong>
+      </article>
+      <article>
+        <span>Viento a 2 m</span><strong>{{ number(latestHourly.values.windSpeed2Ms) }} m/s</strong>
+      </article>
+      <article>
+        <span>Radiación solar</span><strong>{{ number(latestHourly.values.shortwaveRadiationMjM2, 3) }} MJ/m²</strong>
+      </article>
+      <article>
+        <span>ET₀</span><strong>{{ number(latestHourly.values.et0Mm, 3) }} mm</strong>
+      </article>
+      <p class="metric-time">Hora UTC: {{ date(latestHourly.timestamp) }}</p>
+    </section>
+  } @else {
+    <section class="empty-state">
+      <i class="pi pi-cloud-download"></i>
+      <div>
+        <strong>Todavía no hay valores importados</strong>
+        <span>La tarjeta está lista. Los datos aparecerán después de habilitar y ejecutar el piloto en Testing.</span>
+      </div>
+    </section>
+  }
+
+  <section class="two-columns">
+    <article class="panel table-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">RESUMEN DIARIO</p>
+          <h2>Últimos días</h2>
+        </div>
+        <span>{{ daily.length }} filas</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Temp.</th>
+              <th>HR</th>
+              <th>Lluvia</th>
+              <th>ET₀</th>
+              <th>Horas</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of daily; track row.gridPointKey + row.date) {
+              <tr>
+                <td>{{ row.date }}</td>
+                <td>{{ number(row.values.temperatureMeanC) }} °C</td>
+                <td>{{ number(row.values.relativeHumidityMeanPct) }} %</td>
+                <td>{{ number(row.values.precipitationMm, 2) }} mm</td>
+                <td>{{ number(row.values.et0Mm, 2) }} mm</td>
+                <td>{{ row.hoursAvailable }}/24</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="6" class="empty-cell">Sin datos diarios</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="panel table-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">IMPORTACIONES</p>
+          <h2>Últimos trabajos</h2>
+        </div>
+        <span>{{ jobs.length }} trabajos</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Rango</th>
+              <th>Estado</th>
+              <th>Progreso</th>
+              <th>Actualizado</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (job of jobs; track job.jobKey) {
+              <tr>
+                <td>{{ job.rangeStart }} → {{ job.rangeEnd }}</td>
+                <td>
+                  <span class="job-status" [attr.data-status]="job.status">{{ job.status }}</span>
+                </td>
+                <td>{{ job.progressPct }} %</td>
+                <td>{{ date(job.actualizadoEn) }}</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="4" class="empty-cell">Sin trabajos ejecutados</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </article>
+  </section>
+</main>

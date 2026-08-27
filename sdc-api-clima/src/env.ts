@@ -223,6 +223,36 @@ export const FIELDCLIMATE_MAX_DATA_AGE_HOURS = Math.max(
 );
 export const AGROMETEO_INTERNAL_TOKEN =
   process.env.AGROMETEO_INTERNAL_TOKEN || '';
+export const CHAMAN_METEO_INTERNAL_TOKEN =
+  process.env.CHAMAN_METEO_INTERNAL_TOKEN || AGROMETEO_INTERNAL_TOKEN;
+export const CHAMAN_METEO_ENABLED = process.env.CHAMAN_METEO_ENABLED === 'true';
+export const CHAMAN_METEO_IMPORT_ENABLED =
+  CHAMAN_METEO_ENABLED && process.env.CHAMAN_METEO_IMPORT_ENABLED === 'true';
+export const CHAMAN_METEO_CDS_CONFIGURED =
+  process.env.CHAMAN_METEO_CDS_CONFIGURED === 'true';
+export function resolveChamanMeteoHistoricalStart(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error('CHAMAN_METEO_HISTORICAL_START debe usar YYYY-MM-DD');
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== value
+  ) {
+    throw new Error('CHAMAN_METEO_HISTORICAL_START no es una fecha valida');
+  }
+  if (value < '1950-01-02' || value > new Date().toISOString().slice(0, 10)) {
+    throw new Error(
+      'CHAMAN_METEO_HISTORICAL_START esta fuera del rango ERA5-Land',
+    );
+  }
+  return value;
+}
+export const CHAMAN_METEO_HISTORICAL_START = resolveChamanMeteoHistoricalStart(
+  process.env.CHAMAN_METEO_HISTORICAL_START || '2020-01-01',
+);
+export const CHAMAN_METEO_CALCULATION_VERSION =
+  process.env.CHAMAN_METEO_CALCULATION_VERSION || 'chaman-meteo-agro-v1';
 export const SOIL_INTELLIGENCE_INTERNAL_TOKEN =
   process.env.SOIL_INTELLIGENCE_INTERNAL_TOKEN ||
   process.env.LOT_LOCATION_INTERNAL_TOKEN ||
