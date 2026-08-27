@@ -22,6 +22,14 @@ Los puntos piloto se cargan con `CHAMAN_METEO_GRID_POINTS_JSON`; por ejemplo:
 ]
 ```
 
+En la primera importacion, `historicalStart` del punto tiene prioridad sobre
+`CHAMAN_METEO_HISTORICAL_START`. Los resumenes diarios se reconstruyen desde
+todo el hourly persistido de cada dia local afectado, para no perder las horas
+que cruzan el limite UTC. Las trazas negativas de precipitacion se conservan en
+raw y se normalizan en derived con el umbral QA configurable
+`CHAMAN_METEO_NEGATIVE_PRECIPITATION_TOLERANCE_MM` (0.001 mm por defecto); un
+negativo mayor queda excluido del agregado diario y marcado para revision.
+
 El despliegue inicial debe tener una sola réplica y ejecutarse primero en
 Railway Testing. Redis agrega un lease por punto para impedir importaciones
 simultáneas.

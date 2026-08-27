@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 import redis
 import requests
 
-from calculations import aggregate_daily, derive_hourly
+from calculations import aggregate_daily, daily_utc_window, derive_hourly
 from cds_client import CdsTimeSeriesClient
 from config import (
     API_DATOS,
@@ -19,6 +19,7 @@ from config import (
     HISTORICAL_START,
     HTTP_TIMEOUT_SECONDS,
     INTERNAL_TOKEN,
+    NEGATIVE_PRECIPITATION_TOLERANCE_MM,
     POLL_SECONDS,
     PORT,
     REDIS_DB,
@@ -79,12 +80,22 @@ class ChamanMeteoWorker:
         points = self._get("grid-points", params={"limit": 500}).get("datos", [])
         latest_available = self._latest_available_date()
         logger.info("Ciclo iniciado para %s puntos; CDS disponible hasta %s", len(points), latest_available)
+        errors = []
         for point in points:
             if point.get("enabled") is False:
                 continue
-            self._process_point(point, latest_available)
+            try:
+                self._process_point(point, latest_available)
+            except Exception as error:
+                safe_error = self._safe_error(error)
+                errors.append(f"{point.get('key', 'desconocido')}: {safe_error}")
+                logger.error(
+                    "Punto %s fallo antes de importar: %s",
+                    point.get("key", "desconocido"),
+                    safe_error,
+                )
         STATE.last_run = datetime.now(timezone.utc).isoformat()
-        STATE.last_error = None
+        STATE.last_error = "; ".join(errors)[:1000] if errors else None
 
     def _process_point(self, point: dict, latest_available: date):
         key = point["key"]
@@ -96,7 +107,7 @@ class ChamanMeteoWorker:
             return
         try:
             coverage = self._get(f"coverage/{key}") or {}
-            start = self._next_start(coverage)
+            start = self._next_start(coverage, point)
             if start > latest_available:
                 logger.info("Punto %s al dia", key)
                 return
@@ -104,14 +115,14 @@ class ChamanMeteoWorker:
                 latest_available,
                 start + timedelta(days=BACKFILL_DAYS_PER_RUN - 1),
             )
-            self._import_range(point, coverage, start, end)
+            self._import_range(point, start, end)
         finally:
             try:
                 lock.release()
             except redis.exceptions.LockError:
                 logger.warning("El lease Redis de %s vencio antes de finalizar", key)
 
-    def _import_range(self, point: dict, coverage: dict, start: date, end: date):
+    def _import_range(self, point: dict, start: date, end: date):
         key = point["key"]
         job_key = f"{key}:{start.isoformat()}:{end.isoformat()}:{SOURCE_VERSION}"
         job = {
@@ -138,14 +149,29 @@ class ChamanMeteoWorker:
             )
             job.update(progressPct=55, recordsDownloaded=len(raw))
             self._post("jobs/upsert", job)
-            derived = [derive_hourly(record, CALCULATION_VERSION) for record in raw]
-            daily = aggregate_daily(
-                derived, point.get("timezone") or "UTC", CALCULATION_VERSION
-            )
+            derived = [
+                derive_hourly(
+                    record,
+                    CALCULATION_VERSION,
+                    NEGATIVE_PRECIPITATION_TOLERANCE_MM,
+                )
+                for record in raw
+            ]
             for chunk in self._chunks(raw, 500):
                 self._post("hourly/raw/upsert-many", chunk)
             for chunk in self._chunks(derived, 500):
                 self._post("hourly/derived/upsert-many", chunk)
+            daily = []
+            window = daily_utc_window(
+                derived, point.get("timezone") or "UTC"
+            )
+            if window:
+                persisted = self._hourly_range(key, window[0], window[1])
+                daily = aggregate_daily(
+                    persisted,
+                    point.get("timezone") or "UTC",
+                    CALCULATION_VERSION,
+                )
             for chunk in self._chunks(daily, 200):
                 self._post("daily/upsert-many", chunk)
             finished = datetime.now(timezone.utc).isoformat()
@@ -171,12 +197,50 @@ class ChamanMeteoWorker:
             self._post("jobs/upsert", job)
             logger.error("Punto %s fallo: %s", key, safe_error)
 
-    def _next_start(self, coverage: dict) -> date:
+    def _next_start(self, coverage: dict, point: dict) -> date:
         last = coverage.get("hourlyRawTo")
         if not last:
-            return date.fromisoformat(HISTORICAL_START)
+            return self._historical_start(point)
         parsed = datetime.fromisoformat(str(last).replace("Z", "+00:00"))
         return (parsed + timedelta(hours=1)).date()
+
+    def _historical_start(self, point: dict) -> date:
+        value = str(point.get("historicalStart") or HISTORICAL_START)
+        try:
+            parsed = date.fromisoformat(value)
+        except ValueError as error:
+            raise RuntimeError(
+                f"historicalStart invalido para {point.get('key', 'punto')}"
+            ) from error
+        if parsed < date(1950, 1, 2) or parsed > date.today():
+            raise RuntimeError(
+                f"historicalStart fuera de rango para {point.get('key', 'punto')}"
+            )
+        return parsed
+
+    def _hourly_range(
+        self, grid_point_key: str, from_time: str, to_exclusive: str
+    ) -> list[dict]:
+        records = []
+        offset = 0
+        while True:
+            page = self._get(
+                "hourly",
+                params={
+                    "gridPointKey": grid_point_key,
+                    "calculationVersion": CALCULATION_VERSION,
+                    "from": from_time,
+                    "toExclusive": to_exclusive,
+                    "limit": 500,
+                    "offset": offset,
+                },
+            )
+            batch = page.get("datos", [])
+            records.extend(batch)
+            total = int(page.get("total", len(records)))
+            if not batch or len(records) >= total:
+                return records
+            offset += len(batch)
 
     def _latest_available_date(self) -> date:
         try:

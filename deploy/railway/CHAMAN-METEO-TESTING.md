@@ -32,6 +32,7 @@ CHAMAN_METEO_IMPORT_ENABLED=false
 CHAMAN_METEO_CDS_CONFIGURED=false
 CHAMAN_METEO_HISTORICAL_START=2020-01-01
 CHAMAN_METEO_CALCULATION_VERSION=chaman-meteo-agro-v1
+CHAMAN_METEO_NEGATIVE_PRECIPITATION_TOLERANCE_MM=0.001
 ```
 
 En el worker privado `sdc-meteo-worker`:
@@ -43,6 +44,7 @@ CDS_API_URL=https://cds.climate.copernicus.eu/api
 CDS_API_KEY=<secreto nuevo de Copernicus>
 CHAMAN_METEO_HISTORICAL_START=2020-01-01
 CHAMAN_METEO_CALCULATION_VERSION=chaman-meteo-agro-v1
+CHAMAN_METEO_NEGATIVE_PRECIPITATION_TOLERANCE_MM=0.001
 ```
 
 La clave CDS se carga **únicamente** en el worker como variable secreta; nunca

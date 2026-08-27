@@ -115,6 +115,7 @@ export interface IChamanMeteoDaily {
   timezone: string;
   calculationVersion: string;
   hoursAvailable: number;
+  hoursExpected: number;
   values: IChamanMeteoDailyValues;
   qualityFlags: string[];
   calculatedAt: string;

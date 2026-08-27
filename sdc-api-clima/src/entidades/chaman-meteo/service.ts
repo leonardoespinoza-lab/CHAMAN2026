@@ -72,6 +72,7 @@ export class ChamanMeteoService {
       gridPointKey,
       this.number(limit, 48, 1, 500),
       this.number(offset, 0, 0, 1_000_000),
+      CHAMAN_METEO_CALCULATION_VERSION,
     );
   }
 
@@ -80,6 +81,7 @@ export class ChamanMeteoService {
       gridPointKey,
       this.number(limit, 30, 1, 500),
       this.number(offset, 0, 0, 1_000_000),
+      CHAMAN_METEO_CALCULATION_VERSION,
     );
   }
 

@@ -31,17 +31,38 @@ export class ChamanMeteoService {
     );
   }
 
-  hourly(gridPointKey?: string, limit?: string, offset?: string) {
+  hourly(
+    gridPointKey?: string,
+    from?: string,
+    toExclusive?: string,
+    calculationVersion?: string,
+    limit?: string,
+    offset?: string,
+  ) {
+    const fromDate = this.cleanDate(from, 'from');
+    const toDate = this.cleanDate(toExclusive, 'toExclusive');
+    if (fromDate && toDate && fromDate >= toDate) {
+      throw new BadRequestException('from debe ser anterior a toExclusive.');
+    }
     return this.repository.hourlyPage(
       this.cleanKey(gridPointKey),
+      fromDate,
+      toDate,
+      this.cleanKey(calculationVersion),
       this.bounded(limit, 48, 1, 500),
       this.bounded(offset, 0, 0, 1_000_000),
     );
   }
 
-  daily(gridPointKey?: string, limit?: string, offset?: string) {
+  daily(
+    gridPointKey?: string,
+    calculationVersion?: string,
+    limit?: string,
+    offset?: string,
+  ) {
     return this.repository.dailyPage(
       this.cleanKey(gridPointKey),
+      this.cleanKey(calculationVersion),
       this.bounded(limit, 30, 1, 500),
       this.bounded(offset, 0, 0, 1_000_000),
     );
@@ -57,7 +78,8 @@ export class ChamanMeteoService {
     if (
       !data?.key ||
       !Number.isFinite(data.latitude) ||
-      !Number.isFinite(data.longitude)
+      !Number.isFinite(data.longitude) ||
+      !this.validHistoricalStart(data.historicalStart)
     ) {
       throw new BadRequestException('Punto meteorologico incompleto.');
     }
@@ -112,5 +134,34 @@ export class ChamanMeteoService {
   private cleanKey(value?: string): string | undefined {
     const key = String(value || '').trim();
     return key || undefined;
+  }
+
+  private cleanDate(
+    value: string | undefined,
+    field: string,
+  ): Date | undefined {
+    const text = String(value || '').trim();
+    if (!text) return undefined;
+    const parsed = new Date(text);
+    if (!Number.isFinite(parsed.getTime())) {
+      throw new BadRequestException(`${field} debe ser una fecha ISO valida.`);
+    }
+    return parsed;
+  }
+
+  private validHistoricalStart(value: string | undefined): boolean {
+    const text = String(value || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+    const parsed = new Date(`${text}T00:00:00.000Z`);
+    if (
+      !Number.isFinite(parsed.getTime()) ||
+      parsed.toISOString().slice(0, 10) !== text
+    ) {
+      return false;
+    }
+    const minimum = new Date('1950-01-02T00:00:00.000Z');
+    const tomorrow = new Date();
+    tomorrow.setUTCHours(24, 0, 0, 0);
+    return parsed >= minimum && parsed < tomorrow;
   }
 }
