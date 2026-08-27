@@ -69,6 +69,7 @@ class ChamanMeteoWorker:
         self.cds = CdsTimeSeriesClient(CDS_API_URL, CDS_API_KEY, DOWNLOAD_DIR)
         self.redis.ping()
         self._seed_configured_points()
+        STATE.healthy = True
         STATE.ready = True
         logger.info(
             "Worker listo: CDS configurado, importacion habilitada, secreto protegido"
@@ -250,8 +251,13 @@ def main():
     try:
         worker.initialize()
     except Exception as error:
-        STATE.last_error = redact_secret(error)
-        logger.error("Worker no iniciado: %s", STATE.last_error)
+        if not CHAMAN_METEO_ENABLED or not CHAMAN_METEO_IMPORT_ENABLED:
+            STATE.healthy = True
+            STATE.last_error = None
+            logger.info("Worker en espera: importador desactivado por feature flags")
+        else:
+            STATE.last_error = redact_secret(error)
+            logger.error("Worker no iniciado: %s", STATE.last_error)
         while not RUN_ONCE:
             time.sleep(60)
         return

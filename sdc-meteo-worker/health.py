@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 class HealthState:
     def __init__(self):
+        self.healthy = False
         self.ready = False
         self.last_run = None
         self.last_error = None
@@ -19,10 +20,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
             return
-        status = 200 if STATE.ready else 503
+        status = 200 if STATE.healthy else 503
         payload = json.dumps(
             {
                 "service": "sdc-meteo-worker",
+                "healthy": STATE.healthy,
                 "ready": STATE.ready,
                 "lastRun": STATE.last_run,
                 "lastError": STATE.last_error,
