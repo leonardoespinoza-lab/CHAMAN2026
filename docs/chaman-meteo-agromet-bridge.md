@@ -174,8 +174,10 @@ Siembras candidatas observadas para mapear primero a lotes elegibles
 - No se crean automaticamente puntos ni bindings; una asociación geografica
   erronea debe seguir requiriendo revision humana.
 - No se incluye un comando de reproceso masivo ni se activa la allowlist viva.
-- No se implementa en esta rama la exportacion/restauracion de snapshots por
-  siembra.
+- La exportacion/restauracion por siembra existe como herramienta manual y
+  fail-closed para Testing (`scripts/era5-pilot-snapshot.js`); no se ejecuta
+  automaticamente ni habilita un reproceso.
 - El puente inicial aporta diarios; el historico horario ERA5 queda fuera hasta
   validar comparaciones contra estaciones y sensores.
-- No hay merge, push ni despliegue desde esta rama.
+- Publicar esta rama para CI no activa el puente: no hay merge ni despliegue y
+  los flags siguen apagados hasta el piloto autorizado.
