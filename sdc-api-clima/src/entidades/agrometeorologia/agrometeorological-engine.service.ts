@@ -47,6 +47,10 @@ import {
 import { AgrometeorologiaRepository } from './repository';
 import { SensorWeatherOverlayService } from './sensor-weather-overlay.service';
 import { WeatherIngestionService } from './weather-ingestion.service';
+import {
+  observationForChamanMeteoBridgeState,
+  recordUsesChamanMeteo,
+} from './chaman-meteo-agromet-bridge.service';
 
 const INDICATOR_PERSIST_BATCH_SIZE = 100;
 const LEGACY_AGROMET_ENGINE_VERSION = 'agromet-1.1.1';
@@ -81,7 +85,10 @@ const ANNUAL_CHRONO_STAGE_LABELS: Record<string, string[]> = {
     'Madurez Fisiologica',
   ],
 };
-import { AGROMETEO_FORECAST_MAX_AGE_HOURS } from '../../env';
+import {
+  AGROMETEO_FORECAST_MAX_AGE_HOURS,
+  CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
+} from '../../env';
 
 interface ISoilProfile {
   capacityMm?: number;
@@ -1558,6 +1565,7 @@ export class AgrometeorologicalEngineService {
     from?: string,
     to?: string,
   ): Promise<IRespuestaAgrometeorologiaSiembra> {
+    const runtimeWarnings: string[] = [];
     const filter: Record<string, unknown> = {
       idSiembra,
       versionCalculo: AGROMET_ENGINE_VERSION,
@@ -1583,9 +1591,18 @@ export class AgrometeorologicalEngineService {
         idSiembra,
         AGROMET_ENGINE_VERSION,
       );
-      indicators = active?.generationId
-        ? { datos: active.data || [] }
-        : { datos: [] };
+      const activeData = active?.generationId ? active.data || [] : [];
+      if (
+        !CHAMAN_METEO_AGROMET_BRIDGE_ENABLED &&
+        activeData.some(recordUsesChamanMeteo)
+      ) {
+        runtimeWarnings.push(
+          'La generacion Chaman-Meteo persistida fue excluida por el kill switch; no influye mientras el puente esta apagado.',
+        );
+        indicators = { datos: [] };
+      } else {
+        indicators = { datos: activeData };
+      }
     } catch (error) {
       if (error?.message !== 'active-generation-repository-unavailable') {
         this.logger.warn(
@@ -1604,8 +1621,19 @@ export class AgrometeorologicalEngineService {
         sort: 'fecha',
         limit: 0,
       });
-      if ((legacyIndicators.datos || []).length) {
-        indicators = legacyIndicators;
+      const rawLegacyData = legacyIndicators.datos || [];
+      const legacyData =
+        !CHAMAN_METEO_AGROMET_BRIDGE_ENABLED &&
+        rawLegacyData.some(recordUsesChamanMeteo)
+          ? []
+          : rawLegacyData;
+      if (rawLegacyData.length && !legacyData.length) {
+        runtimeWarnings.push(
+          'La serie estable anterior tambien declara procedencia Chaman-Meteo y fue excluida completa por seguridad.',
+        );
+      }
+      if (legacyData.length) {
+        indicators = { datos: legacyData };
         resolvedCalculationVersion = LEGACY_AGROMET_ENGINE_VERSION;
       }
     }
@@ -1632,6 +1660,7 @@ export class AgrometeorologicalEngineService {
         },
         series: [],
         warnings: [
+          ...runtimeWarnings,
           'El motor automatico todavia no genero resultados para esta siembra.',
         ],
         calculationVersion: AGROMET_ENGINE_VERSION,
@@ -1952,6 +1981,7 @@ export class AgrometeorologicalEngineService {
       series,
       warnings: [
         ...new Set([
+          ...runtimeWarnings,
           ...rows.flatMap((item) => item.advertencias),
           ...(resolvedCalculationVersion !== AGROMET_ENGINE_VERSION
             ? [
@@ -4413,7 +4443,7 @@ export class AgrometeorologicalEngineService {
       return undefined;
     }
 
-    return {
+    const normalized: IObservacionMeteorologicaNormalizada = {
       ...resolved,
       valores: resolved.valores,
       fuentePorVariable:
@@ -4430,6 +4460,10 @@ export class AgrometeorologicalEngineService {
         ? resolved.banderasCalidad
         : [],
     };
+    return observationForChamanMeteoBridgeState(
+      normalized,
+      CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
+    );
   }
 
   private safeWeatherContextKey(value: string): string {

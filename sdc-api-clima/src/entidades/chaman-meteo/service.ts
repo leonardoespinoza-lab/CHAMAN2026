@@ -10,7 +10,6 @@ import {
 import {
   CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
   CHAMAN_METEO_AGROMET_LOT_ALLOWLIST,
-  CHAMAN_METEO_AGROMET_SOWING_ALLOWLIST,
   CHAMAN_METEO_CALCULATION_VERSION,
   CHAMAN_METEO_CDS_CONFIGURED,
   CHAMAN_METEO_ENABLED,
@@ -78,7 +77,7 @@ export class ChamanMeteoService {
       operationalSourceUnchanged: !CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
       agrometBridgeEnabled: CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
       agrometPilotLots: CHAMAN_METEO_AGROMET_LOT_ALLOWLIST.length,
-      agrometPilotSowings: CHAMAN_METEO_AGROMET_SOWING_ALLOWLIST.length,
+      agrometPilotSowings: 0,
       configurationValid,
       lastError:
         CHAMAN_METEO_RUNTIME_CONFIGURATION_ERROR ||

@@ -187,8 +187,10 @@ versión antigua.
 La creación automática de un punto a partir de las coordenadas de una siembra
 sigue fuera de alcance. Existe un primer puente diario hacia el motor
 agrometeorológico, pero queda apagado por defecto, exige binding exacto y
-allowlist piloto y sólo completa huecos anteriores a la ventana reciente de
-Open-Meteo. Ver `docs/chaman-meteo-agromet-bridge.md`.
+allowlist piloto por lote con una única siembra activa y sólo completa huecos
+atmosféricos anteriores a la ventana reciente de Open-Meteo. Al apagarlo, sus
+variables y generaciones persistidas quedan excluidas de cálculos y respuestas.
+Ver `docs/chaman-meteo-agromet-bridge.md`.
 
 ## Panel Admin
 
@@ -218,7 +220,6 @@ CHAMAN_METEO_CALCULATION_VERSION=chaman-meteo-agro-v2
 CHAMAN_METEO_SOURCE_VERSION=era5-land-timeseries-19var-v2
 CHAMAN_METEO_AGROMET_BRIDGE_ENABLED=false
 CHAMAN_METEO_AGROMET_LOT_ALLOWLIST=
-CHAMAN_METEO_AGROMET_SOWING_ALLOWLIST=
 ```
 
 Exclusivas del worker:

@@ -3219,6 +3219,64 @@ describe('AgrometeorologicalEngineService', () => {
     expect(getIndicadores).not.toHaveBeenCalled();
   });
 
+  it('kill switch excluye una generacion ERA5 persistida y recupera la estable anterior', async () => {
+    const base = {
+      idSiembra: '64b000000000000000000001',
+      idLote: '64b000000000000000000002',
+      idEstablecimiento: '64b000000000000000000003',
+      fecha: '2026-07-01',
+      metricas: {
+        temperatureMinC: 4,
+        temperatureMeanC: 10,
+        temperatureMaxC: 17,
+        gddAccumulated: 10,
+      },
+      banderasCalidad: [],
+      advertencias: [],
+      completitudPct: 100,
+      esPronostico: false,
+      calculadoEn: '2026-07-01T18:00:00.000Z',
+      versionParametros: 'test-v1',
+    };
+    const getIndicadores = jest.fn().mockResolvedValue({
+      datos: [
+        {
+          ...base,
+          fuente: 'open_meteo',
+          fuentePorVariable: { temperatureMeanC: 'open_meteo' },
+        },
+      ],
+    });
+    const service = new AgrometeorologicalEngineService(
+      {
+        getActiveIndicadoresGeneration: jest.fn().mockResolvedValue({
+          generationId: 'generation-era5',
+          data: [
+            {
+              ...base,
+              fuente: 'chaman_meteo',
+              fuentePorVariable: { temperatureMeanC: 'chaman_meteo' },
+              banderasCalidad: ['chaman_meteo_historical_gap_fill'],
+            },
+          ],
+        }),
+        getIndicadores,
+        getObservaciones: jest.fn().mockResolvedValue({ datos: [] }),
+      } as any,
+      {} as any,
+    );
+
+    const response = await service.getResponse('64b000000000000000000001');
+
+    expect(response.series).toHaveLength(1);
+    expect(response.series[0].source).toBe('open_meteo');
+    expect(response.calculationVersion).toBe('agromet-1.1.1');
+    expect(response.warnings.join(' ')).toContain(
+      'fue excluida por el kill switch',
+    );
+    expect(getIndicadores).toHaveBeenCalledTimes(1);
+  });
+
   it('conserva la version estable anterior durante el cutover sin mezclar versiones', async () => {
     const getIndicadores = jest.fn().mockResolvedValueOnce({
       datos: [

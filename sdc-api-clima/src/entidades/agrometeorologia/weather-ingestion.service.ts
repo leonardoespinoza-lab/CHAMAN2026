@@ -7,12 +7,16 @@ import {
 import {
   AGROMETEO_CHUNK_DAYS,
   AGROMETEO_FORECAST_DAYS,
+  CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
   FIELDCLIMATE_MAX_DATA_AGE_HOURS,
 } from '../../env';
 import { ClimaService } from '../clima/service';
 import { AgrometeorologiaRepository } from './repository';
 import { WeatherSourceResolverService } from './weather-source-resolver.service';
-import { ChamanMeteoAgrometBridgeService } from './chaman-meteo-agromet-bridge.service';
+import {
+  ChamanMeteoAgrometBridgeService,
+  observationForChamanMeteoBridgeState,
+} from './chaman-meteo-agromet-bridge.service';
 
 const DEFAULT_OPERATIONAL_TIMEZONE = 'America/Argentina/Buenos_Aires';
 
@@ -431,16 +435,42 @@ export class WeatherIngestionService {
     observation: IObservacionMeteorologicaNormalizada | undefined,
     idLote?: string,
   ): IObservacionMeteorologicaNormalizada | undefined {
-    if (!observation || !idLote) return observation;
+    if (!observation) return undefined;
+    if (!idLote) {
+      return observationForChamanMeteoBridgeState(
+        observation,
+        CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
+      );
+    }
     const context = observation.contextosLote?.[this.safeContextKey(idLote)];
     if (!context) {
-      return observation.idLote === idLote ? observation : undefined;
+      return observation.idLote === idLote
+        ? observationForChamanMeteoBridgeState(
+            observation,
+            CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
+          )
+        : undefined;
     }
-    return {
-      ...observation,
-      ...context,
-      contextosLote: observation.contextosLote,
-    };
+    return observationForChamanMeteoBridgeState(
+      {
+        ...observation,
+        ...context,
+        valores: {
+          ...(observation.valores || {}),
+          ...(context.valores || {}),
+        },
+        fuentePorVariable: {
+          ...(observation.fuentePorVariable || {}),
+          ...(context.fuentePorVariable || {}),
+        },
+        estadoPorVariable: {
+          ...(observation.estadoPorVariable || {}),
+          ...(context.estadoPorVariable || {}),
+        },
+        contextosLote: observation.contextosLote,
+      },
+      CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
+    );
   }
 
   private safeContextKey(value: string): string {

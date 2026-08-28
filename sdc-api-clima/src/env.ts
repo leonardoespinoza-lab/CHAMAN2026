@@ -391,8 +391,10 @@ export function resolveIdentifierAllowlist(value?: string): string[] {
 
 /**
  * Puente operativo v1: queda apagado aunque Chaman-Meteo administrativo este
- * activo. Ademas exige al menos un lote o una siembra piloto explicitamente
- * autorizada, por lo que `true` sin allowlist tambien falla cerrado.
+ * activo. Solo admite lotes piloto explicitamente autorizados. Una variable
+ * heredada de allowlist por siembra se ignora deliberadamente: autorizar una
+ * siembra dentro de una descarga agrupada podia afectar otras siembras del
+ * mismo lote.
  */
 export const CHAMAN_METEO_AGROMET_BRIDGE_ENABLED =
   CHAMAN_METEO_ENABLED &&
@@ -400,9 +402,6 @@ export const CHAMAN_METEO_AGROMET_BRIDGE_ENABLED =
   process.env.CHAMAN_METEO_AGROMET_BRIDGE_ENABLED === 'true';
 export const CHAMAN_METEO_AGROMET_LOT_ALLOWLIST = resolveIdentifierAllowlist(
   process.env.CHAMAN_METEO_AGROMET_LOT_ALLOWLIST,
-);
-export const CHAMAN_METEO_AGROMET_SOWING_ALLOWLIST = resolveIdentifierAllowlist(
-  process.env.CHAMAN_METEO_AGROMET_SOWING_ALLOWLIST,
 );
 /** Hoy y los cuatro dias previos siguen exclusivamente en Open-Meteo. */
 export const CHAMAN_METEO_AGROMET_RECENT_OPEN_METEO_DAYS = 5;

@@ -11,12 +11,15 @@ El puente actua solamente cuando se cumplen todas estas condiciones:
 1. `CHAMAN_METEO_ENABLED=true`;
 2. el contrato/versionado v2 de Chaman-Meteo es valido;
 3. `CHAMAN_METEO_AGROMET_BRIDGE_ENABLED=true`;
-4. el lote o una siembra del contexto esta en una allowlist explicita;
+4. el lote esta en una allowlist explicita y el contexto contiene exactamente
+   una siembra activa;
 5. existe un `weather_location_binding` activo para ese lote y su punto
    `weather_grid_points` exacto tambien esta activo;
 6. el centroide vigente del lote no difiere mas de 1 km del registrado en el
    binding;
-7. el diario ERA5-Land tiene todas las horas esperadas (23, 24 o 25 segun la
+7. las coordenadas del binding, las de la grilla, `distanceKm`, proveedor,
+   dataset y timezone son autoconsistentes; la grilla no queda a mas de 15 km;
+8. el diario ERA5-Land tiene todas las horas esperadas (23, 24 o 25 segun la
    zona/fecha) y temperatura minima, media y maxima validas.
 
 Si falta cualquiera de estas condiciones, el puente falla cerrado y conserva
@@ -32,8 +35,13 @@ sensor de campo > central FieldClimate > Open-Meteo > Chaman-Meteo/ERA5-Land
 
 ERA5-Land completa exclusivamente valores diarios ausentes; nunca reemplaza
 un valor ya aportado por una fuente prioritaria. La union usa `fechaLocal` como
-clave, elimina duplicados diarios y persiste como maximo una observacion diaria
-por fecha/contexto.
+clave. Si `weather_daily` devuelve fechas duplicadas, paginacion incompleta o
+filas fuera del rango, el lote piloto se bloquea completo: no se elige una fila
+arbitrariamente ni se persiste el resultado ambiguo.
+
+El primer puente incorpora solamente variables atmosfericas. Temperatura y
+humedad de suelo ERA5 permanecen visibles en el panel historico, pero no se
+inyectan en el motor de lotes ni se rotulan como medicion de sonda.
 
 El rango se inicia en la fecha solicitada por el motor (para cultivos anuales,
 la siembra) y se limita al inicio historico configurado de Chaman-Meteo. Hoy y
@@ -54,11 +62,12 @@ calculo, binding verificado y calidad de reanalisis.
 ```text
 CHAMAN_METEO_AGROMET_BRIDGE_ENABLED=false
 CHAMAN_METEO_AGROMET_LOT_ALLOWLIST=
-CHAMAN_METEO_AGROMET_SOWING_ALLOWLIST=
 ```
 
-Las allowlists son identificadores separados por coma. Activar el flag sin una
-allowlist no habilita ningun lote ni siembra.
+La allowlist contiene identificadores de lote separados por coma. Activar el
+flag sin ella no habilita ningun lote. `CHAMAN_METEO_AGROMET_SOWING_ALLOWLIST`
+queda deliberadamente sin efecto: una autorizacion por siembra no puede abrir
+un contexto meteorologico compartido con otras siembras.
 
 ## Migraciones, lecturas y escrituras
 
@@ -73,6 +82,14 @@ una generacion en `indicadores_agrometeorologicos` e
 `indicadores_agrometeorologicos_generaciones`; no es una migracion, pero si es
 una escritura productiva que exige el snapshot previo por siembra.
 
+El apagado es efectivo aunque ya existan documentos: antes de calcular o
+responder, API Clima retira las variables cuya fuente sea `chaman_meteo`; una
+fila sin trazabilidad por variable se descarta completa. Una generacion activa
+que uso ERA5 tampoco se expone con el puente apagado: se recupera la serie
+legacy estable si existe y, si no existe, se responde `sin_datos`. Mongo conserva
+los documentos para auditoria y una reactivacion controlada; el kill switch no
+borra evidencia.
+
 ## Foto read-only de produccion (2026-08-28)
 
 - 86 siembras activas auditadas.
@@ -81,7 +98,8 @@ una escritura productiva que exige el snapshot previo por siembra.
 - En el mismo control, 24 trigos y 8 cebadas ya usan `open_meteo`.
 - El plan vigente de Mongo en Railway no ofrece backup nativo/PITR.
 
-Allowlist candidata observada (manifiesto humano, **no configuracion activa**):
+Siembras candidatas observadas para mapear primero a lotes elegibles
+(manifiesto humano, **no configuracion activa**):
 
 ```text
 6a7de0361447da860d8106cc
@@ -115,11 +133,13 @@ Allowlist candidata observada (manifiesto humano, **no configuracion activa**):
 3. Exportar un snapshot recuperable, por siembra, de observaciones,
    indicadores/generacion activa y predicciones antes del reproceso. La falta
    de PITR vuelve este paso obligatorio.
-4. Habilitar una unica siembra y ejecutar un reproceso manual controlado.
+4. Elegir un lote que tenga una unica siembra activa, habilitar solamente ese
+   lote y ejecutar un reproceso manual controlado.
 5. Confirmar continuidad diaria, temperaturas finitas, GDD completo, fuente
    por variable y ausencia de reemplazos de sensor/FieldClimate/Open-Meteo.
 6. Repetir por lotes pequenos; nunca cargar las 21 de una vez.
-7. Ante cualquier desvio, apagar el flag. No borrar RAW ni diarios ERA5.
+7. Ante cualquier desvio, apagar el flag. Las observaciones y generaciones
+   ERA5 dejan de influir de inmediato; no borrar RAW ni diarios ERA5.
 
 ## Criterios de aceptacion para las 21
 

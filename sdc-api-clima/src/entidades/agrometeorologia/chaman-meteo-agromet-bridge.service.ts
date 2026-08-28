@@ -14,7 +14,6 @@ import {
   CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
   CHAMAN_METEO_AGROMET_LOT_ALLOWLIST,
   CHAMAN_METEO_AGROMET_RECENT_OPEN_METEO_DAYS,
-  CHAMAN_METEO_AGROMET_SOWING_ALLOWLIST,
   CHAMAN_METEO_CALCULATION_VERSION,
   CHAMAN_METEO_HISTORICAL_START,
   CHAMAN_METEO_SOURCE_VERSION,
@@ -55,12 +54,13 @@ const DAILY_SCALARS: ReadonlyArray<
   ['et0Mm', 'et0Mm', 'et0'],
 ];
 
-const SOIL_DEPTHS = ['0-7', '7-28', '28-100', '100-255'] as const;
+const MAX_LOT_BINDING_DRIFT_KM = 1;
+const MAX_GRID_BINDING_DISTANCE_KM = 15;
+const BINDING_DISTANCE_TOLERANCE_KM = 0.1;
 
 export interface IChamanMeteoAgrometBridgeConfig {
   enabled: boolean;
   lotAllowlist: string[];
-  sowingAllowlist: string[];
   historicalStart: string;
   recentOpenMeteoDays: number;
   calculationVersion: string;
@@ -89,7 +89,6 @@ export const DEFAULT_CHAMAN_METEO_AGROMET_BRIDGE_CONFIG: IChamanMeteoAgrometBrid
   {
     enabled: CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
     lotAllowlist: CHAMAN_METEO_AGROMET_LOT_ALLOWLIST,
-    sowingAllowlist: CHAMAN_METEO_AGROMET_SOWING_ALLOWLIST,
     historicalStart: CHAMAN_METEO_HISTORICAL_START,
     recentOpenMeteoDays: CHAMAN_METEO_AGROMET_RECENT_OPEN_METEO_DAYS,
     calculationVersion: CHAMAN_METEO_CALCULATION_VERSION,
@@ -101,12 +100,10 @@ export function isChamanMeteoAgrometPilot(
   idLote?: string,
   idSiembras: string[] = [],
 ): boolean {
-  if (!config.enabled) return false;
+  if (!config.enabled || !idLote) return false;
   const lots = new Set(config.lotAllowlist.map(normalizeIdentifier));
-  const sowings = new Set(config.sowingAllowlist.map(normalizeIdentifier));
-  if (!lots.size && !sowings.size) return false;
-  if (idLote && lots.has(normalizeIdentifier(idLote))) return true;
-  return idSiembras.some((id) => sowings.has(normalizeIdentifier(id)));
+  const sowings = new Set(idSiembras.map(normalizeIdentifier).filter(Boolean));
+  return lots.has(normalizeIdentifier(idLote)) && sowings.size === 1;
 }
 
 /**
@@ -158,26 +155,23 @@ export class ChamanMeteoAgrometBridgeService {
     input: IChamanMeteoAgrometBridgeInput,
     config: IChamanMeteoAgrometBridgeConfig = DEFAULT_CHAMAN_METEO_AGROMET_BRIDGE_CONFIG,
   ): Promise<IChamanMeteoAgrometBridgeResult> {
-    if (
-      input.forecast ||
-      !input.idLote ||
-      !isChamanMeteoAgrometPilot(config, input.idLote, input.idSiembras)
-    ) {
+    if (input.forecast || !input.idLote || !config.enabled) {
       return { observations: input.observations, warnings: [], used: false };
     }
-
-    const today = this.dateOnly(input.today || new Date().toISOString());
-    const recentWindowStart = this.addDays(
-      today,
-      -(Math.max(1, config.recentOpenMeteoDays) - 1),
-    );
-    const from = [this.dateOnly(input.desde), config.historicalStart]
-      .sort()
-      .reverse()[0];
-    const requestedToExclusive = this.addDays(this.dateOnly(input.hasta), 1);
-    const toExclusive = [requestedToExclusive, recentWindowStart].sort()[0];
-    if (from >= toExclusive) {
+    const lotAllowed = new Set(
+      config.lotAllowlist.map(normalizeIdentifier).filter(Boolean),
+    ).has(normalizeIdentifier(input.idLote));
+    if (!lotAllowed) {
       return { observations: input.observations, warnings: [], used: false };
+    }
+    if (!isChamanMeteoAgrometPilot(config, input.idLote, input.idSiembras)) {
+      return {
+        observations: input.observations,
+        warnings: [
+          'Chaman-Meteo omitio el lote piloto: el contexto debe contener exactamente una siembra activa y explicita.',
+        ],
+        used: false,
+      };
     }
 
     try {
@@ -201,6 +195,46 @@ export class ChamanMeteoAgrometBridgeService {
         };
       }
 
+      const requestedFrom = this.dateOnly(input.desde);
+      const requestedTo = this.dateOnly(input.hasta);
+      const today = input.today
+        ? this.dateOnly(input.today)
+        : this.localDateInTimezone(
+            new Date(),
+            resolved.gridPoint.timezone as string,
+          );
+      if (
+        !today ||
+        !this.isCalendarDate(today) ||
+        !this.isCalendarDate(requestedFrom) ||
+        !this.isCalendarDate(requestedTo) ||
+        !this.isCalendarDate(config.historicalStart)
+      ) {
+        return {
+          observations: input.observations,
+          warnings: [
+            'Chaman-Meteo bloqueo el relleno: el rango o la fecha local del punto no es valida.',
+          ],
+          used: false,
+        };
+      }
+      const recentWindowStart = this.addDays(
+        today,
+        -(Math.max(1, config.recentOpenMeteoDays) - 1),
+      );
+      const from = [
+        requestedFrom,
+        config.historicalStart,
+        resolved.gridPoint.historicalStart,
+      ]
+        .sort()
+        .reverse()[0];
+      const requestedToExclusive = this.addDays(requestedTo, 1);
+      const toExclusive = [requestedToExclusive, recentWindowStart].sort()[0];
+      if (from >= toExclusive) {
+        return { observations: input.observations, warnings: [], used: false };
+      }
+
       const page = await this.repository.daily(
         resolved.gridPoint.key,
         500,
@@ -210,6 +244,50 @@ export class ChamanMeteoAgrometBridgeService {
         toExclusive,
       );
       const rows = page?.datos || [];
+      const duplicateDates = this.duplicateDailyDates(rows);
+      if (duplicateDates.length) {
+        return {
+          observations: input.observations,
+          warnings: [
+            `Chaman-Meteo bloqueo el relleno: weather_daily devolvio fechas duplicadas (${duplicateDates.join(', ')}).`,
+          ],
+          used: false,
+        };
+      }
+      if (Number(page?.total) !== rows.length) {
+        return {
+          observations: input.observations,
+          warnings: [
+            'Chaman-Meteo bloqueo el relleno: la pagina diaria no representa la totalidad del rango solicitado.',
+          ],
+          used: false,
+        };
+      }
+      if (rows.some((row) => row.date < from || row.date >= toExclusive)) {
+        return {
+          observations: input.observations,
+          warnings: [
+            'Chaman-Meteo bloqueo el relleno: weather_daily devolvio fechas fuera del rango solicitado.',
+          ],
+          used: false,
+        };
+      }
+      if (
+        rows.some(
+          (row) =>
+            row.gridPointKey !== resolved.gridPoint.key ||
+            row.calculationVersion !== config.calculationVersion ||
+            row.timezone !== resolved.gridPoint.timezone,
+        )
+      ) {
+        return {
+          observations: input.observations,
+          warnings: [
+            'Chaman-Meteo bloqueo el relleno: un diario no coincide con la grilla, version o zona horaria del binding.',
+          ],
+          used: false,
+        };
+      }
       const normalized = rows
         .map((row) =>
           this.normalizeDaily(
@@ -245,6 +323,10 @@ export class ChamanMeteoAgrometBridgeService {
         warnings.push(
           'Chaman-Meteo devolvio dias sin cobertura horaria completa; no se usaron como fallback termico.',
         );
+      } else if (normalized.length !== rows.length) {
+        warnings.push(
+          `Chaman-Meteo descarto ${rows.length - normalized.length} dia(s) por metadatos, zona horaria o cobertura invalidos.`,
+        );
       }
       if (used) {
         warnings.push(
@@ -274,6 +356,18 @@ export class ChamanMeteoAgrometBridgeService {
     resolved: IChamanMeteoResolvedLocationBinding,
     config: IChamanMeteoAgrometBridgeConfig,
   ): IObservacionMeteorologicaNormalizada | undefined {
+    const gridPoint = resolved.gridPoint;
+    if (
+      row.gridPointKey !== gridPoint.key ||
+      row.calculationVersion !== config.calculationVersion ||
+      !this.isCalendarDate(row.date) ||
+      row.date < config.historicalStart ||
+      row.timezone !== gridPoint.timezone ||
+      !this.isIanaTimezone(row.timezone) ||
+      !Number.isFinite(new Date(row.calculatedAt).getTime())
+    ) {
+      return undefined;
+    }
     const expected = Number(row.hoursExpected);
     const available = Number(row.hoursAvailable);
     const temperatureHours = Number(row.availableHoursByMetric?.temperature);
@@ -308,29 +402,6 @@ export class ChamanMeteoAgrometBridgeService {
       assign(target, row.values?.[source]);
     });
 
-    const soilTemperature = this.layerMap(
-      row.values?.soilTemperatureMeanC,
-      'soilTemperatureC',
-      row.availableHoursByMetric?.soilTemperature,
-      expected,
-    );
-    const soilMoisture = this.layerMap(
-      row.values?.soilWaterMeanM3M3,
-      'soilMoistureM3M3',
-      row.availableHoursByMetric?.soilWater,
-      expected,
-    );
-    if (soilTemperature) {
-      values.soilTemperatureC = soilTemperature;
-      sources.soilTemperatureC = 'chaman_meteo';
-      states.soilTemperatureC = 'estimated';
-    }
-    if (soilMoisture) {
-      values.soilMoistureM3M3 = soilMoisture;
-      sources.soilMoistureM3M3 = 'chaman_meteo';
-      states.soilMoistureM3M3 = 'estimated';
-    }
-
     if (
       !['temperatureMinC', 'temperatureMeanC', 'temperatureMaxC'].every((key) =>
         Number.isFinite((values as any)[key]),
@@ -339,12 +410,15 @@ export class ChamanMeteoAgrometBridgeService {
       return undefined;
     }
 
-    const gridPoint = resolved.gridPoint;
+    const timestamp = this.localNoonToUtc(row.date, row.timezone);
+    if (!timestamp) return undefined;
     const flags = [
       ...(row.qualityFlags || []),
       'chaman_meteo_historical_gap_fill',
       'chaman_meteo_grid_binding_verified',
       'chaman_meteo_reanalysis_estimated',
+      'chaman_meteo_daily_uniqueness_verified',
+      'chaman_meteo_atmospheric_only_v1',
       `chaman_meteo_provider_copernicus_cds`,
       `chaman_meteo_dataset_era5_land_timeseries`,
       `chaman_meteo_calculation_version:${config.calculationVersion}`,
@@ -354,7 +428,7 @@ export class ChamanMeteoAgrometBridgeService {
     return {
       idEstablecimiento,
       idLote,
-      timestamp: this.localNoonToUtc(row.date, row.timezone),
+      timestamp,
       fechaLocal: row.date,
       timezone: row.timezone,
       granularidad: 'daily',
@@ -392,32 +466,61 @@ export class ChamanMeteoAgrometBridgeService {
     ) {
       return 'El binding Chaman-Meteo no coincide de forma exacta con el lote y el punto activos.';
     }
+    const bindingCoordinates = {
+      lat: Number(resolved.binding.latitude),
+      lng: Number(resolved.binding.longitude),
+    };
+    const gridCoordinates = {
+      lat: Number(resolved.gridPoint.latitude),
+      lng: Number(resolved.gridPoint.longitude),
+    };
+    if (
+      !this.validCoordinates(coordinates) ||
+      !this.validCoordinates(bindingCoordinates) ||
+      !this.validCoordinates(gridCoordinates)
+    ) {
+      return 'El binding Chaman-Meteo contiene coordenadas invalidas.';
+    }
+    if (
+      resolved.gridPoint.provider !== 'copernicus-cds' ||
+      resolved.gridPoint.dataset !== 'reanalysis-era5-land-timeseries' ||
+      !['AR', 'UY', 'PY', 'BR', 'CL'].includes(
+        String(resolved.gridPoint.countryCode || ''),
+      ) ||
+      !this.isCalendarDate(resolved.gridPoint.historicalStart || '') ||
+      !this.isIanaTimezone(resolved.gridPoint.timezone || '')
+    ) {
+      return 'El punto Chaman-Meteo no coincide con el proveedor, dataset o timezone operativo esperado.';
+    }
     const driftKm = this.distanceKm(coordinates, {
-      lat: resolved.binding.latitude,
-      lng: resolved.binding.longitude,
+      lat: bindingCoordinates.lat,
+      lng: bindingCoordinates.lng,
     });
-    if (driftKm > 1) {
+    if (driftKm > MAX_LOT_BINDING_DRIFT_KM) {
       return `El centroide actual del lote difiere ${driftKm.toFixed(2)} km del binding Chaman-Meteo; se requiere revision antes de usarlo.`;
+    }
+    const calculatedDistanceKm = this.distanceKm(
+      bindingCoordinates,
+      gridCoordinates,
+    );
+    const declaredDistanceKm = Number(resolved.binding.distanceKm);
+    if (
+      !Number.isFinite(declaredDistanceKm) ||
+      declaredDistanceKm < 0 ||
+      declaredDistanceKm > MAX_GRID_BINDING_DISTANCE_KM ||
+      calculatedDistanceKm > MAX_GRID_BINDING_DISTANCE_KM ||
+      Math.abs(calculatedDistanceKm - declaredDistanceKm) >
+        BINDING_DISTANCE_TOLERANCE_KM
+    ) {
+      return 'La distancia declarada entre el binding y la grilla Chaman-Meteo no es valida o no coincide con sus coordenadas.';
     }
     return undefined;
   }
 
-  private layerMap(
-    layers: Array<number | null> | undefined,
-    variable: 'soilTemperatureC' | 'soilMoistureM3M3',
-    availability: number[] | undefined,
-    expected: number,
-  ): Record<string, number> | undefined {
-    const result: Record<string, number> = {};
-    SOIL_DEPTHS.forEach((depth, index) => {
-      if (Number(availability?.[index]) !== expected) return;
-      const value = validarVariableMeteorologica(variable, layers?.[index]);
-      if (value !== undefined) result[depth] = value;
-    });
-    return Object.keys(result).length ? result : undefined;
-  }
-
-  private localNoonToUtc(date: string, timezone: string): string {
+  private localNoonToUtc(date: string, timezone: string): string | undefined {
+    if (!this.isCalendarDate(date) || !this.isIanaTimezone(timezone)) {
+      return undefined;
+    }
     const naiveUtc = new Date(`${date}T12:00:00.000Z`);
     try {
       const formatter = new Intl.DateTimeFormat('en-US', {
@@ -447,10 +550,77 @@ export class ChamanMeteoAgrometBridgeService {
           candidate.getTime() + (naiveUtc.getTime() - representedAsUtc),
         );
       }
+      if (this.localDateInTimezone(candidate, timezone) !== date) {
+        return undefined;
+      }
       return candidate.toISOString();
     } catch {
-      return naiveUtc.toISOString();
+      return undefined;
     }
+  }
+
+  private localDateInTimezone(
+    date: Date,
+    timezone: string,
+  ): string | undefined {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(date);
+      const read = (type: Intl.DateTimeFormatPartTypes) =>
+        parts.find((part) => part.type === type)?.value;
+      const year = read('year');
+      const month = read('month');
+      const day = read('day');
+      return year && month && day ? `${year}-${month}-${day}` : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private isIanaTimezone(value: string): boolean {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: value }).format();
+      return Boolean(value);
+    } catch {
+      return false;
+    }
+  }
+
+  private isCalendarDate(value: string): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return (
+      Number.isFinite(parsed.getTime()) &&
+      parsed.toISOString().slice(0, 10) === value
+    );
+  }
+
+  private validCoordinates(value: ICoordenadas): boolean {
+    const lat = Number(value?.lat);
+    const lng = Number(value?.lng);
+    return (
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      lat >= -90 &&
+      lat <= 90 &&
+      lng >= -180 &&
+      lng <= 180
+    );
+  }
+
+  private duplicateDailyDates(rows: IChamanMeteoDaily[]): string[] {
+    const seen = new Set<string>();
+    const duplicates = new Set<string>();
+    rows.forEach((row) => {
+      const date = String(row?.date || '');
+      if (seen.has(date)) duplicates.add(date || 'sin-fecha');
+      seen.add(date);
+    });
+    return [...duplicates].sort();
   }
 
   private distanceKm(left: ICoordenadas, right: ICoordenadas): number {
@@ -577,4 +747,105 @@ function hasWeatherValue(value: unknown): boolean {
       (item) => typeof item === 'number' && Number.isFinite(item),
     ),
   );
+}
+
+export function isChamanMeteoSource(source: unknown): boolean {
+  return String(source || '').includes('chaman_meteo');
+}
+
+export function recordUsesChamanMeteo(record: {
+  fuente?: unknown;
+  fuentePorVariable?: Record<string, unknown>;
+  banderasCalidad?: string[];
+}): boolean {
+  return (
+    isChamanMeteoSource(record?.fuente) ||
+    Object.values(record?.fuentePorVariable || {}).some(isChamanMeteoSource) ||
+    (record?.banderasCalidad || []).some(
+      (flag) =>
+        String(flag).startsWith('chaman_meteo_') &&
+        flag !== 'chaman_meteo_disabled_source_removed',
+    )
+  );
+}
+
+/**
+ * Kill switch reversible: los documentos permanecen auditables en Mongo, pero
+ * al apagar el puente se retiran todas las variables cuya procedencia sea
+ * Chaman-Meteo antes de cualquier calculo o respuesta. Si una fila antigua no
+ * permite separar la procedencia con seguridad, se descarta completa.
+ */
+export function observationForChamanMeteoBridgeState(
+  observation: IObservacionMeteorologicaNormalizada,
+  enabled: boolean,
+): IObservacionMeteorologicaNormalizada | undefined {
+  if (enabled || !recordUsesChamanMeteo(observation)) return observation;
+
+  const values = { ...(observation.valores || {}) };
+  const sources = { ...(observation.fuentePorVariable || {}) };
+  const states = { ...(observation.estadoPorVariable || {}) };
+  const originalValueKeys = Object.keys(values).filter((key) =>
+    hasWeatherValue((values as any)[key]),
+  );
+  let removed = 0;
+  for (const key of originalValueKeys) {
+    const variableSource = (sources as any)[key];
+    const source =
+      variableSource ||
+      (isChamanMeteoSource(observation.fuente)
+        ? observation.fuente
+        : undefined);
+    if (!isChamanMeteoSource(source)) continue;
+    delete (values as any)[key];
+    delete (sources as any)[key];
+    delete (states as any)[key];
+    removed += 1;
+  }
+
+  // Un registro marcado como ERA5 pero sin procedencia por variable no puede
+  // separarse de manera segura. Fallar cerrado evita conservar un valor opaco.
+  if (!removed && recordUsesChamanMeteo(observation)) return undefined;
+  const remainingValueKeys = Object.keys(values).filter((key) =>
+    hasWeatherValue((values as any)[key]),
+  );
+  if (!remainingValueKeys.length) return undefined;
+  if (remainingValueKeys.some((key) => !(sources as any)[key])) {
+    return undefined;
+  }
+
+  const remainingSources = new Set(
+    remainingValueKeys
+      .map((key) => (sources as any)[key])
+      .filter((source): source is FuenteMeteorologicaNormalizada =>
+        Boolean(source),
+      ),
+  );
+  if ([...remainingSources].some(isChamanMeteoSource)) return undefined;
+  const fuente =
+    remainingSources.size === 1
+      ? [...remainingSources][0]
+      : remainingSources.size > 1
+        ? 'mixed'
+        : observation.fuente;
+  if (isChamanMeteoSource(fuente)) return undefined;
+  const ratio = originalValueKeys.length
+    ? remainingValueKeys.length / originalValueKeys.length
+    : 0;
+  return {
+    ...observation,
+    valores: values,
+    fuente,
+    fuentePorVariable: sources,
+    estadoPorVariable: states,
+    completitudPct:
+      Math.round(Math.min(observation.completitudPct, 100 * ratio) * 10) / 10,
+    banderasCalidad: [
+      ...new Set([
+        ...(observation.banderasCalidad || []).map((flag) =>
+          flag.startsWith('chaman_meteo_') ? `excluded_${flag}` : flag,
+        ),
+        'chaman_meteo_disabled_source_removed',
+      ]),
+    ],
+  };
 }
