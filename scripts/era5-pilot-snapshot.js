@@ -29,7 +29,12 @@ function loadMongoDriver() {
 }
 
 function codeSha() {
-  return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', cwd: path.resolve(__dirname, '..') }).trim();
+  const cwd = path.resolve(__dirname, '..');
+  const dirty = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { encoding: 'utf8', cwd }).trim();
+  if (dirty) throw new Error('El worktree debe estar limpio: codeSha debe identificar exactamente el codigo ejecutado.');
+  const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', cwd }).trim();
+  if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error('No se pudo sellar el codeSha ejecutado.');
+  return sha;
 }
 
 function print(value) {
@@ -42,8 +47,10 @@ async function main() {
   const uriEnv = args.uriEnv || 'CHAMAN_TESTING_MONGODB_URI';
   if (!/^[A-Z][A-Z0-9_]{2,80}$/.test(uriEnv)) throw new Error('uri-env debe ser un nombre de variable seguro.');
   const uri = process.env[uriEnv];
-  toolkit.assertTestingOnly({ uri });
-  toolkit.assertSafetyAttestation();
+  const clusterAttestation = toolkit.loadAttestationFile(process.env.CHAMAN_TESTING_CLUSTER_ATTESTATION_FILE, 'cluster-testing');
+  const safetyAttestation = toolkit.loadAttestationFile(process.env.CHAMAN_ERA5_PILOT_SAFETY_ATTESTATION_FILE, 'seguridad-operativa');
+  toolkit.assertTestingOnly({ uri, attestation: clusterAttestation });
+  toolkit.assertSafetyAttestation(safetyAttestation);
   const { MongoClient, ObjectId, EJSON } = loadMongoDriver();
   const client = new MongoClient(uri, { appName: 'chaman-era5-pilot-snapshot', serverSelectionTimeoutMS: 10000 });
   await client.connect();
@@ -77,8 +84,14 @@ async function main() {
       from: bundle.manifest.weatherWindow.from,
       to: bundle.manifest.weatherWindow.to,
     });
-    const { scope, queries, state: currentState } = await toolkit.readConsistentScope({ client, db, config, ObjectId, EJSON });
-    if (scope.gridPointKey !== bundle.manifest.gridPointKey) throw new Error('El binding actual no coincide con el manifiesto.');
+    const queries = toolkit.sealedQueries(bundle.manifest, ObjectId);
+    const currentState = await toolkit.readConsistentState({
+      client, db, queries, EJSON,
+      coverage: {
+        scope: { gridPointKey: bundle.manifest.gridPointKey, gridTimezone: bundle.manifest.gridTimezone },
+        config: { from: bundle.manifest.weatherWindow.from, to: bundle.manifest.weatherWindow.to },
+      },
+    });
 
     if (args.mode === 'verify') {
       toolkit.assertNoSecrets(currentState);
@@ -102,7 +115,7 @@ async function main() {
       client,
       db,
       bundle,
-      queries,
+      ObjectId,
       EJSON,
       confirmation: process.env.CHAMAN_ERA5_PILOT_CONFIRM,
       bundleDir,

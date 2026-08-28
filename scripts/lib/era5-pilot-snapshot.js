@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const DB_NAME = 'chaman_testing';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const ERA5_CALCULATION_VERSION = 'chaman-meteo-agro-v2';
@@ -53,15 +53,28 @@ function validateDate(value, label) {
 }
 
 function mongoEndpoint(uri) {
-  const parsed = new URL(uri);
-  return `${parsed.protocol}//${parsed.host.toLowerCase()}`;
+  const match = String(uri || '').match(/^(mongodb(?:\+srv)?):\/\/([^/?#]+)\//i);
+  assert(match, 'La URI Mongo no contiene un endpoint valido.');
+  const authority = match[2].slice(match[2].lastIndexOf('@') + 1);
+  const seeds = authority.split(',').map((seed) => seed.trim().toLowerCase()).filter(Boolean).sort();
+  assert(seeds.length > 0, 'La URI Mongo no contiene hosts.');
+  return `${match[1].toLowerCase()}://${seeds.join(',')}`;
 }
 
 function testingClusterFingerprint(uri) {
   return sha256(mongoEndpoint(uri));
 }
 
-function assertTestingOnly({ uri, env = process.env }) {
+function loadAttestationFile(filePath, label) {
+  assert(typeof filePath === 'string' && filePath.trim(), `${label} requiere una ruta de archivo.`);
+  const resolved = path.resolve(filePath);
+  assert(fs.existsSync(resolved), `No existe la attestation ${label}.`);
+  const stats = fs.statSync(resolved);
+  assert(stats.isFile() && stats.size > 0 && stats.size <= 65536, `Archivo de attestation ${label} invalido.`);
+  return JSON.parse(fs.readFileSync(resolved, 'utf8'));
+}
+
+function assertTestingOnly({ uri, attestation, env = process.env }) {
   const productionFlags = [
     'NODE_ENV',
     'RAILWAY_ENVIRONMENT_NAME',
@@ -69,7 +82,7 @@ function assertTestingOnly({ uri, env = process.env }) {
     'CHAMAN_ENV',
     'APP_ENV',
     'ENVIRONMENT',
-  ].filter((name) => /^(production|prod)$/i.test(String(env[name] || '').trim()));
+  ].filter((name) => /prod(?:uction)?/i.test(String(env[name] || '').trim()));
   assert(productionFlags.length === 0, `Abortado: flags productivos detectados (${productionFlags.join(', ')}).`);
   assert(typeof uri === 'string' && /^mongodb(?:\+srv)?:\/\//i.test(uri), 'La URI Mongo de Testing es obligatoria.');
   const withoutQuery = uri.split('?')[0];
@@ -77,15 +90,23 @@ function assertTestingOnly({ uri, env = process.env }) {
   assert(slash > withoutQuery.indexOf('://') + 2, 'La URI debe declarar explicitamente la base chaman_testing.');
   const database = decodeURIComponent(withoutQuery.slice(slash + 1));
   assert(database === DB_NAME, `Abortado: la base debe ser exactamente ${DB_NAME}.`);
-  const expectedFingerprint = String(env.CHAMAN_TESTING_CLUSTER_FINGERPRINT || '').trim().toLowerCase();
-  assert(/^[a-f0-9]{64}$/.test(expectedFingerprint), 'CHAMAN_TESTING_CLUSTER_FINGERPRINT es obligatorio y debe ser SHA-256 del endpoint Testing sin credenciales.');
+  assert(attestation?.schemaVersion === 1 && attestation.environment === 'testing' && attestation.database === DB_NAME,
+    'Se requiere una attestation externa aprobada del cluster Testing.');
+  assert(typeof attestation.approvedBy === 'string' && attestation.approvedBy.trim().length >= 3, 'La attestation del cluster no tiene aprobador.');
+  assert(typeof attestation.evidence === 'string' && attestation.evidence.trim().length >= 8, 'La attestation del cluster no tiene evidencia.');
+  assert(Number.isFinite(new Date(attestation.approvedAt).getTime()), 'La attestation del cluster no tiene fecha valida.');
+  const expectedFingerprint = String(attestation.endpointFingerprint || '').trim().toLowerCase();
+  assert(/^[a-f0-9]{64}$/.test(expectedFingerprint), 'La attestation no contiene un fingerprint SHA-256 valido.');
   assert(testingClusterFingerprint(uri) === expectedFingerprint, 'Abortado: el fingerprint del cluster no corresponde al Testing aprobado.');
   return database;
 }
 
-function assertSafetyAttestation(env = process.env) {
-  assert(env.CHAMAN_ERA5_PILOT_SAFETY_ATTESTATION === SAFETY_ATTESTATION,
+function assertSafetyAttestation(attestation) {
+  assert(attestation?.statement === SAFETY_ATTESTATION,
     'Falta attestation: piloto agromet-only, crons congelados y notificaciones/outbox/push deshabilitados.');
+  assert(typeof attestation.approvedBy === 'string' && attestation.approvedBy.trim().length >= 3, 'La attestation operativa no tiene aprobador.');
+  assert(typeof attestation.evidence === 'string' && attestation.evidence.trim().length >= 8, 'La attestation operativa no tiene evidencia verificable.');
+  assert(Number.isFinite(new Date(attestation.approvedAt).getTime()), 'La attestation operativa no tiene fecha valida.');
 }
 
 function sortForEjson(value) {
@@ -136,7 +157,8 @@ function scanSecrets(value, pathParts = [], findings = []) {
     if (value instanceof Date || value._bsontype) return findings;
     for (const [key, child] of Object.entries(value)) {
       const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (/^(password|passwd|secret|clientsecret|apikey|accesstoken|refreshtoken|token|authorization|cookie|credentials?|mqttpassword|cdskey|fieldclimatekey)$/.test(normalizedKey)) {
+      const sensitiveValue = child !== null && child !== undefined && !/^(|redacted|<redacted>|masked|none|null|n\/a)$/i.test(String(child).trim());
+      if (sensitiveValue && /^(password|passwd|secret|clientsecret|apikey|accesstoken|refreshtoken|authtoken|token|authorization|bearer|privatekey|signingkey|smtp(?:uri|url|password|token)?|databaseuri|databaseurl|mongouri|cookie|credentials?|mqttpassword|cdskey|fieldclimatekey)$/.test(normalizedKey)) {
         findings.push([...pathParts, key].join('.'));
       }
       scanSecrets(child, [...pathParts, key], findings);
@@ -233,6 +255,9 @@ async function resolveScope(db, config, ObjectId, options = {}) {
     fechaLocal: { $gte: config.from, $lte: config.to },
   }, { session }).toArray();
   for (const observation of observations) {
+    const contextKeys = observation.contextosLote && typeof observation.contextosLote === 'object' && !Array.isArray(observation.contextosLote)
+      ? Object.keys(observation.contextosLote) : [];
+    assert(contextKeys.every((value) => OBJECT_ID_PATTERN.test(value)), 'Piloto abortado: una observacion contiene claves de contexto no canonicas.');
     const foreignIds = contextLotIds(observation.contextosLote).filter((value) => value !== config.lotId);
     assert(foreignIds.length === 0, `Piloto abortado: una observacion contiene contextos de otros lotes (${foreignIds.join(', ')}).`);
     if (observation.idLote) assert(idValue(observation.idLote) === config.lotId, 'Piloto abortado: una observacion compartida pertenece a otro lote.');
@@ -244,6 +269,7 @@ async function resolveScope(db, config, ObjectId, options = {}) {
     seedObjectId: row.idSemilla,
     cronoObjectId: row.idCrono,
     gridPointKey: String(binding.gridPointKey),
+    gridTimezone: String(gridPoint.timezone || ''),
     sowingDate,
   };
 }
@@ -261,21 +287,29 @@ function dateRange(from, to) {
   return dates;
 }
 
-async function assertIndexesAndEra5Coverage(db, scope, config, options = {}) {
-  const session = options.session;
+async function assertRequiredIndexes(db) {
   const requirements = {
-    weather_location_bindings: [{ name: 'uniq_weather_location_binding', unique: true }],
-    weather_daily: [{ name: 'uniq_weather_daily_grid_date_version', unique: true }],
-    observaciones_meteorologicas: [{ name: 'uniq_establishment_time_granularity', unique: true }],
-    indicadores_agrometeorologicos: [{ name: 'uniq_sowing_date_engine_version', unique: true }],
+    weather_grid_points: [{ name: 'uniq_weather_grid_point_key', key: { key: 1 }, unique: true }],
+    weather_location_bindings: [{ name: 'uniq_weather_location_binding', key: { locationType: 1, locationId: 1 }, unique: true }],
+    weather_daily: [{ name: 'uniq_weather_daily_grid_date_version', key: { gridPointKey: 1, date: 1, calculationVersion: 1 }, unique: true }],
+    observaciones_meteorologicas: [{ name: 'uniq_establishment_time_granularity', key: { idEstablecimiento: 1, timestamp: 1, granularidad: 1 }, unique: true }],
+    indicadores_agrometeorologicos: [{ name: 'uniq_sowing_date_engine_version', key: { idSiembra: 1, fecha: 1, versionCalculo: 1 }, unique: true }],
   };
   for (const [collectionName, expected] of Object.entries(requirements)) {
-    const indexes = await db.collection(collectionName).listIndexes({ session }).toArray();
+    const indexes = await db.collection(collectionName).listIndexes().toArray();
     for (const requirement of expected) {
       const actual = indexes.find((index) => index.name === requirement.name);
-      assert(actual && Boolean(actual.unique) === requirement.unique, `Falta indice requerido ${collectionName}.${requirement.name}.`);
+      assert(actual && Boolean(actual.unique) === requirement.unique && JSON.stringify(actual.key) === JSON.stringify(requirement.key),
+        `Falta indice exacto requerido ${collectionName}.${requirement.name}.`);
+      assert(!actual.partialFilterExpression, `${collectionName}.${requirement.name} no puede ser parcial.`);
+      assert(!actual.collation || actual.collation.locale === 'simple', `${collectionName}.${requirement.name} requiere collation simple/binaria.`);
+      assert(!actual.sparse && !actual.hidden, `${collectionName}.${requirement.name} no puede ser sparse ni hidden.`);
     }
   }
+}
+
+async function assertEra5Coverage(db, scope, config, options = {}) {
+  const session = options.session;
   const daily = await db.collection('weather_daily').find({
     gridPointKey: scope.gridPointKey,
     calculationVersion: ERA5_CALCULATION_VERSION,
@@ -286,7 +320,13 @@ async function assertIndexesAndEra5Coverage(db, scope, config, options = {}) {
   assert(daily.length === expectedDates.length && JSON.stringify(actualDates) === JSON.stringify(expectedDates),
     `Cobertura ERA5 v2 incompleta: se requieren ${expectedDates.length} dias continuos y hay ${daily.length}.`);
   for (const item of daily) {
-    assert(item.hoursAvailable >= 23 && item.hoursAvailable <= item.hoursExpected && item.values && Object.keys(item.values).length > 0,
+    const expected = Number(item.hoursExpected);
+    const available = Number(item.hoursAvailable);
+    assert([23, 24, 25].includes(expected) && available === expected && Number(item.availableHoursByMetric?.temperature) === expected &&
+      item.gridPointKey === scope.gridPointKey && item.calculationVersion === ERA5_CALCULATION_VERSION &&
+      item.timezone === scope.gridTimezone && item.date >= config.from && item.date <= config.to &&
+      Number.isFinite(new Date(item.calculatedAt).getTime()) &&
+      ['temperatureMinC', 'temperatureMeanC', 'temperatureMaxC'].every((key) => Number.isFinite(Number(item.values?.[key]))),
       `Dia ERA5 v2 incompleto o invalido: ${item.date}.`);
   }
 }
@@ -314,6 +354,32 @@ function collectionQueries(scope, config) {
   };
 }
 
+function sealedQueries(manifest, ObjectId, postState) {
+  const oid = (value) => new ObjectId(validateIdentifier(value, 'id sellado'));
+  const idsFor = (name) => [...new Set([
+    ...(manifest.collections[name]?.ids || []),
+    ...(postState?.collections?.[name]?.ids || []),
+  ])].filter(Boolean).map(oid);
+  const scoped = {
+    siembras: { _id: oid(manifest.sowingId) },
+    lotes: { _id: oid(manifest.lotId) },
+    observaciones_meteorologicas: { idEstablecimiento: oid(manifest.establishmentId), fechaLocal: { $gte: manifest.weatherWindow.from, $lte: manifest.weatherWindow.to } },
+    indicadores_agrometeorologicos: { idSiembra: oid(manifest.sowingId) },
+    indicadores_agrometeorologicos_generados: { idSiembra: oid(manifest.sowingId) },
+    indicadores_agrometeorologicos_generaciones: { idSiembra: oid(manifest.sowingId) },
+    prediccions: { idSiembra: oid(manifest.sowingId) },
+    prediccionriegos: { $or: [{ idSiembra: oid(manifest.sowingId) }, { idLote: oid(manifest.lotId) }] },
+    alertas: { $or: [{ idSiembra: oid(manifest.sowingId) }, { idLote: oid(manifest.lotId) }] },
+  };
+  const result = {};
+  for (const name of MUTABLE_COLLECTIONS) {
+    const sealedIds = idsFor(name);
+    result[name] = sealedIds.length ? { $or: [scoped[name], { _id: { $in: sealedIds } }] } : scoped[name];
+  }
+  for (const name of REFERENCE_COLLECTIONS) result[name] = { _id: { $in: idsFor(name) } };
+  return result;
+}
+
 async function readState(db, queries, EJSON, options = {}) {
   const result = {};
   for (const name of ALL_COLLECTIONS) {
@@ -324,12 +390,13 @@ async function readState(db, queries, EJSON, options = {}) {
 }
 
 async function readConsistentScope({ client, db, config, ObjectId, EJSON }) {
+  await assertRequiredIndexes(db);
   const session = client.startSession();
   let result;
   try {
     await session.withTransaction(async () => {
       const scope = await resolveScope(db, config, ObjectId, { session });
-      await assertIndexesAndEra5Coverage(db, scope, config, { session });
+      await assertEra5Coverage(db, scope, config, { session });
       const queries = collectionQueries(scope, config);
       const state = await readState(db, queries, EJSON, { session });
       result = { scope, queries, state };
@@ -342,6 +409,22 @@ async function readConsistentScope({ client, db, config, ObjectId, EJSON }) {
   }
   assert(result, 'No se pudo obtener un snapshot transaccional consistente.');
   return result;
+}
+
+async function readConsistentState({ client, db, queries, EJSON, coverage }) {
+  await assertRequiredIndexes(db);
+  const session = client.startSession();
+  let state;
+  try {
+    await session.withTransaction(async () => {
+      if (coverage) await assertEra5Coverage(db, coverage.scope, coverage.config, { session });
+      state = await readState(db, queries, EJSON, { session });
+    }, {
+      readConcern: { level: 'snapshot' }, readPreference: 'primary',
+    });
+  } finally { await session.endSession(); }
+  assert(state, 'No se pudo leer el estado sellado consistentemente.');
+  return state;
 }
 
 function stateSummary(state) {
@@ -379,9 +462,11 @@ function buildPlan(config, scope, state, codeSha, EJSON) {
     database: DB_NAME,
     lotId: config.lotId,
     sowingId: config.sowingId,
+    establishmentId: idValue(scope.establishmentObjectId),
     sowingDate: scope.sowingDate,
     weatherWindow: { from: config.from, to: config.to },
     gridPointKey: scope.gridPointKey,
+    gridTimezone: scope.gridTimezone,
     policy: { oneLot: true, exclusiveEstablishment: true, agrometOnly: true, sideEffectsFrozen: true, exactlyOneActiveSowing: true, onConflict: 'abort', restore: 'transactional-compare-and-swap' },
     collections,
   };
@@ -393,6 +478,7 @@ function writeJsonExclusive(filePath, value) {
 }
 
 function writeBundle(bundleDir, plan, state, EJSON, now = new Date()) {
+  assertNoSecrets(state);
   assert(!fs.existsSync(bundleDir), `El directorio de bundle ya existe: ${bundleDir}`);
   fs.mkdirSync(bundleDir, { recursive: false });
   const files = {};
@@ -484,13 +570,22 @@ function loadPostState(bundleDir, manifest, EJSON) {
   return record;
 }
 
-async function restoreBundle({ client, db, bundle, queries, EJSON, confirmation, bundleDir }) {
+async function restoreBundle({ client, db, bundle, ObjectId, EJSON, confirmation, bundleDir }) {
   const postState = loadPostState(bundleDir, bundle.manifest, EJSON);
+  const queries = sealedQueries(bundle.manifest, ObjectId, postState);
+  await assertRequiredIndexes(db);
   assert(confirmation === confirmationForRestore(bundle.manifest, postState.postStateSha256), 'Confirmacion de restore ausente o incorrecta.');
   const session = client.startSession();
   let outcome = 'restored';
   try {
     await session.withTransaction(async () => {
+      await assertEra5Coverage(db, {
+        gridPointKey: bundle.manifest.gridPointKey,
+        gridTimezone: bundle.manifest.gridTimezone,
+      }, {
+        from: bundle.manifest.weatherWindow.from,
+        to: bundle.manifest.weatherWindow.to,
+      }, { session });
       const current = await readState(db, queries, EJSON, { session });
       const currentSummary = stateSummary(current);
       try {
@@ -531,7 +626,8 @@ module.exports = {
   MUTABLE_COLLECTIONS,
   REFERENCE_COLLECTIONS,
   assertNoSecrets,
-  assertIndexesAndEra5Coverage,
+  assertEra5Coverage,
+  assertRequiredIndexes,
   assertSafetyAttestation,
   assertSummaryEqual,
   assertTestingOnly,
@@ -543,14 +639,17 @@ module.exports = {
   contextLotIds,
   hashStateSummary,
   loadBundle,
+  loadAttestationFile,
   loadPostState,
   operationConfig,
   readConsistentScope,
+  readConsistentState,
   readState,
   recordPostState,
   resolveScope,
   restoreBundle,
   scanSecrets,
+  sealedQueries,
   sha256,
   stateSummary,
   summarizeDocuments,

@@ -50,6 +50,7 @@ function match(document, query) {
     const actual = key.split('.').reduce((value, part) => value?.[part], document);
     if (expected && typeof expected === 'object' && !(expected instanceof FakeObjectId) && !(expected instanceof Date)) {
       if ('$ne' in expected) return !same(actual, expected.$ne);
+      if ('$in' in expected) return expected.$in.some((item) => same(actual, item));
       if ('$gte' in expected && actual < expected.$gte) return false;
       if ('$lte' in expected && actual > expected.$lte) return false;
       if ('$gte' in expected || '$lte' in expected) return true;
@@ -67,6 +68,7 @@ class FakeCursor {
 class FakeCollection {
   constructor(documents, db, name) { this.documents = documents; this.db = db; this.name = name; }
   find(query) { return new FakeCursor(this.documents.filter((document) => match(document, query))); }
+  listIndexes() { return new FakeCursor(requiredIndexes()[this.name] || [{ name: '_id_', key: { _id: 1 } }]); }
   async deleteMany(query) {
     const before = this.documents.length;
     this.documents.splice(0, this.documents.length, ...this.documents.filter((document) => !match(document, query)));
@@ -76,6 +78,16 @@ class FakeCollection {
     if (this.db.failInsertCollection === this.name) throw new Error(`fallo simulado en ${this.name}`);
     this.documents.push(...ejsonRevive(JSON.parse(JSON.stringify(ejsonNormalize(documents)))));
   }
+}
+
+function requiredIndexes() {
+  return {
+    weather_grid_points: [{ name: 'uniq_weather_grid_point_key', key: { key: 1 }, unique: true }],
+    weather_location_bindings: [{ name: 'uniq_weather_location_binding', key: { locationType: 1, locationId: 1 }, unique: true }],
+    weather_daily: [{ name: 'uniq_weather_daily_grid_date_version', key: { gridPointKey: 1, date: 1, calculationVersion: 1 }, unique: true }],
+    observaciones_meteorologicas: [{ name: 'uniq_establishment_time_granularity', key: { idEstablecimiento: 1, timestamp: 1, granularidad: 1 }, unique: true }],
+    indicadores_agrometeorologicos: [{ name: 'uniq_sowing_date_engine_version', key: { idSiembra: 1, fecha: 1, versionCalculo: 1 }, unique: true }],
+  };
 }
 
 class FakeDb {
@@ -108,7 +120,7 @@ class TransactionalFakeClient {
 function scopeAndConfig() {
   const scope = {
     lotObjectId: id('1'), sowingObjectId: id('2'), establishmentObjectId: id('3'),
-    seedObjectId: id('4'), cronoObjectId: id('5'), gridPointKey: 'grid-ar-1', sowingDate: '2026-05-01',
+    seedObjectId: id('4'), cronoObjectId: id('5'), gridPointKey: 'grid-ar-1', gridTimezone: 'America/Argentina/Buenos_Aires', sowingDate: '2026-05-01',
   };
   const config = { operationId: 'era5-pilot-test-001', lotId: scope.lotObjectId.value, sowingId: scope.sowingObjectId.value, from: '2026-05-01', to: '2026-05-03' };
   return { scope, config };
@@ -129,21 +141,23 @@ function baselineData(scope) {
     semillas: [{ _id: scope.seedObjectId }],
     cronos: [{ _id: scope.cronoObjectId }],
     weather_location_bindings: [{ _id: id('17'), locationType: 'lote', locationId: scope.lotObjectId, gridPointKey: scope.gridPointKey }],
-    weather_grid_points: [{ _id: id('18'), key: scope.gridPointKey }],
-    weather_daily: ['01', '02', '03'].map((day, index) => ({ _id: id(String(19 + index)), gridPointKey: scope.gridPointKey, date: `2026-05-${day}`, calculationVersion: toolkit.ERA5_CALCULATION_VERSION, hoursAvailable: 24, hoursExpected: 24, values: { temperatureMeanC: 10 } })),
+    weather_grid_points: [{ _id: id('18'), key: scope.gridPointKey, timezone: scope.gridTimezone }],
+    weather_daily: ['01', '02', '03'].map((day, index) => ({ _id: id(String(19 + index)), gridPointKey: scope.gridPointKey, date: `2026-05-${day}`, timezone: scope.gridTimezone, calculationVersion: toolkit.ERA5_CALCULATION_VERSION, hoursAvailable: 24, hoursExpected: 24, availableHoursByMetric: { temperature: 24 }, calculatedAt: new Date('2026-08-01T00:00:00Z'), values: { temperatureMinC: 5, temperatureMeanC: 10, temperatureMaxC: 15 } })),
   };
 }
 
 test('rechaza cualquier destino que no sea chaman_testing o tenga flags productivos', () => {
   const uri = 'mongodb://testing.example/chaman_testing?retryWrites=true';
   const fingerprint = toolkit.testingClusterFingerprint(uri);
-  assert.throws(() => toolkit.assertTestingOnly({ uri: 'mongodb://host/chaman', env: { CHAMAN_TESTING_CLUSTER_FINGERPRINT: fingerprint } }), /exactamente chaman_testing/);
-  assert.throws(() => toolkit.assertTestingOnly({ uri, env: { RAILWAY_ENVIRONMENT_NAME: 'production', CHAMAN_TESTING_CLUSTER_FINGERPRINT: fingerprint } }), /flags productivos/);
-  assert.throws(() => toolkit.assertTestingOnly({ uri, env: {} }), /FINGERPRINT/);
-  assert.throws(() => toolkit.assertTestingOnly({ uri: 'mongodb://otro.example/chaman_testing', env: { CHAMAN_TESTING_CLUSTER_FINGERPRINT: fingerprint } }), /no corresponde/);
-  assert.equal(toolkit.assertTestingOnly({ uri, env: { NODE_ENV: 'test', CHAMAN_TESTING_CLUSTER_FINGERPRINT: fingerprint } }), 'chaman_testing');
+  const attestation = { schemaVersion: 1, environment: 'testing', database: 'chaman_testing', endpointFingerprint: fingerprint, approvedBy: 'qa-owner', evidence: 'change-ticket-123', approvedAt: '2026-08-28T00:00:00Z' };
+  assert.throws(() => toolkit.assertTestingOnly({ uri: 'mongodb://host/chaman', attestation, env: {} }), /exactamente chaman_testing/);
+  assert.throws(() => toolkit.assertTestingOnly({ uri, attestation, env: { RAILWAY_ENVIRONMENT_NAME: 'my-production-copy' } }), /flags productivos/);
+  assert.throws(() => toolkit.assertTestingOnly({ uri, env: {} }), /attestation externa/);
+  assert.throws(() => toolkit.assertTestingOnly({ uri: 'mongodb://otro.example/chaman_testing', attestation, env: {} }), /no corresponde/);
+  assert.equal(toolkit.assertTestingOnly({ uri, attestation, env: { NODE_ENV: 'test' } }), 'chaman_testing');
+  assert.equal(toolkit.testingClusterFingerprint('mongodb://b.example:27017,a.example:27017/chaman_testing'), toolkit.testingClusterFingerprint('mongodb://a.example:27017,b.example:27017/chaman_testing'));
   assert.throws(() => toolkit.assertSafetyAttestation({}), /attestation/);
-  toolkit.assertSafetyAttestation({ CHAMAN_ERA5_PILOT_SAFETY_ATTESTATION: 'AGROMET_ONLY:CRONS_FROZEN:NOTIFICATIONS_DISABLED:OUTBOX_DISABLED:PUSH_DISABLED' });
+  toolkit.assertSafetyAttestation({ statement: 'AGROMET_ONLY:CRONS_FROZEN:NOTIFICATIONS_DISABLED:OUTBOX_DISABLED:PUSH_DISABLED', approvedBy: 'qa-owner', evidence: 'ticket-1234', approvedAt: '2026-08-28T00:00:00Z' });
 });
 
 test('exige IDs exactos, intervalo valido y un operation-id cerrado', () => {
@@ -171,7 +185,7 @@ test('resuelve server-side una unica siembra activa y binding exacto', async () 
         findOne: async () => ({ gridPointKey: scope.gridPointKey }),
         countDocuments: async () => 1,
       };
-      if (name === 'weather_grid_points') return { findOne: async () => ({ key: scope.gridPointKey, enabled: true }) };
+      if (name === 'weather_grid_points') return { findOne: async () => ({ key: scope.gridPointKey, enabled: true, timezone: scope.gridTimezone }) };
       if (name === 'lotes') return { countDocuments: async () => 0 };
       if (name === 'observaciones_meteorologicas') return { find: () => ({ toArray: async () => [] }) };
       throw new Error(`coleccion inesperada ${name}`);
@@ -210,7 +224,7 @@ test('aborta ante otro lote del establecimiento o contexto meteorologico ajeno',
     return { collection(name) {
       if (name === 'siembras') return { aggregate: () => ({ toArray: async () => [row] }) };
       if (name === 'weather_location_bindings') return { findOne: async () => ({ gridPointKey: scope.gridPointKey }), countDocuments: async () => 1 };
-      if (name === 'weather_grid_points') return { findOne: async () => ({ enabled: true }) };
+      if (name === 'weather_grid_points') return { findOne: async () => ({ enabled: true, timezone: scope.gridTimezone }) };
       if (name === 'lotes') return { countDocuments: async () => otherLots };
       if (name === 'observaciones_meteorologicas') return { find: () => ({ toArray: async () => observations }) };
       throw new Error(name);
@@ -219,32 +233,40 @@ test('aborta ante otro lote del establecimiento o contexto meteorologico ajeno',
   await assert.rejects(toolkit.resolveScope(database(1, []), config, FakeObjectId), /otros lotes/);
   const foreign = id('77').value;
   await assert.rejects(toolkit.resolveScope(database(0, [{ contextosLote: { [foreign]: { estado: 'x' } } }]), config, FakeObjectId), /contextos de otros lotes/);
+  await assert.rejects(toolkit.resolveScope(database(0, [{ contextosLote: { 'lote-alias': { estado: 'x' } } }]), config, FakeObjectId), /no canonicas/);
 });
 
-test('valida indices unicos y cobertura ERA5 v2 diaria continua', async () => {
+test('valida indices exactos fuera de transaccion y cobertura ERA5 v2 diaria continua', async () => {
   const { scope, config } = scopeAndConfig();
-  const indexes = {
-    weather_location_bindings: [{ name: 'uniq_weather_location_binding', unique: true }],
-    weather_daily: [{ name: 'uniq_weather_daily_grid_date_version', unique: true }],
-    observaciones_meteorologicas: [{ name: 'uniq_establishment_time_granularity', unique: true }],
-    indicadores_agrometeorologicos: [{ name: 'uniq_sowing_date_engine_version', unique: true }],
-  };
+  const indexes = requiredIndexes();
   const days = baselineData(scope).weather_daily;
   const db = { collection(name) { return {
-    listIndexes: () => ({ toArray: async () => indexes[name] }),
+    listIndexes: (...args) => { assert.equal(args.length, 0, 'listIndexes no debe recibir session/transaccion'); return { toArray: async () => indexes[name] }; },
     find: () => ({ toArray: async () => days }),
   }; } };
-  await toolkit.assertIndexesAndEra5Coverage(db, scope, config);
+  await toolkit.assertRequiredIndexes(db);
+  indexes.weather_daily[0].partialFilterExpression = { active: true };
+  await assert.rejects(toolkit.assertRequiredIndexes(db), /no puede ser parcial/);
+  delete indexes.weather_daily[0].partialFilterExpression;
+  await toolkit.assertEra5Coverage(db, scope, config);
+  days[0].availableHoursByMetric.temperature = 23;
+  await assert.rejects(toolkit.assertEra5Coverage(db, scope, config), /invalido/);
+  days[0].availableHoursByMetric.temperature = 24;
+  days[0].values.temperatureMeanC = Number.NaN;
+  await assert.rejects(toolkit.assertEra5Coverage(db, scope, config), /invalido/);
+  days[0].values.temperatureMeanC = 10;
   days.splice(1, 1);
-  await assert.rejects(toolkit.assertIndexesAndEra5Coverage(db, scope, config), /incompleta/);
+  await assert.rejects(toolkit.assertEra5Coverage(db, scope, config), /incompleta/);
 });
 
 test('hash canonico no depende del orden de claves y el escaner bloquea secretos', () => {
   const first = toolkit.canonicalEjson({ b: 2, a: { d: 4, c: 3 } }, EJSON);
   const second = toolkit.canonicalEjson({ a: { c: 3, d: 4 }, b: 2 }, EJSON);
   assert.equal(first, second);
-  assert.deepEqual(toolkit.scanSecrets({ nested: { api_key: 'redacted' } }), ['nested.api_key']);
-  assert.deepEqual(toolkit.scanSecrets({ client_secret: 'redacted', token: 'redacted', authorization: 'redacted' }).sort(), ['authorization', 'client_secret', 'token']);
+  assert.deepEqual(toolkit.scanSecrets({ nested: { api_key: 'real-value' } }), ['nested.api_key']);
+  assert.deepEqual(toolkit.scanSecrets({ client_secret: 'real', token: 'real', authorization: 'real' }).sort(), ['authorization', 'client_secret', 'token']);
+  assert.deepEqual(toolkit.scanSecrets({ authToken: 'x', bearer: 'x', private_key: 'x', signingKey: 'x', smtpUrl: 'x', databaseUri: 'x' }).sort(), ['authToken', 'bearer', 'databaseUri', 'private_key', 'signingKey', 'smtpUrl'].sort());
+  assert.deepEqual(toolkit.scanSecrets({ authToken: null, bearer: '<redacted>', databaseUri: 'redacted' }), []);
   assert.deepEqual(toolkit.scanSecrets({ dedupeKey: 'safe', eventKeys: ['safe'] }), []);
 });
 
@@ -280,14 +302,16 @@ test('restore compara post-state, revierte en transaccion y es idempotente', asy
     const manifest = toolkit.writeBundle(bundleDir, plan, pre, EJSON);
     data.indicadores_agrometeorologicos.push({ _id: id('20'), idSiembra: scope.sowingObjectId, fecha: '2026-05-02' });
     data.siembras[0].ultimaPrediccion = { riesgo: 99 };
+    data.siembras[0].idLote = id('88');
     const post = await toolkit.readState(db, queries, EJSON);
     const postRecord = toolkit.recordPostState(bundleDir, manifest, toolkit.stateSummary(post), EJSON);
     const bundle = toolkit.loadBundle(bundleDir, EJSON);
     const confirmation = toolkit.confirmationForRestore(manifest, postRecord.postStateSha256);
-    assert.equal(await toolkit.restoreBundle({ client, db, bundle, queries, EJSON, confirmation, bundleDir }), 'restored');
+    assert.equal(await toolkit.restoreBundle({ client, db, bundle, ObjectId: FakeObjectId, EJSON, confirmation, bundleDir }), 'restored');
     assert.equal(data.indicadores_agrometeorologicos.length, 1);
     assert.deepEqual(data.siembras[0].ultimaPrediccion, { riesgo: 1 });
-    assert.equal(await toolkit.restoreBundle({ client, db, bundle, queries, EJSON, confirmation, bundleDir }), 'already_restored');
+    assert.equal(data.siembras[0].idLote.value, scope.lotObjectId.value);
+    assert.equal(await toolkit.restoreBundle({ client, db, bundle, ObjectId: FakeObjectId, EJSON, confirmation, bundleDir }), 'already_restored');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -313,7 +337,7 @@ test('restore aborta si hubo drift despues de registrar el post-state', async ()
     await assert.rejects(
       toolkit.restoreBundle({
         client, db, bundle, queries, EJSON,
-        confirmation: toolkit.confirmationForRestore(manifest, postRecord.postStateSha256),
+        ObjectId: FakeObjectId, confirmation: toolkit.confirmationForRestore(manifest, postRecord.postStateSha256),
         bundleDir,
       }),
       /drift detectado en alertas/,
@@ -322,6 +346,30 @@ test('restore aborta si hubo drift despues de registrar el post-state', async ()
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('CAS sellado detecta re-key de un documento creado durante el piloto', async () => {
+  const { scope, config } = scopeAndConfig();
+  const db = new FakeDb(baselineData(scope));
+  const queries = toolkit.collectionQueries(scope, config);
+  const pre = await toolkit.readState(db, queries, EJSON);
+  const plan = toolkit.buildPlan(config, scope, pre, 'e'.repeat(40), EJSON);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-era5-rekey-'));
+  const bundleDir = path.join(root, 'bundle');
+  try {
+    const manifest = toolkit.writeBundle(bundleDir, plan, pre, EJSON);
+    const created = { _id: id('90'), idSiembra: scope.sowingObjectId, fecha: '2026-05-02' };
+    db.data.indicadores_agrometeorologicos.push(created);
+    const postQueries = toolkit.sealedQueries(manifest, FakeObjectId);
+    const post = await toolkit.readState(db, postQueries, EJSON);
+    const record = toolkit.recordPostState(bundleDir, manifest, toolkit.stateSummary(post), EJSON);
+    created.idSiembra = id('91');
+    await assert.rejects(toolkit.restoreBundle({
+      client: new FakeClient(), db, bundle: toolkit.loadBundle(bundleDir, EJSON), ObjectId: FakeObjectId, EJSON,
+      confirmation: toolkit.confirmationForRestore(manifest, record.postStateSha256), bundleDir,
+    }), /drift detectado/);
+    assert.equal(db.data.indicadores_agrometeorologicos.some((item) => same(item._id, id('90'))), true);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('un fallo intermedio revierte todas las escrituras en la transaccion simulada', async () => {
@@ -341,7 +389,7 @@ test('un fallo intermedio revierte todas las escrituras en la transaccion simula
     const before = EJSON.stringify(db.data);
     db.failInsertCollection = 'lotes';
     await assert.rejects(toolkit.restoreBundle({
-      client: new TransactionalFakeClient(db), db, bundle: toolkit.loadBundle(bundleDir, EJSON), queries, EJSON,
+      client: new TransactionalFakeClient(db), db, bundle: toolkit.loadBundle(bundleDir, EJSON), ObjectId: FakeObjectId, EJSON,
       confirmation: toolkit.confirmationForRestore(manifest, record.postStateSha256), bundleDir,
     }), /fallo simulado/);
     assert.equal(EJSON.stringify(db.data), before);

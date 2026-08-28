@@ -7,9 +7,10 @@ la base `chaman_testing`. No copia Produccion, no conoce Railway y no permite
 otra base. El primer piloto ERA5 no debe ejecutarse si este flujo no termina en
 verde.
 
-La herramienta es un artefacto de seguridad cherry-pickeable. **No contiene el
-bridge ERA5**: debe integrarse sobre la rama que ya contenga foundation + bridge
-y verificarse nuevamente allí antes de publicar Testing.
+La herramienta es una serie de seguridad cherry-pickeable. **No contiene el
+bridge ERA5**. Sobre la rama integrada foundation + bridge aplicar, en orden,
+`7bebce1`, `20fb94d` y el commit posterior que contiene este runbook; resolver
+conflictos sin omitir commits y ejecutar toda la validación nuevamente.
 
 El cierre mutable incluye:
 
@@ -46,6 +47,9 @@ guardan como referencias verificables. Restore nunca los modifica.
 - Escanea secretos y aborta antes de escribir el bundle.
 - Archivos NDJSON EJSON, conteos, IDs y SHA-256 por coleccion; manifiesto con
   hash propio.
+- El preflight de índices se ejecuta antes de abrir la transacción porque Mongo
+  no admite `listIndexes` dentro de ella. Cobertura y datos mutables se vuelven
+  a validar dentro del snapshot transaccional.
 - Plan, snapshot y verify leen un punto consistente mediante transaccion Mongo
   con `readConcern=snapshot`; no mezclan documentos de momentos distintos.
 - Restore requiere transacciones Mongo con `readConcern=snapshot` y
@@ -71,18 +75,25 @@ linea de comandos ni se guarda en el bundle:
 $env:CHAMAN_TESTING_MONGODB_URI = '<URI que termina en /chaman_testing>'
 ```
 
-Obtener una vez el fingerprint no secreto del endpoint aprobado. El valor sólo
-identifica protocolo y host; no incorpora usuario, contraseña, query ni base:
+Infraestructura debe entregar dos JSON aprobados y externos al repositorio. El
+fingerprint no se deriva ni se aprueba desde la URI activa durante la ejecución.
+Para replica sets se sellan los hosts ordenados; para SRV, el hostname SRV.
 
-```powershell
-$env:CHAMAN_TESTING_CLUSTER_FINGERPRINT = node -e "const t=require('./scripts/lib/era5-pilot-snapshot'); process.stdout.write(t.testingClusterFingerprint(process.env.CHAMAN_TESTING_MONGODB_URI))"
-$env:CHAMAN_ERA5_PILOT_SAFETY_ATTESTATION = 'AGROMET_ONLY:CRONS_FROZEN:NOTIFICATIONS_DISABLED:OUTBOX_DISABLED:PUSH_DISABLED'
+```json
+{"schemaVersion":1,"environment":"testing","database":"chaman_testing","endpointFingerprint":"<SHA256 APROBADO>","approvedBy":"<RESPONSABLE>","evidence":"<TICKET/ACTA>","approvedAt":"<ISO-8601>"}
 ```
 
-Comparar y registrar ese fingerprint en el acta aprobada de Testing. Si cambia
-el endpoint, no actualizarlo automáticamente: volver a verificar proyecto y
-cluster. No usar una URI de Producción aunque apunte a una base llamada
-`chaman_testing`.
+```json
+{"statement":"AGROMET_ONLY:CRONS_FROZEN:NOTIFICATIONS_DISABLED:OUTBOX_DISABLED:PUSH_DISABLED","approvedBy":"<RESPONSABLE>","evidence":"<TICKET/LOGS>","approvedAt":"<ISO-8601>"}
+```
+
+```powershell
+$env:CHAMAN_TESTING_CLUSTER_ATTESTATION_FILE = 'D:\attestations\cluster-testing.json'
+$env:CHAMAN_ERA5_PILOT_SAFETY_ATTESTATION_FILE = 'D:\attestations\era5-pilot-freeze.json'
+```
+
+Si cambia el endpoint, no actualizar el acta automáticamente. No usar una URI
+de Producción aunque apunte a una base llamada `chaman_testing`.
 
 ## 1. Plan de solo lectura
 
@@ -159,7 +170,8 @@ Remove-Item Env:CHAMAN_ERA5_PILOT_CONFIRM
 ```
 
 Un resultado `restored` confirma que Mongo volvio a los hashes previos. Un
-resultado `already_restored` confirma idempotencia. Cualquier drift, conflicto,
+resultado `already_restored` confirma idempotencia. Cualquier drift, re-key,
+borrado, documento creado, conflicto,
 error de transaccion o diferencia posterior es un bloqueo: no reintentar
 alterando el manifiesto ni editar NDJSON manualmente.
 
@@ -172,6 +184,9 @@ alterando el manifiesto ni editar NDJSON manualmente.
   para establecimientos compartidos hasta implementar restore granular probado.
 - La cobertura debe existir completa hasta `to`; por el retraso natural de ERA5,
   elegir como `to` el último día ya materializado, nunca completar huecos a mano.
+- Restore usa IDs y pertenencias sellados en bundle/post-state; no depende de
+  que la siembra o el lote sigan resolviendo después del piloto.
+- El worktree debe estar limpio: `codeSha` debe ser el HEAD exacto ejecutado.
 - No restaura colecciones de usuarios, tokens, notificaciones, colas, logs,
   dispositivos, ChirpStack, LoRaWAN ni credenciales externas.
 - El bundle contiene datos operativos de Testing: debe almacenarse cifrado,
