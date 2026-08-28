@@ -21,6 +21,8 @@ const SERVICE_ALIASES = {
   websocket: 'websocket',
   'sdc-ndvi-worker': 'ndvi-worker',
   'ndvi-worker': 'ndvi-worker',
+  'sdc-meteo-worker': 'meteo-worker',
+  'meteo-worker': 'meteo-worker',
 };
 
 const BACKEND_SERVICES = new Set([
@@ -46,6 +48,7 @@ const SERVICE_REQUIRED = {
     'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
     'AGROMETEO_INTERNAL_TOKEN',
     'OPEN_METEO_API_KEY',
+    'CHAMAN_RELEASE_VERSION',
   ],
   auth: ['API_DATOS', 'CLIENT_ID_INICIAL', 'CLIENT_SECRET_INICIAL'],
   datos: [
@@ -53,6 +56,7 @@ const SERVICE_REQUIRED = {
     'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
     'AGROMETEO_INTERNAL_TOKEN',
     'OPEN_METEO_API_KEY',
+    'CHAMAN_RELEASE_VERSION',
   ],
   predicciones: [
     'API_DATOS',
@@ -75,6 +79,12 @@ const SERVICE_REQUIRED = {
   ],
   websocket: ['API_AUTH', 'API_DATOS', 'CORS_ORIGINS'],
   'ndvi-worker': ['REDIS_HOST', 'API_EXTERNA_URL', 'NDVI_WORKER_TOKEN'],
+  'meteo-worker': [
+    'API_DATOS',
+    'REDIS_HOST',
+    'CHAMAN_METEO_INTERNAL_TOKEN',
+    'CHAMAN_METEO_IMPORT_ENABLED',
+  ],
 };
 
 const FORBIDDEN_VALUES = {
@@ -89,6 +99,8 @@ const FORBIDDEN_VALUES = {
   ]),
   AGROMETEO_INTERNAL_TOKEN: new Set(['', '1', 'change-me', '<change-me>']),
   OPEN_METEO_API_KEY: new Set(['', '1', 'change-me', '<change-me>']),
+  CHAMAN_METEO_INTERNAL_TOKEN: new Set(['', '1', 'change-me', '<change-me>']),
+  CDS_API_KEY: new Set(['', '1', 'change-me', '<change-me>']),
   OPEN_METEO_ARCHIVE_API_KEY: new Set(['1', 'change-me', '<change-me>']),
   TIMELAPSE_ADMIN_TOKEN: new Set(['1', 'change-me', '<change-me>']),
 };
@@ -245,6 +257,7 @@ function validate() {
   for (const name of [
     'SOIL_INTELLIGENCE_INTERNAL_TOKEN',
     'AGROMETEO_INTERNAL_TOKEN',
+    'CHAMAN_METEO_INTERNAL_TOKEN',
   ]) {
     if (hasValue(name) && getValue(name).length < 32) {
       pushIssue(issues, 'error', `${name} debe tener al menos 32 caracteres`);
@@ -304,6 +317,79 @@ function validate() {
     ]) {
       if (!hasValue(name)) {
         pushIssue(issues, 'error', `LoRaWAN activo pero falta ${name}`);
+      }
+    }
+  }
+
+  if (['api', 'datos'].includes(service)) {
+    const releaseSha =
+      getValue('CHAMAN_RELEASE_SHA') ||
+      getValue('RAILWAY_GIT_COMMIT_SHA') ||
+      getValue('GIT_COMMIT_SHA');
+    if (!/^[0-9a-f]{40}$/i.test(releaseSha)) {
+      pushIssue(
+        issues,
+        'error',
+        'El endpoint /version requiere CHAMAN_RELEASE_SHA o un SHA Git provisto por Railway',
+      );
+    }
+    if (!/^[a-z0-9][a-z0-9._+-]{0,63}$/i.test(getValue('CHAMAN_RELEASE_VERSION'))) {
+      pushIssue(issues, 'error', 'CHAMAN_RELEASE_VERSION tiene un formato inválido');
+    }
+
+    const explicitBuiltAt = getValue('CHAMAN_RELEASE_BUILT_AT');
+    const sourceDateEpoch = getValue('SOURCE_DATE_EPOCH');
+    if (!explicitBuiltAt && !sourceDateEpoch) {
+      pushIssue(
+        issues,
+        'error',
+        'El endpoint /version requiere CHAMAN_RELEASE_BUILT_AT o SOURCE_DATE_EPOCH',
+      );
+    } else if (
+      explicitBuiltAt &&
+      (!Number.isFinite(Date.parse(explicitBuiltAt)) || explicitBuiltAt.length > 64)
+    ) {
+      pushIssue(issues, 'error', 'CHAMAN_RELEASE_BUILT_AT debe ser una fecha ISO válida');
+    } else if (
+      !explicitBuiltAt &&
+      (!/^\d{1,12}$/.test(sourceDateEpoch) ||
+        !Number.isSafeInteger(Number(sourceDateEpoch) * 1000))
+    ) {
+      pushIssue(issues, 'error', 'SOURCE_DATE_EPOCH debe expresarse en segundos enteros');
+    }
+  }
+
+  if (service === 'meteo-worker') {
+    const importEnabled = getValue('CHAMAN_METEO_IMPORT_ENABLED') === 'true';
+    if (importEnabled && getValue('CHAMAN_METEO_ENABLED') !== 'true') {
+      pushIssue(
+        issues,
+        'error',
+        'CHAMAN_METEO_IMPORT_ENABLED=true requiere CHAMAN_METEO_ENABLED=true',
+      );
+    }
+    if (importEnabled && !hasValue('CDS_API_KEY')) {
+      pushIssue(issues, 'error', 'Importador Chamán-Meteo activo pero falta CDS_API_KEY');
+    }
+    if (getValue('CHAMAN_METEO_RUN_ONCE') === 'true') {
+      pushIssue(
+        issues,
+        'error',
+        'CHAMAN_METEO_RUN_ONCE no puede quedar habilitado en un servicio productivo continuo',
+      );
+    }
+    for (const name of [
+      'CHAMAN_METEO_REPAIR_GRID_POINT',
+      'CHAMAN_METEO_REPAIR_FROM',
+      'CHAMAN_METEO_REPAIR_TO',
+      'CHAMAN_METEO_REPAIR_FORCE',
+    ]) {
+      if (hasValue(name)) {
+        pushIssue(
+          issues,
+          'error',
+          `${name} debe estar ausente del servicio productivo continuo`,
+        );
       }
     }
   }

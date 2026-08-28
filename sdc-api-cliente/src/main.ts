@@ -13,7 +13,10 @@ import {
 function setGlobalPrefix(app: INestApplication, logger: Logger) {
   if (PREFIX_PATH) {
     app.setGlobalPrefix(PREFIX_PATH, {
-      exclude: [{ path: '/health', method: RequestMethod.GET }],
+      exclude: [
+        { path: '/health', method: RequestMethod.GET },
+        { path: '/version', method: RequestMethod.GET },
+      ],
     });
     logger.verbose(`Prefijo de ruta: /${PREFIX_PATH}.`);
   } else {

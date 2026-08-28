@@ -46,6 +46,7 @@ import { IndicadoresAgrometeorologicosModule } from './entidades/indicador-agrom
 import { ScheduleModule } from '@nestjs/schedule';
 import { SoilIntelligenceModule } from './entidades/suelo-inteligencia/module';
 import { TenantsModule } from './entidades/tenant/module';
+import { VersionController } from './auxiliares/version/version.controller';
 
 @Module({
   imports: [
@@ -95,7 +96,7 @@ import { TenantsModule } from './entidades/tenant/module';
     SoilIntelligenceModule,
     TenantsModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, VersionController],
   providers: [],
 })
 export class AppModule {

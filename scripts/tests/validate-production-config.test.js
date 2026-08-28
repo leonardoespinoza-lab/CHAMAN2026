@@ -20,6 +20,9 @@ function validClimaEnv(overrides = {}) {
     SWAGGER_ENABLED: 'false',
     CORS_ORIGINS: 'https://app.chamanagro.ar',
     GOOGLE_LOGIN_ENABLED: 'false',
+    CHAMAN_RELEASE_VERSION: '2026.08.28-rc.1',
+    CHAMAN_RELEASE_BUILT_AT: '2026-08-28T16:30:00.000Z',
+    RAILWAY_GIT_COMMIT_SHA: '4bf3af39643406f91cd74d902a3f71770c7c01fc',
     ...overrides,
   };
 }
@@ -183,4 +186,54 @@ test('lora acepta inventario ChirpStack interno con token', () => {
   });
 
   assert.equal(result.status, 0, result.output);
+});
+
+test('datos exige fecha verificable para /version y acepta SOURCE_DATE_EPOCH', () => {
+  const missing = runValidator({
+    CHAMAN_SERVICE: 'sdc-datos',
+    MONGO_URI: 'mongodb://mongo.railway.internal:27017/chaman',
+    CHAMAN_RELEASE_BUILT_AT: '',
+    SOURCE_DATE_EPOCH: '',
+  });
+  assert.equal(missing.status, 1);
+  assert.match(missing.output, /requiere CHAMAN_RELEASE_BUILT_AT o SOURCE_DATE_EPOCH/);
+
+  const fallback = runValidator({
+    CHAMAN_SERVICE: 'sdc-datos',
+    MONGO_URI: 'mongodb://mongo.railway.internal:27017/chaman',
+    CHAMAN_RELEASE_BUILT_AT: '',
+    SOURCE_DATE_EPOCH: '1787934600',
+  });
+  assert.equal(fallback.status, 0, fallback.output);
+});
+
+test('meteo worker deshabilitado valida red privada sin exigir la clave CDS', () => {
+  const result = runValidator({
+    CHAMAN_SERVICE: 'sdc-meteo-worker',
+    API_DATOS: 'http://chaman-datos.railway.internal:5000',
+    REDIS_HOST: 'redis.railway.internal',
+    CHAMAN_METEO_INTERNAL_TOKEN: 'm'.repeat(32),
+    CHAMAN_METEO_ENABLED: 'true',
+    CHAMAN_METEO_IMPORT_ENABLED: 'false',
+    CDS_API_KEY: '',
+  });
+
+  assert.equal(result.status, 0, result.output);
+});
+
+test('meteo worker activo exige CDS y rechaza variables de reparación persistentes', () => {
+  const result = runValidator({
+    CHAMAN_SERVICE: 'sdc-meteo-worker',
+    API_DATOS: 'http://chaman-datos.railway.internal:5000',
+    REDIS_HOST: 'redis.railway.internal',
+    CHAMAN_METEO_INTERNAL_TOKEN: 'm'.repeat(32),
+    CHAMAN_METEO_ENABLED: 'true',
+    CHAMAN_METEO_IMPORT_ENABLED: 'true',
+    CDS_API_KEY: '',
+    CHAMAN_METEO_REPAIR_FROM: '2026-01-01',
+  });
+
+  assert.equal(result.status, 1);
+  assert.match(result.output, /falta CDS_API_KEY/);
+  assert.match(result.output, /CHAMAN_METEO_REPAIR_FROM debe estar ausente/);
 });

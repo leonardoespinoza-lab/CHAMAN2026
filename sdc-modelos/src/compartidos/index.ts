@@ -10,3 +10,4 @@ export * from './ubicacion';
 export * from './archivado';
 export * from './integraciones';
 export * from './geojson';
+export * from './release-metadata';
