@@ -126,17 +126,7 @@ export class CardFrioTermicoComponent implements OnChanges {
 
   public get fuenteFrioLabel(): string {
     if (!this.data) return this.usaSensorFrio ? 'Sensor LoRa' : 'Sin serie consolidada';
-    const fuente = this.data.dataSource;
-    const respaldo =
-      fuente.type === 'station'
-        ? fuente.stationName || 'central meteorológica'
-        : fuente.type === 'open_meteo'
-          ? 'Open-Meteo'
-          : fuente.type === 'mixed'
-            ? 'fuentes integradas'
-            : fuente.type === 'sensor'
-              ? 'sensor de campo'
-              : 'sin respaldo';
+    const respaldo = this.fuenteCanonicaLabel;
     return this.usaSensorFrio ? `Sensor LoRa + ${respaldo}` : respaldo;
   }
 
@@ -167,16 +157,9 @@ export class CardFrioTermicoComponent implements OnChanges {
       return `Acumulación térmica ${desde}${cierre}${dias}`;
     }
     const cierreFrio = this.fechaAgronomica(resumen.coldThroughDate);
-    const fechaObjetivo = cierreFrio
-      ? new Date(`${cierreFrio}T12:00:00.000Z`)
-      : new Date();
-    const registroInicio = obtenerInicioTemporadaFrioObservado(
-      this.siembra,
-      fechaObjetivo,
-    );
-    const inicioObservado = registroInicio
-      ? fechaEfectivaRegistroFenologico(registroInicio)
-      : undefined;
+    const fechaObjetivo = cierreFrio ? new Date(`${cierreFrio}T12:00:00.000Z`) : new Date();
+    const registroInicio = obtenerInicioTemporadaFrioObservado(this.siembra, fechaObjetivo);
+    const inicioObservado = registroInicio ? fechaEfectivaRegistroFenologico(registroInicio) : undefined;
     const frio = inicioObservado
       ? `Temporada de frío observada desde ${this.fechaCorta(inicioObservado)}`
       : resumen.coldSeasonStart
@@ -603,8 +586,17 @@ export class CardFrioTermicoComponent implements OnChanges {
     if (!fuente) return 'Serie climática canónica';
     if (fuente.type === 'station') return fuente.stationName || 'Central meteorológica asociada';
     if (fuente.type === 'sensor') return fuente.sensorNames?.join(', ') || 'Sensor LoRa asignado';
-    if (fuente.type === 'mixed') return 'Jerarquía campo/central/Open-Meteo';
+    if (fuente.type === 'mixed') {
+      const labels = (fuente.sources || []).map((source) => {
+        if (source === 'sensor') return fuente.sensorNames?.join(', ') || 'Sensor de campo';
+        if (source === 'station') return fuente.stationName || 'Central meteorológica asociada';
+        if (source === 'chaman_meteo') return 'Chamán-Meteo (ERA5-Land)';
+        return source === 'open_meteo' ? 'Open-Meteo' : 'Fuente meteorológica';
+      });
+      return labels.length ? labels.join(' + ') : 'Fuentes climáticas integradas';
+    }
     if (fuente.type === 'open_meteo') return 'Open-Meteo';
+    if (fuente.type === 'chaman_meteo') return 'Chamán-Meteo (ERA5-Land)';
     return 'Serie climática canónica';
   }
 
@@ -811,9 +803,7 @@ export class CardFrioTermicoComponent implements OnChanges {
         startOnTick: false,
         endOnTick: false,
         gridLineColor: 'rgba(119, 150, 180, 0.16)',
-        plotLines: esUtah
-          ? [{ value: 0, width: 1.5, color: 'rgba(31, 48, 71, 0.55)', zIndex: 4 }]
-          : undefined,
+        plotLines: esUtah ? [{ value: 0, width: 1.5, color: 'rgba(31, 48, 71, 0.55)', zIndex: 4 }] : undefined,
       };
     };
     return {
@@ -841,28 +831,28 @@ export class CardFrioTermicoComponent implements OnChanges {
       yAxis: panelesIndependientes
         ? [...(mostrarTemperatura ? [ejeTemperatura] : []), ...visibles.map(ejeDeModelo)]
         : vernalizacion
-        ? visibles.map((item, index) => ({
-            title: { text: item.name },
-            opposite: index > 0,
-            min: 0,
-            gridLineColor: 'rgba(119, 150, 180, 0.16)',
-          }))
-        : [
-            {
-              title: { text: aporteDiario ? 'HF / UF diarias' : 'HF / UF acumuladas' },
-              min: aporteDiario ? undefined : 0,
-              gridLineColor: 'rgba(119, 150, 180, 0.16)',
-              plotLines: aporteDiario
-                ? [{ value: 0, width: 1.5, color: 'rgba(31, 48, 71, 0.5)', zIndex: 4 }]
-                : undefined,
-            },
-            {
-              title: { text: aporteDiario ? 'CP diarias' : 'CP acumuladas' },
-              opposite: true,
+          ? visibles.map((item, index) => ({
+              title: { text: item.name },
+              opposite: index > 0,
               min: 0,
-              gridLineWidth: 0,
-            },
-          ],
+              gridLineColor: 'rgba(119, 150, 180, 0.16)',
+            }))
+          : [
+              {
+                title: { text: aporteDiario ? 'HF / UF diarias' : 'HF / UF acumuladas' },
+                min: aporteDiario ? undefined : 0,
+                gridLineColor: 'rgba(119, 150, 180, 0.16)',
+                plotLines: aporteDiario
+                  ? [{ value: 0, width: 1.5, color: 'rgba(31, 48, 71, 0.5)', zIndex: 4 }]
+                  : undefined,
+              },
+              {
+                title: { text: aporteDiario ? 'CP diarias' : 'CP acumuladas' },
+                opposite: true,
+                min: 0,
+                gridLineWidth: 0,
+              },
+            ],
       tooltip: {
         shared: true,
         headerFormat: `<b>${aporteDiario ? 'Aporte diario' : 'Acumulado'} · {point.key}</b><br/>`,
@@ -966,9 +956,7 @@ export class CardFrioTermicoComponent implements OnChanges {
     const maximo = Math.max(...valores);
     const amplitud = maximo - minimo;
     const margen = Math.max(1, amplitud * 0.08);
-    return amplitud === 0
-      ? { min: minimo - 1, max: maximo + 1 }
-      : { min: minimo - margen, max: maximo + margen };
+    return amplitud === 0 ? { min: minimo - 1, max: maximo + 1 } : { min: minimo - margen, max: maximo + margen };
   }
 
   private async cargarHistoricoSensor(force = false): Promise<void> {

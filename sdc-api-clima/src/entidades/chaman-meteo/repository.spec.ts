@@ -10,10 +10,7 @@ describe('ChamanMeteoRepository', () => {
   });
 
   it('filters storage status by the active calculation version', () => {
-    repository.status(
-      'chaman-meteo-agro-v2',
-      'era5-land-timeseries-19var-v2',
-    );
+    repository.status('chaman-meteo-agro-v2', 'era5-land-timeseries-19var-v2');
 
     expect(axios.GET).toHaveBeenCalledWith(
       `${API_DATOS}/chaman-meteo-internal/status`,
@@ -85,5 +82,21 @@ describe('ChamanMeteoRepository', () => {
       `${API_DATOS}/chaman-meteo-internal/bindings/lote/64b000000000000000000010`,
       expect.objectContaining({ headers: expect.any(Object) }),
     );
+  });
+
+  it('consulta server-side todas las siembras activas reales del lote', () => {
+    repository.activeSowingsByLot('64b000000000000000000010');
+
+    expect(axios.GET).toHaveBeenCalledWith(`${API_DATOS}/siembras`, {
+      params: {
+        filter: JSON.stringify({
+          idLote: '64b000000000000000000010',
+          activa: { $ne: false },
+        }),
+        select: '_id idLote activa',
+        limit: 0,
+      },
+      headers: expect.any(Object),
+    });
   });
 });

@@ -55,6 +55,45 @@ describe('CardFrioTermicoComponent', () => {
     expect(component.mostrar).toBeFalse();
   });
 
+  it('conserva la procedencia Chaman-Meteo en una serie pura o mixta', async () => {
+    const pure = create(
+      response({
+        dataSource: {
+          type: 'chaman_meteo',
+          sources: ['chaman_meteo'],
+          completenessPercentage: 100,
+        },
+      })
+    );
+    pure.siembra = {
+      _id: 'trigo-era5',
+      semilla: { cultivo: 'Trigo' },
+    } as any;
+    await pure.cargar();
+
+    expect(pure.fuenteFrioLabel).toBe('Chamán-Meteo (ERA5-Land)');
+    expect(pure.calidadFrioLabel).toContain('Chamán-Meteo (ERA5-Land)');
+
+    const mixed = create(
+      response({
+        dataSource: {
+          type: 'mixed',
+          sources: ['sensor', 'chaman_meteo'],
+          sensorNames: ['K-01'],
+          completenessPercentage: 100,
+        },
+      })
+    );
+    mixed.siembra = {
+      _id: 'trigo-mixto-era5',
+      semilla: { cultivo: 'Trigo' },
+    } as any;
+    await mixed.cargar();
+
+    expect(mixed.fuenteFrioLabel).toContain('Chamán-Meteo (ERA5-Land)');
+    expect(mixed.fuenteFrioLabel).not.toContain('Open-Meteo');
+  });
+
   it('presenta trigo como acumulacion termica sin mensajes de frio frutal ni calibracion ficticia', async () => {
     const component = create(
       response({

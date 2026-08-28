@@ -7,6 +7,8 @@ import {
   IChamanMeteoPage,
   IChamanMeteoResolvedLocationBinding,
   IChamanMeteoStorageStatus,
+  IListado,
+  ISiembra,
 } from 'modelos/src';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
 import { API_DATOS, CHAMAN_METEO_INTERNAL_TOKEN } from '../../env';
@@ -43,6 +45,22 @@ export class ChamanMeteoRepository {
       `${API_DATOS}/chaman-meteo-internal/bindings/${locationType}/${encodeURIComponent(locationId)}`,
       { headers: this.headers() },
     );
+  }
+
+  activeSowingsByLot(
+    idLote: string,
+  ): Promise<IListado<Pick<ISiembra, '_id' | 'idLote' | 'activa'>>> {
+    return this.axios.GET(`${API_DATOS}/siembras`, {
+      params: {
+        filter: JSON.stringify({
+          idLote,
+          activa: { $ne: false },
+        }),
+        select: '_id idLote activa',
+        limit: 0,
+      },
+      headers: this.headers(),
+    });
   }
 
   jobs(

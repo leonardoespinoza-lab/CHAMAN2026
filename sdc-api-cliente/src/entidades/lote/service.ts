@@ -1468,7 +1468,7 @@ export class LotesService {
     siembra?: ISiembra,
   ): CertificadoClima {
     const source = data.dataSource;
-    const sourceLabels = (source.sources || []).map((item) => {
+    const sourceLabels = this.getCanonicalClimateSources(data).map((item) => {
       if (item === 'sensor') {
         return source.sensorNames?.length
           ? `Sensor ${source.sensorNames.join(', ')}`
@@ -1477,7 +1477,10 @@ export class LotesService {
       if (item === 'station') {
         return source.stationName || 'Central meteorologica';
       }
-      return 'Open-Meteo';
+      if (item === 'chaman_meteo') {
+        return 'Chamán-Meteo (ERA5-Land)';
+      }
+      return item === 'open_meteo' ? 'Open-Meteo' : 'Fuente meteorologica';
     });
     const fuente =
       sourceLabels.join(' + ') ||
@@ -1487,7 +1490,9 @@ export class LotesService {
           ? source.stationName || 'Central meteorologica'
           : source.type === 'open_meteo'
             ? 'Open-Meteo'
-            : 'Motor agrometeorologico Chaman');
+            : source.type === 'chaman_meteo'
+              ? 'Chamán-Meteo (ERA5-Land)'
+              : 'Motor agrometeorologico Chaman');
     const requirement = data.summary.coldRequirement;
     const requirementValid =
       requirement?.status === 'validado' &&
@@ -1560,6 +1565,33 @@ export class LotesService {
               : '',
       ]).join(' '),
     };
+  }
+
+  private getCanonicalClimateSources(
+    data: IRespuestaAgrometeorologiaSiembra,
+  ): Array<'sensor' | 'station' | 'open_meteo' | 'chaman_meteo'> {
+    const sources = new Set<string>(data.dataSource.sources || []);
+    if (data.dataSource.type !== 'mixed') {
+      sources.add(data.dataSource.type);
+    }
+    (data.series || []).forEach((day) => {
+      sources.add(String(day.source || ''));
+      Object.values(day.sourceByVariable || {}).forEach((source) =>
+        sources.add(String(source || '')),
+      );
+    });
+
+    const normalized = new Set<
+      'sensor' | 'station' | 'open_meteo' | 'chaman_meteo'
+    >();
+    sources.forEach((source) => {
+      const value = source.toLowerCase();
+      if (value.includes('chaman_meteo')) normalized.add('chaman_meteo');
+      else if (value.includes('sensor')) normalized.add('sensor');
+      else if (value.includes('station')) normalized.add('station');
+      else if (value.includes('open_meteo')) normalized.add('open_meteo');
+    });
+    return [...normalized];
   }
 
   private mapCanonicalClimateDay(
@@ -5665,10 +5697,7 @@ export class LotesService {
       return this.relacionCoincide(data.idQuimica, permiso.idQuimica);
     }
     if (permiso.nivel === 'Distribuidor') {
-      return this.relacionCoincide(
-        data.idDistribuidor,
-        permiso.idDistribuidor,
-      );
+      return this.relacionCoincide(data.idDistribuidor, permiso.idDistribuidor);
     }
     if (permiso.nivel === 'Asesor') {
       return permisoPuedeVerLote(permiso, data);
@@ -5728,14 +5757,9 @@ export class LotesService {
     }
   }
 
-  private relacionCoincide(
-    idEntidad?: string,
-    idPermiso?: string,
-  ): boolean {
+  private relacionCoincide(idEntidad?: string, idPermiso?: string): boolean {
     return (
-      !!idEntidad &&
-      !!idPermiso &&
-      String(idEntidad) === String(idPermiso)
+      !!idEntidad && !!idPermiso && String(idEntidad) === String(idPermiso)
     );
   }
 

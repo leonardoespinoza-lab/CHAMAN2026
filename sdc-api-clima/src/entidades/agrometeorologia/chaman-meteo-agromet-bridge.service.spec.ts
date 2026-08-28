@@ -13,6 +13,14 @@ import {
 
 const LOT_ID = '64b000000000000000000010';
 const SOWING_ID = '64b000000000000000000020';
+const OTHER_SOWING_ID = '64b000000000000000000021';
+
+const activeSowings = (ids: string[] = [SOWING_ID]) => ({
+  datos: ids.map((_id) => ({ _id, idLote: LOT_ID, activa: true })),
+  totalCount: ids.length,
+});
+
+const activeSowingsMock = () => jest.fn().mockResolvedValue(activeSowings());
 
 const config = (
   data: Partial<IChamanMeteoAgrometBridgeConfig> = {},
@@ -127,6 +135,7 @@ describe('ChamanMeteoAgrometBridgeService', () => {
 
   it('consulta desde la siembra y reserva los ultimos cinco dias para Open-Meteo', async () => {
     const repository = {
+      activeSowingsByLot: activeSowingsMock(),
       resolvedLocationBinding: jest.fn().mockResolvedValue(resolvedBinding()),
       daily: jest.fn().mockResolvedValue({
         datos: [daily('2026-05-01'), daily('2026-08-23')],
@@ -163,6 +172,7 @@ describe('ChamanMeteoAgrometBridgeService', () => {
       '2026-05-01',
       '2026-08-24',
     );
+    expect(repository.activeSowingsByLot).toHaveBeenCalledTimes(2);
     expect(result.used).toBe(true);
     expect(result.observations.map((item) => item.fechaLocal)).toEqual([
       '2026-05-01',
@@ -179,6 +189,7 @@ describe('ChamanMeteoAgrometBridgeService', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-08-28T01:00:00.000Z'));
     try {
       const repository = {
+        activeSowingsByLot: activeSowingsMock(),
         resolvedLocationBinding: jest.fn().mockResolvedValue(resolvedBinding()),
         daily: jest.fn().mockResolvedValue({ datos: [], total: 0 }),
       };
@@ -214,6 +225,7 @@ describe('ChamanMeteoAgrometBridgeService', () => {
   it('rechaza dias ERA5 parciales para no fabricar cobertura termica', async () => {
     const partial = { ...daily('2026-05-01'), hoursAvailable: 23 };
     const repository = {
+      activeSowingsByLot: activeSowingsMock(),
       resolvedLocationBinding: jest.fn().mockResolvedValue(resolvedBinding()),
       daily: jest.fn().mockResolvedValue({ datos: [partial], total: 1 }),
     };
@@ -246,6 +258,7 @@ describe('ChamanMeteoAgrometBridgeService', () => {
       availableHoursByMetric: { temperature: 1 },
     };
     const repository = {
+      activeSowingsByLot: activeSowingsMock(),
       resolvedLocationBinding: jest.fn().mockResolvedValue(resolvedBinding()),
       daily: jest.fn().mockResolvedValue({ datos: [invalidDay], total: 1 }),
     };
@@ -279,6 +292,7 @@ describe('ChamanMeteoAgrometBridgeService', () => {
       },
     };
     const repository = {
+      activeSowingsByLot: activeSowingsMock(),
       resolvedLocationBinding: jest.fn().mockResolvedValue(resolvedBinding()),
       daily: jest
         .fn()
@@ -313,6 +327,7 @@ describe('ChamanMeteoAgrometBridgeService', () => {
 
   it('bloquea el piloto si el batch agrupa mas de una siembra activa', async () => {
     const repository = {
+      activeSowingsByLot: activeSowingsMock(),
       resolvedLocationBinding: jest.fn(),
       daily: jest.fn(),
     };
@@ -339,8 +354,117 @@ describe('ChamanMeteoAgrometBridgeService', () => {
     expect(repository.daily).not.toHaveBeenCalled();
   });
 
+  it('bloquea el bypass interactivo si el servidor encuentra otra siembra activa en el lote', async () => {
+    const repository = {
+      activeSowingsByLot: jest
+        .fn()
+        .mockResolvedValue(activeSowings([SOWING_ID, OTHER_SOWING_ID])),
+      resolvedLocationBinding: jest.fn(),
+      daily: jest.fn(),
+    };
+    const service = new ChamanMeteoAgrometBridgeService(repository as any);
+
+    const result = await service.fillHistoricalDailyGaps(
+      {
+        observations: [],
+        idEstablecimiento: '64b000000000000000000001',
+        idLote: LOT_ID,
+        // El camino interactivo solo conocia esta siembra y antes burlaba el gate.
+        idSiembras: [SOWING_ID],
+        coordenadas: { lat: -38.7888, lng: -68.10434 },
+        desde: '2026-05-01',
+        hasta: '2026-05-01',
+        forecast: false,
+        today: '2026-08-28',
+      },
+      config(),
+    );
+
+    expect(result.used).toBe(false);
+    expect(result.warnings.join(' ')).toContain(
+      'servidor de datos informo 2 siembras activas',
+    );
+    expect(repository.activeSowingsByLot).toHaveBeenCalledWith(LOT_ID);
+    expect(repository.resolvedLocationBinding).not.toHaveBeenCalled();
+    expect(repository.daily).not.toHaveBeenCalled();
+  });
+
+  it('bloquea si la siembra pedida no es la unica activa real del lote', async () => {
+    const repository = {
+      activeSowingsByLot: jest
+        .fn()
+        .mockResolvedValue(activeSowings([OTHER_SOWING_ID])),
+      resolvedLocationBinding: jest.fn(),
+      daily: jest.fn(),
+    };
+    const service = new ChamanMeteoAgrometBridgeService(repository as any);
+
+    const result = await service.fillHistoricalDailyGaps(
+      {
+        observations: [],
+        idEstablecimiento: '64b000000000000000000001',
+        idLote: LOT_ID,
+        idSiembras: [SOWING_ID],
+        coordenadas: { lat: -38.7888, lng: -68.10434 },
+        desde: '2026-05-01',
+        hasta: '2026-05-01',
+        forecast: false,
+        today: '2026-08-28',
+      },
+      config(),
+    );
+
+    expect(result.used).toBe(false);
+    expect(result.warnings.join(' ')).toContain(
+      'no coincide con la unica siembra activa real',
+    );
+    expect(repository.resolvedLocationBinding).not.toHaveBeenCalled();
+  });
+
+  it('revalida el conjunto activo antes de aplicar ERA5 y aborta ante un cambio concurrente', async () => {
+    const base = observation('2026-05-01', 'open_meteo', {
+      precipitationMm: 3,
+    });
+    const repository = {
+      activeSowingsByLot: jest
+        .fn()
+        .mockResolvedValueOnce(activeSowings())
+        .mockResolvedValueOnce(activeSowings([SOWING_ID, OTHER_SOWING_ID])),
+      resolvedLocationBinding: jest.fn().mockResolvedValue(resolvedBinding()),
+      daily: jest.fn().mockResolvedValue({
+        datos: [daily('2026-05-01')],
+        total: 1,
+      }),
+    };
+    const service = new ChamanMeteoAgrometBridgeService(repository as any);
+
+    const result = await service.fillHistoricalDailyGaps(
+      {
+        observations: [base],
+        idEstablecimiento: '64b000000000000000000001',
+        idLote: LOT_ID,
+        idSiembras: [SOWING_ID],
+        coordenadas: { lat: -38.7888, lng: -68.10434 },
+        desde: '2026-05-01',
+        hasta: '2026-05-01',
+        forecast: false,
+        today: '2026-08-28',
+      },
+      config(),
+    );
+
+    expect(repository.daily).toHaveBeenCalled();
+    expect(repository.activeSowingsByLot).toHaveBeenCalledTimes(2);
+    expect(result.used).toBe(false);
+    expect(result.observations).toEqual([base]);
+    expect(result.warnings.join(' ')).toContain(
+      'servidor de datos informo 2 siembras activas',
+    );
+  });
+
   it('bloquea fechas daily duplicadas antes de mezclarlas o persistirlas', async () => {
     const repository = {
+      activeSowingsByLot: activeSowingsMock(),
       resolvedLocationBinding: jest.fn().mockResolvedValue(resolvedBinding()),
       daily: jest.fn().mockResolvedValue({
         datos: [daily('2026-05-01'), daily('2026-05-01')],
@@ -400,6 +524,7 @@ describe('ChamanMeteoAgrometBridgeService', () => {
     ],
   ])('rechaza binding con %s', async (_label, resolved, expectedWarning) => {
     const repository = {
+      activeSowingsByLot: activeSowingsMock(),
       resolvedLocationBinding: jest.fn().mockResolvedValue(resolved),
       daily: jest.fn(),
     };
@@ -428,6 +553,7 @@ describe('ChamanMeteoAgrometBridgeService', () => {
   it('rechaza un daily cuya timezone no coincide con la grilla', async () => {
     const invalidTimezone = { ...daily('2026-05-01'), timezone: 'UTC' };
     const repository = {
+      activeSowingsByLot: activeSowingsMock(),
       resolvedLocationBinding: jest.fn().mockResolvedValue(resolvedBinding()),
       daily: jest.fn().mockResolvedValue({
         datos: [invalidTimezone],
@@ -471,6 +597,7 @@ describe('ChamanMeteoAgrometBridgeService', () => {
       },
     };
     const repository = {
+      activeSowingsByLot: activeSowingsMock(),
       resolvedLocationBinding: jest.fn().mockResolvedValue(resolvedBinding()),
       daily: jest.fn().mockResolvedValue({ datos: [withSoil], total: 1 }),
     };

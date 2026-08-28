@@ -175,6 +175,18 @@ export class ChamanMeteoAgrometBridgeService {
     }
 
     try {
+      const activeSowingWarning = await this.validateSingleActiveSowing(
+        input.idLote,
+        input.idSiembras || [],
+      );
+      if (activeSowingWarning) {
+        return {
+          observations: input.observations,
+          warnings: [activeSowingWarning],
+          used: false,
+        };
+      }
+
       const resolved = await this.repository.resolvedLocationBinding(
         'lote',
         input.idLote,
@@ -288,6 +300,24 @@ export class ChamanMeteoAgrometBridgeService {
           used: false,
         };
       }
+
+      // La llamada interactiva conoce una sola siembra, pero eso no prueba que
+      // sea la unica activa del lote. Se vuelve a consultar al servidor justo
+      // antes de aplicar ERA5 para evitar un cambio concurrente entre lectura y
+      // mezcla (TOCTOU).
+      const activeSowingRevalidationWarning =
+        await this.validateSingleActiveSowing(
+          input.idLote,
+          input.idSiembras || [],
+        );
+      if (activeSowingRevalidationWarning) {
+        return {
+          observations: input.observations,
+          warnings: [activeSowingRevalidationWarning],
+          used: false,
+        };
+      }
+
       const normalized = rows
         .map((row) =>
           this.normalizeDaily(
@@ -347,6 +377,46 @@ export class ChamanMeteoAgrometBridgeService {
         used: false,
       };
     }
+  }
+
+  private async validateSingleActiveSowing(
+    idLote: string,
+    requestedSowingIds: string[],
+  ): Promise<string | undefined> {
+    const requested = [
+      ...new Set(requestedSowingIds.map(normalizeIdentifier).filter(Boolean)),
+    ];
+    if (requested.length !== 1) {
+      return 'Chaman-Meteo bloqueo el lote piloto: la solicitud debe identificar exactamente una siembra activa.';
+    }
+
+    const page = await this.repository.activeSowingsByLot(idLote);
+    const rows = Array.isArray(page?.datos) ? page.datos : [];
+    if (
+      !page ||
+      !Number.isFinite(Number(page.totalCount)) ||
+      Number(page.totalCount) !== rows.length
+    ) {
+      return 'Chaman-Meteo bloqueo el lote piloto: la consulta server-side de siembras activas fue incompleta.';
+    }
+
+    if (rows.length !== 1) {
+      return `Chaman-Meteo bloqueo el lote piloto: el servidor de datos informo ${rows.length} siembras activas; se exige exactamente una.`;
+    }
+
+    const actual = rows[0];
+    const actualId = normalizeIdentifier(actual?._id);
+    if (
+      !actualId ||
+      normalizeIdentifier(actual?.idLote) !== normalizeIdentifier(idLote) ||
+      actual?.activa === false
+    ) {
+      return 'Chaman-Meteo bloqueo el lote piloto: la siembra activa devuelta por el servidor no pertenece de forma valida al lote.';
+    }
+    if (actualId !== requested[0]) {
+      return 'Chaman-Meteo bloqueo el lote piloto: la siembra solicitada no coincide con la unica siembra activa real del lote.';
+    }
+    return undefined;
   }
 
   private normalizeDaily(

@@ -572,6 +572,39 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
     expect(component.estadoRegistroTermico(registro)).toBe('Serie completa');
   });
 
+  it('rotula Chaman-Meteo en el snapshot fenologico y en el registro termico', () => {
+    component.snapshotAgromet = {
+      summary: {},
+      dataSource: {
+        type: 'chaman_meteo',
+        sources: ['chaman_meteo'],
+        completenessPercentage: 100,
+      },
+      series: [{ date: '2026-05-01', metrics: {} }],
+      warnings: [],
+      calculationVersion: 'test',
+      parametersVersion: 'test',
+    } as any;
+
+    expect(component.fuenteFenologiaTermicaTexto).toBe('Chamán-Meteo (ERA5-Land)');
+    expect(
+      component.fuenteRegistroTermico({
+        frioAcumulado: {
+          fuenteTemperatura: 'derived_chaman_meteo',
+        },
+      } as any)
+    ).toBe('Chamán-Meteo (ERA5-Land)');
+
+    component.snapshotAgromet!.dataSource = {
+      type: 'mixed',
+      sources: ['sensor', 'chaman_meteo'],
+      sensorNames: ['K-01'],
+      completenessPercentage: 100,
+    } as any;
+    expect(component.fuenteFenologiaTermicaTexto).toContain('Chamán-Meteo (ERA5-Land)');
+    expect(component.fuenteFenologiaTermicaTexto).not.toContain('Open-Meteo');
+  });
+
   it('distingue el inicio y el cierre de la ventana de vernalizacion anual', () => {
     component.siembra = {
       _id: 'siembra-trigo-1',
