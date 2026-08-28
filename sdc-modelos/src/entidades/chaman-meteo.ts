@@ -47,6 +47,9 @@ export interface IChamanMeteoRawValues {
   precipitationM?: number;
   shortwaveRadiationJm2?: number;
   thermalRadiationJm2?: number;
+  skinTemperatureK?: number;
+  snowCoverFraction?: number;
+  snowDepthM?: number;
   soilTemperatureK?: Array<number | null>;
   soilWaterM3M3?: Array<number | null>;
 }
@@ -67,6 +70,9 @@ export interface IChamanMeteoHourlyValues {
   netRadiationMjM2?: number;
   vpdKpa?: number;
   et0Mm?: number;
+  skinTemperatureC?: number;
+  snowCoverPct?: number;
+  snowDepthM?: number;
   soilTemperatureC?: Array<number | null>;
   soilWaterM3M3?: Array<number | null>;
 }
@@ -78,12 +84,67 @@ export interface IChamanMeteoDailyValues {
   relativeHumidityMinPct?: number;
   relativeHumidityMeanPct?: number;
   relativeHumidityMaxPct?: number;
+  dewPointMinC?: number;
+  dewPointMeanC?: number;
+  dewPointMaxC?: number;
+  surfacePressureMinKpa?: number;
+  surfacePressureMeanKpa?: number;
+  surfacePressureMaxKpa?: number;
   precipitationMm?: number;
+  precipitationMaxHourlyMm?: number;
+  /** @deprecated Use windSpeed2mMeanMs. */
   windSpeedMeanMs?: number;
+  /** @deprecated Use windSpeed2mMaxMs. */
   windSpeedMaxMs?: number;
+  windSpeed2mMeanMs?: number;
+  windSpeed2mMaxMs?: number;
+  windSpeed10mMeanMs?: number;
+  windSpeed10mMaxMs?: number;
+  windDirectionDominantDeg?: number;
+  windDirectionResultantRatio?: number;
   shortwaveRadiationMjM2?: number;
+  thermalRadiationMjM2?: number;
+  netRadiationMjM2?: number;
   et0Mm?: number;
+  vpdMinKpa?: number;
   vpdMeanKpa?: number;
+  vpdMaxKpa?: number;
+  skinTemperatureMinC?: number;
+  skinTemperatureMeanC?: number;
+  skinTemperatureMaxC?: number;
+  snowCoverMinPct?: number;
+  snowCoverMeanPct?: number;
+  snowCoverMaxPct?: number;
+  snowDepthMinM?: number;
+  snowDepthMeanM?: number;
+  snowDepthMaxM?: number;
+  soilTemperatureMinC?: Array<number | null>;
+  soilTemperatureMeanC?: Array<number | null>;
+  soilTemperatureMaxC?: Array<number | null>;
+  soilWaterMinM3M3?: Array<number | null>;
+  soilWaterMeanM3M3?: Array<number | null>;
+  soilWaterMaxM3M3?: Array<number | null>;
+}
+
+export interface IChamanMeteoMetricAvailability {
+  temperature?: number;
+  dewPoint?: number;
+  relativeHumidity?: number;
+  surfacePressure?: number;
+  wind10m?: number;
+  wind2m?: number;
+  windDirection?: number;
+  precipitation?: number;
+  shortwaveRadiation?: number;
+  thermalRadiation?: number;
+  netRadiation?: number;
+  vpd?: number;
+  et0?: number;
+  skinTemperature?: number;
+  snowCover?: number;
+  snowDepth?: number;
+  soilTemperature?: Array<number>;
+  soilWater?: Array<number>;
 }
 
 export interface IChamanMeteoHourlyRaw {
@@ -117,6 +178,7 @@ export interface IChamanMeteoDaily {
   hoursAvailable: number;
   hoursExpected: number;
   values: IChamanMeteoDailyValues;
+  availableHoursByMetric?: IChamanMeteoMetricAvailability;
   qualityFlags: string[];
   calculatedAt: string;
 }
@@ -124,6 +186,8 @@ export interface IChamanMeteoDaily {
 export interface IChamanMeteoCoverage {
   _id?: string;
   gridPointKey: string;
+  calculationVersion?: string;
+  sourceVersion?: string;
   hourlyRawFrom?: string;
   hourlyRawTo?: string;
   hourlyDerivedFrom?: string;
@@ -142,8 +206,12 @@ export interface IChamanMeteoImportJob {
   jobKey: string;
   type: ChamanMeteoJobType;
   gridPointKey?: string;
+  sourceVersion?: string;
+  calculationVersion?: string;
   rangeStart: string;
   rangeEnd: string;
+  retrievalStart?: string;
+  retrievalEnd?: string;
   status: ChamanMeteoJobStatus;
   progressPct: number;
   attempts: number;
@@ -158,6 +226,8 @@ export interface IChamanMeteoImportJob {
 }
 
 export interface IChamanMeteoStorageStatus {
+  calculationVersion?: string;
+  sourceVersion?: string;
   gridPoints: number;
   activeBindings: number;
   hourlyRawRecords: number;
@@ -165,6 +235,7 @@ export interface IChamanMeteoStorageStatus {
   dailyRecords: number;
   jobsByStatus: Record<ChamanMeteoJobStatus, number>;
   latestJob?: IChamanMeteoImportJob;
+  latestProblemJob?: IChamanMeteoImportJob;
   latestCoverage?: IChamanMeteoCoverage;
 }
 
@@ -178,6 +249,8 @@ export interface IChamanMeteoAdminStatus extends IChamanMeteoStorageStatus {
   historicalStart: string;
   calculationVersion: string;
   operationalSourceUnchanged: boolean;
+  configurationValid: boolean;
+  lastError?: string;
   state: "DISABLED" | "READY" | "IMPORTING" | "AVAILABLE" | "ERROR";
   checkedAt: string;
 }

@@ -34,8 +34,10 @@ export class ChamanMeteoController {
     @Query('gridPointKey') gridPointKey?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('from') from?: string,
+    @Query('toExclusive') toExclusive?: string,
   ) {
-    return this.service.hourly(gridPointKey, limit, offset);
+    return this.service.hourly(gridPointKey, limit, offset, from, toExclusive);
   }
 
   @Get('daily')
@@ -44,7 +46,9 @@ export class ChamanMeteoController {
     @Query('gridPointKey') gridPointKey?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('from') from?: string,
+    @Query('toExclusive') toExclusive?: string,
   ) {
-    return this.service.daily(gridPointKey, limit, offset);
+    return this.service.daily(gridPointKey, limit, offset, from, toExclusive);
   }
 }

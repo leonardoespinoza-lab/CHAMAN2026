@@ -230,6 +230,7 @@ export const CHAMAN_METEO_IMPORT_ENABLED =
   CHAMAN_METEO_ENABLED && process.env.CHAMAN_METEO_IMPORT_ENABLED === 'true';
 export const CHAMAN_METEO_CDS_CONFIGURED =
   process.env.CHAMAN_METEO_CDS_CONFIGURED === 'true';
+export const CHAMAN_METEO_MIN_HISTORICAL_START = '2020-01-01';
 export function resolveChamanMeteoHistoricalStart(value: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new Error('CHAMAN_METEO_HISTORICAL_START debe usar YYYY-MM-DD');
@@ -241,18 +242,141 @@ export function resolveChamanMeteoHistoricalStart(value: string): string {
   ) {
     throw new Error('CHAMAN_METEO_HISTORICAL_START no es una fecha valida');
   }
-  if (value < '1950-01-02' || value > new Date().toISOString().slice(0, 10)) {
+  if (value < CHAMAN_METEO_MIN_HISTORICAL_START) {
+    throw new Error(
+      `Chaman-Meteo solo admite historicos desde ${CHAMAN_METEO_MIN_HISTORICAL_START}`,
+    );
+  }
+  if (value > new Date().toISOString().slice(0, 10)) {
     throw new Error(
       'CHAMAN_METEO_HISTORICAL_START esta fuera del rango ERA5-Land',
     );
   }
   return value;
 }
-export const CHAMAN_METEO_HISTORICAL_START = resolveChamanMeteoHistoricalStart(
-  process.env.CHAMAN_METEO_HISTORICAL_START || '2020-01-01',
+export function resolveChamanMeteoRuntimeHistoricalStart(value?: string): {
+  historicalStart: string;
+  configuredStart: string;
+  valid: boolean;
+  error?: string;
+} {
+  const configuredStart = value === undefined ? '2020-01-01' : value;
+  try {
+    return {
+      historicalStart: resolveChamanMeteoHistoricalStart(configuredStart),
+      configuredStart,
+      valid: true,
+    };
+  } catch (error) {
+    return {
+      historicalStart: '2020-01-01',
+      configuredStart,
+      valid: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+const chamanMeteoRuntimeHistoricalStart =
+  resolveChamanMeteoRuntimeHistoricalStart(
+    process.env.CHAMAN_METEO_HISTORICAL_START,
+  );
+export const CHAMAN_METEO_HISTORICAL_START =
+  chamanMeteoRuntimeHistoricalStart.historicalStart;
+export const CHAMAN_METEO_HISTORICAL_START_VALID =
+  chamanMeteoRuntimeHistoricalStart.valid;
+export const CHAMAN_METEO_HISTORICAL_START_ERROR =
+  chamanMeteoRuntimeHistoricalStart.error;
+export const CHAMAN_METEO_EXPECTED_CALCULATION_VERSION =
+  'chaman-meteo-agro-v2';
+export function resolveChamanMeteoCalculationVersion(value: string): string {
+  const version = String(value ?? '');
+  if (version !== CHAMAN_METEO_EXPECTED_CALCULATION_VERSION) {
+    throw new Error(
+      `CHAMAN_METEO_CALCULATION_VERSION debe ser exactamente ${CHAMAN_METEO_EXPECTED_CALCULATION_VERSION}`,
+    );
+  }
+  return version;
+}
+export function resolveChamanMeteoRuntimeVersion(value?: string): {
+  calculationVersion: string;
+  configuredVersion: string;
+  valid: boolean;
+  error?: string;
+} {
+  const configuredVersion =
+    value === undefined ? CHAMAN_METEO_EXPECTED_CALCULATION_VERSION : value;
+  const valid = configuredVersion === CHAMAN_METEO_EXPECTED_CALCULATION_VERSION;
+  return {
+    calculationVersion: CHAMAN_METEO_EXPECTED_CALCULATION_VERSION,
+    configuredVersion,
+    valid,
+    error: valid
+      ? undefined
+      : `CHAMAN_METEO_CALCULATION_VERSION debe ser exactamente ${CHAMAN_METEO_EXPECTED_CALCULATION_VERSION}`,
+  };
+}
+
+// No se valida con un throw al importar env.ts: sdc-api-clima tambien aloja
+// Open-Meteo y otros motores productivos. Una etiqueta heredada debe quedar
+// aislada al modulo Chaman-Meteo y nunca impedir el arranque de toda la API.
+const chamanMeteoRuntimeVersion = resolveChamanMeteoRuntimeVersion(
+  process.env.CHAMAN_METEO_CALCULATION_VERSION,
 );
 export const CHAMAN_METEO_CALCULATION_VERSION =
-  process.env.CHAMAN_METEO_CALCULATION_VERSION || 'chaman-meteo-agro-v1';
+  chamanMeteoRuntimeVersion.calculationVersion;
+export const CHAMAN_METEO_CALCULATION_VERSION_VALID =
+  chamanMeteoRuntimeVersion.valid;
+export const CHAMAN_METEO_CALCULATION_VERSION_ERROR =
+  chamanMeteoRuntimeVersion.error;
+export const CHAMAN_METEO_EXPECTED_SOURCE_VERSION =
+  'era5-land-timeseries-19var-v2';
+export function resolveChamanMeteoSourceVersion(value: string): string {
+  const version = String(value ?? '');
+  if (version !== CHAMAN_METEO_EXPECTED_SOURCE_VERSION) {
+    throw new Error(
+      `CHAMAN_METEO_SOURCE_VERSION debe ser exactamente ${CHAMAN_METEO_EXPECTED_SOURCE_VERSION}`,
+    );
+  }
+  return version;
+}
+export function resolveChamanMeteoRuntimeSourceVersion(value?: string): {
+  sourceVersion: string;
+  configuredVersion: string;
+  valid: boolean;
+  error?: string;
+} {
+  const configuredVersion =
+    value === undefined ? CHAMAN_METEO_EXPECTED_SOURCE_VERSION : value;
+  const valid = configuredVersion === CHAMAN_METEO_EXPECTED_SOURCE_VERSION;
+  return {
+    sourceVersion: CHAMAN_METEO_EXPECTED_SOURCE_VERSION,
+    configuredVersion,
+    valid,
+    error: valid
+      ? undefined
+      : `CHAMAN_METEO_SOURCE_VERSION debe ser exactamente ${CHAMAN_METEO_EXPECTED_SOURCE_VERSION}`,
+  };
+}
+const chamanMeteoRuntimeSourceVersion = resolveChamanMeteoRuntimeSourceVersion(
+  process.env.CHAMAN_METEO_SOURCE_VERSION,
+);
+export const CHAMAN_METEO_SOURCE_VERSION =
+  chamanMeteoRuntimeSourceVersion.sourceVersion;
+export const CHAMAN_METEO_SOURCE_VERSION_VALID =
+  chamanMeteoRuntimeSourceVersion.valid;
+export const CHAMAN_METEO_SOURCE_VERSION_ERROR =
+  chamanMeteoRuntimeSourceVersion.error;
+export const CHAMAN_METEO_RUNTIME_CONFIGURATION_VALID =
+  CHAMAN_METEO_HISTORICAL_START_VALID &&
+  CHAMAN_METEO_CALCULATION_VERSION_VALID &&
+  CHAMAN_METEO_SOURCE_VERSION_VALID;
+export const CHAMAN_METEO_RUNTIME_CONFIGURATION_ERROR = [
+  CHAMAN_METEO_HISTORICAL_START_ERROR,
+  CHAMAN_METEO_CALCULATION_VERSION_ERROR,
+  CHAMAN_METEO_SOURCE_VERSION_ERROR,
+]
+  .filter(Boolean)
+  .join('; ') || undefined;
 export const SOIL_INTELLIGENCE_INTERNAL_TOKEN =
   process.env.SOIL_INTELLIGENCE_INTERNAL_TOKEN ||
   process.env.LOT_LOCATION_INTERNAL_TOKEN ||

@@ -27,8 +27,11 @@ export class ChamanMeteoController {
   constructor(private readonly service: ChamanMeteoService) {}
 
   @Get('status')
-  status() {
-    return this.service.status();
+  status(
+    @Query('calculationVersion') calculationVersion?: string,
+    @Query('sourceVersion') sourceVersion?: string,
+  ) {
+    return this.service.status(calculationVersion, sourceVersion);
   }
 
   @Get('grid-points')
@@ -37,8 +40,23 @@ export class ChamanMeteoController {
   }
 
   @Get('jobs')
-  jobs(@Query('limit') limit?: string, @Query('offset') offset?: string) {
-    return this.service.jobs(limit, offset);
+  jobs(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('calculationVersion') calculationVersion?: string,
+    @Query('sourceVersion') sourceVersion?: string,
+  ) {
+    return this.service.jobs(
+      limit,
+      offset,
+      calculationVersion,
+      sourceVersion,
+    );
+  }
+
+  @Get('jobs/by-key')
+  jobByKey(@Query('jobKey') jobKey?: string) {
+    return this.service.jobByKey(jobKey);
   }
 
   @Get('hourly')
@@ -66,13 +84,30 @@ export class ChamanMeteoController {
     @Query('calculationVersion') calculationVersion?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('from') from?: string,
+    @Query('toExclusive') toExclusive?: string,
   ) {
-    return this.service.daily(gridPointKey, calculationVersion, limit, offset);
+    return this.service.daily(
+      gridPointKey,
+      calculationVersion,
+      limit,
+      offset,
+      from,
+      toExclusive,
+    );
   }
 
   @Get('coverage/:gridPointKey')
-  coverage(@Param('gridPointKey') gridPointKey: string) {
-    return this.service.coverage(gridPointKey);
+  coverage(
+    @Param('gridPointKey') gridPointKey: string,
+    @Query('calculationVersion') calculationVersion?: string,
+    @Query('sourceVersion') sourceVersion?: string,
+  ) {
+    return this.service.coverage(
+      gridPointKey,
+      calculationVersion,
+      sourceVersion,
+    );
   }
 
   @Post('grid-points/upsert')
@@ -83,6 +118,13 @@ export class ChamanMeteoController {
   @Post('hourly/raw/upsert-many')
   upsertHourlyRaw(@Body() data: IChamanMeteoHourlyRaw[]): Promise<any> {
     return this.service.upsertHourlyRaw(data);
+  }
+
+  @Post('hourly/raw/versions/upsert-many')
+  upsertVersionedHourlyRaw(
+    @Body() data: IChamanMeteoHourlyRaw[],
+  ): Promise<any> {
+    return this.service.upsertVersionedHourlyRaw(data);
   }
 
   @Post('hourly/derived/upsert-many')
@@ -111,7 +153,12 @@ export class ChamanMeteoController {
   @Post('coverage/:gridPointKey/recalculate')
   recalculateCoverage(
     @Param('gridPointKey') gridPointKey: string,
+    @Body() data?: { calculationVersion?: string; sourceVersion?: string },
   ): Promise<any> {
-    return this.service.recalculateCoverage(gridPointKey);
+    return this.service.recalculateCoverage(
+      gridPointKey,
+      data?.calculationVersion,
+      data?.sourceVersion,
+    );
   }
 }

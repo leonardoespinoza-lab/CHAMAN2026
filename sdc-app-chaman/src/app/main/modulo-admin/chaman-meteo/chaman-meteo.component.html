@@ -6,31 +6,40 @@
     <div>
       <p class="eyebrow">SERVICIOS METEOROLÓGICOS</p>
       <h1>Chamán-Meteo</h1>
-      <p>Histórico horario propio basado en ERA5-Land, auditable y separado de las fuentes operativas.</p>
+      <p>Histórico propio y auditable para agricultura, basado en ERA5-Land.</p>
     </div>
-    <p-button label="Actualizar estado" icon="pi pi-refresh" [loading]="loading" (onClick)="refresh()" />
+    <p-button label="Actualizar" icon="pi pi-refresh" [loading]="loading" (onClick)="refresh()" />
   </header>
 
   <section class="safety-note">
     <i class="pi pi-shield"></i>
     <div>
-      <strong>Despliegue seguro</strong>
+      <strong>Integración aislada y trazable</strong>
       <span
-        >Open-Meteo, FieldClimate y sensores continúan sin cambios. Chamán-Meteo no reemplaza ninguna fuente mientras
-        esté en validación.</span
+        >Sensores de campo, FieldClimate y Open-Meteo continúan operativos. Esta vista no modifica esas fuentes.</span
       >
     </div>
   </section>
 
   @if (error) {
-    <div class="notice error">{{ error }}</div>
+    <div class="notice error" role="alert">{{ error }}</div>
   }
-
-  @if (status?.state === 'ERROR' && status?.latestJob?.lastError) {
+  @if (historyInconsistent) {
+    <div class="notice warning" role="alert">
+      Los datos cambiaron mientras se cargaba el histórico. Reintentá la consulta para obtener una instantánea
+      consistente antes de exportar.
+    </div>
+  } @else if (historyTruncated) {
+    <div class="notice warning" role="alert">
+      El rango supera 25.000 filas. La vista es parcial y la exportación está bloqueada; acotalo para obtener el
+      histórico completo.
+    </div>
+  }
+  @if (status?.state === 'ERROR' && (status?.lastError || status?.latestJob?.lastError)) {
     <section class="notice warning" role="alert">
       <div>
         <strong>El último intento no pudo completarse</strong>
-        <span>{{ status?.latestJob?.lastError }}</span>
+        <span>{{ status?.lastError || status?.latestJob?.lastError }}</span>
       </div>
       @if (licenseRequired()) {
         <a
@@ -44,16 +53,21 @@
   }
 
   @if (status) {
-    <section class="status-grid">
+    <section class="status-grid" aria-label="Estado del servicio">
       <article class="status-card emphasis">
         <span>Estado</span>
         <strong class="state-pill" [ngClass]="stateClass()">{{ stateLabel() }}</strong>
         <small>Controlado {{ date(status.checkedAt) }}</small>
       </article>
       <article class="status-card">
-        <span>Credencial CDS</span>
-        <strong>{{ status.credentialConfigured ? 'Configurada' : 'Pendiente' }}</strong>
-        <small>La clave nunca se muestra en esta pantalla.</small>
+        <span>Acceso CDS</span>
+        <strong>{{ credentialStatusLabel() }}</strong>
+        <small>La señal no confirma vigencia ni muestra la clave.</small>
+      </article>
+      <article class="status-card">
+        <span>Importación histórica</span>
+        <strong>{{ importEnabledLabel() }}</strong>
+        <small>Controla nuevas descargas; no elimina el histórico disponible.</small>
       </article>
       <article class="status-card">
         <span>Puntos de grilla</span>
@@ -63,41 +77,74 @@
       <article class="status-card">
         <span>Registros horarios</span>
         <strong>{{ status.hourlyDerivedRecords }}</strong>
-        <small>{{ status.hourlyRawRecords }} registros fuente conservados</small>
+        <small>{{ status.hourlyRawRecords }} registros fuente</small>
       </article>
       <article class="status-card">
         <span>Días procesados</span>
         <strong>{{ status.dailyRecords }}</strong>
-        <small>Desde {{ status.historicalStart }}</small>
+        <small>Inicio configurado: {{ status.historicalStart }}</small>
       </article>
       <article class="status-card">
-        <span>Proveedor</span>
+        <span>Fuente</span>
         <strong>{{ status.provider }}</strong>
         <small>{{ status.dataset }}</small>
       </article>
     </section>
   }
 
-  <section class="panel selector-panel">
-    <div>
-      <p class="eyebrow">VALORES</p>
-      <h2>Últimas métricas procesadas</h2>
-    </div>
-    <label>
-      Punto de grilla
-      <select [(ngModel)]="selectedGridPoint" (change)="changeGridPoint()">
-        <option value="">Todos</option>
+  <section class="panel history-controls" aria-label="Filtros históricos">
+    <div class="control point-control">
+      <label for="meteo-grid">Punto de grilla</label>
+      <select id="meteo-grid" [(ngModel)]="selectedGridPoint" (change)="changeGridPoint()">
         @for (point of gridPoints; track point.key) {
           <option [value]="point.key">
             {{ point.key }} · {{ number(point.latitude, 3) }}, {{ number(point.longitude, 3) }}
           </option>
         }
       </select>
-    </label>
+    </div>
+    <div class="period-control" role="group" aria-label="Período">
+      <span>Período</span>
+      <div class="segmented">
+        @for (item of periods; track item.value) {
+          <button type="button" [class.active]="period === item.value" (click)="selectPeriod(item.value)">
+            {{ item.label }}
+          </button>
+        }
+      </div>
+    </div>
+    @if (period === 'custom') {
+      <div class="custom-range">
+        <label>Desde <input type="date" [(ngModel)]="customFrom" /></label>
+        <label>Hasta <input type="date" [(ngModel)]="customTo" /></label>
+        <button type="button" class="action-button" (click)="applyCustomRange()" [disabled]="loading">
+          <i class="pi pi-search"></i> Consultar
+        </button>
+      </div>
+    }
+    <button
+      type="button"
+      class="export-button"
+      (click)="exportCsv()"
+      [disabled]="!canExportCsv"
+      [title]="canExportCsv ? 'Exporta todas las variables cargadas del rango' : exportUnavailableReason"
+    >
+      <i class="pi pi-download"></i> Exportar CSV completo
+    </button>
+    <div class="coverage-line">
+      <span><strong>Rango:</strong> {{ rangeLabel }}</span>
+      <span><strong>Zona:</strong> {{ loadedTimezone }}</span>
+      <span
+        ><strong>Cargado:</strong> {{ hourly.length }}/{{ hourlyTotal }} h · {{ daily.length }}/{{
+          dailyTotal
+        }}
+        días</span
+      >
+    </div>
   </section>
 
   @if (latestHourly) {
-    <section class="metrics-grid">
+    <section class="metrics-grid" aria-label="Últimas métricas">
       <article>
         <span>Temperatura</span><strong>{{ number(latestHourly.values.temperatureC) }} °C</strong>
       </article>
@@ -105,106 +152,343 @@
         <span>Humedad ambiente</span><strong>{{ number(latestHourly.values.relativeHumidityPct) }} %</strong>
       </article>
       <article>
-        <span>Lluvia</span><strong>{{ number(latestHourly.values.precipitationMm, 2) }} mm</strong>
+        <span>Precipitación horaria</span><strong>{{ number(latestHourly.values.precipitationMm, 2) }} mm</strong>
+        <small>Intervalo de 1 h terminado en {{ dateAtPoint(latestHourly.timestamp) }}</small>
       </article>
-      <article>
+      <article class="wind-card">
         <span>Viento a 2 m</span><strong>{{ number(latestHourly.values.windSpeed2Ms) }} m/s</strong>
+        <small
+          >{{ compass(latestHourly.values.windDirectionDeg) }} ·
+          {{ number(latestHourly.values.windDirectionDeg, 0) }}°</small
+        >
       </article>
       <article>
-        <span>Radiación solar</span><strong>{{ number(latestHourly.values.shortwaveRadiationMjM2, 3) }} MJ/m²</strong>
+        <span>Viento a 10 m</span><strong>{{ number(latestHourly.values.windSpeed10Ms) }} m/s</strong>
       </article>
       <article>
-        <span>ET₀</span><strong>{{ number(latestHourly.values.et0Mm, 3) }} mm</strong>
+        <span>ET₀ estimada</span><strong>{{ number(latestHourly.values.et0Mm, 3) }} mm</strong>
       </article>
-      <p class="metric-time">Hora UTC: {{ date(latestHourly.timestamp) }}</p>
+    </section>
+
+    <details class="panel technical-details">
+      <summary>Ver todas las variables técnicas de la última hora</summary>
+      <div class="technical-grid">
+        <article>
+          <span>Punto de rocío</span><strong>{{ number(latestHourly.values.dewPointC) }} °C</strong>
+        </article>
+        <article>
+          <span>Presión superficial</span><strong>{{ number(latestHourly.values.surfacePressureKpa) }} kPa</strong>
+        </article>
+        <article>
+          <span>VPD</span><strong>{{ number(latestHourly.values.vpdKpa, 2) }} kPa</strong>
+        </article>
+        <article>
+          <span>Radiación solar</span><strong>{{ number(latestHourly.values.shortwaveRadiationMjM2, 3) }} MJ/m²</strong>
+        </article>
+        <article>
+          <span>Radiación térmica</span><strong>{{ number(latestHourly.values.thermalRadiationMjM2, 3) }} MJ/m²</strong>
+        </article>
+        <article>
+          <span>Radiación neta</span><strong>{{ number(latestHourly.values.netRadiationMjM2, 3) }} MJ/m²</strong>
+        </article>
+        <article>
+          <span>Temperatura de piel</span><strong>{{ number(latestHourly.values.skinTemperatureC) }} °C</strong>
+        </article>
+        <article>
+          <span>Cobertura de nieve</span><strong>{{ number(latestHourly.values.snowCoverPct) }} %</strong>
+        </article>
+        <article>
+          <span>Profundidad de nieve</span><strong>{{ number(latestHourly.values.snowDepthM, 3) }} m</strong>
+        </article>
+      </div>
+      <p class="timestamp-note">
+        Hora local del punto: <strong>{{ dateAtPoint(latestHourly.timestamp) }}</strong> · Trazabilidad:
+        {{ utcDate(latestHourly.timestamp) }}
+      </p>
+    </details>
+  } @else if (loading) {
+    <section class="empty-state" aria-live="polite">
+      <i class="pi pi-spin pi-spinner"></i>
+      <div>
+        <strong>Cargando el punto y rango seleccionados</strong
+        ><span>Los datos anteriores se retiraron para evitar mezclar ubicaciones.</span>
+      </div>
     </section>
   } @else {
     <section class="empty-state">
       <i class="pi pi-cloud-download"></i>
       <div>
-        <strong>Todavía no hay valores importados</strong>
-        <span>La tarjeta está lista. Los datos aparecerán después de habilitar y ejecutar el piloto en Testing.</span>
+        <strong>No hay datos en este rango</strong><span>Elegí otro período o verificá la cobertura del punto.</span>
       </div>
     </section>
   }
 
-  <section class="two-columns">
-    <article class="panel table-panel">
+  <nav class="view-tabs" aria-label="Vista histórica">
+    @for (item of views; track item.value) {
+      <button type="button" [class.active]="view === item.value" (click)="selectView(item.value)">
+        {{ item.label }}
+      </button>
+    }
+  </nav>
+
+  @if ((view === 'hourly' || view === 'soil') && hourlyChartsLimited) {
+    <section class="model-note chart-scope-note">
+      <i class="pi pi-chart-line"></i>
+      <div>
+        <strong>Gráficos limitados a las últimas {{ hourlyChartRowsShown }} horas</strong>
+        <span
+          >Se cargaron {{ hourly.length }} horas. Este límite mantiene fluida la pantalla; el CSV conserva todas las
+          filas cuando el rango está completo.</span
+        >
+      </div>
+    </section>
+  }
+
+  @if (view === 'daily') {
+    <section class="chart-grid">
+      <article class="panel chart-panel"><app-chart [options]="dailyAtmosphereOptions"></app-chart></article>
+      <article class="panel chart-panel"><app-chart [options]="dailyWaterOptions"></app-chart></article>
+      <article class="panel chart-panel wind-panel"><app-chart [options]="dailyWindOptions"></app-chart></article>
+    </section>
+    <section class="model-note chart-scope-note">
+      <i class="pi pi-info-circle"></i>
+      <div>
+        <strong>Máximo horario, no ráfaga</strong>
+        <span
+          >ERA5-Land aporta viento horario a 10 m; el valor a 2 m es estimado. Esta fuente no entrega ráfagas de
+          viento.</span
+        >
+      </div>
+    </section>
+    <section class="panel table-panel">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">RESUMEN DIARIO</p>
-          <h2>Últimos días</h2>
+          <p class="eyebrow">HISTÓRICO DIARIO</p>
+          <h2>Valores exactos y control de completitud</h2>
         </div>
-        <span>{{ daily.length }} filas</span>
+        <span>{{ daily.length }} días</span>
       </div>
       <div class="table-scroll">
-        <table>
+        <table class="wide-table">
           <thead>
             <tr>
               <th>Fecha</th>
-              <th>Temp.</th>
-              <th>HR</th>
-              <th>Lluvia</th>
-              <th>ET₀</th>
+              <th>Calidad</th>
+              <th>Temp. mín/media/máx</th>
+              <th>HR mín/media/máx</th>
+              <th>Rocío</th>
+              <th>Presión</th>
+              <th>Precip.</th>
+              <th>Máx. horaria lluvia</th>
+              <th>Viento 2 m medio/máx. horario</th>
+              <th>Viento 10 m</th>
+              <th>Dirección</th>
+              <th>Radiación solar</th>
+              <th>VPD</th>
+              <th>ET₀ estimada</th>
               <th>Horas</th>
             </tr>
           </thead>
           <tbody>
-            @for (row of daily; track row.gridPointKey + row.date) {
-              <tr>
+            @for (row of dailyDescending; track row.gridPointKey + row.date) {
+              <tr [class.partial-row]="isPartial(row)">
                 <td>{{ row.date }}</td>
-                <td>{{ number(row.values.temperatureMeanC) }} °C</td>
-                <td>{{ number(row.values.relativeHumidityMeanPct) }} %</td>
+                <td>
+                  <span
+                    class="quality-pill"
+                    [class.partial]="isPartial(row)"
+                    [class.adjusted]="!isPartial(row) && isAdjusted(row)"
+                    >{{ qualityLabel(row) }}</span
+                  >
+                  @if (qualityObservation(row)) {
+                    <small class="quality-observation">{{ qualityObservation(row) }}</small>
+                  }
+                </td>
+                <td>
+                  {{ number(row.values.temperatureMinC) }} / {{ number(row.values.temperatureMeanC) }} /
+                  {{ number(row.values.temperatureMaxC) }} °C
+                </td>
+                <td>
+                  {{ number(row.values.relativeHumidityMinPct) }} / {{ number(row.values.relativeHumidityMeanPct) }} /
+                  {{ number(row.values.relativeHumidityMaxPct) }} %
+                </td>
+                <td>{{ number(row.values.dewPointMeanC) }} °C</td>
+                <td>{{ number(row.values.surfacePressureMeanKpa) }} kPa</td>
                 <td>{{ number(row.values.precipitationMm, 2) }} mm</td>
+                <td title="Máximo de los intervalos horarios del día">
+                  {{ number(row.values.precipitationMaxHourlyMm, 2) }} mm
+                </td>
+                <td>{{ number(windMean2m(row)) }} / {{ number(windMax2m(row)) }} m/s</td>
+                <td>{{ number(row.values.windSpeed10mMeanMs) }} m/s</td>
+                <td>{{ dailyWindDirection(row) }}</td>
+                <td>{{ number(row.values.shortwaveRadiationMjM2, 2) }} MJ/m²</td>
+                <td>{{ number(row.values.vpdMeanKpa, 2) }} kPa</td>
                 <td>{{ number(row.values.et0Mm, 2) }} mm</td>
                 <td>{{ row.hoursAvailable }}/{{ expectedHours(row) }}</td>
               </tr>
             } @empty {
               <tr>
-                <td colspan="6" class="empty-cell">Sin datos diarios</td>
+                <td colspan="15" class="empty-cell">Sin datos diarios</td>
               </tr>
             }
           </tbody>
         </table>
       </div>
-    </article>
+    </section>
+  }
 
-    <article class="panel table-panel">
+  @if (view === 'hourly') {
+    <section class="chart-grid">
+      <article class="panel chart-panel"><app-chart [options]="hourlyAtmosphereOptions"></app-chart></article>
+      <article class="panel chart-panel wind-panel"><app-chart [options]="hourlyWindOptions"></app-chart></article>
+      <article class="panel chart-panel"><app-chart [options]="hourlyRadiationOptions"></app-chart></article>
+    </section>
+    <section class="panel table-panel">
       <div class="section-heading">
         <div>
-          <p class="eyebrow">IMPORTACIONES</p>
-          <h2>Últimos trabajos</h2>
+          <p class="eyebrow">DETALLE HORARIO</p>
+          <h2>Últimas 72 horas del rango</h2>
         </div>
-        <span>{{ jobs.length }} trabajos</span>
+        <span>{{ hourly.length }} horas cargadas</span>
+      </div>
+      <div class="table-scroll">
+        <table class="wide-table">
+          <thead>
+            <tr>
+              <th>Hora local</th>
+              <th>Temp.</th>
+              <th>HR</th>
+              <th>Rocío</th>
+              <th>Presión</th>
+              <th>Precip.</th>
+              <th>Viento 2 m</th>
+              <th>Viento 10 m</th>
+              <th>Dirección</th>
+              <th>Solar</th>
+              <th>Neta</th>
+              <th>VPD</th>
+              <th>ET₀ estimada</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of recentHourly; track row.gridPointKey + row.timestamp) {
+              <tr>
+                <td title="{{ utcDate(row.timestamp) }}">{{ dateAtPoint(row.timestamp) }}</td>
+                <td>{{ number(row.values.temperatureC) }} °C</td>
+                <td>{{ number(row.values.relativeHumidityPct) }} %</td>
+                <td>{{ number(row.values.dewPointC) }} °C</td>
+                <td>{{ number(row.values.surfacePressureKpa) }} kPa</td>
+                <td>{{ number(row.values.precipitationMm, 2) }} mm</td>
+                <td>{{ number(row.values.windSpeed2Ms) }} m/s</td>
+                <td>{{ number(row.values.windSpeed10Ms) }} m/s</td>
+                <td>{{ compass(row.values.windDirectionDeg) }} {{ number(row.values.windDirectionDeg, 0) }}°</td>
+                <td>{{ number(row.values.shortwaveRadiationMjM2, 3) }} MJ/m²</td>
+                <td>{{ number(row.values.netRadiationMjM2, 3) }} MJ/m²</td>
+                <td>{{ number(row.values.vpdKpa, 2) }} kPa</td>
+                <td>{{ number(row.values.et0Mm, 3) }} mm</td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="13" class="empty-cell">Sin datos horarios</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  @if (view === 'soil') {
+    <section class="model-note">
+      <i class="pi pi-info-circle"></i>
+      <div>
+        <strong>Perfil modelado por ERA5-Land</strong
+        ><span
+          >No es una lectura de sonda en campo. Los sensores reales siguen teniendo prioridad en los lotes que los
+          poseen.</span
+        >
+      </div>
+    </section>
+    <section class="soil-charts">
+      <article class="panel chart-panel"><app-chart [options]="soilTemperatureOptions"></app-chart></article>
+      <article class="panel chart-panel"><app-chart [options]="soilWaterOptions"></app-chart></article>
+    </section>
+    <section class="panel table-panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">ÚLTIMO PERFIL</p>
+          <h2>Capas de suelo</h2>
+        </div>
+        <span>{{ dateAtPoint(latestHourly?.timestamp) }}</span>
       </div>
       <div class="table-scroll">
         <table>
           <thead>
             <tr>
-              <th>Rango</th>
-              <th>Estado</th>
-              <th>Progreso</th>
-              <th>Actualizado</th>
+              <th>Profundidad</th>
+              <th>Temperatura</th>
+              <th>Agua volumétrica</th>
+              <th>Agua volumétrica (%)</th>
             </tr>
           </thead>
           <tbody>
-            @for (job of jobs; track job.jobKey) {
+            @for (label of layerLabels; track label; let index = $index) {
               <tr>
-                <td>{{ job.rangeStart }} → {{ job.rangeEnd }}</td>
-                <td>
-                  <span class="job-status" [attr.data-status]="job.status">{{ job.status }}</span>
-                </td>
-                <td>{{ job.progressPct }} %</td>
-                <td>{{ date(job.actualizadoEn) }}</td>
-              </tr>
-            } @empty {
-              <tr>
-                <td colspan="4" class="empty-cell">Sin trabajos ejecutados</td>
+                <td>{{ label }}</td>
+                <td>{{ soilValue(latestHourly?.values?.soilTemperatureC, index) }} °C</td>
+                <td>{{ soilValue(latestHourly?.values?.soilWaterM3M3, index) }} m³/m³</td>
+                <td>{{ soilPercent(latestHourly?.values?.soilWaterM3M3, index) }} %</td>
               </tr>
             }
           </tbody>
         </table>
       </div>
-    </article>
+    </section>
+  }
+
+  <section class="panel table-panel jobs-panel">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">TRAZABILIDAD</p>
+        <h2>Últimas importaciones</h2>
+      </div>
+      <span>{{ jobs.length }} trabajos</span>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Rango</th>
+            <th>Punto</th>
+            <th>Versión cálculo</th>
+            <th>Versión fuente</th>
+            <th>Estado</th>
+            <th>Registros</th>
+            <th>Progreso</th>
+            <th>Actualizado</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (job of jobs; track job.jobKey) {
+            <tr>
+              <td>{{ job.rangeStart }} → {{ job.rangeEnd }}</td>
+              <td>{{ job.gridPointKey || '-' }}</td>
+              <td>{{ job.calculationVersion || 'Legacy / sin versión' }}</td>
+              <td>{{ job.sourceVersion || 'Legacy / sin versión' }}</td>
+              <td>
+                <span class="job-status" [attr.data-status]="job.status">{{ job.status }}</span>
+              </td>
+              <td>{{ job.recordsStored ?? '-' }}</td>
+              <td>{{ job.progressPct }} %</td>
+              <td>{{ date(job.actualizadoEn) }}</td>
+            </tr>
+          } @empty {
+            <tr>
+            <td colspan="8" class="empty-cell">Sin trabajos ejecutados</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
   </section>
 </main>
