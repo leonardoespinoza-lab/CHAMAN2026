@@ -57,6 +57,10 @@ export class FieldClimateIntegracionComponent implements OnInit {
   }
 
   public async importar(station: FieldClimateStationPreview) {
+    if (this.centralImportada(station)) {
+      this.error = 'Esta central ya existe en Chaman. Usa Actualizar acceso para renovar sus credenciales.';
+      return;
+    }
     this.error = '';
     this.message = '';
     this.savingId = station.idExterno;
@@ -111,6 +115,41 @@ export class FieldClimateIntegracionComponent implements OnInit {
     } finally {
       this.savingId = null;
     }
+  }
+
+  public async actualizarAcceso(central: IEstacion) {
+    if (!central._id) return;
+    if (!this.credentials.username.trim() || !this.credentials.password) {
+      this.error = 'Ingresa arriba el usuario y password nuevos de FieldClimate.';
+      return;
+    }
+    this.error = '';
+    this.message = '';
+    this.savingId = central._id;
+    try {
+      const actualizada = await this.service.actualizarCredenciales(central._id, this.credentials);
+      this.message = `Acceso de ${this.nombreCentral(
+        actualizada
+      )} actualizado sin cambiar su asignacion ni su historial.`;
+      await this.cargarCentrales();
+    } catch (error: any) {
+      this.error = error?.error?.message || error?.message || 'No se pudo actualizar el acceso de la central.';
+      await this.cargarCentrales();
+    } finally {
+      this.savingId = null;
+    }
+  }
+
+  public centralImportada(station: FieldClimateStationPreview): boolean {
+    const idExterno = String(station.idExterno || '')
+      .trim()
+      .toUpperCase();
+    return this.centrales.some(
+      (central) =>
+        String(central.idExterno || '')
+          .trim()
+          .toUpperCase() === idExterno
+    );
   }
 
   public nombreCentral(central: IEstacion | FieldClimateStationPreview): string {

@@ -198,6 +198,43 @@
   cursor: pointer;
 }
 
+.login-trust {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem 0.9rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.14);
+  font-size: 0.85rem;
+  line-height: 1.35;
+
+  a {
+    color: rgba(15, 23, 42, 0.76);
+    text-decoration: none;
+    text-underline-offset: 0.18em;
+
+    &:hover,
+    &:focus-visible {
+      color: #075e59;
+      text-decoration: underline;
+    }
+  }
+}
+
+:host-context(.dark-theme) .login-trust {
+  border-top-color: rgba(255, 255, 255, 0.2);
+
+  a {
+    color: rgba(255, 255, 255, 0.78);
+
+    &:hover,
+    &:focus-visible {
+      color: #ffffff;
+    }
+  }
+}
+
 @media (max-width: 768px) {
   .login-background {
     justify-content: center;
@@ -207,5 +244,10 @@
   .version-indicator {
     left: 1rem;
     bottom: 1rem;
+  }
+
+  .login-trust {
+    gap: 0.45rem 0.65rem;
+    font-size: 0.86rem;
   }
 }

@@ -1,11 +1,16 @@
 {
   "id": "/",
-  "name": "Chamán Agro",
+  "name": "Chamán Agro - Monitoreo agrícola inteligente",
   "short_name": "Chamán",
+  "description": "Plataforma B2B para monitorear estaciones meteorológicas, sensores, riego y variables agronómicas.",
+  "lang": "es-AR",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "utilities"],
   "theme_color": "#072B2A",
   "background_color": "#072B2A",
   "display": "standalone",
   "orientation": "portrait",
+  "scope": "/",
   "start_url": "/",
   "icons": [
     {

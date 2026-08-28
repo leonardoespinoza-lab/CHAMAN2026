@@ -1,5 +1,13 @@
 import { Injectable } from '@angular/core';
-import { ISemilla, IListado, IQueryParam, ICreateSemilla, IUpdateSemilla } from 'modelos/src';
+import {
+  ISemilla,
+  IListado,
+  IQueryParam,
+  ICreateSemilla,
+  IUpdateSemilla,
+  IImportacionCatalogoCultivosRequest,
+  IResultadoImportacionCatalogoCultivos,
+} from 'modelos/src';
 import { HttpService } from './http.service';
 
 @Injectable({
@@ -22,6 +30,10 @@ export class SemillaService {
 
   public editar(id: string, dato: IUpdateSemilla): Promise<ISemilla> {
     return this.http.put(`/semillas/${id}`, dato);
+  }
+
+  public importarCatalogo(dato: IImportacionCatalogoCultivosRequest): Promise<IResultadoImportacionCatalogoCultivos> {
+    return this.http.post(`/semillas/importar`, dato);
   }
 
   public eliminar(id: string): Promise<void> {

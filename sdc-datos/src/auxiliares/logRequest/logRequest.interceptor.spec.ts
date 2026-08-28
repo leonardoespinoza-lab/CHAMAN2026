@@ -1,4 +1,4 @@
-import { sanitizeLogData } from './logRequest.interceptor';
+import { requestBodyForLog, sanitizeLogData } from './logRequest.interceptor';
 
 describe('sanitizeLogData', () => {
   it('omite arrays masivos y conserva su cantidad para trazabilidad', () => {
@@ -14,5 +14,20 @@ describe('sanitizeLogData', () => {
     expect(sanitizeLogData([{ token: 'secret', value: 2 }])).toEqual([
       { token: '[redacted]', value: 2 },
     ]);
+  });
+
+  it('resume la importacion del catalogo sin registrar las filas', () => {
+    expect(
+      requestBodyForLog('/semillas/importar', {
+        formatoVersion: 'chaman-cultivos-ancho-v1',
+        modo: 'previsualizar',
+        filas: Array.from({ length: 770 }, (_, index) => ({ index })),
+      }),
+    ).toEqual({
+      formatoVersion: 'chaman-cultivos-ancho-v1',
+      modo: 'previsualizar',
+      planHash: undefined,
+      filas: 770,
+    });
   });
 });

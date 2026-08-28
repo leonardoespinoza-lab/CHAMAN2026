@@ -83,4 +83,74 @@ describe('DispositivosService - servicios logicos del controlador', () => {
       'nivel_napa',
     );
   });
+
+  it('conserva temperatura y humedad de una estacion legacy asignada al productor', async () => {
+    const dispositivo: any = {
+      _id: 'sensor-kleppe-1',
+      deveui: '24E124433F027440',
+      nombre: 'CUADRO 7 (LA COSTA) Sensor 1',
+      tipo: 'Estacion Meteorologica',
+      idProductor: 'productor-kleppe',
+      idEstablecimiento: 'establecimiento-kleppe',
+      idLote: 'cuadro-7-la-costa',
+      sensores: ['Temperatura', 'Humedad', 'Batería', 'Otro'],
+      servicios: [],
+      ultimoReporte: {
+        fecha: '2026-08-20T10:57:48.010Z',
+        datos: {
+          valores: {
+            Temperatura: [{ unidad: 'C', valores: { actual: 4.5 } }],
+            Humedad: [{ unidad: '%', valores: { actual: 71 } }],
+            Batería: [{ unidad: '%', valores: { actual: 96 } }],
+          },
+        },
+      },
+    };
+    const repository = {
+      getById: jest.fn().mockResolvedValue(dispositivo),
+    };
+    const service = new DispositivosService(repository as any);
+    const user: any = {
+      permisos: [{ nivel: 'Productor', idProductor: 'productor-kleppe' }],
+    };
+
+    const response = await service.getById('sensor-kleppe-1', user);
+
+    expect(response.servicios).toEqual([
+      expect.objectContaining({
+        id: 'meteorologia-lote',
+        sensores: ['Temperatura', 'Humedad', 'Otro'],
+      }),
+    ]);
+    expect(response.sensores).toEqual([
+      'Temperatura',
+      'Humedad',
+      'Batería',
+      'Otro',
+    ]);
+    expect(response.ultimoReporte?.datos.valores).toEqual(
+      dispositivo.ultimoReporte.datos.valores,
+    );
+    expect(response.idProductor).toBe('productor-kleppe');
+    expect(response.idLote).toBe('cuadro-7-la-costa');
+  });
+
+  it('mantiene bloqueada la estacion legacy para otro productor', async () => {
+    const repository = {
+      getById: jest.fn().mockResolvedValue({
+        _id: 'sensor-kleppe-1',
+        idProductor: 'productor-kleppe',
+        idLote: 'cuadro-7-la-costa',
+        sensores: ['Temperatura', 'Humedad', 'Batería'],
+        servicios: [],
+      }),
+    };
+    const service = new DispositivosService(repository as any);
+
+    await expect(
+      service.getById('sensor-kleppe-1', {
+        permisos: [{ nivel: 'Productor', idProductor: 'otro-productor' }],
+      } as any),
+    ).rejects.toThrow('No tiene permiso para ver este dispositivo');
+  });
 });

@@ -63,4 +63,8 @@ export class FieldClimateIntegracionService {
   public sincronizar(idCentral: string): Promise<IEstacion> {
     return this.http.post(`/fieldclimate-integraciones/centrales/${idCentral}/sincronizar`, {});
   }
+
+  public actualizarCredenciales(idCentral: string, credentials: FieldClimateCredentials): Promise<IEstacion> {
+    return this.http.put(`/fieldclimate-integraciones/centrales/${idCentral}/credenciales`, credentials);
+  }
 }

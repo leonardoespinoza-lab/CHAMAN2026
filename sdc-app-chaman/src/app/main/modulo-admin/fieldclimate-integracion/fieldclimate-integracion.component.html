@@ -24,6 +24,10 @@
         Las credenciales se cifran en el backend, no se devuelven al navegador y se usan solo para consultar las
         centrales.
       </p>
+      <p>
+        Para renovar el acceso de una central ya asignada, ingresa aqui las claves nuevas y usa
+        <strong>Actualizar acceso</strong> en su tarjeta. La central no se vuelve a importar ni a asignar.
+      </p>
     </div>
     <div class="credentials-form">
       <label>
@@ -80,8 +84,9 @@
               </div>
             </dl>
             <p-button
-              label="Agregar a Chaman"
-              icon="pi pi-plus"
+              [label]="centralImportada(station) ? 'Ya esta en Chaman' : 'Agregar a Chaman'"
+              [icon]="centralImportada(station) ? 'pi pi-check' : 'pi pi-plus'"
+              [disabled]="centralImportada(station)"
               [loading]="savingId === station.idExterno"
               (onClick)="importar(station)"
             />
@@ -166,6 +171,13 @@
                 severity="secondary"
                 [loading]="savingId === central._id"
                 (onClick)="sincronizar(central)"
+              />
+              <p-button
+                label="Actualizar acceso"
+                icon="pi pi-key"
+                severity="warn"
+                [loading]="savingId === central._id"
+                (onClick)="actualizarAcceso(central)"
               />
             </div>
           </article>

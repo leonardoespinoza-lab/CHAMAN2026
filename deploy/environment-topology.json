@@ -27,7 +27,8 @@
       "port": 5002,
       "production": "chaman-api",
       "testing": "testing-api",
-      "stateful": false
+      "stateful": false,
+      "versionPath": "/version"
     },
     {
       "role": "auth",
@@ -43,7 +44,8 @@
       "port": 5000,
       "production": "chaman-datos",
       "testing": "testing-datos",
-      "stateful": false
+      "stateful": false,
+      "versionPath": "/version"
     },
     {
       "role": "clima",
@@ -103,6 +105,20 @@
       "testing": "testing-ndvi-worker",
       "stateful": false,
       "testingSafety": ["NDVI_STORAGE_MODE=inline"]
+    },
+    {
+      "role": "meteo-worker",
+      "selector": "sdc-meteo-worker",
+      "port": 5000,
+      "production": "chaman-meteo-worker",
+      "testing": "testing-meteo-worker",
+      "stateful": false,
+      "rootDirectory": "sdc-meteo-worker",
+      "configPath": "sdc-meteo-worker/railway.json",
+      "testingSafety": [
+        "CHAMAN_METEO_ENABLED=true",
+        "CHAMAN_METEO_IMPORT_ENABLED=false"
+      ]
     },
     {
       "role": "mongodb",

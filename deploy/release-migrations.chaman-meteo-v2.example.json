@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "migrations": [
+    {
+      "id": "20260828-chaman-meteo-v2-read-indexes-v1",
+      "kind": "additive-indexes",
+      "planCommand": "npm run migrate:chaman-meteo-v2-indexes:plan",
+      "applyCommand": "npm run migrate:chaman-meteo-v2-indexes:apply",
+      "rollbackCommand": "npm run migrate:chaman-meteo-v2-indexes:rollback",
+      "rollbackScope": "created-artifacts-only",
+      "startupAllowed": false
+    }
+  ]
+}

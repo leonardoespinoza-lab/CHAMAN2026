@@ -81,7 +81,9 @@ const LARGE_PAYLOAD_KEYS = new Set([
 
 export function sanitizeLogData(value: any): any {
   if (typeof value === 'string') {
-    return value.startsWith('data:image/') || value.length > 2000 ? OMITTED : value;
+    return value.startsWith('data:image/') || value.length > 2000
+      ? OMITTED
+      : value;
   }
 
   if (Array.isArray(value)) {
@@ -91,19 +93,38 @@ export function sanitizeLogData(value: any): any {
   }
   if (!value || typeof value !== 'object') return value;
 
-  return Object.entries(value).reduce((result, [key, item]) => {
-    const normalizedKey = key.toLowerCase().replace(/[\s_-]/g, '');
-    result[key] =
-      SENSITIVE_KEYS.has(normalizedKey) ||
-      normalizedKey.includes('password') ||
-      normalizedKey.includes('secret') ||
-      normalizedKey.includes('token')
-        ? REDACTED
-        : LARGE_PAYLOAD_KEYS.has(normalizedKey)
-          ? OMITTED
-        : sanitizeLogData(item);
-    return result;
-  }, {} as Record<string, any>);
+  return Object.entries(value).reduce(
+    (result, [key, item]) => {
+      const normalizedKey = key.toLowerCase().replace(/[\s_-]/g, '');
+      result[key] =
+        SENSITIVE_KEYS.has(normalizedKey) ||
+        normalizedKey.includes('password') ||
+        normalizedKey.includes('secret') ||
+        normalizedKey.includes('token')
+          ? REDACTED
+          : LARGE_PAYLOAD_KEYS.has(normalizedKey)
+            ? OMITTED
+            : sanitizeLogData(item);
+      return result;
+    },
+    {} as Record<string, any>,
+  );
+}
+
+export function requestBodyForLog(path: string, body: any): any {
+  if (
+    String(path || '')
+      .split('?')[0]
+      .endsWith('/semillas/importar')
+  ) {
+    return {
+      formatoVersion: body?.formatoVersion,
+      modo: body?.modo,
+      planHash: body?.planHash ? '[present]' : undefined,
+      filas: Array.isArray(body?.filas) ? body.filas.length : 0,
+    };
+  }
+  return sanitizeLogData(body);
 }
 
 @Injectable()
@@ -146,7 +167,7 @@ export class LogRequestInterceptor implements NestInterceptor {
     let msg = `${ruta}`;
 
     if (body && Object.keys(body).length)
-      msg += ` [body: ${JSON.stringify(sanitizeLogData(body))}]`;
+      msg += ` [body: ${JSON.stringify(requestBodyForLog(path, body))}]`;
     if (query && Object.keys(query).length)
       msg += ` [query: ${JSON.stringify(sanitizeLogData(query))}]`;
     if (user) msg += magentaBright(` [${user.username}]`);

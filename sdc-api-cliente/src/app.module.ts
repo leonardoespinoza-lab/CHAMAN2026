@@ -55,6 +55,7 @@ import { VisitasLoteModule } from './entidades/visita-lote/module';
 import { REDIS_HOST, REDIS_PORT, REDIS_PASSWORD } from './env';
 import { AdvisorScopeModule } from './auxiliares/authorization/advisor-scope.module';
 import { TenantsModule } from './entidades/tenant/module';
+import { VersionController } from './auxiliares/version/version.controller';
 
 @Module({
   imports: [
@@ -118,7 +119,7 @@ import { TenantsModule } from './entidades/tenant/module';
     VisitasLoteModule,
     TenantsModule,
   ],
-  controllers: [],
+  controllers: [VersionController],
   providers: [{ provide: APP_INTERCEPTOR, useClass: MqttInterceptor }],
 })
 export class AppModule implements NestModule {
@@ -129,6 +130,10 @@ export class AppModule implements NestModule {
     {
       method: RequestMethod.GET,
       path: `/health`,
+    },
+    {
+      method: RequestMethod.GET,
+      path: `/version`,
     },
     {
       method: RequestMethod.POST,

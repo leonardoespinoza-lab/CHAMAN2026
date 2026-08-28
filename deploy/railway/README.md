@@ -4,7 +4,10 @@
 
 Crear un proyecto Railway con servicios separados desde el mismo repositorio `CHAMAN2026`.
 
-Usar root directory `.` para todos los servicios. El repo incluye `railway.json` con builder `RAILPACK` y scripts raiz que resuelven cada subproyecto mediante la variable `CHAMAN_SERVICE`.
+Usar root directory `.` y el `railway.json` raíz para los servicios resueltos
+mediante `CHAMAN_SERVICE`. La excepción preparada es `sdc-meteo-worker`: cuando
+su conjunto completo forme parte del ref, usa Root Directory
+`sdc-meteo-worker` y `sdc-meteo-worker/railway.json`.
 
 Build command para todos los servicios:
 
@@ -30,8 +33,10 @@ npm run railway:start
 8. `chaman-websocket` con `CHAMAN_SERVICE=sdc-websocket`
 9. `chaman-web` con `CHAMAN_SERVICE=sdc-app-chaman`
 10. `chaman-ndvi-worker` con `CHAMAN_SERVICE=sdc-ndvi-worker`
-11. MongoDB
-12. Redis
+11. `chaman-meteo-worker` con `CHAMAN_SERVICE=sdc-meteo-worker` cuando el
+    conjunto Chamán-Meteo completo forme parte del ref
+12. MongoDB
+13. Redis
 
 ## Orden de publicacion
 
@@ -47,6 +52,7 @@ npm run railway:start
 10. `sdc-websocket`.
 11. `sdc-app-chaman`.
 12. `sdc-ndvi-worker`.
+13. `sdc-meteo-worker`, con importación apagada y después de validar las APIs.
 
 ### Migracion de indices activos (release 2026-07-23)
 
@@ -101,6 +107,9 @@ Usar private networking para servicios internos y dominio publico solo para `cha
 - `chaman-websocket`: publico para el navegador, autentica cada conexion y distribuye eventos por Redis o MQTT; sus dependencias `auth`, `datos` y Redis permanecen privadas.
 - `chaman-web`: publico, lee `CHAMAN_WEB_API_URL`, `CHAMAN_WEB_WS_URL` y `CHAMAN_WEB_TILES_URL` desde `/runtime-config.js`. En Railway debe apuntar al gateway publico con prefijo, por ejemplo `https://${{chaman-api.RAILWAY_PUBLIC_DOMAIN}}/sdc-quimica`, y al canal realtime mediante `wss://${{chaman-websocket.RAILWAY_PUBLIC_DOMAIN}}`.
 - `chaman-ndvi-worker`: privado, escucha la cola Redis `REDIS_NDVI_QUEUE` y notifica reportes NDVI a `API_EXTERNA_URL`.
+- `chaman-meteo-worker`: privado, con Root Directory `sdc-meteo-worker`,
+  configuración `sdc-meteo-worker/railway.json`, una réplica e importación
+  desactivada durante el rollout inicial.
 
 Los backends aceptan `HOST` por variable de entorno. En Railway usar `HOST=::` para compatibilidad con private networking dual-stack.
 

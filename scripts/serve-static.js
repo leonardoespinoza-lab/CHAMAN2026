@@ -18,6 +18,55 @@ if (!fs.existsSync(path.join(root, 'index.html')) && fs.existsSync(path.join(bro
 const port = Number(process.env.PORT || 8080);
 const host = process.env.HOST || '0.0.0.0';
 
+const contentSecurityPolicyReportOnly = [
+  "default-src 'self' https: data: blob:",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'self'",
+  "form-action 'self' https:",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https: blob: https://*.arcgis.com https://*.arcgisonline.com",
+  "style-src 'self' 'unsafe-inline' https: https://fonts.googleapis.com",
+  "font-src 'self' data: https: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https: https://*.arcgis.com https://*.arcgisonline.com",
+  "connect-src 'self' https: wss: https://*.arcgis.com https://*.arcgisonline.com",
+  "worker-src 'self' blob: https: https://*.arcgis.com https://*.arcgisonline.com",
+  "child-src 'self' blob: https:",
+  "frame-src 'self' https:",
+  "media-src 'self' blob: https:",
+  "manifest-src 'self'",
+].join('; ');
+
+const securityHeaders = {
+  'Strict-Transport-Security': 'max-age=31536000',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(self), geolocation=(self), microphone=(self), payment=(), usb=()',
+  'Content-Security-Policy-Report-Only': contentSecurityPolicyReportOnly,
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'SAMEORIGIN',
+};
+
+const reservedPublicPaths = new Set([
+  '/robots.txt',
+  '/sitemap.xml',
+  '/.well-known/security.txt',
+  '/favicon.ico',
+  '/favicon.png',
+  '/favicon.svg',
+  '/manifest.json',
+  '/manifest.webmanifest',
+  '/site.webmanifest',
+]);
+
+const revalidateExtensions = new Set(['.txt', '.xml', '.webmanifest']);
+const revalidateFileNames = new Set([
+  'favicon.ico',
+  'favicon.png',
+  'favicon.svg',
+  'manifest.json',
+  'ngsw.json',
+  'ngsw-worker.js',
+]);
+
 const contentTypes = {
   '.css': 'text/css; charset=utf-8',
   '.gif': 'image/gif',
@@ -33,6 +82,7 @@ const contentTypes = {
   '.txt': 'text/plain; charset=utf-8',
   '.webp': 'image/webp',
   '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.xml': 'application/xml; charset=utf-8',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
 };
@@ -46,9 +96,45 @@ const compressibleExtensions = new Set([
   '.svg',
   '.txt',
   '.webmanifest',
+  '.xml',
 ]);
 
 const gzipCache = new Map();
+
+function withSecurityHeaders(headers = {}) {
+  const secured = { ...headers };
+
+  for (const [name, value] of Object.entries(securityHeaders)) {
+    const duplicate = Object.keys(secured).find((header) => header.toLowerCase() === name.toLowerCase());
+    if (duplicate) {
+      delete secured[duplicate];
+    }
+    secured[name] = value;
+  }
+
+  return secured;
+}
+
+function isReservedPublicPath(pathname) {
+  try {
+    return reservedPublicPaths.has(decodeURIComponent(pathname));
+  } catch (_error) {
+    return false;
+  }
+}
+
+function cacheControlFor(filePath, extension) {
+  if (extension === '.html') {
+    return 'no-cache';
+  }
+
+  const fileName = path.basename(filePath).toLowerCase();
+  if (revalidateExtensions.has(extension) || revalidateFileNames.has(fileName)) {
+    return 'no-cache';
+  }
+
+  return 'public, max-age=31536000, immutable';
+}
 
 function runtimeConfigScript() {
   const config = {
@@ -66,7 +152,7 @@ function apiBaseUrl() {
 }
 
 function isLegacyApiRequest(req, pathname) {
-  if (pathname === '/health' || pathname.startsWith('/runtime-config.')) {
+  if (pathname === '/health' || pathname.startsWith('/runtime-config.') || isReservedPublicPath(pathname)) {
     return false;
   }
 
@@ -105,11 +191,13 @@ function rewriteProxyCookies(cookies, upstreamAuthPath) {
 function proxyApiRequest(req, res) {
   const configuredBase = apiBaseUrl();
   if (!configuredBase) {
-    res.writeHead(503, {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-      'X-Content-Type-Options': 'nosniff',
-    });
+    res.writeHead(
+      503,
+      withSecurityHeaders({
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+      })
+    );
     res.end(JSON.stringify({ message: 'API de Chaman no configurada' }));
     return;
   }
@@ -125,11 +213,13 @@ function proxyApiRequest(req, res) {
     target = base;
     upstreamAuthPath = `${basePath}/auth`;
   } catch (error) {
-    res.writeHead(503, {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store',
-      'X-Content-Type-Options': 'nosniff',
-    });
+    res.writeHead(
+      503,
+      withSecurityHeaders({
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+      })
+    );
     res.end(JSON.stringify({ message: 'API de Chaman mal configurada' }));
     return;
   }
@@ -143,30 +233,25 @@ function proxyApiRequest(req, res) {
     'x-forwarded-proto': String(req.headers['x-forwarded-proto'] || 'https'),
   };
 
-  const upstream = transport.request(
-    target,
-    { method: req.method, headers },
-    (upstreamResponse) => {
-      const responseHeaders = { ...upstreamResponse.headers };
-      responseHeaders['cache-control'] = 'no-store';
-      if (responseHeaders['set-cookie']) {
-        responseHeaders['set-cookie'] = rewriteProxyCookies(
-          responseHeaders['set-cookie'],
-          upstreamAuthPath,
-        );
-      }
-      res.writeHead(upstreamResponse.statusCode || 502, responseHeaders);
-      upstreamResponse.pipe(res);
-    },
-  );
+  const upstream = transport.request(target, { method: req.method, headers }, (upstreamResponse) => {
+    const responseHeaders = { ...upstreamResponse.headers };
+    responseHeaders['cache-control'] = 'no-store';
+    if (responseHeaders['set-cookie']) {
+      responseHeaders['set-cookie'] = rewriteProxyCookies(responseHeaders['set-cookie'], upstreamAuthPath);
+    }
+    res.writeHead(upstreamResponse.statusCode || 502, withSecurityHeaders(responseHeaders));
+    upstreamResponse.pipe(res);
+  });
 
   upstream.on('error', (error) => {
     if (!res.headersSent) {
-      res.writeHead(502, {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Cache-Control': 'no-store',
-        'X-Content-Type-Options': 'nosniff',
-      });
+      res.writeHead(
+        502,
+        withSecurityHeaders({
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'no-store',
+        })
+      );
     }
     res.end(JSON.stringify({ message: 'No se pudo contactar la API de Chaman' }));
   });
@@ -217,13 +302,11 @@ function sendFile(req, res, filePath) {
   const gzip = shouldGzip(req, extension);
   const gzipBuffer = gzip ? getGzipBuffer(filePath, stat) : null;
 
-  const headers = {
+  const headers = withSecurityHeaders({
     'Content-Type': contentType,
-    'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'SAMEORIGIN',
-    'Cache-Control': extension === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
-    'Vary': 'Accept-Encoding',
-  };
+    'Cache-Control': cacheControlFor(filePath, extension),
+    Vary: 'Accept-Encoding',
+  });
 
   if (gzip) {
     headers['Content-Encoding'] = 'gzip';
@@ -247,7 +330,13 @@ function sendFile(req, res, filePath) {
   const stream = fs.createReadStream(filePath);
   stream.on('error', () => {
     if (!res.headersSent) {
-      res.writeHead(500);
+      res.writeHead(
+        500,
+        withSecurityHeaders({
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-store',
+        })
+      );
     }
     res.end('Unable to read file');
   });
@@ -259,21 +348,25 @@ const server = http.createServer((req, res) => {
   const pathname = (req.url || '').split('?')[0];
 
   if (pathname === '/health') {
-    res.writeHead(200, {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'no-cache',
-      'X-Content-Type-Options': 'nosniff',
-    });
+    res.writeHead(
+      200,
+      withSecurityHeaders({
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+      })
+    );
     res.end('OK');
     return;
   }
 
   if (pathname === '/runtime-config.js' || pathname === '/runtime-config.bootstrap') {
-    res.writeHead(200, {
-      'Content-Type': 'text/javascript; charset=utf-8',
-      'Cache-Control': 'no-cache',
-      'X-Content-Type-Options': 'nosniff',
-    });
+    res.writeHead(
+      200,
+      withSecurityHeaders({
+        'Content-Type': 'text/javascript; charset=utf-8',
+        'Cache-Control': 'no-store',
+      })
+    );
     res.end(runtimeConfigScript());
     return;
   }
@@ -288,7 +381,13 @@ const server = http.createServer((req, res) => {
 
   const requestedPath = safeResolve(req.url || '/');
   if (!requestedPath) {
-    res.writeHead(400);
+    res.writeHead(
+      400,
+      withSecurityHeaders({
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-store',
+      })
+    );
     res.end('Bad request');
     return;
   }
@@ -298,12 +397,30 @@ const server = http.createServer((req, res) => {
     filePath = path.join(filePath, 'index.html');
   }
 
+  if (!fs.existsSync(filePath) && isReservedPublicPath(pathname)) {
+    res.writeHead(
+      404,
+      withSecurityHeaders({
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+      })
+    );
+    res.end('Not found');
+    return;
+  }
+
   if (!fs.existsSync(filePath)) {
     filePath = path.join(root, 'index.html');
   }
 
   if (!fs.existsSync(filePath)) {
-    res.writeHead(404);
+    res.writeHead(
+      404,
+      withSecurityHeaders({
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-store',
+      })
+    );
     res.end('Not found');
     return;
   }

@@ -9,13 +9,22 @@ import {
   Put,
 } from '@nestjs/common';
 import { SemillasService } from './service';
-import { ICreateSemilla, IQueryParam, IUpdateSemilla } from 'modelos/src';
+import {
+  ICreateSemilla,
+  IImportacionCatalogoCultivosRequest,
+  IQueryParam,
+  IUpdateSemilla,
+} from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
+import { CatalogImportService } from './catalog-import.service';
 
 @ApiTags('Semillas')
 @Controller('semillas')
 export class SemillasController {
-  constructor(private readonly service: SemillasService) {}
+  constructor(
+    private readonly service: SemillasService,
+    private readonly catalogImport: CatalogImportService,
+  ) {}
 
   @Get()
   async getFilter(@Query() query: IQueryParam) {
@@ -35,6 +44,11 @@ export class SemillasController {
   @Post('bulk')
   async bulk(@Body() data: ICreateSemilla[]) {
     return await this.service.bulk(data);
+  }
+
+  @Post('importar')
+  async importCatalog(@Body() data: IImportacionCatalogoCultivosRequest) {
+    return await this.catalogImport.importar(data);
   }
 
   @Put(':id')

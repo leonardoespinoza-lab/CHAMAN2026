@@ -16,6 +16,7 @@ const requiredRoles = [
   'ftp',
   'lora',
   'ndvi-worker',
+  'meteo-worker',
   'mongodb',
   'redis',
 ];
@@ -50,6 +51,42 @@ for (const service of manifest.services) {
   }
   if (service.selector.startsWith('sdc-') && !railwayServices[service.selector]) {
     issues.push(`${service.role}: CHAMAN_SERVICE no reconocido: ${service.selector}`);
+  }
+  if (service.versionPath && service.versionPath !== '/version') {
+    issues.push(`${service.role}: versionPath debe ser /version`);
+  }
+}
+
+const meteoWorker = manifest.services.find((service) => service.role === 'meteo-worker');
+if (meteoWorker) {
+  if (meteoWorker.selector !== 'sdc-meteo-worker') {
+    issues.push('meteo-worker: CHAMAN_SERVICE debe ser sdc-meteo-worker');
+  }
+  if (meteoWorker.rootDirectory !== 'sdc-meteo-worker') {
+    issues.push('meteo-worker: Root Directory debe ser sdc-meteo-worker');
+  }
+  if (meteoWorker.configPath !== 'sdc-meteo-worker/railway.json') {
+    issues.push('meteo-worker: configPath debe apuntar a su railway.json dedicado');
+  }
+  for (const safety of [
+    'CHAMAN_METEO_ENABLED=true',
+    'CHAMAN_METEO_IMPORT_ENABLED=false',
+  ]) {
+    if (!meteoWorker.testingSafety?.includes(safety)) {
+      issues.push(`meteo-worker: falta guardrail de Testing ${safety}`);
+    }
+  }
+}
+
+const lora = manifest.services.find((service) => service.role === 'lora');
+if (lora && !lora.testingSafety?.includes('LORAWAN_MQTT_ENABLED=false')) {
+  issues.push('lora: Testing debe conservar LORAWAN_MQTT_ENABLED=false');
+}
+
+for (const selector of ['sdc-api-cliente', 'sdc-datos']) {
+  const service = manifest.services.find((item) => item.selector === selector);
+  if (service?.versionPath !== '/version') {
+    issues.push(`${selector}: falta el contrato /version de la primera fase`);
   }
 }
 

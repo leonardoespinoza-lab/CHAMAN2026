@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "environment": "testing",
+  "capturedAt": "2026-08-28",
+  "readOnlyEvidence": true,
+  "doNotDeploy": true,
+  "services": [
+    {
+      "role": "web",
+      "service": "testing-web",
+      "deploymentId": "c0a3f109-4e0a-4534-bbd0-869393e5c3cd"
+    },
+    {
+      "role": "api",
+      "service": "testing-api",
+      "deploymentId": "bd00e830-3103-4cca-8f8c-f013b3404910"
+    },
+    {
+      "role": "auth",
+      "service": "testing-auth",
+      "deploymentId": "1aa2272b-5b03-4393-a53e-461cb9c34b30"
+    },
+    {
+      "role": "datos",
+      "service": "testing-datos",
+      "deploymentId": "20891800-1c8b-416e-a299-efb7b5949f17"
+    },
+    {
+      "role": "clima",
+      "service": "testing-clima",
+      "deploymentId": "e1812caf-c4c0-42c1-9cc1-77bfccef1db1"
+    },
+    {
+      "role": "predicciones",
+      "service": "testing-predicciones",
+      "deploymentId": "484914cc-373e-4c39-8bb7-c15a0f001d40"
+    },
+    {
+      "role": "externa",
+      "service": "testing-externa",
+      "deploymentId": "101f7f5e-95e9-4127-b606-e0db7eaa3e72"
+    },
+    {
+      "role": "websocket",
+      "service": "testing-websocket",
+      "deploymentId": "483d7fea-3bf0-4a99-b2d7-0c28b32ff0a4"
+    },
+    {
+      "role": "ftp",
+      "service": "testing-ftp",
+      "deploymentId": "59b25379-972f-409e-8bc3-6a3a17deff5d"
+    },
+    {
+      "role": "lora",
+      "service": "testing-lora",
+      "deploymentId": "6330715f-d04a-4766-9935-e93649d4a0ee"
+    },
+    {
+      "role": "ndvi-worker",
+      "service": "testing-ndvi-worker",
+      "deploymentId": "1139538f-7031-4db8-89ec-db5c7b081552"
+    },
+    {
+      "role": "meteo-worker",
+      "service": "testing-meteo-worker",
+      "deploymentId": "b26b9c27-5e96-4ad8-8204-5df5ea1946df"
+    }
+  ],
+  "isolatedInfrastructure": {
+    "mongodbIdPrefix": "c176d854",
+    "redisIdPrefix": "874a8746",
+    "chirpstackIdPrefixes": ["b9d2628a", "d35e872c", "c6183dde", "5b49b6cf"],
+    "mustRemainUntouched": true
+  },
+  "testingSafety": {
+    "loraBroker": "testing",
+    "LORAWAN_MQTT_ENABLED": false,
+    "capturedWithSkipDeploys": true,
+    "testingLoraExpectedShortSha": "641c71f",
+    "testingLoraMustRemainUntouched": true
+  },
+  "immutableRecoveryRefs": [
+    {
+      "ref": "codex/testing-recovery-2026-08-28-ee51d2b",
+      "expectedShortSha": "ee51d2b",
+      "scope": "legacy-github-services"
+    },
+    {
+      "ref": "codex/testing-recovery-2026-08-28-867eb66",
+      "expectedShortSha": "867eb66",
+      "scope": "testing-api-cli"
+    },
+    {
+      "ref": "codex/testing-recovery-2026-08-28-5018f72",
+      "expectedShortSha": "5018f72",
+      "scope": "testing-clima-datos-web-meteo-cli"
+    }
+  ],
+  "dataQualitySnapshot": {
+    "capturedAt": "2026-08-28T14:07:35.000Z",
+    "readOnlyEvidence": true,
+    "database": "chaman_testing",
+    "activeLots": 51,
+    "activeSowings": 51,
+    "seedsResolved": 30,
+    "duplicatePredictionKeys": 0,
+    "findings": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0
+    },
+    "cropCounts": {
+      "Trigo": 20,
+      "Pecan": 21,
+      "Manzano": 3,
+      "Peral": 2,
+      "Cebada": 4,
+      "Arveja": 1
+    },
+    "agrometAvailable": 51
+  }
+}

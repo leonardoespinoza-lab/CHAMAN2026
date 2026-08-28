@@ -16,6 +16,8 @@ import {
   IQueryParam,
   ICreateSemilla,
   IUpdateSemilla,
+  IImportacionCatalogoCultivosRequest,
+  IResultadoImportacionCatalogoCultivos,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
@@ -50,6 +52,14 @@ export class SemillasController {
   @Permisos({ nivel: 'Admin', roles: ['Admin'] })
   public async bulk(@Body() body: ICreateSemilla[]): Promise<void> {
     return await this.service.bulk(body);
+  }
+
+  @Post('/importar')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  public async importar(
+    @Body() body: IImportacionCatalogoCultivosRequest,
+  ): Promise<IResultadoImportacionCatalogoCultivos> {
+    return await this.service.importar(body);
   }
 
   @Put('/:id')

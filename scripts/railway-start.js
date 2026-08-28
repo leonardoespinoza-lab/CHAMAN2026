@@ -26,6 +26,7 @@ const validatedServices = new Set([
   "sdc-api-externa",
   "sdc-websocket",
   "sdc-ndvi-worker",
+  "sdc-meteo-worker",
 ]);
 if (
   runtimeEnv === "production" &&

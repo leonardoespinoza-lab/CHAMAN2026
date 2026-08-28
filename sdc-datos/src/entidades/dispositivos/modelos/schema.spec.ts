@@ -190,6 +190,46 @@ describe('DispositivoSchema - calificacion meteorologica', () => {
     expect(servicios[1].sensores).toEqual(['Entrada Analógica', 'Napa']);
   });
 
+  it('infiere meteorologia para una estacion legacy sin servicios persistidos', () => {
+    const servicios = serviciosDispositivoNormalizados({
+      deveui: '24E124433F027440',
+      tipo: 'Estacion Meteorologica',
+      idProductor: 'productor-kleppe',
+      idEstablecimiento: 'establecimiento-kleppe',
+      idLote: 'cuadro-7-la-costa',
+      sensores: ['Temperatura', 'Humedad', 'Batería', 'Otro'],
+      servicios: [],
+    });
+
+    expect(servicios).toEqual([
+      expect.objectContaining({
+        id: 'meteorologia-lote',
+        tipo: 'meteorologia',
+        sensores: ['Temperatura', 'Humedad', 'Otro'],
+        idProductor: 'productor-kleppe',
+        idEstablecimiento: 'establecimiento-kleppe',
+        idLote: 'cuadro-7-la-costa',
+        fuente: 'inferido',
+      }),
+    ]);
+  });
+
+  it('no inventa servicios para un uplink aun no asignado a un lote', () => {
+    expect(
+      serviciosDispositivoNormalizados({
+        tipo: 'Estacion Meteorologica',
+        sensores: ['Temperatura', 'Humedad', 'Batería'],
+      }),
+    ).toEqual([]);
+    expect(
+      serviciosDispositivoNormalizados({
+        tipo: 'Otro',
+        sensores: ['Otro'],
+        idLote: 'lote-pendiente',
+      }),
+    ).toEqual([]);
+  });
+
   it('no llama napa a una entrada 4-20 mA todavia sin calibrar', () => {
     const servicios = serviciosDispositivoNormalizados({
       configuracionLecturas: {

@@ -22,7 +22,11 @@ MongoDB, Redis y volumenes independientes.
    - conteos, claves unicas e integridad de catalogos.
 5. Abrir Pull Request hacia `main`. No hacer push directo a `main`.
 6. Exigir checks exitosos, revision humana y despliegue de testing exitoso.
+   `quality-gates` debe validar también el push final a `main`.
 7. Antes de datos o esquemas: crear backup productivo y ensayar una migracion idempotente en testing.
+   Mientras Railway no tenga backups/PITR, el backup debe ser lógico y su
+   restauración debe ensayarse en un destino aislado antes de cualquier deploy
+   productivo; ambas evidencias son obligatorias en el manifiesto de release.
 8. Fusionar el PR. Railway despliega produccion exclusivamente desde `main`.
 9. Ejecutar smoke test productivo y conservar el SHA anterior como rollback inmediato.
 
@@ -48,7 +52,8 @@ servicios sin estado que declaren el mismo release.
 ## Protecciones recomendadas en GitHub
 
 - Proteger `main` y exigir Pull Request.
-- Exigir los checks `topology-and-secrets`, `frontend-production-build`, pruebas de backend y worker satelital.
+- Exigir los checks `topology-and-secrets`, `frontend-production-build`, pruebas de backend,
+  worker satelital y `chaman-meteo-worker-build`.
 - Descartar aprobaciones cuando aparezcan nuevos commits.
 - Exigir que la rama este actualizada con `main`.
 - Impedir force-push y eliminacion de `main`.
@@ -58,5 +63,14 @@ servicios sin estado que declaren el mismo release.
 
 - `testing` es persistente y aislado.
 - Produccion sigue `main`; testing sigue la rama candidata.
-- Los 13 roles definidos en `deploy/environment-topology.json` deben existir en ambos entornos.
+- Wait for CI sólo se habilita cuando `quality-gates` tiene un trigger
+  `on: push` que cubre exactamente la rama conectada al servicio.
+- Los 14 roles definidos en `deploy/environment-topology.json` deben existir en ambos entornos.
 - Antes de aprobar, todos los servicios sin estado de testing deben reportar el mismo SHA.
+- Un deployment ID es evidencia, no garantía de recuperación: en Hobby la
+  imagen se retiene 72 h y se debe comprobar `canRollback`. El rollback
+  arbitrario usa Dashboard/Public API; conservar también el SHA anterior en
+  una referencia Git protegida e inmutable porque la CLI sólo redeploy/restart
+  el deployment más reciente.
+- El procedimiento de manifiesto, preflight y rollback verificable está en
+  `docs/RELEASE-SAFETY-CONTROLS.md`.
