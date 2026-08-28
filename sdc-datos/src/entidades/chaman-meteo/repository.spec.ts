@@ -1,6 +1,50 @@
 import { ChamanMeteoRepository } from './repository';
 
 describe('ChamanMeteoRepository', () => {
+  it('resuelve binding y punto activos sin busqueda por cercania', async () => {
+    const binding = {
+      locationType: 'lote',
+      locationId: '64b000000000000000000010',
+      gridPointKey: 'pilot-grid',
+      active: true,
+    };
+    const gridPoint = { key: 'pilot-grid', enabled: true };
+    const bindings = {
+      findOne: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue(binding),
+      }),
+    };
+    const gridPoints = {
+      findOne: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue(gridPoint),
+      }),
+    };
+    const repository = new ChamanMeteoRepository(
+      gridPoints as any,
+      bindings as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await expect(
+      repository.resolvedLocationBinding('lote', '64b000000000000000000010'),
+    ).resolves.toEqual({ binding, gridPoint });
+    expect(bindings.findOne).toHaveBeenCalledWith({
+      locationType: 'lote',
+      locationId: '64b000000000000000000010',
+      active: true,
+    });
+    expect(gridPoints.findOne).toHaveBeenCalledWith({
+      key: 'pilot-grid',
+      enabled: true,
+    });
+  });
+
   it('filters the job page and its total by calculation version', async () => {
     const lean = jest.fn().mockResolvedValue([{ jobKey: 'v2-job' }]);
     const limit = jest.fn().mockReturnValue({ lean });

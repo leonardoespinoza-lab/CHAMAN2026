@@ -242,4 +242,74 @@ describe('WeatherIngestionService', () => {
       'station_daily_coverage_verified_from_hourly',
     );
   });
+
+  it('integra el fallback piloto antes de persistir sin alterar el resolver operativo', async () => {
+    const clima = {
+      getOpenMeteoAgrometeorologia: jest.fn().mockResolvedValue(null),
+      getDatosEstacionAsociada: jest.fn(),
+    };
+    const repository = {
+      upsertObservaciones: jest.fn().mockResolvedValue(undefined),
+    };
+    const fallback = {
+      idEstablecimiento: 'est-1',
+      idLote: '64b000000000000000000010',
+      timestamp: '2026-05-01T15:00:00.000Z',
+      fechaLocal: '2026-05-01',
+      timezone: 'America/Argentina/Buenos_Aires',
+      granularidad: 'daily',
+      estado: 'estimated',
+      esPronostico: false,
+      valores: {
+        temperatureMinC: 4,
+        temperatureMeanC: 10,
+        temperatureMaxC: 17,
+      },
+      fuente: 'chaman_meteo',
+      fuentePorVariable: {
+        temperatureMinC: 'chaman_meteo',
+        temperatureMeanC: 'chaman_meteo',
+        temperatureMaxC: 'chaman_meteo',
+      },
+      banderasCalidad: ['chaman_meteo_historical_gap_fill'],
+      completitudPct: 42.9,
+      obtenidoEn: '2026-08-28T10:00:00.000Z',
+    };
+    const bridge = {
+      fillHistoricalDailyGaps: jest.fn().mockResolvedValue({
+        observations: [fallback],
+        warnings: ['fallback piloto'],
+        used: true,
+      }),
+    };
+    const ingestion = new WeatherIngestionService(
+      clima as any,
+      repository as any,
+      new WeatherSourceResolverService(),
+      bridge as any,
+    );
+
+    const result = await (ingestion as any).ingestarPeriodo(
+      { _id: 'est-1' },
+      { lat: -38.7888, lng: -68.10434 },
+      '2026-05-01',
+      '2026-05-01',
+      false,
+      '64b000000000000000000010',
+      ['64b000000000000000000020'],
+    );
+
+    expect(bridge.fillHistoricalDailyGaps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        desde: '2026-05-01',
+        hasta: '2026-05-01',
+        idLote: '64b000000000000000000010',
+        idSiembras: ['64b000000000000000000020'],
+        forecast: false,
+      }),
+    );
+    expect(repository.upsertObservaciones).toHaveBeenCalledWith([fallback]);
+    expect(result.fuentes).toEqual(new Set(['chaman_meteo']));
+    expect(result.advertencias).toContain('fallback piloto');
+  });
 });

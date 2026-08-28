@@ -77,4 +77,13 @@ describe('ChamanMeteoRepository', () => {
       );
     },
   );
+
+  it('resuelve el binding exacto del lote mediante el contrato interno', () => {
+    repository.resolvedLocationBinding('lote', '64b000000000000000000010');
+
+    expect(axios.GET).toHaveBeenCalledWith(
+      `${API_DATOS}/chaman-meteo-internal/bindings/lote/64b000000000000000000010`,
+      expect.objectContaining({ headers: expect.any(Object) }),
+    );
+  });
 });

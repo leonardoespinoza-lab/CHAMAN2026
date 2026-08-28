@@ -39,6 +39,14 @@ export class ChamanMeteoController {
     return this.service.gridPoints(limit, offset);
   }
 
+  @Get('bindings/:locationType/:locationId')
+  resolvedLocationBinding(
+    @Param('locationType') locationType: string,
+    @Param('locationId') locationId: string,
+  ) {
+    return this.service.resolvedLocationBinding(locationType, locationId);
+  }
+
   @Get('jobs')
   jobs(
     @Query('limit') limit?: string,

@@ -133,6 +133,7 @@ describe('AgrometeorologiaBatchService', () => {
       '2026-07-01',
       false,
       undefined,
+      ['64b000000000000000000001', '64b000000000000000000002'],
     );
   });
 
@@ -204,6 +205,7 @@ describe('AgrometeorologiaBatchService', () => {
       '2026-05-10',
       false,
       lotA._id,
+      ['64b000000000000000000001'],
     );
     expect(ingestion.sincronizar).toHaveBeenCalledWith(
       establishment,
@@ -211,6 +213,7 @@ describe('AgrometeorologiaBatchService', () => {
       '2026-05-11',
       false,
       lotB._id,
+      ['64b000000000000000000002'],
     );
   });
 

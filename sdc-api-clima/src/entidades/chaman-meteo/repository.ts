@@ -5,6 +5,7 @@ import {
   IChamanMeteoHourlyDerived,
   IChamanMeteoImportJob,
   IChamanMeteoPage,
+  IChamanMeteoResolvedLocationBinding,
   IChamanMeteoStorageStatus,
 } from 'modelos/src';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
@@ -32,6 +33,16 @@ export class ChamanMeteoRepository {
       params: { limit, offset },
       headers: this.headers(),
     });
+  }
+
+  resolvedLocationBinding(
+    locationType: 'establecimiento' | 'lote',
+    locationId: string,
+  ): Promise<IChamanMeteoResolvedLocationBinding | null> {
+    return this.axios.GET(
+      `${API_DATOS}/chaman-meteo-internal/bindings/${locationType}/${encodeURIComponent(locationId)}`,
+      { headers: this.headers() },
+    );
   }
 
   jobs(

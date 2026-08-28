@@ -11,6 +11,7 @@ describe('ChamanMeteoService', () => {
     recalculateCoverage: jest.fn(),
     coverageByGridPoint: jest.fn(),
     upsertVersionedHourlyRaw: jest.fn(),
+    resolvedLocationBinding: jest.fn(),
   };
   const service = new ChamanMeteoService(repository as any);
 
@@ -273,5 +274,19 @@ describe('ChamanMeteoService', () => {
     service.jobByKey('repair-key');
     expect(repository.jobByKey).toHaveBeenCalledWith('repair-key');
     expect(() => service.jobByKey('   ')).toThrow(BadRequestException);
+  });
+
+  it('resuelve solamente bindings con tipo e id validos', () => {
+    service.resolvedLocationBinding('lote', '64b000000000000000000010');
+    expect(repository.resolvedLocationBinding).toHaveBeenCalledWith(
+      'lote',
+      '64b000000000000000000010',
+    );
+    expect(() =>
+      service.resolvedLocationBinding('lote', 'no-es-object-id'),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      service.resolvedLocationBinding('otra-cosa', '64b000000000000000000010'),
+    ).toThrow(BadRequestException);
   });
 });

@@ -377,6 +377,35 @@ export const CHAMAN_METEO_RUNTIME_CONFIGURATION_ERROR = [
 ]
   .filter(Boolean)
   .join('; ') || undefined;
+
+export function resolveIdentifierAllowlist(value?: string): string[] {
+  return [
+    ...new Set(
+      String(value || '')
+        .split(',')
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+/**
+ * Puente operativo v1: queda apagado aunque Chaman-Meteo administrativo este
+ * activo. Ademas exige al menos un lote o una siembra piloto explicitamente
+ * autorizada, por lo que `true` sin allowlist tambien falla cerrado.
+ */
+export const CHAMAN_METEO_AGROMET_BRIDGE_ENABLED =
+  CHAMAN_METEO_ENABLED &&
+  CHAMAN_METEO_RUNTIME_CONFIGURATION_VALID &&
+  process.env.CHAMAN_METEO_AGROMET_BRIDGE_ENABLED === 'true';
+export const CHAMAN_METEO_AGROMET_LOT_ALLOWLIST = resolveIdentifierAllowlist(
+  process.env.CHAMAN_METEO_AGROMET_LOT_ALLOWLIST,
+);
+export const CHAMAN_METEO_AGROMET_SOWING_ALLOWLIST = resolveIdentifierAllowlist(
+  process.env.CHAMAN_METEO_AGROMET_SOWING_ALLOWLIST,
+);
+/** Hoy y los cuatro dias previos siguen exclusivamente en Open-Meteo. */
+export const CHAMAN_METEO_AGROMET_RECENT_OPEN_METEO_DAYS = 5;
 export const SOIL_INTELLIGENCE_INTERNAL_TOKEN =
   process.env.SOIL_INTELLIGENCE_INTERNAL_TOKEN ||
   process.env.LOT_LOCATION_INTERNAL_TOKEN ||

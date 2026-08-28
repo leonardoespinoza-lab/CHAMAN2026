@@ -13,6 +13,6 @@ import { ChamanMeteoService } from './service';
     ChamanMeteoRepository,
     ChamanMeteoService,
   ],
-  exports: [ChamanMeteoService],
+  exports: [ChamanMeteoService, ChamanMeteoRepository],
 })
 export class ChamanMeteoModule {}

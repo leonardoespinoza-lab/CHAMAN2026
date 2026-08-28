@@ -5,6 +5,7 @@ export type FuenteCalidadDato =
   | 'estacion_asignada'
   | 'estacion_cercana'
   | 'open_meteo'
+  | 'chaman_meteo'
   | 'meteosource'
   | 'meteoblue'
   | 'satelite'

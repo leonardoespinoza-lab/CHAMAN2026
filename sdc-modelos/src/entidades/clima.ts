@@ -4,6 +4,7 @@ import { ICalidadDatoMotor } from "../compartidos/calidad-datos";
 export type FuenteClima =
   | "OpenWeather"
   | "OpenMeteo"
+  | "ChamanMeteo"
   | "FieldClimate"
   | "MeteoSource"
   | "Meteoblue"

@@ -108,6 +108,7 @@ export class AgrometeorologiaBatchService {
             earliest,
             false,
             idLote,
+            contextSowings.map((item) => String(item._id)),
           );
           if (!sync?.hasta) {
             throw new Error(

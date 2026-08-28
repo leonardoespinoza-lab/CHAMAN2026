@@ -9,6 +9,7 @@ import {
   IChamanMeteoHourlyRaw,
   IChamanMeteoImportJob,
   IChamanMeteoPage,
+  IChamanMeteoResolvedLocationBinding,
   IChamanMeteoStorageStatus,
 } from 'modelos/src';
 import { Model, PipelineStage } from 'mongoose';
@@ -135,6 +136,26 @@ export class ChamanMeteoRepository {
     offset: number,
   ): Promise<IChamanMeteoPage<IChamanMeteoGridPoint>> {
     return this.page(this.gridPoints, {}, { key: 1 }, limit, offset);
+  }
+
+  async resolvedLocationBinding(
+    locationType: 'establecimiento' | 'lote',
+    locationId: string,
+  ): Promise<IChamanMeteoResolvedLocationBinding | null> {
+    const binding = (await this.bindings
+      .findOne({ locationType, locationId, active: true })
+      .lean()) as any;
+    if (!binding?.gridPointKey) return null;
+    const gridPoint = (await this.gridPoints
+      .findOne({ key: binding.gridPointKey, enabled: true })
+      .lean()) as any;
+    if (!gridPoint) return null;
+    return {
+      binding:
+        binding as unknown as IChamanMeteoResolvedLocationBinding['binding'],
+      gridPoint:
+        gridPoint as unknown as IChamanMeteoResolvedLocationBinding['gridPoint'],
+    };
   }
 
   jobPage(

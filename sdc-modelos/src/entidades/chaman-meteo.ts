@@ -38,6 +38,15 @@ export interface IChamanMeteoLocationBinding {
   actualizadoEn?: string;
 }
 
+/**
+ * Binding operativo resuelto de forma atomica. El consumidor nunca elige el
+ * punto mas cercano: usa exclusivamente el punto activo asociado al lote.
+ */
+export interface IChamanMeteoResolvedLocationBinding {
+  binding: IChamanMeteoLocationBinding;
+  gridPoint: IChamanMeteoGridPoint;
+}
+
 export interface IChamanMeteoRawValues {
   temperatureK?: number;
   dewPointK?: number;
@@ -249,6 +258,9 @@ export interface IChamanMeteoAdminStatus extends IChamanMeteoStorageStatus {
   historicalStart: string;
   calculationVersion: string;
   operationalSourceUnchanged: boolean;
+  agrometBridgeEnabled?: boolean;
+  agrometPilotLots?: number;
+  agrometPilotSowings?: number;
   configurationValid: boolean;
   lastError?: string;
   state: "DISABLED" | "READY" | "IMPORTING" | "AVAILABLE" | "ERROR";

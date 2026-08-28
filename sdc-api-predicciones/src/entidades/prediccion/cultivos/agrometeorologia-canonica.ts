@@ -57,6 +57,7 @@ const fuenteClima = (
   if (value.includes('open_meteo') || value === 'gap_filled') {
     return 'OpenMeteo';
   }
+  if (value.includes('chaman_meteo')) return 'ChamanMeteo';
   return undefined;
 };
 
@@ -69,6 +70,7 @@ const fuenteCalidad = (
   if (value.includes('open_meteo') || value === 'gap_filled') {
     return 'open_meteo';
   }
+  if (value.includes('chaman_meteo')) return 'chaman_meteo';
   return 'mixto';
 };
 

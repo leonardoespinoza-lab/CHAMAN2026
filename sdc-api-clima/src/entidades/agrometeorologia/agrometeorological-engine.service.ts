@@ -406,6 +406,7 @@ export class AgrometeorologicalEngineService {
           cycleStart,
           options.forceBackfill,
           String(lote._id),
+          [String(siembra._id)],
         );
         syncWarnings.push(...sync.advertencias);
         expectedEndDate = [expectedEndDate, sync.hasta]
@@ -1276,6 +1277,13 @@ export class AgrometeorologicalEngineService {
         dayWarnings.push(
           'La humedad del suelo combina sensores disponibles con capas modeladas de Open-Meteo; revisar la fuente por variable.',
         );
+      } else if (
+        rootMoisture !== undefined &&
+        soilModelSource === 'derived_chaman_meteo'
+      ) {
+        dayWarnings.push(
+          'La humedad y temperatura del suelo provienen del reanalisis ERA5-Land de Chaman-Meteo por capas; no son una medicion con sonda en el lote.',
+        );
       }
       const metrics: IMetricasAgrometeorologicasDiarias = {
         temperatureMinC: weather.temperatureMinC,
@@ -1448,6 +1456,9 @@ export class AgrometeorologicalEngineService {
               : []),
             ...(soilModelSource === 'derived_open_meteo'
               ? ['modeled_soil_open_meteo']
+              : []),
+            ...(soilModelSource === 'derived_chaman_meteo'
+              ? ['modeled_soil_chaman_meteo_era5_land']
               : []),
             ...(soilModelSource === 'mixed' ? ['mixed_soil_sources'] : []),
             ...(profile.depthIsFallback ? ['screening_root_depth'] : []),
@@ -1675,7 +1686,9 @@ export class AgrometeorologicalEngineService {
     const stationNames = lotObservations
       .map((item) => item.estacionNombre)
       .filter((value): value is string => !!value);
-    const normalizedSources = new Set<'sensor' | 'station' | 'open_meteo'>();
+    const normalizedSources = new Set<
+      'sensor' | 'station' | 'open_meteo' | 'chaman_meteo'
+    >();
     for (const item of rows) {
       const sources = [
         item.fuente,
@@ -1696,6 +1709,11 @@ export class AgrometeorologicalEngineService {
       ) {
         normalizedSources.add('open_meteo');
       }
+      if (
+        sources.some((source) => String(source || '').includes('chaman_meteo'))
+      ) {
+        normalizedSources.add('chaman_meteo');
+      }
     }
     const dataSourceType =
       normalizedSources.size > 1
@@ -1704,7 +1722,11 @@ export class AgrometeorologicalEngineService {
           ? 'sensor'
           : normalizedSources.has('station')
             ? 'station'
-            : 'open_meteo';
+            : normalizedSources.has('open_meteo')
+              ? 'open_meteo'
+              : normalizedSources.has('chaman_meteo')
+                ? 'chaman_meteo'
+                : 'sin_datos';
     const fieldCoverageRows = rows
       .filter((item) => !item.esPronostico)
       .map((item) => item.coberturaCampoPct)
@@ -4655,11 +4677,20 @@ export class AgrometeorologicalEngineService {
       (value) => !String(value).includes('sensor') && value !== undefined,
     );
     if (sensor) return other ? 'mixed' : 'derived_sensor';
-    return sources.has('station') || sources.has('derived_station')
-      ? sources.has('open_meteo') || sources.has('derived_open_meteo')
-        ? 'mixed'
-        : 'derived_station'
-      : 'derived_open_meteo';
+    const station = [...sources].some((value) =>
+      String(value).includes('station'),
+    );
+    const open = [...sources].some(
+      (value) => String(value).includes('open_meteo') || value === 'gap_filled',
+    );
+    const chaman = [...sources].some((value) =>
+      String(value).includes('chaman_meteo'),
+    );
+    if ([station, open, chaman].filter(Boolean).length > 1) return 'mixed';
+    if (station) return 'derived_station';
+    if (open) return 'derived_open_meteo';
+    if (chaman) return 'derived_chaman_meteo';
+    return 'derived_open_meteo';
   }
 
   private derivedSourceFromHours(
@@ -4679,12 +4710,14 @@ export class AgrometeorologicalEngineService {
     const open = [...sources].some(
       (value) => value.includes('open_meteo') || value === 'gap_filled',
     );
+    const chaman = [...sources].some((value) => value.includes('chaman_meteo'));
     if (sources.has('mixed')) return 'mixed';
-    if (sensor && (station || open)) return 'mixed';
+    if (sensor && (station || open || chaman)) return 'mixed';
     if (sensor) return 'derived_sensor';
-    if (station && open) return 'mixed';
+    if ([station, open, chaman].filter(Boolean).length > 1) return 'mixed';
     if (station) return 'derived_station';
     if (open) return 'derived_open_meteo';
+    if (chaman) return 'derived_chaman_meteo';
     return undefined;
   }
 
@@ -4765,11 +4798,12 @@ export class AgrometeorologicalEngineService {
     source: FuenteMeteorologicaNormalizada | undefined,
   ): number {
     const normalized = String(source || '');
-    if (normalized.includes('sensor')) return 3;
-    if (normalized.includes('station') || normalized === 'mixed') return 2;
+    if (normalized.includes('sensor')) return 4;
+    if (normalized.includes('station') || normalized === 'mixed') return 3;
     if (normalized.includes('open_meteo') || normalized === 'gap_filled') {
-      return 1;
+      return 2;
     }
+    if (normalized.includes('chaman_meteo')) return 1;
     return 0;
   }
 
@@ -4801,11 +4835,15 @@ export class AgrometeorologicalEngineService {
     const open = [...sources].some(
       (value) => String(value).includes('open_meteo') || value === 'gap_filled',
     );
-    if (sensor && (station || open)) return 'mixed';
+    const chaman = [...sources].some((value) =>
+      String(value).includes('chaman_meteo'),
+    );
+    if (sensor && (station || open || chaman)) return 'mixed';
     if (sensor) return 'sensor';
-    if (station && open) return 'mixed';
+    if ([station, open, chaman].filter(Boolean).length > 1) return 'mixed';
     if (station) return 'station';
-    return 'open_meteo';
+    if (open) return 'open_meteo';
+    return chaman ? 'chaman_meteo' : 'open_meteo';
   }
 
   private completenessForIndicator(

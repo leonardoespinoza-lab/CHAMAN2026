@@ -12,6 +12,7 @@ import {
 import { ClimaService } from '../clima/service';
 import { AgrometeorologiaRepository } from './repository';
 import { WeatherSourceResolverService } from './weather-source-resolver.service';
+import { ChamanMeteoAgrometBridgeService } from './chaman-meteo-agromet-bridge.service';
 
 const DEFAULT_OPERATIONAL_TIMEZONE = 'America/Argentina/Buenos_Aires';
 
@@ -21,7 +22,7 @@ export interface IWeatherIngestionResult {
   desde: string;
   hasta: string;
   observaciones: number;
-  fuente: 'station' | 'open_meteo' | 'mixed' | 'sin_datos';
+  fuente: 'station' | 'open_meteo' | 'chaman_meteo' | 'mixed' | 'sin_datos';
   advertencias: string[];
 }
 
@@ -33,6 +34,7 @@ export class WeatherIngestionService {
     private clima: ClimaService,
     private repository: AgrometeorologiaRepository,
     private resolver: WeatherSourceResolverService,
+    private bridge?: ChamanMeteoAgrometBridgeService,
   ) {}
 
   async sincronizar(
@@ -41,6 +43,7 @@ export class WeatherIngestionService {
     desdeSolicitado: string,
     forceBackfill = false,
     idLote?: string,
+    idSiembras?: string[],
   ): Promise<IWeatherIngestionResult> {
     if (!establecimiento?._id) {
       throw new Error('El establecimiento no tiene identificador.');
@@ -69,6 +72,7 @@ export class WeatherIngestionService {
           chunk.hasta,
           false,
           idLote,
+          idSiembras,
         );
         total += result.observaciones;
         result.fuentes.forEach((source) => fuentes.add(source));
@@ -83,19 +87,22 @@ export class WeatherIngestionService {
       hastaPronostico,
       true,
       idLote,
+      idSiembras,
     );
     total += forecastResult.observaciones;
     forecastResult.fuentes.forEach((source) => fuentes.add(source));
     advertencias.push(...forecastResult.advertencias);
 
     const fuente =
-      fuentes.has('station') && fuentes.has('open_meteo')
+      fuentes.size > 1
         ? 'mixed'
         : fuentes.has('station')
           ? 'station'
           : fuentes.has('open_meteo')
             ? 'open_meteo'
-            : 'sin_datos';
+            : fuentes.has('chaman_meteo')
+              ? 'chaman_meteo'
+              : 'sin_datos';
     const result: IWeatherIngestionResult = {
       idEstablecimiento,
       ...(idLote ? { idLote } : {}),
@@ -118,6 +125,7 @@ export class WeatherIngestionService {
     hasta: string,
     forecast: boolean,
     idLote?: string,
+    idSiembras?: string[],
   ): Promise<{
     observaciones: number;
     fuentes: Set<string>;
@@ -217,10 +225,25 @@ export class WeatherIngestionService {
       },
     );
     const stationObservations = [...stationHourly, ...stationDaily];
-    const merged = this.resolver.fusionar(
+    let merged = this.resolver.fusionar(
       stationObservations,
       openObservations,
     );
+    const bridgeWarnings: string[] = [];
+    if (this.bridge) {
+      const bridgeResult = await this.bridge.fillHistoricalDailyGaps({
+        observations: merged,
+        idEstablecimiento,
+        idLote,
+        idSiembras,
+        coordenadas,
+        desde,
+        hasta,
+        forecast,
+      });
+      merged = bridgeResult.observations;
+      bridgeWarnings.push(...bridgeResult.warnings);
+    }
     if (idLote) {
       merged.forEach((item) => {
         item.idLote = idLote;
@@ -248,6 +271,7 @@ export class WeatherIngestionService {
         advertencias: [
           ...stationHourlyResult.advertencias,
           ...stationDailyResult.advertencias,
+          ...bridgeWarnings,
           'No se recibieron datos meteorologicos validos para el periodo.',
         ],
       };
@@ -255,11 +279,22 @@ export class WeatherIngestionService {
     await this.persistirEnLotes(merged, 500);
     const fuentes = new Set<string>();
     merged.forEach((item) => {
-      if (item.fuente === 'station') fuentes.add('station');
-      if (item.fuente === 'open_meteo') fuentes.add('open_meteo');
-      if (item.fuente === 'mixed') {
+      const itemSources = [
+        item.fuente,
+        ...Object.values(item.fuentePorVariable || {}),
+      ].map(String);
+      if (itemSources.some((source) => source.includes('station'))) {
         fuentes.add('station');
+      }
+      if (
+        itemSources.some(
+          (source) => source.includes('open_meteo') || source === 'gap_filled',
+        )
+      ) {
         fuentes.add('open_meteo');
+      }
+      if (itemSources.some((source) => source.includes('chaman_meteo'))) {
+        fuentes.add('chaman_meteo');
       }
     });
     return {
@@ -268,6 +303,7 @@ export class WeatherIngestionService {
       advertencias: [
         ...stationHourlyResult.advertencias,
         ...stationDailyResult.advertencias,
+        ...bridgeWarnings,
         ...(freshnessWarning ? [freshnessWarning] : []),
       ],
     };

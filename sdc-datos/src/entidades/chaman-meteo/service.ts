@@ -8,6 +8,7 @@ import {
   IChamanMeteoHourlyRaw,
   IChamanMeteoImportJob,
 } from 'modelos/src';
+import { Types } from 'mongoose';
 import { ChamanMeteoRepository } from './repository';
 
 @Injectable()
@@ -26,6 +27,21 @@ export class ChamanMeteoService {
     return this.repository.gridPointPage(
       this.bounded(limit, 50, 1, 500),
       this.bounded(offset, 0, 0, 1_000_000),
+    );
+  }
+
+  resolvedLocationBinding(locationType?: string, locationId?: string) {
+    const type = String(locationType || '').trim();
+    const id = String(locationId || '').trim();
+    if (
+      !['establecimiento', 'lote'].includes(type) ||
+      !Types.ObjectId.isValid(id)
+    ) {
+      throw new BadRequestException('Binding meteorologico invalido.');
+    }
+    return this.repository.resolvedLocationBinding(
+      type as 'establecimiento' | 'lote',
+      id,
     );
   }
 

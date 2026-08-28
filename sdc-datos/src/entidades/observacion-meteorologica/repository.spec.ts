@@ -8,7 +8,12 @@ describe('ObservacionesMeteorologicasRepository', () => {
     ).options.enum;
 
     expect(fuentes).toEqual(
-      expect.arrayContaining(['sensor', 'derived_sensor']),
+      expect.arrayContaining([
+        'sensor',
+        'derived_sensor',
+        'chaman_meteo',
+        'derived_chaman_meteo',
+      ]),
     );
   });
 
