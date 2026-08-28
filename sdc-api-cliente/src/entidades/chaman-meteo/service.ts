@@ -17,24 +17,45 @@ export class ChamanMeteoService {
     return this.repository.jobs(this.number(limit), this.number(offset));
   }
 
-  hourly(gridPointKey?: string, limit?: string, offset?: string) {
+  hourly(
+    gridPointKey?: string,
+    limit?: string,
+    offset?: string,
+    from?: string,
+    toExclusive?: string,
+  ) {
     return this.repository.hourly(
       String(gridPointKey || '').trim() || undefined,
       this.number(limit),
       this.number(offset),
+      this.clean(from),
+      this.clean(toExclusive),
     );
   }
 
-  daily(gridPointKey?: string, limit?: string, offset?: string) {
+  daily(
+    gridPointKey?: string,
+    limit?: string,
+    offset?: string,
+    from?: string,
+    toExclusive?: string,
+  ) {
     return this.repository.daily(
       String(gridPointKey || '').trim() || undefined,
       this.number(limit),
       this.number(offset),
+      this.clean(from),
+      this.clean(toExclusive),
     );
   }
 
   private number(value?: string): number | undefined {
     const parsed = Number(value);
     return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+  }
+
+  private clean(value?: string): string | undefined {
+    const text = String(value || '').trim();
+    return text || undefined;
   }
 }

@@ -10,6 +10,8 @@ import {
   CHAMAN_METEO_HOURLY_RAW_MODEL,
   CHAMAN_METEO_IMPORT_JOB_MODEL,
   CHAMAN_METEO_LOCATION_BINDING_MODEL,
+  CHAMAN_METEO_VERSIONED_COVERAGE_MODEL,
+  CHAMAN_METEO_VERSIONED_HOURLY_RAW_MODEL,
   ChamanMeteoCoverageSchema,
   ChamanMeteoDailySchema,
   ChamanMeteoGridPointSchema,
@@ -17,6 +19,8 @@ import {
   ChamanMeteoHourlyRawSchema,
   ChamanMeteoImportJobSchema,
   ChamanMeteoLocationBindingSchema,
+  ChamanMeteoVersionedCoverageSchema,
+  ChamanMeteoVersionedHourlyRawSchema,
 } from './modelos/schema';
 import { ChamanMeteoRepository } from './repository';
 import { ChamanMeteoService } from './service';
@@ -37,11 +41,19 @@ import { ChamanMeteoService } from './service';
         schema: ChamanMeteoHourlyRawSchema,
       },
       {
+        name: CHAMAN_METEO_VERSIONED_HOURLY_RAW_MODEL,
+        schema: ChamanMeteoVersionedHourlyRawSchema,
+      },
+      {
         name: CHAMAN_METEO_HOURLY_DERIVED_MODEL,
         schema: ChamanMeteoHourlyDerivedSchema,
       },
       { name: CHAMAN_METEO_DAILY_MODEL, schema: ChamanMeteoDailySchema },
       { name: CHAMAN_METEO_COVERAGE_MODEL, schema: ChamanMeteoCoverageSchema },
+      {
+        name: CHAMAN_METEO_VERSIONED_COVERAGE_MODEL,
+        schema: ChamanMeteoVersionedCoverageSchema,
+      },
       {
         name: CHAMAN_METEO_IMPORT_JOB_MODEL,
         schema: ChamanMeteoImportJobSchema,

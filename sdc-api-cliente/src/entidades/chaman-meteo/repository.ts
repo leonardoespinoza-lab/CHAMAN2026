@@ -44,9 +44,11 @@ export class ChamanMeteoRepository {
     gridPointKey?: string,
     limit?: number,
     offset?: number,
+    from?: string,
+    toExclusive?: string,
   ): Promise<IChamanMeteoPage<IChamanMeteoHourlyDerived>> {
     return this.axios.GET(`${API_CLIMA}/chaman-meteo/hourly`, {
-      params: { gridPointKey, limit, offset },
+      params: { gridPointKey, from, toExclusive, limit, offset },
       headers: this.headers(),
     });
   }
@@ -55,9 +57,11 @@ export class ChamanMeteoRepository {
     gridPointKey?: string,
     limit?: number,
     offset?: number,
+    from?: string,
+    toExclusive?: string,
   ): Promise<IChamanMeteoPage<IChamanMeteoDaily>> {
     return this.axios.GET(`${API_CLIMA}/chaman-meteo/daily`, {
-      params: { gridPointKey, limit, offset },
+      params: { gridPointKey, from, toExclusive, limit, offset },
       headers: this.headers(),
     });
   }

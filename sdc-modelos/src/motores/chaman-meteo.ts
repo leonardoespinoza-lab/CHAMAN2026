@@ -1,4 +1,5 @@
-export const CHAMAN_METEO_CALCULATION_VERSION = "chaman-meteo-agro-v1";
+export const CHAMAN_METEO_CALCULATION_VERSION = "chaman-meteo-agro-v2";
+export const CHAMAN_METEO_MIN_HISTORICAL_DATE = "2020-01-01";
 
 export function saturationVapourPressureKpa(temperatureC: number): number {
   if (!Number.isFinite(temperatureC)) return NaN;

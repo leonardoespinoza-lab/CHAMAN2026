@@ -1,5 +1,6 @@
 import csv
 import json
+import math
 import re
 import shutil
 import zipfile
@@ -14,6 +15,8 @@ VARIABLE_GROUPS = [
     ["2m_dewpoint_temperature", "2m_temperature"],
     ["surface_pressure", "total_precipitation"],
     ["surface_solar_radiation_downwards", "surface_thermal_radiation_downwards"],
+    ["skin_temperature"],
+    ["snow_cover", "snow_depth"],
     [
         "soil_temperature_level_1",
         "soil_temperature_level_2",
@@ -42,10 +45,29 @@ ALIASES = {
     "soilTemperatureK2": ["soil_temperature_level_2", "stl2"],
     "soilTemperatureK3": ["soil_temperature_level_3", "stl3"],
     "soilTemperatureK4": ["soil_temperature_level_4", "stl4"],
-    "soilWaterM3M31": ["volumetric_soil_water_level_1", "swvl1"],
-    "soilWaterM3M32": ["volumetric_soil_water_level_2", "swvl2"],
-    "soilWaterM3M33": ["volumetric_soil_water_level_3", "swvl3"],
-    "soilWaterM3M34": ["volumetric_soil_water_level_4", "swvl4"],
+    "soilWaterM3M31": [
+        "volumetric_soil_water_level_1",
+        "volumetric_soil_water_layer_1",
+        "swvl1",
+    ],
+    "soilWaterM3M32": [
+        "volumetric_soil_water_level_2",
+        "volumetric_soil_water_layer_2",
+        "swvl2",
+    ],
+    "soilWaterM3M33": [
+        "volumetric_soil_water_level_3",
+        "volumetric_soil_water_layer_3",
+        "swvl3",
+    ],
+    "soilWaterM3M34": [
+        "volumetric_soil_water_level_4",
+        "volumetric_soil_water_layer_4",
+        "swvl4",
+    ],
+    "skinTemperatureK": ["skin_temperature", "skt"],
+    "snowCoverFraction": ["snow_cover", "snowc"],
+    "snowDepthM": ["snow_depth"],
 }
 
 TIME_ALIASES = ["valid_time", "time", "datetime", "date"]
@@ -161,7 +183,7 @@ class CdsTimeSeriesClient:
     def _number(self, value):
         try:
             number = float(value)
-            return number if number == number else None
+            return number if math.isfinite(number) else None
         except (TypeError, ValueError):
             return None
 

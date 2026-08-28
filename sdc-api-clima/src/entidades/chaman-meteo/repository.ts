@@ -14,8 +14,12 @@ import { API_DATOS, CHAMAN_METEO_INTERNAL_TOKEN } from '../../env';
 export class ChamanMeteoRepository {
   constructor(private readonly axios: AxiosService) {}
 
-  status(): Promise<IChamanMeteoStorageStatus> {
+  status(
+    calculationVersion?: string,
+    sourceVersion?: string,
+  ): Promise<IChamanMeteoStorageStatus> {
     return this.axios.GET(`${API_DATOS}/chaman-meteo-internal/status`, {
+      params: { calculationVersion, sourceVersion },
       headers: this.headers(),
     });
   }
@@ -33,9 +37,11 @@ export class ChamanMeteoRepository {
   jobs(
     limit = 25,
     offset = 0,
+    calculationVersion?: string,
+    sourceVersion?: string,
   ): Promise<IChamanMeteoPage<IChamanMeteoImportJob>> {
     return this.axios.GET(`${API_DATOS}/chaman-meteo-internal/jobs`, {
-      params: { limit, offset },
+      params: { limit, offset, calculationVersion, sourceVersion },
       headers: this.headers(),
     });
   }
@@ -45,9 +51,18 @@ export class ChamanMeteoRepository {
     limit = 48,
     offset = 0,
     calculationVersion?: string,
+    from?: string,
+    toExclusive?: string,
   ): Promise<IChamanMeteoPage<IChamanMeteoHourlyDerived>> {
     return this.axios.GET(`${API_DATOS}/chaman-meteo-internal/hourly`, {
-      params: { gridPointKey, limit, offset, calculationVersion },
+      params: {
+        gridPointKey,
+        from,
+        toExclusive,
+        limit,
+        offset,
+        calculationVersion,
+      },
       headers: this.headers(),
     });
   }
@@ -57,9 +72,18 @@ export class ChamanMeteoRepository {
     limit = 30,
     offset = 0,
     calculationVersion?: string,
+    from?: string,
+    toExclusive?: string,
   ): Promise<IChamanMeteoPage<IChamanMeteoDaily>> {
     return this.axios.GET(`${API_DATOS}/chaman-meteo-internal/daily`, {
-      params: { gridPointKey, limit, offset, calculationVersion },
+      params: {
+        gridPointKey,
+        from,
+        toExclusive,
+        limit,
+        offset,
+        calculationVersion,
+      },
       headers: this.headers(),
     });
   }

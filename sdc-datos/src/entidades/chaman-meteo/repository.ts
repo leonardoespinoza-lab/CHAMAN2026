@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import {
   ChamanMeteoJobStatus,
@@ -11,7 +11,7 @@ import {
   IChamanMeteoPage,
   IChamanMeteoStorageStatus,
 } from 'modelos/src';
-import { Model } from 'mongoose';
+import { Model, PipelineStage } from 'mongoose';
 import {
   CHAMAN_METEO_COVERAGE_MODEL,
   CHAMAN_METEO_DAILY_MODEL,
@@ -20,6 +20,8 @@ import {
   CHAMAN_METEO_HOURLY_RAW_MODEL,
   CHAMAN_METEO_IMPORT_JOB_MODEL,
   CHAMAN_METEO_LOCATION_BINDING_MODEL,
+  CHAMAN_METEO_VERSIONED_COVERAGE_MODEL,
+  CHAMAN_METEO_VERSIONED_HOURLY_RAW_MODEL,
 } from './modelos/schema';
 
 @Injectable()
@@ -39,9 +41,16 @@ export class ChamanMeteoRepository {
     private readonly coverage: Model<any>,
     @InjectModel(CHAMAN_METEO_IMPORT_JOB_MODEL)
     private readonly jobs: Model<any>,
+    @InjectModel(CHAMAN_METEO_VERSIONED_COVERAGE_MODEL)
+    private readonly versionedCoverage: Model<any>,
+    @InjectModel(CHAMAN_METEO_VERSIONED_HOURLY_RAW_MODEL)
+    private readonly versionedHourlyRaw: Model<any>,
   ) {}
 
-  async status(): Promise<IChamanMeteoStorageStatus> {
+  async status(
+    calculationVersion?: string,
+    sourceVersion?: string,
+  ): Promise<IChamanMeteoStorageStatus> {
     const statuses: ChamanMeteoJobStatus[] = [
       'PENDING',
       'DOWNLOADING',
@@ -49,6 +58,15 @@ export class ChamanMeteoRepository {
       'AVAILABLE',
       'FAILED',
     ];
+    const versionFilter = this.jobVersionFilter(
+      calculationVersion,
+      sourceVersion,
+    );
+    const calculationFilter = {
+      calculationVersion: calculationVersion || 'chaman-meteo-agro-v1',
+    };
+    const jobPipeline: PipelineStage[] = [{ $match: versionFilter }];
+    jobPipeline.push({ $group: { _id: '$status', count: { $sum: 1 } } });
     const [
       gridPoints,
       activeBindings,
@@ -57,19 +75,33 @@ export class ChamanMeteoRepository {
       dailyRecords,
       jobCounts,
       latestJob,
+      latestProblemJob,
       latestCoverage,
     ] = await Promise.all([
       this.gridPoints.countDocuments({ enabled: true }),
       this.bindings.countDocuments({ active: true }),
-      this.hourlyRaw.estimatedDocumentCount(),
-      this.hourlyDerived.estimatedDocumentCount(),
-      this.daily.estimatedDocumentCount(),
-      this.jobs.aggregate<{ _id: ChamanMeteoJobStatus; count: number }>([
-        { $group: { _id: '$status', count: { $sum: 1 } } },
-      ]),
-      this.jobs.findOne().sort({ actualizadoEn: -1 }).lean(),
-      this.coverage
-        .findOne()
+      sourceVersion
+        ? this.versionedHourlyRaw.countDocuments({ sourceVersion })
+        : this.hourlyRaw.estimatedDocumentCount(),
+      this.hourlyDerived.countDocuments(calculationFilter),
+      this.daily.countDocuments(calculationFilter),
+      this.jobs.aggregate<{ _id: ChamanMeteoJobStatus; count: number }>(
+        jobPipeline,
+      ),
+      this.jobs.findOne(versionFilter).sort({ actualizadoEn: -1 }).lean(),
+      this.jobs
+        .findOne({
+          ...versionFilter,
+          status: { $in: ['PARTIAL', 'FAILED'] },
+        })
+        .sort({ actualizadoEn: -1 })
+        .lean(),
+      (calculationVersion && sourceVersion
+        ? this.versionedCoverage
+        : this.coverage)
+        .findOne(
+          calculationVersion && sourceVersion ? versionFilter : {},
+        )
         .sort({ lastSuccessfulImportAt: -1, actualizadoEn: -1 })
         .lean(),
     ]);
@@ -80,6 +112,8 @@ export class ChamanMeteoRepository {
       if (item._id in jobsByStatus) jobsByStatus[item._id] = item.count;
     });
     return {
+      calculationVersion,
+      sourceVersion,
       gridPoints,
       activeBindings,
       hourlyRawRecords,
@@ -87,6 +121,9 @@ export class ChamanMeteoRepository {
       dailyRecords,
       jobsByStatus,
       latestJob: latestJob as unknown as IChamanMeteoImportJob | undefined,
+      latestProblemJob: latestProblemJob as unknown as
+        | IChamanMeteoImportJob
+        | undefined,
       latestCoverage: latestCoverage as unknown as
         | IChamanMeteoCoverage
         | undefined,
@@ -103,8 +140,17 @@ export class ChamanMeteoRepository {
   jobPage(
     limit: number,
     offset: number,
+    calculationVersion?: string,
+    sourceVersion?: string,
   ): Promise<IChamanMeteoPage<IChamanMeteoImportJob>> {
-    return this.page(this.jobs, {}, { actualizadoEn: -1 }, limit, offset);
+    const filter = this.jobVersionFilter(calculationVersion, sourceVersion);
+    return this.page(this.jobs, filter, { actualizadoEn: -1 }, limit, offset);
+  }
+
+  async jobByKey(jobKey: string): Promise<IChamanMeteoImportJob | null> {
+    return (await this.jobs
+      .findOne({ jobKey })
+      .lean()) as unknown as IChamanMeteoImportJob | null;
   }
 
   hourlyPage(
@@ -137,25 +183,96 @@ export class ChamanMeteoRepository {
     calculationVersion: string | undefined,
     limit: number,
     offset: number,
+    from?: string,
+    toExclusive?: string,
   ): Promise<IChamanMeteoPage<IChamanMeteoDaily>> {
     const filter: Record<string, any> = {};
     if (gridPointKey) filter.gridPointKey = gridPointKey;
     if (calculationVersion) filter.calculationVersion = calculationVersion;
+    if (from || toExclusive) {
+      filter.date = {};
+      if (from) filter.date.$gte = from;
+      if (toExclusive) filter.date.$lt = toExclusive;
+    }
     return this.page(this.daily, filter, { date: -1 }, limit, offset);
   }
 
   async coverageByGridPoint(
     gridPointKey: string,
+    calculationVersion?: string,
+    sourceVersion?: string,
   ): Promise<IChamanMeteoCoverage | null> {
-    return (await this.coverage
-      .findOne({ gridPointKey })
+    const versioned = Boolean(calculationVersion && sourceVersion);
+    const filter = versioned
+      ? { gridPointKey, calculationVersion, sourceVersion }
+      : { gridPointKey };
+    return (await (versioned ? this.versionedCoverage : this.coverage)
+      .findOne(filter)
       .lean()) as unknown as IChamanMeteoCoverage | null;
   }
 
   async upsertGridPoint(data: IChamanMeteoGridPoint): Promise<any> {
+    const existing = await this.gridPoints.findOne({ key: data.key }).lean();
+    const immutableFields = [
+      'latitude',
+      'longitude',
+      'countryCode',
+      'timezone',
+      'provider',
+      'dataset',
+    ] as const;
+    const legacyEnrichableFields = ['countryCode', 'timezone'] as const;
+    const missingLegacyIdentity = (field: (typeof immutableFields)[number]) =>
+      legacyEnrichableFields.includes(field as any) &&
+      (existing?.[field] === undefined ||
+        existing?.[field] === null ||
+        existing?.[field] === '');
+    const drift = existing
+      ? immutableFields.filter(
+          (field) =>
+            !missingLegacyIdentity(field) && existing[field] !== data[field],
+        )
+      : [];
+    if (drift.length) {
+      throw new ConflictException({
+        error: 'grid_point_identity_drift',
+        gridPointKey: data.key,
+        immutableFields: drift,
+      });
+    }
+    const mutable = Object.fromEntries(
+      [
+        ['enabled', data.enabled],
+        ['historicalStart', data.historicalStart],
+        ['latestAvailable', data.latestAvailable],
+        ['firstDataAt', data.firstDataAt],
+        ['lastDataAt', data.lastDataAt],
+      ].filter(([, value]) => value !== undefined),
+    );
+    const legacyIdentityEnrichment = existing
+      ? Object.fromEntries(
+          legacyEnrichableFields
+            .filter((field) => missingLegacyIdentity(field))
+            .map((field) => [field, data[field]]),
+        )
+      : {};
+    const update = existing
+      ? { $set: { ...legacyIdentityEnrichment, ...mutable } }
+      : {
+          $setOnInsert: {
+            key: data.key,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            countryCode: data.countryCode,
+            timezone: data.timezone,
+            provider: data.provider,
+            dataset: data.dataset,
+          },
+          $set: mutable,
+        };
     return this.gridPoints.findOneAndUpdate(
       { key: data.key },
-      { $set: data },
+      update,
       { upsert: true, new: true, runValidators: true },
     );
   }
@@ -194,21 +311,59 @@ export class ChamanMeteoRepository {
   async upsertCoverage(
     gridPointKey: string,
     data: Partial<IChamanMeteoCoverage>,
+    calculationVersion?: string,
+    sourceVersion?: string,
   ): Promise<any> {
-    return this.coverage.findOneAndUpdate(
-      { gridPointKey },
-      { $set: { ...data, gridPointKey } },
+    const versioned = Boolean(calculationVersion && sourceVersion);
+    const filter = versioned
+      ? { gridPointKey, calculationVersion, sourceVersion }
+      : { gridPointKey };
+    const snapshot = versioned
+      ? { ...data, gridPointKey, calculationVersion, sourceVersion }
+      : { ...data, gridPointKey };
+    return (versioned ? this.versionedCoverage : this.coverage).findOneAndUpdate(
+      filter,
+      { $set: snapshot },
       { upsert: true, new: true, runValidators: true },
     );
   }
 
-  async recalculateCoverage(gridPointKey: string): Promise<any> {
+  upsertVersionedHourlyRaw(data: IChamanMeteoHourlyRaw[]): Promise<any> {
+    return this.bulkUpsert(this.versionedHourlyRaw, data, (item) => ({
+      gridPointKey: item.gridPointKey,
+      sourceVersion: item.sourceVersion,
+      timestamp: new Date(item.timestamp),
+    }));
+  }
+
+  async recalculateCoverage(
+    gridPointKey: string,
+    calculationVersion?: string,
+    sourceVersion?: string,
+  ): Promise<any> {
     const [raw, derived, daily] = await Promise.all([
-      this.rangeStats(this.hourlyRaw, gridPointKey, 'timestamp'),
-      this.rangeStats(this.hourlyDerived, gridPointKey, 'timestamp'),
-      this.rangeStats(this.daily, gridPointKey, 'date'),
+      this.rangeStats(
+        sourceVersion ? this.versionedHourlyRaw : this.hourlyRaw,
+        gridPointKey,
+        'timestamp',
+        sourceVersion ? { sourceVersion } : undefined,
+      ),
+      this.rangeStats(
+        this.hourlyDerived,
+        gridPointKey,
+        'timestamp',
+        calculationVersion ? { calculationVersion } : undefined,
+      ),
+      this.rangeStats(
+        this.daily,
+        gridPointKey,
+        'date',
+        calculationVersion ? { calculationVersion } : undefined,
+      ),
     ]);
-    return this.upsertCoverage(gridPointKey, {
+    const snapshot = {
+      ...(calculationVersion ? { calculationVersion } : {}),
+      ...(sourceVersion ? { sourceVersion } : {}),
       hourlyRawFrom: raw?.from,
       hourlyRawTo: raw?.to,
       hourlyDerivedFrom: derived?.from,
@@ -219,7 +374,25 @@ export class ChamanMeteoRepository {
       hourlyDerivedCount: derived?.count || 0,
       dailyCount: daily?.count || 0,
       lastSuccessfulImportAt: new Date().toISOString(),
-    });
+    };
+    if (calculationVersion && sourceVersion) {
+      return this.upsertCoverage(
+        gridPointKey,
+        snapshot,
+        calculationVersion,
+        sourceVersion,
+      );
+    }
+    // Backward-compatible legacy recalculation represents all versions. Clear
+    // a previous active-version label so mixed counts can never masquerade as v2.
+    return this.coverage.findOneAndUpdate(
+      { gridPointKey },
+      {
+        $set: { ...snapshot, gridPointKey },
+        $unset: { calculationVersion: 1 },
+      },
+      { upsert: true, new: true, runValidators: true },
+    );
   }
 
   private async page<T>(
@@ -234,6 +407,27 @@ export class ChamanMeteoRepository {
       model.countDocuments(filter),
     ]);
     return { datos: datos as T[], total, limit, offset };
+  }
+
+  private jobVersionFilter(
+    calculationVersion?: string,
+    sourceVersion?: string,
+  ): Record<string, any> {
+    if (calculationVersion) {
+      return {
+        calculationVersion,
+        ...(sourceVersion ? { sourceVersion } : {}),
+      };
+    }
+    // A v1 API calls status/jobs without version parameters. Keep that
+    // rollback view isolated from v2 jobs while accepting original unversioned
+    // foundation jobs and any explicitly labelled v1 record.
+    return {
+      $or: [
+        { calculationVersion: 'chaman-meteo-agro-v1' },
+        { calculationVersion: { $exists: false } },
+      ],
+    };
   }
 
   private bulkUpsert<T>(
@@ -264,9 +458,11 @@ export class ChamanMeteoRepository {
     model: Model<any>,
     gridPointKey: string,
     field: 'timestamp' | 'date',
+    extraFilter?: Record<string, any>,
   ): Promise<{ from: string; to: string; count: number } | undefined> {
+    const filter: Record<string, any> = { gridPointKey, ...extraFilter };
     const [stats] = await model.aggregate([
-      { $match: { gridPointKey } },
+      { $match: filter },
       {
         $group: {
           _id: null,
