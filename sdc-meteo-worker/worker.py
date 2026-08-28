@@ -60,6 +60,10 @@ LEGACY_CALCULATION_VERSION = "chaman-meteo-agro-v1"
 SUPPORTED_COUNTRY_CODES = frozenset(("AR", "UY", "PY", "BR", "CL"))
 
 
+class RepairOutcomePersistedError(RuntimeError):
+    """A manual repair stopped after its durable job outcome was recorded."""
+
+
 def redact_secret(value) -> str:
     text = str(value)
     return text.replace(CDS_API_KEY, "[REDACTED]") if CDS_API_KEY else text
@@ -227,7 +231,7 @@ class ChamanMeteoWorker:
                 retrieval_end=retrieval_end,
             )
             if not complete:
-                raise RuntimeError(
+                raise RepairOutcomePersistedError(
                     f"Segmento REPAIR {start.isoformat()}..{end.isoformat()} "
                     "quedo PARTIAL; revisar el job antes de continuar"
                 )
@@ -364,7 +368,7 @@ class ChamanMeteoWorker:
             self._post("jobs/upsert", job)
             logger.error("Punto %s fallo: %s", key, safe_error)
             if job_type == "REPAIR":
-                raise RuntimeError(safe_error) from error
+                raise RepairOutcomePersistedError(safe_error) from error
             return False
 
         finished = datetime.now(timezone.utc).isoformat()
@@ -391,6 +395,9 @@ class ChamanMeteoWorker:
                 safe_error,
             )
             if job_type == "REPAIR":
+                # The job is AVAILABLE but coverage is still missing, so this
+                # is not a terminal persisted failure. Keep a non-zero exit to
+                # let the idempotent reconciliation path retry it.
                 raise RuntimeError(safe_error) from error
             return False
 
@@ -770,13 +777,28 @@ def main() -> int:
         return 0 if not CHAMAN_METEO_ENABLED or not CHAMAN_METEO_IMPORT_ENABLED else 1
     while True:
         cycle_failed = False
+        repair_outcome_persisted = False
         try:
             worker.run_cycle()
         except Exception as error:
             cycle_failed = True
+            repair_outcome_persisted = isinstance(
+                error, RepairOutcomePersistedError
+            )
             STATE.last_error = redact_secret(error)
             logger.exception("Fallo del ciclo Chaman-Meteo")
         if RUN_ONCE:
+            if REPAIR_REQUEST and repair_outcome_persisted:
+                # The typed error is raised only after sdc-datos accepted the
+                # repair's durable outcome. Returning success then prevents
+                # Railway from repeating the same explicit repair up to ten
+                # times without a new operator decision. Generic failures keep
+                # a non-zero exit code because no durable diagnosis is proven.
+                logger.error(
+                    "Reparacion RUN_ONCE finalizada con resultado persistido; "
+                    "no se reintentara automaticamente"
+                )
+                return 0
             return 1 if cycle_failed or STATE.last_error else 0
         time.sleep(POLL_SECONDS)
 

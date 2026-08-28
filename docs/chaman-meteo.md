@@ -77,14 +77,16 @@ Se solicitan las 19 variables disponibles en el producto time-series usado:
 | Viento | `10m_v_component_of_wind` | m/s |
 | Superficie | `skin_temperature` | K |
 | Nieve | `snow_cover` | fracción 0–1 |
-| Nieve | `snow_depth` | m de espesor físico |
+| Nieve | `snow_depth` (`sde` en CSV) | m de espesor físico |
 | Suelo | `soil_temperature_level_1..4` | K |
 | Suelo | `volumetric_soil_water_level_1..4` | m³/m³ |
 
 Capas de suelo ERA5-Land: 0–7 cm, 7–28 cm, 28–100 cm y 100–289 cm.
 
-No se usan nombres ambiguos de otros productos, por ejemplo `sd` (equivalente
-de agua), como alias de `snow_depth` físico.
+El parser acepta exactamente `snow_depth` o el nombre corto `sde` que entrega
+el CSV time-series. No se usan nombres ambiguos de otros productos, por
+ejemplo `sd` o `snow_depth_water_equivalent` (equivalente de agua), como alias
+de `snow_depth` físico.
 
 ## Normalización y cálculos
 
@@ -167,6 +169,10 @@ Los tres parámetros de reparación son obligatorios en conjunto. El rango se
 segmenta, ignora la cobertura RAW previa y usa jobs `REPAIR` versionados. Un
 job ya `AVAILABLE` no se repite salvo `CHAMAN_METEO_REPAIR_FORCE=true`.
 Producción debe conservar estas variables ausentes.
+Un repair `RUN_ONCE` con diagnóstico `PARTIAL` o `FAILED` confirmado en
+almacenamiento termina sin activar los reintentos `ON_FAILURE` de Railway. Un
+error previo o un fallo al persistir conserva exit code no-cero. El operador
+debe corregir la causa y disparar deliberadamente una nueva ejecución.
 
 ## API histórica actual
 

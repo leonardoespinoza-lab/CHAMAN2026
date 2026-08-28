@@ -36,13 +36,26 @@ class FakeCdsClient:
             "snow_cover": 0.0,
             "snow_depth": 0.0,
         }
+        csv_headers = {
+            "snow_cover": "snowc",
+            "snow_depth": "sde",
+        }
         with Path(target).open("w", encoding="utf-8", newline="") as stream:
-            writer = csv.DictWriter(stream, fieldnames=["valid_time", *variables])
+            writer = csv.DictWriter(
+                stream,
+                fieldnames=[
+                    "valid_time",
+                    *[csv_headers.get(variable, variable) for variable in variables],
+                ],
+            )
             writer.writeheader()
             writer.writerow(
                 {
                     "valid_time": "2026-08-20T12:00:00",
-                    **{variable: rows[variable] for variable in variables},
+                    **{
+                        csv_headers.get(variable, variable): rows[variable]
+                        for variable in variables
+                    },
                 }
             )
 
@@ -150,6 +163,76 @@ class CdsTimeSeriesClientTest(unittest.TestCase):
                 writer.writeheader()
                 writer.writerow(
                     {"valid_time": "2026-08-20T12:00:00Z", "sd": 0.25}
+                )
+            merged = defaultdict(dict)
+            client = CdsTimeSeriesClient.__new__(CdsTimeSeriesClient)
+            client._merge_csv(path, merged)
+
+        values = client._assemble_values(merged["2026-08-20T12:00:00Z"])
+        self.assertNotIn("snowDepthM", values)
+
+    def test_official_sde_column_is_accepted_as_physical_snow_depth(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "official.csv"
+            with path.open("w", encoding="utf-8", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=["valid_time", "sde"])
+                writer.writeheader()
+                writer.writerow(
+                    {"valid_time": "2026-08-20T12:00:00Z", "sde": 0.125}
+                )
+            merged = defaultdict(dict)
+            client = CdsTimeSeriesClient.__new__(CdsTimeSeriesClient)
+            client._merge_csv(path, merged)
+
+        values = client._assemble_values(merged["2026-08-20T12:00:00Z"])
+        self.assertEqual(values["snowDepthM"], 0.125)
+
+    def test_official_sde_zero_is_preserved(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "official-zero.csv"
+            with path.open("w", encoding="utf-8", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=["valid_time", "sde"])
+                writer.writeheader()
+                writer.writerow(
+                    {"valid_time": "2026-08-20T12:00:00Z", "sde": 0.0}
+                )
+            merged = defaultdict(dict)
+            client = CdsTimeSeriesClient.__new__(CdsTimeSeriesClient)
+            client._merge_csv(path, merged)
+
+        values = client._assemble_values(merged["2026-08-20T12:00:00Z"])
+        self.assertEqual(values["snowDepthM"], 0.0)
+
+    def test_empty_official_sde_value_remains_missing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "official-empty.csv"
+            with path.open("w", encoding="utf-8", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=["valid_time", "sde"])
+                writer.writeheader()
+                writer.writerow(
+                    {"valid_time": "2026-08-20T12:00:00Z", "sde": ""}
+                )
+            merged = defaultdict(dict)
+            client = CdsTimeSeriesClient.__new__(CdsTimeSeriesClient)
+            client._merge_csv(path, merged)
+
+        values = client._assemble_values(merged["2026-08-20T12:00:00Z"])
+        self.assertNotIn("snowDepthM", values)
+
+    def test_snow_water_equivalent_column_is_not_accepted_as_physical_depth(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "water-equivalent.csv"
+            with path.open("w", encoding="utf-8", newline="") as stream:
+                writer = csv.DictWriter(
+                    stream,
+                    fieldnames=["valid_time", "snow_depth_water_equivalent"],
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "valid_time": "2026-08-20T12:00:00Z",
+                        "snow_depth_water_equivalent": 0.25,
+                    }
                 )
             merged = defaultdict(dict)
             client = CdsTimeSeriesClient.__new__(CdsTimeSeriesClient)

@@ -71,6 +71,13 @@ dia y presencia finita de las 19 variables ERA5-Land. Un faltante se persiste
 como `PARTIAL`, con diagnostico sin secretos, y no avanza coverage. Las
 conversiones v2 son fijas por contrato: K a °C, Pa a kPa, m de
 precipitacion a mm y J a MJ. La profundidad fisica de nieve permanece en m.
+El request CDS usa `snow_depth`, mientras que el CSV time-series identifica
+esa misma magnitud con el nombre corto exacto `sde`. `sd` y
+`snow_depth_water_equivalent` no se aceptan como aliases porque representan
+equivalente de agua. Una reparacion `RUN_ONCE` que termina `PARTIAL` o `FAILED`
+queda registrada y, solo despues de confirmar esa escritura, finaliza sin
+reintento automatico de Railway; repetirla requiere una nueva decision
+explicita. Un error previo o un fallo al persistir conserva exit code no-cero.
 
 ## Coexistencia v1/v2 y rollback
 

@@ -67,7 +67,10 @@ ALIASES = {
     ],
     "skinTemperatureK": ["skin_temperature", "skt"],
     "snowCoverFraction": ["snow_cover", "snowc"],
-    "snowDepthM": ["snow_depth"],
+    # The CDS request name is ``snow_depth`` but the time-series CSV uses the
+    # GRIB short name ``sde``.  Do not accept ``sd`` here: it represents snow
+    # water equivalent, not physical snow depth in metres.
+    "snowDepthM": ["snow_depth", "sde"],
 }
 
 TIME_ALIASES = ["valid_time", "time", "datetime", "date"]
@@ -145,7 +148,11 @@ class CdsTimeSeriesClient:
             if not time_header:
                 raise RuntimeError(f"CSV CDS sin columna temporal reconocible: {path.name}")
             mapped = {
-                target: self._find_header(headers, aliases)
+                target: self._find_header(
+                    headers,
+                    aliases,
+                    exact_only=target == "snowDepthM",
+                )
                 for target, aliases in ALIASES.items()
             }
             for row in reader:
@@ -159,10 +166,17 @@ class CdsTimeSeriesClient:
                     if value is not None:
                         merged[timestamp][target] = value
 
-    def _find_header(self, headers: dict, aliases: list[str]):
+    def _find_header(
+        self,
+        headers: dict,
+        aliases: list[str],
+        exact_only: bool = False,
+    ):
         for alias in aliases:
             if alias in headers:
                 return headers[alias]
+        if exact_only:
+            return None
         for normalised, original in headers.items():
             if any(alias in normalised for alias in aliases):
                 return original

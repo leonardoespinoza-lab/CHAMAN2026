@@ -301,6 +301,31 @@ class ChamanMeteoWorkerTest(unittest.TestCase):
         self.assertFalse(any(path.startswith("coverage/") for path, _ in posts))
         self.assertFalse(any(path.startswith("hourly/") for path, _ in posts))
 
+    def test_repair_chunk_raises_typed_error_after_partial_outcome(self):
+        import worker as worker_module
+
+        class Lock:
+            def acquire(self, blocking=False):
+                return True
+
+            def release(self):
+                return None
+
+        self.worker.redis = types.SimpleNamespace(
+            lock=lambda *_args, **_kwargs: Lock()
+        )
+        self.worker._import_range = lambda *_args, **_kwargs: False
+
+        with self.assertRaises(worker_module.RepairOutcomePersistedError):
+            self.worker._run_repair_chunk(
+                {"key": "grid"},
+                date(2026, 8, 20),
+                date(2026, 8, 20),
+                date(2026, 8, 19),
+                date(2026, 8, 21),
+                False,
+            )
+
     def test_repair_halo_persists_daily_only_inside_requested_local_dates(self):
         requested = date(2026, 8, 20)
         retrieval_start = date(2026, 8, 19)
@@ -435,7 +460,41 @@ class ChamanMeteoWorkerTest(unittest.TestCase):
         self.assertEqual(final_states[-1], "AVAILABLE")
         self.assertNotIn("FAILED", final_states)
 
+    def test_repair_available_job_upsert_failure_remains_generic(self):
+        import worker as worker_module
+
+        start = date(2026, 8, 20)
+        raw = [self._complete_raw(start, hour) for hour in range(24)]
+        self.worker.cds = types.SimpleNamespace(retrieve=lambda *_args: raw)
+        self.worker._get = lambda _path, params=None: None
+        self.worker._hourly_range = lambda *_args: []
+
+        def post(path, payload):
+            if path == "jobs/upsert" and payload.get("status") == "AVAILABLE":
+                raise RuntimeError("no se pudo persistir AVAILABLE")
+            return {}
+
+        self.worker._post = post
+        with self.assertRaises(RuntimeError) as raised:
+            self.worker._import_range(
+                {
+                    "key": "grid",
+                    "latitude": -38.0,
+                    "longitude": -68.0,
+                    "timezone": "America/Argentina/Buenos_Aires",
+                },
+                start,
+                start,
+                job_type="REPAIR",
+            )
+
+        self.assertNotIsInstance(
+            raised.exception, worker_module.RepairOutcomePersistedError
+        )
+
     def test_available_repair_retries_coverage_and_surfaces_failure(self):
+        import worker as worker_module
+
         self.worker._get = lambda _path, params=None: {
             "status": "AVAILABLE",
             "attempts": 1,
@@ -447,13 +506,16 @@ class ChamanMeteoWorkerTest(unittest.TestCase):
             return {}
 
         self.worker._post = post
-        with self.assertRaisesRegex(RuntimeError, "coverage temporalmente"):
+        with self.assertRaisesRegex(RuntimeError, "coverage temporalmente") as raised:
             self.worker._import_range(
                 {"key": "grid"},
                 date(2026, 8, 20),
                 date(2026, 8, 20),
                 job_type="REPAIR",
             )
+        self.assertNotIsInstance(
+            raised.exception, worker_module.RepairOutcomePersistedError
+        )
 
     def test_process_reads_only_the_exact_versioned_coverage(self):
         class Lock:
@@ -567,6 +629,30 @@ class ChamanMeteoWorkerTest(unittest.TestCase):
         self.assertEqual(len(points), 501)
         self.assertEqual([call["offset"] for call in calls], [0, 500])
 
+    def test_empty_configured_points_skips_seed_and_keeps_existing_point_readable(self):
+        import worker as worker_module
+
+        posts = []
+        self.worker._post = lambda path, payload: posts.append((path, payload))
+        with patch.object(worker_module, "configured_points", return_value=[]):
+            self.worker._seed_configured_points()
+
+        self.assertEqual(posts, [])
+        existing = {
+            "key": "ar-neuquen-kleppe-pilot",
+            "latitude": -38.7888,
+            "longitude": -68.1043,
+            "countryCode": "AR",
+            "timezone": "America/Argentina/Buenos_Aires",
+            "enabled": True,
+        }
+        self.worker._get = lambda path, params=None: {
+            "datos": [existing],
+            "total": 1,
+        }
+
+        self.assertEqual(self.worker._all_grid_points(), [existing])
+
     def test_invalid_point_does_not_stop_the_remaining_cycle(self):
         self.worker._get = lambda _path, params=None: {
             "datos": [{"key": "bad-grid"}, {"key": "good-grid"}]
@@ -603,6 +689,46 @@ class ChamanMeteoWorkerTest(unittest.TestCase):
             patch.object(worker_module, "ChamanMeteoWorker", return_value=fake_worker),
         ):
             self.assertEqual(worker_module.main(), 1)
+
+    def test_run_once_repair_generic_failure_remains_nonzero(self):
+        import worker as worker_module
+
+        fake_worker = types.SimpleNamespace(
+            initialize=lambda: None,
+            run_cycle=lambda: (_ for _ in ()).throw(
+                RuntimeError("reparacion incompleta")
+            ),
+        )
+        with (
+            patch.object(worker_module, "RUN_ONCE", True),
+            patch.object(worker_module, "REPAIR_REQUEST", {"gridPointKey": "grid"}),
+            patch.object(worker_module, "CHAMAN_METEO_ENABLED", True),
+            patch.object(worker_module, "CHAMAN_METEO_IMPORT_ENABLED", True),
+            patch.object(worker_module, "start_health_server"),
+            patch.object(worker_module, "ChamanMeteoWorker", return_value=fake_worker),
+        ):
+            self.assertEqual(worker_module.main(), 1)
+
+    def test_run_once_persisted_repair_outcome_does_not_trigger_platform_retry(self):
+        import worker as worker_module
+
+        fake_worker = types.SimpleNamespace(
+            initialize=lambda: None,
+            run_cycle=lambda: (_ for _ in ()).throw(
+                worker_module.RepairOutcomePersistedError(
+                    "reparacion incompleta persistida"
+                )
+            ),
+        )
+        with (
+            patch.object(worker_module, "RUN_ONCE", True),
+            patch.object(worker_module, "REPAIR_REQUEST", {"gridPointKey": "grid"}),
+            patch.object(worker_module, "CHAMAN_METEO_ENABLED", True),
+            patch.object(worker_module, "CHAMAN_METEO_IMPORT_ENABLED", True),
+            patch.object(worker_module, "start_health_server"),
+            patch.object(worker_module, "ChamanMeteoWorker", return_value=fake_worker),
+        ):
+            self.assertEqual(worker_module.main(), 0)
 
     def test_run_once_returns_nonzero_when_cycle_reports_point_errors(self):
         import worker as worker_module
