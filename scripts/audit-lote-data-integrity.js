@@ -1,4 +1,3 @@
-const { MongoClient, ObjectId } = require('../sdc-datos/node_modules/mongodb');
 const fs = require('fs');
 
 const RECOVERY_URI_FILE = process.env.CHAMAN_RECOVERY_URI_FILE || '';
@@ -104,6 +103,9 @@ async function main() {
     throw new Error('Falta MONGO_URI/MONGO_URL/DATABASE_URL/DB_URL para auditar integridad de lotes.');
   }
 
+  // El driver pertenece al servicio Datos. Se carga sólo al ejecutar la CLI
+  // para que las reglas puras de auditoría puedan probarse offline en CI.
+  const { MongoClient } = require('../sdc-datos/node_modules/mongodb');
   const client = await MongoClient.connect(DB_URL, {
     serverSelectionTimeoutMS: Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 10000),
   });
