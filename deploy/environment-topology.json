@@ -3,7 +3,7 @@
   "codePromotion": {
     "testingBranchPattern": "^(codex|staging)/",
     "productionBranch": "main",
-    "requireSameCommitAcrossStatelessServices": true,
+    "requireSameCommitAcrossPromotedStatelessServices": true,
     "copyBuiltFilesBetweenEnvironments": false
   },
   "dataPolicy": {
@@ -95,6 +95,16 @@
       "production": "chaman-lora",
       "testing": "testing-lora",
       "stateful": false,
+      "testingPromotion": {
+        "mode": "frozen-at-baseline",
+        "expectedSha": "641c71f6e2f31b209c20ba831d456f93595ca710",
+        "deploymentId": "6330715f-d04a-4766-9935-e93649d4a0ee",
+        "imageDigest": "sha256:620c67d627fd7396550530ead36e91039fbcca041e0b80c09f782c3978bd8683",
+        "cliMessage": "641c71f Milesight LoRa validation",
+        "railwayProjectId": "36dee457-e9f8-498d-a990-72b9728d63d5",
+        "railwayEnvironmentId": "f616374e-b197-4acb-ba6b-15855d20e27a",
+        "railwayServiceId": "57ea9041-2f72-4af8-ade7-3a6371b8a57f"
+      },
       "testingSafety": ["LORAWAN_MQTT_ENABLED=false"]
     },
     {

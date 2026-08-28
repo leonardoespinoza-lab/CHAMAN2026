@@ -53,7 +53,10 @@
     {
       "role": "lora",
       "service": "testing-lora",
-      "deploymentId": "6330715f-d04a-4766-9935-e93649d4a0ee"
+      "deploymentId": "6330715f-d04a-4766-9935-e93649d4a0ee",
+      "observedSha": "641c71f6e2f31b209c20ba831d456f93595ca710",
+      "imageDigest": "sha256:620c67d627fd7396550530ead36e91039fbcca041e0b80c09f782c3978bd8683",
+      "cliMessage": "641c71f Milesight LoRa validation"
     },
     {
       "role": "ndvi-worker",
@@ -76,7 +79,7 @@
     "loraBroker": "testing",
     "LORAWAN_MQTT_ENABLED": false,
     "capturedWithSkipDeploys": true,
-    "testingLoraExpectedShortSha": "641c71f",
+    "testingLoraExpectedSha": "641c71f6e2f31b209c20ba831d456f93595ca710",
     "testingLoraMustRemainUntouched": true
   },
   "immutableRecoveryRefs": [

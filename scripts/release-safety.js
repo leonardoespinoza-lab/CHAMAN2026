@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
+const IMAGE_DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const VERSION_PATTERN = /^[a-z0-9][a-z0-9._+-]{0,63}$/i;
 const ADDITIVE_MIGRATION_KINDS = new Set([
   'additive-collections',
@@ -43,11 +45,60 @@ function codeServices(topology) {
   return topology.services.filter((service) => service.selector.startsWith('sdc-'));
 }
 
+function deploymentMode(service, environment) {
+  if (environment === 'testing' && service.testingPromotion?.mode === 'frozen-at-baseline') {
+    return 'frozen';
+  }
+  return 'promote';
+}
+
+function assertPromotionTopology(topology) {
+  const code = codeServices(topology);
+  const protectedServices = code.filter((service) => service.testingPromotion !== undefined);
+  assert(
+    protectedServices.length === 1 && protectedServices[0].role === 'lora',
+    'La única excepción de promoción permitida es testing-lora',
+  );
+  const lora = protectedServices[0];
+  const policy = lora.testingPromotion;
+  assertAllowedKeys(
+    policy,
+    new Set([
+      'mode',
+      'expectedSha',
+      'deploymentId',
+      'imageDigest',
+      'cliMessage',
+      'railwayProjectId',
+      'railwayEnvironmentId',
+      'railwayServiceId',
+    ]),
+    'testing-lora.testingPromotion',
+  );
+  assert(policy.mode === 'frozen-at-baseline', 'testing-lora debe quedar frozen-at-baseline');
+  assert(SHA_PATTERN.test(String(policy.expectedSha || '')), 'testing-lora.expectedSha debe ser completo');
+  assert(UUID_PATTERN.test(String(policy.deploymentId || '')), 'testing-lora.deploymentId inválido');
+  assert(IMAGE_DIGEST_PATTERN.test(String(policy.imageDigest || '')), 'testing-lora.imageDigest inválido');
+  assert(/^([0-9a-f]{7,40})\b/i.test(String(policy.cliMessage || '')), 'testing-lora.cliMessage inválido');
+  assert(
+    policy.expectedSha.startsWith(policy.cliMessage.split(/\s+/, 1)[0].toLowerCase()),
+    'testing-lora.cliMessage no corresponde al SHA protegido',
+  );
+  for (const field of ['railwayProjectId', 'railwayEnvironmentId', 'railwayServiceId']) {
+    assert(UUID_PATTERN.test(String(policy[field] || '')), `testing-lora.${field} inválido`);
+  }
+  assert(
+    topology.codePromotion?.requireSameCommitAcrossPromotedStatelessServices === true,
+    'La topología debe exigir el mismo commit en servicios promovidos',
+  );
+}
+
 function urlEnvironmentName(role) {
   return `CHAMAN_VERSION_URL_${role.toUpperCase().replace(/-/g, '_')}`;
 }
 
 function normalizeDeploymentBaseline(baseline, topology, environment) {
+  assertPromotionTopology(topology);
   assert(baseline && typeof baseline === 'object', 'deploymentBaseline es obligatorio');
   assert(baseline.schemaVersion === 1, 'deploymentBaseline.schemaVersion no soportado');
   assert(baseline.environment === environment, 'deploymentBaseline pertenece a otro entorno');
@@ -57,17 +108,70 @@ function normalizeDeploymentBaseline(baseline, topology, environment) {
   const expected = codeServices(topology);
   const byRole = new Map();
   for (const service of baseline.services) {
+    assertAllowedKeys(
+      service,
+      new Set(['role', 'service', 'deploymentId', 'observedSha', 'imageDigest', 'cliMessage']),
+      `baseline ${service.role || 'desconocido'}`,
+    );
     assert(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(service.deploymentId || ''), `baseline ${service.role}: deploymentId inválido`);
     assert(!byRole.has(service.role), `baseline: rol duplicado ${service.role}`);
     const topologyService = expected.find((item) => item.role === service.role);
     assert(topologyService, `baseline: rol desconocido ${service.role}`);
     assert(service.service === topologyService[environment], `baseline ${service.role}: nombre incorrecto`);
-    byRole.set(service.role, service.deploymentId.toLowerCase());
+    const mode = deploymentMode(topologyService, environment);
+    if (mode === 'frozen') {
+      assert(environment === 'testing', `baseline ${service.role}: frozen sólo se permite en Testing`);
+      assert(
+        SHA_PATTERN.test(String(service.observedSha || '').toLowerCase()),
+        `baseline ${service.role}: observedSha completo obligatorio`,
+      );
+      assert(
+        IMAGE_DIGEST_PATTERN.test(String(service.imageDigest || '').toLowerCase()),
+        `baseline ${service.role}: imageDigest obligatorio`,
+      );
+      assert(
+        service.observedSha.toLowerCase() === topologyService.testingPromotion.expectedSha,
+        `baseline ${service.role}: observedSha no coincide con la topología protegida`,
+      );
+      assert(
+        service.deploymentId.toLowerCase() === topologyService.testingPromotion.deploymentId,
+        `baseline ${service.role}: deploymentId no coincide con la topología protegida`,
+      );
+      assert(
+        service.imageDigest.toLowerCase() === topologyService.testingPromotion.imageDigest,
+        `baseline ${service.role}: imageDigest no coincide con la topología protegida`,
+      );
+      assert(
+        service.cliMessage === topologyService.testingPromotion.cliMessage,
+        `baseline ${service.role}: cliMessage no coincide con la topología protegida`,
+      );
+    } else {
+      assert(service.observedSha === undefined, `baseline ${service.role}: observedSha sólo se permite para frozen`);
+      assert(service.imageDigest === undefined, `baseline ${service.role}: imageDigest sólo se permite para frozen`);
+      assert(service.cliMessage === undefined, `baseline ${service.role}: cliMessage sólo se permite para frozen`);
+    }
+    byRole.set(service.role, {
+      deploymentId: service.deploymentId.toLowerCase(),
+      observedSha: service.observedSha ? service.observedSha.toLowerCase() : null,
+      imageDigest: service.imageDigest ? service.imageDigest.toLowerCase() : null,
+      cliMessage: service.cliMessage || null,
+    });
   }
   for (const service of expected) {
     assert(byRole.has(service.role), `baseline: falta ${service.role}`);
   }
   assert(byRole.size === expected.length, 'baseline contiene servicios de código inesperados');
+  if (environment === 'testing') {
+    const policy = expected.find((service) => service.role === 'lora').testingPromotion;
+    assert(baseline.testingSafety?.loraBroker === 'testing', 'baseline: loraBroker debe ser testing');
+    assert(baseline.testingSafety?.LORAWAN_MQTT_ENABLED === false, 'baseline: LORAWAN_MQTT_ENABLED debe ser false');
+    assert(baseline.testingSafety?.capturedWithSkipDeploys === true, 'baseline: falta capturedWithSkipDeploys=true');
+    assert(baseline.testingSafety?.testingLoraMustRemainUntouched === true, 'baseline: testing-lora debe permanecer intacto');
+    assert(
+      baseline.testingSafety?.testingLoraExpectedSha === policy.expectedSha,
+      'baseline: testingLoraExpectedSha no coincide con la topología protegida',
+    );
+  }
   return byRole;
 }
 
@@ -127,6 +231,7 @@ function buildReleaseManifest({
   productionAutoDeployPaused = false,
   deploymentBaseline,
 }) {
+  assertPromotionTopology(topology);
   const releaseSha = normalizeSha(sha, 'release.sha');
   const rollbackSha = normalizeSha(previousSha, 'rollback.sha');
   assert(releaseSha !== rollbackSha, 'release.sha y rollback.sha deben ser distintos');
@@ -139,7 +244,7 @@ function buildReleaseManifest({
   );
 
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     environment,
     release: {
       sha: releaseSha,
@@ -151,7 +256,8 @@ function buildReleaseManifest({
       strategy: 'code-first-reverse-order',
     },
     policy: {
-      requireSameCommit: true,
+      requireSameCommitAcrossPromotedServices: true,
+      frozenServicesImmutable: true,
       migrationMode: 'additive-only',
       automaticMigrationOnStartup: false,
     },
@@ -165,21 +271,38 @@ function buildReleaseManifest({
       logicalBackupEvidence: backupEvidence,
       restoreRehearsalEvidence,
     },
-    services: codeServices(topology).map((service) => ({
-      role: service.role,
-      service: service[environment],
-      selector: service.selector,
-      expectedSha: releaseSha,
-      rollbackSha,
-      baselineDeploymentId: baselineByRole.get(service.role),
-      verification: service.versionPath ? 'endpoint' : 'railway-deployment-metadata',
-      ...(service.versionPath
-        ? {
-            versionPath: service.versionPath,
-            versionUrlEnv: urlEnvironmentName(service.role),
-          }
-        : {}),
-    })),
+    services: codeServices(topology).map((service) => {
+      const mode = deploymentMode(service, environment);
+      const baseline = baselineByRole.get(service.role);
+      const frozen = mode === 'frozen';
+      return {
+        role: service.role,
+        service: service[environment],
+        selector: service.selector,
+        deploymentMode: mode,
+        expectedSha: frozen ? baseline.observedSha : releaseSha,
+        rollbackSha: frozen ? baseline.observedSha : rollbackSha,
+        baselineDeploymentId: baseline.deploymentId,
+        ...(frozen ? { expectedImageDigest: baseline.imageDigest } : {}),
+        ...(frozen
+          ? {
+              expectedCliMessage: baseline.cliMessage,
+              railwayProjectId: service.testingPromotion.railwayProjectId,
+              railwayEnvironmentId: service.testingPromotion.railwayEnvironmentId,
+              railwayServiceId: service.testingPromotion.railwayServiceId,
+              shaProvenance: 'railway-cli-message+git-resolution',
+            }
+          : {}),
+        verification:
+          frozen || !service.versionPath ? 'railway-deployment-metadata' : 'endpoint',
+        ...(!frozen && service.versionPath
+          ? {
+              versionPath: service.versionPath,
+              versionUrlEnv: urlEnvironmentName(service.role),
+            }
+          : {}),
+      };
+    }),
     migrations: normalizeMigrations(migrations),
   };
 
@@ -188,6 +311,7 @@ function buildReleaseManifest({
 }
 
 function validateReleaseManifest(manifest, topology) {
+  assertPromotionTopology(topology);
   assertAllowedKeys(
     manifest,
     new Set([
@@ -203,7 +327,7 @@ function validateReleaseManifest(manifest, topology) {
     ]),
     'manifest',
   );
-  assert(manifest.schemaVersion === 1, 'schemaVersion no soportado');
+  assert(manifest.schemaVersion === 2, 'schemaVersion no soportado');
   assert(['testing', 'production'].includes(manifest.environment), 'environment inválido');
 
   assertAllowedKeys(manifest.release, new Set(['sha', 'version', 'builtAt']), 'release');
@@ -221,10 +345,19 @@ function validateReleaseManifest(manifest, topology) {
 
   assertAllowedKeys(
     manifest.policy,
-    new Set(['requireSameCommit', 'migrationMode', 'automaticMigrationOnStartup']),
+    new Set([
+      'requireSameCommitAcrossPromotedServices',
+      'frozenServicesImmutable',
+      'migrationMode',
+      'automaticMigrationOnStartup',
+    ]),
     'policy',
   );
-  assert(manifest.policy.requireSameCommit === true, 'requireSameCommit debe ser true');
+  assert(
+    manifest.policy.requireSameCommitAcrossPromotedServices === true,
+    'requireSameCommitAcrossPromotedServices debe ser true',
+  );
+  assert(manifest.policy.frozenServicesImmutable === true, 'frozenServicesImmutable debe ser true');
   assert(manifest.policy.migrationMode === 'additive-only', 'migrationMode debe ser additive-only');
   assert(
     manifest.policy.automaticMigrationOnStartup === false,
@@ -281,9 +414,16 @@ function validateReleaseManifest(manifest, topology) {
         'role',
         'service',
         'selector',
+        'deploymentMode',
         'expectedSha',
         'rollbackSha',
         'baselineDeploymentId',
+        'expectedImageDigest',
+        'expectedCliMessage',
+        'railwayProjectId',
+        'railwayEnvironmentId',
+        'railwayServiceId',
+        'shaProvenance',
         'verification',
         'versionPath',
         'versionUrlEnv',
@@ -296,19 +436,76 @@ function validateReleaseManifest(manifest, topology) {
     const topologyService = expected.find((item) => item.role === service.role);
     assert(service.service === topologyService[manifest.environment], `${context}: nombre de servicio incorrecto`);
     assert(service.selector === topologyService.selector, `${context}: selector incorrecto`);
-    assert(service.expectedSha === releaseSha, `${context}: expectedSha distinto del release`);
-    assert(service.rollbackSha === rollbackSha, `${context}: rollbackSha distinto del rollback`);
+    const expectedMode = deploymentMode(topologyService, manifest.environment);
+    assert(service.deploymentMode === expectedMode, `${context}: deploymentMode no autorizado`);
+    const serviceExpectedSha = normalizeSha(service.expectedSha, `${context}.expectedSha`);
+    const serviceRollbackSha = normalizeSha(service.rollbackSha, `${context}.rollbackSha`);
     assert(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
         service.baselineDeploymentId || '',
       ),
       `${context}: baselineDeploymentId inválido`,
     );
-    if (topologyService.versionPath) {
+    if (service.deploymentMode === 'frozen') {
+      assert(manifest.environment === 'testing', `${context}: frozen sólo se permite en Testing`);
+      assert(
+        serviceExpectedSha === topologyService.testingPromotion.expectedSha,
+        `${context}: frozen no coincide con el SHA protegido`,
+      );
+      assert(serviceExpectedSha === serviceRollbackSha, `${context}: frozen no puede cambiar en rollback`);
+      assert(
+        service.baselineDeploymentId === topologyService.testingPromotion.deploymentId,
+        `${context}: frozen no coincide con el deployment protegido`,
+      );
+      assert(
+        IMAGE_DIGEST_PATTERN.test(String(service.expectedImageDigest || '').toLowerCase()),
+        `${context}: expectedImageDigest inválido`,
+      );
+      assert(
+        service.expectedImageDigest === topologyService.testingPromotion.imageDigest,
+        `${context}: frozen no coincide con la imagen protegida`,
+      );
+      assert(
+        service.expectedCliMessage === topologyService.testingPromotion.cliMessage,
+        `${context}: frozen no coincide con el mensaje CLI protegido`,
+      );
+      for (const field of ['railwayProjectId', 'railwayEnvironmentId', 'railwayServiceId']) {
+        assert(UUID_PATTERN.test(String(service[field] || '')), `${context}: ${field} inválido`);
+        assert(
+          service[field] === topologyService.testingPromotion[field],
+          `${context}: ${field} no coincide con la topología protegida`,
+        );
+      }
+      assert(
+        service.shaProvenance === 'railway-cli-message+git-resolution',
+        `${context}: shaProvenance no soportada`,
+      );
+      assert(
+        service.verification === 'railway-deployment-metadata',
+        `${context}: frozen debe verificarse por metadata de Railway`,
+      );
+      assert(!service.versionPath && !service.versionUrlEnv, `${context}: frozen no usa endpoint de release`);
+    } else if (topologyService.versionPath) {
+      assert(serviceExpectedSha === releaseSha, `${context}: expectedSha distinto del release`);
+      assert(serviceRollbackSha === rollbackSha, `${context}: rollbackSha distinto del rollback`);
+      assert(service.expectedImageDigest === undefined, `${context}: expectedImageDigest sólo se permite para frozen`);
+      assert(service.expectedCliMessage === undefined, `${context}: expectedCliMessage sólo se permite para frozen`);
+      assert(service.railwayProjectId === undefined, `${context}: railwayProjectId sólo se permite para frozen`);
+      assert(service.railwayEnvironmentId === undefined, `${context}: railwayEnvironmentId sólo se permite para frozen`);
+      assert(service.railwayServiceId === undefined, `${context}: railwayServiceId sólo se permite para frozen`);
+      assert(service.shaProvenance === undefined, `${context}: shaProvenance sólo se permite para frozen`);
       assert(service.verification === 'endpoint', `${context}: debe verificarse por endpoint`);
       assert(service.versionPath === topologyService.versionPath, `${context}: versionPath incorrecto`);
       assert(service.versionUrlEnv === urlEnvironmentName(service.role), `${context}: versionUrlEnv incorrecto`);
     } else {
+      assert(serviceExpectedSha === releaseSha, `${context}: expectedSha distinto del release`);
+      assert(serviceRollbackSha === rollbackSha, `${context}: rollbackSha distinto del rollback`);
+      assert(service.expectedImageDigest === undefined, `${context}: expectedImageDigest sólo se permite para frozen`);
+      assert(service.expectedCliMessage === undefined, `${context}: expectedCliMessage sólo se permite para frozen`);
+      assert(service.railwayProjectId === undefined, `${context}: railwayProjectId sólo se permite para frozen`);
+      assert(service.railwayEnvironmentId === undefined, `${context}: railwayEnvironmentId sólo se permite para frozen`);
+      assert(service.railwayServiceId === undefined, `${context}: railwayServiceId sólo se permite para frozen`);
+      assert(service.shaProvenance === undefined, `${context}: shaProvenance sólo se permite para frozen`);
       assert(
         service.verification === 'railway-deployment-metadata',
         `${context}: verificación no soportada`,
@@ -354,7 +551,64 @@ function validateVersionPayload(payload, service, expectedRelease) {
   };
 }
 
-function collectRailwayDeploymentEvidence(manifest, document, { mode = 'release' } = {}) {
+function validateFrozenDeploymentList(service, deployments, gitResolvedSha) {
+  assert(service?.deploymentMode === 'frozen', 'La verificación live sólo admite servicios frozen');
+  assert(Array.isArray(deployments) && deployments.length > 0, `${service.role}: Railway no devolvió deployments`);
+  const ordered = [...deployments].sort((left, right) => {
+    const leftTime = Date.parse(left?.createdAt || '');
+    const rightTime = Date.parse(right?.createdAt || '');
+    assert(Number.isFinite(leftTime) && Number.isFinite(rightTime), `${service.role}: createdAt inválido`);
+    return rightTime - leftTime;
+  });
+  const current = ordered[0];
+  assert(current.id === service.baselineDeploymentId, `${service.role}: el deployment Railway actual cambió`);
+  assert(current.status === 'SUCCESS', `${service.role}: el deployment Railway protegido no está SUCCESS`);
+  assert(
+    String(current.meta?.imageDigest || '').toLowerCase() === service.expectedImageDigest,
+    `${service.role}: la imagen Railway actual cambió`,
+  );
+  assert(
+    current.meta?.cliMessage === service.expectedCliMessage,
+    `${service.role}: el mensaje CLI Railway actual cambió`,
+  );
+  const shortMatch = /^([0-9a-f]{7,40})\b/i.exec(service.expectedCliMessage);
+  assert(shortMatch, `${service.role}: el mensaje CLI protegido no contiene un SHA`);
+  const shortSha = shortMatch[1].toLowerCase();
+  assert(service.expectedSha.startsWith(shortSha), `${service.role}: el SHA corto no corresponde al protegido`);
+  assert(
+    normalizeSha(gitResolvedSha, `${service.role}.gitResolvedSha`) === service.expectedSha,
+    `${service.role}: Git no resuelve el SHA corto al commit protegido`,
+  );
+  if (current.meta?.commitHash) {
+    assert(
+      normalizeSha(current.meta.commitHash, `${service.role}.railwayCommitHash`) === service.expectedSha,
+      `${service.role}: Railway commitHash no coincide con el protegido`,
+    );
+  }
+  return {
+    role: service.role,
+    service: service.service,
+    deploymentId: current.id,
+    status: current.status,
+    imageDigest: current.meta.imageDigest.toLowerCase(),
+    cliMessage: current.meta.cliMessage,
+    shortSha,
+    resolvedSha: service.expectedSha,
+    shaProvenance: service.shaProvenance,
+    railwayCommitHashPresent: Boolean(current.meta?.commitHash),
+  };
+}
+
+function collectRailwayDeploymentEvidence(
+  manifest,
+  document,
+  {
+    mode = 'release',
+    now = new Date(),
+    maxAgeMs = 15 * 60 * 1000,
+    futureSkewMs = 2 * 60 * 1000,
+  } = {},
+) {
   assert(['release', 'rollback'].includes(mode), 'mode debe ser release o rollback');
   assert(document && typeof document === 'object', 'railwayEvidence es obligatorio');
   assertAllowedKeys(
@@ -366,9 +620,27 @@ function collectRailwayDeploymentEvidence(manifest, document, { mode = 'release'
   assert(document.environment === manifest.environment, 'railwayEvidence pertenece a otro entorno');
   assert(document.readOnlyEvidence === true, 'railwayEvidence debe ser read-only');
   const capturedAt = normalizeBuiltAt(document.capturedAt);
+  const capturedTimestamp = Date.parse(capturedAt);
+  const nowTimestamp = Date.parse(now instanceof Date ? now.toISOString() : String(now));
+  assert(Number.isFinite(nowTimestamp), 'railwayEvidence: now inválido');
+  assert(Number.isFinite(maxAgeMs) && maxAgeMs > 0, 'railwayEvidence: maxAgeMs inválido');
+  assert(Number.isFinite(futureSkewMs) && futureSkewMs >= 0, 'railwayEvidence: futureSkewMs inválido');
+  assert(
+    capturedTimestamp <= nowTimestamp + futureSkewMs,
+    'railwayEvidence: capturedAt está en el futuro',
+  );
+  assert(
+    capturedTimestamp >= nowTimestamp - maxAgeMs,
+    'railwayEvidence: evidencia vencida',
+  );
+  if (mode === 'release') {
+    assert(
+      capturedTimestamp >= Date.parse(manifest.release.builtAt),
+      'railwayEvidence: evidencia anterior al release',
+    );
+  }
   assert(Array.isArray(document.services), 'railwayEvidence.services debe ser una lista');
 
-  const expectedSha = mode === 'rollback' ? manifest.rollback.sha : manifest.release.sha;
   const expectedServices = manifest.services.filter(
     (service) => service.verification === 'railway-deployment-metadata',
   );
@@ -377,13 +649,14 @@ function collectRailwayDeploymentEvidence(manifest, document, { mode = 'release'
     const context = `railwayEvidence.services[${index}]`;
     assertAllowedKeys(
       item,
-      new Set(['role', 'service', 'sha', 'deploymentId', 'status', 'source']),
+      new Set(['role', 'service', 'sha', 'deploymentId', 'imageDigest', 'status', 'source']),
       context,
     );
     const service = expectedServices.find((candidate) => candidate.role === item.role);
     assert(service, `${context}: rol no pendiente o desconocido ${item.role}`);
     assert(!byRole.has(item.role), `${context}: rol duplicado ${item.role}`);
     assert(item.service === service.service, `${context}: nombre de servicio incorrecto`);
+    const expectedSha = mode === 'rollback' ? service.rollbackSha : service.expectedSha;
     assert(normalizeSha(item.sha, `${context}.sha`) === expectedSha, `${context}: SHA incorrecto`);
     assert(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
@@ -391,6 +664,18 @@ function collectRailwayDeploymentEvidence(manifest, document, { mode = 'release'
       ),
       `${context}: deploymentId inválido`,
     );
+    if (service.deploymentMode === 'frozen') {
+      assert(
+        item.deploymentId.toLowerCase() === service.baselineDeploymentId,
+        `${context}: frozen cambió de deployment`,
+      );
+      assert(
+        String(item.imageDigest || '').toLowerCase() === service.expectedImageDigest,
+        `${context}: frozen cambió de imagen`,
+      );
+    } else {
+      assert(item.imageDigest === undefined, `${context}: imageDigest sólo se acepta para frozen`);
+    }
     assert(item.status === 'SUCCESS', `${context}: status debe ser SUCCESS`);
     assert(
       ['railway-dashboard', 'railway-public-api'].includes(item.source),
@@ -403,6 +688,9 @@ function collectRailwayDeploymentEvidence(manifest, document, { mode = 'release'
       deploymentId: item.deploymentId.toLowerCase(),
       status: item.status,
       source: item.source,
+      ...(service.deploymentMode === 'frozen'
+        ? { imageDigest: item.imageDigest.toLowerCase() }
+        : {}),
     });
   }
   for (const service of expectedServices) {
@@ -412,7 +700,14 @@ function collectRailwayDeploymentEvidence(manifest, document, { mode = 'release'
     byRole.size === expectedServices.length,
     'railwayEvidence contiene servicios inesperados',
   );
-  return { expectedSha, capturedAt, evidence: [...byRole.values()] };
+  return {
+    expectedSha: mode === 'rollback' ? manifest.rollback.sha : manifest.release.sha,
+    capturedAt,
+    evidence: [...byRole.values()],
+    frozenRoles: manifest.services
+      .filter((service) => service.deploymentMode === 'frozen')
+      .map((service) => service.role),
+  };
 }
 
 async function collectVersionEvidence(
@@ -421,9 +716,6 @@ async function collectVersionEvidence(
 ) {
   assert(['release', 'rollback'].includes(mode), 'mode debe ser release o rollback');
   assert(typeof fetchImpl === 'function', 'fetch no está disponible');
-  const expectedRelease =
-    mode === 'rollback' ? { sha: manifest.rollback.sha } : manifest.release;
-  const expectedSha = expectedRelease.sha;
   const endpointServices = manifest.services.filter((service) => service.verification === 'endpoint');
   const evidence = [];
 
@@ -442,14 +734,23 @@ async function collectVersionEvidence(
       signal: AbortSignal.timeout(10000),
     });
     assert(response.ok, `${service.role}: /version respondió HTTP ${response.status}`);
+    const expectedRelease = mode === 'rollback'
+      ? { sha: service.rollbackSha }
+      : manifest.release;
     evidence.push(validateVersionPayload(await response.json(), service, expectedRelease));
   }
 
   return {
-    expectedSha,
+    expectedSha: mode === 'rollback' ? manifest.rollback.sha : manifest.release.sha,
     evidence,
     pendingRoles: manifest.services
       .filter((service) => service.verification !== 'endpoint')
+      .map((service) => service.role),
+    missingVersionRoles: manifest.services
+      .filter(
+        (service) =>
+          service.deploymentMode === 'promote' && service.verification !== 'endpoint',
+      )
       .map((service) => service.role),
   };
 }
@@ -463,6 +764,7 @@ module.exports = {
   loadTopology,
   normalizeDeploymentBaseline,
   normalizeSha,
+  validateFrozenDeploymentList,
   validateReleaseManifest,
   validateVersionPayload,
 };

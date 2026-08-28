@@ -59,9 +59,14 @@ try {
   });
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  const promoted = manifest.services.filter((service) => service.deploymentMode === 'promote');
+  const frozen = manifest.services.filter((service) => service.deploymentMode === 'frozen');
   console.log(`Manifiesto creado: ${outputPath}`);
   console.log(`Release SHA: ${manifest.release.sha}`);
   console.log(`Rollback SHA: ${manifest.rollback.sha}`);
+  console.log(
+    `Alcance: ${promoted.length} servicios promovidos; ${frozen.length} ${frozen.length === 1 ? 'congelado' : 'congelados'} sin deploy (${frozen.map((service) => service.role).join(', ') || 'ninguno'}).`,
+  );
 } catch (error) {
   console.error(error.message);
   process.exit(1);

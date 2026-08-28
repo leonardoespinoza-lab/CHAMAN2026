@@ -4,9 +4,10 @@ Estos controles fijan el release por SHA, generan evidencia sin secretos y
 verifican un rollback; no ejecutan deploys, no cambian variables de Railway y
 no aplican migraciones.
 
-El plan actual de Railway no aporta backups ni point-in-time recovery. Por
-eso un manifiesto de **producción** falla si no incluye identificadores de un
-backup lógico reciente y de una restauración ensayada en un destino aislado.
+Railway está en plan Pro y se mantienen backups nativos programados. Aun así,
+un manifiesto de **producción** falla si no incluye identificadores de un backup
+lógico reciente y de una restauración ensayada en un destino aislado: el backup
+nativo no reemplaza la prueba independiente de recuperación.
 
 ## Estado del contrato `/version`
 
@@ -82,19 +83,25 @@ npm run release:manifest -- `
 ```
 
 El generador obtiene todos los servicios de código desde
-`deploy/environment-topology.json`, fija `expectedSha` y `rollbackSha` para
-cada uno, adjunta el deployment previo capturado y rechaza claves desconocidas
-que pudieran introducir secretos. El baseline de Testing del 28/8 está marcado
-`readOnlyEvidence` y `doNotDeploy`; sirve para recuperar el estado anterior,
-no para disparar un redeploy. MongoDB, Redis y ChirpStack aislados están
-inventariados como `mustRemainUntouched`.
+`deploy/environment-topology.json`. Los servicios `promote` reciben el mismo
+`expectedSha` y `rollbackSha`; los servicios `frozen` conservan SHA, deployment
+e imagen exactos del baseline y nunca participan del deploy ni del rollback.
+La única excepción admitida es `testing-lora`; Producción no admite servicios
+congelados. El baseline de Testing del 28/8 está marcado `readOnlyEvidence` y
+`doNotDeploy`; sirve para recuperar el estado anterior, no para disparar un
+redeploy. MongoDB, Redis y ChirpStack aislados están inventariados como
+`mustRemainUntouched`.
+
+Este contrato usa `schemaVersion: 2`. Los manifiestos v1 anteriores se rechazan
+de forma deliberada porque no podían expresar ni verificar servicios congelados;
+deben regenerarse desde su SHA y baseline originales, no editarse a mano.
 
 El `baselineDeploymentId` es evidencia y no garantiza que Railway todavía
-pueda restaurar esa imagen. En el plan Hobby la retención de imágenes es de 72
-horas y antes de depender del rollback nativo se debe comprobar `canRollback`
-en cada servicio. El rollback a un deployment arbitrario se opera desde el
-Dashboard o la Public API; la CLI sólo puede redeploy/restart del deployment
-más reciente.
+pueda restaurar esa imagen. Aunque el proyecto ya usa plan Pro, antes de
+depender del rollback nativo se debe comprobar `canRollback` y la retención
+efectiva en cada servicio. El rollback a un deployment arbitrario se opera
+desde el Dashboard o la Public API; la CLI sólo puede redeploy/restart del
+deployment más reciente.
 
 Para un manifiesto productivo se agregan atestaciones explícitas, después de
 verificarlas en GitHub/Railway:
@@ -140,18 +147,35 @@ manifiesto. Para los roles todavía sin `/version` se exige un JSON de evidencia
 read-only extraído del Dashboard o Public API de Railway. Debe contener sólo:
 `schemaVersion`, `environment`, `capturedAt`, `readOnlyEvidence=true` y una
 entrada por cada rol pendiente con `role`, `service`, `sha`, `deploymentId`,
-`status=SUCCESS` y `source=railway-dashboard|railway-public-api`. Faltantes,
-roles extra, claves extra o un SHA diferente hacen fallar el preflight.
+`status=SUCCESS` y `source=railway-dashboard|railway-public-api`. Un servicio
+`frozen` exige además `imageDigest`, y deben coincidir exactamente SHA,
+deployment e imagen protegidos. Faltantes, roles extra, claves extra o cualquier
+cambio hacen fallar el preflight. `capturedAt` debe ser posterior al build del
+release, no puede estar en el futuro y vence a los 15 minutos.
+
+Para `testing-lora`, Railway no expone `commitHash` en el deployment protegido.
+Por eso el SHA completo no se atribuye directamente a Railway: el preflight
+consulta Railway en vivo para comprobar deployment, estado, imagen, mensaje CLI
+y `LORAWAN_MQTT_ENABLED=false`; luego Git resuelve de forma inequívoca el SHA
+corto del mensaje al SHA completo sellado. Si cambia cualquiera de esas piezas,
+la validación falla.
 
 ```powershell
 npm run release:preflight -- `
   --manifest $env:TEMP/chaman-release.json `
-  --railway-evidence $env:TEMP/chaman-railway-release-evidence.json
+  --railway-evidence $env:TEMP/chaman-railway-release-evidence.json `
+  --railway-cli C:\ruta\a\railway.exe
 ```
+
+También puede definirse `CHAMAN_RAILWAY_CLI`; la ruta no es una credencial.
 
 El modo `--offline` sólo valida estructura, política, baseline y HEAD local; su
 salida declara explícitamente que los deployments no fueron comprobados. No es
 evidencia suficiente para promover.
+
+`--require-full-version-coverage` exige `/version` para todos los servicios
+promovidos. Un servicio `frozen` queda excluido de esa deuda porque se verifica
+por identidad binaria y estado live, no como parte del nuevo release.
 
 ## Migraciones
 
@@ -174,8 +198,10 @@ Antes de producción:
 npm run release:rollback:verify -- --manifest $env:TEMP/chaman-release.json
 ```
 
-Esto comprueba que ambos SHAs existen y que el rollback es ancestro del
-release. No cambia el checkout. El procedimiento operativo es:
+Esto comprueba que los SHA globales de los servicios promovidos existen y que
+el rollback es ancestro del release. Los servicios congelados quedan fuera de
+ambas acciones y se verifican contra su baseline. No cambia el checkout. El
+procedimiento operativo es:
 
 1. antes de promover, conservar `rollback.sha` en una referencia Git protegida
    e inmutable (tag o rama de rollback) y verificar que resuelve exactamente a
@@ -197,9 +223,10 @@ npm run release:rollback:verify -- `
   --railway-evidence $env:TEMP/chaman-railway-rollback-evidence.json
 ```
 
-Mientras existan roles sin endpoint, la confirmación online exige ese archivo
-con todos ellos en `rollback.sha`. Sin evidencia completa el comando falla; la
-comprobación offline sólo demuestra existencia y ancestría Git.
+Mientras existan roles sin endpoint, la confirmación online exige ese archivo:
+los promovidos deben estar en `rollback.sha` y los congelados deben conservar su
+SHA, deployment e imagen originales. Sin evidencia completa el comando falla;
+la comprobación offline sólo demuestra existencia y ancestría Git.
 
 Para el snapshot de Testing del 28/8 ya existen tres referencias remotas
 inmutables de recuperación, creadas sin deploy:
@@ -234,9 +261,10 @@ manual. La ampliación de CI se fusiona y se observa primero en un push real a
 4. Generar el manifiesto desde ese SHA final y desplegarlo primero en Testing.
 5. Ejecutar preflight, migraciones aditivas y smoke tests en Testing.
    Testing debe conservar MongoDB/Redis propios; una mezcla previa de ramas o
-   deploys CLI no cuenta como evidencia hasta que todos los roles del
-   manifiesto confirmen el mismo SHA. `testing-lora` permanece contra el broker
-   de Testing con `LORAWAN_MQTT_ENABLED=false` durante esta validación.
+   deploys CLI no cuenta como evidencia hasta que los 11 roles promovidos del
+   manifiesto confirmen el mismo SHA. `testing-lora` permanece congelado en
+   `641c71f6e2f31b209c20ba831d456f93595ca710`, deployment `6330715f...`, contra
+   el broker de Testing y con `LORAWAN_MQTT_ENABLED=false`.
 6. Antes de cualquier cambio productivo, crear backup lógico y restaurarlo en
    un destino aislado; registrar ambas evidencias en el manifiesto.
 7. Promover exactamente el mismo SHA a todos los servicios coordinadamente.

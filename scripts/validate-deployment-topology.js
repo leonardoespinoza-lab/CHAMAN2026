@@ -55,6 +55,35 @@ for (const service of manifest.services) {
   if (service.versionPath && service.versionPath !== '/version') {
     issues.push(`${service.role}: versionPath debe ser /version`);
   }
+  if (service.testingPromotion) {
+    if (service.testingPromotion.mode !== 'frozen-at-baseline') {
+      issues.push(`${service.role}: testingPromotion.mode no soportado`);
+    }
+    if (service.role !== 'lora') {
+      issues.push(`${service.role}: solo testing-lora puede quedar congelado en este release`);
+    }
+    if (!/^[0-9a-f]{40}$/.test(service.testingPromotion.expectedSha || '')) {
+      issues.push(`${service.role}: testingPromotion.expectedSha debe ser completo`);
+    }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(service.testingPromotion.deploymentId || '')) {
+      issues.push(`${service.role}: testingPromotion.deploymentId invalido`);
+    }
+    if (!/^sha256:[0-9a-f]{64}$/.test(service.testingPromotion.imageDigest || '')) {
+      issues.push(`${service.role}: testingPromotion.imageDigest invalido`);
+    }
+    const shortSha = /^([0-9a-f]{7,40})\b/i.exec(service.testingPromotion.cliMessage || '')?.[1]?.toLowerCase();
+    if (!shortSha || !service.testingPromotion.expectedSha?.startsWith(shortSha)) {
+      issues.push(`${service.role}: testingPromotion.cliMessage no corresponde al SHA protegido`);
+    }
+    for (const field of ['railwayProjectId', 'railwayEnvironmentId', 'railwayServiceId']) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(service.testingPromotion[field] || '')) {
+        issues.push(`${service.role}: testingPromotion.${field} invalido`);
+      }
+    }
+  }
+  if (service.productionPromotion) {
+    issues.push(`${service.role}: no se permiten excepciones de promocion en Produccion`);
+  }
 }
 
 const meteoWorker = manifest.services.find((service) => service.role === 'meteo-worker');
@@ -82,6 +111,9 @@ const lora = manifest.services.find((service) => service.role === 'lora');
 if (lora && !lora.testingSafety?.includes('LORAWAN_MQTT_ENABLED=false')) {
   issues.push('lora: Testing debe conservar LORAWAN_MQTT_ENABLED=false');
 }
+if (lora?.testingPromotion?.mode !== 'frozen-at-baseline') {
+  issues.push('lora: testing-lora debe quedar frozen-at-baseline');
+}
 
 for (const selector of ['sdc-api-cliente', 'sdc-datos']) {
   const service = manifest.services.find((item) => item.selector === selector);
@@ -99,8 +131,8 @@ if (manifest.dataPolicy?.promoteTestingDatabase !== false) {
 if (manifest.codePromotion?.productionBranch !== 'main') {
   issues.push('La rama productiva declarada debe ser main');
 }
-if (!manifest.codePromotion?.requireSameCommitAcrossStatelessServices) {
-  issues.push('Los servicios sin estado deben desplegar exactamente el mismo commit');
+if (!manifest.codePromotion?.requireSameCommitAcrossPromotedStatelessServices) {
+  issues.push('Los servicios promovidos sin estado deben desplegar exactamente el mismo commit');
 }
 
 if (issues.length) {
