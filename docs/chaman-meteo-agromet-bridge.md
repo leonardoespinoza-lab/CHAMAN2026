@@ -93,9 +93,23 @@ borra evidencia.
 ## Foto read-only de produccion (2026-08-28)
 
 - 86 siembras activas auditadas.
-- 21 sin serie agrometeorologica y con fuente `sin_fuente`:
-  19 de trigo y 2 de cebada.
-- En el mismo control, 24 trigos y 8 cebadas ya usan `open_meteo`.
+- Los logs de `chaman-clima` identifican exactamente 21 siembras que fallan en
+  cada corrida horaria por cobertura termica diaria incompleta: 19 de trigo y
+  2 de cebada.
+- Las 21 pertenecen a lotes con una unica siembra activa, no tienen
+  dispositivos asociados y todavia no poseen una generacion agrometeorologica
+  activa utilizable.
+- No faltan documentos diarios: existen todas las fechas entre la siembra y
+  2026-08-27. El problema concreto son **529 dias** cuyos documentos
+  `open_meteo` no contienen simultaneamente temperatura minima, media y maxima.
+  En los 21 casos, la primera fecha con cobertura termica completa es
+  2026-07-07; los huecos anteriores varian entre 10 y 40 dias por siembra.
+- Por eso el puente debe completar variables ausentes dentro de filas
+  existentes, no crear una serie paralela ni sustituir valores validos. La
+  funcion de merge conserva la prioridad de Open-Meteo y usa ERA5-Land solo en
+  esos campos termicos vacios.
+- En el mismo control general, 24 trigos y 8 cebadas ya usan `open_meteo` sin
+  este bloqueo.
 - El plan vigente de Mongo en Railway no ofrece backup nativo/PITR.
 
 Siembras candidatas observadas para mapear primero a lotes elegibles
