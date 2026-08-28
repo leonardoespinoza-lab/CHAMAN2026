@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "kind": "chaman-mongo-write-freeze-attestation",
+  "attestationId": "backup_yyyymmdd_hhmm",
+  "sourceEnvironment": "production",
+  "database": "chaman",
+  "writesFrozen": true,
+  "freezeControls": {
+    "apiWritesDisabled": true,
+    "backgroundWorkersStopped": true,
+    "scheduledJobsDisabled": true,
+    "operatorWritesBlocked": true,
+    "activeWritersVerifiedZero": true
+  },
+  "frozenAt": "REPLACE_WITH_ISO_8601_UTC",
+  "verifiedAt": "REPLACE_WITH_ISO_8601_UTC",
+  "expiresAt": "REPLACE_WITH_ISO_8601_UTC_MAX_TWO_HOURS_AFTER_FREEZE",
+  "operator": "REPLACE_WITH_OPERATOR",
+  "approvedBy": "REPLACE_WITH_APPROVER",
+  "changeTicket": "REPLACE_WITH_CHANGE_TICKET"
+}

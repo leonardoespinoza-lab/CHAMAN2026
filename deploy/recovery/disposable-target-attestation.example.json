@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "kind": "chaman-mongo-disposable-target-attestation",
+  "drillId": "backup_yyyymmdd_hhmm",
+  "environment": "recovery-drill",
+  "database": "chaman_restore_drill_yyyymmdd_hhmm",
+  "disposable": true,
+  "dedicatedInstance": true,
+  "initiallyEmptyExpected": true,
+  "productionTrafficBlocked": true,
+  "externalIntegrationsDisabled": true,
+  "cleanupApproved": true,
+  "expiresAt": "REPLACE_WITH_ISO_8601_UTC_MAX_48_HOURS",
+  "operator": "REPLACE_WITH_OPERATOR",
+  "approvedBy": "REPLACE_WITH_APPROVER",
+  "changeTicket": "REPLACE_WITH_CHANGE_TICKET"
+}

@@ -27,6 +27,7 @@ MongoDB, Redis y volumenes independientes.
    Mientras Railway no tenga backups/PITR, el backup debe ser lógico y su
    restauración debe ensayarse en un destino aislado antes de cualquier deploy
    productivo; ambas evidencias son obligatorias en el manifiesto de release.
+   El procedimiento fail-closed esta en `docs/MONGO-LOGICAL-BACKUP-RESTORE-DRILL.md`.
 8. Fusionar el PR. Railway despliega produccion exclusivamente desde `main`.
 9. Ejecutar smoke test productivo y conservar el SHA anterior como rollback inmediato.
 
