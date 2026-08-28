@@ -349,7 +349,13 @@ function normalizeIndexes(indexes = []) {
       const semantic = Object.fromEntries(
         Object.entries(index).filter(([key]) => !['v', 'ns'].includes(key)),
       );
-      const normalized = canonicalize(semantic);
+      const normalized = {
+        name: semantic.name,
+        key: Object.entries(semantic.key || {}).map(([field, direction]) => [field, canonicalize(direction)]),
+        options: canonicalize(Object.fromEntries(
+          Object.entries(semantic).filter(([key]) => !['name', 'key'].includes(key)),
+        )),
+      };
       return { ...normalized, semanticSha256: sha256Text(JSON.stringify(normalized)) };
     })
     .sort((left, right) => String(left.name).localeCompare(String(right.name)));

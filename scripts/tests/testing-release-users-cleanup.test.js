@@ -39,7 +39,7 @@ function fakeDb(databaseName = 'chaman_testing') {
     },
     maintenance_cleanup_journals: {
       async insertOne(document) { calls.push({ collection: 'journal', operation: 'insertOne', document }); },
-      async updateOne(filter, update) { calls.push({ collection: 'journal', operation: 'updateOne', filter, update }); },
+      async updateOne(filter, update) { calls.push({ collection: 'journal', operation: 'updateOne', filter, update }); return { matchedCount: 1, modifiedCount: 1 }; },
     },
   };
   return {

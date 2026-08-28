@@ -43,10 +43,13 @@ async function cleanupTestingReleaseUsers(db) {
       `Cleanup incompleto: quedan ${remainingTokens} token(s) y ${remainingUsers} usuario(s) temporales.`,
     );
     }
-    await journals.updateOne({ cleanupId, status: 'planned' }, { $set: {
+    const journalResult = await journals.updateOne({ cleanupId, status: 'planned' }, { $set: {
       status: 'completed', completedAt: new Date(), removedTokens: Number(tokenResult.deletedCount || 0),
       removedUsers: Number(userResult.deletedCount || 0), remainingTokens, remainingUsers,
     } });
+    if (journalResult.matchedCount !== 1 || journalResult.modifiedCount !== 1) {
+      throw new Error('No se pudo sellar exactamente un journal de cleanup.');
+    }
     return {
       cleanupId,
       removedTokens: Number(tokenResult.deletedCount || 0),

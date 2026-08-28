@@ -4,6 +4,12 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const WINDOWS_ACL_SCRIPT = path.join(__dirname, 'windows-acl.ps1');
 
+function minimalChildEnv(extra = {}, base = process.env) {
+  const allowed = ['PATH', 'Path', 'PATHEXT', 'SystemRoot', 'WINDIR', 'COMSPEC', 'TEMP', 'TMP'];
+  const env = Object.fromEntries(allowed.filter((key) => base[key]).map((key) => [key, base[key]]));
+  return { ...env, ...extra };
+}
+
 function assertSafeUri(uri) {
   if (typeof uri !== 'string' || !/^mongodb(?:\+srv)?:\/\//i.test(uri)) {
     throw new Error('URI MongoDB invalida para archivo temporal.');
@@ -26,7 +32,7 @@ function runWindowsAcl(action, targetPath, spawn = spawnSync) {
     encoding: 'utf8',
     shell: false,
     windowsHide: true,
-    env: { ...process.env, CHAMAN_ACL_TARGET_PATH: targetPath },
+    env: minimalChildEnv({ CHAMAN_ACL_TARGET_PATH: targetPath }),
   });
   if (result.error || result.status !== 0) {
     throw new Error(`No se pudo aplicar/verificar ACL Windows (${action}).`);
@@ -168,15 +174,7 @@ function assertMongoToolsConfigVersion(versionText) {
   return { major, minor, patch: Number(match[3] || 0) };
 }
 
-function safeChildEnv(extra = {}, base = process.env) {
-  const env = { ...base, ...extra };
-  for (const key of [
-    'CHAMAN_MONGO_SOURCE_URI', 'CHAMAN_MONGO_RESTORE_URI', 'MONGO_PUBLIC_URL',
-    'MONGO_URL', 'MONGO_URI', 'DATABASE_URL', 'DB_URL', 'CHAMAN_BACKUP_CONFIRM',
-    'CHAMAN_RESTORE_CONFIRM', 'CHAMAN_CLEANUP_CONFIRM',
-  ]) delete env[key];
-  return env;
-}
+const safeChildEnv = minimalChildEnv;
 
 module.exports = {
   buildMongodumpArgs,
@@ -184,6 +182,7 @@ module.exports = {
   buildMongoshArgs,
   assertMongoToolsConfigVersion,
   safeChildEnv,
+  minimalChildEnv,
   hardenRestrictedDirectory,
   hardenRestrictedFile,
   verifyRestrictedDirectory,

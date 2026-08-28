@@ -55,10 +55,11 @@ function usage() {
   node scripts/mongo-recovery.js restore --manifest=<json> --attestation=<json> --infrastructure-evidence=<json> --output-dir=<dir>
   node scripts/mongo-recovery.js verify --manifest=<json> --attestation=<json> --infrastructure-evidence=<json> --output-dir=<dir>
   node scripts/mongo-recovery.js cleanup --manifest=<json> --attestation=<json> --infrastructure-evidence=<json> --output-dir=<dir>
-  node scripts/mongo-recovery.js fingerprint --side=source|target
+  node scripts/mongo-recovery.js fingerprint --side=source|target --source-uri-file=<acl>|--target-uri-file=<acl>
+  node scripts/mongo-recovery.js create-uri-file --output=<archivo fuera del repo> < URI por stdin
 
-Secretos (solo variables de entorno, nunca argumentos ni archivos versionados):
-  CHAMAN_MONGO_SOURCE_URI, CHAMAN_MONGO_RESTORE_URI
+Secretos (solo archivos fuera del repo con ACL verificada, nunca entorno/argv):
+  --source-uri-file, --target-uri-file
   CHAMAN_BACKUP_CONFIRM, CHAMAN_RESTORE_CONFIRM, CHAMAN_CLEANUP_CONFIRM`;
 }
 
@@ -73,8 +74,11 @@ function parseCli(argv) {
       manifest: { type: 'string' },
       'output-dir': { type: 'string' },
       'infrastructure-evidence': { type: 'string' },
+      'source-uri-file': { type: 'string' },
+      'target-uri-file': { type: 'string' },
       help: { type: 'boolean', short: 'h' },
       side: { type: 'string' },
+      output: { type: 'string' },
     },
   });
   if (values.help) return { command: 'help', values };
@@ -117,10 +121,7 @@ function recordFailureReceipt(outputDirValue, phase, error) {
     .readdirSync(outputDir)
     .filter((name) => knownArtifacts.has(name))
     .sort();
-  const safeMessage = redact(error?.message || String(error), [
-    process.env.CHAMAN_MONGO_SOURCE_URI,
-    process.env.CHAMAN_MONGO_RESTORE_URI,
-  ]);
+  const safeMessage = redact(error?.message || String(error), []);
   writeJsonExclusive(receiptPath, {
     schemaVersion: 1,
     kind: 'chaman-mongo-recovery-failure-receipt',
@@ -156,7 +157,7 @@ function executable(name) {
   return overrides[name] || name;
 }
 
-function runProcess(program, args, { env = process.env, secrets = [], cwd = ROOT } = {}) {
+function runProcess(program, args, { env = safeChildEnv(), secrets = [], cwd = ROOT } = {}) {
   const result = spawnSync(program, args, {
     cwd,
     env,
@@ -189,7 +190,18 @@ function toolVersions(names) {
 }
 
 function gitSha() {
-  return runProcess('git', ['rev-parse', 'HEAD']).stdout.trim().toLowerCase();
+  return runProcess('git', ['rev-parse', 'HEAD'], { env: safeChildEnv() }).stdout.trim().toLowerCase();
+}
+
+function readProtectedUri(filePath, label) {
+  if (!filePath) throw new Error(`Falta --${label}-uri-file.`);
+  const resolved = path.resolve(filePath);
+  verifyRestrictedFile(resolved);
+  const uri = fs.readFileSync(resolved, 'utf8').trim();
+  if (!/^mongodb(?:\+srv)?:\/\//i.test(uri) || /[\r\n\0]/.test(uri)) {
+    throw new Error(`Archivo URI ${label} invalido.`);
+  }
+  return uri;
 }
 
 function inventory(uri, database) {
@@ -211,36 +223,31 @@ function inventory(uri, database) {
   return normalizeInventory(parsed);
 }
 
-function sourceContext(attestationFile, { requireUri = true, evidenceFile } = {}) {
+function sourceContext(attestationFile, { requireUri = true, evidenceFile, uriFile } = {}) {
   if (!attestationFile) throw new Error('Falta --attestation.');
   const attestation = readJson(attestationFile);
   const validated = validateSourceAttestation(attestation);
   const evidence = loadInfrastructureEvidence(evidenceFile);
   bindAttestationToEvidence(attestation, validated, evidence, 'source');
-  const uri = process.env.CHAMAN_MONGO_SOURCE_URI;
-  if (requireUri && !uri) throw new Error('Falta CHAMAN_MONGO_SOURCE_URI.');
+  const uri = requireUri ? readProtectedUri(uriFile, 'source') : null;
   if (uri && databaseFromMongoUri(uri) !== validated.database) {
-    throw new Error('La base de CHAMAN_MONGO_SOURCE_URI no coincide con la atestacion.');
+    throw new Error('La base del archivo URI origen no coincide con la atestacion.');
   }
   if (uri) assertRuntimeIdentity(uri, validated.instanceIdentity, 'origen');
   return { attestation, validated, uri, evidence };
 }
 
-function targetContext(attestationFile, { requireUri = true, evidenceFile } = {}) {
+function targetContext(attestationFile, { requireUri = true, evidenceFile, uriFile } = {}) {
   if (!attestationFile) throw new Error('Falta --attestation.');
   const attestation = readJson(attestationFile);
   const validated = validateTargetAttestation(attestation);
   const evidence = loadInfrastructureEvidence(evidenceFile);
   bindAttestationToEvidence(attestation, validated, evidence, 'target');
-  const uri = process.env.CHAMAN_MONGO_RESTORE_URI;
-  if (requireUri && !uri) throw new Error('Falta CHAMAN_MONGO_RESTORE_URI.');
+  const uri = requireUri ? readProtectedUri(uriFile, 'target') : null;
   if (uri && databaseFromMongoUri(uri) !== validated.database) {
-    throw new Error('La base de CHAMAN_MONGO_RESTORE_URI no coincide con la atestacion.');
+    throw new Error('La base del archivo URI destino no coincide con la atestacion.');
   }
   if (uri) assertRuntimeIdentity(uri, validated.instanceIdentity, 'destino');
-  if (uri && process.env.CHAMAN_MONGO_SOURCE_URI && uri === process.env.CHAMAN_MONGO_SOURCE_URI) {
-    throw new Error('Origen y destino no pueden usar la misma URI.');
-  }
   return { attestation, validated, uri, evidence };
 }
 
@@ -337,6 +344,7 @@ function describePlan(phase, values, checkTools) {
 function dumpCommand(values) {
   const { attestation, validated, uri } = sourceContext(values.attestation, {
     evidenceFile: values['infrastructure-evidence'],
+    uriFile: values['source-uri-file'],
   });
   requireConfirmation(
     process.env.CHAMAN_BACKUP_CONFIRM,
@@ -408,7 +416,7 @@ function ensureEmptyTarget(targetInventory) {
 }
 
 function restoreCommand(values) {
-  const target = targetContext(values.attestation, { evidenceFile: values['infrastructure-evidence'] });
+  const target = targetContext(values.attestation, { evidenceFile: values['infrastructure-evidence'], uriFile: values['target-uri-file'] });
   const source = manifestContext(values.manifest, { requireRestrictedAcl: true });
   assertTargetAgainstManifest(target, source);
   requireConfirmation(
@@ -480,7 +488,7 @@ function runAudit(program, args, env, secrets, outputPath) {
 }
 
 function verifyCommand(values) {
-  const target = targetContext(values.attestation, { evidenceFile: values['infrastructure-evidence'] });
+  const target = targetContext(values.attestation, { evidenceFile: values['infrastructure-evidence'], uriFile: values['target-uri-file'] });
   const source = manifestContext(values.manifest, { requireRestrictedAcl: true });
   assertTargetAgainstManifest(target, source);
   if (!values['output-dir']) throw new Error('Falta --output-dir.');
@@ -571,7 +579,7 @@ function verifyCommand(values) {
 }
 
 function cleanupCommand(values) {
-  const target = targetContext(values.attestation, { evidenceFile: values['infrastructure-evidence'] });
+  const target = targetContext(values.attestation, { evidenceFile: values['infrastructure-evidence'], uriFile: values['target-uri-file'] });
   const source = manifestContext(values.manifest, { requireRestrictedAcl: true });
   assertTargetAgainstManifest(target, source);
   requireConfirmation(
@@ -624,11 +632,23 @@ function main() {
     console.log(usage());
     return;
   }
+  if (command === 'create-uri-file') {
+    if (!values.output) throw new Error('Falta --output.');
+    const output = path.resolve(values.output);
+    safeArtifactDirectory(path.dirname(output), ROOT);
+    if (fs.existsSync(output)) throw new Error('El archivo URI ya existe.');
+    fs.mkdirSync(path.dirname(output), { recursive: true, mode: 0o700 });
+    hardenRestrictedDirectory(path.dirname(output));
+    const uri = fs.readFileSync(0, 'utf8').trim();
+    if (!/^mongodb(?:\+srv)?:\/\//i.test(uri) || /[\r\n\0]/.test(uri)) throw new Error('URI stdin invalida.');
+    fs.writeFileSync(output, uri, { flag: 'wx', mode: 0o600 });
+    hardenRestrictedFile(output);
+    console.log(JSON.stringify({ status: 'created', file: output }));
+    return;
+  }
   if (command === 'fingerprint') {
     if (!['source', 'target'].includes(values.side)) throw new Error('--side debe ser source o target.');
-    const variable = values.side === 'source' ? 'CHAMAN_MONGO_SOURCE_URI' : 'CHAMAN_MONGO_RESTORE_URI';
-    const uri = process.env[variable];
-    if (!uri) throw new Error(`Falta ${variable}.`);
+    const uri = readProtectedUri(values[`${values.side}-uri-file`], values.side);
     const fingerprint = mongoEndpointFingerprint(uri);
     result = {
       side: values.side,
@@ -652,8 +672,8 @@ function main() {
 }
 
 try {
-  main();
+main();
 } catch (error) {
-  console.error(redact(error.message, [process.env.CHAMAN_MONGO_SOURCE_URI, process.env.CHAMAN_MONGO_RESTORE_URI]));
+  console.error(redact(error.message, []));
   process.exitCode = 1;
 }

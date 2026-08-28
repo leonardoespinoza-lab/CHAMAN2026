@@ -81,14 +81,14 @@ conectar a MongoDB:
 ```powershell
 $secret = Read-Host 'URI Mongo origen' -AsSecureString
 $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
-try { $env:CHAMAN_MONGO_SOURCE_URI = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
-npm run mongo:recovery -- fingerprint --side=source
-} finally { Remove-Item Env:CHAMAN_MONGO_SOURCE_URI -ErrorAction SilentlyContinue; [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) | node scripts/mongo-recovery.js create-uri-file --output=D:\ChamanRecovery\secrets\source.uri }
+finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+npm run mongo:recovery -- fingerprint --side=source --source-uri-file=D:\ChamanRecovery\secrets\source.uri
 $secret = Read-Host 'URI Mongo recovery' -AsSecureString
 $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
-try { $env:CHAMAN_MONGO_RESTORE_URI = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
-npm run mongo:recovery -- fingerprint --side=target
-} finally { Remove-Item Env:CHAMAN_MONGO_RESTORE_URI -ErrorAction SilentlyContinue; [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) | node scripts/mongo-recovery.js create-uri-file --output=D:\ChamanRecovery\secrets\target.uri }
+finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+npm run mongo:recovery -- fingerprint --side=target --target-uri-file=D:\ChamanRecovery\secrets\target.uri
 ```
 
 Copiar cada `endpointFingerprintSha256` a su atestacion y registrar un
@@ -140,19 +140,15 @@ deben ser verdaderos. Mantener el congelamiento hasta que el comando informe
 En una terminal efimera, sin guardar secretos en archivos o historial:
 
 ```powershell
-$secret = Read-Host 'URI Mongo origen' -AsSecureString
-$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
-$env:CHAMAN_MONGO_SOURCE_URI = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
 $env:CHAMAN_BACKUP_CONFIRM = 'dump:backup_yyyymmdd_hhmm:chaman'
 
 npm run mongo:recovery -- dump `
   --attestation=D:\ChamanRecovery\source-freeze.json `
   --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
+  --source-uri-file=D:\ChamanRecovery\secrets\source.uri `
   --output-dir=D:\ChamanRecovery\backup_yyyymmdd_hhmm
 
-Remove-Item Env:CHAMAN_MONGO_SOURCE_URI
 Remove-Item Env:CHAMAN_BACKUP_CONFIRM
-[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
 ```
 
 El directorio debe ser nuevo. Contendra:
@@ -198,14 +194,12 @@ Crear `drill_yyyymmdd_hhmm` vacio fuera del repo antes del restore.
 ## 4. Restaurar
 
 ```powershell
-$secret = Read-Host 'URI Mongo recovery' -AsSecureString
-$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
-$env:CHAMAN_MONGO_RESTORE_URI = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
 $env:CHAMAN_RESTORE_CONFIRM = 'restore:backup_yyyymmdd_hhmm:chaman_restore_drill_yyyymmdd_hhmm'
 
 npm run mongo:recovery -- restore `
   --attestation=D:\ChamanRecovery\target.json `
   --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
+  --target-uri-file=D:\ChamanRecovery\secrets\target.uri `
   --manifest=D:\ChamanRecovery\backup_yyyymmdd_hhmm\manifest.json `
   --output-dir=D:\ChamanRecovery\drill_yyyymmdd_hhmm
 
@@ -225,11 +219,10 @@ Manteniendo solo la URI aislada en la terminal:
 npm run mongo:recovery -- verify `
   --attestation=D:\ChamanRecovery\target.json `
   --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
+  --target-uri-file=D:\ChamanRecovery\secrets\target.uri `
   --manifest=D:\ChamanRecovery\backup_yyyymmdd_hhmm\manifest.json `
   --output-dir=D:\ChamanRecovery\drill_yyyymmdd_hhmm
 
-Remove-Item Env:CHAMAN_MONGO_RESTORE_URI
-[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
 ```
 
 La evidencia `verification.json` solo queda en `passed` cuando:
@@ -258,20 +251,16 @@ El cleanup elimina solamente la base cuyo nombre comienza con
 `chaman_restore_drill_`; no borra el archive ni la evidencia local.
 
 ```powershell
-$secret = Read-Host 'URI Mongo recovery' -AsSecureString
-$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
-$env:CHAMAN_MONGO_RESTORE_URI = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
 $env:CHAMAN_CLEANUP_CONFIRM = 'cleanup:backup_yyyymmdd_hhmm:chaman_restore_drill_yyyymmdd_hhmm'
 
 npm run mongo:recovery -- cleanup `
   --attestation=D:\ChamanRecovery\target.json `
   --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
+  --target-uri-file=D:\ChamanRecovery\secrets\target.uri `
   --manifest=D:\ChamanRecovery\backup_yyyymmdd_hhmm\manifest.json `
   --output-dir=D:\ChamanRecovery\drill_yyyymmdd_hhmm
 
 Remove-Item Env:CHAMAN_CLEANUP_CONFIRM
-Remove-Item Env:CHAMAN_MONGO_RESTORE_URI
-[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
 ```
 
 Conservar `cleanup-receipt.json`. Luego destruir la instancia/volumen descartable

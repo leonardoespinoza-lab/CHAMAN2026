@@ -118,6 +118,14 @@ function writeEvidence(directory) {
   return { file, sha256: require('node:crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex'), evidence };
 }
 
+function writeUriFile(directory, uri, name = 'mongo-uri.txt') {
+  hardenRestrictedDirectory(directory);
+  const file = path.join(directory, name);
+  fs.writeFileSync(file, uri, { flag: 'wx' });
+  hardenRestrictedFile(file);
+  return file;
+}
+
 function inventory(database = 'chaman') {
   return {
     schemaVersion: 1,
@@ -207,19 +215,22 @@ test('fingerprint normaliza host, puerto y orden, pero distingue Produccion de r
 });
 
 test('fingerprint CLI no conecta ni imprime host, usuario o URI', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-fingerprint-'));
+  const uriFile = writeUriFile(directory, SOURCE_URI);
   const result = spawnSync(
     process.execPath,
-    [path.join(process.cwd(), 'scripts', 'mongo-recovery.js'), 'fingerprint', '--side=source'],
+    [path.join(process.cwd(), 'scripts', 'mongo-recovery.js'), 'fingerprint', '--side=source', `--source-uri-file=${uriFile}`],
     {
       cwd: process.cwd(),
       encoding: 'utf8',
-      env: { ...process.env, CHAMAN_MONGO_SOURCE_URI: SOURCE_URI },
+      env: { ...process.env },
     },
   );
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.includes('prod.example.invalid'), false);
   assert.equal(result.stdout.includes('mongodb://'), false);
   assert.match(JSON.parse(result.stdout).endpointFingerprintSha256, /^[0-9a-f]{64}$/);
+  fs.rmSync(directory, { recursive: true, force: true });
 });
 
 test('identidad runtime debe coincidir y destino nunca puede compartir endpoint o instancia productiva', () => {
@@ -274,7 +285,7 @@ test('entorno hijo elimina toda URI y conserva solamente la ruta al secreto', ()
     MONGO_URI: SOURCE_URI, MONGO_PUBLIC_URL: SOURCE_URI, DATABASE_URL: SOURCE_URI, SAFE: 'yes',
   });
   assert.equal(env.CHAMAN_RECOVERY_URI_FILE, 'C:\\secure\\uri.txt');
-  assert.equal(env.SAFE, 'yes');
+  assert.equal(env.SAFE, undefined);
   assert.equal(Object.values(env).includes(SOURCE_URI), false);
   assert.equal(env.MONGO_URI, undefined);
 });
@@ -432,6 +443,9 @@ test('comparacion exige mismas colecciones, conteos, indices y major de MongoDB'
   generatedMetadata.collections[0].indexes[0].v = 9;
   generatedMetadata.collections[0].indexes[0].ns = 'generated';
   assert.equal(compareInventories(inventory(), generatedMetadata).ok, true);
+  const reversedCompound = inventory('chaman_restore_drill_20260828_1800');
+  reversedCompound.collections[0].indexes[1].key = { nombre: 1, idProductor: 1 };
+  assert.equal(compareInventories(inventory(), reversedCompound).ok, false);
 });
 
 test('manifiestos rechazan campos y valores que puedan filtrar secretos', () => {
@@ -483,6 +497,7 @@ test('fallo posterior a crear output-dir deja recibo sin secretos y no conecta',
   try {
     const attestationPath = path.join(directory, 'attestation.json');
     const outputDir = path.join(directory, 'backup-failed');
+    const uriFile = writeUriFile(directory, SOURCE_URI);
     const evidence = writeEvidence(directory);
     const dynamic = sourceAttestation({
       infrastructureEvidenceSha256: evidence.sha256,
@@ -498,6 +513,7 @@ test('fallo posterior a crear output-dir deja recibo sin secretos y no conecta',
         'dump',
         `--attestation=${attestationPath}`,
         `--infrastructure-evidence=${evidence.file}`,
+        `--source-uri-file=${uriFile}`,
         `--output-dir=${outputDir}`,
       ],
       {
@@ -505,7 +521,6 @@ test('fallo posterior a crear output-dir deja recibo sin secretos y no conecta',
         encoding: 'utf8',
         env: {
           ...process.env,
-          CHAMAN_MONGO_SOURCE_URI: SOURCE_URI,
           CHAMAN_BACKUP_CONFIRM: `dump:${dynamic.attestationId}:${dynamic.database}`,
           CHAMAN_MONGOSH_BIN: 'definitely-missing-mongosh-for-test',
         },
