@@ -3,10 +3,23 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const DB_NAME = 'chaman_testing';
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_INSTANT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const ERA5_CALCULATION_VERSION = 'chaman-meteo-agro-v2';
+const ERA5_SOURCE_VERSION = 'era5-land-timeseries-19var-v2';
+const ERA5_PROVIDER = 'copernicus-cds';
+const ERA5_DATASET = 'reanalysis-era5-land-timeseries';
+const ERA5_COUNTRIES = new Set(['AR', 'UY', 'PY', 'BR', 'CL']);
+const RECENT_OPEN_METEO_DAYS = 5;
+const EARLIEST_ERA5_HISTORICAL_START = '2020-01-01';
+const MAX_LOT_BINDING_DRIFT_KM = 1;
+const MAX_GRID_BINDING_DISTANCE_KM = 15;
+const BINDING_DISTANCE_TOLERANCE_KM = 0.1;
+const CLUSTER_ATTESTATION_MAX_VALIDITY_MS = 30 * 24 * 60 * 60 * 1000;
+const SAFETY_ATTESTATION_MAX_VALIDITY_MS = 24 * 60 * 60 * 1000;
+const MAX_ATTESTATION_FUTURE_SKEW_MS = 5 * 60 * 1000;
 const SAFETY_ATTESTATION = 'AGROMET_ONLY:CRONS_FROZEN:NOTIFICATIONS_DISABLED:OUTBOX_DISABLED:PUSH_DISABLED';
 
 const MUTABLE_COLLECTIONS = [
@@ -52,6 +65,24 @@ function validateDate(value, label) {
   return value;
 }
 
+function validateInstant(value, label) {
+  assert(ISO_INSTANT_PATTERN.test(String(value || '')), `${label} debe usar ISO-8601 UTC canonico (YYYY-MM-DDTHH:mm:ss.sssZ).`);
+  const parsed = new Date(value);
+  assert(!Number.isNaN(parsed.getTime()) && parsed.toISOString() === value, `${label} no es un instante ISO-8601 valido.`);
+  return parsed;
+}
+
+function assertAttestationWindow(attestation, label, now, maxValidityMs) {
+  const approvedAt = validateInstant(attestation?.approvedAt, `${label}.approvedAt`);
+  const expiresAt = validateInstant(attestation?.expiresAt, `${label}.expiresAt`);
+  const reference = now instanceof Date ? now : new Date(now);
+  assert(Number.isFinite(reference.getTime()), `El reloj usado para validar ${label} no es valido.`);
+  assert(expiresAt > approvedAt, `${label}.expiresAt debe ser posterior a approvedAt.`);
+  assert(expiresAt.getTime() - approvedAt.getTime() <= maxValidityMs, `${label} excede su vigencia maxima permitida.`);
+  assert(approvedAt.getTime() <= reference.getTime() + MAX_ATTESTATION_FUTURE_SKEW_MS, `${label} fue aprobada en el futuro.`);
+  assert(reference.getTime() + MAX_ATTESTATION_FUTURE_SKEW_MS >= approvedAt.getTime() && reference < expiresAt, `${label} no esta vigente.`);
+}
+
 function mongoEndpoint(uri) {
   const match = String(uri || '').match(/^(mongodb(?:\+srv)?):\/\/([^/?#]+)\//i);
   assert(match, 'La URI Mongo no contiene un endpoint valido.');
@@ -74,7 +105,7 @@ function loadAttestationFile(filePath, label) {
   return JSON.parse(fs.readFileSync(resolved, 'utf8'));
 }
 
-function assertTestingOnly({ uri, attestation, env = process.env }) {
+function assertTestingOnly({ uri, attestation, operationId, env = process.env, now = new Date() }) {
   const productionFlags = [
     'NODE_ENV',
     'RAILWAY_ENVIRONMENT_NAME',
@@ -90,23 +121,29 @@ function assertTestingOnly({ uri, attestation, env = process.env }) {
   assert(slash > withoutQuery.indexOf('://') + 2, 'La URI debe declarar explicitamente la base chaman_testing.');
   const database = decodeURIComponent(withoutQuery.slice(slash + 1));
   assert(database === DB_NAME, `Abortado: la base debe ser exactamente ${DB_NAME}.`);
-  assert(attestation?.schemaVersion === 1 && attestation.environment === 'testing' && attestation.database === DB_NAME,
+  assert(attestation?.schemaVersion === 2 && attestation.purpose === 'era5-agromet-pilot' && attestation.environment === 'testing' && attestation.database === DB_NAME,
     'Se requiere una attestation externa aprobada del cluster Testing.');
+  assert(attestation.operationId === operationId, 'La attestation del cluster no esta vinculada a esta operacion.');
   assert(typeof attestation.approvedBy === 'string' && attestation.approvedBy.trim().length >= 3, 'La attestation del cluster no tiene aprobador.');
   assert(typeof attestation.evidence === 'string' && attestation.evidence.trim().length >= 8, 'La attestation del cluster no tiene evidencia.');
-  assert(Number.isFinite(new Date(attestation.approvedAt).getTime()), 'La attestation del cluster no tiene fecha valida.');
+  assertAttestationWindow(attestation, 'attestation del cluster', now, CLUSTER_ATTESTATION_MAX_VALIDITY_MS);
   const expectedFingerprint = String(attestation.endpointFingerprint || '').trim().toLowerCase();
   assert(/^[a-f0-9]{64}$/.test(expectedFingerprint), 'La attestation no contiene un fingerprint SHA-256 valido.');
   assert(testingClusterFingerprint(uri) === expectedFingerprint, 'Abortado: el fingerprint del cluster no corresponde al Testing aprobado.');
   return database;
 }
 
-function assertSafetyAttestation(attestation) {
+function assertSafetyAttestation(attestation, { operationId, endpointFingerprint, codeSha, now = new Date() }) {
+  assert(attestation?.schemaVersion === 2 && attestation.environment === 'testing' && attestation.database === DB_NAME,
+    'La attestation operativa no pertenece inequívocamente a Testing.');
   assert(attestation?.statement === SAFETY_ATTESTATION,
     'Falta attestation: piloto agromet-only, crons congelados y notificaciones/outbox/push deshabilitados.');
+  assert(attestation.operationId === operationId, 'La attestation operativa no esta vinculada a esta operacion.');
+  assert(attestation.endpointFingerprint === endpointFingerprint, 'La attestation operativa no esta vinculada al cluster Testing aprobado.');
+  assert(attestation.codeSha === codeSha, 'La attestation operativa no esta vinculada al codigo que se esta ejecutando.');
   assert(typeof attestation.approvedBy === 'string' && attestation.approvedBy.trim().length >= 3, 'La attestation operativa no tiene aprobador.');
   assert(typeof attestation.evidence === 'string' && attestation.evidence.trim().length >= 8, 'La attestation operativa no tiene evidencia verificable.');
-  assert(Number.isFinite(new Date(attestation.approvedAt).getTime()), 'La attestation operativa no tiene fecha valida.');
+  assertAttestationWindow(attestation, 'attestation operativa', now, SAFETY_ATTESTATION_MAX_VALIDITY_MS);
 }
 
 function sortForEjson(value) {
@@ -154,11 +191,15 @@ function scanSecrets(value, pathParts = [], findings = []) {
     return findings;
   }
   if (typeof value === 'object') {
-    if (value instanceof Date || value._bsontype) return findings;
+    if (value instanceof Date || Buffer.isBuffer(value)) return findings;
+    if (typeof value.toExtendedJSON === 'function') {
+      const extended = value.toExtendedJSON();
+      if (extended !== value) scanSecrets(extended, pathParts, findings);
+    }
     for (const [key, child] of Object.entries(value)) {
       const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
       const sensitiveValue = child !== null && child !== undefined && !/^(|redacted|<redacted>|masked|none|null|n\/a)$/i.test(String(child).trim());
-      if (sensitiveValue && /^(password|passwd|secret|clientsecret|apikey|accesstoken|refreshtoken|authtoken|token|authorization|bearer|privatekey|signingkey|smtp(?:uri|url|password|token)?|databaseuri|databaseurl|mongouri|cookie|credentials?|mqttpassword|cdskey|fieldclimatekey)$/.test(normalizedKey)) {
+      if (sensitiveValue && isSensitiveKey(normalizedKey)) {
         findings.push([...pathParts, key].join('.'));
       }
       scanSecrets(child, [...pathParts, key], findings);
@@ -173,14 +214,153 @@ function scanSecrets(value, pathParts = [], findings = []) {
   return findings;
 }
 
+function isSensitiveKey(normalizedKey) {
+  if (!normalizedKey) return false;
+  if (/^(dedupekey|eventkey|eventkeys|idempotencykey|publickey)$/.test(normalizedKey)) return false;
+  return /(?:password|passwd|passphrase|secret|credential|authorization|bearer|privatekey|signingkey|encryptionkey|apikey|apitoken|accesstoken|refreshtoken|authtoken|jwttoken|jwtsecret|sessiontoken|sessionsecret|databaseuri|databaseurl|mongouri|mongourl|connectionstring|mqttpassword|cdskey|fieldclimatekey|smtp(?:uri|url|password|token)|cookie)$/.test(normalizedKey) ||
+    /^(?:password|passwd|secret|token|credentials?)$/.test(normalizedKey);
+}
+
 function operationConfig(input) {
   const lotId = validateIdentifier(input.lotId, 'lot-id');
   const sowingId = validateIdentifier(input.sowingId, 'sowing-id');
   const from = validateDate(input.from, 'from');
   const to = validateDate(input.to, 'to');
+  const historicalStart = validateDate(input.historicalStart, 'historical-start');
+  const bridgeToday = validateDate(input.bridgeToday, 'bridge-today');
   assert(from <= to, 'from no puede ser posterior a to.');
+  assert(historicalStart >= EARLIEST_ERA5_HISTORICAL_START, `historical-start no puede ser anterior a ${EARLIEST_ERA5_HISTORICAL_START}.`);
+  assert(from >= historicalStart, 'from es anterior a historical-start; el bridge no puede reconstruir el ciclo completo solicitado.');
   assert(/^[a-z0-9][a-z0-9._-]{5,100}$/i.test(String(input.operationId || '')), 'operation-id es invalido.');
-  return { operationId: input.operationId, lotId, sowingId, from, to };
+  assert(to < bridgeToday, 'to debe ser anterior a bridge-today; el snapshot piloto no admite pronostico.');
+  return { operationId: input.operationId, lotId, sowingId, from, to, historicalStart, bridgeToday };
+}
+
+function isIanaTimezone(value) {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value }).format();
+    return typeof value === 'string' && value.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function dateInTimezone(value, timezone) {
+  assert(isIanaTimezone(timezone), `Timezone IANA invalido: ${timezone}.`);
+  const date = value instanceof Date ? value : new Date(value);
+  assert(Number.isFinite(date.getTime()), 'El reloj local del bridge no es valido.');
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const read = (type) => parts.find((part) => part.type === type)?.value;
+  return `${read('year')}-${read('month')}-${read('day')}`;
+}
+
+function localDateTimeToUtc(date, hour, timezone) {
+  validateDate(date, 'fecha local');
+  assert(Number.isInteger(hour) && hour >= 0 && hour <= 23, 'La hora local debe estar entre 0 y 23.');
+  assert(isIanaTimezone(timezone), `Timezone IANA invalido: ${timezone}.`);
+  const targetAsUtc = new Date(`${date}T${String(hour).padStart(2, '0')}:00:00.000Z`);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  let candidate = targetAsUtc;
+  for (let pass = 0; pass < 3; pass += 1) {
+    const parts = formatter.formatToParts(candidate);
+    const read = (type) => Number(parts.find((part) => part.type === type)?.value || 0);
+    const representedAsUtc = Date.UTC(read('year'), read('month') - 1, read('day'), read('hour'), read('minute'), read('second'));
+    candidate = new Date(candidate.getTime() + (targetAsUtc.getTime() - representedAsUtc));
+  }
+  const represented = Object.fromEntries(formatter.formatToParts(candidate).map((part) => [part.type, part.value]));
+  assert(`${represented.year}-${represented.month}-${represented.day}` === date && Number(represented.hour) === hour,
+    `La hora local ${date} ${hour}:00 no existe o es ambigua en ${timezone}.`);
+  return candidate;
+}
+
+function addDays(value, days) {
+  const date = new Date(`${validateDate(value, 'fecha')}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function validCoordinates(value) {
+  const lat = Number(value?.lat);
+  const lng = Number(value?.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+}
+
+function distanceKm(left, right) {
+  const radians = (value) => (value * Math.PI) / 180;
+  const lat1 = radians(Number(left.lat));
+  const lat2 = radians(Number(right.lat));
+  const deltaLat = lat2 - lat1;
+  const deltaLon = radians(Number(right.lng) - Number(left.lng));
+  const value = Math.sin(deltaLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
+
+function assertBridgeScopeMetadata(scope, config) {
+  const binding = scope.binding;
+  const gridPoint = scope.gridPoint;
+  assert(binding && binding.locationType === 'lote' && binding.locationId === config.lotId && binding.active === true,
+    'El binding Chaman-Meteo no coincide exactamente con el lote activo.');
+  assert(gridPoint && gridPoint.key === binding.gridPointKey && gridPoint.enabled === true,
+    'El punto de grilla no coincide con el binding activo.');
+  assert(gridPoint.provider === ERA5_PROVIDER && gridPoint.dataset === ERA5_DATASET && ERA5_COUNTRIES.has(gridPoint.countryCode),
+    'El punto no coincide con el proveedor, dataset o pais operativo del bridge.');
+  validateDate(gridPoint.historicalStart, 'weather_grid_points.historicalStart');
+  assert(gridPoint.historicalStart >= EARLIEST_ERA5_HISTORICAL_START, 'El historicalStart de la grilla es anterior al minimo operativo.');
+  assert(config.from >= gridPoint.historicalStart && config.from >= config.historicalStart,
+    'La ventana solicitada comienza antes del historicalStart efectivo del bridge.');
+  assert(isIanaTimezone(gridPoint.timezone) && gridPoint.timezone === scope.gridTimezone,
+    'La grilla requiere un timezone IANA coherente con el alcance sellado.');
+  const lotCoordinates = scope.lotCoordinates;
+  const bindingCoordinates = { lat: Number(binding.latitude), lng: Number(binding.longitude) };
+  const gridCoordinates = { lat: Number(gridPoint.latitude), lng: Number(gridPoint.longitude) };
+  assert(validCoordinates(lotCoordinates) && validCoordinates(bindingCoordinates) && validCoordinates(gridCoordinates),
+    'El lote, binding o punto de grilla contiene coordenadas invalidas.');
+  assert(distanceKm(lotCoordinates, bindingCoordinates) <= MAX_LOT_BINDING_DRIFT_KM,
+    'El centroide del lote excede el drift permitido respecto del binding.');
+  const calculatedDistance = distanceKm(bindingCoordinates, gridCoordinates);
+  const declaredDistance = Number(binding.distanceKm);
+  assert(Number.isFinite(declaredDistance) && declaredDistance >= 0 && declaredDistance <= MAX_GRID_BINDING_DISTANCE_KM &&
+    calculatedDistance <= MAX_GRID_BINDING_DISTANCE_KM && Math.abs(calculatedDistance - declaredDistance) <= BINDING_DISTANCE_TOLERANCE_KM,
+  'La distancia declarada entre binding y grilla no es valida o no coincide con sus coordenadas.');
+}
+
+function observationIdentityQuery(scope, config) {
+  assert(isIanaTimezone(scope.gridTimezone), 'No se puede sellar observaciones sin timezone IANA valido.');
+  const start = localDateTimeToUtc(config.from, 0, scope.gridTimezone);
+  const end = localDateTimeToUtc(addDays(config.to, 1), 0, scope.gridTimezone);
+  const daily = dateRange(config.from, config.to).flatMap((date) => [
+    localDateTimeToUtc(date, 12, scope.gridTimezone),
+    new Date(`${date}T00:00:00.000Z`),
+  ]);
+  return {
+    $or: [
+      { idEstablecimiento: scope.establishmentObjectId, timestamp: { $gte: start, $lt: end }, granularidad: 'hourly' },
+      { idEstablecimiento: scope.establishmentObjectId, timestamp: { $in: daily }, granularidad: 'daily' },
+    ],
+  };
+}
+
+function era5BridgeWindow(scope, config) {
+  const from = [config.from, config.historicalStart, scope.gridPoint.historicalStart].sort().reverse()[0];
+  const recentWindowStart = addDays(config.bridgeToday, -(RECENT_OPEN_METEO_DAYS - 1));
+  const toExclusive = [addDays(config.to, 1), recentWindowStart].sort()[0];
+  assert(from < toExclusive, 'La ventana solicitada no contiene dias historicos que el bridge ERA5 pueda usar.');
+  const to = addDays(toExclusive, -1);
+  return { from, to, toExclusive, recentWindowStart };
 }
 
 async function resolveScope(db, config, ObjectId, options = {}) {
@@ -213,7 +393,8 @@ async function resolveScope(db, config, ObjectId, options = {}) {
         fechaSiembra: 1,
         activa: 1,
         fechaCosecha: 1,
-        lote: { _id: 1, idSiembra: 1, idEstablecimiento: 1 },
+        coordenadas: 1,
+        lote: { _id: 1, idSiembra: 1, idEstablecimiento: 1, ubicacion: 1 },
         siembrasActivas: 1,
       },
     },
@@ -228,7 +409,9 @@ async function resolveScope(db, config, ObjectId, options = {}) {
   if (row.idEstablecimiento && row.lote.idEstablecimiento) {
     assert(idValue(row.idEstablecimiento) === idValue(row.lote.idEstablecimiento), 'La siembra y el lote apuntan a establecimientos diferentes.');
   }
-  const sowingDate = new Date(row.fechaSiembra).toISOString().slice(0, 10);
+  const parsedSowingDate = new Date(row.fechaSiembra);
+  assert(Number.isFinite(parsedSowingDate.getTime()), 'La siembra no tiene una fechaSiembra valida.');
+  const sowingDate = parsedSowingDate.toISOString().slice(0, 10);
   assert(config.from === sowingDate, `from debe coincidir exactamente con fechaSiembra (${sowingDate}) para no dejar datos fuera del rollback.`);
   const binding = await db.collection('weather_location_bindings').findOne(
     { locationType: 'lote', locationId: lotObjectId, active: true },
@@ -245,19 +428,59 @@ async function resolveScope(db, config, ObjectId, options = {}) {
     { session },
   );
   assert(gridPoint, 'El punto de grilla del binding no existe o no esta habilitado.');
+  const rawLotCoordinates = row.lote?.ubicacion?.centro || row.coordenadas;
+  const lotCoordinates = { lat: Number(rawLotCoordinates?.lat), lng: Number(rawLotCoordinates?.lng) };
+  const scopeMetadata = {
+    gridTimezone: String(gridPoint.timezone || ''),
+    lotCoordinates,
+    binding: {
+      locationType: binding.locationType,
+      locationId: idValue(binding.locationId),
+      gridPointKey: String(binding.gridPointKey || ''),
+      latitude: Number(binding.latitude),
+      longitude: Number(binding.longitude),
+      distanceKm: Number(binding.distanceKm),
+      active: binding.active,
+    },
+    gridPoint: {
+      key: String(gridPoint.key || ''),
+      latitude: Number(gridPoint.latitude),
+      longitude: Number(gridPoint.longitude),
+      countryCode: String(gridPoint.countryCode || ''),
+      timezone: String(gridPoint.timezone || ''),
+      enabled: gridPoint.enabled,
+      provider: String(gridPoint.provider || ''),
+      dataset: String(gridPoint.dataset || ''),
+      historicalStart: String(gridPoint.historicalStart || ''),
+    },
+  };
+  assertBridgeScopeMetadata({ ...scopeMetadata }, config);
+  assert(config.bridgeToday === dateInTimezone(options.now || new Date(), scopeMetadata.gridTimezone),
+    'bridge-today no coincide con la fecha local actual del punto de grilla.');
   const otherLots = await db.collection('lotes').countDocuments({
     _id: { $ne: lotObjectId },
     idEstablecimiento: new ObjectId(establishmentId),
   }, { session });
   assert(otherLots === 0, 'Piloto abortado: el establecimiento contiene otros lotes; las observaciones son compartidas y no pueden restaurarse aisladamente.');
-  const observations = await db.collection('observaciones_meteorologicas').find({
-    idEstablecimiento: new ObjectId(establishmentId),
-    fechaLocal: { $gte: config.from, $lte: config.to },
-  }, { session }).toArray();
+  const observationScope = {
+    establishmentObjectId: new ObjectId(establishmentId),
+    ...scopeMetadata,
+  };
+  const observations = await db.collection('observaciones_meteorologicas').find(
+    observationIdentityQuery(observationScope, config),
+    { session },
+  ).toArray();
   for (const observation of observations) {
+    assert(observation.contextosLote === undefined || observation.contextosLote === null ||
+      (typeof observation.contextosLote === 'object' && !Array.isArray(observation.contextosLote)),
+    'Piloto abortado: contextosLote debe ser un objeto.');
     const contextKeys = observation.contextosLote && typeof observation.contextosLote === 'object' && !Array.isArray(observation.contextosLote)
       ? Object.keys(observation.contextosLote) : [];
     assert(contextKeys.every((value) => OBJECT_ID_PATTERN.test(value)), 'Piloto abortado: una observacion contiene claves de contexto no canonicas.');
+    for (const [key, context] of Object.entries(observation.contextosLote || {})) {
+      assert(context && typeof context === 'object' && !Array.isArray(context), `Piloto abortado: contextosLote.${key} no es un objeto.`);
+      assert(idValue(context.idLote) === key.toLowerCase(), `Piloto abortado: contextosLote.${key}.idLote no coincide con su clave.`);
+    }
     const foreignIds = contextLotIds(observation.contextosLote).filter((value) => value !== config.lotId);
     assert(foreignIds.length === 0, `Piloto abortado: una observacion contiene contextos de otros lotes (${foreignIds.join(', ')}).`);
     if (observation.idLote) assert(idValue(observation.idLote) === config.lotId, 'Piloto abortado: una observacion compartida pertenece a otro lote.');
@@ -269,7 +492,7 @@ async function resolveScope(db, config, ObjectId, options = {}) {
     seedObjectId: row.idSemilla,
     cronoObjectId: row.idCrono,
     gridPointKey: String(binding.gridPointKey),
-    gridTimezone: String(gridPoint.timezone || ''),
+    ...scopeMetadata,
     sowingDate,
   };
 }
@@ -310,35 +533,45 @@ async function assertRequiredIndexes(db) {
 
 async function assertEra5Coverage(db, scope, config, options = {}) {
   const session = options.session;
+  assertBridgeScopeMetadata(scope, config);
+  const window = era5BridgeWindow(scope, config);
   const daily = await db.collection('weather_daily').find({
     gridPointKey: scope.gridPointKey,
     calculationVersion: ERA5_CALCULATION_VERSION,
-    date: { $gte: config.from, $lte: config.to },
+    date: { $gte: window.from, $lt: window.toExclusive },
   }, { session }).toArray();
-  const expectedDates = dateRange(config.from, config.to);
+  const expectedDates = dateRange(window.from, window.to);
   const actualDates = daily.map((item) => item.date).sort();
   assert(daily.length === expectedDates.length && JSON.stringify(actualDates) === JSON.stringify(expectedDates),
     `Cobertura ERA5 v2 incompleta: se requieren ${expectedDates.length} dias continuos y hay ${daily.length}.`);
+  const ranges = {
+    temperatureMinC: [-55, 60],
+    temperatureMeanC: [-55, 60],
+    temperatureMaxC: [-55, 65],
+  };
   for (const item of daily) {
     const expected = Number(item.hoursExpected);
     const available = Number(item.hoursAvailable);
+    const plausibleTemperatures = Object.entries(ranges).every(([key, [min, max]]) => {
+      const value = Number(item.values?.[key]);
+      return Number.isFinite(value) && value >= min && value <= max;
+    });
     assert([23, 24, 25].includes(expected) && available === expected && Number(item.availableHoursByMetric?.temperature) === expected &&
       item.gridPointKey === scope.gridPointKey && item.calculationVersion === ERA5_CALCULATION_VERSION &&
-      item.timezone === scope.gridTimezone && item.date >= config.from && item.date <= config.to &&
+      item.timezone === scope.gridTimezone && isIanaTimezone(item.timezone) && validateDate(item.date, 'weather_daily.date') &&
+      item.date >= window.from && item.date < window.toExclusive && item.date >= config.historicalStart && item.date >= scope.gridPoint.historicalStart &&
       Number.isFinite(new Date(item.calculatedAt).getTime()) &&
-      ['temperatureMinC', 'temperatureMeanC', 'temperatureMaxC'].every((key) => Number.isFinite(Number(item.values?.[key]))),
+      plausibleTemperatures,
       `Dia ERA5 v2 incompleto o invalido: ${item.date}.`);
   }
 }
 
 function collectionQueries(scope, config) {
+  const window = era5BridgeWindow(scope, config);
   return {
     siembras: { _id: scope.sowingObjectId },
     lotes: { _id: scope.lotObjectId },
-    observaciones_meteorologicas: {
-      idEstablecimiento: scope.establishmentObjectId,
-      fechaLocal: { $gte: config.from, $lte: config.to },
-    },
+    observaciones_meteorologicas: observationIdentityQuery(scope, config),
     indicadores_agrometeorologicos: { idSiembra: scope.sowingObjectId },
     indicadores_agrometeorologicos_generados: { idSiembra: scope.sowingObjectId },
     indicadores_agrometeorologicos_generaciones: { idSiembra: scope.sowingObjectId },
@@ -350,7 +583,7 @@ function collectionQueries(scope, config) {
     cronos: { _id: scope.cronoObjectId },
     weather_location_bindings: { locationType: 'lote', locationId: scope.lotObjectId },
     weather_grid_points: { key: scope.gridPointKey },
-    weather_daily: { gridPointKey: scope.gridPointKey, calculationVersion: ERA5_CALCULATION_VERSION, date: { $gte: config.from, $lte: config.to } },
+    weather_daily: { gridPointKey: scope.gridPointKey, calculationVersion: ERA5_CALCULATION_VERSION, date: { $gte: window.from, $lt: window.toExclusive } },
   };
 }
 
@@ -363,7 +596,13 @@ function sealedQueries(manifest, ObjectId, postState) {
   const scoped = {
     siembras: { _id: oid(manifest.sowingId) },
     lotes: { _id: oid(manifest.lotId) },
-    observaciones_meteorologicas: { idEstablecimiento: oid(manifest.establishmentId), fechaLocal: { $gte: manifest.weatherWindow.from, $lte: manifest.weatherWindow.to } },
+    observaciones_meteorologicas: observationIdentityQuery({
+      establishmentObjectId: oid(manifest.establishmentId),
+      gridTimezone: manifest.gridTimezone,
+    }, {
+      from: manifest.weatherWindow.from,
+      to: manifest.weatherWindow.to,
+    }),
     indicadores_agrometeorologicos: { idSiembra: oid(manifest.sowingId) },
     indicadores_agrometeorologicos_generados: { idSiembra: oid(manifest.sowingId) },
     indicadores_agrometeorologicos_generaciones: { idSiembra: oid(manifest.sowingId) },
@@ -389,13 +628,13 @@ async function readState(db, queries, EJSON, options = {}) {
   return result;
 }
 
-async function readConsistentScope({ client, db, config, ObjectId, EJSON }) {
+async function readConsistentScope({ client, db, config, ObjectId, EJSON, now }) {
   await assertRequiredIndexes(db);
   const session = client.startSession();
   let result;
   try {
     await session.withTransaction(async () => {
-      const scope = await resolveScope(db, config, ObjectId, { session });
+      const scope = await resolveScope(db, config, ObjectId, { session, now });
       await assertEra5Coverage(db, scope, config, { session });
       const queries = collectionQueries(scope, config);
       const state = await readState(db, queries, EJSON, { session });
@@ -451,6 +690,8 @@ function assertNoSecrets(state) {
 }
 
 function buildPlan(config, scope, state, codeSha, EJSON) {
+  assert(/^[a-f0-9]{40}$/.test(String(codeSha || '')), 'codeSha debe ser un commit Git SHA-1 completo y canonico.');
+  assertBridgeScopeMetadata(scope, config);
   for (const name of ['siembras', 'lotes', 'establecimientos', 'semillas', 'cronos', 'weather_location_bindings', 'weather_grid_points']) {
     assert(state[name].count === 1, `El cierre exige exactamente un documento en ${name}; se encontraron ${state[name].count}.`);
   }
@@ -467,10 +708,47 @@ function buildPlan(config, scope, state, codeSha, EJSON) {
     weatherWindow: { from: config.from, to: config.to },
     gridPointKey: scope.gridPointKey,
     gridTimezone: scope.gridTimezone,
+    bridgeConfig: {
+      historicalStart: config.historicalStart,
+      bridgeToday: config.bridgeToday,
+      recentOpenMeteoDays: RECENT_OPEN_METEO_DAYS,
+      calculationVersion: ERA5_CALCULATION_VERSION,
+      sourceVersion: ERA5_SOURCE_VERSION,
+    },
+    bridgeScope: {
+      lotCoordinates: scope.lotCoordinates,
+      binding: scope.binding,
+      gridPoint: scope.gridPoint,
+    },
     policy: { oneLot: true, exclusiveEstablishment: true, agrometOnly: true, sideEffectsFrozen: true, exactlyOneActiveSowing: true, onConflict: 'abort', restore: 'transactional-compare-and-swap' },
     collections,
   };
   return { ...core, planSha256: sha256(canonicalEjson(core, EJSON)) };
+}
+
+function assertCodeIdentity(manifest, currentCodeSha) {
+  assert(/^[a-f0-9]{40}$/.test(String(currentCodeSha || '')), 'El codeSha actual no es canonico.');
+  assert(manifest?.codeSha === currentCodeSha, 'El codeSha actual no coincide con el codigo sellado en el bundle.');
+}
+
+function manifestBridgeScope(manifest) {
+  return {
+    gridPointKey: manifest.gridPointKey,
+    gridTimezone: manifest.gridTimezone,
+    lotCoordinates: manifest.bridgeScope?.lotCoordinates,
+    binding: manifest.bridgeScope?.binding,
+    gridPoint: manifest.bridgeScope?.gridPoint,
+  };
+}
+
+function manifestBridgeConfig(manifest) {
+  return {
+    from: manifest.weatherWindow?.from,
+    to: manifest.weatherWindow?.to,
+    historicalStart: manifest.bridgeConfig?.historicalStart,
+    bridgeToday: manifest.bridgeConfig?.bridgeToday,
+    lotId: manifest.lotId,
+  };
 }
 
 function writeJsonExclusive(filePath, value) {
@@ -515,6 +793,21 @@ function loadBundle(bundleDir, EJSON) {
   const manifestCore = { ...manifest };
   delete manifestCore.manifestSha256;
   assert(sha256(canonicalEjson(manifestCore, EJSON)) === expectedManifestHash, 'El hash del manifiesto no coincide.');
+  assert(/^[a-f0-9]{40}$/.test(String(manifest.codeSha || '')), 'El bundle no contiene un codeSha canonico.');
+  operationConfig({
+    operationId: manifest.operationId,
+    lotId: manifest.lotId,
+    sowingId: manifest.sowingId,
+    from: manifest.weatherWindow?.from,
+    to: manifest.weatherWindow?.to,
+    historicalStart: manifest.bridgeConfig?.historicalStart,
+    bridgeToday: manifest.bridgeConfig?.bridgeToday,
+  });
+  assert(manifest.bridgeConfig?.calculationVersion === ERA5_CALCULATION_VERSION &&
+    manifest.bridgeConfig?.sourceVersion === ERA5_SOURCE_VERSION &&
+    manifest.bridgeConfig?.recentOpenMeteoDays === RECENT_OPEN_METEO_DAYS,
+    'El bundle no corresponde a las versiones exactas del bridge ERA5 admitidas.');
+  assertBridgeScopeMetadata(manifestBridgeScope(manifest), manifestBridgeConfig(manifest));
   const documents = {};
   for (const name of ALL_COLLECTIONS) {
     const fileName = `${name}.ndjson`;
@@ -526,6 +819,8 @@ function loadBundle(bundleDir, EJSON) {
     const summary = summarizeDocuments(documents[name], EJSON);
     assert(summary.count === manifest.collections[name].count && summary.sha256 === manifest.collections[name].sha256, `Contenido inconsistente en ${name}.`);
   }
+  const loadedState = Object.fromEntries(ALL_COLLECTIONS.map((name) => [name, { documents: documents[name] }]));
+  assertNoSecrets(loadedState);
   return { manifest, documents };
 }
 
@@ -545,7 +840,17 @@ function assertSummaryEqual(actual, expected, label) {
   }
 }
 
+function assertReferencesEqual(actual, expected, label) {
+  for (const name of REFERENCE_COLLECTIONS) {
+    const left = actual[name];
+    const right = expected[name];
+    assert(left && right && left.count === right.count && left.sha256 === right.sha256 && JSON.stringify(left.ids) === JSON.stringify(right.ids),
+      `${label}: referencia ${name} cambio.`);
+  }
+}
+
 function recordPostState(bundleDir, manifest, summary, EJSON, now = new Date()) {
+  assertReferencesEqual(summary, manifest.collections, 'estado post-piloto');
   const core = {
     schemaVersion: SCHEMA_VERSION,
     operationId: manifest.operationId,
@@ -570,7 +875,8 @@ function loadPostState(bundleDir, manifest, EJSON) {
   return record;
 }
 
-async function restoreBundle({ client, db, bundle, ObjectId, EJSON, confirmation, bundleDir }) {
+async function restoreBundle({ client, db, bundle, ObjectId, EJSON, confirmation, bundleDir, currentCodeSha }) {
+  assertCodeIdentity(bundle.manifest, currentCodeSha);
   const postState = loadPostState(bundleDir, bundle.manifest, EJSON);
   const queries = sealedQueries(bundle.manifest, ObjectId, postState);
   await assertRequiredIndexes(db);
@@ -579,13 +885,6 @@ async function restoreBundle({ client, db, bundle, ObjectId, EJSON, confirmation
   let outcome = 'restored';
   try {
     await session.withTransaction(async () => {
-      await assertEra5Coverage(db, {
-        gridPointKey: bundle.manifest.gridPointKey,
-        gridTimezone: bundle.manifest.gridTimezone,
-      }, {
-        from: bundle.manifest.weatherWindow.from,
-        to: bundle.manifest.weatherWindow.to,
-      }, { session });
       const current = await readState(db, queries, EJSON, { session });
       const currentSummary = stateSummary(current);
       try {
@@ -595,17 +894,16 @@ async function restoreBundle({ client, db, bundle, ObjectId, EJSON, confirmation
       } catch {
         assertSummaryEqual(currentSummary, postState.collections, 'estado post-piloto');
       }
-      for (const name of REFERENCE_COLLECTIONS) {
-        const actual = currentSummary[name];
-        const expected = bundle.manifest.collections[name];
-        assert(actual.count === expected.count && actual.sha256 === expected.sha256, `Referencia ${name} cambio; restore abortado.`);
-      }
+      assertReferencesEqual(currentSummary, bundle.manifest.collections, 'restore abortado');
+      await assertEra5Coverage(db, manifestBridgeScope(bundle.manifest), manifestBridgeConfig(bundle.manifest), { session });
       for (const name of MUTABLE_COLLECTIONS) {
         await db.collection(name).deleteMany(queries[name], { session });
         if (bundle.documents[name].length) {
           await db.collection(name).insertMany(bundle.documents[name], { ordered: true, session });
         }
       }
+      const restored = await readState(db, queries, EJSON, { session });
+      assertSummaryEqual(stateSummary(restored), bundle.manifest.collections, 'verificacion transaccional del restore');
     }, {
       readConcern: { level: 'snapshot' },
       writeConcern: { w: 'majority' },
@@ -614,8 +912,6 @@ async function restoreBundle({ client, db, bundle, ObjectId, EJSON, confirmation
   } finally {
     await session.endSession();
   }
-  const finalState = await readState(db, queries, EJSON);
-  assertSummaryEqual(stateSummary(finalState), bundle.manifest.collections, 'verificacion posterior al restore');
   return outcome;
 }
 
@@ -625,6 +921,9 @@ module.exports = {
   ERA5_CALCULATION_VERSION,
   MUTABLE_COLLECTIONS,
   REFERENCE_COLLECTIONS,
+  SAFETY_ATTESTATION,
+  assertBridgeScopeMetadata,
+  assertCodeIdentity,
   assertNoSecrets,
   assertEra5Coverage,
   assertRequiredIndexes,
@@ -638,9 +937,13 @@ module.exports = {
   confirmationForSnapshot,
   contextLotIds,
   hashStateSummary,
+  isIanaTimezone,
   loadBundle,
   loadAttestationFile,
   loadPostState,
+  manifestBridgeConfig,
+  manifestBridgeScope,
+  observationIdentityQuery,
   operationConfig,
   readConsistentScope,
   readConsistentState,

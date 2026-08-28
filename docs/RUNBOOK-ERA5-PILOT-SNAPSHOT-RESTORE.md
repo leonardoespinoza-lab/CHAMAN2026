@@ -9,15 +9,18 @@ verde.
 
 La herramienta es una serie de seguridad cherry-pickeable. **No contiene el
 bridge ERA5**. Sobre la rama integrada foundation + bridge aplicar, en orden,
-`7bebce1`, `20fb94d` y el commit posterior que contiene este runbook; resolver
+`7bebce1`, `20fb94d`, `53d3e45` y el commit actual de endurecimiento; resolver
 conflictos sin omitir commits y ejecutar toda la validación nuevamente.
 
 El cierre mutable incluye:
 
 - `siembras` y `lotes`, incluidos sus punteros y ultimas predicciones;
-- `observaciones_meteorologicas` del establecimiento durante todo el intervalo
-  solicitado (no solo las filas que ya mencionan al lote, porque el upsert se
-  identifica por establecimiento, timestamp y granularidad);
+- `observaciones_meteorologicas` seleccionadas por la misma identidad del upsert:
+  `idEstablecimiento + timestamp + granularidad`. Las horas se cierran por el
+  intervalo UTC de la zona IANA del punto; los diarios incluyen tanto mediodía
+  local (Open-Meteo/ERA5) como `00:00Z` (agregado FieldClimate). `fechaLocal` no
+  participa del selector ni del restore, por lo que una etiqueta incoherente no
+  puede ocultar una fila que el piloto sí actualizaría;
 - indicadores legacy, generaciones preparadas, generacion activa e historicas;
 - predicciones sanitarias, predicciones de riego y alertas vinculadas por
   `idSiembra` o `idLote`.
@@ -41,9 +44,16 @@ guardan como referencias verificables. Restore nunca los modifica.
 - Resuelve siembra, lote, establecimiento y siembras activas mediante `$lookup`
   en Mongo; exige un solo resultado y `lotes.idSiembra` coherente.
 - Exige un unico binding activo del lote y un punto de grilla habilitado.
+- Binding y grilla deben coincidir exactamente con el contrato del bridge:
+  proveedor/dataset, país, coordenadas, distancia declarada, `historicalStart`
+  y timezone IANA válidos.
 - Exige índices únicos críticos y cobertura diaria continua
   `chaman-meteo-agro-v2`, con 23-25 horas válidas por día, desde siembra hasta
-  el extremo solicitado.
+  el extremo solicitado. Las temperaturas deben estar dentro de los mismos
+  rangos plausibles aceptados por el motor.
+- `bridge-today` sella la fecha local que usará el piloto. La cobertura ERA5 se
+  calcula con el mismo corte del bridge: hoy y los cuatro días previos quedan
+  fuera de ERA5 y continúan bajo Open-Meteo.
 - Escanea secretos y aborta antes de escribir el bundle.
 - Archivos NDJSON EJSON, conteos, IDs y SHA-256 por coleccion; manifiesto con
   hash propio.
@@ -57,7 +67,12 @@ guardan como referencias verificables. Restore nunca los modifica.
   escrituras sueltas.
 - Restore usa compare-and-swap: el estado debe coincidir exactamente con la
   foto post-piloto. Si alguien cambio un documento despues, no escribe nada.
+- La restauración vuelve a leer y verifica el estado restaurado **dentro de la
+  misma transacción**, antes del commit mayoritario. No interpreta una escritura
+  posterior al commit como si la restauración hubiese fallado.
 - Una segunda restauracion contra el estado ya restaurado es idempotente.
+- `verify` y `restore` vuelven a exigir worktree limpio y el mismo `codeSha`
+  sellado en el bundle; no se admite ejecutar otro commit.
 
 ## Preparacion offline
 
@@ -80,11 +95,11 @@ fingerprint no se deriva ni se aprueba desde la URI activa durante la ejecución
 Para replica sets se sellan los hosts ordenados; para SRV, el hostname SRV.
 
 ```json
-{"schemaVersion":1,"environment":"testing","database":"chaman_testing","endpointFingerprint":"<SHA256 APROBADO>","approvedBy":"<RESPONSABLE>","evidence":"<TICKET/ACTA>","approvedAt":"<ISO-8601>"}
+{"schemaVersion":2,"purpose":"era5-agromet-pilot","operationId":"era5-pilot-20260828-lote-01","environment":"testing","database":"chaman_testing","endpointFingerprint":"<SHA256 APROBADO>","approvedBy":"<RESPONSABLE>","evidence":"<TICKET/ACTA>","approvedAt":"2026-08-28T12:00:00.000Z","expiresAt":"2026-08-29T12:00:00.000Z"}
 ```
 
 ```json
-{"statement":"AGROMET_ONLY:CRONS_FROZEN:NOTIFICATIONS_DISABLED:OUTBOX_DISABLED:PUSH_DISABLED","approvedBy":"<RESPONSABLE>","evidence":"<TICKET/LOGS>","approvedAt":"<ISO-8601>"}
+{"schemaVersion":2,"environment":"testing","database":"chaman_testing","operationId":"era5-pilot-20260828-lote-01","endpointFingerprint":"<MISMO SHA256 APROBADO>","codeSha":"<HEAD LIMPIO DE 40 CARACTERES>","statement":"AGROMET_ONLY:CRONS_FROZEN:NOTIFICATIONS_DISABLED:OUTBOX_DISABLED:PUSH_DISABLED","approvedBy":"<RESPONSABLE>","evidence":"<TICKET/LOGS>","approvedAt":"2026-08-28T12:00:00.000Z","expiresAt":"2026-08-28T20:00:00.000Z"}
 ```
 
 ```powershell
@@ -94,6 +109,10 @@ $env:CHAMAN_ERA5_PILOT_SAFETY_ATTESTATION_FILE = 'D:\attestations\era5-pilot-fre
 
 Si cambia el endpoint, no actualizar el acta automáticamente. No usar una URI
 de Producción aunque apunte a una base llamada `chaman_testing`.
+Las fechas de las actas son ISO-8601 UTC canónico con milisegundos. La del
+cluster puede cubrir como máximo 30 días; la operativa, 24 horas. Ambas deben
+estar vigentes y vinculadas al mismo `operationId`; la operativa también queda
+vinculada al endpoint y al commit exactos.
 
 ## 1. Plan de solo lectura
 
@@ -103,7 +122,9 @@ npm run era5:pilot:snapshot -- plan `
   --lot-id <OBJECT_ID_LOTE> `
   --sowing-id <OBJECT_ID_SIEMBRA> `
   --from <FECHA_SIEMBRA_YYYY-MM-DD> `
-  --to <ULTIMO_DIA_QUE_PUEDE_AFECTAR_EL_PILOTO>
+  --to <ULTIMO_DIA_QUE_PUEDE_AFECTAR_EL_PILOTO> `
+  --historical-start <CHAMAN_METEO_HISTORICAL_START_EXACTO> `
+  --bridge-today <FECHA_LOCAL_DEL_PUNTO_YYYY-MM-DD>
 ```
 
 Revisar que haya exactamente una siembra, un lote y un binding; revisar los
@@ -122,6 +143,8 @@ npm run era5:pilot:snapshot -- snapshot `
   --sowing-id <OBJECT_ID_SIEMBRA> `
   --from <FECHA_SIEMBRA_YYYY-MM-DD> `
   --to <ULTIMO_DIA_QUE_PUEDE_AFECTAR_EL_PILOTO> `
+  --historical-start <CHAMAN_METEO_HISTORICAL_START_EXACTO> `
+  --bridge-today <FECHA_LOCAL_DEL_PUNTO_YYYY-MM-DD> `
   --bundle D:\backups\era5-pilot-20260828-lote-01
 Remove-Item Env:CHAMAN_ERA5_PILOT_CONFIRM
 ```
@@ -175,6 +198,12 @@ borrado, documento creado, conflicto,
 error de transaccion o diferencia posterior es un bloqueo: no reintentar
 alterando el manifiesto ni editar NDJSON manualmente.
 
+La confirmación fuerte ocurre dentro de la transacción. Después de un
+`restored`, mantener los escritores congelados y ejecutar `verify` sin
+`--record-post-state`. Si ese `verify` detecta drift, significa que hubo una
+escritura **posterior** al commit ya confirmado: no volver a ejecutar restore a
+ciegas; conservar la evidencia e identificar primero al escritor concurrente.
+
 ## Limitaciones deliberadas
 
 - No es un importador Produccion → Testing ni reemplaza el contrato selectivo
@@ -186,6 +215,8 @@ alterando el manifiesto ni editar NDJSON manualmente.
   elegir como `to` el último día ya materializado, nunca completar huecos a mano.
 - Restore usa IDs y pertenencias sellados en bundle/post-state; no depende de
   que la siembra o el lote sigan resolviendo después del piloto.
+- Los bundles schema v1/v2 quedan deliberadamente incompatibles con este flujo
+  schema v3; deben recrearse con el commit exacto que se vaya a ejecutar.
 - El worktree debe estar limpio: `codeSha` debe ser el HEAD exacto ejecutado.
 - No restaura colecciones de usuarios, tokens, notificaciones, colas, logs,
   dispositivos, ChirpStack, LoRaWAN ni credenciales externas.
