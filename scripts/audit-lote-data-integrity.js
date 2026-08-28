@@ -53,16 +53,31 @@ function label(doc) {
   return [doc?.nombre, doc?._id ? id(doc._id).slice(-6) : undefined].filter(Boolean).join(' ');
 }
 
-function pushIssue(issues, type, message, details) {
-  if (issues.length < ISSUE_SAMPLE_LIMIT) {
-    issues.push({ type, message, details });
+function createFindingCollector(sampleLimit = ISSUE_SAMPLE_LIMIT) {
+  return { total: 0, samples: [], sampleLimit };
+}
+
+function pushIssue(findings, type, message, details) {
+  findings.total += 1;
+  if (findings.samples.length < findings.sampleLimit) {
+    findings.samples.push({ type, message, details });
   }
 }
 
-function compareTenant(issues, sourceName, source, lote) {
+function classifySiembraReferences(siembra) {
+  return {
+    missingSemilla: !siembra?.idSemilla ? 'blocking' : 'ok',
+    // idCrono es metadata legacy opcional. Los motores sanitarios canonicos
+    // leen la etapa desde la serie agrometeorologica y Cebada / Arveja
+    // conservan explicitamente salidas de baja confianza cuando falta etapa.
+    missingCrono: !siembra?.idCrono ? 'warning' : 'ok',
+  };
+}
+
+function compareTenant(findings, sourceName, source, lote) {
   for (const field of TENANT_FIELDS) {
     if (!eq(source?.[field], lote?.[field])) {
-      pushIssue(issues, 'tenant_mismatch', `${sourceName}.${field} no coincide con lote.${field}`, {
+      pushIssue(findings, 'tenant_mismatch', `${sourceName}.${field} no coincide con lote.${field}`, {
         sourceId: id(source?._id),
         lote: label(lote),
         sourceValue: id(source?.[field]),
@@ -107,7 +122,8 @@ async function main() {
     const lotes = await lotesCollection.find(filtroLotes).limit(LIMIT).toArray();
     const loteById = new Map(lotes.map((lote) => [id(lote._id), lote]));
     const loteIds = lotes.map((lote) => lote._id);
-    const issueSamples = [];
+    const issues = createFindingCollector();
+    const warnings = createFindingCollector();
     const counters = {
       lotes: lotes.length,
       siembras: 0,
@@ -117,6 +133,7 @@ async function main() {
       predicciones: 0,
       riego: 0,
       issues: 0,
+      warnings: 0,
     };
 
     const siembras = await siembrasCollection
@@ -141,21 +158,25 @@ async function main() {
     for (const siembra of siembras) {
       const lote = loteById.get(id(siembra.idLote));
       if (!lote) {
-        pushIssue(issueSamples, 'missing_lote', 'Siembra apunta a lote inexistente en el alcance auditado', {
+        pushIssue(issues, 'missing_lote', 'Siembra apunta a lote inexistente en el alcance auditado', {
           siembraId: id(siembra._id),
           idLote: id(siembra.idLote),
         });
         continue;
       }
-      compareTenant(issueSamples, 'siembra', siembra, lote);
-      if (!siembra.idSemilla) {
-        pushIssue(issueSamples, 'missing_semilla', 'Siembra sin idSemilla', { siembraId: id(siembra._id), lote: label(lote) });
+      compareTenant(issues, 'siembra', siembra, lote);
+      const references = classifySiembraReferences(siembra);
+      if (references.missingSemilla === 'blocking') {
+        pushIssue(issues, 'missing_semilla', 'Siembra sin idSemilla', { siembraId: id(siembra._id), lote: label(lote) });
       }
-      if (!siembra.idCrono) {
-        pushIssue(issueSamples, 'missing_crono', 'Siembra sin idCrono', { siembraId: id(siembra._id), lote: label(lote) });
+      if (references.missingCrono === 'warning') {
+        pushIssue(warnings, 'missing_crono', 'Siembra sin idCrono; metadata legacy opcional', {
+          siembraId: id(siembra._id),
+          lote: label(lote),
+        });
       }
       if (lote.idSiembra && id(lote.idSiembra) !== id(siembra._id) && siembra.activa !== false && !siembra.fechaCosecha) {
-        pushIssue(issueSamples, 'active_siembra_mismatch', 'Lote.idSiembra no coincide con siembra activa', {
+        pushIssue(issues, 'active_siembra_mismatch', 'Lote.idSiembra no coincide con siembra activa', {
           lote: label(lote),
           loteIdSiembra: id(lote.idSiembra),
           siembraId: id(siembra._id),
@@ -184,7 +205,7 @@ async function main() {
       counters.ndvi = reportes.length;
       for (const reporte of reportes) {
         const lote = loteById.get(id(reporte.idLote));
-        if (lote) compareTenant(issueSamples, 'reporteNdvi', reporte, lote);
+        if (lote) compareTenant(issues, 'reporteNdvi', reporte, lote);
       }
     }
 
@@ -210,13 +231,13 @@ async function main() {
         const siembra = siembraById.get(id(alerta.idSiembra));
         const lote = siembra ? loteById.get(id(siembra.idLote)) : undefined;
         if (!siembra || !lote) {
-          pushIssue(issueSamples, 'alerta_orfana', 'Alerta sin siembra/lote resoluble', {
+          pushIssue(issues, 'alerta_orfana', 'Alerta sin siembra/lote resoluble', {
             alertaId: id(alerta._id),
             idSiembra: id(alerta.idSiembra),
           });
           continue;
         }
-        compareTenant(issueSamples, 'alerta', alerta, lote);
+        compareTenant(issues, 'alerta', alerta, lote);
       }
     }
 
@@ -237,7 +258,7 @@ async function main() {
       counters.dispositivos = dispositivos.length;
       for (const dispositivo of dispositivos) {
         const lote = loteById.get(id(dispositivo.idLote));
-        if (lote) compareTenant(issueSamples, 'dispositivo', dispositivo, lote);
+        if (lote) compareTenant(issues, 'dispositivo', dispositivo, lote);
       }
     }
 
@@ -251,7 +272,7 @@ async function main() {
       for (const prediccion of predicciones) {
         const siembra = siembraById.get(id(prediccion.idSiembra));
         const lote = siembra ? loteById.get(id(siembra.idLote)) : undefined;
-        if (lote) compareTenant(issueSamples, 'prediccion', prediccion, lote);
+        if (lote) compareTenant(issues, 'prediccion', prediccion, lote);
       }
     }
 
@@ -264,21 +285,27 @@ async function main() {
       counters.riego = riegos.length;
       for (const riego of riegos) {
         const lote = loteById.get(id(riego.idLote));
-        if (lote) compareTenant(issueSamples, 'prediccionRiego', riego, lote);
+        if (lote) compareTenant(issues, 'prediccionRiego', riego, lote);
       }
     }
 
-    counters.issues = issueSamples.length;
+    counters.issues = issues.total;
+    counters.warnings = warnings.total;
     const result = {
-      ok: issueSamples.length === 0,
+      ok: issues.total === 0,
       db: DB_NAME,
       filtroLotes: ONLY_LOTES || 'todos',
       limit: LIMIT,
       counters,
-      issueSamples,
+      issueSamples: issues.samples,
+      warningSamples: warnings.samples,
       nota:
-        issueSamples.length >= ISSUE_SAMPLE_LIMIT
+        issues.total > issues.samples.length
           ? `Se muestran solo ${ISSUE_SAMPLE_LIMIT} muestras; aumentar CHAMAN_AUDIT_LIMIT o filtrar con CHAMAN_AUDIT_LOTES.`
+          : undefined,
+      notaAdvertencias:
+        warnings.total > warnings.samples.length
+          ? `Se muestran solo ${ISSUE_SAMPLE_LIMIT} advertencias.`
           : undefined,
     };
 
@@ -289,7 +316,11 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error?.message || error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error?.message || error);
+    process.exit(1);
+  });
+}
+
+module.exports = { classifySiembraReferences, createFindingCollector, pushIssue };

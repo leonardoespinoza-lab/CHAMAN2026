@@ -66,6 +66,11 @@ const {
   evaluateAuditInventoryStability,
   readProtectedUri,
 } = require('../mongo-recovery');
+const {
+  classifySiembraReferences,
+  createFindingCollector,
+  pushIssue,
+} = require('../audit-lote-data-integrity');
 
 const NOW = new Date('2026-08-28T18:00:00.000Z');
 const SOURCE_URI = 'mongodb://prod.example.invalid:27017/chaman';
@@ -75,6 +80,32 @@ const SOURCE_SERVICE = '11111111-1111-4111-8111-111111111111';
 const TARGET_SERVICE = '22222222-2222-4222-8222-222222222222';
 const LOCAL_URI = 'mongodb://127.0.0.1:27019/chaman_restore_drill_20260828_1800?replicaSet=chamanDrill';
 const TESTING_SOURCE_URI = 'mongodb://testing.example.invalid:27017/chaman_testing';
+
+test('idCrono ausente queda visible como warning y una semilla ausente sigue bloqueando', () => {
+  assert.deepEqual(classifySiembraReferences({ idSemilla: 'seed-1' }), {
+    missingSemilla: 'ok',
+    missingCrono: 'warning',
+  });
+  assert.deepEqual(classifySiembraReferences({ idCrono: 'crono-1' }), {
+    missingSemilla: 'blocking',
+    missingCrono: 'ok',
+  });
+  assert.deepEqual(classifySiembraReferences({ idSemilla: 'seed-1', idCrono: 'crono-1' }), {
+    missingSemilla: 'ok',
+    missingCrono: 'ok',
+  });
+});
+
+test('los contadores de auditoria conservan el total aunque las muestras se trunquen', () => {
+  const findings = createFindingCollector(2);
+  pushIssue(findings, 'first', 'Primero', {});
+  pushIssue(findings, 'second', 'Segundo', {});
+  pushIssue(findings, 'third', 'Tercero', {});
+
+  assert.equal(findings.total, 3);
+  assert.equal(findings.samples.length, 2);
+  assert.deepEqual(findings.samples.map(({ type }) => type), ['first', 'second']);
+});
 
 function identity(provider, instanceId, uri) {
   return {
