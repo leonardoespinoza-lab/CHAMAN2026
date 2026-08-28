@@ -111,6 +111,38 @@ describe('CardCalculosMeteorologicosComponent', () => {
     expect(component.fuenteLabel).toContain('Open-Meteo');
   });
 
+  it('identifica Chaman-Meteo sin rotularlo como Open-Meteo ni como fuente ausente', async () => {
+    const era5 = response({
+      dataSource: {
+        type: 'chaman_meteo',
+        sources: ['chaman_meteo'],
+        completenessPercentage: 100,
+      },
+      series: [
+        {
+          ...response().series[0],
+          source: 'chaman_meteo',
+          sourceByVariable: {
+            temperatureMeanC: 'derived_chaman_meteo',
+          },
+        },
+      ],
+    });
+    const service = {
+      agrometeorologia: jasmine.createSpy().and.resolveTo(era5),
+    };
+    const component = create(service);
+    component.siembra = { _id: 'siembra-era5' } as any;
+
+    await component.cargar();
+
+    expect(component.fuenteLabel).toBe('Chamán-Meteo (ERA5-Land)');
+    expect(component.fuenteLabel).not.toContain('Open-Meteo');
+    expect(component.fuenteLabel).not.toContain('Sin fuente');
+    expect(component.historialLabel).toContain('Chamán-Meteo');
+    expect(component.estadosSerie).toContain('Estimado');
+  });
+
   it('identifica sensores de campo y su cobertura sin ocultar el respaldo', async () => {
     const service = {
       agrometeorologia: jasmine.createSpy().and.resolveTo(
@@ -190,9 +222,7 @@ describe('CardCalculosMeteorologicosComponent', () => {
   it('tolera respuesta vacía y variables opcionales ausentes', async () => {
     const service = {
       agrometeorologia: jasmine.createSpy().and.resolveTo(response({ series: [], summary: {} })),
-      reprocesarAgrometeorologia: jasmine
-        .createSpy()
-        .and.resolveTo(response({ series: [], summary: {} })),
+      reprocesarAgrometeorologia: jasmine.createSpy().and.resolveTo(response({ series: [], summary: {} })),
     };
     const component = create(service);
     component.siembra = { _id: 'siembra-vacia' } as any;
@@ -202,19 +232,14 @@ describe('CardCalculosMeteorologicosComponent', () => {
     expect(component.hayDatos).toBeFalse();
     expect(component.mostrarSuelo).toBeFalse();
     expect(component.chartOptions).toBeUndefined();
-    expect(service.reprocesarAgrometeorologia).toHaveBeenCalledWith(
-      'siembra-vacia',
-      true
-    );
+    expect(service.reprocesarAgrometeorologia).toHaveBeenCalledWith('siembra-vacia', true);
   });
 
   it('autogenera la primera serie y vuelve a consultar el periodo seleccionado', async () => {
     const empty = response({ series: [], summary: {} });
     const generated = response();
     const service = {
-      agrometeorologia: jasmine
-        .createSpy()
-        .and.returnValues(Promise.resolve(empty), Promise.resolve(generated)),
+      agrometeorologia: jasmine.createSpy().and.returnValues(Promise.resolve(empty), Promise.resolve(generated)),
       reprocesarAgrometeorologia: jasmine.createSpy().and.resolveTo(generated),
     };
     const component = create(service);
@@ -222,10 +247,7 @@ describe('CardCalculosMeteorologicosComponent', () => {
 
     await component.cargar();
 
-    expect(service.reprocesarAgrometeorologia).toHaveBeenCalledWith(
-      'siembra-autogenerada',
-      true
-    );
+    expect(service.reprocesarAgrometeorologia).toHaveBeenCalledWith('siembra-autogenerada', true);
     expect(service.agrometeorologia).toHaveBeenCalledTimes(2);
     expect(component.hayDatos).toBeTrue();
     expect(component.error).toBeUndefined();
@@ -259,9 +281,9 @@ describe('CardCalculosMeteorologicosComponent', () => {
       resolveCurrent = resolve;
     });
     const service = {
-      agrometeorologia: jasmine.createSpy().and.callFake((id: string) =>
-        id === 'siembra-anterior' ? oldRequest : currentRequest
-      ),
+      agrometeorologia: jasmine
+        .createSpy()
+        .and.callFake((id: string) => (id === 'siembra-anterior' ? oldRequest : currentRequest)),
     };
     const component = create(service);
 

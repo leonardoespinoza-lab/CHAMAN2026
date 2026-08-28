@@ -255,7 +255,9 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
 
     const html = service.renderTablaEnfermedades(siembraCebada, [prediccion]);
     expect(html).toContain('86,4/100 - indice ambiental de infeccion');
-    expect(html).toContain('3 dia(s) favorable(s) dentro de un ciclo de 14 dias');
+    expect(html).toContain(
+      '3 dia(s) favorable(s) dentro de un ciclo de 14 dias',
+    );
     expect(html).toContain('intensidad maxima 42,7/100');
     expect(html).toContain('cobertura horaria 93%');
     expect(html).toContain('requiere recorrida para confirmar sintomas');
@@ -1074,5 +1076,54 @@ describe('LotesService - clima canonico del informe agronomico', () => {
     });
     expect(calidad.lectura).toContain('64% completitud');
     expect(calidad.lectura).toContain('25% cobertura de temperatura de campo');
+  });
+
+  it('expone Chaman-Meteo como procedencia en informes puros y mixtos', () => {
+    const { instance } = createService({
+      canonicalResponse: canonical('Trigo'),
+    });
+    const pure = instance.mapCanonicalClimate(
+      canonical('Trigo', {
+        dataSource: {
+          type: 'chaman_meteo',
+          sources: ['chaman_meteo'],
+        },
+      }),
+      undefined,
+      siembra('Trigo'),
+    );
+
+    expect(pure.fuente).toBe('Chamán-Meteo (ERA5-Land)');
+    expect(pure.fuentes).toEqual(['Chamán-Meteo (ERA5-Land)']);
+    expect(pure.fuente).not.toContain('Open-Meteo');
+
+    const mixed = instance.mapCanonicalClimate(
+      canonical('Trigo', {
+        dataSource: {
+          type: 'mixed',
+          sources: ['sensor'],
+          sensorNames: ['K-01'],
+        },
+        series: [
+          {
+            date: '2026-05-01',
+            weather: {},
+            metrics: {},
+            source: 'mixed',
+            sourceByVariable: {
+              temperatureMeanC: 'derived_chaman_meteo',
+            },
+            qualityFlags: [],
+            warnings: [],
+          },
+        ],
+      }),
+      undefined,
+      siembra('Trigo'),
+    );
+
+    expect(mixed.fuente).toContain('Sensor K-01');
+    expect(mixed.fuente).toContain('Chamán-Meteo (ERA5-Land)');
+    expect(mixed.fuente).not.toContain('Open-Meteo');
   });
 });

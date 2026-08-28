@@ -8,6 +8,7 @@ const {
   loadTopology,
   validateReleaseManifest,
 } = require('./release-safety');
+const { verifyFrozenServicesLive } = require('./verify-frozen-services-live');
 
 const { values } = parseArgs({
   options: {
@@ -15,6 +16,8 @@ const { values } = parseArgs({
     online: { type: 'boolean', default: false },
     'require-full-version-coverage': { type: 'boolean', default: false },
     'railway-evidence': { type: 'string' },
+    'railway-cli': { type: 'string' },
+    'rollback-started-at': { type: 'string' },
   },
 });
 
@@ -43,15 +46,25 @@ async function main() {
   );
 
   if (!values.online) {
+    const promoted = manifest.services.filter((service) => service.deploymentMode === 'promote');
+    const frozen = manifest.services.filter((service) => service.deploymentMode === 'frozen');
     console.log(
-      `Rollback Git preparado: ${manifest.release.sha} -> ${manifest.rollback.sha}; deployments aún no comprobados y sin acciones remotas.`,
+      `Rollback Git preparado para ${promoted.length} servicios: ${manifest.release.sha} -> ${manifest.rollback.sha}; ${frozen.length} ${frozen.length === 1 ? 'congelado queda' : 'congelados quedan'} sin acción; deployments aún no comprobados.`,
     );
     return;
   }
 
+  if (!values['rollback-started-at']) {
+    throw new Error('Rollback online exige --rollback-started-at con la hora registrada antes de revertir');
+  }
+
+  const frozenLive = verifyFrozenServicesLive(manifest, {
+    root,
+    railwayCli: values['railway-cli'] || process.env.CHAMAN_RAILWAY_CLI || 'railway',
+  });
   const result = await collectVersionEvidence(manifest, { mode: 'rollback' });
-  if (values['require-full-version-coverage'] && result.pendingRoles.length) {
-    throw new Error(`Faltan endpoints /version para: ${result.pendingRoles.join(', ')}`);
+  if (values['require-full-version-coverage'] && result.missingVersionRoles.length) {
+    throw new Error(`Faltan endpoints /version para: ${result.missingVersionRoles.join(', ')}`);
   }
   let railwayEvidence = { evidence: [] };
   if (result.pendingRoles.length) {
@@ -63,11 +76,11 @@ async function main() {
     railwayEvidence = collectRailwayDeploymentEvidence(
       manifest,
       loadJson(path.resolve(values['railway-evidence'])),
-      { mode: 'rollback' },
+      { mode: 'rollback', evidenceNotBefore: values['rollback-started-at'] },
     );
   }
   console.log(
-    `Rollback online confirmado por ${result.evidence.length} endpoints y ${railwayEvidence.evidence.length} deployments en ${result.expectedSha}.`,
+    `Rollback online confirmado por ${result.evidence.length} endpoints y ${railwayEvidence.evidence.length} deployments para ${result.expectedSha}; ${frozenLive.length} servicios congelados fueron verificados live por deployment/imagen Railway y resolución Git.`,
   );
 }
 

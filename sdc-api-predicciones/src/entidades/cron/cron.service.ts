@@ -6,6 +6,7 @@ import { RiegoService } from '../riego/service';
 import {
   PREDICCIONES_AGROCLIMA_CRON_ENABLED,
   PREDICCIONES_MALEZAS_CRON_ENABLED,
+  PREDICCIONES_SANITARIAS_CRON_ENABLED,
   RIEGO_CRON_ENABLED,
 } from '../../env';
 import { AgroclimaService } from '../agroclima/service';
@@ -25,6 +26,10 @@ export class CronService {
 
   @Cron(CronExpression.EVERY_DAY_AT_5AM, CRON_OPTIONS)
   async hacerPredicciones() {
+    if (!PREDICCIONES_SANITARIAS_CRON_ENABLED) {
+      Logger.log('Predicciones sanitarias automaticas deshabilitadas');
+      return;
+    }
     const siembras =
       await this.siembrasService.listarSiembrasParaPredicciones();
     Logger.log(`Iniciando Predicciones para ${siembras.length} siembras`);

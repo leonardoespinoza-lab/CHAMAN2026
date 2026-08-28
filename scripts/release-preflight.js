@@ -8,6 +8,7 @@ const {
   loadTopology,
   validateReleaseManifest,
 } = require('./release-safety');
+const { verifyFrozenServicesLive } = require('./verify-frozen-services-live');
 
 const { values } = parseArgs({
   options: {
@@ -16,6 +17,7 @@ const { values } = parseArgs({
     'skip-git': { type: 'boolean', default: false },
     'require-full-version-coverage': { type: 'boolean', default: false },
     'railway-evidence': { type: 'string' },
+    'railway-cli': { type: 'string' },
   },
 });
 
@@ -43,15 +45,21 @@ async function main() {
   }
 
   if (values.offline) {
+    const promoted = manifest.services.filter((service) => service.deploymentMode === 'promote');
+    const frozen = manifest.services.filter((service) => service.deploymentMode === 'frozen');
     console.log(
-      `Validación estática OK: ${manifest.services.length} servicios fijados a ${manifest.release.sha}; deployments aún no comprobados.`,
+      `Validación estática OK: ${promoted.length} servicios promovidos fijados a ${manifest.release.sha}; ${frozen.length} ${frozen.length === 1 ? 'congelado' : 'congelados'} sin deploy; deployments aún no comprobados.`,
     );
     return;
   }
 
+  const frozenLive = verifyFrozenServicesLive(manifest, {
+    root,
+    railwayCli: values['railway-cli'] || process.env.CHAMAN_RAILWAY_CLI || 'railway',
+  });
   const result = await collectVersionEvidence(manifest);
-  if (values['require-full-version-coverage'] && result.pendingRoles.length) {
-    throw new Error(`Faltan endpoints /version para: ${result.pendingRoles.join(', ')}`);
+  if (values['require-full-version-coverage'] && result.missingVersionRoles.length) {
+    throw new Error(`Faltan endpoints /version para: ${result.missingVersionRoles.join(', ')}`);
   }
   let railwayEvidence = { evidence: [] };
   if (result.pendingRoles.length) {
@@ -66,7 +74,7 @@ async function main() {
     );
   }
   console.log(
-    `Preflight online OK: ${result.evidence.length} endpoints y ${railwayEvidence.evidence.length} deployments confirman ${result.expectedSha}.`,
+    `Preflight online OK: ${result.evidence.length} endpoints y ${railwayEvidence.evidence.length} deployments confirman el release ${result.expectedSha}; ${frozenLive.length} servicios congelados fueron verificados live por deployment/imagen Railway y resolución Git.`,
   );
 }
 

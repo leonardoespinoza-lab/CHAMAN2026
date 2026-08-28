@@ -80,7 +80,8 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
           : 'Sensor de campo';
       }
       if (source === 'station') return this.data?.dataSource.stationName || 'Central';
-      return 'Open-Meteo';
+      if (source === 'chaman_meteo') return 'Chamán-Meteo (ERA5-Land)';
+      return source === 'open_meteo' ? 'Open-Meteo' : 'Fuente meteorológica';
     });
     switch (this.data?.dataSource.type) {
       case 'sensor':
@@ -93,6 +94,8 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
           : `${this.data.dataSource.stationName || 'Central'} + Open-Meteo`;
       case 'open_meteo':
         return 'Open-Meteo';
+      case 'chaman_meteo':
+        return 'Chamán-Meteo (ERA5-Land)';
       default:
         return 'Sin fuente disponible';
     }
@@ -129,6 +132,8 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
         return 'Jerarquia integrada';
       case 'open_meteo':
         return 'Reanalisis modelado';
+      case 'chaman_meteo':
+        return 'Reanálisis histórico Chamán-Meteo';
       default:
         return 'Historico';
     }
@@ -190,7 +195,10 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
       series.some(
         (dia) =>
           !dia.isForecast &&
-          (String(dia.source).includes('open_meteo') || dia.source === 'mixed' || dia.source === 'gap_filled')
+          (String(dia.source).includes('open_meteo') ||
+            String(dia.source).includes('chaman_meteo') ||
+            dia.source === 'mixed' ||
+            dia.source === 'gap_filled')
       )
     ) {
       states.push('Estimado');
@@ -238,8 +246,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
       let response = await this.siembraService.agrometeorologia(id, desde);
       const necesitaInicializacion = !response?.series?.length;
       const inicializarAutomaticamente =
-        necesitaInicializacion &&
-        !CardCalculosMeteorologicosComponent.bootstrapIntentado.has(id);
+        necesitaInicializacion && !CardCalculosMeteorologicosComponent.bootstrapIntentado.has(id);
       if (force || inicializarAutomaticamente) {
         CardCalculosMeteorologicosComponent.bootstrapIntentado.add(id);
         await this.siembraService.reprocesarAgrometeorologia(id, true);
@@ -252,8 +259,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
       this.prepararVista();
     } catch (error: any) {
       if (sequence !== this.requestSequence) return;
-      const conservaSerieActual =
-        this.requestKey.startsWith(`${id}|`) && !!this.data?.series?.length;
+      const conservaSerieActual = this.requestKey.startsWith(`${id}|`) && !!this.data?.series?.length;
       if (!conservaSerieActual) this.data = undefined;
       this.error = this.normalizarErrorMeteorologico(conservaSerieActual);
     } finally {

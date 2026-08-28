@@ -7,9 +7,12 @@
 
 const bcrypt = require("../sdc-auth/node_modules/bcrypt");
 const { MongoClient } = require("../sdc-datos/node_modules/mongodb");
+const {
+  DB_NAME,
+  PREFIX,
+  cleanupTestingReleaseUsers,
+} = require("./testing-release-users-cleanup");
 
-const DB_NAME = "chaman_testing";
-const PREFIX = "codex-release-20260717-";
 
 function mongoUrl() {
   return (
@@ -42,10 +45,7 @@ async function permissionTemplate(db, level, role) {
 }
 
 async function cleanup(db) {
-  const result = await db.collection("usuarios").deleteMany({
-    username: { $regex: `^${PREFIX}` },
-  });
-  return result.deletedCount;
+  return cleanupTestingReleaseUsers(db);
 }
 
 async function apply(db) {

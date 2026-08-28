@@ -1,0 +1,1832 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const test = require('node:test');
+const vm = require('node:vm');
+const {
+  PRODUCTION_MODE,
+  TESTING_LOCAL_MODE,
+  assertNoSecrets,
+  assertDestinationIsolated,
+  assertRuntimeIdentity,
+  buildBackupManifest,
+  compareInventories,
+  databaseFromMongoUri,
+  expectedConfirmation,
+  mongoEndpointFingerprint,
+  normalizeInventory,
+  safeArtifactDirectory,
+  sha256File,
+  sha256Json,
+  summarizeSeedResolution,
+  validateBackupManifest,
+  validateSourceAttestation,
+  validateTargetAttestation,
+} = require('../mongo-recovery/lib');
+const {
+  buildArchiveCertification,
+  loadArchiveCertification,
+  validateArchiveCertification,
+  validateCertificationCleanupReceipt,
+} = require('../mongo-recovery/archive-certification');
+const {
+  assertNoMongoUriEnvironment,
+  assertMongoToolsConfigVersion,
+  buildMongodumpArgs,
+  buildMongorestoreArgs,
+  buildMongoshArgs,
+  hardenRestrictedDirectory,
+  hardenRestrictedFile,
+  safeChildEnv,
+  verifyRestrictedDirectory,
+  verifyRestrictedFile,
+  withMongoSecretFile,
+} = require('../mongo-recovery/secure-config');
+const {
+  bindAttestationToEvidence,
+  deriveRailwayAsset,
+  validateInfrastructureEvidence,
+} = require('../mongo-recovery/infrastructure-evidence');
+const {
+  buildRuntimeProof,
+  hashDbPath,
+  validateRuntimeProof,
+} = require('../mongo-recovery/runtime-proof');
+const { collectRailwayEvidence, resolveRailwayExecutable } = require('../mongo-recovery/railway-collector');
+const {
+  RESTORE_STABILITY_DELAY_MS,
+  assertCleanGitStatus,
+  assertCleanupRuntimeSchema,
+  assertCleanupReceiptBindings,
+  assertDropConfirmed,
+  assertRestoreStabilityDelay,
+  assertSameRuntimeForCleanup,
+  evaluateAuditInventoryStability,
+  readProtectedUri,
+} = require('../mongo-recovery');
+const {
+  classifySiembraReferences,
+  createFindingCollector,
+  pushIssue,
+} = require('../audit-lote-data-integrity');
+
+const NOW = new Date('2026-08-28T18:00:00.000Z');
+const SOURCE_URI = 'mongodb://prod.example.invalid:27017/chaman';
+const TARGET_URI = 'mongodb://restore.example.invalid:27018/chaman_restore_drill_20260828_1800';
+const EVIDENCE_HASH = 'a'.repeat(64);
+const SOURCE_SERVICE = '11111111-1111-4111-8111-111111111111';
+const TARGET_SERVICE = '22222222-2222-4222-8222-222222222222';
+const LOCAL_URI = 'mongodb://127.0.0.1:27019/chaman_restore_drill_20260828_1800?replicaSet=chamanDrill';
+const TESTING_SOURCE_URI = 'mongodb://testing.example.invalid:27017/chaman_testing';
+
+test('idCrono ausente queda visible como warning y una semilla ausente sigue bloqueando', () => {
+  assert.deepEqual(classifySiembraReferences({ idSemilla: 'seed-1' }), {
+    missingSemilla: 'ok',
+    missingCrono: 'warning',
+  });
+  assert.deepEqual(classifySiembraReferences({ idCrono: 'crono-1' }), {
+    missingSemilla: 'blocking',
+    missingCrono: 'ok',
+  });
+  assert.deepEqual(classifySiembraReferences({ idSemilla: 'seed-1', idCrono: 'crono-1' }), {
+    missingSemilla: 'ok',
+    missingCrono: 'ok',
+  });
+});
+
+test('los contadores de auditoria conservan el total aunque las muestras se trunquen', () => {
+  const findings = createFindingCollector(2);
+  pushIssue(findings, 'first', 'Primero', {});
+  pushIssue(findings, 'second', 'Segundo', {});
+  pushIssue(findings, 'third', 'Tercero', {});
+
+  assert.equal(findings.total, 3);
+  assert.equal(findings.samples.length, 2);
+  assert.deepEqual(findings.samples.map(({ type }) => type), ['first', 'second']);
+});
+
+function identity(provider, instanceId, uri) {
+  return {
+    provider,
+    instanceId,
+    endpointFingerprintSha256: mongoEndpointFingerprint(uri).endpointFingerprintSha256,
+  };
+}
+
+function sourceAttestation(overrides = {}) {
+  return {
+    schemaVersion: 1,
+    kind: 'chaman-mongo-write-freeze-attestation',
+    attestationId: 'backup_20260828_1800',
+    drillMode: PRODUCTION_MODE,
+    sourceEnvironment: 'production',
+    database: 'chaman',
+    writesFrozen: true,
+    freezeControls: {
+      apiWritesDisabled: true,
+      backgroundWorkersStopped: true,
+      scheduledJobsDisabled: true,
+      operatorWritesBlocked: true,
+      activeWritersVerifiedZero: true,
+    },
+    frozenAt: '2026-08-28T17:55:00.000Z',
+    verifiedAt: '2026-08-28T17:59:00.000Z',
+    expiresAt: '2026-08-28T18:30:00.000Z',
+    operator: 'operador-a',
+    approvedBy: 'responsable-b',
+    changeTicket: 'CHAMAN-RECOVERY-2026-08-28',
+    infrastructureEvidenceSha256: EVIDENCE_HASH,
+    instanceIdentity: identity('railway', SOURCE_SERVICE, SOURCE_URI),
+    ...overrides,
+  };
+}
+
+function targetAttestation(overrides = {}) {
+  return {
+    schemaVersion: 1,
+    kind: 'chaman-mongo-disposable-target-attestation',
+    drillId: 'backup_20260828_1800',
+    drillMode: PRODUCTION_MODE,
+    environment: 'recovery-drill',
+    database: 'chaman_restore_drill_20260828_1800',
+    disposable: true,
+    dedicatedInstance: true,
+    initiallyEmptyExpected: true,
+    productionTrafficBlocked: true,
+    externalIntegrationsDisabled: true,
+    cleanupApproved: true,
+    expiresAt: '2026-08-29T18:00:00.000Z',
+    operator: 'operador-a',
+    approvedBy: 'responsable-b',
+    changeTicket: 'CHAMAN-RECOVERY-2026-08-28',
+    infrastructureEvidenceSha256: EVIDENCE_HASH,
+    instanceIdentity: identity('railway', TARGET_SERVICE, TARGET_URI),
+    ...overrides,
+  };
+}
+
+function writeEvidence(directory) {
+  fs.mkdirSync(directory, { recursive: true });
+  hardenRestrictedDirectory(directory);
+  const projectId = '33333333-3333-4333-8333-333333333333';
+  const sourceEnvironmentId = '44444444-4444-4444-8444-444444444444';
+  const targetEnvironmentId = '77777777-7777-4777-8777-777777777777';
+  const sourceVolume = '55555555-5555-4555-8555-555555555555';
+  const targetVolume = '88888888-8888-4888-8888-888888888888';
+  const status = (environmentId, environmentName, serviceId, volumeId) => ({
+    id: projectId,
+    name: 'CHAMAN2026',
+    environments: [{
+      id: environmentId,
+      name: environmentName,
+      services: [{ id: serviceId, name: 'MongoDB' }],
+      volumes: [{ id: volumeId, name: 'mongo-data', serviceId }],
+    }],
+  });
+  const sourceRaw = status(sourceEnvironmentId, 'production', SOURCE_SERVICE, sourceVolume);
+  const targetRaw = status(targetEnvironmentId, 'recovery-drill', TARGET_SERVICE, targetVolume);
+  const sourceRawFile = path.join(directory, 'railway-status-source.raw.json');
+  const targetRawFile = path.join(directory, 'railway-status-target.raw.json');
+  fs.writeFileSync(sourceRawFile, JSON.stringify(sourceRaw));
+  fs.writeFileSync(targetRawFile, JSON.stringify(targetRaw));
+  hardenRestrictedFile(sourceRawFile);
+  hardenRestrictedFile(targetRawFile);
+  const sourceGraph = deriveRailwayAsset(sourceRaw, { projectId, environment: 'production', service: 'MongoDB' });
+  const targetGraph = deriveRailwayAsset(targetRaw, { projectId, environment: 'recovery-drill', service: 'MongoDB' });
+  const digest = (filePath) => require('node:crypto').createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+  const commandDigest = (environment) => require('node:crypto').createHash('sha256')
+    .update(`${JSON.stringify(['railway', 'status', '--project', projectId, '--environment', environment, '--json'])}\n`)
+    .digest('hex');
+  const file = path.join(directory, 'railway-evidence.json');
+  const evidence = {
+    schemaVersion: 2, kind: 'chaman-mongo-infrastructure-evidence', evidenceId: 'evidence_20260828',
+    drillMode: PRODUCTION_MODE,
+    collection: { method: 'railway-cli-status-json', projectId, railwayCliVersion: 'railway 5.26.1', readOnly: true,
+      rawCaptures: [
+        { environmentSelector: 'production', file: path.basename(sourceRawFile), sha256: digest(sourceRawFile), commandSha256: commandDigest('production') },
+        { environmentSelector: 'recovery-drill', file: path.basename(targetRawFile), sha256: digest(targetRawFile), commandSha256: commandDigest('recovery-drill') },
+      ] },
+    collectedAt: new Date(Date.now() - 60_000).toISOString(), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+    source: { provider: 'railway', environmentId: sourceGraph.environmentId, environmentName: sourceGraph.environmentName,
+      serviceId: sourceGraph.serviceId, serviceName: sourceGraph.serviceName, volumeIds: sourceGraph.volumeIds,
+      graphSha256: sourceGraph.graphSha256 },
+    target: { provider: 'railway', environmentId: targetGraph.environmentId, environmentName: targetGraph.environmentName,
+      serviceId: targetGraph.serviceId, serviceName: targetGraph.serviceName, volumeIds: targetGraph.volumeIds,
+      graphSha256: targetGraph.graphSha256 },
+    collector: 'operador-a', reviewedBy: 'responsable-b',
+  };
+  fs.writeFileSync(file, JSON.stringify(evidence));
+  hardenRestrictedFile(file);
+  return { file, sha256: require('node:crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex'), evidence };
+}
+
+function writeTestingEvidence(directory) {
+  fs.mkdirSync(directory, { recursive: true });
+  hardenRestrictedDirectory(directory);
+  const projectId = '33333333-3333-4333-8333-333333333333';
+  const environmentId = '44444444-4444-4444-8444-444444444444';
+  const volumeId = '55555555-5555-4555-8555-555555555555';
+  const raw = {
+    id: projectId,
+    name: 'CHAMAN2026',
+    environments: [{
+      id: environmentId,
+      name: 'Testing',
+      services: [{ id: SOURCE_SERVICE, name: 'MongoDB' }],
+      volumes: [{ id: volumeId, name: 'mongo-data', serviceId: SOURCE_SERVICE }],
+    }],
+  };
+  const rawFile = path.join(directory, 'railway-status-source.raw.json');
+  fs.writeFileSync(rawFile, JSON.stringify(raw));
+  hardenRestrictedFile(rawFile);
+  const localRoot = path.join(directory, 'chaman-recovery-drill', 'testing-evidence');
+  const dbPath = path.join(localRoot, 'data');
+  fs.mkdirSync(dbPath, { recursive: true });
+  const proof = buildRuntimeProof(localRuntimeRaw(dbPath, new Date().toISOString()), {
+    uri: LOCAL_URI,
+    expectedDbPathRoot: localRoot,
+  });
+  const proofFile = path.join(directory, 'runtime-proof.json');
+  fs.writeFileSync(proofFile, `${JSON.stringify(proof)}\n`);
+  hardenRestrictedFile(proofFile);
+  const digest = (filePath) => require('node:crypto').createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+  const commandSha256 = require('node:crypto').createHash('sha256')
+    .update(`${JSON.stringify(['railway', 'status', '--project', projectId, '--environment', 'Testing', '--json'])}\n`)
+    .digest('hex');
+  const sourceGraph = deriveRailwayAsset(raw, { projectId, environment: 'Testing', service: 'MongoDB' });
+  const now = Date.now();
+  const evidence = {
+    schemaVersion: 2,
+    kind: 'chaman-mongo-infrastructure-evidence',
+    evidenceId: 'testing_evidence_20260828',
+    drillMode: TESTING_LOCAL_MODE,
+    collection: {
+      method: 'railway-cli-status-json', projectId, railwayCliVersion: 'railway 5.26.1', readOnly: true,
+      rawCaptures: [{
+        environmentSelector: 'Testing', file: path.basename(rawFile), sha256: digest(rawFile), commandSha256,
+      }],
+    },
+    collectedAt: new Date(now - 60_000).toISOString(),
+    expiresAt: new Date(now + 60 * 60_000).toISOString(),
+    source: {
+      provider: 'railway', environmentId: sourceGraph.environmentId, environmentName: sourceGraph.environmentName,
+      serviceId: sourceGraph.serviceId, serviceName: sourceGraph.serviceName, volumeIds: sourceGraph.volumeIds,
+      graphSha256: sourceGraph.graphSha256,
+    },
+    target: {
+      provider: 'local-mongodb', instanceId: proof.instanceId,
+      endpointFingerprintSha256: proof.endpoint.endpointFingerprintSha256,
+      runtimeProofSha256: digest(proofFile), replicaSet: proof.mongo.replicaSet,
+      dbPathSha256: proof.mongo.dbPathSha256,
+    },
+    collector: 'operador-a',
+    reviewedBy: 'responsable-b',
+  };
+  const file = path.join(directory, 'railway-evidence.json');
+  fs.writeFileSync(file, JSON.stringify(evidence));
+  hardenRestrictedFile(file);
+  return { file, sha256: digest(file), evidence };
+}
+
+function writeUriFile(directory, uri, name = 'mongo-uri.txt') {
+  hardenRestrictedDirectory(directory);
+  const file = path.join(directory, name);
+  fs.writeFileSync(file, uri, { flag: 'wx' });
+  hardenRestrictedFile(file);
+  return file;
+}
+
+function inventory(database = 'chaman') {
+  return {
+    schemaVersion: 2,
+    database,
+    serverVersion: '8.0.4',
+    contentHashAlgorithm: 'mongodb-dbHash-md5',
+    databaseContentHash: 'a'.repeat(32),
+    capturedAt: '2026-08-28T18:01:00.000Z',
+    collections: [
+      {
+        name: 'lotes',
+        type: 'collection',
+        options: { validationAction: 'error' },
+        count: 51,
+        contentHash: 'b'.repeat(32),
+        indexes: [
+          { name: '_id_', key: { _id: 1 } },
+          { name: 'tenant_name', key: { idProductor: 1, nombre: 1 }, unique: true },
+        ],
+      },
+      {
+        name: 'siembras',
+        type: 'collection',
+        options: {},
+        count: 51,
+        contentHash: 'c'.repeat(32),
+        indexes: [{ name: '_id_', key: { _id: 1 } }],
+      },
+    ],
+  };
+}
+
+function localRuntimeRaw(dbPath, capturedAt = NOW.toISOString()) {
+  return {
+    schemaVersion: 2,
+    database: 'chaman_restore_drill_20260828_1800',
+    capturedAt,
+    hello: {
+      setName: 'chamanDrill',
+      me: '127.0.0.1:27019',
+      primary: '127.0.0.1:27019',
+      hosts: ['127.0.0.1:27019'],
+      passives: [],
+      arbiters: [],
+      isWritablePrimary: true,
+    },
+    buildInfo: { version: '8.0.29' },
+    commandLine: {
+      net: { bindIp: '127.0.0.1', port: 27019 },
+      replication: { replSetName: 'chamanDrill' },
+      storage: { dbPath },
+    },
+    getParameter: { ttlMonitorEnabled: false },
+    serverStatus: { process: 'mongod', pid: 4242 },
+  };
+}
+
+test('acepta solo un congelamiento productivo completo, vigente y corto', () => {
+  const result = validateSourceAttestation(sourceAttestation(), { now: NOW });
+  assert.equal(result.database, 'chaman');
+  assert.throws(
+    () =>
+      validateSourceAttestation(
+        sourceAttestation({
+          freezeControls: { ...sourceAttestation().freezeControls, backgroundWorkersStopped: false },
+        }),
+        { now: NOW },
+      ),
+    /backgroundWorkersStopped/,
+  );
+  assert.throws(
+    () => validateSourceAttestation(sourceAttestation(), { now: new Date('2026-08-28T18:31:00Z') }),
+    /no esta vigente/,
+  );
+});
+
+test('destino exige instancia dedicada, descartable y nombre imposible de confundir con produccion', () => {
+  assert.equal(validateTargetAttestation(targetAttestation(), { now: NOW }).database, 'chaman_restore_drill_20260828_1800');
+  assert.throws(
+    () => validateTargetAttestation(targetAttestation({ database: 'chaman' }), { now: NOW }),
+    /debe comenzar/,
+  );
+  assert.throws(
+    () => validateTargetAttestation(targetAttestation({ dedicatedInstance: false }), { now: NOW }),
+    /dedicatedInstance/,
+  );
+});
+
+test('atestaciones no admiten campos extra capaces de relajar controles', () => {
+  assert.throws(
+    () => validateSourceAttestation(sourceAttestation({ allowLiveWrites: true }), { now: NOW }),
+    /campos no permitidos/,
+  );
+  assert.throws(
+    () => validateTargetAttestation(targetAttestation({ allowProduction: true }), { now: NOW }),
+    /campos no permitidos/,
+  );
+});
+
+test('URI debe fijar base y nunca se confunde confirmacion de dump, restore y cleanup', () => {
+  assert.equal(databaseFromMongoUri('mongodb://example.invalid:27017/chaman?authSource=admin'), 'chaman');
+  assert.equal(databaseFromMongoUri('mongodb+srv://example.invalid/chaman_restore_drill_x1'), 'chaman_restore_drill_x1');
+  assert.throws(() => databaseFromMongoUri('mongodb://example.invalid'), /fijar explicitamente/);
+  assert.equal(expectedConfirmation('dump', 'run_12345678', 'chaman'), 'dump:run_12345678:chaman');
+  assert.equal(
+    expectedConfirmation('restore', 'run_12345678', 'chaman_restore_drill_x1'),
+    'restore:run_12345678:chaman_restore_drill_x1',
+  );
+});
+
+test('fingerprint normaliza host, puerto y orden, pero distingue Produccion de restore', () => {
+  const first = mongoEndpointFingerprint('mongodb://B.example.invalid,a.example.invalid.:27017/chaman');
+  const normalized = mongoEndpointFingerprint('mongodb://a.example.invalid:27017,b.example.invalid:27017/otra');
+  assert.equal(first.endpointFingerprintSha256, normalized.endpointFingerprintSha256);
+  assert.notEqual(first.endpointFingerprintSha256, mongoEndpointFingerprint(TARGET_URI).endpointFingerprintSha256);
+});
+
+test('fingerprint CLI no conecta ni imprime host, usuario o URI', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-fingerprint-'));
+  const uriFile = writeUriFile(directory, SOURCE_URI);
+  const result = spawnSync(
+    process.execPath,
+    [path.join(process.cwd(), 'scripts', 'mongo-recovery.js'), 'fingerprint', '--side=source', `--source-uri-file=${uriFile}`],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env },
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.includes('prod.example.invalid'), false);
+  assert.equal(result.stdout.includes('mongodb://'), false);
+  assert.match(JSON.parse(result.stdout).endpointFingerprintSha256, /^[0-9a-f]{64}$/);
+  fs.rmSync(directory, { recursive: true, force: true });
+});
+
+test('identidad runtime debe coincidir y destino nunca puede compartir endpoint o instancia productiva', () => {
+  const source = sourceAttestation().instanceIdentity;
+  const target = targetAttestation().instanceIdentity;
+  assert.doesNotThrow(() => assertRuntimeIdentity(SOURCE_URI, source, 'origen'));
+  assert.doesNotThrow(() => assertDestinationIsolated(source, target));
+  assert.throws(
+    () =>
+      assertDestinationIsolated(source, {
+        ...target,
+        endpointFingerprintSha256: source.endpointFingerprintSha256,
+      }),
+    /comparte host\/puerto/,
+  );
+  assert.throws(
+    () =>
+      assertDestinationIsolated(source, {
+        ...target,
+        provider: source.provider,
+        instanceId: source.instanceId,
+      }),
+    /comparte identidad/,
+  );
+});
+
+test('spawn args nunca contienen URI y usan config/archivo de script', () => {
+  const dumpArgs = buildMongodumpArgs('C:\\secure\\mongo.yml', 'chaman', 'D:\\backup.archive.gz');
+  const restoreArgs = buildMongorestoreArgs(
+    'C:\\secure\\mongo.yml',
+    'D:\\backup.archive.gz',
+    'chaman',
+    'chaman_restore_drill_x',
+  );
+  const shellArgs = buildMongoshArgs('C:\\safe\\inventory.mongosh.js');
+  for (const args of [dumpArgs, restoreArgs, shellArgs]) {
+    assert.equal(args.some((arg) => /mongodb(?:\+srv)?:\/\//i.test(arg)), false);
+    assert.equal(args.some((arg) => arg === '--uri' || arg.startsWith('--uri=')), false);
+  }
+  assert.ok(dumpArgs.some((arg) => arg.startsWith('--config=')));
+  assert.ok(restoreArgs.some((arg) => arg.startsWith('--config=')));
+  assert.ok(shellArgs.includes('--norc'));
+  assert.deepEqual(assertMongoToolsConfigVersion('mongodump version: 100.12.2'), {
+    major: 100,
+    minor: 12,
+    patch: 2,
+  });
+  assert.throws(() => assertMongoToolsConfigVersion('mongodump version: 100.2.1'), /100.3/);
+});
+
+test('entorno hijo elimina toda URI y conserva solamente la ruta al secreto', () => {
+  const env = safeChildEnv({ CHAMAN_RECOVERY_URI_FILE: 'C:\\secure\\uri.txt' }, {
+    MONGO_URI: SOURCE_URI, MONGO_PUBLIC_URL: SOURCE_URI, DATABASE_URL: SOURCE_URI, SAFE: 'yes',
+  });
+  assert.equal(env.CHAMAN_RECOVERY_URI_FILE, 'C:\\secure\\uri.txt');
+  assert.equal(env.SAFE, undefined);
+  assert.equal(Object.values(env).includes(SOURCE_URI), false);
+  assert.equal(env.MONGO_URI, undefined);
+});
+
+test('proceso principal rechaza cualquier URI MongoDB heredada por entorno', () => {
+  assert.throws(() => assertNoMongoUriEnvironment({ MONGO_URI: SOURCE_URI, PATH: 'safe' }), /prohibida.*MONGO_URI/);
+  assert.throws(
+    () => assertNoMongoUriEnvironment({ APP_CONFIG: `{"uri":"${SOURCE_URI}"}` }),
+    /prohibida.*APP_CONFIG/,
+  );
+  assert.doesNotThrow(() => assertNoMongoUriEnvironment({ CHAMAN_BACKUP_CONFIRM: 'dump:x:y' }));
+});
+
+test('hash de dbPath preserva mayusculas en POSIX y normaliza solo en Windows', () => {
+  assert.notEqual(hashDbPath('/var/lib/chaman/Data', 'linux'), hashDbPath('/var/lib/chaman/data', 'linux'));
+  assert.equal(hashDbPath('C:\\Chaman\\Data', 'win32'), hashDbPath('c:\\chaman\\data', 'win32'));
+});
+
+test('dump y certificacion rechazan atribuir un worktree sucio a HEAD', () => {
+  assert.doesNotThrow(() => assertCleanGitStatus(''));
+  assert.throws(() => assertCleanGitStatus(' M scripts/mongo-recovery.js\n'), /worktree Git limpio/);
+  assert.throws(() => assertCleanGitStatus('?? artefacto-no-versionado\n'), /worktree Git limpio/);
+});
+
+test('runtime proof acepta el campo replSet que MongoDB 8 expone en getCmdLineOpts', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-runtime-replset-'));
+  const root = path.join(directory, 'chaman-recovery-drill', 'mongo8');
+  const dbPath = path.join(root, 'data');
+  fs.mkdirSync(dbPath, { recursive: true });
+  try {
+    const raw = localRuntimeRaw(dbPath);
+    raw.commandLine.replication = { replSet: 'chamanDrill' };
+    raw.serverStatus.process = 'C:\\MongoDB\\bin\\mongod.exe';
+    assert.equal(buildRuntimeProof(raw, {
+      uri: LOCAL_URI,
+      expectedDbPathRoot: root,
+      now: NOW,
+    }).mongo.replicaSet, 'chamanDrill');
+
+    raw.commandLine.replication.replSetName = 'otroReplicaSet';
+    assert.throws(() => buildRuntimeProof(raw, {
+      uri: LOCAL_URI,
+      expectedDbPathRoot: root,
+      now: NOW,
+    }), /contradictorios/);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('lectura de URI exige ACL del directorio antes de verificar o leer el archivo', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-uri-parent-acl-'));
+  const file = path.join(directory, 'source.uri');
+  fs.writeFileSync(file, SOURCE_URI);
+  const calls = [];
+  try {
+    assert.throws(() => readProtectedUri(file, 'source', {
+      verifyDirectory(parent) { calls.push(['directory', parent]); throw new Error('directorio no restringido'); },
+      verifyFile(target) { calls.push(['file', target]); },
+    }), /directorio no restringido/);
+    assert.deepEqual(calls, [['directory', directory]]);
+    assert.equal(readProtectedUri(file, 'source', {
+      verifyDirectory(parent) { assert.equal(parent, directory); },
+      verifyFile(target) { assert.equal(target, file); },
+    }), SOURCE_URI);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('scripts mongosh convierten BSON Long a PID numerico seguro antes de serializar y comparar', () => {
+  const targetDatabase = 'chaman_restore_drill_20260828_1800';
+  const bsonLong = {
+    high: 0,
+    low: 4242,
+    unsigned: false,
+    valueOf() { return 4242; },
+    toJSON() { return { high: 0, low: 4242, unsigned: false }; },
+  };
+  assert.match(JSON.stringify({ pid: bsonLong }), /"high":0/);
+
+  const runRuntimeScript = (pid, {
+    ttlMonitorEnabled = false,
+    includeTtlMonitorParameter = true,
+    purpose = 'operation',
+  } = {}) => {
+    let printed;
+    const results = {
+      hello: {
+        ok: 1, setName: 'chamanDrill', me: '127.0.0.1:27019', primary: '127.0.0.1:27019',
+        hosts: ['127.0.0.1:27019'], isWritablePrimary: true,
+      },
+      buildInfo: { ok: 1, version: '8.0.29' },
+      getCmdLineOpts: { ok: 1, parsed: {
+        net: { bindIp: '127.0.0.1', port: 27019 }, replication: { replSetName: 'chamanDrill' },
+        storage: { dbPath: 'C:\\chaman-recovery-drill\\test\\data' },
+      } },
+      getParameter: includeTtlMonitorParameter ? { ok: 1, ttlMonitorEnabled } : { ok: 1 },
+      serverStatus: { ok: 1, process: 'mongod', pid },
+    };
+    const database = {
+      getName: () => targetDatabase,
+      adminCommand(command) {
+        const commandName = Object.keys(command)[0];
+        if (commandName === 'getParameter' && (command.getParameter !== 1 || command.ttlMonitorEnabled !== 1)) {
+          throw new Error('Consulta getParameter incompleta.');
+        }
+        return results[commandName];
+      },
+    };
+    const connection = { getDB: () => database, close() {} };
+    vm.runInNewContext(
+      fs.readFileSync(path.join(process.cwd(), 'scripts', 'mongo-recovery', 'runtime-proof.mongosh.js'), 'utf8'),
+      {
+        require: () => ({ readFileSync: () => LOCAL_URI }),
+        process: { env: {
+          CHAMAN_RECOVERY_URI_FILE: 'uri.acl',
+          CHAMAN_RECOVERY_DATABASE: targetDatabase,
+          CHAMAN_RECOVERY_RUNTIME_PURPOSE: purpose,
+        } },
+        Mongo: function Mongo() { return connection; },
+        print(value) { printed = value; },
+      },
+    );
+    return JSON.parse(printed);
+  };
+  const proofRaw = runRuntimeScript(bsonLong);
+  assert.equal(proofRaw.serverStatus.pid, 4242);
+  assert.equal(typeof proofRaw.serverStatus.pid, 'number');
+  assert.equal(proofRaw.schemaVersion, 2);
+  assert.equal(proofRaw.getParameter.ttlMonitorEnabled, false);
+  assert.throws(
+    () => runRuntimeScript(bsonLong, { ttlMonitorEnabled: true }),
+    /monitor TTL debe estar deshabilitado/,
+  );
+  assert.throws(
+    () => runRuntimeScript(bsonLong, { includeTtlMonitorParameter: false }),
+    /no devolvio un booleano/,
+  );
+  assert.throws(
+    () => runRuntimeScript(bsonLong, { ttlMonitorEnabled: 'false' }),
+    /no devolvio un booleano/,
+  );
+  assert.equal(
+    runRuntimeScript(bsonLong, { ttlMonitorEnabled: true, purpose: 'cleanup' }).getParameter.ttlMonitorEnabled,
+    true,
+  );
+  assert.throws(() => runRuntimeScript({ high: 0, low: 4242, unsigned: false }), /entero seguro/);
+
+  let dropped = false;
+  let printed;
+  const target = {
+    getName: () => targetDatabase,
+    adminCommand: () => ({ ok: 1, process: 'C:\\MongoDB\\bin\\mongod.exe', pid: bsonLong }),
+    dropDatabase() { dropped = true; return { ok: 1 }; },
+  };
+  const admin = { adminCommand: () => ({ ok: 1, databases: [] }) };
+  const connection = { getDB: (name) => name === 'admin' ? admin : target, close() {} };
+  vm.runInNewContext(
+    fs.readFileSync(path.join(process.cwd(), 'scripts', 'mongo-recovery', 'drop-database.mongosh.js'), 'utf8'),
+    {
+      require: () => ({ readFileSync: () => LOCAL_URI }),
+      process: { env: {
+        CHAMAN_RECOVERY_URI_FILE: 'uri.acl', CHAMAN_RECOVERY_DATABASE: targetDatabase,
+        CHAMAN_RECOVERY_DRILL_ID: 'backup_20260828_1800',
+        CHAMAN_RECOVERY_DROP_CONFIRM: `cleanup:backup_20260828_1800:${targetDatabase}`,
+        CHAMAN_RECOVERY_EXPECTED_PID: '4242',
+      } },
+      Mongo: function Mongo() { return connection; },
+      print(value) { printed = value; },
+    },
+  );
+  assert.equal(dropped, true);
+  assert.equal(JSON.parse(printed).rescanFound, false);
+});
+
+test('runtime proof acredita loopback, replica set, dbPath dedicado y processId', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-runtime-'));
+  const root = path.join(directory, 'chaman-recovery-drill', 'runtime-proof-test');
+  const dbPath = path.join(root, 'data');
+  const unrelated = path.join(directory, 'unrelated', 'data');
+  fs.mkdirSync(dbPath, { recursive: true });
+  fs.mkdirSync(unrelated, { recursive: true });
+  try {
+    const proof = buildRuntimeProof(localRuntimeRaw(dbPath), { uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW });
+    const validated = validateRuntimeProof(proof, { now: NOW, expectedDatabase: proof.database });
+    assert.equal(validated.replicaSet, 'chamanDrill');
+    assert.equal(validated.processId, 4242);
+    assert.equal(validated.schemaVersion, 2);
+    assert.equal(validated.ttlMonitorEnabled, false);
+    assert.equal(proof.mongo.process, 'mongod');
+    assert.equal(proof.getParameter.ttlMonitorEnabled, false);
+    assert.equal(proof.commands.getParameter, true);
+    assert.match(validated.instanceId, /^local-mongodb:[0-9a-f]{64}$/);
+
+    const ttlEnabledRaw = localRuntimeRaw(dbPath);
+    ttlEnabledRaw.getParameter.ttlMonitorEnabled = true;
+    assert.throws(() => buildRuntimeProof(ttlEnabledRaw, {
+      uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW,
+    }), /monitor TTL debe estar deshabilitado/);
+    const cleanupProof = buildRuntimeProof(ttlEnabledRaw, {
+      uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW, purpose: 'cleanup',
+    });
+    assert.equal(validateRuntimeProof(cleanupProof, {
+      now: NOW, expectedDatabase: cleanupProof.database, purpose: 'cleanup',
+    }).ttlMonitorEnabled, true);
+    assert.throws(() => validateRuntimeProof(cleanupProof, { now: NOW }), /monitor TTL debe estar deshabilitado/);
+    const missingTtlProof = structuredClone(proof);
+    delete missingTtlProof.getParameter;
+    assert.throws(() => validateRuntimeProof(missingTtlProof, { now: NOW }), /campos inesperados o faltantes/);
+    const stringTtlProof = structuredClone(proof);
+    stringTtlProof.getParameter.ttlMonitorEnabled = 'false';
+    assert.throws(() => validateRuntimeProof(stringTtlProof, { now: NOW }), /debe ser booleano/);
+
+    const ttlMissingRaw = localRuntimeRaw(dbPath);
+    delete ttlMissingRaw.getParameter.ttlMonitorEnabled;
+    assert.throws(() => buildRuntimeProof(ttlMissingRaw, {
+      uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW,
+    }), /debe ser booleano/);
+    const ttlStringRaw = localRuntimeRaw(dbPath);
+    ttlStringRaw.getParameter.ttlMonitorEnabled = 'false';
+    assert.throws(() => buildRuntimeProof(ttlStringRaw, {
+      uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW,
+    }), /debe ser booleano/);
+
+    const legacyProof = structuredClone(proof);
+    legacyProof.schemaVersion = 1;
+    delete legacyProof.getParameter;
+    delete legacyProof.commands.getParameter;
+    assert.throws(() => validateRuntimeProof(legacyProof, { now: NOW }), /schema v1 solo se admite para cleanup/);
+    const legacyCleanup = validateRuntimeProof(legacyProof, { now: NOW, purpose: 'cleanup' });
+    assert.equal(legacyCleanup.schemaVersion, 1);
+    assert.equal(legacyCleanup.ttlMonitorEnabled, null);
+
+    assert.throws(() => buildRuntimeProof(localRuntimeRaw(dbPath), {
+      uri: LOCAL_URI.replace('127.0.0.1', 'mongo.example.invalid'), expectedDbPathRoot: root, now: NOW,
+    }), /loopback/);
+    assert.throws(() => buildRuntimeProof({ ...localRuntimeRaw(dbPath), commandLine: {
+      ...localRuntimeRaw(dbPath).commandLine, net: { bindIp: '0.0.0.0', port: 27019 },
+    } }, { uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW }), /loopback/);
+    assert.throws(() => buildRuntimeProof({ ...localRuntimeRaw(dbPath), hello: {
+      ...localRuntimeRaw(dbPath).hello, setName: undefined,
+    } }, { uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW }), /setName/);
+    assert.throws(() => buildRuntimeProof({ ...localRuntimeRaw(dbPath), hello: {
+      ...localRuntimeRaw(dbPath).hello, hosts: ['127.0.0.1:27019', '127.0.0.1:27020'],
+    } }, { uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW }), /solo nodo/);
+    assert.throws(() => buildRuntimeProof(localRuntimeRaw(unrelated), {
+      uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW,
+    }), /subdirectorio/);
+    assert.throws(() => buildRuntimeProof({ ...localRuntimeRaw(dbPath), serverStatus: {
+      process: 'mongos', pid: 4242,
+    } }, { uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW }), /mongod/);
+    assert.throws(() => validateRuntimeProof({ ...proof, mongo: { ...proof.mongo, misleading: true } }, { now: NOW }), /inesperados/);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('modo testing-local fija Testing/chaman_testing y permite cleanup con atestacion expirada', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-mode-'));
+  const root = path.join(directory, 'chaman-recovery-drill', 'mode-test');
+  fs.mkdirSync(path.join(root, 'data'), { recursive: true });
+  const proof = buildRuntimeProof(localRuntimeRaw(path.join(root, 'data')), { uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW });
+  const source = sourceAttestation({ drillMode: TESTING_LOCAL_MODE, sourceEnvironment: 'testing', database: 'chaman_testing' });
+  assert.equal(validateSourceAttestation(source, { now: NOW }).drillMode, TESTING_LOCAL_MODE);
+  assert.throws(() => validateSourceAttestation({ ...source, database: 'chaman' }, { now: NOW }), /chaman_testing/);
+  const target = targetAttestation({
+    drillMode: TESTING_LOCAL_MODE,
+    environment: 'local-recovery-drill',
+    instanceIdentity: {
+      provider: 'local-mongodb',
+      instanceId: proof.instanceId,
+      endpointFingerprintSha256: proof.endpoint.endpointFingerprintSha256,
+    },
+    expiresAt: '2026-08-28T17:00:00.000Z',
+  });
+  assert.throws(() => validateTargetAttestation(target, { now: NOW }), /vencida/);
+  assert.equal(validateTargetAttestation(target, { now: NOW, allowExpired: true }).drillMode, TESTING_LOCAL_MODE);
+  const afterProofExpiry = new Date(NOW.getTime() + 11 * 60_000);
+  assert.throws(
+    () => validateRuntimeProof(proof, { now: afterProofExpiry, purpose: 'cleanup' }),
+    /no esta vigente/,
+  );
+  assert.equal(
+    validateRuntimeProof(proof, { now: afterProofExpiry, purpose: 'cleanup', allowExpired: true }).schemaVersion,
+    2,
+  );
+  fs.rmSync(directory, { recursive: true, force: true });
+});
+
+test('cleanup liga recibo original, prueba runtime fresca y rescan negativo', () => {
+  const hashes = {
+    sourceManifestSha256: 'a'.repeat(64),
+    targetAttestationSha256: 'b'.repeat(64),
+    infrastructureEvidenceSha256: 'c'.repeat(64),
+  };
+  const receipt = {
+    kind: 'chaman-mongo-restore-receipt',
+    drillId: 'backup_20260828_1800',
+    sourceDatabase: 'chaman_testing',
+    targetDatabase: 'chaman_restore_drill_20260828_1800',
+    sourceManifestSha256: hashes.sourceManifestSha256.toUpperCase(),
+    targetAttestationSha256: hashes.targetAttestationSha256,
+    infrastructureEvidenceSha256: hashes.infrastructureEvidenceSha256.toUpperCase(),
+    targetRuntimeProofSha256: 'd'.repeat(64),
+  };
+  const expected = {
+    drillId: receipt.drillId,
+    sourceDatabase: receipt.sourceDatabase,
+    targetDatabase: receipt.targetDatabase,
+    ...hashes,
+    targetRuntimeProofSha256: 'D'.repeat(64),
+    expectedKind: 'chaman-mongo-restore-receipt',
+  };
+  assert.doesNotThrow(() => assertCleanupReceiptBindings(receipt, expected));
+  assert.throws(() => assertCleanupReceiptBindings({ ...receipt, targetDatabase: 'otro' }, expected), /Artefacto original/);
+  assert.throws(() => assertCleanupReceiptBindings({ ...receipt, targetRuntimeProofSha256: 'e'.repeat(64) }, expected), /runtime proof/);
+  const runtime = {
+    instanceId: `local-mongodb:${'e'.repeat(64)}`,
+    endpointFingerprintSha256: 'f'.repeat(64),
+    replicaSet: 'chamanDrill',
+    dbPathSha256: '1'.repeat(64),
+    processId: 4242,
+  };
+  assert.doesNotThrow(() => assertSameRuntimeForCleanup(runtime, { ...runtime }));
+  assert.throws(() => assertSameRuntimeForCleanup(runtime, { ...runtime, processId: 4243 }), /reinicio/);
+  assert.doesNotThrow(() => assertDropConfirmed({ ok: true, database: receipt.targetDatabase, rescanFound: false }, receipt.targetDatabase));
+  assert.throws(() => assertDropConfirmed({ ok: true, database: receipt.targetDatabase, rescanFound: true }, receipt.targetDatabase), /rescan/);
+});
+
+test('collector conserva raw railway status, deriva el grafo y sella target local', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-collector-'));
+  const projectId = 'abcdef12-3456-4789-8abc-def123456789';
+  const environmentId = '44444444-4444-4444-8444-444444444444';
+  const volumeId = '55555555-5555-4555-8555-555555555555';
+  try {
+    const proofDir = path.join(directory, 'proof');
+    fs.mkdirSync(proofDir);
+    hardenRestrictedDirectory(proofDir);
+    const root = path.join(directory, 'chaman-recovery-drill', 'collector-test');
+    fs.mkdirSync(path.join(root, 'data'), { recursive: true });
+    const proof = buildRuntimeProof(localRuntimeRaw(path.join(root, 'data'), new Date().toISOString()), {
+      uri: LOCAL_URI, expectedDbPathRoot: root,
+    });
+    const proofFile = path.join(proofDir, 'runtime-proof.json');
+    fs.writeFileSync(proofFile, `${JSON.stringify(proof)}\n`);
+    hardenRestrictedFile(proofFile);
+    const raw = {
+      id: projectId,
+      name: 'CHAMAN2026',
+      environments: [{ id: environmentId, name: 'Testing',
+        services: [{ id: SOURCE_SERVICE, name: 'MongoDB' }],
+        volumes: [{ id: volumeId, name: 'mongo-data', serviceId: SOURCE_SERVICE }] }],
+    };
+    const calls = [];
+    const runner = (args) => {
+      calls.push(args);
+      return args[0] === '--version' ? 'railway 5.26.1\n' : `${JSON.stringify(raw)}\n`;
+    };
+    const outputDir = path.join(directory, 'evidence');
+    const result = collectRailwayEvidence({
+      outputDir, projectId: projectId.toUpperCase(), drillMode: TESTING_LOCAL_MODE, sourceEnvironment: 'testing',
+      sourceService: 'MongoDB', runtimeProofFile: proofFile, evidenceId: 'testing_local_20260828',
+      collector: 'operador-a', reviewedBy: 'responsable-b',
+    }, { runner });
+    assert.equal(result.rawCaptures, 1);
+    const evidence = JSON.parse(fs.readFileSync(result.evidencePath, 'utf8'));
+    assert.equal(evidence.source.serviceId, SOURCE_SERVICE);
+    assert.equal(evidence.target.instanceId, proof.instanceId);
+    assert.deepEqual(calls[1], ['status', '--project', projectId, '--environment', 'testing', '--json']);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(outputDir, 'railway-status-source.raw.json'), 'utf8')), raw);
+    assert.throws(() => collectRailwayEvidence({
+      outputDir: path.join(directory, 'production-evidence'), projectId, drillMode: PRODUCTION_MODE,
+      sourceEnvironment: 'Production', sourceService: 'MongoDB', evidenceId: 'production_20260828',
+      collector: 'operador-a', reviewedBy: 'responsable-b',
+    }, { runner }), /Produccion permanece bloqueada/);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('cleanup v2 rechaza proof corriente legacy antes del drop y conserva compatibilidad legacy', () => {
+  assert.throws(() => assertCleanupRuntimeSchema(2, 1), /schema v2 antes del drop/);
+  assert.doesNotThrow(() => assertCleanupRuntimeSchema(2, 2));
+  assert.doesNotThrow(() => assertCleanupRuntimeSchema(1, 1));
+});
+
+test('verify exige 130 segundos completos desde completedAt y rechaza fechas invalidas o futuras', () => {
+  const completedAt = '2026-08-28T18:29:31.000Z';
+  assert.equal(RESTORE_STABILITY_DELAY_MS, 130_000);
+  assert.throws(
+    () => assertRestoreStabilityDelay(completedAt, { now: '2026-08-28T18:31:40.000Z' }),
+    /al menos 130 segundos/,
+  );
+  assert.deepEqual(
+    assertRestoreStabilityDelay(completedAt, { now: '2026-08-28T18:31:41.000Z' }),
+    {
+      restoreCompletedAt: completedAt,
+      stabilityCheckedAt: '2026-08-28T18:31:41.000Z',
+      stabilityDelaySeconds: 130,
+      requiredStabilityDelaySeconds: 130,
+    },
+  );
+  assert.throws(() => assertRestoreStabilityDelay('fecha-invalida'), /fecha ISO valida/);
+  assert.throws(
+    () => assertRestoreStabilityDelay('2026-08-28T18:31:42.000Z', { now: '2026-08-28T18:31:41.000Z' }),
+    /futuro/,
+  );
+});
+
+test('collector resuelve un binario Railway directo y rechaza rutas configuradas inexistentes', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-railway-bin-'));
+  const executable = path.join(directory, 'railway.exe');
+  fs.writeFileSync(executable, 'test');
+  try {
+    assert.equal(resolveRailwayExecutable({ CHAMAN_RAILWAY_BIN: executable }, 'win32'), executable);
+    assert.throws(
+      () => resolveRailwayExecutable({ CHAMAN_RAILWAY_BIN: path.join(directory, 'missing.exe') }, 'win32'),
+      /no refiere un archivo ejecutable existente/,
+    );
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('parser acepta el grafo real de Railway CLI con edges, serviceInstances y volumeInstances', () => {
+  const projectId = '33333333-3333-4333-8333-333333333333';
+  const environmentId = '44444444-4444-4444-8444-444444444444';
+  const volumeId = '55555555-5555-4555-8555-555555555555';
+  const raw = {
+    id: projectId,
+    name: 'CHAMAN2026',
+    services: { edges: [{ node: { id: SOURCE_SERVICE, name: 'MongoDB' } }] },
+    environments: { edges: [{ node: {
+      id: environmentId,
+      name: 'Testing',
+      serviceInstances: { edges: [{ node: {
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', serviceId: SOURCE_SERVICE, serviceName: 'MongoDB',
+      } }] },
+      volumeInstances: { edges: [{ node: {
+        serviceId: SOURCE_SERVICE, volume: { id: volumeId, name: 'mongo-volume' },
+      } }] },
+    } }] },
+  };
+  const derived = deriveRailwayAsset(raw, { projectId, environment: 'Testing', service: 'MongoDB' });
+  assert.equal(derived.environmentId, environmentId);
+  assert.equal(derived.serviceId, SOURCE_SERVICE);
+  assert.deepEqual(derived.volumeIds, [volumeId]);
+  const unlinked = structuredClone(raw);
+  delete unlinked.environments.edges[0].node.volumeInstances.edges[0].node.serviceId;
+  assert.throws(
+    () => deriveRailwayAsset(unlinked, { projectId, environment: 'Testing', service: 'MongoDB' }),
+    /exactamente un volumen/,
+  );
+});
+
+test('evidencia Railway se deriva del raw, detecta adulteracion y auto-revision', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-evidence-'));
+  try {
+    const { evidence } = writeEvidence(directory);
+    assert.doesNotThrow(() => validateInfrastructureEvidence(evidence, { baseDir: directory }));
+    assert.throws(() => validateInfrastructureEvidence({ ...evidence, target: {
+      ...evidence.target, volumeIds: evidence.source.volumeIds,
+    } }, { baseDir: directory }), /captura cruda|volumen/);
+    assert.throws(() => validateInfrastructureEvidence({ ...evidence, reviewedBy: evidence.collector }, { baseDir: directory }), /distintas/);
+    assert.throws(() => validateInfrastructureEvidence({ ...evidence, collection: {
+      ...evidence.collection,
+      rawCaptures: evidence.collection.rawCaptures.map((capture, index) =>
+        index === 0 ? { ...capture, commandSha256: 'f'.repeat(64) } : capture),
+    } }, { baseDir: directory }), /comando Railway esperado/);
+    assert.throws(() => validateInfrastructureEvidence({
+      ...evidence,
+      collectedAt: new Date(Date.now() + 60_000).toISOString(),
+      expiresAt: new Date(Date.now() + 61 * 60_000).toISOString(),
+    }, { baseDir: directory }), /futuro/);
+    fs.appendFileSync(path.join(directory, evidence.collection.rawCaptures[0].file), 'tampered');
+    assert.throws(() => validateInfrastructureEvidence(evidence, { baseDir: directory }), /Checksum/);
+    const fresh = writeEvidence(path.join(directory, 'fresh'));
+    const loaded = { sha256: 'b'.repeat(64), validated: validateInfrastructureEvidence(fresh.evidence, { baseDir: path.dirname(fresh.file) }) };
+    assert.throws(() => bindAttestationToEvidence(sourceAttestation(),
+      validateSourceAttestation(sourceAttestation(), { now: NOW }), loaded, 'source'), /ligada/);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('archivo secreto temporal se restringe y elimina incluso si el callback falla', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-secret-test-'));
+  let capturedPath;
+  try {
+    assert.throws(
+      () =>
+        withMongoSecretFile(
+          SOURCE_URI,
+          'tools-yaml',
+          (filePath) => {
+            capturedPath = filePath;
+            assert.match(fs.readFileSync(filePath, 'utf8'), /^uri: /);
+            throw new Error('fallo simulado');
+          },
+          {
+            tmpRoot: directory,
+            hardenDirectory: (target) => {
+              assert.deepEqual(fs.readdirSync(target), []);
+              fs.chmodSync(target, 0o700);
+            },
+            hardenFile: (target) => fs.chmodSync(target, 0o600),
+            verifyDirectory: () => ({ ok: true }),
+          },
+        ),
+      /fallo simulado/,
+    );
+    assert.equal(fs.existsSync(capturedPath), false);
+    assert.deepEqual(fs.readdirSync(directory), []);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('hardening Windows usa script ACL antes de datos y exige evidencia efectiva', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-acl-test-'));
+  const filePath = path.join(directory, 'secret.yml');
+  const calls = [];
+  try {
+    fs.writeFileSync(filePath, 'secret');
+    const spawn = (program, args, options) => {
+      calls.push({ program, args, env: options.env });
+      return {
+        status: 0,
+        stdout: JSON.stringify({ ok: true, kind: 'file', ownerSid: 'S-1-5-21-1', rules: 1, protected: true }),
+        stderr: '',
+      };
+    };
+    hardenRestrictedDirectory(directory, {
+      platform: 'win32',
+      spawn,
+    });
+    hardenRestrictedFile(filePath, { platform: 'win32', spawn });
+    assert.deepEqual(
+      calls.map((call) => call.args.at(-1)),
+      ['HardenDirectory', 'VerifyDirectory', 'HardenFile', 'VerifyFile'],
+    );
+    assert.ok(calls.every((call) => call.program === 'powershell.exe'));
+    assert.equal(calls[0].env.CHAMAN_ACL_TARGET_PATH, directory);
+    assert.equal(calls[2].env.CHAMAN_ACL_TARGET_PATH, filePath);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('ACL efectiva Windows protege directorio antes de archivo', { skip: process.platform !== 'win32' }, () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-acl-effective-'));
+  try {
+    hardenRestrictedDirectory(directory);
+    assert.equal(verifyRestrictedDirectory(directory).ok, true);
+    const file = path.join(directory, 'secret.txt');
+    fs.writeFileSync(file, 'not-a-real-secret');
+    hardenRestrictedFile(file);
+    assert.equal(verifyRestrictedFile(file).ok, true);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('auditoria de semillas compara IDs unicos y acepta 51 siembras que comparten 30 variedades', () => {
+  const sowings = Array.from({ length: 51 }, (_, index) => ({ idSemilla: `seed-${index % 30}` }));
+  const seeds = Array.from({ length: 30 }, (_, index) => ({ _id: `seed-${index}` }));
+  assert.deepEqual(summarizeSeedResolution(sowings, seeds), {
+    referencedUniqueSeeds: 30,
+    resolvedUniqueSeeds: 30,
+    missingSeedReferences: 0,
+    unresolvedUniqueSeeds: 0,
+  });
+});
+
+test('manifiesto se sella con checksums y detecta cualquier manipulacion', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-mongo-recovery-'));
+  try {
+    const archivePath = path.join(directory, 'backup.archive.gz');
+    const inventoryBeforePath = path.join(directory, 'source-inventory-before.json');
+    const inventoryAfterPath = path.join(directory, 'source-inventory-after.json');
+    const stableInventoryAfterPath = path.join(directory, 'source-inventory-after-stable.json');
+    const inventoryBefore = inventory();
+    const inventoryAfter = inventory();
+    inventoryAfter.capturedAt = '2026-08-28T18:02:00.000Z';
+    inventoryAfter.collections[0].count -= 1;
+    const stableInventoryAfter = inventory();
+    stableInventoryAfter.capturedAt = '2026-08-28T18:02:00.000Z';
+    fs.writeFileSync(archivePath, 'archive-fixture');
+    fs.writeFileSync(inventoryBeforePath, `${JSON.stringify(inventoryBefore)}\n`);
+    fs.writeFileSync(inventoryAfterPath, `${JSON.stringify(inventoryAfter)}\n`);
+    fs.writeFileSync(stableInventoryAfterPath, `${JSON.stringify(stableInventoryAfter)}\n`);
+    const stableManifest = buildBackupManifest({
+      attestation: sourceAttestation(),
+      inventoryBefore,
+      inventoryAfter: stableInventoryAfter,
+      archivePath,
+      inventoryBeforePath,
+      inventoryAfterPath: stableInventoryAfterPath,
+      tools: { mongosh: '2.5.0', mongodump: '100.12.2' },
+      gitSha: '901cfdae8732d06d34fb20ec9646b45ddf323c29',
+      now: new Date('2026-08-28T18:03:00.000Z'),
+    });
+    assert.equal(stableManifest.sourceObservation.comparison.ok, true);
+    assert.equal(validateBackupManifest(stableManifest, directory).sourcePointInTimeGuaranteed, false);
+    const manifest = buildBackupManifest({
+      attestation: sourceAttestation(),
+      inventoryBefore,
+      inventoryAfter,
+      archivePath,
+      inventoryBeforePath,
+      inventoryAfterPath,
+      tools: { mongosh: '2.5.0', mongodump: '100.12.2' },
+      gitSha: '901cfdae8732d06d34fb20ec9646b45ddf323c29',
+      now: new Date('2026-08-28T18:03:00.000Z'),
+    });
+    const validated = validateBackupManifest(manifest, directory);
+    assert.equal(manifest.schemaVersion, 2);
+    assert.equal(validated.sourcePointInTimeGuaranteed, false);
+    assert.equal(manifest.sourceObservation.comparison.findings[0].issue, 'count_mismatch');
+    const hiddenDrift = structuredClone(manifest);
+    hiddenDrift.sourceObservation.sourcePointInTimeGuaranteed = true;
+    hiddenDrift.consistency.sourcePointInTimeGuaranteed = true;
+    hiddenDrift.sourceObservation.comparison = compareInventories(inventoryBefore, inventoryBefore);
+    assert.throws(() => validateBackupManifest(hiddenDrift, directory), /comparacion source before\/after|point-in-time/);
+    fs.appendFileSync(archivePath, 'tampered');
+    assert.throws(() => validateBackupManifest(manifest, directory), /Checksum del archive invalido/);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('comparacion exige mismas colecciones, conteos, indices y major de MongoDB', () => {
+  const restored = inventory('chaman_restore_drill_20260828_1800');
+  assert.equal(compareInventories(inventory(), restored).ok, true);
+  restored.collections[0].count = 50;
+  assert.deepEqual(compareInventories(inventory(), restored).findings[0], {
+    collection: 'lotes',
+    issue: 'count_mismatch',
+    expected: 51,
+    actual: 50,
+  });
+  const wrongOptions = inventory('chaman_restore_drill_20260828_1800');
+  wrongOptions.collections[0].options.validationAction = 'warn';
+  assert.equal(compareInventories(inventory(), wrongOptions).findings[0].issue, 'options_mismatch');
+  const wrongIndex = inventory('chaman_restore_drill_20260828_1800');
+  wrongIndex.collections[0].indexes[1].hidden = true;
+  wrongIndex.collections[0].indexes[1].wildcardProjection = { secretField: 0 };
+  assert.equal(compareInventories(inventory(), wrongIndex).findings[0].issue, 'indexes_mismatch');
+  const wrongVersion = inventory('chaman_restore_drill_20260828_1800');
+  wrongVersion.serverVersion = '7.0.18';
+  assert.throws(() => compareInventories(inventory(), wrongVersion), /incompatibles/);
+  const futureOption = inventory('chaman_restore_drill_20260828_1800');
+  futureOption.collections[0].indexes[0].futureSemanticOption = { enabled: true };
+  assert.equal(compareInventories(inventory(), futureOption).ok, false);
+  const generatedMetadata = inventory('chaman_restore_drill_20260828_1800');
+  generatedMetadata.collections[0].indexes[0].v = 9;
+  generatedMetadata.collections[0].indexes[0].ns = 'generated';
+  assert.equal(compareInventories(inventory(), generatedMetadata).ok, true);
+  const reversedCompound = inventory('chaman_restore_drill_20260828_1800');
+  reversedCompound.collections[0].indexes[1].key = { nombre: 1, idProductor: 1 };
+  assert.equal(compareInventories(inventory(), reversedCompound).ok, false);
+  const sameCountDifferentValue = inventory('chaman_restore_drill_20260828_1800');
+  sameCountDifferentValue.collections[0].contentHash = 'd'.repeat(32);
+  assert.equal(compareInventories(inventory(), sameCountDifferentValue).findings[0].issue, 'content_hash_mismatch');
+  const inventoryScript = fs.readFileSync(
+    path.join(process.cwd(), 'scripts', 'mongo-recovery', 'inventory.mongosh.js'),
+    'utf8',
+  );
+  assert.match(inventoryScript, /runCommand\(\{ dbHash: 1 \}\)/);
+});
+
+test('certificado liga archive e inventarios inmutables y no tolera un documento menos', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-archive-certificate-'));
+  try {
+    const backupDir = path.join(root, 'backup');
+    const certificateDir = path.join(root, 'certificate');
+    fs.mkdirSync(backupDir);
+    const testingEvidence = writeTestingEvidence(certificateDir);
+    const archivePath = path.join(backupDir, 'backup.archive.gz');
+    const beforePath = path.join(backupDir, 'source-inventory-before.json');
+    const afterPath = path.join(backupDir, 'source-inventory-after.json');
+    const before = inventory('chaman_testing');
+    const after = inventory('chaman_testing');
+    after.capturedAt = '2026-08-28T18:02:00.000Z';
+    after.collections[0].count -= 1;
+    fs.writeFileSync(archivePath, 'archive-candidate');
+    fs.writeFileSync(beforePath, `${JSON.stringify(before)}\n`);
+    fs.writeFileSync(afterPath, `${JSON.stringify(after)}\n`);
+    const manifest = buildBackupManifest({
+      attestation: sourceAttestation({
+        drillMode: TESTING_LOCAL_MODE,
+        sourceEnvironment: 'testing',
+        database: 'chaman_testing',
+        infrastructureEvidenceSha256: testingEvidence.sha256,
+        instanceIdentity: identity('railway', SOURCE_SERVICE, TESTING_SOURCE_URI),
+      }),
+      inventoryBefore: before,
+      inventoryAfter: after,
+      inventoryBeforePath: beforePath,
+      inventoryAfterPath: afterPath,
+      archivePath,
+      tools: { mongosh: '2.10.0', mongodump: 'mongodump version: 100.18.0' },
+      gitSha: '901cfdae8732d06d34fb20ec9646b45ddf323c29',
+      now: new Date('2026-08-28T18:03:00.000Z'),
+    });
+    const manifestPath = path.join(backupDir, 'manifest.json');
+    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const manifestVerified = validateBackupManifest(manifest, backupDir);
+    const certificationDatabase = 'chaman_restore_drill_certification_20260828';
+    const evidenceRuntimeProof = JSON.parse(
+      fs.readFileSync(path.join(certificateDir, 'runtime-proof.json'), 'utf8'),
+    );
+    const runtimeDbPath = evidenceRuntimeProof.mongo.dbPath;
+    const runtimeRoot = path.dirname(runtimeDbPath);
+    const certificationUri = `mongodb://127.0.0.1:27019/${certificationDatabase}?replicaSet=chamanDrill`;
+    const runtimeAt = (capturedAt) => {
+      const raw = localRuntimeRaw(runtimeDbPath, capturedAt);
+      raw.database = certificationDatabase;
+      return buildRuntimeProof(raw, {
+        uri: certificationUri,
+        expectedDbPathRoot: runtimeRoot,
+        now: new Date(capturedAt),
+      });
+    };
+    const runtimeProof = runtimeAt('2026-08-28T18:00:00.000Z');
+    const postRestoreRuntimeProof = runtimeAt('2026-08-28T18:02:40.000Z');
+    const verifyRuntimeProof = runtimeAt('2026-08-28T18:04:50.000Z');
+    const liveBeforeAuditsRuntimeProof = runtimeAt('2026-08-28T18:05:00.000Z');
+    const liveAfterAuditsRuntimeProof = runtimeAt('2026-08-28T18:05:00.500Z');
+    const runtimeProofPath = path.join(certificateDir, 'target-runtime-proof-restore.json');
+    fs.writeFileSync(runtimeProofPath, `${JSON.stringify(runtimeProof)}\n`);
+    const verifyRuntimeProofPath = path.join(certificateDir, 'target-runtime-proof-verify.json');
+    const postRestoreRuntimePath = path.join(certificateDir, 'target-runtime-proof-live-after-restore.json');
+    const liveBeforeAuditsRuntimePath = path.join(certificateDir, 'target-runtime-proof-live-before-audits.json');
+    const liveAfterAuditsRuntimePath = path.join(certificateDir, 'target-runtime-proof-live-after-audits.json');
+    for (const [runtimePath, proof] of [
+      [verifyRuntimeProofPath, verifyRuntimeProof],
+      [postRestoreRuntimePath, postRestoreRuntimeProof],
+      [liveBeforeAuditsRuntimePath, liveBeforeAuditsRuntimeProof],
+      [liveAfterAuditsRuntimePath, liveAfterAuditsRuntimeProof],
+    ]) fs.writeFileSync(runtimePath, `${JSON.stringify(proof)}\n`);
+    const infrastructureEvidencePath = path.join(certificateDir, 'infrastructure-evidence.json');
+    fs.copyFileSync(testingEvidence.file, infrastructureEvidencePath);
+    const targetAttestationValue = targetAttestation({
+      drillId: manifest.drillId,
+      drillMode: TESTING_LOCAL_MODE,
+      environment: 'local-recovery-drill',
+      database: certificationDatabase,
+      expiresAt: '2026-08-28T18:05:59.000Z',
+      infrastructureEvidenceSha256: sha256File(infrastructureEvidencePath),
+      instanceIdentity: {
+        provider: 'local-mongodb',
+        instanceId: runtimeProof.instanceId,
+        endpointFingerprintSha256: runtimeProof.endpoint.endpointFingerprintSha256,
+      },
+    });
+    const targetAttestationPath = path.join(certificateDir, 'target-attestation.json');
+    fs.writeFileSync(targetAttestationPath, `${JSON.stringify(targetAttestationValue)}\n`);
+    const emptyInventory = {
+      ...inventory(certificationDatabase),
+      databaseContentHash: 'd41d8cd98f00b204e9800998ecf8427e',
+      collections: [],
+    };
+    const emptyInventoryPath = path.join(certificateDir, 'target-inventory-before.json');
+    fs.writeFileSync(emptyInventoryPath, `${JSON.stringify(emptyInventory)}\n`);
+    const immediate = inventory(certificationDatabase);
+    const finalInventory = inventory(certificationDatabase);
+    finalInventory.capturedAt = '2026-08-28T18:05:00.000Z';
+    const immediatePath = path.join(certificateDir, 'target-inventory-after-restore.json');
+    const beforeAuditsPath = path.join(certificateDir, 'target-inventory-before-audits.json');
+    const finalPath = path.join(certificateDir, 'target-inventory-after-audits.json');
+    const agronomicPath = path.join(certificateDir, 'audit-restored-agronomic-data.json');
+    const lotPath = path.join(certificateDir, 'audit-lote-data-integrity.json');
+    fs.writeFileSync(immediatePath, `${JSON.stringify(immediate)}\n`);
+    fs.writeFileSync(beforeAuditsPath, `${JSON.stringify(immediate)}\n`);
+    fs.writeFileSync(finalPath, `${JSON.stringify(finalInventory)}\n`);
+    fs.writeFileSync(agronomicPath, `${JSON.stringify({ ok: true, summary: {} })}\n`);
+    fs.writeFileSync(lotPath, `${JSON.stringify({ ok: true, counters: {}, issueSamples: [] })}\n`);
+    const manifestSha256 = sha256File(manifestPath);
+    const targetAttestationSha256 = sha256File(targetAttestationPath);
+    const infrastructureEvidenceSha256 = sha256File(infrastructureEvidencePath);
+    const targetRuntimeProofSha256 = sha256File(runtimeProofPath);
+    const base = {
+      schemaVersion: 2,
+      restoreRole: 'certification',
+      drillId: manifest.drillId,
+      sourceDatabase: manifest.database,
+      targetDatabase: certificationDatabase,
+      sourceManifestSha256: manifestSha256,
+      targetAttestationSha256,
+      infrastructureEvidenceSha256,
+      targetRuntimeProofSha256,
+    };
+    const intentPath = path.join(certificateDir, 'restore-intent.json');
+    fs.writeFileSync(intentPath, `${JSON.stringify({
+      ...base,
+      kind: 'chaman-mongo-restore-intent',
+      archiveCertificationSha256: null,
+      emptyInventorySha256: sha256File(emptyInventoryPath),
+      authorizedAt: '2026-08-28T18:02:00.000Z',
+      status: 'restore-authorized',
+    })}\n`);
+    const receiptPath = path.join(certificateDir, 'restore-receipt.json');
+    const immediateCounts = {
+      collections: immediate.collections.length,
+      documents: immediate.collections.reduce((sum, item) => sum + item.count, 0),
+    };
+    fs.writeFileSync(receiptPath, `${JSON.stringify({
+      ...base,
+      kind: 'chaman-mongo-restore-receipt',
+      archiveCertificationSha256: null,
+      restoreIntentSha256: sha256File(intentPath),
+      targetMongoVersion: immediate.serverVersion,
+      startedAt: '2026-08-28T18:02:01.000Z',
+      restoredInventory: {
+        file: path.basename(immediatePath),
+        sha256: sha256File(immediatePath),
+        ...immediateCounts,
+        certifiedComparison: null,
+      },
+      completedAt: '2026-08-28T18:02:50.000Z',
+      postRestoreRuntime: {
+        file: path.basename(postRestoreRuntimePath),
+        sha256: sha256File(postRestoreRuntimePath),
+        valueSha256: sha256Json(postRestoreRuntimeProof),
+      },
+      status: 'restored-unverified',
+    })}\n`);
+    const verificationPath = path.join(certificateDir, 'verification.json');
+    const immediateComparison = compareInventories(immediate, immediate);
+    const beforeAuditsComparison = compareInventories(immediate, immediate);
+    const afterAuditsComparison = compareInventories(immediate, finalInventory);
+    const beforeVsAfterComparison = compareInventories(immediate, finalInventory);
+    fs.writeFileSync(verificationPath, `${JSON.stringify({
+      schemaVersion: 2,
+      kind: 'chaman-mongo-restore-verification',
+      restoreRole: 'certification',
+      drillId: manifest.drillId,
+      sourceManifestSha256: manifestSha256,
+      archiveCertificationSha256: null,
+      restoreReceiptSha256: sha256File(receiptPath),
+      sourceDatabase: manifest.database,
+      targetDatabase: certificationDatabase,
+      currentRuntimeProofSha256: sha256File(verifyRuntimeProofPath),
+      liveRuntimeValueSha256: sha256Json(liveBeforeAuditsRuntimeProof),
+      postAuditRuntimeValueSha256: sha256Json(liveAfterAuditsRuntimeProof),
+      runtimeProcessId: verifyRuntimeProof.mongo.processId,
+      inventory: {
+        ...afterAuditsComparison,
+        file: path.basename(finalPath),
+        sha256: sha256File(finalPath),
+      },
+      audits: {
+        agronomicMatrix: { sha256: sha256File(agronomicPath) },
+        lotIntegrity: { sha256: sha256File(lotPath) },
+      },
+      auditWindowInventory: {
+        ok: true,
+        immediate: {
+          file: path.basename(immediatePath),
+          sha256: sha256File(immediatePath),
+          expectedComparison: immediateComparison,
+        },
+        beforeAudits: {
+          file: path.basename(beforeAuditsPath),
+          sha256: sha256File(beforeAuditsPath),
+          sourceComparison: beforeAuditsComparison,
+        },
+        afterAudits: {
+          file: path.basename(finalPath),
+          sha256: sha256File(finalPath),
+          sourceComparison: afterAuditsComparison,
+        },
+        beforeVsAfter: beforeVsAfterComparison,
+      },
+      restoreCompletedAt: '2026-08-28T18:02:50.000Z',
+      stabilityCheckedAt: '2026-08-28T18:05:00.000Z',
+      stabilityDelaySeconds: 130,
+      requiredStabilityDelaySeconds: 130,
+      verifiedAt: '2026-08-28T18:05:01.000Z',
+      status: 'passed',
+    })}\n`);
+    const certificate = buildArchiveCertification({
+      drillId: manifest.drillId,
+      drillMode: manifest.drillMode,
+      sourceDatabase: manifest.database,
+      certificationDatabase,
+      sourceManifestSha256: manifestSha256,
+      archiveSha256: manifest.archive.sha256,
+      certificationTarget: {
+        targetAttestationSha256,
+        infrastructureEvidenceSha256,
+        targetRuntimeProofSha256,
+        verificationRuntimeProofSha256: sha256File(verifyRuntimeProofPath),
+        instanceId: runtimeProof.instanceId,
+        endpointFingerprintSha256: runtimeProof.endpoint.endpointFingerprintSha256,
+        replicaSet: runtimeProof.mongo.replicaSet,
+        dbPathSha256: runtimeProof.mongo.dbPathSha256,
+        processId: runtimeProof.mongo.processId,
+        verificationProcessId: verifyRuntimeProof.mongo.processId,
+      },
+      restoreArtifacts: {
+        intent: { file: path.basename(intentPath), sha256: sha256File(intentPath) },
+        receipt: { file: path.basename(receiptPath), sha256: sha256File(receiptPath) },
+        verification: { file: path.basename(verificationPath), sha256: sha256File(verificationPath) },
+        runtimeProof: { file: path.basename(runtimeProofPath), sha256: sha256File(runtimeProofPath) },
+        verifyRuntimeProof: {
+          file: path.basename(verifyRuntimeProofPath),
+          sha256: sha256File(verifyRuntimeProofPath),
+        },
+        postRestoreRuntime: {
+          file: path.basename(postRestoreRuntimePath),
+          sha256: sha256File(postRestoreRuntimePath),
+        },
+        liveBeforeAuditsRuntime: {
+          file: path.basename(liveBeforeAuditsRuntimePath),
+          sha256: sha256File(liveBeforeAuditsRuntimePath),
+        },
+        liveAfterAuditsRuntime: {
+          file: path.basename(liveAfterAuditsRuntimePath),
+          sha256: sha256File(liveAfterAuditsRuntimePath),
+        },
+        targetAttestation: {
+          file: path.basename(targetAttestationPath),
+          sha256: sha256File(targetAttestationPath),
+        },
+        infrastructureEvidence: {
+          file: path.basename(infrastructureEvidencePath),
+          sha256: sha256File(infrastructureEvidencePath),
+        },
+        emptyInventory: {
+          file: path.basename(emptyInventoryPath),
+          sha256: sha256File(emptyInventoryPath),
+        },
+        beforeAuditsInventory: {
+          file: path.basename(beforeAuditsPath),
+          sha256: sha256File(beforeAuditsPath),
+        },
+      },
+      inventory: {
+        file: path.basename(finalPath),
+        sha256: sha256File(finalPath),
+        collections: finalInventory.collections.length,
+        documents: finalInventory.collections.reduce((sum, item) => sum + item.count, 0),
+        serverVersion: finalInventory.serverVersion,
+        capturedAt: finalInventory.capturedAt,
+      },
+      audits: {
+        agronomic: { file: path.basename(agronomicPath), sha256: sha256File(agronomicPath) },
+        lotIntegrity: { file: path.basename(lotPath), sha256: sha256File(lotPath) },
+      },
+      sourceObservation: {
+        sourcePointInTimeGuaranteed: false,
+        comparison: manifestVerified.sourceComparison,
+        beforeToCertified: compareInventories(manifestVerified.sourceBefore, finalInventory),
+        afterToCertified: compareInventories(manifestVerified.sourceAfter, finalInventory),
+      },
+      certifierGitSha: '901cfdae8732d06d34fb20ec9646b45ddf323c29',
+      tools: { mongosh: '2.10.0', mongorestore: 'mongorestore version: 100.18.0' },
+      certifiedAt: '2026-08-28T18:05:01.000Z',
+      status: 'certified',
+    });
+    const validated = validateArchiveCertification(certificate, {
+      certificateDir,
+      manifest,
+      manifestPath,
+      manifestVerified,
+    });
+    assert.equal(validated.sourcePointInTimeGuaranteed, false);
+    const certificatePath = path.join(certificateDir, 'archive-certification.json');
+    fs.writeFileSync(certificatePath, `${JSON.stringify(certificate, null, 2)}\n`);
+    for (const artifactPath of [
+      runtimeProofPath, verifyRuntimeProofPath, postRestoreRuntimePath,
+      liveBeforeAuditsRuntimePath, liveAfterAuditsRuntimePath,
+      infrastructureEvidencePath, targetAttestationPath, emptyInventoryPath,
+      immediatePath, beforeAuditsPath, finalPath, agronomicPath, lotPath,
+      intentPath, receiptPath, verificationPath, certificatePath,
+    ]) hardenRestrictedFile(artifactPath);
+    const manifestContextValue = {
+      manifest,
+      manifestPath,
+      verified: manifestVerified,
+    };
+    assert.equal(
+      loadArchiveCertification(certificatePath, manifestContextValue, { requireCleanup: false }).validated.certificationDatabase,
+      certificationDatabase,
+    );
+    const baselineReceipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
+    const baselineVerification = JSON.parse(fs.readFileSync(verificationPath, 'utf8'));
+    const assertRejectedArtifactMutation = ({ mutateReceipt, mutateVerification }, pattern) => {
+      const changedReceipt = structuredClone(baselineReceipt);
+      const changedVerification = structuredClone(baselineVerification);
+      if (mutateReceipt) mutateReceipt(changedReceipt);
+      fs.writeFileSync(receiptPath, `${JSON.stringify(changedReceipt)}\n`);
+      changedVerification.restoreReceiptSha256 = sha256File(receiptPath);
+      if (mutateVerification) mutateVerification(changedVerification);
+      fs.writeFileSync(verificationPath, `${JSON.stringify(changedVerification)}\n`);
+      const changedCertificate = structuredClone(certificate);
+      changedCertificate.restoreArtifacts.receipt.sha256 = sha256File(receiptPath);
+      changedCertificate.restoreArtifacts.verification.sha256 = sha256File(verificationPath);
+      assert.throws(() => validateArchiveCertification(changedCertificate, {
+        certificateDir, manifest, manifestPath, manifestVerified,
+      }), pattern);
+      fs.writeFileSync(receiptPath, `${JSON.stringify(baselineReceipt)}\n`);
+      fs.writeFileSync(verificationPath, `${JSON.stringify(baselineVerification)}\n`);
+    };
+    assertRejectedArtifactMutation({
+      mutateReceipt: (changed) => { changed.postRestoreRuntime.unexpected = true; },
+    }, /postRestoreRuntime.*campos inesperados/i);
+    assertRejectedArtifactMutation({
+      mutateReceipt: (changed) => { delete changed.restoredInventory.documents; },
+    }, /restoredInventory.*campos inesperados/i);
+    assertRejectedArtifactMutation({
+      mutateReceipt: (changed) => { changed.restoredInventory.collections += 1; },
+    }, /resumen del inventario inmediato/i);
+    assertRejectedArtifactMutation({
+      mutateReceipt: (changed) => { changed.restoredInventory.certifiedComparison = {}; },
+    }, /certifiedComparison/i);
+    assertRejectedArtifactMutation({
+      mutateVerification: (changed) => { changed.inventory.sourceDocuments += 1; },
+    }, /verification\.inventory no coincide/i);
+    assertRejectedArtifactMutation({
+      mutateVerification: (changed) => { delete changed.auditWindowInventory.afterAudits; },
+    }, /auditWindowInventory.*campos inesperados/i);
+    assertRejectedArtifactMutation({
+      mutateVerification: (changed) => { changed.auditWindowInventory.beforeVsAfter.targetDocuments += 1; },
+    }, /beforeVsAfter no coincide/i);
+    assertRejectedArtifactMutation({
+      mutateVerification: (changed) => { changed.auditWindowInventory.afterAudits.sha256 = 'f'.repeat(64); },
+    }, /ventana completa de inventarios/i);
+    assert.throws(
+      () => loadArchiveCertification(certificatePath, manifestContextValue),
+      /cleanup-receipt|no existe|cannot find/i,
+    );
+    const tooEarly = structuredClone(certificate);
+    const tooEarlyVerification = JSON.parse(fs.readFileSync(verificationPath, 'utf8'));
+    tooEarlyVerification.stabilityCheckedAt = '2026-08-28T18:04:59.000Z';
+    tooEarlyVerification.stabilityDelaySeconds = 129;
+    fs.writeFileSync(verificationPath, `${JSON.stringify(tooEarlyVerification)}\n`);
+    tooEarly.restoreArtifacts.verification.sha256 = sha256File(verificationPath);
+    assert.throws(() => validateArchiveCertification(tooEarly, {
+      certificateDir, manifest, manifestPath, manifestVerified,
+    }), /ventana estable completa/);
+    fs.writeFileSync(verificationPath, `${JSON.stringify({
+      ...tooEarlyVerification,
+      stabilityCheckedAt: '2026-08-28T18:05:00.000Z',
+      stabilityDelaySeconds: 130,
+    })}\n`);
+    const cleanupRuntimeProof = runtimeAt('2026-08-28T18:05:45.000Z');
+    const liveCleanupRuntimeProof = runtimeAt('2026-08-28T18:05:55.000Z');
+    const cleanupRuntimeProofSerializedSha256 = require('node:crypto')
+      .createHash('sha256').update(`${JSON.stringify(cleanupRuntimeProof)}\n`).digest('hex');
+    const cleanupRuntimeValueSha256 = sha256Json(liveCleanupRuntimeProof);
+    const cleanupRuntimeProofName = `target-runtime-proof-cleanup-${cleanupRuntimeProofSerializedSha256.slice(0, 16)}.json`;
+    const liveCleanupRuntimeProofName = `target-runtime-proof-live-cleanup-${cleanupRuntimeValueSha256.slice(0, 16)}.json`;
+    const cleanupRuntimeProofPath = path.join(certificateDir, cleanupRuntimeProofName);
+    const liveCleanupRuntimeProofPath = path.join(certificateDir, liveCleanupRuntimeProofName);
+    fs.writeFileSync(cleanupRuntimeProofPath, `${JSON.stringify(cleanupRuntimeProof)}\n`);
+    fs.writeFileSync(liveCleanupRuntimeProofPath, `${JSON.stringify(liveCleanupRuntimeProof)}\n`);
+    hardenRestrictedFile(cleanupRuntimeProofPath);
+    hardenRestrictedFile(liveCleanupRuntimeProofPath);
+    const cleanupReceipt = {
+      schemaVersion: 1,
+      kind: 'chaman-mongo-cleanup-receipt',
+      status: 'dropped',
+      rescanFound: false,
+      drillId: certificate.drillId,
+      database: certificationDatabase,
+      sourceManifestSha256: manifestSha256,
+      restoreIntentSha256: sha256File(intentPath),
+      restoreReceiptSha256: sha256File(receiptPath),
+      targetAttestationSha256,
+      infrastructureEvidenceSha256,
+      originalTargetRuntimeProofSha256: targetRuntimeProofSha256,
+      freshRuntimeProofFile: cleanupRuntimeProofName,
+      freshRuntimeProofSha256: sha256File(cleanupRuntimeProofPath),
+      liveRuntimeProofFile: liveCleanupRuntimeProofName,
+      liveRuntimeProofSha256: sha256File(liveCleanupRuntimeProofPath),
+      runtimeProcessId: cleanupRuntimeProof.mongo.processId,
+      liveRuntimeValueSha256: sha256Json(liveCleanupRuntimeProof),
+      originalAttestationExpired: true,
+      completedAt: '2026-08-28T18:06:00.000Z',
+    };
+    assert.equal(validateCertificationCleanupReceipt(cleanupReceipt, {
+      certification: { value: certificate, validated }, manifestPath, certificateDir,
+    }), true);
+    assert.throws(() => validateCertificationCleanupReceipt({
+      ...cleanupReceipt,
+      originalAttestationExpired: false,
+    }, {
+      certification: { value: certificate, validated }, manifestPath, certificateDir,
+    }), /drop \+ rescan/);
+    assert.throws(() => validateCertificationCleanupReceipt({ ...cleanupReceipt, rescanFound: true }, {
+      certification: { value: certificate, validated }, manifestPath, certificateDir,
+    }), /drop \+ rescan/);
+    const cleanupReceiptPath = path.join(certificateDir, 'cleanup-receipt.json');
+    fs.writeFileSync(cleanupReceiptPath, `${JSON.stringify(cleanupReceipt)}\n`);
+    hardenRestrictedFile(cleanupReceiptPath);
+    assert.equal(
+      loadArchiveCertification(certificatePath, manifestContextValue).validated.certificationDatabase,
+      certificationDatabase,
+    );
+    const skeletalCleanup = { ...cleanupReceipt };
+    delete skeletalCleanup.freshRuntimeProofSha256;
+    assert.throws(() => validateCertificationCleanupReceipt(skeletalCleanup, {
+      certification: { value: certificate, validated }, manifestPath, certificateDir,
+    }), /campos inesperados o faltantes/);
+    const oneLess = inventory('chaman_restore_drill_final_20260828');
+    oneLess.collections[0].count -= 1;
+    assert.equal(compareInventories(validated.inventory, oneLess).ok, false);
+    const wrongArchive = structuredClone(certificate);
+    wrongArchive.archiveSha256 = 'f'.repeat(64);
+    assert.throws(() => validateArchiveCertification(wrongArchive, {
+      certificateDir, manifest, manifestPath, manifestVerified,
+    }), /archive sellado/);
+    const ttlEnabledProof = structuredClone(runtimeProof);
+    ttlEnabledProof.getParameter.ttlMonitorEnabled = true;
+    fs.writeFileSync(runtimeProofPath, `${JSON.stringify(ttlEnabledProof)}\n`);
+    const ttlEnabledCertificate = structuredClone(certificate);
+    ttlEnabledCertificate.restoreArtifacts.runtimeProof.sha256 = sha256File(runtimeProofPath);
+    ttlEnabledCertificate.certificationTarget.targetRuntimeProofSha256 = sha256File(runtimeProofPath);
+    assert.throws(() => validateArchiveCertification(ttlEnabledCertificate, {
+      certificateDir, manifest, manifestPath, manifestVerified,
+    }), /monitor TTL debe estar deshabilitado/);
+    fs.writeFileSync(runtimeProofPath, `${JSON.stringify(runtimeProof)}\n`);
+    const badAudit = structuredClone(certificate);
+    fs.writeFileSync(lotPath, `${JSON.stringify({ ok: false, counters: {}, issueSamples: [] })}\n`);
+    badAudit.audits.lotIntegrity.sha256 = sha256File(lotPath);
+    assert.throws(() => validateArchiveCertification(badAudit, {
+      certificateDir, manifest, manifestPath, manifestVerified,
+    }), /auditorias no aprobadas/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('manifiesto legacy v1 permanece validable exclusivamente para cadenas de cleanup existentes', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-legacy-cleanup-'));
+  try {
+    const archivePath = path.join(directory, 'backup.archive.gz');
+    const inventoryPath = path.join(directory, 'source-inventory.json');
+    const sourceInventory = inventory();
+    sourceInventory.schemaVersion = 1;
+    delete sourceInventory.contentHashAlgorithm;
+    delete sourceInventory.databaseContentHash;
+    for (const collection of sourceInventory.collections) delete collection.contentHash;
+    fs.writeFileSync(archivePath, 'legacy-archive');
+    fs.writeFileSync(inventoryPath, `${JSON.stringify(sourceInventory)}\n`);
+    const attestation = sourceAttestation();
+    const manifest = {
+      schemaVersion: 1,
+      kind: 'chaman-mongo-logical-backup',
+      drillId: attestation.attestationId,
+      drillMode: attestation.drillMode,
+      database: attestation.database,
+      sourceEnvironment: attestation.sourceEnvironment,
+      sourceInstance: attestation.instanceIdentity,
+      infrastructureEvidenceSha256: attestation.infrastructureEvidenceSha256,
+      consistency: {
+        method: 'application-write-freeze',
+        attestationId: attestation.attestationId,
+        frozenAt: attestation.frozenAt,
+        verifiedAt: attestation.verifiedAt,
+        expiresAt: attestation.expiresAt,
+        changeTicket: attestation.changeTicket,
+      },
+      createdAt: NOW.toISOString(),
+      gitSha: '901cfdae8732d06d34fb20ec9646b45ddf323c29',
+      mongoServerVersion: sourceInventory.serverVersion,
+      tools: { mongosh: '2.10.0', mongodump: 'mongodump version: 100.18.0' },
+      archive: { file: path.basename(archivePath), sizeBytes: fs.statSync(archivePath).size, sha256: sha256File(archivePath) },
+      inventory: {
+        file: path.basename(inventoryPath),
+        sha256: sha256File(inventoryPath),
+        collections: sourceInventory.collections.length,
+        documents: sourceInventory.collections.reduce((sum, item) => sum + item.count, 0),
+      },
+    };
+    const validated = validateBackupManifest(manifest, directory);
+    assert.equal(validated.schemaVersion, 1);
+    assert.equal(validated.inventoryPath, inventoryPath);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('comparacion es idempotente para inventario normalizado sin relajar options ni orden de indices', () => {
+  const source = normalizeInventory(inventory());
+  const restored = inventory('chaman_restore_drill_20260828_1800');
+
+  assert.deepEqual(normalizeInventory(source), source);
+  assert.equal(compareInventories(source, restored).ok, true);
+
+  const wrongCollectionOptions = inventory('chaman_restore_drill_20260828_1800');
+  wrongCollectionOptions.collections[0].options.validationAction = 'warn';
+  assert.equal(compareInventories(source, wrongCollectionOptions).findings[0].issue, 'options_mismatch');
+
+  const wrongIndexOptions = inventory('chaman_restore_drill_20260828_1800');
+  wrongIndexOptions.collections[0].indexes[1].unique = false;
+  assert.equal(compareInventories(source, wrongIndexOptions).findings[0].issue, 'indexes_mismatch');
+
+  const reversedCompound = inventory('chaman_restore_drill_20260828_1800');
+  reversedCompound.collections[0].indexes[1].key = { nombre: 1, idProductor: 1 };
+  assert.equal(compareInventories(source, reversedCompound).findings[0].issue, 'indexes_mismatch');
+
+  const tamperedNormalized = structuredClone(source);
+  tamperedNormalized.collections[0].indexes[1].options.unique = false;
+  assert.throws(() => compareInventories(tamperedNormalized, restored), /hash semantico invalido/);
+});
+
+test('inventario final detecta mutaciones ocurridas durante las auditorias', () => {
+  const source = inventory();
+  const beforeAudits = inventory('chaman_restore_drill_20260828_1800');
+  const unchangedAfterAudits = inventory('chaman_restore_drill_20260828_1800');
+  assert.equal(evaluateAuditInventoryStability(source, beforeAudits, unchangedAfterAudits).ok, true);
+
+  const changedAfterAudits = inventory('chaman_restore_drill_20260828_1800');
+  changedAfterAudits.collections[0].count -= 1;
+  const changed = evaluateAuditInventoryStability(source, beforeAudits, changedAfterAudits);
+  assert.equal(changed.ok, false);
+  assert.equal(changed.sourceBeforeAudits.ok, true);
+  assert.equal(changed.sourceAfterAudits.ok, false);
+  assert.equal(changed.beforeVsAfterAudits.ok, false);
+
+  const semanticChangeAfterAudits = inventory('chaman_restore_drill_20260828_1800');
+  semanticChangeAfterAudits.collections[0].indexes[1].unique = false;
+  const semanticChange = evaluateAuditInventoryStability(source, beforeAudits, semanticChangeAfterAudits);
+  assert.equal(semanticChange.ok, false);
+  assert.equal(semanticChange.beforeVsAfterAudits.findings[0].issue, 'indexes_mismatch');
+});
+
+test('manifiestos rechazan campos y valores que puedan filtrar secretos', () => {
+  assert.throws(() => assertNoSecrets({ sourceUri: 'redacted' }), /campo sensible/);
+  assert.throws(() => assertNoSecrets({ note: 'mongodb://example.invalid/chaman' }), /URI de MongoDB/);
+});
+
+test('artefactos deben vivir fuera del repo y nunca sobreescribirse', () => {
+  assert.throws(() => safeArtifactDirectory(path.join(process.cwd(), 'mongo-recovery-artifacts'), process.cwd()), /fuera/);
+  assert.throws(() => safeArtifactDirectory(path.join(process.cwd(), '..bundle', 'candidate'), process.cwd()), /fuera/);
+  assert.throws(() => safeArtifactDirectory(path.join(process.cwd(), '...', 'candidate'), process.cwd()), /fuera/);
+  const outside = path.join(os.tmpdir(), 'chaman-safe-artifacts-not-created');
+  assert.equal(safeArtifactDirectory(outside, process.cwd()), path.resolve(outside));
+});
+
+test('runbook exige TTL deshabilitado solo en Mongo local y verificacion estable diferida', () => {
+  const runbook = fs.readFileSync(
+    path.join(process.cwd(), 'docs', 'MONGO-LOGICAL-BACKUP-RESTORE-DRILL.md'),
+    'utf8',
+  );
+  assert.match(runbook, /--setParameter ttlMonitorEnabled=false/);
+  assert.match(runbook, /Nunca se configura en MongoDB de Testing, Producci[oó]n/);
+  assert.match(runbook, /al menos \*\*130 segundos\*\*/);
+  assert.match(runbook, /--purpose=cleanup/);
+  assert.match(runbook, /certify-archive-restore/);
+  assert.match(runbook, /certify-archive-verify/);
+  assert.match(runbook, /--archive-certification/);
+  assert.match(runbook, /Limpiar esta primera base[\s\S]*antes de avanzar/);
+  assert.match(runbook, /dbHash/);
+  assert.match(runbook, /no se degrada a comparar s[oó]lo conteos/);
+  assert.match(runbook, /git status --porcelain --untracked-files=normal/);
+});
+
+test('plan CLI es offline: valida gobierno sin URI ni conexion', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-mongo-plan-'));
+  try {
+    const attestationPath = path.join(directory, 'attestation.json');
+    const evidence = writeTestingEvidence(directory);
+    const dynamic = sourceAttestation({
+      drillMode: TESTING_LOCAL_MODE,
+      sourceEnvironment: 'testing',
+      database: 'chaman_testing',
+      instanceIdentity: identity('railway', SOURCE_SERVICE, TESTING_SOURCE_URI),
+      infrastructureEvidenceSha256: evidence.sha256,
+      frozenAt: new Date(Date.now() - 60_000).toISOString(),
+      verifiedAt: new Date(Date.now() - 30_000).toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+    });
+    fs.writeFileSync(attestationPath, JSON.stringify(dynamic));
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(process.cwd(), 'scripts', 'mongo-recovery.js'),
+        'plan',
+        '--phase=dump',
+        `--attestation=${attestationPath}`,
+        `--infrastructure-evidence=${evidence.file}`,
+        `--output-dir=${path.join(directory, 'new-backup')}`,
+      ],
+      { cwd: process.cwd(), encoding: 'utf8', env: { ...process.env, CHAMAN_MONGO_SOURCE_URI: '' } },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const plan = JSON.parse(result.stdout);
+    assert.equal(plan.connectsToMongo, false);
+    assert.equal(plan.mutatesMongo, false);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('fallo posterior a crear output-dir deja recibo sin secretos y no conecta', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-mongo-failure-'));
+  try {
+    const attestationPath = path.join(directory, 'attestation.json');
+    const outputDir = path.join(directory, 'backup-failed');
+    const uriFile = writeUriFile(directory, TESTING_SOURCE_URI);
+    const evidence = writeTestingEvidence(directory);
+    const dynamic = sourceAttestation({
+      drillMode: TESTING_LOCAL_MODE,
+      sourceEnvironment: 'testing',
+      database: 'chaman_testing',
+      instanceIdentity: identity('railway', SOURCE_SERVICE, TESTING_SOURCE_URI),
+      infrastructureEvidenceSha256: evidence.sha256,
+      frozenAt: new Date(Date.now() - 60_000).toISOString(),
+      verifiedAt: new Date(Date.now() - 30_000).toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+    });
+    fs.writeFileSync(attestationPath, JSON.stringify(dynamic));
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(process.cwd(), 'scripts', 'mongo-recovery.js'),
+        'dump',
+        `--attestation=${attestationPath}`,
+        `--infrastructure-evidence=${evidence.file}`,
+        `--source-uri-file=${uriFile}`,
+        `--output-dir=${outputDir}`,
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          CHAMAN_BACKUP_CONFIRM: `dump:${dynamic.attestationId}:${dynamic.database}`,
+          CHAMAN_MONGOSH_BIN: 'definitely-missing-mongosh-for-test',
+        },
+      },
+    );
+    assert.notEqual(result.status, 0);
+    const receipt = fs.readFileSync(path.join(outputDir, 'dump-failure-receipt.json'), 'utf8');
+    assert.equal(receipt.includes(TESTING_SOURCE_URI), false);
+    assert.equal(JSON.parse(receipt).status, 'failed');
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

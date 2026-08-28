@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "chaman-mongo-write-freeze-attestation",
+  "attestationId": "backup_yyyymmdd_hhmm",
+  "drillMode": "testing-local-drill",
+  "sourceEnvironment": "testing",
+  "database": "chaman_testing",
+  "writesFrozen": true,
+  "freezeControls": {
+    "apiWritesDisabled": true,
+    "backgroundWorkersStopped": true,
+    "scheduledJobsDisabled": true,
+    "operatorWritesBlocked": true,
+    "activeWritersVerifiedZero": true
+  },
+  "frozenAt": "REPLACE_WITH_ISO_8601_UTC",
+  "verifiedAt": "REPLACE_WITH_ISO_8601_UTC",
+  "expiresAt": "REPLACE_WITH_ISO_8601_UTC_MAX_TWO_HOURS_AFTER_FREEZE",
+  "operator": "REPLACE_WITH_OPERATOR",
+  "approvedBy": "REPLACE_WITH_APPROVER",
+  "changeTicket": "REPLACE_WITH_CHANGE_TICKET",
+  "instanceIdentity": {
+    "provider": "railway",
+    "instanceId": "REPLACE_WITH_RAILWAY_TESTING_MONGO_SERVICE_ID",
+    "endpointFingerprintSha256": "REPLACE_WITH_64_HEX_FROM_FINGERPRINT_COMMAND"
+  },
+  "infrastructureEvidenceSha256": "REPLACE_WITH_SHA256_OF_SEPARATE_RAILWAY_EVIDENCE_FILE"
+}

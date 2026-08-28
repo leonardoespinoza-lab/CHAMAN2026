@@ -752,6 +752,7 @@ export class PrediccionTrigoService {
     const fuenteProveedor = String(registro.fuente || 'desconocida');
     const fuentes: Record<string, ICalidadDatoMotor['fuente']> = {
       OpenMeteo: 'open_meteo',
+      ChamanMeteo: 'chaman_meteo',
       MeteoSource: 'meteosource',
       Meteoblue: 'meteoblue',
       FieldClimate: 'estacion_asignada',

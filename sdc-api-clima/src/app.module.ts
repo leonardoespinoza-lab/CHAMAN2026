@@ -12,6 +12,7 @@ import { HoratechModule } from './entidades/horatech/module';
 import { ClimaV2Module } from './entidades/clima-v2/module';
 import { MeteoblueModule } from './entidades/meteoblue/module';
 import { AgrometeorologiaModule } from './entidades/agrometeorologia/module';
+import { ChamanMeteoModule } from './entidades/chaman-meteo/module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { AgrometeorologiaModule } from './entidades/agrometeorologia/module';
     MeteoblueModule,
     HoratechModule,
     AgrometeorologiaModule,
+    ChamanMeteoModule,
   ],
 })
 export class AppModule {

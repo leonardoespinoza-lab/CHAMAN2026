@@ -78,3 +78,51 @@ describe('RIEGO_CRON_ENABLED', () => {
     expect(loadFlag()).toBe(true);
   });
 });
+
+describe('PREDICCIONES_SANITARIAS_CRON_ENABLED', () => {
+  const originalFlag = process.env.PREDICCIONES_SANITARIAS_CRON_ENABLED;
+  const originalEnv = process.env.ENV;
+
+  afterEach(() => {
+    if (originalFlag === undefined)
+      delete process.env.PREDICCIONES_SANITARIAS_CRON_ENABLED;
+    else process.env.PREDICCIONES_SANITARIAS_CRON_ENABLED = originalFlag;
+    if (originalEnv === undefined) delete process.env.ENV;
+    else process.env.ENV = originalEnv;
+    jest.resetModules();
+  });
+
+  function loadFlag(): boolean {
+    let enabled = false;
+    jest.isolateModules(() => {
+      enabled = require('./env').PREDICCIONES_SANITARIAS_CRON_ENABLED;
+    });
+    return enabled;
+  }
+
+  it('preserva el cron existente salvo opt-out explicito', () => {
+    delete process.env.PREDICCIONES_SANITARIAS_CRON_ENABLED;
+    process.env.ENV = 'local';
+    expect(loadFlag()).toBe(true);
+
+    jest.resetModules();
+    process.env.PREDICCIONES_SANITARIAS_CRON_ENABLED = 'false';
+    expect(loadFlag()).toBe(false);
+  });
+
+  it('falla cerrado ante espacios, mayusculas o un valor desconocido', () => {
+    process.env.ENV = 'local';
+    process.env.PREDICCIONES_SANITARIAS_CRON_ENABLED = ' FALSE ';
+    expect(loadFlag()).toBe(false);
+
+    jest.resetModules();
+    process.env.PREDICCIONES_SANITARIAS_CRON_ENABLED = 'habilitado';
+    expect(loadFlag()).toBe(false);
+  });
+
+  it('nunca ejecuta el cron durante tests', () => {
+    process.env.PREDICCIONES_SANITARIAS_CRON_ENABLED = 'true';
+    process.env.ENV = 'test';
+    expect(loadFlag()).toBe(false);
+  });
+});

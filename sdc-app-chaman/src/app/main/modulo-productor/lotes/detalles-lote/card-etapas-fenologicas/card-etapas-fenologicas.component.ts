@@ -308,9 +308,11 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     const snapshot = registro.frioAcumulado;
     if (!snapshot) return 'Sin snapshot';
     if (snapshot.serieCampoPrioritaria) return 'Sensor de campo prioritario';
-    const fuente = String(snapshot.fuenteTemperatura || snapshot.fuente || '')
-      .replace(/_/g, ' ')
-      .trim();
+    const fuenteOriginal = String(snapshot.fuenteTemperatura || snapshot.fuente || '');
+    if (fuenteOriginal.toLowerCase().includes('chaman_meteo')) {
+      return 'Chamán-Meteo (ERA5-Land)';
+    }
+    const fuente = fuenteOriginal.replace(/_/g, ' ').trim();
     return fuente || 'Motor agrometeorologico';
   }
 
@@ -322,9 +324,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
   }
 
   public get ultimoRegistroFenologico(): IRegistroFenologico | undefined {
-    const vigentes = this.registrosFenologicosVigentes.filter(
-      (registro) => this.registroEnCampaniaActual(registro)
-    );
+    const vigentes = this.registrosFenologicosVigentes.filter((registro) => this.registroEnCampaniaActual(registro));
     return vigentes[vigentes.length - 1];
   }
 
@@ -461,8 +461,18 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
       const type = this.snapshotAgromet.dataSource.type;
       if (type === 'sensor') return 'Sensor de campo';
       if (type === 'station') return 'Central meteorologica asociada';
-      if (type === 'mixed') return 'Sensor/central + Open-Meteo';
+      if (type === 'mixed') {
+        const source = this.snapshotAgromet.dataSource;
+        const labels = (source.sources || []).map((item) => {
+          if (item === 'sensor') return source.sensorNames?.join(', ') || 'Sensor de campo';
+          if (item === 'station') return source.stationName || 'Central meteorologica asociada';
+          if (item === 'chaman_meteo') return 'Chamán-Meteo (ERA5-Land)';
+          return item === 'open_meteo' ? 'Open-Meteo' : 'Fuente meteorologica';
+        });
+        return labels.length ? labels.join(' + ') : 'Fuentes meteorologicas integradas';
+      }
       if (type === 'open_meteo') return 'Open-Meteo automatico';
+      if (type === 'chaman_meteo') return 'Chamán-Meteo (ERA5-Land)';
     }
     return 'Sin clima consolidado';
   }
@@ -1897,15 +1907,10 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     return Math.max(0, Math.floor((fecha.getTime() - inicio.getTime()) / this.diaMs));
   }
 
-  private registroEnCampaniaActual(
-    registro: IRegistroFenologico,
-    fecha: Date = new Date()
-  ): boolean {
+  private registroEnCampaniaActual(registro: IRegistroFenologico, fecha: Date = new Date()): boolean {
     if (!this.campaniaTexto) return true;
     const siembra = this.siembraActual;
-    return siembra
-      ? registroFenologicoPerteneceCampania(siembra, registro, fecha)
-      : false;
+    return siembra ? registroFenologicoPerteneceCampania(siembra, registro, fecha) : false;
   }
 
   private async cargarSnapshotAgromet(): Promise<void> {

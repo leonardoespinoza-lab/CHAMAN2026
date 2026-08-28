@@ -4,10 +4,12 @@ export type FuenteMeteorologicaNormalizada =
   | "sensor"
   | "station"
   | "open_meteo"
+  | "chaman_meteo"
   | "mixed"
   | "derived_sensor"
   | "derived_station"
   | "derived_open_meteo"
+  | "derived_chaman_meteo"
   | "gap_filled";
 
 export type EstadoDatoMeteorologico =
@@ -436,8 +438,14 @@ export interface IResumenAgrometeorologico {
 }
 
 export interface IFuenteAgrometeorologicaResumen {
-  type: "sensor" | "station" | "open_meteo" | "mixed" | "sin_datos";
-  sources?: Array<"sensor" | "station" | "open_meteo">;
+  type:
+    | "sensor"
+    | "station"
+    | "open_meteo"
+    | "chaman_meteo"
+    | "mixed"
+    | "sin_datos";
+  sources?: Array<"sensor" | "station" | "open_meteo" | "chaman_meteo">;
   stationName?: string;
   lastObservationAt?: string;
   lastCalculatedAt?: string;
