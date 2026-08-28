@@ -8,7 +8,8 @@
 - Cabeza de codigo reconciliado antes de agregar este manifiesto: `b81adbb7eaf262c067c55dbfea703dc26a8e33c7`.
 - Arbol Git de aplicacion: `5f159940fe0091a674842b78cfd0dc53e4be2843`.
 - El arbol anterior es byte por byte equivalente al arbol de `8e9d0f2df2fab89f6bd7b7fae5e6b519bffb0be6`.
-- No se hizo push, merge, deploy, migracion ni cambio de variables o datos.
+- La rama fue publicada en GitHub y vinculada al PR borrador #25. No se hizo
+  merge, deploy, migracion ni cambio de datos productivos.
 
 ## Commits productivos incorporados
 
@@ -150,8 +151,18 @@ promocion que escriba datos.
 11 altas). No se ejecuto `npm audit fix` ni se modificaron dependencias porque
 eso estaria fuera del alcance de esta reconciliacion.
 
+## Controles de release incorporados
+
+- Commit de controles sobre esta rama: `8104c30`.
+- CI debe volver a aprobar el SHA final integrado antes de cualquier cambio en
+  Railway Testing.
+- El estado previo de Testing y sus referencias Git inmutables de recuperacion
+  estan en `deploy/testing-baseline-2026-08-28.json`.
+- Produccion sigue bloqueada hasta contar con backup logico y una restauracion
+  ensayada en un destino aislado.
+
 ## Condicion de promocion
 
 Este manifiesto no convierte la rama en release productivo. Antes de cualquier
-push o despliegue se requieren pruebas completas, revision del diff, controles
+merge o despliegue se requieren pruebas completas, revision del diff, controles
 de CI/deploy por servicio, validacion en Railway Testing y aprobacion explicita.
