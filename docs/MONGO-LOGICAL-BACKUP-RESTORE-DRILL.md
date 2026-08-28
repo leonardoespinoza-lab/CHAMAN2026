@@ -33,10 +33,20 @@ multi-colección consistente.
   `chaman-recovery-drill` y demostrar `ttlMonitorEnabled: false`.
 - La prueba runtime dura diez minutos. Cada fase posterior usa una prueba
   fresca que debe conservar endpoint, replica set y `dbPath` sellados.
-- El manifiesto fija modo, origen, SHA Git, checksums, inventario y evidencia de
-  infraestructura. Los hashes se comparan sin depender de mayúsculas.
-- El restore exige una base vacía, remapea el namespace y compara colecciones,
-  opciones, conteos e índices, preservando el orden de claves compuestas.
+- El manifiesto schema v2 fija modo, origen, SHA Git, archive y observaciones
+  source antes/después. Como este dump por base no usa oplog ni snapshot,
+  `sourcePointInTimeGuaranteed` queda siempre en `false`; la comparación informa
+  además cualquier deriva observada —por ejemplo la provocada por TTL— sin
+  presentar esas lecturas como contenido del archive.
+- Dump y certificación exigen que
+  `git status --porcelain --untracked-files=normal` esté vacío; un worktree
+  sucio aborta para que el SHA sellado represente el código ejecutado.
+- El archive candidato se restaura primero en una base local vacía y con TTL
+  deshabilitado. Sólo se certifica después de 130 segundos, dos inventarios
+  adicionales estables y ambas auditorías aprobadas.
+- El segundo restore usa otra base vacía y compara sin tolerancias contra el
+  inventario certificado: colecciones, opciones, conteos, índices y el digest
+  `dbHash` de cada colección, preservando el orden de claves compuestas.
 - Antes de la primera escritura crea `restore-intent.json`. Si el restore queda
   parcial, ese intent sellado permite limpiar el destino sin inventar un recibo
   exitoso.
@@ -176,7 +186,7 @@ Copiar las plantillas fuera del repo y completar datos reales. Para este modo:
 - `instanceIdentity.provider`: `railway`;
 - `instanceIdentity.instanceId`: service ID derivado por el collector.
 
-`target.json`:
+Cada `target.json`:
 
 - `drillMode`: `testing-local-drill`;
 - `environment`: `local-recovery-drill`;
@@ -184,9 +194,11 @@ Copiar las plantillas fuera del repo y completar datos reales. Para este modo:
 - `instanceIdentity.provider`: `local-mongodb`;
 - `instanceIdentity.instanceId` y fingerprint: valores del runtime proof.
 
-Ambas atestaciones llevan el SHA-256 de la misma evidencia. Testing también se
-congela: API, workers, jobs y escrituras de operador deben estar detenidos y los
-cinco controles deben ser verdaderos.
+La atestación source lleva la evidencia usada durante el dump. Cada destino
+local —certificación y segundo restore— lleva su propia evidencia fresca y su
+runtime proof específico; las tres evidencias deben derivar la misma instancia
+MongoDB de Testing. Testing también se congela: API, workers, jobs y escrituras
+de operador deben estar detenidos y los cinco controles deben ser verdaderos.
 
 ### Precaución con `railway scale`
 
@@ -224,48 +236,100 @@ npm run mongo:recovery -- verify-backup `
   --manifest=D:\ChamanRecovery\backup-001\manifest.json
 ```
 
-El dump sólo es utilizable cuando devuelve `sealed` y `verify-backup` devuelve
-`backup-verified`. Después se documenta el fin del freeze de Testing.
+El dump devuelve `candidate-sealed` y `verify-backup` devuelve
+`archive-candidate-verified`. Genera `source-inventory-before.json` y
+`source-inventory-after.json`; su comparación queda sellada en el manifiesto.
+El archive todavía **no** es una referencia de restore hasta completar la
+certificación local. Después se documenta el fin del freeze de Testing.
 
-## 6. Restore y auditoría
+La cuenta Mongo usada por la herramienta debe poder ejecutar el comando
+`dbHash`. MongoDB 8 devuelve hashes MD5 por colección; Chamán los usa como
+detector determinista de cambios de contenido y falla si falta uno. No es una
+firma criptográfica contra colisiones intencionales, ni vuelve point-in-time al
+dump. Si el servidor o sus permisos no admiten `dbHash`, el drill queda NO-GO:
+no se degrada a comparar sólo conteos.
 
-Crear un directorio vacío y restringido para el drill. Generar un runtime proof
-nuevo si el anterior tiene más de diez minutos y usarlo en cada fase.
+## 6. Primer restore: certificar el contenido real del archive
+
+Crear un directorio vacío y restringido. La URI, runtime proof, evidencia y
+atestación deben referir una primera base descartable, por ejemplo
+`chaman_restore_drill_<ID>_cert`. Esa base debe estar vacía y acreditar TTL
+false.
 
 ```powershell
-$env:CHAMAN_RESTORE_CONFIRM = 'restore:<DRILL_ID>:chaman_restore_drill_<ID>'
-npm run mongo:recovery -- restore `
-  --attestation=D:\ChamanRecovery\target.json `
-  --infrastructure-evidence=D:\ChamanRecovery\evidence-001\infrastructure-evidence.json `
-  --runtime-proof=D:\ChamanRecovery\secrets-local\runtime-proof-restore.json `
-  --target-uri-file=D:\ChamanRecovery\secrets-local\target.uri `
+$env:CHAMAN_RESTORE_CONFIRM = 'restore:<DRILL_ID>:chaman_restore_drill_<ID>_cert'
+npm run mongo:recovery -- certify-archive-restore `
+  --attestation=D:\ChamanRecovery\target-cert.json `
+  --infrastructure-evidence=D:\ChamanRecovery\evidence-cert\infrastructure-evidence.json `
+  --runtime-proof=D:\ChamanRecovery\secrets-cert\runtime-proof-restore.json `
+  --target-uri-file=D:\ChamanRecovery\secrets-cert\target.uri `
   --manifest=D:\ChamanRecovery\backup-001\manifest.json `
-  --output-dir=D:\ChamanRecovery\drill-001
+  --output-dir=D:\ChamanRecovery\certificate-run-001
 Remove-Item Env:CHAMAN_RESTORE_CONFIRM
-
-Esperar al menos **130 segundos** desde `completedAt` del restore antes de
-ejecutar `verify`. Es una comprobación de estabilidad superior a dos ciclos
-normales de 60 segundos del monitor TTL; el inventario diferido debe conservar
-exactamente colecciones, conteos, opciones e índices del inventario fuente. El
-CLI rechaza fechas inválidas, futuras o cualquier demora menor a 130 segundos, y deja
-el retraso efectivo y el umbral requerido dentro de `verification.json`.
-
-npm run mongo:recovery -- verify `
-  --attestation=D:\ChamanRecovery\target.json `
-  --infrastructure-evidence=D:\ChamanRecovery\evidence-001\infrastructure-evidence.json `
-  --runtime-proof=D:\ChamanRecovery\secrets-local\runtime-proof-verify.json `
-  --target-uri-file=D:\ChamanRecovery\secrets-local\target.uri `
-  --manifest=D:\ChamanRecovery\backup-001\manifest.json `
-  --output-dir=D:\ChamanRecovery\drill-001
 ```
 
-La salida aceptable es `verification.json` con `status: passed`. Además se
-conservan inventarios exclusivos antes y después de las auditorías, las
-auditorías agronómicas y una copia ACL del runtime proof exacto usado antes del
-restore. El inventario final se compara tanto con la fuente como con el
-inventario pre-auditoría; cualquier deriva impide `passed`.
+Esperar al menos **130 segundos** desde `completedAt` del restore antes de
+verificar. Luego:
 
-## 7. Cleanup incluso después de expiración
+```powershell
+npm run mongo:recovery -- certify-archive-verify `
+  --attestation=D:\ChamanRecovery\target-cert.json `
+  --infrastructure-evidence=D:\ChamanRecovery\evidence-cert\infrastructure-evidence.json `
+  --runtime-proof=D:\ChamanRecovery\secrets-cert\runtime-proof-verify.json `
+  --target-uri-file=D:\ChamanRecovery\secrets-cert\target.uri `
+  --manifest=D:\ChamanRecovery\backup-001\manifest.json `
+  --output-dir=D:\ChamanRecovery\certificate-run-001
+```
+
+La certificación exige igualdad exacta entre inventario inmediato,
+pre-auditoría y post-auditoría, y exige `ok: true` en las dos auditorías.
+`archive-certification.json` liga esos archivos al SHA del archive, manifiesto,
+atestación, evidencia y runtime proof TTL=false. También conserva, sin
+tolerancias ni allowlists, la diferencia source-before/source-after/archive.
+Una modificación de un valor, aun con el mismo número de documentos, cambia el
+digest de la colección y bloquea la certificación.
+
+Limpiar esta primera base con el procedimiento de la sección 8 antes de avanzar.
+
+## 7. Segundo restore exacto y auditoría final
+
+Crear otra base local vacía —nombre, URI, runtime proof, evidencia y atestación
+nuevos— distinta de la base de certificación. El mismo proceso `mongod` puede
+usarse si continúa aislado, pero la base debe ser diferente y vacía.
+
+```powershell
+$env:CHAMAN_RESTORE_CONFIRM = 'restore:<DRILL_ID>:chaman_restore_drill_<ID>_final'
+npm run mongo:recovery -- restore `
+  --attestation=D:\ChamanRecovery\target-final.json `
+  --infrastructure-evidence=D:\ChamanRecovery\evidence-final\infrastructure-evidence.json `
+  --runtime-proof=D:\ChamanRecovery\secrets-final\runtime-proof-restore.json `
+  --target-uri-file=D:\ChamanRecovery\secrets-final\target.uri `
+  --manifest=D:\ChamanRecovery\backup-001\manifest.json `
+  --archive-certification=D:\ChamanRecovery\certificate-run-001\archive-certification.json `
+  --output-dir=D:\ChamanRecovery\drill-final-001
+Remove-Item Env:CHAMAN_RESTORE_CONFIRM
+```
+
+El restore aborta antes de emitir recibo exitoso si su inventario inmediato no
+coincide exactamente con el certificado. Esperar nuevamente al menos 130
+segundos y ejecutar:
+
+```powershell
+npm run mongo:recovery -- verify `
+  --attestation=D:\ChamanRecovery\target-final.json `
+  --infrastructure-evidence=D:\ChamanRecovery\evidence-final\infrastructure-evidence.json `
+  --runtime-proof=D:\ChamanRecovery\secrets-final\runtime-proof-verify.json `
+  --target-uri-file=D:\ChamanRecovery\secrets-final\target.uri `
+  --manifest=D:\ChamanRecovery\backup-001\manifest.json `
+  --archive-certification=D:\ChamanRecovery\certificate-run-001\archive-certification.json `
+  --output-dir=D:\ChamanRecovery\drill-final-001
+```
+
+La salida aceptable es `verification.json` con `status: passed`. Compara el
+certificado contra inventario inmediato, pre-auditoría y final, además de
+comparar esos tres entre sí. Las dos auditorías son bloqueantes.
+
+## 8. Cleanup incluso después de expiración
 
 No renovar ni reemplazar las atestaciones originales. Generar una prueba
 runtime nueva del mismo endpoint, replica set y `dbPath`; el proceso se vuelve a
@@ -274,6 +338,11 @@ comando que ejecuta `dropDatabase`. Para cleanup se declara explícitamente
 `--purpose=cleanup`: es la única fase que puede aceptar una prueba schema v1
 histórica o un monitor TTL activo, porque su única mutación autorizada es
 eliminar la base descartable ligada al intent original.
+
+Para una cadena nueva con manifiesto schema v2, la prueba **corriente** pasada a
+cleanup también debe ser schema v2; el CLI lo comprueba antes del drop. La
+compatibilidad schema v1 queda limitada a la prueba histórica/original y al
+cleanup integral de intentos legacy cuyo manifiesto también sea v1.
 
 La atestación, la evidencia y la copia del runtime proof usada originalmente
 para restaurar pueden estar vencidas durante cleanup: se conservan y validan
@@ -305,15 +374,26 @@ evidencia del drill según la política de retención.
 
 ## Criterio de salida
 
-El simulacro es GO sólo si existen, para el mismo `drillId`:
+El simulacro de recuperabilidad del archive es GO sólo si existen, para el
+mismo `drillId`:
 
 - captura Railway cruda y evidencia derivada intactas;
-- manifiesto sellado y archive con checksum válido;
-- restore receipt ligado al manifiesto y atestación;
-- `verification.json` en `passed`, capturado al menos 130 segundos después del
-  restore y sin deriva del inventario;
-- cleanup receipt con rescan negativo;
+- manifiesto candidato v2, archive con checksum válido y observaciones source
+  before/after sin ocultar su deriva;
+- `archive-certification.json` ligado al primer restore, con tres inventarios
+  iguales y ambas auditorías aprobadas;
+- cleanup receipt del primer destino con rescan negativo;
+- segundo restore receipt ligado al mismo SHA del archive y certificado;
+- `verification.json` final en `passed`, al menos 130 segundos después y sin
+  deriva respecto del certificado;
+- cleanup receipt del segundo destino con rescan negativo;
 - revisión humana y ubicación controlada del archive.
+
+`sourcePointInTimeGuaranteed: false` no se convierte en `true` por certificar:
+el proceso demuestra que el archive se restaura de forma estructuralmente
+exacta y estable, no que sea una fotografía point-in-time de Testing. Para esa
+garantía hace falta snapshot del proveedor o dump completo de replica set con
+oplog; `mongodump --oplog` no admite `--db`.
 
 Ante cualquier duda de URI, destino, freeze, versión o identidad runtime, se
 cancela. Nunca se restaura sobre Producción, Testing compartido ni ChirpStack.

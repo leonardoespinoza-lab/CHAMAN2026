@@ -50,13 +50,18 @@ const {
   validateRuntimeProof,
 } = require('./mongo-recovery/runtime-proof');
 const { collectRailwayEvidence } = require('./mongo-recovery/railway-collector');
+const {
+  ARCHIVE_CERTIFICATION_STABILITY_DELAY_SECONDS,
+  buildArchiveCertification,
+  loadArchiveCertification,
+} = require('./mongo-recovery/archive-certification');
 
 const ROOT = path.resolve(__dirname, '..');
 const INVENTORY_SCRIPT = path.join(__dirname, 'mongo-recovery', 'inventory.mongosh.js');
 const DROP_SCRIPT = path.join(__dirname, 'mongo-recovery', 'drop-database.mongosh.js');
 const AGRONOMIC_AUDIT = path.join(__dirname, 'mongo-recovery', 'audit-restored.js');
 const RUNTIME_PROOF_SCRIPT = path.join(__dirname, 'mongo-recovery', 'runtime-proof.mongosh.js');
-const RESTORE_STABILITY_DELAY_MS = 130_000;
+const RESTORE_STABILITY_DELAY_MS = ARCHIVE_CERTIFICATION_STABILITY_DELAY_SECONDS * 1000;
 
 function assertRestoreStabilityDelay(completedAt, { now = new Date() } = {}) {
   if (typeof completedAt !== 'string' || !completedAt.trim()) {
@@ -98,12 +103,14 @@ function evaluateAuditInventoryStability(source, beforeAudits, afterAudits) {
 
 function usage() {
   return `Uso:
-  node scripts/mongo-recovery.js plan --phase=dump|restore|verify|cleanup --attestation=<json> [--manifest=<json>] [--output-dir=<dir>]
-  node scripts/mongo-recovery.js preflight --phase=dump|restore|verify|cleanup --attestation=<json> [--manifest=<json>] [--output-dir=<dir>]
+  node scripts/mongo-recovery.js plan --phase=dump|certify-archive-restore|certify-archive-verify|restore|verify|cleanup --attestation=<json> [--manifest=<json>] [--output-dir=<dir>]
+  node scripts/mongo-recovery.js preflight --phase=dump|certify-archive-restore|certify-archive-verify|restore|verify|cleanup --attestation=<json> [--manifest=<json>] [--output-dir=<dir>]
   node scripts/mongo-recovery.js dump --attestation=<json> --infrastructure-evidence=<json> --output-dir=<dir>
   node scripts/mongo-recovery.js verify-backup --manifest=<json>
-  node scripts/mongo-recovery.js restore --manifest=<json> --attestation=<json> --infrastructure-evidence=<json> --runtime-proof=<json> --output-dir=<dir>
-  node scripts/mongo-recovery.js verify --manifest=<json> --attestation=<json> --infrastructure-evidence=<json> --runtime-proof=<json> --output-dir=<dir>
+  node scripts/mongo-recovery.js certify-archive-restore --manifest=<json> --attestation=<json> --infrastructure-evidence=<json> --runtime-proof=<json> --output-dir=<dir>
+  node scripts/mongo-recovery.js certify-archive-verify --manifest=<json> --attestation=<json> --infrastructure-evidence=<json> --runtime-proof=<json> --output-dir=<dir>
+  node scripts/mongo-recovery.js restore --manifest=<json> --archive-certification=<json> --attestation=<json> --infrastructure-evidence=<json> --runtime-proof=<json> --output-dir=<dir>
+  node scripts/mongo-recovery.js verify --manifest=<json> --archive-certification=<json> --attestation=<json> --infrastructure-evidence=<json> --runtime-proof=<json> --output-dir=<dir>
   node scripts/mongo-recovery.js cleanup --manifest=<json> --attestation=<json> --infrastructure-evidence=<json> --runtime-proof=<json> --output-dir=<dir>
   node scripts/mongo-recovery.js runtime-proof --target-uri-file=<acl> --output=<json> --expected-dbpath-root=<dir> [--purpose=operation|cleanup]
   node scripts/mongo-recovery.js collect-infrastructure-evidence --mode=testing-local-drill --project-id=<uuid> --source-environment=Testing --source-service=<MongoDB> --runtime-proof=<json> --output-dir=<dir> --evidence-id=<id> --collector=<persona> --reviewed-by=<otra>
@@ -125,6 +132,7 @@ function parseCli(argv) {
       purpose: { type: 'string' },
       attestation: { type: 'string' },
       manifest: { type: 'string' },
+      'archive-certification': { type: 'string' },
       'output-dir': { type: 'string' },
       'infrastructure-evidence': { type: 'string' },
       'source-uri-file': { type: 'string' },
@@ -159,6 +167,39 @@ function writeJsonExclusive(filePath, value) {
   hardenRestrictedFile(filePath);
 }
 
+function copyRestrictedFileExclusive(sourcePathValue, destinationPath) {
+  const sourcePath = path.resolve(sourcePathValue);
+  const resolvedDestination = path.resolve(destinationPath);
+  if (sourcePath === resolvedDestination) throw new Error('Origen y destino del artefacto sellado no pueden coincidir.');
+  fs.copyFileSync(sourcePath, resolvedDestination, fs.constants.COPYFILE_EXCL);
+  hardenRestrictedFile(resolvedDestination);
+  if (sha256File(sourcePath).toLowerCase() !== sha256File(resolvedDestination).toLowerCase()) {
+    throw new Error(`La copia sellada de ${path.basename(destinationPath)} no coincide.`);
+  }
+  return resolvedDestination;
+}
+
+function copyRestrictedFileOnce(sourcePathValue, destinationPath) {
+  if (!fs.existsSync(destinationPath)) return copyRestrictedFileExclusive(sourcePathValue, destinationPath);
+  verifyRestrictedFile(destinationPath);
+  if (sha256File(sourcePathValue).toLowerCase() !== sha256File(destinationPath).toLowerCase()) {
+    throw new Error(`El artefacto previo ${path.basename(destinationPath)} no coincide.`);
+  }
+  return path.resolve(destinationPath);
+}
+
+function writeJsonOnce(filePath, value) {
+  if (!fs.existsSync(filePath)) {
+    writeJsonExclusive(filePath, value);
+    return filePath;
+  }
+  verifyRestrictedFile(filePath);
+  if (sha256Json(readJson(filePath)).toLowerCase() !== sha256Json(value).toLowerCase()) {
+    throw new Error(`El artefacto previo ${path.basename(filePath)} no coincide.`);
+  }
+  return filePath;
+}
+
 function recordFailureReceipt(outputDirValue, phase, error) {
   if (!outputDirValue) return { written: false, reason: 'output-dir no informado' };
   const outputDir = safeArtifactDirectory(outputDirValue, ROOT);
@@ -171,21 +212,35 @@ function recordFailureReceipt(outputDirValue, phase, error) {
   const knownArtifacts = new Set([
     'backup.archive.gz',
     'source-inventory.json',
+    'source-inventory-before.json',
+    'source-inventory-after.json',
     'manifest.json',
     'target-inventory-before.json',
     'target-inventory-after-restore.json',
     'target-inventory-after.json',
+    'target-inventory-before-audits.json',
+    'target-inventory-after-audits.json',
     'target-runtime-proof-restore.json',
+    'target-runtime-proof-verify.json',
+    'target-runtime-proof-live-after-restore.json',
+    'target-runtime-proof-live-before-audits.json',
+    'target-runtime-proof-live-after-audits.json',
+    'target-runtime-proof-cleanup.json',
+    'target-runtime-proof-live-cleanup.json',
+    'target-attestation.json',
+    'infrastructure-evidence.json',
     'restore-intent.json',
     'restore-receipt.json',
     'verification.json',
+    'archive-certification.json',
     'audit-restored-agronomic-data.json',
     'audit-lote-data-integrity.json',
     'cleanup-receipt.json',
   ]);
   const partialArtifacts = fs
     .readdirSync(outputDir)
-    .filter((name) => knownArtifacts.has(name))
+    .filter((name) =>
+      knownArtifacts.has(name) || /^target-runtime-proof-(?:live-)?cleanup-[0-9a-f]{16}\.json$/i.test(name))
     .sort();
   const safeMessage = redact(error?.message || String(error), []);
   writeJsonExclusive(receiptPath, {
@@ -255,8 +310,21 @@ function toolVersions(names) {
   return Object.fromEntries(names.map((name) => [name, toolVersion(name)]));
 }
 
+function assertCleanGitStatus(statusOutput) {
+  if (typeof statusOutput !== 'string') throw new Error('No se pudo acreditar el estado del worktree Git.');
+  if (statusOutput.trim()) {
+    throw new Error('El dump/certificado exige un worktree Git limpio para que el SHA represente el codigo ejecutado.');
+  }
+}
+
 function gitSha() {
-  return runProcess('git', ['rev-parse', 'HEAD'], { env: safeChildEnv() }).stdout.trim().toLowerCase();
+  const sha = runProcess('git', ['rev-parse', 'HEAD'], { env: safeChildEnv() }).stdout.trim().toLowerCase();
+  if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error('Git no devolvio un SHA completo valido.');
+  const status = runProcess('git', ['status', '--porcelain', '--untracked-files=normal'], {
+    env: safeChildEnv(),
+  }).stdout;
+  assertCleanGitStatus(status);
+  return sha;
 }
 
 function readProtectedUri(filePath, label, {
@@ -382,28 +450,37 @@ function assertTargetAgainstManifest(target, source) {
     throw new Error('drillMode del destino no coincide con el manifiesto.');
   }
   assertDestinationIsolated(source.manifest.sourceInstance, target.validated.instanceIdentity);
+  if (source.manifest.schemaVersion === 1) {
+    if (
+      target.evidence.sha256.toLowerCase() !== source.manifest.infrastructureEvidenceSha256.toLowerCase() ||
+      target.validated.infrastructureEvidenceSha256.toLowerCase() !== source.manifest.infrastructureEvidenceSha256.toLowerCase()
+    ) {
+      throw new Error('Destino y manifiesto legacy no comparten la misma evidencia Railway inmutable.');
+    }
+    return;
+  }
+  const evidenceSource = target.evidence.validated.source;
   if (
-    target.evidence.sha256.toLowerCase() !== source.manifest.infrastructureEvidenceSha256.toLowerCase() ||
-    target.validated.infrastructureEvidenceSha256.toLowerCase() !== source.manifest.infrastructureEvidenceSha256.toLowerCase()
+    evidenceSource.provider !== source.manifest.sourceInstance.provider ||
+    evidenceSource.serviceId !== source.manifest.sourceInstance.instanceId.toLowerCase()
   ) {
-    throw new Error('Destino y manifiesto no comparten la misma evidencia Railway inmutable.');
+    throw new Error('La evidencia target no acredita la misma instancia source sellada en el manifiesto.');
   }
 }
 
 function manifestContext(manifestFile, { requireRestrictedAcl = false } = {}) {
   if (!manifestFile) throw new Error('Falta --manifest.');
   const manifestPath = path.resolve(manifestFile);
-  const manifest = readJson(manifestPath);
   const backupDir = path.dirname(manifestPath);
   if (requireRestrictedAcl) {
     verifyRestrictedDirectory(backupDir);
     verifyRestrictedFile(manifestPath);
   }
+  const manifest = readJson(manifestPath);
   const verified = validateBackupManifest(manifest, backupDir);
   assertOperationalDrillMode(manifest.drillMode);
   if (requireRestrictedAcl) {
-    verifyRestrictedFile(verified.archivePath);
-    verifyRestrictedFile(verified.inventoryPath);
+    for (const artifactPath of verified.artifactPaths) verifyRestrictedFile(artifactPath);
   }
   return {
     manifest,
@@ -414,8 +491,9 @@ function manifestContext(manifestFile, { requireRestrictedAcl = false } = {}) {
 }
 
 function describePlan(phase, values, checkTools) {
-  if (!['dump', 'restore', 'verify', 'cleanup'].includes(phase)) {
-    throw new Error('--phase debe ser dump, restore, verify o cleanup.');
+  const phases = ['dump', 'certify-archive-restore', 'certify-archive-verify', 'restore', 'verify', 'cleanup'];
+  if (!phases.includes(phase)) {
+    throw new Error(`--phase debe ser ${phases.join(', ')}.`);
   }
   const result = {
     status: 'plan-only',
@@ -437,9 +515,10 @@ function describePlan(phase, values, checkTools) {
       'write-freeze attestation vigente',
       'cinco controles de escritores en true',
       'confirmacion exacta por variable de entorno',
-      'inventario antes del dump',
+      'observaciones source antes y despues del dump',
       'archive gzip sin sobreescritura',
-      'SHA-256 y manifiesto sin secretos',
+      'deriva source explicita sin fingir point-in-time',
+      'SHA-256 y manifiesto candidato sin secretos',
     ];
     if (checkTools) result.tools = toolVersions(['mongosh', 'mongodump']);
   } else {
@@ -461,10 +540,24 @@ function describePlan(phase, values, checkTools) {
     ];
     const source = manifestContext(values.manifest);
     assertTargetAgainstManifest(targetPlan, source);
+    if (phase !== 'cleanup' && source.manifest.schemaVersion !== 2) {
+      throw new Error('Las fases nuevas exigen manifiesto candidato schema v2.');
+    }
+    if (['restore', 'verify'].includes(phase)) {
+      const certification = loadArchiveCertification(values['archive-certification'], source);
+      if (certification.validated.certificationDatabase === validated.database) {
+        throw new Error('El segundo restore debe usar otra base distinta de la certificacion.');
+      }
+      result.archiveCertificationSha256 = certification.sha256;
+    } else if (['certify-archive-restore', 'certify-archive-verify'].includes(phase) && values['archive-certification']) {
+      throw new Error('La primera restauracion no acepta un certificado preexistente.');
+    }
     result.sourceDatabase = source.manifest.database;
     if (checkTools) {
       result.tools = toolVersions(
-        phase === 'restore' ? ['mongosh', 'mongorestore'] : phase === 'verify' ? ['mongosh'] : ['mongosh'],
+        ['restore', 'certify-archive-restore'].includes(phase)
+          ? ['mongosh', 'mongorestore']
+          : ['mongosh'],
       );
     }
   }
@@ -490,12 +583,14 @@ function dumpCommand(values) {
   fs.mkdirSync(outputDir, { recursive: false, mode: 0o700 });
   hardenRestrictedDirectory(outputDir);
   const archivePath = path.join(outputDir, 'backup.archive.gz');
-  const inventoryPath = path.join(outputDir, 'source-inventory.json');
+  const inventoryBeforePath = path.join(outputDir, 'source-inventory-before.json');
+  const inventoryAfterPath = path.join(outputDir, 'source-inventory-after.json');
   const manifestPath = path.join(outputDir, 'manifest.json');
   try {
+    const sourceGitSha = gitSha();
     const tools = toolVersions(['mongosh', 'mongodump']);
-    const sourceInventory = inventory(uri, validated.database);
-    writeJsonExclusive(inventoryPath, sourceInventory);
+    const sourceInventoryBefore = inventory(uri, validated.database);
+    writeJsonExclusive(inventoryBeforePath, sourceInventoryBefore);
     withMongoSecretFile(uri, 'tools-yaml', (configPath) =>
       runProcess(executable('mongodump'), buildMongodumpArgs(configPath, validated.database, archivePath), {
         env: safeChildEnv(),
@@ -506,23 +601,29 @@ function dumpCommand(values) {
       throw new Error('mongodump no produjo un archive no vacio.');
     }
     hardenRestrictedFile(archivePath);
+    const sourceInventoryAfter = inventory(uri, validated.database);
+    writeJsonExclusive(inventoryAfterPath, sourceInventoryAfter);
     const manifest = buildBackupManifest({
       attestation,
-      inventory: sourceInventory,
+      inventoryBefore: sourceInventoryBefore,
+      inventoryAfter: sourceInventoryAfter,
       archivePath,
-      inventoryPath,
+      inventoryBeforePath,
+      inventoryAfterPath,
       tools,
-      gitSha: gitSha(),
+      gitSha: sourceGitSha,
     });
     writeJsonExclusive(manifestPath, manifest);
     validateBackupManifest(manifest, outputDir);
     return {
-      status: 'sealed',
+      status: 'candidate-sealed',
       drillId: validated.id,
       database: validated.database,
       manifest: manifestPath,
       archiveSha256: manifest.archive.sha256,
-      reminder: 'Mantener las escrituras congeladas hasta registrar el cierre del dump; luego descongelar por el procedimiento operativo.',
+      sourcePointInTimeGuaranteed: manifest.sourceObservation.sourcePointInTimeGuaranteed,
+      sourceDrift: manifest.sourceObservation.comparison,
+      reminder: 'El archive es candidato hasta completar certificacion local y segundo restore exacto; source before/after no describen por si solos su contenido.',
     };
   } catch (error) {
     throw new Error(`Backup no sellado; no usar sus artefactos. ${error.message}`);
@@ -532,10 +633,12 @@ function dumpCommand(values) {
 function verifyBackupCommand(values) {
   const context = manifestContext(values.manifest, { requireRestrictedAcl: true });
   return {
-    status: 'backup-verified',
+    status: context.manifest.schemaVersion === 2 ? 'archive-candidate-verified' : 'legacy-backup-verified',
     drillId: context.manifest.drillId,
     database: context.manifest.database,
     archiveSha256: context.manifest.archive.sha256,
+    certificationRequired: context.manifest.schemaVersion === 2,
+    sourcePointInTimeGuaranteed: context.verified.sourcePointInTimeGuaranteed,
   };
 }
 
@@ -545,14 +648,27 @@ function ensureEmptyTarget(targetInventory) {
   }
 }
 
-function restoreCommand(values) {
+function restoreCommand(values, { restoreRole = 'final' } = {}) {
+  if (!['certification', 'final'].includes(restoreRole)) throw new Error('restoreRole invalido.');
+  if (restoreRole === 'certification' && values['archive-certification']) {
+    throw new Error('La primera restauracion no acepta un certificado preexistente.');
+  }
   const target = targetContext(values.attestation, {
     evidenceFile: values['infrastructure-evidence'],
     uriFile: values['target-uri-file'],
     runtimeProofFile: values['runtime-proof'],
   });
   const source = manifestContext(values.manifest, { requireRestrictedAcl: true });
+  if (source.manifest.schemaVersion !== 2 || source.manifest.certificationRequired !== true) {
+    throw new Error('Los restores nuevos exigen manifiesto candidato schema v2. Legacy queda disponible solo para cleanup.');
+  }
   assertTargetAgainstManifest(target, source);
+  const certification = restoreRole === 'final'
+    ? loadArchiveCertification(values['archive-certification'], source)
+    : null;
+  if (restoreRole === 'final' && certification.validated.certificationDatabase === target.validated.database) {
+    throw new Error('El segundo restore debe usar otra base vacia distinta de la usada para certificar.');
+  }
   requireConfirmation(
     process.env.CHAMAN_RESTORE_CONFIRM,
     expectedConfirmation('restore', target.validated.drillId, target.validated.database),
@@ -566,6 +682,8 @@ function restoreCommand(values) {
   hardenRestrictedDirectory(outputDir);
   const beforePath = path.join(outputDir, 'target-inventory-before.json');
   const restoreRuntimeProofPath = path.join(outputDir, 'target-runtime-proof-restore.json');
+  const targetAttestationPath = path.join(outputDir, 'target-attestation.json');
+  const infrastructureEvidencePath = path.join(outputDir, 'infrastructure-evidence.json');
   const intentPath = path.join(outputDir, 'restore-intent.json');
   const receiptPath = path.join(outputDir, 'restore-receipt.json');
   if (fs.existsSync(restoreRuntimeProofPath) || fs.existsSync(intentPath) || fs.existsSync(receiptPath)) {
@@ -574,21 +692,30 @@ function restoreCommand(values) {
   toolVersions(['mongosh', 'mongorestore']);
   const before = inventory(target.uri, target.validated.database);
   ensureEmptyTarget(before);
-  assertCompatibleMongoVersions(source.verified.inventory.serverVersion, before.serverVersion);
+  assertCompatibleMongoVersions(source.manifest.mongoServerVersion, before.serverVersion);
   writeJsonExclusive(beforePath, before);
-  fs.copyFileSync(target.runtimeProof.path, restoreRuntimeProofPath, fs.constants.COPYFILE_EXCL);
-  hardenRestrictedFile(restoreRuntimeProofPath);
+  copyRestrictedFileExclusive(target.runtimeProof.path, restoreRuntimeProofPath);
+  copyRestrictedFileExclusive(path.resolve(values.attestation), targetAttestationPath);
+  copyRestrictedFileExclusive(target.evidence.path, infrastructureEvidencePath);
+  for (const capture of target.evidence.validated.captures) {
+    copyRestrictedFileExclusive(
+      path.join(path.dirname(target.evidence.path), capture.file),
+      path.join(outputDir, capture.file),
+    );
+  }
   if (sha256File(restoreRuntimeProofPath).toLowerCase() !== target.runtimeProof.sha256.toLowerCase()) {
     throw new Error('La copia sellada del runtime proof de restore no coincide.');
   }
   const intent = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: 'chaman-mongo-restore-intent',
+    restoreRole,
     drillId: target.validated.drillId,
     sourceManifestSha256: sha256File(source.manifestPath),
-    targetAttestationSha256: sha256File(path.resolve(values.attestation)),
-    infrastructureEvidenceSha256: target.evidence.sha256,
+    targetAttestationSha256: sha256File(targetAttestationPath),
+    infrastructureEvidenceSha256: sha256File(infrastructureEvidencePath),
     targetRuntimeProofSha256: sha256File(restoreRuntimeProofPath),
+    archiveCertificationSha256: certification?.sha256 || null,
     sourceDatabase: source.manifest.database,
     targetDatabase: target.validated.database,
     emptyInventorySha256: sha256File(beforePath),
@@ -625,33 +752,44 @@ function restoreCommand(values) {
     expectedDatabase: target.validated.database,
   });
   assertSameRuntimeForCleanup(liveValidated, postRestoreValidated);
+  const postRestoreRuntimePath = path.join(outputDir, 'target-runtime-proof-live-after-restore.json');
+  writeJsonExclusive(postRestoreRuntimePath, postRestoreRuntime);
   const afterRestore = inventory(target.uri, target.validated.database);
   const afterRestorePath = path.join(outputDir, 'target-inventory-after-restore.json');
   writeJsonExclusive(afterRestorePath, afterRestore);
-  const restoreComparison = compareInventories(source.verified.inventory, afterRestore);
-  if (!restoreComparison.ok) {
-    throw new Error('El inventario inmediatamente posterior al restore no coincide con el origen.');
+  const restoreComparison = certification
+    ? compareInventories(certification.validated.inventory, afterRestore)
+    : null;
+  if (certification && !restoreComparison.ok) {
+    throw new Error('El segundo restore no coincide exactamente con el inventario certificado del archive.');
   }
   const receipt = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: 'chaman-mongo-restore-receipt',
+    restoreRole,
     drillId: target.validated.drillId,
     sourceManifestSha256: sha256File(source.manifestPath),
-    targetAttestationSha256: sha256File(path.resolve(values.attestation)),
-    infrastructureEvidenceSha256: target.evidence.sha256,
+    targetAttestationSha256: sha256File(targetAttestationPath),
+    infrastructureEvidenceSha256: sha256File(infrastructureEvidencePath),
     targetRuntimeProofSha256: sha256File(restoreRuntimeProofPath),
+    archiveCertificationSha256: certification?.sha256 || null,
     restoreIntentSha256: sha256File(intentPath),
     sourceDatabase: source.manifest.database,
     targetDatabase: target.validated.database,
     targetMongoVersion: before.serverVersion,
     startedAt,
     completedAt: new Date().toISOString(),
-    postRestoreRuntimeValueSha256: sha256Json(postRestoreRuntime),
+    postRestoreRuntime: {
+      file: path.basename(postRestoreRuntimePath),
+      sha256: sha256File(postRestoreRuntimePath),
+      valueSha256: sha256Json(postRestoreRuntime),
+    },
     restoredInventory: {
       file: path.basename(afterRestorePath),
       sha256: sha256File(afterRestorePath),
-      collections: restoreComparison.targetCollections,
-      documents: restoreComparison.targetDocuments,
+      collections: afterRestore.collections.length,
+      documents: afterRestore.collections.reduce((sum, item) => sum + (item.count || 0), 0),
+      certifiedComparison: restoreComparison,
     },
     status: 'restored-unverified',
   };
@@ -666,14 +804,28 @@ function runAudit(program, args, env, secrets, outputPath) {
   return { file: path.basename(outputPath), sha256: sha256File(outputPath) };
 }
 
-function verifyCommand(values) {
+function verifyCommand(values, { restoreRole = 'final' } = {}) {
+  if (!['certification', 'final'].includes(restoreRole)) throw new Error('restoreRole invalido.');
+  const certifierGitSha = restoreRole === 'certification' ? gitSha() : null;
+  if (restoreRole === 'certification' && values['archive-certification']) {
+    throw new Error('La verificacion de certificacion no acepta un certificado preexistente.');
+  }
   const target = targetContext(values.attestation, {
     evidenceFile: values['infrastructure-evidence'],
     uriFile: values['target-uri-file'],
     runtimeProofFile: values['runtime-proof'],
   });
   const source = manifestContext(values.manifest, { requireRestrictedAcl: true });
+  if (source.manifest.schemaVersion !== 2 || source.manifest.certificationRequired !== true) {
+    throw new Error('Verify nuevo exige manifiesto candidato schema v2. Legacy queda disponible solo para cleanup.');
+  }
   assertTargetAgainstManifest(target, source);
+  const certification = restoreRole === 'final'
+    ? loadArchiveCertification(values['archive-certification'], source)
+    : null;
+  if (restoreRole === 'final' && certification.validated.certificationDatabase === target.validated.database) {
+    throw new Error('Verify final debe corresponder al segundo restore en otra base.');
+  }
   if (!values['output-dir']) throw new Error('Falta --output-dir.');
   const outputDir = safeArtifactDirectory(values['output-dir'], ROOT);
   verifyRestrictedDirectory(outputDir);
@@ -701,6 +853,15 @@ function verifyCommand(values) {
   };
   assertCleanupReceiptBindings(intent, { ...bindingExpectation, expectedKind: 'chaman-mongo-restore-intent' });
   assertCleanupReceiptBindings(receipt, { ...bindingExpectation, expectedKind: 'chaman-mongo-restore-receipt' });
+  const expectedCertificationSha256 = certification?.sha256 || null;
+  if (
+    intent.restoreRole !== restoreRole ||
+    receipt.restoreRole !== restoreRole ||
+    intent.archiveCertificationSha256 !== expectedCertificationSha256 ||
+    receipt.archiveCertificationSha256 !== expectedCertificationSha256
+  ) {
+    throw new Error('Intent/receipt no coinciden con el rol y certificado esperados.');
+  }
   if (String(receipt.restoreIntentSha256 || '').toLowerCase() !== sha256File(intentPath).toLowerCase()) {
     throw new Error('El recibo de restore no coincide con el intent original.');
   }
@@ -725,6 +886,14 @@ function verifyCommand(values) {
   ) {
     throw new Error('El inventario post-restore fue alterado o falta.');
   }
+  const immediateInventory = normalizeInventory(readJson(restoredInventoryPath));
+  const expectedInventory = certification?.validated.inventory || immediateInventory;
+  const immediateComparison = compareInventories(expectedInventory, immediateInventory);
+  if (!immediateComparison.ok) {
+    throw new Error('El inventario inmediato no coincide con la referencia inmutable esperada.');
+  }
+  const verifyRuntimeProofPath = path.join(outputDir, 'target-runtime-proof-verify.json');
+  copyRestrictedFileExclusive(target.runtimeProof.path, verifyRuntimeProofPath);
   const liveRuntime = captureRuntimeProof(
     target.uri,
     target.validated.database,
@@ -732,6 +901,8 @@ function verifyCommand(values) {
   );
   const liveValidated = validateRuntimeProof(liveRuntime, { expectedDatabase: target.validated.database });
   assertSameRuntimeForCleanup(target.runtimeProof.validated, liveValidated);
+  const liveRuntimePath = path.join(outputDir, 'target-runtime-proof-live-before-audits.json');
+  writeJsonExclusive(liveRuntimePath, liveRuntime);
   const beforeAudits = inventory(target.uri, target.validated.database);
   const beforeAuditsPath = path.join(outputDir, 'target-inventory-before-audits.json');
   writeJsonExclusive(beforeAuditsPath, beforeAudits);
@@ -767,22 +938,27 @@ function verifyCommand(values) {
     expectedDatabase: target.validated.database,
   });
   assertSameRuntimeForCleanup(liveValidated, postAuditValidated);
+  const postAuditRuntimePath = path.join(outputDir, 'target-runtime-proof-live-after-audits.json');
+  writeJsonExclusive(postAuditRuntimePath, postAuditRuntime);
   const afterAudits = inventory(target.uri, target.validated.database);
   const afterAuditsPath = path.join(outputDir, 'target-inventory-after-audits.json');
   writeJsonExclusive(afterAuditsPath, afterAudits);
   const inventoryStability = evaluateAuditInventoryStability(
-    source.verified.inventory,
+    expectedInventory,
     beforeAudits,
     afterAudits,
   );
   const verification = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: 'chaman-mongo-restore-verification',
+    restoreRole,
     drillId: target.validated.drillId,
     sourceManifestSha256: sha256File(source.manifestPath),
+    archiveCertificationSha256: certification?.sha256 || null,
+    restoreReceiptSha256: sha256File(receiptPath),
     sourceDatabase: source.manifest.database,
     targetDatabase: target.validated.database,
-    currentRuntimeProofSha256: target.runtimeProof.sha256,
+    currentRuntimeProofSha256: sha256File(verifyRuntimeProofPath),
     liveRuntimeValueSha256: sha256Json(liveRuntime),
     postAuditRuntimeValueSha256: sha256Json(postAuditRuntime),
     runtimeProcessId: liveValidated.processId,
@@ -795,6 +971,11 @@ function verifyCommand(values) {
     },
     auditWindowInventory: {
       ok: inventoryStability.ok,
+      immediate: {
+        file: path.basename(restoredInventoryPath),
+        sha256: sha256File(restoredInventoryPath),
+        expectedComparison: immediateComparison,
+      },
       beforeAudits: {
         file: path.basename(beforeAuditsPath),
         sha256: sha256File(beforeAuditsPath),
@@ -814,17 +995,116 @@ function verifyCommand(values) {
         ok: lotIntegrity.ok === true,
         counters: lotIntegrity.counters,
         issueTypes: lotIssueTypes,
-        blockingForRestoreEquality: false,
+        blockingForRestoreEquality: true,
       },
     },
-    status: inventoryStability.ok && agronomic.ok === true ? 'passed' : 'failed',
+    status: inventoryStability.ok && agronomic.ok === true && lotIntegrity.ok === true ? 'passed' : 'failed',
   };
   const verificationPath = path.join(outputDir, 'verification.json');
   writeJsonExclusive(verificationPath, verification);
   if (verification.status !== 'passed') {
     throw new Error(`El simulacro no paso. Evidencia: ${verificationPath}`);
   }
-  return { status: 'passed', evidence: verificationPath, targetDatabase: target.validated.database };
+  if (restoreRole === 'certification') {
+    const certificatePath = path.join(outputDir, 'archive-certification.json');
+    const certificate = buildArchiveCertification({
+      drillId: target.validated.drillId,
+      drillMode: target.validated.drillMode,
+      sourceDatabase: source.manifest.database,
+      certificationDatabase: target.validated.database,
+      sourceManifestSha256: sha256File(source.manifestPath),
+      archiveSha256: source.manifest.archive.sha256,
+      certificationTarget: {
+        targetAttestationSha256: sha256File(path.join(outputDir, 'target-attestation.json')),
+        infrastructureEvidenceSha256: sha256File(path.join(outputDir, 'infrastructure-evidence.json')),
+        targetRuntimeProofSha256: originalRuntimeProof.sha256,
+        verificationRuntimeProofSha256: sha256File(verifyRuntimeProofPath),
+        instanceId: originalRuntimeProof.validated.instanceId,
+        endpointFingerprintSha256: originalRuntimeProof.validated.endpointFingerprintSha256,
+        replicaSet: originalRuntimeProof.validated.replicaSet,
+        dbPathSha256: originalRuntimeProof.validated.dbPathSha256,
+        processId: originalRuntimeProof.validated.processId,
+        verificationProcessId: target.runtimeProof.validated.processId,
+      },
+      restoreArtifacts: {
+        intent: { file: path.basename(intentPath), sha256: sha256File(intentPath) },
+        receipt: { file: path.basename(receiptPath), sha256: sha256File(receiptPath) },
+        verification: { file: path.basename(verificationPath), sha256: sha256File(verificationPath) },
+        runtimeProof: {
+          file: path.basename(restoreRuntimeProofPath),
+          sha256: sha256File(restoreRuntimeProofPath),
+        },
+        verifyRuntimeProof: {
+          file: path.basename(verifyRuntimeProofPath),
+          sha256: sha256File(verifyRuntimeProofPath),
+        },
+        postRestoreRuntime: {
+          file: 'target-runtime-proof-live-after-restore.json',
+          sha256: sha256File(path.join(outputDir, 'target-runtime-proof-live-after-restore.json')),
+        },
+        liveBeforeAuditsRuntime: {
+          file: path.basename(liveRuntimePath),
+          sha256: sha256File(liveRuntimePath),
+        },
+        liveAfterAuditsRuntime: {
+          file: path.basename(postAuditRuntimePath),
+          sha256: sha256File(postAuditRuntimePath),
+        },
+        targetAttestation: {
+          file: 'target-attestation.json',
+          sha256: sha256File(path.join(outputDir, 'target-attestation.json')),
+        },
+        infrastructureEvidence: {
+          file: 'infrastructure-evidence.json',
+          sha256: sha256File(path.join(outputDir, 'infrastructure-evidence.json')),
+        },
+        emptyInventory: {
+          file: path.basename(beforePath),
+          sha256: sha256File(beforePath),
+        },
+        beforeAuditsInventory: {
+          file: path.basename(beforeAuditsPath),
+          sha256: sha256File(beforeAuditsPath),
+        },
+      },
+      inventory: {
+        file: path.basename(afterAuditsPath),
+        sha256: sha256File(afterAuditsPath),
+        collections: afterAudits.collections.length,
+        documents: afterAudits.collections.reduce((sum, item) => sum + (item.count || 0), 0),
+        serverVersion: afterAudits.serverVersion,
+        capturedAt: afterAudits.capturedAt,
+      },
+      audits: {
+        agronomic: { file: auditMatrix.file, sha256: auditMatrix.sha256 },
+        lotIntegrity: { file: auditLotes.file, sha256: auditLotes.sha256 },
+      },
+      sourceObservation: {
+        sourcePointInTimeGuaranteed: source.verified.sourcePointInTimeGuaranteed,
+        comparison: source.verified.sourceComparison,
+        beforeToCertified: compareInventories(source.verified.sourceBefore, afterAudits),
+        afterToCertified: compareInventories(source.verified.sourceAfter, afterAudits),
+      },
+      certifierGitSha,
+      tools: toolVersions(['mongosh', 'mongorestore']),
+      certifiedAt: verification.verifiedAt,
+      status: 'certified',
+    });
+    writeJsonExclusive(certificatePath, certificate);
+    loadArchiveCertification(certificatePath, source, { requireCleanup: false });
+    return {
+      status: 'certified',
+      certificate: certificatePath,
+      sourcePointInTimeGuaranteed: source.verified.sourcePointInTimeGuaranteed,
+      targetDatabase: target.validated.database,
+    };
+  }
+  return {
+    status: 'passed',
+    evidence: verificationPath,
+    archiveCertificationSha256: certification.sha256,
+    targetDatabase: target.validated.database,
+  };
 }
 
 function assertCleanupReceiptBindings(receipt, {
@@ -868,6 +1148,12 @@ function assertDropConfirmed(dropped, database) {
   }
 }
 
+function assertCleanupRuntimeSchema(manifestSchemaVersion, currentRuntimeSchemaVersion) {
+  if (manifestSchemaVersion === 2 && currentRuntimeSchemaVersion !== 2) {
+    throw new Error('Cleanup de una cadena v2 exige runtime proof corriente schema v2 antes del drop.');
+  }
+}
+
 function cleanupCommand(values) {
   const target = targetContext(values.attestation, {
     evidenceFile: values['infrastructure-evidence'],
@@ -879,6 +1165,7 @@ function cleanupCommand(values) {
   });
   const source = manifestContext(values.manifest, { requireRestrictedAcl: true });
   assertTargetAgainstManifest(target, source);
+  assertCleanupRuntimeSchema(source.manifest.schemaVersion, target.runtimeProof?.validated.schemaVersion);
   requireConfirmation(
     process.env.CHAMAN_CLEANUP_CONFIRM,
     expectedConfirmation('cleanup', target.validated.drillId, target.validated.database),
@@ -965,6 +1252,19 @@ function cleanupCommand(values) {
   );
   const dropped = JSON.parse(result.stdout.trim());
   assertDropConfirmed(dropped, target.validated.database);
+  const freshRuntimeProofSha256 = target.runtimeProof.sha256.toLowerCase();
+  const liveRuntimeValueSha256 = sha256Json(liveRuntime).toLowerCase();
+  const cleanupRuntimeProofPath = path.join(
+    outputDir,
+    `target-runtime-proof-cleanup-${freshRuntimeProofSha256.slice(0, 16)}.json`,
+  );
+  const liveCleanupRuntimeProofPath = path.join(
+    outputDir,
+    `target-runtime-proof-live-cleanup-${liveRuntimeValueSha256.slice(0, 16)}.json`,
+  );
+  copyRestrictedFileOnce(target.runtimeProof.path, cleanupRuntimeProofPath);
+  writeJsonOnce(liveCleanupRuntimeProofPath, liveRuntime);
+  const completedAt = new Date();
   writeJsonExclusive(receiptPath, {
     schemaVersion: 1,
     kind: 'chaman-mongo-cleanup-receipt',
@@ -976,12 +1276,15 @@ function cleanupCommand(values) {
     restoreIntentSha256: sha256File(restoreIntentPath),
     restoreReceiptSha256,
     originalTargetRuntimeProofSha256: originalRuntimeProof.sha256,
-    freshRuntimeProofSha256: target.runtimeProof?.sha256 || null,
+    freshRuntimeProofFile: path.basename(cleanupRuntimeProofPath),
+    freshRuntimeProofSha256: sha256File(cleanupRuntimeProofPath),
+    liveRuntimeProofFile: path.basename(liveCleanupRuntimeProofPath),
+    liveRuntimeProofSha256: sha256File(liveCleanupRuntimeProofPath),
     runtimeProcessId: target.runtimeProof?.validated.processId || null,
-    liveRuntimeValueSha256: liveRuntime ? sha256Json(liveRuntime) : null,
-    originalAttestationExpired: new Date() >= target.validated.expiresAt,
+    liveRuntimeValueSha256,
+    originalAttestationExpired: completedAt >= target.validated.expiresAt,
     rescanFound: false,
-    completedAt: new Date().toISOString(),
+    completedAt: completedAt.toISOString(),
     status: 'dropped',
   });
   return { status: 'dropped', database: target.validated.database, receipt: receiptPath };
@@ -1072,8 +1375,17 @@ function main() {
     result = describePlan(values.phase, values, command === 'preflight');
   } else if (command === 'dump') result = withFailureReceipt('dump', values, () => dumpCommand(values));
   else if (command === 'verify-backup') result = verifyBackupCommand(values);
-  else if (command === 'restore') result = withFailureReceipt('restore', values, () => restoreCommand(values));
-  else if (command === 'verify') result = withFailureReceipt('verify', values, () => verifyCommand(values));
+  else if (command === 'certify-archive-restore') {
+    result = withFailureReceipt('certify-archive-restore', values, () =>
+      restoreCommand(values, { restoreRole: 'certification' }));
+  } else if (command === 'certify-archive-verify') {
+    result = withFailureReceipt('certify-archive-verify', values, () =>
+      verifyCommand(values, { restoreRole: 'certification' }));
+  } else if (command === 'restore') {
+    result = withFailureReceipt('restore', values, () => restoreCommand(values, { restoreRole: 'final' }));
+  } else if (command === 'verify') {
+    result = withFailureReceipt('verify', values, () => verifyCommand(values, { restoreRole: 'final' }));
+  }
   else if (command === 'cleanup') result = withFailureReceipt('cleanup', values, () => cleanupCommand(values));
   else throw new Error(`Comando desconocido: ${command}.\n${usage()}`);
   console.log(JSON.stringify(result, null, 2));
@@ -1090,6 +1402,8 @@ if (require.main === module) {
 
 module.exports = {
   RESTORE_STABILITY_DELAY_MS,
+  assertCleanGitStatus,
+  assertCleanupRuntimeSchema,
   assertCleanupReceiptBindings,
   assertDropConfirmed,
   assertRestoreStabilityDelay,

@@ -18,11 +18,19 @@ const {
   mongoEndpointFingerprint,
   normalizeInventory,
   safeArtifactDirectory,
+  sha256File,
+  sha256Json,
   summarizeSeedResolution,
   validateBackupManifest,
   validateSourceAttestation,
   validateTargetAttestation,
 } = require('../mongo-recovery/lib');
+const {
+  buildArchiveCertification,
+  loadArchiveCertification,
+  validateArchiveCertification,
+  validateCertificationCleanupReceipt,
+} = require('../mongo-recovery/archive-certification');
 const {
   assertNoMongoUriEnvironment,
   assertMongoToolsConfigVersion,
@@ -49,6 +57,8 @@ const {
 const { collectRailwayEvidence, resolveRailwayExecutable } = require('../mongo-recovery/railway-collector');
 const {
   RESTORE_STABILITY_DELAY_MS,
+  assertCleanGitStatus,
+  assertCleanupRuntimeSchema,
   assertCleanupReceiptBindings,
   assertDropConfirmed,
   assertRestoreStabilityDelay,
@@ -259,9 +269,11 @@ function writeUriFile(directory, uri, name = 'mongo-uri.txt') {
 
 function inventory(database = 'chaman') {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     database,
     serverVersion: '8.0.4',
+    contentHashAlgorithm: 'mongodb-dbHash-md5',
+    databaseContentHash: 'a'.repeat(32),
     capturedAt: '2026-08-28T18:01:00.000Z',
     collections: [
       {
@@ -269,6 +281,7 @@ function inventory(database = 'chaman') {
         type: 'collection',
         options: { validationAction: 'error' },
         count: 51,
+        contentHash: 'b'.repeat(32),
         indexes: [
           { name: '_id_', key: { _id: 1 } },
           { name: 'tenant_name', key: { idProductor: 1, nombre: 1 }, unique: true },
@@ -279,6 +292,7 @@ function inventory(database = 'chaman') {
         type: 'collection',
         options: {},
         count: 51,
+        contentHash: 'c'.repeat(32),
         indexes: [{ name: '_id_', key: { _id: 1 } }],
       },
     ],
@@ -459,6 +473,12 @@ test('proceso principal rechaza cualquier URI MongoDB heredada por entorno', () 
 test('hash de dbPath preserva mayusculas en POSIX y normaliza solo en Windows', () => {
   assert.notEqual(hashDbPath('/var/lib/chaman/Data', 'linux'), hashDbPath('/var/lib/chaman/data', 'linux'));
   assert.equal(hashDbPath('C:\\Chaman\\Data', 'win32'), hashDbPath('c:\\chaman\\data', 'win32'));
+});
+
+test('dump y certificacion rechazan atribuir un worktree sucio a HEAD', () => {
+  assert.doesNotThrow(() => assertCleanGitStatus(''));
+  assert.throws(() => assertCleanGitStatus(' M scripts/mongo-recovery.js\n'), /worktree Git limpio/);
+  assert.throws(() => assertCleanGitStatus('?? artefacto-no-versionado\n'), /worktree Git limpio/);
 });
 
 test('runtime proof acepta el campo replSet que MongoDB 8 expone en getCmdLineOpts', () => {
@@ -818,6 +838,12 @@ test('collector conserva raw railway status, deriva el grafo y sella target loca
   }
 });
 
+test('cleanup v2 rechaza proof corriente legacy antes del drop y conserva compatibilidad legacy', () => {
+  assert.throws(() => assertCleanupRuntimeSchema(2, 1), /schema v2 antes del drop/);
+  assert.doesNotThrow(() => assertCleanupRuntimeSchema(2, 2));
+  assert.doesNotThrow(() => assertCleanupRuntimeSchema(1, 1));
+});
+
 test('verify exige 130 segundos completos desde completedAt y rechaza fechas invalidas o futuras', () => {
   const completedAt = '2026-08-28T18:29:31.000Z';
   assert.equal(RESTORE_STABILITY_DELAY_MS, 130_000);
@@ -1006,19 +1032,52 @@ test('manifiesto se sella con checksums y detecta cualquier manipulacion', () =>
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-mongo-recovery-'));
   try {
     const archivePath = path.join(directory, 'backup.archive.gz');
-    const inventoryPath = path.join(directory, 'source-inventory.json');
+    const inventoryBeforePath = path.join(directory, 'source-inventory-before.json');
+    const inventoryAfterPath = path.join(directory, 'source-inventory-after.json');
+    const stableInventoryAfterPath = path.join(directory, 'source-inventory-after-stable.json');
+    const inventoryBefore = inventory();
+    const inventoryAfter = inventory();
+    inventoryAfter.capturedAt = '2026-08-28T18:02:00.000Z';
+    inventoryAfter.collections[0].count -= 1;
+    const stableInventoryAfter = inventory();
+    stableInventoryAfter.capturedAt = '2026-08-28T18:02:00.000Z';
     fs.writeFileSync(archivePath, 'archive-fixture');
-    fs.writeFileSync(inventoryPath, `${JSON.stringify(inventory())}\n`);
-    const manifest = buildBackupManifest({
+    fs.writeFileSync(inventoryBeforePath, `${JSON.stringify(inventoryBefore)}\n`);
+    fs.writeFileSync(inventoryAfterPath, `${JSON.stringify(inventoryAfter)}\n`);
+    fs.writeFileSync(stableInventoryAfterPath, `${JSON.stringify(stableInventoryAfter)}\n`);
+    const stableManifest = buildBackupManifest({
       attestation: sourceAttestation(),
-      inventory: inventory(),
+      inventoryBefore,
+      inventoryAfter: stableInventoryAfter,
       archivePath,
-      inventoryPath,
+      inventoryBeforePath,
+      inventoryAfterPath: stableInventoryAfterPath,
       tools: { mongosh: '2.5.0', mongodump: '100.12.2' },
       gitSha: '901cfdae8732d06d34fb20ec9646b45ddf323c29',
-      now: NOW,
+      now: new Date('2026-08-28T18:03:00.000Z'),
     });
-    validateBackupManifest(manifest, directory);
+    assert.equal(stableManifest.sourceObservation.comparison.ok, true);
+    assert.equal(validateBackupManifest(stableManifest, directory).sourcePointInTimeGuaranteed, false);
+    const manifest = buildBackupManifest({
+      attestation: sourceAttestation(),
+      inventoryBefore,
+      inventoryAfter,
+      archivePath,
+      inventoryBeforePath,
+      inventoryAfterPath,
+      tools: { mongosh: '2.5.0', mongodump: '100.12.2' },
+      gitSha: '901cfdae8732d06d34fb20ec9646b45ddf323c29',
+      now: new Date('2026-08-28T18:03:00.000Z'),
+    });
+    const validated = validateBackupManifest(manifest, directory);
+    assert.equal(manifest.schemaVersion, 2);
+    assert.equal(validated.sourcePointInTimeGuaranteed, false);
+    assert.equal(manifest.sourceObservation.comparison.findings[0].issue, 'count_mismatch');
+    const hiddenDrift = structuredClone(manifest);
+    hiddenDrift.sourceObservation.sourcePointInTimeGuaranteed = true;
+    hiddenDrift.consistency.sourcePointInTimeGuaranteed = true;
+    hiddenDrift.sourceObservation.comparison = compareInventories(inventoryBefore, inventoryBefore);
+    assert.throws(() => validateBackupManifest(hiddenDrift, directory), /comparacion source before\/after|point-in-time/);
     fs.appendFileSync(archivePath, 'tampered');
     assert.throws(() => validateBackupManifest(manifest, directory), /Checksum del archive invalido/);
   } finally {
@@ -1056,6 +1115,529 @@ test('comparacion exige mismas colecciones, conteos, indices y major de MongoDB'
   const reversedCompound = inventory('chaman_restore_drill_20260828_1800');
   reversedCompound.collections[0].indexes[1].key = { nombre: 1, idProductor: 1 };
   assert.equal(compareInventories(inventory(), reversedCompound).ok, false);
+  const sameCountDifferentValue = inventory('chaman_restore_drill_20260828_1800');
+  sameCountDifferentValue.collections[0].contentHash = 'd'.repeat(32);
+  assert.equal(compareInventories(inventory(), sameCountDifferentValue).findings[0].issue, 'content_hash_mismatch');
+  const inventoryScript = fs.readFileSync(
+    path.join(process.cwd(), 'scripts', 'mongo-recovery', 'inventory.mongosh.js'),
+    'utf8',
+  );
+  assert.match(inventoryScript, /runCommand\(\{ dbHash: 1 \}\)/);
+});
+
+test('certificado liga archive e inventarios inmutables y no tolera un documento menos', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-archive-certificate-'));
+  try {
+    const backupDir = path.join(root, 'backup');
+    const certificateDir = path.join(root, 'certificate');
+    fs.mkdirSync(backupDir);
+    const testingEvidence = writeTestingEvidence(certificateDir);
+    const archivePath = path.join(backupDir, 'backup.archive.gz');
+    const beforePath = path.join(backupDir, 'source-inventory-before.json');
+    const afterPath = path.join(backupDir, 'source-inventory-after.json');
+    const before = inventory('chaman_testing');
+    const after = inventory('chaman_testing');
+    after.capturedAt = '2026-08-28T18:02:00.000Z';
+    after.collections[0].count -= 1;
+    fs.writeFileSync(archivePath, 'archive-candidate');
+    fs.writeFileSync(beforePath, `${JSON.stringify(before)}\n`);
+    fs.writeFileSync(afterPath, `${JSON.stringify(after)}\n`);
+    const manifest = buildBackupManifest({
+      attestation: sourceAttestation({
+        drillMode: TESTING_LOCAL_MODE,
+        sourceEnvironment: 'testing',
+        database: 'chaman_testing',
+        infrastructureEvidenceSha256: testingEvidence.sha256,
+        instanceIdentity: identity('railway', SOURCE_SERVICE, TESTING_SOURCE_URI),
+      }),
+      inventoryBefore: before,
+      inventoryAfter: after,
+      inventoryBeforePath: beforePath,
+      inventoryAfterPath: afterPath,
+      archivePath,
+      tools: { mongosh: '2.10.0', mongodump: 'mongodump version: 100.18.0' },
+      gitSha: '901cfdae8732d06d34fb20ec9646b45ddf323c29',
+      now: new Date('2026-08-28T18:03:00.000Z'),
+    });
+    const manifestPath = path.join(backupDir, 'manifest.json');
+    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const manifestVerified = validateBackupManifest(manifest, backupDir);
+    const certificationDatabase = 'chaman_restore_drill_certification_20260828';
+    const evidenceRuntimeProof = JSON.parse(
+      fs.readFileSync(path.join(certificateDir, 'runtime-proof.json'), 'utf8'),
+    );
+    const runtimeDbPath = evidenceRuntimeProof.mongo.dbPath;
+    const runtimeRoot = path.dirname(runtimeDbPath);
+    const certificationUri = `mongodb://127.0.0.1:27019/${certificationDatabase}?replicaSet=chamanDrill`;
+    const runtimeAt = (capturedAt) => {
+      const raw = localRuntimeRaw(runtimeDbPath, capturedAt);
+      raw.database = certificationDatabase;
+      return buildRuntimeProof(raw, {
+        uri: certificationUri,
+        expectedDbPathRoot: runtimeRoot,
+        now: new Date(capturedAt),
+      });
+    };
+    const runtimeProof = runtimeAt('2026-08-28T18:00:00.000Z');
+    const postRestoreRuntimeProof = runtimeAt('2026-08-28T18:02:40.000Z');
+    const verifyRuntimeProof = runtimeAt('2026-08-28T18:04:50.000Z');
+    const liveBeforeAuditsRuntimeProof = runtimeAt('2026-08-28T18:05:00.000Z');
+    const liveAfterAuditsRuntimeProof = runtimeAt('2026-08-28T18:05:00.500Z');
+    const runtimeProofPath = path.join(certificateDir, 'target-runtime-proof-restore.json');
+    fs.writeFileSync(runtimeProofPath, `${JSON.stringify(runtimeProof)}\n`);
+    const verifyRuntimeProofPath = path.join(certificateDir, 'target-runtime-proof-verify.json');
+    const postRestoreRuntimePath = path.join(certificateDir, 'target-runtime-proof-live-after-restore.json');
+    const liveBeforeAuditsRuntimePath = path.join(certificateDir, 'target-runtime-proof-live-before-audits.json');
+    const liveAfterAuditsRuntimePath = path.join(certificateDir, 'target-runtime-proof-live-after-audits.json');
+    for (const [runtimePath, proof] of [
+      [verifyRuntimeProofPath, verifyRuntimeProof],
+      [postRestoreRuntimePath, postRestoreRuntimeProof],
+      [liveBeforeAuditsRuntimePath, liveBeforeAuditsRuntimeProof],
+      [liveAfterAuditsRuntimePath, liveAfterAuditsRuntimeProof],
+    ]) fs.writeFileSync(runtimePath, `${JSON.stringify(proof)}\n`);
+    const infrastructureEvidencePath = path.join(certificateDir, 'infrastructure-evidence.json');
+    fs.copyFileSync(testingEvidence.file, infrastructureEvidencePath);
+    const targetAttestationValue = targetAttestation({
+      drillId: manifest.drillId,
+      drillMode: TESTING_LOCAL_MODE,
+      environment: 'local-recovery-drill',
+      database: certificationDatabase,
+      expiresAt: '2026-08-28T18:05:59.000Z',
+      infrastructureEvidenceSha256: sha256File(infrastructureEvidencePath),
+      instanceIdentity: {
+        provider: 'local-mongodb',
+        instanceId: runtimeProof.instanceId,
+        endpointFingerprintSha256: runtimeProof.endpoint.endpointFingerprintSha256,
+      },
+    });
+    const targetAttestationPath = path.join(certificateDir, 'target-attestation.json');
+    fs.writeFileSync(targetAttestationPath, `${JSON.stringify(targetAttestationValue)}\n`);
+    const emptyInventory = {
+      ...inventory(certificationDatabase),
+      databaseContentHash: 'd41d8cd98f00b204e9800998ecf8427e',
+      collections: [],
+    };
+    const emptyInventoryPath = path.join(certificateDir, 'target-inventory-before.json');
+    fs.writeFileSync(emptyInventoryPath, `${JSON.stringify(emptyInventory)}\n`);
+    const immediate = inventory(certificationDatabase);
+    const finalInventory = inventory(certificationDatabase);
+    finalInventory.capturedAt = '2026-08-28T18:05:00.000Z';
+    const immediatePath = path.join(certificateDir, 'target-inventory-after-restore.json');
+    const beforeAuditsPath = path.join(certificateDir, 'target-inventory-before-audits.json');
+    const finalPath = path.join(certificateDir, 'target-inventory-after-audits.json');
+    const agronomicPath = path.join(certificateDir, 'audit-restored-agronomic-data.json');
+    const lotPath = path.join(certificateDir, 'audit-lote-data-integrity.json');
+    fs.writeFileSync(immediatePath, `${JSON.stringify(immediate)}\n`);
+    fs.writeFileSync(beforeAuditsPath, `${JSON.stringify(immediate)}\n`);
+    fs.writeFileSync(finalPath, `${JSON.stringify(finalInventory)}\n`);
+    fs.writeFileSync(agronomicPath, `${JSON.stringify({ ok: true, summary: {} })}\n`);
+    fs.writeFileSync(lotPath, `${JSON.stringify({ ok: true, counters: {}, issueSamples: [] })}\n`);
+    const manifestSha256 = sha256File(manifestPath);
+    const targetAttestationSha256 = sha256File(targetAttestationPath);
+    const infrastructureEvidenceSha256 = sha256File(infrastructureEvidencePath);
+    const targetRuntimeProofSha256 = sha256File(runtimeProofPath);
+    const base = {
+      schemaVersion: 2,
+      restoreRole: 'certification',
+      drillId: manifest.drillId,
+      sourceDatabase: manifest.database,
+      targetDatabase: certificationDatabase,
+      sourceManifestSha256: manifestSha256,
+      targetAttestationSha256,
+      infrastructureEvidenceSha256,
+      targetRuntimeProofSha256,
+    };
+    const intentPath = path.join(certificateDir, 'restore-intent.json');
+    fs.writeFileSync(intentPath, `${JSON.stringify({
+      ...base,
+      kind: 'chaman-mongo-restore-intent',
+      archiveCertificationSha256: null,
+      emptyInventorySha256: sha256File(emptyInventoryPath),
+      authorizedAt: '2026-08-28T18:02:00.000Z',
+      status: 'restore-authorized',
+    })}\n`);
+    const receiptPath = path.join(certificateDir, 'restore-receipt.json');
+    const immediateCounts = {
+      collections: immediate.collections.length,
+      documents: immediate.collections.reduce((sum, item) => sum + item.count, 0),
+    };
+    fs.writeFileSync(receiptPath, `${JSON.stringify({
+      ...base,
+      kind: 'chaman-mongo-restore-receipt',
+      archiveCertificationSha256: null,
+      restoreIntentSha256: sha256File(intentPath),
+      targetMongoVersion: immediate.serverVersion,
+      startedAt: '2026-08-28T18:02:01.000Z',
+      restoredInventory: {
+        file: path.basename(immediatePath),
+        sha256: sha256File(immediatePath),
+        ...immediateCounts,
+        certifiedComparison: null,
+      },
+      completedAt: '2026-08-28T18:02:50.000Z',
+      postRestoreRuntime: {
+        file: path.basename(postRestoreRuntimePath),
+        sha256: sha256File(postRestoreRuntimePath),
+        valueSha256: sha256Json(postRestoreRuntimeProof),
+      },
+      status: 'restored-unverified',
+    })}\n`);
+    const verificationPath = path.join(certificateDir, 'verification.json');
+    const immediateComparison = compareInventories(immediate, immediate);
+    const beforeAuditsComparison = compareInventories(immediate, immediate);
+    const afterAuditsComparison = compareInventories(immediate, finalInventory);
+    const beforeVsAfterComparison = compareInventories(immediate, finalInventory);
+    fs.writeFileSync(verificationPath, `${JSON.stringify({
+      schemaVersion: 2,
+      kind: 'chaman-mongo-restore-verification',
+      restoreRole: 'certification',
+      drillId: manifest.drillId,
+      sourceManifestSha256: manifestSha256,
+      archiveCertificationSha256: null,
+      restoreReceiptSha256: sha256File(receiptPath),
+      sourceDatabase: manifest.database,
+      targetDatabase: certificationDatabase,
+      currentRuntimeProofSha256: sha256File(verifyRuntimeProofPath),
+      liveRuntimeValueSha256: sha256Json(liveBeforeAuditsRuntimeProof),
+      postAuditRuntimeValueSha256: sha256Json(liveAfterAuditsRuntimeProof),
+      runtimeProcessId: verifyRuntimeProof.mongo.processId,
+      inventory: {
+        ...afterAuditsComparison,
+        file: path.basename(finalPath),
+        sha256: sha256File(finalPath),
+      },
+      audits: {
+        agronomicMatrix: { sha256: sha256File(agronomicPath) },
+        lotIntegrity: { sha256: sha256File(lotPath) },
+      },
+      auditWindowInventory: {
+        ok: true,
+        immediate: {
+          file: path.basename(immediatePath),
+          sha256: sha256File(immediatePath),
+          expectedComparison: immediateComparison,
+        },
+        beforeAudits: {
+          file: path.basename(beforeAuditsPath),
+          sha256: sha256File(beforeAuditsPath),
+          sourceComparison: beforeAuditsComparison,
+        },
+        afterAudits: {
+          file: path.basename(finalPath),
+          sha256: sha256File(finalPath),
+          sourceComparison: afterAuditsComparison,
+        },
+        beforeVsAfter: beforeVsAfterComparison,
+      },
+      restoreCompletedAt: '2026-08-28T18:02:50.000Z',
+      stabilityCheckedAt: '2026-08-28T18:05:00.000Z',
+      stabilityDelaySeconds: 130,
+      requiredStabilityDelaySeconds: 130,
+      verifiedAt: '2026-08-28T18:05:01.000Z',
+      status: 'passed',
+    })}\n`);
+    const certificate = buildArchiveCertification({
+      drillId: manifest.drillId,
+      drillMode: manifest.drillMode,
+      sourceDatabase: manifest.database,
+      certificationDatabase,
+      sourceManifestSha256: manifestSha256,
+      archiveSha256: manifest.archive.sha256,
+      certificationTarget: {
+        targetAttestationSha256,
+        infrastructureEvidenceSha256,
+        targetRuntimeProofSha256,
+        verificationRuntimeProofSha256: sha256File(verifyRuntimeProofPath),
+        instanceId: runtimeProof.instanceId,
+        endpointFingerprintSha256: runtimeProof.endpoint.endpointFingerprintSha256,
+        replicaSet: runtimeProof.mongo.replicaSet,
+        dbPathSha256: runtimeProof.mongo.dbPathSha256,
+        processId: runtimeProof.mongo.processId,
+        verificationProcessId: verifyRuntimeProof.mongo.processId,
+      },
+      restoreArtifacts: {
+        intent: { file: path.basename(intentPath), sha256: sha256File(intentPath) },
+        receipt: { file: path.basename(receiptPath), sha256: sha256File(receiptPath) },
+        verification: { file: path.basename(verificationPath), sha256: sha256File(verificationPath) },
+        runtimeProof: { file: path.basename(runtimeProofPath), sha256: sha256File(runtimeProofPath) },
+        verifyRuntimeProof: {
+          file: path.basename(verifyRuntimeProofPath),
+          sha256: sha256File(verifyRuntimeProofPath),
+        },
+        postRestoreRuntime: {
+          file: path.basename(postRestoreRuntimePath),
+          sha256: sha256File(postRestoreRuntimePath),
+        },
+        liveBeforeAuditsRuntime: {
+          file: path.basename(liveBeforeAuditsRuntimePath),
+          sha256: sha256File(liveBeforeAuditsRuntimePath),
+        },
+        liveAfterAuditsRuntime: {
+          file: path.basename(liveAfterAuditsRuntimePath),
+          sha256: sha256File(liveAfterAuditsRuntimePath),
+        },
+        targetAttestation: {
+          file: path.basename(targetAttestationPath),
+          sha256: sha256File(targetAttestationPath),
+        },
+        infrastructureEvidence: {
+          file: path.basename(infrastructureEvidencePath),
+          sha256: sha256File(infrastructureEvidencePath),
+        },
+        emptyInventory: {
+          file: path.basename(emptyInventoryPath),
+          sha256: sha256File(emptyInventoryPath),
+        },
+        beforeAuditsInventory: {
+          file: path.basename(beforeAuditsPath),
+          sha256: sha256File(beforeAuditsPath),
+        },
+      },
+      inventory: {
+        file: path.basename(finalPath),
+        sha256: sha256File(finalPath),
+        collections: finalInventory.collections.length,
+        documents: finalInventory.collections.reduce((sum, item) => sum + item.count, 0),
+        serverVersion: finalInventory.serverVersion,
+        capturedAt: finalInventory.capturedAt,
+      },
+      audits: {
+        agronomic: { file: path.basename(agronomicPath), sha256: sha256File(agronomicPath) },
+        lotIntegrity: { file: path.basename(lotPath), sha256: sha256File(lotPath) },
+      },
+      sourceObservation: {
+        sourcePointInTimeGuaranteed: false,
+        comparison: manifestVerified.sourceComparison,
+        beforeToCertified: compareInventories(manifestVerified.sourceBefore, finalInventory),
+        afterToCertified: compareInventories(manifestVerified.sourceAfter, finalInventory),
+      },
+      certifierGitSha: '901cfdae8732d06d34fb20ec9646b45ddf323c29',
+      tools: { mongosh: '2.10.0', mongorestore: 'mongorestore version: 100.18.0' },
+      certifiedAt: '2026-08-28T18:05:01.000Z',
+      status: 'certified',
+    });
+    const validated = validateArchiveCertification(certificate, {
+      certificateDir,
+      manifest,
+      manifestPath,
+      manifestVerified,
+    });
+    assert.equal(validated.sourcePointInTimeGuaranteed, false);
+    const certificatePath = path.join(certificateDir, 'archive-certification.json');
+    fs.writeFileSync(certificatePath, `${JSON.stringify(certificate, null, 2)}\n`);
+    for (const artifactPath of [
+      runtimeProofPath, verifyRuntimeProofPath, postRestoreRuntimePath,
+      liveBeforeAuditsRuntimePath, liveAfterAuditsRuntimePath,
+      infrastructureEvidencePath, targetAttestationPath, emptyInventoryPath,
+      immediatePath, beforeAuditsPath, finalPath, agronomicPath, lotPath,
+      intentPath, receiptPath, verificationPath, certificatePath,
+    ]) hardenRestrictedFile(artifactPath);
+    const manifestContextValue = {
+      manifest,
+      manifestPath,
+      verified: manifestVerified,
+    };
+    assert.equal(
+      loadArchiveCertification(certificatePath, manifestContextValue, { requireCleanup: false }).validated.certificationDatabase,
+      certificationDatabase,
+    );
+    const baselineReceipt = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
+    const baselineVerification = JSON.parse(fs.readFileSync(verificationPath, 'utf8'));
+    const assertRejectedArtifactMutation = ({ mutateReceipt, mutateVerification }, pattern) => {
+      const changedReceipt = structuredClone(baselineReceipt);
+      const changedVerification = structuredClone(baselineVerification);
+      if (mutateReceipt) mutateReceipt(changedReceipt);
+      fs.writeFileSync(receiptPath, `${JSON.stringify(changedReceipt)}\n`);
+      changedVerification.restoreReceiptSha256 = sha256File(receiptPath);
+      if (mutateVerification) mutateVerification(changedVerification);
+      fs.writeFileSync(verificationPath, `${JSON.stringify(changedVerification)}\n`);
+      const changedCertificate = structuredClone(certificate);
+      changedCertificate.restoreArtifacts.receipt.sha256 = sha256File(receiptPath);
+      changedCertificate.restoreArtifacts.verification.sha256 = sha256File(verificationPath);
+      assert.throws(() => validateArchiveCertification(changedCertificate, {
+        certificateDir, manifest, manifestPath, manifestVerified,
+      }), pattern);
+      fs.writeFileSync(receiptPath, `${JSON.stringify(baselineReceipt)}\n`);
+      fs.writeFileSync(verificationPath, `${JSON.stringify(baselineVerification)}\n`);
+    };
+    assertRejectedArtifactMutation({
+      mutateReceipt: (changed) => { changed.postRestoreRuntime.unexpected = true; },
+    }, /postRestoreRuntime.*campos inesperados/i);
+    assertRejectedArtifactMutation({
+      mutateReceipt: (changed) => { delete changed.restoredInventory.documents; },
+    }, /restoredInventory.*campos inesperados/i);
+    assertRejectedArtifactMutation({
+      mutateReceipt: (changed) => { changed.restoredInventory.collections += 1; },
+    }, /resumen del inventario inmediato/i);
+    assertRejectedArtifactMutation({
+      mutateReceipt: (changed) => { changed.restoredInventory.certifiedComparison = {}; },
+    }, /certifiedComparison/i);
+    assertRejectedArtifactMutation({
+      mutateVerification: (changed) => { changed.inventory.sourceDocuments += 1; },
+    }, /verification\.inventory no coincide/i);
+    assertRejectedArtifactMutation({
+      mutateVerification: (changed) => { delete changed.auditWindowInventory.afterAudits; },
+    }, /auditWindowInventory.*campos inesperados/i);
+    assertRejectedArtifactMutation({
+      mutateVerification: (changed) => { changed.auditWindowInventory.beforeVsAfter.targetDocuments += 1; },
+    }, /beforeVsAfter no coincide/i);
+    assertRejectedArtifactMutation({
+      mutateVerification: (changed) => { changed.auditWindowInventory.afterAudits.sha256 = 'f'.repeat(64); },
+    }, /ventana completa de inventarios/i);
+    assert.throws(
+      () => loadArchiveCertification(certificatePath, manifestContextValue),
+      /cleanup-receipt|no existe|cannot find/i,
+    );
+    const tooEarly = structuredClone(certificate);
+    const tooEarlyVerification = JSON.parse(fs.readFileSync(verificationPath, 'utf8'));
+    tooEarlyVerification.stabilityCheckedAt = '2026-08-28T18:04:59.000Z';
+    tooEarlyVerification.stabilityDelaySeconds = 129;
+    fs.writeFileSync(verificationPath, `${JSON.stringify(tooEarlyVerification)}\n`);
+    tooEarly.restoreArtifacts.verification.sha256 = sha256File(verificationPath);
+    assert.throws(() => validateArchiveCertification(tooEarly, {
+      certificateDir, manifest, manifestPath, manifestVerified,
+    }), /ventana estable completa/);
+    fs.writeFileSync(verificationPath, `${JSON.stringify({
+      ...tooEarlyVerification,
+      stabilityCheckedAt: '2026-08-28T18:05:00.000Z',
+      stabilityDelaySeconds: 130,
+    })}\n`);
+    const cleanupRuntimeProof = runtimeAt('2026-08-28T18:05:45.000Z');
+    const liveCleanupRuntimeProof = runtimeAt('2026-08-28T18:05:55.000Z');
+    const cleanupRuntimeProofSerializedSha256 = require('node:crypto')
+      .createHash('sha256').update(`${JSON.stringify(cleanupRuntimeProof)}\n`).digest('hex');
+    const cleanupRuntimeValueSha256 = sha256Json(liveCleanupRuntimeProof);
+    const cleanupRuntimeProofName = `target-runtime-proof-cleanup-${cleanupRuntimeProofSerializedSha256.slice(0, 16)}.json`;
+    const liveCleanupRuntimeProofName = `target-runtime-proof-live-cleanup-${cleanupRuntimeValueSha256.slice(0, 16)}.json`;
+    const cleanupRuntimeProofPath = path.join(certificateDir, cleanupRuntimeProofName);
+    const liveCleanupRuntimeProofPath = path.join(certificateDir, liveCleanupRuntimeProofName);
+    fs.writeFileSync(cleanupRuntimeProofPath, `${JSON.stringify(cleanupRuntimeProof)}\n`);
+    fs.writeFileSync(liveCleanupRuntimeProofPath, `${JSON.stringify(liveCleanupRuntimeProof)}\n`);
+    hardenRestrictedFile(cleanupRuntimeProofPath);
+    hardenRestrictedFile(liveCleanupRuntimeProofPath);
+    const cleanupReceipt = {
+      schemaVersion: 1,
+      kind: 'chaman-mongo-cleanup-receipt',
+      status: 'dropped',
+      rescanFound: false,
+      drillId: certificate.drillId,
+      database: certificationDatabase,
+      sourceManifestSha256: manifestSha256,
+      restoreIntentSha256: sha256File(intentPath),
+      restoreReceiptSha256: sha256File(receiptPath),
+      targetAttestationSha256,
+      infrastructureEvidenceSha256,
+      originalTargetRuntimeProofSha256: targetRuntimeProofSha256,
+      freshRuntimeProofFile: cleanupRuntimeProofName,
+      freshRuntimeProofSha256: sha256File(cleanupRuntimeProofPath),
+      liveRuntimeProofFile: liveCleanupRuntimeProofName,
+      liveRuntimeProofSha256: sha256File(liveCleanupRuntimeProofPath),
+      runtimeProcessId: cleanupRuntimeProof.mongo.processId,
+      liveRuntimeValueSha256: sha256Json(liveCleanupRuntimeProof),
+      originalAttestationExpired: true,
+      completedAt: '2026-08-28T18:06:00.000Z',
+    };
+    assert.equal(validateCertificationCleanupReceipt(cleanupReceipt, {
+      certification: { value: certificate, validated }, manifestPath, certificateDir,
+    }), true);
+    assert.throws(() => validateCertificationCleanupReceipt({
+      ...cleanupReceipt,
+      originalAttestationExpired: false,
+    }, {
+      certification: { value: certificate, validated }, manifestPath, certificateDir,
+    }), /drop \+ rescan/);
+    assert.throws(() => validateCertificationCleanupReceipt({ ...cleanupReceipt, rescanFound: true }, {
+      certification: { value: certificate, validated }, manifestPath, certificateDir,
+    }), /drop \+ rescan/);
+    const cleanupReceiptPath = path.join(certificateDir, 'cleanup-receipt.json');
+    fs.writeFileSync(cleanupReceiptPath, `${JSON.stringify(cleanupReceipt)}\n`);
+    hardenRestrictedFile(cleanupReceiptPath);
+    assert.equal(
+      loadArchiveCertification(certificatePath, manifestContextValue).validated.certificationDatabase,
+      certificationDatabase,
+    );
+    const skeletalCleanup = { ...cleanupReceipt };
+    delete skeletalCleanup.freshRuntimeProofSha256;
+    assert.throws(() => validateCertificationCleanupReceipt(skeletalCleanup, {
+      certification: { value: certificate, validated }, manifestPath, certificateDir,
+    }), /campos inesperados o faltantes/);
+    const oneLess = inventory('chaman_restore_drill_final_20260828');
+    oneLess.collections[0].count -= 1;
+    assert.equal(compareInventories(validated.inventory, oneLess).ok, false);
+    const wrongArchive = structuredClone(certificate);
+    wrongArchive.archiveSha256 = 'f'.repeat(64);
+    assert.throws(() => validateArchiveCertification(wrongArchive, {
+      certificateDir, manifest, manifestPath, manifestVerified,
+    }), /archive sellado/);
+    const ttlEnabledProof = structuredClone(runtimeProof);
+    ttlEnabledProof.getParameter.ttlMonitorEnabled = true;
+    fs.writeFileSync(runtimeProofPath, `${JSON.stringify(ttlEnabledProof)}\n`);
+    const ttlEnabledCertificate = structuredClone(certificate);
+    ttlEnabledCertificate.restoreArtifacts.runtimeProof.sha256 = sha256File(runtimeProofPath);
+    ttlEnabledCertificate.certificationTarget.targetRuntimeProofSha256 = sha256File(runtimeProofPath);
+    assert.throws(() => validateArchiveCertification(ttlEnabledCertificate, {
+      certificateDir, manifest, manifestPath, manifestVerified,
+    }), /monitor TTL debe estar deshabilitado/);
+    fs.writeFileSync(runtimeProofPath, `${JSON.stringify(runtimeProof)}\n`);
+    const badAudit = structuredClone(certificate);
+    fs.writeFileSync(lotPath, `${JSON.stringify({ ok: false, counters: {}, issueSamples: [] })}\n`);
+    badAudit.audits.lotIntegrity.sha256 = sha256File(lotPath);
+    assert.throws(() => validateArchiveCertification(badAudit, {
+      certificateDir, manifest, manifestPath, manifestVerified,
+    }), /auditorias no aprobadas/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('manifiesto legacy v1 permanece validable exclusivamente para cadenas de cleanup existentes', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-legacy-cleanup-'));
+  try {
+    const archivePath = path.join(directory, 'backup.archive.gz');
+    const inventoryPath = path.join(directory, 'source-inventory.json');
+    const sourceInventory = inventory();
+    sourceInventory.schemaVersion = 1;
+    delete sourceInventory.contentHashAlgorithm;
+    delete sourceInventory.databaseContentHash;
+    for (const collection of sourceInventory.collections) delete collection.contentHash;
+    fs.writeFileSync(archivePath, 'legacy-archive');
+    fs.writeFileSync(inventoryPath, `${JSON.stringify(sourceInventory)}\n`);
+    const attestation = sourceAttestation();
+    const manifest = {
+      schemaVersion: 1,
+      kind: 'chaman-mongo-logical-backup',
+      drillId: attestation.attestationId,
+      drillMode: attestation.drillMode,
+      database: attestation.database,
+      sourceEnvironment: attestation.sourceEnvironment,
+      sourceInstance: attestation.instanceIdentity,
+      infrastructureEvidenceSha256: attestation.infrastructureEvidenceSha256,
+      consistency: {
+        method: 'application-write-freeze',
+        attestationId: attestation.attestationId,
+        frozenAt: attestation.frozenAt,
+        verifiedAt: attestation.verifiedAt,
+        expiresAt: attestation.expiresAt,
+        changeTicket: attestation.changeTicket,
+      },
+      createdAt: NOW.toISOString(),
+      gitSha: '901cfdae8732d06d34fb20ec9646b45ddf323c29',
+      mongoServerVersion: sourceInventory.serverVersion,
+      tools: { mongosh: '2.10.0', mongodump: 'mongodump version: 100.18.0' },
+      archive: { file: path.basename(archivePath), sizeBytes: fs.statSync(archivePath).size, sha256: sha256File(archivePath) },
+      inventory: {
+        file: path.basename(inventoryPath),
+        sha256: sha256File(inventoryPath),
+        collections: sourceInventory.collections.length,
+        documents: sourceInventory.collections.reduce((sum, item) => sum + item.count, 0),
+      },
+    };
+    const validated = validateBackupManifest(manifest, directory);
+    assert.equal(validated.schemaVersion, 1);
+    assert.equal(validated.inventoryPath, inventoryPath);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('comparacion es idempotente para inventario normalizado sin relajar options ni orden de indices', () => {
@@ -1110,6 +1692,8 @@ test('manifiestos rechazan campos y valores que puedan filtrar secretos', () => 
 
 test('artefactos deben vivir fuera del repo y nunca sobreescribirse', () => {
   assert.throws(() => safeArtifactDirectory(path.join(process.cwd(), 'mongo-recovery-artifacts'), process.cwd()), /fuera/);
+  assert.throws(() => safeArtifactDirectory(path.join(process.cwd(), '..bundle', 'candidate'), process.cwd()), /fuera/);
+  assert.throws(() => safeArtifactDirectory(path.join(process.cwd(), '...', 'candidate'), process.cwd()), /fuera/);
   const outside = path.join(os.tmpdir(), 'chaman-safe-artifacts-not-created');
   assert.equal(safeArtifactDirectory(outside, process.cwd()), path.resolve(outside));
 });
@@ -1123,6 +1707,13 @@ test('runbook exige TTL deshabilitado solo en Mongo local y verificacion estable
   assert.match(runbook, /Nunca se configura en MongoDB de Testing, Producci[oó]n/);
   assert.match(runbook, /al menos \*\*130 segundos\*\*/);
   assert.match(runbook, /--purpose=cleanup/);
+  assert.match(runbook, /certify-archive-restore/);
+  assert.match(runbook, /certify-archive-verify/);
+  assert.match(runbook, /--archive-certification/);
+  assert.match(runbook, /Limpiar esta primera base[\s\S]*antes de avanzar/);
+  assert.match(runbook, /dbHash/);
+  assert.match(runbook, /no se degrada a comparar s[oó]lo conteos/);
+  assert.match(runbook, /git status --porcelain --untracked-files=normal/);
 });
 
 test('plan CLI es offline: valida gobierno sin URI ni conexion', () => {

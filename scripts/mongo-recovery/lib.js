@@ -346,7 +346,8 @@ function safeArtifactDirectory(outputDir, repositoryRoot, { mustNotExist = false
       ? path.join(fs.realpathSync(parent), path.basename(resolved))
       : resolved;
   const relative = path.relative(repoReal, resolvedReal);
-  if (!relative.startsWith('..') && !path.isAbsolute(relative)) {
+  const outsideRepository = relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+  if (!outsideRepository) {
     fail('Los artefactos de backup deben guardarse fuera del repositorio.');
   }
   if (resolved === path.parse(resolved).root) fail('output-dir no puede ser la raiz del volumen.');
@@ -429,7 +430,7 @@ function canonicalize(value) {
   return value;
 }
 
-function normalizeCollection(collection) {
+function normalizeCollection(collection, { requireContentHash = false } = {}) {
   const name = requiredText(collection.name, 'collection.name');
   const type = collection.type === 'view' ? 'view' : 'collection';
   if (type === 'view') {
@@ -437,20 +438,28 @@ function normalizeCollection(collection) {
   }
   const count = Number(collection.count);
   if (!Number.isSafeInteger(count) || count < 0) fail(`Conteo invalido para ${name}.`);
-  return {
+  const normalized = {
     name,
     type,
     options: canonicalize(collection.options || {}),
     count,
     indexes: normalizeIndexes(collection.indexes),
   };
+  if (requireContentHash) {
+    const contentHash = requiredText(collection.contentHash, `collection ${name}.contentHash`).toLowerCase();
+    if (!/^[0-9a-f]{32}$/.test(contentHash)) fail(`Digest documental invalido para ${name}.`);
+    normalized.contentHash = contentHash;
+  }
+  return normalized;
 }
 
 function normalizeInventory(inventory) {
   assertPlainObject(inventory, 'El inventario');
   if (!Array.isArray(inventory.collections)) fail('El inventario no contiene collections.');
-  return {
-    schemaVersion: 1,
+  if (![1, 2].includes(inventory.schemaVersion)) fail('Schema de inventario no soportado.');
+  const requireContentHash = inventory.schemaVersion === 2;
+  const normalized = {
+    schemaVersion: inventory.schemaVersion,
     database: validateDatabaseName(inventory.database, {
       restore: String(inventory.database).startsWith(RESTORE_DB_PREFIX),
     }),
@@ -458,9 +467,17 @@ function normalizeInventory(inventory) {
     capturedAt: validDate(inventory.capturedAt, 'capturedAt').toISOString(),
     collections: inventory.collections
       .filter((collection) => !String(collection.name || '').startsWith('system.'))
-      .map(normalizeCollection)
+      .map((collection) => normalizeCollection(collection, { requireContentHash }))
       .sort((left, right) => left.name.localeCompare(right.name)),
   };
+  if (requireContentHash) {
+    if (inventory.contentHashAlgorithm !== 'mongodb-dbHash-md5') fail('Algoritmo de digest documental no soportado.');
+    const databaseContentHash = requiredText(inventory.databaseContentHash, 'databaseContentHash').toLowerCase();
+    if (!/^[0-9a-f]{32}$/.test(databaseContentHash)) fail('databaseContentHash invalido.');
+    normalized.contentHashAlgorithm = inventory.contentHashAlgorithm;
+    normalized.databaseContentHash = databaseContentHash;
+  }
+  return normalized;
 }
 
 function mongoMajor(version) {
@@ -480,10 +497,21 @@ function assertCompatibleMongoVersions(sourceVersion, targetVersion) {
 function compareInventories(sourceRaw, targetRaw) {
   const source = normalizeInventory(sourceRaw);
   const target = normalizeInventory(targetRaw);
+  if (source.schemaVersion !== target.schemaVersion) {
+    fail('Inventarios con capacidades de digest documental incompatibles.');
+  }
   assertCompatibleMongoVersions(source.serverVersion, target.serverVersion);
   const sourceByName = new Map(source.collections.map((item) => [item.name, item]));
   const targetByName = new Map(target.collections.map((item) => [item.name, item]));
   const findings = [];
+  if (source.schemaVersion === 2 && source.databaseContentHash !== target.databaseContentHash) {
+    findings.push({
+      collection: '$database',
+      issue: 'database_content_hash_mismatch',
+      expected: source.databaseContentHash,
+      actual: target.databaseContentHash,
+    });
+  }
   for (const [name, expected] of sourceByName) {
     const actual = targetByName.get(name);
     if (!actual) {
@@ -496,6 +524,14 @@ function compareInventories(sourceRaw, targetRaw) {
     }
     if (expected.type === 'collection' && actual.count !== expected.count) {
       findings.push({ collection: name, issue: 'count_mismatch', expected: expected.count, actual: actual.count });
+    }
+    if (expected.type === 'collection' && actual.contentHash !== expected.contentHash) {
+      findings.push({
+        collection: name,
+        issue: 'content_hash_mismatch',
+        expected: expected.contentHash,
+        actual: actual.contentHash,
+      });
     }
     if (JSON.stringify(actual.indexes) !== JSON.stringify(expected.indexes)) {
       findings.push({ collection: name, issue: 'indexes_mismatch' });
@@ -548,14 +584,54 @@ function assertNoSecrets(value, trail = 'manifest') {
   }
 }
 
-function buildBackupManifest({ attestation, inventory, archivePath, inventoryPath, tools, gitSha, now = new Date() }) {
+function inventoryArtifact(inventory, inventoryPath) {
+  const normalized = normalizeInventory(inventory);
+  return {
+    file: path.basename(inventoryPath),
+    sha256: sha256File(inventoryPath),
+    capturedAt: normalized.capturedAt,
+    collections: normalized.collections.length,
+    documents: normalized.collections.reduce((sum, item) => sum + (item.count || 0), 0),
+  };
+}
+
+function buildBackupManifest({
+  attestation,
+  inventoryBefore,
+  inventoryAfter,
+  inventoryBeforePath,
+  inventoryAfterPath,
+  archivePath,
+  tools,
+  gitSha,
+  now = new Date(),
+}) {
   const source = validateSourceAttestation(attestation, { now });
-  const normalizedInventory = normalizeInventory(inventory);
-  if (normalizedInventory.database !== source.database) {
-    fail('La base del inventario no coincide con la atestacion.');
+  const normalizedBefore = normalizeInventory(inventoryBefore);
+  const normalizedAfter = normalizeInventory(inventoryAfter);
+  if (normalizedBefore.schemaVersion !== 2 || normalizedAfter.schemaVersion !== 2) {
+    fail('El manifiesto candidato exige inventarios schema v2 con dbHash por coleccion.');
   }
+  if (normalizedBefore.database !== source.database || normalizedAfter.database !== source.database) {
+    fail('Las observaciones fuente no coinciden con la base atestada.');
+  }
+  if (normalizedBefore.serverVersion !== normalizedAfter.serverVersion) {
+    fail('La version MongoDB cambio durante la ventana del dump.');
+  }
+  const createdAt = new Date(now);
+  const beforeCapturedAt = new Date(normalizedBefore.capturedAt);
+  const afterCapturedAt = new Date(normalizedAfter.capturedAt);
+  if (
+    beforeCapturedAt < source.verifiedAt ||
+    afterCapturedAt < beforeCapturedAt ||
+    createdAt < afterCapturedAt ||
+    afterCapturedAt >= source.expiresAt
+  ) {
+    fail('Las observaciones source no estan ordenadas dentro de la ventana atestada.');
+  }
+  const sourceComparison = compareInventories(normalizedBefore, normalizedAfter);
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: BACKUP_KIND,
     drillId: source.id,
     drillMode: source.drillMode,
@@ -564,34 +640,36 @@ function buildBackupManifest({ attestation, inventory, archivePath, inventoryPat
     sourceInstance: source.instanceIdentity,
     infrastructureEvidenceSha256: source.infrastructureEvidenceSha256,
     consistency: {
-      method: 'application-write-freeze',
+      method: 'application-write-freeze-with-system-writers-observed',
       attestationId: source.id,
       frozenAt: source.frozenAt.toISOString(),
       verifiedAt: source.verifiedAt.toISOString(),
       expiresAt: source.expiresAt.toISOString(),
       changeTicket: attestation.changeTicket,
+      sourcePointInTimeGuaranteed: false,
     },
-    createdAt: now.toISOString(),
+    createdAt: createdAt.toISOString(),
     gitSha: requiredText(gitSha, 'gitSha'),
-    mongoServerVersion: normalizedInventory.serverVersion,
+    mongoServerVersion: normalizedBefore.serverVersion,
     tools,
     archive: {
       file: path.basename(archivePath),
       sizeBytes: fs.statSync(archivePath).size,
       sha256: sha256File(archivePath),
     },
-    inventory: {
-      file: path.basename(inventoryPath),
-      sha256: sha256File(inventoryPath),
-      collections: normalizedInventory.collections.length,
-      documents: normalizedInventory.collections.reduce((sum, item) => sum + (item.count || 0), 0),
+    sourceObservation: {
+      before: inventoryArtifact(normalizedBefore, inventoryBeforePath),
+      after: inventoryArtifact(normalizedAfter, inventoryAfterPath),
+      comparison: sourceComparison,
+      sourcePointInTimeGuaranteed: false,
     },
+    certificationRequired: true,
   };
   assertNoSecrets(manifest);
   return manifest;
 }
 
-function validateBackupManifest(manifest, backupDir) {
+function validateLegacyBackupManifest(manifest, backupDir) {
   assertPlainObject(manifest, 'El manifiesto');
   assertExactKeys(
     manifest,
@@ -681,6 +759,163 @@ function validateBackupManifest(manifest, backupDir) {
     fail('Resumen de inventario del manifiesto no coincide.');
   }
   return { archivePath, inventoryPath, inventory };
+}
+
+function validateInventoryArtifact(value, backupDir, label) {
+  assertPlainObject(value, label);
+  assertExactKeys(value, ['file', 'sha256', 'capturedAt', 'collections', 'documents'], label);
+  const file = requiredText(value.file, `${label}.file`);
+  if (path.basename(file) !== file) fail(`${label}.file debe ser un nombre simple.`);
+  if (!/^[0-9a-f]{64}$/i.test(value.sha256 || '')) fail(`${label}.sha256 invalido.`);
+  validDate(value.capturedAt, `${label}.capturedAt`);
+  if (!Number.isSafeInteger(value.collections) || value.collections < 0) fail(`${label}.collections invalido.`);
+  if (!Number.isSafeInteger(value.documents) || value.documents < 0) fail(`${label}.documents invalido.`);
+  const artifactPath = path.resolve(backupDir, file);
+  const relative = path.relative(path.resolve(backupDir), artifactPath);
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    fail(`${label} intenta salir de backup-dir.`);
+  }
+  if (!fs.existsSync(artifactPath) || !fs.statSync(artifactPath).isFile()) fail(`Falta ${label}.`);
+  if (sha256File(artifactPath).toLowerCase() !== value.sha256.toLowerCase()) fail(`Checksum invalido para ${label}.`);
+  const inventory = normalizeInventory(readJson(artifactPath));
+  const documents = inventory.collections.reduce((sum, item) => sum + (item.count || 0), 0);
+  if (
+    inventory.capturedAt !== validDate(value.capturedAt, `${label}.capturedAt`).toISOString() ||
+    inventory.collections.length !== value.collections ||
+    documents !== value.documents
+  ) {
+    fail(`Resumen invalido para ${label}.`);
+  }
+  return { path: artifactPath, inventory };
+}
+
+function validateBackupManifestV2(manifest, backupDir) {
+  assertExactKeys(
+    manifest,
+    [
+      'schemaVersion', 'kind', 'drillId', 'drillMode', 'database', 'sourceEnvironment',
+      'sourceInstance', 'infrastructureEvidenceSha256', 'consistency', 'createdAt', 'gitSha',
+      'mongoServerVersion', 'tools', 'archive', 'sourceObservation', 'certificationRequired',
+    ],
+    'El manifiesto',
+  );
+  if (manifest.kind !== BACKUP_KIND) fail('Formato de manifiesto de backup no soportado.');
+  assertNoSecrets(manifest);
+  requiredText(manifest.drillId, 'drillId');
+  validateDatabaseName(manifest.database);
+  if (![TESTING_LOCAL_MODE, PRODUCTION_MODE].includes(manifest.drillMode)) fail('drillMode del manifiesto invalido.');
+  const expectedEnvironment = manifest.drillMode === TESTING_LOCAL_MODE ? 'testing' : 'production';
+  const expectedDatabase = manifest.drillMode === TESTING_LOCAL_MODE ? 'chaman_testing' : 'chaman';
+  if (manifest.sourceEnvironment !== expectedEnvironment || manifest.database !== expectedDatabase) {
+    fail('Origen del manifiesto incompatible con drillMode.');
+  }
+  validateInstanceIdentity(manifest.sourceInstance, 'sourceInstance');
+  if (!/^[0-9a-f]{64}$/i.test(manifest.infrastructureEvidenceSha256 || '')) {
+    fail('infrastructureEvidenceSha256 del manifiesto es invalido.');
+  }
+  if (!/^[0-9a-f]{40}$/i.test(manifest.gitSha || '')) fail('gitSha del manifiesto es invalido.');
+  const createdAt = validDate(manifest.createdAt, 'createdAt');
+  assertPlainObject(manifest.consistency, 'consistency');
+  assertExactKeys(
+    manifest.consistency,
+    ['method', 'attestationId', 'frozenAt', 'verifiedAt', 'expiresAt', 'changeTicket', 'sourcePointInTimeGuaranteed'],
+    'consistency',
+  );
+  if (
+    manifest.consistency.method !== 'application-write-freeze-with-system-writers-observed' ||
+    manifest.consistency.attestationId !== manifest.drillId ||
+    typeof manifest.consistency.sourcePointInTimeGuaranteed !== 'boolean'
+  ) {
+    fail('La evidencia de consistencia del manifiesto v2 es invalida.');
+  }
+  const frozenAt = validDate(manifest.consistency.frozenAt, 'consistency.frozenAt');
+  const verifiedAt = validDate(manifest.consistency.verifiedAt, 'consistency.verifiedAt');
+  const expiresAt = validDate(manifest.consistency.expiresAt, 'consistency.expiresAt');
+  if (verifiedAt < frozenAt || expiresAt <= verifiedAt || expiresAt - frozenAt > 2 * 60 * 60 * 1000) {
+    fail('La ventana de consistencia del manifiesto es invalida.');
+  }
+  if (createdAt < verifiedAt || createdAt >= expiresAt) fail('El manifiesto no fue creado dentro de la ventana atestada.');
+  if (manifest.certificationRequired !== true) fail('El manifiesto v2 debe exigir certificacion local del archive.');
+  assertPlainObject(manifest.archive, 'archive');
+  assertExactKeys(manifest.archive, ['file', 'sizeBytes', 'sha256'], 'archive');
+  const archiveFile = requiredText(manifest.archive.file, 'archive.file');
+  if (path.basename(archiveFile) !== archiveFile) fail('archive.file debe ser un nombre simple.');
+  if (!Number.isSafeInteger(manifest.archive.sizeBytes) || manifest.archive.sizeBytes < 1) fail('Tamano del archive invalido.');
+  if (!/^[0-9a-f]{64}$/i.test(manifest.archive.sha256 || '')) fail('SHA-256 del archive invalido.');
+  const archivePath = path.resolve(backupDir, archiveFile);
+  const archiveRelative = path.relative(path.resolve(backupDir), archivePath);
+  if (archiveRelative === '..' || archiveRelative.startsWith(`..${path.sep}`) || path.isAbsolute(archiveRelative)) {
+    fail('archive intenta salir de backup-dir.');
+  }
+  if (!fs.existsSync(archivePath) || !fs.statSync(archivePath).isFile()) fail('Falta el archive.');
+  if (sha256File(archivePath).toLowerCase() !== manifest.archive.sha256.toLowerCase()) fail('Checksum del archive invalido.');
+  if (fs.statSync(archivePath).size !== manifest.archive.sizeBytes) fail('Tamano del archive no coincide.');
+  assertPlainObject(manifest.sourceObservation, 'sourceObservation');
+  assertExactKeys(
+    manifest.sourceObservation,
+    ['before', 'after', 'comparison', 'sourcePointInTimeGuaranteed'],
+    'sourceObservation',
+  );
+  const before = validateInventoryArtifact(manifest.sourceObservation.before, backupDir, 'sourceObservation.before');
+  const after = validateInventoryArtifact(manifest.sourceObservation.after, backupDir, 'sourceObservation.after');
+  if (before.inventory.schemaVersion !== 2 || after.inventory.schemaVersion !== 2) {
+    fail('El manifiesto candidato exige inventarios schema v2 con digest documental.');
+  }
+  const beforeCapturedAt = new Date(before.inventory.capturedAt);
+  const afterCapturedAt = new Date(after.inventory.capturedAt);
+  if (
+    beforeCapturedAt < verifiedAt ||
+    afterCapturedAt < beforeCapturedAt ||
+    createdAt < afterCapturedAt ||
+    afterCapturedAt >= expiresAt
+  ) {
+    fail('Las observaciones source no estan ordenadas dentro de la ventana atestada.');
+  }
+  if (before.inventory.database !== manifest.database || after.inventory.database !== manifest.database) {
+    fail('Observaciones source y manifiesto refieren bases distintas.');
+  }
+  if (
+    before.inventory.serverVersion !== manifest.mongoServerVersion ||
+    after.inventory.serverVersion !== manifest.mongoServerVersion
+  ) {
+    fail('Observaciones source y manifiesto refieren versiones MongoDB distintas.');
+  }
+  const comparison = compareInventories(before.inventory, after.inventory);
+  if (JSON.stringify(manifest.sourceObservation.comparison) !== JSON.stringify(comparison)) {
+    fail('La comparacion source before/after no coincide con los inventarios sellados.');
+  }
+  if (
+    manifest.sourceObservation.sourcePointInTimeGuaranteed !== false ||
+    manifest.consistency.sourcePointInTimeGuaranteed !== false
+  ) {
+    fail('Este dump logico sin oplog/snapshot no puede declarar garantia point-in-time.');
+  }
+  return {
+    schemaVersion: 2,
+    archivePath,
+    sourceBeforePath: before.path,
+    sourceAfterPath: after.path,
+    sourceBefore: before.inventory,
+    sourceAfter: after.inventory,
+    sourceComparison: comparison,
+    sourcePointInTimeGuaranteed: false,
+    artifactPaths: [archivePath, before.path, after.path],
+  };
+}
+
+function validateBackupManifest(manifest, backupDir) {
+  assertPlainObject(manifest, 'El manifiesto');
+  if (manifest.schemaVersion === 1) {
+    const legacy = validateLegacyBackupManifest(manifest, backupDir);
+    return {
+      schemaVersion: 1,
+      ...legacy,
+      sourcePointInTimeGuaranteed: false,
+      artifactPaths: [legacy.archivePath, legacy.inventoryPath],
+    };
+  }
+  if (manifest.schemaVersion === 2) return validateBackupManifestV2(manifest, backupDir);
+  fail('Formato de manifiesto de backup no soportado.');
 }
 
 function redact(text, secrets = []) {
