@@ -7,6 +7,10 @@ la base `chaman_testing`. No copia Produccion, no conoce Railway y no permite
 otra base. El primer piloto ERA5 no debe ejecutarse si este flujo no termina en
 verde.
 
+La herramienta es un artefacto de seguridad cherry-pickeable. **No contiene el
+bridge ERA5**: debe integrarse sobre la rama que ya contenga foundation + bridge
+y verificarse nuevamente allí antes de publicar Testing.
+
 El cierre mutable incluye:
 
 - `siembras` y `lotes`, incluidos sus punteros y ultimas predicciones;
@@ -26,9 +30,19 @@ guardan como referencias verificables. Restore nunca los modifica.
 - `from` debe ser exactamente la fecha de siembra.
 - Aborta salvo que la base declarada en la URI sea `chaman_testing`.
 - Aborta ante cualquier flag de entorno productivo.
+- Exige un fingerprint SHA-256 explícito del endpoint del cluster Testing; el
+  nombre lógico de la base por sí solo no es suficiente.
+- Aborta si el establecimiento contiene otro lote, si una observación del rango
+  contiene `idLote` o `contextosLote` ajenos, o si falta la attestation operativa.
+- El piloto inicial es exclusivamente agrometeorológico. Crons, predicciones,
+  notificaciones, outbox y push deben permanecer congelados desde antes del
+  plan hasta después de verify/restore.
 - Resuelve siembra, lote, establecimiento y siembras activas mediante `$lookup`
   en Mongo; exige un solo resultado y `lotes.idSiembra` coherente.
 - Exige un unico binding activo del lote y un punto de grilla habilitado.
+- Exige índices únicos críticos y cobertura diaria continua
+  `chaman-meteo-agro-v2`, con 23-25 horas válidas por día, desde siembra hasta
+  el extremo solicitado.
 - Escanea secretos y aborta antes de escribir el bundle.
 - Archivos NDJSON EJSON, conteos, IDs y SHA-256 por coleccion; manifiesto con
   hash propio.
@@ -57,9 +71,18 @@ linea de comandos ni se guarda en el bundle:
 $env:CHAMAN_TESTING_MONGODB_URI = '<URI que termina en /chaman_testing>'
 ```
 
-No usar una URI que seleccione Produccion aunque el usuario tenga permisos
-limitados. La herramienta verifica el nombre logico, pero la revision humana de
-host/proyecto sigue siendo obligatoria.
+Obtener una vez el fingerprint no secreto del endpoint aprobado. El valor sólo
+identifica protocolo y host; no incorpora usuario, contraseña, query ni base:
+
+```powershell
+$env:CHAMAN_TESTING_CLUSTER_FINGERPRINT = node -e "const t=require('./scripts/lib/era5-pilot-snapshot'); process.stdout.write(t.testingClusterFingerprint(process.env.CHAMAN_TESTING_MONGODB_URI))"
+$env:CHAMAN_ERA5_PILOT_SAFETY_ATTESTATION = 'AGROMET_ONLY:CRONS_FROZEN:NOTIFICATIONS_DISABLED:OUTBOX_DISABLED:PUSH_DISABLED'
+```
+
+Comparar y registrar ese fingerprint en el acta aprobada de Testing. Si cambia
+el endpoint, no actualizarlo automáticamente: volver a verificar proyecto y
+cluster. No usar una URI de Producción aunque apunte a una base llamada
+`chaman_testing`.
 
 ## 1. Plan de solo lectura
 
@@ -103,8 +126,11 @@ No iniciar el piloto si esta verificacion falla.
 ## 3. Piloto
 
 Ejecutar el bridge y reproceso solamente para el `idSiembra` y `idLote` del
-manifiesto. Mantener desactivado el batch general. Verificar metricas y salidas
-antes de continuar.
+manifiesto y únicamente hasta la generación agrometeorológica. Mantener
+desactivados el batch general, motor sanitario, riego, alertas, workers de
+notificaciones, outbox y proveedor push. Verificar métricas y salidas antes de
+continuar. La attestation es una confirmación humana verificable, no detiene
+procesos por sí sola.
 
 ## 4. Sellar el estado posterior
 
@@ -142,6 +168,10 @@ alterando el manifiesto ni editar NDJSON manualmente.
 - No es un importador Produccion → Testing ni reemplaza el contrato selectivo
   de 21 siembras.
 - No crea el binding, no descarga ERA5 y no ejecuta el reproceso.
+- Por seguridad inicial exige un establecimiento con un único lote. No sirve
+  para establecimientos compartidos hasta implementar restore granular probado.
+- La cobertura debe existir completa hasta `to`; por el retraso natural de ERA5,
+  elegir como `to` el último día ya materializado, nunca completar huecos a mano.
 - No restaura colecciones de usuarios, tokens, notificaciones, colas, logs,
   dispositivos, ChirpStack, LoRaWAN ni credenciales externas.
 - El bundle contiene datos operativos de Testing: debe almacenarse cifrado,

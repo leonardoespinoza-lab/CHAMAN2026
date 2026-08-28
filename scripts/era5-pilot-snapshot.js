@@ -43,6 +43,7 @@ async function main() {
   if (!/^[A-Z][A-Z0-9_]{2,80}$/.test(uriEnv)) throw new Error('uri-env debe ser un nombre de variable seguro.');
   const uri = process.env[uriEnv];
   toolkit.assertTestingOnly({ uri });
+  toolkit.assertSafetyAttestation();
   const { MongoClient, ObjectId, EJSON } = loadMongoDriver();
   const client = new MongoClient(uri, { appName: 'chaman-era5-pilot-snapshot', serverSelectionTimeoutMS: 10000 });
   await client.connect();

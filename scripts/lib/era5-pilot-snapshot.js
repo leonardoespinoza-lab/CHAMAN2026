@@ -6,6 +6,8 @@ const DB_NAME = 'chaman_testing';
 const SCHEMA_VERSION = 1;
 const OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const ERA5_CALCULATION_VERSION = 'chaman-meteo-agro-v2';
+const SAFETY_ATTESTATION = 'AGROMET_ONLY:CRONS_FROZEN:NOTIFICATIONS_DISABLED:OUTBOX_DISABLED:PUSH_DISABLED';
 
 const MUTABLE_COLLECTIONS = [
   'siembras',
@@ -50,6 +52,15 @@ function validateDate(value, label) {
   return value;
 }
 
+function mongoEndpoint(uri) {
+  const parsed = new URL(uri);
+  return `${parsed.protocol}//${parsed.host.toLowerCase()}`;
+}
+
+function testingClusterFingerprint(uri) {
+  return sha256(mongoEndpoint(uri));
+}
+
 function assertTestingOnly({ uri, env = process.env }) {
   const productionFlags = [
     'NODE_ENV',
@@ -66,7 +77,15 @@ function assertTestingOnly({ uri, env = process.env }) {
   assert(slash > withoutQuery.indexOf('://') + 2, 'La URI debe declarar explicitamente la base chaman_testing.');
   const database = decodeURIComponent(withoutQuery.slice(slash + 1));
   assert(database === DB_NAME, `Abortado: la base debe ser exactamente ${DB_NAME}.`);
+  const expectedFingerprint = String(env.CHAMAN_TESTING_CLUSTER_FINGERPRINT || '').trim().toLowerCase();
+  assert(/^[a-f0-9]{64}$/.test(expectedFingerprint), 'CHAMAN_TESTING_CLUSTER_FINGERPRINT es obligatorio y debe ser SHA-256 del endpoint Testing sin credenciales.');
+  assert(testingClusterFingerprint(uri) === expectedFingerprint, 'Abortado: el fingerprint del cluster no corresponde al Testing aprobado.');
   return database;
+}
+
+function assertSafetyAttestation(env = process.env) {
+  assert(env.CHAMAN_ERA5_PILOT_SAFETY_ATTESTATION === SAFETY_ATTESTATION,
+    'Falta attestation: piloto agromet-only, crons congelados y notificaciones/outbox/push deshabilitados.');
 }
 
 function sortForEjson(value) {
@@ -116,7 +135,8 @@ function scanSecrets(value, pathParts = [], findings = []) {
   if (typeof value === 'object') {
     if (value instanceof Date || value._bsontype) return findings;
     for (const [key, child] of Object.entries(value)) {
-      if (/^(password|passwd|secret|clientsecret|apikey|api_key|access_token|refresh_token|cookie|credentials?|mqtt_password|cds_key|fieldclimate_key)$/i.test(key)) {
+      const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (/^(password|passwd|secret|clientsecret|apikey|accesstoken|refreshtoken|token|authorization|cookie|credentials?|mqttpassword|cdskey|fieldclimatekey)$/.test(normalizedKey)) {
         findings.push([...pathParts, key].join('.'));
       }
       scanSecrets(child, [...pathParts, key], findings);
@@ -203,6 +223,20 @@ async function resolveScope(db, config, ObjectId, options = {}) {
     { session },
   );
   assert(gridPoint, 'El punto de grilla del binding no existe o no esta habilitado.');
+  const otherLots = await db.collection('lotes').countDocuments({
+    _id: { $ne: lotObjectId },
+    idEstablecimiento: new ObjectId(establishmentId),
+  }, { session });
+  assert(otherLots === 0, 'Piloto abortado: el establecimiento contiene otros lotes; las observaciones son compartidas y no pueden restaurarse aisladamente.');
+  const observations = await db.collection('observaciones_meteorologicas').find({
+    idEstablecimiento: new ObjectId(establishmentId),
+    fechaLocal: { $gte: config.from, $lte: config.to },
+  }, { session }).toArray();
+  for (const observation of observations) {
+    const foreignIds = contextLotIds(observation.contextosLote).filter((value) => value !== config.lotId);
+    assert(foreignIds.length === 0, `Piloto abortado: una observacion contiene contextos de otros lotes (${foreignIds.join(', ')}).`);
+    if (observation.idLote) assert(idValue(observation.idLote) === config.lotId, 'Piloto abortado: una observacion compartida pertenece a otro lote.');
+  }
   return {
     lotObjectId,
     sowingObjectId,
@@ -212,6 +246,49 @@ async function resolveScope(db, config, ObjectId, options = {}) {
     gridPointKey: String(binding.gridPointKey),
     sowingDate,
   };
+}
+
+function contextLotIds(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  return Object.keys(value).filter((key) => OBJECT_ID_PATTERN.test(key)).map((key) => key.toLowerCase());
+}
+
+function dateRange(from, to) {
+  const dates = [];
+  for (let cursor = new Date(`${from}T00:00:00.000Z`), end = new Date(`${to}T00:00:00.000Z`); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    dates.push(cursor.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
+async function assertIndexesAndEra5Coverage(db, scope, config, options = {}) {
+  const session = options.session;
+  const requirements = {
+    weather_location_bindings: [{ name: 'uniq_weather_location_binding', unique: true }],
+    weather_daily: [{ name: 'uniq_weather_daily_grid_date_version', unique: true }],
+    observaciones_meteorologicas: [{ name: 'uniq_establishment_time_granularity', unique: true }],
+    indicadores_agrometeorologicos: [{ name: 'uniq_sowing_date_engine_version', unique: true }],
+  };
+  for (const [collectionName, expected] of Object.entries(requirements)) {
+    const indexes = await db.collection(collectionName).listIndexes({ session }).toArray();
+    for (const requirement of expected) {
+      const actual = indexes.find((index) => index.name === requirement.name);
+      assert(actual && Boolean(actual.unique) === requirement.unique, `Falta indice requerido ${collectionName}.${requirement.name}.`);
+    }
+  }
+  const daily = await db.collection('weather_daily').find({
+    gridPointKey: scope.gridPointKey,
+    calculationVersion: ERA5_CALCULATION_VERSION,
+    date: { $gte: config.from, $lte: config.to },
+  }, { session }).toArray();
+  const expectedDates = dateRange(config.from, config.to);
+  const actualDates = daily.map((item) => item.date).sort();
+  assert(daily.length === expectedDates.length && JSON.stringify(actualDates) === JSON.stringify(expectedDates),
+    `Cobertura ERA5 v2 incompleta: se requieren ${expectedDates.length} dias continuos y hay ${daily.length}.`);
+  for (const item of daily) {
+    assert(item.hoursAvailable >= 23 && item.hoursAvailable <= item.hoursExpected && item.values && Object.keys(item.values).length > 0,
+      `Dia ERA5 v2 incompleto o invalido: ${item.date}.`);
+  }
 }
 
 function collectionQueries(scope, config) {
@@ -233,7 +310,7 @@ function collectionQueries(scope, config) {
     cronos: { _id: scope.cronoObjectId },
     weather_location_bindings: { locationType: 'lote', locationId: scope.lotObjectId },
     weather_grid_points: { key: scope.gridPointKey },
-    weather_daily: { gridPointKey: scope.gridPointKey, date: { $gte: config.from, $lte: config.to } },
+    weather_daily: { gridPointKey: scope.gridPointKey, calculationVersion: ERA5_CALCULATION_VERSION, date: { $gte: config.from, $lte: config.to } },
   };
 }
 
@@ -252,6 +329,7 @@ async function readConsistentScope({ client, db, config, ObjectId, EJSON }) {
   try {
     await session.withTransaction(async () => {
       const scope = await resolveScope(db, config, ObjectId, { session });
+      await assertIndexesAndEra5Coverage(db, scope, config, { session });
       const queries = collectionQueries(scope, config);
       const state = await readState(db, queries, EJSON, { session });
       result = { scope, queries, state };
@@ -304,7 +382,7 @@ function buildPlan(config, scope, state, codeSha, EJSON) {
     sowingDate: scope.sowingDate,
     weatherWindow: { from: config.from, to: config.to },
     gridPointKey: scope.gridPointKey,
-    policy: { oneLot: true, exactlyOneActiveSowing: true, onConflict: 'abort', restore: 'transactional-compare-and-swap' },
+    policy: { oneLot: true, exclusiveEstablishment: true, agrometOnly: true, sideEffectsFrozen: true, exactlyOneActiveSowing: true, onConflict: 'abort', restore: 'transactional-compare-and-swap' },
     collections,
   };
   return { ...core, planSha256: sha256(canonicalEjson(core, EJSON)) };
@@ -449,9 +527,12 @@ async function restoreBundle({ client, db, bundle, queries, EJSON, confirmation,
 module.exports = {
   ALL_COLLECTIONS,
   DB_NAME,
+  ERA5_CALCULATION_VERSION,
   MUTABLE_COLLECTIONS,
   REFERENCE_COLLECTIONS,
   assertNoSecrets,
+  assertIndexesAndEra5Coverage,
+  assertSafetyAttestation,
   assertSummaryEqual,
   assertTestingOnly,
   buildPlan,
@@ -459,6 +540,7 @@ module.exports = {
   collectionQueries,
   confirmationForRestore,
   confirmationForSnapshot,
+  contextLotIds,
   hashStateSummary,
   loadBundle,
   loadPostState,
@@ -472,5 +554,6 @@ module.exports = {
   sha256,
   stateSummary,
   summarizeDocuments,
+  testingClusterFingerprint,
   writeBundle,
 };

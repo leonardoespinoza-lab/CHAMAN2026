@@ -49,6 +49,7 @@ function match(document, query) {
   return Object.entries(query).every(([key, expected]) => {
     const actual = key.split('.').reduce((value, part) => value?.[part], document);
     if (expected && typeof expected === 'object' && !(expected instanceof FakeObjectId) && !(expected instanceof Date)) {
+      if ('$ne' in expected) return !same(actual, expected.$ne);
       if ('$gte' in expected && actual < expected.$gte) return false;
       if ('$lte' in expected && actual > expected.$lte) return false;
       if ('$gte' in expected || '$lte' in expected) return true;
@@ -64,7 +65,7 @@ class FakeCursor {
 }
 
 class FakeCollection {
-  constructor(documents) { this.documents = documents; }
+  constructor(documents, db, name) { this.documents = documents; this.db = db; this.name = name; }
   find(query) { return new FakeCursor(this.documents.filter((document) => match(document, query))); }
   async deleteMany(query) {
     const before = this.documents.length;
@@ -72,19 +73,33 @@ class FakeCollection {
     return { deletedCount: before - this.documents.length };
   }
   async insertMany(documents) {
+    if (this.db.failInsertCollection === this.name) throw new Error(`fallo simulado en ${this.name}`);
     this.documents.push(...ejsonRevive(JSON.parse(JSON.stringify(ejsonNormalize(documents)))));
   }
 }
 
 class FakeDb {
   constructor(data) { this.data = data; }
-  collection(name) { return new FakeCollection(this.data[name] || (this.data[name] = [])); }
+  collection(name) { return new FakeCollection(this.data[name] || (this.data[name] = []), this, name); }
 }
 
 class FakeClient {
   startSession() {
     return {
       async withTransaction(callback) { await callback(); },
+      async endSession() {},
+    };
+  }
+}
+
+class TransactionalFakeClient {
+  constructor(db) { this.db = db; }
+  startSession() {
+    return {
+      withTransaction: async (callback) => {
+        const before = ejsonRevive(JSON.parse(JSON.stringify(ejsonNormalize(this.db.data))));
+        try { await callback(); } catch (error) { this.db.data = before; throw error; }
+      },
       async endSession() {},
     };
   }
@@ -115,14 +130,20 @@ function baselineData(scope) {
     cronos: [{ _id: scope.cronoObjectId }],
     weather_location_bindings: [{ _id: id('17'), locationType: 'lote', locationId: scope.lotObjectId, gridPointKey: scope.gridPointKey }],
     weather_grid_points: [{ _id: id('18'), key: scope.gridPointKey }],
-    weather_daily: [{ _id: id('19'), gridPointKey: scope.gridPointKey, date: '2026-05-01', values: { temperatureMeanC: 10 } }],
+    weather_daily: ['01', '02', '03'].map((day, index) => ({ _id: id(String(19 + index)), gridPointKey: scope.gridPointKey, date: `2026-05-${day}`, calculationVersion: toolkit.ERA5_CALCULATION_VERSION, hoursAvailable: 24, hoursExpected: 24, values: { temperatureMeanC: 10 } })),
   };
 }
 
 test('rechaza cualquier destino que no sea chaman_testing o tenga flags productivos', () => {
-  assert.throws(() => toolkit.assertTestingOnly({ uri: 'mongodb://u:p@host/chaman', env: {} }), /exactamente chaman_testing/);
-  assert.throws(() => toolkit.assertTestingOnly({ uri: 'mongodb://u:p@host/chaman_testing', env: { RAILWAY_ENVIRONMENT_NAME: 'production' } }), /flags productivos/);
-  assert.equal(toolkit.assertTestingOnly({ uri: 'mongodb://u:p@host/chaman_testing?retryWrites=true', env: { NODE_ENV: 'test' } }), 'chaman_testing');
+  const uri = 'mongodb://testing.example/chaman_testing?retryWrites=true';
+  const fingerprint = toolkit.testingClusterFingerprint(uri);
+  assert.throws(() => toolkit.assertTestingOnly({ uri: 'mongodb://host/chaman', env: { CHAMAN_TESTING_CLUSTER_FINGERPRINT: fingerprint } }), /exactamente chaman_testing/);
+  assert.throws(() => toolkit.assertTestingOnly({ uri, env: { RAILWAY_ENVIRONMENT_NAME: 'production', CHAMAN_TESTING_CLUSTER_FINGERPRINT: fingerprint } }), /flags productivos/);
+  assert.throws(() => toolkit.assertTestingOnly({ uri, env: {} }), /FINGERPRINT/);
+  assert.throws(() => toolkit.assertTestingOnly({ uri: 'mongodb://otro.example/chaman_testing', env: { CHAMAN_TESTING_CLUSTER_FINGERPRINT: fingerprint } }), /no corresponde/);
+  assert.equal(toolkit.assertTestingOnly({ uri, env: { NODE_ENV: 'test', CHAMAN_TESTING_CLUSTER_FINGERPRINT: fingerprint } }), 'chaman_testing');
+  assert.throws(() => toolkit.assertSafetyAttestation({}), /attestation/);
+  toolkit.assertSafetyAttestation({ CHAMAN_ERA5_PILOT_SAFETY_ATTESTATION: 'AGROMET_ONLY:CRONS_FROZEN:NOTIFICATIONS_DISABLED:OUTBOX_DISABLED:PUSH_DISABLED' });
 });
 
 test('exige IDs exactos, intervalo valido y un operation-id cerrado', () => {
@@ -151,6 +172,8 @@ test('resuelve server-side una unica siembra activa y binding exacto', async () 
         countDocuments: async () => 1,
       };
       if (name === 'weather_grid_points') return { findOne: async () => ({ key: scope.gridPointKey, enabled: true }) };
+      if (name === 'lotes') return { countDocuments: async () => 0 };
+      if (name === 'observaciones_meteorologicas') return { find: () => ({ toArray: async () => [] }) };
       throw new Error(`coleccion inesperada ${name}`);
     },
   };
@@ -176,11 +199,52 @@ test('aborta cuando el lote tiene mas de una siembra activa', async () => {
   await assert.rejects(toolkit.resolveScope(db, config, FakeObjectId), /exactamente una siembra activa/);
 });
 
+test('aborta ante otro lote del establecimiento o contexto meteorologico ajeno', async () => {
+  const { scope, config } = scopeAndConfig();
+  const row = {
+    _id: scope.sowingObjectId, idLote: scope.lotObjectId, idEstablecimiento: scope.establishmentObjectId,
+    idSemilla: scope.seedObjectId, idCrono: scope.cronoObjectId, fechaSiembra: new Date('2026-05-01T00:00:00Z'), activa: true,
+    lote: { _id: scope.lotObjectId, idSiembra: scope.sowingObjectId, idEstablecimiento: scope.establishmentObjectId }, siembrasActivas: [{ _id: scope.sowingObjectId }],
+  };
+  function database(otherLots, observations) {
+    return { collection(name) {
+      if (name === 'siembras') return { aggregate: () => ({ toArray: async () => [row] }) };
+      if (name === 'weather_location_bindings') return { findOne: async () => ({ gridPointKey: scope.gridPointKey }), countDocuments: async () => 1 };
+      if (name === 'weather_grid_points') return { findOne: async () => ({ enabled: true }) };
+      if (name === 'lotes') return { countDocuments: async () => otherLots };
+      if (name === 'observaciones_meteorologicas') return { find: () => ({ toArray: async () => observations }) };
+      throw new Error(name);
+    } };
+  }
+  await assert.rejects(toolkit.resolveScope(database(1, []), config, FakeObjectId), /otros lotes/);
+  const foreign = id('77').value;
+  await assert.rejects(toolkit.resolveScope(database(0, [{ contextosLote: { [foreign]: { estado: 'x' } } }]), config, FakeObjectId), /contextos de otros lotes/);
+});
+
+test('valida indices unicos y cobertura ERA5 v2 diaria continua', async () => {
+  const { scope, config } = scopeAndConfig();
+  const indexes = {
+    weather_location_bindings: [{ name: 'uniq_weather_location_binding', unique: true }],
+    weather_daily: [{ name: 'uniq_weather_daily_grid_date_version', unique: true }],
+    observaciones_meteorologicas: [{ name: 'uniq_establishment_time_granularity', unique: true }],
+    indicadores_agrometeorologicos: [{ name: 'uniq_sowing_date_engine_version', unique: true }],
+  };
+  const days = baselineData(scope).weather_daily;
+  const db = { collection(name) { return {
+    listIndexes: () => ({ toArray: async () => indexes[name] }),
+    find: () => ({ toArray: async () => days }),
+  }; } };
+  await toolkit.assertIndexesAndEra5Coverage(db, scope, config);
+  days.splice(1, 1);
+  await assert.rejects(toolkit.assertIndexesAndEra5Coverage(db, scope, config), /incompleta/);
+});
+
 test('hash canonico no depende del orden de claves y el escaner bloquea secretos', () => {
   const first = toolkit.canonicalEjson({ b: 2, a: { d: 4, c: 3 } }, EJSON);
   const second = toolkit.canonicalEjson({ a: { c: 3, d: 4 }, b: 2 }, EJSON);
   assert.equal(first, second);
   assert.deepEqual(toolkit.scanSecrets({ nested: { api_key: 'redacted' } }), ['nested.api_key']);
+  assert.deepEqual(toolkit.scanSecrets({ client_secret: 'redacted', token: 'redacted', authorization: 'redacted' }).sort(), ['authorization', 'client_secret', 'token']);
   assert.deepEqual(toolkit.scanSecrets({ dedupeKey: 'safe', eventKeys: ['safe'] }), []);
 });
 
@@ -255,6 +319,32 @@ test('restore aborta si hubo drift despues de registrar el post-state', async ()
       /drift detectado en alertas/,
     );
     assert.equal(data.alertas[0].descripcion, 'cambio concurrente');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('un fallo intermedio revierte todas las escrituras en la transaccion simulada', async () => {
+  const { scope, config } = scopeAndConfig();
+  const db = new FakeDb(baselineData(scope));
+  const queries = toolkit.collectionQueries(scope, config);
+  const pre = await toolkit.readState(db, queries, EJSON);
+  const plan = toolkit.buildPlan(config, scope, pre, 'd'.repeat(40), EJSON);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-era5-rollback-'));
+  const bundleDir = path.join(root, 'bundle');
+  try {
+    const manifest = toolkit.writeBundle(bundleDir, plan, pre, EJSON);
+    db.data.siembras[0].ultimaPrediccion = { riesgo: 50 };
+    db.data.alertas[0].activa = false;
+    const post = await toolkit.readState(db, queries, EJSON);
+    const record = toolkit.recordPostState(bundleDir, manifest, toolkit.stateSummary(post), EJSON);
+    const before = EJSON.stringify(db.data);
+    db.failInsertCollection = 'lotes';
+    await assert.rejects(toolkit.restoreBundle({
+      client: new TransactionalFakeClient(db), db, bundle: toolkit.loadBundle(bundleDir, EJSON), queries, EJSON,
+      confirmation: toolkit.confirmationForRestore(manifest, record.postStateSha256), bundleDir,
+    }), /fallo simulado/);
+    assert.equal(EJSON.stringify(db.data), before);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
