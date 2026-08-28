@@ -67,4 +67,3 @@ sdc-api-admin/
 **/.vscode/
 .DS_Store
 Thumbs.db
-{console.error(e)
