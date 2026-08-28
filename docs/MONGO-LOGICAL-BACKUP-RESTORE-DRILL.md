@@ -59,6 +59,7 @@ MongoDB del mismo major que el origen. Los binarios pueden seleccionarse con:
 $env:CHAMAN_MONGOSH_BIN = 'C:\ruta\mongosh.exe'
 $env:CHAMAN_MONGODUMP_BIN = 'C:\ruta\mongodump.exe'
 $env:CHAMAN_MONGORESTORE_BIN = 'C:\ruta\mongorestore.exe'
+$env:CHAMAN_RAILWAY_BIN = 'C:\ruta\railway.exe'
 ```
 
 Estas variables sólo contienen rutas de ejecutables, nunca credenciales.
@@ -168,6 +169,22 @@ Copiar las plantillas fuera del repo y completar datos reales. Para este modo:
 Ambas atestaciones llevan el SHA-256 de la misma evidencia. Testing también se
 congela: API, workers, jobs y escrituras de operador deben estar detenidos y los
 cinco controles deben ser verdaderos.
+
+### Precaución con `railway scale`
+
+En Railway CLI 5.26.1, los servicios históricos pueden aparecer como región
+`sfo`, pero ese nombre no se admite para volver a escalar. El nombre operativo
+es `us-west` y el estado resultante se informa como `us-west2`. Además, bajar y
+subir réplicas crea un deployment nuevo y puede tomar la punta actual de la
+rama configurada. Por eso `scale` no es, por sí solo, un mecanismo de freeze
+reversible.
+
+Sólo se puede usar para este drill después de que todos los escritores de
+Testing hayan sido desplegados desde una rama de release inmóvil y se haya
+registrado el mismo SHA exacto antes y después. Servicios sin SHA Git fijado
+deben quedar fuera o recibir primero una imagen/release inmutable. Si esas
+precondiciones no se cumplen, el dump se cancela; nunca se atestigua
+`activeWritersVerifiedZero` por mera intención.
 
 ## 5. Plan, dump y verificación offline
 

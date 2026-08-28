@@ -18,9 +18,14 @@ const database = connection.getDB(databaseName);
 if (database.getName() !== databaseName) throw new Error('La base conectada no coincide con la solicitada.');
 const runtime = database.adminCommand({ serverStatus: 1 });
 const runtimeProcessId = Number(runtime.pid);
+const runtimeExecutable = String(runtime.process || '')
+  .replace(/\\/g, '/')
+  .split('/')
+  .pop()
+  .toLowerCase();
 if (
   runtime.ok !== 1 ||
-  runtime.process !== 'mongod' ||
+  !['mongod', 'mongod.exe'].includes(runtimeExecutable) ||
   !Number.isSafeInteger(runtimeProcessId) ||
   runtimeProcessId < 1 ||
   runtimeProcessId !== expectedProcessId

@@ -17,7 +17,22 @@ function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
-function runRailway(args, { executable = 'railway', spawn = spawnSync } = {}) {
+function resolveRailwayExecutable(base = process.env, platform = process.platform) {
+  if (base.CHAMAN_RAILWAY_BIN) {
+    const configured = path.resolve(String(base.CHAMAN_RAILWAY_BIN));
+    if (!fs.existsSync(configured) || !fs.statSync(configured).isFile()) {
+      throw new Error('CHAMAN_RAILWAY_BIN no refiere un archivo ejecutable existente.');
+    }
+    return configured;
+  }
+  if (platform === 'win32' && base.APPDATA) {
+    const bundled = path.join(base.APPDATA, 'npm', 'node_modules', '@railway', 'cli', 'bin', 'railway.exe');
+    if (fs.existsSync(bundled) && fs.statSync(bundled).isFile()) return bundled;
+  }
+  return platform === 'win32' ? 'railway.exe' : 'railway';
+}
+
+function runRailway(args, { executable = resolveRailwayExecutable(), spawn = spawnSync } = {}) {
   const result = spawn(executable, args, {
     encoding: 'utf8',
     env: safeChildEnv(),
@@ -72,7 +87,9 @@ function collectRailwayEvidence(options, dependencies = {}) {
   if (String(sourceEnvironment || '').trim().toLowerCase() !== 'testing') {
     throw new Error('testing-local-drill exige --source-environment=Testing.');
   }
-  const normalizedSourceEnvironment = 'Testing';
+  // Railway CLI 5.26 resolves the environment name case-sensitively.
+  // The canonical project selector is lower-case even when the UI labels it "Testing".
+  const normalizedSourceEnvironment = 'testing';
   for (const [label, value] of Object.entries({ outputDir, sourceService, runtimeProofFile, evidenceId, collector, reviewedBy })) {
     if (typeof value !== 'string' || !value.trim()) throw new Error(`Falta ${label}.`);
   }
@@ -144,4 +161,4 @@ function collectRailwayEvidence(options, dependencies = {}) {
   return { evidencePath, evidenceSha256: sha256(fs.readFileSync(evidencePath)), rawCaptures: captures.length };
 }
 
-module.exports = { captureStatus, collectRailwayEvidence, runRailway };
+module.exports = { captureStatus, collectRailwayEvidence, resolveRailwayExecutable, runRailway };

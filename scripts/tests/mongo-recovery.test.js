@@ -45,7 +45,7 @@ const {
   hashDbPath,
   validateRuntimeProof,
 } = require('../mongo-recovery/runtime-proof');
-const { collectRailwayEvidence } = require('../mongo-recovery/railway-collector');
+const { collectRailwayEvidence, resolveRailwayExecutable } = require('../mongo-recovery/railway-collector');
 const {
   assertCleanupReceiptBindings,
   assertDropConfirmed,
@@ -456,6 +456,32 @@ test('hash de dbPath preserva mayusculas en POSIX y normaliza solo en Windows', 
   assert.equal(hashDbPath('C:\\Chaman\\Data', 'win32'), hashDbPath('c:\\chaman\\data', 'win32'));
 });
 
+test('runtime proof acepta el campo replSet que MongoDB 8 expone en getCmdLineOpts', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-runtime-replset-'));
+  const root = path.join(directory, 'chaman-recovery-drill', 'mongo8');
+  const dbPath = path.join(root, 'data');
+  fs.mkdirSync(dbPath, { recursive: true });
+  try {
+    const raw = localRuntimeRaw(dbPath);
+    raw.commandLine.replication = { replSet: 'chamanDrill' };
+    raw.serverStatus.process = 'C:\\MongoDB\\bin\\mongod.exe';
+    assert.equal(buildRuntimeProof(raw, {
+      uri: LOCAL_URI,
+      expectedDbPathRoot: root,
+      now: NOW,
+    }).mongo.replicaSet, 'chamanDrill');
+
+    raw.commandLine.replication.replSetName = 'otroReplicaSet';
+    assert.throws(() => buildRuntimeProof(raw, {
+      uri: LOCAL_URI,
+      expectedDbPathRoot: root,
+      now: NOW,
+    }), /contradictorios/);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('lectura de URI exige ACL del directorio antes de verificar o leer el archivo', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-uri-parent-acl-'));
   const file = path.join(directory, 'source.uri');
@@ -526,7 +552,7 @@ test('scripts mongosh convierten BSON Long a PID numerico seguro antes de serial
   let printed;
   const target = {
     getName: () => targetDatabase,
-    adminCommand: () => ({ ok: 1, process: 'mongod', pid: bsonLong }),
+    adminCommand: () => ({ ok: 1, process: 'C:\\MongoDB\\bin\\mongod.exe', pid: bsonLong }),
     dropDatabase() { dropped = true; return { ok: 1 }; },
   };
   const admin = { adminCommand: () => ({ ok: 1, databases: [] }) };
@@ -690,13 +716,28 @@ test('collector conserva raw railway status, deriva el grafo y sella target loca
     const evidence = JSON.parse(fs.readFileSync(result.evidencePath, 'utf8'));
     assert.equal(evidence.source.serviceId, SOURCE_SERVICE);
     assert.equal(evidence.target.instanceId, proof.instanceId);
-    assert.deepEqual(calls[1], ['status', '--project', projectId, '--environment', 'Testing', '--json']);
+    assert.deepEqual(calls[1], ['status', '--project', projectId, '--environment', 'testing', '--json']);
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(outputDir, 'railway-status-source.raw.json'), 'utf8')), raw);
     assert.throws(() => collectRailwayEvidence({
       outputDir: path.join(directory, 'production-evidence'), projectId, drillMode: PRODUCTION_MODE,
       sourceEnvironment: 'Production', sourceService: 'MongoDB', evidenceId: 'production_20260828',
       collector: 'operador-a', reviewedBy: 'responsable-b',
     }, { runner }), /Produccion permanece bloqueada/);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('collector resuelve un binario Railway directo y rechaza rutas configuradas inexistentes', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-railway-bin-'));
+  const executable = path.join(directory, 'railway.exe');
+  fs.writeFileSync(executable, 'test');
+  try {
+    assert.equal(resolveRailwayExecutable({ CHAMAN_RAILWAY_BIN: executable }, 'win32'), executable);
+    assert.throws(
+      () => resolveRailwayExecutable({ CHAMAN_RAILWAY_BIN: path.join(directory, 'missing.exe') }, 'win32'),
+      /no refiere un archivo ejecutable existente/,
+    );
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

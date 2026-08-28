@@ -77,6 +77,18 @@ function normalizeMembers(value, label) {
   return value.map((item) => text(item, label).toLowerCase()).sort();
 }
 
+function normalizeMongoProcess(value) {
+  const executable = text(value, 'serverStatus.process')
+    .replace(/\\/g, '/')
+    .split('/')
+    .pop()
+    .toLowerCase();
+  if (!['mongod', 'mongod.exe'].includes(executable)) {
+    fail('serverStatus.process no acredita un proceso mongod.');
+  }
+  return 'mongod';
+}
+
 function assertDbPath(dbPathValue, expectedRoot) {
   const dbPathInput = path.resolve(text(dbPathValue, 'commandLine.storage.dbPath'));
   const rootInput = path.resolve(text(expectedRoot, 'expected-dbpath-root'));
@@ -119,7 +131,15 @@ function buildRuntimeProof(raw, { uri, expectedDbPathRoot, now = new Date() }) {
   if (members.length !== 1 || members[0] !== me || passives.length || arbiters.length) {
     fail('hello no acredita un replica set local de un solo nodo.');
   }
-  const configuredReplicaSet = text(raw.commandLine?.replication?.replSetName, 'commandLine.replication.replSetName');
+  const replSetName = raw.commandLine?.replication?.replSetName;
+  const replSet = raw.commandLine?.replication?.replSet;
+  if (replSetName != null && replSet != null && String(replSetName).trim() !== String(replSet).trim()) {
+    fail('getCmdLineOpts informa nombres de replica set contradictorios.');
+  }
+  const configuredReplicaSet = text(
+    replSetName ?? replSet,
+    'commandLine.replication.replSetName/replSet',
+  );
   if (configuredReplicaSet !== replicaSet) fail('Replica set runtime no coincide con getCmdLineOpts.');
   const bindIps = normalizeBindIps(raw.commandLine?.net?.bindIp);
   const port = Number(raw.commandLine?.net?.port ?? 27017);
@@ -127,7 +147,7 @@ function buildRuntimeProof(raw, { uri, expectedDbPathRoot, now = new Date() }) {
   if (port !== uriEndpoint.port || !me.endsWith(`:${port}`)) fail('Puerto URI, hello y getCmdLineOpts no coinciden.');
   const processId = Number(raw.serverStatus?.pid);
   if (!Number.isSafeInteger(processId) || processId < 1) fail('serverStatus.pid invalido.');
-  if (raw.serverStatus?.process !== 'mongod') fail('serverStatus.process no acredita un proceso mongod.');
+  normalizeMongoProcess(raw.serverStatus?.process);
   const mongoVersion = text(raw.buildInfo?.version, 'buildInfo.version');
   const { dbPath, dbPathSha256 } = assertDbPath(raw.commandLine?.storage?.dbPath, expectedDbPathRoot);
   const endpointFingerprintSha256 = mongoEndpointFingerprint(uri).endpointFingerprintSha256;
