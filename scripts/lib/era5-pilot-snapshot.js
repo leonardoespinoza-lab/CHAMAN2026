@@ -3,7 +3,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const DB_NAME = 'chaman_testing';
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
+const SAFETY_ATTESTATION_SCHEMA_VERSION = 3;
+const REPOSITORY_ROOT = path.resolve(__dirname, '..', '..');
 const OBJECT_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_INSTANT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
@@ -19,6 +21,7 @@ const MAX_GRID_BINDING_DISTANCE_KM = 15;
 const BINDING_DISTANCE_TOLERANCE_KM = 0.1;
 const CLUSTER_ATTESTATION_MAX_VALIDITY_MS = 30 * 24 * 60 * 60 * 1000;
 const SAFETY_ATTESTATION_MAX_VALIDITY_MS = 24 * 60 * 60 * 1000;
+const REVALIDATION_TOKEN = Symbol('era5-pilot-scope-revalidation');
 const MAX_ATTESTATION_FUTURE_SKEW_MS = 5 * 60 * 1000;
 const SAFETY_ATTESTATION = 'AGROMET_ONLY:CRONS_FROZEN:NOTIFICATIONS_DISABLED:OUTBOX_DISABLED:PUSH_DISABLED';
 
@@ -51,6 +54,37 @@ function sha256(value) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function exactKeys(value, allowed, label) {
+  assert(value && typeof value === 'object' && !Array.isArray(value), `${label} debe ser un objeto.`);
+  const extras = Object.keys(value).filter((key) => !allowed.includes(key));
+  const missing = allowed.filter((key) => !(key in value));
+  assert(extras.length === 0 && missing.length === 0,
+    `${label} contiene campos inesperados o faltantes (extras=${extras.join(',')}; faltantes=${missing.join(',')}).`);
+}
+
+function resolveWithExistingAncestor(inputPath) {
+  const resolved = path.resolve(inputPath);
+  const suffix = [];
+  let cursor = resolved;
+  while (!fs.existsSync(cursor)) {
+    const parent = path.dirname(cursor);
+    assert(parent !== cursor, `No se pudo resolver un ancestro existente para ${resolved}.`);
+    suffix.unshift(path.basename(cursor));
+    cursor = parent;
+  }
+  return path.join(fs.realpathSync(cursor), ...suffix);
+}
+
+function assertExternalPath(inputPath, label, repositoryRoot = REPOSITORY_ROOT) {
+  assert(typeof inputPath === 'string' && inputPath.trim(), `${label} requiere una ruta.`);
+  const target = resolveWithExistingAncestor(inputPath);
+  const root = fs.realpathSync(path.resolve(repositoryRoot));
+  const relative = path.relative(root, target);
+  const outside = relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+  assert(outside, `${label} debe estar fuera del worktree.`);
+  return target;
 }
 
 function validateIdentifier(value, label) {
@@ -98,7 +132,7 @@ function testingClusterFingerprint(uri) {
 
 function loadAttestationFile(filePath, label) {
   assert(typeof filePath === 'string' && filePath.trim(), `${label} requiere una ruta de archivo.`);
-  const resolved = path.resolve(filePath);
+  const resolved = assertExternalPath(filePath, `La attestation ${label}`);
   assert(fs.existsSync(resolved), `No existe la attestation ${label}.`);
   const stats = fs.statSync(resolved);
   assert(stats.isFile() && stats.size > 0 && stats.size <= 65536, `Archivo de attestation ${label} invalido.`);
@@ -133,17 +167,71 @@ function assertTestingOnly({ uri, attestation, operationId, env = process.env, n
   return database;
 }
 
-function assertSafetyAttestation(attestation, { operationId, endpointFingerprint, codeSha, now = new Date() }) {
-  assert(attestation?.schemaVersion === 2 && attestation.environment === 'testing' && attestation.database === DB_NAME,
+function criticalPilotConfig(config) {
+  const validated = operationConfig(config);
+  return {
+    lotId: validated.lotId,
+    sowingId: validated.sowingId,
+    from: validated.from,
+    to: validated.to,
+    historicalStart: validated.historicalStart,
+    bridgeToday: validated.bridgeToday,
+    recentOpenMeteoDays: RECENT_OPEN_METEO_DAYS,
+    calculationVersion: ERA5_CALCULATION_VERSION,
+    sourceVersion: ERA5_SOURCE_VERSION,
+  };
+}
+
+function assertSafetyAttestation(attestation, {
+  operationId,
+  endpointFingerprint,
+  codeSha,
+  config,
+  now = new Date(),
+}) {
+  assert(attestation?.schemaVersion === SAFETY_ATTESTATION_SCHEMA_VERSION &&
+    attestation.environment === 'testing' && attestation.database === DB_NAME,
     'La attestation operativa no pertenece inequívocamente a Testing.');
+  exactKeys(attestation, [
+    'schemaVersion', 'environment', 'database', 'operationId', 'endpointFingerprint', 'codeSha',
+    'statement', 'pilotConfig', 'approvedBy', 'evidence', 'approvedAt', 'expiresAt',
+  ], 'attestation operativa');
   assert(attestation?.statement === SAFETY_ATTESTATION,
     'Falta attestation: piloto agromet-only, crons congelados y notificaciones/outbox/push deshabilitados.');
   assert(attestation.operationId === operationId, 'La attestation operativa no esta vinculada a esta operacion.');
   assert(attestation.endpointFingerprint === endpointFingerprint, 'La attestation operativa no esta vinculada al cluster Testing aprobado.');
   assert(attestation.codeSha === codeSha, 'La attestation operativa no esta vinculada al codigo que se esta ejecutando.');
+  const expectedConfig = criticalPilotConfig(config);
+  assert(JSON.stringify(sortForEjson(attestation.pilotConfig)) === JSON.stringify(sortForEjson(expectedConfig)),
+    'La attestation operativa no aprueba la configuracion critica exacta del piloto.');
   assert(typeof attestation.approvedBy === 'string' && attestation.approvedBy.trim().length >= 3, 'La attestation operativa no tiene aprobador.');
   assert(typeof attestation.evidence === 'string' && attestation.evidence.trim().length >= 8, 'La attestation operativa no tiene evidencia verificable.');
   assertAttestationWindow(attestation, 'attestation operativa', now, SAFETY_ATTESTATION_MAX_VALIDITY_MS);
+  return {
+    schemaVersion: SAFETY_ATTESTATION_SCHEMA_VERSION,
+    attestationSha256: sha256(JSON.stringify(sortForEjson(attestation))),
+    endpointFingerprint,
+    pilotConfig: expectedConfig,
+  };
+}
+
+function assertOperationalApproval(approval, config) {
+  exactKeys(approval, ['schemaVersion', 'attestationSha256', 'endpointFingerprint', 'pilotConfig'], 'aprobacion operativa sellada');
+  assert(approval.schemaVersion === SAFETY_ATTESTATION_SCHEMA_VERSION,
+    'La aprobacion operativa sellada tiene una version no admitida.');
+  assert(/^[a-f0-9]{64}$/i.test(String(approval.attestationSha256 || '')),
+    'La aprobacion operativa no contiene un hash canonico de la attestation.');
+  assert(/^[a-f0-9]{64}$/i.test(String(approval.endpointFingerprint || '')),
+    'La aprobacion operativa no contiene el fingerprint canonico del cluster Testing.');
+  const expected = criticalPilotConfig(config);
+  assert(JSON.stringify(sortForEjson(approval.pilotConfig)) === JSON.stringify(sortForEjson(expected)),
+    'La aprobacion operativa no esta vinculada a la configuracion critica exacta del piloto.');
+}
+
+function assertOperationalApprovalMatchesManifest(manifest, currentApproval) {
+  assertOperationalApproval(currentApproval, manifestOperationConfig(manifest));
+  assert(currentApproval.endpointFingerprint === manifest.operationalApproval?.endpointFingerprint,
+    'El cluster Testing actual no coincide con el cluster sellado en el bundle.');
 }
 
 function sortForEjson(value) {
@@ -155,6 +243,38 @@ function sortForEjson(value) {
 
 function canonicalEjson(value, EJSON) {
   return EJSON.stringify(sortForEjson(value), { relaxed: false });
+}
+
+function runtimeDependencyIdentity(repositoryRoot = REPOSITORY_ROOT, versions = process.versions) {
+  const nodeVersion = String(versions?.node || '');
+  const nodeMajor = Number(nodeVersion.split('.')[0]);
+  assert(nodeMajor === 20, 'La herramienta requiere Node.js 20.x, igual que el engine y .nvmrc sellados.');
+  const lockNames = ['package-lock.json', 'sdc-datos/package-lock.json'];
+  const lockfiles = {};
+  for (const name of lockNames) {
+    const filePath = path.join(repositoryRoot, ...name.split('/'));
+    assert(fs.existsSync(filePath) && fs.statSync(filePath).isFile(), `Falta lockfile requerido ${name}.`);
+    lockfiles[name] = sha256(fs.readFileSync(filePath));
+  }
+  return { nodeMajor, nodeVersion, lockfiles };
+}
+
+function assertRuntimeDependencyIdentity(sealed, current) {
+  exactKeys(sealed, ['nodeMajor', 'nodeVersion', 'lockfiles'], 'runtimeIdentity sellada');
+  exactKeys(current, ['nodeMajor', 'nodeVersion', 'lockfiles'], 'runtimeIdentity actual');
+  exactKeys(sealed.lockfiles, ['package-lock.json', 'sdc-datos/package-lock.json'], 'lockfiles sellados');
+  exactKeys(current.lockfiles, ['package-lock.json', 'sdc-datos/package-lock.json'], 'lockfiles actuales');
+  assert(sealed.nodeMajor === 20 && current.nodeMajor === 20,
+    'La herramienta y el bundle exigen exactamente Node.js 20.x.');
+  assert(/^20\.\d+\.\d+(?:[-+][0-9a-z.-]+)?$/i.test(String(sealed.nodeVersion || '')) &&
+    /^20\.\d+\.\d+(?:[-+][0-9a-z.-]+)?$/i.test(String(current.nodeVersion || '')),
+  'Las versiones Node sellada y actual deben ser versiones 20.x canonicas.');
+  for (const name of ['package-lock.json', 'sdc-datos/package-lock.json']) {
+    assert(/^[a-f0-9]{64}$/i.test(String(sealed.lockfiles?.[name] || '')),
+      `Hash sellado invalido para ${name}.`);
+    assert(String(current.lockfiles?.[name] || '').toLowerCase() === sealed.lockfiles[name].toLowerCase(),
+      `El lockfile ${name} no coincide con el bundle.`);
+  }
 }
 
 function documentId(document) {
@@ -184,6 +304,22 @@ function summarizeDocuments(documents, EJSON) {
   };
 }
 
+function normalizedKey(value) {
+  return String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function looksLikeBase64(value) {
+  const text = String(value || '').trim();
+  if (/^data:[^;,]+;base64,[a-z0-9+/=]+$/i.test(text) || /^base64:[a-z0-9+/=]+$/i.test(text)) return true;
+  if (text.length < 24 || text.length % 4 !== 0 || !/^[a-z0-9+/]+={0,2}$/i.test(text) || /^[a-f0-9]+$/i.test(text)) return false;
+  try {
+    const normalized = Buffer.from(text, 'base64').toString('base64').replace(/=+$/, '');
+    return normalized === text.replace(/=+$/, '');
+  } catch {
+    return false;
+  }
+}
+
 function scanSecrets(value, pathParts = [], findings = []) {
   if (value === null || value === undefined) return findings;
   if (Array.isArray(value)) {
@@ -191,23 +327,41 @@ function scanSecrets(value, pathParts = [], findings = []) {
     return findings;
   }
   if (typeof value === 'object') {
-    if (value instanceof Date || Buffer.isBuffer(value)) return findings;
+    if (value instanceof Date) return findings;
+    if (Buffer.isBuffer(value) || value instanceof ArrayBuffer || ArrayBuffer.isView(value) || value?._bsontype === 'Binary' || Object.hasOwn(value, '$binary')) {
+      findings.push(pathParts.join('.'));
+      return findings;
+    }
+    const entries = Object.entries(value);
+    for (const [key, child] of entries) {
+      const keyNormalized = normalizedKey(key);
+      const parentNormalized = normalizedKey(pathParts.at(-1));
+      const sensitiveValue = child !== null && child !== undefined && !/^(|redacted|<redacted>|masked|none|null|n\/a)$/i.test(String(child).trim());
+      if (sensitiveValue && (isSensitiveKey(keyNormalized) || isSensitiveKey(`${parentNormalized}${keyNormalized}`))) {
+        findings.push([...pathParts, key].join('.'));
+      }
+    }
+    if (
+      value?._bsontype === 'ObjectId' &&
+      typeof value.toHexString === 'function' &&
+      OBJECT_ID_PATTERN.test(String(value.toHexString()))
+    ) {
+      for (const [key, child] of entries) {
+        if (!['_bsontype', 'id', 'buffer'].includes(key)) scanSecrets(child, [...pathParts, key], findings);
+      }
+      return findings;
+    }
     if (typeof value.toExtendedJSON === 'function') {
       const extended = value.toExtendedJSON();
       if (extended !== value) scanSecrets(extended, pathParts, findings);
     }
-    for (const [key, child] of Object.entries(value)) {
-      const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const sensitiveValue = child !== null && child !== undefined && !/^(|redacted|<redacted>|masked|none|null|n\/a)$/i.test(String(child).trim());
-      if (sensitiveValue && isSensitiveKey(normalizedKey)) {
-        findings.push([...pathParts, key].join('.'));
-      }
+    for (const [key, child] of entries) {
       scanSecrets(child, [...pathParts, key], findings);
     }
     return findings;
   }
   if (typeof value === 'string') {
-    if (/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(value) || /mongodb(?:\+srv)?:\/\/[^\s/:]+:[^\s/@]+@/i.test(value) || /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\b/.test(value)) {
+    if (looksLikeBase64(value) || /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(value) || /mongodb(?:\+srv)?:\/\/[^\s/:]+:[^\s/@]+@/i.test(value) || /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\b/.test(value)) {
       findings.push(pathParts.join('.'));
     }
   }
@@ -293,6 +447,16 @@ function addDays(value, days) {
   return date.toISOString().slice(0, 10);
 }
 
+function numeroFinito(value, label, { min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY } = {}) {
+  const allowedType = typeof value === 'number' || typeof value === 'string';
+  assert(allowedType && value !== null && value !== undefined &&
+    !(typeof value === 'string' && value.trim() === ''), `${label} invalido: debe ser un numero finito explicito.`);
+  const numeric = Number(value);
+  assert(Number.isFinite(numeric) && numeric >= min && numeric <= max,
+    `${label} invalido: debe estar entre ${min} y ${max}.`);
+  return numeric;
+}
+
 function validCoordinates(value) {
   const lat = Number(value?.lat);
   const lng = Number(value?.lng);
@@ -342,14 +506,21 @@ function observationIdentityQuery(scope, config) {
   assert(isIanaTimezone(scope.gridTimezone), 'No se puede sellar observaciones sin timezone IANA valido.');
   const start = localDateTimeToUtc(config.from, 0, scope.gridTimezone);
   const end = localDateTimeToUtc(addDays(config.to, 1), 0, scope.gridTimezone);
-  const daily = dateRange(config.from, config.to).flatMap((date) => [
+  const dates = dateRange(config.from, config.to);
+  const dailyIdentities = dates.flatMap((date) => [
     localDateTimeToUtc(date, 12, scope.gridTimezone),
     new Date(`${date}T00:00:00.000Z`),
+    new Date(`${date}T01:00:00.000Z`),
   ]);
+  const utcCalendarStart = new Date(`${config.from}T00:00:00.000Z`);
+  const utcCalendarEnd = new Date(`${addDays(config.to, 1)}T00:00:00.000Z`);
+  const base = { idEstablecimiento: scope.establishmentObjectId };
   return {
     $or: [
-      { idEstablecimiento: scope.establishmentObjectId, timestamp: { $gte: start, $lt: end }, granularidad: 'hourly' },
-      { idEstablecimiento: scope.establishmentObjectId, timestamp: { $in: daily }, granularidad: 'daily' },
+      { ...base, timestamp: { $gte: start, $lt: end }, granularidad: 'hourly' },
+      { ...base, fechaLocal: { $gte: config.from, $lte: config.to }, granularidad: 'daily' },
+      { ...base, timestamp: { $gte: utcCalendarStart, $lt: utcCalendarEnd }, granularidad: 'daily' },
+      { ...base, timestamp: { $in: dailyIdentities }, granularidad: 'daily' },
     ],
   };
 }
@@ -361,6 +532,25 @@ function era5BridgeWindow(scope, config) {
   assert(from < toExclusive, 'La ventana solicitada no contiene dias historicos que el bridge ERA5 pueda usar.');
   const to = addDays(toExclusive, -1);
   return { from, to, toExclusive, recentWindowStart };
+}
+
+function assertObservationOwnership(observations, lotId) {
+  const canonicalLotId = validateIdentifier(lotId, 'lot-id de ownership meteorologico');
+  for (const observation of observations) {
+    assert(observation.contextosLote === undefined || observation.contextosLote === null ||
+      (typeof observation.contextosLote === 'object' && !Array.isArray(observation.contextosLote)),
+    'Piloto abortado: contextosLote debe ser un objeto.');
+    const contextKeys = observation.contextosLote && typeof observation.contextosLote === 'object' && !Array.isArray(observation.contextosLote)
+      ? Object.keys(observation.contextosLote) : [];
+    assert(contextKeys.every((value) => OBJECT_ID_PATTERN.test(value)), 'Piloto abortado: una observacion contiene claves de contexto no canonicas.');
+    for (const [key, context] of Object.entries(observation.contextosLote || {})) {
+      assert(context && typeof context === 'object' && !Array.isArray(context), `Piloto abortado: contextosLote.${key} no es un objeto.`);
+      assert(idValue(context.idLote) === key.toLowerCase(), `Piloto abortado: contextosLote.${key}.idLote no coincide con su clave.`);
+    }
+    const foreignIds = contextLotIds(observation.contextosLote).filter((value) => value !== canonicalLotId);
+    assert(foreignIds.length === 0, `Piloto abortado: una observacion contiene contextos de otros lotes (${foreignIds.join(', ')}).`);
+    if (observation.idLote) assert(idValue(observation.idLote) === canonicalLotId, 'Piloto abortado: una observacion compartida pertenece a otro lote.');
+  }
 }
 
 async function resolveScope(db, config, ObjectId, options = {}) {
@@ -455,8 +645,10 @@ async function resolveScope(db, config, ObjectId, options = {}) {
     },
   };
   assertBridgeScopeMetadata({ ...scopeMetadata }, config);
-  assert(config.bridgeToday === dateInTimezone(options.now || new Date(), scopeMetadata.gridTimezone),
-    'bridge-today no coincide con la fecha local actual del punto de grilla.');
+  if (options.requireCurrentBridgeDate !== false) {
+    assert(config.bridgeToday === dateInTimezone(options.now || new Date(), scopeMetadata.gridTimezone),
+      'bridge-today no coincide con la fecha local actual del punto de grilla.');
+  }
   const otherLots = await db.collection('lotes').countDocuments({
     _id: { $ne: lotObjectId },
     idEstablecimiento: new ObjectId(establishmentId),
@@ -470,21 +662,7 @@ async function resolveScope(db, config, ObjectId, options = {}) {
     observationIdentityQuery(observationScope, config),
     { session },
   ).toArray();
-  for (const observation of observations) {
-    assert(observation.contextosLote === undefined || observation.contextosLote === null ||
-      (typeof observation.contextosLote === 'object' && !Array.isArray(observation.contextosLote)),
-    'Piloto abortado: contextosLote debe ser un objeto.');
-    const contextKeys = observation.contextosLote && typeof observation.contextosLote === 'object' && !Array.isArray(observation.contextosLote)
-      ? Object.keys(observation.contextosLote) : [];
-    assert(contextKeys.every((value) => OBJECT_ID_PATTERN.test(value)), 'Piloto abortado: una observacion contiene claves de contexto no canonicas.');
-    for (const [key, context] of Object.entries(observation.contextosLote || {})) {
-      assert(context && typeof context === 'object' && !Array.isArray(context), `Piloto abortado: contextosLote.${key} no es un objeto.`);
-      assert(idValue(context.idLote) === key.toLowerCase(), `Piloto abortado: contextosLote.${key}.idLote no coincide con su clave.`);
-    }
-    const foreignIds = contextLotIds(observation.contextosLote).filter((value) => value !== config.lotId);
-    assert(foreignIds.length === 0, `Piloto abortado: una observacion contiene contextos de otros lotes (${foreignIds.join(', ')}).`);
-    if (observation.idLote) assert(idValue(observation.idLote) === config.lotId, 'Piloto abortado: una observacion compartida pertenece a otro lote.');
-  }
+  assertObservationOwnership(observations, config.lotId);
   return {
     lotObjectId,
     sowingObjectId,
@@ -550,18 +728,25 @@ async function assertEra5Coverage(db, scope, config, options = {}) {
     temperatureMaxC: [-55, 65],
   };
   for (const item of daily) {
-    const expected = Number(item.hoursExpected);
-    const available = Number(item.hoursAvailable);
-    const plausibleTemperatures = Object.entries(ranges).every(([key, [min, max]]) => {
-      const value = Number(item.values?.[key]);
-      return Number.isFinite(value) && value >= min && value <= max;
-    });
-    assert([23, 24, 25].includes(expected) && available === expected && Number(item.availableHoursByMetric?.temperature) === expected &&
+    const expected = numeroFinito(item.hoursExpected, 'hoursExpected', { min: 23, max: 25 });
+    const available = numeroFinito(item.hoursAvailable, 'hoursAvailable', { min: 23, max: 25 });
+    const temperatures = Object.fromEntries(Object.entries(ranges).map(([key, [min, max]]) => [
+      key,
+      numeroFinito(item.values?.[key], `values.${key}`, { min, max }),
+    ]));
+    const plausibleTemperatures = temperatures.temperatureMinC <= temperatures.temperatureMeanC &&
+      temperatures.temperatureMeanC <= temperatures.temperatureMaxC;
+    const availableTemperatureHours = numeroFinito(
+      item.availableHoursByMetric?.temperature,
+      'availableHoursByMetric.temperature',
+      { min: 23, max: 25 },
+    );
+    assert([23, 24, 25].includes(expected) && available === expected &&
       item.gridPointKey === scope.gridPointKey && item.calculationVersion === ERA5_CALCULATION_VERSION &&
       item.timezone === scope.gridTimezone && isIanaTimezone(item.timezone) && validateDate(item.date, 'weather_daily.date') &&
       item.date >= window.from && item.date < window.toExclusive && item.date >= config.historicalStart && item.date >= scope.gridPoint.historicalStart &&
       Number.isFinite(new Date(item.calculatedAt).getTime()) &&
-      plausibleTemperatures,
+      availableTemperatureHours === expected && plausibleTemperatures,
       `Dia ERA5 v2 incompleto o invalido: ${item.date}.`);
   }
 }
@@ -647,23 +832,41 @@ async function readConsistentScope({ client, db, config, ObjectId, EJSON, now })
     await session.endSession();
   }
   assert(result, 'No se pudo obtener un snapshot transaccional consistente.');
+  await assertRequiredIndexes(db);
   return result;
 }
 
-async function readConsistentState({ client, db, queries, EJSON, coverage }) {
+async function readConsistentState({ client, db, queries, EJSON, revalidation }) {
+  assert(revalidation?.manifest && revalidation?.ObjectId,
+    'La lectura post-piloto exige revalidar el scope sellado dentro de la transaccion.');
   await assertRequiredIndexes(db);
   const session = client.startSession();
-  let state;
+  let result;
   try {
     await session.withTransaction(async () => {
-      if (coverage) await assertEra5Coverage(db, coverage.scope, coverage.config, { session });
-      state = await readState(db, queries, EJSON, { session });
+      const config = manifestOperationConfig(revalidation.manifest);
+      const scope = await resolveScope(db, config, revalidation.ObjectId, {
+        session,
+        now: revalidation.now,
+        requireCurrentBridgeDate: false,
+      });
+      await assertEra5Coverage(db, scope, config, { session });
+      const state = await readState(db, queries, EJSON, { session });
+      assertObservationOwnership(state.observaciones_meteorologicas.documents, revalidation.manifest.lotId);
+      const revalidationProof = createScopeRevalidationProof(
+        scope,
+        revalidation.manifest,
+        EJSON,
+        stateSummary(state),
+      );
+      result = { state, revalidationProof };
     }, {
       readConcern: { level: 'snapshot' }, readPreference: 'primary',
     });
   } finally { await session.endSession(); }
-  assert(state, 'No se pudo leer el estado sellado consistentemente.');
-  return state;
+  assert(result, 'No se pudo leer y revalidar el estado sellado consistentemente.');
+  await assertRequiredIndexes(db);
+  return result;
 }
 
 function stateSummary(state) {
@@ -689,8 +892,10 @@ function assertNoSecrets(state) {
   assert(findings.length === 0, `El escaner de secretos bloqueo el snapshot en: ${findings.slice(0, 10).join(', ')}`);
 }
 
-function buildPlan(config, scope, state, codeSha, EJSON) {
+function buildPlan(config, scope, state, codeSha, EJSON, controls = {}) {
   assert(/^[a-f0-9]{40}$/.test(String(codeSha || '')), 'codeSha debe ser un commit Git SHA-1 completo y canonico.');
+  assertOperationalApproval(controls.operationalApproval, config);
+  assertRuntimeDependencyIdentity(controls.runtimeIdentity, controls.runtimeIdentity);
   assertBridgeScopeMetadata(scope, config);
   for (const name of ['siembras', 'lotes', 'establecimientos', 'semillas', 'cronos', 'weather_location_bindings', 'weather_grid_points']) {
     assert(state[name].count === 1, `El cierre exige exactamente un documento en ${name}; se encontraron ${state[name].count}.`);
@@ -704,6 +909,8 @@ function buildPlan(config, scope, state, codeSha, EJSON) {
     lotId: config.lotId,
     sowingId: config.sowingId,
     establishmentId: idValue(scope.establishmentObjectId),
+    seedId: idValue(scope.seedObjectId),
+    cronoId: idValue(scope.cronoObjectId),
     sowingDate: scope.sowingDate,
     weatherWindow: { from: config.from, to: config.to },
     gridPointKey: scope.gridPointKey,
@@ -720,6 +927,8 @@ function buildPlan(config, scope, state, codeSha, EJSON) {
       binding: scope.binding,
       gridPoint: scope.gridPoint,
     },
+    operationalApproval: controls.operationalApproval,
+    runtimeIdentity: controls.runtimeIdentity,
     policy: { oneLot: true, exclusiveEstablishment: true, agrometOnly: true, sideEffectsFrozen: true, exactlyOneActiveSowing: true, onConflict: 'abort', restore: 'transactional-compare-and-swap' },
     collections,
   };
@@ -751,11 +960,100 @@ function manifestBridgeConfig(manifest) {
   };
 }
 
+function manifestOperationConfig(manifest) {
+  return operationConfig({
+    operationId: manifest.operationId,
+    lotId: manifest.lotId,
+    sowingId: manifest.sowingId,
+    from: manifest.weatherWindow?.from,
+    to: manifest.weatherWindow?.to,
+    historicalStart: manifest.bridgeConfig?.historicalStart,
+    bridgeToday: manifest.bridgeConfig?.bridgeToday,
+  });
+}
+
+function scopeDescriptorFromScope(scope) {
+  return {
+    lotId: idValue(scope.lotObjectId),
+    sowingId: idValue(scope.sowingObjectId),
+    establishmentId: idValue(scope.establishmentObjectId),
+    seedId: idValue(scope.seedObjectId),
+    cronoId: idValue(scope.cronoObjectId),
+    sowingDate: scope.sowingDate,
+    gridPointKey: scope.gridPointKey,
+    gridTimezone: scope.gridTimezone,
+    bridgeScope: {
+      lotCoordinates: scope.lotCoordinates,
+      binding: scope.binding,
+      gridPoint: scope.gridPoint,
+    },
+  };
+}
+
+function scopeDescriptorFromManifest(manifest) {
+  return {
+    lotId: manifest.lotId,
+    sowingId: manifest.sowingId,
+    establishmentId: manifest.establishmentId,
+    seedId: manifest.seedId,
+    cronoId: manifest.cronoId,
+    sowingDate: manifest.sowingDate,
+    gridPointKey: manifest.gridPointKey,
+    gridTimezone: manifest.gridTimezone,
+    bridgeScope: manifest.bridgeScope,
+  };
+}
+
+function createScopeRevalidationProof(scope, manifest, EJSON, summary) {
+  const actual = canonicalEjson(scopeDescriptorFromScope(scope), EJSON);
+  const expected = canonicalEjson(scopeDescriptorFromManifest(manifest), EJSON);
+  assert(actual === expected,
+    'La revalidacion transaccional del lote/siembra/binding no coincide con el manifiesto sellado.');
+  const checks = {
+    exactLotAndSowing: true,
+    exactlyOneActiveSowing: true,
+    exclusiveEstablishment: true,
+    canonicalObservationContexts: true,
+    exactBindingAndGrid: true,
+    exactSowingAndReferences: true,
+  };
+  const proof = {
+    schemaVersion: 1,
+    manifestSha256: manifest.manifestSha256,
+    scopeSha256: sha256(expected),
+    stateSummarySha256: hashStateSummary(summary, EJSON),
+    checks,
+  };
+  Object.defineProperty(proof, REVALIDATION_TOKEN, { value: true, enumerable: false });
+  return proof;
+}
+
+function assertScopeRevalidationProof(proof, manifest, EJSON, requireFresh = false, summary) {
+  exactKeys(proof, ['schemaVersion', 'manifestSha256', 'scopeSha256', 'stateSummarySha256', 'checks'], 'prueba de revalidacion');
+  exactKeys(proof.checks, [
+    'exactLotAndSowing', 'exactlyOneActiveSowing', 'exclusiveEstablishment',
+    'canonicalObservationContexts', 'exactBindingAndGrid', 'exactSowingAndReferences',
+  ], 'checks de revalidacion');
+  assert(proof.schemaVersion === 1 && proof.manifestSha256 === manifest.manifestSha256,
+    'La prueba de revalidacion no corresponde al manifiesto.');
+  assert(Object.values(proof.checks).every((value) => value === true),
+    'La prueba de revalidacion no acredita todos los invariantes del scope.');
+  assert(proof.scopeSha256 === sha256(canonicalEjson(scopeDescriptorFromManifest(manifest), EJSON)),
+    'La prueba de revalidacion no corresponde al scope sellado.');
+  assert(/^[a-f0-9]{64}$/i.test(String(proof.stateSummarySha256 || '')),
+    'La prueba de revalidacion no contiene un hash canonico del estado leido.');
+  if (summary) assert(proof.stateSummarySha256 === hashStateSummary(summary, EJSON),
+    'La prueba de revalidacion no corresponde al resumen post-piloto entregado.');
+  if (requireFresh) assert(proof[REVALIDATION_TOKEN] === true,
+    'recordPostState exige una prueba fresca generada por la revalidacion transaccional.');
+}
+
 function writeJsonExclusive(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, { flag: 'wx', encoding: 'utf8' });
 }
 
 function writeBundle(bundleDir, plan, state, EJSON, now = new Date()) {
+  bundleDir = assertExternalPath(bundleDir, 'El bundle');
   assertNoSecrets(state);
   assert(!fs.existsSync(bundleDir), `El directorio de bundle ya existe: ${bundleDir}`);
   fs.mkdirSync(bundleDir, { recursive: false });
@@ -784,6 +1082,7 @@ function writeBundle(bundleDir, plan, state, EJSON, now = new Date()) {
 }
 
 function loadBundle(bundleDir, EJSON) {
+  bundleDir = assertExternalPath(bundleDir, 'El bundle');
   const manifestPath = path.join(bundleDir, 'manifest.json');
   assert(fs.existsSync(manifestPath), 'El bundle no contiene manifest.json.');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -794,15 +1093,9 @@ function loadBundle(bundleDir, EJSON) {
   delete manifestCore.manifestSha256;
   assert(sha256(canonicalEjson(manifestCore, EJSON)) === expectedManifestHash, 'El hash del manifiesto no coincide.');
   assert(/^[a-f0-9]{40}$/.test(String(manifest.codeSha || '')), 'El bundle no contiene un codeSha canonico.');
-  operationConfig({
-    operationId: manifest.operationId,
-    lotId: manifest.lotId,
-    sowingId: manifest.sowingId,
-    from: manifest.weatherWindow?.from,
-    to: manifest.weatherWindow?.to,
-    historicalStart: manifest.bridgeConfig?.historicalStart,
-    bridgeToday: manifest.bridgeConfig?.bridgeToday,
-  });
+  const sealedConfig = manifestOperationConfig(manifest);
+  assertOperationalApproval(manifest.operationalApproval, sealedConfig);
+  assertRuntimeDependencyIdentity(manifest.runtimeIdentity, manifest.runtimeIdentity);
   assert(manifest.bridgeConfig?.calculationVersion === ERA5_CALCULATION_VERSION &&
     manifest.bridgeConfig?.sourceVersion === ERA5_SOURCE_VERSION &&
     manifest.bridgeConfig?.recentOpenMeteoDays === RECENT_OPEN_METEO_DAYS,
@@ -820,6 +1113,7 @@ function loadBundle(bundleDir, EJSON) {
     assert(summary.count === manifest.collections[name].count && summary.sha256 === manifest.collections[name].sha256, `Contenido inconsistente en ${name}.`);
   }
   const loadedState = Object.fromEntries(ALL_COLLECTIONS.map((name) => [name, { documents: documents[name] }]));
+  assertObservationOwnership(documents.observaciones_meteorologicas, manifest.lotId);
   assertNoSecrets(loadedState);
   return { manifest, documents };
 }
@@ -849,7 +1143,9 @@ function assertReferencesEqual(actual, expected, label) {
   }
 }
 
-function recordPostState(bundleDir, manifest, summary, EJSON, now = new Date()) {
+function recordPostState(bundleDir, manifest, summary, EJSON, revalidationProof, now = new Date()) {
+  bundleDir = assertExternalPath(bundleDir, 'El bundle');
+  assertScopeRevalidationProof(revalidationProof, manifest, EJSON, true, summary);
   assertReferencesEqual(summary, manifest.collections, 'estado post-piloto');
   const core = {
     schemaVersion: SCHEMA_VERSION,
@@ -857,6 +1153,7 @@ function recordPostState(bundleDir, manifest, summary, EJSON, now = new Date()) 
     manifestSha256: manifest.manifestSha256,
     recordedAt: now.toISOString(),
     database: DB_NAME,
+    revalidationProof,
     collections: summary,
   };
   const record = { ...core, postStateSha256: sha256(canonicalEjson(core, EJSON)) };
@@ -865,17 +1162,19 @@ function recordPostState(bundleDir, manifest, summary, EJSON, now = new Date()) 
 }
 
 function loadPostState(bundleDir, manifest, EJSON) {
+  bundleDir = assertExternalPath(bundleDir, 'El bundle');
   const filePath = path.join(bundleDir, 'post-state.json');
   assert(fs.existsSync(filePath), 'Falta post-state.json; ejecute verify --record-post-state inmediatamente despues del piloto.');
   const record = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   assert(record.operationId === manifest.operationId && record.manifestSha256 === manifest.manifestSha256 && record.database === DB_NAME, 'post-state.json no corresponde al bundle.');
+  assertScopeRevalidationProof(record.revalidationProof, manifest, EJSON, false, record.collections);
   const core = { ...record };
   delete core.postStateSha256;
   assert(sha256(canonicalEjson(core, EJSON)) === record.postStateSha256, 'Hash invalido en post-state.json.');
   return record;
 }
 
-async function restoreBundle({ client, db, bundle, ObjectId, EJSON, confirmation, bundleDir, currentCodeSha }) {
+async function restoreBundle({ client, db, bundle, ObjectId, EJSON, confirmation, bundleDir, currentCodeSha, now }) {
   assertCodeIdentity(bundle.manifest, currentCodeSha);
   const postState = loadPostState(bundleDir, bundle.manifest, EJSON);
   const queries = sealedQueries(bundle.manifest, ObjectId, postState);
@@ -885,7 +1184,24 @@ async function restoreBundle({ client, db, bundle, ObjectId, EJSON, confirmation
   let outcome = 'restored';
   try {
     await session.withTransaction(async () => {
+      const config = manifestOperationConfig(bundle.manifest);
+      const scope = await resolveScope(db, config, ObjectId, {
+        session,
+        now,
+        requireCurrentBridgeDate: false,
+      });
+      const currentScopeProof = createScopeRevalidationProof(
+        scope,
+        bundle.manifest,
+        EJSON,
+        postState.collections,
+      );
+      assertScopeRevalidationProof(currentScopeProof, bundle.manifest, EJSON, true);
+      assert(canonicalEjson(currentScopeProof, EJSON) === canonicalEjson(postState.revalidationProof, EJSON),
+        'El scope revalidado durante restore no coincide con la prueba post-piloto sellada.');
+      await assertEra5Coverage(db, scope, config, { session });
       const current = await readState(db, queries, EJSON, { session });
+      assertObservationOwnership(current.observaciones_meteorologicas.documents, bundle.manifest.lotId);
       const currentSummary = stateSummary(current);
       try {
         assertSummaryEqual(currentSummary, bundle.manifest.collections, 'estado actual');
@@ -895,7 +1211,6 @@ async function restoreBundle({ client, db, bundle, ObjectId, EJSON, confirmation
         assertSummaryEqual(currentSummary, postState.collections, 'estado post-piloto');
       }
       assertReferencesEqual(currentSummary, bundle.manifest.collections, 'restore abortado');
-      await assertEra5Coverage(db, manifestBridgeScope(bundle.manifest), manifestBridgeConfig(bundle.manifest), { session });
       for (const name of MUTABLE_COLLECTIONS) {
         await db.collection(name).deleteMany(queries[name], { session });
         if (bundle.documents[name].length) {
@@ -912,7 +1227,22 @@ async function restoreBundle({ client, db, bundle, ObjectId, EJSON, confirmation
   } finally {
     await session.endSession();
   }
-  return outcome;
+  try {
+    await assertRequiredIndexes(db);
+  } catch (error) {
+    return {
+      status: outcome === 'restored' ? 'restored_but_index_postcheck_failed' : 'already_restored_but_index_postcheck_failed',
+      restoreStatus: outcome,
+      databaseMutationCommitted: outcome === 'restored',
+      indexPostcheck: 'failed',
+      postcheckError: error.message,
+    };
+  }
+  return {
+    status: outcome,
+    databaseMutationCommitted: outcome === 'restored',
+    indexPostcheck: 'passed',
+  };
 }
 
 module.exports = {
@@ -924,10 +1254,16 @@ module.exports = {
   SAFETY_ATTESTATION,
   assertBridgeScopeMetadata,
   assertCodeIdentity,
+  assertExternalPath,
   assertNoSecrets,
+  assertObservationOwnership,
   assertEra5Coverage,
+  assertOperationalApproval,
+  assertOperationalApprovalMatchesManifest,
   assertRequiredIndexes,
+  assertRuntimeDependencyIdentity,
   assertSafetyAttestation,
+  assertScopeRevalidationProof,
   assertSummaryEqual,
   assertTestingOnly,
   buildPlan,
@@ -936,6 +1272,7 @@ module.exports = {
   confirmationForRestore,
   confirmationForSnapshot,
   contextLotIds,
+  criticalPilotConfig,
   hashStateSummary,
   isIanaTimezone,
   loadBundle,
@@ -943,6 +1280,8 @@ module.exports = {
   loadPostState,
   manifestBridgeConfig,
   manifestBridgeScope,
+  manifestOperationConfig,
+  numeroFinito,
   observationIdentityQuery,
   operationConfig,
   readConsistentScope,
@@ -951,6 +1290,7 @@ module.exports = {
   recordPostState,
   resolveScope,
   restoreBundle,
+  runtimeDependencyIdentity,
   scanSecrets,
   sealedQueries,
   sha256,

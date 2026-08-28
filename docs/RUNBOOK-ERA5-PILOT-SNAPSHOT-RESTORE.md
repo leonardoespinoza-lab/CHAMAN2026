@@ -8,19 +8,22 @@ otra base. El primer piloto ERA5 no debe ejecutarse si este flujo no termina en
 verde.
 
 La herramienta es una serie de seguridad cherry-pickeable. **No contiene el
-bridge ERA5**. Sobre la rama integrada foundation + bridge aplicar, en orden,
-`7bebce1`, `20fb94d`, `53d3e45` y el commit actual de endurecimiento; resolver
-conflictos sin omitir commits y ejecutar toda la validación nuevamente.
+bridge ERA5**. Sobre la rama integrada foundation + bridge aplicar el rango
+completo posterior al baseline `901cfda`, en orden topológico, hasta el tip de
+`codex/era5-pilot-snapshot-tool` (`git cherry-pick 901cfda..codex/era5-pilot-snapshot-tool`).
+Ese rango incluye `7bebce1`, `20fb94d`, `53d3e45`, `b76fbc4` y el commit final
+de este endurecimiento; resolver conflictos sin omitir commits y ejecutar toda
+la validación nuevamente.
 
 El cierre mutable incluye:
 
 - `siembras` y `lotes`, incluidos sus punteros y ultimas predicciones;
 - `observaciones_meteorologicas` seleccionadas por la misma identidad del upsert:
   `idEstablecimiento + timestamp + granularidad`. Las horas se cierran por el
-  intervalo UTC de la zona IANA del punto; los diarios incluyen tanto mediodía
-  local (Open-Meteo/ERA5) como `00:00Z` (agregado FieldClimate). `fechaLocal` no
-  participa del selector ni del restore, por lo que una etiqueta incoherente no
-  puede ocultar una fila que el piloto sí actualizaría;
+  intervalo UTC de la zona IANA del punto; los diarios se cierran por
+  `fechaLocal`, por el rango calendario UTC y por las identidades explícitas de
+  mediodía local, `00:00Z` y `01:00Z`. Así una etiqueta o timestamp incoherente
+  no puede ocultar una fila que el piloto sí podría actualizar;
 - indicadores legacy, generaciones preparadas, generacion activa e historicas;
 - predicciones sanitarias, predicciones de riego y alertas vinculadas por
   `idSiembra` o `idLote`.
@@ -49,17 +52,22 @@ guardan como referencias verificables. Restore nunca los modifica.
   y timezone IANA válidos.
 - Exige índices únicos críticos y cobertura diaria continua
   `chaman-meteo-agro-v2`, con 23-25 horas válidas por día, desde siembra hasta
-  el extremo solicitado. Las temperaturas deben estar dentro de los mismos
-  rangos plausibles aceptados por el motor.
+  el extremo solicitado. Temperaturas nulas, vacías o no finitas se rechazan;
+  strings numéricos explícitos se interpretan igual que en el bridge y deben
+  respetar sus rangos plausibles y el orden mínima ≤ media ≤ máxima.
 - `bridge-today` sella la fecha local que usará el piloto. La cobertura ERA5 se
   calcula con el mismo corte del bridge: hoy y los cuatro días previos quedan
   fuera de ERA5 y continúan bajo Open-Meteo.
-- Escanea secretos y aborta antes de escribir el bundle.
+- Escanea secretos y aborta antes de escribir el bundle, incluidos Buffer,
+  BSON Binary, `$binary`, base64 y credenciales anidadas como `api.key`.
 - Archivos NDJSON EJSON, conteos, IDs y SHA-256 por coleccion; manifiesto con
   hash propio.
-- El preflight de índices se ejecuta antes de abrir la transacción porque Mongo
-  no admite `listIndexes` dentro de ella. Cobertura y datos mutables se vuelven
-  a validar dentro del snapshot transaccional.
+- Bundle y attestations se rechazan si están dentro del worktree. El manifiesto
+  sella Node 20.x y los SHA-256 de `package-lock.json` y
+  `sdc-datos/package-lock.json`; verify/restore exigen los mismos locks.
+- Los índices se verifican antes de abrir y después de cerrar cada transacción,
+  porque Mongo no admite `listIndexes` dentro de ella. Cobertura y datos
+  mutables se vuelven a validar dentro del snapshot transaccional.
 - Plan, snapshot y verify leen un punto consistente mediante transaccion Mongo
   con `readConcern=snapshot`; no mezclan documentos de momentos distintos.
 - Restore requiere transacciones Mongo con `readConcern=snapshot` y
@@ -67,6 +75,12 @@ guardan como referencias verificables. Restore nunca los modifica.
   escrituras sueltas.
 - Restore usa compare-and-swap: el estado debe coincidir exactamente con la
   foto post-piloto. Si alguien cambio un documento despues, no escribe nada.
+- Al sellar post-state y al restaurar, la misma transacción vuelve a resolver
+  lote/siembra, única siembra activa, exclusividad del establecimiento,
+  binding/grilla y contextos meteorológicos sobre **todas** las observaciones
+  leídas por la consulta sellada, incluso IDs re-keyeados fuera del rango. La
+  prueba queda ligada al hash del manifiesto; `recordPostState` no admite una
+  afirmación autocertificada.
 - La restauración vuelve a leer y verifica el estado restaurado **dentro de la
   misma transacción**, antes del commit mayoritario. No interpreta una escritura
   posterior al commit como si la restauración hubiese fallado.
@@ -82,6 +96,9 @@ Instalar las dependencias ya fijadas del servicio Datos:
 npm --prefix sdc-datos ci
 npm run test:era5:pilot:snapshot
 ```
+
+Ejecutar con Node.js 20.x, igual que `engines` y `.nvmrc`. No regenerar ninguno de los dos lockfiles
+durante el piloto: ambos hashes forman parte de la identidad restaurable.
 
 La URI se entrega solo por una variable local secreta. Nunca se pasa en la
 linea de comandos ni se guarda en el bundle:
@@ -99,7 +116,7 @@ Para replica sets se sellan los hosts ordenados; para SRV, el hostname SRV.
 ```
 
 ```json
-{"schemaVersion":2,"environment":"testing","database":"chaman_testing","operationId":"era5-pilot-20260828-lote-01","endpointFingerprint":"<MISMO SHA256 APROBADO>","codeSha":"<HEAD LIMPIO DE 40 CARACTERES>","statement":"AGROMET_ONLY:CRONS_FROZEN:NOTIFICATIONS_DISABLED:OUTBOX_DISABLED:PUSH_DISABLED","approvedBy":"<RESPONSABLE>","evidence":"<TICKET/LOGS>","approvedAt":"2026-08-28T12:00:00.000Z","expiresAt":"2026-08-28T20:00:00.000Z"}
+{"schemaVersion":3,"environment":"testing","database":"chaman_testing","operationId":"era5-pilot-20260828-lote-01","endpointFingerprint":"<MISMO SHA256 APROBADO>","codeSha":"<HEAD LIMPIO DE 40 CARACTERES>","statement":"AGROMET_ONLY:CRONS_FROZEN:NOTIFICATIONS_DISABLED:OUTBOX_DISABLED:PUSH_DISABLED","pilotConfig":{"lotId":"<OBJECT_ID_LOTE>","sowingId":"<OBJECT_ID_SIEMBRA>","from":"<FECHA_SIEMBRA>","to":"<ULTIMO_DIA>","historicalStart":"<HISTORICAL_START_EXACTO>","bridgeToday":"<FECHA_LOCAL_SELLADA>","recentOpenMeteoDays":5,"calculationVersion":"chaman-meteo-agro-v2","sourceVersion":"era5-land-timeseries-19var-v2"},"approvedBy":"<RESPONSABLE>","evidence":"<TICKET/LOGS>","approvedAt":"2026-08-28T12:00:00.000Z","expiresAt":"2026-08-28T20:00:00.000Z"}
 ```
 
 ```powershell
@@ -112,7 +129,9 @@ de Producción aunque apunte a una base llamada `chaman_testing`.
 Las fechas de las actas son ISO-8601 UTC canónico con milisegundos. La del
 cluster puede cubrir como máximo 30 días; la operativa, 24 horas. Ambas deben
 estar vigentes y vinculadas al mismo `operationId`; la operativa también queda
-vinculada al endpoint y al commit exactos.
+vinculada al endpoint, al commit y a toda la configuración crítica exactos,
+incluido `historicalStart`. El fingerprint del endpoint queda dentro del
+manifiesto; verify/restore rechazan usar el bundle bajo otro cluster Testing.
 
 ## 1. Plan de solo lectura
 
@@ -193,10 +212,18 @@ Remove-Item Env:CHAMAN_ERA5_PILOT_CONFIRM
 ```
 
 Un resultado `restored` confirma que Mongo volvio a los hashes previos. Un
-resultado `already_restored` confirma idempotencia. Cualquier drift, re-key,
+resultado `already_restored` confirma idempotencia. Restore puede ejecutarse
+otro día: usa el `bridgeToday` sellado y no lo sustituye por la fecha actual.
+Cualquier drift, re-key,
 borrado, documento creado, conflicto,
 error de transaccion o diferencia posterior es un bloqueo: no reintentar
 alterando el manifiesto ni editar NDJSON manualmente.
+
+Si la transacción ya confirmó el restore pero el control posterior de índices
+falla, la salida es `restored_but_index_postcheck_failed`, con
+`databaseMutationCommitted=true` y el error de postcheck. No interpretar ese
+recibo como rollback: los datos ya fueron restaurados y corresponde reparar o
+auditar el índice sin repetir el restore a ciegas.
 
 La confirmación fuerte ocurre dentro de la transacción. Después de un
 `restored`, mantener los escritores congelados y ejecutar `verify` sin
@@ -213,10 +240,10 @@ ciegas; conservar la evidencia e identificar primero al escritor concurrente.
   para establecimientos compartidos hasta implementar restore granular probado.
 - La cobertura debe existir completa hasta `to`; por el retraso natural de ERA5,
   elegir como `to` el último día ya materializado, nunca completar huecos a mano.
-- Restore usa IDs y pertenencias sellados en bundle/post-state; no depende de
-  que la siembra o el lote sigan resolviendo después del piloto.
-- Los bundles schema v1/v2 quedan deliberadamente incompatibles con este flujo
-  schema v3; deben recrearse con el commit exacto que se vaya a ejecutar.
+- Restore exige que IDs, pertenencias y alcance todavía se resuelvan exactamente
+  como quedaron sellados; cualquier deriva aborta antes de mutar.
+- Los bundles schema v1/v2/v3 quedan deliberadamente incompatibles con este
+  flujo schema v4; deben recrearse con el commit exacto que se vaya a ejecutar.
 - El worktree debe estar limpio: `codeSha` debe ser el HEAD exacto ejecutado.
 - No restaura colecciones de usuarios, tokens, notificaciones, colas, logs,
   dispositivos, ChirpStack, LoRaWAN ni credenciales externas.

@@ -65,6 +65,8 @@ async function main() {
   }
   const executionCodeSha = codeSha();
   if (bundle) toolkit.assertCodeIdentity(bundle.manifest, executionCodeSha);
+  const runtimeIdentity = toolkit.runtimeDependencyIdentity();
+  if (bundle) toolkit.assertRuntimeDependencyIdentity(bundle.manifest.runtimeIdentity, runtimeIdentity);
   const uriEnv = args.uriEnv || 'CHAMAN_TESTING_MONGODB_URI';
   if (!/^[A-Z][A-Z0-9_]{2,80}$/.test(uriEnv)) throw new Error('uri-env debe ser un nombre de variable seguro.');
   const uri = process.env[uriEnv];
@@ -72,11 +74,13 @@ async function main() {
   const safetyAttestation = toolkit.loadAttestationFile(process.env.CHAMAN_ERA5_PILOT_SAFETY_ATTESTATION_FILE, 'seguridad-operativa');
   const endpointFingerprint = toolkit.testingClusterFingerprint(uri);
   toolkit.assertTestingOnly({ uri, attestation: clusterAttestation, operationId: config.operationId });
-  toolkit.assertSafetyAttestation(safetyAttestation, {
+  const operationalApproval = toolkit.assertSafetyAttestation(safetyAttestation, {
     operationId: config.operationId,
     endpointFingerprint,
     codeSha: executionCodeSha,
+    config,
   });
+  if (bundle) toolkit.assertOperationalApprovalMatchesManifest(bundle.manifest, operationalApproval);
   const client = new MongoClient(uri, { appName: 'chaman-era5-pilot-snapshot', serverSelectionTimeoutMS: 10000 });
   await client.connect();
   try {
@@ -87,7 +91,10 @@ async function main() {
       const { scope, state } = await toolkit.readConsistentScope({ client, db, config, ObjectId, EJSON });
       toolkit.assertNoSecrets(state);
       toolkit.assertCodeIdentity({ codeSha: executionCodeSha }, codeSha());
-      const plan = toolkit.buildPlan(config, scope, state, executionCodeSha, EJSON);
+      const plan = toolkit.buildPlan(config, scope, state, executionCodeSha, EJSON, {
+        operationalApproval,
+        runtimeIdentity,
+      });
       if (args.mode === 'plan') {
         print({ mode: 'plan', ...plan, requiredConfirmation: toolkit.confirmationForSnapshot(plan) });
         return;
@@ -101,18 +108,18 @@ async function main() {
 
     if (args.mode === 'verify') {
       const queries = toolkit.sealedQueries(bundle.manifest, ObjectId);
-      const currentState = await toolkit.readConsistentState({
+      const { state: currentState, revalidationProof } = await toolkit.readConsistentState({
         client, db, queries, EJSON,
-        coverage: {
-          scope: toolkit.manifestBridgeScope(bundle.manifest),
-          config: toolkit.manifestBridgeConfig(bundle.manifest),
+        revalidation: {
+          manifest: bundle.manifest,
+          ObjectId,
         },
       });
       toolkit.assertCodeIdentity(bundle.manifest, codeSha());
       toolkit.assertNoSecrets(currentState);
       const summary = toolkit.stateSummary(currentState);
       if (args.recordPostState) {
-        const record = toolkit.recordPostState(bundleDir, bundle.manifest, summary, EJSON);
+        const record = toolkit.recordPostState(bundleDir, bundle.manifest, summary, EJSON, revalidationProof);
         print({
           mode: 'verify',
           status: 'post_state_recorded',
@@ -138,7 +145,8 @@ async function main() {
       bundleDir,
       currentCodeSha: restoreCodeSha,
     });
-    print({ mode: 'restore', status: outcome, manifestSha256: bundle.manifest.manifestSha256 });
+    print({ mode: 'restore', ...outcome, manifestSha256: bundle.manifest.manifestSha256 });
+    if (outcome.indexPostcheck === 'failed') process.exitCode = 2;
   } finally {
     await client.close();
   }
