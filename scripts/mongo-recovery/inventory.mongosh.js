@@ -26,37 +26,9 @@ const collections = database
       type: 'collection',
       options: item.options || {},
       count: collection.countDocuments({}),
-      indexes: collection
-        .getIndexes()
-        .map((index) => ({
-          name: index.name,
-          key: index.key,
-          unique: index.unique === true,
-          sparse: index.sparse === true,
-          hidden: index.hidden === true,
-          ...(index.expireAfterSeconds == null ? {} : { expireAfterSeconds: index.expireAfterSeconds }),
-          ...(index.partialFilterExpression == null
-            ? {}
-            : { partialFilterExpression: index.partialFilterExpression }),
-          ...(index.collation == null ? {} : { collation: index.collation }),
-          ...(index.wildcardProjection == null ? {} : { wildcardProjection: index.wildcardProjection }),
-          ...(index.weights == null ? {} : { weights: index.weights }),
-          ...Object.fromEntries(
-            [
-              'default_language',
-              'language_override',
-              'textIndexVersion',
-              '2dsphereIndexVersion',
-              'bits',
-              'min',
-              'max',
-              'bucketSize',
-              'storageEngine',
-            ]
-              .filter((key) => index[key] != null)
-              .map((key) => [key, index[key]]),
-          ),
-        })),
+      // Conservar el documento completo de listIndexes/getIndexes. La normalizacion
+      // elimina exclusivamente metadatos de servidor conocidos (v/ns).
+      indexes: collection.getIndexes(),
     };
   });
 

@@ -29,8 +29,17 @@ const {
   buildMongodumpArgs,
   buildMongorestoreArgs,
   buildMongoshArgs,
+  hardenRestrictedDirectory,
+  hardenRestrictedFile,
+  verifyRestrictedDirectory,
+  verifyRestrictedFile,
+  safeChildEnv,
   withMongoSecretFile,
 } = require('./mongo-recovery/secure-config');
+const {
+  bindAttestationToEvidence,
+  loadInfrastructureEvidence,
+} = require('./mongo-recovery/infrastructure-evidence');
 
 const ROOT = path.resolve(__dirname, '..');
 const INVENTORY_SCRIPT = path.join(__dirname, 'mongo-recovery', 'inventory.mongosh.js');
@@ -41,11 +50,11 @@ function usage() {
   return `Uso:
   node scripts/mongo-recovery.js plan --phase=dump|restore|verify|cleanup --attestation=<json> [--manifest=<json>] [--output-dir=<dir>]
   node scripts/mongo-recovery.js preflight --phase=dump|restore|verify|cleanup --attestation=<json> [--manifest=<json>] [--output-dir=<dir>]
-  node scripts/mongo-recovery.js dump --attestation=<json> --output-dir=<dir>
+  node scripts/mongo-recovery.js dump --attestation=<json> --infrastructure-evidence=<json> --output-dir=<dir>
   node scripts/mongo-recovery.js verify-backup --manifest=<json>
-  node scripts/mongo-recovery.js restore --manifest=<json> --attestation=<json> --output-dir=<dir>
-  node scripts/mongo-recovery.js verify --manifest=<json> --attestation=<json> --output-dir=<dir>
-  node scripts/mongo-recovery.js cleanup --manifest=<json> --attestation=<json> --output-dir=<dir>
+  node scripts/mongo-recovery.js restore --manifest=<json> --attestation=<json> --infrastructure-evidence=<json> --output-dir=<dir>
+  node scripts/mongo-recovery.js verify --manifest=<json> --attestation=<json> --infrastructure-evidence=<json> --output-dir=<dir>
+  node scripts/mongo-recovery.js cleanup --manifest=<json> --attestation=<json> --infrastructure-evidence=<json> --output-dir=<dir>
   node scripts/mongo-recovery.js fingerprint --side=source|target
 
 Secretos (solo variables de entorno, nunca argumentos ni archivos versionados):
@@ -63,6 +72,7 @@ function parseCli(argv) {
       attestation: { type: 'string' },
       manifest: { type: 'string' },
       'output-dir': { type: 'string' },
+      'infrastructure-evidence': { type: 'string' },
       help: { type: 'boolean', short: 'h' },
       side: { type: 'string' },
     },
@@ -78,19 +88,18 @@ function writeJsonExclusive(filePath, value) {
     flag: 'wx',
     mode: 0o600,
   });
+  hardenRestrictedFile(filePath);
 }
 
 function recordFailureReceipt(outputDirValue, phase, error) {
-  if (!outputDirValue) return;
-  let outputDir;
-  try {
-    outputDir = safeArtifactDirectory(outputDirValue, ROOT);
-  } catch {
-    return;
+  if (!outputDirValue) return { written: false, reason: 'output-dir no informado' };
+  const outputDir = safeArtifactDirectory(outputDirValue, ROOT);
+  if (!fs.existsSync(outputDir) || !fs.statSync(outputDir).isDirectory()) {
+    return { written: false, reason: 'output-dir no existe' };
   }
-  if (!fs.existsSync(outputDir) || !fs.statSync(outputDir).isDirectory()) return;
+  verifyRestrictedDirectory(outputDir);
   const receiptPath = path.join(outputDir, `${phase}-failure-receipt.json`);
-  if (fs.existsSync(receiptPath)) return;
+  if (fs.existsSync(receiptPath)) throw new Error(`${path.basename(receiptPath)} ya existe.`);
   const knownArtifacts = new Set([
     'backup.archive.gz',
     'source-inventory.json',
@@ -121,13 +130,19 @@ function recordFailureReceipt(outputDirValue, phase, error) {
     partialArtifacts,
     status: 'failed',
   });
+  return { written: true, receiptPath };
 }
 
 function withFailureReceipt(phase, values, action) {
   try {
     return action();
   } catch (error) {
-    recordFailureReceipt(values['output-dir'], phase, error);
+    try {
+      const receipt = recordFailureReceipt(values['output-dir'], phase, error);
+      if (!receipt.written) error.message = `${error.message} [sin failure receipt: ${receipt.reason}]`;
+    } catch (receiptError) {
+      error.message = `${error.message} [fallo adicional al registrar failure receipt: ${receiptError.message}]`;
+    }
     throw error;
   }
 }
@@ -139,25 +154,6 @@ function executable(name) {
     mongorestore: process.env.CHAMAN_MONGORESTORE_BIN,
   };
   return overrides[name] || name;
-}
-
-function safeChildEnv(extra = {}) {
-  const env = { ...process.env, ...extra };
-  for (const key of [
-    'CHAMAN_MONGO_SOURCE_URI',
-    'CHAMAN_MONGO_RESTORE_URI',
-    'MONGO_PUBLIC_URL',
-    'MONGO_URL',
-    'MONGO_URI',
-    'DATABASE_URL',
-    'DB_URL',
-    'CHAMAN_BACKUP_CONFIRM',
-    'CHAMAN_RESTORE_CONFIRM',
-    'CHAMAN_CLEANUP_CONFIRM',
-  ]) {
-    delete env[key];
-  }
-  return env;
 }
 
 function runProcess(program, args, { env = process.env, secrets = [], cwd = ROOT } = {}) {
@@ -215,23 +211,27 @@ function inventory(uri, database) {
   return normalizeInventory(parsed);
 }
 
-function sourceContext(attestationFile, { requireUri = true } = {}) {
+function sourceContext(attestationFile, { requireUri = true, evidenceFile } = {}) {
   if (!attestationFile) throw new Error('Falta --attestation.');
   const attestation = readJson(attestationFile);
   const validated = validateSourceAttestation(attestation);
+  const evidence = loadInfrastructureEvidence(evidenceFile);
+  bindAttestationToEvidence(attestation, validated, evidence, 'source');
   const uri = process.env.CHAMAN_MONGO_SOURCE_URI;
   if (requireUri && !uri) throw new Error('Falta CHAMAN_MONGO_SOURCE_URI.');
   if (uri && databaseFromMongoUri(uri) !== validated.database) {
     throw new Error('La base de CHAMAN_MONGO_SOURCE_URI no coincide con la atestacion.');
   }
   if (uri) assertRuntimeIdentity(uri, validated.instanceIdentity, 'origen');
-  return { attestation, validated, uri };
+  return { attestation, validated, uri, evidence };
 }
 
-function targetContext(attestationFile, { requireUri = true } = {}) {
+function targetContext(attestationFile, { requireUri = true, evidenceFile } = {}) {
   if (!attestationFile) throw new Error('Falta --attestation.');
   const attestation = readJson(attestationFile);
   const validated = validateTargetAttestation(attestation);
+  const evidence = loadInfrastructureEvidence(evidenceFile);
+  bindAttestationToEvidence(attestation, validated, evidence, 'target');
   const uri = process.env.CHAMAN_MONGO_RESTORE_URI;
   if (requireUri && !uri) throw new Error('Falta CHAMAN_MONGO_RESTORE_URI.');
   if (uri && databaseFromMongoUri(uri) !== validated.database) {
@@ -241,7 +241,7 @@ function targetContext(attestationFile, { requireUri = true } = {}) {
   if (uri && process.env.CHAMAN_MONGO_SOURCE_URI && uri === process.env.CHAMAN_MONGO_SOURCE_URI) {
     throw new Error('Origen y destino no pueden usar la misma URI.');
   }
-  return { attestation, validated, uri };
+  return { attestation, validated, uri, evidence };
 }
 
 function assertTargetAgainstManifest(target, source) {
@@ -249,18 +249,33 @@ function assertTargetAgainstManifest(target, source) {
     throw new Error('drillId del destino no coincide con el manifiesto de backup.');
   }
   assertDestinationIsolated(source.manifest.sourceInstance, target.validated.instanceIdentity);
+  if (
+    target.evidence.sha256 !== source.manifest.infrastructureEvidenceSha256 ||
+    target.validated.infrastructureEvidenceSha256 !== source.manifest.infrastructureEvidenceSha256
+  ) {
+    throw new Error('Destino y manifiesto no comparten la misma evidencia Railway inmutable.');
+  }
 }
 
-function manifestContext(manifestFile) {
+function manifestContext(manifestFile, { requireRestrictedAcl = false } = {}) {
   if (!manifestFile) throw new Error('Falta --manifest.');
   const manifestPath = path.resolve(manifestFile);
   const manifest = readJson(manifestPath);
   const backupDir = path.dirname(manifestPath);
+  if (requireRestrictedAcl) {
+    verifyRestrictedDirectory(backupDir);
+    verifyRestrictedFile(manifestPath);
+  }
+  const verified = validateBackupManifest(manifest, backupDir);
+  if (requireRestrictedAcl) {
+    verifyRestrictedFile(verified.archivePath);
+    verifyRestrictedFile(verified.inventoryPath);
+  }
   return {
     manifest,
     manifestPath,
     backupDir,
-    verified: validateBackupManifest(manifest, backupDir),
+    verified,
   };
 }
 
@@ -277,7 +292,10 @@ function describePlan(phase, values, checkTools) {
     protections: [],
   };
   if (phase === 'dump') {
-    const { validated } = sourceContext(values.attestation, { requireUri: false });
+    const { validated } = sourceContext(values.attestation, {
+      requireUri: false,
+      evidenceFile: values['infrastructure-evidence'],
+    });
     if (!values['output-dir']) throw new Error('Falta --output-dir.');
     safeArtifactDirectory(values['output-dir'], ROOT, { mustNotExist: false });
     result.database = validated.database;
@@ -291,7 +309,11 @@ function describePlan(phase, values, checkTools) {
     ];
     if (checkTools) result.tools = toolVersions(['mongosh', 'mongodump']);
   } else {
-    const { validated } = targetContext(values.attestation, { requireUri: false });
+    const targetPlan = targetContext(values.attestation, {
+      requireUri: false,
+      evidenceFile: values['infrastructure-evidence'],
+    });
+    const { validated } = targetPlan;
     if (!values['output-dir']) throw new Error('Falta --output-dir.');
     safeArtifactDirectory(values['output-dir'], ROOT, { mustNotExist: false });
     result.database = validated.database;
@@ -301,7 +323,7 @@ function describePlan(phase, values, checkTools) {
       'confirmacion exacta por variable de entorno para escrituras',
     ];
     const source = manifestContext(values.manifest);
-    assertTargetAgainstManifest({ validated }, source);
+    assertTargetAgainstManifest(targetPlan, source);
     result.sourceDatabase = source.manifest.database;
     if (checkTools) {
       result.tools = toolVersions(
@@ -313,7 +335,9 @@ function describePlan(phase, values, checkTools) {
 }
 
 function dumpCommand(values) {
-  const { attestation, validated, uri } = sourceContext(values.attestation);
+  const { attestation, validated, uri } = sourceContext(values.attestation, {
+    evidenceFile: values['infrastructure-evidence'],
+  });
   requireConfirmation(
     process.env.CHAMAN_BACKUP_CONFIRM,
     expectedConfirmation('dump', validated.id, validated.database),
@@ -326,6 +350,7 @@ function dumpCommand(values) {
     throw new Error('El directorio padre de output-dir debe existir.');
   }
   fs.mkdirSync(outputDir, { recursive: false, mode: 0o700 });
+  hardenRestrictedDirectory(outputDir);
   const archivePath = path.join(outputDir, 'backup.archive.gz');
   const inventoryPath = path.join(outputDir, 'source-inventory.json');
   const manifestPath = path.join(outputDir, 'manifest.json');
@@ -342,6 +367,7 @@ function dumpCommand(values) {
     if (!fs.existsSync(archivePath) || fs.statSync(archivePath).size === 0) {
       throw new Error('mongodump no produjo un archive no vacio.');
     }
+    hardenRestrictedFile(archivePath);
     const manifest = buildBackupManifest({
       attestation,
       inventory: sourceInventory,
@@ -366,7 +392,7 @@ function dumpCommand(values) {
 }
 
 function verifyBackupCommand(values) {
-  const context = manifestContext(values.manifest);
+  const context = manifestContext(values.manifest, { requireRestrictedAcl: true });
   return {
     status: 'backup-verified',
     drillId: context.manifest.drillId,
@@ -382,8 +408,8 @@ function ensureEmptyTarget(targetInventory) {
 }
 
 function restoreCommand(values) {
-  const target = targetContext(values.attestation);
-  const source = manifestContext(values.manifest);
+  const target = targetContext(values.attestation, { evidenceFile: values['infrastructure-evidence'] });
+  const source = manifestContext(values.manifest, { requireRestrictedAcl: true });
   assertTargetAgainstManifest(target, source);
   requireConfirmation(
     process.env.CHAMAN_RESTORE_CONFIRM,
@@ -395,6 +421,7 @@ function restoreCommand(values) {
   if (!fs.existsSync(outputDir) || !fs.statSync(outputDir).isDirectory()) {
     throw new Error('output-dir del simulacro debe existir.');
   }
+  hardenRestrictedDirectory(outputDir);
   const beforePath = path.join(outputDir, 'target-inventory-before.json');
   const receiptPath = path.join(outputDir, 'restore-receipt.json');
   if (fs.existsSync(receiptPath)) throw new Error('Ya existe restore-receipt.json; no se repetira el restore.');
@@ -448,15 +475,17 @@ function restoreCommand(values) {
 function runAudit(program, args, env, secrets, outputPath) {
   const result = runProcess(program, args, { env, secrets });
   fs.writeFileSync(outputPath, result.stdout, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+  hardenRestrictedFile(outputPath);
   return { file: path.basename(outputPath), sha256: sha256File(outputPath) };
 }
 
 function verifyCommand(values) {
-  const target = targetContext(values.attestation);
-  const source = manifestContext(values.manifest);
+  const target = targetContext(values.attestation, { evidenceFile: values['infrastructure-evidence'] });
+  const source = manifestContext(values.manifest, { requireRestrictedAcl: true });
   assertTargetAgainstManifest(target, source);
   if (!values['output-dir']) throw new Error('Falta --output-dir.');
   const outputDir = safeArtifactDirectory(values['output-dir'], ROOT);
+  verifyRestrictedDirectory(outputDir);
   const receiptPath = path.join(outputDir, 'restore-receipt.json');
   const receipt = readJson(receiptPath);
   if (
@@ -485,27 +514,21 @@ function verifyCommand(values) {
   const afterPath = path.join(outputDir, 'target-inventory-after.json');
   writeJsonExclusive(afterPath, after);
   const comparison = compareInventories(source.verified.inventory, after);
-  const auditEnv = {
-    ...process.env,
-    MONGO_URI: target.uri,
-    DB_NAME: target.validated.database,
-    CHAMAN_RECOVERY_DRILL: 'true',
-  };
-  for (const key of ['MONGO_PUBLIC_URL', 'MONGO_URL', 'DATABASE_URL', 'DB_URL']) delete auditEnv[key];
-  const auditMatrix = runAudit(
-    process.execPath,
-    [AGRONOMIC_AUDIT],
-    auditEnv,
-    [target.uri],
-    path.join(outputDir, 'audit-restored-agronomic-data.json'),
-  );
-  const auditLotes = runAudit(
-    process.execPath,
-    [path.join(ROOT, 'scripts', 'audit-lote-data-integrity.js')],
-    { ...auditEnv, CHAMAN_AUDIT_STRICT: 'false' },
-    [target.uri],
-    path.join(outputDir, 'audit-lote-data-integrity.json'),
-  );
+  const { auditMatrix, auditLotes } = withMongoSecretFile(target.uri, 'raw-uri', (uriFile) => {
+    const auditEnv = safeChildEnv({
+      CHAMAN_RECOVERY_URI_FILE: uriFile,
+      DB_NAME: target.validated.database,
+      CHAMAN_RECOVERY_DRILL: 'true',
+    });
+    return {
+      auditMatrix: runAudit(process.execPath, [AGRONOMIC_AUDIT], auditEnv, [target.uri],
+        path.join(outputDir, 'audit-restored-agronomic-data.json')),
+      auditLotes: runAudit(process.execPath,
+        [path.join(ROOT, 'scripts', 'audit-lote-data-integrity.js')],
+        { ...auditEnv, CHAMAN_AUDIT_STRICT: 'false' }, [target.uri],
+        path.join(outputDir, 'audit-lote-data-integrity.json')),
+    };
+  });
   const agronomic = readJson(path.join(outputDir, auditMatrix.file));
   const lotIntegrity = readJson(path.join(outputDir, auditLotes.file));
   const lotIssueTypes = Object.fromEntries(
@@ -548,8 +571,8 @@ function verifyCommand(values) {
 }
 
 function cleanupCommand(values) {
-  const target = targetContext(values.attestation);
-  const source = manifestContext(values.manifest);
+  const target = targetContext(values.attestation, { evidenceFile: values['infrastructure-evidence'] });
+  const source = manifestContext(values.manifest, { requireRestrictedAcl: true });
   assertTargetAgainstManifest(target, source);
   requireConfirmation(
     process.env.CHAMAN_CLEANUP_CONFIRM,
@@ -561,6 +584,7 @@ function cleanupCommand(values) {
   if (!fs.existsSync(outputDir) || !fs.statSync(outputDir).isDirectory()) {
     throw new Error('output-dir del simulacro no existe.');
   }
+  verifyRestrictedDirectory(outputDir);
   const receiptPath = path.join(outputDir, 'cleanup-receipt.json');
   if (fs.existsSync(receiptPath)) throw new Error('Ya existe cleanup-receipt.json; no se repetira el drop.');
   const result = withMongoSecretFile(target.uri, 'raw-uri', (uriFile) =>

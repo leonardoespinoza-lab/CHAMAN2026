@@ -13,6 +13,10 @@ function fail(message) {
   throw new Error(message);
 }
 
+function sha256Text(value) {
+  return crypto.createHash('sha256').update(String(value), 'utf8').digest('hex');
+}
+
 function readJson(filePath) {
   let parsed;
   try {
@@ -150,6 +154,7 @@ function validateSourceAttestation(attestation, { now = new Date() } = {}) {
       'approvedBy',
       'changeTicket',
       'instanceIdentity',
+      'infrastructureEvidenceSha256',
     ],
     'La atestacion de congelamiento',
   );
@@ -182,6 +187,13 @@ function validateSourceAttestation(attestation, { now = new Date() } = {}) {
   requiredText(attestation.approvedBy, 'approvedBy');
   requiredText(attestation.changeTicket, 'changeTicket');
   const instanceIdentity = validateInstanceIdentity(attestation.instanceIdentity, 'instanceIdentity');
+  const infrastructureEvidenceSha256 = requiredText(
+    attestation.infrastructureEvidenceSha256,
+    'infrastructureEvidenceSha256',
+  ).toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(infrastructureEvidenceSha256)) {
+    fail('infrastructureEvidenceSha256 invalido.');
+  }
   const frozenAt = validDate(attestation.frozenAt, 'frozenAt');
   const verifiedAt = validDate(attestation.verifiedAt, 'verifiedAt');
   const expiresAt = validDate(attestation.expiresAt, 'expiresAt');
@@ -191,7 +203,15 @@ function validateSourceAttestation(attestation, { now = new Date() } = {}) {
     fail('La ventana de congelamiento no puede superar dos horas.');
   }
   if (now < verifiedAt || now >= expiresAt) fail('La atestacion no esta vigente.');
-  return { id, database, frozenAt, verifiedAt, expiresAt, instanceIdentity };
+  return {
+    id,
+    database,
+    frozenAt,
+    verifiedAt,
+    expiresAt,
+    instanceIdentity,
+    infrastructureEvidenceSha256,
+  };
 }
 
 function validateTargetAttestation(attestation, { now = new Date() } = {}) {
@@ -215,6 +235,7 @@ function validateTargetAttestation(attestation, { now = new Date() } = {}) {
       'approvedBy',
       'changeTicket',
       'instanceIdentity',
+      'infrastructureEvidenceSha256',
     ],
     'La atestacion del destino',
   );
@@ -241,12 +262,19 @@ function validateTargetAttestation(attestation, { now = new Date() } = {}) {
   requiredText(attestation.approvedBy, 'approvedBy');
   requiredText(attestation.changeTicket, 'changeTicket');
   const instanceIdentity = validateInstanceIdentity(attestation.instanceIdentity, 'instanceIdentity');
+  const infrastructureEvidenceSha256 = requiredText(
+    attestation.infrastructureEvidenceSha256,
+    'infrastructureEvidenceSha256',
+  ).toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(infrastructureEvidenceSha256)) {
+    fail('infrastructureEvidenceSha256 invalido.');
+  }
   const expiresAt = validDate(attestation.expiresAt, 'expiresAt');
   if (now >= expiresAt) fail('La atestacion del destino esta vencida.');
   if (expiresAt - now > 48 * 60 * 60 * 1000) {
     fail('La atestacion del destino no puede tener mas de 48 horas de vigencia restante.');
   }
-  return { drillId, database, expiresAt, instanceIdentity };
+  return { drillId, database, expiresAt, instanceIdentity, infrastructureEvidenceSha256 };
 }
 
 function assertRuntimeIdentity(uri, attestedIdentity, label) {
@@ -317,37 +345,13 @@ function safeArtifactDirectory(outputDir, repositoryRoot, { mustNotExist = false
 
 function normalizeIndexes(indexes = []) {
   return indexes
-    .map((index) => ({
-      name: index.name,
-      key: index.key,
-      unique: index.unique === true,
-      sparse: index.sparse === true,
-      hidden: index.hidden === true,
-      ...(index.expireAfterSeconds == null ? {} : { expireAfterSeconds: index.expireAfterSeconds }),
-      ...(index.partialFilterExpression == null
-        ? {}
-        : { partialFilterExpression: canonicalize(index.partialFilterExpression) }),
-      ...(index.collation == null ? {} : { collation: canonicalize(index.collation) }),
-      ...(index.wildcardProjection == null
-        ? {}
-        : { wildcardProjection: canonicalize(index.wildcardProjection) }),
-      ...(index.weights == null ? {} : { weights: canonicalize(index.weights) }),
-      ...Object.fromEntries(
-        [
-          'default_language',
-          'language_override',
-          'textIndexVersion',
-          '2dsphereIndexVersion',
-          'bits',
-          'min',
-          'max',
-          'bucketSize',
-          'storageEngine',
-        ]
-          .filter((key) => index[key] != null)
-          .map((key) => [key, canonicalize(index[key])]),
-      ),
-    }))
+    .map((index) => {
+      const semantic = Object.fromEntries(
+        Object.entries(index).filter(([key]) => !['v', 'ns'].includes(key)),
+      );
+      const normalized = canonicalize(semantic);
+      return { ...normalized, semanticSha256: sha256Text(JSON.stringify(normalized)) };
+    })
     .sort((left, right) => String(left.name).localeCompare(String(right.name)));
 }
 
@@ -495,6 +499,7 @@ function buildBackupManifest({ attestation, inventory, archivePath, inventoryPat
     database: source.database,
     sourceEnvironment: 'production',
     sourceInstance: source.instanceIdentity,
+    infrastructureEvidenceSha256: source.infrastructureEvidenceSha256,
     consistency: {
       method: 'application-write-freeze',
       attestationId: source.id,
@@ -534,6 +539,7 @@ function validateBackupManifest(manifest, backupDir) {
       'database',
       'sourceEnvironment',
       'sourceInstance',
+      'infrastructureEvidenceSha256',
       'consistency',
       'createdAt',
       'gitSha',
@@ -552,6 +558,9 @@ function validateBackupManifest(manifest, backupDir) {
   validateDatabaseName(manifest.database);
   if (manifest.sourceEnvironment !== 'production') fail('El manifiesto no identifica production como origen.');
   validateInstanceIdentity(manifest.sourceInstance, 'sourceInstance');
+  if (!/^[0-9a-f]{64}$/i.test(manifest.infrastructureEvidenceSha256 || '')) {
+    fail('infrastructureEvidenceSha256 del manifiesto es invalido.');
+  }
   if (!/^[0-9a-f]{40}$/i.test(manifest.gitSha || '')) fail('gitSha del manifiesto es invalido.');
   const createdAt = validDate(manifest.createdAt, 'createdAt');
   assertPlainObject(manifest.consistency, 'consistency');

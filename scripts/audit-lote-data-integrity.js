@@ -1,6 +1,15 @@
 const { MongoClient, ObjectId } = require('../sdc-datos/node_modules/mongodb');
+const fs = require('fs');
 
-const DB_URL =
+const RECOVERY_URI_FILE = process.env.CHAMAN_RECOVERY_URI_FILE || '';
+const DB_URL = RECOVERY_URI_FILE
+  ? (() => {
+      if (process.env.CHAMAN_RECOVERY_DRILL !== 'true') {
+        throw new Error('CHAMAN_RECOVERY_URI_FILE solo se admite en un recovery drill.');
+      }
+      return fs.readFileSync(RECOVERY_URI_FILE, 'utf8').trim();
+    })()
+  :
   process.env.MONGO_PUBLIC_URL ||
   process.env.MONGO_URI ||
   process.env.MONGO_URL ||

@@ -18,7 +18,8 @@ gateways, MQTT, Redis ni configuraciones de sensores.
 
 ## Garantias fail-closed
 
-- La URI de origen y destino se recibe solo por variables de entorno y se
+- La URI de origen y destino se captura con `Read-Host -AsSecureString`, se
+  mantiene en una variable de entorno solamente durante el proceso padre y se
   redacta de errores. No aparece en manifiestos ni en los argumentos de procesos
   hijos. Database Tools la lee desde un YAML temporal restringido; `mongosh`
   desde un archivo temporal restringido. Ambos se sobrescriben y eliminan en
@@ -30,9 +31,9 @@ gateways, MQTT, Redis ni configuraciones de sensores.
 - El destino exige una instancia dedicada y descartable, sin trafico productivo
   ni integraciones externas. Su base debe comenzar con
   `chaman_restore_drill_`.
-- Origen y destino atestan proveedor, ID de instancia y SHA-256 del endpoint
-  normalizado. Restore y cleanup abortan si comparten host/puerto o identidad de
-  instancia, aunque la base destino tenga el prefijo correcto.
+- Una evidencia separada, obtenida por API Railway de solo lectura, enumera IDs
+  de ambiente, servicio, volumen, identidad de red y todos los aliases. Su hash
+  liga ambas atestaciones; cualquier coincidencia o alias ambiguo aborta.
 - Cada accion que escribe exige una frase exacta distinta en una variable de
   entorno.
 - No se sobreescriben archives, recibos ni evidencias existentes.
@@ -65,7 +66,9 @@ tratarse como informacion confidencial.
 6. Dos personas identificadas en las atestaciones: operador y aprobador. Los
    archivos de ejemplo estan en `deploy/recovery/` y nunca deben contener URI,
    usuario o contraseña.
-7. MongoDB Database Tools 100.3 o superior, porque `--config` con `uri` fue
+7. Evidencia Railway vigente, recolectada por un operador y revisada por otra
+   persona, usando `deploy/recovery/railway-isolation-evidence.example.json`.
+8. MongoDB Database Tools 100.3 o superior, porque `--config` con `uri` fue
    incorporado en esa version. Referencia oficial:
    https://www.mongodb.com/docs/database-tools/mongodump/#std-option-mongodump.--config
 
@@ -76,13 +79,16 @@ Copiar las plantillas fuera del repo, completar fechas UTC reales y usar el mism
 conectar a MongoDB:
 
 ```powershell
-$env:CHAMAN_MONGO_SOURCE_URI = '<URI productiva con /chaman>'
+$secret = Read-Host 'URI Mongo origen' -AsSecureString
+$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
+try { $env:CHAMAN_MONGO_SOURCE_URI = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
 npm run mongo:recovery -- fingerprint --side=source
-Remove-Item Env:CHAMAN_MONGO_SOURCE_URI
-
-$env:CHAMAN_MONGO_RESTORE_URI = '<URI aislada con /chaman_restore_drill_yyyymmdd_hhmm>'
+} finally { Remove-Item Env:CHAMAN_MONGO_SOURCE_URI -ErrorAction SilentlyContinue; [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
+$secret = Read-Host 'URI Mongo recovery' -AsSecureString
+$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
+try { $env:CHAMAN_MONGO_RESTORE_URI = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
 npm run mongo:recovery -- fingerprint --side=target
-Remove-Item Env:CHAMAN_MONGO_RESTORE_URI
+} finally { Remove-Item Env:CHAMAN_MONGO_RESTORE_URI -ErrorAction SilentlyContinue; [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
 ```
 
 Copiar cada `endpointFingerprintSha256` a su atestacion y registrar un
@@ -90,11 +96,19 @@ Copiar cada `endpointFingerprintSha256` a su atestacion y registrar un
 distintos. Una base de recovery creada en el host productivo es invalida. La
 atestacion de origen solo se completa despues de congelar escrituras.
 
+La evidencia no debe redactarse a mano: se conserva la respuesta del canal
+Railway de solo lectura en un archivo separado, se revisan todos los dominios y
+aliases y se copia su SHA-256 a ambas atestaciones. El verificador offline puede
+probar la ligadura, vigencia y ausencia de coincidencias, pero no puede demostrar
+por si solo que un JSON manual provino de Railway. Por eso una recoleccion manual,
+un alias no inventariado o evidencia sin respuesta original inmutable es NO-GO.
+
 El plan valida el contrato sin buscar herramientas ni conectar:
 
 ```powershell
 npm run mongo:recovery -- plan --phase=dump `
   --attestation=D:\ChamanRecovery\source-freeze.json `
+  --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
   --output-dir=D:\ChamanRecovery\backup_yyyymmdd_hhmm
 ```
 
@@ -103,6 +117,7 @@ El preflight tambien comprueba las versiones locales, pero sigue sin conectarse:
 ```powershell
 npm run mongo:recovery -- preflight --phase=dump `
   --attestation=D:\ChamanRecovery\source-freeze.json `
+  --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
   --output-dir=D:\ChamanRecovery\backup_yyyymmdd_hhmm
 ```
 
@@ -125,15 +140,19 @@ deben ser verdaderos. Mantener el congelamiento hasta que el comando informe
 En una terminal efimera, sin guardar secretos en archivos o historial:
 
 ```powershell
-$env:CHAMAN_MONGO_SOURCE_URI = '<URI productiva con /chaman>'
+$secret = Read-Host 'URI Mongo origen' -AsSecureString
+$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
+$env:CHAMAN_MONGO_SOURCE_URI = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
 $env:CHAMAN_BACKUP_CONFIRM = 'dump:backup_yyyymmdd_hhmm:chaman'
 
 npm run mongo:recovery -- dump `
   --attestation=D:\ChamanRecovery\source-freeze.json `
+  --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
   --output-dir=D:\ChamanRecovery\backup_yyyymmdd_hhmm
 
 Remove-Item Env:CHAMAN_MONGO_SOURCE_URI
 Remove-Item Env:CHAMAN_BACKUP_CONFIRM
+[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
 ```
 
 El directorio debe ser nuevo. Contendra:
@@ -169,6 +188,7 @@ El preflight valida herramientas y checksums sin conectarse:
 ```powershell
 npm run mongo:recovery -- preflight --phase=restore `
   --attestation=D:\ChamanRecovery\target.json `
+  --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
   --manifest=D:\ChamanRecovery\backup_yyyymmdd_hhmm\manifest.json `
   --output-dir=D:\ChamanRecovery\drill_yyyymmdd_hhmm
 ```
@@ -178,11 +198,14 @@ Crear `drill_yyyymmdd_hhmm` vacio fuera del repo antes del restore.
 ## 4. Restaurar
 
 ```powershell
-$env:CHAMAN_MONGO_RESTORE_URI = '<URI aislada con /chaman_restore_drill_yyyymmdd_hhmm>'
+$secret = Read-Host 'URI Mongo recovery' -AsSecureString
+$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
+$env:CHAMAN_MONGO_RESTORE_URI = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
 $env:CHAMAN_RESTORE_CONFIRM = 'restore:backup_yyyymmdd_hhmm:chaman_restore_drill_yyyymmdd_hhmm'
 
 npm run mongo:recovery -- restore `
   --attestation=D:\ChamanRecovery\target.json `
+  --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
   --manifest=D:\ChamanRecovery\backup_yyyymmdd_hhmm\manifest.json `
   --output-dir=D:\ChamanRecovery\drill_yyyymmdd_hhmm
 
@@ -201,10 +224,12 @@ Manteniendo solo la URI aislada en la terminal:
 ```powershell
 npm run mongo:recovery -- verify `
   --attestation=D:\ChamanRecovery\target.json `
+  --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
   --manifest=D:\ChamanRecovery\backup_yyyymmdd_hhmm\manifest.json `
   --output-dir=D:\ChamanRecovery\drill_yyyymmdd_hhmm
 
 Remove-Item Env:CHAMAN_MONGO_RESTORE_URI
+[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
 ```
 
 La evidencia `verification.json` solo queda en `passed` cuando:
@@ -233,16 +258,20 @@ El cleanup elimina solamente la base cuyo nombre comienza con
 `chaman_restore_drill_`; no borra el archive ni la evidencia local.
 
 ```powershell
-$env:CHAMAN_MONGO_RESTORE_URI = '<URI aislada con /chaman_restore_drill_yyyymmdd_hhmm>'
+$secret = Read-Host 'URI Mongo recovery' -AsSecureString
+$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
+$env:CHAMAN_MONGO_RESTORE_URI = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
 $env:CHAMAN_CLEANUP_CONFIRM = 'cleanup:backup_yyyymmdd_hhmm:chaman_restore_drill_yyyymmdd_hhmm'
 
 npm run mongo:recovery -- cleanup `
   --attestation=D:\ChamanRecovery\target.json `
+  --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
   --manifest=D:\ChamanRecovery\backup_yyyymmdd_hhmm\manifest.json `
   --output-dir=D:\ChamanRecovery\drill_yyyymmdd_hhmm
 
 Remove-Item Env:CHAMAN_CLEANUP_CONFIRM
 Remove-Item Env:CHAMAN_MONGO_RESTORE_URI
+[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
 ```
 
 Conservar `cleanup-receipt.json`. Luego destruir la instancia/volumen descartable

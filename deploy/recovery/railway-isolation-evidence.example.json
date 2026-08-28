@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "chaman-railway-mongo-isolation-evidence",
+  "evidenceId": "railway_isolation_yyyymmdd_hhmm",
+  "collection": {
+    "method": "railway-read-only-api",
+    "projectId": "00000000-0000-4000-8000-000000000000",
+    "readOnly": true
+  },
+  "collectedAt": "REPLACE_WITH_ISO_8601_UTC",
+  "expiresAt": "REPLACE_WITH_ISO_8601_UTC_MAX_FOUR_HOURS",
+  "source": {
+    "environmentId": "00000000-0000-4000-8000-000000000001",
+    "serviceId": "00000000-0000-4000-8000-000000000002",
+    "volumeId": "00000000-0000-4000-8000-000000000003",
+    "networkIdentityId": "00000000-0000-4000-8000-000000000004",
+    "endpointFingerprintsSha256": ["REPLACE_WITH_64_HEX_FOR_EVERY_SOURCE_ALIAS"]
+  },
+  "target": {
+    "environmentId": "00000000-0000-4000-8000-000000000011",
+    "serviceId": "00000000-0000-4000-8000-000000000012",
+    "volumeId": "00000000-0000-4000-8000-000000000013",
+    "networkIdentityId": "00000000-0000-4000-8000-000000000014",
+    "endpointFingerprintsSha256": ["REPLACE_WITH_64_HEX_FOR_EVERY_TARGET_ALIAS"]
+  },
+  "assertions": {
+    "distinctEnvironment": true,
+    "distinctService": true,
+    "distinctVolume": true,
+    "distinctNetworkIdentity": true,
+    "targetHasNoProductionConsumers": true
+  },
+  "collector": "REPLACE_WITH_EVIDENCE_COLLECTOR",
+  "reviewedBy": "REPLACE_WITH_DIFFERENT_REVIEWER"
+}

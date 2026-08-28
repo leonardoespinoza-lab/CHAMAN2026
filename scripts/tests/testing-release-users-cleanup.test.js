@@ -37,6 +37,10 @@ function fakeDb(databaseName = 'chaman_testing') {
         return 0;
       },
     },
+    maintenance_cleanup_journals: {
+      async insertOne(document) { calls.push({ collection: 'journal', operation: 'insertOne', document }); },
+      async updateOne(filter, update) { calls.push({ collection: 'journal', operation: 'updateOne', filter, update }); },
+    },
   };
   return {
     databaseName,
@@ -50,13 +54,18 @@ function fakeDb(databaseName = 'chaman_testing') {
 test('cleanup revoca tokens por username y user._id legacy antes de usuarios, y verifica residuo cero', async () => {
   const db = fakeDb();
   const result = await cleanupTestingReleaseUsers(db);
-  assert.deepEqual(result, {
+  assert.match(result.cleanupId, /^[0-9a-f-]{36}$/);
+  assert.deepEqual({ ...result, cleanupId: undefined }, {
+    cleanupId: undefined,
     removedTokens: 14,
     removedUsers: 8,
     matchedTemporaryUserIds: 2,
     remainingTokens: 0,
     remainingUsers: 0,
   });
+  const journal = db.calls.find((call) => call.operation === 'insertOne');
+  assert.deepEqual(journal.document.userIds, ['user-1', 'user-2']);
+  assert.ok(db.calls.indexOf(journal) < db.calls.findIndex((call) => call.operation === 'deleteMany'));
   assert.deepEqual(
     db.calls.filter(({ operation }) => operation === 'deleteMany').map(({ collection, operation }) => `${collection}:${operation}`),
     ['tokens:deleteMany', 'usuarios:deleteMany'],

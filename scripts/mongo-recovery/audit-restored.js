@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const { MongoClient } = require('../../sdc-datos/node_modules/mongodb');
+const fs = require('fs');
 const { summarizeSeedResolution } = require('./lib');
 
 async function exists(db, name) {
@@ -8,10 +9,11 @@ async function exists(db, name) {
 }
 
 async function main() {
-  const uri = process.env.MONGO_URI;
+  const uriFile = process.env.CHAMAN_RECOVERY_URI_FILE;
+  const uri = uriFile ? fs.readFileSync(uriFile, 'utf8').trim() : '';
   const databaseName = process.env.DB_NAME;
   if (process.env.CHAMAN_RECOVERY_DRILL !== 'true') throw new Error('Falta CHAMAN_RECOVERY_DRILL=true.');
-  if (!uri || !databaseName) throw new Error('Faltan MONGO_URI/DB_NAME.');
+  if (!uri || !databaseName) throw new Error('Faltan CHAMAN_RECOVERY_URI_FILE/DB_NAME.');
   if (!databaseName.startsWith('chaman_restore_drill_')) throw new Error('La auditoria exige una base descartable.');
 
   const client = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });

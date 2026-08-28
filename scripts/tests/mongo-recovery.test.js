@@ -24,13 +24,21 @@ const {
   buildMongodumpArgs,
   buildMongorestoreArgs,
   buildMongoshArgs,
-  hardenSecretFile,
+  hardenRestrictedDirectory,
+  hardenRestrictedFile,
+  safeChildEnv,
+  verifyRestrictedDirectory,
+  verifyRestrictedFile,
   withMongoSecretFile,
 } = require('../mongo-recovery/secure-config');
+const { bindAttestationToEvidence, validateInfrastructureEvidence } = require('../mongo-recovery/infrastructure-evidence');
 
 const NOW = new Date('2026-08-28T18:00:00.000Z');
 const SOURCE_URI = 'mongodb://prod.example.invalid:27017/chaman';
 const TARGET_URI = 'mongodb://restore.example.invalid:27018/chaman_restore_drill_20260828_1800';
+const EVIDENCE_HASH = 'a'.repeat(64);
+const SOURCE_SERVICE = '11111111-1111-4111-8111-111111111111';
+const TARGET_SERVICE = '22222222-2222-4222-8222-222222222222';
 
 function identity(provider, instanceId, uri) {
   return {
@@ -61,7 +69,8 @@ function sourceAttestation(overrides = {}) {
     operator: 'operador-a',
     approvedBy: 'responsable-b',
     changeTicket: 'CHAMAN-RECOVERY-2026-08-28',
-    instanceIdentity: identity('railway', 'project/env/mongo-production', SOURCE_URI),
+    infrastructureEvidenceSha256: EVIDENCE_HASH,
+    instanceIdentity: identity('railway', SOURCE_SERVICE, SOURCE_URI),
     ...overrides,
   };
 }
@@ -83,9 +92,30 @@ function targetAttestation(overrides = {}) {
     operator: 'operador-a',
     approvedBy: 'responsable-b',
     changeTicket: 'CHAMAN-RECOVERY-2026-08-28',
-    instanceIdentity: identity('docker', 'container/restore-drill-20260828', TARGET_URI),
+    infrastructureEvidenceSha256: EVIDENCE_HASH,
+    instanceIdentity: identity('railway', TARGET_SERVICE, TARGET_URI),
     ...overrides,
   };
+}
+
+function writeEvidence(directory) {
+  const file = path.join(directory, 'railway-evidence.json');
+  const evidence = {
+    schemaVersion: 1, kind: 'chaman-railway-mongo-isolation-evidence', evidenceId: 'evidence_20260828',
+    collection: { method: 'railway-read-only-api', projectId: '33333333-3333-4333-8333-333333333333', readOnly: true },
+    collectedAt: new Date(Date.now() - 60_000).toISOString(), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+    source: { environmentId: '44444444-4444-4444-8444-444444444444', serviceId: SOURCE_SERVICE,
+      volumeId: '55555555-5555-4555-8555-555555555555', networkIdentityId: '66666666-6666-4666-8666-666666666666',
+      endpointFingerprintsSha256: [mongoEndpointFingerprint(SOURCE_URI).endpointFingerprintSha256] },
+    target: { environmentId: '77777777-7777-4777-8777-777777777777', serviceId: TARGET_SERVICE,
+      volumeId: '88888888-8888-4888-8888-888888888888', networkIdentityId: '99999999-9999-4999-8999-999999999999',
+      endpointFingerprintsSha256: [mongoEndpointFingerprint(TARGET_URI).endpointFingerprintSha256] },
+    assertions: { distinctEnvironment: true, distinctService: true, distinctVolume: true,
+      distinctNetworkIdentity: true, targetHasNoProductionConsumers: true },
+    collector: 'operador-a', reviewedBy: 'responsable-b',
+  };
+  fs.writeFileSync(file, JSON.stringify(evidence));
+  return { file, sha256: require('node:crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex'), evidence };
 }
 
 function inventory(database = 'chaman') {
@@ -239,6 +269,31 @@ test('spawn args nunca contienen URI y usan config/archivo de script', () => {
   assert.throws(() => assertMongoToolsConfigVersion('mongodump version: 100.2.1'), /100.3/);
 });
 
+test('entorno hijo elimina toda URI y conserva solamente la ruta al secreto', () => {
+  const env = safeChildEnv({ CHAMAN_RECOVERY_URI_FILE: 'C:\\secure\\uri.txt' }, {
+    MONGO_URI: SOURCE_URI, MONGO_PUBLIC_URL: SOURCE_URI, DATABASE_URL: SOURCE_URI, SAFE: 'yes',
+  });
+  assert.equal(env.CHAMAN_RECOVERY_URI_FILE, 'C:\\secure\\uri.txt');
+  assert.equal(env.SAFE, 'yes');
+  assert.equal(Object.values(env).includes(SOURCE_URI), false);
+  assert.equal(env.MONGO_URI, undefined);
+});
+
+test('evidencia Railway rechaza aliases compartidos y auto-revision', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-evidence-'));
+  try {
+    const { evidence } = writeEvidence(directory);
+    assert.doesNotThrow(() => validateInfrastructureEvidence(evidence));
+    assert.throws(() => validateInfrastructureEvidence({ ...evidence, target: {
+      ...evidence.target, endpointFingerprintsSha256: evidence.source.endpointFingerprintsSha256,
+    } }), /alias/);
+    assert.throws(() => validateInfrastructureEvidence({ ...evidence, reviewedBy: evidence.collector }), /distintas/);
+    const loaded = { sha256: 'b'.repeat(64), validated: validateInfrastructureEvidence(evidence) };
+    assert.throws(() => bindAttestationToEvidence(sourceAttestation(),
+      validateSourceAttestation(sourceAttestation(), { now: NOW }), loaded, 'source'), /ligada/);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
 test('archivo secreto temporal se restringe y elimina incluso si el callback falla', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-secret-test-'));
   let capturedPath;
@@ -253,7 +308,15 @@ test('archivo secreto temporal se restringe y elimina incluso si el callback fal
             assert.match(fs.readFileSync(filePath, 'utf8'), /^uri: /);
             throw new Error('fallo simulado');
           },
-          { tmpRoot: directory, harden: (filePath) => fs.chmodSync(filePath, 0o600) },
+          {
+            tmpRoot: directory,
+            hardenDirectory: (target) => {
+              assert.deepEqual(fs.readdirSync(target), []);
+              fs.chmodSync(target, 0o700);
+            },
+            hardenFile: (target) => fs.chmodSync(target, 0o600),
+            verifyDirectory: () => ({ ok: true }),
+          },
         ),
       /fallo simulado/,
     );
@@ -264,28 +327,47 @@ test('archivo secreto temporal se restringe y elimina incluso si el callback fal
   }
 });
 
-test('hardening Windows elimina herencia y concede solo al SID actual', () => {
+test('hardening Windows usa script ACL antes de datos y exige evidencia efectiva', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-acl-test-'));
   const filePath = path.join(directory, 'secret.yml');
   const calls = [];
   try {
     fs.writeFileSync(filePath, 'secret');
-    hardenSecretFile(filePath, {
+    const spawn = (program, args, options) => {
+      calls.push({ program, args, env: options.env });
+      return {
+        status: 0,
+        stdout: JSON.stringify({ ok: true, kind: 'file', ownerSid: 'S-1-5-21-1', rules: 1, protected: true }),
+        stderr: '',
+      };
+    };
+    hardenRestrictedDirectory(directory, {
       platform: 'win32',
-      spawn(program, args) {
-        calls.push({ program, args });
-        if (program === 'whoami') {
-          return { status: 0, stdout: '"DOMAIN\\operator","S-1-5-21-123-456-789-1001"\r\n', stderr: '' };
-        }
-        return { status: 0, stdout: 'processed', stderr: '' };
-      },
+      spawn,
     });
-    const acl = calls.find((call) => call.program === 'icacls');
-    assert.ok(acl.args.includes('/inheritance:r'));
-    assert.ok(acl.args.includes('*S-1-5-21-123-456-789-1001:(R,W)'));
+    hardenRestrictedFile(filePath, { platform: 'win32', spawn });
+    assert.deepEqual(
+      calls.map((call) => call.args.at(-1)),
+      ['HardenDirectory', 'VerifyDirectory', 'HardenFile', 'VerifyFile'],
+    );
+    assert.ok(calls.every((call) => call.program === 'powershell.exe'));
+    assert.equal(calls[0].env.CHAMAN_ACL_TARGET_PATH, directory);
+    assert.equal(calls[2].env.CHAMAN_ACL_TARGET_PATH, filePath);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('ACL efectiva Windows protege directorio antes de archivo', { skip: process.platform !== 'win32' }, () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-acl-effective-'));
+  try {
+    hardenRestrictedDirectory(directory);
+    assert.equal(verifyRestrictedDirectory(directory).ok, true);
+    const file = path.join(directory, 'secret.txt');
+    fs.writeFileSync(file, 'not-a-real-secret');
+    hardenRestrictedFile(file);
+    assert.equal(verifyRestrictedFile(file).ok, true);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
 test('auditoria de semillas compara IDs unicos y acepta 51 siembras que comparten 30 variedades', () => {
@@ -343,6 +425,13 @@ test('comparacion exige mismas colecciones, conteos, indices y major de MongoDB'
   const wrongVersion = inventory('chaman_restore_drill_20260828_1800');
   wrongVersion.serverVersion = '7.0.18';
   assert.throws(() => compareInventories(inventory(), wrongVersion), /incompatibles/);
+  const futureOption = inventory('chaman_restore_drill_20260828_1800');
+  futureOption.collections[0].indexes[0].futureSemanticOption = { enabled: true };
+  assert.equal(compareInventories(inventory(), futureOption).ok, false);
+  const generatedMetadata = inventory('chaman_restore_drill_20260828_1800');
+  generatedMetadata.collections[0].indexes[0].v = 9;
+  generatedMetadata.collections[0].indexes[0].ns = 'generated';
+  assert.equal(compareInventories(inventory(), generatedMetadata).ok, true);
 });
 
 test('manifiestos rechazan campos y valores que puedan filtrar secretos', () => {
@@ -360,7 +449,9 @@ test('plan CLI es offline: valida gobierno sin URI ni conexion', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-mongo-plan-'));
   try {
     const attestationPath = path.join(directory, 'attestation.json');
+    const evidence = writeEvidence(directory);
     const dynamic = sourceAttestation({
+      infrastructureEvidenceSha256: evidence.sha256,
       frozenAt: new Date(Date.now() - 60_000).toISOString(),
       verifiedAt: new Date(Date.now() - 30_000).toISOString(),
       expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
@@ -373,6 +464,7 @@ test('plan CLI es offline: valida gobierno sin URI ni conexion', () => {
         'plan',
         '--phase=dump',
         `--attestation=${attestationPath}`,
+        `--infrastructure-evidence=${evidence.file}`,
         `--output-dir=${path.join(directory, 'new-backup')}`,
       ],
       { cwd: process.cwd(), encoding: 'utf8', env: { ...process.env, CHAMAN_MONGO_SOURCE_URI: '' } },
@@ -391,7 +483,9 @@ test('fallo posterior a crear output-dir deja recibo sin secretos y no conecta',
   try {
     const attestationPath = path.join(directory, 'attestation.json');
     const outputDir = path.join(directory, 'backup-failed');
+    const evidence = writeEvidence(directory);
     const dynamic = sourceAttestation({
+      infrastructureEvidenceSha256: evidence.sha256,
       frozenAt: new Date(Date.now() - 60_000).toISOString(),
       verifiedAt: new Date(Date.now() - 30_000).toISOString(),
       expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
@@ -403,6 +497,7 @@ test('fallo posterior a crear output-dir deja recibo sin secretos y no conecta',
         path.join(process.cwd(), 'scripts', 'mongo-recovery.js'),
         'dump',
         `--attestation=${attestationPath}`,
+        `--infrastructure-evidence=${evidence.file}`,
         `--output-dir=${outputDir}`,
       ],
       {
