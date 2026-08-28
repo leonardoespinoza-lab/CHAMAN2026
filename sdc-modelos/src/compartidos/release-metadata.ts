@@ -35,10 +35,10 @@ export function buildReleaseMetadata(
   serviceName: string,
   environment: ReleaseEnvironment = {},
 ): ReleaseMetadata {
-  const explicitSha = environment.CHAMAN_RELEASE_SHA;
+  const explicitSha = environment['CHAMAN_RELEASE_SHA'];
   const sha = safeToken(
     explicitSha === undefined
-      ? environment.RAILWAY_GIT_COMMIT_SHA || environment.GIT_COMMIT_SHA
+      ? environment['RAILWAY_GIT_COMMIT_SHA'] || environment['GIT_COMMIT_SHA']
       : explicitSha,
     /^[0-9a-f]{40}$/i,
   ).toLowerCase();
@@ -48,12 +48,12 @@ export function buildReleaseMetadata(
     service: safeToken(serviceName, /^[a-z0-9][a-z0-9-]{1,63}$/),
     sha,
     version: safeToken(
-      environment.CHAMAN_RELEASE_VERSION || environment.npm_package_version,
+      environment['CHAMAN_RELEASE_VERSION'] || environment['npm_package_version'],
       /^[a-z0-9][a-z0-9._+-]{0,63}$/i,
     ),
     builtAt:
-      environment.CHAMAN_RELEASE_BUILT_AT === undefined
-        ? safeSourceDateEpoch(environment.SOURCE_DATE_EPOCH)
-        : safeBuiltAt(environment.CHAMAN_RELEASE_BUILT_AT),
+      environment['CHAMAN_RELEASE_BUILT_AT'] === undefined
+        ? safeSourceDateEpoch(environment['SOURCE_DATE_EPOCH'])
+        : safeBuiltAt(environment['CHAMAN_RELEASE_BUILT_AT']),
   };
 }
