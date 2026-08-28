@@ -6,6 +6,8 @@ const { verifyRestrictedDirectory, verifyRestrictedFile } = require('./secure-co
 
 const KIND = 'chaman-local-mongo-runtime-proof';
 const SHA256 = /^[0-9a-f]{64}$/i;
+const CURRENT_SCHEMA_VERSION = 2;
+const RUNTIME_PURPOSES = new Set(['operation', 'cleanup']);
 
 function fail(message) {
   throw new Error(message);
@@ -109,8 +111,29 @@ function assertDbPath(dbPathValue, expectedRoot) {
   return { dbPath, dbPathSha256: hashDbPath(dbPath) };
 }
 
-function buildRuntimeProof(raw, { uri, expectedDbPathRoot, now = new Date() }) {
-  if (!raw || typeof raw !== 'object' || raw.schemaVersion !== 1) fail('Respuesta runtime de mongosh invalida.');
+function assertRuntimePurpose(purpose) {
+  if (!RUNTIME_PURPOSES.has(purpose)) fail('Proposito de runtime proof invalido.');
+  return purpose;
+}
+
+function assertTtlMonitorState(value, purpose) {
+  if (typeof value !== 'boolean') fail('getParameter.ttlMonitorEnabled debe ser booleano.');
+  if (purpose !== 'cleanup' && value !== false) {
+    fail('El monitor TTL debe estar deshabilitado para preservar la fotografia restaurada.');
+  }
+  return value;
+}
+
+function buildRuntimeProof(raw, {
+  uri,
+  expectedDbPathRoot,
+  now = new Date(),
+  purpose = 'operation',
+}) {
+  assertRuntimePurpose(purpose);
+  if (!raw || typeof raw !== 'object' || raw.schemaVersion !== CURRENT_SCHEMA_VERSION) {
+    fail('Respuesta runtime de mongosh invalida.');
+  }
   const uriEndpoint = parseUriEndpoints(uri);
   const database = text(raw.database, 'database');
   if (!database.startsWith('chaman_restore_drill_')) fail('Runtime proof exige una base descartable.');
@@ -149,12 +172,13 @@ function buildRuntimeProof(raw, { uri, expectedDbPathRoot, now = new Date() }) {
   if (!Number.isSafeInteger(processId) || processId < 1) fail('serverStatus.pid invalido.');
   normalizeMongoProcess(raw.serverStatus?.process);
   const mongoVersion = text(raw.buildInfo?.version, 'buildInfo.version');
+  const ttlMonitorEnabled = assertTtlMonitorState(raw.getParameter?.ttlMonitorEnabled, purpose);
   const { dbPath, dbPathSha256 } = assertDbPath(raw.commandLine?.storage?.dbPath, expectedDbPathRoot);
   const endpointFingerprintSha256 = mongoEndpointFingerprint(uri).endpointFingerprintSha256;
   const stable = { endpointFingerprintSha256, replicaSet, dbPathSha256 };
   const instanceId = `local-mongodb:${sha256Text(JSON.stringify(stable))}`;
   return {
-    schemaVersion: 1,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     kind: KIND,
     database,
     collectedAt: capturedAt.toISOString(),
@@ -170,7 +194,8 @@ function buildRuntimeProof(raw, { uri, expectedDbPathRoot, now = new Date() }) {
       processId,
       writablePrimary: true,
     },
-    commands: { hello: true, buildInfo: true, getCmdLineOpts: true, serverStatus: true },
+    getParameter: { ttlMonitorEnabled },
+    commands: { hello: true, buildInfo: true, getCmdLineOpts: true, serverStatus: true, getParameter: true },
     instanceId,
   };
 }
@@ -179,11 +204,21 @@ function validateRuntimeProof(value, {
   now = new Date(),
   allowExpired = false,
   expectedDatabase,
+  purpose = 'operation',
 } = {}) {
-  if (!value || typeof value !== 'object' || value.schemaVersion !== 1 || value.kind !== KIND) {
+  assertRuntimePurpose(purpose);
+  if (!value || typeof value !== 'object' || ![1, CURRENT_SCHEMA_VERSION].includes(value.schemaVersion) || value.kind !== KIND) {
     fail('Formato de runtime proof no soportado.');
   }
-  const allowed = ['schemaVersion', 'kind', 'database', 'collectedAt', 'expiresAt', 'endpoint', 'mongo', 'commands', 'instanceId'];
+  const legacyV1 = value.schemaVersion === 1;
+  if (legacyV1 && purpose !== 'cleanup') {
+    fail('Runtime proof schema v1 solo se admite para cleanup seguro de intentos antiguos.');
+  }
+  const allowed = [
+    'schemaVersion', 'kind', 'database', 'collectedAt', 'expiresAt', 'endpoint', 'mongo',
+    ...(legacyV1 ? [] : ['getParameter']),
+    'commands', 'instanceId',
+  ];
   const extras = Object.keys(value).filter((key) => !allowed.includes(key));
   const missing = allowed.filter((key) => !(key in value));
   if (extras.length || missing.length) fail('Runtime proof contiene campos inesperados o faltantes.');
@@ -193,7 +228,14 @@ function validateRuntimeProof(value, {
     ['version', 'process', 'replicaSet', 'members', 'dbPath', 'dbPathSha256', 'processId', 'writablePrimary'],
     'runtime.mongo',
   );
-  exactKeys(value.commands, ['hello', 'buildInfo', 'getCmdLineOpts', 'serverStatus'], 'runtime.commands');
+  if (!legacyV1) exactKeys(value.getParameter, ['ttlMonitorEnabled'], 'runtime.getParameter');
+  exactKeys(
+    value.commands,
+    legacyV1
+      ? ['hello', 'buildInfo', 'getCmdLineOpts', 'serverStatus']
+      : ['hello', 'buildInfo', 'getCmdLineOpts', 'serverStatus', 'getParameter'],
+    'runtime.commands',
+  );
   const database = text(value.database, 'database');
   if (!database.startsWith('chaman_restore_drill_')) fail('Runtime proof no refiere una base descartable.');
   if (expectedDatabase && database !== expectedDatabase) fail('Runtime proof refiere otra base descartable.');
@@ -230,13 +272,19 @@ function validateRuntimeProof(value, {
   if (!Number.isSafeInteger(value.mongo?.processId) || value.mongo.processId < 1) fail('processId runtime invalido.');
   if (value.mongo?.process !== 'mongod') fail('Runtime proof no corresponde a un proceso mongod.');
   if (value.mongo?.writablePrimary !== true) fail('Runtime proof no corresponde a primary escribible.');
-  for (const command of ['hello', 'buildInfo', 'getCmdLineOpts', 'serverStatus']) {
+  const requiredCommands = ['hello', 'buildInfo', 'getCmdLineOpts', 'serverStatus'];
+  if (!legacyV1) requiredCommands.push('getParameter');
+  for (const command of requiredCommands) {
     if (value.commands?.[command] !== true) fail(`Falta evidencia del comando ${command}.`);
   }
+  const ttlMonitorEnabled = legacyV1
+    ? null
+    : assertTtlMonitorState(value.getParameter?.ttlMonitorEnabled, purpose);
   const expectedInstanceId = `local-mongodb:${sha256Text(JSON.stringify({ endpointFingerprintSha256, replicaSet, dbPathSha256 }))}`;
   if (String(value.instanceId).toLowerCase() !== expectedInstanceId) fail('instanceId runtime no coincide con sus campos estables.');
   return { database, collectedAt, expiresAt, endpointFingerprintSha256, replicaSet, dbPathSha256,
-    instanceId: expectedInstanceId, processId: value.mongo.processId, mongoVersion: text(value.mongo.version, 'mongo.version') };
+    instanceId: expectedInstanceId, processId: value.mongo.processId, mongoVersion: text(value.mongo.version, 'mongo.version'),
+    schemaVersion: value.schemaVersion, ttlMonitorEnabled };
 }
 
 function loadRuntimeProof(filePath, options = {}) {

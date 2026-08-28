@@ -48,9 +48,12 @@ const {
 } = require('../mongo-recovery/runtime-proof');
 const { collectRailwayEvidence, resolveRailwayExecutable } = require('../mongo-recovery/railway-collector');
 const {
+  RESTORE_STABILITY_DELAY_MS,
   assertCleanupReceiptBindings,
   assertDropConfirmed,
+  assertRestoreStabilityDelay,
   assertSameRuntimeForCleanup,
+  evaluateAuditInventoryStability,
   readProtectedUri,
 } = require('../mongo-recovery');
 
@@ -284,7 +287,7 @@ function inventory(database = 'chaman') {
 
 function localRuntimeRaw(dbPath, capturedAt = NOW.toISOString()) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     database: 'chaman_restore_drill_20260828_1800',
     capturedAt,
     hello: {
@@ -302,6 +305,7 @@ function localRuntimeRaw(dbPath, capturedAt = NOW.toISOString()) {
       replication: { replSetName: 'chamanDrill' },
       storage: { dbPath },
     },
+    getParameter: { ttlMonitorEnabled: false },
     serverStatus: { process: 'mongod', pid: 4242 },
   };
 }
@@ -514,7 +518,11 @@ test('scripts mongosh convierten BSON Long a PID numerico seguro antes de serial
   };
   assert.match(JSON.stringify({ pid: bsonLong }), /"high":0/);
 
-  const runRuntimeScript = (pid) => {
+  const runRuntimeScript = (pid, {
+    ttlMonitorEnabled = false,
+    includeTtlMonitorParameter = true,
+    purpose = 'operation',
+  } = {}) => {
     let printed;
     const results = {
       hello: {
@@ -526,18 +534,29 @@ test('scripts mongosh convierten BSON Long a PID numerico seguro antes de serial
         net: { bindIp: '127.0.0.1', port: 27019 }, replication: { replSetName: 'chamanDrill' },
         storage: { dbPath: 'C:\\chaman-recovery-drill\\test\\data' },
       } },
+      getParameter: includeTtlMonitorParameter ? { ok: 1, ttlMonitorEnabled } : { ok: 1 },
       serverStatus: { ok: 1, process: 'mongod', pid },
     };
     const database = {
       getName: () => targetDatabase,
-      adminCommand(command) { return results[Object.keys(command)[0]]; },
+      adminCommand(command) {
+        const commandName = Object.keys(command)[0];
+        if (commandName === 'getParameter' && (command.getParameter !== 1 || command.ttlMonitorEnabled !== 1)) {
+          throw new Error('Consulta getParameter incompleta.');
+        }
+        return results[commandName];
+      },
     };
     const connection = { getDB: () => database, close() {} };
     vm.runInNewContext(
       fs.readFileSync(path.join(process.cwd(), 'scripts', 'mongo-recovery', 'runtime-proof.mongosh.js'), 'utf8'),
       {
         require: () => ({ readFileSync: () => LOCAL_URI }),
-        process: { env: { CHAMAN_RECOVERY_URI_FILE: 'uri.acl', CHAMAN_RECOVERY_DATABASE: targetDatabase } },
+        process: { env: {
+          CHAMAN_RECOVERY_URI_FILE: 'uri.acl',
+          CHAMAN_RECOVERY_DATABASE: targetDatabase,
+          CHAMAN_RECOVERY_RUNTIME_PURPOSE: purpose,
+        } },
         Mongo: function Mongo() { return connection; },
         print(value) { printed = value; },
       },
@@ -547,6 +566,24 @@ test('scripts mongosh convierten BSON Long a PID numerico seguro antes de serial
   const proofRaw = runRuntimeScript(bsonLong);
   assert.equal(proofRaw.serverStatus.pid, 4242);
   assert.equal(typeof proofRaw.serverStatus.pid, 'number');
+  assert.equal(proofRaw.schemaVersion, 2);
+  assert.equal(proofRaw.getParameter.ttlMonitorEnabled, false);
+  assert.throws(
+    () => runRuntimeScript(bsonLong, { ttlMonitorEnabled: true }),
+    /monitor TTL debe estar deshabilitado/,
+  );
+  assert.throws(
+    () => runRuntimeScript(bsonLong, { includeTtlMonitorParameter: false }),
+    /no devolvio un booleano/,
+  );
+  assert.throws(
+    () => runRuntimeScript(bsonLong, { ttlMonitorEnabled: 'false' }),
+    /no devolvio un booleano/,
+  );
+  assert.equal(
+    runRuntimeScript(bsonLong, { ttlMonitorEnabled: true, purpose: 'cleanup' }).getParameter.ttlMonitorEnabled,
+    true,
+  );
   assert.throws(() => runRuntimeScript({ high: 0, low: 4242, unsigned: false }), /entero seguro/);
 
   let dropped = false;
@@ -588,8 +625,51 @@ test('runtime proof acredita loopback, replica set, dbPath dedicado y processId'
     const validated = validateRuntimeProof(proof, { now: NOW, expectedDatabase: proof.database });
     assert.equal(validated.replicaSet, 'chamanDrill');
     assert.equal(validated.processId, 4242);
+    assert.equal(validated.schemaVersion, 2);
+    assert.equal(validated.ttlMonitorEnabled, false);
     assert.equal(proof.mongo.process, 'mongod');
+    assert.equal(proof.getParameter.ttlMonitorEnabled, false);
+    assert.equal(proof.commands.getParameter, true);
     assert.match(validated.instanceId, /^local-mongodb:[0-9a-f]{64}$/);
+
+    const ttlEnabledRaw = localRuntimeRaw(dbPath);
+    ttlEnabledRaw.getParameter.ttlMonitorEnabled = true;
+    assert.throws(() => buildRuntimeProof(ttlEnabledRaw, {
+      uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW,
+    }), /monitor TTL debe estar deshabilitado/);
+    const cleanupProof = buildRuntimeProof(ttlEnabledRaw, {
+      uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW, purpose: 'cleanup',
+    });
+    assert.equal(validateRuntimeProof(cleanupProof, {
+      now: NOW, expectedDatabase: cleanupProof.database, purpose: 'cleanup',
+    }).ttlMonitorEnabled, true);
+    assert.throws(() => validateRuntimeProof(cleanupProof, { now: NOW }), /monitor TTL debe estar deshabilitado/);
+    const missingTtlProof = structuredClone(proof);
+    delete missingTtlProof.getParameter;
+    assert.throws(() => validateRuntimeProof(missingTtlProof, { now: NOW }), /campos inesperados o faltantes/);
+    const stringTtlProof = structuredClone(proof);
+    stringTtlProof.getParameter.ttlMonitorEnabled = 'false';
+    assert.throws(() => validateRuntimeProof(stringTtlProof, { now: NOW }), /debe ser booleano/);
+
+    const ttlMissingRaw = localRuntimeRaw(dbPath);
+    delete ttlMissingRaw.getParameter.ttlMonitorEnabled;
+    assert.throws(() => buildRuntimeProof(ttlMissingRaw, {
+      uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW,
+    }), /debe ser booleano/);
+    const ttlStringRaw = localRuntimeRaw(dbPath);
+    ttlStringRaw.getParameter.ttlMonitorEnabled = 'false';
+    assert.throws(() => buildRuntimeProof(ttlStringRaw, {
+      uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW,
+    }), /debe ser booleano/);
+
+    const legacyProof = structuredClone(proof);
+    legacyProof.schemaVersion = 1;
+    delete legacyProof.getParameter;
+    delete legacyProof.commands.getParameter;
+    assert.throws(() => validateRuntimeProof(legacyProof, { now: NOW }), /schema v1 solo se admite para cleanup/);
+    const legacyCleanup = validateRuntimeProof(legacyProof, { now: NOW, purpose: 'cleanup' });
+    assert.equal(legacyCleanup.schemaVersion, 1);
+    assert.equal(legacyCleanup.ttlMonitorEnabled, null);
 
     assert.throws(() => buildRuntimeProof(localRuntimeRaw(dbPath), {
       uri: LOCAL_URI.replace('127.0.0.1', 'mongo.example.invalid'), expectedDbPathRoot: root, now: NOW,
@@ -635,6 +715,15 @@ test('modo testing-local fija Testing/chaman_testing y permite cleanup con atest
   });
   assert.throws(() => validateTargetAttestation(target, { now: NOW }), /vencida/);
   assert.equal(validateTargetAttestation(target, { now: NOW, allowExpired: true }).drillMode, TESTING_LOCAL_MODE);
+  const afterProofExpiry = new Date(NOW.getTime() + 11 * 60_000);
+  assert.throws(
+    () => validateRuntimeProof(proof, { now: afterProofExpiry, purpose: 'cleanup' }),
+    /no esta vigente/,
+  );
+  assert.equal(
+    validateRuntimeProof(proof, { now: afterProofExpiry, purpose: 'cleanup', allowExpired: true }).schemaVersion,
+    2,
+  );
   fs.rmSync(directory, { recursive: true, force: true });
 });
 
@@ -727,6 +816,29 @@ test('collector conserva raw railway status, deriva el grafo y sella target loca
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('verify exige 130 segundos completos desde completedAt y rechaza fechas invalidas o futuras', () => {
+  const completedAt = '2026-08-28T18:29:31.000Z';
+  assert.equal(RESTORE_STABILITY_DELAY_MS, 130_000);
+  assert.throws(
+    () => assertRestoreStabilityDelay(completedAt, { now: '2026-08-28T18:31:40.000Z' }),
+    /al menos 130 segundos/,
+  );
+  assert.deepEqual(
+    assertRestoreStabilityDelay(completedAt, { now: '2026-08-28T18:31:41.000Z' }),
+    {
+      restoreCompletedAt: completedAt,
+      stabilityCheckedAt: '2026-08-28T18:31:41.000Z',
+      stabilityDelaySeconds: 130,
+      requiredStabilityDelaySeconds: 130,
+    },
+  );
+  assert.throws(() => assertRestoreStabilityDelay('fecha-invalida'), /fecha ISO valida/);
+  assert.throws(
+    () => assertRestoreStabilityDelay('2026-08-28T18:31:42.000Z', { now: '2026-08-28T18:31:41.000Z' }),
+    /futuro/,
+  );
 });
 
 test('collector resuelve un binario Railway directo y rechaza rutas configuradas inexistentes', () => {
@@ -970,6 +1082,27 @@ test('comparacion es idempotente para inventario normalizado sin relajar options
   assert.throws(() => compareInventories(tamperedNormalized, restored), /hash semantico invalido/);
 });
 
+test('inventario final detecta mutaciones ocurridas durante las auditorias', () => {
+  const source = inventory();
+  const beforeAudits = inventory('chaman_restore_drill_20260828_1800');
+  const unchangedAfterAudits = inventory('chaman_restore_drill_20260828_1800');
+  assert.equal(evaluateAuditInventoryStability(source, beforeAudits, unchangedAfterAudits).ok, true);
+
+  const changedAfterAudits = inventory('chaman_restore_drill_20260828_1800');
+  changedAfterAudits.collections[0].count -= 1;
+  const changed = evaluateAuditInventoryStability(source, beforeAudits, changedAfterAudits);
+  assert.equal(changed.ok, false);
+  assert.equal(changed.sourceBeforeAudits.ok, true);
+  assert.equal(changed.sourceAfterAudits.ok, false);
+  assert.equal(changed.beforeVsAfterAudits.ok, false);
+
+  const semanticChangeAfterAudits = inventory('chaman_restore_drill_20260828_1800');
+  semanticChangeAfterAudits.collections[0].indexes[1].unique = false;
+  const semanticChange = evaluateAuditInventoryStability(source, beforeAudits, semanticChangeAfterAudits);
+  assert.equal(semanticChange.ok, false);
+  assert.equal(semanticChange.beforeVsAfterAudits.findings[0].issue, 'indexes_mismatch');
+});
+
 test('manifiestos rechazan campos y valores que puedan filtrar secretos', () => {
   assert.throws(() => assertNoSecrets({ sourceUri: 'redacted' }), /campo sensible/);
   assert.throws(() => assertNoSecrets({ note: 'mongodb://example.invalid/chaman' }), /URI de MongoDB/);
@@ -979,6 +1112,17 @@ test('artefactos deben vivir fuera del repo y nunca sobreescribirse', () => {
   assert.throws(() => safeArtifactDirectory(path.join(process.cwd(), 'mongo-recovery-artifacts'), process.cwd()), /fuera/);
   const outside = path.join(os.tmpdir(), 'chaman-safe-artifacts-not-created');
   assert.equal(safeArtifactDirectory(outside, process.cwd()), path.resolve(outside));
+});
+
+test('runbook exige TTL deshabilitado solo en Mongo local y verificacion estable diferida', () => {
+  const runbook = fs.readFileSync(
+    path.join(process.cwd(), 'docs', 'MONGO-LOGICAL-BACKUP-RESTORE-DRILL.md'),
+    'utf8',
+  );
+  assert.match(runbook, /--setParameter ttlMonitorEnabled=false/);
+  assert.match(runbook, /Nunca se configura en MongoDB de Testing, Producci[oó]n/);
+  assert.match(runbook, /al menos \*\*130 segundos\*\*/);
+  assert.match(runbook, /--purpose=cleanup/);
 });
 
 test('plan CLI es offline: valida gobierno sin URI ni conexion', () => {

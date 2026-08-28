@@ -28,9 +28,9 @@ multi-colección consistente.
   proyecto→environment→servicio→volumen se deriva de esa captura. No se acepta
   un JSON de topología escrito a mano.
 - El destino local se acredita consultando `hello`, `buildInfo`,
-  `getCmdLineOpts` y `serverStatus`. Debe ser primary, usar replica set, exponer
-  un único endpoint loopback y tener su `dbPath` bajo
-  `chaman-recovery-drill`.
+  `getCmdLineOpts`, `serverStatus` y `getParameter`. Debe ser primary, usar
+  replica set, exponer un único endpoint loopback, tener su `dbPath` bajo
+  `chaman-recovery-drill` y demostrar `ttlMonitorEnabled: false`.
 - La prueba runtime dura diez minutos. Cada fase posterior usa una prueba
   fresca que debe conservar endpoint, replica set y `dbPath` sellados.
 - El manifiesto fija modo, origen, SHA Git, checksums, inventario y evidencia de
@@ -98,9 +98,24 @@ Las URI deben incluir respectivamente `/chaman_testing` y
 ## 2. Acreditar MongoDB local
 
 El `mongod` se inicia fuera de esta herramienta con `--bind_ip 127.0.0.1`,
-`--port 27019`, `--replSet chamanDrill` y un `--dbpath` nuevo bajo un directorio
-llamado `chaman-recovery-drill`. El replica set debe anunciar el mismo endpoint
-loopback de la URI, no el hostname de la PC:
+`--port 27019`, `--replSet chamanDrill`, `--setParameter
+ttlMonitorEnabled=false` y un `--dbpath` nuevo bajo un directorio llamado
+`chaman-recovery-drill`. El replica set debe anunciar el mismo endpoint
+loopback de la URI, no el hostname de la PC.
+
+`ttlMonitorEnabled=false` se usa **exclusivamente en este MongoDB local,
+aislado y descartable**, para impedir que un índice TTL modifique la fotografía
+mientras se audita. Nunca se configura en MongoDB de Testing, Producción,
+Railway ni en una instancia compartida. Los índices TTL se restauran sin
+alterarlos y siguen formando parte de la comparación.
+
+El inicio local debe contener, entre otros, estos argumentos:
+
+```text
+mongod --bind_ip 127.0.0.1 --port 27019 --replSet chamanDrill --dbpath <DIRECTORIO_DEDICADO> --setParameter ttlMonitorEnabled=false
+```
+
+Luego se inicia el replica set:
 
 ```javascript
 rs.initiate({
@@ -118,7 +133,10 @@ npm run mongo:recovery -- runtime-proof `
   --output=D:\ChamanRecovery\secrets-local\runtime-proof.json
 ```
 
-No editar ese JSON. Si vence, generar otro archivo con nombre nuevo.
+No editar ese JSON. Es schema v2 y sella el valor booleano devuelto por
+`getParameter.ttlMonitorEnabled`; `true`, ausencia o la cadena `"false"`
+cancelan plan, preflight, restore y verify. Si vence, generar otro archivo con
+nombre nuevo.
 
 ## 3. Recolectar evidencia Railway
 
@@ -225,6 +243,13 @@ npm run mongo:recovery -- restore `
   --output-dir=D:\ChamanRecovery\drill-001
 Remove-Item Env:CHAMAN_RESTORE_CONFIRM
 
+Esperar al menos **130 segundos** desde `completedAt` del restore antes de
+ejecutar `verify`. Es una comprobación de estabilidad superior a dos ciclos
+normales de 60 segundos del monitor TTL; el inventario diferido debe conservar
+exactamente colecciones, conteos, opciones e índices del inventario fuente. El
+CLI rechaza fechas inválidas, futuras o cualquier demora menor a 130 segundos, y deja
+el retraso efectivo y el umbral requerido dentro de `verification.json`.
+
 npm run mongo:recovery -- verify `
   --attestation=D:\ChamanRecovery\target.json `
   --infrastructure-evidence=D:\ChamanRecovery\evidence-001\infrastructure-evidence.json `
@@ -235,17 +260,34 @@ npm run mongo:recovery -- verify `
 ```
 
 La salida aceptable es `verification.json` con `status: passed`. Además se
-conservan el inventario restaurado, las auditorías agronómicas y una copia ACL
-del runtime proof exacto usado antes del restore.
+conservan inventarios exclusivos antes y después de las auditorías, las
+auditorías agronómicas y una copia ACL del runtime proof exacto usado antes del
+restore. El inventario final se compara tanto con la fuente como con el
+inventario pre-auditoría; cualquier deriva impide `passed`.
 
 ## 7. Cleanup incluso después de expiración
 
 No renovar ni reemplazar las atestaciones originales. Generar una prueba
 runtime nueva del mismo endpoint, replica set y `dbPath`; el proceso se vuelve a
 consultar inmediatamente antes del drop y su PID se comprueba dentro del propio
-comando que ejecuta `dropDatabase`.
+comando que ejecuta `dropDatabase`. Para cleanup se declara explícitamente
+`--purpose=cleanup`: es la única fase que puede aceptar una prueba schema v1
+histórica o un monitor TTL activo, porque su única mutación autorizada es
+eliminar la base descartable ligada al intent original.
+
+La atestación, la evidencia y la copia del runtime proof usada originalmente
+para restaurar pueden estar vencidas durante cleanup: se conservan y validan
+por hash e identidad. En cambio, el archivo pasado ahora mediante
+`--runtime-proof` debe ser una captura **fresca y vigente** del proceso actual;
+`--purpose=cleanup` no relaja su ventana de diez minutos.
 
 ```powershell
+npm run mongo:recovery -- runtime-proof `
+  --purpose=cleanup `
+  --target-uri-file=D:\ChamanRecovery\secrets-local\target.uri `
+  --expected-dbpath-root=C:\Users\lespinoza\AppData\Local\Codex\chaman-recovery-drill\run-001 `
+  --output=D:\ChamanRecovery\secrets-local\runtime-proof-cleanup.json
+
 $env:CHAMAN_CLEANUP_CONFIRM = 'cleanup:<DRILL_ID>:chaman_restore_drill_<ID>'
 npm run mongo:recovery -- cleanup `
   --attestation=D:\ChamanRecovery\target.json `
@@ -268,7 +310,8 @@ El simulacro es GO sólo si existen, para el mismo `drillId`:
 - captura Railway cruda y evidencia derivada intactas;
 - manifiesto sellado y archive con checksum válido;
 - restore receipt ligado al manifiesto y atestación;
-- `verification.json` en `passed`;
+- `verification.json` en `passed`, capturado al menos 130 segundos después del
+  restore y sin deriva del inventario;
 - cleanup receipt con rescan negativo;
 - revisión humana y ubicación controlada del archive.
 

@@ -56,6 +56,45 @@ const INVENTORY_SCRIPT = path.join(__dirname, 'mongo-recovery', 'inventory.mongo
 const DROP_SCRIPT = path.join(__dirname, 'mongo-recovery', 'drop-database.mongosh.js');
 const AGRONOMIC_AUDIT = path.join(__dirname, 'mongo-recovery', 'audit-restored.js');
 const RUNTIME_PROOF_SCRIPT = path.join(__dirname, 'mongo-recovery', 'runtime-proof.mongosh.js');
+const RESTORE_STABILITY_DELAY_MS = 130_000;
+
+function assertRestoreStabilityDelay(completedAt, { now = new Date() } = {}) {
+  if (typeof completedAt !== 'string' || !completedAt.trim()) {
+    throw new Error('restore-receipt.completedAt no es una fecha ISO valida.');
+  }
+  const restoredAt = new Date(completedAt);
+  const checkedAt = new Date(now);
+  if (
+    !Number.isFinite(restoredAt.getTime()) ||
+    restoredAt.toISOString() !== completedAt ||
+    !Number.isFinite(checkedAt.getTime())
+  ) {
+    throw new Error('restore-receipt.completedAt no es una fecha ISO valida.');
+  }
+  const delayMs = checkedAt.getTime() - restoredAt.getTime();
+  if (delayMs < 0) throw new Error('restore-receipt.completedAt no puede estar en el futuro.');
+  if (delayMs < RESTORE_STABILITY_DELAY_MS) {
+    throw new Error('Verify exige al menos 130 segundos completos desde completedAt del restore.');
+  }
+  return {
+    restoreCompletedAt: restoredAt.toISOString(),
+    stabilityCheckedAt: checkedAt.toISOString(),
+    stabilityDelaySeconds: delayMs / 1000,
+    requiredStabilityDelaySeconds: RESTORE_STABILITY_DELAY_MS / 1000,
+  };
+}
+
+function evaluateAuditInventoryStability(source, beforeAudits, afterAudits) {
+  const sourceBeforeAudits = compareInventories(source, beforeAudits);
+  const sourceAfterAudits = compareInventories(source, afterAudits);
+  const beforeVsAfterAudits = compareInventories(beforeAudits, afterAudits);
+  return {
+    ok: sourceBeforeAudits.ok && sourceAfterAudits.ok && beforeVsAfterAudits.ok,
+    sourceBeforeAudits,
+    sourceAfterAudits,
+    beforeVsAfterAudits,
+  };
+}
 
 function usage() {
   return `Uso:
@@ -66,7 +105,7 @@ function usage() {
   node scripts/mongo-recovery.js restore --manifest=<json> --attestation=<json> --infrastructure-evidence=<json> --runtime-proof=<json> --output-dir=<dir>
   node scripts/mongo-recovery.js verify --manifest=<json> --attestation=<json> --infrastructure-evidence=<json> --runtime-proof=<json> --output-dir=<dir>
   node scripts/mongo-recovery.js cleanup --manifest=<json> --attestation=<json> --infrastructure-evidence=<json> --runtime-proof=<json> --output-dir=<dir>
-  node scripts/mongo-recovery.js runtime-proof --target-uri-file=<acl> --output=<json> --expected-dbpath-root=<dir>
+  node scripts/mongo-recovery.js runtime-proof --target-uri-file=<acl> --output=<json> --expected-dbpath-root=<dir> [--purpose=operation|cleanup]
   node scripts/mongo-recovery.js collect-infrastructure-evidence --mode=testing-local-drill --project-id=<uuid> --source-environment=Testing --source-service=<MongoDB> --runtime-proof=<json> --output-dir=<dir> --evidence-id=<id> --collector=<persona> --reviewed-by=<otra>
   node scripts/mongo-recovery.js fingerprint --side=source|target --source-uri-file=<acl>|--target-uri-file=<acl>
   node scripts/mongo-recovery.js create-uri-file --output=<archivo fuera del repo> < URI por stdin
@@ -83,6 +122,7 @@ function parseCli(argv) {
     strict: true,
     options: {
       phase: { type: 'string' },
+      purpose: { type: 'string' },
       attestation: { type: 'string' },
       manifest: { type: 'string' },
       'output-dir': { type: 'string' },
@@ -253,12 +293,13 @@ function inventory(uri, database) {
   return normalizeInventory(parsed);
 }
 
-function captureRuntimeProof(uri, database, expectedDbPathRoot) {
+function captureRuntimeProof(uri, database, expectedDbPathRoot, { purpose = 'operation' } = {}) {
   const result = withMongoSecretFile(uri, 'raw-uri', (uriFile) =>
     runProcess(executable('mongosh'), buildMongoshArgs(RUNTIME_PROOF_SCRIPT), {
       env: safeChildEnv({
         CHAMAN_RECOVERY_URI_FILE: uriFile,
         CHAMAN_RECOVERY_DATABASE: database,
+        CHAMAN_RECOVERY_RUNTIME_PURPOSE: purpose,
       }),
       secrets: [uri],
     }),
@@ -269,7 +310,7 @@ function captureRuntimeProof(uri, database, expectedDbPathRoot) {
   } catch {
     throw new Error('mongosh no devolvio runtime proof JSON valido.');
   }
-  return buildRuntimeProof(raw, { uri, expectedDbPathRoot });
+  return buildRuntimeProof(raw, { uri, expectedDbPathRoot, purpose });
 }
 
 function assertOperationalDrillMode(drillMode) {
@@ -300,6 +341,7 @@ function targetContext(attestationFile, {
   runtimeProofFile,
   allowExpired = false,
   requireSealedRuntimeProof = false,
+  runtimeProofPurpose = 'operation',
 } = {}) {
   if (!attestationFile) throw new Error('Falta --attestation.');
   const attestation = readJson(attestationFile);
@@ -315,7 +357,10 @@ function targetContext(attestationFile, {
   if (uri && validated.drillMode === TESTING_LOCAL_MODE) parseUriEndpoints(uri);
   let runtimeProof = null;
   if (validated.drillMode === TESTING_LOCAL_MODE) {
-    runtimeProof = loadRuntimeProof(runtimeProofFile, { expectedDatabase: validated.database });
+    runtimeProof = loadRuntimeProof(runtimeProofFile, {
+      expectedDatabase: validated.database,
+      purpose: runtimeProofPurpose,
+    });
     assertRuntimeProofMatchesEvidence(runtimeProof, evidence.validated.target, {
       requireSealedHash: requireSealedRuntimeProof,
     });
@@ -403,6 +448,7 @@ function describePlan(phase, values, checkTools) {
       evidenceFile: values['infrastructure-evidence'],
       runtimeProofFile: values['runtime-proof'],
       allowExpired: phase === 'cleanup',
+      runtimeProofPurpose: phase === 'cleanup' ? 'cleanup' : 'operation',
     });
     const { validated } = targetPlan;
     if (!values['output-dir']) throw new Error('Falta --output-dir.');
@@ -570,6 +616,15 @@ function restoreCommand(values) {
       { env: safeChildEnv(), secrets: [target.uri] },
     ),
   );
+  const postRestoreRuntime = captureRuntimeProof(
+    target.uri,
+    target.validated.database,
+    path.dirname(target.runtimeProof.value.mongo.dbPath),
+  );
+  const postRestoreValidated = validateRuntimeProof(postRestoreRuntime, {
+    expectedDatabase: target.validated.database,
+  });
+  assertSameRuntimeForCleanup(liveValidated, postRestoreValidated);
   const afterRestore = inventory(target.uri, target.validated.database);
   const afterRestorePath = path.join(outputDir, 'target-inventory-after-restore.json');
   writeJsonExclusive(afterRestorePath, afterRestore);
@@ -591,6 +646,7 @@ function restoreCommand(values) {
     targetMongoVersion: before.serverVersion,
     startedAt,
     completedAt: new Date().toISOString(),
+    postRestoreRuntimeValueSha256: sha256Json(postRestoreRuntime),
     restoredInventory: {
       file: path.basename(afterRestorePath),
       sha256: sha256File(afterRestorePath),
@@ -653,6 +709,7 @@ function verifyCommand(values) {
   ) {
     throw new Error('El intent de restore no coincide con el inventario vacío original.');
   }
+  const stability = assertRestoreStabilityDelay(receipt.completedAt);
   ensureEmptyTarget(normalizeInventory(readJson(beforePath)));
   const restoredInventoryFile = receipt.restoredInventory?.file;
   if (
@@ -675,10 +732,9 @@ function verifyCommand(values) {
   );
   const liveValidated = validateRuntimeProof(liveRuntime, { expectedDatabase: target.validated.database });
   assertSameRuntimeForCleanup(target.runtimeProof.validated, liveValidated);
-  const after = inventory(target.uri, target.validated.database);
-  const afterPath = path.join(outputDir, 'target-inventory-after.json');
-  writeJsonExclusive(afterPath, after);
-  const comparison = compareInventories(source.verified.inventory, after);
+  const beforeAudits = inventory(target.uri, target.validated.database);
+  const beforeAuditsPath = path.join(outputDir, 'target-inventory-before-audits.json');
+  writeJsonExclusive(beforeAuditsPath, beforeAudits);
   const { auditMatrix, auditLotes } = withMongoSecretFile(target.uri, 'raw-uri', (uriFile) => {
     const auditEnv = safeChildEnv({
       CHAMAN_RECOVERY_URI_FILE: uriFile,
@@ -702,6 +758,23 @@ function verifyCommand(values) {
       return counts;
     }, new Map()),
   );
+  const postAuditRuntime = captureRuntimeProof(
+    target.uri,
+    target.validated.database,
+    path.dirname(target.runtimeProof.value.mongo.dbPath),
+  );
+  const postAuditValidated = validateRuntimeProof(postAuditRuntime, {
+    expectedDatabase: target.validated.database,
+  });
+  assertSameRuntimeForCleanup(liveValidated, postAuditValidated);
+  const afterAudits = inventory(target.uri, target.validated.database);
+  const afterAuditsPath = path.join(outputDir, 'target-inventory-after-audits.json');
+  writeJsonExclusive(afterAuditsPath, afterAudits);
+  const inventoryStability = evaluateAuditInventoryStability(
+    source.verified.inventory,
+    beforeAudits,
+    afterAudits,
+  );
   const verification = {
     schemaVersion: 1,
     kind: 'chaman-mongo-restore-verification',
@@ -711,12 +784,28 @@ function verifyCommand(values) {
     targetDatabase: target.validated.database,
     currentRuntimeProofSha256: target.runtimeProof.sha256,
     liveRuntimeValueSha256: sha256Json(liveRuntime),
+    postAuditRuntimeValueSha256: sha256Json(postAuditRuntime),
     runtimeProcessId: liveValidated.processId,
     verifiedAt: new Date().toISOString(),
+    ...stability,
     inventory: {
-      ...comparison,
-      file: path.basename(afterPath),
-      sha256: sha256File(afterPath),
+      ...inventoryStability.sourceAfterAudits,
+      file: path.basename(afterAuditsPath),
+      sha256: sha256File(afterAuditsPath),
+    },
+    auditWindowInventory: {
+      ok: inventoryStability.ok,
+      beforeAudits: {
+        file: path.basename(beforeAuditsPath),
+        sha256: sha256File(beforeAuditsPath),
+        sourceComparison: inventoryStability.sourceBeforeAudits,
+      },
+      afterAudits: {
+        file: path.basename(afterAuditsPath),
+        sha256: sha256File(afterAuditsPath),
+        sourceComparison: inventoryStability.sourceAfterAudits,
+      },
+      beforeVsAfter: inventoryStability.beforeVsAfterAudits,
     },
     audits: {
       agronomicMatrix: { ...auditMatrix, ok: agronomic.ok === true, summary: agronomic.summary },
@@ -728,7 +817,7 @@ function verifyCommand(values) {
         blockingForRestoreEquality: false,
       },
     },
-    status: comparison.ok && agronomic.ok === true ? 'passed' : 'failed',
+    status: inventoryStability.ok && agronomic.ok === true ? 'passed' : 'failed',
   };
   const verificationPath = path.join(outputDir, 'verification.json');
   writeJsonExclusive(verificationPath, verification);
@@ -786,6 +875,7 @@ function cleanupCommand(values) {
     runtimeProofFile: values['runtime-proof'],
     allowExpired: true,
     requireSealedRuntimeProof: false,
+    runtimeProofPurpose: 'cleanup',
   });
   const source = manifestContext(values.manifest, { requireRestrictedAcl: true });
   assertTargetAgainstManifest(target, source);
@@ -810,6 +900,7 @@ function cleanupCommand(values) {
   const originalRuntimeProof = loadRuntimeProof(restoreRuntimeProofPath, {
     expectedDatabase: target.validated.database,
     allowExpired: true,
+    purpose: 'cleanup',
   });
   assertRuntimeProofMatchesEvidence(originalRuntimeProof, target.evidence.validated.target, {
     requireSealedHash: false,
@@ -847,8 +938,13 @@ function cleanupCommand(values) {
   let liveValidated = null;
   if (target.validated.drillMode === TESTING_LOCAL_MODE) {
     const expectedRoot = path.dirname(target.runtimeProof.value.mongo.dbPath);
-    liveRuntime = captureRuntimeProof(target.uri, target.validated.database, expectedRoot);
-    liveValidated = validateRuntimeProof(liveRuntime, { expectedDatabase: target.validated.database });
+    liveRuntime = captureRuntimeProof(target.uri, target.validated.database, expectedRoot, {
+      purpose: 'cleanup',
+    });
+    liveValidated = validateRuntimeProof(liveRuntime, {
+      expectedDatabase: target.validated.database,
+      purpose: 'cleanup',
+    });
     assertSameRuntimeForCleanup(target.runtimeProof.validated, liveValidated);
   }
   const result = withMongoSecretFile(target.uri, 'raw-uri', (uriFile) =>
@@ -929,9 +1025,13 @@ function main() {
     if (fs.existsSync(output)) throw new Error('El runtime proof ya existe.');
     const uri = readProtectedUri(values['target-uri-file'], 'target');
     const database = databaseFromMongoUri(uri);
-    const proof = captureRuntimeProof(uri, database, values['expected-dbpath-root']);
+    const purpose = values.purpose || 'operation';
+    if (!['operation', 'cleanup'].includes(purpose)) {
+      throw new Error('--purpose debe ser operation o cleanup.');
+    }
+    const proof = captureRuntimeProof(uri, database, values['expected-dbpath-root'], { purpose });
     writeJsonExclusive(output, proof);
-    const loaded = loadRuntimeProof(output, { expectedDatabase: database });
+    const loaded = loadRuntimeProof(output, { expectedDatabase: database, purpose });
     console.log(JSON.stringify({ status: 'captured', file: output, sha256: loaded.sha256 }, null, 2));
     return;
   }
@@ -989,8 +1089,11 @@ if (require.main === module) {
 }
 
 module.exports = {
+  RESTORE_STABILITY_DELAY_MS,
   assertCleanupReceiptBindings,
   assertDropConfirmed,
+  assertRestoreStabilityDelay,
   assertSameRuntimeForCleanup,
+  evaluateAuditInventoryStability,
   readProtectedUri,
 };
