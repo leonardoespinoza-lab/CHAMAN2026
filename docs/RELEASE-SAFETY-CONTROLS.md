@@ -220,13 +220,16 @@ procedimiento operativo es:
 npm run release:rollback:verify -- `
   --manifest $env:TEMP/chaman-release.json `
   --online `
+  --rollback-started-at 2026-08-28T23:10:00.000Z `
   --railway-evidence $env:TEMP/chaman-railway-rollback-evidence.json
 ```
 
 Mientras existan roles sin endpoint, la confirmación online exige ese archivo:
 los promovidos deben estar en `rollback.sha` y los congelados deben conservar su
-SHA, deployment e imagen originales. Sin evidencia completa el comando falla;
-la comprobación offline sólo demuestra existencia y ancestría Git.
+SHA, deployment e imagen originales. `--rollback-started-at` se registra justo
+antes de iniciar la reversión; toda evidencia debe ser posterior a ese instante,
+además de tener menos de 15 minutos. Sin evidencia completa el comando falla; la
+comprobación offline sólo demuestra existencia y ancestría Git.
 
 Para el snapshot de Testing del 28/8 ya existen tres referencias remotas
 inmutables de recuperación, creadas sin deploy:

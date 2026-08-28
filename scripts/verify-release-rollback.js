@@ -17,6 +17,7 @@ const { values } = parseArgs({
     'require-full-version-coverage': { type: 'boolean', default: false },
     'railway-evidence': { type: 'string' },
     'railway-cli': { type: 'string' },
+    'rollback-started-at': { type: 'string' },
   },
 });
 
@@ -53,6 +54,10 @@ async function main() {
     return;
   }
 
+  if (!values['rollback-started-at']) {
+    throw new Error('Rollback online exige --rollback-started-at con la hora registrada antes de revertir');
+  }
+
   const frozenLive = verifyFrozenServicesLive(manifest, {
     root,
     railwayCli: values['railway-cli'] || process.env.CHAMAN_RAILWAY_CLI || 'railway',
@@ -71,7 +76,7 @@ async function main() {
     railwayEvidence = collectRailwayDeploymentEvidence(
       manifest,
       loadJson(path.resolve(values['railway-evidence'])),
-      { mode: 'rollback' },
+      { mode: 'rollback', evidenceNotBefore: values['rollback-started-at'] },
     );
   }
   console.log(

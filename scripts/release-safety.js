@@ -607,6 +607,7 @@ function collectRailwayDeploymentEvidence(
     now = new Date(),
     maxAgeMs = 15 * 60 * 1000,
     futureSkewMs = 2 * 60 * 1000,
+    evidenceNotBefore = null,
   } = {},
 ) {
   assert(['release', 'rollback'].includes(mode), 'mode debe ser release o rollback');
@@ -633,12 +634,16 @@ function collectRailwayDeploymentEvidence(
     capturedTimestamp >= nowTimestamp - maxAgeMs,
     'railwayEvidence: evidencia vencida',
   );
-  if (mode === 'release') {
-    assert(
-      capturedTimestamp >= Date.parse(manifest.release.builtAt),
-      'railwayEvidence: evidencia anterior al release',
-    );
+  if (mode === 'rollback') {
+    assert(evidenceNotBefore, 'railwayEvidence: rollback exige evidenceNotBefore');
   }
+  const notBefore = normalizeBuiltAt(evidenceNotBefore || manifest.release.builtAt);
+  assert(
+    capturedTimestamp >= Date.parse(notBefore),
+    mode === 'rollback'
+      ? 'railwayEvidence: evidencia anterior al inicio del rollback'
+      : 'railwayEvidence: evidencia anterior al release',
+  );
   assert(Array.isArray(document.services), 'railwayEvidence.services debe ser una lista');
 
   const expectedServices = manifest.services.filter(

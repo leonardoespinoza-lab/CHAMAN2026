@@ -375,7 +375,11 @@ test('Railway evidence covers promoted services and proves frozen LoRa stayed un
     item.sha = service.rollbackSha;
   }
   assert.doesNotThrow(() =>
-    collectRailwayDeploymentEvidence(value, rollback, { ...evidenceOptions, mode: 'rollback' }),
+    collectRailwayDeploymentEvidence(value, rollback, {
+      ...evidenceOptions,
+      mode: 'rollback',
+      evidenceNotBefore: '2026-08-28T16:59:00.000Z',
+    }),
   );
   assert.equal(rollback.services.find((service) => service.role === 'lora').sha, FROZEN_SHA);
 
@@ -396,6 +400,24 @@ test('Railway evidence covers promoted services and proves frozen LoRa stayed un
       pattern,
     );
   }
+
+  const beforeRollback = structuredClone(rollback);
+  beforeRollback.capturedAt = '2026-08-28T16:59:59.000Z';
+  assert.throws(
+    () => collectRailwayDeploymentEvidence(value, beforeRollback, {
+      mode: 'rollback',
+      now: '2026-08-28T17:05:00.000Z',
+      evidenceNotBefore: '2026-08-28T17:00:00.000Z',
+    }),
+    /evidencia anterior al inicio del rollback/,
+  );
+  assert.throws(
+    () => collectRailwayDeploymentEvidence(value, rollback, {
+      mode: 'rollback',
+      now: '2026-08-28T17:05:00.000Z',
+    }),
+    /rollback exige evidenceNotBefore/,
+  );
 });
 
 test('live frozen verification binds Railway deployment/image/message to Git resolution', () => {
