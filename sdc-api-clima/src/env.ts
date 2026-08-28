@@ -201,6 +201,15 @@ export const DISTANCIA_MALA = +process.env.DISTANCIA_MALA || 100;
 export const CRON_TEST =
   process.env.CRON_TEST === 'true' ? true : false || false;
 
+// Los cron historicos de estaciones (07:00) y calidad de lotes (00:00)
+// conservan el comportamiento productivo existente. La bandera permite
+// detenerlos de forma explicita durante ventanas controladas de migracion o
+// recuperacion, sin deshabilitar los endpoints manuales del servicio.
+export const CLIMA_LEGACY_CRONS_ENABLED =
+  ENV !== 'test' &&
+  (process.env.CLIMA_LEGACY_CRONS_ENABLED === undefined ||
+    process.env.CLIMA_LEGACY_CRONS_ENABLED.trim().toLowerCase() === 'true');
+
 // Motor agrometeorologico
 export const AGROMETEO_CRON_ENABLED =
   process.env.AGROMETEO_CRON_ENABLED === 'true' ||

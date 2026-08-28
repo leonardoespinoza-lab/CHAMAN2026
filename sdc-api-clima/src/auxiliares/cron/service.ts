@@ -10,7 +10,12 @@ import {
   nivelPrediccion,
   Sensores,
 } from 'modelos/src';
-import { CRON_TEST, FIELD_CLIMATE_PASS, FIELD_CLIMATE_USERS } from '../../env';
+import {
+  CLIMA_LEGACY_CRONS_ENABLED,
+  CRON_TEST,
+  FIELD_CLIMATE_PASS,
+  FIELD_CLIMATE_USERS,
+} from '../../env';
 import { FieldClimateService } from '../../entidades/fieldClimate/service';
 import { LogService } from '../logsService/service';
 import { OmixomService } from 'src/entidades/omixom/service';
@@ -89,6 +94,14 @@ export class CronService {
   @Cron(
     CRON_TEST ? CronExpression.EVERY_MINUTE : CronExpression.EVERY_DAY_AT_7AM,
   )
+  async actualizarEstacionesAutomaticamente() {
+    if (!CLIMA_LEGACY_CRONS_ENABLED) {
+      Logger.log('Actualizacion automatica de estaciones deshabilitada');
+      return;
+    }
+    return await this.actualizarEstaciones();
+  }
+
   async actualizarEstaciones() {
     Logger.log(`Iniciando actualización de estaciones`);
     await this.getEstacionesFieldClimate();
@@ -98,6 +111,14 @@ export class CronService {
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  async calcularNivelesAutomaticamente() {
+    if (!CLIMA_LEGACY_CRONS_ENABLED) {
+      Logger.log('Calculo automatico de semaforo deshabilitado');
+      return;
+    }
+    return await this.calcularNiveles();
+  }
+
   async calcularNiveles() {
     Logger.log(`Iniciando cálculo de semáforo`);
     await this.calcularNivelesPrediccionLotes();

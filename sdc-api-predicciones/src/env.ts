@@ -135,6 +135,14 @@ export const OPEN_METEO_MAX_RETRIES = openMeteoNumber(
   true,
 );
 // CRON
+// Conserva por defecto el cron sanitario diario existente. En una ventana de
+// migracion se puede apagar de forma explicita sin bloquear el reproceso
+// manual y sin cambiar el comportamiento de produccion.
+export const PREDICCIONES_SANITARIAS_CRON_ENABLED =
+  ENV !== 'test' &&
+  (process.env.PREDICCIONES_SANITARIAS_CRON_ENABLED === undefined ||
+    process.env.PREDICCIONES_SANITARIAS_CRON_ENABLED.trim().toLowerCase() ===
+      'true');
 export const PREDICCIONES_MALEZAS_CRON_ENABLED =
   process.env.PREDICCIONES_MALEZAS_CRON_ENABLED !== 'false' && ENV !== 'test';
 export const PREDICCIONES_MALEZAS_LIMIT =
