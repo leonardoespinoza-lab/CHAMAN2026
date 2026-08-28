@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const { MongoClient } = require('../../sdc-datos/node_modules/mongodb');
+const { summarizeSeedResolution } = require('./lib');
 
 async function exists(db, name) {
   return (await db.listCollections({ name }, { nameOnly: true }).toArray()).length === 1;
@@ -29,9 +30,9 @@ async function main() {
     const activeLots = await db.collection('lotes').find({ idSiembra: { $exists: true, $ne: null } }).toArray();
     const sowingIds = activeLots.map((lot) => lot.idSiembra);
     const sowings = await db.collection('siembras').find({ _id: { $in: sowingIds } }).toArray();
-    const seedIds = sowings.map((sowing) => sowing.idSemilla).filter(Boolean);
-    const [seedsResolved, duplicates, agrometAvailable] = await Promise.all([
-      db.collection('semillas').countDocuments({ _id: { $in: seedIds } }),
+    const seedIds = [...new Map(sowings.filter((sowing) => sowing.idSemilla != null).map((sowing) => [String(sowing.idSemilla), sowing.idSemilla])).values()];
+    const [resolvedSeeds, duplicates, agrometAvailable] = await Promise.all([
+      db.collection('semillas').find({ _id: { $in: seedIds } }, { projection: { _id: 1 } }).toArray(),
       db
         .collection('prediccions')
         .aggregate([
@@ -48,19 +49,20 @@ async function main() {
           })
         : [],
     ]);
+    const seedResolution = summarizeSeedResolution(sowings, resolvedSeeds);
     const summary = {
       activeLots: activeLots.length,
       activeSowingsResolved: sowings.length,
-      seedsResolved,
+      ...seedResolution,
       duplicatePredictionKeys: duplicates?.total || 0,
       agrometSowingsAvailable: agrometAvailable.length,
       unresolvedSowings: activeLots.length - sowings.length,
-      unresolvedSeeds: sowings.length - seedsResolved,
       missingCollections,
     };
     const ok =
       summary.unresolvedSowings === 0 &&
-      summary.unresolvedSeeds === 0 &&
+      summary.missingSeedReferences === 0 &&
+      summary.unresolvedUniqueSeeds === 0 &&
       summary.duplicatePredictionKeys === 0 &&
       missingCollections.length === 0;
     console.log(JSON.stringify({ ok, database: databaseName, summary }, null, 2));

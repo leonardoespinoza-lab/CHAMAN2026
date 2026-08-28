@@ -7,6 +7,7 @@ const SOURCE_ATTESTATION_KIND = 'chaman-mongo-write-freeze-attestation';
 const TARGET_ATTESTATION_KIND = 'chaman-mongo-disposable-target-attestation';
 const RESTORE_DB_PREFIX = 'chaman_restore_drill_';
 const SYSTEM_DATABASES = new Set(['admin', 'config', 'local']);
+const INSTANCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{5,199}$/;
 
 function fail(message) {
   throw new Error(message);
@@ -73,6 +74,63 @@ function databaseFromMongoUri(uri) {
   return validateDatabaseName(database);
 }
 
+function mongoEndpointFingerprint(uri) {
+  const value = requiredText(uri, 'URI de MongoDB');
+  const schemeMatch = value.match(/^(mongodb(?:\+srv)?):\/\//i);
+  if (!schemeMatch) fail('La URI no usa mongodb:// o mongodb+srv://.');
+  if (/[\r\n\0]/.test(value)) fail('La URI contiene caracteres de control.');
+  const scheme = schemeMatch[1].toLowerCase();
+  const remainder = value.slice(schemeMatch[0].length);
+  const authority = remainder.split('/')[0];
+  const hostsPart = authority.slice(authority.lastIndexOf('@') + 1);
+  if (!hostsPart) fail('La URI no contiene endpoints MongoDB.');
+  const endpoints = hostsPart
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .map((entry) => {
+      if (!entry) fail('La URI contiene un endpoint vacio.');
+      if (entry.startsWith('[')) {
+        const closing = entry.indexOf(']');
+        if (closing < 0) fail('Endpoint IPv6 invalido.');
+        const host = entry.slice(1, closing).replace(/\.$/, '');
+        const suffix = entry.slice(closing + 1);
+        const port = suffix ? Number(suffix.replace(/^:/, '')) : 27017;
+        if (!host || !Number.isInteger(port) || port < 1 || port > 65535) fail('Endpoint IPv6 invalido.');
+        return `[${host}]:${port}`;
+      }
+      const separator = entry.lastIndexOf(':');
+      const hasPort = separator > -1 && entry.indexOf(':') === separator;
+      const host = (hasPort ? entry.slice(0, separator) : entry).replace(/\.$/, '');
+      const port = hasPort ? Number(entry.slice(separator + 1)) : 27017;
+      if (!host || !Number.isInteger(port) || port < 1 || port > 65535) fail('Endpoint MongoDB invalido.');
+      return `${host}:${port}`;
+    })
+    .sort();
+  const canonical = `${scheme}|${endpoints.join(',')}`;
+  return {
+    scheme,
+    endpointCount: endpoints.length,
+    endpointFingerprintSha256: crypto.createHash('sha256').update(canonical).digest('hex'),
+  };
+}
+
+function validateInstanceIdentity(identity, label) {
+  assertPlainObject(identity, label);
+  assertExactKeys(identity, ['provider', 'instanceId', 'endpointFingerprintSha256'], label);
+  const provider = requiredText(identity.provider, `${label}.provider`).toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]{1,31}$/.test(provider)) fail(`${label}.provider invalido.`);
+  const instanceId = requiredText(identity.instanceId, `${label}.instanceId`);
+  if (!INSTANCE_ID_PATTERN.test(instanceId)) fail(`${label}.instanceId invalido.`);
+  const endpointFingerprintSha256 = requiredText(
+    identity.endpointFingerprintSha256,
+    `${label}.endpointFingerprintSha256`,
+  ).toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(endpointFingerprintSha256)) {
+    fail(`${label}.endpointFingerprintSha256 invalido.`);
+  }
+  return { provider, instanceId, endpointFingerprintSha256 };
+}
+
 function validateSourceAttestation(attestation, { now = new Date() } = {}) {
   assertPlainObject(attestation, 'La atestacion de congelamiento');
   assertExactKeys(
@@ -91,6 +149,7 @@ function validateSourceAttestation(attestation, { now = new Date() } = {}) {
       'operator',
       'approvedBy',
       'changeTicket',
+      'instanceIdentity',
     ],
     'La atestacion de congelamiento',
   );
@@ -122,6 +181,7 @@ function validateSourceAttestation(attestation, { now = new Date() } = {}) {
   requiredText(attestation.operator, 'operator');
   requiredText(attestation.approvedBy, 'approvedBy');
   requiredText(attestation.changeTicket, 'changeTicket');
+  const instanceIdentity = validateInstanceIdentity(attestation.instanceIdentity, 'instanceIdentity');
   const frozenAt = validDate(attestation.frozenAt, 'frozenAt');
   const verifiedAt = validDate(attestation.verifiedAt, 'verifiedAt');
   const expiresAt = validDate(attestation.expiresAt, 'expiresAt');
@@ -131,7 +191,7 @@ function validateSourceAttestation(attestation, { now = new Date() } = {}) {
     fail('La ventana de congelamiento no puede superar dos horas.');
   }
   if (now < verifiedAt || now >= expiresAt) fail('La atestacion no esta vigente.');
-  return { id, database, frozenAt, verifiedAt, expiresAt };
+  return { id, database, frozenAt, verifiedAt, expiresAt, instanceIdentity };
 }
 
 function validateTargetAttestation(attestation, { now = new Date() } = {}) {
@@ -154,6 +214,7 @@ function validateTargetAttestation(attestation, { now = new Date() } = {}) {
       'operator',
       'approvedBy',
       'changeTicket',
+      'instanceIdentity',
     ],
     'La atestacion del destino',
   );
@@ -179,12 +240,33 @@ function validateTargetAttestation(attestation, { now = new Date() } = {}) {
   requiredText(attestation.operator, 'operator');
   requiredText(attestation.approvedBy, 'approvedBy');
   requiredText(attestation.changeTicket, 'changeTicket');
+  const instanceIdentity = validateInstanceIdentity(attestation.instanceIdentity, 'instanceIdentity');
   const expiresAt = validDate(attestation.expiresAt, 'expiresAt');
   if (now >= expiresAt) fail('La atestacion del destino esta vencida.');
   if (expiresAt - now > 48 * 60 * 60 * 1000) {
     fail('La atestacion del destino no puede tener mas de 48 horas de vigencia restante.');
   }
-  return { drillId, database, expiresAt };
+  return { drillId, database, expiresAt, instanceIdentity };
+}
+
+function assertRuntimeIdentity(uri, attestedIdentity, label) {
+  const runtime = mongoEndpointFingerprint(uri);
+  if (runtime.endpointFingerprintSha256 !== attestedIdentity.endpointFingerprintSha256) {
+    fail(`El endpoint runtime no coincide con la identidad atestada de ${label}.`);
+  }
+  return runtime;
+}
+
+function assertDestinationIsolated(sourceIdentity, targetIdentity) {
+  const source = validateInstanceIdentity(sourceIdentity, 'sourceInstance');
+  const target = validateInstanceIdentity(targetIdentity, 'targetInstance');
+  if (source.endpointFingerprintSha256 === target.endpointFingerprintSha256) {
+    fail('Destino rechazado: comparte host/puerto normalizado con Produccion.');
+  }
+  if (source.provider === target.provider && source.instanceId === target.instanceId) {
+    fail('Destino rechazado: comparte identidad de instancia con Produccion.');
+  }
+  return true;
 }
 
 function expectedConfirmation(action, id, database) {
@@ -240,11 +322,31 @@ function normalizeIndexes(indexes = []) {
       key: index.key,
       unique: index.unique === true,
       sparse: index.sparse === true,
+      hidden: index.hidden === true,
       ...(index.expireAfterSeconds == null ? {} : { expireAfterSeconds: index.expireAfterSeconds }),
       ...(index.partialFilterExpression == null
         ? {}
-        : { partialFilterExpression: index.partialFilterExpression }),
-      ...(index.collation == null ? {} : { collation: index.collation }),
+        : { partialFilterExpression: canonicalize(index.partialFilterExpression) }),
+      ...(index.collation == null ? {} : { collation: canonicalize(index.collation) }),
+      ...(index.wildcardProjection == null
+        ? {}
+        : { wildcardProjection: canonicalize(index.wildcardProjection) }),
+      ...(index.weights == null ? {} : { weights: canonicalize(index.weights) }),
+      ...Object.fromEntries(
+        [
+          'default_language',
+          'language_override',
+          'textIndexVersion',
+          '2dsphereIndexVersion',
+          'bits',
+          'min',
+          'max',
+          'bucketSize',
+          'storageEngine',
+        ]
+          .filter((key) => index[key] != null)
+          .map((key) => [key, canonicalize(index[key])]),
+      ),
     }))
     .sort((left, right) => String(left.name).localeCompare(String(right.name)));
 }
@@ -346,6 +448,24 @@ function compareInventories(sourceRaw, targetRaw) {
   };
 }
 
+function summarizeSeedResolution(sowings, resolvedSeedDocuments) {
+  const missingSeedReferences = sowings.filter((sowing) => sowing?.idSemilla == null).length;
+  const referenced = new Map();
+  for (const sowing of sowings) {
+    if (sowing?.idSemilla != null) referenced.set(String(sowing.idSemilla), sowing.idSemilla);
+  }
+  const resolved = new Set(
+    resolvedSeedDocuments.filter((seed) => seed?._id != null).map((seed) => String(seed._id)),
+  );
+  const unresolvedSeedIds = [...referenced.keys()].filter((id) => !resolved.has(id));
+  return {
+    referencedUniqueSeeds: referenced.size,
+    resolvedUniqueSeeds: [...referenced.keys()].filter((id) => resolved.has(id)).length,
+    missingSeedReferences,
+    unresolvedUniqueSeeds: unresolvedSeedIds.length,
+  };
+}
+
 function assertNoSecrets(value, trail = 'manifest') {
   if (Array.isArray(value)) return value.forEach((item, index) => assertNoSecrets(item, `${trail}[${index}]`));
   if (value && typeof value === 'object') {
@@ -374,6 +494,7 @@ function buildBackupManifest({ attestation, inventory, archivePath, inventoryPat
     drillId: source.id,
     database: source.database,
     sourceEnvironment: 'production',
+    sourceInstance: source.instanceIdentity,
     consistency: {
       method: 'application-write-freeze',
       attestationId: source.id,
@@ -412,6 +533,7 @@ function validateBackupManifest(manifest, backupDir) {
       'drillId',
       'database',
       'sourceEnvironment',
+      'sourceInstance',
       'consistency',
       'createdAt',
       'gitSha',
@@ -429,6 +551,7 @@ function validateBackupManifest(manifest, backupDir) {
   requiredText(manifest.drillId, 'drillId');
   validateDatabaseName(manifest.database);
   if (manifest.sourceEnvironment !== 'production') fail('El manifiesto no identifica production como origen.');
+  validateInstanceIdentity(manifest.sourceInstance, 'sourceInstance');
   if (!/^[0-9a-f]{40}$/i.test(manifest.gitSha || '')) fail('gitSha del manifiesto es invalido.');
   const createdAt = validDate(manifest.createdAt, 'createdAt');
   assertPlainObject(manifest.consistency, 'consistency');
@@ -494,11 +617,14 @@ module.exports = {
   SOURCE_ATTESTATION_KIND,
   TARGET_ATTESTATION_KIND,
   assertCompatibleMongoVersions,
+  assertDestinationIsolated,
   assertNoSecrets,
+  assertRuntimeIdentity,
   buildBackupManifest,
   compareInventories,
   databaseFromMongoUri,
   expectedConfirmation,
+  mongoEndpointFingerprint,
   normalizeInventory,
   readJson,
   redact,
@@ -506,6 +632,7 @@ module.exports = {
   safeArtifactDirectory,
   sha256File,
   sha256Json,
+  summarizeSeedResolution,
   validateBackupManifest,
   validateSourceAttestation,
   validateTargetAttestation,

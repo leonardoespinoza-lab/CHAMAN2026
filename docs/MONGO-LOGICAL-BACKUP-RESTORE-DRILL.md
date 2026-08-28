@@ -19,7 +19,10 @@ gateways, MQTT, Redis ni configuraciones de sensores.
 ## Garantias fail-closed
 
 - La URI de origen y destino se recibe solo por variables de entorno y se
-  redacta de errores. No aparece en manifiestos.
+  redacta de errores. No aparece en manifiestos ni en los argumentos de procesos
+  hijos. Database Tools la lee desde un YAML temporal restringido; `mongosh`
+  desde un archivo temporal restringido. Ambos se sobrescriben y eliminan en
+  `finally`.
 - La URI debe contener el nombre explicito de la base y coincidir con la
   atestacion.
 - El origen exige `sourceEnvironment=production`, cinco controles de escritura
@@ -27,6 +30,9 @@ gateways, MQTT, Redis ni configuraciones de sensores.
 - El destino exige una instancia dedicada y descartable, sin trafico productivo
   ni integraciones externas. Su base debe comenzar con
   `chaman_restore_drill_`.
+- Origen y destino atestan proveedor, ID de instancia y SHA-256 del endpoint
+  normalizado. Restore y cleanup abortan si comparten host/puerto o identidad de
+  instancia, aunque la base destino tenga el prefijo correcto.
 - Cada accion que escribe exige una frase exacta distinta en una variable de
   entorno.
 - No se sobreescriben archives, recibos ni evidencias existentes.
@@ -59,12 +65,30 @@ tratarse como informacion confidencial.
 6. Dos personas identificadas en las atestaciones: operador y aprobador. Los
    archivos de ejemplo estan en `deploy/recovery/` y nunca deben contener URI,
    usuario o contraseña.
+7. MongoDB Database Tools 100.3 o superior, porque `--config` con `uri` fue
+   incorporado en esa version. Referencia oficial:
+   https://www.mongodb.com/docs/database-tools/mongodump/#std-option-mongodump.--config
 
 ## 1. Plan y preflight offline
 
 Copiar las plantillas fuera del repo, completar fechas UTC reales y usar el mismo
-`attestationId`/`drillId`. La atestacion de origen solo se completa despues de
-congelar escrituras.
+`attestationId`/`drillId`. Antes de firmarlas, calcular los fingerprints sin
+conectar a MongoDB:
+
+```powershell
+$env:CHAMAN_MONGO_SOURCE_URI = '<URI productiva con /chaman>'
+npm run mongo:recovery -- fingerprint --side=source
+Remove-Item Env:CHAMAN_MONGO_SOURCE_URI
+
+$env:CHAMAN_MONGO_RESTORE_URI = '<URI aislada con /chaman_restore_drill_yyyymmdd_hhmm>'
+npm run mongo:recovery -- fingerprint --side=target
+Remove-Item Env:CHAMAN_MONGO_RESTORE_URI
+```
+
+Copiar cada `endpointFingerprintSha256` a su atestacion y registrar un
+`instanceId` verificable de la plataforma. Los dos IDs y fingerprints deben ser
+distintos. Una base de recovery creada en el host productivo es invalida. La
+atestacion de origen solo se completa despues de congelar escrituras.
 
 El plan valida el contrato sin buscar herramientas ni conectar:
 
@@ -118,6 +142,10 @@ El directorio debe ser nuevo. Contendra:
 - `source-inventory.json` con nombres, conteos e indices, nunca documentos;
 - `manifest.json` con SHA-256, versiones y datos de consistencia, sin secretos.
 
+Si una fase falla despues de crear su directorio, queda un
+`<fase>-failure-receipt.json` con hash del error y lista cerrada de artefactos
+parciales. Esos artefactos no se consideran recuperables ni se reutilizan.
+
 Verificar nuevamente sin conexion:
 
 ```powershell
@@ -162,7 +190,8 @@ Remove-Item Env:CHAMAN_RESTORE_CONFIRM
 ```
 
 No se usa `--drop`: el destino debe estar vacio. El archive se remapea de la base
-original a la base con prefijo de recovery. El recibo queda como
+original a la base con prefijo de recovery. Se guardan inventarios antes y justo
+despues del restore; una diferencia impide crear un recibo exitoso. El recibo queda como
 `restored-unverified`; todavia no habilita una promocion.
 
 ## 5. Verificar restauracion y agronomia
@@ -185,6 +214,8 @@ La evidencia `verification.json` solo queda en `passed` cuando:
 - los indices normalizados coinciden;
 - el major de MongoDB coincide;
 - no faltan siembras ni semillas para lotes activos;
+- las semillas se comparan por IDs unicos: varias siembras pueden compartir la
+  misma variedad sin producir falsos faltantes;
 - no aparecen claves duplicadas de prediccion.
 
 Tambien se ejecuta la auditoria general de integridad de lotes. Sus hallazgos
@@ -207,6 +238,7 @@ $env:CHAMAN_CLEANUP_CONFIRM = 'cleanup:backup_yyyymmdd_hhmm:chaman_restore_drill
 
 npm run mongo:recovery -- cleanup `
   --attestation=D:\ChamanRecovery\target.json `
+  --manifest=D:\ChamanRecovery\backup_yyyymmdd_hhmm\manifest.json `
   --output-dir=D:\ChamanRecovery\drill_yyyymmdd_hhmm
 
 Remove-Item Env:CHAMAN_CLEANUP_CONFIRM

@@ -19,6 +19,15 @@ function fakeDb(databaseName = 'chaman_testing') {
       },
     },
     usuarios: {
+      find(filter) {
+        calls.push({ collection: 'usuarios', operation: 'find', filter });
+        return {
+          project(projection) {
+            calls.push({ collection: 'usuarios', operation: 'project', projection });
+            return { async toArray() { return [{ _id: 'user-1' }, { _id: 'user-2' }]; } };
+          },
+        };
+      },
       async deleteMany(filter) {
         calls.push({ collection: 'usuarios', operation: 'deleteMany', filter });
         return { deletedCount: 8 };
@@ -38,21 +47,25 @@ function fakeDb(databaseName = 'chaman_testing') {
   };
 }
 
-test('cleanup revoca primero tokens temporales, luego usuarios, y verifica residuo cero', async () => {
+test('cleanup revoca tokens por username y user._id legacy antes de usuarios, y verifica residuo cero', async () => {
   const db = fakeDb();
   const result = await cleanupTestingReleaseUsers(db);
   assert.deepEqual(result, {
     removedTokens: 14,
     removedUsers: 8,
+    matchedTemporaryUserIds: 2,
     remainingTokens: 0,
     remainingUsers: 0,
   });
   assert.deepEqual(
-    db.calls.slice(0, 2).map(({ collection, operation }) => `${collection}:${operation}`),
+    db.calls.filter(({ operation }) => operation === 'deleteMany').map(({ collection, operation }) => `${collection}:${operation}`),
     ['tokens:deleteMany', 'usuarios:deleteMany'],
   );
-  assert.equal(db.calls[0].filter['user.username'].$regex, `^${PREFIX}`);
-  assert.equal(db.calls[1].filter.username.$regex, `^${PREFIX}`);
+  const tokenDelete = db.calls.find((call) => call.collection === 'tokens' && call.operation === 'deleteMany');
+  const userDelete = db.calls.find((call) => call.collection === 'usuarios' && call.operation === 'deleteMany');
+  assert.equal(tokenDelete.filter.$or[0]['user.username'].$regex, `^${PREFIX}`);
+  assert.deepEqual(tokenDelete.filter.$or[1]['user._id'].$in, ['user-1', 'user-2']);
+  assert.equal(userDelete.filter.username.$regex, `^${PREFIX}`);
 });
 
 test('cleanup rechaza cualquier base que no sea chaman_testing antes de tocar colecciones', async () => {

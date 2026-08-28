@@ -1,9 +1,11 @@
-const uri = process.env.CHAMAN_RECOVERY_URI;
+const fs = require('fs');
+const uriFile = process.env.CHAMAN_RECOVERY_URI_FILE;
 const databaseName = process.env.CHAMAN_RECOVERY_DATABASE;
 const drillId = process.env.CHAMAN_RECOVERY_DRILL_ID;
 const confirmation = process.env.CHAMAN_RECOVERY_DROP_CONFIRM;
 
-if (!uri || !databaseName || !drillId || !confirmation) throw new Error('Faltan variables internas de cleanup.');
+if (!uriFile || !databaseName || !drillId || !confirmation) throw new Error('Faltan variables internas de cleanup.');
+const uri = fs.readFileSync(uriFile, 'utf8');
 if (!databaseName.startsWith('chaman_restore_drill_')) throw new Error('Destino no descartable.');
 if (confirmation !== `cleanup:${drillId}:${databaseName}`) throw new Error('Confirmacion interna invalida.');
 

@@ -13,5 +13,10 @@
   "expiresAt": "REPLACE_WITH_ISO_8601_UTC_MAX_48_HOURS",
   "operator": "REPLACE_WITH_OPERATOR",
   "approvedBy": "REPLACE_WITH_APPROVER",
-  "changeTicket": "REPLACE_WITH_CHANGE_TICKET"
+  "changeTicket": "REPLACE_WITH_CHANGE_TICKET",
+  "instanceIdentity": {
+    "provider": "REPLACE_WITH_PROVIDER",
+    "instanceId": "REPLACE_WITH_DISTINCT_DISPOSABLE_INSTANCE_ID",
+    "endpointFingerprintSha256": "REPLACE_WITH_64_HEX_FROM_FINGERPRINT_COMMAND"
+  }
 }

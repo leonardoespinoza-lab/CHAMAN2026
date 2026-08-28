@@ -6,17 +6,39 @@ const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 const {
   assertNoSecrets,
+  assertDestinationIsolated,
+  assertRuntimeIdentity,
   buildBackupManifest,
   compareInventories,
   databaseFromMongoUri,
   expectedConfirmation,
+  mongoEndpointFingerprint,
   safeArtifactDirectory,
+  summarizeSeedResolution,
   validateBackupManifest,
   validateSourceAttestation,
   validateTargetAttestation,
 } = require('../mongo-recovery/lib');
+const {
+  assertMongoToolsConfigVersion,
+  buildMongodumpArgs,
+  buildMongorestoreArgs,
+  buildMongoshArgs,
+  hardenSecretFile,
+  withMongoSecretFile,
+} = require('../mongo-recovery/secure-config');
 
 const NOW = new Date('2026-08-28T18:00:00.000Z');
+const SOURCE_URI = 'mongodb://prod.example.invalid:27017/chaman';
+const TARGET_URI = 'mongodb://restore.example.invalid:27018/chaman_restore_drill_20260828_1800';
+
+function identity(provider, instanceId, uri) {
+  return {
+    provider,
+    instanceId,
+    endpointFingerprintSha256: mongoEndpointFingerprint(uri).endpointFingerprintSha256,
+  };
+}
 
 function sourceAttestation(overrides = {}) {
   return {
@@ -39,6 +61,7 @@ function sourceAttestation(overrides = {}) {
     operator: 'operador-a',
     approvedBy: 'responsable-b',
     changeTicket: 'CHAMAN-RECOVERY-2026-08-28',
+    instanceIdentity: identity('railway', 'project/env/mongo-production', SOURCE_URI),
     ...overrides,
   };
 }
@@ -60,6 +83,7 @@ function targetAttestation(overrides = {}) {
     operator: 'operador-a',
     approvedBy: 'responsable-b',
     changeTicket: 'CHAMAN-RECOVERY-2026-08-28',
+    instanceIdentity: identity('docker', 'container/restore-drill-20260828', TARGET_URI),
     ...overrides,
   };
 }
@@ -145,6 +169,136 @@ test('URI debe fijar base y nunca se confunde confirmacion de dump, restore y cl
   );
 });
 
+test('fingerprint normaliza host, puerto y orden, pero distingue Produccion de restore', () => {
+  const first = mongoEndpointFingerprint('mongodb://B.example.invalid,a.example.invalid.:27017/chaman');
+  const normalized = mongoEndpointFingerprint('mongodb://a.example.invalid:27017,b.example.invalid:27017/otra');
+  assert.equal(first.endpointFingerprintSha256, normalized.endpointFingerprintSha256);
+  assert.notEqual(first.endpointFingerprintSha256, mongoEndpointFingerprint(TARGET_URI).endpointFingerprintSha256);
+});
+
+test('fingerprint CLI no conecta ni imprime host, usuario o URI', () => {
+  const result = spawnSync(
+    process.execPath,
+    [path.join(process.cwd(), 'scripts', 'mongo-recovery.js'), 'fingerprint', '--side=source'],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { ...process.env, CHAMAN_MONGO_SOURCE_URI: SOURCE_URI },
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.includes('prod.example.invalid'), false);
+  assert.equal(result.stdout.includes('mongodb://'), false);
+  assert.match(JSON.parse(result.stdout).endpointFingerprintSha256, /^[0-9a-f]{64}$/);
+});
+
+test('identidad runtime debe coincidir y destino nunca puede compartir endpoint o instancia productiva', () => {
+  const source = sourceAttestation().instanceIdentity;
+  const target = targetAttestation().instanceIdentity;
+  assert.doesNotThrow(() => assertRuntimeIdentity(SOURCE_URI, source, 'origen'));
+  assert.doesNotThrow(() => assertDestinationIsolated(source, target));
+  assert.throws(
+    () =>
+      assertDestinationIsolated(source, {
+        ...target,
+        endpointFingerprintSha256: source.endpointFingerprintSha256,
+      }),
+    /comparte host\/puerto/,
+  );
+  assert.throws(
+    () =>
+      assertDestinationIsolated(source, {
+        ...target,
+        provider: source.provider,
+        instanceId: source.instanceId,
+      }),
+    /comparte identidad/,
+  );
+});
+
+test('spawn args nunca contienen URI y usan config/archivo de script', () => {
+  const dumpArgs = buildMongodumpArgs('C:\\secure\\mongo.yml', 'chaman', 'D:\\backup.archive.gz');
+  const restoreArgs = buildMongorestoreArgs(
+    'C:\\secure\\mongo.yml',
+    'D:\\backup.archive.gz',
+    'chaman',
+    'chaman_restore_drill_x',
+  );
+  const shellArgs = buildMongoshArgs('C:\\safe\\inventory.mongosh.js');
+  for (const args of [dumpArgs, restoreArgs, shellArgs]) {
+    assert.equal(args.some((arg) => /mongodb(?:\+srv)?:\/\//i.test(arg)), false);
+    assert.equal(args.some((arg) => arg === '--uri' || arg.startsWith('--uri=')), false);
+  }
+  assert.ok(dumpArgs.some((arg) => arg.startsWith('--config=')));
+  assert.ok(restoreArgs.some((arg) => arg.startsWith('--config=')));
+  assert.deepEqual(assertMongoToolsConfigVersion('mongodump version: 100.12.2'), {
+    major: 100,
+    minor: 12,
+    patch: 2,
+  });
+  assert.throws(() => assertMongoToolsConfigVersion('mongodump version: 100.2.1'), /100.3/);
+});
+
+test('archivo secreto temporal se restringe y elimina incluso si el callback falla', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-secret-test-'));
+  let capturedPath;
+  try {
+    assert.throws(
+      () =>
+        withMongoSecretFile(
+          SOURCE_URI,
+          'tools-yaml',
+          (filePath) => {
+            capturedPath = filePath;
+            assert.match(fs.readFileSync(filePath, 'utf8'), /^uri: /);
+            throw new Error('fallo simulado');
+          },
+          { tmpRoot: directory, harden: (filePath) => fs.chmodSync(filePath, 0o600) },
+        ),
+      /fallo simulado/,
+    );
+    assert.equal(fs.existsSync(capturedPath), false);
+    assert.deepEqual(fs.readdirSync(directory), []);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('hardening Windows elimina herencia y concede solo al SID actual', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-acl-test-'));
+  const filePath = path.join(directory, 'secret.yml');
+  const calls = [];
+  try {
+    fs.writeFileSync(filePath, 'secret');
+    hardenSecretFile(filePath, {
+      platform: 'win32',
+      spawn(program, args) {
+        calls.push({ program, args });
+        if (program === 'whoami') {
+          return { status: 0, stdout: '"DOMAIN\\operator","S-1-5-21-123-456-789-1001"\r\n', stderr: '' };
+        }
+        return { status: 0, stdout: 'processed', stderr: '' };
+      },
+    });
+    const acl = calls.find((call) => call.program === 'icacls');
+    assert.ok(acl.args.includes('/inheritance:r'));
+    assert.ok(acl.args.includes('*S-1-5-21-123-456-789-1001:(R,W)'));
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('auditoria de semillas compara IDs unicos y acepta 51 siembras que comparten 30 variedades', () => {
+  const sowings = Array.from({ length: 51 }, (_, index) => ({ idSemilla: `seed-${index % 30}` }));
+  const seeds = Array.from({ length: 30 }, (_, index) => ({ _id: `seed-${index}` }));
+  assert.deepEqual(summarizeSeedResolution(sowings, seeds), {
+    referencedUniqueSeeds: 30,
+    resolvedUniqueSeeds: 30,
+    missingSeedReferences: 0,
+    unresolvedUniqueSeeds: 0,
+  });
+});
+
 test('manifiesto se sella con checksums y detecta cualquier manipulacion', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-mongo-recovery-'));
   try {
@@ -182,6 +336,10 @@ test('comparacion exige mismas colecciones, conteos, indices y major de MongoDB'
   const wrongOptions = inventory('chaman_restore_drill_20260828_1800');
   wrongOptions.collections[0].options.validationAction = 'warn';
   assert.equal(compareInventories(inventory(), wrongOptions).findings[0].issue, 'options_mismatch');
+  const wrongIndex = inventory('chaman_restore_drill_20260828_1800');
+  wrongIndex.collections[0].indexes[1].hidden = true;
+  wrongIndex.collections[0].indexes[1].wildcardProjection = { secretField: 0 };
+  assert.equal(compareInventories(inventory(), wrongIndex).findings[0].issue, 'indexes_mismatch');
   const wrongVersion = inventory('chaman_restore_drill_20260828_1800');
   wrongVersion.serverVersion = '7.0.18';
   assert.throws(() => compareInventories(inventory(), wrongVersion), /incompatibles/);
@@ -223,6 +381,45 @@ test('plan CLI es offline: valida gobierno sin URI ni conexion', () => {
     const plan = JSON.parse(result.stdout);
     assert.equal(plan.connectsToMongo, false);
     assert.equal(plan.mutatesMongo, false);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('fallo posterior a crear output-dir deja recibo sin secretos y no conecta', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-mongo-failure-'));
+  try {
+    const attestationPath = path.join(directory, 'attestation.json');
+    const outputDir = path.join(directory, 'backup-failed');
+    const dynamic = sourceAttestation({
+      frozenAt: new Date(Date.now() - 60_000).toISOString(),
+      verifiedAt: new Date(Date.now() - 30_000).toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+    });
+    fs.writeFileSync(attestationPath, JSON.stringify(dynamic));
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(process.cwd(), 'scripts', 'mongo-recovery.js'),
+        'dump',
+        `--attestation=${attestationPath}`,
+        `--output-dir=${outputDir}`,
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          CHAMAN_MONGO_SOURCE_URI: SOURCE_URI,
+          CHAMAN_BACKUP_CONFIRM: `dump:${dynamic.attestationId}:${dynamic.database}`,
+          CHAMAN_MONGOSH_BIN: 'definitely-missing-mongosh-for-test',
+        },
+      },
+    );
+    assert.notEqual(result.status, 0);
+    const receipt = fs.readFileSync(path.join(outputDir, 'dump-failure-receipt.json'), 'utf8');
+    assert.equal(receipt.includes(SOURCE_URI), false);
+    assert.equal(JSON.parse(receipt).status, 'failed');
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

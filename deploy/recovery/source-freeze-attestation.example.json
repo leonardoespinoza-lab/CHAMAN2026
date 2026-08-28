@@ -17,5 +17,10 @@
   "expiresAt": "REPLACE_WITH_ISO_8601_UTC_MAX_TWO_HOURS_AFTER_FREEZE",
   "operator": "REPLACE_WITH_OPERATOR",
   "approvedBy": "REPLACE_WITH_APPROVER",
-  "changeTicket": "REPLACE_WITH_CHANGE_TICKET"
+  "changeTicket": "REPLACE_WITH_CHANGE_TICKET",
+  "instanceIdentity": {
+    "provider": "railway",
+    "instanceId": "REPLACE_WITH_PROJECT_ENVIRONMENT_SERVICE_ID",
+    "endpointFingerprintSha256": "REPLACE_WITH_64_HEX_FROM_FINGERPRINT_COMMAND"
+  }
 }

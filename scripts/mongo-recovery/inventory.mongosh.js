@@ -1,7 +1,9 @@
-const uri = process.env.CHAMAN_RECOVERY_URI;
+const fs = require('fs');
+const uriFile = process.env.CHAMAN_RECOVERY_URI_FILE;
 const databaseName = process.env.CHAMAN_RECOVERY_DATABASE;
 
-if (!uri || !databaseName) throw new Error('Faltan variables internas del inventario.');
+if (!uriFile || !databaseName) throw new Error('Faltan variables internas del inventario.');
+const uri = fs.readFileSync(uriFile, 'utf8');
 
 const connection = new Mongo(uri);
 const database = connection.getDB(databaseName);
@@ -31,11 +33,29 @@ const collections = database
           key: index.key,
           unique: index.unique === true,
           sparse: index.sparse === true,
+          hidden: index.hidden === true,
           ...(index.expireAfterSeconds == null ? {} : { expireAfterSeconds: index.expireAfterSeconds }),
           ...(index.partialFilterExpression == null
             ? {}
             : { partialFilterExpression: index.partialFilterExpression }),
           ...(index.collation == null ? {} : { collation: index.collation }),
+          ...(index.wildcardProjection == null ? {} : { wildcardProjection: index.wildcardProjection }),
+          ...(index.weights == null ? {} : { weights: index.weights }),
+          ...Object.fromEntries(
+            [
+              'default_language',
+              'language_override',
+              'textIndexVersion',
+              '2dsphereIndexVersion',
+              'bits',
+              'min',
+              'max',
+              'bucketSize',
+              'storageEngine',
+            ]
+              .filter((key) => index[key] != null)
+              .map((key) => [key, index[key]]),
+          ),
         })),
     };
   });
