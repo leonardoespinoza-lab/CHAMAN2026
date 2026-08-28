@@ -357,22 +357,64 @@ function safeArtifactDirectory(outputDir, repositoryRoot, { mustNotExist = false
   return resolved;
 }
 
+function normalizedIndex(index, position) {
+  assertPlainObject(index, `El indice ${position}`);
+  const label = `El indice ${position}`;
+  const isAlreadyNormalized =
+    Array.isArray(index.key) ||
+    Object.hasOwn(index, 'options') ||
+    Object.hasOwn(index, 'semanticSha256');
+
+  if (isAlreadyNormalized) {
+    assertExactKeys(index, ['name', 'key', 'options', 'semanticSha256'], label);
+    const name = requiredText(index.name, `${label}.name`);
+    if (!Array.isArray(index.key) || index.key.length === 0) {
+      fail(`${label}.key normalizado debe ser una lista no vacia.`);
+    }
+    const seenFields = new Set();
+    const key = index.key.map((entry, entryPosition) => {
+      if (!Array.isArray(entry) || entry.length !== 2) {
+        fail(`${label}.key[${entryPosition}] debe contener exactamente campo y direccion.`);
+      }
+      const field = requiredText(entry[0], `${label}.key[${entryPosition}].field`);
+      if (seenFields.has(field)) fail(`${label}.key contiene el campo duplicado ${field}.`);
+      seenFields.add(field);
+      return [field, canonicalize(entry[1])];
+    });
+    assertPlainObject(index.options, `${label}.options`);
+    const normalized = { name, key, options: canonicalize(index.options) };
+    const semanticSha256 = sha256Text(JSON.stringify(normalized));
+    if (
+      !/^[0-9a-f]{64}$/i.test(index.semanticSha256 || '') ||
+      index.semanticSha256.toLowerCase() !== semanticSha256
+    ) {
+      fail(`${label} tiene un hash semantico invalido.`);
+    }
+    return { ...normalized, semanticSha256 };
+  }
+
+  const semantic = Object.fromEntries(
+    Object.entries(index).filter(([key]) => !['v', 'ns'].includes(key)),
+  );
+  const name = requiredText(semantic.name, `${label}.name`);
+  assertPlainObject(semantic.key, `${label}.key`);
+  const key = Object.entries(semantic.key).map(([field, direction]) => [field, canonicalize(direction)]);
+  if (key.length === 0) fail(`${label}.key debe contener al menos un campo.`);
+  const normalized = {
+    name,
+    key,
+    options: canonicalize(Object.fromEntries(
+      Object.entries(semantic).filter(([keyName]) => !['name', 'key'].includes(keyName)),
+    )),
+  };
+  return { ...normalized, semanticSha256: sha256Text(JSON.stringify(normalized)) };
+}
+
 function normalizeIndexes(indexes = []) {
+  if (!Array.isArray(indexes)) fail('collection.indexes debe ser una lista JSON.');
   return indexes
-    .map((index) => {
-      const semantic = Object.fromEntries(
-        Object.entries(index).filter(([key]) => !['v', 'ns'].includes(key)),
-      );
-      const normalized = {
-        name: semantic.name,
-        key: Object.entries(semantic.key || {}).map(([field, direction]) => [field, canonicalize(direction)]),
-        options: canonicalize(Object.fromEntries(
-          Object.entries(semantic).filter(([key]) => !['name', 'key'].includes(key)),
-        )),
-      };
-      return { ...normalized, semanticSha256: sha256Text(JSON.stringify(normalized)) };
-    })
-    .sort((left, right) => String(left.name).localeCompare(String(right.name)));
+    .map((index, position) => normalizedIndex(index, position))
+    .sort((left, right) => left.name.localeCompare(right.name));
 }
 
 function canonicalize(value) {

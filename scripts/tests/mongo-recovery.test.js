@@ -16,6 +16,7 @@ const {
   databaseFromMongoUri,
   expectedConfirmation,
   mongoEndpointFingerprint,
+  normalizeInventory,
   safeArtifactDirectory,
   summarizeSeedResolution,
   validateBackupManifest,
@@ -943,6 +944,30 @@ test('comparacion exige mismas colecciones, conteos, indices y major de MongoDB'
   const reversedCompound = inventory('chaman_restore_drill_20260828_1800');
   reversedCompound.collections[0].indexes[1].key = { nombre: 1, idProductor: 1 };
   assert.equal(compareInventories(inventory(), reversedCompound).ok, false);
+});
+
+test('comparacion es idempotente para inventario normalizado sin relajar options ni orden de indices', () => {
+  const source = normalizeInventory(inventory());
+  const restored = inventory('chaman_restore_drill_20260828_1800');
+
+  assert.deepEqual(normalizeInventory(source), source);
+  assert.equal(compareInventories(source, restored).ok, true);
+
+  const wrongCollectionOptions = inventory('chaman_restore_drill_20260828_1800');
+  wrongCollectionOptions.collections[0].options.validationAction = 'warn';
+  assert.equal(compareInventories(source, wrongCollectionOptions).findings[0].issue, 'options_mismatch');
+
+  const wrongIndexOptions = inventory('chaman_restore_drill_20260828_1800');
+  wrongIndexOptions.collections[0].indexes[1].unique = false;
+  assert.equal(compareInventories(source, wrongIndexOptions).findings[0].issue, 'indexes_mismatch');
+
+  const reversedCompound = inventory('chaman_restore_drill_20260828_1800');
+  reversedCompound.collections[0].indexes[1].key = { nombre: 1, idProductor: 1 };
+  assert.equal(compareInventories(source, reversedCompound).findings[0].issue, 'indexes_mismatch');
+
+  const tamperedNormalized = structuredClone(source);
+  tamperedNormalized.collections[0].indexes[1].options.unique = false;
+  assert.throws(() => compareInventories(tamperedNormalized, restored), /hash semantico invalido/);
 });
 
 test('manifiestos rechazan campos y valores que puedan filtrar secretos', () => {
