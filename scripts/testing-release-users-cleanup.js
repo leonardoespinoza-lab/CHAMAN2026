@@ -6,6 +6,12 @@ function prefixFilter() {
   return { $regex: `^${PREFIX}` };
 }
 
+function assertOneJournalMutation(result, action) {
+  if (result?.matchedCount !== 1 || result?.modifiedCount !== 1) {
+    throw new Error(`Journal ${action} no modifico exactamente un documento.`);
+  }
+}
+
 async function cleanupTestingReleaseUsers(db) {
   if (!db || db.databaseName !== DB_NAME) {
     throw new Error('Cleanup rechazado: solo puede operar en chaman_testing.');
@@ -19,10 +25,11 @@ async function cleanupTestingReleaseUsers(db) {
     .toArray();
   const userIds = temporaryUsers.map((user) => user._id).filter((id) => id != null);
   const cleanupId = crypto.randomUUID();
-  await journals.insertOne({
+  const planned = await journals.insertOne({
     cleanupId, kind: 'testing-release-users-cleanup', status: 'planned',
     usernamePrefix: PREFIX, userIds: userIds.map(String), createdAt: new Date(),
   });
+  if (planned?.acknowledged !== true) throw new Error('No se pudo crear el journal previo al cleanup.');
   const tokenFilter = {
     $or: [
       { 'user.username': prefixFilter() },
@@ -33,23 +40,22 @@ async function cleanupTestingReleaseUsers(db) {
   let userResult;
   try {
     tokenResult = await tokens.deleteMany(tokenFilter);
-    userResult = await users.deleteMany({ username: prefixFilter() });
-  const [remainingTokens, remainingUsers] = await Promise.all([
-    tokens.countDocuments(tokenFilter),
-    users.countDocuments({ username: prefixFilter() }),
-  ]);
+    const userFilter = { $or: [{ username: prefixFilter() }, { _id: { $in: userIds } }] };
+    userResult = await users.deleteMany(userFilter);
+    const [remainingTokens, remainingUsers] = await Promise.all([
+      tokens.countDocuments(tokenFilter),
+      users.countDocuments(userFilter),
+    ]);
     if (remainingTokens !== 0 || remainingUsers !== 0) {
-    throw new Error(
-      `Cleanup incompleto: quedan ${remainingTokens} token(s) y ${remainingUsers} usuario(s) temporales.`,
-    );
+      throw new Error(
+        `Cleanup incompleto: quedan ${remainingTokens} token(s) y ${remainingUsers} usuario(s) temporales.`,
+      );
     }
     const journalResult = await journals.updateOne({ cleanupId, status: 'planned' }, { $set: {
       status: 'completed', completedAt: new Date(), removedTokens: Number(tokenResult.deletedCount || 0),
       removedUsers: Number(userResult.deletedCount || 0), remainingTokens, remainingUsers,
     } });
-    if (journalResult.matchedCount !== 1 || journalResult.modifiedCount !== 1) {
-      throw new Error('No se pudo sellar exactamente un journal de cleanup.');
-    }
+    assertOneJournalMutation(journalResult, 'completed');
     return {
       cleanupId,
       removedTokens: Number(tokenResult.deletedCount || 0),
@@ -59,12 +65,19 @@ async function cleanupTestingReleaseUsers(db) {
       remainingUsers,
     };
   } catch (error) {
-    await journals.updateOne({ cleanupId, status: 'planned' }, { $set: {
-      status: 'failed', failedAt: new Date(),
-      errorSha256: crypto.createHash('sha256').update(error.message).digest('hex'),
-    } }).catch(() => {});
+    let journalError;
+    try {
+      const failedResult = await journals.updateOne({ cleanupId, status: 'planned' }, { $set: {
+        status: 'failed', failedAt: new Date(),
+        errorSha256: crypto.createHash('sha256').update(error.message).digest('hex'),
+      } });
+      assertOneJournalMutation(failedResult, 'failed');
+    } catch (failure) {
+      journalError = failure;
+    }
+    if (journalError) throw new AggregateError([error, journalError], 'Cleanup fallo y el journal no pudo sellarse.');
     throw error;
   }
 }
 
-module.exports = { DB_NAME, PREFIX, cleanupTestingReleaseUsers, prefixFilter };
+module.exports = { DB_NAME, PREFIX, assertOneJournalMutation, cleanupTestingReleaseUsers, prefixFilter };

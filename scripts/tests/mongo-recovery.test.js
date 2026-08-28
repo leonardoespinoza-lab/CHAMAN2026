@@ -5,6 +5,8 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 const {
+  PRODUCTION_MODE,
+  TESTING_LOCAL_MODE,
   assertNoSecrets,
   assertDestinationIsolated,
   assertRuntimeIdentity,
@@ -20,6 +22,7 @@ const {
   validateTargetAttestation,
 } = require('../mongo-recovery/lib');
 const {
+  assertNoMongoUriEnvironment,
   assertMongoToolsConfigVersion,
   buildMongodumpArgs,
   buildMongorestoreArgs,
@@ -31,7 +34,22 @@ const {
   verifyRestrictedFile,
   withMongoSecretFile,
 } = require('../mongo-recovery/secure-config');
-const { bindAttestationToEvidence, validateInfrastructureEvidence } = require('../mongo-recovery/infrastructure-evidence');
+const {
+  bindAttestationToEvidence,
+  deriveRailwayAsset,
+  validateInfrastructureEvidence,
+} = require('../mongo-recovery/infrastructure-evidence');
+const {
+  buildRuntimeProof,
+  hashDbPath,
+  validateRuntimeProof,
+} = require('../mongo-recovery/runtime-proof');
+const { collectRailwayEvidence } = require('../mongo-recovery/railway-collector');
+const {
+  assertCleanupReceiptBindings,
+  assertDropConfirmed,
+  assertSameRuntimeForCleanup,
+} = require('../mongo-recovery');
 
 const NOW = new Date('2026-08-28T18:00:00.000Z');
 const SOURCE_URI = 'mongodb://prod.example.invalid:27017/chaman';
@@ -39,6 +57,8 @@ const TARGET_URI = 'mongodb://restore.example.invalid:27018/chaman_restore_drill
 const EVIDENCE_HASH = 'a'.repeat(64);
 const SOURCE_SERVICE = '11111111-1111-4111-8111-111111111111';
 const TARGET_SERVICE = '22222222-2222-4222-8222-222222222222';
+const LOCAL_URI = 'mongodb://127.0.0.1:27019/chaman_restore_drill_20260828_1800?replicaSet=chamanDrill';
+const TESTING_SOURCE_URI = 'mongodb://testing.example.invalid:27017/chaman_testing';
 
 function identity(provider, instanceId, uri) {
   return {
@@ -53,6 +73,7 @@ function sourceAttestation(overrides = {}) {
     schemaVersion: 1,
     kind: 'chaman-mongo-write-freeze-attestation',
     attestationId: 'backup_20260828_1800',
+    drillMode: PRODUCTION_MODE,
     sourceEnvironment: 'production',
     database: 'chaman',
     writesFrozen: true,
@@ -80,6 +101,7 @@ function targetAttestation(overrides = {}) {
     schemaVersion: 1,
     kind: 'chaman-mongo-disposable-target-attestation',
     drillId: 'backup_20260828_1800',
+    drillMode: PRODUCTION_MODE,
     environment: 'recovery-drill',
     database: 'chaman_restore_drill_20260828_1800',
     disposable: true,
@@ -99,23 +121,126 @@ function targetAttestation(overrides = {}) {
 }
 
 function writeEvidence(directory) {
+  fs.mkdirSync(directory, { recursive: true });
+  hardenRestrictedDirectory(directory);
+  const projectId = '33333333-3333-4333-8333-333333333333';
+  const sourceEnvironmentId = '44444444-4444-4444-8444-444444444444';
+  const targetEnvironmentId = '77777777-7777-4777-8777-777777777777';
+  const sourceVolume = '55555555-5555-4555-8555-555555555555';
+  const targetVolume = '88888888-8888-4888-8888-888888888888';
+  const status = (environmentId, environmentName, serviceId, volumeId) => ({
+    id: projectId,
+    name: 'CHAMAN2026',
+    environments: [{
+      id: environmentId,
+      name: environmentName,
+      services: [{ id: serviceId, name: 'MongoDB' }],
+      volumes: [{ id: volumeId, name: 'mongo-data', serviceId }],
+    }],
+  });
+  const sourceRaw = status(sourceEnvironmentId, 'production', SOURCE_SERVICE, sourceVolume);
+  const targetRaw = status(targetEnvironmentId, 'recovery-drill', TARGET_SERVICE, targetVolume);
+  const sourceRawFile = path.join(directory, 'railway-status-source.raw.json');
+  const targetRawFile = path.join(directory, 'railway-status-target.raw.json');
+  fs.writeFileSync(sourceRawFile, JSON.stringify(sourceRaw));
+  fs.writeFileSync(targetRawFile, JSON.stringify(targetRaw));
+  hardenRestrictedFile(sourceRawFile);
+  hardenRestrictedFile(targetRawFile);
+  const sourceGraph = deriveRailwayAsset(sourceRaw, { projectId, environment: 'production', service: 'MongoDB' });
+  const targetGraph = deriveRailwayAsset(targetRaw, { projectId, environment: 'recovery-drill', service: 'MongoDB' });
+  const digest = (filePath) => require('node:crypto').createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+  const commandDigest = (environment) => require('node:crypto').createHash('sha256')
+    .update(`${JSON.stringify(['railway', 'status', '--project', projectId, '--environment', environment, '--json'])}\n`)
+    .digest('hex');
   const file = path.join(directory, 'railway-evidence.json');
   const evidence = {
-    schemaVersion: 1, kind: 'chaman-railway-mongo-isolation-evidence', evidenceId: 'evidence_20260828',
-    collection: { method: 'railway-read-only-api', projectId: '33333333-3333-4333-8333-333333333333', readOnly: true },
+    schemaVersion: 2, kind: 'chaman-mongo-infrastructure-evidence', evidenceId: 'evidence_20260828',
+    drillMode: PRODUCTION_MODE,
+    collection: { method: 'railway-cli-status-json', projectId, railwayCliVersion: 'railway 5.26.1', readOnly: true,
+      rawCaptures: [
+        { environmentSelector: 'production', file: path.basename(sourceRawFile), sha256: digest(sourceRawFile), commandSha256: commandDigest('production') },
+        { environmentSelector: 'recovery-drill', file: path.basename(targetRawFile), sha256: digest(targetRawFile), commandSha256: commandDigest('recovery-drill') },
+      ] },
     collectedAt: new Date(Date.now() - 60_000).toISOString(), expiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
-    source: { environmentId: '44444444-4444-4444-8444-444444444444', serviceId: SOURCE_SERVICE,
-      volumeId: '55555555-5555-4555-8555-555555555555', networkIdentityId: '66666666-6666-4666-8666-666666666666',
-      endpointFingerprintsSha256: [mongoEndpointFingerprint(SOURCE_URI).endpointFingerprintSha256] },
-    target: { environmentId: '77777777-7777-4777-8777-777777777777', serviceId: TARGET_SERVICE,
-      volumeId: '88888888-8888-4888-8888-888888888888', networkIdentityId: '99999999-9999-4999-8999-999999999999',
-      endpointFingerprintsSha256: [mongoEndpointFingerprint(TARGET_URI).endpointFingerprintSha256] },
-    assertions: { distinctEnvironment: true, distinctService: true, distinctVolume: true,
-      distinctNetworkIdentity: true, targetHasNoProductionConsumers: true },
+    source: { provider: 'railway', environmentId: sourceGraph.environmentId, environmentName: sourceGraph.environmentName,
+      serviceId: sourceGraph.serviceId, serviceName: sourceGraph.serviceName, volumeIds: sourceGraph.volumeIds,
+      graphSha256: sourceGraph.graphSha256 },
+    target: { provider: 'railway', environmentId: targetGraph.environmentId, environmentName: targetGraph.environmentName,
+      serviceId: targetGraph.serviceId, serviceName: targetGraph.serviceName, volumeIds: targetGraph.volumeIds,
+      graphSha256: targetGraph.graphSha256 },
     collector: 'operador-a', reviewedBy: 'responsable-b',
   };
   fs.writeFileSync(file, JSON.stringify(evidence));
+  hardenRestrictedFile(file);
   return { file, sha256: require('node:crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex'), evidence };
+}
+
+function writeTestingEvidence(directory) {
+  fs.mkdirSync(directory, { recursive: true });
+  hardenRestrictedDirectory(directory);
+  const projectId = '33333333-3333-4333-8333-333333333333';
+  const environmentId = '44444444-4444-4444-8444-444444444444';
+  const volumeId = '55555555-5555-4555-8555-555555555555';
+  const raw = {
+    id: projectId,
+    name: 'CHAMAN2026',
+    environments: [{
+      id: environmentId,
+      name: 'Testing',
+      services: [{ id: SOURCE_SERVICE, name: 'MongoDB' }],
+      volumes: [{ id: volumeId, name: 'mongo-data', serviceId: SOURCE_SERVICE }],
+    }],
+  };
+  const rawFile = path.join(directory, 'railway-status-source.raw.json');
+  fs.writeFileSync(rawFile, JSON.stringify(raw));
+  hardenRestrictedFile(rawFile);
+  const localRoot = path.join(directory, 'chaman-recovery-drill', 'testing-evidence');
+  const dbPath = path.join(localRoot, 'data');
+  fs.mkdirSync(dbPath, { recursive: true });
+  const proof = buildRuntimeProof(localRuntimeRaw(dbPath, new Date().toISOString()), {
+    uri: LOCAL_URI,
+    expectedDbPathRoot: localRoot,
+  });
+  const proofFile = path.join(directory, 'runtime-proof.json');
+  fs.writeFileSync(proofFile, `${JSON.stringify(proof)}\n`);
+  hardenRestrictedFile(proofFile);
+  const digest = (filePath) => require('node:crypto').createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+  const commandSha256 = require('node:crypto').createHash('sha256')
+    .update(`${JSON.stringify(['railway', 'status', '--project', projectId, '--environment', 'Testing', '--json'])}\n`)
+    .digest('hex');
+  const sourceGraph = deriveRailwayAsset(raw, { projectId, environment: 'Testing', service: 'MongoDB' });
+  const now = Date.now();
+  const evidence = {
+    schemaVersion: 2,
+    kind: 'chaman-mongo-infrastructure-evidence',
+    evidenceId: 'testing_evidence_20260828',
+    drillMode: TESTING_LOCAL_MODE,
+    collection: {
+      method: 'railway-cli-status-json', projectId, railwayCliVersion: 'railway 5.26.1', readOnly: true,
+      rawCaptures: [{
+        environmentSelector: 'Testing', file: path.basename(rawFile), sha256: digest(rawFile), commandSha256,
+      }],
+    },
+    collectedAt: new Date(now - 60_000).toISOString(),
+    expiresAt: new Date(now + 60 * 60_000).toISOString(),
+    source: {
+      provider: 'railway', environmentId: sourceGraph.environmentId, environmentName: sourceGraph.environmentName,
+      serviceId: sourceGraph.serviceId, serviceName: sourceGraph.serviceName, volumeIds: sourceGraph.volumeIds,
+      graphSha256: sourceGraph.graphSha256,
+    },
+    target: {
+      provider: 'local-mongodb', instanceId: proof.instanceId,
+      endpointFingerprintSha256: proof.endpoint.endpointFingerprintSha256,
+      runtimeProofSha256: digest(proofFile), replicaSet: proof.mongo.replicaSet,
+      dbPathSha256: proof.mongo.dbPathSha256,
+    },
+    collector: 'operador-a',
+    reviewedBy: 'responsable-b',
+  };
+  const file = path.join(directory, 'railway-evidence.json');
+  fs.writeFileSync(file, JSON.stringify(evidence));
+  hardenRestrictedFile(file);
+  return { file, sha256: digest(file), evidence };
 }
 
 function writeUriFile(directory, uri, name = 'mongo-uri.txt') {
@@ -151,6 +276,30 @@ function inventory(database = 'chaman') {
         indexes: [{ name: '_id_', key: { _id: 1 } }],
       },
     ],
+  };
+}
+
+function localRuntimeRaw(dbPath, capturedAt = NOW.toISOString()) {
+  return {
+    schemaVersion: 1,
+    database: 'chaman_restore_drill_20260828_1800',
+    capturedAt,
+    hello: {
+      setName: 'chamanDrill',
+      me: '127.0.0.1:27019',
+      primary: '127.0.0.1:27019',
+      hosts: ['127.0.0.1:27019'],
+      passives: [],
+      arbiters: [],
+      isWritablePrimary: true,
+    },
+    buildInfo: { version: '8.0.29' },
+    commandLine: {
+      net: { bindIp: '127.0.0.1', port: 27019 },
+      replication: { replSetName: 'chamanDrill' },
+      storage: { dbPath },
+    },
+    serverStatus: { process: 'mongod', pid: 4242 },
   };
 }
 
@@ -272,6 +421,7 @@ test('spawn args nunca contienen URI y usan config/archivo de script', () => {
   }
   assert.ok(dumpArgs.some((arg) => arg.startsWith('--config=')));
   assert.ok(restoreArgs.some((arg) => arg.startsWith('--config=')));
+  assert.ok(shellArgs.includes('--norc'));
   assert.deepEqual(assertMongoToolsConfigVersion('mongodump version: 100.12.2'), {
     major: 100,
     minor: 12,
@@ -290,16 +440,227 @@ test('entorno hijo elimina toda URI y conserva solamente la ruta al secreto', ()
   assert.equal(env.MONGO_URI, undefined);
 });
 
-test('evidencia Railway rechaza aliases compartidos y auto-revision', () => {
+test('proceso principal rechaza cualquier URI MongoDB heredada por entorno', () => {
+  assert.throws(() => assertNoMongoUriEnvironment({ MONGO_URI: SOURCE_URI, PATH: 'safe' }), /prohibida.*MONGO_URI/);
+  assert.throws(
+    () => assertNoMongoUriEnvironment({ APP_CONFIG: `{"uri":"${SOURCE_URI}"}` }),
+    /prohibida.*APP_CONFIG/,
+  );
+  assert.doesNotThrow(() => assertNoMongoUriEnvironment({ CHAMAN_BACKUP_CONFIRM: 'dump:x:y' }));
+});
+
+test('hash de dbPath preserva mayusculas en POSIX y normaliza solo en Windows', () => {
+  assert.notEqual(hashDbPath('/var/lib/chaman/Data', 'linux'), hashDbPath('/var/lib/chaman/data', 'linux'));
+  assert.equal(hashDbPath('C:\\Chaman\\Data', 'win32'), hashDbPath('c:\\chaman\\data', 'win32'));
+});
+
+test('runtime proof acredita loopback, replica set, dbPath dedicado y processId', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-runtime-'));
+  const root = path.join(directory, 'chaman-recovery-drill', 'runtime-proof-test');
+  const dbPath = path.join(root, 'data');
+  const unrelated = path.join(directory, 'unrelated', 'data');
+  fs.mkdirSync(dbPath, { recursive: true });
+  fs.mkdirSync(unrelated, { recursive: true });
+  try {
+    const proof = buildRuntimeProof(localRuntimeRaw(dbPath), { uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW });
+    const validated = validateRuntimeProof(proof, { now: NOW, expectedDatabase: proof.database });
+    assert.equal(validated.replicaSet, 'chamanDrill');
+    assert.equal(validated.processId, 4242);
+    assert.equal(proof.mongo.process, 'mongod');
+    assert.match(validated.instanceId, /^local-mongodb:[0-9a-f]{64}$/);
+
+    assert.throws(() => buildRuntimeProof(localRuntimeRaw(dbPath), {
+      uri: LOCAL_URI.replace('127.0.0.1', 'mongo.example.invalid'), expectedDbPathRoot: root, now: NOW,
+    }), /loopback/);
+    assert.throws(() => buildRuntimeProof({ ...localRuntimeRaw(dbPath), commandLine: {
+      ...localRuntimeRaw(dbPath).commandLine, net: { bindIp: '0.0.0.0', port: 27019 },
+    } }, { uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW }), /loopback/);
+    assert.throws(() => buildRuntimeProof({ ...localRuntimeRaw(dbPath), hello: {
+      ...localRuntimeRaw(dbPath).hello, setName: undefined,
+    } }, { uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW }), /setName/);
+    assert.throws(() => buildRuntimeProof({ ...localRuntimeRaw(dbPath), hello: {
+      ...localRuntimeRaw(dbPath).hello, hosts: ['127.0.0.1:27019', '127.0.0.1:27020'],
+    } }, { uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW }), /solo nodo/);
+    assert.throws(() => buildRuntimeProof(localRuntimeRaw(unrelated), {
+      uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW,
+    }), /subdirectorio/);
+    assert.throws(() => buildRuntimeProof({ ...localRuntimeRaw(dbPath), serverStatus: {
+      process: 'mongos', pid: 4242,
+    } }, { uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW }), /mongod/);
+    assert.throws(() => validateRuntimeProof({ ...proof, mongo: { ...proof.mongo, misleading: true } }, { now: NOW }), /inesperados/);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('modo testing-local fija Testing/chaman_testing y permite cleanup con atestacion expirada', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-mode-'));
+  const root = path.join(directory, 'chaman-recovery-drill', 'mode-test');
+  fs.mkdirSync(path.join(root, 'data'), { recursive: true });
+  const proof = buildRuntimeProof(localRuntimeRaw(path.join(root, 'data')), { uri: LOCAL_URI, expectedDbPathRoot: root, now: NOW });
+  const source = sourceAttestation({ drillMode: TESTING_LOCAL_MODE, sourceEnvironment: 'testing', database: 'chaman_testing' });
+  assert.equal(validateSourceAttestation(source, { now: NOW }).drillMode, TESTING_LOCAL_MODE);
+  assert.throws(() => validateSourceAttestation({ ...source, database: 'chaman' }, { now: NOW }), /chaman_testing/);
+  const target = targetAttestation({
+    drillMode: TESTING_LOCAL_MODE,
+    environment: 'local-recovery-drill',
+    instanceIdentity: {
+      provider: 'local-mongodb',
+      instanceId: proof.instanceId,
+      endpointFingerprintSha256: proof.endpoint.endpointFingerprintSha256,
+    },
+    expiresAt: '2026-08-28T17:00:00.000Z',
+  });
+  assert.throws(() => validateTargetAttestation(target, { now: NOW }), /vencida/);
+  assert.equal(validateTargetAttestation(target, { now: NOW, allowExpired: true }).drillMode, TESTING_LOCAL_MODE);
+  fs.rmSync(directory, { recursive: true, force: true });
+});
+
+test('cleanup liga recibo original, prueba runtime fresca y rescan negativo', () => {
+  const hashes = {
+    sourceManifestSha256: 'a'.repeat(64),
+    targetAttestationSha256: 'b'.repeat(64),
+    infrastructureEvidenceSha256: 'c'.repeat(64),
+  };
+  const receipt = {
+    kind: 'chaman-mongo-restore-receipt',
+    drillId: 'backup_20260828_1800',
+    sourceDatabase: 'chaman_testing',
+    targetDatabase: 'chaman_restore_drill_20260828_1800',
+    sourceManifestSha256: hashes.sourceManifestSha256.toUpperCase(),
+    targetAttestationSha256: hashes.targetAttestationSha256,
+    infrastructureEvidenceSha256: hashes.infrastructureEvidenceSha256.toUpperCase(),
+    targetRuntimeProofSha256: 'd'.repeat(64),
+  };
+  const expected = {
+    drillId: receipt.drillId,
+    sourceDatabase: receipt.sourceDatabase,
+    targetDatabase: receipt.targetDatabase,
+    ...hashes,
+    targetRuntimeProofSha256: 'D'.repeat(64),
+    expectedKind: 'chaman-mongo-restore-receipt',
+  };
+  assert.doesNotThrow(() => assertCleanupReceiptBindings(receipt, expected));
+  assert.throws(() => assertCleanupReceiptBindings({ ...receipt, targetDatabase: 'otro' }, expected), /Artefacto original/);
+  assert.throws(() => assertCleanupReceiptBindings({ ...receipt, targetRuntimeProofSha256: 'e'.repeat(64) }, expected), /runtime proof/);
+  const runtime = {
+    instanceId: `local-mongodb:${'e'.repeat(64)}`,
+    endpointFingerprintSha256: 'f'.repeat(64),
+    replicaSet: 'chamanDrill',
+    dbPathSha256: '1'.repeat(64),
+    processId: 4242,
+  };
+  assert.doesNotThrow(() => assertSameRuntimeForCleanup(runtime, { ...runtime }));
+  assert.throws(() => assertSameRuntimeForCleanup(runtime, { ...runtime, processId: 4243 }), /reinicio/);
+  assert.doesNotThrow(() => assertDropConfirmed({ ok: true, database: receipt.targetDatabase, rescanFound: false }, receipt.targetDatabase));
+  assert.throws(() => assertDropConfirmed({ ok: true, database: receipt.targetDatabase, rescanFound: true }, receipt.targetDatabase), /rescan/);
+});
+
+test('collector conserva raw railway status, deriva el grafo y sella target local', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-collector-'));
+  const projectId = 'abcdef12-3456-4789-8abc-def123456789';
+  const environmentId = '44444444-4444-4444-8444-444444444444';
+  const volumeId = '55555555-5555-4555-8555-555555555555';
+  try {
+    const proofDir = path.join(directory, 'proof');
+    fs.mkdirSync(proofDir);
+    hardenRestrictedDirectory(proofDir);
+    const root = path.join(directory, 'chaman-recovery-drill', 'collector-test');
+    fs.mkdirSync(path.join(root, 'data'), { recursive: true });
+    const proof = buildRuntimeProof(localRuntimeRaw(path.join(root, 'data'), new Date().toISOString()), {
+      uri: LOCAL_URI, expectedDbPathRoot: root,
+    });
+    const proofFile = path.join(proofDir, 'runtime-proof.json');
+    fs.writeFileSync(proofFile, `${JSON.stringify(proof)}\n`);
+    hardenRestrictedFile(proofFile);
+    const raw = {
+      id: projectId,
+      name: 'CHAMAN2026',
+      environments: [{ id: environmentId, name: 'Testing',
+        services: [{ id: SOURCE_SERVICE, name: 'MongoDB' }],
+        volumes: [{ id: volumeId, name: 'mongo-data', serviceId: SOURCE_SERVICE }] }],
+    };
+    const calls = [];
+    const runner = (args) => {
+      calls.push(args);
+      return args[0] === '--version' ? 'railway 5.26.1\n' : `${JSON.stringify(raw)}\n`;
+    };
+    const outputDir = path.join(directory, 'evidence');
+    const result = collectRailwayEvidence({
+      outputDir, projectId: projectId.toUpperCase(), drillMode: TESTING_LOCAL_MODE, sourceEnvironment: 'testing',
+      sourceService: 'MongoDB', runtimeProofFile: proofFile, evidenceId: 'testing_local_20260828',
+      collector: 'operador-a', reviewedBy: 'responsable-b',
+    }, { runner });
+    assert.equal(result.rawCaptures, 1);
+    const evidence = JSON.parse(fs.readFileSync(result.evidencePath, 'utf8'));
+    assert.equal(evidence.source.serviceId, SOURCE_SERVICE);
+    assert.equal(evidence.target.instanceId, proof.instanceId);
+    assert.deepEqual(calls[1], ['status', '--project', projectId, '--environment', 'Testing', '--json']);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(outputDir, 'railway-status-source.raw.json'), 'utf8')), raw);
+    assert.throws(() => collectRailwayEvidence({
+      outputDir: path.join(directory, 'production-evidence'), projectId, drillMode: PRODUCTION_MODE,
+      sourceEnvironment: 'Production', sourceService: 'MongoDB', evidenceId: 'production_20260828',
+      collector: 'operador-a', reviewedBy: 'responsable-b',
+    }, { runner }), /Produccion permanece bloqueada/);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('parser acepta el grafo real de Railway CLI con edges, serviceInstances y volumeInstances', () => {
+  const projectId = '33333333-3333-4333-8333-333333333333';
+  const environmentId = '44444444-4444-4444-8444-444444444444';
+  const volumeId = '55555555-5555-4555-8555-555555555555';
+  const raw = {
+    id: projectId,
+    name: 'CHAMAN2026',
+    services: { edges: [{ node: { id: SOURCE_SERVICE, name: 'MongoDB' } }] },
+    environments: { edges: [{ node: {
+      id: environmentId,
+      name: 'Testing',
+      serviceInstances: { edges: [{ node: {
+        id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', serviceId: SOURCE_SERVICE, serviceName: 'MongoDB',
+      } }] },
+      volumeInstances: { edges: [{ node: {
+        serviceId: SOURCE_SERVICE, volume: { id: volumeId, name: 'mongo-volume' },
+      } }] },
+    } }] },
+  };
+  const derived = deriveRailwayAsset(raw, { projectId, environment: 'Testing', service: 'MongoDB' });
+  assert.equal(derived.environmentId, environmentId);
+  assert.equal(derived.serviceId, SOURCE_SERVICE);
+  assert.deepEqual(derived.volumeIds, [volumeId]);
+  const unlinked = structuredClone(raw);
+  delete unlinked.environments.edges[0].node.volumeInstances.edges[0].node.serviceId;
+  assert.throws(
+    () => deriveRailwayAsset(unlinked, { projectId, environment: 'Testing', service: 'MongoDB' }),
+    /exactamente un volumen/,
+  );
+});
+
+test('evidencia Railway se deriva del raw, detecta adulteracion y auto-revision', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-evidence-'));
   try {
     const { evidence } = writeEvidence(directory);
-    assert.doesNotThrow(() => validateInfrastructureEvidence(evidence));
+    assert.doesNotThrow(() => validateInfrastructureEvidence(evidence, { baseDir: directory }));
     assert.throws(() => validateInfrastructureEvidence({ ...evidence, target: {
-      ...evidence.target, endpointFingerprintsSha256: evidence.source.endpointFingerprintsSha256,
-    } }), /alias/);
-    assert.throws(() => validateInfrastructureEvidence({ ...evidence, reviewedBy: evidence.collector }), /distintas/);
-    const loaded = { sha256: 'b'.repeat(64), validated: validateInfrastructureEvidence(evidence) };
+      ...evidence.target, volumeIds: evidence.source.volumeIds,
+    } }, { baseDir: directory }), /captura cruda|volumen/);
+    assert.throws(() => validateInfrastructureEvidence({ ...evidence, reviewedBy: evidence.collector }, { baseDir: directory }), /distintas/);
+    assert.throws(() => validateInfrastructureEvidence({ ...evidence, collection: {
+      ...evidence.collection,
+      rawCaptures: evidence.collection.rawCaptures.map((capture, index) =>
+        index === 0 ? { ...capture, commandSha256: 'f'.repeat(64) } : capture),
+    } }, { baseDir: directory }), /comando Railway esperado/);
+    assert.throws(() => validateInfrastructureEvidence({
+      ...evidence,
+      collectedAt: new Date(Date.now() + 60_000).toISOString(),
+      expiresAt: new Date(Date.now() + 61 * 60_000).toISOString(),
+    }, { baseDir: directory }), /futuro/);
+    fs.appendFileSync(path.join(directory, evidence.collection.rawCaptures[0].file), 'tampered');
+    assert.throws(() => validateInfrastructureEvidence(evidence, { baseDir: directory }), /Checksum/);
+    const fresh = writeEvidence(path.join(directory, 'fresh'));
+    const loaded = { sha256: 'b'.repeat(64), validated: validateInfrastructureEvidence(fresh.evidence, { baseDir: path.dirname(fresh.file) }) };
     assert.throws(() => bindAttestationToEvidence(sourceAttestation(),
       validateSourceAttestation(sourceAttestation(), { now: NOW }), loaded, 'source'), /ligada/);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
@@ -463,8 +824,12 @@ test('plan CLI es offline: valida gobierno sin URI ni conexion', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-mongo-plan-'));
   try {
     const attestationPath = path.join(directory, 'attestation.json');
-    const evidence = writeEvidence(directory);
+    const evidence = writeTestingEvidence(directory);
     const dynamic = sourceAttestation({
+      drillMode: TESTING_LOCAL_MODE,
+      sourceEnvironment: 'testing',
+      database: 'chaman_testing',
+      instanceIdentity: identity('railway', SOURCE_SERVICE, TESTING_SOURCE_URI),
       infrastructureEvidenceSha256: evidence.sha256,
       frozenAt: new Date(Date.now() - 60_000).toISOString(),
       verifiedAt: new Date(Date.now() - 30_000).toISOString(),
@@ -497,9 +862,13 @@ test('fallo posterior a crear output-dir deja recibo sin secretos y no conecta',
   try {
     const attestationPath = path.join(directory, 'attestation.json');
     const outputDir = path.join(directory, 'backup-failed');
-    const uriFile = writeUriFile(directory, SOURCE_URI);
-    const evidence = writeEvidence(directory);
+    const uriFile = writeUriFile(directory, TESTING_SOURCE_URI);
+    const evidence = writeTestingEvidence(directory);
     const dynamic = sourceAttestation({
+      drillMode: TESTING_LOCAL_MODE,
+      sourceEnvironment: 'testing',
+      database: 'chaman_testing',
+      instanceIdentity: identity('railway', SOURCE_SERVICE, TESTING_SOURCE_URI),
       infrastructureEvidenceSha256: evidence.sha256,
       frozenAt: new Date(Date.now() - 60_000).toISOString(),
       verifiedAt: new Date(Date.now() - 30_000).toISOString(),
@@ -528,7 +897,7 @@ test('fallo posterior a crear output-dir deja recibo sin secretos y no conecta',
     );
     assert.notEqual(result.status, 0);
     const receipt = fs.readFileSync(path.join(outputDir, 'dump-failure-receipt.json'), 'utf8');
-    assert.equal(receipt.includes(SOURCE_URI), false);
+    assert.equal(receipt.includes(TESTING_SOURCE_URI), false);
     assert.equal(JSON.parse(receipt).status, 'failed');
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });

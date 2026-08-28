@@ -5,9 +5,24 @@ const { spawnSync } = require('node:child_process');
 const WINDOWS_ACL_SCRIPT = path.join(__dirname, 'windows-acl.ps1');
 
 function minimalChildEnv(extra = {}, base = process.env) {
-  const allowed = ['PATH', 'Path', 'PATHEXT', 'SystemRoot', 'WINDIR', 'COMSPEC', 'TEMP', 'TMP'];
+  const allowed = [
+    'PATH', 'Path', 'PATHEXT', 'SystemRoot', 'WINDIR', 'COMSPEC', 'TEMP', 'TMP',
+    'APPDATA', 'LOCALAPPDATA', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'HOME', 'XDG_CONFIG_HOME',
+  ];
   const env = Object.fromEntries(allowed.filter((key) => base[key]).map((key) => [key, base[key]]));
   return { ...env, ...extra };
+}
+
+function assertNoMongoUriEnvironment(base = process.env) {
+  const offenders = Object.entries(base)
+    .filter(([, value]) => /mongodb(?:\+srv)?:\/\//i.test(String(value || '')))
+    .map(([key]) => key)
+    .sort();
+  if (offenders.length) {
+    throw new Error(
+      `URI MongoDB prohibida en el entorno del proceso (${offenders.join(', ')}); use stdin + archivo ACL.`,
+    );
+  }
 }
 
 function assertSafeUri(uri) {
@@ -160,7 +175,7 @@ function buildMongorestoreArgs(configPath, archivePath, sourceDatabase, targetDa
 }
 
 function buildMongoshArgs(scriptPath) {
-  return ['--nodb', '--quiet', '--file', scriptPath];
+  return ['--nodb', '--quiet', '--norc', '--file', scriptPath];
 }
 
 function assertMongoToolsConfigVersion(versionText) {
@@ -181,6 +196,7 @@ module.exports = {
   buildMongorestoreArgs,
   buildMongoshArgs,
   assertMongoToolsConfigVersion,
+  assertNoMongoUriEnvironment,
   safeChildEnv,
   minimalChildEnv,
   hardenRestrictedDirectory,

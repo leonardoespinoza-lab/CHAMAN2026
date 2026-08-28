@@ -1,283 +1,249 @@
-# Backup logico y simulacro de restauracion de MongoDB
+# Backup lógico y simulacro MongoDB
 
-## Alcance y regla de seguridad
+## Estado y alcance
 
-Este procedimiento genera evidencia recuperable antes de una promocion de
-Chamán. No despliega codigo, no cambia Railway y no se ejecuta automaticamente
-en CI. El `plan` es offline; `dump`, `restore`, `verify` y `cleanup` requieren una
-operacion humana deliberada.
+Esta herramienta prepara un simulacro recuperable sin desplegar código ni
+modificar Railway. El primer uso autorizado es **Testing → MongoDB local
+descartable**, modo `testing-local-drill`:
 
-MongoDB productivo es actualmente standalone. `mongodump` no puede crear por si
-solo una fotografia transaccional multi-coleccion en ese modo. Por eso el dump
-solo se habilita con una atestacion vigente de **congelamiento completo de
-escrituras de la aplicacion**. Si no se puede probar ese congelamiento, el backup
-se cancela. No se usa `fsyncLock` ni se modifica la base productiva.
+- origen: environment `Testing`, base `chaman_testing`;
+- destino: un `mongod` local, ligado sólo a loopback, como replica set de un
+  nodo y con base `chaman_restore_drill_*`;
+- ChirpStack, LoRaWAN, MQTT, Redis y Producción quedan fuera de alcance.
 
-El tooling nunca debe apuntar a ChirpStack. No modifica sesiones LoRaWAN,
-gateways, MQTT, Redis ni configuraciones de sensores.
+Un dump de Producción continúa bloqueado hasta disponer de una ventana de
+mantenimiento que demuestre congelamiento total de escritores. MongoDB
+productivo es standalone y `mongodump` no ofrece por sí solo una fotografía
+multi-colección consistente.
 
-## Garantias fail-closed
+## Garantías fail-closed
 
-- La URI de origen y destino se captura con `Read-Host -AsSecureString`, se
-  mantiene en una variable de entorno solamente durante el proceso padre y se
-  redacta de errores. No aparece en manifiestos ni en los argumentos de procesos
-  hijos. Database Tools la lee desde un YAML temporal restringido; `mongosh`
-  desde un archivo temporal restringido. Ambos se sobrescriben y eliminan en
-  `finally`.
-- La URI debe contener el nombre explicito de la base y coincidir con la
-  atestacion.
-- El origen exige `sourceEnvironment=production`, cinco controles de escritura
-  en `true` y una ventana de congelamiento menor a dos horas.
-- El destino exige una instancia dedicada y descartable, sin trafico productivo
-  ni integraciones externas. Su base debe comenzar con
-  `chaman_restore_drill_`.
-- Una evidencia separada, obtenida por API Railway de solo lectura, enumera IDs
-  de ambiente, servicio, volumen, identidad de red y todos los aliases. Su hash
-  liga ambas atestaciones; cualquier coincidencia o alias ambiguo aborta.
-- Cada accion que escribe exige una frase exacta distinta en una variable de
-  entorno.
-- No se sobreescriben archives, recibos ni evidencias existentes.
-- Los artefactos de backup y simulacro deben estar fuera del repositorio.
-- Antes del restore se comprueba que el destino no tenga colecciones y que el
-  major de MongoDB coincida con el origen.
-- El resultado compara colecciones, opciones, conteos exactos e indices y ejecuta dos
-  auditorias agronomicas de solo lectura.
+- Las URI se ingresan por stdin y se guardan fuera del repositorio en archivos
+  con ACL exclusiva. Una URI encontrada en el entorno del proceso aborta.
+- Ningún hijo recibe el entorno completo. `mongosh`, Database Tools, Git,
+  Railway CLI y PowerShell reciben un entorno mínimo; la URI nunca aparece en
+  argv ni en variables de entorno.
+- `railway status --json` se ejecuta con `--project` y `--environment`
+  explícitos. Su stdout crudo se guarda con ACL, se hashea y el grafo
+  proyecto→environment→servicio→volumen se deriva de esa captura. No se acepta
+  un JSON de topología escrito a mano.
+- El destino local se acredita consultando `hello`, `buildInfo`,
+  `getCmdLineOpts` y `serverStatus`. Debe ser primary, usar replica set, exponer
+  un único endpoint loopback y tener su `dbPath` bajo
+  `chaman-recovery-drill`.
+- La prueba runtime dura diez minutos. Cada fase posterior usa una prueba
+  fresca que debe conservar endpoint, replica set y `dbPath` sellados.
+- El manifiesto fija modo, origen, SHA Git, checksums, inventario y evidencia de
+  infraestructura. Los hashes se comparan sin depender de mayúsculas.
+- El restore exige una base vacía, remapea el namespace y compara colecciones,
+  opciones, conteos e índices, preservando el orden de claves compuestas.
+- Antes de la primera escritura crea `restore-intent.json`. Si el restore queda
+  parcial, ese intent sellado permite limpiar el destino sin inventar un recibo
+  exitoso.
+- El cleanup exige manifiesto e intent originales (y el recibo si llegó a
+  crearse), una prueba runtime nueva y reescanea `listDatabases` después del
+  drop. Funciona aunque las atestaciones originales ya hayan vencido.
+- Ningún archivo existente se sobreescribe. Los artefactos viven fuera del
+  repositorio.
 
-Esto no reemplaza cifrado en reposo, control de acceso, retencion fuera de la PC
-ni una politica de continuidad. El archive contiene datos productivos y debe
-tratarse como informacion confidencial.
+## Herramientas portables
 
-## Prerrequisitos
+La versión comprobada en esta PC está registrada en:
 
-1. Una ventana de mantenimiento aprobada y comunicada.
-2. Espacio libre suficiente fuera del repositorio (recomendado: tres veces el
-   tamaño estimado de la base).
-3. `mongosh`, `mongodump` y `mongorestore` instalados. Las Database Tools deben
-   ser compatibles con el servidor.
-4. Dependencias de `sdc-datos` instaladas para las auditorias:
+`C:\Users\lespinoza\AppData\Local\Codex\chaman-recovery-tools\MANIFEST.json`
 
-   ```powershell
-   npm ci --prefix sdc-datos
-   ```
-
-5. Una instancia Mongo aislada y descartable con el mismo major que produccion.
-   No puede compartir servicio, volumen, credenciales ni red de aplicacion con
-   produccion.
-6. Dos personas identificadas en las atestaciones: operador y aprobador. Los
-   archivos de ejemplo estan en `deploy/recovery/` y nunca deben contener URI,
-   usuario o contraseña.
-7. Evidencia Railway vigente, recolectada por un operador y revisada por otra
-   persona, usando `deploy/recovery/railway-isolation-evidence.example.json`.
-8. MongoDB Database Tools 100.3 o superior, porque `--config` con `uri` fue
-   incorporado en esa version. Referencia oficial:
-   https://www.mongodb.com/docs/database-tools/mongodump/#std-option-mongodump.--config
-
-## 1. Plan y preflight offline
-
-Copiar las plantillas fuera del repo, completar fechas UTC reales y usar el mismo
-`attestationId`/`drillId`. Antes de firmarlas, calcular los fingerprints sin
-conectar a MongoDB:
+Se requieren MongoDB Database Tools 100.3 o superior, `mongosh` y un servidor
+MongoDB del mismo major que el origen. Los binarios pueden seleccionarse con:
 
 ```powershell
-$secret = Read-Host 'URI Mongo origen' -AsSecureString
-$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
-try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) | node scripts/mongo-recovery.js create-uri-file --output=D:\ChamanRecovery\secrets\source.uri }
-finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
-npm run mongo:recovery -- fingerprint --side=source --source-uri-file=D:\ChamanRecovery\secrets\source.uri
-$secret = Read-Host 'URI Mongo recovery' -AsSecureString
-$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
-try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) | node scripts/mongo-recovery.js create-uri-file --output=D:\ChamanRecovery\secrets\target.uri }
-finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
-npm run mongo:recovery -- fingerprint --side=target --target-uri-file=D:\ChamanRecovery\secrets\target.uri
+$env:CHAMAN_MONGOSH_BIN = 'C:\ruta\mongosh.exe'
+$env:CHAMAN_MONGODUMP_BIN = 'C:\ruta\mongodump.exe'
+$env:CHAMAN_MONGORESTORE_BIN = 'C:\ruta\mongorestore.exe'
 ```
 
-Copiar cada `endpointFingerprintSha256` a su atestacion y registrar un
-`instanceId` verificable de la plataforma. Los dos IDs y fingerprints deben ser
-distintos. Una base de recovery creada en el host productivo es invalida. La
-atestacion de origen solo se completa despues de congelar escrituras.
+Estas variables sólo contienen rutas de ejecutables, nunca credenciales.
 
-La evidencia no debe redactarse a mano: se conserva la respuesta del canal
-Railway de solo lectura en un archivo separado, se revisan todos los dominios y
-aliases y se copia su SHA-256 a ambas atestaciones. El verificador offline puede
-probar la ligadura, vigencia y ausencia de coincidencias, pero no puede demostrar
-por si solo que un JSON manual provino de Railway. Por eso una recoleccion manual,
-un alias no inventariado o evidencia sin respuesta original inmutable es NO-GO.
+## 1. Directorios y URI
 
-El plan valida el contrato sin buscar herramientas ni conectar:
+Usar directorios dedicados fuera del repositorio. `create-uri-file` crea el
+directorio secreto si su padre ya existe; si existe, exige que ya tenga ACL
+restrictiva y no cambia permisos de un directorio compartido.
+
+```powershell
+$secret = Read-Host 'URI Mongo Testing' -AsSecureString
+$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
+try {
+  [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) |
+    node scripts/mongo-recovery.js create-uri-file `
+      --output=D:\ChamanRecovery\secrets-testing\source.uri
+} finally {
+  [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+}
+
+$secret = Read-Host 'URI Mongo local descartable' -AsSecureString
+$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
+try {
+  [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) |
+    node scripts/mongo-recovery.js create-uri-file `
+      --output=D:\ChamanRecovery\secrets-local\target.uri
+} finally {
+  [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+}
+```
+
+Las URI deben incluir respectivamente `/chaman_testing` y
+`/chaman_restore_drill_<id>`.
+
+## 2. Acreditar MongoDB local
+
+El `mongod` se inicia fuera de esta herramienta con `--bind_ip 127.0.0.1`,
+`--replSet <nombre>` y un `--dbpath` nuevo bajo un directorio llamado
+`chaman-recovery-drill`. Después de `rs.initiate()` y de confirmar primary:
+
+```powershell
+npm run mongo:recovery -- runtime-proof `
+  --target-uri-file=D:\ChamanRecovery\secrets-local\target.uri `
+  --expected-dbpath-root=C:\Users\lespinoza\AppData\Local\Codex\chaman-recovery-drill\run-001 `
+  --output=D:\ChamanRecovery\secrets-local\runtime-proof.json
+```
+
+No editar ese JSON. Si vence, generar otro archivo con nombre nuevo.
+
+## 3. Recolectar evidencia Railway
+
+Este es el único comando que consulta Railway. Es de sólo lectura y no usa el
+estado enlazado de la carpeta:
+
+```powershell
+npm run mongo:recovery -- collect-infrastructure-evidence `
+  --mode=testing-local-drill `
+  --project-id=<UUID_PROYECTO_CHAMAN> `
+  --source-environment=Testing `
+  --source-service=<UUID_O_NOMBRE_MONGODB_TESTING> `
+  --runtime-proof=D:\ChamanRecovery\secrets-local\runtime-proof.json `
+  --output-dir=D:\ChamanRecovery\evidence-001 `
+  --evidence-id=testing_local_yyyymmdd_hhmm `
+  --collector=<OPERADOR> `
+  --reviewed-by=<OTRA_PERSONA>
+```
+
+El directorio contiene:
+
+- `railway-status-source.raw.json`, stdout exacto de Railway;
+- `infrastructure-evidence.json`, grafo derivado y hashes.
+
+La persona revisora debe comparar la captura con el Admin de Railway antes de
+usar el SHA de `infrastructure-evidence.json` en las atestaciones.
+
+## 4. Atestaciones Testing→local
+
+Copiar las plantillas fuera del repo y completar datos reales. Para este modo:
+
+`source-freeze.json`:
+
+- `drillMode`: `testing-local-drill`;
+- `sourceEnvironment`: `testing`;
+- `database`: `chaman_testing`;
+- `instanceIdentity.provider`: `railway`;
+- `instanceIdentity.instanceId`: service ID derivado por el collector.
+
+`target.json`:
+
+- `drillMode`: `testing-local-drill`;
+- `environment`: `local-recovery-drill`;
+- `database`: `chaman_restore_drill_*`;
+- `instanceIdentity.provider`: `local-mongodb`;
+- `instanceIdentity.instanceId` y fingerprint: valores del runtime proof.
+
+Ambas atestaciones llevan el SHA-256 de la misma evidencia. Testing también se
+congela: API, workers, jobs y escrituras de operador deben estar detenidos y los
+cinco controles deben ser verdaderos.
+
+## 5. Plan, dump y verificación offline
 
 ```powershell
 npm run mongo:recovery -- plan --phase=dump `
   --attestation=D:\ChamanRecovery\source-freeze.json `
-  --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
-  --output-dir=D:\ChamanRecovery\backup_yyyymmdd_hhmm
-```
+  --infrastructure-evidence=D:\ChamanRecovery\evidence-001\infrastructure-evidence.json `
+  --output-dir=D:\ChamanRecovery\backup-001
 
-El preflight tambien comprueba las versiones locales, pero sigue sin conectarse:
-
-```powershell
-npm run mongo:recovery -- preflight --phase=dump `
-  --attestation=D:\ChamanRecovery\source-freeze.json `
-  --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
-  --output-dir=D:\ChamanRecovery\backup_yyyymmdd_hhmm
-```
-
-## 2. Congelar escrituras y crear el dump
-
-Antes de firmar `source-freeze.json`:
-
-1. Poner la API en modo mantenimiento sin escrituras o detener sus replicas.
-2. Detener workers de datos, clima, predicciones, NDVI, FTP y cualquier consumidor
-   que escriba Mongo.
-3. Deshabilitar cron y tareas programadas.
-4. Bloquear cambios manuales de operadores.
-5. Verificar que no quedan escritores activos y registrar hora/evidencia en el
-   ticket.
-
-No basta detener un solo servicio: todos los cinco controles de la atestacion
-deben ser verdaderos. Mantener el congelamiento hasta que el comando informe
-`status: sealed` y el operador registre el SHA-256.
-
-En una terminal efimera, sin guardar secretos en archivos o historial:
-
-```powershell
-$env:CHAMAN_BACKUP_CONFIRM = 'dump:backup_yyyymmdd_hhmm:chaman'
-
+$env:CHAMAN_BACKUP_CONFIRM = 'dump:<DRILL_ID>:chaman_testing'
 npm run mongo:recovery -- dump `
   --attestation=D:\ChamanRecovery\source-freeze.json `
-  --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
-  --source-uri-file=D:\ChamanRecovery\secrets\source.uri `
-  --output-dir=D:\ChamanRecovery\backup_yyyymmdd_hhmm
-
+  --infrastructure-evidence=D:\ChamanRecovery\evidence-001\infrastructure-evidence.json `
+  --source-uri-file=D:\ChamanRecovery\secrets-testing\source.uri `
+  --output-dir=D:\ChamanRecovery\backup-001
 Remove-Item Env:CHAMAN_BACKUP_CONFIRM
-```
 
-El directorio debe ser nuevo. Contendra:
-
-- `backup.archive.gz`;
-- `source-inventory.json` con nombres, conteos e indices, nunca documentos;
-- `manifest.json` con SHA-256, versiones y datos de consistencia, sin secretos.
-
-Si una fase falla despues de crear su directorio, queda un
-`<fase>-failure-receipt.json` con hash del error y lista cerrada de artefactos
-parciales. Esos artefactos no se consideran recuperables ni se reutilizan.
-
-Verificar nuevamente sin conexion:
-
-```powershell
 npm run mongo:recovery -- verify-backup `
-  --manifest=D:\ChamanRecovery\backup_yyyymmdd_hhmm\manifest.json
+  --manifest=D:\ChamanRecovery\backup-001\manifest.json
 ```
 
-Solo despues de `sealed` y `backup-verified` se restablecen los servicios de
-escritura conforme al ticket. Si falla el sellado, no usar el archive y mantener
-el incidente controlado hasta decidir si se repite dentro de una nueva ventana.
+El dump sólo es utilizable cuando devuelve `sealed` y `verify-backup` devuelve
+`backup-verified`. Después se documenta el fin del freeze de Testing.
 
-## 3. Preparar el destino descartable
+## 6. Restore y auditoría
 
-Crear una instancia de recovery sin conexiones de Chamán y una base vacia, por
-ejemplo `chaman_restore_drill_yyyymmdd_hhmm`. Completar
-`disposable-target-attestation.json` fuera del repo. Su `drillId` debe coincidir
-con el manifiesto.
-
-El preflight valida herramientas y checksums sin conectarse:
+Crear un directorio vacío y restringido para el drill. Generar un runtime proof
+nuevo si el anterior tiene más de diez minutos y usarlo en cada fase.
 
 ```powershell
-npm run mongo:recovery -- preflight --phase=restore `
-  --attestation=D:\ChamanRecovery\target.json `
-  --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
-  --manifest=D:\ChamanRecovery\backup_yyyymmdd_hhmm\manifest.json `
-  --output-dir=D:\ChamanRecovery\drill_yyyymmdd_hhmm
-```
-
-Crear `drill_yyyymmdd_hhmm` vacio fuera del repo antes del restore.
-
-## 4. Restaurar
-
-```powershell
-$env:CHAMAN_RESTORE_CONFIRM = 'restore:backup_yyyymmdd_hhmm:chaman_restore_drill_yyyymmdd_hhmm'
-
+$env:CHAMAN_RESTORE_CONFIRM = 'restore:<DRILL_ID>:chaman_restore_drill_<ID>'
 npm run mongo:recovery -- restore `
   --attestation=D:\ChamanRecovery\target.json `
-  --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
-  --target-uri-file=D:\ChamanRecovery\secrets\target.uri `
-  --manifest=D:\ChamanRecovery\backup_yyyymmdd_hhmm\manifest.json `
-  --output-dir=D:\ChamanRecovery\drill_yyyymmdd_hhmm
-
+  --infrastructure-evidence=D:\ChamanRecovery\evidence-001\infrastructure-evidence.json `
+  --runtime-proof=D:\ChamanRecovery\secrets-local\runtime-proof-restore.json `
+  --target-uri-file=D:\ChamanRecovery\secrets-local\target.uri `
+  --manifest=D:\ChamanRecovery\backup-001\manifest.json `
+  --output-dir=D:\ChamanRecovery\drill-001
 Remove-Item Env:CHAMAN_RESTORE_CONFIRM
-```
 
-No se usa `--drop`: el destino debe estar vacio. El archive se remapea de la base
-original a la base con prefijo de recovery. Se guardan inventarios antes y justo
-despues del restore; una diferencia impide crear un recibo exitoso. El recibo queda como
-`restored-unverified`; todavia no habilita una promocion.
-
-## 5. Verificar restauracion y agronomia
-
-Manteniendo solo la URI aislada en la terminal:
-
-```powershell
 npm run mongo:recovery -- verify `
   --attestation=D:\ChamanRecovery\target.json `
-  --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
-  --target-uri-file=D:\ChamanRecovery\secrets\target.uri `
-  --manifest=D:\ChamanRecovery\backup_yyyymmdd_hhmm\manifest.json `
-  --output-dir=D:\ChamanRecovery\drill_yyyymmdd_hhmm
-
+  --infrastructure-evidence=D:\ChamanRecovery\evidence-001\infrastructure-evidence.json `
+  --runtime-proof=D:\ChamanRecovery\secrets-local\runtime-proof-verify.json `
+  --target-uri-file=D:\ChamanRecovery\secrets-local\target.uri `
+  --manifest=D:\ChamanRecovery\backup-001\manifest.json `
+  --output-dir=D:\ChamanRecovery\drill-001
 ```
 
-La evidencia `verification.json` solo queda en `passed` cuando:
+La salida aceptable es `verification.json` con `status: passed`. Además se
+conservan el inventario restaurado, las auditorías agronómicas y una copia ACL
+del runtime proof exacto usado antes del restore.
 
-- todas las colecciones y vistas esperadas existen y conservan sus opciones;
-- los conteos exactos coinciden;
-- los indices normalizados coinciden;
-- el major de MongoDB coincide;
-- no faltan siembras ni semillas para lotes activos;
-- las semillas se comparan por IDs unicos: varias siembras pueden compartir la
-  misma variedad sin producir falsos faltantes;
-- no aparecen claves duplicadas de prediccion.
+## 7. Cleanup incluso después de expiración
 
-Tambien se ejecuta la auditoria general de integridad de lotes. Sus hallazgos
-historicos quedan documentados, pero no demuestran por si mismos una falla del
-restore; la comparacion estructural y la matriz agronomica critica si son
-bloqueantes. Revisar los tres archivos de auditoria antes de firmar el ticket.
-
-La evidencia aceptable para una futura promocion es el SHA-256 del manifiesto y
-un `verification.json` con `status: passed`. Un log de `mongodump` aislado no es
-prueba de recuperabilidad.
-
-## 6. Cleanup seguro
-
-El cleanup elimina solamente la base cuyo nombre comienza con
-`chaman_restore_drill_`; no borra el archive ni la evidencia local.
+No renovar ni reemplazar las atestaciones originales. Generar una prueba
+runtime nueva del mismo endpoint, replica set y `dbPath`; el proceso se vuelve a
+consultar inmediatamente antes del drop y su PID se comprueba dentro del propio
+comando que ejecuta `dropDatabase`.
 
 ```powershell
-$env:CHAMAN_CLEANUP_CONFIRM = 'cleanup:backup_yyyymmdd_hhmm:chaman_restore_drill_yyyymmdd_hhmm'
-
+$env:CHAMAN_CLEANUP_CONFIRM = 'cleanup:<DRILL_ID>:chaman_restore_drill_<ID>'
 npm run mongo:recovery -- cleanup `
   --attestation=D:\ChamanRecovery\target.json `
-  --infrastructure-evidence=D:\ChamanRecovery\railway-evidence.json `
-  --target-uri-file=D:\ChamanRecovery\secrets\target.uri `
-  --manifest=D:\ChamanRecovery\backup_yyyymmdd_hhmm\manifest.json `
-  --output-dir=D:\ChamanRecovery\drill_yyyymmdd_hhmm
-
+  --infrastructure-evidence=D:\ChamanRecovery\evidence-001\infrastructure-evidence.json `
+  --runtime-proof=D:\ChamanRecovery\secrets-local\runtime-proof-cleanup.json `
+  --target-uri-file=D:\ChamanRecovery\secrets-local\target.uri `
+  --manifest=D:\ChamanRecovery\backup-001\manifest.json `
+  --output-dir=D:\ChamanRecovery\drill-001
 Remove-Item Env:CHAMAN_CLEANUP_CONFIRM
 ```
 
-Conservar `cleanup-receipt.json`. Luego destruir la instancia/volumen descartable
-desde su plataforma y registrar esa segunda evidencia en el ticket. La destruccion
-de infraestructura no se automatiza desde este repositorio.
+`cleanup-receipt.json` conserva los hashes originales, el process ID probado y
+`rescanFound: false`. Después se detiene el `mongod` local y se conserva la
+evidencia del drill según la política de retención.
 
-## Criterio de salida y recuperacion
+## Criterio de salida
 
-Una promocion que escriba datos productivos sigue bloqueada si falta cualquiera
-de estos elementos:
+El simulacro es GO sólo si existen, para el mismo `drillId`:
 
-- manifest sellado y checksum verificado;
-- restore receipt del mismo `drillId`;
-- verificacion `passed`;
-- revision humana de auditorias;
-- ubicacion cifrada y controlada del archive;
-- SHA Git exacto de la version a promover y SHA de rollback.
+- captura Railway cruda y evidencia derivada intactas;
+- manifiesto sellado y archive con checksum válido;
+- restore receipt ligado al manifiesto y atestación;
+- `verification.json` en `passed`;
+- cleanup receipt con rescan negativo;
+- revisión humana y ubicación controlada del archive.
 
-Ante cualquier duda de destino, version, freeze o URI, cancelar. Nunca se prueba
-un restore sobre produccion, Testing compartido ni la base de ChirpStack.
+Ante cualquier duda de URI, destino, freeze, versión o identidad runtime, se
+cancela. Nunca se restaura sobre Producción, Testing compartido ni ChirpStack.

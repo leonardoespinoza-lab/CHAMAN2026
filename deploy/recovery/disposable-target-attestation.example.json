@@ -2,7 +2,8 @@
   "schemaVersion": 1,
   "kind": "chaman-mongo-disposable-target-attestation",
   "drillId": "backup_yyyymmdd_hhmm",
-  "environment": "recovery-drill",
+  "drillMode": "testing-local-drill",
+  "environment": "local-recovery-drill",
   "database": "chaman_restore_drill_yyyymmdd_hhmm",
   "disposable": true,
   "dedicatedInstance": true,
@@ -15,9 +16,9 @@
   "approvedBy": "REPLACE_WITH_APPROVER",
   "changeTicket": "REPLACE_WITH_CHANGE_TICKET",
   "instanceIdentity": {
-    "provider": "REPLACE_WITH_PROVIDER",
-    "instanceId": "REPLACE_WITH_DISTINCT_DISPOSABLE_INSTANCE_ID",
-    "endpointFingerprintSha256": "REPLACE_WITH_64_HEX_FROM_FINGERPRINT_COMMAND"
+    "provider": "local-mongodb",
+    "instanceId": "REPLACE_WITH_LOCAL_MONGODB_INSTANCE_ID_FROM_RUNTIME_PROOF",
+    "endpointFingerprintSha256": "REPLACE_WITH_64_HEX_FROM_RUNTIME_PROOF"
   },
   "infrastructureEvidenceSha256": "REPLACE_WITH_SAME_SHA256_OF_RAILWAY_EVIDENCE_FILE"
 }

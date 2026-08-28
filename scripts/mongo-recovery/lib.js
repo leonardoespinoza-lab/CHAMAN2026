@@ -6,6 +6,8 @@ const BACKUP_KIND = 'chaman-mongo-logical-backup';
 const SOURCE_ATTESTATION_KIND = 'chaman-mongo-write-freeze-attestation';
 const TARGET_ATTESTATION_KIND = 'chaman-mongo-disposable-target-attestation';
 const RESTORE_DB_PREFIX = 'chaman_restore_drill_';
+const TESTING_LOCAL_MODE = 'testing-local-drill';
+const PRODUCTION_MODE = 'production-disposable';
 const SYSTEM_DATABASES = new Set(['admin', 'config', 'local']);
 const INSTANCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{5,199}$/;
 
@@ -143,6 +145,7 @@ function validateSourceAttestation(attestation, { now = new Date() } = {}) {
       'schemaVersion',
       'kind',
       'attestationId',
+      'drillMode',
       'sourceEnvironment',
       'database',
       'writesFrozen',
@@ -163,10 +166,15 @@ function validateSourceAttestation(attestation, { now = new Date() } = {}) {
   }
   const id = requiredText(attestation.attestationId, 'attestationId');
   if (!/^[a-z0-9][a-z0-9_-]{7,79}$/i.test(id)) fail('attestationId invalido.');
-  if (attestation.sourceEnvironment !== 'production') {
-    fail('El dump gobernado exige sourceEnvironment=production.');
+  const drillMode = requiredText(attestation.drillMode, 'drillMode');
+  if (![TESTING_LOCAL_MODE, PRODUCTION_MODE].includes(drillMode)) fail('drillMode invalido.');
+  const expectedEnvironment = drillMode === TESTING_LOCAL_MODE ? 'testing' : 'production';
+  if (attestation.sourceEnvironment !== expectedEnvironment) {
+    fail(`El modo ${drillMode} exige sourceEnvironment=${expectedEnvironment}.`);
   }
   const database = validateDatabaseName(attestation.database);
+  const expectedDatabase = drillMode === TESTING_LOCAL_MODE ? 'chaman_testing' : 'chaman';
+  if (database !== expectedDatabase) fail(`El modo ${drillMode} exige database=${expectedDatabase}.`);
   if (attestation.writesFrozen !== true) fail('writesFrozen debe ser true.');
   assertPlainObject(attestation.freezeControls, 'freezeControls');
   assertExactKeys(
@@ -205,6 +213,8 @@ function validateSourceAttestation(attestation, { now = new Date() } = {}) {
   if (now < verifiedAt || now >= expiresAt) fail('La atestacion no esta vigente.');
   return {
     id,
+    drillMode,
+    sourceEnvironment: expectedEnvironment,
     database,
     frozenAt,
     verifiedAt,
@@ -214,7 +224,7 @@ function validateSourceAttestation(attestation, { now = new Date() } = {}) {
   };
 }
 
-function validateTargetAttestation(attestation, { now = new Date() } = {}) {
+function validateTargetAttestation(attestation, { now = new Date(), allowExpired = false } = {}) {
   assertPlainObject(attestation, 'La atestacion del destino');
   assertExactKeys(
     attestation,
@@ -222,6 +232,7 @@ function validateTargetAttestation(attestation, { now = new Date() } = {}) {
       'schemaVersion',
       'kind',
       'drillId',
+      'drillMode',
       'environment',
       'database',
       'disposable',
@@ -244,9 +255,10 @@ function validateTargetAttestation(attestation, { now = new Date() } = {}) {
   }
   const drillId = requiredText(attestation.drillId, 'drillId');
   if (!/^[a-z0-9][a-z0-9_-]{7,79}$/i.test(drillId)) fail('drillId invalido.');
-  if (attestation.environment !== 'recovery-drill') {
-    fail('El destino debe declarar environment=recovery-drill.');
-  }
+  const drillMode = requiredText(attestation.drillMode, 'drillMode');
+  if (![TESTING_LOCAL_MODE, PRODUCTION_MODE].includes(drillMode)) fail('drillMode invalido.');
+  const expectedEnvironment = drillMode === TESTING_LOCAL_MODE ? 'local-recovery-drill' : 'recovery-drill';
+  if (attestation.environment !== expectedEnvironment) fail(`El modo ${drillMode} exige environment=${expectedEnvironment}.`);
   const database = validateDatabaseName(attestation.database, { restore: true });
   for (const key of [
     'disposable',
@@ -262,6 +274,8 @@ function validateTargetAttestation(attestation, { now = new Date() } = {}) {
   requiredText(attestation.approvedBy, 'approvedBy');
   requiredText(attestation.changeTicket, 'changeTicket');
   const instanceIdentity = validateInstanceIdentity(attestation.instanceIdentity, 'instanceIdentity');
+  const expectedProvider = drillMode === TESTING_LOCAL_MODE ? 'local-mongodb' : 'railway';
+  if (instanceIdentity.provider !== expectedProvider) fail(`El modo ${drillMode} exige provider=${expectedProvider}.`);
   const infrastructureEvidenceSha256 = requiredText(
     attestation.infrastructureEvidenceSha256,
     'infrastructureEvidenceSha256',
@@ -270,11 +284,11 @@ function validateTargetAttestation(attestation, { now = new Date() } = {}) {
     fail('infrastructureEvidenceSha256 invalido.');
   }
   const expiresAt = validDate(attestation.expiresAt, 'expiresAt');
-  if (now >= expiresAt) fail('La atestacion del destino esta vencida.');
-  if (expiresAt - now > 48 * 60 * 60 * 1000) {
+  if (!allowExpired && now >= expiresAt) fail('La atestacion del destino esta vencida.');
+  if (!allowExpired && expiresAt - now > 48 * 60 * 60 * 1000) {
     fail('La atestacion del destino no puede tener mas de 48 horas de vigencia restante.');
   }
-  return { drillId, database, expiresAt, instanceIdentity, infrastructureEvidenceSha256 };
+  return { drillId, drillMode, database, expiresAt, instanceIdentity, infrastructureEvidenceSha256 };
 }
 
 function assertRuntimeIdentity(uri, attestedIdentity, label) {
@@ -502,8 +516,9 @@ function buildBackupManifest({ attestation, inventory, archivePath, inventoryPat
     schemaVersion: 1,
     kind: BACKUP_KIND,
     drillId: source.id,
+    drillMode: source.drillMode,
     database: source.database,
-    sourceEnvironment: 'production',
+    sourceEnvironment: source.sourceEnvironment,
     sourceInstance: source.instanceIdentity,
     infrastructureEvidenceSha256: source.infrastructureEvidenceSha256,
     consistency: {
@@ -542,6 +557,7 @@ function validateBackupManifest(manifest, backupDir) {
       'schemaVersion',
       'kind',
       'drillId',
+      'drillMode',
       'database',
       'sourceEnvironment',
       'sourceInstance',
@@ -562,7 +578,12 @@ function validateBackupManifest(manifest, backupDir) {
   assertNoSecrets(manifest);
   requiredText(manifest.drillId, 'drillId');
   validateDatabaseName(manifest.database);
-  if (manifest.sourceEnvironment !== 'production') fail('El manifiesto no identifica production como origen.');
+  if (![TESTING_LOCAL_MODE, PRODUCTION_MODE].includes(manifest.drillMode)) fail('drillMode del manifiesto invalido.');
+  const expectedEnvironment = manifest.drillMode === TESTING_LOCAL_MODE ? 'testing' : 'production';
+  const expectedDatabase = manifest.drillMode === TESTING_LOCAL_MODE ? 'chaman_testing' : 'chaman';
+  if (manifest.sourceEnvironment !== expectedEnvironment || manifest.database !== expectedDatabase) {
+    fail('Origen del manifiesto incompatible con drillMode.');
+  }
   validateInstanceIdentity(manifest.sourceInstance, 'sourceInstance');
   if (!/^[0-9a-f]{64}$/i.test(manifest.infrastructureEvidenceSha256 || '')) {
     fail('infrastructureEvidenceSha256 del manifiesto es invalido.');
@@ -603,8 +624,8 @@ function validateBackupManifest(manifest, backupDir) {
       fail(`Falta el artefacto ${path.basename(artifactPath)}.`);
     }
   }
-  if (sha256File(archivePath) !== manifest.archive.sha256) fail('Checksum del archive invalido.');
-  if (sha256File(inventoryPath) !== manifest.inventory.sha256) fail('Checksum del inventario invalido.');
+  if (sha256File(archivePath).toLowerCase() !== manifest.archive.sha256.toLowerCase()) fail('Checksum del archive invalido.');
+  if (sha256File(inventoryPath).toLowerCase() !== manifest.inventory.sha256.toLowerCase()) fail('Checksum del inventario invalido.');
   if (fs.statSync(archivePath).size !== manifest.archive.sizeBytes) fail('Tamano del archive no coincide.');
   const inventory = normalizeInventory(readJson(inventoryPath));
   if (inventory.database !== manifest.database) fail('Inventario y manifiesto refieren bases distintas.');
@@ -628,9 +649,11 @@ function redact(text, secrets = []) {
 
 module.exports = {
   BACKUP_KIND,
+  PRODUCTION_MODE,
   RESTORE_DB_PREFIX,
   SOURCE_ATTESTATION_KIND,
   TARGET_ATTESTATION_KIND,
+  TESTING_LOCAL_MODE,
   assertCompatibleMongoVersions,
   assertDestinationIsolated,
   assertNoSecrets,

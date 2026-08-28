@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const {
   PREFIX,
+  assertOneJournalMutation,
   cleanupTestingReleaseUsers,
 } = require('../testing-release-users-cleanup');
 
@@ -38,7 +39,7 @@ function fakeDb(databaseName = 'chaman_testing') {
       },
     },
     maintenance_cleanup_journals: {
-      async insertOne(document) { calls.push({ collection: 'journal', operation: 'insertOne', document }); },
+      async insertOne(document) { calls.push({ collection: 'journal', operation: 'insertOne', document }); return { acknowledged: true, insertedId: document.cleanupId }; },
       async updateOne(filter, update) { calls.push({ collection: 'journal', operation: 'updateOne', filter, update }); return { matchedCount: 1, modifiedCount: 1 }; },
     },
   };
@@ -74,7 +75,8 @@ test('cleanup revoca tokens por username y user._id legacy antes de usuarios, y 
   const userDelete = db.calls.find((call) => call.collection === 'usuarios' && call.operation === 'deleteMany');
   assert.equal(tokenDelete.filter.$or[0]['user.username'].$regex, `^${PREFIX}`);
   assert.deepEqual(tokenDelete.filter.$or[1]['user._id'].$in, ['user-1', 'user-2']);
-  assert.equal(userDelete.filter.username.$regex, `^${PREFIX}`);
+  assert.equal(userDelete.filter.$or[0].username.$regex, `^${PREFIX}`);
+  assert.deepEqual(userDelete.filter.$or[1]._id.$in, ['user-1', 'user-2']);
 });
 
 test('cleanup rechaza cualquier base que no sea chaman_testing antes de tocar colecciones', async () => {
@@ -92,4 +94,10 @@ test('cleanup falla cerrado si quedan tokens o usuarios temporales', async () =>
     return collection;
   };
   await assert.rejects(() => cleanupTestingReleaseUsers(db), /Cleanup incompleto/);
+});
+
+test('journal exige matchedCount=1 y modifiedCount=1 tanto para exito como falla', () => {
+  assert.doesNotThrow(() => assertOneJournalMutation({ matchedCount: 1, modifiedCount: 1 }, 'completed'));
+  assert.throws(() => assertOneJournalMutation({ matchedCount: 1, modifiedCount: 0 }, 'completed'), /exactamente/);
+  assert.throws(() => assertOneJournalMutation({ matchedCount: 0, modifiedCount: 0 }, 'failed'), /exactamente/);
 });
