@@ -4,6 +4,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
+const vm = require('node:vm');
 const {
   PRODUCTION_MODE,
   TESTING_LOCAL_MODE,
@@ -49,6 +50,7 @@ const {
   assertCleanupReceiptBindings,
   assertDropConfirmed,
   assertSameRuntimeForCleanup,
+  readProtectedUri,
 } = require('../mongo-recovery');
 
 const NOW = new Date('2026-08-28T18:00:00.000Z');
@@ -452,6 +454,99 @@ test('proceso principal rechaza cualquier URI MongoDB heredada por entorno', () 
 test('hash de dbPath preserva mayusculas en POSIX y normaliza solo en Windows', () => {
   assert.notEqual(hashDbPath('/var/lib/chaman/Data', 'linux'), hashDbPath('/var/lib/chaman/data', 'linux'));
   assert.equal(hashDbPath('C:\\Chaman\\Data', 'win32'), hashDbPath('c:\\chaman\\data', 'win32'));
+});
+
+test('lectura de URI exige ACL del directorio antes de verificar o leer el archivo', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-uri-parent-acl-'));
+  const file = path.join(directory, 'source.uri');
+  fs.writeFileSync(file, SOURCE_URI);
+  const calls = [];
+  try {
+    assert.throws(() => readProtectedUri(file, 'source', {
+      verifyDirectory(parent) { calls.push(['directory', parent]); throw new Error('directorio no restringido'); },
+      verifyFile(target) { calls.push(['file', target]); },
+    }), /directorio no restringido/);
+    assert.deepEqual(calls, [['directory', directory]]);
+    assert.equal(readProtectedUri(file, 'source', {
+      verifyDirectory(parent) { assert.equal(parent, directory); },
+      verifyFile(target) { assert.equal(target, file); },
+    }), SOURCE_URI);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('scripts mongosh convierten BSON Long a PID numerico seguro antes de serializar y comparar', () => {
+  const targetDatabase = 'chaman_restore_drill_20260828_1800';
+  const bsonLong = {
+    high: 0,
+    low: 4242,
+    unsigned: false,
+    valueOf() { return 4242; },
+    toJSON() { return { high: 0, low: 4242, unsigned: false }; },
+  };
+  assert.match(JSON.stringify({ pid: bsonLong }), /"high":0/);
+
+  const runRuntimeScript = (pid) => {
+    let printed;
+    const results = {
+      hello: {
+        ok: 1, setName: 'chamanDrill', me: '127.0.0.1:27019', primary: '127.0.0.1:27019',
+        hosts: ['127.0.0.1:27019'], isWritablePrimary: true,
+      },
+      buildInfo: { ok: 1, version: '8.0.29' },
+      getCmdLineOpts: { ok: 1, parsed: {
+        net: { bindIp: '127.0.0.1', port: 27019 }, replication: { replSetName: 'chamanDrill' },
+        storage: { dbPath: 'C:\\chaman-recovery-drill\\test\\data' },
+      } },
+      serverStatus: { ok: 1, process: 'mongod', pid },
+    };
+    const database = {
+      getName: () => targetDatabase,
+      adminCommand(command) { return results[Object.keys(command)[0]]; },
+    };
+    const connection = { getDB: () => database, close() {} };
+    vm.runInNewContext(
+      fs.readFileSync(path.join(process.cwd(), 'scripts', 'mongo-recovery', 'runtime-proof.mongosh.js'), 'utf8'),
+      {
+        require: () => ({ readFileSync: () => LOCAL_URI }),
+        process: { env: { CHAMAN_RECOVERY_URI_FILE: 'uri.acl', CHAMAN_RECOVERY_DATABASE: targetDatabase } },
+        Mongo: function Mongo() { return connection; },
+        print(value) { printed = value; },
+      },
+    );
+    return JSON.parse(printed);
+  };
+  const proofRaw = runRuntimeScript(bsonLong);
+  assert.equal(proofRaw.serverStatus.pid, 4242);
+  assert.equal(typeof proofRaw.serverStatus.pid, 'number');
+  assert.throws(() => runRuntimeScript({ high: 0, low: 4242, unsigned: false }), /entero seguro/);
+
+  let dropped = false;
+  let printed;
+  const target = {
+    getName: () => targetDatabase,
+    adminCommand: () => ({ ok: 1, process: 'mongod', pid: bsonLong }),
+    dropDatabase() { dropped = true; return { ok: 1 }; },
+  };
+  const admin = { adminCommand: () => ({ ok: 1, databases: [] }) };
+  const connection = { getDB: (name) => name === 'admin' ? admin : target, close() {} };
+  vm.runInNewContext(
+    fs.readFileSync(path.join(process.cwd(), 'scripts', 'mongo-recovery', 'drop-database.mongosh.js'), 'utf8'),
+    {
+      require: () => ({ readFileSync: () => LOCAL_URI }),
+      process: { env: {
+        CHAMAN_RECOVERY_URI_FILE: 'uri.acl', CHAMAN_RECOVERY_DATABASE: targetDatabase,
+        CHAMAN_RECOVERY_DRILL_ID: 'backup_20260828_1800',
+        CHAMAN_RECOVERY_DROP_CONFIRM: `cleanup:backup_20260828_1800:${targetDatabase}`,
+        CHAMAN_RECOVERY_EXPECTED_PID: '4242',
+      } },
+      Mongo: function Mongo() { return connection; },
+      print(value) { printed = value; },
+    },
+  );
+  assert.equal(dropped, true);
+  assert.equal(JSON.parse(printed).rescanFound, false);
 });
 
 test('runtime proof acredita loopback, replica set, dbPath dedicado y processId', () => {

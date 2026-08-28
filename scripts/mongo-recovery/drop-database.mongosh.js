@@ -17,7 +17,14 @@ const connection = new Mongo(uri);
 const database = connection.getDB(databaseName);
 if (database.getName() !== databaseName) throw new Error('La base conectada no coincide con la solicitada.');
 const runtime = database.adminCommand({ serverStatus: 1 });
-if (runtime.ok !== 1 || runtime.process !== 'mongod' || runtime.pid !== expectedProcessId) {
+const runtimeProcessId = Number(runtime.pid);
+if (
+  runtime.ok !== 1 ||
+  runtime.process !== 'mongod' ||
+  !Number.isSafeInteger(runtimeProcessId) ||
+  runtimeProcessId < 1 ||
+  runtimeProcessId !== expectedProcessId
+) {
   throw new Error('El proceso MongoDB cambio antes del drop; cleanup cancelado.');
 }
 const result = database.dropDatabase();

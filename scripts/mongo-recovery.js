@@ -219,10 +219,14 @@ function gitSha() {
   return runProcess('git', ['rev-parse', 'HEAD'], { env: safeChildEnv() }).stdout.trim().toLowerCase();
 }
 
-function readProtectedUri(filePath, label) {
+function readProtectedUri(filePath, label, {
+  verifyDirectory = verifyRestrictedDirectory,
+  verifyFile = verifyRestrictedFile,
+} = {}) {
   if (!filePath) throw new Error(`Falta --${label}-uri-file.`);
   const resolved = path.resolve(filePath);
-  verifyRestrictedFile(resolved);
+  verifyDirectory(path.dirname(resolved));
+  verifyFile(resolved);
   const uri = fs.readFileSync(resolved, 'utf8').trim();
   if (!/^mongodb(?:\+srv)?:\/\//i.test(uri) || /[\r\n\0]/.test(uri)) {
     throw new Error(`Archivo URI ${label} invalido.`);
@@ -988,4 +992,5 @@ module.exports = {
   assertCleanupReceiptBindings,
   assertDropConfirmed,
   assertSameRuntimeForCleanup,
+  readProtectedUri,
 };

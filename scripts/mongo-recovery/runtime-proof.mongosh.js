@@ -16,6 +16,10 @@ const serverStatus = database.adminCommand({ serverStatus: 1 });
 for (const [name, result] of Object.entries({ hello, buildInfo, commandLine, serverStatus })) {
   if (result.ok !== 1) throw new Error(`${name} no fue confirmado por MongoDB.`);
 }
+const processId = Number(serverStatus.pid);
+if (!Number.isSafeInteger(processId) || processId < 1) {
+  throw new Error('serverStatus.pid no puede convertirse a un entero seguro.');
+}
 
 print(JSON.stringify({
   schemaVersion: 1,
@@ -36,7 +40,7 @@ print(JSON.stringify({
     replication: commandLine.parsed?.replication || {},
     storage: commandLine.parsed?.storage || {},
   },
-  serverStatus: { process: serverStatus.process, pid: serverStatus.pid },
+  serverStatus: { process: serverStatus.process, pid: processId },
 }));
 
 connection.close();

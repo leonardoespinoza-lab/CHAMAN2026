@@ -97,8 +97,18 @@ Las URI deben incluir respectivamente `/chaman_testing` y
 ## 2. Acreditar MongoDB local
 
 El `mongod` se inicia fuera de esta herramienta con `--bind_ip 127.0.0.1`,
-`--replSet <nombre>` y un `--dbpath` nuevo bajo un directorio llamado
-`chaman-recovery-drill`. Después de `rs.initiate()` y de confirmar primary:
+`--port 27019`, `--replSet chamanDrill` y un `--dbpath` nuevo bajo un directorio
+llamado `chaman-recovery-drill`. El replica set debe anunciar el mismo endpoint
+loopback de la URI, no el hostname de la PC:
+
+```javascript
+rs.initiate({
+  _id: 'chamanDrill',
+  members: [{ _id: 0, host: '127.0.0.1:27019' }],
+})
+```
+
+Después de confirmar que ese único nodo es primary:
 
 ```powershell
 npm run mongo:recovery -- runtime-proof `
