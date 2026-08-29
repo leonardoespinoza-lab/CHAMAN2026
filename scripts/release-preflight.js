@@ -74,7 +74,7 @@ async function main() {
     );
   }
   console.log(
-    `Preflight online OK: ${result.evidence.length} endpoints y ${railwayEvidence.evidence.length} deployments confirman el release ${result.expectedSha}; ${frozenLive.length} servicios congelados fueron verificados live por deployment/imagen Railway y resolución Git.`,
+    `Preflight online OK: ${result.evidence.length} endpoints y ${railwayEvidence.evidence.length} deployments confirman el release ${result.expectedSha}; ${frozenLive.length} servicios congelados fueron verificados live por identidad binaria y procedencia SHA Railway/Git.`,
   );
 }
 

@@ -86,11 +86,91 @@ El generador obtiene todos los servicios de código desde
 `deploy/environment-topology.json`. Los servicios `promote` reciben el mismo
 `expectedSha` y `rollbackSha`; los servicios `frozen` conservan SHA, deployment
 e imagen exactos del baseline y nunca participan del deploy ni del rollback.
-La única excepción admitida es `testing-lora`; Producción no admite servicios
-congelados. El baseline de Testing del 28/8 está marcado `readOnlyEvidence` y
+Sin selección explícita se conserva el contrato anterior: los once servicios
+ordinarios quedan `promote` y sólo `testing-lora` queda `frozen`. Producción no
+admite servicios congelados. El baseline de Testing del 28/8 está marcado `readOnlyEvidence` y
 `doNotDeploy`; sirve para recuperar el estado anterior, no para disparar un
 redeploy. MongoDB, Redis y ChirpStack aislados están inventariados como
 `mustRemainUntouched`.
+
+### Release selectivo en Testing
+
+`--promote-only` acepta una lista CSV de roles de código y sólo está habilitado
+en Testing. La lista se normaliza en el orden de la topología, no admite vacíos,
+duplicados ni roles desconocidos. `lora` no puede incluirse: `testing-lora`
+siempre permanece congelado bajo su identidad protegida.
+
+Para promover únicamente el worker meteorológico:
+
+```powershell
+$releaseSha = git rev-parse HEAD
+$rollbackSha = '<SHA completo actualmente desplegado en testing-meteo-worker>'
+$baselinePath = 'C:\ruta\baseline-selectivo-fresco.json'
+$builtAt = (Get-Date).ToUniversalTime().ToString('o')
+npm run release:manifest -- `
+  --sha $releaseSha `
+  --previous-sha $rollbackSha `
+  --version 2026.08.28-testing-meteo-sde.1 `
+  --built-at $builtAt `
+  --environment testing `
+  --deployment-baseline $baselinePath `
+  --promote-only meteo-worker `
+  --output $env:TEMP/chaman-testing-meteo-only.json
+```
+
+El manifiesto resultante guarda `policy.promoteOnlyRoles=["meteo-worker"]`, fija
+`testing-meteo-worker` al SHA nuevo y congela los otros diez servicios Testing
+más LoRa. El comando sólo genera JSON: no conecta fuentes, no cambia variables
+y no ejecuta deploys.
+
+El alcance del manifiesto es un control de validación, no un interruptor de
+Railway. Antes del push o de conectar la fuente del worker se deben pausar o
+excluir de auto-deploy los once servicios `frozen`; el baseline se captura
+después de inmovilizarlos y el preflight live se repite después del deploy
+selectivo. De otro modo el preflight detectaría un redeploy accidental, pero no
+podría impedir que Railway lo iniciara.
+
+El baseline selectivo es evidencia read-only fresca: `capturedAt` debe estar en
+ISO UTC canónico, no más de dos minutos en el futuro y no más de quince minutos
+antes de generar el manifiesto. La entrada promovida debe incluir `observedSha`
+completo e `imageDigest`; el SHA debe coincidir con `--previous-sha`. El
+manifiesto conserva además el deployment y la imagen exactos para que el
+rollback selectivo no pueda aceptar otro deployment con el mismo commit. Cada
+servicio GitHub congelado requiere:
+
+```json
+{
+  "role": "auth",
+  "service": "testing-auth",
+  "deploymentId": "<UUID deployment actual>",
+  "observedSha": "<commitHash completo actual>",
+  "imageDigest": "sha256:<64 hex>",
+  "railwayProjectId": "<UUID proyecto Testing>",
+  "railwayEnvironmentId": "<UUID entorno Testing>",
+  "railwayServiceId": "<UUID servicio testing-auth>",
+  "shaProvenance": "railway-github-commit-hash"
+}
+```
+
+`deploy/testing-baseline-2026-08-28.json` conserva el baseline histórico del
+contrato general, pero no sirve como baseline selectivo: no contiene SHA,
+imagen, procedencia ni IDs Railway completos para los diez roles genéricos.
+
+El proyecto y entorno deben coincidir con los IDs canónicos de Testing; los
+deployment y service IDs no pueden repetirse. La verificación live exige que el
+deployment más reciente siga `SUCCESS` y conserve exactamente ID, imagen y
+`meta.commitHash`; primero consulta una sola vez el inventario de servicios y
+comprueba que cada `railwayServiceId` siga asociado al nombre esperado. El
+rollback selectivo exige además que el servicio promovido vuelva al deployment
+e imagen exactos sellados en el baseline, no sólo al SHA. Los congelados
+genéricos no aceptan un `cliMessage` como reemplazo. LoRa mantiene su excepción más estricta
+`railway-cli-message+git-resolution`, resolución Git exacta y
+`LORAWAN_MQTT_ENABLED=false`.
+
+La política de migraciones no cambia en modo selectivo: siguen admitiéndose
+únicamente las migraciones aditivas, fuera del startup y con rollback limitado.
+Un release de sólo parser, como `meteo-sde`, debe generar `migrations: []` y no
+pasar la plantilla de índices si no forma parte de ese cambio.
 
 Este contrato usa `schemaVersion: 2`. Los manifiestos v1 anteriores se rechazan
 de forma deliberada porque no podían expresar ni verificar servicios congelados;
@@ -153,12 +233,12 @@ deployment e imagen protegidos. Faltantes, roles extra, claves extra o cualquier
 cambio hacen fallar el preflight. `capturedAt` debe ser posterior al build del
 release, no puede estar en el futuro y vence a los 15 minutos.
 
-Para `testing-lora`, Railway no expone `commitHash` en el deployment protegido.
-Por eso el SHA completo no se atribuye directamente a Railway: el preflight
-consulta Railway en vivo para comprobar deployment, estado, imagen, mensaje CLI
-y `LORAWAN_MQTT_ENABLED=false`; luego Git resuelve de forma inequívoca el SHA
-corto del mensaje al SHA completo sellado. Si cambia cualquiera de esas piezas,
-la validación falla.
+Para congelados GitHub, el preflight consulta Railway en vivo y exige
+`commitHash` completo, deployment e imagen exactos. Para `testing-lora`, Railway
+no expone `commitHash` en el deployment protegido; el preflight comprueba
+deployment, estado, imagen, mensaje CLI y `LORAWAN_MQTT_ENABLED=false`, y Git
+resuelve de forma inequívoca el SHA corto al SHA completo sellado. Si cambia
+cualquiera de esas piezas, la validación falla.
 
 ```powershell
 npm run release:preflight -- `

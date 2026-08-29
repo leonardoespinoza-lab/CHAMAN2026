@@ -25,6 +25,58 @@ function verifyFrozenServicesLive(
   } = {},
 ) {
   const frozen = manifest.services.filter((service) => service.deploymentMode === 'frozen');
+  const genericFrozen = frozen.filter((service) => service.role !== 'lora');
+  if (genericFrozen.length) {
+    const [{ railwayProjectId, railwayEnvironmentId }] = genericFrozen;
+    for (const service of genericFrozen) {
+      if (
+        service.railwayProjectId !== railwayProjectId
+        || service.railwayEnvironmentId !== railwayEnvironmentId
+      ) {
+        throw new Error('Los servicios frozen genéricos deben pertenecer al mismo proyecto/entorno Testing');
+      }
+    }
+    const rawServices = runCommand(
+      railwayCli,
+      [
+        'service',
+        'list',
+        '--project',
+        railwayProjectId,
+        '--environment',
+        railwayEnvironmentId,
+        '--json',
+      ],
+      { cwd: root, label: 'inventario de servicios Railway live' },
+    );
+    let services;
+    try {
+      services = JSON.parse(rawServices);
+    } catch {
+      throw new Error('Railway no devolvió un inventario de servicios JSON válido');
+    }
+    if (!Array.isArray(services)) {
+      throw new Error('Railway no devolvió una lista de servicios');
+    }
+    const byId = new Map();
+    for (const item of services) {
+      if (!item || typeof item.id !== 'string' || typeof item.name !== 'string') {
+        throw new Error('Railway devolvió una identidad de servicio inválida');
+      }
+      if (byId.has(item.id)) {
+        throw new Error(`Railway devolvió serviceId duplicado ${item.id}`);
+      }
+      byId.set(item.id, item);
+    }
+    for (const service of genericFrozen) {
+      const live = byId.get(service.railwayServiceId);
+      if (!live || live.name !== service.service) {
+        throw new Error(
+          `${service.role}: railwayServiceId no corresponde a ${service.service}`,
+        );
+      }
+    }
+  }
   return frozen.map((service) => {
     const raw = runCommand(
       railwayCli,
@@ -47,6 +99,10 @@ function verifyFrozenServicesLive(
     } catch {
       throw new Error(`${service.role}: Railway no devolvió JSON válido`);
     }
+    if (service.role !== 'lora') {
+      return validateFrozenDeploymentList(service, deployments);
+    }
+
     const rawVariables = runCommand(
       railwayCli,
       [

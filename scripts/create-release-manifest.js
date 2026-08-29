@@ -5,6 +5,7 @@ const {
   buildReleaseManifest,
   loadJson,
   loadTopology,
+  parsePromoteOnlyCsv,
 } = require('./release-safety');
 
 const { values } = parseArgs({
@@ -22,6 +23,7 @@ const { values } = parseArgs({
     'production-auto-deploy-paused': { type: 'boolean', default: false },
     output: { type: 'string' },
     'deployment-baseline': { type: 'string' },
+    'promote-only': { type: 'string' },
     force: { type: 'boolean', default: false },
   },
 });
@@ -56,6 +58,7 @@ try {
     railwayWaitForCiVerified: values['railway-wait-for-ci-verified'],
     productionAutoDeployPaused: values['production-auto-deploy-paused'],
     deploymentBaseline,
+    promoteOnly: parsePromoteOnlyCsv(values['promote-only']),
   });
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
