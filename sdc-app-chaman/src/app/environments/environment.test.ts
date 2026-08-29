@@ -1,6 +1,6 @@
 import { v } from './version';
 export const VERSION = v;
-export const ENV: 'Local' | 'Test' | 'Production' = 'Local';
+export const ENV: 'Local' | 'Test' | 'Production' = 'Test';
 
 const runtime = (globalThis as any).__CHAMAN_CONFIG__ || {};
 

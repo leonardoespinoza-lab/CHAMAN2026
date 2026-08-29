@@ -3,6 +3,14 @@ import { Injectable } from '@angular/core';
 import { SwUpdate } from '@angular/service-worker';
 import { TranslateService } from '@ngx-translate/core';
 import { ConfirmationService } from 'primeng/api';
+import { ENV } from '../../environments/environment';
+
+export const debeAplicarActualizacionAutomaticamente = (
+  environment: 'Local' | 'Test' | 'Production',
+  hostname: string
+): boolean =>
+  environment === 'Test' ||
+  hostname.toLowerCase().includes('testing-web-testing-dc8e');
 
 @Injectable({
   providedIn: 'root',
@@ -46,7 +54,16 @@ export class PwaService {
       const newVersion = await this.swUpdate.checkForUpdate();
       if (newVersion) {
         console.log('SW - Nueva versión de app detectada');
-        await this.promptReload();
+        if (
+          debeAplicarActualizacionAutomaticamente(
+            ENV,
+            globalThis.location?.hostname || ''
+          )
+        ) {
+          await this.activateAndReload();
+        } else {
+          await this.promptReload();
+        }
       } else {
         console.log('SW - No hay nueva versión');
       }
@@ -55,6 +72,11 @@ export class PwaService {
     } finally {
       this.checkingVersion = false;
     }
+  }
+
+  private async activateAndReload() {
+    await this.swUpdate.activateUpdate();
+    window.location.reload();
   }
 
   private async promptReload() {
@@ -79,8 +101,7 @@ export class PwaService {
       },
       accept: async () => {
         try {
-          await this.swUpdate.activateUpdate();
-          window.location.reload();
+          await this.activateAndReload();
         } finally {
           this.updatePromptOpen = false;
         }

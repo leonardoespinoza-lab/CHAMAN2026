@@ -1,6 +1,20 @@
-import { PwaService } from './pwa.service';
+import {
+  debeAplicarActualizacionAutomaticamente,
+  PwaService,
+} from './pwa.service';
 
 describe('PwaService', () => {
+  it('aplica automaticamente las actualizaciones solo en Testing', () => {
+    expect(debeAplicarActualizacionAutomaticamente('Test', 'testing.example')).toBeTrue();
+    expect(
+      debeAplicarActualizacionAutomaticamente(
+        'Local',
+        'testing-web-testing-dc8e.up.railway.app'
+      )
+    ).toBeTrue();
+    expect(debeAplicarActualizacionAutomaticamente('Production', 'app.chamanagro.ar')).toBeFalse();
+  });
+
   const createService = () => {
     let confirmation: any;
     const swUpdate = {
