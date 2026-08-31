@@ -245,6 +245,11 @@ ciegas; conservar la evidencia e identificar primero al escritor concurrente.
 - Los bundles schema v1/v2/v3 quedan deliberadamente incompatibles con este
   flujo schema v4; deben recrearse con el commit exacto que se vaya a ejecutar.
 - El worktree debe estar limpio: `codeSha` debe ser el HEAD exacto ejecutado.
+- En la imagen desplegada de `testing-datos`, donde Railway excluye `.git`, la
+  herramienta acepta exclusivamente `RAILWAY_GIT_COMMIT_SHA`, junto con las
+  identidades nativas de proyecto, deployment, servicio y entorno Testing. En
+  cualquier otro servicio o entorno falla cerrado; en la PC sigue exigiendo el
+  worktree Git limpio.
 - No restaura colecciones de usuarios, tokens, notificaciones, colas, logs,
   dispositivos, ChirpStack, LoRaWAN ni credenciales externas.
 - El bundle contiene datos operativos de Testing: debe almacenarse cifrado,

@@ -1,4 +1,5 @@
 const { createHash } = require('node:crypto');
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -257,6 +258,36 @@ function runtimeDependencyIdentity(repositoryRoot = REPOSITORY_ROOT, versions = 
     lockfiles[name] = sha256(fs.readFileSync(filePath));
   }
   return { nodeMajor, nodeVersion, lockfiles };
+}
+
+function resolveCodeSha({
+  repositoryRoot = REPOSITORY_ROOT,
+  environment = process.env,
+  runGit = (args, options) => execFileSync('git', args, options),
+} = {}) {
+  const root = path.resolve(repositoryRoot);
+  if (fs.existsSync(path.join(root, '.git'))) {
+    const dirty = String(runGit(
+      ['status', '--porcelain', '--untracked-files=all'],
+      { encoding: 'utf8', cwd: root },
+    )).trim();
+    assert(!dirty, 'El worktree debe estar limpio: codeSha debe identificar exactamente el codigo ejecutado.');
+    const sha = String(runGit(['rev-parse', 'HEAD'], { encoding: 'utf8', cwd: root })).trim().toLowerCase();
+    assert(/^[a-f0-9]{40}$/.test(sha), 'No se pudo sellar el codeSha ejecutado.');
+    return sha;
+  }
+
+  const railwaySha = String(environment.RAILWAY_GIT_COMMIT_SHA || '').trim().toLowerCase();
+  const railwayTestingImage =
+    environment.RAILWAY_ENVIRONMENT_NAME === 'testing' &&
+    environment.RAILWAY_SERVICE_NAME === 'testing-datos' &&
+    /^[a-f0-9-]{36}$/i.test(String(environment.RAILWAY_DEPLOYMENT_ID || '')) &&
+    /^[a-f0-9-]{36}$/i.test(String(environment.RAILWAY_PROJECT_ID || ''));
+  assert(
+    railwayTestingImage && /^[a-f0-9]{40}$/.test(railwaySha),
+    'Sin metadata Git local, codeSha solo puede provenir del despliegue nativo de Railway testing-datos.',
+  );
+  return railwaySha;
 }
 
 function assertRuntimeDependencyIdentity(sealed, current) {
@@ -1290,6 +1321,7 @@ module.exports = {
   recordPostState,
   resolveScope,
   restoreBundle,
+  resolveCodeSha,
   runtimeDependencyIdentity,
   scanSecrets,
   sealedQueries,

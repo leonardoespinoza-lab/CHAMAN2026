@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
 const toolkit = require('./lib/era5-pilot-snapshot');
 
 function parseArgs(argv) {
@@ -26,15 +25,6 @@ function loadMongoDriver() {
   } catch {
     throw new Error('Falta el driver Mongo. Ejecute npm ci en sdc-datos; la herramienta no instala dependencias automaticamente.');
   }
-}
-
-function codeSha() {
-  const cwd = path.resolve(__dirname, '..');
-  const dirty = execFileSync('git', ['status', '--porcelain', '--untracked-files=all'], { encoding: 'utf8', cwd }).trim();
-  if (dirty) throw new Error('El worktree debe estar limpio: codeSha debe identificar exactamente el codigo ejecutado.');
-  const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', cwd }).trim();
-  if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error('No se pudo sellar el codeSha ejecutado.');
-  return sha;
 }
 
 function print(value) {
@@ -63,7 +53,7 @@ async function main() {
       bridgeToday: bundle.manifest.bridgeConfig.bridgeToday,
     });
   }
-  const executionCodeSha = codeSha();
+  const executionCodeSha = toolkit.resolveCodeSha();
   if (bundle) toolkit.assertCodeIdentity(bundle.manifest, executionCodeSha);
   const runtimeIdentity = toolkit.runtimeDependencyIdentity();
   if (bundle) toolkit.assertRuntimeDependencyIdentity(bundle.manifest.runtimeIdentity, runtimeIdentity);
@@ -90,7 +80,7 @@ async function main() {
     if (args.mode === 'plan' || args.mode === 'snapshot') {
       const { scope, state } = await toolkit.readConsistentScope({ client, db, config, ObjectId, EJSON });
       toolkit.assertNoSecrets(state);
-      toolkit.assertCodeIdentity({ codeSha: executionCodeSha }, codeSha());
+      toolkit.assertCodeIdentity({ codeSha: executionCodeSha }, toolkit.resolveCodeSha());
       const plan = toolkit.buildPlan(config, scope, state, executionCodeSha, EJSON, {
         operationalApproval,
         runtimeIdentity,
@@ -115,7 +105,7 @@ async function main() {
           ObjectId,
         },
       });
-      toolkit.assertCodeIdentity(bundle.manifest, codeSha());
+      toolkit.assertCodeIdentity(bundle.manifest, toolkit.resolveCodeSha());
       toolkit.assertNoSecrets(currentState);
       const summary = toolkit.stateSummary(currentState);
       if (args.recordPostState) {
@@ -133,7 +123,7 @@ async function main() {
       return;
     }
 
-    const restoreCodeSha = codeSha();
+    const restoreCodeSha = toolkit.resolveCodeSha();
     toolkit.assertCodeIdentity(bundle.manifest, restoreCodeSha);
     const outcome = await toolkit.restoreBundle({
       client,

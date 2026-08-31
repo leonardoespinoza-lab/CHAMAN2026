@@ -517,8 +517,56 @@ test('verify y restore revalidan worktree limpio y codeSha sellado', () => {
   const cli = fs.readFileSync(path.join(__dirname, '..', 'era5-pilot-snapshot.js'), 'utf8');
   assert.match(cli, /if \(bundle\) toolkit\.assertCodeIdentity\(bundle\.manifest, executionCodeSha\)/);
   assert.match(cli, /if \(bundle\) toolkit\.assertOperationalApprovalMatchesManifest\(bundle\.manifest, operationalApproval\)/);
-  assert.match(cli, /toolkit\.assertCodeIdentity\(bundle\.manifest, codeSha\(\)\)/);
-  assert.match(cli, /const restoreCodeSha = codeSha\(\)/);
+  assert.match(cli, /toolkit\.assertCodeIdentity\(bundle\.manifest, toolkit\.resolveCodeSha\(\)\)/);
+  assert.match(cli, /const restoreCodeSha = toolkit\.resolveCodeSha\(\)/);
+});
+
+test('codeSha usa Git limpio local y acepta metadata nativa solo en testing-datos sin .git', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'chaman-era5-code-sha-'));
+  try {
+    fs.writeFileSync(path.join(root, '.git'), 'gitdir: C:/fake\n');
+    const calls = [];
+    const local = toolkit.resolveCodeSha({
+      repositoryRoot: root,
+      runGit(args) {
+        calls.push(args.join(' '));
+        return args[0] === 'status' ? '' : `${'a'.repeat(40)}\n`;
+      },
+    });
+    assert.equal(local, 'a'.repeat(40));
+    assert.deepEqual(calls, ['status --porcelain --untracked-files=all', 'rev-parse HEAD']);
+    assert.throws(() => toolkit.resolveCodeSha({
+      repositoryRoot: root,
+      runGit(args) { return args[0] === 'status' ? ' M archivo\n' : `${'a'.repeat(40)}\n`; },
+    }), /worktree debe estar limpio/);
+
+    fs.rmSync(path.join(root, '.git'));
+    const railwayEnvironment = {
+      RAILWAY_ENVIRONMENT_NAME: 'testing',
+      RAILWAY_SERVICE_NAME: 'testing-datos',
+      RAILWAY_DEPLOYMENT_ID: '12e33a7e-41e7-4772-aa42-23a2458f11de',
+      RAILWAY_PROJECT_ID: '36dee457-e9f8-498d-a990-72b9728d63d5',
+      RAILWAY_GIT_COMMIT_SHA: 'B'.repeat(40),
+    };
+    assert.equal(
+      toolkit.resolveCodeSha({ repositoryRoot: root, environment: railwayEnvironment }),
+      'b'.repeat(40),
+    );
+    assert.throws(() => toolkit.resolveCodeSha({
+      repositoryRoot: root,
+      environment: { ...railwayEnvironment, RAILWAY_ENVIRONMENT_NAME: 'production' },
+    }), /solo puede provenir.*testing-datos/);
+    assert.throws(() => toolkit.resolveCodeSha({
+      repositoryRoot: root,
+      environment: { ...railwayEnvironment, RAILWAY_SERVICE_NAME: 'testing-clima' },
+    }), /solo puede provenir.*testing-datos/);
+    assert.throws(() => toolkit.resolveCodeSha({
+      repositoryRoot: root,
+      environment: { ...railwayEnvironment, RAILWAY_GIT_COMMIT_SHA: 'not-a-sha' },
+    }), /solo puede provenir.*testing-datos/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('writeBundle falla cerrado ante secretos incluso con un _bsontype falsificado', async () => {
