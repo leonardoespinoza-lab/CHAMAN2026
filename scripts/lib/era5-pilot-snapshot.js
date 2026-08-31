@@ -141,6 +141,11 @@ function loadAttestationFile(filePath, label) {
 }
 
 function assertTestingOnly({ uri, attestation, operationId, env = process.env, now = new Date() }) {
+  const railwayTestingRuntime =
+    env.RAILWAY_ENVIRONMENT_NAME === 'testing' &&
+    env.RAILWAY_SERVICE_NAME === 'testing-datos' &&
+    /^[a-f0-9-]{36}$/i.test(String(env.RAILWAY_DEPLOYMENT_ID || '')) &&
+    /^[a-f0-9-]{36}$/i.test(String(env.RAILWAY_PROJECT_ID || ''));
   const productionFlags = [
     'NODE_ENV',
     'RAILWAY_ENVIRONMENT_NAME',
@@ -148,7 +153,10 @@ function assertTestingOnly({ uri, attestation, operationId, env = process.env, n
     'CHAMAN_ENV',
     'APP_ENV',
     'ENVIRONMENT',
-  ].filter((name) => /prod(?:uction)?/i.test(String(env[name] || '').trim()));
+  ].filter((name) => {
+    const productive = /prod(?:uction)?/i.test(String(env[name] || '').trim());
+    return productive && !(name === 'NODE_ENV' && railwayTestingRuntime);
+  });
   assert(productionFlags.length === 0, `Abortado: flags productivos detectados (${productionFlags.join(', ')}).`);
   assert(typeof uri === 'string' && /^mongodb(?:\+srv)?:\/\//i.test(uri), 'La URI Mongo de Testing es obligatoria.');
   const withoutQuery = uri.split('?')[0];

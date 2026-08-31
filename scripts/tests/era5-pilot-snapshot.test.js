@@ -242,6 +242,29 @@ test('rechaza cualquier destino que no sea chaman_testing o tenga flags producti
   assert.throws(() => toolkit.assertTestingOnly({ uri, ...options }), /attestation externa/);
   assert.throws(() => toolkit.assertTestingOnly({ uri: 'mongodb://otro.example/chaman_testing', attestation, ...options }), /no corresponde/);
   assert.equal(toolkit.assertTestingOnly({ uri, attestation, ...options, env: { NODE_ENV: 'test' } }), 'chaman_testing');
+  const railwayTesting = {
+    NODE_ENV: 'production',
+    RAILWAY_ENVIRONMENT_NAME: 'testing',
+    RAILWAY_SERVICE_NAME: 'testing-datos',
+    RAILWAY_DEPLOYMENT_ID: '12e33a7e-41e7-4772-aa42-23a2458f11de',
+    RAILWAY_PROJECT_ID: '36dee457-e9f8-498d-a990-72b9728d63d5',
+  };
+  assert.equal(
+    toolkit.assertTestingOnly({ uri, attestation, ...options, env: railwayTesting }),
+    'chaman_testing',
+  );
+  assert.throws(() => toolkit.assertTestingOnly({
+    uri,
+    attestation,
+    ...options,
+    env: { ...railwayTesting, RAILWAY_ENVIRONMENT_NAME: 'production' },
+  }), /flags productivos/);
+  assert.throws(() => toolkit.assertTestingOnly({
+    uri,
+    attestation,
+    ...options,
+    env: { ...railwayTesting, RAILWAY_SERVICE_NAME: 'testing-clima' },
+  }), /flags productivos/);
   assert.equal(toolkit.testingClusterFingerprint('mongodb://b.example:27017,a.example:27017/chaman_testing'), toolkit.testingClusterFingerprint('mongodb://a.example:27017,b.example:27017/chaman_testing'));
   const codeSha = 'a'.repeat(40);
   const { config } = scopeAndConfig();

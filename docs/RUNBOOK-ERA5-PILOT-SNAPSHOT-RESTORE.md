@@ -250,6 +250,9 @@ ciegas; conservar la evidencia e identificar primero al escritor concurrente.
   identidades nativas de proyecto, deployment, servicio y entorno Testing. En
   cualquier otro servicio o entorno falla cerrado; en la PC sigue exigiendo el
   worktree Git limpio.
+- `NODE_ENV=production` puede indicar el modo optimizado de Node dentro de esa
+  misma imagen de Testing. Sólo se admite con la identidad Railway anterior;
+  un entorno Railway productivo o cualquier otro servicio sigue abortando.
 - No restaura colecciones de usuarios, tokens, notificaciones, colas, logs,
   dispositivos, ChirpStack, LoRaWAN ni credenciales externas.
 - El bundle contiene datos operativos de Testing: debe almacenarse cifrado,
