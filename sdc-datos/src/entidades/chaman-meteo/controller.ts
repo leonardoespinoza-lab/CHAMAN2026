@@ -16,6 +16,7 @@ import {
   IChamanMeteoHourlyDerived,
   IChamanMeteoHourlyRaw,
   IChamanMeteoImportJob,
+  IChamanMeteoLocationBinding,
 } from 'modelos/src';
 import { ChamanMeteoStorageGuard } from './guard';
 import { ChamanMeteoService } from './service';
@@ -45,6 +46,13 @@ export class ChamanMeteoController {
     @Param('locationId') locationId: string,
   ) {
     return this.service.resolvedLocationBinding(locationType, locationId);
+  }
+
+  @Post('bindings/upsert')
+  upsertLocationBinding(
+    @Body() data: IChamanMeteoLocationBinding,
+  ): Promise<any> {
+    return this.service.upsertLocationBinding(data);
   }
 
   @Get('jobs')

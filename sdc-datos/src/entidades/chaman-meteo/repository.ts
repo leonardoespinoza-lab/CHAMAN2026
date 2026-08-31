@@ -8,6 +8,7 @@ import {
   IChamanMeteoHourlyDerived,
   IChamanMeteoHourlyRaw,
   IChamanMeteoImportJob,
+  IChamanMeteoLocationBinding,
   IChamanMeteoPage,
   IChamanMeteoResolvedLocationBinding,
   IChamanMeteoStorageStatus,
@@ -156,6 +157,85 @@ export class ChamanMeteoRepository {
       gridPoint:
         gridPoint as unknown as IChamanMeteoResolvedLocationBinding['gridPoint'],
     };
+  }
+
+  async upsertLocationBinding(
+    data: IChamanMeteoLocationBinding,
+  ): Promise<any> {
+    const gridPoint = (await this.gridPoints
+      .findOne({ key: data.gridPointKey, enabled: true })
+      .lean()) as any;
+    if (!gridPoint) {
+      throw new ConflictException({
+        error: 'weather_grid_point_unavailable',
+        gridPointKey: data.gridPointKey,
+      });
+    }
+    const calculatedDistanceKm = this.distanceKm(
+      { lat: data.latitude, lng: data.longitude },
+      { lat: gridPoint.latitude, lng: gridPoint.longitude },
+    );
+    if (
+      !Number.isFinite(calculatedDistanceKm) ||
+      calculatedDistanceKm > 15 ||
+      Math.abs(calculatedDistanceKm - data.distanceKm) > 0.1
+    ) {
+      throw new ConflictException({
+        error: 'weather_binding_distance_mismatch',
+        gridPointKey: data.gridPointKey,
+      });
+    }
+    const existing = (await this.bindings
+      .findOne({
+        locationType: data.locationType,
+        locationId: data.locationId,
+      })
+      .lean()) as any;
+    const immutableDrift = existing
+      ? [
+          ['gridPointKey', existing.gridPointKey, data.gridPointKey],
+          ['latitude', Number(existing.latitude), data.latitude],
+          ['longitude', Number(existing.longitude), data.longitude],
+          ['distanceKm', Number(existing.distanceKm), data.distanceKm],
+        ]
+          .filter(([, left, right]) => {
+            if (typeof left !== 'number' && typeof right !== 'number') {
+              return left !== right;
+            }
+            return (
+              !Number.isFinite(Number(left)) ||
+              !Number.isFinite(Number(right)) ||
+              Math.abs(Number(left) - Number(right)) > 0.000_001
+            );
+          })
+          .map(([field]) => field)
+      : [];
+    if (immutableDrift.length) {
+      throw new ConflictException({
+        error: 'weather_location_binding_identity_drift',
+        locationType: data.locationType,
+        locationId: data.locationId,
+        immutableFields: immutableDrift,
+      });
+    }
+    return this.bindings.findOneAndUpdate(
+      {
+        locationType: data.locationType,
+        locationId: data.locationId,
+      },
+      {
+        $setOnInsert: {
+          locationType: data.locationType,
+          locationId: data.locationId,
+          gridPointKey: data.gridPointKey,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          distanceKm: data.distanceKm,
+        },
+        $set: { active: data.active },
+      },
+      { upsert: true, new: true, runValidators: true },
+    );
   }
 
   jobPage(
@@ -473,6 +553,23 @@ export class ChamanMeteoRepository {
       })),
       { ordered: false },
     );
+  }
+
+  private distanceKm(
+    left: { lat: number; lng: number },
+    right: { lat: number; lng: number },
+  ): number {
+    const radians = (value: number) => (value * Math.PI) / 180;
+    const lat1 = radians(Number(left.lat));
+    const lat2 = radians(Number(right.lat));
+    const deltaLat = lat2 - lat1;
+    const deltaLon = radians(Number(right.lng) - Number(left.lng));
+    const value =
+      Math.sin(deltaLat / 2) ** 2 +
+      Math.cos(lat1) *
+        Math.cos(lat2) *
+        Math.sin(deltaLon / 2) ** 2;
+    return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
   }
 
   private async rangeStats(

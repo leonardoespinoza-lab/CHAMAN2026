@@ -7,6 +7,7 @@ import {
   IChamanMeteoHourlyDerived,
   IChamanMeteoHourlyRaw,
   IChamanMeteoImportJob,
+  IChamanMeteoLocationBinding,
 } from 'modelos/src';
 import { Types } from 'mongoose';
 import { ChamanMeteoRepository } from './repository';
@@ -43,6 +44,51 @@ export class ChamanMeteoService {
       type as 'establecimiento' | 'lote',
       id,
     );
+  }
+
+  upsertLocationBinding(data: IChamanMeteoLocationBinding): Promise<any> {
+    const locationId = String(data?.locationId || '').trim();
+    const gridPointKey = this.cleanKey(data?.gridPointKey);
+    const latitude = data?.latitude;
+    const longitude = data?.longitude;
+    const distanceKm = data?.distanceKm;
+    if (
+      data?.locationType !== 'lote' ||
+      !Types.ObjectId.isValid(locationId) ||
+      !gridPointKey ||
+      !Number.isFinite(latitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      !Number.isFinite(longitude) ||
+      longitude < -180 ||
+      longitude > 180 ||
+      !Number.isFinite(distanceKm) ||
+      distanceKm < 0 ||
+      distanceKm > 15 ||
+      typeof data?.active !== 'boolean'
+    ) {
+      throw new BadRequestException({
+        error: 'invalid_lot_weather_binding',
+        required: [
+          'locationType=lote',
+          'locationId=ObjectId',
+          'gridPointKey',
+          'latitude',
+          'longitude',
+          'distanceKm=0..15',
+          'active=boolean',
+        ],
+      });
+    }
+    return this.repository.upsertLocationBinding({
+      ...data,
+      locationType: 'lote',
+      locationId,
+      gridPointKey,
+      latitude,
+      longitude,
+      distanceKm,
+    });
   }
 
   jobs(

@@ -69,6 +69,14 @@ flag sin ella no habilita ningun lote. `CHAMAN_METEO_AGROMET_SOWING_ALLOWLIST`
 queda deliberadamente sin efecto: una autorizacion por siembra no puede abrir
 un contexto meteorologico compartido con otras siembras.
 
+El storage interno permite crear o reactivar un binding explicito mediante
+`POST /chaman-meteo-internal/bindings/upsert`. Sigue protegido por el token
+interno, admite solamente `locationType=lote`, exige un punto habilitado y
+comprueba en servidor que la distancia declarada coincide (tolerancia 100 m)
+y no supera 15 km. La identidad fisica de un binding existente es inmutable:
+solo puede cambiar `active`. El bridge vuelve a contrastar el binding contra
+el centroide actual del lote antes de usar un solo valor.
+
 ## Migraciones, lecturas y escrituras
 
 Este cambio no crea colecciones ni requiere una migracion de Mongo. Con el
@@ -90,7 +98,7 @@ legacy estable si existe y, si no existe, se responde `sin_datos`. Mongo conserv
 los documentos para auditoria y una reactivacion controlada; el kill switch no
 borra evidencia.
 
-## Foto read-only de produccion (2026-08-28)
+## Foto read-only de produccion (revalidada 2026-08-31)
 
 - 86 siembras activas auditadas.
 - Los logs de `chaman-clima` identifican exactamente 21 siembras que fallan en
@@ -100,17 +108,38 @@ borra evidencia.
   dispositivos asociados y todavia no poseen una generacion agrometeorologica
   activa utilizable.
 - No faltan documentos diarios: existen todas las fechas entre la siembra y
-  2026-08-27. El problema concreto son **529 dias** cuyos documentos
+  2026-08-26. La revalidacion actual encontro **571 dias** cuyos documentos
   `open_meteo` no contienen simultaneamente temperatura minima, media y maxima.
   En los 21 casos, la primera fecha con cobertura termica completa es
-  2026-07-07; los huecos anteriores varian entre 10 y 40 dias por siembra.
+  2026-07-09; los huecos anteriores varian entre 12 y 42 dias por siembra. La
+  diferencia respecto de la foto inicial de 2026-08-28 queda conservada como
+  evidencia de que el diagnostico debe repetirse antes de cada lote piloto.
 - Por eso el puente debe completar variables ausentes dentro de filas
   existentes, no crear una serie paralela ni sustituir valores validos. La
   funcion de merge conserva la prioridad de Open-Meteo y usa ERA5-Land solo en
   esos campos termicos vacios.
 - En el mismo control general, 24 trigos y 8 cebadas ya usan `open_meteo` sin
   este bloqueo.
-- El plan vigente de Mongo en Railway no ofrece backup nativo/PITR.
+- El piloto exige de todos modos un snapshot logico por siembra, independiente
+  de los backups programados de Railway, para permitir una restauracion exacta
+  y acotada sin revertir datos de otros clientes.
+
+## Evidencia del piloto no persistente en Testing (2026-08-31)
+
+- Se importaron 69 diarios ERA5-Land completos para un Trigo aislado, desde su
+  siembra 2026-05-01 hasta 2026-07-08. Cada diario paso cobertura horaria
+  completa y el job quedo `AVAILABLE`; el bridge de Railway permanecio apagado.
+- Se reprodujo en memoria el mismo patron productivo eliminando solamente las
+  temperaturas de los 69 diarios Open-Meteo. Sin ERA5, los 69 indicadores
+  quedaron con `incomplete_gdd_accumulation`, sin acumulado publicable.
+- El merge operativo completo exclusivamente temperatura con
+  `fuentePorVariable=chaman_meteo`, conservo la precipitacion Open-Meteo en los
+  69 dias y produjo `gddAccumulationComplete=true`, sin un solo dia incompleto.
+- La compuerta climatica sanitaria quedo lista en 69/69 dias. La variedad
+  JURAMENTO conserva `cronograma_referencia` y confianza `referencia`, por lo
+  que la compuerta fenologica no abre alertas automaticas. Es una limitacion
+  agronomica independiente de la cobertura meteorologica y no se debe ocultar
+  ni forzar mediante ERA5.
 
 Siembras candidatas observadas para mapear primero a lotes elegibles
 (manifiesto humano, **no configuracion activa**):

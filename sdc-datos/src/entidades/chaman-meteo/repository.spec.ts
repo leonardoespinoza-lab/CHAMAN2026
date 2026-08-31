@@ -1,6 +1,123 @@
 import { ChamanMeteoRepository } from './repository';
 
 describe('ChamanMeteoRepository', () => {
+  it('crea un binding exacto y deja active como unico campo mutable', async () => {
+    const gridPoints = {
+      findOne: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({
+          key: 'pilot-grid',
+          latitude: -38.7888,
+          longitude: -68.10434,
+          enabled: true,
+        }),
+      }),
+    };
+    const bindings = {
+      findOne: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue(null),
+      }),
+      findOneAndUpdate: jest.fn().mockResolvedValue({ active: true }),
+    };
+    const repository = new ChamanMeteoRepository(
+      gridPoints as any,
+      bindings as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    const binding = {
+      locationType: 'lote' as const,
+      locationId: '64b000000000000000000010',
+      gridPointKey: 'pilot-grid',
+      latitude: -38.7888,
+      longitude: -68.10434,
+      distanceKm: 0,
+      active: true,
+    };
+
+    await expect(repository.upsertLocationBinding(binding)).resolves.toEqual({
+      active: true,
+    });
+    expect(bindings.findOneAndUpdate).toHaveBeenCalledWith(
+      { locationType: 'lote', locationId: binding.locationId },
+      {
+        $setOnInsert: {
+          locationType: binding.locationType,
+          locationId: binding.locationId,
+          gridPointKey: binding.gridPointKey,
+          latitude: binding.latitude,
+          longitude: binding.longitude,
+          distanceKm: binding.distanceKm,
+        },
+        $set: { active: true },
+      },
+      { upsert: true, new: true, runValidators: true },
+    );
+  });
+
+  it('rechaza distancia falsa o cambio de identidad de un binding', async () => {
+    const gridPoints = {
+      findOne: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({
+          key: 'pilot-grid',
+          latitude: -38.7888,
+          longitude: -68.10434,
+          enabled: true,
+        }),
+      }),
+    };
+    const bindings = {
+      findOne: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({
+          gridPointKey: 'otro-grid',
+          latitude: -38.7888,
+          longitude: -68.10434,
+          distanceKm: 0,
+        }),
+      }),
+      findOneAndUpdate: jest.fn(),
+    };
+    const repository = new ChamanMeteoRepository(
+      gridPoints as any,
+      bindings as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    const base = {
+      locationType: 'lote' as const,
+      locationId: '64b000000000000000000010',
+      gridPointKey: 'pilot-grid',
+      latitude: -38.7888,
+      longitude: -68.10434,
+      active: true,
+    };
+
+    await expect(
+      repository.upsertLocationBinding({ ...base, distanceKm: 1 }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        error: 'weather_binding_distance_mismatch',
+      }),
+    });
+    await expect(
+      repository.upsertLocationBinding({ ...base, distanceKm: 0 }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        error: 'weather_location_binding_identity_drift',
+      }),
+    });
+    expect(bindings.findOneAndUpdate).not.toHaveBeenCalled();
+  });
+
   it('resuelve binding y punto activos sin busqueda por cercania', async () => {
     const binding = {
       locationType: 'lote',

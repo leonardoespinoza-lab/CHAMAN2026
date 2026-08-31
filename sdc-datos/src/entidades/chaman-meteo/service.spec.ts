@@ -12,6 +12,7 @@ describe('ChamanMeteoService', () => {
     coverageByGridPoint: jest.fn(),
     upsertVersionedHourlyRaw: jest.fn(),
     resolvedLocationBinding: jest.fn(),
+    upsertLocationBinding: jest.fn(),
   };
   const service = new ChamanMeteoService(repository as any);
 
@@ -287,6 +288,61 @@ describe('ChamanMeteoService', () => {
     ).toThrow(BadRequestException);
     expect(() =>
       service.resolvedLocationBinding('otra-cosa', '64b000000000000000000010'),
+    ).toThrow(BadRequestException);
+  });
+
+  it('valida y reenvia un binding de lote exacto', () => {
+    const binding = {
+      locationType: 'lote' as const,
+      locationId: '64b000000000000000000010',
+      gridPointKey: ' pilot-grid ',
+      latitude: -38.7888,
+      longitude: -68.10434,
+      distanceKm: 0,
+      active: true,
+    };
+
+    service.upsertLocationBinding(binding);
+
+    expect(repository.upsertLocationBinding).toHaveBeenCalledWith({
+      ...binding,
+      gridPointKey: 'pilot-grid',
+    });
+  });
+
+  it('rechaza bindings de establecimiento o fuera del radio operativo', () => {
+    expect(() =>
+      service.upsertLocationBinding({
+        locationType: 'establecimiento',
+        locationId: '64b000000000000000000010',
+        gridPointKey: 'pilot-grid',
+        latitude: -38.7888,
+        longitude: -68.10434,
+        distanceKm: 0,
+        active: true,
+      }),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      service.upsertLocationBinding({
+        locationType: 'lote',
+        locationId: '64b000000000000000000010',
+        gridPointKey: 'pilot-grid',
+        latitude: -38.7888,
+        longitude: -68.10434,
+        distanceKm: 15.1,
+        active: true,
+      }),
+    ).toThrow(BadRequestException);
+    expect(() =>
+      service.upsertLocationBinding({
+        locationType: 'lote',
+        locationId: '64b000000000000000000010',
+        gridPointKey: 'pilot-grid',
+        latitude: null as any,
+        longitude: -68.10434,
+        distanceKm: 0,
+        active: true,
+      }),
     ).toThrow(BadRequestException);
   });
 });
