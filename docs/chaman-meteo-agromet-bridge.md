@@ -172,6 +172,42 @@ borra evidencia.
   agronomica independiente de la cobertura meteorologica y no se debe ocultar
   ni forzar mediante ERA5.
 
+## Evidencia del piloto persistente y acotado en Testing (2026-08-31)
+
+- El commit `2ed956e345c1c30d259e769ea2d05b0f9aa373ff` se desplego solamente
+  en los servicios de Testing. La rama y los servicios de Produccion
+  permanecieron en `7b119f0c4d075b36abf08439bc4b59ac9ae4f3b7` durante toda la prueba.
+- La vinculacion automatica se habilito exclusivamente para el lote Testing
+  `6a5f5132bf400cab88ea2752`; el cron agrometeorologico siguio apagado y no se
+  definio una fecha de activacion para siembras futuras.
+- El bridge aprovisiono el punto
+  `era5-land:ar:-32.7:-62.6:america-argentina-cordoba`, con pais `AR`, zona
+  horaria IANA valida, inicio historico 2026-06-01 y binding activo a 2,514 km
+  del centro del lote.
+- El worker importo dos tramos disponibles, ambos con estado `AVAILABLE`, 100%
+  de progreso y sin error: 744 horas desde 2026-06-01 hasta 2026-07-01 y 1.344
+  horas desde 2026-07-02 hasta 2026-08-26. La cobertura diaria final fue
+  continua: 87 dias, desde la siembra hasta la ultima fecha ERA5 disponible.
+- El reproceso manual alcanzo solamente la siembra
+  `6a5f514cbf400cab88ea27cd`. Antes y despues se compararon 522 celdas de
+  variables resueltas por Open-Meteo: el hash fue identico, no cambio ningun
+  valor ni procedencia, no aparecieron fechas duplicadas y ERA5 no sustituyo
+  temperaturas ya presentes.
+- La generacion agrometeorologica resultante tuvo 91 dias hasta 2026-08-30,
+  `gddAccumulationComplete=true` y cero dias con
+  `incomplete_gdd_accumulation`. En este piloto persistente no se escribieron
+  dias `chaman_meteo` porque Open-Meteo ya cubria las temperaturas; la prueba
+  no persistente anterior demuestra por separado que el mismo merge completa
+  los huecos termicos y habilita el GDD.
+- Al cierre, Produccion conservaba
+  `CHAMAN_METEO_AGROMET_BRIDGE_ENABLED=false`, sin aprovisionamiento automatico
+  ni allowlist. `chaman-lora` conservaba `LORAWAN_MQTT_ENABLED=true` y no fue
+  desplegado ni reiniciado por esta prueba.
+- Las 21 siembras productivas no existen en la base de Testing. Por lo tanto,
+  esta evidencia valida el comportamiento del codigo y de la infraestructura,
+  pero no afirma que las 21 ya hayan sido reprocesadas. Esa aceptacion requiere
+  un piloto productivo individual y reversible antes de ampliar por tandas.
+
 Siembras candidatas observadas para mapear primero a lotes elegibles
 (manifiesto humano, **no configuracion activa**):
 
