@@ -30,6 +30,12 @@ const REQUIRED_DAILY: VariableMeteorologicaNormalizada[] = [
   'et0Mm',
 ];
 
+const DAILY_TEMPERATURE_KEYS = [
+  'temperatureMinC',
+  'temperatureMeanC',
+  'temperatureMaxC',
+] as const;
+
 const DAILY_SCALARS: ReadonlyArray<
   readonly [
     keyof IChamanMeteoDaily['values'],
@@ -473,12 +479,13 @@ export class ChamanMeteoAgrometBridgeService {
     });
 
     if (
-      !['temperatureMinC', 'temperatureMeanC', 'temperatureMaxC'].every((key) =>
+      !DAILY_TEMPERATURE_KEYS.every((key) =>
         Number.isFinite((values as any)[key]),
       )
     ) {
       return undefined;
     }
+    if (!hasCoherentDailyTemperature(values)) return undefined;
 
     const timestamp = this.localNoonToUtc(row.date, row.timezone);
     if (!timestamp) return undefined;
@@ -729,7 +736,14 @@ function fillMissingDailyValues(
   const values = { ...primary.valores };
   const sources = { ...primary.fuentePorVariable };
   const states = { ...(primary.estadoPorVariable || {}) };
+  const flags = [...(primary.banderasCalidad || [])];
   let filled = false;
+  if (deriveMissingDailyTemperatureMean(values, sources, states, flags)) {
+    filled = true;
+  }
+  const fallbackTemperatureKeys = new Set<
+    (typeof DAILY_TEMPERATURE_KEYS)[number]
+  >();
   for (const key of Object.keys(fallback.valores) as Array<
     keyof IValoresMeteorologicosNormalizados
   >) {
@@ -737,23 +751,105 @@ function fillMissingDailyValues(
     (values as any)[key] = fallback.valores[key];
     (sources as any)[key] = fallback.fuentePorVariable[key] || fallback.fuente;
     (states as any)[key] = fallback.estadoPorVariable?.[key] || fallback.estado;
+    if ((DAILY_TEMPERATURE_KEYS as readonly string[]).includes(key)) {
+      fallbackTemperatureKeys.add(
+        key as (typeof DAILY_TEMPERATURE_KEYS)[number],
+      );
+    }
     filled = true;
   }
+  if (
+    DAILY_TEMPERATURE_KEYS.every((key) => hasWeatherValue(values[key])) &&
+    !hasCoherentDailyTemperature(values)
+  ) {
+    fallbackTemperatureKeys.forEach((key) => {
+      delete (values as any)[key];
+      delete (sources as any)[key];
+      delete (states as any)[key];
+    });
+    flags.push('historical_fallback_temperature_triplet_incoherent');
+  }
   if (!filled) return primary;
+  const distinctSources = new Set(
+    Object.keys(values)
+      .map((key) => (sources as any)[key])
+      .filter(Boolean),
+  );
   return {
     ...primary,
     valores: values,
-    fuente: primary.fuente === 'chaman_meteo' ? 'chaman_meteo' : 'mixed',
+    fuente:
+      distinctSources.size === 1
+        ? ([...distinctSources][0] as FuenteMeteorologicaNormalizada)
+        : 'mixed',
     fuentePorVariable: sources,
     estadoPorVariable: states,
     banderasCalidad: [
-      ...new Set([
-        ...(primary.banderasCalidad || []),
-        ...(fallback.banderasCalidad || []),
-      ]),
+      ...new Set([...flags, ...(fallback.banderasCalidad || [])]),
     ],
     completitudPct: calcularCompletitud(values, REQUIRED_DAILY),
   };
+}
+
+function deriveMissingDailyTemperatureMean(
+  values: IValoresMeteorologicosNormalizados,
+  sources: IObservacionMeteorologicaNormalizada['fuentePorVariable'],
+  states: NonNullable<
+    IObservacionMeteorologicaNormalizada['estadoPorVariable']
+  >,
+  flags: string[],
+): boolean {
+  if (hasWeatherValue(values.temperatureMeanC)) return false;
+  const min = Number(values.temperatureMinC);
+  const max = Number(values.temperatureMaxC);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min > max) return false;
+  const minSource = sources.temperatureMinC;
+  const maxSource = sources.temperatureMaxC;
+  const derivedSource = commonDerivedTemperatureSource(minSource, maxSource);
+  if (!derivedSource) return false;
+  values.temperatureMeanC = (min + max) / 2;
+  sources.temperatureMeanC = derivedSource;
+  states.temperatureMeanC =
+    states.temperatureMinC === 'forecast' ||
+    states.temperatureMaxC === 'forecast'
+      ? 'forecast'
+      : 'estimated';
+  flags.push('temperature_mean_derived_from_daily_min_max');
+  return true;
+}
+
+function commonDerivedTemperatureSource(
+  left?: FuenteMeteorologicaNormalizada,
+  right?: FuenteMeteorologicaNormalizada,
+): FuenteMeteorologicaNormalizada | undefined {
+  const family = (source?: FuenteMeteorologicaNormalizada) => {
+    const value = String(source || '');
+    if (value.includes('sensor')) return 'sensor';
+    if (value.includes('station')) return 'station';
+    if (value.includes('open_meteo') || value === 'gap_filled') {
+      return 'open_meteo';
+    }
+    if (value.includes('chaman_meteo')) return 'chaman_meteo';
+    return undefined;
+  };
+  const leftFamily = family(left);
+  if (!leftFamily || leftFamily !== family(right)) return undefined;
+  return `derived_${leftFamily}` as FuenteMeteorologicaNormalizada;
+}
+
+function hasCoherentDailyTemperature(
+  values: IValoresMeteorologicosNormalizados,
+): boolean {
+  const min = Number(values.temperatureMinC);
+  const mean = Number(values.temperatureMeanC);
+  const max = Number(values.temperatureMaxC);
+  return (
+    Number.isFinite(min) &&
+    Number.isFinite(mean) &&
+    Number.isFinite(max) &&
+    min <= mean &&
+    mean <= max
+  );
 }
 
 function mergeDuplicateBaseDaily(

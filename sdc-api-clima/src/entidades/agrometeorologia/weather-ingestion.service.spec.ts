@@ -148,10 +148,7 @@ describe('WeatherIngestionService', () => {
     );
 
     await expect(
-      (incremental as any).resolverDesdeIncremental(
-        'est-1',
-        '2026-05-01',
-      ),
+      (incremental as any).resolverDesdeIncremental('est-1', '2026-05-01'),
     ).resolves.toBe('2026-05-03');
   });
 
@@ -208,6 +205,10 @@ describe('WeatherIngestionService', () => {
       ),
     };
     const repository = {
+      getObservaciones: jest.fn().mockResolvedValue({
+        datos: [],
+        totalCount: 0,
+      }),
       upsertObservaciones: jest.fn().mockResolvedValue(undefined),
     };
     const ingestion = new WeatherIngestionService(
@@ -249,6 +250,10 @@ describe('WeatherIngestionService', () => {
       getDatosEstacionAsociada: jest.fn(),
     };
     const repository = {
+      getObservaciones: jest.fn().mockResolvedValue({
+        datos: [],
+        totalCount: 0,
+      }),
       upsertObservaciones: jest.fn().mockResolvedValue(undefined),
     };
     const fallback = {
@@ -311,5 +316,104 @@ describe('WeatherIngestionService', () => {
     expect(repository.upsertObservaciones).toHaveBeenCalledWith([fallback]);
     expect(result.fuentes).toEqual(new Set(['chaman_meteo']));
     expect(result.advertencias).toContain('fallback piloto');
+  });
+
+  it('recupera el historico persistido del contexto exacto del lote antes del fallback', async () => {
+    const lotId = '64b000000000000000000010';
+    const persisted = {
+      idEstablecimiento: 'est-1',
+      timestamp: '2026-05-01T15:00:00.000Z',
+      fechaLocal: '2026-05-01',
+      timezone: 'America/Argentina/Buenos_Aires',
+      granularidad: 'daily',
+      estado: 'observed',
+      esPronostico: false,
+      valores: { precipitationMm: 8 },
+      fuente: 'open_meteo',
+      fuentePorVariable: { precipitationMm: 'open_meteo' },
+      estadoPorVariable: { precipitationMm: 'observed' },
+      banderasCalidad: [],
+      completitudPct: 14.3,
+      obtenidoEn: '2026-05-02T00:00:00.000Z',
+      contextosLote: {
+        [lotId]: {
+          idEstablecimiento: 'est-1',
+          idLote: lotId,
+          timestamp: '2026-05-01T15:00:00.000Z',
+          fechaLocal: '2026-05-01',
+          timezone: 'America/Argentina/Buenos_Aires',
+          granularidad: 'daily',
+          estado: 'observed',
+          esPronostico: false,
+          valores: { precipitationMm: 3 },
+          fuente: 'open_meteo',
+          fuentePorVariable: { precipitationMm: 'open_meteo' },
+          estadoPorVariable: { precipitationMm: 'observed' },
+          banderasCalidad: [],
+          completitudPct: 14.3,
+          obtenidoEn: '2026-05-02T00:00:00.000Z',
+        },
+      },
+    };
+    const repository = {
+      getObservaciones: jest.fn().mockResolvedValue({
+        datos: [persisted],
+        totalCount: 1,
+      }),
+    };
+    const ingestion = new WeatherIngestionService(
+      {} as any,
+      repository as any,
+      {} as any,
+    );
+
+    const result = await (ingestion as any).existingHistoricalDaily(
+      'est-1',
+      lotId,
+      '2026-05-01',
+      '2026-05-02',
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0].idLote).toBe(lotId);
+    expect(result[0].valores.precipitationMm).toBe(3);
+    const parsedFilter = JSON.parse(
+      repository.getObservaciones.mock.calls[0][0].filter,
+    );
+    expect(parsedFilter).toEqual(
+      expect.objectContaining({
+        idEstablecimiento: 'est-1',
+        granularidad: 'daily',
+        esPronostico: false,
+        fechaLocal: { $gte: '2026-05-01', $lte: '2026-05-02' },
+      }),
+    );
+    expect(parsedFilter.$or).toContainEqual({ idLote: lotId });
+    expect(parsedFilter.$or).toContainEqual({
+      [`contextosLote.${lotId}.idLote`]: lotId,
+    });
+  });
+
+  it('falla cerrado si el historico persistido llega paginado o incompleto', async () => {
+    const repository = {
+      getObservaciones: jest.fn().mockResolvedValue({
+        datos: [{ fechaLocal: '2026-05-01' }],
+        totalCount: 2,
+      }),
+    };
+    const ingestion = new WeatherIngestionService(
+      {} as any,
+      repository as any,
+      {} as any,
+    );
+
+    await expect(
+      (ingestion as any).existingHistoricalDaily(
+        'est-1',
+        '64b000000000000000000010',
+        '2026-05-01',
+        '2026-05-02',
+      ),
+    ).rejects.toThrow('se cancela el reproceso');
   });
 });

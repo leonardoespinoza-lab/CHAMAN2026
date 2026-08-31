@@ -736,4 +736,54 @@ describe('mergeDailyHistoricalGapFill', () => {
       'chaman_meteo_historical_gap_fill',
     );
   });
+
+  it('deriva la media desde minima y maxima Open-Meteo antes de usar ERA5', () => {
+    const partialOpen = observation('2026-07-08', 'open_meteo', {
+      temperatureMinC: 13.5,
+      temperatureMaxC: 14.7,
+      precipitationMm: 1.2,
+    });
+    const era5 = observation('2026-07-08', 'chaman_meteo', {
+      temperatureMinC: 8,
+      temperatureMeanC: 12.7371,
+      temperatureMaxC: 18,
+      relativeHumidityMeanPct: 76,
+    });
+
+    const [merged] = mergeDailyHistoricalGapFill([partialOpen], [era5]);
+
+    expect(merged.valores.temperatureMinC).toBe(13.5);
+    expect(merged.valores.temperatureMeanC).toBeCloseTo(14.1, 6);
+    expect(merged.valores.temperatureMaxC).toBe(14.7);
+    expect(merged.fuentePorVariable.temperatureMeanC).toBe(
+      'derived_open_meteo',
+    );
+    expect(merged.valores.precipitationMm).toBe(1.2);
+    expect(merged.fuentePorVariable.precipitationMm).toBe('open_meteo');
+    expect(merged.banderasCalidad).toContain(
+      'temperature_mean_derived_from_daily_min_max',
+    );
+  });
+
+  it('no incorpora variables termicas de fallback si formarian un triplete incoherente', () => {
+    const primary = observation('2026-07-08', 'open_meteo', {
+      temperatureMinC: 13.5,
+      temperatureMeanC: 13.8,
+      precipitationMm: 1.2,
+    });
+    const fallback = observation('2026-07-08', 'chaman_meteo', {
+      temperatureMaxC: 12,
+      relativeHumidityMeanPct: 76,
+    });
+
+    const [merged] = mergeDailyHistoricalGapFill([primary], [fallback]);
+
+    expect(merged.valores.temperatureMinC).toBe(13.5);
+    expect(merged.valores.temperatureMeanC).toBe(13.8);
+    expect(merged.valores.temperatureMaxC).toBeUndefined();
+    expect(merged.valores.relativeHumidityMeanPct).toBe(76);
+    expect(merged.banderasCalidad).toContain(
+      'historical_fallback_temperature_triplet_incoherent',
+    );
+  });
 });

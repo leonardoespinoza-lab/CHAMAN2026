@@ -15,6 +15,7 @@ import { AgrometeorologiaRepository } from './repository';
 import { WeatherSourceResolverService } from './weather-source-resolver.service';
 import {
   ChamanMeteoAgrometBridgeService,
+  mergeDailyHistoricalGapFill,
   observationForChamanMeteoBridgeState,
 } from './chaman-meteo-agromet-bridge.service';
 
@@ -229,11 +230,22 @@ export class WeatherIngestionService {
       },
     );
     const stationObservations = [...stationHourly, ...stationDaily];
-    let merged = this.resolver.fusionar(
-      stationObservations,
-      openObservations,
-    );
+    let merged = this.resolver.fusionar(stationObservations, openObservations);
     const bridgeWarnings: string[] = [];
+    if (
+      this.bridge &&
+      CHAMAN_METEO_AGROMET_BRIDGE_ENABLED &&
+      !forecast &&
+      idLote
+    ) {
+      const existingDaily = await this.existingHistoricalDaily(
+        idEstablecimiento,
+        idLote,
+        desde,
+        hasta,
+      );
+      merged = mergeDailyHistoricalGapFill(merged, existingDaily);
+    }
     if (this.bridge) {
       const bridgeResult = await this.bridge.fillHistoricalDailyGaps({
         observations: merged,
@@ -339,6 +351,55 @@ export class WeatherIngestionService {
     }
   }
 
+  /**
+   * Conserva la mejor evidencia diaria que ya fue persistida antes de aplicar
+   * un fallback historico. Una respuesta parcial del proveedor actual no puede
+   * borrar lluvia, humedad u otra variable valida de un reproceso anterior.
+   *
+   * El metodo falla cerrado: si la pagina no es completa o un documento no se
+   * puede resolver al contexto exacto del lote, se aborta antes de persistir.
+   */
+  private async existingHistoricalDaily(
+    idEstablecimiento: string,
+    idLote: string,
+    desde: string,
+    hasta: string,
+  ): Promise<IObservacionMeteorologicaNormalizada[]> {
+    const safeKey = this.safeContextKey(idLote);
+    const filter: Record<string, unknown> = {
+      idEstablecimiento,
+      granularidad: 'daily',
+      esPronostico: false,
+      fechaLocal: { $gte: desde, $lte: hasta },
+      $or: [{ idLote }, { [`contextosLote.${safeKey}.idLote`]: idLote }],
+    };
+    const page = await this.repository.getObservaciones({
+      filter: JSON.stringify(filter),
+      sort: 'timestamp',
+      limit: 5000,
+    });
+    const rows = Array.isArray(page?.datos) ? page.datos : [];
+    const totalCount = Number(page?.totalCount);
+    if (!Number.isFinite(totalCount) || totalCount !== rows.length) {
+      throw new Error(
+        'No se pudo leer de forma completa el historico meteorologico existente del lote; se cancela el reproceso para no sobrescribir datos.',
+      );
+    }
+    const resolved = rows.map((item) => this.resolveLotContext(item, idLote));
+    if (resolved.some((item) => !item)) {
+      throw new Error(
+        'El historico meteorologico existente contiene un contexto de lote no resoluble; se cancela el reproceso para no sobrescribir datos.',
+      );
+    }
+    return (resolved as IObservacionMeteorologicaNormalizada[]).filter(
+      (item) =>
+        item.granularidad === 'daily' &&
+        !item.esPronostico &&
+        item.fechaLocal >= desde &&
+        item.fechaLocal <= hasta,
+    );
+  }
+
   private async resolverDesdeIncremental(
     idEstablecimiento: string,
     requestedFrom: string,
@@ -395,9 +456,7 @@ export class WeatherIngestionService {
         const firstIncomplete = (coverage?.datos || [])
           .map((item) => this.resolveLotContext(item, idLote))
           .filter(
-            (
-              item,
-            ): item is IObservacionMeteorologicaNormalizada =>
+            (item): item is IObservacionMeteorologicaNormalizada =>
               !!item &&
               item.fechaLocal >= requested &&
               item.fechaLocal <= lastDate,
