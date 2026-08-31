@@ -399,11 +399,10 @@ export function resolveIdentifierAllowlist(value?: string): string[] {
 }
 
 /**
- * Puente operativo v1: queda apagado aunque Chaman-Meteo administrativo este
- * activo. Solo admite lotes piloto explicitamente autorizados. Una variable
- * heredada de allowlist por siembra se ignora deliberadamente: autorizar una
- * siembra dentro de una descarga agrupada podia afectar otras siembras del
- * mismo lote.
+ * Puente operativo: queda apagado aunque Chaman-Meteo administrativo este
+ * activo. La allowlist siempre autoriza lotes completos; una variable heredada
+ * por siembra se ignora deliberadamente porque una descarga puede agrupar
+ * varias siembras activas del mismo lote.
  */
 export const CHAMAN_METEO_AGROMET_BRIDGE_ENABLED =
   CHAMAN_METEO_ENABLED &&
@@ -412,6 +411,28 @@ export const CHAMAN_METEO_AGROMET_BRIDGE_ENABLED =
 export const CHAMAN_METEO_AGROMET_LOT_ALLOWLIST = resolveIdentifierAllowlist(
   process.env.CHAMAN_METEO_AGROMET_LOT_ALLOWLIST,
 );
+/**
+ * Alta automatica de puntos/bindings para lotes activos. Permanece apagada
+ * por defecto y se habilita por ambiente despues de validar el backfill.
+ */
+export const CHAMAN_METEO_AGROMET_AUTO_PROVISION_ENABLED =
+  CHAMAN_METEO_AGROMET_BRIDGE_ENABLED &&
+  process.env.CHAMAN_METEO_AGROMET_AUTO_PROVISION_ENABLED === 'true';
+export function resolveChamanMeteoAutoProvisionFrom(
+  value?: string,
+): string | undefined {
+  const normalized = String(value || '').trim();
+  if (!normalized) return undefined;
+  try {
+    return resolveChamanMeteoHistoricalStart(normalized);
+  } catch {
+    return undefined;
+  }
+}
+export const CHAMAN_METEO_AGROMET_AUTO_PROVISION_FROM =
+  resolveChamanMeteoAutoProvisionFrom(
+    process.env.CHAMAN_METEO_AGROMET_AUTO_PROVISION_FROM,
+  );
 /** Hoy y los cuatro dias previos siguen exclusivamente en Open-Meteo. */
 export const CHAMAN_METEO_AGROMET_RECENT_OPEN_METEO_DAYS = 5;
 export const SOIL_INTELLIGENCE_INTERNAL_TOKEN =

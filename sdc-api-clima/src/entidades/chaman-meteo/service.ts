@@ -9,6 +9,8 @@ import {
 } from 'modelos/src';
 import {
   CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
+  CHAMAN_METEO_AGROMET_AUTO_PROVISION_ENABLED,
+  CHAMAN_METEO_AGROMET_AUTO_PROVISION_FROM,
   CHAMAN_METEO_AGROMET_LOT_ALLOWLIST,
   CHAMAN_METEO_CALCULATION_VERSION,
   CHAMAN_METEO_CDS_CONFIGURED,
@@ -76,6 +78,9 @@ export class ChamanMeteoService {
       sourceVersion: CHAMAN_METEO_SOURCE_VERSION,
       operationalSourceUnchanged: !CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
       agrometBridgeEnabled: CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
+      agrometAutoProvisionEnabled:
+        CHAMAN_METEO_AGROMET_AUTO_PROVISION_ENABLED,
+      agrometAutoProvisionFrom: CHAMAN_METEO_AGROMET_AUTO_PROVISION_FROM,
       agrometPilotLots: CHAMAN_METEO_AGROMET_LOT_ALLOWLIST.length,
       agrometPilotSowings: 0,
       configurationValid,

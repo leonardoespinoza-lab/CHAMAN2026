@@ -4,9 +4,11 @@ import {
   IChamanMeteoGridPoint,
   IChamanMeteoHourlyDerived,
   IChamanMeteoImportJob,
+  IChamanMeteoLocationBinding,
   IChamanMeteoPage,
   IChamanMeteoResolvedLocationBinding,
   IChamanMeteoStorageStatus,
+  ILote,
   IListado,
   ISiembra,
 } from 'modelos/src';
@@ -43,6 +45,30 @@ export class ChamanMeteoRepository {
   ): Promise<IChamanMeteoResolvedLocationBinding | null> {
     return this.axios.GET(
       `${API_DATOS}/chaman-meteo-internal/bindings/${locationType}/${encodeURIComponent(locationId)}`,
+      { headers: this.headers() },
+    );
+  }
+
+  lot(idLote: string): Promise<ILote> {
+    return this.axios.GET(`${API_DATOS}/lotes/${encodeURIComponent(idLote)}`, {
+      headers: this.headers(),
+    });
+  }
+
+  upsertGridPoint(data: IChamanMeteoGridPoint): Promise<IChamanMeteoGridPoint> {
+    return this.axios.POST(
+      `${API_DATOS}/chaman-meteo-internal/grid-points/upsert`,
+      data,
+      { headers: this.headers() },
+    );
+  }
+
+  upsertLocationBinding(
+    data: IChamanMeteoLocationBinding,
+  ): Promise<IChamanMeteoLocationBinding> {
+    return this.axios.POST(
+      `${API_DATOS}/chaman-meteo-internal/bindings/upsert`,
+      data,
       { headers: this.headers() },
     );
   }

@@ -3,8 +3,10 @@ import {
   calcularCompletitud,
   FuenteMeteorologicaNormalizada,
   IChamanMeteoDaily,
+  IChamanMeteoGridPoint,
   IChamanMeteoResolvedLocationBinding,
   ICoordenadas,
+  ILote,
   IObservacionMeteorologicaNormalizada,
   IValoresMeteorologicosNormalizados,
   validarVariableMeteorologica,
@@ -12,6 +14,8 @@ import {
 } from 'modelos/src';
 import {
   CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
+  CHAMAN_METEO_AGROMET_AUTO_PROVISION_ENABLED,
+  CHAMAN_METEO_AGROMET_AUTO_PROVISION_FROM,
   CHAMAN_METEO_AGROMET_LOT_ALLOWLIST,
   CHAMAN_METEO_AGROMET_RECENT_OPEN_METEO_DAYS,
   CHAMAN_METEO_CALCULATION_VERSION,
@@ -66,6 +70,8 @@ const BINDING_DISTANCE_TOLERANCE_KM = 0.1;
 
 export interface IChamanMeteoAgrometBridgeConfig {
   enabled: boolean;
+  autoProvisionEnabled: boolean;
+  autoProvisionFrom?: string;
   lotAllowlist: string[];
   historicalStart: string;
   recentOpenMeteoDays: number;
@@ -81,6 +87,7 @@ export interface IChamanMeteoAgrometBridgeInput {
   coordenadas: ICoordenadas;
   desde: string;
   hasta: string;
+  coverageStart?: string;
   forecast: boolean;
   today?: string;
 }
@@ -94,6 +101,8 @@ export interface IChamanMeteoAgrometBridgeResult {
 export const DEFAULT_CHAMAN_METEO_AGROMET_BRIDGE_CONFIG: IChamanMeteoAgrometBridgeConfig =
   {
     enabled: CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
+    autoProvisionEnabled: CHAMAN_METEO_AGROMET_AUTO_PROVISION_ENABLED,
+    autoProvisionFrom: CHAMAN_METEO_AGROMET_AUTO_PROVISION_FROM,
     lotAllowlist: CHAMAN_METEO_AGROMET_LOT_ALLOWLIST,
     historicalStart: CHAMAN_METEO_HISTORICAL_START,
     recentOpenMeteoDays: CHAMAN_METEO_AGROMET_RECENT_OPEN_METEO_DAYS,
@@ -107,9 +116,66 @@ export function isChamanMeteoAgrometPilot(
   idSiembras: string[] = [],
 ): boolean {
   if (!config.enabled || !idLote) return false;
-  const lots = new Set(config.lotAllowlist.map(normalizeIdentifier));
   const sowings = new Set(idSiembras.map(normalizeIdentifier).filter(Boolean));
+  if (config.autoProvisionEnabled) return sowings.size > 0;
+  const lots = new Set(config.lotAllowlist.map(normalizeIdentifier));
   return lots.has(normalizeIdentifier(idLote)) && sowings.size === 1;
+}
+
+export function isChamanMeteoAutoProvisionEligible(
+  config: IChamanMeteoAgrometBridgeConfig,
+  idLote: string,
+  coverageStart?: string,
+): boolean {
+  if (!config.autoProvisionEnabled) return false;
+  const explicitlyAllowed = new Set(
+    config.lotAllowlist.map(normalizeIdentifier).filter(Boolean),
+  ).has(normalizeIdentifier(idLote));
+  if (explicitlyAllowed) return true;
+  return Boolean(
+    config.autoProvisionFrom &&
+      /^\d{4}-\d{2}-\d{2}$/.test(String(coverageStart || '')) &&
+      String(coverageStart) >= config.autoProvisionFrom,
+  );
+}
+
+export function chamanMeteoCountryFromTimezone(
+  timezone?: string,
+): IChamanMeteoGridPoint['countryCode'] | undefined {
+  const normalized = String(timezone || '').trim();
+  if (
+    normalized.startsWith('America/Argentina/') ||
+    normalized === 'America/Buenos_Aires'
+  ) {
+    return 'AR';
+  }
+  if (normalized === 'America/Montevideo') return 'UY';
+  if (normalized === 'America/Asuncion') return 'PY';
+  if (
+    normalized === 'America/Santiago' ||
+    normalized === 'America/Punta_Arenas'
+  ) {
+    return 'CL';
+  }
+  const brazilTimezones = new Set([
+    'America/Araguaina',
+    'America/Bahia',
+    'America/Belem',
+    'America/Boa_Vista',
+    'America/Campo_Grande',
+    'America/Cuiaba',
+    'America/Eirunepe',
+    'America/Fortaleza',
+    'America/Maceio',
+    'America/Manaus',
+    'America/Noronha',
+    'America/Porto_Velho',
+    'America/Recife',
+    'America/Rio_Branco',
+    'America/Santarem',
+    'America/Sao_Paulo',
+  ]);
+  return brazilTimezones.has(normalized) ? 'BR' : undefined;
 }
 
 /**
@@ -161,29 +227,41 @@ export class ChamanMeteoAgrometBridgeService {
     input: IChamanMeteoAgrometBridgeInput,
     config: IChamanMeteoAgrometBridgeConfig = DEFAULT_CHAMAN_METEO_AGROMET_BRIDGE_CONFIG,
   ): Promise<IChamanMeteoAgrometBridgeResult> {
-    if (input.forecast || !input.idLote || !config.enabled) {
-      return { observations: input.observations, warnings: [], used: false };
-    }
-    const lotAllowed = new Set(
-      config.lotAllowlist.map(normalizeIdentifier).filter(Boolean),
-    ).has(normalizeIdentifier(input.idLote));
-    if (!lotAllowed) {
+    if (!input.idLote || !config.enabled) {
       return { observations: input.observations, warnings: [], used: false };
     }
     if (!isChamanMeteoAgrometPilot(config, input.idLote, input.idSiembras)) {
       return {
         observations: input.observations,
         warnings: [
-          'Chaman-Meteo omitio el lote piloto: el contexto debe contener exactamente una siembra activa y explicita.',
+          config.autoProvisionEnabled
+            ? 'Chaman-Meteo omitio el lote: el contexto no identifica siembras activas explicitas.'
+            : 'Chaman-Meteo omitio el lote piloto: debe estar autorizado y contener exactamente una siembra activa explicita.',
         ],
+        used: false,
+      };
+    }
+    const coverageStart = this.dateOnly(input.coverageStart || input.desde);
+    if (
+      config.autoProvisionEnabled &&
+      !isChamanMeteoAutoProvisionEligible(
+        config,
+        input.idLote,
+        coverageStart,
+      )
+    ) {
+      return {
+        observations: input.observations,
+        warnings: [],
         used: false,
       };
     }
 
     try {
-      const activeSowingWarning = await this.validateSingleActiveSowing(
+      const activeSowingWarning = await this.validateActiveSowingSet(
         input.idLote,
         input.idSiembras || [],
+        !config.autoProvisionEnabled,
       );
       if (activeSowingWarning) {
         return {
@@ -193,10 +271,11 @@ export class ChamanMeteoAgrometBridgeService {
         };
       }
 
-      const resolved = await this.repository.resolvedLocationBinding(
-        'lote',
-        input.idLote,
+      const bindingResolution = await this.ensureLotBinding(
+        input,
+        config,
       );
+      const resolved = bindingResolution.resolved;
       const bindingWarning = this.validateResolvedBinding(
         resolved,
         input.idLote,
@@ -207,8 +286,21 @@ export class ChamanMeteoAgrometBridgeService {
           observations: input.observations,
           warnings: [
             bindingWarning ||
-              'Chaman-Meteo no encontro un binding activo para el lote piloto.',
+              bindingResolution.warning ||
+              'Chaman-Meteo no encontro un binding activo para el lote.',
           ],
+          used: false,
+        };
+      }
+
+      if (input.forecast) {
+        return {
+          observations: input.observations,
+          warnings: bindingResolution.provisioned
+            ? [
+                `Chaman-Meteo vinculo el lote al punto ${resolved.gridPoint.key}; el worker completara el historico desde ${resolved.gridPoint.historicalStart}.`,
+              ]
+            : [],
           used: false,
         };
       }
@@ -312,9 +404,10 @@ export class ChamanMeteoAgrometBridgeService {
       // antes de aplicar ERA5 para evitar un cambio concurrente entre lectura y
       // mezcla (TOCTOU).
       const activeSowingRevalidationWarning =
-        await this.validateSingleActiveSowing(
+        await this.validateActiveSowingSet(
           input.idLote,
           input.idSiembras || [],
+          !config.autoProvisionEnabled,
         );
       if (activeSowingRevalidationWarning) {
         return {
@@ -378,22 +471,25 @@ export class ChamanMeteoAgrometBridgeService {
       return {
         observations: input.observations,
         warnings: [
-          'Chaman-Meteo no pudo completar el historico del lote piloto; se conservaron sin cambios las fuentes operativas existentes.',
+          'Chaman-Meteo no pudo completar el historico del lote; se conservaron sin cambios las fuentes operativas existentes.',
         ],
         used: false,
       };
     }
   }
 
-  private async validateSingleActiveSowing(
+  private async validateActiveSowingSet(
     idLote: string,
     requestedSowingIds: string[],
+    requireSingle: boolean,
   ): Promise<string | undefined> {
     const requested = [
       ...new Set(requestedSowingIds.map(normalizeIdentifier).filter(Boolean)),
-    ];
-    if (requested.length !== 1) {
-      return 'Chaman-Meteo bloqueo el lote piloto: la solicitud debe identificar exactamente una siembra activa.';
+    ].sort();
+    if (!requested.length || (requireSingle && requested.length !== 1)) {
+      return requireSingle
+        ? 'Chaman-Meteo bloqueo el lote piloto: la solicitud debe identificar exactamente una siembra activa.'
+        : 'Chaman-Meteo bloqueo el lote: la solicitud no identifica siembras activas.';
     }
 
     const page = await this.repository.activeSowingsByLot(idLote);
@@ -403,26 +499,195 @@ export class ChamanMeteoAgrometBridgeService {
       !Number.isFinite(Number(page.totalCount)) ||
       Number(page.totalCount) !== rows.length
     ) {
-      return 'Chaman-Meteo bloqueo el lote piloto: la consulta server-side de siembras activas fue incompleta.';
+      return 'Chaman-Meteo bloqueo el lote: la consulta server-side de siembras activas fue incompleta.';
     }
 
-    if (rows.length !== 1) {
+    if (requireSingle && rows.length !== 1) {
       return `Chaman-Meteo bloqueo el lote piloto: el servidor de datos informo ${rows.length} siembras activas; se exige exactamente una.`;
     }
-
-    const actual = rows[0];
-    const actualId = normalizeIdentifier(actual?._id);
+    const actual = rows
+      .map((item) => ({
+        id: normalizeIdentifier(item?._id),
+        idLote: normalizeIdentifier(item?.idLote),
+        active: item?.activa !== false,
+      }))
+      .sort((left, right) => left.id.localeCompare(right.id));
     if (
-      !actualId ||
-      normalizeIdentifier(actual?.idLote) !== normalizeIdentifier(idLote) ||
-      actual?.activa === false
+      actual.some(
+        (item) =>
+          !item.id ||
+          item.idLote !== normalizeIdentifier(idLote) ||
+          !item.active,
+      )
     ) {
-      return 'Chaman-Meteo bloqueo el lote piloto: la siembra activa devuelta por el servidor no pertenece de forma valida al lote.';
+      return 'Chaman-Meteo bloqueo el lote: una siembra activa devuelta por el servidor no pertenece de forma valida al lote.';
     }
-    if (actualId !== requested[0]) {
-      return 'Chaman-Meteo bloqueo el lote piloto: la siembra solicitada no coincide con la unica siembra activa real del lote.';
+    const actualIds = actual.map((item) => item.id);
+    if (
+      actualIds.length !== requested.length ||
+      actualIds.some((id, index) => id !== requested[index])
+    ) {
+      return requireSingle
+        ? 'Chaman-Meteo bloqueo el lote piloto: la siembra solicitada no coincide con la unica siembra activa real del lote.'
+        : 'Chaman-Meteo bloqueo el lote: el conjunto solicitado no coincide exactamente con todas las siembras activas reales.';
     }
     return undefined;
+  }
+
+  private async ensureLotBinding(
+    input: IChamanMeteoAgrometBridgeInput,
+    config: IChamanMeteoAgrometBridgeConfig,
+  ): Promise<{
+    resolved: IChamanMeteoResolvedLocationBinding | null;
+    provisioned: boolean;
+    warning?: string;
+  }> {
+    const idLote = String(input.idLote || '');
+    let resolved = await this.repository.resolvedLocationBinding(
+      'lote',
+      idLote,
+    );
+    if (!config.autoProvisionEnabled) {
+      return { resolved, provisioned: false };
+    }
+
+    const coverageStart = this.dateOnly(input.coverageStart || input.desde);
+    if (!this.isCalendarDate(coverageStart)) {
+      return {
+        resolved,
+        provisioned: false,
+        warning:
+          'Chaman-Meteo no pudo vincular el lote: la fecha inicial de cobertura no es valida.',
+      };
+    }
+    const historicalStart = [coverageStart, config.historicalStart]
+      .sort()
+      .reverse()[0];
+
+    if (resolved) {
+      if (resolved.gridPoint.historicalStart > historicalStart) {
+        await this.repository.upsertGridPoint({
+          ...resolved.gridPoint,
+          historicalStart,
+        });
+        resolved = await this.repository.resolvedLocationBinding(
+          'lote',
+          idLote,
+        );
+      }
+      return { resolved, provisioned: false };
+    }
+
+    const lot = await this.repository.lot(idLote);
+    const timezone = this.resolveProvisioningTimezone(
+      input.observations,
+      lot,
+    );
+    const countryCode =
+      this.resolveCountryCode(lot) || chamanMeteoCountryFromTimezone(timezone);
+    if (!countryCode || !timezone) {
+      return {
+        resolved: null,
+        provisioned: false,
+        warning:
+          'Chaman-Meteo dejo la vinculacion pendiente: el lote necesita pais oficial y zona horaria IANA resuelta por Open-Meteo o su central.',
+      };
+    }
+
+    const gridCoordinates = this.snapEra5Grid(input.coordenadas);
+    const gridPoint: IChamanMeteoGridPoint = {
+      key: this.gridPointKey(countryCode, gridCoordinates, timezone),
+      latitude: gridCoordinates.lat,
+      longitude: gridCoordinates.lng,
+      countryCode,
+      timezone,
+      enabled: true,
+      provider: 'copernicus-cds',
+      dataset: 'reanalysis-era5-land-timeseries',
+      historicalStart,
+    };
+    const distanceKm = this.distanceKm(input.coordenadas, gridCoordinates);
+    if (distanceKm > MAX_GRID_BINDING_DISTANCE_KM) {
+      return {
+        resolved: null,
+        provisioned: false,
+        warning:
+          'Chaman-Meteo no pudo vincular el lote: la grilla calculada excede la distancia maxima permitida.',
+      };
+    }
+
+    await this.repository.upsertGridPoint(gridPoint);
+    await this.repository.upsertLocationBinding({
+      locationType: 'lote',
+      locationId: idLote,
+      gridPointKey: gridPoint.key,
+      latitude: Number(input.coordenadas.lat),
+      longitude: Number(input.coordenadas.lng),
+      distanceKm: +distanceKm.toFixed(6),
+      active: true,
+    });
+    resolved = await this.repository.resolvedLocationBinding('lote', idLote);
+    return { resolved, provisioned: Boolean(resolved) };
+  }
+
+  private resolveCountryCode(
+    lot: ILote,
+  ): IChamanMeteoGridPoint['countryCode'] | undefined {
+    const official = lot?.ubicacionAdministrativa?.pais;
+    const establishmentOfficial = lot?.establecimiento?.ubicacionOficial?.pais;
+    const candidates = [
+      official?.id,
+      official?.nombre,
+      official?.nombreCompleto,
+      establishmentOfficial?.id,
+      establishmentOfficial?.nombre,
+      establishmentOfficial?.nombreCompleto,
+    ]
+      .map(normalizeCountry)
+      .filter(Boolean);
+    const aliases: Array<
+      readonly [IChamanMeteoGridPoint['countryCode'], string[]]
+    > = [
+      ['AR', ['ar', 'arg', 'argentina']],
+      ['UY', ['uy', 'ury', 'uruguay']],
+      ['PY', ['py', 'pry', 'paraguay']],
+      ['BR', ['br', 'bra', 'brasil', 'brazil']],
+      ['CL', ['cl', 'chl', 'chile']],
+    ];
+    return aliases.find(([, values]) =>
+      candidates.some((candidate) => values.includes(candidate)),
+    )?.[0];
+  }
+
+  private resolveProvisioningTimezone(
+    observations: IObservacionMeteorologicaNormalizada[],
+    lot: ILote,
+  ): string | undefined {
+    const candidates = [
+      ...(observations || []).map((item) => item.timezone),
+      lot?.establecimiento?.estacionMeteorologica?.position?.timezoneCode,
+    ]
+      .map((item) => String(item || '').trim())
+      .filter((item) => item.startsWith('America/'));
+    return candidates.find((item) => this.isIanaTimezone(item));
+  }
+
+  private snapEra5Grid(coordinates: ICoordenadas): ICoordenadas {
+    const snap = (value: number) => {
+      const rounded = Math.round(Number(value) * 10) / 10;
+      return Object.is(rounded, -0) ? 0 : rounded;
+    };
+    return { lat: snap(coordinates.lat), lng: snap(coordinates.lng) };
+  }
+
+  private gridPointKey(
+    countryCode: IChamanMeteoGridPoint['countryCode'],
+    coordinates: ICoordenadas,
+    timezone: string,
+  ): string {
+    const coordinate = (value: number) => Number(value).toFixed(1);
+    const timezoneKey = timezone.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    return `era5-land:${String(countryCode).toLowerCase()}:${coordinate(coordinates.lat)}:${coordinate(coordinates.lng)}:${timezoneKey}`;
   }
 
   private normalizeDaily(
@@ -725,6 +990,14 @@ export class ChamanMeteoAgrometBridgeService {
 
 function normalizeIdentifier(value: string): string {
   return String(value || '')
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeCountry(value: unknown): string {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toLowerCase();
 }

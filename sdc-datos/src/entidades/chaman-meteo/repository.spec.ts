@@ -647,12 +647,62 @@ describe('ChamanMeteoRepository', () => {
 
     expect(gridPoints.findOneAndUpdate).toHaveBeenCalledWith(
       { key: 'legacy-grid' },
-      {
+      expect.objectContaining({
         $set: expect.objectContaining({
           countryCode: 'AR',
           timezone: 'America/Argentina/Buenos_Aires',
         }),
-      },
+        $min: { historicalStart: '2020-01-01' },
+      }),
+      { upsert: true, new: true, runValidators: true },
+    );
+  });
+
+  it('solo retrocede el inicio historico de una grilla compartida', async () => {
+    const gridPoints = {
+      findOne: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({
+          key: 'shared-grid',
+          latitude: -38.8,
+          longitude: -68.1,
+          countryCode: 'AR',
+          timezone: 'America/Argentina/Buenos_Aires',
+          provider: 'copernicus-cds',
+          dataset: 'reanalysis-era5-land-timeseries',
+          historicalStart: '2026-05-01',
+        }),
+      }),
+      findOneAndUpdate: jest.fn().mockResolvedValue({ key: 'shared-grid' }),
+    };
+    const repository = new ChamanMeteoRepository(
+      gridPoints as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    await repository.upsertGridPoint({
+      key: 'shared-grid',
+      latitude: -38.8,
+      longitude: -68.1,
+      countryCode: 'AR',
+      timezone: 'America/Argentina/Buenos_Aires',
+      enabled: true,
+      provider: 'copernicus-cds',
+      dataset: 'reanalysis-era5-land-timeseries',
+      historicalStart: '2024-06-15',
+    });
+
+    expect(gridPoints.findOneAndUpdate).toHaveBeenCalledWith(
+      { key: 'shared-grid' },
+      expect.objectContaining({
+        $min: { historicalStart: '2024-06-15' },
+      }),
       { upsert: true, new: true, runValidators: true },
     );
   });

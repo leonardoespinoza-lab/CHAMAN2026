@@ -259,6 +259,8 @@ export interface IChamanMeteoAdminStatus extends IChamanMeteoStorageStatus {
   calculationVersion: string;
   operationalSourceUnchanged: boolean;
   agrometBridgeEnabled?: boolean;
+  agrometAutoProvisionEnabled?: boolean;
+  agrometAutoProvisionFrom?: string;
   agrometPilotLots?: number;
   agrometPilotSowings?: number;
   configurationValid: boolean;

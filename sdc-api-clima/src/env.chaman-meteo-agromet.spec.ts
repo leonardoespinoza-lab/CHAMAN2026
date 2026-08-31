@@ -1,5 +1,7 @@
 import {
   CHAMAN_METEO_AGROMET_BRIDGE_ENABLED,
+  CHAMAN_METEO_AGROMET_AUTO_PROVISION_ENABLED,
+  CHAMAN_METEO_AGROMET_AUTO_PROVISION_FROM,
   CHAMAN_METEO_AGROMET_RECENT_OPEN_METEO_DAYS,
   resolveIdentifierAllowlist,
 } from './env';
@@ -7,6 +9,8 @@ import {
 describe('Chaman-Meteo agromet bridge environment', () => {
   it('queda apagado por defecto y reserva cinco dias recientes', () => {
     expect(CHAMAN_METEO_AGROMET_BRIDGE_ENABLED).toBe(false);
+    expect(CHAMAN_METEO_AGROMET_AUTO_PROVISION_ENABLED).toBe(false);
+    expect(CHAMAN_METEO_AGROMET_AUTO_PROVISION_FROM).toBeUndefined();
     expect(CHAMAN_METEO_AGROMET_RECENT_OPEN_METEO_DAYS).toBe(5);
   });
 

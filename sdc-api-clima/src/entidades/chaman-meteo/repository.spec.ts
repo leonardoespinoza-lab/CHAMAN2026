@@ -2,7 +2,7 @@ import { API_DATOS } from '../../env';
 import { ChamanMeteoRepository } from './repository';
 
 describe('ChamanMeteoRepository', () => {
-  const axios = { GET: jest.fn() };
+  const axios = { GET: jest.fn(), POST: jest.fn() };
   const repository = new ChamanMeteoRepository(axios as any);
 
   beforeEach(() => {
@@ -98,5 +98,44 @@ describe('ChamanMeteoRepository', () => {
       },
       headers: expect.any(Object),
     });
+  });
+
+  it('crea punto y binding solo por el canal interno autenticado', () => {
+    const point = {
+      key: 'era5-land:ar:-38.8:-68.1:america-argentina-buenos-aires',
+      latitude: -38.8,
+      longitude: -68.1,
+      countryCode: 'AR' as const,
+      timezone: 'America/Argentina/Buenos_Aires',
+      enabled: true,
+      provider: 'copernicus-cds' as const,
+      dataset: 'reanalysis-era5-land-timeseries' as const,
+      historicalStart: '2024-06-15',
+    };
+    const binding = {
+      locationType: 'lote' as const,
+      locationId: '64b000000000000000000010',
+      gridPointKey: point.key,
+      latitude: -38.7888,
+      longitude: -68.10434,
+      distanceKm: 1.3,
+      active: true,
+    };
+
+    repository.upsertGridPoint(point);
+    repository.upsertLocationBinding(binding);
+
+    expect(axios.POST).toHaveBeenNthCalledWith(
+      1,
+      `${API_DATOS}/chaman-meteo-internal/grid-points/upsert`,
+      point,
+      expect.objectContaining({ headers: expect.any(Object) }),
+    );
+    expect(axios.POST).toHaveBeenNthCalledWith(
+      2,
+      `${API_DATOS}/chaman-meteo-internal/bindings/upsert`,
+      binding,
+      expect.objectContaining({ headers: expect.any(Object) }),
+    );
   });
 });

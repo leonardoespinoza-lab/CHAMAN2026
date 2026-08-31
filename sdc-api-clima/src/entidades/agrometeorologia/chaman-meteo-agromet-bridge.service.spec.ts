@@ -4,7 +4,9 @@ import {
 } from 'modelos/src';
 import {
   ChamanMeteoAgrometBridgeService,
+  chamanMeteoCountryFromTimezone,
   IChamanMeteoAgrometBridgeConfig,
+  isChamanMeteoAutoProvisionEligible,
   isChamanMeteoAgrometPilot,
   mergeDailyHistoricalGapFill,
   observationForChamanMeteoBridgeState,
@@ -26,6 +28,8 @@ const config = (
   data: Partial<IChamanMeteoAgrometBridgeConfig> = {},
 ): IChamanMeteoAgrometBridgeConfig => ({
   enabled: true,
+  autoProvisionEnabled: false,
+  autoProvisionFrom: undefined,
   lotAllowlist: [LOT_ID],
   historicalStart: '2020-01-01',
   recentOpenMeteoDays: 5,
@@ -111,6 +115,17 @@ const daily = (date: string): IChamanMeteoDaily => ({
 });
 
 describe('ChamanMeteoAgrometBridgeService', () => {
+  it('resuelve el pais soportado desde la zona horaria sin inferir por coordenadas', () => {
+    expect(
+      chamanMeteoCountryFromTimezone('America/Argentina/Buenos_Aires'),
+    ).toBe('AR');
+    expect(chamanMeteoCountryFromTimezone('America/Montevideo')).toBe('UY');
+    expect(chamanMeteoCountryFromTimezone('America/Asuncion')).toBe('PY');
+    expect(chamanMeteoCountryFromTimezone('America/Sao_Paulo')).toBe('BR');
+    expect(chamanMeteoCountryFromTimezone('America/Santiago')).toBe('CL');
+    expect(chamanMeteoCountryFromTimezone('America/New_York')).toBeUndefined();
+  });
+
   it('falla cerrado con flag apagado, lote no autorizado o contexto con mas de una siembra', () => {
     expect(
       isChamanMeteoAgrometPilot(config({ enabled: false }), LOT_ID, [
@@ -131,6 +146,194 @@ describe('ChamanMeteoAgrometBridgeService', () => {
     expect(
       isChamanMeteoAgrometPilot(config(), LOT_ID, [SOWING_ID.toUpperCase()]),
     ).toBe(true);
+    expect(
+      isChamanMeteoAutoProvisionEligible(
+        config({
+          autoProvisionEnabled: true,
+          autoProvisionFrom: '2026-09-01',
+          lotAllowlist: [],
+        }),
+        LOT_ID,
+        '2026-08-31',
+      ),
+    ).toBe(false);
+    expect(
+      isChamanMeteoAutoProvisionEligible(
+        config({
+          autoProvisionEnabled: true,
+          autoProvisionFrom: '2026-09-01',
+          lotAllowlist: [LOT_ID],
+        }),
+        LOT_ID,
+        '2024-01-01',
+      ),
+    ).toBe(true);
+    expect(
+      isChamanMeteoAgrometPilot(
+        config({ autoProvisionEnabled: true, lotAllowlist: [] }),
+        LOT_ID,
+        [SOWING_ID, OTHER_SOWING_ID],
+      ),
+    ).toBe(true);
+  });
+
+  it('vincula una siembra nueva desde su fecha real sin usar una allowlist', async () => {
+    const autoBinding = {
+      binding: {
+        locationType: 'lote' as const,
+        locationId: LOT_ID,
+        gridPointKey:
+          'era5-land:ar:-38.8:-68.1:america-argentina-buenos-aires',
+        latitude: -38.7888,
+        longitude: -68.10434,
+        distanceKm: 1.3,
+        active: true,
+      },
+      gridPoint: {
+        key: 'era5-land:ar:-38.8:-68.1:america-argentina-buenos-aires',
+        latitude: -38.8,
+        longitude: -68.1,
+        countryCode: 'AR' as const,
+        timezone: 'America/Argentina/Buenos_Aires',
+        enabled: true,
+        provider: 'copernicus-cds' as const,
+        dataset: 'reanalysis-era5-land-timeseries' as const,
+        historicalStart: '2024-06-15',
+      },
+    };
+    const repository = {
+      activeSowingsByLot: jest
+        .fn()
+        .mockResolvedValue(activeSowings([SOWING_ID, OTHER_SOWING_ID])),
+      resolvedLocationBinding: jest
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(autoBinding),
+      // Este lote reproduce el caso productivo sin pais oficial. El pais se
+      // resuelve desde la timezone IANA que Open-Meteo obtuvo para el punto.
+      lot: jest.fn().mockResolvedValue({}),
+      upsertGridPoint: jest.fn().mockResolvedValue(autoBinding.gridPoint),
+      upsertLocationBinding: jest
+        .fn()
+        .mockResolvedValue(autoBinding.binding),
+      daily: jest.fn(),
+    };
+    const service = new ChamanMeteoAgrometBridgeService(repository as any);
+
+    const result = await service.fillHistoricalDailyGaps(
+      {
+        observations: [
+          observation('2026-08-28', 'open_meteo', {
+            temperatureMeanC: 12,
+          }),
+        ],
+        idEstablecimiento: '64b000000000000000000001',
+        idLote: LOT_ID,
+        idSiembras: [SOWING_ID, OTHER_SOWING_ID],
+        coordenadas: { lat: -38.7888, lng: -68.10434 },
+        desde: '2026-08-28',
+        hasta: '2026-09-10',
+        coverageStart: '2024-06-15',
+        forecast: true,
+      },
+      config({
+        autoProvisionEnabled: true,
+        autoProvisionFrom: '2024-01-01',
+        lotAllowlist: [],
+      }),
+    );
+
+    expect(repository.upsertGridPoint).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: 'era5-land:ar:-38.8:-68.1:america-argentina-buenos-aires',
+        latitude: -38.8,
+        longitude: -68.1,
+        historicalStart: '2024-06-15',
+      }),
+    );
+    expect(repository.upsertLocationBinding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        locationType: 'lote',
+        locationId: LOT_ID,
+        gridPointKey:
+          'era5-land:ar:-38.8:-68.1:america-argentina-buenos-aires',
+        active: true,
+      }),
+    );
+    expect(repository.daily).not.toHaveBeenCalled();
+    expect(result.used).toBe(false);
+    expect(result.warnings.join(' ')).toContain('vinculo el lote');
+  });
+
+  it('acepta el conjunto exacto de varias siembras activas en modo automatico', async () => {
+    const repository = {
+      activeSowingsByLot: jest
+        .fn()
+        .mockResolvedValue(activeSowings([SOWING_ID, OTHER_SOWING_ID])),
+      resolvedLocationBinding: jest.fn().mockResolvedValue(resolvedBinding()),
+      daily: jest.fn().mockResolvedValue({
+        datos: [daily('2026-05-01')],
+        total: 1,
+      }),
+    };
+    const service = new ChamanMeteoAgrometBridgeService(repository as any);
+
+    const result = await service.fillHistoricalDailyGaps(
+      {
+        observations: [],
+        idEstablecimiento: '64b000000000000000000001',
+        idLote: LOT_ID,
+        idSiembras: [OTHER_SOWING_ID, SOWING_ID],
+        coordenadas: { lat: -38.7888, lng: -68.10434 },
+        desde: '2026-05-01',
+        hasta: '2026-05-01',
+        coverageStart: '2026-05-01',
+        forecast: false,
+        today: '2026-08-28',
+      },
+      config({
+        autoProvisionEnabled: true,
+        autoProvisionFrom: '2024-01-01',
+        lotAllowlist: [],
+      }),
+    );
+
+    expect(result.used).toBe(true);
+    expect(repository.activeSowingsByLot).toHaveBeenCalledTimes(2);
+  });
+
+  it('no crea metadatos si el conjunto activo cambio entre lote y servidor', async () => {
+    const repository = {
+      activeSowingsByLot: jest.fn().mockResolvedValue(activeSowings()),
+      resolvedLocationBinding: jest.fn(),
+      upsertGridPoint: jest.fn(),
+      upsertLocationBinding: jest.fn(),
+    };
+    const service = new ChamanMeteoAgrometBridgeService(repository as any);
+
+    const result = await service.fillHistoricalDailyGaps(
+      {
+        observations: [],
+        idEstablecimiento: '64b000000000000000000001',
+        idLote: LOT_ID,
+        idSiembras: [SOWING_ID, OTHER_SOWING_ID],
+        coordenadas: { lat: -38.7888, lng: -68.10434 },
+        desde: '2026-08-28',
+        hasta: '2026-09-10',
+        coverageStart: '2024-06-15',
+        forecast: true,
+      },
+      config({
+        autoProvisionEnabled: true,
+        autoProvisionFrom: '2024-01-01',
+        lotAllowlist: [],
+      }),
+    );
+
+    expect(result.used).toBe(false);
+    expect(result.warnings.join(' ')).toContain('no coincide exactamente');
+    expect(repository.resolvedLocationBinding).not.toHaveBeenCalled();
+    expect(repository.upsertGridPoint).not.toHaveBeenCalled();
   });
 
   it('consulta desde la siembra y reserva los ultimos cinco dias para Open-Meteo', async () => {

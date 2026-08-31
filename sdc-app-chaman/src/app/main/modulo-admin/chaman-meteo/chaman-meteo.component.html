@@ -71,9 +71,24 @@
       </article>
       <article class="status-card">
         <span>Uso en motores</span>
-        <strong>{{ status.agrometBridgeEnabled ? 'Piloto controlado' : 'Desactivado' }}</strong>
+        <strong>
+          {{
+            status.agrometAutoProvisionEnabled
+              ? 'Vinculación automática controlada'
+              : status.agrometBridgeEnabled
+                ? 'Piloto controlado'
+                : 'Desactivado'
+          }}
+        </strong>
         <small>
-          @if (status.agrometBridgeEnabled) {
+          @if (status.agrometAutoProvisionEnabled) {
+            {{ status.agrometPilotLots || 0 }} lote(s) de backlog;
+            @if (status.agrometAutoProvisionFrom) {
+              altas nuevas desde {{ status.agrometAutoProvisionFrom }}.
+            } @else {
+              altas nuevas bloqueadas por falta de fecha de activación.
+            }
+          } @else if (status.agrometBridgeEnabled) {
             Sólo {{ status.agrometPilotLots || 0 }} lote(s) explícitos con una única siembra activa.
           } @else {
             El kill switch excluye ERA5 del motor agrometeorológico y su respuesta canónica.

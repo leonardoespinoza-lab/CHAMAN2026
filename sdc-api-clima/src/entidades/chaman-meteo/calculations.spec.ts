@@ -7,6 +7,7 @@ import {
 } from 'modelos/src';
 import {
   resolveChamanMeteoCalculationVersion,
+  resolveChamanMeteoAutoProvisionFrom,
   resolveChamanMeteoHistoricalStart,
   resolveChamanMeteoRuntimeHistoricalStart,
   resolveChamanMeteoRuntimeSourceVersion,
@@ -97,6 +98,15 @@ describe('Chaman-Meteo agronomic calculations', () => {
       valid: false,
       error: 'Chaman-Meteo solo admite historicos desde 2020-01-01',
     });
+  });
+
+  it('fails closed when the automatic provisioning cutoff is missing or invalid', () => {
+    expect(resolveChamanMeteoAutoProvisionFrom(undefined)).toBeUndefined();
+    expect(resolveChamanMeteoAutoProvisionFrom('2019-12-31')).toBeUndefined();
+    expect(resolveChamanMeteoAutoProvisionFrom('2026-02-30')).toBeUndefined();
+    expect(resolveChamanMeteoAutoProvisionFrom('2026-08-31')).toBe(
+      '2026-08-31',
+    );
   });
 
   it('isolates a legacy source label from the shared climate API', () => {

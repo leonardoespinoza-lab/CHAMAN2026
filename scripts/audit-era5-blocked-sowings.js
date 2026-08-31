@@ -8,8 +8,10 @@
 
 const { MongoClient, ObjectId } = require('../sdc-datos/node_modules/mongodb');
 
-const DB_NAME = 'chaman';
+const PRODUCTION_DB_NAME = 'chaman';
+const TESTING_DB_NAME = 'chaman_testing';
 const AGROMET_VERSION = 'agromet-1.5.0';
+const ERA5_MINIMUM_DATE = '2020-01-01';
 const DEFAULT_TO_EXCLUSIVE = '2026-08-27';
 const SOWING_IDS = [
   '6a7de0361447da860d8106cc',
@@ -51,6 +53,40 @@ function finite(value) {
   return value !== null && value !== '' && Number.isFinite(Number(value));
 }
 
+function addDays(value, amount) {
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  parsed.setUTCDate(parsed.getUTCDate() + amount);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function normalizedCountry(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function supportedCountry(lot, establishment) {
+  const candidates = [
+    lot?.ubicacionAdministrativa?.pais?.id,
+    lot?.ubicacionAdministrativa?.pais?.nombre,
+    lot?.ubicacionAdministrativa?.pais?.nombreCompleto,
+    establishment?.ubicacionOficial?.pais?.id,
+    establishment?.ubicacionOficial?.pais?.nombre,
+    establishment?.ubicacionOficial?.pais?.nombreCompleto,
+  ].map(normalizedCountry);
+  const aliases = {
+    AR: ['ar', 'arg', 'argentina'],
+    UY: ['uy', 'ury', 'uruguay'],
+    PY: ['py', 'pry', 'paraguay'],
+    BR: ['br', 'bra', 'brasil', 'brazil'],
+    CL: ['cl', 'chl', 'chile'],
+  };
+  return Object.entries(aliases)
+    .find(([, values]) => candidates.some((candidate) => values.includes(candidate)))?.[0];
+}
+
 function observationForLot(observation, lotId) {
   const context = observation?.contextosLote?.[lotId];
   if (context) return context;
@@ -60,8 +96,17 @@ function observationForLot(observation, lotId) {
 
 async function main() {
   const environment = String(process.env.RAILWAY_ENVIRONMENT_NAME || '').trim().toLowerCase();
-  if (environment !== 'production') {
-    throw new Error('Auditoría rechazada: requiere RAILWAY_ENVIRONMENT_NAME=production.');
+  if (!['production', 'testing'].includes(environment)) {
+    throw new Error(
+      'Auditoría rechazada: requiere RAILWAY_ENVIRONMENT_NAME=production o testing.',
+    );
+  }
+  const expectedDbName = environment === 'production'
+    ? PRODUCTION_DB_NAME
+    : TESTING_DB_NAME;
+  const dbName = String(process.env.DB_NAME || expectedDbName);
+  if (dbName !== expectedDbName) {
+    throw new Error(`Base inesperada para ${environment}: ${dbName}.`);
   }
   const uri = process.env.MONGO_PUBLIC_URL || process.env.MONGO_URL || process.env.MONGO_URI;
   if (!uri) throw new Error('Falta la URL de MongoDB.');
@@ -76,8 +121,8 @@ async function main() {
   });
   await client.connect();
   try {
-    const db = client.db(DB_NAME);
-    if (db.databaseName !== DB_NAME) throw new Error('Base productiva inesperada.');
+    const db = client.db(dbName);
+    if (db.databaseName !== expectedDbName) throw new Error('Base inesperada.');
     const sowingObjectIds = SOWING_IDS.map((value) => new ObjectId(value));
     const sowings = await db.collection('siembras').find(
       { _id: { $in: sowingObjectIds } },
@@ -97,6 +142,7 @@ async function main() {
           idEstablecimiento: 1,
           idsDispositivo: 1,
           ubicacion: 1,
+          ubicacionAdministrativa: 1,
         },
       },
     ).toArray();
@@ -133,7 +179,12 @@ async function main() {
           establishmentId
             ? db.collection('establecimientos').findOne(
                 { _id: establishmentId },
-                { projection: { estacionMeteorologica: 1 } },
+                {
+                  projection: {
+                    estacionMeteorologica: 1,
+                    ubicacionOficial: 1,
+                  },
+                },
               )
             : null,
           establishmentId && from
@@ -212,6 +263,30 @@ async function main() {
         };
       }
       const center = lot.ubicacion?.centro;
+      const countryCode = supportedCountry(lot, establishment);
+      const binding = await db.collection('weather_location_bindings').findOne({
+        locationType: 'lote',
+        locationId: lot._id,
+        active: true,
+      });
+      const gridPoint = binding?.gridPointKey
+        ? await db.collection('weather_grid_points').findOne({
+            key: binding.gridPointKey,
+          })
+        : null;
+      const coverage = binding?.gridPointKey
+        ? await db.collection('weather_grid_coverage_versions').find({
+            gridPointKey: binding.gridPointKey,
+          }).sort({ lastSuccessfulImportAt: -1, updatedAt: -1 }).limit(1).next()
+        : null;
+      const requestedEra5From = from < ERA5_MINIMUM_DATE ? ERA5_MINIMUM_DATE : from;
+      const requiredEra5To = addDays(toExclusive, -1);
+      const era5CoverageReady = Boolean(
+        coverage?.dailyFrom &&
+          coverage?.dailyTo &&
+          coverage.dailyFrom <= requestedEra5From &&
+          coverage.dailyTo >= requiredEra5To,
+      );
       rows.push({
         sowingId,
         lotId,
@@ -221,6 +296,14 @@ async function main() {
         devices,
         hasFieldClimate: Boolean(establishment?.estacionMeteorologica),
         coordinatesValid: Boolean(center && finite(center.lat) && finite(center.lng)),
+        countryCode: countryCode || null,
+        hasActiveBinding: Boolean(binding),
+        gridPointKey: gridPoint?.key || null,
+        gridPointEnabled: gridPoint?.enabled === true,
+        requestedEra5From,
+        coverageDailyFrom: coverage?.dailyFrom || null,
+        coverageDailyTo: coverage?.dailyTo || null,
+        era5CoverageReady,
         dailyRows: seenDates.size,
         completeTemperatureDays,
         incompleteTemperatureDays,
@@ -235,7 +318,8 @@ async function main() {
     const existing = rows.filter((item) => item.exists);
     console.log(JSON.stringify({
       generatedAt: new Date().toISOString(),
-      database: DB_NAME,
+      environment,
+      database: dbName,
       readOnly: true,
       window: { toExclusive },
       summary: {
@@ -252,6 +336,9 @@ async function main() {
         withDevices: existing.filter((item) => item.devices > 0).length,
         withFieldClimate: existing.filter((item) => item.hasFieldClimate).length,
         withValidCoordinates: existing.filter((item) => item.coordinatesValid).length,
+        withSupportedCountry: existing.filter((item) => item.countryCode).length,
+        withActiveBinding: existing.filter((item) => item.hasActiveBinding).length,
+        withEra5CoverageReady: existing.filter((item) => item.era5CoverageReady).length,
         chamanMeteoDays: existing.reduce((sum, item) => sum + item.chamanMeteoDays, 0),
       },
       rows,

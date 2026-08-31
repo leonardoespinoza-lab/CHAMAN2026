@@ -11,8 +11,10 @@ El puente actua solamente cuando se cumplen todas estas condiciones:
 1. `CHAMAN_METEO_ENABLED=true`;
 2. el contrato/versionado v2 de Chaman-Meteo es valido;
 3. `CHAMAN_METEO_AGROMET_BRIDGE_ENABLED=true`;
-4. el lote esta en una allowlist explicita y el contexto contiene exactamente
-   una siembra activa;
+4. en modo piloto, el lote esta en una allowlist explicita y el contexto
+   contiene exactamente una siembra activa; en modo automatico, el conjunto
+   solicitado debe coincidir exactamente con todas las siembras activas reales
+   del lote;
 5. existe un `weather_location_binding` activo para ese lote y su punto
    `weather_grid_points` exacto tambien esta activo;
 6. el centroide vigente del lote no difiere mas de 1 km del registrado en el
@@ -61,13 +63,37 @@ calculo, binding verificado y calidad de reanalisis.
 
 ```text
 CHAMAN_METEO_AGROMET_BRIDGE_ENABLED=false
+CHAMAN_METEO_AGROMET_AUTO_PROVISION_ENABLED=false
+CHAMAN_METEO_AGROMET_AUTO_PROVISION_FROM=
 CHAMAN_METEO_AGROMET_LOT_ALLOWLIST=
 ```
 
-La allowlist contiene identificadores de lote separados por coma. Activar el
-flag sin ella no habilita ningun lote. `CHAMAN_METEO_AGROMET_SOWING_ALLOWLIST`
-queda deliberadamente sin efecto: una autorizacion por siembra no puede abrir
-un contexto meteorologico compartido con otras siembras.
+La allowlist contiene identificadores de lote separados por coma. Con el modo
+automatico apagado, activar el puente sin ella no habilita ningun lote.
+`CHAMAN_METEO_AGROMET_SOWING_ALLOWLIST` queda deliberadamente sin efecto: una
+autorizacion por siembra no puede abrir un contexto meteorologico compartido
+con otras siembras.
+
+El modo automatico tiene dos carriles independientes y fail-closed:
+
+- backlog: solamente lotes presentes en `CHAMAN_METEO_AGROMET_LOT_ALLOWLIST`;
+- siembras futuras: solamente contextos cuya fecha inicial sea igual o
+  posterior a `CHAMAN_METEO_AGROMET_AUTO_PROVISION_FROM`.
+
+Si falta una fecha de activacion valida, el modo automatico no incorpora
+siembras nuevas fuera de la allowlist. Esto evita que una activacion despliegue
+de golpe puntos para todas las siembras historicas activas.
+
+Para cada lote elegible, API Clima exige un país soportado, zona horaria IANA
+proveniente de Open-Meteo o de la central asociada y coordenadas validas. El
+país se toma primero de la ubicación oficial y, cuando ese dato falta, de una
+zona horaria inequívoca de Argentina, Uruguay, Paraguay, Brasil o Chile; nunca
+se adivina mediante límites geográficos superpuestos.
+Luego ajusta el punto a la grilla ERA5-Land de 0,1 grados, crea una key que
+incluye país, coordenadas y zona horaria, registra un binding inmutable y pide
+histórico desde la fecha de siembra (nunca antes de 2020-01-01). Si varios
+lotes comparten punto, `historicalStart` sólo puede retroceder; nunca se recorta
+cobertura existente.
 
 El storage interno permite crear o reactivar un binding explicito mediante
 `POST /chaman-meteo-internal/bindings/upsert`. Sigue protegido por el token
@@ -107,6 +133,11 @@ borra evidencia.
 - Las 21 pertenecen a lotes con una unica siembra activa, no tienen
   dispositivos asociados y todavia no poseen una generacion agrometeorologica
   activa utilizable.
+- Las 21 tienen coordenadas validas. Veinte resuelven Argentina desde la
+  ubicacion oficial; el lote restante queda cubierto por la resolucion
+  fail-closed desde su zona horaria IANA, sin inferencia por coordenadas.
+- Un lote ya tiene binding y cobertura ERA5-Land completa hasta 2026-08-26;
+  los otros 20 permanecen sin binding y deben entrar por tandas.
 - No faltan documentos diarios: existen todas las fechas entre la siembra y
   2026-08-26. La revalidacion actual encontro **571 dias** cuyos documentos
   `open_meteo` no contienen simultaneamente temperatura minima, media y maxima.
@@ -168,6 +199,33 @@ Siembras candidatas observadas para mapear primero a lotes elegibles
 6a8f00243b0e91ed17865141
 ```
 
+Lotes correspondientes para ampliar `CHAMAN_METEO_AGROMET_LOT_ALLOWLIST` por
+tandas (**no copiar los 21 de una vez**):
+
+```text
+6a7de00c1447da860d810518
+6a7efa20975346ea77478747
+6a7f0103975346ea774792d8
+6a8064c0963c5f88fa62d42a
+6a8065b8963c5f88fa62db54
+6a806781963c5f88fa62eeae
+6a80679c963c5f88fa62efb6
+6a8067c2963c5f88fa62f1e4
+6a8067d0963c5f88fa62f2bb
+6a85f4b5f9b27f4600038c67
+6a8896cd3b0e91ed177f8b34
+6a8896e33b0e91ed177f8bb3
+6a8896fb3b0e91ed177f8c32
+6a889a7c3b0e91ed177f9c74
+6a889ab53b0e91ed177f9ca8
+6a8c3d8d3b0e91ed17830a10
+6a8c62393b0e91ed178346ee
+6a8c63f73b0e91ed17834c52
+6a8c65043b0e91ed17834d91
+6a8c66153b0e91ed17835208
+6a8eff5b3b0e91ed17864e8a
+```
+
 ## Condiciones previas a cualquier piloto productivo
 
 1. Desplegar y validar primero en Testing.
@@ -180,7 +238,8 @@ Siembras candidatas observadas para mapear primero a lotes elegibles
    lote y ejecutar un reproceso manual controlado.
 5. Confirmar continuidad diaria, temperaturas finitas, GDD completo, fuente
    por variable y ausencia de reemplazos de sensor/FieldClimate/Open-Meteo.
-6. Repetir por lotes pequenos; nunca cargar las 21 de una vez.
+6. Repetir por lotes pequenos; ampliar la allowlist por tandas y conservar la
+   fecha de activacion de siembras futuras.
 7. Ante cualquier desvio, apagar el flag. Las observaciones y generaciones
    ERA5 dejan de influir de inmediato; no borrar RAW ni diarios ERA5.
 
@@ -200,8 +259,8 @@ Siembras candidatas observadas para mapear primero a lotes elegibles
 
 ## Brechas deliberadamente pendientes
 
-- No se crean automaticamente puntos ni bindings; una asociación geografica
-  erronea debe seguir requiriendo revision humana.
+- El aprovisionamiento automatico permanece apagado por defecto y debe pasar
+  por Testing antes de definir la allowlist productiva y la fecha de corte.
 - No se incluye un comando de reproceso masivo ni se activa la allowlist viva.
 - La exportacion/restauracion por siembra existe como herramienta manual y
   fail-closed para Testing (`scripts/era5-pilot-snapshot.js`); no se ejecuta

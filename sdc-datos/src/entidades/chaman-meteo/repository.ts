@@ -344,7 +344,6 @@ export class ChamanMeteoRepository {
     const mutable = Object.fromEntries(
       [
         ['enabled', data.enabled],
-        ['historicalStart', data.historicalStart],
         ['latestAvailable', data.latestAvailable],
         ['firstDataAt', data.firstDataAt],
         ['lastDataAt', data.lastDataAt],
@@ -357,20 +356,26 @@ export class ChamanMeteoRepository {
             .map((field) => [field, data[field]]),
         )
       : {};
-    const update = existing
-      ? { $set: { ...legacyIdentityEnrichment, ...mutable } }
-      : {
-          $setOnInsert: {
-            key: data.key,
-            latitude: data.latitude,
-            longitude: data.longitude,
-            countryCode: data.countryCode,
-            timezone: data.timezone,
-            provider: data.provider,
-            dataset: data.dataset,
-          },
-          $set: mutable,
-        };
+    const update = {
+      ...(existing
+        ? {}
+        : {
+            $setOnInsert: {
+              key: data.key,
+              latitude: data.latitude,
+              longitude: data.longitude,
+              countryCode: data.countryCode,
+              timezone: data.timezone,
+              provider: data.provider,
+              dataset: data.dataset,
+            },
+          }),
+      $set: { ...legacyIdentityEnrichment, ...mutable },
+      // Un nuevo cultivo puede necesitar una fecha anterior. El inicio de una
+      // grilla compartida solo puede retroceder; nunca se recorta cobertura ya
+      // importada ni se crea una carrera donde gane la solicitud mas reciente.
+      $min: { historicalStart: data.historicalStart },
+    };
     return this.gridPoints.findOneAndUpdate(
       { key: data.key },
       update,

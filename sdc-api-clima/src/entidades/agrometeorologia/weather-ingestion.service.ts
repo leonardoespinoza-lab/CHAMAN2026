@@ -55,6 +55,7 @@ export class WeatherIngestionService {
     }
     const idEstablecimiento = establecimiento._id;
     const advertencias: string[] = [];
+    const coverageStart = this.dateOnly(desdeSolicitado);
     const desde = forceBackfill
       ? this.dateOnly(desdeSolicitado)
       : await this.resolverDesdeIncremental(
@@ -78,6 +79,7 @@ export class WeatherIngestionService {
           false,
           idLote,
           idSiembras,
+          coverageStart,
         );
         total += result.observaciones;
         result.fuentes.forEach((source) => fuentes.add(source));
@@ -93,6 +95,7 @@ export class WeatherIngestionService {
       true,
       idLote,
       idSiembras,
+      coverageStart,
     );
     total += forecastResult.observaciones;
     forecastResult.fuentes.forEach((source) => fuentes.add(source));
@@ -131,6 +134,7 @@ export class WeatherIngestionService {
     forecast: boolean,
     idLote?: string,
     idSiembras?: string[],
+    coverageStart?: string,
   ): Promise<{
     observaciones: number;
     fuentes: Set<string>;
@@ -255,6 +259,7 @@ export class WeatherIngestionService {
         coordenadas,
         desde,
         hasta,
+        coverageStart,
         forecast,
       });
       merged = bridgeResult.observations;
