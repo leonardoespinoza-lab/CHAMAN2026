@@ -608,14 +608,13 @@ export class PrediccionTrigoService {
     const experimental = idEnfermedad === 'trigo.roya_anaranjada';
     const fuentes: Partial<Record<TEnfermedadId, string>> = {
       'trigo.mancha_amarilla':
-        'Contrato sanitario trigo 2026 / Mancha Amarilla',
-      'trigo.mancha_hoja': 'Contrato sanitario trigo 2026 / Mancha de la Hoja',
-      'trigo.roya_hoja':
-        'Contrato sanitario trigo 2026; Moschini y Perez (1999), adaptacion varietal declarada',
+        'Modelo propietario Chaman 2026 / Mancha Amarilla',
+      'trigo.mancha_hoja': 'Modelo propietario Chaman 2026 / Mancha de la Hoja',
+      'trigo.roya_hoja': 'Modelo propietario Chaman 2026 / contrato sanitario trigo',
       'trigo.roya_anaranjada':
         'Contrato sanitario trigo 2026 / registro legado Roya Anaranjada',
       'trigo.fusarium_espiga':
-        'Moschini y Fortugno (1996) / contrato sanitario trigo 2026',
+        'Modelo propietario Chaman 2026 / contrato sanitario trigo',
     };
 
     return crearPrediccionFueraVentana(
@@ -638,17 +637,17 @@ export class PrediccionTrigoService {
       [
         'Mancha de la Hoja',
         'trigo.mancha_hoja',
-        'Contrato sanitario trigo 2026 / Mancha de la Hoja',
+        'Modelo propietario Chaman 2026 / Mancha de la Hoja',
       ],
       [
         'Mancha Amarilla',
         'trigo.mancha_amarilla',
-        'Contrato sanitario trigo 2026 / Mancha Amarilla',
+        'Modelo propietario Chaman 2026 / Mancha Amarilla',
       ],
       [
         'Roya de la Hoja',
         'trigo.roya_hoja',
-        'Contrato sanitario trigo 2026; Moschini y Perez (1999)',
+        'Modelo propietario Chaman 2026 / contrato sanitario trigo',
       ],
       [
         'Roya Anaranjada',
@@ -658,7 +657,7 @@ export class PrediccionTrigoService {
       [
         'Fusarium de la Espiga',
         'trigo.fusarium_espiga',
-        'Moschini y Fortugno (1996) / contrato sanitario trigo 2026',
+        'Modelo propietario Chaman 2026 / contrato sanitario trigo',
       ],
     ];
     return definiciones.map(([enfermedad, idEnfermedad, fuente]) => {

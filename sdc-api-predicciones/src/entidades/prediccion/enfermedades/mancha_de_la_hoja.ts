@@ -65,7 +65,7 @@ export class ManchaDeLaHojaService {
         'Mancha de la Hoja',
         'trigo.mancha_hoja',
         faltantes,
-        'Contrato sanitario trigo 2026 / Mancha de la Hoja',
+        'Modelo propietario Chaman 2026 / Mancha de la Hoja',
         TRIGO_MOTOR_SANITARIO_VERSION,
         'operativo_provisional',
         variables,
@@ -114,7 +114,7 @@ export class ManchaDeLaHojaService {
       modelo: {
         id: 'trigo.mancha_hoja',
         version: TRIGO_MOTOR_SANITARIO_VERSION,
-        fuente: 'Contrato sanitario trigo 2026 / Mancha de la Hoja',
+        fuente: 'Modelo propietario Chaman 2026 / Mancha de la Hoja',
         resolucion: 'diaria',
         validacion: 'operativo_provisional',
         alcance:

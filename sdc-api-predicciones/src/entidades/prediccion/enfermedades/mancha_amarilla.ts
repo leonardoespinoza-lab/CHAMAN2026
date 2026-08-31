@@ -72,7 +72,7 @@ export class ManchaAmarillaService {
         'Mancha Amarilla',
         'trigo.mancha_amarilla',
         faltantes,
-        'Contrato sanitario trigo 2026 / Mancha Amarilla',
+        'Modelo propietario Chaman 2026 / Mancha Amarilla',
         TRIGO_MOTOR_SANITARIO_VERSION,
         'operativo_provisional',
         variables,
@@ -119,7 +119,7 @@ export class ManchaAmarillaService {
       modelo: {
         id: 'trigo.mancha_amarilla',
         version: TRIGO_MOTOR_SANITARIO_VERSION,
-        fuente: 'Contrato sanitario trigo 2026 / Mancha Amarilla',
+        fuente: 'Modelo propietario Chaman 2026 / Mancha Amarilla',
         resolucion: 'diaria',
         validacion: 'operativo_provisional',
         alcance:

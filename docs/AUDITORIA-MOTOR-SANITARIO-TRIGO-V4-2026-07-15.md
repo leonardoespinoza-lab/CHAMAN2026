@@ -130,7 +130,9 @@ La ecuación de contraste calcula incidencia sobre la ventana epidemiológica co
 - Los ejemplos Excel tienen fórmulas/semáforos rotos y no deben ejecutarse como fuente productiva.
 - La base de campaña 26/27 agrega variedades, pero presenta faltantes de normalización y no incluye resistencia reciente para Mancha de la Hoja. No debe importarse silenciosamente sin resolver esos casos.
 
-## Fuentes científicas verificadas
+## Literatura de contraste y modelos auxiliares verificados
+
+Las referencias siguientes no se presentan como autoría de las cuatro fórmulas propietarias de Chamán. Sirven para contraste epidemiológico y diseño de validación. El criterio horario de El Jarroudi et al. (2017) sí se ejecuta directamente, de forma experimental, para roya amarilla/estriada.
 
 - Moschini y Fortugno, modelo de incidencia de Fusarium: https://doi.org/10.1007/BF01877959
 - UNR, definiciones y validación regional de Fusarium: https://fcagr.unr.edu.ar/Extension/Informes%20tecnicos/fusariosistrigo1.htm

@@ -70,7 +70,7 @@ export class FusariumDeLaEspigaService {
         'Fusarium de la Espiga',
         'trigo.fusarium_espiga',
         motivo,
-        'Moschini y Fortugno (1996); adaptacion varietal del contrato sanitario trigo 2026',
+        'Modelo propietario Chaman 2026 / contrato sanitario trigo',
         TRIGO_MOTOR_SANITARIO_VERSION,
         'operativo_provisional',
         variables,
@@ -114,7 +114,7 @@ export class FusariumDeLaEspigaService {
         'Fusarium de la Espiga',
         'trigo.fusarium_espiga',
         faltantes,
-        'Moschini y Fortugno (1996) / contrato sanitario trigo 2026',
+        'Modelo propietario Chaman 2026 / contrato sanitario trigo',
         TRIGO_MOTOR_SANITARIO_VERSION,
         'operativo_provisional',
         variables,
@@ -184,8 +184,7 @@ export class FusariumDeLaEspigaService {
         modelo: {
           id: 'trigo.fusarium_espiga',
           version: TRIGO_MOTOR_SANITARIO_VERSION,
-          fuente:
-            'Moschini y Fortugno (1996); adaptacion varietal del contrato sanitario trigo 2026',
+          fuente: 'Modelo propietario Chaman 2026 / contrato sanitario trigo',
           resolucion: 'diaria',
           validacion: 'operativo_provisional',
           alcance:

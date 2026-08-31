@@ -70,7 +70,7 @@ export class RoyaDeLaHojaService {
         'Roya de la Hoja',
         'trigo.roya_hoja',
         faltantes,
-        'Contrato sanitario trigo 2026 / Roya de la Hoja',
+        'Modelo propietario Chaman 2026 / Roya de la Hoja',
         TRIGO_MOTOR_SANITARIO_VERSION,
         'operativo_provisional',
         variables,
@@ -126,8 +126,7 @@ export class RoyaDeLaHojaService {
       modelo: {
         id: 'trigo.roya_hoja',
         version: TRIGO_MOTOR_SANITARIO_VERSION,
-        fuente:
-          'Contrato sanitario trigo 2026; Moschini y Perez (1999), adaptacion varietal declarada',
+        fuente: 'Modelo propietario Chaman 2026 / contrato sanitario trigo',
         resolucion: 'diaria',
         validacion: 'operativo_provisional',
         alcance:
