@@ -2,6 +2,7 @@ import {
   ICalidadDatoMotor,
   IClimaEstacionMeteorologica,
   IHoraRoyaAmarilla,
+  ISerieAgrometeorologicaHora,
 } from 'modelos/src';
 
 const finito = (value: unknown): value is number =>
@@ -217,4 +218,58 @@ export function ventanaHorariaRoyaAmarilla(
       ),
     }))
     .sort((a, b) => a.fecha.localeCompare(b.fecha));
+}
+
+/**
+ * Selecciona una ventana sanitaria desde la serie horaria canonica. Usa la
+ * fecha local declarada por el motor meteorologico y exige al menos 22 horas
+ * unicas por dia; no mezcla dias UTC con dias agronomicos del lote.
+ */
+export function ventanaHorariaRoyaAmarillaCanonica(
+  filas: ISerieAgrometeorologicaHora[],
+  fechaObjetivo: Date,
+): IHoraRoyaAmarilla[] {
+  const fin = fechaObjetivo.toISOString().split('T')[0];
+  const inicioDate = new Date(`${fin}T12:00:00.000Z`);
+  inicioDate.setUTCDate(inicioDate.getUTCDate() - 9);
+  const inicio = inicioDate.toISOString().split('T')[0];
+  const unicas = new Map<string, ISerieAgrometeorologicaHora>();
+  for (const fila of filas || []) {
+    const instante = new Date(String(fila?.timestamp || ''));
+    if (!Number.isFinite(instante.getTime())) continue;
+    const fechaLocal = String(fila?.localDate || '');
+    if (fechaLocal < inicio || fechaLocal > fin) continue;
+    const hora = instante.toISOString().slice(0, 13);
+    const previa = unicas.get(hora);
+    const puntaje = [
+      fila.weather?.temperatureC,
+      fila.weather?.relativeHumidityPct,
+      fila.weather?.precipitationMm ?? fila.weather?.rainMm,
+    ].filter((value) => numero(value) !== undefined).length;
+    const puntajePrevio = previa
+      ? [
+          previa.weather?.temperatureC,
+          previa.weather?.relativeHumidityPct,
+          previa.weather?.precipitationMm ?? previa.weather?.rainMm,
+        ].filter((value) => numero(value) !== undefined).length
+      : -1;
+    if (!previa || puntaje > puntajePrevio) unicas.set(hora, fila);
+  }
+
+  const porDia = new Map<string, ISerieAgrometeorologicaHora[]>();
+  for (const fila of unicas.values()) {
+    porDia.set(fila.localDate, [...(porDia.get(fila.localDate) || []), fila]);
+  }
+  return [...porDia.entries()]
+    .filter(([, registros]) => registros.length >= 22)
+    .flatMap(([, registros]) => registros)
+    .map((item) => ({
+      fecha: item.timestamp,
+      temperatura: numero(item.weather?.temperatureC),
+      humedadRelativa: numero(item.weather?.relativeHumidityPct),
+      lluviaMm: numero(
+        item.weather?.precipitationMm ?? item.weather?.rainMm,
+      ),
+    }))
+    .sort((left, right) => left.fecha.localeCompare(right.fecha));
 }

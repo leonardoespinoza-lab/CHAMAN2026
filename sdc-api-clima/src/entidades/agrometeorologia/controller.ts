@@ -26,8 +26,9 @@ export class AgrometeorologiaController {
     @Param('id') id: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('includeHourly') includeHourly?: string,
   ) {
-    return this.engine.getResponse(id, from, to);
+    return this.engine.getResponse(id, from, to, includeHourly === 'true');
   }
 
   @Post('siembras/:id/reprocesar')

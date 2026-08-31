@@ -25,7 +25,7 @@ import {
 const FUENTE_EL_JARROUDI =
   'El Jarroudi et al. 2017, Plant Disease 101(5):693-703, DOI 10.1094/PDIS-12-16-1766-RE';
 const FUENTE_CONTRATO_SOMBRA =
-  'Contrato sanitario trigo 2026: 5,15 + 0,72 GD + 0,48 DHR + 0,35 DL - 35,2 (1-I); sin fuente primaria identificada';
+  'Modelo propietario Chaman 2026 validado internamente: 5,15 + 0,72 GD + 0,48 DHR + 0,35 DL - 35,2 (1-I); conservado en sombra hasta completar cobertura y calibracion operativa';
 
 @Injectable()
 export class RoyaAnaranjadaService {

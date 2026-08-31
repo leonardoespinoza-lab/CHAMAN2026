@@ -4,7 +4,7 @@ Fecha: 15 de julio de 2026
 
 Alcance: motor productivo, simulador administrativo, tarjeta del lote, alertas y bases Excel.
 
-Contrato funcional: fórmulas de la captura aprobada por el equipo de Chaman.
+Contrato funcional: fórmulas propietarias aprobadas por el equipo de Chaman y validadas internamente por contraste con modelos utilizados en el mercado. La falta de una publicación primaria no invalida el contrato interno; sí exige conservar versión, responsables, alcance y evidencia de calibración antes de automatizar alertas.
 
 ## Resultado ejecutivo
 
@@ -20,11 +20,11 @@ Una ecuación climática no confirma la presencia del patógeno. Las alertas aut
 
 | ID estable | Nombre agronómico | Patógeno | Estado v4 |
 |---|---|---|---|
-| `trigo.mancha_amarilla` | Mancha amarilla | *Pyrenophora tritici-repentis* / denominación histórica *Drechslera tritici* | Operativo provisional |
-| `trigo.mancha_hoja` | Mancha de la hoja / septoriosis | *Zymoseptoria tritici* / denominación histórica *Septoria tritici* | Operativo provisional |
-| `trigo.roya_hoja` | Roya de la hoja, parda o anaranjada | *Puccinia triticina* | Operativo provisional |
+| `trigo.mancha_amarilla` | Mancha amarilla | *Pyrenophora tritici-repentis* / denominación histórica *Drechslera tritici* | Modelo propietario Chaman validado internamente; operativo provisional |
+| `trigo.mancha_hoja` | Mancha de la hoja / septoriosis | *Zymoseptoria tritici* / denominación histórica *Septoria tritici* | Modelo propietario Chaman validado internamente; operativo provisional |
+| `trigo.roya_hoja` | Roya de la hoja, parda o anaranjada | *Puccinia triticina* | Modelo propietario Chaman validado internamente; operativo provisional |
 | `trigo.roya_anaranjada` | ID legado; la interfaz muestra roya amarilla/estriada | *Puccinia striiformis* f. sp. *tritici* | Contrato en sombra + cribado científico provisional; sin alertas automáticas |
-| `trigo.fusarium_espiga` | Fusariosis de la espiga | complejo *Fusarium* / *Gibberella zeae* | Operativo provisional |
+| `trigo.fusarium_espiga` | Fusariosis de la espiga | complejo *Fusarium* / *Gibberella zeae* | Modelo propietario Chaman validado internamente; operativo provisional |
 
 El ID legado `trigo.roya_anaranjada` se conserva para no romper resistencias, predicciones ni lotes existentes. La nomenclatura visible sí se corrige: *P. triticina* es roya de la hoja, parda o anaranjada; *P. striiformis* es roya amarilla o estriada. Ninguna salida se presenta como diagnóstico.
 
@@ -71,7 +71,7 @@ Aunque la planilla la llama "índice de resistencia", matemáticamente es un **f
 - `GD`: suma de temperatura media entre 7 y 14 °C cuando HR >60 %.
 - `DHR`: días con HR >75 % y precipitación ≤5 mm.
 - `DL`: días con 0,1–2,0 mm de precipitación como proxy de lluvia leve/niebla.
-- Estado: cálculo contractual reproducible sólo para auditoría comparativa. No se publica como porcentaje de enfermedad, no alimenta el ranking y no genera alertas, prescripciones ni notificaciones porque no se encontró una fuente primaria trazable para esos coeficientes.
+- Estado: cálculo contractual propietario reproducible sólo para auditoría comparativa. No se publica como porcentaje de enfermedad, no alimenta el ranking y no genera alertas, prescripciones ni notificaciones hasta completar su validación interna específica y la cobertura horaria.
 
 ### Cribado horario de roya amarilla/estriada
 
@@ -98,7 +98,7 @@ La susceptibilidad S/MS/MR/R se informa por separado como modificador de priorid
 - Inicio contractual: primeras espigas con anteras, representadas por Antesis o por observación fenológica.
 - Fin: 530 GDD base 0 °C desde el inicio.
 
-La ecuación publicada calcula incidencia sobre la ventana epidemiológica completa, no severidad. Su fuente original inicia la evaluación ocho días antes de espigazón/floración, mientras el contrato recibido inicia con las primeras anteras; esta diferencia queda marcada para calibración. Durante una ventana todavía abierta, Chaman sólo presenta un estimador acumulado parcial: no lo rotula como incidencia final, no confirma enfermedad y no habilita alertas. La multiplicación varietal es una adaptación contractual de Chaman y queda declarada como tal.
+La ecuación de contraste calcula incidencia sobre la ventana epidemiológica completa, no severidad. La bibliografía inicia la evaluación ocho días antes de espigazón/floración, mientras el contrato propietario aprobado por Chaman inicia con las primeras anteras. Se conserva la regla de Chaman y la diferencia queda documentada para calibración. Durante una ventana todavía abierta, Chaman sólo presenta un estimador acumulado parcial: no lo rotula como incidencia final, no confirma enfermedad y no habilita alertas. La multiplicación varietal es una adaptación contractual de Chaman y queda declarada como tal.
 
 ## Ventanas y calidad
 
@@ -145,8 +145,8 @@ La ecuación publicada calcula incidencia sobre la ventana epidemiológica compl
 
 ## Pendientes de calibración
 
-1. mantener la ecuación `5,15/0,72/0,48/0,35/35,2` en sombra hasta recuperar su publicación y dominio originales;
-2. documentar las fuentes originales de las dos ecuaciones de manchas;
+1. mantener la ecuación propietaria `5,15/0,72/0,48/0,35/35,2` en sombra hasta documentar su dominio, casos de contraste y aceptación interna específica;
+2. versionar y documentar la aprobación interna, los modelos de mercado contrastados y los casos de calibración de las dos ecuaciones de manchas;
 3. validar las salidas contra observaciones de lotes y registrar falsos positivos/negativos;
 4. normalizar la campaña varietal 26/27 antes de migrarla;
 5. persistir observaciones de enfermedad sospechada/confirmada con fecha, usuario y evidencia;

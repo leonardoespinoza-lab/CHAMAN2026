@@ -23,6 +23,7 @@ export class ClimaRepository {
       params: {
         ...(from ? { from } : {}),
         ...(to ? { to } : {}),
+        includeHourly: true,
       },
       headers: AGROMETEO_INTERNAL_TOKEN
         ? {

@@ -34,7 +34,7 @@ import {
   crearPrediccionSinDatos,
   esValorClimaticoValido,
 } from '../enfermedades/calidad';
-import { ventanaHorariaRoyaAmarilla } from './clima-horario-trigo';
+import { ventanaHorariaRoyaAmarillaCanonica } from './clima-horario-trigo';
 import { construirDiasSanitariosCanonicos } from './agrometeorologia-canonica';
 
 @Injectable()
@@ -141,10 +141,7 @@ export class PrediccionTrigoService {
       const etapaCanonicaActual = [...diasCanonicos]
         .reverse()
         .find((dia) => dia.etapaHabilitante)?.etapaNumero;
-      // La respuesta canónica expone agregados diarios y métricas de mojado,
-      // no observaciones horarias crudas. El modelo experimental de roya
-      // estriada queda explícitamente sin datos en vez de reconstruir horas.
-      const climaHorario: IClimaEstacionMeteorologica[] = [];
+      const climaHorario = respuestaCanonica?.hourlySeries || [];
 
       const fumigaciones = await this.fumigacionsService.getByIdSiembra(
         siembra._id,
@@ -387,7 +384,7 @@ export class PrediccionTrigoService {
                 this.royaAnaranjadaService.predecir(
                   siembra.semilla,
                   { precip, hr, Tmin, Tmax, Tavg },
-                  ventanaHorariaRoyaAmarilla(climaHorario, fecha),
+                  ventanaHorariaRoyaAmarillaCanonica(climaHorario, fecha),
                   predAnterior,
                   predecir,
                   contextoVentanaFoliar,

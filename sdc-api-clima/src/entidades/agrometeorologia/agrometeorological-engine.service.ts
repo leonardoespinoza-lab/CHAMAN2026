@@ -31,6 +31,7 @@ import {
   IRegistroFenologico,
   IRespuestaAgrometeorologiaSiembra,
   ISerieAgrometeorologicaDia,
+  ISerieAgrometeorologicaHora,
   ISiembra,
   IValoresMeteorologicosNormalizados,
   IEntradasAgronomicasSuelo,
@@ -1564,6 +1565,7 @@ export class AgrometeorologicalEngineService {
     idSiembra: string,
     from?: string,
     to?: string,
+    includeHourly = false,
   ): Promise<IRespuestaAgrometeorologiaSiembra> {
     const runtimeWarnings: string[] = [];
     const filter: Record<string, unknown> = {
@@ -1671,7 +1673,7 @@ export class AgrometeorologicalEngineService {
     const observations = await this.repository.getObservaciones({
       filter: JSON.stringify({
         idEstablecimiento: establishmentId,
-        granularidad: 'daily',
+        granularidad: includeHourly ? { $in: ['daily', 'hourly'] } : 'daily',
         fechaLocal: {
           $gte: rows[0].fecha,
           $lte: rows[rows.length - 1].fecha,
@@ -1680,11 +1682,37 @@ export class AgrometeorologicalEngineService {
       sort: 'timestamp',
       limit: 0,
     });
-    const lotObservations = (observations.datos || [])
+    let lotObservations = (observations.datos || [])
       .map((item) => this.resolveLotObservation(item, rows[0].idLote))
       .filter((item): item is IObservacionMeteorologicaNormalizada => !!item);
+    if (includeHourly && this.sensorOverlay && rows[0].idLote) {
+      try {
+        const lote = await this.repository.getLote(rows[0].idLote);
+        const field = await this.sensorOverlay.overlay(
+          lote,
+          establishmentId,
+          rows[0].fecha,
+          lotObservations,
+        );
+        lotObservations = field.observations.filter(
+          (item) =>
+            item.fechaLocal >= rows[0].fecha &&
+            item.fechaLocal <= rows[rows.length - 1].fecha,
+        );
+        runtimeWarnings.push(...field.warnings);
+      } catch (error) {
+        runtimeWarnings.push(
+          'La serie horaria se entrego sin overlay de sensores porque el integrador de campo no estuvo disponible.',
+        );
+        this.logger.warn(
+          `No se pudo resolver el overlay horario de ${rows[0].idLote}: ${error?.message || error}`,
+        );
+      }
+    }
     const weatherByDate = new Map(
-      lotObservations.map((item) => [item.fechaLocal, item]),
+      lotObservations
+        .filter((item) => item.granularidad === 'daily')
+        .map((item) => [item.fechaLocal, item]),
     );
     const series: ISerieAgrometeorologicaDia[] = rows.map((item) => {
       const weather = weatherByDate.get(item.fecha);
@@ -1706,6 +1734,24 @@ export class AgrometeorologicalEngineService {
     const responseTimezone =
       lotObservations.find((item) => item.timezone)?.timezone ||
       DEFAULT_OPERATIONAL_TIMEZONE;
+    const hourlySeries: ISerieAgrometeorologicaHora[] = includeHourly
+      ? lotObservations
+          .filter((item) => item.granularidad === 'hourly')
+          .sort((left, right) => left.timestamp.localeCompare(right.timestamp))
+          .map((item) => ({
+            timestamp: item.timestamp,
+            localDate: item.fechaLocal,
+            timezone: item.timezone,
+            isForecast: item.esPronostico,
+            state: item.estado,
+            weather: item.valores,
+            source: item.fuente,
+            sourceByVariable: item.fuentePorVariable,
+            stateByVariable: item.estadoPorVariable,
+            qualityFlags: item.banderasCalidad,
+            completenessPercentage: item.completitudPct,
+          }))
+      : [];
     const today = this.localDateInTimezone(new Date(), responseTimezone);
     const latestObserved =
       [...rows]
@@ -1979,6 +2025,7 @@ export class AgrometeorologicalEngineService {
           : undefined,
       },
       series,
+      ...(includeHourly ? { hourlySeries } : {}),
       warnings: [
         ...new Set([
           ...runtimeWarnings,

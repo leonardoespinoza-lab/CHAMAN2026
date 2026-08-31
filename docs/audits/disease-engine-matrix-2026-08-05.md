@@ -23,12 +23,12 @@ La lectura de producción detectó además un registro histórico `soja.fin_cicl
 
 | Cultivo | Identificador | Patología | Implementación actual | Variables principales | Estado de validación | Alerta automática |
 |---|---|---|---|---|---|---|
-| Trigo | `trigo.mancha_amarilla` | Mancha Amarilla | v5, contrato Chaman 2026 | DPrHRT, DPr, resistencia, GDD/etapa | Provisional; fórmula reproducida, sin validación regional de desempeño | No |
-| Trigo | `trigo.mancha_hoja` | Mancha de la Hoja | v5, contrato Chaman 2026 | DHR, DPr, resistencia, GDD/etapa | Provisional | No |
-| Trigo | `trigo.roya_hoja` | Roya de la Hoja | v5, contrato Chaman 2026 | GD, DHR, resistencia, GDD/etapa | Provisional | No |
+| Trigo | `trigo.mancha_amarilla` | Mancha Amarilla | v5, modelo propietario Chaman 2026 | DPrHRT, DPr, resistencia, GDD/etapa | Validación interna por contraste; desempeño de campo pendiente | No |
+| Trigo | `trigo.mancha_hoja` | Mancha de la Hoja | v5, modelo propietario Chaman 2026 | DHR, DPr, resistencia, GDD/etapa | Validación interna por contraste; resistencia específica pendiente en algunas variedades | No |
+| Trigo | `trigo.roya_hoja` | Roya de la Hoja | v5, modelo propietario Chaman 2026 | GD, DHR, resistencia, GDD/etapa | Validación interna por contraste; dominio 0–100 protegido | No |
 | Trigo | `trigo.roya_tallo` | Roya del Tallo | Sin fórmula | — | Sin modelo | No |
 | Trigo | `trigo.roya_anaranjada` | Roya Amarilla/Estriada | v5, criterio horario de oportunidad ambiental; el ID legado se conserva por compatibilidad | T, HR, lluvia y rachas horarias en 10 días | Experimental; no equivale a la ecuación histórica ni a presencia de *P. striiformis* | No |
-| Trigo | `trigo.fusarium_espiga` | Fusarium de la Espiga | v5, contrato Chaman 2026 | PMoj, GDN, ventana desde antesis, resistencia | Provisional; exige antesis y cobertura meteorológica | No |
+| Trigo | `trigo.fusarium_espiga` | Fusarium de la Espiga | v5, modelo propietario Chaman 2026 | PMoj, GDN, ventana contractual desde primeras anteras, resistencia | Validación interna por contraste; exige ventana y cobertura meteorológica | No |
 | Cebada | `cebada.mancha_red` | Mancha en Red | v4, presión de infección en ventana móvil | mojado continuo, temperatura durante mojado, persistencia, variedad | Operativa sólo con cobertura horaria suficiente; si no, provisional y limitada | **Sí, condicional** |
 | Cebada | `cebada.escaldadura` | Escaldadura | v3, screening ambiental | temperatura, mojado foliar, precipitación, variedad | Provisional; falta calibración regional | No |
 | Cebada | `cebada.roya_hoja` | Roya de la Hoja | v3, acumulativo heredado | GD, DHR, precipitación, HR, variedad | Provisional | No |

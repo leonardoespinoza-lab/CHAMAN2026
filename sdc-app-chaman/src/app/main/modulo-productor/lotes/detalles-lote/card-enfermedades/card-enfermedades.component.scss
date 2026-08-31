@@ -110,6 +110,10 @@
   background: color-mix(in srgb, #e05d4f 5%, var(--p-content-background));
 }
 
+.disease-action-card.neutral {
+  background: color-mix(in srgb, var(--p-surface-100) 55%, var(--p-content-background));
+}
+
 .status-pill {
   align-self: start;
   background: color-mix(in srgb, var(--p-primary-color), transparent 88%);
@@ -129,6 +133,10 @@
   background: rgba(224, 93, 79, 0.16);
 }
 
+.disease-action-card.neutral .status-pill {
+  background: var(--p-surface-200);
+}
+
 .disease-action-card strong {
   color: var(--p-text-color);
   font-size: 1.12rem;
@@ -141,6 +149,12 @@
   font-size: 2.15rem;
   font-weight: 850;
   line-height: 0.95;
+}
+
+.risk-value.non-numeric,
+.detail-hero em.non-numeric {
+  font-size: 1.35rem;
+  line-height: 1.08;
 }
 
 .risk-caption {

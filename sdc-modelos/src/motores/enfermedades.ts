@@ -93,8 +93,8 @@ export const ENFERMEDADES_CANONICAS: IDefinicionEnfermedad[] = [
       "Puccinia striiformis",
     ],
     // El identificador se conserva por compatibilidad. P. striiformis es roya
-    // amarilla/estriada y la ecuación operativa recibida aún no tiene una
-    // publicación o validación regional trazable.
+    // amarilla/estriada. La ecuación propietaria de Chaman permanece en sombra
+    // hasta completar cobertura horaria y calibración operativa específica.
     motor: "experimental",
   },
   {
@@ -1107,9 +1107,9 @@ export function calcularRoyaAnaranjada(
 }
 
 /**
- * Ecuación operativa recibida para el registro legado "Roya Anaranjada".
- * El catálogo la mantiene experimental porque P. striiformis corresponde a
- * roya amarilla/estriada y aún falta una fuente de validación trazable.
+ * Ecuación propietaria de Chaman para el registro legado "Roya Anaranjada".
+ * Se conserva exacta para auditoría, pero el catálogo la mantiene experimental
+ * hasta completar cobertura horaria y calibración operativa específica.
  */
 export function calcularRoyaAnaranjadaTrigo2026(
   GD: number,

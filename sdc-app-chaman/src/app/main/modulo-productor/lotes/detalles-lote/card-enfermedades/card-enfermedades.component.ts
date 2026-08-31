@@ -49,8 +49,9 @@ interface DiseaseInsight {
   resultadoEtiqueta: string;
   etiquetaMetrica: string;
   enVentanaFenologica: boolean;
+  mostrarEscala: boolean;
   fill: number;
-  severity: 'low' | 'medium' | 'high';
+  severity: 'neutral' | 'low' | 'medium' | 'high';
   periodo: string;
   sensibilidad: string;
   variables: string;
@@ -205,8 +206,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         prediccion?.estado === 'fuera_ventana' ? false : this.estaEnVentanaFenologica(enfermedad);
       const estadoCalculo = this.estadoCalculo(prediccion, enfermedad, prediccionVigente);
       const salidaOperativa = this.esPrediccionOperativa(prediccion) && !esExperimental;
-      const indiceVisible = !!prediccion && prediccionVigente;
-      const requierePrecaucion = !salidaOperativa;
+      const mostrarEscala = this.puedeMostrarEscala(prediccion, enfermedad, prediccionVigente);
       return {
         enfermedad,
         nombreVisible: this.nombreVisibleEnfermedad(enfermedad),
@@ -215,8 +215,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         resultadoEtiqueta: this.resultadoEtiqueta(prediccion, resultado, enfermedad, prediccionVigente),
         etiquetaMetrica: this.etiquetaMetrica(enfermedad, prediccion),
         enVentanaFenologica,
-        fill: indiceVisible ? this.llenadoRiesgo(resultado, true, enfermedad) : 0,
-        severity: requierePrecaucion ? 'medium' : this.severidad(resultado, enfermedad),
+        mostrarEscala,
+        fill: mostrarEscala ? this.llenadoRiesgo(resultado, true, enfermedad, prediccion) : 0,
+        severity: this.severidadVisual(prediccion, enfermedad, resultado, prediccionVigente),
         periodo: this.periodoSusceptible(enfermedad),
         sensibilidad: this.sensibilidadVarietal(enfermedad),
         variables: this.resumenVariables(prediccion, enfermedad),
@@ -254,7 +255,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     const mayor = this.enfermedadInsights
       .filter((item) => item.salidaOperativa)
       .sort((a, b) => b.resultado - a.resultado)[0];
-    return mayor ? `Mayor atencion: ${mayor.enfermedad}` : `Monitoreo activo para ${cultivo}.`;
+    if (mayor) return `Mayor atencion: ${mayor.enfermedad}`;
+    if (cultivo === 'Trigo') {
+      return 'Modelos Chaman activos para seguimiento; las alertas automaticas permanecen protegidas.';
+    }
+    return `Monitoreo activo para ${cultivo}.`;
   }
 
   private sincronizarPrescripcionSeleccionada(): void {
@@ -320,10 +325,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   private umbralesRiesgo(enfermedad?: TEnfermedad): { medio: number; alto: number; escalaDirecta: boolean } {
-    if (
-      enfermedad === 'Mancha en Red' &&
-      this.esManchaRedV4(enfermedad, this.prediccionPorEnfermedad(enfermedad))
-    ) {
+    if (enfermedad === 'Mancha en Red' && this.esManchaRedV4(enfermedad, this.prediccionPorEnfermedad(enfermedad))) {
       return {
         medio: 35,
         alto: CEBADA_MANCHA_RED_UMBRAL_ALERTA,
@@ -333,13 +335,19 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     return getUmbralesRiesgoSanitario(this.siembra?.semilla?.cultivo, this.esScreeningExperimental);
   }
 
-  private llenadoRiesgo(resultado: number, tienePrediccion: boolean, enfermedad?: TEnfermedad): number {
+  private llenadoRiesgo(
+    resultado: number,
+    tienePrediccion: boolean,
+    enfermedad?: TEnfermedad,
+    prediccion?: IPrediccionEnfermedad
+  ): number {
     if (!tienePrediccion) {
       return 0;
     }
     const umbrales = this.umbralesRiesgo(enfermedad);
-    const valor = umbrales.escalaDirecta ? resultado : resultado * 4;
-    return Math.max(8, Math.min(100, valor));
+    const esIndiceCien = prediccion?.modelo?.validacion !== 'operativo';
+    const valor = esIndiceCien || umbrales.escalaDirecta ? resultado : resultado * 4;
+    return Math.max(0, Math.min(100, valor));
   }
 
   private severidad(resultado: number, enfermedad?: TEnfermedad): 'low' | 'medium' | 'high' {
@@ -351,6 +359,25 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return 'medium';
     }
     return 'low';
+  }
+
+  private severidadVisual(
+    prediccion: IPrediccionEnfermedad | undefined,
+    enfermedad: TEnfermedad,
+    resultado: number,
+    prediccionVigente: boolean
+  ): 'neutral' | 'low' | 'medium' | 'high' {
+    if (
+      !prediccion ||
+      !prediccionVigente ||
+      prediccion.estado === 'fuera_ventana' ||
+      prediccion.estado === 'sin_datos' ||
+      (this.esRegistroRoyaAmarillaExperimental(enfermedad) && this.coberturaHorariaRoya(prediccion) < 90)
+    ) {
+      return 'neutral';
+    }
+    if (!this.esPrediccionOperativa(prediccion)) return 'medium';
+    return this.severidad(resultado, enfermedad);
   }
 
   private sensibilidadVarietal(enfermedad: TEnfermedad): string {
@@ -503,13 +530,16 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
 
   private calculoEnfermedad(enfermedad: TEnfermedad): string {
     const calculos: Partial<Record<TEnfermedad, string>> = {
-      'Mancha Amarilla': 'Severidad = (-2,25 + 1,62 x DPrHRT + 1,30 x DPr) x multiplicador varietal.',
-      'Roya de la Hoja': 'Severidad = 4,42 + 0,61 x GD + 0,57 x DHR - 30,01 x (1 - factor de susceptibilidad).',
-      'Mancha de la Hoja': 'Severidad = (-6,41 + 0,59 x DHR + 2,79 x DPr) x multiplicador varietal.',
+      'Mancha Amarilla':
+        'Modelo propietario Chaman 2026 validado internamente: indice = (-2,25 + 1,62 x DPrHRT + 1,30 x DPr) x multiplicador varietal.',
+      'Roya de la Hoja':
+        'Modelo propietario Chaman 2026 validado internamente: indice = 4,42 + 0,61 x GD + 0,57 x DHR - 30,01 x (1 - factor de susceptibilidad).',
+      'Mancha de la Hoja':
+        'Modelo propietario Chaman 2026 validado internamente: indice = (-6,41 + 0,59 x DHR + 2,79 x DPr) x multiplicador varietal.',
       'Fusarium de la Espiga':
-        'Estimador acumulado parcial = (20,37 + 8,63 x PMoj - 0,49 x GDN) x factor de susceptibilidad. La ecuacion publicada corresponde a una ventana completa; Chaman no presenta el valor diario parcial como incidencia final ni como severidad observada.',
+        'Modelo propietario Chaman 2026 validado internamente: estimador acumulado parcial = (20,37 + 8,63 x PMoj - 0,49 x GDN) x factor de susceptibilidad. Chaman conserva su ventana contractual desde primeras anteras y no presenta el valor diario parcial como incidencia final ni como severidad observada.',
       'Roya Anaranjada':
-        'El Jarroudi 2017: cuenta rachas de al menos 4 h con 4<T<16 C, HR>92% y lluvia<=0,1 mm en una ventana movil de 10 dias. 5% es señal temprana, 15% oportunidad fuerte y 20% muy fuerte. La formula contractual 5,15 + 0,72 GD + 0,48 DHR + 0,35 DL - 35,2 (1-I) queda solo en sombra, sin alertas.',
+        'Modelo horario experimental: cuenta rachas de al menos 4 h con 4<T<16 C, HR>92% y lluvia<=0,1 mm en una ventana movil de 10 dias. La formula propietaria Chaman 5,15 + 0,72 GD + 0,48 DHR + 0,35 DL - 35,2 (1-I), validada internamente por contraste, queda en sombra y no genera alertas.',
       'Mancha en Red':
         'Cebada V4: calcula grados-hora desde el inicio del mojado, estima el riesgo de cada episodio y combina los episodios de los ultimos 14 dias. Usa Shaw 1986, Petta y Lavilla 2023 y el perfil varietal INTA. El indice expresa presion predictiva condicionada a inoculo; no es severidad observada.',
       'Escaldadura de la Cebada':
@@ -670,6 +700,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     if (prediccion.estado === 'sin_datos') {
       return 'sin datos suficientes para calcular';
     }
+    if (this.resultadoCrudoFueraDominio(prediccion)) {
+      return 'indice limitado a la escala 0-100; la saturacion queda trazada y no se automatiza';
+    }
     if (this.esCalidadNoOperativa(prediccion)) {
       return 'resultado de baja confianza; no genera alerta ni prescripcion';
     }
@@ -692,7 +725,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return 'En calibracion';
     }
     if (!prediccion && !this.estaEnVentanaFenologica(enfermedad)) {
-      return 'Indice bajo';
+      return 'Fuera de ventana';
     }
     if (!prediccion) {
       return 'Sin lectura';
@@ -701,11 +734,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return `Actualizar v${TRIGO_MOTOR_SANITARIO_VERSION}`;
     }
     if (prediccion.estado === 'fuera_ventana') {
-      return 'Indice bajo';
+      return 'Fuera de ventana';
     }
     if (this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
       const cobertura = this.coberturaHorariaRoya(prediccion);
-      if (cobertura < 90) return 'Precaucion';
+      if (cobertura < 90) return 'Sin datos horarios';
       const nivel = Number((prediccion.variables as Record<string, number>)?.['nivelOportunidad'] || 0);
       if (nivel >= 3) return 'Condiciones muy favorables';
       if (nivel >= 2) return 'Condiciones favorables';
@@ -713,16 +746,19 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return 'Sin horas favorables';
     }
     if (prediccion.estado === 'sin_datos') {
-      return 'Precaucion';
+      return 'No evaluable';
+    }
+    if (this.resultadoCrudoFueraDominio(prediccion)) {
+      return 'Indice saturado';
     }
     if (this.sinResistenciaVarietal(prediccion)) {
-      return 'Precaucion';
+      return 'Dato varietal pendiente';
     }
     if (this.esCalidadNoOperativa(prediccion)) {
-      return 'Precaucion';
+      return 'Datos a revisar';
     }
     if (this.esSalidaProvisionalTrigo(prediccion)) {
-      return 'Seguimiento';
+      return resultado >= this.umbralesRiesgo(enfermedad).medio ? 'Recorrida recomendada' : 'Seguimiento';
     }
     if (prediccion.modelo?.validacion === 'operativo_provisional') {
       return 'Seguimiento';
@@ -754,7 +790,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return 'Modelo reservado para calibracion del cultivo.';
     }
     if (!prediccion && !this.estaEnVentanaFenologica(enfermedad)) {
-      return 'Indice ambiental actual; la ventana sensible se consulta en el detalle.';
+      return 'El modelo no se evalua hasta ingresar en la ventana sensible.';
     }
     if (!prediccion) {
       return 'Calculo disponible al actualizar riesgo.';
@@ -763,7 +799,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return `Lectura no vigente: recalcular con el motor sanitario v${TRIGO_MOTOR_SANITARIO_VERSION}.`;
     }
     if (prediccion.estado === 'fuera_ventana') {
-      return 'Indice actual del modelo; la ventana sensible todavia no esta activa.';
+      return 'Sin evaluacion: la ventana sensible todavia no esta activa.';
     }
     if (this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
       const variables = (prediccion.variables || {}) as Record<string, number>;
@@ -772,20 +808,16 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       const validas = Number(variables['horasValidas10d'] || 0);
       const esperadas = Number(variables['horasEsperadas10d'] || 240);
       if (cobertura < 90) {
-        return `Cobertura horaria ${cobertura.toFixed(0)}%; abrir el detalle para revisar las ${validas.toFixed(0)} de ${esperadas.toFixed(0)} horas disponibles.`;
+        return `Sin evaluacion: cobertura horaria ${cobertura.toFixed(0)}%; hay ${validas.toFixed(0)} de ${esperadas.toFixed(0)} horas disponibles y se requiere 90%.`;
       }
       return `Horas ambientalmente favorables: ${frecuencia.toFixed(1)}% en la ventana de 10 dias (${cobertura.toFixed(0)}% de cobertura). No confirma enfermedad; requiere observacion a campo.`;
     }
     if (prediccion.estado === 'sin_datos') {
-      return prediccion.calidadDatos?.resumen || 'Faltan variables climaticas para calcular sin inventar datos.';
+      return `Sin evaluacion: ${prediccion.calidadDatos?.resumen || 'faltan variables climaticas para calcular sin inventar datos.'}`;
     }
     if (this.esManchaRedV4(enfermedad, prediccion)) {
       const variables = (prediccion.variables || {}) as Record<string, number>;
-      const favorables = Number(
-        variables['diasFavorablesVentana'] ??
-          variables['eventosCompatibles'] ??
-          0
-      );
+      const favorables = Number(variables['diasFavorablesVentana'] ?? variables['eventosCompatibles'] ?? 0);
       const dias = Number(variables['diasVentana'] || 0);
       const cobertura = Number(variables['coberturaVentana'] || 0) * 100;
       const pico = Number(variables['intensidadPico'] || 0);
@@ -794,14 +826,20 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     if (this.sinResistenciaVarietal(prediccion)) {
       return 'Resistencia varietal pendiente; el indice usa S=1 y requiere recorrida antes de definir manejo.';
     }
+    if (this.resultadoCrudoFueraDominio(prediccion)) {
+      const crudo = Number((prediccion.variables as Record<string, number>)?.['resultadoCrudo']);
+      return `El modelo propietario dio ${crudo.toFixed(1)} y la salida contractual se limita a ${prediccion.resultado.toFixed(1)}/100. La saturacion queda visible para auditoria y no genera alerta o prescripcion automatica.`;
+    }
     if (this.esCalidadNoOperativa(prediccion)) {
-      const resumen = (prediccion.calidadDatos?.resumen || estadoCalculo)
-        .trim()
-        .replace(/[.\s]+$/, '');
+      const resumen = (prediccion.calidadDatos?.resumen || estadoCalculo).trim().replace(/[.\s]+$/, '');
       return `${resumen}. Requiere revisar datos y validar a campo.`;
     }
     if (this.esSalidaProvisionalTrigo(prediccion)) {
-      return `${estadoCalculo}. Es una salida para seguimiento y calibracion; no declara enfermedad.`;
+      const recorrida =
+        prediccion.resultado >= this.umbralesRiesgo(enfermedad).medio
+          ? ' El nivel justifica una recorrida de verificacion.'
+          : '';
+      return `${estadoCalculo}. Es un indice propietario Chaman validado internamente para seguimiento; no declara enfermedad ni emite una alerta automatica.${recorrida}`;
     }
     if (this.esScreeningExperimental) {
       return `${estadoCalculo}. Resistencia varietal sin datos; validar sintomas a campo.`;
@@ -910,28 +948,14 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   ): string {
     if (!prediccion) return 'Sin lectura';
     if (!prediccionVigente) return `Actualizar v${TRIGO_MOTOR_SANITARIO_VERSION}`;
-    if (
-      prediccion.estado === 'fuera_ventana' &&
-      prediccion.modelo?.validacion &&
-      prediccion.modelo.validacion !== 'operativo'
-    ) {
-      return `${resultado.toFixed(1)}/100`;
-    }
-    if (prediccion.estado === 'fuera_ventana') return `${resultado.toFixed(1)}%`;
+    if (prediccion.estado === 'fuera_ventana') return 'Fuera de ventana';
     if (enfermedad && this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
       const cobertura = this.coberturaHorariaRoya(prediccion);
-      if (cobertura < 90) return `${resultado.toFixed(1)}%`;
+      if (cobertura < 90) return 'Sin evaluar';
       const frecuencia = Number((prediccion.variables as Record<string, number>)?.['frecuenciaAmbientalPct'] || 0);
       return `${frecuencia.toFixed(1)}%`;
     }
-    if (
-      prediccion.estado === 'sin_datos' &&
-      prediccion.modelo?.validacion &&
-      prediccion.modelo.validacion !== 'operativo'
-    ) {
-      return `${resultado.toFixed(1)}/100`;
-    }
-    if (prediccion.estado === 'sin_datos') return `${resultado.toFixed(1)}%`;
+    if (prediccion.estado === 'sin_datos') return 'Sin evaluar';
     if (enfermedad && this.esManchaRedV4(enfermedad, prediccion)) {
       return `${resultado.toFixed(1)}/100`;
     }
@@ -944,23 +968,29 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     return 'Bajo';
   }
 
-  private etiquetaMetrica(
-    enfermedad: TEnfermedad,
-    prediccion?: IPrediccionEnfermedad
-  ): string {
+  private etiquetaMetrica(enfermedad: TEnfermedad, prediccion?: IPrediccionEnfermedad): string {
+    if (prediccion?.estado === 'fuera_ventana') {
+      return 'Estado de la ventana sanitaria';
+    }
+    if (this.esRegistroRoyaAmarillaExperimental(enfermedad) && this.coberturaHorariaRoya(prediccion) < 90) {
+      return 'Cobertura horaria requerida: 90%';
+    }
+    if (prediccion?.estado === 'sin_datos') {
+      return 'Disponibilidad del calculo';
+    }
+    if (this.resultadoCrudoFueraDominio(prediccion)) {
+      return 'Indice Chaman limitado a 0-100';
+    }
     if (this.esManchaRedV4(enfermedad, prediccion)) {
       return 'Indice ambiental de infeccion';
     }
     if (prediccion?.modelo?.validacion && prediccion.modelo.validacion !== 'operativo') {
-      return 'Indice ambiental para seguimiento';
+      return 'Indice Chaman para seguimiento';
     }
     return 'Indice sanitario estimado';
   }
 
-  private esManchaRedV4(
-    enfermedad: TEnfermedad,
-    prediccion?: IPrediccionEnfermedad
-  ): boolean {
+  private esManchaRedV4(enfermedad: TEnfermedad, prediccion?: IPrediccionEnfermedad): boolean {
     return enfermedad === 'Mancha en Red' && Number(prediccion?.modelo?.version || 0) >= 4;
   }
 
@@ -973,6 +1003,24 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
 
   private esCalidadNoOperativa(prediccion?: IPrediccionEnfermedad): boolean {
     return ['baja', 'sin_datos'].includes(String(prediccion?.calidadDatos?.nivel || ''));
+  }
+
+  private resultadoCrudoFueraDominio(prediccion?: IPrediccionEnfermedad): boolean {
+    if (!prediccion?.variables || prediccion.modelo?.validacion === 'experimental') return false;
+    const crudo = Number((prediccion.variables as Record<string, number>)['resultadoCrudo']);
+    return Number.isFinite(crudo) && (crudo < 0 || crudo > 100);
+  }
+
+  private puedeMostrarEscala(
+    prediccion: IPrediccionEnfermedad | undefined,
+    enfermedad: TEnfermedad,
+    prediccionVigente: boolean
+  ): boolean {
+    if (!prediccion || !prediccionVigente || prediccion.estado !== 'calculado') return false;
+    if (this.esRegistroRoyaAmarillaExperimental(enfermedad)) {
+      return this.coberturaHorariaRoya(prediccion) >= 90;
+    }
+    return true;
   }
 
   private esPrediccionOperativa(prediccion?: IPrediccionEnfermedad): boolean {
@@ -993,9 +1041,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   private coberturaHorariaRoya(prediccion?: IPrediccionEnfermedad): number {
-    const valor = Number(
-      ((prediccion?.variables || {}) as Record<string, number>)['coberturaHoraria10d'] || 0
-    );
+    const valor = Number(((prediccion?.variables || {}) as Record<string, number>)['coberturaHoraria10d'] || 0);
     return Math.max(0, Math.min(100, valor * 100));
   }
 

@@ -1,7 +1,11 @@
-import { IClimaEstacionMeteorologica } from 'modelos/src';
+import {
+  IClimaEstacionMeteorologica,
+  ISerieAgrometeorologicaHora,
+} from 'modelos/src';
 import {
   agregarClimaHorarioPorDia,
   ventanaHorariaRoyaAmarilla,
+  ventanaHorariaRoyaAmarillaCanonica,
 } from './clima-horario-trigo';
 
 function hora(
@@ -73,6 +77,76 @@ describe('clima horario sanitario de trigo', () => {
 
     expect(
       ventanaHorariaRoyaAmarilla(duplicadas, new Date('2026-07-10T12:00:00Z')),
+    ).toHaveLength(0);
+  });
+
+  it('usa 240 horas canonicas completas y conserva la fecha local del lote', () => {
+    const filas: ISerieAgrometeorologicaHora[] = [];
+    for (let dia = 1; dia <= 10; dia += 1) {
+      for (let hora = 0; hora < 24; hora += 1) {
+        const fecha = `2026-07-${String(dia).padStart(2, '0')}`;
+        filas.push({
+          timestamp: `${fecha}T${String(hora).padStart(2, '0')}:00:00.000Z`,
+          localDate: fecha,
+          timezone: 'America/Argentina/Buenos_Aires',
+          isForecast: false,
+          state: 'observed',
+          weather: {
+            temperatureC: 10,
+            relativeHumidityPct: 95,
+            precipitationMm: 0,
+          },
+          source: 'open_meteo',
+          sourceByVariable: {
+            temperatureC: 'open_meteo',
+            relativeHumidityPct: 'open_meteo',
+            precipitationMm: 'open_meteo',
+          },
+          qualityFlags: [],
+          completenessPercentage: 100,
+        });
+      }
+    }
+
+    const ventana = ventanaHorariaRoyaAmarillaCanonica(
+      filas,
+      new Date('2026-07-10T03:00:00.000Z'),
+    );
+
+    expect(ventana).toHaveLength(240);
+    expect(ventana[0]).toEqual(
+      expect.objectContaining({
+        temperatura: 10,
+        humedadRelativa: 95,
+        lluviaMm: 0,
+      }),
+    );
+  });
+
+  it('excluye un dia canonico con menos de 22 horas unicas', () => {
+    const fechaObjetivo = new Date('2026-07-10T03:00:00.000Z');
+    const filas: ISerieAgrometeorologicaHora[] = Array.from(
+      { length: 21 },
+      (_, hora) => ({
+        timestamp: `2026-07-10T${String(hora).padStart(2, '0')}:00:00.000Z`,
+        localDate: '2026-07-10',
+        timezone: 'America/Argentina/Buenos_Aires',
+        isForecast: false,
+        state: 'observed',
+        weather: {
+          temperatureC: 10,
+          relativeHumidityPct: 95,
+          precipitationMm: 0,
+        },
+        source: 'open_meteo',
+        sourceByVariable: {},
+        qualityFlags: [],
+        completenessPercentage: 100,
+      }),
+    );
+
+    expect(
+      ventanaHorariaRoyaAmarillaCanonica(filas, fechaObjetivo),
     ).toHaveLength(0);
   });
 });

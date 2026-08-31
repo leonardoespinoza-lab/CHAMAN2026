@@ -3219,6 +3219,108 @@ describe('AgrometeorologicalEngineService', () => {
     expect(getIndicadores).not.toHaveBeenCalled();
   });
 
+  it('expone horas canonicas opcionales con prioridad del sensor de campo', async () => {
+    const indicator = {
+      idSiembra: '64b000000000000000000001',
+      idLote: '64b000000000000000000002',
+      idEstablecimiento: '64b000000000000000000003',
+      fecha: '2026-07-02',
+      metricas: { gddAccumulated: 20 },
+      fuente: 'open_meteo',
+      fuentePorVariable: {},
+      banderasCalidad: [],
+      advertencias: [],
+      completitudPct: 100,
+      esPronostico: false,
+      calculadoEn: '2026-07-02T18:00:00.000Z',
+      versionParametros: 'test-v1',
+    } as any;
+    const daily = {
+      idEstablecimiento: indicator.idEstablecimiento,
+      idLote: indicator.idLote,
+      timestamp: '2026-07-02T15:00:00.000Z',
+      fechaLocal: '2026-07-02',
+      timezone: 'America/Argentina/Buenos_Aires',
+      granularidad: 'daily',
+      estado: 'observed',
+      esPronostico: false,
+      valores: { temperatureMeanC: 12 },
+      fuente: 'open_meteo',
+      fuentePorVariable: { temperatureMeanC: 'open_meteo' },
+      banderasCalidad: [],
+      completitudPct: 100,
+      obtenidoEn: '2026-07-03T00:00:00.000Z',
+    } as any;
+    const baseHourly = {
+      ...daily,
+      timestamp: '2026-07-02T12:00:00.000Z',
+      granularidad: 'hourly',
+      valores: {
+        temperatureC: 12,
+        relativeHumidityPct: 90,
+        precipitationMm: 0,
+      },
+      fuentePorVariable: {
+        temperatureC: 'open_meteo',
+        relativeHumidityPct: 'open_meteo',
+        precipitationMm: 'open_meteo',
+      },
+    } as any;
+    const canonicalHourly = {
+      ...baseHourly,
+      valores: { ...baseHourly.valores, temperatureC: 9 },
+      fuente: 'mixed',
+      fuentePorVariable: {
+        ...baseHourly.fuentePorVariable,
+        temperatureC: 'sensor',
+      },
+      banderasCalidad: ['sensor_with_fallback'],
+    } as any;
+    const getObservaciones = jest
+      .fn()
+      .mockResolvedValue({ datos: [daily, baseHourly] });
+    const sensorOverlay = {
+      overlay: jest.fn().mockResolvedValue({
+        observations: [daily, canonicalHourly],
+        warnings: [],
+      }),
+    };
+    const service = new AgrometeorologicalEngineService(
+      {
+        getActiveIndicadoresGeneration: jest.fn().mockResolvedValue({
+          generationId: 'generation-active',
+          data: [indicator],
+        }),
+        getIndicadores: jest.fn().mockResolvedValue({ datos: [] }),
+        getObservaciones,
+        getLote: jest.fn().mockResolvedValue({ _id: indicator.idLote }),
+      } as any,
+      {} as any,
+      sensorOverlay as any,
+    );
+
+    const response = await service.getResponse(
+      indicator.idSiembra,
+      '2026-07-02',
+      '2026-07-02',
+      true,
+    );
+
+    expect(response.hourlySeries).toHaveLength(1);
+    expect(response.hourlySeries?.[0]).toEqual(
+      expect.objectContaining({
+        localDate: '2026-07-02',
+        source: 'mixed',
+        weather: expect.objectContaining({ temperatureC: 9 }),
+        sourceByVariable: expect.objectContaining({ temperatureC: 'sensor' }),
+      }),
+    );
+    expect(sensorOverlay.overlay).toHaveBeenCalled();
+    expect(JSON.parse(getObservaciones.mock.calls[0][0].filter)).toMatchObject({
+      granularidad: { $in: ['daily', 'hourly'] },
+    });
+  });
+
   it('kill switch excluye una generacion ERA5 persistida y recupera la estable anterior', async () => {
     const base = {
       idSiembra: '64b000000000000000000001',

@@ -472,10 +472,34 @@ export interface ISerieAgrometeorologicaDia {
   warnings: string[];
 }
 
+/**
+ * Observacion horaria canonica ya resuelta con la misma jerarquia que usa el
+ * motor agrometeorologico. Se publica de forma opcional para motores que no
+ * pueden reconstruirse con agregados diarios (por ejemplo, rachas sanitarias).
+ */
+export interface ISerieAgrometeorologicaHora {
+  timestamp: string;
+  localDate: string;
+  timezone: string;
+  isForecast: boolean;
+  state: EstadoDatoMeteorologico;
+  weather: IValoresMeteorologicosNormalizados;
+  source: FuenteMeteorologicaNormalizada;
+  sourceByVariable: Partial<
+    Record<VariableMeteorologicaNormalizada, FuenteMeteorologicaNormalizada>
+  >;
+  stateByVariable?: Partial<
+    Record<VariableMeteorologicaNormalizada, EstadoDatoMeteorologico>
+  >;
+  qualityFlags: string[];
+  completenessPercentage: number;
+}
+
 export interface IRespuestaAgrometeorologiaSiembra {
   summary: IResumenAgrometeorologico;
   dataSource: IFuenteAgrometeorologicaResumen;
   series: ISerieAgrometeorologicaDia[];
+  hourlySeries?: ISerieAgrometeorologicaHora[];
   warnings: string[];
   calculationVersion: string;
   parametersVersion: string;

@@ -39,9 +39,11 @@
         >
           <span class="status-pill">{{ item.estadoCorto }}</span>
           <strong>{{ item.nombreVisible }}</strong>
-          <span class="risk-value">{{ item.resultadoEtiqueta }}</span>
+          <span class="risk-value" [class.non-numeric]="!item.mostrarEscala">{{ item.resultadoEtiqueta }}</span>
           <span class="risk-caption">{{ item.etiquetaMetrica }}</span>
-          <span class="risk-track"><i></i></span>
+          @if (item.mostrarEscala) {
+            <span class="risk-track"><i></i></span>
+          }
           @if (!item.enVentanaFenologica) {
             <span class="window-note">Fuera de ventana sensible</span>
           }
@@ -74,7 +76,7 @@
           <strong>{{ detalle.nombreVisible }}</strong>
           <small>{{ detalle.descripcion }}</small>
         </div>
-        <em>{{ detalle.resultadoEtiqueta }}</em>
+        <em [class.non-numeric]="!detalle.mostrarEscala">{{ detalle.resultadoEtiqueta }}</em>
       </div>
 
       <div class="detail-meta">
