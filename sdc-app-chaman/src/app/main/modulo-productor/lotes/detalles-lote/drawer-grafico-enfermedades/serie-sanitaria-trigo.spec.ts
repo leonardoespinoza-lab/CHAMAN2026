@@ -19,10 +19,17 @@ describe('construirSeriesSanitariasTrigo', () => {
     ];
 
     const series = construirSeriesSanitariasTrigo(predicciones);
+    const royaHoja = series.filter((serie) => serie.idEnfermedad === 'trigo.roya_hoja');
+    const versionActual = series.filter((serie) => serie.versionEtiqueta === 'v4');
 
-    expect(series.length).toBe(2);
-    expect(series.map((serie) => serie.idEnfermedad)).toEqual(['trigo.roya_hoja', 'trigo.roya_hoja']);
-    expect(series.map((serie) => serie.versionEtiqueta)).toEqual(['v3', 'v4']);
+    expect(royaHoja.map((serie) => serie.versionEtiqueta)).toEqual(['v3', 'v4']);
+    expect(versionActual.map((serie) => serie.idEnfermedad)).toEqual([
+      'trigo.mancha_amarilla',
+      'trigo.roya_hoja',
+      'trigo.roya_anaranjada',
+      'trigo.mancha_hoja',
+      'trigo.fusarium_espiga',
+    ]);
   });
 
   it('representa estados no calculables como huecos y conserva un cero calculado', () => {
@@ -36,7 +43,7 @@ describe('construirSeriesSanitariasTrigo', () => {
       }),
     ];
 
-    const [serie] = construirSeriesSanitariasTrigo(predicciones);
+    const serie = construirSeriesSanitariasTrigo(predicciones).find((item) => item.idEnfermedad === 'trigo.roya_hoja')!;
 
     expect(serie.data.map((punto) => punto[1])).toEqual([12, null, 0, null]);
   });
@@ -47,22 +54,31 @@ describe('construirSeriesSanitariasTrigo', () => {
       prediccion('2026-07-13', enfermedadV4(20, 'calculado')),
     ];
 
-    const [serie] = construirSeriesSanitariasTrigo(predicciones);
+    const serie = construirSeriesSanitariasTrigo(predicciones).find((item) => item.idEnfermedad === 'trigo.roya_hoja')!;
 
     expect(serie.data.map((punto) => punto[1])).toEqual([12, null, 20]);
   });
 
-  it('no crea una leyenda para una serie que nunca tuvo una lectura valida', () => {
+  it('conserva las cinco enfermedades en la leyenda sin inventar valores faltantes', () => {
     const series = construirSeriesSanitariasTrigo([
       prediccion('2026-07-10', enfermedadV4(0, 'sin_datos')),
       prediccion('2026-07-11', enfermedadV4(0, 'fuera_ventana')),
     ]);
+    const royaHoja = series.find((serie) => serie.idEnfermedad === 'trigo.roya_hoja')!;
 
-    expect(series).toEqual([]);
+    expect(series.map((serie) => serie.idEnfermedad)).toEqual([
+      'trigo.mancha_amarilla',
+      'trigo.roya_hoja',
+      'trigo.roya_anaranjada',
+      'trigo.mancha_hoja',
+      'trigo.fusarium_espiga',
+    ]);
+    expect(royaHoja.tieneLecturas).toBeFalse();
+    expect(royaHoja.data.map((punto) => punto[1])).toEqual([null, null]);
   });
 
   it('muestra la nomenclatura correcta aunque el dato conserve el id legado', () => {
-    const [serie] = construirSeriesSanitariasTrigo([
+    const serie = construirSeriesSanitariasTrigo([
       prediccion('2026-07-10', {
         enfermedad: 'Roya Anaranjada',
         idEnfermedad: 'trigo.roya_anaranjada',
@@ -77,7 +93,7 @@ describe('construirSeriesSanitariasTrigo', () => {
           validacion: 'experimental',
         },
       }),
-    ]);
+    ]).find((item) => item.idEnfermedad === 'trigo.roya_anaranjada')!;
 
     expect(serie.idEnfermedad).toBe('trigo.roya_anaranjada');
     expect(serie.nombre).toBe('Roya Amarilla/Estriada');

@@ -2,7 +2,13 @@ import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { SeriesOptionsType, XAxisPlotBandsOptions, XAxisPlotLinesOptions } from 'highcharts';
-import { IListado, IPrediccion, IQueryParam, TRIGO_MOTOR_SANITARIO_VERSION } from 'modelos/src';
+import {
+  getUmbralesRiesgoSanitario,
+  IListado,
+  IPrediccion,
+  IQueryParam,
+  TRIGO_MOTOR_SANITARIO_VERSION,
+} from 'modelos/src';
 import { Subscription } from 'rxjs';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
@@ -10,6 +16,14 @@ import { ListadosService } from '../../../../../auxiliares/servicios/listados';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetalleSiembra } from '../detalles-lote.component';
 import { construirSeriesSanitariasTrigo } from './serie-sanitaria-trigo';
+
+export const COLORES_SERIE_SANITARIA_TRIGO: Record<string, string> = {
+  'trigo.mancha_amarilla': '#13b8ad',
+  'trigo.roya_hoja': '#2f9fe5',
+  'trigo.roya_anaranjada': '#e6a117',
+  'trigo.mancha_hoja': '#7567d8',
+  'trigo.fusarium_espiga': '#cf4f72',
+};
 
 export const ETAPAS_TRIGO: string[] = [
   'Siembra',
@@ -61,6 +75,10 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
 
   public chartOptions?: Highcharts.Options;
 
+  public get umbralesRiesgo(): { medio: number; alto: number } {
+    return getUmbralesRiesgoSanitario(this.siembra?.semilla?.cultivo);
+  }
+
   constructor(
     public helper: HelperService,
     private listados: ListadosService,
@@ -93,8 +111,6 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
     scale?: {
       title?: string;
       max?: number;
-      bajoHasta?: number;
-      medioHasta?: number;
     }
   ) {
     // const color1 = '#dee8eb';
@@ -104,8 +120,8 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
     const color2 = 'rgba(230, 184, 79, 0.16)';
     const color3 = 'rgba(224, 82, 70, 0.14)';
     const max = scale?.max ?? 100;
-    const bajoHasta = scale?.bajoHasta ?? 15;
-    const medioHasta = scale?.medioHasta ?? 20;
+    const bajoHasta = this.umbralesRiesgo.medio;
+    const medioHasta = this.umbralesRiesgo.alto;
 
     const options: Highcharts.Options = {
       chart: {
@@ -216,30 +232,38 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
       return;
     }
 
-    const series: any[] = construirSeriesSanitariasTrigo(this.predicciones).map((serie) => ({
-      type: 'line',
-      id: `${serie.idEnfermedad}-${serie.versionEtiqueta}`,
-      name: `${serie.nombre}${
-        serie.idEnfermedad === 'trigo.roya_anaranjada' ? ' · oportunidad ambiental' : ''
-      } · ${serie.versionEtiqueta}`,
-      data: serie.data,
-      connectNulls: false,
-      lineWidth: serie.version === TRIGO_MOTOR_SANITARIO_VERSION ? 4 : 2,
-      dashStyle: serie.version === TRIGO_MOTOR_SANITARIO_VERSION ? 'Solid' : 'ShortDash',
-      opacity: serie.version === TRIGO_MOTOR_SANITARIO_VERSION ? 1 : 0.72,
-      custom: {
-        idEnfermedad: serie.idEnfermedad,
-        version: serie.versionEtiqueta,
-      },
-      tooltip: {
-        xDateFormat: '%d-%m-%Y',
-        pointFormat: '<span>{series.name}</span><br/><strong>{point.y}%</strong>',
-        headerFormat: '<span style="font-size: 14px">{point.key}</span><br/>',
-      },
-      dataLabels: {
-        enabled: false, // Deshabilitamos para mejor legibilidad en el gráfico expandido
-      },
-    }));
+    const series: any[] = construirSeriesSanitariasTrigo(this.predicciones).map((serie) => {
+      const esVersionActual = serie.version === TRIGO_MOTOR_SANITARIO_VERSION;
+      const estadoSerie = serie.tieneLecturas ? '' : ' · sin curva válida';
+
+      return {
+        type: 'line',
+        id: `${serie.idEnfermedad}-${serie.versionEtiqueta}`,
+        name: `${serie.nombre}${
+          serie.idEnfermedad === 'trigo.roya_anaranjada' ? ' · oportunidad ambiental' : ''
+        } · ${serie.versionEtiqueta}${estadoSerie}`,
+        color: COLORES_SERIE_SANITARIA_TRIGO[serie.idEnfermedad] || '#64748b',
+        data: serie.data,
+        connectNulls: false,
+        lineWidth: esVersionActual ? 4 : 2,
+        dashStyle: serie.tieneLecturas ? (esVersionActual ? 'Solid' : 'ShortDash') : 'ShortDot',
+        opacity: serie.tieneLecturas ? (esVersionActual ? 1 : 0.72) : 0.62,
+        showInLegend: true,
+        custom: {
+          idEnfermedad: serie.idEnfermedad,
+          version: serie.versionEtiqueta,
+          tieneLecturas: serie.tieneLecturas,
+        },
+        tooltip: {
+          xDateFormat: '%d-%m-%Y',
+          pointFormat: '<span>{series.name}</span><br/><strong>{point.y}%</strong>',
+          headerFormat: '<span style="font-size: 14px">{point.key}</span><br/>',
+        },
+        dataLabels: {
+          enabled: false,
+        },
+      };
+    });
 
     const fechaActual = new Date().toISOString();
     const fechaEtapa2 = this.helper.getFechaInicioEtapaTrigo2(this.siembra!, 2, this.siembra?.crono);
@@ -752,8 +776,6 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
     this.chartOptions = this.chartBasicOptions(lines, plotBands, series, {
       title: this.translate.instant('Evolucion de riesgo sanitario - Cebada'),
       max: 100,
-      bajoHasta: 35,
-      medioHasta: 60,
     });
   }
 

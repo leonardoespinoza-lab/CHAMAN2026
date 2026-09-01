@@ -1,4 +1,7 @@
-import { DrawerGraficoEnfermedadesComponent } from './drawer-grafico-enfermedades.component';
+import {
+  COLORES_SERIE_SANITARIA_TRIGO,
+  DrawerGraficoEnfermedadesComponent,
+} from './drawer-grafico-enfermedades.component';
 
 describe('DrawerGraficoEnfermedadesComponent - grafico principal', () => {
   const crear = () =>
@@ -10,6 +13,26 @@ describe('DrawerGraficoEnfermedadesComponent - grafico principal', () => {
     const options = (componente as any).chartBasicOptions([], [], []);
 
     expect(options.yAxis.max).toBe(100);
+  });
+
+  it('toma del modelo compartido los umbrales 15 y 20 para trigo', () => {
+    const componente = crear();
+    componente.siembra = { semilla: { cultivo: 'Trigo' } } as any;
+
+    const options = (componente as any).chartBasicOptions([], [], []);
+
+    expect(options.yAxis.plotBands.map((band: any) => [band.from, band.to])).toEqual([
+      [0, 15],
+      [15, 20],
+      [20, 100],
+    ]);
+  });
+
+  it('mantiene cinco colores fijos y diferentes para las enfermedades de trigo', () => {
+    const colores = Object.values(COLORES_SERIE_SANITARIA_TRIGO);
+
+    expect(colores.length).toBe(5);
+    expect(new Set(colores).size).toBe(5);
   });
 
   it('evita repetir titulo y subtitulo cuando el grafico esta embebido', () => {

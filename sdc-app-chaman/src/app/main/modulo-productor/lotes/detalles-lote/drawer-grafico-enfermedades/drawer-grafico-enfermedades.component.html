@@ -18,6 +18,11 @@
             Serie histórica del motor sanitario. La lectura debe cruzarse con etapa, clima, recorrida y manejo.
           }
         </small>
+        <div class="threshold-legend" aria-label="Umbrales de la escala sanitaria">
+          <span class="low">Bajo &lt; {{ umbralesRiesgo.medio }}</span>
+          <span class="medium">Seguimiento {{ umbralesRiesgo.medio }}–&lt;{{ umbralesRiesgo.alto }}</span>
+          <span class="high">Umbral alto ≥ {{ umbralesRiesgo.alto }}</span>
+        </div>
       </div>
       @if (predicciones.length) {
         <em>{{ predicciones.length }} lectura(s)</em>

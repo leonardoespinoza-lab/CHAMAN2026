@@ -67,6 +67,40 @@
   font-size: 0.84rem;
 }
 
+.threshold-legend {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.36rem;
+  margin-top: 0.52rem;
+}
+
+.threshold-legend span {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--chaman-ink, #071827);
+  display: inline-flex;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0.3rem 0.5rem;
+}
+
+.threshold-legend .low {
+  background: rgba(54, 181, 107, 0.13);
+  border-color: rgba(54, 181, 107, 0.28);
+}
+
+.threshold-legend .medium {
+  background: rgba(230, 184, 79, 0.16);
+  border-color: rgba(196, 143, 22, 0.3);
+}
+
+.threshold-legend .high {
+  background: rgba(224, 82, 70, 0.14);
+  border-color: rgba(224, 82, 70, 0.28);
+}
+
 .disease-chart-shell header em {
   display: inline-flex;
   align-items: center;
