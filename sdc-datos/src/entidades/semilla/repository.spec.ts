@@ -149,7 +149,28 @@ describe('SemillasRepository - importacion de catalogo segura', () => {
         variedad: 'Variedad',
         ciclo: 'CORTO',
         campania: { $exists: false },
-        $expr: expect.any(Object),
+        $expr: expect.objectContaining({
+          $and: expect.arrayContaining([
+            expect.objectContaining({
+              $eq: expect.arrayContaining([
+                expect.objectContaining({
+                  $cond: expect.arrayContaining([
+                    expect.objectContaining({
+                      $eq: [
+                        {
+                          $type: {
+                            $arrayElemAt: ['$resistencia', 0],
+                          },
+                        },
+                        'object',
+                      ],
+                    }),
+                  ]),
+                }),
+              ]),
+            }),
+          ]),
+        }),
       }),
       { $set: { resistencia: replacement } },
       { new: true, runValidators: true },

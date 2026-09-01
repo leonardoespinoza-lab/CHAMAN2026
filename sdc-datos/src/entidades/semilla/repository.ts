@@ -70,6 +70,7 @@ export class SemillasRepository {
       structuralExpressions,
       'resistencia',
       expected,
+      '$resistencia',
     );
     if (structuralExpressions.length) {
       filter.$expr =
@@ -110,6 +111,7 @@ export class SemillasRepository {
     structuralExpressions: Record<string, unknown>[],
     path: string,
     value: unknown,
+    aggregationValue: unknown,
   ): void {
     if (value === undefined) {
       filter[path] = { $exists: false };
@@ -127,6 +129,7 @@ export class SemillasRepository {
           structuralExpressions,
           `${path}.${index}`,
           item,
+          { $arrayElemAt: [aggregationValue, index] },
         ),
       );
       return;
@@ -138,8 +141,8 @@ export class SemillasRepository {
         $eq: [
           {
             $cond: [
-              { $eq: [{ $type: `$${path}` }, 'object'] },
-              { $size: { $objectToArray: `$${path}` } },
+              { $eq: [{ $type: aggregationValue }, 'object'] },
+              { $size: { $objectToArray: aggregationValue } },
               -1,
             ],
           },
@@ -155,6 +158,7 @@ export class SemillasRepository {
           structuralExpressions,
           `${path}.${key}`,
           item,
+          { $getField: { field: key, input: aggregationValue } },
         );
       }
       return;
