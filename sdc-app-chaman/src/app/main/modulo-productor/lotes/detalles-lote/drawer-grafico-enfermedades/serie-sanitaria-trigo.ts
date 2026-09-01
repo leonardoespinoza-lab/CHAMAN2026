@@ -87,10 +87,10 @@ export function construirSeriesSanitariasTrigo(predicciones: IPrediccion[] = [])
   const versionEtiquetaObjetivo = `v${versionObjetivo}`;
 
   for (const enfermedad of ENFERMEDADES_SERIE_SANITARIA_TRIGO) {
-    const clave = `${enfermedad.id}::${versionEtiquetaObjetivo}`;
-    if (series.has(clave)) continue;
+    const tieneSerie = [...series.values()].some((serie) => serie.idEnfermedad === enfermedad.id);
+    if (tieneSerie) continue;
 
-    series.set(clave, {
+    series.set(`${enfermedad.id}::${versionEtiquetaObjetivo}`, {
       idEnfermedad: enfermedad.id,
       nombre: enfermedad.nombre,
       version: versionObjetivo,
@@ -119,6 +119,21 @@ export function construirSeriesSanitariasTrigo(predicciones: IPrediccion[] = [])
       }
       return (a.version ?? -1) - (b.version ?? -1);
     });
+}
+
+export function seleccionarSeriesVigentesTrigo(series: SerieSanitariaTrigo[]): SerieSanitariaTrigo[] {
+  const seleccionadas = new Map<string, SerieSanitariaTrigo>();
+
+  for (const serie of series) {
+    const actual = seleccionadas.get(serie.idEnfermedad);
+    const versionActual = actual?.version ?? -1;
+    const versionCandidata = serie.version ?? -1;
+    if (!actual || versionCandidata > versionActual || (versionCandidata === versionActual && serie.tieneLecturas)) {
+      seleccionadas.set(serie.idEnfermedad, serie);
+    }
+  }
+
+  return [...seleccionadas.values()];
 }
 
 function insertarCortesTemporales(puntos: PuntoSerieSanitaria[]): PuntoSerieSanitaria[] {

@@ -1,5 +1,5 @@
 import { IPrediccion } from 'modelos/src';
-import { construirSeriesSanitariasTrigo } from './serie-sanitaria-trigo';
+import { construirSeriesSanitariasTrigo, seleccionarSeriesVigentesTrigo } from './serie-sanitaria-trigo';
 
 describe('construirSeriesSanitariasTrigo', () => {
   it('agrupa aliases por enfermedad canonica y separa versiones', () => {
@@ -97,6 +97,23 @@ describe('construirSeriesSanitariasTrigo', () => {
 
     expect(serie.idEnfermedad).toBe('trigo.roya_anaranjada');
     expect(serie.nombre).toBe('Roya Amarilla/Estriada');
+  });
+
+  it('selecciona una sola curva vigente por enfermedad sin perder la version mas reciente', () => {
+    const series = construirSeriesSanitariasTrigo([
+      prediccion('2026-07-10', enfermedadV4(12, 'calculado')),
+      prediccion('2026-07-11', {
+        ...enfermedadV4(21, 'calculado'),
+        modelo: { id: 'trigo.roya_hoja', version: 5, fuente: 'contrato v5' },
+      }),
+    ]);
+
+    const seleccionadas = seleccionarSeriesVigentesTrigo(series);
+    const royaHoja = seleccionadas.filter((serie) => serie.idEnfermedad === 'trigo.roya_hoja');
+
+    expect(seleccionadas.length).toBe(5);
+    expect(royaHoja.length).toBe(1);
+    expect(royaHoja[0].versionEtiqueta).toBe('v5');
   });
 });
 

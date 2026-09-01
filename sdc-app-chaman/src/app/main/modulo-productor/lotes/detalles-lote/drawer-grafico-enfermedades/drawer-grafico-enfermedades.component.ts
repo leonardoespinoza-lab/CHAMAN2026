@@ -2,20 +2,14 @@ import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { SeriesOptionsType, XAxisPlotBandsOptions, XAxisPlotLinesOptions } from 'highcharts';
-import {
-  getUmbralesRiesgoSanitario,
-  IListado,
-  IPrediccion,
-  IQueryParam,
-  TRIGO_MOTOR_SANITARIO_VERSION,
-} from 'modelos/src';
+import { getUmbralesRiesgoSanitario, IListado, IPrediccion, IQueryParam } from 'modelos/src';
 import { Subscription } from 'rxjs';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../../auxiliares/servicios/listados';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetalleSiembra } from '../detalles-lote.component';
-import { construirSeriesSanitariasTrigo } from './serie-sanitaria-trigo';
+import { construirSeriesSanitariasTrigo, seleccionarSeriesVigentesTrigo } from './serie-sanitaria-trigo';
 
 export const COLORES_SERIE_SANITARIA_TRIGO: Record<string, string> = {
   'trigo.mancha_amarilla': '#13b8ad',
@@ -232,38 +226,35 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
       return;
     }
 
-    const series: any[] = construirSeriesSanitariasTrigo(this.predicciones).map((serie) => {
-      const esVersionActual = serie.version === TRIGO_MOTOR_SANITARIO_VERSION;
-      const estadoSerie = serie.tieneLecturas ? '' : ' · sin curva válida';
-
-      return {
-        type: 'line',
-        id: `${serie.idEnfermedad}-${serie.versionEtiqueta}`,
-        name: `${serie.nombre}${
-          serie.idEnfermedad === 'trigo.roya_anaranjada' ? ' · oportunidad ambiental' : ''
-        } · ${serie.versionEtiqueta}${estadoSerie}`,
-        color: COLORES_SERIE_SANITARIA_TRIGO[serie.idEnfermedad] || '#64748b',
-        data: serie.data,
-        connectNulls: false,
-        lineWidth: esVersionActual ? 4 : 2,
-        dashStyle: serie.tieneLecturas ? (esVersionActual ? 'Solid' : 'ShortDash') : 'ShortDot',
-        opacity: serie.tieneLecturas ? (esVersionActual ? 1 : 0.72) : 0.62,
-        showInLegend: true,
-        custom: {
-          idEnfermedad: serie.idEnfermedad,
-          version: serie.versionEtiqueta,
-          tieneLecturas: serie.tieneLecturas,
-        },
-        tooltip: {
-          xDateFormat: '%d-%m-%Y',
-          pointFormat: '<span>{series.name}</span><br/><strong>{point.y}%</strong>',
-          headerFormat: '<span style="font-size: 14px">{point.key}</span><br/>',
-        },
-        dataLabels: {
-          enabled: false,
-        },
-      };
-    });
+    const series: any[] = seleccionarSeriesVigentesTrigo(construirSeriesSanitariasTrigo(this.predicciones)).map(
+      (serie) => {
+        return {
+          type: 'line',
+          id: `${serie.idEnfermedad}-${serie.versionEtiqueta}`,
+          name: serie.nombre,
+          color: COLORES_SERIE_SANITARIA_TRIGO[serie.idEnfermedad] || '#64748b',
+          data: serie.data,
+          connectNulls: false,
+          lineWidth: 4,
+          dashStyle: serie.tieneLecturas ? 'Solid' : 'ShortDot',
+          opacity: serie.tieneLecturas ? 1 : 0.62,
+          showInLegend: true,
+          custom: {
+            idEnfermedad: serie.idEnfermedad,
+            version: serie.versionEtiqueta,
+            tieneLecturas: serie.tieneLecturas,
+          },
+          tooltip: {
+            xDateFormat: '%d-%m-%Y',
+            pointFormat: '<span>{series.name}</span><br/><strong>{point.y}%</strong>',
+            headerFormat: '<span style="font-size: 14px">{point.key}</span><br/>',
+          },
+          dataLabels: {
+            enabled: false,
+          },
+        };
+      }
+    );
 
     const fechaActual = new Date().toISOString();
     const fechaEtapa2 = this.helper.getFechaInicioEtapaTrigo2(this.siembra!, 2, this.siembra?.crono);

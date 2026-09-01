@@ -5,7 +5,11 @@ import {
 
 describe('DrawerGraficoEnfermedadesComponent - grafico principal', () => {
   const crear = () =>
-    new DrawerGraficoEnfermedadesComponent({} as any, {} as any, { instant: (value: string) => value } as any);
+    new DrawerGraficoEnfermedadesComponent(
+      { getFechaInicioEtapaTrigo2: () => undefined } as any,
+      {} as any,
+      { instant: (value: string) => value } as any
+    );
 
   it('usa una escala completa de 0 a 100 para no recortar resultados altos', () => {
     const componente = crear();
@@ -43,5 +47,36 @@ describe('DrawerGraficoEnfermedadesComponent - grafico principal', () => {
 
     expect(options.title.text).toBeUndefined();
     expect(options.subtitle.text).toBeUndefined();
+  });
+
+  it('muestra al cliente solamente los nombres de las cinco enfermedades', () => {
+    const componente = crear();
+    componente.siembra = { semilla: { cultivo: 'Trigo' } } as any;
+    componente.predicciones = [
+      {
+        fecha: '2026-07-10T03:00:00.000Z',
+        enfermedades: [
+          {
+            enfermedad: 'Roya de la Hoja',
+            idEnfermedad: 'trigo.roya_hoja',
+            resultado: 21,
+            estado: 'calculado',
+            modelo: { id: 'trigo.roya_hoja', version: 5, fuente: 'contrato v5' },
+          },
+        ],
+      } as any,
+    ];
+
+    (componente as any).crearGraficoPrediccionesTrigo();
+    const nombres = ((componente.chartOptions?.series || []) as any[]).map((serie) => serie.name);
+
+    expect(nombres).toEqual([
+      'Mancha Amarilla',
+      'Roya de la Hoja',
+      'Roya Amarilla/Estriada',
+      'Mancha de la Hoja',
+      'Fusarium de la Espiga',
+    ]);
+    expect(nombres.some((nombre) => /v\d|oportunidad|sin curva/i.test(nombre))).toBeFalse();
   });
 });
