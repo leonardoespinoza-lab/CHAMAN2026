@@ -103,6 +103,10 @@ function crearHojaLeeme(workbook: ExcelJS.Workbook, cantidad: number): void {
     ['SIN_REGISTRO', 'No existe una entrada; no equivale a susceptible y no elimina datos.'],
     ['DESCONOCIDA', 'Existe la enfermedad, pero la fuente no aporta una categoría utilizable.'],
     ['DATO_ESPECIFICO', 'La evidencia es por patotipo o índice de campo; no se simplifica.'],
+    [
+      'S INFERIDA',
+      'Activa el monitoreo con el supuesto conservador susceptible y confianza baja. No confirma enfermedad: requiere recorrida a lote.',
+    ],
     ['Importación', 'Chamán previsualiza los cambios antes de escribir y nunca borra por omisión.'],
   ];
   instrucciones.forEach(([titulo, detalle], index) => {

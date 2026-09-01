@@ -1,5 +1,11 @@
 import ExcelJS from 'exceljs';
-import { CATALOGO_CULTIVOS_FORMATO_VERSION, ISemilla, snapshotSemillaCatalogo } from 'modelos/src';
+import {
+  CATALOGO_CULTIVOS_FORMATO_VERSION,
+  columnasSanitariasCatalogo,
+  derivarPerfilCatalogo,
+  ISemilla,
+  snapshotSemillaCatalogo,
+} from 'modelos/src';
 import {
   crearLibroCatalogoCultivos,
   cultivosLibroCatalogo,
@@ -118,6 +124,52 @@ describe('Catálogo de cultivos XLSX ancho', () => {
     const workbook = crearLibroCatalogoCultivos([]);
     expect(workbook.getWorksheet(HOJA_META_CATALOGO)?.getCell('B1').value).toBe(CATALOGO_CULTIVOS_FORMATO_VERSION);
     expect(ENCABEZADOS_CATALOGO.semillero).toBe('SEMILLERO');
+  });
+
+  it('habilita las 35 columnas sanitarias y publica la política conservadora', () => {
+    const columnas = cultivosLibroCatalogo().flatMap((cultivo) => columnasSanitariasCatalogo(cultivo));
+    expect(columnas).toHaveSize(35);
+    expect(columnas.every((columna) => columna.editable)).toBeTrue();
+
+    expect(
+      columnasSanitariasCatalogo('Cebada').find((columna) => columna.idEnfermedad === 'cebada.mancha_red')
+        ?.perfilesPermitidos
+    ).toEqual(['R', 'MR', 'I', 'S']);
+    expect(
+      columnasSanitariasCatalogo('Cebada').find((columna) => columna.idEnfermedad === 'cebada.fusariosis_espiga')
+        ?.perfilesPermitidos
+    ).toEqual(['R', 'MR', 'MS', 'S']);
+    expect(
+      columnasSanitariasCatalogo('Soja').find((columna) => columna.idEnfermedad === 'soja.cancro_tallo')
+        ?.perfilesPermitidos
+    ).toEqual(['R', 'S']);
+    expect(
+      columnasSanitariasCatalogo('Arveja').find((columna) => columna.idEnfermedad === 'arveja.ascochyta')
+        ?.perfilesPermitidos
+    ).toEqual(['R', 'MR', 'MS', 'S']);
+
+    const leeme = crearLibroCatalogoCultivos([]).getWorksheet(HOJA_LEEME_CATALOGO)!;
+    expect(leeme.getCell('A11').value).toBe('S INFERIDA');
+    expect(String(leeme.getCell('B11').value)).toContain('requiere recorrida a lote');
+  });
+
+  it('deriva los factores por cultivo sin alterar las escalas especiales', () => {
+    expect(derivarPerfilCatalogo('Arveja', 'arveja.ascochyta', 'S')).toEqual(
+      jasmine.objectContaining({ multiplicador: 1, indiceResistencia: 0 })
+    );
+    expect(derivarPerfilCatalogo('Cebada', 'cebada.fusariosis_espiga', 'MS')).toEqual(
+      jasmine.objectContaining({ multiplicador: 0.75, indiceResistencia: 1 / 3 })
+    );
+    expect(derivarPerfilCatalogo('Cebada', 'cebada.mancha_red', 'I')).toEqual(
+      jasmine.objectContaining({ multiplicador: 0.625, indiceResistencia: 0.5 })
+    );
+    expect(derivarPerfilCatalogo('Papa', 'papa.tizon_tardio', 'S')).toEqual(
+      jasmine.objectContaining({ multiplicador: 1.2, indiceResistencia: 0 })
+    );
+    expect(derivarPerfilCatalogo('Soja', 'soja.cancro_tallo', 'MR')).toBeUndefined();
+    expect(derivarPerfilCatalogo('Manzano', 'manzano.oidio', 'MR')).toEqual(
+      jasmine.objectContaining({ multiplicador: 0.5, indiceResistencia: 2 / 3 })
+    );
   });
 
   it('ignora el id virtual de raíz pero protege ids científicos anidados', () => {

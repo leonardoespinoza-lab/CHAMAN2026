@@ -91,7 +91,13 @@ export interface IResultadoImportacionCatalogoCultivos {
   idsActualizados?: string[];
 }
 
-const REGLAS_TRIGO_MAIZ: Record<string, IReglaPerfilCatalogo> = {
+/**
+ * Escala sanitaria general del catálogo. También se usa para antecedentes
+ * varietales conservadores: S activa el seguimiento con el factor máximo,
+ * mientras que estado/confianza/fuente conservan la trazabilidad de que el
+ * dato fue inferido y no una observación de enfermedad a campo.
+ */
+const REGLAS_CUATRO_CATEGORIAS: Record<string, IReglaPerfilCatalogo> = {
   R: { multiplicador: 0.05, indiceResistencia: 1 },
   MR: { multiplicador: 0.5, indiceResistencia: 2 / 3 },
   MS: { multiplicador: 0.75, indiceResistencia: 1 / 3 },
@@ -117,31 +123,6 @@ const REGLAS_SOJA_CANCRO: Record<string, IReglaPerfilCatalogo> = {
   S: { multiplicador: 1, indiceResistencia: 0 },
 };
 
-const SOLO_LECTURA_POR_CULTIVO: Partial<Record<Cultivo, string>> = {
-  Arveja:
-    "El catálogo actual no contiene perfiles varietales validados para Arveja.",
-  Vid: "Los antecedentes de Vid usan una escala legacy que no debe convertirse automáticamente.",
-  Manzano:
-    "Los antecedentes disponibles son inferencias generales y no perfiles específicos por enfermedad.",
-  Peral:
-    "Los antecedentes disponibles son inferencias generales y no perfiles específicos por enfermedad.",
-  Pecan:
-    "Los antecedentes disponibles son inferencias generales y no perfiles específicos por enfermedad.",
-};
-
-const SOLO_LECTURA_POR_ENFERMEDAD: Partial<Record<TEnfermedadId, string>> = {
-  "cebada.fusariosis_espiga":
-    "Las fuentes vigentes no publican respuesta varietal para Fusariosis de la Espiga.",
-  "soja.fin_ciclo":
-    "La fuente vigente no publica una categoría varietal única para enfermedades de fin de ciclo.",
-  "soja.phytophthora":
-    "La respuesta se registra por patotipo y no admite una categoría única.",
-  "soja.muerte_repentina":
-    "La fuente registra un índice de campo y no una categoría única.",
-  "soja.mancha_ojo_rana":
-    "La respuesta se registra por patotipo y no admite una categoría única.",
-};
-
 export function normalizarTextoCatalogo(value?: unknown): string {
   return String(value ?? "")
     .trim()
@@ -163,15 +144,12 @@ export function columnasSanitariasCatalogo(
     esEnfermedadCultivoCatalogo(cultivo, item.id),
   ).map((item) => {
     const reglas = getReglasPerfilCatalogo(cultivo, item.id);
-    const motivoSoloLectura =
-      SOLO_LECTURA_POR_ENFERMEDAD[item.id] || SOLO_LECTURA_POR_CULTIVO[cultivo];
     return {
       cultivo,
       idEnfermedad: item.id,
       encabezado: item.nombre.toUpperCase(),
-      editable: !!reglas && !motivoSoloLectura,
+      editable: !!reglas,
       perfilesPermitidos: reglas ? Object.keys(reglas) : [],
-      motivoSoloLectura,
     };
   });
 }
@@ -184,21 +162,14 @@ export function getReglasPerfilCatalogo(
   if (!definicion || !esEnfermedadCultivoCatalogo(cultivo, idEnfermedad)) {
     return undefined;
   }
-  if (
-    SOLO_LECTURA_POR_CULTIVO[cultivo] ||
-    SOLO_LECTURA_POR_ENFERMEDAD[idEnfermedad]
-  ) {
-    return undefined;
+  if (cultivo === "Cebada" && idEnfermedad !== "cebada.fusariosis_espiga") {
+    return REGLAS_CEBADA;
   }
-  if (cultivo === "Trigo" || cultivo === "Maiz") {
-    return REGLAS_TRIGO_MAIZ;
-  }
-  if (cultivo === "Cebada") return REGLAS_CEBADA;
   if (cultivo === "Papa") return REGLAS_PAPA;
   if (cultivo === "Soja" && idEnfermedad === "soja.cancro_tallo") {
     return REGLAS_SOJA_CANCRO;
   }
-  return undefined;
+  return REGLAS_CUATRO_CATEGORIAS;
 }
 
 export function esEnfermedadCultivoCatalogo(

@@ -376,6 +376,55 @@ describe('CatalogImportService', () => {
     ]);
   });
 
+  it('activa una enfermedad antes bloqueada con S inferida, confianza baja y recorrida documentada', async () => {
+    const current = {
+      _id: '64e124433f02744000000016',
+      __v: 0,
+      cultivo: 'Arveja',
+      semillero: 'Semillero conservador',
+      variedad: 'Variedad piloto',
+      ciclo: 'INTERMEDIO',
+      campania: '2025-2026',
+      resistencia: [],
+    } as ISemilla & { _id: string; __v: number };
+    const { service, repository } = repositorySubject([current]);
+    const fila: IFilaCatalogoCultivos = {
+      fila: 2,
+      hoja: 'Arveja',
+      id: current._id,
+      snapshot: snapshotSemillaCatalogo(current),
+      semillero: current.semillero!,
+      variedad: current.variedad!,
+      ciclo: current.ciclo!,
+      campania: current.campania,
+      perfiles: { 'arveja.ascochyta': 'S' },
+      fuenteActualizacion:
+        'Matriz sanitaria CHAMAN - carga conservadora sin fuente varietal',
+      estado: 'inferida',
+      confianza: 'baja',
+      observacionesActualizacion:
+        'Supuesto conservador; recomendar recorrida a lote para confirmar eventos.',
+    };
+
+    const result = await service.importar(request([fila]));
+
+    expect(result.errores).toEqual([]);
+    expect(result.actualizaciones).toBe(1);
+    expect(
+      repository.validateCatalogDocument.mock.calls[0][0].resistencia,
+    ).toEqual([
+      expect.objectContaining({
+        idEnfermedad: 'arveja.ascochyta',
+        perfil: 'S',
+        multiplicador: 1,
+        indiceResistencia: 0,
+        estado: 'inferida',
+        confianza: 'baja',
+        observaciones: expect.stringContaining('recorrida a lote'),
+      }),
+    ]);
+  });
+
   it('rechaza una fecha calendario imposible aunque tenga formato ISO', async () => {
     const current = seed('64e124433f02744000000012', 'Fecha imposible');
     const { service } = repositorySubject([current]);
