@@ -94,13 +94,17 @@ describe('SemillasRepository - actualizacion termica segura', () => {
 });
 
 describe('SemillasRepository - importacion de catalogo segura', () => {
-  it('usa compare-and-set y runValidators al reemplazar resistencia', async () => {
+  it('usa compare-and-set estructural y runValidators al reemplazar resistencia', async () => {
     const expected = [
       {
         idEnfermedad: 'trigo.roya_hoja',
         enfermedad: 'Roya de la Hoja',
         perfil: 'S',
         multiplicador: 1,
+        detalleSanitario: {
+          interpretacion: 'dato legacy',
+          metodo: 'ensayo',
+        },
       },
     ];
     const replacement = [
@@ -129,15 +133,24 @@ describe('SemillasRepository - importacion de catalogo segura', () => {
     );
 
     expect(model.findOneAndUpdate).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         _id: 'semilla-1',
-        resistencia: expected,
+        resistencia: { $size: 1 },
+        'resistencia.0': { $type: 'object' },
+        'resistencia.0.idEnfermedad': 'trigo.roya_hoja',
+        'resistencia.0.enfermedad': 'Roya de la Hoja',
+        'resistencia.0.perfil': 'S',
+        'resistencia.0.multiplicador': 1,
+        'resistencia.0.detalleSanitario': { $type: 'object' },
+        'resistencia.0.detalleSanitario.interpretacion': 'dato legacy',
+        'resistencia.0.detalleSanitario.metodo': 'ensayo',
         cultivo: 'Trigo',
         semillero: 'Semillero',
         variedad: 'Variedad',
         ciclo: 'CORTO',
         campania: { $exists: false },
-      },
+        $expr: expect.any(Object),
+      }),
       { $set: { resistencia: replacement } },
       { new: true, runValidators: true },
     );

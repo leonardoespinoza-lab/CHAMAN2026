@@ -63,7 +63,20 @@ export class SemillasRepository {
     expected: IResistencia[],
     replacement: IResistencia[],
   ): Promise<Semilla | null> {
-    const filter: Record<string, unknown> = { _id: id, resistencia: expected };
+    const filter: Record<string, unknown> = { _id: id };
+    const structuralExpressions: Record<string, unknown>[] = [];
+    this.addCatalogValueGuard(
+      filter,
+      structuralExpressions,
+      'resistencia',
+      expected,
+    );
+    if (structuralExpressions.length) {
+      filter.$expr =
+        structuralExpressions.length === 1
+          ? structuralExpressions[0]
+          : { $and: structuralExpressions };
+    }
     for (const field of [
       'cultivo',
       'semillero',
@@ -83,6 +96,70 @@ export class SemillasRepository {
       { $set: { resistencia: replacement } },
       { new: true, runValidators: true },
     );
+  }
+
+  /**
+   * Mongo compara documentos embebidos por valor y por orden de campos. Las
+   * matrices legacy no siempre conservan el orden actual del schema, por lo
+   * que una igualdad directa puede rechazar un documento sin cambios reales.
+   * Este guard recorre estructura, tamaños y valores mediante rutas punteadas:
+   * mantiene el compare-and-set estricto y a la vez ignora sólo ese orden BSON.
+   */
+  private addCatalogValueGuard(
+    filter: Record<string, unknown>,
+    structuralExpressions: Record<string, unknown>[],
+    path: string,
+    value: unknown,
+  ): void {
+    if (value === undefined) {
+      filter[path] = { $exists: false };
+      return;
+    }
+    if (value === null) {
+      filter[path] = { $type: 'null' };
+      return;
+    }
+    if (Array.isArray(value)) {
+      filter[path] = { $size: value.length };
+      value.forEach((item, index) =>
+        this.addCatalogValueGuard(
+          filter,
+          structuralExpressions,
+          `${path}.${index}`,
+          item,
+        ),
+      );
+      return;
+    }
+    if (typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>);
+      filter[path] = { $type: 'object' };
+      structuralExpressions.push({
+        $eq: [
+          {
+            $cond: [
+              { $eq: [{ $type: `$${path}` }, 'object'] },
+              { $size: { $objectToArray: `$${path}` } },
+              -1,
+            ],
+          },
+          entries.length,
+        ],
+      });
+      for (const [key, item] of entries) {
+        if (key.includes('.') || key.startsWith('$')) {
+          throw new Error(`Campo sanitario no compatible con CAS: ${key}.`);
+        }
+        this.addCatalogValueGuard(
+          filter,
+          structuralExpressions,
+          `${path}.${key}`,
+          item,
+        );
+      }
+      return;
+    }
+    filter[path] = value;
   }
 
   /**
