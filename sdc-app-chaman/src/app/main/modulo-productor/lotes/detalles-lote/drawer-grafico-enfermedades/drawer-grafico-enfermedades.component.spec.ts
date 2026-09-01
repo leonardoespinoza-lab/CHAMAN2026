@@ -49,6 +49,14 @@ describe('DrawerGraficoEnfermedadesComponent - grafico principal', () => {
     expect(options.subtitle.text).toBeUndefined();
   });
 
+  it('no agrega un segundo porcentaje global al valor del tooltip', () => {
+    const componente = crear();
+
+    const options = (componente as any).chartBasicOptions([], [], []);
+
+    expect(options.tooltip.valueSuffix).toBeUndefined();
+  });
+
   it('muestra al cliente solamente los nombres de las cinco enfermedades', () => {
     const componente = crear();
     componente.siembra = { semilla: { cultivo: 'Trigo' } } as any;

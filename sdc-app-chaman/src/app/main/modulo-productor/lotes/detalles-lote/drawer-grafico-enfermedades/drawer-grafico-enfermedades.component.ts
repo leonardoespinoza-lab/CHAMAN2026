@@ -202,7 +202,6 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
       tooltip: {
         shared: true,
         xDateFormat: '%d/%m/%Y',
-        valueSuffix: '%',
       },
       plotOptions: {
         series: {
