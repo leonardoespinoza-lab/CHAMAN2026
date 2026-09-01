@@ -985,7 +985,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return 'Disponibilidad del calculo';
     }
     if (this.resultadoCrudoFueraDominio(prediccion)) {
-      return 'Indice Chaman limitado a 0-100';
+      return '';
     }
     if (this.esManchaRedV4(enfermedad, prediccion)) {
       return 'Indice ambiental de infeccion';

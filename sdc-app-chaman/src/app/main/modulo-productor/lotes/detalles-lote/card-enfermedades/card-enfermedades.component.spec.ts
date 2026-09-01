@@ -93,6 +93,7 @@ describe('CardEnfermedadesComponent - comunicacion sanitaria', () => {
 
     expect((componente as any).resultadoEtiqueta(prediccion, 100, 'Roya de la Hoja', true)).toBe('100.0/100');
     expect((componente as any).estadoCorto(prediccion, 'Roya de la Hoja', 100, true)).toBe('Indice saturado');
+    expect((componente as any).etiquetaMetrica('Roya de la Hoja', prediccion)).toBe('');
     expect((componente as any).puedeMostrarEscala(prediccion, 'Roya de la Hoja', true)).toBeTrue();
     expect((componente as any).lecturaCorta(prediccion, 'Roya de la Hoja', 'indice limitado', true)).toContain('108.7');
   });

@@ -69,7 +69,9 @@
             <span class="status-pill">{{ item.estadoCorto }}</span>
             <strong>{{ item.nombreVisible }}</strong>
             <span class="risk-value" [class.non-numeric]="!item.mostrarEscala">{{ item.resultadoEtiqueta }}</span>
-            <span class="risk-caption">{{ item.etiquetaMetrica }}</span>
+            @if (item.etiquetaMetrica) {
+              <span class="risk-caption">{{ item.etiquetaMetrica }}</span>
+            }
             @if (item.mostrarEscala) {
               <span class="risk-track"><i></i></span>
             }
