@@ -75,12 +75,13 @@ interface DiseaseInsight {
 export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   @Input() public siembra?: ISiembra;
   @Input() public estadoFenologiaArveja?: IEstadoFenologiaArveja;
-  public verDrawerGraficoEnfermedades = false;
+  public verInformacionModelo = false;
   public verDetalleEnfermedad = false;
   public actualizandoPrediccion = false;
   public enfermedadSeleccionada?: DiseaseInsight;
   public prescripcionSeleccionadaGrupo?: string;
   private readonly cultivosConMotorSanitario = new Set(['Trigo', 'Soja', 'Maiz', 'Cebada', 'Arveja']);
+  private readonly cultivosConCurvaSanitaria = new Set(['Trigo', 'Soja', 'Maiz', 'Cebada']);
   private readonly enfermedadesConfirmadas = new Set<TEnfermedad>();
 
   constructor(
@@ -103,6 +104,11 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
 
   public get esScreeningExperimental(): boolean {
     return this.siembra?.semilla?.cultivo === 'Arveja';
+  }
+
+  public get tieneCurvaSanitaria(): boolean {
+    const cultivo = this.siembra?.semilla?.cultivo;
+    return !!cultivo && this.tienePredicciones && this.cultivosConCurvaSanitaria.has(cultivo);
   }
 
   public get etiquetaBotonActualizacion(): string {
@@ -190,9 +196,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     return this.enfermedadesConfirmadas.has(enfermedad);
   }
 
-  public abrirCurvas(): void {
-    this.verDetalleEnfermedad = false;
-    this.verDrawerGraficoEnfermedades = true;
+  public abrirInformacionModelo(event?: Event): void {
+    event?.stopPropagation();
+    this.verInformacionModelo = true;
   }
 
   public get enfermedadInsights(): DiseaseInsight[] {

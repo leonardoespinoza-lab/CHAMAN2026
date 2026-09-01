@@ -6,15 +6,24 @@
     </div>
 
     @if (siembra?._id && tieneMotorSanitario) {
-      <p-button
-        icon="pi pi-refresh"
-        [label]="etiquetaBotonActualizacion"
-        severity="secondary"
-        [outlined]="true"
-        [loading]="actualizandoPrediccion"
-        [disabled]="actualizandoPrediccion || !tieneMotorSanitario"
-        (click)="actualizarPrediccion($event)"
-      />
+      <div class="disease-header-actions">
+        <p-button
+          icon="pi pi-info-circle"
+          label="Más información"
+          severity="secondary"
+          [text]="true"
+          (click)="abrirInformacionModelo($event)"
+        />
+        <p-button
+          icon="pi pi-refresh"
+          [label]="etiquetaBotonActualizacion"
+          severity="secondary"
+          [outlined]="true"
+          [loading]="actualizandoPrediccion"
+          [disabled]="actualizandoPrediccion || !tieneMotorSanitario"
+          (click)="actualizarPrediccion($event)"
+        />
+      </div>
     }
   </div>
 
@@ -28,33 +37,139 @@
       </div>
     </section>
   } @else if (enfermedadInsights.length) {
-    <div class="disease-action-grid">
-      @for (item of enfermedadInsights; track item.enfermedad) {
-        <button
-          type="button"
-          class="disease-action-card"
-          [ngClass]="item.severity"
-          [style.--fill]="item.fill + '%'"
-          (click)="abrirDetalleEnfermedad(item)"
-        >
-          <span class="status-pill">{{ item.estadoCorto }}</span>
-          <strong>{{ item.nombreVisible }}</strong>
-          <span class="risk-value" [class.non-numeric]="!item.mostrarEscala">{{ item.resultadoEtiqueta }}</span>
-          <span class="risk-caption">{{ item.etiquetaMetrica }}</span>
-          @if (item.mostrarEscala) {
-            <span class="risk-track"><i></i></span>
-          }
-          @if (!item.enVentanaFenologica) {
-            <span class="window-note">Fuera de ventana sensible</span>
-          }
-          <small>{{ item.lecturaCorta }}</small>
-        </button>
-      }
-    </div>
+    @if (tieneCurvaSanitaria) {
+      <section class="disease-primary-chart" aria-label="Evolución temporal del monitoreo de enfermedades">
+        <app-drawer-grafico-enfermedades
+          [siembra]="siembra"
+          [embedded]="true"
+          [refreshToken]="fechaUltimaPrediccion?.getTime() || 0"
+        ></app-drawer-grafico-enfermedades>
+      </section>
+    }
+
+    <section class="current-risk-summary" aria-labelledby="current-risk-title">
+      <header>
+        <div>
+          <span>LECTURA ACTUAL</span>
+          <strong id="current-risk-title">Indicadores por enfermedad</strong>
+        </div>
+        <small>Seleccioná un indicador para revisar variables y cálculo.</small>
+      </header>
+
+      <div class="disease-action-grid">
+        @for (item of enfermedadInsights; track item.enfermedad) {
+          <button
+            type="button"
+            class="disease-action-card"
+            [ngClass]="item.severity"
+            [style.--fill]="item.fill + '%'"
+            [attr.aria-label]="item.nombreVisible + ': ' + item.resultadoEtiqueta + '. Abrir detalle'"
+            (click)="abrirDetalleEnfermedad(item)"
+          >
+            <span class="status-pill">{{ item.estadoCorto }}</span>
+            <strong>{{ item.nombreVisible }}</strong>
+            <span class="risk-value" [class.non-numeric]="!item.mostrarEscala">{{ item.resultadoEtiqueta }}</span>
+            <span class="risk-caption">{{ item.etiquetaMetrica }}</span>
+            @if (item.mostrarEscala) {
+              <span class="risk-track"><i></i></span>
+            }
+            @if (!item.enVentanaFenologica) {
+              <span class="window-note">Fuera de ventana</span>
+            }
+            <span class="compact-detail-link">Ver detalle <i class="pi pi-arrow-right"></i></span>
+          </button>
+        }
+      </div>
+    </section>
   } @else {
     <p-message severity="info">{{ 'Cargue una siembra para activar el monitoreo' | translate }}</p-message>
   }
 </div>
+
+<p-dialog
+  [(visible)]="verInformacionModelo"
+  [modal]="true"
+  [dismissableMask]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(780px, 94vw)' }"
+  [breakpoints]="{ '720px': '96vw' }"
+  header="Cómo funciona el monitoreo"
+  styleClass="chaman-detail-dialog disease-model-dialog"
+>
+  <section class="model-information">
+    <header>
+      <i class="pi pi-chart-line"></i>
+      <div>
+        <strong>Seguimiento ambiental, fenológico y varietal</strong>
+        <p>
+          El valor representa la salida del modelo de cada enfermedad. No confirma presencia ni equivale por sí solo a
+          probabilidad de enfermedad.
+        </p>
+      </div>
+    </header>
+
+    <div class="model-information-grid">
+      <article>
+        <span>1</span>
+        <div>
+          <strong>Datos meteorológicos</strong>
+          <p>
+            Se prioriza el sensor del lote, luego la central válida y finalmente Open-Meteo o Chamán-Meteo para
+            completar huecos.
+          </p>
+        </div>
+      </article>
+      <article>
+        <span>2</span>
+        <div>
+          <strong>Ventana del cultivo</strong>
+          <p>
+            La etapa fenológica define cuándo una enfermedad puede evaluarse y cuándo queda fuera de ventana sensible.
+          </p>
+        </div>
+      </article>
+      <article>
+        <span>3</span>
+        <div>
+          <strong>Modelo y variedad</strong>
+          <p>
+            Cada motor cruza sus variables ambientales con la resistencia varietal disponible y conserva la versión
+            calculada.
+          </p>
+        </div>
+      </article>
+      <article>
+        <span>4</span>
+        <div>
+          <strong>Decisión a campo</strong>
+          <p>
+            Las curvas sirven para priorizar recorridas. La confirmación y cualquier tratamiento requieren observación y
+            criterio técnico.
+          </p>
+        </div>
+      </article>
+    </div>
+
+    <div class="model-scale-explanation">
+      <strong>Cómo leer el gráfico</strong>
+      <div>
+        <span class="scale-low">Seguimiento</span>
+        <span class="scale-medium">Mayor atención</span>
+        <span class="scale-high">Condiciones favorables</span>
+      </div>
+      <p>
+        Los fondos muestran los umbrales propios de cada motor. Los cortes de una curva indican días fuera de ventana o
+        sin calidad suficiente.
+      </p>
+    </div>
+
+    <small
+      >En cada indicador podés abrir el detalle para ver variables, resistencia utilizada, estado del cálculo y versión
+      del modelo.</small
+    >
+  </section>
+</p-dialog>
 
 <p-dialog
   [(visible)]="verDetalleEnfermedad"
@@ -186,25 +301,6 @@
           }
         </section>
       }
-
-      <div class="detail-actions">
-        @if (tienePredicciones && !esScreeningExperimental) {
-          <p-button
-            icon="pi pi-chart-line"
-            label="Ver curvas"
-            severity="secondary"
-            [outlined]="true"
-            (click)="abrirCurvas()"
-          />
-        }
-      </div>
     </section>
   }
 </p-dialog>
-
-@if (tienePredicciones && !esScreeningExperimental) {
-  <app-drawer-grafico-enfermedades
-    [siembra]="siembra"
-    [(visible)]="verDrawerGraficoEnfermedades"
-  ></app-drawer-grafico-enfermedades>
-}

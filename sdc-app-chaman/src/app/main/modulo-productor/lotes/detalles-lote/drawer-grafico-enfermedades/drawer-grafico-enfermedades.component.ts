@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, OnDestroy, OnInit, Output, SimpleChanges } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { SeriesOptionsType, XAxisPlotBandsOptions, XAxisPlotLinesOptions } from 'highcharts';
 import { IListado, IPrediccion, IQueryParam, TRIGO_MOTOR_SANITARIO_VERSION } from 'modelos/src';
@@ -48,12 +48,15 @@ export const ETAPAS_CEBADA: string[] = [
   templateUrl: './drawer-grafico-enfermedades.component.html',
   styleUrl: './drawer-grafico-enfermedades.component.scss',
 })
-export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
+export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, OnDestroy {
   public loading = false;
   @Input() public visible: boolean = true;
+  @Input() public embedded = false;
+  @Input() public refreshToken = 0;
   @Output() public visibleChange = new EventEmitter<boolean>();
   @Input() public siembra?: IDetalleSiembra;
   private predicciones$?: Subscription;
+  private initialized = false;
   public predicciones: IPrediccion[] = [];
 
   public chartOptions?: Highcharts.Options;
@@ -100,7 +103,7 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
     const color1 = 'rgba(54, 181, 107, 0.13)';
     const color2 = 'rgba(230, 184, 79, 0.16)';
     const color3 = 'rgba(224, 82, 70, 0.14)';
-    const max = scale?.max ?? 40;
+    const max = scale?.max ?? 100;
     const bajoHasta = scale?.bajoHasta ?? 15;
     const medioHasta = scale?.medioHasta ?? 20;
 
@@ -112,16 +115,18 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
           fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           color: 'var(--p-text-color)',
         },
-        spacing: [22, 22, 18, 18],
+        spacing: this.embedded ? [12, 14, 12, 10] : [22, 22, 18, 18],
       },
       title: {
-        text: scale?.title || this.translate.instant('Evolucion de salidas sanitarias'),
+        text: this.embedded ? undefined : scale?.title || this.translate.instant('Evolucion de salidas sanitarias'),
         align: 'left',
       },
       subtitle: {
-        text: this.translate.instant(
-          'Valor calculado por cada modelo; no equivale por si solo a presencia o probabilidad de enfermedad.'
-        ),
+        text: this.embedded
+          ? undefined
+          : this.translate.instant(
+              'Valor calculado por cada modelo; no equivale por si solo a presencia o probabilidad de enfermedad.'
+            ),
         align: 'left',
       },
       yAxis: {
@@ -341,12 +346,14 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
     }
 
     this.chartOptions = this.chartBasicOptions(plotLines, plotBands, series);
-    this.chartOptions.subtitle = {
-      text: this.translate.instant(
-        'Cada version del motor se muestra por separado. Los cortes indican dias fuera de ventana, sin datos o con calidad insuficiente.'
-      ),
-      align: 'left',
-    };
+    if (!this.embedded) {
+      this.chartOptions.subtitle = {
+        text: this.translate.instant(
+          'Cada version del motor se muestra por separado. Los cortes indican dias fuera de ventana, sin datos o con calidad insuficiente.'
+        ),
+        align: 'left',
+      };
+    }
   }
 
   private crearGraficoPrediccionesSoja(): void {
@@ -770,6 +777,15 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit(): Promise<void> {
+    this.initialized = true;
+    this.loading = true;
+    await this.listarPredicciones();
+    this.loading = false;
+  }
+
+  async ngOnChanges(changes: SimpleChanges): Promise<void> {
+    if (!this.initialized || !changes['refreshToken'] || changes['refreshToken'].firstChange) return;
+
     this.loading = true;
     await this.listarPredicciones();
     this.loading = false;

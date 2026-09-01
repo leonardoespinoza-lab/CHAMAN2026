@@ -1,5 +1,4 @@
 .disease-card {
-  height: 100%;
   min-height: 100%;
 }
 
@@ -24,10 +23,57 @@
   margin-top: 0.22rem;
 }
 
+.disease-header-actions {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.45rem;
+}
+
+.disease-primary-chart {
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.current-risk-summary {
+  display: grid;
+  gap: 0.68rem;
+}
+
+.current-risk-summary > header {
+  align-items: end;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.current-risk-summary > header span {
+  color: var(--p-primary-color);
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.045em;
+}
+
+.current-risk-summary > header strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 1.03rem;
+  line-height: 1.15;
+  margin-top: 0.08rem;
+}
+
+.current-risk-summary > header small {
+  color: var(--p-text-muted-color);
+  font-size: 0.78rem;
+  line-height: 1.2;
+  text-align: right;
+}
+
 .disease-action-grid {
   display: grid;
-  gap: 0.72rem;
-  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(168px, 100%), 1fr));
 }
 
 .disease-action-card {
@@ -41,9 +87,10 @@
   cursor: pointer;
   display: grid;
   font: inherit;
-  gap: 0.52rem;
-  min-height: 176px;
-  padding: 0.85rem;
+  gap: 0.3rem;
+  grid-template-rows: auto minmax(2.1rem, auto) auto auto auto;
+  min-height: 132px;
+  padding: 0.66rem;
   text-align: left;
   transition:
     border-color 0.18s ease,
@@ -139,21 +186,20 @@
 
 .disease-action-card strong {
   color: var(--p-text-color);
-  font-size: 1.12rem;
-  line-height: 1.1;
-  min-height: 2.45rem;
+  font-size: 0.91rem;
+  line-height: 1.12;
 }
 
 .risk-value {
   color: var(--p-text-color);
-  font-size: 2.15rem;
+  font-size: 1.42rem;
   font-weight: 850;
-  line-height: 0.95;
+  line-height: 1;
 }
 
 .risk-value.non-numeric,
 .detail-hero em.non-numeric {
-  font-size: 1.35rem;
+  font-size: 1.05rem;
   line-height: 1.08;
 }
 
@@ -170,7 +216,7 @@
   background: var(--p-surface-100);
   border: 1px solid #d4deea;
   border-radius: 999px;
-  height: 9px;
+  height: 6px;
   overflow: hidden;
 }
 
@@ -195,19 +241,152 @@
   line-height: 1.25;
 }
 
+.compact-detail-link {
+  align-items: center;
+  color: var(--p-primary-color);
+  display: inline-flex;
+  font-size: 0.7rem;
+  font-weight: 800;
+  gap: 0.28rem;
+  justify-self: end;
+  margin-top: 0.08rem;
+}
+
+.compact-detail-link i {
+  font-size: 0.62rem;
+}
+
 .window-note {
   align-items: center;
   color: #8a6218;
   display: inline-flex;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 800;
   gap: 0.28rem;
+}
+
+.model-information {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.model-information > header {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--p-primary-color) 5%, var(--p-content-background));
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 22%, var(--p-surface-border));
+  border-radius: 10px;
+  display: flex;
+  gap: 0.8rem;
+  padding: 0.9rem;
+}
+
+.model-information > header > i {
+  align-items: center;
+  background: color-mix(in srgb, var(--p-primary-color) 14%, var(--p-surface-0));
+  border-radius: 999px;
+  color: var(--p-primary-color);
+  display: inline-flex;
+  flex: 0 0 2.5rem;
+  height: 2.5rem;
+  justify-content: center;
+}
+
+.model-information > header strong,
+.model-scale-explanation > strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 1.02rem;
+}
+
+.model-information p {
+  color: var(--p-text-muted-color);
+  line-height: 1.35;
+  margin: 0.22rem 0 0;
+}
+
+.model-information-grid {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.model-information-grid article {
+  align-items: flex-start;
+  background: var(--p-surface-0);
+  border: 1px solid var(--p-surface-border);
+  border-radius: 8px;
+  display: flex;
+  gap: 0.65rem;
+  padding: 0.75rem;
+}
+
+.model-information-grid article > span {
+  align-items: center;
+  background: var(--p-surface-100);
+  border-radius: 999px;
+  color: var(--p-primary-color);
+  display: inline-flex;
+  flex: 0 0 1.75rem;
+  font-size: 0.76rem;
+  font-weight: 900;
+  height: 1.75rem;
+  justify-content: center;
+}
+
+.model-information-grid strong {
+  color: var(--p-text-color);
+  display: block;
+  font-size: 0.9rem;
+}
+
+.model-information-grid p,
+.model-scale-explanation p {
+  font-size: 0.82rem;
+}
+
+.model-scale-explanation {
+  background: var(--p-surface-0);
+  border: 1px solid var(--p-surface-border);
+  border-radius: 8px;
+  padding: 0.78rem;
+}
+
+.model-scale-explanation > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.model-scale-explanation span {
+  border-radius: 999px;
+  color: var(--p-text-color);
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.3rem 0.55rem;
+}
+
+.scale-low {
+  background: rgba(54, 181, 107, 0.16);
+}
+
+.scale-medium {
+  background: rgba(230, 184, 79, 0.2);
+}
+
+.scale-high {
+  background: rgba(224, 82, 70, 0.16);
+}
+
+.model-information > small {
+  color: var(--p-text-muted-color);
+  line-height: 1.35;
 }
 
 .window-note::before {
   background: #f4b942;
   border-radius: 999px;
-  content: '';
+  content: "";
   height: 0.42rem;
   width: 0.42rem;
 }
@@ -227,9 +406,7 @@
 
 .detail-hero {
   align-items: stretch;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(242, 252, 250, 0.86)),
-    var(--p-surface-50);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(242, 252, 250, 0.86)), var(--p-surface-50);
   border: 1px solid #c7d4e2;
   border-radius: 8px;
   box-shadow: 0 8px 20px rgba(15, 35, 55, 0.05);
@@ -448,6 +625,25 @@
     flex-direction: column;
   }
 
+  .disease-header-actions {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .current-risk-summary > header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.22rem;
+  }
+
+  .current-risk-summary > header small {
+    text-align: left;
+  }
+
+  .model-information-grid {
+    grid-template-columns: 1fr;
+  }
+
   .detail-hero,
   .detail-grid,
   .prescription-heading {
@@ -468,5 +664,10 @@
   .disease-action-grid,
   .variable-list {
     grid-template-columns: 1fr;
+  }
+
+  .disease-header-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

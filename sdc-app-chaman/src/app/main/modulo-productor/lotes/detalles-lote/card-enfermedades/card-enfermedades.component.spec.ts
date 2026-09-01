@@ -94,9 +94,7 @@ describe('CardEnfermedadesComponent - comunicacion sanitaria', () => {
     expect((componente as any).resultadoEtiqueta(prediccion, 100, 'Roya de la Hoja', true)).toBe('100.0/100');
     expect((componente as any).estadoCorto(prediccion, 'Roya de la Hoja', 100, true)).toBe('Indice saturado');
     expect((componente as any).puedeMostrarEscala(prediccion, 'Roya de la Hoja', true)).toBeTrue();
-    expect(
-      (componente as any).lecturaCorta(prediccion, 'Roya de la Hoja', 'indice limitado', true)
-    ).toContain('108.7');
+    expect((componente as any).lecturaCorta(prediccion, 'Roya de la Hoja', 'indice limitado', true)).toContain('108.7');
   });
 
   it('diferencia fuera de ventana de un indice cero', () => {
@@ -223,5 +221,31 @@ describe('CardEnfermedadesComponent - comunicacion sanitaria', () => {
     expect(componente.mensajeSinModeloSanitario).toContain('No se calcula un porcentaje');
     expect(componente.etiquetaBotonActualizacion).toBe('Sin modelo sanitario validado');
     expect(componente.enfermedadInsights).toEqual([]);
+  });
+
+  it('habilita la curva principal solo cuando el cultivo tiene serie historica soportada', () => {
+    const componente = crear();
+    (componente.siembra as any).ultimaPrediccion = {
+      enfermedades: [{ enfermedad: 'Mancha Amarilla', resultado: 11.4 }],
+    };
+
+    expect(componente.tieneCurvaSanitaria).toBeTrue();
+
+    (componente.siembra as any).semilla.cultivo = 'Arveja';
+    expect(componente.tieneCurvaSanitaria).toBeFalse();
+
+    (componente.siembra as any).semilla.cultivo = 'Trigo';
+    (componente.siembra as any).ultimaPrediccion.enfermedades = [];
+    expect(componente.tieneCurvaSanitaria).toBeFalse();
+  });
+
+  it('abre la informacion del modelo sin propagar el click', () => {
+    const componente = crear();
+    const evento = jasmine.createSpyObj<Event>('event', ['stopPropagation']);
+
+    componente.abrirInformacionModelo(evento);
+
+    expect(evento.stopPropagation).toHaveBeenCalled();
+    expect(componente.verInformacionModelo).toBeTrue();
   });
 });

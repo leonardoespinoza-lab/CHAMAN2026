@@ -1,21 +1,23 @@
-<p-dialog
-  [(visible)]="visible"
-  [modal]="true"
-  [dismissableMask]="true"
-  [draggable]="false"
-  [resizable]="false"
-  [style]="{ width: 'min(1080px, 94vw)' }"
-  [breakpoints]="{ '720px': '96vw' }"
-  [header]="'Monitoreo de enfermedades' | translate"
-  styleClass="chaman-detail-dialog disease-chart-dialog"
-  (onHide)="visibleChange.emit(false)"
->
-  <section class="disease-chart-shell">
+<ng-template #chartContent>
+  <section class="disease-chart-shell" [class.embedded]="embedded">
     <header>
       <div>
-        <span>Curvas sanitarias</span>
-        <strong>{{ siembra?.semilla?.cultivo || 'Cultivo' }}{{ siembra?.semilla?.variedad ? ' - ' + siembra?.semilla?.variedad : '' }}</strong>
-        <small>Serie historica del motor sanitario. La lectura debe cruzarse con etapa, clima, recorrida y manejo.</small>
+        <span>{{ embedded ? 'EVOLUCIÓN SANITARIA' : 'CURVAS SANITARIAS' }}</span>
+        <strong>
+          @if (embedded) {
+            Riesgo ambiental a través del tiempo
+          } @else {
+            {{ siembra?.semilla?.cultivo || 'Cultivo'
+            }}{{ siembra?.semilla?.variedad ? ' - ' + siembra?.semilla?.variedad : '' }}
+          }
+        </strong>
+        <small>
+          @if (embedded) {
+            Cada línea conserva los valores calculados, los cortes de transmisión y las etapas del cultivo.
+          } @else {
+            Serie histórica del motor sanitario. La lectura debe cruzarse con etapa, clima, recorrida y manejo.
+          }
+        </small>
       </div>
       @if (predicciones.length) {
         <em>{{ predicciones.length }} lectura(s)</em>
@@ -26,13 +28,36 @@
       <div class="chart-empty">Cargando curvas sanitarias...</div>
     } @else if (chartOptions) {
       <div class="chart-frame">
-        <app-chart [options]="chartOptions" style="display: block; height: min(58vh, 560px); width: 100%"></app-chart>
+        <app-chart
+          [options]="chartOptions"
+          [style.height]="embedded ? 'clamp(330px, 42vw, 500px)' : 'min(58vh, 560px)'"
+          style="display: block; width: 100%"
+        ></app-chart>
       </div>
     } @else {
       <div class="chart-empty">
         <strong>Sin serie suficiente</strong>
-        <span>Necesitamos predicciones historicas de esta siembra para graficar la evolucion sanitaria.</span>
+        <span>Necesitamos predicciones históricas de esta siembra para graficar la evolución sanitaria.</span>
       </div>
     }
   </section>
-</p-dialog>
+</ng-template>
+
+@if (embedded) {
+  <ng-container *ngTemplateOutlet="chartContent"></ng-container>
+} @else {
+  <p-dialog
+    [(visible)]="visible"
+    [modal]="true"
+    [dismissableMask]="true"
+    [draggable]="false"
+    [resizable]="false"
+    [style]="{ width: 'min(1080px, 94vw)' }"
+    [breakpoints]="{ '720px': '96vw' }"
+    [header]="'Monitoreo de enfermedades' | translate"
+    styleClass="chaman-detail-dialog disease-chart-dialog"
+    (onHide)="visibleChange.emit(false)"
+  >
+    <ng-container *ngTemplateOutlet="chartContent"></ng-container>
+  </p-dialog>
+}

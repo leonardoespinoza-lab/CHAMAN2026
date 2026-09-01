@@ -12,6 +12,11 @@
   padding: 1.2rem;
 }
 
+.disease-chart-shell.embedded {
+  gap: 0.62rem;
+  padding: 0;
+}
+
 .disease-chart-shell header {
   display: flex;
   justify-content: space-between;
@@ -20,10 +25,14 @@
   padding: 0.9rem 1rem;
   border: 1px solid rgba(139, 163, 184, 0.2);
   border-radius: 8px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.58), rgba(247, 250, 252, 0.32)),
-    rgba(255, 255, 255, 0.42);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.58), rgba(247, 250, 252, 0.32)), rgba(255, 255, 255, 0.42);
   box-shadow: var(--chaman-card-shadow, 0 14px 32px rgba(15, 23, 42, 0.055));
+}
+
+.disease-chart-shell.embedded header {
+  background: linear-gradient(145deg, rgba(240, 253, 250, 0.76), rgba(255, 255, 255, 0.52)), var(--p-surface-0);
+  box-shadow: none;
+  padding: 0.72rem 0.82rem;
 }
 
 .disease-chart-shell header span {
@@ -42,12 +51,20 @@
   line-height: 1.08;
 }
 
+.disease-chart-shell.embedded header strong {
+  font-size: clamp(1.05rem, 1.25vw, 1.35rem);
+}
+
 .disease-chart-shell header small {
   display: block;
   margin-top: 0.25rem;
   color: var(--chaman-muted, #64748b);
   font-size: 0.98rem;
   line-height: 1.35;
+}
+
+.disease-chart-shell.embedded header small {
+  font-size: 0.84rem;
 }
 
 .disease-chart-shell header em {
@@ -69,10 +86,13 @@
   padding: 0.7rem;
   border: 1px solid rgba(139, 163, 184, 0.2);
   border-radius: 8px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(247, 250, 252, 0.35)),
-    rgba(255, 255, 255, 0.44);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(247, 250, 252, 0.35)), rgba(255, 255, 255, 0.44);
   box-shadow: var(--chaman-card-shadow, 0 14px 32px rgba(15, 23, 42, 0.055));
+}
+
+.disease-chart-shell.embedded .chart-frame {
+  min-height: clamp(350px, 43vw, 520px);
+  padding: 0.45rem;
 }
 
 .chart-empty {
@@ -104,5 +124,14 @@
 
   .chart-frame {
     min-height: 24rem;
+  }
+
+  .disease-chart-shell.embedded header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .disease-chart-shell.embedded .chart-frame {
+    min-height: 330px;
   }
 }
