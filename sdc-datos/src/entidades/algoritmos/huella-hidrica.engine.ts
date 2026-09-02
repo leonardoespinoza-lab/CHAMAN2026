@@ -1,5 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 import {
+  getLineasFertilizacion,
+  getLineasFumigacion,
   IFertilizacion,
   IFumigacion,
   IHuellaHidrica,
@@ -744,17 +746,22 @@ function getGrisLitrosHa(
   const cultivo = siembra.semilla?.cultivo || (siembra as any).cultivo;
   const rendimientoSeco = Number(siembra.rendimientoObtenidoKgHaSeco || 0);
   const { potencialN, potencialP } = getPotencialesGris(siembra, lote);
-  const aporteN = fertilizaciones.reduce(
-    (acc, f) =>
+  const lineasFertilizacion = fertilizaciones.flatMap((aplicacion) =>
+    getLineasFertilizacion(aplicacion),
+  );
+  const aporteN = lineasFertilizacion.reduce(
+    (acc, linea) =>
       acc +
-      (Number(f.dosisKgHa || 0) * Number(f.fertilizante?.porcentajeN || 0)) /
+      (Number(linea.dosisKgHa || 0) *
+        Number(linea.fertilizante?.porcentajeN || 0)) /
         100,
     0,
   );
-  const aporteP = fertilizaciones.reduce(
-    (acc, f) =>
+  const aporteP = lineasFertilizacion.reduce(
+    (acc, linea) =>
       acc +
-      (Number(f.dosisKgHa || 0) * Number(f.fertilizante?.porcentajeP || 0)) /
+      (Number(linea.dosisKgHa || 0) *
+        Number(linea.fertilizante?.porcentajeP || 0)) /
         100,
     0,
   );
@@ -771,8 +778,11 @@ function getGrisLitrosHa(
   const grisFertilizantesLitrosHa =
     (excedenteN * 1000000) / 35 + (excedenteP * 1000000) / 4;
 
-  const grisAgroquimicosBase = fumigaciones.reduce((acc, f) => {
-    const principio = f.principioActivo || {};
+  const lineasFumigacion = fumigaciones.flatMap((aplicacion) =>
+    getLineasFumigacion(aplicacion),
+  );
+  const grisAgroquimicosBase = lineasFumigacion.reduce((acc, linea) => {
+    const principio = linea.principioActivo || {};
     const potencialCpp =
       Number(principio.koc || 0) * PESOS_CPP.koc +
       Number(principio.persistencia || 0) * PESOS_CPP.persistenciaEscorrentia +
@@ -790,7 +800,7 @@ function getGrisLitrosHa(
       val('manejoAgronomico', siembra.manejoAgronomico) *
         PESOS_CPP.manejoAgronomico;
     const iaHa =
-      (Number(f.dosisLtHa || 0) * Number(f.concentracion || 0)) / 100;
+      (Number(linea.dosisLtHa || 0) * Number(linea.concentracion || 0)) / 100;
     return acc + iaHa * potencialCpp;
   }, 0);
 

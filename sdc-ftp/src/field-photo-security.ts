@@ -4,6 +4,8 @@ import path from 'path';
 
 export const FIELD_PHOTO_STORAGE_ROOT = 'CAMPO';
 export const FIELD_PHOTO_MAX_BYTES = 12 * 1024 * 1024;
+export const FIELD_AUDIO_STORAGE_ROOT = 'AUDIO-CAMPO';
+export const FIELD_AUDIO_MAX_BYTES = 25 * 1024 * 1024;
 
 export interface OperationalTokenHeaders {
   authorization?: string;
@@ -94,6 +96,35 @@ export function privateFieldPhotoAccess(
   };
 }
 
+export function isPrivateFieldAudioPath(rawPath: string): boolean {
+  const decoded = decodePath(rawPath);
+  const segments = decoded.split('/').filter(Boolean);
+  const audioRoot = segments[0]?.toLowerCase() === 'audios' ? 1 : 0;
+  return segments[audioRoot]?.toLowerCase() === FIELD_AUDIO_STORAGE_ROOT.toLowerCase();
+}
+
+export function privateFieldAudioAccess(expectedToken: string): RequestHandler {
+  return (req, res, next) => {
+    if (!isPrivateFieldAudioPath(req.originalUrl || req.url || req.path)) {
+      next();
+      return;
+    }
+    if (
+      hasOperationalAccess(
+        {
+          authorization: req.get('authorization') || '',
+          explicitToken: req.get('x-timelapse-token') || '',
+        },
+        expectedToken,
+      )
+    ) {
+      next();
+      return;
+    }
+    res.status(404).json({ ok: false, message: 'Audio no encontrado.' });
+  };
+}
+
 export function sanitizeFieldPhotoSegment(
   value: string,
   fallback: string,
@@ -154,6 +185,42 @@ export function assertValidFieldPhoto(
   }
 }
 
+function audioSignatureMatches(bytes: Buffer, contentType: string): boolean {
+  if (/audio\/(webm)/i.test(contentType)) {
+    return bytes.length >= 4 && bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+  }
+  if (/audio\/(ogg)/i.test(contentType)) {
+    return bytes.length >= 4 && bytes.toString('ascii', 0, 4) === 'OggS';
+  }
+  if (/audio\/(wav|wave|x-wav)/i.test(contentType)) {
+    return bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WAVE';
+  }
+  if (/audio\/(mpeg|mp3)/i.test(contentType)) {
+    return (
+      (bytes.length >= 3 && bytes.toString('ascii', 0, 3) === 'ID3') ||
+      (bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)
+    );
+  }
+  if (/audio\/(mp4|m4a|x-m4a)/i.test(contentType)) {
+    return bytes.length >= 12 && bytes.toString('ascii', 4, 8) === 'ftyp';
+  }
+  return false;
+}
+
+export function assertValidFieldAudio(bytes: Buffer, contentType: string): void {
+  const normalizedType = String(contentType || '').split(';', 1)[0].trim();
+  if (!/^audio\/(webm|ogg|mpeg|mp3|mp4|m4a|x-m4a|wav|wave|x-wav)$/i.test(normalizedType)) {
+    throw new Error('Formato de audio no admitido.');
+  }
+  if (!bytes?.length) throw new Error('El audio esta vacio.');
+  if (bytes.length > FIELD_AUDIO_MAX_BYTES) {
+    throw new Error('El audio supera el limite de 25 MB.');
+  }
+  if (!audioSignatureMatches(bytes, normalizedType)) {
+    throw new Error('El contenido no coincide con un audio valido.');
+  }
+}
+
 function extensionFor(contentType: string, originalName: string): string {
   const byName = path.extname(originalName || '').toLowerCase();
   const allowedForType: Record<string, string[]> = {
@@ -208,6 +275,66 @@ export function buildFieldPhotoStoragePlan(options: {
     throw new Error('La ruta de almacenamiento no es valida.');
   }
 
+  return {
+    targetDir,
+    targetPath,
+    relativePath: path.relative(baseDir, targetPath),
+    storedName,
+  };
+}
+
+function audioExtensionFor(contentType: string, originalName: string): string {
+  const byName = path.extname(originalName || '').toLowerCase();
+  const normalizedType = String(contentType || '').split(';', 1)[0].toLowerCase();
+  const allowedForType: Record<string, string[]> = {
+    'audio/webm': ['.webm'],
+    'audio/ogg': ['.ogg', '.oga'],
+    'audio/mpeg': ['.mp3'],
+    'audio/mp3': ['.mp3'],
+    'audio/mp4': ['.m4a', '.mp4'],
+    'audio/m4a': ['.m4a'],
+    'audio/x-m4a': ['.m4a'],
+    'audio/wav': ['.wav'],
+    'audio/wave': ['.wav'],
+    'audio/x-wav': ['.wav'],
+  };
+  if (allowedForType[normalizedType]?.includes(byName)) return byName;
+  if (/ogg/.test(normalizedType)) return '.ogg';
+  if (/mpeg|mp3/.test(normalizedType)) return '.mp3';
+  if (/mp4|m4a/.test(normalizedType)) return '.m4a';
+  if (/wav|wave/.test(normalizedType)) return '.wav';
+  return '.webm';
+}
+
+export function buildFieldAudioStoragePlan(options: {
+  baseDir: string;
+  idLote: string;
+  originalName: string;
+  contentType: string;
+  capturedAt: Date;
+  nonce: string;
+}): FieldPhotoStoragePlan {
+  const baseDir = path.resolve(options.baseDir);
+  const safeLote = sanitizeFieldPhotoSegment(options.idLote, 'sin-lote');
+  const day = options.capturedAt.toISOString().slice(0, 10);
+  const originalBase = path.basename(
+    options.originalName || 'audio-campo',
+    path.extname(options.originalName || ''),
+  );
+  const safeBase = sanitizeFieldPhotoSegment(originalBase, 'audio-campo');
+  const safeNonce = sanitizeFieldPhotoSegment(options.nonce, 'audio');
+  const storedName = `${safeNonce}-${safeBase}${audioExtensionFor(
+    options.contentType,
+    options.originalName,
+  )}`;
+  const targetDir = path.resolve(baseDir, FIELD_AUDIO_STORAGE_ROOT, safeLote, day);
+  const targetPath = path.resolve(targetDir, storedName);
+  if (
+    !targetDir.startsWith(`${baseDir}${path.sep}`) ||
+    !targetPath.startsWith(`${targetDir}${path.sep}`)
+  ) {
+    throw new Error('La ruta de almacenamiento no es valida.');
+  }
   return {
     targetDir,
     targetPath,

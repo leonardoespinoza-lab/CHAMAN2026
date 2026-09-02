@@ -1,84 +1,103 @@
-<div style="padding: 1em; min-height: 100vh;">
-  <div class="p-card">
-    <!-- Header -->
-    <div class="p-card-header" style="display: flex; justify-content: center">
-      <img src="images/fert.jpg" alt="" />
-    </div>
-
-    <!-- Body -->
-    <div class="p-card-body">
+<main class="application-page">
+  <section class="application-card">
+    <header class="application-header">
+      <div class="application-icon"><i class="pi pi-sparkles"></i></div>
       <div>
-        <!-- Titulo -->
-        <div class="p-card-title">{{ titulo?.() }}</div>
-        <!-- Subtitulo -->
+        <span>Nutrición del cultivo</span>
+        <h1>{{ titulo?.() }}</h1>
         @if (lote) {
-          <div class="p-card-subtitle">{{ 'Lote' | translate }} {{ lote.nombre }}</div>
+          <p>Aplicación en <strong>{{ lote.nombre }}</strong></p>
         }
-        <!-- Content -->
-        <div class="p-card-content" style="margin-top: 1em">
-          @if (form) {
-            <form [formGroup]="form">
-              <!-- Fecha de fertilizacion -->
-              <p-floatlabel variant="in" class="mb-4">
-                <p-datepicker
-                  formControlName="fechaFertilizacion"
-                  showIcon
-                  iconDisplay="input"
-                  [fluid]="true"
-                  [showButtonBar]="true"
+      </div>
+    </header>
+
+    @if (form) {
+      <form [formGroup]="form" class="application-form">
+        <section class="date-panel">
+          <p-floatlabel variant="in">
+            <p-datepicker
+              formControlName="fechaFertilizacion"
+              showIcon
+              iconDisplay="input"
+              [fluid]="true"
+              [showButtonBar]="true"
+            />
+            <label>Fecha de fertilización</label>
+          </p-floatlabel>
+        </section>
+
+        <section class="products-section" formArrayName="lineas">
+          <div class="products-heading">
+            <div>
+              <span>Productos de la aplicación</span>
+              <strong>{{ lineas.length }} fertilizante{{ lineas.length === 1 ? '' : 's' }}</strong>
+            </div>
+            <p-button
+              label="Agregar fertilizante"
+              icon="pi pi-plus"
+              [outlined]="true"
+              [rounded]="true"
+              [disabled]="lineas.length >= 12"
+              (onClick)="agregarLinea()"
+            />
+          </div>
+
+          <div class="product-list">
+            @for (linea of lineas.controls; track linea; let index = $index) {
+              <article class="product-row" [formGroupName]="index">
+                <div class="product-number">{{ index + 1 }}</div>
+                <p-floatlabel variant="in">
+                  <p-select
+                    [loading]="loading"
+                    [options]="fertilizantes"
+                    formControlName="idFertilizante"
+                    optionLabel="nombre"
+                    optionValue="_id"
+                    [filter]="true"
+                    filterBy="nombre"
+                    [showClear]="true"
+                    [fluid]="true"
+                    appendTo="body"
+                  />
+                  <label>Fertilizante</label>
+                </p-floatlabel>
+                <p-floatlabel variant="in">
+                  <p-inputnumber
+                    formControlName="dosisKgHa"
+                    mode="decimal"
+                    [min]="0"
+                    [maxFractionDigits]="3"
+                    [fluid]="true"
+                    suffix=" kg/ha"
+                  />
+                  <label>Dosis</label>
+                </p-floatlabel>
+                <p-button
+                  icon="pi pi-trash"
+                  severity="danger"
+                  [text]="true"
+                  [rounded]="true"
+                  [disabled]="lineas.length === 1"
+                  [attr.aria-label]="'Quitar fertilizante ' + (index + 1)"
+                  (onClick)="quitarLinea(index)"
                 />
-                <label>{{ 'Fecha de fertilización' | translate }}</label>
-              </p-floatlabel>
+              </article>
+            }
+          </div>
+          <small class="products-help">Todos los productos quedarán vinculados a una única labor y fecha.</small>
+        </section>
+      </form>
+    }
 
-              <!-- Fertilizante -->
-              <p-floatlabel variant="in" class="mb-4">
-                <p-select
-                  [loading]="loading"
-                  [options]="fertilizantes"
-                  formControlName="idFertilizante"
-                  optionLabel="nombre"
-                  optionValue="_id"
-                  [filter]="true"
-                  filterBy="nombre"
-                  [showClear]="true"
-                  [fluid]="true"
-                  [appendTo]="'body'"
-                >
-                </p-select>
-                <label>{{ 'Fertilizante' | translate }}</label>
-              </p-floatlabel>
-
-              <!-- Dosis -->
-              <p-floatlabel variant="in" class="mb-4">
-                <p-inputnumber formControlName="dosisKgHa" [min]="0" [fluid]="true" suffix=" Kg/Ha" />
-                <label>{{ 'Dosis' | translate }}</label>
-              </p-floatlabel>
-            </form>
-          }
-        </div>
-      </div>
-      <!-- Footer -->
-      <div class="p-card-footer" style="flex: 0 0 auto;">
-        <p-divider />
-        <div class="flex gap-4 mt-1">
-          <p-button
-            [label]="'Cancelar' | translate"
-            severity="secondary"
-            class="w-full"
-            [outlined]="true"
-            styleClass="w-full"
-            (onClick)="volver()"
-          />
-          <p-button
-            [label]="'Guardar' | translate"
-            class="w-full"
-            styleClass="w-full"
-            [loading]="loading"
-            (onClick)="guardar()"
-            [disabled]="!form?.valid"
-          />
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+    <footer class="application-footer">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true" (onClick)="volver()" />
+      <p-button
+        label="Guardar aplicación"
+        icon="pi pi-check"
+        [loading]="loading"
+        [disabled]="!form?.valid"
+        (onClick)="guardar()"
+      />
+    </footer>
+  </section>
+</main>

@@ -6,6 +6,7 @@ import {
   IDistribuidor,
   IEstablecimiento,
   IFumigacion,
+  ILineaFumigacion,
   IPrincipioActivo,
   IProductor,
   IQuimica,
@@ -65,6 +66,39 @@ export class Fumigacion implements Exactly<IFumigacion, Fumigacion> {
 
   @Prop({ type: Number })
   dosisLtHa?: number;
+
+  @Prop({
+    type: [
+      {
+        _id: false,
+        idAgroquimico: { type: mongoose.Schema.Types.ObjectId },
+        idPrincipioActivo: { type: mongoose.Schema.Types.ObjectId },
+        concentracion: { type: Number, min: 0, max: 100 },
+        dosisLtHa: { type: Number, min: 0 },
+        duracion: { type: Number, min: 0 },
+        agroquimico: {
+          _id: { type: String },
+          nombre: { type: String },
+          idPrincipioActivo: { type: String },
+          concentracion: { type: Number },
+          koc: { type: Number },
+          persistencia: { type: Number },
+          volatilidad: { type: String },
+          segmento: { type: String },
+          subsegmentos: { type: [String] },
+          modoAccion: { type: String },
+        },
+        principioActivo: {
+          _id: { type: String },
+          nombre: { type: String },
+          koc: { type: Number },
+          persistencia: { type: Number },
+        },
+      },
+    ],
+    default: undefined,
+  })
+  lineas?: ILineaFumigacion[];
 
   // Populate
   siembra?: ISiembra;

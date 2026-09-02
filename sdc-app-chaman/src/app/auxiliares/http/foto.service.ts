@@ -23,6 +23,13 @@ export class FotoService {
     });
   }
 
+  public getAudio(id: string): Promise<Blob> {
+    return this.http.get<Blob>(`/fotos/audio`, {
+      params: { id },
+      responseType: 'blob',
+    });
+  }
+
   public listarPorId(id: string): Promise<IFoto> {
     return this.http.get(`/fotos/${id}`);
   }
@@ -52,6 +59,30 @@ export class FotoService {
       form.append(key, Array.isArray(value) ? value.join(',') : String(value));
     });
     return this.http.post<IFoto[]>('/fotos/campo/upload', form);
+  }
+
+  public subirAudio(
+    file: File,
+    data: {
+      idLote: string;
+      idVisita?: string;
+      fechaCaptura?: string;
+      duracionSegundos?: number;
+      titulo?: string;
+      descripcion?: string;
+      etiquetas?: string[];
+      latitud?: number;
+      longitud?: number;
+      precisionMetros?: number;
+    }
+  ): Promise<IFoto> {
+    const form = new FormData();
+    form.append('audio', file, file.name);
+    Object.entries(data).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '') return;
+      form.append(key, Array.isArray(value) ? value.join(',') : String(value));
+    });
+    return this.http.post<IFoto>('/fotos/campo/audio/upload', form);
   }
 
   public actualizar(id: string, data: IUpdateFoto): Promise<IFoto> {

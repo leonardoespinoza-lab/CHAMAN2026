@@ -30,10 +30,10 @@
             <!-- Principio activo -->
             <td style="max-width: 35vw; overflow: scroll">
               <div style="display: flex; flex-direction: column">
-                <span>
-                  {{ item.fertilizante?.nombre }}
-                </span>
-                <span style="color: var(--p-text-muted-color)"> {{ item.dosisKgHa }} Kg/Ha </span>
+                @for (linea of lineas(item); track $index) {
+                  <span>{{ linea.fertilizante?.nombre || item.fertilizante?.nombre }}</span>
+                  <span style="color: var(--p-text-muted-color)">{{ linea.dosisKgHa }} kg/ha</span>
+                }
               </div>
             </td>
 

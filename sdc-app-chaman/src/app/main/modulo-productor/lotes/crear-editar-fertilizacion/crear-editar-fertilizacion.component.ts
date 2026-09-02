@@ -1,7 +1,15 @@
 import { Component } from '@angular/core';
-import { FormControl, FormGroup, Validators } from '@angular/forms';
+import { FormArray, FormControl, FormGroup, Validators } from '@angular/forms';
 import { TranslateService } from '@ngx-translate/core';
-import { ICreateFertilizacion, IFertilizacion, IFertilizante, IListado, IQueryParam } from 'modelos/src';
+import {
+  getLineasFertilizacion,
+  ICreateFertilizacion,
+  IFertilizacion,
+  IFertilizante,
+  ILineaFertilizacion,
+  IListado,
+  IQueryParam,
+} from 'modelos/src';
 import { Subscription } from 'rxjs';
 import { FertilizacionService } from '../../../../auxiliares/http/fertilizacion.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
@@ -41,18 +49,44 @@ export class CrearEditarFertilizacionComponent {
       ? new Date(this.fertilizacion?.fechaFertilizacion)
       : new Date();
 
+    const lineas = getLineasFertilizacion(this.fertilizacion);
     this.form = new FormGroup({
       fechaFertilizacion: new FormControl(fecha, Validators.required),
-      dosisKgHa: new FormControl(this.fertilizacion?.dosisKgHa, Validators.required),
-      idFertilizante: new FormControl(this.fertilizacion?.idFertilizante, Validators.required),
+      lineas: new FormArray(
+        (lineas.length ? lineas : [{}]).map((linea) => this.crearLinea(linea)),
+      ),
     });
+  }
+
+  private crearLinea(linea: ILineaFertilizacion): FormGroup {
+    return new FormGroup({
+      idFertilizante: new FormControl(linea.idFertilizante, Validators.required),
+      dosisKgHa: new FormControl(linea.dosisKgHa, [Validators.required, Validators.min(0.001)]),
+    });
+  }
+
+  public get lineas(): FormArray {
+    return this.form?.get('lineas') as FormArray;
+  }
+
+  public agregarLinea(): void {
+    if (this.lineas.length >= 12) return;
+    this.lineas.push(this.crearLinea({}));
+  }
+
+  public quitarLinea(index: number): void {
+    if (this.lineas.length <= 1) return;
+    this.lineas.removeAt(index);
   }
 
   // ACCIONES
 
   private getData() {
-    const data: ICreateFertilizacion = this.form?.value;
+    const data: ICreateFertilizacion = this.form?.getRawValue();
     data.idLote = this.fertilizacion?.idLote || this.lote?._id;
+    const primera = data.lineas?.[0];
+    data.idFertilizante = primera?.idFertilizante;
+    data.dosisKgHa = primera?.dosisKgHa;
     return data;
   }
 
@@ -106,7 +140,7 @@ export class CrearEditarFertilizacionComponent {
 
     this.titulo = this.fertilizacion
       ? () => this.translate.instant(`Editar fertilización`)
-      : () => this.translate.instant('Fertilizar');
+      : () => this.translate.instant('Nueva fertilización');
     this.createForm();
     await Promise.all([this.listarFertilizantes()]);
     this.loading = false;

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   forwardRef,
   Inject,
   Injectable,
@@ -17,12 +18,15 @@ import {
   IEstadoAlerta,
   IPopulate,
   IPermiso,
+  ILineaFumigacion,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { establecimientosDelPermiso } from '../../auxiliares/authorization/alcance-permiso';
 import { FumigacionsRepository } from './repository';
 import { AlertasService } from '../alerta/service';
 import { SiembrasService } from '../siembra/service';
+import { AgroquimicosService } from '../agroquimico/service';
+import { PrincipioActivosService } from '../principio-activo/service';
 
 @Injectable()
 export class FumigacionsService {
@@ -31,6 +35,8 @@ export class FumigacionsService {
     private alertas: AlertasService,
     @Inject(forwardRef(() => SiembrasService))
     private siembrasService: SiembrasService,
+    private agroquimicosService: AgroquimicosService,
+    private principiosActivosService: PrincipioActivosService,
   ) {}
 
   async getById(id: string, permiso: IPermiso): Promise<IFumigacion> {
@@ -73,6 +79,7 @@ export class FumigacionsService {
     user: IUsuario,
     permiso: IPermiso,
   ): Promise<IFumigacion> {
+    await this.normalizarLineas(data);
     const siembra = await this.siembrasService.getById(data.idSiembra, permiso);
     data.idLote = siembra.idLote;
     data.idEstablecimiento = siembra.idEstablecimiento;
@@ -95,7 +102,15 @@ export class FumigacionsService {
     data: IUpdateFumigacion,
     permiso: IPermiso,
   ): Promise<IFumigacion> {
-    await this.getById(id, permiso);
+    const actual = await this.getById(id, permiso);
+    const normalizado = { ...actual, ...data } as ICreateFumigacion;
+    await this.normalizarLineas(normalizado);
+    data.lineas = normalizado.lineas;
+    data.idAgroquimico = normalizado.idAgroquimico;
+    data.idPrincipioActivo = normalizado.idPrincipioActivo;
+    data.concentracion = normalizado.concentracion;
+    data.dosisLtHa = normalizado.dosisLtHa;
+    data.duracion = normalizado.duracion;
     return await this.repository.update(id, data);
   }
 
@@ -127,6 +142,107 @@ export class FumigacionsService {
   }
 
   // Private
+
+  private async normalizarLineas(
+    data: ICreateFumigacion | IUpdateFumigacion,
+  ): Promise<void> {
+    const recibidas = Array.isArray(data.lineas) && data.lineas.length
+      ? data.lineas
+      : [{
+          idAgroquimico: data.idAgroquimico,
+          idPrincipioActivo: data.idPrincipioActivo,
+          concentracion: data.concentracion,
+          dosisLtHa: data.dosisLtHa,
+          duracion: data.duracion,
+        }];
+    if (!recibidas.length || recibidas.length > 12) {
+      throw new BadRequestException(
+        'La aplicacion debe incluir entre 1 y 12 productos.',
+      );
+    }
+
+    const lineas: ILineaFumigacion[] = [];
+    for (const recibida of recibidas) {
+      const idAgroquimico = String(recibida.idAgroquimico || '').trim() || undefined;
+      const agroquimico = idAgroquimico
+        ? await this.agroquimicosService.getById(idAgroquimico)
+        : undefined;
+      const idPrincipioActivo = String(
+        recibida.idPrincipioActivo || agroquimico?.idPrincipioActivo || '',
+      ).trim();
+      if (!idPrincipioActivo) {
+        throw new BadRequestException(
+          'Cada producto debe indicar al menos un principio activo.',
+        );
+      }
+      const principioActivo = await this.principiosActivosService.getById(
+        idPrincipioActivo,
+      );
+      const concentracion = Number(
+        recibida.concentracion ?? agroquimico?.concentracion,
+      );
+      const dosisLtHa = Number(recibida.dosisLtHa);
+      const duracion = Number(recibida.duracion ?? 15);
+      if (!Number.isFinite(concentracion) || concentracion < 0 || concentracion > 100) {
+        throw new BadRequestException(
+          'La concentracion debe estar comprendida entre 0 y 100%.',
+        );
+      }
+      if (!Number.isFinite(dosisLtHa) || dosisLtHa <= 0) {
+        throw new BadRequestException(
+          'La dosis de cada producto debe ser mayor que cero.',
+        );
+      }
+      if (!Number.isFinite(duracion) || duracion < 0) {
+        throw new BadRequestException(
+          'La duracion del efecto no puede ser negativa.',
+        );
+      }
+      lineas.push({
+        idAgroquimico,
+        idPrincipioActivo,
+        concentracion,
+        dosisLtHa,
+        duracion,
+        agroquimico: agroquimico
+          ? {
+              _id: agroquimico._id,
+              nombre: agroquimico.nombre,
+              idPrincipioActivo: agroquimico.idPrincipioActivo,
+              concentracion: agroquimico.concentracion,
+              koc: agroquimico.koc,
+              persistencia: agroquimico.persistencia,
+              volatilidad: agroquimico.volatilidad,
+              segmento: agroquimico.segmento,
+              subsegmentos: agroquimico.subsegmentos,
+              modoAccion: agroquimico.modoAccion,
+            }
+          : undefined,
+        principioActivo: {
+          _id: principioActivo._id,
+          nombre: principioActivo.nombre,
+          koc: principioActivo.koc,
+          persistencia: principioActivo.persistencia,
+        },
+      });
+    }
+
+    const claves = lineas.map(
+      (linea) => `${linea.idAgroquimico || ''}:${linea.idPrincipioActivo}`,
+    );
+    if (new Set(claves).size !== claves.length) {
+      throw new BadRequestException(
+        'Un producto no puede repetirse dentro de la misma aplicacion.',
+      );
+    }
+    data.lineas = lineas;
+    const primera = lineas[0];
+    data.idAgroquimico = primera.idAgroquimico;
+    data.idPrincipioActivo = primera.idPrincipioActivo;
+    data.concentracion = primera.concentracion;
+    data.dosisLtHa = primera.dosisLtHa;
+    data.duracion = Math.max(...lineas.map((linea) => Number(linea.duracion || 0)));
+  }
 
   private async marcarAlertasTratadas(
     data: ICreateFumigacion,

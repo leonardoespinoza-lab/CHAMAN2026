@@ -1,7 +1,16 @@
 import { Component, OnInit } from '@angular/core';
-import { FormControl, FormGroup, Validators } from '@angular/forms';
+import { FormArray, FormControl, FormGroup, Validators } from '@angular/forms';
 import { TranslateService } from '@ngx-translate/core';
-import { IAgroquimico, ICreateFumigacion, IFumigacion, IListado, IPrincipioActivo, IQueryParam } from 'modelos/src';
+import {
+  getLineasFumigacion,
+  IAgroquimico,
+  ICreateFumigacion,
+  IFumigacion,
+  ILineaFumigacion,
+  IListado,
+  IPrincipioActivo,
+  IQueryParam,
+} from 'modelos/src';
 import { Subscription } from 'rxjs';
 import { FumigacionService } from '../../../../auxiliares/http/fumigacion.service';
 import { HelperService } from '../../../../auxiliares/servicios/helper';
@@ -41,25 +50,54 @@ export class CrearEditarFumigacionComponent implements OnInit {
   private createForm(): void {
     const fecha = this.fumigacion?.fechaFumigacion ? new Date(this.fumigacion?.fechaFumigacion) : new Date();
 
+    const lineas = getLineasFumigacion(this.fumigacion);
     this.form = new FormGroup({
       fechaFumigacion: new FormControl(fecha, Validators.required),
-      idAgroquimico: new FormControl(this.fumigacion?.idAgroquimico),
-      idPrincipioActivo: new FormControl(this.fumigacion?.idPrincipioActivo, Validators.required),
-      concentracion: new FormControl(this.fumigacion?.concentracion, Validators.required),
-      dosisLtHa: new FormControl(this.fumigacion?.dosisLtHa, Validators.required),
-      duracion: new FormControl(this.fumigacion?.duracion || 15, Validators.required),
+      lineas: new FormArray(
+        (lineas.length ? lineas : [{}]).map((linea) => this.crearLinea(linea)),
+      ),
     });
+  }
 
-    this.form.get('idAgroquimico')?.valueChanges.subscribe((idAgroquimico) => {
-      this.autocompletarDesdeAgroquimico(idAgroquimico);
+  private crearLinea(linea: ILineaFumigacion): FormGroup {
+    const grupo = new FormGroup({
+      idAgroquimico: new FormControl(linea.idAgroquimico),
+      idPrincipioActivo: new FormControl(linea.idPrincipioActivo, Validators.required),
+      concentracion: new FormControl(linea.concentracion, [Validators.required, Validators.min(0), Validators.max(100)]),
+      dosisLtHa: new FormControl(linea.dosisLtHa, [Validators.required, Validators.min(0.001)]),
+      duracion: new FormControl(linea.duracion ?? 15, [Validators.required, Validators.min(0)]),
     });
+    grupo.get('idAgroquimico')?.valueChanges.subscribe((idAgroquimico) => {
+      this.autocompletarDesdeAgroquimico(grupo, idAgroquimico || undefined);
+    });
+    return grupo;
+  }
+
+  public get lineas(): FormArray {
+    return this.form?.get('lineas') as FormArray;
+  }
+
+  public agregarLinea(): void {
+    if (this.lineas.length >= 12) return;
+    this.lineas.push(this.crearLinea({}));
+  }
+
+  public quitarLinea(index: number): void {
+    if (this.lineas.length <= 1) return;
+    this.lineas.removeAt(index);
   }
 
   // ACCIONES
 
   private getData() {
-    const data: ICreateFumigacion = this.form?.value;
+    const data: ICreateFumigacion = this.form?.getRawValue();
     data.idSiembra = this.fumigacion?.idSiembra || this.lote?.siembra?._id;
+    const primera = data.lineas?.[0];
+    data.idAgroquimico = primera?.idAgroquimico;
+    data.idPrincipioActivo = primera?.idPrincipioActivo;
+    data.concentracion = primera?.concentracion;
+    data.dosisLtHa = primera?.dosisLtHa;
+    data.duracion = primera?.duracion;
     return data;
   }
 
@@ -132,9 +170,9 @@ export class CrearEditarFumigacionComponent implements OnInit {
     await this.listado.getLastValue('agroquimicos', queryParams);
   }
 
-  private autocompletarDesdeAgroquimico(idAgroquimico?: string): void {
+  private autocompletarDesdeAgroquimico(grupo: FormGroup, idAgroquimico?: string): void {
     const agroquimico = this.agroquimicos.find((item) => item._id === idAgroquimico);
-    if (!agroquimico || !this.form) return;
+    if (!agroquimico) return;
 
     const patch: Partial<ICreateFumigacion> = {};
     if (agroquimico.idPrincipioActivo) {
@@ -143,7 +181,7 @@ export class CrearEditarFumigacionComponent implements OnInit {
     if (agroquimico.concentracion !== undefined && agroquimico.concentracion !== null) {
       patch.concentracion = agroquimico.concentracion;
     }
-    this.form.patchValue(patch, { emitEvent: false });
+    grupo.patchValue(patch, { emitEvent: false });
   }
 
   //
@@ -155,10 +193,9 @@ export class CrearEditarFumigacionComponent implements OnInit {
 
     this.titulo = this.fumigacion
       ? () => this.translate.instant(`Editar fumigación`)
-      : () => this.translate.instant('Fumigar');
+      : () => this.translate.instant('Nueva fumigación');
     this.createForm();
     await Promise.all([this.listarAgroquimicos(), this.listarPrincipiosActivos()]);
-    this.autocompletarDesdeAgroquimico(this.form?.get('idAgroquimico')?.value);
     this.loading = false;
   }
 }

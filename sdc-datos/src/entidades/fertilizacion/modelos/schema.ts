@@ -6,6 +6,7 @@ import {
   IEstablecimiento,
   IFertilizacion,
   IFertilizante,
+  ILineaFertilizacion,
   ILote,
   IProductor,
   IQuimica,
@@ -51,6 +52,24 @@ export class Fertilizacion implements Exactly<IFertilizacion, Fertilizacion> {
 
   @Prop({ type: Number })
   dosisKgHa?: number;
+
+  @Prop({
+    type: [
+      {
+        _id: false,
+        idFertilizante: { type: mongoose.Schema.Types.ObjectId },
+        dosisKgHa: { type: Number, min: 0 },
+        fertilizante: {
+          _id: { type: String },
+          nombre: { type: String },
+          porcentajeN: { type: Number },
+          porcentajeP: { type: Number },
+        },
+      },
+    ],
+    default: undefined,
+  })
+  lineas?: ILineaFertilizacion[];
 
   // Populate
   lote?: ILote;

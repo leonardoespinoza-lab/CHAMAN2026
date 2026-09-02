@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
 import { Router } from '@angular/router';
-import { IFilter, IFumigacion, IListado, IPopulate, IQueryParam } from 'modelos/src';
+import { getLineasFumigacion, IFilter, IFumigacion, IListado, IPopulate, IQueryParam } from 'modelos/src';
 import { Subscription } from 'rxjs';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../../auxiliares/servicios/listados';
@@ -63,18 +63,25 @@ export class CardUltimaFumigacionComponent implements OnInit, OnDestroy, OnChang
       persistencia?: number;
     }[] = [];
     ultimasFumigaciones.forEach((fumigacion) => {
-      principiosActivos.push({
-        nombre: fumigacion.principioActivo?.nombre,
-        concentracion: fumigacion.concentracion,
-        dosis: fumigacion.dosisLtHa,
-        koc: fumigacion.principioActivo?.koc,
-        persistencia: fumigacion.principioActivo?.persistencia,
+      getLineasFumigacion(fumigacion).forEach((linea) => {
+        const principio = linea.principioActivo || fumigacion.principioActivo;
+        principiosActivos.push({
+          nombre: linea.agroquimico?.nombre || principio?.nombre,
+          concentracion: linea.concentracion,
+          dosis: linea.dosisLtHa,
+          koc: principio?.koc,
+          persistencia: principio?.persistencia,
+        });
       });
     });
 
     this.ultimaFumigacion = {
       fechaFumigacion: ultimasFumigaciones[0]?.fechaFumigacion,
-      duracion: ultimasFumigaciones[0]?.duracion,
+      duracion: Math.max(
+        ...ultimasFumigaciones.flatMap((fumigacion) =>
+          getLineasFumigacion(fumigacion).map((linea) => Number(linea.duracion || 0)),
+        ),
+      ),
       principiosActivos,
     };
   }

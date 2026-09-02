@@ -2,6 +2,7 @@ import { IArchivado } from "../compartidos/archivado";
 import { ILote } from "./lote"; // Adjust the path as necessary
 
 export type TOrigenFoto = "ftp" | "hik-connect" | "campo";
+export type TTipoMedioCampo = "imagen" | "audio";
 export type TEstadoAnalisisFoto = "pendiente" | "lista" | "procesando" | "analizada" | "error";
 
 export interface IFoto extends IArchivado {
@@ -12,11 +13,14 @@ export interface IFoto extends IArchivado {
   idLote?: string; // ID del lote al que pertenece la foto
   idVisita?: string;
   fuente?: TOrigenFoto;
+  /** Ausente en registros historicos equivale a imagen. */
+  tipoMedio?: TTipoMedioCampo;
   serialCamara?: string;
   canalCamara?: number;
   nombreOriginal?: string;
   mimeType?: string;
   sizeBytes?: number;
+  duracionSegundos?: number;
   titulo?: string;
   descripcion?: string;
   etiquetas?: string[];

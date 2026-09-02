@@ -1,12 +1,15 @@
 <section class="custom-card chaman-surface field-photo-card">
   <header class="field-card-header">
     <div>
-      <span>Registro fotografico</span>
+      <span>Registro fotográfico</span>
       <strong>Evidencia de campo</strong>
       <small>{{ fotos.length ? fotos.length + ' foto' + (fotos.length === 1 ? '' : 's') + ' documentada' + (fotos.length === 1 ? '' : 's') : 'Sin fotos de recorrida' }}</small>
     </div>
     @if (!helper.soloLectura()) {
-      <p-button label="Tomar foto" icon="pi pi-camera" [rounded]="true" (onClick)="abrirRegistro()" />
+      <div class="field-header-actions">
+        <p-button label="Foto" icon="pi pi-camera" [rounded]="true" (onClick)="abrirRegistro()" />
+        <p-button label="Audio" icon="pi pi-microphone" [rounded]="true" [outlined]="true" (onClick)="abrirRegistroAudio()" />
+      </div>
     }
   </header>
 
@@ -46,10 +49,39 @@
       <i class="pi pi-images"></i>
       <div>
         <strong>Documente el estado real del cultivo</strong>
-        <small>Las fotos quedan fechadas y listas para el futuro motor de analisis por IA.</small>
+        <small>Las fotos quedan fechadas y listas para el futuro motor de análisis por IA.</small>
       </div>
     </div>
   }
+
+
+  <section class="audio-register">
+    <div class="audio-register-heading">
+      <div>
+        <span>Notas de voz</span>
+        <strong>{{ audios.length ? audios.length + ' audio' + (audios.length === 1 ? '' : 's') : 'Sin audios' }}</strong>
+      </div>
+      @if (audios.length) {
+        <button type="button" class="field-card-link chaman-interactive-surface" (click)="verAudios()">
+          Ver todos <i class="pi pi-arrow-right"></i>
+        </button>
+      }
+    </div>
+    @if (audios.length) {
+      <div class="audio-list-compact">
+        @for (audio of audios.slice(0, 2); track audio._id) {
+          <button type="button" class="audio-item chaman-interactive-surface" (click)="verAudios(audio)">
+            <i class="pi pi-volume-up"></i>
+            <span>
+              <strong>{{ audio.titulo || 'Nota de campo' }}</strong>
+              <small>{{ etiquetaFecha(audio.fechaCaptura || audio.fechaCreacion) }} · {{ duracionAudio(audio.duracionSegundos) }}</small>
+            </span>
+            <i class="pi pi-play-circle"></i>
+          </button>
+        }
+      </div>
+    }
+  </section>
 </section>
 
 <p-dialog
@@ -59,7 +91,7 @@
   [resizable]="false"
   [dismissableMask]="true"
   [style]="{ width: 'min(760px, 96vw)' }"
-  header="Nuevo registro fotografico"
+  header="Nuevo registro fotográfico"
   styleClass="field-record-dialog"
 >
   <div class="photo-capture-panel">
@@ -87,12 +119,12 @@
         class="capture-button chaman-interactive-surface"
         role="button"
         tabindex="0"
-        aria-label="Elegir fotos de la galeria"
+        aria-label="Elegir fotos de la galería"
         (keydown.enter)="galleryInput.click()"
         (keydown.space)="$event.preventDefault(); galleryInput.click()"
       >
         <i class="pi pi-images"></i>
-        <span>Elegir de galeria</span>
+        <span>Cargar archivo o galería</span>
         <input
           #galleryInput
           type="file"
@@ -136,12 +168,12 @@
         </select>
       </label>
       <label class="wide">
-        <span>Titulo breve</span>
+        <span>Título breve</span>
         <input pInputText maxlength="120" [(ngModel)]="titulo" placeholder="Ej. Mancha observada en borde norte" />
       </label>
       <label class="wide">
-        <span>Descripcion de campo</span>
-        <textarea pTextarea rows="3" maxlength="3000" [(ngModel)]="descripcion" placeholder="Que se observa, sector, intensidad y contexto de la recorrida"></textarea>
+        <span>Descripción de campo</span>
+        <textarea pTextarea rows="3" maxlength="3000" [(ngModel)]="descripcion" placeholder="Qué se observa, sector, intensidad y contexto de la recorrida"></textarea>
       </label>
       <label class="wide">
         <span>Etiquetas</span>
@@ -154,7 +186,7 @@
       <div>
         <strong>{{ latitud !== undefined ? 'Ubicacion registrada' : 'Ubicacion opcional' }}</strong>
         <small>
-          {{ latitud !== undefined ? (latitud | number:'1.5-5') + ', ' + (longitud | number:'1.5-5') + ' · precision ' + (precisionMetros | number:'1.0-0') + ' m' : 'Permite localizar la observacion dentro del lote.' }}
+          {{ latitud !== undefined ? (latitud | number:'1.5-5') + ', ' + (longitud | number:'1.5-5') + ' · precisión ' + (precisionMetros | number:'1.0-0') + ' m' : 'Permite localizar la observación dentro del lote.' }}
         </small>
       </div>
       @if (latitud === undefined) {
@@ -171,12 +203,75 @@
 </p-dialog>
 
 <p-dialog
+  [(visible)]="dialogoAudio"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="!grabando"
+  [closable]="!grabando"
+  (onHide)="cerrarRegistroAudio()"
+  [style]="{ width: 'min(720px, 96vw)' }"
+  header="Nuevo audio de campo"
+  styleClass="field-record-dialog"
+>
+  <div class="audio-capture-panel">
+    <div class="capture-actions">
+      @if (!grabando) {
+        <button type="button" class="capture-button capture-primary chaman-interactive-surface" (click)="iniciarGrabacion()">
+          <i class="pi pi-microphone"></i><span>Grabar ahora</span>
+        </button>
+      } @else {
+        <button type="button" class="capture-button recording chaman-interactive-surface" (click)="detenerGrabacion()">
+          <i class="pi pi-stop-circle"></i><span>Detener · {{ duracionAudio(segundosGrabados) }}</span>
+        </button>
+      }
+      <label class="capture-button chaman-interactive-surface" role="button" tabindex="0" (keydown.enter)="audioInput.click()" (keydown.space)="$event.preventDefault(); audioInput.click()">
+        <i class="pi pi-upload"></i><span>Cargar archivo</span>
+        <input #audioInput type="file" accept="audio/webm,audio/ogg,audio/mpeg,audio/mp4,audio/wav,.m4a,.mp3,.oga" (change)="seleccionarAudio($event)" />
+      </label>
+    </div>
+
+    @if (archivoAudio) {
+      <article class="audio-preview">
+        <i class="pi pi-wave-pulse"></i>
+        <div>
+          <strong>{{ archivoAudio.file.name }}</strong>
+          <small>{{ duracionAudio(archivoAudio.duracionSegundos) }} · {{ archivoAudio.file.size / 1048576 | number:'1.1-1' }} MB</small>
+          <audio [src]="archivoAudio.preview" controls preload="metadata"></audio>
+        </div>
+        <p-button icon="pi pi-times" severity="danger" [text]="true" [rounded]="true" aria-label="Quitar audio" (onClick)="limpiarAudio()" />
+      </article>
+    }
+
+    <div class="field-form-grid">
+      <label><span>Fecha</span><input pInputText type="date" [(ngModel)]="fechaCaptura" /></label>
+      <label>
+        <span>Vincular a visita (opcional)</span>
+        <select [(ngModel)]="idVisita">
+          <option value="">Registro independiente</option>
+          @for (visita of visitas; track visita._id) {
+            <option [value]="visita._id">{{ etiquetaFecha(visita.fechaVisita) }} · {{ visita.titulo }}</option>
+          }
+        </select>
+      </label>
+      <label class="wide"><span>Título breve</span><input pInputText maxlength="120" [(ngModel)]="titulo" placeholder="Ej. Recorrida del sector norte" /></label>
+      <label class="wide"><span>Descripción</span><textarea pTextarea rows="3" maxlength="3000" [(ngModel)]="descripcion" placeholder="Contexto adicional de la nota de voz"></textarea></label>
+      <label class="wide"><span>Etiquetas</span><input pInputText [(ngModel)]="etiquetas" placeholder="recorrida, enfermedad, malezas (separadas por coma)" /></label>
+    </div>
+  </div>
+  <ng-template #footer>
+    <p-button label="Cancelar" severity="secondary" [text]="true" [disabled]="grabando" (onClick)="cerrarRegistroAudio()" />
+    <p-button label="Guardar audio" icon="pi pi-check" [disabled]="!archivoAudio || grabando" [loading]="subiendo" (onClick)="guardarAudio()" />
+  </ng-template>
+</p-dialog>
+
+<p-dialog
   [(visible)]="dialogoGaleria"
   [modal]="true"
   [draggable]="false"
   [resizable]="false"
   [style]="{ width: 'min(980px, 96vw)' }"
-  header="Galeria de campo"
+  header="Galería de campo"
   styleClass="field-gallery-dialog"
 >
   <div class="field-gallery">
@@ -212,7 +307,7 @@
         }
         <div class="gallery-metadata">
           <span>{{ etiquetaFecha(foto.fechaCaptura || foto.fechaCreacion) }}</span>
-          <h3>{{ foto.titulo || 'Registro fotografico de campo' }}</h3>
+          <h3>{{ foto.titulo || 'Registro fotográfico de campo' }}</h3>
           @if (foto.descripcion) { <p>{{ foto.descripcion }}</p> }
           <small>Registrada por {{ foto.creadaPorNombre || 'usuario Chaman' }}</small>
           @if (foto.idVisita) { <small>Visita: {{ etiquetaVisita(foto.idVisita) }}</small> }
@@ -222,6 +317,41 @@
           }
         </div>
       </main>
+    }
+  </div>
+</p-dialog>
+
+<p-dialog
+  [(visible)]="dialogoAudios"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(760px, 96vw)' }"
+  header="Audios de campo"
+>
+  <div class="audio-gallery">
+    @for (audio of audios; track audio._id) {
+      <article [class.active]="audioSeleccionado?._id === audio._id">
+        <button type="button" class="audio-gallery-title chaman-interactive-surface" (click)="audioSeleccionado = audio">
+          <i class="pi pi-volume-up"></i>
+          <span><strong>{{ audio.titulo || 'Nota de campo' }}</strong><small>{{ etiquetaFecha(audio.fechaCaptura || audio.fechaCreacion) }} · {{ duracionAudio(audio.duracionSegundos) }}</small></span>
+        </button>
+        @if (audioSeleccionado?._id === audio._id) {
+          <div class="audio-gallery-detail">
+            @if (audioDe(audio); as audioUrl) {
+              <audio [src]="audioUrl" controls preload="metadata"></audio>
+            } @else {
+              <small>El archivo no esta disponible en este momento.</small>
+            }
+            @if (audio.descripcion) { <p>{{ audio.descripcion }}</p> }
+            <small>Registrado por {{ audio.creadaPorNombre || 'usuario Chaman' }}</small>
+            @if (audio.idVisita) { <small>Visita: {{ etiquetaVisita(audio.idVisita) }}</small> }
+            @if (!helper.soloLectura()) {
+              <p-button label="Archivar" icon="pi pi-archive" severity="danger" [outlined]="true" size="small" (onClick)="archivarAudio(audio)" />
+            }
+          </div>
+        }
+      </article>
     }
   </div>
 </p-dialog>

@@ -11,6 +11,12 @@ interface ArchivoFotoCampo {
   preview: string;
 }
 
+interface ArchivoAudioCampo {
+  file: File;
+  preview: string;
+  duracionSegundos?: number;
+}
+
 @Component({
   selector: 'app-card-registro-fotografico',
   standalone: true,
@@ -22,13 +28,20 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
   @Input() lote?: ILote;
 
   fotos: IFoto[] = [];
+  audios: IFoto[] = [];
   visitas: IVisitaLote[] = [];
   cargando = false;
   subiendo = false;
   dialogoRegistro = false;
   dialogoGaleria = false;
+  dialogoAudio = false;
+  dialogoAudios = false;
   fotoSeleccionada?: IFoto;
+  audioSeleccionado?: IFoto;
   archivos: ArchivoFotoCampo[] = [];
+  archivoAudio?: ArchivoAudioCampo;
+  grabando = false;
+  segundosGrabados = 0;
   titulo = '';
   descripcion = '';
   etiquetas = '';
@@ -39,7 +52,12 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
   precisionMetros?: number;
   buscandoUbicacion = false;
   private imagenesAutenticadas = new Map<string, string>();
+  private audiosAutenticados = new Map<string, string>();
   private cicloCargaImagenes = 0;
+  private mediaRecorder?: MediaRecorder;
+  private mediaStream?: MediaStream;
+  private fragmentosAudio: Blob[] = [];
+  private grabacionInterval?: ReturnType<typeof setInterval>;
 
   constructor(
     private fotosService: FotoService,
@@ -56,13 +74,18 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
     this.cicloCargaImagenes += 1;
     this.liberarImagenesAutenticadas();
     this.liberarPreviews();
+    this.liberarAudiosAutenticados();
+    this.limpiarAudio();
+    this.detenerFlujoGrabacion();
   }
 
   async cargar(): Promise<void> {
     if (!this.lote?._id) return;
     const ciclo = ++this.cicloCargaImagenes;
     this.liberarImagenesAutenticadas();
+    this.liberarAudiosAutenticados();
     this.fotos = [];
+    this.audios = [];
     this.cargando = true;
     try {
       const [fotos, visitas] = await Promise.all([
@@ -70,11 +93,16 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
         this.visitasService.listarPorLote(this.lote._id).catch(() => ({ datos: [], totalCount: 0 })),
       ]);
       if (ciclo !== this.cicloCargaImagenes) return;
-      this.fotos = (fotos.datos || [])
+      const registros = (fotos.datos || [])
         .filter((foto) => foto.fuente === 'campo' && !foto.archivado)
         .sort((a, b) => this.timestamp(b.fechaCaptura || b.fechaCreacion) - this.timestamp(a.fechaCaptura || a.fechaCreacion));
+      this.fotos = registros.filter((foto) => foto.tipoMedio !== 'audio');
+      this.audios = registros.filter((foto) => foto.tipoMedio === 'audio');
       this.visitas = (visitas.datos || []).filter((visita) => !visita.archivado);
-      await Promise.all(this.fotos.map((foto) => this.cargarImagenAutenticada(foto, ciclo)));
+      await Promise.all([
+        ...this.fotos.map((foto) => this.cargarImagenAutenticada(foto, ciclo)),
+        ...this.audios.map((audio) => this.cargarAudioAutenticado(audio, ciclo)),
+      ]);
     } catch (error) {
       if (ciclo === this.cicloCargaImagenes) this.helper.notifError(error);
     } finally {
@@ -85,6 +113,69 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
   abrirRegistro(): void {
     this.limpiarFormulario();
     this.dialogoRegistro = true;
+  }
+
+  abrirRegistroAudio(): void {
+    this.limpiarFormulario();
+    this.limpiarAudio();
+    this.dialogoAudio = true;
+  }
+
+  async seleccionarAudio(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    try {
+      await this.prepararAudio(file);
+    } catch (error) {
+      this.helper.notifError(error);
+    }
+  }
+
+  async iniciarGrabacion(): Promise<void> {
+    if (this.grabando) return;
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      this.helper.notifError('Este navegador no permite grabar audio. Puede seleccionar un archivo.');
+      return;
+    }
+    try {
+      this.limpiarAudio();
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = this.mimeGrabacionSoportado();
+      this.mediaRecorder = mimeType
+        ? new MediaRecorder(this.mediaStream, { mimeType })
+        : new MediaRecorder(this.mediaStream);
+      this.fragmentosAudio = [];
+      this.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size) this.fragmentosAudio.push(event.data);
+      };
+      this.mediaRecorder.onstop = () => void this.finalizarGrabacion();
+      this.mediaRecorder.start(500);
+      this.grabando = true;
+      this.segundosGrabados = 0;
+      this.grabacionInterval = setInterval(() => {
+        this.segundosGrabados += 1;
+        if (this.segundosGrabados >= 900) this.detenerGrabacion();
+      }, 1000);
+    } catch {
+      this.detenerFlujoGrabacion();
+      this.helper.notifError('No se pudo acceder al microfono. Revise el permiso del navegador.');
+    }
+  }
+
+  detenerGrabacion(): void {
+    if (this.mediaRecorder?.state === 'recording') this.mediaRecorder.stop();
+  }
+
+  cerrarRegistroAudio(): void {
+    if (this.mediaRecorder?.state === 'recording') {
+      this.mediaRecorder.onstop = null;
+      this.mediaRecorder.stop();
+    }
+    this.detenerFlujoGrabacion();
+    this.limpiarAudio();
+    this.dialogoAudio = false;
   }
 
   async seleccionarArchivos(event: Event): Promise<void> {
@@ -163,6 +254,34 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
     }
   }
 
+  async guardarAudio(): Promise<void> {
+    if (!this.lote?._id || !this.archivoAudio || this.subiendo) return;
+    this.subiendo = true;
+    try {
+      await this.fotosService.subirAudio(this.archivoAudio.file, {
+        idLote: this.lote._id,
+        idVisita: this.idVisita || undefined,
+        fechaCaptura: new Date(`${this.fechaCaptura}T12:00:00`).toISOString(),
+        duracionSegundos: this.archivoAudio.duracionSegundos,
+        titulo: this.titulo,
+        descripcion: this.descripcion,
+        etiquetas: this.etiquetas.split(',').map((x) => x.trim()).filter(Boolean),
+        latitud: this.latitud,
+        longitud: this.longitud,
+        precisionMetros: this.precisionMetros,
+      });
+      this.helper.notifSuccess('Audio registrado');
+      this.dialogoAudio = false;
+      this.limpiarFormulario();
+      this.limpiarAudio();
+      await this.cargar();
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.subiendo = false;
+    }
+  }
+
   verFoto(foto: IFoto): void {
     this.fotoSeleccionada = foto;
     this.dialogoGaleria = true;
@@ -170,6 +289,15 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
 
   imagenDe(foto: IFoto): string {
     return foto._id ? this.imagenesAutenticadas.get(foto._id) || '' : '';
+  }
+
+  audioDe(audio: IFoto): string {
+    return audio._id ? this.audiosAutenticados.get(audio._id) || '' : '';
+  }
+
+  verAudios(audio?: IFoto): void {
+    this.audioSeleccionado = audio || this.audios[0];
+    this.dialogoAudios = true;
   }
 
   archivarFoto(foto: IFoto): void {
@@ -194,6 +322,35 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
     });
   }
 
+  archivarAudio(audio: IFoto): void {
+    if (!audio._id) return;
+    this.confirmation.confirm({
+      header: 'Archivar audio de campo',
+      message: 'El audio dejara de mostrarse, pero se conservara su trazabilidad.',
+      icon: 'pi pi-archive',
+      acceptLabel: 'Archivar',
+      rejectLabel: 'Cancelar',
+      accept: async () => {
+        try {
+          await this.fotosService.eliminar(audio._id!);
+          const url = this.audiosAutenticados.get(audio._id!);
+          if (url) URL.revokeObjectURL(url);
+          this.audiosAutenticados.delete(audio._id!);
+          this.audios = this.audios.filter((item) => item._id !== audio._id);
+          this.audioSeleccionado = this.audios[0];
+          this.helper.notifSuccess('Audio archivado');
+        } catch (error) {
+          this.helper.notifError(error);
+        }
+      },
+    });
+  }
+
+  duracionAudio(value?: number): string {
+    const total = Math.max(0, Math.round(Number(value || 0)));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+  }
+
   etiquetaFecha(value?: string): string {
     if (!value) return 'Sin fecha';
     return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
@@ -213,6 +370,92 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
     this.idVisita = '';
     this.fechaCaptura = this.fechaInput(new Date());
     this.quitarUbicacion();
+  }
+
+  private async prepararAudio(file: File): Promise<void> {
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    const mimePorExtension: Record<string, string> = {
+      webm: 'audio/webm',
+      ogg: 'audio/ogg',
+      oga: 'audio/ogg',
+      mp3: 'audio/mpeg',
+      m4a: 'audio/mp4',
+      mp4: 'audio/mp4',
+      wav: 'audio/wav',
+    };
+    const mime = String(file.type || mimePorExtension[extension || ''] || '').split(';', 1)[0];
+    if (!/^audio\/(webm|ogg|mpeg|mp3|mp4|m4a|x-m4a|wav|wave|x-wav)$/i.test(mime)) {
+      throw new Error('Formato de audio no admitido. Use WebM, OGG, MP3, M4A o WAV.');
+    }
+    if (!file.size || file.size > 25 * 1024 * 1024) {
+      throw new Error('El audio debe pesar menos de 25 MB.');
+    }
+    if (this.archivoAudio?.preview) URL.revokeObjectURL(this.archivoAudio.preview);
+    const normalizado = file.type
+      ? file
+      : new File([file], file.name, { type: mime, lastModified: file.lastModified });
+    const preview = URL.createObjectURL(normalizado);
+    this.archivoAudio = {
+      file: normalizado,
+      preview,
+      duracionSegundos: await this.leerDuracionAudio(preview),
+    };
+  }
+
+  private leerDuracionAudio(url: string): Promise<number | undefined> {
+    return new Promise((resolve) => {
+      const media = new Audio();
+      const finalizar = () => {
+        const duracion = Number(media.duration);
+        media.src = '';
+        resolve(Number.isFinite(duracion) ? Math.round(duracion) : undefined);
+      };
+      media.preload = 'metadata';
+      media.onloadedmetadata = finalizar;
+      media.onerror = () => resolve(undefined);
+      media.src = url;
+    });
+  }
+
+  private mimeGrabacionSoportado(): string | undefined {
+    return ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus']
+      .find((type) => MediaRecorder.isTypeSupported(type));
+  }
+
+  private async finalizarGrabacion(): Promise<void> {
+    const type = this.mediaRecorder?.mimeType || this.fragmentosAudio[0]?.type || 'audio/webm';
+    const blob = new Blob(this.fragmentosAudio, { type });
+    const extension = /mp4/i.test(type) ? 'm4a' : /ogg/i.test(type) ? 'ogg' : 'webm';
+    const file = new File([blob], `audio-campo-${Date.now()}.${extension}`, {
+      type: type.split(';', 1)[0],
+      lastModified: Date.now(),
+    });
+    const duracion = this.segundosGrabados;
+    this.detenerFlujoGrabacion();
+    try {
+      await this.prepararAudio(file);
+      if (this.archivoAudio && !this.archivoAudio.duracionSegundos) {
+        this.archivoAudio.duracionSegundos = duracion;
+      }
+    } catch (error) {
+      this.helper.notifError(error);
+    }
+  }
+
+  private detenerFlujoGrabacion(): void {
+    if (this.grabacionInterval) clearInterval(this.grabacionInterval);
+    this.grabacionInterval = undefined;
+    this.mediaStream?.getTracks().forEach((track) => track.stop());
+    this.mediaStream = undefined;
+    this.mediaRecorder = undefined;
+    this.fragmentosAudio = [];
+    this.grabando = false;
+  }
+
+  public limpiarAudio(): void {
+    if (this.archivoAudio?.preview) URL.revokeObjectURL(this.archivoAudio.preview);
+    this.archivoAudio = undefined;
+    this.segundosGrabados = 0;
   }
 
   private liberarPreviews(): void {
@@ -245,6 +488,23 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
     }
   }
 
+  private async cargarAudioAutenticado(audio: IFoto, ciclo: number): Promise<void> {
+    if (!audio._id) return;
+    try {
+      const blob = await this.fotosService.getAudio(audio._id);
+      if (ciclo !== this.cicloCargaImagenes || !this.audios.some((item) => item._id === audio._id)) return;
+      const mime = /^audio\//i.test(blob.type) ? blob.type : String(audio.mimeType || 'audio/webm');
+      const objectUrl = URL.createObjectURL(blob.slice(0, blob.size, mime));
+      if (ciclo !== this.cicloCargaImagenes || !this.audios.some((item) => item._id === audio._id)) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
+      this.audiosAutenticados.set(audio._id, objectUrl);
+    } catch {
+      // La metadata permanece visible aunque el archivo no pueda recuperarse.
+    }
+  }
+
   private blobRenderizable(blob: Blob, foto: IFoto): Blob {
     if (blob.type.startsWith('image/')) return blob;
     const mime = /^image\/(jpeg|png|webp)$/i.test(String(foto.mimeType || ''))
@@ -272,6 +532,11 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
   private liberarImagenesAutenticadas(): void {
     this.imagenesAutenticadas.forEach((url) => URL.revokeObjectURL(url));
     this.imagenesAutenticadas.clear();
+  }
+
+  private liberarAudiosAutenticados(): void {
+    this.audiosAutenticados.forEach((url) => URL.revokeObjectURL(url));
+    this.audiosAutenticados.clear();
   }
 
   private fechaInput(value: Date): string {

@@ -25,6 +25,9 @@ export class Foto implements Exactly<IFoto, Foto> {
   @Prop({ type: String, enum: ['ftp', 'hik-connect', 'campo'], index: true })
   fuente?: IFoto['fuente'];
 
+  @Prop({ type: String, enum: ['imagen', 'audio'] })
+  tipoMedio?: IFoto['tipoMedio'];
+
   @Prop({ uppercase: true })
   serialCamara?: string;
 
@@ -39,6 +42,9 @@ export class Foto implements Exactly<IFoto, Foto> {
 
   @Prop({ type: Number, min: 0 })
   sizeBytes?: number;
+
+  @Prop({ type: Number, min: 0 })
+  duracionSegundos?: number;
 
   @Prop({ trim: true, maxlength: 120 })
   titulo?: string;

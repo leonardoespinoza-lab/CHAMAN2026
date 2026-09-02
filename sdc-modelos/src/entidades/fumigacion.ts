@@ -6,6 +6,17 @@ import { IProductor } from "./productor";
 import { IQuimica } from "./quimica";
 import { ISiembra } from "./siembra";
 
+export interface ILineaFumigacion {
+  idAgroquimico?: string;
+  idPrincipioActivo?: string;
+  concentracion?: number;
+  dosisLtHa?: number;
+  duracion?: number;
+  /** Copias historicas del producto al momento de registrar la aplicacion. */
+  agroquimico?: IAgroquimico;
+  principioActivo?: IPrincipioActivo;
+}
+
 export interface IFumigacion {
   _id?: string;
   // Tenant
@@ -24,6 +35,8 @@ export interface IFumigacion {
   idPrincipioActivo?: string;
   concentracion?: number;
   dosisLtHa?: number;
+  /** Productos usados dentro de la misma labor de pulverizacion. */
+  lineas?: ILineaFumigacion[];
 
   // Populate
   siembra?: ISiembra;
@@ -58,3 +71,29 @@ type OmitirUpdate =
   | "principioActivo";
 export interface IUpdateFumigacion
   extends Omit<Partial<IFumigacion>, OmitirUpdate> {}
+
+export function getLineasFumigacion(
+  aplicacion?: Partial<IFumigacion>,
+): ILineaFumigacion[] {
+  if (Array.isArray(aplicacion?.lineas) && aplicacion.lineas.length) {
+    return aplicacion.lineas;
+  }
+  if (
+    !aplicacion?.idAgroquimico &&
+    !aplicacion?.idPrincipioActivo &&
+    aplicacion?.dosisLtHa === undefined
+  ) {
+    return [];
+  }
+  return [
+    {
+      idAgroquimico: aplicacion.idAgroquimico,
+      idPrincipioActivo: aplicacion.idPrincipioActivo,
+      concentracion: aplicacion.concentracion,
+      dosisLtHa: aplicacion.dosisLtHa,
+      duracion: aplicacion.duracion,
+      agroquimico: aplicacion.agroquimico,
+      principioActivo: aplicacion.principioActivo,
+    },
+  ];
+}

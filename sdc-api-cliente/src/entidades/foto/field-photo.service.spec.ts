@@ -4,6 +4,7 @@ import {
   FotosRepository,
   isPrivateFieldPhotoStorageUrl,
   requireTimelapseAdminToken,
+  resolveStoredAudioUrl,
   resolveStoredPhotoUrl,
 } from './repository';
 
@@ -18,12 +19,20 @@ describe('FotosService - registro fotografico de campo', () => {
       }),
       getLoteById: jest.fn().mockResolvedValue({ _id: 'lote-1', idProductor: 'productor-1' }),
       getImagen: jest.fn().mockResolvedValue(Buffer.from([0xff, 0xd8, 0xff])),
+      getAudio: jest.fn().mockResolvedValue(Buffer.from('OggSdatos')),
       uploadCampo: jest.fn().mockResolvedValue({
         publicUrl: 'https://testing.example/imagenes/CAMPO/lote-1/foto.jpg',
         size: 4,
         contentType: 'image/jpeg',
         fechaCaptura: '2026-07-22T12:00:00.000Z',
       }),
+      uploadAudio: jest.fn().mockResolvedValue({
+        publicUrl: 'https://testing.example/audios/AUDIO-CAMPO/lote-1/nota.ogg',
+        size: 9,
+        contentType: 'audio/ogg',
+        fechaCaptura: '2026-09-02T12:00:00.000Z',
+      }),
+      get: jest.fn().mockResolvedValue({ datos: [], totalCount: 0 }),
       create: jest.fn((data) => Promise.resolve({ _id: 'foto-1', ...data })),
       update: jest.fn((id, data) => Promise.resolve({ _id: id, ...data })),
     };
@@ -45,6 +54,20 @@ describe('FotosService - registro fotografico de campo', () => {
     mimetype: 'image/jpeg',
     size: 4,
   };
+
+  it('mantiene audios fuera de los listados historicos de camaras y time-lapse', async () => {
+    const { service, repository } = subject();
+    await service.get({ filter: JSON.stringify({ idLote: 'lote-1' }) }, {
+      nivel: 'Admin',
+      rol: 'Admin',
+    } as any);
+
+    const query = repository.get.mock.calls[0][0];
+    expect(JSON.parse(query.filter)).toEqual({
+      idLote: 'lote-1',
+      tipoMedio: { $ne: 'audio' },
+    });
+  });
 
   it('guarda el binario fuera de Mongo y registra solo su evidencia y auditoria', async () => {
     const { service, repository } = subject();
@@ -245,6 +268,60 @@ describe('FotosService - registro fotografico de campo', () => {
       'Foto no encontrada',
     );
     expect(repository.getImagen).not.toHaveBeenCalled();
+  });
+
+  it('registra un audio fuera de Mongo con tipo y auditoria separados', async () => {
+    const { service, repository } = subject();
+    const audio = {
+      buffer: Buffer.from('OggSdatos'),
+      originalname: 'recorrida.ogg',
+      mimetype: 'audio/ogg',
+      size: 9,
+    };
+    await expect(
+      service.uploadAudio(
+        audio,
+        { idLote: 'lote-1', titulo: 'Recorrida norte', duracionSegundos: 12 },
+        permiso,
+        user,
+      ),
+    ).resolves.toEqual(expect.objectContaining({ tipoMedio: 'audio' }));
+    expect(repository.uploadAudio).toHaveBeenCalledWith('lote-1', audio);
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tipoMedio: 'audio',
+        url: expect.stringContaining('/audios/AUDIO-CAMPO/'),
+        duracionSegundos: 12,
+      }),
+    );
+  });
+
+  it('rechaza un archivo disfrazado de audio', async () => {
+    const { service, repository } = subject();
+    await expect(
+      service.uploadAudio(
+        { buffer: Buffer.from('texto'), originalname: 'falso.mp3', mimetype: 'audio/mpeg', size: 5 },
+        { idLote: 'lote-1' },
+        permiso,
+        user,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repository.uploadAudio).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveStoredAudioUrl - politica anti SSRF', () => {
+  const trustedBase = 'https://ftp.chaman.example';
+  it('solo reconstruye rutas del namespace privado de audio', () => {
+    expect(
+      resolveStoredAudioUrl(
+        'https://legacy.example/audios/AUDIO-CAMPO/lote-1/nota.ogg',
+        trustedBase,
+      ),
+    ).toBe('https://ftp.chaman.example/audios/AUDIO-CAMPO/lote-1/nota.ogg');
+    expect(() =>
+      resolveStoredAudioUrl('http://169.254.169.254/latest/meta-data', trustedBase),
+    ).toThrow('fuente del audio');
   });
 });
 

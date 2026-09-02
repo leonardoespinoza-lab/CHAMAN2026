@@ -50,6 +50,22 @@ export class FotosRepository {
     });
   }
 
+  async getAudio(
+    audio: IFoto,
+    configuredToken = TIMELAPSE_ADMIN_TOKEN,
+  ): Promise<any> {
+    const url = resolveStoredAudioUrl(audio?.url);
+    const operationalToken = requireTimelapseAdminToken(configuredToken);
+    return await this.axios.GET(url, {
+      responseType: 'arraybuffer',
+      maxRedirects: 0,
+      headers: {
+        Authorization: `Bearer ${operationalToken}`,
+        'x-timelapse-token': operationalToken,
+      },
+    });
+  }
+
   async create(data: ICreateFoto): Promise<IFoto> {
     return await this.axios.POST<IFoto>(`${API_DATOS}/fotos`, data);
   }
@@ -80,6 +96,33 @@ export class FotosRepository {
           'x-original-name': encodeURIComponent(file.originalname || 'foto-campo.jpg'),
         },
         maxBodyLength: 12 * 1024 * 1024,
+        timeout: 30000,
+      },
+    );
+  }
+
+  async uploadAudio(
+    idLote: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string },
+  ): Promise<{
+    publicUrl: string;
+    size: number;
+    contentType: string;
+    fechaCaptura: string;
+  }> {
+    const operationalToken = requireTimelapseAdminToken();
+    return await this.axios.POST(
+      `${API_FTP}/field-audio/upload/${encodeURIComponent(idLote)}`,
+      file.buffer,
+      {
+        headers: {
+          Authorization: `Bearer ${operationalToken}`,
+          'x-timelapse-token': operationalToken,
+          'Content-Type': file.mimetype,
+          'Content-Length': String(file.buffer.length),
+          'x-original-name': encodeURIComponent(file.originalname || 'audio-campo.webm'),
+        },
+        maxBodyLength: 25 * 1024 * 1024,
         timeout: 30000,
       },
     );
@@ -179,4 +222,50 @@ export function isPrivateFieldPhotoStorageUrl(value: string): boolean {
     segments[0]?.toLowerCase() === 'imagenes' &&
     segments[1]?.toLowerCase() === 'campo'
   );
+}
+
+export function resolveStoredAudioUrl(
+  storedUrl: string | undefined,
+  trustedBase = API_FTP,
+): string {
+  const raw = String(storedUrl || '').trim();
+  if (!raw || /[\u0000-\u001f\u007f]/.test(raw)) {
+    throw new BadRequestException('El audio no tiene una ubicacion valida.');
+  }
+  let base: URL;
+  let stored: URL;
+  try {
+    base = new URL(trustedBase);
+    stored = new URL(raw, base);
+  } catch {
+    throw new BadRequestException('El audio no tiene una ubicacion valida.');
+  }
+  if (
+    !['http:', 'https:'].includes(base.protocol) ||
+    base.username ||
+    base.password ||
+    !['http:', 'https:'].includes(stored.protocol) ||
+    stored.username ||
+    stored.password ||
+    stored.search ||
+    stored.hash
+  ) {
+    throw new BadRequestException('La fuente del audio no esta permitida.');
+  }
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(stored.pathname);
+  } catch {
+    throw new BadRequestException('El audio no tiene una ruta valida.');
+  }
+  const segments = decodedPath.split('/');
+  if (
+    !decodedPath.startsWith('/audios/AUDIO-CAMPO/') ||
+    !/^\/audios\/AUDIO-CAMPO\/[A-Za-z0-9._/-]+\.(webm|ogg|oga|mp3|m4a|mp4|wav)$/i.test(decodedPath) ||
+    decodedPath.includes('\\') ||
+    segments.slice(2).some((segment) => !segment || segment === '.' || segment === '..')
+  ) {
+    throw new BadRequestException('La fuente del audio no esta permitida.');
+  }
+  return new URL(decodedPath, `${base.origin}/`).toString();
 }

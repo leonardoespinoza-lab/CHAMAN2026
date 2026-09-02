@@ -2,11 +2,15 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import path from 'node:path';
 import {
+  assertValidFieldAudio,
   assertValidFieldPhoto,
+  buildFieldAudioStoragePlan,
   buildFieldPhotoStoragePlan,
   extractOperationalToken,
   hasOperationalAccess,
   isPrivateFieldPhotoPath,
+  isPrivateFieldAudioPath,
+  privateFieldAudioAccess,
   privateFieldPhotoAccess,
 } from './field-photo-security';
 
@@ -27,6 +31,43 @@ test('extrae y valida el token operativo sin aceptar valores parciales', () => {
     false,
   );
   assert.equal(hasOperationalAccess({}, ''), false);
+});
+
+test('valida y confina audios de campo en un namespace independiente', () => {
+  const baseDir = path.resolve('storage-test');
+  const plan = buildFieldAudioStoragePlan({
+    baseDir,
+    idLote: '../../lote sensible',
+    originalName: '../../nota.mp3',
+    contentType: 'audio/mpeg',
+    capturedAt: new Date('2026-09-02T12:00:00.000Z'),
+    nonce: '456',
+  });
+  assert.equal(plan.storedName, '456-nota.mp3');
+  assert.equal(plan.targetPath.startsWith(path.join(baseDir, 'AUDIO-CAMPO') + path.sep), true);
+  assert.equal(isPrivateFieldAudioPath('/audios/AUDIO-CAMPO/lote/nota.mp3'), true);
+  assert.equal(isPrivateFieldPhotoPath('/audios/AUDIO-CAMPO/lote/nota.mp3'), false);
+  assert.doesNotThrow(() => assertValidFieldAudio(Buffer.from('OggSdatos'), 'audio/ogg'));
+  assert.throws(() => assertValidFieldAudio(Buffer.from('no-es-audio'), 'audio/mpeg'), /contenido/i);
+});
+
+test('oculta los audios de campo si falta el token operativo', () => {
+  const middleware = privateFieldAudioAccess('secreto-operativo');
+  let statusCode = 0;
+  let nextCalls = 0;
+  middleware(
+    {
+      originalUrl: '/audios/AUDIO-CAMPO/lote/nota.webm',
+      get: () => undefined,
+    } as any,
+    {
+      status(code: number) { statusCode = code; return this; },
+      json() { return this; },
+    } as any,
+    () => { nextCalls += 1; },
+  );
+  assert.equal(statusCode, 404);
+  assert.equal(nextCalls, 0);
 });
 
 test('identifica CAMPO como privado aun codificado o con otra capitalizacion', () => {

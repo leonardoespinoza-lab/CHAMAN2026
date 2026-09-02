@@ -6,6 +6,13 @@ import { IProductor } from "./productor";
 import { IQuimica } from "./quimica";
 import { ISiembra } from "./siembra";
 
+export interface ILineaFertilizacion {
+  idFertilizante?: string;
+  dosisKgHa?: number;
+  /** Copia historica del insumo al momento de registrar la aplicacion. */
+  fertilizante?: IFertilizante;
+}
+
 export interface IFertilizacion {
   _id?: string;
   // Tenant
@@ -20,6 +27,12 @@ export interface IFertilizacion {
   idLote?: string;
   idFertilizante?: string;
   dosisKgHa?: number;
+  /**
+   * Productos aplicados en una misma labor. Los campos simples anteriores se
+   * conservan con la primera linea para compatibilidad con registros y
+   * consumidores legacy.
+   */
+  lineas?: ILineaFertilizacion[];
 
   // Populate
   lote?: ILote;
@@ -51,3 +64,21 @@ type OmitirUpdate =
   | "establecimiento";
 export interface IUpdateFertilizacion
   extends Omit<Partial<IFertilizacion>, OmitirUpdate> {}
+
+export function getLineasFertilizacion(
+  aplicacion?: Partial<IFertilizacion>,
+): ILineaFertilizacion[] {
+  if (Array.isArray(aplicacion?.lineas) && aplicacion.lineas.length) {
+    return aplicacion.lineas;
+  }
+  if (!aplicacion?.idFertilizante && aplicacion?.dosisKgHa === undefined) {
+    return [];
+  }
+  return [
+    {
+      idFertilizante: aplicacion.idFertilizante,
+      dosisKgHa: aplicacion.dosisKgHa,
+      fertilizante: aplicacion.fertilizante,
+    },
+  ];
+}

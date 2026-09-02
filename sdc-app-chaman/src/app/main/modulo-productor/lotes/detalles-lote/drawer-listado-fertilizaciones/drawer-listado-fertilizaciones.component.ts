@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { IFertilizacion, IFumigacion } from 'modelos/src';
+import { getLineasFertilizacion, IFertilizacion } from 'modelos/src';
 import { ConfirmationService } from 'primeng/api';
 import { FertilizacionService } from '../../../../../auxiliares/http/fertilizacion.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
@@ -33,12 +33,16 @@ export class DrawerListadoFertilizacionesComponent implements OnInit, OnDestroy 
     private params: ParamsService
   ) {}
 
-  public editar(dato: IFumigacion): void {
+  public lineas(dato: IFertilizacion) {
+    return getLineasFertilizacion(dato);
+  }
+
+  public editar(dato: IFertilizacion): void {
     this.params.set('editFertilizacion', dato);
     this.router.navigate(['/lotes/fertilizar/', dato._id]);
   }
 
-  public async eliminar(dato: IFumigacion) {
+  public async eliminar(dato: IFertilizacion) {
     this.confirmationService.confirm({
       // target: event.target as EventTarget,
       header: this.translate.instant('Por favor, confirme la acción'),

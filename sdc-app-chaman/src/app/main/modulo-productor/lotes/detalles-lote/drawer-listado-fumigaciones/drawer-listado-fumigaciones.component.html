@@ -30,12 +30,10 @@
             <!-- Principio activo -->
             <td style="max-width: 35vw; overflow: scroll">
               <div style="display: flex; flex-direction: column">
-                <span>
-                  {{ item.principioActivo?.nombre | titlecase }}
-                </span>
-                <span style="color: var(--p-text-muted-color)">
-                  {{ item.concentracion }} % - {{ item.dosisLtHa }} L/Ha
-                </span>
+                @for (linea of lineas(item); track $index) {
+                  <span>{{ (linea.agroquimico?.nombre || linea.principioActivo?.nombre || item.principioActivo?.nombre) | titlecase }}</span>
+                  <span style="color: var(--p-text-muted-color)">{{ linea.concentracion }}% · {{ linea.dosisLtHa }} l/ha</span>
+                }
               </div>
             </td>
 

@@ -27,7 +27,7 @@
       <article class="date-box">
         <span>Fecha</span>
         <strong>{{ ultimaFertilizacion.fechaFertilizacion | date: 'shortDate' }}</strong>
-        <small>Ultima carga</small>
+        <small>Última carga</small>
       </article>
 
       <section class="composition-list">
@@ -45,15 +45,18 @@
       </section>
     </div>
   } @else {
-    <div class="application-empty">
-      <p-message severity="info">{{ 'El lote no fue fertilizado' | translate }}</p-message>
-      <small>La base local ya tiene fertilizantes cargados para iniciar aplicaciones.</small>
+    <div class="application-empty application-empty--clean">
+      <i class="pi pi-sparkles"></i>
+      <div>
+        <strong>Sin fertilizaciones registradas</strong>
+        <small>Registre la primera aplicación y todos sus productos.</small>
+      </div>
     </div>
   }
 
   @if (!helper.soloLectura()) {
     <p-button
-      [label]="'Fertilizar' | translate"
+      label="Registrar aplicación"
       [fluid]="true"
       [outlined]="true"
       styleClass="w-full"

@@ -1,4 +1,5 @@
 import {
+  getLineasFumigacion,
   Cultivo,
   IClimaEstacionMeteorologica,
   ICoordenadas,
@@ -116,10 +117,17 @@ export class HelperService {
 
   static fechasFumigadas(fumigaciones: IFumigacion[]): string[] {
     const fechas: string[] = [];
-    fumigaciones.forEach((f) => {
-      const fechaFumigacion = new Date(f.fechaFumigacion);
-      fechaFumigacion.setUTCHours(3, 0, 0, 0);
-      for (let index = 0; index < (f.duracion || 15); index++) {
+      fumigaciones.forEach((f) => {
+        const fechaFumigacion = new Date(f.fechaFumigacion);
+        fechaFumigacion.setUTCHours(3, 0, 0, 0);
+        const lineas = getLineasFumigacion(f);
+        const duracion = lineas.length
+          ? Math.max(
+              0,
+              ...lineas.map((linea) => Number(linea.duracion ?? f.duracion ?? 15)),
+            )
+          : Math.max(0, Number(f.duracion ?? 15));
+      for (let index = 0; index < duracion; index++) {
         fechas.push(fechaFumigacion.toISOString());
         fechaFumigacion.setUTCDate(fechaFumigacion.getUTCDate() + 1);
       }

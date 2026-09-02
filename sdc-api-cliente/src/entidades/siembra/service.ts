@@ -7,6 +7,8 @@ import {
   Optional,
 } from '@nestjs/common';
 import {
+  getLineasFertilizacion,
+  getLineasFumigacion,
   ISiembra,
   IListado,
   IQueryParam,
@@ -773,7 +775,12 @@ export class SiembrasService {
   private calcularAporteTotalN(fertilizaciones: IFertilizacion[]) {
     let aporteTotalN = 0;
     for (const f of fertilizaciones) {
-      aporteTotalN += (f.dosisKgHa * f.fertilizante?.porcentajeN) / 100;
+      for (const linea of getLineasFertilizacion(f)) {
+        aporteTotalN +=
+          (Number(linea.dosisKgHa || 0) *
+            Number(linea.fertilizante?.porcentajeN || 0)) /
+          100;
+      }
     }
     return aporteTotalN;
   }
@@ -781,7 +788,12 @@ export class SiembrasService {
   private calcularAporteTotalP(fertilizaciones: IFertilizacion[]) {
     let aporteTotalP = 0;
     for (const f of fertilizaciones) {
-      aporteTotalP += (f.dosisKgHa * f.fertilizante?.porcentajeP) / 100;
+      for (const linea of getLineasFertilizacion(f)) {
+        aporteTotalP +=
+          (Number(linea.dosisKgHa || 0) *
+            Number(linea.fertilizante?.porcentajeP || 0)) /
+          100;
+      }
     }
     return aporteTotalP;
   }
@@ -896,22 +908,18 @@ export class SiembrasService {
 
     let sumaHhIa = 0;
     for (const f of fumigaciones) {
-      const potencialCPP: number = this.calcularPotencialTotalCPP(
-        siembra,
-        lote,
-        f,
-      );
-      console.debug(
-        `Potencial Total CPP para ${f.principioActivo?.nombre}:`,
-        potencialCPP,
-      );
-      const IaHa = (f.dosisLtHa * f.concentracion) / 100;
-      console.debug(`IaHa para ${f.principioActivo?.nombre}:`, IaHa);
-
-      const hhIa = IaHa * potencialCPP;
-      console.debug(`HHG Ia para ${f.principioActivo?.nombre}:`, hhIa);
-
-      sumaHhIa += hhIa;
+      for (const linea of getLineasFumigacion(f)) {
+        const producto = { ...f, ...linea } as IFumigacion;
+        const potencialCPP: number = this.calcularPotencialTotalCPP(
+          siembra,
+          lote,
+          producto,
+        );
+        const IaHa =
+          (Number(linea.dosisLtHa || 0) * Number(linea.concentracion || 0)) /
+          100;
+        sumaHhIa += IaHa * potencialCPP;
+      }
     }
 
     console.debug('Suma HHG Ia:', sumaHhIa);

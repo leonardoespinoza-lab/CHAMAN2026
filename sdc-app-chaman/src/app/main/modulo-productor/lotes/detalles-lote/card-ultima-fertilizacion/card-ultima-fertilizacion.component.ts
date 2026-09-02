@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { IFertilizacion, IFilter, IListado, IQueryParam } from 'modelos/src';
+import { getLineasFertilizacion, IFertilizacion, IFilter, IListado, IQueryParam } from 'modelos/src';
 import { Subscription } from 'rxjs';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../../../auxiliares/servicios/listados';
@@ -58,11 +58,13 @@ export class CardUltimaFertilizacionComponent implements OnInit, OnDestroy {
       porcentajeP?: number;
     }[] = [];
     ultimasFertilizaciones.forEach((fertilizacion) => {
-      fertilizantes.push({
-        nombre: fertilizacion.fertilizante?.nombre,
-        dosis: fertilizacion.dosisKgHa,
-        porcentajeN: fertilizacion.fertilizante?.porcentajeN,
-        porcentajeP: fertilizacion.fertilizante?.porcentajeP,
+      getLineasFertilizacion(fertilizacion).forEach((linea) => {
+        fertilizantes.push({
+          nombre: linea.fertilizante?.nombre || fertilizacion.fertilizante?.nombre,
+          dosis: linea.dosisKgHa,
+          porcentajeN: linea.fertilizante?.porcentajeN ?? fertilizacion.fertilizante?.porcentajeN,
+          porcentajeP: linea.fertilizante?.porcentajeP ?? fertilizacion.fertilizante?.porcentajeP,
+        });
       });
     });
 

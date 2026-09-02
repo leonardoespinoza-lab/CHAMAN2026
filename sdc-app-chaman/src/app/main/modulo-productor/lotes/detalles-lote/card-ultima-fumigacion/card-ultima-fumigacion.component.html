@@ -27,7 +27,7 @@
       <article class="date-box">
         <span>Fecha</span>
         <strong>{{ ultimaFumigacion.fechaFumigacion | date: 'shortDate' }}</strong>
-        <small>{{ ultimaFumigacion.duracion }} dias de duracion</small>
+        <small>{{ ultimaFumigacion.duracion }} días de duración</small>
       </article>
 
       <section class="composition-list">
@@ -45,9 +45,12 @@
       </section>
     </div>
   } @else if (siembra) {
-    <div class="application-empty">
-      <p-message severity="info">{{ 'La siembra no fue fumigada' | translate }}</p-message>
-      <small>La base local ya tiene principios activos cargados para iniciar aplicaciones.</small>
+    <div class="application-empty application-empty--clean">
+      <i class="pi pi-shield"></i>
+      <div>
+        <strong>Sin fumigaciones registradas</strong>
+        <small>Registre la primera aplicación y la mezcla utilizada.</small>
+      </div>
     </div>
   } @else {
     <div class="application-empty">
@@ -58,7 +61,7 @@
   @if (!helper.soloLectura()) {
     @if (lote?.idSiembra === siembra?._id && !siembra?.fechaCosecha) {
       <p-button
-        [label]="'Fumigar' | translate"
+        label="Registrar aplicación"
         [fluid]="true"
         [outlined]="true"
         styleClass="w-full"

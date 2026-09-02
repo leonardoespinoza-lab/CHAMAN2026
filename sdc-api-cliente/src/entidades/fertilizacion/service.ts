@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   IFertilizacion,
   ICreateFertilizacion,
@@ -8,17 +8,20 @@ import {
   IFilter,
   IPopulate,
   IPermiso,
+  ILineaFertilizacion,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { establecimientosDelPermiso } from '../../auxiliares/authorization/alcance-permiso';
 import { FertilizacionsRepository } from './repository';
 import { LotesService } from '../lote/service';
+import { FertilizantesService } from '../fertilizante/service';
 
 @Injectable()
 export class FertilizacionsService {
   constructor(
     private repository: FertilizacionsRepository,
     private lotesService: LotesService,
+    private fertilizantesService: FertilizantesService,
   ) {}
 
   async getById(id: string, permiso: IPermiso): Promise<IFertilizacion> {
@@ -76,6 +79,7 @@ export class FertilizacionsService {
     data: ICreateFertilizacion,
     permiso: IPermiso,
   ): Promise<IFertilizacion> {
+    await this.normalizarLineas(data);
     const lote = await this.lotesService.getById(data.idLote, permiso);
     data.idQuimica = lote.idQuimica;
     data.idDistribuidor = lote.idDistribuidor;
@@ -93,7 +97,12 @@ export class FertilizacionsService {
     data: IUpdateFertilizacion,
     permiso: IPermiso,
   ): Promise<IFertilizacion> {
-    await this.getById(id, permiso);
+    const actual = await this.getById(id, permiso);
+    const normalizado = { ...actual, ...data } as ICreateFertilizacion;
+    await this.normalizarLineas(normalizado);
+    data.lineas = normalizado.lineas;
+    data.idFertilizante = normalizado.idFertilizante;
+    data.dosisKgHa = normalizado.dosisKgHa;
     return await this.repository.update(id, data);
   }
 
@@ -103,6 +112,56 @@ export class FertilizacionsService {
   }
 
   // Private
+
+  private async normalizarLineas(
+    data: ICreateFertilizacion | IUpdateFertilizacion,
+  ): Promise<void> {
+    const recibidas = Array.isArray(data.lineas) && data.lineas.length
+      ? data.lineas
+      : [{
+          idFertilizante: data.idFertilizante,
+          dosisKgHa: data.dosisKgHa,
+        }];
+    if (!recibidas.length || recibidas.length > 12) {
+      throw new BadRequestException(
+        'La aplicacion debe incluir entre 1 y 12 fertilizantes.',
+      );
+    }
+    const ids = recibidas.map((linea) => String(linea.idFertilizante || '').trim());
+    if (ids.some((id) => !id)) {
+      throw new BadRequestException('Cada linea debe indicar un fertilizante.');
+    }
+    if (new Set(ids).size !== ids.length) {
+      throw new BadRequestException(
+        'Un fertilizante no puede repetirse dentro de la misma aplicacion.',
+      );
+    }
+    const fertilizantes = await Promise.all(
+      ids.map((id) => this.fertilizantesService.getById(id)),
+    );
+    const lineas: ILineaFertilizacion[] = recibidas.map((linea, index) => {
+      const dosisKgHa = Number(linea.dosisKgHa);
+      if (!Number.isFinite(dosisKgHa) || dosisKgHa <= 0) {
+        throw new BadRequestException(
+          'La dosis de cada fertilizante debe ser mayor que cero.',
+        );
+      }
+      const fertilizante = fertilizantes[index];
+      return {
+        idFertilizante: ids[index],
+        dosisKgHa,
+        fertilizante: {
+          _id: fertilizante._id,
+          nombre: fertilizante.nombre,
+          porcentajeN: fertilizante.porcentajeN,
+          porcentajeP: fertilizante.porcentajeP,
+        },
+      };
+    });
+    data.lineas = lineas;
+    data.idFertilizante = lineas[0].idFertilizante;
+    data.dosisKgHa = lineas[0].dosisKgHa;
+  }
 
   // Permisos
 

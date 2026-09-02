@@ -5,6 +5,8 @@ import {
   Optional,
 } from '@nestjs/common';
 import {
+  getLineasFertilizacion,
+  getLineasFumigacion,
   ILote,
   IListado,
   IQueryParam,
@@ -925,16 +927,21 @@ export class LotesService {
       predicciones,
     );
     const enfermedades = this.resumirEnfermedadesFitosanitarias(prediccion);
-    const aplicaciones = fumigaciones.map((item) =>
-      this.resumirAplicacionFitosanitaria(item),
+    const aplicaciones = fumigaciones.flatMap((item) =>
+      getLineasFumigacion(item).map((linea) =>
+        this.resumirAplicacionFitosanitaria({
+          ...item,
+          ...linea,
+        } as IFumigacion),
+      ),
     );
     const presionEnfermedades =
       this.calcularPresionEnfermedadesFitosanitarias(enfermedades);
     const cargaQuimica = this.limitarPorcentaje(
       aplicaciones.reduce((total, item) => total + item.aporte, 0),
     );
-    const aplicacionesUltimos30Dias = aplicaciones.filter((item) =>
-      this.estaEnUltimosDias(item.fecha, 30),
+    const aplicacionesUltimos30Dias = fumigaciones.filter((item) =>
+      this.estaEnUltimosDias(item.fechaFumigacion || item.fechaCreacion, 30),
     ).length;
     const recenciaAplicaciones = this.limitarPorcentaje(
       aplicacionesUltimos30Dias * 25,
@@ -972,7 +979,7 @@ export class LotesService {
       presionEnfermedades,
       cargaQuimica,
       recenciaAplicaciones,
-      aplicacionesTotales: aplicaciones.length,
+      aplicacionesTotales: fumigaciones.length,
       aplicacionesUltimos30Dias,
       enfermedadesMonitoreadas: enfermedades.length,
       factores: [
@@ -986,7 +993,7 @@ export class LotesService {
           nombre: 'Carga de aplicaciones',
           valor: cargaQuimica,
           peso: 45,
-          detalle: `${aplicaciones.length} fumigacion(es) registradas en la campana.`,
+          detalle: `${fumigaciones.length} labor(es) y ${aplicaciones.length} producto(s) registrados en la campana.`,
         },
         {
           nombre: 'Recencia operativa',
@@ -4390,13 +4397,13 @@ export class LotesService {
       return '<p>Sin fertilizaciones registradas.</p>';
     }
     const rows = fertilizaciones
-      .map(
-        (item) => `
+      .flatMap((item) =>
+        getLineasFertilizacion(item).map((linea) => `
       <tr>
         <td>${this.escapeHtml(this.formatDate(item.fechaFertilizacion || item.fechaCreacion) || '-')}</td>
-        <td>${this.escapeHtml(item.fertilizante?.nombre || item.idFertilizante || '-')}</td>
-        <td>${this.escapeHtml(this.formatMaybe(item.dosisKgHa, 2))} kg/ha</td>
-      </tr>`,
+        <td>${this.escapeHtml(linea.fertilizante?.nombre || item.fertilizante?.nombre || linea.idFertilizante || '-')}</td>
+        <td>${this.escapeHtml(this.formatMaybe(linea.dosisKgHa, 2))} kg/ha</td>
+      </tr>`),
       )
       .join('');
     return `<table><thead><tr><th>Fecha</th><th>Producto</th><th>Dosis</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -4407,14 +4414,14 @@ export class LotesService {
       return '<p>Sin fumigaciones registradas.</p>';
     }
     const rows = fumigaciones
-      .map(
-        (item) => `
+      .flatMap((item) =>
+        getLineasFumigacion(item).map((linea) => `
       <tr>
         <td>${this.escapeHtml(this.formatDate(item.fechaFumigacion || item.fechaCreacion) || '-')}</td>
-        <td>${this.escapeHtml(item.agroquimico?.nombre || item.principioActivo?.nombre || item.idAgroquimico || '-')}</td>
-        <td>${this.escapeHtml(this.formatMaybe(item.dosisLtHa, 2))} l/ha</td>
-        <td>${this.escapeHtml(this.formatMaybe(item.concentracion, 2))}</td>
-      </tr>`,
+        <td>${this.escapeHtml(linea.agroquimico?.nombre || linea.principioActivo?.nombre || item.agroquimico?.nombre || item.principioActivo?.nombre || linea.idAgroquimico || '-')}</td>
+        <td>${this.escapeHtml(this.formatMaybe(linea.dosisLtHa, 2))} l/ha</td>
+        <td>${this.escapeHtml(this.formatMaybe(linea.concentracion, 2))}</td>
+      </tr>`),
       )
       .join('');
     return `<table><thead><tr><th>Fecha</th><th>Producto / activo</th><th>Dosis</th><th>Conc.</th></tr></thead><tbody>${rows}</tbody></table>`;

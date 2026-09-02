@@ -9,10 +9,11 @@ import {
   Query,
   Res,
   UploadedFiles,
+  UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { FotosService } from './service';
 import { IListado, IQueryParam, IPermiso, IFoto, IUpdateFoto, IUsuario } from 'modelos/src';
@@ -44,6 +45,21 @@ export class FotosController {
       'private, max-age=300, stale-while-revalidate=60',
     );
     res.send(image);
+  }
+
+  @Get('audio')
+  @Permisos(...PERMISOS_AUTENTICADOS)
+  async getAudio(
+    @Query('id') id: string,
+    @GetPermiso() permiso: IPermiso,
+    @Res() res: Response,
+  ): Promise<void> {
+    const audio = await this.service.getAudio(id, permiso);
+    res.setHeader('Content-Type', audio.mimeType);
+    res.setHeader('Content-Length', String(audio.bytes.length));
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('Content-Disposition', 'inline');
+    res.send(audio.bytes);
   }
 
   @Get()
@@ -103,6 +119,28 @@ export class FotosController {
     @GetUser() user: IUsuario,
   ): Promise<IFoto[]> {
     return await this.service.uploadCampo(files, body, permiso, user);
+  }
+
+  @Post('campo/audio/upload')
+  @Permisos(
+    { nivel: 'Admin', roles: ['Admin'] },
+    { nivel: 'Tenant', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
+  )
+  @UseInterceptors(
+    FileInterceptor('audio', { limits: { fileSize: 25 * 1024 * 1024 } }),
+  )
+  public async uploadAudio(
+    @UploadedFile() file: any,
+    @Body() body: Record<string, any>,
+    @GetPermiso() permiso: IPermiso,
+    @GetUser() user: IUsuario,
+  ): Promise<IFoto> {
+    return await this.service.uploadAudio(file, body, permiso, user);
   }
 
   @Put('/:id')

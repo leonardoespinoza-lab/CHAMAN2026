@@ -101,6 +101,32 @@
   line-height: 1.35;
 }
 
+.application-empty--clean {
+  align-items: center;
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-height: 92px;
+  padding: 0.8rem;
+  border: 1px dashed #b9d6d8;
+  border-radius: 10px;
+  background: #f7fbfb;
+}
+
+.application-empty--clean > i {
+  align-items: center;
+  background: color-mix(in srgb, var(--p-primary-color), white 86%);
+  border-radius: 10px;
+  color: var(--p-primary-color);
+  display: flex;
+  font-size: 1.05rem;
+  height: 42px;
+  justify-content: center;
+}
+
+.application-empty--clean > div { display: grid; gap: 0.18rem; }
+.application-empty--clean strong { color: var(--p-text-color); }
+
 @media (max-width: 620px) {
   .application-body {
     grid-template-columns: 1fr;

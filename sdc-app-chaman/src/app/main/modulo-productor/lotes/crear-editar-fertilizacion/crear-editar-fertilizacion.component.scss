@@ -1,25 +1,27 @@
-/* Aplicar el mismo patrón que detalles-lote para evitar el botón del menú */
-/* En móviles: ancho completo sin márgenes */
-/* En escritorio: contenedor centrado con márgenes simétricos */
-
-/* Para escritorio real (pantallas grandes no táctiles) */
-@media (min-width: 1024px) and (pointer: fine) and (hover: hover) {
-  :host {
-    display: block;
-    width: 80%;
-    margin: 2em auto 4em auto; /* Márgenes simétricos y verticales */
-  }
-}
-
-/* Para pantallas muy grandes */
-@media (min-width: 1921px) {
-  :host {
-    width: 85%;
-    margin: 3em auto 5em auto;
-  }
-}
-
-:host {
-  height: 100%;
-  display: block;
+:host { display:block; min-height:100%; }
+.application-page { min-height:100vh; padding:clamp(.75rem,2vw,2rem); background:linear-gradient(145deg,#f1faf9,#f6f8fb 48%,#edf5f7); }
+.application-card { width:min(1080px,100%); margin:0 auto; overflow:hidden; border:1px solid #c8d9df; border-radius:18px; background:rgba(255,255,255,.94); box-shadow:0 22px 58px rgba(22,53,68,.1); }
+.application-header { display:flex; align-items:center; gap:1rem; padding:1.25rem 1.4rem; border-bottom:1px solid #dbe5e8; background:radial-gradient(circle at 92% 5%,color-mix(in srgb,var(--p-primary-color),transparent 76%),transparent 34%),linear-gradient(135deg,#f8fdfc,#eff8f8); }
+.application-icon { width:52px; height:52px; display:grid; place-items:center; flex:0 0 auto; border-radius:15px; color:#fff; font-size:1.25rem; background:linear-gradient(135deg,var(--p-primary-color),var(--p-accent-color)); }
+.application-header span,.products-heading span { color:var(--p-primary-color); font-size:.74rem; font-weight:850; letter-spacing:.045em; text-transform:uppercase; }
+.application-header h1 { margin:.15rem 0; color:#102434; font-size:clamp(1.55rem,2.4vw,2.15rem); line-height:1.05; }
+.application-header p { margin:0; color:#637487; }
+.application-form { display:grid; gap:1rem; padding:1.25rem 1.4rem; }
+.date-panel,.products-section { padding:1rem; border:1px solid #d7e3e7; border-radius:14px; background:#fbfdfd; }
+.products-heading { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-bottom:.85rem; }
+.products-heading > div { display:grid; gap:.14rem; }
+.products-heading strong { color:#183242; font-size:1.05rem; }
+.product-list { display:grid; gap:.65rem; }
+.product-row { display:grid; grid-template-columns:34px minmax(220px,1.5fr) minmax(180px,.75fr) 40px; gap:.7rem; align-items:center; padding:.75rem; border:1px solid #dbe6e9; border-radius:12px; background:#fff; }
+.product-number { width:30px; height:30px; display:grid; place-items:center; border-radius:9px; color:var(--p-primary-color); font-weight:850; background:color-mix(in srgb,var(--p-primary-color),white 88%); }
+.products-help { display:block; margin-top:.7rem; color:#65778a; }
+.application-footer { display:flex; justify-content:flex-end; gap:.7rem; padding:1rem 1.4rem 1.25rem; border-top:1px solid #e0e7e9; }
+@media(max-width:720px){
+  .application-page { padding:0; }
+  .application-card { min-height:100vh; border:0; border-radius:0; }
+  .application-header,.application-form,.application-footer { padding-inline:.85rem; }
+  .products-heading { align-items:stretch; flex-direction:column; }
+  .product-row { grid-template-columns:32px minmax(0,1fr) 36px; }
+  .product-row p-floatlabel:nth-of-type(2) { grid-column:2/3; }
+  .application-footer { display:grid; grid-template-columns:1fr 1.4fr; }
 }

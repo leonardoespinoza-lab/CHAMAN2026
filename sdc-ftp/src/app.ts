@@ -28,9 +28,12 @@ import {
 import { HikConnectClient } from "./hik-connect";
 import { ICamara, IFoto, IListado, ILote } from "modelos";
 import {
+  assertValidFieldAudio,
   assertValidFieldPhoto,
+  buildFieldAudioStoragePlan,
   buildFieldPhotoStoragePlan,
   hasOperationalAccess,
+  privateFieldAudioAccess,
   privateFieldPhotoAccess,
 } from "./field-photo-security";
 
@@ -133,6 +136,15 @@ function publicUrlFor(relativePath: string, req?: Request) {
   return `/imagenes/${normalized}`;
 }
 
+function publicAudioUrlFor(relativePath: string, req?: Request) {
+  const normalized = relativePath.split(path.sep).join('/');
+  if (PUBLIC_BASE_URL) {
+    return `${PUBLIC_BASE_URL.replace(/\/$/, '')}/audios/${normalized}`;
+  }
+  if (req) return `${req.protocol}://${req.get('host')}/audios/${normalized}`;
+  return `/audios/${normalized}`;
+}
+
 function extensionFromContentType(contentType: string) {
   if (/png/i.test(contentType)) return "png";
   if (/webp/i.test(contentType)) return "webp";
@@ -168,6 +180,38 @@ function ingestFieldPhoto(
     contentType,
     fechaCaptura,
     fuente: 'campo' as const,
+  };
+}
+
+function ingestFieldAudio(
+  idLote: string,
+  originalName: string,
+  contentType: string,
+  bytes: Buffer,
+) {
+  assertValidFieldAudio(bytes, contentType);
+  const fechaCaptura = new Date().toISOString();
+  const storage = buildFieldAudioStoragePlan({
+    baseDir: FTP_DATA_DIR,
+    idLote,
+    originalName,
+    contentType,
+    capturedAt: new Date(fechaCaptura),
+    nonce: `${Date.now()}`,
+  });
+  ensureDir(storage.targetDir);
+  fs.writeFileSync(storage.targetPath, bytes);
+  return {
+    idLote,
+    originalName,
+    storedName: storage.storedName,
+    relativePath: storage.relativePath,
+    publicUrl: publicAudioUrlFor(storage.relativePath),
+    size: bytes.length,
+    contentType,
+    fechaCaptura,
+    fuente: 'campo' as const,
+    tipoMedio: 'audio' as const,
   };
 }
 
@@ -662,12 +706,62 @@ function startHttp() {
     },
   );
 
+  app.post(
+    '/field-audio/upload/:idLote',
+    requireAdminToken,
+    express.raw({
+      type: [
+        'audio/webm',
+        'audio/ogg',
+        'audio/mpeg',
+        'audio/mp3',
+        'audio/mp4',
+        'audio/m4a',
+        'audio/x-m4a',
+        'audio/wav',
+        'audio/wave',
+        'audio/x-wav',
+      ],
+      limit: '25mb',
+    }),
+    (req: Request, res: Response) => {
+      try {
+        const originalName = decodeURIComponent(
+          String(req.get('x-original-name') || 'audio-campo.webm'),
+        );
+        const contentType = String(req.get('content-type') || 'audio/webm').split(';')[0];
+        res.status(201).json(
+          ingestFieldAudio(
+            req.params.idLote,
+            originalName,
+            contentType,
+            req.body as Buffer,
+          ),
+        );
+      } catch (err: any) {
+        const message = err?.type === 'entity.too.large'
+          ? 'El audio supera el limite de 25 MB.'
+          : err?.message || String(err);
+        res.status(400).json({ ok: false, message });
+      }
+    },
+  );
+
   app.use(
     "/imagenes",
     privateFieldPhotoAccess(TIMELAPSE_ADMIN_TOKEN),
     express.static(FTP_DATA_DIR, {
       immutable: true,
       maxAge: "30d",
+    }),
+  );
+
+  app.use(
+    '/audios',
+    privateFieldAudioAccess(TIMELAPSE_ADMIN_TOKEN),
+    express.static(FTP_DATA_DIR, {
+      immutable: true,
+      maxAge: '30d',
     }),
   );
 

@@ -2,7 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
-import { IFumigacion } from 'modelos/src';
+import { getLineasFumigacion, IFumigacion } from 'modelos/src';
 import { ConfirmationService } from 'primeng/api';
 import { FumigacionService } from '../../../../../auxiliares/http/fumigacion.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
@@ -22,6 +22,10 @@ export class DrawerListadoFumigacionesComponent implements OnInit, OnDestroy {
   @Output() public visibleChange = new EventEmitter<boolean>();
 
   @Input() public fumigaciones: IFumigacion[] = [];
+
+  public lineas(dato: IFumigacion) {
+    return getLineasFumigacion(dato);
+  }
 
   constructor(
     public helper: HelperService,
