@@ -4,7 +4,10 @@
   flex-direction: column;
   gap: 1rem;
   height: 100vh;
+  height: 100dvh;
   margin: 0 auto;
+  max-width: 100%;
+  overflow-x: hidden;
   overflow-y: scroll;
   padding: 3em 1em 1em;
   scrollbar-width: none;
@@ -36,7 +39,9 @@
   align-items: center;
   display: flex;
   flex-direction: row;
+  gap: 1rem;
   justify-content: space-between;
+  min-width: 0;
 }
 
 .lote-title {
@@ -45,6 +50,7 @@
   flex-direction: row;
   gap: 0.7em;
   justify-content: center;
+  min-width: 0;
 }
 
 @media (min-width: 1024px) and (pointer: fine) and (hover: hover) {
@@ -81,6 +87,7 @@
   font-weight: 750;
   line-height: 1.1;
   letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 .lote-establishment {
@@ -95,7 +102,10 @@
   align-items: center;
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   gap: 0.5em;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .siembra-badge {
@@ -598,6 +608,8 @@
   display: flex;
   flex-direction: column;
   gap: 1.15rem;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .field-records-row {
@@ -813,6 +825,8 @@
 .services-stack > * {
   display: flex;
   flex-direction: column;
+  max-width: 100%;
+  min-width: 0;
 }
 
 :host ::ng-deep .services-stack .custom-card {
@@ -851,6 +865,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -906,6 +921,10 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.sanitary-monitoring-row {
+  align-items: start;
+}
+
 .operative-monitoring-row.single,
 .sanitary-monitoring-row.single {
   grid-template-columns: 1fr;
@@ -913,6 +932,7 @@
 
 .operative-monitoring-row > *,
 .sanitary-monitoring-row > * {
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -1009,6 +1029,40 @@
   }
 }
 
+@media (max-width: 720px) {
+  .lote-view-container {
+    gap: 0.78rem;
+    padding: max(0.8rem, env(safe-area-inset-top)) 0.65rem max(1.25rem, env(safe-area-inset-bottom));
+  }
+
+  .services-stack {
+    gap: 0.95rem;
+  }
+
+  .service-group,
+  .monitoring-section {
+    gap: 0.68rem;
+  }
+
+  .service-group-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  :host ::ng-deep .services-stack .custom-card {
+    padding: 0.72rem;
+  }
+
+  :host ::ng-deep .services-stack .p-button {
+    max-width: 100%;
+  }
+
+  :host ::ng-deep .services-stack .p-button-label {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}
+
 @media (max-width: 560px) {
   .lote-header {
     align-items: flex-start;
@@ -1017,6 +1071,7 @@
   }
 
   .lote-actions {
+    justify-content: flex-start;
     width: 100%;
   }
 
@@ -1032,6 +1087,11 @@
   .lot-primary-actions {
     align-items: stretch;
     display: grid;
+    width: 100%;
+  }
+
+  :host ::ng-deep .lot-primary-actions .p-button {
+    justify-content: center;
     width: 100%;
   }
 

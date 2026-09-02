@@ -73,6 +73,7 @@
     "audit:deployment-topology": "node scripts/validate-deployment-topology.js",
     "audit:lote-integrity": "node scripts/audit-lote-data-integrity.js",
     "test:agromet:frontend": "node --test scripts/tests/agrometeorology-frontend.test.js",
+    "test:lot-detail:responsive": "node --test scripts/tests/lot-detail-responsive.test.js",
     "test:chaman-meteo": "npm --prefix sdc-api-clima test -- --runInBand src/entidades/chaman-meteo/calculations.spec.ts --silent && cd sdc-meteo-worker && python -m unittest discover -v -p \"test_*.py\"",
     "test:lot-location:frontend": "node --test scripts/tests/lot-location-frontend.test.js",
     "test:establishment-location:frontend": "node --test scripts/tests/establishment-location-frontend.test.js",
