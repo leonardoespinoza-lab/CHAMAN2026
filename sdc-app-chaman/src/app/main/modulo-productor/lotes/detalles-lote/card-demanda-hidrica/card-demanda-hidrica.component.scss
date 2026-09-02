@@ -9,7 +9,6 @@
 
 .water-demand-header,
 .hourly-heading,
-.source-row,
 .water-demand-card footer {
   align-items: center;
   display: flex;
@@ -33,7 +32,6 @@
 .metric-grid span,
 .metric-grid strong,
 .interpretation,
-.source-row span,
 .water-demand-card footer span {
   margin: 0;
 }
@@ -50,7 +48,6 @@
 .reading-title span,
 .reading-title small,
 .metric-grid span,
-.source-row,
 .water-demand-card footer {
   color: var(--p-text-muted-color);
 }
@@ -87,11 +84,10 @@
 }
 
 .plant-scene {
-  aspect-ratio: 16 / 10;
   background: #071c1d;
-  border: 1px solid rgba(132, 210, 199, 0.38);
+  border: 1px solid #c4d0d7;
   border-radius: 12px;
-  min-height: 300px;
+  height: clamp(430px, 46vw, 560px);
   overflow: hidden;
   position: relative;
 }
@@ -105,8 +101,8 @@
 }
 
 .plant-scene img {
-  object-fit: cover;
-  object-position: center 48%;
+  object-fit: contain;
+  object-position: center;
 }
 
 .scene-shade {
@@ -193,31 +189,88 @@
   font-size: 0.72rem;
 }
 
-.flow-path {
-  bottom: 31%;
-  display: grid;
-  gap: 0.35rem;
-  left: 50%;
+.water-network {
+  inset: 0;
+  opacity: 0.34;
   position: absolute;
-  transform: translateX(-50%);
   z-index: 3;
 }
 
-.flow-path i {
-  animation: water-flow 1.8s ease-in-out infinite;
-  background: #48d8d0;
-  border-radius: 50%;
-  box-shadow: 0 0 10px #48d8d0;
-  height: 5px;
-  opacity: 0.8;
-  width: 5px;
+.water-network svg {
+  height: 100%;
+  inset: 0;
+  overflow: visible;
+  position: absolute;
+  width: 100%;
 }
 
-.flow-path i:nth-child(2) { animation-delay: 0.25s; }
-.flow-path i:nth-child(3) { animation-delay: 0.5s; }
-.flow-path i:nth-child(4) { animation-delay: 0.75s; }
-.level-night .flow-path i,
-.level-not_evaluated .flow-path i { animation-duration: 3.8s; opacity: 0.35; }
+.water-trace {
+  animation: water-rise 3.8s linear infinite;
+  fill: none;
+  filter: drop-shadow(0 0 2px rgba(76, 222, 220, 0.75));
+  stroke: rgba(84, 230, 226, 0.78);
+  stroke-dasharray: 1.2 5.5;
+  stroke-linecap: round;
+  stroke-width: 0.7;
+}
+
+.water-trace.root-right {
+  animation-delay: -0.8s;
+}
+.water-trace.stem {
+  animation-delay: -1.5s;
+}
+.water-trace.leaf-left {
+  animation-delay: -2.1s;
+}
+.water-trace.leaf-right {
+  animation-delay: -2.7s;
+}
+
+.transpiration {
+  display: flex;
+  gap: 0.35rem;
+  position: absolute;
+  top: 23%;
+}
+
+.transpiration.left {
+  left: 25%;
+}
+.transpiration.center {
+  left: 48%;
+  top: 12%;
+}
+.transpiration.right {
+  right: 23%;
+  top: 20%;
+}
+
+.transpiration i {
+  animation: transpiration 3.2s ease-out infinite;
+  background: rgba(122, 237, 233, 0.8);
+  border-radius: 50%;
+  box-shadow: 0 0 5px rgba(86, 226, 221, 0.75);
+  height: 4px;
+  width: 4px;
+}
+
+.transpiration i:nth-child(2) {
+  animation-delay: -1.1s;
+}
+.transpiration i:nth-child(3) {
+  animation-delay: -2.2s;
+}
+.stomata-open .water-network {
+  opacity: 0.72;
+}
+.stomata-regulated .water-network {
+  opacity: 0.42;
+}
+.level-night .water-network,
+.level-not_evaluated .water-network {
+  opacity: 0.14;
+}
 
 .water-demand-reading {
   background: color-mix(in srgb, var(--p-primary-color) 3%, var(--p-surface-0));
@@ -271,23 +324,40 @@
 }
 
 .interpretation {
-  background: rgba(216, 243, 238, 0.55);
-  border-left: 3px solid #16bdb5;
-  border-radius: 6px;
+  background: transparent;
   color: var(--p-text-color);
   line-height: 1.35;
-  padding: 0.68rem;
+  padding: 0.2rem 0;
 }
 
-.source-row {
-  flex-wrap: wrap;
-  font-size: 0.8rem;
+.stomatal-window {
+  background: var(--p-surface-0);
+  border: 1px solid #d5e0e6;
+  border-radius: 9px;
+  display: grid;
+  gap: 0.18rem;
+  padding: 0.72rem;
 }
 
-.source-row span {
-  align-items: center;
-  display: inline-flex;
-  gap: 0.3rem;
+.stomatal-window span {
+  color: #0b8883;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.035em;
+}
+
+.stomatal-window strong {
+  color: var(--p-text-color);
+  font-size: 1.18rem;
+}
+
+.stomatal-window small {
+  color: var(--p-text-muted-color);
+  font-size: 0.76rem;
+}
+
+.stomatal-window.inactive {
+  background: color-mix(in srgb, var(--p-surface-100) 70%, var(--p-surface-0));
 }
 
 .hourly-heading {
@@ -339,11 +409,19 @@
 }
 
 .hourly-strip button.level-high,
-.hourly-strip button.level-very_high { background: rgba(235, 112, 64, 0.1); }
-.hourly-strip button.level-low { background: rgba(65, 151, 210, 0.1); }
-.hourly-strip button.level-night { background: rgba(35, 65, 100, 0.1); }
+.hourly-strip button.level-very_high {
+  background: rgba(235, 112, 64, 0.1);
+}
+.hourly-strip button.level-low {
+  background: rgba(65, 151, 210, 0.1);
+}
+.hourly-strip button.level-night {
+  background: rgba(35, 65, 100, 0.1);
+}
 .hourly-strip button.level-no_data,
-.hourly-strip button.level-not_evaluated { opacity: 0.62; }
+.hourly-strip button.level-not_evaluated {
+  opacity: 0.62;
+}
 
 .hourly-strip span,
 .hourly-strip small {
@@ -351,9 +429,16 @@
   font-size: 0.68rem;
 }
 
-.hourly-strip strong { font-size: 0.95rem; }
-.hourly-strip i { color: #15a99f; font-size: 0.78rem; }
-.hourly-strip .pi-moon { color: #476a91; }
+.hourly-strip strong {
+  font-size: 0.95rem;
+}
+.hourly-strip i {
+  color: #15a99f;
+  font-size: 0.78rem;
+}
+.hourly-strip .pi-moon {
+  color: #476a91;
+}
 
 .water-demand-card footer {
   align-items: flex-start;
@@ -378,27 +463,63 @@
   padding: 1rem;
 }
 
-.water-demand-state.error { color: #a54334; }
+.water-demand-state.error {
+  color: #a54334;
+}
 
-@keyframes water-flow {
-  0%, 100% { opacity: 0.2; transform: translateY(8px) scale(0.75); }
-  45% { opacity: 1; transform: translateY(-5px) scale(1.15); }
+@keyframes water-rise {
+  to {
+    stroke-dashoffset: -34;
+  }
+}
+
+@keyframes transpiration {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.65);
+  }
+  35% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-18px) scale(1.1);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .flow-path i { animation: none; }
+  .water-trace,
+  .transpiration i {
+    animation: none;
+  }
 }
 
 @media (max-width: 860px) {
-  .water-demand-layout { grid-template-columns: 1fr; }
-  .plant-scene { min-height: 280px; }
+  .water-demand-layout {
+    grid-template-columns: 1fr;
+  }
+  .plant-scene {
+    height: min(640px, 118vw);
+  }
 }
 
 @media (max-width: 560px) {
   .water-demand-header,
-  .hourly-heading { align-items: flex-start; flex-direction: column; }
-  .refresh-button { width: 100%; justify-content: center; }
-  .plant-scene { min-height: 260px; }
-  .metric-grid { grid-template-columns: 1fr 1fr; }
-  .hourly-heading small { text-align: left; }
+  .hourly-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .refresh-button {
+    width: 100%;
+    justify-content: center;
+  }
+  .plant-scene {
+    height: min(580px, 132vw);
+  }
+  .metric-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .hourly-heading small {
+    text-align: left;
+  }
 }

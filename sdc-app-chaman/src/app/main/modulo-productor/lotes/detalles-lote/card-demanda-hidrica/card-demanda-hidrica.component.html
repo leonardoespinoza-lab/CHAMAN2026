@@ -24,7 +24,12 @@
       </div>
     } @else if (selected; as current) {
       <div class="water-demand-layout">
-        <article class="plant-scene" [class]="levelClass(current.level)">
+        <article
+          class="plant-scene"
+          [class]="levelClass(current.level)"
+          [class.stomata-open]="current.stomatalState === 'open'"
+          [class.stomata-regulated]="current.stomatalState === 'regulated'"
+        >
           <img [src]="imageUrl" [alt]="'Representacion de ' + crop + ' y sus raices'" loading="lazy" />
           <div class="scene-shade"></div>
           <div class="scene-topline">
@@ -50,8 +55,17 @@
             </strong>
             <small>Balance hidrico disponible</small>
           </div>
-          <div class="flow-path" aria-hidden="true">
-            <i></i><i></i><i></i><i></i>
+          <div class="water-network" aria-hidden="true">
+            <svg viewBox="0 0 100 150" preserveAspectRatio="none">
+              <path class="water-trace root-left" d="M18 140 C31 130 39 119 49 105" />
+              <path class="water-trace root-right" d="M82 140 C69 129 60 118 50 105" />
+              <path class="water-trace stem" d="M50 111 C49 91 51 64 50 30" />
+              <path class="water-trace leaf-left" d="M50 83 C43 72 34 61 24 53" />
+              <path class="water-trace leaf-right" d="M50 74 C58 65 68 56 77 48" />
+            </svg>
+            <div class="transpiration left"><i></i><i></i><i></i></div>
+            <div class="transpiration center"><i></i><i></i><i></i></div>
+            <div class="transpiration right"><i></i><i></i><i></i></div>
           </div>
         </article>
 
@@ -65,11 +79,15 @@
           <div class="metric-grid">
             <article>
               <span>Temperatura</span>
-              <strong>{{ current.temperatureC === undefined ? '-' : (current.temperatureC | number: '1.1-1') + ' °C' }}</strong>
+              <strong>{{
+                current.temperatureC === undefined ? '-' : (current.temperatureC | number: '1.1-1') + ' °C'
+              }}</strong>
             </article>
             <article>
               <span>Humedad relativa</span>
-              <strong>{{ current.relativeHumidityPct === undefined ? '-' : (current.relativeHumidityPct | number: '1.0-0') + '%' }}</strong>
+              <strong>{{
+                current.relativeHumidityPct === undefined ? '-' : (current.relativeHumidityPct | number: '1.0-0') + '%'
+              }}</strong>
             </article>
             <article>
               <span>Referencia VPD</span>
@@ -92,9 +110,12 @@
           </div>
 
           <p class="interpretation">{{ current.interpretation }}</p>
-          <div class="source-row">
-            <span><i class="pi pi-database"></i> {{ sourceLabel }}</span>
-            <span>{{ current.completenessPercentage | number: '1.0-0' }}% completo</span>
+          <div class="stomatal-window" [class.inactive]="stomatalWindow.durationHours === 0">
+            <span>APERTURA ESTOMÁTICA ESTIMADA</span>
+            <strong>{{ stomatalWindow.periodsLabel }}</strong>
+            <small>
+              {{ stomatalWindow.durationHours | number: '1.0-0' }} h con condiciones compatibles durante el día
+            </small>
           </div>
         </div>
       </div>

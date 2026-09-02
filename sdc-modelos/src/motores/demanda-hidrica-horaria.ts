@@ -10,7 +10,7 @@ import {
   PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA,
 } from "./agrometeorologia";
 
-export const WATER_DEMAND_ENGINE_VERSION = "water-demand-1.0.0";
+export const WATER_DEMAND_ENGINE_VERSION = "water-demand-1.1.0";
 
 export type FaseDemandaHidrica =
   | "implantation"
@@ -30,6 +30,13 @@ export type NivelDemandaHidricaHoraria =
   | "not_evaluated"
   | "no_data";
 
+export type EstadoEstomaticoEstimado =
+  | "open"
+  | "regulated"
+  | "closed"
+  | "not_evaluated"
+  | "no_data";
+
 export interface IEstadoDemandaHidricaHora {
   timestamp: string;
   localDate: string;
@@ -41,6 +48,7 @@ export interface IEstadoDemandaHidricaHora {
   stage?: string;
   phase: FaseDemandaHidrica;
   level: NivelDemandaHidricaHoraria;
+  stomatalState: EstadoEstomaticoEstimado;
   temperatureC?: number;
   relativeHumidityPct?: number;
   vpdKpa?: number;
@@ -52,6 +60,13 @@ export interface IEstadoDemandaHidricaHora {
   interpretation: string;
   scope: string;
   calculationVersion: string;
+}
+
+export interface IVentanaAperturaEstomatica {
+  desde: string;
+  hasta: string;
+  timezone: string;
+  durationHours: number;
 }
 
 const DEFAULT_VPD_THRESHOLD_KPA = 1.8;
@@ -82,6 +97,13 @@ export function evaluarDemandaHidricaHora(
     vpdKpa,
     vpdThresholdKpa,
   );
+  const stomatalState = resolverEstadoEstomatico(
+    daylight.isDaylight,
+    phase,
+    vpdKpa,
+    vpdThresholdKpa,
+    availableWaterPercentage,
+  );
 
   return {
     timestamp: hour.timestamp,
@@ -94,6 +116,7 @@ export function evaluarDemandaHidricaHora(
     stage: day?.stage,
     phase,
     level,
+    stomatalState,
     temperatureC: weather.temperatureC,
     relativeHumidityPct: weather.relativeHumidityPct,
     vpdKpa,
@@ -104,9 +127,68 @@ export function evaluarDemandaHidricaHora(
     completenessPercentage: hour.completenessPercentage,
     interpretation: interpretar(level, phase),
     scope:
-      "Estimacion ambiental horaria: no mide apertura estomatica ni potencial hidrico interno de la planta.",
+      "Apertura estimada con ambiente, luz, etapa y reserva hidrica; no es una medicion directa del estoma.",
     calculationVersion: WATER_DEMAND_ENGINE_VERSION,
   };
+}
+
+export function resolverEstadoEstomatico(
+  isDaylight: boolean,
+  phase: FaseDemandaHidrica,
+  vpdKpa: number | undefined,
+  thresholdKpa: number,
+  availableWaterPercentage?: number,
+): EstadoEstomaticoEstimado {
+  if (phase === "rest" || phase === "harvest") return "not_evaluated";
+  if (!isDaylight) return "closed";
+  if (!esNumeroFinito(vpdKpa)) return "no_data";
+  if (
+    (esNumeroFinito(availableWaterPercentage) &&
+      availableWaterPercentage < 20) ||
+    vpdKpa >= thresholdKpa
+  ) {
+    return "regulated";
+  }
+  return "open";
+}
+
+export function resumirVentanasAperturaEstomatica(
+  hours: IEstadoDemandaHidricaHora[],
+): IVentanaAperturaEstomatica[] {
+  const openHours = [
+    ...new Map(
+      hours
+        .filter(
+          (hour) =>
+            hour.stomatalState === "open" &&
+            Number.isFinite(new Date(hour.timestamp).getTime()),
+        )
+        .map((hour) => [hour.timestamp, hour]),
+    ).values(),
+  ].sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+  const groups: IEstadoDemandaHidricaHora[][] = [];
+  for (const hour of openHours) {
+    const current = groups[groups.length - 1];
+    const previous = current?.[current.length - 1];
+    const separation = previous
+      ? new Date(hour.timestamp).getTime() -
+        new Date(previous.timestamp).getTime()
+      : Number.POSITIVE_INFINITY;
+    if (!current || separation > 90 * 60 * 1000) groups.push([hour]);
+    else current.push(hour);
+  }
+  return groups.map((group) => {
+    const first = group[0];
+    const last = group[group.length - 1];
+    return {
+      desde: first.timestamp,
+      hasta: new Date(
+        new Date(last.timestamp).getTime() + 60 * 60 * 1000,
+      ).toISOString(),
+      timezone: first.timezone,
+      durationHours: group.length,
+    };
+  });
 }
 
 /**
@@ -131,15 +213,13 @@ export function calcularPotencialHidricoAireMpa(
   const temperatureK = temperatureC + 273.15;
   if (temperatureK <= 0) return undefined;
   return (
-    ((gasConstantJMolK * temperatureK) / waterMolarVolumeM3Mol) *
-    Math.log(relativeHumidityPct / 100) /
+    (((gasConstantJMolK * temperatureK) / waterMolarVolumeM3Mol) *
+      Math.log(relativeHumidityPct / 100)) /
     1_000_000
   );
 }
 
-export function resolverFaseDemandaHidrica(
-  stage?: string,
-): FaseDemandaHidrica {
+export function resolverFaseDemandaHidrica(stage?: string): FaseDemandaHidrica {
   const value = normalizar(stage);
   if (!value) return "unknown";
   if (incluye(value, ["dormancia", "reposo", "nueva campania"])) {
@@ -251,11 +331,16 @@ function interpretar(
         : phase === "maturity"
           ? " En madurez, la respuesta fisiologica esperada es menor."
           : "";
-  const messages: Record<Exclude<NivelDemandaHidricaHoraria, "night" | "not_evaluated" | "no_data">, string> = {
+  const messages: Record<
+    Exclude<NivelDemandaHidricaHoraria, "night" | "not_evaluated" | "no_data">,
+    string
+  > = {
     low: "Demanda atmosferica baja; el ambiente limita la transpiracion potencial.",
-    expected: "Demanda atmosferica dentro del rango operativo de referencia del cultivo.",
+    expected:
+      "Demanda atmosferica dentro del rango operativo de referencia del cultivo.",
     high: "Demanda atmosferica alta; conviene contrastar con la reserva de agua y observacion de lote.",
-    very_high: "Demanda atmosferica muy alta; aumenta la probabilidad de regulacion estomatica defensiva.",
+    very_high:
+      "Demanda atmosferica muy alta; aumenta la probabilidad de regulacion estomatica defensiva.",
   };
   return `${messages[level]}${stageContext}`;
 }

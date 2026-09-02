@@ -4,14 +4,20 @@ import {
   CULTIVOS_DISPONIBLES,
   Cultivo,
   evaluarDemandaHidricaHora,
-  FuenteMeteorologicaNormalizada,
+  EstadoEstomaticoEstimado,
   IEstadoDemandaHidricaHora,
   IRespuestaAgrometeorologiaSiembra,
   ISiembra,
   NivelDemandaHidricaHoraria,
+  resumirVentanasAperturaEstomatica,
 } from 'modelos/src';
 import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
+
+interface IVentanaEstomatica {
+  durationHours: number;
+  periodsLabel: string;
+}
 
 @Component({
   selector: 'app-card-demanda-hidrica',
@@ -39,9 +45,7 @@ export class CardDemandaHidricaComponent implements OnChanges {
 
   public get crop(): Cultivo | undefined {
     const value = this.siembra?.semilla?.cultivo;
-    return (CULTIVOS_DISPONIBLES as readonly string[]).includes(String(value))
-      ? (value as Cultivo)
-      : undefined;
+    return (CULTIVOS_DISPONIBLES as readonly string[]).includes(String(value)) ? (value as Cultivo) : undefined;
   }
 
   public get imageUrl(): string {
@@ -66,17 +70,34 @@ export class CardDemandaHidricaComponent implements OnChanges {
   }
 
   public get periodLabel(): string {
-    return this.selected?.isDaylight
-      ? 'Actividad diurna estimada'
-      : 'Actividad estomatica habitualmente reducida';
+    const labels: Record<EstadoEstomaticoEstimado, string> = {
+      open: 'Apertura estomatica probable',
+      regulated: 'Regulacion estomatica probable',
+      closed: 'Estomas probablemente cerrados',
+      not_evaluated: 'Etapa fuera de evaluacion',
+      no_data: 'Estado estomatico sin evaluar',
+    };
+    return labels[this.selected?.stomatalState || 'no_data'];
   }
 
   public get stageLabel(): string {
     return this.selected?.stage || 'Etapa sin confirmar';
   }
 
-  public get sourceLabel(): string {
-    return this.fuenteLabel(this.selected?.source);
+  public get stomatalWindow(): IVentanaEstomatica {
+    const windows = resumirVentanasAperturaEstomatica(this.hours);
+    if (!windows.length) {
+      return { durationHours: 0, periodsLabel: 'Sin ventana favorable' };
+    }
+    return {
+      durationHours: windows.reduce((total, window) => total + window.durationHours, 0),
+      periodsLabel: windows
+        .map(
+          (window) =>
+            `${this.timeLabel(window.desde, window.timezone)}–${this.timeLabel(window.hasta, window.timezone)}`
+        )
+        .join(' · '),
+    };
   }
 
   public ngOnChanges(changes: SimpleChanges): void {
@@ -134,10 +155,14 @@ export class CardDemandaHidricaComponent implements OnChanges {
   }
 
   public hourLabel(hour: IEstadoDemandaHidricaHora): string {
-    const date = new Date(hour.timestamp);
+    return this.timeLabel(hour.timestamp, hour.timezone);
+  }
+
+  private timeLabel(timestamp: string, timezone: string): string {
+    const date = new Date(timestamp);
     if (Number.isNaN(date.getTime())) return '--';
     return date.toLocaleTimeString('es-AR', {
-      timeZone: hour.timezone,
+      timeZone: timezone,
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
@@ -170,7 +195,7 @@ export class CardDemandaHidricaComponent implements OnChanges {
     if (!crop) return this.reset();
     const days = new Map(response.series.map((day) => [day.date, day]));
     const states = (response.hourlySeries || []).map((hour) =>
-      evaluarDemandaHidricaHora(hour, crop, days.get(hour.localDate)),
+      evaluarDemandaHidricaHora(hour, crop, days.get(hour.localDate))
     );
     if (!states.length) {
       this.hours = [];
@@ -185,22 +210,6 @@ export class CardDemandaHidricaComponent implements OnChanges {
     const targetDate = this.selected.localDate;
     const sameDate = states.filter((hour) => hour.localDate === targetDate);
     this.hours = (sameDate.length ? sameDate : states.slice(-24)).slice(0, 24);
-  }
-
-  private fuenteLabel(source?: FuenteMeteorologicaNormalizada): string {
-    const labels: Record<FuenteMeteorologicaNormalizada, string> = {
-      sensor: 'Sensor de campo',
-      station: 'Central meteorologica',
-      open_meteo: 'Open-Meteo',
-      chaman_meteo: 'Chaman-Meteo',
-      mixed: 'Fuentes combinadas',
-      derived_sensor: 'Derivado de sensor',
-      derived_station: 'Derivado de central',
-      derived_open_meteo: 'Derivado de Open-Meteo',
-      derived_chaman_meteo: 'Derivado de Chaman-Meteo',
-      gap_filled: 'Serie completada',
-    };
-    return source ? labels[source] : 'Fuente no disponible';
   }
 
   private reset(): void {
