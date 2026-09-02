@@ -28,6 +28,7 @@ interface IVentanaEstomatica {
 export class CardDemandaHidricaComponent implements OnChanges {
   private static readonly cache = new Map<string, IRespuestaAgrometeorologiaSiembra>();
   private static readonly pending = new Map<string, Promise<IRespuestaAgrometeorologiaSiembra>>();
+  private static readonly imagePreloads = new Map<string, HTMLImageElement>();
 
   @Input() public siembra?: ISiembra;
 
@@ -49,6 +50,10 @@ export class CardDemandaHidricaComponent implements OnChanges {
   }
 
   public get imageUrl(): string {
+    return `/images/water-demand/${this.normalizar(this.crop)}.webp`;
+  }
+
+  public get imageFallbackUrl(): string {
     return `/images/water-demand/${this.normalizar(this.crop)}.png`;
   }
 
@@ -101,7 +106,10 @@ export class CardDemandaHidricaComponent implements OnChanges {
   }
 
   public ngOnChanges(changes: SimpleChanges): void {
-    if (changes['siembra']) void this.cargar();
+    if (changes['siembra']) {
+      this.preloadImage();
+      void this.cargar();
+    }
   }
 
   public selectHour(hour: IEstadoDemandaHidricaHora): void {
@@ -217,6 +225,17 @@ export class CardDemandaHidricaComponent implements OnChanges {
     this.hours = [];
     this.selected = undefined;
     this.error = undefined;
+  }
+
+  private preloadImage(): void {
+    if (!this.crop || typeof Image === 'undefined') return;
+    const url = this.imageUrl;
+    if (CardDemandaHidricaComponent.imagePreloads.has(url)) return;
+    const image = new Image();
+    image.decoding = 'async';
+    image.fetchPriority = 'high';
+    image.src = url;
+    CardDemandaHidricaComponent.imagePreloads.set(url, image);
   }
 
   private isoDate(value: Date): string {

@@ -30,7 +30,18 @@
           [class.stomata-open]="current.stomatalState === 'open'"
           [class.stomata-regulated]="current.stomatalState === 'regulated'"
         >
-          <img [src]="imageUrl" [alt]="'Representacion de ' + crop + ' y sus raices'" loading="lazy" />
+          <picture>
+            <source [srcset]="imageUrl" type="image/webp" />
+            <img
+              [src]="imageFallbackUrl"
+              [alt]="'Representacion de ' + crop + ' y sus raices'"
+              width="768"
+              height="1152"
+              loading="eager"
+              decoding="async"
+              fetchpriority="high"
+            />
+          </picture>
           <div class="scene-shade"></div>
           <div class="scene-topline">
             <span class="period-pill">
