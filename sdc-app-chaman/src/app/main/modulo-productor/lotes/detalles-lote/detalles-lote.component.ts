@@ -121,6 +121,7 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   public estadoFenologiaArveja?: IEstadoFenologiaArveja;
   public cargandoPrimario: boolean = false;
   public refrescandoDetalle: boolean = false;
+  public cargarServiciosAlVolver: boolean = false;
   private readonly numeroAr = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
   private destroyed = false;
 
@@ -393,6 +394,10 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
 
   async ngOnInit(): Promise<void> {
     const idLote = this.activatedRoute.snapshot.paramMap.get('id');
+    this.cargarServiciosAlVolver = this.activatedRoute.snapshot.fragment === 'manejo-cultivo';
+    if (this.cargarServiciosAlVolver) {
+      this.programarEnfoqueManejo();
+    }
     const loteParam = this.paramsService.get('detallesLote') as IDetallesLote | undefined;
     const loteCacheado = idLote ? DetallesLoteComponent.loteCache.get(idLote) : undefined;
     // Nunca renderizar un lote conservado por navegación si no coincide con
@@ -414,6 +419,21 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     }
 
     void this.hidratarSiembraOperativa();
+  }
+
+  private programarEnfoqueManejo(intento = 0): void {
+    if (typeof document === 'undefined') return;
+    setTimeout(() => {
+      if (this.destroyed) return;
+      const seccion = document.getElementById('manejo-cultivo');
+      if (seccion) {
+        seccion.scrollIntoView({ behavior: intento ? 'auto' : 'smooth', block: 'start' });
+        return;
+      }
+      if (intento < 30) {
+        this.programarEnfoqueManejo(intento + 1);
+      }
+    }, intento ? 50 : 0);
   }
 
   private getSiembraOperativa(): IDetalleSiembra | undefined {

@@ -126,6 +126,7 @@ export class CardUltimaFumigacionComponent implements OnInit, OnDestroy, OnChang
   public async fumigar(): Promise<void> {
     this.params.set('fumigarLote', this.lote);
     this.params.set('editFumigacion', false);
+    this.params.set('retornoManejoLoteId', this.lote?._id);
     this.router.navigate(['lotes', 'fumigar', this.lote?._id]);
   }
 

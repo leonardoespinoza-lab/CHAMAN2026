@@ -117,6 +117,7 @@ export class CardUltimaFertilizacionComponent implements OnInit, OnDestroy {
   public async fertilizar(): Promise<void> {
     this.params.set('fertilizarLote', this.lote);
     this.params.set('editFertilizacion', false);
+    this.params.set('retornoManejoLoteId', this.lote?._id);
     this.router.navigate(['lotes', 'fertilizar', this.lote?._id]);
   }
 

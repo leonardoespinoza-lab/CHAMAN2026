@@ -22,6 +22,7 @@ export class DrawerListadoFumigacionesComponent implements OnInit, OnDestroy {
   @Output() public visibleChange = new EventEmitter<boolean>();
 
   @Input() public fumigaciones: IFumigacion[] = [];
+  @Input() public idLote?: string;
 
   public lineas(dato: IFumigacion) {
     return getLineasFumigacion(dato);
@@ -39,6 +40,7 @@ export class DrawerListadoFumigacionesComponent implements OnInit, OnDestroy {
 
   public editar(dato: IFumigacion): void {
     this.params.set('editFumigacion', dato);
+    this.params.set('retornoManejoLoteId', this.idLote);
     this.router.navigate(['/lotes/fumigar/', dato._id]);
   }
 

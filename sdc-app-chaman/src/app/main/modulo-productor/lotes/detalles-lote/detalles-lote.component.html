@@ -369,7 +369,7 @@
     }
   }
 
-  @defer (on viewport; on interaction(loadServicesTrigger); prefetch on idle) {
+  @defer (when cargarServiciosAlVolver; on viewport; on interaction(loadServicesTrigger); prefetch on idle) {
     <div class="services-stack">
       @if (siembra?.fechaCosecha) {
         <app-card-rendimiento class="service-panel" [siembra]="siembra"></app-card-rendimiento>
@@ -523,7 +523,7 @@
         helper.puedeVerModulo('Fumigacion') ||
         helper.puedeVerModulo('Enfermedades')
       ) {
-        <section class="service-group management-section">
+        <section id="manejo-cultivo" class="service-group management-section">
           <div class="service-group-header">
             <div>
               <span>Trazabilidad</span>

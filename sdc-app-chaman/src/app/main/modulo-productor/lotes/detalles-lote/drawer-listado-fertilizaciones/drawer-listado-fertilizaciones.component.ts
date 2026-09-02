@@ -22,6 +22,7 @@ export class DrawerListadoFertilizacionesComponent implements OnInit, OnDestroy 
   @Output() public visibleChange = new EventEmitter<boolean>();
 
   @Input() public fertilizaciones: IFertilizacion[] = [];
+  @Input() public idLote?: string;
 
   constructor(
     public helper: HelperService,
@@ -39,6 +40,7 @@ export class DrawerListadoFertilizacionesComponent implements OnInit, OnDestroy 
 
   public editar(dato: IFertilizacion): void {
     this.params.set('editFertilizacion', dato);
+    this.params.set('retornoManejoLoteId', this.idLote || dato.idLote);
     this.router.navigate(['/lotes/fertilizar/', dato._id]);
   }
 

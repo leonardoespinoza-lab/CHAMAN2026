@@ -73,5 +73,6 @@
 
 <app-drawer-listado-fumigaciones
   [fumigaciones]="siembra?.fumigaciones || []"
+  [idLote]="lote?._id"
   [(visible)]="verDrawerFumigaciones"
 ></app-drawer-listado-fumigaciones>

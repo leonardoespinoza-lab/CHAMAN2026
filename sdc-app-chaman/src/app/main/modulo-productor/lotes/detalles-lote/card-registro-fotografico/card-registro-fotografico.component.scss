@@ -1,11 +1,13 @@
 :host { display: block; min-width: 0; }
 .field-photo-card { height: 100%; padding: 1rem; border: 1px solid #c7dde0; border-radius: 14px; background: rgba(255,255,255,.88); }
 .field-card-header { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
-.field-card-header > div { display:grid; gap:.12rem; }
+.field-card-copy { display:grid; gap:.12rem; }
 .field-card-header span { color:var(--p-primary-color); font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; }
 .field-card-header strong { color:#122436; font-size:1.15rem; }
 .field-card-header small { color:#64748b; }
-.field-header-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:.4rem; }
+.field-header-actions { display:grid; grid-template-columns:repeat(2,minmax(96px,1fr)); align-items:stretch; gap:.5rem; }
+:host ::ng-deep .field-header-actions .p-button { width:100%; min-height:40px; justify-content:center; }
+:host ::ng-deep .field-header-actions .p-button-label { font-weight:750; }
 .field-card-loading { min-height:132px; display:grid; place-content:center; color:#64748b; gap:.5rem; }
 .photo-strip { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.5rem; margin-top:.9rem; }
 .photo-tile { position:relative; min-height:118px; padding:0; border:0; border-radius:11px; overflow:hidden; cursor:pointer; background:#e9f4f3; }
@@ -31,6 +33,10 @@
 .field-empty-state > i { width:42px; height:42px; display:grid; place-items:center; border-radius:12px; background:color-mix(in srgb,var(--p-primary-color),white 84%); color:var(--p-primary-color); font-size:1.2rem; }
 .field-empty-state div { display:grid; gap:.2rem; }
 .field-empty-state strong { color:#183242; }
+.field-empty-state--compact { min-height:auto; margin-top:.55rem; padding:.75rem; }
+.field-empty-state--compact > i { width:36px; height:36px; border-radius:10px; font-size:1rem; }
+.field-empty-state--compact strong { font-size:.86rem; }
+.field-empty-state--compact small { font-size:.74rem; }
 .capture-actions { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; }
 .capture-button { min-height:86px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.4rem; border:1px solid #b9d6d8; border-radius:13px; color:var(--p-primary-color); font-weight:800; cursor:pointer; background:#f7fbfb; }
 .capture-button.capture-primary { color:var(--p-primary-contrast-color,#fff); background:linear-gradient(135deg,var(--p-primary-color),var(--p-accent-color)); border-color:var(--p-primary-color); }

@@ -1,6 +1,6 @@
 <section class="custom-card chaman-surface field-photo-card">
   <header class="field-card-header">
-    <div>
+    <div class="field-card-copy">
       <span>Registro fotográfico</span>
       <strong>Evidencia de campo</strong>
       <small>{{ fotos.length ? fotos.length + ' foto' + (fotos.length === 1 ? '' : 's') + ' documentada' + (fotos.length === 1 ? '' : 's') : 'Sin fotos de recorrida' }}</small>
@@ -8,7 +8,7 @@
     @if (!helper.soloLectura()) {
       <div class="field-header-actions">
         <p-button label="Foto" icon="pi pi-camera" [rounded]="true" (onClick)="abrirRegistro()" />
-        <p-button label="Audio" icon="pi pi-microphone" [rounded]="true" [outlined]="true" (onClick)="abrirRegistroAudio()" />
+        <p-button label="Audio" icon="pi pi-microphone" [rounded]="true" (onClick)="abrirRegistroAudio()" />
       </div>
     }
   </header>
@@ -79,6 +79,14 @@
             <i class="pi pi-play-circle"></i>
           </button>
         }
+      </div>
+    } @else {
+      <div class="field-empty-state field-empty-state--compact">
+        <i class="pi pi-microphone"></i>
+        <div>
+          <strong>Registre una nota de voz de la recorrida</strong>
+          <small>Los audios quedan fechados junto con el resto de la evidencia del lote.</small>
+        </div>
       </div>
     }
   </section>

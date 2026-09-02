@@ -117,12 +117,14 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
   }
 
   public async fertilizar(data: ILoteTabla): Promise<void> {
+    this.params.remove('retornoManejoLoteId');
     this.params.set('fertilizarLote', data);
     this.params.set('editFertilizacion', false);
     this.router.navigate(['lotes', 'fertilizar', data._id]);
   }
 
   public async fumigar(data: ILoteTabla): Promise<void> {
+    this.params.remove('retornoManejoLoteId');
     this.params.set('fumigarLote', data);
     this.params.set('editFumigacion', false);
     this.router.navigate(['lotes', 'fumigar', data._id]);

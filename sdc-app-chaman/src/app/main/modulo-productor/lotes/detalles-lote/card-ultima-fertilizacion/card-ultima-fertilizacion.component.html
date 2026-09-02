@@ -67,5 +67,6 @@
 
 <app-drawer-listado-fertilizaciones
   [fertilizaciones]="lote?.fertilizaciones || []"
+  [idLote]="lote?._id"
   [(visible)]="verDrawerFertilizaciones"
 ></app-drawer-listado-fertilizaciones>

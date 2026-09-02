@@ -1,4 +1,5 @@
 import { Component, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
 import { FormArray, FormControl, FormGroup, Validators } from '@angular/forms';
 import { TranslateService } from '@ngx-translate/core';
 import {
@@ -43,7 +44,8 @@ export class CrearEditarFumigacionComponent implements OnInit {
     private translate: TranslateService,
     private service: FumigacionService,
     private helper: HelperService,
-    private listado: ListadosService
+    private listado: ListadosService,
+    private router: Router
   ) {}
 
   // FORMULARIO
@@ -120,7 +122,13 @@ export class CrearEditarFumigacionComponent implements OnInit {
     this.loading = false;
   }
 
-  public volver() {
+  public volver(): void {
+    const idLote = this.paramsService.get('retornoManejoLoteId') as unknown as string | undefined;
+    if (idLote) {
+      this.paramsService.remove('retornoManejoLoteId');
+      void this.router.navigate(['lotes', 'detalles', idLote], { fragment: 'manejo-cultivo' });
+      return;
+    }
     window.history.back();
   }
 
