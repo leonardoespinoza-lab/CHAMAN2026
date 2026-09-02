@@ -1,0 +1,404 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.water-demand-card {
+  overflow: hidden;
+}
+
+.water-demand-header,
+.hourly-heading,
+.source-row,
+.water-demand-card footer {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.water-demand-header {
+  margin-bottom: 0.8rem;
+}
+
+.water-demand-header p,
+.water-demand-header h3,
+.water-demand-header span,
+.hourly-heading span,
+.hourly-heading strong,
+.hourly-heading small,
+.reading-title span,
+.reading-title strong,
+.reading-title small,
+.metric-grid span,
+.metric-grid strong,
+.interpretation,
+.source-row span,
+.water-demand-card footer span {
+  margin: 0;
+}
+
+.water-demand-header h3 {
+  color: var(--p-text-color);
+  font-size: 1.35rem;
+  line-height: 1.1;
+  margin-top: 0.15rem;
+}
+
+.water-demand-header > div > span,
+.hourly-heading small,
+.reading-title span,
+.reading-title small,
+.metric-grid span,
+.source-row,
+.water-demand-card footer {
+  color: var(--p-text-muted-color);
+}
+
+.water-demand-header > div > span {
+  display: block;
+  font-size: 0.9rem;
+  margin-top: 0.22rem;
+}
+
+.refresh-button {
+  align-items: center;
+  background: var(--p-surface-0);
+  border: 1px solid #b9cad8;
+  border-radius: 999px;
+  color: #087c7b;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 800;
+  gap: 0.4rem;
+  padding: 0.58rem 0.9rem;
+}
+
+.refresh-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.water-demand-layout {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: minmax(300px, 0.95fr) minmax(320px, 1.05fr);
+}
+
+.plant-scene {
+  aspect-ratio: 16 / 10;
+  background: #071c1d;
+  border: 1px solid rgba(132, 210, 199, 0.38);
+  border-radius: 12px;
+  min-height: 300px;
+  overflow: hidden;
+  position: relative;
+}
+
+.plant-scene img,
+.scene-shade {
+  height: 100%;
+  inset: 0;
+  position: absolute;
+  width: 100%;
+}
+
+.plant-scene img {
+  object-fit: cover;
+  object-position: center 48%;
+}
+
+.scene-shade {
+  background: linear-gradient(90deg, rgba(3, 19, 20, 0.62), transparent 42%, rgba(3, 19, 20, 0.5));
+}
+
+.scene-topline,
+.air-metric,
+.root-metric {
+  position: absolute;
+  z-index: 2;
+}
+
+.scene-topline {
+  display: flex;
+  gap: 0.45rem;
+  inset: 0.7rem 0.7rem auto;
+  justify-content: space-between;
+}
+
+.period-pill,
+.level-pill {
+  align-items: center;
+  backdrop-filter: blur(8px);
+  background: rgba(4, 23, 24, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 850;
+  gap: 0.35rem;
+  padding: 0.4rem 0.58rem;
+}
+
+.level-pill {
+  background: rgba(14, 125, 120, 0.86);
+}
+
+.level-high .level-pill,
+.level-very_high .level-pill {
+  background: rgba(199, 83, 46, 0.9);
+}
+
+.level-low .level-pill,
+.level-night .level-pill {
+  background: rgba(39, 96, 151, 0.88);
+}
+
+.air-metric,
+.root-metric {
+  color: #fff;
+  display: grid;
+  gap: 0.06rem;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
+}
+
+.air-metric {
+  left: 0.9rem;
+  top: 35%;
+}
+
+.root-metric {
+  bottom: 1rem;
+  right: 0.9rem;
+  text-align: right;
+}
+
+.air-metric span,
+.root-metric span {
+  color: #8fe1d7;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.air-metric strong,
+.root-metric strong {
+  font-size: 1.35rem;
+}
+
+.air-metric small,
+.root-metric small {
+  font-size: 0.72rem;
+}
+
+.flow-path {
+  bottom: 31%;
+  display: grid;
+  gap: 0.35rem;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 3;
+}
+
+.flow-path i {
+  animation: water-flow 1.8s ease-in-out infinite;
+  background: #48d8d0;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #48d8d0;
+  height: 5px;
+  opacity: 0.8;
+  width: 5px;
+}
+
+.flow-path i:nth-child(2) { animation-delay: 0.25s; }
+.flow-path i:nth-child(3) { animation-delay: 0.5s; }
+.flow-path i:nth-child(4) { animation-delay: 0.75s; }
+.level-night .flow-path i,
+.level-not_evaluated .flow-path i { animation-duration: 3.8s; opacity: 0.35; }
+
+.water-demand-reading {
+  background: color-mix(in srgb, var(--p-primary-color) 3%, var(--p-surface-0));
+  border: 1px solid #c9d8e2;
+  border-radius: 12px;
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.9rem;
+}
+
+.reading-title {
+  border-bottom: 1px solid #dbe4ea;
+  display: grid;
+  gap: 0.15rem;
+  padding-bottom: 0.65rem;
+}
+
+.reading-title span,
+.hourly-heading span {
+  color: #0b8883;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+}
+
+.reading-title strong {
+  color: var(--p-text-color);
+  font-size: 1.55rem;
+}
+
+.metric-grid {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.metric-grid article {
+  background: var(--p-surface-0);
+  border: 1px solid #d8e2e8;
+  border-radius: 8px;
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+  padding: 0.65rem;
+}
+
+.metric-grid strong {
+  color: var(--p-text-color);
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.interpretation {
+  background: rgba(216, 243, 238, 0.55);
+  border-left: 3px solid #16bdb5;
+  border-radius: 6px;
+  color: var(--p-text-color);
+  line-height: 1.35;
+  padding: 0.68rem;
+}
+
+.source-row {
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+}
+
+.source-row span {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.hourly-heading {
+  align-items: flex-end;
+  margin: 0.9rem 0 0.5rem;
+}
+
+.hourly-heading > div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.hourly-heading strong {
+  color: var(--p-text-color);
+}
+
+.hourly-heading small {
+  font-size: 0.78rem;
+  text-align: right;
+}
+
+.hourly-strip {
+  display: grid;
+  gap: 0.35rem;
+  grid-auto-columns: minmax(58px, 1fr);
+  grid-auto-flow: column;
+  overflow-x: auto;
+  padding: 0.15rem 0.05rem 0.45rem;
+  scrollbar-width: thin;
+}
+
+.hourly-strip button {
+  background: var(--p-surface-0);
+  border: 1px solid #cad8e1;
+  border-radius: 8px;
+  color: var(--p-text-color);
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 0.05rem;
+  justify-items: center;
+  min-height: 74px;
+  padding: 0.38rem 0.22rem;
+}
+
+.hourly-strip button.active {
+  border-color: #0bbab1;
+  box-shadow: 0 0 0 2px rgba(11, 186, 177, 0.18);
+}
+
+.hourly-strip button.level-high,
+.hourly-strip button.level-very_high { background: rgba(235, 112, 64, 0.1); }
+.hourly-strip button.level-low { background: rgba(65, 151, 210, 0.1); }
+.hourly-strip button.level-night { background: rgba(35, 65, 100, 0.1); }
+.hourly-strip button.level-no_data,
+.hourly-strip button.level-not_evaluated { opacity: 0.62; }
+
+.hourly-strip span,
+.hourly-strip small {
+  color: var(--p-text-muted-color);
+  font-size: 0.68rem;
+}
+
+.hourly-strip strong { font-size: 0.95rem; }
+.hourly-strip i { color: #15a99f; font-size: 0.78rem; }
+.hourly-strip .pi-moon { color: #476a91; }
+
+.water-demand-card footer {
+  align-items: flex-start;
+  border-top: 1px solid #dbe4ea;
+  font-size: 0.76rem;
+  justify-content: flex-start;
+  line-height: 1.3;
+  margin-top: 0.65rem;
+  padding-top: 0.6rem;
+}
+
+.water-demand-state {
+  align-items: center;
+  background: var(--p-surface-0);
+  border: 1px dashed #b9ccd7;
+  border-radius: 10px;
+  color: var(--p-text-muted-color);
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
+  min-height: 150px;
+  padding: 1rem;
+}
+
+.water-demand-state.error { color: #a54334; }
+
+@keyframes water-flow {
+  0%, 100% { opacity: 0.2; transform: translateY(8px) scale(0.75); }
+  45% { opacity: 1; transform: translateY(-5px) scale(1.15); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow-path i { animation: none; }
+}
+
+@media (max-width: 860px) {
+  .water-demand-layout { grid-template-columns: 1fr; }
+  .plant-scene { min-height: 280px; }
+}
+
+@media (max-width: 560px) {
+  .water-demand-header,
+  .hourly-heading { align-items: flex-start; flex-direction: column; }
+  .refresh-button { width: 100%; justify-content: center; }
+  .plant-scene { min-height: 260px; }
+  .metric-grid { grid-template-columns: 1fr 1fr; }
+  .hourly-heading small { text-align: left; }
+}

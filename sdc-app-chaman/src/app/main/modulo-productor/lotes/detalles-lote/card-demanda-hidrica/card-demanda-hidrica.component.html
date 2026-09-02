@@ -1,0 +1,138 @@
+@if (mostrar) {
+  <section class="custom-card water-demand-card">
+    <header class="water-demand-header">
+      <div>
+        <p class="titulo-card">RESPUESTA HIDRICA DEL CULTIVO</p>
+        <h3>{{ title }}</h3>
+        <span>VPD, ambiente y etapa fenologica integrados hora por hora.</span>
+      </div>
+      <button type="button" class="refresh-button" [disabled]="loading" (click)="cargar(true)">
+        <i class="pi pi-refresh" [class.pi-spin]="loading"></i>
+        Actualizar
+      </button>
+    </header>
+
+    @if (loading && !selected) {
+      <div class="water-demand-state" role="status">
+        <i class="pi pi-spin pi-spinner"></i>
+        <span>Preparando la lectura horaria del lote...</span>
+      </div>
+    } @else if (error) {
+      <div class="water-demand-state error" role="status">
+        <i class="pi pi-cloud"></i>
+        <span>{{ error }}</span>
+      </div>
+    } @else if (selected; as current) {
+      <div class="water-demand-layout">
+        <article class="plant-scene" [class]="levelClass(current.level)">
+          <img [src]="imageUrl" [alt]="'Representacion de ' + crop + ' y sus raices'" loading="lazy" />
+          <div class="scene-shade"></div>
+          <div class="scene-topline">
+            <span class="period-pill">
+              <i [class]="current.isDaylight ? 'pi pi-sun' : 'pi pi-moon'"></i>
+              {{ current.isDaylight ? 'Dia' : 'Noche' }} · {{ hourLabel(current) }}
+            </span>
+            <span class="level-pill">{{ levelLabel }}</span>
+          </div>
+          <div class="air-metric">
+            <span>ATMOSFERA</span>
+            <strong>{{ current.vpdKpa === undefined ? '-' : (current.vpdKpa | number: '1.2-2') }} kPa</strong>
+            <small>VPD estimado</small>
+          </div>
+          <div class="root-metric">
+            <span>RESERVA DEL PERFIL</span>
+            <strong>
+              {{
+                current.availableWaterPercentage === undefined
+                  ? '-'
+                  : (current.availableWaterPercentage | number: '1.0-0') + '%'
+              }}
+            </strong>
+            <small>Balance hidrico disponible</small>
+          </div>
+          <div class="flow-path" aria-hidden="true">
+            <i></i><i></i><i></i><i></i>
+          </div>
+        </article>
+
+        <div class="water-demand-reading">
+          <div class="reading-title">
+            <span>{{ dateLabel(current) }} · {{ observationLabel(current) }}</span>
+            <strong>{{ levelLabel }}</strong>
+            <small>{{ periodLabel }}</small>
+          </div>
+
+          <div class="metric-grid">
+            <article>
+              <span>Temperatura</span>
+              <strong>{{ current.temperatureC === undefined ? '-' : (current.temperatureC | number: '1.1-1') + ' °C' }}</strong>
+            </article>
+            <article>
+              <span>Humedad relativa</span>
+              <strong>{{ current.relativeHumidityPct === undefined ? '-' : (current.relativeHumidityPct | number: '1.0-0') + '%' }}</strong>
+            </article>
+            <article>
+              <span>Referencia VPD</span>
+              <strong>{{ current.vpdThresholdKpa | number: '1.1-1' }} kPa</strong>
+            </article>
+            <article>
+              <span>Potencial del aire Ψ</span>
+              <strong>
+                {{
+                  current.airWaterPotentialMpa === undefined
+                    ? '-'
+                    : (current.airWaterPotentialMpa | number: '1.0-0') + ' MPa'
+                }}
+              </strong>
+            </article>
+            <article>
+              <span>Etapa</span>
+              <strong>{{ stageLabel }}</strong>
+            </article>
+          </div>
+
+          <p class="interpretation">{{ current.interpretation }}</p>
+          <div class="source-row">
+            <span><i class="pi pi-database"></i> {{ sourceLabel }}</span>
+            <span>{{ current.completenessPercentage | number: '1.0-0' }}% completo</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hourly-heading">
+        <div>
+          <span>EVOLUCION DEL DIA</span>
+          <strong>Selecciona una hora para revisar el estado</strong>
+        </div>
+        <small>Los umbrales nocturnos no se interpretan como estres diurno.</small>
+      </div>
+      <div class="hourly-strip" role="list" aria-label="Lecturas horarias">
+        @for (hour of hours; track hour.timestamp) {
+          <button
+            type="button"
+            role="listitem"
+            [class]="levelClass(hour.level)"
+            [class.active]="current.timestamp === hour.timestamp"
+            [attr.aria-pressed]="current.timestamp === hour.timestamp"
+            (click)="selectHour(hour)"
+          >
+            <span>{{ hourLabel(hour) }}</span>
+            <i [class]="hour.isDaylight ? 'pi pi-sun' : 'pi pi-moon'"></i>
+            <strong>{{ hour.vpdKpa === undefined ? '-' : (hour.vpdKpa | number: '1.1-1') }}</strong>
+            <small>kPa</small>
+          </button>
+        }
+      </div>
+
+      <footer>
+        <i class="pi pi-info-circle"></i>
+        <span>{{ current.scope }}</span>
+      </footer>
+    } @else {
+      <div class="water-demand-state" role="status">
+        <i class="pi pi-clock"></i>
+        <span>Aun no hay cobertura horaria suficiente para este lote.</span>
+      </div>
+    }
+  </section>
+}

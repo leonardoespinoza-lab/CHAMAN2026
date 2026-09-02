@@ -8,3 +8,4 @@ export * from "./catalogo-termico-varietal";
 export * from "./ficha-varietal";
 export * from "./catalogo-cultivos";
 export * from "./chaman-meteo";
+export * from "./demanda-hidrica-horaria";

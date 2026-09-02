@@ -17,12 +17,18 @@ case "${CHAMAN_COOKIE_AUTH_ENABLED:-false}" in
   *) cookie_auth=false ;;
 esac
 
+case "${CHAMAN_WATER_DEMAND_CARD_ENABLED:-false}" in
+  true|TRUE|1|yes|YES) water_demand_card=true ;;
+  *) water_demand_card=false ;;
+esac
+
 cat > /usr/share/nginx/html/runtime-config.bootstrap <<EOF
 globalThis.__CHAMAN_CONFIG__ = Object.freeze({
   API: "$api",
   WS: "$ws",
   TILES_URL: "$tiles",
-  COOKIE_AUTH: $cookie_auth
+  COOKIE_AUTH: $cookie_auth,
+  WATER_DEMAND_CARD_ENABLED: $water_demand_card
 });
 EOF
 

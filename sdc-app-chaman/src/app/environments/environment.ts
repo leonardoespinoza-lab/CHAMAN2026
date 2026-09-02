@@ -8,3 +8,5 @@ export const WS = runtime.WS || 'ws://127.0.0.1:5006';
 export const API = runtime.API || 'http://127.0.0.1:5002';
 export const TILES_URL = runtime.TILES_URL || 'http://127.0.0.1:5002/data';
 export const COOKIE_AUTH = runtime.COOKIE_AUTH === true || runtime.COOKIE_AUTH === 'true';
+export const WATER_DEMAND_CARD_ENABLED =
+  runtime.WATER_DEMAND_CARD_ENABLED === true || runtime.WATER_DEMAND_CARD_ENABLED === 'true';

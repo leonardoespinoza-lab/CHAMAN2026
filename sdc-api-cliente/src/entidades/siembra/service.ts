@@ -135,10 +135,16 @@ export class SiembrasService {
     id: string,
     desde: string | undefined,
     hasta: string | undefined,
+    includeHourly: boolean,
     permiso: IPermiso,
   ): Promise<IRespuestaAgrometeorologiaSiembra> {
     await this.getById(id, permiso);
-    return await this.repository.agrometeorologia(id, desde, hasta);
+    return await this.repository.agrometeorologia(
+      id,
+      desde,
+      hasta,
+      includeHourly,
+    );
   }
 
   async reprocesarAgrometeorologia(

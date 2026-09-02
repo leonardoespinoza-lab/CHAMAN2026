@@ -387,6 +387,9 @@
               <strong>Riesgos y recomendaciones</strong>
             </div>
           </div>
+          @if (helper.puedeVerModulo('Clima') && mostrarDemandaHidricaHoraria) {
+            <app-card-demanda-hidrica class="service-panel" [siembra]="siembra"></app-card-demanda-hidrica>
+          }
           @if ((helper.puedeVerModulo('Clima') && mostrarRiesgosAgroclimaticos) || helper.puedeVerModulo('Riego')) {
             <div
               class="operative-monitoring-row"

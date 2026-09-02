@@ -142,6 +142,7 @@ function runtimeConfigScript() {
     WS: process.env.CHAMAN_WEB_WS_URL || process.env.WS_URL || process.env.WS || '',
     TILES_URL: process.env.CHAMAN_WEB_TILES_URL || process.env.TILES_URL || '',
     COOKIE_AUTH: process.env.CHAMAN_COOKIE_AUTH_ENABLED === 'true',
+    WATER_DEMAND_CARD_ENABLED: process.env.CHAMAN_WATER_DEMAND_CARD_ENABLED === 'true',
   };
 
   return `window.__CHAMAN_CONFIG__ = ${JSON.stringify(config)};`;

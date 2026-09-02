@@ -25,3 +25,5 @@ export const WS = runtime.WS || fallback.WS;
 export const API = runtime.API || fallback.API;
 export const TILES_URL = runtime.TILES_URL || (API ? `${API}/data` : '');
 export const COOKIE_AUTH = runtime.COOKIE_AUTH === true || runtime.COOKIE_AUTH === 'true';
+export const WATER_DEMAND_CARD_ENABLED =
+  runtime.WATER_DEMAND_CARD_ENABLED === true || runtime.WATER_DEMAND_CARD_ENABLED === 'true';

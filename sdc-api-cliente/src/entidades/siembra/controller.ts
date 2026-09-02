@@ -75,9 +75,16 @@ export class SiembrasController {
     @Param('id') id: string,
     @Query('desde') desde: string | undefined,
     @Query('hasta') hasta: string | undefined,
+    @Query('includeHourly') includeHourly: string | undefined,
     @GetPermiso() permiso: IPermiso,
   ): Promise<IRespuestaAgrometeorologiaSiembra> {
-    return await this.service.agrometeorologia(id, desde, hasta, permiso);
+    return await this.service.agrometeorologia(
+      id,
+      desde,
+      hasta,
+      includeHourly === 'true',
+      permiso,
+    );
   }
 
   @Post('/:id/agrometeorologia/reprocesar')

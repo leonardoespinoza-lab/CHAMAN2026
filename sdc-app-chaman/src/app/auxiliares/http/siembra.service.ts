@@ -101,10 +101,16 @@ export class SiembraService {
     return this.http.get(`/siembras/${id}/huella-hidrica/seguimiento`);
   }
 
-  public agrometeorologia(id: string, desde?: string, hasta?: string): Promise<IRespuestaAgrometeorologiaSiembra> {
+  public agrometeorologia(
+    id: string,
+    desde?: string,
+    hasta?: string,
+    includeHourly = false
+  ): Promise<IRespuestaAgrometeorologiaSiembra> {
     const params: Record<string, string> = {};
     if (desde) params['desde'] = desde;
     if (hasta) params['hasta'] = hasta;
+    if (includeHourly) params['includeHourly'] = 'true';
     return this.http.get(`/siembras/${id}/agrometeorologia`, {
       params,
     });

@@ -30,10 +30,15 @@ export class SiembrasRepository {
     id: string,
     desde?: string,
     hasta?: string,
+    includeHourly = false,
   ): Promise<IRespuestaAgrometeorologiaSiembra> {
     const url = `${API_CLIMA}/agrometeorologia/siembras/${id}`;
     return await this.axios.GET<IRespuestaAgrometeorologiaSiembra>(url, {
-      params: { from: desde, to: hasta },
+      params: {
+        from: desde,
+        to: hasta,
+        ...(includeHourly ? { includeHourly: 'true' } : {}),
+      },
       headers: this.agrometeorologiaHeaders(),
     });
   }

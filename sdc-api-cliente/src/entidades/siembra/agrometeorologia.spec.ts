@@ -38,6 +38,7 @@ describe('SiembrasService agrometeorologia', () => {
       'siembra-1',
       '2026-07-01',
       '2026-07-13',
+      false,
       { nivel: 'Productor', rol: 'Lectura', idProductor: 'productor-owner' },
     );
     expect(result).toBe(response as any);
@@ -46,19 +47,37 @@ describe('SiembrasService agrometeorologia', () => {
       'siembra-1',
       '2026-07-01',
       '2026-07-13',
+      false,
     );
   });
 
   it('impide consultar una siembra de otro productor', async () => {
     const { service, repository } = setup();
     await expect(
-      service.agrometeorologia('siembra-1', undefined, undefined, {
+      service.agrometeorologia('siembra-1', undefined, undefined, false, {
         nivel: 'Productor',
         rol: 'Lectura',
         idProductor: 'otro-productor',
       }),
     ).rejects.toThrow('No tiene permiso');
     expect(repository.agrometeorologia).not.toHaveBeenCalled();
+  });
+
+  it('solicita horas solamente cuando el consumidor lo requiere', async () => {
+    const { service, repository } = setup();
+    await service.agrometeorologia(
+      'siembra-1',
+      '2026-09-01',
+      '2026-09-03',
+      true,
+      { nivel: 'Productor', rol: 'Lectura', idProductor: 'productor-owner' },
+    );
+    expect(repository.agrometeorologia).toHaveBeenCalledWith(
+      'siembra-1',
+      '2026-09-01',
+      '2026-09-03',
+      true,
+    );
   });
 
   it('autoriza, reprocesa y devuelve la nueva generación agrometeorológica', async () => {

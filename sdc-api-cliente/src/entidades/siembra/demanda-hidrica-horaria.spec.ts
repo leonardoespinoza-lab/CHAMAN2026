@@ -1,0 +1,116 @@
+import {
+  calcularPotencialHidricoAireMpa,
+  evaluarDemandaHidricaHora,
+  ISerieAgrometeorologicaDia,
+  ISerieAgrometeorologicaHora,
+  resolverFaseDemandaHidrica,
+} from 'modelos/src';
+
+function hour(
+  weather: ISerieAgrometeorologicaHora['weather'],
+  timestamp = '2026-09-02T15:00:00.000Z',
+): ISerieAgrometeorologicaHora {
+  return {
+    timestamp,
+    localDate: '2026-09-02',
+    timezone: 'America/Argentina/Buenos_Aires',
+    isForecast: false,
+    state: 'observed',
+    weather,
+    source: 'sensor',
+    sourceByVariable: {},
+    qualityFlags: [],
+    completenessPercentage: 100,
+  };
+}
+
+function day(stage: string): ISerieAgrometeorologicaDia {
+  return {
+    date: '2026-09-02',
+    isForecast: false,
+    stage,
+    weather: {},
+    metrics: { availableWaterPercentage: 62 },
+    source: 'sensor',
+    sourceByVariable: {},
+    qualityFlags: [],
+    warnings: [],
+  };
+}
+
+describe('demanda hidrica horaria', () => {
+  it('evalua el VPD diurno con el umbral del cultivo y conserva la etapa', () => {
+    const result = evaluarDemandaHidricaHora(
+      hour({
+        temperatureC: 28,
+        relativeHumidityPct: 42,
+        vpdKpa: 1.8,
+        shortwaveRadiationWm2: 520,
+      }),
+      'Trigo',
+      day('Antesis'),
+    );
+
+    expect(result.level).toBe('high');
+    expect(result.phase).toBe('reproductive');
+    expect(result.vpdThresholdKpa).toBe(1.6);
+    expect(result.availableWaterPercentage).toBe(62);
+    expect(result.source).toBe('sensor');
+  });
+
+  it('no interpreta la noche con umbrales de estres diurno', () => {
+    const result = evaluarDemandaHidricaHora(
+      hour({
+        temperatureC: 24,
+        relativeHumidityPct: 20,
+        vpdKpa: 4,
+        shortwaveRadiationWm2: 0,
+      }),
+      'Soja',
+      day('Desarrollo vegetativo'),
+    );
+
+    expect(result.isDaylight).toBe(false);
+    expect(result.level).toBe('night');
+    expect(result.interpretation).toContain('actividad estomatica suele estar reducida');
+  });
+
+  it('desactiva la lectura fisiologica durante reposo o cosecha', () => {
+    const result = evaluarDemandaHidricaHora(
+      hour({ vpdKpa: 2.8, shortwaveRadiationWm2: 480 }),
+      'Manzano',
+      day('Reposo invernal'),
+    );
+
+    expect(result.phase).toBe('rest');
+    expect(result.level).toBe('not_evaluated');
+  });
+
+  it('calcula VPD desde temperatura y humedad cuando no viene informado', () => {
+    const result = evaluarDemandaHidricaHora(
+      hour({
+        temperatureC: 24,
+        relativeHumidityPct: 50,
+        shortwaveRadiationWm2: 300,
+      }),
+      'Maiz',
+      day('Desarrollo vegetativo'),
+    );
+
+    expect(result.vpdKpa).toBeGreaterThan(1.4);
+    expect(result.vpdKpa).toBeLessThan(1.6);
+    expect(result.level).toBe('expected');
+  });
+
+  it('clasifica las fases fenologicas sin asumir una etapa inexistente', () => {
+    expect(resolverFaseDemandaHidrica('Emergencia')).toBe('implantation');
+    expect(resolverFaseDemandaHidrica('Floracion y cuaje')).toBe('reproductive');
+    expect(resolverFaseDemandaHidrica(undefined)).toBe('unknown');
+  });
+
+  it('deriva el potencial hidrico del aire sin atribuirlo a la planta', () => {
+    expect(calcularPotencialHidricoAireMpa(24, 33)).toBeCloseTo(-152, 0);
+    expect(calcularPotencialHidricoAireMpa(24, 90)).toBeCloseTo(-14.5, 0);
+    expect(calcularPotencialHidricoAireMpa(24, 0)).toBeUndefined();
+  });
+});

@@ -49,6 +49,8 @@ import { CardSueloAmbienteComponent } from './card-suelo-ambiente/card-suelo-amb
 import { DrawerListadoSiembrasComponent } from './drawer-listado-siembras/drawer-listado-siembras.component';
 import { CardRegistroFotograficoComponent } from './card-registro-fotografico/card-registro-fotografico.component';
 import { CardVisitasLoteComponent } from './card-visitas-lote/card-visitas-lote.component';
+import { CardDemandaHidricaComponent } from './card-demanda-hidrica/card-demanda-hidrica.component';
+import { WATER_DEMAND_CARD_ENABLED } from '../../../../environments/environment';
 
 const CULTIVOS_CON_PREDICCION_MALEZAS = ['Soja', 'Trigo', 'Maiz'];
 
@@ -100,6 +102,7 @@ export function resolverLoteInicialSeguro(
     CardSueloAmbienteComponent,
     CardRegistroFotograficoComponent,
     CardVisitasLoteComponent,
+    CardDemandaHidricaComponent,
   ],
   templateUrl: './detalles-lote.component.html',
   styleUrl: './detalles-lote.component.scss',
@@ -122,6 +125,7 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   public cargandoPrimario: boolean = false;
   public refrescandoDetalle: boolean = false;
   public cargarServiciosAlVolver: boolean = false;
+  public readonly mostrarDemandaHidricaHoraria = WATER_DEMAND_CARD_ENABLED;
   private readonly numeroAr = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
   private destroyed = false;
 
