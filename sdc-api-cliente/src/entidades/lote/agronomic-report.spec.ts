@@ -578,6 +578,13 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
     expect(html).toContain('Riesgos agroclimaticos y granizo');
     expect(html).toContain('Napa y agua subterranea');
     expect(html).toContain('Estado al momento de emision');
+    expect(html).toMatch(
+      /\.score-card \{\s+border: 0;\s+border-right: 1px solid var\(--line\);\s+border-radius: 0;/,
+    );
+    expect(html).toMatch(
+      /\.note \{\s+border: 0;\s+border-top: 1px solid var\(--line\);\s+background: transparent;\s+border-radius: 0;/,
+    );
+    expect(html).not.toContain('.warn { border-left-color:');
   });
 
   it('limita una fuente complementaria lenta y conserva un fallback honesto', async () => {

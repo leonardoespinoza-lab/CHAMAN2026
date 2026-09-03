@@ -2158,16 +2158,20 @@ export class LotesService {
     .executive-board {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
-      gap: 8px;
+      gap: 0;
       margin-top: 10px;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
     }
     .score-card {
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 10px;
-      background: #fff;
+      border: 0;
+      border-right: 1px solid var(--line);
+      border-radius: 0;
+      padding: 10px 12px;
+      background: transparent;
       min-height: 86px;
     }
+    .score-card:last-child { border-right: 0; }
     .score-card span {
       display: block;
       color: var(--muted);
@@ -2187,8 +2191,8 @@ export class LotesService {
       margin-top: 4px;
     }
     .score-meter {
-      height: 9px;
-      border-radius: 999px;
+      height: 5px;
+      border-radius: 2px;
       background: #e9f1f8;
       overflow: hidden;
       margin-top: 7px;
@@ -2198,10 +2202,10 @@ export class LotesService {
       height: 100%;
       width: var(--value, 0%);
       border-radius: inherit;
-      background: linear-gradient(90deg, var(--cyan), var(--green));
+      background: var(--cyan);
     }
-    .score-card.warn .score-meter i { background: linear-gradient(90deg, #f7c35d, var(--amber)); }
-    .score-card.danger .score-meter i { background: linear-gradient(90deg, #ff8b80, var(--danger)); }
+    .score-card.warn .score-meter i { background: var(--amber); }
+    .score-card.danger .score-meter i { background: var(--danger); }
     .score-row.warn .score-meter i { background: linear-gradient(90deg, #f7c35d, var(--amber)); }
     .score-row.danger .score-meter i { background: linear-gradient(90deg, #ff8b80, var(--danger)); }
     .action-panel {
@@ -2378,14 +2382,16 @@ export class LotesService {
     .service-status.no_aplica { background: #edf1f5; color: #5c6878; }
     .service-status.no_consolidado { background: #eef6ff; color: #376c9b; }
     .note {
-      border-left: 4px solid var(--cyan);
-      background: #eafdfb;
-      border-radius: 10px;
-      padding: 8px 10px;
+      border: 0;
+      border-top: 1px solid var(--line);
+      background: transparent;
+      border-radius: 0;
+      padding: 8px 0 0;
       margin-top: 8px;
     }
-    .warn { border-left-color: var(--amber); background: #fff8e8; }
-    .danger { border-left-color: var(--danger); background: #fff0ef; }
+    .note.warn, .note.danger { background: transparent; }
+    .note.warn strong { color: #8b6113; }
+    .note.danger strong { color: #a43f38; }
     .two-col {
       display: grid;
       grid-template-columns: 0.95fr 1.05fr;
