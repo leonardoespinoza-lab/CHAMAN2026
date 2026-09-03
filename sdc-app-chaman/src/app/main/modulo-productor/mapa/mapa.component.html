@@ -63,12 +63,7 @@
     </div>
 
     <div class="summary-action" aria-label="Resumen ejecutivo del mapa">
-      <button
-        type="button"
-        class="summary-button"
-        data-chaman-action="info"
-        (click)="abrirResumenGerencial()"
-      >
+      <button type="button" class="summary-button" data-chaman-action="info" (click)="abrirResumenGerencial()">
         <span class="summary-button-icon">
           <i class="pi pi-chart-bar"></i>
         </span>
@@ -80,17 +75,35 @@
     </div>
   </div>
 
-  @if (mostrarRedTerritorial && redComercial && (redComercial.distribuidores.length || redComercial.productores.length)) {
+  @if (
+    mostrarRedTerritorial && redComercial && (redComercial.distribuidores.length || redComercial.productores.length)
+  ) {
     <div class="network-rail" aria-label="Capas de la red territorial">
       <span>Red territorial</span>
-      <button type="button" class="network-chip distributor" [class.inactive]="!mostrarDistribuidores" (click)="toggleDistribuidores()">
-        <i class="pi pi-building"></i><strong>{{ redComercial.distribuidores.length }}</strong><small>Distribuidores</small>
+      <button
+        type="button"
+        class="network-chip distributor"
+        [class.inactive]="!mostrarDistribuidores"
+        (click)="toggleDistribuidores()"
+      >
+        <i class="pi pi-building"></i><strong>{{ redComercial.distribuidores.length }}</strong
+        ><small>Distribuidores</small>
       </button>
-      <button type="button" class="network-chip producer" [class.inactive]="!mostrarProductores" (click)="toggleProductores()">
-        <i class="pi pi-users"></i><strong>{{ redComercial.productores.length }}</strong><small>Productores</small>
+      <button
+        type="button"
+        class="network-chip producer"
+        [class.inactive]="!mostrarProductores"
+        (click)="toggleProductores()"
+      >
+        <i class="pi pi-users"></i><strong>{{ redComercial.productores.length }}</strong
+        ><small>Productores</small>
       </button>
-      <span class="network-static"><i class="pi pi-map"></i><strong>{{ redComercial.establecimientos.length }}</strong> establecimientos</span>
-      <span class="network-static"><i class="pi pi-th-large"></i><strong>{{ redComercial.totales.lotes }}</strong> lotes</span>
+      <span class="network-static"
+        ><i class="pi pi-map"></i><strong>{{ redComercial.establecimientos.length }}</strong> establecimientos</span
+      >
+      <span class="network-static"
+        ><i class="pi pi-th-large"></i><strong>{{ redComercial.totales.lotes }}</strong> lotes</span
+      >
       <span class="network-hint">Seleccione un punto para ver su estructura asociada.</span>
     </div>
   }
@@ -157,14 +170,7 @@
         [style.gap]="(helper.isWide$ | async) ? '2em' : '3em'"
       >
         <!-- Riesgo bajo -->
-        <div
-          style="
-            display: flex;
-            flex-direction: column;
-            padding-left: 0.5em;
-            white-space: nowrap;
-          "
-        >
+        <div style="display: flex; flex-direction: column; padding-left: 0.5em; white-space: nowrap">
           <span style="font-size: 12px; white-space: wrap">{{ 'Riesgo bajo' | translate }}</span>
           <span style="font-size: 24px; font-weight: bold">
             {{ enfermedades.haVerde }}
@@ -173,14 +179,7 @@
         </div>
 
         <!-- Riesgo medio -->
-        <div
-          style="
-            display: flex;
-            flex-direction: column;
-            padding-left: 0.5em;
-            white-space: nowrap;
-          "
-        >
+        <div style="display: flex; flex-direction: column; padding-left: 0.5em; white-space: nowrap">
           <span style="font-size: 12px; white-space: wrap">{{ 'Riesgo medio' | translate }}</span>
           <span style="font-size: 24px; font-weight: bold">
             {{ enfermedades.haAmarillo }}
@@ -189,14 +188,7 @@
         </div>
 
         <!-- Riesgo alto -->
-        <div
-          style="
-            display: flex;
-            flex-direction: column;
-            padding-left: 0.5em;
-            white-space: nowrap;
-          "
-        >
+        <div style="display: flex; flex-direction: column; padding-left: 0.5em; white-space: nowrap">
           <span style="font-size: 12px; white-space: wrap">{{ 'Riesgo alto' | translate }}</span>
           <span style="font-size: 24px; font-weight: bold">
             {{ enfermedades.haRojo }}
@@ -269,14 +261,7 @@
         [style.gap]="(helper.isWide$ | async) ? '2em' : '3em'"
       >
         <!-- Riesgo bajo -->
-        <div
-          style="
-            display: flex;
-            flex-direction: column;
-            padding-left: 0.5em;
-            white-space: nowrap;
-          "
-        >
+        <div style="display: flex; flex-direction: column; padding-left: 0.5em; white-space: nowrap">
           <span style="font-size: 12px; white-space: wrap">{{ 'No regar' | translate }}</span>
           <span style="font-size: 24px; font-weight: bold">
             {{ riego.haVerde }}
@@ -285,14 +270,7 @@
         </div>
 
         <!-- Riesgo medio -->
-        <div
-          style="
-            display: flex;
-            flex-direction: column;
-            padding-left: 0.5em;
-            white-space: nowrap;
-          "
-        >
+        <div style="display: flex; flex-direction: column; padding-left: 0.5em; white-space: nowrap">
           <span style="font-size: 12px; white-space: wrap">{{ 'Riego Bajo' | translate }}</span>
           <span style="font-size: 24px; font-weight: bold">
             {{ riego.haAmarillo }}
@@ -301,14 +279,7 @@
         </div>
 
         <!-- Riesgo alto -->
-        <div
-          style="
-            display: flex;
-            flex-direction: column;
-            padding-left: 0.5em;
-            white-space: nowrap;
-          "
-        >
+        <div style="display: flex; flex-direction: column; padding-left: 0.5em; white-space: nowrap">
           <span style="font-size: 12px; white-space: wrap">{{ 'Riego alto' | translate }}</span>
           <span style="font-size: 24px; font-weight: bold">
             {{ riego.haRojo }}
@@ -316,14 +287,7 @@
           </span>
         </div>
 
-        <div
-          style="
-            display: flex;
-            flex-direction: column;
-            padding-left: 0.5em;
-            white-space: nowrap;
-          "
-        >
+        <div style="display: flex; flex-direction: column; padding-left: 0.5em; white-space: nowrap">
           <span style="font-size: 12px; white-space: wrap">Sin datos concluyentes</span>
           <span style="font-size: 24px; font-weight: bold">
             {{ riego.haSinDatos }}
@@ -403,14 +367,7 @@
         [style.gap]="(helper.isWide$ | async) ? '2em' : '3em'"
       >
         <!-- Riesgo bajo -->
-        <div
-          style="
-            display: flex;
-            flex-direction: column;
-            padding-left: 0.5em;
-            white-space: nowrap;
-          "
-        >
+        <div style="display: flex; flex-direction: column; padding-left: 0.5em; white-space: nowrap">
           <span style="font-size: 12px; white-space: wrap">{{ 'Impacto bajo' | translate }}</span>
           <span style="font-size: 24px; font-weight: bold">
             {{ huella.haVerde }}
@@ -419,14 +376,7 @@
         </div>
 
         <!-- Riesgo medio -->
-        <div
-          style="
-            display: flex;
-            flex-direction: column;
-            padding-left: 0.5em;
-            white-space: nowrap;
-          "
-        >
+        <div style="display: flex; flex-direction: column; padding-left: 0.5em; white-space: nowrap">
           <span style="font-size: 12px; white-space: wrap">{{ 'Impacto medio' | translate }}</span>
           <span style="font-size: 24px; font-weight: bold">
             {{ huella.haAmarillo }}
@@ -435,14 +385,7 @@
         </div>
 
         <!-- Riesgo alto -->
-        <div
-          style="
-            display: flex;
-            flex-direction: column;
-            padding-left: 0.5em;
-            white-space: nowrap;
-          "
-        >
+        <div style="display: flex; flex-direction: column; padding-left: 0.5em; white-space: nowrap">
           <span style="font-size: 12px; white-space: wrap">{{ 'Impacto alto' | translate }}</span>
           <span style="font-size: 24px; font-weight: bold">
             {{ huella.haRojo }}
@@ -750,29 +693,30 @@
       </div>
     </div>
 
-    <div class="lot-summary-strip">
-      <div>
+    <div class="lot-summary-strip" aria-label="Datos del lote y de su siembra activa">
+      <div class="lot-summary-item">
         <span>Superficie</span>
         <strong>{{ loteHectareas(loteSeleccionado) }}</strong>
       </div>
-      <div>
+      <div class="lot-summary-item">
         <span>Suelo</span>
         <strong>{{ loteSuelo(loteSeleccionado) }}</strong>
       </div>
-      <div>
+      <div class="lot-summary-item">
         <span>Cultivo</span>
         <strong>{{ loteCultivo(loteSeleccionado) }}</strong>
       </div>
-      <div>
+      <div class="lot-summary-item lot-summary-variety">
         <span>Variedad</span>
-        <strong>{{ loteVariedad(loteSeleccionado) }}</strong>
+        <strong [title]="loteVariedad(loteSeleccionado)">{{ loteVariedad(loteSeleccionado) }}</strong>
+        <small [title]="loteVariedadDetalle(loteSeleccionado)">{{ loteVariedadDetalle(loteSeleccionado) }}</small>
       </div>
-      <div>
+      <div class="lot-summary-item">
         <span>Siembra</span>
         <strong>{{ loteFechaSiembra(loteSeleccionado) }}</strong>
       </div>
-      <div>
-        <span>Rinde</span>
+      <div class="lot-summary-item">
+        <span>Rendimiento</span>
         <strong>{{ loteRindeResumen(loteSeleccionado) }}</strong>
       </div>
     </div>
@@ -800,7 +744,7 @@
           <span>Riego</span>
         </div>
         <strong>{{ loteRiegoResumen(loteSeleccionado) }}</strong>
-        <p>Recomendacion de la siembra activa.</p>
+        <p>Recomendacion vinculada a la siembra activa de este lote.</p>
       </article>
 
       <article class="service-summary-card">
@@ -811,7 +755,7 @@
           <span>NDVI</span>
         </div>
         <strong>{{ loteNdviResumen(loteSeleccionado) }}</strong>
-        <p>Ultima lectura disponible del indice verde.</p>
+        <p>Ultima lectura satelital valida para este lote.</p>
       </article>
 
       <article class="service-summary-card">
@@ -822,16 +766,16 @@
           <span>Huella hidrica</span>
         </div>
         <strong>{{ loteHuellaResumen(loteSeleccionado) }}</strong>
-        <p>Avance del ciclo y cierre al cosechar.</p>
+        <p>Se consolida con agua y rendimiento de la siembra.</p>
       </article>
 
-      <article class="service-summary-card yield-summary-card">
+      <article class="service-summary-card">
         <div class="service-summary-title">
           <i class="pi pi-chart-line"></i>
-          <span>Prediccion de rendimiento</span>
+          <span>Rendimiento</span>
         </div>
         <strong>{{ loteRindeResumen(loteSeleccionado) }}</strong>
-        <p>Cruza cultivo, suelo, NDVI, riego y riesgo sanitario. Se ajusta al cerrar cosechas historicas.</p>
+        <p>{{ loteRindeDetalle(loteSeleccionado) }}</p>
       </article>
 
       <article class="service-summary-card">
@@ -840,7 +784,7 @@
           <span>Etapa</span>
         </div>
         <strong>{{ loteEtapa(loteSeleccionado) }}</strong>
-        <p>Estado fenologico actual.</p>
+        <p>Etapa calculada desde la siembra activa y su cronograma.</p>
       </article>
     </div>
   </section>

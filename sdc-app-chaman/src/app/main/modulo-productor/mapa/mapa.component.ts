@@ -482,19 +482,17 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private buscarEstablecimiento(id?: string, nombre?: string): IEstablecimiento | undefined {
-    return this.establecimientos.find((establecimiento) => {
-      const idMatch = !!id && (establecimiento._id === id || establecimiento.nombre === id);
-      const nombreMatch = !!nombre && establecimiento.nombre === nombre;
-      return idMatch || nombreMatch;
-    });
+    if (id) {
+      return this.establecimientos.find((establecimiento) => String(establecimiento._id || '') === String(id));
+    }
+    return nombre ? this.establecimientos.find((establecimiento) => establecimiento.nombre === nombre) : undefined;
   }
 
   private buscarLote(id?: string, nombre?: string): ILoteMapa | undefined {
-    return this.lotes.find((lote) => {
-      const idMatch = !!id && lote._id === id;
-      const nombreMatch = !!nombre && lote.nombre === nombre;
-      return idMatch || nombreMatch;
-    });
+    if (id) {
+      return this.lotes.find((lote) => String(lote._id || '') === String(id));
+    }
+    return nombre ? this.lotes.find((lote) => lote.nombre === nombre) : undefined;
   }
 
   private getEstablecimientoDelLote(lote?: ILoteMapa): IEstablecimiento | undefined {
@@ -1050,17 +1048,48 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     );
   }
 
+  private siembraDelLote(lote?: ILoteMapa): ILoteMapa['siembra'] | undefined {
+    const seleccionado = lote || this.loteSeleccionado;
+    const siembra = seleccionado?.siembra;
+    if (!seleccionado || !siembra) {
+      return undefined;
+    }
+
+    const loteId = String(seleccionado._id || '').trim();
+    const siembraLoteId = String(siembra.idLote || '').trim();
+    const siembraId = String(siembra._id || '').trim();
+    const siembraActivaId = String(seleccionado.idSiembra || '').trim();
+    if (loteId && siembraLoteId && loteId !== siembraLoteId) {
+      return undefined;
+    }
+    if (siembraActivaId && siembraId && siembraActivaId !== siembraId) {
+      return undefined;
+    }
+    return siembra;
+  }
+
   public loteCultivo(lote?: ILoteMapa): string {
-    const cultivo = (lote || this.loteSeleccionado)?.siembra?.semilla?.cultivo;
+    const cultivo = this.siembraDelLote(lote)?.semilla?.cultivo;
     return cultivo ? this.helper.translateCultivo(cultivo) : 'Sin siembra';
   }
 
   public loteVariedad(lote?: ILoteMapa): string {
-    const semilla = (lote || this.loteSeleccionado)?.siembra?.semilla;
+    const semilla = this.siembraDelLote(lote)?.semilla;
     if (!semilla) {
       return 'Sin variedad cargada';
     }
-    return [semilla.variedad, semilla.semillero, this.helper.translateCiclo(semilla.ciclo)].filter(Boolean).join(' ');
+    return semilla.variedad || 'Sin variedad cargada';
+  }
+
+  public loteVariedadDetalle(lote?: ILoteMapa): string {
+    const semilla = this.siembraDelLote(lote)?.semilla;
+    if (!semilla) {
+      return 'Sin semillero ni ciclo';
+    }
+    return (
+      [semilla.semillero, this.helper.translateCiclo(semilla.ciclo)].filter(Boolean).join(' · ') ||
+      'Sin semillero ni ciclo'
+    );
   }
 
   public nombreAmbienteListado(index: number): string {
@@ -1106,33 +1135,41 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
 
   public loteEtapa(lote?: ILoteMapa): string {
     const seleccionado = lote || this.loteSeleccionado;
-    return seleccionado?.siembra ? this.helper.getNombreEtapa(seleccionado) : 'Sin siembra';
+    const siembra = this.siembraDelLote(seleccionado);
+    if (!seleccionado || !siembra) {
+      return 'Sin siembra';
+    }
+    return this.helper.getNombreEtapa({ ...seleccionado, siembra }) || 'Sin etapa calculada';
   }
 
   public loteFechaSiembra(lote?: ILoteMapa): string {
-    const fecha = (lote || this.loteSeleccionado)?.siembra?.fechaSiembra;
-    return fecha ? new Date(fecha).toLocaleDateString('es-AR') : 'No cargada';
+    const fecha = this.siembraDelLote(lote)?.fechaSiembra;
+    if (!fecha || !Number.isFinite(new Date(fecha).getTime())) {
+      return 'No cargada';
+    }
+    return new Date(fecha).toLocaleDateString('es-AR');
   }
 
   public loteEnfermedadResumen(lote?: ILoteMapa): string {
-    const evidencia = evaluarSanidadFrontend((lote || this.loteSeleccionado)?.siembra);
+    const evidencia = evaluarSanidadFrontend(this.siembraDelLote(lote));
     if (evidencia.principal) {
       return `${evidencia.principal.enfermedad}: indice ${this.formatNumber(evidencia.principal.resultado || 0, 0)}/100`;
     }
     if (evidencia.noAgregables.length) {
-      return `0% · Sin alerta sanitaria operativa; ${evidencia.noAgregables.length} modelo${evidencia.noAgregables.length === 1 ? '' : 's'} en seguimiento`;
+      return `Sin alerta operativa · ${evidencia.noAgregables.length} modelo${evidencia.noAgregables.length === 1 ? '' : 's'} en seguimiento`;
     }
     if (!evidencia.todas.length) {
-      return '0% · Sin alerta sanitaria calculada';
+      return 'Sin alerta sanitaria calculada';
     }
-    return '0% · Prediccion no vigente; actualizar monitoreo';
+    return 'Prediccion no vigente; actualizar monitoreo';
   }
 
   public loteEnfermedadNivel(lote?: ILoteMapa): string {
-    const seleccionado = lote || this.loteSeleccionado;
+    const seleccionado = this.loteConSiembraValidada(lote);
+    const evidencia = evaluarSanidadFrontend(seleccionado?.siembra);
     const max = this.maxRiesgoEnfermedad(seleccionado);
     if (max === null) {
-      return 'Riesgo bajo';
+      return evidencia.todas.length ? 'En seguimiento' : 'Sin lectura';
     }
     const nivel = this.nivelRiesgoEnfermedad(seleccionado, max);
     if (nivel === 2) return 'Riesgo alto';
@@ -1141,18 +1178,18 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   public loteEnfermedadPercent(lote?: ILoteMapa): number {
-    const seleccionado = lote || this.loteSeleccionado;
+    const seleccionado = this.loteConSiembraValidada(lote);
     const max = this.maxRiesgoEnfermedad(seleccionado);
     return max === null ? 0 : this.progresoRiesgoEnfermedad(seleccionado, max);
   }
 
   public loteEnfermedadesOperativas(lote?: ILoteMapa) {
-    return evaluarSanidadFrontend((lote || this.loteSeleccionado)?.siembra).operativas;
+    return evaluarSanidadFrontend(this.siembraDelLote(lote)).operativas;
   }
 
   public loteRiegoResumen(lote?: ILoteMapa): string {
     const seleccionado = lote || this.loteSeleccionado;
-    if (!seleccionado?.siembra) {
+    if (!seleccionado || !this.siembraDelLote(seleccionado)) {
       return 'Sin siembra';
     }
     if (seleccionado?.sumaRiego && seleccionado.sumaRiego > 0) {
@@ -1165,69 +1202,63 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   public loteHuellaResumen(lote?: ILoteMapa): string {
-    const huella = (lote || this.loteSeleccionado)?.huellaHidrica;
+    const seleccionado = lote || this.loteSeleccionado;
+    const siembra = this.siembraDelLote(seleccionado);
+    const huella = siembra?.huellaHidrica || seleccionado?.huellaHidrica;
     if (huella?.total?.litrosKg) {
       return `${this.formatNumber(huella.total.litrosKg, 0)} l/kg total`;
     }
-    return 'En seguimiento';
+    return 'Sin calculo consolidado';
   }
 
   public loteNdviResumen(lote?: ILoteMapa): string {
     const seleccionado = lote || this.loteSeleccionado;
-    if (seleccionado?.ndvi) {
-      return `NDVI ${this.formatNumber(seleccionado.ndvi, 3)}`;
+    const ndvi = seleccionado?.ndvi == null ? null : this.numero(seleccionado.ndvi);
+    if (ndvi !== null) {
+      return `NDVI ${this.formatNumber(ndvi, 3)}`;
     }
-    return 'Sin lectura NDVI';
+    return 'Sin lectura operativa';
   }
 
   public loteRindeResumen(lote?: ILoteMapa): string {
-    const seleccionado = lote || this.loteSeleccionado;
-    const siembra = seleccionado?.siembra;
+    const siembra = this.siembraDelLote(lote);
     if (!siembra) {
       return 'Sin siembra';
     }
-    const cosecha = siembra.rendimientoObtenidoKgHaSeco || siembra.rendimientoObtenidoKgHa;
-    if (cosecha) {
+    const cosecha = [siembra.rendimientoObtenidoKgHaSeco, siembra.rendimientoObtenidoKgHa].find(
+      (valor): valor is number => typeof valor === 'number' && Number.isFinite(valor) && valor >= 0
+    );
+    if (cosecha !== undefined) {
       return `${this.formatNumber(cosecha, 0)} kg/ha cosechado`;
     }
+    return 'Sin dato consolidado';
+  }
 
-    const cultivo = String(siembra.semilla?.cultivo || '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase();
-    let base = 3500;
-    if (cultivo.includes('maiz')) base = 8500;
-    if (cultivo.includes('soja')) base = 3200;
-    if (cultivo.includes('trigo')) base = 4200;
+  public loteRindeDetalle(lote?: ILoteMapa): string {
+    const siembra = this.siembraDelLote(lote);
+    if (!siembra) {
+      return 'El lote no tiene una siembra activa vinculada.';
+    }
+    if (
+      [siembra.rendimientoObtenidoKgHaSeco, siembra.rendimientoObtenidoKgHa].some(
+        (valor) => typeof valor === 'number' && Number.isFinite(valor) && valor >= 0
+      )
+    ) {
+      return 'Rendimiento registrado en la cosecha de esta siembra.';
+    }
+    if (siembra.rendimiento) {
+      return `Rendimiento esperado cargado: ${siembra.rendimiento}.`;
+    }
+    return 'Cargar rendimiento esperado o cosecha para mostrar un valor.';
+  }
 
-    const manejoFactor: Record<string, number> = {
-      'Muy Bajo': 0.65,
-      Bajo: 0.82,
-      Alto: 1.08,
-      'Muy Alto': 1.2,
-    };
-    const sueloFactor: Record<string, number> = {
-      Arcilloso: 0.95,
-      'Franco arcilloso': 1.04,
-      Franco: 1.08,
-      'Franco limoso': 1.07,
-      Limoso: 1.02,
-      'Franco arenoso': 0.98,
-      Arenoso: 0.84,
-    };
-
-    const riesgo = this.maxRiesgoEnfermedad(seleccionado) || 0;
-    const ndviFactor = seleccionado?.ndvi ? Math.max(0.65, Math.min(1.18, 0.72 + seleccionado.ndvi * 0.62)) : 0.92;
-    const enfermedadFactor = riesgo >= 20 ? 0.82 : riesgo >= 15 ? 0.91 : 1;
-    const riegoFactor = seleccionado?.sumaRiego && seleccionado.sumaRiego > 15 ? 0.92 : 1;
-    const factor =
-      (manejoFactor[siembra.rendimiento || ''] || 1) *
-      (sueloFactor[this.loteSuelo(seleccionado)] || 1) *
-      ndviFactor *
-      enfermedadFactor *
-      riegoFactor;
-
-    return `${this.formatNumber(base * factor, 0)} kg/ha estimado`;
+  private loteConSiembraValidada(lote?: ILoteMapa): ILoteMapa | undefined {
+    const seleccionado = lote || this.loteSeleccionado;
+    if (!seleccionado) {
+      return undefined;
+    }
+    const siembra = this.siembraDelLote(seleccionado);
+    return siembra ? { ...seleccionado, siembra } : { ...seleccionado, siembra: undefined };
   }
 
   public cosecharLote() {
@@ -2724,11 +2755,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     feature.set('nombre', distribuidor.nombre);
     feature.set('name', distribuidor.nombre);
     source?.addFeature(feature);
-    this.addZonaInfluencia(
-      geojson,
-      Number(distribuidor.radioInfluenciaKm || 0),
-      `Zona ${distribuidor.nombre}`,
-    );
+    this.addZonaInfluencia(geojson, Number(distribuidor.radioInfluenciaKm || 0), `Zona ${distribuidor.nombre}`);
   }
 
   private addProductorRed(productor: IProductorRedComercial): void {
@@ -2818,10 +2845,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       }
       return undefined;
     });
-    const entidad = hit?.get('redComercial') as
-      | IDistribuidorRedComercial
-      | IProductorRedComercial
-      | undefined;
+    const entidad = hit?.get('redComercial') as IDistribuidorRedComercial | IProductorRedComercial | undefined;
     const tipo = hit?.get('tipoRed') as 'distribuidor' | 'productor' | undefined;
     if (!entidad || !tipo || !this.popupContentElement) return false;
 
@@ -2833,10 +2857,9 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
     const title = document.createElement('strong');
     title.textContent = entidad.nombre;
     const address = document.createElement('p');
-    address.textContent = entidad.direccion ||
-      (entidad.fuenteUbicacion === 'Derivada'
-        ? 'Ubicación derivada de sus establecimientos'
-        : 'Dirección pendiente');
+    address.textContent =
+      entidad.direccion ||
+      (entidad.fuenteUbicacion === 'Derivada' ? 'Ubicación derivada de sus establecimientos' : 'Dirección pendiente');
     const metrics = document.createElement('small');
     metrics.textContent = `${entidad.metricas.establecimientos} establecimientos · ${entidad.metricas.lotes} lotes · ${entidad.metricas.hectareas.toLocaleString('es-AR')} ha`;
     const button = document.createElement('button');
@@ -3007,7 +3030,13 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     } catch (error) {
       console.error('Error al obtener los reportes NDVI:', error);
+      return;
     }
+
+    this.lotes.forEach((lote) => {
+      lote.ndvi = undefined;
+      lote.ndviFecha = undefined;
+    });
     if (!this.reportesNDVI?.length) return;
 
     this.reportesNDVI.map((reporte) => {
@@ -3017,8 +3046,10 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       }
       const lote = this.lotes.find((lote) => lote._id === reporte?.lastReporte?.idLote);
       // Actualizo el lote con el ndvi promedio
-      if (lote && reporte?.lastReporte?.ndviPromedio && reporte.lastReporte?.fechaDelReporte) {
-        lote.ndvi = reporte.lastReporte?.ndviPromedio;
+      const ndvi = reporte?.lastReporte?.ndviPromedio;
+      const fecha = reporte?.lastReporte?.fechaDeLaImagen || reporte?.lastReporte?.fechaDelReporte;
+      if (lote && typeof ndvi === 'number' && Number.isFinite(ndvi) && fecha) {
+        lote.ndvi = ndvi;
         lote.ndviFecha = reporte.lastReporte?.fechaDeLaImagen || reporte.lastReporte?.fechaDelReporte;
         lote.colorNDVI = 'rgba(0, 0, 0, 0)';
       }
