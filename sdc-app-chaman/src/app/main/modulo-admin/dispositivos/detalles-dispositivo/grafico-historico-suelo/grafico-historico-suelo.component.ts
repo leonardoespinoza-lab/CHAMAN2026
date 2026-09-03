@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, ElementRef, HostListener, Input, OnChanges, SimpleChanges, ViewChild } from '@angular/core';
 import { ILorawanRawFrame, ILorawanRawReading, IReporte } from 'modelos/src';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
@@ -114,6 +114,8 @@ interface ProfileRecentWindow {
   styleUrl: './grafico-historico-suelo.component.scss',
 })
 export class GraficoHistoricoSueloComponent implements OnChanges {
+  @ViewChild('depthSelector') private depthSelector?: ElementRef<HTMLDetailsElement>;
+
   @Input() reportes: IReporte[] = [];
   @Input() rawFrames: ILorawanRawFrame[] = [];
   @Input() lluvias: SentekRainfallPoint[] = [];
@@ -183,7 +185,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
       unit: 'C',
       color: '#e74c3c',
       decimals: 1,
-      displayDecimals: 5,
+      displayDecimals: 1,
     },
   ];
 
@@ -265,6 +267,14 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
     if (this.selectedDepthsCm.length === this.depthOptionsCm.length) return;
     this.selectedDepthsCm = [...this.depthOptionsCm];
     this.prepareOptions();
+  }
+
+  @HostListener('document:click', ['$event'])
+  public closeDepthSelectorOnOutsideClick(event: MouseEvent): void {
+    const selector = this.depthSelector?.nativeElement;
+    const target = event.target;
+    if (!selector?.open || !(target instanceof Node) || selector.contains(target)) return;
+    selector.open = false;
   }
 
   public exportarCsv(): void {
@@ -588,6 +598,7 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
         timeZone: chartTimeZone,
         year: 'numeric',
       });
+    const sweepToleranceMs = this.sentekSweepToleranceMs;
 
     return {
       chart: {
@@ -699,7 +710,48 @@ export class GraficoHistoricoSueloComponent implements OnChanges {
                 : formatTooltipDateTime(point.x);
             return `<span style="font-size:12px">${dateLabel}</span><br/><span style="color:#2f9fe8">&#9646;</span> Lluvia: <strong>${Number(point.y).toFixed(1)} mm</strong>`;
           }
-          return `<span style="font-size:12px">${formatTooltipDateTime(point.x)}</span><br/><span style="color:${point.color}">&bull;</span> ${point.series?.name || ''}: <strong>${Number(point.y).toFixed(decimals)} ${unit}</strong>`;
+
+          const chartSeries = (point.series?.chart?.series || []).filter(
+            (candidate: any) => candidate.visible !== false && candidate.userOptions?.custom?.isSoil
+          );
+          const profileRows = chartSeries
+            .map((candidate: any) => {
+              const candidatePoints = (candidate.points || candidate.data || []).filter(
+                (candidatePoint: any) =>
+                  Number.isFinite(candidatePoint?.x) &&
+                  Number.isFinite(candidatePoint?.y) &&
+                  !candidatePoint?.custom?.isGap
+              );
+              const nearest = candidatePoints.reduce((best: any, candidatePoint: any) => {
+                if (!best) return candidatePoint;
+                return Math.abs(candidatePoint.x - point.x) < Math.abs(best.x - point.x) ? candidatePoint : best;
+              }, undefined);
+              const distance = nearest ? Math.abs(nearest.x - point.x) : Number.POSITIVE_INFINITY;
+              if (!nearest || distance > sweepToleranceMs) return undefined;
+              const custom = candidate.userOptions?.custom || {};
+              return {
+                color: candidate.color || candidate.userOptions?.color || '#22cfc7',
+                decimals: custom.decimals ?? decimals,
+                depthCm: Number(custom.depthCm),
+                name: candidate.name || candidate.userOptions?.name || '',
+                unit: custom.unit || unit,
+                value: Number(nearest.y),
+              };
+            })
+            .filter(Boolean)
+            .sort((left: any, right: any) => left.depthCm - right.depthCm);
+
+          if (!profileRows.length) {
+            return `<span style="font-size:12px">${formatTooltipDateTime(point.x)}</span><br/><span style="color:${point.color}">&bull;</span> ${point.series?.name || ''}: <strong>${Number(point.y).toFixed(decimals)} ${unit}</strong>`;
+          }
+
+          const values = profileRows
+            .map(
+              (row: any) =>
+                `<br/><span style="color:${row.color}">&bull;</span> ${row.name}: <strong>${row.value.toFixed(row.decimals)} ${row.unit}</strong>`
+            )
+            .join('');
+          return `<span style="font-size:12px">${formatTooltipDateTime(point.x)}</span>${values}`;
         },
         style: { color: 'var(--p-text-color)', fontSize: '14px' },
       },

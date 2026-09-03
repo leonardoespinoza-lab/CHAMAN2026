@@ -20,7 +20,7 @@
             <option [ngValue]="option.value">{{ option.label }}</option>
           }
         </select>
-        <details class="soil-depth-selector">
+        <details #depthSelector class="soil-depth-selector">
           <summary aria-label="Seleccionar profundidades visibles">
             <i class="pi pi-sliders-h" aria-hidden="true"></i>
             <span>{{ depthSelectionLabel }}</span>

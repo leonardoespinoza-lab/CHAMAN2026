@@ -457,6 +457,66 @@ describe('GraficoHistoricoSueloComponent', () => {
     fixture.destroy();
   }));
 
+  it('mantiene abierto el selector al interactuar dentro y lo cierra al hacer click fuera', fakeAsync(() => {
+    TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
+    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    fixture.componentRef.setInput('rawFrames', cicloPerfil('2026-08-14T20:00:00.000Z', 1));
+    fixture.componentRef.setInput('mostrarNapa', false);
+    fixture.componentRef.setInput('mostrarEntradaAnalogica', false);
+    fixture.detectChanges();
+    tick(80);
+
+    const host = fixture.nativeElement as HTMLElement;
+    const selector = host.querySelector<HTMLDetailsElement>('.soil-depth-selector')!;
+    const fieldset = selector.querySelector<HTMLFieldSetElement>('fieldset')!;
+    selector.open = true;
+    fieldset.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(selector.open).toBeTrue();
+
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+    expect(selector.open).toBeFalse();
+    fixture.destroy();
+  }));
+
+  it('muestra en el tooltip todos los niveles del mismo barrido y temperatura con un decimal', () => {
+    const component = new GraficoHistoricoSueloComponent();
+    component.rawFrames = [
+      frame('2026-08-14T20:00:00.000Z', [lectura('temperatura_suelo', 10, 10.46148)], 1, [0]),
+      frame('2026-08-14T20:02:00.000Z', [lectura('temperatura_suelo', 20, 11.248)], 2, [1]),
+      frame('2026-08-14T20:09:00.000Z', [lectura('temperatura_suelo', 30, 19.876)], 3, [2]),
+    ];
+    component.ngOnChanges({ rawFrames: {} as any });
+    component.onMetricChange('temperatura');
+
+    const configured = component.chartOptions.series.filter((series: any) => series.custom?.isSoil);
+    const runtimeSeries = configured.map((series: any) => ({
+      color: series.color,
+      data: series.data,
+      name: series.name,
+      points: series.data,
+      userOptions: series,
+      visible: series.visible,
+    }));
+    const hoveredSeries = runtimeSeries.find((series: any) => series.userOptions.custom.depthCm === 10)!;
+    const hoveredPoint = hoveredSeries.points.find((point: any) => point.y !== null)!;
+    const chart = { series: runtimeSeries };
+    runtimeSeries.forEach((series: any) => (series.chart = chart));
+
+    const tooltip = component.chartOptions.tooltip.formatter.call({
+      point: {
+        ...hoveredPoint,
+        color: hoveredSeries.color,
+        series: hoveredSeries,
+      },
+    });
+
+    expect(tooltip).toContain('10 cm: <strong>10.5 C</strong>');
+    expect(tooltip).toContain('20 cm: <strong>11.2 C</strong>');
+    expect(tooltip).not.toContain('30 cm');
+    expect(component.profileRows.find((row) => row.profundidad === 30)?.formatted).toBe('19.9 C');
+  });
+
   it('usa amanecer y atardecer reales en Buenos Aires en una franja inferior sin pintar fechas desconocidas', () => {
     const component = new GraficoHistoricoSueloComponent();
     component.periodDays = 2;
@@ -1217,7 +1277,7 @@ describe('GraficoHistoricoSueloComponent', () => {
     ).toBeTrue();
     expect(component.profileRows).toHaveSize(12);
     expect(component.profileRecentMissingDepths).toEqual([]);
-    expect(component.profileRows[0].formatted).toContain('12.00000 C');
+    expect(component.profileRows[0].formatted).toContain('12.0 C');
     const latestFrameCounters = new Set<number>();
     [humiditySeries, salinitySeries, temperatureSeries].flat().forEach((series: any) => {
       const latest = [...series.data].reverse().find((point: any) => point.y !== null);
