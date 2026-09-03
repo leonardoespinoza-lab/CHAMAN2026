@@ -59,7 +59,14 @@ test("malezas conserva altura propia y presenta resultados compactos", () => {
   assert.match(weedsCss, /\.weed-action-card\s*\{[\s\S]*?min-height:\s*0/);
   assert.match(
     detailCss,
-    /\.sanitary-monitoring-row\s*\{[\s\S]*?align-items:\s*start/,
+    /\.sanitary-monitoring-row\s*\{[\s\S]*?align-items:\s*start;[\s\S]*?grid-template-columns:\s*1fr/,
+  );
+});
+
+test("enfermedades conserva ancho completo aunque el lote tambien tenga malezas", () => {
+  assert.match(
+    detailCss,
+    /\.sanitary-monitoring-row\s*\{[\s\S]*?grid-template-columns:\s*1fr/,
   );
 });
 
