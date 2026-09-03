@@ -26,12 +26,8 @@
       </div>
     </header>
 
-    @if (loading && !data) {
-      <div class="frio-loading" aria-label="Cargando frío y acumulación térmica">
-        @for (item of [1, 2, 3, 4, 5, 6]; track item) {
-          <i></i>
-        }
-      </div>
+    @if (!data && !usaSensorFrio) {
+      <p-message severity="info" text="Se están realizando los cálculos."></p-message>
     } @else if (data || usaSensorFrio) {
       <div class="frio-summary">
         <div>
@@ -169,10 +165,6 @@
           </ul>
         </details>
       }
-    } @else if (error) {
-      <p-message severity="warn">{{ error }}</p-message>
-    } @else {
-      <p-message severity="info">Preparando la serie de frío y acumulación térmica.</p-message>
     }
   </section>
 

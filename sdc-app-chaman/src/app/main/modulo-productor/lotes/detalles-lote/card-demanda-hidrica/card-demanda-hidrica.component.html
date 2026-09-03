@@ -12,15 +12,10 @@
       </button>
     </header>
 
-    @if (loading && !selected) {
+    @if (!selected) {
       <div class="water-demand-state" role="status">
-        <i class="pi pi-spin pi-spinner"></i>
-        <span>Preparando la lectura horaria del lote...</span>
-      </div>
-    } @else if (error) {
-      <div class="water-demand-state error" role="status">
-        <i class="pi pi-cloud"></i>
-        <span>{{ error }}</span>
+        <i class="pi" [class.pi-spin]="loading" [class.pi-spinner]="loading" [class.pi-clock]="!loading"></i>
+        <span>Se están realizando los cálculos.</span>
       </div>
     } @else if (selected; as current) {
       <div class="water-demand-layout">
@@ -160,11 +155,6 @@
         <i class="pi pi-info-circle"></i>
         <span>{{ current.scope }}</span>
       </footer>
-    } @else {
-      <div class="water-demand-state" role="status">
-        <i class="pi pi-clock"></i>
-        <span>Aun no hay cobertura horaria suficiente para este lote.</span>
-      </div>
     }
   </section>
 }

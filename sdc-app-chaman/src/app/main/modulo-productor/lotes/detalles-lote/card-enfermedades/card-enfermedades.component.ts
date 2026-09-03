@@ -97,6 +97,10 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     return !!this.siembra?.ultimaPrediccion?.enfermedades?.length;
   }
 
+  public get calculosPendientes(): boolean {
+    return !!this.siembra?._id && this.tieneMotorSanitario && !this.tienePredicciones;
+  }
+
   public get tieneMotorSanitario(): boolean {
     const cultivo = this.siembra?.semilla?.cultivo;
     return !!cultivo && this.cultivosConMotorSanitario.has(cultivo);

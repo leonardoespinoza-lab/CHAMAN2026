@@ -2,10 +2,12 @@
   <div class="disease-header">
     <div>
       <p class="titulo-card">{{ 'Monitoreo de enfermedades' | translate | uppercase }}</p>
-      <span>{{ resumenGeneral }}</span>
+      @if (!calculosPendientes) {
+        <span>{{ resumenGeneral }}</span>
+      }
     </div>
 
-    @if (siembra?._id && tieneMotorSanitario) {
+    @if (siembra?._id && tieneMotorSanitario && !calculosPendientes) {
       <div class="disease-header-actions">
         <p-button
           icon="pi pi-info-circle"
@@ -27,7 +29,9 @@
     }
   </div>
 
-  @if (!tieneMotorSanitario && siembra?.semilla?.cultivo) {
+  @if (calculosPendientes) {
+    <p-message severity="info" text="Se están realizando los cálculos."></p-message>
+  } @else if (!tieneMotorSanitario && siembra?.semilla?.cultivo) {
     <section class="disease-model-empty" role="status" aria-live="polite">
       <i class="pi pi-shield"></i>
       <div>

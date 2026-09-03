@@ -25,6 +25,23 @@ const cardTs = fs.readFileSync(
   ),
   "utf8",
 );
+const climateDependentCards = [
+  "card-calculos-meteorologicos/card-calculos-meteorologicos.component.html",
+  "card-demanda-hidrica/card-demanda-hidrica.component.html",
+  "card-enfermedades/card-enfermedades.component.html",
+  "card-frio-termico/card-frio-termico.component.html",
+  "card-malezas/card-malezas.component.html",
+  "card-riesgos-agroclimaticos/card-riesgos-agroclimaticos.component.html",
+].map((relativePath) =>
+  fs.readFileSync(
+    path.join(
+      root,
+      "sdc-app-chaman/src/app/main/modulo-productor/lotes/detalles-lote",
+      relativePath,
+    ),
+    "utf8",
+  ),
+);
 
 test("fenologia queda junto al detalle operativo y frio precede las variables meteorologicas", () => {
   const detailStart = detail.indexOf(
@@ -56,12 +73,18 @@ test("fenologia queda junto al detalle operativo y frio precede las variables me
   );
 });
 
-test("la vista es de solo lectura y contempla carga, vacio y error", () => {
+test("la vista es de solo lectura y comunica el calculo inicial sin ruido tecnico", () => {
   assert.match(cardHtml, /VARIABLES METEOROLÓGICAS/);
   assert.doesNotMatch(cardHtml, />\s*Calcular\s*</i);
-  assert.match(cardHtml, /skeleton-grid/);
-  assert.match(cardHtml, /Preparando la primera serie meteorologica/);
-  assert.match(cardHtml, /No se pudo leer el seguimiento meteorologico/);
+  assert.match(cardHtml, /Se están realizando los cálculos\./);
+  assert.doesNotMatch(cardHtml, /Preparando la primera serie meteorologica/);
+  assert.doesNotMatch(cardHtml, /No se pudo leer el seguimiento meteorologico/);
+});
+
+test("los modulos dependientes del clima unifican el estado de calculo inicial", () => {
+  for (const template of climateDependentCards) {
+    assert.match(template, /Se están realizando los cálculos\./);
+  }
 });
 
 test("los graficos separan observaciones y pronostico y toleran suelo opcional", () => {

@@ -31,23 +31,15 @@
     </div>
 
     @if (actualizando) {
-      <p-message
-        severity="info"
-        [text]="
-          actualizacionAutomatica
-            ? 'Sincronizando prediccion diaria de malezas...'
-            : 'Calculando malezas con clima historico y pronostico...'
-        "
-      ></p-message>
+      <p-message severity="info" text="Se están realizando los cálculos."></p-message>
+    } @else if (error && !prediccion) {
+      <p-message severity="info" text="Se están realizando los cálculos."></p-message>
     } @else if (error) {
       <p-message severity="warn" [text]="error"></p-message>
     } @else if (!prediccion) {
-      <p-message
-        severity="info"
-        text="Sin prediccion diaria disponible aun; el proceso automatico la completa al sincronizar clima y modelos."
-      ></p-message>
+      <p-message severity="info" text="Se están realizando los cálculos."></p-message>
     } @else if (prediccion.estado === 'sin_clima') {
-      <p-message severity="warn" text="No se pudo obtener clima suficiente para actualizar malezas."></p-message>
+      <p-message severity="info" text="Se están realizando los cálculos."></p-message>
     } @else if (prediccion.estado === 'sin_modelos' || !analisis.length) {
       <p-message severity="info" text="No hay modelos de malezas cargados para este cultivo."></p-message>
     } @else {

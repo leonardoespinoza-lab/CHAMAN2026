@@ -31,28 +31,10 @@
     }
   </header>
 
-  @if (loading && !hayDatos) {
-    <div class="skeleton-grid" aria-label="Cargando calculos meteorologicos">
-      @for (item of [1, 2, 3, 4, 5, 6]; track item) {
-        <i></i>
-      }
-    </div>
-    <div class="skeleton-chart"></div>
-  } @else if (error && !hayDatos) {
-    <div class="agromet-state warn">
-      <i class="pi pi-exclamation-triangle"></i>
-      <div>
-        <strong>No se pudo leer el seguimiento meteorologico.</strong><span>{{ error }}</span>
-      </div>
-      <button type="button" (click)="cargar(true)">Reintentar</button>
-    </div>
-  } @else if (!hayDatos) {
-    <div class="agromet-state">
-      <i class="pi pi-clock"></i>
-      <div>
-        <strong>Preparando la primera serie meteorologica.</strong>
-        <span>El proceso automatico usara la central asociada cuando sea valida y Open-Meteo como respaldo.</span>
-      </div>
+  @if (!hayDatos) {
+    <div class="agromet-state" role="status" aria-live="polite">
+      <i class="pi" [class.pi-spin]="loading" [class.pi-spinner]="loading" [class.pi-clock]="!loading"></i>
+      <div><strong>Se están realizando los cálculos.</strong></div>
     </div>
   } @else {
     @if (error) {

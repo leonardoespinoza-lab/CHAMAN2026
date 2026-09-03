@@ -4,10 +4,22 @@ describe('CardEnfermedadesComponent - comunicacion sanitaria', () => {
   const crear = () => {
     const componente = new CardEnfermedadesComponent({} as any, {} as any);
     componente.siembra = {
+      _id: 'siembra-1',
       semilla: { cultivo: 'Trigo', variedad: 'MS INTA 924' },
     } as any;
     return componente;
   };
+
+  it('muestra un unico estado pendiente mientras la primera prediccion se calcula', () => {
+    const componente = crear();
+
+    expect(componente.calculosPendientes).toBeTrue();
+
+    (componente.siembra as any).ultimaPrediccion = {
+      enfermedades: [{ enfermedad: 'Mancha Amarilla', resultado: 0 }],
+    };
+    expect(componente.calculosPendientes).toBeFalse();
+  });
 
   it('muestra cobertura insuficiente y nunca el resultado contractual en sombra', () => {
     const componente = crear();
