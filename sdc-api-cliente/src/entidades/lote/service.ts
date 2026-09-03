@@ -46,6 +46,13 @@ import {
   IInteligenciaSueloLote,
   IEntradasAgronomicasSuelo,
   IUsuario,
+  IFoto,
+  IVisitaLote,
+  IResumenRiesgosAgroclimaticos,
+  IEstadoDemandaHidricaHora,
+  Cultivo,
+  evaluarDemandaHidricaHora,
+  resumirVentanasAperturaEstomatica,
   aplicarEntradasAgronomicasSuelo,
   obtenerRegistroFenologicoDecisorioEnFecha,
   SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT,
@@ -97,7 +104,21 @@ interface CertificadoDatos {
   cargaFitosanitaria: ICargaFitosanitaria;
   frio: CertificadoFrio;
   clima?: CertificadoClima;
+  demandaHidrica?: CertificadoDemandaHidrica;
+  visitas: IVisitaLote[];
+  evidenciasCampo: IFoto[];
   emisor?: IUsuario;
+}
+
+interface CertificadoDemandaHidrica {
+  fechaLocal: string;
+  timezone: string;
+  fuente: string;
+  coberturaPct: number;
+  ultima?: IEstadoDemandaHidricaHora;
+  vpdMaxKpa?: number;
+  horasApertura: number;
+  ventanas: Array<{ desde: string; hasta: string; durationHours: number }>;
 }
 
 interface CertificadoClima {
@@ -139,6 +160,7 @@ interface CertificadoClima {
     umbralDanoSeveroC?: number;
     lectura?: string;
   };
+  riesgosAgroclimaticos?: IResumenRiesgosAgroclimaticos;
   serie: Array<{
     fecha: string;
     temperaturaMin?: number;
@@ -506,6 +528,9 @@ export class LotesService {
       fumigaciones,
       clima,
       soilAssessment,
+      demandaHidrica,
+      visitas,
+      evidenciasCampo,
     ] = await Promise.all([
       this.getFuenteCertificadoConLimite(
         'seguimiento satelital',
@@ -556,6 +581,25 @@ export class LotesService {
         null,
         CERTIFICADO_TIMEOUT_DATOS_MS,
       ),
+      this.getFuenteCertificadoConLimite(
+        'demanda hidrica horaria',
+        () => this.getDemandaHidricaCertificado(siembra),
+        undefined,
+        CERTIFICADO_TIMEOUT_CLIMA_MS,
+      ),
+      this.getFuenteCertificadoConLimite(
+        'visitas de campo',
+        () => this.getVisitasCertificado(id, CERTIFICADO_TIMEOUT_DATOS_MS),
+        [],
+        CERTIFICADO_TIMEOUT_DATOS_MS,
+      ),
+      this.getFuenteCertificadoConLimite(
+        'evidencias de campo',
+        () =>
+          this.getEvidenciasCampoCertificado(id, CERTIFICADO_TIMEOUT_DATOS_MS),
+        [],
+        CERTIFICADO_TIMEOUT_DATOS_MS,
+      ),
     ]);
     const cargaFitosanitaria = this.calcularCargaFitosanitaria(
       lote,
@@ -575,6 +619,9 @@ export class LotesService {
       cargaFitosanitaria,
       frio: this.getFrioCertificado(lote, siembra, clima),
       clima,
+      demandaHidrica,
+      visitas,
+      evidenciasCampo,
       emisor,
     });
   }
@@ -1394,6 +1441,110 @@ export class LotesService {
     );
   }
 
+  private async getVisitasCertificado(
+    idLote: string,
+    timeoutMs?: number,
+  ): Promise<IVisitaLote[]> {
+    return this.getListadoInterno<IVisitaLote>(
+      'visitas-lote',
+      { idLote, archivado: { $ne: true } },
+      { limit: 12, sort: '-fechaVisita,-fechaCreacion' },
+      timeoutMs,
+    );
+  }
+
+  private async getEvidenciasCampoCertificado(
+    idLote: string,
+    timeoutMs?: number,
+  ): Promise<IFoto[]> {
+    return this.getListadoInterno<IFoto>(
+      'fotos',
+      { idLote, fuente: 'campo', archivado: { $ne: true } },
+      { limit: 80, sort: '-fechaCaptura,-fechaCreacion' },
+      timeoutMs,
+    );
+  }
+
+  private async getDemandaHidricaCertificado(
+    siembra?: ISiembra,
+  ): Promise<CertificadoDemandaHidrica | undefined> {
+    const idSiembra = String(siembra?._id || '').trim();
+    const cultivo = String(siembra?.semilla?.cultivo || '').trim();
+    if (!idSiembra || !cultivo || siembra?.fechaCosecha) return undefined;
+
+    const ahora = new Date();
+    const desde = new Date(ahora.getTime() - 48 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const hasta = new Date(ahora.getTime() + 48 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const respuesta = await this.repository.getAgrometeorologia(
+      idSiembra,
+      desde,
+      hasta,
+      true,
+    );
+    const dias = new Map(
+      (respuesta.series || []).map((dia) => [dia.date, dia]),
+    );
+    const estados = (respuesta.hourlySeries || [])
+      .map((hora) =>
+        evaluarDemandaHidricaHora(
+          hora,
+          cultivo as Cultivo,
+          dias.get(hora.localDate),
+        ),
+      )
+      .filter((hora) => Number.isFinite(new Date(hora.timestamp).getTime()));
+    if (!estados.length) return undefined;
+
+    const observadas = estados
+      .filter(
+        (hora) =>
+          !hora.isForecast &&
+          new Date(hora.timestamp).getTime() <= ahora.getTime(),
+      )
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const ultima = observadas[observadas.length - 1] || estados[0];
+    const horasDia = estados
+      .filter((hora) => hora.localDate === ultima.localDate)
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+      .slice(0, 24);
+    const ventanas = resumirVentanasAperturaEstomatica(horasDia);
+    const vpd = horasDia
+      .map((hora) => Number(hora.vpdKpa))
+      .filter(Number.isFinite);
+    const coberturas = horasDia
+      .map((hora) => Number(hora.completenessPercentage))
+      .filter(Number.isFinite);
+    const fuentes = new Set(
+      horasDia.map((hora) => this.getFuenteMeteorologicaLabel(hora.source)),
+    );
+
+    return {
+      fechaLocal: ultima.localDate,
+      timezone: ultima.timezone,
+      fuente:
+        [...fuentes].filter(Boolean).join(' + ') || 'Serie canonica Chaman',
+      coberturaPct: coberturas.length
+        ? coberturas.reduce((total, valor) => total + valor, 0) /
+          coberturas.length
+        : 0,
+      ultima,
+      vpdMaxKpa: vpd.length ? Math.max(...vpd) : undefined,
+      horasApertura: ventanas.reduce(
+        (total, ventana) => total + ventana.durationHours,
+        0,
+      ),
+      ventanas: ventanas.map((ventana) => ({
+        desde: ventana.desde,
+        hasta: ventana.hasta,
+        durationHours: ventana.durationHours,
+      })),
+    };
+  }
+
   private async getClimaCertificado(
     lote: ILote,
     siembra?: ISiembra,
@@ -1431,13 +1582,11 @@ export class LotesService {
         canonicalResult.status === 'fulfilled'
           ? canonicalResult.value
           : undefined;
-      const riesgo =
-        riskResult.status === 'fulfilled'
-          ? riskResult.value?.helada
-          : undefined;
+      const riesgos =
+        riskResult.status === 'fulfilled' ? riskResult.value : undefined;
 
       if (this.hasCanonicalClimateData(canonical)) {
-        return this.mapCanonicalClimate(canonical!, riesgo, siembra);
+        return this.mapCanonicalClimate(canonical!, riesgos, siembra);
       }
       if (canonicalResult.status === 'rejected') {
         this.logger.warn(
@@ -1471,7 +1620,7 @@ export class LotesService {
 
   private mapCanonicalClimate(
     data: IRespuestaAgrometeorologiaSiembra,
-    riesgoHelada: IRiesgoAgroclimatico | undefined,
+    riesgosAgroclimaticos: IResumenRiesgosAgroclimaticos | undefined,
     siembra?: ISiembra,
   ): CertificadoClima {
     const source = data.dataSource;
@@ -1551,7 +1700,8 @@ export class LotesService {
           data.summary.gddBaseTemperatureC ??
           siembra?.semilla?.fenologiaReferencia?.temperaturaBaseC,
       },
-      riesgoHelada: this.mapRiskFrost(riesgoHelada),
+      riesgoHelada: this.mapRiskFrost(riesgosAgroclimaticos?.helada),
+      riesgosAgroclimaticos,
       serie: (data.series || []).map((item) =>
         this.mapCanonicalClimateDay(item),
       ),
@@ -1599,6 +1749,16 @@ export class LotesService {
       else if (value.includes('open_meteo')) normalized.add('open_meteo');
     });
     return [...normalized];
+  }
+
+  private getFuenteMeteorologicaLabel(source?: string): string {
+    const value = String(source || '').toLowerCase();
+    if (value.includes('chaman_meteo')) return 'Chamán-Meteo (ERA5-Land)';
+    if (value.includes('sensor')) return 'Sensor de campo';
+    if (value.includes('station')) return 'Central meteorologica';
+    if (value.includes('open_meteo')) return 'Open-Meteo';
+    if (value.includes('gap_filled')) return 'Relleno canonico Chaman';
+    return source ? this.prettyKey(source) : 'Serie canonica Chaman';
   }
 
   private mapCanonicalClimateDay(
@@ -1824,6 +1984,9 @@ export class LotesService {
       fumigaciones,
       cargaFitosanitaria,
       clima,
+      demandaHidrica,
+      visitas,
+      evidenciasCampo,
       soilAssessment,
       emisor,
     } = datos;
@@ -2449,6 +2612,21 @@ export class LotesService {
       ${this.renderCargaFitosanitaria(cargaFitosanitaria)}
     </section>
 
+    <section class="section">
+      <h2>Decisiones meteorologicas y respuesta del cultivo</h2>
+      <p class="section-copy">Lecturas operativas del mismo sistema canonico que alimenta las tarjetas del lote. La apertura estomatica es una estimacion ambiental y no una medicion directa de la planta.</p>
+      <div class="two-col">
+        <div>${this.renderDemandaHidricaCertificado(demandaHidrica)}</div>
+        <div>${this.renderRiesgosAgroclimaticosCertificado(clima)}</div>
+      </div>
+      ${this.renderVientoCertificado(lote)}
+    </section>
+
+    <section class="section">
+      <h2>Prediccion de malezas</h2>
+      ${this.renderMalezasCertificado(siembra)}
+    </section>
+
     <section class="section two-col">
       <div>
         <h2>Fertilizaciones</h2>
@@ -2473,6 +2651,17 @@ export class LotesService {
     </section>
 
     <section class="section">
+      <h2>Sensores y monitoreo de campo</h2>
+      ${this.renderDispositivosCampoCertificado(lote)}
+    </section>
+
+    <section class="section">
+      <h2>Bitacora y evidencia de campo</h2>
+      <p class="section-copy">Visitas, observaciones y archivos cargados por usuarios autorizados. El informe registra metadatos y vinculacion; no incrusta audios ni originales pesados.</p>
+      ${this.renderBitacoraCampoCertificado(visitas, evidenciasCampo)}
+    </section>
+
+    <section class="section">
       <h2>Seguimiento satelital del cultivo</h2>
       <p>La curva principal usa una escala NDVI fija de 0 a 1 para que los cambios sean comparables entre fechas y no se exageren variaciones pequenas. Cada escena se relaciona con el dia del ciclo y la mejor referencia fenologica disponible.</p>
       ${this.renderNdviSparkline(reportesNdvi, siembra)}
@@ -2487,9 +2676,10 @@ export class LotesService {
       <div class="source-list">
         <div><strong>Lote y superficie</strong><br/>Poligono y ubicacion cargados en Chaman.</div>
         <div><strong>Fenologia</strong><br/>Base Chaman por cultivo/departamento o fenologia editable del cultivo.</div>
-        <div><strong>Clima y frio</strong><br/>Open-Meteo / estacion o sensor asociado cuando existe historico operativo.</div>
+        <div><strong>Clima y frio</strong><br/>Sensor / central / Open-Meteo / Chamán-Meteo (ERA5-Land), segun prioridad y cobertura del motor canonico.</div>
         <div><strong>Satelite</strong><br/>Worker Chaman con escenas Sentinel/Landsat disponibles y validadas.</div>
         <div><strong>Aplicaciones</strong><br/>Fertilizaciones y fumigaciones registradas por usuario autorizado.</div>
+        <div><strong>Campo</strong><br/>Visitas, fotos y audios registrados y vinculados al lote en Chaman.</div>
         <div><strong>Carga fitosanitaria</strong><br/>Motor Chaman sobre prediccion sanitaria, aplicaciones y fenologia.</div>
         <div><strong>Suelo</strong><br/>Motor edafico Chaman con INTA + SoilGrids; laboratorio, sensor y datos confirmados conservan prioridad cuando existen.</div>
       </div>
@@ -2528,6 +2718,262 @@ export class LotesService {
     return /^data:image\/(?:png|jpeg|webp);base64,[a-zA-Z0-9+/=]+$/.test(foto)
       ? foto
       : undefined;
+  }
+
+  private renderDemandaHidricaCertificado(
+    demanda?: CertificadoDemandaHidrica,
+  ): string {
+    if (!demanda?.ultima) {
+      return `<h3>Respuesta hidrica horaria</h3><div class="note warn"><strong>Sin lectura horaria consolidada.</strong> El informe no reemplaza la ausencia de datos con valores estimados.</div>`;
+    }
+    const ultima = demanda.ultima;
+    const ventanas = demanda.ventanas.length
+      ? demanda.ventanas
+          .map(
+            (ventana) =>
+              `${this.formatHoraZona(ventana.desde, demanda.timezone)} a ${this.formatHoraZona(ventana.hasta, demanda.timezone)} (${this.formatNumber(ventana.durationHours, 0)} h)`,
+          )
+          .join(' · ')
+      : 'Sin ventana favorable identificada';
+    return `<h3>Respuesta hidrica horaria</h3>
+      <div class="grid three">
+        ${this.metricCard('VPD actual', this.formatClimaMetric(ultima.vpdKpa, 'kPa', 2), `Maximo diario ${this.formatMaybe(demanda.vpdMaxKpa, 2)} kPa`)}
+        ${this.metricCard('Estado estomatico', this.getEstadoEstomaticoLabel(ultima.stomatalState), ultima.isForecast ? 'Pronostico' : 'Observado')}
+        ${this.metricCard('Apertura estimada', `${this.formatNumber(demanda.horasApertura, 0)} h`, ventanas)}
+      </div>
+      <div class="note"><strong>${this.escapeHtml(this.formatDate(demanda.fechaLocal))}:</strong> ${this.escapeHtml(ultima.interpretation)} Cobertura ${this.formatNumber(demanda.coberturaPct, 0)}%. Fuente: ${this.escapeHtml(demanda.fuente)}.</div>`;
+  }
+
+  private getEstadoEstomaticoLabel(
+    estado?: IEstadoDemandaHidricaHora['stomatalState'],
+  ): string {
+    const labels: Record<IEstadoDemandaHidricaHora['stomatalState'], string> = {
+      open: 'Apertura probable',
+      regulated: 'Regulacion probable',
+      closed: 'Cierre probable',
+      not_evaluated: 'Fuera de evaluacion',
+      no_data: 'Sin dato',
+    };
+    return labels[estado || 'no_data'];
+  }
+
+  private renderRiesgosAgroclimaticosCertificado(
+    clima?: CertificadoClima,
+  ): string {
+    const resumen = clima?.riesgosAgroclimaticos;
+    const items = [resumen?.helada, resumen?.granizo].filter(
+      (item): item is IRiesgoAgroclimatico => !!item && item.aplica,
+    );
+    if (!items.length) {
+      return `<h3>Riesgos agroclimaticos</h3><div class="note warn"><strong>Sin snapshot vigente.</strong> No se declara ausencia de riesgo cuando la fuente no esta disponible.</div>`;
+    }
+    const rows = items
+      .map((item) => {
+        const valor =
+          item.tipo === 'granizo'
+            ? `${this.formatNumber(item.posibilidadPct, 0)}/100 indice`
+            : `${this.formatNumber(item.posibilidadPct, 0)}%`;
+        return `<tr><td><strong>${this.escapeHtml(item.titulo)}</strong></td><td>${this.escapeHtml(this.capitalize(item.nivel))}</td><td>${valor}</td><td>${this.escapeHtml(this.formatDate(item.fechaCritica) || 'Sin fecha critica')}</td><td>${this.escapeHtml(item.lectura)}</td></tr>`;
+      })
+      .join('');
+    return `<h3>Riesgos agroclimaticos</h3><table><thead><tr><th>Riesgo</th><th>Nivel</th><th>Indicador</th><th>Fecha</th><th>Lectura</th></tr></thead><tbody>${rows}</tbody></table><p class="sanitary-source">Actualizado ${this.escapeHtml(this.formatDateTime(resumen?.generadoEn))}. Fuente: ${this.escapeHtml(resumen?.fuente || 'Motor agroclimatico Chaman')}.</p>`;
+  }
+
+  private renderVientoCertificado(lote: ILote): string {
+    const actualBase = lote.establecimiento?.climaActual as any;
+    const actualRaw = actualBase?.clima || actualBase;
+    const actual = Array.isArray(actualRaw)
+      ? actualRaw[actualRaw.length - 1]
+      : actualRaw;
+    const pronosticoBase = lote.establecimiento?.prediccionClimatica as any;
+    const pronosticos =
+      pronosticoBase?.pronosticos || pronosticoBase?.clima?.pronosticos;
+    const primerPronostico = Array.isArray(pronosticos)
+      ? pronosticos[0]
+      : undefined;
+    const velocidad = this.toNumber(
+      actual?.velocidadViento?.last ??
+        actual?.velocidadViento?.avg ??
+        primerPronostico?.velocidadViento?.avg ??
+        primerPronostico?.velocidadViento?.max,
+    );
+    const rafaga = this.toNumber(
+      actual?.rafagaViento?.last ??
+        actual?.rafagaViento?.max ??
+        primerPronostico?.rafagaViento?.max,
+    );
+    const direccion = this.toNumber(
+      actual?.direccionViento?.last ??
+        actual?.direccionViento?.avg ??
+        actual?.direccionViento ??
+        primerPronostico?.direccionViento?.avg,
+    );
+    if (![velocidad, rafaga, direccion].some(Number.isFinite)) {
+      return '<div class="note warn"><strong>Viento y ventana de aplicacion:</strong> sin lectura consolidada en este corte.</div>';
+    }
+    const referencia = Math.max(velocidad || 0, rafaga || velocidad || 0);
+    const ventana =
+      referencia >= 35
+        ? 'No aplicar: viento o rafagas fuera del rango operativo de la tarjeta.'
+        : referencia >= 20
+          ? 'Evitar pulverizacion fina y esperar una ventana mas calma.'
+          : referencia >= 10
+            ? 'Aplicar con precaucion y validar marbete, humedad, rafagas y cultivos vecinos.'
+            : 'Ventana de viento favorable; validar igualmente marbete, humedad y cultivos vecinos.';
+    return `<div class="note ${referencia >= 20 ? 'warn' : ''}"><strong>Viento y ventana de aplicacion:</strong> ${this.formatClimaMetric(velocidad, 'km/h', 1)}; rafaga ${this.formatClimaMetric(rafaga, 'km/h', 1)}; direccion ${Number.isFinite(direccion) ? `${this.formatNumber(Number(direccion), 0)} grados` : 'sin dato'}. ${this.escapeHtml(ventana)}</div>`;
+  }
+
+  private renderMalezasCertificado(siembra?: ISiembra): string {
+    const prediccion = siembra?.ultimaPrediccionMalezas;
+    const especies = prediccion?.especies || [];
+    if (!esPrediccionMalezasOperativa(prediccion) || !especies.length) {
+      const motivo =
+        prediccion?.estado === 'no_aplica'
+          ? 'El motor determino que el analisis no aplica a esta siembra.'
+          : prediccion?.estado === 'sin_clima'
+            ? 'No hay clima suficiente para emitir una prediccion.'
+            : prediccion?.estado === 'sin_modelos'
+              ? 'No hay modelos aplicables al cultivo.'
+              : 'No existe una prediccion operativa consolidada.';
+      return `<div class="note warn"><strong>Sin lectura operativa:</strong> ${this.escapeHtml(motivo)}</div>`;
+    }
+    const rows = especies
+      .map(
+        (item) => `<tr>
+          <td><strong>${this.escapeHtml(item.nombre || 'Maleza')}</strong><br/><small>${this.escapeHtml(item.nombreCientifico || '')}</small></td>
+          <td>${this.formatMaybe(item.emergenciaActualPct ?? item.emergenciaPct ?? item.avancePct, 1)}%</td>
+          <td>${this.formatMaybe(item.emergenciaProyectada7dPct, 1)}%</td>
+          <td>${this.escapeHtml(this.capitalize(item.severidad || item.estadoCorto || 'sin clasificar'))}</td>
+          <td>${this.escapeHtml(item.recomendacion || item.lecturaCorta || 'Seguimiento sin recomendacion consolidada')}</td>
+        </tr>`,
+      )
+      .join('');
+    return `<table><thead><tr><th>Especie</th><th>Emergencia actual</th><th>Proyeccion 7 d</th><th>Nivel</th><th>Lectura</th></tr></thead><tbody>${rows}</tbody></table><p class="sanitary-source">${this.escapeHtml(prediccion?.resumen || '')} Actualizado ${this.escapeHtml(this.formatDateTime(prediccion?.fecha))}. Fuente: ${this.escapeHtml(prediccion?.fuenteDatos || 'Motor de malezas Chaman')}.</p>`;
+  }
+
+  private renderDispositivosCampoCertificado(lote: ILote): string {
+    const dispositivos = (lote.dispositivos || []) as IDispositivo[];
+    if (!dispositivos.length) {
+      const central =
+        lote.establecimiento?.idEstacionMeteorologica ||
+        lote.establecimiento?.estacionMeteorologica;
+      return central
+        ? '<div class="note"><strong>Central meteorologica asociada.</strong> Sus variables validas ingresan por la serie climatica canonica del informe.</div>'
+        : '<div class="note warn"><strong>Sin dispositivos de campo asociados.</strong> Los modulos climaticos usan fuentes modeladas cuando corresponde.</div>';
+    }
+    const rows = dispositivos
+      .map((dispositivo) => {
+        const reporte = dispositivo.ultimoReporte;
+        const lectura = this.getLecturasDispositivoCertificado(dispositivo);
+        const fecha =
+          dispositivo.fechaUltimaComunicacion ||
+          reporte?.fecha ||
+          reporte?.fechaCreacion;
+        const bateria = this.toNumber(dispositivo.bateria?.valor);
+        return `<tr><td><strong>${this.escapeHtml(dispositivo.nombre || dispositivo.tipo || 'Dispositivo')}</strong></td><td>${this.escapeHtml((dispositivo.sensores || []).join(', ') || 'Sin variables declaradas')}</td><td>${this.escapeHtml(lectura || 'Sin lectura incluida')}</td><td>${this.escapeHtml(this.formatDateTime(fecha) || 'Sin fecha')}</td><td>${Number.isFinite(bateria) ? `${this.formatNumber(Number(bateria), 0)}${this.escapeHtml(dispositivo.bateria?.unidad || '%')}` : 'Sin dato'}</td></tr>`;
+      })
+      .join('');
+    return `<table><thead><tr><th>Equipo</th><th>Variables</th><th>Ultimo valor disponible</th><th>Comunicacion</th><th>Bateria</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  private getLecturasDispositivoCertificado(dispositivo: IDispositivo): string {
+    const valores = dispositivo.ultimoReporte?.datos?.valores || {};
+    return Object.entries(valores)
+      .flatMap(([variable, niveles]) =>
+        (niveles || []).map((nivel: any) => {
+          const valor = this.toNumber(
+            nivel?.valores?.actual ??
+              nivel?.valores?.promedio ??
+              nivel?.valores?.acumulado ??
+              nivel?.valores?.suma,
+          );
+          if (!Number.isFinite(valor)) return '';
+          const profundidad = Number.isFinite(Number(nivel?.profundidad))
+            ? ` ${this.formatNumber(Number(nivel.profundidad), 0)} cm`
+            : '';
+          return `${variable}${profundidad}: ${this.formatNumber(Number(valor), 1)} ${nivel?.unidad || ''}`.trim();
+        }),
+      )
+      .filter(Boolean)
+      .slice(0, 8)
+      .join(' · ');
+  }
+
+  private renderBitacoraCampoCertificado(
+    visitas: IVisitaLote[] = [],
+    evidencias: IFoto[] = [],
+  ): string {
+    const imagenes = evidencias.filter((item) => item.tipoMedio !== 'audio');
+    const audios = evidencias.filter((item) => item.tipoMedio === 'audio');
+    const resumen = `<div class="grid three">
+      ${this.metricCard('Visitas', `${visitas.length}`, 'Registros activos incluidos')}
+      ${this.metricCard('Fotografias', `${imagenes.length}`, 'Evidencia de campo')}
+      ${this.metricCard('Audios', `${audios.length}`, 'Notas de voz')}
+    </div>`;
+    if (!visitas.length && !evidencias.length) {
+      return `${resumen}<div class="note warn"><strong>Sin bitacora de campo.</strong> No hay visitas, fotos ni audios registrados para este lote.</div>`;
+    }
+    const rows = visitas
+      .map((visita) => {
+        const asociados = evidencias.filter(
+          (item) =>
+            item.idVisita && String(item.idVisita) === String(visita._id),
+        );
+        const fotos = asociados.filter(
+          (item) => item.tipoMedio !== 'audio',
+        ).length;
+        const notas = asociados.filter(
+          (item) => item.tipoMedio === 'audio',
+        ).length;
+        const detalle = this.resumirTexto(
+          this.compactar([
+            visita.observaciones,
+            visita.hallazgos ? `Hallazgos: ${visita.hallazgos}` : '',
+            visita.recomendaciones
+              ? `Recomendaciones: ${visita.recomendaciones}`
+              : '',
+          ]).join(' '),
+          360,
+        );
+        return `<tr><td>${this.escapeHtml(this.formatDate(visita.fechaVisita || visita.fechaCreacion) || 'Sin fecha')}</td><td><strong>${this.escapeHtml(visita.titulo || 'Visita al lote')}</strong><br/><small>${this.escapeHtml(visita.creadaPorNombre || '')}</small></td><td>${this.escapeHtml(this.capitalize(visita.estado || 'realizada'))}</td><td>${this.escapeHtml(detalle || 'Sin comentarios')}</td><td>${fotos} foto(s) · ${notas} audio(s)</td></tr>`;
+      })
+      .join('');
+    const sinVisita = evidencias.filter((item) => !item.idVisita);
+    const tabla = rows
+      ? `<table style="margin-top:10px;"><thead><tr><th>Fecha</th><th>Visita</th><th>Estado</th><th>Comentarios</th><th>Evidencia vinculada</th></tr></thead><tbody>${rows}</tbody></table>`
+      : '<div class="note warn"><strong>Sin visitas registradas.</strong> Hay evidencia de campo sin visita vinculada.</div>';
+    const nota = sinVisita.length
+      ? `<div class="note warn"><strong>Evidencia sin visita vinculada:</strong> ${sinVisita.filter((item) => item.tipoMedio !== 'audio').length} foto(s) y ${sinVisita.filter((item) => item.tipoMedio === 'audio').length} audio(s).</div>`
+      : '';
+    return `${resumen}${tabla}${nota}`;
+  }
+
+  private resumirTexto(value: string, max: number): string {
+    const texto = String(value || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return texto.length > max
+      ? `${texto.slice(0, Math.max(0, max - 3))}...`
+      : texto;
+  }
+
+  private formatHoraZona(value: string, timezone: string): string {
+    const fecha = new Date(value);
+    if (!Number.isFinite(fecha.getTime())) return '--:--';
+    try {
+      return new Intl.DateTimeFormat('es-AR', {
+        timeZone: timezone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(fecha);
+    } catch {
+      return new Intl.DateTimeFormat('es-AR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(fecha);
+    }
   }
 
   private renderCoberturaServicios(datos: CertificadoDatos): string {
@@ -2598,6 +3044,29 @@ export class LotesService {
       reportesNdvi,
       siembra,
     );
+    const riesgosAgroclimaticos = [
+      clima?.riesgosAgroclimaticos?.helada,
+      clima?.riesgosAgroclimaticos?.granizo,
+    ].filter((item) => item?.aplica);
+    const climaActualBase = lote.establecimiento?.climaActual as any;
+    const climaActualRaw = climaActualBase?.clima || climaActualBase;
+    const climaActual = Array.isArray(climaActualRaw)
+      ? climaActualRaw[climaActualRaw.length - 1]
+      : climaActualRaw;
+    const tieneViento = [
+      climaActual?.velocidadViento?.last,
+      climaActual?.velocidadViento?.avg,
+      climaActual?.rafagaViento?.last,
+      climaActual?.rafagaViento?.max,
+    ].some((value) => Number.isFinite(Number(value)));
+    const dispositivoNapa = (lote.dispositivos || []).find(
+      (item) =>
+        (item.sensores || []).includes('Napa') ||
+        Object.prototype.hasOwnProperty.call(
+          item.ultimoReporte?.datos?.valores || {},
+          'Napa',
+        ),
+    );
 
     return [
       {
@@ -2661,10 +3130,21 @@ export class LotesService {
       },
       {
         nombre: 'Riesgos agroclimaticos y granizo',
-        estado: 'no_consolidado',
-        lectura:
-          'Disponible en la app; sin snapshot auditable incluido en este informe',
-        fuente: 'Motor agroclimatico Chaman',
+        estado: riesgosAgroclimaticos.length ? 'con_dato' : 'sin_dato',
+        lectura: riesgosAgroclimaticos.length
+          ? `${riesgosAgroclimaticos.length} riesgo(s) con snapshot vigente`
+          : 'Sin snapshot agroclimatico vigente',
+        fuente:
+          clima?.riesgosAgroclimaticos?.fuente || 'Motor agroclimatico Chaman',
+      },
+      {
+        nombre: 'Respuesta hidrica horaria',
+        estado: datos.demandaHidrica?.ultima ? 'con_dato' : 'sin_dato',
+        lectura: datos.demandaHidrica?.ultima
+          ? `${this.getEstadoEstomaticoLabel(datos.demandaHidrica.ultima.stomatalState)} · ${this.formatNumber(datos.demandaHidrica.horasApertura, 0)} h de apertura estimada`
+          : 'Sin lectura horaria consolidada',
+        fuente:
+          datos.demandaHidrica?.fuente || 'Motor de demanda hidrica Chaman',
       },
       {
         nombre: 'Riego y balance hidrico',
@@ -2697,9 +3177,10 @@ export class LotesService {
       },
       {
         nombre: 'Viento y ventana de aplicacion',
-        estado: 'no_consolidado',
-        lectura:
-          'Disponible en la tarjeta del lote; sin lectura historica fijada en este corte',
+        estado: tieneViento ? 'con_dato' : 'sin_dato',
+        lectura: tieneViento
+          ? `Viento ${this.formatClimaMetric(this.toNumber(climaActual?.velocidadViento?.last ?? climaActual?.velocidadViento?.avg), 'km/h', 1)}`
+          : 'Sin lectura de viento consolidada',
         fuente: 'Clima operativo Chaman',
       },
       {
@@ -2722,8 +3203,11 @@ export class LotesService {
       },
       {
         nombre: 'Napa y agua subterranea',
-        estado: 'no_consolidado',
-        lectura: 'Sin lectura de napa incorporada al snapshot del informe',
+        estado: dispositivoNapa ? 'con_dato' : 'sin_dato',
+        lectura: dispositivoNapa
+          ? this.getLecturasDispositivoCertificado(dispositivoNapa) ||
+            'Sensor de napa asociado; lectura pendiente'
+          : 'Sin sensor de napa asociado al lote',
         fuente: 'Servicio de napa Chaman',
       },
       {
@@ -2741,6 +3225,15 @@ export class LotesService {
           ? `${datos.fertilizaciones.length} fertilizacion(es) · ${datos.fumigaciones.length} fumigacion(es)`
           : 'Sin operaciones registradas en el corte',
         fuente: 'Registros operativos Chaman',
+      },
+      {
+        nombre: 'Visitas y evidencia de campo',
+        estado:
+          datos.visitas?.length || datos.evidenciasCampo?.length
+            ? 'con_dato'
+            : 'sin_dato',
+        lectura: `${datos.visitas?.length || 0} visita(s) · ${datos.evidenciasCampo?.filter((item) => item.tipoMedio !== 'audio').length || 0} foto(s) · ${datos.evidenciasCampo?.filter((item) => item.tipoMedio === 'audio').length || 0} audio(s)`,
+        fuente: 'Bitacora de campo Chaman',
       },
       {
         nombre: 'Sensores y central meteorologica',
@@ -4398,12 +4891,14 @@ export class LotesService {
     }
     const rows = fertilizaciones
       .flatMap((item) =>
-        getLineasFertilizacion(item).map((linea) => `
+        getLineasFertilizacion(item).map(
+          (linea) => `
       <tr>
         <td>${this.escapeHtml(this.formatDate(item.fechaFertilizacion || item.fechaCreacion) || '-')}</td>
         <td>${this.escapeHtml(linea.fertilizante?.nombre || item.fertilizante?.nombre || linea.idFertilizante || '-')}</td>
         <td>${this.escapeHtml(this.formatMaybe(linea.dosisKgHa, 2))} kg/ha</td>
-      </tr>`),
+      </tr>`,
+        ),
       )
       .join('');
     return `<table><thead><tr><th>Fecha</th><th>Producto</th><th>Dosis</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -4415,13 +4910,15 @@ export class LotesService {
     }
     const rows = fumigaciones
       .flatMap((item) =>
-        getLineasFumigacion(item).map((linea) => `
+        getLineasFumigacion(item).map(
+          (linea) => `
       <tr>
         <td>${this.escapeHtml(this.formatDate(item.fechaFumigacion || item.fechaCreacion) || '-')}</td>
         <td>${this.escapeHtml(linea.agroquimico?.nombre || linea.principioActivo?.nombre || item.agroquimico?.nombre || item.principioActivo?.nombre || linea.idAgroquimico || '-')}</td>
         <td>${this.escapeHtml(this.formatMaybe(linea.dosisLtHa, 2))} l/ha</td>
         <td>${this.escapeHtml(this.formatMaybe(linea.concentracion, 2))}</td>
-      </tr>`),
+      </tr>`,
+        ),
       )
       .join('');
     return `<table><thead><tr><th>Fecha</th><th>Producto / activo</th><th>Dosis</th><th>Conc.</th></tr></thead><tbody>${rows}</tbody></table>`;

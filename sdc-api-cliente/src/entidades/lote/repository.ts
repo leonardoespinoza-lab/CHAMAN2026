@@ -80,9 +80,17 @@ export class LotesRepository {
 
   async getAgrometeorologia(
     idSiembra: string,
+    from?: string,
+    to?: string,
+    includeHourly = false,
   ): Promise<IRespuestaAgrometeorologiaSiembra> {
     const url = `${API_CLIMA}/agrometeorologia/siembras/${idSiembra}`;
     return await this.axios.GET<IRespuestaAgrometeorologiaSiembra>(url, {
+      params: {
+        ...(from ? { from } : {}),
+        ...(to ? { to } : {}),
+        ...(includeHourly ? { includeHourly: 'true' } : {}),
+      },
       headers: AGROMETEO_INTERNAL_TOKEN
         ? { 'x-chaman-internal-token': AGROMETEO_INTERNAL_TOKEN }
         : {},

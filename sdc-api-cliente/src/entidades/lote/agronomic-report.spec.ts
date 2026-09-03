@@ -640,6 +640,240 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
 
     expect(axios.GET.mock.calls[0][1]).not.toHaveProperty('timeout');
   });
+
+  it('incorpora demanda hidrica, malezas, riesgos, sensores y bitacora sin incrustar archivos', () => {
+    const ahora = new Date().toISOString();
+    const html = service.renderCertificadoHtml({
+      lote: {
+        nombre: 'Lote integral',
+        establecimiento: {
+          nombre: 'Campo prueba',
+          climaActual: {
+            velocidadViento: { last: 8.4 },
+            rafagaViento: { max: 12.1 },
+          },
+        },
+        dispositivos: [
+          {
+            nombre: 'Sonda perfil',
+            sensores: ['Humedad Suelo Profundidad', 'Napa', 'Batería'],
+            bateria: { valor: 86, unidad: '%' },
+            fechaUltimaComunicacion: ahora,
+            ultimoReporte: {
+              fecha: ahora,
+              datos: {
+                valores: {
+                  Napa: [
+                    {
+                      unidad: 'm',
+                      valores: { actual: 1.7 },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      },
+      siembra: {
+        ...siembra,
+        ultimaPrediccionMalezas: {
+          estado: 'operativo',
+          fecha: ahora,
+          fuenteDatos: 'Serie canonica Chaman',
+          especies: [
+            {
+              nombre: 'Pata de gallina',
+              emergenciaActualPct: 14.2,
+              emergenciaProyectada7dPct: 31.5,
+              severidad: 'media',
+              recomendacion: 'Recorrer el lote.',
+            },
+          ],
+        },
+      },
+      demandaHidrica: {
+        fechaLocal: ahora.slice(0, 10),
+        timezone: 'America/Argentina/Buenos_Aires',
+        fuente: 'Chamán-Meteo (ERA5-Land)',
+        coberturaPct: 100,
+        vpdMaxKpa: 1.7,
+        horasApertura: 5,
+        ventanas: [{ desde: ahora, hasta: ahora, durationHours: 5 }],
+        ultima: {
+          timestamp: ahora,
+          localDate: ahora.slice(0, 10),
+          timezone: 'America/Argentina/Buenos_Aires',
+          isForecast: false,
+          isDaylight: true,
+          daylightSource: 'radiation',
+          crop: 'Arveja',
+          phase: 'vegetative',
+          level: 'expected',
+          stomatalState: 'open',
+          vpdKpa: 1.2,
+          vpdThresholdKpa: 1.8,
+          source: 'chaman_meteo',
+          completenessPercentage: 100,
+          interpretation: 'Demanda dentro del rango esperado.',
+          scope: 'Estimacion ambiental.',
+          calculationVersion: 'water-demand-test',
+        },
+      },
+      clima: {
+        origen: 'canonico',
+        fuente: 'Chamán-Meteo (ERA5-Land)',
+        fuentes: ['Chamán-Meteo (ERA5-Land)'],
+        completitudPct: 100,
+        advertencias: [],
+        acumulados: {},
+        requerimientos: {},
+        serie: [],
+        lectura: 'Serie canonica.',
+        riesgosAgroclimaticos: {
+          fuente: 'OpenMeteo',
+          lat: -33,
+          lng: -64,
+          generadoEn: ahora,
+          granizo: {
+            tipo: 'granizo',
+            aplica: true,
+            nivel: 'medio',
+            posibilidadPct: 42,
+            titulo: 'Vigilancia de granizo',
+            lectura: 'Senal convectiva a vigilar.',
+            recomendacion: 'Revisar el pronostico.',
+            diasRiesgo: 1,
+            evidencia: [],
+            serie: [],
+          },
+        },
+      },
+      visitas: [
+        {
+          _id: 'visita-1',
+          fechaVisita: ahora,
+          titulo: 'Recorrida sanitaria',
+          estado: 'realizada',
+          observaciones: 'Sin sintomas visibles.',
+        },
+      ],
+      evidenciasCampo: [
+        {
+          _id: 'foto-1',
+          idVisita: 'visita-1',
+          tipoMedio: 'imagen',
+          url: 'https://privado/foto.jpg',
+        },
+        {
+          _id: 'audio-1',
+          idVisita: 'visita-1',
+          tipoMedio: 'audio',
+          url: 'https://privado/audio.ogg',
+        },
+      ],
+      reportesNdvi: [],
+      predicciones: [],
+      fertilizaciones: [],
+      fumigaciones: [],
+      cargaFitosanitaria: service.calcularCargaFitosanitaria(
+        {},
+        siembra,
+        [],
+        [],
+      ),
+      frio: {
+        aplica: false,
+        fuente: 'No aplica',
+        titulo: 'No aplica',
+        detalle: 'Cultivo anual',
+        lectura: 'No aplica',
+        objetivos: {},
+      },
+    } as any);
+
+    expect(html).toContain('Decisiones meteorologicas y respuesta del cultivo');
+    expect(html).toContain('Apertura probable');
+    expect(html).toContain('Pata de gallina');
+    expect(html).toContain('Vigilancia de granizo');
+    expect(html).toContain('Napa: 1,7 m');
+    expect(html).toContain('Sin sintomas visibles.');
+    expect(html).toContain('1 foto(s) · 1 audio(s)');
+    expect(html).not.toContain('https://privado/');
+  });
+
+  it('resume la ultima jornada horaria y pide explicitamente la serie hourly canonica', async () => {
+    const now = new Date();
+    const localDate = now.toISOString().slice(0, 10);
+    const hour = (offset: number, vpdKpa: number) => ({
+      timestamp: new Date(
+        now.getTime() - offset * 60 * 60 * 1000,
+      ).toISOString(),
+      localDate,
+      timezone: 'UTC',
+      isForecast: false,
+      state: 'observed',
+      weather: {
+        temperatureC: 22,
+        relativeHumidityPct: 60,
+        vpdKpa,
+        shortwaveRadiationWm2: 300,
+      },
+      source: 'chaman_meteo',
+      sourceByVariable: {},
+      qualityFlags: [],
+      completenessPercentage: 100,
+    });
+    const repository = {
+      getAgrometeorologia: jest.fn().mockResolvedValue({
+        summary: {},
+        dataSource: { type: 'chaman_meteo', completenessPercentage: 100 },
+        series: [
+          {
+            date: localDate,
+            isForecast: false,
+            stage: 'Vegetativo',
+            weather: {},
+            metrics: { availableWaterPercentage: 70 },
+            source: 'chaman_meteo',
+            sourceByVariable: {},
+            qualityFlags: [],
+            warnings: [],
+          },
+        ],
+        hourlySeries: [hour(2, 1.1), hour(1, 1.4)],
+        warnings: [],
+        calculationVersion: 'test',
+        parametersVersion: 'test',
+      }),
+    };
+    const instance = new LotesService(
+      repository as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    ) as any;
+
+    const result = await instance.getDemandaHidricaCertificado({
+      _id: 'siembra-1',
+      semilla: { cultivo: 'Trigo' },
+    });
+
+    expect(repository.getAgrometeorologia).toHaveBeenCalledWith(
+      'siembra-1',
+      expect.any(String),
+      expect.any(String),
+      true,
+    );
+    expect(result).toMatchObject({
+      fuente: 'Chamán-Meteo (ERA5-Land)',
+      coberturaPct: 100,
+      horasApertura: 2,
+      vpdMaxKpa: 1.4,
+    });
+  });
 });
 
 describe('LotesService - clima canonico del informe agronomico', () => {
