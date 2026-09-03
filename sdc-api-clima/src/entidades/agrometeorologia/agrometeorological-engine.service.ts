@@ -1568,6 +1568,7 @@ export class AgrometeorologicalEngineService {
     includeHourly = false,
   ): Promise<IRespuestaAgrometeorologiaSiembra> {
     const runtimeWarnings: string[] = [];
+    let generationOutdated = false;
     const filter: Record<string, unknown> = {
       idSiembra,
       versionCalculo: AGROMET_ENGINE_VERSION,
@@ -1595,6 +1596,15 @@ export class AgrometeorologicalEngineService {
       );
       const activeData = active?.generationId ? active.data || [] : [];
       if (
+        activeData.length &&
+        !(await this.generationMatchesCurrentCycle(idSiembra, activeData))
+      ) {
+        generationOutdated = true;
+        runtimeWarnings.push(
+          'La fecha agronomica cambio y la nueva serie meteorologica se esta calculando.',
+        );
+        indicators = { datos: [] };
+      } else if (
         !CHAMAN_METEO_AGROMET_BRIDGE_ENABLED &&
         activeData.some(recordUsesChamanMeteo)
       ) {
@@ -1613,7 +1623,7 @@ export class AgrometeorologicalEngineService {
       }
       indicators = { datos: [] };
     }
-    if (!(indicators.datos || []).length) {
+    if (!(indicators.datos || []).length && !generationOutdated) {
       const legacyFilter = {
         ...filter,
         versionCalculo: LEGACY_AGROMET_ENGINE_VERSION,
@@ -1634,7 +1644,15 @@ export class AgrometeorologicalEngineService {
           'La serie estable anterior tambien declara procedencia Chaman-Meteo y fue excluida completa por seguridad.',
         );
       }
-      if (legacyData.length) {
+      if (
+        legacyData.length &&
+        !(await this.generationMatchesCurrentCycle(idSiembra, legacyData))
+      ) {
+        generationOutdated = true;
+        runtimeWarnings.push(
+          'La fecha agronomica cambio y la nueva serie meteorologica se esta calculando.',
+        );
+      } else if (legacyData.length) {
         indicators = { datos: legacyData };
         resolvedCalculationVersion = LEGACY_AGROMET_ENGINE_VERSION;
       }
@@ -2040,6 +2058,26 @@ export class AgrometeorologicalEngineService {
       calculationVersion: resolvedCalculationVersion,
       parametersVersion: current.versionParametros,
     };
+  }
+
+  private async generationMatchesCurrentCycle(
+    idSiembra: string,
+    rows: IIndicadorAgrometeorologicoDiario[],
+  ): Promise<boolean> {
+    if (
+      !rows.length ||
+      typeof (this.repository as any).getSiembra !== 'function'
+    ) {
+      return true;
+    }
+    const siembra = await this.repository.getSiembra(idSiembra);
+    if (!siembra?.fechaSiembra) return false;
+    const expectedStart = this.resolveCycleStart(siembra);
+    const actualStart = [...rows]
+      .map((row) => String(row.fecha || '').slice(0, 10))
+      .filter(Boolean)
+      .sort()[0];
+    return actualStart === expectedStart;
   }
 
   private resolveColdSeasonWindow(

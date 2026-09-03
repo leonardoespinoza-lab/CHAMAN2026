@@ -3873,4 +3873,45 @@ describe('AgrometeorologicalEngineService', () => {
       }),
     ).toBe(false);
   });
+
+  it('no expone una generacion calculada para una fecha de siembra anterior', async () => {
+    const getIndicadores = jest.fn().mockResolvedValue({ datos: [] });
+    const service = new AgrometeorologicalEngineService(
+      {
+        getActiveIndicadoresGeneration: jest.fn().mockResolvedValue({
+          generationId: 'generation-before-date-edit',
+          data: [
+            {
+              idSiembra: 'siembra-1',
+              fecha: '2026-05-01',
+              metricas: { gddAccumulated: 1 },
+              fuente: 'open_meteo',
+              fuentePorVariable: {},
+              banderasCalidad: [],
+              advertencias: [],
+              completitudPct: 100,
+              esPronostico: false,
+              calculadoEn: '2026-09-03T12:00:00.000Z',
+            },
+          ],
+        }),
+        getSiembra: jest.fn().mockResolvedValue({
+          _id: 'siembra-1',
+          fechaSiembra: '2026-04-01T00:00:00.000Z',
+          semilla: { cultivo: 'Cebada' },
+        }),
+        getIndicadores,
+      } as any,
+      {} as any,
+    );
+
+    const response = await service.getResponse('siembra-1');
+
+    expect(response.series).toEqual([]);
+    expect(response.dataSource.type).toBe('sin_datos');
+    expect(response.warnings.join(' ')).toContain(
+      'la nueva serie meteorologica se esta calculando',
+    );
+    expect(getIndicadores).not.toHaveBeenCalled();
+  });
 });

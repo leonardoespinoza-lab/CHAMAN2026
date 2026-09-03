@@ -71,10 +71,11 @@ export class DecisionPipelineRepository {
   async reprocessClimate(
     idSiembra: string,
     sincronizarClima: boolean,
+    forceBackfill = false,
   ): Promise<void> {
     await this.axios.POST<void>(
       `${API_CLIMA}/agrometeorologia/siembras/${idSiembra}/reprocesar`,
-      { sincronizarClima },
+      { sincronizarClima, forceBackfill },
       {
         headers: this.internalHeaders(),
         timeout: DECISION_PIPELINE_JOB_TIMEOUT_MS - 10_000,

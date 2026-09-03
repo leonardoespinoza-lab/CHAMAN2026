@@ -46,11 +46,12 @@ export class SiembrasRepository {
   async reprocesarAgrometeorologia(
     id: string,
     sincronizarClima = true,
+    forceBackfill = false,
   ): Promise<void> {
     const url = `${API_CLIMA}/agrometeorologia/siembras/${id}/reprocesar`;
     await this.axios.POST<void>(
       url,
-      { sincronizarClima },
+      { sincronizarClima, forceBackfill },
       { headers: this.agrometeorologiaHeaders() },
     );
   }

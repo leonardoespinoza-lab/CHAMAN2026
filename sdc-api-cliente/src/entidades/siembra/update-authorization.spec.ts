@@ -2,7 +2,10 @@ import { BadRequestException } from '@nestjs/common';
 import { SiembrasService } from './service';
 
 describe('SiembrasService - autorización de edición', () => {
-  function subject(siembra: Record<string, unknown>) {
+  function subject(
+    siembra: Record<string, unknown>,
+    useDecisionQueue = false,
+  ) {
     const repository = {
       getById: jest.fn().mockResolvedValue(siembra),
       update: jest.fn().mockResolvedValue(siembra),
@@ -22,6 +25,9 @@ describe('SiembrasService - autorización de edición', () => {
       }),
       generarNdvi: jest.fn().mockResolvedValue(undefined),
     };
+    const decisionPipelineQueue = {
+      enqueueForSowing: jest.fn().mockResolvedValue({ id: 'decision-1' }),
+    };
     const service = new SiembrasService(
       repository as any,
       prediccionsService as any,
@@ -31,12 +37,19 @@ describe('SiembrasService - autorización de edición', () => {
       {} as any,
       {} as any,
       {} as any,
+      (useDecisionQueue ? decisionPipelineQueue : undefined) as any,
     );
     jest
       .spyOn(service as any, 'getCrono')
       .mockResolvedValue({ _id: 'crono-1' });
     jest.spyOn(service as any, 'evaluarAgroclima').mockResolvedValue(undefined);
-    return { service, repository, lotesService, prediccionsService };
+    return {
+      service,
+      repository,
+      lotesService,
+      prediccionsService,
+      decisionPipelineQueue,
+    };
   }
 
   it('rechaza editar una siembra ajena aunque el payload indique un lote propio', async () => {
@@ -118,6 +131,63 @@ describe('SiembrasService - autorización de edición', () => {
         idProductor: 'productor-ajeno',
       }),
     ).rejects.toThrow('No tiene permiso');
+  });
+
+  it('fuerza backfill cuando cambia la fecha de siembra', async () => {
+    const { service, decisionPipelineQueue } = subject(
+      {
+        _id: 'siembra-propia',
+        idLote: 'lote-propio',
+        idProductor: 'productor-propio',
+        fechaSiembra: '2026-05-01T00:00:00.000Z',
+      },
+      true,
+    );
+
+    await service.update(
+      'siembra-propia',
+      { fechaSiembra: '2026-04-01T00:00:00.000Z' },
+      {
+        nivel: 'Productor',
+        rol: 'Escritura',
+        idProductor: 'productor-propio',
+      },
+    );
+
+    expect(decisionPipelineQueue.enqueueForSowing).toHaveBeenCalledWith(
+      'siembra-propia',
+      expect.objectContaining({
+        trigger: 'siembra.updated',
+        forceClimateBackfill: true,
+      }),
+    );
+  });
+
+  it('no fuerza backfill cuando la fecha de siembra se conserva', async () => {
+    const { service, decisionPipelineQueue } = subject(
+      {
+        _id: 'siembra-propia',
+        idLote: 'lote-propio',
+        idProductor: 'productor-propio',
+        fechaSiembra: '2026-05-01T00:00:00.000Z',
+      },
+      true,
+    );
+
+    await service.update(
+      'siembra-propia',
+      { fechaSiembra: '2026-05-01' },
+      {
+        nivel: 'Productor',
+        rol: 'Escritura',
+        idProductor: 'productor-propio',
+      },
+    );
+
+    expect(decisionPipelineQueue.enqueueForSowing).toHaveBeenCalledWith(
+      'siembra-propia',
+      expect.objectContaining({ forceClimateBackfill: false }),
+    );
   });
 
   it('serializa dos pipelines de decision para la misma siembra', async () => {

@@ -455,6 +455,7 @@ export class SiembrasService {
         trigger: 'siembra.created',
         changedFields: Object.keys(data || {}),
         sincronizarClima: true,
+        forceClimateBackfill: true,
       },
       permiso,
       false,
@@ -485,6 +486,9 @@ export class SiembrasService {
     this.assertAdvisorReadOnly(permiso);
     data = this.sinHistorialFenologicoGenerico(data);
     const siembraActual = await this.getById(id, permiso);
+    const fechaSiembraAnterior = this.fechaCalendario(
+      siembraActual.fechaSiembra,
+    );
     const idLoteActual = String(siembraActual.idLote || '');
     if (!idLoteActual) {
       throw new BadRequestException(
@@ -510,6 +514,12 @@ export class SiembrasService {
     };
     const crono = await this.getCrono(data);
     data.idCrono = crono?._id;
+    const fechaSiembraNueva = this.fechaCalendario(
+      data.fechaSiembra ?? siembraActual.fechaSiembra,
+    );
+    const cambioFechaSiembra =
+      Boolean(fechaSiembraAnterior && fechaSiembraNueva) &&
+      fechaSiembraAnterior !== fechaSiembraNueva;
 
     await this.repository.update(id, data);
     await this.encolarPipelineDecision(
@@ -518,6 +528,7 @@ export class SiembrasService {
         trigger: 'siembra.updated',
         changedFields: Object.keys(data || {}),
         sincronizarClima: true,
+        forceClimateBackfill: cambioFechaSiembra,
       },
       permiso,
       true,
@@ -1261,6 +1272,7 @@ export class SiembrasService {
     permiso: IPermiso,
     sincronizarClima: boolean,
     reemplazarPrediccion: boolean,
+    forceBackfill = false,
   ): Promise<void> {
     const key = String(idSiembra);
     const anterior = this.pipelinesDecision.get(key) || Promise.resolve();
@@ -1271,7 +1283,18 @@ export class SiembrasService {
         );
       })
       .then(async () => {
-        await this.repository.reprocesarAgrometeorologia(key, sincronizarClima);
+        if (forceBackfill) {
+          await this.repository.reprocesarAgrometeorologia(
+            key,
+            sincronizarClima,
+            true,
+          );
+        } else {
+          await this.repository.reprocesarAgrometeorologia(
+            key,
+            sincronizarClima,
+          );
+        }
         if (reemplazarPrediccion) {
           await this.actualizarPrediccion(key, permiso);
         } else {
@@ -1307,7 +1330,23 @@ export class SiembrasService {
       permiso,
       options.sincronizarClima,
       reemplazarPrediccion,
+      options.forceClimateBackfill,
     );
+  }
+
+  private fechaCalendario(value: unknown): string | undefined {
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime())
+        ? undefined
+        : value.toISOString().slice(0, 10);
+    }
+    const text = String(value || '').trim();
+    const direct = text.match(/^\d{4}-\d{2}-\d{2}/)?.[0];
+    if (direct) return direct;
+    const parsed = new Date(text);
+    return Number.isNaN(parsed.getTime())
+      ? undefined
+      : parsed.toISOString().slice(0, 10);
   }
 
   private crearIdRegistroFenologico(): string {

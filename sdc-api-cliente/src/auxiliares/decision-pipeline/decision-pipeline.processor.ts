@@ -91,6 +91,7 @@ export class DecisionPipelineProcessor {
         await this.repository.reprocessClimate(
           idSiembra,
           event.impact.sincronizarClima,
+          event.impact.forceClimateBackfill,
         );
         completedStages.clima = new Date().toISOString();
         await job.update({ ...job.data, completedStages });

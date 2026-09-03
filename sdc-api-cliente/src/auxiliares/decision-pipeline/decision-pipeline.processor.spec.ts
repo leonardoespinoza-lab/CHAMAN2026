@@ -15,6 +15,7 @@ describe('DecisionPipelineProcessor', () => {
     changedFields: ['fechaSiembra'],
     impact: {
       sincronizarClima: true,
+      forceClimateBackfill: false,
       reconstruirSanidad: true,
       evaluarAgroclima: true,
     },
@@ -72,7 +73,11 @@ describe('DecisionPipelineProcessor', () => {
     await processor.recomputeSowing(sowingJob());
 
     expect(order).toEqual(['clima', 'sanidad', 'agroclima']);
-    expect(repository.reprocessClimate).toHaveBeenCalledWith('siembra-1', true);
+    expect(repository.reprocessClimate).toHaveBeenCalledWith(
+      'siembra-1',
+      true,
+      false,
+    );
     expect(queue.client.eval).toHaveBeenCalledTimes(1);
   });
 

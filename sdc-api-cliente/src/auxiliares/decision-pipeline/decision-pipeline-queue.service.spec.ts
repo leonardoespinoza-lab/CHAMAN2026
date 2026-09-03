@@ -1,4 +1,5 @@
 import {
+  DECISION_HISTORICAL_JOB_OPTIONS,
   DECISION_JOB_OPTIONS,
   EXPAND_DECISION_SCOPE_JOB,
   RECOMPUTE_SOWING_JOB,
@@ -50,7 +51,10 @@ describe('DecisionPipelineQueueService', () => {
       event: {
         eventId: 'operacion-1',
         changedFields: ['fechaSiembra', 'idSemilla'],
-        impact: { sincronizarClima: true },
+        impact: {
+          sincronizarClima: true,
+          forceClimateBackfill: false,
+        },
       },
     });
     expect(options).toMatchObject({
@@ -59,6 +63,25 @@ describe('DecisionPipelineQueueService', () => {
       timeout: DECISION_JOB_OPTIONS.timeout,
       priority: 1,
       jobId: expect.stringMatching(/^decision-sowing-siembra-1-/),
+    });
+  });
+
+  it('mantiene pendientes los backfills historicos con reintentos espaciados', async () => {
+    const { queue, service } = setup();
+
+    await service.enqueueForSowing('siembra-1', {
+      trigger: 'siembra.updated',
+      changedFields: ['fechaSiembra'],
+      sincronizarClima: true,
+      forceClimateBackfill: true,
+      operationId: 'backfill-1',
+    });
+
+    const [, data, options] = queue.add.mock.calls[0];
+    expect(data.event.impact.forceClimateBackfill).toBe(true);
+    expect(options).toMatchObject({
+      attempts: DECISION_HISTORICAL_JOB_OPTIONS.attempts,
+      backoff: DECISION_HISTORICAL_JOB_OPTIONS.backoff,
     });
   });
 

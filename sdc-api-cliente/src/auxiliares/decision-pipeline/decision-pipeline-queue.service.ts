@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createHash, randomUUID } from 'crypto';
 import { Job, Queue } from 'bull';
 import {
+  DECISION_HISTORICAL_JOB_OPTIONS,
   DECISION_JOB_OPTIONS,
   DECISION_PIPELINE_QUEUE,
   EXPAND_DECISION_SCOPE_JOB,
@@ -69,7 +70,9 @@ export class DecisionPipelineQueueService {
     const jobId = `decision-sowing-${normalizedId}-${event.idempotencyKey}`;
     try {
       const job = await this.queue.add(RECOMPUTE_SOWING_JOB, data, {
-        ...DECISION_JOB_OPTIONS,
+        ...(event.impact.forceClimateBackfill
+          ? DECISION_HISTORICAL_JOB_OPTIONS
+          : DECISION_JOB_OPTIONS),
         jobId,
         priority: 1,
       });
@@ -148,6 +151,7 @@ export class DecisionPipelineQueueService {
     await this.repository.reprocessClimate(
       idSiembra,
       event.impact.sincronizarClima,
+      event.impact.forceClimateBackfill,
     );
     await this.repository.rebuildSanitaryPredictions(idSiembra);
     await this.repository.evaluateAgroclimate(idSiembra);
@@ -171,6 +175,7 @@ export class DecisionPipelineQueueService {
       aggregateId: normalizedId,
       changedFields,
       sincronizarClima: Boolean(options.sincronizarClima),
+      forceClimateBackfill: Boolean(options.forceClimateBackfill),
     });
     const idempotencyKey = createHash('sha256').update(canonical).digest('hex');
     return {
@@ -182,6 +187,7 @@ export class DecisionPipelineQueueService {
       changedFields,
       impact: {
         sincronizarClima: Boolean(options.sincronizarClima),
+        forceClimateBackfill: Boolean(options.forceClimateBackfill),
         reconstruirSanidad: true,
         evaluarAgroclima: true,
       },

@@ -21,6 +21,7 @@ export interface DecisionEnqueueOptions {
   trigger: DecisionTrigger;
   changedFields?: string[];
   sincronizarClima: boolean;
+  forceClimateBackfill?: boolean;
   operationId?: string;
 }
 
@@ -36,6 +37,7 @@ export interface DecisionEventV1 {
   changedFields: string[];
   impact: {
     sincronizarClima: boolean;
+    forceClimateBackfill: boolean;
     reconstruirSanidad: true;
     evaluarAgroclima: true;
   };
