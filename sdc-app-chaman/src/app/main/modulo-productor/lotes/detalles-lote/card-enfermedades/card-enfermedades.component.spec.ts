@@ -223,17 +223,19 @@ describe('CardEnfermedadesComponent - comunicacion sanitaria', () => {
     );
   });
 
-  it('declara explicitamente que Pecan no tiene modelo sanitario validado', () => {
+  it('habilita el monitoreo sanitario experimental para Pecan', () => {
     const componente = crear();
     componente.siembra = {
       semilla: { cultivo: 'Pecan', variedad: 'Kiowa' },
     } as any;
 
-    expect(componente.tieneMotorSanitario).toBeFalse();
-    expect(componente.resumenGeneral).toContain('sin modelo sanitario validado');
-    expect(componente.mensajeSinModeloSanitario).toContain('No se calcula un porcentaje');
-    expect(componente.etiquetaBotonActualizacion).toBe('Sin modelo sanitario validado');
-    expect(componente.enfermedadInsights).toEqual([]);
+    expect(componente.tieneMotorSanitario).toBeTrue();
+    expect(componente.resumenGeneral).toContain('seguimiento ambiental para Pecan');
+    expect(componente.etiquetaBotonActualizacion).toBe('Actualizar screening');
+    expect(componente.enfermedadInsights.map((item) => item.enfermedad)).toEqual([
+      'Sarna del Pecan',
+      'Bacteriosis del Pecan',
+    ]);
   });
 
   it('habilita la curva principal solo cuando el cultivo tiene serie historica soportada', () => {

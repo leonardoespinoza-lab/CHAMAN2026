@@ -13,7 +13,9 @@ import {
   IPrediccion,
   IPrediccionEnfermedad,
   IQueryParam,
+  ISemilla,
   ISiembra,
+  resolverResistencia,
   TEnfermedad,
   TEnfermedadId,
 } from 'modelos/src';
@@ -24,6 +26,7 @@ import {
   crearPrediccionFueraVentana,
   crearPrediccionSinDatos,
   esValorClimaticoValido,
+  metadataResistencia,
 } from '../enfermedades/calidad';
 import { PrediccionsRepository } from '../repository';
 import {
@@ -133,6 +136,7 @@ export class PrediccionArvejaService {
               config.etapas.includes(codigo)
                 ? this.evaluarEnfermedad(
                     config,
+                    siembra.semilla,
                     this.climaDiaCanonico(dia),
                     codigo,
                     dia.calidadClima,
@@ -259,6 +263,7 @@ export class PrediccionArvejaService {
 
   private evaluarEnfermedad(
     config: ConfigEnfermedadArveja,
+    semilla: ISemilla | undefined,
     clima: ClimaDiaArveja,
     etapa: CodigoEtapaArveja,
     calidadCanonica: ICalidadDatoMotor,
@@ -308,24 +313,39 @@ export class PrediccionArvejaService {
               lluviaMm: clima.precip,
               etapaReproductiva: etapa === 'R1' || etapa === 'R3',
             });
+    const resistencia = resolverResistencia(semilla?.resistencia, config.id);
+    const metadataVarietal = metadataResistencia(resistencia);
+    const resultado = this.clamp(
+      evaluacion.indiceAmbiental * resistencia.multiplicador,
+      0,
+      100,
+    );
     return {
       enfermedad: config.nombre,
       idEnfermedad: config.id,
-      resultado: evaluacion.indiceAmbiental,
+      resultado: this.round(resultado, 2),
       estado: 'calculado',
-      resistenciaUsada: { estado: 'desconocida' },
-      calidadDatos: combinarCalidadDatos(calidadCanonica, {
-        nivel: 'baja',
-        fuente: 'estimado',
-        cobertura: clima.coberturaHoraria,
-        fallback: true,
-        resumen: `Screening ambiental experimental: nivel ${evaluacion.nivel}. No equivale a probabilidad de infeccion.`,
-        limitaciones: [
-          'Sin resistencia varietal publicada; ausencia de dato no equivale a susceptibilidad.',
-          'Sin confirmacion de inoculo, rastrojo, semilla infectada ni sintomas de campo.',
-          ...evaluacion.fundamentos,
-        ],
-      }),
+      resistenciaUsada: metadataVarietal.resistenciaUsada,
+      calidadDatos: combinarCalidadDatos(
+        resistencia.desconocida
+          ? calidadCanonica
+          : combinarCalidadDatos(
+              calidadCanonica,
+              metadataVarietal.calidadDatos,
+            ),
+        {
+          nivel: 'baja',
+          fuente: 'estimado',
+          cobertura: clima.coberturaHoraria,
+          fallback: true,
+          resumen: `Screening ambiental experimental ajustado por perfil varietal: nivel ${evaluacion.nivel}. No equivale a probabilidad de infeccion.`,
+          limitaciones: [
+            ...(metadataVarietal.calidadDatos.limitaciones || []),
+            'Sin confirmacion de inoculo, rastrojo, semilla infectada ni sintomas de campo.',
+            ...evaluacion.fundamentos,
+          ],
+        },
+      ),
       modelo: {
         id: config.id,
         version: ARVEJA_MOTOR_SANITARIO_VERSION,
@@ -339,6 +359,7 @@ export class PrediccionArvejaService {
         humedadRelativa: this.round(clima.hr, 1),
         horasMojado: this.round(clima.horasMojado, 1),
         lluviaDiaria: this.round(clima.precip, 1),
+        kVar: this.round(resistencia.multiplicador, 2),
         etapaScore: 1,
         nivelOrdinal: this.nivelOrdinal(evaluacion.nivel),
       },
@@ -381,5 +402,9 @@ export class PrediccionArvejaService {
     if (!Number.isFinite(value)) return 0;
     const factor = 10 ** digits;
     return Math.round(value * factor) / factor;
+  }
+
+  private clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
   }
 }

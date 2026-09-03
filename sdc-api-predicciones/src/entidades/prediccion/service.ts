@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { SiembrasService } from '../siembra/service';
 import { PrediccionSojaService } from './cultivos/soja';
 import { PrediccionTrigoService } from './cultivos/trigo';
@@ -17,10 +17,15 @@ import {
 } from 'modelos/src';
 import { AlertasService } from '../alerta/service';
 import { PrediccionMaizService } from './cultivos/maiz';
-import { PREDICCIONES_MALEZAS_LIMIT } from '../../env';
+import {
+  PREDICCIONES_MALEZAS_LIMIT,
+  PREDICCIONES_SANITARIAS_CONCURRENCY,
+} from '../../env';
 import { PrediccionCebadaService } from './cultivos/cebada';
 import { PrediccionArvejaService } from './cultivos/arveja';
 import { PrediccionsRepository } from './repository';
+import { PREDICCIONES_FRUTALES_EXPERIMENTALES_ENABLED } from '../../env';
+import { PrediccionFrutalesService } from './cultivos/frutales';
 
 @Injectable()
 export class PrediccionsService {
@@ -36,18 +41,47 @@ export class PrediccionsService {
     private notificacionesService: NotificacionsService,
     private alertasService: AlertasService,
     private prediccionsRepository: PrediccionsRepository,
+    @Optional()
+    private prediccionFrutalesService?: PrediccionFrutalesService,
   ) {}
 
   async hacerPredicciones() {
     const siembras =
-      await this.siembrasService.listarSiembrasParaPredicciones();
+      await this.siembrasService.listarSiembrasParaPrediccionesSanitarias();
     Logger.log(`Iniciando Predicciones para ${siembras.length} siembras`);
-    await Promise.all(
-      siembras.map(async (s) => {
-        return await this.prediccion(s._id);
-      }),
+    const fallidas: string[] = [];
+    for (
+      let inicio = 0;
+      inicio < siembras.length;
+      inicio += PREDICCIONES_SANITARIAS_CONCURRENCY
+    ) {
+      const tanda = siembras.slice(
+        inicio,
+        inicio + PREDICCIONES_SANITARIAS_CONCURRENCY,
+      );
+      const resultados = await Promise.allSettled(
+        tanda.map((siembra) => this.prediccion(siembra._id)),
+      );
+      resultados.forEach((resultado, indice) => {
+        if (resultado.status === 'rejected') {
+          const idSiembra = String(tanda[indice]._id);
+          fallidas.push(idSiembra);
+          this.logger.error(
+            `Fallo la prediccion sanitaria de la siembra ${idSiembra}: ${
+              resultado.reason?.message || resultado.reason
+            }`,
+          );
+        }
+      });
+    }
+    Logger.log(
+      `Predicciones realizadas: ${siembras.length - fallidas.length}/${siembras.length}`,
     );
-    Logger.log('Predicciones realizadas');
+    if (fallidas.length) {
+      throw new Error(
+        `Fallaron ${fallidas.length} predicciones sanitarias: ${fallidas.join(', ')}`,
+      );
+    }
   }
 
   async hacerPrediccionesMalezas() {
@@ -115,6 +149,17 @@ export class PrediccionsService {
           predicciones =
             await this.prediccionArvejaService.hacerPredicciones(siembra);
           break;
+        case 'Manzano':
+        case 'Peral':
+        case 'Pecan':
+          if (
+            PREDICCIONES_FRUTALES_EXPERIMENTALES_ENABLED &&
+            this.prediccionFrutalesService
+          ) {
+            predicciones =
+              await this.prediccionFrutalesService.hacerPredicciones(siembra);
+          }
+          break;
       }
 
       if (!predicciones?.length) {
@@ -124,7 +169,13 @@ export class PrediccionsService {
       try {
         // Arveja permanece como screening experimental: no crea notificaciones
         // ni alertas hasta validacion contra observaciones de campo.
-        if (siembra.semilla?.cultivo === 'Arveja') return predicciones;
+        if (
+          ['Arveja', 'Manzano', 'Peral', 'Pecan'].includes(
+            String(siembra.semilla?.cultivo || ''),
+          )
+        ) {
+          return predicciones;
+        }
         await Promise.all([
           this.notificacionesService.enviarNotificaciones(
             predicciones,
@@ -163,9 +214,7 @@ export class PrediccionsService {
     return await actual;
   }
 
-  private async reconstruirSerie(
-    idSiembra: string,
-  ): Promise<IPrediccion[]> {
+  private async reconstruirSerie(idSiembra: string): Promise<IPrediccion[]> {
     const snapshot = await this.prediccionsRepository.get({
       filter: JSON.stringify({ idSiembra }),
       sort: 'fecha',

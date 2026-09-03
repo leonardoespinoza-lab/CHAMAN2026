@@ -69,6 +69,37 @@ describe('PrediccionsService - alertas sanitarias', () => {
     return { service, alertas };
   };
 
+  it('procesa todas las tandas aunque una siembra falle y reporta el resultado incompleto', async () => {
+    const ids = Array.from({ length: 7 }, (_, indice) => `siembra-${indice + 1}`);
+    const siembras = {
+      listarSiembrasParaPrediccionesSanitarias: jest
+        .fn()
+        .mockResolvedValue(ids.map((_id) => ({ _id }))),
+    };
+    const service = new PrediccionsService(
+      siembras as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    const ejecutar = jest
+      .spyOn(service, 'prediccion')
+      .mockImplementation(async (id) => {
+        if (id === 'siembra-2') throw new Error('sin clima');
+        return [];
+      });
+
+    await expect(service.hacerPredicciones()).rejects.toThrow(
+      'Fallaron 1 predicciones sanitarias: siembra-2',
+    );
+    expect(ejecutar).toHaveBeenCalledTimes(7);
+  });
+
   it('finaliza la alerta si la ultima salida cronologica deja de ser alertable', async () => {
     const { service, alertas } = crearServicio();
     const predicciones = [

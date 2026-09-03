@@ -30,15 +30,7 @@ export class CronService {
       Logger.log('Predicciones sanitarias automaticas deshabilitadas');
       return;
     }
-    const siembras =
-      await this.siembrasService.listarSiembrasParaPredicciones();
-    Logger.log(`Iniciando Predicciones para ${siembras.length} siembras`);
-    await Promise.all(
-      siembras.map(async (s) => {
-        return await this.prediccionsService.prediccion(s._id);
-      }),
-    );
-    Logger.log('Predicciones realizadas');
+    await this.prediccionsService.hacerPredicciones();
   }
 
   // Todos los dias a las 05:30

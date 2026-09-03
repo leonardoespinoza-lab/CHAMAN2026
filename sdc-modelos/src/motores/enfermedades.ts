@@ -26,6 +26,7 @@ export const TRIGO_MOTOR_SANITARIO_VERSION = 5;
  * experimental y nunca habilita alertas automaticas.
  */
 export const ARVEJA_MOTOR_SANITARIO_VERSION = 2;
+export const FRUTALES_MOTOR_SANITARIO_VERSION = 1;
 export const TRIGO_GDD_BASE_0_INICIO_MIN = 800;
 export const TRIGO_GDD_BASE_0_INICIO_CONSERVADOR = 850;
 export const TRIGO_GDD_COBERTURA_MINIMA = 0.9;
@@ -249,21 +250,21 @@ export const ENFERMEDADES_CANONICAS: IDefinicionEnfermedad[] = [
     nombre: "Sarna del Manzano",
     cultivo: "Manzano",
     aliases: [],
-    motor: "sin_modelo",
+    motor: "experimental",
   },
   {
     id: "manzano.oidio",
     nombre: "Oidio del Manzano",
     cultivo: "Manzano",
     aliases: [],
-    motor: "sin_modelo",
+    motor: "experimental",
   },
   {
     id: "frutales.fuego_bacteriano",
     nombre: "Fuego Bacteriano",
     cultivo: "Frutales",
     aliases: [],
-    motor: "sin_modelo",
+    motor: "experimental",
   },
   {
     id: "manzano.carpocapsa",
@@ -277,7 +278,7 @@ export const ENFERMEDADES_CANONICAS: IDefinicionEnfermedad[] = [
     nombre: "Sarna del Peral",
     cultivo: "Peral",
     aliases: [],
-    motor: "sin_modelo",
+    motor: "experimental",
   },
   {
     id: "peral.psila",
@@ -291,14 +292,14 @@ export const ENFERMEDADES_CANONICAS: IDefinicionEnfermedad[] = [
     nombre: "Sarna del Pecan",
     cultivo: "Pecan",
     aliases: [],
-    motor: "sin_modelo",
+    motor: "experimental",
   },
   {
     id: "pecan.bacteriosis",
     nombre: "Bacteriosis del Pecan",
     cultivo: "Pecan",
     aliases: [],
-    motor: "sin_modelo",
+    motor: "experimental",
   },
 ];
 

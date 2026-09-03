@@ -80,7 +80,16 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   public actualizandoPrediccion = false;
   public enfermedadSeleccionada?: DiseaseInsight;
   public prescripcionSeleccionadaGrupo?: string;
-  private readonly cultivosConMotorSanitario = new Set(['Trigo', 'Soja', 'Maiz', 'Cebada', 'Arveja']);
+  private readonly cultivosConMotorSanitario = new Set([
+    'Trigo',
+    'Soja',
+    'Maiz',
+    'Cebada',
+    'Arveja',
+    'Manzano',
+    'Peral',
+    'Pecan',
+  ]);
   private readonly cultivosConCurvaSanitaria = new Set(['Trigo', 'Soja', 'Maiz', 'Cebada']);
   private readonly enfermedadesConfirmadas = new Set<TEnfermedad>();
 
@@ -107,7 +116,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   public get esScreeningExperimental(): boolean {
-    return this.siembra?.semilla?.cultivo === 'Arveja';
+    return ['Arveja', 'Manzano', 'Peral', 'Pecan'].includes(
+      String(this.siembra?.semilla?.cultivo || '')
+    );
   }
 
   public get tieneCurvaSanitaria(): boolean {
@@ -248,7 +259,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     const cultivo = this.siembra?.semilla?.cultivo || 'cultivo';
     const variedad = this.siembra?.semilla?.variedad || 'la variedad';
     if (this.esScreeningExperimental) {
-      return `${variedad}: screening ambiental experimental para Arveja; requiere confirmacion a campo.`;
+      return `${variedad}: seguimiento ambiental para ${cultivo}; requiere confirmacion a campo.`;
     }
     if (!this.tieneMotorSanitario) {
       return `${variedad}: sin modelo sanitario validado para ${cultivo}.`;
@@ -391,10 +402,6 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   }
 
   private sensibilidadVarietal(enfermedad: TEnfermedad): string {
-    if (this.esScreeningExperimental) {
-      const variedad = this.siembra?.semilla?.variedad || 'la variedad';
-      return `Sin dato varietal publicado; no se asume susceptibilidad para ${variedad}.`;
-    }
     const prediccion = this.prediccionPorEnfermedad(enfermedad);
     if (this.sinResistenciaVarietal(prediccion)) {
       return 'Resistencia varietal no cargada. El motor usa el factor conservador susceptible (S=1) para no subestimar el ambiente. Esto no confirma presencia ni ausencia: requiere recorrida y decision del responsable tecnico.';
@@ -852,7 +859,7 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return `${estadoCalculo}. Es un indice propietario Chaman validado internamente para seguimiento; no declara enfermedad ni emite una alerta automatica.${recorrida}`;
     }
     if (this.esScreeningExperimental) {
-      return `${estadoCalculo}. Resistencia varietal sin datos; validar sintomas a campo.`;
+      return `${estadoCalculo}. ${this.sensibilidadVarietal(enfermedad)}. Validar sintomas a campo.`;
     }
     return `${estadoCalculo}. ${this.sensibilidadVarietal(enfermedad)}.`;
   }

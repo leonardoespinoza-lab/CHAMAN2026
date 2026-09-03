@@ -93,9 +93,7 @@ describe('screening sanitario con fenologia proyectada', () => {
       ),
     ).not.toHaveLength(0);
     expect(
-      creadas[0].enfermedades.some(
-        (item: any) => item.estado === 'sin_datos',
-      ),
+      creadas[0].enfermedades.some((item: any) => item.estado === 'sin_datos'),
     ).toBe(false);
     expect(
       creadas[0].enfermedades.map((item: any) => ({
@@ -193,7 +191,9 @@ describe('screening sanitario con fenologia proyectada', () => {
     expect(
       creadas[creadas.length - 1].enfermedades
         .filter((item: any) => item.idEnfermedad !== 'cebada.mancha_red')
-        .every((item: any) => item.modelo.validacion === 'operativo_provisional'),
+        .every(
+          (item: any) => item.modelo.validacion === 'operativo_provisional',
+        ),
     ).toBe(true);
   });
 
@@ -293,9 +293,7 @@ describe('screening sanitario con fenologia proyectada', () => {
       ),
     ).not.toHaveLength(0);
     expect(
-      creadas[0].enfermedades.some(
-        (item: any) => item.estado === 'sin_datos',
-      ),
+      creadas[0].enfermedades.some((item: any) => item.estado === 'sin_datos'),
     ).toBe(false);
     expect(
       creadas[0].enfermedades.every(
@@ -355,7 +353,10 @@ describe('screening sanitario con fenologia proyectada', () => {
   });
 
   it('mantiene calculable Arveja con clima diario completo aunque falte mojado horario', async () => {
-    const data = respuesta('E - Emergencia y desarrollo vegetativo', 'rango_termico_referencia');
+    const data = respuesta(
+      'E - Emergencia y desarrollo vegetativo',
+      'rango_termico_referencia',
+    );
     delete data.series[0].metrics.leafWetnessHours;
     const creadas: any[] = [];
     const service = new PrediccionArvejaService(
@@ -374,7 +375,64 @@ describe('screening sanitario con fenologia proyectada', () => {
       semilla: { cultivo: 'Arveja', variedad: 'KINGFISHER' },
     } as any);
 
-    expect(creadas[0].enfermedades.some((item: any) => item.estado === 'sin_datos')).toBe(false);
+    expect(
+      creadas[0].enfermedades.some((item: any) => item.estado === 'sin_datos'),
+    ).toBe(false);
     expect(creadas[0].enfermedades[0].modelo.resolucion).toBe('proxy_diario');
+  });
+
+  it('aplica y deja trazabilidad de la susceptibilidad varietal de Arveja', async () => {
+    const data = respuesta(
+      'E - Emergencia y desarrollo vegetativo',
+      'rango_termico_referencia',
+    );
+    const creadas: any[] = [];
+    const service = new PrediccionArvejaService(
+      {
+        get: jest.fn().mockResolvedValue({ datos: [] }),
+        create: jest.fn(async (value) => (creadas.push(value), value)),
+      } as any,
+      { update: jest.fn() } as any,
+      { getAgrometeorologiaSiembra: jest.fn().mockResolvedValue(data) } as any,
+    );
+
+    await service.hacerPredicciones({
+      _id: 'siembra-arveja-resistencia',
+      fechaSiembra: '2026-07-15T03:00:00.000Z',
+      coordenadas: { lat: -39, lng: -67 },
+      semilla: {
+        cultivo: 'Arveja',
+        variedad: 'ASTRONAUTE',
+        resistencia: [
+          {
+            enfermedad: 'Complejo Ascochyta de la Arveja',
+            idEnfermedad: 'arveja.ascochyta',
+            perfil: 'MR',
+            multiplicador: 0.5,
+            indiceResistencia: 2 / 3,
+            estado: 'observada',
+            confianza: 'alta',
+            fuente: 'Ensayo varietal',
+            campaniaFuente: '2025-2026',
+          },
+        ],
+      },
+    } as any);
+
+    const ascochyta = creadas[0].enfermedades.find(
+      (item: any) => item.idEnfermedad === 'arveja.ascochyta',
+    );
+    const mildiu = creadas[0].enfermedades.find(
+      (item: any) => item.idEnfermedad === 'arveja.mildiu',
+    );
+    expect(ascochyta.resistenciaUsada).toMatchObject({
+      estado: 'observada',
+      perfil: 'MR',
+      multiplicador: 0.5,
+    });
+    expect(ascochyta.variables.kVar).toBe(0.5);
+    expect(ascochyta.resultado).toBeLessThanOrEqual(mildiu.resultado);
+    expect(mildiu.resistenciaUsada.estado).toBe('desconocida');
+    expect(mildiu.variables.kVar).toBe(1);
   });
 });

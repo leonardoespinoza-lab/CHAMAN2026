@@ -42,6 +42,21 @@ export class SiembrasService {
     const query: IQueryParam = {
       select: '_id',
       filter: JSON.stringify(filter),
+      sort: '-fechaSiembra',
+    };
+    const listado = await this.repository.get(query);
+    return listado.datos;
+  }
+
+  async listarSiembrasParaPrediccionesSanitarias(): Promise<ISiembra[]> {
+    const filter = {
+      fechaCosecha: { $eq: null },
+      activa: { $ne: false },
+    };
+    const query: IQueryParam = {
+      select: '_id',
+      filter: JSON.stringify(filter),
+      sort: '-fechaSiembra',
     };
     const listado = await this.repository.get(query);
     return listado.datos;

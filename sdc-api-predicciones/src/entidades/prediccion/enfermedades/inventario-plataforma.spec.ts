@@ -22,32 +22,33 @@ describe('inventario sanitario integral de CHAMAN2026', () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(porEstado).toEqual({
       operativo: 10,
-      sin_modelo: 20,
-      experimental: 4,
+      sin_modelo: 14,
+      experimental: 10,
     });
   });
 
-  it.each(
-    ENFERMEDADES_CANONICAS.filter((item) => item.motor !== 'operativo'),
-  )('$id nunca se vuelve operativo por recibir un numero alto', (definicion) => {
-    const lectura = {
-      idEnfermedad: definicion.id,
-      enfermedad: definicion.nombre,
-      resultado: 100,
-      estado: 'calculado' as const,
-      modelo: { version: 99, validacion: 'operativo' as const },
-      resistenciaUsada: {
-        estado: 'observada' as const,
-        confianza: 'alta' as const,
-        campaniaFuente: '2025/2026',
-      },
-      calidadDatos: { nivel: 'alta' as const },
-      variables: { resultadoCrudo: 100 },
-    };
+  it.each(ENFERMEDADES_CANONICAS.filter((item) => item.motor !== 'operativo'))(
+    '$id nunca se vuelve operativo por recibir un numero alto',
+    (definicion) => {
+      const lectura = {
+        idEnfermedad: definicion.id,
+        enfermedad: definicion.nombre,
+        resultado: 100,
+        estado: 'calculado' as const,
+        modelo: { version: 99, validacion: 'operativo' as const },
+        resistenciaUsada: {
+          estado: 'observada' as const,
+          confianza: 'alta' as const,
+          campaniaFuente: '2025/2026',
+        },
+        calidadDatos: { nivel: 'alta' as const },
+        variables: { resultadoCrudo: 100 },
+      };
 
-    expect(esLecturaSanitariaOperativa(lectura)).toBe(false);
-    expect(esPrediccionSanitariaAlertable(lectura)).toBe(false);
-  });
+      expect(esLecturaSanitariaOperativa(lectura)).toBe(false);
+      expect(esPrediccionSanitariaAlertable(lectura)).toBe(false);
+    },
+  );
 
   it('un resultado provisional saturado tampoco emite una alerta', () => {
     const lectura = {
