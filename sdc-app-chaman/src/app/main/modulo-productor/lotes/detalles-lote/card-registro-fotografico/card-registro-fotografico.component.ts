@@ -51,6 +51,7 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
   longitud?: number;
   precisionMetros?: number;
   buscandoUbicacion = false;
+  guardandoVinculoId?: string;
   private imagenesAutenticadas = new Map<string, string>();
   private audiosAutenticados = new Map<string, string>();
   private cicloCargaImagenes = 0;
@@ -113,12 +114,14 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
   abrirRegistro(): void {
     this.limpiarFormulario();
     this.dialogoRegistro = true;
+    void this.refrescarVisitas();
   }
 
   abrirRegistroAudio(): void {
     this.limpiarFormulario();
     this.limpiarAudio();
     this.dialogoAudio = true;
+    void this.refrescarVisitas();
   }
 
   async seleccionarAudio(event: Event): Promise<void> {
@@ -298,6 +301,20 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
   verAudios(audio?: IFoto): void {
     this.audioSeleccionado = audio || this.audios[0];
     this.dialogoAudios = true;
+    void this.refrescarVisitas();
+  }
+
+  async guardarVinculoVisita(audio: IFoto): Promise<void> {
+    if (!audio._id || !audio.idVisita || this.guardandoVinculoId) return;
+    this.guardandoVinculoId = audio._id;
+    try {
+      await this.fotosService.actualizar(audio._id, { idVisita: audio.idVisita });
+      this.helper.notifSuccess('Audio vinculado a la visita');
+    } catch (error) {
+      this.helper.notifError(error);
+    } finally {
+      this.guardandoVinculoId = undefined;
+    }
   }
 
   archivarFoto(foto: IFoto): void {
@@ -370,6 +387,16 @@ export class CardRegistroFotograficoComponent implements OnChanges, OnDestroy {
     this.idVisita = '';
     this.fechaCaptura = this.fechaInput(new Date());
     this.quitarUbicacion();
+  }
+
+  private async refrescarVisitas(): Promise<void> {
+    if (!this.lote?._id) return;
+    try {
+      const response = await this.visitasService.listarPorLote(this.lote._id);
+      this.visitas = (response.datos || []).filter((visita) => !visita.archivado);
+    } catch {
+      // El registro de fotos y audios sigue disponible aunque Visitas este deshabilitado.
+    }
   }
 
   private async prepararAudio(file: File): Promise<void> {

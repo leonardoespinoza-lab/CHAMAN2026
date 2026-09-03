@@ -353,9 +353,29 @@
             }
             @if (audio.descripcion) { <p>{{ audio.descripcion }}</p> }
             <small>Registrado por {{ audio.creadaPorNombre || 'usuario Chaman' }}</small>
-            @if (audio.idVisita) { <small>Visita: {{ etiquetaVisita(audio.idVisita) }}</small> }
             @if (!helper.soloLectura()) {
+              <div class="audio-visit-link">
+                <label>
+                  <span>Visita asociada</span>
+                  <select [(ngModel)]="audio.idVisita">
+                    <option value="">Seleccionar una visita</option>
+                    @for (visita of visitas; track visita._id) {
+                      <option [value]="visita._id">{{ etiquetaFecha(visita.fechaVisita) }} · {{ visita.titulo }}</option>
+                    }
+                  </select>
+                </label>
+                <p-button
+                  label="Guardar vínculo"
+                  icon="pi pi-link"
+                  size="small"
+                  [disabled]="!audio.idVisita"
+                  [loading]="guardandoVinculoId === audio._id"
+                  (onClick)="guardarVinculoVisita(audio)"
+                />
+              </div>
               <p-button label="Archivar" icon="pi pi-archive" severity="danger" [outlined]="true" size="small" (onClick)="archivarAudio(audio)" />
+            } @else if (audio.idVisita) {
+              <small>Visita: {{ etiquetaVisita(audio.idVisita) }}</small>
             }
           </div>
         }

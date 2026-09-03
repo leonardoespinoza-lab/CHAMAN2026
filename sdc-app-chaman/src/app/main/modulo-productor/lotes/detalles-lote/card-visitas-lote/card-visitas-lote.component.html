@@ -36,17 +36,64 @@
   </div>
 
   <div class="visits-summary">
-    <article>
+    <button
+      type="button"
+      [class.chaman-interactive-surface]="!!ultimaVisita"
+      [disabled]="!ultimaVisita"
+      (click)="ultimaVisita && abrirVisita(ultimaVisita)"
+    >
       <span>Ultima recorrida</span>
       <strong>{{ ultimaVisita ? fechaLabel(ultimaVisita.fechaVisita) : 'Sin registro' }}</strong>
       <small>{{ ultimaVisita?.titulo || 'Documente la primera visita' }}</small>
-    </article>
-    <article>
+    </button>
+    <button
+      type="button"
+      [class.chaman-interactive-surface]="!!proximaVisitaResumen"
+      [disabled]="!proximaVisitaResumen"
+      (click)="proximaVisitaResumen && abrirVisita(proximaVisitaResumen)"
+    >
       <span>Proxima visita</span>
       <strong>{{ proximaVisitaResumen ? fechaLabel(proximaVisitaResumen.fechaVisita) : 'Sin programar' }}</strong>
       <small>{{ proximaVisitaResumen?.titulo || 'Puede agendarla desde el calendario' }}</small>
-    </article>
+    </button>
   </div>
+
+  @if (visitasOrdenadas.length) {
+    <section class="visit-history">
+      <header>
+        <div>
+          <span>Historial</span>
+          <strong>Comentarios y recorridas</strong>
+        </div>
+        <small>Seleccione una visita para verla, editarla o archivarla.</small>
+      </header>
+      <div class="visit-history-list">
+        @for (visita of visitasVisibles; track visita._id) {
+          <button type="button" class="visit-history-item chaman-interactive-surface" (click)="abrirVisita(visita)">
+            <span class="visit-history-date">
+              <strong>{{ fechaLabel(visita.fechaVisita) }}</strong>
+              <small>{{ estadoLabel(visita.estado) }}</small>
+            </span>
+            <span class="visit-history-copy">
+              <strong>{{ visita.titulo || tipoLabel(visita.tipo) }}</strong>
+              <small>{{ resumenVisita(visita) }}</small>
+            </span>
+            <span class="visit-history-evidence">
+              @if (evidenciasDe(visita).length) {
+                <small><i class="pi pi-paperclip"></i>{{ evidenciasDe(visita).length }}</small>
+              }
+              <i class="pi pi-chevron-right"></i>
+            </span>
+          </button>
+        }
+      </div>
+      @if (visitasOrdenadas.length > 4) {
+        <button type="button" class="history-toggle" (click)="mostrarHistorialCompleto = !mostrarHistorialCompleto">
+          {{ mostrarHistorialCompleto ? 'Mostrar menos' : 'Ver todas las visitas' }}
+        </button>
+      }
+    </section>
+  }
 </section>
 
 <p-dialog
@@ -141,6 +188,38 @@
     </div>
 
     @if (editando) {
+      <section class="visit-evidence-block">
+        <header>
+          <div>
+            <span>Evidencia vinculada</span>
+            <strong>{{ evidenciasDe(editando).length }} archivo{{ evidenciasDe(editando).length === 1 ? '' : 's' }}</strong>
+          </div>
+          <small>Fotos y audios registrados para esta visita.</small>
+        </header>
+        @if (evidenciasDe(editando).length) {
+          <div class="visit-evidence-list">
+            @for (evidencia of evidenciasDe(editando); track evidencia._id) {
+              <article>
+                <i class="pi" [class.pi-microphone]="evidencia.tipoMedio === 'audio'" [class.pi-image]="evidencia.tipoMedio !== 'audio'"></i>
+                <div>
+                  <strong>{{ evidenciaLabel(evidencia) }}</strong>
+                  <small>{{ evidencia.tipoMedio === 'audio' ? 'Audio' : 'Foto' }} · {{ fechaLabel(evidencia.fechaCaptura || evidencia.fechaCreacion) }}</small>
+                  @if (evidencia.descripcion) { <p>{{ evidencia.descripcion }}</p> }
+                  @if (evidencia.tipoMedio === 'audio') {
+                    @if (audioDe(evidencia); as audioUrl) {
+                      <audio [src]="audioUrl" controls preload="metadata"></audio>
+                    } @else {
+                      <small>Preparando audio…</small>
+                    }
+                  }
+                </div>
+              </article>
+            }
+          </div>
+        } @else {
+          <p class="visit-evidence-empty">Esta visita todavía no tiene fotos ni audios vinculados.</p>
+        }
+      </section>
       <div class="visit-audit">
         <i class="pi pi-shield"></i>
         <span>Registrada por {{ editando.creadaPorNombre || 'usuario Chaman' }} · {{ fechaLabel(editando.fechaCreacion) }}</span>

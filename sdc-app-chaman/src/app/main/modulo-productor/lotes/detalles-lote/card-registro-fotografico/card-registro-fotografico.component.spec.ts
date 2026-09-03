@@ -29,6 +29,7 @@ describe('CardRegistroFotograficoComponent', () => {
         return Promise.resolve();
       }),
       subirCampo: jasmine.createSpy('subirCampo'),
+      actualizar: jasmine.createSpy('actualizar').and.resolveTo({}),
     };
     const visitasService = {
       listarPorLote: jasmine
@@ -56,6 +57,7 @@ describe('CardRegistroFotograficoComponent', () => {
     return {
       component,
       fotosService,
+      visitasService,
       confirmation,
       getConfirmacion: () => confirmacion,
     };
@@ -91,5 +93,31 @@ describe('CardRegistroFotograficoComponent', () => {
     expect(component.fotoSeleccionada).toBeUndefined();
     expect(component.imagenDe(fotoCampo)).toBe('');
     expect(revoke).toHaveBeenCalledWith('blob:foto-autenticada');
+  });
+
+  it('actualiza las visitas disponibles al abrir un nuevo audio', async () => {
+    const { component, visitasService } = subject();
+    visitasService.listarPorLote.and.resolveTo({
+      datos: [{ _id: 'visita-nueva', titulo: 'Visita recien creada' }],
+      totalCount: 1,
+    });
+
+    component.abrirRegistroAudio();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(visitasService.listarPorLote).toHaveBeenCalledWith('lote-1');
+    expect(component.visitas.map((visita) => visita._id)).toEqual(['visita-nueva']);
+  });
+
+  it('permite vincular un audio existente con una visita', async () => {
+    const { component, fotosService } = subject();
+    const audio = { _id: 'audio-1', idVisita: 'visita-1' } as any;
+
+    await component.guardarVinculoVisita(audio);
+
+    expect(fotosService.actualizar).toHaveBeenCalledOnceWith('audio-1', {
+      idVisita: 'visita-1',
+    });
   });
 });

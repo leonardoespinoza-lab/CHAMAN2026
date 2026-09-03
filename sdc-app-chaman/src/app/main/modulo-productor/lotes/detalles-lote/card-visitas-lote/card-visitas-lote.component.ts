@@ -1,6 +1,7 @@
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
 import {
   ICreateVisitaLote,
+  IFoto,
   ILote,
   TActividadVisitaLote,
   TEstadoVisitaLote,
@@ -8,6 +9,7 @@ import {
   IVisitaLote,
 } from 'modelos/src';
 import { ConfirmationService } from 'primeng/api';
+import { FotoService } from '../../../../../auxiliares/http/foto.service';
 import { VisitaLoteService } from '../../../../../auxiliares/http/visita-lote.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
@@ -27,10 +29,11 @@ interface DiaCalendarioVisitas {
   templateUrl: './card-visitas-lote.component.html',
   styleUrl: './card-visitas-lote.component.scss',
 })
-export class CardVisitasLoteComponent implements OnChanges {
+export class CardVisitasLoteComponent implements OnChanges, OnDestroy {
   @Input() lote?: ILote;
 
   visitas: IVisitaLote[] = [];
+  evidencias: IFoto[] = [];
   cargando = false;
   guardando = false;
   dialogo = false;
@@ -52,6 +55,9 @@ export class CardVisitasLoteComponent implements OnChanges {
   longitud?: number;
   precisionMetros?: number;
   buscandoUbicacion = false;
+  mostrarHistorialCompleto = false;
+  private audiosAutenticados = new Map<string, string>();
+  private cicloCargaAudios = 0;
 
   readonly tipos: { value: TTipoVisitaLote; label: string }[] = [
     { value: 'recorrida_general', label: 'Recorrida general' },
@@ -79,12 +85,18 @@ export class CardVisitasLoteComponent implements OnChanges {
 
   constructor(
     private visitasService: VisitaLoteService,
+    private fotosService: FotoService,
     private confirmation: ConfirmationService,
     public helper: HelperService,
   ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['lote'] && this.lote?._id) void this.cargar();
+  }
+
+  ngOnDestroy(): void {
+    this.cicloCargaAudios += 1;
+    this.liberarAudiosAutenticados();
   }
 
   get diasCalendario(): DiaCalendarioVisitas[] {
@@ -125,12 +137,35 @@ export class CardVisitasLoteComponent implements OnChanges {
       .sort((a, b) => this.timestamp(b.fechaVisita) - this.timestamp(a.fechaVisita))[0];
   }
 
+  get visitasOrdenadas(): IVisitaLote[] {
+    return [...this.visitas].sort(
+      (a, b) => this.timestamp(b.fechaVisita) - this.timestamp(a.fechaVisita),
+    );
+  }
+
+  get visitasVisibles(): IVisitaLote[] {
+    return this.mostrarHistorialCompleto
+      ? this.visitasOrdenadas
+      : this.visitasOrdenadas.slice(0, 4);
+  }
+
   async cargar(): Promise<void> {
     if (!this.lote?._id) return;
     this.cargando = true;
     try {
-      const response = await this.visitasService.listarPorLote(this.lote._id);
-      this.visitas = (response.datos || []).filter((visita) => !visita.archivado);
+      const [visitas, evidencias] = await Promise.all([
+        this.visitasService.listarPorLote(this.lote._id),
+        this.fotosService
+          .listarPorLote(this.lote._id)
+          .catch(() => ({ datos: [], totalCount: 0 })),
+      ]);
+      this.visitas = (visitas.datos || []).filter((visita) => !visita.archivado);
+      this.evidencias = (evidencias.datos || []).filter(
+        (evidencia) =>
+          evidencia.fuente === 'campo' &&
+          !evidencia.archivado &&
+          !!evidencia.idVisita,
+      );
     } catch (error) {
       this.helper.notifError(error);
     } finally {
@@ -143,6 +178,8 @@ export class CardVisitasLoteComponent implements OnChanges {
   }
 
   abrirNueva(fecha = this.fechaInput(new Date())): void {
+    this.cicloCargaAudios += 1;
+    this.liberarAudiosAutenticados();
     this.limpiarFormulario();
     this.fechaVisita = fecha;
     this.dialogo = true;
@@ -154,6 +191,8 @@ export class CardVisitasLoteComponent implements OnChanges {
   }
 
   abrirVisita(visita: IVisitaLote): void {
+    const ciclo = ++this.cicloCargaAudios;
+    this.liberarAudiosAutenticados();
     this.editando = visita;
     this.titulo = visita.titulo || 'Visita al lote';
     this.fechaVisita = this.fechaInput(new Date(visita.fechaVisita || Date.now()));
@@ -171,6 +210,36 @@ export class CardVisitasLoteComponent implements OnChanges {
     this.longitud = visita.longitud;
     this.precisionMetros = visita.precisionMetros;
     this.dialogo = true;
+    void this.refrescarEvidenciasVisita(visita, ciclo);
+  }
+
+  resumenVisita(visita: IVisitaLote): string {
+    return (
+      visita.observaciones ||
+      visita.hallazgos ||
+      visita.recomendaciones ||
+      'Sin comentarios registrados.'
+    );
+  }
+
+  evidenciasDe(visita?: IVisitaLote): IFoto[] {
+    if (!visita?._id) return [];
+    return this.evidencias.filter(
+      (evidencia) => String(evidencia.idVisita || '') === String(visita._id),
+    );
+  }
+
+  audioDe(audio: IFoto): string {
+    return audio._id ? this.audiosAutenticados.get(audio._id) || '' : '';
+  }
+
+  tipoLabel(tipo?: TTipoVisitaLote): string {
+    return this.tipos.find((item) => item.value === tipo)?.label || 'Visita al lote';
+  }
+
+  evidenciaLabel(evidencia: IFoto): string {
+    if (evidencia.titulo) return evidencia.titulo;
+    return evidencia.tipoMedio === 'audio' ? 'Audio de campo' : 'Foto de campo';
   }
 
   toggleActividad(value: TActividadVisitaLote): void {
@@ -291,5 +360,58 @@ export class CardVisitasLoteComponent implements OnChanges {
 
   private timestamp(value?: string): number {
     return value ? new Date(value).getTime() || 0 : 0;
+  }
+
+  private async cargarAudioAutenticado(audio: IFoto, ciclo: number): Promise<void> {
+    if (!audio._id) return;
+    try {
+      const blob = await this.fotosService.getAudio(audio._id);
+      if (
+        ciclo !== this.cicloCargaAudios ||
+        !this.evidenciasDe(this.editando).some((item) => item._id === audio._id)
+      ) {
+        return;
+      }
+      const mime = /^audio\//i.test(blob.type)
+        ? blob.type
+        : String(audio.mimeType || 'audio/webm');
+      const objectUrl = URL.createObjectURL(blob.slice(0, blob.size, mime));
+      if (ciclo !== this.cicloCargaAudios) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
+      this.audiosAutenticados.set(audio._id, objectUrl);
+    } catch {
+      // La visita y la metadata siguen visibles si el archivo no esta disponible.
+    }
+  }
+
+  private async refrescarEvidenciasVisita(
+    visita: IVisitaLote,
+    ciclo: number,
+  ): Promise<void> {
+    if (!this.lote?._id) return;
+    try {
+      const response = await this.fotosService.listarPorLote(this.lote._id);
+      if (ciclo !== this.cicloCargaAudios || this.editando?._id !== visita._id) return;
+      this.evidencias = (response.datos || []).filter(
+        (evidencia) =>
+          evidencia.fuente === 'campo' &&
+          !evidencia.archivado &&
+          !!evidencia.idVisita,
+      );
+      for (const audio of this.evidenciasDe(visita).filter(
+        (evidencia) => evidencia.tipoMedio === 'audio',
+      )) {
+        void this.cargarAudioAutenticado(audio, ciclo);
+      }
+    } catch {
+      // Los comentarios siguen disponibles si la evidencia no puede refrescarse.
+    }
+  }
+
+  private liberarAudiosAutenticados(): void {
+    this.audiosAutenticados.forEach((url) => URL.revokeObjectURL(url));
+    this.audiosAutenticados.clear();
   }
 }
