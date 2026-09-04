@@ -37,7 +37,6 @@ describe('salida publica de prediccion de malezas', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
     );
 
     const result = await service.getFilter({});
