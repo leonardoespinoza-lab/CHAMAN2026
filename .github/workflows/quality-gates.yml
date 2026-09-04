@@ -35,6 +35,7 @@ jobs:
       - run: npm run test:load-runner
       - run: npm run test:release-safety
       - run: npm run test:mongo-recovery
+      - run: npm run test:mobile-release
 
   core-tests:
     name: test-${{ matrix.service }}

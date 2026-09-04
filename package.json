@@ -87,6 +87,7 @@
     "release:rollback:verify": "node scripts/verify-release-rollback.js",
     "mongo:recovery": "node scripts/mongo-recovery.js",
     "test:mongo-recovery": "node --test scripts/tests/mongo-recovery.test.js",
+    "test:mobile-release": "node scripts/validate-mobile-release.js",
     "era5:pilot:snapshot": "node scripts/era5-pilot-snapshot.js",
     "test:era5:pilot:snapshot": "node --test scripts/tests/era5-pilot-snapshot.test.js",
     "load:testing": "node scripts/tests/testing-load-smoke.mjs --confirm-testing",

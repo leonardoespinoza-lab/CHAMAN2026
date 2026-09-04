@@ -1,0 +1,99 @@
+name: mobile-gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "sdc-app-chaman/**"
+      - "sdc-modelos/**"
+      - "scripts/validate-mobile-release.js"
+      - ".github/workflows/mobile-gates.yml"
+  push:
+    branches:
+      - "codex/mobile-**"
+    paths:
+      - "sdc-app-chaman/**"
+      - "sdc-modelos/**"
+      - "scripts/validate-mobile-release.js"
+      - ".github/workflows/mobile-gates.yml"
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: android-api-36
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            sdc-modelos/package-lock.json
+            sdc-app-chaman/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - working-directory: sdc-modelos
+        run: npm ci
+      - working-directory: sdc-modelos
+        run: npm run build
+      - working-directory: sdc-app-chaman
+        run: npm ci --legacy-peer-deps
+      - run: npm run test:mobile-release
+      - working-directory: sdc-app-chaman
+        run: npm run build
+      - working-directory: sdc-app-chaman
+        run: npx cap sync android
+      - working-directory: sdc-app-chaman/android
+        run: chmod +x gradlew && ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chaman-android-debug
+          path: sdc-app-chaman/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+  ios:
+    name: ios-xcode-26
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            sdc-modelos/package-lock.json
+            sdc-app-chaman/package-lock.json
+      - run: xcodebuild -version
+      - working-directory: sdc-modelos
+        run: npm ci
+      - working-directory: sdc-modelos
+        run: npm run build
+      - working-directory: sdc-app-chaman
+        run: npm ci --legacy-peer-deps
+      - run: npm run test:mobile-release
+      - working-directory: sdc-app-chaman
+        run: npm run build
+      - working-directory: sdc-app-chaman
+        run: npx cap sync ios
+      - working-directory: sdc-app-chaman/ios/App
+        run: rm -f Podfile.lock && pod install
+      - working-directory: sdc-app-chaman/ios/App
+        run: >-
+          xcodebuild -workspace App.xcworkspace -scheme App
+          -configuration Debug -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chaman-ios-podfile-lock
+          path: sdc-app-chaman/ios/App/Podfile.lock
+          if-no-files-found: error

@@ -1,113 +1,60 @@
-# 📱 Scripts de Build para Móvil - Chaman App
+# Compilación móvil de Chamán
 
-Este proyecto incluye scripts automatizados para facilitar el desarrollo y build de la aplicación móvil usando Capacitor.
+La aplicación móvil usa el mismo frontend Angular que la web y se empaqueta con
+Capacitor. El identificador debe permanecer como `com.chamanagro.app` para
+actualizar las aplicaciones existentes en Apple y Google sin perder usuarios.
 
-## 🚀 Comandos Principales
+## Versiones de esta entrega
 
-### iOS
+- Aplicación: `1.6.0`.
+- Android: `versionCode 22`, `targetSdk 36`, `minSdk 24`.
+- iOS: `CFBundleShortVersionString 1.6.0`, build `2`, iOS 15.6 o superior.
+- Capacitor: línea 8.x.
+
+## Validación local
+
+Desde la raíz del repositorio:
+
 ```bash
-# Build completo y apertura de Xcode (RECOMENDADO)
-npm run ios:build
-
-# Build rápido para desarrollo
-npm run ios:dev
-
-# Build para producción
-npm run ios:prod
+npm run test:mobile-release
+npm run audit:secrets
 ```
 
-### Android
+Desde `sdc-app-chaman`:
+
 ```bash
-# Build completo y apertura de Android Studio (RECOMENDADO)
-npm run android:build
-
-# Build rápido para desarrollo
-npm run android:dev
-
-# Build para producción
-npm run android:prod
+npm ci --legacy-peer-deps
+npm test -- --watch=false --karma-config=karma.ci.conf.js --browsers=ChromeHeadlessCI
+npm run build
+npx cap sync android
+npx cap sync ios
 ```
 
-## 🔧 Comandos de Utilidad
+La sincronización de iOS puede prepararse en Windows, pero CocoaPods y la
+compilación final requieren macOS y Xcode. El workflow
+`.github/workflows/mobile-gates.yml` realiza ambos builds en GitHub: Android con
+API 36 e iOS con Xcode 26.
 
-### Sincronización de Capacitor
-```bash
-# Sincronizar ambas plataformas
-npm run cap:sync
+## Firma
 
-# Sincronizar solo iOS
-npm run cap:sync:ios
+La firma Android no se guarda en Git. El build de distribución recibe:
 
-# Sincronizar solo Android
-npm run cap:sync:android
-```
+- `CHAMAN_ANDROID_KEYSTORE_FILE`
+- `CHAMAN_ANDROID_KEYSTORE_PASSWORD`
+- `CHAMAN_ANDROID_KEY_ALIAS`
+- `CHAMAN_ANDROID_KEY_PASSWORD`
 
-### Limpieza y Diagnóstico
-```bash
-# Limpiar cache de Capacitor y build
-npm run cap:clean
+Los certificados y perfiles de Apple se administran con la cuenta del equipo
+de Chamán en App Store Connect y tampoco se guardan en el repositorio.
 
-# Diagnosticar problemas de Capacitor
-npm run cap:doctor
-```
+## Flujo de publicación
 
-## 📋 ¿Qué hace cada script?
+1. Crear una rama `codex/mobile-*` desde el SHA productivo aprobado.
+2. Ejecutar las validaciones locales.
+3. Subir la rama y esperar los dos jobs de `mobile-gates`.
+4. Probar el APK generado y un build de TestFlight con usuarios internos.
+5. Completar metadatos, privacidad y capturas en las tiendas.
+6. Publicar manualmente después de la aprobación de cada tienda.
 
-### `npm run ios:build`
-1. 🧹 Limpia el build anterior
-2. 🏗️ Construye la aplicación Angular en modo producción
-3. 🔄 Sincroniza con Capacitor iOS
-4. 📱 Abre Xcode automáticamente
-5. ✅ Proporciona feedback visual del proceso
-
-### `npm run android:build`
-1. 🧹 Limpia el build anterior
-2. 🏗️ Construye la aplicación Angular en modo producción
-3. 🔄 Sincroniza con Capacitor Android
-4. 📱 Abre Android Studio automáticamente
-5. ✅ Proporciona feedback visual del proceso
-
-## 🔍 Solución de Problemas
-
-### Error: "Permission denied"
-```bash
-chmod +x scripts/ios-build.sh
-chmod +x scripts/android-build.sh
-```
-
-### Error: "Xcode command line tools not found"
-```bash
-xcode-select --install
-```
-
-### Error: "Android SDK not found"
-1. Instala Android Studio
-2. Configura las variables de entorno ANDROID_HOME
-3. Ejecuta `npm run cap:doctor` para verificar
-
-### Mapa no renderiza en iOS
-- Verifica que las mejoras implementadas estén aplicadas
-- El script automáticamente usa la configuración optimizada
-- Los timeouts para iOS están incluidos en el código
-
-## 📁 Estructura de Scripts
-
-```
-scripts/
-├── ios-build.sh     # Script completo para iOS
-└── android-build.sh # Script completo para Android
-```
-
-## 💡 Tips
-
-- Usa `npm run ios:build` para desarrollo diario (más robusto)
-- Usa `npm run ios:dev` para builds rápidos ocasionales
-- Ejecuta `npm run cap:clean` si tienes problemas de cache
-- Revisa `npm run cap:doctor` para diagnosticar problemas de configuración
-
-## 🚨 Notas Importantes
-
-- Los scripts verifican que todos los directorios existan antes de proceder
-- Se proporciona feedback visual de cada paso
-- Los errores detienen la ejecución automáticamente
-- Compatible con macOS (desarrollo iOS) y cualquier SO (desarrollo Android)
+No se compila ni publica desde una carpeta sucia y no se utiliza `railway up`
+para una entrega móvil.
