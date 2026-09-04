@@ -18,6 +18,7 @@ const WEEDS = [
     nombreCientifico: "Amaranthus spp.",
     cultivosObjetivo: EXTENSIVE_WEED_CROPS,
     modelo: "Gompertz HTT",
+    temporadaEmergencia: "estival",
     parametros: {
       kMaxPorcentaje: 100,
       beta: 0.0005,
@@ -78,6 +79,7 @@ const WEEDS = [
     nombreCientifico: "Eleusine indica",
     cultivosObjetivo: EXTENSIVE_WEED_CROPS,
     modelo: "Gompertz HTT",
+    temporadaEmergencia: "estival",
     parametros: {
       kMaxPorcentaje: 100,
       beta: 0.0006,

@@ -62,10 +62,13 @@ import {
 } from 'modelos/src';
 import {
   calcularSerieHidrotermalMalezas,
+  campaniaMalezasParaFecha,
   combinarClimaSemillero,
   ContextoSatelitalMalezas,
   DiaClimaMalezas,
   diasSemilleroDesdeOpenMeteo,
+  MAX_DIAS_CAMPANIA_MALEZAS,
+  temporadaMalezasActual,
 } from './malezas-semillero.engine';
 
 export interface AlgoritmoCatalogo {
@@ -122,9 +125,8 @@ interface ResistenciaSimulador {
 @Injectable()
 export class AlgoritmosService {
   private readonly logger = new Logger(AlgoritmosService.name);
-  private readonly cultivosMalezas: readonly string[] = [...CULTIVOS_ANUALES];
   private readonly diasPronosticoMalezas = 7;
-  private readonly maxDiasHistoricoMalezas = 180;
+  private readonly maxDiasHistoricoMalezas = MAX_DIAS_CAMPANIA_MALEZAS;
 
   constructor(
     private readonly cronosService: CronosService,
@@ -205,9 +207,10 @@ export class AlgoritmosService {
         nombre: 'Prediccion de malezas',
         estado: 'auditable',
         descripcion:
-          'Evalua emergencia potencial del banco de semillas en cultivos anuales usando temperatura y humedad de los primeros centimetros del suelo.',
+          'Evalua emergencia potencial del banco de semillas del lote por campaña usando temperatura y humedad de los primeros centimetros del suelo.',
         inputs: [
-          'Lote y cultivo anual activo',
+          'Lote georreferenciado, con o sin siembra activa',
+          'Campaña estival o invernal de la especie',
           'Temperatura de suelo superficial',
           'Humedad volumetrica de suelo superficial',
           'Contexto de cobertura satelital',
@@ -238,7 +241,7 @@ export class AlgoritmosService {
         semillas: 1,
         enfermedades: 1,
         cronos: 1,
-        malezas: 'obligatorio para cultivos anuales',
+        malezas: 'modelos estacionales a nivel lote',
       },
       cultivos: resultados,
     };
@@ -267,12 +270,7 @@ export class AlgoritmosService {
         }),
         this.countByFilter(this.enfermedadsService, { cultivo }),
         this.countByFilter(this.cronosService, { cultivo }),
-        this.countByFilter(
-          this.malezasService,
-          this.cultivosMalezas.includes(cultivo)
-            ? {}
-            : { cultivosObjetivo: cultivo },
-        ),
+        this.countByFilter(this.malezasService, {}),
       ],
     );
     const filasSemillas = Array.isArray(catalogoSemillas?.datos)
@@ -342,7 +340,10 @@ export class AlgoritmosService {
       };
     });
     const tieneEnfermedades = enfermedades > 0 || enfermedadesMotor > 0;
-    const requiereMalezas = this.cultivosMalezas.includes(cultivo);
+    // Los modelos de emergencia pertenecen al lote y a la campana estacional,
+    // no al cultivo sembrado. El catalogo global debe estar disponible para
+    // cualquier lote, incluso cuando todavia no tenga una siembra activa.
+    const requiereMalezas = true;
     const faltantes: string[] = [];
     const observaciones: string[] = [];
     if (!semillas) faltantes.push('semillas');
@@ -1305,8 +1306,7 @@ export class AlgoritmosService {
     const x0 = Number(body?.x0 ?? 130);
     const amplitud = Number(body?.amplitud ?? 92);
 
-    const cultivosPermitidos = this.cultivosMalezas;
-    const habilitado = cultivosPermitidos.includes(cultivo);
+    const habilitado = true;
     let gradosDia = 0;
     const humedadFactor = this.clamp(
       (humedadSuelo + lluvia7d) / 100,
@@ -1327,9 +1327,7 @@ export class AlgoritmosService {
 
     return {
       motor: 'malezas',
-      resumen: habilitado
-        ? `${especie}: emergencia acumulada ${this.round(ultimo, 1)}%`
-        : `No aplica para ${cultivo}; el motor se habilita en cultivos anuales.`,
+      resumen: `${especie}: emergencia acumulada ${this.round(ultimo, 1)}%`,
       metricas: {
         cultivo,
         especie,
@@ -1343,9 +1341,7 @@ export class AlgoritmosService {
       trazas: [
         'Modelo propietario Chaman de emergencia hidrotermal.',
         'La respuesta combina temperatura y humedad de la zona de semillas.',
-        habilitado
-          ? 'Motor habilitado para cultivos anuales.'
-          : `Cultivo ${cultivo} fuera del alcance operativo del motor de malezas.`,
+        'Motor habilitado por lote y campana estacional, con independencia de la siembra.',
       ],
     };
   }
@@ -1408,20 +1404,22 @@ export class AlgoritmosService {
   }
 
   async calcularPrediccionMalezas(params: {
-    siembra: ISiembra;
+    siembra?: ISiembra;
     lote: ILote;
+    fechaInicio?: string;
     climaCanonico?: DiaClimaMalezas[];
     contextoSatelital?: ContextoSatelitalMalezas;
   }): Promise<IResultadoPrediccionMalezas> {
     const siembra = params.siembra;
     const lote = params.lote;
-    const cultivo = siembra.semilla?.cultivo;
+    const cultivo = siembra?.semilla?.cultivo;
+    const contextoNombre = cultivo || 'Lote sin siembra registrada';
     const fecha = new Date().toISOString();
     const baseResultado: IResultadoPrediccionMalezas = {
       fecha,
       versionMotor: PREDICCION_MALEZAS_ENGINE_VERSION,
-      idSiembra: siembra._id,
-      idLote: lote._id || siembra.idLote,
+      idSiembra: siembra?._id,
+      idLote: lote._id || siembra?.idLote,
       cultivo,
       estado: 'operativo',
       fuenteDatos: 'Open-Meteo',
@@ -1430,25 +1428,15 @@ export class AlgoritmosService {
       trazas: [],
     };
 
-    if (!cultivo || !this.cultivosMalezas.includes(cultivo)) {
-      return {
-        ...baseResultado,
-        estado: 'no_aplica',
-        resumen: `Motor de malezas habilitado para ${this.cultivosMalezas.join(', ')}.`,
-        calidadDatos: 'baja',
-        trazas: [`Cultivo recibido: ${cultivo || 'sin cultivo'}.`],
-      };
-    }
-
-    const modelos = await this.getModelosMalezas(cultivo);
+    const modelos = await this.getModelosMalezas();
     if (!modelos.length) {
       return {
         ...baseResultado,
         estado: 'sin_modelos',
-        resumen: `${cultivo}: no hay modelos de malezas cargados.`,
+        resumen: `${contextoNombre}: no hay modelos de malezas cargados.`,
         calidadDatos: 'baja',
         trazas: [
-          'No se encontraron documentos en la coleccion malezas para el cultivo.',
+          'No se encontraron modelos en la coleccion del banco de semillas.',
         ],
       };
     }
@@ -1458,7 +1446,7 @@ export class AlgoritmosService {
       return {
         ...baseResultado,
         estado: 'sin_clima',
-        resumen: `${cultivo}: falta centro geografico del lote para consultar clima.`,
+        resumen: `${contextoNombre}: falta centro geografico del lote para consultar clima.`,
         calidadDatos: 'baja',
         trazas: [
           'No se pudo resolver lat/lng desde lote.ubicacion.centro ni siembra.coordenadas.',
@@ -1467,22 +1455,40 @@ export class AlgoritmosService {
     }
 
     const hoy = this.toDateKey(new Date().toISOString());
+    const temporadaActual = temporadaMalezasActual(hoy);
+    const modelosTemporada = modelos.filter((maleza) => {
+      const temporada = this.temporadaMaleza(maleza);
+      return temporada === 'todo_el_anio' || temporada === temporadaActual;
+    });
+    if (!modelosTemporada.length) {
+      return {
+        ...baseResultado,
+        estado: 'sin_modelos',
+        resumen: `${contextoNombre}: no hay modelos cargados para la campaña ${temporadaActual}.`,
+        calidadDatos: 'baja',
+        trazas: [
+          `Los modelos disponibles no corresponden a la campaña ${temporadaActual}.`,
+        ],
+      };
+    }
     const ayer = this.shiftDateKey(hoy, -1);
-    const hastaPronostico = this.shiftDateKey(
+    const finCampania = campaniaMalezasParaFecha(hoy, temporadaActual).fechaFin;
+    const hastaPronosticoTeorico = this.shiftDateKey(
       hoy,
       this.diasPronosticoMalezas - 1,
     );
-    const fechaSiembra = this.toDateKey(siembra.fechaSiembra || hoy);
+    const hastaPronostico =
+      hastaPronosticoTeorico < finCampania
+        ? hastaPronosticoTeorico
+        : finCampania;
+    const fechaInicio = this.toDateKey(params.fechaInicio || hoy);
     // La ventana del motor no depende de contratar Open-Meteo Archive:
     // Open-Meteo aporta su tramo superficial disponible y la serie canonica
     // Chaman-Meteo completa los dias anteriores que ya fueron normalizados.
-    const desdeMaximo = this.shiftDateKey(
-      hoy,
-      -this.maxDiasHistoricoMalezas,
-    );
-    const desde = fechaSiembra > desdeMaximo ? fechaSiembra : desdeMaximo;
+    const desdeMaximo = this.shiftDateKey(hoy, -this.maxDiasHistoricoMalezas);
+    const desde = fechaInicio > desdeMaximo ? fechaInicio : desdeMaximo;
     const recorteDias =
-      fechaSiembra < desde ? this.diffDias(fechaSiembra, desde) : 0;
+      fechaInicio < desde ? this.diffDias(fechaInicio, desde) : 0;
 
     const climaCanonico = (params.climaCanonico || []).filter(
       (dia) => dia.fecha >= desde && dia.fecha <= hastaPronostico,
@@ -1497,11 +1503,13 @@ export class AlgoritmosService {
       );
     } catch (error) {
       if (!climaCanonico.length) {
-        this.logger.error(`Error al calcular malezas ${siembra._id}: ${error}`);
+        this.logger.error(
+          `Error al calcular malezas del lote ${lote._id || siembra?._id}: ${error}`,
+        );
         return {
           ...baseResultado,
           estado: 'sin_clima',
-          resumen: `${cultivo}: no se pudo obtener clima historico/proyectado.`,
+          resumen: `${contextoNombre}: no se pudo obtener clima historico/proyectado.`,
           calidadDatos: 'baja',
           trazas: [
             'No hay una serie meteorologica utilizable para el periodo.',
@@ -1509,7 +1517,7 @@ export class AlgoritmosService {
         };
       }
       this.logger.warn(
-        `Open-Meteo no disponible para malezas ${siembra._id}; se conserva la serie canonica: ${error?.message || error}`,
+        `Open-Meteo no disponible para malezas del lote ${lote._id || siembra?._id}; se conserva la serie canonica: ${error?.message || error}`,
       );
     }
 
@@ -1519,7 +1527,7 @@ export class AlgoritmosService {
       return {
         ...baseResultado,
         estado: 'sin_clima',
-        resumen: `${cultivo}: sin dias climaticos disponibles para evaluar malezas.`,
+        resumen: `${contextoNombre}: sin dias climaticos disponibles para evaluar malezas.`,
         calidadDatos: 'baja',
         periodo: {
           desde,
@@ -1534,7 +1542,9 @@ export class AlgoritmosService {
       };
     }
 
-    const especies = modelos.map((maleza) => this.evaluarMaleza(maleza, clima));
+    const especies = modelosTemporada.map((maleza) =>
+      this.evaluarMaleza(maleza, clima),
+    );
     const mayor = [...especies].sort(
       (a, b) => Number(b.avancePct || 0) - Number(a.avancePct || 0),
     )[0];
@@ -1549,8 +1559,8 @@ export class AlgoritmosService {
     return {
       ...baseResultado,
       resumen: mayor
-        ? `${cultivo}: mayor avance en ${mayor.nombre || 'maleza'} (${this.round(mayor.avancePct || 0, 1)}%).`
-        : `${cultivo}: sin especies evaluadas.`,
+        ? `${contextoNombre}: mayor avance en ${mayor.nombre || 'maleza'} (${this.round(mayor.avancePct || 0, 1)}%).`
+        : `${contextoNombre}: sin especies evaluadas.`,
       fuenteDatos: this.fuentesMalezas(clima),
       calidadDatos,
       periodo: {
@@ -1569,8 +1579,8 @@ export class AlgoritmosService {
         params.contextoSatelital?.observacion ||
           'Sin escena satelital operativa reciente; el calculo hidrotermal se conserva sin ajuste satelital.',
         recorteDias > 0
-          ? `La siembra excedia la ventana operativa; se recortaron ${recorteDias} dias iniciales y se evaluo desde ${desde}.`
-          : `Acumulacion desde fecha de siembra: ${desde}.`,
+          ? `El seguimiento excedia la ventana operativa; se recortaron ${recorteDias} dias iniciales y se evaluo desde ${desde}.`
+          : `Acumulacion desde el inicio del seguimiento: ${desde}.`,
       ],
     };
   }
@@ -1585,7 +1595,7 @@ export class AlgoritmosService {
     return Math.round(rendimiento * (100 / (100 + humedad)) * 100) / 100;
   }
 
-  private async getModelosMalezas(_cultivo: string): Promise<IMaleza[]> {
+  private async getModelosMalezas(): Promise<IMaleza[]> {
     const response = await this.malezasService.getFilter({
       // La emergencia pertenece al banco de semillas del lote. El campo
       // cultivosObjetivo se conserva como metadata legacy de validacion, pero
@@ -1594,6 +1604,31 @@ export class AlgoritmosService {
       sort: 'nombre',
     });
     return response.datos || [];
+  }
+
+  private temporadaMaleza(
+    maleza: IMaleza,
+  ): 'estival' | 'invernal' | 'todo_el_anio' | undefined {
+    if (
+      ['estival', 'invernal', 'todo_el_anio'].includes(
+        String(maleza.temporadaEmergencia || ''),
+      )
+    ) {
+      return maleza.temporadaEmergencia as
+        | 'estival'
+        | 'invernal'
+        | 'todo_el_anio';
+    }
+    const especie = `${maleza.nombre || ''} ${maleza.nombreCientifico || ''}`
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    if (especie.includes('eleusine') || especie.includes('amaranthus')) {
+      return 'estival';
+    }
+    // Solo las dos especies existentes tienen compatibilidad legacy. Una
+    // especie nueva debe declarar su temporada antes de entrar al motor.
+    return undefined;
   }
 
   private evaluarMaleza(
@@ -1835,9 +1870,9 @@ export class AlgoritmosService {
 
   private getCentroLote(
     lote: ILote,
-    siembra: ISiembra,
+    siembra?: ISiembra,
   ): { lat: number; lng: number } | undefined {
-    const centro = lote.ubicacion?.centro || siembra.coordenadas;
+    const centro = lote.ubicacion?.centro || siembra?.coordenadas;
     const lat = this.toNumber((centro as any)?.lat);
     const lng = this.toNumber((centro as any)?.lng);
     if (lat === undefined || lng === undefined) return undefined;

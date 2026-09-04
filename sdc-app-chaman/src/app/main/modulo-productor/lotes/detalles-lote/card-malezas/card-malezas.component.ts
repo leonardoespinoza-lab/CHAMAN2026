@@ -6,12 +6,10 @@ import {
   ISiembra,
   PREDICCION_MALEZAS_ENGINE_VERSION,
 } from 'modelos/src';
-import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
+import { LoteService } from '../../../../../auxiliares/http/lote.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
-
-const CULTIVOS_CON_PREDICCION_MALEZAS = ['Soja', 'Trigo', 'Maiz', 'Papa', 'Cebada', 'Arveja'];
 
 @Component({
   selector: 'app-card-malezas',
@@ -39,7 +37,7 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
   });
 
   constructor(
-    private siembraService: SiembraService,
+    private loteService: LoteService,
     public helper: HelperService
   ) {}
 
@@ -48,7 +46,7 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   public get cultivoCompatible(): boolean {
-    return CULTIVOS_CON_PREDICCION_MALEZAS.includes(this.cultivo);
+    return !!this.lote?._id;
   }
 
   public get analisis(): IPrediccionMalezaEspecie[] {
@@ -65,12 +63,12 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
 
   public get resumenGeneral(): string {
     if (!this.cultivoCompatible) {
-      return 'Motor habilitado para cultivos anuales.';
+      return 'El lote necesita una ubicación válida para iniciar el seguimiento.';
     }
     if (this.prediccion?.resumen) {
       return this.normalizarNombres(this.prediccion.resumen);
     }
-    return `${this.cultivo}: sincronizacion diaria de emergencia de malezas.`;
+    return `${this.cultivo || 'Lote sin siembra registrada'}: seguimiento estacional de emergencia de malezas.`;
   }
 
   public get totalModelos(): number {
@@ -97,7 +95,7 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
 
   public async actualizarPrediccion(event?: Event, options: { silent?: boolean; force?: boolean } = {}): Promise<void> {
     event?.stopPropagation();
-    if (!this.siembra?._id || this.actualizando || !this.cultivoCompatible) return;
+    if (!this.lote?._id || this.actualizando || !this.cultivoCompatible) return;
     if (!options.force && this.prediccionAlDia) return;
 
     this.actualizando = true;
@@ -106,13 +104,14 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
     try {
       const resultado = await this.obtenerPrediccion(options.force);
       this.prediccion = resultado;
-      this.siembra.ultimaPrediccionMalezas = resultado;
+      this.lote.ultimaPrediccionMalezas = resultado;
+      if (this.siembra) this.siembra.ultimaPrediccionMalezas = resultado;
       if (resultado.estado === 'sin_clima') {
         this.error = 'No se pudo actualizar malezas: falta clima disponible.';
         if (!options.silent) this.helper.notifError('No se pudo actualizar malezas: falta clima disponible');
       } else if (resultado.estado === 'sin_modelos') {
-        this.error = 'No hay modelos de malezas cargados para este cultivo.';
-        if (!options.silent) this.helper.notifError('No hay modelos de malezas cargados para este cultivo');
+        this.error = 'No hay modelos de malezas cargados para esta campaña.';
+        if (!options.silent) this.helper.notifError('No hay modelos de malezas cargados para esta campaña');
       } else if (!options.silent) {
         this.helper.notifSuccess('Prediccion de malezas actualizada');
       }
@@ -130,7 +129,7 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    if (changes['siembra']) {
+    if (changes['siembra'] || changes['lote']) {
       this.sincronizarPrediccion();
     }
   }
@@ -138,7 +137,7 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
   ngOnDestroy(): void {}
 
   private sincronizarPrediccion(): void {
-    this.prediccion = this.siembra?.ultimaPrediccionMalezas;
+    this.prediccion = this.lote?.ultimaPrediccionMalezas || this.siembra?.ultimaPrediccionMalezas;
     this.malezaSeleccionada = undefined;
     this.verDetalleMaleza = false;
     this.error = undefined;
@@ -146,26 +145,26 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private async actualizarAutomaticamenteSiCorresponde(): Promise<void> {
-    if (!this.siembra?._id || !this.cultivoCompatible || this.siembra.fechaCosecha) return;
+    if (!this.lote?._id || !this.cultivoCompatible) return;
     if (this.helper.soloLectura() || this.prediccionAlDia || this.actualizando) return;
     await this.actualizarPrediccion(undefined, { silent: true });
   }
 
   private obtenerPrediccion(force = false): Promise<IResultadoPrediccionMalezas> {
-    const idSiembra = this.siembra!._id!;
-    const key = `${idSiembra}:${this.hoyKey()}${force ? ':force' : ''}`;
+    const idLote = this.lote!._id!;
+    const key = `${idLote}:${this.hoyKey()}${force ? ':force' : ''}`;
     const pendiente = CardMalezasComponent.prediccionesPendientes.get(key);
     if (pendiente) return pendiente;
 
-    const request = this.siembraService
-      .generarPrediccionMalezas(idSiembra)
+    const request = this.loteService
+      .generarPrediccionMalezas(idLote)
       .finally(() => CardMalezasComponent.prediccionesPendientes.delete(key));
     CardMalezasComponent.prediccionesPendientes.set(key, request);
     return request;
   }
 
   private prediccionEsDeHoy(prediccion?: IResultadoPrediccionMalezas): boolean {
-    if (!prediccion?.fecha) return false;
+    if (!prediccion?.fecha || !prediccion.contextoLote) return false;
     return (
       prediccion.versionMotor === PREDICCION_MALEZAS_ENGINE_VERSION && this.dateKey(prediccion.fecha) === this.hoyKey()
     );

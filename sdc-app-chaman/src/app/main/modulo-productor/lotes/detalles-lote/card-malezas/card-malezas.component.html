@@ -16,7 +16,7 @@
       </div>
       <div class="header-actions">
         <strong>{{ totalModelos }}</strong>
-        @if (siembra?._id && !helper.soloLectura()) {
+        @if (lote?._id && !helper.soloLectura()) {
           <p-button
             icon="pi pi-refresh"
             label="Recalcular"
@@ -41,7 +41,7 @@
     } @else if (prediccion.estado === 'sin_clima') {
       <p-message severity="info" text="Se están realizando los cálculos."></p-message>
     } @else if (prediccion.estado === 'sin_modelos' || !analisis.length) {
-      <p-message severity="info" text="No hay modelos de malezas cargados para este cultivo."></p-message>
+      <p-message severity="info" text="No hay modelos de malezas cargados para esta campaña."></p-message>
     } @else {
       <div class="weed-action-grid">
         @for (item of analisis; track item.codigoCarga || item.nombre) {

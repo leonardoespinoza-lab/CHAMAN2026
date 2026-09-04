@@ -20,6 +20,8 @@ import {
   ISiembra,
   ICalidadClima,
   IDispositivo,
+  IResultadoPrediccionMalezas,
+  ISeguimientoMalezasLote,
   ISueloReferencia,
   IUbicacionAdministrativaLote,
   IDepartamentoLegadoLote,
@@ -152,6 +154,12 @@ export class Lote implements Exactly<ILote, Lote> {
 
   @Prop({ type: Object })
   calidadClima?: ICalidadClima;
+
+  @Prop({ type: Object })
+  seguimientoMalezas?: ISeguimientoMalezasLote;
+
+  @Prop({ type: Object })
+  ultimaPrediccionMalezas?: IResultadoPrediccionMalezas;
 
   // Populate
 

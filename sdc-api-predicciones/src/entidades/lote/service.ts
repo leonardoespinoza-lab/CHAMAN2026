@@ -6,6 +6,7 @@ import {
   IQueryParam,
   IUpdateLote,
   IEntradasAgronomicasSuelo,
+  IResultadoPrediccionMalezas,
 } from 'modelos/src';
 import { LotesRepository } from './repository';
 
@@ -19,6 +20,20 @@ export class LotesService {
 
   async get(filtro: IQueryParam): Promise<IListado<ILote>> {
     return await this.repository.get(filtro);
+  }
+
+  async listarLotesParaMalezas(limit = 250): Promise<ILote[]> {
+    const query: IQueryParam = {
+      select: '_id',
+      filter: JSON.stringify({ archivado: { $ne: true } }),
+      sort: '_id',
+      limit,
+    };
+    return (await this.repository.get(query)).datos;
+  }
+
+  async prediccionMalezas(id: string): Promise<IResultadoPrediccionMalezas> {
+    return await this.repository.prediccionMalezas(id);
   }
 
   async getSoilAgronomicInputs(

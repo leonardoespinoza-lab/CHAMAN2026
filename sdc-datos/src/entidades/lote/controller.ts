@@ -9,7 +9,12 @@ import {
   Put,
 } from '@nestjs/common';
 import { LotesService } from './service';
-import { ICreateLote, IQueryParam, ISolicitudArchivado, IUpdateLote } from 'modelos/src';
+import {
+  ICreateLote,
+  IQueryParam,
+  ISolicitudArchivado,
+  IUpdateLote,
+} from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 
 @ApiTags('Lotes')
@@ -25,6 +30,14 @@ export class LotesController {
   @Get(':id')
   async getById(@Param('id') id: string) {
     return await this.service.getById(id);
+  }
+
+  @Post(':id/prediccion-malezas')
+  async prediccionMalezas(
+    @Param('id') id: string,
+    @Body() data?: { reiniciarSeguimiento?: boolean },
+  ) {
+    return await this.service.prediccionMalezas(id, data || {});
   }
 
   @Post()

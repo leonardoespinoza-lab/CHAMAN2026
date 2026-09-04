@@ -15,6 +15,7 @@ import {
 } from "./ubicacion-lote";
 import { TFuentePropiedadSuelo } from "./suelo-inteligencia";
 import { IArchivado } from "../compartidos/archivado";
+import { IResultadoPrediccionMalezas, ISeguimientoMalezasLote } from "./maleza";
 
 export type TTexturaSuelo =
   | "Arcilloso"
@@ -31,10 +32,7 @@ export type TTipoDrenaje =
   | "Excesivamente Drenado";
 
 export type TTipoErosionEscorrentiaPendiente =
-  | "Baja (0 - 3%)"
-  | "Moderada (3 - 8%)"
-  | "Alta (8 - 15%)"
-  | "Muy Alta (> 15%)";
+  "Baja (0 - 3%)" | "Moderada (3 - 8%)" | "Alta (8 - 15%)" | "Muy Alta (> 15%)";
 export type TTipoContenidoP = "< 12" | "> 12 < 20" | "> 20 < 30" | "> 30";
 
 export type TTipoDepositoN = "< 0.5" | "> 0.5" | "< 1.5" | "> 1.5";
@@ -135,6 +133,10 @@ export interface ILote extends IArchivado {
   // Id de la ultima siembra del lote
   idSiembra?: string;
   calidadClima?: ICalidadClima;
+  /** Biofix operativo del banco de semillas superficial del lote. */
+  seguimientoMalezas?: ISeguimientoMalezasLote;
+  /** Ultimo resultado canónico del motor de emergencia a nivel lote. */
+  ultimaPrediccionMalezas?: IResultadoPrediccionMalezas;
   ubicacionAdministrativa?: IUbicacionAdministrativaLote;
   // Populate
   quimica?: IQuimica;

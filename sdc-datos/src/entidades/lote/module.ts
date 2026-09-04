@@ -7,6 +7,9 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { LotLocationModule } from '../ubicacion-lote/module';
 import { SoilIntelligenceModule } from '../suelo-inteligencia/module';
 import { Dispositivo, DispositivoSchema } from '../dispositivos/modelos/schema';
+import { AlgoritmosModule } from '../algoritmos/module';
+import { ChamanMeteoModule } from '../chaman-meteo/module';
+import { ReporteNDVIsModule } from '../reporte-ndvis/module';
 
 @Module({
   controllers: [LotesController],
@@ -19,6 +22,9 @@ import { Dispositivo, DispositivoSchema } from '../dispositivos/modelos/schema';
     ]),
     LotLocationModule,
     SoilIntelligenceModule,
+    AlgoritmosModule,
+    ChamanMeteoModule,
+    ReporteNDVIsModule,
   ],
 })
 export class LotesModule {}

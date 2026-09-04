@@ -6,6 +6,7 @@ import {
   ICreateLote,
   IUpdateLote,
   IEntradasAgronomicasSuelo,
+  IResultadoPrediccionMalezas,
 } from 'modelos/src';
 import { API_DATOS, SOIL_INTELLIGENCE_INTERNAL_TOKEN } from '../../env';
 import { AxiosService } from '../../auxiliares/axios/axios.service';
@@ -33,6 +34,11 @@ export class LotesRepository {
   async get(params: IQueryParam): Promise<IListado<ILote>> {
     const url = `${API_DATOS}/lotes`;
     return await this.axios.GET<IListado<ILote>>(url, { params });
+  }
+
+  async prediccionMalezas(id: string): Promise<IResultadoPrediccionMalezas> {
+    const url = `${API_DATOS}/lotes/${id}/prediccion-malezas`;
+    return await this.axios.POST<IResultadoPrediccionMalezas>(url, {});
   }
 
   async create(data: ICreateLote): Promise<ILote> {

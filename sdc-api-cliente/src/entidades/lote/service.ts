@@ -2630,7 +2630,7 @@ export class LotesService {
 
     <section class="section">
       <h2>Prediccion de malezas</h2>
-      ${this.renderMalezasCertificado(siembra)}
+      ${this.renderMalezasCertificado(lote, siembra)}
     </section>
 
     <section class="section two-col">
@@ -2829,8 +2829,9 @@ export class LotesService {
     return `<div class="note ${referencia >= 20 ? 'warn' : ''}"><strong>Viento y ventana de aplicacion:</strong> ${this.formatClimaMetric(velocidad, 'km/h', 1)}; rafaga ${this.formatClimaMetric(rafaga, 'km/h', 1)}; direccion ${Number.isFinite(direccion) ? `${this.formatNumber(Number(direccion), 0)} grados` : 'sin dato'}. ${this.escapeHtml(ventana)}</div>`;
   }
 
-  private renderMalezasCertificado(siembra?: ISiembra): string {
-    const prediccion = siembra?.ultimaPrediccionMalezas;
+  private renderMalezasCertificado(lote: ILote, siembra?: ISiembra): string {
+    const prediccion =
+      lote.ultimaPrediccionMalezas || siembra?.ultimaPrediccionMalezas;
     const especies = prediccion?.especies || [];
     if (!esPrediccionMalezasOperativa(prediccion) || !especies.length) {
       const motivo =
@@ -2839,7 +2840,7 @@ export class LotesService {
           : prediccion?.estado === 'sin_clima'
             ? 'No hay clima suficiente para emitir una prediccion.'
             : prediccion?.estado === 'sin_modelos'
-              ? 'No hay modelos aplicables al cultivo.'
+              ? 'No hay modelos aplicables a la campaña actual.'
               : 'No existe una prediccion operativa consolidada.';
       return `<div class="note warn"><strong>Sin lectura operativa:</strong> ${this.escapeHtml(motivo)}</div>`;
     }
@@ -3041,11 +3042,10 @@ export class LotesService {
       siembra?.rendimientoObtenidoKgHaSeco ?? siembra?.rendimientoObtenidoKgHa;
     const tieneRendimiento =
       typeof rendimiento === 'number' && Number.isFinite(Number(rendimiento));
-    const malezasOperativas = esPrediccionMalezasOperativa(
-      siembra?.ultimaPrediccionMalezas,
-    );
-    const malezasNoAplica =
-      siembra?.ultimaPrediccionMalezas?.estado === 'no_aplica';
+    const prediccionMalezas =
+      lote.ultimaPrediccionMalezas || siembra?.ultimaPrediccionMalezas;
+    const malezasOperativas = esPrediccionMalezasOperativa(prediccionMalezas);
+    const malezasNoAplica = prediccionMalezas?.estado === 'no_aplica';
     const puntosSatelitales = this.getPuntosNdviCertificado(
       reportesNdvi,
       siembra,
@@ -3171,13 +3171,13 @@ export class LotesService {
             ? 'no_aplica'
             : 'sin_dato',
         lectura: malezasOperativas
-          ? `${siembra?.ultimaPrediccionMalezas?.especies?.length || 0} especie(s) evaluada(s) por el motor operativo`
+          ? `${prediccionMalezas?.especies?.length || 0} especie(s) evaluada(s) por el motor operativo`
           : malezasNoAplica
-            ? 'El motor determino que el analisis no aplica a esta siembra'
-            : siembra?.ultimaPrediccionMalezas?.estado === 'sin_clima'
+            ? 'El motor determino que el analisis no aplica al lote'
+            : prediccionMalezas?.estado === 'sin_clima'
               ? 'Sin clima suficiente para calcular malezas'
-              : siembra?.ultimaPrediccionMalezas?.estado === 'sin_modelos'
-                ? 'Sin modelos de malezas aplicables al cultivo'
+              : prediccionMalezas?.estado === 'sin_modelos'
+                ? 'Sin modelos de malezas aplicables a la campaña'
                 : 'Sin prediccion operativa de malezas consolidada',
         fuente: 'Motor de malezas Chaman',
       },

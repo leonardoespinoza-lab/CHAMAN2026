@@ -1,6 +1,6 @@
 import { Cultivo } from "./crono";
 
-export const PREDICCION_MALEZAS_ENGINE_VERSION = "2.0";
+export const PREDICCION_MALEZAS_ENGINE_VERSION = "3.0";
 
 export type TModeloMaleza = "Gompertz HTT";
 
@@ -28,10 +28,7 @@ export interface IRecomendacionMaleza {
 }
 
 export type TEstadoPrediccionMalezas =
-  | "operativo"
-  | "sin_modelos"
-  | "no_aplica"
-  | "sin_clima";
+  "operativo" | "sin_modelos" | "no_aplica" | "sin_clima";
 
 export type TSeveridadPrediccionMaleza = "baja" | "media" | "alta";
 
@@ -42,6 +39,27 @@ export type TEstadoSuperficieMalezas =
   | "vegetacion_incipiente"
   | "cobertura_activa"
   | "no_evaluable";
+
+export type TOrigenSeguimientoMalezas =
+  "campania_estival" | "campania_invernal" | "reinicio_manual";
+
+export type TTemporadaEmergenciaMaleza =
+  "estival" | "invernal" | "todo_el_anio";
+
+export interface ISeguimientoMalezasLote {
+  fechaInicio: string;
+  origen: TOrigenSeguimientoMalezas;
+  temporada: TTemporadaEmergenciaMaleza;
+  actualizadoEn?: string;
+}
+
+export interface IContextoLoteMalezas {
+  estado: "siembra_activa" | "sin_siembra_registrada";
+  etiqueta: string;
+  fechaInicio: string;
+  origen: TOrigenSeguimientoMalezas;
+  temporada: TTemporadaEmergenciaMaleza;
+}
 
 export interface IContextoSatelitalMalezas {
   estado: TEstadoSuperficieMalezas;
@@ -130,6 +148,7 @@ export interface IResultadoPrediccionMalezas {
     diasEvaluados?: number;
     recorteDias?: number;
   };
+  contextoLote?: IContextoLoteMalezas;
   contextoSatelital?: IContextoSatelitalMalezas;
   especies?: IPrediccionMalezaEspecie[];
   trazas?: string[];
@@ -159,6 +178,7 @@ export interface IMaleza {
   nombreCientifico?: string;
   cultivosObjetivo?: Cultivo[];
   modelo?: TModeloMaleza;
+  temporadaEmergencia?: TTemporadaEmergenciaMaleza;
   parametros?: IParametrosGompertzMaleza;
   umbrales?: IUmbralEmergenciaMaleza[];
   recomendaciones?: IRecomendacionMaleza[];

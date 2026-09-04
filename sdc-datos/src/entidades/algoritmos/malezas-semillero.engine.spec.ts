@@ -6,6 +6,9 @@ import {
   contextoSatelitalMalezas,
   diasSemilleroDesdeOpenMeteo,
   humedadSemillero0a5,
+  campaniaMalezasParaFecha,
+  resolverSeguimientoMalezasLote,
+  temporadaMalezasActual,
   temperaturaSemillero0a5,
 } from './malezas-semillero.engine';
 
@@ -148,5 +151,68 @@ describe('motor superficial de emergencia de malezas', () => {
     expect(contextoSatelitalMalezas(reporte, '2026-10-10').estado).toBe(
       'no_evaluable',
     );
+  });
+
+  it('separa campañas estivales e invernales sin depender de una siembra', () => {
+    expect(temporadaMalezasActual('2026-09-04')).toBe('estival');
+    expect(temporadaMalezasActual('2027-02-28')).toBe('estival');
+    expect(temporadaMalezasActual('2027-03-01')).toBe('invernal');
+    expect(temporadaMalezasActual('2027-08-31')).toBe('invernal');
+
+    expect(campaniaMalezasParaFecha('2027-01-10')).toEqual({
+      temporada: 'estival',
+      fechaInicio: '2026-09-01',
+      fechaFin: '2027-02-28',
+    });
+    expect(campaniaMalezasParaFecha('2027-06-10')).toEqual({
+      temporada: 'invernal',
+      fechaInicio: '2027-03-01',
+      fechaFin: '2027-08-31',
+    });
+  });
+
+  it('inicia el seguimiento con la campaña climática y conserva un reinicio manual', () => {
+    const inicial = resolverSeguimientoMalezasLote({
+      hoy: '2026-09-04',
+    });
+    expect(inicial).toMatchObject({
+      fechaInicio: '2026-09-01',
+      origen: 'campania_estival',
+      temporada: 'estival',
+    });
+
+    const reiniciado = resolverSeguimientoMalezasLote({
+      hoy: '2026-10-12',
+      seguimiento: inicial,
+      reiniciar: true,
+    });
+    expect(reiniciado).toMatchObject({
+      fechaInicio: '2026-10-12',
+      origen: 'reinicio_manual',
+      temporada: 'estival',
+    });
+    expect(
+      resolverSeguimientoMalezasLote({
+        hoy: '2027-01-15',
+        seguimiento: reiniciado,
+      }),
+    ).toEqual(reiniciado);
+  });
+
+  it('abre una campaña nueva aunque exista un reinicio de la temporada anterior', () => {
+    expect(
+      resolverSeguimientoMalezasLote({
+        hoy: '2027-03-02',
+        seguimiento: {
+          fechaInicio: '2026-10-12',
+          origen: 'reinicio_manual',
+          temporada: 'estival',
+        },
+      }),
+    ).toMatchObject({
+      fechaInicio: '2027-03-01',
+      origen: 'campania_invernal',
+      temporada: 'invernal',
+    });
   });
 });

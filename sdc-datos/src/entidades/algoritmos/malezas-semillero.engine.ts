@@ -3,7 +3,9 @@ import {
   IContextoSatelitalMalezas,
   IPrediccionMalezaDia,
   IReporteNDVI,
+  ISeguimientoMalezasLote,
   SATELLITE_OPERATIONAL_MIN_VALID_COVERAGE_PCT,
+  TTemporadaEmergenciaMaleza,
 } from 'modelos/src';
 
 export type FuenteSemilleroMalezas =
@@ -43,6 +45,19 @@ export interface ResultadoHidrotermalMalezas {
   humedadReferencia?: number;
 }
 
+export interface ContextoTemporalMalezas {
+  seguimiento?: ISeguimientoMalezasLote;
+  hoy: string;
+  temporada?: Exclude<TTemporadaEmergenciaMaleza, 'todo_el_anio'>;
+  reiniciar?: boolean;
+}
+
+export interface CampaniaMalezas {
+  temporada: Exclude<TTemporadaEmergenciaMaleza, 'todo_el_anio'>;
+  fechaInicio: string;
+  fechaFin: string;
+}
+
 interface ParametrosHidrotermalesMalezas {
   temperaturaBase: number;
   humedadTheta50: number;
@@ -53,6 +68,80 @@ interface ParametrosHidrotermalesMalezas {
 
 const PROFUNDIDAD_TEMPERATURA_OBJETIVO_CM = 2.5;
 const HORAS_ESPERADAS_DIA = 24;
+export const MAX_DIAS_CAMPANIA_MALEZAS = 184;
+
+/**
+ * Define el biofix estacional del banco de semillas. La siembra no dispara la
+ * germinacion: el ciclo se abre por temporada y acumula solo cuando temperatura
+ * y humedad superficial son favorables. Un reinicio manual representa una
+ * labranza, barbecho quimico u otro control que inicia una camada nueva.
+ */
+export function resolverSeguimientoMalezasLote(
+  contexto: ContextoTemporalMalezas,
+): ISeguimientoMalezasLote {
+  const hoy =
+    fechaValida(contexto.hoy) || new Date().toISOString().slice(0, 10);
+  const campania = campaniaMalezasParaFecha(hoy, contexto.temporada);
+  const existente = contexto.seguimiento;
+
+  if (contexto.reiniciar) {
+    return {
+      fechaInicio: hoy,
+      origen: 'reinicio_manual',
+      temporada: campania.temporada,
+      actualizadoEn: new Date().toISOString(),
+    };
+  }
+
+  if (
+    existente?.origen === 'reinicio_manual' &&
+    existente.temporada === campania.temporada &&
+    !!fechaValida(existente.fechaInicio) &&
+    existente.fechaInicio >= campania.fechaInicio &&
+    existente.fechaInicio <= hoy
+  ) {
+    return existente;
+  }
+
+  return {
+    fechaInicio: campania.fechaInicio,
+    origen:
+      campania.temporada === 'estival'
+        ? 'campania_estival'
+        : 'campania_invernal',
+    temporada: campania.temporada,
+    actualizadoEn: new Date().toISOString(),
+  };
+}
+
+export function temporadaMalezasActual(
+  hoy: string,
+): Exclude<TTemporadaEmergenciaMaleza, 'todo_el_anio'> {
+  const fecha = fechaValida(hoy) || new Date().toISOString().slice(0, 10);
+  const mes = Number(fecha.slice(5, 7));
+  return mes >= 9 || mes <= 2 ? 'estival' : 'invernal';
+}
+
+export function campaniaMalezasParaFecha(
+  hoy: string,
+  temporada = temporadaMalezasActual(hoy),
+): CampaniaMalezas {
+  const fecha = fechaValida(hoy) || new Date().toISOString().slice(0, 10);
+  const anio = Number(fecha.slice(0, 4));
+  const mes = Number(fecha.slice(5, 7));
+  const anioInicio =
+    temporada === 'estival' ? (mes <= 2 ? anio - 1 : anio) : anio;
+  const fechaInicio =
+    temporada === 'estival' ? `${anioInicio}-09-01` : `${anioInicio}-03-01`;
+  const fin = new Date(`${fechaInicio}T12:00:00.000Z`);
+  fin.setUTCMonth(fin.getUTCMonth() + 6);
+  fin.setUTCDate(fin.getUTCDate() - 1);
+  return {
+    temporada,
+    fechaInicio,
+    fechaFin: fin.toISOString().slice(0, 10),
+  };
+}
 
 export function diasSemilleroDesdeOpenMeteo(
   data: any,
@@ -420,6 +509,16 @@ function numero(value: unknown): number | undefined {
   const result = Number(value);
   return value !== null && value !== '' && Number.isFinite(result)
     ? result
+    : undefined;
+}
+
+function fechaValida(value: unknown): string | undefined {
+  const fecha = String(value || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return undefined;
+  const parsed = new Date(`${fecha}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === fecha
+    ? fecha
     : undefined;
 }
 

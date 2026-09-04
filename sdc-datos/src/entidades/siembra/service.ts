@@ -29,12 +29,6 @@ import {
   DiaClimaHuella,
   HuellaHidricaSeguimientoResultado,
 } from '../algoritmos/huella-hidrica.engine';
-import {
-  capaSuperficialModelada,
-  contextoSatelitalMalezas,
-  DiaClimaMalezas,
-} from '../algoritmos/malezas-semillero.engine';
-import { ReporteNDVIsService } from '../reporte-ndvis/service';
 
 const OBJETIVOS_BIOFIX_PERMITIDOS = new Set<TObjetivoBiofixFenologico>([
   'anclaje_fenologico',
@@ -59,7 +53,6 @@ export class SiembrasService {
     private algoritmosService: AlgoritmosService,
     private soilInputsService: SoilAgronomicInputsService,
     private indicadoresAgrometeorologicosService: IndicadoresAgrometeorologicosService,
-    private reporteNDVIsService: ReporteNDVIsService,
     private prediccionsService: PrediccionsService,
     private alertasService: AlertasService,
   ) {}
@@ -637,93 +630,12 @@ export class SiembrasService {
 
   async prediccionMalezas(id: string) {
     const siembra = await this.getById(id);
-    const lote = await this.lotesService.getById(siembra.idLote);
-    const climaCanonico = await this.getClimaCanonicoMalezas(id);
-    const reporteSatelital = await this.getReporteSatelitalMalezas(
-      String(siembra.idLote),
-    );
-    const resultado = await this.algoritmosService.calcularPrediccionMalezas({
-      siembra,
-      lote,
-      climaCanonico,
-      contextoSatelital: contextoSatelitalMalezas(reporteSatelital),
-    });
-
-    if (resultado.estado !== 'sin_clima') {
-      await this.repository.update(id, { ultimaPrediccionMalezas: resultado });
-    }
-
-    return resultado;
-  }
-
-  private async getClimaCanonicoMalezas(
-    idSiembra: string,
-  ): Promise<DiaClimaMalezas[]> {
-    try {
-      const active =
-        await this.indicadoresAgrometeorologicosService.getActiveGeneration(
-          idSiembra,
-          AGROMET_ENGINE_VERSION,
-        );
-      return (active?.data || [])
-        .map((row: any) => {
-          const metricas = row?.metricas || {};
-          const fuenteTemperatura = row?.fuentePorVariable?.soilTemperatureC;
-          const fuenteHumedad = row?.fuentePorVariable?.soilMoistureM3M3;
-          const temperaturaSuelo = capaSuperficialModelada(
-            metricas.soilTemperatureC,
-            fuenteTemperatura,
-          );
-          const humedadSuelo = this.fraccionHumedad(
-            capaSuperficialModelada(metricas.soilMoistureM3M3, fuenteHumedad),
-          );
-          const origen = [fuenteTemperatura, fuenteHumedad]
-            .map(String)
-            .join(' ');
-          const fuente = origen.includes('chaman_meteo')
-            ? 'Chaman-Meteo · suelo 0-7 cm'
-            : origen.includes('open_meteo') || origen.includes('mixed')
-              ? 'Modelo meteorologico · suelo 0-7 cm'
-              : undefined;
-          return {
-            fecha: String(row?.fecha || '').slice(0, 10),
-            tipo: row?.esPronostico ? 'pronostico' : 'historico',
-            temperaturaSuelo,
-            humedadSuelo,
-            lluviaMm: this.numeroOpcional(metricas.precipitationMm),
-            et0Mm: this.numeroOpcional(metricas.et0Mm),
-            fuente,
-            profundidadReferenciaCm: '0-7',
-            coberturaHorariaPct:
-              temperaturaSuelo !== undefined && humedadSuelo !== undefined
-                ? 100
-                : 0,
-          } as DiaClimaMalezas;
-        })
-        .filter(
-          (dia: DiaClimaMalezas) =>
-            !!dia.fecha &&
-            dia.temperaturaSuelo !== undefined &&
-            dia.humedadSuelo !== undefined,
-        );
-    } catch (error) {
-      this.logger.warn(
-        `Serie canonica no disponible para malezas ${idSiembra}; se usara respaldo: ${error?.message || error}`,
+    if (!siembra.idLote) {
+      throw new BadRequestException(
+        'La siembra no tiene un lote asociado para calcular malezas.',
       );
-      return [];
     }
-  }
-
-  private async getReporteSatelitalMalezas(idLote: string) {
-    try {
-      const result = await this.reporteNDVIsService.getLastByIdLote(idLote);
-      return result?.datos?.[0];
-    } catch (error) {
-      this.logger.warn(
-        `Contexto satelital no disponible para malezas ${idLote}; se conserva el calculo hidrotermal: ${error?.message || error}`,
-      );
-      return undefined;
-    }
+    return this.lotesService.prediccionMalezas(String(siembra.idLote));
   }
 
   /** Evita que resultados legacy transporten parametros propietarios al cliente. */
@@ -747,16 +659,5 @@ export class SiembrasService {
         : prediccion.especies,
     };
     return salida as T;
-  }
-
-  private numeroOpcional(value: unknown): number | undefined {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : undefined;
-  }
-
-  private fraccionHumedad(value: unknown): number | undefined {
-    const number = this.numeroOpcional(value);
-    if (number === undefined || number < 0) return undefined;
-    return Math.min(number > 1 ? number / 100 : number, 1);
   }
 }

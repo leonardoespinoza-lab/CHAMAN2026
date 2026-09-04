@@ -26,6 +26,7 @@ import { PrediccionArvejaService } from './cultivos/arveja';
 import { PrediccionsRepository } from './repository';
 import { PREDICCIONES_FRUTALES_EXPERIMENTALES_ENABLED } from '../../env';
 import { PrediccionFrutalesService } from './cultivos/frutales';
+import { LotesService } from '../lote/service';
 
 @Injectable()
 export class PrediccionsService {
@@ -43,6 +44,8 @@ export class PrediccionsService {
     private prediccionsRepository: PrediccionsRepository,
     @Optional()
     private prediccionFrutalesService?: PrediccionFrutalesService,
+    @Optional()
+    private lotesService?: LotesService,
   ) {}
 
   async hacerPredicciones() {
@@ -85,6 +88,41 @@ export class PrediccionsService {
   }
 
   async hacerPrediccionesMalezas() {
+    if (this.lotesService) {
+      const lotes = await this.lotesService.listarLotesParaMalezas(
+        PREDICCIONES_MALEZAS_LIMIT,
+      );
+      Logger.log(
+        `Iniciando Predicciones de malezas para ${lotes.length} lotes`,
+      );
+
+      let procesados = 0;
+      let conEvento = 0;
+      for (const lote of lotes) {
+        try {
+          const resultado = await this.prediccionMalezasLote(lote._id);
+          procesados += 1;
+          if (
+            resultado?.especies?.some((especie) => especie.severidad === 'alta')
+          ) {
+            conEvento += 1;
+          }
+        } catch (error) {
+          this.logger.error(
+            `Error en prediccion de malezas del lote ${lote._id}: ${error?.message || error}`,
+          );
+        }
+      }
+
+      Logger.log(
+        `Predicciones de malezas realizadas: ${procesados}/${lotes.length}. Eventos: ${conEvento}`,
+      );
+      return;
+    }
+
+    // Compatibilidad para pruebas y despliegues transitorios donde el modulo
+    // de lotes aun no este disponible. Produccion usa siempre el recorrido por
+    // lote, incluida la superficie sin una siembra activa.
     const siembras = await this.siembrasService.listarSiembrasParaMalezas(
       PREDICCIONES_MALEZAS_LIMIT,
     );
@@ -255,17 +293,7 @@ export class PrediccionsService {
     try {
       const siembra = await this.siembrasService.getById(idSiembra);
       const resultado = await this.siembrasService.prediccionMalezas(idSiembra);
-
-      if (resultado?.estado === 'operativo') {
-        await Promise.all([
-          this.notificacionesService.enviarNotificacionesMalezas(
-            resultado,
-            siembra,
-          ),
-          this.enviarAlertasMalezas(resultado, siembra),
-        ]);
-      }
-
+      await this.notificarResultadoMalezas(resultado, siembra);
       return resultado;
     } catch (error) {
       this.logger.error(
@@ -273,6 +301,34 @@ export class PrediccionsService {
       );
       throw error;
     }
+  }
+
+  async prediccionMalezasLote(
+    idLote: string,
+  ): Promise<IResultadoPrediccionMalezas> {
+    if (!this.lotesService) {
+      throw new Error('El servicio de lotes no esta disponible.');
+    }
+    const resultado = await this.lotesService.prediccionMalezas(idLote);
+    if (resultado?.idSiembra) {
+      const siembra = await this.siembrasService.getById(resultado.idSiembra);
+      await this.notificarResultadoMalezas(resultado, siembra);
+    }
+    return resultado;
+  }
+
+  private async notificarResultadoMalezas(
+    resultado: IResultadoPrediccionMalezas,
+    siembra: ISiembra,
+  ): Promise<void> {
+    if (resultado?.estado !== 'operativo') return;
+    await Promise.all([
+      this.notificacionesService.enviarNotificacionesMalezas(
+        resultado,
+        siembra,
+      ),
+      this.enviarAlertasMalezas(resultado, siembra),
+    ]);
   }
 
   private async enviarAlertas(predicciones: IPrediccion[], siembra: ISiembra) {

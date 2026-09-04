@@ -653,6 +653,20 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
     const html = service.renderCertificadoHtml({
       lote: {
         nombre: 'Lote integral',
+        ultimaPrediccionMalezas: {
+          estado: 'operativo',
+          fecha: ahora,
+          fuenteDatos: 'Serie canonica Chaman',
+          especies: [
+            {
+              nombre: 'Eleusine',
+              emergenciaActualPct: 14.2,
+              emergenciaProyectada7dPct: 31.5,
+              severidad: 'media',
+              recomendacion: 'Recorrer el lote.',
+            },
+          ],
+        },
         establecimiento: {
           nombre: 'Campo prueba',
           climaActual: {
@@ -682,23 +696,7 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
           },
         ],
       },
-      siembra: {
-        ...siembra,
-        ultimaPrediccionMalezas: {
-          estado: 'operativo',
-          fecha: ahora,
-          fuenteDatos: 'Serie canonica Chaman',
-          especies: [
-            {
-              nombre: 'Pata de gallina',
-              emergenciaActualPct: 14.2,
-              emergenciaProyectada7dPct: 31.5,
-              severidad: 'media',
-              recomendacion: 'Recorrer el lote.',
-            },
-          ],
-        },
-      },
+      siembra,
       demandaHidrica: {
         fechaLocal: ahora.slice(0, 10),
         timezone: 'America/Argentina/Buenos_Aires',
@@ -801,7 +799,7 @@ describe('LotesService - seguimiento satelital del informe agronomico', () => {
 
     expect(html).toContain('Decisiones meteorologicas y respuesta del cultivo');
     expect(html).toContain('Apertura probable');
-    expect(html).toContain('Pata de gallina');
+    expect(html).toContain('Eleusine');
     expect(html).toContain('Vigilancia de granizo');
     expect(html).toContain('Napa: 1,7 m');
     expect(html).toContain('Sin sintomas visibles.');

@@ -52,8 +52,6 @@ import { CardVisitasLoteComponent } from './card-visitas-lote/card-visitas-lote.
 import { CardDemandaHidricaComponent } from './card-demanda-hidrica/card-demanda-hidrica.component';
 import { WATER_DEMAND_CARD_ENABLED } from '../../../../environments/environment';
 
-const CULTIVOS_CON_PREDICCION_MALEZAS = ['Soja', 'Trigo', 'Maiz', 'Papa', 'Cebada', 'Arveja'];
-
 export interface IDetalleSiembra extends ISiembra {
   fumigaciones?: IFumigacion[];
 }
@@ -335,8 +333,7 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   }
 
   public get mostrarPrediccionMalezas(): boolean {
-    const cultivo = this.siembra?.semilla?.cultivo;
-    return !!cultivo && CULTIVOS_CON_PREDICCION_MALEZAS.includes(cultivo);
+    return !!this.lote?._id;
   }
 
   public get mostrarRiesgosAgroclimaticos(): boolean {

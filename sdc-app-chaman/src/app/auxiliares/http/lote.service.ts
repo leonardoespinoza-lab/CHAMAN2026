@@ -9,6 +9,7 @@ import {
   IUpdateLote,
   IInteligenciaSueloLote,
   IEntradasAgronomicasSuelo,
+  IResultadoPrediccionMalezas,
 } from 'modelos/src';
 import { HttpService } from './http.service';
 
@@ -103,6 +104,12 @@ export class LoteService {
     ultimaFechaImagen?: string | null;
   }> {
     return this.http.post(`/lotes/${id}/ndvi`, {});
+  }
+
+  public generarPrediccionMalezas(id: string, reiniciarSeguimiento = false): Promise<IResultadoPrediccionMalezas> {
+    return this.http.post(`/lotes/${id}/prediccion-malezas`, {
+      reiniciarSeguimiento,
+    });
   }
 
   public editar(id: string, dato: IUpdateLote): Promise<ILote> {

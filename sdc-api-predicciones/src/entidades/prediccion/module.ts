@@ -23,6 +23,7 @@ import { AgroclimaModule } from '../agroclima/module';
 import { PrediccionCebadaService } from './cultivos/cebada';
 import { PrediccionArvejaService } from './cultivos/arveja';
 import { PrediccionFrutalesService } from './cultivos/frutales';
+import { LotesModule } from '../lote/module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { PrediccionFrutalesService } from './cultivos/frutales';
     AlertasModule,
     FumigacionsModule,
     AgroclimaModule,
+    LotesModule,
   ],
   controllers: [PrediccionsController],
   providers: [

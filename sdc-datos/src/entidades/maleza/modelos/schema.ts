@@ -30,6 +30,9 @@ export class Maleza implements Exactly<IMaleza, Maleza> {
   @Prop({ type: String, default: 'Gompertz HTT' })
   modelo?: IMaleza['modelo'];
 
+  @Prop({ type: String, enum: ['estival', 'invernal', 'todo_el_anio'] })
+  temporadaEmergencia?: IMaleza['temporadaEmergencia'];
+
   @Prop({ type: Object })
   parametros?: IParametrosGompertzMaleza;
 

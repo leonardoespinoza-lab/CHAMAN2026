@@ -250,3 +250,132 @@ describe('LotesService spatial resolution sequencing', () => {
     );
   });
 });
+
+describe('LotesService weed tracking by lot', () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-04T15:00:00.000Z'));
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
+  it('calcula un lote sin siembra desde el inicio de la campaña estival', async () => {
+    const repository = {
+      getById: jest.fn().mockResolvedValue({
+        _id: '68b9a84b1db87c1aa9500d01',
+        nombre: 'Barbecho Norte',
+        ubicacion: { centro: { lat: -33.1, lng: -64.2 } },
+      }),
+      update: jest.fn().mockResolvedValue(undefined),
+    };
+    const algoritmos = {
+      calcularPrediccionMalezas: jest.fn().mockResolvedValue({
+        fecha: '2026-09-04T15:00:00.000Z',
+        versionMotor: '2.0',
+        idLote: '68b9a84b1db87c1aa9500d01',
+        estado: 'operativo',
+        especies: [
+          {
+            nombre: 'Amaranthus',
+            avancePct: 4,
+            formula: 'parametros internos',
+            temperaturaBase: 13.2,
+          },
+        ],
+      }),
+    };
+    const chamanMeteo = {
+      resolvedLocationBinding: jest.fn().mockResolvedValue(null),
+    };
+    const satelite = {
+      getLastByIdLote: jest.fn().mockResolvedValue({ datos: [] }),
+    };
+    const service = new LotesService(
+      repository as any,
+      {} as any,
+      {} as any,
+      algoritmos as any,
+      chamanMeteo as any,
+      satelite as any,
+    );
+
+    const resultado = await service.prediccionMalezas(
+      '68b9a84b1db87c1aa9500d01',
+    );
+
+    expect(algoritmos.calcularPrediccionMalezas).toHaveBeenCalledWith(
+      expect.objectContaining({
+        siembra: undefined,
+        fechaInicio: '2026-09-01',
+        climaCanonico: [],
+      }),
+    );
+    expect(repository.update).toHaveBeenCalledWith(
+      '68b9a84b1db87c1aa9500d01',
+      expect.objectContaining({
+        seguimientoMalezas: expect.objectContaining({
+          fechaInicio: '2026-09-01',
+          origen: 'campania_estival',
+          temporada: 'estival',
+        }),
+        ultimaPrediccionMalezas: expect.objectContaining({
+          estado: 'operativo',
+        }),
+      }),
+    );
+    expect(resultado.contextoLote).toMatchObject({
+      estado: 'sin_siembra_registrada',
+      fechaInicio: '2026-09-01',
+      temporada: 'estival',
+    });
+    expect(resultado.especies?.[0]).not.toHaveProperty('formula');
+    expect(resultado.especies?.[0]).not.toHaveProperty('temperaturaBase');
+  });
+
+  it('reinicia la camada desde hoy sólo cuando se solicita explícitamente', async () => {
+    const repository = {
+      getById: jest.fn().mockResolvedValue({
+        _id: '68b9a84b1db87c1aa9500d02',
+        nombre: 'Lote tratado',
+        ubicacion: { centro: { lat: -33.1, lng: -64.2 } },
+        seguimientoMalezas: {
+          fechaInicio: '2026-09-01',
+          origen: 'campania_estival',
+          temporada: 'estival',
+        },
+      }),
+      update: jest.fn().mockResolvedValue(undefined),
+    };
+    const algoritmos = {
+      calcularPrediccionMalezas: jest.fn().mockResolvedValue({
+        estado: 'sin_modelos',
+        especies: [],
+      }),
+    };
+    const service = new LotesService(
+      repository as any,
+      {} as any,
+      {} as any,
+      algoritmos as any,
+    );
+
+    await service.prediccionMalezas('68b9a84b1db87c1aa9500d02', {
+      reiniciarSeguimiento: true,
+    });
+
+    expect(algoritmos.calcularPrediccionMalezas).toHaveBeenCalledWith(
+      expect.objectContaining({ fechaInicio: '2026-09-04' }),
+    );
+    expect(repository.update).toHaveBeenCalledWith(
+      '68b9a84b1db87c1aa9500d02',
+      expect.objectContaining({
+        seguimientoMalezas: expect.objectContaining({
+          fechaInicio: '2026-09-04',
+          origen: 'reinicio_manual',
+        }),
+      }),
+    );
+  });
+});
