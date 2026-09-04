@@ -1,0 +1,216 @@
+name: ios-testflight-1.6.0
+
+on:
+  push:
+    branches:
+      - "codex/mobile-release-2026-09-03"
+    paths:
+      - ".github/workflows/ios-testflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-testflight-1.6.0
+  cancel-in-progress: false
+
+jobs:
+  upload-testflight:
+    name: signed-ios-dbbe33e-to-testflight
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      RELEASE_SHA: dbbe33e5b1f1bd41ee6f9f9c5fc3a8b3ff3c2773
+      APPLE_TEAM_ID: 38589U58A3
+      APP_BUNDLE_ID: com.chamanagro.app
+      PROFILE_NAME: Chaman App Store 1.6.0 2026-09-03
+      PROFILE_UUID: aae10b57-2ce4-49b6-911a-866da70aeeb4
+      ARCHIVE_PATH: ${{ runner.temp }}/Chaman.xcarchive
+      EXPORT_PATH: ${{ runner.temp }}/ChamanExport
+    steps:
+      - name: Checkout exact approved source
+        uses: actions/checkout@v4
+        with:
+          ref: dbbe33e5b1f1bd41ee6f9f9c5fc3a8b3ff3c2773
+          fetch-depth: 1
+
+      - name: Verify immutable release source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Configure Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            sdc-modelos/package-lock.json
+            sdc-app-chaman/package-lock.json
+
+      - name: Build shared models
+        working-directory: sdc-modelos
+        run: npm ci && npm run build
+
+      - name: Install app dependencies
+        working-directory: sdc-app-chaman
+        run: npm ci --legacy-peer-deps
+
+      - name: Re-run mobile release validation
+        run: npm run test:mobile-release
+
+      - name: Build production web bundle
+        working-directory: sdc-app-chaman
+        run: npm run build
+
+      - name: Synchronize Capacitor iOS project
+        working-directory: sdc-app-chaman
+        run: npx cap sync ios
+
+      - name: Enforce pinned CocoaPods resolution
+        working-directory: sdc-app-chaman/ios/App
+        run: pod install --deployment
+
+      - name: Install Apple signing identity and profile
+        env:
+          APPLE_DISTRIBUTION_CERT_P12_BASE64: ${{ secrets.APPLE_DISTRIBUTION_CERT_P12_BASE64 }}
+          APPLE_DISTRIBUTION_CERT_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_CERT_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$RUNNER_TEMP/chaman-distribution.p12" "$RUNNER_TEMP/chaman.mobileprovision" <<'PY'
+          import base64
+          import os
+          import pathlib
+          import sys
+
+          pathlib.Path(sys.argv[1]).write_bytes(
+              base64.b64decode(os.environ["APPLE_DISTRIBUTION_CERT_P12_BASE64"])
+          )
+          pathlib.Path(sys.argv[2]).write_bytes(
+              base64.b64decode(os.environ["APPLE_PROVISIONING_PROFILE_BASE64"])
+          )
+          PY
+
+          KEYCHAIN_PATH="$RUNNER_TEMP/chaman-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 36)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/chaman-distribution.p12" \
+            -P "$APPLE_DISTRIBUTION_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+          PROFILE_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILE_DIR"
+          cp "$RUNNER_TEMP/chaman.mobileprovision" "$PROFILE_DIR/$PROFILE_UUID.mobileprovision"
+
+      - name: Archive signed iOS app
+        working-directory: sdc-app-chaman/ios/App
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$ARCHIVE_PATH" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY='Apple Distribution' \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+            archive
+
+      - name: Export App Store Connect IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>destination</key>
+            <string>export</string>
+            <key>manageAppVersionAndBuildNumber</key>
+            <false/>
+            <key>method</key>
+            <string>app-store-connect</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>teamID</key>
+            <string>$APPLE_TEAM_ID</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>$APP_BUNDLE_ID</key>
+              <string>$PROFILE_NAME</string>
+            </dict>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$ARCHIVE_PATH" \
+            -exportPath "$EXPORT_PATH" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist"
+
+          IPA_PATH="$(find "$EXPORT_PATH" -maxdepth 1 -name '*.ipa' -print -quit)"
+          test -n "$IPA_PATH"
+          echo "IPA_PATH=$IPA_PATH" >> "$GITHUB_ENV"
+          shasum -a 256 "$IPA_PATH"
+
+      - name: Validate and upload only to TestFlight
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          API_KEY_DIR="$HOME/.appstoreconnect/private_keys"
+          API_KEY_PATH="$API_KEY_DIR/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8"
+          mkdir -p "$API_KEY_DIR"
+          python3 - "$API_KEY_PATH" <<'PY'
+          import base64
+          import os
+          import pathlib
+          import sys
+
+          pathlib.Path(sys.argv[1]).write_bytes(
+              base64.b64decode(os.environ["APP_STORE_CONNECT_API_KEY_P8_BASE64"])
+          )
+          PY
+          chmod 600 "$API_KEY_PATH"
+
+          xcrun altool --validate-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+
+          xcrun altool --upload-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$APP_STORE_CONNECT_API_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+
+      - name: Remove ephemeral signing material
+        if: always()
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/chaman-signing.keychain-db" 2>/dev/null || true
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"
+          rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8"
+          rm -f "$RUNNER_TEMP/chaman-distribution.p12" "$RUNNER_TEMP/chaman.mobileprovision"
