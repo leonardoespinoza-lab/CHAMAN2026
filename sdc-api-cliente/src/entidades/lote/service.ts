@@ -50,6 +50,7 @@ import {
   IVisitaLote,
   IResumenRiesgosAgroclimaticos,
   IEstadoDemandaHidricaHora,
+  IResultadoPrediccionMalezas,
   Cultivo,
   evaluarDemandaHidricaHora,
   resumirVentanasAperturaEstomatica,
@@ -308,6 +309,15 @@ export class LotesService {
   ): Promise<IInteligenciaSueloLote> {
     await this.assertCanView(id, permiso);
     return this.repository.reprocessSoilIntelligence(id);
+  }
+
+  async prediccionMalezas(
+    id: string,
+    permiso: IPermiso,
+    reiniciarSeguimiento = false,
+  ): Promise<IResultadoPrediccionMalezas> {
+    await this.assertCanView(id, permiso);
+    return this.repository.prediccionMalezas(id, reiniciarSeguimiento);
   }
 
   async get(filtro: IQueryParam, permiso: IPermiso): Promise<IListado<ILote>> {

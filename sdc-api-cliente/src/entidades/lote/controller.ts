@@ -22,6 +22,7 @@ import {
   IEntradasAgronomicasSuelo,
   IInteligenciaSueloLote,
   IUsuario,
+  IResultadoPrediccionMalezas,
 } from 'modelos/src';
 import { ApiTags } from '@nestjs/swagger';
 import { PermisoGuard } from '../../auxiliares/authorization/permiso.guard';
@@ -210,6 +211,26 @@ export class LotesController {
     @GetPermiso() permiso: IPermiso,
   ): Promise<IInteligenciaSueloLote> {
     return this.service.reprocessSoilIntelligence(id, permiso);
+  }
+
+  @Post('/:id/prediccion-malezas')
+  @Permisos(
+    { nivel: 'Quimica', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
+  )
+  public async prediccionMalezas(
+    @Param('id') id: string,
+    @Body() body: { reiniciarSeguimiento?: boolean } | undefined,
+    @GetPermiso() permiso: IPermiso,
+  ): Promise<IResultadoPrediccionMalezas> {
+    return await this.service.prediccionMalezas(
+      id,
+      permiso,
+      body?.reiniciarSeguimiento === true,
+    );
   }
 
   @Get('/:id')

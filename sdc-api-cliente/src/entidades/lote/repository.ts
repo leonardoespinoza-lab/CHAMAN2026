@@ -9,6 +9,7 @@ import {
   IInteligenciaSueloLote,
   IEntradasAgronomicasSuelo,
   IRespuestaAgrometeorologiaSiembra,
+  IResultadoPrediccionMalezas,
   ISolicitudArchivado,
 } from 'modelos/src';
 import {
@@ -152,5 +153,15 @@ export class LotesRepository {
           : {},
       },
     );
+  }
+
+  async prediccionMalezas(
+    idLote: string,
+    reiniciarSeguimiento = false,
+  ): Promise<IResultadoPrediccionMalezas> {
+    const url = `${API_DATOS}/lotes/${idLote}/prediccion-malezas`;
+    return await this.axios.POST<IResultadoPrediccionMalezas>(url, {
+      reiniciarSeguimiento,
+    });
   }
 }

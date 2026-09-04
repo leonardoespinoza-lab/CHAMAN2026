@@ -71,10 +71,28 @@ describe('LotesRepository internal tokens', () => {
     expect(axios.GET).toHaveBeenCalledWith(
       'http://clima/agrometeorologia/siembras/siembra-1',
       {
+        params: {},
         headers: {
           'x-chaman-internal-token': 'agrometeo-token',
         },
       },
+    );
+  });
+
+  it('reenvia la prediccion estacional del lote al servicio de datos', async () => {
+    const resultado = { estado: 'ok', especies: [] };
+    const axios = {
+      POST: jest.fn().mockResolvedValue(resultado),
+    };
+    const repository = new LotesRepository(axios as any);
+
+    await expect(repository.prediccionMalezas('lote-1', true)).resolves.toBe(
+      resultado,
+    );
+
+    expect(axios.POST).toHaveBeenCalledWith(
+      'http://datos/lotes/lote-1/prediccion-malezas',
+      { reiniciarSeguimiento: true },
     );
   });
 });
