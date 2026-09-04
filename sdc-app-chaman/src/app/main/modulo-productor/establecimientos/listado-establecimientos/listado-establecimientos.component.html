@@ -1,4 +1,7 @@
-<div class="list-view-container establishments-list-page">
+<div
+  class="list-view-container establishments-list-page"
+  [class.is-empty]="!loading && dataSource.length === 0"
+>
   <p-table
     #table
     [value]="dataSource"
@@ -6,7 +9,7 @@
     [rows]="helper.getPageSize(name)"
     [rowsPerPageOptions]="helper.pageSizeOptions"
     [loading]="loading"
-    [paginator]="true"
+    [paginator]="dataSource.length > 0"
     [scrollable]="true"
     scrollHeight="flex"
     (onPage)="helper.setPageSize(name, $event.rows)"
@@ -169,25 +172,27 @@
     <ng-template #emptymessage>
       <tr>
         <td colspan="2">
-          <p-message severity="info">
-            {{ 'No se encontraron establecimientos' | translate }}
-          </p-message>
+          <div class="empty-establishments">
+            <i class="pi pi-building"></i>
+            <div>
+              <strong>{{ 'No se encontraron establecimientos' | translate }}</strong>
+              @if (helper.permiso?.nivel === 'Asesor') {
+                <span>La cartera del asesor todavía no tiene productores y campos vinculados.</span>
+              } @else {
+                <span>Creá el primer establecimiento para comenzar a organizar sus lotes.</span>
+              }
+            </div>
+          </div>
         </td>
       </tr>
     </ng-template>
 
     <ng-template #summary>
-      <div class="table-summary">
-        <span>{{ dataSource.length }} visibles</span>
-        @if (!helper.soloLectura()) {
-          <p-button
-            [label]="'Crear nuevo establecimiento' | translate"
-            icon="pi pi-plus"
-            severity="primary"
-            (onClick)="create()"
-          ></p-button>
-        }
-      </div>
+      @if (dataSource.length > 0) {
+        <div class="table-summary">
+          <span>{{ dataSource.length }} visibles</span>
+        </div>
+      }
     </ng-template>
   </p-table>
 </div>

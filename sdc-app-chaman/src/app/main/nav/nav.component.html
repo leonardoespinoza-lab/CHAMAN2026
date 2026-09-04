@@ -41,7 +41,10 @@
         </span>
       </div>
       <!-- Elementos del menu -->
-      <div class="overflow-y-auto nav-menu-scroll">
+      <div
+        class="overflow-y-auto nav-menu-scroll"
+        [class.advisor-navigation]="esNivel('Asesor')"
+      >
         <!-- Selector de permisos -->
         @if (permisos.length > 1) {
           <div class="nav-permission-switch row-center">
@@ -154,46 +157,6 @@
               }
               <!-- Menu Distribuidor -->
               @if (esNivel('Distribuidor', 'Asesor')) {
-                @if (puedeGestionarCarteraAgronomica()) {
-                  <li>
-                    <a
-                      pRipple
-                      class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
-                      [routerLink]="['/establecimientos']"
-                      [routerLinkActive]="['active']"
-                      (click)="cerrarMenu($event)"
-                    >
-                      <svg
-                        [style.fill]="'var(--p-primary-color)'"
-                        [attr.width]="'24px'"
-                        [attr.height]="'24px'"
-                        class="mr-2"
-                      >
-                        <use [attr.xlink:href]="'icons/icons.svg#house-siding'"></use>
-                      </svg>
-                      <span class="font-medium">{{ 'Establecimientos' | translate }}</span>
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      pRipple
-                      class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
-                      [routerLink]="['/lotes']"
-                      [routerLinkActive]="['active']"
-                      (click)="cerrarMenu($event)"
-                    >
-                      <svg
-                        [style.fill]="'var(--p-primary-color)'"
-                        [attr.width]="'24px'"
-                        [attr.height]="'24px'"
-                        class="mr-2"
-                      >
-                        <use [attr.xlink:href]="'icons/icons.svg#siembras'"></use>
-                      </svg>
-                      <span class="font-medium">{{ 'Lotes' | translate }}</span>
-                    </a>
-                  </li>
-                }
                 <!-- Mapa -->
                 <li>
                   <a
@@ -258,6 +221,46 @@
                     }
                   </a>
                 </li>
+                @if (puedeGestionarCarteraAgronomica()) {
+                  <li>
+                    <a
+                      pRipple
+                      class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                      [routerLink]="['/establecimientos']"
+                      [routerLinkActive]="['active']"
+                      (click)="cerrarMenu($event)"
+                    >
+                      <svg
+                        [style.fill]="'var(--p-primary-color)'"
+                        [attr.width]="'24px'"
+                        [attr.height]="'24px'"
+                        class="mr-2"
+                      >
+                        <use [attr.xlink:href]="'icons/icons.svg#house-siding'"></use>
+                      </svg>
+                      <span class="font-medium">{{ 'Establecimientos' | translate }}</span>
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      pRipple
+                      class="flex items-center cursor-pointer p-4 rounded-border text-surface-700 dark:text-surface-100 hover:bg-surface-100 dark:hover:bg-surface-700 duration-150 transition-colors p-ripple"
+                      [routerLink]="['/lotes']"
+                      [routerLinkActive]="['active']"
+                      (click)="cerrarMenu($event)"
+                    >
+                      <svg
+                        [style.fill]="'var(--p-primary-color)'"
+                        [attr.width]="'24px'"
+                        [attr.height]="'24px'"
+                        class="mr-2"
+                      >
+                        <use [attr.xlink:href]="'icons/icons.svg#siembras'"></use>
+                      </svg>
+                      <span class="font-medium">{{ 'Lotes' | translate }}</span>
+                    </a>
+                  </li>
+                }
               }
               <!-- Menu productor -->
               @if (esNivel('Productor')) {
