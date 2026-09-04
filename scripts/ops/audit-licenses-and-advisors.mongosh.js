@@ -3,7 +3,13 @@
  * Se ejecuta con mongosh contra una copia o una base indicada explicitamente.
  */
 
-const database = db.getSiblingDB('chaman');
+const databaseName = String(
+  process.env.CHAMAN_LICENSE_CATALOG_DB || 'chaman',
+).trim();
+if (!['chaman', 'chaman_testing'].includes(databaseName)) {
+  throw new Error(`Base no autorizada para auditar licencias: ${databaseName}`);
+}
+const database = db.getSiblingDB(databaseName);
 const now = new Date();
 
 const licenses = database.licencias.find({}).toArray();

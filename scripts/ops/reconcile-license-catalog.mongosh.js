@@ -8,7 +8,13 @@
  * Ejecutar solamente despues de un mongodump verificado del ambiente objetivo.
  */
 
-const database = db.getSiblingDB('chaman');
+const databaseName = String(
+  process.env.CHAMAN_LICENSE_CATALOG_DB || 'chaman',
+).trim();
+if (!['chaman', 'chaman_testing'].includes(databaseName)) {
+  throw new Error(`Base no autorizada para reconciliar licencias: ${databaseName}`);
+}
+const database = db.getSiblingDB(databaseName);
 const now = new Date();
 const apply = process.env.CHAMAN_LICENSE_CATALOG_APPLY === 'true';
 const expectedHash = String(
@@ -168,14 +174,48 @@ if (licenses.length !== plan.sourceLicenseCount) {
   throw new Error('El catalogo cambio despues de generar el plan');
 }
 
-const session = db.getMongo().startSession();
+const reconciliationId = new ObjectId();
+const backupCollection = database.license_catalog_reconciliation_backups;
+const originalLicenseIds = licenses.map((license) => license._id);
+const originalAssignmentIds = assignments.map((assignment) => assignment._id);
+let backupPrepared = false;
+
+const restoreOriginalDocuments = () => {
+  for (const license of licenses) {
+    database.licencias.replaceOne(
+      { _id: license._id },
+      license,
+      { upsert: true },
+    );
+  }
+  for (const assignment of assignments) {
+    database.licenciaporentidads.replaceOne(
+      { _id: assignment._id },
+      assignment,
+      { upsert: true },
+    );
+  }
+};
+
 try {
-  session.startTransaction();
-  const tx = session.getDatabase(database.getName());
+  backupCollection.insertOne({
+    _id: reconciliationId,
+    kind: 'license-catalog-reconciliation-backup',
+    status: 'prepared',
+    database: database.getName(),
+    planHash,
+    createdAt: now,
+    sourceLicenseCount: licenses.length,
+    sourceAssignmentCount: assignments.length,
+    licenses,
+    assignments,
+  });
+  backupPrepared = true;
+
   for (const group of groups) {
     const definition = group.definition;
     const identity = group.identity;
-    const updateResult = tx.licencias.updateOne(
+    const updateResult = database.licencias.updateOne(
       { _id: ObjectId(group.canonicalId) },
       {
         $set: {
@@ -194,17 +234,17 @@ try {
       throw new Error(`No se encontro el plan canonico ${group.canonicalId}`);
     }
     if (group.duplicateIds.length) {
-      tx.licenciaporentidads.updateMany(
+      database.licenciaporentidads.updateMany(
         { idLicencia: { $in: group.duplicateIds.map((value) => ObjectId(value)) } },
         { $set: { idLicencia: ObjectId(group.canonicalId) } },
       );
-      tx.licencias.deleteMany({
+      database.licencias.deleteMany({
         _id: { $in: group.duplicateIds.map((value) => ObjectId(value)) },
       });
     }
   }
 
-  tx.licenciaporentidads.updateMany(
+  database.licenciaporentidads.updateMany(
     {
       fechaExpiracion: { $lt: now },
       $or: [{ estado: { $exists: false } }, { estado: null }],
@@ -218,17 +258,95 @@ try {
     },
   );
 
-  const finalCount = tx.licencias.countDocuments({});
+  const finalCount = database.licencias.countDocuments({});
   if (finalCount !== plan.targetLicenseCount) {
     throw new Error(
       `Conteo final inesperado: ${finalCount}; esperado ${plan.targetLicenseCount}`,
     );
   }
-  session.commitTransaction();
-  print(EJSON.stringify({ applied: true, planHash, finalLicenseCount: finalCount }, null, 2));
+  const finalAssignments = database.licenciaporentidads.find({}).toArray();
+  if (finalAssignments.length !== assignments.length) {
+    throw new Error(
+      `Conteo de asignaciones inesperado: ${finalAssignments.length}; esperado ${assignments.length}`,
+    );
+  }
+  const finalAssignmentIds = new Set(
+    finalAssignments.map((assignment) => id(assignment._id)),
+  );
+  if (originalAssignmentIds.some((assignmentId) => !finalAssignmentIds.has(id(assignmentId)))) {
+    throw new Error('La reconciliacion perdio una o mas asignaciones originales');
+  }
+  const finalLicenseIds = new Set(
+    database.licencias.find({}, { _id: 1 }).toArray().map((license) => id(license._id)),
+  );
+  const expectedCanonicalIds = new Set(groups.map((group) => group.canonicalId));
+  if (
+    finalLicenseIds.size !== expectedCanonicalIds.size ||
+    [...finalLicenseIds].some((licenseId) => !expectedCanonicalIds.has(licenseId))
+  ) {
+    throw new Error('El catalogo final no coincide con los planes canonicos aprobados');
+  }
+  const orphanAssignments = finalAssignments.filter(
+    (assignment) => !finalLicenseIds.has(id(assignment.idLicencia)),
+  );
+  if (orphanAssignments.length) {
+    throw new Error(
+      `La reconciliacion dejo ${orphanAssignments.length} asignaciones huerfanas`,
+    );
+  }
+
+  backupCollection.updateOne(
+    { _id: reconciliationId },
+    {
+      $set: {
+        status: 'applied',
+        completedAt: new Date(),
+        finalLicenseCount: finalCount,
+        finalAssignmentCount: finalAssignments.length,
+      },
+    },
+  );
+  print(EJSON.stringify({
+    applied: true,
+    reconciliationId,
+    planHash,
+    finalLicenseCount: finalCount,
+    finalAssignmentCount: finalAssignments.length,
+    orphanAssignments: 0,
+  }, null, 2));
 } catch (error) {
-  session.abortTransaction();
+  if (backupPrepared) {
+    try {
+      restoreOriginalDocuments();
+      const restoredLicenseCount = database.licencias.countDocuments({
+        _id: { $in: originalLicenseIds },
+      });
+      const restoredAssignmentCount = database.licenciaporentidads.countDocuments({
+        _id: { $in: originalAssignmentIds },
+      });
+      if (
+        restoredLicenseCount !== licenses.length ||
+        restoredAssignmentCount !== assignments.length
+      ) {
+        throw new Error(
+          `Rollback incompleto: licencias ${restoredLicenseCount}/${licenses.length}; asignaciones ${restoredAssignmentCount}/${assignments.length}`,
+        );
+      }
+      backupCollection.updateOne(
+        { _id: reconciliationId },
+        {
+          $set: {
+            status: 'rolled_back',
+            rolledBackAt: new Date(),
+            error: String(error?.message || error),
+          },
+        },
+      );
+    } catch (rollbackError) {
+      throw new Error(
+        `Fallo la reconciliacion (${error?.message || error}) y tambien el rollback (${rollbackError?.message || rollbackError})`,
+      );
+    }
+  }
   throw error;
-} finally {
-  session.endSession();
 }

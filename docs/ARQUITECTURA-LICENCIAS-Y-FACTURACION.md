@@ -90,7 +90,10 @@ La consolidacion legacy se realiza con
 defecto y no escribe. Para aplicar exige simultaneamente una bandera explicita
 y el hash exacto de la previsualizacion, siempre despues de un backup verificado
 del ambiente. Si encuentra un perfil comercial desconocido, se detiene sin
-realizar cambios.
+realizar cambios. El ambiente se selecciona con
+`CHAMAN_LICENSE_CATALOG_DB=chaman_testing`; si se omite, el script apunta a
+`chaman`, pero siempre continúa en modo previsualizacion hasta recibir las dos
+confirmaciones de aplicacion.
 
 ## Alcance operativo del asesor
 
