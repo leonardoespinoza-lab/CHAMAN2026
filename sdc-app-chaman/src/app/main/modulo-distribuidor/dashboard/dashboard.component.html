@@ -16,7 +16,7 @@
             type="button"
             icon="pi pi-building"
             label="Nuevo establecimiento"
-            severity="secondary"
+            class="dashboard-action-button"
             (click)="crearEstablecimiento()"
           ></button>
           <button
@@ -24,6 +24,7 @@
             type="button"
             icon="pi pi-plus"
             label="Nuevo lote"
+            class="dashboard-action-button"
             (click)="crearLote()"
           ></button>
         </div>
@@ -39,7 +40,7 @@
         type="button"
         icon="pi pi-file-pdf"
         [label]="'Exportar informe' | translate"
-        class="export-button"
+        class="dashboard-action-button"
         (click)="exportarInformeDistribuidor()"
       ></button>
     </div>

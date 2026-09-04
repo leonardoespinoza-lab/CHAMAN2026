@@ -56,9 +56,30 @@
   flex-wrap: wrap;
 }
 
-.export-button {
+.dashboard-action-button {
+  align-items: center;
+  background: linear-gradient(135deg, #2ed6cc, #76cfe7);
+  border: 1px solid #12b9b3;
+  border-radius: 999px;
+  box-shadow: 0 8px 18px rgba(18, 185, 179, 0.16);
+  color: #10233b;
+  display: inline-flex;
+  font-weight: 700;
+  justify-content: center;
   min-height: 44px;
+  padding: 0 18px;
   white-space: nowrap;
+
+  &:hover {
+    background: linear-gradient(135deg, #27c9c0, #63c5df);
+    border-color: #0ea7a2;
+    box-shadow: 0 10px 22px rgba(18, 185, 179, 0.22);
+  }
+
+  &:focus-visible {
+    outline: 3px solid rgba(46, 214, 204, 0.24);
+    outline-offset: 2px;
+  }
 }
 
 .eyebrow {
@@ -656,6 +677,10 @@ h2 {
   .advisor-create-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .dashboard-action-button {
+    width: 100%;
   }
 
   .kpi-grid,

@@ -219,13 +219,6 @@ a {
   grid-template-columns: repeat(auto-fit, minmax(184px, 1fr));
 }
 
-:host ::ng-deep .chaman-nav-dialog .advisor-navigation > ul > li > ul,
-:host ::ng-deep .chaman-nav-dialog .advisor-navigation > ul > li > ul > li > ul {
-  gap: 0.55rem;
-  grid-template-columns: repeat(auto-fill, minmax(168px, 198px));
-  justify-content: start;
-}
-
 :host ::ng-deep .chaman-nav-dialog .advisor-navigation a {
   gap: 0.62rem;
   min-height: 3.65rem;
@@ -252,6 +245,17 @@ a {
 }
 
 :host ::ng-deep .chaman-nav-dialog .nav-menu-scroll li:has(> ul) {
+  display: contents;
+}
+
+:host ::ng-deep .chaman-nav-dialog .advisor-navigation > ul > li {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 198px));
+  justify-content: start;
+}
+
+:host ::ng-deep .chaman-nav-dialog .advisor-navigation > ul > li > ul {
   display: contents;
 }
 
@@ -578,8 +582,7 @@ a {
     padding: 0.85rem 1rem 1rem;
   }
 
-  :host ::ng-deep .chaman-nav-dialog .advisor-navigation > ul > li > ul,
-  :host ::ng-deep .chaman-nav-dialog .advisor-navigation > ul > li > ul > li > ul {
+  :host ::ng-deep .chaman-nav-dialog .advisor-navigation > ul > li {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
