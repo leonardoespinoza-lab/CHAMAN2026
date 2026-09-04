@@ -82,10 +82,12 @@ jobs:
       - run: npm run test:mobile-release
       - working-directory: sdc-app-chaman
         run: npm run build
+      - working-directory: sdc-app-chaman/ios/App
+        run: rm -f Podfile.lock
       - working-directory: sdc-app-chaman
         run: npx cap sync ios
       - working-directory: sdc-app-chaman/ios/App
-        run: rm -f Podfile.lock && pod install
+        run: pod install
       - working-directory: sdc-app-chaman/ios/App
         run: >-
           xcodebuild -workspace App.xcworkspace -scheme App

@@ -74,6 +74,7 @@ describe('LotesRepository internal tokens', () => {
         headers: {
           'x-chaman-internal-token': 'agrometeo-token',
         },
+        params: {},
       },
     );
   });
