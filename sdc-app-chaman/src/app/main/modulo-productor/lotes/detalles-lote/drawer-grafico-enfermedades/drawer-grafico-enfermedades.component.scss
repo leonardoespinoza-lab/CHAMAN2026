@@ -124,9 +124,19 @@
   box-shadow: var(--chaman-card-shadow, 0 14px 32px rgba(15, 23, 42, 0.055));
 }
 
+.disease-history-chart {
+  display: block;
+  height: min(58vh, 560px);
+  width: 100%;
+}
+
 .disease-chart-shell.embedded .chart-frame {
   min-height: clamp(350px, 43vw, 520px);
   padding: 0.45rem;
+}
+
+.disease-chart-shell.embedded .disease-history-chart {
+  height: clamp(330px, 42vw, 500px);
 }
 
 .chart-empty {
@@ -167,5 +177,15 @@
 
   .disease-chart-shell.embedded .chart-frame {
     min-height: 330px;
+  }
+
+  .disease-chart-shell.embedded .disease-history-chart {
+    height: 480px;
+  }
+}
+
+@media (max-width: 460px) {
+  .disease-chart-shell.embedded .disease-history-chart {
+    height: 500px;
   }
 }
