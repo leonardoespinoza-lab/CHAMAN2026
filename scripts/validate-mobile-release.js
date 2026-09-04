@@ -166,7 +166,7 @@ requireText(
   'Proyecto iOS',
 );
 requireText(xcodeProject, `MARKETING_VERSION = ${expectedVersion};`, 'Proyecto iOS');
-requireText(xcodeProject, 'CURRENT_PROJECT_VERSION = 2;', 'Proyecto iOS');
+requireText(xcodeProject, 'CURRENT_PROJECT_VERSION = 3;', 'Proyecto iOS');
 requireText(xcodeProject, 'IPHONEOS_DEPLOYMENT_TARGET = 15.0;', 'Proyecto iOS');
 requireText(xcodeProject, 'IPHONEOS_DEPLOYMENT_TARGET = 15.6;', 'Proyecto iOS');
 requireText(xcodeProject, 'PrivacyInfo.xcprivacy in Resources', 'Proyecto iOS');

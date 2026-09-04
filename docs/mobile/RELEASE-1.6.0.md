@@ -13,7 +13,7 @@ revisión.
 | Apple team ID | `38589U58A3` |
 | Versión | `1.6.0` |
 | Android versionCode | `22` |
-| iOS build | `2` |
+| iOS build | `3` |
 
 Cambiar el bundle/package ID crearía otra aplicación y dejaría fuera a quienes
 ya tienen Chamán instalada.
