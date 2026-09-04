@@ -32,6 +32,20 @@ const waterTs = fs.readFileSync(
   ),
   "utf8",
 );
+const diseaseChartHtml = fs.readFileSync(
+  path.join(
+    root,
+    "sdc-app-chaman/src/app/main/modulo-productor/lotes/detalles-lote/drawer-grafico-enfermedades/drawer-grafico-enfermedades.component.html",
+  ),
+  "utf8",
+);
+const diseaseChartCss = fs.readFileSync(
+  path.join(
+    root,
+    "sdc-app-chaman/src/app/main/modulo-productor/lotes/detalles-lote/drawer-grafico-enfermedades/drawer-grafico-enfermedades.component.scss",
+  ),
+  "utf8",
+);
 
 test("el detalle del lote evita desborde horizontal y respeta el viewport movil", () => {
   assert.match(detailCss, /height:\s*100dvh/);
@@ -67,6 +81,23 @@ test("enfermedades conserva ancho completo aunque el lote tambien tenga malezas"
   assert.match(
     detailCss,
     /\.sanitary-monitoring-row\s*\{[\s\S]*?grid-template-columns:\s*1fr/,
+  );
+});
+
+test("el grafico sanitario movil contiene las cinco filas de leyenda sin invadir la lectura actual", () => {
+  assert.match(diseaseChartHtml, /class="disease-history-chart"/);
+  assert.match(
+    diseaseChartHtml,
+    /\[style\]="'display:block;width:100%;height:100%'"/,
+  );
+  assert.doesNotMatch(diseaseChartHtml, /\[style\.height\]/);
+  assert.match(
+    diseaseChartCss,
+    /@media\s*\(max-width:\s*720px\)[\s\S]*?\.disease-chart-shell\.embedded \.disease-history-chart\s*\{[\s\S]*?height:\s*480px/,
+  );
+  assert.match(
+    diseaseChartCss,
+    /@media\s*\(max-width:\s*460px\)[\s\S]*?\.disease-chart-shell\.embedded \.disease-history-chart\s*\{[\s\S]*?height:\s*500px/,
   );
 });
 
