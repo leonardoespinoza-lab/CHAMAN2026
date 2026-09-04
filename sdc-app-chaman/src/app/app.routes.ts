@@ -24,11 +24,11 @@ const scope = (
 const adminOnly = scope(['Admin'], ROLES_ADMINISTRACION);
 const lecturaOperativaScope = scope(NIVELES_PERMISO, ROLES_LECTURA);
 const escrituraEstablecimientoScope = scope(
-  ['Admin', 'Productor'],
+  ['Admin', 'Productor', 'Asesor'],
   ROLES_ESCRITURA
 );
 const escrituraLoteScope = scope(
-  ['Productor', 'Establecimiento'],
+  ['Productor', 'Establecimiento', 'Asesor'],
   ROLES_ESCRITURA
 );
 const tenantScope = scope(['Tenant'], ROLES_LECTURA);

@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnDestroy } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { TranslateService } from '@ngx-translate/core';
 import {
@@ -9,11 +9,15 @@ import {
   IGeoJSONPoint,
   IGeoJSONMultiPolygon,
   IGeoJSONPolygon,
+  IListado,
+  IProductor,
+  IQueryParam,
   IUbicacion,
   IZonaGeografica,
 } from 'modelos/src';
 import { AutoCompleteCompleteEvent, AutoCompleteSelectEvent } from 'primeng/autocomplete';
 import { FileSelectEvent } from 'primeng/fileupload';
+import { Subscription } from 'rxjs';
 import { MapDrawComponent } from '../../../../auxiliares/componentes/map-draw/map-draw.component';
 import { PROVINCIAS_ARGENTINA_BASE } from '../../../../auxiliares/constantes/provincias-argentina';
 import { EstablecimientoService } from '../../../../auxiliares/http/establecimiento.service';
@@ -30,7 +34,7 @@ import { SharedModule } from '../../../../auxiliares/shared.module';
   templateUrl: './crear-editar-establecimientos.component.html',
   styleUrl: './crear-editar-establecimientos.component.scss',
 })
-export class CrearEditarEstablecimientosComponent {
+export class CrearEditarEstablecimientosComponent implements OnDestroy {
   public loading = false;
   public establecimiento?: IEstablecimiento;
   public titulo?: () => string;
@@ -48,12 +52,21 @@ export class CrearEditarEstablecimientosComponent {
   public kmzImportando = false;
   public kmzNombreArchivo = '';
   public kmzPoligonos: IKmzPolygonImportado[] = [];
+  public productores: IProductor[] = [];
+  private productores$?: Subscription;
+
+  public get requiereSeleccionProductor(): boolean {
+    return (
+      !this.establecimiento &&
+      ['Admin', 'Asesor'].includes(this.helper.permiso?.nivel || '')
+    );
+  }
 
   constructor(
     private paramsService: ParamsService,
     private translate: TranslateService,
     private service: EstablecimientoService,
-    private helper: HelperService,
+    public helper: HelperService,
     private listado: ListadosService,
     private geonode: GeoNodeService,
     private kmlKmzImport: KmlKmzImportService
@@ -76,6 +89,10 @@ export class CrearEditarEstablecimientosComponent {
   private createForm(): void {
     this.form = new FormGroup({
       nombre: new FormControl(this.establecimiento?.nombre, Validators.required),
+      idProductor: new FormControl(
+        this.establecimiento?.idProductor,
+        this.requiereSeleccionProductor ? Validators.required : [],
+      ),
     });
   }
 
@@ -490,6 +507,7 @@ export class CrearEditarEstablecimientosComponent {
       for (const poligono of this.kmzPoligonos) {
         const data: ICreateEstablecimiento = {
           nombre: poligono.nombre,
+          idProductor: this.form?.get('idProductor')?.value,
           ubicacion: [
             {
               geojson: poligono.geojson,
@@ -527,6 +545,18 @@ export class CrearEditarEstablecimientosComponent {
 
   //
 
+  private async listarProductores(): Promise<void> {
+    if (!this.requiereSeleccionProductor) return;
+    const query: IQueryParam = { page: 0, limit: 0, sort: 'nombre' };
+    this.productores$?.unsubscribe();
+    this.productores$ = this.listado
+      .subscribe<IListado<IProductor>>('productors', query)
+      .subscribe((response) => {
+        this.productores = response.datos || [];
+      });
+    await this.listado.getLastValue('productors', query);
+  }
+
   async ngOnInit(): Promise<void> {
     this.loading = true;
     this.establecimiento = this.paramsService.get('editEstablecimiento');
@@ -562,8 +592,15 @@ export class CrearEditarEstablecimientosComponent {
       : () => this.translate.instant('Crear establecimiento');
     this.initMultipolygon();
     this.createForm();
-    await this.listarProvinciasGeograficas();
+    await Promise.all([
+      this.listarProvinciasGeograficas(),
+      this.listarProductores(),
+    ]);
     this.inicializarMapaDesdeUbicacion();
     this.loading = false;
+  }
+
+  ngOnDestroy(): void {
+    this.productores$?.unsubscribe();
   }
 }

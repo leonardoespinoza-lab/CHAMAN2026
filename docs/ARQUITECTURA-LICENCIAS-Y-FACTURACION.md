@@ -76,3 +76,26 @@ alias transitorios. El modelo canonico usa `maxDistribuidores` y
 `maxHectareas`. Los registros legacy sin estado continúan operando como activos
 hasta su migracion, y los limites legacy permanecen informativos para evitar
 bloqueos inesperados en clientes existentes.
+
+## Operacion del catalogo
+
+Las altas y ediciones de Compania, Distribuidor y Productor solo envian el
+identificador del plan seleccionado y su vencimiento. Nunca copian los limites
+o modulos del plan dentro de una nueva licencia. La vigencia continua viviendo
+en `licenciaporentidads`; esas asignaciones no son planes nuevos y se conservan
+como historial auditable.
+
+La consolidacion legacy se realiza con
+`scripts/ops/reconcile-license-catalog.mongosh.js`. El comando previsualiza por
+defecto y no escribe. Para aplicar exige simultaneamente una bandera explicita
+y el hash exacto de la previsualizacion, siempre despues de un backup verificado
+del ambiente. Si encuentra un perfil comercial desconocido, se detiene sin
+realizar cambios.
+
+## Alcance operativo del asesor
+
+El permiso `Asesor` con rol `Admin` o `Escritura` puede crear y administrar
+establecimientos, lotes y siembras de sus productores asesorados. La jerarquia
+se deriva en el backend: los identificadores enviados por el cliente no pueden
+trasladar recursos a otra cartera. Los permisos de lectura no obtienen acciones
+de escritura.

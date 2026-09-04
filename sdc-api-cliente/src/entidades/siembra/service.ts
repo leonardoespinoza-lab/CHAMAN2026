@@ -424,7 +424,6 @@ export class SiembrasService {
   }
 
   async create(data: ICreateSiembra, permiso: IPermiso): Promise<ISiembra> {
-    this.assertAdvisorReadOnly(permiso);
     data = this.sinHistorialFenologicoGenerico(data);
     if (!data.idLote) {
       throw new BadRequestException('No se ingresó el lote');
@@ -469,7 +468,6 @@ export class SiembrasService {
     data: IUpdateSiembra,
     permiso: IPermiso,
   ): Promise<ISiembra> {
-    this.assertAdvisorReadOnly(permiso);
     data = this.sinHistorialFenologicoGenerico(data);
     const siembra = await this.getById(id, permiso);
     // La autorizacion del lote se mantiene en la API publica, pero el calculo
@@ -483,7 +481,6 @@ export class SiembrasService {
     data: IUpdateSiembra,
     permiso: IPermiso,
   ): Promise<ISiembra> {
-    this.assertAdvisorReadOnly(permiso);
     data = this.sinHistorialFenologicoGenerico(data);
     const siembraActual = await this.getById(id, permiso);
     const fechaSiembraAnterior = this.fechaCalendario(
@@ -538,7 +535,6 @@ export class SiembrasService {
   }
 
   async delete(id: string, permiso: IPermiso): Promise<ISiembra> {
-    this.assertAdvisorReadOnly(permiso);
     const siembra = await this.getById(id, permiso);
     const deleted = await this.repository.delete(id);
     await this.actualizarLoteAlEliminarSiembra(siembra, permiso);
@@ -1206,14 +1202,6 @@ export class SiembrasService {
   }
 
   // Private
-
-  private assertAdvisorReadOnly(permiso: IPermiso): void {
-    if (permiso.nivel === 'Asesor') {
-      throw new BadRequestException(
-        'El asesor supervisa la red; la gestion de campana corresponde al usuario productor',
-      );
-    }
-  }
 
   private async actualizarPrediccion(idSiembra: string, permiso: IPermiso) {
     await this.prediccionsService.reconstruir(idSiembra, permiso);

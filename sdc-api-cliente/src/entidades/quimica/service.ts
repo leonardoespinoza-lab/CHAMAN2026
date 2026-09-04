@@ -79,28 +79,6 @@ export class QuimicasService {
     return quimica;
   }
 
-  private getLicenciaGratis() {
-    return {
-      nombre: 'Gratis',
-      origen: 'automatico' as const,
-      motivoCreacion: 'Alta de quimica sin licencia seleccionada',
-      maxUsuarios: 2,
-      maxdDistribuidores: 10,
-      maxProductores: 50,
-      maxEstablecimientos: 100,
-      maxLotes: 500,
-      maxdHectareas: 100000,
-      modulos: {
-        Enfermedades: true,
-        Riego: false,
-        'Huella Hídrica': false,
-        NDVI: true,
-        Clima: true,
-        'Etapas Fenológicas': true,
-      },
-    };
-  }
-
   async update(
     id: string,
     data: IUpdateQuimica,

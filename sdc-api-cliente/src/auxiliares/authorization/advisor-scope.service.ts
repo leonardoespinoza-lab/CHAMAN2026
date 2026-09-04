@@ -28,8 +28,8 @@ export class AdvisorScopeService {
 
     const idAsesor = String(userId);
     permiso.idAsesor = idAsesor;
-    // El Asesor administra productores y observa toda su red aguas abajo.
-    // No es propietario operativo de establecimientos ni lotes.
+    // El asesor administra su cartera completa. Los IDs se reconstruyen del
+    // servidor en cada sesion y nunca se confian al cliente.
     permiso.idLotes = [];
     const establecimientosAsignados = permiso.idTenant
       ? await this.getTenantAssignedEstablishments(

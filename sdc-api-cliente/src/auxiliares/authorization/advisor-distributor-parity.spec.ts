@@ -14,7 +14,7 @@ function niveles(controller: ControllerClass, method: string): string[] {
   return (permisos || []).map((permiso) => permiso.nivel);
 }
 
-describe('Asesor - paridad comercial con Distribuidor', () => {
+describe('Asesor - cartera operativa diferenciada del Distribuidor', () => {
   it('ambos administran productores', () => {
     for (const method of ['get', 'getById', 'create', 'update', 'delete']) {
       expect(niveles(ProductorsController as any, method)).toEqual(
@@ -23,20 +23,20 @@ describe('Asesor - paridad comercial con Distribuidor', () => {
     }
   });
 
-  it('ambos supervisan establecimientos pero no los modifican', () => {
+  it('ambos ven establecimientos y solo el asesor opera su cartera', () => {
     for (const method of ['get', 'getById']) {
       expect(niveles(EstablecimientosController as any, method)).toEqual(
         expect.arrayContaining(['Distribuidor', 'Asesor']),
       );
     }
     for (const method of ['create', 'update', 'delete']) {
-      expect(niveles(EstablecimientosController as any, method)).not.toEqual(
-        expect.arrayContaining(['Distribuidor', 'Asesor']),
-      );
+      const autorizados = niveles(EstablecimientosController as any, method);
+      expect(autorizados).not.toContain('Distribuidor');
+      expect(autorizados).toContain('Asesor');
     }
   });
 
-  it('ambos supervisan lotes pero no los crean, editan ni eliminan', () => {
+  it('ambos ven lotes y solo el asesor opera su cartera', () => {
     for (const method of ['get', 'getById']) {
       expect(niveles(LotesController as any, method)).toEqual(
         expect.arrayContaining(['Distribuidor', 'Asesor']),
@@ -45,18 +45,18 @@ describe('Asesor - paridad comercial con Distribuidor', () => {
     for (const method of ['create', 'update', 'delete']) {
       const autorizados = niveles(LotesController as any, method);
       expect(autorizados).not.toContain('Distribuidor');
-      expect(autorizados).not.toContain('Asesor');
+      expect(autorizados).toContain('Asesor');
     }
   });
 
-  it('las campanas y cosechas quedan a cargo de Productor/Establecimiento', () => {
+  it('el asesor administra campanas de su cartera y el distribuidor solo observa', () => {
     expect(niveles(SiembrasController as any, 'get')).toEqual(
       expect.arrayContaining(['Distribuidor', 'Asesor']),
     );
     for (const method of ['create', 'cosechar', 'update', 'delete']) {
       const autorizados = niveles(SiembrasController as any, method);
       expect(autorizados).not.toContain('Distribuidor');
-      expect(autorizados).not.toContain('Asesor');
+      expect(autorizados).toContain('Asesor');
     }
   });
 

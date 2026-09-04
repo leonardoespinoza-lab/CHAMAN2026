@@ -254,6 +254,7 @@ export class LotesController {
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async create(
     @Body() body: ICreateLote,
@@ -297,6 +298,7 @@ export class LotesController {
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async update(
     @Param('id') id: string,
@@ -311,6 +313,7 @@ export class LotesController {
     { nivel: 'Admin', roles: ['Admin'] },
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async delete(
     @Param('id') id: string,

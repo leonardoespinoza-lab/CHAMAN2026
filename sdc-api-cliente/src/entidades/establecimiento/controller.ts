@@ -53,6 +53,7 @@ export class EstablecimientosController {
   @Post()
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Admin', roles: ['Admin'] },
   )
   public async create(
@@ -65,6 +66,7 @@ export class EstablecimientosController {
   @Put('/:id')
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Admin', roles: ['Admin'] },
   )
   public async update(
@@ -78,6 +80,7 @@ export class EstablecimientosController {
   @Delete('/:id')
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Admin', roles: ['Admin'] },
   )
   public async delete(

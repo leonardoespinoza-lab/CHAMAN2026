@@ -9,6 +9,7 @@ import { EstablecimientosClimateSyncService } from './climate-sync.service';
 import { EstacionsModule } from '../estacion/module';
 import { DecisionPipelineModule } from '../../auxiliares/decision-pipeline';
 import { LotesRepository } from '../lote/repository';
+import { AdvisorScopeModule } from '../../auxiliares/authorization/advisor-scope.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { LotesRepository } from '../lote/repository';
     EstacionsModule,
     forwardRef(() => ClimaModule),
     DecisionPipelineModule,
+    AdvisorScopeModule,
   ],
   controllers: [EstablecimientosController],
   providers: [

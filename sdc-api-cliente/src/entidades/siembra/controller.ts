@@ -172,6 +172,7 @@ export class SiembrasController {
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async create(
     @Body() body: ICreateSiembra,
@@ -184,6 +185,7 @@ export class SiembrasController {
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async cosechar(
     @Param('id') id: string,
@@ -197,6 +199,7 @@ export class SiembrasController {
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async update(
     @Param('id') id: string,
@@ -210,6 +213,7 @@ export class SiembrasController {
   @Permisos(
     { nivel: 'Productor', roles: ['Admin', 'Escritura'] },
     { nivel: 'Establecimiento', roles: ['Admin', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Escritura'] },
   )
   public async delete(
     @Param('id') id: string,

@@ -28,6 +28,25 @@
                         <label>{{ 'Nombre' | translate }}</label>
                       </p-floatlabel>
 
+                      @if (requiereSeleccionProductor) {
+                        <p-floatlabel variant="in">
+                          <p-select
+                            formControlName="idProductor"
+                            [options]="productores"
+                            optionLabel="nombre"
+                            optionValue="_id"
+                            [filter]="true"
+                            filterBy="nombre,razonSocial,cuit"
+                            [fluid]="true"
+                            appendTo="body"
+                          />
+                          <label>Productor asesorado</label>
+                        </p-floatlabel>
+                        <small class="field-help">
+                          El establecimiento quedara dentro de este cliente y de tu cartera autorizada.
+                        </small>
+                      }
+
                       <section class="kmz-import-card">
                         <div class="kmz-import-copy">
                           <strong>Importar KML/KMZ</strong>

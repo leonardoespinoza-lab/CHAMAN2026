@@ -36,6 +36,7 @@ import {
   permisoPuedeVerEstablecimiento,
 } from '../../auxiliares/authorization/alcance-permiso';
 import { LotesRepository } from '../lote/repository';
+import { AdvisorScopeService } from '../../auxiliares/authorization/advisor-scope.service';
 
 @Injectable()
 export class EstablecimientosService {
@@ -52,6 +53,8 @@ export class EstablecimientosService {
     private readonly decisionPipelineQueue?: DecisionPipelineQueueService,
     @Optional()
     private readonly lotesRepository?: LotesRepository,
+    @Optional()
+    private readonly advisorScope?: AdvisorScopeService,
   ) {}
 
   async getById(id: string, permiso: IPermiso): Promise<IEstablecimiento> {
@@ -83,11 +86,6 @@ export class EstablecimientosService {
     data: ICreateEstablecimiento,
     permiso: IPermiso,
   ): Promise<IEstablecimiento> {
-    if (permiso.nivel === 'Asesor') {
-      throw new BadRequestException(
-        'El asesor gestiona productores; los establecimientos los crea el usuario productor',
-      );
-    }
     data = this.withoutAutomaticLocation(data);
     if (data.ubicacion?.length) {
       for (const u of data.ubicacion) {
@@ -118,7 +116,14 @@ export class EstablecimientosService {
         'No tiene permiso para crear este establecimiento',
       );
     }
-    return await this.repository.create(data);
+    const created = await this.repository.create(data);
+    if (created._id) {
+      this.advisorScope?.registerOwnedEstablishment(
+        permiso,
+        String(created._id),
+      );
+    }
+    return created;
   }
 
   async update(
@@ -126,13 +131,16 @@ export class EstablecimientosService {
     data: IUpdateEstablecimiento,
     permiso: IPermiso,
   ): Promise<IEstablecimiento> {
-    if (permiso.nivel === 'Asesor') {
-      throw new BadRequestException(
-        'El asesor tiene acceso de supervision; la edicion corresponde al usuario productor',
-      );
-    }
     data = this.withoutAutomaticLocation(data);
-    await this.getById(id, permiso);
+    const current = await this.getById(id, permiso);
+    if (permiso.nivel === 'Asesor') {
+      // El asesor puede editar el establecimiento de su cartera, pero no
+      // trasladarlo a otro productor ni alterar relaciones de pertenencia.
+      delete data.idProductor;
+      delete data.idDistribuidor;
+      delete data.idQuimica;
+      data.idProductor = current.idProductor;
+    }
     if (data.ubicacion?.length) {
       for (const u of data.ubicacion) {
         if (u.poligono?.length) {
@@ -173,11 +181,6 @@ export class EstablecimientosService {
     permiso: IPermiso,
     actor?: IUsuario,
   ): Promise<IEstablecimiento> {
-    if (permiso.nivel === 'Asesor') {
-      throw new BadRequestException(
-        'El asesor tiene acceso de supervision; la eliminacion corresponde al usuario productor',
-      );
-    }
     await this.getById(id, permiso);
     const audit = {
       archivadoPor: actor?.username || actor?._id || 'sistema',
@@ -194,7 +197,9 @@ export class EstablecimientosService {
         this.lotesRepository!.delete(String(item._id), audit),
       ),
     );
-    return await this.repository.delete(id, audit);
+    const deleted = await this.repository.delete(id, audit);
+    this.advisorScope?.removeOwnedEstablishment(permiso, id);
+    return deleted;
   }
 
   async refreshClimaDeEstablecimientos(): Promise<{

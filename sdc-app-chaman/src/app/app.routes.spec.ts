@@ -38,6 +38,14 @@ describe('app route access matrix', () => {
     it(`impide Lectura en la operacion ${path}`, () => {
       expect(route(path).data?.['roles']).toEqual(['Admin', 'Escritura']);
       expect(route(path).data?.['roles']).not.toContain('Lectura');
+      expect(route(path).data?.['niveles']).toContain('Asesor');
+    });
+  });
+
+  ['establecimientos/crear', 'establecimientos/editar/:id'].forEach((path) => {
+    it(`habilita ${path} para el asesor con escritura`, () => {
+      expect(route(path).data?.['niveles']).toContain('Asesor');
+      expect(route(path).data?.['roles']).toEqual(['Admin', 'Escritura']);
     });
   });
 

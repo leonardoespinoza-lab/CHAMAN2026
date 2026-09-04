@@ -108,28 +108,6 @@ export class DistribuidorsService {
     return distribuidor;
   }
 
-  private getLicenciaGratis() {
-    return {
-      nombre: 'Gratis',
-      origen: 'automatico' as const,
-      motivoCreacion: 'Alta de distribuidor sin licencia seleccionada',
-      maxUsuarios: 2,
-      maxdDistribuidores: 1,
-      maxProductores: 25,
-      maxEstablecimientos: 50,
-      maxLotes: 250,
-      maxdHectareas: 50000,
-      modulos: {
-        Enfermedades: true,
-        Riego: false,
-        'Huella Hídrica': false,
-        NDVI: true,
-        Clima: true,
-        'Etapas Fenológicas': true,
-      },
-    };
-  }
-
   async update(
     id: string,
     data: IUpdateDistribuidor,

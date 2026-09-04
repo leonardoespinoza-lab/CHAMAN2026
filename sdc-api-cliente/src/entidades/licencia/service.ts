@@ -37,6 +37,7 @@ export class LicenciasService {
     data.fechaCreacion = data.fechaCreacion || new Date().toISOString();
     data.codigo = this.normalizarCodigo(data.codigo || data.nombre);
     data.version = data.version || 1;
+    await this.validarCodigoVersionDisponible(data.codigo, data.version);
     data.estado = data.estado || 'activo';
     data.modeloFacturacion = data.modeloFacturacion || 'sin_cargo';
     data.modoLimite = data.modoLimite || 'informativo';
@@ -57,6 +58,16 @@ export class LicenciasService {
   }
 
   async update(id: string, data: IUpdateLicencia): Promise<ILicencia> {
+    const actual = await this.getById(id);
+    if (data.codigo) data.codigo = this.normalizarCodigo(data.codigo);
+    const codigo = data.codigo || actual.codigo;
+    const version = data.version || actual.version || 1;
+    if (codigo) await this.validarCodigoVersionDisponible(codigo, version, id);
+    if (actual.default && data.estado === 'archivado') {
+      throw new BadRequestException(
+        'El plan por defecto no puede archivarse hasta definir otro plan por defecto',
+      );
+    }
     this.normalizarLimites(data);
     return this.normalizar(await this.repository.update(id, data));
   }
@@ -83,6 +94,28 @@ export class LicenciasService {
       .replace(/[^a-z0-9]+/g, '_')
       .replace(/^_+|_+$/g, '')
       .slice(0, 60);
+  }
+
+  private async validarCodigoVersionDisponible(
+    codigo: string,
+    version: number,
+    excluirId?: string,
+  ): Promise<void> {
+    const existentes = await this.repository.get({
+      page: 0,
+      limit: 2,
+      filter: JSON.stringify({ codigo, version }),
+      select: '_id codigo version',
+    });
+    if (
+      (existentes.datos || []).some(
+        (item) => !excluirId || String(item._id) !== String(excluirId),
+      )
+    ) {
+      throw new BadRequestException(
+        `Ya existe el plan ${codigo} version ${version}`,
+      );
+    }
   }
 
   private normalizarLimites(data: Partial<ILicencia>): void {

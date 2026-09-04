@@ -326,11 +326,6 @@ export class LotesService {
   }
 
   async create(data: ICreateLote, permiso: IPermiso): Promise<ILote> {
-    if (permiso.nivel === 'Asesor') {
-      throw new BadRequestException(
-        'El asesor gestiona productores; los lotes los crea el usuario productor',
-      );
-    }
     data = this.withoutAutomaticDepartment(data);
     if (data.ubicacion?.poligono?.length) {
       data.ubicacion.geojson = {
@@ -372,13 +367,16 @@ export class LotesService {
     data: IUpdateLote,
     permiso: IPermiso,
   ): Promise<ILote> {
-    if (permiso.nivel === 'Asesor') {
-      throw new BadRequestException(
-        'El asesor tiene acceso de supervision; la edicion corresponde al usuario productor',
-      );
-    }
     data = this.withoutAutomaticDepartment(data);
     const current = await this.getById(id, permiso);
+    if (permiso.nivel === 'Asesor') {
+      // La cartera se valida con el lote actual. Un asesor no puede cambiar
+      // sus relaciones jerarquicas enviando IDs arbitrarios en el cuerpo.
+      delete data.idProductor;
+      delete data.idDistribuidor;
+      delete data.idQuimica;
+      data.idEstablecimiento = current.idEstablecimiento;
+    }
     if (data.ubicacion?.poligono?.length) {
       data.ubicacion.geojson = {
         type: 'Polygon',
@@ -456,11 +454,6 @@ export class LotesService {
     permiso: IPermiso,
     actor?: IUsuario,
   ): Promise<ILote> {
-    if (permiso.nivel === 'Asesor') {
-      throw new BadRequestException(
-        'El asesor tiene acceso de supervision; la eliminacion corresponde al usuario productor',
-      );
-    }
     await this.getById(idLote, permiso);
     // El lote y sus series historicas se conservan para auditoria.
     return await this.repository.delete(idLote, {

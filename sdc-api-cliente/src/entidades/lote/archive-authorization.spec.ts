@@ -1,7 +1,21 @@
 import { LotesController } from './controller';
 
 describe('LotesController - autorizacion de archivado', () => {
-  it('permite archivar al administrador y al propietario operativo, no al asesor supervisor', () => {
+  it.each(['create', 'update'] as const)(
+    'habilita %s para el asesor con escritura',
+    (method) => {
+      const permisos = Reflect.getMetadata(
+        'permisos',
+        LotesController.prototype[method],
+      );
+      expect(permisos).toContainEqual({
+        nivel: 'Asesor',
+        roles: ['Admin', 'Escritura'],
+      });
+    },
+  );
+
+  it('permite archivar al administrador, al propietario y al asesor de la cartera', () => {
     const permisos = Reflect.getMetadata(
       'permisos',
       LotesController.prototype.delete,
@@ -16,8 +30,9 @@ describe('LotesController - autorizacion de archivado', () => {
       nivel: 'Establecimiento',
       roles: ['Admin', 'Escritura'],
     });
-    expect(permisos).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ nivel: 'Asesor' })]),
-    );
+    expect(permisos).toContainEqual({
+      nivel: 'Asesor',
+      roles: ['Admin', 'Escritura'],
+    });
   });
 });

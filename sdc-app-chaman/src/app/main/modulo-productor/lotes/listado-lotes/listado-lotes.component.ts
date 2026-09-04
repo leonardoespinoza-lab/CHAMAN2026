@@ -64,16 +64,12 @@ export class ListadoLotesComponent implements OnInit, OnDestroy {
     this.router.navigate(['lotes', 'crear']);
   }
 
-  /**
-   * Asesores y distribuidores supervisan la operacion aguas abajo, pero no
-   * modifican ni archivan activos del productor. La misma regla vive en el
-   * backend; aplicarla aqui evita ofrecer acciones que terminarian en 403.
-   */
+  /** El asesor opera unicamente dentro de la cartera consolidada por el servidor. */
   public puedeGestionarLotes(): boolean {
     const permiso = this.helper.permiso;
     return Boolean(
       permiso &&
-        ['Admin', 'Productor', 'Establecimiento'].includes(permiso.nivel) &&
+        ['Admin', 'Productor', 'Establecimiento', 'Asesor'].includes(permiso.nivel) &&
         ['Admin', 'Escritura'].includes(permiso.rol),
     );
   }

@@ -197,16 +197,8 @@ export class CrearEditarDistribuidoresComponent implements OnInit, OnDestroy {
     try {
       const data = this.getData();
       if (this.debeGuardarLicencia()) {
-        const dataLicencia = this.getDataLicencia();
-        data.licencia = dataLicencia;
         data.expiracion = this.helper.dateToDias(this.fechaDeExpiracion);
-
-        const licenciaId = this.licencia?._id;        
-        data.licencia = {
-          ...dataLicencia,
-          _id: licenciaId
-        } as any;
-
+        data.licencia = { _id: this.licencia!._id } as any;
       }
       if (this.distribuidor?._id) {
         await this.service.editar(this.distribuidor._id, data);
@@ -241,8 +233,8 @@ export class CrearEditarDistribuidoresComponent implements OnInit, OnDestroy {
     // form Valid siempre
     // si hay formLicencia, también tiene que ser válido
     // si hay mostrarLicencia y no hay editarLicencia, entonces tiene que haber una licencia seleccionada
-    this.disabled = !this.form?.valid || (this.formLicencia ? !this.formLicencia?.valid : false);
-    if (this.mostrarLicencia && !this.editarLicencia) {
+    this.disabled = !this.form?.valid;
+    if (this.mostrarLicencia) {
       this.disabled = this.disabled || !this.licencia;
     }
   }
