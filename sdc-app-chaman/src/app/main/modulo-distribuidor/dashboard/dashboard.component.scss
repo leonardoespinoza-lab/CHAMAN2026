@@ -45,6 +45,15 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.advisor-create-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .export-button {
@@ -640,6 +649,11 @@ h2 {
   }
 
   .hero-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .advisor-create-actions {
     align-items: stretch;
     flex-direction: column;
   }

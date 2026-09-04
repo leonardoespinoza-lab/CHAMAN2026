@@ -104,4 +104,26 @@ describe('NavComponent access matrix', () => {
       'Asesor de prueba'
     );
   });
+
+  it('permite gestionar establecimientos y lotes a asesores con escritura', () => {
+    for (const rol of ['Admin', 'Escritura'] as const) {
+      const { component } = crearComponente({
+        nivel: 'Asesor',
+        rol,
+        idAsesor: 'asesor-1',
+      });
+
+      expect(component.puedeGestionarCarteraAgronomica()).toBeTrue();
+    }
+  });
+
+  it('mantiene al asesor de lectura sin acciones de alta', () => {
+    const { component } = crearComponente({
+      nivel: 'Asesor',
+      rol: 'Lectura',
+      idAsesor: 'asesor-1',
+    });
+
+    expect(component.puedeGestionarCarteraAgronomica()).toBeFalse();
+  });
 });

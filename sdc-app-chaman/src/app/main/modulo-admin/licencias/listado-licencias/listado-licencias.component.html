@@ -68,7 +68,7 @@
         <td>
           <div class="license-name">{{ row.nombre }}</div>
           <div class="license-subtitle">
-            {{ row.codigo || 'legacy-sin-codigo' }} · v{{ row.version || 1 }} · {{ row.estado || 'activo legacy' }} · {{ row.modeloFacturacion || 'sin clasificar' }}
+            v{{ row.version || 1 }} · {{ row.estado || 'activo legacy' }} · {{ row.modeloFacturacion || 'sin clasificar' }}
           </div>
           <div class="license-subtitle">{{ row.motivoCreacion || 'Sin motivo registrado' }}</div>
         </td>
@@ -135,7 +135,7 @@
       @if (!helper.soloLectura()) {
         <div class="flex justify-center p-3 border-t border-surface-200">
           <p-button
-            [label]="'Crear nueva licencia' | translate"
+            label="Crear licencia manual"
             icon="pi pi-plus"
             severity="primary"
             [fluid]="true"

@@ -19,7 +19,6 @@ export class CrearEditarLicenciasComponent implements OnInit {
   public licencia?: ILicencia;
   public titulo?: () => string;
   public form?: FormGroup;
-  public tabValue = 0;
   public estadosPlan = [
     { label: 'Borrador', value: 'borrador' },
     { label: 'Activo', value: 'activo' },
@@ -45,12 +44,12 @@ export class CrearEditarLicenciasComponent implements OnInit {
     private translate: TranslateService,
     private service: LicenciaService,
     private helper: HelperService,
-    private listado: ListadosService,
+    private listado: ListadosService
   ) {}
 
   private createForm(): void {
     this.form = new FormGroup({
-      nombre: new FormControl(this.licencia?.nombre || 'Gratis', Validators.required),
+      nombre: new FormControl(this.licencia?.nombre || 'Licencia manual', Validators.required),
       codigo: new FormControl(this.licencia?.codigo),
       version: new FormControl(this.licencia?.version ?? 1, [Validators.required, Validators.min(1)]),
       estado: new FormControl(this.licencia?.estado || 'activo', Validators.required),
@@ -125,7 +124,7 @@ export class CrearEditarLicenciasComponent implements OnInit {
     }
     this.titulo = this.licencia
       ? () => this.translate.instant(`Editar licencia`)
-      : () => this.translate.instant(`Crear licencia`);
+      : () => this.translate.instant(`Crear licencia manual`);
     this.createForm();
     this.loading = false;
   }

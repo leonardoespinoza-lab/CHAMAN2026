@@ -28,7 +28,9 @@ import { Subscription } from 'rxjs';
 import { HelperService } from '../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../auxiliares/servicios/listados';
 import { OpenLayersService } from '../../../auxiliares/servicios/openLayers.service';
+import { ParamsService } from '../../../auxiliares/servicios/params.service';
 import { LoginService } from '../../../auxiliares/http/login.service';
+import { puedeEscribir } from '../../../auxiliares/seguridad/access-policy';
 import { SharedModule } from '../../../auxiliares/shared.module';
 import {
   BORDE_SEMAFORO_MAPA,
@@ -155,7 +157,8 @@ export class DashboardDistribuidorComponent implements OnInit, AfterViewInit, On
     private helper: HelperService,
     public loginService: LoginService,
     private router: Router,
-    private activatedRoute: ActivatedRoute
+    private activatedRoute: ActivatedRoute,
+    private params: ParamsService
   ) {
     this.resetRiesgoCards();
   }
@@ -169,6 +172,24 @@ export class DashboardDistribuidorComponent implements OnInit, AfterViewInit, On
       );
     }
     return this.distribuidorActual?.nombre || 'Distribuidor';
+  }
+
+  public puedeGestionarCartera(): boolean {
+    return this.loginService.esAsesor && puedeEscribir(this.helper.permiso);
+  }
+
+  public crearEstablecimiento(): void {
+    if (this.puedeGestionarCartera()) {
+      this.params.set('editEstablecimiento', false);
+      this.router.navigateByUrl('/establecimientos/crear');
+    }
+  }
+
+  public crearLote(): void {
+    if (this.puedeGestionarCartera()) {
+      this.params.set('editLote', false);
+      this.router.navigateByUrl('/lotes/crear');
+    }
   }
 
   public formatHa(value: number, digits = 1): string {

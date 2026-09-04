@@ -27,6 +27,7 @@ import {
   indicePermiso,
   permisoPrincipal,
   puedeAdministrar,
+  puedeEscribir,
   rutaInicioPermiso,
 } from '../../auxiliares/seguridad/access-policy';
 import { HelperService } from '../../auxiliares/servicios/helper';
@@ -206,6 +207,10 @@ export class NavComponent implements OnInit, OnDestroy {
 
   public puedeGestionarUsuarios(): boolean {
     return puedeAdministrar(this.permisoActivo());
+  }
+
+  public puedeGestionarCarteraAgronomica(): boolean {
+    return this.esNivel('Asesor') && puedeEscribir(this.permisoActivo());
   }
 
   public esNivel(...niveles: NivelPermiso[]): boolean {

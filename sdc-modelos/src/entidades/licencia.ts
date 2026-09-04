@@ -35,7 +35,7 @@ export interface ILicencia {
     'Etapas Fenológicas'?: boolean;
   };
 
-  default?: boolean; // Indica si es la licencia por defecto y solo puede haber una. (La gratis)
+  default?: boolean; // Indica si es la licencia por defecto y solo puede haber una.
 }
 
 type OmitirCreate = '_id';

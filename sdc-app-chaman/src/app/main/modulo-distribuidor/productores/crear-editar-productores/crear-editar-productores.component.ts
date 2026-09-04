@@ -87,7 +87,7 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
       telefonoFiscal: new FormControl(this.productor?.telefonoFiscal),
       direccionFiscal: new FormControl(this.productor?.direccionFiscal),
       logo: new FormControl(this.productor?.logo),
-      gratis: new FormControl(this.productor?.gratis || true),
+      gratis: new FormControl(this.productor?.gratis ?? true),
       idQuimica: new FormControl(this.productor?.idQuimica),
       idDistribuidor: new FormControl(this.productor?.idDistribuidor),
       direccion: new FormControl(this.productor?.direccion),
@@ -101,7 +101,7 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
 
   private createFormLicencia(): void {
     this.formLicencia = new FormGroup({
-      nombre: new FormControl('Gratis', Validators.required),
+      nombre: new FormControl('Licencia manual', Validators.required),
       maxUsuarios: new FormControl(2, Validators.required),
       maxdDistribuidores: new FormControl(1, Validators.required),
       maxProductores: new FormControl(1, Validators.required),

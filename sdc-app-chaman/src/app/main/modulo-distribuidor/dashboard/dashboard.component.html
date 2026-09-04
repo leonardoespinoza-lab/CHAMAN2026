@@ -9,6 +9,25 @@
     </div>
 
     <div class="hero-actions">
+      @if (puedeGestionarCartera()) {
+        <div class="advisor-create-actions">
+          <button
+            pButton
+            type="button"
+            icon="pi pi-building"
+            label="Nuevo establecimiento"
+            severity="secondary"
+            (click)="crearEstablecimiento()"
+          ></button>
+          <button
+            pButton
+            type="button"
+            icon="pi pi-plus"
+            label="Nuevo lote"
+            (click)="crearLote()"
+          ></button>
+        </div>
+      }
       <div class="health-badge" [ngClass]="estadoSanitarioClase">
         <span>{{ 'Estado sanitario' | translate }}</span>
         <strong>{{ estadoSanitario | translate }}</strong>

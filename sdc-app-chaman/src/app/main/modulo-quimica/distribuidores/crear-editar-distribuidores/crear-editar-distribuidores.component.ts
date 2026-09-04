@@ -89,7 +89,7 @@ export class CrearEditarDistribuidoresComponent implements OnInit, OnDestroy {
 
   private createFormLicencia(): void {
     this.formLicencia = new FormGroup({
-      nombre: new FormControl('Gratis', Validators.required),
+      nombre: new FormControl('Licencia manual', Validators.required),
       maxUsuarios: new FormControl(2, Validators.required),
       maxdDistribuidores: new FormControl(1, Validators.required),
       maxProductores: new FormControl(1, Validators.required),

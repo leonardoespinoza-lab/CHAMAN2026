@@ -66,7 +66,7 @@ const planIdentity = (definition) => {
     definition.maxEstablecimientos === 100 &&
     definition.maxLotes === 500
   ) {
-    return { codigo: 'gratis_empresa', nombre: 'Gratis Empresa', default: false };
+    return { codigo: 'gratis_empresa', nombre: 'Plan Empresa', default: false };
   }
   if (
     definition.maxProductores === 25 &&
@@ -74,8 +74,8 @@ const planIdentity = (definition) => {
     definition.maxLotes === 250
   ) {
     return integral
-      ? { codigo: 'gratis_red_integral', nombre: 'Gratis Red Integral', default: false }
-      : { codigo: 'gratis_red', nombre: 'Gratis Red', default: false };
+      ? { codigo: 'gratis_red_integral', nombre: 'Plan Red Integral', default: false }
+      : { codigo: 'gratis_red', nombre: 'Plan Red', default: false };
   }
   if (
     definition.maxDistribuidores === 1 &&
@@ -84,7 +84,7 @@ const planIdentity = (definition) => {
     definition.maxLotes === 1 &&
     definition.maxHectareas === 10000
   ) {
-    return { codigo: 'gratis_individual', nombre: 'Gratis Individual', default: true };
+    return { codigo: 'gratis_individual', nombre: 'Plan Individual', default: true };
   }
   throw new Error(
     `Perfil de licencia desconocido; no se consolida: ${JSON.stringify(definition)}`,
