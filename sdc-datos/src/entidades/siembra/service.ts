@@ -29,6 +29,12 @@ import {
   DiaClimaHuella,
   HuellaHidricaSeguimientoResultado,
 } from '../algoritmos/huella-hidrica.engine';
+import {
+  capaSuperficialModelada,
+  contextoSatelitalMalezas,
+  DiaClimaMalezas,
+} from '../algoritmos/malezas-semillero.engine';
+import { ReporteNDVIsService } from '../reporte-ndvis/service';
 
 const OBJETIVOS_BIOFIX_PERMITIDOS = new Set<TObjetivoBiofixFenologico>([
   'anclaje_fenologico',
@@ -53,18 +59,25 @@ export class SiembrasService {
     private algoritmosService: AlgoritmosService,
     private soilInputsService: SoilAgronomicInputsService,
     private indicadoresAgrometeorologicosService: IndicadoresAgrometeorologicosService,
+    private reporteNDVIsService: ReporteNDVIsService,
     private prediccionsService: PrediccionsService,
     private alertasService: AlertasService,
   ) {}
 
   async getFilter(query: IQueryParam) {
-    return await this.repository.getFilter(query);
+    const listado = await this.repository.getFilter(query);
+    return {
+      ...listado,
+      datos: (listado?.datos || []).map((siembra) =>
+        this.ocultarParametrosMalezas(siembra),
+      ),
+    };
   }
 
   async getById(id: string) {
     const data = await this.repository.getById(id);
     if (data) {
-      return data;
+      return this.ocultarParametrosMalezas(data);
     }
     throw new NotFoundException('No encontrado');
   }
@@ -144,31 +157,38 @@ export class SiembrasService {
       dato.humedadCosecha,
     );
 
-    const siembraParaCalculo = this.completarSiembraConSueloCanonico({
-      ...siembra,
-      ...dato,
-      fechaCosecha: dato.fechaCosecha,
-      rendimientoObtenidoKgHaSeco: rendimientoSeco,
-      activa: false,
-    }, soilContext.inputs);
+    const siembraParaCalculo = this.completarSiembraConSueloCanonico(
+      {
+        ...siembra,
+        ...dato,
+        fechaCosecha: dato.fechaCosecha,
+        rendimientoObtenidoKgHaSeco: rendimientoSeco,
+        activa: false,
+      },
+      soilContext.inputs,
+    );
 
     const desdeFertilizacion = new Date(siembra.fechaSiembra);
     desdeFertilizacion.setDate(desdeFertilizacion.getDate() - 30);
     const hasta = new Date(dato.fechaCosecha).toISOString();
 
-    const [fertilizacionesResult, fumigacionesResult] = await Promise.allSettled([
-      this.fertilizacionsService.getFilter({
-        filter: JSON.stringify({
-          idLote: siembra.idLote,
-          fechaFertilizacion: { $gte: desdeFertilizacion.toISOString(), $lte: hasta },
+    const [fertilizacionesResult, fumigacionesResult] =
+      await Promise.allSettled([
+        this.fertilizacionsService.getFilter({
+          filter: JSON.stringify({
+            idLote: siembra.idLote,
+            fechaFertilizacion: {
+              $gte: desdeFertilizacion.toISOString(),
+              $lte: hasta,
+            },
+          }),
+          populate: 'fertilizante',
         }),
-        populate: 'fertilizante',
-      }),
-      this.fumigacionsService.getFilter({
-        filter: JSON.stringify({ idSiembra: id }),
-        populate: 'principioActivo',
-      }),
-    ]);
+        this.fumigacionsService.getFilter({
+          filter: JSON.stringify({ idSiembra: id }),
+          populate: 'principioActivo',
+        }),
+      ]);
     const fertilizaciones =
       fertilizacionesResult.status === 'fulfilled'
         ? fertilizacionesResult.value?.datos || []
@@ -178,10 +198,14 @@ export class SiembrasService {
         ? fumigacionesResult.value?.datos || []
         : [];
     if (fertilizacionesResult.status === 'rejected') {
-      this.logger.warn(`Cosecha ${id}: fertilizaciones no disponibles; la huella queda incompleta.`);
+      this.logger.warn(
+        `Cosecha ${id}: fertilizaciones no disponibles; la huella queda incompleta.`,
+      );
     }
     if (fumigacionesResult.status === 'rejected') {
-      this.logger.warn(`Cosecha ${id}: aplicaciones no disponibles; la huella queda incompleta.`);
+      this.logger.warn(
+        `Cosecha ${id}: aplicaciones no disponibles; la huella queda incompleta.`,
+      );
     }
 
     const huellaHidrica = await this.calcularHuellaCosechaSinBloqueo({
@@ -246,23 +270,31 @@ export class SiembrasService {
       siembraPersistida,
       soilContext.inputs,
     );
-    const fechaSiembra = siembra.fechaSiembra ? new Date(siembra.fechaSiembra) : new Date();
+    const fechaSiembra = siembra.fechaSiembra
+      ? new Date(siembra.fechaSiembra)
+      : new Date();
     fechaSiembra.setDate(fechaSiembra.getDate() - 30);
-    const hasta = (siembra.fechaCosecha ? new Date(siembra.fechaCosecha) : new Date()).toISOString();
+    const hasta = (
+      siembra.fechaCosecha ? new Date(siembra.fechaCosecha) : new Date()
+    ).toISOString();
 
-    const [fertilizacionesResult, fumigacionesResult] = await Promise.allSettled([
-      this.fertilizacionsService.getFilter({
-        filter: JSON.stringify({
-          idLote: siembra.idLote,
-          fechaFertilizacion: { $gte: fechaSiembra.toISOString(), $lte: hasta },
+    const [fertilizacionesResult, fumigacionesResult] =
+      await Promise.allSettled([
+        this.fertilizacionsService.getFilter({
+          filter: JSON.stringify({
+            idLote: siembra.idLote,
+            fechaFertilizacion: {
+              $gte: fechaSiembra.toISOString(),
+              $lte: hasta,
+            },
+          }),
+          populate: 'fertilizante',
         }),
-        populate: 'fertilizante',
-      }),
-      this.fumigacionsService.getFilter({
-        filter: JSON.stringify({ idSiembra: id }),
-        populate: 'principioActivo',
-      }),
-    ]);
+        this.fumigacionsService.getFilter({
+          filter: JSON.stringify({ idSiembra: id }),
+          populate: 'principioActivo',
+        }),
+      ]);
 
     const fertilizaciones =
       fertilizacionesResult.status === 'fulfilled'
@@ -284,7 +316,9 @@ export class SiembrasService {
       siembra.fechaCosecha || new Date().toISOString(),
     );
     if (!canonical.clima.length) {
-      return await this.algoritmosService.calcularSeguimientoHuellaHidrica(base);
+      return await this.algoritmosService.calcularSeguimientoHuellaHidrica(
+        base,
+      );
     }
     const seguimiento = this.algoritmosService.simularSeguimientoHuellaHidrica({
       ...base,
@@ -308,10 +342,7 @@ export class SiembrasService {
     return sanitized;
   }
 
-  private validarClavesPersistencia(
-    value: unknown,
-    path = 'siembra',
-  ): void {
+  private validarClavesPersistencia(value: unknown, path = 'siembra'): void {
     if (value === null || value === undefined || typeof value !== 'object') {
       return;
     }
@@ -348,10 +379,7 @@ export class SiembrasService {
       );
     }
     const date = String(
-      record.fechaInicioEtapa ||
-        record.fechaObservacion ||
-        record.fecha ||
-        '',
+      record.fechaInicioEtapa || record.fechaObservacion || record.fecha || '',
     ).trim();
     if (!date || Number.isNaN(new Date(date).getTime())) {
       throw new BadRequestException(
@@ -423,7 +451,10 @@ export class SiembrasService {
       this.logger.warn(
         `Entradas edaficas canonicas no disponibles para huella del lote ${lote?._id || ''}; se conserva el perfil previo: ${error?.message || error}`,
       );
-      return { lote: aplicarEntradasAgronomicasSuelo(lote, null), inputs: null };
+      return {
+        lote: aplicarEntradasAgronomicasSuelo(lote, null),
+        inputs: null,
+      };
     }
   }
 
@@ -472,10 +503,11 @@ export class SiembrasService {
     hasta?: string,
   ): Promise<{ clima: DiaClimaHuella[]; fuentes: string[] }> {
     try {
-      const active = await this.indicadoresAgrometeorologicosService.getActiveGeneration(
-        idSiembra,
-        AGROMET_ENGINE_VERSION,
-      );
+      const active =
+        await this.indicadoresAgrometeorologicosService.getActiveGeneration(
+          idSiembra,
+          AGROMET_ENGINE_VERSION,
+        );
       const start = String(desde || '').slice(0, 10);
       const end = String(hasta || '').slice(0, 10);
       const rows = (active?.data || []).filter((row: any) => {
@@ -489,12 +521,14 @@ export class SiembrasService {
       });
       const fuentes = [
         ...new Set(
-          rows.flatMap((row: any) => [
-            String(
-              row?.fuentePorVariable?.precipitationMm || row?.fuente || '',
-            ),
-            String(row?.fuentePorVariable?.et0Mm || row?.fuente || ''),
-          ]).filter(Boolean),
+          rows
+            .flatMap((row: any) => [
+              String(
+                row?.fuentePorVariable?.precipitationMm || row?.fuente || '',
+              ),
+              String(row?.fuentePorVariable?.et0Mm || row?.fuente || ''),
+            ])
+            .filter(Boolean),
         ),
       ];
       return {
@@ -533,7 +567,9 @@ export class SiembrasService {
     };
     try {
       if (!canonical.clima.length) {
-        throw new Error('No hay serie agrometeorologica canonica historica para consolidar.');
+        throw new Error(
+          'No hay serie agrometeorologica canonica historica para consolidar.',
+        );
       }
       const resultado = this.algoritmosService.simularHuellaHidrica({
         ...base,
@@ -566,7 +602,10 @@ export class SiembrasService {
           clima: [],
         });
       }
-      return this.huellaIncompletaDesdeSeguimiento(seguimiento, canonical.fuentes);
+      return this.huellaIncompletaDesdeSeguimiento(
+        seguimiento,
+        canonical.fuentes,
+      );
     }
   }
 
@@ -599,12 +638,125 @@ export class SiembrasService {
   async prediccionMalezas(id: string) {
     const siembra = await this.getById(id);
     const lote = await this.lotesService.getById(siembra.idLote);
-    const resultado = await this.algoritmosService.calcularPrediccionMalezas({ siembra, lote });
+    const climaCanonico = await this.getClimaCanonicoMalezas(id);
+    const reporteSatelital = await this.getReporteSatelitalMalezas(
+      String(siembra.idLote),
+    );
+    const resultado = await this.algoritmosService.calcularPrediccionMalezas({
+      siembra,
+      lote,
+      climaCanonico,
+      contextoSatelital: contextoSatelitalMalezas(reporteSatelital),
+    });
 
     if (resultado.estado !== 'sin_clima') {
       await this.repository.update(id, { ultimaPrediccionMalezas: resultado });
     }
 
     return resultado;
+  }
+
+  private async getClimaCanonicoMalezas(
+    idSiembra: string,
+  ): Promise<DiaClimaMalezas[]> {
+    try {
+      const active =
+        await this.indicadoresAgrometeorologicosService.getActiveGeneration(
+          idSiembra,
+          AGROMET_ENGINE_VERSION,
+        );
+      return (active?.data || [])
+        .map((row: any) => {
+          const metricas = row?.metricas || {};
+          const fuenteTemperatura = row?.fuentePorVariable?.soilTemperatureC;
+          const fuenteHumedad = row?.fuentePorVariable?.soilMoistureM3M3;
+          const temperaturaSuelo = capaSuperficialModelada(
+            metricas.soilTemperatureC,
+            fuenteTemperatura,
+          );
+          const humedadSuelo = this.fraccionHumedad(
+            capaSuperficialModelada(metricas.soilMoistureM3M3, fuenteHumedad),
+          );
+          const origen = [fuenteTemperatura, fuenteHumedad]
+            .map(String)
+            .join(' ');
+          const fuente = origen.includes('chaman_meteo')
+            ? 'Chaman-Meteo · suelo 0-7 cm'
+            : origen.includes('open_meteo') || origen.includes('mixed')
+              ? 'Modelo meteorologico · suelo 0-7 cm'
+              : undefined;
+          return {
+            fecha: String(row?.fecha || '').slice(0, 10),
+            tipo: row?.esPronostico ? 'pronostico' : 'historico',
+            temperaturaSuelo,
+            humedadSuelo,
+            lluviaMm: this.numeroOpcional(metricas.precipitationMm),
+            et0Mm: this.numeroOpcional(metricas.et0Mm),
+            fuente,
+            profundidadReferenciaCm: '0-7',
+            coberturaHorariaPct:
+              temperaturaSuelo !== undefined && humedadSuelo !== undefined
+                ? 100
+                : 0,
+          } as DiaClimaMalezas;
+        })
+        .filter(
+          (dia: DiaClimaMalezas) =>
+            !!dia.fecha &&
+            dia.temperaturaSuelo !== undefined &&
+            dia.humedadSuelo !== undefined,
+        );
+    } catch (error) {
+      this.logger.warn(
+        `Serie canonica no disponible para malezas ${idSiembra}; se usara respaldo: ${error?.message || error}`,
+      );
+      return [];
+    }
+  }
+
+  private async getReporteSatelitalMalezas(idLote: string) {
+    try {
+      const result = await this.reporteNDVIsService.getLastByIdLote(idLote);
+      return result?.datos?.[0];
+    } catch (error) {
+      this.logger.warn(
+        `Contexto satelital no disponible para malezas ${idLote}; se conserva el calculo hidrotermal: ${error?.message || error}`,
+      );
+      return undefined;
+    }
+  }
+
+  /** Evita que resultados legacy transporten parametros propietarios al cliente. */
+  private ocultarParametrosMalezas<T>(siembra: T): T {
+    if (!siembra || typeof siembra !== 'object') return siembra;
+    const origen: any = siembra as any;
+    const salida: any =
+      typeof origen.toObject === 'function' ? origen.toObject() : { ...origen };
+    const prediccion = salida.ultimaPrediccionMalezas;
+    if (!prediccion || typeof prediccion !== 'object') return salida as T;
+    salida.ultimaPrediccionMalezas = {
+      ...prediccion,
+      especies: Array.isArray(prediccion.especies)
+        ? prediccion.especies.map((item: any) => {
+            const seguro = { ...item };
+            delete seguro.formula;
+            delete seguro.temperaturaBase;
+            delete seguro.deltaHoras;
+            return seguro;
+          })
+        : prediccion.especies,
+    };
+    return salida as T;
+  }
+
+  private numeroOpcional(value: unknown): number | undefined {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : undefined;
+  }
+
+  private fraccionHumedad(value: unknown): number | undefined {
+    const number = this.numeroOpcional(value);
+    if (number === undefined || number < 0) return undefined;
+    return Math.min(number > 1 ? number / 100 : number, 1);
   }
 }

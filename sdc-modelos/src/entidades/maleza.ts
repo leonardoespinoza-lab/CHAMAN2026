@@ -1,5 +1,7 @@
 import { Cultivo } from "./crono";
 
+export const PREDICCION_MALEZAS_ENGINE_VERSION = "2.0";
+
 export type TModeloMaleza = "Gompertz HTT";
 
 export interface IParametrosGompertzMaleza {
@@ -26,11 +28,33 @@ export interface IRecomendacionMaleza {
 }
 
 export type TEstadoPrediccionMalezas =
-  "operativo" | "sin_modelos" | "no_aplica" | "sin_clima";
+  | "operativo"
+  | "sin_modelos"
+  | "no_aplica"
+  | "sin_clima";
 
 export type TSeveridadPrediccionMaleza = "baja" | "media" | "alta";
 
 export type TCalidadPrediccionMalezas = "alta" | "media" | "baja";
+
+export type TEstadoSuperficieMalezas =
+  | "suelo_expuesto"
+  | "vegetacion_incipiente"
+  | "cobertura_activa"
+  | "no_evaluable";
+
+export interface IContextoSatelitalMalezas {
+  estado: TEstadoSuperficieMalezas;
+  etiqueta: string;
+  fecha?: string;
+  confianza: "alta" | "media" | "baja";
+  coberturaValidaPct?: number;
+  ndvi?: number;
+  ndmi?: number;
+  savi?: number;
+  evi?: number;
+  observacion: string;
+}
 
 export interface IPrediccionMalezaDia {
   fecha?: string;
@@ -89,6 +113,7 @@ export interface IPrediccionMalezaEspecie {
 
 export interface IResultadoPrediccionMalezas {
   fecha?: string;
+  versionMotor?: string;
   idSiembra?: string;
   idLote?: string;
   cultivo?: Cultivo;
@@ -105,6 +130,7 @@ export interface IResultadoPrediccionMalezas {
     diasEvaluados?: number;
     recorteDias?: number;
   };
+  contextoSatelital?: IContextoSatelitalMalezas;
   especies?: IPrediccionMalezaEspecie[];
   trazas?: string[];
 }

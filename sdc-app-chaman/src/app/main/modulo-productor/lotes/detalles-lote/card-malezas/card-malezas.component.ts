@@ -1,12 +1,17 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
-import { IPrediccionMalezaEspecie, IResultadoPrediccionMalezas, ISiembra } from 'modelos/src';
+import {
+  IPrediccionMalezaEspecie,
+  IResultadoPrediccionMalezas,
+  ISiembra,
+  PREDICCION_MALEZAS_ENGINE_VERSION,
+} from 'modelos/src';
 import { SiembraService } from '../../../../../auxiliares/http/siembra.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetallesLote } from '../detalles-lote.component';
 
-const CULTIVOS_CON_PREDICCION_MALEZAS = ['Soja', 'Trigo', 'Maiz'];
+const CULTIVOS_CON_PREDICCION_MALEZAS = ['Soja', 'Trigo', 'Maiz', 'Papa', 'Cebada', 'Arveja'];
 
 @Component({
   selector: 'app-card-malezas',
@@ -60,7 +65,7 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
 
   public get resumenGeneral(): string {
     if (!this.cultivoCompatible) {
-      return 'Motor habilitado para trigo, soja y maiz.';
+      return 'Motor habilitado para cultivos anuales.';
     }
     if (this.prediccion?.resumen) {
       return this.normalizarNombres(this.prediccion.resumen);
@@ -90,10 +95,7 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
     this.malezaSeleccionada = undefined;
   }
 
-  public async actualizarPrediccion(
-    event?: Event,
-    options: { silent?: boolean; force?: boolean } = {}
-  ): Promise<void> {
+  public async actualizarPrediccion(event?: Event, options: { silent?: boolean; force?: boolean } = {}): Promise<void> {
     event?.stopPropagation();
     if (!this.siembra?._id || this.actualizando || !this.cultivoCompatible) return;
     if (!options.force && this.prediccionAlDia) return;
@@ -164,7 +166,9 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
 
   private prediccionEsDeHoy(prediccion?: IResultadoPrediccionMalezas): boolean {
     if (!prediccion?.fecha) return false;
-    return this.dateKey(prediccion.fecha) === this.hoyKey();
+    return (
+      prediccion.versionMotor === PREDICCION_MALEZAS_ENGINE_VERSION && this.dateKey(prediccion.fecha) === this.hoyKey()
+    );
   }
 
   private hoyKey(): string {

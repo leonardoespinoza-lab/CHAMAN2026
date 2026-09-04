@@ -113,9 +113,6 @@ export class AlgoritmosComponent {
     baseTermica: 8,
     humedadSueloPct: 55,
     lluvia7d: 18,
-    k: 0.038,
-    x0: 130,
-    amplitud: 92,
   };
 
   private readonly motorDefinitions: Record<MotorAuditableId, MotorDefinition> = {
@@ -134,7 +131,12 @@ export class AlgoritmosComponent {
           type: 'seed',
           helper: 'Lee la base real de semillas/variedades y sus resistencias cargadas.',
         },
-        { key: 'zona', label: 'Zona / departamento', type: 'text', helper: 'Referencia de influencia para crono y calibracion regional.' },
+        {
+          key: 'zona',
+          label: 'Zona / departamento',
+          type: 'text',
+          helper: 'Referencia de influencia para crono y calibracion regional.',
+        },
         {
           key: 'etapa',
           label: 'Etapa fenologica',
@@ -160,8 +162,18 @@ export class AlgoritmosComponent {
         { key: 'horasMojado', label: 'Horas de mojado', type: 'number', suffix: 'h' },
         { key: 'lluvia48h', label: 'Lluvia 48 h', type: 'number', suffix: 'mm' },
         { key: 'temperatura', label: 'Temperatura media', type: 'number', suffix: 'C' },
-        { key: 'diasSimulados', label: 'Dias simulados', type: 'number', helper: 'Necesario para modelos acumulativos como Mancha en Red y Fusariosis.' },
-        { key: 'susceptibilidad', label: 'Susceptibilidad base', type: 'number', helper: '0.05 tolerante, 1 susceptible; >1 muy susceptible.' },
+        {
+          key: 'diasSimulados',
+          label: 'Dias simulados',
+          type: 'number',
+          helper: 'Necesario para modelos acumulativos como Mancha en Red y Fusariosis.',
+        },
+        {
+          key: 'susceptibilidad',
+          label: 'Susceptibilidad base',
+          type: 'number',
+          helper: '0.05 tolerante, 1 susceptible; >1 muy susceptible.',
+        },
       ],
     },
     riego: {
@@ -190,12 +202,17 @@ export class AlgoritmosComponent {
     malezas: {
       title: 'Banco de prediccion de malezas',
       description:
-        'Evalua emergencia acumulada por cultivo y especie usando acumulacion termica, humedad de suelo, lluvia reciente y curva Gompertz.',
-      formula: 'Emergencia = amplitud x exp(-exp(-k x (GDA - x0))) ajustada por humedad y lluvia',
+        'Evalua emergencia potencial por especie con temperatura y humedad de la zona superficial de semillas.',
+      formula: 'Modelo propietario Chaman de emergencia hidrotermal',
       endpoint: 'POST /algoritmos/malezas/simular',
       persistencia: 'Motor productivo: /siembras/:id/prediccion-malezas',
       fields: [
-        { key: 'cultivo', label: 'Cultivo', type: 'select', options: ['Trigo', 'Soja', 'Maiz'] },
+        {
+          key: 'cultivo',
+          label: 'Cultivo',
+          type: 'select',
+          options: ['Soja', 'Trigo', 'Maiz', 'Papa', 'Cebada', 'Arveja'],
+        },
         {
           key: 'especie',
           label: 'Especie',
@@ -207,9 +224,6 @@ export class AlgoritmosComponent {
         { key: 'baseTermica', label: 'Base termica', type: 'number', suffix: 'C' },
         { key: 'humedadSueloPct', label: 'Humedad suelo', type: 'number', suffix: '%' },
         { key: 'lluvia7d', label: 'Lluvia 7 dias', type: 'number', suffix: 'mm' },
-        { key: 'k', label: 'K Gompertz', type: 'number' },
-        { key: 'x0', label: 'GDA punto medio', type: 'number' },
-        { key: 'amplitud', label: 'Emergencia maxima', type: 'number', suffix: '%' },
       ],
     },
   };
@@ -446,9 +460,7 @@ export class AlgoritmosComponent {
       return `No hay variedades cargadas para ${cultivo}. El banco permite simular manualmente, pero falta seed de catalogo.`;
     }
     const variedades = new Set(semillas.map((semilla) => this.normalizar(semilla.variedad)).filter(Boolean)).size;
-    const conResistencia = semillas.filter((semilla) =>
-      this.semillaTieneResistenciaEspecifica(semilla),
-    ).length;
+    const conResistencia = semillas.filter((semilla) => this.semillaTieneResistenciaEspecifica(semilla)).length;
     const conCrono = semillas.filter((semilla) => this.semillaTieneCrono(semilla)).length;
     return `${variedades} variedad(es) de ${cultivo}. ${conCrono} con crono/fenologia robusta y ${conResistencia} con resistencia varietal especifica.`;
   }
@@ -474,9 +486,7 @@ export class AlgoritmosComponent {
   }
 
   public seedOptionLabel(semilla: ISemilla): string {
-    return [semilla.variedad, semilla.ciclo, semilla.semillero, semilla.campania]
-      .filter(Boolean)
-      .join(' - ');
+    return [semilla.variedad, semilla.ciclo, semilla.semillero, semilla.campania].filter(Boolean).join(' - ');
   }
 
   public generarMotorPayload(): void {
@@ -508,7 +518,10 @@ export class AlgoritmosComponent {
     return id === 'enfermedades' || id === 'riego' || id === 'malezas';
   }
 
-  private async cargarSemillasCatalogo(cultivo = this.enfermedadesForm.cultivo, mantenerVariedad = true): Promise<void> {
+  private async cargarSemillasCatalogo(
+    cultivo = this.enfermedadesForm.cultivo,
+    mantenerVariedad = true
+  ): Promise<void> {
     this.semillasError = '';
     const query: IQueryParam = {
       page: 0,
@@ -570,9 +583,7 @@ export class AlgoritmosComponent {
       resistencia: semilla?.resistencia || this.enfermedadesForm.resistencia || [],
       calidadVarietal: {
         catalogoSemillas: !!semilla,
-        resistenciaEspecifica: semilla
-          ? this.semillaTieneResistenciaEspecifica(semilla)
-          : false,
+        resistenciaEspecifica: semilla ? this.semillaTieneResistenciaEspecifica(semilla) : false,
         cronoFenologico: semilla ? this.semillaTieneCrono(semilla) : false,
         observaciones: semilla?.observaciones,
       },

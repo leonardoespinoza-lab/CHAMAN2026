@@ -500,12 +500,14 @@ export class PrediccionsService {
         tipo: 'maleza',
         categoria: 'malezas',
         motor: 'prediccion-malezas',
-        versionMotor: 'v1',
+        versionMotor: resultado.versionMotor
+          ? `v${resultado.versionMotor}`
+          : 'sin-version',
         lectura: `${nombre}: emergencia proyectada ${Number(especie.emergenciaProyectada7dPct || 0).toFixed(1)}%.`,
         recomendacion: especie.recomendacion,
         calidadDatos: {
           nivel: 'media',
-          fuente: 'Acumulacion termica/hidrica y parametros de especie',
+          fuente: 'Semillero superficial modelado y parametros de especie',
           detalle:
             'Proyeccion diaria del motor de malezas; debe cruzarse con recorrida y cobertura real.',
         },

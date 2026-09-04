@@ -6,8 +6,8 @@
         <span>{{ resumenGeneral }}</span>
         @if (fechaUltimaPrediccion) {
           <small>
-            Actualizado {{ fechaUltimaPrediccion | date: 'dd/MM/yy, HH:mm' }} -
-            calidad {{ prediccion?.calidadDatos || 'media' }}
+            Actualizado {{ fechaUltimaPrediccion | date: 'dd/MM/yy, HH:mm' }} - calidad
+            {{ prediccion?.calidadDatos || 'media' }}
             @if (prediccionAlDia) {
               - al dia
             }
@@ -56,7 +56,7 @@
             <span class="status-pill">{{ item.estadoCorto }}</span>
             <strong>{{ nombreVisible(item) }}</strong>
             <span class="scientific-name">{{ item.nombreCientifico }}</span>
-            <span class="risk-value">{{ (item.avancePct || 0) | number: '1.0-1' }}%</span>
+            <span class="risk-value">{{ item.avancePct || 0 | number: '1.0-1' }}%</span>
             <span class="risk-track"><i></i></span>
             <small>{{ item.lecturaCorta }}</small>
           </button>
@@ -80,35 +80,39 @@
 >
   @if (malezaSeleccionada; as detalle) {
     <section class="weed-detail">
-      <div class="detail-hero" [class.high]="detalle.severidad === 'alta'" [class.medium]="detalle.severidad === 'media'">
+      <div
+        class="detail-hero"
+        [class.high]="detalle.severidad === 'alta'"
+        [class.medium]="detalle.severidad === 'media'"
+      >
         <div>
           <span>{{ detalle.estado }}</span>
           <strong>{{ nombreVisible(detalle) }}</strong>
           <small>{{ detalle.nombreCientifico || 'Especie sin nombre cientifico cargado' }}</small>
         </div>
-        <em>{{ (detalle.avancePct || 0) | number: '1.0-1' }}%</em>
+        <em>{{ detalle.avancePct || 0 | number: '1.0-1' }}%</em>
       </div>
 
       <div class="detail-meta">
-        <article>
-          <span>Modelo</span>
-          <strong>{{ detalle.modelo || 'Gompertz HTT' }}</strong>
-        </article>
         <article>
           <span>Fuente</span>
           <strong>{{ detalle.fuenteDatos }}</strong>
         </article>
         <article>
-          <span>HTT total</span>
-          <strong>{{ (detalle.httTotal || 0) | number: '1.0-1' }}</strong>
+          <span>Calidad de datos</span>
+          <strong>{{ detalle.calidadDatos || prediccion?.calidadDatos || '-' }}</strong>
         </article>
         <article>
           <span>Emergencia 7d</span>
-          <strong>{{ (detalle.emergenciaProyectada7dPct || 0) | number: '1.0-1' }}%</strong>
+          <strong>{{ detalle.emergenciaProyectada7dPct || 0 | number: '1.0-1' }}%</strong>
+        </article>
+        <article>
+          <span>Estado de la superficie</span>
+          <strong>{{ $any(prediccion).contextoSatelital?.etiqueta || 'Sin escena reciente' }}</strong>
         </article>
       </div>
 
-      <div class="detail-grid">
+      <div class="detail-grid single">
         <article class="detail-panel">
           <span>Lectura agronomica</span>
           <p>{{ detalle.recomendacion }}</p>
@@ -117,30 +121,12 @@
             <small>{{ detalle.observaciones }}</small>
           }
         </article>
-
-        <article class="detail-panel">
-          <span>Calculo del motor</span>
-          <p>{{ detalle.formula }}</p>
-          <small>HTT diario = max(0, temperatura media - base) x factor hidrico x delta horas.</small>
-        </article>
       </div>
 
       <div class="variable-list">
         <article>
-          <span>HTT historico</span>
-          <strong>{{ (detalle.httHistorico || 0) | number: '1.0-1' }}</strong>
-        </article>
-        <article>
-          <span>HTT 7 dias</span>
-          <strong>{{ (detalle.httProyectado7d || 0) | number: '1.0-1' }}</strong>
-        </article>
-        <article>
           <span>Emergencia actual</span>
-          <strong>{{ (detalle.emergenciaActualPct || 0) | number: '1.0-1' }}%</strong>
-        </article>
-        <article>
-          <span>Calidad datos</span>
-          <strong>{{ detalle.calidadDatos || prediccion?.calidadDatos || '-' }}</strong>
+          <strong>{{ detalle.emergenciaActualPct || 0 | number: '1.0-1' }}%</strong>
         </article>
         <article>
           <span>Temp. referencia</span>
@@ -148,7 +134,7 @@
             @if (detalle.temperaturaReferencia !== undefined) {
               {{ detalle.temperaturaReferencia | number: '1.0-1' }} C
             } @else {
-              Open-Meteo
+              Sin dato superficial
             }
           </strong>
         </article>
@@ -158,17 +144,9 @@
             @if (detalle.humedadReferencia !== undefined) {
               {{ detalle.humedadReferencia * 100 | number: '1.0-0' }}%
             } @else {
-              Proxy hidrico
+              Sin dato superficial
             }
           </strong>
-        </article>
-        <article>
-          <span>Base termica</span>
-          <strong>{{ detalle.temperaturaBase || 0 }} C</strong>
-        </article>
-        <article>
-          <span>Delta</span>
-          <strong>{{ detalle.deltaHoras || 24 }} h</strong>
         </article>
       </div>
 
@@ -183,13 +161,13 @@
               <article>
                 <div>
                   <span>E{{ umbral.porcentaje }}</span>
-                  <strong>{{ (umbral.progreso || 0) | number: '1.0-0' }}%</strong>
+                  <strong>{{ umbral.progreso || 0 | number: '1.0-0' }}%</strong>
                 </div>
                 <div class="threshold-bar">
                   <i [style.width.%]="umbral.progreso || 0"></i>
                 </div>
                 <small>
-                  {{ (umbral.horasTermicas || 0) | number: '1.0-0' }} HTT - {{ umbral.estado }}
+                  {{ umbral.estado }}
                   @if (umbral.fechaEstimada) {
                     - {{ umbral.fechaEstimada | date: 'dd/MM' }}
                   }
@@ -215,20 +193,6 @@
                   <small>{{ recomendacion.detalle }}</small>
                 }
               </article>
-            }
-          </div>
-        </section>
-      }
-
-      @if (prediccion?.trazas?.length) {
-        <section class="recommendation-panel">
-          <div class="section-heading">
-            <span>Trazabilidad</span>
-            <strong>Motor backend persistido por siembra</strong>
-          </div>
-          <div class="trace-list">
-            @for (traza of prediccion?.trazas; track traza) {
-              <small>{{ traza }}</small>
             }
           </div>
         </section>

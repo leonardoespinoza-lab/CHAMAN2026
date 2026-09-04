@@ -52,7 +52,7 @@ import { CardVisitasLoteComponent } from './card-visitas-lote/card-visitas-lote.
 import { CardDemandaHidricaComponent } from './card-demanda-hidrica/card-demanda-hidrica.component';
 import { WATER_DEMAND_CARD_ENABLED } from '../../../../environments/environment';
 
-const CULTIVOS_CON_PREDICCION_MALEZAS = ['Soja', 'Trigo', 'Maiz'];
+const CULTIVOS_CON_PREDICCION_MALEZAS = ['Soja', 'Trigo', 'Maiz', 'Papa', 'Cebada', 'Arveja'];
 
 export interface IDetalleSiembra extends ISiembra {
   fumigaciones?: IFumigacion[];
@@ -214,7 +214,9 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
 
     this.confirmationService.confirm({
       header: this.translate.instant('Por favor, confirme la accion'),
-      message: this.translate.instant('¿Desea archivar el lote? Sus reportes e históricos quedarán preservados para auditoría.'),
+      message: this.translate.instant(
+        '¿Desea archivar el lote? Sus reportes e históricos quedarán preservados para auditoría.'
+      ),
       closable: true,
       closeOnEscape: true,
       icon: 'pi pi-exclamation-triangle',
@@ -427,17 +429,20 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
 
   private programarEnfoqueManejo(intento = 0): void {
     if (typeof document === 'undefined') return;
-    setTimeout(() => {
-      if (this.destroyed) return;
-      const seccion = document.getElementById('manejo-cultivo');
-      if (seccion) {
-        seccion.scrollIntoView({ behavior: intento ? 'auto' : 'smooth', block: 'start' });
-        return;
-      }
-      if (intento < 30) {
-        this.programarEnfoqueManejo(intento + 1);
-      }
-    }, intento ? 50 : 0);
+    setTimeout(
+      () => {
+        if (this.destroyed) return;
+        const seccion = document.getElementById('manejo-cultivo');
+        if (seccion) {
+          seccion.scrollIntoView({ behavior: intento ? 'auto' : 'smooth', block: 'start' });
+          return;
+        }
+        if (intento < 30) {
+          this.programarEnfoqueManejo(intento + 1);
+        }
+      },
+      intento ? 50 : 0
+    );
   }
 
   private getSiembraOperativa(): IDetalleSiembra | undefined {

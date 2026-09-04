@@ -13,6 +13,7 @@ import { IndicadoresAgrometeorologicosModule } from '../indicador-agrometeorolog
 import { AgrometeorologiaStorageGuard } from '../../auxiliares/agrometeorologia-storage.guard';
 import { PrediccionsModule } from '../prediccion/module';
 import { AlertasModule } from '../alerta/module';
+import { ReporteNDVIsModule } from '../reporte-ndvis/module';
 
 @Module({
   controllers: [SiembrasController],
@@ -32,6 +33,7 @@ import { AlertasModule } from '../alerta/module';
     IndicadoresAgrometeorologicosModule,
     PrediccionsModule,
     AlertasModule,
+    ReporteNDVIsModule,
   ],
 })
 export class SiembrasModule {}

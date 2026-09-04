@@ -1,12 +1,13 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import {
-  IDispositivo,
+  CULTIVOS_ANUALES,
   IHuellaHidrica,
   ILote,
   IMaleza,
   IPrediccionMalezaDia,
   IPrediccionMalezaEspecie,
   IPrediccionMalezaUmbral,
+  PREDICCION_MALEZAS_ENGINE_VERSION,
   IResultadoPrediccionMalezas,
   ISiembra,
   TCalidadPrediccionMalezas,
@@ -59,6 +60,13 @@ import {
   TRIGO_FUSARIUM_GDD_BASE_0_MAX,
   TRIGO_MOTOR_SANITARIO_VERSION,
 } from 'modelos/src';
+import {
+  calcularSerieHidrotermalMalezas,
+  combinarClimaSemillero,
+  ContextoSatelitalMalezas,
+  DiaClimaMalezas,
+  diasSemilleroDesdeOpenMeteo,
+} from './malezas-semillero.engine';
 
 export interface AlgoritmoCatalogo {
   id: string;
@@ -97,19 +105,6 @@ export interface ReadinessCultivoCatalogo {
   faltantes: string[];
 }
 
-interface DiaClimaMalezas {
-  fecha: string;
-  tipo: 'historico' | 'pronostico';
-  temperaturaMedia?: number;
-  lluviaMm?: number;
-  et0Mm?: number;
-}
-
-interface SensorSueloReferencia {
-  temperatura?: number;
-  humedad?: number;
-}
-
 interface ResistenciaSimulador {
   idEnfermedad?: string;
   enfermedad?: string;
@@ -127,7 +122,7 @@ interface ResistenciaSimulador {
 @Injectable()
 export class AlgoritmosService {
   private readonly logger = new Logger(AlgoritmosService.name);
-  private readonly cultivosMalezas = ['Trigo', 'Soja', 'Maiz'];
+  private readonly cultivosMalezas: readonly string[] = [...CULTIVOS_ANUALES];
   private readonly diasPronosticoMalezas = 7;
   private readonly maxDiasHistoricoMalezas = 180;
 
@@ -210,11 +205,12 @@ export class AlgoritmosService {
         nombre: 'Prediccion de malezas',
         estado: 'auditable',
         descripcion:
-          'Evalua emergencia de malezas para trigo, soja y maiz usando acumulacion termica/hidrica y parametros Gompertz.',
+          'Evalua emergencia potencial del banco de semillas en cultivos anuales usando temperatura y humedad de los primeros centimetros del suelo.',
         inputs: [
-          'Cultivo',
-          'Temperatura',
-          'Humedad/lluvia',
+          'Lote y cultivo anual activo',
+          'Temperatura de suelo superficial',
+          'Humedad volumetrica de suelo superficial',
+          'Contexto de cobertura satelital',
           'Parametros por especie',
         ],
         outputs: [
@@ -231,7 +227,7 @@ export class AlgoritmosService {
   }
 
   async getReadinessCatalogos() {
-    const cultivos = ['Trigo', 'Cebada', 'Soja', 'Maiz', 'Arveja'];
+    const cultivos = [...CULTIVOS_ANUALES];
     const resultados = await Promise.all(
       cultivos.map((cultivo) => this.getReadinessCultivo(cultivo)),
     );
@@ -242,7 +238,7 @@ export class AlgoritmosService {
         semillas: 1,
         enfermedades: 1,
         cronos: 1,
-        malezas: 'obligatorio solo para Trigo, Soja y Maiz',
+        malezas: 'obligatorio para cultivos anuales',
       },
       cultivos: resultados,
     };
@@ -271,7 +267,12 @@ export class AlgoritmosService {
         }),
         this.countByFilter(this.enfermedadsService, { cultivo }),
         this.countByFilter(this.cronosService, { cultivo }),
-        this.countByFilter(this.malezasService, { cultivosObjetivo: cultivo }),
+        this.countByFilter(
+          this.malezasService,
+          this.cultivosMalezas.includes(cultivo)
+            ? {}
+            : { cultivosObjetivo: cultivo },
+        ),
       ],
     );
     const filasSemillas = Array.isArray(catalogoSemillas?.datos)
@@ -1304,7 +1305,7 @@ export class AlgoritmosService {
     const x0 = Number(body?.x0 ?? 130);
     const amplitud = Number(body?.amplitud ?? 92);
 
-    const cultivosPermitidos = ['Trigo', 'Soja', 'Maiz'];
+    const cultivosPermitidos = this.cultivosMalezas;
     const habilitado = cultivosPermitidos.includes(cultivo);
     let gradosDia = 0;
     const humedadFactor = this.clamp(
@@ -1328,7 +1329,7 @@ export class AlgoritmosService {
       motor: 'malezas',
       resumen: habilitado
         ? `${especie}: emergencia acumulada ${this.round(ultimo, 1)}%`
-        : `No aplica para ${cultivo}; malezas solo se habilita en trigo, soja y maiz.`,
+        : `No aplica para ${cultivo}; el motor se habilita en cultivos anuales.`,
       metricas: {
         cultivo,
         especie,
@@ -1340,10 +1341,10 @@ export class AlgoritmosService {
       },
       serie,
       trazas: [
-        'Curva Gompertz: emergencia = A x exp(-exp(-k x (grados dia - x0))).',
-        'Los grados dia se ajustan por humedad de suelo y lluvia reciente.',
+        'Modelo propietario Chaman de emergencia hidrotermal.',
+        'La respuesta combina temperatura y humedad de la zona de semillas.',
         habilitado
-          ? 'Motor habilitado para trigo, soja y maiz.'
+          ? 'Motor habilitado para cultivos anuales.'
           : `Cultivo ${cultivo} fuera del alcance operativo del motor de malezas.`,
       ],
     };
@@ -1409,6 +1410,8 @@ export class AlgoritmosService {
   async calcularPrediccionMalezas(params: {
     siembra: ISiembra;
     lote: ILote;
+    climaCanonico?: DiaClimaMalezas[];
+    contextoSatelital?: ContextoSatelitalMalezas;
   }): Promise<IResultadoPrediccionMalezas> {
     const siembra = params.siembra;
     const lote = params.lote;
@@ -1416,6 +1419,7 @@ export class AlgoritmosService {
     const fecha = new Date().toISOString();
     const baseResultado: IResultadoPrediccionMalezas = {
       fecha,
+      versionMotor: PREDICCION_MALEZAS_ENGINE_VERSION,
       idSiembra: siembra._id,
       idLote: lote._id || siembra.idLote,
       cultivo,
@@ -1469,34 +1473,47 @@ export class AlgoritmosService {
       this.diasPronosticoMalezas - 1,
     );
     const fechaSiembra = this.toDateKey(siembra.fechaSiembra || hoy);
-    const maxDiasClima = OPEN_METEO_ARCHIVE_ENABLED
-      ? this.maxDiasHistoricoMalezas
-      : Math.min(this.maxDiasHistoricoMalezas, 91);
-    const desdeMaximo = this.shiftDateKey(hoy, -maxDiasClima);
+    // La ventana del motor no depende de contratar Open-Meteo Archive:
+    // Open-Meteo aporta su tramo superficial disponible y la serie canonica
+    // Chaman-Meteo completa los dias anteriores que ya fueron normalizados.
+    const desdeMaximo = this.shiftDateKey(
+      hoy,
+      -this.maxDiasHistoricoMalezas,
+    );
     const desde = fechaSiembra > desdeMaximo ? fechaSiembra : desdeMaximo;
     const recorteDias =
       fechaSiembra < desde ? this.diffDias(fechaSiembra, desde) : 0;
 
-    let clima: DiaClimaMalezas[] = [];
+    const climaCanonico = (params.climaCanonico || []).filter(
+      (dia) => dia.fecha >= desde && dia.fecha <= hastaPronostico,
+    );
+    let climaOpenMeteo: DiaClimaMalezas[] = [];
     try {
-      clima = await this.getClimaMalezasOpenMeteo(
+      climaOpenMeteo = await this.getClimaMalezasOpenMeteo(
         centro.lat,
         centro.lng,
         desde,
         hastaPronostico,
       );
     } catch (error) {
-      this.logger.error(`Error al calcular malezas ${siembra._id}: ${error}`);
-      return {
-        ...baseResultado,
-        estado: 'sin_clima',
-        resumen: `${cultivo}: no se pudo obtener clima historico/proyectado.`,
-        calidadDatos: 'baja',
-        trazas: [
-          'Open-Meteo no respondio para la ventana de malezas. No se actualizo la prediccion persistida.',
-        ],
-      };
+      if (!climaCanonico.length) {
+        this.logger.error(`Error al calcular malezas ${siembra._id}: ${error}`);
+        return {
+          ...baseResultado,
+          estado: 'sin_clima',
+          resumen: `${cultivo}: no se pudo obtener clima historico/proyectado.`,
+          calidadDatos: 'baja',
+          trazas: [
+            'No hay una serie meteorologica utilizable para el periodo.',
+          ],
+        };
+      }
+      this.logger.warn(
+        `Open-Meteo no disponible para malezas ${siembra._id}; se conserva la serie canonica: ${error?.message || error}`,
+      );
     }
+
+    const clima = combinarClimaSemillero(climaOpenMeteo, climaCanonico);
 
     if (!clima.length) {
       return {
@@ -1517,10 +1534,7 @@ export class AlgoritmosService {
       };
     }
 
-    const sensor = this.getSensorSueloReferencia(lote);
-    const especies = modelos.map((maleza) =>
-      this.evaluarMaleza(maleza, clima, sensor),
-    );
+    const especies = modelos.map((maleza) => this.evaluarMaleza(maleza, clima));
     const mayor = [...especies].sort(
       (a, b) => Number(b.avancePct || 0) - Number(a.avancePct || 0),
     )[0];
@@ -1530,21 +1544,14 @@ export class AlgoritmosService {
     const diasPronostico = clima.filter(
       (dia) => dia.tipo === 'pronostico',
     ).length;
-    const calidadDatos = this.calidadPrediccionMalezas(
-      sensor,
-      diasHistorico,
-      diasPronostico,
-    );
+    const calidadDatos = this.calidadPrediccionMalezas(clima);
 
     return {
       ...baseResultado,
       resumen: mayor
         ? `${cultivo}: mayor avance en ${mayor.nombre || 'maleza'} (${this.round(mayor.avancePct || 0, 1)}%).`
         : `${cultivo}: sin especies evaluadas.`,
-      fuenteDatos:
-        sensor.temperatura !== undefined || sensor.humedad !== undefined
-          ? 'Open-Meteo + sensor de suelo'
-          : 'Open-Meteo historico/proyectado',
+      fuenteDatos: this.fuentesMalezas(clima),
       calidadDatos,
       periodo: {
         desde,
@@ -1555,11 +1562,12 @@ export class AlgoritmosService {
         diasEvaluados: clima.length,
         recorteDias,
       },
+      contextoSatelital: params.contextoSatelital,
       especies,
       trazas: [
-        'HTT diario = max(0, temperatura media - base termica) x factor hidrico x delta horas.',
-        'Factor hidrico = 1 / (1 + exp((theta50 - humedad) / escala)).',
-        'Emergencia Gompertz = K x exp(-exp(-beta x (HTT acumulado - mu))).',
+        'Prediccion calculada sobre la zona de semillas 0-5 cm. Las sondas profundas se excluyen del calculo hidrotermal.',
+        params.contextoSatelital?.observacion ||
+          'Sin escena satelital operativa reciente; el calculo hidrotermal se conserva sin ajuste satelital.',
         recorteDias > 0
           ? `La siembra excedia la ventana operativa; se recortaron ${recorteDias} dias iniciales y se evaluo desde ${desde}.`
           : `Acumulacion desde fecha de siembra: ${desde}.`,
@@ -1577,9 +1585,12 @@ export class AlgoritmosService {
     return Math.round(rendimiento * (100 / (100 + humedad)) * 100) / 100;
   }
 
-  private async getModelosMalezas(cultivo: string): Promise<IMaleza[]> {
+  private async getModelosMalezas(_cultivo: string): Promise<IMaleza[]> {
     const response = await this.malezasService.getFilter({
-      filter: JSON.stringify({ cultivosObjetivo: cultivo }),
+      // La emergencia pertenece al banco de semillas del lote. El campo
+      // cultivosObjetivo se conserva como metadata legacy de validacion, pero
+      // no limita biologicamente una especie a trigo, soja o maiz.
+      filter: JSON.stringify({}),
       sort: 'nombre',
     });
     return response.datos || [];
@@ -1588,7 +1599,6 @@ export class AlgoritmosService {
   private evaluarMaleza(
     maleza: IMaleza,
     clima: DiaClimaMalezas[],
-    sensor: SensorSueloReferencia,
   ): IPrediccionMalezaEspecie {
     const parametros = maleza.parametros || {};
     const base = Number(parametros.temperaturaBase ?? 0);
@@ -1598,49 +1608,21 @@ export class AlgoritmosService {
     const k = Number(parametros.kMaxPorcentaje ?? 100);
     const beta = Number(parametros.beta ?? 0);
     const mu = Number(parametros.muHorasTermicas ?? 0);
-    let httAcumulado = 0;
-    let httHistorico = 0;
-    let httProyectado7d = 0;
-
-    const serie: IPrediccionMalezaDia[] = clima.map((dia) => {
-      const usarSensor = dia.tipo === 'pronostico';
-      const temperatura =
-        usarSensor && sensor.temperatura !== undefined
-          ? sensor.temperatura
-          : (this.toNumber(dia.temperaturaMedia) ?? 0);
-      const humedad =
-        usarSensor && sensor.humedad !== undefined
-          ? sensor.humedad
-          : this.humedadProxyMalezas(dia);
-      const factorTermico = Math.max(0, temperatura - base);
-      const factorHidrico = 1 / (1 + Math.exp((theta50 - humedad) / escala));
-      const httDia = factorTermico * factorHidrico * deltaHoras;
-      httAcumulado += httDia;
-
-      if (dia.tipo === 'historico') {
-        httHistorico += httDia;
-      } else {
-        httProyectado7d += httDia;
-      }
-
-      return {
-        fecha: dia.fecha,
-        tipo: dia.tipo,
-        temperaturaMedia: this.round(temperatura, 1),
-        lluviaMm: this.round(dia.lluviaMm || 0, 1),
-        et0Mm: this.round(dia.et0Mm || 0, 1),
-        humedadSueloPct: this.round(humedad * 100, 0),
-        factorHidrico: this.round(factorHidrico, 3),
-        httDia: this.round(httDia, 1),
-        httAcumulado: this.round(httAcumulado, 1),
-        emergenciaPct: this.gompertz(httAcumulado, k, beta, mu),
-        fuente:
-          usarSensor &&
-          (sensor.temperatura !== undefined || sensor.humedad !== undefined)
-            ? 'Open-Meteo + sensor'
-            : 'Open-Meteo',
-      };
+    const hidrotermal = calcularSerieHidrotermalMalezas(clima, {
+      temperaturaBase: base,
+      humedadTheta50: theta50,
+      humedadEscala: escala > 0 ? escala : 0.03,
+      deltaHorasDiario: deltaHoras > 0 ? deltaHoras : 24,
+      emergencia: (htt) => this.gompertz(htt, k, beta, mu),
     });
+    const {
+      serie,
+      httHistorico,
+      httProyectado7d,
+      httTotal: httAcumulado,
+      temperaturaReferencia,
+      humedadReferencia,
+    } = hidrotermal;
 
     const emergenciaActualPct = this.gompertz(httHistorico, k, beta, mu);
     const emergenciaProyectada7dPct = this.gompertz(httAcumulado, k, beta, mu);
@@ -1653,11 +1635,7 @@ export class AlgoritmosService {
       avancePct,
       emergenciaProyectada7dPct,
     );
-    const calidadDatos = this.calidadPrediccionMalezas(
-      sensor,
-      clima.filter((dia) => dia.tipo === 'historico').length,
-      clima.filter((dia) => dia.tipo === 'pronostico').length,
-    );
+    const calidadDatos = this.calidadPrediccionMalezas(clima);
 
     return {
       idMaleza: String(maleza._id || ''),
@@ -1672,8 +1650,8 @@ export class AlgoritmosService {
       httHistorico: this.round(httHistorico, 1),
       httProyectado7d: this.round(httProyectado7d, 1),
       httTotal: this.round(httAcumulado, 1),
-      temperaturaReferencia: sensor.temperatura,
-      humedadReferencia: sensor.humedad,
+      temperaturaReferencia: this.round(temperaturaReferencia, 1),
+      humedadReferencia: this.round(humedadReferencia, 3),
       severidad,
       estado:
         severidad === 'alta'
@@ -1694,15 +1672,9 @@ export class AlgoritmosService {
         progresoE10,
       ),
       recomendacion: this.recomendacionMaleza(severidad, maleza),
-      fuenteDatos:
-        sensor.temperatura !== undefined || sensor.humedad !== undefined
-          ? 'Open-Meteo + sensor de suelo'
-          : 'Open-Meteo historico/proyectado',
-      detalleFuente: this.detalleFuenteMalezas(sensor, clima.length),
-      formula: `Emergencia = K x exp(-exp(-beta x (HTT - mu))). K=${k || '-'}, beta=${beta || '-'}, mu=${mu || '-'} HTT.`,
+      fuenteDatos: this.fuentesMalezas(clima),
+      detalleFuente: this.detalleFuenteMalezas(clima),
       calidadDatos,
-      temperaturaBase: base,
-      deltaHoras,
       umbrales,
       recomendaciones: maleza.recomendaciones || [],
       observaciones: maleza.observaciones,
@@ -1808,115 +1780,52 @@ export class AlgoritmosService {
     return 'Mantener seguimiento; usar recorrida para validar nacimientos y ajustar residualidad.';
   }
 
-  private detalleFuenteMalezas(
-    sensor: SensorSueloReferencia,
-    dias: number,
-  ): string {
-    const temp =
-      sensor.temperatura !== undefined
-        ? `${this.round(sensor.temperatura, 1)} C de suelo como referencia de arranque`
-        : 'temperatura media diaria de Open-Meteo';
-    const humedad =
-      sensor.humedad !== undefined
-        ? `${this.round(sensor.humedad * 100, 0)}% de humedad de suelo como referencia de arranque`
-        : 'proxy hidrico diario por lluvia y ET0';
-    return `Acumula ${dias} dias con ${temp} y ${humedad}.`;
+  private detalleFuenteMalezas(clima: DiaClimaMalezas[]): string {
+    const validos = clima.filter((dia) => this.diaSemilleroValido(dia)).length;
+    return `Acumula ${validos} dias con temperatura y humedad del semillero 0-5 cm; no utiliza sondas profundas.`;
+  }
+
+  private fuentesMalezas(clima: DiaClimaMalezas[]): string {
+    const fuentes = [
+      ...new Set(clima.map((dia) => dia.fuente).filter(Boolean)),
+    ];
+    return fuentes.length
+      ? fuentes.join(' + ')
+      : 'modelo meteorologico superficial';
   }
 
   private calidadPrediccionMalezas(
-    sensor: SensorSueloReferencia,
-    diasHistorico: number,
-    diasPronostico: number,
+    clima: DiaClimaMalezas[],
   ): TCalidadPrediccionMalezas {
-    const tieneSensorCompleto =
-      sensor.temperatura !== undefined && sensor.humedad !== undefined;
-    if (tieneSensorCompleto && diasHistorico >= 14 && diasPronostico >= 3)
+    const validos = clima.filter((dia) => this.diaSemilleroValido(dia));
+    const diasHistorico = validos.filter(
+      (dia) => dia.tipo === 'historico',
+    ).length;
+    const diasPronostico = validos.filter(
+      (dia) => dia.tipo === 'pronostico',
+    ).length;
+    const coberturas = validos
+      .map((dia) => dia.coberturaHorariaPct)
+      .filter((value): value is number => value !== undefined);
+    const coberturaMedia = coberturas.length
+      ? coberturas.reduce((sum, value) => sum + value, 0) / coberturas.length
+      : 0;
+    if (diasHistorico >= 14 && diasPronostico >= 3 && coberturaMedia >= 75) {
       return 'alta';
+    }
     if (diasHistorico >= 7 && diasPronostico >= 3) return 'media';
     return 'baja';
   }
 
-  private getSensorSueloReferencia(lote: ILote): SensorSueloReferencia {
-    const dispositivo = lote.dispositivos?.find(
-      (item) => item.tipo === 'Sensor de Humedad de Suelo',
-    );
-    return {
-      temperatura: this.promedioValoresSensor(dispositivo, 'Temperatura Suelo'),
-      humedad: this.humedadSueloReferencia(dispositivo),
-    };
-  }
-
-  private promedioValoresSensor(
-    dispositivo: IDispositivo | undefined,
-    sensor: string,
-  ): number | undefined {
-    const valores = (dispositivo?.ultimoReporte?.datos?.valores as any)?.[
-      sensor
-    ];
-    if (!Array.isArray(valores)) return undefined;
-    const numeros = valores
-      .slice(0, 3)
-      .map((item) =>
-        this.toNumber(item?.valores?.actual ?? item?.valores?.promedio),
-      )
-      .filter((valor): valor is number => valor !== undefined);
-    if (!numeros.length) return undefined;
-    return numeros.reduce((sum, value) => sum + value, 0) / numeros.length;
-  }
-
-  private humedadSueloReferencia(
-    dispositivo: IDispositivo | undefined,
-  ): number | undefined {
-    const valores =
-      (dispositivo?.ultimoReporte?.datos?.valores as any)?.[
-        'Humedad Suelo Profundidad'
-      ] ||
-      (dispositivo?.ultimoReporte?.datos?.valores as any)?.[
-        'Humedad Suelo Superficial'
-      ];
-    if (!Array.isArray(valores)) return undefined;
-    const numeros = valores
-      .slice(0, 3)
-      .map((item) =>
-        this.normalizarHumedadSensor(
-          this.toNumber(item?.valores?.actual ?? item?.valores?.promedio),
-          item?.unidad,
-        ),
-      )
-      .filter((valor): valor is number => valor !== undefined);
-    if (!numeros.length) return undefined;
-    const promedio =
-      numeros.reduce((sum, value) => sum + value, 0) / numeros.length;
-    return this.clamp(promedio / 100, 0, 1);
-  }
-
-  private normalizarHumedadSensor(
-    value: number | undefined,
-    unidad?: string,
-  ): number | undefined {
-    if (value === undefined) return undefined;
-    const unidadNormalizada = String(unidad || '')
-      .toLowerCase()
-      .replace(/\s/g, '');
-    if (value > 100 && value <= 300) return (value / 300) * 100;
-    if (unidadNormalizada.includes('%')) return this.clamp(value, 0, 100);
-    if (
-      (unidadNormalizada.includes('m3/m3') ||
-        unidadNormalizada.includes('vwc')) &&
-      value >= 0 &&
-      value <= 1
-    ) {
-      return value * 100;
+  private diaSemilleroValido(dia: DiaClimaMalezas): boolean {
+    if (dia.horas?.length) {
+      return dia.horas.some(
+        (hora) =>
+          hora.temperaturaSuelo !== undefined &&
+          hora.humedadSuelo !== undefined,
+      );
     }
-    if (value >= 0 && value <= 3) return (value / 3) * 100;
-    if (value > 300 && value <= 1000) return value / 10;
-    return this.clamp(value, 0, 100);
-  }
-
-  private humedadProxyMalezas(dia: DiaClimaMalezas): number {
-    const lluvia = Number(dia.lluviaMm || 0);
-    const et0 = Number(dia.et0Mm || 0);
-    return this.clamp(0.12 + lluvia / 90 - et0 / 80, 0.05, 0.45);
+    return dia.temperaturaSuelo !== undefined && dia.humedadSuelo !== undefined;
   }
 
   private gompertz(htt: number, k: number, beta: number, mu: number): number {
@@ -2572,13 +2481,30 @@ export class AlgoritmosService {
     hasta: string,
   ): Promise<DiaClimaMalezas[]> {
     if (desde > hasta) return [];
-    const data = await this.fetchOpenMeteoDaily(
+    const hourly =
+      tipo === 'forecast'
+        ? [
+            'soil_temperature_0cm',
+            'soil_temperature_6cm',
+            'soil_moisture_0_to_1cm',
+            'soil_moisture_1_to_3cm',
+            'soil_moisture_3_to_9cm',
+            'precipitation',
+            'et0_fao_evapotranspiration',
+          ].join(',')
+        : [
+            'soil_temperature_0_to_7cm',
+            'soil_moisture_0_to_7cm',
+            'precipitation',
+            'et0_fao_evapotranspiration',
+          ].join(',');
+    const data = await this.fetchOpenMeteoHourly(
       tipo,
       lat,
       lng,
       desde,
       hasta,
-      'temperature_2m_mean,precipitation_sum,et0_fao_evapotranspiration',
+      hourly,
       'malezas',
     );
     if (!data) {
@@ -2586,17 +2512,36 @@ export class AlgoritmosService {
         'No se pudo obtener clima Open-Meteo para calcular malezas.',
       );
     }
-    const fechas: string[] = data?.daily?.time || [];
-    const temperaturas: number[] = data?.daily?.temperature_2m_mean || [];
-    const lluvias: number[] = data?.daily?.precipitation_sum || [];
-    const et0: number[] = data?.daily?.et0_fao_evapotranspiration || [];
-    return fechas.map((fecha, index) => ({
-      fecha,
-      tipo: tipo === 'archive' ? 'historico' : 'pronostico',
-      temperaturaMedia: this.toNumber(temperaturas[index]),
-      lluviaMm: Number(lluvias[index] || 0),
-      et0Mm: Number(et0[index] || 0),
-    }));
+    return diasSemilleroDesdeOpenMeteo(
+      data,
+      this.toDateKey(new Date().toISOString()),
+    );
+  }
+
+  private async fetchOpenMeteoHourly(
+    tipo: 'archive' | 'forecast',
+    lat: number,
+    lng: number,
+    desde: string,
+    hasta: string,
+    hourly: string,
+    contexto: string,
+  ): Promise<any | null> {
+    const base =
+      tipo === 'archive'
+        ? `${OPEN_METEO_ARCHIVE_BASE_URL}/archive`
+        : `${OPEN_METEO_FORECAST_BASE_URL}/forecast`;
+    const url = new URL(base);
+    url.searchParams.set('latitude', String(lat));
+    url.searchParams.set('longitude', String(lng));
+    url.searchParams.set('start_date', desde);
+    url.searchParams.set('end_date', hasta);
+    url.searchParams.set('hourly', hourly);
+    url.searchParams.set('timezone', 'America/Argentina/Buenos_Aires');
+    return this.openMeteoClient.getJson<any>(
+      url,
+      `${contexto} ${tipo} horario ${desde}/${hasta}`,
+    );
   }
 
   private async fetchOpenMeteoDaily(
