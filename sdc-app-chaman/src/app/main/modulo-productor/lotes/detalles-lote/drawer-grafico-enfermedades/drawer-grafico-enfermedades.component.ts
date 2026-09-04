@@ -235,8 +235,8 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
           data: serie.data,
           connectNulls: false,
           lineWidth: 4,
-          dashStyle: serie.tieneLecturas ? 'Solid' : 'ShortDot',
-          opacity: serie.tieneLecturas ? 1 : 0.62,
+          dashStyle: 'Solid',
+          opacity: 1,
           showInLegend: true,
           custom: {
             idEnfermedad: serie.idEnfermedad,

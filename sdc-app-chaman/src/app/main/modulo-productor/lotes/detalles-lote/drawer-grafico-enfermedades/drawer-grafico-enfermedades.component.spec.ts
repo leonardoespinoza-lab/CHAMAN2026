@@ -87,4 +87,30 @@ describe('DrawerGraficoEnfermedadesComponent - grafico principal', () => {
     ]);
     expect(nombres.some((nombre) => /v\d|oportunidad|sin curva/i.test(nombre))).toBeFalse();
   });
+
+  it('representa todas las enfermedades de trigo con lineas solidas', () => {
+    const componente = crear();
+    componente.siembra = { semilla: { cultivo: 'Trigo' } } as any;
+    componente.predicciones = [
+      {
+        fecha: '2026-07-10T03:00:00.000Z',
+        enfermedades: [
+          {
+            enfermedad: 'Roya de la Hoja',
+            idEnfermedad: 'trigo.roya_hoja',
+            resultado: 21,
+            estado: 'calculado',
+            modelo: { id: 'trigo.roya_hoja', version: 5, fuente: 'contrato v5' },
+          },
+        ],
+      } as any,
+    ];
+
+    (componente as any).crearGraficoPrediccionesTrigo();
+    const series = (componente.chartOptions?.series || []) as any[];
+
+    expect(series).toHaveSize(5);
+    expect(series.every((serie) => serie.dashStyle === 'Solid')).toBeTrue();
+    expect(series.every((serie) => serie.opacity === 1)).toBeTrue();
+  });
 });
