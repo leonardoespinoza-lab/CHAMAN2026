@@ -112,6 +112,45 @@ jobs:
           mkdir -p "$PROFILE_DIR"
           cp "$RUNNER_TEMP/chaman.mobileprovision" "$PROFILE_DIR/$PROFILE_UUID.mobileprovision"
 
+      - name: Scope App Store signing to the Chaman app target
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          project_path = Path("sdc-app-chaman/ios/App/App.xcodeproj/project.pbxproj")
+          project = project_path.read_text()
+          marker = "\t\t504EC3181FED79650016851F /* Release */ = {"
+          start = project.index(marker)
+          end = project.index("\n\t\t};", start) + len("\n\t\t};")
+          release_block = project[start:end]
+
+          old_signing = "\t\t\t\tCODE_SIGN_STYLE = Automatic;"
+          if release_block.count(old_signing) != 1:
+              raise SystemExit("Unexpected App Release signing configuration")
+
+          new_signing = "\n".join(
+              [
+                  '\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";',
+                  "\t\t\t\tCODE_SIGN_STYLE = Manual;",
+                  '\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "Chaman App Store 1.6.0 2026-09-03";',
+              ]
+          )
+          release_block = release_block.replace(old_signing, new_signing)
+          project_path.write_text(project[:start] + release_block + project[end:])
+          PY
+
+          APP_RELEASE_SETTINGS="$(xcodebuild \
+            -project sdc-app-chaman/ios/App/App.xcodeproj \
+            -target App \
+            -configuration Release \
+            -showBuildSettings)"
+          grep -Fq 'CODE_SIGN_STYLE = Manual' <<< "$APP_RELEASE_SETTINGS"
+          grep -Fq 'CODE_SIGN_IDENTITY = Apple Distribution' <<< "$APP_RELEASE_SETTINGS"
+          grep -Fq "PROVISIONING_PROFILE_SPECIFIER = $PROFILE_NAME" <<< "$APP_RELEASE_SETTINGS"
+          grep -Fq "PRODUCT_BUNDLE_IDENTIFIER = $APP_BUNDLE_ID" <<< "$APP_RELEASE_SETTINGS"
+
       - name: Archive signed iOS app
         working-directory: sdc-app-chaman/ios/App
         shell: bash
@@ -124,8 +163,6 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Chaman.xcarchive" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_IDENTITY='Apple Distribution' \
             archive
 
       - name: Export App Store Connect IPA
