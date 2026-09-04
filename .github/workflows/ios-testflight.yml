@@ -17,11 +17,11 @@ concurrency:
 
 jobs:
   upload-testflight:
-    name: signed-ios-dbbe33e-to-testflight
+    name: signed-ios-4270349-to-testflight
     runs-on: macos-26
     timeout-minutes: 45
     env:
-      RELEASE_SHA: dbbe33e5b1f1bd41ee6f9f9c5fc3a8b3ff3c2773
+      RELEASE_SHA: 4270349b41afeedbd1dfebb2485b24748605a432
       APPLE_TEAM_ID: 38589U58A3
       APP_BUNDLE_ID: com.chamanagro.app
       PROFILE_NAME: Chaman App Store 1.6.0 2026-09-03
@@ -30,7 +30,7 @@ jobs:
       - name: Checkout exact approved source
         uses: actions/checkout@v4
         with:
-          ref: dbbe33e5b1f1bd41ee6f9f9c5fc3a8b3ff3c2773
+          ref: 4270349b41afeedbd1dfebb2485b24748605a432
           fetch-depth: 1
 
       - name: Verify immutable release source
