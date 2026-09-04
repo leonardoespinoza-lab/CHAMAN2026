@@ -227,29 +227,17 @@
 
       <div class="detail-grid">
         <article class="detail-panel">
-          <span>Lectura agronomica</span>
+          <span>Interpretacion agronomica</span>
           <p>{{ detalle.sensibilidad }}</p>
-          <small>{{ detalle.periodo }}</small>
-          <small>{{ detalle.enVentanaFenologica ? 'Ventana fenologica activa' : 'Fuera de ventana fenologica' }}</small>
+          <small>{{ detalle.descripcion }}</small>
         </article>
 
         <article class="detail-panel">
-          <span>Calculo del motor</span>
-          <p>{{ detalle.calculo }}</p>
-          <small>{{ detalle.variables }}</small>
+          <span>Ventana de seguimiento</span>
+          <p>{{ detalle.periodo }}</p>
+          <small>{{ detalle.enVentanaFenologica ? 'Ventana fenologica activa' : 'Fuera de ventana fenologica' }}</small>
         </article>
       </div>
-
-      @if (detalle.variablesDetalladas.length) {
-        <div class="variable-list">
-          @for (variable of detalle.variablesDetalladas; track variable.key) {
-            <article>
-              <span>{{ variable.label }}</span>
-              <strong>{{ variable.value }}</strong>
-            </article>
-          }
-        </div>
-      }
 
       @if (detalle.salidaOperativa) {
         <section class="decision-panel" [class.confirmed]="enfermedadConfirmada(detalle.enfermedad)">

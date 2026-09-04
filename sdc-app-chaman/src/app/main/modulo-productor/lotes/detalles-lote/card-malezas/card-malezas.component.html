@@ -54,7 +54,7 @@
             (click)="abrirDetalleMaleza(item)"
           >
             <span class="status-pill">{{ item.estadoCorto }}</span>
-            <strong>{{ item.nombre }}</strong>
+            <strong>{{ nombreVisible(item) }}</strong>
             <span class="scientific-name">{{ item.nombreCientifico }}</span>
             <span class="risk-value">{{ (item.avancePct || 0) | number: '1.0-1' }}%</span>
             <span class="risk-track"><i></i></span>
@@ -74,7 +74,7 @@
   [resizable]="false"
   [style]="{ width: 'min(920px, 94vw)' }"
   [breakpoints]="{ '720px': '96vw' }"
-  [header]="malezaSeleccionada?.nombre || 'Detalle de maleza'"
+  [header]="nombreVisible(malezaSeleccionada)"
   styleClass="chaman-detail-dialog weed-detail-dialog"
   (onHide)="cerrarDetalleMaleza()"
 >
@@ -83,7 +83,7 @@
       <div class="detail-hero" [class.high]="detalle.severidad === 'alta'" [class.medium]="detalle.severidad === 'media'">
         <div>
           <span>{{ detalle.estado }}</span>
-          <strong>{{ detalle.nombre }}</strong>
+          <strong>{{ nombreVisible(detalle) }}</strong>
           <small>{{ detalle.nombreCientifico || 'Especie sin nombre cientifico cargado' }}</small>
         </div>
         <em>{{ (detalle.avancePct || 0) | number: '1.0-1' }}%</em>

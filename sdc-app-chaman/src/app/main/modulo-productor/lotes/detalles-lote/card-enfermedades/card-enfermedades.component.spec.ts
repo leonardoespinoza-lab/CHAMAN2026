@@ -83,12 +83,10 @@ describe('CardEnfermedadesComponent - comunicacion sanitaria', () => {
     (componente.siembra as any).ultimaPrediccion = { enfermedades: [prediccion] };
 
     expect((componente as any).estadoCorto(prediccion, 'Mancha de la Hoja', 32, true)).toBe('Dato varietal pendiente');
-    expect((componente as any).sensibilidadVarietal('Mancha de la Hoja')).toContain(
-      'factor conservador susceptible (S=1)'
-    );
+    expect((componente as any).sensibilidadVarietal('Mancha de la Hoja')).toContain('pendiente de confirmacion');
     expect(
       (componente as any).lecturaCorta(prediccion, 'Mancha de la Hoja', 'resultado de baja confianza', true)
-    ).toContain('S=1');
+    ).not.toContain('S=1');
   });
 
   it('muestra el indice limitado y deja explicita la saturacion del resultado crudo', () => {
@@ -107,7 +105,9 @@ describe('CardEnfermedadesComponent - comunicacion sanitaria', () => {
     expect((componente as any).estadoCorto(prediccion, 'Roya de la Hoja', 100, true)).toBe('Indice saturado');
     expect((componente as any).etiquetaMetrica('Roya de la Hoja', prediccion)).toBe('');
     expect((componente as any).puedeMostrarEscala(prediccion, 'Roya de la Hoja', true)).toBeTrue();
-    expect((componente as any).lecturaCorta(prediccion, 'Roya de la Hoja', 'indice limitado', true)).toContain('108.7');
+    const lectura = (componente as any).lecturaCorta(prediccion, 'Roya de la Hoja', 'indice limitado', true);
+    expect(lectura).toContain('limite superior');
+    expect(lectura).not.toContain('108.7');
   });
 
   it('diferencia fuera de ventana de un indice cero', () => {

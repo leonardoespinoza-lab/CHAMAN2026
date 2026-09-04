@@ -63,13 +63,21 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
       return 'Motor habilitado para trigo, soja y maiz.';
     }
     if (this.prediccion?.resumen) {
-      return this.prediccion.resumen;
+      return this.normalizarNombres(this.prediccion.resumen);
     }
     return `${this.cultivo}: sincronizacion diaria de emergencia de malezas.`;
   }
 
   public get totalModelos(): number {
     return this.analisis.length;
+  }
+
+  public nombreVisible(item?: IPrediccionMalezaEspecie): string {
+    if (!item) return 'Detalle de maleza';
+    const referencia = `${item.nombre || ''} ${item.nombreCientifico || ''}`.toLocaleLowerCase('es-AR');
+    if (referencia.includes('eleusine') || referencia.includes('pata de gallina')) return 'Eleusine';
+    if (referencia.includes('amaranthus') || referencia.includes('yuyo colorado')) return 'Amaranthus';
+    return item.nombre || item.nombreCientifico || 'Maleza';
   }
 
   public abrirDetalleMaleza(item: IPrediccionMalezaEspecie): void {
@@ -167,5 +175,9 @@ export class CardMalezasComponent implements OnInit, OnChanges, OnDestroy {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
     return this.formatterDia.format(date);
+  }
+
+  private normalizarNombres(texto: string): string {
+    return texto.replace(/pata de gallina/gi, 'Eleusine').replace(/yuyo colorado/gi, 'Amaranthus');
   }
 }

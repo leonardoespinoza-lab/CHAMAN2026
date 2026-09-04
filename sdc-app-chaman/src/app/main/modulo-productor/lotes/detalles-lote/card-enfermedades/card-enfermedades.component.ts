@@ -6,7 +6,6 @@ import {
   getUmbralesRiesgoSanitario,
   IPrediccionEnfermedad,
   ISiembra,
-  resolverResistencia,
   TEnfermedad,
   TRIGO_MOTOR_SANITARIO_VERSION,
 } from 'modelos/src';
@@ -29,12 +28,6 @@ interface PrescripcionEnfermedad {
   nota: string;
 }
 
-interface VariableDetalle {
-  key: string;
-  label: string;
-  value: string;
-}
-
 interface PrescripcionOption {
   label: string;
   value: string;
@@ -54,13 +47,10 @@ interface DiseaseInsight {
   severity: 'neutral' | 'low' | 'medium' | 'high';
   periodo: string;
   sensibilidad: string;
-  variables: string;
-  variablesDetalladas: VariableDetalle[];
   estadoCalculo: string;
   estadoCorto: string;
   lecturaCorta: string;
   descripcion: string;
-  calculo: string;
   prescripcion: PrescripcionEnfermedad;
   mostrarPrescripcion: boolean;
   salidaOperativa: boolean;
@@ -241,13 +231,10 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
         severity: this.severidadVisual(prediccion, enfermedad, resultado, prediccionVigente),
         periodo: this.periodoSusceptible(enfermedad),
         sensibilidad: this.sensibilidadVarietal(enfermedad),
-        variables: this.resumenVariables(prediccion, enfermedad),
-        variablesDetalladas: this.variablesDetalladas(prediccion),
         estadoCalculo,
         estadoCorto: this.estadoCorto(prediccion, enfermedad, resultado, prediccionVigente),
         lecturaCorta: this.lecturaCorta(prediccion, enfermedad, estadoCalculo, prediccionVigente),
         descripcion: this.descripcionEnfermedad(enfermedad),
-        calculo: this.calculoEnfermedad(enfermedad),
         prescripcion: this.prescripcionPorEnfermedad(enfermedad),
         mostrarPrescripcion: this.tieneMotorSanitario && enVentanaFenologica && salidaOperativa,
         salidaOperativa,
@@ -404,25 +391,9 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
   private sensibilidadVarietal(enfermedad: TEnfermedad): string {
     const prediccion = this.prediccionPorEnfermedad(enfermedad);
     if (this.sinResistenciaVarietal(prediccion)) {
-      return 'Resistencia varietal no cargada. El motor usa el factor conservador susceptible (S=1) para no subestimar el ambiente. Esto no confirma presencia ni ausencia: requiere recorrida y decision del responsable tecnico.';
+      return 'Respuesta varietal pendiente de confirmacion; se recomienda validar el resultado mediante recorrida.';
     }
-    const resuelta = resolverResistencia(this.siembra?.semilla?.resistencia, prediccion?.idEnfermedad || enfermedad);
-    const resistencia =
-      prediccion?.resistenciaUsada?.multiplicador != null ? prediccion.resistenciaUsada : resuelta.resistencia;
-    const multiplicador = resistencia?.multiplicador;
-    if (multiplicador == null) {
-      return 'Sin dato varietal trazable; no habilita alerta automatica';
-    }
-    const perfil = resistencia?.perfil || 'sin perfil';
-    const campania = resistencia?.campaniaFuente ? ` · campaña ${resistencia.campaniaFuente}` : '';
-    const confianza = resistencia?.confianza ? ` · confianza ${resistencia.confianza}` : '';
-    const lectura = `Perfil ${perfil} · factor ${Number(multiplicador).toLocaleString('es-AR', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}${campania}${confianza}`;
-    return this.esRegistroRoyaAmarillaExperimental(enfermedad)
-      ? `${lectura}. Modifica solo la prioridad interna de recorrida; no altera ni simula un porcentaje de enfermedad.`
-      : lectura;
+    return 'La respuesta varietal fue considerada en el resultado de seguimiento.';
   }
 
   private periodoSusceptible(enfermedad: TEnfermedad): string {
@@ -545,149 +516,6 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
     return textos[enfermedad] || 'Riesgo sanitario configurado por cultivo, etapa fenologica y ambiente.';
   }
 
-  private calculoEnfermedad(enfermedad: TEnfermedad): string {
-    const calculos: Partial<Record<TEnfermedad, string>> = {
-      'Mancha Amarilla':
-        'Modelo propietario Chaman 2026 validado internamente: indice = (-2,25 + 1,62 x DPrHRT + 1,30 x DPr) x multiplicador varietal.',
-      'Roya de la Hoja':
-        'Modelo propietario Chaman 2026 validado internamente: indice = 4,42 + 0,61 x GD + 0,57 x DHR - 30,01 x (1 - factor de susceptibilidad).',
-      'Mancha de la Hoja':
-        'Modelo propietario Chaman 2026 validado internamente: indice = (-6,41 + 0,59 x DHR + 2,79 x DPr) x multiplicador varietal.',
-      'Fusarium de la Espiga':
-        'Modelo propietario Chaman 2026 validado internamente: estimador acumulado parcial = (20,37 + 8,63 x PMoj - 0,49 x GDN) x factor de susceptibilidad. Chaman conserva su ventana contractual desde primeras anteras y no presenta el valor diario parcial como incidencia final ni como severidad observada.',
-      'Roya Anaranjada':
-        'Modelo horario experimental: cuenta rachas de al menos 4 h con 4<T<16 C, HR>92% y lluvia<=0,1 mm en una ventana movil de 10 dias. La formula propietaria Chaman 5,15 + 0,72 GD + 0,48 DHR + 0,35 DL - 35,2 (1-I), validada internamente por contraste, queda en sombra y no genera alertas.',
-      'Mancha en Red':
-        'Cebada V4: calcula grados-hora desde el inicio del mojado, estima el riesgo de cada episodio y combina los episodios de los ultimos 14 dias. Usa Shaw 1986, Petta y Lavilla 2023 y el perfil varietal INTA. El indice expresa presion predictiva condicionada a inoculo; no es severidad observada.',
-      'Escaldadura de la Cebada':
-        'Cebada V2: riesgo de infeccion por temperatura fresca, mojado foliar, lluvia/salpicado y perfil varietal.',
-      'Roya de la Hoja de Cebada':
-        'Cebada V2: severidad por grados dia, dias con HR sostenida y perfil de resistencia.',
-      'Fusariosis de la Espiga de Cebada':
-        'Cebada V2: mojado de espiga, grados dia negativos/estresantes y perfil varietal durante ventana critica.',
-      'Fin de Ciclo':
-        'Riesgo = (8 x Lt7 / 600) x multiplicador varietal, con Lt7 basado en dias y milimetros de lluvia mayor a 7 mm.',
-      'Roya del Maiz': 'Severidad = 4,42 + 0,61 x GD + 0,57 x DHR - 30,01 x multiplicador varietal.',
-      'Complejo Ascochyta de la Arveja':
-        'Screening ordinal: temperatura, horas de mojado y lluvia. No calcula probabilidad ni severidad.',
-      'Mildiu de la Arveja':
-        'Screening ordinal: minimo 4 h de mojado; nivel alto con 6 h, 8-20 C y HR igual o mayor a 91%.',
-      'Oidio de la Arveja': 'Prioridad ordinal de monitoreo desde floracion, usando temperatura y ausencia de lluvia.',
-    };
-    return calculos[enfermedad] || 'Modelo en calibracion: cruza cultivo, etapa, clima y sensibilidad varietal.';
-  }
-
-  private variablesDetalladas(prediccion?: IPrediccionEnfermedad): VariableDetalle[] {
-    if (!prediccion?.variables) {
-      return [];
-    }
-
-    const labels: Record<string, string> = this.variableLabels();
-    return Object.entries(prediccion.variables)
-      .filter(([, value]) => value !== undefined && value !== null && Number.isFinite(Number(value)))
-      .map(([key, value]) => ({
-        key,
-        label: labels[key] || key,
-        value: Number(value).toFixed(1),
-      }));
-  }
-
-  private resumenVariables(prediccion?: IPrediccionEnfermedad, enfermedad?: TEnfermedad): string {
-    if (!this.tieneMotorSanitario) {
-      return 'Sin calculo sanitario calibrado para este cultivo.';
-    }
-    if (!prediccion && enfermedad && !this.estaEnVentanaFenologica(enfermedad)) {
-      return 'Fuera de ventana fenologica del cultivo.';
-    }
-    if (prediccion && !prediccion.variables) {
-      return 'Riesgo calculado con clima diario y sensibilidad varietal.';
-    }
-    if (!prediccion?.variables) {
-      return 'Actualizar riesgo para cruzar fenologia, humedad, lluvia y temperatura.';
-    }
-    const labels: Record<string, string> = this.variableLabels();
-    return Object.entries(prediccion.variables)
-      .filter(([, value]) => value !== undefined && value !== null)
-      .map(([key, value]) => `${labels[key] || key}: ${Number(value).toFixed(1)}`)
-      .slice(0, 3)
-      .join(' - ');
-  }
-
-  private variableLabels(): Record<string, string> {
-    return {
-      DHR: 'HR sostenida',
-      DPr: 'dias lluvia',
-      DPrHRT: 'lluvia + HR + temp',
-      PMoj: 'mojado',
-      GDN: 'GDN',
-      GDAcum: 'GDA',
-      GD: 'GD',
-      DL: 'dias con lluvia',
-      horasEsperadas10d: 'horas esperadas (10 d)',
-      horasValidas10d: 'horas validas (10 d)',
-      coberturaHoraria10d: 'cobertura horaria',
-      horasFavorables10d: 'horas favorables en rachas',
-      rachasFavorables10d: 'rachas favorables',
-      rachaMaximaHoras: 'racha maxima (h)',
-      frecuenciaAmbientalPct: 'frecuencia ambiental (no enfermedad)',
-      umbralSenalTempranaPct: 'umbral señal temprana',
-      umbralFuertePct: 'umbral oportunidad fuerte',
-      umbralMuyFuertePct: 'umbral oportunidad muy fuerte',
-      nivelOportunidad: 'nivel de oportunidad',
-      prioridadInterna: 'prioridad interna varietal',
-      resultadoContractualCrudo: 'contrato en sombra (crudo)',
-      resultadoContractualLimitado: 'contrato en sombra (0-100)',
-      GDDBase0Siembra: 'GDD base 0 desde siembra',
-      coberturaGdd: 'cobertura GDD',
-      umbralInicioGdd: 'umbral de inicio',
-      inicioPorFenologiaObservada: 'inicio fenologico observado',
-      factorSusceptibilidad: 'factor de susceptibilidad',
-      resultadoCrudo: 'resultado crudo',
-      PtAc7: 'lluvia > 7',
-      DPr7: 'dias > 7',
-      Lt7: 'persistencia',
-      Tmin: 'Tmin',
-      Tmax: 'Tmax',
-      viento: 'viento',
-      HR: 'HR',
-      diasFavorables: 'dias favorables',
-      indiceAcumulado: 'indice acumulado',
-      lluviaAcumulada: 'lluvia ponderada',
-      humedadScore: 'humedad',
-      temperaturaScore: 'temperatura',
-      lluviaScore: 'lluvia',
-      etapaScore: 'etapa',
-      formulaVersion: 'version',
-      fTemp: 'f temp',
-      fHMF: 'f mojado',
-      fPP: 'f lluvia',
-      kVar: 'perfil varietal',
-      ri: 'RI',
-      horasMojado: 'horas mojado',
-      horasMojadoContinuo: 'mojado continuo (h)',
-      temperaturaMojado: 'temperatura durante mojado',
-      gradosHoraInfeccion: 'grados-hora de infeccion',
-      riesgoEvento: 'indice del episodio',
-      riesgoVentana: 'indice del ciclo',
-      eventosCompatibles: 'dias favorables (compatibilidad)',
-      diasFavorablesVentana: 'dias favorables',
-      intensidadPico: 'intensidad maxima',
-      intensidadMedia: 'intensidad media',
-      persistenciaVentana: 'persistencia del ciclo',
-      diasDesdeUltimoEvento: 'dias desde la ultima condicion favorable',
-      agregacionVersion: 'version de agregacion',
-      diasVentana: 'dias de ventana',
-      diasHorariosValidos: 'dias horarios validos',
-      coberturaVentana: 'cobertura de ventana',
-      lluviaDiaria: 'lluvia diaria',
-      factorHumedad: 'factor HR',
-      tasaDiaria: 'tasa diaria',
-      severidadAcumulada: 'severidad acum.',
-      temperaturaMedia: 'temperatura media',
-      humedadRelativa: 'HR',
-      nivelOrdinal: 'nivel ordinal',
-    };
-  }
 
   private estadoCalculo(
     prediccion?: IPrediccionEnfermedad,
@@ -841,11 +669,10 @@ export class CardEnfermedadesComponent implements OnInit, OnDestroy {
       return `${favorables} dia(s) favorable(s) dentro de un ciclo de ${dias} dias; intensidad maxima ${pico.toFixed(1)}/100 y cobertura horaria ${cobertura.toFixed(0)}%. Es presion ambiental condicionada a inoculo; requiere recorrida para confirmar sintomas.`;
     }
     if (this.sinResistenciaVarietal(prediccion)) {
-      return 'Resistencia varietal pendiente; el indice usa S=1 y requiere recorrida antes de definir manejo.';
+      return 'Respuesta varietal pendiente; requiere recorrida antes de definir manejo.';
     }
     if (this.resultadoCrudoFueraDominio(prediccion)) {
-      const crudo = Number((prediccion.variables as Record<string, number>)?.['resultadoCrudo']);
-      return `El modelo propietario dio ${crudo.toFixed(1)} y la salida contractual se limita a ${prediccion.resultado.toFixed(1)}/100. La saturacion queda visible para auditoria y no genera alerta o prescripcion automatica.`;
+      return 'Resultado en el limite superior de la escala; requiere validacion mediante recorrida.';
     }
     if (this.esCalidadNoOperativa(prediccion)) {
       const resumen = (prediccion.calidadDatos?.resumen || estadoCalculo).trim().replace(/[.\s]+$/, '');
