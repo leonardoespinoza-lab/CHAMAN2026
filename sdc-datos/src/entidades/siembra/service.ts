@@ -643,7 +643,9 @@ export class SiembrasService {
     if (!siembra || typeof siembra !== 'object') return siembra;
     const origen: any = siembra as any;
     const salida: any =
-      typeof origen.toObject === 'function' ? origen.toObject() : { ...origen };
+      typeof origen.toObject === 'function'
+        ? origen.toObject({ virtuals: true, getters: true })
+        : { ...origen };
     const prediccion = salida.ultimaPrediccionMalezas;
     if (!prediccion || typeof prediccion !== 'object') return salida as T;
     salida.ultimaPrediccionMalezas = {
