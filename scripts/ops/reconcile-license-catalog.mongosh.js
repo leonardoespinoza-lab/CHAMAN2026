@@ -8,6 +8,7 @@
  * Ejecutar solamente despues de un mongodump verificado del ambiente objetivo.
  */
 
+const run = async () => {
 const databaseName = String(
   process.env.CHAMAN_LICENSE_CATALOG_DB || 'chaman',
 ).trim();
@@ -91,8 +92,8 @@ const planIdentity = (definition) => {
   );
 };
 
-const licenses = database.licencias.find({}).toArray();
-const assignments = database.licenciaporentidads.find({}).toArray();
+const licenses = await (await database.licencias.find({})).toArray();
+const assignments = await (await database.licenciaporentidads.find({})).toArray();
 const assignedByLicense = new Map();
 for (const assignment of assignments) {
   const key = id(assignment.idLicencia);
@@ -164,13 +165,16 @@ const planHash = crypto
 
 print(EJSON.stringify({ mode: apply ? 'apply' : 'preview', planHash, plan }, null, 2));
 
-if (!apply) quit(0);
+if (!apply) return;
 if (!expectedHash || expectedHash !== planHash) {
   throw new Error(
     `Plan hash invalido. Esperado ${planHash}; recibido ${expectedHash || '(vacio)'}`,
   );
 }
-if (licenses.length !== plan.sourceLicenseCount) {
+const currentLicenses = await (await database.licencias.find({})).toArray();
+const currentAssignments = await (await database.licenciaporentidads.find({})).toArray();
+if (EJSON.stringify(currentLicenses) !== EJSON.stringify(licenses) ||
+    EJSON.stringify(currentAssignments) !== EJSON.stringify(assignments)) {
   throw new Error('El catalogo cambio despues de generar el plan');
 }
 
@@ -180,16 +184,16 @@ const originalLicenseIds = licenses.map((license) => license._id);
 const originalAssignmentIds = assignments.map((assignment) => assignment._id);
 let backupPrepared = false;
 
-const restoreOriginalDocuments = () => {
+const restoreOriginalDocuments = async () => {
   for (const license of licenses) {
-    database.licencias.replaceOne(
+    await database.licencias.replaceOne(
       { _id: license._id },
       license,
       { upsert: true },
     );
   }
   for (const assignment of assignments) {
-    database.licenciaporentidads.replaceOne(
+    await database.licenciaporentidads.replaceOne(
       { _id: assignment._id },
       assignment,
       { upsert: true },
@@ -198,7 +202,7 @@ const restoreOriginalDocuments = () => {
 };
 
 try {
-  backupCollection.insertOne({
+  await backupCollection.insertOne({
     _id: reconciliationId,
     kind: 'license-catalog-reconciliation-backup',
     status: 'prepared',
@@ -215,7 +219,7 @@ try {
   for (const group of groups) {
     const definition = group.definition;
     const identity = group.identity;
-    const updateResult = database.licencias.updateOne(
+    const updateResult = await database.licencias.updateOne(
       { _id: ObjectId(group.canonicalId) },
       {
         $set: {
@@ -234,37 +238,27 @@ try {
       throw new Error(`No se encontro el plan canonico ${group.canonicalId}`);
     }
     if (group.duplicateIds.length) {
-      database.licenciaporentidads.updateMany(
+      const repointed = await database.licenciaporentidads.updateMany(
         { idLicencia: { $in: group.duplicateIds.map((value) => ObjectId(value)) } },
         { $set: { idLicencia: ObjectId(group.canonicalId) } },
       );
-      database.licencias.deleteMany({
+      if (repointed.matchedCount !== group.assignmentsToRepoint) {
+        throw new Error('Las asignaciones cambiaron durante la consolidacion');
+      }
+      await database.licencias.deleteMany({
         _id: { $in: group.duplicateIds.map((value) => ObjectId(value)) },
       });
     }
   }
 
-  database.licenciaporentidads.updateMany(
-    {
-      fechaExpiracion: { $lt: now },
-      $or: [{ estado: { $exists: false } }, { estado: null }],
-    },
-    {
-      $set: {
-        estado: 'vencida',
-        fechaActualizacion: now,
-        origen: 'sistema',
-      },
-    },
-  );
-
-  const finalCount = database.licencias.countDocuments({});
+  // La consolidacion no modifica estados, fechas ni condiciones de contratos.
+  const finalCount = await database.licencias.countDocuments({});
   if (finalCount !== plan.targetLicenseCount) {
     throw new Error(
       `Conteo final inesperado: ${finalCount}; esperado ${plan.targetLicenseCount}`,
     );
   }
-  const finalAssignments = database.licenciaporentidads.find({}).toArray();
+  const finalAssignments = await (await database.licenciaporentidads.find({})).toArray();
   if (finalAssignments.length !== assignments.length) {
     throw new Error(
       `Conteo de asignaciones inesperado: ${finalAssignments.length}; esperado ${assignments.length}`,
@@ -276,8 +270,16 @@ try {
   if (originalAssignmentIds.some((assignmentId) => !finalAssignmentIds.has(id(assignmentId)))) {
     throw new Error('La reconciliacion perdio una o mas asignaciones originales');
   }
+  for (const original of assignments) {
+    const current = finalAssignments.find((item) => id(item._id) === id(original._id));
+    const { idLicencia: previousPlan, ...previousContract } = original;
+    const { idLicencia: currentPlan, ...currentContract } = current;
+    if (EJSON.stringify(previousContract) !== EJSON.stringify(currentContract)) {
+      throw new Error('Se alteraron condiciones de una asignacion durante la consolidacion');
+    }
+  }
   const finalLicenseIds = new Set(
-    database.licencias.find({}, { _id: 1 }).toArray().map((license) => id(license._id)),
+    (await (await database.licencias.find({}, { _id: 1 })).toArray()).map((license) => id(license._id)),
   );
   const expectedCanonicalIds = new Set(groups.map((group) => group.canonicalId));
   if (
@@ -295,7 +297,7 @@ try {
     );
   }
 
-  backupCollection.updateOne(
+  await backupCollection.updateOne(
     { _id: reconciliationId },
     {
       $set: {
@@ -317,11 +319,11 @@ try {
 } catch (error) {
   if (backupPrepared) {
     try {
-      restoreOriginalDocuments();
-      const restoredLicenseCount = database.licencias.countDocuments({
+      await restoreOriginalDocuments();
+      const restoredLicenseCount = await database.licencias.countDocuments({
         _id: { $in: originalLicenseIds },
       });
-      const restoredAssignmentCount = database.licenciaporentidads.countDocuments({
+      const restoredAssignmentCount = await database.licenciaporentidads.countDocuments({
         _id: { $in: originalAssignmentIds },
       });
       if (
@@ -332,7 +334,7 @@ try {
           `Rollback incompleto: licencias ${restoredLicenseCount}/${licenses.length}; asignaciones ${restoredAssignmentCount}/${assignments.length}`,
         );
       }
-      backupCollection.updateOne(
+      await backupCollection.updateOne(
         { _id: reconciliationId },
         {
           $set: {
@@ -350,3 +352,5 @@ try {
   }
   throw error;
 }
+};
+run().catch((error) => { print(String(error?.message || error)); quit(1); });
