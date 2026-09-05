@@ -254,7 +254,9 @@ export class LotesService {
     if (!lote || typeof lote !== 'object') return lote;
     const origen: any = lote as any;
     const salida: any =
-      typeof origen.toObject === 'function' ? origen.toObject() : { ...origen };
+      typeof origen.toObject === 'function'
+        ? origen.toObject({ virtuals: true, getters: true })
+        : { ...origen };
     salida.ultimaPrediccionMalezas = this.prediccionMalezasSegura(
       salida.ultimaPrediccionMalezas,
     );
