@@ -139,19 +139,22 @@ export class ProductorsService {
 
   private async createAdmin(data: ICreateProductor): Promise<IProductor> {
     const idLicencia = (data.licencia as any)?._id as string | undefined;
+    const expiracion = data.expiracion;
     const licencia = idLicencia
       ? await this.licencias.getById(idLicencia)
-      : await this.licenciasPorEntidad.getLicenciaDefaultPlan();
-    if (!licencia._id)
-      throw new BadRequestException(
-        'Configure un plan por defecto persistido antes de crear el productor',
-      );
-
+      : undefined;
+    if (idLicencia && !licencia?._id)
+      throw new BadRequestException('No se encontro el plan seleccionado');
+    delete data.licencia;
+    delete data.expiracion;
     const productor = await this.repository.create(data);
+    // Sin plan explicito no se fabrica una asignacion directa: el productor
+    // hereda de la red. Se conserva el camino legacy cuando un cliente antiguo
+    // envia deliberadamente una licencia.
+    if (!idLicencia) return productor;
+
     const fechaExpiracion = new Date();
-    fechaExpiracion.setDate(
-      fechaExpiracion.getDate() + (data.expiracion || 30),
-    );
+    fechaExpiracion.setDate(fechaExpiracion.getDate() + (expiracion || 30));
     // Creo la licencia por entidad
     const createLicenciaPorEntidad: ICreateLicenciaPorEntidad = {
       idEntidad: productor._id,
@@ -160,10 +163,8 @@ export class ProductorsService {
       fechaInicio: new Date().toISOString(),
       tipoEntidad: 'Productor',
       estado: 'activa',
-      origen: 'sistema',
-      motivoCambio: idLicencia
-        ? 'Plan seleccionado en el alta'
-        : 'Plan por defecto del sistema',
+      origen: 'manual',
+      motivoCambio: 'Plan seleccionado en el alta desde un cliente legacy',
     };
     await this.licenciasPorEntidad.create(createLicenciaPorEntidad);
     return productor;

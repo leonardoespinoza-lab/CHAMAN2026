@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import {
   IAsignarLicenciaEntidad,
   IEstadoLicenciaEntidad,
+  IHeredarLicenciaEntidad,
   ILicenciaPorEntidad,
   IListado,
   IQueryParam,
@@ -30,8 +31,16 @@ export class LicenciaPorEntidadService {
   public asignar(
     tipo: TipoEntidadLicencia,
     id: string,
-    data: IAsignarLicenciaEntidad,
+    data: IAsignarLicenciaEntidad
   ): Promise<IEstadoLicenciaEntidad> {
     return this.http.put(`/licenciaporentidads/entidad/${tipo}/${id}`, data);
+  }
+
+  public heredar(
+    tipo: TipoEntidadLicencia,
+    id: string,
+    data: IHeredarLicenciaEntidad
+  ): Promise<IEstadoLicenciaEntidad> {
+    return this.http.put(`/licenciaporentidads/entidad/${tipo}/${id}/heredar`, data);
   }
 }

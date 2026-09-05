@@ -43,20 +43,22 @@
 
 .hero-actions {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  flex-direction: column;
   gap: 12px;
-  flex-wrap: wrap;
   justify-content: flex-end;
 }
 
-.advisor-create-actions {
+.hero-action-buttons,
+.hero-status-row {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.dashboard-action-button {
+button.p-button.dashboard-action-button {
   align-items: center;
   background: linear-gradient(135deg, #2ed6cc, #76cfe7);
   border: 1px solid #12b9b3;
@@ -79,6 +81,32 @@
   &:focus-visible {
     outline: 3px solid rgba(46, 214, 204, 0.24);
     outline-offset: 2px;
+  }
+}
+
+.advisor-license-card {
+  display: grid;
+  min-width: 190px;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid rgba(130, 164, 202, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+
+  span,
+  small {
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  span {
+    text-transform: uppercase;
+  }
+
+  strong {
+    color: var(--ink);
+    font-size: 1rem;
   }
 }
 
@@ -671,16 +699,20 @@ h2 {
 
   .hero-actions {
     align-items: stretch;
-    flex-direction: column;
   }
 
-  .advisor-create-actions {
+  .hero-action-buttons,
+  .hero-status-row {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .dashboard-action-button {
+  button.p-button.dashboard-action-button {
     width: 100%;
+  }
+
+  .advisor-license-card {
+    min-width: 0;
   }
 
   .kpi-grid,

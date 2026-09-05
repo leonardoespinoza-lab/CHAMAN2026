@@ -15,6 +15,7 @@ export interface ILicenciaPorEntidad {
   estado?: EstadoAsignacionLicencia;
   origen?: 'manual' | 'heredada' | 'facturacion' | 'sistema';
   motivoCambio?: string;
+  modalidadComercial?: ModalidadComercialLicencia;
   creadoPorUsuario?: string;
   idAsignacionAnterior?: string;
   referenciaFacturacion?: {
@@ -63,11 +64,22 @@ export type EstadoAsignacionLicencia =
   | 'vencida'
   | 'reemplazada';
 
+export type ModalidadComercialLicencia =
+  | 'prueba'
+  | 'cortesia'
+  | 'suscripcion';
+
 export interface IAsignarLicenciaEntidad {
   idLicencia: string;
   tipoEntidad: TipoEntidadLicencia;
   fechaInicio?: string;
   fechaExpiracion?: string;
+  motivoCambio?: string;
+  modalidadComercial?: ModalidadComercialLicencia;
+}
+
+export interface IHeredarLicenciaEntidad {
+  tipoEntidad: TipoEntidadLicencia;
   motivoCambio?: string;
 }
 

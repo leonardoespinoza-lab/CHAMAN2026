@@ -11,6 +11,7 @@ import { ApiTags } from '@nestjs/swagger';
 import {
   IAsignarLicenciaEntidad,
   IEstadoLicenciaEntidad,
+  IHeredarLicenciaEntidad,
   ILicenciaPorEntidad,
   IListado,
   IPermiso,
@@ -63,6 +64,17 @@ export class LicenciaPorEntidadsController {
     @GetUser() user: IUsuario,
   ): Promise<IEstadoLicenciaEntidad> {
     return await this.service.asignar(id, { ...body, tipoEntidad: tipo }, user);
+  }
+
+  @Put('/entidad/:tipo/:id/heredar')
+  @Permisos({ nivel: 'Admin', roles: ['Admin'] })
+  public async heredar(
+    @Param('tipo') tipo: TipoEntidadLicencia,
+    @Param('id') id: string,
+    @Body() body: IHeredarLicenciaEntidad,
+    @GetUser() user: IUsuario,
+  ): Promise<IEstadoLicenciaEntidad> {
+    return await this.service.heredar(id, { ...body, tipoEntidad: tipo }, user);
   }
 
   @Get()

@@ -47,6 +47,9 @@ export class LicenciaPorEntidad
   @Prop({ type: String, trim: true })
   motivoCambio?: string;
 
+  @Prop({ type: String, enum: ['prueba', 'cortesia', 'suscripcion'] })
+  modalidadComercial?: 'prueba' | 'cortesia' | 'suscripcion';
+
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   creadoPorUsuario?: string;
 

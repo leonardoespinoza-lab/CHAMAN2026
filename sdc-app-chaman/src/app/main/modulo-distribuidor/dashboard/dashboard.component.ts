@@ -7,6 +7,7 @@ import {
   esHuellaHidricaConsolidada,
   IDistribuidor,
   IGeoJSONPolygon,
+  IEstadoLicenciaEntidad,
   IListado,
   ILote,
   IProductor,
@@ -30,6 +31,7 @@ import { ListadosService } from '../../../auxiliares/servicios/listados';
 import { OpenLayersService } from '../../../auxiliares/servicios/openLayers.service';
 import { ParamsService } from '../../../auxiliares/servicios/params.service';
 import { LoginService } from '../../../auxiliares/http/login.service';
+import { LicenciaPorEntidadService } from '../../../auxiliares/http/licencia-por-entidad.service';
 import { puedeEscribir } from '../../../auxiliares/seguridad/access-policy';
 import { SharedModule } from '../../../auxiliares/shared.module';
 import {
@@ -107,6 +109,8 @@ export class DashboardDistribuidorComponent implements OnInit, AfterViewInit, On
   public productores: IProductor[] = [];
   public lotes: ILote[] = [];
   public distribuidorActual?: IDistribuidor;
+  public estadoLicencia?: IEstadoLicenciaEntidad;
+  public licenciaConsultada = false;
 
   public totalHectareas = 0;
   public totalHectareasSembradas = 0;
@@ -156,6 +160,7 @@ export class DashboardDistribuidorComponent implements OnInit, AfterViewInit, On
     private listadosService: ListadosService,
     private helper: HelperService,
     public loginService: LoginService,
+    private licenciaPorEntidadService: LicenciaPorEntidadService,
     private router: Router,
     private activatedRoute: ActivatedRoute,
     private params: ParamsService
@@ -165,17 +170,27 @@ export class DashboardDistribuidorComponent implements OnInit, AfterViewInit, On
 
   public nombreGestor(): string {
     if (this.loginService.esAsesor) {
-      return (
-        this.helper.user?.datosPersonales?.nombre ||
-        this.helper.user?.username ||
-        'Asesor'
-      );
+      return this.helper.user?.datosPersonales?.nombre || this.helper.user?.username || 'Asesor';
     }
     return this.distribuidorActual?.nombre || 'Distribuidor';
   }
 
   public puedeGestionarCartera(): boolean {
     return this.loginService.esAsesor && puedeEscribir(this.helper.permiso);
+  }
+
+  public origenLicenciaLabel(): string {
+    if (!this.estadoLicencia) return 'Estado no disponible';
+    if (this.estadoLicencia.origenEfectivo === 'heredada') return 'Heredado de la red';
+    if (this.estadoLicencia.origenEfectivo === 'directa') return 'Asignación directa';
+    if (this.estadoLicencia.origenEfectivo === 'default') return 'Plan base';
+    return 'Sin configurar';
+  }
+
+  public vigenciaLicenciaLabel(): string {
+    const dias = this.estadoLicencia?.diasRestantes;
+    if (dias === undefined) return 'Sin vencimiento directo';
+    return dias === 1 ? '1 día restante' : `${dias} días restantes`;
   }
 
   public crearEstablecimiento(): void {
@@ -1006,11 +1021,7 @@ export class DashboardDistribuidorComponent implements OnInit, AfterViewInit, On
 
   private evaluacionSanitaria(siembra?: ISiembra) {
     const fecha = siembra?.ultimaPrediccion?.fechaPrediccion || siembra?.ultimaPrediccion?.fecha;
-    return evaluarSanidadAgregada(
-      siembra?.ultimaPrediccion?.enfermedades || [],
-      siembra?.semilla?.cultivo,
-      fecha
-    );
+    return evaluarSanidadAgregada(siembra?.ultimaPrediccion?.enfermedades || [], siembra?.semilla?.cultivo, fecha);
   }
 
   private filaCobertura(servicio: string, estado: EstadoCoberturaServicio, detalle: string): ICoberturaServicio {
@@ -1232,8 +1243,29 @@ export class DashboardDistribuidorComponent implements OnInit, AfterViewInit, On
   }
 
   private async cargaInicial(): Promise<void> {
-    await Promise.all([this.listarDistribuidor(), this.listarSiembras(), this.listarProductores(), this.listarLotes()]);
+    await Promise.all([
+      this.listarDistribuidor(),
+      this.listarSiembras(),
+      this.listarProductores(),
+      this.listarLotes(),
+      this.listarLicenciaActual(),
+    ]);
     this.recomputarResumen();
+  }
+
+  private async listarLicenciaActual(): Promise<void> {
+    if (!this.loginService.esAsesor) {
+      this.licenciaConsultada = true;
+      return;
+    }
+    try {
+      this.estadoLicencia = await this.licenciaPorEntidadService.actual();
+    } catch (_error) {
+      // El tablero operativo no debe fallar si el resumen comercial no responde.
+      this.estadoLicencia = undefined;
+    } finally {
+      this.licenciaConsultada = true;
+    }
   }
 
   async ngOnInit(): Promise<void> {

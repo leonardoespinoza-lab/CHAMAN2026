@@ -221,4 +221,66 @@ describe('ProductorsService - red comercial del asesor', () => {
     );
     expect(result._id).toBe('prod-asesor-tenant');
   });
+
+  it('un alta de Admin sin plan explicito hereda y no fabrica una asignacion', async () => {
+    const repository = {
+      create: jest.fn(async (data) => ({ _id: 'prod-admin', ...data })),
+    };
+    const licencias = { getById: jest.fn() };
+    const asignaciones = { create: jest.fn() };
+    const service = new ProductorsService(
+      repository as any,
+      {} as any,
+      licencias as any,
+      asignaciones as any,
+      {} as any,
+    );
+
+    const result = await service.create(
+      { nombre: 'Productor heredado' } as any,
+      { nivel: 'Admin', rol: 'Admin' } as any,
+      undefined as any,
+    );
+
+    expect(result._id).toBe('prod-admin');
+    expect(licencias.getById).not.toHaveBeenCalled();
+    expect(asignaciones.create).not.toHaveBeenCalled();
+  });
+
+  it('mantiene compatible el alta legacy cuando envia un plan explicito', async () => {
+    const repository = {
+      create: jest.fn(async (data) => ({ _id: 'prod-admin', ...data })),
+    };
+    const licencias = {
+      getById: jest.fn(async () => ({ _id: 'plan-1', nombre: 'Plan 1' })),
+    };
+    const asignaciones = { create: jest.fn(async (data) => data) };
+    const service = new ProductorsService(
+      repository as any,
+      {} as any,
+      licencias as any,
+      asignaciones as any,
+      {} as any,
+    );
+
+    await service.create(
+      {
+        nombre: 'Productor directo',
+        licencia: { _id: 'plan-1' },
+        expiracion: 45,
+      } as any,
+      { nivel: 'Admin', rol: 'Admin' } as any,
+      undefined as any,
+    );
+
+    expect(repository.create.mock.calls[0][0]).not.toHaveProperty('licencia');
+    expect(repository.create.mock.calls[0][0]).not.toHaveProperty('expiracion');
+    expect(asignaciones.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        idEntidad: 'prod-admin',
+        idLicencia: 'plan-1',
+        tipoEntidad: 'Productor',
+      }),
+    );
+  });
 });

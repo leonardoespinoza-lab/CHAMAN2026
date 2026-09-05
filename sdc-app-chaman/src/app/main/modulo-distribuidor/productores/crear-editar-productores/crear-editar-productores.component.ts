@@ -13,6 +13,7 @@ import {
   IProductor,
   IQueryParam,
   IQuimica,
+  ModalidadComercialLicencia,
 } from 'modelos/src';
 import { SelectChangeEvent } from 'primeng/select';
 import { Subscription } from 'rxjs';
@@ -50,6 +51,14 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
   public estadoLicencia?: IEstadoLicenciaEntidad;
   private licenciaInicialId?: string;
   private expiracionInicial?: string;
+  private modoLicenciaInicial: ModoLicencia = 'heredada';
+  public modoLicencia: ModoLicencia = 'heredada';
+  private readonly modosLicenciaBase: Array<{ label: string; value: ModoLicencia }> = [
+    { label: 'Heredar de la red', value: 'heredada' },
+    { label: 'Prueba temporal', value: 'prueba' },
+    { label: 'Cortesía comercial', value: 'cortesia' },
+    { label: 'Suscripción', value: 'suscripcion' },
+  ];
   public licencias$?: Subscription;
   public hoy = new Date();
   public fechaDeExpiracion = new Date(this.hoy.getFullYear(), this.hoy.getMonth() + 1, this.hoy.getDate());
@@ -74,7 +83,7 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
     private listados: ListadosService,
     public loginService: LoginService,
     private router: Router,
-    private licenciaPorEntidadService: LicenciaPorEntidadService,
+    private licenciaPorEntidadService: LicenciaPorEntidadService
   ) {}
 
   private createForm(): void {
@@ -87,7 +96,6 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
       telefonoFiscal: new FormControl(this.productor?.telefonoFiscal),
       direccionFiscal: new FormControl(this.productor?.direccionFiscal),
       logo: new FormControl(this.productor?.logo),
-      gratis: new FormControl(this.productor?.gratis ?? true),
       idQuimica: new FormControl(this.productor?.idQuimica),
       idDistribuidor: new FormControl(this.productor?.idDistribuidor),
       direccion: new FormControl(this.productor?.direccion),
@@ -139,15 +147,18 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
       this.createFormLicencia();
       if (this.productor?._id) {
         this.estadoLicencia = await this.licenciaPorEntidadService.getEstadoEntidad('Productor', this.productor._id);
+        const asignacion = this.estadoLicencia.asignacion;
+        this.modoLicencia = asignacion ? asignacion.modalidadComercial || 'directa_legacy' : 'heredada';
         if (this.estadoLicencia.asignacion?.fechaExpiracion) {
           this.fechaDeExpiracion = new Date(this.estadoLicencia.asignacion.fechaExpiracion);
         }
       }
       await this.listarLicencias();
-      this.licencia = this.licencias.find((item) => item._id === this.estadoLicencia?.licencia?._id);
+      this.licencia = this.licencias.find((item) => item._id === this.estadoLicencia?.asignacion?.idLicencia);
       if (this.licencia) await this.onLicenciaChange(this.licencia);
       this.licenciaInicialId = this.licencia?._id;
       this.expiracionInicial = this.fechaKey(this.fechaDeExpiracion);
+      this.modoLicenciaInicial = this.modoLicencia;
     } else {
       // Si no se muestra la licencia, reinicio el formulario de licencia
       this.formLicencia = undefined;
@@ -157,6 +168,8 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
       this.estadoLicencia = undefined;
       this.licenciaInicialId = undefined;
       this.expiracionInicial = undefined;
+      this.modoLicencia = 'heredada';
+      this.modoLicenciaInicial = 'heredada';
       this.fechaDeExpiracion = new Date(this.hoy.getFullYear(), this.hoy.getMonth() + 1, this.hoy.getDate());
     }
     this.checkDisabled();
@@ -187,6 +200,28 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
     this.checkDisabled();
   }
 
+  public onModoLicenciaChange(modo: ModoLicencia): void {
+    this.modoLicencia = modo;
+    this.checkDisabled();
+  }
+
+  public get modosLicencia(): Array<{ label: string; value: ModoLicencia }> {
+    if (this.modoLicenciaInicial === 'directa_legacy' || this.modoLicencia === 'directa_legacy') {
+      return [
+        ...this.modosLicenciaBase,
+        {
+          label: 'Asignación anterior sin clasificar',
+          value: 'directa_legacy',
+        },
+      ];
+    }
+    return this.modosLicenciaBase;
+  }
+
+  public get requiereAsignacionDirecta(): boolean {
+    return this.modoLicencia !== 'heredada';
+  }
+
   // ACCIONES
   private getData() {
     const data: ICreateProductor = {
@@ -199,7 +234,9 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
   public onCuitInput(): void {
     const control = this.form?.get('cuit');
     if (!control) return;
-    const normalizado = String(control.value || '').replace(/\D/g, '').slice(0, 11);
+    const normalizado = String(control.value || '')
+      .replace(/\D/g, '')
+      .slice(0, 11);
     if (normalizado !== control.value) {
       control.setValue(normalizado, { emitEvent: false });
     }
@@ -220,27 +257,26 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
   public async guardar(crearUsuario = false): Promise<void> {
     this.loading = true;
     try {
-      const data = this.getData();      
+      const data = this.getData();
       let productorCreado: IProductor | undefined;
 
-      if (this.debeGuardarLicencia()) {
-        data.expiracion = this.helper.dateToDias(this.fechaDeExpiracion);
-        data.licencia = { _id: this.licencia!._id } as any;
-      }
       if (this.productor?._id) {
         await this.service.editar(this.productor._id, data);
+        await this.guardarConfiguracionLicencia(this.productor._id);
 
         // Solo actualiza el item en cache
         this.listados.patchEntityItem('productors', {
-         _id: this.productor._id,
-         ...data,
-        });  
+          _id: this.productor._id,
+          ...data,
+        });
 
         this.helper.notifSuccess(this.translate.instant('Editado correctamente'));
       } else {
-
         const created = await this.service.crear(data);
         productorCreado = created;
+        if (created._id) {
+          await this.guardarConfiguracionLicencia(created._id);
+        }
 
         // Solo actualiza el item en cache
         this.listados.createEntityItem('productors', created);
@@ -278,7 +314,7 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
     // si hay mostrarLicencia y no hay editarLicencia, entonces tiene que haber una licencia seleccionada
     this.disabled = !this.form?.valid;
     if (this.mostrarLicencia) {
-      this.disabled = this.disabled || !this.licencia;
+      this.disabled = this.disabled || (this.requiereAsignacionDirecta && (!this.licencia || !this.fechaDeExpiracion));
     }
   }
 
@@ -342,9 +378,6 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
     if (this.productor) {
       console.log('edit', this.productor);
     }
-    if (this.mostrarLicencia === true) {
-      await this.onMostrarLicenciaChange(true);
-    }
     this.titulo = this.productor
       ? () => this.translate.instant(`Editar productor`)
       : () => this.translate.instant('Crear productor');
@@ -358,6 +391,7 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
     }
     if (this.loginService.esAdmin) {
       this.createFormLicencia();
+      await this.onMostrarLicenciaChange(true);
     }
     this.subcribeFormChanges();
     this.checkDisabled();
@@ -365,12 +399,52 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
   }
 
   private debeGuardarLicencia(): boolean {
-    if (!this.mostrarLicencia || !this.licencia?._id) return false;
-    if (!this.productor?._id) return true;
+    if (!this.mostrarLicencia) return false;
+    if (!this.productor?._id) return this.requiereAsignacionDirecta;
+    if (this.modoLicencia !== this.modoLicenciaInicial) return true;
+    if (!this.requiereAsignacionDirecta || !this.licencia?._id) return false;
     return (
-      this.licencia._id !== this.licenciaInicialId ||
-      this.fechaKey(this.fechaDeExpiracion) !== this.expiracionInicial
+      this.licencia._id !== this.licenciaInicialId || this.fechaKey(this.fechaDeExpiracion) !== this.expiracionInicial
     );
+  }
+
+  private async guardarConfiguracionLicencia(idProductor: string): Promise<void> {
+    if (!this.debeGuardarLicencia()) return;
+    if (this.modoLicencia === 'heredada') {
+      this.estadoLicencia = await this.licenciaPorEntidadService.heredar('Productor', idProductor, {
+        tipoEntidad: 'Productor',
+        motivoCambio: 'Productor configurado para heredar el plan de su red',
+      });
+      return;
+    }
+    if (!this.licencia?._id) {
+      throw new Error('Seleccione un plan para la asignación directa');
+    }
+    const modalidad = this.modalidadPersistible();
+    this.estadoLicencia = await this.licenciaPorEntidadService.asignar('Productor', idProductor, {
+      tipoEntidad: 'Productor',
+      idLicencia: this.licencia._id,
+      fechaInicio: new Date().toISOString(),
+      fechaExpiracion: this.fechaDeExpiracion.toISOString(),
+      modalidadComercial: modalidad,
+      motivoCambio: this.motivoCambioLicencia(),
+    });
+  }
+
+  private modalidadPersistible(): ModalidadComercialLicencia | undefined {
+    return this.modoLicencia === 'prueba' || this.modoLicencia === 'cortesia' || this.modoLicencia === 'suscripcion'
+      ? this.modoLicencia
+      : undefined;
+  }
+
+  private motivoCambioLicencia(): string {
+    const etiquetas: Record<Exclude<ModoLicencia, 'heredada'>, string> = {
+      prueba: 'Prueba temporal asignada desde la administración del productor',
+      cortesia: 'Cortesía comercial asignada desde la administración del productor',
+      suscripcion: 'Suscripción asignada desde la administración del productor',
+      directa_legacy: 'Asignación directa anterior actualizada desde la administración del productor',
+    };
+    return etiquetas[this.modoLicencia as Exclude<ModoLicencia, 'heredada'>];
   }
 
   private fechaKey(fecha?: Date): string | undefined {
@@ -399,3 +473,5 @@ export class CrearEditarProductoresComponent implements OnInit, OnDestroy {
     this.checkDisabled();
   }
 }
+
+type ModoLicencia = 'heredada' | ModalidadComercialLicencia | 'directa_legacy';

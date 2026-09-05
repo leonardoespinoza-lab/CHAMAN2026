@@ -6,7 +6,10 @@
       <p>Alta del productor. Luego se puede crear el usuario y asociarlo a este productor.</p>
     </div>
     <div class="header-actions">
-      @if ((loginService.esAdmin || loginService.esTenant || loginService.esDistribuidor || loginService.esAsesor) && !productor) {
+      @if (
+        (loginService.esAdmin || loginService.esTenant || loginService.esDistribuidor || loginService.esAsesor) &&
+        !productor
+      ) {
         <p-button
           label="Guardar y crear usuario"
           icon="pi pi-user-plus"
@@ -70,17 +73,15 @@
             </p-floatlabel>
           }
         </div>
-
-        <div class="toggle-row">
-          <p-checkbox formControlName="gratis" inputId="gratis" [binary]="true" />
-          <label for="gratis">Acceso sin cargo</label>
-        </div>
       </div>
 
       <div class="form-section">
         <div class="section-heading">
           <h2>Información fiscal</h2>
-          <span>Opcional. Identifica correctamente a la persona o empresa productora; no corresponde al perfil profesional del asesor.</span>
+          <span
+            >Opcional. Identifica correctamente a la persona o empresa productora; no corresponde al perfil profesional
+            del asesor.</span
+          >
         </div>
 
         <div class="field-grid">
@@ -146,49 +147,96 @@
           <input pInputText type="number" formControlName="radioInfluenciaKm" [fluid]="true" />
           <label>Radio operativo de referencia (km)</label>
         </p-floatlabel>
-        <p class="hint">Si no se carga una dirección, el mapa usa el centro de sus establecimientos y lo identifica como ubicación derivada.</p>
+        <p class="hint">
+          Si no se carga una dirección, el mapa usa el centro de sus establecimientos y lo identifica como ubicación
+          derivada.
+        </p>
       </div>
 
-      @if (loginService.esAdmin) {
-        <div class="form-section compact">
-          <div class="toggle-row">
-            <p-checkbox
-              [(ngModel)]="mostrarLicencia"
-              [ngModelOptions]="{ standalone: true }"
-              [binary]="true"
-              inputId="mostrarLicencia"
-              (ngModelChange)="onMostrarLicenciaChange($event)"
-            />
-            <label for="mostrarLicencia">Administrar licencia</label>
-          </div>
-          <p class="hint">Si no se configura, el productor hereda el plan de su distribuidor o compañía.</p>
-        </div>
-      }
-
-      @if (loginService.esAdmin && mostrarLicencia && formLicencia) {
+      @if (loginService.esAdmin && formLicencia) {
         <div class="form-section license-assignment-panel" [formGroup]="formLicencia">
-          <div class="section-heading">
-            <h2>Plan del productor</h2>
-            <span>La asignación es auditable y no modifica el catálogo compartido.</span>
+          <div class="section-heading license-heading">
+            <div>
+              <h2>Licencia y vigencia</h2>
+              <span>Elegí cómo se habilita este productor. Sólo un administrador global puede cambiarlo.</span>
+            </div>
+            @if (estadoLicencia) {
+              <span class="license-source">{{ estadoLicencia.origenEfectivo }}</span>
+            }
           </div>
 
-          <p-select
-            [options]="licencias"
-            [(ngModel)]="licencia"
-            optionLabel="nombre"
-            placeholder="Seleccionar un plan existente"
-            [fluid]="true"
-            appendTo="body"
-            [ngModelOptions]="{ standalone: true }"
-            (onChange)="onLicenciaChange($event.value)"
-          />
+          <div class="license-mode-field">
+            <label for="producerLicenseMode">Modalidad</label>
+            <p-select
+              inputId="producerLicenseMode"
+              [options]="modosLicencia"
+              [(ngModel)]="modoLicencia"
+              optionLabel="label"
+              optionValue="value"
+              [fluid]="true"
+              appendTo="body"
+              [ngModelOptions]="{ standalone: true }"
+              (onChange)="onModoLicenciaChange($event.value)"
+            />
+          </div>
 
-          @if (licencia) {
+          @if (modoLicencia === 'heredada') {
+            <div class="license-inheritance-note">
+              <i class="pi pi-sitemap"></i>
+              <div>
+                <strong>Hereda el plan de su red</strong>
+                <span
+                  >Usará la asignación vigente del distribuidor o compañía, sin crear otra licencia para este
+                  productor.</span
+                >
+              </div>
+            </div>
+          } @else {
+            <div class="license-direct-fields">
+              <div class="license-plan-field">
+                <label for="producerLicensePlan">Plan</label>
+                <p-select
+                  inputId="producerLicensePlan"
+                  [options]="licencias"
+                  [(ngModel)]="licencia"
+                  optionLabel="nombre"
+                  placeholder="Seleccionar un plan existente"
+                  [fluid]="true"
+                  appendTo="body"
+                  [ngModelOptions]="{ standalone: true }"
+                  (onChange)="onLicenciaChange($event.value)"
+                />
+              </div>
+
+              <div class="license-date-field">
+                <label for="producerLicenseExpiration">Vigencia hasta</label>
+                <p-datepicker
+                  inputId="producerLicenseExpiration"
+                  [(ngModel)]="fechaDeExpiracion"
+                  [minDate]="hoy"
+                  [showIcon]="true"
+                  [fluid]="true"
+                  appendTo="body"
+                  [ngModelOptions]="{ standalone: true }"
+                />
+              </div>
+            </div>
+          }
+
+          @if (requiereAsignacionDirecta && licencia) {
             <div class="license-plan-summary">
-              <div><span>Usuarios</span><strong>{{ licencia.maxUsuarios ?? 'Sin limite' }}</strong></div>
-              <div><span>Establecimientos</span><strong>{{ licencia.maxEstablecimientos ?? 'Sin limite' }}</strong></div>
-              <div><span>Lotes</span><strong>{{ licencia.maxLotes ?? 'Sin limite' }}</strong></div>
-              <div><span>Hectareas</span><strong>{{ licencia.maxdHectareas ?? 'Sin limite' }}</strong></div>
+              <div>
+                <span>Usuarios</span><strong>{{ licencia.maxUsuarios ?? 'Sin limite' }}</strong>
+              </div>
+              <div>
+                <span>Establecimientos</span><strong>{{ licencia.maxEstablecimientos ?? 'Sin limite' }}</strong>
+              </div>
+              <div>
+                <span>Lotes</span><strong>{{ licencia.maxLotes ?? 'Sin limite' }}</strong>
+              </div>
+              <div>
+                <span>Hectareas</span><strong>{{ licencia.maxdHectareas ?? 'Sin limite' }}</strong>
+              </div>
             </div>
           }
 
@@ -198,25 +246,25 @@
               <small>Medicion administrativa; no modifica permisos ni factura consumos.</small>
             </div>
             <div class="license-usage-summary">
-              <div><span>Usuarios</span><strong>{{ uso.usuarios.actual }} / {{ uso.usuarios.limite ?? 'Sin limite' }}</strong></div>
-              <div><span>Establecimientos</span><strong>{{ uso.establecimientos.actual }} / {{ uso.establecimientos.limite ?? 'Sin limite' }}</strong></div>
-              <div><span>Lotes</span><strong>{{ uso.lotes.actual }} / {{ uso.lotes.limite ?? 'Sin limite' }}</strong></div>
-              <div><span>Hectareas</span><strong>{{ uso.hectareas.actual }} / {{ uso.hectareas.limite ?? 'Sin limite' }}</strong></div>
+              <div>
+                <span>Usuarios</span
+                ><strong>{{ uso.usuarios.actual }} / {{ uso.usuarios.limite ?? 'Sin limite' }}</strong>
+              </div>
+              <div>
+                <span>Establecimientos</span
+                ><strong>{{ uso.establecimientos.actual }} / {{ uso.establecimientos.limite ?? 'Sin limite' }}</strong>
+              </div>
+              <div>
+                <span>Lotes</span><strong>{{ uso.lotes.actual }} / {{ uso.lotes.limite ?? 'Sin limite' }}</strong>
+              </div>
+              <div>
+                <span>Hectareas</span
+                ><strong>{{ uso.hectareas.actual }} / {{ uso.hectareas.limite ?? 'Sin limite' }}</strong>
+              </div>
             </div>
           }
 
-          <div class="license-date-field">
-            <label for="producerLicenseExpiration">Vigencia hasta</label>
-            <p-datepicker
-              inputId="producerLicenseExpiration"
-              [(ngModel)]="fechaDeExpiracion"
-              [minDate]="hoy"
-              [showIcon]="true"
-              [fluid]="true"
-              appendTo="body"
-              [ngModelOptions]="{ standalone: true }"
-            />
-          </div>
+          <p class="hint">El cambio conserva historial. No modifica el catálogo ni los permisos del usuario.</p>
         </div>
       }
     </form>

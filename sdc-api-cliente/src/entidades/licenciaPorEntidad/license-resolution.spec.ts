@@ -143,6 +143,7 @@ describe('LicenciaPorEntidadsService - resolucion y auditoria', () => {
         fechaInicio: '2026-07-01T00:00:00.000Z',
         fechaExpiracion: '2027-07-01T00:00:00.000Z',
         motivoCambio: 'Upgrade comercial',
+        modalidadComercial: 'suscripcion',
       },
       { _id: 'admin-1' } as any,
     );
@@ -157,6 +158,7 @@ describe('LicenciaPorEntidadsService - resolucion y auditoria', () => {
         idAsignacionAnterior: 'asig-anterior',
         creadoPorUsuario: 'admin-1',
         motivoCambio: 'Upgrade comercial',
+        modalidadComercial: 'suscripcion',
       }),
     );
     expect(licencias.getById).toHaveBeenCalledWith('plan-pro');
@@ -165,6 +167,65 @@ describe('LicenciaPorEntidadsService - resolucion y auditoria', () => {
       true,
     );
     expect(estado.origenEfectivo).toBe('directa');
+  });
+
+  it('conserva la modalidad comercial elegida en la asignacion', async () => {
+    const { service, repository } = build();
+
+    await service.asignar(
+      'prod-1',
+      {
+        tipoEntidad: 'Productor',
+        idLicencia: 'plan-pro',
+        modalidadComercial: 'prueba',
+      },
+      { _id: 'admin-1' } as any,
+    );
+
+    expect(repository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ modalidadComercial: 'prueba' }),
+    );
+  });
+
+  it('vuelve a herencia cerrando la asignacion directa sin borrar historial', async () => {
+    const { service, repository, asignaciones } = build([
+      {
+        _id: 'asig-directa',
+        idEntidad: 'prod-1',
+        idLicencia: 'plan-pro',
+        estado: 'activa',
+        fechaExpiracion: '2030-01-01T00:00:00.000Z',
+      },
+    ]);
+
+    const estado = await service.heredar(
+      'prod-1',
+      { tipoEntidad: 'Productor', motivoCambio: 'Herencia elegida' },
+      { _id: 'admin-1' } as any,
+    );
+
+    expect(repository.update).toHaveBeenCalledWith(
+      'asig-directa',
+      expect.objectContaining({
+        estado: 'reemplazada',
+        motivoCambio: 'Herencia elegida',
+      }),
+    );
+    expect(repository.delete).not.toHaveBeenCalled();
+    expect(asignaciones[0].estado).toBe('reemplazada');
+    expect(estado.origenEfectivo).toBe('default');
+  });
+
+  it('rechaza modalidades comerciales desconocidas', async () => {
+    const { service, repository } = build();
+    await expect(
+      service.asignar('prod-1', {
+        tipoEntidad: 'Productor',
+        idLicencia: 'plan-pro',
+        modalidadComercial: 'otra' as any,
+      }),
+    ).rejects.toThrow('Modalidad comercial no valida');
+    expect(repository.create).not.toHaveBeenCalled();
   });
 
   it('programa un cambio futuro sin cortar la licencia activa', async () => {

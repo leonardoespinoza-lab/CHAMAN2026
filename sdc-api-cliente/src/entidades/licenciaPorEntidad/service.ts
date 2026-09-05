@@ -8,6 +8,7 @@ import {
   IAsignarLicenciaEntidad,
   ICreateLicenciaPorEntidad,
   IEstadoLicenciaEntidad,
+  IHeredarLicenciaEntidad,
   ILicencia,
   ILicenciaPorEntidad,
   IListado,
@@ -132,6 +133,12 @@ export class LicenciaPorEntidadsService {
         'Entidad, tipo y plan de licencia son obligatorios',
       );
     }
+    if (
+      data.modalidadComercial &&
+      !['prueba', 'cortesia', 'suscripcion'].includes(data.modalidadComercial)
+    ) {
+      throw new BadRequestException('Modalidad comercial no valida');
+    }
     this.validarTipoEntidad(data.tipoEntidad);
     const fechaInicio = data.fechaInicio
       ? new Date(data.fechaInicio)
@@ -187,6 +194,7 @@ export class LicenciaPorEntidadsService {
       estado,
       origen: 'manual',
       motivoCambio: data.motivoCambio?.trim() || 'Asignacion administrativa',
+      modalidadComercial: data.modalidadComercial,
       creadoPorUsuario: usuario?._id,
       idAsignacionAnterior: anterior?._id,
     });
@@ -201,6 +209,33 @@ export class LicenciaPorEntidadsService {
         [asignacion, ...historial],
       ),
     );
+  }
+
+  async heredar(
+    idEntidad: string,
+    data: IHeredarLicenciaEntidad,
+    usuario?: IUsuario,
+  ): Promise<IEstadoLicenciaEntidad> {
+    if (!idEntidad || !data.tipoEntidad) {
+      throw new BadRequestException('Entidad y tipo son obligatorios');
+    }
+    this.validarTipoEntidad(data.tipoEntidad);
+    const historial = await this.getHistorial(idEntidad);
+    const ahora = new Date().toISOString();
+    const vigentes = historial.filter((item) =>
+      this.estadoReemplazable(item.estado),
+    );
+    for (const item of vigentes) {
+      if (!item._id) continue;
+      await this.repository.update(item._id, {
+        estado: 'reemplazada',
+        fechaActualizacion: ahora,
+        motivoCambio:
+          data.motivoCambio?.trim() ||
+          `Retorno a herencia por ${usuario?._id || 'administracion'}`,
+      });
+    }
+    return await this.getEstadoPorEntidad(data.tipoEntidad, idEntidad);
   }
 
   async get(
