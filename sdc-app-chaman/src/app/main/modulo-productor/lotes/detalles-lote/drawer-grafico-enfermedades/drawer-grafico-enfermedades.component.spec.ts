@@ -43,6 +43,22 @@ describe('DrawerGraficoEnfermedadesComponent - grafico principal', () => {
     expect(new Set(colores).size).toBe(5);
   });
 
+  for (const cultivo of ['Cebada', 'Trigo', 'Soja', 'Maiz']) {
+    it(`conserva las tres bandas verde, amarilla y roja del fondo para ${cultivo}`, () => {
+      const componente = crear();
+      componente.siembra = { semilla: { cultivo } } as any;
+      const options = (componente as any).chartBasicOptions([], [], []);
+      const { medio, alto } = componente.umbralesRiesgo;
+
+      expect(componente.mostrarUmbrales).toBeTrue();
+      expect(options.yAxis.plotBands).toEqual([
+        { from: 0, to: medio, color: 'rgba(54, 181, 107, 0.13)' },
+        { from: medio, to: alto, color: 'rgba(230, 184, 79, 0.16)' },
+        { from: alto, to: 100, color: 'rgba(224, 82, 70, 0.14)' },
+      ]);
+    });
+  }
+
   it('evita repetir titulo y subtitulo cuando el grafico esta embebido', () => {
     const componente = crear();
     componente.embedded = true;
@@ -178,7 +194,11 @@ describe('DrawerGraficoEnfermedadesComponent - grafico principal', () => {
     expect(fusariosis.showInLegend).toBeTrue();
     expect(fusariosis.data).toEqual([]);
     expect(fusariosis.enableMouseTracking).toBeFalse();
-    expect((componente.chartOptions!.yAxis as any).plotBands).toEqual([]);
+    expect((componente.chartOptions!.yAxis as any).plotBands).toEqual([
+      { from: 0, to: 35, color: 'rgba(54, 181, 107, 0.13)' },
+      { from: 35, to: 60, color: 'rgba(230, 184, 79, 0.16)' },
+      { from: 60, to: 100, color: 'rgba(224, 82, 70, 0.14)' },
+    ]);
     expect((componente.chartOptions!.yAxis as any).title.text).not.toContain('%');
   });
 

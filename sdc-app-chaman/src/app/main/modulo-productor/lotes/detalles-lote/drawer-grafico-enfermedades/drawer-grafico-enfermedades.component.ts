@@ -82,9 +82,9 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
   public chartOptions?: Highcharts.Options;
 
   public get mostrarUmbrales(): boolean {
-    // Cebada reúne índices diarios y de ventana, además de versiones históricas.
-    // Una única banda de riesgo daría a entender que son equivalentes.
-    return this.siembra?.semilla?.cultivo !== 'Cebada';
+    // Conservar las bandas de referencia del diseño vigente para todos los cultivos.
+    // Los cortes de versión se resuelven en las series, no ocultando el fondo.
+    return true;
   }
 
   public get umbralesRiesgo(): { medio: number; alto: number } {
