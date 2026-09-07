@@ -18,11 +18,16 @@
             Serie histórica del motor sanitario. La lectura debe cruzarse con etapa, clima, recorrida y manejo.
           }
         </small>
-        <div class="threshold-legend" aria-label="Umbrales de la escala sanitaria">
-          <span class="low">Bajo &lt; {{ umbralesRiesgo.medio }}</span>
-          <span class="medium">Seguimiento {{ umbralesRiesgo.medio }}–&lt;{{ umbralesRiesgo.alto }}</span>
-          <span class="high">Umbral alto ≥ {{ umbralesRiesgo.alto }}</span>
-        </div>
+        <small>{{
+          'Índices de seguimiento, no porcentaje de plantas enfermas. Las versiones distintas no se unen.' | translate
+        }}</small>
+        @if (mostrarUmbrales) {
+          <div class="threshold-legend" aria-label="Umbrales de la escala sanitaria">
+            <span class="low">Bajo &lt; {{ umbralesRiesgo.medio }}</span>
+            <span class="medium">Seguimiento {{ umbralesRiesgo.medio }}–&lt;{{ umbralesRiesgo.alto }}</span>
+            <span class="high">Umbral alto ≥ {{ umbralesRiesgo.alto }}</span>
+          </div>
+        }
       </div>
       @if (predicciones.length) {
         <em>{{ predicciones.length }} lectura(s)</em>
@@ -39,6 +44,16 @@
           [style]="'display:block;width:100%;height:100%'"
         ></app-chart>
       </div>
+      @if (seriesSinLecturas.length) {
+        <ul class="series-status" aria-label="Enfermedades sin curva calculada">
+          @for (serie of seriesSinLecturas; track serie.nombre) {
+            <li>
+              <strong>{{ serie.nombre }}</strong
+              >: {{ serie.estado | translate }}
+            </li>
+          }
+        </ul>
+      }
     } @else {
       <div class="chart-empty">
         <strong>Sin serie suficiente</strong>

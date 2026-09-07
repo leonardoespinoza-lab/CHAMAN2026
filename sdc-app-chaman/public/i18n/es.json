@@ -201,5 +201,8 @@
 	"Inicio de llenado": "Inicio de llenado",
 	"Distribuidores": "Distribuidores",
 	"Te damos la bienvenida a Chamán Agro": "Te damos la bienvenida a Chamán Agro",
-	"Superficie": "Superficie"
+	"Superficie": "Superficie",
+	"Escala del indicador (0–100)": "Escala del indicador (0–100)",
+	"Índices de seguimiento, no porcentaje de plantas enfermas. Las versiones distintas no se unen.": "Índices de seguimiento, no porcentaje de plantas enfermas. Las versiones distintas no se unen.",
+	"% horas favorables": "% horas favorables"
 }

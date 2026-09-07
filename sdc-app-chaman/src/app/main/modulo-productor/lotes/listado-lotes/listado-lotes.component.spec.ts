@@ -81,12 +81,20 @@ describe('ListadoLotesComponent', () => {
     expect(indicador.tone).toBe('warn');
   });
 
-  it('mantiene al asesor en modo supervision sin acciones de lote', () => {
+  it('conserva la gestión aprobada para asesores administradores y de escritura', () => {
     const componente = crearComponente();
     (componente as any).helper = {
       permiso: { nivel: 'Asesor', rol: 'Admin' },
     };
 
+    expect(componente.puedeGestionarLotes()).toBeTrue();
+    (componente as any).helper.permiso.rol = 'Escritura';
+    expect(componente.puedeGestionarLotes()).toBeTrue();
+  });
+
+  it('no ofrece gestión de lotes a un asesor de solo lectura', () => {
+    const componente = crearComponente();
+    (componente as any).helper = { permiso: { nivel: 'Asesor', rol: 'Lectura' } };
     expect(componente.puedeGestionarLotes()).toBeFalse();
   });
 

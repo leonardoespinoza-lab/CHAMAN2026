@@ -10,6 +10,11 @@ import { ListadosService } from '../../../../../auxiliares/servicios/listados';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import { IDetalleSiembra } from '../detalles-lote.component';
 import { construirSeriesSanitariasTrigo, seleccionarSeriesVigentesTrigo } from './serie-sanitaria-trigo';
+import {
+  construirSeriesSanitariasHistoricas,
+  escaparTextoSanitario,
+  unidadSerieSanitaria,
+} from './serie-sanitaria-historica';
 
 export const COLORES_SERIE_SANITARIA_TRIGO: Record<string, string> = {
   'trigo.mancha_amarilla': '#13b8ad',
@@ -17,6 +22,13 @@ export const COLORES_SERIE_SANITARIA_TRIGO: Record<string, string> = {
   'trigo.roya_anaranjada': '#e6a117',
   'trigo.mancha_hoja': '#7567d8',
   'trigo.fusarium_espiga': '#cf4f72',
+};
+
+const COLORES_CEBADA: Record<string, string> = {
+  'cebada.mancha_red': '#13b8ad',
+  'cebada.escaldadura': '#2f9fe5',
+  'cebada.roya_hoja': '#36b56b',
+  'cebada.fusariosis_espiga': '#e6b84f',
 };
 
 export const ETAPAS_TRIGO: string[] = [
@@ -68,6 +80,13 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
   public predicciones: IPrediccion[] = [];
 
   public chartOptions?: Highcharts.Options;
+  public seriesSinLecturas: { nombre: string; estado: string }[] = [];
+
+  public get mostrarUmbrales(): boolean {
+    // Cebada reúne índices diarios y de ventana, además de versiones históricas.
+    // Una única banda de riesgo daría a entender que son equivalentes.
+    return this.siembra?.semilla?.cultivo !== 'Cebada';
+  }
 
   public get umbralesRiesgo(): { medio: number; alto: number } {
     return getUmbralesRiesgoSanitario(this.siembra?.semilla?.cultivo);
@@ -80,6 +99,8 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
   ) {}
 
   private crearGraficoPredicciones(): void {
+    this.seriesSinLecturas = [];
+    this.chartOptions = undefined;
     if (this.siembra?.semilla?.cultivo === 'Trigo') {
       this.crearGraficoPrediccionesTrigo();
       return;
@@ -116,6 +137,7 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
     const max = scale?.max ?? 100;
     const bajoHasta = this.umbralesRiesgo.medio;
     const medioHasta = this.umbralesRiesgo.alto;
+    const componente = this;
 
     const options: Highcharts.Options = {
       chart: {
@@ -143,30 +165,32 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
         max,
         min: 0,
         title: {
-          text: this.translate.instant('Valor calculado (%)'),
+          text: this.translate.instant('Escala del indicador (0–100)'),
           style: {
             color: 'var(--p-text-color)',
             fontSize: '13px',
             fontWeight: '700',
           },
         },
-        plotBands: [
-          {
-            from: 0,
-            to: bajoHasta,
-            color: color1,
-          },
-          {
-            from: bajoHasta,
-            to: medioHasta,
-            color: color2,
-          },
-          {
-            from: medioHasta,
-            to: max,
-            color: color3,
-          },
-        ],
+        plotBands: this.mostrarUmbrales
+          ? [
+              {
+                from: 0,
+                to: bajoHasta,
+                color: color1,
+              },
+              {
+                from: bajoHasta,
+                to: medioHasta,
+                color: color2,
+              },
+              {
+                from: medioHasta,
+                to: max,
+                color: color3,
+              },
+            ]
+          : [],
         labels: {
           style: {
             color: 'var(--p-text-color)',
@@ -202,6 +226,12 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
       tooltip: {
         shared: true,
         xDateFormat: '%d/%m/%Y',
+        useHTML: true,
+        style: { whiteSpace: 'normal', width: 280 },
+        formatter: function () {
+          const punto = this.points?.[0] || this;
+          return componente.formatearTooltip(Number(this.x), punto.series.chart.series);
+        },
       },
       plotOptions: {
         series: {
@@ -212,12 +242,84 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
             connectorAllowed: false,
           },
           lineWidth: 2.5,
+          connectNulls: false,
+          dashStyle: 'Solid',
         },
       },
       series,
     };
 
     return options;
+  }
+
+  private formatearTooltip(fecha: number, series: Highcharts.Series[]): string {
+    const idioma = this.translate.currentLang === 'br' ? 'pt-BR' : this.translate.currentLang || 'es-AR';
+    const numero = new Intl.NumberFormat(idioma, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const dia = new Intl.DateTimeFormat(idioma, { timeZone: 'UTC' }).format(fecha);
+    const filas = series
+      .filter((serie) => serie.visible)
+      .flatMap((serie) => {
+        const meta = serie.options.custom || {};
+        if (
+          (meta['desde'] !== undefined && fecha < meta['desde']) ||
+          (meta['hasta'] !== undefined && fecha > meta['hasta'])
+        )
+          return [];
+        const punto = serie.data.find((p) => p.x === fecha);
+        if (!punto) return [];
+        const detalle = punto.options.custom || {};
+        const estado = detalle['estado'];
+        const valor =
+          estado === 'fuera_ventana'
+            ? this.translate.instant('Fuera de ventana')
+            : punto.y === null || punto.y === undefined
+              ? this.translate.instant('Sin datos')
+              : `${numero.format(punto.y)} ${this.translate.instant(meta['unidad'] || '/100')}`;
+        const calidad = detalle['calidad'] === 'baja' ? ` · ${this.translate.instant('Datos a revisar')}` : '';
+        return [
+          `<div style="margin-top:8px"><span>${escaparTextoSanitario(serie.name)}</span><br/><strong>${escaparTextoSanitario(valor)}</strong>${escaparTextoSanitario(calidad)}</div>`,
+        ];
+      });
+    return `<div style="max-width:260px;white-space:normal"><strong>${escaparTextoSanitario(dia)}</strong>${filas.join('')}</div>`;
+  }
+
+  private crearSeriesHistoricas(): SeriesOptionsType[] {
+    const historicas = construirSeriesSanitariasHistoricas(this.predicciones);
+    const colores = new Map<string, string>();
+    const paleta = ['#13b8ad', '#2f9fe5', '#36b56b', '#e6b84f', '#7567d8'];
+    this.seriesSinLecturas = [];
+    return historicas.map((serie) => {
+      const hermanas = historicas.filter((s) => s.idEnfermedad === serie.idEnfermedad);
+      const ultima = Math.max(...hermanas.map((s) => s.hasta || 0));
+      const tieneLecturas = serie.data.some((p) => p.y !== null);
+      if (!tieneLecturas && serie.hasta === ultima) {
+        const estado = serie.data.find((p) => p.x === serie.hasta)?.custom.estado;
+        this.seriesSinLecturas.push({
+          nombre: serie.nombre,
+          estado: estado === 'fuera_ventana' ? 'Fuera de ventana' : 'Sin datos',
+        });
+      }
+      if (!colores.has(serie.idEnfermedad))
+        colores.set(serie.idEnfermedad, COLORES_CEBADA[serie.idEnfermedad] || paleta[colores.size % paleta.length]);
+      return {
+        type: 'line',
+        id: `${serie.idEnfermedad}-${serie.versionEtiqueta}`,
+        name: hermanas.length > 1 ? `${serie.nombre} · ${serie.versionEtiqueta}` : serie.nombre,
+        color: colores.get(serie.idEnfermedad),
+        data: serie.data,
+        connectNulls: false,
+        lineWidth: 4,
+        dashStyle: 'Solid',
+        marker: { enabled: serie.data.filter((p) => p.y !== null).length === 1, radius: 3 },
+        custom: {
+          idEnfermedad: serie.idEnfermedad,
+          version: serie.versionEtiqueta,
+          desde: serie.desde,
+          hasta: serie.hasta,
+          unidad: '/100',
+        },
+      };
+    });
   }
 
   private crearGraficoPrediccionesTrigo(): void {
@@ -242,11 +344,7 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
             idEnfermedad: serie.idEnfermedad,
             version: serie.versionEtiqueta,
             tieneLecturas: serie.tieneLecturas,
-          },
-          tooltip: {
-            xDateFormat: '%d-%m-%Y',
-            pointFormat: '<span>{series.name}</span><br/><strong>{point.y}%</strong>',
-            headerFormat: '<span style="font-size: 14px">{point.key}</span><br/>',
+            unidad: unidadSerieSanitaria(serie.idEnfermedad, serie.version),
           },
           dataLabels: {
             enabled: false,
@@ -375,43 +473,7 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
       return;
     }
 
-    const enfermedades = this.predicciones.map((p) => {
-      return p.enfermedades!.map((e) => e.enfermedad);
-    });
-    const enfermedadesUnicas = [...new Set(enfermedades.flat())];
-
-    const series: any[] = [];
-
-    for (const enfermedad of enfermedadesUnicas) {
-      series.push({
-        type: 'line',
-        name: enfermedad,
-        data: [],
-        lineWidth: 5,
-        tooltip: {
-          xDateFormat: '%d-%m-%Y',
-          pointFormat: '<strong>{point.y} %</strong>',
-        },
-      });
-    }
-
-    for (const prediccion of this.predicciones) {
-      if (!prediccion.fecha || !prediccion.enfermedades) {
-        continue;
-      }
-
-      const fecha = new Date(prediccion.fecha).getTime();
-
-      for (const enfermedad of prediccion.enfermedades) {
-        const valor = enfermedad.resultado;
-
-        for (const serie of series) {
-          if (serie.name === enfermedad.enfermedad) {
-            serie.data.push([fecha, valor]);
-          }
-        }
-      }
-    }
+    const series = this.crearSeriesHistoricas();
 
     const fechaActual = new Date().toISOString();
     const fechaEtapa2 = this.helper.getFechaInicioEtapaSoja2(this.siembra!, 'Emergencia', this.siembra?.crono);
@@ -525,42 +587,7 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
       return;
     }
 
-    const enfermedades = this.predicciones.map((p) => {
-      return p.enfermedades!.map((e) => e.enfermedad);
-    });
-    const enfermedadesUnicas = [...new Set(enfermedades.flat())];
-
-    const series: any[] = [];
-
-    for (const enfermedad of enfermedadesUnicas) {
-      series.push({
-        type: 'line',
-        name: enfermedad,
-        data: [],
-        lineWidth: 5,
-        tooltip: {
-          xDateFormat: '%d-%m-%Y',
-          pointFormat: '<strong>{point.y} %</strong>',
-        },
-      });
-    }
-
-    for (const prediccion of this.predicciones) {
-      if (!prediccion.fecha || !prediccion.enfermedades) {
-        continue;
-      }
-      const fecha = new Date(prediccion.fecha).getTime();
-
-      for (const enfermedad of prediccion.enfermedades) {
-        const valor = enfermedad.resultado;
-
-        for (const serie of series) {
-          if (serie.name === enfermedad.enfermedad) {
-            serie.data.push([fecha, valor]);
-          }
-        }
-      }
-    }
+    const series = this.crearSeriesHistoricas();
 
     const fechaActual = new Date().toISOString();
     const fechaEtapa2 = this.helper.getFechaInicioEtapaMaiz2(this.siembra!, 'Emergencia', this.siembra?.crono);
@@ -649,44 +676,7 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
       return;
     }
 
-    const enfermedades = this.predicciones.map((p) => {
-      return p.enfermedades!.map((e) => e.enfermedad);
-    });
-    const enfermedadesUnicas = [...new Set(enfermedades.flat())];
-
-    const series: any[] = [];
-
-    for (const enfermedad of enfermedadesUnicas) {
-      series.push({
-        type: 'line',
-        name: enfermedad,
-        data: [],
-        lineWidth: 4,
-        tooltip: {
-          xDateFormat: '%d-%m-%Y',
-          pointFormat: '<strong>{point.y}%</strong>',
-          headerFormat: '<span style="font-size: 14px">{point.key}</span><br/>',
-        },
-        dataLabels: {
-          enabled: false,
-        },
-      });
-    }
-
-    for (const prediccion of this.predicciones) {
-      if (!prediccion.fecha || !prediccion.enfermedades) {
-        continue;
-      }
-      const fecha = new Date(prediccion.fecha).getTime();
-
-      for (const enfermedad of prediccion.enfermedades) {
-        for (const serie of series) {
-          if (serie.name === enfermedad.enfermedad) {
-            serie.data.push([fecha, enfermedad.resultado]);
-          }
-        }
-      }
-    }
+    const series = this.crearSeriesHistoricas();
 
     const fechaActual = new Date().toISOString();
     const hitos = [
