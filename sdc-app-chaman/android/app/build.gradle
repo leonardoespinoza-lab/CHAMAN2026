@@ -1,41 +1,54 @@
 apply plugin: 'com.android.application'
 
+def releaseKeystorePath = System.getenv('CHAMAN_ANDROID_KEYSTORE_FILE')
+def releaseKeystorePassword = System.getenv('CHAMAN_ANDROID_KEYSTORE_PASSWORD')
+def releaseKeyAlias = System.getenv('CHAMAN_ANDROID_KEY_ALIAS')
+def releaseKeyPassword = System.getenv('CHAMAN_ANDROID_KEY_PASSWORD')
+def releaseSigningConfigured = [
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+].every { value -> value != null && !value.trim().isEmpty() }
+
 android {
-    namespace "com.chamanagro.app"
-    compileSdk rootProject.ext.compileSdkVersion
+    namespace = "com.chamanagro.app"
+    compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.chamanagro.app"
-        minSdkVersion rootProject.ext.minSdkVersion
-        targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 21
-        versionName "1.5.5"
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        applicationId = "com.chamanagro.app"
+        minSdkVersion = rootProject.ext.minSdkVersion
+        targetSdkVersion = rootProject.ext.targetSdkVersion
+        versionCode = 22
+        versionName = "1.6.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    signingConfigs {
-        release {
-            storeFile file("../../keystore-chaman.key")
-            storePassword 'reina192613'
-            keyAlias 'key0'
-            keyPassword 'reina192613'
+    if (releaseSigningConfigured) {
+        signingConfigs {
+            release {
+                storeFile = file(releaseKeystorePath)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled = false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.release
+            }
         }
     }
 
-    lintOptions { 
-
-        checkReleaseBuilds false
-
+    lint {
+        checkReleaseBuilds = false
     }
 }
 

@@ -1,1 +1,1 @@
-export const v = '1.5.5';
+export const v = '1.6.0';

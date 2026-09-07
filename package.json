@@ -8,6 +8,7 @@
     "npm": ">=10"
   },
   "scripts": {
+    "test:mobile-release": "node scripts/validate-mobile-release.js && node --test scripts/tests/mobile-runtime-config.test.js",
     "build": "npm run build:datos && npm run build:auth && npm run build:api-cliente && npm run build:predicciones && npm run build:clima && npm run build:lora && npm run build:meteo-worker && npm run build:app",
     "build:datos": "npm --prefix sdc-datos run build",
     "build:auth": "npm --prefix sdc-auth run build",

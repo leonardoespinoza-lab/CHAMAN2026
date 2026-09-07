@@ -1,15 +1,23 @@
+import { Capacitor } from '@capacitor/core';
+
 import { v } from './version';
 export const VERSION = v;
 export const ENV: 'Local' | 'Test' | 'Production' = 'Production';
 
 const runtime = (globalThis as any).__CHAMAN_CONFIG__ || {};
 const hostname = String((globalThis as any).location?.hostname || '').toLowerCase();
+const isNative = Capacitor.isNativePlatform();
 
 // runtime-config.js es la fuente canonica. Los valores por hostname son una
 // red de seguridad para sesiones que hayan conservado una version antigua del
 // service worker: nunca deben terminar haciendo POST contra el servidor
 // estatico de Angular y recibiendo index.html como si fuera JSON.
-const fallback = hostname.includes('testing-web-testing-dc8e')
+const fallback = isNative
+  ? {
+      API: 'https://chaman-api-production.up.railway.app/sdc-quimica',
+      WS: 'wss://chaman-websocket-production.up.railway.app/sdc-websocket',
+    }
+  : hostname.includes('testing-web-testing-dc8e')
   ? {
       API: 'https://testing-api-testing.up.railway.app/sdc-quimica-test',
       WS: 'wss://testing-websocket-testing.up.railway.app/sdc-websocket-test',
@@ -26,4 +34,6 @@ export const API = runtime.API || fallback.API;
 export const TILES_URL = runtime.TILES_URL || (API ? `${API}/data` : '');
 export const COOKIE_AUTH = runtime.COOKIE_AUTH === true || runtime.COOKIE_AUTH === 'true';
 export const WATER_DEMAND_CARD_ENABLED =
-  runtime.WATER_DEMAND_CARD_ENABLED === true || runtime.WATER_DEMAND_CARD_ENABLED === 'true';
+  runtime.WATER_DEMAND_CARD_ENABLED === undefined
+    ? isNative
+    : runtime.WATER_DEMAND_CARD_ENABLED === true || runtime.WATER_DEMAND_CARD_ENABLED === 'true';
