@@ -97,6 +97,8 @@ export interface IVariablesFusariumDeLaEspiga {
 }
 
 export interface IVariablesEnfermedadCebada {
+  /** 1: hay aportes desconocidos; conservar lo conocido sin declarar una serie completa. */
+  acumulacionIncompleta?: number;
   diasFavorables?: number;
   indiceAcumulado?: number;
   lluviaAcumulada?: number;

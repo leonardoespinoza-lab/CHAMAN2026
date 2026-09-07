@@ -166,6 +166,12 @@ export class PrediccionCebadaService {
       const fecha = new Date(`${dia.fecha}T03:00:00.000Z`);
       if (fecha < dateDesde || fecha >= dateHasta) continue;
       const fechaIso = fecha.toISOString();
+      const fechaEsperada = predAnterior?.fecha
+        ? this.diaSiguiente(new Date(predAnterior.fecha))
+        : inicioSiembra;
+      const hayDiaAusente =
+        fecha.toISOString().slice(0, 10) >
+        fechaEsperada.toISOString().slice(0, 10);
       const predecir = !fechasFumigadas.includes(fechaIso);
       const etapa = dia.etapaNumero;
       const fechaAnterior = this.diaAnterior(fecha).toISOString().slice(0, 10);
@@ -192,50 +198,25 @@ export class PrediccionCebadaService {
                 ),
           ),
         );
-      const enfermedades =
-        !dia.climaHabilitante
-          ? this.enfermedades.map((config) =>
-              crearPrediccionSinDatos(
-                config.nombre,
-                config.id,
-                dia.motivosNoHabilitante.length
-                  ? dia.motivosNoHabilitante
-                  : ['serie_agrometeorologica_canonica'],
-                'ENFERMEDADES EN CEBADA.xlsx',
-              ),
-            )
-          : this.enfermedades.map((config) => {
-              const anterior = predAnterior?.enfermedades?.find(
-                (item) => item.idEnfermedad === config.id,
-              );
-              if (etapa === undefined) {
-                if (config.formula === 'fusariosis') {
-                  return crearPrediccionFueraVentana(
-                    config.nombre,
-                    config.id,
-                    'Fusariosis requiere confirmar espigazon/antesis; el clima se conserva sin declarar una ventana reproductiva.',
-                    'ENFERMEDADES EN CEBADA.xlsx',
-                    3,
-                    'operativo_provisional',
-                    { etapaScore: 0 },
-                    anterior,
-                  );
-                }
-                return this.predecirEnfermedad({
-                  config,
-                  semilla: siembra.semilla,
-                  etapa: 1,
-                  clima: climaDia,
-                  ventanaManchaRed,
-                  prediccionAnterior: predAnterior,
-                  predecir,
-                });
-              }
-              if (!this.estaEnVentana(etapa, config)) {
+      const enfermedades = !dia.climaHabilitante
+        ? this.enfermedades.map((config) =>
+            this.crearSinDatosCebada(
+              config,
+              dia.motivosNoHabilitante.length
+                ? dia.motivosNoHabilitante
+                : ['serie_agrometeorologica_canonica'],
+              this.enfermedadAnterior(config, predAnterior),
+              predAnterior?.etapa,
+            ),
+          )
+        : this.enfermedades.map((config) => {
+            const anterior = this.enfermedadAnterior(config, predAnterior);
+            if (etapa === undefined) {
+              if (config.formula === 'fusariosis') {
                 return crearPrediccionFueraVentana(
                   config.nombre,
                   config.id,
-                  `Etapa ${etapa}: fuera de la ventana ${config.etapaMin}-${config.etapaMax}.`,
+                  'Fusariosis requiere confirmar espigazon/antesis; el clima se conserva sin declarar una ventana reproductiva.',
                   'ENFERMEDADES EN CEBADA.xlsx',
                   3,
                   'operativo_provisional',
@@ -246,14 +227,87 @@ export class PrediccionCebadaService {
               return this.predecirEnfermedad({
                 config,
                 semilla: siembra.semilla,
-                etapa,
+                etapa: 1,
                 clima: climaDia,
                 ventanaManchaRed,
                 prediccionAnterior: predAnterior,
                 predecir,
               });
+            }
+            if (!this.estaEnVentana(etapa, config)) {
+              return crearPrediccionFueraVentana(
+                config.nombre,
+                config.id,
+                `Etapa ${etapa}: fuera de la ventana ${config.etapaMin}-${config.etapaMax}.`,
+                'ENFERMEDADES EN CEBADA.xlsx',
+                3,
+                'operativo_provisional',
+                { etapaScore: 0 },
+                anterior,
+              );
+            }
+            return this.predecirEnfermedad({
+              config,
+              semilla: siembra.semilla,
+              etapa,
+              clima: climaDia,
+              ventanaManchaRed,
+              prediccionAnterior: predAnterior,
+              predecir,
             });
+          });
       for (const enfermedad of enfermedades) {
+        const config = this.enfermedades.find(
+          (item) => item.id === enfermedad.idEnfermedad,
+        );
+        const anterior = this.enfermedadAnterior(config, predAnterior);
+        const acumuladosAnteriores = this.acumuladoresCompatibles(
+          config,
+          anterior,
+        );
+        const camposAcumulados = this.camposAcumulados(config);
+        if (
+          camposAcumulados.length &&
+          ((enfermedad.variables as IVariablesEnfermedadCebada)
+            ?.acumulacionIncompleta === 1 ||
+            (anterior?.variables as IVariablesEnfermedadCebada)
+              ?.acumulacionIncompleta === 1 ||
+            (hayDiaAusente &&
+              (enfermedad.estado !== 'fuera_ventana' ||
+                camposAcumulados.some((campo) =>
+                  Number.isFinite(acumuladosAnteriores[campo]),
+                ))) ||
+            (!this.baseAcumulacionConocida(
+              config,
+              anterior,
+              predAnterior?.etapa,
+            ) &&
+              camposAcumulados.some(
+                (campo) => !Number.isFinite(acumuladosAnteriores[campo]),
+              )))
+        ) {
+          enfermedad.variables = {
+            ...(enfermedad.variables || {}),
+            acumulacionIncompleta: 1,
+          };
+          enfermedad.modelo = {
+            ...enfermedad.modelo,
+            validacion: 'operativo_provisional',
+          };
+          enfermedad.calidadDatos = combinarCalidadDatos(
+            enfermedad.calidadDatos,
+            {
+              nivel: 'baja',
+              fuente: 'estimado',
+              fallback: true,
+              resumen:
+                'Acumulacion parcial: se conservan los aportes conocidos sin completar los dias ausentes.',
+              limitaciones: [
+                'La continuidad climatica requiere reconstruccion controlada; no habilita alertas automaticas.',
+              ],
+            },
+          );
+        }
         enfermedad.calidadDatos = combinarCalidadDatos(
           enfermedad.calidadDatos,
           dia.calidadClima,
@@ -362,34 +416,33 @@ export class PrediccionCebadaService {
     dia: IDiaSanitarioCanonico,
     anterior?: IDiaSanitarioCanonico,
   ): ClimaDiaCebada {
+    const horasMojado = this.horasValidas(dia.serie.metrics?.leafWetnessHours);
+    const horasMojadoContinuo = this.horasValidas(
+      dia.serie.metrics?.maxContinuousLeafWetnessHours,
+    );
+    const temperaturaMojado = this.numeroClimatico(
+      dia.serie.metrics?.meanTemperatureDuringLeafWetnessC,
+    );
     return {
-      hr: Number(dia.clima.humedad?.avg),
-      tavg: Number(dia.clima.temperatura?.avg),
-      tmin: Number(dia.clima.temperatura?.min),
-      tmax: Number(dia.clima.temperatura?.max),
-      precip: Number(dia.clima.lluvia?.sum),
+      hr: this.numeroClimatico(dia.clima.humedad?.avg),
+      tavg: this.numeroClimatico(dia.clima.temperatura?.avg),
+      tmin: this.numeroClimatico(dia.clima.temperatura?.min),
+      tmax: this.numeroClimatico(dia.clima.temperatura?.max),
+      precip: this.numeroClimatico(dia.clima.lluvia?.sum),
       horas: [],
-      horasMojado: Number(dia.serie.metrics?.leafWetnessHours),
-      horasMojadoContinuo: Number(
-        dia.serie.metrics?.maxContinuousLeafWetnessHours,
-      ),
-      temperaturaMojado: Number(
-        dia.serie.metrics?.meanTemperatureDuringLeafWetnessC,
-      ),
+      horasMojado,
+      horasMojadoContinuo,
+      temperaturaMojado,
       coberturaHoraria: dia.calidadClima.cobertura || 0,
       resolucion:
-        Number.isFinite(Number(dia.serie.metrics?.leafWetnessHours)) &&
-        Number.isFinite(
-          Number(dia.serie.metrics?.maxContinuousLeafWetnessHours),
-        ) &&
-        (Number(dia.serie.metrics?.maxContinuousLeafWetnessHours) === 0 ||
-          Number.isFinite(
-            Number(dia.serie.metrics?.meanTemperatureDuringLeafWetnessC),
-          ))
+        Number.isFinite(horasMojado) &&
+        Number.isFinite(horasMojadoContinuo) &&
+        horasMojadoContinuo <= horasMojado &&
+        (horasMojadoContinuo === 0 || Number.isFinite(temperaturaMojado))
           ? 'horaria'
           : 'proxy_diario',
-      hrAnterior: Number(anterior?.clima.humedad?.avg),
-      precipAnterior: Number(anterior?.clima.lluvia?.sum),
+      hrAnterior: this.numeroClimatico(anterior?.clima.humedad?.avg),
+      precipAnterior: this.numeroClimatico(anterior?.clima.lluvia?.sum),
     };
   }
 
@@ -411,29 +464,46 @@ export class PrediccionCebadaService {
       prediccionAnterior,
       predecir,
     } = params;
+    const anterior = this.enfermedadAnterior(config, prediccionAnterior);
+    const variablesAnteriores = this.acumuladoresCompatibles(config, anterior);
     if (!predecir) {
-      return {
-        enfermedad: config.nombre,
-        idEnfermedad: config.id,
-        resultado: 0,
-        estado: 'calculado',
-        modelo: {
-          id: config.id,
-          version: 3,
-          fuente: 'ENFERMEDADES EN CEBADA.xlsx',
-          resolucion: clima.resolucion,
-          validacion: 'operativo_provisional',
-          alcance:
-            'Lectura fuera de la ventana fenologica del modelo; se conserva para trazabilidad y nunca habilita alertas automaticas.',
-        },
-        variables: { formulaVersion: 3, etapaScore: 0 },
-      };
+      // Se mantiene la suspension existente, sin interpretar una aplicacion
+      // como ausencia de enfermedad ni borrar el estado ambiental acumulado.
+      return this.crearSinDatosCebada(
+        config,
+        [
+          'Calculo suspendido por tratamiento registrado; eficacia sanitaria no modelada.',
+        ],
+        anterior,
+        prediccionAnterior?.etapa,
+      );
+    }
+    if (
+      !this.baseAcumulacionConocida(
+        config,
+        anterior,
+        prediccionAnterior?.etapa,
+      ) &&
+      this.camposAcumulados(config).some(
+        (campo) => !Number.isFinite(variablesAnteriores[campo]),
+      )
+    ) {
+      // Un registro legacy pudo perder su estado. No reconstruirlo a partir
+      // de otra revision meteorologica ni comenzar silenciosamente desde cero.
+      return this.crearSinDatosCebada(
+        config,
+        [
+          'Acumuladores historicos ausentes: se requiere reconstruccion controlada.',
+        ],
+        anterior,
+        prediccionAnterior?.etapa,
+      );
     }
     const camposPorFormula: Record<
       ConfigEnfermedadCebada['formula'],
       string[]
     > = {
-      mancha_red: ['hr', 'tavg'],
+      mancha_red: ['hr', 'tavg', 'horasMojado'],
       escaldadura: ['tavg', 'horasMojado', 'precip'],
       roya_hoja: ['hr', 'tavg', 'precip'],
       fusariosis: [
@@ -451,23 +521,13 @@ export class PrediccionCebadaService {
       camposPorFormula[config.formula],
     );
     if (faltantes.length) {
-      return crearPrediccionSinDatos(
-        config.nombre,
-        config.id,
+      return this.crearSinDatosCebada(
+        config,
         faltantes,
-        'ENFERMEDADES EN CEBADA.xlsx',
+        anterior,
+        prediccionAnterior?.etapa,
       );
     }
-    const anterior = prediccionAnterior?.enfermedades?.find(
-      (e) => e.enfermedad === config.nombre,
-    );
-    const variablesAnterioresRaw =
-      (anterior?.variables as IVariablesEnfermedadCebada) || {};
-    const variablesAnteriores = [2, 3].includes(
-      variablesAnterioresRaw.formulaVersion,
-    )
-      ? variablesAnterioresRaw
-      : {};
 
     switch (config.formula) {
       case 'mancha_red':
@@ -759,6 +819,107 @@ export class PrediccionCebadaService {
     return etapa >= config.etapaMin && etapa <= config.etapaMax;
   }
 
+  private enfermedadAnterior(
+    config: ConfigEnfermedadCebada | undefined,
+    prediccion?: IPrediccion,
+  ): IPrediccionEnfermedad | undefined {
+    if (!config) return undefined;
+    return (
+      prediccion?.enfermedades?.find(
+        (item) => item.idEnfermedad === config.id,
+      ) ||
+      prediccion?.enfermedades?.find(
+        (item) => !item.idEnfermedad && item.enfermedad === config.nombre,
+      )
+    );
+  }
+
+  private camposAcumulados(
+    config?: ConfigEnfermedadCebada,
+  ): (keyof IVariablesEnfermedadCebada)[] {
+    if (config?.formula === 'roya_hoja') return ['GD', 'DHR'];
+    if (config?.formula === 'fusariosis') return ['PMoj', 'GDN', 'GDAcum'];
+    return [];
+  }
+
+  private acumuladoresCompatibles(
+    config: ConfigEnfermedadCebada | undefined,
+    anterior?: IPrediccionEnfermedad,
+  ): IVariablesEnfermedadCebada {
+    const variables = anterior?.variables as IVariablesEnfermedadCebada;
+    if (!variables || ![2, 3].includes(variables.formulaVersion)) return {};
+    const resultado: IVariablesEnfermedadCebada = {};
+    for (const campo of this.camposAcumulados(config)) {
+      const valor = this.numeroClimatico(variables[campo]);
+      if (Number.isFinite(valor)) resultado[campo] = valor;
+    }
+    if (variables.acumulacionIncompleta === 1) {
+      resultado.acumulacionIncompleta = 1;
+    }
+    return resultado;
+  }
+
+  private crearSinDatosCebada(
+    config: ConfigEnfermedadCebada,
+    faltantes: string[],
+    anterior?: IPrediccionEnfermedad,
+    etapaAnterior?: number,
+  ): IPrediccionEnfermedad {
+    const acumulados = this.acumuladoresCompatibles(config, anterior);
+    const campos = this.camposAcumulados(config);
+    if (campos.length) {
+      // Cero es una base conocida sólo antes de comenzar la acumulacion,
+      // nunca un reemplazo para un acumulador historico perdido.
+      if (this.baseAcumulacionConocida(config, anterior, etapaAnterior)) {
+        for (const campo of campos) {
+          if (!Number.isFinite(acumulados[campo])) acumulados[campo] = 0;
+        }
+      }
+      acumulados.acumulacionIncompleta = 1;
+    }
+    return crearPrediccionSinDatos(
+      config.nombre,
+      config.id,
+      faltantes,
+      'ENFERMEDADES EN CEBADA.xlsx',
+      config.formula === 'mancha_red' ? CEBADA_MANCHA_RED_MOTOR_VERSION : 3,
+      'operativo_provisional',
+      acumulados,
+    );
+  }
+
+  private baseAcumulacionConocida(
+    config: ConfigEnfermedadCebada | undefined,
+    anterior?: IPrediccionEnfermedad,
+    etapaAnterior?: number,
+  ): boolean {
+    if (!anterior) return true;
+    const variables = (anterior.variables || {}) as IVariablesEnfermedadCebada;
+    return (
+      anterior.estado === 'fuera_ventana' &&
+      Number.isFinite(etapaAnterior) &&
+      etapaAnterior < config?.etapaMin &&
+      anterior.calidadDatos?.nivel !== 'sin_datos' &&
+      variables.acumulacionIncompleta !== 1 &&
+      this.camposAcumulados(config).every((campo) => !(campo in variables))
+    );
+  }
+
+  private numeroClimatico(valor: unknown): number {
+    if (
+      (typeof valor !== 'number' && typeof valor !== 'string') ||
+      (typeof valor === 'string' && valor.trim() === '')
+    )
+      return NaN;
+    const numero = Number(valor);
+    return Number.isFinite(numero) ? numero : NaN;
+  }
+
+  private horasValidas(valor: unknown): number {
+    const numero = this.numeroClimatico(valor);
+    return numero >= 0 && numero <= 24 ? numero : NaN;
+  }
+
   private factorTempEscaldadura(temperatura: number): number {
     if (temperatura < 4 || temperatura > 25) return 0;
     if (temperatura >= 10 && temperatura <= 18) return 1;
@@ -820,6 +981,12 @@ export class PrediccionCebadaService {
     const fechaAnterior = new Date(fecha);
     fechaAnterior.setUTCDate(fechaAnterior.getUTCDate() - 1);
     return fechaAnterior;
+  }
+
+  private diaSiguiente(fecha: Date): Date {
+    const siguiente = new Date(fecha);
+    siguiente.setUTCDate(siguiente.getUTCDate() + 1);
+    return siguiente;
   }
 
   private clamp(value: number, min: number, max: number): number {
