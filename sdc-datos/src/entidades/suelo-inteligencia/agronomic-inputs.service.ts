@@ -16,6 +16,7 @@ import {
 import { Model } from 'mongoose';
 import { Lote, LoteDocument } from '../lote/modelos/schema';
 import { LotSoilIntelligenceEngine } from './engine.service';
+import { hasCompleteSoilInterval } from './config/profile-completeness';
 
 interface SoilCandidate {
   source: TFuentePropiedadSuelo;
@@ -78,6 +79,14 @@ export class SoilAgronomicInputsService {
       };
     }
 
+    // Los consumidores existentes ya conservan el lote operativo cuando
+    // stale=true. Un perfil automático con huecos no debe llegar al adaptador
+    // que selecciona el horizonte más cercano para cada sensor.
+    const incompleteAutomatic =
+      !!automatic &&
+      selected === automatic &&
+      !hasCompleteSoilInterval(selected.depthLayers, 0, 200, () => 1);
+
     const alternatives: IAlternativaEntradasAgronomicasSuelo[] = [];
     if (selected === automatic && legacy && this.isManualOrLegacy(lot)) {
       alternatives.push(
@@ -111,10 +120,17 @@ export class SoilAgronomicInputsService {
       : undefined;
     const profileAvailableWaterMm =
       selected === automatic
-        ? this.nonNegative(
-            summary?.profileAvailableWaterMm,
-            summary?.rootZoneAvailableWaterMm,
+        ? hasCompleteSoilInterval(
+            selected?.depthLayers,
+            0,
+            this.finite(summary?.effectiveDepthCm) ?? 100,
+            (layer) => this.nonNegative(layer.availableWaterMmPerMeter),
           )
+          ? this.nonNegative(
+              summary?.profileAvailableWaterMm,
+              summary?.rootZoneAvailableWaterMm,
+            )
+          : undefined
         : Number.isFinite(availableWaterMmPerMeter) &&
             Number.isFinite(selectedDepthCm)
           ? Number(
@@ -125,7 +141,7 @@ export class SoilAgronomicInputsService {
     return {
       loteId,
       status: assessment.status,
-      stale,
+      stale: stale || incompleteAutomatic,
       calculatedAt: terminal ? assessment.calculatedAt : undefined,
       resolutionKey: assessment.resolutionKey,
       selectionPolicyVersion: SOIL_AGRONOMIC_SELECTION_POLICY_VERSION,
@@ -161,7 +177,12 @@ export class SoilAgronomicInputsService {
         summary?.organicMatterEstimatedPercentage,
       source: this.summarySource(selected, assessment),
       confidence: selected?.confidence,
-      warnings: assessment.warnings,
+      warnings: incompleteAutomatic
+        ? [
+            ...(assessment.warnings || []),
+            'El perfil automático no cubre de forma continua 0–200 cm. Se conserva el suelo operativo previo hasta completar las capas.',
+          ]
+        : assessment.warnings,
     };
   }
 
@@ -572,6 +593,12 @@ export class SoilAgronomicInputsService {
     fromCm: number,
     toCm: number,
   ): number | undefined {
+    // Un promedio de 0–100 cm requiere evidencia en todo ese intervalo.
+    // Las capas disponibles se conservan para diagnóstico, sin extenderlas
+    // sobre profundidades que el proveedor no pudo resolver.
+    if (!hasCompleteSoilInterval(layers, fromCm, toCm, (layer) => layer[key])) {
+      return undefined;
+    }
     let weighted = 0;
     let depth = 0;
     for (const layer of layers) {
@@ -592,6 +619,9 @@ export class SoilAgronomicInputsService {
     fromCm: number,
     toCm: number,
   ): TConfianzaInteligenciaSuelo {
+    if (!hasCompleteSoilInterval(layers, fromCm, toCm, () => 1)) {
+      return 'unavailable';
+    }
     const rank: Record<TConfianzaInteligenciaSuelo, number> = {
       unavailable: 0,
       low: 1,

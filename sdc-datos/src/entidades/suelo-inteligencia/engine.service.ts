@@ -20,6 +20,12 @@ import { LotGeometryNormalizer } from '../ubicacion-lote/geometry-normalizer.ser
 import { LotLocationService } from '../ubicacion-lote/service';
 import { INTA_LAYER_REGISTRY_VERSION } from './config/inta-soil-layers';
 import {
+  hasCompleteSoilInterval,
+  isFiniteSoilValue,
+  mergeSoilGridsProfiles,
+  missingSoilGridsDepths,
+} from './config/profile-completeness';
+import {
   SOILGRIDS_ATTRIBUTION,
   SOILGRIDS_LICENSE,
   SOILGRIDS_METADATA_URL,
@@ -74,7 +80,8 @@ export class LotSoilIntelligenceEngine {
         geometry.geometryHash,
         lot,
       );
-      if (current?.resolutionKey === expectedResolutionKey) return current;
+      if (current?.resolutionKey === expectedResolutionKey)
+        return this.validatedCoverage(current);
     } catch {
       // request() persiste missing_geometry/invalid_geometry con el detalle
       // de la normalizacion para que la API no entregue una lectura vieja.
@@ -124,7 +131,7 @@ export class LotSoilIntelligenceEngine {
       existing.resolutionKey === resolutionKey &&
       ['ready', 'partial', 'no_coverage'].includes(existing.status)
     ) {
-      return existing;
+      return this.validatedCoverage(existing);
     }
     const running = this.inFlight.get(resolutionKey);
     if (running) return options.immediate ? running : (existing as any);
@@ -143,8 +150,31 @@ export class LotSoilIntelligenceEngine {
         : undefined,
       attempts: (existing?.attempts || 0) + 1,
       warnings: geometry.warnings,
+      ...(existing &&
+      (existing.geometryHash !== geometry.geometryHash ||
+        existing.resolutionKey !== resolutionKey)
+        ? {
+            depthProfile: [],
+            summary: null,
+            propertyProvenance: {},
+            soilUnits: [],
+            source: null,
+            sources: [],
+            qualityFlags: [],
+          }
+        : {}),
     });
-    const task = this.process({ lot, geometry, resolutionKey, reason });
+    const task = this.process({
+      lot,
+      geometry,
+      resolutionKey,
+      reason,
+      previousProfile:
+        existing?.geometryHash === geometry.geometryHash &&
+        existing?.resolutionKey === resolutionKey
+          ? existing.depthProfile
+          : undefined,
+    });
     this.inFlight.set(resolutionKey, task);
     void task.then(
       () => this.inFlight.delete(resolutionKey),
@@ -153,7 +183,117 @@ export class LotSoilIntelligenceEngine {
         void this.persistFailure(loteId, resolutionKey, error);
       },
     );
-    return options.immediate ? task : pending;
+    return options.immediate ? task : this.validatedCoverage(pending);
+  }
+
+  /** Protect reads of legacy cached summaries while the bounded queue repairs them. */
+  private validatedCoverage(
+    current: IInteligenciaSueloLote,
+  ): IInteligenciaSueloLote {
+    // prepare() returns a Mongoose document; spreading it would expose internals
+    // and drop persisted top-level fields. Cached getByLot() already returns lean.
+    if (typeof (current as any).toObject === 'function')
+      current = (current as any).toObject();
+    const missing = missingSoilGridsDepths(current.depthProfile);
+    if (!current.summary && current.status !== 'ready') return current;
+    const profile = current.depthProfile || [];
+    const summary = { ...current.summary } as IResumenInteligenciaSuelo;
+    const hasTopsoil = hasCompleteSoilInterval(profile, 0, 30);
+    if (!hasTopsoil) {
+      summary.sandPercentage =
+        summary.siltPercentage =
+        summary.clayPercentage =
+          undefined;
+      summary.usdaTexture = undefined;
+      if (!current.soilUnits?.some((unit) => unit.canonicalTexture)) {
+        summary.canonicalTexture = summary.estimatedTexture = undefined;
+        if (summary.operationalTextureSource === 'soilgrids')
+          summary.operationalTexture = undefined;
+      }
+    }
+    const metrics: [
+      keyof IResumenInteligenciaSuelo,
+      keyof IPerfilProfundidadSuelo,
+      number,
+    ][] = [
+      ['availableWaterMmPerMeter', 'availableWaterMmPerMeter', 100],
+      ['ph', 'phWater', 30],
+      ['organicCarbonGKg', 'organicCarbonGKg', 30],
+      [
+        'organicMatterEstimatedPercentage',
+        'organicMatterEstimatedPercentage',
+        30,
+      ],
+      ['cecCmolKg', 'cecCmolKg', 30],
+      ['bulkDensityKgDm3', 'bulkDensityKgDm3', 30],
+      ['coarseFragmentsPercentage', 'coarseFragmentsPercentage', 30],
+    ];
+    for (const [summaryKey, layerKey, toCm] of metrics) {
+      if (
+        !hasCompleteSoilInterval(profile, 0, toCm, (layer) => layer[layerKey])
+      )
+        delete summary[summaryKey];
+    }
+    if (
+      !hasCompleteSoilInterval(
+        profile,
+        0,
+        summary.effectiveDepthCm || 100,
+        (layer) => layer.availableWaterMmPerMeter,
+      )
+    ) {
+      summary.profileAvailableWaterMm = summary.rootZoneAvailableWaterMm =
+        undefined;
+    }
+    const propertyProvenance = { ...current.propertyProvenance };
+    const propertyKeys: Record<string, keyof IPerfilProfundidadSuelo> = {
+      ...Object.fromEntries(
+        metrics.map(([summaryKey, layerKey]) => [summaryKey, layerKey]),
+      ),
+      fieldCapacityPercentage: 'fieldCapacityPercentage',
+      wiltingPointPercentage: 'wiltingPointPercentage',
+      profileAvailableWaterMm: 'availableWaterMmPerMeter',
+      rootZoneAvailableWaterMm: 'availableWaterMmPerMeter',
+    };
+    for (const [key, property] of Object.entries(propertyProvenance)) {
+      if (
+        property &&
+        isFiniteSoilValue(property.depthFromCm) &&
+        isFiniteSoilValue(property.depthToCm) &&
+        ['soilgrids', 'derived'].includes(property.source) &&
+        !hasCompleteSoilInterval(
+          profile,
+          property.depthFromCm,
+          property.depthToCm,
+          propertyKeys[key] ? (layer) => layer[propertyKeys[key]] : undefined,
+        )
+      ) {
+        propertyProvenance[key] = {
+          ...property,
+          value: null,
+          confidence: 'unavailable',
+        };
+      }
+    }
+    return {
+      ...current,
+      status:
+        current.status === 'ready' && missing.length
+          ? 'partial'
+          : current.status,
+      summary,
+      propertyProvenance,
+      warnings: [
+        ...new Set([
+          ...(current.warnings || []),
+          ...(missing.length
+            ? [
+                `Perfil de suelo incompleto: faltan ${missing.map((depth) => `${depth.fromCm}–${depth.toCm} cm`).join(', ')}.`,
+              ]
+            : []),
+        ]),
+      ],
+    };
   }
 
   async backfill(limit = 0): Promise<{
@@ -236,6 +376,7 @@ export class LotSoilIntelligenceEngine {
     geometry: ReturnType<LotGeometryNormalizer['normalize']>;
     resolutionKey: string;
     reason: TMotivoInteligenciaSuelo;
+    previousProfile?: IPerfilProfundidadSuelo[];
   }): Promise<IInteligenciaSueloLote> {
     const processStartedAt = Date.now();
     if (!(await this.isCurrentResolution(input))) {
@@ -256,6 +397,22 @@ export class LotSoilIntelligenceEngine {
       this.inta.assess(input.geometry, province),
       this.soilgrids.assess(input.geometry),
     ]);
+    const freshDepths = soilGridsResult.profile.length;
+    soilGridsResult.profile = mergeSoilGridsProfiles(
+      input.previousProfile,
+      soilGridsResult.profile,
+    );
+    const missingDepths = missingSoilGridsDepths(soilGridsResult.profile);
+    if (soilGridsResult.profile.length > freshDepths) {
+      soilGridsResult.warnings.push(
+        'Se conservaron capas válidas de la misma resolución que no se pudieron actualizar en este intento.',
+      );
+      soilGridsResult.coveragePercentage = Math.min(
+        ...soilGridsResult.profile.map(
+          (layer) => layer.coveragePercentage || 0,
+        ),
+      );
+    }
     const topsoil = this.topsoil(soilGridsResult.profile);
     const operationalTexture = this.operationalTexture(input.lot);
     const operationalSource = operationalTexture
@@ -384,6 +541,11 @@ export class LotSoilIntelligenceEngine {
       ...input.geometry.warnings,
       ...intaResult.warnings,
       ...soilGridsResult.warnings,
+      ...(missingDepths.length
+        ? [
+            `Perfil de suelo incompleto: faltan ${missingDepths.map((depth) => `${depth.fromCm}–${depth.toCm} cm`).join(', ')}. Los resúmenes sólo se calculan sobre intervalos completos.`,
+          ]
+        : []),
       ...(effectiveDepth.isFallback
         ? [
             `Se usa ${effectiveDepth.value} cm como perfil operativo de referencia porque no hay una profundidad validada; no es una medición del lote.`,
@@ -412,7 +574,7 @@ export class LotSoilIntelligenceEngine {
       intaResult.units.length || soilGridsResult.profile.length
     );
     const status = hasAutomatic
-      ? intaResult.failedLayers.length || !soilGridsResult.profile.length
+      ? intaResult.failedLayers.length || missingDepths.length
         ? 'partial'
         : 'ready'
       : operationalTexture
@@ -529,6 +691,7 @@ export class LotSoilIntelligenceEngine {
         usda: any;
       }
     | undefined {
+    if (!hasCompleteSoilInterval(profile, 0, 30)) return undefined;
     const layers = profile
       .filter(
         (layer) =>
@@ -636,10 +799,12 @@ export class LotSoilIntelligenceEngine {
     fromCm: number,
     toCm: number,
   ): number | undefined {
+    if (!hasCompleteSoilInterval(profile, fromCm, toCm, (layer) => layer[key]))
+      return undefined;
     let total = 0;
     let depth = 0;
     for (const layer of profile) {
-      const value = Number(layer[key]);
+      const value = layer[key] as number;
       const overlap = Math.max(
         0,
         Math.min(layer.depthToCm, toCm) - Math.max(layer.depthFromCm, fromCm),
@@ -670,6 +835,8 @@ export class LotSoilIntelligenceEngine {
     fromCm: number,
     toCm: number,
   ): number | undefined {
+    if (!hasCompleteSoilInterval(profile, fromCm, toCm, (layer) => layer[key]))
+      return undefined;
     let totalMm = 0;
     let cursorCm = fromCm;
     const layers = [...profile].sort(
@@ -680,7 +847,7 @@ export class LotSoilIntelligenceEngine {
     for (const layer of layers) {
       if (layer.depthToCm <= cursorCm) continue;
       if (layer.depthFromCm > cursorCm) return undefined;
-      const valueMmPerMeter = Number(layer[key]);
+      const valueMmPerMeter = layer[key] as number;
       if (!Number.isFinite(valueMmPerMeter)) return undefined;
       const layerTopCm = Math.max(cursorCm, layer.depthFromCm, fromCm);
       const layerBottomCm = Math.min(layer.depthToCm, toCm);

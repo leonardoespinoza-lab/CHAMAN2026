@@ -79,12 +79,12 @@ export class SoilIntelligenceJobsService
     for (const assessment of pending) {
       if ((assessment.attempts || 0) >= 4) continue;
       try {
-        await this.engine.request(
+        const result = await this.engine.request(
           assessment.loteId,
           assessment.status === 'partial' ? 'partial_retry' : 'failed_retry',
           { immediate: true, force: true },
         );
-        completed++;
+        if (result.status === 'ready') completed++;
       } catch {
         // El motor persiste el estado failed y el siguiente cron aplica backoff operativo.
       }

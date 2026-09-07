@@ -78,6 +78,16 @@ describe('SoilAgronomicInputsService canonical selection', () => {
         source: 'soilgrids',
         confidence: 'low',
       },
+      {
+        depthFromCm: 100,
+        depthToCm: 200,
+        chamanTexture: 'Franco arcilloso',
+        fieldCapacityPercentage: 27,
+        wiltingPointPercentage: 12,
+        availableWaterMmPerMeter: 150,
+        source: 'soilgrids',
+        confidence: 'low',
+      },
     ],
     warnings: [],
   });
@@ -305,7 +315,8 @@ describe('SoilAgronomicInputsService canonical selection', () => {
 
     const result = await service.getForLot('lot-1');
 
-    expect(result?.fieldCapacityPercentage).toBe(20);
+    // La única CC válida cubre 0–30 cm, no el intervalo completo 0–100 cm.
+    expect(result?.fieldCapacityPercentage).toBeUndefined();
     expect(result?.wiltingPointPercentage).toBeUndefined();
     expect(result?.availableWaterMmPerMeter).toBeUndefined();
     expect(result?.profileAvailableWaterMm).toBeUndefined();
@@ -320,6 +331,277 @@ describe('SoilAgronomicInputsService canonical selection', () => {
       wiltingPointPercentage: undefined,
       availableWaterMmPerMeter: undefined,
     });
+  });
+
+  it.each(['ready', 'partial'])(
+    'no extrapola un perfil %s de 0–5 y 100–200 cm ni reutiliza reservas antiguas',
+    async (status) => {
+      lots.findById.mockReturnValue({
+        lean: jest.fn().mockResolvedValue({ _id: 'lot-1' }),
+      });
+      const assessment = automaticAssessment();
+      assessment.status = status;
+      assessment.depthProfile = [
+        {
+          ...assessment.depthProfile[0],
+          depthFromCm: 0,
+          depthToCm: 5,
+          availableWaterMmPerMeter: 175.11,
+        },
+        {
+          ...assessment.depthProfile[1],
+          depthFromCm: 100,
+          depthToCm: 200,
+        },
+      ];
+      assessment.summary.availableWaterMmPerMeter = 175.11;
+      assessment.summary.profileAvailableWaterMm = 175.11;
+      assessment.summary.rootZoneAvailableWaterMm = 175.11;
+      const original = JSON.parse(JSON.stringify(assessment));
+      engine.get.mockResolvedValue(assessment);
+
+      const result = await service.getForLot('lot-1');
+
+      expect(result?.selectionReason).toBe('automatic_assessment');
+      expect(result?.stale).toBe(true);
+      expect(result?.fieldCapacityPercentage).toBeUndefined();
+      expect(result?.wiltingPointPercentage).toBeUndefined();
+      expect(result?.availableWaterMmPerMeter).toBeUndefined();
+      expect(result?.profileAvailableWaterMm).toBeUndefined();
+      expect(result?.rootZoneAvailableWaterMm).toBeUndefined();
+      expect(
+        result?.depthLayers.map((layer) => [
+          layer.depthFromCm,
+          layer.depthToCm,
+        ]),
+      ).toEqual([
+        [0, 5],
+        [100, 200],
+      ]);
+      expect(result?.depthLayers[0].availableWaterMmPerMeter).toBe(175.11);
+      for (const key of [
+        'fieldCapacityPercentage',
+        'wiltingPointPercentage',
+        'availableWaterMmPerMeter',
+      ]) {
+        expect(result?.provenance[key]).toMatchObject({
+          value: undefined,
+          observedOrEstimated: 'unknown',
+          confidence: 'unavailable',
+        });
+      }
+      expect(assessment).toEqual(original);
+    },
+  );
+
+  it('no sustituye el perfil automatico incompleto por datos manuales sin cambiar precedencia', async () => {
+    lots.findById.mockReturnValue({
+      lean: jest.fn().mockResolvedValue({
+        _id: 'lot-1',
+        sueloProcedencia: 'manual',
+        sueloConfirmadoPorUsuario: true,
+        capacidadDeCampo: 30,
+        puntoMarchitez: 14,
+      }),
+    });
+    const assessment = automaticAssessment();
+    assessment.depthProfile = [assessment.depthProfile[0]];
+    engine.get.mockResolvedValue(assessment);
+
+    const result = await service.getForLot('lot-1');
+
+    expect(result?.selectionReason).toBe('automatic_assessment');
+    expect(result?.fieldCapacityPercentage).toBeUndefined();
+    expect(result?.wiltingPointPercentage).toBeUndefined();
+    expect(result?.availableWaterMmPerMeter).toBeUndefined();
+    expect(result?.profileAvailableWaterMm).toBeUndefined();
+    expect(result?.alternatives?.[0]).toMatchObject({
+      source: 'manual',
+      fieldCapacityPercentage: 30,
+      wiltingPointPercentage: 14,
+    });
+  });
+
+  it.each([
+    ['nulo', null],
+    ['ausente', undefined],
+    ['no finito', Number.NaN],
+    ['infinito', Number.POSITIVE_INFINITY],
+  ])(
+    'no promedia una propiedad %s en parte del intervalo',
+    async (_label, missing) => {
+      lots.findById.mockReturnValue({
+        lean: jest.fn().mockResolvedValue({ _id: 'lot-1' }),
+      });
+      const assessment = automaticAssessment();
+      assessment.depthProfile[1].fieldCapacityPercentage = missing as number;
+      engine.get.mockResolvedValue(assessment);
+
+      const result = await service.getForLot('lot-1');
+
+      expect(result?.fieldCapacityPercentage).toBeUndefined();
+      expect(result?.provenance.fieldCapacityPercentage).toMatchObject({
+        value: undefined,
+        confidence: 'unavailable',
+        observedOrEstimated: 'unknown',
+      });
+      expect(result?.depthLayers[0].fieldCapacityPercentage).toBe(31);
+      expect(result?.depthLayers[1].fieldCapacityPercentage).toBeUndefined();
+    },
+  );
+
+  it('rechaza capas superpuestas en lugar de contar dos veces su espesor', async () => {
+    lots.findById.mockReturnValue({
+      lean: jest.fn().mockResolvedValue({ _id: 'lot-1' }),
+    });
+    const assessment = automaticAssessment();
+    assessment.depthProfile.splice(1, 0, { ...assessment.depthProfile[0] });
+    engine.get.mockResolvedValue(assessment);
+
+    const result = await service.getForLot('lot-1');
+
+    expect(result?.fieldCapacityPercentage).toBeUndefined();
+    expect(result?.wiltingPointPercentage).toBeUndefined();
+    expect(result?.availableWaterMmPerMeter).toBeUndefined();
+    expect(result?.profileAvailableWaterMm).toBeUndefined();
+  });
+
+  it('mantiene valores cuando 0–100 cm esta completo aunque falte el horizonte mas profundo', async () => {
+    lots.findById.mockReturnValue({
+      lean: jest.fn().mockResolvedValue({ _id: 'lot-1' }),
+    });
+    const assessment = automaticAssessment();
+    assessment.status = 'partial';
+    assessment.depthProfile = assessment.depthProfile
+      .filter((layer) => layer.depthToCm <= 100)
+      .reverse();
+    engine.get.mockResolvedValue(assessment);
+
+    const result = await service.getForLot('lot-1');
+
+    expect(result).toMatchObject({
+      status: 'partial',
+      stale: true,
+      fieldCapacityPercentage: 29.6,
+      wiltingPointPercentage: 13.3,
+      availableWaterMmPerMeter: 163,
+      profileAvailableWaterMm: 163,
+      rootZoneAvailableWaterMm: 163,
+    });
+  });
+
+  it('conserva calibracion confirmada sobre 0–30 cm frente a perfil automatico incompleto', async () => {
+    lots.findById.mockReturnValue({
+      lean: jest.fn().mockResolvedValue({
+        _id: 'lot-1',
+        sueloProcedencia: 'sensor',
+        sueloConfirmadoPorUsuario: true,
+        capacidadDeCampo: 33,
+        puntoMarchitez: 16,
+        suelos: [{ profundidad: 30, capacidadDeCampo: 33, puntoMarchitez: 16 }],
+      }),
+    });
+    const assessment = automaticAssessment();
+    assessment.depthProfile = [{ ...assessment.depthProfile[0], depthToCm: 5 }];
+    engine.get.mockResolvedValue(assessment);
+
+    const result = await service.getForLot('lot-1');
+
+    expect(result).toMatchObject({
+      selectionReason: 'confirmed_sensor',
+      fieldCapacityPercentage: 33,
+      wiltingPointPercentage: 16,
+      availableWaterMmPerMeter: 170,
+      profileAvailableWaterMm: 51,
+      rootZoneAvailableWaterMm: 51,
+      stale: false,
+    });
+  });
+
+  it('no proyecta horizontes cercanos en los doce niveles de una sonda cuando hay huecos', async () => {
+    const lot = {
+      _id: 'lot-1',
+      capacidadDeCampo: 24,
+      puntoMarchitez: 10,
+      suelos: Array.from({ length: 12 }, (_, index) => ({
+        profundidad: (index + 1) * 10,
+        numeroDeSensor: index + 1,
+        capacidadDeCampo: 24 + index / 10,
+        puntoMarchitez: 10,
+      })),
+    };
+    lots.findById.mockReturnValue({ lean: jest.fn().mockResolvedValue(lot) });
+    const assessment = automaticAssessment();
+    assessment.depthProfile = [
+      { ...assessment.depthProfile[0], depthToCm: 5 },
+      assessment.depthProfile[2],
+    ];
+    engine.get.mockResolvedValue(assessment);
+
+    const result = await service.getForLot('lot-1');
+    const projected = aplicarEntradasAgronomicasSuelo(lot, result);
+    const lotAt15 = {
+      ...lot,
+      suelos: [{ ...lot.suelos[0], profundidad: 15 }],
+    };
+    const projectedAt15 = aplicarEntradasAgronomicasSuelo(lotAt15, result);
+
+    expect(result?.stale).toBe(true);
+    expect(result?.warnings?.join(' ')).toContain('suelo operativo previo');
+    expect(result?.depthLayers).toHaveLength(2);
+    expect(projected).toEqual(lot);
+    expect(projected).not.toBe(lot);
+    expect(projected.suelos).toHaveLength(12);
+    expect(projected.suelos[0].capacidadDeCampo).toBe(24);
+    expect(projectedAt15).toEqual(lotAt15);
+  });
+
+  it('proyecta sin regresión seis horizontes completos sobre los doce sensores', async () => {
+    const lot = {
+      _id: 'lot-1',
+      capacidadDeCampo: 24,
+      puntoMarchitez: 10,
+      suelos: Array.from({ length: 12 }, (_, index) => ({
+        profundidad: (index + 1) * 10,
+        numeroDeSensor: index + 1,
+        capacidadDeCampo: 24,
+        puntoMarchitez: 10,
+      })),
+    };
+    lots.findById.mockReturnValue({ lean: jest.fn().mockResolvedValue(lot) });
+    const assessment = automaticAssessment();
+    const previousLayers = assessment.depthProfile;
+    assessment.depthProfile = [
+      [0, 5],
+      [5, 15],
+      [15, 30],
+      [30, 60],
+      [60, 100],
+      [100, 200],
+    ].map(([depthFromCm, depthToCm]) => ({
+      ...previousLayers[depthToCm <= 30 ? 0 : depthToCm <= 100 ? 1 : 2],
+      depthFromCm,
+      depthToCm,
+    }));
+    engine.get.mockResolvedValue(assessment);
+
+    const result = await service.getForLot('lot-1');
+    const projected = aplicarEntradasAgronomicasSuelo(lot, result);
+
+    expect(result).toMatchObject({
+      stale: false,
+      fieldCapacityPercentage: 29.6,
+      wiltingPointPercentage: 13.3,
+      availableWaterMmPerMeter: 163,
+      profileAvailableWaterMm: 163,
+    });
+    expect(projected.suelos).toHaveLength(12);
+    expect(projected.suelos.map((layer) => layer.capacidadDeCampo)).toEqual([
+      31, 31, 31, 29, 29, 29, 29, 29, 29, 29, 27, 27,
+    ]);
+    expect(lot.suelos.every((layer) => layer.capacidadDeCampo === 24)).toBe(
+      true,
+    );
   });
 
   it('no presenta el summary anterior de un assessment pending como vigente', async () => {

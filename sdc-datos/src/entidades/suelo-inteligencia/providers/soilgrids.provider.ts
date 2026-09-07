@@ -86,7 +86,13 @@ export class SoilGridsProvider {
       const depth = SOILGRIDS_DEPTHS[index];
       const result = depthResults[index];
       if (result.status === 'fulfilled') {
-        if (result.value) profile.push(result.value);
+        if (result.value) {
+          profile.push(result.value);
+        } else {
+          warnings.push(
+            `SoilGrids no pudo completar ${depth.fromCm}–${depth.toCm} cm: faltan datos de textura.`,
+          );
+        }
       } else {
         warnings.push(
           `SoilGrids no pudo completar ${depth.fromCm}–${depth.toCm} cm.`,
@@ -97,6 +103,7 @@ export class SoilGridsProvider {
       }
     }
 
+    // La cobertura es espacial en las capas obtenidas, no completitud vertical.
     const coveragePercentage = profile.length
       ? Math.min(...profile.map((layer) => layer.coveragePercentage || 0))
       : 0;

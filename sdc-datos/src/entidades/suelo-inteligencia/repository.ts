@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { IInteligenciaSueloLote, TEstadoInteligenciaSuelo } from 'modelos/src';
 import { Model } from 'mongoose';
 import { LotSoilAssessment, LotSoilAssessmentDocument } from './modelos/schema';
+import { SOILGRIDS_DEPTHS } from './config/soilgrids.config';
 
 @Injectable()
 export class SoilIntelligenceRepository {
@@ -52,6 +53,25 @@ export class SoilIntelligenceRepository {
             attempts: { $lt: 4 },
             $or: [
               { status: 'pending' },
+              {
+                // Legacy records may have been marked ready with missing horizons.
+                // Reuse the bounded recovery queue/backoff, never a global backfill.
+                status: 'ready',
+                updatedAt: { $lt: retryAfter },
+                $or: SOILGRIDS_DEPTHS.map((depth) => ({
+                  depthProfile: {
+                    $not: {
+                      $elemMatch: {
+                        depthFromCm: depth.fromCm,
+                        depthToCm: depth.toCm,
+                        sandQ50: { $type: 'number', $gte: 0, $lte: 100 },
+                        siltQ50: { $type: 'number', $gte: 0, $lte: 100 },
+                        clayQ50: { $type: 'number', $gte: 0, $lte: 100 },
+                      },
+                    },
+                  },
+                })),
+              },
               {
                 status: { $in: ['partial', 'failed'] },
                 updatedAt: { $lt: retryAfter },
