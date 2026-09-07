@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { extname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -112,6 +113,30 @@ const decorativeRailAllowlist = [
 ];
 
 const normalizePath = (path) => path.replaceAll('\\', '/');
+
+// El usuario confirmó el 07/09 que este release debe conservar el diseño vivo
+// de 9529dcc. No son nuevas excepciones estructurales: se congela el archivo
+// completo y únicamente estas dos declaraciones existentes. Cualquier cambio
+// requiere revisar esta atestación junto con la aprobación de diseño.
+const frozenProductionStyle = {
+  file: 'app/main/modulo-admin/licencias/crear-editar-licencias/crear-editar-licencias.component.scss',
+  sha256: 'f8f303ce45e704955096c8679b979f6f6c6e0f8b07b197bda696f17ed7ca358e',
+  rails: [
+    { rule: 'thick-side-border', selector: '.architecture-note', declaration: 'border-left: 3px solid var(--p-primary-color)' },
+    { rule: 'colored-side-override', selector: '.architecture-note.warning', declaration: 'border-left-color: var(--p-orange-500)' },
+  ],
+};
+
+function verifyFrozenProductionStyle(source) {
+  const digest = createHash('sha256').update(source.replaceAll('\r\n', '\n')).digest('hex');
+  assert.equal(digest, frozenProductionStyle.sha256, 'El diseño congelado de Licencias cambió; requiere aprobación visual explícita.');
+}
+
+function isFrozenProductionRail(violation) {
+  return violation.file === frozenProductionStyle.file && frozenProductionStyle.rails.some(
+    (rail) => rail.rule === violation.rule && rail.selector === violation.selector && rail.declaration === violation.declaration,
+  );
+}
 
 async function listFirstPartyStyleSources(directory = frontendRoot) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -376,20 +401,36 @@ test('el detector global reconoce bordes, sombras, pseudo-elementos y estilos in
   );
 });
 
-test('ninguna superficie first-party reintroduce franjas decorativas', async () => {
+test('la conservación del diseño no permite cambios ni amplía la excepción a otras franjas', async () => {
+  const source = await readFile(resolve(frontendRoot, frozenProductionStyle.file), 'utf8');
+  verifyFrozenProductionStyle(source);
+  assert.throws(() => verifyFrozenProductionStyle(source.replace('border-left: 3px', 'border-left: 4px')));
+  const fixture = { file: frozenProductionStyle.file, ...frozenProductionStyle.rails[0] };
+  assert.equal(isFrozenProductionRail(fixture), true);
+  assert.equal(isFrozenProductionRail({ ...fixture, file: 'app/other.scss' }), false);
+  assert.equal(isFrozenProductionRail({ ...fixture, selector: '.new-card' }), false);
+  assert.equal(isFrozenProductionRail({ ...fixture, declaration: 'border-left: 4px solid var(--p-primary-color)' }), false);
+});
+
+test('ninguna superficie first-party agrega franjas fuera del diseño productivo congelado', async () => {
   const files = await listFirstPartyStyleSources();
   const violations = (
     await Promise.all(
       files.map(async (absolute) => {
         const file = normalizePath(relative(frontendRoot, absolute));
-        return collectDecorativeRailViolations(file, await readFile(absolute, 'utf8'));
+        const source = await readFile(absolute, 'utf8');
+        if (file === frozenProductionStyle.file) verifyFrozenProductionStyle(source);
+        return collectDecorativeRailViolations(file, source);
       }),
     )
   ).flat();
 
+  const frozen = violations.filter(isFrozenProductionRail);
+  assert.deepEqual(frozen.map(({ rule, selector, declaration }) => ({ rule, selector, declaration })), frozenProductionStyle.rails);
+  const unexpected = violations.filter((violation) => !isFrozenProductionRail(violation));
   assert.equal(
-    violations.length,
+    unexpected.length,
     0,
-    `Se detectaron ${violations.length} franjas decorativas fuera de la allowlist:\n${formatViolations(violations)}`,
+    `Se detectaron ${unexpected.length} franjas decorativas nuevas:\n${formatViolations(unexpected)}`,
   );
 });

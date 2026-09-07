@@ -163,10 +163,17 @@ test("renderiza composición por profundidad, estados, nulls y móvil sin botón
 });
 
 test("prioriza el bloque operativo y difiere servicios pesados e historial", () => {
+  const servicesTrigger = "@defer (when cargarServiciosAlVolver; on viewport; on interaction(loadServicesTrigger); prefetch on idle)";
+  const detailTs = fs.readFileSync(
+    path.join(root, "sdc-app-chaman/src/app/main/modulo-productor/lotes/detalles-lote/detalles-lote.component.ts"),
+    "utf8",
+  );
   assert.match(
     detail,
-    /@defer \(on viewport; on interaction\(loadServicesTrigger\); prefetch on idle\)/,
+    /@defer \(when cargarServiciosAlVolver; on viewport; on interaction\(loadServicesTrigger\); prefetch on idle\)/,
   );
+  assert.match(detailTs, /public cargarServiciosAlVolver: boolean = false/);
+  assert.match(detailTs, /this\.cargarServiciosAlVolver = this\.activatedRoute\.snapshot\.fragment === 'manejo-cultivo'/);
   assert.match(detail, /#loadServicesTrigger/);
   assert.match(detail, /services-deferred-placeholder/);
   assert.match(
@@ -175,8 +182,6 @@ test("prioriza el bloque operativo y difiere servicios pesados e historial", () 
   );
   assert.ok(
     detail.indexOf("<app-card-suelo-ambiente") <
-      detail.indexOf(
-        "@defer (on viewport; on interaction(loadServicesTrigger); prefetch on idle)",
-      ),
+      detail.indexOf(servicesTrigger),
   );
 });
