@@ -55,6 +55,18 @@ enviarla a Apple. No hay un envío en revisión al momento de esta comprobación
   esto **no equivale** a un archive firmado ni valida ejecución en un iPhone.
 - No se hizo push ni merge; no se ejecutó un workflow de firma o subida.
 
+### Preparación de firma posterior
+
+El código candidato quedó en `7c347d94667960b2f3f594b4afaea7ca1ccf2376`.
+Se preparó un workflow separado, reutilizando el de la compilación 3, que fija
+exactamente ese SHA y sólo escucha la rama aislada de este candidato.
+El workflow utiliza los secretos ya existentes de Apple en GitHub; no contiene
+claves privadas y no hay pasos de Railway ni de envío a App Review.
+Su sintaxis YAML y la coincidencia de rama/SHA se comprobaron localmente.
+Antes de hacer push se requiere autorización de la subida de la compilación 4 a
+TestFlight. Mantener la selección de compilación en el borrador vacía hasta validar
+el nuevo binario; no seleccionar la 3 accidentalmente como versión definitiva.
+
 ## Pendientes antes de enviar
 
 1. Aprobar el SHA final, subir a GitHub en la rama aislada y usar la firma existente
