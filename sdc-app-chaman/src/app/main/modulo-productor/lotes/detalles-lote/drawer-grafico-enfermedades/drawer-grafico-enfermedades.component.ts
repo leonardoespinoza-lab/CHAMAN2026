@@ -80,7 +80,6 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
   public predicciones: IPrediccion[] = [];
 
   public chartOptions?: Highcharts.Options;
-  public seriesSinLecturas: { nombre: string; estado: string }[] = [];
 
   public get mostrarUmbrales(): boolean {
     // Cebada reúne índices diarios y de ventana, además de versiones históricas.
@@ -99,7 +98,6 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
   ) {}
 
   private crearGraficoPredicciones(): void {
-    this.seriesSinLecturas = [];
     this.chartOptions = undefined;
     if (this.siembra?.semilla?.cultivo === 'Trigo') {
       this.crearGraficoPrediccionesTrigo();
@@ -154,11 +152,7 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
         align: 'left',
       },
       subtitle: {
-        text: this.embedded
-          ? undefined
-          : this.translate.instant(
-              'Valor calculado por cada modelo; no equivale por si solo a presencia o probabilidad de enfermedad.'
-            ),
+        text: undefined,
         align: 'left',
       },
       yAxis: {
@@ -219,6 +213,8 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
         itemStyle: {
           color: 'var(--p-text-color)',
           fontSize: '13px',
+          textOverflow: 'clip',
+          whiteSpace: 'normal',
         },
         itemMarginBottom: 8,
         symbolWidth: 25,
@@ -227,7 +223,7 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
         shared: true,
         xDateFormat: '%d/%m/%Y',
         useHTML: true,
-        style: { whiteSpace: 'normal', width: 280 },
+        style: { whiteSpace: 'normal' },
         formatter: function () {
           const punto = this.points?.[0] || this;
           return componente.formatearTooltip(Number(this.x), punto.series.chart.series);
@@ -246,10 +242,60 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
           dashStyle: 'Solid',
         },
       },
-      series,
+      series: this.seriesParaMostrar(series),
     };
 
     return options;
+  }
+
+  private seriesParaMostrar(series: SeriesOptionsType[]): SeriesOptionsType[] {
+    const valor = (punto: unknown): number | null => {
+      const candidato = Array.isArray(punto)
+        ? punto[1]
+        : typeof punto === 'number'
+          ? punto
+          : punto && typeof punto === 'object' && 'y' in punto
+            ? punto.y
+            : null;
+      return typeof candidato === 'number' && Number.isFinite(candidato) ? candidato : null;
+    };
+    const identidad = (serie: SeriesOptionsType): string =>
+      String(serie.custom?.['idEnfermedad'] || serie.name || serie.id);
+    // Keep every monitored disease in the legend. A disease without positive
+    // values gets an empty presentation series: no invented curve or tooltip
+    // readings. Original records and zeroes in retained curves stay unchanged.
+    const conValores = new Set(
+      series
+        .filter((serie) =>
+          (serie as { data?: unknown[] }).data?.some((punto) => Number.isFinite(valor(punto)) && valor(punto)! > 0)
+        )
+        .map(identidad)
+    );
+    const primera = new Map<string, string>();
+    const visibles: SeriesOptionsType[] = [];
+    for (const serie of series) {
+      const clave = identidad(serie);
+      const principal = primera.get(clave);
+      const id = serie.id || clave;
+      if (!conValores.has(clave)) {
+        if (!principal) {
+          primera.set(clave, id);
+          visibles.push({
+            ...serie,
+            id,
+            data: [],
+            showInLegend: true,
+            enableMouseTracking: false,
+            marker: { enabled: false },
+          } as SeriesOptionsType);
+        }
+        continue;
+      }
+      if (!(serie as { data?: unknown[] }).data?.some((punto) => Number.isFinite(valor(punto)))) continue;
+      if (!principal) primera.set(clave, id);
+      visibles.push({ ...serie, id, linkedTo: principal, showInLegend: !principal } as SeriesOptionsType);
+    }
+    return visibles;
   }
 
   private formatearTooltip(fecha: number, series: Highcharts.Series[]): string {
@@ -258,6 +304,11 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
     const dia = new Intl.DateTimeFormat(idioma, { timeZone: 'UTC' }).format(fecha);
     const filas = series
       .filter((serie) => serie.visible)
+      .sort(
+        (a, b) =>
+          series.findIndex((s) => s.options.custom?.['idEnfermedad'] === a.options.custom?.['idEnfermedad']) -
+          series.findIndex((s) => s.options.custom?.['idEnfermedad'] === b.options.custom?.['idEnfermedad'])
+      )
       .flatMap((serie) => {
         const meta = serie.options.custom || {};
         if (
@@ -266,45 +317,27 @@ export class DrawerGraficoEnfermedadesComponent implements OnInit, OnChanges, On
         )
           return [];
         const punto = serie.data.find((p) => p.x === fecha);
-        if (!punto) return [];
-        const detalle = punto.options.custom || {};
-        const estado = detalle['estado'];
-        const valor =
-          estado === 'fuera_ventana'
-            ? this.translate.instant('Fuera de ventana')
-            : punto.y === null || punto.y === undefined
-              ? this.translate.instant('Sin datos')
-              : `${numero.format(punto.y)} ${this.translate.instant(meta['unidad'] || '/100')}`;
-        const calidad = detalle['calidad'] === 'baja' ? ` · ${this.translate.instant('Datos a revisar')}` : '';
+        if (!punto || punto.y === null || punto.y === undefined || !Number.isFinite(punto.y)) return [];
+        if (punto.options.custom?.['estado'] === 'fuera_ventana') return [];
+        const valor = `${numero.format(punto.y)} ${this.translate.instant(meta['unidad'] || '/100')}`;
         return [
-          `<div style="margin-top:8px"><span>${escaparTextoSanitario(serie.name)}</span><br/><strong>${escaparTextoSanitario(valor)}</strong>${escaparTextoSanitario(calidad)}</div>`,
+          `<tr><th scope="row" style="padding:5px 10px 5px 0;text-align:left;font-weight:400">${escaparTextoSanitario(serie.name)}</th><td style="padding:5px 0;text-align:right;font-weight:700;white-space:nowrap">${escaparTextoSanitario(valor)}</td></tr>`,
         ];
       });
-    return `<div style="max-width:260px;white-space:normal"><strong>${escaparTextoSanitario(dia)}</strong>${filas.join('')}</div>`;
+    return `<div style="width:260px;max-width:calc(100vw - 64px);white-space:normal"><strong>${escaparTextoSanitario(dia)}</strong><table style="width:100%;border-collapse:collapse;margin-top:6px"><tbody>${filas.join('')}</tbody></table></div>`;
   }
 
   private crearSeriesHistoricas(): SeriesOptionsType[] {
     const historicas = construirSeriesSanitariasHistoricas(this.predicciones);
     const colores = new Map<string, string>();
     const paleta = ['#13b8ad', '#2f9fe5', '#36b56b', '#e6b84f', '#7567d8'];
-    this.seriesSinLecturas = [];
     return historicas.map((serie) => {
-      const hermanas = historicas.filter((s) => s.idEnfermedad === serie.idEnfermedad);
-      const ultima = Math.max(...hermanas.map((s) => s.hasta || 0));
-      const tieneLecturas = serie.data.some((p) => p.y !== null);
-      if (!tieneLecturas && serie.hasta === ultima) {
-        const estado = serie.data.find((p) => p.x === serie.hasta)?.custom.estado;
-        this.seriesSinLecturas.push({
-          nombre: serie.nombre,
-          estado: estado === 'fuera_ventana' ? 'Fuera de ventana' : 'Sin datos',
-        });
-      }
       if (!colores.has(serie.idEnfermedad))
         colores.set(serie.idEnfermedad, COLORES_CEBADA[serie.idEnfermedad] || paleta[colores.size % paleta.length]);
       return {
         type: 'line',
         id: `${serie.idEnfermedad}-${serie.versionEtiqueta}`,
-        name: hermanas.length > 1 ? `${serie.nombre} · ${serie.versionEtiqueta}` : serie.nombre,
+        name: serie.nombre,
         color: colores.get(serie.idEnfermedad),
         data: serie.data,
         connectNulls: false,

@@ -19,6 +19,8 @@ describe('DrawerGraficoEnfermedadesComponent - grafico principal', () => {
     const options = (componente as any).chartBasicOptions([], [], []);
 
     expect(options.yAxis.max).toBe(100);
+    expect(options.legend.itemStyle.whiteSpace).toBe('normal');
+    expect(options.legend.itemStyle.textOverflow).toBe('clip');
   });
 
   it('toma del modelo compartido los umbrales 15 y 20 para trigo', () => {
@@ -59,7 +61,7 @@ describe('DrawerGraficoEnfermedadesComponent - grafico principal', () => {
     expect(options.tooltip.valueSuffix).toBeUndefined();
   });
 
-  it('muestra al cliente solamente los nombres de las cinco enfermedades', () => {
+  it('conserva los cinco nombres de trigo en la leyenda aunque solo una enfermedad tenga valores', () => {
     const componente = crear();
     componente.siembra = { semilla: { cultivo: 'Trigo' } } as any;
     componente.predicciones = [
@@ -80,13 +82,11 @@ describe('DrawerGraficoEnfermedadesComponent - grafico principal', () => {
     (componente as any).crearGraficoPrediccionesTrigo();
     const nombres = ((componente.chartOptions?.series || []) as any[]).map((serie) => serie.name);
 
-    expect(nombres).toEqual([
-      'Mancha Amarilla',
-      'Roya de la Hoja',
-      'Roya Amarilla/Estriada',
-      'Mancha de la Hoja',
-      'Fusarium de la Espiga',
-    ]);
+    expect(nombres).toHaveSize(5);
+    expect(nombres).toContain('Roya de la Hoja');
+    const series = componente.chartOptions!.series as any[];
+    expect(series.every((serie) => serie.showInLegend)).toBeTrue();
+    expect(series.filter((serie) => serie.data.length)).toHaveSize(1);
     expect(nombres.some((nombre) => /v\d|oportunidad|sin curva/i.test(nombre))).toBeFalse();
   });
 
@@ -165,22 +165,25 @@ describe('DrawerGraficoEnfermedadesComponent - grafico principal', () => {
     (componente as any).crearGraficoPrediccionesCebada();
     const series = componente.chartOptions!.series as any[];
     const mancha = series.filter((s) => s.custom.idEnfermedad === 'cebada.mancha_red');
-    expect(mancha.map((s) => s.name)).toEqual(['Mancha en Red · v3', 'Mancha en Red · v4']);
+    expect(mancha.map((s) => s.name)).toEqual(['Mancha en Red', 'Mancha en Red']);
+    expect(mancha.map((s) => s.showInLegend)).toEqual([true, false]);
+    expect(mancha[1].linkedTo).toBe(mancha[0].id);
     expect(mancha[0].color).toBe(mancha[1].color);
     expect(mancha.map((s) => s.data.map((p: any) => p.y))).toEqual([
       [99.86, null],
       [null, 41.09],
     ]);
     expect(series.every((s) => s.connectNulls === false && s.dashStyle === 'Solid')).toBeTrue();
-    expect(componente.seriesSinLecturas).toEqual([
-      { nombre: 'Fusariosis de la Espiga de Cebada', estado: 'Fuera de ventana' },
-    ]);
+    const fusariosis = series.find((s) => s.name.includes('Fusariosis'));
+    expect(fusariosis.showInLegend).toBeTrue();
+    expect(fusariosis.data).toEqual([]);
+    expect(fusariosis.enableMouseTracking).toBeFalse();
     expect((componente.chartOptions!.yAxis as any).plotBands).toEqual([]);
     expect((componente.chartOptions!.yAxis as any).title.text).not.toContain('%');
   });
 
   for (const width of [360, 1280]) {
-    it(`renderiza el tooltip con nombres, un decimal y estados a ${width}px`, () => {
+    it(`renderiza solo nombre y valor, sin versiones ni estados a ${width}px`, () => {
       const componente = crear();
       componente.siembra = { semilla: { cultivo: 'Cebada' } } as any;
       componente.predicciones = historialCebada();
@@ -194,19 +197,20 @@ describe('DrawerGraficoEnfermedadesComponent - grafico principal', () => {
         chart: { ...options.chart, width, height: 500, animation: false },
       });
       try {
-        const active = chart.series.find((s) => s.name === 'Mancha en Red · v4')!;
+        const active = chart.series.find((s) => s.options.custom?.['version'] === 'v4')!;
         chart.tooltip.refresh(active.data[1]);
         const texto = host.textContent || '';
         expect(texto).toContain('41,1 /100');
-        expect(texto).toContain('Fuera de ventana');
+        expect(texto).not.toContain('Fuera de ventana');
         expect(texto).not.toContain('0,0 /100');
         const contenido = (componente as any).formatearTooltip(Date.parse('2026-08-04T03:00:00.000Z'), chart.series);
-        expect(contenido).toContain('Mancha en Red · v4');
-        expect(contenido).not.toContain('Mancha en Red · v3');
-        expect(contenido).not.toContain('%');
-        const tooltip = host.querySelector('.highcharts-tooltip') as HTMLElement;
+        expect(contenido).toContain('Mancha en Red');
+        expect(contenido).not.toMatch(/v3|v4|Datos a revisar|Sin datos/);
+        const tooltip = host.querySelector('div.highcharts-tooltip > span') as HTMLElement;
         expect(tooltip).toBeTruthy();
+        expect(tooltip.textContent).not.toContain('%');
         expect(tooltip.getBoundingClientRect().width).toBeLessThanOrEqual(width);
+        expect(tooltip.getBoundingClientRect().width).toBeGreaterThanOrEqual(240);
         expect(chart.plotHeight).toBeGreaterThan(180);
       } finally {
         chart.destroy();
@@ -214,4 +218,137 @@ describe('DrawerGraficoEnfermedadesComponent - grafico principal', () => {
       }
     });
   }
+
+  it('conserva el ancho del tooltip con cuatro nombres largos y calidad baja', () => {
+    const componente = crear();
+    componente.embedded = true;
+    componente.siembra = { semilla: { cultivo: 'Cebada' } } as any;
+    componente.predicciones = [
+      {
+        fecha: '2026-07-26T03:00:00.000Z',
+        enfermedades: [
+          { idEnfermedad: 'cebada.mancha_red', enfermedad: 'Mancha en Red', resultado: 94.63, estado: 'calculado' },
+          {
+            idEnfermedad: 'cebada.escaldadura',
+            enfermedad: 'Escaldadura de la Cebada',
+            resultado: 1.67,
+            estado: 'calculado',
+          },
+          {
+            idEnfermedad: 'cebada.roya_hoja',
+            enfermedad: 'Roya de la Hoja de Cebada',
+            resultado: 0,
+            estado: 'fuera_ventana',
+          },
+          {
+            idEnfermedad: 'cebada.fusariosis_espiga',
+            enfermedad: 'Fusariosis de la Espiga de Cebada',
+            resultado: 0,
+            estado: 'fuera_ventana',
+          },
+        ].map((e) => ({ ...e, modelo: { version: 3 }, calidadDatos: 'baja' })),
+      },
+    ] as any;
+    (componente as any).crearGraficoPrediccionesCebada();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const options = withChamanChartTheme(componente.chartOptions!);
+    const chart = Highcharts.chart(host, {
+      ...options,
+      chart: { ...options.chart, width: 360, height: 500, animation: false },
+    });
+    try {
+      chart.tooltip.refresh(chart.series[0].data[0]);
+      const tooltip = host.querySelector('div.highcharts-tooltip > span') as HTMLElement;
+      const rect = tooltip.getBoundingClientRect();
+      const chartRect = host.querySelector('.highcharts-container')!.getBoundingClientRect();
+      expect(rect.width).toBeGreaterThanOrEqual(240);
+      expect(rect.width).toBeLessThanOrEqual(280);
+      expect(rect.height).toBeLessThan(300);
+      expect(rect.bottom).toBeLessThanOrEqual(chartRect.bottom);
+      expect(tooltip.textContent).toContain('94,6 /100');
+      expect(tooltip.textContent).toContain('Escaldadura de la Cebada');
+      expect(tooltip.querySelectorAll('tbody tr')).toHaveSize(2);
+      expect(tooltip.textContent).not.toMatch(/Fusariosis|Roya de la Hoja|Fuera de ventana|Datos a revisar|v3/);
+    } finally {
+      chart.destroy();
+      host.remove();
+    }
+  });
+
+  it('mantiene nombres y colores en la leyenda sin curvas vacías o en cero y conserva el retorno a cero de curvas activas', () => {
+    const componente = crear();
+    const series = [
+      {
+        type: 'line',
+        id: 'activa',
+        name: 'Activa',
+        data: [
+          [1, 8],
+          [2, 0],
+          [3, null],
+        ],
+      },
+      {
+        type: 'line',
+        id: 'cero',
+        name: 'Solo cero',
+        color: '#36b56b',
+        data: [
+          [1, 0],
+          [2, 0],
+        ],
+      },
+      {
+        type: 'line',
+        id: 'vacia',
+        name: 'Sin datos',
+        color: '#e6b84f',
+        data: [
+          [1, null],
+          [2, null],
+        ],
+      },
+    ];
+    const original = JSON.stringify(series);
+    const options = (componente as any).chartBasicOptions([], [], series);
+    expect(options.series.map((s: any) => s.name)).toEqual(['Activa', 'Solo cero', 'Sin datos']);
+    expect(options.series.every((s: any) => s.showInLegend)).toBeTrue();
+    expect(options.series.slice(1).map((s: any) => [s.data, s.color, s.enableMouseTracking])).toEqual([
+      [[], '#36b56b', false],
+      [[], '#e6b84f', false],
+    ]);
+    expect(options.series[0].data).toEqual([
+      [1, 8],
+      [2, 0],
+      [3, null],
+    ]);
+    expect(JSON.stringify(series)).toBe(original);
+  });
+
+  it('oculta y muestra todas las versiones con una única entrada de leyenda', () => {
+    const componente = crear();
+    componente.siembra = { semilla: { cultivo: 'Cebada' } } as any;
+    componente.predicciones = historialCebada();
+    (componente as any).crearGraficoPrediccionesCebada();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const chart = Highcharts.chart(host, componente.chartOptions!);
+    try {
+      expect(chart.series.filter((s) => s.options.showInLegend)).toHaveSize(2);
+      const mancha = chart.series.filter((s) => s.name === 'Mancha en Red');
+      const fusariosis = chart.series.find((s) => s.name.includes('Fusariosis'))!;
+      chart.series[0].hide();
+      expect(mancha.every((s) => !s.visible)).toBeTrue();
+      expect(fusariosis.visible).toBeTrue();
+      chart.series[0].show();
+      expect(chart.series.every((s) => s.visible)).toBeTrue();
+      fusariosis.hide();
+      fusariosis.show();
+      expect(fusariosis.data).toEqual([]);
+    } finally {
+      chart.destroy();
+      host.remove();
+    }
+  });
 });

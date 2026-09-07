@@ -263,4 +263,51 @@ describe('CardEnfermedadesComponent - comunicacion sanitaria', () => {
     expect(evento.stopPropagation).toHaveBeenCalled();
     expect(componente.verInformacionModelo).toBeTrue();
   });
+
+  it('mantiene las cuatro enfermedades monitoreadas en cebada aunque no todas tengan curva', () => {
+    const componente = crear();
+    componente.siembra = {
+      _id: 'siembra-qa',
+      semilla: { cultivo: 'Cebada' },
+      ultimaPrediccion: {
+        enfermedades: [
+          {
+            idEnfermedad: 'cebada.mancha_red',
+            enfermedad: 'Mancha en Red',
+            resultado: 24.62,
+            estado: 'calculado',
+            modelo: { version: 4, validacion: 'operativo_provisional' },
+          },
+          {
+            idEnfermedad: 'cebada.escaldadura',
+            enfermedad: 'Escaldadura de la Cebada',
+            resultado: 0,
+            estado: 'calculado',
+            modelo: { version: 3, validacion: 'operativo_provisional' },
+          },
+          {
+            idEnfermedad: 'cebada.fusariosis_espiga',
+            enfermedad: 'Fusariosis de la Espiga de Cebada',
+            resultado: 0,
+            estado: 'fuera_ventana',
+            modelo: { version: 3, validacion: 'operativo_provisional' },
+          },
+        ],
+      },
+    } as any;
+    const porNombre = new Map(componente.enfermedadInsights.map((item) => [item.nombreVisible, item]));
+    expect([...porNombre.keys()]).toEqual([
+      'Mancha en Red',
+      'Escaldadura de la Cebada',
+      'Roya de la Hoja de Cebada',
+      'Fusariosis de la Espiga de Cebada',
+    ]);
+    expect(porNombre.get('Mancha en Red')!.resultadoEtiqueta).toBe('24.6/100');
+    expect(porNombre.get('Escaldadura de la Cebada')!.resultadoEtiqueta).toBe('0.0/100');
+    expect(porNombre.get('Roya de la Hoja de Cebada')!.resultadoEtiqueta).toBe('Sin lectura');
+    expect(porNombre.get('Fusariosis de la Espiga de Cebada')!.resultadoEtiqueta).toBe('Fuera de ventana');
+    componente.abrirDetalleEnfermedad(porNombre.get('Fusariosis de la Espiga de Cebada')!);
+    expect(componente.verDetalleEnfermedad).toBeTrue();
+    expect(componente.enfermedadSeleccionada!.nombreVisible).toBe('Fusariosis de la Espiga de Cebada');
+  });
 });

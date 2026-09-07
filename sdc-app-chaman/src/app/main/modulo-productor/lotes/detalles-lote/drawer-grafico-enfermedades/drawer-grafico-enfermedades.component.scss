@@ -157,15 +157,6 @@
   font-size: 1.25rem;
 }
 
-.series-status {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  color: var(--chaman-muted, #64748b);
-  font-size: 0.85rem;
-  line-height: 1.5;
-}
-
 @media (max-width: 720px) {
   .disease-chart-shell {
     padding: 0.85rem;
