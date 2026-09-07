@@ -60,10 +60,10 @@ describe('SoilGridsProvider', () => {
     expect(result.sand + result.silt + result.clay).toBeCloseTo(100, 8);
   });
 
-  it('rechaza composiciones SoilGrids con desvíos excesivos', () => {
-    expect(() => (provider as any).closeTextureComposition(5, 45, 25)).toThrow(
-      /fuera de tolerancia/i,
-    );
+  it('no confunde la suma de medianas marginales con una composición medida', () => {
+    const result = (provider as any).closeTextureComposition(5, 45, 25);
+    expect(result.originalSum).toBe(75);
+    expect(result.sand + result.silt + result.clay).toBeCloseTo(100, 8);
   });
 
   it('limita la concurrencia y conserva el orden de los resultados', async () => {
@@ -114,42 +114,73 @@ describe('SoilGridsProvider', () => {
 
     const mockCoverage = (
       assessedProvider: SoilGridsProvider,
-      missing: (property: string, depthCode: string, quantile: string) => boolean,
+      missing: (
+        property: string,
+        depthCode: string,
+        quantile: string,
+      ) => boolean,
     ) =>
-      jest.spyOn(assessedProvider as any, 'readCoverage').mockImplementation(
-        async (_geometry, property: string, depthCode: string, quantile: string) => {
-          if (missing(property, depthCode, quantile)) {
-            throw new Error('Cobertura simulada no disponible.');
-          }
-          const value = property === 'sand' ? 40 : property === 'silt' ? 35 : 25;
-          return {
-            weightedMean: value,
-            median: value,
-            spatialLow: value,
-            spatialHigh: value,
-            standardDeviation: 0,
-            validPixels: 4,
-            coveragePercentage: 100,
-          };
-        },
-      );
+      jest
+        .spyOn(assessedProvider as any, 'readCoverage')
+        .mockImplementation(
+          async (
+            _geometry,
+            property: string,
+            depthCode: string,
+            quantile: string,
+          ) => {
+            if (missing(property, depthCode, quantile)) {
+              throw new Error('Cobertura simulada no disponible.');
+            }
+            const value =
+              property === 'sand' ? 40 : property === 'silt' ? 35 : 25;
+            return {
+              weightedMean: value,
+              median: value,
+              spatialLow: value,
+              spatialHigh: value,
+              standardDeviation: 0,
+              validPixels: 4,
+              coveragePercentage: 100,
+              spatialSupport: {
+                gridHash: 'same-grid',
+                validMaskHash: 'same-valid-pixels',
+              },
+            };
+          },
+        );
 
     it('advierte cada una de las cuatro profundidades sin Q50 y conserva las dos capas válidas', async () => {
-      const assessedProvider = new SoilGridsProvider(new SoilTextureClassifier());
+      const assessedProvider = new SoilGridsProvider(
+        new SoilTextureClassifier(),
+      );
       const missingDepths = SOILGRIDS_DEPTHS.slice(0, 4);
       const missingProperties = ['sand', 'silt', 'clay', 'sand'];
       mockCoverage(assessedProvider, (property, depthCode, quantile) => {
-        const index = missingDepths.findIndex((depth) => depth.code === depthCode);
-        return index >= 0 && property === missingProperties[index] && quantile === 'Q0.5';
+        const index = missingDepths.findIndex(
+          (depth) => depth.code === depthCode,
+        );
+        return (
+          index >= 0 &&
+          property === missingProperties[index] &&
+          quantile === 'Q0.5'
+        );
       });
 
       const result = await assessedProvider.assess(geometry);
 
-      expect(result.profile.map((layer) => [layer.depthFromCm, layer.depthToCm]))
-        .toEqual([[60, 100], [100, 200]]);
-      expect(result.warnings).toEqual(missingDepths.map((depth) =>
-        `SoilGrids no pudo completar ${depth.fromCm}–${depth.toCm} cm: faltan datos de textura.`,
-      ));
+      expect(
+        result.profile.map((layer) => [layer.depthFromCm, layer.depthToCm]),
+      ).toEqual([
+        [60, 100],
+        [100, 200],
+      ]);
+      expect(result.warnings).toEqual(
+        missingDepths.map(
+          (depth) =>
+            `SoilGrids no pudo completar ${depth.fromCm}–${depth.toCm} cm: faltan datos de textura.`,
+        ),
+      );
       // 100% del área de esas dos capas no equivale a disponer de seis profundidades.
       expect(result.coveragePercentage).toBe(100);
       expect(result.profile).toHaveLength(2);
@@ -157,23 +188,33 @@ describe('SoilGridsProvider', () => {
     });
 
     it('no descarta una profundidad por faltar solo un cuantil no esencial', async () => {
-      const assessedProvider = new SoilGridsProvider(new SoilTextureClassifier());
-      mockCoverage(assessedProvider, (property, _depthCode, quantile) =>
-        property === 'sand' && quantile === 'Q0.95',
+      const assessedProvider = new SoilGridsProvider(
+        new SoilTextureClassifier(),
+      );
+      mockCoverage(
+        assessedProvider,
+        (property, _depthCode, quantile) =>
+          property === 'sand' && quantile === 'Q0.95',
       );
 
       const result = await assessedProvider.assess(geometry);
 
       expect(result.profile).toHaveLength(SOILGRIDS_DEPTHS.length);
-      expect(result.profile.every((layer) => layer.sandQ95 === undefined)).toBe(true);
+      expect(result.profile.every((layer) => layer.sandQ95 === undefined)).toBe(
+        true,
+      );
       expect(result.warnings).toEqual([]);
       expect(result.coveragePercentage).toBe(100);
     });
 
     it('informa las seis profundidades faltantes cuando ninguna devuelve textura Q50', async () => {
-      const assessedProvider = new SoilGridsProvider(new SoilTextureClassifier());
-      mockCoverage(assessedProvider, (property, _depthCode, quantile) =>
-        property === 'clay' && quantile === 'Q0.5',
+      const assessedProvider = new SoilGridsProvider(
+        new SoilTextureClassifier(),
+      );
+      mockCoverage(
+        assessedProvider,
+        (property, _depthCode, quantile) =>
+          property === 'clay' && quantile === 'Q0.5',
       );
 
       const result = await assessedProvider.assess(geometry);
@@ -182,8 +223,9 @@ describe('SoilGridsProvider', () => {
       expect(result.coveragePercentage).toBe(0);
       expect(result.confidence).toBe('unavailable');
       expect(result.warnings).toEqual([
-        ...SOILGRIDS_DEPTHS.map((depth) =>
-          `SoilGrids no pudo completar ${depth.fromCm}–${depth.toCm} cm: faltan datos de textura.`,
+        ...SOILGRIDS_DEPTHS.map(
+          (depth) =>
+            `SoilGrids no pudo completar ${depth.fromCm}–${depth.toCm} cm: faltan datos de textura.`,
         ),
         'SoilGrids no devolvió píxeles válidos para el polígono del lote.',
       ]);

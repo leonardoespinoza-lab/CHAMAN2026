@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
+import { createHash } from 'node:crypto';
 import {
   area,
   bbox,
@@ -26,7 +27,9 @@ import { SoilGridsProviderResult } from './provider.types';
 
 type SoilGridsQuantile = 'Q0.05' | 'Q0.5' | 'Q0.95';
 
-export const SOILGRIDS_TEXTURE_CLOSURE_MAX_DEVIATION = 15;
+// A quality warning, NOT a validity bound for marginal predictive medians.
+export const SOILGRIDS_TEXTURE_CLOSURE_REVIEW_DEVIATION = 15;
+const SOILGRIDS_RASTER_SUPPORT_VERSION = 'raster-support-v1';
 
 interface RasterStatistics {
   weightedMean: number;
@@ -36,6 +39,7 @@ interface RasterStatistics {
   standardDeviation: number;
   validPixels: number;
   coveragePercentage: number;
+  spatialSupport: { gridHash: string; validMaskHash: string };
 }
 
 interface CoverageResult {
@@ -174,11 +178,24 @@ export class SoilGridsProvider {
     const get = (
       property: SoilGridsPropertyCode,
       quantile: SoilGridsQuantile = 'Q0.5',
-    ) => byKey.get(`${property}:${quantile}`);
+    ) => {
+      const stats = byKey.get(`${property}:${quantile}`);
+      if (quantile === 'Q0.5') return stats;
+      const reference = byKey.get(`${property}:Q0.5`)?.spatialSupport;
+      // Optional prediction intervals must describe the same pixels as Q50.
+      // A missing/incompatible interval must not remove an otherwise valid layer.
+      return reference?.gridHash &&
+        reference.validMaskHash &&
+        stats?.spatialSupport?.gridHash === reference.gridHash &&
+        stats?.spatialSupport?.validMaskHash === reference.validMaskHash
+        ? stats
+        : undefined;
+    };
     const sand = get('sand');
     const silt = get('silt');
     const clay = get('clay');
     if (!sand || !silt || !clay) return null;
+    this.assertCommonTextureSupport([sand, silt, clay]);
 
     const closedTexture = this.closeTextureComposition(
       sand.weightedMean,
@@ -214,14 +231,19 @@ export class SoilGridsProvider {
         return Number.isFinite(low) &&
           Number.isFinite(middle) &&
           Number.isFinite(high) &&
+          low! >= 0 &&
+          low! <= middle! &&
+          middle! <= high! &&
+          high! <= 100 &&
           middle! > 0
           ? (high! - low!) / middle!
           : undefined;
       })
       .filter((value): value is number => Number.isFinite(value));
-    const uncertaintyRatio = ratios.length
-      ? ratios.reduce((sum, value) => sum + value, 0) / ratios.length
-      : undefined;
+    const uncertaintyRatio =
+      ratios.length === 3
+        ? ratios.reduce((sum, value) => sum + value, 0) / ratios.length
+        : undefined;
 
     return {
       depthFromCm: depth.fromCm,
@@ -278,9 +300,16 @@ export class SoilGridsProvider {
           : 'low',
       qualityFlags: [
         `${SOILGRIDS_ATTRIBUTION}; mediana predictiva y estadística zonal ponderada por superficie.`,
+        'Textura: cierre de medianas marginales Q0.50 con grilla y soporte espacial coincidentes; no equivale a la media predictiva.',
         ...(closedTexture.closureApplied
           ? [
               `Cierre composicional SoilGrids aplicado: suma Q0.50 original ${closedTexture.originalSum.toFixed(2)}%, normalizada a 100%.`,
+            ]
+          : []),
+        ...(Math.abs(closedTexture.originalSum - 100) >
+        SOILGRIDS_TEXTURE_CLOSURE_REVIEW_DEVIATION
+          ? [
+              'Las medianas marginales requieren un cierre composicional amplio; confianza textural baja.',
             ]
           : []),
         ...(Number.isFinite(uncertaintyRatio)
@@ -311,13 +340,12 @@ export class SoilGridsProvider {
       throw new Error('Fracciones texturales SoilGrids inválidas.');
     }
     const originalSum = sand + silt + clay;
-    if (
-      originalSum <= 0 ||
-      Math.abs(originalSum - 100) > SOILGRIDS_TEXTURE_CLOSURE_MAX_DEVIATION
-    ) {
-      throw new Error(
-        `Composición SoilGrids fuera de tolerancia: ${originalSum.toFixed(2)}%.`,
-      );
+    // SoilGrids 2.0 computes marginal quantiles after back-transforming each
+    // tree prediction (Poggio et al. 2021, §2.5.1, doi:10.5194/soil-7-217-2021).
+    // Their sum need not be 100. Keep the existing closed-Q50 estimator, not a
+    // silent switch to mean, but require matching spatial support upstream.
+    if (originalSum <= 0 || !Number.isFinite(100 / originalSum)) {
+      throw new Error('Composición textural SoilGrids vacía o inválida.');
     }
     const factor = 100 / originalSum;
     return {
@@ -329,13 +357,35 @@ export class SoilGridsProvider {
     };
   }
 
+  private assertCommonTextureSupport(layers: RasterStatistics[]): void {
+    const reference = layers[0]?.spatialSupport;
+    if (
+      !reference?.gridHash ||
+      !reference.validMaskHash ||
+      layers.some(
+        (layer) =>
+          !Number.isInteger(layer.validPixels) ||
+          layer.validPixels <= 0 ||
+          !Number.isFinite(layer.coveragePercentage) ||
+          layer.coveragePercentage <= 0 ||
+          layer.coveragePercentage > 100 ||
+          layer.spatialSupport?.gridHash !== reference.gridHash ||
+          layer.spatialSupport?.validMaskHash !== reference.validMaskHash,
+      )
+    ) {
+      throw new Error(
+        'Las fracciones SoilGrids no comparten grilla y soporte espacial válidos.',
+      );
+    }
+  }
+
   private async readCoverage(
     geometry: NormalizedLotGeometry,
     property: SoilGridsPropertyCode,
     depthCode: string,
     quantile: SoilGridsQuantile,
   ): Promise<RasterStatistics> {
-    const cacheKey = `${geometry.geometryHash}:${property}:${depthCode}:${quantile}`;
+    const cacheKey = `${SOILGRIDS_RASTER_SUPPORT_VERSION}:${geometry.geometryHash}:${property}:${depthCode}:${quantile}`;
     const cached = this.cache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.stats;
     if (cached) this.cache.delete(cacheKey);
@@ -371,6 +421,51 @@ export class SoilGridsProvider {
     const values = rasters[0] as ArrayLike<number>;
     const imageBounds = image.getBoundingBox();
     const nodata = image.getGDALNoData();
+    const geoKeys = image.getGeoKeys();
+    const directory = image.getFileDirectory();
+    const transform = directory.ModelTransformation;
+    const scale = directory.ModelPixelScale;
+    const tiepoint = directory.ModelTiepoint;
+    // Inspect affine tags directly: geotiff 2.x negates matrix[5] in
+    // getResolution(), unlike its getBoundingBox() matrix calculation.
+    const northUp = transform
+      ? !scale &&
+        transform.length === 16 &&
+        Array.from(transform as ArrayLike<number>).every(Number.isFinite) &&
+        transform[0] > 0 &&
+        transform[5] < 0 &&
+        transform[1] === 0 &&
+        transform[4] === 0 &&
+        transform[12] === 0 &&
+        transform[13] === 0 &&
+        transform[14] === 0 &&
+        transform[15] === 1
+      : scale &&
+        scale.length >= 2 &&
+        Number.isFinite(scale[0]) &&
+        scale[0] > 0 &&
+        Number.isFinite(scale[1]) &&
+        scale[1] > 0 &&
+        tiepoint?.length === 6 &&
+        Array.from(tiepoint as ArrayLike<number>).every(Number.isFinite) &&
+        tiepoint[0] === 0 &&
+        tiepoint[1] === 0;
+    // Zonal integration below assumes north-up, pixel-area EPSG:4326 grids.
+    // Reject incompatible metadata rather than treating metres as degrees or
+    // silently mirroring/rotating the pixel support.
+    if (
+      geoKeys.GeographicTypeGeoKey !== 4326 ||
+      geoKeys.GTModelTypeGeoKey !== 2 ||
+      geoKeys.GTRasterTypeGeoKey !== 1 ||
+      geoKeys.ProjectedCSTypeGeoKey ||
+      !northUp ||
+      image.getWidth() !== width ||
+      image.getHeight() !== height
+    ) {
+      throw new Error(
+        'Grilla SoilGrids incompatible con la consulta EPSG:4326.',
+      );
+    }
     const stats = this.zonalStatistics({
       values,
       width: image.getWidth(),
@@ -379,6 +474,9 @@ export class SoilGridsProvider {
       nodata,
       geometry,
       conversionFactor: SOILGRIDS_PROPERTIES[property].conversionFactor,
+      valueRange: ['sand', 'silt', 'clay'].includes(property)
+        ? [0, 100]
+        : undefined,
     });
     this.cache.set(cacheKey, {
       stats,
@@ -396,20 +494,43 @@ export class SoilGridsProvider {
     nodata: number | null;
     geometry: NormalizedLotGeometry;
     conversionFactor: number;
+    valueRange?: [number, number];
   }): RasterStatistics {
     const [minX, minY, maxX, maxY] = input.bounds;
+    if (
+      input.bounds.length !== 4 ||
+      !input.bounds.every(Number.isFinite) ||
+      minX < -180 ||
+      maxX > 180 ||
+      minY < -90 ||
+      maxY > 90 ||
+      maxX <= minX ||
+      maxY <= minY ||
+      !Number.isInteger(input.width) ||
+      !Number.isInteger(input.height) ||
+      input.width <= 0 ||
+      input.height <= 0 ||
+      input.values.length !== input.width * input.height ||
+      !Number.isFinite(input.conversionFactor) ||
+      input.conversionFactor <= 0 ||
+      !Number.isFinite(input.geometry.areaM2) ||
+      input.geometry.areaM2 <= 0
+    )
+      throw new Error('Metadatos de cobertura SoilGrids inválidos.');
     const stepX = (maxX - minX) / input.width;
     const stepY = (maxY - minY) / input.height;
     const lotFeature = feature(input.geometry.geometry as any);
     const weighted: Array<{ value: number; weight: number }> = [];
+    const validIndices: number[] = [];
     let coveredArea = 0;
 
     for (let row = 0; row < input.height; row++) {
       for (let column = 0; column < input.width; column++) {
-        const raw = Number(input.values[row * input.width + column]);
+        const pixelIndex = row * input.width + column;
+        const raw = input.values[pixelIndex];
         if (
-          !Number.isFinite(raw) ||
-          (Number.isFinite(input.nodata) && raw === input.nodata)
+          (Number.isFinite(input.nodata) && raw === input.nodata) ||
+          (Number.isNaN(input.nodata) && Number.isNaN(raw))
         ) {
           continue;
         }
@@ -430,9 +551,18 @@ export class SoilGridsProvider {
         if (!overlap) continue;
         const overlapArea = area(overlap);
         if (!Number.isFinite(overlapArea) || overlapArea <= 0) continue;
+        const value = raw / input.conversionFactor;
+        if (
+          typeof raw !== 'number' ||
+          !Number.isFinite(raw) ||
+          (input.valueRange &&
+            (value < input.valueRange[0] || value > input.valueRange[1]))
+        )
+          throw new Error('Píxel SoilGrids inválido dentro del polígono.');
         coveredArea += overlapArea;
+        validIndices.push(pixelIndex);
         weighted.push({
-          value: raw / input.conversionFactor,
+          value,
           weight: overlapArea,
         });
       }
@@ -472,6 +602,23 @@ export class SoilGridsProvider {
         100,
         (coveredArea / input.geometry.areaM2) * 100,
       ),
+      spatialSupport: {
+        gridHash: createHash('sha256')
+          .update(
+            JSON.stringify({
+              bounds: input.bounds,
+              width: input.width,
+              height: input.height,
+              crs: 'EPSG:4326',
+              rasterType: 'PixelIsArea',
+              orientation: 'north-up',
+            }),
+          )
+          .digest('hex'),
+        validMaskHash: createHash('sha256')
+          .update(JSON.stringify(validIndices))
+          .digest('hex'),
+      },
     };
   }
 
@@ -506,6 +653,15 @@ export class SoilGridsProvider {
   ): TConfianzaInteligenciaSuelo {
     if (!profile.length || coverage <= 0) return 'unavailable';
     if (geometry.areaM2 < SOILGRIDS_RESOLUTION_METERS ** 2) return 'low';
+    if (
+      profile.some(
+        (layer) =>
+          Number.isFinite(layer.textureCompositionOriginalSum) &&
+          Math.abs(layer.textureCompositionOriginalSum! - 100) >
+            SOILGRIDS_TEXTURE_CLOSURE_REVIEW_DEVIATION,
+      )
+    )
+      return 'low';
     if (coverage >= 90 && profile.length >= 3) return 'medium';
     return 'low';
   }
