@@ -9,6 +9,13 @@ describe('Map provider attribution', () => {
     expect(a.getElement().classList).toContain('chaman-map-attribution');
     expect(a.getElement().querySelector('button')?.title).toBe('Créditos y licencias del mapa');
   });
+  it('does not give either icon the attribution container class', () => {
+    const control = mapAttributionControls()[0];
+    const button = control.getElement().querySelector('button')!;
+    expect(button.firstElementChild?.className).toBe('chaman-map-credit-expand');
+    button.click();
+    expect(button.firstElementChild?.className).toBe('chaman-map-credit-collapse');
+  });
   it('credits imagery separately from the open-source map library', () => {
     expect(ESRI_IMAGERY_ATTRIBUTION).toContain('Vantor');
     expect(ESRI_IMAGERY_ATTRIBUTION).toContain('Earthstar Geographics');
@@ -67,6 +74,11 @@ describe('Map provider attribution', () => {
         expect(getComputedStyle(element.querySelector('ul')!).display).not.toBe('none');
         expect(getComputedStyle(element.querySelector('ul')!).fontSize).toBe('12px');
         expect(getComputedStyle(element.querySelector('.map-credit-detail')!).display).toBe('none');
+        const button = element.querySelector('button')!;
+        const icon = button.firstElementChild!;
+        expect(getComputedStyle(icon).display).toBe('inline');
+        expect(icon.getBoundingClientRect().width).toBeGreaterThan(8);
+        expect(icon.getBoundingClientRect().right).toBeLessThanOrEqual(button.getBoundingClientRect().right);
         control.setCollapsed(false);
         expect(getComputedStyle(element.querySelector('.map-credit-detail')!).display).not.toBe('none');
         expect(element.scrollWidth).toBeLessThanOrEqual(element.clientWidth);

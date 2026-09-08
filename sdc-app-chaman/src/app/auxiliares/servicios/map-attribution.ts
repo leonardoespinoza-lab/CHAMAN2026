@@ -18,7 +18,10 @@ class CompactMapAttribution extends Attribution {
       collapsible: true,
       collapsed: true,
       label: 'ⓘ',
+      // Explicit names prevent OL from applying the container layout to icons.
+      expandClassName: 'chaman-map-credit-expand',
       collapseLabel: '×',
+      collapseClassName: 'chaman-map-credit-collapse',
       tipLabel: 'Créditos y licencias del mapa',
     });
     this.element.addEventListener('keydown', (event) => {
