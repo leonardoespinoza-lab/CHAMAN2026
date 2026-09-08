@@ -15,10 +15,10 @@ android {
     namespace = "com.chamanagro.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId = "com.chamanagro.app"
+        applicationId = "ar.chamanagro.app"
         minSdkVersion = rootProject.ext.minSdkVersion
         targetSdkVersion = rootProject.ext.targetSdkVersion
-        versionCode = 22
+        versionCode = 1
         versionName = "1.6.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -30,6 +30,7 @@ android {
     if (releaseSigningConfigured) {
         signingConfigs {
             release {
+                storeType = 'PKCS12'
                 storeFile = file(releaseKeystorePath)
                 storePassword = releaseKeystorePassword
                 keyAlias = releaseKeyAlias
@@ -49,6 +50,14 @@ android {
 
     lint {
         checkReleaseBuilds = false
+    }
+}
+
+// A release task must never silently produce an unsigned bundle.
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { task -> task.project == project && task.name.toLowerCase().contains('release') }
+            && !releaseSigningConfigured) {
+        throw new GradleException('Android release requires the dedicated upload signing configuration.')
     }
 }
 

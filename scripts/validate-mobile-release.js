@@ -5,6 +5,7 @@ const ROOT = path.resolve(__dirname, '..');
 const APP = path.join(ROOT, 'sdc-app-chaman');
 const expectedVersion = '1.6.0';
 const expectedAppId = 'com.chamanagro.app';
+const expectedAndroidAppId = 'ar.chamanagro.app';
 
 function read(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
@@ -69,7 +70,12 @@ for (const removedDependency of [
 }
 
 const capacitorConfig = read('sdc-app-chaman/capacitor.config.ts');
-requireText(capacitorConfig, `appId: '${expectedAppId}'`, 'Capacitor config');
+requireText(capacitorConfig, '...resolveNativeIdentity()', 'Capacitor config');
+const { resolveNativeIdentity } = require('../sdc-app-chaman/scripts/native-identity.cjs');
+if (resolveNativeIdentity(['sync', 'ios']).appId !== expectedAppId ||
+    resolveNativeIdentity(['sync', 'android']).appId !== expectedAndroidAppId) {
+  throw new Error('Capacitor: las identidades iOS/Android deben conservarse separadas');
+}
 
 const prodEnvironment = read(
   'sdc-app-chaman/src/app/environments/environment.prod.ts',
@@ -97,8 +103,10 @@ requireText(androidVariables, 'compileSdkVersion = 36', 'Android variables');
 requireText(androidVariables, 'targetSdkVersion = 36', 'Android variables');
 
 const androidBuild = read('sdc-app-chaman/android/app/build.gradle');
-requireText(androidBuild, `applicationId = "${expectedAppId}"`, 'Android build');
-requireText(androidBuild, 'versionCode = 22', 'Android build');
+requireText(androidBuild, `applicationId = "${expectedAndroidAppId}"`, 'Android build');
+requireText(androidBuild, 'versionCode = 1', 'Android build');
+requireText(androidBuild, "storeType = 'PKCS12'", 'Firma Android');
+requireText(androidBuild, 'Android release requires the dedicated upload signing configuration.', 'Firma Android');
 requireText(
   androidBuild,
   `versionName = "${expectedVersion}"`,
@@ -204,5 +212,5 @@ requireText(
 rejectText(privacyManifest, '<key>NSPrivacyTracking</key>\n\t<true/>', 'Privacy manifest iOS');
 
 console.log(
-  `Configuración móvil ${expectedVersion} coherente para ${expectedAppId}.`,
+  `Configuración móvil ${expectedVersion}: iOS ${expectedAppId}; Android ${expectedAndroidAppId}.`,
 );

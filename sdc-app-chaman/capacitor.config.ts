@@ -1,8 +1,8 @@
 import { CapacitorConfig } from '@capacitor/cli';
+import { resolveNativeIdentity } from './scripts/native-identity.cjs';
 
 const config: CapacitorConfig = {
-  appId: 'com.chamanagro.app',
-  appName: 'Chamán',
+  ...resolveNativeIdentity(),
   webDir: 'dist/browser',
   server: {
     androidScheme: 'https',
