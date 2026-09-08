@@ -3,7 +3,7 @@ name: ios-testflight-1.6.0
 on:
   push:
     branches:
-      - "codex/ios-privacy-build5-2026-09-08"
+      - "codex/ios-map-credit-build6-2026-09-08"
     paths:
       - ".github/workflows/ios-testflight.yml"
   workflow_dispatch:
@@ -17,11 +17,11 @@ concurrency:
 
 jobs:
   upload-testflight:
-    name: signed-ios-build-5-to-internal-testflight
+    name: signed-ios-build-6-to-internal-testflight
     runs-on: macos-26
     timeout-minutes: 45
     env:
-      RELEASE_SHA: 04c982420826c916d53462665ecc624d423ffc83
+      RELEASE_SHA: 7261475aabef66052608d274b660f97a3009ac82
       APPLE_TEAM_ID: 38589U58A3
       APP_BUNDLE_ID: com.chamanagro.app
       PROFILE_NAME: Chaman App Store 1.6.0 2026-09-03
@@ -30,7 +30,7 @@ jobs:
       - name: Checkout exact approved source
         uses: actions/checkout@v4
         with:
-          ref: 04c982420826c916d53462665ecc624d423ffc83
+          ref: 7261475aabef66052608d274b660f97a3009ac82
           fetch-depth: 1
 
       - name: Verify immutable release source
