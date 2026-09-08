@@ -1,20 +1,92 @@
-// Only provider credits: preserve the existing map and application design.
-.ol-attribution.ol-uncollapsible {
-  max-width: calc(100% - 12px);
-  right: 6px;
-  bottom: 6px;
-  padding: 3px 6px;
-  background: rgba(255, 255, 255, 0.94);
-  color: #182b38;
-  font-size: 10px;
-  line-height: 1.35;
-  text-align: right;
+// Scoped to map credits: do not change the map or the application controls.
+.ol-attribution.chaman-map-attribution {
+  left: max(6px, env(safe-area-inset-left, 0px));
+  right: auto;
+  bottom: max(6px, env(safe-area-inset-bottom, 0px));
+  // Leave room for the Chaman menu at the opposite corner.
+  max-width: calc(100% - 84px - env(safe-area-inset-left, 0px));
+  width: fit-content;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #323232;
+  font:
+    12px/1.4 Arial,
+    sans-serif;
+  text-align: left;
   pointer-events: auto;
+
+  // Keep linked names (and any unwrapped OSM credit) visible when collapsed.
+  ul {
+    display: block;
+    margin: 0;
+    padding: 2px 3px;
+    color: inherit;
+    font: inherit;
+    text-shadow: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  li {
+    display: inline;
+  }
+  li + li::before {
+    content: " · ";
+  }
+  a {
+    color: #075766;
+    text-decoration: underline;
+  }
+  .map-credit-short {
+    white-space: nowrap;
+  }
+  .map-credit-detail {
+    display: none;
+  }
+
+  button {
+    display: block;
+    width: 24px;
+    height: 24px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    background: transparent;
+    color: #075766;
+    font:
+      16px/24px Arial,
+      sans-serif;
+    box-shadow: none;
+    cursor: pointer;
+  }
+  button:focus-visible,
+  a:focus-visible {
+    outline: 2px solid #075766;
+    outline-offset: 1px;
+  }
+
+  &:not(.ol-collapsed) {
+    align-items: flex-start;
+    max-height: calc(100% - 12px - env(safe-area-inset-bottom, 0px));
+    overflow-y: auto;
+    ul {
+      padding: 6px;
+    }
+    li {
+      display: block;
+    }
+    li + li {
+      margin-top: 4px;
+    }
+    li + li::before {
+      content: none;
+    }
+    .map-credit-short {
+      display: none;
+    }
+    .map-credit-detail {
+      display: inline;
+    }
+  }
 }
-.ol-attribution.ol-uncollapsible ul {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-.ol-attribution.ol-uncollapsible li { display: inline; }
-.ol-attribution.ol-uncollapsible li + li::before { content: " · "; }
-.ol-attribution.ol-uncollapsible a { color: #075766; text-decoration: underline; }
