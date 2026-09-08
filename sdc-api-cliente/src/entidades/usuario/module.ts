@@ -10,10 +10,11 @@ import { LotesRepository } from '../lote/repository';
 import { DistribuidorsRepository } from '../distribuidor/repository';
 import { ProductorsRepository } from '../productor/repository';
 import { TenantsRepository } from '../tenant/repository';
+import { PrivacyController } from './privacy.controller';
 
 @Module({
   imports: [AxiosModule, ProductorsModule, AuthenticationModule],
-  controllers: [UsuariosController],
+  controllers: [UsuariosController, PrivacyController],
   providers: [
     UsuariosService,
     UsuariosRepository,

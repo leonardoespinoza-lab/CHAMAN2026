@@ -1,7 +1,7 @@
+import { ESRI_IMAGERY_ATTRIBUTION, mapAttributionControls } from '../../../../../auxiliares/servicios/map-attribution';
 import { CommonModule } from '@angular/common';
 import { AfterViewInit, Component, ElementRef, Input, OnChanges, OnDestroy, SimpleChanges, ViewChild } from '@angular/core';
 import { Feature, Map, View } from 'ol';
-import { defaults as defaultControls } from 'ol/control';
 import { defaults as defaultInteractions } from 'ol/interaction';
 import TileLayer from 'ol/layer/Tile';
 import VectorLayer from 'ol/layer/Vector';
@@ -222,7 +222,7 @@ export class CardVientoLoteComponent implements OnChanges, AfterViewInit, OnDest
       this.loteLayer = new VectorLayer({ source });
       this.map = new Map({
         target,
-        controls: defaultControls({ attribution: false, rotate: false, zoom: false }),
+        controls: mapAttributionControls(),
         interactions: defaultInteractions({
           altShiftDragRotate: false,
           doubleClickZoom: false,
@@ -236,7 +236,7 @@ export class CardVientoLoteComponent implements OnChanges, AfterViewInit, OnDest
           new TileLayer({
             source: new XYZ({
               url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-              attributions: '',
+              attributions: ESRI_IMAGERY_ATTRIBUTION,
               maxZoom: 19,
             }),
           }),

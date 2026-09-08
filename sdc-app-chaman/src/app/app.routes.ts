@@ -259,6 +259,15 @@ export const routes: Routes = [
     canActivate: [loginGuard],
     children: [
       // *** Prductor *** //
+      {
+        path: 'cuenta/privacidad',
+        loadComponent: () => import('./main/cuenta/privacidad.component').then(m => m.PrivacidadComponent),
+      },
+      {
+        path: 'cuenta/solicitudes-privacidad',
+        loadComponent: () => import('./main/cuenta/solicitudes-privacidad.component').then(m => m.SolicitudesPrivacidadComponent),
+        ...adminOnly,
+      },
       // Mapa
       { path: '', redirectTo: redirectInicio, pathMatch: 'full' },
       {

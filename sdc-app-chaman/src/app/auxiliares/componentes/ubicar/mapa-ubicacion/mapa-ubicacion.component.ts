@@ -1,3 +1,4 @@
+import { mapAttributionControls } from '../../../servicios/map-attribution';
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
 import { ICoordenadas } from 'modelos/src';
 import { Feature, Map, View } from 'ol';
@@ -54,7 +55,7 @@ export class MapaUbicacionComponent implements OnInit {
       this.map = new Map({
         interactions: OpenLayersService.interactions(),
         target: this.mapId,
-        controls: [],
+        controls: mapAttributionControls(),
         layers: [
           OpenLayersService.mapTileSatelite(maxZoomSatellite),
           OpenLayersService.mapReferenciasPoliticas(),

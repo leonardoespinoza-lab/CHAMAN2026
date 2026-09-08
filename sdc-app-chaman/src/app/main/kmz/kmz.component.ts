@@ -1,3 +1,4 @@
+import { ESRI_IMAGERY_ATTRIBUTION, ESRI_PLACES_ATTRIBUTION, mapAttributionControls } from '../../auxiliares/servicios/map-attribution';
 import { Component, OnInit, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { TranslateService } from '@ngx-translate/core';
@@ -67,7 +68,7 @@ export class KMZComponent implements OnInit {
 
     this.map = new Map({
       target: 'kmz',
-      controls: [],
+      controls: mapAttributionControls(),
       view: new View({
         center: this.currentPosition?.coordinates,
         zoom,
@@ -77,14 +78,14 @@ export class KMZComponent implements OnInit {
         new TileLayer({
           source: new OSM({
             url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            attributions: '',
+            attributions: ESRI_IMAGERY_ATTRIBUTION,
             maxZoom: maxZoomSatellite,
           }),
         }),
         new TileLayer({
           source: new XYZ({
             url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-            attributions: '',
+            attributions: ESRI_PLACES_ATTRIBUTION,
             maxZoom: 19,
           }),
         }),
