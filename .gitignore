@@ -73,5 +73,6 @@ sdc-app-chaman/keystore-chaman.key
 *.pfx
 sdc-app-chaman/android/app/build/
 sdc-app-chaman/android/.gradle/
+sdc-app-chaman/android/.kotlin/
 sdc-app-chaman/ios/App/Pods/
 sdc-app-chaman/ios/App/build/
