@@ -1,3 +1,4 @@
+import { ESRI_IMAGERY_ATTRIBUTION, ESRI_PLACES_ATTRIBUTION, mapAttributionControls } from '../../servicios/map-attribution';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   AfterViewInit,
@@ -148,19 +149,19 @@ export class MapDrawComponent implements AfterViewInit, OnDestroy {
 
     this.map = new Map({
       target: this.mapContainer.nativeElement,
-      controls: [],
+      controls: mapAttributionControls(),
       layers: [
         new TileLayer({
           source: new OSM({
             url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-            attributions: '',
+            attributions: ESRI_IMAGERY_ATTRIBUTION,
             maxZoom: maxZoomSatellite,
           }),
         }),
         new TileLayer({
           source: new XYZ({
             url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-            attributions: '',
+            attributions: ESRI_PLACES_ATTRIBUTION,
             maxZoom: 19,
           }),
         }),

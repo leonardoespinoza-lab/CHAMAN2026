@@ -1,3 +1,4 @@
+import { ESRI_IMAGERY_ATTRIBUTION, ESRI_PLACES_ATTRIBUTION, mapAttributionControls } from '../../../auxiliares/servicios/map-attribution';
 import { animate, style, transition, trigger } from '@angular/animations';
 import { AfterViewInit, ChangeDetectorRef, Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
@@ -1969,7 +1970,7 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
       const initialPosition = this.getInitialMapPosition();
       this.map = new Map({
         target: 'mapa',
-        controls: [],
+        controls: mapAttributionControls(),
         view: new View({
           center: fromLonLat(initialPosition.center),
           zoom: initialPosition.zoom,
@@ -1981,14 +1982,14 @@ export class MapaComponent implements OnInit, AfterViewInit, OnDestroy {
           new TileLayer({
             source: new OSM({
               url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-              attributions: '',
+              attributions: ESRI_IMAGERY_ATTRIBUTION,
               maxZoom: maxZoomSatellite,
             }),
           }),
           new TileLayer({
             source: new XYZ({
               url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-              attributions: '',
+              attributions: ESRI_PLACES_ATTRIBUTION,
               maxZoom: maxZoomLabels,
             }),
           }),

@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { ESRI_IMAGERY_ATTRIBUTION, ESRI_PLACES_ATTRIBUTION } from './map-attribution';
 import { ICoordenadas, IGeoJSONPolygon } from 'modelos/src';
 import { Feature } from 'ol';
 import { Coordinate } from 'ol/coordinate';
@@ -30,7 +31,7 @@ export class OpenLayersService {
     return new TileLayer({
       source: new OSM({
         url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        attributions: '',
+        attributions: ESRI_IMAGERY_ATTRIBUTION,
         maxZoom,
       }),
     });
@@ -40,7 +41,7 @@ export class OpenLayersService {
     return new TileLayer({
       source: new XYZ({
         url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-        attributions: '',
+        attributions: ESRI_PLACES_ATTRIBUTION,
         maxZoom: 19,
       }),
     });

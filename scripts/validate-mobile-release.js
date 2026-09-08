@@ -187,6 +187,7 @@ for (const collectedType of [
   'NSPrivacyCollectedDataTypeName',
   'NSPrivacyCollectedDataTypeEmailAddress',
   'NSPrivacyCollectedDataTypePhoneNumber',
+  'NSPrivacyCollectedDataTypePhysicalAddress',
   'NSPrivacyCollectedDataTypePreciseLocation',
   'NSPrivacyCollectedDataTypePhotosorVideos',
   'NSPrivacyCollectedDataTypeAudioData',

@@ -1,3 +1,4 @@
+import { ESRI_IMAGERY_ATTRIBUTION, mapAttributionControls } from '../../../../../auxiliares/servicios/map-attribution';
 import { CommonModule } from '@angular/common';
 import {
   AfterViewInit,
@@ -12,7 +13,6 @@ import {
 } from '@angular/core';
 import Highcharts from 'highcharts';
 import { Feature, Map, View } from 'ol';
-import { defaults as defaultControls } from 'ol/control';
 import { defaults as defaultInteractions } from 'ol/interaction';
 import { Extent } from 'ol/extent';
 import { MultiPolygon, Polygon } from 'ol/geom';
@@ -806,7 +806,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
       this.satelliteLoteLayer = new VectorLayer({ source, zIndex: 20 });
       const basemapSource = new XYZ({
         url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        attributions: '',
+        attributions: ESRI_IMAGERY_ATTRIBUTION,
         crossOrigin: 'anonymous',
         maxZoom: 17,
       });
@@ -818,7 +818,7 @@ export class CardNDVIComponent implements OnInit, OnDestroy, OnChanges, AfterVie
       });
       this.satelliteMap = new Map({
         target,
-        controls: defaultControls({ attribution: false, rotate: false, zoom: false }),
+        controls: mapAttributionControls(),
         interactions: defaultInteractions({
           altShiftDragRotate: false,
           doubleClickZoom: false,

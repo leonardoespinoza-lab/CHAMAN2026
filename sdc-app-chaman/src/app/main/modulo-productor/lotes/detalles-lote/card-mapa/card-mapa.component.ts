@@ -1,3 +1,4 @@
+import { ESRI_IMAGERY_ATTRIBUTION, mapAttributionControls } from '../../../../../auxiliares/servicios/map-attribution';
 import { CommonModule } from '@angular/common';
 import { AfterViewInit, Component, ElementRef, Input, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { IGeoJSONPolygon } from 'modelos/src';
@@ -29,7 +30,7 @@ export class CardMapaComponent implements OnInit, OnDestroy, AfterViewInit {
     if (this.lote?.ubicacion?.centro && this.mapContainer?.nativeElement) {
       this.map = new Map({
         target: this.mapContainer.nativeElement,
-        controls: [],
+        controls: mapAttributionControls(),
         interactions: [],
         view: new View({
           center: [this.lote.ubicacion.centro.lng, this.lote.ubicacion.centro.lat],
@@ -40,7 +41,7 @@ export class CardMapaComponent implements OnInit, OnDestroy, AfterViewInit {
           new TileLayer({
             source: new OSM({
               url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-              attributions: '',
+              attributions: ESRI_IMAGERY_ATTRIBUTION,
               maxZoom: 15,
             }),
           }),
