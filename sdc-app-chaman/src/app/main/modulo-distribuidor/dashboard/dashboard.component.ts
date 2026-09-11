@@ -15,6 +15,7 @@ import {
   ISiembra,
 } from 'modelos/src';
 import { Feature, Map as OlMap, View } from 'ol';
+import { defaults as defaultControls } from 'ol/control';
 import { FeatureLike } from 'ol/Feature';
 import { Point, Polygon } from 'ol/geom';
 import VectorLayer from 'ol/layer/Vector';
@@ -28,6 +29,7 @@ import Text from 'ol/style/Text';
 import { Subscription } from 'rxjs';
 import { HelperService } from '../../../auxiliares/servicios/helper';
 import { ListadosService } from '../../../auxiliares/servicios/listados';
+import { mapAttributionControls } from '../../../auxiliares/servicios/map-attribution';
 import { OpenLayersService } from '../../../auxiliares/servicios/openLayers.service';
 import { ParamsService } from '../../../auxiliares/servicios/params.service';
 import { LoginService } from '../../../auxiliares/http/login.service';
@@ -932,6 +934,7 @@ export class DashboardDistribuidorComponent implements OnInit, AfterViewInit, On
 
     this.map = new OlMap({
       target: this.networkMap.nativeElement,
+      controls: defaultControls({ attribution: false }).extend(mapAttributionControls()),
       layers: [
         OpenLayersService.mapTileSatelite(17),
         OpenLayersService.mapReferenciasPoliticas(),
