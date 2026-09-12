@@ -121,6 +121,54 @@ describe('Integration storage isolation, integrity and usage', () => {
       ),
     ).rejects.toThrow('cambió');
   });
+  test('persists service requests without authorizing them, and preserves them for older admin clients', async () => {
+    const requestedServices = [
+      'malezas',
+      'riego',
+      'clima-historico',
+      'clima-pronostico',
+    ];
+    const created = await service.command(
+      command({
+        action: 'create',
+        data: { ...registration, requestedServices },
+      }),
+    );
+    expect(created.requestedServices).toEqual(requestedServices);
+    expect(created.scopes).toEqual(settings.scopes);
+    await service.command(
+      command({
+        action: 'update',
+        revision: 1,
+        data: { ...settings, requestedServices: [] },
+      }),
+    );
+    expect(
+      clients.findOneAndUpdate.mock.calls[0][1].$set.requestedServices,
+    ).toEqual([]);
+    await service.command(
+      command({ action: 'update', revision: 1, data: settings }),
+    );
+    expect(clients.findOneAndUpdate.mock.calls[1][1].$set).not.toHaveProperty(
+      'requestedServices',
+    );
+    for (const requestedServices of [
+      ['private'],
+      ['riego', 'riego'],
+      ['fenologia'],
+      'riego',
+      null,
+    ])
+      await expect(
+        service.command(
+          command({
+            action: 'update',
+            revision: 1,
+            data: { ...settings, requestedServices },
+          }),
+        ),
+      ).rejects.toThrow();
+  });
   test('rejects overwrites of ownership, unsupported fields and invalid expiry', async () => {
     for (const data of [
       { ...settings, advisorUserId: 'c'.repeat(24) },

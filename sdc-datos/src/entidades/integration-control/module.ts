@@ -17,6 +17,8 @@ export const IntegrationClientSchema = new Schema(
     enabled: Boolean,
     expiresAt: String,
     scopes: [String],
+    // Optional for compatibility. These entries never authorize API routes.
+    requestedServices: { type: [String], default: undefined },
     limits: { productores: Number, establecimientos: Number, lotes: Number },
     requestsPerMinute: Number,
     maxSowingAgeDays: Number,

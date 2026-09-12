@@ -185,6 +185,45 @@ fieldset {
   flex: 0 0 18px;
   accent-color: var(--p-primary-color);
 }
+.service-group {
+  margin: 20px 0;
+}
+.service-group h4 {
+  font-size: 0.95rem;
+  margin: 0 0 10px;
+}
+.service-card {
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  padding: 16px;
+  min-width: 0;
+}
+.service-card.requested {
+  border-color: var(--p-primary-color);
+}
+.service-card p {
+  font-size: 0.86rem;
+  margin: 10px 0;
+}
+.service-card .check {
+  font-size: 0.85rem;
+  margin-top: 12px;
+  align-items: flex-start;
+}
+.service-state {
+  margin-top: 5px;
+}
+.service-requirements {
+  margin-top: 12px;
+  font-size: 0.8rem;
+}
+.service-requirements summary {
+  font-weight: 400;
+}
+.catalog-summary {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
 .operator {
   margin-top: 16px;
   align-items: end;

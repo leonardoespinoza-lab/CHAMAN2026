@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { ApiClientView } from 'modelos/src';
+import { ApiClientView, API_SERVICE_CATALOG, API_PENDING_SERVICES, API_SERVICES } from 'modelos/src';
 import { IntegrationAdminService } from '../../../auxiliares/http/integration-admin.service';
 import { IntegracionesAdminComponent } from './integraciones.component';
 import { integrationInstructions } from './instructions';
@@ -29,6 +29,7 @@ const list = () => ({
   registrySource: 'database',
   apiEnabled: false,
   services: [],
+  serviceCatalog: API_SERVICE_CATALOG,
   baseUrl: 'https://example.invalid/integraciones/v1',
 });
 describe('Integration admin panel', () => {
@@ -37,13 +38,11 @@ describe('Integration admin panel', () => {
     api = {
       list: jasmine.createSpy().and.resolveTo(list()),
       usage: jasmine.createSpy().and.resolveTo({ rows: [], lastRequestAt: null, retentionDays: 90 }),
-      operator: jasmine
-        .createSpy()
-        .and.resolveTo({
-          id: 'a'.repeat(24),
-          username: 'example',
-          permissions: [{ index: 0, nivel: 'Asesor', rol: 'Admin' }],
-        }),
+      operator: jasmine.createSpy().and.resolveTo({
+        id: 'a'.repeat(24),
+        username: 'example',
+        permissions: [{ index: 0, nivel: 'Asesor', rol: 'Admin' }],
+      }),
       create: jasmine.createSpy().and.resolveTo(client()),
       update: jasmine.createSpy().and.resolveTo(client()),
     };
@@ -69,6 +68,7 @@ describe('Integration admin panel', () => {
     expect(c.form.enabled).toBeFalse();
     expect(c.expiry).toBe('');
     expect(c.secret).toBe('');
+    expect(c.form.requestedServices).toBeUndefined();
   });
   it('preserves the selected client and operator while editing and does not mutate the list', () => {
     const c = new IntegracionesAdminComponent(api);
@@ -126,7 +126,55 @@ describe('Integration admin panel', () => {
     f.detectChanges();
     await f.whenStable();
     expect(f.nativeElement.querySelector('input[name="id"]').disabled).toBeTrue();
-    expect(f.nativeElement.querySelectorAll('input[type="checkbox"]').length).toBe(5);
+    expect(f.nativeElement.querySelectorAll('input[type="checkbox"]').length).toBe(
+      API_SERVICES.length + API_PENDING_SERVICES.length + 1
+    );
     expect(f.nativeElement.textContent).toContain('Instructivo del cliente');
+  });
+  it('renders every service, including meteorological history and forecast as separate choices', async () => {
+    const f = TestBed.createComponent(IntegracionesAdminComponent);
+    f.detectChanges();
+    await f.whenStable();
+    f.componentInstance.start(client());
+    f.detectChanges();
+    await f.whenStable();
+    expect(f.nativeElement.querySelectorAll('.service-card').length).toBe(API_SERVICE_CATALOG.length);
+    expect(f.nativeElement.querySelector('[data-service="clima-historico"] input[type="checkbox"]')).not.toBeNull();
+    expect(f.nativeElement.querySelector('[data-service="clima-pronostico"] input[type="checkbox"]')).not.toBeNull();
+    expect(f.nativeElement.textContent).toContain('Pendiente de conexión API');
+  });
+  it('requests services independently, preserves saved clients and never grants runtime scopes', async () => {
+    const c = new IntegracionesAdminComponent(api);
+    c.data = list() as any;
+    const saved = { ...client(), requestedServices: ['malezas'] as const };
+    c.start(saved as any);
+    c.requestService('clima-historico', true);
+    c.requestService('clima-historico', true);
+    c.requestService('clima-pronostico', true);
+    c.requestService('private', true);
+    expect(c.form.requestedServices).toEqual(['malezas', 'clima-historico', 'clima-pronostico']);
+    expect(saved.requestedServices).toEqual(['malezas']);
+    expect(c.form.scopes).toEqual(saved.scopes);
+    c.serviceSearch = 'meteorológico';
+    expect(c.serviceGroups.flatMap((g) => g.items).some((s) => s.codigo === 'clima-historico')).toBeTrue();
+    expect(c.form.requestedServices).toContain('malezas');
+    await c.save();
+    expect(api.update.calls.mostRecent().args[2].requestedServices).toEqual([
+      'malezas',
+      'clima-historico',
+      'clima-pronostico',
+    ]);
+  });
+  it('does not promise pending services in client instructions or silently grant them on upgrade', () => {
+    const saved = { ...client(), requestedServices: ['malezas', 'riego'] as any };
+    const text = integrationInstructions(saved, list().baseUrl, false);
+    expect(text).not.toContain('/malezas');
+    expect(text).not.toContain('/riego');
+    expect(text).not.toContain('Predicción de nacimiento');
+    const c = new IntegracionesAdminComponent(api);
+    c.start(client());
+    c.requestService('malezas', true);
+    expect(c.form.requestedServices).toBeUndefined();
+    expect(c.form.scopes).toEqual(client().scopes);
   });
 });

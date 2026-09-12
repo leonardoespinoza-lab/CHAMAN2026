@@ -256,6 +256,13 @@ test(
         enabled: false,
         expiresAt: "2099-01-01T00:00:00.000Z",
         scopes: ["catalogos:leer", "fenologia:leer"],
+        requestedServices: [
+          "malezas",
+          "riego",
+          "enfermedades",
+          "clima-historico",
+          "clima-pronostico",
+        ],
         limits: { productores: 50, establecimientos: 50, lotes: 50 },
         requestsPerMinute: 60,
         maxSowingAgeDays: 366,
@@ -272,6 +279,16 @@ test(
           });
           assert.equal(r.status, 201);
           current = await r.json();
+          assert.deepEqual(
+            current.requestedServices,
+            settings.requestedServices,
+          );
+          const persisted = await clients.findOne({ id: current.id }).lean();
+          assert.deepEqual(
+            persisted.requestedServices,
+            settings.requestedServices,
+          );
+          assert.deepEqual(persisted.scopes, settings.scopes);
           const r2 = await call("/admin/integraciones", "POST", {
             ...settings,
             id: "fixture-two",
@@ -316,6 +333,7 @@ test(
         assert.deepEqual(responses.map((r) => r.status).sort(), [200, 409]);
         current = await responses.find((r) => r.status === 200).json();
         assert.equal(current.revision, 2);
+        assert.deepEqual(current.requestedServices, settings.requestedServices);
       });
       let key;
       await t.test(
@@ -353,11 +371,20 @@ test(
           });
           assert.equal(r.status, 200);
           current = await r.json();
-          assert.equal(
-            (await call("/integraciones/v1/servicios", "GET", undefined, key))
-              .status,
-            200,
+          const available = await call(
+            "/integraciones/v1/servicios",
+            "GET",
+            undefined,
+            key,
           );
+          assert.equal(available.status, 200);
+          const contract = await available.json();
+          assert.deepEqual(contract.permisos, settings.scopes);
+          assert.deepEqual(contract.servicios.map((s) => s.codigo).sort(), [
+            "catalogos",
+            "fenologia",
+          ]);
+          assert.equal(Object.hasOwn(contract, "requestedServices"), false);
         },
       );
       await t.test(

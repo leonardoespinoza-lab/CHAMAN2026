@@ -1,5 +1,16 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { API_SERVICES, ApiClientView, ApiRegistration, ApiScope, ApiSettings, ApiUsageReport } from 'modelos/src';
+import {
+  API_SERVICES,
+  API_SERVICE_CATALOG,
+  API_SERVICE_GROUPS,
+  API_PENDING_SERVICES,
+  ApiPendingServiceCode,
+  ApiClientView,
+  ApiRegistration,
+  ApiScope,
+  ApiSettings,
+  ApiUsageReport,
+} from 'modelos/src';
 import { SharedModule } from '../../../auxiliares/shared.module';
 import {
   IntegrationAdminList,
@@ -25,6 +36,36 @@ export class IntegracionesAdminComponent implements OnInit, OnDestroy {
   username = '';
   operator?: IntegrationOperator;
   services = API_SERVICES;
+  get serviceCatalog() {
+    return this.data?.serviceCatalog || API_SERVICE_CATALOG;
+  }
+  serviceSearch = '';
+  get serviceGroups() {
+    const search = this.serviceSearch.trim().toLocaleLowerCase('es');
+    return API_SERVICE_GROUPS.map((nombre) => ({
+      nombre,
+      items: this.serviceCatalog.filter(
+        (s) => s.grupo === nombre && (!search || `${s.nombre} ${s.salida}`.toLocaleLowerCase('es').includes(search))
+      ),
+    })).filter((g) => g.items.length > 0);
+  }
+  servicePermissions(code: string) {
+    return this.services.filter((s) => s.scope.split(':')[0] === code);
+  }
+  requested(code: string) {
+    return (this.form.requestedServices || []).some((s) => s === code);
+  }
+  requestService(code: string, checked: boolean) {
+    if (
+      !this.data?.serviceCatalog?.some((s) => s.codigo === code && s.estado === 'pendiente') ||
+      !API_PENDING_SERVICES.some((s) => s.codigo === code)
+    )
+      return;
+    const value = code as ApiPendingServiceCode;
+    this.form.requestedServices = checked
+      ? [...(this.form.requestedServices || []).filter((s) => s !== value), value]
+      : (this.form.requestedServices || []).filter((s) => s !== value);
+  }
   expiry = '';
   secret = '';
   usage?: ApiUsageReport;
@@ -93,6 +134,7 @@ export class IntegracionesAdminComponent implements OnInit, OnDestroy {
     this.secret = '';
     this.usage = undefined;
     this.instructions = '';
+    this.serviceSearch = '';
     this.error = '';
     this.message = '';
     this.username = '';
@@ -106,6 +148,7 @@ export class IntegracionesAdminComponent implements OnInit, OnDestroy {
           enabled: client.enabled,
           expiresAt: client.expiresAt,
           scopes: [...client.scopes],
+          ...(client.requestedServices !== undefined ? { requestedServices: [...client.requestedServices] } : {}),
           limits: { ...client.limits },
           requestsPerMinute: client.requestsPerMinute,
           maxSowingAgeDays: client.maxSowingAgeDays,
@@ -143,7 +186,8 @@ export class IntegracionesAdminComponent implements OnInit, OnDestroy {
         : await this.api.create(this.form);
       this.data = await this.api.list();
       this.start(saved);
-      this.message = 'Configuración guardada. No se cambiaron licencias ni datos de campos.';
+      this.message =
+        'Configuración guardada. Los servicios solicitados pendientes no habilitan acceso ni generan cobros. No se cambiaron licencias ni datos de campos.';
     });
   }
   issueKey() {

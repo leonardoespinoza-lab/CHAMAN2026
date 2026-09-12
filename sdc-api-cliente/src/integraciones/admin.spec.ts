@@ -1,6 +1,9 @@
 import { Test } from '@nestjs/testing';
 import {
   API_SERVICES,
+  API_SERVICE_CATALOG,
+  API_PENDING_SERVICES,
+  API_SERVICE_GROUPS,
   ApiClientRecord,
   apiClientView,
   validApiSettings,
@@ -103,6 +106,87 @@ describe('Admin integration control plane', () => {
     ])
       expect(validApiSettings({ ...registration, ...patch }, true)).toBe(false);
   });
+  test('the full catalogue is unique and does not silently add runtime permissions', () => {
+    expect(new Set(API_SERVICE_CATALOG.map((s) => s.codigo)).size).toBe(
+      API_SERVICE_CATALOG.length,
+    );
+    expect(
+      API_SERVICE_CATALOG.every((s) => API_SERVICE_GROUPS.includes(s.grupo)),
+    ).toBe(true);
+    for (const code of [
+      'malezas',
+      'enfermedades',
+      'riego',
+      'clima-historico',
+      'clima-pronostico',
+      'satelite',
+      'sensores',
+      'suelo-perfil',
+      'huella-hidrica',
+    ])
+      expect(API_SERVICE_CATALOG.some((s) => s.codigo === code)).toBe(true);
+    expect(
+      API_SERVICE_CATALOG.filter((s) => s.estado === 'conectado')
+        .map((s) => s.codigo)
+        .sort(),
+    ).toEqual([...new Set(SCOPES.map((s) => s.split(':')[0]))].sort());
+    expect(
+      API_PENDING_SERVICES.every(
+        (s) => !SCOPES.some((scope) => scope.startsWith(s.codigo + ':')),
+      ),
+    ).toBe(true);
+  });
+  test('accepts optional service requests but rejects using them as permissions', () => {
+    const requestedServices = API_PENDING_SERVICES.map((s) => s.codigo);
+    expect(validApiSettings({ ...registration, requestedServices }, true)).toBe(
+      true,
+    );
+    expect(
+      validApiSettings({ ...registration, requestedServices: [] }, true),
+    ).toBe(true);
+    expect(validApiSettings(registration, true)).toBe(true);
+    for (const value of [
+      null,
+      undefined,
+      'malezas',
+      ['malezas', 'malezas'],
+      ['private'],
+      ['fenologia'],
+      [{ $ne: null }],
+    ])
+      expect(
+        validApiSettings({ ...registration, requestedServices: value }, true),
+      ).toBe(false);
+    expect(
+      validApiSettings(
+        { ...registration, scopes: ['malezas:leer'], requestedServices },
+        true,
+      ),
+    ).toBe(false);
+    const projected = apiClientView({ ...fixture(), requestedServices });
+    projected.requestedServices!.pop();
+    expect(requestedServices.length).toBe(API_PENDING_SERVICES.length);
+  });
+  test('returns the full catalogue separately from effective permissions and forwards requests to storage', async () => {
+    store.command.mockResolvedValueOnce({
+      items: [fixture()],
+      truncated: false,
+    });
+    const data = await service.list();
+    expect(data.serviceCatalog).toEqual(API_SERVICE_CATALOG);
+    expect(data.services.map((s) => s.scope)).toEqual([...SCOPES]);
+    await service.create(
+      { ...registration, requestedServices: ['malezas', 'clima-historico'] },
+      'b'.repeat(24),
+    );
+    expect(store.command.mock.calls[1][0].data.requestedServices).toEqual([
+      'malezas',
+      'clima-historico',
+    ]);
+    expect(store.command.mock.calls[1][0].data.scopes).toEqual(
+      registration.scopes,
+    );
+  });
   test('the operator projection never contains the human password or whole permissions', async () => {
     const result = await service.operator('example');
     expect(Object.keys(result).sort()).toEqual([
@@ -199,6 +283,14 @@ describe('Persisted registry and operational usage', () => {
       50,
     );
     current.limits.lotes = 100;
+    current.requestedServices = [
+      'malezas',
+      'clima-historico',
+      'clima-pronostico',
+    ];
+    const authenticated = await registry.authenticateRequest(credential);
+    expect(authenticated.scopes).toEqual(settings.scopes);
+    expect(authenticated).not.toHaveProperty('requestedServices');
     expect((await registry.authenticateRequest(credential)).limits?.lotes).toBe(
       100,
     );

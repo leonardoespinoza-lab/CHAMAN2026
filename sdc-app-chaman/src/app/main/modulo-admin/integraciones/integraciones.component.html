@@ -47,7 +47,10 @@
         >
           <span
             ><strong>{{ c.name }}</strong
-            ><small>{{ c.id }} · {{ c.scopes.length }} permisos</small></span
+            ><small
+              >{{ c.id }} · {{ c.scopes.length }} permisos · {{ c.requestedServices?.length || 0 }} servicios
+              solicitados</small
+            ></span
           >
           <span
             >{{ c.limits.productores }} productores · {{ c.limits.establecimientos }} campos ·
@@ -110,19 +113,73 @@
               vinculación se conserva para proteger la propiedad de los recursos.
             </p>
           }
-          <h3>Servicios incluidos</h3>
-          <div class="services">
-            @for (s of services; track s.scope) {
-              <label class="check"
-                ><input
-                  type="checkbox"
-                  [name]="s.scope"
-                  [ngModel]="form.scopes.includes(s.scope)"
-                  (ngModelChange)="toggle(s.scope, $event)"
-                />{{ s.nombre }}</label
-              >
-            }
-          </div>
+          <h3>Catálogo completo de servicios · {{ serviceCatalog.length }}</h3>
+          <p class="muted">
+            Elegí por cliente. «Conectado en esta versión» permite configurar permisos; la disponibilidad real depende
+            del entorno, la cuenta y los datos. «Pendiente de conexión API» guarda una solicitud interna: no habilita
+            consultas ni se incluye como servicio disponible en el instructivo.
+          </p>
+          @if (!data?.serviceCatalog) {
+            <p class="notice">
+              Este servidor aún no admite solicitudes del catálogo ampliado. No se pueden guardar hasta alinear la
+              versión del panel y la API.
+            </p>
+          }
+          <label class="search"
+            >Buscar servicio<input
+              type="search"
+              name="serviceSearch"
+              [(ngModel)]="serviceSearch"
+              placeholder="Malezas, riego, clima, satélite…"
+          /></label>
+          <p class="catalog-summary">
+            {{ form.scopes.length }} permisos seleccionados · {{ form.requestedServices?.length || 0 }} servicios
+            solicitados pendientes
+          </p>
+          @for (g of serviceGroups; track g.nombre) {
+            <section class="service-group" [attr.aria-label]="g.nombre">
+              <h4>{{ g.nombre }}</h4>
+              <div class="services">
+                @for (s of g.items; track s.codigo) {
+                  <div class="service-card" [attr.data-service]="s.codigo" [class.requested]="requested(s.codigo)">
+                    <strong>{{ s.nombre }}</strong>
+                    <small class="service-state">{{
+                      s.estado === 'conectado' ? 'Conectado en esta versión' : 'Pendiente de conexión API'
+                    }}</small>
+                    <p>{{ s.salida }}</p>
+                    @if (s.estado === 'conectado') {
+                      @for (p of servicePermissions(s.codigo); track p.scope) {
+                        <label class="check"
+                          ><input
+                            type="checkbox"
+                            [name]="p.scope"
+                            [ngModel]="form.scopes.includes(p.scope)"
+                            (ngModelChange)="toggle(p.scope, $event)"
+                          />{{ p.nombre }}</label
+                        >
+                      }
+                    } @else {
+                      <label class="check"
+                        ><input
+                          type="checkbox"
+                          [name]="'request-' + s.codigo"
+                          [disabled]="!data?.serviceCatalog"
+                          [ngModel]="requested(s.codigo)"
+                          (ngModelChange)="requestService(s.codigo, $event)"
+                        />Solicitar para este cliente</label
+                      >
+                    }
+                    <details class="service-requirements">
+                      <summary>Condiciones del servicio</summary>
+                      <p>{{ s.requisitos }}</p>
+                    </details>
+                  </div>
+                }
+              </div>
+            </section>
+          } @empty {
+            <p class="empty">No hay servicios con ese criterio. La búsqueda no cambia la selección.</p>
+          }
           <h3>Cupos y vigencia</h3>
           <div class="grid quotas">
             <label
@@ -181,7 +238,8 @@
           </div>
           <p class="muted">
             Los cupos incluyen los recursos activos de la cartera, también los cargados desde Chamán. Reducir un cupo no
-            borra datos: bloquea nuevas altas sobre ese límite.
+            borra datos: bloquea nuevas altas sobre ese límite. Los servicios nuevos no se conceden automáticamente a
+            los clientes existentes.
           </p>
           @if (selected) {
             <label class="check"

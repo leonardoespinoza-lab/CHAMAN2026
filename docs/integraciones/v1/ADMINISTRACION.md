@@ -7,7 +7,7 @@ Estado: implementación local del 12/09/2026. No habilita por sí sola Testing n
 Una tarjeta **Integraciones API** en el dashboard del administrador general abre `/integraciones-api`.
 
 - Registrar una integración para un **Asesor existente y activo**: verificar su usuario y seleccionar su permiso. No crea ni reutiliza contraseñas humanas.
-- Elegir los servicios implementados: lectura de estructura, creación de estructura/siembras, catálogo y fenología. No ofrece motores todavía no expuestos por la API.
+- Elegir los permisos implementados: lectura de estructura, creación de estructura/siembras, catálogo y fenología. El [catálogo completo](CATALOGO-SERVICIOS.md) incluye otros 24 servicios para solicitar por cliente; quedan pendientes de conexión externa, sin conceder permisos ni anunciar rutas inexistentes.
 - Editar cupos de productores, establecimientos y lotes; frecuencia de consultas; antigüedad máxima de nuevas siembras; vencimiento; habilitación/suspensión.
 - Cupos sugeridos en el formulario: 50/50/50. La fecha de vencimiento debe elegirla el administrador. Registrar no habilita automáticamente.
 - Generar claves de uso servidor-a-servidor, con prefijo del entorno y vencimiento no posterior al del cliente. Se muestran **una sola vez**. Hasta tres claves permiten solapamiento durante un recambio; revocación explícita por clave.

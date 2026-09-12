@@ -1,5 +1,13 @@
 import { Injectable } from '@angular/core';
-import { API_SERVICES, ApiClientView, ApiEnvironment, ApiRegistration, ApiSettings, ApiUsageReport } from 'modelos/src';
+import {
+  API_SERVICES,
+  API_SERVICE_CATALOG,
+  ApiClientView,
+  ApiEnvironment,
+  ApiRegistration,
+  ApiSettings,
+  ApiUsageReport,
+} from 'modelos/src';
 import { HttpService } from './http.service';
 
 export interface IntegrationAdminList {
@@ -10,6 +18,7 @@ export interface IntegrationAdminList {
   registrySource: string;
   baseUrl: string;
   services: typeof API_SERVICES;
+  serviceCatalog?: typeof API_SERVICE_CATALOG;
 }
 export interface IntegrationOperator {
   id: string;

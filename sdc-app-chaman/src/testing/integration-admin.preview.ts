@@ -4,7 +4,7 @@ import { bootstrapApplication } from '@angular/platform-browser';
 import { provideRouter } from '@angular/router';
 import { providePrimeNG } from 'primeng/config';
 import { MyPreset } from '../../public/styles/theme';
-import { API_SERVICES, ApiClientView } from 'modelos/src';
+import { API_SERVICES, API_SERVICE_CATALOG, ApiClientView } from 'modelos/src';
 import { IntegracionesAdminComponent } from '../app/main/modulo-admin/integraciones/integraciones.component';
 import { IntegrationAdminService } from '../app/auxiliares/http/integration-admin.service';
 
@@ -12,7 +12,7 @@ if (!['127.0.0.1', 'localhost'].includes(location.hostname)) throw new Error('Lo
 const initial: ApiClientView = { id: 'appcorteva-demo', name: 'AppCorteva · Ejemplo local', advisorUserId: 'a'.repeat(24), permissionIndex: 0, environment: 'testing', enabled: false, expiresAt: '2026-10-12T23:59:00.000Z', scopes: API_SERVICES.map(s => s.scope), limits: { productores: 50, establecimientos: 50, lotes: 50 }, requestsPerMinute: 60, maxSowingAgeDays: 366, revision: 1, keys: [], audit: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
 const rows = [initial];
 const fakeApi = {
-  list: async () => ({ items: structuredClone(rows), truncated: false, environment: 'testing', registrySource: 'database', apiEnabled: false, baseUrl: 'https://testing-api-testing.up.railway.app/sdc-quimica-test/integraciones/v1', services: API_SERVICES }),
+  list: async () => ({ items: structuredClone(rows), truncated: false, environment: 'testing', registrySource: 'database', apiEnabled: false, baseUrl: 'https://testing-api-testing.up.railway.app/sdc-quimica-test/integraciones/v1', services: API_SERVICES, serviceCatalog: API_SERVICE_CATALOG }),
   operator: async (username: string) => ({ id: 'b'.repeat(24), username, permissions: [{ index: 0, nivel: 'Asesor', rol: 'Admin' }] }),
   create: async (data: any) => { const item = { ...structuredClone(initial), ...data, keys: [], revision: 1 }; rows.push(item); return structuredClone(item); },
   update: async (id: string, revision: number, settings: any) => { const item = rows.find(r => r.id === id)!; Object.assign(item, settings, { revision: revision + 1 }); return structuredClone(item); },

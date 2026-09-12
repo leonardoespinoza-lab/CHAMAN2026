@@ -14,6 +14,7 @@ import {
   IUsuario,
   validApiSettings,
   API_SERVICES,
+  API_SERVICE_CATALOG,
 } from 'modelos/src';
 import {
   IntegrationControlStore,
@@ -49,6 +50,7 @@ export class IntegrationAdminService {
       truncated: data.truncated,
       environment,
       services: API_SERVICES,
+      serviceCatalog: API_SERVICE_CATALOG,
       apiEnabled:
         process.env.CHAMAN_INTEGRATIONS_ENABLED === 'true' &&
         (environment !== 'production' ||

@@ -1,4 +1,9 @@
-/** Control plane contracts. Public views must never include credential hashes. */
+import {
+  ApiPendingServiceCode,
+  validApiRequestedServices,
+} from "./integraciones-catalogo";
+export * from "./integraciones-catalogo";
+/** Implemented permissions only. The full commercial catalogue is separate. */
 export const API_SERVICES = [
   {
     scope: "estructura:leer",
@@ -18,6 +23,8 @@ export interface ApiSettings {
   enabled: boolean;
   expiresAt: string;
   scopes: ApiScope[];
+  /** Administrative requests awaiting an external adapter; never grants access. */
+  requestedServices?: ApiPendingServiceCode[];
   limits: { productores: number; establecimientos: number; lotes: number };
   requestsPerMinute: number;
   maxSowingAgeDays: number;
@@ -96,13 +103,16 @@ const settingsKeys = [
   "maxSowingAgeDays",
 ];
 export function validApiSettings(v: any, registration = false): boolean {
-  const keys = registration
+  const requiredKeys = registration
     ? [...settingsKeys, "id", "advisorUserId", "permissionIndex"]
     : settingsKeys;
+  const keys = [...requiredKeys, "requestedServices"];
   return (
     plain(v) &&
-    Object.keys(v).length === keys.length &&
+    requiredKeys.every((k) => Object.prototype.hasOwnProperty.call(v, k)) &&
     Object.keys(v).every((k) => keys.includes(k)) &&
+    (!Object.prototype.hasOwnProperty.call(v, "requestedServices") ||
+      validApiRequestedServices(v.requestedServices)) &&
     typeof v.name === "string" &&
     v.name.trim().length > 0 &&
     v.name.length <= 120 &&
@@ -138,6 +148,9 @@ export function apiClientView(record: ApiClientRecord): ApiClientView {
     environment: record.environment,
     expiresAt: record.expiresAt,
     scopes: [...record.scopes],
+    ...(record.requestedServices !== undefined
+      ? { requestedServices: [...record.requestedServices] }
+      : {}),
     limits: { ...record.limits },
     requestsPerMinute: record.requestsPerMinute,
     maxSowingAgeDays: record.maxSowingAgeDays,
