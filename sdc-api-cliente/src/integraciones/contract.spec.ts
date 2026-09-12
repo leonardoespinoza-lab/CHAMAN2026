@@ -264,6 +264,93 @@ describe('Public phenology projection', () => {
         .estado,
     ).toBe('cosechada');
   });
+  test('keeps a current canonical field observation even when today weather is forecast', () => {
+    const result = projectPhenology(
+      's1',
+      sowing,
+      snapshot([
+        {
+          ...row,
+          date: '2026-09-11',
+          stage: 'Emergencia',
+          stageSource: 'cronograma_referencia',
+        },
+        {
+          ...row,
+          stage: 'Espiguilla Terminal',
+          stageSource: 'campo',
+          isForecast: true,
+          stageConfidence: 'media',
+        },
+        {
+          ...row,
+          date: '2026-09-13',
+          stage: 'wrong future field',
+          stageSource: 'campo',
+          isForecast: true,
+        },
+      ]),
+      now,
+    );
+    expect(result).toMatchObject({
+      fechaDato: '2026-09-12',
+      etapa: 'Espiguilla Terminal',
+      origen: 'observada',
+      confirmadaEnCampo: true,
+      confianza: 'media',
+      estado: 'disponible',
+    });
+    expect(JSON.stringify(result)).not.toMatch(
+      /private|secret|metrics|parametersVersion/,
+    );
+  });
+  test.each([
+    'gdd_validado',
+    'proyeccion_anclada_campo',
+    'cronograma_referencia',
+    'rango_termico_referencia',
+    'seguimiento',
+  ])(
+    'does not admit weather-forecast rows for unobserved source %s',
+    (stageSource) => {
+      expect(
+        projectPhenology(
+          's1',
+          sowing,
+          snapshot([{ ...row, isForecast: true, stageSource }]),
+          now,
+        ),
+      ).toMatchObject({
+        etapa: null,
+        estado: 'pendiente',
+        confirmadaEnCampo: false,
+      });
+    },
+  );
+  test('still excludes invalid, pre-sowing and missing weather status on field rows', () => {
+    expect(
+      projectPhenology(
+        's1',
+        sowing,
+        snapshot([
+          {
+            ...row,
+            date: '2026-02-30',
+            isForecast: true,
+            stageSource: 'campo',
+          },
+          {
+            ...row,
+            date: '2026-04-30',
+            isForecast: true,
+            stageSource: 'campo',
+          },
+          { ...row, isForecast: undefined, stageSource: 'campo' },
+        ]),
+        now,
+      ),
+    ).toMatchObject({ etapa: null, estado: 'pendiente' });
+  });
   test('revision is stable on repeated reads and changes with stage', () => {
     const first = projectPhenology('s1', sowing, snapshot([row]), now);
     expect(

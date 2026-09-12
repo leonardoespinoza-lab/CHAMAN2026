@@ -21,7 +21,11 @@ export function projectPhenology(
         date(day.date) &&
         day.date <= today &&
         day.date >= start &&
-        day.isForecast === false &&
+        // isForecast describes the weather row, not an independently confirmed
+        // field stage. Today's canonical observation must not be hidden until
+        // tomorrow's weather close. All unobserved forecasts stay excluded.
+        (day.isForecast === false ||
+          (day.isForecast === true && day.stageSource === 'campo')) &&
         typeof day.stage === 'string' &&
         day.stage.trim(),
     )
