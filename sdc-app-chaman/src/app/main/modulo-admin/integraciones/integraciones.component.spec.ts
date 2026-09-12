@@ -87,6 +87,33 @@ describe('Integration admin panel', () => {
     expect(api.create).not.toHaveBeenCalled();
     expect(c.error).toContain('vencimiento');
   });
+  it('preserves exact expiry when changing only quotas or services', async () => {
+    const c = new IntegracionesAdminComponent(api);
+    const saved = { ...client(), expiresAt: '2099-10-12T14:47:21.169Z' };
+    c.start(saved);
+    c.form.limits.lotes = 75;
+    await c.save();
+    const settings = api.update.calls.mostRecent().args[2];
+    expect(settings.expiresAt).toBe(saved.expiresAt);
+    expect(settings.limits.lotes).toBe(75);
+    expect(saved.expiresAt).toBe('2099-10-12T14:47:21.169Z');
+  });
+  it('converts an intentionally edited local expiry to UTC', async () => {
+    const c = new IntegracionesAdminComponent(api);
+    c.start({ ...client(), expiresAt: '2099-10-12T14:47:21.169Z' });
+    c.expiry = '2099-11-02T16:30';
+    await c.save();
+    expect(api.update.calls.mostRecent().args[2].expiresAt).toBe(new Date('2099-11-02T16:30').toISOString());
+  });
+  it('sets the explicitly chosen expiry for a new registration', async () => {
+    const c = new IntegracionesAdminComponent(api);
+    c.start();
+    Object.assign(c.form, { id: 'new-client', name: 'Nuevo cliente', advisorUserId: 'a'.repeat(24) });
+    c.expiry = '2099-11-02T16:30';
+    await c.save();
+    expect(api.create.calls.mostRecent().args[0].expiresAt).toBe(new Date('2099-11-02T16:30').toISOString());
+    expect(api.update).not.toHaveBeenCalled();
+  });
   it('does not call an active configuration live when environment or keys are missing', () => {
     const c = new IntegracionesAdminComponent(api);
     c.data = list() as any;

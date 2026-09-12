@@ -179,7 +179,12 @@ export class IntegracionesAdminComponent implements OnInit, OnDestroy {
     return this.run(async () => {
       if (!this.expiry || !Number.isFinite(new Date(this.expiry).getTime()))
         throw { error: { message: 'Definí el vencimiento de esta integración.' } };
-      this.form.expiresAt = new Date(this.expiry).toISOString();
+      // The date control shows minutes. Preserve the stored precision unless
+      // the administrator actually edits the expiration date/time.
+      this.form.expiresAt =
+        this.selected && this.expiry === this.localDate(this.selected.expiresAt)
+          ? this.selected.expiresAt
+          : new Date(this.expiry).toISOString();
       const { id, advisorUserId, permissionIndex, ...settings } = this.form;
       const saved = this.selected
         ? await this.api.update(id, this.selected.revision, settings as ApiSettings)
