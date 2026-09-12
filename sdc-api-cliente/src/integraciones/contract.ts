@@ -152,17 +152,32 @@ export function normalizeBody(
 ): Record<string, any> {
   const fields = {
     productores: ['nombre'],
-    establecimientos: ['nombre', 'productorIdExterno'],
+    establecimientos: ['nombre', 'productorIdExterno', 'carteraPropiaAsesor'],
     lotes: ['nombre', 'establecimientoIdExterno', 'ubicacion', 'superficieHa'],
     siembras: ['loteIdExterno', 'idSemilla', 'fechaSiembra'],
   };
   const body = record(input, fields[kind]);
   if (kind === 'productores') return { nombre: name(body.nombre) };
-  if (kind === 'establecimientos')
+  if (kind === 'establecimientos') {
+    if (
+      body.carteraPropiaAsesor !== undefined &&
+      body.carteraPropiaAsesor !== true
+    )
+      throw new BadRequestException(
+        'carteraPropiaAsesor sólo admite true; para un productor, omitir este campo.',
+      );
+    if (body.carteraPropiaAsesor === true) {
+      if (Object.prototype.hasOwnProperty.call(body, 'productorIdExterno'))
+        throw new BadRequestException(
+          'Elegir cartera propia o productor, no ambos.',
+        );
+      return { nombre: name(body.nombre), carteraPropiaAsesor: true };
+    }
     return {
       nombre: name(body.nombre),
       productorIdExterno: externalId(body.productorIdExterno),
     };
+  }
   if (kind === 'siembras') {
     const date = calendarDate(body.fechaSiembra);
     if (

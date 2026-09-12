@@ -20,6 +20,8 @@ export interface IEstablecimiento extends IArchivado {
   idTenant?: string;
   /** Propietario inmutable cuando el establecimiento fue creado por un asesor. */
   idAsesorPropietario?: string;
+  /** Alta explícita en la cartera propia del asesor, sin productor intermedio. */
+  carteraPropiaAsesor?: boolean;
   idQuimica?: string;
   idDistribuidor?: string;
   idProductor?: string;
@@ -59,6 +61,7 @@ export interface ICreateEstablecimiento
   extends Omit<Partial<IEstablecimiento>, OmitirCreate> {}
 
 type OmitirUpdate =
+  | "carteraPropiaAsesor"
   | "_id"
   | "idTenant"
   | "idAsesorPropietario"

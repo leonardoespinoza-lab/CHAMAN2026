@@ -86,6 +86,10 @@ export class EstablecimientosService {
     data: ICreateEstablecimiento,
     permiso: IPermiso,
   ): Promise<IEstablecimiento> {
+    const propia = data.carteraPropiaAsesor;
+    if (propia !== undefined && typeof propia !== 'boolean') {
+      throw new BadRequestException('carteraPropiaAsesor debe ser booleano');
+    }
     data = this.withoutAutomaticLocation(data);
     if (data.ubicacion?.length) {
       for (const u of data.ubicacion) {
@@ -97,20 +101,48 @@ export class EstablecimientosService {
         }
       }
     }
-    if (!data.idProductor) {
-      data.idProductor = permiso.idProductor;
+    if (propia === true) {
+      if (
+        permiso.nivel !== 'Asesor' ||
+        !['Admin', 'Escritura'].includes(permiso.rol) ||
+        !/^[a-f0-9]{24}$/.test(String(permiso.idAsesor || '')) ||
+        data.idProductor != null
+      ) {
+        throw new BadRequestException(
+          'La cartera propia requiere un asesor con escritura y no admite un productor.',
+        );
+      }
+      delete data.idProductor;
+      data.carteraPropiaAsesor = true;
+      data.idDistribuidor = permiso.idTenant
+        ? undefined
+        : permiso.idDistribuidor;
+      data.idQuimica = permiso.idTenant ? undefined : permiso.idQuimica;
+      Object.assign(data, {
+        idTenant: permiso.idTenant,
+        idAsesorPropietario: String(permiso.idAsesor),
+      });
+    } else {
+      if (!data.idProductor) {
+        data.idProductor = permiso.idProductor;
+      }
+      if (!data.idProductor) {
+        throw new BadRequestException(
+          'Seleccionar un productor o indicar explícitamente la cartera propia del asesor.',
+        );
+      }
+      const productor = await this.productorsService.getById(
+        data.idProductor,
+        permiso,
+      );
+      data.idDistribuidor = productor.idDistribuidor;
+      data.idQuimica = productor.idQuimica;
+      (data as ICreateEstablecimiento & { idTenant?: string }).idTenant =
+        productor.idTenant;
+      (
+        data as ICreateEstablecimiento & { idAsesorPropietario?: string }
+      ).idAsesorPropietario = productor.idAsesorPropietario;
     }
-    const productor = await this.productorsService.getById(
-      data.idProductor,
-      permiso,
-    );
-    data.idDistribuidor = productor.idDistribuidor;
-    data.idQuimica = productor.idQuimica;
-    (data as ICreateEstablecimiento & { idTenant?: string }).idTenant =
-      productor.idTenant;
-    (
-      data as ICreateEstablecimiento & { idAsesorPropietario?: string }
-    ).idAsesorPropietario = productor.idAsesorPropietario;
     if (!this.puedeVer(data, permiso)) {
       throw new BadRequestException(
         'No tiene permiso para crear este establecimiento',
@@ -133,6 +165,11 @@ export class EstablecimientosService {
   ): Promise<IEstablecimiento> {
     data = this.withoutAutomaticLocation(data);
     const current = await this.getById(id, permiso);
+    if (current.carteraPropiaAsesor === true && data.idProductor != null) {
+      throw new BadRequestException(
+        'La cartera propia no se puede trasladar a un productor desde la edición.',
+      );
+    }
     if (permiso.nivel === 'Asesor') {
       // El asesor puede editar el establecimiento de su cartera, pero no
       // trasladarlo a otro productor ni alterar relaciones de pertenencia.
@@ -771,6 +808,35 @@ export class EstablecimientosService {
     if (permiso.nivel === 'Admin') {
       return true;
     }
+    if (data.carteraPropiaAsesor === true) {
+      // Un campo explícitamente propio no queda abierto por carecer de
+      // productor, distribuidor o compañía. Exigir una relación efectiva.
+      if (data.idProductor != null) return false;
+      if (permiso.nivel === 'Productor') return false;
+      if (permiso.nivel === 'Quimica') {
+        return (
+          !!permiso.idQuimica &&
+          !data.idTenant &&
+          String(data.idQuimica || '') === String(permiso.idQuimica)
+        );
+      }
+      if (permiso.nivel === 'Distribuidor') {
+        return (
+          !!permiso.idDistribuidor &&
+          !data.idTenant &&
+          String(data.idDistribuidor || '') === String(permiso.idDistribuidor)
+        );
+      }
+      if (permiso.nivel === 'Asesor') {
+        return (
+          !!permiso.idAsesor &&
+          String(data.idTenant || '') === String(permiso.idTenant || '') &&
+          (String(data.idAsesorPropietario || '') ===
+            String(permiso.idAsesor) ||
+            (!!data._id && permisoPuedeVerEstablecimiento(permiso, data._id)))
+        );
+      }
+    }
     if (permiso.nivel === 'Tenant') {
       return (
         !!permiso.idTenant &&
@@ -841,6 +907,7 @@ export class EstablecimientosService {
     delete data.ubicacionOficial;
     delete data.idAsesorPropietario;
     delete data.idTenant;
+    delete data.carteraPropiaAsesor;
     return data;
   }
 }

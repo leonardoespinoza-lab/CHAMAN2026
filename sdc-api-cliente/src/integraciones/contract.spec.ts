@@ -28,6 +28,33 @@ const client: any = {
 };
 
 describe('Integration input contract', () => {
+  test('requires explicit advisor ownership or an existing external producer', () => {
+    expect(
+      normalizeBody('establecimientos', {
+        nombre: 'Campo propio',
+        carteraPropiaAsesor: true,
+      }),
+    ).toEqual({ nombre: 'Campo propio', carteraPropiaAsesor: true });
+    expect(
+      normalizeBody('establecimientos', {
+        nombre: 'Campo del cliente',
+        productorIdExterno: 'p1',
+      }),
+    ).toEqual({ nombre: 'Campo del cliente', productorIdExterno: 'p1' });
+    for (const extra of [
+      {},
+      { carteraPropiaAsesor: false },
+      { carteraPropiaAsesor: 'true' },
+      { carteraPropiaAsesor: true, productorIdExterno: null },
+      { carteraPropiaAsesor: true, productorIdExterno: 'p1' },
+      { carteraPropiaAsesor: true, idAsesorPropietario: 'x' },
+      { carteraPropiaAsesor: true, idTenant: 'x' },
+    ]) {
+      expect(() =>
+        normalizeBody('establecimientos', { nombre: 'Campo', ...extra }),
+      ).toThrow();
+    }
+  });
   test.each([
     '$where',
     '',

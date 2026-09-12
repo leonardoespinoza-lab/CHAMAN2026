@@ -28,6 +28,13 @@
                         <label>{{ 'Nombre' | translate }}</label>
                       </p-floatlabel>
 
+                      @if (puedeElegirCarteraPropia) {
+                        <label class="field-help">
+                          <p-checkbox formControlName="carteraPropiaAsesor" [binary]="true"
+                            (onChange)="cambiarCarteraPropia()" />
+                          Establecimiento propio del asesor, sin productor
+                        </label>
+                      }
                       @if (requiereSeleccionProductor) {
                         <p-floatlabel variant="in">
                           <p-select

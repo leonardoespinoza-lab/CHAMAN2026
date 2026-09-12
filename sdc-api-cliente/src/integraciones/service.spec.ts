@@ -121,6 +121,78 @@ describe('Multi-client integration resources', () => {
       ctx.permission,
     );
   });
+  test('advisor-owned farm, lot and sowing require no producer and preserve replay', async () => {
+    const farm = { nombre: 'Campo propio', carteraPropiaAsesor: true };
+    ctx.client.limits = { productores: 0, establecimientos: 50, lotes: 50 };
+    expect(
+      await service.create('establecimientos', 'e1', farm, ctx),
+    ).toMatchObject({ creado: true });
+    await service.create('lotes', 'l1', bodies.lotes, ctx);
+    await service.create('siembras', 's1', bodies.siembras, ctx);
+    expect(await service.phenology('s1', ctx)).toMatchObject({
+      estado: 'pendiente',
+    });
+    expect(
+      await service.create('establecimientos', 'e1', farm, ctx),
+    ).toMatchObject({ creado: false });
+    expect(
+      await service.create('lotes', 'l1', bodies.lotes, ctx),
+    ).toMatchObject({ creado: false });
+    expect(db.productores.size).toBe(0);
+    expect(business[0].create).not.toHaveBeenCalled();
+    expect(business[1].create).toHaveBeenCalledWith(
+      expect.objectContaining({ carteraPropiaAsesor: true }),
+      ctx.permission,
+    );
+    expect(db.establecimientos.size).toBe(1);
+    expect(db.lotes.size).toBe(1);
+    expect(db.siembras.size).toBe(1);
+  });
+  test('cannot turn a producer farm into advisor-owned on replay or bypass a missing parent', async () => {
+    await chain();
+    await expect(
+      service.create(
+        'establecimientos',
+        'e1',
+        {
+          nombre: 'Campo',
+          carteraPropiaAsesor: true,
+        },
+        ctx,
+      ),
+    ).rejects.toThrow('otros datos');
+    delete db.establecimientos.values().next().value.idProductor;
+    await expect(service.get('lotes', 'l1', ctx)).rejects.toThrow();
+  });
+  test('direct ownership rejects another advisor, tenant, archive or conflicting parent', async () => {
+    await service.create(
+      'establecimientos',
+      'e1',
+      { nombre: 'Propio', carteraPropiaAsesor: true },
+      ctx,
+    );
+    await service.create('lotes', 'l1', bodies.lotes, ctx);
+    const farm = db.establecimientos.values().next().value;
+    const mutations: [string, any][] = [
+      ['idAsesorPropietario', 'b'.repeat(24)],
+      ['idTenant', 'b'.repeat(24)],
+      ['archivado', true],
+      ['idProductor', 'b'.repeat(24)],
+    ];
+    for (const [field, value] of mutations) {
+      const previous = farm[field];
+      farm[field] = value;
+      await expect(service.get('lotes', 'l1', ctx)).rejects.toThrow();
+      farm[field] = previous;
+    }
+    const other = {
+      ...ctx,
+      client: { ...ctx.client, id: 'other', advisorUserId: 'b'.repeat(24) },
+    };
+    await expect(
+      service.get('establecimientos', 'e1', other),
+    ).rejects.toThrow();
+  });
   test('repeating the same external IDs, even concurrently, does not duplicate or charge a new licence', async () => {
     await chain();
     const results = await Promise.all(

@@ -1429,6 +1429,11 @@
             "minLength": 1,
             "maxLength": 120
           },
+          "carteraPropiaAsesor": {
+            "type": "boolean",
+            "enum": [true],
+            "description": "Crear en la cartera propia del asesor autenticado, sin productor. No combinar con productorIdExterno."
+          },
           "productorIdExterno": {
             "type": "string",
             "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$",
@@ -1436,7 +1441,17 @@
             "maxLength": 80
           }
         },
-        "required": ["nombre", "productorIdExterno"]
+        "required": ["nombre"],
+        "oneOf": [
+          {
+            "required": ["productorIdExterno"],
+            "not": { "required": ["carteraPropiaAsesor"] }
+          },
+          {
+            "required": ["carteraPropiaAsesor"],
+            "not": { "required": ["productorIdExterno"] }
+          }
+        ]
       },
       "LoteInput": {
         "type": "object",

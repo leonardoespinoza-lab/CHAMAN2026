@@ -58,8 +58,22 @@ export class CrearEditarEstablecimientosComponent implements OnDestroy {
   public get requiereSeleccionProductor(): boolean {
     return (
       !this.establecimiento &&
-      ['Admin', 'Asesor'].includes(this.helper.permiso?.nivel || '')
+      ['Admin', 'Asesor'].includes(this.helper.permiso?.nivel || '') &&
+      !this.form?.get('carteraPropiaAsesor')?.value
     );
+  }
+
+  public get puedeElegirCarteraPropia(): boolean {
+    return !this.establecimiento && this.helper.permiso?.nivel === 'Asesor' &&
+      ['Admin', 'Escritura'].includes(this.helper.permiso?.rol || '');
+  }
+
+  public cambiarCarteraPropia(): void {
+    const productor = this.form?.get('idProductor');
+    if (!productor) return;
+    productor.setValue(null);
+    productor.setValidators(this.requiereSeleccionProductor ? Validators.required : []);
+    productor.updateValueAndValidity();
   }
 
   constructor(
@@ -94,6 +108,9 @@ export class CrearEditarEstablecimientosComponent implements OnDestroy {
         this.requiereSeleccionProductor ? Validators.required : [],
       ),
     });
+    if (this.puedeElegirCarteraPropia) {
+      this.form.addControl('carteraPropiaAsesor', new FormControl(false));
+    }
   }
 
   public onMultipoligonChange(mp: IGeoJSONMultiPolygon) {
@@ -409,6 +426,10 @@ export class CrearEditarEstablecimientosComponent implements OnDestroy {
   }
 
   public async guardar(): Promise<void> {
+    if (!this.form || this.form.invalid) {
+      this.form?.markAllAsTouched();
+      return;
+    }
     this.loading = true;
     try {
       const data = this.getData();
@@ -494,6 +515,12 @@ export class CrearEditarEstablecimientosComponent implements OnDestroy {
 
   public async crearEstablecimientosImportados(): Promise<void> {
     if (!this.kmzPoligonos.length) return;
+    // Imported polygon names replace the name control, but ownership is shared.
+    if (this.requiereSeleccionProductor && !this.form?.get('idProductor')?.value) {
+      this.form?.get('idProductor')?.markAsTouched();
+      this.helper.notifWarn('Selecciona el productor responsable de los establecimientos.');
+      return;
+    }
     const cantidad = this.kmzPoligonos.length;
     const confirmar = window.confirm(
       `Crear ${cantidad} establecimiento${cantidad === 1 ? '' : 's'} desde el archivo importado?`
@@ -508,6 +535,8 @@ export class CrearEditarEstablecimientosComponent implements OnDestroy {
         const data: ICreateEstablecimiento = {
           nombre: poligono.nombre,
           idProductor: this.form?.get('idProductor')?.value,
+          ...(this.puedeElegirCarteraPropia && this.form?.get('carteraPropiaAsesor')?.value === true
+            ? { carteraPropiaAsesor: true } : {}),
           ubicacion: [
             {
               geojson: poligono.geojson,

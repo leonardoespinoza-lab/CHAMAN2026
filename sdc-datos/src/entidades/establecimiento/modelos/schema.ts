@@ -33,6 +33,9 @@ export class Establecimiento implements Exactly<
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idAsesorPropietario?: string;
 
+  @Prop({ type: Boolean })
+  carteraPropiaAsesor?: boolean;
+
   @Prop({ type: mongoose.Schema.Types.ObjectId })
   idQuimica?: string;
 
@@ -107,12 +110,25 @@ export const EstablecimientoSchema =
 
 EstablecimientoSchema.set('toJSON', { virtuals: true, getters: true });
 
+// Deployment requires a reviewed index transition: create both new indexes,
+// verify them, then retire v2. Never sync/drop indexes automatically.
+EstablecimientoSchema.index(
+  { nombre: 1, idProductor: 1, idAsesorPropietario: 1 },
+  {
+    name: 'uniq_establecimiento_titular_nombre_activo_v3',
+    unique: true,
+    partialFilterExpression: { archivado: false },
+  },
+);
 EstablecimientoSchema.index(
   { nombre: 1, idProductor: 1 },
   {
-    name: 'uniq_establecimiento_productor_nombre_activo_v2',
+    name: 'uniq_establecimiento_productor_nombre_activo_v3',
     unique: true,
-    partialFilterExpression: { archivado: false },
+    partialFilterExpression: {
+      archivado: false,
+      idProductor: { $type: 'objectId' },
+    },
   },
 );
 EstablecimientoSchema.index({ idAsesorPropietario: 1 });

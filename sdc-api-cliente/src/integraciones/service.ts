@@ -83,6 +83,17 @@ export class IntegrationsService {
         );
       return;
     }
+    if (kind === 'establecimientos' && entity.carteraPropiaAsesor === true) {
+      if (
+        entity.idProductor != null ||
+        String(entity.idAsesorPropietario || '') !== ctx.client.advisorUserId ||
+        String(entity.idTenant || '') !== String(ctx.permission.idTenant || '')
+      )
+        throw new NotFoundException(
+          'Recurso no disponible para esta integración.',
+        );
+      return;
+    }
     const parentKind =
       kind === 'establecimientos'
         ? 'productores'
@@ -139,9 +150,13 @@ export class IntegrationsService {
       const data: any = { _id: internalId };
       if (kind !== 'siembras') data.nombre = body.nombre;
       if (kind === 'establecimientos') {
-        data.idProductor = (
-          await this.own('productores', body.productorIdExterno, ctx)
-        )._id;
+        if (body.carteraPropiaAsesor === true) {
+          data.carteraPropiaAsesor = true;
+        } else {
+          data.idProductor = (
+            await this.own('productores', body.productorIdExterno, ctx)
+          )._id;
+        }
       } else if (kind === 'lotes') {
         data.idEstablecimiento = (
           await this.own('establecimientos', body.establecimientoIdExterno, ctx)
@@ -176,7 +191,11 @@ export class IntegrationsService {
       const matches = (entity: any) => {
         if (kind !== 'siembras' && entity.nombre !== data.nombre) return false;
         if (kind === 'establecimientos')
-          return String(entity.idProductor) === String(data.idProductor);
+          return (
+            (entity.carteraPropiaAsesor === true) ===
+              (data.carteraPropiaAsesor === true) &&
+            String(entity.idProductor || '') === String(data.idProductor || '')
+          );
         if (kind === 'lotes')
           return (
             String(entity.idEstablecimiento) ===

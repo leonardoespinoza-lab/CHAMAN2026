@@ -44,6 +44,13 @@ En el piloto cada integración utiliza un Asesor dedicado. Los identificadores d
 
 ## Recorrido del integrador
 
+**Candidata local aún no desplegada:** el alta de establecimientos admite también
+`{ "nombre": "Campo propio", "carteraPropiaAsesor": true }`, sin productor intermedio.
+Ver [cartera propia, transición de índices y pruebas pendientes](CARTERA-PROPIA.md).
+Las solicitudes con `productorIdExterno` mantienen su recorrido anterior.
+La [propuesta de polígonos](GEOMETRIA-LOTES.md) es independiente y todavía no está
+implementada en el endpoint público.
+
 1. Chamán registra la integración, el Asesor operador, servicios habilitados y vencimiento. La clave se entrega por un canal seguro.
 2. Su backend consulta `GET /servicios` y `GET /catalogos/semillas`.
 3. Al crear un cliente en su plataforma envía `PUT /productores/cliente-001` con su nombre. **Esto crea un productor, no un usuario con contraseña.**
@@ -88,6 +95,7 @@ Si cambia la revisión, reemplazar los datos de su app. Con 503 conservar la úl
 - [Entorno Postman sin secretos](Chaman-Testing.postman_environment.json): completar `apiKey` localmente como secreto; no exportar una copia con su valor.
 - [Plantilla Postman productiva](Chaman-Produccion.postman_environment.json): sin credencial ni IDs; no utilizar hasta confirmar la activación. Sus altas afectan datos reales.
 - [Ejemplo Node de consulta](../../../scripts/integraciones/consultar-fenologia.cjs).
+- [Código de servidor para el integrador](servidor/README.md): cliente Node.js, dos recorridos de alta, sincronización de fenología y pruebas; sin claves ni fórmulas. No enviar todavía como integración productiva validada hasta cerrar el acta del piloto.
 - [Operación y activación](OPERACION.md): alta de integraciones, rollback y validación.
 - [Resultados de la validación local](VALIDACION.md): pruebas realizadas y límites de la evidencia.
 
