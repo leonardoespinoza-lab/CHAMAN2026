@@ -1,0 +1,1806 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Chamán Integraciones",
+    "version": "1.0.0-pilot",
+    "description": "Contrato multicliente para Testing. Candidato no desplegado. No acceso a base de datos ni fórmulas. Ver README/OPERACION."
+  },
+  "servers": [
+    {
+      "url": "https://testing-api-testing.up.railway.app/sdc-quimica-test/integraciones/v1",
+      "description": "Testing: confirmar activación y prefijo antes de usar"
+    }
+  ],
+  "security": [
+    {
+      "IntegrationKey": []
+    }
+  ],
+  "paths": {
+    "/servicios": {
+      "get": {
+        "operationId": "consultarServicios",
+        "summary": "Permisos y capacidades de la integración",
+        "responses": {
+          "200": {
+            "description": "Configuración pública",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Identificador para soporte"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Servicios"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credencial inválida/vencida",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Servicio/operador/plan no habilitado",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no disponible",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto; ver instructivo",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de consultas",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "60 segundos"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependencia no disponible; reintentar sin cambiar IDs",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalogos/semillas": {
+      "get": {
+        "operationId": "consultarSemillas",
+        "summary": "Semillas; requiere catalogos:leer",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cultivo",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pagina",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Página de hasta 100 semillas",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Identificador para soporte"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Catalogo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credencial inválida/vencida",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Servicio/operador/plan no habilitado",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no disponible",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto; ver instructivo",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de consultas",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "60 segundos"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependencia no disponible; reintentar sin cambiar IDs",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/productores/{idExterno}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "idExterno",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        }
+      ],
+      "get": {
+        "operationId": "consultar_productores",
+        "summary": "Consulta de productores; requiere estructura:leer",
+        "responses": {
+          "200": {
+            "description": "Recurso propio",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Identificador para soporte"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recurso"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credencial inválida/vencida",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Servicio/operador/plan no habilitado",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no disponible",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto; ver instructivo",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de consultas",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "60 segundos"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependencia no disponible; reintentar sin cambiar IDs",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "registrar_productores",
+        "summary": "Alta repetible de productores; requiere estructura:crear",
+        "description": "No es actualización: otro contenido bajo el mismo ID devuelve 409. No crear IDs nuevos para reintentar un timeout.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductorInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Alta confirmada o repetida, indicado por creado",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Identificador para soporte"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recurso"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credencial inválida/vencida",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Servicio/operador/plan no habilitado",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no disponible",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto; ver instructivo",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de consultas",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "60 segundos"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependencia no disponible; reintentar sin cambiar IDs",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/establecimientos/{idExterno}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "idExterno",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        }
+      ],
+      "get": {
+        "operationId": "consultar_establecimientos",
+        "summary": "Consulta de establecimientos; requiere estructura:leer",
+        "responses": {
+          "200": {
+            "description": "Recurso propio",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Identificador para soporte"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recurso"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credencial inválida/vencida",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Servicio/operador/plan no habilitado",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no disponible",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto; ver instructivo",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de consultas",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "60 segundos"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependencia no disponible; reintentar sin cambiar IDs",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "registrar_establecimientos",
+        "summary": "Alta repetible de establecimientos; requiere estructura:crear",
+        "description": "No es actualización: otro contenido bajo el mismo ID devuelve 409. No crear IDs nuevos para reintentar un timeout.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EstablecimientoInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Alta confirmada o repetida, indicado por creado",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Identificador para soporte"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recurso"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credencial inválida/vencida",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Servicio/operador/plan no habilitado",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no disponible",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto; ver instructivo",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de consultas",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "60 segundos"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependencia no disponible; reintentar sin cambiar IDs",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lotes/{idExterno}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "idExterno",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        }
+      ],
+      "get": {
+        "operationId": "consultar_lotes",
+        "summary": "Consulta de lotes; requiere estructura:leer",
+        "responses": {
+          "200": {
+            "description": "Recurso propio",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Identificador para soporte"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recurso"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credencial inválida/vencida",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Servicio/operador/plan no habilitado",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no disponible",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto; ver instructivo",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de consultas",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "60 segundos"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependencia no disponible; reintentar sin cambiar IDs",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "registrar_lotes",
+        "summary": "Alta repetible de lotes; requiere estructura:crear",
+        "description": "No es actualización: otro contenido bajo el mismo ID devuelve 409. No crear IDs nuevos para reintentar un timeout.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoteInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Alta confirmada o repetida, indicado por creado",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Identificador para soporte"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recurso"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credencial inválida/vencida",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Servicio/operador/plan no habilitado",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no disponible",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto; ver instructivo",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de consultas",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "60 segundos"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependencia no disponible; reintentar sin cambiar IDs",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/siembras/{idExterno}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "idExterno",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        }
+      ],
+      "get": {
+        "operationId": "consultar_siembras",
+        "summary": "Consulta de siembras; requiere estructura:leer",
+        "responses": {
+          "200": {
+            "description": "Recurso propio",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Identificador para soporte"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recurso"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credencial inválida/vencida",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Servicio/operador/plan no habilitado",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no disponible",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto; ver instructivo",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de consultas",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "60 segundos"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependencia no disponible; reintentar sin cambiar IDs",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "registrar_siembras",
+        "summary": "Alta repetible de siembras; requiere estructura:crear",
+        "description": "No es actualización: otro contenido bajo el mismo ID devuelve 409. No crear IDs nuevos para reintentar un timeout.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiembraInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Alta confirmada o repetida, indicado por creado",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Identificador para soporte"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recurso"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credencial inválida/vencida",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Servicio/operador/plan no habilitado",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no disponible",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto; ver instructivo",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de consultas",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "60 segundos"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependencia no disponible; reintentar sin cambiar IDs",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/siembras/{idExterno}/fenologia": {
+      "get": {
+        "operationId": "consultarFenologia",
+        "summary": "Resultado procesado; requiere fenologia:leer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "idExterno",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$",
+              "minLength": 1,
+              "maxLength": 80
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "type": "string"
+            },
+            "description": "ETag anterior incluyendo comillas. No enviar si no tiene una lectura anterior."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resultado actual, histórico o desactualizado; inspeccionar estado",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Identificador para soporte"
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fenologia"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Resultado pendiente",
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Identificador para soporte"
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Fenologia"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Sin cambios. Sin cuerpo.",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Datos inválidos",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credencial inválida/vencida",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Servicio/operador/plan no habilitado",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Recurso no disponible",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicto; ver instructivo",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Límite de consultas",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "60 segundos"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependencia no disponible; reintentar sin cambiar IDs",
+            "headers": {},
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "IntegrationKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "Clave exclusiva del backend del integrador, nunca contraseña de Chamán."
+      }
+    },
+    "schemas": {
+      "ProductorInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "nombre"
+        ]
+      },
+      "EstablecimientoInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "productorIdExterno": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "nombre",
+          "productorIdExterno"
+        ]
+      },
+      "LoteInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "establecimientoIdExterno": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "ubicacion": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "lat": {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              },
+              "lng": {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              }
+            },
+            "required": [
+              "lat",
+              "lng"
+            ]
+          },
+          "superficieHa": {
+            "type": "number",
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 100000
+          }
+        },
+        "required": [
+          "nombre",
+          "establecimientoIdExterno",
+          "ubicacion",
+          "superficieHa"
+        ]
+      },
+      "SiembraInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "loteIdExterno": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "idSemilla": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{24}$"
+          },
+          "fechaSiembra": {
+            "type": "string",
+            "format": "date",
+            "description": "2000-01-01 hasta hoy + 366 días; campaña anual."
+          }
+        },
+        "required": [
+          "loteIdExterno",
+          "idSemilla",
+          "fechaSiembra"
+        ]
+      },
+      "Recurso": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "productores",
+              "establecimientos",
+              "lotes",
+              "siembras"
+            ]
+          },
+          "idExterno": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "registrado",
+              "archivado"
+            ]
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "fechaSiembra": {
+            "type": "string",
+            "format": "date"
+          },
+          "activa": {
+            "type": "boolean"
+          },
+          "creado": {
+            "type": "boolean",
+            "description": "Sólo en respuestas de PUT."
+          }
+        },
+        "required": [
+          "tipo",
+          "idExterno",
+          "estado"
+        ]
+      },
+      "Fenologia": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "siembraIdExterno": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "cultivo": {
+            "type": "string",
+            "nullable": true
+          },
+          "variedad": {
+            "type": "string",
+            "nullable": true
+          },
+          "fechaSiembra": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "disponible",
+              "pendiente",
+              "desactualizada",
+              "cosechada"
+            ]
+          },
+          "etapa": {
+            "type": "string",
+            "nullable": true
+          },
+          "fechaDato": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "origen": {
+            "type": "string",
+            "enum": [
+              "observada",
+              "estimada_con_observacion",
+              "estimada_termica",
+              "referencia_calendario",
+              "referencia_termica",
+              "seguimiento",
+              "no_disponible"
+            ]
+          },
+          "confirmadaEnCampo": {
+            "type": "boolean"
+          },
+          "confianza": {
+            "type": "string",
+            "enum": [
+              "alta",
+              "media",
+              "referencia"
+            ],
+            "nullable": true
+          },
+          "actualizadoEn": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "revision": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "consultadoEn": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "siembraIdExterno",
+          "cultivo",
+          "variedad",
+          "fechaSiembra",
+          "estado",
+          "etapa",
+          "fechaDato",
+          "origen",
+          "confirmadaEnCampo",
+          "confianza",
+          "actualizadoEn",
+          "revision",
+          "consultadoEn"
+        ]
+      },
+      "Servicios": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "entorno": {
+            "type": "string",
+            "enum": [
+              "testing"
+            ]
+          },
+          "integracion": {
+            "type": "string"
+          },
+          "servicios": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "codigo": {
+                  "type": "string"
+                },
+                "operaciones": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "codigo",
+                "operaciones"
+              ]
+            }
+          },
+          "permisos": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "solicitudesPorMinuto": {
+            "type": "integer"
+          },
+          "actualizacion": {
+            "type": "string",
+            "enum": [
+              "consulta_periodica"
+            ]
+          },
+          "webhooks": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          }
+        },
+        "required": [
+          "version",
+          "entorno",
+          "integracion",
+          "servicios",
+          "permisos",
+          "solicitudesPorMinuto",
+          "actualizacion",
+          "webhooks"
+        ]
+      },
+      "Catalogo": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pagina": {
+            "type": "integer"
+          },
+          "limite": {
+            "type": "integer"
+          },
+          "datos": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "idSemilla": {
+                  "type": "string"
+                },
+                "cultivo": {
+                  "type": "string"
+                },
+                "variedad": {
+                  "type": "string"
+                },
+                "ciclo": {
+                  "type": "string"
+                },
+                "semillero": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "idSemilla",
+                "cultivo"
+              ]
+            }
+          },
+          "siguientePagina": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "pagina",
+          "limite",
+          "datos",
+          "siguientePagina"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "integer"
+          },
+          "message": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
