@@ -285,12 +285,10 @@ export class CrearEditarUsuariosComponent implements OnInit, OnDestroy {
       if (this.loginService.esQuimica) {
         idQuimica?.setValue(this.helper.permiso?.idQuimica);
         idDistribuidor?.setValue(null);
-      } else if (!this.loginService.esTenant) {
-        idQuimica?.setValidators(Validators.required);
-        if (!idQuimica?.value && this.quimicas.length === 1) {
-          idQuimica?.setValue(this.quimicas[0]._id);
-        }
       }
+      // El Admin puede crear asesores independientes. No exigir ni inferir
+      // una compania por la cantidad de opciones disponibles en el listado.
+      // La vinculacion elegida/existente y el alcance de la sesion se conservan.
     }
     idProductor?.updateValueAndValidity();
     idEstablecimiento?.updateValueAndValidity();
