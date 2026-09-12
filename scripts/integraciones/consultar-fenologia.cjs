@@ -8,18 +8,28 @@ async function queryPhenology({
   fetchImpl = fetch,
 }) {
   const base = new URL(baseUrl);
+  const environments = {
+    "https://testing-api-testing.up.railway.app/sdc-quimica-test/integraciones/v1":
+      "test",
+    "https://chaman-api-production.up.railway.app/sdc-quimica/integraciones/v1":
+      "live",
+  };
+  const environment = environments[base.href.replace(/\/$/, "")];
   if (
-    base.origin !== "https://testing-api-testing.up.railway.app" ||
+    !environment ||
     base.username ||
     base.password ||
     base.search ||
-    base.hash ||
-    base.pathname.replace(/\/$/, "") !== "/sdc-quimica-test/integraciones/v1"
+    base.hash
   )
-    throw Error("Este ejemplo solo admite la URL de Testing acordada.");
+    throw Error(
+      "Este ejemplo solo admite las URLs de Testing o Produccion acordadas.",
+    );
   if (
     typeof apiKey !== "string" ||
-    !apiKey ||
+    !new RegExp(
+      `^chm_${environment}_[a-z0-9_-]{3,50}\\.[A-Za-z0-9_-]{43,86}$`,
+    ).test(apiKey) ||
     !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$/.test(sowingId)
   )
     throw Error("Credencial e ID externo validos requeridos.");

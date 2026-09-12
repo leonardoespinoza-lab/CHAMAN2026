@@ -2,7 +2,7 @@
 
 ## Alcance seguro
 
-Esta versión vive en `sdc-api-cliente`, no modifica el servicio externo antiguo. Sólo requiere desplegar `testing-api` una vez aprobado el SHA y configurar allí el registro de integraciones. No cambiar `testing-web`, `testing-datos`, `testing-auth`, motores, Mongo, licencias ni ningún servicio de Producción. No hay migración de esquema.
+Esta versión vive en `sdc-api-cliente`, no modifica el servicio externo antiguo. El piloto ya se comprobó en Testing. La preparación para Producción se detalla en [PRODUCCION.md](PRODUCCION.md) y permanece sin activar. Un despliegue de API no debe incluir web, datos, auth, motores ni migraciones. Conservar la base Git actual de cada servicio.
 
 La exclusión del login habitual cubre exclusivamente los métodos y rutas del módulo. Cada endpoint tiene guardia propia. Las claves no abren rutas de usuarios, administración, dispositivos ni APIs internas. El cuerpo de las solicitudes de integración se omite del log HTTP; no usar datos personales como IDs externos. Los servicios internos conservan sus mecanismos de logging existentes; no es una garantía de ausencia de datos en toda la infraestructura.
 
@@ -13,7 +13,7 @@ La exclusión del login habitual cubre exclusivamente los métodos y rutas del m
 3. Registrar ID técnico inmutable, nombre, ID de usuario Asesor, índice de su permiso, servicios autorizados, vencimiento y cupo por minuto. Los permisos de la credencial son compartidos por sus claves; para separar privilegios crear otra integración/operador.
 4. Generar una clave aleatoria con `scripts/integraciones/preparar-cliente.cjs`. El script no conecta a ningún servidor ni despliega; produce dos archivos nuevos fuera del repositorio. No sobrescribe archivos previos. No imprime la clave. Elegir una carpeta privada y revisar sus permisos de acceso: en Windows la protección depende de la ACL de la carpeta, no del modo POSIX del archivo. Los errores del sistema de archivos pueden mostrar rutas, nunca el contenido de la clave.
 5. Revisar el JSON de servidor y agregarlo a la lista completa de `CHAMAN_INTEGRATIONS_CLIENTS`; **no reemplazar ni omitir los clientes que ya estaban configurados**. Mantener una copia protegida del registro previo.
-6. Activar `CHAMAN_INTEGRATIONS_ENABLED=true` sólo en `testing-api`. `ENV` debe ser `test`/`testing`/`dev`/`development`/`local`. `production` se rechaza si se intenta activar el piloto. No alterar ENV para eludir esa barrera.
+6. En Testing, activar `CHAMAN_INTEGRATIONS_ENABLED=true` con `ENV=test`/`testing`/`dev`/`development`/`local`. El registro admite `environment: testing` (o ausencia por compatibilidad). En Producción también exige `CHAMAN_INTEGRATIONS_PRODUCTION_ENABLED=true`, `environment: production` en cada cliente, límites explícitos y clave live. No copiar el registro ni las claves de Testing ni alterar ENV para eludir las barreras. Completar los pendientes y autorizar el despliegue antes de activar.
 7. Entregar la clave al backend del integrador mediante un gestor de secretos/canal privado. El archivo de clave no se adjunta al instructivo público.
 
 Ejemplo de configuración de servidor, **no utilizable hasta completar los valores**:
@@ -56,6 +56,7 @@ Rollback de configuración: deshabilitar la función en `testing-api`, restaurar
 - Para suspender todo un cliente, `enabled=false` y recargar. Suspender la cuenta operadora también bloquea sus consultas por la guardia.
 - Expiración de clave o integración: 401. Sin licencia efectiva persistida/usuario habilitado: 403. No otorgar privilegios globales para sortear errores.
 - No reutilizar claves de login, Apple, Google Play, Railway, Mongo ni la API externa anterior.
+- Para ampliar cupos o servicios ya implementados, editar sólo `limits`, `maxSowingAgeDays`, `requestsPerMinute` o `scopes` del cliente, preservando el resto del registro y sus hashes de claves. Recargar únicamente el servicio API del entorno autorizado. No regenerar claves ni cambiar IDs por una ampliación. No hay todavía editor gráfico de integraciones.
 
 ## Reintentos y soporte
 
@@ -66,7 +67,7 @@ Rollback de configuración: deshabilitar la función en `testing-api`, restaurar
 | 304 | Mantener la representación anterior. Sin cuerpo. |
 | 400 | Corregir formato/campos. No reintentar ciegamente. |
 | 401 | Verificar clave/vencimiento; no enviar contraseña de usuario. |
-| 403 | Revisar servicios habilitados, rol del operador o licencia. |
+| 403 | Revisar servicios habilitados, rol, licencia o cupo de recursos. No reintentar un alta al alcanzar el cupo; solicitar ampliación. |
 | 404 | Recurso ajeno/inexistente/archivado o módulo apagado. No revela dueño. |
 | 409 | Operación en curso, otro contenido bajo el mismo ID, nombre duplicado o siembra activa. Sólo el conflicto temporal admite reintento automático acotado. |
 | 429 | Respetar `Retry-After: 60`; reducir concurrencia. |
@@ -81,4 +82,4 @@ Compartir con soporte `X-Request-Id`, momento, integración y tipo de operación
 - Definir límites de recursos/cálculos además de requests/minuto, observabilidad, alertas y condiciones comerciales.
 - Confirmar renovación real de resultados en background y latencia acordada; definir si basta polling o se requieren webhooks.
 - Credenciales de Producción separadas, gestión de secretos, plan de revocación, backup/rollback y revisión de seguridad.
-- Retirar la barrera de piloto sólo mediante otro cambio explícito de código probado y autorizado. Este documento no autoriza su publicación.
+- Las barreras de entorno y doble activación deben permanecer. Este documento no autoriza publicar ni habilitar el acceso productivo.

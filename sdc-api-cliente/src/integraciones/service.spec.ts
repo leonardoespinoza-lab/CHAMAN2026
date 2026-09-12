@@ -34,19 +34,26 @@ describe('Multi-client integration resources', () => {
     db = Object.fromEntries(RESOURCE_TYPES.map((kind) => [kind, new Map()]));
     repositories = RESOURCE_TYPES.map((kind) => ({
       getById: jest.fn(async (id) => db[kind].get(id)),
-      get: jest.fn(async (query) => ({
-        datos: [...db[kind].values()].filter((item) => {
+      get: jest.fn(async (query) => {
+        const datos = [...db[kind].values()].filter((item) => {
           const f = JSON.parse(query.filter || '{}');
-          return Object.entries(f).every(([key, value]) => item[key] === value);
-        }),
-      })),
+          return Object.entries(f).every(([key, value]: [string, any]) =>
+            value && typeof value === 'object' && '$ne' in value
+              ? item[key] !== value.$ne
+              : item[key] === value,
+          );
+        });
+        return {
+          totalCount: datos.length,
+          datos: query.limit ? datos.slice(0, query.limit) : datos,
+        };
+      }),
     }));
     business = RESOURCE_TYPES.map((kind, index) => ({
       create: jest.fn(async (input, permission) => {
         const data = structuredClone(input);
         if (db[kind].has(data._id)) throw new Error('duplicate _id');
-        if (kind === 'productores')
-          data.idAsesorPropietario = permission.idAsesor;
+        if (kind !== 'siembras') data.idAsesorPropietario = permission.idAsesor;
         if (kind === 'siembras')
           data.semilla = { cultivo: 'Trigo', variedad: 'Demo' };
         db[kind].set(data._id, data);
@@ -214,5 +221,126 @@ describe('Multi-client integration resources', () => {
     const result = await service.get('productores', 'p1', ctx);
     expect(result).not.toHaveProperty('_id');
     expect(result).not.toHaveProperty('idAsesorPropietario');
+  });
+  test.each(['productores', 'establecimientos', 'lotes'] as const)(
+    'enforces 50 %s, permits replays and raises the cap without changing IDs',
+    async (kind) => {
+      ctx.client.limits = { productores: 50, establecimientos: 50, lotes: 50 };
+      if (kind !== 'productores')
+        await service.create('productores', 'p1', bodies.productores, ctx);
+      if (kind === 'lotes')
+        await service.create(
+          'establecimientos',
+          'e1',
+          bodies.establecimientos,
+          ctx,
+        );
+      for (let i = 0; i < 50; i++)
+        await service.create(
+          kind,
+          `resource-${i}`,
+          { ...bodies[kind], nombre: `Recurso ${i}` },
+          ctx,
+        );
+      expect(db[kind].size).toBe(50);
+      await expect(
+        service.create(
+          kind,
+          'resource-50',
+          { ...bodies[kind], nombre: 'Recurso 50' },
+          ctx,
+        ),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(
+        await service.create(
+          kind,
+          'resource-0',
+          { ...bodies[kind], nombre: 'Recurso 0' },
+          ctx,
+        ),
+      ).toMatchObject({ creado: false });
+      ctx.client.limits[kind] = 51;
+      expect(
+        await service.create(
+          kind,
+          'resource-50',
+          { ...bodies[kind], nombre: 'Recurso 50' },
+          ctx,
+        ),
+      ).toMatchObject({ creado: true });
+      ctx.client.limits[kind] = 0;
+      expect(await service.get(kind, 'resource-0', ctx)).toMatchObject({
+        estado: 'registrado',
+      });
+      expect(db[kind].size).toBe(51);
+    },
+  );
+  test('counts manual records in the same advisor portfolio, not archived or foreign data', async () => {
+    ctx.client.limits = { productores: 1, establecimientos: 1, lotes: 1 };
+    db.productores.set('foreign', {
+      _id: 'foreign',
+      idAsesorPropietario: 'b'.repeat(24),
+    });
+    db.productores.set('archived', {
+      _id: 'archived',
+      idAsesorPropietario: ctx.client.advisorUserId,
+      archivado: true,
+    });
+    await service.create('productores', 'p1', bodies.productores, ctx);
+    db.productores.set('manual', {
+      _id: 'manual',
+      idAsesorPropietario: ctx.client.advisorUserId,
+    });
+    ctx.client.limits.productores = 2;
+    await expect(
+      service.create('productores', 'p2', { nombre: 'Segundo' }, ctx),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(repositories[0].get).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        limit: 1,
+        select: '_id',
+        filter: JSON.stringify({
+          idAsesorPropietario: ctx.client.advisorUserId,
+          archivado: { $ne: true },
+        }),
+      }),
+    );
+  });
+  test('serializes concurrent new IDs at the limit and fails closed when usage cannot be checked', async () => {
+    ctx.client.limits = { productores: 1, establecimientos: 1, lotes: 1 };
+    const results = await Promise.allSettled([
+      service.create('productores', 'p1', { nombre: 'Uno' }, ctx),
+      service.create('productores', 'p2', { nombre: 'Dos' }, ctx),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(db.productores.size).toBe(1);
+    repositories[0].get.mockResolvedValueOnce({ datos: [] });
+    await expect(
+      service.create('productores', 'p3', { nombre: 'Tres' }, ctx),
+    ).rejects.toMatchObject({ status: 503 });
+    expect(business[0].create).toHaveBeenCalledTimes(1);
+  });
+  test('bounds new sowing backfill without blocking replays of existing sowings', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-12T12:00:00Z'));
+    try {
+      ctx.client.maxSowingAgeDays = 366;
+      await chain();
+      const oldDate = '2024-05-01';
+      await expect(
+        service.create(
+          'siembras',
+          'too-old',
+          { ...bodies.siembras, fechaSiembra: oldDate },
+          ctx,
+        ),
+      ).rejects.toMatchObject({ status: 400 });
+      ctx.client.maxSowingAgeDays = 30;
+      expect(
+        await service.create('siembras', 's1', bodies.siembras, ctx),
+      ).toMatchObject({ creado: false });
+      expect(db.siembras.size).toBe(1);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

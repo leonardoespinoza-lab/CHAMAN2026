@@ -1,12 +1,12 @@
 # Chamán Integraciones · API v1
 
-Estado: candidata de código y documentación para un piloto en Testing. **No habilitada ni desplegada por este paquete.** No es todavía una oferta productiva con SLA. Fecha: 12/09/2026.
+Estado al 12/09/2026: piloto de estructura y fenología probado en Testing. Se prepara el acceso a Producción con credenciales, cupos y permisos separados. **La API productiva aún no está habilitada para el cliente.** Ver [preparación productiva y pendientes](PRODUCCION.md). No es todavía una oferta con SLA.
 
 ## Una base para varios clientes y servicios
 
 Chamán presta resultados agronómicos procesados. La plataforma externa conserva su experiencia de usuario y sincroniza únicamente los datos acordados. No recibe acceso a MongoDB, al código de los motores ni a las fórmulas.
 
-`appcorteva` es el primer operador previsto en Testing, no una condición del código. El mismo contrato admite distintas integraciones con claves, vencimientos, permisos y carteras independientes.
+`appcorteva` es el primer operador; existen cuentas separadas en Testing y Producción, no es una condición del código. El mismo contrato admite distintas integraciones con claves, vencimientos, permisos y carteras independientes.
 
 ```text
 Plataforma A → clave A → integración A → asesor A → productores → campos → lotes → siembras
@@ -39,7 +39,8 @@ En el piloto cada integración utiliza un Asesor dedicado. Los identificadores d
 - Catálogo de semillas y variedades para evitar nombres ambiguos.
 - Lectura de la fenología procesada con fecha, origen y estado de actualización; no incluye fórmulas ni series internas.
 - Cupo configurable de solicitudes por minuto, compartido por todas las claves del cliente; reserva Redis para serializar sus escrituras.
-- Activación sólo en entornos no productivos. Apagada por defecto.
+- Apagada por defecto; Producción exige doble activación explícita, registro productivo y clave `chm_live_`. Una clave `chm_test_` no puede autenticar en Producción.
+- Cupos configurables por integración para productores, establecimientos y lotes; lecturas y confirmaciones siguen disponibles al alcanzar el cupo. No habilita cobros automáticos ni cambia la licencia de la app.
 
 ## Recorrido del integrador
 
@@ -85,6 +86,7 @@ Si cambia la revisión, reemplazar los datos de su app. Con 503 conservar la úl
 - [Contrato OpenAPI](openapi.json): endpoints y esquemas; importable en herramientas compatibles.
 - [Colección Postman](Chaman-Integraciones.postman_collection.json).
 - [Entorno Postman sin secretos](Chaman-Testing.postman_environment.json): completar `apiKey` localmente como secreto; no exportar una copia con su valor.
+- [Plantilla Postman productiva](Chaman-Produccion.postman_environment.json): sin credencial ni IDs; no utilizar hasta confirmar la activación. Sus altas afectan datos reales.
 - [Ejemplo Node de consulta](../../../scripts/integraciones/consultar-fenologia.cjs).
 - [Operación y activación](OPERACION.md): alta de integraciones, rollback y validación.
 - [Resultados de la validación local](VALIDACION.md): pruebas realizadas y límites de la evidencia.

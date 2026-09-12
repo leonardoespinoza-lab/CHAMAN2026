@@ -17,9 +17,38 @@ export const SCOPES = [
   'fenologia:leer',
 ] as const;
 export type Scope = (typeof SCOPES)[number];
+export type IntegrationEnvironment = 'testing' | 'production';
+export const LIMITED_RESOURCE_TYPES = [
+  'productores',
+  'establecimientos',
+  'lotes',
+] as const;
+export type IntegrationLimits = Record<
+  (typeof LIMITED_RESOURCE_TYPES)[number],
+  number
+>;
+export function validIntegrationLimits(
+  value: unknown,
+): value is IntegrationLimits {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.keys(value).length === LIMITED_RESOURCE_TYPES.length &&
+    LIMITED_RESOURCE_TYPES.every(
+      (key) =>
+        Number.isInteger(value[key]) && value[key] >= 0 && value[key] <= 100000,
+    )
+  );
+}
 export interface IntegrationClient {
   id: string;
   name: string;
+  /** Legacy sandbox entries may omit this. Production must be explicit. */
+  environment?: IntegrationEnvironment;
+  limits?: IntegrationLimits;
+  /** Bound newly requested historical calculations; replays/reads remain available. */
+  maxSowingAgeDays?: number;
   advisorUserId: string;
   permissionIndex: number;
   scopes: Scope[];

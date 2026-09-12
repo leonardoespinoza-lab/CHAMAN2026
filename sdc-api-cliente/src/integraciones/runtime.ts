@@ -11,6 +11,12 @@ import { REDIS_HOST, REDIS_PORT, REDIS_PASSWORD } from '../env';
 @Injectable()
 export class IntegrationRuntime implements OnModuleDestroy {
   private redis?: Redis;
+  // Preserve the sandbox namespace during rolling updates. Live locks/counters
+  // are separate even if Redis is accidentally shared between environments.
+  private readonly namespace =
+    String(process.env.ENV || '').toLowerCase() === 'production'
+      ? 'integrations:production:v1'
+      : 'integrations:v1';
   private connection(): Redis {
     if (!this.redis) {
       this.redis = new Redis({
@@ -33,7 +39,7 @@ export class IntegrationRuntime implements OnModuleDestroy {
         await this.connection().eval(
           "local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('PEXPIRE',KEYS[1],60000) end; return n",
           1,
-          `integrations:v1:rate:${id}`,
+          `${this.namespace}:rate:${id}`,
         ),
       );
     } catch {
@@ -51,7 +57,7 @@ export class IntegrationRuntime implements OnModuleDestroy {
     id: string,
     task: (assertHeld: () => Promise<void>) => Promise<T>,
   ): Promise<T> {
-    const key = `integrations:v1:write:${id}`;
+    const key = `${this.namespace}:write:${id}`;
     const owner = randomUUID();
     let acquired: string | null;
     try {

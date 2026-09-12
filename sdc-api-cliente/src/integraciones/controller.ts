@@ -26,16 +26,33 @@ export class IntegrationsController {
   @IntegrationScope('status')
   services(@Res({ passthrough: true }) res: Response) {
     const ctx: IntegrationContext = res.locals.integration;
+    const operations = [
+      ...(ctx.client.scopes.includes('estructura:crear') &&
+      ctx.permission.rol !== 'Lectura'
+        ? ['crear']
+        : []),
+      ...(ctx.client.scopes.includes('estructura:leer') ? ['consultar'] : []),
+    ];
     return {
       version: '1.0',
-      entorno: 'testing',
+      entorno: ctx.client.environment || 'testing',
       integracion: ctx.client.id,
       servicios: [
-        { codigo: 'estructura', operaciones: ['crear', 'consultar'] },
-        { codigo: 'fenologia', operaciones: ['consultar'] },
+        ...(operations.length
+          ? [{ codigo: 'estructura', operaciones: operations }]
+          : []),
+        ...(ctx.client.scopes.includes('catalogos:leer')
+          ? [{ codigo: 'catalogos', operaciones: ['consultar'] }]
+          : []),
+        ...(ctx.client.scopes.includes('fenologia:leer') &&
+        ctx.permission.modulos?.EtapasFenologicas !== false
+          ? [{ codigo: 'fenologia', operaciones: ['consultar'] }]
+          : []),
       ],
       permisos: ctx.client.scopes,
       solicitudesPorMinuto: ctx.client.requestsPerMinute,
+      limites: ctx.client.limits || null,
+      antiguedadMaximaSiembraDias: ctx.client.maxSowingAgeDays ?? null,
       actualizacion: 'consulta_periodica',
       webhooks: false,
     };

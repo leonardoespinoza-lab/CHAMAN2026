@@ -6,6 +6,33 @@ const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 
 function prepare(config, directory) {
+  const environment = config?.environment ?? "testing";
+  if (!["testing", "production"].includes(environment))
+    throw Error("Entorno invalido: testing o production.");
+  const fields = ["productores", "establecimientos", "lotes"];
+  if (
+    (environment === "production" || config.limits !== undefined) &&
+    (!config.limits ||
+      typeof config.limits !== "object" ||
+      Array.isArray(config.limits) ||
+      Object.keys(config.limits).length !== fields.length ||
+      fields.some(
+        (k) =>
+          !Number.isInteger(config.limits[k]) ||
+          config.limits[k] < 0 ||
+          config.limits[k] > 100000,
+      ))
+  )
+    throw Error(
+      "Limites invalidos: indicar productores, establecimientos y lotes (0 a 100000).",
+    );
+  if (
+    (environment === "production" || config.maxSowingAgeDays !== undefined) &&
+    (!Number.isInteger(config.maxSowingAgeDays) ||
+      config.maxSowingAgeDays < 1 ||
+      config.maxSowingAgeDays > 366)
+  )
+    throw Error("Antiguedad maxima de siembra invalida (1 a 366 dias).");
   if (
     !config ||
     !/^[a-z0-9_-]{3,50}$/.test(config.id) ||
@@ -55,10 +82,15 @@ function prepare(config, directory) {
       "No guardar credenciales dentro de Git; comprobar Git y elegir otra carpeta.",
     );
   const keyId = `k_${crypto.randomBytes(12).toString("hex")}`;
-  const credential = `chm_test_${keyId}.${crypto.randomBytes(32).toString("base64url")}`;
+  const credential = `chm_${environment === "production" ? "live" : "test"}_${keyId}.${crypto.randomBytes(32).toString("base64url")}`;
   const client = {
     id: config.id,
     name: config.name.trim(),
+    environment,
+    ...(config.limits ? { limits: { ...config.limits } } : {}),
+    ...(config.maxSowingAgeDays !== undefined
+      ? { maxSowingAgeDays: config.maxSowingAgeDays }
+      : {}),
     advisorUserId: config.advisorUserId,
     permissionIndex: config.permissionIndex,
     enabled: true,
@@ -82,6 +114,7 @@ function prepare(config, directory) {
   });
   return {
     integration: config.id,
+    environment,
     secretPath,
     registryPath,
     expiresAt: client.expiresAt,

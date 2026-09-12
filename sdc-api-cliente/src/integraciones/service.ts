@@ -1,11 +1,12 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { ISiembra, esCultivoPerenne } from 'modelos/src';
+import { ISiembra, IQueryParam, esCultivoPerenne } from 'modelos/src';
 import { ProductorsRepository } from '../entidades/productor/repository';
 import { EstablecimientosRepository } from '../entidades/establecimiento/repository';
 import { LotesRepository } from '../entidades/lote/repository';
@@ -44,6 +45,7 @@ export class IntegrationsService {
 
   private repository(kind: ResourceType): {
     getById(id: string): Promise<any>;
+    get(params: IQueryParam): Promise<{ totalCount: number; datos: any[] }>;
   } {
     return {
       productores: this.producerRepository,
@@ -205,6 +207,7 @@ export class IntegrationsService {
       };
       const existing = await this.raw(kind, internalId);
       if (existing) return replay(existing);
+      await this.assertCapacity(kind, body, ctx);
       if (kind === 'siembras') {
         const active = await this.sowingRepository.get({
           limit: 1,
@@ -248,6 +251,50 @@ export class IntegrationsService {
         );
       }
     });
+  }
+  private async assertCapacity(
+    kind: ResourceType,
+    body: Record<string, any>,
+    ctx: IntegrationContext,
+  ): Promise<void> {
+    if (kind === 'siembras') {
+      const days = ctx.client.maxSowingAgeDays;
+      if (
+        days !== undefined &&
+        body.fechaSiembra <
+          new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
+      )
+        throw new BadRequestException(
+          'La fecha de siembra supera la antigüedad habilitada para esta integración. Solicitar revisión del histórico.',
+        );
+      return;
+    }
+    const limit = ctx.client.limits?.[kind];
+    if (limit === undefined) return; // Existing sandbox clients only; live registry requires limits.
+    let count: number;
+    try {
+      // Include manual creations in this dedicated advisor portfolio too. Do not
+      // count other advisors, fetch whole documents or trust client-supplied usage.
+      const result = await this.repository(kind).get({
+        page: 0,
+        limit: 1,
+        select: '_id',
+        filter: JSON.stringify({
+          idAsesorPropietario: ctx.client.advisorUserId,
+          archivado: { $ne: true },
+        }),
+      });
+      count = result.totalCount;
+      if (!Number.isSafeInteger(count) || count < 0) throw Error();
+    } catch {
+      throw new ServiceUnavailableException(
+        'No se pudo verificar el cupo de la integración. No se realizó el alta.',
+      );
+    }
+    if (count >= limit)
+      throw new ForbiddenException(
+        `Cupo de ${kind} alcanzado (${limit}). Solicitar ampliación a Chamán; las consultas y confirmaciones siguen disponibles.`,
+      );
   }
   private async reconcileSowing(
     sowing: ISiembra,

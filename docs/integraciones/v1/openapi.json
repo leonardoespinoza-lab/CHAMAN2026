@@ -3,12 +3,16 @@
   "info": {
     "title": "Chamán Integraciones",
     "version": "1.0.0-pilot",
-    "description": "Contrato multicliente para Testing. Candidato no desplegado. No acceso a base de datos ni fórmulas. Ver README/OPERACION."
+    "description": "Contrato multicliente. Piloto activo en Testing; preparación de Producción pendiente de activación y validación de paridad fenológica. Sin acceso a base de datos ni fórmulas. Ver README/OPERACION."
   },
   "servers": [
     {
       "url": "https://testing-api-testing.up.railway.app/sdc-quimica-test/integraciones/v1",
       "description": "Testing: confirmar activación y prefijo antes de usar"
+    },
+    {
+      "url": "https://chaman-api-production.up.railway.app/sdc-quimica/integraciones/v1",
+      "description": "Producción: no habilitada para el cliente hasta completar y autorizar la activación"
     }
   ],
   "security": [
@@ -1414,9 +1418,7 @@
             "maxLength": 120
           }
         },
-        "required": [
-          "nombre"
-        ]
+        "required": ["nombre"]
       },
       "EstablecimientoInput": {
         "type": "object",
@@ -1434,10 +1436,7 @@
             "maxLength": 80
           }
         },
-        "required": [
-          "nombre",
-          "productorIdExterno"
-        ]
+        "required": ["nombre", "productorIdExterno"]
       },
       "LoteInput": {
         "type": "object",
@@ -1469,10 +1468,7 @@
                 "maximum": 180
               }
             },
-            "required": [
-              "lat",
-              "lng"
-            ]
+            "required": ["lat", "lng"]
           },
           "superficieHa": {
             "type": "number",
@@ -1505,14 +1501,10 @@
           "fechaSiembra": {
             "type": "string",
             "format": "date",
-            "description": "2000-01-01 hasta hoy + 366 días; campaña anual."
+            "description": "Campaña anual. Rango general 2000-01-01 hasta hoy + 366 días; las nuevas altas también respetan antiguedadMaximaSiembraDias de la integración, obligatorio en Producción (hasta 366 días de pasado)."
           }
         },
-        "required": [
-          "loteIdExterno",
-          "idSemilla",
-          "fechaSiembra"
-        ]
+        "required": ["loteIdExterno", "idSemilla", "fechaSiembra"]
       },
       "Recurso": {
         "type": "object",
@@ -1520,12 +1512,7 @@
         "properties": {
           "tipo": {
             "type": "string",
-            "enum": [
-              "productores",
-              "establecimientos",
-              "lotes",
-              "siembras"
-            ]
+            "enum": ["productores", "establecimientos", "lotes", "siembras"]
           },
           "idExterno": {
             "type": "string",
@@ -1535,10 +1522,7 @@
           },
           "estado": {
             "type": "string",
-            "enum": [
-              "registrado",
-              "archivado"
-            ]
+            "enum": ["registrado", "archivado"]
           },
           "nombre": {
             "type": "string"
@@ -1555,11 +1539,7 @@
             "description": "Sólo en respuestas de PUT."
           }
         },
-        "required": [
-          "tipo",
-          "idExterno",
-          "estado"
-        ]
+        "required": ["tipo", "idExterno", "estado"]
       },
       "Fenologia": {
         "type": "object",
@@ -1586,12 +1566,7 @@
           },
           "estado": {
             "type": "string",
-            "enum": [
-              "disponible",
-              "pendiente",
-              "desactualizada",
-              "cosechada"
-            ]
+            "enum": ["disponible", "pendiente", "desactualizada", "cosechada"]
           },
           "etapa": {
             "type": "string",
@@ -1619,11 +1594,7 @@
           },
           "confianza": {
             "type": "string",
-            "enum": [
-              "alta",
-              "media",
-              "referencia"
-            ],
+            "enum": ["alta", "media", "referencia"],
             "nullable": true
           },
           "actualizadoEn": {
@@ -1665,9 +1636,7 @@
           },
           "entorno": {
             "type": "string",
-            "enum": [
-              "testing"
-            ]
+            "enum": ["testing", "production"]
           },
           "integracion": {
             "type": "string"
@@ -1688,10 +1657,7 @@
                   }
                 }
               },
-              "required": [
-                "codigo",
-                "operaciones"
-              ]
+              "required": ["codigo", "operaciones"]
             }
           },
           "permisos": {
@@ -1703,17 +1669,38 @@
           "solicitudesPorMinuto": {
             "type": "integer"
           },
+          "limites": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": false,
+            "properties": {
+              "productores": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000
+              },
+              "establecimientos": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100000
+              },
+              "lotes": { "type": "integer", "minimum": 0, "maximum": 100000 }
+            },
+            "required": ["productores", "establecimientos", "lotes"]
+          },
+          "antiguedadMaximaSiembraDias": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 366
+          },
           "actualizacion": {
             "type": "string",
-            "enum": [
-              "consulta_periodica"
-            ]
+            "enum": ["consulta_periodica"]
           },
           "webhooks": {
             "type": "boolean",
-            "enum": [
-              false
-            ]
+            "enum": [false]
           }
         },
         "required": [
@@ -1723,6 +1710,8 @@
           "servicios",
           "permisos",
           "solicitudesPorMinuto",
+          "limites",
+          "antiguedadMaximaSiembraDias",
           "actualizacion",
           "webhooks"
         ]
@@ -1759,10 +1748,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "idSemilla",
-                "cultivo"
-              ]
+              "required": ["idSemilla", "cultivo"]
             }
           },
           "siguientePagina": {
@@ -1770,12 +1756,7 @@
             "nullable": true
           }
         },
-        "required": [
-          "pagina",
-          "limite",
-          "datos",
-          "siguientePagina"
-        ]
+        "required": ["pagina", "limite", "datos", "siguientePagina"]
       },
       "Error": {
         "type": "object",

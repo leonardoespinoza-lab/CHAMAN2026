@@ -41,6 +41,9 @@ test("OpenAPI references resolve and no endpoint in Postman is invented", () => 
     ).value,
     "",
   );
+  const production = read('Chaman-Produccion.postman_environment.json');
+  assert.equal(production.values.find(v=>v.key==='apiKey').value, '');
+  assert.ok(production.values.filter(v=>v.key!=='baseUrl').every(v=>v.value===''));
 });
 
 test("offline provisioning creates only a hash for the server, with unique keys and no secret stdout", () => {
@@ -69,6 +72,30 @@ test("offline provisioning creates only a hash for the server, with unique keys 
     );
     assert.ok(!JSON.stringify(server).includes(secret));
     assert.ok(!JSON.stringify(one).includes(secret));
+    assert.equal(server.environment, "testing");
+    assert.throws(
+      () => prepare({ ...config, environment: "production" }, dir),
+      /Limites/,
+    );
+    const live = prepare(
+      {
+        ...config,
+        environment: "production",
+        limits: { productores: 50, establecimientos: 50, lotes: 50 },
+        maxSowingAgeDays: 366,
+      },
+      dir,
+    );
+    const liveSecret = fs.readFileSync(live.secretPath, "utf8").trim();
+    const liveRegistry = JSON.parse(fs.readFileSync(live.registryPath, "utf8"));
+    assert.match(liveSecret, /^chm_live_k_[a-f0-9]{24}\.[A-Za-z0-9_-]{43}$/);
+    assert.equal(liveRegistry.environment, "production");
+    assert.equal(
+      liveRegistry.keys[0].sha256,
+      crypto.createHash("sha256").update(liveSecret).digest("hex"),
+    );
+    assert.ok(!JSON.stringify(live).includes(liveSecret));
+    assert.throws(() => prepare({ ...config, environment: "prod" }, dir));
     assert.throws(() => prepare({ ...config, advisorUserId: "admin" }, dir));
     assert.throws(
       () => prepare(config, path.resolve(__dirname, "../..")),
@@ -92,7 +119,7 @@ test("the client handles pending, unchanged and rate limits; credentials cannot 
   const args = {
     baseUrl:
       "https://testing-api-testing.up.railway.app/sdc-quimica-test/integraciones/v1",
-    apiKey: "unit-test-fixture",
+    apiKey: "chm_test_unit_fixture." + "a".repeat(43),
     sowingId: "s1",
   };
   const calls = [];
@@ -125,4 +152,27 @@ test("the client handles pending, unchanged and rate limits; credentials cannot 
     queryPhenology({ ...args, baseUrl: "https://app.chamanagro.ar" }),
     /Testing/,
   );
+  let sent = false;
+  const liveUrl =
+    "https://chaman-api-production.up.railway.app/sdc-quimica/integraciones/v1";
+  const fetchImpl = async () => {
+    sent = true;
+    return new Response("{}", { status: 200 });
+  };
+  await assert.rejects(
+    queryPhenology({ ...args, baseUrl: liveUrl, fetchImpl }),
+    /Credencial/,
+  );
+  assert.equal(
+    sent,
+    false,
+    "A sandbox key must not even be sent to Production",
+  );
+  await queryPhenology({
+    ...args,
+    baseUrl: liveUrl,
+    apiKey: "chm_live_unit_fixture." + "b".repeat(43),
+    fetchImpl,
+  });
+  assert.equal(sent, true);
 });
