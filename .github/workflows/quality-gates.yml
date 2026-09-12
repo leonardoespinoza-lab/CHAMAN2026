@@ -76,6 +76,8 @@ jobs:
         run: npm run test:cold-metadata-migration
       - if: matrix.service == 'sdc-datos'
         run: npm run test:notification-outbox-migration
+      - if: matrix.service == 'sdc-api-cliente'
+        run: node --test scripts/integraciones/contract.test.cjs
 
   build-only-services:
     name: build-${{ matrix.service }}

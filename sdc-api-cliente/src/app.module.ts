@@ -57,6 +57,8 @@ import { AdvisorScopeModule } from './auxiliares/authorization/advisor-scope.mod
 import { TenantsModule } from './entidades/tenant/module';
 import { VersionController } from './auxiliares/version/version.controller';
 import { ChamanMeteoModule } from './entidades/chaman-meteo/module';
+import { IntegrationsModule } from './integraciones/module';
+import { INTEGRATION_ROUTES } from './integraciones/contract';
 
 @Module({
   imports: [
@@ -120,6 +122,7 @@ import { ChamanMeteoModule } from './entidades/chaman-meteo/module';
     VisitasLoteModule,
     TenantsModule,
     ChamanMeteoModule,
+    IntegrationsModule,
   ],
   controllers: [VersionController],
   providers: [{ provide: APP_INTERCEPTOR, useClass: MqttInterceptor }],
@@ -166,7 +169,7 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(AuthenticationMiddleware)
-      .exclude(...this.excludeAuth)
+      .exclude(...this.excludeAuth, ...INTEGRATION_ROUTES)
       .forRoutes('*');
   }
 

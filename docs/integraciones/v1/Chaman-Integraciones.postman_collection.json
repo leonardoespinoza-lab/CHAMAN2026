@@ -1,0 +1,185 @@
+{
+  "info": {
+    "name": "Chamán Integraciones v1 · Testing",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Candidato no desplegado. Los PUT crean ejemplos; no ejecutar sobre una cartera real. Copiar el ETag manualmente para consultas condicionales. No exportar secretos."
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "x-api-key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{apiKey}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "01 Servicios habilitados",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/servicios"
+      }
+    },
+    {
+      "name": "02 Catálogo (elegir idSemilla manualmente)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/catalogos/semillas?pagina=0"
+      }
+    },
+    {
+      "name": "Alta repetible · productores",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/productores/{{productorId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Productor Demo Integracion\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Alta repetible · establecimientos",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/establecimientos/{{establecimientoId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Campo Demo Integracion\",\n  \"productorIdExterno\": \"{{productorId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Alta repetible · lotes",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/lotes/{{loteId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nombre\": \"Lote Demo Integracion\",\n  \"establecimientoIdExterno\": \"{{establecimientoId}}\",\n  \"ubicacion\": {\n    \"lat\": -32.6,\n    \"lng\": -63.2\n  },\n  \"superficieHa\": 10\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Alta repetible · siembras",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/siembras/{{siembraId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"loteIdExterno\": \"{{loteId}}\",\n  \"idSemilla\": \"{{idSemilla}}\",\n  \"fechaSiembra\": \"{{fechaSiembra}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Consultar fenología",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/siembras/{{siembraId}}/fenologia"
+      }
+    },
+    {
+      "name": "Consultar lote",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/lotes/{{loteId}}"
+      }
+    }
+  ]
+}
