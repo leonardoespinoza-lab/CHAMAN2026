@@ -85,7 +85,6 @@ textarea:focus-visible {
 .notice {
   padding: 14px 16px;
   border: 1px solid var(--p-content-border-color);
-  border-left: 3px solid var(--p-primary-color);
   background: var(--p-content-background);
   border-radius: 8px;
   margin: 12px 0;
@@ -93,7 +92,6 @@ textarea:focus-visible {
   line-height: 1.6;
 }
 .error {
-  border-left-color: #b42318;
   color: #a12929;
 }
 .muted,
