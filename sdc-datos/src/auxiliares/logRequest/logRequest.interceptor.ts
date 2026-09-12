@@ -112,6 +112,7 @@ export function sanitizeLogData(value: any): any {
 }
 
 export function requestBodyForLog(path: string, body: any): any {
+  if (String(path || '').includes('/internal/integration-control')) return '[omitted-integration-control-payload]';
   if (
     String(path || '')
       .split('?')[0]

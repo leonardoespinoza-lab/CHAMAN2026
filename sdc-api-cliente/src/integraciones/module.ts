@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { IntegrationControlStore } from './control-store';
+import { IntegrationAdminController } from './admin.controller';
+import { IntegrationAdminService } from './admin.service';
 import { AxiosModule } from '../auxiliares/axios/axios.module';
 import { AdvisorScopeModule } from '../auxiliares/authorization/advisor-scope.module';
 import { ProductorsModule } from '../entidades/productor/module';
@@ -31,8 +34,10 @@ import { DecisionPipelineModule } from '../auxiliares/decision-pipeline/decision
     LicenciaPorEntidadsModule,
     DecisionPipelineModule,
   ],
-  controllers: [IntegrationsController],
+  controllers: [IntegrationsController, IntegrationAdminController],
   providers: [
+    IntegrationControlStore,
+    IntegrationAdminService,
     IntegrationRegistry,
     IntegrationRuntime,
     IntegrationGuard,

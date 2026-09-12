@@ -14,6 +14,10 @@ describe('app route access matrix', () => {
   it('resuelve el acceso directo raiz con una funcion dependiente del permiso', () => {
     expect(typeof route('').redirectTo).toBe('function');
   });
+  it('reserva las integraciones API al administrador general', () => {
+    expect(route('integraciones-api').data?.['niveles']).toEqual(['Admin']);
+    expect(route('integraciones-api').data?.['roles']).toEqual(['Admin']);
+  });
 
   ['mapa', 'lotes', 'lotes/detalles/:id', 'alertas', 'establecimientos'].forEach(
     (path) => {

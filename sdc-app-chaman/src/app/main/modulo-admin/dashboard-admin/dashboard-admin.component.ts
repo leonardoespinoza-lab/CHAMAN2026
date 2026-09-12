@@ -40,6 +40,14 @@ export class DashboardAdminComponent implements OnInit {
 
   public readonly cards: AdminServiceCard[] = [
     {
+      title: 'Integraciones API',
+      description: 'Clientes externos, servicios, cupos, vencimientos, credenciales e instructivos de conexión.',
+      icon: 'pi pi-code',
+      route: '/integraciones-api',
+      group: 'Integraciones',
+      status: 'Configurable',
+    },
+    {
       title: 'Tenants',
       description: 'Espacios empresariales aislados con marca, administrador, modulos y limites propios.',
       icon: 'pi pi-palette',

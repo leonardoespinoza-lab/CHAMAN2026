@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  Optional,
   ServiceUnavailableException,
   SetMetadata,
 } from '@nestjs/common';
@@ -14,6 +15,7 @@ import { AdvisorScopeService } from '../auxiliares/authorization/advisor-scope.s
 import { IntegrationRegistry } from './registry';
 import { IntegrationRuntime } from './runtime';
 import { Scope } from './contract';
+import { IntegrationControlStore } from './control-store';
 
 export const IntegrationScope = (scope: Scope | 'status') =>
   SetMetadata('integrationScope', scope);
@@ -26,12 +28,28 @@ export class IntegrationGuard implements CanActivate {
     private licenses: LicenciaPorEntidadsService,
     private advisors: AdvisorScopeService,
     private runtime: IntegrationRuntime,
+    @Optional() private control?: IntegrationControlStore,
   ) {}
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest();
     const res = context.switchToHttp().getResponse();
     res.setHeader('Cache-Control', 'no-store');
-    const client = this.registry.authenticate(req.headers['x-api-key']);
+    const client = await this.registry.authenticateRequest(
+      req.headers['x-api-key'],
+    );
+    let requestId = randomUUID();
+    if (process.env.CHAMAN_INTEGRATIONS_REGISTRY_SOURCE === 'database') {
+      if (!this.control)
+        throw new ServiceUnavailableException(
+          'Registro de consumo no disponible.',
+        );
+      requestId = (await this.control.track(
+        client.id,
+        req,
+        res,
+      )) as typeof requestId;
+    }
+    res.setHeader('X-Request-Id', requestId);
     const scope = this.reflector.get<Scope | 'status'>(
       'integrationScope',
       context.getHandler(),
@@ -87,8 +105,6 @@ export class IntegrationGuard implements CanActivate {
     }
     if (!license?._id)
       throw new ForbiddenException('Se requiere un plan efectivo persistido.');
-    const requestId = randomUUID();
-    res.setHeader('X-Request-Id', requestId);
     res.locals.integration = { client, permission, license, requestId };
     // Do not populate the personal-login token or permit integration keys on app routes.
     return true;

@@ -328,6 +328,7 @@ export const routes: Routes = [
 
       // *** Admin *** //
       { path: 'dashboard-admin', loadComponent: loadDashboardAdmin, ...adminOnly },
+      { path: 'integraciones-api', loadComponent: () => import('./main/modulo-admin/integraciones/integraciones.component').then(m => m.IntegracionesAdminComponent), ...adminOnly },
       { path: 'tenants', loadComponent: loadListadoTenants, ...adminOnly },
       { path: 'tenants/crear', loadComponent: loadCrearEditarTenant, ...adminOnly },
       { path: 'tenants/editar/:id', loadComponent: loadCrearEditarTenant, ...tenantAdminScope },

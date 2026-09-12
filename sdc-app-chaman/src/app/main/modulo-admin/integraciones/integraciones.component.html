@@ -1,0 +1,337 @@
+<section class="api-admin" [attr.aria-busy]="busy">
+  <header>
+    <div>
+      <a routerLink="/dashboard-admin">← Administración</a>
+      <h1>Integraciones API</h1>
+      <p>Clientes, servicios, credenciales y consumo.</p>
+    </div>
+    <div class="actions">
+      <button type="button" [disabled]="busy" (click)="load()">Actualizar</button
+      ><button type="button" class="primary" [disabled]="busy || !data" (click)="start()">+ Nueva integración</button>
+    </div>
+  </header>
+  @if (error) {
+    <p class="notice error" role="alert">{{ error }}</p>
+  }
+  @if (message) {
+    <p class="notice" role="status">{{ message }}</p>
+  }
+  @if (busy) {
+    <p role="status">Procesando…</p>
+  }
+  @if (data) {
+    <div class="notice">
+      <strong>{{ data.environment === 'production' ? 'Producción' : 'Testing' }}</strong> ·
+      {{
+        data.apiEnabled && data.registrySource === 'database'
+          ? 'Configuración por panel habilitada'
+          : 'La configuración se guarda, pero estas integraciones aún no están habilitadas para recibir consultas.'
+      }}<br />No modifica planes ni cobros. Los permisos y el plan de la cuenta también limitan el acceso.
+    </div>
+    <label class="search"
+      >Buscar cliente<input type="search" [(ngModel)]="search" placeholder="Nombre o identificador"
+    /></label>
+    @if (data.truncated) {
+      <p class="notice">
+        Se muestran las primeras 1.000 integraciones. Se requiere ampliar la paginación para este volumen.
+      </p>
+    }
+    <div class="client-list">
+      @for (c of filtered; track c.id) {
+        <button
+          type="button"
+          class="client"
+          [class.selected]="selected?.id === c.id"
+          [disabled]="busy"
+          (click)="start(c)"
+        >
+          <span
+            ><strong>{{ c.name }}</strong
+            ><small>{{ c.id }} · {{ c.scopes.length }} permisos</small></span
+          >
+          <span
+            >{{ c.limits.productores }} productores · {{ c.limits.establecimientos }} campos ·
+            {{ c.limits.lotes }} lotes<small>Vence {{ c.expiresAt | date: 'dd/MM/yyyy HH:mm' }}</small></span
+          >
+          <span class="status">{{ status(c) }} →</span>
+        </button>
+      } @empty {
+        <p class="empty">No hay integraciones registradas con ese criterio.</p>
+      }
+    </div>
+  }
+  @if (editing) {
+    <article class="panel">
+      <div class="section-title">
+        <h2>{{ selected ? selected.name : 'Nueva integración' }}</h2>
+        <button type="button" [disabled]="busy" (click)="editing = false; secret = ''; instructions = ''">
+          Cerrar
+        </button>
+      </div>
+      <form (ngSubmit)="save()" #apiForm="ngForm">
+        <fieldset [disabled]="busy">
+          <div class="grid">
+            <label>Nombre del cliente<input name="name" [(ngModel)]="form.name" maxlength="120" required /></label>
+            <label
+              >Identificador estable<input
+                name="id"
+                [(ngModel)]="form.id"
+                [disabled]="!!selected"
+                pattern="[a-z0-9_-]{3,50}"
+                minlength="3"
+                maxlength="50"
+                required
+              /><small>No cambia al renovar o ampliar servicios.</small></label
+            >
+          </div>
+          @if (!selected) {
+            <div class="operator">
+              <label
+                >Usuario asesor de Chamán<input
+                  name="username"
+                  [(ngModel)]="username"
+                  (ngModelChange)="operator = undefined; form.advisorUserId = ''"
+                  placeholder="Ej.: appcorteva" /></label
+              ><button type="button" (click)="findOperator()">Verificar usuario</button>
+            </div>
+            @if (operator) {
+              <p class="notice">Cuenta verificada: {{ operator.username }}</p>
+              <label
+                >Permiso de la cuenta<select name="permission" [(ngModel)]="form.permissionIndex">
+                  @for (p of operator.permissions; track p.index) {
+                    <option [ngValue]="p.index">Asesor · {{ p.rol }} · permiso {{ p.index + 1 }}</option>
+                  }
+                </select></label
+              >
+            }
+          } @else {
+            <p class="muted">
+              Cuenta vinculada: {{ selected.advisorUserId }} · Permiso {{ selected.permissionIndex + 1 }}. La
+              vinculación se conserva para proteger la propiedad de los recursos.
+            </p>
+          }
+          <h3>Servicios incluidos</h3>
+          <div class="services">
+            @for (s of services; track s.scope) {
+              <label class="check"
+                ><input
+                  type="checkbox"
+                  [name]="s.scope"
+                  [ngModel]="form.scopes.includes(s.scope)"
+                  (ngModelChange)="toggle(s.scope, $event)"
+                />{{ s.nombre }}</label
+              >
+            }
+          </div>
+          <h3>Cupos y vigencia</h3>
+          <div class="grid quotas">
+            <label
+              >Productores<input
+                type="number"
+                name="productores"
+                [(ngModel)]="form.limits.productores"
+                min="0"
+                max="100000"
+                step="1"
+                required
+            /></label>
+            <label
+              >Establecimientos<input
+                type="number"
+                name="establecimientos"
+                [(ngModel)]="form.limits.establecimientos"
+                min="0"
+                max="100000"
+                step="1"
+                required
+            /></label>
+            <label
+              >Lotes<input
+                type="number"
+                name="lotes"
+                [(ngModel)]="form.limits.lotes"
+                min="0"
+                max="100000"
+                step="1"
+                required
+            /></label>
+            <label
+              >Consultas por minuto<input
+                type="number"
+                name="rpm"
+                [(ngModel)]="form.requestsPerMinute"
+                min="1"
+                max="600"
+                step="1"
+                required
+            /></label>
+            <label
+              >Histórico de siembra (días)<input
+                type="number"
+                name="history"
+                [(ngModel)]="form.maxSowingAgeDays"
+                min="1"
+                max="366"
+                step="1"
+                required
+            /></label>
+            <label
+              >Vencimiento (hora local)<input type="datetime-local" name="expiry" [(ngModel)]="expiry" required
+            /></label>
+          </div>
+          <p class="muted">
+            Los cupos incluyen los recursos activos de la cartera, también los cargados desde Chamán. Reducir un cupo no
+            borra datos: bloquea nuevas altas sobre ese límite.
+          </p>
+          @if (selected) {
+            <label class="check"
+              ><input type="checkbox" name="enabled" [(ngModel)]="form.enabled" />Permitir acceso a esta integración
+              (requiere clave, cuenta vigente y habilitación del entorno)</label
+            >
+          }
+          <div class="actions">
+            <button
+              type="submit"
+              class="primary"
+              [disabled]="busy || apiForm.invalid || !form.advisorUserId || !form.scopes.length"
+            >
+              {{ selected ? 'Guardar cambios' : 'Registrar deshabilitada' }}
+            </button>
+          </div>
+        </fieldset>
+      </form>
+    </article>
+    @if (selected) {
+      <article class="panel">
+        <div class="section-title">
+          <div>
+            <h2>Conexión y claves</h2>
+            <p class="muted">Hasta tres claves para permitir el recambio sin cortar la integración.</p>
+          </div>
+          <button type="button" [disabled]="busy || selected.keys.length >= 3" (click)="issueKey()">
+            Generar clave
+          </button>
+        </div>
+        <code>{{ data?.baseUrl }}</code>
+        @if (secret) {
+          <div class="secret" role="status">
+            <strong>Copiá esta clave ahora: no se podrá recuperar.</strong
+            ><textarea
+              readonly
+              aria-label="Nueva clave de integración"
+              [value]="secret"
+              autocomplete="off"
+              spellcheck="false"
+            ></textarea>
+            <p>Entregar por un canal seguro. No se incluye en el instructivo.</p>
+            <button type="button" (click)="secret = ''">Ya la guardé · Ocultar</button>
+          </div>
+        }
+        @for (k of selected.keys; track k.id) {
+          <div class="key-row">
+            <span
+              >Clave {{ k.id }}<small>Vence {{ k.expiresAt | date: 'dd/MM/yyyy HH:mm' }}</small></span
+            ><button type="button" class="danger" [disabled]="busy" (click)="revokeKey(k.id)">Revocar</button>
+          </div>
+        } @empty {
+          <p class="empty">Todavía no hay claves. No se usa la contraseña del asesor.</p>
+        }
+      </article>
+      <article class="panel">
+        <div class="section-title">
+          <div>
+            <h2>Consumo de consultas</h2>
+            <p class="muted">Registro operativo desde la habilitación. No es facturación ni cantidad de cálculos.</p>
+          </div>
+          <div class="actions">
+            <label
+              >Período<select [(ngModel)]="days">
+                <option [ngValue]="7">7 días</option>
+                <option [ngValue]="30">30 días</option>
+                <option [ngValue]="90">90 días</option>
+              </select></label
+            ><button type="button" [disabled]="busy" (click)="showUsage()">Consultar</button>
+          </div>
+        </div>
+        @if (usage) {
+          <div class="metrics">
+            <span
+              ><strong>{{ total('requests') }}</strong
+              >Solicitudes</span
+            ><span
+              ><strong>{{ total('success') }}</strong
+              >Respuestas 2xx / 3xx</span
+            ><span
+              ><strong>{{ total('errors') }}</strong
+              >Errores</span
+            ><span
+              ><strong>{{ total('unfinished') }}</strong
+              >Sin cierre confirmado</span
+            >
+          </div>
+          <p class="muted">
+            Incluye {{ total('pending') }} respuestas con cálculo pendiente (202) y {{ total('rateLimited') }} rechazos
+            por frecuencia (429). Última solicitud registrada:
+            {{ usage.lastRequestAt ? (usage.lastRequestAt | date: 'dd/MM/yyyy HH:mm') : 'Sin registros' }}.
+          </p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Día UTC</th>
+                  <th>Operación</th>
+                  <th>Solicitudes</th>
+                  <th>Errores</th>
+                  <th>Sin cierre</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of usage.rows; track r.day + r.operation) {
+                  <tr>
+                    <td>{{ r.day }}</td>
+                    <td>{{ r.operation }}</td>
+                    <td>{{ r.requests }}</td>
+                    <td>{{ r.errors }}</td>
+                    <td>{{ r.unfinished }}</td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="5">Sin consumo registrado en este período. No se reconstruye consumo anterior.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <p class="muted">
+            Retención: {{ usage.retentionDays }} días. Cada intento autenticado se registra, incluidos reintentos y 304.
+            Las solicitudes sin cierre pueden seguir en curso o haber sido interrumpidas. No se guardan claves,
+            contenido de campos ni datos del cliente en este registro.
+          </p>
+        }
+      </article>
+      <article class="panel">
+        <div class="section-title">
+          <h2>Instructivo del cliente</h2>
+          <div class="actions">
+            <button type="button" (click)="showInstructions()">Preparar instructivo</button>
+            @if (instructions) {
+              <button type="button" class="primary" (click)="print()">Imprimir / Guardar PDF</button>
+            }
+          </div>
+        </div>
+        @if (instructions) {
+          <pre>{{ instructions }}</pre>
+        }
+      </article>
+      <details class="panel">
+        <summary>Últimos cambios de configuración</summary>
+        @for (a of selected.audit; track a.revision) {
+          <p>
+            {{ a.at | date: 'dd/MM/yyyy HH:mm' }} · {{ a.action }} · revisión {{ a.revision }} · administrador
+            {{ a.actorId }}
+          </p>
+        }
+      </details>
+    }
+  }
+</section>

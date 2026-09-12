@@ -1,4 +1,5 @@
 import { Logger, Module } from '@nestjs/common';
+import { IntegrationControlModule } from './entidades/integration-control/module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { HealthController } from './auxiliares/health/health.controller';
 import { AgroquimicosModule } from './entidades/agroquimico/module';
@@ -97,6 +98,7 @@ import { ChamanMeteoModule } from './entidades/chaman-meteo/module';
     SoilIntelligenceModule,
     TenantsModule,
     ChamanMeteoModule,
+    ...(process.env.CHAMAN_INTEGRATIONS_ADMIN_ENABLED === 'true' ? [IntegrationControlModule] : []),
   ],
   controllers: [HealthController, VersionController],
   providers: [],

@@ -91,6 +91,7 @@ function sanitizeLogData(value: any): any {
 }
 
 export function requestBodyForLog(path: string, body: any): any {
+  if (String(path || '').includes('/admin/integraciones')) return '[omitted-integration-admin-payload]';
   if (String(path || '').split('?')[0].includes('/integraciones/v1/')) {
     return { integrationPayload: '[omitted]' };
   }
