@@ -101,8 +101,8 @@
                           @if (nivel(i) === 'Asesor') {
                             <div class="advisor-scope">
                               <div class="advisor-scope-heading">
-                                <strong>Red comercial del asesor</strong>
-                                <span>El asesor administra productores y supervisa su red con la misma logica operativa de un distribuidor.</span>
+                                <strong>Vinculación del asesor</strong>
+                                <span>Puede trabajar de forma independiente o vinculado a una compañía.</span>
                               </div>
                               @if (!loginService.esTenant && !loginService.esQuimica) {
                                 <p-floatlabel variant="in" class="mb-4">
@@ -110,12 +110,14 @@
                                     [loading]="loading"
                                     [options]="quimicas"
                                     formControlName="idQuimica"
+                                    [inputId]="'asesor-compania-' + i"
+                                    [showClear]="true"
                                     [fluid]="true"
                                     [appendTo]="'body'"
                                     optionValue="_id"
                                     optionLabel="nombre"
                                   />
-                                  <label>Compania responsable</label>
+                                  <label [for]="'asesor-compania-' + i">Compañía (opcional)</label>
                                 </p-floatlabel>
                               }
                               <p-floatlabel variant="in" class="mb-4">
@@ -132,7 +134,16 @@
                                 />
                                 <label>Establecimientos iniciales (opcional)</label>
                               </p-floatlabel>
-                              <small>La compania se asigna desde la sesion de forma segura. El asesor crea y administra productores; visualiza los establecimientos, lotes y servicios que esos productores generen.</small>
+                              <small>
+                                @if (loginService.esQuimica) {
+                                  La compañía se asigna desde tu sesión de forma segura.
+                                } @else if (loginService.esTenant) {
+                                  El asesor permanece dentro de la organización de tu sesión.
+                                } @else {
+                                  Para crear un asesor independiente, dejá la compañía sin seleccionar.
+                                }
+                                El acceso sigue limitado a su cartera y a los establecimientos asignados, según sus permisos.
+                              </small>
                             </div>
                           }
 
