@@ -345,8 +345,53 @@ describe('CardEtapasFenologicasComponent - perennes observados', () => {
     expect(component.etapaActual).toBe('Brotacion');
     expect(component.etapaActualConfirmadaCampo).toBeTrue();
     expect(component.etapas.find((etapa) => etapa.nombre === 'Brotacion')?.estado).toBe('current');
+    expect(component.fuenteEtapaActual).toBe('campo');
+    expect(component.etiquetaEtapaActual).toBe('Estadio confirmado en campo');
     expect(component.etapas.find((etapa) => etapa.nombre === 'Floracion')?.fecha).toBeUndefined();
     expect(component.fuenteTexto).toContain('registro de campo prioritario');
+  });
+
+  ['Peral', 'Manzano', 'Vid', 'Pecan'].forEach((cultivo) => {
+    it(`identifica campo y restablece calendario sin conservar etiquetas anteriores en ${cultivo}`, () => {
+      jasmine.clock().mockDate(new Date(2026, 8, 13, 12, 0, 0));
+      component.siembra = {
+        _id: `s-label-${cultivo}`,
+        idLote: `l-label-${cultivo}`,
+        fechaSiembra: '2020-01-01T12:00:00.000Z',
+        semilla: {
+          cultivo,
+          variedad: 'Referencia de prueba',
+          fenologiaReferencia: {
+            etapas: { Reposo_invernal: 0, Yema_hinchada: 32, Brotacion: 16, Floracion: 16, Cuaje: 14 },
+          },
+        },
+        registrosFenologicos: [{
+          id: `r-label-${cultivo}`,
+          tipoEvento: 'inicio_etapa',
+          accion: 'inicio',
+          etapa: 'Brotacion',
+          fechaInicioEtapa: '2026-09-09T15:00:00.000Z',
+          campania: '2026/2027',
+          confianza: 'media',
+          coberturaObservadaPct: 100,
+        }],
+      } as any;
+
+      (component as any).crearTimeline();
+      expect(component.etapaActual).toBe('Brotacion');
+      expect(component.fuenteEtapaActual).toBe('campo');
+      expect(component.etiquetaEtapaActual).toBe('Estadio confirmado en campo');
+      const current = component.etapas.find((etapa) => etapa.estado === 'current')!;
+      expect(component.etiquetaVisualEtapa(current, component.etapas.indexOf(current)))
+        .toContain('Estadio confirmado en campo: Brotacion');
+      expect(current.fechaFuente).toBe('campo');
+
+      component.siembra = { ...component.siembra, registrosFenologicos: [] } as any;
+      (component as any).crearTimeline();
+      expect(component.etapaActualConfirmadaCampo).toBeFalse();
+      expect(component.fuenteEtapaActual).toBe('calendario');
+      expect(component.etiquetaEtapaActual).toBe('Etapa proyectada por cronograma');
+    });
   });
 
   it('mantiene Dormancia observada el 1-may al cruzar el 1-jul en Pecan Kiowa', () => {

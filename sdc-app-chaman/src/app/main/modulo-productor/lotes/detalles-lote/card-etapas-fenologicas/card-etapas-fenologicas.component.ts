@@ -1632,6 +1632,7 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
     const registroCampo = this.getRegistroPerenneActual(etapasCiclo, hoy);
     const etapaActualNumero = registroCampo?.indiceEtapa ?? etapaReferenciaNumero;
     this.etapaActualConfirmadaCampo = !!registroCampo;
+    this.fuenteEtapaActual = registroCampo ? 'campo' : 'calendario';
     this.progreso = registroCampo
       ? this.limitar((etapaActualNumero / Math.max(1, etapasCiclo.length - 1)) * 100)
       : this.limitar((diaCampania / 365) * 100);
