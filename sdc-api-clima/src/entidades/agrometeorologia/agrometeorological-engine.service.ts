@@ -4,6 +4,7 @@ import SunCalc from 'suncalc';
 import {
   AGROMET_DEFAULT_PARAMETERS_VERSION,
   AGROMET_ENGINE_VERSION,
+  AGROMET_READ_VERSIONS,
   aplicarEntradasAgronomicasSuelo,
   calcularBalanceHidrico,
   calcularCapacidadAguaUtilMm,
@@ -1584,7 +1585,7 @@ export class AgrometeorologicalEngineService {
     let indicators: {
       datos?: IIndicadorAgrometeorologicoDiario[];
     } = { datos: [] };
-    let resolvedCalculationVersion = AGROMET_ENGINE_VERSION;
+    let resolvedCalculationVersion: string = AGROMET_ENGINE_VERSION;
     try {
       if (
         typeof (this.repository as any).getActiveIndicadoresGeneration !==
@@ -1592,30 +1593,34 @@ export class AgrometeorologicalEngineService {
       ) {
         throw new TypeError('active-generation-repository-unavailable');
       }
-      const active = await this.repository.getActiveIndicadoresGeneration(
-        idSiembra,
-        AGROMET_ENGINE_VERSION,
-      );
-      const activeData = active?.generationId ? active.data || [] : [];
-      if (
-        activeData.length &&
-        !(await this.generationMatchesCurrentCycle(idSiembra, activeData))
-      ) {
-        generationOutdated = true;
-        runtimeWarnings.push(
-          'La fecha agronomica cambio y la nueva serie meteorologica se esta calculando.',
+      for (const version of AGROMET_READ_VERSIONS) {
+        const active = await this.repository.getActiveIndicadoresGeneration(
+          idSiembra,
+          version,
         );
-        indicators = { datos: [] };
-      } else if (
-        !CHAMAN_METEO_AGROMET_BRIDGE_ENABLED &&
-        activeData.some(recordUsesChamanMeteo)
-      ) {
-        runtimeWarnings.push(
-          'La generacion Chaman-Meteo persistida fue excluida por el kill switch; no influye mientras el puente esta apagado.',
-        );
-        indicators = { datos: [] };
-      } else {
-        indicators = { datos: activeData };
+        const activeData = active?.generationId ? active.data || [] : [];
+        if (!activeData.length) continue;
+        if (!(await this.generationMatchesCurrentCycle(idSiembra, activeData))) {
+          generationOutdated = true;
+          runtimeWarnings.push(
+            'La fecha agronomica cambio y la nueva serie meteorologica se esta calculando.',
+          );
+          indicators = { datos: [] };
+          // Una fecha corregida no puede rescatarse de una version mas antigua.
+          break;
+        } else if (
+          !CHAMAN_METEO_AGROMET_BRIDGE_ENABLED &&
+          activeData.some(recordUsesChamanMeteo)
+        ) {
+          runtimeWarnings.push(
+            'La generacion Chaman-Meteo persistida fue excluida por el kill switch; no influye mientras el puente esta apagado.',
+          );
+          indicators = { datos: [] };
+        } else {
+          indicators = { datos: activeData };
+          resolvedCalculationVersion = version;
+          break;
+        }
       }
     } catch (error) {
       if (error?.message !== 'active-generation-repository-unavailable') {

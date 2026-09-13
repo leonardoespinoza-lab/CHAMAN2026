@@ -1,18 +1,121 @@
 import { RiegoService } from './service';
 
-const PROFUNDIDADES = Array.from({ length: 12 }, (_, index) => (index + 1) * 10);
+const PROFUNDIDADES = Array.from(
+  { length: 12 },
+  (_, index) => (index + 1) * 10,
+);
 
 describe('RiegoService - invalidacion segura de persistencia', () => {
-  it.each([true, false])('conserva el calculo y respeta enviarIntegraciones=%s', async (enviarIntegraciones) => {
-    const contexto = crearContexto({ sueloConfirmadoPorUsuario: true });
-    const enviar = jest.spyOn(contexto.service as any, 'verificarIntegraciones').mockResolvedValue(undefined);
-
-    await contexto.service.prediccion('siembra-1', enviarIntegraciones);
-
-    expect(contexto.prediccionRiegoService.create).toHaveBeenCalledTimes(1);
-    expect(enviar).toHaveBeenCalledTimes(enviarIntegraciones ? 1 : 0);
-    expect(contexto.httpsService.send).not.toHaveBeenCalled();
+  it('el circuito interno calcula sin enviar integraciones', async () => {
+    const c = crearContexto({ sueloConfirmadoPorUsuario: true });
+    const enviar = jest.spyOn(c.service as any, 'verificarIntegraciones');
+    await expect(
+      c.service.prediccion('siembra-1', false, { propagarErrores: true }),
+    ).resolves.toBeUndefined();
+    expect(c.prediccionRiegoService.create).toHaveBeenCalledTimes(1);
+    expect(enviar).not.toHaveBeenCalled();
+    expect(c.httpsService.send).not.toHaveBeenCalled();
   });
+
+  it('un bloqueo agronomico valido no es un fallo tecnico del pipeline', async () => {
+    const c = crearContexto({ sueloConfirmadoPorUsuario: false });
+    await expect(
+      c.service.prediccion('siembra-1', false, { propagarErrores: true }),
+    ).resolves.toBeUndefined();
+    expect(c.prediccionRiegoService.create).not.toHaveBeenCalled();
+    expect(c.siembrasService.update).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['dependencia', 'persistencia', 'invalidacion', 'fuente', 'siembra'])(
+    'propaga %s fallida solo al circuito interno',
+    async (caso) => {
+      const c = crearContexto({
+        sueloConfirmadoPorUsuario: caso !== 'invalidacion',
+      });
+      const error = new Error(`fallo ${caso}`);
+      if (caso === 'dependencia')
+        jest
+          .spyOn(c.service as any, 'resolverLoteConEntradasAgronomicas')
+          .mockRejectedValue(error);
+      if (caso === 'persistencia')
+        c.prediccionRiegoService.create.mockRejectedValue(error);
+      if (caso === 'invalidacion')
+        c.siembrasService.update.mockRejectedValue(error);
+      if (caso === 'fuente')
+        jest
+          .spyOn(c.service, 'obtenerPronosticoConET0')
+          .mockRejectedValue(error);
+      if (caso === 'siembra')
+        c.siembrasService.getById.mockRejectedValue(error);
+      await expect(
+        c.service.prediccion('siembra-1', false, { propagarErrores: true }),
+      ).rejects.toThrow();
+      expect(c.httpsService.send).not.toHaveBeenCalled();
+    },
+  );
+
+  it('espera la escritura tardia antes de invalidar el resultado parcial', async () => {
+    const c = crearContexto({ sueloConfirmadoPorUsuario: true });
+    let terminarEscritura!: () => void;
+    let escrituraIniciada!: () => void;
+    const iniciada = new Promise<void>((resolve) => {
+      escrituraIniciada = resolve;
+    });
+    c.siembrasService.update.mockImplementationOnce(() => {
+      escrituraIniciada();
+      return new Promise((resolve) => {
+        terminarEscritura = () => resolve({});
+      });
+    });
+    c.prediccionRiegoService.create.mockRejectedValue(
+      new Error('fallo parcial'),
+    );
+    const rejection = expect(
+      c.service.prediccion('siembra-1', false, { propagarErrores: true }),
+    ).rejects.toThrow('fallo parcial');
+    await iniciada;
+    expect(c.siembrasService.update).toHaveBeenCalledTimes(1);
+    terminarEscritura();
+    await rejection;
+    expect(c.siembrasService.update).toHaveBeenCalledTimes(2);
+    expect(c.siembrasService.update).toHaveBeenLastCalledWith(
+      'siembra-1',
+      expect.objectContaining({
+        ultimaPrediccionRiego: [],
+        estadoRecomendacionRiego: 'no_disponible',
+        motivoRecomendacionRiego: expect.stringContaining(
+          'fallo la persistencia',
+        ),
+      }),
+    );
+  });
+
+  it('el fallo de invalidacion tras una dependencia tampoco se informa como exito', async () => {
+    const c = crearContexto({ sueloConfirmadoPorUsuario: true });
+    jest
+      .spyOn(c.service as any, 'resolverLoteConEntradasAgronomicas')
+      .mockRejectedValue(new Error('dependencia'));
+    c.siembrasService.update.mockRejectedValue(new Error('BD no disponible'));
+    await expect(
+      c.service.prediccion('siembra-1', false, { propagarErrores: true }),
+    ).rejects.toThrow('dependencia');
+  });
+
+  it.each([true, false])(
+    'conserva el calculo y respeta enviarIntegraciones=%s',
+    async (enviarIntegraciones) => {
+      const contexto = crearContexto({ sueloConfirmadoPorUsuario: true });
+      const enviar = jest
+        .spyOn(contexto.service as any, 'verificarIntegraciones')
+        .mockResolvedValue(undefined);
+
+      await contexto.service.prediccion('siembra-1', enviarIntegraciones);
+
+      expect(contexto.prediccionRiegoService.create).toHaveBeenCalledTimes(1);
+      expect(enviar).toHaveBeenCalledTimes(enviarIntegraciones ? 1 : 0);
+      expect(contexto.httpsService.send).not.toHaveBeenCalled();
+    },
+  );
 
   it('no crea una prediccion bloqueada y limpia serie y agua util anteriores', async () => {
     const contexto = crearContexto({ sueloConfirmadoPorUsuario: false });
@@ -42,7 +145,9 @@ describe('RiegoService - invalidacion segura de persistencia', () => {
     await contexto.service.prediccion('siembra-1');
 
     expect(contexto.prediccionRiegoService.create).toHaveBeenCalledTimes(1);
-    expect(contexto.siembrasService.update.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(
+      contexto.siembrasService.update.mock.calls.length,
+    ).toBeGreaterThanOrEqual(2);
     expect(contexto.siembrasService.update).toHaveBeenLastCalledWith(
       'siembra-1',
       expect.objectContaining({
@@ -51,7 +156,9 @@ describe('RiegoService - invalidacion segura de persistencia', () => {
         estadoCalculoAguaUtil: 'no_disponible',
         estadoRecomendacionRiego: 'no_disponible',
         fuenteRecomendacionRiego: null,
-        motivoRecomendacionRiego: expect.stringContaining('fallo la persistencia'),
+        motivoRecomendacionRiego: expect.stringContaining(
+          'fallo la persistencia',
+        ),
       }),
     );
     expect(contexto.httpsService.send).not.toHaveBeenCalled();
@@ -93,14 +200,18 @@ function crearContexto(options: { sueloConfirmadoPorUsuario: boolean }) {
     update: jest.fn().mockResolvedValue({}),
   };
   const lotesService = {
-    getSoilAgronomicInputs: jest.fn().mockRejectedValue(new Error('sin perfil externo')),
+    getSoilAgronomicInputs: jest
+      .fn()
+      .mockRejectedValue(new Error('sin perfil externo')),
     update: jest.fn().mockResolvedValue(lote),
   };
   const prediccionRiegoService = {
     create: jest.fn().mockResolvedValue({ _id: 'prediccion-1' }),
   };
   const dispositivosService = {
-    get: jest.fn().mockResolvedValue({ datos: [{ _id: 'controlador-sentek' }] }),
+    get: jest
+      .fn()
+      .mockResolvedValue({ datos: [{ _id: 'controlador-sentek' }] }),
   };
   const climaV2Service = {
     getLluviaMasCercanaEntreFechas: jest.fn().mockResolvedValue([

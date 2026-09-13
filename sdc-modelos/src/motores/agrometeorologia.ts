@@ -6,6 +6,12 @@ import {
 } from "../entidades";
 
 export const AGROMET_ENGINE_VERSION = "agromet-1.5.1";
+// Lectura durante el cutover; nunca escribir, mezclar ni reetiquetar la anterior.
+// 1.5.1 cambia el anclaje fenologico, no las metricas meteorologicas de 1.5.0.
+export const AGROMET_READ_VERSIONS: readonly string[] = [
+  AGROMET_ENGINE_VERSION,
+  "agromet-1.5.0",
+];
 export const AGROMET_DEFAULT_PARAMETERS_VERSION = "agromet-reference-2026.07.5";
 
 export interface ICalculoGddParams {

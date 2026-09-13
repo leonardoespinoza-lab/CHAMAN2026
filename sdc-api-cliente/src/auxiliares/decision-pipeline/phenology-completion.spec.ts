@@ -90,6 +90,35 @@ describe('Confirmacion de calculos fenologicos', () => {
       (await c.service.statusFenologia('another-sowing', 'r1')).estado,
     ).toBe('no_disponible');
   });
+  it('no confirma riego fallido y reintenta solo lo pendiente', async () => {
+    const c = setup();
+    const job: any = await c.service.enqueueForSowing('s1', {
+      trigger: 'siembra.phenology-recorded',
+      changedFields: ['registrosFenologicos'],
+      sincronizarClima: false,
+      operationId: 'r1',
+    });
+    c.repo.recalculateIrrigation.mockRejectedValueOnce(
+      new Error('persistencia riego'),
+    );
+    await expect(c.processor.recomputeSowing(job)).rejects.toThrow(
+      'persistencia riego',
+    );
+    expect(job.data.completedStages.riego).toBeUndefined();
+    expect((await c.service.statusFenologia('s1', 'r1')).estado).not.toBe(
+      'completado',
+    );
+    await c.processor.recomputeSowing(job);
+    expect(job.data.completedStages.riego).toEqual(expect.any(String));
+    expect(c.repo.recalculateIrrigation).toHaveBeenCalledTimes(2);
+    for (const metodo of [
+      'reprocessClimate',
+      'rebuildSanitaryPredictions',
+      'evaluateAgroclimate',
+    ]) {
+      expect(c.repo[metodo]).toHaveBeenCalledTimes(1);
+    }
+  });
   it('exige acceso al lote y que el registro pertenezca a esa siembra antes de consultar Redis', async () => {
     const c = setup();
     const service = new SiembrasService(

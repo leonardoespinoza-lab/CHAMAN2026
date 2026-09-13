@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import {
   aplicarEntradasAgronomicasSuelo,
-  AGROMET_ENGINE_VERSION,
+  AGROMET_READ_VERSIONS,
   ICreateSiembra,
   IEntradasAgronomicasSuelo,
   IHuellaHidrica,
@@ -497,11 +497,16 @@ export class SiembrasService {
     hasta?: string,
   ): Promise<{ clima: DiaClimaHuella[]; fuentes: string[] }> {
     try {
-      const active =
-        await this.indicadoresAgrometeorologicosService.getActiveGeneration(
+      let active: { data?: any[] } | undefined;
+      for (const version of AGROMET_READ_VERSIONS) {
+        active = await this.indicadoresAgrometeorologicosService.getActiveGeneration(
           idSiembra,
-          AGROMET_ENGINE_VERSION,
+          version,
         );
+        // Solo lluvia/ET0 de una generacion completa; no combina versiones,
+        // no usa fenologia anterior ni consulta filas preparatorias.
+        if (active?.data?.length) break;
+      }
       const start = String(desde || '').slice(0, 10);
       const end = String(hasta || '').slice(0, 10);
       const rows = (active?.data || []).filter((row: any) => {

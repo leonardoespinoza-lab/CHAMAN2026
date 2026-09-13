@@ -15,7 +15,7 @@ export class RiegoController {
   @Post('recalcular/:idSiembra')
   public async recalcular(@Param('idSiembra') idSiembra: string, @Headers('x-chaman-internal-token') token?: string) {
     if (!internalTokenMatches(token, AGROMETEO_INTERNAL_TOKEN)) throw new UnauthorizedException();
-    return await this.service.prediccion(idSiembra, false);
+    return await this.service.prediccion(idSiembra, false, { propagarErrores: true });
   }
 
   @Get('prediccion/:idSiembra')

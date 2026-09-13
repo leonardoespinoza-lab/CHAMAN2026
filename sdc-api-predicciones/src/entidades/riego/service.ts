@@ -123,8 +123,13 @@ export class RiegoService {
     Logger.log('Predicciones realizadas');
   }
 
-  async prediccion(idSiembra: string, enviarIntegraciones = true): Promise<any> {
+  async prediccion(
+    idSiembra: string,
+    enviarIntegraciones = true,
+    options: { propagarErrores?: boolean } = {},
+  ): Promise<any> {
     let siembra: ISiembra = await this.siembrasService.getById(idSiembra);
+    let falloPersistencia = false;
     try {
       const lotePersistido = siembra.lote;
       const lote =
@@ -253,6 +258,9 @@ export class RiegoService {
         [],
       );
       const reportesLanza = valorFuente<IClimaEstacionMeteorologica[]>(3, []);
+      if (options.propagarErrores && fuentesConError.length) {
+        throw new Error(`Fuentes de riego no disponibles: ${fuentesConError.join(', ')}`);
+      }
 
       if (!HelperService.arrayValido(pronostico7Dias)) {
         this.logger.warn(
@@ -479,7 +487,7 @@ export class RiegoService {
                 : {}),
             })
           : Promise.resolve(lotePersistido);
-        const [prediccion] = await Promise.all([
+        const escrituras = [
           this.prediccionRiegoService.create(create),
           this.siembrasService.update(idSiembra, {
             ultimaPrediccionRiego: create.regar,
@@ -491,7 +499,19 @@ export class RiegoService {
             motivoRecomendacionRiego: estadoRecomendacion.motivo,
           }),
           persistenciaSensor,
-        ]);
+        ];
+        let resultados: any[];
+        if (options.propagarErrores) {
+          // Esperar todas las escrituras antes de invalidar: una escritura
+          // tardia no debe restaurar la recomendacion tras un fallo parcial.
+          const settled = await Promise.allSettled(escrituras);
+          const fallo = settled.find((item) => item.status === 'rejected');
+          if (fallo?.status === 'rejected') throw fallo.reason;
+          resultados = settled.map((item) => item.status === 'fulfilled' ? item.value : undefined);
+        } else {
+          resultados = await Promise.all(escrituras);
+        }
+        const [prediccion] = resultados;
 
         // Log resumen de la predicción completada
         const aguaUtilLog =
@@ -515,6 +535,10 @@ export class RiegoService {
           );
         }
       } catch (error) {
+        if (options.propagarErrores) {
+          falloPersistencia = true;
+          throw error;
+        }
         this.logger.error(error);
         const motivo = `Recomendacion de riego no disponible: fallo la persistencia del calculo (${(error as Error)?.message || error}).`;
         try {
@@ -526,7 +550,7 @@ export class RiegoService {
         }
       }
     } catch (error) {
-      const motivo = `Recomendacion de riego no disponible: fallo una dependencia del calculo (${(error as Error)?.message || error}).`;
+      const motivo = `Recomendacion de riego no disponible: ${falloPersistencia ? 'fallo la persistencia del calculo' : 'fallo una dependencia del calculo'} (${(error as Error)?.message || error}).`;
       this.logger.error(
         `Error en la prediccion de riego de la siembra ${idSiembra} del lote ${siembra.lote?.nombre} del productor ${siembra.productor?.nombre}`,
       );
@@ -538,6 +562,9 @@ export class RiegoService {
           `No se pudo invalidar la recomendacion anterior de ${idSiembra}: ${(updateError as Error)?.message || updateError}`,
         );
       }
+      // El pipeline debe reintentar, nunca anunciar completado ante un fallo.
+      // Crons y endpoints anteriores conservan su comportamiento por defecto.
+      if (options.propagarErrores) throw error;
     }
   }
 
