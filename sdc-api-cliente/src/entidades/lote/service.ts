@@ -5853,11 +5853,21 @@ export class LotesService {
     if (!siembra?.fechaSiembra) {
       return 'Sin fecha de inicio';
     }
-    const dias = this.getDiasDesde(siembra.fechaSiembra);
-    const etiqueta = siembra.fechaCosecha
-      ? 'Ciclo cerrado'
-      : 'Dias desde inicio';
-    return dias === undefined ? 'Sin fecha valida' : `${etiqueta}: ${dias}`;
+    const inicio = new Date(siembra.fechaSiembra).getTime();
+    const ahora = Date.now();
+    const cosecha = siembra.fechaCosecha
+      ? new Date(siembra.fechaCosecha).getTime()
+      : undefined;
+    if (
+      !Number.isFinite(inicio) || inicio > ahora ||
+      (cosecha !== undefined && (!Number.isFinite(cosecha) || cosecha < inicio))
+    ) {
+      return 'Sin fecha valida';
+    }
+    // Solo presentacion del informe: no modifica fechas ni acumuladores.
+    const cerrado = cosecha !== undefined && cosecha <= ahora;
+    const dias = Math.floor(((cerrado ? cosecha : ahora) - inicio) / 86400000);
+    return `${cerrado ? 'Ciclo cerrado' : 'Dias desde inicio'}: ${dias}`;
   }
 
   private getDiasDesde(fecha?: string): number | undefined {

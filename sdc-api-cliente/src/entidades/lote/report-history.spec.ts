@@ -127,6 +127,35 @@ describe('Integracion del historico en el informe existente', () => {
     fechaCosecha: '2026-08-20',
     semilla: { cultivo: 'Trigo' },
   };
+  describe('duracion informada del cultivo', () => {
+    beforeEach(() => jest.useFakeTimers().setSystemTime(new Date('2026-09-13T18:00:00Z')));
+    afterEach(() => jest.useRealTimers());
+
+    it('cierra los dias en la cosecha, sin acumular hasta la emision del PDF', () => {
+      const sowing: any = { fechaSiembra: '2025-11-01', fechaCosecha: '2026-04-15', semilla: { cultivo: 'Soja' } };
+      const original = JSON.stringify(sowing);
+      expect(service.getDiasCultivoTexto(sowing)).toBe('Ciclo cerrado: 165');
+      jest.setSystemTime(new Date('2026-12-01T18:00:00Z'));
+      expect(service.getDiasCultivoTexto(sowing)).toBe('Ciclo cerrado: 165');
+      expect(JSON.stringify(sowing)).toBe(original);
+    });
+    it('no trata una fecha de cosecha futura como un ciclo ya cerrado', () => {
+      expect(service.getDiasCultivoTexto({ fechaSiembra: '2026-09-01', fechaCosecha: '2026-10-01' }))
+        .toBe('Dias desde inicio: 12');
+    });
+    it('conserva los dias desde la plantacion en un perenne sin cosecha', () => {
+      expect(service.getDiasCultivoTexto({ fechaSiembra: '2020-01-01', semilla: { cultivo: 'Peral' } }))
+        .toBe('Dias desde inicio: 2447');
+    });
+    it.each([
+      { fechaSiembra: 'invalida' },
+      { fechaSiembra: '2027-01-01' },
+      { fechaSiembra: '2026-01-01', fechaCosecha: 'invalida' },
+      { fechaSiembra: '2026-01-01', fechaCosecha: '2025-12-31' },
+    ])('no comunica una duracion valida con fechas incoherentes: %j', (sowing) => {
+      expect(service.getDiasCultivoTexto(sowing)).toBe('Sin fecha valida');
+    });
+  });
   it('consulta toda la campana sanitaria sin sustituir la consulta del riesgo actual', async () => {
     const query = jest
       .spyOn(service, 'getListadoInterno')
