@@ -15,7 +15,7 @@ import {
   fechaEfectivaRegistroFenologico,
   obtenerInicioTemporadaFrioObservado,
   obtenerInicioForzadoObservado,
-  revisionFenologica,
+  revisionResultadosFenologicos as revisionFenologica,
   resolverFichaTermicaVarietal,
 } from 'modelos/src';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
@@ -433,6 +433,11 @@ export class CardFrioTermicoComponent implements OnChanges {
 
   public async cargar(force = false): Promise<void> {
     const sequence = ++this.requestSequence;
+    if (this.siembra?.calculoFenologico && this.siembra.calculoFenologico.estado !== 'completado') {
+      this.loading = ['pendiente', 'procesando'].includes(this.siembra.calculoFenologico.estado);
+      this.error = this.loading ? undefined : 'El registro esta guardado; falta completar la actualizacion de los motores.';
+      return;
+    }
     const id = this.siembra?._id;
     if (!id || !this.mostrar) {
       this.loading = false;

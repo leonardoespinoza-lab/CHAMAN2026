@@ -8,6 +8,7 @@ describe('calcularRiegoV13Estimado', () => {
       cultivo: 'Soja' as any,
       crono: { etapas: {} } as any,
       lluviaHistorica: [],
+      demandaCanonica: [{ fecha: '2026-07-14', et0: 5, kc: 1, consumoAgua: 5 }],
       pronostico7Dias: [
         {
           fecha: '2026-07-14',

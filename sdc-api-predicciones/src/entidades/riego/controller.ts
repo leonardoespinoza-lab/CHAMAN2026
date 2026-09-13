@@ -1,4 +1,6 @@
-import { Controller, Get, Logger, Param } from '@nestjs/common';
+import { Controller, Get, Logger, Param, Post, Headers, UnauthorizedException } from '@nestjs/common';
+import { AGROMETEO_INTERNAL_TOKEN } from '../../env';
+import { internalTokenMatches } from '../../auxiliares/security/app-hardening';
 import { RiegoService } from './service';
 import { ApiTags } from '@nestjs/swagger';
 
@@ -8,6 +10,13 @@ export class RiegoController {
   private logger = new Logger(RiegoController.name);
 
   constructor(private service: RiegoService) {}
+
+  // Recalculo interno por cambio agronomico: no dispara integraciones HTTPS.
+  @Post('recalcular/:idSiembra')
+  public async recalcular(@Param('idSiembra') idSiembra: string, @Headers('x-chaman-internal-token') token?: string) {
+    if (!internalTokenMatches(token, AGROMETEO_INTERNAL_TOKEN)) throw new UnauthorizedException();
+    return await this.service.prediccion(idSiembra, false);
+  }
 
   @Get('prediccion/:idSiembra')
   public async prediccion(@Param('idSiembra') idSiembra: string) {

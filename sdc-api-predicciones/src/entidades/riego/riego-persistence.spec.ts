@@ -3,6 +3,17 @@ import { RiegoService } from './service';
 const PROFUNDIDADES = Array.from({ length: 12 }, (_, index) => (index + 1) * 10);
 
 describe('RiegoService - invalidacion segura de persistencia', () => {
+  it.each([true, false])('conserva el calculo y respeta enviarIntegraciones=%s', async (enviarIntegraciones) => {
+    const contexto = crearContexto({ sueloConfirmadoPorUsuario: true });
+    const enviar = jest.spyOn(contexto.service as any, 'verificarIntegraciones').mockResolvedValue(undefined);
+
+    await contexto.service.prediccion('siembra-1', enviarIntegraciones);
+
+    expect(contexto.prediccionRiegoService.create).toHaveBeenCalledTimes(1);
+    expect(enviar).toHaveBeenCalledTimes(enviarIntegraciones ? 1 : 0);
+    expect(contexto.httpsService.send).not.toHaveBeenCalled();
+  });
+
   it('no crea una prediccion bloqueada y limpia serie y agua util anteriores', async () => {
     const contexto = crearContexto({ sueloConfirmadoPorUsuario: false });
 
@@ -110,7 +121,12 @@ function crearContexto(options: { sueloConfirmadoPorUsuario: boolean }) {
   const httpsService = { send: jest.fn().mockResolvedValue(undefined) };
   const service = new RiegoService(
     siembrasService as any,
-    {} as any,
+    { getAgrometeorologiaSiembra: jest.fn().mockResolvedValue({
+      series: [0, 1, 2].map(dia => ({
+        date: new Date(ahora + dia * 86400000).toISOString().slice(0, 10),
+        metrics: { et0Mm: 3, kc: 1, etcMm: 3 },
+      })),
+    }) } as any,
     lotesService as any,
     prediccionRiegoService as any,
     {} as any,

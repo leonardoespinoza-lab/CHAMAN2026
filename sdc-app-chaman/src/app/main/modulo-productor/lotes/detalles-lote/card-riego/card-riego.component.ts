@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
-import { IResultadoPrediccionRiego, ISiembra } from 'modelos/src';
+import { IResultadoPrediccionRiego, ISiembra, campaniaRiegoVigente } from 'modelos/src';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
 import {
@@ -85,13 +85,7 @@ export class CardRiegoComponent implements OnInit, OnDestroy {
   }
 
   public get campaniaRiegoVigente(): boolean {
-    if (!this.siembra || this.siembra.activa === false || !!this.siembra.fechaCosecha)
-      return false;
-    const fechaSiembra = new Date(this.siembra.fechaSiembra || '').getTime();
-    if (!Number.isFinite(fechaSiembra) || fechaSiembra > Date.now()) return false;
-    const limite = new Date();
-    limite.setMonth(limite.getMonth() - 6);
-    return fechaSiembra >= limite.getTime();
+    return campaniaRiegoVigente(this.siembra);
   }
 
   public get cultivoRiegoConfigurado(): boolean {
@@ -106,6 +100,7 @@ export class CardRiegoComponent implements OnInit, OnDestroy {
   }
 
   private get datosCampaniaRiegoValidos(): boolean {
+    if (this.siembra?.calculoFenologico && this.siembra.calculoFenologico.estado !== 'completado') return false;
     return this.campaniaRiegoVigente && this.cultivoRiegoConfigurado;
   }
 

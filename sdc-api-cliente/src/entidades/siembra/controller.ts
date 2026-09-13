@@ -107,6 +107,18 @@ export class SiembrasController {
     );
   }
 
+  @Get('/:id/registros-fenologicos/:registroId/calculos')
+  @Permisos(
+    { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Distribuidor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Productor', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Establecimiento', roles: ['Admin', 'Lectura', 'Escritura'] },
+    { nivel: 'Asesor', roles: ['Admin', 'Lectura', 'Escritura'] },
+  )
+  public async estadoCalculoFenologico(@Param('id') id: string, @Param('registroId') registroId: string, @GetPermiso() permiso: IPermiso) {
+    return await this.service.estadoCalculoFenologico(id, registroId, permiso);
+  }
+
   @Get('/:id')
   @Permisos(
     { nivel: 'Quimica', roles: ['Admin', 'Lectura', 'Escritura'] },

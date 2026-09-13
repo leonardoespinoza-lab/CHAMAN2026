@@ -107,6 +107,12 @@ export class DecisionPipelineRepository {
     return !sowing.fechaCosecha || esCultivoPerenne(sowing.semilla?.cultivo);
   }
 
+  async recalculateIrrigation(idSiembra: string): Promise<void> {
+    await this.axios.POST(`${API_PREDICCIONES}/riego/recalcular/${idSiembra}`, {}, {
+      headers: this.internalHeaders(), timeout: DECISION_PIPELINE_JOB_TIMEOUT_MS - 10_000,
+    });
+  }
+
   private async scopeFilter(
     scopeType: Exclude<DecisionAggregateType, 'siembra'>,
     scopeId: string,

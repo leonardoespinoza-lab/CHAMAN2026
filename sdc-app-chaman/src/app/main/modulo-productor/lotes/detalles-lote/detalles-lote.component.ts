@@ -51,6 +51,7 @@ import { CardRegistroFotograficoComponent } from './card-registro-fotografico/ca
 import { CardVisitasLoteComponent } from './card-visitas-lote/card-visitas-lote.component';
 import { CardDemandaHidricaComponent } from './card-demanda-hidrica/card-demanda-hidrica.component';
 import { WATER_DEMAND_CARD_ENABLED } from '../../../../environments/environment';
+import { seguirCalculoFenologico } from './seguir-calculo-fenologico';
 
 export interface IDetalleSiembra extends ISiembra {
   fumigaciones?: IFumigacion[];
@@ -126,6 +127,9 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   public readonly mostrarDemandaHidricaHoraria = WATER_DEMAND_CARD_ENABLED;
   private readonly numeroAr = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
   private destroyed = false;
+  private seguimientoFenologico?: AbortController;
+  public mensajeCalculoFenologico = '';
+  public siguiendoCalculoFenologico = false;
 
   constructor(
     private paramsService: ParamsService,
@@ -153,6 +157,9 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
   }
 
   public async selectSiembra(siembra: ISiembra): Promise<void> {
+    this.seguimientoFenologico?.abort();
+    this.mensajeCalculoFenologico = '';
+    this.siguiendoCalculoFenologico = false;
     if (!siembra) return;
     let siembraCompleta = siembra as IDetalleSiembra;
     if (siembra._id && (!siembra.semilla || !siembra.crono)) {
@@ -553,6 +560,12 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (siembra.calculoFenologico && siembra.calculoFenologico.estado !== 'completado') {
+      siembra = { ...siembra, ultimaPrediccion: undefined, ultimaPrediccionRiego: [], aguaUtilReal: null,
+        estadoCalculoAguaUtil: 'no_disponible', estadoRecomendacionRiego: 'no_disponible' };
+      if (siembra.calculoFenologico?.estado === 'fallido') this.mensajeCalculoFenologico = 'Registro guardado. La actualizacion de los motores fallo y los resultados no estan actualizados.';
+    }
+
     if (this.lote && actualizarLote) {
       this.lote.siembra = siembra;
       this.lote.idSiembra = this.lote.idSiembra || siembra._id;
@@ -563,10 +576,48 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
     if (siembra._id) {
       DetallesLoteComponent.siembraCache.set(siembra._id, JSON.parse(JSON.stringify(siembra)));
     }
+    if (['pendiente', 'procesando'].includes(siembra.calculoFenologico?.estado || '') && !this.siguiendoCalculoFenologico) {
+      void this.revisarCalculoFenologico();
+    }
   }
 
   public actualizarSiembraFenologica(siembra: ISiembra): void {
+    this.seguimientoFenologico?.abort();
+    this.siguiendoCalculoFenologico = false;
     this.publicarSiembra(siembra as IDetalleSiembra);
+    if (siembra.calculoFenologico?.estado === 'completado') {
+      this.mensajeCalculoFenologico = 'Registro guardado y motores actualizados.';
+    }
+  }
+
+  public async revisarCalculoFenologico(): Promise<void> {
+    const id = this.siembra?._id;
+    const registro = this.siembra?.calculoFenologico?.registroId;
+    if (!id || !registro) return;
+    this.seguimientoFenologico?.abort();
+    const control = this.seguimientoFenologico = new AbortController();
+    const vigente = () => !control.signal.aborted && !this.destroyed && this.siembra?._id === id;
+    this.siguiendoCalculoFenologico = true;
+    this.mensajeCalculoFenologico = 'Registro guardado. Actualizando motores; los resultados anteriores aun no incorporan este cambio.';
+    try {
+      const estado = await seguirCalculoFenologico(() => this.siembraService.estadoCalculoFenologico(id, registro), control.signal);
+      if (!vigente()) return;
+      if (estado?.estado === 'completado') {
+        const actualizada = await this.siembraService.listarPorId(id);
+        if (!vigente()) return;
+        this.publicarSiembra({ ...actualizada, calculoFenologico: estado });
+        this.mensajeCalculoFenologico = 'Registro guardado y motores actualizados.';
+      } else {
+        if (estado) this.publicarSiembra({ ...this.siembra!, calculoFenologico: estado });
+        this.mensajeCalculoFenologico = estado?.estado === 'fallido'
+          ? 'El registro esta guardado, pero fallo la actualizacion de los motores. Los resultados no estan actualizados.'
+          : 'El registro esta guardado. Aun no se confirmo el fin del calculo; podes consultar su estado nuevamente.';
+      }
+    } catch {
+      if (vigente()) this.mensajeCalculoFenologico = 'El registro esta guardado, pero no se pudo comprobar la actualizacion. Podes volver a consultar sin duplicar el registro.';
+    } finally {
+      if (vigente()) this.siguiendoCalculoFenologico = false;
+    }
   }
 
   private async cargarLoteEnSegundoPlano(idLote: string): Promise<void> {
@@ -660,5 +711,6 @@ export class DetallesLoteComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    this.seguimientoFenologico?.abort();
   }
 }

@@ -59,5 +59,6 @@ export interface DecisionSowingJobData {
     clima?: string;
     sanidad?: string;
     agroclima?: string;
+    riego?: string;
   };
 }

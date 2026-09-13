@@ -15,6 +15,8 @@ export interface DiaClimaHuella {
   fecha: string;
   lluviaMm: number;
   et0Mm: number;
+  kc?: number;
+  etcMm?: number;
 }
 
 export interface HuellaHidricaParams {
@@ -23,6 +25,8 @@ export interface HuellaHidricaParams {
   fertilizaciones?: IFertilizacion[];
   fumigaciones?: IFumigacion[];
   clima?: DiaClimaHuella[];
+  /** Obligatorio en las rutas reales; sin ETc no se reconstruye por calendario. */
+  demandaCanonica?: boolean;
   riegos?: Array<Record<string, any>>;
 }
 
@@ -126,7 +130,7 @@ interface Stage {
   days: number;
 }
 
-const HUELLA_HIDRICA_VERSION = 'huella-hidrica-chaman-2026-02';
+const HUELLA_HIDRICA_VERSION = 'huella-hidrica-chaman-2026-03';
 const HUELLA_HIDRICA_ENFOQUE =
   'WFN operativa + FAO-56: ETc con Kc y ET0, agua verde por lluvia efectiva, azul por riego registrado y gris por carga potencial.';
 const HUELLA_HIDRICA_LIMITES = [
@@ -255,7 +259,15 @@ function diffDias(desde?: string | Date, hasta?: string | Date): number {
   return Math.max(0, Math.floor((end - start) / 86400000));
 }
 
-function normalizarClimaHuella(clima?: DiaClimaHuella[]): DiaClimaHuella[] {
+function normalizarClimaHuella(clima?: DiaClimaHuella[], canonica = false): DiaClimaHuella[] {
+  if (canonica) {
+    // No promedia generaciones duplicadas ni transforma una ausencia en cero.
+    const dias = (clima || []).map(d => ({ ...d, fecha: toDateKey(d.fecha) || '' }));
+    const valido = (n: unknown) => typeof n === 'number' && Number.isFinite(n) && n >= 0;
+    return dias.filter(d => d.fecha && dias.filter(otro => otro.fecha === d.fecha).length === 1
+      && valido(d.kc) && valido(d.etcMm) && valido(d.et0Mm) && valido(d.lluviaMm))
+      .sort((a, b) => a.fecha.localeCompare(b.fecha));
+  }
   const byDate = new Map<
     string,
     { lluvia: number; et0: number; count: number }
@@ -857,8 +869,8 @@ export function calcularSeguimientoHuellaHidrica(
   const diasCiclo = getDiasCiclo(cultivo, siembra.crono);
   const climaInput = params.clima || [];
   const climaDuplicado =
-    normalizarClimaHuella(climaInput).length !== climaInput.length;
-  const climaCompleto = normalizarClimaHuella(climaInput);
+    normalizarClimaHuella(climaInput, params.demandaCanonica).length !== climaInput.length;
+  const climaCompleto = normalizarClimaHuella(climaInput, params.demandaCanonica);
   const clima =
     huellaFinal || siembra.fechaCosecha
       ? climaCompleto
@@ -887,8 +899,8 @@ export function calcularSeguimientoHuellaHidrica(
   let lluviaEfectivaMm = 0;
   clima.forEach((dia, index) => {
     const dias = getDiasDesdeSiembra(siembra.fechaSiembra, dia.fecha);
-    const kc = getKc(dias || index, cultivo, siembra.crono);
-    const etc = kc * Number(dia.et0Mm || 0);
+    const kc = params.demandaCanonica ? dia.kc! : getKc(dias || index, cultivo, siembra.crono);
+    const etc = params.demandaCanonica ? dia.etcMm! : kc * Number(dia.et0Mm || 0);
     const lluviaEf = lluviaEfectiva(siembra, lote, Number(dia.lluviaMm || 0));
     const verdeDia = Math.min(etc, lluviaEf);
     const azulDia = Math.max(etc - lluviaEf, 0);
@@ -1057,9 +1069,14 @@ export function calcularHuellaHidrica(
   const fertilizaciones = params.fertilizaciones || [];
   const fumigaciones = params.fumigaciones || [];
   const climaInput = params.clima || [];
-  const clima = normalizarClimaHuella(climaInput);
+  const clima = normalizarClimaHuella(climaInput, params.demandaCanonica);
   const climaDuplicado = clima.length !== climaInput.length;
   validar(siembra, lote, clima);
+  if (params.demandaCanonica && (clima.length !== diffDias(siembra.fechaSiembra, siembra.fechaCosecha) + 1
+    || clima[0]?.fecha !== toDateKey(siembra.fechaSiembra)
+    || clima[clima.length - 1]?.fecha !== toDateKey(siembra.fechaCosecha))) {
+    throw new BadRequestException('Falta ETc canonica diaria para consolidar toda la campania; se conserva seguimiento incompleto.');
+  }
 
   const trazas: string[] = [];
   const cultivo = siembra.semilla?.cultivo || (siembra as any).cultivo;
@@ -1072,8 +1089,8 @@ export function calcularHuellaHidrica(
   let lluviaEfectivaMm = 0;
   clima.forEach((dia, index) => {
     const dias = getDiasDesdeSiembra(siembra.fechaSiembra, dia.fecha);
-    const kc = getKc(dias || index, cultivo, siembra.crono);
-    const etc = kc * Number(dia.et0Mm || 0);
+    const kc = params.demandaCanonica ? dia.kc! : getKc(dias || index, cultivo, siembra.crono);
+    const etc = params.demandaCanonica ? dia.etcMm! : kc * Number(dia.et0Mm || 0);
     const lluviaEf = lluviaEfectiva(siembra, lote, Number(dia.lluviaMm || 0));
     const verdeDia = Math.min(etc, lluviaEf);
     const azulDia = Math.max(etc - lluviaEf, 0);

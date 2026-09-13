@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import {
   ISiembra,
+  ICalculoFenologico,
   ICreateSiembra,
   IListado,
   IPrediccion,
@@ -124,6 +125,10 @@ export class SiembraService {
 
   public registrarEtapaFenologica(id: string, dato: IRegistroFenologico): Promise<ISiembra> {
     return this.http.put(`/siembras/${id}/registro-fenologico`, dato);
+  }
+
+  public estadoCalculoFenologico(id: string, registroId: string): Promise<ICalculoFenologico> {
+    return this.http.get(`/siembras/${encodeURIComponent(id)}/registros-fenologicos/${encodeURIComponent(registroId)}/calculos`);
   }
 
   public editar(id: string, dato: IUpdateSiembra): Promise<ISiembra> {

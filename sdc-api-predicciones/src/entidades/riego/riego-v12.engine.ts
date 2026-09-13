@@ -14,6 +14,7 @@ import {
   ISuelo,
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
+import { DemandaRiegoDia } from './riego-demanda-canonica';
 import {
   normalizarHumedadSueloPct,
   resolverEficienciaRiego,
@@ -93,6 +94,7 @@ export function calcularRiegoV12(params: {
   humedadSuelo: IClimaEstacionMeteorologica[];
   lluviaHistorica: IClimaEstacionMeteorologica[];
   pronostico7Dias: IPronosticoEstacionMeteorologica[];
+  demandaCanonica: DemandaRiegoDia[];
 }): ResultadoRiegoV12 {
   const trazas: string[] = [];
   const capacidadDeRiego = Number(params.lote.capacidadDeRiego);
@@ -133,7 +135,7 @@ export function calcularRiegoV12(params: {
     return resultadoFallido('No hay pronostico con ET0 para proyectar demanda.');
   }
 
-  const et0Promedio = HelperService.getEt0Promedio(pronostico7Dias);
+  const et0Promedio = HelperService.getEt0Promedio(pronostico7Dias.map(p => ({ ...p, et0: params.demandaCanonica.find(d => d.fecha === p.fecha?.slice(0, 10))?.et0 })));
   const umbralDeRiego = HelperService.getUmbralDeRiego(params.cultivo, et0Promedio);
   const ventana = construirVentanaDiaNoche(humedadSuelo, lluviaHistorica);
   const ultimo = humedadSuelo[humedadSuelo.length - 1];
@@ -220,6 +222,7 @@ export function calcularRiegoV12(params: {
 
   const { pronosticosRiego, demanda3Dias, lluviaEfectiva72h, recomendacionHoyMm } = calcularPronosticoRiegoV12({
     pronostico7Dias,
+    demandaCanonica: params.demandaCanonica,
     siembra: params.siembra,
     cultivo: params.cultivo,
     crono: params.crono,
@@ -622,6 +625,7 @@ function calcularNivel(
 
 function calcularPronosticoRiegoV12(params: {
   pronostico7Dias: IPronosticoEstacionMeteorologica[];
+  demandaCanonica: DemandaRiegoDia[];
   siembra: ISiembra;
   cultivo: Cultivo;
   crono: ICrono;
@@ -635,17 +639,15 @@ function calcularPronosticoRiegoV12(params: {
   let saldo = params.aguaUtilActualMm;
   const pronosticosRiego: IPronosticoRiego[] = [];
   const consumo = params.pronostico7Dias.map((pronostico) => {
-    const fecha = new Date(pronostico.fecha || new Date().toISOString());
-    const fechaSiembra = new Date(params.siembra.fechaSiembra || new Date().toISOString());
-    const diasDesdeEmergencia = HelperService.getDiasDesdeEmergencia(params.crono, fechaSiembra, fecha);
-    const kc = HelperService.getKc(diasDesdeEmergencia, params.cultivo, params.crono);
-    const et0 = Number(pronostico.et0 || 0);
+    const demanda = params.demandaCanonica.find(d => d.fecha === pronostico.fecha?.slice(0, 10));
+    if (!demanda) throw new Error('Falta demanda canonica para riego.');
+    const { kc, et0 } = demanda;
     const lluvia = Number(pronostico.probabilidadLluvia || 0) >= 70 ? Number(pronostico.lluvia || 0) : 0;
     return {
       fecha: pronostico.fecha,
       et0,
       kc,
-      consumoAgua: redondear(kc * et0, 2),
+      consumoAgua: redondear(demanda.consumoAgua, 2),
       lluvias: redondear(lluvia, 2),
     };
   });

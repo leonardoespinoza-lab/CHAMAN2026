@@ -1,4 +1,12 @@
 <div class="lote-view-container">
+  @if (mensajeCalculoFenologico) {
+    <div class="custom-card" role="status" aria-live="polite">
+      {{ mensajeCalculoFenologico }}
+      @if (!siguiendoCalculoFenologico && siembra?.calculoFenologico?.estado !== 'completado') {
+        <p-button label="Consultar estado" [text]="true" (onClick)="revisarCalculoFenologico()" />
+      }
+    </div>
+  }
   <div class="lote-header">
     <div class="lote-title">
       <div>

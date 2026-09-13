@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  NotFoundException,
   forwardRef,
   Inject,
   Injectable,
@@ -10,6 +11,7 @@ import {
   getLineasFertilizacion,
   getLineasFumigacion,
   ISiembra,
+  ICalculoFenologico,
   IListado,
   IQueryParam,
   ICreateSiembra,
@@ -97,10 +99,10 @@ export class SiembrasService {
     private readonly decisionPipelineQueue?: DecisionPipelineQueueService,
   ) {}
 
-  async getById(id: string, permiso: IPermiso): Promise<ISiembra> {
+  async getById(id: string, permiso: IPermiso, incluirEstado = true): Promise<ISiembra> {
     const data = await this.repository.getById(id);
     if (this.puedeVer(data, permiso)) {
-      return data;
+      return incluirEstado ? await this.conEstadoFenologico(data) : data;
     }
     if (
       permiso.nivel !== 'Admin' &&
@@ -109,7 +111,7 @@ export class SiembrasService {
     ) {
       try {
         await this.lotesService.getById(data.idLote, permiso);
-        return data;
+        return incluirEstado ? await this.conEstadoFenologico(data) : data;
       } catch {
         // El lote canonico es la unica via de compatibilidad para una siembra
         // legacy sin tenant persistido. Un desacuerdo explicito nunca cae aqui.
@@ -118,9 +120,30 @@ export class SiembrasService {
     throw new Error('No tiene permiso para ver esta siembra');
   }
 
+  private async conEstadoFenologico(data: ISiembra): Promise<ISiembra> {
+    if (!this.decisionPipelineQueue || !data._id) return data;
+    const ultimo = [...(data.registrosFenologicos || [])].filter(r => r.id)
+      .sort((a, b) => (Date.parse(b.creadoEn || '') || 0) - (Date.parse(a.creadoEn || '') || 0))[0];
+    if (!ultimo?.id) return data;
+    try {
+      const calculoFenologico = await this.decisionPipelineQueue.statusFenologia(data._id, ultimo.id);
+      return calculoFenologico.estado === 'no_disponible' ? data : { ...data, calculoFenologico };
+    } catch {
+      // La indisponibilidad de Redis nunca bloquea la lectura del lote.
+      return data;
+    }
+  }
+
   async seguimientoHuellaHidrica(id: string, permiso: IPermiso): Promise<any> {
     await this.getById(id, permiso);
     return await this.repository.seguimientoHuellaHidrica(id);
+  }
+
+  async estadoCalculoFenologico(id: string, registroId: string, permiso: IPermiso): Promise<ICalculoFenologico> {
+    const siembra = await this.getById(id, permiso, false);
+    if (!(siembra.registrosFenologicos || []).some(r => r.id === registroId)) throw new NotFoundException('Registro fenologico no encontrado.');
+    if (!this.decisionPipelineQueue) return { registroId, estado: 'no_disponible' };
+    return await this.decisionPipelineQueue.statusFenologia(id, registroId);
   }
 
   async prediccionMalezas(
@@ -287,7 +310,7 @@ export class SiembrasService {
     registros.push(registroPersistible);
 
     await this.repository.registrarEtapaFenologica(id, registroPersistible);
-    await this.encolarPipelineDecision(
+    const pendiente = await this.encolarPipelineDecision(
       id,
       {
         trigger: 'siembra.phenology-recorded',
@@ -298,7 +321,11 @@ export class SiembrasService {
       permiso,
       true,
     );
-    return await this.getById(id, permiso);
+    const resultado = await this.getById(id, permiso);
+    return { ...resultado, calculoFenologico: {
+      registroId: idRegistro, estado: pendiente ? 'pendiente' : 'completado',
+      ...(!pendiente ? { completadoEn: new Date().toISOString() } : {}),
+    } };
   }
 
   private async construirSnapshotTermicoFenologico(
@@ -1304,10 +1331,9 @@ export class SiembrasService {
     options: DecisionEnqueueOptions,
     permiso: IPermiso,
     reemplazarPrediccion: boolean,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (this.decisionPipelineQueue) {
-      await this.decisionPipelineQueue.enqueueForSowing(idSiembra, options);
-      return;
+      return !!(await this.decisionPipelineQueue.enqueueForSowing(idSiembra, options));
     }
 
     // Compatibilidad exclusiva para pruebas unitarias que construyen el
@@ -1320,6 +1346,7 @@ export class SiembrasService {
       reemplazarPrediccion,
       options.forceClimateBackfill,
     );
+    return false;
   }
 
   private fechaCalendario(value: unknown): string | undefined {
@@ -1351,6 +1378,7 @@ export class SiembrasService {
       registrosFenologicos?: unknown;
     };
     delete sanitized.registrosFenologicos;
+    delete (sanitized as any).calculoFenologico;
     return sanitized;
   }
 

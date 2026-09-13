@@ -39,6 +39,7 @@ import {
   calcularRiegoV12,
 } from './riego-v12.engine';
 import { calcularRiegoV13Estimado } from './riego-v13-fallback.engine';
+import { demandaRiegoCanonica } from './riego-demanda-canonica';
 import { resolverEstadoRecomendacionRiego } from './riego-recommendation-status';
 import {
   adaptarPerfilSueloLoRaWAN,
@@ -123,7 +124,7 @@ export class RiegoService {
     Logger.log('Predicciones realizadas');
   }
 
-  async prediccion(idSiembra: string): Promise<any> {
+  async prediccion(idSiembra: string, enviarIntegraciones = true): Promise<any> {
     let siembra: ISiembra = await this.siembrasService.getById(idSiembra);
     try {
       const lotePersistido = siembra.lote;
@@ -253,6 +254,16 @@ export class RiegoService {
         [],
       );
       const reportesLanza = valorFuente<IClimaEstacionMeteorologica[]>(3, []);
+      const fechasDemanda = pronostico7Dias.slice(0, 7).map(p => p.fecha?.slice(0, 10)).filter(Boolean).sort();
+      const demandaCanonica = demandaRiegoCanonica(
+        siembra,
+        pronostico7Dias,
+        await this.climaService.getAgrometeorologiaSiembra(idSiembra, fechasDemanda[0], fechasDemanda[fechasDemanda.length - 1]),
+      );
+      // La misma ET0 alimenta los umbrales y el consumo; nunca se mezcla con
+      // otra fuente. La lluvia y sus controles conservan su ruta actual.
+      pronostico7Dias.splice(7);
+      pronostico7Dias.forEach(p => { p.et0 = demandaCanonica.find(d => d.fecha === p.fecha?.slice(0, 10))!.et0; });
 
       if (!HelperService.arrayValido(pronostico7Dias)) {
         this.logger.warn(
@@ -300,6 +311,7 @@ export class RiegoService {
             crono,
             lluviaHistorica: pluviometro || [],
             pronostico7Dias,
+            demandaCanonica,
           })
         : calcularRiegoV12({
             siembra,
@@ -310,6 +322,7 @@ export class RiegoService {
             humedadSuelo: datosHumedadAdaptados,
             lluviaHistorica: pluviometro || [],
             pronostico7Dias,
+            demandaCanonica,
           });
 
       resultadoRiego.calidadDatos ||= {
@@ -505,7 +518,7 @@ export class RiegoService {
         );
 
         if (
-          estadoRecomendacion.estado === 'calculada' &&
+          enviarIntegraciones && estadoRecomendacion.estado === 'calculada' &&
           estadoRecomendacion.fuente === 'sensor_suelo'
         ) {
           await this.verificarIntegraciones(prediccion, siembra);

@@ -4,7 +4,7 @@ import Highcharts from 'highcharts';
 import {
   esCultivoPerenne,
   obtenerInicioForzadoObservado,
-  revisionFenologica,
+  revisionResultadosFenologicos as revisionFenologica,
   IRespuestaAgrometeorologiaSiembra,
   IResumenAgrometeorologico,
   ISerieAgrometeorologicaDia,
@@ -231,6 +231,11 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
 
   public async cargar(force = false): Promise<void> {
     const sequence = ++this.requestSequence;
+    if (this.siembra?.calculoFenologico && this.siembra.calculoFenologico.estado !== 'completado') {
+      this.loading = ['pendiente', 'procesando'].includes(this.siembra.calculoFenologico.estado);
+      this.error = this.loading ? undefined : 'El registro esta guardado; falta completar la actualizacion de los motores.';
+      return;
+    }
     const id = this.siembra?._id;
     if (!id) {
       this.data = undefined;

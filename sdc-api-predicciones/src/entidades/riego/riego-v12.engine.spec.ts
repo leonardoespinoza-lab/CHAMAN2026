@@ -30,6 +30,7 @@ describe('calcularRiegoV12 - geometria fisica del perfil', () => {
       } as any,
       cultivo: 'Trigo',
       crono: undefined as any,
+      demandaCanonica: [0, 1, 2].map(d => ({ fecha: `2026-08-${15 + d}`, et0: 3, kc: 1, consumoAgua: 3 })),
       suelo: profundidades.map((profundidad, index) => ({
         numeroDeSensor: index + 1,
         profundidad,

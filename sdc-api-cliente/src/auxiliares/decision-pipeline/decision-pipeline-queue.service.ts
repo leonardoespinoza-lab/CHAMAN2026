@@ -2,6 +2,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash, randomUUID } from 'crypto';
 import { Job, Queue } from 'bull';
+import { ICalculoFenologico } from 'modelos/src';
 import {
   DECISION_HISTORICAL_JOB_OPTIONS,
   DECISION_JOB_OPTIONS,
@@ -34,6 +35,38 @@ export class DecisionPipelineQueueService {
   ): Promise<Job<DecisionSowingJobData> | undefined> {
     const event = this.createEvent('siembra', idSiembra, options);
     return await this.enqueueResolvedSowing(event, idSiembra);
+  }
+
+  /** El servicio llamador debe comprobar acceso a la siembra y al registro. */
+  async statusFenologia(idSiembra: string, registroId: string): Promise<ICalculoFenologico> {
+    const event = this.createEvent('siembra', idSiembra, {
+      trigger: 'siembra.phenology-recorded', changedFields: ['registrosFenologicos'],
+      sincronizarClima: false, operationId: registroId,
+    });
+    const job = await this.consultaAcotada(this.queue.getJob(`decision-sowing-${idSiembra}-${event.idempotencyKey}`));
+    if (!job || job.data.idSiembra !== idSiembra || job.data.event?.eventId !== registroId) {
+      return { registroId, estado: 'no_disponible' };
+    }
+    const state = await this.consultaAcotada(job.getState());
+    const estado = state === 'completed'
+      ? (job.returnvalue?.skipped ? 'no_disponible' : 'completado')
+      : state === 'failed' ? 'fallido' : state === 'active' ? 'procesando' : 'pendiente';
+    return { registroId, estado, ...(estado === 'completado' && job.finishedOn
+      ? { completadoEn: new Date(job.finishedOn).toISOString() } : {}) };
+  }
+
+  private async consultaAcotada<T>(request: Promise<T>): Promise<T> {
+    let timer: ReturnType<typeof setTimeout>;
+    try {
+      return await Promise.race([
+        request,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('Estado de calculos temporalmente no disponible.')), 2500);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer!);
+    }
   }
 
   async enqueueForSeed(
@@ -155,6 +188,7 @@ export class DecisionPipelineQueueService {
     );
     await this.repository.rebuildSanitaryPredictions(idSiembra);
     await this.repository.evaluateAgroclimate(idSiembra);
+    if (event.trigger === 'siembra.phenology-recorded') await this.repository.recalculateIrrigation(idSiembra);
   }
 
   private createEvent(

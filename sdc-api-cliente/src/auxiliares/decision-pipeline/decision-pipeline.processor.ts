@@ -108,6 +108,11 @@ export class DecisionPipelineProcessor {
         completedStages.agroclima = new Date().toISOString();
         await job.update({ ...job.data, completedStages });
       }
+      if (event.trigger === 'siembra.phenology-recorded' && !completedStages.riego) {
+        await this.repository.recalculateIrrigation(idSiembra);
+        completedStages.riego = new Date().toISOString();
+        await job.update({ ...job.data, completedStages });
+      }
       await job.progress(100);
 
       const result = {

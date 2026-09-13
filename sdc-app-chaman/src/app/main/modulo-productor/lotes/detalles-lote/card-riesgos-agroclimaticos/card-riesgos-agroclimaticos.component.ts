@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
-import { IRiesgoAgroclimatico, IResumenRiesgosAgroclimaticos, ISiembra, revisionFenologica } from 'modelos/src';
+import { IRiesgoAgroclimatico, IResumenRiesgosAgroclimaticos, ISiembra, revisionResultadosFenologicos as revisionFenologica } from 'modelos/src';
 import { ClimaService } from '../../../../../auxiliares/http/clima.service';
 import { PrediccionService } from '../../../../../auxiliares/http/prediccion.service';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
@@ -78,6 +78,11 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
 
   public async cargar(force = false): Promise<void> {
     const sequence = ++this.requestSequence;
+    if (this.siembra?.calculoFenologico && this.siembra.calculoFenologico.estado !== 'completado') {
+      this.loading = ['pendiente', 'procesando'].includes(this.siembra.calculoFenologico.estado);
+      this.error = this.loading ? undefined : 'El registro esta guardado; falta completar la actualizacion de los motores.';
+      return;
+    }
     if (!this.mostrar || !this.centro) {
       this.riesgos = undefined;
       this.loading = false;

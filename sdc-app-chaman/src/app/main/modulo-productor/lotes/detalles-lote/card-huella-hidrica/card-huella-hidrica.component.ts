@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges, OnDestroy, OnInit, SimpleChanges } from '@angular/core';
-import { ISiembra } from 'modelos/src';
+import { ISiembra, revisionResultadosFenologicos } from 'modelos/src';
 import { HuellaHidricaSeguimiento, SiembraService } from '../../../../../auxiliares/http/siembra.service';
 import { HelperService } from '../../../../../auxiliares/servicios/helper';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
@@ -23,6 +23,7 @@ export class CardHuellaHidricaComponent implements OnInit, OnChanges, OnDestroy 
   private readonly numeroAr = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 });
   private readonly decimalAr = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 1 });
   private ultimaSiembraConsultada?: string;
+  private requestSequence = 0;
 
   constructor(
     public helper: HelperService,
@@ -37,7 +38,7 @@ export class CardHuellaHidricaComponent implements OnInit, OnChanges, OnDestroy 
     }
   }
 
-  ngOnDestroy(): void {}
+  ngOnDestroy(): void { ++this.requestSequence; }
 
   public get subtitulo(): string {
     if (this.siembra?.huellaHidrica) {
@@ -188,17 +189,31 @@ export class CardHuellaHidricaComponent implements OnInit, OnChanges, OnDestroy 
 
   private async cargarSeguimiento(): Promise<void> {
     const idSiembra = this.siembra?._id;
-    if (!idSiembra || this.siembra?.huellaHidrica || this.ultimaSiembraConsultada === idSiembra) return;
-    this.ultimaSiembraConsultada = idSiembra;
+    if (this.siembra?.calculoFenologico && this.siembra.calculoFenologico.estado !== 'completado') {
+      ++this.requestSequence;
+      this.cargandoSeguimiento = ['pendiente', 'procesando'].includes(this.siembra.calculoFenologico.estado);
+      this.errorSeguimiento = this.cargandoSeguimiento ? undefined : 'Falta completar la actualizacion de los motores.';
+      this.seguimiento = undefined;
+      return;
+    }
+    const key = idSiembra + '|' + revisionResultadosFenologicos(this.siembra);
+    if (!idSiembra || this.siembra?.huellaHidrica) { ++this.requestSequence; this.cargandoSeguimiento = false; return; }
+    if (this.ultimaSiembraConsultada === key) return;
+    const sequence = ++this.requestSequence;
+    this.ultimaSiembraConsultada = key;
     this.cargandoSeguimiento = true;
     this.errorSeguimiento = undefined;
     try {
-      this.seguimiento = await this.siembraService.seguimientoHuellaHidrica(idSiembra);
+      const resultado = await this.siembraService.seguimientoHuellaHidrica(idSiembra);
+      if (sequence !== this.requestSequence) return;
+      this.seguimiento = resultado;
     } catch (error) {
+      if (sequence !== this.requestSequence) return;
+      this.ultimaSiembraConsultada = undefined;
       console.error('Error al cargar seguimiento de huella hidrica', error);
       this.errorSeguimiento = 'No se pudo consultar el seguimiento de huella.';
     } finally {
-      this.cargandoSeguimiento = false;
+      if (sequence === this.requestSequence) this.cargandoSeguimiento = false;
     }
   }
 

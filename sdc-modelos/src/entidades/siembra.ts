@@ -169,7 +169,15 @@ export interface IRegistroFenologico {
   actualizadoEn?: string;
 }
 
+/** Estado de respuesta, no un campo persistible ni una orden de calculo. */
+export interface ICalculoFenologico {
+  registroId: string;
+  estado: 'pendiente' | 'procesando' | 'completado' | 'fallido' | 'no_disponible';
+  completadoEn?: string;
+}
+
 export interface ISiembra {
+  calculoFenologico?: ICalculoFenologico;
   _id?: string;
   idQuimica?: string;
   idDistribuidor?: string;
@@ -224,6 +232,7 @@ export interface ISiembra {
 }
 
 type OmitirCreate =
+  | "calculoFenologico"
   | "_id"
   | "quimica"
   | "distribuidor"
@@ -237,6 +246,7 @@ type OmitirCreate =
 export interface ICreateSiembra extends Omit<Partial<ISiembra>, OmitirCreate> {}
 
 type OmitirUpdate =
+  | "calculoFenologico"
   | "_id"
   | "quimica"
   | "distribuidor"
