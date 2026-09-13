@@ -2605,6 +2605,7 @@ export class LotesService {
       .page { width: auto; margin: 0; border: none; border-radius: 0; box-shadow: none; overflow: visible; }
       .section { break-inside: auto; }
       .section h2, .section h3 { break-after: avoid; }
+      .section.phenology-section { break-inside: avoid; }
       .phenology-section + .sanitary-section { break-before: auto; page-break-before: auto; }
       .card, .score-card, .summary-chart, .ndvi-tracking { break-inside: avoid; }
       table { break-inside: auto; }
