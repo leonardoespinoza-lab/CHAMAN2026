@@ -1,4 +1,4 @@
-import { reportPeriod, renderHistoryChart } from './report-history';
+import { reportPeriod, renderHistoryChart, summarizeHistory, historyPoints, renderHistorySummary } from './report-history';
 import { LotesService } from './service';
 
 describe('Ventanas del informe sin cambiar el ciclo biologico', () => {
@@ -112,6 +112,51 @@ describe('Graficos de historia: datos reales y huecos', () => {
     expect(graph([])).toContain('Sin datos historicos suficientes'));
 });
 
+describe('Resumenes numericos auditables del informe', () => {
+  const from = Date.parse('2026-01-01'), to = Date.parse('2026-01-06');
+  const row = (date: string, value: unknown) => ({ date, values: { value } });
+  const points = [row('2026-01-01', 0), row('2026-01-02', 8), row('2026-01-03', null), row('2026-01-05', 4)];
+  const spec = { key: 'value', label: 'Prueba', unit: 'mm', operation: 'sum' as const };
+  it('suma solo valores disponibles y explicita la cobertura, no rellena dias', () => {
+    expect(summarizeHistory(points, from, to, spec)).toMatchObject({ value: 12, count: 3, expected: 6 });
+    expect(summarizeHistory(points, from, to, { ...spec, operation: 'mean' }).value).toBe(4);
+    expect(renderHistorySummary({ points, from, to, summaries: [spec] })).toContain('3/6 dias con dato');
+  });
+  it.each([undefined, null, NaN, Infinity, '8'])('no convierte %s en dato o cero', value => {
+    expect(summarizeHistory([row('2026-01-01', value)], from, to, spec)).toMatchObject({ value: undefined, count: 0 });
+  });
+  it('no suma dos veces duplicados iguales y no elige un valor arbitrario ante conflicto', () => {
+    const rows = [row('2026-01-01', 2), row('2026-01-01', 2), row('2026-01-02', 3), row('2026-01-02', 4)];
+    expect(summarizeHistory(rows, from, to, spec)).toMatchObject({ value: 2, count: 1 });
+    expect(historyPoints(rows, from, to)).toHaveLength(2);
+  });
+  it('excluye fechas imposibles, intradiarias y fuera del periodo', () => {
+    const rows = [row('2025-12-31', 100), row('2026-01-07', 200), row('2026-01-01T02:00:00Z', 300), row('2026-02-30', 400), ...points];
+    expect(summarizeHistory(rows, from, to, spec).value).toBe(12);
+  });
+  it('mantiene el ultimo acumulado disponible, no suma ni escoge el maximo', () => {
+    const rows = [row('2026-01-02', 30), row('2026-01-05', 24), row('2026-01-06', null)];
+    expect(summarizeHistory(rows, from, to, { ...spec, operation: 'latest' })).toMatchObject({ value: 24, date: '2026-01-05' });
+  });
+  it('cuenta dias con helada estrictamente bajo 0, no episodios ni alertas', () => {
+    const rows = [row('2026-01-01', -2), row('2026-01-02', -1), row('2026-01-03', 0), row('2026-01-04', null)];
+    expect(summarizeHistory(rows, from, to, { ...spec, operation: 'below', threshold: 0 })).toMatchObject({ value: 2, count: 3 });
+  });
+  it('descarta porcentajes fuera de rango y lluvia negativa conservando ceros reales', () => {
+    const rows = [row('2026-01-01', -1), row('2026-01-02', 110), row('2026-01-03', 0)];
+    expect(summarizeHistory(rows, from, to, { ...spec, minValue: 0, maxValue: 100 })).toMatchObject({ value: 0, count: 1 });
+    expect(summarizeHistory(rows, from, to, { ...spec, minValue: 0 })).toMatchObject({ value: 110, count: 2 });
+  });
+  it('amplia las fechas disponibles sin esconder el periodo ni inventar valores intermedios', () => {
+    const html = renderHistoryChart({ title: 'Lluvia', unit: 'mm', points, from, to, summaries: [spec], lines: [{ key: 'value', name: 'Lluvia', color: '#000' }] });
+    expect(html).toContain('viewBox="0 0 760 260"');
+    expect(html).toContain('Datos graficados: 01/01/2026 a 05/01/2026');
+    expect(html).toContain('12 mm');
+    expect(html).toContain('3/6 dias con dato');
+    expect(html).toContain('history-summary');
+  });
+});
+
 describe('Integracion del historico en el informe existente', () => {
   const service = new LotesService(
     {} as any,
@@ -204,6 +249,27 @@ describe('Integracion del historico en el informe existente', () => {
     );
     expect(c.serie).toHaveLength(1);
     expect(c.acumulados.gradosDia).toBe(10);
+  });
+  it('lleva las metricas canonicas al grafico y su resumen sin incluir el pronostico', () => {
+    const input: any = { summary: {}, dataSource: { type: 'open_meteo' }, warnings: [], series: [
+      { date: '2026-05-01', isForecast: false, metrics: { temperatureMinC: -1, temperatureMaxC: 12, relativeHumidityMeanPct: 60, precipitationMm: 8, gddAccumulated: 4, et0Mm: 2, etcMm: 1, availableWaterPercentage: 25 }, weather: {} },
+      { date: '2026-05-02', isForecast: false, metrics: { temperatureMinC: 0, temperatureMaxC: 14, relativeHumidityMeanPct: 80, precipitationMm: 0, gddAccumulated: 9, et0Mm: 3, etcMm: 2, availableWaterPercentage: 20 }, weather: {} },
+      { date: '2026-05-03', isForecast: true, metrics: { precipitationMm: 999, relativeHumidityMeanPct: 100, temperatureMinC: -9 }, weather: {} },
+    ] };
+    const original = JSON.stringify(input);
+    const c = service.mapCanonicalClimate(input, undefined, s);
+    const html = service.renderGraficosHistoricos(c, s);
+    expect(html).toContain('8 mm');
+    expect(html).toContain('70 %');
+    expect(html).toContain('1 dia');
+    expect(html).toContain('9 GDD');
+    expect(html).toContain('5 mm');
+    expect(html).toContain('3 mm');
+    expect(html).toContain('22,5 %');
+    expect(html).not.toContain('999');
+    expect(html).toContain('No cuenta alertas emitidas');
+    expect(html).toContain('history-charts');
+    expect(JSON.stringify(input)).toBe(original);
   });
   it('un screening experimental no se dibuja como porcentaje operativo', () => {
     const html = service.renderHistoricoSanitario(

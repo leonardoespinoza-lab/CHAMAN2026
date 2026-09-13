@@ -73,7 +73,7 @@ import {
   permisoPuedeVerLote,
 } from '../../auxiliares/authorization/alcance-permiso';
 import { renderHtmlToPdf } from './pdf-renderer';
-import { reportPeriod, renderHistoryChart } from './report-history';
+import { reportPeriod, renderHistoryChart, renderHistorySummary, historyPoints } from './report-history';
 
 interface IntaFeatureCollection {
   features?: {
@@ -2383,6 +2383,25 @@ export class LotesService {
       height: auto;
       min-height: 220px;
     }
+    /* Report-only layout: do not change the application's cards or maps. */
+    .history-charts { display: block; }
+    .history-charts > .thermal-chart { margin: 14px 0 18px; }
+    .history-chart svg { min-height: 0; }
+    .history-legend { padding: 0 12px 10px; font-size: 12px; }
+    .history-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      padding: 12px;
+      border-top: 1px solid var(--line);
+      background: #f5f9fa;
+    }
+    .history-summary:empty { display: none; }
+    .history-stat span, .history-stat strong, .history-stat small { display: block; }
+    .history-stat span { font-size: 12px; font-weight: 700; }
+    .history-stat strong { font-size: 22px; margin: 5px 0; color: var(--ink); }
+    .history-stat small { font-size: 11px; color: var(--muted); }
+    .history-note { margin: 0; padding: 10px 12px; font-size: 12px; color: var(--muted); }
     .tracking-table td:nth-child(4),
     .tracking-table td:nth-child(5) {
       font-variant-numeric: tabular-nums;
@@ -4122,25 +4141,47 @@ export class LotesService {
     const from = new Date(period.desde).toISOString().slice(0, 10);
     const to = new Date(period.hasta).toISOString().slice(0, 10);
     const days = clima.serie.filter(d => d.esPronostico === false && d.fecha >= from && d.fecha <= to);
-    const points = days.map(d => ({ date: d.fecha, values: { ...d } }));
-    const panels = [
+    const points = historyPoints(days.map(d => ({ date: d.fecha, values: { ...d } })), Date.parse(from), Date.parse(to));
+    const panels: Array<Omit<Parameters<typeof renderHistoryChart>[0], 'points' | 'from' | 'to'>> = [
       { title: 'Temperatura diaria', unit: 'C', lines: [
         { key: 'temperaturaMin', name: 'Minima', color: '#547ec8' },
-        { key: 'temperaturaMax', name: 'Maxima', color: '#d7833d' }] },
+        { key: 'temperaturaMax', name: 'Maxima', color: '#d7833d' }], summaries: [
+        { key: 'temperaturaMin', label: 'Minima del periodo', unit: 'C', operation: 'min' },
+        { key: 'temperaturaMax', label: 'Maxima del periodo', unit: 'C', operation: 'max' },
+        { key: 'temperaturaMin', label: 'Dias con helada meteorologica', unit: 'dias', operation: 'below', threshold: 0 },
+      ], note: 'Helada meteorologica: jornada con temperatura minima del aire menor a 0 C. No cuenta alertas emitidas ni confirma dano en el cultivo. Dias sin dato no se cuentan como dias sin helada.' },
       { title: 'Humedad relativa del aire', unit: '%', bounds: [0,100] as [number,number], lines: [
-        { key: 'humedadRelativa', name: 'HR media', color: '#168d82' }] },
+        { key: 'humedadRelativa', name: 'HR media', color: '#168d82', minValue: 0, maxValue: 100 }], summaries: [
+        { key: 'humedadRelativa', label: 'Humedad promedio', unit: '%', operation: 'mean', minValue: 0, maxValue: 100 },
+        { key: 'humedadRelativa', label: 'Menor media diaria', unit: '%', operation: 'min', minValue: 0, maxValue: 100 },
+        { key: 'humedadRelativa', label: 'Mayor media diaria', unit: '%', operation: 'max', minValue: 0, maxValue: 100 },
+      ], note: 'Promedio de las medias diarias disponibles, con igual peso por dia. Es humedad del aire, no humedad del suelo.' },
       { title: 'Lluvia diaria', unit: 'mm', lines: [
-        { key: 'lluvia', name: 'Precipitacion', color: '#547ec8' }] },
+        { key: 'lluvia', name: 'Precipitacion', color: '#547ec8', minValue: 0 }], summaries: [
+        { key: 'lluvia', label: 'Lluvia acumulada disponible', unit: 'mm', operation: 'sum', minValue: 0 },
+        { key: 'lluvia', label: 'Dias con lluvia (> 0 mm)', unit: 'dias', operation: 'above', threshold: 0, minValue: 0 },
+        { key: 'lluvia', label: 'Maxima lluvia diaria', unit: 'mm', operation: 'max', minValue: 0 },
+      ], note: 'Suma de precipitaciones diarias dentro del periodo del informe. Si la cobertura es parcial, no representa el total de toda la campana.' },
       { title: 'Grados-dia acumulados', unit: 'GDD', lines: [
-        { key: 'gradosDiaAcumulados', name: 'Acumulado canonico', color: '#d7833d' }] },
+        { key: 'gradosDiaAcumulados', name: 'Acumulado canonico', color: '#d7833d', minValue: 0 }], summaries: [
+        { key: 'gradosDiaAcumulados', label: 'Ultimo acumulado disponible', unit: 'GDD', operation: 'latest', minValue: 0 },
+      ], note: 'Valor calculado por el motor desde su inicio termico o biofix: no es la suma de los acumulados diarios ni se reinicia por el recorte del informe. En perennes, el calor comienza desde la brotacion registrada; antes puede no haber valores.' },
       { title: 'Evapotranspiracion diaria', unit: 'mm', lines: [
-        { key: 'et0', name: 'ET0 de referencia', color: '#547ec8' },
-        { key: 'etc', name: 'ETc del cultivo', color: '#168d82' }] },
+        { key: 'et0', name: 'ET0 de referencia', color: '#547ec8', minValue: 0 },
+        { key: 'etc', name: 'ETc del cultivo', color: '#168d82', minValue: 0 }], summaries: [
+        { key: 'et0', label: 'ET0 acumulada disponible', unit: 'mm', operation: 'sum', minValue: 0 },
+        { key: 'etc', label: 'ETc acumulada disponible', unit: 'mm', operation: 'sum', minValue: 0 },
+        { key: 'etc', label: 'Maxima demanda diaria (ETc)', unit: 'mm', operation: 'max', minValue: 0 },
+      ], note: 'Suma de valores diarios calculados por el motor dentro del periodo. ET0 y ETc conservan su propia cobertura; no equivalen al volumen de riego aplicado.' },
       { title: 'Agua disponible estimada', unit: '%', bounds: [0,100] as [number,number], lines: [
-        { key: 'aguaDisponiblePct', name: 'Balance del suelo (no humedad volumetrica)', color: '#168d82' }] },
+        { key: 'aguaDisponiblePct', name: 'Balance del suelo (no humedad volumetrica)', color: '#168d82', minValue: 0, maxValue: 100 }], summaries: [
+        { key: 'aguaDisponiblePct', label: 'Disponibilidad promedio', unit: '%', operation: 'mean', minValue: 0, maxValue: 100 },
+        { key: 'aguaDisponiblePct', label: 'Minima disponibilidad', unit: '%', operation: 'min', minValue: 0, maxValue: 100 },
+        { key: 'aguaDisponiblePct', label: 'Ultimo dato disponible', unit: '%', operation: 'latest', minValue: 0, maxValue: 100 },
+      ], note: 'Porcentaje de agua disponible estimado por el balance del suelo. No es una medicion de humedad volumetrica de sonda.' },
     ];
     const charts = panels.map(panel => renderHistoryChart({ ...panel, points, from: Date.parse(from), to: Date.parse(to) })).join('');
-    return `<p class="section-copy">${days.length} jornada(s) con serie consolidada. ${days.length ? `Datos disponibles: ${this.escapeHtml(days[0].fecha)} a ${this.escapeHtml(days.at(-1)!.fecha)}.` : ''} Los huecos no se convierten en cero ni se unen; se excluye el pronostico. Los acumulados conservan su biofix original y no se reinician al recortar el informe.</p><div class="thermal-charts">${charts}</div>`;
+    return `<p class="section-copy">${points.length} jornada(s) con serie consolidada. Cada grafico amplia las fechas con valores disponibles; el resumen indica cuantos dias del periodo tienen dato. Los huecos no se convierten en cero ni se unen; se excluye el pronostico.</p><div class="thermal-charts history-charts">${charts}</div>`;
   }
 
   private renderHistoricoSanitario(predicciones: IPrediccion[] = [], siembra?: ISiembra): string {
@@ -4159,9 +4200,13 @@ export class LotesService {
       )}));
     // Historial separado: nunca modifica el resumen de riesgo actual del lote.
     if (!lines.size) return '<p>Sin serie sanitaria operativa disponible para graficar en este periodo.</p>';
-    return `<h3>Historico de indicadores sanitarios</h3><p class="section-copy">Resultados publicados por cada motor en escala 0–100; no equivalen a una medicion de dano ni a una probabilidad calibrada. Se excluyen lecturas experimentales o no operativas.</p><div class="thermal-charts">${[...lines.values()].map(line => renderHistoryChart({
-      title: line.name, unit: 'Indice /100', lines: [line], points,
+    return `<h3>Historico de indicadores sanitarios</h3><p class="section-copy">Resultados publicados por cada motor en escala 0–100; no equivalen a una medicion de dano ni a una probabilidad calibrada. Se excluyen lecturas experimentales o no operativas.</p><div class="thermal-charts history-charts">${[...lines.values()].map(line => renderHistoryChart({
+      title: line.name, unit: 'Indice /100', lines: [{ ...line, minValue: 0, maxValue: 100 }], points,
       from: Date.parse(new Date(period.desde).toISOString().slice(0, 10)), to: period.hasta, bounds: [0, 100],
+      summaries: [
+        { key: line.key, label: 'Ultimo indicador publicado', unit: '/100', operation: 'latest', minValue: 0, maxValue: 100 },
+        { key: line.key, label: 'Maximo del periodo', unit: '/100', operation: 'max', minValue: 0, maxValue: 100 },
+      ],
     })).join('')}</div>`;
   }
 
@@ -4639,9 +4684,21 @@ export class LotesService {
       ${dateLabels()}
     </svg>`;
 
-    return `<div class="thermal-charts">
-      <article class="thermal-chart"><header><strong>Evolucion acumulada</strong><small>Temperaturas minima y maxima dan contexto; HF, Utah y CP conservan escalas independientes.</small></header>${accumulatedSvg}</article>
-      <article class="thermal-chart"><header><strong>Aporte diario</strong><small>Utah se calcula hora a hora; temperaturas mayores a 15,9 C pueden descontar unidades.</small></header>${dailySvg}</article>
+    const summaryPoints = serie.map(d => ({ date: d.fecha, values: { ...d } }));
+    const summaryRange = { points: summaryPoints, from: Date.parse(serie[0].fecha), to: Date.parse(serie.at(-1)!.fecha) };
+    const accumulatedSummary = renderHistorySummary({ ...summaryRange, summaries: [
+      { key: 'horasFrioAcumuladas', label: 'Ultimo acumulado HF', unit: 'HF', operation: 'latest', minValue: 0 },
+      { key: 'unidadesUtahAcumuladas', label: 'Ultimo acumulado Utah', unit: 'UF', operation: 'latest' },
+      { key: 'porcionesFrioAcumuladas', label: 'Ultimo acumulado CP', unit: 'CP', operation: 'latest', minValue: 0, decimals: 2 },
+    ], note: 'Acumulados originales del motor, sin sumarlos entre si ni reiniciarlos. Cobertura sobre las fechas de la serie de frio mostrada.' });
+    const dailySummary = renderHistorySummary({ ...summaryRange, summaries: [
+      { key: 'horasFrio', label: 'Mayor aporte diario HF', unit: 'HF', operation: 'max', minValue: 0 },
+      { key: 'unidadesUtah', label: 'Dias con descuento Utah', unit: 'dias', operation: 'below', threshold: 0 },
+      { key: 'porcionesFrio', label: 'Mayor aporte diario CP', unit: 'CP', operation: 'max', minValue: 0, decimals: 2 },
+    ], note: 'El descuento Utah cuenta dias con aporte neto negativo, no horas. HF, UF y CP son modelos independientes, no unidades convertibles entre si.' });
+    return `<div class="thermal-charts history-charts">
+      <article class="thermal-chart"><header><strong>Evolucion acumulada</strong><small>Temperaturas minima y maxima dan contexto; HF, Utah y CP conservan escalas independientes.</small></header>${accumulatedSvg}${accumulatedSummary}</article>
+      <article class="thermal-chart"><header><strong>Aporte diario</strong><small>Utah se calcula hora a hora; temperaturas mayores a 15,9 C pueden descontar unidades.</small></header>${dailySvg}${dailySummary}</article>
     </div>`;
   }
 
