@@ -9,7 +9,6 @@ import {
 } from 'modelos/src';
 import { HelperService } from '../../auxiliares/helper';
 import { ResultadoRiegoV12 } from './riego-v12.engine';
-import { DemandaRiegoDia } from './riego-demanda-canonica';
 
 export function calcularRiegoV13Estimado(params: {
   siembra: ISiembra;
@@ -18,19 +17,18 @@ export function calcularRiegoV13Estimado(params: {
   crono: ICrono;
   lluviaHistorica: IClimaEstacionMeteorologica[];
   pronostico7Dias: IPronosticoEstacionMeteorologica[];
-  demandaCanonica: DemandaRiegoDia[];
 }): ResultadoRiegoV12 {
   const pronostico7Dias = (params.pronostico7Dias || []).slice(0, 7);
   const lluviaHistorica = params.lluviaHistorica || [];
-  const et0Promedio = HelperService.getEt0Promedio(pronostico7Dias.map(p => ({ ...p, et0: params.demandaCanonica.find(d => d.fecha === p.fecha?.slice(0, 10))?.et0 })));
+  const et0Promedio = HelperService.getEt0Promedio(pronostico7Dias);
   const umbralDeRiego = HelperService.getUmbralDeRiego(params.cultivo, et0Promedio);
+  const diasDesdeSiembra = diasDesde(params.siembra.fechaSiembra);
 
   const consumo = pronostico7Dias.map((pronostico, index) => {
-    const demanda = params.demandaCanonica.find(d => d.fecha === pronostico.fecha?.slice(0, 10));
-    if (!demanda) throw new Error('Falta demanda canonica para riego.');
-    const { kc, et0 } = demanda;
+    const kc = getKcSeguro(diasDesdeSiembra + index, params.cultivo, params.crono);
+    const et0 = Number(pronostico.et0 || et0Promedio || 0);
     const lluvia = lluviaProbable(pronostico);
-    const consumoAgua = redondear(demanda.consumoAgua, 2);
+    const consumoAgua = redondear(et0 * kc, 2);
     return {
       fecha: pronostico.fecha?.slice(0, 10) || fechaDesdeHoy(index),
       et0: redondear(et0, 2),
@@ -113,6 +111,15 @@ export function calcularRiegoV13Estimado(params: {
   };
 }
 
+function getKcSeguro(dias: number, cultivo: Cultivo, crono: ICrono): number {
+  try {
+    const kc = HelperService.getKc(dias, cultivo, crono);
+    return Number.isFinite(kc) ? redondear(kc, 2) : 0.85;
+  } catch (_error) {
+    return 0.85;
+  }
+}
+
 function lluviaProbable(pronostico: IPronosticoEstacionMeteorologica): number {
   const prob = Number(pronostico.probabilidadLluvia || 0);
   const lluvia = Number(pronostico.lluvia || 0);
@@ -138,6 +145,14 @@ function sumarLluviaReciente(
       .filter((item) => new Date(item.fecha || 0).getTime() >= desde)
       .map((item) => Number(item.lluvia?.sum ?? item.lluvia?.last ?? item.lluvia?.avg ?? 0)),
   );
+}
+
+function diasDesde(fecha?: string): number {
+  const desde = fecha ? new Date(fecha).getTime() : Date.now();
+  if (!Number.isFinite(desde)) {
+    return 0;
+  }
+  return Math.max(0, Math.floor((Date.now() - desde) / (24 * 60 * 60 * 1000)));
 }
 
 function fechaDesdeHoy(offset: number): string {

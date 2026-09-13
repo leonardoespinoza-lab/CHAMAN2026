@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import {
-  campaniaRiegoVigente,
   ISiembra,
   IListado,
   IQueryParam,
@@ -32,19 +31,21 @@ export class SiembrasService {
   //
 
   async listarSiembrasParaPredicciones(): Promise<ISiembra[]> {
+    const fechaHace6Meses = new Date();
+    fechaHace6Meses.setMonth(fechaHace6Meses.getMonth() - 6);
     const filter = {
-      activa: { $ne: false },
+      fechaSiembra: {
+        $gt: fechaHace6Meses,
+      },
       fechaCosecha: { $eq: null },
     };
     const query: IQueryParam = {
-      select: '_id fechaSiembra fechaCosecha activa idSemilla idLote registrosFenologicos',
-      populate: 'semilla',
-      limit: 0,
+      select: '_id',
       filter: JSON.stringify(filter),
       sort: '-fechaSiembra',
     };
     const listado = await this.repository.get(query);
-    return listado.datos.filter(s => campaniaRiegoVigente(s));
+    return listado.datos;
   }
 
   async listarSiembrasParaPrediccionesSanitarias(): Promise<ISiembra[]> {

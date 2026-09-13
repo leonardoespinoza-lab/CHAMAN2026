@@ -121,12 +121,7 @@ function crearContexto(options: { sueloConfirmadoPorUsuario: boolean }) {
   const httpsService = { send: jest.fn().mockResolvedValue(undefined) };
   const service = new RiegoService(
     siembrasService as any,
-    { getAgrometeorologiaSiembra: jest.fn().mockResolvedValue({
-      series: [0, 1, 2].map(dia => ({
-        date: new Date(ahora + dia * 86400000).toISOString().slice(0, 10),
-        metrics: { et0Mm: 3, kc: 1, etcMm: 3 },
-      })),
-    }) } as any,
+    {} as any,
     lotesService as any,
     prediccionRiegoService as any,
     {} as any,

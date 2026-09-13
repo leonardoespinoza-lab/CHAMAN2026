@@ -184,7 +184,7 @@ export class AlgoritmosService {
         nombre: 'Recomendacion de riego',
         estado: 'auditable',
         descripcion:
-          'Motor V12: requiere lanza/sonda de humedad, cruza dia/noche, raices, capacidad de campo, PMP, ET0, Kc y lluvia efectiva.',
+          'El motor productivo evalua sensor, raices, suelo y clima. El banco de esta pantalla es una simulacion orientativa con Kc manual; no reproduce la validacion completa del perfil Sentek ni guarda una recomendacion real.',
         inputs: [
           'Lanza de humedad de suelo por profundidad',
           'Capacidad de campo estimada o cargada',

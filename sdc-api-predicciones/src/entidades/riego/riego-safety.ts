@@ -1,5 +1,4 @@
 import {
-  campaniaRiegoVigente,
   IClimaEstacionMeteorologica,
   ILote,
   IPronosticoEstacionMeteorologica,
@@ -235,7 +234,13 @@ function lecturaValida(
 }
 
 function campaniaVigente(siembra: ISiembra, ahora: Date): boolean {
-  return campaniaRiegoVigente(siembra, ahora);
+  if (siembra.activa === false || !!siembra.fechaCosecha) return false;
+  const fechaSiembra = new Date(siembra.fechaSiembra || '').getTime();
+  if (!Number.isFinite(fechaSiembra) || fechaSiembra > ahora.getTime())
+    return false;
+  const limite = new Date(ahora);
+  limite.setMonth(limite.getMonth() - 6);
+  return fechaSiembra >= limite.getTime();
 }
 
 function humedadLegacyFresca(

@@ -245,7 +245,6 @@ describe('RiegoService - entradas agronomicas de suelo', () => {
 
     const resultado = calcularRiegoV12({
       siembra: { fechaSiembra: '2026-05-05' } as any,
-      demandaCanonica: [{ fecha: '2026-07-15', et0: 3, kc: 1, consumoAgua: 3 }],
       lote: loteCanonico,
       cultivo: 'Trigo',
       crono: undefined as any,

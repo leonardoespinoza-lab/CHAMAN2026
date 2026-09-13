@@ -4,6 +4,8 @@
 
 Revision de codigo general, consulta de registros de Produccion en modo lectura y correcciones **locales**. No se hizo push, despliegue, migracion, reproceso de Produccion ni envio real de alertas. Rama: `codex/phenology-report-review-2026-09-13`, base `52dec253`.
 
+**Estado vigente tras la aclaracion del usuario:** la sustitucion general de demanda de riego y huella del segundo bloque NO integra la propuesta operativa. Se preservo en `codex/hydric-canonical-proposal-2026-09-13` (`1cf874da`) y se restablecieron los algoritmos anteriores a ese bloque, sin reescribir historia. Ver [separacion y comparacion por cultivo](hydric-compatibility-review-2026-09-13.md). Las secciones anteriores y el segundo bloque se conservan como historial del trabajo, no como instrucciones de despliegue.
+
 El usuario definio que el inicio registrado de brotacion debe habilitar GDD en los perennes. Se implemento para todos los perennes del catalogo actual: Vid, Peral, Pecan y Manzano. No se agregaron cultivos ni parametros termicos nuevos.
 
 ## Hallazgos principales
@@ -82,7 +84,9 @@ Tener un catalogo amplio no demuestra exactitud fenologica de cada variedad. Con
 
 Antes de publicar: probar cambios de etapa completos en Testing y preparar commits por servicio contra el SHA realmente desplegado. Respaldar y recuperar solo las siembras aprobadas. No promover el monorepo completo ni modificar datos contradictorios por inferencia.
 
-## Segundo bloque local: conexiones hidricas y confirmacion asincrona
+## Segundo bloque local: propuesta hidrica apartada y confirmacion asincrona conservada
+
+La unificacion hidrica y el requisito de brotacion para habilitar riego descritos en este bloque fueron apartados posteriormente. Siguen vigentes la consulta de finalizacion, el refresco de pantalla y el POST interno de recalculo sin envios HTTPS, que ahora ejecuta el algoritmo de riego anterior. No interpretar este bloque historico como autorizacion para sustituir Kc/ETc.
 
 - Riego V12 (sensor) y V13 (balance orientativo) reciben ETc y Kc diarios del motor canonico. Se cotejan fechas, duplicados, valores finitos y vigencia respecto de la ultima edicion fenologica. No hay fallback silencioso a Kc por edad de plantacion ni ET0 de otra fuente. En perennes se exige etapa observada o proyeccion anclada a campo.
 - Se conservan las formulas de dosis, perfil fisico Sentek, frescura 12/12, CC/PMP, eficiencia, area mojada y bloqueo cuando no se valida zona radicular. Sin demanda canonica valida se invalida la recomendacion anterior, no se publica un cero como ausencia real de demanda.

@@ -346,17 +346,6 @@ export function revisionResultadosFenologicos(siembra?: ISiembra): string {
   return `${revisionFenologica(siembra)}|${siembra?.calculoFenologico?.completadoEn || ''}`;
 }
 
-/** La edad de una plantacion perenne no es la edad de su temporada activa. */
-export function campaniaRiegoVigente(siembra?: ISiembra, ahora = new Date()): boolean {
-  if (!siembra || siembra.activa === false || siembra.fechaCosecha) return false;
-  const fecha = new Date(siembra.fechaSiembra || '').getTime();
-  if (!Number.isFinite(fecha) || fecha > ahora.getTime()) return false;
-  if (esCultivoPerenne(siembra.semilla?.cultivo)) return !!obtenerInicioForzadoObservado(siembra, ahora);
-  const limite = new Date(ahora);
-  limite.setMonth(limite.getMonth() - 6);
-  return fecha >= limite.getTime();
-}
-
 function fechaValida(value?: string | Date): Date | undefined {
   if (!value) return undefined;
   const parsed = new Date(value);

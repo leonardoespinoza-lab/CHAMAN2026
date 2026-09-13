@@ -179,17 +179,17 @@ export class AlgoritmosComponent {
     riego: {
       title: 'Banco de recomendacion de riego',
       description:
-        'Audita agua util real, deficit a capacidad de campo, raices activas, ETc, lluvia efectiva y limite operativo de riego.',
+        'Simulacion orientativa con humedad, raices y Kc ingresados manualmente. Permite explorar el balance, pero no ejecuta el motor productivo ni valida las 12 capas de una sonda Sentek.',
       formula: 'Riego recomendado = deficit util + ETc proyectada - lluvia efectiva, limitado por capacidad operativa',
       endpoint: 'POST /algoritmos/riego/simular',
-      persistencia: 'Motor productivo: prediccion diaria sobre siembra, sensor, suelo y clima',
+      persistencia: 'Sin persistencia. La recomendacion del lote se calcula por separado con cultivo, cronograma, sensor, suelo y clima.',
       fields: [
         { key: 'humedadSueloPct', label: 'Humedad suelo', type: 'number', suffix: '%' },
         { key: 'capacidadCampoPct', label: 'Capacidad de campo', type: 'number', suffix: '%' },
         { key: 'puntoMarchitezPct', label: 'Punto de marchitez', type: 'number', suffix: '%' },
         { key: 'profundidadRaicesCm', label: 'Profundidad raices', type: 'number', suffix: 'cm' },
         { key: 'et0MmDia', label: 'ET0 diaria', type: 'number', suffix: 'mm/dia' },
-        { key: 'kc', label: 'Kc cultivo', type: 'number' },
+        { key: 'kc', label: 'Kc cultivo', type: 'number', helper: 'Valor de prueba ingresado por el administrador; no se selecciona automaticamente del cultivo.' },
         { key: 'lluvia72h', label: 'Lluvia 72 h', type: 'number', suffix: 'mm' },
         { key: 'probabilidadLluviaPct', label: 'Probabilidad lluvia', type: 'number', suffix: '%' },
         { key: 'capacidadRiegoMmDia', label: 'Capacidad de riego', type: 'number', suffix: 'mm/dia' },

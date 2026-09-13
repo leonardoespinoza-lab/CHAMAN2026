@@ -8,7 +8,6 @@ import {
   aplicarEntradasAgronomicasSuelo,
   AGROMET_ENGINE_VERSION,
   ICreateSiembra,
-  ISiembra,
   IEntradasAgronomicasSuelo,
   IHuellaHidrica,
   IRegistroFenologico,
@@ -303,16 +302,16 @@ export class SiembrasService {
       lote,
       fertilizaciones,
       fumigaciones,
-      demandaCanonica: true,
     };
     const canonical = await this.getClimaCanonicoHuella(
       id,
       siembra.fechaSiembra,
       siembra.fechaCosecha || new Date().toISOString(),
-      siembra,
     );
     if (!canonical.clima.length) {
-      return this.algoritmosService.simularSeguimientoHuellaHidrica({ ...base, clima: [] });
+      return await this.algoritmosService.calcularSeguimientoHuellaHidrica(
+        base,
+      );
     }
     const seguimiento = this.algoritmosService.simularSeguimientoHuellaHidrica({
       ...base,
@@ -496,7 +495,6 @@ export class SiembrasService {
     idSiembra: string,
     desde?: string,
     hasta?: string,
-    siembra?: ISiembra,
   ): Promise<{ clima: DiaClimaHuella[]; fuentes: string[] }> {
     try {
       const active =
@@ -506,12 +504,10 @@ export class SiembrasService {
         );
       const start = String(desde || '').slice(0, 10);
       const end = String(hasta || '').slice(0, 10);
-      const ultimaEdicion = Math.max(0, ...(siembra?.registrosFenologicos || []).map(r => Date.parse(r.actualizadoEn || r.creadoEn || '') || 0));
       const rows = (active?.data || []).filter((row: any) => {
         const date = String(row?.fecha || '').slice(0, 10);
         return (
           !row?.esPronostico &&
-          (!ultimaEdicion || Date.parse(row.calculadoEn || '') >= ultimaEdicion) &&
           !!date &&
           (!start || date >= start) &&
           (!end || date <= end)
@@ -532,10 +528,8 @@ export class SiembrasService {
       return {
         clima: rows.map((row: any) => ({
           fecha: String(row.fecha).slice(0, 10),
-          lluviaMm: row.metricas?.precipitationMm,
-          et0Mm: row.metricas?.et0Mm,
-          kc: row.metricas?.kc,
-          etcMm: row.metricas?.etcMm,
+          lluviaMm: Math.max(0, Number(row.metricas?.precipitationMm || 0)),
+          et0Mm: Math.max(0, Number(row.metricas?.et0Mm || 0)),
         })),
         fuentes,
       };
@@ -558,14 +552,12 @@ export class SiembrasService {
       params.idSiembra,
       params.siembra.fechaSiembra,
       params.siembra.fechaCosecha,
-      params.siembra,
     );
     const base = {
       siembra: params.siembra,
       lote: params.lote,
       fertilizaciones: params.fertilizaciones,
       fumigaciones: params.fumigaciones,
-      demandaCanonica: true,
     };
     try {
       if (!canonical.clima.length) {
