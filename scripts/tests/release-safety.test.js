@@ -29,6 +29,15 @@ const GENERIC_FROZEN_IMAGE_DIGEST = `sha256:${'3'.repeat(64)}`;
 const SELECTIVE_ROLLBACK_IMAGE_DIGEST = `sha256:${'4'.repeat(64)}`;
 const RAILWAY_PROJECT_ID = '36dee457-e9f8-498d-a990-72b9728d63d5';
 const RAILWAY_ENVIRONMENT_ID = 'f616374e-b197-4acb-ba6b-15855d20e27a';
+const PRODUCTION_ENVIRONMENT_ID = 'd123c534-474e-438c-9e73-47489f811361';
+const productionGovernance = {
+  environment: 'production',
+  backupEvidence: 'production-logical-backup-test',
+  restoreRehearsalEvidence: 'production-local-restore-test',
+  branchProtectionVerified: true,
+  railwayWaitForCiVerified: true,
+  productionAutoDeployPaused: true,
+};
 
 function deploymentBaseline(environment, { promoteOnly = null } = {}) {
   const topology = loadTopology(path.join(__dirname, '..', '..'));
@@ -41,16 +50,15 @@ function deploymentBaseline(environment, { promoteOnly = null } = {}) {
     services: topology.services
       .filter((service) => service.selector.startsWith('sdc-'))
       .map((service, index) => {
-        const frozen = environment === 'testing'
-          && (service.role === 'lora'
-            || (promoteOnly && !promoteOnly.includes(service.role)));
+        const testingLora = environment === 'testing' && service.role === 'lora';
+        const frozen = testingLora || (promoteOnly && !promoteOnly.includes(service.role));
         return {
           role: service.role,
           service: service[environment],
-          deploymentId: service.role === 'lora' && frozen
+          deploymentId: testingLora
             ? FROZEN_DEPLOYMENT_ID
             : `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
-          ...(service.role === 'lora' && frozen
+          ...(testingLora
             ? {
                 observedSha: FROZEN_SHA,
                 imageDigest: FROZEN_IMAGE_DIGEST,
@@ -61,7 +69,7 @@ function deploymentBaseline(environment, { promoteOnly = null } = {}) {
                   observedSha: GENERIC_FROZEN_SHA,
                   imageDigest: GENERIC_FROZEN_IMAGE_DIGEST,
                   railwayProjectId: RAILWAY_PROJECT_ID,
-                  railwayEnvironmentId: RAILWAY_ENVIRONMENT_ID,
+                  railwayEnvironmentId: environment === 'production' ? PRODUCTION_ENVIRONMENT_ID : RAILWAY_ENVIRONMENT_ID,
                   railwayServiceId: `20000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
                   shaProvenance: 'railway-github-commit-hash',
                 }
@@ -501,7 +509,7 @@ test('--promote-only CSV is strict, deterministic and accepts only known non-LoR
   }
 });
 
-test('production rejects selective promotion and still promotes every code service', () => {
+test('production supports explicitly scoped promotion without changing the full-release default', () => {
   const governance = {
     environment: 'production',
     backupEvidence: 'mongo-logical-backup-20260828-1630z',
@@ -510,15 +518,65 @@ test('production rejects selective promotion and still promotes every code servi
     railwayWaitForCiVerified: true,
     productionAutoDeployPaused: true,
   };
-  assert.throws(
-    () => manifest({ ...governance, promoteOnly: ['meteo-worker'] }),
-    /sólo se permite en Testing/,
-  );
+  const selective = manifest({ ...governance, promoteOnly: ['api'] });
+  assert.equal(selective.services.filter(s => s.deploymentMode === 'promote').length, 1);
+  assert.equal(selective.services.filter(s => s.deploymentMode === 'frozen').length, 11);
+  const lora = selective.services.find(s => s.role === 'lora');
+  assert.equal(lora.railwayEnvironmentId, PRODUCTION_ENVIRONMENT_ID);
+  assert.equal(lora.shaProvenance, 'railway-github-commit-hash');
+  assert.equal(lora.expectedCliMessage, undefined);
+  assert.equal(lora.expectedSha, GENERIC_FROZEN_SHA);
   assert.ok(
     manifest(governance).services.every(
       (service) => service.deploymentMode === 'promote',
     ),
   );
+});
+
+test('selective Production keeps governance, environment, rollback and freshness gates mandatory', () => {
+  const options = { ...productionGovernance, promoteOnly: ['api'] };
+  for (const field of ['branchProtectionVerified', 'railwayWaitForCiVerified', 'productionAutoDeployPaused']) {
+    assert.throws(() => manifest({ ...options, [field]: false }), new RegExp(field));
+  }
+  for (const field of ['backupEvidence', 'restoreRehearsalEvidence']) {
+    assert.throws(() => manifest({ ...options, [field]: null }), /dataProtection/);
+  }
+  for (const role of ['web', 'lora']) {
+    const baseline = deploymentBaseline('production', options);
+    baseline.services.find(s => s.role === role).railwayEnvironmentId = RAILWAY_ENVIRONMENT_ID;
+    assert.throws(() => manifest({ ...options, deploymentBaseline: baseline }), /entorno Production/);
+  }
+  const baseline = deploymentBaseline('production', options);
+  baseline.services.find(s => s.role === 'api').observedSha = GENERIC_FROZEN_SHA;
+  assert.throws(() => manifest({ ...options, deploymentBaseline: baseline }), /rollback.sha/);
+  baseline.services.find(s => s.role === 'api').observedSha = ROLLBACK_SHA;
+  baseline.capturedAt = '2020-01-01T00:00:00.000Z';
+  assert.throws(() => manifest({ ...options, deploymentBaseline: baseline }), /vencido/);
+  const topology = loadTopology(path.join(__dirname, '..', '..'));
+  topology.codePromotion.productionTarget.railwayEnvironmentId = RAILWAY_ENVIRONMENT_ID;
+  assert.throws(() => manifest({ ...options, topology }), /no puede ser Testing/);
+});
+
+test('Production frozen verifier checks LoRa GitHub image and identity without touching MQTT', () => {
+  const value = manifest({ ...productionGovernance, promoteOnly: ['api'] });
+  const frozen = value.services.filter(s => s.deploymentMode === 'frozen');
+  const calls = [];
+  const runCommand = (executable, args) => {
+    calls.push(args[0]);
+    assert.notEqual(executable, 'git');
+    assert.notEqual(args[0], 'variables');
+    assert.equal(args[args.indexOf('--environment') + 1], PRODUCTION_ENVIRONMENT_ID);
+    if (args[0] === 'service') return JSON.stringify(frozen.map(s => ({ id: s.railwayServiceId, name: s.service })));
+    const service = frozen.find(s => s.railwayServiceId === args[args.indexOf('--service') + 1]);
+    assert(service);
+    return JSON.stringify([{ id: service.baselineDeploymentId, status: 'SUCCESS', createdAt: new Date().toISOString(), meta: { commitHash: service.expectedSha, imageDigest: service.expectedImageDigest } }]);
+  };
+  const evidence = verifyFrozenServicesLive(value, { railwayCli: 'railway-test', runCommand });
+  assert.equal(evidence.length, 11);
+  assert.equal(calls.filter(c => c === 'service').length, 1);
+  assert.equal(evidence.find(s => s.role === 'lora').mqttDisabled, undefined);
+  const lora = frozen.find(s => s.role === 'lora');
+  assert.throws(() => validateFrozenDeploymentList(lora, [{ id: lora.baselineDeploymentId, status: 'SUCCESS', createdAt: new Date().toISOString(), meta: { commitHash: lora.expectedSha, imageDigest: 'sha256:' + 'f'.repeat(64) } }]), /imagen Railway actual cambió/);
 });
 
 test('selective frozen baseline requires complete GitHub deployment identity', () => {
@@ -692,7 +750,7 @@ test('manifest policy cannot self-certify a different selective scope', () => {
     productionAutoDeployPaused: true,
   });
   production.policy.promoteOnlyRoles = ['meteo-worker'];
-  assert.throws(() => validateReleaseManifest(production, topology), /sólo se permite en Testing/);
+  assert.throws(() => validateReleaseManifest(production, topology), /fecha ISO válida/);
 });
 
 test('create-release-manifest CLI wires --promote-only into an immutable selective manifest', (t) => {

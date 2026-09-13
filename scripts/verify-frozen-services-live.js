@@ -25,7 +25,8 @@ function verifyFrozenServicesLive(
   } = {},
 ) {
   const frozen = manifest.services.filter((service) => service.deploymentMode === 'frozen');
-  const genericFrozen = frozen.filter((service) => service.role !== 'lora');
+  const isTestingLora = (service) => manifest.environment === 'testing' && service.role === 'lora';
+  const genericFrozen = frozen.filter((service) => !isTestingLora(service));
   if (genericFrozen.length) {
     const [{ railwayProjectId, railwayEnvironmentId }] = genericFrozen;
     for (const service of genericFrozen) {
@@ -33,7 +34,7 @@ function verifyFrozenServicesLive(
         service.railwayProjectId !== railwayProjectId
         || service.railwayEnvironmentId !== railwayEnvironmentId
       ) {
-        throw new Error('Los servicios frozen genéricos deben pertenecer al mismo proyecto/entorno Testing');
+        throw new Error('Los servicios frozen genéricos deben pertenecer al mismo proyecto/entorno');
       }
     }
     const rawServices = runCommand(
@@ -99,7 +100,7 @@ function verifyFrozenServicesLive(
     } catch {
       throw new Error(`${service.role}: Railway no devolvió JSON válido`);
     }
-    if (service.role !== 'lora') {
+    if (!isTestingLora(service)) {
       return validateFrozenDeploymentList(service, deployments);
     }
 

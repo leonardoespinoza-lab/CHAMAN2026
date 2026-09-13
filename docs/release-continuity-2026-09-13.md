@@ -81,3 +81,22 @@ La correccion `codex/report-season-review-2026-09-13` parte exactamente del API 
 - API: 90 suites / 586 pruebas aprobadas; TypeScript sin diagnosticos. QA con tres PDF completos: un snapshot previo de Testing de El Mirasol (128 filas y 15,6 GDD) y dos fixtures explicitamente sinteticos, perenne sin registro y anual cerrado. Los fixtures no acreditan datos nuevos ni resultados de La Costa en Produccion.
 
 El usuario autorizo completar y promover; no autorizo copiar mas documentos de Testing a Produccion. La comprobacion de gobernanza encontro `main` sin proteccion y sin rulesets de GitHub. El preflight de Produccion requiere esos controles, y el manifiesto selectivo actual solo admite Testing. No declarar verificaciones inexistentes ni usar un despliegue manual para omitirlas. El estado efectivo de cada despliegue se documentara en recibos separados; esta nota no acredita promocion.
+# Controles de promoción autorizados — 13/09/2026
+
+La extensión del control de release permite `--promote-only` también en Producción,
+con el UUID de ese entorno explícito, inventario completo y una imagen de rollback
+por cada paso. No habilita desplegar sin CI, protección de rama, respaldo ni ensayo
+de restauración. Testing conserva su excepción permanente de LoRa; LoRa productivo
+se verifica por su propio commit/imagen, sin aplicar la configuración MQTT de Testing.
+
+El pase de fenología e informes se limita a datos → clima → predicciones → api → web.
+Los otros siete servicios de código y la infraestructura deben permanecer intactos.
+Cada servicio promovido usa el mismo SHA final, primero comprobado en Testing.
+No se copia Mongo Testing a Producción ni se modifican registros fenológicos.
+
+GitHub `main` exige los 16 checks del workflow, también para administradores, y
+rechaza force-push y borrado. Railway desactiva autodeploy quitando el trigger, sin
+detener el deployment activo: se conserva un respaldo de rama/trigger. Antes de
+cada pase manual se comprueba el CI del SHA exacto y se configura el trigger del
+servicio objetivo con `checkSuites=true`. Nunca se usa un despliegue global del entorno.
+La pausa y su restitución deben verificar versiones, variables y servicios ajenos.

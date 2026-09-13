@@ -4,7 +4,11 @@
     "testingBranchPattern": "^(codex|staging)/",
     "productionBranch": "main",
     "requireSameCommitAcrossPromotedStatelessServices": true,
-    "copyBuiltFilesBetweenEnvironments": false
+    "copyBuiltFilesBetweenEnvironments": false,
+    "productionTarget": {
+      "railwayProjectId": "36dee457-e9f8-498d-a990-72b9728d63d5",
+      "railwayEnvironmentId": "d123c534-474e-438c-9e73-47489f811361"
+    }
   },
   "dataPolicy": {
     "cloneDirection": "production-to-testing",

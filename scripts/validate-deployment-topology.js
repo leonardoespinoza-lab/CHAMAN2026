@@ -21,6 +21,11 @@ const requiredRoles = [
   'redis',
 ];
 const issues = [];
+try {
+  require('./release-safety').assertPromotionTopology(manifest);
+} catch (error) {
+  issues.push(error.message);
+}
 
 function duplicateValues(values) {
   return [...new Set(values.filter((value, index) => values.indexOf(value) !== index))];

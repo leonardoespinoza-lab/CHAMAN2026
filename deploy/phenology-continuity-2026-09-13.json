@@ -29,6 +29,11 @@
     "sdc-datos/src/entidades/algoritmos/huella-hidrica.engine.ts"
   ],
   "allowedChanges": [
+    "deploy/environment-topology.json",
+    "scripts/release-safety.js",
+    "scripts/verify-frozen-services-live.js",
+    "scripts/validate-deployment-topology.js",
+    "scripts/tests/release-safety.test.js",
     "deploy/phenology-continuity-2026-09-13.json",
     "docs/hydric-compatibility-review-2026-09-13.md",
     "docs/phenology-connections-audit-2026-09-13.md",
