@@ -5,7 +5,7 @@ import {
   VariableMeteorologicaNormalizada,
 } from "../entidades";
 
-export const AGROMET_ENGINE_VERSION = "agromet-1.5.0";
+export const AGROMET_ENGINE_VERSION = "agromet-1.5.1";
 export const AGROMET_DEFAULT_PARAMETERS_VERSION = "agromet-reference-2026.07.5";
 
 export interface ICalculoGddParams {

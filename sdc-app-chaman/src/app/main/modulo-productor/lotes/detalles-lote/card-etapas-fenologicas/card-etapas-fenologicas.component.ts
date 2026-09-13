@@ -7,6 +7,7 @@ import { IDetallesLote } from '../detalles-lote.component';
 import {
   esPlantacionPerenneJoven,
   esCultivoPerenne,
+  esEtapaBrotacion,
   getEdadPerenneAnios,
   getFenologiaJuvenilPerenne,
   getEtapasPerennesReferencia,
@@ -434,7 +435,10 @@ export class CardEtapasFenologicasComponent implements OnInit, OnChanges, OnDest
           return 'Ancla la etapa observada sin activar automaticamente un modelo termico.';
       }
     }
-    return 'Corrige la fecha real de inicio y reancla la proyeccion posterior sin borrar el historial.';
+    if (esCultivoPerenne(this.siembra?.semilla?.cultivo) && esEtapaBrotacion(this.registroForm.etapa)) {
+      return 'Registra el inicio real de brotacion y habilita los grados-dia desde esa fecha en esta campania. Floracion o cuaje posteriores no reinician el acumulado. Los motores se actualizan en segundo plano.';
+    }
+    return 'Corrige la fecha real de inicio y reancla la proyeccion posterior sin borrar el historial. Los motores se actualizan en segundo plano.';
   }
 
   public get puedeRegistrarFenologiaCampo(): boolean {

@@ -1608,7 +1608,7 @@ describe('AgrometeorologicalEngineService', () => {
     expect(results[1].metricas.gddAccumulated).toBeUndefined();
     expect(results[2].metricas.gddAccumulated).toBeUndefined();
     expect(results[2].advertencias.join(' ')).toContain(
-      'quedan bloqueados hasta registrar un biofix',
+      'quedan pendientes hasta registrar el inicio de brotacion',
     );
     jest.useRealTimers();
   });

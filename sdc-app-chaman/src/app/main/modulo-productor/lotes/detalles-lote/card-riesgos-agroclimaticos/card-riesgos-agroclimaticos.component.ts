@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
-import { IRiesgoAgroclimatico, IResumenRiesgosAgroclimaticos, ISiembra } from 'modelos/src';
+import { IRiesgoAgroclimatico, IResumenRiesgosAgroclimaticos, ISiembra, revisionFenologica } from 'modelos/src';
 import { ClimaService } from '../../../../../auxiliares/http/clima.service';
 import { PrediccionService } from '../../../../../auxiliares/http/prediccion.service';
 import { SharedModule } from '../../../../../auxiliares/shared.module';
@@ -26,6 +26,7 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
   public verDetalle = false;
 
   private ultimoKey = '';
+  private requestSequence = 0;
 
   constructor(
     private climaService: ClimaService,
@@ -76,13 +77,19 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
   }
 
   public async cargar(force = false): Promise<void> {
+    const sequence = ++this.requestSequence;
     if (!this.mostrar || !this.centro) {
       this.riesgos = undefined;
+      this.loading = false;
       return;
     }
 
     const key = this.requestKey();
     if (!force && key === this.ultimoKey && this.riesgos) return;
+    if (key !== this.ultimoKey) {
+      this.riesgos = undefined;
+      this.cerrarDetalle();
+    }
 
     const cached = CardRiesgosAgroclimaticosComponent.cache.get(key);
     if (!force && cached) {
@@ -96,13 +103,16 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
     if (!force && pending) {
       this.loading = !this.riesgos;
       try {
-        this.riesgos = await pending;
+        const response = await pending;
+        if (sequence !== this.requestSequence) return;
+        this.riesgos = response;
         this.ultimoKey = key;
         this.error = undefined;
       } catch (error: any) {
+        if (sequence !== this.requestSequence) return;
         this.error = this.normalizarErrorClimatico(error);
       } finally {
-        this.loading = false;
+        if (sequence === this.requestSequence) this.loading = false;
       }
       return;
     }
@@ -121,14 +131,17 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
             fuenteAjusteVarietal: this.siembra?.semilla?.sensibilidadHelada?.fuente,
           });
       CardRiesgosAgroclimaticosComponent.pending.set(key, request);
-      this.riesgos = await request;
+      const response = await request;
+      if (sequence !== this.requestSequence) return;
+      this.riesgos = response;
       this.ultimoKey = key;
       CardRiesgosAgroclimaticosComponent.cache.set(key, this.riesgos);
     } catch (error: any) {
+      if (sequence !== this.requestSequence) return;
       this.error = this.normalizarErrorClimatico(error);
     } finally {
       CardRiesgosAgroclimaticosComponent.pending.delete(key);
-      this.loading = false;
+      if (sequence === this.requestSequence) this.loading = false;
     }
   }
 
@@ -193,6 +206,9 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
 
   private requestKey(): string {
     return [
+      this.lote?._id,
+      this.siembra?._id,
+      revisionFenologica(this.siembra),
       this.centro?.lat,
       this.centro?.lng,
       this.siembra?.semilla?.cultivo,
@@ -201,6 +217,7 @@ export class CardRiesgosAgroclimaticosComponent implements OnChanges {
       this.siembra?.semilla?.fenologiaReferencia?.edadProductivaDesdeAnios,
       this.siembra?.semilla?.sensibilidadHelada?.ajusteUmbralC,
       this.siembra?.semilla?.sensibilidadHelada?.fuente,
+      JSON.stringify(this.siembra?.semilla?.sensibilidadHelada?.ajustesPorFase),
       new Date().toISOString().slice(0, 10),
     ].join('|');
   }

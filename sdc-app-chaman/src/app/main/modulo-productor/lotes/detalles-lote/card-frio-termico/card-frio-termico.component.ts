@@ -14,6 +14,8 @@ import {
   IResolucionFichaTermica,
   fechaEfectivaRegistroFenologico,
   obtenerInicioTemporadaFrioObservado,
+  obtenerInicioForzadoObservado,
+  revisionFenologica,
   resolverFichaTermicaVarietal,
 } from 'modelos/src';
 import { ChartComponent } from '../../../../../auxiliares/componentes/chart/chart.component';
@@ -438,26 +440,27 @@ export class CardFrioTermicoComponent implements OnChanges {
     }
     this.loading = true;
     this.error = undefined;
+    const key = `${id}|${revisionFenologica(this.siembra)}`;
     try {
       if (force) {
         const response = await this.siembraService.reprocesarAgrometeorologia(id, true);
         if (sequence !== this.requestSequence) return;
         this.data = response;
-        CardFrioTermicoComponent.agrometCache.set(id, response);
+        CardFrioTermicoComponent.agrometCache.set(key, response);
       } else {
-        const cached = CardFrioTermicoComponent.agrometCache.get(id);
+        const cached = CardFrioTermicoComponent.agrometCache.get(key);
         if (cached) {
           this.data = cached;
         } else {
-          let request = CardFrioTermicoComponent.agrometPending.get(id);
+          let request = CardFrioTermicoComponent.agrometPending.get(key);
           if (!request) {
             request = this.siembraService.agrometeorologia(id);
-            CardFrioTermicoComponent.agrometPending.set(id, request);
+            CardFrioTermicoComponent.agrometPending.set(key, request);
           }
           const response = await request;
           if (sequence !== this.requestSequence) return;
           this.data = response;
-          CardFrioTermicoComponent.agrometCache.set(id, response);
+          CardFrioTermicoComponent.agrometCache.set(key, response);
         }
       }
       if (sequence !== this.requestSequence) return;
@@ -466,7 +469,7 @@ export class CardFrioTermicoComponent implements OnChanges {
       if (sequence !== this.requestSequence) return;
       this.error = error?.error?.message || error?.message || 'No se pudo leer la acumulación térmica.';
     } finally {
-      CardFrioTermicoComponent.agrometPending.delete(id);
+      CardFrioTermicoComponent.agrometPending.delete(key);
       if (sequence === this.requestSequence) this.loading = false;
     }
   }
@@ -606,12 +609,7 @@ export class CardFrioTermicoComponent implements OnChanges {
   }
 
   private get tieneBiofixForzado(): boolean {
-    return ((this.siembra as any)?.registrosFenologicos || []).some((record: any) => {
-      if (record?.estadoRegistro === 'anulado' || record?.tipoEvento !== 'biofix') return false;
-      return (record?.objetivosBiofix || []).some((objective: string) =>
-        ['inicio_forzado', 'reinicio_gdd_forzado'].includes(String(objective))
-      );
-    });
+    return !!obtenerInicioForzadoObservado(this.siembra, new Date());
   }
 
   private valorFrioLegacy(key: 'horasFrioEfectivas' | 'porcionesFrio' | 'factorEfectivoActual'): number | undefined {

@@ -38,6 +38,8 @@ import {
   normalizarContenidoVolumetrico,
   numeroFinito,
   obtenerInicioTemporadaFrioObservado,
+  obtenerInicioForzadoObservado,
+  fechaEfectivaRegistroFenologico,
   PARAMETROS_AGROMETEOROLOGICOS_REFERENCIA,
   promedioPonderadoZonaRadicular,
   resolverFenologiaTermicaArveja,
@@ -861,8 +863,8 @@ export class AgrometeorologicalEngineService {
     if (esCultivoPerenne(crop)) {
       globalWarnings.push(
         thermalStart
-          ? `En perennes el frio se acumula desde ${cycleStart}; los GDD de forzado comienzan ${thermalStart} por biofix de campo.`
-          : `En perennes el frio se acumula desde ${cycleStart}; los GDD de forzado biologico quedan bloqueados hasta registrar un biofix de inicio de forzado. No se usa una fecha calendario generica para atravesar primavera, verano y dormancia.`,
+          ? `En perennes el frio se acumula desde ${cycleStart}; los GDD de forzado comienzan ${thermalStart} desde brotacion registrada o biofix explicito de campo.`
+          : `En perennes el frio se acumula desde ${cycleStart}; los GDD quedan pendientes hasta registrar el inicio de brotacion o un biofix explicito de forzado. No se inicia por yema hinchada ni por una fecha calendario generica.`,
       );
     }
     const coldThermal = this.calculateColdThermalSeries(
@@ -4278,47 +4280,10 @@ export class AgrometeorologicalEngineService {
     if (!esCultivoPerenne(siembra.semilla?.cultivo)) {
       return String(siembra.fechaSiembra || '').slice(0, 10);
     }
-    const seasonalSearchStart = this.perennialCampaignStart(referenceDate);
-    const targetDate = new Date(`${referenceDate}T12:00:00.000Z`);
-    const biofix = this.activePhenologyRecords(siembra.registrosFenologicos)
-      .filter((record) => {
-        if (record.tipoEvento !== 'biofix') return false;
-        if (!this.phenologyRecordCanDriveDecision(record)) return false;
-        const objectives = record.objetivosBiofix || [];
-        if (
-          !objectives.some((objective) =>
-            ['inicio_forzado', 'reinicio_gdd_forzado'].includes(
-              String(objective),
-            ),
-          )
-        ) {
-          return false;
-        }
-        if (
-          !registroFenologicoPerteneceCampania(
-            siembra,
-            record,
-            targetDate,
-          )
-        ) {
-          return false;
-        }
-        const date = String(
-          record.fechaInicioEtapa ||
-            record.fechaObservacion ||
-            record.fecha ||
-            '',
-        ).slice(0, 10);
-        return !!date && date >= seasonalSearchStart && date <= referenceDate;
-      })
-      .map((record) =>
-        String(
-          record.fechaInicioEtapa || record.fechaObservacion || record.fecha,
-        ).slice(0, 10),
-      )
-      .sort()
-      .pop();
-    return biofix;
+    const inicio = obtenerInicioForzadoObservado(
+      siembra, new Date(`${referenceDate}T23:59:59.999Z`),
+    );
+    return inicio ? fechaEfectivaRegistroFenologico(inicio)?.slice(0, 10) : undefined;
   }
 
   private hasCurrentCampaignBiofix(

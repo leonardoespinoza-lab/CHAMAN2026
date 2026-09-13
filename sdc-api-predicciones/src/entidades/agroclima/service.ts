@@ -8,6 +8,8 @@ import {
   ISiembra,
   NivelRiesgoAgroclimatico,
   resolverContextoHeladaFenologico,
+  obtenerRegistroFenologicoDecisorioEnFecha,
+  fechaEfectivaRegistroFenologico,
 } from 'modelos/src';
 import {
   OPEN_METEO_FORECAST_BASE_URL,
@@ -75,7 +77,7 @@ export class AgroclimaService {
         cultivo,
         generadoEn: new Date().toISOString(),
         helada: this.calcularRiesgoHelada(serie, siembra),
-        granizo: this.calcularRiesgoGranizo(serie),
+        granizo: this.calcularRiesgoGranizo(serie, siembra),
       },
     };
   }
@@ -105,7 +107,7 @@ export class AgroclimaService {
         tipo: 'helada',
         categoria: 'agroclimatica',
         motor: 'riesgos-agroclimaticos',
-        versionMotor: 'v1',
+        versionMotor: 'v1.1-fenologia-campo',
         lectura: riesgos.helada.lectura,
         recomendacion: riesgos.helada.recomendacion,
         calidadDatos: {
@@ -300,11 +302,15 @@ export class AgroclimaService {
     }
 
     const dias = serie.map((dia) => {
+      const observado = obtenerRegistroFenologicoDecisorioEnFecha(
+        siembra, new Date(`${dia.fecha.slice(0, 10)}T23:59:59.999Z`),
+      );
       const contexto = resolverContextoHeladaFenologico({
         cultivo,
         variedad: siembra.semilla?.variedad,
         fecha: dia.fecha,
         fechaSiembra: siembra.fechaSiembra,
+        etapaFenologica: observado?.etapa,
         etapasFenologia: siembra.semilla?.fenologiaReferencia?.etapas,
         etapasJuveniles: siembra.semilla?.fenologiaReferencia?.etapasJuveniles,
         edadProductivaDesdeAnios:
@@ -345,6 +351,9 @@ export class AgroclimaService {
         ajusteVarietalC: contexto?.ajusteVarietalC,
         fuenteAjusteVarietal: contexto?.fuenteAjusteVarietal,
         evidencia: [
+          observado
+            ? `Etapa registrada en campo el ${fechaEfectivaRegistroFenologico(observado)?.slice(0, 10)}; no reemplaza una verificacion local.`
+            : 'Etapa de referencia por calendario; pendiente de confirmacion en campo.',
           dia.temperaturaMin !== undefined
             ? `Temperatura minima prevista ${dia.temperaturaMin} C`
             : 'Sin temperatura minima disponible',
@@ -408,8 +417,12 @@ export class AgroclimaService {
 
   private calcularRiesgoGranizo(
     serie: ISerieFrioTermicoDia[],
+    siembra?: ISiembra,
   ): IRiesgoAgroclimatico {
     const dias = serie.map((dia) => {
+      const observado = obtenerRegistroFenologicoDecisorioEnFecha(
+        siembra, new Date(`${dia.fecha.slice(0, 10)}T23:59:59.999Z`),
+      );
       const evaluacion = this.evaluarGranizoAgroclimatico(dia);
       const posibilidad = evaluacion.posibilidadPct;
       const nivel: NivelRiesgoAgroclimatico =
@@ -426,7 +439,11 @@ export class AgroclimaService {
         cape: dia.cape,
         showers: dia.showers,
         rafagaViento: dia.rafagaViento,
-        evidencia: evaluacion.evidencia,
+        etapaFenologica: observado?.etapa,
+        contextoFenologico: observado ? `Etapa registrada: ${observado.etapa}. Contexto para inspeccion de danos; no modifica la senal meteorologica.` : undefined,
+        evidencia: [...evaluacion.evidencia, ...(observado ? [
+          `Etapa registrada: ${observado.etapa}. No se estima porcentaje de dano al cultivo por granizo.`,
+        ] : [])],
         calidadDatos: evaluacion.calidadDatos,
       };
     });
@@ -459,6 +476,8 @@ export class AgroclimaService {
             : 'Confirmar con alerta oficial o radar antes de movilizar recursos; proteger personal y operaciones si la amenaza se valida.',
       fechaCritica: critico?.fecha,
       diasRiesgo: dias.filter((dia) => dia.nivel !== 'bajo').length,
+      etapaFenologica: critico?.etapaFenologica,
+      contextoFenologico: critico?.contextoFenologico,
       evidencia: critico?.evidencia || [],
       calidadDatos: critico?.calidadDatos,
       serie: dias,

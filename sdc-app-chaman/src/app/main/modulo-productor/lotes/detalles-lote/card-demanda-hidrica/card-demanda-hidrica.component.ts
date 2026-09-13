@@ -8,6 +8,7 @@ import {
   IEstadoDemandaHidricaHora,
   IRespuestaAgrometeorologiaSiembra,
   ISiembra,
+  revisionFenologica,
   NivelDemandaHidricaHoraria,
   resumirVentanasAperturaEstomatica,
 } from 'modelos/src';
@@ -37,6 +38,7 @@ export class CardDemandaHidricaComponent implements OnChanges {
   public response?: IRespuestaAgrometeorologiaSiembra;
   public hours: IEstadoDemandaHidricaHora[] = [];
   public selected?: IEstadoDemandaHidricaHora;
+  private requestSequence = 0;
 
   constructor(private siembraService: SiembraService) {}
 
@@ -117,12 +119,14 @@ export class CardDemandaHidricaComponent implements OnChanges {
   }
 
   public async cargar(force = false): Promise<void> {
+    const sequence = ++this.requestSequence;
     const id = this.siembra?._id;
     if (!id || !this.crop) {
       this.reset();
+      this.loading = false;
       return;
     }
-    const key = `${id}|${new Date().toISOString().slice(0, 10)}`;
+    const key = `${id}|${new Date().toISOString().slice(0, 10)}|${revisionFenologica(this.siembra)}`;
     const cached = CardDemandaHidricaComponent.cache.get(key);
     if (!force && cached) {
       this.aplicar(cached);
@@ -132,11 +136,14 @@ export class CardDemandaHidricaComponent implements OnChanges {
     if (!force && active) {
       this.loading = true;
       try {
-        this.aplicar(await active);
+        const response = await active;
+        if (sequence !== this.requestSequence) return;
+        this.aplicar(response);
       } catch {
+        if (sequence !== this.requestSequence) return;
         this.error = 'No se pudo recuperar la lectura horaria en este momento.';
       } finally {
-        this.loading = false;
+        if (sequence === this.requestSequence) this.loading = false;
       }
       return;
     }
@@ -150,15 +157,17 @@ export class CardDemandaHidricaComponent implements OnChanges {
       const request = this.siembraService.agrometeorologia(id, from, to, true);
       CardDemandaHidricaComponent.pending.set(key, request);
       const response = await request;
+      if (sequence !== this.requestSequence) return;
       CardDemandaHidricaComponent.cache.set(key, response);
       this.aplicar(response);
     } catch {
+      if (sequence !== this.requestSequence) return;
       this.error = 'No se pudo recuperar la lectura horaria en este momento.';
       this.hours = [];
       this.selected = undefined;
     } finally {
       CardDemandaHidricaComponent.pending.delete(key);
-      this.loading = false;
+      if (sequence === this.requestSequence) this.loading = false;
     }
   }
 

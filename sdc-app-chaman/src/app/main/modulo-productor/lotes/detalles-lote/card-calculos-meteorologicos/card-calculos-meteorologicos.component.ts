@@ -3,6 +3,8 @@ import { Component, inject, Input, OnChanges, SimpleChanges } from '@angular/cor
 import Highcharts from 'highcharts';
 import {
   esCultivoPerenne,
+  obtenerInicioForzadoObservado,
+  revisionFenologica,
   IRespuestaAgrometeorologiaSiembra,
   IResumenAgrometeorologico,
   ISerieAgrometeorologicaDia,
@@ -237,7 +239,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     }
 
     const desde = this.desdePeriodo();
-    const key = `${id}|${desde || 'ciclo'}`;
+    const key = `${id}|${desde || 'ciclo'}|${revisionFenologica(this.siembra)}`;
     if (!force && key === this.requestKey && this.data) return;
 
     this.loading = true;
@@ -794,12 +796,7 @@ export class CardCalculosMeteorologicosComponent implements OnChanges {
     if (!esCultivoPerenne(this.siembra?.semilla?.cultivo) || this.esNumero(resumen.gddAccumulated)) {
       return false;
     }
-    return !((this.siembra as any)?.registrosFenologicos || []).some((record: any) => {
-      if (record?.estadoRegistro === 'anulado' || record?.tipoEvento !== 'biofix') return false;
-      return (record?.objetivosBiofix || []).some((objective: string) =>
-        ['inicio_forzado', 'reinicio_gdd_forzado'].includes(String(objective))
-      );
-    });
+    return !obtenerInicioForzadoObservado(this.siembra, new Date());
   }
 
   private edadHoras(value?: string): number | undefined {

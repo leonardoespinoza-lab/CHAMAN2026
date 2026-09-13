@@ -297,6 +297,50 @@ export function obtenerInicioTemporadaFrioObservado(
     )[0]?.registro;
 }
 
+export function esEtapaBrotacion(etapa?: string): boolean {
+  return ['BROTACION', 'BROTACION VEGETATIVA'].includes(normalizar(etapa));
+}
+
+/**
+ * Inicio de GDD de la campania perenne: primera brotacion persistente valida.
+ * No convierte una observacion puntual en un inicio ni reinicia por floracion.
+ * Conserva los biofix de forzado/reinicio explicitamente configurados.
+ */
+export function obtenerInicioForzadoObservado(
+  siembra: ISiembra | undefined,
+  fechaObjetivo: Date,
+): IRegistroFenologico | undefined {
+  if (!siembra || !esCultivoPerenne(siembra.semilla?.cultivo) ||
+      Number.isNaN(fechaObjetivo.getTime())) return undefined;
+  const candidatos = registrosFenologicosVigentes(siembra.registrosFenologicos || [])
+    .filter(registro => {
+      const puntual = registro.tipoEvento === 'observacion' ||
+        (registro.accion === 'observacion' && !registro.fechaInicioEtapa);
+      if (puntual) return false;
+      // Mismos limites de propiedad, cultivo, fecha, campania y calidad que
+      // gobiernan las decisiones fenologicas, tambien para registros legacy.
+      return !!obtenerRegistroFenologicoDecisorioEnFecha(
+        { ...siembra, registrosFenologicos: [registro] }, fechaObjetivo,
+      );
+    });
+  const fecha = (r: IRegistroFenologico) => fechaEfectivaRegistroFenologico(r)!;
+  const explicitos = candidatos.filter(r => r.tipoEvento === 'biofix' &&
+    (r.objetivosBiofix || []).some(o => ['inicio_forzado', 'reinicio_gdd_forzado'].includes(o)));
+  if (explicitos.length) return explicitos.sort((a, b) => fecha(b).localeCompare(fecha(a)))[0];
+  return candidatos.filter(r => r.tipoEvento !== 'biofix' && esEtapaBrotacion(r.etapa))
+    .sort((a, b) => fecha(a).localeCompare(fecha(b)))[0];
+}
+
+/** Clave de cache sin notas, datos del observador ni otros datos personales. */
+export function revisionFenologica(siembra?: ISiembra): string {
+  return JSON.stringify((siembra?.registrosFenologicos || []).map(r => [
+    r.id, r.etapa, r.fecha, r.fechaInicioEtapa, r.fechaObservacion,
+    r.tipoEvento, r.accion, r.confianza, r.coberturaObservadaPct,
+    r.campania, r.reemplazaRegistroId, r.objetivosBiofix, r.actualizadoEn,
+    r.idSiembra, r.idLote, r.cultivo,
+  ]).sort((a, b) => String(a[0] || '').localeCompare(String(b[0] || ''))));
+}
+
 function fechaValida(value?: string | Date): Date | undefined {
   if (!value) return undefined;
   const parsed = new Date(value);
