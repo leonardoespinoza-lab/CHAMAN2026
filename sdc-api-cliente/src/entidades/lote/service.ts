@@ -2604,6 +2604,8 @@ export class LotesService {
       body { background: white; }
       .page { width: auto; margin: 0; border: none; border-radius: 0; box-shadow: none; overflow: visible; }
       .section { break-inside: auto; }
+      .section h2, .section h3 { break-after: avoid; }
+      .phenology-section + .sanitary-section { break-before: auto; page-break-before: auto; }
       .card, .score-card, .summary-chart, .ndvi-tracking { break-inside: avoid; }
       table { break-inside: auto; }
       thead { display: table-header-group; }
@@ -2688,7 +2690,7 @@ export class LotesService {
         : ''
     }
 
-    <section class="section">
+    <section class="section phenology-section">
       <h2>Fenologia y ciclo</h2>
       ${this.renderTablaFenologia(fenologia, siembra)}
     </section>
