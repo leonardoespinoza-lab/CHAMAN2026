@@ -36,6 +36,8 @@
     "package.json",
     "scripts/audit-hydric-compatibility.cjs",
     "scripts/check-code-continuity.cjs",
+    "scripts/migrations/20260913-advisor-owned-field-indexes.cjs",
+    "scripts/tests/advisor-owned-field-indexes.test.cjs",
     "scripts/tests/code-continuity.test.cjs",
     "sdc-api-cliente/src/auxiliares/decision-pipeline/decision-pipeline-queue.service.ts",
     "sdc-api-cliente/src/auxiliares/decision-pipeline/decision-pipeline.processor.ts",

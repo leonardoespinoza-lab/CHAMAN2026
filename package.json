@@ -81,7 +81,7 @@
     "test:varietal-profile:frontend": "node --test scripts/tests/varietal-profile-frontend.test.js",
     "test:visual-language": "node --test scripts/tests/chaman-visual-language.test.mjs",
     "test:load-runner": "node --test scripts/tests/testing-load-smoke.test.mjs",
-    "test:release-safety": "node --test scripts/tests/release-safety.test.js scripts/tests/runtime-environment.test.js scripts/tests/validate-production-config.test.js scripts/tests/testing-release-users-cleanup.test.js scripts/tests/code-continuity.test.cjs",
+    "test:release-safety": "node --test scripts/tests/release-safety.test.js scripts/tests/runtime-environment.test.js scripts/tests/validate-production-config.test.js scripts/tests/testing-release-users-cleanup.test.js scripts/tests/code-continuity.test.cjs scripts/tests/advisor-owned-field-indexes.test.cjs",
     "release:manifest": "node scripts/create-release-manifest.js",
     "release:preflight": "node scripts/release-preflight.js",
     "release:rollback:verify": "node scripts/verify-release-rollback.js",
