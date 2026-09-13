@@ -57,3 +57,11 @@ Logs y runners locales: `C:/CHAMAN2026/output/phenology-report-audit-2026-09-13/
 7. Solo luego de aprobar, Produccion recibe **el mismo commit probado**, nunca una reconstruccion manual o un nuevo commit no validado. La verificacion final debe registrar el SHA efectivo por servicio y la excepcion justificada de cualquier servicio sin cambios. Los cambios de datos reales de Kleppe siguen siendo una operacion separada.
 
 Limites agronomicos heredados de riego y huella perennes: ver `hydric-compatibility-review-2026-09-13.md`. Este bloque no los oculta ni los sustituye por una formula universal.
+
+## Preparacion de Testing: control CI del 13/09
+
+El push de `0a5362e5568c1e6db5df689e7f366683c264dcb5` ejecuto `quality-gates` (run `34768919628`). Quince jobs aprobaron, incluidos todos los backend y ambos Docker; el frontend detecto cuatro fallos entre 531 casos. No se desplego ni se modifico Mongo por ese resultado.
+
+La causa comprobada fue temporal en la prueba `grafico-historico-suelo.component.spec.ts`: las lecturas fijas del 14/08 a las 10:00 quedaron fuera del rango movil de 30 dias al ejecutarse CI el 13/09 a las 16:34 UTC. Se fija el fin de periodo en la preparacion de fixtures (incluidos los DOM); no se cambia el componente, sus estilos, filtros ni datos. Dos regresiones adicionales comprueban que la aplicacion sigue excluyendo datos antiguos/futuros con su reloj real y que un periodo historico explicito no depende del dia de ejecucion. La suite aislada aprueba 49 casos. Se incorpora unicamente ese archivo de pruebas a la lista de cambios permitidos; las 19 rutas protegidas y la prohibicion de CSS/SCSS siguen iguales. La nueva candidata debe repetir CI completo.
+
+Para la diferencia de bases desplegadas, la secuencia prevista es datos -> clima -> predicciones -> api -> web, todos con el mismo SHA candidato. Cada paso requiere un manifiesto selectivo con foto live reciente, SHA/deployment/digest anterior real y verificacion de los demas servicios congelados. Una reversa se ejecuta en orden inverso. No se inventa una base comun ni se relaja el validador de manifiestos. El paso de indices se documenta y verifica separadamente; no se presenta el retiro de v2 como una migracion aditiva.

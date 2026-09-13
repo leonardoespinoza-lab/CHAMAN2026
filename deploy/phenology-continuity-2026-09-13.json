@@ -61,6 +61,7 @@
     "sdc-api-predicciones/src/entidades/riego/service.ts",
     "sdc-app-chaman/src/app/auxiliares/http/siembra.service.ts",
     "sdc-app-chaman/src/app/main/modulo-admin/algoritmos/algoritmos.component.ts",
+    "sdc-app-chaman/src/app/main/modulo-admin/dispositivos/detalles-dispositivo/grafico-historico-suelo/grafico-historico-suelo.component.spec.ts",
     "sdc-app-chaman/src/app/main/modulo-productor/lotes/detalles-lote/card-calculos-meteorologicos/card-calculos-meteorologicos.component.ts",
     "sdc-app-chaman/src/app/main/modulo-productor/lotes/detalles-lote/card-demanda-hidrica/card-demanda-hidrica.component.ts",
     "sdc-app-chaman/src/app/main/modulo-productor/lotes/detalles-lote/card-etapas-fenologicas/card-etapas-fenologicas.component.ts",

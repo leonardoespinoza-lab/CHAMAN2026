@@ -5,6 +5,21 @@ import { ChartComponent } from '../../../../../auxiliares/componentes/chart/char
 import { GraficoHistoricoSueloComponent } from './grafico-historico-suelo.component';
 
 describe('GraficoHistoricoSueloComponent', () => {
+  // These fixtures belong to August, not to the day CI happens to run.
+  const fixturePeriodEnd = '2026-08-15T13:00:00.000Z';
+
+  function createComponent(): GraficoHistoricoSueloComponent {
+    const component = new GraficoHistoricoSueloComponent();
+    component.periodEnd = fixturePeriodEnd;
+    return component;
+  }
+
+  function createFixture() {
+    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    fixture.componentRef.setInput('periodEnd', fixturePeriodEnd);
+    return fixture;
+  }
+
   function frame(
     timestamp: string,
     readings: ILorawanRawReading[],
@@ -152,7 +167,7 @@ describe('GraficoHistoricoSueloComponent', () => {
     periodDays = 30,
     periodEnd?: string | number
   ): GraficoHistoricoSueloComponent {
-    const component = new GraficoHistoricoSueloComponent();
+    const component = createComponent();
     component.rawFrames = rawFrames;
     component.periodDays = periodDays;
     component.periodEnd =
@@ -161,6 +176,33 @@ describe('GraficoHistoricoSueloComponent', () => {
     component.ngOnChanges({ rawFrames: {} as any });
     return component;
   }
+
+  it('sin fin explicito conserva el filtro real de 30 dias y excluye lecturas futuras', () => {
+    const now = Date.parse('2026-09-13T10:01:00.000Z');
+    spyOn(Date, 'now').and.returnValue(now);
+    const component = new GraficoHistoricoSueloComponent();
+    component.rawFrames = [
+      frame('2026-08-14T10:00:00.000Z', [humedad(10, 19)], 1),
+      frame('2026-08-14T10:02:00.000Z', [humedad(10, 28)], 2),
+      frame('2026-09-13T10:02:00.000Z', [humedad(10, 45)], 3),
+    ];
+    component.ngOnChanges({ rawFrames: {} as any });
+
+    const series = component.chartOptions.series.find((item: any) => item.id === 'sentek-humedad-10');
+    expect(series.data.filter((point: any) => point.y !== null).map((point: any) => point.y)).toEqual([28]);
+    expect(component.chartOptions.xAxis.max).toBe(now);
+  });
+
+  it('el periodo explicito de la captura historica no depende de la fecha de ejecucion', () => {
+    spyOn(Date, 'now').and.returnValue(Date.parse('2027-01-01T00:00:00.000Z'));
+    const component = createComponent();
+    component.rawFrames = [frame('2026-08-14T10:00:00.000Z', [humedad(10, 28)], 1)];
+    component.ngOnChanges({ rawFrames: {} as any });
+
+    const series = component.chartOptions.series.find((item: any) => item.id === 'sentek-humedad-10');
+    expect(series.data.filter((point: any) => point.y !== null).map((point: any) => point.y)).toEqual([28]);
+    expect(component.chartOptions.xAxis.max).toBe(Date.parse(fixturePeriodEnd));
+  });
 
   it('construye 12 curvas y 12 filas de perfil desde cuatro tramas crudas de tres profundidades', () => {
     const component = prepare([
@@ -192,7 +234,7 @@ describe('GraficoHistoricoSueloComponent', () => {
 
   it('distingue 24 horas, 7 dias y 30 dias conservando cada valor crudo sin promedio', () => {
     const periodEnd = '2026-08-15T13:00:00.000Z';
-    const component = new GraficoHistoricoSueloComponent();
+    const component = createComponent();
     component.periodEnd = periodEnd;
     component.rawFrames = [
       frame('2026-08-12T12:00:00.000Z', [humedad(10, 11.11111)], 101, [0]),
@@ -334,7 +376,7 @@ describe('GraficoHistoricoSueloComponent', () => {
   });
 
   it('superpone una sola capa de lluvia detras del perfil de humedad', () => {
-    const component = new GraficoHistoricoSueloComponent();
+    const component = createComponent();
     component.rawFrames = [frame('2026-08-14T10:00:00.000Z', [humedad(10, 28)], 1)];
     component.lluvias = [
       { fecha: '2026-08-14T12:00:00.000Z', milimetros: 12.4 },
@@ -364,7 +406,7 @@ describe('GraficoHistoricoSueloComponent', () => {
   });
 
   it('mantiene visible la lluvia aunque el total observado sea cero y reserva la leyenda para niveles', () => {
-    const component = new GraficoHistoricoSueloComponent();
+    const component = createComponent();
     component.rawFrames = [frame('2026-08-14T10:00:00.000Z', [humedad(10, 28)], 1)];
     component.lluvias = [
       { fecha: '2026-08-14T10:00:00.000Z', milimetros: 0 },
@@ -382,7 +424,7 @@ describe('GraficoHistoricoSueloComponent', () => {
   });
 
   it('filtra solo la vista por profundidad y conserva datos, dominio y seleccion al cambiar metrica', () => {
-    const component = new GraficoHistoricoSueloComponent();
+    const component = createComponent();
     component.rawFrames = [
       ...cicloPerfil('2026-08-14T20:00:00.000Z', 1),
       ...cicloPerfil('2026-08-14T20:20:00.000Z', 4, 2),
@@ -425,7 +467,7 @@ describe('GraficoHistoricoSueloComponent', () => {
 
   it('expone un selector accesible con los doce niveles y evita dejar la vista vacia', fakeAsync(() => {
     TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
-    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    const fixture = createFixture();
     fixture.componentRef.setInput('rawFrames', cicloPerfil('2026-08-14T20:00:00.000Z', 1));
     fixture.componentRef.setInput('mostrarNapa', false);
     fixture.componentRef.setInput('mostrarEntradaAnalogica', false);
@@ -459,7 +501,7 @@ describe('GraficoHistoricoSueloComponent', () => {
 
   it('mantiene abierto el selector al interactuar dentro y lo cierra al hacer click fuera', fakeAsync(() => {
     TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
-    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    const fixture = createFixture();
     fixture.componentRef.setInput('rawFrames', cicloPerfil('2026-08-14T20:00:00.000Z', 1));
     fixture.componentRef.setInput('mostrarNapa', false);
     fixture.componentRef.setInput('mostrarEntradaAnalogica', false);
@@ -480,7 +522,7 @@ describe('GraficoHistoricoSueloComponent', () => {
   }));
 
   it('muestra en el tooltip todos los niveles del mismo barrido y temperatura con un decimal', () => {
-    const component = new GraficoHistoricoSueloComponent();
+    const component = createComponent();
     component.rawFrames = [
       frame('2026-08-14T20:00:00.000Z', [lectura('temperatura_suelo', 10, 10.46148)], 1, [0]),
       frame('2026-08-14T20:02:00.000Z', [lectura('temperatura_suelo', 20, 11.248)], 2, [1]),
@@ -518,7 +560,7 @@ describe('GraficoHistoricoSueloComponent', () => {
   });
 
   it('usa amanecer y atardecer reales en Buenos Aires en una franja inferior sin pintar fechas desconocidas', () => {
-    const component = new GraficoHistoricoSueloComponent();
+    const component = createComponent();
     component.periodDays = 2;
     component.periodEnd = '2026-08-16T00:00:00.000Z';
     component.rawFrames = [
@@ -597,7 +639,7 @@ describe('GraficoHistoricoSueloComponent', () => {
 
   it('renderiza las franjas de dia y noche y su clave minima en el SVG real', fakeAsync(() => {
     TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
-    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    const fixture = createFixture();
     fixture.componentRef.setInput('rawFrames', [
       ...cicloPerfil('2026-08-14T08:00:00.000Z', 1),
       ...cicloPerfil('2026-08-14T22:00:00.000Z', 4, 2),
@@ -677,7 +719,7 @@ describe('GraficoHistoricoSueloComponent', () => {
 
   it('oculta las bandas ante referencia invalida o desactualizada y lo informa en el DOM', fakeAsync(() => {
     TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
-    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    const fixture = createFixture();
     fixture.componentRef.setInput('rawFrames', cicloPerfil('2026-08-14T20:00:00.000Z', 1));
     fixture.componentRef.setInput('agronomicThresholds', {
       capacidadCampoPct: 33.46,
@@ -701,7 +743,7 @@ describe('GraficoHistoricoSueloComponent', () => {
 
   it('renderiza bandas agronomicas SVG con superficie real y procedencia visible', fakeAsync(() => {
     TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
-    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    const fixture = createFixture();
     fixture.componentRef.setInput('rawFrames', cicloPerfil('2026-08-14T20:00:00.000Z', 1));
     fixture.componentRef.setInput('agronomicThresholds', {
       capacidadCampoPct: 33.46,
@@ -737,7 +779,7 @@ describe('GraficoHistoricoSueloComponent', () => {
 
   it('sincroniza un click real de leyenda con el selector sin eliminar la serie ni permitir vista vacia', fakeAsync(() => {
     TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
-    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    const fixture = createFixture();
     fixture.componentRef.setInput('rawFrames', cicloPerfil('2026-08-14T20:00:00.000Z', 1));
     fixture.componentRef.setInput('mostrarNapa', false);
     fixture.componentRef.setInput('mostrarEntradaAnalogica', false);
@@ -788,7 +830,7 @@ describe('GraficoHistoricoSueloComponent', () => {
 
   it('muestra en el DOM cuando no existe historico de lluvia y no lo confunde con cero mm', fakeAsync(() => {
     TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
-    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    const fixture = createFixture();
     fixture.componentRef.setInput('rawFrames', [frame('2026-08-14T10:00:00.000Z', [humedad(10, 28)], 1)]);
     fixture.componentRef.setInput('mostrarNapa', false);
     fixture.componentRef.setInput('mostrarEntradaAnalogica', false);
@@ -804,7 +846,7 @@ describe('GraficoHistoricoSueloComponent', () => {
   }));
 
   it('distingue una fuente sin lluvia en el periodo de una fuente historica ausente', () => {
-    const component = new GraficoHistoricoSueloComponent();
+    const component = createComponent();
     component.fechaDesde = '2026-08-14T09:00:00.000Z';
     component.rawFrames = [frame('2026-08-14T10:00:00.000Z', [humedad(10, 28)], 1)];
     component.lluvias = [{ fecha: '2026-08-10', milimetros: 4 }];
@@ -816,7 +858,7 @@ describe('GraficoHistoricoSueloComponent', () => {
   });
 
   it('usa el periodo solicitado y conserva cada lectura cruda aunque preceda al primer barrido coherente', () => {
-    const component = new GraficoHistoricoSueloComponent();
+    const component = createComponent();
     const recentStart = '2026-08-14T20:00:00.000Z';
     const recentEnd = '2026-08-14T20:20:30.000Z';
     const deepDepths = [100, 110, 120];
@@ -1116,7 +1158,7 @@ describe('GraficoHistoricoSueloComponent', () => {
     const shallow = [10, 20, 30, 40];
     const middle = [50, 60, 70, 80];
     const deep = [90, 100, 110, 120];
-    const component = new GraficoHistoricoSueloComponent();
+    const component = createComponent();
     component.periodDays = 1;
     component.periodEnd = '2026-08-14T21:50:45.882Z';
     component.rawFrames = [
@@ -1182,7 +1224,7 @@ describe('GraficoHistoricoSueloComponent', () => {
   });
 
   it('conserva por identidad todas las lecturas crudas validas, incluido el prefijo ch11', () => {
-    const component = new GraficoHistoricoSueloComponent();
+    const component = createComponent();
     const prefixTimestamp = '2026-08-14T19:50:00.000Z';
     component.fechaDesde = '2026-08-14T19:00:00.000Z';
     component.periodDays = 1;
@@ -1288,7 +1330,7 @@ describe('GraficoHistoricoSueloComponent', () => {
 
   it('renderiza en SVG una spline continua entre observaciones reales de barridos parciales', fakeAsync(() => {
     TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
-    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    const fixture = createFixture();
     const host = fixture.nativeElement as HTMLElement;
     host.style.display = 'block';
     host.style.width = '1200px';
@@ -1355,7 +1397,7 @@ describe('GraficoHistoricoSueloComponent', () => {
   [1664, 390].forEach((width) => {
     it(`recorta el eje al dato observado sin perder puntos crudos a ${width}px`, fakeAsync(() => {
       TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
-      const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+      const fixture = createFixture();
       const host = fixture.nativeElement as HTMLElement;
       host.style.display = 'block';
       host.style.maxWidth = 'none';
@@ -1392,7 +1434,7 @@ describe('GraficoHistoricoSueloComponent', () => {
 
   it('dibuja curva spline y lluvia de fecha diaria dentro de un dominio intradia', fakeAsync(() => {
     TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
-    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    const fixture = createFixture();
     const host = fixture.nativeElement as HTMLElement;
     host.style.display = 'block';
     host.style.width = '1024px';
@@ -1436,7 +1478,7 @@ describe('GraficoHistoricoSueloComponent', () => {
   it('excluye la lluvia del dia anterior cuando el dominio empieza exactamente a medianoche', () => {
     const localMidnight = new Date('2026-08-15T03:00:00.000Z').getTime();
     const start = new Date(localMidnight).toISOString();
-    const component = new GraficoHistoricoSueloComponent();
+    const component = createComponent();
     component.fechaDesde = start;
     component.periodDays = 1;
     component.periodEnd = new Date(localMidnight + 60 * 60 * 1000).toISOString();
@@ -1469,7 +1511,7 @@ describe('GraficoHistoricoSueloComponent', () => {
   [1440, 1280, 1024, 768, 390].forEach((width) => {
     it(`mantiene toolbar y grafico dentro del host a ${width}px`, fakeAsync(() => {
       TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
-      const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+      const fixture = createFixture();
       const host = fixture.nativeElement as HTMLElement;
       host.style.display = 'block';
       host.style.maxWidth = 'none';
@@ -1668,7 +1710,7 @@ describe('GraficoHistoricoSueloComponent', () => {
   it('oculta markers estaticos en un historico largo sin perder spline, hover ni tooltip', fakeAsync(() => {
     const start = new Date('2026-08-12T10:00:00.000Z').getTime();
     TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
-    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    const fixture = createFixture();
     const host = fixture.nativeElement as HTMLElement;
     host.style.display = 'block';
     host.style.width = '1024px';
@@ -1753,7 +1795,7 @@ describe('GraficoHistoricoSueloComponent', () => {
 
   it('renderiza dos subtrazos SVG ante una interrupcion superior a seis horas', fakeAsync(() => {
     TestBed.configureTestingModule({ imports: [GraficoHistoricoSueloComponent] });
-    const fixture = TestBed.createComponent(GraficoHistoricoSueloComponent);
+    const fixture = createFixture();
     fixture.componentRef.setInput('rawFrames', [
       ...cicloPerfil('2026-08-14T10:00:00.000Z', 1),
       ...cicloPerfil('2026-08-14T17:01:00.000Z', 4, 10),
@@ -1776,7 +1818,7 @@ describe('GraficoHistoricoSueloComponent', () => {
 
   it('reemplaza por identidad todas las series al cambiar humedad, temperatura y salinidad', () => {
     const allDepths = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
-    const component = new GraficoHistoricoSueloComponent();
+    const component = createComponent();
     component.periodDays = 2;
     component.periodEnd = '2026-08-14T20:01:00.000Z';
     component.rawFrames = [
